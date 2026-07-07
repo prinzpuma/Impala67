@@ -2,24 +2,122 @@
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
 // Client-ID (das ist eine Plattform-Vorgabe von Google, keine Aura-Beschränkung).
-// Diese Client-ID muss EINMALIG in der Google Cloud Console erstellt und in den
-// Einstellungen → Sync hinterlegt werden. Danach reduziert sich alles Weitere
-// wirklich auf einen Klick: "Mit Google anmelden" → Google-Popup → verbunden.
+//
+// Browser/PWA: Popup-Login über Googles Identity-Bibliothek, Client-ID kommt aus
+// den Einstellungen → Sync.
+//
+// Desktop-App (Tauri): Popups funktionieren dort nicht — Google blockiert OAuth
+// grundsätzlich in eingebetteten Webviews. Stattdessen läuft der offizielle
+// Loopback-Flow für installierte Apps (RFC 8252): System-Browser öffnen, Antwort
+// über einen kurzen lokalen Server auffangen (siehe getTokenDesktop). Dafür ist
+// ein SEPARATER Google-OAuth-Client vom Typ "Desktop-App" nötig (Zugangsdaten
+// kommen aus web/config.local.js, nicht der Web-Client aus den Einstellungen).
 const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "notion-sync.json";
+	// Desktop-OAuth-Client (Typ "Desktop-App", Google Cloud Console). Das Secret
+	// ist bei diesem App-Typ laut Google kein echtes Geheimnis (installierte Apps
+	// können ohnehin keine Geheimnisse wahren) — normaler, vorgesehener Fall.
+	// Werte kommen aus web/config.local.js (lokal, NICHT im Git-Repo — siehe .gitignore).
+	// Bei GitHub-Actions-Builds wird diese Datei automatisch aus Repo-Secrets erzeugt.
+	const DESKTOP_CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
+	const DESKTOP_CLIENT_SECRET = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || "";
 	let token = null;
 
-	function getToken(interactive) {
-		return new Promise((resolve, reject) => {
-			// 1. Prüfen, ob wir ein noch gültiges Token im LocalStorage haben
-			const savedToken = localStorage.getItem("notion_drive_token");
-			const savedExpiry = localStorage.getItem("notion_drive_token_expiry");
-			if (savedToken && savedExpiry && Date.now() < Number(savedExpiry)) {
-				token = savedToken;
-				return resolve(token);
-			}
+	function base64url(buffer) {
+		return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+			.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	}
 
+	async function pkcePair() {
+		const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)).buffer);
+		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+		return { verifier, challenge: base64url(digest) };
+	}
+
+	async function exchangeCode(code, verifier, redirectUri) {
+		const res = await fetch("https://oauth2.googleapis.com/token", {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				code, client_id: DESKTOP_CLIENT_ID, client_secret: DESKTOP_CLIENT_SECRET,
+				redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier,
+			}),
+		});
+		if (!res.ok) throw new Error("Token-Tausch fehlgeschlagen: " + (await res.text()).slice(0, 200));
+		return res.json();
+	}
+
+	async function refreshDesktopToken(refreshToken) {
+		const res = await fetch("https://oauth2.googleapis.com/token", {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				client_id: DESKTOP_CLIENT_ID, client_secret: DESKTOP_CLIENT_SECRET,
+				refresh_token: refreshToken, grant_type: "refresh_token",
+			}),
+		});
+		if (!res.ok) return null;
+		return res.json();
+	}
+
+	function saveToken(data) {
+		token = data.access_token;
+		const expiresIn = data.expires_in ? Number(data.expires_in) : 3600;
+		localStorage.setItem("notion_drive_token", token);
+		localStorage.setItem("notion_drive_token_expiry", String(Date.now() + expiresIn * 1000 - 60000));
+		if (data.refresh_token) localStorage.setItem("notion_drive_refresh_token", data.refresh_token);
+	}
+
+	// Desktop-App (Tauri): System-Browser + lokaler Redirect-Server statt Popup.
+	async function getTokenDesktop(interactive) {
+		const refreshToken = localStorage.getItem("notion_drive_refresh_token");
+		if (refreshToken) {
+			const data = await refreshDesktopToken(refreshToken);
+			if (data && data.access_token) {
+				saveToken(data);
+				return token;
+			}
+		}
+		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
+
+		const { verifier, challenge } = await pkcePair();
+		const port = await window.__TAURI__.core.invoke("start_oauth_server");
+		const redirectUri = "http://localhost:" + port;
+		const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+			client_id: DESKTOP_CLIENT_ID,
+			redirect_uri: redirectUri,
+			response_type: "code",
+			scope: SCOPE,
+			access_type: "offline",
+			prompt: "consent",
+			code_challenge: challenge,
+			code_challenge_method: "S256",
+		});
+
+		const codePromise = new Promise((resolve, reject) => {
+			window.__TAURI__.event.once("redirect_uri", (event) => {
+				try {
+					const url = new URL(event.payload);
+					const err = url.searchParams.get("error");
+					const code = url.searchParams.get("code");
+					if (err) return reject(new Error("Google-Login abgebrochen: " + err));
+					if (!code) return reject(new Error("Kein Code in der Antwort erhalten."));
+					resolve(code);
+				} catch (e) { reject(e); }
+			});
+		});
+
+		await window.__TAURI__.shell.open(authUrl);
+		const code = await codePromise;
+		window.__TAURI__.core.invoke("cancel_oauth_server", { port }).catch(() => {});
+		saveToken(await exchangeCode(code, verifier, redirectUri));
+		return token;
+	}
+
+	// Browser/PWA: der bisherige Popup-Flow über Googles Identity-Bibliothek.
+	function getTokenBrowser(interactive) {
+		return new Promise((resolve, reject) => {
 			if (!window.google || !google.accounts) {
 				return reject(new Error("Google-Script nicht geladen (Internet nötig)."));
 			}
@@ -30,11 +128,7 @@ const DRIVE = (() => {
 				scope: SCOPE,
 				callback: (resp) => {
 					if (resp.access_token) {
-						token = resp.access_token;
-						// Token im LocalStorage sichern (Google-Tokens gelten i.d.R. 3600 Sekunden = 1 Stunde)
-						const expiresIn = resp.expires_in ? Number(resp.expires_in) : 3600;
-						localStorage.setItem("notion_drive_token", token);
-						localStorage.setItem("notion_drive_token_expiry", String(Date.now() + expiresIn * 1000 - 60000)); // 1 Min Puffer
+						saveToken(resp);
 						resolve(token);
 					}
 					else reject(new Error("Kein Zugriffstoken erhalten."));
@@ -43,6 +137,17 @@ const DRIVE = (() => {
 			// prompt: "" versucht einen stillen Login im Hintergrund, falls die Zustimmung bereits erteilt wurde
 			tc.requestAccessToken({ prompt: interactive ? "consent" : "" });
 		});
+	}
+
+	function getToken(interactive) {
+		// Bereits gültiges Token im LocalStorage? Gilt für beide Wege gleich.
+		const savedToken = localStorage.getItem("notion_drive_token");
+		const savedExpiry = localStorage.getItem("notion_drive_token_expiry");
+		if (savedToken && savedExpiry && Date.now() < Number(savedExpiry)) {
+			token = savedToken;
+			return Promise.resolve(token);
+		}
+		return window.__TAURI__ ? getTokenDesktop(interactive) : getTokenBrowser(interactive);
 	}
 
 	async function fetchUserInfo() {
@@ -68,6 +173,7 @@ const DRIVE = (() => {
 		token = null;
 		localStorage.removeItem("notion_drive_token");
 		localStorage.removeItem("notion_drive_token_expiry");
+		localStorage.removeItem("notion_drive_refresh_token");
 	}
 
 	async function api(path, opts = {}) {

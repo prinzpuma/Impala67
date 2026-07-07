@@ -1,8 +1,8 @@
 {
 	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-	"productName": "Notion",
-	"version": "0.1.0",
-	"identifier": "com.johncena.notion",
+	"productName": "Impala67",
+	"version": "0.1.1",
+	"identifier": "com.johncena.impala67",
 	"build": {
 		"frontendDist": "../web"
 	},
@@ -10,7 +10,7 @@
 		"withGlobalTauri": true,
 		"windows": [
 			{
-				"title": "Notion",
+				"title": "Impala67",
 				"width": 1400,
 				"height": 900,
 				"resizable": true,

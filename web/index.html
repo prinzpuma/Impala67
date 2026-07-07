@@ -92,7 +92,8 @@
 <input type="file" id="fileBg" accept="image/*" hidden>
 <input type="file" id="fileImport" accept="application/json" hidden>
 
-<!-- Ladereihenfolge: util → db → srs → state → tools → ai → rag → drive → pdfs → editor → render → app -->
+<!-- Ladereihenfolge: config.local (optional, lokal/nicht im Repo) → util → db → srs → state → tools → ai → rag → drive → pdfs → editor → render → app -->
+<script src="config.local.js"></script>
 <script src="util.js"></script>
 <script src="db.js"></script>
 <script src="srs.js"></script>
