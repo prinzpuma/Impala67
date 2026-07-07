@@ -1,0 +1,1298 @@
+"use strict";
+// render.js — UI-Aufbau im Notion-Stil: einklappbare Sidebar (Workspaces/Seiten
+// oder Chat-Verlauf), Tab-Leiste mit Zurück/Vor, Notion-artiger Seitenkopf
+// (Breadcrumb, Icon, Cover), Chat mit Modellwahl, Thinking- und Edit-Karten.
+function render() {
+	renderSidebar();
+	renderMain();
+	renderTabs();
+	renderChat();
+	if (S.view === "chat") renderMainChatLog();
+	renderPendingChip();
+	renderStatusDot();
+	renderModelBar();
+	const due = STATE.dueCards().length;
+	const el = U.el("dueCount");
+	if (el) el.textContent = due;
+}
+
+function renderTopbar() {
+	const home = U.el("btnHome");
+	const chat = U.el("btnChatTab");
+	if (home) home.classList.toggle("active", S.sidebarMode === "files");
+	if (chat) chat.classList.toggle("active", S.sidebarMode === "chats");
+	const lib = U.el("btnLibrary");
+	if (lib) lib.classList.toggle("active", S.view === "library");
+	const anki = U.el("btnAnki");
+	if (anki) anki.classList.toggle("active", S.view === "anki");
+	const daily = U.el("btnDaily");
+	if (daily) daily.classList.toggle("active", S.view === "daily");
+}
+
+function renderStatusDot() {
+	const dot = U.el("aiDot");
+	if (!dot) return;
+	dot.className = "dot" + (S.aiOnline === true ? " online" : S.aiOnline === false ? " offline" : "");
+	dot.title = S.aiOnline === true ? "KI verbunden"
+		: S.aiOnline === false ? "KI nicht erreichbar (Einstellungen prüfen)" : "KI-Status wird geprüft…";
+}
+
+// Aktuelles Modell als lesbares Label ("Quelle · modell").
+function currentModelLabel() {
+	const cur = S.settings.aiModel || "";
+	const pr = (S.settings.aiProviders || []).find((p) => p.id === S.settings.aiProviderId);
+	return cur ? ((pr ? pr.name + " · " : "") + cur) : "Kein Modell";
+}
+
+// Aktualisiert beide Auslöser: das kompakte Icon im kleinen Chat-Panel und den
+// Modell-Chip unten rechts im großen Chat-Fenster (wie in Notion).
+function renderModelBar() {
+	const label = currentModelLabel();
+	const chip = U.el("btnModelChipFull");
+	if (chip) chip.innerHTML = '<span class="chip-label">' + U.esc(label) + '</span> <span class="model-caret">▾</span>';
+	const icon = U.el("btnModelMenu");
+	if (icon) icon.title = "Modell: " + label;
+	renderModelMenu();
+}
+
+// Baut den Inhalt des einheitlichen Modell-Dropdowns: nach Quelle gruppiert, das
+// aktive Modell mit Häkchen, unten ein Bereich für ein frei eingetipptes Modell
+// (Quelle über Chips wählbar statt über ein hässliches natives <select>).
+function modelMenuInnerHtml() {
+	const providers = S.settings.aiProviders || [];
+	const curProviderId = S.settings.aiProviderId || "";
+	const curModel = S.settings.aiModel || "";
+	const live = S.availableModels || [];
+	let html = "";
+	if (S.modelMenuLoading) html += '<div class="menu-note">Modelle werden geladen…</div>';
+	if (!providers.length) html += '<div class="menu-note">Noch keine Quelle eingerichtet — Einstellungen → KI.</div>';
+	const opt = (prId, value, label, active) =>
+		'<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
+			'<span class="menu-item-label">' + U.esc(label) + "</span>" +
+			(active ? '<span class="menu-check">✓</span>' : "") +
+		"</button>";
+	providers.forEach((pr) => {
+		const liveForPr = live.filter((m) => m.providerId === pr.id);
+		const liveIds = new Set(liveForPr.map((m) => m.id));
+		const presetsForPr = AI.MODEL_PRESETS.filter((p) => p.provider === pr.id && !liveIds.has(p.value));
+		const isCurrentCustom = pr.id === curProviderId && curModel && !liveIds.has(curModel) && !presetsForPr.some((p) => p.value === curModel);
+		if (!liveForPr.length && !presetsForPr.length && !isCurrentCustom) return;
+		html += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>";
+		html += liveForPr.map((m) => opt(pr.id, m.id, m.id, pr.id === curProviderId && m.id === curModel)).join("");
+		html += presetsForPr.map((p) => opt(pr.id, p.value, p.label, pr.id === curProviderId && p.value === curModel)).join("");
+		if (isCurrentCustom) html += opt(pr.id, curModel, curModel, true);
+	});
+	if (providers.length) {
+		const pick = S.customModelProviderPick || curProviderId || providers[0].id;
+		html += '<div class="menu-sep"></div><div class="menu-label">Eigenes Modell</div>' +
+			'<div class="menu-custom">' +
+				(providers.length > 1
+					? '<div class="menu-chips">' + providers.map((pr) =>
+						'<button class="menu-chip' + (pr.id === pick ? " active" : "") + '" data-customprov="' + U.esc(pr.id) + '">' + U.esc(pr.name || pr.id) + "</button>"
+					).join("") + "</div>"
+					: "") +
+				'<div class="menu-custom-row"><input id="customModelInput" placeholder="Modellname eingeben…"><button data-modelcustomapply="1">Setzen</button></div>' +
+			"</div>";
+	}
+	return html;
+}
+
+// Zeigt/versteckt beide Dropdown-Container (kleines Panel + großes Chat-Fenster)
+// und befüllt den gerade geöffneten mit demselben Inhalt — ein Design für beide.
+function renderModelMenu() {
+	const inner = modelMenuInnerHtml();
+	["modelMenu", "modelMenuFull"].forEach((id) => {
+		const el = U.el(id);
+		if (!el) return;
+		const which = id === "modelMenuFull" ? "full" : "panel";
+		const show = S.modelMenuOpen && (S.modelMenuAnchor || "panel") === which;
+		el.hidden = !show;
+		if (show) el.innerHTML = inner;
+	});
+}
+
+// ---------- Ein-/Ausklappen (Workspaces + Unterseiten, bleibt über Neustarts erhalten) ----------
+function wsHeadHtml(ws) {
+	const key = "ws:" + ws.id;
+	const collapsed = COLLAPSE.isCollapsed(key);
+	return '<div class="ws-head">' +
+		'<button class="row-chevron ws-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + key + '" title="Ein-/Ausklappen">▸</button>' +
+		'<span class="ws-name">' + U.esc(ws.name) + "</span>" +
+		'<button class="mini" data-newpage="' + ws.id + '" title="Neue Seite in ' + U.esc(ws.name) + '">+</button></div>';
+}
+
+// Sidebar: "files" = Workspaces mit einklappbarem Seitenbaum, "chats" = Chat-Verlauf
+function renderSidebar() {
+	renderTopbar();
+	const tree = U.el("tree");
+	if (!tree) return;
+
+	// Explizit gewählter Chat-Modus hat Vorrang — sonst ist die Chat-Liste
+	// aus der Anki-Ansicht heraus nie erreichbar (Chat-Knopf wirkte "tot").
+	if (S.sidebarMode === "chats") {
+		tree.innerHTML = chatListHtml();
+		return;
+	}
+
+	// Im Karteikarten-Bereich zeigt die linke Spalte den Stapel-Baum — wie der
+	// Seitenbaum im Home-Tab: Unterstapel anlegen, ein-/ausklappen, umbenennen.
+	if (S.view === "anki") {
+		tree.innerHTML = deckTreeHtml();
+		return;
+	}
+
+	const q = (U.el("search").value || "").trim().toLowerCase();
+	if (q) {
+		const hits = STATE.searchNotes(q);
+		// Fundstellen-Vorschau: Kontext-Schnipsel unter jedem Treffer, Suchbegriff hervorgehoben.
+		const mark = (txt) => U.esc(txt).replace(
+			new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi"), "<mark>$1</mark>");
+		tree.innerHTML = hits.map((r) =>
+			rowHtml(r.page, 0, r.page.workspaceId) +
+			(r.snippet ? '<div class="search-snip">' + mark(r.snippet.replace(/\s+/g, " ").trim().slice(0, 160)) + "</div>" : "")
+		).join("") || '<div class="empty">Nichts gefunden</div>';
+		return;
+	}
+
+	let html = "";
+	// ★ Favoriten — gepinnte Seiten immer oben in der Sidebar
+	const favs = STATE.activePages().filter((p) => p.favorite);
+	if (favs.length) {
+		html += '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' +
+			favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("");
+	}
+	for (const ws of Object.values(S.workspaces)) {
+		html += wsHeadHtml(ws);
+		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) {
+			html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
+		}
+	}
+	tree.innerHTML = html;
+}
+
+// Chat-Verlauf in der Sidebar — die Suche (Strg+K) filtert auch hier: nach Titel UND Nachrichteninhalt.
+function chatListHtml() {
+	const q = (U.el("search").value || "").trim().toLowerCase();
+	let sessions = (typeof CHATS !== "undefined") ? CHATS.load() : [];
+	if (q) {
+		sessions = sessions.filter((s) =>
+			(s.title || "").toLowerCase().includes(q) ||
+			(s.messages || []).some((m) => (m.content || "").toLowerCase().includes(q))
+		);
+	}
+	let html = q ? "" : '<div class="row" data-newchat="1"><span class="row-title">＋ Neuer Chat</span></div>';
+	html += sessions.map((s) =>
+		'<div class="row' + (s.id === S.currentChatId ? " active" : "") + '" data-chat="' + s.id + '">' +
+		'<span class="row-title">' + U.esc(s.title || "Chat") + "</span>" +
+		'<span class="hint">' + U.fmtDate(s.updated || s.created) + "</span>" +
+		'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
+	).join("") || (q ? '<div class="empty">Keine Chats gefunden</div>' : "");
+	return html;
+}
+
+function branchHtml(parentId, depth, wsId) {
+	if (depth > 8) return "";
+	return STATE.childrenOf(parentId, wsId).map((pg) => rowHtml(pg, depth, wsId)).join("");
+}
+
+function rowHtml(pg, depth, wsId) {
+	const active = pg.id === S.currentPageId && S.view === "page" ? " active" : "";
+	const kids = STATE.childrenOf(pg.id, wsId || pg.workspaceId);
+	const hasKids = kids.length > 0;
+	const collapsed = COLLAPSE.isCollapsed(pg.id);
+	const chevron = hasKids
+		? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">▸</button>'
+		: '<span class="row-chevron spacer"></span>';
+	const childHtml = hasKids && !collapsed ? branchHtml(pg.id, depth + 1, wsId || pg.workspaceId) : "";
+	const menuOpen = S.pageMenuOpenId === pg.id;
+	const renaming = S.renamingPageId === pg.id;
+	return '<div class="row' + active + '" draggable="true" data-page="' + pg.id + '" style="padding-left:'
+		+ (6 + depth * 16) + 'px">' +
+		chevron +
+		(renaming
+			? '<input class="row-rename-input" data-renamename="' + U.esc(pg.id) + '" value="' + U.esc(pg.title) + '" autocomplete="off">'
+			: '<span class="row-title">' + (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "") + U.esc(pg.title) + "</span>") +
+		'<button class="row-add" data-pagemenu="' + pg.id + '" title="Weitere Optionen">⋯</button>' +
+		'<button class="row-add" data-addchild="' + pg.id + '" title="Unterseite anlegen">+</button>' +
+		(menuOpen ? pageMenuHtml(pg) : "") +
+		"</div>" + childHtml;
+}
+
+// Notion-artiges ⋯-Menü je Seite: Umbenennen, Duplizieren, Vorlage, Löschen (→ Papierkorb).
+function pageMenuHtml(pg) {
+	return '<div class="page-menu">' +
+		'<button class="menu-item" data-pagerename="' + pg.id + '">✎ Umbenennen</button>' +
+		'<button class="menu-item" data-pageduplicate="' + pg.id + '">📋 Duplizieren</button>' +
+		'<button class="menu-item" data-pagetemplate="' + pg.id + '">📑 ' + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage") + "</button>" +
+		'<button class="menu-item" data-pagefav="' + pg.id + '">' + (pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + "</button>" +
+		'<button class="menu-item" data-pagemove="' + pg.id + '">📦 Verschieben nach…</button>' +
+		'<button class="menu-item danger" data-pagetrash="' + pg.id + '">🗑 Löschen</button>' +
+		"</div>";
+}
+
+// ---------- Tab-Leiste (Zurück/Vor + offene Seiten UND Chats, wie eine Notion-Tableiste) ----------
+function renderTabs() {
+	const bar = U.el("tabbar");
+	if (!bar) return;
+	const canBack = S.navIndex > 0;
+	const canFwd = S.navIndex < S.navHistory.length - 1;
+	let html = '<button class="navbtn" id="btnSidebarToggle" title="Seitenleiste ein-/ausblenden">☰</button>' +
+		'<button class="navbtn" id="btnNavBack" ' + (canBack ? "" : "disabled") + ' title="Zurück">‹</button>' +
+		'<button class="navbtn" id="btnNavForward" ' + (canFwd ? "" : "disabled") + ' title="Vor">›</button>' +
+		'<div class="tabstrip">';
+	html += S.tabs.map((id) => {
+		let title = "";
+		const isChat = id.startsWith("chat:");
+		if (isChat) {
+			const chatId = id.slice(5);
+			const s = CHATS.load().find((x) => x.id === chatId);
+			title = "💬 " + (s ? s.title : "Chat");
+		} else {
+			const pg = S.pages[id];
+			if (!pg) return "";
+			title = (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "📝 ") + U.esc(pg.title);
+		}
+		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (!isChat && S.view === "page")) ? " active" : "";
+		return '<div class="tabchip' + active + '" data-tabopen="' + id + '">' +
+			'<span class="tabchip-title">' + title + '</span>' +
+			'<button class="tabchip-x" data-tabclose="' + id + '" title="Schließen">✕</button></div>';
+	}).join("");
+	html += "</div>";
+	bar.innerHTML = html;
+}
+
+function renderMain() {
+	// Nicht neu bauen, während der Nutzer tippt (Cursor bleibt erhalten)
+	const ae = document.activeElement;
+	if (ae && (ae.id === "pageTitle" || ae.id === "inpWsName" || ae.id === "inpNotionToken" || ae.id === "inpNotionPage" || ae.id === "libFilter" || ae.id === "ankiSearch"
+		|| (ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("db-cell"))))) return;
+
+	const main = U.el("main");
+	if (!main) return;
+	if (S.view === "library") { renderLibrary(main); return; }
+	if (S.view === "anki") { renderAnki(main); return; }
+	if (S.view === "daily") { renderDaily(main); return; }
+	if (S.view === "trash") { renderTrash(main); return; }
+	if (S.view === "chat") { renderFullChat(main); return; }
+	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
+	if (S.view === "home" || !pg) { renderHome(main); return; }
+
+	// Wie in Notion: nur noch EINE, durchgehend bearbeitbare und angezeigte Ansicht —
+	// kein Moduswechsel mehr. Der Block-Editor (editor.js) ist immer aktiv.
+	main.innerHTML =
+		'<div class="page-meta">' +
+			breadcrumbHtml(pg) +
+			(pg.coverImg || pg.cover
+				? '<div class="page-cover ' + (pg.coverImg ? "has-img" : "cover-" + pg.cover) + '"' + (pg.coverImg ? ' data-coverimg="' + U.esc(pg.coverImg) + '"' : "") + '><div class="cover-btns">' +
+					'<button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button>' +
+					"</div></div>"
+				: "") +
+			'<div class="page-heading">' +
+				'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + (pg.icon || (pg.pdfId ? "📄" : "📝")) + "</button>" +
+				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">＋ Cover</button>' : "") +
+			"</div>" +
+			'<input id="pageTitle" value="' + U.esc(pg.title) + '" autocomplete="off">' +
+			'<div class="page-toolbar">' +
+				(pg.pdfId ? '<button id="btnOpenPdf">' + (S.pdfOpen ? "PDF schließen" : "PDF anzeigen") + "</button>" : "") +
+				'<button id="btnHistory" title="Frühere Versionen ansehen und wiederherstellen">🕘 Verlauf</button>' +
+			"</div>" +
+		"</div>" +
+		(pg.db ? dbTableHtml(pg) : "") +
+		'<div class="editor-wrap"><div id="blockEditor" class="block-editor"></div></div>' +
+		// src="about:blank" verhindert die Chrome-Warnung "Unsafe attempt to load URL file://..."
+		// (ein iframe ohne src lädt sonst die eigene Seiten-URL als Platzhalter).
+		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" src="about:blank" title="PDF"></iframe>' : "");
+	hydrateCovers(main);
+	if (typeof EDITOR !== "undefined") {
+		const beHost = U.el("blockEditor");
+		if (beHost) EDITOR.mount(beHost, pg.id);
+	}
+	if (S.pdfOpen && pg.pdfId) {
+		PDFS.urlFor(pg.pdfId).then((u) => {
+			const f = U.el("pdfFrame");
+			if (f && u) f.src = u;
+		});
+	}
+}
+
+// ---------- Datenbank-Ansicht (echte Datenbanken statt kopierter Tabellen) ----------
+// Eine Datenbank-Seite (pg.db) zeigt ihre Unterseiten als editierbare Tabelle:
+// Spalten = pg.db.schema, Zellwerte = props der Zeilen-Seiten. Zellen-Änderungen
+// laufen als normales pageUpdate-Event → Verlauf, Diff und Notion-Sync greifen.
+function dbTableHtml(pg) {
+	const cols = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
+	const rows = STATE.childrenOf(pg.id, pg.workspaceId);
+	const RO = { formula: 1, rollup: 1, created_time: 1, last_edited_time: 1, created_by: 1, last_edited_by: 1, people: 1, relation: 1, files: 1, button: 1, unique_id: 1, verification: 1 };
+	return '<div class="db-view md"><table class="db-table"><thead><tr><th>Name</th>' +
+		cols.map((c) => "<th title='" + U.esc(c.type || "text") + "'>" + U.esc(c.name) + "</th>").join("") +
+		"</tr></thead><tbody>" +
+		rows.map((r) => '<tr><td><span class="crumb" data-page="' + r.id + '">' + (r.icon ? U.esc(r.icon) + " " : "📄 ") + U.esc(r.title) + "</span></td>" +
+			cols.map((c) => RO[c.type]
+				? '<td><span class="hint">' + U.esc((r.props || {})[c.name] || "") + "</span></td>"
+				: '<td><input class="db-cell" data-dbrow="' + r.id + '" data-dbcol="' + U.esc(c.name) + '" value="' + U.esc((r.props || {})[c.name] || "") + '"></td>').join("") +
+		"</tr>").join("") +
+		"</tbody></table>" +
+		'<div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="' + pg.id + '">＋ Neue Zeile</button></div></div>';
+}
+
+// Breadcrumb: Workspace › Elternseiten › aktuelle Seite (wie in Notion)
+function ancestorsOf(pg) {
+	const chain = [];
+	let cur = pg;
+	while (cur && cur.parentId) {
+		cur = S.pages[cur.parentId];
+		if (cur) chain.unshift(cur);
+	}
+	return chain;
+}
+
+function breadcrumbHtml(pg) {
+	const ws = S.workspaces[pg.workspaceId] || { name: "Privat" };
+	const chain = ancestorsOf(pg);
+	let html = '<div class="breadcrumb"><span class="crumb" data-crumbws="1">' + U.esc(ws.name) + "</span>";
+	chain.forEach((a) => {
+		html += '<span class="crumb-sep">/</span><span class="crumb" data-page="' + a.id + '">' + U.esc(a.title) + "</span>";
+	});
+	html += '<span class="crumb-sep">/</span><span class="crumb current">' + U.esc(pg.title) + "</span></div>";
+	return html;
+}
+
+function renderHome(main) {
+	const pages = STATE.activePages(); // Papierkorb-Seiten zählen nicht mit und erscheinen nicht unter "Zuletzt bearbeitet"
+	const recent = pages.slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 8);
+	const due = STATE.dueCards().length;
+	// Backup-Erinnerung: IndexedDB kann vom Browser geräumt werden — nach 7 Tagen ohne Export erinnern.
+	const lastBk = localStorage.getItem("notionLastBackup");
+	const bkDays = lastBk ? Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5) : null;
+	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
+	main.innerHTML =
+		'<div class="home">' +
+			"<h1>Guten Tag 👋</h1>" +
+			'<p class="hint">' + pages.length + " Seiten · " + Object.keys(S.cards).length + " Karteikarten" +
+			(due ? ' · <button id="btnReviewHome" class="mini">🃏 ' + due + " fällig — jetzt wiederholen</button>" : "") +
+			"</p>" +
+			(bkDue ? '<div class="backup-banner">💾 ' + (bkDays === null ? "Noch kein Backup erstellt" : "Letztes Backup vor " + bkDays + " Tagen") + ' — <button id="btnBackupNow" class="mini">Jetzt als JSON sichern</button></div>' : "") +
+			"<h3>Zuletzt bearbeitet</h3>" +
+			(recent.length
+				? '<div class="home-grid">' + recent.map((pg) =>
+					'<div class="home-card" data-page="' + pg.id + '"><span>' + (pg.icon || (pg.pdfId ? "📄" : "📝")) + " " + U.esc(pg.title) + "</span>" +
+					'<span class="hint">' + U.fmtDate(pg.updated) + "</span></div>"
+				).join("") + "</div>"
+				: '<p class="hint">Noch keine Seiten — lege über das + neben einem Workspace eine an.</p>') +
+		"</div>";
+}
+
+// Papierkorb: gelöschte Seiten mit Wiederherstellen / Endgültig-löschen-Optionen.
+function renderTrash(main) {
+	const items = STATE.trashedPages();
+	let html = '<div class="library"><h1>🗑 Papierkorb</h1><p class="hint">Einträge werden nach 30 Tagen automatisch endgültig gelöscht.</p>';
+	html += items.length
+		? '<div class="trash-list">' + items.map((pg) =>
+			'<div class="trash-row">' +
+				'<span class="row-title">' + (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "📝 ") + U.esc(pg.title) + "</span>" +
+				'<span class="hint">gelöscht ' + U.fmtDate(pg.trashedAt || pg.updated) + "</span>" +
+				'<button data-pagerestore="' + pg.id + '">↩ Wiederherstellen</button>' +
+				'<button data-pagepurge="' + pg.id + '" class="danger">🗑 Endgültig löschen</button>' +
+			"</div>"
+		).join("") + "</div>"
+		: '<p class="hint">Der Papierkorb ist leer.</p>';
+	html += "</div>";
+	main.innerHTML = html;
+}
+
+// ---------- GoodNotes-artige Bibliothek: Deckblätter (eigenes Bild oder vorgefertigt) ----------
+const COVER_URLS = {}; // blobId → Object-URL (einmal je Sitzung erzeugt und gecacht)
+const COVER_PRESETS = ["sunset", "ocean", "forest", "grape", "mono"];
+
+// Ohne eigenes Cover: deterministisch eine der vorgefertigten Verlaufs-Vorlagen aus
+// Titel/ID ableiten, damit jede Kachel wie in GoodNotes ein festes Deckblatt hat.
+function defaultCover(pg) {
+	const s = (pg.title || "") + (pg.id || "");
+	let h = 0;
+	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+	return COVER_PRESETS[h % COVER_PRESETS.length];
+}
+
+// Cover-Fläche einer Kachel: eigenes Bild (per data-coverimg nachgeladen) oder Verlauf.
+function libCoverHtml(pg) {
+	const icon = pg.icon || (pg.pdfId ? "📄" : "📝");
+	if (pg.coverImg) {
+		return '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '"><span class="lib-cover-icon">' + U.esc(icon) + "</span></div>";
+	}
+	const preset = pg.cover || defaultCover(pg);
+	// Papier-Vorschau wie in GoodNotes: die ersten Inhaltszeilen auf dem Deckblatt
+	const firstLines = (pg.content || "").split("\n").filter((l) => l.trim() && !l.startsWith("![")).slice(0, 4)
+		.map((l) => l.replace(/[#>*`\-\[\]]/g, "").trim().slice(0, 36)).filter(Boolean);
+	return '<div class="lib-cover cover-' + U.esc(preset) + '"><span class="lib-cover-icon">' + U.esc(icon) + "</span>" +
+		'<span class="lib-cover-paper">' + firstLines.map((l) => "<i>" + U.esc(l) + "</i>").join("") + "</span></div>";
+}
+
+async function coverObjectUrl(blobId) {
+	if (COVER_URLS[blobId]) return COVER_URLS[blobId];
+	try {
+		const rec = await DB.getBlob(blobId);
+		if (!rec || !rec.buf || !rec.buf.byteLength) return null;
+		const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/jpeg" }));
+		COVER_URLS[blobId] = url;
+		return url;
+	} catch (e) { console.warn("Cover konnte nicht geladen werden:", e); return null; }
+}
+
+// Lädt eigene Cover-Bilder nach dem Rendern nach (innerHTML kann kein async).
+function hydrateCovers(root) {
+	(root || document).querySelectorAll("[data-coverimg]").forEach(async (el) => {
+		if (el.dataset.coverHydrated) return;
+		el.dataset.coverHydrated = "1";
+		const u = await coverObjectUrl(el.dataset.coverimg);
+		if (u) el.style.backgroundImage = "url('" + u + "')";
+	});
+}
+
+// Lädt lokal gespeicherte Bilder (![...](img:...)) in gerendertem Markdown nach.
+const IMG_URLS = {};
+function hydrateImages(root) {
+	(root || document).querySelectorAll('img[src^="img:"]').forEach(async (img) => {
+		const id = img.getAttribute("src");
+		if (IMG_URLS[id]) { img.src = IMG_URLS[id]; return; }
+		try {
+			const rec = await DB.getBlob(id);
+			if (!rec || !rec.buf || !rec.buf.byteLength) return;
+			const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/png" }));
+			IMG_URLS[id] = url;
+			img.src = url;
+		} catch (e) { console.warn("Bild konnte nicht geladen werden:", e); }
+	});
+}
+
+// Lokaler Tages-Schlüssel "YYYY-MM-DD" (bewusst NICHT toISOString — Zeitzone!)
+function localDayKey(x) {
+	const d = new Date(x);
+	return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+// Bibliothek: GoodNotes-artige Kachel-Ansicht (Ordner + Dokument-Deckblätter) mit
+// Ordner-Navigation und Breadcrumb, plus alternative Tabellen-Ansicht.
+function renderLibrary(main) {
+	const view = (S.libView === "table") ? "table" : "grid";
+	const q = (S.libFilter || "").trim().toLowerCase();
+	const matches = (pg) => (!S.libTag || (pg.tags || []).includes(S.libTag))
+		&& (!q || pg.title.toLowerCase().includes(q)
+		|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
+	const vbtn = (v, label) => '<button data-libview="' + v + '" class="' + (view === v ? "active" : "") + '">' + label + "</button>";
+	const skey = S.libSort || "updated";
+	const sdir = S.libSortDir || -1;
+	const sbtn = (k, label) => '<button data-libsort="' + k + '" class="' + (skey === k ? "active" : "") + '">' + label + (skey === k ? (sdir === 1 ? " ↑" : " ↓") : "") + "</button>";
+	const sortPages = (arr) => arr.slice().sort((a, b) => {
+		const va = skey === "title" ? a.title.toLowerCase() : (a[skey] || "");
+		const vb = skey === "title" ? b.title.toLowerCase() : (b[skey] || "");
+		return (va < vb ? -1 : va > vb ? 1 : 0) * sdir;
+	});
+	let html = '<div class="library"><div class="lib-head"><h1>Bibliothek</h1>' +
+		'<input id="libFilter" placeholder="Filtern (Titel, Tags)…" autocomplete="off" value="' + U.esc(S.libFilter || "") + '">' +
+		'<div class="mode-btns">' + sbtn("updated", "Datum") + sbtn("title", "Name") + '</div>' +
+		'<div class="mode-btns">' + vbtn("grid", "Kacheln") + vbtn("table", "Tabelle") + "</div></div>";
+	// Tag-Verwaltung: Chips mit Zähler — Klick filtert, ✎ benennt den aktiven Tag um.
+	const tagCounts = {};
+	STATE.activePages().forEach((p) => (p.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
+	const tagNames = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+	if (tagNames.length) {
+		html += '<div class="tag-row">' + tagNames.map((tag) =>
+			'<button class="tag-chip' + (S.libTag === tag ? " active" : "") + '" data-tagfilter="' + U.esc(tag) + '">#' + U.esc(tag) + " · " + tagCounts[tag] + "</button>"
+		).join("") + (S.libTag ? '<button class="tag-chip" data-tagrename="' + U.esc(S.libTag) + '" title="Tag umbenennen">✎ umbenennen</button>' : "") + "</div>";
+	}
+	// Vorlagen-Galerie: alle als Vorlage markierten Seiten mit Ein-Klick-„Verwenden“.
+	const tpls = STATE.activePages().filter((p) => p.isTemplate);
+	if (tpls.length && !q && !S.libTag) {
+		html += '<div class="tpl-gallery"><h3>📑 Vorlagen</h3><div class="tpl-list">' + tpls.map((p) =>
+			'<span class="tpl-item">' + (p.icon ? U.esc(p.icon) + " " : "📑 ") + U.esc(p.title) +
+			' <button class="mini" data-tpluse="' + p.id + '">Verwenden</button>' +
+			' <button class="mini" data-page="' + p.id + '">Öffnen</button></span>'
+		).join("") + "</div></div>";
+	}
+
+	if (view === "table") {
+		const key = S.libSort || "updated";
+		const dir = S.libSortDir || -1;
+		const rows = STATE.activePages().filter(matches).sort((a, b) => {
+			const va = key === "title" ? a.title.toLowerCase() : (a[key] || "");
+			const vb = key === "title" ? b.title.toLowerCase() : (b[key] || "");
+			return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+		});
+		const arrow = (k) => (key === k ? (dir === 1 ? " ↑" : " ↓") : "");
+		html += '<table class="lib-table"><thead><tr>' +
+			'<th data-libsort="title" title="Klicken zum Sortieren">Titel' + arrow("title") + "</th>" +
+			"<th>Workspace</th><th>Tags</th>" +
+			'<th data-libsort="created" title="Klicken zum Sortieren">Erstellt' + arrow("created") + "</th>" +
+			'<th data-libsort="updated" title="Klicken zum Sortieren">Geändert' + arrow("updated") + "</th>" +
+			"</tr></thead><tbody>" +
+			rows.map((pg) =>
+				'<tr data-page="' + pg.id + '">' +
+					"<td>" + (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "📝 ") + U.esc(pg.title) + (pg.isTemplate ? ' <span class="tpl-badge">Vorlage</span>' : "") + "</td>" +
+					"<td>" + U.esc((S.workspaces[pg.workspaceId] || {}).name || "—") + "</td>" +
+					"<td>" + (pg.tags && pg.tags.length ? U.esc(pg.tags.join(", ")) : "—") + "</td>" +
+					"<td>" + U.fmtDate(pg.created) + "</td>" +
+					"<td>" + U.fmtDate(pg.updated) + "</td>" +
+				"</tr>"
+			).join("") + "</tbody></table>";
+		if (!rows.length) html += '<div class="empty small">Keine Seiten' + (q ? " für diesen Filter" : "") + "</div>";
+	} else if (q || S.libTag) {
+		// Kachel-Ansicht mit aktivem Filter: flache Treffer-Kacheln über alle Workspaces
+		const hits = sortPages(STATE.activePages().filter(matches));
+		html += '<div class="lib-grid">' + hits.map((pg) => libCardHtml(pg)).join("") + "</div>";
+		if (!hits.length) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
+		html += "</div>";
+		main.innerHTML = html;
+		hydrateCovers(main);
+		return;
+	} else {
+		let folder = S.libFolder;
+		const wsList = Object.values(S.workspaces);
+		// Nur ein Workspace? Dann direkt hinein — die Ordner-Zwischenebene ist unnötig.
+		if (!folder && wsList.length === 1) folder = { wsId: wsList[0].id, pageId: null };
+		let crumbs = "";
+		if (folder && (folder.pageId || wsList.length > 1)) {
+			const cur = folder.pageId ? S.pages[folder.pageId] : null;
+			const upAttr = cur
+				? (cur.parentId ? 'data-libinto="' + cur.parentId + '"' : 'data-libws="' + U.esc(folder.wsId) + '"')
+				: 'data-libroot="1"';
+			crumbs += '<button class="lib-back" ' + upAttr + ' title="Zurück">‹</button>';
+		}
+		crumbs += '<span class="lib-crumb" data-libroot="1">🗂 Alle</span>';
+		let tiles = "";
+		if (!folder) {
+			tiles = Object.values(S.workspaces).map((ws) => {
+				const count = STATE.activePages().filter((p) => (p.workspaceId || "default") === ws.id).length;
+				return '<button class="lib-folder" data-libws="' + U.esc(ws.id) + '"><span class="lib-folder-ico">📁</span>' +
+					'<span class="lib-folder-name">' + U.esc(ws.name) + "</span>" +
+					'<span class="lib-folder-count">' + count + " Seiten</span></button>";
+			}).join("") || '<div class="empty small">Keine Workspaces</div>';
+		} else {
+			const ws = S.workspaces[folder.wsId] || { name: "Workspace", id: folder.wsId };
+			crumbs += '<span class="lib-crumb-sep">/</span><span class="lib-crumb" data-libws="' + U.esc(ws.id) + '">' + U.esc(ws.name) + "</span>";
+			if (folder.pageId) {
+				ancestorsOf(S.pages[folder.pageId] || {}).forEach((a) => {
+					crumbs += '<span class="lib-crumb-sep">/</span><span class="lib-crumb" data-libinto="' + a.id + '">' + U.esc(a.title) + "</span>";
+				});
+				const cur = S.pages[folder.pageId];
+				if (cur) crumbs += '<span class="lib-crumb-sep">/</span><span class="lib-crumb current">' + U.esc(cur.title) + "</span>";
+			}
+			const kids = sortPages(STATE.childrenOf(folder.pageId || null, folder.wsId));
+			tiles = kids.map((pg) => libCardHtml(pg)).join("");
+			// „Neue Seite“-Kachel direkt im aktuellen Ordner (wie das + in GoodNotes)
+			tiles += '<button class="lib-newdoc" data-libnew="1" title="Neue Seite hier anlegen"><span class="lib-newdoc-plus">＋</span><span>Neue Seite</span></button>';
+		}
+		html += '<div class="lib-crumbs">' + crumbs + "</div>";
+		html += '<div class="lib-grid">' + tiles + "</div>";
+		if (!folder) html += '<div class="lib-new"><input id="inpWsName" placeholder="Neuer Workspace…"><button id="btnCreateWs">Erstellen</button></div>';
+		html += "</div>";
+		main.innerHTML = html;
+		hydrateCovers(main);
+		return;
+	}
+	html += '<div class="lib-new"><input id="inpWsName" placeholder="Neuer Workspace…">' +
+		'<button id="btnCreateWs">Erstellen</button></div></div>';
+	main.innerHTML = html;
+	hydrateCovers(main);
+}
+
+// Eine Dokument-Kachel: Deckblatt (eigenes Bild oder vorgefertigt) + Titel + Datum.
+// Hat die Seite Unterseiten, erscheint zusätzlich ein Ordner-Knopf zum Hineinnavigieren.
+function libCardHtml(pg) {
+	const kids = STATE.childrenOf(pg.id, pg.workspaceId);
+	const into = kids.length
+		? '<button class="lib-into" data-libinto="' + pg.id + '" title="Unterseiten öffnen">📁 ' + kids.length + "</button>"
+		: "";
+	return '<div class="lib-card" data-page="' + pg.id + '">' +
+		libCoverHtml(pg) + into +
+		'<div class="lib-card-title">' + (pg.isTemplate ? "📑 " : "") + U.esc(pg.title) + "</div>" +
+		'<div class="lib-card-date">' + U.fmtDate(pg.updated) + "</div>" +
+	"</div>";
+}
+
+// ---------- Anki-Bereich (🃏-Tab): Stapel / Browser / Statistik / Lernen ----------
+// „Standard" ist der interne Default für Karten ohne expliziten Stapel — er taucht
+// nirgends in der UI auf (nicht im Baum, nicht in den Browser-Chips, nicht im Hauptbereich).
+function ankiDecks() {
+	const set = new Set();
+	Object.keys(S.decks || {}).forEach((n) => { if (n !== "Standard") set.add(n); });
+	Object.values(S.cards).forEach((c) => { const d = c.deck || ""; if (d && d !== "Standard") set.add(d); });
+	// Elternstapel ergänzen: "Mathe::Analysis" erzeugt automatisch auch "Mathe"
+	[...set].forEach((n) => {
+		const parts = n.split("::");
+		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
+	});
+	return [...set].sort((a, b) => a.localeCompare(b, "de"));
+}
+
+// Karten eines Stapels INKLUSIVE aller Unterstapel ("Mathe" enthält "Mathe::Analysis")
+function ankiCardsOf(deck) {
+	return Object.values(S.cards).filter((c) => {
+		if (!deck) return true;
+		const d = c.deck || "Standard";
+		return d === deck || d.startsWith(deck + "::");
+	});
+}
+
+function ankiDueOf(deck) {
+	const now = new Date();
+	return ankiCardsOf(deck).filter((c) => !c.suspended && new Date(c.srs.due) <= now)
+		.sort((a, b) => a.srs.due.localeCompare(b.srs.due));
+}
+
+// Stapel-Baum für die linke Spalte: Unterstapel per "::"-Namensschema (wie in Anki),
+// ein-/ausklappbar wie der Seitenbaum, mit Fällig/Neu-Zählern und Aktionen je Zeile.
+// „Standard" und „Alle Stapel" tauchen NICHT auf — „Standard" ist nur der interne
+// Default für Karten ohne expliziten Stapel, und „Alle" ist überflüssig.
+function deckTreeHtml() {
+	const all = ankiDecks().filter((n) => n !== "Standard");
+	const kidsOf = (parent) => all.filter((n) => {
+		if (parent) return n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::");
+		return !n.includes("::");
+	});
+	const rowFor = (name, depth) => {
+		const label = name.split("::").pop();
+		const kids = kidsOf(name);
+		const key = "deck:" + name;
+		const collapsed = COLLAPSE.isCollapsed(key);
+		const due = ankiDueOf(name).length;
+		const neu = ankiCardsOf(name).filter((c) => c.srs.state === "new" && !c.suspended).length;
+		const chevron = kids.length
+			? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
+			: '<span class="row-chevron spacer"></span>';
+		const menuOpen = S.deckMenuOpenName === name;
+		const renaming = S.renamingDeck === name;
+		let html = '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
+			chevron +
+			(renaming
+				? '<input class="row-rename-input" data-deckrenamename="' + U.esc(name) + '" value="' + U.esc(label) + '" autocomplete="off">'
+				: '<span class="row-title">🃏 ' + U.esc(label) + "</span>") +
+			(due ? '<span class="deck-badge due" title="fällig">' + due + "</span>" : "") +
+			(neu ? '<span class="deck-badge" title="neu">' + neu + "</span>" : "") +
+			'<button class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
+			'<button class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
+			(menuOpen ? deckMenuHtml(name) : "") +
+			"</div>";
+		if (kids.length && !collapsed) html += kids.map((k) => rowFor(k, depth + 1)).join("");
+		return html;
+	};
+	return '<div class="ws-head"><span class="ws-name">Stapel</span>' +
+		'<button class="mini" data-decknew="1" title="Neuer Stapel">+</button></div>' +
+		(all.length ? kidsOf(null).map((n) => rowFor(n, 0)).join("") : '<div class="empty small">Noch keine Stapel — mit + einen anlegen</div>');
+}
+
+// Notion-artiges ⋯-Menü je Stapel (wie pageMenuHtml bei Seiten): Umbenennen, Duplizieren, Löschen.
+function deckMenuHtml(name) {
+	return '<div class="page-menu">' +
+		'<button class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
+		'<button class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
+		'<button class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 Löschen</button>' +
+		"</div>";
+}
+
+function renderAnki(main) {
+	const tab = S.ankiTab || "decks";
+	const tbtn = (id, label) => '<button data-ankitab="' + id + '" class="' + (tab === id ? "active" : "") + '">' + label + "</button>";
+	let html = '<div class="library anki"><div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
+		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + "</div>" +
+		'<button data-ankinewcard="1">＋ Neue Karte</button></div>';
+	if (tab === "browser") html += ankiBrowserHtml();
+	else if (tab === "stats") html += ankiStatsHtml();
+	else if (tab === "study") html += ankiStudyHtml();
+	else html += ankiDecksHtml();
+	html += "</div>";
+	main.innerHTML = html;
+	U.renderMath(main);
+	U.highlightCode(main);
+	hydrateImages(main);
+}
+
+// Stapel-Übersicht wie Ankis Deck-Liste: hierarchisch eingerückt (Unterstapel per "::"),
+// Zähler inklusive Unterstapel, Lernen/Durchsuchen/Unterstapel je Zeile.
+function ankiDecksHtml() {
+	const rows = ankiDecks().map((d) => {
+		const depth = d.split("::").length - 1;
+		const label = d.split("::").pop();
+		const cards = ankiCardsOf(d);
+		const neu = cards.filter((c) => c.srs.state === "new" && !c.suspended).length;
+		const due = ankiDueOf(d).length;
+		const susp = cards.filter((c) => c.suspended).length;
+		return '<div class="deck-row" style="margin-left:' + (depth * 24) + 'px">' +
+			'<div class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
+			'<span class="deck-counts"><b class="cnt-due">' + due + '</b> fällig · <b class="cnt-new">' + neu + "</b> neu · " + cards.length + " gesamt" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
+			'<div class="deck-actions">' +
+				'<button data-ankistudy="' + U.esc(d) + '" ' + (due ? "" : "disabled") + ">▶ Lernen</button>" +
+				'<button data-ankideckfilter="' + U.esc(d) + '">🔍 Durchsuchen</button>' +
+				'<button data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
+			"</div></div>";
+	}).join("");
+	const totalDue = ankiDueOf(null).length;
+	return '<div class="deck-list">' + rows + "</div>" +
+		'<div class="row-btns" style="margin-top:14px;max-width:720px">' +
+			'<button data-ankistudy="" ' + (totalDue ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalDue + " fällig)</button>" +
+			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
+}
+
+// Karten-Browser: Suche, Stapel-Filter-Chips, sortierbare Spalten, Zeilen-Aktionen.
+function ankiBrowserHtml() {
+	const q = (S.ankiSearch || "").trim().toLowerCase();
+	const key = S.ankiSort || "due";
+	const dir = S.ankiSortDir || 1;
+	let cards = ankiCardsOf(S.ankiDeck);
+	if (q) cards = cards.filter((c) => (c.front + "\n" + c.back).toLowerCase().includes(q));
+	const val = (c) => {
+		if (key === "front") return c.front.toLowerCase();
+		if (key === "deck") return (c.deck || "Standard").toLowerCase();
+		if (key === "state") return (c.suspended ? "z" : c.srs.state);
+		if (key === "interval") return c.srs.stability || 0;
+		if (key === "reps") return c.srs.reps || 0;
+		if (key === "lapses") return c.srs.lapses || 0;
+		if (key === "created") return c.created;
+		return c.srs.due;
+	};
+	cards = cards.slice().sort((a, b) => { const va = val(a), vb = val(b); return (va < vb ? -1 : va > vb ? 1 : 0) * dir; });
+	// Nur ein Fenster rendern — 2000+ Zeilen auf einmal machten den Tab spürbar zäh.
+	const shown = cards.slice(0, S.ankiBrowserLimit || 200);
+	const arrow = (k) => (key === k ? (dir === 1 ? " ↑" : " ↓") : "");
+	const chips = '<button class="menu-chip' + (!S.ankiDeck ? " active" : "") + '" data-ankideckfilter="">Alle</button>' +
+		ankiDecks().map((d) => '<button class="menu-chip' + (S.ankiDeck === d ? " active" : "") + '" data-ankideckfilter="' + U.esc(d) + '">' + U.esc(d) + "</button>").join("");
+	const stateLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" };
+	return '<div class="anki-toolbar"><input id="ankiSearch" placeholder="Karten durchsuchen…" autocomplete="off" value="' + U.esc(S.ankiSearch || "") + '">' +
+		'<div class="menu-chips">' + chips + "</div></div>" +
+		'<table class="lib-table anki-table"><thead><tr>' +
+			'<th data-ankisort="front" title="Klicken zum Sortieren">Vorderseite' + arrow("front") + "</th>" +
+			'<th data-ankisort="deck" title="Klicken zum Sortieren">Stapel' + arrow("deck") + "</th>" +
+			'<th data-ankisort="state" title="Klicken zum Sortieren">Status' + arrow("state") + "</th>" +
+			'<th data-ankisort="due" title="Klicken zum Sortieren">Fällig' + arrow("due") + "</th>" +
+			'<th data-ankisort="interval" title="Klicken zum Sortieren">Intervall' + arrow("interval") + "</th>" +
+			'<th data-ankisort="reps" title="Klicken zum Sortieren">Wdh.' + arrow("reps") + "</th>" +
+			'<th data-ankisort="lapses" title="Klicken zum Sortieren">Fehler' + arrow("lapses") + "</th>" +
+			"<th></th>" +
+		"</tr></thead><tbody>" +
+		shown.map((c) =>
+			'<tr class="' + (c.suspended ? "suspended" : "") + '">' +
+				'<td class="anki-front" data-ankiedit="' + c.id + '" title="Zum Bearbeiten klicken">' + U.esc(c.front.length > 90 ? c.front.slice(0, 90) + "…" : c.front) + "</td>" +
+				"<td>" + U.esc(c.deck || "Standard") + "</td>" +
+				"<td>" + (c.suspended ? "⏸ Ausgesetzt" : (stateLabel[c.srs.state] || c.srs.state)) + "</td>" +
+				"<td>" + U.fmtDate(c.srs.due) + "</td>" +
+				"<td>" + (c.srs.state === "new" ? "—" : Math.max(1, Math.round(c.srs.stability)) + " T") + "</td>" +
+				"<td>" + (c.srs.reps || 0) + "</td>" +
+				"<td>" + (c.srs.lapses || 0) + "</td>" +
+				'<td class="anki-rowbtns">' +
+					'<button data-ankiedit="' + c.id + '" title="Bearbeiten">✎</button>' +
+					'<button data-ankisuspend="' + c.id + '" title="' + (c.suspended ? "Fortsetzen" : "Aussetzen") + '">' + (c.suspended ? "▶" : "⏸") + "</button>" +
+					'<button data-ankidel="' + c.id + '" class="danger" title="Löschen">🗑</button>' +
+				"</td></tr>"
+		).join("") + "</tbody></table>" +
+		(cards.length > shown.length ? '<div class="row-btns" style="margin-top:8px"><button data-ankimore="1">↓ ' + (cards.length - shown.length) + " weitere Karten anzeigen</button></div>" : "") +
+		(!cards.length ? '<div class="empty small">Keine Karten' + (q ? " für diese Suche" : "") + "</div>" : "");
+}
+
+// Statistik-Dashboard: Kennzahlen, 30-Tage-Diagramm, 7-Tage-Prognose.
+function ankiStatsHtml() {
+	const cards = ankiCardsOf(S.ankiDeck);
+	const now = new Date();
+	const due = cards.filter((c) => !c.suspended && new Date(c.srs.due) <= now).length;
+	const neu = cards.filter((c) => c.srs.state === "new").length;
+	const learned = cards.filter((c) => c.srs.state === "review").length;
+	const reviews = (S.reviews || []).filter((r) => !S.ankiDeck || (S.cards[r.cardId] && (S.cards[r.cardId].deck || "Standard") === S.ankiDeck));
+	const graded = reviews.filter((r) => r.grade > 0);
+	const retention = graded.length ? Math.round(graded.filter((r) => r.grade > 1).length / graded.length * 100) : null;
+	const perDay = {};
+	reviews.forEach((r) => { const k = localDayKey(r.t); perDay[k] = (perDay[k] || 0) + 1; });
+	const dayKeys = [];
+	for (let i = 29; i >= 0; i--) dayKeys.push(localDayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)));
+	const maxN = Math.max(1, ...dayKeys.map((k) => perDay[k] || 0));
+	const bars = dayKeys.map((k) => '<div class="bar-wrap" title="' + k + ": " + (perDay[k] || 0) + ' Wiederholungen"><div class="bar" style="height:' + Math.round((perDay[k] || 0) / maxN * 100) + '%"></div></div>').join("");
+	const fc = [];
+	for (let i = 0; i < 7; i++) {
+		const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+		const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1);
+		const n = cards.filter((c) => !c.suspended && new Date(c.srs.due) >= (i === 0 ? new Date(0) : d0) && new Date(c.srs.due) < d1).length;
+		fc.push({ label: i === 0 ? "Heute" : d0.toLocaleDateString("de-DE", { weekday: "short" }), n });
+	}
+	const fcMax = Math.max(1, ...fc.map((x) => x.n));
+	const kpi = (label, value) => '<div class="kpi"><div class="kpi-num">' + value + '</div><div class="kpi-label">' + label + "</div></div>";
+	return '<div class="kpi-row">' +
+			kpi("Karten", cards.length) + kpi("Fällig", due) + kpi("Neu", neu) + kpi("Gelernt", learned) +
+			kpi("Wiederholungen", reviews.length) + kpi("Erfolgsquote", retention === null ? "—" : retention + "%") +
+		"</div>" +
+		"<h3>Wiederholungen — letzte 30 Tage</h3>" +
+		'<div class="bar-chart">' + bars + "</div>" +
+		"<h3>Prognose — nächste 7 Tage</h3>" +
+		'<div class="bar-chart forecast">' + fc.map((x) => '<div class="bar-wrap" title="' + x.label + ": " + x.n + '"><div class="bar" style="height:' + Math.round(x.n / fcMax * 100) + '%"></div><div class="bar-label">' + x.label + "</div></div>").join("") + "</div>";
+}
+
+// Lern-Ansicht: Vorderseite → Antwort zeigen → vier Bewertungen mit Intervall-Vorschau.
+function ankiStudyHtml() {
+	const due = ankiDueOf(S.ankiDeck);
+	const head = '<div class="hint">Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · noch " + due.length + " fällig</div>";
+	if (!due.length) {
+		return head + '<div class="study-done"><h2>Alles wiederholt 🎉</h2>' +
+			'<p class="hint">In diesem Stapel ist gerade nichts fällig.</p>' +
+			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
+	}
+	const c = due[0];
+	const pv = SRS.preview(c.srs);
+	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
+	let html = head + '<div class="study-card">' +
+		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× gelernt · " + (c.srs.lapses || 0) + " Fehler · Intervall " +
+			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage" : "—") + " · Stapel " + U.esc(c.deck || "Standard") + "</div>" +
+		'<div class="card-face md">' + U.md(c.front) + "</div>";
+	if (S.reviewShowBack) {
+		html += '<div class="card-face back md">' + U.md(c.back) + "</div>" +
+			'<div class="grades">' +
+				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + "</span></button>" +
+				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + "</span></button>" +
+				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + "</span></button>" +
+				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + "</span></button>" +
+			"</div>";
+	} else {
+		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen</button></div>';
+	}
+	html += "</div>";
+	return html;
+}
+
+// Karten-Editor (neu anlegen oder bearbeiten) — Stapel frei wählbar (neue Stapel einfach eintippen).
+function openCardEditor(cardId) {
+	const c = cardId ? S.cards[cardId] : null;
+	const o = U.el("overlay");
+	o.hidden = false;
+	o.innerHTML = modal(
+		"<h3>" + (c ? "Karte bearbeiten" : "Neue Karte") + "</h3>" +
+		'<div><label for="cardDeck">Stapel (neuen Namen eintippen = neuer Stapel)</label>' +
+		'<input id="cardDeck" list="deckList" value="' + U.esc(c ? (c.deck || "Standard") : (S.ankiDeck || "Standard")) + '">' +
+		'<datalist id="deckList">' + ankiDecks().map((d) => '<option value="' + U.esc(d) + '">').join("") + "</datalist></div>" +
+		'<div><label for="cardFront">Vorderseite (Markdown + LaTeX)</label><textarea id="cardFront" rows="3">' + U.esc(c ? c.front : "") + "</textarea></div>" +
+		'<div><label for="cardBack">Rückseite</label><textarea id="cardBack" rows="3">' + U.esc(c ? c.back : "") + "</textarea></div>" +
+		'<div class="modal-actions"><button data-cardeditorsave="' + (c ? c.id : "new") + '">Speichern</button><button id="btnCloseOverlay">Abbrechen</button></div>'
+	);
+}
+
+// ---------- Daily Notes (📅-Tab): Monatskalender, jeder Tag ist eine eigene Seite ----------
+function renderDaily(main) {
+	const now = new Date();
+	const cur = S.dailyMonth ? new Date(S.dailyMonth + "-01T12:00:00") : new Date(now.getFullYear(), now.getMonth(), 1);
+	const y = cur.getFullYear(), mo = cur.getMonth();
+	const monthLabel = cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+	const todayKey = localDayKey(now);
+	const notes = {};
+	STATE.activePages().forEach((p) => { if (p.daily) notes[p.daily] = p; });
+	const startOffset = (new Date(y, mo, 1).getDay() + 6) % 7; // Montag = 0
+	const daysInMonth = new Date(y, mo + 1, 0).getDate();
+	let cells = "";
+	for (let i = 0; i < startOffset; i++) cells += '<div class="cal-day other"></div>';
+	for (let d = 1; d <= daysInMonth; d++) {
+		const key = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+		const pg = notes[key];
+		const snippet = pg ? ((pg.content || "").split("\n").find((l) => l.trim()) || "") : "";
+		cells += '<div class="cal-day' + (key === todayKey ? " today" : "") + (pg ? " has-note" : "") + '" data-dailyday="' + key + '" title="' + key + '">' +
+			'<span class="cal-num">' + d + "</span>" +
+			(pg ? '<span class="cal-snippet">' + U.esc(snippet.slice(0, 70)) + "</span>" : "") +
+		"</div>";
+	}
+	main.innerHTML = '<div class="library daily"><div class="lib-head"><h1>📅 Daily Notes</h1>' +
+		'<div class="mode-btns"><button data-dailynav="-1" title="Voriger Monat">‹</button><button id="btnDailyToday">Heute</button><button data-dailynav="1" title="Nächster Monat">›</button></div>' +
+		'<span class="hint">' + monthLabel + " — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>" +
+		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => '<div class="cal-dow">' + d + "</div>").join("") + "</div>" +
+		'<div class="cal-grid">' + cells + "</div></div>";
+}
+
+// Vorlagen-Auswahl beim Anlegen einer neuen Seite: "Leere Seite" oder eine der
+// als Vorlage markierten Seiten (⋯-Menü → Als Vorlage) als Startinhalt.
+function openTemplatePicker() {
+	const tpls = STATE.activePages().filter((p) => p.isTemplate);
+	const o = U.el("overlay");
+	o.hidden = false;
+	o.innerHTML = modal(
+		"<h3>Neue Seite</h3>" +
+		'<button class="tpl-opt" data-tplblank="1">📄 Leere Seite</button>' +
+		(tpls.length ? '<p class="hint">Oder aus einer Vorlage:</p>' : "") +
+		tpls.map((p) =>
+			'<button class="tpl-opt" data-tpluse="' + p.id + '">' + (p.icon ? U.esc(p.icon) + " " : "📑 ") + U.esc(p.title) + "</button>"
+		).join("") +
+		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div>'
+	);
+}
+
+// Seitenverlauf-Dialog: Versionsliste links (aus dem Event-Log), Vorschau rechts,
+// Wiederherstellen erzeugt ein NEUES Event — der Verlauf selbst bleibt vollständig erhalten.
+function renderHistoryModal() {
+	const o = U.el("overlay");
+	o.hidden = false;
+	const vs = S.histVersions || [];
+	const idx = Math.max(0, Math.min(S.histIndex, vs.length - 1));
+	const v = vs[idx];
+	const items = vs.map((x, i) => ({ x, i })).reverse().slice(0, 50).map(({ x, i }) =>
+		'<button class="hist-item' + (i === idx ? " active" : "") + '" data-histversion="' + i + '">' +
+			new Date(x.t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) +
+			(i === vs.length - 1 ? ' <span class="hint">aktuell</span>' : "") +
+		"</button>"
+	).join("");
+	o.innerHTML = '<div class="modal hist-modal">' +
+		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
+		'<div class="hist-list"><h3>🕘 Verlauf</h3>' + (items || '<p class="hint">Keine Versionen</p>') + "</div>" +
+		'<div class="hist-preview"><h3>' + U.esc(v ? v.title : "") + "</h3>" +
+			'<div class="md hist-md">' + (v ? U.md(v.content) : "") + "</div>" +
+			'<div class="modal-actions"><button id="btnHistRestore" ' + (!v || idx === vs.length - 1 ? "disabled" : "") + ">↩ Diese Version wiederherstellen</button></div>" +
+		"</div></div>";
+	const pv = o.querySelector(".hist-md");
+	if (pv) { U.renderMath(pv); U.highlightCode(pv); hydrateImages(pv); }
+}
+
+// ---------- Chat: Nachrichten, Thinking-Prozess (live + finalisiert), Edit-Karten mit Undo, Datei-Chips ----------
+function userMsgHtml(m) {
+	// Wie in Notion: Bearbeiten ist gesperrt, solange danach noch nicht rückgängig
+	// gemachte Seitenänderungen (edit-Karten) stehen.
+	const idx = S.chat.findIndex((x) => x.mid === m.mid);
+	const locked = idx !== -1 && S.chat.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
+	return '<div class="msg user">' +
+		'<button class="msg-edit' + (locked ? " locked" : "") + '" data-editmsg="' + m.mid + '" title="' +
+			(locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten") + '">' + (locked ? "🔒" : "✎") + "</button>" +
+		(m.content ? U.esc(m.content) : "") +
+		(m.image ? '<img class="msg-img" src="' + m.image + '" alt="Anhang">' : "") +
+		(m.textFile ? fileChipHtml(m) : "") +
+		"</div>";
+}
+
+// Lange geklebte Texte werden nicht ausgeschrieben, sondern als kleine .txt-Karte
+// gezeigt (herunterladbar); das Modell bekommt den Inhalt trotzdem als Kontext.
+function fileChipHtml(m) {
+	return '<div class="file-chip"><span>📄 ' + U.esc(m.textFile.name) + " · " + m.textFile.size + ' Zeichen</span>' +
+		'<button data-filedownload="' + m.mid + '">Herunterladen</button></div>';
+}
+
+function chatMsgListHtml(historyList) {
+	const parts = (historyList || []).map((m) => {
+		if (m.role === "edit") return editCardHtml(m);
+		if (m.role === "question") return questionCardHtml(m);
+		if (m.role === "assistant") return assistantMsgHtml(m);
+		return userMsgHtml(m);
+	});
+	if (S.aiBusy) {
+		const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
+		if (historyList === activeList) {
+			if (S.aiDraft) parts.push('<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>");
+			else if (S.aiThinkingDraft) parts.push(thinkingLiveHtml());
+			else parts.push('<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>");
+		}
+	}
+	return parts.join("");
+}
+
+// Rückfrage-Karte (ask_choice-Tool): anklickbare Optionen, danach die gewählte Antwort fixiert.
+function questionCardHtml(m) {
+	if (m.answered) {
+		return '<div class="msg assistant question-card answered"><div class="q-text">❓ ' + U.esc(m.question) + "</div>" +
+			'<div class="q-picked">Ausgewählt: <b>' + U.esc(m.answer) + "</b></div></div>";
+	}
+	return '<div class="msg assistant question-card"><div class="q-text">❓ ' + U.esc(m.question) + "</div>" +
+		'<div class="q-options">' + (m.options || []).map((o) =>
+			'<button class="q-opt" data-answerq="' + m.mid + '" data-answer="' + U.esc(o) + '">' + U.esc(o) + "</button>"
+		).join("") + "</div></div>";
+}
+
+// Nach dem Setzen von innerHTML wird LaTeX gerendert (KaTeX) und Code eingefärbt (highlight.js) —
+// beides live, auch während die Antwort noch streamt.
+function renderChat() {
+	const log = U.el("chatLog");
+	if (!log) return;
+	log.innerHTML = chatMsgListHtml(S.sideChat);
+	U.renderMath(log);
+	U.highlightCode(log);
+	log.scrollTop = log.scrollHeight;
+}
+
+// Ein Vollbild-Chat, der genau im Hauptbereich gerendert wird (gleiche Bausteine wie das Seitenpanel).
+// Layout wie Notions eigenes KI-Panel: Log wächst nach oben, das Eingabefeld bleibt
+// fest unten und ist horizontal zentriert — unabhängig von der Nachrichtenzahl.
+function renderFullChat(main) {
+	const s = S.currentChatId ? CHATS.load().find((x) => x.id === S.currentChatId) : null;
+	const title = (s && s.title) || "Neuer Chat";
+	const empty = !S.chat.length;
+	main.innerHTML =
+		'<div class="chat-full-wrap">' +
+			'<h1>💬 ' + U.esc(title) + "</h1>" +
+			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' : "") +
+			'<div id="mainChatLog" class="chat-log-full"></div>' +
+			'<form id="mainChatForm" class="chat-form-full">' +
+				'<button type="button" id="btnAttachFull" title="PDF oder Bild anhängen">+</button>' +
+				'<textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>' +
+				'<button type="button" id="btnModelChipFull" class="model-chip" title="Modell wählen"></button>' +
+				'<button type="submit" title="Senden">➤</button>' +
+				'<div id="modelMenuFull" class="model-menu" hidden></div>' +
+			"</form>" +
+		"</div>";
+	renderMainChatLog();
+	const inp = U.el("mainChatInput");
+	if (empty && inp) inp.focus();
+}
+
+function renderMainChatLog() {
+	const log = U.el("mainChatLog");
+	if (!log) return;
+	log.innerHTML = chatMsgListHtml(S.chat);
+	U.renderMath(log);
+	U.highlightCode(log);
+	log.scrollTop = log.scrollHeight;
+}
+
+// Während des Streamings: Mini-Ansicht mit den letzten 2 Zeilen, ausklappbar.
+function thinkingLiveHtml() {
+	const full = S.aiThinkingDraft;
+	const expanded = !!S.thinkingLiveExpanded;
+	return '<div class="think-box">' +
+		'<div class="think-head"><span>🧠 Denkt nach…</span>' +
+		'<button id="btnThinkLive">' + (expanded ? "Einklappen ▾" : "Ausklappen ▸") + "</button></div>" +
+		'<div class="think-body' + (expanded ? " full" : " mini") + '">' + U.esc(expanded ? full : U.lastLines(full, 2)) + "</div>" +
+		"</div>";
+}
+
+// Nach Abschluss: komplett eingeklappte Leiste, die man wieder aufklappen kann.
+function assistantMsgHtml(m) {
+	let html = "";
+	if (m.reasoning) {
+		const expanded = !!m.reasoningExpanded;
+		html += '<div class="think-box done">' +
+			'<button class="think-toggle" data-reasoningtoggle="' + m.mid + '">' +
+			(expanded ? "▾ Gedankengang" : "▸ Gedankengang anzeigen") + "</button>" +
+			(expanded ? '<div class="think-body full">' + U.esc(m.reasoning) + "</div>" : "") +
+			"</div>";
+	}
+	const refineOpen = S.refineOpenMid === m.mid;
+	html += '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
+		'<div class="msg-tools">' +
+			'<button class="msg-tool-btn" data-refinetoggle="' + m.mid + '" title="Antwort anpassen">✦ Anpassen</button>' +
+			(refineOpen
+				? '<div class="refine-menu">' +
+					'<button data-refine="' + m.mid + '" data-mode="longer">⬆️ Länger</button>' +
+					'<button data-refine="' + m.mid + '" data-mode="shorter">⬇️ Kürzer</button>' +
+					"</div>"
+				: "") +
+		"</div></div>";
+	return html;
+}
+
+function editCardHtml(m) {
+	const title = m.pageTitle || "Unbenannt";
+	const label = m.created ? "Hat erstellt" : "Hat geändert";
+	const diff = m.after.content && m.before.content ? U.diffLines(m.before.content, m.after.content) : [];
+	const diffHtml = diff.map((d) =>
+		'<div class="diffline ' + d.type + '">' + (d.type === "add" ? "+ " : d.type === "del" ? "− " : "  ") + U.esc(d.text) + "</div>"
+	).join("");
+	return '<div class="edit-card">' +
+		'<div class="edit-title">' + U.esc(m.summary || (label + " " + title)) + '</div>' +
+		'<div class="edit-actions-row">' +
+			'<button class="btn-show-changes" data-difftoggle="' + m.mid + '">' + (m.diffExpanded ? "Änderungen ausblenden" : "Änderungen anzeigen") + '</button>' +
+			'<button class="btn-undo-icon" data-undo="' + m.mid + '" ' + (m.undone ? "disabled" : "") + ' title="Rückgängig machen">↺</button>' +
+		'</div>' +
+		'<div class="edit-subtitle">' + label + '</div>' +
+		'<div class="edit-files-list">' +
+			'<div class="edit-file-item">📄 ' + U.esc(title) + '</div>' +
+		'</div>' +
+		(m.diffExpanded ? '<div class="diff-block">' + (diffHtml || '<span class="hint">Keine Textunterschiede</span>') + "</div>" : "") +
+		"</div>";
+}
+
+function renderPendingChip() {
+	const chip = U.el("pendingChip");
+	if (!chip) return;
+	if (S.pendingImage) {
+		chip.hidden = false;
+		chip.innerHTML = '<img src="' + S.pendingImage + '" alt=""> Bild angehängt ' +
+			'<button id="btnRemoveImage" title="Entfernen">✕</button>';
+	} else if (S.pendingTextFile) {
+		chip.hidden = false;
+		chip.innerHTML = '📄 ' + U.esc(S.pendingTextFile.name) + ' (' + S.pendingTextFile.size + ' Zeichen) wird als Datei angehängt ' +
+			'<button id="btnRemoveTextFile" title="Entfernen">✕</button>';
+	} else {
+		chip.hidden = true;
+		chip.innerHTML = "";
+	}
+}
+
+// ---------- Modals ----------
+function modal(inner) {
+	return '<div class="modal">' + inner + "</div>";
+}
+
+function field(label, id, value, type) {
+	return "<div><label for=\"" + id + "\">" + U.esc(label) + "</label>" +
+		'<input id="' + id + '" type="' + (type || "text") + '" value="' + U.esc(value || "") + '"></div>';
+}
+
+function openIconPicker() {
+	if (!S.currentPageId) return;
+	const icons = ["📝", "📘", "📕", "📙", "📗", "🧪", "🧮", "⚡", "🧢", "📐", "🔬", "💡", "🎯", "📊", "🗂", "📎", "✅", "⭐", "🔥", "🎓", "🧠", "📚", "🛠", "🚀"];
+	const o = U.el("overlay");
+	o.hidden = false;
+	o.innerHTML = modal(
+		"<h3>Icon wählen</h3>" +
+		'<div class="icon-grid">' + icons.map((i) => '<button class="icon-opt" data-iconset="' + i + '">' + i + "</button>").join("") + "</div>" +
+		'<div class="modal-actions"><button data-iconset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
+	);
+}
+
+function openCoverPicker() {
+	if (!S.currentPageId) return;
+	const covers = ["sunset", "ocean", "forest", "grape", "mono"];
+	const o = U.el("overlay");
+	o.hidden = false;
+	o.innerHTML = modal(
+		"<h3>Cover wählen</h3>" +
+		'<div class="cover-grid">' + covers.map((c) => '<button class="cover-swatch cover-' + c + '" data-coverset="' + c + '"></button>').join("") + "</div>" +
+		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
+		'<div class="row-btns"><button id="btnCoverUpload">🖼 Eigenes Bild wählen</button></div>' +
+		'<div class="modal-actions"><button data-coverset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
+	);
+}
+
+// Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
+const SETTINGS_SECTIONS = [
+	{ id: "ki", label: "KI" },
+	{ id: "look", label: "Darstellung" },
+	{ id: "notion", label: "Notion Sync" },
+	{ id: "backup", label: "Backup" },
+	{ id: "sync", label: "Sync" },
+];
+
+function openSettings(section) {
+	S.settingsSection = section || S.settingsSection || "ki";
+	const sec = S.settingsSection;
+	const o = U.el("overlay");
+	o.hidden = false;
+	const nav = SETTINGS_SECTIONS.map((s) =>
+		'<div class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + s.label + "</div>"
+	).join("");
+	let body = "";
+	if (sec === "ki") {
+		const providers = S.settings.aiProviders || [];
+		body = "<h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>" +
+			'<div class="provider-list">' + providers.map((pr) =>
+				'<div class="provider-card" data-provrow="' + pr.id + '">' +
+					'<div class="provider-card-head">' +
+						'<input data-provname="' + pr.id + '" placeholder="Name der Quelle" value="' + U.esc(pr.name) + '">' +
+						'<button data-provdel="' + pr.id + '" class="icon-danger" title="Quelle entfernen">🗑</button>' +
+					"</div>" +
+					'<input data-provbase="' + pr.id + '" placeholder="Server-URL (OpenAI-kompatibel)" value="' + U.esc(pr.base) + '">' +
+					'<input data-provkey="' + pr.id + '" type="password" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
+				"</div>"
+			).join("") + "</div>" +
+			'<button id="btnAddProvider">＋ Quelle hinzufügen</button>' +
+			field("Embedding-Modell (optional, semantische Suche — nutzt die im Modell-Dropdown aktive Quelle)", "inpEmbed", S.settings.embedModel) +
+			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI (optional)</label>" +
+			'<textarea id="inpCustomInstructions" rows="3" placeholder="z.B. Studienfach, bevorzugte Sprache, Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div>" +
+			'<p class="hint">Lege für jede Quelle Server-URL + optionalen API-Key an, z.B.:<br>' +
+			"Google Gemini: https://generativelanguage.googleapis.com/v1beta/openai · Modelle z.B. gemma-4-31b-it, gemini-2.5-flash · Embeddings gemini-embedding-001.<br>" +
+			"OpenAI: https://api.openai.com/v1 · Embeddings text-embedding-3-small.<br>" +
+			"Lokal: z.B. http://localhost:1234/v1 (LM Studio, Port 1234, CORS aktivieren, kein Key nötig).<br>" +
+			"Welches Modell aktiv ist, wählst du oben im Modell-Dropdown — dort erscheinen alle Quellen gruppiert mit ihren live abgefragten Modellen. Die KI kennt nur, was du hier selbst einträgst.</p>" +
+			'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+	} else if (sec === "notion") {
+		const last = S.settings.notionLastSync;
+		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
+			field("Notion Seiten-ID (Wurzelseite für den Sync; leer = alle freigegebenen Seiten)", "inpNotionPage", S.settings.notionPageId || S.notionPageId) +
+			field("Eigener CORS-Proxy (optional, z.B. https://dein-worker.workers.dev/?; leer = corsproxy.io)", "inpCorsProxy", S.settings.corsProxy || "") +
+			'<p class="hint">1) Auf notion.so/my-integrations eine interne Integration erstellen, Token kopieren.<br>' +
+			'2) In Notion die gewünschten Seiten über „Teilen“ mit der Integration freigeben.<br>' +
+			"3) <b>⬇ Import</b> holt alles einmalig. <b>⇅ Zwei-Wege-Sync</b> gleicht danach in beide Richtungen ab: die jeweils neuere Version gewinnt, lokal neue Seiten werden in deinem Notion unter der Wurzelseite angelegt.<br>" +
+			"Hinweis: Notions API erlaubt keine direkten Browseranfragen (CORS). Ohne eigenen Proxy laufen die Anfragen über den öffentlichen corsproxy.io — sicherer ist ein eigener Mini-Proxy (Cloudflare Worker), dessen URL du oben einträgst.</p>" +
+			(last ? '<p class="hint">Letzter Sync: ' + U.fmtDate(last) + "</p>" : "") +
+			'<div class="modal-actions"><button id="btnMigrateNotion">⬇ Import</button><button id="btnNotionSync">⇅ Zwei-Wege-Sync</button><button id="btnNotionCancel" class="danger" hidden>⏹ Abbrechen</button></div>' +
+			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
+			'<p class="hint" id="notionStatus"></p>';
+	} else if (sec === "look") {
+		const theme = localStorage.getItem("notionTheme") === "light" ? "light" : "dark";
+		body = '<h4>Design</h4><div class="row-btns">' +
+			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '">🌙 Dunkel</button>' +
+			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '">☀️ Hell</button></div>' +
+			'<h4 style="margin-top:14px">Hintergrund</h4>' +
+			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dunkel überblendet, damit Text lesbar bleibt.</p>' +
+			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>';
+	} else if (sec === "backup") {
+		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
+			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
+			'<h4 style="margin-top:14px">Workspace als Markdown-ZIP</h4>' +
+			'<p class="hint">Alle Seiten eines Workspace als .md-Dateien (Ordnerstruktur = Seitenbaum) — in jedem Editor nutzbar.</p>' +
+			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>
+				'<button data-zipws="' + U.esc(ws.id) + '">🗜 ' + U.esc(ws.name) + "</button>").join("") + "</div>" +
+			'<h4 style="margin-top:20px; color:var(--danger)">⚠️ Gefahrenzone</h4>' +
+			'<p class="hint">Löscht alle lokalen Seiten und deren Versionsverlauf unwiderruflich von diesem Gerät. Deine Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
+			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
+	} else if (sec === "sync") {
+		if (!S.settings.driveClientId) {
+			body = field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
+				'<p class="hint">Google verlangt für jede App eine registrierte Client-ID — das ist einmalig nötig, keine Notion-Eigenheit:<br>' +
+				"1) Google Cloud Console → Drive-API aktivieren.<br>" +
+				'2) OAuth-Client vom Typ „Webanwendung“ anlegen, <code>' + location.origin + '</code> als autorisierten Ursprung eintragen.<br>' +
+				"3) Client-ID hier einfügen und speichern.<br>" +
+				"Danach reicht wirklich nur noch ein Klick auf „Mit Google anmelden“.</p>" +
+				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+		} else if (S.driveUserEmail) {
+			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
+				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
+				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
+		} else {
+			body = '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
+				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
+		}
+	}
+	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
+	o.innerHTML = '<div class="modal settings-modal">' +
+		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
+		'<div class="settings-nav">' + nav + "</div>" +
+		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
+	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
+	// sofort wieder anzeigen — der Zustand lebt in S.notionJob (app.js) und überlebt
+	// so das Schließen und Wiederöffnen der Einstellungen.
+	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
+}
+
+function openReview() {
+	const o = U.el("overlay");
+	o.hidden = false;
+	const due = STATE.dueCards();
+	if (!due.length) {
+		o.innerHTML = modal(
+			"<h3>Alles wiederholt 🎉</h3>" +
+			'<p class="hint">Gerade sind keine Karten fällig. Die KI legt beim Lernen automatisch neue an.</p>' +
+			'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
+		);
+		return;
+	}
+	const c = due[0];
+	o.innerHTML = modal(
+		"<h3>Wiederholen · noch " + due.length + " fällig</h3>" +
+		'<div class="card-face md">' + U.md(c.front) + "</div>" +
+		(S.reviewShowBack
+			? '<div class="card-face back md">' + U.md(c.back) + "</div>" +
+				'<div class="grades">' +
+					'<button data-grade="1" data-card="' + c.id + '">Nochmal</button>' +
+					'<button data-grade="2" data-card="' + c.id + '">Schwer</button>' +
+					'<button data-grade="3" data-card="' + c.id + '">Gut</button>' +
+					'<button data-grade="4" data-card="' + c.id + '">Einfach</button>' +
+				"</div>"
+			: '<div class="modal-actions"><button id="btnShowBack">Antwort zeigen</button></div>') +
+		'<div class="modal-actions"><button id="btnCloseOverlay">Beenden</button></div>'
+	);
+}
+
+function openCards() {
+	const o = U.el("overlay");
+	o.hidden = false;
+	const cards = Object.values(S.cards).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
+	const rows = cards.map((c) =>
+		'<div class="card-row">' +
+			'<textarea data-front="' + c.id + '" rows="2">' + U.esc(c.front) + "</textarea>" +
+			'<textarea data-back="' + c.id + '" rows="2">' + U.esc(c.back) + "</textarea>" +
+			'<div class="card-meta"><span>fällig: ' + U.fmtDate(c.srs.due) + " · Wdh. " + (c.srs.reps || 0) + "</span>" +
+			'<span><button data-cardsave="' + c.id + '">Speichern</button> ' +
+			'<button data-carddel="' + c.id + '" class="danger">Löschen</button></span></div>' +
+		"</div>"
+	).join("");
+	o.innerHTML = modal(
+		"<h3>Karten verwalten (" + cards.length + ")</h3>" +
+		'<div class="cards-list">' + (rows || '<p class="hint">Noch keine Karten.</p>') + "</div>" +
+		'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
+	);
+}

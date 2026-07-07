@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notion — GLM5.2 Design-Alternative</title>
+    <style>
+        /* === Deine Original-Variablen aus styles.css === */
+        :root {
+            --bg0: #05070d;
+            --bg1: #0a1120;
+            --edge: rgba(255, 255, 255, 0.14);
+            --text: rgba(255, 255, 255, 0.92);
+            --text2: rgba(255, 255, 255, 0.60);
+            --accent: #6fc3ff;
+            --accent-soft: rgba(111, 195, 255, 0.12);
+            --danger: #e97366;
+            --menu-bg: #1f2127;
+            --panel-solid: #1b1c1f;
+            --success: #72bc8f;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text);
+            background: var(--bg0);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #bg { position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(1400px 900px at 50% -20%, #12151b 0%, #0b0d11 55%, #08090c 100%);
+        }
+
+        /* === 3-Spalten-Grid wie dein Original === */
+        #app { position: relative; z-index: 1;
+            display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px;
+            gap: 12px; height: 100vh; padding: 12px;
+        }
+
+        /* Flache Panels, dezente Kanten — kein Glas-Look */
+        #sidebar, #mainWrap, #panel, .modal {
+            background: var(--panel-solid);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius);
+            min-height: 0;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+        #sidebar { display: flex; flex-direction: column; padding: 14px 10px; gap: 10px; }
+
+        .topbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+        .topbar .tab {
+            display: flex; align-items: center; gap: 6px; border: none; background: transparent;
+            border-radius: 8px; padding: 6px 7px; color: var(--text2); min-height: 32px; flex-shrink: 0; cursor: pointer;
+        }
+        .topbar .tab:hover { background: rgba(255,255,255,0.07); }
+        .topbar .tab.active { background: rgba(255,255,255,0.10); color: var(--text); }
+        .topbar .tab .tab-label { font-weight: 600; font-size: 14px; }
+
+        #search { width: 100%; }
+        input, textarea, select {
+            background: rgba(0,0,0,0.25); color: var(--text);
+            border: 1px solid var(--edge); border-radius: 8px;
+            padding: 8px 10px; font: inherit; outline: none;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+        #tree { flex: 1; overflow-y: auto; }
+
+        .ws-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; margin-top: 8px;
+            font-size: 12px; font-weight: 600; letter-spacing: 0.5px; color: var(--text2); text-transform: uppercase; }
+        .ws-head .ws-name { flex: 1; padding-left: 2px; }
+        .mini { min-height: 0; height: 24px; padding: 0 8px; border: none; background: transparent;
+            font-size: 16px; color: var(--text2); cursor: pointer; border-radius: 4px; }
+        .mini:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        .row { display: flex; align-items: center; gap: 2px; padding: 6px 8px;
+            border-radius: 8px; cursor: pointer; color: var(--text2); }
+        .row-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+        .row:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .row.active { background: var(--accent-soft); color: var(--text);
+            box-shadow: inset 0 0 0 1px rgba(111,195,255,0.25); }
+
+        .row-chevron { min-height: 0; width: 16px; height: 16px; padding: 0; background: transparent;
+            color: var(--text2); font-size: 9px; display: flex; align-items: center; justify-content: center;
+            transition: transform .12s; flex-shrink: 0; cursor: pointer; }
+        .row-chevron.open { transform: rotate(90deg); }
+        .row-chevron.spacer { visibility: hidden; }
+
+        .row-add { opacity: 0; min-height: 0; height: 22px; padding: 0 7px; border: none;
+            background: transparent; color: var(--text2); font-size: 15px; cursor: pointer; border-radius: 4px; }
+        .row:hover .row-add { opacity: 1; }
+        .row-add:hover { color: var(--accent); background: rgba(255,255,255,0.10); }
+
+        .side-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.06); }
+        .side-foot button { background: transparent; text-align: left; color: var(--text2);
+            border: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 14px; }
+        .side-foot button:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+        /* ---------- HAUPTBEREICH ---------- */
+        #mainWrap { display: flex; flex-direction: column; overflow: hidden; }
+        #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        #tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; overflow-x: auto; }
+        .navbtn { min-height: 26px; padding: 2px 8px; background: transparent; color: var(--text2);
+            font-size: 16px; border: none; cursor: pointer; border-radius: 4px; }
+        .navbtn:disabled { opacity: .3; cursor: default; }
+        .navbtn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        .tabstrip { display: flex; gap: 2px; overflow-x: auto; }
+        .tabchip { display: flex; align-items: center; gap: 6px; padding: 5px 4px 5px 10px; border-radius: 6px;
+            cursor: pointer; font-size: 12.5px; color: var(--text2); white-space: nowrap; max-width: 180px; }
+        .tabchip-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tabchip:hover { background: rgba(255,255,255,0.06); }
+        .tabchip.active { background: rgba(255,255,255,0.11); color: var(--text); }
+        .tabchip-x { min-height: 0; padding: 0 4px; background: transparent; color: var(--text2);
+            font-size: 11px; border: none; cursor: pointer; border-radius: 4px; }
+        .tabchip-x:hover { color: var(--text); background: rgba(255,255,255,0.14); }
+
+        /* Notion-artiger Seitenkopf */
+        .page-meta { padding: 10px 40px 4px; flex-shrink: 0; }
+        .breadcrumb { font-size: 13px; color: var(--text2); padding: 4px 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+        .crumb { cursor: pointer; }
+        .crumb:hover { color: var(--text); text-decoration: underline; }
+        .crumb.current { color: var(--text); cursor: default; text-decoration: none; font-weight: 600; }
+        .crumb-sep { opacity: .4; }
+
+        .page-cover { height: 120px; border-radius: 10px; margin: 8px 0 0; position: relative;
+            background: linear-gradient(120deg, #2b5876, #4e4376); }
+
+        .page-heading { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; }
+        .page-icon { font-size: 38px; cursor: pointer; background: transparent; border: none; padding: 2px 6px; border-radius: 8px; }
+        .page-icon:hover { background: rgba(255,255,255,0.07); }
+        #pageTitle { flex: 1; width: 100%; font-size: 32px; font-weight: 700; line-height: 1.25;
+            background: transparent; border: none; padding: 2px 0 6px; outline: none; color: #fff; }
+        .page-toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 0 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06); }
+
+        /* Block-Editor */
+        .editor-wrap { flex: 1; display: flex; min-height: 0; justify-content: center; }
+        .block-editor { flex: 1; overflow-y: auto; position: relative; padding: 10px 24px 0 0; max-width: 860px; width: 100%; margin: 0 auto; }
+        .blk { display: flex; align-items: flex-start; gap: 2px; border-radius: 6px; position: relative; padding: 2px 0; }
+        .blk:hover { background: rgba(255,255,255,0.02); }
+        .blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 4px; opacity: 0; }
+        .blk:hover .blk-gutter { opacity: 1; }
+        .blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent;
+            color: var(--text2); font-size: 14px; display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; cursor: pointer; border: none; }
+        .blk-plus:hover, .blk-handle:hover { background: rgba(255,255,255,0.10); color: var(--text); }
+        .blk-body { flex: 1; min-width: 0; min-height: 1.7em; padding: 2px 0; }
+        .blk-h { margin: 0.35em 0 0.1em; line-height: 1.3; }
+        .blk-h.h1 { font-size: 1.7em; } .blk-h.h2 { font-size: 1.35em; } .blk-h.h3 { font-size: 1.12em; }
+        .blk-li { display: flex; gap: 8px; align-items: flex-start; }
+        .blk-marker { flex-shrink: 0; min-width: 18px; text-align: right; }
+        .blk-litext { flex: 1; min-width: 0; }
+        .blk-check { margin-top: 5px; accent-color: var(--accent); cursor: pointer; }
+        .blk-callout { border-radius: 8px; padding: 10px 14px; border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(82,156,202,0.10); }
+
+        /* ---------- KI-PANEL ---------- */
+        #panel { display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .panel-head { padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--edge);
+            font-weight: 600; font-size: 13px; letter-spacing: 0.6px; color: var(--text2);
+            display: flex; align-items: center; justify-content: space-between; }
+        .panel-head button { min-height: 0; padding: 4px 10px; border: none; background: transparent;
+            color: var(--text2); cursor: pointer; font-size: 14px; border-radius: 4px; }
+        .panel-head button:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        #chatLog { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { font-size: 15px; line-height: 1.55; max-width: 100%; }
+        .msg.user { align-self: flex-end; max-width: 85%; background: #2c2e33;
+            border-radius: 12px; padding: 8px 12px; }
+        .msg.assistant { align-self: stretch; background: none; border: none; padding: 2px 0; }
+        .msg.busy { color: var(--text2); font-style: italic; }
+
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            background: rgba(255,255,255,0.25); margin-left: 8px; }
+        .dot.online { background: var(--success); box-shadow: 0 0 6px rgba(114,188,143,0.7); }
+
+        /* Thinking-/Reasoning-Anzeige */
+        .think-box { margin: 4px 0; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; background: rgba(255,255,255,0.02); }
+        .think-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text2); }
+        .think-body { font-size: 12.5px; color: var(--text2); white-space: pre-wrap;
+            font-family: Menlo, Consolas, monospace; margin-top: 4px; max-height: 260px; overflow-y: auto; }
+
+        /* Edit-Karten mit Diff */
+        .edit-card { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px;
+            background: rgba(255,255,255,0.02); font-size: 13.5px; margin: 8px 0; }
+        .edit-title { font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+        .diff-block { margin-top: 8px; font-family: Menlo, Consolas, monospace; font-size: 12px;
+            max-height: 220px; overflow-y: auto; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; }
+        .diffline.add { background: rgba(114,188,143,0.15); color: #9fdcb4; padding: 1px 4px; border-radius: 3px; white-space: pre-wrap; }
+        .diffline.del { background: rgba(233,115,102,0.15); color: #f0a89f; text-decoration: line-through; padding: 1px 4px; border-radius: 3px; white-space: pre-wrap; }
+
+        /* Eingabe-Pille */
+        #chatForm { display: flex; align-items: center; gap: 6px; margin: 10px; position: relative;
+            padding: 6px 6px 6px 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 22px;
+            background: rgba(255,255,255,0.035); flex-shrink: 0; }
+        #chatForm:focus-within { border-color: var(--accent); }
+        #chatInput { flex: 1; resize: none; border: none; background: transparent; padding: 6px 0; max-height: 160px;
+            color: var(--text); outline: none; font: inherit; }
+        #chatForm button[type="submit"] { background: var(--accent); color: #06090f; border-radius: 50%;
+            width: 30px; height: 30px; min-height: 0; padding: 0; border: none; cursor: pointer; font-size: 14px;
+            display: flex; align-items: center; justify-content: center; }
+        #chatForm button[type="submit"]:hover { background: #8fd0ff; }
+        .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; background: transparent; border: none;
+            color: var(--text2); cursor: pointer; }
+        .composer-tool:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+        #pendingChip { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+            border-top: 1px solid var(--edge); font-size: 13px; color: var(--text2); }
+
+        /* ---------- BIBLIOTHEK ---------- */
+        .library { padding: 32px 40px; overflow-y: auto; flex: 1; }
+        .library h1 { margin-bottom: 12px; }
+        .lib-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .lib-crumbs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 16px; font-size: 13px; color: var(--text2); }
+        .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 22px 16px; align-items: start; }
+        .lib-card { cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+        .lib-cover { height: 160px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.10); overflow: hidden;
+            display: flex; align-items: center; justify-content: center; background: linear-gradient(120deg, #6a11cb, #2575fc);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+        .lib-cover-icon { font-size: 42px; opacity: 0.92; text-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+        .lib-card-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; }
+        .lib-card-date { font-size: 11.5px; color: var(--text2); }
+        .lib-folder { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+            text-align: left; min-height: 150px; padding: 16px; border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 12px; background: rgba(255,255,255,0.03); cursor: pointer; }
+        .lib-folder:hover { background: rgba(255,255,255,0.07); }
+        .lib-folder-ico { font-size: 38px; }
+        .lib-newdoc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            min-height: 160px; border: 1px dashed rgba(255,255,255,0.22); border-radius: 10px;
+            background: transparent; color: var(--text2); font-size: 13px; cursor: pointer; }
+        .lib-newdoc:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+        .lib-newdoc-plus { font-size: 30px; }
+
+        .lib-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .lib-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text2); padding: 6px 10px; border-bottom: 1px solid var(--edge); }
+        .lib-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+        .lib-table tr:hover td { background: rgba(255,255,255,0.04); }
+
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+        .tag-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--edge);
+            background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; }
+        .tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+        /* ---------- ANKI-KARTEIKARTEN ---------- */
+        .deck-list { display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
+        .deck-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px;
+            border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; background: rgba(255,255,255,0.03); }
+        .deck-name { font-weight: 700; font-size: 16px; }
+        .deck-counts { font-size: 12.5px; color: var(--text2); }
+        .cnt-due { color: var(--accent); } .cnt-new { color: var(--success); }
+        .deck-badge { flex-shrink: 0; font-size: 10.5px; min-width: 18px; text-align: center; border-radius: 9px;
+            padding: 1px 5px; background: rgba(114,188,143,0.16); color: var(--success); }
+        .deck-badge.due { background: var(--accent-soft); color: var(--accent); }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 8px 0 18px; max-width: 860px; }
+        .kpi { padding: 14px; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; background: rgba(255,255,255,0.03); text-align: center; }
+        .kpi-num { font-size: 24px; font-weight: 700; color: var(--accent); }
+        .kpi-label { font-size: 12px; color: var(--text2); }
+        .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 130px; max-width: 720px;
+            padding: 8px; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+        .bar-wrap { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
+        .bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .8; }
+        .bar-label { font-size: 10px; color: var(--text2); }
+
+        .study-card { max-width: 680px; margin: 18px auto 0; display: flex; flex-direction: column; gap: 12px; }
+        .card-face { padding: 18px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.14); }
+        .card-face.back { border-color: rgba(111,195,255,0.3); }
+        .grades { display: flex; gap: 8px; }
+        .grades button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px;
+            background: rgba(255,255,255,0.055); color: var(--text); border: none; border-radius: 6px; cursor: pointer; min-height: 32px; font: inherit; font-size: 14px; }
+        .grades button:hover { background: rgba(255,255,255,0.11); }
+        .grade-ivl { font-size: 11px; color: var(--text2); }
+
+        /* ---------- DAILY NOTES ---------- */
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 980px; }
+        .cal-dow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 0 4px; }
+        .cal-day { min-height: 92px; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 6px 8px;
+            cursor: pointer; display: flex; flex-direction: column; gap: 4px; background: rgba(255,255,255,0.02); }
+        .cal-day:hover { background: rgba(255,255,255,0.06); }
+        .cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+        .cal-day.has-note { background: var(--accent-soft); }
+        .cal-num { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+        .cal-day.today .cal-num { color: var(--accent); }
+
+        /* ---------- PAPIERKORB ---------- */
+        .trash-list { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+        .trash-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.06); }
+        .trash-row .row-title { flex: 1; }
+
+        /* ---------- HOME ---------- */
+        .home { padding: 28px 32px; overflow-y: auto; flex: 1; }
+        .home h1 { margin-bottom: 4px; }
+        .home h3 { margin: 22px 0 10px; color: var(--text2); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        .home-card { padding: 14px; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; cursor: pointer;
+            display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.03); }
+        .home-card:hover { background: rgba(255,255,255,0.07); }
+
+        /* ---------- MODAL / OVERLAY ---------- */
+        #overlay { position: fixed; inset: 0; z-index: 10;
+            background: rgba(3, 5, 10, 0.6); display: grid; place-items: center; }
+        #overlay[hidden] { display: none; }
+        .modal { width: min(520px, 92vw); padding: 24px; display: flex; flex-direction: column; gap: 12px;
+            background: #232529; box-shadow: 0 16px 48px rgba(0,0,0,0.5); border-radius: var(--radius); }
+        .modal h3 { margin-bottom: 4px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+        .modal-x { position: absolute; top: 10px; right: 10px; min-height: 0; width: 28px; height: 28px;
+            padding: 0; border-radius: 6px; background: transparent; color: var(--text2); font-size: 14px;
+            border: none; cursor: pointer; }
+        .modal-x:hover { background: rgba(255,255,255,0.10); color: var(--text); }
+
+        /* ---------- BUTTONS ---------- */
+        button { background: rgba(255,255,255,0.055); color: var(--text); border: none; border-radius: 6px;
+            padding: 6px 10px; font: inherit; font-size: 14px; cursor: pointer; min-height: 32px; }
+        button:hover { background: rgba(255,255,255,0.11); }
+        button.danger { color: var(--danger); }
+        .empty { color: var(--text2); padding: 16px; text-align: center; }
+        .hint { font-size: 13px; color: var(--text2); }
+
+        /* ---------- MODELl-DROPDOWN ---------- */
+        .model-menu { position: absolute; bottom: calc(100% + 8px); left: 8px; z-index: 20;
+            width: 300px; max-height: 340px; overflow-y: auto;
+            background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 6px; }
+        .model-menu[hidden] { display: none; }
+        .menu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 8px 8px 3px; }
+        .menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+            text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 7px 8px; border-radius: 6px; }
+        .menu-item:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+        .menu-item.active { background: var(--accent-soft); color: var(--text); }
+        .menu-check { color: var(--accent); flex-shrink: 0; font-size: 12px; }
+
+        /* ---------- Scrollbars ---------- */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 980px) {
+            body { overflow: auto; }
+            #app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+            #mainWrap { min-height: 60vh; }
+            #panel { min-height: 40vh; }
+        }
+
+        /* ---------- LIGHT THEME ---------- */
+        body.light {
+            --bg0: #f7f7f5; --bg1: #ffffff;
+            --edge: rgba(0, 0, 0, 0.12);
+            --text: rgba(20, 20, 20, 0.92); --text2: rgba(20, 20, 20, 0.60);
+            --accent: #2383e2; --accent-soft: rgba(35, 131, 226, 0.10);
+            --menu-bg: #ffffff; --panel-solid: #f1f1ef;
+        }
+        body.light #bg { background: radial-gradient(1400px 900px at 50% -20%, #ffffff 0%, #f0efed 55%, #f7f7f5 100%); }
+    </style>
+</head>
+<body>
+    <div id="bg"></div>
+
+    <div id="app">
+        <!-- ========== SIDEBAR ========== -->
+        <aside id="sidebar">
+            <div class="topbar">
+                <button class="tab active" title="Home">🏠 <span class="tab-label">Home</span></button>
+                <button class="tab" title="Chats">💬</button>
+                <button class="tab" title="Bibliothek">🗂</button>
+                <button class="tab" title="Karteikarten">🃏</button>
+                <button class="tab" title="Daily Notes">📅</button>
+                <button class="tab" title="Suchen">🔍</button>
+            </div>
+            <input id="search" placeholder="Suchen… (Strg+K)" autocomplete="off">
+            <nav id="tree">
+                <!-- Favoriten -->
+                <div class="ws-head"><span class="ws-name">★ Favoriten</span></div>
+                <div class="row active">
+                    <span class="row-chevron spacer"></span>
+                    <span class="row-title">📝 Design-Alternativen</span>
+                </div>
+                <!-- Workspace -->
+                <div class="ws-head">
+                    <button class="row-chevron open" title="Ein-/Ausklappen">▸</button>
+                    <span class="ws-name">Privat</span>
+                    <button class="mini" title="Neue Seite">+</button>
+                </div>
+                <div class="row">
+                    <button class="row-chevron open">▸</button>
+                    <span class="row-title">⚡ Elektrodynamik VL6</span>
+                    <button class="row-add" title="Optionen">⋯</button>
+                    <button class="row-add" title="Unterseite">+</button>
+                </div>
+                <div class="row">
+                    <span class="row-chevron spacer"></span>
+                    <span class="row-title">📚 Semester 2</span>
+                    <button class="row-add" title="Optionen">⋯</button>
+                </div>
+            </nav>
+            <div class="side-foot">
+                <button>🃏 Karten fällig: <span style="color:var(--accent)">5</span></button>
+                <button>🗂 Karten verwalten</button>
+                <button>🗑 Papierkorb</button>
+                <button>☁️ Sync</button>
+                <button>⚙︎ Einstellungen</button>
+            </div>
+        </aside>
+
+        <!-- ========== HAUPTBEREICH ========== -->
+        <div id="mainWrap">
+            <div id="tabbar">
+                <button class="navbtn" title="Seitenleiste">☰</button>
+                <button class="navbtn" title="Zurück">‹</button>
+                <button class="navbtn" title="Vor" disabled>›</button>
+                <div class="tabstrip">
+                    <div class="tabchip active">
+                        <span class="tabchip-title">📝 Design-Alternativen</span>
+                        <button class="tabchip-x" title="Schließen">✕</button>
+                    </div>
+                    <div class="tabchip">
+                        <span class="tabchip-title">⚡ Elektrodynamik</span>
+                        <button class="tabchip-x">✕</button>
+                    </div>
+                    <div class="tabchip">
+                        <span class="tabchip-title">💬 Chat</span>
+                        <button class="tabchip-x">✕</button>
+                    </div>
+                </div>
+            </div>
+
+            <main id="main">
+                <!-- Seitenkopf: Breadcrumb, Cover, Icon, Titel, Toolbar -->
+                <div class="page-meta">
+                    <div class="breadcrumb">
+                        <span class="crumb">Privat</span>
+                        <span class="crumb-sep">/</span>
+                        <span class="crumb current">Design-Alternativen</span>
+                    </div>
+                    <div class="page-cover"></div>
+                    <div class="page-heading">
+                        <button class="page-icon" title="Icon ändern">🎨</button>
+                        <input id="pageTitle" value="Design-Alternativen" readonly>
+                    </div>
+                    <div class="page-toolbar">
+                        <button title="Frühere Versionen">🕘 Verlauf</button>
+                        <button title="Teilen">🔗 Teilen</button>
+                    </div>
+                </div>
+
+                <!-- Block-Editor mit Block-Typen: Toggle, Bullet, To-do, Heading, Callout -->
+                <div class="editor-wrap">
+                    <div class="block-editor">
+                        <!-- Heading H1 -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-h h1">Feature-Überblick: Komplette Design-Alternative</div>
+                        </div>
+                        <!-- Callout -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-callout">💡 Dieser Prototyp zeigt alle Features deines Notion-Klon-Projekts in einem einzigen Design-Entwurf: Sidebar, Tab-Leiste, Block-Editor, KI-Panel, Bibliothek, Anki, Daily Notes, Papierkorb & mehr.</div>
+                        </div>
+                        <!-- Bullet List -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Workspaces mit einklappbarem Seitenbaum, Favoriten (★) und Drag & Drop</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Tab-Leiste mit Zurück/Vor-Navigation — zeigt Seiten und Chats gemischt</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Block-Editor mit Slash-Menü (/), Drag-Handles (⠿), Callouts und To-dos</span></div>
+                        </div>
+                        <!-- To-do -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><input type="checkbox" class="blk-check" checked><span class="blk-litext" style="color:var(--text2);text-decoration:line-through">KI-Panel mit Modell-Dropdown, Thinking und Edit-Karten</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><input type="checkbox" class="blk-check"><span class="blk-litext">Anki-Karteikarten mit FSRS-Lernschritten, Stapel-Baum & Statistik</span></div>
+                        </div>
+                        <!-- Heading H2 -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-h h2">Bibliothek</div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">GoodNotes-artige Kachel-Ansicht mit Deckblättern und Ordner-Navigation</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Alternative Tabellen-Ansicht (Titel/Workspace/Tags/Geändert), sortierbar</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Tag-Chips mit Zähler, Filter und Umbenennung</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Vorlagen-Galerie mit Ein-Klick-„Verwenden“</span></div>
+                        </div>
+                        <!-- Heading H2 -->
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-h h2">Sync & Backup</div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Google-Drive-Sync mit OAuth-Client-ID (AppData-Speicher)</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Export/Import als JSON (Event-Log, konfliktfrei), Markdown-ZIP pro Workspace</span></div>
+                        </div>
+                        <div class="blk">
+                            <div class="blk-gutter"><button class="blk-plus">+</button><button class="blk-handle">⠿</button></div>
+                            <div class="blk-body blk-li"><span class="blk-marker">•</span><span class="blk-litext">Zwei-Wege-Notion-Synchronisation über CORS-Proxy</span></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- ========== KI-PANEL ========== -->
+        <aside id="panel">
+            <div class="panel-head">
+                <span>KI-Coach<span class="dot online" title="Verbunden"></span></span>
+                <span>
+                    <button title="Vollbild">⛶</button>
+                    <button title="Einklappen">✕</button>
+                </span>
+            </div>
+
+            <div id="chatLog">
+                <!-- User Message -->
+                <div class="msg user">Fasse die Features der Design-Alternative zusammen.</div>
+
+                <!-- Assistant Message with Thinking -->
+                <div class="think-box">
+                    <div class="think-head"><span>🧠 Denkt nach…</span><button>Einklappen ▾</button></div>
+                    <div class="think-body">Der Nutzer fragt nach einer Feature-Übersicht des Prototyps. Ich gehe die Hauptbestandteile durch: Sidebar, Editor, KI-Panel, Bibliothek, Anki, Daily Notes.</div>
+                </div>
+
+                <!-- Assistant Message -->
+                <div class="msg assistant">
+                    <p>Dieser Prototyp übernimmt <strong>alle Features</strong> deines Notion-Klon-Projekts:</p>
+                    <p style="margin-top:6px">• Werkstatteiten Sidebar mit Seitenbaum, Favoriten & Drag & Drop<br>• Tab-Leiste mit Zurück/Vor (Seiten + Chats)<br>• Block-Editor mit Slash-Menü, Callouts & To-dos<br>• KI-Panel mit Modell-Dropdown, Thinking & Edit-Karten<br>• Bibliothek (Kacheln/Tabelle), Anki, Daily Notes, Papierkorb</p>
+                </div>
+
+                <!-- Edit Card with Diff -->
+                <div class="edit-card">
+                    <div class="edit-title">Hat geändert: Design-Alternativen</div>
+                    <div style="display:flex;gap:8px;margin-bottom:12px">
+                        <button style="background:rgba(255,255,255,0.07);border:1px solid var(--edge);padding:6px 14px;font-size:13px;font-weight:600">Änderungen anzeigen</button>
+                        <button style="background:transparent;border:none;font-size:16px;color:var(--text2);cursor:pointer" title="Rückgängig">↺</button>
+                    </div>
+                    <div style="font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;margin-bottom:6px">Hat geändert</div>
+                    <div style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:10px 12px;font-size:13.5px">📄 Design-Alternativen</div>
+                    <div class="diff-block">
+                        <div class="diffline add">+ Feature-Überblick: Komplette Design-Alternative</div>
+                        <div class="diffline add">+ Workspaces mit einklappbarem Seitenbaum</div>
+                        <div class="diffline del">- Platzhalter-Text</div>
+                        <div class="diffline same">  Bibliothek und Sync-Features</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Attachment Chip -->
+            <div id="pendingChip" hidden></div>
+
+            <!-- Input Form with Modell-Dropdown -->
+            <form id="chatForm">
+                <button type="button" title="PDF oder Bild anhängen" class="composer-tool">+</button>
+                <button type="button" class="composer-tool" title="Modell wählen">⚙</button>
+                <textarea id="chatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>
+                <button type="submit" title="Senden">➤</button>
+                <div class="model-menu" hidden>
+                    <div class="menu-label">Lokal (LM Studio)</div>
+                    <div class="menu-item active"><span>glm-2.5-flash</span><span class="menu-check">✓</span></div>
+                    <div class="menu-item"><span>gemma-3-27b</span></div>
+                    <div class="menu-label">Cloud</div>
+                    <div class="menu-item"><span>gemini-2.5-flash</span></div>
+                    <div class="menu-item"><span>gpt-4o-mini</span></div>
+                </div>
+            </form>
+        </aside>
+    </div>
+
+    <!-- ========== OVERLAY: Einstellungen-Modal ========== -->
+    <div id="overlay" hidden>
+        <div class="modal" style="width:min(720px,94vw);height:min(520px,84vh);flex-direction:row;overflow:hidden;position:relative;padding:0">
+            <button class="modal-x" title="Schließen">✕</button>
+            <div style="width:180px;border-right:1px solid var(--edge);padding:16px 8px;display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,0.15)">
+                <div style="padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text);background:var(--accent-soft)">KI</div>
+                <div style="padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text2)">Darstellung</div>
+                <div style="padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text2)">Notion Sync</div>
+                <div style="padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text2)">Backup</div>
+                <div style="padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text2)">Sync</div>
+            </div>
+            <div style="flex:1;padding:20px 24px;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
+                <h3>Einstellungen</h3>
+                <h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>
+                <div style="padding:10px 12px;border:1px solid var(--edge);border-radius:10px;background:rgba(255,255,255,0.02)">
+                    <input style="width:100%;font-weight:600;margin-bottom:6px" placeholder="Name der Quelle" value="Lokal (LM Studio)">
+                    <input style="width:100%;margin-bottom:6px" placeholder="Server-URL" value="http://localhost:1234/v1">
+                    <input type="password" style="width:100%" placeholder="API-Key (optional)">
+                </div>
+                <button style="align-self:flex-start">＋ Quelle hinzufügen</button>
+                <p class="hint">Lege für jede Quelle Server-URL + optionalen API-Key an. Welches Modell aktiv ist, wählst du oben im Modell-Dropdown.</p>
+                <div class="modal-actions"><button>Speichern</button></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
