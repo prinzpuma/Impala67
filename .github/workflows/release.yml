@@ -17,6 +17,8 @@ jobs:
       - name: Linux-Abhängigkeiten installieren
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libxdo-dev libssl-dev
 
