@@ -1,37 +1,41 @@
-name: auto-version
-
+name: release
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
 
 jobs:
-  bump:
-    if: [[ !contains(github.event.head_commit.message, '[skip ci]') ]]
-    runs-on: ubuntu-latest
+  build:
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Linux-Abhängigkeiten installieren
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec grep -l "packages.microsoft.com" {} \; | xargs -r sudo rm -f
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libxdo-dev libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
         with:
-          token: [[ secrets.GH_PAT ]]
-          fetch-depth: 0
+          node-version: 20
 
-      - name: Patch-Version erhoehen
-        id: bump
-        run: |
-          CURRENT=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          IFS='.' read -r MA MI PA <<< "$CURRENT"
-          NEW="$MA.$MI.$((PA+1))"
-          node -e "const fs=require('fs');const p='./src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(p));j.version='$NEW';fs.writeFileSync(p, JSON.stringify(j, null, 2)+'\n');"
-          node -e "const fs=require('fs');const p='./package.json';const j=JSON.parse(fs.readFileSync(p));j.version='$NEW';fs.writeFileSync(p, JSON.stringify(j, null, 2)+'\n');"
-          echo "new=$NEW" >> [[ GITHUB_OUTPUT ]]
+      - run: npm install
 
-      - name: Committen, taggen, pushen
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json package.json
-          git commit -m "chore: bump version to [[ steps.bump.outputs.new ]] [skip ci]"
-          git tag v[[ steps.bump.outputs.new ]]
-          git push origin main
-          git push origin v[[ steps.bump.outputs.new ]]
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        with:
+          tagName: __VERSION__
+          releaseName: "Impala67 v__VERSION__"
+          releaseDraft: false
+          includeUpdaterJson: true
