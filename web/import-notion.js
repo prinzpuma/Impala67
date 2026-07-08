@@ -4,7 +4,6 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
 
-// ---------- Notion-API Migration ----------
 export const NOTION_MIGRATOR = (() => {
 	// Abbrechen-Unterstützung: cancel() setzt das Flag, checkCancelled() wirft an
 	// den nächsten Kontrollpunkten (Seiten-/Block-Schleifen) eine markierte Ausnahme.
@@ -64,224 +63,271 @@ export const NOTION_MIGRATOR = (() => {
 			if (ann.italic) text = "*" + text + "*";
 			if (ann.strikethrough) text = "~~" + text + "~~";
 			if (ann.underline) text = "<u>" + text + "</u>";
-			let c = ann.color || "";
-			if (c && c !== "default") {
-				if (c.endsWith("_background")) {
-					const bg = c.slice(0, -11);
-					text = "{bg-" + (NOTION_COLOR_MAP[bg] || bg) + "}" + text + "{/}";
-				} else {
-					text = "{" + (NOTION_COLOR_MAP[c] || c) + "}" + text + "{/}";
-				}
+			const col = ann.color || "default";
+			if (col !== "default") {
+				const base = NOTION_COLOR_MAP[col.replace("_background", "")];
+				if (base) text = "{" + (col.endsWith("_background") ? "bg-" : "") + base + "}" + text + "{/}";
 			}
-			if (x.type === "text" && x.text && x.text.link) {
-				const href = x.text.link.url || "";
-				// notion.so-Links in lokale Raute-Links (#id) zurückübersetzen, falls gemappt
-				const r = href.match(/^https?:\/\/(www\.)?notion\.so\/([0-9a-fA-F]{32})/);
-				const l = r ? reverseMap()[normId(r[2])] : null;
-				text = "[" + text + "](" + (l ? "#" + l : href) + ")";
+			if (x.href) {
+				// Erwähnungen/Links auf importierte Notion-Seiten → lokaler Link (#seitenId)
+				const nm = String(x.href).match(/notion\.so\/(?:[^/?#]*-)?([0-9a-f]{32})/);
+				const loc = nm ? localIdForRemote(nm[1]) : null;
+				text = "[" + text + "](" + (loc ? "#" + loc : x.href) + ")";
 			}
 			return text;
 		}).join("");
 	};
 
-	const normId = (s) => String(s || "").replace(/-/g, "").toLowerCase();
-
-	// Liest die Notion-Struktur rekursiv ein — wir respektieren die Eltern-Kind-Beziehungen
-	// exakt, um die Ordnerhierarchie lokal originalgetreu abzubilden.
 	async function loadAllChildren(token, blockId) {
-		const out = [];
+		let results = [];
 		let cursor;
-		for (let i = 0; i < 30; i++) {
-			const path = "/blocks/" + blockId + "/children" + (cursor ? "?start_cursor=" + cursor : "");
-			const data = await req(token, path);
-			out.push(...(data.results || []));
+		for (let i = 0; i < 50; i++) {
+			const qs = cursor ? "?start_cursor=" + cursor + "&page_size=100" : "?page_size=100";
+			const data = await req(token, "/blocks/" + blockId + "/children" + qs);
+			results = results.concat(data.results || []);
 			if (!data.has_more) break;
 			cursor = data.next_cursor;
 		}
-		return out;
+		return results;
 	}
 
-	// Notion-Blöcke → lokales Markdown (mit Tabellen, Spalten, Toggles, etc.)
-	async function blocksToMd(token, blocks, ctx) {
-		const lines = [];
-		for (let i = 0; i < blocks.length; i++) {
+	// ---------- Gemeinsame Helfer: IDs, Zuordnung, Duplikat-Erkennung ----------
+	const normId = (id) => String(id || "").replace(/-/g, "");
+	const normText = (s) => String(s || "").replace(/\r/g, "").trim();
+
+	// Rückwärts-Zuordnung Notion-ID → lokale ID (aus settings.notionMap), einmal je Lauf aufgebaut.
+	function reverseMap() {
+		const rev = {};
+		const map = S.settings.notionMap || {};
+		for (const localId in map) rev[map[localId]] = localId;
+		return rev;
+	}
+
+	// Ermittelt, ob eine Notion-Seite bereits lokal existiert — entweder direkt importiert
+	// (lokale ID = Notion-ID ohne Bindestriche) oder als lokal erstellte Seite, die per Sync
+	// bereits einmal nach Notion gepusht wurde (settings.notionMap). Ohne diese Rückwärtssuche
+	// entsteht beim nächsten Sync ein Duplikat der lokal erstellten Seite!
+	function localIdForRemote(nid, rev) {
+		if (S.pages[nid]) return nid;
+		return (rev || reverseMap())[nid] || null;
+	}
+
+	// Ist eine lokale Seite bereits einer Notion-Seite zugeordnet? (U.uid() erzeugt UUIDs
+	// MIT Bindestrichen — nur importierte Seiten haben 32 Hex-Zeichen ohne Bindestriche.)
+	const isLinked = (pg) => /^[0-9a-f]{32}$/.test(pg.id) || !!(S.settings.notionMap || {})[pg.id];
+
+	// Zusammenführen statt duplizieren: existiert lokal eine noch NICHT zugeordnete Seite,
+	// die exakt der Notion-Seite entspricht (gleicher Titel + exakt gleicher Inhalt — oder
+	// gleicher Titel und eine der beiden Seiten ist noch leer)? Dann wird sie als Gegenstück
+	// übernommen und an den richtigen Ort verschoben, statt eine Kopie anzulegen.
+	function findMergeCandidate(title, content) {
+		const t = normText(title).toLowerCase();
+		if (!t) return null;
+		const cands = STATE.activePages().filter((pg) => !isLinked(pg) && normText(pg.title).toLowerCase() === t);
+		if (!cands.length) return null;
+		const c = normText(content);
+		const exact = cands.filter((pg) => normText(pg.content) === c);
+		if (exact.length) return exact[0];
+		const nearly = cands.filter((pg) => !normText(pg.content) || !c);
+		return nearly.length === 1 ? nearly[0] : null; // mehrere unklare Kandidaten → lieber nicht raten
+	}
+
+	// Alle für die Integration freigegebenen Notion-Seiten (mit Pagination, ohne Archivierte) —
+	// vorher wurde nur die erste Suchseite (100 Treffer) gelesen.
+	async function listRemotePages(token, onPage) {
+		let results = [];
+		let cursor;
+		for (let i = 0; i < 100; i++) {
 			checkCancelled();
-			const b = blocks[i];
-			const t = b.type;
-			const body = b[t] || {};
-			const rich = body.rich_text || [];
-
-			if (t === "child_page" && ctx && ctx.onChildPage) { await ctx.onChildPage(b.id); continue; }
-			if (t === "child_database" && ctx && ctx.onChildDb) { lines.push(await ctx.onChildDb(b.id, body.title)); continue; }
-
-			if (t === "paragraph") lines.push(parseRichText(rich));
-			else if (t.startsWith("heading_")) {
-				const n = t.slice(8);
-				lines.push("#".repeat(Number(n)) + " " + parseRichText(rich));
-			} else if (t === "bulleted_list_item") {
-				lines.push("- " + parseRichText(rich));
-				if (b.has_children) {
-					const kids = await loadAllChildren(token, b.id);
-					const sub = await blocksToMd(token, kids, ctx);
-					lines.push(...sub.split("\n").filter((l) => l.trim()).map((l) => "  " + l));
-				}
-			} else if (t === "numbered_list_item") {
-				lines.push("1. " + parseRichText(rich));
-				if (b.has_children) {
-					const kids = await loadAllChildren(token, b.id);
-					const sub = await blocksToMd(token, kids, ctx);
-					lines.push(...sub.split("\n").filter((l) => l.trim()).map((l) => "  " + l));
-				}
-			} else if (t === "to_do") {
-				lines.push("- [" + (body.checked ? "x" : " ") + "] " + parseRichText(rich));
-				if (b.has_children) {
-					const kids = await loadAllChildren(token, b.id);
-					const sub = await blocksToMd(token, kids, ctx);
-					lines.push(...sub.split("\n").filter((l) => l.trim()).map((l) => "  " + l));
-				}
-			} else if (t === "toggle") {
-				const kids = b.has_children ? await loadAllChildren(token, b.id) : [];
-				const sub = await blocksToMd(token, kids, ctx);
-				lines.push("<details><summary>" + parseRichText(rich) + "</summary>\n" + sub + "\n</details>");
-			} else if (t === "code") {
-				lines.push("```" + (body.language || "text") + "\n" + plainText(rich) + "\n```");
-			} else if (t === "equation" && body.expression) {
-				lines.push("$$\n" + body.expression + "\n$$");
-			} else if (t === "divider") {
-				lines.push("---");
-			} else if (t === "quote") {
-				const txt = parseRichText(rich);
-				if (b.has_children) {
-					const kids = await loadAllChildren(token, b.id);
-					const sub = await blocksToMd(token, kids, ctx);
-					lines.push("> " + txt + "\n" + sub.split("\n").map((l) => "> " + l).join("\n"));
-				} else {
-					lines.push("> " + txt);
-				}
-			} else if (t === "callout") {
-				const txt = parseRichText(rich);
-				let icon = "";
-				if (body.icon && body.icon.type === "emoji") icon = body.icon.emoji + " ";
-				let color = "blue";
-				const bg = (body.color || "").match(/^([a-z]+)_background$/);
-				if (bg) color = bg[1];
-				if (b.has_children) {
-					const kids = await loadAllChildren(token, b.id);
-					const sub = await blocksToMd(token, kids, ctx);
-					lines.push("> [!" + color + "] " + icon + txt + "\n" + sub.split("\n").map((l) => "> " + l).join("\n"));
-				} else {
-					lines.push("> [!" + color + "] " + icon + txt);
-				}
-			} else if (t === "image" && body.type === "external") {
-				lines.push("![Bild](" + (body.external.url || "") + ")");
-			} else if (t === "image" && body.type === "file") {
-				lines.push("![Bild](" + (body.file.url || "") + ")");
-			} else if (t === "table" && b.has_children) {
-				try {
-					const rows = await loadAllChildren(token, b.id);
-					const mdRows = [];
-					for (const r of rows) {
-						if (r.type !== "table_row") continue;
-						const cells = (r.table_row || {}).cells || [];
-						mdRows.push("| " + cells.map(parseRichText).join(" | ") + " |");
-					}
-					if (mdRows.length) {
-						const width = (body.table_width || 1);
-						const sep = "| " + Array.from({ length: width }, () => "---").join(" | ") + " |";
-						mdRows.splice(body.has_column_header ? 1 : 0, 0, sep);
-						lines.push(mdRows.join("\n"));
-					}
-				} catch (err) { console.warn("Tabelle konnte nicht gelesen werden", err); }
-			} else if (t === "column_list" && b.has_children) {
-				const cols = await loadAllChildren(token, b.id);
-				const mdCols = [];
-				for (const col of cols) {
-					if (col.type !== "column" || !col.has_children) continue;
-					const kids = await loadAllChildren(token, col.id);
-					mdCols.push(await blocksToMd(token, kids, ctx));
-				}
-				if (mdCols.length) {
-					lines.push(":::columns\n" + mdCols.join("\n:::split\n") + "\n:::end");
-				}
-			} else if (t === "file" && body.type === "external") {
-				lines.push("📎 [Datei](" + (body.external.url || "") + ")");
-			} else if (t === "file" && body.type === "file") {
-				lines.push("📎 [Datei](" + (body.file.url || "") + ")");
-			}
-		}
-		return lines.join("\n\n");
-	}
-
-	function titleAndIconOf(pgData) {
-		const p = pgData.properties || {};
-		const titleKey = Object.keys(p).find((k) => p[k].type === "title");
-		const title = titleKey ? plainText(p[titleKey].title) : "Ohne Titel";
-		const icon = pgData.icon && pgData.icon.type === "emoji" ? pgData.icon.emoji : null;
-		return { title: title || "Ohne Titel", icon };
-	}
-
-	async function listRemotePages(token, onCount) {
-		const out = [];
-		let cursor;
-		for (let i = 0; i < 30; i++) {
-			const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
+			const body = { filter: { property: "object", value: "page" }, page_size: 100 };
+			if (cursor) body.start_cursor = cursor;
 			const data = await req(token, "/search", { method: "POST", body });
-			const pages = (data.results || []).filter((x) => x.object === "page");
-			out.push(...pages);
-			if (onCount) onCount(out.length);
+			results = results.concat(data.results || []);
+			if (onPage) onPage(results.length);
 			if (!data.has_more) break;
 			cursor = data.next_cursor;
 		}
-		return out;
+		return results.filter((r) => !r.archived && !r.in_trash);
 	}
 
+	// Eltern-Notion-ID einer Notion-Seite: page_id direkt; database_id wird über die Seite
+	// aufgelöst, in der die Datenbank liegt (gecacht); workspace-Ebene → null (oberste Ebene).
+	const dbParentCache = {};
 	async function remoteParentId(token, pgData) {
 		const par = pgData.parent || {};
 		if (par.type === "page_id") return normId(par.page_id);
 		if (par.type === "database_id") {
-			// Elternseite der Datenbank ermitteln — so landen Zeilen in derselben Hierarchie.
-			try {
-				const db = await req(token, "/databases/" + par.database_id);
-				const dp = db.parent || {};
-				if (dp.type === "page_id") return normId(dp.page_id);
-			} catch {}
-			return normId(par.database_id);
+			const dbid = normId(par.database_id);
+			if (!(dbid in dbParentCache)) {
+				try {
+					const db = await req(token, "/databases/" + par.database_id);
+					dbParentCache[dbid] = (db.parent && db.parent.type === "page_id") ? normId(db.parent.page_id) : null;
+				} catch { dbParentCache[dbid] = null; }
+			}
+			return dbParentCache[dbid];
 		}
 		return null;
 	}
 
-	// Umkehr-Mapping: remote Notion-UUID → lokale Seiten-ID
-	function reverseMap() {
-		const rev = {};
-		Object.entries(S.settings.notionMap || {}).forEach(([lid, nid]) => { rev[normId(nid)] = lid; });
-		Object.keys(S.pages).forEach((id) => { if (/^[0-9a-f]{32}$/.test(id)) rev[id] = id; });
-		return rev;
+	function titleAndIconOf(pgData) {
+		let title = "Importierte Seite";
+		let icon = null;
+		if (pgData.properties) {
+			const tProp = Object.values(pgData.properties).find((p) => p.type === "title");
+			if (tProp && tProp.title && tProp.title.length) title = parseRichText(tProp.title);
+		}
+		if (pgData.icon && pgData.icon.type === "emoji") icon = pgData.icon.emoji;
+		return { title, icon };
 	}
 
-	function localIdForRemote(remoteId, revMap) {
-		const n = normId(remoteId);
-		return revMap[n] || (S.pages[n] ? n : null);
+	// Datenbank-Eigenschaften lesbar abflachen (für die Tabellen-Darstellung).
+	function propToText(p) {
+		if (!p) return "";
+		const t = p.type;
+		if (t === "title") return parseRichText(p.title);
+		if (t === "rich_text") return parseRichText(p.rich_text);
+		if (t === "select") return p.select ? p.select.name : "";
+		if (t === "multi_select") return (p.multi_select || []).map((o) => o.name).join(", ");
+		if (t === "status") return p.status ? p.status.name : "";
+		if (t === "date") return p.date ? p.date.start + (p.date.end ? " → " + p.date.end : "") : "";
+		if (t === "number") return p.number == null ? "" : String(p.number);
+		if (t === "checkbox") return p.checkbox ? "✅" : "◻";
+		if (t === "url") return p.url || "";
+		if (t === "email") return p.email || "";
+		if (t === "phone_number") return p.phone_number || "";
+		if (t === "people") return (p.people || []).map((u) => u.name || "?").join(", ");
+		if (t === "formula") {
+			const f = p.formula || {};
+			return f.type === "string" ? (f.string || "") : f.type === "number" ? (f.number == null ? "" : String(f.number)) : f.type === "boolean" ? (f.boolean ? "✅" : "◻") : (f.date ? f.date.start : "");
+		}
+		if (t === "created_time") return U.fmtDate(p.created_time);
+		if (t === "last_edited_time") return U.fmtDate(p.last_edited_time);
+		return "";
 	}
 
-	// Sucht nach einer lokalen Seite, die denselben Titel UND Inhalt hat.
-	// Verhindert, dass beim Erstimport lokal bestehende Seiten dupliziert werden.
-	const normText = (s) => String(s || "").replace(/[\s\n\r#*-]/g, "").toLowerCase();
-	function findMergeCandidate(title, content) {
-		const t = normText(title);
-		const c = normText(content);
-		if (!t) return null;
-		return Object.values(S.pages).find((pg) => !pg.trashed && !isLinked(pg) && normText(pg.title) === t && normText(pg.content) === c);
+	// Notion-Datenbank → Markdown-Tabelle (Titel-Spalte zuerst); die Zeilen-Seiten
+	// werden zusätzlich als Unterseiten importiert (siehe pullRemotePage).
+	function dbToMdTable(title, rows) {
+		const head = title ? "**🗃 " + title + "**\n\n" : "";
+		if (!rows.length) return head;
+		const cols = [];
+		rows.forEach((r) => Object.keys(r.properties || {}).forEach((k) => { if (!cols.includes(k)) cols.push(k); }));
+		cols.sort((a, b) => ((((rows[0].properties || {})[a] || {}).type === "title") ? -1 : 0) - ((((rows[0].properties || {})[b] || {}).type === "title") ? -1 : 0));
+		const esc = (s) => String(s || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+		let md = head + "| " + cols.map(esc).join(" | ") + " |\n| " + cols.map(() => "---").join(" | ") + " |\n";
+		rows.forEach((r) => { md += "| " + cols.map((c) => esc(propToText((r.properties || {})[c]))).join(" | ") + " |\n"; });
+		return md + "\n";
 	}
 
-	const isLinked = (pg) => /^[0-9a-f]{32}$/.test(pg.id) || !!(S.settings.notionMap && S.settings.notionMap[pg.id]);
+	// Notion-Blöcke → Markdown mit hoher Wiedergabetreue: verschachtelte Listen,
+	// Toggles MIT Inhalt, Callout-Farben (> [!farbe]), Spalten (:::columns), echte
+	// Tabellen, Bilder, Formeln, Lesezeichen/Embeds als Links. Unterseiten und
+	// Datenbanken werden über die ctx-Callbacks eingesammelt statt inline importiert.
+	async function blocksToMd(token, children, ctx) {
+		ctx = ctx || {};
+		const depth = ctx.depth || 0;
+		if (depth > 12) return "";
+		const ind = ctx.indent || 0;
+		const pad = "  ".repeat(ind);
+		const inner = async (b, addIndent) => {
+			if (!b.has_children) return "";
+			const kids = await loadAllChildren(token, b.id);
+			return blocksToMd(token, kids, { ...ctx, depth: depth + 1, indent: ind + (addIndent ? 1 : 0) });
+		};
+		let md = "";
+		for (const b of children) {
+			checkCancelled();
+			const type = b.type;
+			const d = b[type] || {};
+			if (type === "paragraph") {
+				md += pad + parseRichText(d.rich_text) + "\n\n";
+				if (b.has_children) md += await inner(b, true);
+			} else if (type === "heading_1" || type === "heading_2" || type === "heading_3") {
+				md += pad + "#".repeat(Number(type.slice(-1))) + " " + parseRichText(d.rich_text) + "\n\n";
+				if (b.has_children) md += await inner(b, false); // Toggle-Überschrift: Inhalt darunter
+			} else if (type === "bulleted_list_item") {
+				md += pad + "- " + parseRichText(d.rich_text) + "\n" + (await inner(b, true));
+			} else if (type === "numbered_list_item") {
+				md += pad + "1. " + parseRichText(d.rich_text) + "\n" + (await inner(b, true));
+			} else if (type === "to_do") {
+				md += pad + "- [" + (d.checked ? "x" : " ") + "] " + parseRichText(d.rich_text) + "\n" + (await inner(b, true));
+			} else if (type === "code") {
+				md += pad + "```" + (d.language === "plain text" ? "" : d.language || "") + "\n" + plainText(d.rich_text) + "\n```\n\n";
+			} else if (type === "equation") {
+				md += pad + "$$" + (d.expression || "") + "$$\n\n";
+			} else if (type === "quote") {
+				let q = parseRichText(d.rich_text);
+				if (b.has_children) {
+					const body = (await blocksToMd(token, await loadAllChildren(token, b.id), { ...ctx, depth: depth + 1, indent: 0 })).trim();
+					if (body) q += "\n" + body;
+				}
+				md += q.split("\n").map((l) => pad + "> " + l).join("\n") + "\n\n";
+			} else if (type === "divider") {
+				md += pad + "---\n\n";
+			} else if (type === "callout") {
+				const col = NOTION_COLOR_MAP[(d.color || "default").replace("_background", "")] || "blue";
+				const icon = d.icon && d.icon.type === "emoji" ? d.icon.emoji + " " : "";
+				// Der Inhalt gehört MIT in die Box: alle Zeilen mit "> " fortsetzen — der
+				// Editor rendert das als EINE mehrzeilige Callout-Box (wie in Notion).
+				let body = icon + parseRichText(d.rich_text);
+				if (b.has_children) {
+					const kids = (await blocksToMd(token, await loadAllChildren(token, b.id), { ...ctx, depth: depth + 1, indent: 0 })).trim();
+					if (kids) body += "\n" + kids;
+				}
+				const cl = body.split("\n");
+				md += pad + "> [!" + col + "] " + cl[0] + "\n" + cl.slice(1).map((l) => pad + "> " + l).join("\n") + (cl.length > 1 ? "\n" : "") + "\n";
+			} else if (type === "toggle") {
+				const body = b.has_children ? (await inner(b, false)).trim() : "";
+				md += pad + "<details><summary>" + parseRichText(d.rich_text) + "</summary>\n" + (body ? body + "\n" : "") + "</details>\n\n";
+			} else if (type === "column_list") {
+				const cols = (await loadAllChildren(token, b.id)).filter((c) => c.type === "column");
+				const parts = [];
+				for (const col of cols) {
+					parts.push(col.has_children ? (await blocksToMd(token, await loadAllChildren(token, col.id), { ...ctx, depth: depth + 1, indent: 0 })).trim() : "");
+				}
+				md += ":::columns\n" + parts.join("\n:::split\n") + "\n:::end\n\n";
+			} else if (type === "table") {
+				const rows = (await loadAllChildren(token, b.id)).filter((r) => r.type === "table_row");
+				if (rows.length) {
+					const cells = rows.map((r) => (r.table_row.cells || []).map((c) => parseRichText(c).replace(/\|/g, "\\|").replace(/\n/g, " ")));
+					const width = Math.max(...cells.map((r) => r.length), 1);
+					const line = (r) => "| " + Array.from({ length: width }, (_, i) => r[i] || "").join(" | ") + " |";
+					md += line(cells[0]) + "\n| " + Array.from({ length: width }, () => "---").join(" | ") + " |\n" + (cells.length > 1 ? cells.slice(1).map(line).join("\n") + "\n" : "") + "\n";
+				}
+			} else if (type === "image") {
+				const src = d.type === "external" ? (d.external || {}).url : (d.file || {}).url;
+				if (src) md += pad + "![" + (plainText(d.caption) || "Bild").replace(/[\[\]]/g, "") + "](" + src + ")\n\n";
+			} else if (type === "bookmark" || type === "embed" || type === "video" || type === "file" || type === "pdf" || type === "link_preview") {
+				const url = d.url || (d.external || {}).url || (d.file || {}).url || "";
+				if (url) md += pad + "[" + (plainText(d.caption) || d.name || url) + "](" + url + ")\n\n";
+			} else if (type === "child_page") {
+				if (ctx.onChildPage) await ctx.onChildPage(b.id);
+			} else if (type === "child_database") {
+				if (ctx.onChildDb) {
+					const tbl = await ctx.onChildDb(b.id, d.title || "");
+					if (tbl) md += tbl;
+				}
+			} else if (type === "synced_block" || type === "template") {
+				if (b.has_children) md += await inner(b, false);
+			} else if (type === "table_of_contents" || type === "breadcrumb") {
+				// rein visuelle Blöcke — bewusst überspringen
+			} else if (b.has_children) {
+				md += await inner(b, false); // unbekannter Container: Inhalt trotzdem retten
+			}
+		}
+		return depth === 0 ? md.trim() : md;
+	}
 
-	// Notion parent cache für Datenbank-Zeilen (Zeilen haben remote eine database_id,
-	// sollen lokal aber direkt unter die Datenbank-Seite gehängt werden).
-	const dbParentCache = {};
-
+	// Importiert/aktualisiert GENAU EINE Notion-Seite lokal: Titel, Icon, Inhalt und den
+	// exakt richtigen Ort (Elternseite wie in Notion). Existiert lokal bereits eine exakt
+	// gleiche, noch nicht zugeordnete Seite, wird sie zusammengeführt statt dupliziert —
+	// und dabei an den richtigen Ort verschoben. ctx.parentLocal === undefined bedeutet:
+	// Ablageort aus den Notion-Daten der Seite selbst auflösen.
 	async function pullRemotePage(token, pgData, ctx) {
-		const nid = normId(pgData.id);
+		checkCancelled();
+		ctx = ctx || {};
 		const rev = ctx.rev || reverseMap();
+		const nid = normId(pgData.id);
 		const { title, icon } = titleAndIconOf(pgData);
 
 		// Ablageort exakt wie in Notion bestimmen
@@ -384,6 +430,9 @@ export const NOTION_MIGRATOR = (() => {
 		return { id, childPageIds };
 	}
 
+	// Rekursiver Einzelseiten-Import — für den „nur diese Seite“-Import und als
+	// Sicherheitsnetz für Unterseiten, die die Notion-Suche nicht geliefert hat.
+	// parentLocal === undefined → Ablageort aus den Notion-Daten auflösen.
 	async function importPageAndChildren(token, blockId, parentLocal, depth, opts) {
 		checkCancelled();
 		opts = opts || {};
@@ -406,6 +455,9 @@ export const NOTION_MIGRATOR = (() => {
 		return res.id;
 	}
 
+	// Aufräum-Lauf nach Import/Sync: exakt gleiche, noch nicht zugeordnete lokale Kopien
+	// (gleicher Titel UND gleicher Inhalt) werden mit ihrem Notion-Gegenstück zusammengeführt —
+	// Unterseiten wandern zum Original, die Kopie in den Papierkorb (30 Tage wiederherstellbar).
 	async function mergeDuplicates() {
 		let merged = 0;
 		const groups = {};
@@ -430,6 +482,8 @@ export const NOTION_MIGRATOR = (() => {
 		return merged;
 	}
 
+	// Workspace-Zugehörigkeit an die Struktur angleichen: Unterseiten erben den
+	// Workspace ihrer Elternseite (wichtig nach Verschiebungen durch den Import).
 	async function alignWorkspaces() {
 		const visited = new Set();
 		async function walk(pid, wsId) {
@@ -448,6 +502,8 @@ export const NOTION_MIGRATOR = (() => {
 	}
 
 	// ---------- Push: lokales Markdown → Notion-Blöcke ----------
+	// Lange Texte in mehrere Rich-Text-Stücke teilen (Notion-Limit: 2000 Zeichen je Stück) —
+	// vorher wurde alles nach 1900 Zeichen einfach abgeschnitten.
 	const rt = (text) => {
 		const s = String(text == null ? "" : text);
 		const out = [];
@@ -455,6 +511,7 @@ export const NOTION_MIGRATOR = (() => {
 		return out.length ? out : [{ type: "text", text: { content: "" } }];
 	};
 
+	// ---------- Markdown-Inline → Notion rich_text mit echten Annotationen ----------
 	const REV_COLOR = { gray: "gray", brown: "brown", orange: "orange", yellow: "yellow", green: "green", blue: "blue", purple: "purple", pink: "pink", red: "red" };
 	function mdRichText(text) {
 		const out = [];
@@ -481,6 +538,8 @@ export const NOTION_MIGRATOR = (() => {
 					walk(m[12], base ? { ...ann, color: m[10] ? base + "_background" : base } : { ...ann });
 				} else if (m[13] && out.length < 95) out.push({ type: "equation", equation: { expression: m[14] } });
 				else if (m[15]) {
+					// Lokale Links (#seitenId) → notion.so-Link des Gegenstücks; Nicht-URLs
+					// (z.B. img:…) als Klartext — Notion lehnt ungültige Link-URLs ab.
 					let href = /^(https?:|mailto:)/.test(m[17]) ? m[17] : null;
 					const loc = m[17].match(/^#([0-9a-fA-F-]{32,36})$/);
 					const lnid = loc ? (notionIdOf(loc[1]) || notionIdOf(loc[1].replace(/-/g, ""))) : null;
@@ -497,6 +556,7 @@ export const NOTION_MIGRATOR = (() => {
 		return out.length ? out : [{ type: "text", text: { content: "" } }];
 	}
 
+	// Code-Sprachen, die Notion akzeptiert (sonst lehnt die API den Block ab).
 	const LANG_ALIAS = { js: "javascript", ts: "typescript", py: "python", sh: "bash", yml: "yaml", text: "plain text", txt: "plain text", plaintext: "plain text", cpp: "c++", cs: "c#", md: "markdown" };
 	const NOTION_LANGS = new Set(["abap", "arduino", "bash", "basic", "c", "clojure", "coffeescript", "c++", "c#", "css", "dart", "diff", "docker", "elixir", "elm", "erlang", "flow", "fortran", "f#", "gherkin", "glsl", "go", "graphql", "groovy", "haskell", "html", "java", "javascript", "json", "julia", "kotlin", "latex", "less", "lisp", "livescript", "lua", "makefile", "markdown", "markup", "matlab", "mermaid", "nix", "objective-c", "ocaml", "pascal", "perl", "php", "plain text", "powershell", "prolog", "protobuf", "python", "r", "reason", "ruby", "rust", "sass", "scala", "scheme", "scss", "shell", "sql", "swift", "typescript", "vb.net", "verilog", "vhdl", "visual basic", "webassembly", "xml", "yaml"]);
 	const notionLang = (lang) => {
@@ -504,6 +564,8 @@ export const NOTION_MIGRATOR = (() => {
 		return NOTION_LANGS.has(l) ? l : LANG_ALIAS[l] || "plain text";
 	};
 
+	// Eine Listen-Sequenz (2 Leerzeichen Einrückung = eine Ebene, wie im Editor)
+	// in verschachtelte Notion-Listen-Blöcke umwandeln; gibt den Folgeindex zurück.
 	const LIST_RE = /^(\s*)(- \[( |x)\] |- |\d+\. )(.*)$/;
 	function listRun(lines, start, blocks) {
 		let i = start;
@@ -527,12 +589,14 @@ export const NOTION_MIGRATOR = (() => {
 		return i;
 	}
 
+	// ---------- Zeilen → Notion-Blöcke (mit Tabellen, Spalten, Toggles, Formeln) ----------
 	function linesToBlocks(lines) {
 		const blocks = [];
 		let i = 0;
 		while (i < lines.length) {
 			const line = lines[i];
 			const t = line.trim();
+			// Code-Zaun
 			if (t.startsWith("```")) {
 				const lang = t.slice(3).trim();
 				const body = [];
@@ -542,6 +606,7 @@ export const NOTION_MIGRATOR = (() => {
 				blocks.push({ type: "code", code: { language: notionLang(lang), rich_text: [{ type: "text", text: { content: body.join("\n").slice(0, 1900) } }] } });
 				continue;
 			}
+			// Formel-Block $$…$$ (ein- oder mehrzeilig)
 			if (t.startsWith("$$")) {
 				let expr = t.slice(2);
 				if (expr.endsWith("$$")) expr = expr.slice(0, -2);
@@ -550,6 +615,7 @@ export const NOTION_MIGRATOR = (() => {
 				i++;
 				continue;
 			}
+			// Spalten :::columns … :::split … :::end
 			if (t === ":::columns") {
 				const cols = [[]];
 				i++;
@@ -567,6 +633,7 @@ export const NOTION_MIGRATOR = (() => {
 				blocks.push({ type: "column_list", column_list: { children: cols.map((c) => ({ type: "column", column: { children: linesToBlocks(c) } })) } });
 				continue;
 			}
+			// Toggle <details><summary>…</summary> … </details>
 			if (t.startsWith("<details>")) {
 				const sm = t.match(/<summary>([\s\S]*?)<\/summary>/);
 				const body = [];
@@ -576,6 +643,7 @@ export const NOTION_MIGRATOR = (() => {
 				blocks.push({ type: "toggle", toggle: { rich_text: mdRichText(sm ? sm[1] : "Toggle"), children: linesToBlocks(body) } });
 				continue;
 			}
+			// Tabelle (GitHub-Stil)
 			if (t.startsWith("|") && t.endsWith("|")) {
 				const rows = [];
 				while (i < lines.length) {
@@ -589,8 +657,10 @@ export const NOTION_MIGRATOR = (() => {
 				blocks.push({ type: "table", table: { table_width: width, has_column_header: rows.length > 1, has_row_header: false, children: rows.map((r) => ({ type: "table_row", table_row: { cells: Array.from({ length: width }, (_, ci) => mdRichText(r[ci] || "")) } })) } });
 				continue;
 			}
+			// Listen (verschachtelt)
 			if (LIST_RE.test(line) && t) { i = listRun(lines, i, blocks); continue; }
 			if (!t) { i++; continue; }
+			// Bild
 			const img = t.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
 			if (img) {
 				if (/^https?:\/\//.test(img[2])) blocks.push({ type: "image", image: { type: "external", external: { url: img[2] } } });
@@ -598,6 +668,7 @@ export const NOTION_MIGRATOR = (() => {
 				i++;
 				continue;
 			}
+			// Callout > [!farbe] 💡 Text — ">"-Folgezeilen gehören mit IN die Box
 			const co = t.match(/^> \[!([a-z]+)\] ?([\s\S]*)$/);
 			if (co) {
 				const cont = [];
@@ -616,6 +687,7 @@ export const NOTION_MIGRATOR = (() => {
 				blocks.push(cob);
 				continue;
 			}
+			// Mehrzeiliges Zitat: ">"-Folgezeilen werden Kinder des Zitat-Blocks
 			if (t.startsWith(">")) {
 				const cont = [];
 				i++;
@@ -638,6 +710,8 @@ export const NOTION_MIGRATOR = (() => {
 		return blocks;
 	}
 
+	// Notion erlaubt beim Anhängen nur 2 Ebenen verschachtelter Kinder pro Anfrage —
+	// tiefere Ebenen werden zu Geschwistern hochgezogen (Tabellenzeilen bleiben unberührt).
 	function clampChildren(blocks, level) {
 		const out = [];
 		for (const b of blocks) {
@@ -654,6 +728,8 @@ export const NOTION_MIGRATOR = (() => {
 		return linesToBlocks(String(md || "").replace(/\r/g, "").split("\n"));
 	}
 
+	// Blöcke in 90er-Paketen anhängen (Notion-Limit: max. 100 Blöcke je Anfrage) —
+	// vorher wurde alles nach Block 90 einfach abgeschnitten.
 	async function appendBlocks(token, notionId, blocks) {
 		blocks = clampChildren(blocks, 0);
 		for (let i = 0; i < blocks.length; i += 90) {
@@ -662,11 +738,15 @@ export const NOTION_MIGRATOR = (() => {
 		}
 	}
 
+	// Notion-Gegenstück einer lokalen Seite: importierte Seiten nutzen die Notion-UUID
+	// als lokale ID, lokal erstellte Seiten stehen in der Zuordnungstabelle (settings.notionMap).
 	function notionIdOf(localId) {
 		if (/^[0-9a-f]{32}$/.test(localId)) return localId;
 		return (S.settings.notionMap || {})[localId] || null;
 	}
 
+	// props (Text) → Notion-Eigenschaftswerte anhand des Datenbank-Schemas der Elternseite.
+	// Nur beschreibbare Typen — Formeln, Rollups, Personen & Co. bleiben unangetastet.
 	function propsToNotion(pg) {
 		const parent = pg.parentId ? S.pages[pg.parentId] : null;
 		const schema = parent && parent.db && parent.db.schema;
@@ -693,6 +773,7 @@ export const NOTION_MIGRATOR = (() => {
 		return Object.keys(out).length ? out : null;
 	}
 
+	// Bestehende Notion-Seite aktualisieren: Titel/Icon/Eigenschaften setzen, alte Blöcke entfernen, Inhalt neu anhängen.
 	async function pushPage(token, pg, notionId) {
 		await req(token, "/pages/" + notionId, { method: "PATCH", body: {
 			properties: { title: { title: rt(pg.title) }, ...(propsToNotion(pg) || {}) },
@@ -700,14 +781,16 @@ export const NOTION_MIGRATOR = (() => {
 		} });
 		const children = await loadAllChildren(token, notionId);
 		for (const b of children) {
-			if (b.type === "child_page" || b.type === "child_database") continue;
+			if (b.type === "child_page" || b.type === "child_database") continue; // Unterseiten niemals löschen
 			await req(token, "/blocks/" + b.id, { method: "DELETE" });
 		}
 		await appendBlocks(token, notionId, mdToBlocks(pg.content));
 	}
 
+	// Lokal neue Seite in Notion anlegen (unter dem Gegenstück der Eltern- bzw. der Wurzelseite).
 	async function createRemote(token, pg, parentNotionId) {
 		const blocks = clampChildren(mdToBlocks(pg.content), 0);
+		// Unterseite einer Datenbank-Seite? Dann als ECHTE neue Datenbank-Zeile anlegen.
 		const parentPg = pg.parentId ? S.pages[pg.parentId] : null;
 		const isDbRow = !!(parentPg && parentPg.db);
 		const data = await req(token, "/pages", { method: "POST", body: {
@@ -721,28 +804,14 @@ export const NOTION_MIGRATOR = (() => {
 		return newId;
 	}
 
-	// Hilfsfunktion zur Typkonvertierung von Notion Properties für die Datenbank
-	function propToText(prop) {
-		if (!prop) return "";
-		const t = prop.type;
-		if (t === "rich_text") return plainText(prop.rich_text);
-		if (t === "number") return prop.number != null ? String(prop.number) : "";
-		if (t === "select") return prop.select ? prop.select.name || "" : "";
-		if (t === "status") return prop.status ? prop.status.name || "" : "";
-		if (t === "multi_select") return (prop.multi_select || []).map((x) => x.name || "").join(", ");
-		if (t === "checkbox") return prop.checkbox ? "✅" : "❌";
-		if (t === "url") return prop.url || "";
-		if (t === "email") return prop.email || "";
-		if (t === "phone_number") return prop.phone_number || "";
-		if (t === "date" && prop.date) {
-			const d = prop.date;
-			return d.start + (d.end ? " → " + d.end : "");
-		}
-		return "";
-	}
-
 	return {
 		cancel,
+
+		// onStatus(text, fraction) — fraction ist 0..1, wenn die Gesamtmenge bekannt ist,
+		// sonst null (unbestimmter Fortschritt). Der Import spiegelt die Notion-Struktur
+		// EXAKT: Eltern werden zuerst angelegt, jede Seite landet unter ihrem echten
+		// Notion-Elternteil (Datenbank-Zeilen unter der Seite mit der Datenbank), und
+		// exakt gleiche lokale Seiten werden zusammengeführt statt dupliziert.
 		async migrate(token, pageId, onStatus) {
 			cancelled = false;
 			const rev = reverseMap();
@@ -761,6 +830,7 @@ export const NOTION_MIGRATOR = (() => {
 			if (onStatus) onStatus("Suche freigegebene Notion-Seiten…", null);
 			const remote = await listRemotePages(token, (n) => { if (onStatus) onStatus("Suche freigegebene Notion-Seiten… (" + n + ")", null); });
 			if (!remote.length) throw new Error("Keine freigegebenen Seiten gefunden. Teile Seiten in Notion zuerst mit deiner Integration.");
+			// Eltern vor Kindern importieren — so entsteht jede Seite direkt am richtigen Ort.
 			const byId = {};
 			remote.forEach((r) => { byId[normId(r.id)] = r; });
 			const order = [];
@@ -782,6 +852,7 @@ export const NOTION_MIGRATOR = (() => {
 				if (onStatus) onStatus("Importiere " + (i + 1) + "/" + order.length + " — „" + title + "“…", (i + 1) / order.length);
 				const res = await pullRemotePage(token, order[i], { rev, merged, restoreTrashed: true });
 				lastId = res.id;
+				// Sicherheitsnetz: Unterseiten, die die Notion-Suche nicht geliefert hat
 				for (const cid of res.childPageIds) {
 					if (visited.has(cid)) continue;
 					visited.add(cid);
@@ -793,6 +864,13 @@ export const NOTION_MIGRATOR = (() => {
 			return lastId;
 		},
 
+		// Zwei-Wege-Sync mit Sync-Gedächtnis (settings.notionMeta): für jede Seite wird der
+		// zuletzt abgeglichene Stand (remote r + lokal l) gemerkt. Dadurch wird nur echt
+		// Geändertes übertragen (kein Ping-Pong durch den Import-Zeitstempel mehr), bei
+		// beidseitiger Änderung gewinnt die neuere Version, und die Struktur folgt exakt
+		// Notion (Notion ist die Referenz für den Ablageort). Lokal NEUE Seiten entstehen
+		// in Notion unter dem Gegenstück ihrer Elternseite (sonst unter der Wurzelseite),
+		// exakt gleiche lokale Seiten werden zusammengeführt statt dupliziert.
 		async sync(token, rootPageId, onStatus) {
 			cancelled = false;
 			const say = (s, f) => { if (onStatus) onStatus(s, f); };
@@ -805,6 +883,7 @@ export const NOTION_MIGRATOR = (() => {
 			remote.forEach((r) => { remoteById[normId(r.id)] = r; });
 			let pulled = 0, pushed = 0, created = 0;
 
+			// 1) Pull — Eltern zuerst, damit jede Seite direkt am exakt richtigen Ort landet.
 			const order = [];
 			const seen = new Set();
 			async function addInOrder(r) {
@@ -824,16 +903,19 @@ export const NOTION_MIGRATOR = (() => {
 				const redit = r.last_edited_time || "";
 				const localId = localIdForRemote(nid, rev);
 				const localPg = localId ? S.pages[localId] : null;
-				if (localPg && localPg.trashed) continue;
+				if (localPg && localPg.trashed) continue; // lokal in den Papierkorb gelegt → nicht wiederbeleben
 				const m = meta[nid];
-				if (!localPg && localId && m) continue;
+				if (!localPg && localId && m) continue; // lokal endgültig gelöscht → nicht wiederbeleben
 				const remoteChanged = !m || redit > (m.r || "");
 				const localChanged = !!localPg && (!m || (localPg.updated || "") > (m.l || ""));
+				// Übernehmen, wenn die Seite lokal fehlt oder Notion Neues hat.
+				// Bei beidseitiger Änderung entscheidet der Zeitstempel (die neuere Version gewinnt).
 				if (!localPg || (remoteChanged && (!localChanged || redit >= (localPg.updated || "")))) {
 					say("⬇ Übernehme " + (i + 1) + "/" + order.length + "…", (i + 1) / (order.length + 1) * 0.5);
 					const res = await pullRemotePage(token, r, { rev, merged: mergedCounter });
 					meta[nid] = { r: redit, l: (S.pages[res.id] || {}).updated || "" };
 					pulled++;
+					// Sicherheitsnetz: Unterseiten, die die Notion-Suche nicht geliefert hat
 					for (const cid of res.childPageIds) {
 						if (remoteById[cid] || localIdForRemote(cid, rev)) continue;
 						await importPageAndChildren(token, cid, res.id, 0, { rev, merged: mergedCounter, visited: new Set([cid]) });
@@ -842,6 +924,8 @@ export const NOTION_MIGRATOR = (() => {
 			}
 			await alignWorkspaces();
 
+			// 2) Push — lokal Geändertes nach Notion, lokal Neues dort anlegen (Eltern zuerst,
+			// damit neue Unterbäume in Notion mit derselben Struktur entstehen).
 			const activeById = {};
 			STATE.activePages().forEach((pg) => { activeById[pg.id] = pg; });
 			const localOrder = [];
@@ -871,12 +955,12 @@ export const NOTION_MIGRATOR = (() => {
 						meta[nid] = { r: fresh.last_edited_time || redit, l: pg.updated || "" };
 						pushed++;
 					} else if (!m) {
-						meta[nid] = { r: redit, l: pg.updated || "" };
+						meta[nid] = { r: redit, l: pg.updated || "" }; // Stand als abgeglichen merken
 					}
 				} else if (!nid) {
 					const parentNid = pg.parentId ? nidOf(pg.parentId) : null;
 					const target = parentNid || (rootPageId ? normId(rootPageId) : "");
-					if (!target) continue;
+					if (!target) continue; // ohne Wurzelseite gibt es kein Ziel in Notion
 					const newId = await createRemote(token, pg, target);
 					if (newId) {
 						mapPatch[pg.id] = newId;
