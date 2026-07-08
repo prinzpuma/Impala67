@@ -9,11 +9,12 @@ import { RENDER } from "./render.js";
 import { DRIVE } from "./drive.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
+import { TABS } from "./tabs.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
 const closeOverlay = (...args) => APP.closeOverlay(...args);
-const openPage = (...args) => APP.openPage(...args);
+const openPage = (...args) => TABS.openPage(...args);
 
 // Verbindungsstatus automatisch prüfen (beim Start, nach Einstellungen, alle 60s)
 export async function checkAI() {
