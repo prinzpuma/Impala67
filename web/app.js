@@ -5,6 +5,7 @@ import { NOTION_MIGRATOR } from "./import-notion.js";
 import { AI } from "./ai.js";
 import { DB } from "./db.js";
 import { RENDER } from "./render.js";
+import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
@@ -26,6 +27,20 @@ const saveCurrentChat = (...args) => CHAT_FULLSCREEN.saveCurrentChat(...args);
 const toggleChatFull = (...args) => CHAT_FULLSCREEN.toggleChatFull(...args);
 const refineMessage = (...args) => CHAT_FULLSCREEN.refineMessage(...args);
 const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
+const renderModelBar = (...args) => RENDER.renderModelBar(...args);
+const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
+const renderSidebar = (...args) => RENDER.renderSidebar(...args);
+const renderMain = (...args) => RENDER.renderMain(...args);
+const openReview = (...args) => RENDER.openReview(...args);
+const openCards = (...args) => RENDER.openCards(...args);
+const openIconPicker = (...args) => RENDER.openIconPicker(...args);
+const openCoverPicker = (...args) => RENDER.openCoverPicker(...args);
+const localDayKey = (...args) => RENDER.localDayKey(...args);
+const renderHistoryModal = (...args) => RENDER.renderHistoryModal(...args);
+const renderPendingChip = (...args) => RENDER.renderPendingChip(...args);
+const ankiCardsOf = (...args) => RENDER_ANKI.ankiCardsOf(...args);
+const openCardEditor = (...args) => RENDER_ANKI.openCardEditor(...args);
+const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
 
 // app.js — Initialisierung und Event-Verkabelung.
 

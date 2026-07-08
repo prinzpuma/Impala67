@@ -863,5 +863,7 @@ export const RENDER = {
 	hydrateCovers,
 	ancestorsOf,
 	renderLibrary: (...args) => LIBRARY.renderLibrary(...args),
-	libCardHtml: (...args) => LIBRARY.libCardHtml(...args)
+	libCardHtml: (...args) => LIBRARY.libCardHtml(...args),
+	renderModelBar,
+	renderPendingChip
 };
