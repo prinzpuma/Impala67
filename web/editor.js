@@ -1,4 +1,6 @@
 "use strict";
+import { S, STATE } from "./state.js";
+import { U } from "./util.js";
 // editor.js — Notion-artiger Block-Editor über Markdown (Live-Preview-Hybrid).
 // Grundprinzip: Markdown bleibt die EINZIGE Wahrheit. Event-Log, Verlauf, Diffs,
 // KI-Tools, Notion-Import und Drive-Sync arbeiten unverändert auf pg.content.

@@ -1,4 +1,7 @@
 "use strict";
+import { S, STATE } from "./state.js";
+import { DB } from "./db.js";
+import { U } from "./util.js";
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
 // Client-ID (das ist eine Plattform-Vorgabe von Google, keine Impala67-Beschränkung).

@@ -1,4 +1,5 @@
 "use strict";
+import { U } from "./util.js";
 // db.js — IndexedDB-Persistenz: Event-Log (append-only) + PDF-Blobs.
 // Sync-Modell: Export = Log + Blobs als JSON. Import = Log-Merge (nur unbekannte
 // Events werden übernommen, sortiert nach Zeitstempel deterministisch abgespielt).

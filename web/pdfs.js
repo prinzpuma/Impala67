@@ -1,4 +1,8 @@
 "use strict";
+import { U } from "./util.js";
+import { DB } from "./db.js";
+import { STATE } from "./state.js";
+import { RAG } from "./rag.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
 export const PDFS = (() => {

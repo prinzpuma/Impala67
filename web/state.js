@@ -1,4 +1,7 @@
 "use strict";
+import { U } from "./util.js";
+import { DB } from "./db.js";
+import { SRS } from "./srs.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
 export const S = {
