@@ -46,13 +46,15 @@ export function toggleChatFull(force) {
 
 // Formuliert eine KI-Antwort länger oder kürzer um (wie Gemini) — ersetzt die
 // Antwort an Ort und Stelle, ohne eine neue Chat-Nachricht anzuhängen.
+// FIX: funktioniert jetzt in beiden Chats — Seitenpanel (S.sideChat) und Vollbild (S.chat).
 export async function refineMessage(mid, mode) {
 	if (S.aiBusy) return;
-	const idx = S.chat.findIndex((x) => x.mid === mid);
+	const list = S.chat.some((x) => x.mid === mid) ? S.chat : S.sideChat;
+	const idx = list.findIndex((x) => x.mid === mid);
 	if (idx === -1) return;
-	const msg = S.chat[idx];
+	const msg = list[idx];
 	S.aiBusy = true;
-	const history = S.chat.slice(0, idx)
+	const history = list.slice(0, idx)
 		.filter((m) => m.role === "user" || m.role === "assistant")
 		.map((m) => ({ role: m.role, content: m.content || "" }));
 	history.push({ role: "assistant", content: msg.content });
@@ -112,7 +114,6 @@ export async function sendChatMessage(text, type) {
 }
 
 // Event-Delegation-Hilfen aus app.js:
-
 export function handleReasoningToggle(t) {
 	if (t.id === "btnThinkLive") {
 		S.thinkingLiveExpanded = !S.thinkingLiveExpanded;
@@ -231,15 +232,22 @@ export async function handleRefineSelect(t) {
 	await refineMessage(t.dataset.refine, t.dataset.mode);
 }
 
+// FIX: Menü öffnet über dem ＋-Button (der sitzt am unteren Rand) statt darunter
+// aus dem Bildschirm; window.scrollY entfernt (falsch bei position:fixed).
 export function handleAttachMenuToggle(t) {
 	const m = U.el("attachMenu");
 	if (!m) return;
 	if (m.hidden) {
-		const rect = t.getBoundingClientRect();
+		// Erst unsichtbar einblenden, um die echte Menügröße messen zu können.
 		m.style.position = "fixed";
-		m.style.left = Math.round(rect.left) + "px";
-		m.style.top = Math.round(rect.bottom + window.scrollY + 4) + "px";
+		m.style.visibility = "hidden";
 		m.hidden = false;
+		const rect = t.getBoundingClientRect();
+		let top = rect.top - m.offsetHeight - 4;
+		if (top < 8) top = rect.bottom + 4;
+		m.style.left = Math.round(Math.min(rect.left, window.innerWidth - m.offsetWidth - 8)) + "px";
+		m.style.top = Math.round(top) + "px";
+		m.style.visibility = "";
 	} else {
 		m.hidden = true;
 	}
