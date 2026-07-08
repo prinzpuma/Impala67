@@ -5,6 +5,8 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { RENDER } from "./render.js";
 
+const render = (...args) => RENDER.render(...args);
+
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
