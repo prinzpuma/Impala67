@@ -1772,7 +1772,7 @@ async function purgeOldTrash() {
 	}
 }
 
-window.addEventListener("DOMContentLoaded", async () => {
+async function initApp() {
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -1788,7 +1788,13 @@ window.addEventListener("DOMContentLoaded", async () => {
 	setInterval(() => { if (!document.hidden) checkAI(); }, 60000);
 	document.addEventListener("visibilitychange", () => { if (!document.hidden) checkAI(); });
 	RAG.reindexStale();
-});
+}
+
+if (document.readyState === "loading") {
+	window.addEventListener("DOMContentLoaded", initApp);
+} else {
+	initApp();
+}
 
 export const APP = {
 	COLLAPSE,
