@@ -16,6 +16,7 @@ const APP_FILES = [
 	"./main.js",
 	"./collapse.js",
 	"./chats.js",
+	"./import-notion.js",
 	"./util.js",
 	"./db.js",
 	"./srs.js",

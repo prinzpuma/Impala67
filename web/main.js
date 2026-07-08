@@ -20,6 +20,7 @@ import { EDITOR } from "./editor.js";
 import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { APP } from "./app.js";
+import { NOTION_MIGRATOR } from "./import-notion.js";
 import { COLLAPSE } from "./collapse.js";
 import { CHATS } from "./chats.js";
 import "./updater.js";
@@ -41,6 +42,7 @@ window.EDITOR = EDITOR;
 window.EXTRAS = EXTRAS;
 window.COLLAPSE = COLLAPSE;
 window.CHATS = CHATS;
+window.NOTION_MIGRATOR = NOTION_MIGRATOR;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;
