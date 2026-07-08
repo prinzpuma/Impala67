@@ -32,6 +32,7 @@ const APP_FILES = [
 	"./settings.js",
 	"./tabs.js",
 	"./search.js",
+	"./shortcuts.js",
 	"./app.js",
 	"./updater.js",
 	"./render-anki.js",

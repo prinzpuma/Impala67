@@ -29,6 +29,7 @@ import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
+import { SHORTCUTS } from "./shortcuts.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -51,6 +52,7 @@ window.SETTINGS = SETTINGS;
 window.LIBRARY = LIBRARY;
 window.TABS = TABS;
 window.SEARCH = SEARCH;
+window.SHORTCUTS = SHORTCUTS;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

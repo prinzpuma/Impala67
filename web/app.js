@@ -11,6 +11,7 @@ import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
+import { SHORTCUTS } from "./shortcuts.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -1423,29 +1424,8 @@ function wireEvents() {
 	document.addEventListener("focusout", (e) => {
 		if (e.target.dataset.renamename || e.target.dataset.deckrenamename) commitRename(e.target);
 	});
-	// Escape schließt Overlays (Einstellungen, Dialoge), das ⋯-Seitenmenü und die Schnellsuche
-	document.addEventListener("keydown", (e) => {
-		if (e.key !== "Escape") return;
-		if (e.target.dataset && (e.target.dataset.renamename || e.target.dataset.deckrenamename)) return;
-		const o = U.el("overlay");
-		if (o && !o.hidden) { closeOverlay(); return; }
-		if (S.pageMenuOpenId) { S.pageMenuOpenId = null; renderSidebar(); if (S.view === "library") renderMain(); return; }
-		const s = U.el("search");
-		if (s && !s.hidden) { s.value = ""; s.hidden = true; s.blur(); renderSidebar(); }
-	});
-	// Strg/Cmd+K öffnet wie in Notion die Schnellsuche
-	document.addEventListener("keydown", (e) => {
-		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-			e.preventDefault();
-			const s = U.el("search");
-			if (s) {
-				s.hidden = false;
-				renderSidebar();
-				s.focus();
-				s.select();
-			}
-		}
-	});
+	// Tastenkombinationen (Shortcuts) registrieren
+	SHORTCUTS.wireShortcuts();
 	// Langen geklebten Text automatisch als .txt-Anhang behandeln statt im Feld auszuschreiben
 	document.addEventListener("paste", (e) => {
 		if (e.target.id !== "chatInput" && e.target.id !== "mainChatInput") return;
