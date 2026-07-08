@@ -1,7 +1,9 @@
 "use strict";
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
+import { AI } from "./ai.js";
+import { PDFS } from "./pdfs.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
 // Benötigt ein Embedding-Modell in ⚙️ (Gemini: gemini-embedding-001,
