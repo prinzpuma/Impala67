@@ -28,6 +28,7 @@ import { EXTRAS } from "./extras.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
+import { SEARCH } from "./search.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -49,6 +50,7 @@ window.NOTION_MIGRATOR = NOTION_MIGRATOR;
 window.SETTINGS = SETTINGS;
 window.LIBRARY = LIBRARY;
 window.TABS = TABS;
+window.SEARCH = SEARCH;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

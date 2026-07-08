@@ -10,6 +10,7 @@ import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
+import { SEARCH } from "./search.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -1018,19 +1019,9 @@ function wireEvents() {
 				break;
 			case "btnNavBack": navBack(); break;
 			case "btnNavForward": navForward(); break;
-			case "btnSearchToggle": {
-				const s = U.el("search");
-				s.hidden = !s.hidden;
-				if (!s.hidden) {
-					S.sidebarMode = "files";
-					renderSidebar();
-					s.focus();
-				} else {
-					s.value = "";
-					renderSidebar();
-				}
+			case "btnSearchToggle":
+				SEARCH.handleSearchToggle();
 				break;
-			}
 			case "btnCreateWs":
 				await LIBRARY.handleCreateWorkspace();
 				break;
@@ -1202,7 +1193,9 @@ function wireEvents() {
 
 	// Eingaben (Delegation) — inkl. Live-Vorschau im Split-Modus
 	document.addEventListener("input", (e) => {
-		if (e.target.id === "search") renderSidebar();
+		if (e.target.id === "search") {
+			SEARCH.handleSearchInput(e);
+		}
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
 			LIBRARY.handleFilterInput(e);
