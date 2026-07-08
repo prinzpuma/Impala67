@@ -3,7 +3,9 @@
 // und aktualisiert sie bei jedem Aufruf im Hintergrund (stale-while-revalidate).
 // Neue App-Version veröffentlichen = Dateien auf GitHub Pages pushen — fertig.
 
-const CACHE = "notion-v2";
+// Neuer Cache-Name nach der Umbenennung — der alte "notion-v2"-Cache wird bei der
+// Aktivierung unten automatisch aufgeräumt (keys-Filter löscht alles außer CACHE).
+const CACHE = "impala67-v2";
 
 const APP_FILES = [
 	"./",
@@ -23,6 +25,9 @@ const APP_FILES = [
 	"./editor.js",
 	"./render.js",
 	"./app.js",
+	"./updater.js",
+	"./render-anki.js",
+	"./extras.js",
 ];
 
 // CDN-Bibliotheken beim Installieren vorab cachen (best effort) — damit Markdown,

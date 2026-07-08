@@ -1,7 +1,7 @@
 "use strict";
 // app.js — Initialisierung und Event-Verkabelung.
 const WELCOME_MD = [
-	"Willkommen bei **Notion** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
+	"Willkommen bei **Impala67** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
 	"",
 	"## 🗂 Seiten & Organisation",
 	"- Workspaces mit einklappbarem Seitenbaum (Pfeil links neben jeder Seite), Zustand bleibt über Neustarts erhalten",
@@ -80,9 +80,9 @@ async function seedIfEmpty() {
 // ---------- Ein-/Ausklapp-Zustand (Sidebar-Baum), überlebt einen Neustart ----------
 const COLLAPSE = (() => {
 	let set = new Set();
-	try { set = new Set(JSON.parse(localStorage.getItem("notion.collapsed") || "[]")); } catch { /* leer starten */ }
+	try { set = new Set(JSON.parse(localStorage.getItem("impala67.collapsed") || localStorage.getItem("notion.collapsed") || "[]")); } catch { /* leer starten */ }
 	function persist() {
-		try { localStorage.setItem("notion.collapsed", JSON.stringify([...set])); } catch (e) { console.warn(e); }
+		try { localStorage.setItem("impala67.collapsed", JSON.stringify([...set])); } catch (e) { console.warn(e); }
 	}
 	return {
 		isCollapsed: (key) => set.has(key),
@@ -93,11 +93,12 @@ const COLLAPSE = (() => {
 // ---------- Chat-Verlauf (lokal in localStorage, wie Notions Chat-Liste) ----------
 const CHATS = {
 	load() {
-		try { return JSON.parse(localStorage.getItem("notion.chats") || "[]"); }
+		// Fallback auf den alten Schlüssel — gespeicherte Chats überleben die Umbenennung.
+		try { return JSON.parse(localStorage.getItem("impala67.chats") || localStorage.getItem("notion.chats") || "[]"); }
 		catch { return []; }
 	},
 	save(list) {
-		try { localStorage.setItem("notion.chats", JSON.stringify(list.slice(0, 100))); }
+		try { localStorage.setItem("impala67.chats", JSON.stringify(list.slice(0, 100))); }
 		catch (e) { console.warn("Chat-Verlauf konnte nicht gespeichert werden:", e); }
 	},
 };
@@ -148,7 +149,7 @@ function toggleChatFull(force) {
 // Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
 // Theme (dunkel/hell) — Gerätewahl in localStorage, Standard: dunkel.
 function applyTheme() {
-	document.body.classList.toggle("light", localStorage.getItem("notionTheme") === "light");
+	document.body.classList.toggle("light", (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light");
 }
 
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt das #overlay wie alle anderen Dialoge.

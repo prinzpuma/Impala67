@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Notion — Notizen · PDFs · KI</title>
+<title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
@@ -39,6 +39,7 @@
 			</button>
 			<button id="btnAnki" class="tab" title="Karteikarten (Anki)">🃏</button>
 			<button id="btnDaily" class="tab" title="Daily Notes">📅</button>
+			<button id="btnNotebookLM" class="tab" title="NotebookLM (öffnet eigenes Fenster)">📓</button>
 			<button id="btnSearchToggle" class="tab" title="Suchen">
 				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>
 			</button>
@@ -92,7 +93,7 @@
 <input type="file" id="fileBg" accept="image/*" hidden>
 <input type="file" id="fileImport" accept="application/json" hidden>
 
-<!-- Ladereihenfolge: config.local (optional, lokal/nicht im Repo) → util → db → srs → state → tools → ai → rag → drive → pdfs → editor → render → app -->
+<!-- Ladereihenfolge: config.local (optional, lokal/nicht im Repo) → util → db → srs → state → tools → ai → rag → drive → pdfs → editor → render → app → updater → extras (Anki-Ausbau, Import/Export, Backlinks, Multi-Tab-Schutz) -->
 <script src="config.local.js"></script>
 <script src="util.js"></script>
 <script src="db.js"></script>
@@ -105,14 +106,34 @@
 <script src="pdfs.js"></script>
 <script src="editor.js"></script>
 <script src="render.js"></script>
+	<script src="render-anki.js"></script>
 <script src="app.js"></script>
 <script src="updater.js"></script>
+<script src="extras.js"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 	navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("Service-Worker:", e));
 }
+
+// NotebookLM als "eigener Tab": Google blockiert das Einbetten per iframe (X-Frame-Options/CSP),
+// daher öffnet der Button ein eigenes Fenster — in der Tauri-App ein natives App-Fenster,
+// im Browser/PWA ein randarmes Popup, das sich wie eine eigene App anfühlt.
+// Hinweis Tauri v2: dafür muss die Capability "core:webview:allow-create-webview-window"
+// erlaubt sein — sonst greift der Fallback (System-Browser).
+document.getElementById("btnNotebookLM").addEventListener("click", () => {
+	const url = "https://notebooklm.google.com/";
+	const T = window.__TAURI__;
+	if (T && T.webviewWindow && T.webviewWindow.WebviewWindow) {
+		try {
+			new T.webviewWindow.WebviewWindow("notebooklm", { url, title: "NotebookLM", width: 1280, height: 860 });
+			return;
+		} catch (e) { console.warn("NotebookLM-Fenster fehlgeschlagen, öffne im Browser:", e); }
+	}
+	if (T && T.shell && T.shell.open) { T.shell.open(url); return; }
+	window.open(url, "impala67-notebooklm", "popup=yes,width=1280,height=860");
+});
 </script>
 </body>
 </html>
