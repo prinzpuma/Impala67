@@ -923,10 +923,7 @@ function modal(inner) {
 	return '<div class="modal">' + inner + "</div>";
 }
 
-function field(label, id, value, type) {
-	return "<div><label for=\"" + id + "\">" + U.esc(label) + "</label>" +
-		'<input id="' + id + '" type="' + (type || "text") + '" value="' + U.esc(value || "") + '"></div>';
-}
+
 
 function openIconPicker() {
 	if (!S.currentPageId) return;
@@ -954,110 +951,7 @@ function openCoverPicker() {
 	);
 }
 
-// Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
-const SETTINGS_SECTIONS = [
-	{ id: "ki", label: "KI" },
-	{ id: "look", label: "Darstellung" },
-	{ id: "notion", label: "Notion Sync" },
-	{ id: "backup", label: "Backup" },
-	{ id: "sync", label: "Sync" },
-];
 
-function openSettings(section) {
-	S.settingsSection = section || S.settingsSection || "ki";
-	const sec = S.settingsSection;
-	const o = U.el("overlay");
-	o.hidden = false;
-	const nav = SETTINGS_SECTIONS.map((s) =>
-		'<div class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + s.label + "</div>"
-	).join("");
-	let body = "";
-	if (sec === "ki") {
-		const providers = S.settings.aiProviders || [];
-		body = "<h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>" +
-			'<div class="provider-list">' + providers.map((pr) =>
-				'<div class="provider-card" data-provrow="' + pr.id + '">' +
-					'<div class="provider-card-head">' +
-						'<input data-provname="' + pr.id + '" placeholder="Name der Quelle" value="' + U.esc(pr.name) + '">' +
-						'<button data-provdel="' + pr.id + '" class="icon-danger" title="Quelle entfernen">🗑</button>' +
-					"</div>" +
-					'<input data-provbase="' + pr.id + '" placeholder="Server-URL (OpenAI-kompatibel)" value="' + U.esc(pr.base) + '">' +
-					'<input data-provkey="' + pr.id + '" type="password" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
-				"</div>"
-			).join("") + "</div>" +
-			'<button id="btnAddProvider">＋ Quelle hinzufügen</button>' +
-			// Schnell-Buttons für die drei Standard-Quellen — falls sie in älteren gespeicherten
-			// Einstellungen fehlen (settingsSet überschreibt die Default-Liste aus state.js).
-			'<div class="row-btns" style="margin-top:6px"><span class="hint">Schnell hinzufügen:</span>' +
-			'<button data-provpreset="local">🖥 LM Studio (lokal)</button>' +
-			'<button data-provpreset="google">✨ Google Gemini</button>' +
-			'<button data-provpreset="openai">🤖 OpenAI</button></div>' +
-			field("Embedding-Modell (optional, semantische Suche — nutzt die im Modell-Dropdown aktive Quelle)", "inpEmbed", S.settings.embedModel) +
-			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI (optional)</label>" +
-			'<textarea id="inpCustomInstructions" rows="3" placeholder="z.B. Studienfach, bevorzugte Sprache, Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div>" +
-			'<p class="hint">Lege für jede Quelle Server-URL + optionalen API-Key an, z.B.:<br>' +
-			"Google Gemini: https://generativelanguage.googleapis.com/v1beta/openai · Modelle z.B. gemma-4-31b-it, gemini-2.5-flash · Embeddings gemini-embedding-001.<br>" +
-			"OpenAI: https://api.openai.com/v1 · Embeddings text-embedding-3-small.<br>" +
-			"Lokal: z.B. http://localhost:1234/v1 (LM Studio, Port 1234, CORS aktivieren, kein Key nötig).<br>" +
-			"Welches Modell aktiv ist, wählst du oben im Modell-Dropdown — dort erscheinen alle Quellen gruppiert mit ihren live abgefragten Modellen. Die KI kennt nur, was du hier selbst einträgst.</p>" +
-			'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
-	} else if (sec === "notion") {
-		const last = S.settings.notionLastSync;
-		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
-			field("Notion Seiten-ID (Wurzelseite für den Sync; leer = alle freigegebenen Seiten)", "inpNotionPage", S.settings.notionPageId || S.notionPageId) +
-			field("Eigener CORS-Proxy (optional, z.B. https://dein-worker.workers.dev/?; leer = corsproxy.io)", "inpCorsProxy", S.settings.corsProxy || "") +
-			'<p class="hint">1) Auf notion.so/my-integrations eine interne Integration erstellen, Token kopieren.<br>' +
-			'2) In Notion die gewünschten Seiten über „Teilen“ mit der Integration freigeben.<br>' +
-			"3) <b>⬇ Import</b> holt alles einmalig. <b>⇅ Zwei-Wege-Sync</b> gleicht danach in beide Richtungen ab: die jeweils neuere Version gewinnt, lokal neue Seiten werden in deinem Notion unter der Wurzelseite angelegt.<br>" +
-			"Hinweis: Notions API erlaubt keine direkten Browseranfragen (CORS). Ohne eigenen Proxy laufen die Anfragen über den öffentlichen corsproxy.io — sicherer ist ein eigener Mini-Proxy (Cloudflare Worker), dessen URL du oben einträgst.</p>" +
-			(last ? '<p class="hint">Letzter Sync: ' + U.fmtDate(last) + "</p>" : "") +
-			'<div class="modal-actions"><button id="btnMigrateNotion">⬇ Import</button><button id="btnNotionSync">⇅ Zwei-Wege-Sync</button><button id="btnNotionCancel" class="danger" hidden>⏹ Abbrechen</button></div>' +
-			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
-			'<p class="hint" id="notionStatus"></p>';
-	} else if (sec === "look") {
-		const theme = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light" ? "light" : "dark"; // alter Schlüssel als Fallback
-		body = '<h4>Design</h4><div class="row-btns">' +
-			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '">🌙 Dunkel</button>' +
-			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '">☀️ Hell</button></div>' +
-			'<h4 style="margin-top:14px">Hintergrund</h4>' +
-			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dunkel überblendet, damit Text lesbar bleibt.</p>' +
-			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>';
-	} else if (sec === "backup") {
-		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
-			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
-			'<h4 style="margin-top:14px">Workspace als Markdown-ZIP</h4>' +
-			'<p class="hint">Alle Seiten eines Workspace als .md-Dateien (Ordnerstruktur = Seitenbaum) — in jedem Editor nutzbar.</p>' +
-			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>
-				'<button data-zipws="' + U.esc(ws.id) + '">🗜 ' + U.esc(ws.name) + "</button>").join("") + "</div>" +
-			'<h4 style="margin-top:20px; color:var(--danger)">⚠️ Gefahrenzone</h4>' +
-			'<p class="hint">Löscht alle lokalen Seiten und deren Versionsverlauf unwiderruflich von diesem Gerät. Deine Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
-			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
-	} else if (sec === "sync") {
-		if (!S.settings.driveClientId) {
-			body = field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
-				'<p class="hint">Google verlangt für jede App eine registrierte Client-ID — das ist einmalig nötig, keine Notion-Eigenheit:<br>' +
-				"1) Google Cloud Console → Drive-API aktivieren.<br>" +
-				'2) OAuth-Client vom Typ „Webanwendung“ anlegen, <code>' + location.origin + '</code> als autorisierten Ursprung eintragen.<br>' +
-				"3) Client-ID hier einfügen und speichern.<br>" +
-				"Danach reicht wirklich nur noch ein Klick auf „Mit Google anmelden“.</p>" +
-				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
-		} else if (S.driveUserEmail) {
-			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
-				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
-				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
-		} else {
-			body = '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
-				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
-		}
-	}
-	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
-	o.innerHTML = '<div class="modal settings-modal">' +
-		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
-	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
-	if (sec === "notion" && typeof SETTINGS.renderNotionJob === "function") SETTINGS.renderNotionJob();
-}
 
 function openReview() {
 	const o = U.el("overlay");
@@ -1114,7 +1008,7 @@ export const RENDER = {
 	renderModelMenu,
 	renderSidebar,
 	renderMain,
-	openSettings,
+	openSettings: (...args) => SETTINGS.openSettings(...args),
 	openReview,
 	openCards,
 	renderChat,

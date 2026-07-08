@@ -54,7 +54,7 @@ window.renderTopbar = RENDER.renderTopbar;
 window.renderModelMenu = RENDER.renderModelMenu;
 window.renderSidebar = RENDER.renderSidebar;
 window.renderMain = RENDER.renderMain;
-window.openSettings = RENDER.openSettings;
+window.openSettings = SETTINGS.openSettings;
 window.openReview = RENDER.openReview;
 window.openCards = RENDER.openCards;
 

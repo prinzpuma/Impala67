@@ -1161,123 +1161,29 @@ function wireEvents() {
 				document.body.classList.remove("panel-collapsed");
 				t.hidden = true;
 				break;
-			case "btnSettings": openSettings(); break;
+			case "btnSettings": SETTINGS.openSettings(); break;
 			case "btnMigrateNotion":
-			case "btnNotionSync": {
-				if (S.notionJob && S.notionJob.running) break;
-				const isSync = t.id === "btnNotionSync";
-				const tok = U.el("inpNotionToken").value.trim();
-				const pid = U.el("inpNotionPage").value.trim();
-				const prox = U.el("inpCorsProxy") ? U.el("inpCorsProxy").value.trim() : (S.settings.corsProxy || "");
-				S.notionToken = tok;
-				S.notionPageId = pid;
-				await STATE.dispatch("settingsSet", { notionToken: tok, notionPageId: pid, corsProxy: prox });
-				if (!tok) { alert("Token ist erforderlich."); break; }
-				// Fortschritt lebt in S.notionJob (nicht in lokalen DOM-Referenzen) — so
-				// überlebt er das Schließen der Einstellungen und wird beim Wiederöffnen
-				// von openSettings() über renderNotionJob() einfach neu gezeichnet.
-				S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
-				SETTINGS.renderNotionJob();
-				const onStatus = (st, fraction) => {
-					S.notionJob.status = st;
-					S.notionJob.fraction = fraction == null ? null : fraction;
-					SETTINGS.renderNotionJob();
-				};
-				try {
-					if (isSync) {
-						const r = await NOTION_MIGRATOR.sync(tok, pid || null, onStatus);
-						S.notionJob.status = "✅ Sync fertig — " + r.pulled + " übernommen, " + r.pushed + " nach Notion übertragen, " + r.created + " in Notion angelegt" + (r.merged ? ", " + r.merged + " Duplikat(e) zusammengeführt" : "") + ".";
-					} else {
-						const newId = await NOTION_MIGRATOR.migrate(tok, pid || null, onStatus);
-						S.notionJob.status = "✅ Import fertig!";
-						if (newId) setTimeout(() => { closeOverlay(); openPage(newId); }, 600);
-					}
-					S.notionJob.fraction = 1;
-				} catch (err) {
-					S.notionJob.status = err.cancelled ? "⏹ Abgebrochen." : "⚠️ " + err.message;
-					S.notionJob.fraction = null;
-				}
-				S.notionJob.running = false;
-				S.notionJob.cancelling = false;
-				SETTINGS.renderNotionJob();
-				render();
+			case "btnNotionSync":
+				await SETTINGS.handleNotionSync(t);
 				break;
-			}
-			case "btnNotionCancel": {
-				NOTION_MIGRATOR.cancel();
-				if (S.notionJob) { S.notionJob.cancelling = true; S.notionJob.status = "Wird abgebrochen…"; }
-				SETTINGS.renderNotionJob();
+			case "btnNotionCancel":
+				SETTINGS.handleNotionCancel();
 				break;
-			}
-			case "btnDriveLogin": {
-				t.disabled = true;
-				const old = t.textContent;
-				t.textContent = "Verbinde…";
-				try {
-					const info = await DRIVE.login();
-					S.driveUserEmail = (info && info.email) ? info.email : "Google-Konto";
-					openSettings("sync");
-				} catch (err) {
-					alert("Anmeldung fehlgeschlagen: " + err.message);
-					t.disabled = false;
-					t.textContent = old;
-				}
+			case "btnDriveLogin":
+				await SETTINGS.handleDriveLogin(t);
 				break;
-			}
 			case "btnDriveLogout":
-				DRIVE.logout();
-				S.driveUserEmail = null;
-				openSettings("sync");
+				SETTINGS.handleDriveLogout();
 				break;
-			case "btnDriveSyncSettings": {
-				t.disabled = true;
-				const old = t.textContent;
-				try {
-					const imported = await DRIVE.sync((st) => { t.textContent = st; });
-					if (imported > 0) { alert("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu."); location.reload(); }
-					else alert("Sync abgeschlossen — keine neuen Änderungen.");
-				} catch (err) {
-					alert("Sync fehlgeschlagen: " + err.message);
-				}
-				t.disabled = false;
-				t.textContent = old;
+			case "btnDriveSyncSettings":
+				await SETTINGS.handleDriveSyncSettings(t);
 				break;
-			}
-			case "btnAddProvider": {
-				const providers = (S.settings.aiProviders || []).slice();
-				providers.push({ id: U.uid(), name: "Neue Quelle", base: "", key: "" });
-				await STATE.dispatch("settingsSet", { aiProviders: providers });
-				openSettings("ki");
+			case "btnAddProvider":
+				await SETTINGS.handleAddProvider();
 				break;
-			}
-			case "btnSaveSettings": {
-				const patch = {};
-				const g = (id) => document.getElementById(id);
-				const provRows = document.querySelectorAll("[data-provrow]");
-				if (provRows.length) {
-					patch.aiProviders = Array.from(provRows).map((row) => {
-						const id = row.dataset.provrow;
-						const nameEl = row.querySelector("[data-provname]");
-						const baseEl = row.querySelector("[data-provbase]");
-						const keyEl = row.querySelector("[data-provkey]");
-						return {
-							id,
-							name: nameEl && nameEl.value.trim() ? nameEl.value.trim() : id,
-							base: baseEl ? baseEl.value.trim() : "",
-							key: keyEl ? keyEl.value.trim() : "",
-						};
-					});
-				}
-				if (g("inpEmbed")) patch.embedModel = g("inpEmbed").value.trim();
-				if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
-				if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
-				await STATE.dispatch("settingsSet", patch);
-				closeOverlay();
-				SETTINGS.checkAI();
-				RAG.reindexStale();
-				S.availableModels = [];
+			case "btnSaveSettings":
+				await SETTINGS.handleSaveSettings();
 				break;
-			}
 			case "btnModelMenu":
 			case "btnModelChipFull": {
 				S.modelMenuAnchor = t.id === "btnModelChipFull" ? "full" : "panel";
@@ -1319,8 +1225,7 @@ function wireEvents() {
 				break;
 			}
 			case "btnClearBg":
-				await DB.putBlob("bgImage", new ArrayBuffer(0), {});
-				SETTINGS.applyBg();
+				await SETTINGS.handleClearBg();
 				break;
 			case "btnCloseOverlay": closeOverlay(); break;
 			case "btnAnki": openAnki(); break;
@@ -1353,39 +1258,17 @@ function wireEvents() {
 				}
 				break;
 			}
-			case "btnDriveSync": {
-				if (!S.settings.driveClientId) {
-					alert("Für den Drive-Sync brauchst du einmalig eine Google OAuth Client-ID:\n" +
-						"Google Cloud Console → Drive-API aktivieren → OAuth-Client (Webanwendung) → " +
-						"Client-ID in Einstellungen → Sync eintragen. Danach reicht ein Klick.");
-					break;
-				}
-				t.disabled = true;
-				try {
-					const imported = await DRIVE.sync((st) => { t.textContent = "☁️ " + st; });
-					if (imported > 0) {
-						alert("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.");
-						location.reload();
-					}
-				} catch (err) {
-					alert("Sync fehlgeschlagen: " + err.message);
-				}
-				t.disabled = false;
-				t.textContent = "☁️ Sync";
+			case "btnDriveSync":
+				await SETTINGS.handleDriveSync(t);
 				break;
-			}
 			case "btnBackupNow":
 			case "btnExport":
-				U.download("notion-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
-				// Backup-Zeitpunkt merken — steuert die Erinnerung auf der Startseite
-				localStorage.setItem("notionLastBackup", new Date().toISOString());
-				if (S.view === "home") renderMain();
+				await SETTINGS.handleBackupNow();
 				break;
 			case "btnSidebarToggle": document.body.classList.toggle("sidebar-open"); break;
 			case "btnThemeDark":
 			case "btnThemeLight":
-				localStorage.setItem("notionTheme", t.id === "btnThemeLight" ? "light" : "dark");
-				SETTINGS.applyTheme();
+				SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");
 				break;
 			case "btnImport": U.el("fileImport").click(); break;
 			case "btnOpenPdf":
@@ -1393,22 +1276,9 @@ function wireEvents() {
 				if (document.activeElement) document.activeElement.blur();
 				render();
 				break;
-			case "btnResetAll": {
-				if (confirm("⚠️ ACHTUNG: Möchtest du wirklich alle lokalen Seiten unwiderruflich löschen?\n\nDeine Einstellungen, API-Keys, Karteikarten und Stapel bleiben erhalten!")) {
-					t.disabled = true;
-					t.textContent = "Lösche Seiten...";
-					try {
-						await DB.clearPages();
-						alert("Alle Seiten wurden erfolgreich gelöscht. Aura lädt sich nun neu.");
-						location.reload();
-					} catch (err) {
-						alert("Fehler beim Löschen der Seiten: " + err.message);
-						t.disabled = false;
-						t.textContent = "Alle Seiten löschen";
-					}
-				}
+			case "btnResetAll":
+				await SETTINGS.handleResetAll(t);
 				break;
-			}
 			case "btnTrash":
 				S.view = "trash";
 				if (document.activeElement) document.activeElement.blur();
@@ -1471,22 +1341,10 @@ function wireEvents() {
 			r.readAsDataURL(file);
 		}
 		if (e.target.id === "fileBg" && e.target.files[0]) {
-			const file = e.target.files[0];
-			e.target.value = "";
-			const buf = await U.readAsBuffer(file);
-			await DB.putBlob("bgImage", buf, { name: file.name, type: file.type });
-			SETTINGS.applyBg();
+			await SETTINGS.handleFileBgChange(e);
 		}
 		if (e.target.id === "fileImport" && e.target.files[0]) {
-			const file = e.target.files[0];
-			e.target.value = "";
-			try {
-				const added = await DB.importAll(await U.readAsText(file));
-				alert(added + " Änderungen importiert. Die App lädt neu.");
-				location.reload();
-			} catch (err) {
-				alert("Import fehlgeschlagen: " + err.message);
-			}
+			await SETTINGS.handleImportChange(e);
 		}
 	});
 
@@ -1740,5 +1598,7 @@ export const APP = {
 	seedIfEmpty,
 	wireEvents,
 	purgeOldTrash,
-	saveCurrentChat
+	saveCurrentChat,
+	closeOverlay,
+	openPage
 };
