@@ -1793,7 +1793,7 @@ async function initApp() {
 if (document.readyState === "loading") {
 	window.addEventListener("DOMContentLoaded", initApp);
 } else {
-	setTimeout(initApp, 0);
+	initApp();
 }
 
 export const APP = {
