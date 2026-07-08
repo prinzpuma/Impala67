@@ -1,4 +1,6 @@
 "use strict";
+import { COLLAPSE } from "./collapse.js";
+import { CHATS } from "./chats.js";
 // app.js — Initialisierung und Event-Verkabelung.
 const WELCOME_MD = [
 	"Willkommen bei **Impala67** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
@@ -77,31 +79,7 @@ async function seedIfEmpty() {
 	S.currentPageId = id;
 }
 
-// ---------- Ein-/Ausklapp-Zustand (Sidebar-Baum), überlebt einen Neustart ----------
-const COLLAPSE = (() => {
-	let set = new Set();
-	try { set = new Set(JSON.parse(localStorage.getItem("impala67.collapsed") || localStorage.getItem("notion.collapsed") || "[]")); } catch { /* leer starten */ }
-	function persist() {
-		try { localStorage.setItem("impala67.collapsed", JSON.stringify([...set])); } catch (e) { console.warn(e); }
-	}
-	return {
-		isCollapsed: (key) => set.has(key),
-		toggle(key) { set.has(key) ? set.delete(key) : set.add(key); persist(); },
-	};
-})();
 
-// ---------- Chat-Verlauf (lokal in localStorage, wie Notions Chat-Liste) ----------
-const CHATS = {
-	load() {
-		// Fallback auf den alten Schlüssel — gespeicherte Chats überleben die Umbenennung.
-		try { return JSON.parse(localStorage.getItem("impala67.chats") || localStorage.getItem("notion.chats") || "[]"); }
-		catch { return []; }
-	},
-	save(list) {
-		try { localStorage.setItem("impala67.chats", JSON.stringify(list.slice(0, 100))); }
-		catch (e) { console.warn("Chat-Verlauf konnte nicht gespeichert werden:", e); }
-	},
-};
 
 function saveCurrentChat() {
 	if (!S.chat.length) return;

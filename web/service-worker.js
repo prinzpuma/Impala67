@@ -14,6 +14,8 @@ const APP_FILES = [
 	"./manifest.json",
 	"./icon.svg",
 	"./main.js",
+	"./collapse.js",
+	"./chats.js",
 	"./util.js",
 	"./db.js",
 	"./srs.js",

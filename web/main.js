@@ -20,6 +20,8 @@ import { EDITOR } from "./editor.js";
 import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { APP } from "./app.js";
+import { COLLAPSE } from "./collapse.js";
+import { CHATS } from "./chats.js";
 import "./updater.js";
 import { EXTRAS } from "./extras.js";
 
@@ -37,6 +39,8 @@ window.DRIVE = DRIVE;
 window.PDFS = PDFS;
 window.EDITOR = EDITOR;
 window.EXTRAS = EXTRAS;
+window.COLLAPSE = COLLAPSE;
+window.CHATS = CHATS;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;
@@ -58,8 +62,6 @@ window.renderAnki = RENDER_ANKI.renderAnki;
 window.openCardEditor = RENDER_ANKI.openCardEditor;
 
 // APP-Funktionen an window binden
-window.COLLAPSE = APP.COLLAPSE;
-window.CHATS = APP.CHATS;
 window.seedIfEmpty = APP.seedIfEmpty;
 window.wireEvents = APP.wireEvents;
 window.purgeOldTrash = APP.purgeOldTrash;
