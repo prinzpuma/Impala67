@@ -1,4 +1,9 @@
 "use strict";
+
+import { S, STATE } from "./state.js";
+import { TOOLS } from "./tools.js";
+import { U } from "./util.js";
+
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
 // Mit Streaming (SSE), Modellauswahl, Reasoning/Thinking-Erfassung, Verbindungs-
 // Ping, Embeddings und automatischer Diff-Erfassung für Seiten-Bearbeitungen.
