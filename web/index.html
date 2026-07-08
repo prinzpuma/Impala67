@@ -2,6 +2,49 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<script>
+window.onerror = function(message, source, lineno, colno, error) {
+	const div = document.createElement("div");
+	div.style.position = "fixed";
+	div.style.top = "0";
+	div.style.left = "0";
+	div.style.width = "100%";
+	div.style.height = "100%";
+	div.style.backgroundColor = "rgba(255,0,0,0.95)";
+	div.style.color = "white";
+	div.style.zIndex = "999999";
+	div.style.padding = "20px";
+	div.style.fontFamily = "monospace";
+	div.style.fontSize = "16px";
+	div.style.overflow = "auto";
+	div.innerHTML = "<h1>Frontend Error Caught</h1>" +
+		"<p><strong>Message:</strong> " + message + "</p>" +
+		"<p><strong>Source:</strong> " + source + "</p>" +
+		"<p><strong>Line:</strong> " + lineno + " <strong>Col:</strong> " + colno + "</p>" +
+		"<pre>" + (error && error.stack ? error.stack : "") + "</pre>";
+	document.documentElement.appendChild(div);
+	return false;
+};
+window.onunhandledrejection = function(event) {
+	const div = document.createElement("div");
+	div.style.position = "fixed";
+	div.style.top = "0";
+	div.style.left = "0";
+	div.style.width = "100%";
+	div.style.height = "100%";
+	div.style.backgroundColor = "rgba(255,0,0,0.95)";
+	div.style.color = "white";
+	div.style.zIndex = "999999";
+	div.style.padding = "20px";
+	div.style.fontFamily = "monospace";
+	div.style.fontSize = "16px";
+	div.style.overflow = "auto";
+	div.innerHTML = "<h1>Unhandled Promise Rejection</h1>" +
+		"<p><strong>Reason:</strong> " + event.reason + "</p>" +
+		"<pre>" + (event.reason && event.reason.stack ? event.reason.stack : "") + "</pre>";
+	document.documentElement.appendChild(div);
+};
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css">
