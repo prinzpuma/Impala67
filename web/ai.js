@@ -3,6 +3,8 @@
 import { S, STATE } from "./state.js";
 import { TOOLS } from "./tools.js";
 import { U } from "./util.js";
+import { RENDER } from "./render.js";
+import { APP } from "./app.js";
 
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
 // Mit Streaming (SSE), Modellauswahl, Reasoning/Thinking-Erfassung, Verbindungs-
@@ -294,7 +296,7 @@ export const AI = (() => {
 			renderQueued = true;
 			requestAnimationFrame(() => {
 				renderQueued = false;
-				if (type === "side") renderChat(); else renderMainChatLog();
+				if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
 			});
 		}
 
@@ -320,13 +322,13 @@ export const AI = (() => {
 						const answer = await new Promise((resolve) => {
 							pendingChoices[qMid] = resolve;
 							targetChat.push({ mid: qMid, role: "question", question: args.question || "", options, answered: false });
-							if (type === "side") renderChat(); else renderMainChatLog();
+							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
 						});
 						const qMsg = targetChat.find((x) => x.mid === qMid);
 						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
 						if (onStep) onStep("ask_choice");
 						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ answer }) });
-						if (type === "full") saveCurrentChat();
+						if (type === "full") APP.saveCurrentChat();
 						continue;
 					}
 
@@ -363,7 +365,7 @@ export const AI = (() => {
 								mid: U.uid(), role: "edit", pageId, pageTitle: after.title,
 								before, after, created, undone: false, diffExpanded: false,
 							});
-							if (type === "side") renderChat(); else renderMainChatLog();
+							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
 						}
 					}
 					messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
