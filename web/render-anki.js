@@ -1,4 +1,9 @@
 "use strict";
+import { COLLAPSE } from "./collapse.js";
+import { EXTRAS } from "./extras.js";
+import { SRS } from "./srs.js";
+import { S, STATE } from "./state.js";
+import { U } from "./util.js";
 // render-anki.js — aus render.js ausgelagert (Datei-Split): der komplette Anki-Bereich
 // (Stapel-Baum, Stapel-Liste, Karten-Browser, Statistik mit Heatmap & Retention,
 // Lern-Ansicht, Karten-Editor). Lädt in index.html direkt nach render.js.
