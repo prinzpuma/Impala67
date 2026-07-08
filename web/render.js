@@ -8,6 +8,10 @@ import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+
+const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
+const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
+
 // render.js — UI-Aufbau im Notion-Stil: einklappbare Sidebar (Workspaces/Seiten
 // oder Chat-Verlauf), Tab-Leiste mit Zurück/Vor, Notion-artiger Seitenkopf
 // (Breadcrumb, Icon, Cover), Chat mit Modellwahl, Thinking- und Edit-Karten.
@@ -1113,5 +1117,13 @@ export const RENDER = {
 	renderMain,
 	openSettings,
 	openReview,
-	openCards
+	openCards,
+	renderChat,
+	renderMainChatLog,
+	openTemplatePicker,
+	renderStatusDot,
+	renderTabs,
+	hydrateImages,
+	localDayKey,
+	modal
 };
