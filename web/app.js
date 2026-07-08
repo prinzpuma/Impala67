@@ -2,6 +2,11 @@
 import { COLLAPSE } from "./collapse.js";
 import { CHATS } from "./chats.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
+import { AI } from "./ai.js";
+import { DB } from "./db.js";
+import { RENDER } from "./render.js";
+import { S, STATE } from "./state.js";
+import { U } from "./util.js";
 // app.js — Initialisierung und Event-Verkabelung.
 const WELCOME_MD = [
 	"Willkommen bei **Impala67** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
