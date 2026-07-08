@@ -1,4 +1,13 @@
 "use strict";
+import { AI } from "./ai.js";
+import { CHATS } from "./chats.js";
+import { COLLAPSE } from "./collapse.js";
+import { DB } from "./db.js";
+import { EDITOR } from "./editor.js";
+import { PDFS } from "./pdfs.js";
+import { RENDER_ANKI } from "./render-anki.js";
+import { S, STATE } from "./state.js";
+import { U } from "./util.js";
 // render.js — UI-Aufbau im Notion-Stil: einklappbare Sidebar (Workspaces/Seiten
 // oder Chat-Verlauf), Tab-Leiste mit Zurück/Vor, Notion-artiger Seitenkopf
 // (Breadcrumb, Icon, Cover), Chat mit Modellwahl, Thinking- und Edit-Karten.
