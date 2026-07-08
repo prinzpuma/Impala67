@@ -4,6 +4,7 @@ import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { RENDER } from "./render.js";
+import { SETTINGS } from "./settings.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -467,7 +468,7 @@ export const EXTRAS = (() => {
 			list.push({ ...p, key: "" });
 			// LM Studio direkt als aktive Quelle setzen, damit das Modell-Dropdown sie sofort zeigt
 			await STATE.dispatch("settingsSet", { aiProviders: list, ...(p.id === "local" ? { aiProviderId: "local" } : {}) });
-			if (typeof openSettings === "function") openSettings("ki");
+			SETTINGS.openSettings("ki");
 			return;
 		}
 		if ((el = q("[data-ankiundo]"))) { if (!el.disabled) await undoReview(); return; }

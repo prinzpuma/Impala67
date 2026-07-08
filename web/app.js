@@ -604,7 +604,7 @@ function wireEvents() {
 		if (t.dataset.provdel) {
 			const providers = (S.settings.aiProviders || []).filter((p) => p.id !== t.dataset.provdel);
 			await STATE.dispatch("settingsSet", { aiProviders: providers });
-			openSettings("ki");
+			SETTINGS.openSettings("ki");
 			return;
 		}
 
@@ -888,7 +888,7 @@ function wireEvents() {
 			return;
 		}
 
-		if (t.dataset.set) { openSettings(t.dataset.set); return; }
+		if (t.dataset.set) { SETTINGS.openSettings(t.dataset.set); return; }
 
 		// Neue Seite in einem Workspace (+ neben dem Workspace-Namen)
 		if (t.dataset.newpage) { await newPageFlow(t.dataset.newpage, null); return; }

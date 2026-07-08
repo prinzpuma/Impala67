@@ -284,7 +284,7 @@ function renderMain() {
 
 	const main = U.el("main");
 	if (!main) return;
-	if (S.view === "library") { renderLibrary(main); return; }
+	if (S.view === "library") { LIBRARY.renderLibrary(main); return; }
 	if (S.view === "anki") { renderAnki(main); return; }
 	if (S.view === "daily") { renderDaily(main); return; }
 	if (S.view === "trash") { renderTrash(main); return; }
