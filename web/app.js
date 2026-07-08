@@ -2785,3 +2785,11 @@ window.addEventListener("DOMContentLoaded", async () => {
 	document.addEventListener("visibilitychange", () => { if (!document.hidden) checkAI(); });
 	RAG.reindexStale();
 });
+
+export const APP = {
+	COLLAPSE,
+	CHATS,
+	seedIfEmpty,
+	wireEvents,
+	purgeOldTrash
+};

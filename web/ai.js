@@ -2,7 +2,7 @@
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
 // Mit Streaming (SSE), Modellauswahl, Reasoning/Thinking-Erfassung, Verbindungs-
 // Ping, Embeddings und automatischer Diff-Erfassung für Seiten-Bearbeitungen.
-const AI = (() => {
+export const AI = (() => {
 	// Kuratierte Modell-Presets für die Dropdown-Auswahl im Chat-Panel.
 	// "Eigenes" Modelle (z.B. lokale LM-Studio-Namen) werden automatisch ergänzt.
 	const MODEL_PRESETS = [

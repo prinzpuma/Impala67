@@ -13,6 +13,7 @@ const APP_FILES = [
 	"./styles.css",
 	"./manifest.json",
 	"./icon.svg",
+	"./main.js",
 	"./util.js",
 	"./db.js",
 	"./srs.js",

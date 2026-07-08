@@ -3,7 +3,7 @@
 // Lernschritten für Minuten-Intervalle. Gespeichert werden weiterhin
 // stability / difficulty / due / reps / lapses / state / step / last — dieselben
 // Felder wie vorher (FSRS-lite) und wie ts-fsrs: keine Datenmigration nötig.
-const SRS = (() => {
+export const SRS = (() => {
 	// FSRS-5-Standardgewichte w0…w18 (wie ts-fsrs) — w0…w3 sind die Start-Stabilitäten
 	// für Nochmal/Schwer/Gut/Einfach, der Rest steuert Schwierigkeit & Stabilitätswachstum.
 	const W = [0.40255, 1.18385, 3.173, 15.69105, 7.1949, 0.5345, 1.4604, 0.0046, 1.54575,

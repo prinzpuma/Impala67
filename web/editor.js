@@ -6,7 +6,7 @@
 // Ausschnitt in einer Textarea bearbeitet, alle anderen Blöcke sind fertig
 // gerendert (inkl. LaTeX + Code-Highlighting). Enter/Backspace/Pfeiltasten
 // verhalten sich wie in Notion, ⠿-Handles verschieben Blöcke per Drag & Drop.
-const EDITOR = (() => {
+export const EDITOR = (() => {
 	let host = null;      // Container (#blockEditor), wird bei jedem renderMain neu gemountet
 	let pageId = null;    // aktuell bearbeitete Seite
 	let blocks = [];      // geparste Blockliste

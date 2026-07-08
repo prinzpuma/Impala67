@@ -7,7 +7,7 @@
 // • Mobile: KI-Panel als Vollbild-Overlay statt komplett ausgeblendet
 // Alle neuen Knöpfe laufen über eine EIGENE Event-Delegation (data-*-Attribute),
 // damit bestehende Handler in app.js unangetastet bleiben.
-const EXTRAS = (() => {
+export const EXTRAS = (() => {
 	// Cloze-Marker zusammengesetzt statt wörtlich, damit die doppelt geschweiften
 	// Klammern nirgends mit Template-/Platzhalter-Systemen kollidieren.
 	const CO = "{" + "{";

@@ -1,7 +1,7 @@
 "use strict";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
-const TOOLS = (() => {
+export const TOOLS = (() => {
 	const t = (name, description, properties, required) => ({
 		type: "function",
 		function: { name, description, parameters: { type: "object", properties, required } },

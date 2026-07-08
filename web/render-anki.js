@@ -310,3 +310,13 @@ function openCardEditor(cardId) {
 		'<button id="btnCloseOverlay">Abbrechen</button></div>'
 	);
 }
+
+export const RENDER_ANKI = {
+	ankiDecks,
+	ankiCardsOf,
+	ankiDueOf,
+	deckTreeHtml,
+	deckMenuHtml,
+	renderAnki,
+	openCardEditor
+};

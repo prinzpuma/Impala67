@@ -93,23 +93,7 @@
 <input type="file" id="fileBg" accept="image/*" hidden>
 <input type="file" id="fileImport" accept="application/json" hidden>
 
-<!-- Ladereihenfolge: config.local (optional, lokal/nicht im Repo) → util → db → srs → state → tools → ai → rag → drive → pdfs → editor → render → app → updater → extras (Anki-Ausbau, Import/Export, Backlinks, Multi-Tab-Schutz) -->
-<script src="config.local.js"></script>
-<script src="util.js"></script>
-<script src="db.js"></script>
-<script src="srs.js"></script>
-<script src="state.js"></script>
-<script src="tools.js"></script>
-<script src="ai.js"></script>
-<script src="rag.js"></script>
-<script src="drive.js"></script>
-<script src="pdfs.js"></script>
-<script src="editor.js"></script>
-<script src="render.js"></script>
-	<script src="render-anki.js"></script>
-<script src="app.js"></script>
-<script src="updater.js"></script>
-<script src="extras.js"></script>
+<script type="module" src="main.js"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.

@@ -3,7 +3,7 @@
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
 // Benötigt ein Embedding-Modell in ⚙️ (Gemini: gemini-embedding-001,
 // OpenAI: text-embedding-3-small, oder ein LM-Studio-Embedding-Modell).
-const RAG = (() => {
+export const RAG = (() => {
 	const queue = new Set();
 	let timer = null;
 

@@ -4,7 +4,7 @@
 // Events werden übernommen, sortiert nach Zeitstempel deterministisch abgespielt).
 // Ein späterer Google-Drive-Sync ersetzt nur Export/Import durch die Drive-API —
 // am Datenmodell ändert sich nichts.
-const DB = (() => {
+export const DB = (() => {
 	let db = null;
 
 	function openRaw(name, version) {

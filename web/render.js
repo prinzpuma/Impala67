@@ -1095,3 +1095,14 @@ function openCards() {
 		'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
 	);
 }
+
+export const RENDER = {
+	render,
+	renderTopbar,
+	renderModelMenu,
+	renderSidebar,
+	renderMain,
+	openSettings,
+	openReview,
+	openCards
+};

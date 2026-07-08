@@ -12,7 +12,7 @@
 // über einen kurzen lokalen Server auffangen (siehe getTokenDesktop). Dafür ist
 // ein SEPARATER Google-OAuth-Client vom Typ "Desktop-App" nötig (Zugangsdaten
 // kommen aus web/config.local.js, nicht der Web-Client aus den Einstellungen).
-const DRIVE = (() => {
+export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json";
 	const LEGACY_FILE_NAME = "notion-sync.json"; // vor der Umbenennung — wird beim nächsten Upload automatisch auf den neuen Namen umgestellt

@@ -1,7 +1,7 @@
 "use strict";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
-const PDFS = (() => {
+export const PDFS = (() => {
 	if (window.pdfjsLib) {
 		pdfjsLib.GlobalWorkerOptions.workerSrc =
 			"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";

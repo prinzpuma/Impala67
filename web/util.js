@@ -1,6 +1,6 @@
 "use strict";
 // util.js — kleine Helfer, keine Abhängigkeiten
-const U = {
+export const U = {
 	uid: () => crypto.randomUUID(),
 	now: () => new Date().toISOString(),
 

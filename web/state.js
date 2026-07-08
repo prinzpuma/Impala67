@@ -1,7 +1,7 @@
 "use strict";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
-const S = {
+export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
 	settings: {
@@ -82,7 +82,7 @@ const S = {
 	reviews: [], // Wiederholungs-Protokoll { cardId, t, grade } — aus dem Event-Log rekonstruiert
 };
 
-const STATE = (() => {
+export const STATE = (() => {
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
 	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
 	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => n === from || n.startsWith(from + "::"));
