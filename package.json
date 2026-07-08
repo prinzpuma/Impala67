@@ -9,5 +9,6 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1"
-  }
+  },
+  "version": "0.2.1"
 }

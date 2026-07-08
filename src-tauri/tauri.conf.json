@@ -1,48 +1,50 @@
 {
-	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-	"productName": "Impala67",
-	"version": "0.2.0",
-	"identifier": "com.johncena.impala67",
-	"build": {
-		"frontendDist": "../web"
-	},
-	"app": {
-		"withGlobalTauri": true,
-		"windows": [
-			{
-				"title": "Impala67",
-				"width": 1400,
-				"height": 900,
-				"resizable": true,
-				"fullscreen": false
-			}
-		],
-		"security": {
-			"csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com https://generativelanguage.googleapis.com http://localhost:* ws://localhost:*;"
-		}
-	},
-	"bundle": {
-		"active": true,
-		"targets": "all",
-		"createUpdaterArtifacts": true,
-		"icon": [
-			"icons/32x32.png",
-			"icons/128x128.png",
-			"icons/128x128@2x.png",
-			"icons/icon.icns",
-			"icons/icon.ico"
-		],
-		"android": {
-			"debugApplicationIdSuffix": ".debug"
-		}
-	},
-	"plugins": {
-		"updater": {
-			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4QTNERUQ3Q0ZCQzVCMTUKUldRVlc3elAxOTZqS05OdlpRV0VuRkhoUjc3RnpIeU8veTBSWUlwQkRWYUJ2QnJ6a3hUaUNRTlMK",
-			"endpoints": [
-				"https://github.com/prinzpuma/notion-klon/releases/latest/download/latest.json"
-			],
-			"windows": { "installMode": "passive" }
-		}
-	}
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Impala67",
+  "version": "0.2.1",
+  "identifier": "com.johncena.impala67",
+  "build": {
+    "frontendDist": "../web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Impala67",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com https://generativelanguage.googleapis.com http://localhost:* ws://localhost:*;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4QTNERUQ3Q0ZCQzVCMTUKUldRVlc3elAxOTZqS05OdlpRV0VuRkhoUjc3RnpIeU8veTBSWUlwQkRWYUJ2QnJ6a3hUaUNRTlMK",
+      "endpoints": [
+        "https://github.com/prinzpuma/notion-klon/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }
