@@ -3,6 +3,7 @@
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
+import { RENDER } from "./render.js";
 
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
