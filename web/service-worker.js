@@ -28,6 +28,7 @@ const APP_FILES = [
 	"./pdfs.js",
 	"./editor.js",
 	"./render.js",
+	"./library.js",
 	"./settings.js",
 	"./app.js",
 	"./updater.js",

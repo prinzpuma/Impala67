@@ -8,6 +8,7 @@ import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
+import { LIBRARY } from "./library.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -346,24 +347,7 @@ async function openDailyNote(key) {
 }
 
 // Ganzen Workspace als ZIP voller Markdown-Dateien exportieren (Ordnerstruktur = Seitenbaum)
-function exportWorkspaceZip(wsId) {
-	const ws = S.workspaces[wsId];
-	const safe = (s) => String(s || "Ohne Titel").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Seite";
-	const files = [];
-	const used = new Set();
-	const walk = (parentId, path) => {
-		STATE.childrenOf(parentId, wsId).forEach((pg) => {
-			let base = path + safe(pg.title), n = 2;
-			while (used.has(base)) base = path + safe(pg.title) + " (" + (n++) + ")";
-			used.add(base);
-			files.push({ name: base + ".md", text: "# " + pg.title + "\n\n" + (pg.content || "") });
-			walk(pg.id, base + "/");
-		});
-	};
-	walk(null, "");
-	if (!files.length) { alert("Dieser Workspace hat keine Seiten."); return; }
-	U.downloadBlob(safe(ws ? ws.name : "Workspace") + ".zip", U.zip(files));
-}
+
 
 // Öffnet den Seitenverlauf (Versionen aus dem Event-Log rekonstruiert).
 async function openHistory(pageId) {
@@ -878,7 +862,7 @@ function wireEvents() {
 		}
 
 		// Workspace als Markdown-ZIP exportieren (Einstellungen → Backup)
-		if (t.dataset.zipws) { exportWorkspaceZip(t.dataset.zipws); return; }
+		if (t.dataset.zipws) { LIBRARY.exportWorkspaceZip(t.dataset.zipws); return; }
 
 		// ⋯-Menü: Seite als Vorlage markieren / Markierung entfernen
 		if (t.dataset.pagetemplate) {
