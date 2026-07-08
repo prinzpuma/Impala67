@@ -972,6 +972,12 @@ function openSettings(section) {
 				"</div>"
 			).join("") + "</div>" +
 			'<button id="btnAddProvider">＋ Quelle hinzufügen</button>' +
+			// Schnell-Buttons für die drei Standard-Quellen — falls sie in älteren gespeicherten
+			// Einstellungen fehlen (settingsSet überschreibt die Default-Liste aus state.js).
+			'<div class="row-btns" style="margin-top:6px"><span class="hint">Schnell hinzufügen:</span>' +
+			'<button data-provpreset="local">🖥 LM Studio (lokal)</button>' +
+			'<button data-provpreset="google">✨ Google Gemini</button>' +
+			'<button data-provpreset="openai">🤖 OpenAI</button></div>' +
 			field("Embedding-Modell (optional, semantische Suche — nutzt die im Modell-Dropdown aktive Quelle)", "inpEmbed", S.settings.embedModel) +
 			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI (optional)</label>" +
 			'<textarea id="inpCustomInstructions" rows="3" placeholder="z.B. Studienfach, bevorzugte Sprache, Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div>" +

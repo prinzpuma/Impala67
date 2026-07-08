@@ -89,6 +89,11 @@ const DRIVE = (() => {
 			}
 		}
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
+		// Ohne Desktop-Client-ID würde Google nur kryptisch mit „Fehler 400: invalid_request —
+		// Missing required parameter: client_id" antworten — hier klar abfangen und erklären.
+		if (!DESKTOP_CLIENT_ID) {
+			throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt (web/config.local.js nicht vorhanden oder leer). Einrichtung: siehe Doku-Seite „Google-Login Desktop-Fix (Loopback-OAuth)“ — dort steht, wie du den Desktop-OAuth-Client anlegst und die config.local.js befüllst.");
+		}
 
 		const { verifier, challenge } = await pkcePair();
 		const port = await window.__TAURI__.core.invoke("start_oauth_server");

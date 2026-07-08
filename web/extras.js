@@ -444,6 +444,24 @@ const EXTRAS = (() => {
 				() => prompt("Interner Link (mit Strg+C kopieren):", link));
 			return;
 		}
+		// Schnell-Buttons in Einstellungen → KI: fehlende Standard-Quelle (z.B. LM Studio) wieder
+		// anlegen — ältere gespeicherte Einstellungen überschreiben sonst die Default-Liste aus state.js.
+		if ((el = q("[data-provpreset]"))) {
+			const PRESETS = {
+				local: { id: "local", name: "Lokal (LM Studio)", base: "http://localhost:1234/v1" },
+				google: { id: "google", name: "Google Gemini", base: "https://generativelanguage.googleapis.com/v1beta/openai" },
+				openai: { id: "openai", name: "OpenAI", base: "https://api.openai.com/v1" },
+			};
+			const p = PRESETS[el.dataset.provpreset];
+			if (!p) return;
+			const list = (S.settings.aiProviders || []).slice();
+			if (list.some((x) => x.id === p.id)) { alert("Diese Quelle ist bereits eingerichtet: " + p.name); return; }
+			list.push({ ...p, key: "" });
+			// LM Studio direkt als aktive Quelle setzen, damit das Modell-Dropdown sie sofort zeigt
+			await STATE.dispatch("settingsSet", { aiProviders: list, ...(p.id === "local" ? { aiProviderId: "local" } : {}) });
+			if (typeof openSettings === "function") openSettings("ki");
+			return;
+		}
 		if ((el = q("[data-ankiundo]"))) { if (!el.disabled) await undoReview(); return; }
 		if ((el = q("[data-deckconf]"))) { openDeckConf(el.dataset.deckconf === "*" ? "" : el.dataset.deckconf); return; }
 		if (q("[data-ankiexport]")) { openAnkiIo("export"); return; }
