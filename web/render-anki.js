@@ -4,6 +4,12 @@ import { EXTRAS } from "./extras.js";
 import { SRS } from "./srs.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { RENDER } from "./render.js";
+
+const hydrateImages = (...args) => RENDER.hydrateImages(...args);
+const localDayKey = (...args) => RENDER.localDayKey(...args);
+const modal = (...args) => RENDER.modal(...args);
+
 // render-anki.js — aus render.js ausgelagert (Datei-Split): der komplette Anki-Bereich
 // (Stapel-Baum, Stapel-Liste, Karten-Browser, Statistik mit Heatmap & Retention,
 // Lern-Ansicht, Karten-Editor). Lädt in index.html direkt nach render.js.
