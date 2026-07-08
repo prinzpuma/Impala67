@@ -31,6 +31,7 @@ import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
 import { SHORTCUTS } from "./shortcuts.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
+import { BOOT } from "./boot.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -55,6 +56,7 @@ window.TABS = TABS;
 window.SEARCH = SEARCH;
 window.SHORTCUTS = SHORTCUTS;
 window.CHAT_FULLSCREEN = CHAT_FULLSCREEN;
+window.BOOT = BOOT;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

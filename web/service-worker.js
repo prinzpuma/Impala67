@@ -34,6 +34,7 @@ const APP_FILES = [
 	"./search.js",
 	"./shortcuts.js",
 	"./chat-fullscreen.js",
+	"./boot.js",
 	"./app.js",
 	"./updater.js",
 	"./render-anki.js",

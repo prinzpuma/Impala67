@@ -28,82 +28,7 @@ const refineMessage = (...args) => CHAT_FULLSCREEN.refineMessage(...args);
 const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
 
 // app.js — Initialisierung und Event-Verkabelung.
-const WELCOME_MD = [
-	"Willkommen bei **Impala67** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
-	"",
-	"## 🗂 Seiten & Organisation",
-	"- Workspaces mit einklappbarem Seitenbaum (Pfeil links neben jeder Seite), Zustand bleibt über Neustarts erhalten",
-	"- Neue Seiten über das **+** je Workspace, Unterseiten per Hover-**+** oder per Drag & Drop verschieben",
-	"- Notion-artiger Seitenkopf: großes Icon, Cover-Verlauf, Breadcrumb (Workspace › Elternseiten › aktuelle Seite)",
-	"- Tab-Leiste oben mit Zurück/Vor wie im Browser — zeigt Seiten **und** Chats gemischt",
-	"- Bibliothek (🗂-Symbol oben) mit Baum- **oder** Tabellen-Ansicht (Titel/Workspace/Tags/Geändert)",
-	"- Schnellsuche mit **Strg+K**, durchsucht Seiten und (im Chat-Modus) auch gespeicherte KI-Chats",
-	"",
-	"## 🤖 KI-Coach",
-	"- Modell frei wählbar aus mehreren gleichzeitig konfigurierten Quellen (Einstellungen → KI): das Dropdown fragt jede Quelle live nach ihren Modellen ab",
-	"- Tool-Calling: Seiten lesen/anlegen/ändern/verschieben, Karteikarten erstellen, Volltext- **und** semantische Suche",
-	"- **Rückfragen mit Buttons**: ist etwas mehrdeutig, fragt die KI mit anklickbaren Optionen nach, statt zu raten",
-	"- Ausklappbarer Denkprozess bei Reasoning-Modellen (▸ Gedankengang anzeigen), standardmäßig eingeklappt",
-	"- Edit-Karten mit Diff-Anzeige und **Undo** bei jeder KI-Seitenänderung",
-	"- **✦ Anpassen**-Button an jeder Antwort: länger oder kürzer umformulieren lassen (wie bei Gemini)",
-	"- Nachrichten lassen sich nachträglich bearbeiten (✎-Symbol beim Hover)",
-	"- Chats als eigene Vollbild-Tabs oder schnell im Seitenpanel; Chats löschbar, mit Schließen-Warnung bei offenen Fragen",
-	"- Lange geklebte Texte werden automatisch als .txt-Datei angehängt statt den Chat vollzuschreiben",
-	"- Eigene Anweisungen an die KI unter Einstellungen → KI (nur was du dort einträgst, keine automatischen Annahmen)",
-	"",
-	"## 📄 PDFs, Bilder, Karteikarten",
-	"- PDF hochladen → Text lokal extrahiert → KI vergibt Titel/Ablageort/Zusammenfassung/Tags automatisch",
-	"- Bilder direkt an die KI (Vision-fähige Modelle)",
-	"- Anki-ähnliche Karteikarten mit FSRS-lite-Wiederholung (Nochmal/Schwer/Gut/Einfach)",
-	"",
-	"## ☁️ Sync, Backup & Migration",
-	"- Google-Drive-Sync: einmalig Client-ID hinterlegen, danach nur noch **Anmelden**-Klick (Einstellungen → Sync)",
-	"- Manuelles Export/Import als JSON (Einstellungen → Backup), konfliktfrei zusammenführbar",
-	"- Notion-Import per Integrationstoken (Einstellungen → Notion Import), mit Fortschrittsbalken",
-	"",
-	"## ✨ Formatierung — alles unten ist *live* nutzbar",
-	"**Fett**, *kursiv*, ~~durchgestrichen~~, `Inline-Code`, ==markierter Text== und [Links](https://example.com).",
-	"",
-	"### Listen & Aufgaben",
-	"- Aufzählung eins",
-	"- Aufzählung zwei",
-	"1. Nummeriert eins",
-	"2. Nummeriert zwei",
-	"- [x] Erledigte Aufgabe",
-	"- [ ] Offene Aufgabe",
-	"",
-	"### Zitat",
-	"> Wissen ist wie ein Garten: Wird er nicht gepflegt, kann man nichts ernten.",
-	"",
-	"### Aufklappbarer Toggle-Block (über das Slash-Menü „/“ einfügbar)",
-	"<details><summary>Klick zum Aufklappen</summary>\nHier steht der versteckte Inhalt — super für Zusatzinfos, ohne die Seite vollzuschreiben.\n</details>",
-	"",
-	"### Code mit Syntax-Highlighting",
-	"```javascript\nfunction gruss(name) {\n\treturn \"Hallo, \" + name + \"!\";\n}\n```",
-	"",
-	"### LaTeX — live gerendert, auch im Chat (das kann Notion nicht)",
-	"Inline: die Kreisfläche ist $A = \\pi r^2$.",
-	"",
-	"Als eigene Zeile:",
-	"$$\\int_0^1 x^2 \\, dx = \\frac{1}{3}$$",
-	"",
-	"### Tabelle",
-	"| Feature | Status |",
-	"| --- | --- |",
-	"| LaTeX live | ✅ |",
-	"| Toggle-Blöcke | ✅ |",
-	"| Datenbank-Ansicht | ✅ (einfache Tabellen-Ansicht) |",
-	"",
-	"---",
-	"*(Der Strich darüber ist eine Trennlinie — auch das geht einfach per `---` in eigener Zeile.)*",
-].join("\n");
 
-async function seedIfEmpty() {
-	if (Object.keys(S.pages).length) return;
-	const id = U.uid();
-	await STATE.dispatch("pageCreate", { id, title: "👋 Willkommen", content: WELCOME_MD, workspaceId: "default" });
-	S.currentPageId = id;
-}
 
 export function closeOverlay() {
 	const o = U.el("overlay");
@@ -1234,47 +1159,9 @@ function wireEvents() {
 	});
 }
 
-// Papierkorb automatisch leeren: Seiten, die länger als 30 Tage im Papierkorb
-// liegen, werden beim Start endgültig gelöscht (wie in Notion).
-async function purgeOldTrash() {
-	const cutoff = Date.now() - 30 * 864e5;
-	for (const pg of STATE.trashedPages()) {
-		if (pg.trashedAt && new Date(pg.trashedAt).getTime() < cutoff) {
-			await STATE.dispatch("pageDelete", { id: pg.id });
-		}
-	}
-}
-
-async function initApp() {
-	await DB.open();
-	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
-	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-	SETTINGS.applyTheme();
-	await STATE.load();
-	await purgeOldTrash();
-	await seedIfEmpty();
-	wireEvents();
-	SETTINGS.applyBg();
-	render();
-	SETTINGS.checkAI();
-	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
-	setInterval(() => { if (!document.hidden) SETTINGS.checkAI(); }, 60000);
-	document.addEventListener("visibilitychange", () => { if (!document.hidden) SETTINGS.checkAI(); });
-	RAG.reindexStale();
-}
-
-if (document.readyState === "loading") {
-	window.addEventListener("DOMContentLoaded", initApp);
-} else {
-	initApp();
-}
-
 export const APP = {
 	COLLAPSE,
 	CHATS,
-	seedIfEmpty,
 	wireEvents,
-	purgeOldTrash,
-	saveCurrentChat,
 	closeOverlay
 };
