@@ -5,7 +5,7 @@
 
 // Neuer Cache-Name nach der Umbenennung — der alte "notion-v2"-Cache wird bei der
 // Aktivierung unten automatisch aufgeräumt (keys-Filter löscht alles außer CACHE).
-const CACHE = "impala67-v2";
+const CACHE = "impala67-v3";
 
 const APP_FILES = [
 	"./",
