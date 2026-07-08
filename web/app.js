@@ -696,33 +696,25 @@ function wireEvents() {
 
 		// Bibliothek: Kachel-/Tabellen-Ansicht umschalten
 		if (t.dataset.libview) {
-			S.libView = t.dataset.libview;
-			renderMain();
+			LIBRARY.handleLibView(t.dataset.libview);
 			return;
 		}
 
 		// Bibliothek (Kacheln): Ordner-Navigation (Wurzel, Workspace, in Unterseiten)
-		if (t.dataset.libroot) { S.libFolder = null; renderMain(); return; }
-		if (t.dataset.libws) { S.libFolder = { wsId: t.dataset.libws, pageId: null }; renderMain(); return; }
-		if (t.dataset.libinto) {
-			const pg = S.pages[t.dataset.libinto];
-			if (pg) S.libFolder = { wsId: pg.workspaceId || "default", pageId: pg.id };
-			renderMain();
+		if (t.dataset.libroot || t.dataset.libws || t.dataset.libinto) {
+			LIBRARY.handleLibFolderNavigation(t);
 			return;
 		}
 
 		// Bibliothek: „＋ Neue Seite“-Kachel legt die Seite direkt im aktuellen Ordner an
 		if (t.dataset.libnew) {
-			const f = S.libFolder || { wsId: Object.keys(S.workspaces)[0] || "default", pageId: null };
-			await newPageFlow(f.wsId, f.pageId);
+			await LIBRARY.handleLibNewPage();
 			return;
 		}
 
 		// Bibliothek: Spaltenüberschrift klicken = sortieren (erneut klicken = Richtung wechseln)
 		if (t.dataset.libsort) {
-			if (S.libSort === t.dataset.libsort) S.libSortDir = -(S.libSortDir || -1);
-			else { S.libSort = t.dataset.libsort; S.libSortDir = 1; }
-			renderMain();
+			LIBRARY.handleLibSort(t.dataset.libsort);
 			return;
 		}
 
@@ -1112,15 +1104,9 @@ function wireEvents() {
 				}
 				break;
 			}
-			case "btnCreateWs": {
-				const inp = document.getElementById("inpWsName");
-				const name = inp ? inp.value.trim() : "";
-				if (name) {
-					await STATE.dispatch("workspaceCreate", { id: U.uid(), name });
-					render();
-				}
+			case "btnCreateWs":
+				await LIBRARY.handleCreateWorkspace();
 				break;
-			}
 			case "btnAttach":
 			case "btnAttachFull": {
 				// Menü dynamisch über dem jeweils geklickten Anhang-Button positionieren,
@@ -1292,11 +1278,7 @@ function wireEvents() {
 		if (e.target.id === "search") renderSidebar();
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
-			S.libFilter = e.target.value;
-			const pos = e.target.selectionStart;
-			renderLibrary(U.el("main"));
-			const inp = U.el("libFilter");
-			if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
+			LIBRARY.handleFilterInput(e);
 		}
 		// Karten-Browser: live suchen, Fokus + Cursorposition erhalten
 		if (e.target.id === "ankiSearch") {
