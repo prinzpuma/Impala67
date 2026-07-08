@@ -18,7 +18,7 @@ const RAG = (() => {
 			else cur = cur ? cur + "\n\n" + p : p;
 		}
 		if (cur.trim()) parts.push(cur);
-		return parts.slice(0, 40);
+		return parts.slice(0, 80); // großzügiger, damit auch PDF-Volltext hineinpasst
 	}
 
 	async function indexPage(pageId) {
@@ -26,7 +26,24 @@ const RAG = (() => {
 		const pg = S.pages[pageId];
 		// Gelöschte (Papierkorb-)Seiten aus dem Index entfernen statt sie zu indexieren
 		if (!pg || pg.trashed) { await DB.delVec(pageId); return; }
-		const chunks = chunk(pg.title + "\n\n" + pg.content);
+		let text = pg.title + "\n\n" + pg.content;
+		// PDF-Volltext mitindexieren: der bei der Aufnahme extrahierte Text liegt als
+		// eigener Blob ("pdftext:<id>") in IndexedDB; ältere PDFs werden einmalig nachextrahiert.
+		if (pg.pdfId) {
+			try {
+				let rec = await DB.getBlob("pdftext:" + pg.pdfId);
+				if (!rec) {
+					const pdf = await DB.getBlob(pg.pdfId);
+					if (pdf && window.pdfjsLib) {
+						const ex = await PDFS.extractText(pdf.buf.slice(0));
+						await DB.putBlob("pdftext:" + pg.pdfId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
+						rec = await DB.getBlob("pdftext:" + pg.pdfId);
+					}
+				}
+				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 60000);
+			} catch (e) { console.warn("PDF-Volltext für RAG fehlgeschlagen:", e); }
+		}
+		const chunks = chunk(text);
 		if (!chunks.length) { await DB.delVec(pageId); return; }
 		const vecs = await AI.embed(chunks);
 		await DB.putVec(pageId, {

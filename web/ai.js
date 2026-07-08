@@ -179,9 +179,9 @@ const AI = (() => {
 	function systemPrompt(type) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const lines = [
-			"Du bist der KI-Agent von Notion, einer lokalen Notiz- und Lern-App.",
+			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App.",
 			"Antworte auf Deutsch, kompakt, in kleinen Schritten. Nutze LaTeX für Formeln (z.B. $I = U / R$ inline oder $$...$$ für eigene Zeilen) — das wird live gerendert.",
-			"Beim Schreiben in Seiten kannst du neben Markdown auch Auras Erweiterungen nutzen: {red}Text{/} bzw. {bg-yellow}Text{/} für Text-/Hintergrundfarbe (gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==Text== zum Hervorheben und ':::columns ... :::split ... :::end' für Spalten.",
+			"Beim Schreiben in Seiten kannst du neben Markdown auch die Impala67-Erweiterungen nutzen: {red}Text{/} bzw. {bg-yellow}Text{/} für Text-/Hintergrundfarbe (gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==Text== zum Hervorheben und ':::columns ... :::split ... :::end' für Spalten.",
 			"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern und Karteikarten zu erstellen. Nutze sie aktiv:",
 			"- Merkt sich die Person etwas schlecht oder beantwortet etwas falsch: lege mit create_flashcard eine karte an (kurze Frage, kurze Antwort).",
 			"- Soll Wissen gespeichert werden: create_page oder append_to_page.",
@@ -339,6 +339,12 @@ const AI = (() => {
 						out = { error: String(e) };
 					}
 					if (onStep) onStep(tc.function.name);
+					// Tool-Anzeige im Chat (wie in Notion): welche Aktion lief — bei der
+					// semantischen Suche inklusive des verwendeten Embedding-Modells.
+					let detail = args.page_title || args.title || args.query || "";
+					if (tc.function.name === "semantic_search") detail = (detail ? detail + " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
+					targetChat.push({ mid: U.uid(), role: "tool", name: tc.function.name, detail: String(detail).slice(0, 80), error: !!(out && out.error) });
+					scheduleRender();
 					if (mutating && out && !out.error) {
 						let pageId = beforePageId;
 						let created = false;

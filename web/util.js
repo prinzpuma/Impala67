@@ -154,22 +154,18 @@ const U = {
 		return out;
 	},
 
-	download(name, text) {
+	// Gemeinsamer Download-Helfer (dedupliziert download/downloadText/downloadBlob)
+	_dl(name, blob) {
 		const a = document.createElement("a");
-		a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+		a.href = URL.createObjectURL(blob);
 		a.download = name;
 		a.click();
 		setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 	},
+	download: (name, text) => U._dl(name, new Blob([text], { type: "application/json" })),
 
 	// Generischer Text-Download (z.B. für angehängte lange Texte aus dem Chat)
-	downloadText(name, text) {
-		const a = document.createElement("a");
-		a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-		a.download = name;
-		a.click();
-		setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-	},
+	downloadText: (name, text) => U._dl(name, new Blob([text], { type: "text/plain" })),
 
 	// ---- Minimaler ZIP-Writer (Methode "Store", ohne Kompression, ohne Bibliothek) ----
 	// Für Workspace-Exporte: files = [{ name, text }] → ZIP-Blob.
@@ -213,13 +209,7 @@ const U = {
 			num(cdSize, 4), num(offset, 4), num(0, 2));
 		return new Blob(chunks, { type: "application/zip" });
 	},
-	downloadBlob(name, blob) {
-		const a = document.createElement("a");
-		a.href = URL.createObjectURL(blob);
-		a.download = name;
-		a.click();
-		setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-	},
+	downloadBlob: (name, blob) => U._dl(name, blob),
 
 	readAsText: (f) => new Promise((res, rej) => {
 		const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(f);

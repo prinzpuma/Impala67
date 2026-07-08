@@ -1,7 +1,7 @@
 "use strict";
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
-// Client-ID (das ist eine Plattform-Vorgabe von Google, keine Aura-Beschränkung).
+// Client-ID (das ist eine Plattform-Vorgabe von Google, keine Impala67-Beschränkung).
 //
 // Browser/PWA: Popup-Login über Googles Identity-Bibliothek, Client-ID kommt aus
 // den Einstellungen → Sync.
@@ -14,7 +14,8 @@
 // kommen aus web/config.local.js, nicht der Web-Client aus den Einstellungen).
 const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
-	const FILE_NAME = "notion-sync.json";
+	const FILE_NAME = "impala67-sync.json";
+	const LEGACY_FILE_NAME = "notion-sync.json"; // vor der Umbenennung — wird beim nächsten Upload automatisch auf den neuen Namen umgestellt
 	// Desktop-OAuth-Client (Typ "Desktop-App", Google Cloud Console). Das Secret
 	// ist bei diesem App-Typ laut Google kein echtes Geheimnis (installierte Apps
 	// können ohnehin keine Geheimnisse wahren) — normaler, vorgesehener Fall.
@@ -23,6 +24,14 @@ const DRIVE = (() => {
 	const DESKTOP_CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
 	const DESKTOP_CLIENT_SECRET = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || "";
 	let token = null;
+
+	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
+	// so bleibt die bestehende Google-Sitzung nach der Umbenennung erhalten.
+	["drive_token", "drive_token_expiry", "drive_refresh_token"].forEach((k) => {
+		const old = localStorage.getItem("notion_" + k);
+		if (old !== null && localStorage.getItem("impala67_" + k) === null) localStorage.setItem("impala67_" + k, old);
+		localStorage.removeItem("notion_" + k);
+	});
 
 	function base64url(buffer) {
 		return btoa(String.fromCharCode(...new Uint8Array(buffer)))
@@ -64,14 +73,14 @@ const DRIVE = (() => {
 	function saveToken(data) {
 		token = data.access_token;
 		const expiresIn = data.expires_in ? Number(data.expires_in) : 3600;
-		localStorage.setItem("notion_drive_token", token);
-		localStorage.setItem("notion_drive_token_expiry", String(Date.now() + expiresIn * 1000 - 60000));
-		if (data.refresh_token) localStorage.setItem("notion_drive_refresh_token", data.refresh_token);
+		localStorage.setItem("impala67_drive_token", token);
+		localStorage.setItem("impala67_drive_token_expiry", String(Date.now() + expiresIn * 1000 - 60000));
+		if (data.refresh_token) localStorage.setItem("impala67_drive_refresh_token", data.refresh_token);
 	}
 
 	// Desktop-App (Tauri): System-Browser + lokaler Redirect-Server statt Popup.
 	async function getTokenDesktop(interactive) {
-		const refreshToken = localStorage.getItem("notion_drive_refresh_token");
+		const refreshToken = localStorage.getItem("impala67_drive_refresh_token");
 		if (refreshToken) {
 			const data = await refreshDesktopToken(refreshToken);
 			if (data && data.access_token) {
@@ -141,8 +150,8 @@ const DRIVE = (() => {
 
 	function getToken(interactive) {
 		// Bereits gültiges Token im LocalStorage? Gilt für beide Wege gleich.
-		const savedToken = localStorage.getItem("notion_drive_token");
-		const savedExpiry = localStorage.getItem("notion_drive_token_expiry");
+		const savedToken = localStorage.getItem("impala67_drive_token");
+		const savedExpiry = localStorage.getItem("impala67_drive_token_expiry");
 		if (savedToken && savedExpiry && Date.now() < Number(savedExpiry)) {
 			token = savedToken;
 			return Promise.resolve(token);
@@ -171,9 +180,9 @@ const DRIVE = (() => {
 
 	function logout() {
 		token = null;
-		localStorage.removeItem("notion_drive_token");
-		localStorage.removeItem("notion_drive_token_expiry");
-		localStorage.removeItem("notion_drive_refresh_token");
+		localStorage.removeItem("impala67_drive_token");
+		localStorage.removeItem("impala67_drive_token_expiry");
+		localStorage.removeItem("impala67_drive_refresh_token");
 	}
 
 	async function api(path, opts = {}) {
@@ -188,15 +197,17 @@ const DRIVE = (() => {
 	}
 
 	async function findFile() {
-		const res = await api("/drive/v3/files?spaces=appDataFolder&q=name='"
-			+ FILE_NAME + "'&fields=files(id,modifiedTime)");
+		// Auch die Alt-Datei (vor der Umbenennung) finden — der nächste Upload benennt sie
+		// über die PATCH-Metadaten automatisch auf den neuen Namen um.
+		const q = encodeURIComponent("name='" + FILE_NAME + "' or name='" + LEGACY_FILE_NAME + "'");
+		const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + q + "&fields=files(id,modifiedTime)");
 		const { files } = await res.json();
 		return files[0] || null;
 	}
 
 	async function upload(fileId, content) {
 		const meta = { name: FILE_NAME, ...(fileId ? {} : { parents: ["appDataFolder"] }) };
-		const boundary = "aura" + Date.now();
+		const boundary = "impala67" + Date.now();
 		const body =
 			"--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
 			"\r\n--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + content +
@@ -210,10 +221,10 @@ const DRIVE = (() => {
 
 	// Voller Sync: Remote-Stand laden → mergen → Gesamtstand hochladen.
 	async function sync(onStatus) {
-		if (!token) {
-			if (onStatus) onStatus("Mit Google verbinden…");
-			await getToken(false);
-		}
+		// Token immer über getToken() beziehen — das im Speicher gehaltene Token
+		// kann abgelaufen sein (führte zu 401-Fehlern mitten in der Sitzung).
+		if (onStatus) onStatus("Mit Google verbinden…");
+		await getToken(false);
 		if (onStatus) onStatus("Remote-Stand laden…");
 		const file = await findFile();
 		let imported = 0;

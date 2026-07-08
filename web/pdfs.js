@@ -27,6 +27,9 @@ const PDFS = (() => {
 		await DB.putBlob(pdfId, buf, { name: file.name, size: file.size, type: "application/pdf" });
 
 		const { text, numPages } = await extractText(buf.slice(0));
+		// Volltext als eigener Blob — damit durchsucht die semantische Suche (RAG)
+		// das ganze PDF, nicht nur die KI-Zusammenfassung (siehe rag.js indexPage).
+		try { await DB.putBlob("pdftext:" + pdfId, new TextEncoder().encode(text).buffer, { name: file.name + ".txt", type: "text/plain" }); } catch (e) { console.warn(e); }
 
 		if (onStatus) onStatus("KI sortiert ein & fasst zusammen…");
 		let meta = null;
@@ -70,7 +73,12 @@ const PDFS = (() => {
 	const urlCache = {};
 	// Objekt-URLs beim Verlassen der Seite freigeben (Memory-Leak-Schutz)
 	window.addEventListener("pagehide", () => {
-		Object.values(urlCache).forEach((u) => URL.revokeObjectURL(u));
+		// Auch aus dem Cache entfernen — sonst liefert der Cache nach einer
+		// bfcache-Rückkehr tote (widerrufene) Objekt-URLs aus.
+		for (const k of Object.keys(urlCache)) {
+			URL.revokeObjectURL(urlCache[k]);
+			delete urlCache[k];
+		}
 	});
 	async function urlFor(pdfId) {
 		if (urlCache[pdfId]) return urlCache[pdfId];

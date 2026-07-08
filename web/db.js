@@ -7,10 +7,12 @@
 const DB = (() => {
 	let db = null;
 
-	function open() {
+	function openRaw(name, version) {
 		return new Promise((resolve, reject) => {
-			const req = indexedDB.open("notion", 2);
+			const req = version ? indexedDB.open(name, version) : indexedDB.open(name);
 			req.onupgradeneeded = () => {
+				// Ohne Versionsangabe wird nur GEPRÜFT, ob die DB existiert — nie neu anlegen.
+				if (!version) { req.transaction.abort(); resolve(null); return; }
 				const d = req.result;
 				if (!d.objectStoreNames.contains("events")) {
 					d.createObjectStore("events", { keyPath: "seq", autoIncrement: true });
@@ -18,9 +20,36 @@ const DB = (() => {
 				if (!d.objectStoreNames.contains("blobs")) d.createObjectStore("blobs");
 				if (!d.objectStoreNames.contains("vecs")) d.createObjectStore("vecs");
 			};
-			req.onsuccess = () => { db = req.result; resolve(); };
+			req.onsuccess = () => resolve(req.result);
 			req.onerror = () => reject(req.error);
 		});
+	}
+
+	// Einmalige Migration: die Datenbank hieß vor der Umbenennung "notion". Beim ersten
+	// Start unter dem neuen Namen werden alle Stores kopiert — die alte DB bleibt als
+	// Sicherheitsnetz liegen (wird erst bei resetDatabase mit entsorgt).
+	async function migrateLegacy() {
+		const hasEvents = await val(db.transaction("events").objectStore("events").count());
+		if (hasEvents) return;
+		let legacy = null;
+		try { legacy = await openRaw("notion"); } catch { return; }
+		if (!legacy || !legacy.objectStoreNames.contains("events")) { if (legacy) legacy.close(); return; }
+		for (const store of ["events", "blobs", "vecs"]) {
+			if (!legacy.objectStoreNames.contains(store)) continue;
+			const src = legacy.transaction(store).objectStore(store);
+			const keys = await val(src.getAllKeys());
+			const vals = await val(legacy.transaction(store).objectStore(store).getAll());
+			const t = db.transaction(store, "readwrite");
+			const dst = t.objectStore(store);
+			vals.forEach((v, i) => { if (store === "events") dst.put(v); else dst.put(v, keys[i]); });
+			await done(t);
+		}
+		legacy.close();
+	}
+
+	async function open() {
+		db = await openRaw("impala67", 2);
+		await migrateLegacy();
 	}
 
 	const done = (t) => new Promise((res, rej) => {
@@ -98,13 +127,14 @@ const DB = (() => {
 			const rec = await getBlob(k);
 			blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
 		}
-		return JSON.stringify({ app: "notion", version: 1, exportedAt: U.now(), events, blobs });
+		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
 
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
 	async function importAll(json) {
 		const data = JSON.parse(json);
-		if (data.app !== "notion") throw new Error("Keine Notion-Exportdatei.");
+		// Alt-Exporte (app: "notion") bleiben importierbar — gleiche Datenstruktur, nur anderer Name.
+		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei.");
 		const existing = new Set((await allEvents()).map((e) => e.id));
 		const fresh = (data.events || []).filter((ev) => !existing.has(ev.id));
 		fresh.forEach((ev) => { delete ev.seq; }); // neue lokale Sequenznummer
@@ -120,7 +150,8 @@ const DB = (() => {
 		return new Promise((resolve, reject) => {
 			if (db) db.close();
 			db = null;
-			const req = indexedDB.deleteDatabase("notion");
+			indexedDB.deleteDatabase("notion"); // Alt-Datenbank (vor der Umbenennung) mit entsorgen
+			const req = indexedDB.deleteDatabase("impala67");
 			req.onsuccess = () => resolve();
 			req.onerror = () => reject(req.error);
 			// Ohne diesen Handler bleibt das Promise für immer offen, wenn ein anderer Tab
@@ -132,17 +163,16 @@ const DB = (() => {
 	async function clearPages() {
 		const t = db.transaction(["events", "vecs"], "readwrite");
 		const evStore = t.objectStore("events");
-		const vecStore = t.objectStore("vecs");
-
-		const evs = await val(evStore.getAll());
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore"]);
-		for (const ev of evs) {
-			if (pageTypes.has(ev.type)) {
-				evStore.delete(ev.seq);
+		// Löschungen synchron im onsuccess-Callback anstoßen: nach einem await kann
+		// die Transaktion (v.a. in Safari) bereits automatisch geschlossen sein.
+		const req = evStore.getAll();
+		req.onsuccess = () => {
+			for (const ev of req.result) {
+				if (pageTypes.has(ev.type)) evStore.delete(ev.seq);
 			}
-		}
-
-		vecStore.clear();
+		};
+		t.objectStore("vecs").clear();
 		return done(t);
 	}
 

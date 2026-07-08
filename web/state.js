@@ -21,6 +21,7 @@ const S = {
 		notionMeta: {}, // Sync-Gedächtnis je Notion-Seite: { r: Remote-Stand, l: lokaler Stand } beim letzten Abgleich — verhindert Ping-Pong-Übertragungen
 		notionLastSync: "", // Zeitstempel des letzten Zwei-Wege-Syncs
 		corsProxy: "", // eigener CORS-Proxy für den Notion-Sync (leer = öffentlicher corsproxy.io)
+		deckConf: {}, // Stapel-Optionen: Tageslimits + Leech-Verhalten je Stapel ("*" = Standardwerte)
 	},
 	decks: { Standard: { name: "Standard", created: "" } }, // Karteikarten-Stapel; Unterstapel per "Eltern::Kind"-Namensschema
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
@@ -98,10 +99,24 @@ const STATE = (() => {
 		cardsInDeckTree(from).forEach((c) => { c.deck = to + (c.deck || "Standard").slice(from.length); });
 	}
 
+	// ---- Stapel-Optionen: Tageslimits + Leech-Verhalten (wie Anki, pro Stapel) ----
+	const DECK_DEFAULTS = { newPerDay: 20, revPerDay: 200, leechThreshold: 8, leechAction: "suspend" };
+	function deckConfOf(deck) {
+		const all = (S.settings && S.settings.deckConf) || {};
+		let d = deck || "Standard";
+		// Vererbung: "Mathe::Analysis" fällt auf "Mathe" zurück, dann auf "*" bzw. Standardwerte
+		while (d) {
+			if (all[d]) return { ...DECK_DEFAULTS, ...(all["*"] || {}), ...all[d] };
+			d = d.includes("::") ? d.slice(0, d.lastIndexOf("::")) : "";
+		}
+		return { ...DECK_DEFAULTS, ...(all["*"] || {}) };
+	}
+
 	// ---- Geheimnisse (API-Keys, Notion-Token) — pro Gerät in localStorage ----
 	// Sie gehören NICHT ins Event-Log: das Log wandert in Exporte + Drive-Sync.
 	function loadSecrets() {
-		try { return JSON.parse(localStorage.getItem("notion.secrets") || "{}"); } catch { return {}; }
+		// Fallback auf den alten Schlüssel (Projekt hieß früher "notion") — Keys bleiben so erhalten.
+		try { return JSON.parse(localStorage.getItem("impala67.secrets") || localStorage.getItem("notion.secrets") || "{}"); } catch { return {}; }
 	}
 	function stripSecrets(payload) {
 		const sec = loadSecrets();
@@ -115,7 +130,7 @@ const STATE = (() => {
 				return { ...pr, key: "" };
 			});
 		}
-		try { localStorage.setItem("notion.secrets", JSON.stringify(sec)); } catch (e) { console.warn(e); }
+		try { localStorage.setItem("impala67.secrets", JSON.stringify(sec)); } catch (e) { console.warn(e); }
 		return p;
 	}
 	function applySecrets() {
@@ -187,15 +202,39 @@ const STATE = (() => {
 				S.cards[p.id] = {
 					id: p.id, front: p.front, back: p.back, pageId: p.pageId || null,
 					deck: p.deck || "Standard", suspended: false,
+					type: p.type || "basic", cloze: p.cloze || null, // "cloze" = aus Lückentext erzeugt
 					srs: p.srs || SRS.newCard(ev.t), created: ev.t,
 				};
 				if (p.deck && !S.decks[p.deck]) S.decks[p.deck] = { name: p.deck, created: ev.t };
 				break;
 			case "cardReview": {
 				const c = S.cards[p.id];
-				if (c) c.srs = p.srs;
-				// Protokoll für die Statistik (Diagramm + Erfolgsquote)
-				S.reviews.push({ cardId: p.id, t: ev.t, grade: p.grade || 0 });
+				const wasNew = !!(c && c.srs && c.srs.state === "new");
+				if (c) {
+					c.srs = p.srs;
+					// Leech-Erkennung (wie Anki): fällt eine Karte zu oft durch, wird sie
+					// markiert und — je nach Stapel-Option — automatisch ausgesetzt.
+					const conf = deckConfOf(c.deck);
+					if ((p.grade || 0) === 1 && (c.srs.lapses || 0) >= conf.leechThreshold) {
+						c.leech = true;
+						if (conf.leechAction === "suspend") c.suspended = true;
+					}
+				}
+				// Protokoll für Statistik/Heatmap/Retention + Tageslimits (first = war neue Karte)
+				S.reviews.push({ cardId: p.id, t: ev.t, grade: p.grade || 0, first: wasNew });
+				break;
+			}
+			case "cardReviewUndo": {
+				// Kompensations-Event (Log bleibt append-only): stellt den srs-Stand vor der
+				// letzten Bewertung wieder her und entfernt den Protokoll-Eintrag.
+				const c = S.cards[p.id];
+				if (!c) break;
+				c.srs = p.srs;
+				if ((c.srs.lapses || 0) < deckConfOf(c.deck).leechThreshold) c.leech = false;
+				if (p.unsuspend) c.suspended = false;
+				for (let i = S.reviews.length - 1; i >= 0; i--) {
+					if (S.reviews[i].cardId === p.id) { S.reviews.splice(i, 1); break; }
+				}
 				break;
 			}
 			case "cardUpdate": {
@@ -314,7 +353,7 @@ const STATE = (() => {
 	function searchNotes(query) {
 		const q = String(query).toLowerCase();
 		if (!q) return [];
-		return Object.values(S.pages).filter((pg) => !pg.trashed).map((pg) => {
+		return activePages().map((pg) => {
 			const hay = (pg.title + "\n" + pg.content).toLowerCase();
 			const idx = hay.indexOf(q);
 			if (idx < 0) return null;
@@ -324,9 +363,45 @@ const STATE = (() => {
 		}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
 	}
 
-	const dueCards = () => Object.values(S.cards)
+	// Tageslimits (wie Anki): heute bereits gelernte neue Karten bzw. Wiederholungen
+	// zählen gegen das Limit des jeweiligen Stapels (aus dem Review-Protokoll).
+	function applyDailyLimits(cards) {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const usedNew = {}, usedRev = {};
+		(S.reviews || []).forEach((r) => {
+			if (new Date(r.t) < today) return;
+			const c = S.cards[r.cardId];
+			const d = c ? (c.deck || "Standard") : "Standard";
+			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
+			else usedRev[d] = (usedRev[d] || 0) + 1;
+		});
+		return cards.filter((c) => {
+			const d = c.deck || "Standard";
+			const conf = deckConfOf(d);
+			if (c.srs.state === "new") {
+				if ((usedNew[d] || 0) >= conf.newPerDay) return false;
+				usedNew[d] = (usedNew[d] || 0) + 1;
+			} else {
+				if ((usedRev[d] || 0) >= conf.revPerDay) return false;
+				usedRev[d] = (usedRev[d] || 0) + 1;
+			}
+			return true;
+		});
+	}
+
+	const dueCards = () => applyDailyLimits(Object.values(S.cards)
 		.filter((c) => !c.suspended && new Date(c.srs.due) <= new Date())
-		.sort((a, b) => a.srs.due.localeCompare(b.srs.due));
+		.sort((a, b) => a.srs.due.localeCompare(b.srs.due)));
+
+	// Backlinks: Seiten, die die Zielseite per Titel erwähnen — bewusst einfacher
+	// Volltext-Scan, reicht für lokale Datenmengen völlig aus.
+	function backlinksOf(pageId) {
+		const target = S.pages[pageId];
+		if (!target || !target.title || target.title === "Ohne Titel") return [];
+		const t = target.title.toLowerCase();
+		return activePages().filter((pg) => pg.id !== pageId && (pg.content || "").toLowerCase().includes(t));
+	}
 
 	// Seitenverlauf: rekonstruiert alle früheren Versionen einer Seite aus dem
 	// Event-Log (Titel-/Inhaltsänderungen). Das Log ist append-only — der Verlauf
@@ -355,5 +430,5 @@ const STATE = (() => {
 		return versions;
 	}
 
-	return { reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, pageHistory };
+	return { reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, deckConfOf, backlinksOf, pageHistory };
 })();

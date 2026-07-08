@@ -1,8 +1,9 @@
 @echo off
-echo Starte Notion Web-Server...
+echo Starte Impala67 Web-Server...
 
 :: Wechsle in das Verzeichnis deiner Web-Dateien (seit der Tauri-Restrukturierung liegen sie in web\)
-cd /d "C:\Users\joshu\Documents\Notion\web"
+:: Pfad ggf. anpassen, falls dein Projektordner (noch) anders heisst
+cd /d "C:\Users\joshu\Documents\Impala67\web"
 
 :: Öffnet direkt localhost im Standardbrowser
 start http://localhost:8000

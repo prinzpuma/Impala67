@@ -1,4 +1,4 @@
-/* styles.css — Notion: cleanes, flaches Notion-artiges Dunkeldesign */
+/* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeldesign */
 :root {
 	--bg0: #05070d;
 	--bg1: #0a1120;
@@ -10,6 +10,7 @@
 	--danger: #e97366;
 	--menu-bg: #1f2127;
 	--panel-solid: #1b1c1f;
+	--bubble: #2c2e33;
 	--success: #72bc8f;
 	--radius: 12px;
 }
@@ -198,7 +199,7 @@ button.danger { color: var(--danger); }
 #chatLog { flex: 1; overflow-y: auto; padding: 12px; display: flex;
 	flex-direction: column; gap: 10px; }
 .msg { font-size: 15px; line-height: 1.55; max-width: 100%; }
-.msg.user { align-self: flex-end; max-width: 85%; background: #2c2e33;
+.msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble);
 	border-radius: 12px; padding: 8px 12px; position: relative; }
 .msg-edit { position: absolute; top: -10px; left: -10px; min-height: 0; width: 22px; height: 22px;
 	padding: 0; border-radius: 50%; background: var(--panel-solid); border: 1px solid var(--edge); font-size: 11px;
@@ -349,7 +350,7 @@ button.danger { color: var(--danger); }
 #overlay[hidden] { display: none; }
 .modal { width: min(520px, 92vw); padding: 24px; display: flex;
 	flex-direction: column; gap: 12px;
-	background: #232529; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+	background: var(--menu-bg); box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
 .modal h3 { margin-bottom: 4px; }
 .modal label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 4px; }
 .modal input { width: 100%; }
@@ -516,7 +517,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-crumb:hover { color: var(--text); text-decoration: underline; }
 .lib-crumb.current { color: var(--text); cursor: default; text-decoration: none; font-weight: 600; }
 .lib-crumb-sep { opacity: .4; }
-.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 16px; align-items: start; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 26px 18px; align-items: start; }
 .lib-folder { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
 	text-align: left; min-height: 150px; padding: 16px; border: 1px solid var(--edge); border-radius: 12px;
 	background: rgba(255,255,255,0.03); }
@@ -525,11 +526,12 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-folder-name { font-weight: 600; margin-top: 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-folder-count { font-size: 12px; color: var(--text2); }
 .lib-card { cursor: pointer; display: flex; flex-direction: column; gap: 2px; position: relative; }
-.lib-cover { height: 155px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.10); overflow: hidden;
-	display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center;
+.lib-cover { height: 210px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.10); overflow: hidden;
+	position: relative; display: flex; align-items: flex-start; justify-content: flex-start; padding: 12px 14px 0;
+	background-size: cover; background-position: center;
 	box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: transform .12s, box-shadow .12s; }
 .lib-card:hover .lib-cover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,0.5); }
-.lib-cover-icon { font-size: 42px; opacity: 0.92; text-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+.lib-cover-icon { font-size: 28px; opacity: 0.92; text-shadow: 0 2px 6px rgba(0,0,0,0.45); }
 .lib-cover.has-img .lib-cover-icon { display: none; }
 .lib-card-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; line-height: 1.3;
 	overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
@@ -545,7 +547,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .board-col-head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
 	color: var(--text2); padding: 2px 4px 8px; }
 .board-card { padding: 10px 12px; border: 1px solid var(--edge); border-radius: 8px; cursor: pointer;
-	background: #202226; margin-bottom: 6px; font-size: 14px; }
+	background: var(--menu-bg); margin-bottom: 6px; font-size: 14px; }
 .board-card:hover { background: rgba(255,255,255,0.08); }
 
 /* Vorlagen-Auswahl beim Seiten-Anlegen */
@@ -602,7 +604,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .blk-body { flex: 1; min-width: 0; min-height: 1.7em; padding: 2px 0; }
 .blk.drop-before { box-shadow: 0 -2px 0 var(--accent); }
 .blk.drop-after { box-shadow: 0 2px 0 var(--accent); }
-.blk-tail { height: 25vh; cursor: text; }
+.blk-tail { min-height: 25vh; cursor: text; }
 .blk-input { width: 100%; resize: none; border: none; background: rgba(255,255,255,0.03); border-radius: 6px;
 	padding: 2px 6px; line-height: 1.6; overflow: hidden; display: block;
 	font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14.5px; }
@@ -676,7 +678,6 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 
 /* ---------- Alles auswählen (Strg+A) + Klickfläche unter dem letzten Block ---------- */
 .block-editor.all-selected .blk-body { background: rgba(35,131,226,0.28); border-radius: 4px; }
-.blk-tail { min-height: 25vh; cursor: text; }
 
 /* ---------- Anki-Bereich: Stapel, Browser, Statistik, Lernen ---------- */
 .deck-list { display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
@@ -734,9 +735,6 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 .study-meta { text-align: center; }
 
 /* ---------- Bibliothek 2.0: Papier-Deckblätter mit Textvorschau, Neu-Kachel, Zurück-Knopf ---------- */
-.lib-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 26px 18px; }
-.lib-cover { height: 210px; align-items: flex-start; justify-content: flex-start; position: relative; padding: 12px 14px 0; }
-.lib-cover-icon { font-size: 28px; }
 .lib-cover.has-img { padding: 0; align-items: center; justify-content: center; }
 .lib-cover-paper { position: absolute; left: 10px; right: 10px; bottom: 10px; top: 56px; border-radius: 6px 6px 4px 4px;
 	background: rgba(250,250,248,0.94); color: #333; padding: 10px 10px 0; overflow: hidden;
@@ -785,7 +783,7 @@ body.light {
 	--edge: rgba(0, 0, 0, 0.12);
 	--text: rgba(20, 20, 20, 0.92); --text2: rgba(20, 20, 20, 0.60);
 	--accent: #2383e2; --accent-soft: rgba(35, 131, 226, 0.10);
-	--menu-bg: #ffffff; --panel-solid: #f1f1ef;
+	--menu-bg: #ffffff; --panel-solid: #f1f1ef; --bubble: #e9e9e7;
 }
 body.light input, body.light textarea, body.light select { background: rgba(0,0,0,0.04); }
 body.light .row:hover, body.light .side-foot button:hover, body.light .menu-item:hover { background: rgba(0,0,0,0.06); }

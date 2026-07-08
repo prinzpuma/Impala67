@@ -300,7 +300,7 @@ const EXTRAS = (() => {
 		const deckMap = {};
 		try {
 			const d = JSON.parse(db.exec("SELECT decks FROM col")[0].values[0][0]);
-			Object.values(d).forEach((x) => { deckMap[x.id] = String(x.name || "Import").replace(//g, "::"); });
+			Object.values(d).forEach((x) => { deckMap[x.id] = String(x.name || "Import").replace(/\//g, "::"); });
 		} catch (e) { console.warn("Stapel-Namen nicht lesbar:", e); }
 		// Cloze-Notizen haben mehrere Karten je Notiz — ord 0 reicht für den Text
 		const res = db.exec("SELECT n.flds, c.did FROM notes n JOIN cards c ON c.nid = n.id AND c.ord = 0");

@@ -7,6 +7,10 @@ const TOOLS = (() => {
 		function: { name, description, parameters: { type: "object", properties, required } },
 	});
 
+	// Cloze-Beispielsyntax zusammengesetzt, damit die doppelt geschweiften Klammern
+	// nirgends mit Template-/Platzhalter-Systemen kollidieren.
+	const CLOZE_HINT = "{" + "{c1::Antwort}" + "}";
+
 	const defs = [
 		t("create_page", "Erstellt eine neue Notiz-Seite.", {
 			title: { type: "string" },
@@ -38,8 +42,14 @@ const TOOLS = (() => {
 		t("create_flashcard", "Erstellt eine Karteikarte für die Spaced-Repetition-Wiederholung.", {
 			front: { type: "string", description: "Frage / Vorderseite" },
 			back: { type: "string", description: "Antwort / Rückseite" },
+			deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind' (optional, Standard: 'Standard')" },
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["front", "back"]),
+		t("create_cloze_card", "Erstellt Lückentext-Karteikarten (Cloze). Lücken im Text als " + CLOZE_HINT + " markieren — pro Lücken-Nummer (c1, c2, …) entsteht eine eigene Karte.", {
+			text: { type: "string", description: "Text mit Cloze-Lücken" },
+			deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind' (optional)" },
+			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
+		}, ["text"]),
 		t("list_due_cards", "Listet aktuell fällige Karteikarten.", {}, []),
 		t("ask_choice", "Stellt der Nutzerin/dem Nutzer eine kurze Rückfrage mit 2-5 anklickbaren Antwortmöglichkeiten, wenn eine Entscheidung nötig ist, bevor du fortfährst. Sparsam einsetzen, nur bei echter Mehrdeutigkeit.", {
 			question: { type: "string", description: "Kurze, konkrete Frage" },
@@ -122,8 +132,18 @@ const TOOLS = (() => {
 				const id = U.uid();
 				await STATE.dispatch("cardCreate", {
 					id, front: a.front, back: a.back, pageId: pg ? pg.id : null,
+					deck: a.deck || undefined,
 				});
-				return { ok: true, front: a.front };
+				return { ok: true, front: a.front, deck: a.deck || "Standard" };
+			}
+			case "create_cloze_card": {
+				if (typeof EXTRAS === "undefined") return { error: "Cloze-Modul (extras.js) nicht geladen." };
+				const pg = a.page_title
+					? STATE.findPage(a.page_title)
+					: (S.currentPageId ? S.pages[S.currentPageId] : null);
+				const n = await EXTRAS.createClozeCards(a.text || "", a.deck || undefined, pg ? pg.id : null);
+				if (!n) return { error: "Keine Cloze-Lücken gefunden — Lücken als " + CLOZE_HINT + " markieren." };
+				return { ok: true, cards: n, deck: a.deck || "Standard" };
 			}
 			case "list_due_cards":
 				return {
