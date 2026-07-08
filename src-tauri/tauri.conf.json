@@ -18,7 +18,7 @@
 			}
 		],
 		"security": {
-			"csp": null
+			"csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com https://generativelanguage.googleapis.com http://localhost:* ws://localhost:*;"
 		}
 	},
 	"bundle": {

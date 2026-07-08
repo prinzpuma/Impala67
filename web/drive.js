@@ -22,7 +22,6 @@ const DRIVE = (() => {
 	// Werte kommen aus web/config.local.js (lokal, NICHT im Git-Repo — siehe .gitignore).
 	// Bei GitHub-Actions-Builds wird diese Datei automatisch aus Repo-Secrets erzeugt.
 	const DESKTOP_CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
-	const DESKTOP_CLIENT_SECRET = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || "";
 	let token = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
@@ -49,7 +48,7 @@ const DRIVE = (() => {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
-				code, client_id: DESKTOP_CLIENT_ID, client_secret: DESKTOP_CLIENT_SECRET,
+				code, client_id: DESKTOP_CLIENT_ID,
 				redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier,
 			}),
 		});
@@ -62,7 +61,7 @@ const DRIVE = (() => {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
-				client_id: DESKTOP_CLIENT_ID, client_secret: DESKTOP_CLIENT_SECRET,
+				client_id: DESKTOP_CLIENT_ID,
 				refresh_token: refreshToken, grant_type: "refresh_token",
 			}),
 		});
