@@ -7,6 +7,7 @@ import { DB } from "./db.js";
 import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { SETTINGS } from "./settings.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -118,14 +119,6 @@ function closeOverlay() {
 	S.reviewShowBack = false;
 }
 
-// Verbindungsstatus automatisch prüfen (beim Start, nach Einstellungen, alle 60s)
-async function checkAI() {
-	S.aiOnline = null;
-	renderStatusDot();
-	S.aiOnline = await AI.ping();
-	renderStatusDot();
-}
-
 // KI-Vollbildmodus (wie Notion AI)
 function toggleChatFull(force) {
 	S.chatFull = force === undefined ? !S.chatFull : force;
@@ -134,12 +127,6 @@ function toggleChatFull(force) {
 		document.body.classList.remove("panel-collapsed");
 		U.el("btnShowPanel").hidden = true;
 	}
-}
-
-// Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
-// Theme (dunkel/hell) — Gerätewahl in localStorage, Standard: dunkel.
-function applyTheme() {
-	document.body.classList.toggle("light", (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light");
 }
 
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt das #overlay wie alle anderen Dialoge.
@@ -191,25 +178,7 @@ function openMoveDialog(pageId) {
 	U.el("dlgMoveCancel").addEventListener("click", () => closeOverlay());
 }
 
-async function applyBg() {
-	const bg = U.el("bg");
-	if (!bg) return;
-	try {
-		const rec = await DB.getBlob("bgImage");
-		if (rec && rec.buf && rec.buf.byteLength) {
-			const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/jpeg" }));
-			bg.style.backgroundImage = "linear-gradient(rgba(6,8,12,0.84), rgba(6,8,12,0.93)), url('" + url + "')";
-			bg.style.backgroundSize = "cover";
-			bg.style.backgroundPosition = "center";
-		} else {
-			bg.style.backgroundImage = "";
-			bg.style.backgroundSize = "";
-			bg.style.backgroundPosition = "";
-		}
-	} catch (e) {
-		console.warn("Hintergrund konnte nicht geladen werden:", e);
-	}
-}
+
 
 function isDescendant(childId, ancestorId) {
 	let cur = S.pages[childId];
@@ -474,33 +443,7 @@ async function sendChatMessage(text, type) {
 
 // NOTION_MIGRATOR ist jetzt in import-notion.js ausgelagert.
 
-// Zeichnet den Notion-Fortschritt in die Einstellungen — falls sie offen sind.
-// Der Zustand lebt in S.notionJob und überlebt so das Schließen des Dialogs:
-// beim Wiederöffnen (render.js → openSettings) wird er einfach neu gezeichnet.
-function renderNotionJob() {
-	const bar = U.el("notionProgress");
-	if (!bar) return; // Einstellungen (Notion-Tab) sind gerade nicht offen
-	const job = S.notionJob;
-	const fill = bar.querySelector(".progress-fill");
-	const status = U.el("notionStatus");
-	const cancelBtn = U.el("btnNotionCancel");
-	const btnImp = U.el("btnMigrateNotion");
-	const btnSync = U.el("btnNotionSync");
-	const running = !!(job && job.running);
-	bar.hidden = !job || (!running && job.fraction == null);
-	if (fill) {
-		if (job && job.fraction != null) { bar.classList.remove("indeterminate"); fill.style.width = Math.round(job.fraction * 100) + "%"; }
-		else { bar.classList.toggle("indeterminate", running); fill.style.width = ""; }
-	}
-	if (status) status.textContent = job ? job.status || "" : "";
-	if (cancelBtn) {
-		cancelBtn.hidden = !running;
-		cancelBtn.disabled = !!(job && job.cancelling);
-		cancelBtn.textContent = job && job.cancelling ? "Wird abgebrochen…" : "⏹ Abbrechen";
-	}
-	if (btnImp) { btnImp.disabled = running; btnImp.textContent = running && job.kind === "import" ? "Importiere…" : "⬇ Import"; }
-	if (btnSync) { btnSync.disabled = running; btnSync.textContent = running && job.kind === "sync" ? "Synchronisiere…" : "⇅ Zwei-Wege-Sync"; }
-}
+
 
 function wireEvents() {
 	// Datenbank-Tabellen: Zellwert speichern (props der Zeilen-Seite) — normales
@@ -669,7 +612,7 @@ function wireEvents() {
 			await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 			S.modelMenuOpen = false;
 			renderModelBar();
-			checkAI();
+			SETTINGS.checkAI();
 			return;
 		}
 
@@ -700,7 +643,7 @@ function wireEvents() {
 				await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 				S.modelMenuOpen = false;
 				renderModelBar();
-				checkAI();
+				SETTINGS.checkAI();
 			}
 			return;
 		}
@@ -1250,11 +1193,11 @@ function wireEvents() {
 				// überlebt er das Schließen der Einstellungen und wird beim Wiederöffnen
 				// von openSettings() über renderNotionJob() einfach neu gezeichnet.
 				S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
-				renderNotionJob();
+				SETTINGS.renderNotionJob();
 				const onStatus = (st, fraction) => {
 					S.notionJob.status = st;
 					S.notionJob.fraction = fraction == null ? null : fraction;
-					renderNotionJob();
+					SETTINGS.renderNotionJob();
 				};
 				try {
 					if (isSync) {
@@ -1272,14 +1215,14 @@ function wireEvents() {
 				}
 				S.notionJob.running = false;
 				S.notionJob.cancelling = false;
-				renderNotionJob();
+				SETTINGS.renderNotionJob();
 				render();
 				break;
 			}
 			case "btnNotionCancel": {
 				NOTION_MIGRATOR.cancel();
 				if (S.notionJob) { S.notionJob.cancelling = true; S.notionJob.status = "Wird abgebrochen…"; }
-				renderNotionJob();
+				SETTINGS.renderNotionJob();
 				break;
 			}
 			case "btnDriveLogin": {
@@ -1346,7 +1289,7 @@ function wireEvents() {
 				if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 				await STATE.dispatch("settingsSet", patch);
 				closeOverlay();
-				checkAI();
+				SETTINGS.checkAI();
 				RAG.reindexStale();
 				S.availableModels = [];
 				break;
@@ -1393,7 +1336,7 @@ function wireEvents() {
 			}
 			case "btnClearBg":
 				await DB.putBlob("bgImage", new ArrayBuffer(0), {});
-				applyBg();
+				SETTINGS.applyBg();
 				break;
 			case "btnCloseOverlay": closeOverlay(); break;
 			case "btnAnki": openAnki(); break;
@@ -1458,7 +1401,7 @@ function wireEvents() {
 			case "btnThemeDark":
 			case "btnThemeLight":
 				localStorage.setItem("notionTheme", t.id === "btnThemeLight" ? "light" : "dark");
-				applyTheme();
+				SETTINGS.applyTheme();
 				break;
 			case "btnImport": U.el("fileImport").click(); break;
 			case "btnOpenPdf":
@@ -1520,7 +1463,7 @@ function wireEvents() {
 		}
 		if (e.target.id === "modelSelect") {
 			await STATE.dispatch("settingsSet", { aiModel: e.target.value });
-			checkAI();
+			SETTINGS.checkAI();
 		}
 		if (e.target.id === "filePdf" && e.target.files[0]) {
 			const file = e.target.files[0];
@@ -1548,7 +1491,7 @@ function wireEvents() {
 			e.target.value = "";
 			const buf = await U.readAsBuffer(file);
 			await DB.putBlob("bgImage", buf, { name: file.name, type: file.type });
-			applyBg();
+			SETTINGS.applyBg();
 		}
 		if (e.target.id === "fileImport" && e.target.files[0]) {
 			const file = e.target.files[0];
@@ -1787,17 +1730,17 @@ async function initApp() {
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-	applyTheme();
+	SETTINGS.applyTheme();
 	await STATE.load();
 	await purgeOldTrash();
 	await seedIfEmpty();
 	wireEvents();
-	applyBg();
+	SETTINGS.applyBg();
 	render();
-	checkAI();
+	SETTINGS.checkAI();
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
-	setInterval(() => { if (!document.hidden) checkAI(); }, 60000);
-	document.addEventListener("visibilitychange", () => { if (!document.hidden) checkAI(); });
+	setInterval(() => { if (!document.hidden) SETTINGS.checkAI(); }, 60000);
+	document.addEventListener("visibilitychange", () => { if (!document.hidden) SETTINGS.checkAI(); });
 	RAG.reindexStale();
 }
 

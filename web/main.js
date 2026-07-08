@@ -25,6 +25,7 @@ import { COLLAPSE } from "./collapse.js";
 import { CHATS } from "./chats.js";
 import "./updater.js";
 import { EXTRAS } from "./extras.js";
+import { SETTINGS } from "./settings.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -43,6 +44,7 @@ window.EXTRAS = EXTRAS;
 window.COLLAPSE = COLLAPSE;
 window.CHATS = CHATS;
 window.NOTION_MIGRATOR = NOTION_MIGRATOR;
+window.SETTINGS = SETTINGS;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

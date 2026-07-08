@@ -8,6 +8,7 @@ import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { SETTINGS } from "./settings.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -1055,9 +1056,7 @@ function openSettings(section) {
 		'<div class="settings-nav">' + nav + "</div>" +
 		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
-	// sofort wieder anzeigen — der Zustand lebt in S.notionJob (app.js) und überlebt
-	// so das Schließen und Wiederöffnen der Einstellungen.
-	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
+	if (sec === "notion" && typeof SETTINGS.renderNotionJob === "function") SETTINGS.renderNotionJob();
 }
 
 function openReview() {
