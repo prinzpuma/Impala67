@@ -12,6 +12,7 @@ import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
 import { SHORTCUTS } from "./shortcuts.js";
+import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -21,6 +22,10 @@ const openPage = (...args) => TABS.openPage(...args);
 const closeTab = (...args) => TABS.closeTab(...args);
 const navBack = (...args) => TABS.navBack(...args);
 const navForward = (...args) => TABS.navForward(...args);
+const saveCurrentChat = (...args) => CHAT_FULLSCREEN.saveCurrentChat(...args);
+const toggleChatFull = (...args) => CHAT_FULLSCREEN.toggleChatFull(...args);
+const refineMessage = (...args) => CHAT_FULLSCREEN.refineMessage(...args);
+const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
 
 // app.js — Initialisierung und Event-Verkabelung.
 const WELCOME_MD = [
@@ -100,43 +105,14 @@ async function seedIfEmpty() {
 	S.currentPageId = id;
 }
 
-
-
-function saveCurrentChat() {
-	if (!S.chat.length) return;
-	const list = CHATS.load();
-	let s = S.currentChatId ? list.find((x) => x.id === S.currentChatId) : null;
-	if (!s) {
-		s = { id: U.uid(), title: "", created: U.now(), messages: [] };
-		S.currentChatId = s.id;
-		list.unshift(s);
-	}
-	s.messages = S.chat;
-	s.updated = U.now();
-	if (!s.title) {
-		const first = S.chat.find((m) => m.role === "user");
-		s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
-	}
-	CHATS.save(list);
-}
-
-function closeOverlay() {
+export function closeOverlay() {
 	const o = U.el("overlay");
-	o.hidden = true;
-	o.innerHTML = "";
+	if (o) {
+		o.hidden = true;
+		o.innerHTML = "";
+	}
 	S.reviewShowBack = false;
 }
-
-// KI-Vollbildmodus (wie Notion AI)
-function toggleChatFull(force) {
-	S.chatFull = force === undefined ? !S.chatFull : force;
-	document.body.classList.toggle("chat-full", S.chatFull);
-	if (S.chatFull) {
-		document.body.classList.remove("panel-collapsed");
-		U.el("btnShowPanel").hidden = true;
-	}
-}
-
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt das #overlay wie alle anderen Dialoge.
 function openPromptDialog(title, onSubmit, initial) {
 	const o = U.el("overlay");
@@ -287,72 +263,7 @@ async function openHistory(pageId) {
 	renderHistoryModal();
 }
 
-// Formuliert eine KI-Antwort länger oder kürzer um (wie Gemini) — ersetzt die
-// Antwort an Ort und Stelle, ohne eine neue Chat-Nachricht anzuhängen.
-async function refineMessage(mid, mode) {
-	if (S.aiBusy) return;
-	const idx = S.chat.findIndex((x) => x.mid === mid);
-	if (idx === -1) return;
-	const msg = S.chat[idx];
-	S.aiBusy = true;
-	const history = S.chat.slice(0, idx)
-		.filter((m) => m.role === "user" || m.role === "assistant")
-		.map((m) => ({ role: m.role, content: m.content || "" }));
-	history.push({ role: "assistant", content: msg.content });
-	const instruction = mode === "longer"
-		? "Bitte formuliere deine letzte Antwort ausführlicher und länger, mit mehr Details."
-		: "Bitte formuliere deine letzte Antwort kürzer und knapper, auf das Wesentliche reduziert.";
-	let renderQueued = false;
-	try {
-		const newContent = await AI.refine(history, instruction, (text) => {
-			msg.content = text;
-			// Auch hier Renders bündeln statt bei jedem Token das ganze Log neu aufzubauen.
-			if (renderQueued) return;
-			renderQueued = true;
-			requestAnimationFrame(() => {
-				renderQueued = false;
-				renderChat();
-				if (S.view === "chat") renderMainChatLog();
-			});
-		});
-		msg.content = newContent;
-	} catch (err) {
-		alert("Anpassen fehlgeschlagen: " + err.message);
-	}
-	S.aiBusy = false;
-	saveCurrentChat();
-	render();
-}
 
-// ---------- Gemeinsame Sende-Logik für Seitenpanel UND Vollbild-Chat-Tab ----------
-async function sendChatMessage(text, type) {
-	type = type || "side";
-	if ((!text && !S.pendingImage && !S.pendingTextFile) || S.aiBusy) return;
-	S.aiBusy = true;
-	S.aiActiveChatType = type;
-	S.aiStatus = "…denkt nach…";
-	S.aiDraft = "";
-	S.aiThinkingDraft = "";
-	S.thinkingLiveExpanded = false;
-	if (type === "side") renderChat();
-	else renderMainChatLog();
-	try {
-		const fallback = S.pendingTextFile ? "Fasse die angehängte Datei zusammen." : "Beschreibe das angehängte Bild.";
-		await AI.agent(text || fallback, type, (tool) => {
-			S.aiStatus = "⚙ " + tool + "…";
-			if (type === "side") renderChat();
-			else renderMainChatLog();
-		});
-	} catch (err) {
-		const targetList = type === "side" ? S.sideChat : S.chat;
-		targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message });
-	}
-	S.aiBusy = false;
-	S.aiDraft = "";
-	S.aiThinkingDraft = "";
-	if (type === "full") saveCurrentChat();
-	render();
-}
 
 // NOTION_MIGRATOR ist jetzt in import-notion.js ausgelagert.
 
@@ -460,59 +371,24 @@ function wireEvents() {
 		if (t.dataset.tabclose) { closeTab(t.dataset.tabclose); return; }
 
 		// Thinking-Prozess: live (während Streaming) oder finalisiert ausklappen
-		if (t.id === "btnThinkLive") { S.thinkingLiveExpanded = !S.thinkingLiveExpanded; renderChat(); return; }
-		if (t.dataset.reasoningtoggle) {
-			// Wie beim Diff-Toggle: die Nachricht kann im Seitenpanel-Chat (S.sideChat) ODER im
-			// Vollbild-Chat-Tab (S.chat) liegen — vorher wurde nur S.chat durchsucht, wodurch sich
-			// der Gedankengang im Seitenpanel-Chat nie ausklappen ließ (Bug).
-			const m = S.chat.find((x) => x.mid === t.dataset.reasoningtoggle) || S.sideChat.find((x) => x.mid === t.dataset.reasoningtoggle);
-			if (m) {
-				m.reasoningExpanded = !m.reasoningExpanded;
-				renderChat();
-				if (S.view === "chat") renderMainChatLog();
-			}
+		if (t.id === "btnThinkLive" || t.dataset.reasoningtoggle) {
+			CHAT_FULLSCREEN.handleReasoningToggle(t);
 			return;
 		}
 
 		// Edit-Karte: Diff ein-/ausblenden, Rückgängig machen
 		if (t.dataset.difftoggle) {
-			const m = S.chat.find((x) => x.mid === t.dataset.difftoggle) || S.sideChat.find((x) => x.mid === t.dataset.difftoggle);
-			if (m) { m.diffExpanded = !m.diffExpanded;
-				if (m.diffExpanded && m.pageId) {
-					S.highlightedPageId = m.pageId;
-					S.highlightedDiff = U.diffLines(m.before.content, m.after.content);
-					openPage(m.pageId);
-					setTimeout(() => {
-						const el = document.querySelector(".blk.highlight-add");
-						if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-					}, 100);
-				} else {
-					S.highlightedPageId = null;
-					S.highlightedDiff = null;
-				}
-				if (S.view === "chat") renderMainChatLog(); renderChat(); }
+			CHAT_FULLSCREEN.handleDiffCardToggle(t);
 			return;
 		}
 		if (t.dataset.undo) {
-			const m = S.chat.find((x) => x.mid === t.dataset.undo) || S.sideChat.find((x) => x.mid === t.dataset.undo);
-			if (m && !m.undone) {
-				if (m.created) {
-					await STATE.dispatch("pageDelete", { id: m.pageId });
-				} else {
-					await STATE.dispatch("pageUpdate", { id: m.pageId, patch: { title: m.before.title, content: m.before.content } });
-				}
-				m.undone = true;
-				saveCurrentChat();
-				renderChat();
-				if (S.view === "chat") renderMainChatLog();
-			}
+			await CHAT_FULLSCREEN.handleUndo(t);
 			return;
 		}
 
 		// Datei-Chip im Chat: geklebten Text als .txt herunterladen
 		if (t.dataset.filedownload) {
-			const m = S.chat.find((x) => x.mid === t.dataset.filedownload) || S.sideChat.find((x) => x.mid === t.dataset.filedownload);
-			if (m && m.textFile) U.downloadText(m.textFile.name, m.textFile.content);
+			CHAT_FULLSCREEN.handleFileDownload(t);
 			return;
 		}
 
@@ -563,63 +439,29 @@ function wireEvents() {
 
 		// KI-Chat aus der Liste löschen
 		if (t.dataset.chatdel) {
-			if (confirm("Diesen Chat wirklich löschen?")) {
-				const list = CHATS.load().filter((x) => x.id !== t.dataset.chatdel);
-				CHATS.save(list);
-				const tabId = "chat:" + t.dataset.chatdel;
-				if (S.tabs.includes(tabId)) { S.tabs = S.tabs.filter((id) => id !== tabId); }
-				if (S.currentChatId === t.dataset.chatdel) {
-					S.chat = []; S.currentChatId = null;
-					if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
-				}
-				render();
-			}
+			CHAT_FULLSCREEN.handleDeleteChat(t);
 			return;
 		}
 
-		// Nutzer-Nachricht nachträglich bearbeiten: Nachricht + alles Folgende entfernen,
-		// Text zurück ins Eingabefeld legen, damit man sie geändert erneut senden kann.
-		// Wie in Notion: Solange nach dieser Nachricht noch nicht rückgängig gemachte
-		// Seitenänderungen (edit-Karten) stehen, ist Bearbeiten gesperrt — erst über
-		// "Rückgängig machen" bei diesen Karten auflösen, dann lässt sich die Nachricht bearbeiten.
+		// Nutzer-Nachricht nachträglich bearbeiten
 		if (t.dataset.editmsg) {
-			const isSide = S.sideChat.some((x) => x.mid === t.dataset.editmsg);
-			const targetChat = isSide ? S.sideChat : S.chat;
-			const idx = targetChat.findIndex((x) => x.mid === t.dataset.editmsg);
-			if (idx !== -1) {
-				const hasUnresolvedEdits = targetChat.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
-				if (hasUnresolvedEdits) {
-					alert("Diese Nachricht lässt sich erst bearbeiten, wenn die späteren Seitenänderungen rückgängig gemacht wurden — nutze „Rückgängig machen“ bei den Änderungs-Karten weiter unten.");
-					return;
-				}
-				const old = targetChat[idx];
-				if (isSide) S.sideChat = S.sideChat.slice(0, idx);
-				else S.chat = S.chat.slice(0, idx);
-				// Erst NACH dem Rendern greifen, da der Vollbild-Chat-Tab bei jedem Render
-				// komplett neu aufgebaut wird (alte Eingabefeld-Referenz wäre sonst verwaist).
-				render();
-				const inp = S.view === "chat" ? U.el("mainChatInput") : U.el("chatInput");
-				if (inp) { inp.value = old.content || ""; inp.focus(); }
-			}
+			CHAT_FULLSCREEN.handleEditUserMessage(t);
 			return;
 		}
 
-		// Rückfrage-Karte: Option anklicken löst den wartenden Agent-Loop auf (siehe ai.js ask_choice)
+		// Rückfrage-Karte: Option anklicken löst den wartenden Agent-Loop auf
 		if (t.dataset.answerq) {
-			AI.resolveChoice(t.dataset.answerq, t.dataset.answer);
+			CHAT_FULLSCREEN.handleAnswerQuestion(t);
 			return;
 		}
 
 		// "✦ Anpassen"-Menü (länger/kürzer) an einer KI-Antwort ein-/ausblenden
 		if (t.dataset.refinetoggle) {
-			S.refineOpenMid = S.refineOpenMid === t.dataset.refinetoggle ? null : t.dataset.refinetoggle;
-			renderChat();
-			if (S.view === "chat") renderMainChatLog();
+			CHAT_FULLSCREEN.handleRefineToggle(t);
 			return;
 		}
 		if (t.dataset.refine) {
-			S.refineOpenMid = null;
-			await refineMessage(t.dataset.refine, t.dataset.mode);
+			await CHAT_FULLSCREEN.handleRefineSelect(t);
 			return;
 		}
 
@@ -1016,7 +858,7 @@ function wireEvents() {
 				render();
 				break;
 			case "btnChatExpand":
-				toggleChatFull();
+				CHAT_FULLSCREEN.toggleChatFull();
 				break;
 			case "btnNavBack": navBack(); break;
 			case "btnNavForward": navForward(); break;
@@ -1027,20 +869,9 @@ function wireEvents() {
 				await LIBRARY.handleCreateWorkspace();
 				break;
 			case "btnAttach":
-			case "btnAttachFull": {
-				// Menü dynamisch über dem jeweils geklickten Anhang-Button positionieren,
-				// da es sowohl im Seitenpanel als auch im Vollbild-Chat-Tab genutzt wird.
-				const m = U.el("attachMenu");
-				if (m.hidden) {
-					const rect = t.getBoundingClientRect();
-					m.style.position = "fixed";
-					m.style.left = Math.round(rect.left) + "px";
-					m.style.bottom = Math.round(window.innerHeight - rect.top + 8) + "px";
-					m.style.top = "auto";
-				}
-				m.hidden = !m.hidden;
+			case "btnAttachFull":
+				CHAT_FULLSCREEN.handleAttachMenuToggle(t);
 				break;
-			}
 			case "attachPdf":
 				U.el("attachMenu").hidden = true;
 				U.el("filePdf").click();
@@ -1050,15 +881,13 @@ function wireEvents() {
 				U.el("fileImg").click();
 				break;
 			case "btnRemoveImage":
-				S.pendingImage = null;
-				renderPendingChip();
+				CHAT_FULLSCREEN.handleRemoveImage();
 				break;
 			case "btnRemoveTextFile":
-				S.pendingTextFile = null;
-				renderPendingChip();
+				CHAT_FULLSCREEN.handleRemoveTextFile();
 				break;
 			case "btnTogglePanel":
-				toggleChatFull(false);
+				CHAT_FULLSCREEN.toggleChatFull(false);
 				document.body.classList.add("panel-collapsed");
 				U.el("btnShowPanel").hidden = false;
 				break;
@@ -1090,21 +919,9 @@ function wireEvents() {
 				await SETTINGS.handleSaveSettings();
 				break;
 			case "btnModelMenu":
-			case "btnModelChipFull": {
-				S.modelMenuAnchor = t.id === "btnModelChipFull" ? "full" : "panel";
-				S.modelMenuOpen = !S.modelMenuOpen;
-				S.customModelProviderPick = S.settings.aiProviderId;
-				renderModelMenu();
-				if (S.modelMenuOpen && !S.availableModels.length) {
-					S.modelMenuLoading = true;
-					renderModelMenu();
-					const models = await AI.listModels();
-					S.modelMenuLoading = false;
-					S.availableModels = models;
-					renderModelMenu();
-				}
+			case "btnModelChipFull":
+				await CHAT_FULLSCREEN.handleModelMenuToggle(t);
 				break;
-			}
 			case "btnPickBg": U.el("fileBg").click(); break;
 			case "btnCoverUpload": {
 				const pid = S.currentPageId;
@@ -1223,25 +1040,10 @@ function wireEvents() {
 			SETTINGS.checkAI();
 		}
 		if (e.target.id === "filePdf" && e.target.files[0]) {
-			const file = e.target.files[0];
-			e.target.value = "";
-			S.aiBusy = true;
-			try {
-				await PDFS.ingest(file, (st) => { S.aiStatus = st; renderChat(); });
-				S.chat.push({ mid: U.uid(), role: "assistant", content: "📄 **" + file.name + "** wurde einsortiert und zusammengefasst." });
-			} catch (err) {
-				S.chat.push({ mid: U.uid(), role: "assistant", content: "⚠️ PDF-Import fehlgeschlagen: " + err.message });
-			}
-			S.aiBusy = false;
-			saveCurrentChat();
-			render();
+			await CHAT_FULLSCREEN.handleFilePdfChange(e);
 		}
 		if (e.target.id === "fileImg" && e.target.files[0]) {
-			const file = e.target.files[0];
-			e.target.value = "";
-			const r = new FileReader();
-			r.onload = () => { S.pendingImage = r.result; renderPendingChip(); };
-			r.readAsDataURL(file);
+			CHAT_FULLSCREEN.handleFileImgChange(e);
 		}
 		if (e.target.id === "fileBg" && e.target.files[0]) {
 			await SETTINGS.handleFileBgChange(e);
@@ -1428,14 +1230,7 @@ function wireEvents() {
 	SHORTCUTS.wireShortcuts();
 	// Langen geklebten Text automatisch als .txt-Anhang behandeln statt im Feld auszuschreiben
 	document.addEventListener("paste", (e) => {
-		if (e.target.id !== "chatInput" && e.target.id !== "mainChatInput") return;
-		const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
-		const lines = text.split("\n").length;
-		if (text.length > 600 || lines > 15) {
-			e.preventDefault();
-			S.pendingTextFile = { name: "geklebter-text.txt", content: text, size: text.length };
-			renderPendingChip();
-		}
+		CHAT_FULLSCREEN.handlePaste(e);
 	});
 }
 
