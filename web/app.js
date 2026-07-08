@@ -7,6 +7,12 @@ import { DB } from "./db.js";
 import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+
+const render = (...args) => RENDER.render(...args);
+const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
+const renderTabs = (...args) => RENDER.renderTabs(...args);
+const openTemplatePicker = (...args) => RENDER.openTemplatePicker(...args);
+
 // app.js — Initialisierung und Event-Verkabelung.
 const WELCOME_MD = [
 	"Willkommen bei **Impala67** — deiner lokalen Lern-App: Notizen, PDFs und KI in einem. Diese Seite zeigt gleichzeitig alle Funktionen *und* alle Formatierungsmöglichkeiten, die es aktuell gibt.",
@@ -1806,5 +1812,6 @@ export const APP = {
 	CHATS,
 	seedIfEmpty,
 	wireEvents,
-	purgeOldTrash
+	purgeOldTrash,
+	saveCurrentChat
 };
