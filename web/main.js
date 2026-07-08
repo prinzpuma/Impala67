@@ -1,12 +1,5 @@
 "use strict";
 
-// Optional config.local.js laden
-try {
-	await import("./config.local.js");
-} catch (e) {
-	console.log("Lokale Konfiguration (config.local.js) nicht geladen oder nicht vorhanden.");
-}
-
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";
@@ -67,3 +60,10 @@ window.openCardEditor = RENDER_ANKI.openCardEditor;
 window.seedIfEmpty = APP.seedIfEmpty;
 window.wireEvents = APP.wireEvents;
 window.purgeOldTrash = APP.purgeOldTrash;
+
+// Optional config.local.js laden
+try {
+	await import("./config.local.js");
+} catch (e) {
+	console.log("Lokale Konfiguration (config.local.js) nicht geladen oder nicht vorhanden.");
+}
