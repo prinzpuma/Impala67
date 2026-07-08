@@ -506,8 +506,6 @@ function localDayKey(x) {
 	return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-
-
 // ---------- Daily Notes (📅-Tab): Monatskalender, jeder Tag ist eine eigene Seite ----------
 function renderDaily(main) {
 	const now = new Date();
@@ -714,6 +712,7 @@ function assistantMsgHtml(m) {
 			(refineOpen
 				? '<div class="refine-menu">' +
 					'<button data-refine="' + m.mid + '" data-mode="longer">⬆️ Länger</button>' +
+					'<button data-refine="' + m.mid + '" data-mode="same">↔️ Gleich</button>' +
 					'<button data-refine="' + m.mid + '" data-mode="shorter">⬇️ Kürzer</button>' +
 					"</div>"
 				: "") +
@@ -764,8 +763,6 @@ function modal(inner) {
 	return '<div class="modal">' + inner + "</div>";
 }
 
-
-
 function openIconPicker() {
 	if (!S.currentPageId) return;
 	const icons = ["📝", "📘", "📕", "📙", "📗", "🧪", "🧮", "⚡", "🧢", "📐", "🔬", "💡", "🎯", "📊", "🗂", "📎", "✅", "⭐", "🔥", "🎓", "🧠", "📚", "🛠", "🚀"];
@@ -791,8 +788,6 @@ function openCoverPicker() {
 		'<div class="modal-actions"><button data-coverset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
 	);
 }
-
-
 
 function openReview() {
 	const o = U.el("overlay");

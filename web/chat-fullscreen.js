@@ -44,41 +44,61 @@ export function toggleChatFull(force) {
 	}
 }
 
-// Formuliert eine KI-Antwort länger oder kürzer um (wie Gemini) — ersetzt die
-// Antwort an Ort und Stelle, ohne eine neue Chat-Nachricht anzuhängen.
-// FIX: funktioniert jetzt in beiden Chats — Seitenpanel (S.sideChat) und Vollbild (S.chat).
+// Formuliert eine KI-Antwort länger, kürzer oder in gleicher Länge um (wie Gemini).
+// FIX: sucht jetzt sowohl in S.chat (Vollbild) als auch S.sideChat (Seitenpanel).
+// FIX: komplett überarbeitete UX — die alte Antwort verschwindet SOFORT aus der Liste
+// (nicht nur ausgegraut), und die neue Antwort wird über denselben S.aiDraft/S.aiBusy-
+// Mechanismus wie eine ganz normale neue Nachricht (sendChatMessage) eingeblendet —
+// sieht also exakt so aus, als würde gerade frisch geantwortet, inklusive dem bekannten
+// wachsenden Text-Bubble, statt eines separaten Patch-/Status-Zustands.
 export async function refineMessage(mid, mode) {
 	if (S.aiBusy) return;
-	const list = S.chat.some((x) => x.mid === mid) ? S.chat : S.sideChat;
+	const isSide = S.sideChat.some((x) => x.mid === mid);
+	const list = isSide ? S.sideChat : S.chat;
 	const idx = list.findIndex((x) => x.mid === mid);
 	if (idx === -1) return;
 	const msg = list[idx];
-	S.aiBusy = true;
 	const history = list.slice(0, idx)
 		.filter((m) => m.role === "user" || m.role === "assistant")
 		.map((m) => ({ role: m.role, content: m.content || "" }));
 	history.push({ role: "assistant", content: msg.content });
 	const instruction = mode === "longer"
 		? "Bitte formuliere deine letzte Antwort ausführlicher und länger, mit mehr Details."
-		: "Bitte formuliere deine letzte Antwort kürzer und knapper, auf das Wesentliche reduziert.";
+		: mode === "shorter"
+		? "Bitte formuliere deine letzte Antwort kürzer und knapper, auf das Wesentliche reduziert."
+		: "Bitte formuliere deine letzte Antwort in etwa gleicher Länge neu — anderer Wortlaut, gleicher Inhalt und Umfang.";
+	// Alte Antwort sofort entfernen — sie verschwindet augenblicklich aus dem Log.
+	list.splice(idx, 1);
+	S.aiBusy = true;
+	S.aiActiveChatType = isSide ? "side" : "full";
+	S.aiStatus = "…denkt nach…";
+	S.aiDraft = "";
+	S.aiThinkingDraft = "";
+	if (isSide) renderChat(); else renderMainChatLog();
 	let renderQueued = false;
-	try {
-		const newContent = await AI.refine(history, instruction, (text) => {
-			msg.content = text;
-			// Auch hier Renders bündeln statt bei jedem Token das ganze Log neu aufzubauen.
-			if (renderQueued) return;
-			renderQueued = true;
-			requestAnimationFrame(() => {
-				renderQueued = false;
-				renderChat();
-				if (S.view === "chat") renderMainChatLog();
-			});
+	function scheduleRender() {
+		if (renderQueued) return;
+		renderQueued = true;
+		requestAnimationFrame(() => {
+			renderQueued = false;
+			if (isSide) renderChat(); else renderMainChatLog();
 		});
-		msg.content = newContent;
+	}
+	let newContent = msg.content;
+	try {
+		newContent = await AI.refine(history, instruction, (text) => {
+			S.aiDraft = text;
+			scheduleRender();
+		});
 	} catch (err) {
 		alert("Anpassen fehlgeschlagen: " + err.message);
 	}
 	S.aiBusy = false;
+	S.aiDraft = "";
+	S.aiThinkingDraft = "";
+	// Neue Antwort an derselben Stelle wieder einsetzen (gleiche mid, damit z.B. spätere
+	// Bearbeitungsprüfungen weiter konsistent bleiben).
+	list.splice(idx, 0, { mid, role: "assistant", content: newContent, reasoning: msg.reasoning || null, reasoningExpanded: false });
 	saveCurrentChat();
 	render();
 }
@@ -228,26 +248,32 @@ export function handleRefineToggle(t) {
 }
 
 export async function handleRefineSelect(t) {
+	// FIX: Menü jetzt SOFORT schließen + rendern, bevor auf die KI-Antwort gewartet wird
+	// (vorher blieb es sichtbar, bis der erste Streaming-Chunk ankam).
 	S.refineOpenMid = null;
+	renderChat();
+	if (S.view === "chat") renderMainChatLog();
 	await refineMessage(t.dataset.refine, t.dataset.mode);
 }
 
-// FIX: Menü öffnet über dem ＋-Button (der sitzt am unteren Rand) statt darunter
-// aus dem Bildschirm; window.scrollY entfernt (falsch bei position:fixed).
+// FIX: Menü unsichtbar vermessen, dann je nach Platz ÜBER oder unter dem Button
+// positionieren (vorher: immer unterhalb + window.scrollY -> bei position:fixed
+// falsch berechnet, Menü landete oft außerhalb des sichtbaren Bereichs).
 export function handleAttachMenuToggle(t) {
 	const m = U.el("attachMenu");
 	if (!m) return;
 	if (m.hidden) {
-		// Erst unsichtbar einblenden, um die echte Menügröße messen zu können.
+		const rect = t.getBoundingClientRect();
 		m.style.position = "fixed";
 		m.style.visibility = "hidden";
 		m.hidden = false;
-		const rect = t.getBoundingClientRect();
 		let top = rect.top - m.offsetHeight - 4;
 		if (top < 8) top = rect.bottom + 4;
-		m.style.left = Math.round(Math.min(rect.left, window.innerWidth - m.offsetWidth - 8)) + "px";
+		let left = Math.min(rect.left, window.innerWidth - m.offsetWidth - 8);
+		if (left < 8) left = 8;
 		m.style.top = Math.round(top) + "px";
-		m.style.visibility = "";
+		m.style.left = Math.round(left) + "px";
+		m.style.visibility = "visible";
 	} else {
 		m.hidden = true;
 	}
@@ -321,5 +347,5 @@ export const CHAT_FULLSCREEN = {
 	handleRemoveTextFile,
 	handleFilePdfChange,
 	handleFileImgChange,
-	handlePaste
+	handlePaste,
 };
