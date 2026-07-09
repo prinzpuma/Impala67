@@ -1,11 +1,13 @@
 "use strict";
-// Service-Worker: cached alle App-Dateien und CDN-Bibliotheken für Offline-Nutzung
-// und aktualisiert sie bei jedem Aufruf im Hintergrund (stale-while-revalidate).
+// Service-Worker: App-Dateien network-first (immer aktuell, offline aus dem Cache),
+// CDN-Bibliotheken stale-while-revalidate (URLs sind versioniert, Inhalt ändert sich nie).
 // Neue App-Version veröffentlichen = Dateien auf GitHub Pages pushen — fertig.
+// config.local.js (gerätespezifisch, optional) wird grundsätzlich NICHT behandelt.
 
-// Neuer Cache-Name nach der Umbenennung — der alte "notion-v2"-Cache wird bei der
-// Aktivierung unten automatisch aufgeräumt (keys-Filter löscht alles außer CACHE).
-const CACHE = "impala67-v3";
+// v4: einmaliger Cache-Reset — räumt auf allen Geräten evtl. vergiftete v3-Caches auf
+// (eine HTML-Fallback-Antwort war unter config.local.js gelandet und blockierte den
+// Start bis zum Hard Reload). Alte Caches löscht der activate-Handler automatisch.
+const CACHE = "impala67-v4";
 
 const APP_FILES = [
 	"./",
@@ -80,24 +82,47 @@ self.addEventListener("activate", (e) => {
 function shouldHandle(req) {
 	if (req.method !== "GET") return false;
 	const url = new URL(req.url);
+	// config.local.js ist gerätespezifisch & optional — niemals abfangen oder cachen.
+	if (url.origin === self.location.origin && url.pathname.endsWith("/config.local.js")) return false;
 	return url.origin === self.location.origin ||
 		url.hostname === "cdn.jsdelivr.net" ||
 		url.hostname === "cdnjs.cloudflare.com";
 }
 
+// Cache-Vergiftung verhindern: niemals HTML-Fallbacks unter Skript-/Asset-Pfaden
+// speichern (SPA-/404-Fallbacks liefern HTML mit Status 200 — einmal gecacht,
+// wirft z.B. ein .js-Pfad beim nächsten Start "SyntaxError: Unexpected token '<'").
+function isHtmlFallback(req, res) {
+	const ct = (res.headers.get("content-type") || "").toLowerCase();
+	const path = new URL(req.url).pathname;
+	return /\.(js|css|json|svg)$/.test(path) && ct.includes("text/html");
+}
+
 self.addEventListener("fetch", (e) => {
 	if (!shouldHandle(e.request)) return;
+	const sameOrigin = new URL(e.request.url).origin === self.location.origin;
 	e.respondWith(
 		caches.open(CACHE).then(async (cache) => {
 			const cached = await cache.match(e.request);
-			// Im Hintergrund frisch laden und den Cache aktualisieren.
+			// App-Dateien: network-first — jeder normale Start lädt die aktuelle Version
+			// (kein Strg+Shift+R mehr nötig); offline dient der Cache als Fallback.
+			if (sameOrigin) {
+				try {
+					const res = await fetch(e.request);
+					if (res && res.ok && !isHtmlFallback(e.request, res)) cache.put(e.request, res.clone());
+					return res;
+				} catch {
+					return cached || Response.error();
+				}
+			}
+			// CDN-Bibliotheken: stale-while-revalidate — URLs sind versioniert,
+			// der Inhalt ändert sich nie, Offline-Start bleibt schnell.
 			const fresh = fetch(e.request)
 				.then((res) => {
 					if (res && res.ok) cache.put(e.request, res.clone());
 					return res;
 				})
 				.catch(() => cached);
-			// Sofort aus dem Cache antworten (schnell + offline), sonst aufs Netz warten.
 			return cached || fresh;
 		})
 	);

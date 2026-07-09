@@ -3,46 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <script>
-window.onerror = function(message, source, lineno, colno, error) {
+// Diagnose-Overlay (temporär) — vereinheitlicht: EINE Helfer-Funktion für
+// window.onerror UND window.onunhandledrejection (vorher 2× identischer Code).
+function showErrorOverlay(title, html, stack) {
 	const div = document.createElement("div");
-	div.style.position = "fixed";
-	div.style.top = "0";
-	div.style.left = "0";
-	div.style.width = "100%";
-	div.style.height = "100%";
-	div.style.backgroundColor = "rgba(255,0,0,0.95)";
-	div.style.color = "white";
-	div.style.zIndex = "999999";
-	div.style.padding = "20px";
-	div.style.fontFamily = "monospace";
-	div.style.fontSize = "16px";
-	div.style.overflow = "auto";
-	div.innerHTML = "<h1>Frontend Error Caught</h1>" +
+	div.style.cssText = "position:fixed;inset:0;background:rgba(255,0,0,0.95);color:#fff;" +
+		"z-index:999999;padding:20px;font-family:monospace;font-size:16px;overflow:auto;";
+	div.innerHTML = "<h1>" + title + "</h1>" + html + "<pre>" + (stack || "") + "</pre>";
+	document.documentElement.appendChild(div);
+}
+window.onerror = function (message, source, lineno, colno, error) {
+	showErrorOverlay("Frontend Error Caught",
 		"<p><strong>Message:</strong> " + message + "</p>" +
 		"<p><strong>Source:</strong> " + source + "</p>" +
-		"<p><strong>Line:</strong> " + lineno + " <strong>Col:</strong> " + colno + "</p>" +
-		"<pre>" + (error && error.stack ? error.stack : "") + "</pre>";
-	document.documentElement.appendChild(div);
+		"<p><strong>Line:</strong> " + lineno + " <strong>Col:</strong> " + colno + "</p>",
+		error && error.stack);
 	return false;
 };
-window.onunhandledrejection = function(event) {
-	const div = document.createElement("div");
-	div.style.position = "fixed";
-	div.style.top = "0";
-	div.style.left = "0";
-	div.style.width = "100%";
-	div.style.height = "100%";
-	div.style.backgroundColor = "rgba(255,0,0,0.95)";
-	div.style.color = "white";
-	div.style.zIndex = "999999";
-	div.style.padding = "20px";
-	div.style.fontFamily = "monospace";
-	div.style.fontSize = "16px";
-	div.style.overflow = "auto";
-	div.innerHTML = "<h1>Unhandled Promise Rejection</h1>" +
-		"<p><strong>Reason:</strong> " + event.reason + "</p>" +
-		"<pre>" + (event.reason && event.reason.stack ? event.reason.stack : "") + "</pre>";
-	document.documentElement.appendChild(div);
+window.onunhandledrejection = function (event) {
+	showErrorOverlay("Unhandled Promise Rejection",
+		"<p><strong>Reason:</strong> " + event.reason + "</p>",
+		event.reason && event.reason.stack);
 };
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -136,13 +117,32 @@ window.onunhandledrejection = function(event) {
 <input type="file" id="fileBg" accept="image/*" hidden>
 <input type="file" id="fileImport" accept="application/json" hidden>
 
-<script src="config.local.js"></script>
+<!-- config.local.js wird bewusst NICHT hier geladen: main.js importiert sie optional
+     und fehlertolerant (try { await import("./config.local.js") } catch {}).
+     FIX Start-Bug: Ein normales <script src="config.local.js"> wirft bei fehlender
+     Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
+     HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
+     lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
 <script type="module" src="main.js"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
+// FIX Start-Bug (Teil 2): In der Tauri-Desktop-App ist der Service-Worker sinnlos
+// (Dateien liegen lokal, Updates macht der Tauri-Updater) und gefährlich — er hatte
+// die HTML-Fallback-Antwort für die fehlende config.local.js dauerhaft gecacht,
+// die App startete dann nur noch nach Strg+Shift+R. Darum: nur im Browser/PWA
+// registrieren; in Tauri Alt-Registrierungen + Caches einmalig aufräumen.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-	navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("Service-Worker:", e));
+	if (window.__TAURI__) {
+		navigator.serviceWorker.getRegistrations()
+			.then((regs) => regs.forEach((r) => r.unregister()))
+			.catch(() => {});
+		if (window.caches && caches.keys) {
+			caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+		}
+	} else {
+		navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("Service-Worker:", e));
+	}
 }
 
 // NotebookLM als "eigener Tab": Google blockiert das Einbetten per iframe (X-Frame-Options/CSP),

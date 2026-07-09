@@ -58,6 +58,10 @@ export async function purgeOldTrash() {
 }
 
 export async function initApp() {
+	// FIX (Start-Bug-Paket, 9. Juli): state.js ruft nach jedem dispatch() den Hook
+	// STATE.onChange auf — das alte implizite globale render() ist seit dem
+	// ES-Module-Refactor kein verlässlicher Auto-Render mehr. Einmalig verdrahten:
+	STATE.onChange = () => render();
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

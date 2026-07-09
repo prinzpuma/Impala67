@@ -1,7 +1,6 @@
 "use strict";
-import { S, STATE } from "./state.js";
+import { S } from "./state.js";
 import { DB } from "./db.js";
-import { U } from "./util.js";
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
 // Client-ID (das ist eine Plattform-Vorgabe von Google, keine Impala67-Beschränkung).
@@ -24,7 +23,10 @@ export const DRIVE = (() => {
 	// können ohnehin keine Geheimnisse wahren) — normaler, vorgesehener Fall.
 	// Werte kommen aus web/config.local.js (lokal, NICHT im Git-Repo — siehe .gitignore).
 	// Bei GitHub-Actions-Builds wird diese Datei automatisch aus Repo-Secrets erzeugt.
-	const DESKTOP_CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
+	// FIX: lazy lesen statt beim Modul-Import — config.local.js wird seit dem
+	// Start-Bug-Fix asynchron/optional geladen; zum Import-Zeitpunkt wäre
+	// window.APP_CONFIG evtl. noch nicht gesetzt (Race Condition).
+	const desktopClientId = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
 	let token = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
@@ -51,7 +53,7 @@ export const DRIVE = (() => {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
-				code, client_id: DESKTOP_CLIENT_ID,
+				code, client_id: desktopClientId(),
 				redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier,
 			}),
 		});
@@ -64,7 +66,7 @@ export const DRIVE = (() => {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
-				client_id: DESKTOP_CLIENT_ID,
+				client_id: desktopClientId(),
 				refresh_token: refreshToken, grant_type: "refresh_token",
 			}),
 		});
@@ -93,7 +95,7 @@ export const DRIVE = (() => {
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
 		// Ohne Desktop-Client-ID würde Google nur kryptisch mit „Fehler 400: invalid_request —
 		// Missing required parameter: client_id" antworten — hier klar abfangen und erklären.
-		if (!DESKTOP_CLIENT_ID) {
+		if (!desktopClientId()) {
 			throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt (web/config.local.js nicht vorhanden oder leer). Einrichtung: siehe Doku-Seite „Google-Login Desktop-Fix (Loopback-OAuth)“ — dort steht, wie du den Desktop-OAuth-Client anlegst und die config.local.js befüllst.");
 		}
 
@@ -101,7 +103,7 @@ export const DRIVE = (() => {
 		const port = await window.__TAURI__.core.invoke("start_oauth_server");
 		const redirectUri = "http://localhost:" + port;
 		const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
-			client_id: DESKTOP_CLIENT_ID,
+			client_id: desktopClientId(),
 			redirect_uri: redirectUri,
 			response_type: "code",
 			scope: SCOPE,

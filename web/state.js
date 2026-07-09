@@ -302,7 +302,11 @@ export const STATE = (() => {
 		}
 		reduce(ev);
 		if (type === "settingsSet") applySecrets();
-		if (typeof render === "function") render();
+		// FIX: Nach dem ES-Module-Refactor existiert kein globales render() mehr —
+		// der alte Check `typeof render === "function"` war immer false (stilles No-Op:
+		// die UI wurde nach dispatch nicht mehr automatisch aktualisiert).
+		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
+		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
 		return ev;
 	}
 
@@ -433,5 +437,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, deckConfOf, backlinksOf, pageHistory };
 })();
