@@ -280,7 +280,8 @@ export async function handleDriveSyncSettings(t) {
 	t.disabled = true;
 	const old = t.textContent;
 	try {
-		const imported = await DRIVE.sync((st) => { t.textContent = st; });
+		const { imported, conflicts } = await DRIVE.sync((st) => { t.textContent = st; });
+		if (conflicts > 0) U.toast("⚠ " + conflicts + " Bearbeitungs-Konflikt(e) erkannt — der unterlegene Stand liegt als „⚠ Konflikt“-Seite neben dem Original.", "error");
 		if (imported > 0) {
 			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
 			setTimeout(() => location.reload(), 900);
@@ -367,7 +368,8 @@ export async function handleDriveSync(t) {
 	t.disabled = true;
 	const old = t.innerHTML; // Button enthält jetzt ein SVG-Icon — textContent würde es zerstören
 	try {
-		const imported = await DRIVE.sync((st) => { t.textContent = "☁️ " + st; });
+		const { imported, conflicts } = await DRIVE.sync((st) => { t.textContent = "☁️ " + st; });
+		if (conflicts > 0) U.toast("⚠ " + conflicts + " Bearbeitungs-Konflikt(e) erkannt — der unterlegene Stand liegt als „⚠ Konflikt“-Seite neben dem Original.", "error");
 		if (imported > 0) {
 			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
 			setTimeout(() => location.reload(), 900);
@@ -382,13 +384,14 @@ export async function handleDriveSync(t) {
 }
 
 export async function handleBackupNow() {
-	U.download("notion-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
-	localStorage.setItem("notionLastBackup", new Date().toISOString());
+	U.download("impala67-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
+	localStorage.setItem("impala67LastBackup", new Date().toISOString());
 	if (S.view === "home") render();
 }
 
 export function handleThemeSelect(theme) {
-	localStorage.setItem("notionTheme", theme);
+	localStorage.setItem("impala67Theme", theme);
+	localStorage.removeItem("notionTheme"); // alten Schlüssel aufräumen — gelesen wird er nur noch als Fallback
 	applyTheme();
 }
 
@@ -407,7 +410,7 @@ export async function handleImportChange(e) {
 		const file = e.target.files[0];
 		e.target.value = "";
 		try {
-			const added = await DB.importAll(await U.readAsText(file));
+			const { added } = await DB.importAll(await U.readAsText(file));
 			U.toast(added + " Änderungen importiert — die App lädt neu.", "success");
 			setTimeout(() => location.reload(), 900);
 		} catch (err) {

@@ -7,7 +7,11 @@
 // v4: einmaliger Cache-Reset — räumt auf allen Geräten evtl. vergiftete v3-Caches auf
 // (eine HTML-Fallback-Antwort war unter config.local.js gelandet und blockierte den
 // Start bis zum Hard Reload). Alte Caches löscht der activate-Handler automatisch.
-const CACHE = "impala67-v4";
+// v5: notebooklm.js in APP_FILES aufgenommen (fehlte — offline brach damit der
+// gesamte ES-Module-Graph, weil render.js/tools.js/extras.js es importieren).
+// v6: sql.js (.apkg-Import) in den CDN-Precache aufgenommen — der Anki-Import
+// funktioniert damit auch offline.
+const CACHE = "impala67-v8";
 
 const APP_FILES = [
 	"./",
@@ -36,11 +40,13 @@ const APP_FILES = [
 	"./search.js",
 	"./shortcuts.js",
 	"./chat-fullscreen.js",
+	"./popovers.js",
 	"./boot.js",
 	"./app.js",
 	"./updater.js",
 	"./render-anki.js",
 	"./extras.js",
+	"./notebooklm.js",
 ];
 
 // CDN-Bibliotheken beim Installieren vorab cachen (best effort) — damit Markdown,
@@ -57,6 +63,8 @@ const CDN_FILES = [
 	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css",
 	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js",
 	"https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js",
+	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js",
+	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
 ];
 
 // Installation: App-Dateien verpflichtend, CDN-Dateien best effort vorab cachen.

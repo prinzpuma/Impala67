@@ -13,13 +13,13 @@ const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 // Die Seite wird in Blöcke zerlegt; der aktive Block wird als roher Markdown-
 // Ausschnitt in einer Textarea bearbeitet, alle anderen Blöcke sind fertig
 // gerendert (inkl. LaTeX + Code-Highlighting). Enter/Backspace/Pfeiltasten
-// verhalten sich wie in Notion, ⠿-Handles verschieben Blöcke per Drag & Drop.
+// verhalten sich wie in Notion, ⠠-Handles verschieben Blöcke per Drag & Drop.
 export const EDITOR = (() => {
 	let host = null;      // Container (#blockEditor), wird bei jedem renderMain neu gemountet
 	let pageId = null;    // aktuell bearbeitete Seite
 	let blocks = [];      // geparste Blockliste
 	let activeId = null;  // Block im Bearbeiten-Modus (Textarea)
-	let dragBid = null;   // Block, der gerade per ⠿ gezogen wird
+	let dragBid = null;   // Block, der gerade per ⠠ gezogen wird
 	let slash = null;     // { items, index } solange das Slash-Menü offen ist
 	let selAll = false;   // true = "alles ausgewählt" (Strg+A über alle Blöcke)
 
@@ -114,7 +114,7 @@ export const EDITOR = (() => {
 		return out;
 	}
 
-	// Blockliste ��� Markdown: Listenpunkte direkt untereinander, sonst Leerzeile dazwischen
+	// Blockliste → Markdown: Listenpunkte direkt untereinander, sonst Leerzeile dazwischen
 	function serialize(list) {
 		let out = "";
 		list.forEach((b, idx) => {
@@ -196,7 +196,7 @@ export const EDITOR = (() => {
 			return '<div class="blk' + (isNew ? " highlight-add" : "") + '" data-bid="' + b.id + '">' +
 				'<div class="blk-gutter">' +
 					'<button class="blk-plus" data-plus="' + b.id + '" title="Block darunter einfügen">+</button>' +
-					'<button class="blk-handle" draggable="true" data-handle="' + b.id + '" title="Ziehen zum Verschieben">⠿</button>' +
+					'<button class="blk-handle" draggable="true" data-handle="' + b.id + '" title="Ziehen zum Verschieben">⠠</button>' +
 				"</div>" +
 				'<div class="blk-body">' + (b.id === activeId ? editHtml(b) : viewHtml(b, blocks, idx)) + "</div>" +
 			"</div>";
@@ -713,7 +713,7 @@ export const EDITOR = (() => {
 			}
 		});
 
-		// Drag & Drop über die ⠿-Handles
+		// Drag & Drop über die ⠠-Handles
 		host.addEventListener("dragstart", (e) => {
 			const h = e.target.closest(".blk-handle");
 			if (h) { dragBid = h.dataset.handle; e.dataTransfer.effectAllowed = "move"; }
@@ -794,5 +794,5 @@ export const EDITOR = (() => {
 		draw();
 	}
 
-	return { mount, parse, serialize };
+	return { mount, parse, serialize, undoRedo };
 })();

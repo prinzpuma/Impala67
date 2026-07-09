@@ -157,19 +157,6 @@ function renderSidebar() {
 		return;
 	}
 
-	const q = (U.el("search").value || "").trim().toLowerCase();
-	if (q) {
-		const hits = STATE.searchNotes(q);
-		// Fundstellen-Vorschau: Kontext-Schnipsel unter jedem Treffer, Suchbegriff hervorgehoben.
-		const mark = (txt) => U.esc(txt).replace(
-			new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi"), "<mark>$1</mark>");
-		tree.innerHTML = hits.map((r) =>
-			rowHtml(r.page, 0, r.page.workspaceId) +
-			(r.snippet ? '<div class="search-snip">' + mark(r.snippet.replace(/\s+/g, " ").trim().slice(0, 160)) + "</div>" : "")
-		).join("") || '<div class="empty">Nichts gefunden</div>';
-		return;
-	}
-
 	let html = "";
 	// ★ Favoriten — gepinnte Seiten immer oben in der Sidebar
 	const favs = STATE.activePages().filter((p) => p.favorite);
@@ -183,26 +170,33 @@ function renderSidebar() {
 			html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 		}
 	}
+	// 💬 Chats: eigener einklappbarer Abschnitt unter dem Seitenbaum —
+	// nicht mehr hinter dem Dateien/Chats-Umschalter versteckt.
+	const chatsCollapsed = COLLAPSE.isCollapsed("sec:chats");
+	html += '<div class="ws-head"><button class="row-chevron ws-chevron' + (chatsCollapsed ? "" : " open") + '" data-collapse="sec:chats" title="Ein-/Ausklappen">▸</button>' +
+		'<span class="ws-name">Chats</span>' +
+		'<button class="mini" data-newchat="1" title="Neuer Chat">+</button></div>';
+	if (!chatsCollapsed) {
+		const sessions = (typeof CHATS !== "undefined") ? CHATS.load().slice(0, 8) : [];
+		html += sessions.map((s) =>
+			'<div class="row' + (s.id === S.currentChatId && S.view === "chat" ? " active" : "") + '" data-chat="' + s.id + '">' +
+			'<span class="row-title">💬 ' + U.esc(s.title || "Chat") + "</span>" +
+			'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
+		).join("") || '<div class="empty small">Noch keine Chats</div>';
+	}
 	tree.innerHTML = html;
 }
 
-// Chat-Verlauf in der Sidebar — die Suche (Strg+K) filtert auch hier: nach Titel UND Nachrichteninhalt.
+// Chat-Verlauf in der Sidebar (Chat-Modus) — die Volltextsuche über Titel UND Inhalte läuft jetzt im Befehls-Menü (Strg+K).
 function chatListHtml() {
-	const q = (U.el("search").value || "").trim().toLowerCase();
-	let sessions = (typeof CHATS !== "undefined") ? CHATS.load() : [];
-	if (q) {
-		sessions = sessions.filter((s) =>
-			(s.title || "").toLowerCase().includes(q) ||
-			(s.messages || []).some((m) => (m.content || "").toLowerCase().includes(q))
-		);
-	}
-	let html = q ? "" : '<div class="row" data-newchat="1"><span class="row-title">＋ Neuer Chat</span></div>';
+	const sessions = (typeof CHATS !== "undefined") ? CHATS.load() : [];
+	let html = '<div class="row" data-newchat="1"><span class="row-title">＋ Neuer Chat</span></div>';
 	html += sessions.map((s) =>
 		'<div class="row' + (s.id === S.currentChatId ? " active" : "") + '" data-chat="' + s.id + '">' +
 		'<span class="row-title">' + U.esc(s.title || "Chat") + "</span>" +
 		'<span class="hint">' + U.fmtDate(s.updated || s.created) + "</span>" +
 		'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
-	).join("") || (q ? '<div class="empty">Keine Chats gefunden</div>' : "");
+	).join("");
 	return html;
 }
 
@@ -358,6 +352,9 @@ function shareMenuHtml(pg) {
 function moreMenuHtml(pg) {
 	const marks = ((pg.content || "").match(/==[^=\n]+==/g) || []).length + ((pg.content || "").match(/\{\{c\d+::/g) || []).length;
 	return '<div class="page-menu top-menu">' +
+		'<button class="menu-item" data-editundo="1">↩ Rückgängig <span class="menu-hint">Strg+Z</span></button>' +
+		'<button class="menu-item" data-editredo="1">↪ Wiederholen <span class="menu-hint">Strg+Y</span></button>' +
+		'<div class="menu-sep"></div>' +
 		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
 		(pg.pdfId ? '<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen ? "📄 PDF schließen" : "📄 PDF anzeigen") + "</button>" : "") +
 		'<button class="menu-item" data-iconpick="1">😀 Icon ändern</button>' +
@@ -424,6 +421,8 @@ function breadcrumbHtml(pg) {
 	return html;
 }
 
+// Home als Dashboard: bündelt fällige Karten, die heutige Daily Note und den
+// Backup-Status als klickbare Kacheln — EIN Einstieg statt drei konkurrierender.
 function renderHome(main) {
 	const pages = STATE.activePages(); // Papierkorb-Seiten zählen nicht mit und erscheinen nicht unter "Zuletzt bearbeitet"
 	const recent = pages.slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 8);
@@ -432,13 +431,24 @@ function renderHome(main) {
 	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup"); // alter Schlüssel als Fallback
 	const bkDays = lastBk ? Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5) : null;
 	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
+	const todayKey = localDayKey(new Date());
+	const daily = pages.find((p) => p.daily === todayKey);
+	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").slice(0, 46) : "";
 	main.innerHTML =
 		'<div class="home">' +
 			"<h1>Guten Tag 👋</h1>" +
-			'<p class="hint">' + pages.length + " Seiten · " + Object.keys(S.cards).length + " Karteikarten" +
-			(due ? ' · <button id="btnReviewHome" class="mini">🃏 ' + due + " fällig — jetzt wiederholen</button>" : "") +
-			"</p>" +
-			(bkDue ? '<div class="backup-banner">💾 ' + (bkDays === null ? "Noch kein Backup erstellt" : "Letztes Backup vor " + bkDays + " Tagen") + ' — <button id="btnBackupNow" class="mini">Jetzt als JSON sichern</button></div>' : "") +
+			'<p class="hint">' + pages.length + " Seiten · " + Object.keys(S.cards).length + " Karteikarten</p>" +
+			'<div class="home-tiles">' +
+				'<button class="home-tile' + (due ? " attention" : "") + '" id="btnReviewHome">' +
+					'<span class="tile-num">🃏 ' + due + '</span><span class="tile-label">Karten fällig</span>' +
+					'<span class="tile-action">' + (due ? "Jetzt lernen →" : "Alles wiederholt 🎉") + "</span></button>" +
+				'<button class="home-tile" id="btnDailyHome">' +
+					'<span class="tile-num">📅</span><span class="tile-label">Daily Note heute</span>' +
+					'<span class="tile-action">' + (daily ? (dailyLine ? U.esc(dailyLine) : "Öffnen →") : "Anlegen →") + "</span></button>" +
+				'<button class="home-tile' + (bkDue ? " attention" : "") + '" id="btnBackupNow">' +
+					'<span class="tile-num">💾</span><span class="tile-label">Backup</span>' +
+					'<span class="tile-action">' + (bkDays === null ? "Noch keins — jetzt sichern →" : "Vor " + bkDays + " Tag" + (bkDays === 1 ? "" : "en") + " — erneut sichern →") + "</span></button>" +
+			"</div>" +
 			"<h3>Zuletzt bearbeitet</h3>" +
 			(recent.length
 				? '<div class="home-grid">' + recent.map((pg) =>

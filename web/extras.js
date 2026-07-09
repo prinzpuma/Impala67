@@ -4,6 +4,7 @@ import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
 import { NLM } from "./notebooklm.js";
+import { POPOVERS } from "./popovers.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -193,6 +194,7 @@ export const EXTRAS = (() => {
 			sqlPromise = new Promise((res, rej) => {
 				const s2 = document.createElement("script");
 				s2.src = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js";
+				s2.crossOrigin = "anonymous";
 				s2.onload = () => res(initSqlJs({ locateFile: (f) => "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/" + f }));
 				s2.onerror = () => rej(new Error("sql.js konnte nicht geladen werden (Internet nötig)."));
 				document.head.appendChild(s2);
@@ -469,8 +471,8 @@ export const EXTRAS = (() => {
 		const q = (sel) => e.target.closest(sel);
 		let el;
 		// Topbar-Menüs (Teilen / ⋯): öffnen/schließen; Klick außerhalb oder auf einen Menüpunkt schließt
-		if (q("[data-sharemenu]")) { S.topMenu = S.topMenu === "share" ? null : "share"; render(); return; }
-		if (q("[data-morepagemenu]")) { S.topMenu = S.topMenu === "more" ? null : "more"; render(); return; }
+		if (q("[data-sharemenu]")) { const old = S.topMenu; POPOVERS.closeAll("top"); S.topMenu = old === "share" ? null : "share"; render(); return; }
+		if (q("[data-morepagemenu]")) { const old = S.topMenu; POPOVERS.closeAll("top"); S.topMenu = old === "more" ? null : "more"; render(); return; }
 		if (S.topMenu && (!q(".top-menu") || q(".top-menu .menu-item"))) {
 			S.topMenu = null;
 			setTimeout(() => { if (typeof render === "function") render(); }, 0); // erst app.js-Handler wirken lassen

@@ -4,6 +4,7 @@ import { CHATS } from "./chats.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
 import { AI } from "./ai.js";
 import { DB } from "./db.js";
+import { EDITOR } from "./editor.js";
 import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
@@ -14,6 +15,7 @@ import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
 import { SHORTCUTS } from "./shortcuts.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
+import { POPOVERS } from "./popovers.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -259,16 +261,12 @@ function wireEvents() {
 
 	document.addEventListener("click", async (e) => {
 		const t = e.target.closest(CLICKABLE);
-		if (!t) {
-			U.el("attachMenu").hidden = true;
-			if (S.modelMenuOpen && !e.target.closest(".model-menu")) { S.modelMenuOpen = false; renderModelMenu(); }
-			if (S.pageMenuOpenId && !e.target.closest(".page-menu")) { S.pageMenuOpenId = null; renderSidebar(); }
-			if (S.deckMenuOpenName && !e.target.closest(".page-menu")) { S.deckMenuOpenName = null; renderSidebar(); }
-			return;
-		}
-		if (t.id !== "btnModelMenu" && t.id !== "btnModelChipFull" && !t.closest(".model-menu") && S.modelMenuOpen) { S.modelMenuOpen = false; renderModelMenu(); }
-		if (!t.dataset.pagemenu && !t.closest(".page-menu") && S.pageMenuOpenId && !t.dataset.renamename) { S.pageMenuOpenId = null; renderSidebar(); }
-		if (!t.dataset.deckmenu && !t.closest(".page-menu") && S.deckMenuOpenName && !t.dataset.deckrenamename) { S.deckMenuOpenName = null; renderSidebar(); }
+		// Eine Außenklick-Logik für alle Popovers (Anhang, Modell, Seite, Stapel, Topbar).
+		const closedPopovers = POPOVERS.closeOutside(e.target);
+		if (closedPopovers.model) renderModelMenu();
+		if (closedPopovers.sidebar) renderSidebar();
+		if (closedPopovers.main) renderMain();
+		if (!t) return;
 
 		// Ein-/Ausklappen (Workspace oder Seite mit Unterseiten)
 		if (t.dataset.collapse) {
@@ -503,17 +501,9 @@ function wireEvents() {
 			const name = t.dataset.deckmenu;
 			S.deckMenuOpenName = S.deckMenuOpenName === name ? null : name;
 			renderSidebar();
-			if (S.deckMenuOpenName) {
-				const btn = document.querySelector('[data-deckmenu="' + name + '"]');
-				const menu = document.querySelector(".page-menu");
-				if (btn && menu) {
-					const r = btn.getBoundingClientRect();
-					menu.style.position = "fixed";
-					menu.style.top = Math.round(r.bottom + 2) + "px";
-					menu.style.left = Math.round(Math.min(r.left, window.innerWidth - 180)) + "px";
-					menu.style.right = "auto";
-				}
-			}
+			if (S.deckMenuOpenName) POPOVERS.position(
+				document.querySelector('[data-deckmenu="' + name + '"]'),
+				document.querySelector(".page-menu"), { align: "end", gap: 2 });
 			return;
 		}
 		if (t.dataset.decknew || t.dataset.decksub) {
@@ -619,17 +609,9 @@ function wireEvents() {
 			if (S.view === "library") renderMain();
 			// Menü fest (fixed) über dem Button positionieren, damit es nicht vom
 			// Scroll-Container der Seitenleiste (#tree, overflow:auto) abgeschnitten wird.
-			if (S.pageMenuOpenId) {
-				const btn = document.querySelector('[data-pagemenu="' + id + '"]');
-				const menu = document.querySelector(".page-menu");
-				if (btn && menu) {
-					const r = btn.getBoundingClientRect();
-					menu.style.position = "fixed";
-					menu.style.top = Math.round(r.bottom + 2) + "px";
-					menu.style.left = Math.round(Math.min(r.left, window.innerWidth - 180)) + "px";
-					menu.style.right = "auto";
-				}
-			}
+			if (S.pageMenuOpenId) POPOVERS.position(
+				document.querySelector('[data-pagemenu="' + id + '"]'),
+				document.querySelector(".page-menu"), { align: "end", gap: 2 });
 			return;
 		}
 		// ⋯-Menü: Seite umbenennen — wie bei Stapeln per Inline-Textfeld direkt in der Zeile.
@@ -760,6 +742,15 @@ function wireEvents() {
 			return;
 		}
 
+		// Undo/Redo aus dem ⋯-Menü der Seite — nutzt dieselben Stapel wie Strg+Z / Strg+Y
+		if (t.dataset.editundo || t.dataset.editredo) {
+			const redo = !!t.dataset.editredo;
+			S.topMenu = null;
+			RENDER.renderMain();
+			await EDITOR.undoRedo(redo);
+			return;
+		}
+
 		// Seite öffnen (Sidebar, Home-Karte, Bibliothek oder Breadcrumb-Vorfahre)
 		if (t.dataset.page) { openPage(t.dataset.page); return; }
 
@@ -777,6 +768,15 @@ function wireEvents() {
 
 		switch (t.id) {
 			// Home: wechselt NUR die Sidebar zur Datei-Übersicht (wie in Notion)
+			case "btnMobileHome":
+				S.view = "home"; S.sidebarMode = "files"; toggleChatFull(false); render(); break;
+			case "btnMobileSearch": SEARCH.openPalette(); break;
+			case "btnMobileAdd":
+				await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null); break;
+			case "btnMobileCards": openAnki(); break;
+			case "btnMobileAI":
+				document.body.classList.remove("panel-collapsed");
+				CHAT_FULLSCREEN.toggleChatFull(true); break;
 			case "btnHome":
 				S.sidebarMode = "files";
 				// Aus Anki/Daily/Bibliothek/Papierkorb führt Home auch inhaltlich zurück
@@ -923,6 +923,9 @@ function wireEvents() {
 			case "btnDriveSync":
 				await SETTINGS.handleDriveSync(t);
 				break;
+			case "btnDailyHome":
+				await openDailyNote(RENDER.localDayKey(new Date()));
+				break;
 			case "btnBackupNow":
 			case "btnExport":
 				await SETTINGS.handleBackupNow();
@@ -951,9 +954,6 @@ function wireEvents() {
 
 	// Eingaben (Delegation) — inkl. Live-Vorschau im Split-Modus
 	document.addEventListener("input", (e) => {
-		if (e.target.id === "search") {
-			SEARCH.handleSearchInput(e);
-		}
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
 			LIBRARY.handleFilterInput(e);
@@ -1178,5 +1178,7 @@ export const APP = {
 	COLLAPSE,
 	CHATS,
 	wireEvents,
-	closeOverlay
+	closeOverlay,
+	newPageFlow,
+	openDailyNote
 };

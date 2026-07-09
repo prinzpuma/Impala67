@@ -242,7 +242,8 @@ export const DRIVE = (() => {
 		});
 	}
 
-	// Voller Sync: Remote-Stand laden → mergen → Gesamtstand hochladen.
+	// Voller Sync: Remote-Stand laden → mergen (mit Konflikt-Erkennung) → Gesamtstand
+	// hochladen → Log lokal kompaktieren → Sync-Wasserstand setzen.
 	async function sync(onStatus) {
 		// Token immer über getToken() beziehen — das im Speicher gehaltene Token
 		// kann abgelaufen sein (führte zu 401-Fehlern mitten in der Sitzung).
@@ -250,10 +251,17 @@ export const DRIVE = (() => {
 		await getToken(false);
 		if (onStatus) onStatus("Remote-Stand laden…");
 		let file = await findFile();
-		let imported = 0;
+		let imported = 0, conflicts = 0;
+		// Konflikt-Erkennung braucht den Wasserstand des letzten Uploads: nur lokale
+		// Events DANACH können mit Änderungen anderer Geräte kollidieren.
+		const importOpts = {
+			unsyncedAfterSeq: Number(localStorage.getItem("impala67_drive_synced_seq") || 0),
+			pageInfo: (id) => S.pages[id],
+		};
 		if (file) {
 			const res = await api("/drive/v3/files/" + file.id + "?alt=media");
-			imported = await DB.importAll(await res.text());
+			const r = await DB.importAll(await res.text(), importOpts);
+			imported = r.added; conflicts = r.conflicts;
 			// FIX (Audit): Lost-Update-Schutz — hat ein anderes Gerät WÄHREND dieses Syncs
 			// hochgeladen (modifiedTime geändert), dessen Stand erst noch übernehmen, sonst
 			// würde der folgende Upload ihn kommentarlos überschreiben. importAll ist
@@ -261,13 +269,18 @@ export const DRIVE = (() => {
 			const again = await findFile();
 			if (again && (again.id !== file.id || again.modifiedTime !== file.modifiedTime)) {
 				const res2 = await api("/drive/v3/files/" + again.id + "?alt=media");
-				imported += await DB.importAll(await res2.text());
+				const r2 = await DB.importAll(await res2.text(), importOpts);
+				imported += r2.added; conflicts += r2.conflicts;
 				file = again;
 			}
 		}
 		if (onStatus) onStatus("Hochladen…");
 		await upload(file ? file.id : null, await DB.exportAll());
-		return imported;
+		// Nach erfolgreichem Sync: Log lokal kompaktieren (der Stand ist gesichert) und
+		// den Wasserstand auf die dann höchste Sequenznummer setzen.
+		await DB.compactLocal();
+		localStorage.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
+		return { imported, conflicts };
 	}
 
 	return { login, logout, sync, isConnected: () => !!token };

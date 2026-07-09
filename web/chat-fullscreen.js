@@ -6,6 +6,7 @@ import { AI } from "./ai.js";
 import { U } from "./util.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER } from "./render.js";
+import { POPOVERS } from "./popovers.js";
 import { TABS } from "./tabs.js";
 
 const render = (...args) => RENDER.render(...args);
@@ -190,8 +191,10 @@ export function handleFileDownload(t) {
 }
 
 export async function handleModelMenuToggle(t) {
+	const wasOpen = S.modelMenuOpen && S.modelMenuAnchor === (t.id === "btnModelChipFull" ? "full" : "panel");
+	POPOVERS.closeAll("model");
 	S.modelMenuAnchor = t.id === "btnModelChipFull" ? "full" : "panel";
-	S.modelMenuOpen = !S.modelMenuOpen;
+	S.modelMenuOpen = !wasOpen;
 	S.customModelProviderPick = S.settings.aiProviderId;
 	renderModelMenu();
 	if (S.modelMenuOpen && !S.availableModels.length) {
@@ -262,21 +265,7 @@ export async function handleRefineSelect(t) {
 export function handleAttachMenuToggle(t) {
 	const m = U.el("attachMenu");
 	if (!m) return;
-	if (m.hidden) {
-		const rect = t.getBoundingClientRect();
-		m.style.position = "fixed";
-		m.style.visibility = "hidden";
-		m.hidden = false;
-		let top = rect.top - m.offsetHeight - 4;
-		if (top < 8) top = rect.bottom + 4;
-		let left = Math.min(rect.left, window.innerWidth - m.offsetWidth - 8);
-		if (left < 8) left = 8;
-		m.style.top = Math.round(top) + "px";
-		m.style.left = Math.round(left) + "px";
-		m.style.visibility = "visible";
-	} else {
-		m.hidden = true;
-	}
+	POPOVERS.toggleElement(m, t, { prefer: "above", gap: 4 });
 }
 
 export function handleRemoveImage() {
