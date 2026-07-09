@@ -169,6 +169,9 @@ export function openSettings(section) {
 		// Desktop = Typ „Desktop-App“ (System-Browser-Login), Browser = Typ „Webanwendung“ (Popup).
 		const inTauri = !!window.__TAURI__;
 		const desktopId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || S.settings.driveDesktopClientId || "";
+		// Google verlangt für Desktop-Clients auch mit PKCE das client_secret (gilt bei
+		// installierten Apps laut Google nicht als geheim) — ohne kommt „client_secret is missing“.
+		const desktopSecret = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || S.settings.driveDesktopClientSecret || "";
 		const modeHint = '<p class="hint">' + (inTauri
 			? "Desktop-App: Anmeldung über den System-Browser (OAuth-Client Typ „Desktop-App“)."
 			: "Browser/PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).") + "</p>";
@@ -177,10 +180,11 @@ export function openSettings(section) {
 			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
 				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
 				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
-		} else if (inTauri && !desktopId) {
-			// 2) Desktop-App ohne Desktop-Client-ID (config.local.js fehlte im Build).
-			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", "") +
-				'<p class="hint">Im App-Paket wurde keine befüllte <code>config.local.js</code> gefunden. Trage einmalig die Client-ID deines Google-OAuth-Clients vom Typ „Desktop-App“ ein (Google Cloud Console) — sie wird gespeichert, danach reicht ein Klick auf „Mit Google anmelden“. Alternativ: <code>web/config.local.js</code> befüllen und die App neu bauen.</p>' +
+		} else if (inTauri && (!desktopId || !desktopSecret)) {
+			// 2) Desktop-App ohne vollständige Desktop-Zugangsdaten (config.local.js fehlte im Build).
+			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", S.settings.driveDesktopClientId || desktopId) +
+				field("Google Desktop-Client-Secret (GOCSPX-…)", "inpDriveDesktopSecret", S.settings.driveDesktopClientSecret || "", "password") +
+				'<p class="hint">Beides steht in der Google Cloud Console direkt beim OAuth-Client vom Typ „Desktop-App“. Google verlangt das Secret beim Token-Tausch auch mit PKCE — bei Desktop-Apps gilt es laut Google ausdrücklich nicht als geheim. Einmal speichern, danach reicht ein Klick auf „Mit Google anmelden“. Alternativ: <code>web/config.local.js</code> befüllen und die App neu bauen.</p>' +
 				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
 		} else if (!inTauri && !S.settings.driveClientId) {
 			// 3) Browser/PWA ohne Web-Client-ID.
@@ -318,6 +322,7 @@ export async function handleSaveSettings() {
 	if (g("inpEmbed")) patch.embedModel = g("inpEmbed").value.trim();
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
 	if (g("inpDriveDesktop")) patch.driveDesktopClientId = g("inpDriveDesktop").value.trim(); // FIX: Desktop-Client-ID-Fallback
+	if (g("inpDriveDesktopSecret")) patch.driveDesktopClientSecret = g("inpDriveDesktopSecret").value.trim(); // Google verlangt das Secret auch mit PKCE (Desktop-Client)
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 	await STATE.dispatch("settingsSet", patch);
 	closeOverlay();

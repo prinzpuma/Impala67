@@ -29,6 +29,11 @@ export const DRIVE = (() => {
 	// FIX: Fallback auf die in den Einstellungen (⚙️ → Sync) hinterlegte ID — für
 	// Builds, in denen config.local.js fehlt oder leer ist (kein Neu-Build nötig).
 	const desktopClientId = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || (S.settings && S.settings.driveDesktopClientId) || "";
+	// FIX (Login-Bug „client_secret is missing“): Google verlangt bei „Desktop-App“-Clients
+	// das client_secret beim Token-Tausch AUCH mit PKCE — das weicht vom OAuth-Standard ab,
+	// ist aber Googles dokumentiertes Verhalten. Bei installierten Apps gilt das Secret laut
+	// Google ausdrücklich NICHT als geheim, es darf also in der App/Config liegen.
+	const desktopClientSecret = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || (S.settings && S.settings.driveDesktopClientSecret) || "";
 	let token = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
@@ -56,6 +61,8 @@ export const DRIVE = (() => {
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
 				code, client_id: desktopClientId(),
+				// Google-Eigenheit: client_secret ist beim Desktop-Client auch mit PKCE Pflicht.
+				...(desktopClientSecret() ? { client_secret: desktopClientSecret() } : {}),
 				redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier,
 			}),
 		});
@@ -69,6 +76,7 @@ export const DRIVE = (() => {
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
 				client_id: desktopClientId(),
+				...(desktopClientSecret() ? { client_secret: desktopClientSecret() } : {}),
 				refresh_token: refreshToken, grant_type: "refresh_token",
 			}),
 		});
@@ -99,6 +107,10 @@ export const DRIVE = (() => {
 		// Missing required parameter: client_id" antworten — hier klar abfangen und erklären.
 		if (!desktopClientId()) {
 			throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt. Trage sie einmalig unter ⚙️ Einstellungen → Sync ein (OAuth-Client Typ „Desktop-App“ aus der Google Cloud Console) — oder befülle web/config.local.js und baue die App neu.");
+		}
+		// Frühzeitig klar melden statt Googles kryptischem „client_secret is missing“ nach dem Redirect.
+		if (!desktopClientSecret()) {
+			throw new Error("Google-Login nicht möglich: Das Desktop-Client-Secret fehlt (Google verlangt es für Desktop-Clients auch mit PKCE). Trage es einmalig unter ⚙️ Einstellungen → Sync ein — es steht in der Google Cloud Console direkt beim Desktop-OAuth-Client (GOCSPX-…).");
 		}
 
 		const { verifier, challenge } = await pkcePair();
