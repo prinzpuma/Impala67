@@ -26,7 +26,9 @@ export const DRIVE = (() => {
 	// FIX: lazy lesen statt beim Modul-Import — config.local.js wird seit dem
 	// Start-Bug-Fix asynchron/optional geladen; zum Import-Zeitpunkt wäre
 	// window.APP_CONFIG evtl. noch nicht gesetzt (Race Condition).
-	const desktopClientId = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || "";
+	// FIX: Fallback auf die in den Einstellungen (⚙️ → Sync) hinterlegte ID — für
+	// Builds, in denen config.local.js fehlt oder leer ist (kein Neu-Build nötig).
+	const desktopClientId = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || (S.settings && S.settings.driveDesktopClientId) || "";
 	let token = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
@@ -96,7 +98,7 @@ export const DRIVE = (() => {
 		// Ohne Desktop-Client-ID würde Google nur kryptisch mit „Fehler 400: invalid_request —
 		// Missing required parameter: client_id" antworten — hier klar abfangen und erklären.
 		if (!desktopClientId()) {
-			throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt (web/config.local.js nicht vorhanden oder leer). Einrichtung: siehe Doku-Seite „Google-Login Desktop-Fix (Loopback-OAuth)“ — dort steht, wie du den Desktop-OAuth-Client anlegst und die config.local.js befüllst.");
+			throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt. Trage sie einmalig unter ⚙️ Einstellungen → Sync ein (OAuth-Client Typ „Desktop-App“ aus der Google Cloud Console) — oder befülle web/config.local.js und baue die App neu.");
 		}
 
 		const { verifier, challenge } = await pkcePair();
@@ -235,11 +237,21 @@ export const DRIVE = (() => {
 		if (onStatus) onStatus("Mit Google verbinden…");
 		await getToken(false);
 		if (onStatus) onStatus("Remote-Stand laden…");
-		const file = await findFile();
+		let file = await findFile();
 		let imported = 0;
 		if (file) {
 			const res = await api("/drive/v3/files/" + file.id + "?alt=media");
 			imported = await DB.importAll(await res.text());
+			// FIX (Audit): Lost-Update-Schutz — hat ein anderes Gerät WÄHREND dieses Syncs
+			// hochgeladen (modifiedTime geändert), dessen Stand erst noch übernehmen, sonst
+			// würde der folgende Upload ihn kommentarlos überschreiben. importAll ist
+			// idempotent (Log-Merge) — doppeltes Einspielen ist unkritisch.
+			const again = await findFile();
+			if (again && (again.id !== file.id || again.modifiedTime !== file.modifiedTime)) {
+				const res2 = await api("/drive/v3/files/" + again.id + "?alt=media");
+				imported += await DB.importAll(await res2.text());
+				file = again;
+			}
 		}
 		if (onStatus) onStatus("Hochladen…");
 		await upload(file ? file.id : null, await DB.exportAll());

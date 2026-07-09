@@ -789,6 +789,29 @@ body.light input, body.light textarea, body.light select { background: rgba(0,0,
 body.light .row:hover, body.light .side-foot button:hover, body.light .menu-item:hover { background: rgba(0,0,0,0.06); }
 body.light .row-add:hover { background: rgba(0,0,0,0.08); }
 
+/* ---------- Toasts (In-App-Meldungen statt alert()) — siehe U.toast in util.js ---------- */
+#toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2000;
+	display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: 10px; font-size: 13.5px;
+	background: var(--menu-bg); color: var(--text); border: 1px solid var(--edge);
+	box-shadow: 0 12px 32px rgba(0,0,0,0.5); animation: toastIn .22s ease; pointer-events: auto; }
+.toast.success { border-color: rgba(114,188,143,0.45); }
+.toast.error { border-color: rgba(233,115,102,0.55); }
+.toast.hide { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+
+/* ---------- Feinschliff: einheitliche dezente Übergänge + kleine Spielereien ---------- */
+button { transition: background .15s ease, color .15s ease, transform .08s ease; }
+button:active:not(.row-chevron) { transform: scale(.97); }
+.side-foot button { display: flex; align-items: center; gap: 8px; }
+.side-foot button svg, .tab svg { flex-shrink: 0; }
+#btnReview.attention svg { animation: wiggle 2.6s ease-in-out infinite; }
+@keyframes wiggle { 0%, 88%, 100% { transform: none; } 92% { transform: rotate(-8deg); } 96% { transform: rotate(8deg); } }
+.blk-check:checked { animation: pop .18s ease; }
+@keyframes pop { 50% { transform: scale(1.3); } }
+#btnShowPanel { transition: transform .12s ease, box-shadow .12s ease; }
+#btnShowPanel:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 28px rgba(0,0,0,0.45); }
+
 /* ---------- Mobile (≤ 768px): Off-Canvas-Sidebar + größere Klickziele ---------- */
 #btnSidebarToggle { display: none; }
 @media (max-width: 768px) {

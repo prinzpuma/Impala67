@@ -91,7 +91,7 @@ export async function refineMessage(mid, mode) {
 			scheduleRender();
 		});
 	} catch (err) {
-		alert("Anpassen fehlgeschlagen: " + err.message);
+		U.toast("Anpassen fehlgeschlagen: " + err.message, "error");
 	}
 	S.aiBusy = false;
 	S.aiDraft = "";
@@ -225,7 +225,7 @@ export function handleEditUserMessage(t) {
 	if (idx !== -1) {
 		const hasUnresolvedEdits = targetChat.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
 		if (hasUnresolvedEdits) {
-			alert("Diese Nachricht lässt sich erst bearbeiten, wenn die späteren Seitenänderungen rückgängig gemacht wurden — nutze „Rückgängig machen“ bei den Änderungs-Karten weiter unten.");
+			U.toast("Diese Nachricht lässt sich erst bearbeiten, wenn die späteren Seitenänderungen rückgängig gemacht wurden — nutze „Rückgängig machen“ bei den Änderungs-Karten weiter unten.", "error");
 			return;
 		}
 		const old = targetChat[idx];
@@ -318,7 +318,8 @@ export function handleFileImgChange(e) {
 
 export function handlePaste(e) {
 	if (e.target.id !== "chatInput" && e.target.id !== "mainChatInput") return;
-	const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+	// FIX (Audit): window.clipboardData war ein toter IE-Fallback — entfernt.
+	const text = e.clipboardData ? e.clipboardData.getData("text/plain") || "" : "";
 	const lines = text.split("\n").length;
 	if (text.length > 600 || lines > 15) {
 		e.preventDefault();

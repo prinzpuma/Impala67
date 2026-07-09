@@ -52,7 +52,7 @@ export async function applyBg() {
 
 // Zeichnet den Notion-Fortschritt in die Einstellungen — falls sie offen sind.
 // Der Zustand lebt in S.notionJob und überlebt so das Schließen des Dialogs:
-// beim Wiederöffnen (render.js → openSettings) wird er einfach neu gezeichnet.
+// beim Wiederöffnen (render.js → openSettings) wird er einfach neu gezeichnet.
 export function renderNotionJob() {
 	const bar = U.el("notionProgress");
 	if (!bar) return; // Einstellungen (Notion-Tab) sind gerade nicht offen
@@ -164,20 +164,36 @@ export function openSettings(section) {
 			'<p class="hint">Löscht alle lokalen Seiten und deren Versionsverlauf unwiderruflich von diesem Gerät. Deine Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
 			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
 	} else if (sec === "sync") {
-		if (!S.settings.driveClientId) {
-			body = field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
-				'<p class="hint">Google verlangt für jede App eine registrierte Client-ID — das ist einmalig nötig, keine Notion-Eigenheit:<br>' +
+		// AUFGERÄUMT: EIN klarer Zweig pro Zustand — Desktop-App (Tauri) und Browser/PWA
+		// nutzen ZWEI verschiedene Google-OAuth-Clients, das wird hier sichtbar getrennt:
+		// Desktop = Typ „Desktop-App“ (System-Browser-Login), Browser = Typ „Webanwendung“ (Popup).
+		const inTauri = !!window.__TAURI__;
+		const desktopId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || S.settings.driveDesktopClientId || "";
+		const modeHint = '<p class="hint">' + (inTauri
+			? "Desktop-App: Anmeldung über den System-Browser (OAuth-Client Typ „Desktop-App“)."
+			: "Browser/PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).") + "</p>";
+		if (S.driveUserEmail) {
+			// 1) Bereits verbunden — egal auf welchem Weg.
+			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
+				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
+				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
+		} else if (inTauri && !desktopId) {
+			// 2) Desktop-App ohne Desktop-Client-ID (config.local.js fehlte im Build).
+			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", "") +
+				'<p class="hint">Im App-Paket wurde keine befüllte <code>config.local.js</code> gefunden. Trage einmalig die Client-ID deines Google-OAuth-Clients vom Typ „Desktop-App“ ein (Google Cloud Console) — sie wird gespeichert, danach reicht ein Klick auf „Mit Google anmelden“. Alternativ: <code>web/config.local.js</code> befüllen und die App neu bauen.</p>' +
+				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+		} else if (!inTauri && !S.settings.driveClientId) {
+			// 3) Browser/PWA ohne Web-Client-ID.
+			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
+				'<p class="hint">Google verlangt für jede App eine registrierte Client-ID — das ist einmalig nötig:<br>' +
 				"1) Google Cloud Console → Drive-API aktivieren.<br>" +
 				'2) OAuth-Client vom Typ „Webanwendung“ anlegen, <code>' + location.origin + '</code> als autorisierten Ursprung eintragen.<br>' +
 				"3) Client-ID hier einfügen und speichern.<br>" +
 				"Danach reicht wirklich nur noch ein Klick auf „Mit Google anmelden“.</p>" +
 				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
-		} else if (S.driveUserEmail) {
-			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
-				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
-				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
 		} else {
-			body = '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
+			// 4) Client-ID vorhanden — nur noch anmelden.
+			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
 				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
 		}
 	}
@@ -201,7 +217,7 @@ export async function handleNotionSync(t) {
 	S.notionToken = tok;
 	S.notionPageId = pid;
 	await STATE.dispatch("settingsSet", { notionToken: tok, notionPageId: pid, corsProxy: prox });
-	if (!tok) { alert("Token ist erforderlich."); return; }
+	if (!tok) { U.toast("Token ist erforderlich.", "error"); return; }
 	S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
 	renderNotionJob();
 	const onStatus = (st, fraction) => {
@@ -244,7 +260,7 @@ export async function handleDriveLogin(t) {
 		S.driveUserEmail = (info && info.email) ? info.email : "Google-Konto";
 		openSettings("sync");
 	} catch (err) {
-		alert("Anmeldung fehlgeschlagen: " + err.message);
+		U.toast("Anmeldung fehlgeschlagen: " + err.message, "error");
 		t.disabled = false;
 		t.textContent = old;
 	}
@@ -261,10 +277,14 @@ export async function handleDriveSyncSettings(t) {
 	const old = t.textContent;
 	try {
 		const imported = await DRIVE.sync((st) => { t.textContent = st; });
-		if (imported > 0) { alert("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu."); location.reload(); }
-		else alert("Sync abgeschlossen — keine neuen Änderungen.");
+		if (imported > 0) {
+			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
+			setTimeout(() => location.reload(), 900);
+		} else {
+			U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
+		}
 	} catch (err) {
-		alert("Sync fehlgeschlagen: " + err.message);
+		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}
 	t.disabled = false;
 	t.textContent = old;
@@ -297,6 +317,7 @@ export async function handleSaveSettings() {
 	}
 	if (g("inpEmbed")) patch.embedModel = g("inpEmbed").value.trim();
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
+	if (g("inpDriveDesktop")) patch.driveDesktopClientId = g("inpDriveDesktop").value.trim(); // FIX: Desktop-Client-ID-Fallback
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 	await STATE.dispatch("settingsSet", patch);
 	closeOverlay();
@@ -316,10 +337,10 @@ export async function handleResetAll(t) {
 		t.textContent = "Lösche Seiten...";
 		try {
 			await DB.clearPages();
-			alert("Alle Seiten wurden erfolgreich gelöscht. Aura lädt sich nun neu.");
-			location.reload();
+			U.toast("Alle Seiten wurden gelöscht — die App lädt neu.", "success");
+			setTimeout(() => location.reload(), 900);
 		} catch (err) {
-			alert("Fehler beim Löschen der Seiten: " + err.message);
+			U.toast("Fehler beim Löschen der Seiten: " + err.message, "error");
 			t.disabled = false;
 			t.textContent = "Alle Seiten löschen";
 		}
@@ -327,24 +348,32 @@ export async function handleResetAll(t) {
 }
 
 export async function handleDriveSync(t) {
-	if (!S.settings.driveClientId) {
-		alert("Für den Drive-Sync brauchst du einmalig eine Google OAuth Client-ID:\n" +
-			"Google Cloud Console → Drive-API aktivieren → OAuth-Client (Webanwendung) → " +
-			"Client-ID in Einstellungen → Sync eintragen. Danach reicht ein Klick.");
+	// FIX: je nach Plattform die RICHTIGE Client-ID prüfen (Desktop-App ≠ Web-Client) —
+	// vorher wurde in der Tauri-App fälschlich die Web-Client-ID verlangt.
+	const inTauri = !!window.__TAURI__;
+	const hasId = inTauri
+		? ((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || S.settings.driveDesktopClientId)
+		: S.settings.driveClientId;
+	if (!hasId) {
+		U.toast("Für den Drive-Sync fehlt noch die Google Client-ID — einmalig unter ⚙️ Einstellungen → Sync einrichten.", "error");
+		openSettings("sync");
 		return;
 	}
 	t.disabled = true;
+	const old = t.innerHTML; // Button enthält jetzt ein SVG-Icon — textContent würde es zerstören
 	try {
 		const imported = await DRIVE.sync((st) => { t.textContent = "☁️ " + st; });
 		if (imported > 0) {
-			alert("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.");
-			location.reload();
+			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
+			setTimeout(() => location.reload(), 900);
+		} else {
+			U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
 		}
 	} catch (err) {
-		alert("Sync fehlgeschlagen: " + err.message);
+		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}
 	t.disabled = false;
-	t.textContent = "☁️ Sync";
+	t.innerHTML = old;
 }
 
 export async function handleBackupNow() {
@@ -374,10 +403,10 @@ export async function handleImportChange(e) {
 		e.target.value = "";
 		try {
 			const added = await DB.importAll(await U.readAsText(file));
-			alert(added + " Änderungen importiert. Die App lädt neu.");
-			location.reload();
+			U.toast(added + " Änderungen importiert — die App lädt neu.", "success");
+			setTimeout(() => location.reload(), 900);
 		} catch (err) {
-			alert("Import fehlgeschlagen: " + err.message);
+			U.toast("Import fehlgeschlagen: " + err.message, "error");
 		}
 	}
 }

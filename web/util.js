@@ -14,6 +14,27 @@ export const U = {
 
 	el: (id) => document.getElementById(id),
 
+	// In-App-Toast statt alert(): kleine Meldung unten mittig, verschwindet von selbst.
+	// type: "info" (Standard), "success", "error" — Fehler bleiben etwas länger stehen.
+	// Styles: styles.css (#toasts/.toast). Blockiert nichts — anders als alert().
+	toast(msg, type) {
+		let wrap = document.getElementById("toasts");
+		if (!wrap) {
+			wrap = document.createElement("div");
+			wrap.id = "toasts";
+			document.body.appendChild(wrap);
+		}
+		const t = document.createElement("div");
+		t.className = "toast" + (type ? " " + type : "");
+		t.textContent = String(msg ?? "");
+		wrap.appendChild(t);
+		setTimeout(() => {
+			t.classList.add("hide");
+			setTimeout(() => t.remove(), 350);
+		}, type === "error" ? 7000 : 4000);
+		return t;
+	},
+
 	fmtDate: (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }),
 
 	// Farb-Syntax: {red}Text{/} → farbiger Text, {bg-yellow}Text{/} → Hintergrundfarbe.

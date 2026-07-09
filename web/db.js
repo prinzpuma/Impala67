@@ -162,7 +162,7 @@ export const DB = (() => {
 	}
 
 	async function clearPages() {
-		const t = db.transaction(["events", "vecs"], "readwrite");
+		const t = db.transaction(["events", "vecs", "blobs"], "readwrite");
 		const evStore = t.objectStore("events");
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore"]);
 		// Löschungen synchron im onsuccess-Callback anstoßen: nach einem await kann
@@ -174,6 +174,16 @@ export const DB = (() => {
 			}
 		};
 		t.objectStore("vecs").clear();
+		// FIX (Audit): PDF-Blobs gehören zu den gelöschten Seiten und blieben bisher als
+		// Speicherleck in IndexedDB zurück. Alles außer dem Hintergrundbild entsorgen —
+		// Einstellungen (und damit das Hintergrundbild) sollen den Reset überleben.
+		const blobStore = t.objectStore("blobs");
+		const keysReq = blobStore.getAllKeys();
+		keysReq.onsuccess = () => {
+			for (const k of keysReq.result) {
+				if (k !== "bgImage") blobStore.delete(k);
+			}
+		};
 		return done(t);
 	}
 

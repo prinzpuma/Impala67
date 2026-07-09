@@ -1,13 +1,8 @@
 "use strict";
-
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
-import { DB } from "./db.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
-
-const render = (...args) => RENDER.render(...args);
-
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -16,6 +11,7 @@ const render = (...args) => RENDER.render(...args);
 // • Mobile: KI-Panel als Vollbild-Overlay statt komplett ausgeblendet
 // Alle neuen Knöpfe laufen über eine EIGENE Event-Delegation (data-*-Attribute),
 // damit bestehende Handler in app.js unangetastet bleiben.
+const render = (...args) => RENDER.render(...args);
 export const EXTRAS = (() => {
 	// Cloze-Marker zusammengesetzt statt wörtlich, damit die doppelt geschweiften
 	// Klammern nirgends mit Template-/Platzhalter-Systemen kollidieren.
@@ -142,7 +138,7 @@ export const EXTRAS = (() => {
 			const src = plain.replace(/==([^=\n]+)==/g, (a, t) => CO + "c" + (++i) + "::" + t + CC);
 			if (!hasClozeCard(src)) n += await createClozeCards(src, S.ankiDeck || undefined, pageId);
 		}
-		alert(n ? n + " Karteikarte(n) erstellt." : "Keine neuen Markierungen — für alle gibt es schon Karten.");
+		U.toast(n ? n + " Karteikarte(n) erstellt." : "Keine neuen Markierungen — für alle gibt es schon Karten.", n ? "success" : "info");
 		return n;
 	}
 
@@ -186,7 +182,7 @@ export const EXTRAS = (() => {
 			await STATE.dispatch("cardCreate", { id: U.uid(), front: r[0], back: r[1] || "", deck: (r[2] || S.ankiDeck || undefined) });
 			n++;
 		}
-		alert(n + " Karten importiert.");
+		U.toast(n + " Karten importiert.", "success");
 	}
 
 	// ---- sql.js bei Bedarf nachladen (nur für .apkg nötig, ~1 MB WASM) ----
@@ -302,7 +298,7 @@ export const EXTRAS = (() => {
 		const files = await unzip(await U.readAsBuffer(file));
 		const colFile = files["collection.anki21"] || files["collection.anki2"];
 		if (!colFile) {
-			alert("Keine collection.anki2 im Archiv — das neue .apkg-Format (anki21b, zstd-komprimiert) wird nicht unterstützt. In Anki beim Export „Support older Anki versions“ anhaken.");
+			U.toast("Keine collection.anki2 im Archiv — das neue .apkg-Format (anki21b, zstd-komprimiert) wird nicht unterstützt. In Anki beim Export „Support older Anki versions“ anhaken.", "error");
 			return;
 		}
 		const db = new SQL.Database(colFile);
@@ -326,7 +322,7 @@ export const EXTRAS = (() => {
 			n++;
 		}
 		db.close();
-		alert(n + " Karten importiert (Bilder/Audio werden nicht übernommen).");
+		U.toast(n + " Karten importiert (Bilder/Audio werden nicht übernommen).", "success");
 	}
 
 	// ---- Stapel-Optionen-Dialog: Tageslimits + Leech-Verhalten (settingsSet-Event) ----
@@ -367,7 +363,7 @@ export const EXTRAS = (() => {
 				'<div class="row-btns"><button id="btnExpCsv">CSV (front;back;deck)</button><button id="btnExpApkg">Anki-Paket (.apkg)</button></div>' +
 				'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div></div>';
 			U.el("btnExpCsv").addEventListener("click", exportCsv);
-			U.el("btnExpApkg").addEventListener("click", () => exportApkg().catch((e) => alert("Export fehlgeschlagen: " + (e.message || e))));
+			U.el("btnExpApkg").addEventListener("click", () => exportApkg().catch((e) => U.toast("Export fehlgeschlagen: " + (e.message || e), "error")));
 		} else {
 			o.innerHTML = '<div class="modal"><h3>⬇ Karten importieren</h3>' +
 				'<p class="hint">CSV (front;back;deck — Trennzeichen ; , oder Tab) oder Anki-Paket (.apkg, Text der Felder ohne Medien).</p>' +
@@ -385,7 +381,7 @@ export const EXTRAS = (() => {
 						if (/\.apkg$/i.test(f.name)) await importApkgFile(f);
 						else await importCsvFile(f);
 						if (typeof render === "function") render();
-					} catch (e) { alert("Import fehlgeschlagen: " + (e.message || e)); }
+					} catch (e) { U.toast("Import fehlgeschlagen: " + (e.message || e), "error"); }
 				});
 				inp.click();
 			});
@@ -397,7 +393,7 @@ export const EXTRAS = (() => {
 		const pg = S.pages[pageId];
 		if (!pg) return;
 		const w = window.open("", "_blank");
-		if (!w) { alert("Popup blockiert — bitte für diese Seite erlauben."); return; }
+		if (!w) { U.toast("Popup blockiert — bitte für diese Seite erlauben.", "error"); return; }
 		w.document.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + U.esc(pg.title) + "</title>" +
 			'<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">' +
 			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}</style>" +
@@ -420,7 +416,7 @@ export const EXTRAS = (() => {
 		const front = U.el("cardFront") ? U.el("cardFront").value : "";
 		const deck = U.el("cardDeck") ? (U.el("cardDeck").value.trim() || "Standard") : "Standard";
 		const n = await createClozeCards(front, deck, S.currentPageId);
-		if (!n) { alert("Keine Cloze-Lücken gefunden — erst Text markieren und „Lücke einfügen“ klicken."); return; }
+		if (!n) { U.toast("Keine Cloze-Lücken gefunden — erst Text markieren und „Lücke einfügen“ klicken.", "error"); return; }
 		U.el("overlay").hidden = true;
 		if (typeof render === "function") render();
 	}
@@ -432,6 +428,37 @@ export const EXTRAS = (() => {
 		const safe = String(pg.title || "Seite").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Seite";
 		U.downloadText(safe + ".md", "# " + pg.title + "\n\n" + (pg.content || ""));
 	}
+
+	// ---- NotebookLM als „eigener Tab“ (aus index.html hierher verschoben — Modul statt Inline-Script) ----
+	// Google blockiert das Einbetten per iframe (X-Frame-Options/CSP), daher eigenes Fenster:
+	// in der Tauri-App ein natives App-Fenster, sonst System-Browser bzw. randarmes Popup.
+	// Hinweis Tauri v2: das native Fenster braucht die Capability "core:webview:allow-create-webview-window"
+	// (src-tauri/capabilities/default.json) — fehlt sie, greift automatisch der Fallback.
+	async function openNotebookLM() {
+		const url = "https://notebooklm.google.com/";
+		const T = window.__TAURI__;
+		const openExtern = () => {
+			if (T && T.shell && T.shell.open) T.shell.open(url);
+			else window.open(url, "impala67-notebooklm", "popup=yes,width=1280,height=860");
+		};
+		if (T && T.webviewWindow && T.webviewWindow.WebviewWindow) {
+			try {
+				// Zweiter Klick: existiert das Fenster schon, nur in den Vordergrund holen.
+				const existing = await T.webviewWindow.WebviewWindow.getByLabel("notebooklm");
+				if (existing) { existing.setFocus().catch(() => {}); return; }
+				const win = new T.webviewWindow.WebviewWindow("notebooklm", { url, title: "NotebookLM", width: 1280, height: 860 });
+				// Fehler meldet Tauri ASYNCHRON über tauri://error (nicht als Exception) → Fallback.
+				win.once("tauri://error", (e) => {
+					console.warn("NotebookLM-Fenster fehlgeschlagen, öffne im System-Browser:", e);
+					openExtern();
+				});
+				return;
+			} catch (e) { console.warn("NotebookLM-Fenster fehlgeschlagen, öffne extern:", e); }
+		}
+		openExtern();
+	}
+	const btnNlm = document.getElementById("btnNotebookLM");
+	if (btnNlm) btnNlm.addEventListener("click", openNotebookLM);
 
 	// ---- Eigene Event-Delegation für alle neuen Knöpfe (app.js bleibt unberührt) ----
 	document.addEventListener("click", async (e) => {
@@ -449,7 +476,7 @@ export const EXTRAS = (() => {
 		if ((el = q("[data-copylink]"))) {
 			const link = "#" + el.dataset.copylink;
 			(navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(
-				() => alert("Interner Link kopiert: " + link + " — auf anderen Seiten als [Text](" + link + ") einfügen."),
+				() => U.toast("Interner Link kopiert: " + link + " — auf anderen Seiten als [Text](" + link + ") einfügen.", "success"),
 				() => prompt("Interner Link (mit Strg+C kopieren):", link));
 			return;
 		}
@@ -464,7 +491,7 @@ export const EXTRAS = (() => {
 			const p = PRESETS[el.dataset.provpreset];
 			if (!p) return;
 			const list = (S.settings.aiProviders || []).slice();
-			if (list.some((x) => x.id === p.id)) { alert("Diese Quelle ist bereits eingerichtet: " + p.name); return; }
+			if (list.some((x) => x.id === p.id)) { U.toast("Diese Quelle ist bereits eingerichtet: " + p.name); return; }
 			list.push({ ...p, key: "" });
 			// LM Studio direkt als aktive Quelle setzen, damit das Modell-Dropdown sie sofort zeigt
 			await STATE.dispatch("settingsSet", { aiProviders: list, ...(p.id === "local" ? { aiProviderId: "local" } : {}) });
@@ -481,5 +508,5 @@ export const EXTRAS = (() => {
 		if (q("[data-clozesave]")) { await clozeSaveFromEditor(); return; }
 	});
 
-	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd };
+	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd, openNotebookLM };
 })();
