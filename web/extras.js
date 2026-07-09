@@ -3,6 +3,7 @@ import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
+import { NLM } from "./notebooklm.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -458,7 +459,10 @@ export const EXTRAS = (() => {
 		openExtern();
 	}
 	const btnNlm = document.getElementById("btnNotebookLM");
-	if (btnNlm) btnNlm.addEventListener("click", openNotebookLM);
+	// 📓-Dialog (notebooklm.js): Seiten als Quelle in die Zwischenablage, NotebookLM öffnen
+	// (Desktop: eingebettet im Hauptfenster + Download-Abgriff, sonst Fenster-Fallback oben)
+	// und übernommene Downloads abspielen/exportieren.
+	if (btnNlm) btnNlm.addEventListener("click", () => NLM.openDialog(openNotebookLM));
 
 	// ---- Eigene Event-Delegation für alle neuen Knöpfe (app.js bleibt unberührt) ----
 	document.addEventListener("click", async (e) => {
