@@ -10,6 +10,7 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
+import { NLM } from "./notebooklm.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -258,16 +259,19 @@ function renderTabs() {
 	html += S.tabs.map((id) => {
 		let title = "";
 		const isChat = id.startsWith("chat:");
+		const isNlm = id === "nlm:main";
 		if (isChat) {
 			const chatId = id.slice(5);
 			const s = CHATS.load().find((x) => x.id === chatId);
 			title = "💬 " + (s ? s.title : "Chat");
+		} else if (isNlm) {
+			title = "📓 NotebookLM";
 		} else {
 			const pg = S.pages[id];
 			if (!pg) return "";
 			title = (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "📝 ") + U.esc(pg.title);
 		}
-		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (!isChat && S.view === "page")) ? " active" : "";
+		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (!isChat && !isNlm && S.view === "page")) ? " active" : "";
 		return '<div class="tabchip' + active + '" data-tabopen="' + id + '">' +
 			'<span class="tabchip-title">' + title + '</span>' +
 			'<button class="tabchip-x" data-tabclose="' + id + '" title="Schließen">✕</button></div>';
@@ -284,11 +288,15 @@ function renderMain() {
 
 	const main = U.el("main");
 	if (!main) return;
+	// Eingebettetes NotebookLM-Webview (Desktop) liegt als OS-Overlay über der UI —
+	// verlässt der Nutzer den Tab, muss es aktiv ausgeblendet werden (kein DOM-Element).
+	if (S.view !== "notebooklm") NLM.hideEmbeddedIfActive();
 	if (S.view === "library") { LIBRARY.renderLibrary(main); return; }
 	if (S.view === "anki") { renderAnki(main); return; }
 	if (S.view === "daily") { renderDaily(main); return; }
 	if (S.view === "trash") { renderTrash(main); return; }
 	if (S.view === "chat") { renderFullChat(main); return; }
+	if (S.view === "notebooklm") { NLM.renderPane(main); return; }
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 	if (S.view === "home" || !pg) { renderHome(main); return; }
 

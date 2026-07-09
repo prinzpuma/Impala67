@@ -16,12 +16,15 @@ export function openPage(pageId, opts) {
 		S.highlightedDiff = null;
 	}
 	const isChat = String(pageId).startsWith("chat:");
+	const isNlm = pageId === "nlm:main";
 	if (isChat) {
 		const chatId = pageId.slice(5);
 		S.currentChatId = chatId;
 		const s = CHATS.load().find((x) => x.id === chatId);
 		S.chat = s ? s.messages || [] : [];
 		S.view = "chat";
+	} else if (isNlm) {
+		S.view = "notebooklm";
 	} else {
 		const pg = S.pages[pageId];
 		if (!pg) return;

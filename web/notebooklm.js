@@ -1,6 +1,7 @@
 "use strict";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
+import { TABS } from "./tabs.js";
 // notebooklm.js — NotebookLM-Anbindung v2, OHNE fremde APIs (Wrapper-Ansatz verworfen):
 // • Überall (Web, Desktop, Mobil): Seiten-Picker → Inhalte als EINE Quelle in die
 //   Zwischenablage (in NotebookLM: „Quelle hinzufügen → Kopierter Text" → Strg+V)
@@ -33,6 +34,9 @@ export const NLM = (() => {
 		".nlm-tag{display:inline-block;font-size:10px;opacity:.9;background:rgba(76,141,255,.18);color:#4c8dff;padding:1px 7px;border-radius:20px;margin-left:7px;vertical-align:middle}",
 		".nlm-empty{padding:14px;text-align:center;opacity:.6;font-size:13px}",
 		".nlm-count{opacity:.65;font-size:12.5px;margin-left:auto}",
+		".nlm-pane{display:flex;flex-direction:column;height:100%}",
+		".nlm-pane-hint{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(128,128,128,.3);flex:none}",
+		".nlm-host{flex:1;position:relative}",
 	].join("\n");
 	document.head.appendChild(pickStyle);
 
@@ -88,36 +92,48 @@ export const NLM = (() => {
 	//      App-UI — eigene schmale Leiste oben zum Zurückwechseln. Größen in CSS-Pixeln
 	//      (Tauri LogicalPosition/LogicalSize rechnen selbst mit dem Display-Scaling). ----
 	let embedded = false;
-	let bar = null;
-	const BAR_H = 40;
-	const geometry = () => ({ x: 0, y: BAR_H, w: window.innerWidth, h: window.innerHeight - BAR_H });
-	async function showEmbedded() {
-		const g = geometry();
-		await invoke("nlm_webview", { show: true, x: g.x, y: g.y, w: g.w, h: g.h });
-		embedded = true;
-		if (!bar) {
-			bar = document.createElement("div");
-			bar.style.cssText = "position:fixed;inset:0 0 auto 0;height:40px;z-index:1500;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid rgba(128,128,128,.3)";
-			bar.innerHTML = '<strong>📓 NotebookLM</strong><span class="hint" style="flex:1">Quelle einfügen: „Quelle hinzufügen → Kopierter Text" · Downloads landen automatisch in Impala</span><button id="nlmClose">✕ Zurück zu Impala</button>';
-			document.body.appendChild(bar);
-			bar.querySelector("#nlmClose").addEventListener("click", hideEmbedded);
-			window.addEventListener("resize", () => {
-				if (!embedded) return;
-				const g2 = geometry();
-				invoke("nlm_webview", { show: true, x: g2.x, y: g2.y, w: g2.w, h: g2.h }).catch(() => {});
-			});
-		}
-		bar.hidden = false;
+	let pendingFallback = null;
+	let resizeObserverNlm = null;
+	function hostRect() {
+		const host = document.getElementById("nlmHost");
+		return host ? host.getBoundingClientRect() : null;
 	}
-	function hideEmbedded() {
+	async function positionEmbedded(closeTabOnFail) {
+		if (S.view !== "notebooklm") return;
+		const r = hostRect();
+		if (!r) return;
+		try {
+			await invoke("nlm_webview", { show: true, x: r.left, y: r.top, w: r.width, h: r.height });
+			embedded = true;
+		} catch (e) {
+			embedded = false;
+			if (closeTabOnFail) {
+				TABS.closeTab("nlm:main");
+				(pendingFallback || openFallbackDefault)();
+			}
+		}
+	}
+	function hideEmbeddedIfActive() {
+		if (!embedded) return;
 		embedded = false;
-		if (bar) bar.hidden = true;
 		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
 	}
-	async function open(openFallback) {
-		try { await showEmbedded(); }
-		catch (e) { (openFallback || openFallbackDefault)(); } // kein Tauri / Rust-Kommando fehlt → Fenster wie bisher
+	window.addEventListener("resize", () => positionEmbedded(false));
+	function renderPane(main) {
+		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">Downloads landen automatisch in Impala</span></div><div id="nlmHost" class="nlm-host"></div></div>';
+		const host = document.getElementById("nlmHost");
+		if (resizeObserverNlm) resizeObserverNlm.disconnect();
+		if (host && "ResizeObserver" in window) {
+			resizeObserverNlm = new ResizeObserver(() => positionEmbedded(false));
+			resizeObserverNlm.observe(host);
+		}
+		positionEmbedded(true);
 	}
+	function open(openFallback) {
+		pendingFallback = openFallback || null;
+		TABS.openPage("nlm:main");
+	}
+
 
 	// ---- Downloads aus dem NotebookLM-Webview übernehmen (Rust meldet "nlm-download") ----
 	(function initDownloadListener() {
@@ -310,5 +326,5 @@ export const NLM = (() => {
 		return { ok: true, copied: pages.length, hint: 'Inhalte liegen in der Zwischenablage — in NotebookLM „Quelle hinzufügen → Kopierter Text" wählen und einfügen, dann z.B. Audio-Übersicht (Lernpodcast) erstellen.' };
 	}
 
-	return { openDialog, sendPages };
+	return { openDialog, sendPages, renderPane, hideEmbeddedIfActive };
 })();
