@@ -302,24 +302,92 @@ function ankiStudyHtml() {
 	return html;
 }
 
-// Karten-Editor (neu anlegen oder bearbeiten) — Stapel frei wählbar (neue Stapel einfach eintippen).
+// Stapel-Liste für den Editor: Baum + Karten + aktuell gewählter Anki-Stapel.
+// „Standard“ nur als letzter Fallback, wenn wirklich nichts existiert.
+function editorDecks() {
+	const set = new Set();
+	const add = (n) => {
+		const d = String(n || "").trim();
+		if (d && d !== "Standard") set.add(d);
+	};
+	Object.keys(S.decks || {}).forEach(add);
+	Object.values(S.cards).forEach((c) => add(c && c.deck));
+	add(S.ankiDeck);
+	// Elternstapel aus Hierarchie mit aufnehmen
+	[...set].forEach((n) => {
+		const parts = n.split("::");
+		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
+	});
+	const list = [...set].sort((a, b) => a.localeCompare(b, "de"));
+	return list.length ? list : ["Standard"];
+}
+
+// Liest den gewählten Stapel aus Select bzw. „Neuer Stapel“-Feld.
+function readCardEditorDeck() {
+	const sel = U.el("cardDeck");
+	const neu = U.el("cardDeckNew");
+	let deck = sel ? String(sel.value || "").trim() : "";
+	if (deck === "__new__") {
+		const n = neu ? neu.value.trim().replace(/::/g, ":") : "";
+		deck = n || S.ankiDeck || "Standard";
+	}
+	if (!deck) deck = S.ankiDeck || "Standard";
+	return deck;
+}
+
+// Karten-Editor: echtes <select> mit aktuellen Stapeln (kein unzuverlässiges datalist),
+// optionales Feld für neuen Stapel, Cloze unter „Mehr“ versteckt.
 function openCardEditor(cardId) {
 	const c = cardId ? S.cards[cardId] : null;
+	const decks = editorDecks();
+	// Vorauswahl: bestehende Karte → ihr Stapel; sonst aktiver Anki-Stapel; sonst erster Eintrag
+	let current = (c && c.deck) || S.ankiDeck || decks[0] || "Standard";
+	if (current === "Standard" && decks[0] && decks[0] !== "Standard") current = decks[0];
+	if (current !== "Standard" && !decks.includes(current)) decks.unshift(current);
+
+	const opts = decks.map((d) =>
+		'<option value="' + U.esc(d) + '"' + (d === current ? " selected" : "") + ">" + U.esc(d) + "</option>"
+	).join("");
+
 	const o = U.el("overlay");
 	o.hidden = false;
 	o.innerHTML = modal(
+		'<div class="card-editor">' +
 		"<h3>" + (c ? "Karte bearbeiten" : "Neue Karte") + "</h3>" +
-		'<div><label for="cardDeck">Stapel (neuen Namen eintippen = neuer Stapel)</label>' +
-		'<input id="cardDeck" list="deckList" value="' + U.esc(c ? (c.deck || "Standard") : (S.ankiDeck || "Standard")) + '">' +
-		'<datalist id="deckList">' + ankiDecks().map((d) => '<option value="' + U.esc(d) + '">').join("") + "</datalist></div>" +
-		'<div><label for="cardFront">Vorderseite (Markdown + LaTeX)</label><textarea id="cardFront" rows="3">' + U.esc(c ? c.front : "") + "</textarea></div>" +
-		'<div><label for="cardBack">Rückseite</label><textarea id="cardBack" rows="3">' + U.esc(c ? c.back : "") + "</textarea></div>" +
-		'<p class="hint">Cloze: Text in der Vorderseite markieren, „Lücke einfügen“ klicken — „Als Cloze speichern“ erzeugt pro Lücke eine eigene Karte.</p>' +
-		'<div class="modal-actions"><button data-cardeditorsave="' + (c ? c.id : "new") + '">Speichern</button>' +
-		'<button data-clozewrap="1" title="Auswahl in der Vorderseite in eine Cloze-Lücke verwandeln">［…］ Lücke einfügen</button>' +
-		'<button data-clozesave="1" title="Pro Lücke eine Karte erzeugen">Als Cloze speichern</button>' +
-		'<button id="btnCloseOverlay">Abbrechen</button></div>'
+		'<label for="cardDeck">Stapel</label>' +
+		'<div class="card-deck-row">' +
+			'<select id="cardDeck">' + opts +
+				'<option value="__new__">＋ Neuer Stapel…</option>' +
+			"</select>" +
+			'<input id="cardDeckNew" class="card-deck-new" placeholder="Name des neuen Stapels" autocomplete="off" hidden>' +
+		"</div>" +
+		'<label for="cardFront">Vorderseite</label>' +
+		'<textarea id="cardFront" rows="4" placeholder="Frage…">' + U.esc(c ? c.front : "") + "</textarea>" +
+		'<label for="cardBack">Rückseite</label>' +
+		'<textarea id="cardBack" rows="4" placeholder="Antwort…">' + U.esc(c ? c.back : "") + "</textarea>" +
+		'<details class="card-advanced"><summary>Cloze / Lückentext</summary>' +
+			'<p class="hint">Text markieren → „Lücke einfügen“. „Als Cloze speichern“ erzeugt pro Lücke eine Karte.</p>' +
+			'<div class="row-btns">' +
+				'<button type="button" data-clozewrap="1">［…］ Lücke einfügen</button>' +
+				'<button type="button" data-clozesave="1">Als Cloze speichern</button>' +
+			"</div></details>" +
+		'<div class="modal-actions">' +
+			'<button type="button" class="primary" data-cardeditorsave="' + (c ? c.id : "new") + '">Speichern</button>' +
+			'<button type="button" id="btnCloseOverlay">Abbrechen</button>' +
+		"</div></div>"
 	);
+
+	const sel = U.el("cardDeck");
+	const neu = U.el("cardDeckNew");
+	if (sel && neu) {
+		sel.addEventListener("change", () => {
+			const isNew = sel.value === "__new__";
+			neu.hidden = !isNew;
+			if (isNew) { neu.focus(); neu.select(); }
+		});
+	}
+	const front = U.el("cardFront");
+	if (front) front.focus();
 }
 
 export const RENDER_ANKI = {
@@ -329,5 +397,6 @@ export const RENDER_ANKI = {
 	deckTreeHtml,
 	deckMenuHtml,
 	renderAnki,
-	openCardEditor
+	openCardEditor,
+	readCardEditorDeck
 };

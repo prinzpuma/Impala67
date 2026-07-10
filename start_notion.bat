@@ -1,9 +1,10 @@
 @echo off
 echo Starte Impala67 Web-Server...
 
-:: Wechsle in das Verzeichnis deiner Web-Dateien (seit der Tauri-Restrukturierung liegen sie in web\)
-:: Pfad ggf. anpassen, falls dein Projektordner (noch) anders heisst
-cd /d "C:\Users\joshu\Documents\Impala67\web"
+:: Wechsle in das Verzeichnis der Web-Dateien, relativ zu dieser Bat-Datei selbst
+:: (%~dp0 = Ordner, in dem start_impala67.bat liegt -> funktioniert egal wie der
+:: Projektordner heisst oder wo er auf der Platte liegt, kein manuelles Anpassen mehr noetig)
+cd /d "%~dp0web"
 
 :: Öffnet direkt localhost im Standardbrowser
 start http://localhost:8000

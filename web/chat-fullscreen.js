@@ -212,18 +212,23 @@ export async function handleModelMenuToggle(t) {
 	}
 }
 
-export function handleDeleteChat(t) {
-	if (confirm("Diesen Chat wirklich löschen?")) {
-		const list = CHATS.load().filter((x) => x.id !== t.dataset.chatdel);
-		CHATS.save(list);
-		const tabId = "chat:" + t.dataset.chatdel;
-		if (S.tabs.includes(tabId)) { S.tabs = S.tabs.filter((id) => id !== tabId); }
-		if (S.currentChatId === t.dataset.chatdel) {
-			S.chat = []; S.currentChatId = null;
-			if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
-		}
-		render();
+export async function handleDeleteChat(t) {
+	const id = t.dataset.chatdel;
+	const s = CHATS.load().find((x) => x.id === id);
+	const title = (s && s.title) || "Chat";
+	const ok = await U.confirm('„' + title + '“ wirklich löschen? Das kann nicht rückgängig gemacht werden.', {
+		title: "Chat löschen", ok: "Löschen", danger: true,
+	});
+	if (!ok) return;
+	const list = CHATS.load().filter((x) => x.id !== id);
+	CHATS.save(list);
+	const tabId = "chat:" + id;
+	if (S.tabs.includes(tabId)) { S.tabs = S.tabs.filter((tid) => tid !== tabId); }
+	if (S.currentChatId === id) {
+		S.chat = []; S.currentChatId = null;
+		if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
 	}
+	render();
 }
 
 export function handleEditUserMessage(t) {
@@ -246,7 +251,25 @@ export function handleEditUserMessage(t) {
 }
 
 export function handleAnswerQuestion(t) {
-	AI.resolveChoice(t.dataset.answerq, t.dataset.answer);
+	const mid = t.dataset.answerq;
+	if (!mid) return;
+	const idx = Number(t.dataset.answeridx);
+	const isSide = S.sideChat.some((x) => x.mid === mid);
+	const list = isSide ? S.sideChat : S.chat;
+	const msg = list.find((x) => x.mid === mid);
+	if (!msg || msg.answered) return;
+	const options = Array.isArray(msg.options) ? msg.options : [];
+	if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) return;
+	const answer = options[idx];
+	// Sofort UI fixieren — verhindert Doppelklicks und leere Wartezustände.
+	msg.answered = true;
+	msg.answer = answer;
+	if (isSide) renderChat();
+	else renderMainChatLog();
+	if (!AI.resolveChoice(mid, answer)) {
+		// Kein wartender Agent (z.B. nach Reload): Karte bleibt beantwortet, kein Hang.
+		U.toast("Antwort notiert — der vorherige KI-Lauf ist nicht mehr aktiv.", "error");
+	}
 }
 
 export function handleRefineToggle(t) {

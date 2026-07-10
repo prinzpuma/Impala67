@@ -104,6 +104,10 @@ export function field(label, id, value, type) {
 		'<input id="' + id + '" type="' + (type || "text") + '" value="' + U.esc(value || "") + '"></div>';
 }
 
+// Gemeinsames "Speichern"-Aktionsleiste-Markup — stand vorher dreimal wortgleich
+// im Code (KI-Bereich sowie zwei Sync-Bereich-Zweige).
+const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+
 // Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
 export const SETTINGS_SECTIONS = [
 	{ id: "ki", label: "KI" },
@@ -125,7 +129,8 @@ export function openSettings(section) {
 	let body = "";
 	if (sec === "ki") {
 		const providers = S.settings.aiProviders || [];
-		body = "<h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>" +
+		body = '<div id="aiStatusSettings" class="ai-status-banner"></div>' +
+			"<h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>" +
 			'<div class="provider-list">' + providers.map((pr) =>
 				'<div class="provider-card" data-provrow="' + pr.id + '">' +
 					'<div class="provider-card-head">' +
@@ -151,7 +156,7 @@ export function openSettings(section) {
 			"OpenAI: https://api.openai.com/v1 · Embeddings text-embedding-3-small.<br>" +
 			"Lokal: z.B. http://localhost:1234/v1 (LM Studio, Port 1234, CORS aktivieren, kein Key nötig).<br>" +
 			"Welches Modell aktiv ist, wählst du oben im Modell-Dropdown — dort erscheinen alle Quellen gruppiert mit ihren live abgefragten Modellen. Die KI kennt nur, was du hier selbst einträgst.</p>" +
-			'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+			saveActionsHtml;
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
 		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
@@ -225,7 +230,7 @@ export function openSettings(section) {
 			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", S.settings.driveDesktopClientId || desktopId) +
 				field("Google Desktop-Client-Secret (GOCSPX-…)", "inpDriveDesktopSecret", S.settings.driveDesktopClientSecret || "", "password") +
 				'<p class="hint">Beides steht in der Google Cloud Console direkt beim OAuth-Client vom Typ „Desktop-App“. Google verlangt das Secret beim Token-Tausch auch mit PKCE — bei Desktop-Apps gilt es laut Google ausdrücklich nicht als geheim. Einmal speichern, danach reicht ein Klick auf „Mit Google anmelden“. Alternativ: <code>web/config.local.js</code> befüllen und die App neu bauen.</p>' +
-				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+				saveActionsHtml;
 		} else if (!inTauri && !S.settings.driveClientId) {
 			// 3) Browser/PWA ohne Web-Client-ID.
 			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
@@ -234,7 +239,7 @@ export function openSettings(section) {
 				'2) OAuth-Client vom Typ „Webanwendung“ anlegen, <code>' + location.origin + '</code> als autorisierten Ursprung eintragen.<br>' +
 				"3) Client-ID hier einfügen und speichern.<br>" +
 				"Danach reicht wirklich nur noch ein Klick auf „Mit Google anmelden“.</p>" +
-				'<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+				saveActionsHtml;
 		} else {
 			// 4) Client-ID vorhanden — nur noch anmelden.
 			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
@@ -248,6 +253,8 @@ export function openSettings(section) {
 		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
+	// KI-Tab: Status-Banner mit aktuellem Ping-Ergebnis füllen
+	if (sec === "ki") renderStatusDot();
 }
 
 // Einstellungen-Aktionen aus wireEvents:
@@ -316,18 +323,28 @@ export function handleDriveLogout() {
 	openSettings("sync");
 }
 
+// Nach Drive-Sync: Konfliktdetails merken, Popup öffnen (oder nach Reload via boot.js).
+function finishDriveSync({ imported, conflicts, conflictDetails }) {
+	const details = conflictDetails || [];
+	if (details.length) RENDER.mergePendingConflicts(details);
+	const n = details.length || conflicts || 0;
+	if (imported > 0) {
+		U.toast(n ? "Sync fertig — " + imported + " Änderungen, " + n + " Konflikt(e). Lösungsdialog folgt…" : "Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", n ? "error" : "success");
+		setTimeout(() => location.reload(), 900);
+		return;
+	}
+	if (n > 0) {
+		RENDER.openConflictResolver(0);
+		return;
+	}
+	U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
+}
+
 export async function handleDriveSyncSettings(t) {
 	t.disabled = true;
 	const old = t.textContent;
 	try {
-		const { imported, conflicts } = await DRIVE.sync((st) => { t.textContent = st; });
-		if (conflicts > 0) U.toast("⚠ " + conflicts + " Bearbeitungs-Konflikt(e) erkannt — der unterlegene Stand liegt als „⚠ Konflikt“-Seite neben dem Original.", "error");
-		if (imported > 0) {
-			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
-			setTimeout(() => location.reload(), 900);
-		} else {
-			U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
-		}
+		finishDriveSync(await DRIVE.sync((st) => { t.textContent = st; }));
 	} catch (err) {
 		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}
@@ -378,18 +395,21 @@ export async function handleClearBg() {
 }
 
 export async function handleResetAll(t) {
-	if (confirm("⚠️ ACHTUNG: Möchtest du wirklich alle lokalen Seiten unwiderruflich löschen?\n\nDeine Einstellungen, API-Keys, Karteikarten und Stapel bleiben erhalten!")) {
-		t.disabled = true;
-		t.textContent = "Lösche Seiten...";
-		try {
-			await DB.clearPages();
-			U.toast("Alle Seiten wurden gelöscht — die App lädt neu.", "success");
-			setTimeout(() => location.reload(), 900);
-		} catch (err) {
-			U.toast("Fehler beim Löschen der Seiten: " + err.message, "error");
-			t.disabled = false;
-			t.textContent = "Alle Seiten löschen";
-		}
+	const ok = await U.confirm(
+		"Möchtest du wirklich alle lokalen Seiten unwiderruflich löschen?\n\nDeine Einstellungen, API-Keys, Karteikarten und Stapel bleiben erhalten.",
+		{ title: "Alle Seiten löschen", ok: "Alles löschen", danger: true }
+	);
+	if (!ok) return;
+	t.disabled = true;
+	t.textContent = "Lösche Seiten...";
+	try {
+		await DB.clearPages();
+		U.toast("Alle Seiten wurden gelöscht — die App lädt neu.", "success");
+		setTimeout(() => location.reload(), 900);
+	} catch (err) {
+		U.toast("Fehler beim Löschen der Seiten: " + err.message, "error");
+		t.disabled = false;
+		t.textContent = "Alle Seiten löschen";
 	}
 }
 
@@ -408,14 +428,7 @@ export async function handleDriveSync(t) {
 	t.disabled = true;
 	const old = t.innerHTML; // Button enthält jetzt ein SVG-Icon — textContent würde es zerstören
 	try {
-		const { imported, conflicts } = await DRIVE.sync((st) => { t.textContent = "☁️ " + st; });
-		if (conflicts > 0) U.toast("⚠ " + conflicts + " Bearbeitungs-Konflikt(e) erkannt — der unterlegene Stand liegt als „⚠ Konflikt“-Seite neben dem Original.", "error");
-		if (imported > 0) {
-			U.toast("Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", "success");
-			setTimeout(() => location.reload(), 900);
-		} else {
-			U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
-		}
+		finishDriveSync(await DRIVE.sync((st) => { t.textContent = "☁️ " + st; }));
 	} catch (err) {
 		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}

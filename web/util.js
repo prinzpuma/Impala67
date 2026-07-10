@@ -8,8 +8,8 @@ export const U = {
 		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
 
 	debounce(fn, ms) {
-		let t;
-		return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+		let timer;
+		return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 	},
 
 	el: (id) => document.getElementById(id),
@@ -35,18 +35,65 @@ export const U = {
 		return t;
 	},
 
+	// In-App-Bestätigung statt window.confirm() — gleiches #overlay wie alle Dialoge.
+	// opts: { title?, ok?, cancel?, danger? } — danger färbt den OK-Button rot (Löschen).
+	confirm(message, opts) {
+		opts = opts || {};
+		const o = document.getElementById("overlay");
+		if (!o) return Promise.resolve(window.confirm(String(message ?? "")));
+		return new Promise((resolve) => {
+			const title = opts.title || "Bestätigen";
+			const okLabel = opts.ok || "OK";
+			const cancelLabel = opts.cancel || "Abbrechen";
+			const danger = !!opts.danger;
+			o.innerHTML = '<div class="modal modal-sm">' +
+				"<h3>" + U.esc(title) + "</h3>" +
+				'<p class="hint" style="white-space:pre-wrap">' + U.esc(String(message ?? "")) + "</p>" +
+				'<div class="modal-actions">' +
+					'<button type="button" id="dlgConfirmCancel">' + U.esc(cancelLabel) + "</button>" +
+					'<button type="button" id="dlgConfirmOk"' + (danger ? ' class="danger"' : "") + '>' +
+						U.esc(okLabel) + "</button>" +
+				"</div></div>";
+			o.hidden = false;
+			let done = false;
+			const onKey = (e) => {
+				if (e.key === "Escape") { e.preventDefault(); finish(false); }
+				else if (e.key === "Enter") { e.preventDefault(); finish(true); }
+			};
+			const finish = (ok) => {
+				if (done) return;
+				done = true;
+				document.removeEventListener("keydown", onKey, true);
+				o.hidden = true;
+				o.innerHTML = "";
+				resolve(ok);
+			};
+			U.el("dlgConfirmOk").addEventListener("click", () => finish(true));
+			U.el("dlgConfirmCancel").addEventListener("click", () => finish(false));
+			document.addEventListener("keydown", onKey, true);
+			const okBtn = U.el("dlgConfirmOk");
+			if (okBtn) okBtn.focus();
+		});
+	},
+
 	fmtDate: (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }),
 
 	// Farb-Syntax: {red}Text{/} → farbiger Text, {bg-yellow}Text{/} → Hintergrundfarbe.
 	// Bleibt reiner Text im Markdown — Diffs, Sync, Verlauf und KI-Tools funktionieren unverändert.
 	// Übrig gebliebene {/} (z.B. bei Verschachtelung) werden am Ende entfernt.
+	// FIX (Audit): Inhalt innerhalb der Farb-Marker escapen, bevor er als HTML-Span landet
+	// (sonst XSS, falls marked/DOMPurify offline/fehlend sind). Klassennamen bleiben [a-z]+.
 	colorize: (s) => String(s ?? "")
-		.replace(/\{bg-([a-z]+)\}([\s\S]+?)\{\/\}/g, '<span class="hl-$1">$2</span>')
-		.replace(/\{([a-z]+)\}([\s\S]+?)\{\/\}/g, '<span class="c-$1">$2</span>')
+		.replace(/\{bg-([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="hl-' + c + '">' + U.esc(t) + '</span>')
+		.replace(/\{([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="c-' + c + '">' + U.esc(t) + '</span>')
 		.replace(/\{\/\}/g, ""),
 
-	// Markdown → HTML. marked kommt per CDN; offline gibt es einen sicheren Fallback.
-	// Unterstützt zusätzlich ==markiert== → <mark> und die Farb-Syntax (colorize).
+	// Gemeinsamer Helfer für md()/mdInline(): ==markiert== → escapetes <mark>…</mark>,
+	// danach Farb-Syntax. Vorher in beiden Funktionen fast identisch kopiert.
+	_markHighlights(text) {
+		return U.colorize(String(text ?? "").replace(/==([^=\n]+)==/g, (_, t) => "<mark>" + U.esc(t) + "</mark>"));
+	},
+
 	// HTML gegen XSS bereinigen: DOMPurify (per CDN), sonst konservativer Basis-Filter.
 	sanitize(html) {
 		if (window.DOMPurify) return DOMPurify.sanitize(html);
@@ -57,11 +104,13 @@ export const U = {
 			.replace(/(href|src)\s*=\s*(["']?)\s*javascript:[^"'\s>]*/gi, "$1=$2#");
 	},
 
+	// Markdown → HTML. marked kommt per CDN; offline gibt es einen sicheren Fallback.
+	// Unterstützt zusätzlich ==markiert== → <mark> und die Farb-Syntax (colorize).
 	_mdCache: new Map(),
 	md(text) {
 		const src = String(text ?? "");
 		if (U._mdCache.has(src)) return U._mdCache.get(src);
-		const raw = U.colorize(src.replace(/==([^=\n]+)==/g, "<mark>$1</mark>"));
+		const raw = U._markHighlights(src);
 		const html = window.marked
 			? U.sanitize(marked.parse(raw, { breaks: true }))
 			: "<pre>" + U.esc(raw) + "</pre>";
@@ -74,7 +123,7 @@ export const U = {
 	// Nur Inline-Markdown (einzelne Zeile, ohne <p>-Wrapper) — für Blockzeilen
 	// im Block-Editor (Überschriften, Listenpunkte, To-dos).
 	mdInline(text) {
-		const raw = U.colorize(String(text ?? "").replace(/==([^=\n]+)==/g, "<mark>$1</mark>"));
+		const raw = U._markHighlights(text);
 		if (window.marked && marked.parseInline) {
 			try { return U.sanitize(marked.parseInline(raw, { breaks: true })); } catch { /* Fallback unten */ }
 		}
@@ -139,7 +188,7 @@ export const U = {
 		});
 	},
 
-	// Letzte n nicht-leeren Zeilen eines Texts (für die Thinking-Mini-Ansicht)
+	// Letzte n nicht-leere Zeilen eines Texts (für die Thinking-Mini-Ansicht)
 	lastLines(text, n) {
 		const lines = String(text ?? "").split("\n").filter((l) => l.trim() !== "");
 		return lines.slice(-n).join("\n");
@@ -187,6 +236,7 @@ export const U = {
 
 	// Generischer Text-Download (z.B. für angehängte lange Texte aus dem Chat)
 	downloadText: (name, text) => U._dl(name, new Blob([text], { type: "text/plain" })),
+	downloadBlob: (name, blob) => U._dl(name, blob),
 
 	// ---- Minimaler ZIP-Writer (Methode "Store", ohne Kompression, ohne Bibliothek) ----
 	// Für Workspace-Exporte: files = [{ name, text }] → ZIP-Blob.
@@ -205,12 +255,14 @@ export const U = {
 		return (crc ^ -1) >>> 0;
 	},
 	zip(files) {
+		// FIX: defensiv gegen ungültige Eingaben (z.B. undefined) statt hartem Crash.
+		const list = Array.isArray(files) ? files : [];
 		const enc = new TextEncoder();
 		const num = (n, len) => { const a = new Uint8Array(len); for (let i = 0; i < len; i++) a[i] = (n >>> (8 * i)) & 0xff; return a; };
 		const chunks = [];
 		const central = [];
 		let offset = 0;
-		for (const f of files) {
+		for (const f of list) {
 			const nameB = enc.encode(f.name);
 			const data = typeof f.text === "string" ? enc.encode(f.text) : new Uint8Array(f.text);
 			const crc = U.crc32(data);
@@ -230,25 +282,35 @@ export const U = {
 			num(cdSize, 4), num(offset, 4), num(0, 2));
 		return new Blob(chunks, { type: "application/zip" });
 	},
-	downloadBlob: (name, blob) => U._dl(name, blob),
 
-	readAsText: (f) => new Promise((res, rej) => {
-		const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(f);
+	// FileReader-Helfer (Promise statt Callback). Lehnen jetzt mit r.error statt dem
+	// rohen ProgressEvent ab — konsistent mit den anderen Promise-Helfern hier.
+	readAsText: (f) => new Promise((resolve, reject) => {
+		const r = new FileReader();
+		r.onload = () => resolve(r.result);
+		r.onerror = () => reject(r.error);
+		r.readAsText(f);
 	}),
-	readAsBuffer: (f) => new Promise((res, rej) => {
-		const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(f);
+	readAsBuffer: (f) => new Promise((resolve, reject) => {
+		const r = new FileReader();
+		r.onload = () => resolve(r.result);
+		r.onerror = () => reject(r.error);
+		r.readAsArrayBuffer(f);
 	}),
 
 	// ArrayBuffer ⇄ Base64 (für Export/Import der PDFs)
 	bufToB64(buf) {
-		const bytes = new Uint8Array(buf); let bin = ""; const CH = 0x8000;
-		for (let i = 0; i < bytes.length; i += CH) {
-			bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+		const bytes = new Uint8Array(buf);
+		let bin = "";
+		const CHUNK = 0x8000;
+		for (let i = 0; i < bytes.length; i += CHUNK) {
+			bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
 		}
 		return btoa(bin);
 	},
 	b64ToBuf(b64) {
-		const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+		const bin = atob(b64);
+		const bytes = new Uint8Array(bin.length);
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 		return bytes.buffer;
 	},

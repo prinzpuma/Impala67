@@ -60,8 +60,10 @@ export async function purgeOldTrash() {
 export async function initApp() {
 	// FIX (Start-Bug-Paket, 9. Juli): state.js ruft nach jedem dispatch() den Hook
 	// STATE.onChange auf — das alte implizite globale render() ist seit dem
-	// ES-Module-Refactor kein verlässlicher Auto-Render mehr. Einmalig verdrahten:
-	STATE.onChange = () => render();
+	// ES-Module-Refactor kein verlässlicher Auto-Render mehr. Einmalig verdrahten.
+	// PERF (10. Juli): selektiver Hook statt blindem Full-Render (Content-Autosave
+	// überspringt Sidebar/Tabs/Chat; sonst rAF-coalesced) — siehe RENDER.onStateChange.
+	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -73,10 +75,20 @@ export async function initApp() {
 	SETTINGS.applyBg();
 	render();
 	SETTINGS.checkAI();
+	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
+	setTimeout(showPendingConflictsIfAny, 450);
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
-	setInterval(() => { if (!document.hidden) SETTINGS.checkAI(); }, 60000);
-	document.addEventListener("visibilitychange", () => { if (!document.hidden) SETTINGS.checkAI(); });
+	setInterval(pingAiStatusIfVisible, 60000);
+	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	RAG.reindexStale();
+}
+
+function pingAiStatusIfVisible() {
+	if (!document.hidden) SETTINGS.checkAI();
+}
+
+function showPendingConflictsIfAny() {
+	if (RENDER.loadPendingConflicts && RENDER.loadPendingConflicts().length) RENDER.openConflictResolver(0);
 }
 
 if (document.readyState === "loading") {

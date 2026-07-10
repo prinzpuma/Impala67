@@ -25,7 +25,7 @@ export function defaultCover(pg) {
 
 // Cover-Fläche einer Kachel: eigenes Bild (per data-coverimg nachgeladen) oder Verlauf.
 export function libCoverHtml(pg) {
-	const icon = pg.icon || (pg.pdfId ? "📄" : "📝");
+	const icon = RENDER.pageIconLabel(pg);
 	if (pg.coverImg) {
 		return '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '"><span class="lib-cover-icon">' + U.esc(icon) + "</span></div>";
 	}
@@ -51,12 +51,23 @@ export function libCardHtml(pg) {
 	"</div>";
 }
 
+// Gemeinsame Eingabezeile "Neuer Workspace…" (Ordner-Ansicht ohne Filter + Fallback
+// am Ende der Tabellen-Ansicht) — vorher zweimal wortgleich im Markup vorhanden.
+function newWorkspaceInputHtml() {
+	return '<div class="lib-new"><input id="inpWsName" placeholder="Neuer Workspace…" autocomplete="off">' +
+		'<button id="btnCreateWs">Erstellen</button></div>';
+}
+
 // Bibliothek: GoodNotes-artige Kachel-Ansicht (Ordner + Dokument-Deckblätter) mit
 // Ordner-Navigation und Breadcrumb, plus alternative Tabellen-Ansicht.
 export function renderLibrary(main) {
 	const view = (S.libView === "table") ? "table" : "grid";
 	const q = (S.libFilter || "").trim().toLowerCase();
 	const smart = S.libSmart || null;
+	// PERF/DRY: STATE.activePages() lief vorher bis zu 5× pro Render (Smart-Zähler,
+	// Tag-Zähler, Vorlagen, Tabellen-/Kachel-Treffer) — jetzt EINMAL berechnet und
+	// überall wiederverwendet.
+	const allPages = STATE.activePages();
 	const smartMatch = (pg) => !smart
 		|| (smart === "fav" && pg.favorite)
 		|| (smart === "pdf" && pg.pdfId)
@@ -80,17 +91,16 @@ export function renderLibrary(main) {
 		'<div class="mode-btns">' + sbtn("updated", "Datum") + sbtn("title", "Name") + '</div>' +
 		'<div class="mode-btns">' + vbtn("grid", "Kacheln") + vbtn("table", "Tabelle") + "</div></div>";
 	// Smart-Sammlungen: schnelle Filter über alle Workspaces hinweg (wie Notions Ansichten).
-	const all = STATE.activePages();
-	const smartDefs = [["all", "🗂 Alle", all.length],
-		["fav", "★ Favoriten", all.filter((p) => p.favorite).length],
-		["pdf", "📄 PDFs", all.filter((p) => p.pdfId).length],
-		["tpl", "📑 Vorlagen", all.filter((p) => p.isTemplate).length],
-		["untagged", "◌ Ohne Tag", all.filter((p) => !(p.tags || []).length).length]];
+	const smartDefs = [["all", "🗂 Alle", allPages.length],
+		["fav", "★ Favoriten", allPages.filter((p) => p.favorite).length],
+		["pdf", "📄 PDFs", allPages.filter((p) => p.pdfId).length],
+		["tpl", "📑 Vorlagen", allPages.filter((p) => p.isTemplate).length],
+		["untagged", "◌ Ohne Tag", allPages.filter((p) => !(p.tags || []).length).length]];
 	html += '<div class="tag-row smart-row">' + smartDefs.map(([id, label, n]) =>
 		'<button class="tag-chip' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + label + " · " + n + "</button>").join("") + "</div>";
 	// Tag-Verwaltung: Chips mit Zähler — Klick filtert, ✎ benennt den aktiven Tag um.
 	const tagCounts = {};
-	STATE.activePages().forEach((p) => (p.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
+	allPages.forEach((p) => (p.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
 	const tagNames = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
 	if (tagNames.length) {
 		html += '<div class="tag-row">' + tagNames.map((tag) =>
@@ -98,7 +108,7 @@ export function renderLibrary(main) {
 		).join("") + (S.libTag ? '<button class="tag-chip" data-tagrename="' + U.esc(S.libTag) + '" title="Tag umbenennen">✎ umbenennen</button>' : "") + "</div>";
 	}
 	// Vorlagen-Galerie: alle als Vorlage markierten Seiten mit Ein-Klick-„Verwenden“.
-	const tpls = STATE.activePages().filter((p) => p.isTemplate);
+	const tpls = allPages.filter((p) => p.isTemplate);
 	if (tpls.length && !q && !S.libTag) {
 		html += '<div class="tpl-gallery"><h3>📑 Vorlagen</h3><div class="tpl-list">' + tpls.map((p) =>
 			'<span class="tpl-item">' + (p.icon ? U.esc(p.icon) + " " : "📑 ") + U.esc(p.title) +
@@ -108,14 +118,10 @@ export function renderLibrary(main) {
 	}
 
 	if (view === "table") {
-		const key = S.libSort || "updated";
-		const dir = S.libSortDir || -1;
-		const rows = STATE.activePages().filter(matches).sort((a, b) => {
-			const va = key === "title" ? a.title.toLowerCase() : (a[key] || "");
-			const vb = key === "title" ? b.title.toLowerCase() : (b[key] || "");
-			return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
-		});
-		const arrow = (k) => (key === k ? (dir === 1 ? " ↑" : " ↓") : "");
+		const arrow = (k) => (skey === k ? (sdir === 1 ? " ↑" : " ↓") : "");
+		// DRY: nutzt jetzt dieselbe sortPages()-Sortierung wie die Kachel-Ansicht,
+		// statt eine zweite, wortgleiche Sortierfunktion inline zu wiederholen.
+		const rows = sortPages(allPages.filter(matches));
 		html += '<table class="lib-table"><thead><tr>' +
 			'<th data-libsort="title" title="Klicken zum Sortieren">Titel' + arrow("title") + "</th>" +
 			"<th>Workspace</th><th>Tags</th>" +
@@ -124,7 +130,7 @@ export function renderLibrary(main) {
 			"</tr></thead><tbody>" +
 			rows.map((pg) =>
 				'<tr data-page="' + pg.id + '">' +
-					"<td>" + (pg.icon ? U.esc(pg.icon) + " " : pg.pdfId ? "📄 " : "📝 ") + U.esc(pg.title) + (pg.isTemplate ? ' <span class="tpl-badge">Vorlage</span>' : "") + "</td>" +
+					"<td>" + U.esc(RENDER.pageIconLabel(pg)) + " " + U.esc(pg.title) + (pg.isTemplate ? ' <span class="tpl-badge">Vorlage</span>' : "") + "</td>" +
 					"<td>" + U.esc((S.workspaces[pg.workspaceId] || {}).name || "—") + "</td>" +
 					"<td>" + (pg.tags && pg.tags.length ? U.esc(pg.tags.join(", ")) : "—") + "</td>" +
 					"<td>" + U.fmtDate(pg.created) + "</td>" +
@@ -134,7 +140,7 @@ export function renderLibrary(main) {
 		if (!rows.length) html += '<div class="empty small">Keine Seiten' + (q ? " für diesen Filter" : "") + "</div>";
 	} else if (q || S.libTag || smart) {
 		// Kachel-Ansicht mit aktivem Filter: flache Treffer-Kacheln über alle Workspaces
-		const hits = sortPages(STATE.activePages().filter(matches));
+		const hits = sortPages(allPages.filter(matches));
 		html += '<div class="lib-grid">' + hits.map((pg) => libCardHtml(pg)).join("") + "</div>";
 		if (!hits.length) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
 		html += "</div>";
@@ -158,7 +164,7 @@ export function renderLibrary(main) {
 		let tiles = "";
 		if (!folder) {
 			tiles = Object.values(S.workspaces).map((ws) => {
-				const count = STATE.activePages().filter((p) => (p.workspaceId || "default") === ws.id).length;
+				const count = allPages.filter((p) => (p.workspaceId || "default") === ws.id).length;
 				return '<button class="lib-folder" data-libws="' + U.esc(ws.id) + '"><span class="lib-folder-ico">📁</span>' +
 					'<span class="lib-folder-name">' + U.esc(ws.name) + "</span>" +
 					'<span class="lib-folder-count">' + count + " Seiten</span></button>";
@@ -180,14 +186,13 @@ export function renderLibrary(main) {
 		}
 		html += '<div class="lib-crumbs">' + crumbs + "</div>";
 		html += '<div class="lib-grid">' + tiles + "</div>";
-		if (!folder) html += '<div class="lib-new"><input id="inpWsName" placeholder="Neuer Workspace…"><button id="btnCreateWs">Erstellen</button></div>';
+		if (!folder) html += newWorkspaceInputHtml();
 		html += "</div>";
 		main.innerHTML = html;
 		hydrateCovers(main);
 		return;
 	}
-	html += '<div class="lib-new"><input id="inpWsName" placeholder="Neuer Workspace…">' +
-		'<button id="btnCreateWs">Erstellen</button></div></div>';
+	html += newWorkspaceInputHtml() + "</div>";
 	main.innerHTML = html;
 	hydrateCovers(main);
 }

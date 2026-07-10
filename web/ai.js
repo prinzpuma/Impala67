@@ -4,7 +4,7 @@ import { S, STATE } from "./state.js";
 import { TOOLS } from "./tools.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
-import { APP } from "./app.js";
+import { CHATS } from "./chats.js";
 
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
 // Mit Streaming (SSE), Modellauswahl, Reasoning/Thinking-Erfassung, Verbindungs-
@@ -267,11 +267,43 @@ export const AI = (() => {
 		return { content: content.trim(), reasoning: reasoning.trim() };
 	}
 
+	// Chat speichern ohne APP (app.js exportiert saveCurrentChat nicht — und Import
+	// von chat-fullscreen.js hier wäre zyklisch: chat-fullscreen → ai → …).
+	function persistChat(type) {
+		const messages = type === "side" ? S.sideChat : S.chat;
+		const idKey = type === "side" ? "sideChatId" : "currentChatId";
+		if (!messages.length) return;
+		const list = CHATS.load();
+		let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
+		if (!s) {
+			s = { id: U.uid(), title: "", created: U.now(), messages: [] };
+			S[idKey] = s.id;
+			list.unshift(s);
+		}
+		s.messages = messages;
+		s.updated = U.now();
+		if (!s.title) {
+			const first = messages.find((m) => m.role === "user");
+			s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
+		}
+		CHATS.save(list);
+	}
+
 	// Agent-Loop mit Streaming: Text und Denkprozess erscheinen live, Tools laufen
-	// dazwischen. Seiten-ändernde Tools erzeugen automatisch eine Edit-Karte mit Undo.
+	// dazwischen. Seiten-ändernde Tools erzeugen Edit-Karten — die werden am ENDE
+	// dieses Turns (nach der finalen KI-Nachricht) angehängt, nicht mitten im Chat
+	// und nicht ans absolute Chat-Ende aller Turns.
 	async function agent(userText, type, onStep) {
 		type = type || "side";
 		const targetChat = type === "side" ? S.sideChat : S.chat;
+		// Edit-Karten dieses Agent-Laufs — flush nach finaler Assistant-Nachricht
+		const pendingEdits = [];
+		function flushPendingEdits() {
+			if (!pendingEdits.length) return;
+			for (const ed of pendingEdits) targetChat.push(ed);
+			pendingEdits.length = 0;
+			if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+		}
 
 		// Ein Anhang gehört ausschließlich zu dem Chat, in dem er ausgewählt wurde.
 		const useAttachment = S.pendingAttachmentTarget === type;
@@ -326,21 +358,57 @@ export const AI = (() => {
 					let args = {};
 					try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ungültiges JSON — leere Argumente */ }
 
-					// Rückfrage mit anklickbaren Optionen: pausiert hier, bis der Klick-Handler die
-					// Promise auflöst (siehe resolveChoice). Kein Server-Roundtrip nötig, rein lokal.
+					// Rückfrage (Notion-Style): pausiert bis Klick, nur die Frage-Karte in der UI
+					// (kein extra Tool-Chip „Rückfrage gestellt“ — das wirkt wie Notion-Umfrage).
 					if (tc.function.name === "ask_choice") {
+						const norm = TOOLS.normalizeAskChoice(args);
+						if (norm.error) {
+							if (onStep) onStep("ask_choice");
+							targetChat.push({
+								mid: U.uid(), role: "tool", name: "ask_choice",
+								detail: String(norm.error).slice(0, 80), error: true,
+							});
+							scheduleRender();
+							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(norm) });
+							continue;
+						}
 						const qMid = U.uid();
-						const options = Array.isArray(args.options) ? args.options.slice(0, 5) : [];
+						// Side-Chat: Panel sichtbar machen, sonst sieht man die Frage-Karte nicht.
+						if (type === "side") {
+							document.body.classList.remove("panel-collapsed");
+							const showBtn = U.el("btnShowPanel");
+							if (showBtn) showBtn.hidden = true;
+						}
+						S.aiStatus = "Warte auf deine Auswahl…";
+						S.aiDraft = "";
+						S.aiThinkingDraft = "";
 						const answer = await new Promise((resolve) => {
 							pendingChoices[qMid] = resolve;
-							targetChat.push({ mid: qMid, role: "question", question: args.question || "", options, answered: false });
+							targetChat.push({
+								mid: qMid,
+								role: "question",
+								question: norm.question,
+								options: norm.options,
+								answered: false,
+							});
 							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
 						});
 						const qMsg = targetChat.find((x) => x.mid === qMid);
-						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
+						if (qMsg) {
+							qMsg.answered = true;
+							qMsg.answer = answer;
+						}
+						// Kein tool-Chip bei Erfolg — die beantwortete Karte reicht (Notion-Style).
+						S.aiStatus = "…denkt nach…";
 						if (onStep) onStep("ask_choice");
-						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ answer }) });
-						if (type === "full") APP.saveCurrentChat();
+						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						messages.push({
+							role: "tool",
+							tool_call_id: tc.id,
+							content: JSON.stringify({ answer, question: norm.question }),
+						});
+						// Zwischenstand speichern (beide Chat-Typen) — ohne APP.*
+						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach ask_choice:", e); }
 						continue;
 					}
 
@@ -373,11 +441,12 @@ export const AI = (() => {
 						}
 						if (pageId && S.pages[pageId]) {
 							const after = { title: S.pages[pageId].title, content: S.pages[pageId].content };
-							targetChat.push({
+							// Noch nicht pushen — erst nach der finalen KI-Antwort dieses Turns
+							// (Änderungsanzeige am Ende der Nachricht, nicht mitten im Turn / Chat-Ende).
+							pendingEdits.push({
 								mid: U.uid(), role: "edit", pageId, pageTitle: after.title,
-								before, after, created, undone: false, diffExpanded: false,
+								before, after, created, undone: false,
 							});
-							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
 						}
 					}
 					messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
@@ -391,21 +460,29 @@ export const AI = (() => {
 			S.aiDraft = "";
 			S.aiThinkingDraft = "";
 			targetChat.push(finalMsg);
+			flushPendingEdits();
 			return finalMsg.content;
 		}
 		S.aiDraft = "";
 		S.aiThinkingDraft = "";
 		const abort = "(Abgebrochen: zu viele Tool-Schritte.)";
 		targetChat.push({ mid: U.uid(), role: "assistant", content: abort });
+		flushPendingEdits();
 		return abort;
 	}
 
 	// Wird vom Klick-Handler einer Rückfrage-Karte aufgerufen, um den wartenden agent()-Aufruf fortzusetzen.
+	// Gibt true zurück, wenn eine offene Rückfrage aufgelöst wurde (Doppelklicks sonst harmlos).
 	function resolveChoice(mid, answer) {
-		if (pendingChoices[mid]) {
-			pendingChoices[mid](answer);
-			delete pendingChoices[mid];
-		}
+		if (!pendingChoices[mid]) return false;
+		const resolve = pendingChoices[mid];
+		delete pendingChoices[mid];
+		resolve(answer);
+		return true;
+	}
+
+	function hasPendingChoice() {
+		return Object.keys(pendingChoices).length > 0;
 	}
 
 	// Formuliert eine bestehende Antwort länger/kürzer um (wie Notions "Antwort anpassen").
@@ -416,5 +493,5 @@ export const AI = (() => {
 		return msg.content || "";
 	}
 
-	return { chatOnce, complete, agent, resolveChoice, refine, ping, embed, listModels, MODEL_PRESETS };
+	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, MODEL_PRESETS };
 })();

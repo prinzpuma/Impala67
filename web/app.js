@@ -1,13 +1,13 @@
 "use strict";
 import { COLLAPSE } from "./collapse.js";
 import { CHATS } from "./chats.js";
-import { NOTION_MIGRATOR } from "./import-notion.js";
-import { AI } from "./ai.js";
 import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
+import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
+import { SRS } from "./srs.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
@@ -18,16 +18,14 @@ import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { POPOVERS } from "./popovers.js";
 
 const render = (...args) => RENDER.render(...args);
-const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
-const renderTabs = (...args) => RENDER.renderTabs(...args);
 const openTemplatePicker = (...args) => RENDER.openTemplatePicker(...args);
 const openPage = (...args) => TABS.openPage(...args);
+const openNewTab = (...args) => TABS.openNewTab(...args);
 const closeTab = (...args) => TABS.closeTab(...args);
 const navBack = (...args) => TABS.navBack(...args);
 const navForward = (...args) => TABS.navForward(...args);
 const saveCurrentChat = (...args) => CHAT_FULLSCREEN.saveCurrentChat(...args);
 const toggleChatFull = (...args) => CHAT_FULLSCREEN.toggleChatFull(...args);
-const refineMessage = (...args) => CHAT_FULLSCREEN.refineMessage(...args);
 const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
 const renderModelBar = (...args) => RENDER.renderModelBar(...args);
 const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
@@ -39,7 +37,6 @@ const openIconPicker = (...args) => RENDER.openIconPicker(...args);
 const openCoverPicker = (...args) => RENDER.openCoverPicker(...args);
 const localDayKey = (...args) => RENDER.localDayKey(...args);
 const renderHistoryModal = (...args) => RENDER.renderHistoryModal(...args);
-const renderPendingChip = (...args) => RENDER.renderPendingChip(...args);
 const ankiCardsOf = (...args) => RENDER_ANKI.ankiCardsOf(...args);
 const openCardEditor = (...args) => RENDER_ANKI.openCardEditor(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -51,6 +48,7 @@ export function closeOverlay() {
 	const o = U.el("overlay");
 	if (o) {
 		o.hidden = true;
+		o.classList.remove("change-overlay");
 		o.innerHTML = "";
 	}
 	S.reviewShowBack = false;
@@ -159,10 +157,12 @@ async function newPageFlow(wsId, parentId) {
 	}
 }
 
-// Karteikarten-Bereich öffnen (🃏-Tab oben links): Stapel/Browser/Statistik/Lernen
+// Karteikarten-Bereich öffnen (🃏-Pille oben links): Stapel/Browser/Statistik/Lernen
+// sidebarMode bleibt unberührt für den Dateibaum, aber die Topbar-Pille ist exklusiv „anki“
+// (renderTopbar priorisiert view==="anki" über sidebarMode).
 function openAnki(tab, deck) {
 	S.view = "anki";
-	S.sidebarMode = "files"; // Sidebar zeigt wieder den Stapel-Baum, falls zuvor der Chat-Modus aktiv war
+	S.sidebarMode = "files"; // Stapel-Baum in der Sidebar (nicht Chat-Liste)
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
 	S.reviewShowBack = false;
@@ -205,12 +205,21 @@ async function openHistory(pageId) {
 	renderHistoryModal();
 }
 
+// Bewertet eine Karteikarte per FSRS und dispatcht das Ergebnis als EIN Event —
+// von beiden Lernorten (Anki-Browser-Inline-Bewertung UND Review-Modal) genutzt,
+// damit "grade" immer im Event-Payload steht (Tageslimits/Statistik werten das aus).
+async function rateAndReviewCard(cardId, grade) {
+	const card = S.cards[cardId];
+	if (!card) return null;
+	const srs = SRS.rate(card.srs, grade);
+	await STATE.dispatch("cardReview", { id: card.id, srs, grade });
+	return card;
+}
 
-
-// NOTION_MIGRATOR ist jetzt in import-notion.js ausgelagert.
-
-// Einheitlicher Einstieg für neue Chats — wird von Sidebar und Home-Dashboard genutzt.
-function startNewChat() {
+// Einheitlicher Einstieg für neue Chats — wird von Sidebar, Home und „+ Tab“-Menü genutzt.
+// opts.newTab: Chat in neuem Tab öffnen (Notion-Stil, Plus in der Tab-Leiste).
+function startNewChat(opts) {
+	opts = opts || {};
 	saveCurrentChat();
 	const newId = U.uid();
 	const list = CHATS.load();
@@ -218,7 +227,26 @@ function startNewChat() {
 	CHATS.save(list);
 	S.chat = [];
 	S.currentChatId = newId;
-	openPage("chat:" + newId);
+	openPage("chat:" + newId, opts.newTab ? { newTab: true } : undefined);
+}
+
+// Neue Seite direkt in einem neuen Tab (für „+ → Neue Seite“ im Tab-Menü).
+async function createPageInNewTab(wsId, parentId, tpl) {
+	const id = U.uid();
+	S.currentWorkspaceId = wsId || S.currentWorkspaceId;
+	await STATE.dispatch("pageCreate", {
+		id,
+		title: tpl ? tpl.title : "Neue Seite",
+		parentId: parentId || null,
+		content: tpl ? tpl.content : "",
+		icon: tpl ? tpl.icon : null,
+		tags: tpl ? tpl.tags : [],
+		workspaceId: S.currentWorkspaceId,
+	});
+	openPage(id, { newTab: true });
+	const ti = document.getElementById("pageTitle");
+	if (ti) { ti.focus(); ti.select(); }
+	return id;
 }
 
 function wireEvents() {
@@ -267,7 +295,8 @@ function wireEvents() {
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
 		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge]," +
-		"[data-pagetemplate],[data-tplblank],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename],button";
+		"[data-pagetemplate],[data-tplblank],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
+		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {
 		const t = e.target.closest(CLICKABLE);
@@ -324,6 +353,26 @@ function wireEvents() {
 			return;
 		}
 
+		// Sync-Konflikt-Dialog (Popup + Homescreen-Banner/Widget)
+		if (t.dataset.conflictopen != null) {
+			RENDER.openConflictResolver(t.dataset.conflictopen);
+			return;
+		}
+		if (t.dataset.conflictnav) {
+			const cur = S.conflictResolveIndex || 0;
+			RENDER.openConflictResolver(cur + Number(t.dataset.conflictnav));
+			return;
+		}
+		if (t.dataset.conflictresolve) {
+			await RENDER.resolveConflict(t.dataset.conflictresolve);
+			return;
+		}
+		if (t.dataset.conflictpage) {
+			closeOverlay();
+			openPage(t.dataset.conflictpage);
+			return;
+		}
+
 		// Schnellaktionen des Home-Dashboards. Navigation bleibt bewusst unverändert:
 		// Home/Chat/Bibliothek sind die drei Hauptpillen, das Dashboard startet nur Aktionen.
 		if (t.dataset.homeaction) {
@@ -336,6 +385,7 @@ function wireEvents() {
 				case "cards": openAnki("study", null); break;
 				case "daily": await openDailyNote(localDayKey(new Date())); break;
 				case "backup": await SETTINGS.handleBackupNow(); break;
+				case "conflicts": RENDER.openConflictResolver(0); break;
 			}
 			return;
 		}
@@ -376,9 +426,14 @@ function wireEvents() {
 			return;
 		}
 
-		// Tab-Leiste: Tab öffnen / schließen
-		if (t.dataset.tabopen) { openPage(t.dataset.tabopen); return; }
+		// Tab-Leiste: Tab öffnen / schließen / neuer Tab (Notion-artig: + = neuer Tab)
+		if (t.dataset.tabopen) { openPage(t.dataset.tabopen, { skipHistory: false }); return; }
 		if (t.dataset.tabclose) { closeTab(t.dataset.tabclose); return; }
+		if (t.dataset.tabnew != null || t.id === "btnTabNew") {
+			// Plus: Notion-artiges Menü „In neuem Tab öffnen…“ (Suche + Neue Seite / Chat)
+			SEARCH.openNewTabMenu();
+			return;
+		}
 
 		// Thinking-Prozess: live (während Streaming) oder finalisiert ausklappen
 		if (t.id === "btnThinkLive" || t.dataset.reasoningtoggle) {
@@ -483,6 +538,13 @@ function wireEvents() {
 			return;
 		}
 
+		// KI-Status-Pille im Chat-Header / Settings: erneut pingen; Offline → Einstellungen
+		if (t.dataset.aistatus || t.id === "btnRecheckAI") {
+			SETTINGS.checkAI();
+			if (t.dataset.aistatus && S.aiOnline === false) SETTINGS.openSettings("ki");
+			return;
+		}
+
 		// "✦ Anpassen"-Menü (länger/kürzer) an einer KI-Antwort ein-/ausblenden
 		if (t.dataset.refinetoggle) {
 			CHAT_FULLSCREEN.handleRefineToggle(t);
@@ -528,12 +590,8 @@ function wireEvents() {
 		}
 		if (t.dataset.ankishowback) { S.reviewShowBack = true; renderMain(); return; }
 		if (t.dataset.ankigrade) {
-			const card = S.cards[t.dataset.card];
-			if (card) {
-				const srs = SRS.rate(card.srs, Number(t.dataset.ankigrade));
-				S.reviewShowBack = false;
-				await STATE.dispatch("cardReview", { id: card.id, srs, grade: Number(t.dataset.ankigrade) });
-			}
+			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade));
+			S.reviewShowBack = false;
 			return;
 		}
 		if (t.dataset.ankimore) {
@@ -559,7 +617,9 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.ankidel) {
-			if (confirm("Karte wirklich löschen?")) await STATE.dispatch("cardDelete", { id: t.dataset.ankidel });
+			if (await U.confirm("Diese Karte wirklich löschen?", { title: "Karte löschen", ok: "Löschen", danger: true })) {
+				await STATE.dispatch("cardDelete", { id: t.dataset.ankidel });
+			}
 			return;
 		}
 		if (t.dataset.ankiedit) { openCardEditor(t.dataset.ankiedit); return; }
@@ -567,13 +627,20 @@ function wireEvents() {
 		if (t.dataset.cardeditorsave) {
 			const front = (U.el("cardFront") || {}).value || "";
 			const back = (U.el("cardBack") || {}).value || "";
-			const deck = ((U.el("cardDeck") || {}).value || "Standard").trim() || "Standard";
-			if (!front.trim()) { alert("Die Vorderseite darf nicht leer sein."); return; }
+			// Stapel aus Select bzw. „Neuer Stapel“-Feld (kein freies datalist mehr)
+			const deck = (RENDER_ANKI.readCardEditorDeck && RENDER_ANKI.readCardEditorDeck()) || "Standard";
+			if (!front.trim()) { U.toast("Die Vorderseite darf nicht leer sein.", "error"); return; }
+			if (deck === "__new__" || !String(deck).trim()) { U.toast("Bitte einen Stapel wählen oder einen neuen Namen eingeben.", "error"); return; }
+			// Neuen Stapel-Namen im Baum anlegen, falls noch unbekannt
+			if (deck !== "Standard" && !(S.decks || {})[deck] && !Object.values(S.cards).some((c) => (c.deck || "") === deck)) {
+				await STATE.dispatch("deckCreate", { name: deck });
+			}
 			if (t.dataset.cardeditorsave === "new") {
 				await STATE.dispatch("cardCreate", { id: U.uid(), front, back, deck });
 			} else {
 				await STATE.dispatch("cardUpdate", { id: t.dataset.cardeditorsave, patch: { front, back, deck } });
 			}
+			S.ankiDeck = deck === "Standard" ? null : deck;
 			closeOverlay();
 			render();
 			return;
@@ -620,7 +687,8 @@ function wireEvents() {
 			S.deckMenuOpenName = null;
 			const name = t.dataset.deckdel;
 			const n = ankiCardsOf(name).length;
-			if (confirm('Stapel „' + name + '“ löschen?' + (n ? " " + n + ' Karte(n) wandern in „Standard“.' : ""))) {
+			const msg = 'Stapel „' + name + '“ wirklich löschen?' + (n ? " " + n + ' Karte(n) wandern in „Standard“.' : "");
+			if (await U.confirm(msg, { title: "Stapel löschen", ok: "Löschen", danger: true })) {
 				await STATE.dispatch("deckDelete", { name });
 				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
 			}
@@ -660,7 +728,16 @@ function wireEvents() {
 			const p = S.pendingNewPage;
 			S.pendingNewPage = null;
 			closeOverlay();
-			if (p) await createPageIn(p.wsId, p.parentId);
+			if (p) {
+				const id = U.uid();
+				await STATE.dispatch("pageCreate", {
+					id, title: "Neue Seite", parentId: p.parentId || null, content: "",
+					icon: null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId,
+				});
+				openPage(id, p.newTab ? { newTab: true } : undefined);
+				const ti = document.getElementById("pageTitle");
+				if (ti) { ti.focus(); ti.select(); }
+			}
 			return;
 		}
 		if (t.dataset.tpluse) {
@@ -668,7 +745,14 @@ function wireEvents() {
 			const tpl = S.pages[t.dataset.tpluse];
 			S.pendingNewPage = null;
 			closeOverlay();
-			if (p && tpl) await createPageIn(p.wsId, p.parentId, tpl);
+			if (p && tpl) {
+				const id = U.uid();
+				await STATE.dispatch("pageCreate", {
+					id, title: tpl.title, parentId: p.parentId || null, content: tpl.content || "",
+					icon: tpl.icon || null, tags: tpl.tags || [], workspaceId: p.wsId || S.currentWorkspaceId,
+				});
+				openPage(id, p.newTab ? { newTab: true } : undefined);
+			}
 			return;
 		}
 
@@ -790,7 +874,9 @@ function wireEvents() {
 		}
 		if (t.dataset.pagepurge) {
 			const pg = S.pages[t.dataset.pagepurge];
-			if (pg && confirm('"' + pg.title + '" endgültig löschen? Das kann nicht rückgängig gemacht werden.')) {
+			if (pg && await U.confirm('„' + pg.title + '“ endgültig löschen? Das kann nicht rückgängig gemacht werden.', {
+				title: "Endgültig löschen", ok: "Löschen", danger: true,
+			})) {
 				await STATE.dispatch("pageDelete", { id: t.dataset.pagepurge });
 				render();
 			}
@@ -815,7 +901,7 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.carddel) {
-			if (confirm("Karte wirklich löschen?")) {
+			if (await U.confirm("Diese Karte wirklich löschen?", { title: "Karte löschen", ok: "Löschen", danger: true })) {
 				await STATE.dispatch("cardDelete", { id: t.dataset.carddel });
 				openCards();
 			}
@@ -836,11 +922,7 @@ function wireEvents() {
 
 		// Karten-Bewertung im Review
 		if (t.dataset.grade) {
-			const card = S.cards[t.dataset.card];
-			if (card) {
-				const srs = SRS.rate(card.srs, Number(t.dataset.grade));
-				await STATE.dispatch("cardReview", { id: card.id, srs });
-			}
+			await rateAndReviewCard(t.dataset.card, Number(t.dataset.grade));
 			S.reviewShowBack = false;
 			openReview();
 			return;
@@ -1007,7 +1089,7 @@ function wireEvents() {
 				await SETTINGS.handleDriveSync(t);
 				break;
 			case "btnDailyHome":
-				await openDailyNote(RENDER.localDayKey(new Date()));
+				await openDailyNote(localDayKey(new Date()));
 				break;
 			case "btnBackupNow":
 			case "btnExport":
@@ -1040,18 +1122,22 @@ function wireEvents() {
 	});
 
 	// Eingaben (Delegation) — inkl. Live-Vorschau im Split-Modus
+	// PERF (10. Juli): Anki-Suche debounced — vorher Full-Render der Browser-Tabelle pro Tastendruck
+	const debouncedAnkiSearch = U.debounce((value, pos) => {
+		S.ankiSearch = value;
+		renderAnki(U.el("main"));
+		const inp = U.el("ankiSearch");
+		if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
+	}, 150);
 	document.addEventListener("input", (e) => {
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
 			LIBRARY.handleFilterInput(e);
 		}
-		// Karten-Browser: live suchen, Fokus + Cursorposition erhalten
+		// Karten-Browser: live suchen (debounced), Fokus + Cursorposition erhalten
 		if (e.target.id === "ankiSearch") {
-			S.ankiSearch = e.target.value;
 			const pos = e.target.selectionStart;
-			renderAnki(U.el("main"));
-			const inp = U.el("ankiSearch");
-			if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
+			debouncedAnkiSearch(e.target.value, pos);
 		}
 	});
 	document.addEventListener("change", async (e) => {
@@ -1271,5 +1357,9 @@ export const APP = {
 	wireEvents,
 	closeOverlay,
 	newPageFlow,
-	openDailyNote
+	openDailyNote,
+	startNewChat,
+	createPageInNewTab,
+	// Für Strg+K-Aktionen (search.js) — „Karten verwalten“ & Co.
+	openAnki
 };

@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Kopiere diese Datei zu file-map.json, falls dein Projekt Unterordner benutzt. Notion kennt keine Ordner, daher stehen in den Notion-Seiten meist nur flache Pfade wie impala67/boot.js. Hier kannst du fuer einzelne Dateien einen abweichenden lokalen Zielpfad erzwingen.",
+  "boot.js": "web/boot.js",
+  "state.js": "web/state.js",
+  "styles.css": "web/styles.css"
+}

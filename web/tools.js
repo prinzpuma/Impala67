@@ -16,6 +16,32 @@ export const TOOLS = (() => {
 	// nirgends mit Template-/Platzhalter-Systemen kollidieren.
 	const CLOZE_HINT = "{" + "{c1::Antwort}" + "}";
 
+	// ask_choice: Argumente säubern/validieren (vom Agent-Loop vor der UI genutzt).
+	// - leere/doppelte Optionen raus
+	// - max. 5, min. 2
+	// - Frage Pflicht
+	function normalizeAskChoice(a) {
+		a = a || {};
+		const question = String(a.question || "").trim();
+		const raw = Array.isArray(a.options) ? a.options : [];
+		const seen = new Set();
+		const options = [];
+		for (const o of raw) {
+			const s = String(o == null ? "" : o).trim();
+			if (!s) continue;
+			const key = s.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			options.push(s);
+			if (options.length >= 5) break;
+		}
+		if (!question) return { error: "ask_choice: Frage fehlt." };
+		if (options.length < 2) {
+			return { error: "ask_choice: mindestens 2 kurze Optionen nötig (max. 5)." };
+		}
+		return { question, options };
+	}
+
 	const defs = [
 		t("create_page", "Erstellt eine neue Notiz-Seite.", {
 			title: { type: "string" },
@@ -59,10 +85,17 @@ export const TOOLS = (() => {
 		t("send_to_notebooklm", "Bereitet Notiz-Seiten als NotebookLM-Quelle vor: kopiert ihre Inhalte in die Zwischenablage und öffnet NotebookLM — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
 			page_titles: { type: "array", items: { type: "string" }, description: "Titel der Seiten (leer = aktuelle Seite)" },
 		}, []),
-		t("ask_choice", "Stellt der Nutzerin/dem Nutzer eine kurze Rückfrage mit 2-5 anklickbaren Antwortmöglichkeiten, wenn eine Entscheidung nötig ist, bevor du fortfährst. Sparsam einsetzen, nur bei echter Mehrdeutigkeit.", {
-			question: { type: "string", description: "Kurze, konkrete Frage" },
-			options: { type: "array", items: { type: "string" }, description: "2-5 kurze Antwortoptionen" },
-		}, ["question", "options"]),
+		t("ask_choice", "Stellt EINE kurze Rückfrage mit 2–5 anklickbaren Optionen und wartet auf die Auswahl. NUR bei echter Mehrdeutigkeit (z.B. mehrere passende Seiten). Keine Ja/Nein-Floskeln, keine Meta-Fragen. Optionen müssen vollständig und sofort nutzbar sein (keine Platzhalter).",
+			{
+				question: { type: "string", description: "Eine kurze, konkrete Frage (1 Satz)" },
+				options: {
+					type: "array",
+					items: { type: "string" },
+					minItems: 2,
+					maxItems: 5,
+					description: "2–5 kurze, eindeutige Antwortoptionen",
+				},
+			}, ["question", "options"]),
 	];
 
 	async function run(name, a) {
@@ -160,10 +193,21 @@ export const TOOLS = (() => {
 			case "send_to_notebooklm":
 				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet NotebookLM
 				return await NLM.sendPages(a.page_titles || []);
+			case "ask_choice": {
+				// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und
+				// macht klar, dass ein direkter Aufruf nicht die interaktive Karte öffnet.
+				const norm = normalizeAskChoice(a);
+				if (norm.error) return norm;
+				return {
+					error: "ask_choice muss interaktiv im Chat beantwortet werden (Agent-Loop).",
+					question: norm.question,
+					options: norm.options,
+				};
+			}
 			default:
 				return { error: "Unbekanntes Tool: " + name };
 		}
 	}
 
-	return { defs, run };
+	return { defs, run, normalizeAskChoice };
 })();

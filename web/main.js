@@ -54,6 +54,9 @@ window.NOTION_MIGRATOR = NOTION_MIGRATOR;
 window.SETTINGS = SETTINGS;
 window.LIBRARY = LIBRARY;
 window.TABS = TABS;
+window.openPage = TABS.openPage;
+window.openNewTab = TABS.openNewTab;
+window.closeTab = TABS.closeTab;
 window.SEARCH = SEARCH;
 window.SHORTCUTS = SHORTCUTS;
 window.CHAT_FULLSCREEN = CHAT_FULLSCREEN;
@@ -71,6 +74,7 @@ window.openReview = RENDER.openReview;
 window.openCards = RENDER.openCards;
 
 // RENDER_ANKI-Funktionen an window binden
+window.RENDER_ANKI = RENDER_ANKI;
 window.ankiDecks = RENDER_ANKI.ankiDecks;
 window.ankiCardsOf = RENDER_ANKI.ankiCardsOf;
 window.ankiDueOf = RENDER_ANKI.ankiDueOf;
@@ -78,6 +82,7 @@ window.deckTreeHtml = RENDER_ANKI.deckTreeHtml;
 window.deckMenuHtml = RENDER_ANKI.deckMenuHtml;
 window.renderAnki = RENDER_ANKI.renderAnki;
 window.openCardEditor = RENDER_ANKI.openCardEditor;
+window.readCardEditorDeck = RENDER_ANKI.readCardEditorDeck;
 
 // APP-Funktionen an window binden
 window.seedIfEmpty = APP.seedIfEmpty;

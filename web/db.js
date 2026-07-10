@@ -5,8 +5,29 @@ import { U } from "./util.js";
 // Events werden übernommen, sortiert nach Zeitstempel deterministisch abgespielt).
 // Ein späterer Google-Drive-Sync ersetzt nur Export/Import durch die Drive-API —
 // am Datenmodell ändert sich nichts.
+//
+// Rewrite (10. Juli 2026): ensureOpen()/validateEvent() ergänzt (fehlende Validierung),
+// open() memoisiert gegen parallele Doppel-Aufrufe, migrateLegacy() liest Keys+Werte
+// jetzt aus derselben Transaktion, addEvent() ist nur noch ein addEvents()-Alias
+// (vorher doppelter Code), resetDatabase() behandelt beide deleteDatabase()-Aufrufe
+// jetzt mit echter Fehlerbehandlung, importAll() validiert data.events, allVecs()
+// liest parallel statt sequenziell.
 export const DB = (() => {
 	let db = null;
+	let openPromise = null; // Memoisiert offene/laufende open()-Aufrufe (verhindert Doppel-Open-Race)
+
+	// FIX: vorher führte ein Aufruf vor open() zu einem kryptischen
+	// "Cannot read properties of null" beim ersten db.transaction(...).
+	function ensureOpen() {
+		if (!db) throw new Error("DB.open() muss zuerst aufgerufen werden.");
+	}
+
+	// FIX: fehlende Validierung — ein Event ohne id/t/type ließ sich bisher klaglos
+	// ins append-only Log schreiben und sorgte später für schwer auffindbare Bugs.
+	function validateEvent(ev) {
+		if (!ev || typeof ev !== "object") throw new Error("Event muss ein Objekt sein.");
+		if (!ev.id || !ev.t || !ev.type) throw new Error("Event benötigt id, t und type.");
+	}
 
 	function openRaw(name, version) {
 		return new Promise((resolve, reject) => {
@@ -26,6 +47,16 @@ export const DB = (() => {
 		});
 	}
 
+	const done = (t) => new Promise((res, rej) => {
+		t.oncomplete = () => res();
+		t.onerror = () => rej(t.error);
+		t.onabort = () => rej(t.error);
+	});
+	const val = (r) => new Promise((res, rej) => {
+		r.onsuccess = () => res(r.result);
+		r.onerror = () => rej(r.error);
+	});
+
 	// Einmalige Migration: die Datenbank hieß vor der Umbenennung "notion". Beim ersten
 	// Start unter dem neuen Namen werden alle Stores kopiert — die alte DB bleibt als
 	// Sicherheitsnetz liegen (wird erst bei resetDatabase mit entsorgt).
@@ -37,78 +68,91 @@ export const DB = (() => {
 		if (!legacy || !legacy.objectStoreNames.contains("events")) { if (legacy) legacy.close(); return; }
 		for (const store of ["events", "blobs", "vecs"]) {
 			if (!legacy.objectStoreNames.contains(store)) continue;
-			const src = legacy.transaction(store).objectStore(store);
-			const keys = await val(src.getAllKeys());
-			const vals = await val(legacy.transaction(store).objectStore(store).getAll());
-			const t = db.transaction(store, "readwrite");
-			const dst = t.objectStore(store);
-			vals.forEach((v, i) => { if (store === "events") dst.put(v); else dst.put(v, keys[i]); });
-			await done(t);
+			// FIX: Keys + Werte jetzt aus DERSELBEN Quell-Transaktion lesen (vorher zwei
+			// separate readonly-Transaktionen — theoretisch inkonsistent, falls zwischen
+			// beiden noch geschrieben wird) und parallel statt nacheinander abgefragt.
+			const srcStore = legacy.transaction(store).objectStore(store);
+			const [keys, vals] = await Promise.all([val(srcStore.getAllKeys()), val(srcStore.getAll())]);
+			const destTx = db.transaction(store, "readwrite");
+			const destStore = destTx.objectStore(store);
+			vals.forEach((v, i) => { if (store === "events") destStore.put(v); else destStore.put(v, keys[i]); });
+			await done(destTx);
 		}
 		legacy.close();
 	}
 
-	async function open() {
-		db = await openRaw("impala67", 2);
-		await migrateLegacy();
+	// FIX: mehrfache/parallele open()-Aufrufe teilten sich bisher KEINEN gemeinsamen
+	// Zustand — zwei gleichzeitige Aufrufe (z.B. durch einen doppelten Boot-Pfad)
+	// konnten die DB parallel öffnen und die Migration doppelt anstoßen (Race Condition).
+	// Jetzt liefert ein laufender open() denselben Promise an alle Aufrufer; schlägt er
+	// fehl, wird der nächste Aufruf einen neuen Versuch starten.
+	function open() {
+		if (!openPromise) {
+			openPromise = (async () => {
+				db = await openRaw("impala67", 2);
+				await migrateLegacy();
+			})().catch((e) => { openPromise = null; throw e; });
+		}
+		return openPromise;
 	}
 
-	const done = (t) => new Promise((res, rej) => {
-		t.oncomplete = () => res();
-		t.onerror = () => rej(t.error);
-		t.onabort = () => rej(t.error);
-	});
-	const val = (r) => new Promise((res, rej) => {
-		r.onsuccess = () => res(r.result);
-		r.onerror = () => rej(r.error);
-	});
-
-	async function addEvent(ev) {
-		const t = db.transaction("events", "readwrite");
-		t.objectStore("events").add(ev);
-		return done(t);
-	}
 	// Viele Events in EINER Transaktion — beim Import/Sync um Größenordnungen schneller.
 	async function addEvents(evs) {
+		ensureOpen();
+		const list = Array.isArray(evs) ? evs : [evs];
+		if (!list.length) return;
+		list.forEach(validateEvent);
 		const t = db.transaction("events", "readwrite");
 		const store = t.objectStore("events");
-		evs.forEach((ev) => store.add(ev));
+		list.forEach((ev) => store.add(ev));
 		return done(t);
 	}
+	// addEvent war vorher fast identischer Code (eigene Transaktion, ein add()) —
+	// jetzt nur noch ein Alias auf addEvents([ev]) (dedupliziert).
+	const addEvent = (ev) => addEvents([ev]);
+
 	async function allEvents() {
+		ensureOpen();
 		return val(db.transaction("events").objectStore("events").getAll());
 	}
 	async function putBlob(id, buf, meta) {
+		ensureOpen();
 		const t = db.transaction("blobs", "readwrite");
 		t.objectStore("blobs").put({ buf, meta }, id);
 		return done(t);
 	}
 	async function getBlob(id) {
+		ensureOpen();
 		return val(db.transaction("blobs").objectStore("blobs").get(id));
 	}
 	async function allBlobKeys() {
+		ensureOpen();
 		return val(db.transaction("blobs").objectStore("blobs").getAllKeys());
 	}
 
 	// Embedding-Vektoren (RAG) — nicht Teil des Event-Logs, lokal neu berechenbar
 	async function putVec(pageId, rec) {
+		ensureOpen();
 		const t = db.transaction("vecs", "readwrite");
 		t.objectStore("vecs").put(rec, pageId);
 		return done(t);
 	}
 	async function getVec(pageId) {
+		ensureOpen();
 		return val(db.transaction("vecs").objectStore("vecs").get(pageId));
 	}
 	async function delVec(pageId) {
+		ensureOpen();
 		const t = db.transaction("vecs", "readwrite");
 		t.objectStore("vecs").delete(pageId);
 		return done(t);
 	}
 	async function allVecs() {
+		ensureOpen();
 		const keys = await val(db.transaction("vecs").objectStore("vecs").getAllKeys());
-		const out = {};
-		for (const k of keys) out[k] = await getVec(k);
-		return out;
+		// PERF: parallel statt einer sequenziellen await-Schleife über getVec().
+		const entries = await Promise.all(keys.map(async (k) => [k, await getVec(k)]));
+		return Object.fromEntries(entries);
 	}
 
 	// ---- Log-Kompaktierung -----------------------------------------------------
@@ -159,6 +203,7 @@ export const DB = (() => {
 	// (impala67_drive_synced_seq) muss danach neu gesetzt werden. Unter minDrop
 	// gesparten Events lohnt das Neuschreiben nicht.
 	async function compactLocal(minDrop = 200) {
+		ensureOpen();
 		const evs = await allEvents();
 		const compacted = compactEvents(evs);
 		if (evs.length - compacted.length < minDrop) return 0;
@@ -170,8 +215,9 @@ export const DB = (() => {
 		return evs.length - compacted.length;
 	}
 
-	// Höchste lokale Sequenznummer — Basis des Sync-Wasserstands („was war schon hochgeladen?“).
+	// Höchste lokale Sequenznummer — Basis des Sync-Wasserstands („war was schon hochgeladen?“).
 	function maxSeq() {
+		ensureOpen();
 		return new Promise((res, rej) => {
 			const req = db.transaction("events").objectStore("events").openCursor(null, "prev");
 			req.onsuccess = () => res(req.result ? Number(req.result.key) : 0);
@@ -180,6 +226,7 @@ export const DB = (() => {
 	}
 
 	async function exportAll() {
+		ensureOpen();
 		// Keys/Tokens niemals exportieren: alte settingsSet-Events werden beim Export
 		// bereinigt (neue enthalten ohnehin keine Secrets mehr — siehe state.js).
 		// Kompaktiert exportieren: Drive-Datei & Backups enthalten keine toten Zwischenstände.
@@ -188,6 +235,8 @@ export const DB = (() => {
 			const p = { ...ev.payload };
 			if (p.notionToken) p.notionToken = "";
 			if (p.corsProxy) p.corsProxy = "";
+			// FIX (Audit): Alt-Events mit Desktop-Secret aus Export/Drive-Sync entfernen
+			if (p.driveDesktopClientSecret) p.driveDesktopClientSecret = "";
 			if (Array.isArray(p.aiProviders)) p.aiProviders = p.aiProviders.map((pr) => ({ ...pr, key: "" }));
 			return { ...ev, payload: p };
 		});
@@ -205,20 +254,24 @@ export const DB = (() => {
 	//   unsyncedAfterSeq — Sequenznummer des letzten erfolgreichen Uploads. Lokale Events
 	//     danach kennt noch kein anderes Gerät → Basis der Konflikt-Erkennung.
 	//   pageInfo(id) — liefert {title, parentId, workspaceId} für Konfliktkopien.
-	// Rückgabe: { added, conflicts }.
+	// Rückgabe: { added, conflicts, conflictDetails }.
 	async function importAll(json, opts = {}) {
+		ensureOpen();
 		const data = JSON.parse(json);
 		// Alt-Exporte (app: "notion") bleiben importierbar — gleiche Datenstruktur, nur anderer Name.
 		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei.");
+		// FIX: fehlende Validierung — eine kaputte/fremde Exportdatei mit data.events als
+		// Nicht-Array brach bisher mit einem kryptischen ".filter is not a function" ab.
+		const incomingEvents = Array.isArray(data.events) ? data.events : [];
 		const local = await allEvents();
 		const existing = new Set(local.map((e) => e.id));
-		const fresh = (data.events || []).filter((ev) => !existing.has(ev.id));
+		const fresh = incomingEvents.filter((ev) => ev && ev.id && !existing.has(ev.id));
 		// Konflikt-Erkennung: dieselbe Seite wurde seit dem letzten Sync lokal UND auf einem
 		// anderen Gerät inhaltlich geändert. Der Log-Merge entscheidet still per „späterer
 		// Zeitstempel gewinnt“ — der unterlegene Stand wird hier als Konfliktkopie gerettet.
-		// Deterministische Event-id: erkennen BEIDE Geräte denselben Konflikt, entsteht die
-		// Kopie trotzdem nur einmal (der Merge dedupliziert nach id).
+		// conflictDetails speist das Lösungs-Popup (Grund + Diff) und den Homescreen-Banner.
 		let conflictCount = 0;
+		const conflictDetails = [];
 		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length) {
 			const contentHeads = (evs, extra) => {
 				const heads = {};
@@ -236,13 +289,90 @@ export const DB = (() => {
 				const loser = mine.t <= remote.t ? mine : remote; // Replay: späterer Zeitstempel gewinnt
 				if (existing.has("conflict-" + loser.id)) continue;
 				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
+				const title = info.title || "Seite";
+				const winner = mine.t <= remote.t ? "remote" : "local";
+				const conflictPageId = "conflictpg-" + loser.id;
+				conflictDetails.push({
+					pageId: id,
+					title,
+					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät am Inhalt geändert. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
+					localContent: mine.payload.patch.content,
+					remoteContent: remote.payload.patch.content,
+					localTime: mine.t,
+					remoteTime: remote.t,
+					winner,
+					loserContent: loser.payload.patch.content,
+					loserTime: loser.t,
+					conflictPageId,
+					eventId: "conflict-" + loser.id,
+				});
 				fresh.push({
 					id: "conflict-" + loser.id, t: U.now(), type: "pageCreate",
 					payload: {
-						id: "conflictpg-" + loser.id,
-						title: "⚠ Konflikt: " + (info.title || "Seite") + " — Stand " + loser.t.slice(0, 16).replace("T", " "),
+						id: conflictPageId,
+						title: "⚠ Konflikt: " + title + " — Stand " + loser.t.slice(0, 16).replace("T", " "),
 						content: loser.payload.patch.content,
 						parentId: info.parentId || null, workspaceId: info.workspaceId || "default",
+					},
+				});
+				conflictCount++;
+			}
+
+			// Konflikt-Erkennung (2): Löschen wettstreitet mit Verschieben/Ändern. Wird eine Seite auf
+			// einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync
+			// verschoben, wiederhergestellt oder sonst geändert wurde, gewinnt beim Log-Merge immer das
+			// Löschen (die Seite verschwindet) — der Verschiebe-/Änderungsversuch ginge sonst
+			// stillschweigend verloren (Bug: dafür wurde bisher kein Konflikt erkannt). Wie beim
+			// Inhalts-Konflikt oben retten wir den unterlegenen Stand als Kopie, statt das Löschen
+			// zu unterdrücken.
+			const lifecycleTypes = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore"]);
+			const deletesOf = (evs, extra) => {
+				const out = {};
+				for (const ev of evs) {
+					if (ev.type === "pageDelete" && ev.payload && (!extra || extra(ev))) out[ev.payload.id] = ev;
+				}
+				return out;
+			};
+			const lifecycleOf = (evs, extra) => {
+				const out = {};
+				for (const ev of evs) {
+					if (lifecycleTypes.has(ev.type) && ev.payload && (!extra || extra(ev))) {
+						if (!out[ev.payload.id] || ev.t > out[ev.payload.id].t) out[ev.payload.id] = ev; // jüngstes zählt
+					}
+				}
+				return out;
+			};
+			const localDeletes = deletesOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
+			const remoteDeletes = deletesOf(fresh);
+			const localLifecycle = lifecycleOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
+			const remoteLifecycle = lifecycleOf(fresh);
+			const lifecyclePairs = [
+				...Object.keys(localDeletes).filter((id) => remoteLifecycle[id]).map((id) => ({ id, del: localDeletes[id], moved: remoteLifecycle[id] })),
+				...Object.keys(remoteDeletes).filter((id) => localLifecycle[id]).map((id) => ({ id, del: remoteDeletes[id], moved: localLifecycle[id] })),
+			];
+			for (const { id, del, moved } of lifecyclePairs) {
+				if (existing.has("lifeconflict-" + moved.id)) continue;
+				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
+				const title = (moved.payload && moved.payload.title) || info.title || "Seite";
+				const content = info.content != null ? info.content : ((moved.payload && moved.payload.patch && moved.payload.patch.content) || "");
+				const parentId = (moved.type === "pageMove" && moved.payload.parentId) || info.parentId || null;
+				const conflictPageId = "conflictpg-" + moved.id;
+				conflictDetails.push({
+					pageId: id,
+					title,
+					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
+					deletedAt: del.t,
+					changedAt: moved.t,
+					conflictPageId,
+					eventId: "lifeconflict-" + moved.id,
+				});
+				fresh.push({
+					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate",
+					payload: {
+						id: conflictPageId,
+						title: "⚠ Konflikt (gelöscht/verschoben): " + title,
+						content,
+						parentId, workspaceId: info.workspaceId || "default",
 					},
 				});
 				conflictCount++;
@@ -250,27 +380,34 @@ export const DB = (() => {
 		}
 		fresh.forEach((ev) => { delete ev.seq; }); // neue lokale Sequenznummer
 		if (fresh.length) await addEvents(fresh);
-		for (const [k, v] of Object.entries(data.blobs || {})) {
+		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
+		for (const [k, v] of Object.entries(blobs)) {
 			if (!(await getBlob(k))) await putBlob(k, U.b64ToBuf(v.b64), v.meta);
 		}
-		return { added: fresh.length, conflicts: conflictCount };
+		return { added: fresh.length, conflicts: conflictCount, conflictDetails };
 	}
 
 	async function resetDatabase() {
-		return new Promise((resolve, reject) => {
-			if (db) db.close();
-			db = null;
-			indexedDB.deleteDatabase("notion"); // Alt-Datenbank (vor der Umbenennung) mit entsorgen
-			const req = indexedDB.deleteDatabase("impala67");
+		if (db) db.close();
+		db = null;
+		openPromise = null; // nach dem Reset muss ein neuer open()-Aufruf wieder wirklich öffnen
+		const deleteDb = (name) => new Promise((resolve, reject) => {
+			const req = indexedDB.deleteDatabase(name);
 			req.onsuccess = () => resolve();
 			req.onerror = () => reject(req.error);
 			// Ohne diesen Handler bleibt das Promise für immer offen, wenn ein anderer Tab
 			// dieselbe Datenbank noch geöffnet hält (weder onsuccess noch onerror feuern dann).
 			req.onblocked = () => reject(new Error("Datenbank ist noch in einem anderen Tab geöffnet. Bitte alle anderen Tabs dieser App schließen und erneut versuchen."));
 		});
+		// FIX: das Löschen der Alt-Datenbank ("notion") lief bisher komplett ohne
+		// Fehlerbehandlung nebenher (fire-and-forget) — Fehler verschwanden stillschweigend.
+		// Jetzt: nicht fatal (die Haupt-DB wird trotzdem gelöscht), aber sichtbar geloggt.
+		await deleteDb("notion").catch((e) => console.warn("Alt-Datenbank 'notion' konnte nicht gelöscht werden:", e));
+		await deleteDb("impala67");
 	}
 
 	async function clearPages() {
+		ensureOpen();
 		const t = db.transaction(["events", "vecs", "blobs"], "readwrite");
 		const evStore = t.objectStore("events");
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore"]);

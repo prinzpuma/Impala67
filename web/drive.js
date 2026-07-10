@@ -66,7 +66,12 @@ export const DRIVE = (() => {
 				redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier,
 			}),
 		});
-		if (!res.ok) throw new Error("Token-Tausch fehlgeschlagen: " + (await res.text()).slice(0, 200));
+			// FIX (Audit): Fehlertext nicht ungefiltert weiterreichen (könnte Token-Fragmente enthalten)
+		if (!res.ok) {
+			const raw = (await res.text()).slice(0, 200);
+			const safe = raw.replace(/[A-Za-z0-9_\-]{20,}/g, "[…]").replace(/GOCSPX-[A-Za-z0-9_\-]+/g, "[secret]");
+			throw new Error("Token-Tausch fehlgeschlagen: " + safe);
+		}
 		return res.json();
 	}
 
@@ -85,6 +90,8 @@ export const DRIVE = (() => {
 	}
 
 	function saveToken(data) {
+		// Access-/Refresh-Token bewusst nur in localStorage (pro Gerät), nie ins Event-Log/Export.
+		// Klartext ist bei installierten Apps/Browser-Storage üblich; Logout entfernt alle drei Keys.
 		token = data.access_token;
 		const expiresIn = data.expires_in ? Number(data.expires_in) : 3600;
 		localStorage.setItem("impala67_drive_token", token);
@@ -252,6 +259,7 @@ export const DRIVE = (() => {
 		if (onStatus) onStatus("Remote-Stand laden…");
 		let file = await findFile();
 		let imported = 0, conflicts = 0;
+		let conflictDetails = [];
 		// Konflikt-Erkennung braucht den Wasserstand des letzten Uploads: nur lokale
 		// Events DANACH können mit Änderungen anderer Geräte kollidieren.
 		const importOpts = {
@@ -261,7 +269,8 @@ export const DRIVE = (() => {
 		if (file) {
 			const res = await api("/drive/v3/files/" + file.id + "?alt=media");
 			const r = await DB.importAll(await res.text(), importOpts);
-			imported = r.added; conflicts = r.conflicts;
+			imported = r.added; conflicts = r.conflicts || 0;
+			conflictDetails = r.conflictDetails || [];
 			// FIX (Audit): Lost-Update-Schutz — hat ein anderes Gerät WÄHREND dieses Syncs
 			// hochgeladen (modifiedTime geändert), dessen Stand erst noch übernehmen, sonst
 			// würde der folgende Upload ihn kommentarlos überschreiben. importAll ist
@@ -270,7 +279,8 @@ export const DRIVE = (() => {
 			if (again && (again.id !== file.id || again.modifiedTime !== file.modifiedTime)) {
 				const res2 = await api("/drive/v3/files/" + again.id + "?alt=media");
 				const r2 = await DB.importAll(await res2.text(), importOpts);
-				imported += r2.added; conflicts += r2.conflicts;
+				imported += r2.added; conflicts += r2.conflicts || 0;
+				conflictDetails = conflictDetails.concat(r2.conflictDetails || []);
 				file = again;
 			}
 		}
@@ -280,7 +290,7 @@ export const DRIVE = (() => {
 		// den Wasserstand auf die dann höchste Sequenznummer setzen.
 		await DB.compactLocal();
 		localStorage.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
-		return { imported, conflicts };
+		return { imported, conflicts, conflictDetails };
 	}
 
 	return { login, logout, sync, isConnected: () => !!token };

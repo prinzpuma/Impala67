@@ -92,6 +92,18 @@ export const S = {
 };
 
 export const STATE = (() => {
+	// PERF (10. Juli): Parent→Kinder-Index für childrenOf (Sidebar-Baum war O(n²)).
+	// Vor reduce deklariert, damit Invalidierung im Hot Path greift.
+	let _childIdx = null;
+	function bustChildIdx() { _childIdx = null; }
+
+	// Race-Condition-Fix (10. Juli): serialisiert dispatch()-Aufrufe. Zwei parallele
+	// dispatch()-Aufrufe persistierten bisher unabhängig voneinander — je nachdem,
+	// welches DB.addEvent() zuerst fertig wurde, konnte reduce() in der falschen
+	// Reihenfolge laufen. Jetzt läuft höchstens ein dispatch() gleichzeitig, streng
+	// in Aufrufreihenfolge; ein Fehlschlag blockiert nachfolgende Aufrufe nicht.
+	let _dispatchChain = Promise.resolve();
+
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
 	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
 	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => n === from || n.startsWith(from + "::"));
@@ -132,6 +144,8 @@ export const STATE = (() => {
 		const p = { ...payload };
 		if ("notionToken" in p) { sec.notionToken = p.notionToken || ""; p.notionToken = ""; }
 		if ("corsProxy" in p) { sec.corsProxy = p.corsProxy || ""; p.corsProxy = ""; }
+		// FIX (Audit): Desktop-OAuth-Secret gehörte bisher ins Event-Log/Export — wie andere Secrets nur pro Gerät in localStorage.
+		if ("driveDesktopClientSecret" in p) { sec.driveDesktopClientSecret = p.driveDesktopClientSecret || ""; p.driveDesktopClientSecret = ""; }
 		if (Array.isArray(p.aiProviders)) {
 			sec.providerKeys = {};
 			p.aiProviders = p.aiProviders.map((pr) => {
@@ -146,6 +160,7 @@ export const STATE = (() => {
 		const sec = loadSecrets();
 		if (sec.notionToken) S.settings.notionToken = sec.notionToken;
 		if (sec.corsProxy) S.settings.corsProxy = sec.corsProxy;
+		if (sec.driveDesktopClientSecret) S.settings.driveDesktopClientSecret = sec.driveDesktopClientSecret;
 		(S.settings.aiProviders || []).forEach((pr) => {
 			if (sec.providerKeys && sec.providerKeys[pr.id]) pr.key = sec.providerKeys[pr.id];
 		});
@@ -155,6 +170,9 @@ export const STATE = (() => {
 		const p = ev.payload || {};
 		switch (ev.type) {
 			case "pageCreate":
+				// FIX: fehlende Validierung — ohne id konnte eine "undefined"-Seite entstehen.
+				if (!p.id) break;
+				bustChildIdx();
 				S.pages[p.id] = {
 					id: p.id, title: p.title || "Ohne Titel", parentId: p.parentId || null,
 					content: p.content || "", pdfId: p.pdfId || null, tags: p.tags || [],
@@ -169,11 +187,16 @@ export const STATE = (() => {
 			case "pageUpdate": {
 				const pg = S.pages[p.id];
 				if (!pg) break;
+				// Strukturrelevant nur bei parent/order/workspace/trash — content-only spart Index-Rebuild
+				const patch = p.patch || {};
+				if ("parentId" in patch || "order" in patch || "workspaceId" in patch || "trashed" in patch || "title" in patch)
+					bustChildIdx();
 				Object.assign(pg, p.patch);
 				pg.updated = ev.t;
 				break;
 			}
 			case "pageMove": {
+				bustChildIdx();
 				const pg = S.pages[p.id];
 				if (!pg) break;
 				// Zyklus-Schutz: eine Seite darf nie unter sich selbst oder einen eigenen
@@ -189,12 +212,14 @@ export const STATE = (() => {
 				break;
 			}
 			case "pageDelete":
+				bustChildIdx();
 				Object.values(S.pages).forEach((pg) => {
 					if (pg.parentId === p.id) pg.parentId = null; // Kinder wandern auf Root
 				});
 				delete S.pages[p.id];
 				break;
 			case "pageTrash":
+				bustChildIdx();
 				// Wie in Notion: die ganze Unterseiten-Struktur wandert zusammen in den Papierkorb.
 				collectSubtree(p.id).forEach((id) => {
 					const pg = S.pages[id];
@@ -202,12 +227,15 @@ export const STATE = (() => {
 				});
 				break;
 			case "pageRestore":
+				bustChildIdx();
 				collectSubtree(p.id).forEach((id) => {
 					const pg = S.pages[id];
 					if (pg) { pg.trashed = false; delete pg.trashedAt; }
 				});
 				break;
 			case "cardCreate":
+				// FIX: fehlende Validierung — analog zu pageCreate.
+				if (!p.id) break;
 				S.cards[p.id] = {
 					id: p.id, front: p.front, back: p.back, pageId: p.pageId || null,
 					deck: p.deck || "Standard", suspended: false,
@@ -219,7 +247,9 @@ export const STATE = (() => {
 			case "cardReview": {
 				const c = S.cards[p.id];
 				const wasNew = !!(c && c.srs && c.srs.state === "new");
-				if (c) {
+				// FIX: fehlende Validierung — ohne srs-Payload den Kartenstand nicht zerstören
+				// (c.srs = undefined hätte die Karte bisher klaglos kaputt gemacht).
+				if (c && p.srs) {
 					c.srs = p.srs;
 					// Leech-Erkennung (wie Anki): fällt eine Karte zu oft durch, wird sie
 					// markiert und — je nach Stapel-Option — automatisch ausgesetzt.
@@ -229,7 +259,8 @@ export const STATE = (() => {
 						if (conf.leechAction === "suspend") c.suspended = true;
 					}
 				}
-				// Protokoll für Statistik/Heatmap/Retention + Tageslimits (first = war neue Karte)
+				// Protokoll für Statistik/Heatmap/Retention + Tageslimits (first = war neue Karte) —
+				// bewusst unabhängig davon, ob die Karte noch existiert (Statistik bleibt vollständig).
 				S.reviews.push({ cardId: p.id, t: ev.t, grade: p.grade || 0, first: wasNew });
 				break;
 			}
@@ -237,7 +268,8 @@ export const STATE = (() => {
 				// Kompensations-Event (Log bleibt append-only): stellt den srs-Stand vor der
 				// letzten Bewertung wieder her und entfernt den Protokoll-Eintrag.
 				const c = S.cards[p.id];
-				if (!c) break;
+				// FIX: fehlende Validierung — ohne srs-Payload keine Undo-Anwendung.
+				if (!c || !p.srs) break;
 				c.srs = p.srs;
 				if ((c.srs.lapses || 0) < deckConfOf(c.deck).leechThreshold) c.leech = false;
 				if (p.unsuspend) c.suspended = false;
@@ -255,6 +287,8 @@ export const STATE = (() => {
 				delete S.cards[p.id];
 				break;
 			case "deckCreate":
+				// FIX: fehlende Validierung — ohne Namen keinen Stapel anlegen.
+				if (!p.name) break;
 				S.decks[p.name] = { name: p.name, created: ev.t };
 				break;
 			case "deckRename":
@@ -287,6 +321,8 @@ export const STATE = (() => {
 				break;
 			}
 			case "workspaceCreate":
+				// FIX: fehlende Validierung — ohne id keinen Workspace anlegen.
+				if (!p.id) break;
 				S.workspaces[p.id] = { id: p.id, name: p.name || "Workspace", created: ev.t };
 				break;
 			case "settingsSet":
@@ -295,7 +331,7 @@ export const STATE = (() => {
 		}
 	}
 
-	async function dispatch(type, payload) {
+	async function dispatchOne(type, payload) {
 		if (type === "settingsSet") payload = stripSecrets(payload);
 		const ev = { id: U.uid(), t: U.now(), type, payload };
 		// Erst persistieren, dann anwenden — sonst zeigt die UI bei einem
@@ -308,41 +344,93 @@ export const STATE = (() => {
 		}
 		reduce(ev);
 		if (type === "settingsSet") applySecrets();
-		// FIX: Nach dem ES-Module-Refactor existiert kein globales render() mehr —
-		// der alte Check `typeof render === "function"` war immer false (stilles No-Op:
-		// die UI wurde nach dispatch nicht mehr automatisch aktualisiert).
 		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
 		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
 		return ev;
 	}
 
-	async function load() {
+	// FIX (Race Condition): dispatch() serialisiert jetzt alle Aufrufe über eine
+	// Kette (_dispatchChain), statt sie parallel persistieren zu lassen. Vorher
+	// konnten zwei fast gleichzeitige dispatch()-Aufrufe ihre DB.addEvent() in
+	// beliebiger Reihenfolge abschließen und reduce() dadurch außer der Reihe
+	// anwenden — der In-Memory-Zustand konnte dann von dem abweichen, was ein
+	// erneutes load() aus dem (nach Zeitstempel sortierten) Log rekonstruiert.
+	// Jeder Aufrufer erhält weiterhin sein eigenes Promise mit Ergebnis/Fehler;
+	// ein Fehlschlag blockiert nicht die nachfolgenden dispatch()-Aufrufe.
+	function dispatch(type, payload) {
+		const run = _dispatchChain.then(() => dispatchOne(type, payload));
+		_dispatchChain = run.then(() => undefined, () => undefined);
+		return run;
+	}
+
+	// Gemeinsamer Helfer für load()/pageHistory(): Event-Log laden und deterministisch
+	// sortieren (vorher in beiden Funktionen fast identisch dupliziert).
+	async function loadSortedEvents() {
 		const evs = await DB.allEvents();
 		// Deterministisch: nach Zeitstempel, dann lokaler Sequenz
 		evs.sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
+		return evs;
+	}
+
+	async function load() {
+		const evs = await loadSortedEvents();
 		evs.forEach(reduce);
 		applySecrets(); // Keys liegen pro Gerät in localStorage, nicht im Log
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze
 	// Unterseiten-Struktur wandert gemeinsam rein bzw. wieder raus).
-	function collectSubtree(id, visited = new Set()) {
-		if (visited.has(id)) return []; // Sicherheitsnetz gegen Zyklen in Alt-Daten
-		visited.add(id);
-		const result = [id];
-		Object.values(S.pages).forEach((pg) => {
-			if (pg.parentId === id) result.push(...collectSubtree(pg.id, visited));
-		});
+	// PERF (10. Juli): baut EINMAL eine Eltern→Kinder-Liste über alle Seiten auf,
+	// statt bei jedem rekursiven Schritt erneut komplett über S.pages zu scannen
+	// (vorher O(n²) im Worst Case bei tiefen/breiten Bäumen). Iterativ mit einem
+	// Stack statt Rekursion, Zyklen-Schutz wie zuvor über ein Set.
+	function collectSubtree(id) {
+		const byParent = new Map();
+		for (const pg of Object.values(S.pages)) {
+			const key = pg.parentId || null;
+			let kids = byParent.get(key);
+			if (!kids) { kids = []; byParent.set(key, kids); }
+			kids.push(pg.id);
+		}
+		const result = [];
+		const visited = new Set();
+		const stack = [id];
+		while (stack.length) {
+			const cur = stack.pop();
+			if (visited.has(cur)) continue; // Sicherheitsnetz gegen Zyklen in Alt-Daten
+			visited.add(cur);
+			result.push(cur);
+			const kids = byParent.get(cur);
+			if (kids) stack.push(...kids);
+		}
 		return result;
 	}
 
 	// Sidebar-Reihenfolge: explizit gesetzte order (per Drag & Drop) hat Vorrang,
 	// sonst Erstellzeit — so bleiben Alt-Daten stabil sortiert wie bisher.
 	const sortKeyOf = (pg) => (typeof pg.order === "number" ? pg.order : (Date.parse(pg.created) || 0));
-	const childrenOf = (id, wsId) => Object.values(S.pages)
-		.filter((pg) => !pg.trashed && (pg.parentId || null) === (id || null)
-			&& (pg.workspaceId || "default") === (wsId || S.currentWorkspaceId))
-		.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || a.created.localeCompare(b.created));
+	// PERF (10. Juli): childrenOf war O(n) pro Aufruf → Sidebar-Baum O(n²).
+	// Parent→Kinder-Index (_childIdx / bustChildIdx am IIFE-Kopf).
+	function ensureChildIdx() {
+		if (_childIdx) return _childIdx;
+		const m = new Map();
+		for (const pg of Object.values(S.pages)) {
+			if (pg.trashed) continue;
+			const k = (pg.workspaceId || "default") + "\0" + (pg.parentId || "");
+			let arr = m.get(k);
+			if (!arr) { arr = []; m.set(k, arr); }
+			arr.push(pg);
+		}
+		for (const arr of m.values()) {
+			arr.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || a.created.localeCompare(b.created));
+		}
+		_childIdx = m;
+		return m;
+	}
+	const childrenOf = (id, wsId) => {
+		const k = (wsId || S.currentWorkspaceId || "default") + "\0" + (id || "");
+		return (ensureChildIdx().get(k) || []).slice();
+	};
 
 	const trashedPages = () => Object.values(S.pages)
 		.filter((pg) => pg.trashed)
@@ -354,24 +442,31 @@ export const STATE = (() => {
 
 	const pageTitles = () => activePages().map((pg) => pg.title);
 
+	// PERF: EIN Durchlauf statt zweier separater .find()-Durchläufe (Exakt- und
+	// Teilstring-Treffer), inklusive nur je einmal berechnetem toLowerCase() pro Seite.
 	function findPage(title) {
 		if (!title) return null;
-		const all = activePages();
 		const q = String(title).toLowerCase();
-		return all.find((pg) => pg.title.toLowerCase() === q)
-			|| all.find((pg) => pg.title.toLowerCase().includes(q))
-			|| null;
+		let partial = null;
+		for (const pg of activePages()) {
+			const t = pg.title.toLowerCase();
+			if (t === q) return pg;
+			if (!partial && t.includes(q)) partial = pg;
+		}
+		return partial;
 	}
 
 	function searchNotes(query) {
 		const q = String(query).toLowerCase();
 		if (!q) return [];
 		return activePages().map((pg) => {
-			const hay = (pg.title + "\n" + pg.content).toLowerCase();
+			// FIX: "title + \n + content" wurde vorher zweimal berechnet (einmal für hay,
+			// einmal für raw) — jetzt nur noch einmal.
+			const raw = pg.title + "\n" + pg.content;
+			const hay = raw.toLowerCase();
 			const idx = hay.indexOf(q);
 			if (idx < 0) return null;
 			const score = (pg.title.toLowerCase().includes(q) ? 10 : 0) + hay.split(q).length - 1;
-			const raw = pg.title + "\n" + pg.content;
 			return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
 		}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
 	}
@@ -420,8 +515,7 @@ export const STATE = (() => {
 	// Event-Log (Titel-/Inhaltsänderungen). Das Log ist append-only — der Verlauf
 	// ist also vollständig, ohne dass extra Snapshots gespeichert werden müssen.
 	async function pageHistory(pageId) {
-		const evs = await DB.allEvents();
-		evs.sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
+		const evs = await loadSortedEvents();
 		const versions = [];
 		let cur = null;
 		for (const ev of evs) {

@@ -266,17 +266,26 @@ export const EDITOR = (() => {
 	}
 
 	// Aktiven Block festschreiben: der bearbeitete Text kann mehrere Blöcke ergeben
+	// PERF: Bei 1:1-Commit die Block-ID behalten — sonst invalidiert jeder Fokuswechsel
+	// den inkrementellen draw()-Pfad (parse() vergibt sonst neue UUIDs).
 	function commitActive() {
 		if (!activeId) return;
 		const ta = host ? host.querySelector(".blk-input") : null;
 		const idx = blocks.findIndex((x) => x.id === activeId);
+		const keepId = activeId;
 		activeId = null;
 		closeSlash();
 		closeLinkMenu();
 		if (idx === -1) return;
 		const val = ta ? ta.value : blocks[idx].raw;
-		if (!val.trim()) blocks[idx] = newBlock("p", "");
-		else blocks.splice(idx, 1, ...parse(val));
+		if (!val.trim()) {
+			blocks[idx] = newBlock("p", "");
+			blocks[idx].id = keepId;
+		} else {
+			const parsed = parse(val);
+			if (parsed.length === 1) parsed[0].id = keepId;
+			blocks.splice(idx, 1, ...parsed);
+		}
 		saveSoon();
 	}
 
@@ -711,11 +720,15 @@ export const EDITOR = (() => {
 		let idx = blkEl ? blocks.findIndex((x) => x.id === blkEl.dataset.bid) : blocks.length - 1;
 		if (idx < 0) idx = blocks.length - 1;
 		for (const f of files) {
-			const buf = await U.readAsBuffer(f);
-			const blobId = "img:" + U.uid();
-			await DB.putBlob(blobId, buf, { name: f.name || "bild", type: f.type });
-			const alt = String(f.name || "Bild").replace(/[\[\]()]/g, "");
-			blocks.splice(++idx, 0, newBlock("p", "![" + alt + "](" + blobId + ")"));
+			try {
+				const buf = await U.readAsBuffer(f);
+				const blobId = "img:" + U.uid();
+				await DB.putBlob(blobId, buf, { name: f.name || "bild", type: f.type });
+				const alt = String(f.name || "Bild").replace(/[\[\]()]/g, "");
+				blocks.splice(++idx, 0, newBlock("p", "![" + alt + "](" + blobId + ")"));
+			} catch (err) {
+				U.toast("Bild konnte nicht eingefügt werden: " + (err.message || err), "error");
+			}
 		}
 		await save();
 		draw();

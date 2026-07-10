@@ -11,7 +11,7 @@
 // gesamte ES-Module-Graph, weil render.js/tools.js/extras.js es importieren).
 // v6: sql.js (.apkg-Import) in den CDN-Precache aufgenommen — der Anki-Import
 // funktioniert damit auch offline.
-const CACHE = "impala67-v11";
+const CACHE = "impala67-v12";
 
 const APP_FILES = [
 	"./",

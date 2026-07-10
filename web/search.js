@@ -15,6 +15,7 @@ import { APP } from "./app.js";
 
 let items = []; // aktuell angezeigte, auswählbare Einträge (für ↑/↓ und Enter)
 let selIdx = 0;
+let paletteMode = "command"; // "command" = Strg+K | "newTab" = Plus in der Tab-Leiste (Notion-Stil)
 
 function host() {
 	let el = U.el("palette");
@@ -33,12 +34,17 @@ export function isPaletteOpen() {
 	return !!el && !el.hidden;
 }
 
-export function openPalette() {
+function openPaletteUi(mode, placeholder) {
+	paletteMode = mode || "command";
 	const el = host();
 	el.hidden = false;
-	el.innerHTML = '<div class="palette-box">' +
-		'<input id="paletteInput" placeholder="Suchen oder Befehl eingeben…" autocomplete="off">' +
+	el.dataset.mode = paletteMode;
+	el.innerHTML = '<div class="palette-box' + (paletteMode === "newTab" ? " palette-newtab" : "") + '">' +
+		'<input id="paletteInput" placeholder="' + U.esc(placeholder || "Suchen oder Befehl eingeben…") + '" autocomplete="off">' +
 		'<div id="paletteList" class="palette-list"></div>' +
+		(paletteMode === "newTab"
+			? '<div class="palette-foot"><span><kbd>↵</kbd> Öffnen</span><span><kbd>Esc</kbd> Schließen</span></div>'
+			: "") +
 		"</div>";
 	selIdx = 0;
 	renderList("");
@@ -46,9 +52,19 @@ export function openPalette() {
 	if (inp) inp.focus();
 }
 
+export function openPalette() {
+	openPaletteUi("command", "Suchen oder Befehl eingeben…");
+}
+
+// Notion-artiges Menü beim „+“ in der Tab-Leiste: suchen & in neuem Tab öffnen
+export function openNewTabMenu() {
+	openPaletteUi("newTab", "In neuem Tab öffnen…");
+}
+
 export function closePalette() {
 	const el = U.el("palette");
-	if (el) { el.hidden = true; el.innerHTML = ""; }
+	if (el) { el.hidden = true; el.innerHTML = ""; delete el.dataset.mode; }
+	paletteMode = "command";
 }
 
 // Der 🔍-Button in der Sidebar-Topbar öffnet/schließt ebenfalls das Befehls-Menü.
@@ -64,7 +80,9 @@ function actionItems() {
 	return [
 		{ type: "action", icon: "＋", label: "Neue Seite", run: () => APP.newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
 		{ type: "action", icon: "🃏", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
-		{ type: "action", icon: "▱", label: "Karten verwalten", run: click("btnCards") },
+		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
+		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
+		{ type: "action", icon: "▱", label: "Karten verwalten", run: () => APP.openAnki("browser") },
 		{ type: "action", icon: "📅", label: "Daily Note von heute öffnen", run: () => APP.openDailyNote(RENDER.localDayKey(new Date())) },
 		{ type: "action", icon: "🗓", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
 		{ type: "action", icon: "📓", label: "NotebookLM öffnen", run: click("btnNotebookLM") },
@@ -78,9 +96,66 @@ function actionItems() {
 	];
 }
 
+// Aktionen nur für das „+ Tab“-Menü (wie in Notion oben: Neuer Chat / Neue Seite)
+function newTabActions() {
+	const wsId = S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default";
+	return [
+		{ type: "action", icon: "✦", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
+			if (typeof APP.startNewChat === "function") APP.startNewChat({ newTab: true });
+			else {
+				// Fallback: Chat-Tab-Button / neue Session über Sidebar-Flow
+				const b = U.el("btnChatTab");
+				if (b) b.click();
+			}
+		} },
+		{ type: "action", icon: "📄", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
+			// Immer in neuem Tab anlegen (wie Notion + → Neue Seite)
+			if (typeof APP.createPageInNewTab === "function") await APP.createPageInNewTab(wsId, null);
+			else await APP.newPageFlow(wsId, null);
+		} },
+	];
+}
+
+// Breadcrumb-Pfad einer Seite für die New-Tab-Liste (Workspace › Eltern › …)
+function pagePathLabel(pg) {
+	if (!pg) return "";
+	const parts = [];
+	let cur = pg;
+	const guard = new Set();
+	while (cur && cur.parentId && !guard.has(cur.parentId)) {
+		guard.add(cur.parentId);
+		const p = S.pages[cur.parentId];
+		if (!p || p.trashed) break;
+		parts.unshift(p.title || "");
+		cur = p;
+	}
+	const ws = S.workspaces[pg.workspaceId] || S.workspaces.default;
+	if (ws && ws.name) parts.unshift(ws.name);
+	return parts.filter(Boolean).join(" › ");
+}
+
 function gather(q) {
 	const ql = q.trim().toLowerCase();
 	const rows = [];
+
+	// Plus-Tab-Menü: Schnellaktionen oben, dann Seiten/Chats (Titel-Suche, mehr Treffer)
+	if (paletteMode === "newTab") {
+		const acts = newTabActions().filter((a) => !ql || a.label.toLowerCase().includes(ql));
+		if (acts.length) rows.push({ head: "" }, ...acts);
+		const pages = (ql
+			? STATE.activePages().filter((p) => (p.title || "").toLowerCase().includes(ql)
+				|| pagePathLabel(p).toLowerCase().includes(ql))
+			: STATE.activePages().slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 14)
+		).map((p) => ({ type: "page", page: p, path: pagePathLabel(p) }));
+		let chats = (typeof CHATS !== "undefined") ? CHATS.load() : [];
+		chats = (ql
+			? chats.filter((s) => (s.title || "").toLowerCase().includes(ql))
+			: chats).slice(0, ql ? 8 : 4);
+		if (pages.length) rows.push({ head: ql ? "Seiten" : "Zuletzt" }, ...pages);
+		if (chats.length) rows.push({ head: "Chats" }, ...chats.map((s) => ({ type: "chat", chat: s })));
+		return rows;
+	}
+
 	const pages = ql
 		? STATE.searchNotes(ql).map((r) => ({ type: "page", page: r.page, snippet: r.snippet }))
 		: STATE.activePages().slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 6).map((p) => ({ type: "page", page: p }));
@@ -116,35 +191,44 @@ function renderList(q) {
 		if (r.type === "page") {
 			const pg = r.page;
 			const snip = r.snippet ? r.snippet.replace(/\s+/g, " ").trim().slice(0, 110) : "";
+			const path = r.path || "";
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
-				'<span class="palette-icon">' + (pg.icon ? U.esc(pg.icon) : pg.pdfId ? "📄" : "📝") + "</span>" +
+				'<span class="palette-icon">' + U.esc(RENDER.pageIconLabel(pg)) + "</span>" +
 				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, ql) + "</span>" +
-				(snip ? '<span class="palette-snip">' + mark(snip, ql) + "</span>" : "") + "</span>" +
-				'<span class="palette-kind">' + U.fmtDate(pg.updated) + "</span></button>";
+				(path ? '<span class="palette-snip">' + mark(path, ql) + "</span>"
+					: (snip ? '<span class="palette-snip">' + mark(snip, ql) + "</span>" : "")) +
+				"</span>" +
+				'<span class="palette-kind">' + (paletteMode === "newTab" && path ? U.esc(path.split(" › ").slice(-1)[0] || "") : U.fmtDate(pg.updated)) + "</span></button>";
 		}
 		if (r.type === "chat") {
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
-				'<span class="palette-icon">💬</span>' +
+				'<span class="palette-icon">✦</span>' +
 				'<span class="palette-main"><span class="palette-title">' + mark(r.chat.title || "Chat", ql) + "</span></span>" +
 				'<span class="palette-kind">' + U.fmtDate(r.chat.updated || r.chat.created) + "</span></button>";
 		}
 		return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
 			'<span class="palette-icon">' + r.icon + "</span>" +
 			'<span class="palette-main"><span class="palette-title">' + mark(r.label, ql) + "</span></span>" +
-			'<span class="palette-kind">Aktion</span></button>';
+			'<span class="palette-kind">' + U.esc(r.kind || "Aktion") + "</span></button>";
 	}).join("") || '<div class="empty">Nichts gefunden</div>';
 	const selEl = list.querySelector(".palette-item.selected");
 	if (selEl) selEl.scrollIntoView({ block: "nearest" });
 }
 
 function runItem(it) {
+	const asNewTab = paletteMode === "newTab";
 	closePalette();
 	if (!it) return;
-	if (it.type === "page") TABS.openPage(it.page.id);
-	else if (it.type === "chat") TABS.openPage("chat:" + it.chat.id);
+	if (it.type === "page") TABS.openPage(it.page.id, asNewTab ? { newTab: true } : undefined);
+	else if (it.type === "chat") TABS.openPage("chat:" + it.chat.id, asNewTab ? { newTab: true } : undefined);
 	else if (it.run) it.run();
 }
 
+// FIX: ↑/↓/Enter/Escape griffen bisher nur, solange der Fokus exakt im
+// Eingabefeld lag (e.target.id === "paletteInput"). Landete der Fokus aus
+// irgendeinem Grund auf einem Listeneintrag, reagierte insbesondere Escape
+// gar nicht mehr — genau das Muster "Menü lässt sich nicht schließen".
+// Jetzt reicht jedes Tastatur-Ziel INNERHALB des Befehls-Menüs.
 function wirePalette(el) {
 	el.addEventListener("click", (e) => {
 		if (e.target === el) { closePalette(); return; } // Klick auf den Hintergrund schließt
@@ -155,10 +239,11 @@ function wirePalette(el) {
 		if (e.target.id === "paletteInput") { selIdx = 0; renderList(e.target.value); }
 	});
 	el.addEventListener("keydown", (e) => {
-		if (e.target.id !== "paletteInput") return;
+		if (!el.contains(e.target)) return;
+		const inputVal = (U.el("paletteInput") || {}).value || "";
 		if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") e.stopPropagation();
-		if (e.key === "ArrowDown") { e.preventDefault(); selIdx = Math.min(items.length - 1, selIdx + 1); renderList(e.target.value); }
-		else if (e.key === "ArrowUp") { e.preventDefault(); selIdx = Math.max(0, selIdx - 1); renderList(e.target.value); }
+		if (e.key === "ArrowDown") { e.preventDefault(); selIdx = Math.min(items.length - 1, selIdx + 1); renderList(inputVal); }
+		else if (e.key === "ArrowUp") { e.preventDefault(); selIdx = Math.max(0, selIdx - 1); renderList(inputVal); }
 		else if (e.key === "Enter") { e.preventDefault(); runItem(items[selIdx]); }
 		else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
 	});
@@ -166,6 +251,7 @@ function wirePalette(el) {
 
 export const SEARCH = {
 	openPalette,
+	openNewTabMenu,
 	closePalette,
 	isPaletteOpen,
 	handleSearchToggle

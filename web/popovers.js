@@ -1,12 +1,14 @@
 "use strict";
 
 // popovers.js — eine gemeinsame Steuerung für alle schwebenden Menüs.
-// Zentralisiert Positionierung, gegenseitiges Schließen und Außenklick-Erkennung
-// für Seiten-/Stapel-Menüs, Topbar-Menüs, Modellwahl und Dateianhänge.
+// Zentralisiert Positionierung, gegenseitiges Schließen, Außenklick-Erkennung
+// und kleine Fokus-Helfer für Seiten-/Stapel-Menüs, Topbar-Menüs, Modellwahl
+// und Dateianhänge — EIN Ort für alle wiederkehrenden Popover-Muster.
 
 import { S } from "./state.js";
 import { U } from "./util.js";
 
+// Positioniert `menu` (fixed) relativ zu `anchor`, bleibt innerhalb des Viewports.
 export function position(anchor, menu, opts = {}) {
 	if (!anchor || !menu) return;
 	const gap = opts.gap == null ? 4 : opts.gap;
@@ -28,25 +30,39 @@ export function position(anchor, menu, opts = {}) {
 	menu.style.visibility = "visible";
 }
 
+// Errät aus der Element-ID, welcher closeAll()-Kategorie ein Menü/Auslöser
+// angehört — so muss jede Aufrufstelle von toggleElement() den Typ nicht selbst kennen.
+function guessCategory(el) {
+	const id = (el && el.id) || "";
+	if (/model/i.test(id)) return "model";
+	if (/attach/i.test(id)) return "attach";
+	return "";
+}
+
+// Generischer Auf/Zu-Umschalter für ein Popover: schließt beim Öffnen alle
+// ANDEREN Popover (nie sich selbst) und positioniert relativ zum Auslöser.
+// FIX: `except` war früher hart auf "attach" gesetzt — jedes Menü, das über
+// toggleElement lief (z.B. das Modell-Menü), schloss dadurch fälschlich nicht
+// das Anhang-Menü ("Menü schließt sich nicht"). Jetzt wird die eigene
+// Kategorie automatisch erkannt (Menü- oder Anker-ID) bzw. per opts.except
+// explizit übergeben, und nur die WIRKLICH anderen Popover werden geschlossen.
 export function toggleElement(menu, anchor, opts = {}) {
 	if (!menu) return false;
 	if (!menu.hidden) { menu.hidden = true; return false; }
-	// Das gerade geöffnete Composer-Menü aussparen; alle anderen Varianten
-	// (auch Modell-Menüs im jeweils anderen Chat) werden zuverlässig geschlossen.
-	closeAll("attach");
+	closeAll(opts.except || guessCategory(menu) || guessCategory(anchor));
 	position(anchor, menu, opts);
 	return true;
 }
 
-// Schließt alle anderen Menüs, wenn ein neues geöffnet wird.
+// Schließt alle Popover-Kategorien außer der in `except` genannten.
 export function closeAll(except = "") {
 	const changed = { model: false, sidebar: false, main: false, attach: false };
 	const attach = U.el("attachMenu");
 	if (except !== "attach" && attach && !attach.hidden) { attach.hidden = true; changed.attach = true; }
 	if (except !== "model") {
 		// Modell-Menüs werden normalerweise über den Render-State gesteuert. Beim
-		// Öffnen des Anhang-Menüs gibt es aber kein komplettes Re-Render — deshalb
-		// beide DOM-Varianten hier sofort ausblenden, damit sie nie überlappen.
+		// Öffnen eines anderen Menüs gibt es aber kein komplettes Re-Render —
+		// deshalb beide DOM-Varianten hier sofort ausblenden, damit sie nie überlappen.
 		[U.el("modelMenu"), U.el("modelMenuFull")].forEach((menu) => {
 			if (menu && !menu.hidden) menu.hidden = true;
 		});
@@ -58,6 +74,7 @@ export function closeAll(except = "") {
 	return changed;
 }
 
+// Ermittelt aus einem Klick-Ziel, welche Popover-Kategorie offen bleiben soll.
 export function closeOutside(target) {
 	const keep = target && target.closest
 		? target.closest("#attachMenu,#btnAttach,#btnAttachFull") ? "attach"
@@ -68,8 +85,16 @@ export function closeOutside(target) {
 		: target.closest(".top-menu,[data-sharemenu],[data-morepagemenu]") ? "top"
 		: ""
 		: "";
-	const changed = closeAll(keep);
-	return changed;
+	return closeAll(keep);
 }
 
-export const POPOVERS = { position, toggleElement, closeAll, closeOutside };
+// Kleiner, wiederkehrender Fokus-Helfer: Notion blendet die Text-/Eingabe-
+// Auswahl konsequent aus, sobald eine Navigations- oder Menü-Aktion ausgeführt
+// wird — vorher war das in jedem Modul einzeln als "if (document.activeElement)
+// document.activeElement.blur();" nachgebaut (siehe tabs.js).
+export function blurActive() {
+	const ae = document.activeElement;
+	if (ae && typeof ae.blur === "function") ae.blur();
+}
+
+export const POPOVERS = { position, toggleElement, closeAll, closeOutside, blurActive };

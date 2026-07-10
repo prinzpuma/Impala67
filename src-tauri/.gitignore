@@ -3,3 +3,4 @@
 /target/
 /gen/schemas
 web/config.local.js
+web/.env

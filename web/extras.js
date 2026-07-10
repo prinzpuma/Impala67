@@ -417,7 +417,14 @@ export const EXTRAS = (() => {
 	}
 	async function clozeSaveFromEditor() {
 		const front = U.el("cardFront") ? U.el("cardFront").value : "";
-		const deck = U.el("cardDeck") ? (U.el("cardDeck").value.trim() || "Standard") : "Standard";
+		// Gleicher Stapel-Pfad wie der normale Karten-Editor (Select + optionaler neuer Name)
+		let deck = "Standard";
+		const reader = (typeof window !== "undefined" && (window.readCardEditorDeck || (window.RENDER_ANKI && window.RENDER_ANKI.readCardEditorDeck))) || null;
+		if (reader) deck = reader();
+		else if (U.el("cardDeck")) {
+			const v = U.el("cardDeck").value;
+			deck = v === "__new__" ? ((U.el("cardDeckNew") || {}).value || "").trim() || "Standard" : (v || "Standard");
+		}
 		const n = await createClozeCards(front, deck, S.currentPageId);
 		if (!n) { U.toast("Keine Cloze-Lücken gefunden — erst Text markieren und „Lücke einfügen“ klicken.", "error"); return; }
 		U.el("overlay").hidden = true;
