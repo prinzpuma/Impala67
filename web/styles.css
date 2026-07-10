@@ -1406,3 +1406,37 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.conflict-banner { flex-direction: column; align-items: stretch; }
 	.conflict-diff { max-height: 42dvh; }
 }
+
+/* ==========================================================================
+   iPad & Touch v4 — Tablet-Layout (769–1024px), Safe-Areas, Touch-Feinschliff
+   ========================================================================== */
+/* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Zoom unterbinden */
+html, body { overscroll-behavior: none; }
+button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .palette-item {
+	touch-action: manipulation;
+}
+
+/* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalten-Grid ist hier
+   zu breit — Sidebar schmaler, KI-Panel als Overlay von rechts statt fester Spalte */
+@media (min-width: 769px) and (max-width: 1024px) {
+	#app { grid-template-columns: 220px minmax(0, 1fr); }
+	#panel { position: fixed; z-index: 25; top: 12px; right: 12px; bottom: 12px;
+		width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg); }
+	body.chat-full #app { grid-template-columns: 220px 1fr; }
+	body.chat-full #panel { position: static; width: auto; box-shadow: none; }
+}
+
+/* Notch/Home-Indicator: Ränder respektieren (viewport-fit=cover ist in index.html gesetzt) */
+@media (max-width: 768px) {
+	body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+	#app { padding-left: max(6px, env(safe-area-inset-left));
+		padding-right: max(6px, env(safe-area-inset-right)); }
+}
+
+/* Lernen auf Touch: Bewertungsleiste bleibt über der Bottom-Nav erreichbar */
+@media (pointer: coarse) and (max-width: 768px) {
+	.study-card { padding-bottom: 84px; }
+	.study-card .grades { position: sticky; bottom: 70px; z-index: 2;
+		background: var(--panel-solid); border: 1px solid var(--edge-soft);
+		border-radius: 12px; padding: 6px; }
+}

@@ -253,7 +253,7 @@ export const EXTRAS = (() => {
 		let pos = 1;
 		for (const c of Object.values(S.cards)) {
 			id += 1;
-			stmtN.run([id, U.uid().slice(0, 10), mid, nowSec, -1, "", (c.front || "") + "" + (c.back || ""), (c.front || "").slice(0, 80), 0, 0, ""]);
+			stmtN.run([id, U.uid().slice(0, 10), mid, nowSec, -1, "", (c.front || "") + "\x1f" + (c.back || ""), (c.front || "").slice(0, 80), 0, 0, ""]);
 			const isNew = c.srs.state === "new";
 			const dueDays = Math.max(0, Math.round((new Date(c.srs.due) - crt * 1000) / 864e5));
 			stmtC.run([id, id, deckIds[c.deck || "Standard"] || 1, 0, nowSec, -1,
@@ -324,7 +324,9 @@ export const EXTRAS = (() => {
 		const res = db.exec("SELECT n.flds, c.did FROM notes n JOIN cards c ON c.nid = n.id AND c.ord = 0");
 		let n = 0;
 		for (const rowv of ((res[0] && res[0].values) || [])) {
-			const flds = String(rowv[0]).split("");
+			// "\x1f" (Unit Separator) trennt Anki-Felder — bewusst als Escape-Sequenz,
+			// damit das unsichtbare Steuerzeichen beim Kopieren nicht verloren geht.
+			const flds = String(rowv[0]).split("\x1f");
 			const front = stripHtml(flds[0]);
 			if (!front) continue;
 			await STATE.dispatch("cardCreate", {
@@ -531,6 +533,11 @@ export const EXTRAS = (() => {
 		if ((el = q("[data-cardsfromhl]"))) { await cardsFromHighlights(el.dataset.cardsfromhl); if (typeof render === "function") render(); return; }
 		if (q("[data-clozewrap]")) { clozeWrapSelection(); return; }
 		if (q("[data-clozesave]")) { await clozeSaveFromEditor(); return; }
+		// Touch: Doppel-Tipp auf der Bewertungsleiste würde sonst die nächste Karte
+		// gleich mitbewerten — nach dem ersten Tipp bis zum Re-Render sperren.
+		if ((el = q(".grades button")) && !el.disabled) {
+			el.closest(".grades").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+		}
 	});
 
 	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd, openNotebookLM };
