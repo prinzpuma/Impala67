@@ -447,9 +447,11 @@ export const EXTRAS = (() => {
 	async function openNotebookLM() {
 		const url = "https://notebooklm.google.com/";
 		const T = window.__TAURI__;
+		// Browser: normaler Tab. popup=yes wirkte wie eine eigene Chrome-App-Fenster.
+		// iframe ist unmöglich (X-Frame-Options/CSP von Google).
 		const openExtern = () => {
 			if (T && T.shell && T.shell.open) T.shell.open(url);
-			else window.open(url, "impala67-notebooklm", "popup=yes,width=1280,height=860");
+			else window.open(url, "_blank", "noopener,noreferrer");
 		};
 		if (T && T.webviewWindow && T.webviewWindow.WebviewWindow) {
 			try {

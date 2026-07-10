@@ -46,10 +46,12 @@ export const NLM = (() => {
 		const t = T();
 		return t && t.core && t.core.invoke ? t.core.invoke(cmd, args) : Promise.reject(new Error("kein Tauri"));
 	};
+	// Browser: normaler Tab (kein popup=yes — das wirkte wie eine eigene Chrome-App).
+	// Google blockiert iframes (X-Frame-Options), deshalb kein Einbetten im Browser.
 	const openFallbackDefault = () => {
 		const t = T();
 		if (t && t.shell && t.shell.open) t.shell.open(NLM_URL);
-		else window.open(NLM_URL, "impala67-notebooklm", "popup=yes,width=1280,height=860");
+		else window.open(NLM_URL, "_blank", "noopener,noreferrer");
 	};
 
 	// ---- Mini-Ablage für übernommene Downloads (eigene IndexedDB — bewusst getrennt
@@ -89,22 +91,42 @@ export const NLM = (() => {
 	}
 
 	// ---- NotebookLM eingebettet im Hauptfenster (nur Desktop). Das Webview liegt ÜBER der
-	//      App-UI — eigene schmale Leiste oben zum Zurückwechseln. Größen in CSS-Pixeln
-	//      (Tauri LogicalPosition/LogicalSize rechnen selbst mit dem Display-Scaling). ----
+	//      App-UI (natives Tauri-Layer) — Größen in CSS-Pixeln
+	//      (Tauri LogicalPosition/LogicalSize rechnen selbst mit dem Display-Scaling).
+	//      Deshalb: bei #overlay / #palette (Strg+K, Neue Seite, Dialoge) kurz ausblenden. ----
 	let embedded = false;
+	let uiPaused = false;
 	let pendingFallback = null;
 	let resizeObserverNlm = null;
+	let uiWatchReady = false;
 	function hostRect() {
 		const host = document.getElementById("nlmHost");
 		return host ? host.getBoundingClientRect() : null;
 	}
+	function isAppUiBlocking() {
+		const o = document.getElementById("overlay");
+		if (o && !o.hidden) return true;
+		const p = document.getElementById("palette");
+		if (p && !p.hidden) return true;
+		return false;
+	}
+	function hideWebviewOnly() {
+		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
+	}
 	async function positionEmbedded(closeTabOnFail) {
 		if (S.view !== "notebooklm") return;
+		// Strg+K / Dialoge: natives Webview deckt sonst die HTML-UI ab.
+		if (isAppUiBlocking()) {
+			uiPaused = true;
+			hideWebviewOnly();
+			return;
+		}
 		const r = hostRect();
-		if (!r) return;
+		if (!r || r.width < 2 || r.height < 2) return;
 		try {
 			await invoke("nlm_webview", { show: true, x: r.left, y: r.top, w: r.width, h: r.height });
 			embedded = true;
+			uiPaused = false;
 		} catch (e) {
 			embedded = false;
 			if (closeTabOnFail) {
@@ -112,6 +134,40 @@ export const NLM = (() => {
 				(pendingFallback || openFallbackDefault)();
 			}
 		}
+	}
+	function syncEmbeddedToUi() {
+		if (S.view !== "notebooklm") return;
+		if (isAppUiBlocking()) {
+			if (!uiPaused) {
+				uiPaused = true;
+				hideWebviewOnly();
+			}
+			return;
+		}
+		if (uiPaused || embedded) {
+			uiPaused = false;
+			positionEmbedded(false);
+		}
+	}
+	function watchAppUiOverlays() {
+		if (uiWatchReady) return;
+		uiWatchReady = true;
+		const watched = new WeakSet();
+		const attach = (el) => {
+			if (!el || watched.has(el)) return;
+			watched.add(el);
+			const mo = new MutationObserver(() => syncEmbeddedToUi());
+			mo.observe(el, { attributes: true, attributeFilter: ["hidden", "class", "style"] });
+		};
+		attach(document.getElementById("overlay"));
+		attach(document.getElementById("palette"));
+		// #palette wird lazy in search.js erzeugt — nachziehen, sobald es im DOM ist.
+		const bodyMo = new MutationObserver(() => {
+			attach(document.getElementById("overlay"));
+			attach(document.getElementById("palette"));
+			syncEmbeddedToUi();
+		});
+		bodyMo.observe(document.body, { childList: true, subtree: true });
 	}
 	function hideEmbeddedIfActive() {
 		// Nicht auf den lokalen Status vertrauen: Das Webview kann noch sichtbar sein,
@@ -121,11 +177,13 @@ export const NLM = (() => {
 			resizeObserverNlm = null;
 		}
 		embedded = false;
-		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
+		uiPaused = false;
+		hideWebviewOnly();
 	}
 	window.addEventListener("resize", () => positionEmbedded(false));
 	// tabs.js meldet das Schließen synchron, noch bevor die Ansicht neu gerendert wird.
 	window.addEventListener("impala67:nlm-hide", hideEmbeddedIfActive);
+	watchAppUiOverlays();
 	function renderPane(main) {
 		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">Downloads landen automatisch in Impala</span></div><div id="nlmHost" class="nlm-host"></div></div>';
 		const host = document.getElementById("nlmHost");
@@ -134,6 +192,7 @@ export const NLM = (() => {
 			resizeObserverNlm = new ResizeObserver(() => positionEmbedded(false));
 			resizeObserverNlm.observe(host);
 		}
+		watchAppUiOverlays();
 		positionEmbedded(true);
 	}
 	function open(openFallback) {
