@@ -209,7 +209,17 @@ async function openHistory(pageId) {
 
 // NOTION_MIGRATOR ist jetzt in import-notion.js ausgelagert.
 
-
+// Einheitlicher Einstieg für neue Chats — wird von Sidebar und Home-Dashboard genutzt.
+function startNewChat() {
+	saveCurrentChat();
+	const newId = U.uid();
+	const list = CHATS.load();
+	list.unshift({ id: newId, title: "", created: U.now(), updated: U.now(), messages: [] });
+	CHATS.save(list);
+	S.chat = [];
+	S.currentChatId = newId;
+	openPage("chat:" + newId);
+}
 
 function wireEvents() {
 	// Datenbank-Tabellen: Zellwert speichern (props der Zeilen-Seite) — normales
@@ -267,6 +277,68 @@ function wireEvents() {
 		if (closedPopovers.sidebar) renderSidebar();
 		if (closedPopovers.main) renderMain();
 		if (!t) return;
+
+		// Darstellung: dieselben zentralen Optionen steuern alle Komponenten über CSS-Tokens.
+		if (t.dataset.accent) { SETTINGS.handleAppearanceSelect("accent", t.dataset.accent); return; }
+		if (t.dataset.dashtoggle) { SETTINGS.handleDashboardToggle(t.dataset.dashtoggle); return; }
+		if (t.dataset.dashmove) {
+			const [id, direction] = t.dataset.dashmove.split(":");
+			SETTINGS.handleDashboardMove(id, Number(direction));
+			return;
+		}
+		if (t.dataset.dashadd) { SETTINGS.handleDashboardAdd(); return; }
+		if (t.dataset.removeattachment) { CHAT_FULLSCREEN.handleRemoveAttachment(); return; }
+
+		// Chat umbenennen (Sidebar-Chatliste) — gleicher Dialog wie bei Stapeln
+		if (t.dataset.chatrename) {
+			const list = CHATS.load();
+			const s = list.find((x) => x.id === t.dataset.chatrename);
+			if (!s) return;
+			openPromptDialog("Chat umbenennen", (name) => {
+				s.title = name;
+				CHATS.save(list);
+				render();
+			}, s.title || "");
+			return;
+		}
+		// KI-Antwort in die Zwischenablage kopieren
+		if (t.dataset.copymsg) {
+			const m = S.chat.find((x) => x.mid === t.dataset.copymsg) || S.sideChat.find((x) => x.mid === t.dataset.copymsg);
+			if (m) navigator.clipboard.writeText(m.content || "").then(
+				() => U.toast("Antwort kopiert.", "success"),
+				() => U.toast("Zwischenablage blockiert.", "error"));
+			return;
+		}
+		// Review-Overlay: Karte aussetzen und direkt mit der nächsten fälligen weitermachen
+		if (t.dataset.reviewsuspend) {
+			await STATE.dispatch("cardUpdate", { id: t.dataset.reviewsuspend, patch: { suspended: true } });
+			S.reviewShowBack = false;
+			openReview();
+			return;
+		}
+		// Bibliothek: Smart-Sammlungen (Alle/Favoriten/PDFs/Vorlagen/ohne Tag)
+		if (t.dataset.libsmart) {
+			const v = t.dataset.libsmart;
+			S.libSmart = v === "all" || S.libSmart === v ? null : v;
+			renderMain();
+			return;
+		}
+
+		// Schnellaktionen des Home-Dashboards. Navigation bleibt bewusst unverändert:
+		// Home/Chat/Bibliothek sind die drei Hauptpillen, das Dashboard startet nur Aktionen.
+		if (t.dataset.homeaction) {
+			switch (t.dataset.homeaction) {
+				case "search": SEARCH.openPalette(); break;
+				case "newpage": await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null); break;
+				case "newchat": startNewChat(); break;
+				case "chats": S.sidebarMode = "chats"; render(); break;
+				case "library": S.view = "library"; S.libFolder = null; render(); break;
+				case "cards": openAnki("study", null); break;
+				case "daily": await openDailyNote(localDayKey(new Date())); break;
+				case "backup": await SETTINGS.handleBackupNow(); break;
+			}
+			return;
+		}
 
 		// Ein-/Ausklappen (Workspace oder Seite mit Unterseiten)
 		if (t.dataset.collapse) {
@@ -327,6 +399,24 @@ function wireEvents() {
 		// Datei-Chip im Chat: geklebten Text als .txt herunterladen
 		if (t.dataset.filedownload) {
 			CHAT_FULLSCREEN.handleFileDownload(t);
+			return;
+		}
+
+		// Modell-Menü: Notion-artige Untermenüs für Modell und Thinking-Stufe.
+		if (t.dataset.modelsubmenu) {
+			S.modelMenuSection = t.dataset.modelsubmenu;
+			renderModelMenu();
+			return;
+		}
+		if (t.dataset.modelmenuback) {
+			S.modelMenuSection = "root";
+			renderModelMenu();
+			return;
+		}
+		if (t.dataset.thinkinglevel) {
+			await STATE.dispatch("settingsSet", { thinkingLevel: t.dataset.thinkinglevel });
+			S.modelMenuSection = "root";
+			renderModelMenu();
 			return;
 		}
 
@@ -708,17 +798,7 @@ function wireEvents() {
 		}
 
 		// Chat-Verlauf: neuer Chat / Chat auswählen
-		if (t.dataset.newchat) {
-			saveCurrentChat();
-			const newId = U.uid();
-			const list = CHATS.load();
-			list.unshift({ id: newId, title: "", created: U.now(), updated: U.now(), messages: [] });
-			CHATS.save(list);
-			S.chat = [];
-			S.currentChatId = newId;
-			openPage("chat:" + newId);
-			return;
-		}
+		if (t.dataset.newchat) { startNewChat(); return; }
 		if (t.dataset.chat) {
 			saveCurrentChat();
 			openPage("chat:" + t.dataset.chat);
@@ -788,7 +868,7 @@ function wireEvents() {
 			// Chat-Taste: zeigt den Chat-Verlauf in der Sidebar
 			case "btnChatTab":
 				S.sidebarMode = "chats";
-				renderSidebar();
+				render();
 				break;
 			case "btnLibrary":
 				S.view = "library";
@@ -812,19 +892,22 @@ function wireEvents() {
 			case "btnAttachFull":
 				CHAT_FULLSCREEN.handleAttachMenuToggle(t);
 				break;
-			case "attachPdf":
+			case "attachFile":
 				U.el("attachMenu").hidden = true;
-				U.el("filePdf").click();
+				U.el("fileAttachment").click();
 				break;
-			case "attachImg":
+			case "attachMention":
 				U.el("attachMenu").hidden = true;
-				U.el("fileImg").click();
+				U.toast("Seiten- und Personen-Erwähnungen folgen als Nächstes.", "success");
 				break;
 			case "btnRemoveImage":
 				CHAT_FULLSCREEN.handleRemoveImage();
 				break;
 			case "btnRemoveTextFile":
 				CHAT_FULLSCREEN.handleRemoveTextFile();
+				break;
+			case "btnRemovePdf":
+				CHAT_FULLSCREEN.handleRemovePdf();
 				break;
 			case "btnTogglePanel":
 				CHAT_FULLSCREEN.toggleChatFull(false);
@@ -935,6 +1018,10 @@ function wireEvents() {
 			case "btnThemeLight":
 				SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");
 				break;
+			case "btnDensityComfortable": SETTINGS.handleAppearanceSelect("density", "comfortable"); break;
+			case "btnDensityCompact": SETTINGS.handleAppearanceSelect("density", "compact"); break;
+			case "btnMotionFull": SETTINGS.handleAppearanceSelect("motion", "full"); break;
+			case "btnMotionReduced": SETTINGS.handleAppearanceSelect("motion", "reduced"); break;
 			case "btnImport": U.el("fileImport").click(); break;
 			case "btnOpenPdf":
 				S.pdfOpen = !S.pdfOpen;
@@ -978,6 +1065,10 @@ function wireEvents() {
 		if (e.target.id === "modelSelect") {
 			await STATE.dispatch("settingsSet", { aiModel: e.target.value });
 			SETTINGS.checkAI();
+		}
+		if (e.target.id === "fileAttachment" && e.target.files[0]) {
+			if (e.target.files[0].type === "application/pdf") await CHAT_FULLSCREEN.handleFilePdfChange(e);
+			else if (e.target.files[0].type.startsWith("image/")) CHAT_FULLSCREEN.handleFileImgChange(e);
 		}
 		if (e.target.id === "filePdf" && e.target.files[0]) {
 			await CHAT_FULLSCREEN.handleFilePdfChange(e);

@@ -31,7 +31,9 @@ export function position(anchor, menu, opts = {}) {
 export function toggleElement(menu, anchor, opts = {}) {
 	if (!menu) return false;
 	if (!menu.hidden) { menu.hidden = true; return false; }
-	closeAll("dom");
+	// Das gerade geöffnete Composer-Menü aussparen; alle anderen Varianten
+	// (auch Modell-Menüs im jeweils anderen Chat) werden zuverlässig geschlossen.
+	closeAll("attach");
 	position(anchor, menu, opts);
 	return true;
 }
@@ -41,7 +43,15 @@ export function closeAll(except = "") {
 	const changed = { model: false, sidebar: false, main: false, attach: false };
 	const attach = U.el("attachMenu");
 	if (except !== "attach" && attach && !attach.hidden) { attach.hidden = true; changed.attach = true; }
-	if (except !== "model" && S.modelMenuOpen) { S.modelMenuOpen = false; changed.model = true; }
+	if (except !== "model") {
+		// Modell-Menüs werden normalerweise über den Render-State gesteuert. Beim
+		// Öffnen des Anhang-Menüs gibt es aber kein komplettes Re-Render — deshalb
+		// beide DOM-Varianten hier sofort ausblenden, damit sie nie überlappen.
+		[U.el("modelMenu"), U.el("modelMenuFull")].forEach((menu) => {
+			if (menu && !menu.hidden) menu.hidden = true;
+		});
+		if (S.modelMenuOpen) { S.modelMenuOpen = false; changed.model = true; }
+	}
 	if (except !== "page" && S.pageMenuOpenId) { S.pageMenuOpenId = null; changed.sidebar = true; }
 	if (except !== "deck" && S.deckMenuOpenName) { S.deckMenuOpenName = null; changed.sidebar = true; }
 	if (except !== "top" && S.topMenu) { S.topMenu = null; changed.main = true; }

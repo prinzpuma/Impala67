@@ -16,22 +16,32 @@ const renderPendingChip = (...args) => RENDER.renderPendingChip(...args);
 const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
 const openPage = (...args) => TABS.openPage(...args);
 
-export function saveCurrentChat() {
-	if (!S.chat.length) return;
+function saveChat(messages, idKey) {
+	if (!messages.length) return;
 	const list = CHATS.load();
-	let s = S.currentChatId ? list.find((x) => x.id === S.currentChatId) : null;
+	let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
 	if (!s) {
 		s = { id: U.uid(), title: "", created: U.now(), messages: [] };
-		S.currentChatId = s.id;
+		S[idKey] = s.id;
 		list.unshift(s);
 	}
-	s.messages = S.chat;
+	s.messages = messages;
 	s.updated = U.now();
 	if (!s.title) {
-		const first = S.chat.find((m) => m.role === "user");
+		const first = messages.find((m) => m.role === "user");
 		s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
 	}
 	CHATS.save(list);
+}
+
+export function saveCurrentChat() {
+	saveChat(S.chat, "currentChatId");
+}
+
+// Der kleine Seitenchat wird nach jeder Antwort als eigener Eintrag gesichert und
+// erscheint dadurch automatisch links in der Chat-Liste.
+export function saveSideChat() {
+	saveChat(S.sideChat, "sideChatId");
 }
 
 // KI-Vollbildmodus (wie Notion AI)
@@ -100,14 +110,16 @@ export async function refineMessage(mid, mode) {
 	// Neue Antwort an derselben Stelle wieder einsetzen (gleiche mid, damit z.B. spätere
 	// Bearbeitungsprüfungen weiter konsistent bleiben).
 	list.splice(idx, 0, { mid, role: "assistant", content: newContent, reasoning: msg.reasoning || null, reasoningExpanded: false });
-	saveCurrentChat();
+	if (isSide) saveSideChat();
+	else saveCurrentChat();
 	render();
 }
 
 // ---------- Gemeinsame Sende-Logik für Seitenpanel UND Vollbild-Chat-Tab ----------
 export async function sendChatMessage(text, type) {
 	type = type || "side";
-	if ((!text && !S.pendingImage && !S.pendingTextFile) || S.aiBusy) return;
+	const hasAttachment = S.pendingAttachmentTarget === type && (S.pendingImage || S.pendingTextFile || S.pendingPdf);
+	if ((!text && !hasAttachment) || S.aiBusy) return;
 	S.aiBusy = true;
 	S.aiActiveChatType = type;
 	S.aiStatus = "…denkt nach…";
@@ -117,7 +129,9 @@ export async function sendChatMessage(text, type) {
 	if (type === "side") renderChat();
 	else renderMainChatLog();
 	try {
-		const fallback = S.pendingTextFile ? "Fasse die angehängte Datei zusammen." : "Beschreibe das angehängte Bild.";
+		const fallback = S.pendingAttachmentTarget === type && S.pendingPdf ? "Analysiere das angehängte PDF."
+			: S.pendingAttachmentTarget === type && S.pendingTextFile ? "Fasse die angehängte Datei zusammen."
+			: "Beschreibe das angehängte Bild.";
 		await AI.agent(text || fallback, type, (tool) => {
 			S.aiStatus = "⚙ " + tool + "…";
 			if (type === "side") renderChat();
@@ -130,7 +144,8 @@ export async function sendChatMessage(text, type) {
 	S.aiBusy = false;
 	S.aiDraft = "";
 	S.aiThinkingDraft = "";
-	if (type === "full") saveCurrentChat();
+	if (type === "side") saveSideChat();
+	else saveCurrentChat();
 	render();
 }
 
@@ -151,23 +166,9 @@ export function handleReasoningToggle(t) {
 
 export function handleDiffCardToggle(t) {
 	const m = S.chat.find((x) => x.mid === t.dataset.difftoggle) || S.sideChat.find((x) => x.mid === t.dataset.difftoggle);
-	if (m) {
-		m.diffExpanded = !m.diffExpanded;
-		if (m.diffExpanded && m.pageId) {
-			S.highlightedPageId = m.pageId;
-			S.highlightedDiff = U.diffLines(m.before.content, m.after.content);
-			openPage(m.pageId);
-			setTimeout(() => {
-				const el = document.querySelector(".blk.highlight-add");
-				if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-			}, 100);
-		} else {
-			S.highlightedPageId = null;
-			S.highlightedDiff = null;
-		}
-		if (S.view === "chat") renderMainChatLog();
-		renderChat();
-	}
+	// Änderungen werden wie in Notion in einer eigenen Seiten-Vorschau geprüft,
+	// ohne die aktuell geöffnete Seite oder den Chat-Kontext zu verlassen.
+	if (m) RENDER.openChangePreview(m);
 }
 
 export async function handleUndo(t) {
@@ -179,7 +180,8 @@ export async function handleUndo(t) {
 			await STATE.dispatch("pageUpdate", { id: m.pageId, patch: { title: m.before.title, content: m.before.content } });
 		}
 		m.undone = true;
-		saveCurrentChat();
+		if (S.sideChat.includes(m)) saveSideChat();
+		else saveCurrentChat();
 		renderChat();
 		if (S.view === "chat") renderMainChatLog();
 	}
@@ -195,9 +197,12 @@ export async function handleModelMenuToggle(t) {
 	POPOVERS.closeAll("model");
 	S.modelMenuAnchor = t.id === "btnModelChipFull" ? "full" : "panel";
 	S.modelMenuOpen = !wasOpen;
+	S.modelMenuSection = "root";
 	S.customModelProviderPick = S.settings.aiProviderId;
 	renderModelMenu();
-	if (S.modelMenuOpen && !S.availableModels.length) {
+	// Bei jedem Öffnen neu abfragen: besonders LM Studio meldet hier nur die
+	// aktuell auf dem Server geladen(en) Modelle.
+	if (S.modelMenuOpen) {
 		S.modelMenuLoading = true;
 		renderModelMenu();
 		const models = await AI.listModels();
@@ -265,33 +270,38 @@ export async function handleRefineSelect(t) {
 export function handleAttachMenuToggle(t) {
 	const m = U.el("attachMenu");
 	if (!m) return;
+	S.attachTarget = t.id === "btnAttachFull" ? "full" : "side";
 	POPOVERS.toggleElement(m, t, { prefer: "above", gap: 4 });
 }
 
-export function handleRemoveImage() {
+export function handleRemoveAttachment() {
 	S.pendingImage = null;
-	renderPendingChip();
+	S.pendingTextFile = null;
+	S.pendingPdf = null;
+	S.pendingAttachmentTarget = null;
+	renderPendingChip("side");
+	renderPendingChip("full");
 }
 
-export function handleRemoveTextFile() {
-	S.pendingTextFile = null;
-	renderPendingChip();
-}
+export const handleRemoveImage = handleRemoveAttachment;
+export const handleRemoveTextFile = handleRemoveAttachment;
+export const handleRemovePdf = handleRemoveAttachment;
 
 export async function handleFilePdfChange(e) {
-	if (e.target.files[0]) {
-		const file = e.target.files[0];
-		e.target.value = "";
-		S.aiBusy = true;
-		try {
-			await PDFS.ingest(file, (st) => { S.aiStatus = st; renderChat(); });
-			S.chat.push({ mid: U.uid(), role: "assistant", content: "📄 **" + file.name + "** wurde einsortiert und zusammengefasst." });
-		} catch (err) {
-			S.chat.push({ mid: U.uid(), role: "assistant", content: "⚠️ PDF-Import fehlgeschlagen: " + err.message });
-		}
-		S.aiBusy = false;
-		saveCurrentChat();
-		render();
+	if (!e.target.files[0]) return;
+	const file = e.target.files[0];
+	e.target.value = "";
+	try {
+		// PDFs sind jetzt reine Chat-Anhänge: Text wird lokal extrahiert und erst mit
+		// der nächsten Nachricht an die KI übergeben. Es wird keine Seite angelegt,
+		// nichts automatisch sortiert und nichts im Chat-Verlauf gespeichert.
+		const buf = await U.readAsBuffer(file);
+		const out = await PDFS.extractText(buf);
+		S.pendingPdf = { name: file.name, content: out.text, size: file.size, pages: out.numPages };
+		S.pendingAttachmentTarget = S.attachTarget || "side";
+		renderPendingChip(S.pendingAttachmentTarget);
+	} catch (err) {
+		U.toast("PDF konnte nicht gelesen werden: " + err.message, "error");
 	}
 }
 
@@ -300,7 +310,11 @@ export function handleFileImgChange(e) {
 		const file = e.target.files[0];
 		e.target.value = "";
 		const r = new FileReader();
-		r.onload = () => { S.pendingImage = r.result; renderPendingChip(); };
+		r.onload = () => {
+			S.pendingImage = r.result;
+			S.pendingAttachmentTarget = S.attachTarget || "side";
+			renderPendingChip(S.pendingAttachmentTarget);
+		};
 		r.readAsDataURL(file);
 	}
 }
@@ -313,12 +327,14 @@ export function handlePaste(e) {
 	if (text.length > 600 || lines > 15) {
 		e.preventDefault();
 		S.pendingTextFile = { name: "geklebter-text.txt", content: text, size: text.length };
-		renderPendingChip();
+		S.pendingAttachmentTarget = e.target.id === "mainChatInput" ? "full" : "side";
+		renderPendingChip(S.pendingAttachmentTarget);
 	}
 }
 
 export const CHAT_FULLSCREEN = {
 	saveCurrentChat,
+	saveSideChat,
 	toggleChatFull,
 	refineMessage,
 	sendChatMessage,
@@ -333,8 +349,10 @@ export const CHAT_FULLSCREEN = {
 	handleRefineToggle,
 	handleRefineSelect,
 	handleAttachMenuToggle,
+	handleRemoveAttachment,
 	handleRemoveImage,
 	handleRemoveTextFile,
+	handleRemovePdf,
 	handleFilePdfChange,
 	handleFileImgChange,
 	handlePaste,

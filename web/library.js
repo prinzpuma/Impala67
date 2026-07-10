@@ -56,7 +56,14 @@ export function libCardHtml(pg) {
 export function renderLibrary(main) {
 	const view = (S.libView === "table") ? "table" : "grid";
 	const q = (S.libFilter || "").trim().toLowerCase();
-	const matches = (pg) => (!S.libTag || (pg.tags || []).includes(S.libTag))
+	const smart = S.libSmart || null;
+	const smartMatch = (pg) => !smart
+		|| (smart === "fav" && pg.favorite)
+		|| (smart === "pdf" && pg.pdfId)
+		|| (smart === "tpl" && pg.isTemplate)
+		|| (smart === "untagged" && !(pg.tags || []).length);
+	const matches = (pg) => smartMatch(pg)
+		&& (!S.libTag || (pg.tags || []).includes(S.libTag))
 		&& (!q || pg.title.toLowerCase().includes(q)
 		|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
 	const vbtn = (v, label) => '<button data-libview="' + v + '" class="' + (view === v ? "active" : "") + '">' + label + "</button>";
@@ -72,6 +79,15 @@ export function renderLibrary(main) {
 		'<input id="libFilter" placeholder="Filtern (Titel, Tags)…" autocomplete="off" value="' + U.esc(S.libFilter || "") + '">' +
 		'<div class="mode-btns">' + sbtn("updated", "Datum") + sbtn("title", "Name") + '</div>' +
 		'<div class="mode-btns">' + vbtn("grid", "Kacheln") + vbtn("table", "Tabelle") + "</div></div>";
+	// Smart-Sammlungen: schnelle Filter über alle Workspaces hinweg (wie Notions Ansichten).
+	const all = STATE.activePages();
+	const smartDefs = [["all", "🗂 Alle", all.length],
+		["fav", "★ Favoriten", all.filter((p) => p.favorite).length],
+		["pdf", "📄 PDFs", all.filter((p) => p.pdfId).length],
+		["tpl", "📑 Vorlagen", all.filter((p) => p.isTemplate).length],
+		["untagged", "◌ Ohne Tag", all.filter((p) => !(p.tags || []).length).length]];
+	html += '<div class="tag-row smart-row">' + smartDefs.map(([id, label, n]) =>
+		'<button class="tag-chip' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + label + " · " + n + "</button>").join("") + "</div>";
 	// Tag-Verwaltung: Chips mit Zähler — Klick filtert, ✎ benennt den aktiven Tag um.
 	const tagCounts = {};
 	STATE.activePages().forEach((p) => (p.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
@@ -116,7 +132,7 @@ export function renderLibrary(main) {
 				"</tr>"
 			).join("") + "</tbody></table>";
 		if (!rows.length) html += '<div class="empty small">Keine Seiten' + (q ? " für diesen Filter" : "") + "</div>";
-	} else if (q || S.libTag) {
+	} else if (q || S.libTag || smart) {
 		// Kachel-Ansicht mit aktivem Filter: flache Treffer-Kacheln über alle Workspaces
 		const hits = sortPages(STATE.activePages().filter(matches));
 		html += '<div class="lib-grid">' + hits.map((pg) => libCardHtml(pg)).join("") + "</div>";

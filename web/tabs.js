@@ -60,6 +60,9 @@ export function closeTab(pageId) {
 			if (!confirm(msg)) return;
 		}
 	}
+	// Das eingebettete NotebookLM-Webview liegt über der App-Oberfläche und muss
+	// verschwinden, bevor der Tab entfernt und die nächste Ansicht gerendert wird.
+	if (pageId === "nlm:main") window.dispatchEvent(new Event("impala67:nlm-hide"));
 	S.tabs.splice(idx, 1);
 	if (S.activeTabId === pageId) {
 		const next = S.tabs[idx] || S.tabs[idx - 1] || null;

@@ -15,6 +15,7 @@ export const S = {
 		],
 		aiProviderId: "local",
 		aiModel: "",
+		thinkingLevel: "auto", // "auto" | "low" | "medium" | "high" — wird nur an unterstützte APIs übergeben
 		embedModel: "",
 		driveClientId: "100283147644-1ra4er2dc5r85k3mefd521hbm1ek3qpf.apps.googleusercontent.com",
 		customInstructions: "",
@@ -30,7 +31,8 @@ export const S = {
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
 	// Reiner UI-Zustand (nicht persistiert):
 	chat: [], // Haupt-Chatverlauf (Vollbild-Tab)
-	sideChat: [], // Separater Verlauf für das kleine KI-Seitenpanel
+	sideChat: [], // Verlauf für das kleine KI-Seitenpanel
+	sideChatId: null, // eigene gespeicherte Chat-Sitzung des Seitenpanels
 	aiActiveChatType: "side", // "side" | "full"
 	highlightedPageId: null, // Für die Hervorhebung geänderter Blöcke
 	highlightedDiff: null, // Diff-Array für die Hervorhebung geänderter Blöcke
@@ -39,6 +41,8 @@ export const S = {
 	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "daily" | "trash"
 	chatFull: false,
 	pendingImage: null,
+	pendingAttachmentTarget: null, // "side" | "full" — Chat, dem der ausgewählte Anhang gehört
+	attachTarget: "side", // zuletzt geöffneter Datei-Dialog; erst nach Dateiauswahl wird der Anhang zugeordnet
 	settingsSection: "ki",
 	sidebarMode: "files", // "files" | "chats"
 	currentChatId: null,
@@ -57,11 +61,13 @@ export const S = {
 	notionToken: "",
 	notionPageId: "",
 	pendingTextFile: null, // { name, content, size } — langer geklebter Text, wird als .txt-Anhang statt Fließtext gesendet
+	pendingPdf: null, // { name, content, size, pages } — PDF-Anhang für den aktuellen Chat, wird nicht automatisch als Seite gespeichert
 	driveUserEmail: null, // gesetzt nach erfolgreichem Google-Login (nur für die aktuelle Sitzung)
 	availableModels: [], // vom Server abgefragte Modell-Liste (ephemer, nicht persistiert)
 	modelMenuOpen: false,
 	modelMenuAnchor: "panel", // welches Chat-Fenster das Modell-Dropdown geöffnet hat: "panel" | "full"
 	modelMenuLoading: false, // true, solange listModels() die Quellen abfragt
+	modelMenuSection: "root", // "root" | "models" | "thinking"
 	customModelProviderPick: null, // im Dropdown gewählte Quelle für ein eigenes Modell
 	editingMsgId: null, // mid einer Nutzer-Nachricht, die gerade bearbeitet wird
 	refineOpenMid: null, // mid einer Assistenten-Antwort, deren "Anpassen"-Menü offen ist

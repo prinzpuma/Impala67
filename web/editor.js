@@ -4,6 +4,7 @@ import { U } from "./util.js";
 import { DB } from "./db.js";
 import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
+import { AI } from "./ai.js";
 
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 
@@ -21,6 +22,8 @@ export const EDITOR = (() => {
 	let activeId = null;  // Block im Bearbeiten-Modus (Textarea)
 	let dragBid = null;   // Block, der gerade per ⠠ gezogen wird
 	let slash = null;     // { items, index } solange das Slash-Menü offen ist
+	let linkMenu = null;  // { items, index, query } — [[Seitenverlinkung
+	let blockMenuId = null; // Block, dessen ⚠-Menü gerade offen ist
 	let selAll = false;   // true = "alles ausgewählt" (Strg+A über alle Blöcke)
 
 	const LISTY = { bullet: 1, number: 1, todo: 1 };
@@ -42,6 +45,7 @@ export const EDITOR = (() => {
 		{ k: "callout hinweis box info farbe", label: "💡 Callout (Farbwort im Marker änderbar)", ins: "> [!blue] ", type: "callout" },
 		{ k: "code programm quelltext", label: "⌨ Code-Block", ins: "```javascript\n\n```", type: "code", caret: 14 },
 		{ k: "mermaid diagramm flowchart graph gantt", label: "⧐ Mermaid-Diagramm", ins: "```mermaid\ngraph TD\n\tA[Start] --> B[Ende]\n```", type: "code", caret: 11 },
+		{ k: "bild image foto hochladen", label: "🖼 Bild hochladen", ins: "", type: "p", action: "image" },
 		{ k: "trennlinie divider linie", label: "— Trennlinie", ins: "---", type: "divider" },
 		{ k: "tabelle table", label: "▦ Tabelle", ins: "| Spalte 1 | Spalte 2 |\n| --- | --- |\n|   |   |", type: "table" },
 		{ k: "spalten columns layout nebeneinander", label: "◫ 2 Spalten", ins: ":::columns\nLinke Spalte\n:::split\nRechte Spalte\n:::end", type: "columns" },
@@ -191,6 +195,8 @@ export const EDITOR = (() => {
 	// ---------- Zeichnen ----------
 	function draw(focus) {
 		if (!host) return;
+		blockMenuId = null;
+		linkMenu = null;
 		host.innerHTML = blocks.map((b, idx) => {
 			const isNew = S.highlightedPageId === pageId && S.highlightedDiff && S.highlightedDiff.some((d) => d.type === "add" && d.text.trim() === b.raw.trim());
 			return '<div class="blk' + (isNew ? " highlight-add" : "") + '" data-bid="' + b.id + '">' +
@@ -200,7 +206,7 @@ export const EDITOR = (() => {
 				"</div>" +
 				'<div class="blk-body">' + (b.id === activeId ? editHtml(b) : viewHtml(b, blocks, idx)) + "</div>" +
 			"</div>";
-		}).join("") + '<div class="blk-tail"></div>';
+		}).join("") + '<div class="blk-tail"></div>' + editorCounterHtml();
 		// LaTeX + Code-Highlighting nur in gerenderten (nicht aktiven) Blöcken
 		host.querySelectorAll(".blk").forEach((el) => {
 			if (el.dataset.bid !== activeId) { U.renderMath(el); U.highlightCode(el); }
@@ -266,6 +272,7 @@ export const EDITOR = (() => {
 		const idx = blocks.findIndex((x) => x.id === activeId);
 		activeId = null;
 		closeSlash();
+		closeLinkMenu();
 		if (idx === -1) return;
 		const val = ta ? ta.value : blocks[idx].raw;
 		if (!val.trim()) blocks[idx] = newBlock("p", "");
@@ -415,6 +422,17 @@ export const EDITOR = (() => {
 		const b = blocks.find((x) => x.id === activeId);
 		slash = null;
 		if (!item || !b) { drawSlash(); return; }
+		if (item.action === "image") {
+			drawSlash();
+			b.raw = "";
+			const inp = document.createElement("input");
+			inp.type = "file";
+			inp.accept = "image/*";
+			inp.multiple = true;
+			inp.onchange = () => { if (inp.files && inp.files.length) insertImages([...inp.files], host.querySelector('.blk[data-bid="' + b.id + '"]')); };
+			inp.click();
+			return;
+		}
 		b.raw = item.ins;
 		b.type = item.type;
 		delete b.indent; delete b.checked;
@@ -429,6 +447,172 @@ export const EDITOR = (() => {
 			return;
 		}
 		draw({ caret: item.caret !== undefined ? item.caret : item.ins.length });
+	}
+
+	// ---------- Block-Menü (Klick auf ⠠): Verschieben, Umwandeln, Duplizieren … ----------
+	const TURN_TYPES = [["p", "Text"], ["h1", "Überschrift 1"], ["h2", "Überschrift 2"], ["h3", "Überschrift 3"], ["bullet", "• Liste"], ["number", "1. Liste"], ["todo", "☑ To-do"], ["quote", "❝ Zitat"], ["callout", "💡 Callout"], ["code", "⌨ Code"]];
+
+	function plainTextOf(b) {
+		if (b.type === "code") return b.raw.replace(/^```[^\n]*\n?/, "").replace(/\n?```$/, "");
+		if (LISTY[b.type]) return listText(b);
+		return b.raw.replace(/^#{1,3}\s+/, "").replace(/^>\s*(\[![a-z]+\]\s?)?/gm, "");
+	}
+
+	function convertBlock(b, type) {
+		const text = plainTextOf(b);
+		const P = { p: "", h1: "# ", h2: "## ", h3: "### ", bullet: "- ", number: "1. ", todo: "- [ ] ", quote: "> ", callout: "> [!blue] " };
+		b.raw = type === "code" ? "```\n" + text + "\n```" : (P[type] || "") + text;
+		b.type = type;
+		delete b.indent;
+		delete b.checked;
+	}
+
+	function closeBlockMenu() {
+		blockMenuId = null;
+		const m = host && host.querySelector(".block-menu");
+		if (m) m.remove();
+	}
+
+	function openBlockMenu(bid) {
+		if (blockMenuId === bid) { closeBlockMenu(); return; }
+		closeBlockMenu();
+		blockMenuId = bid;
+		const menu = document.createElement("div");
+		menu.className = "slash-menu block-menu";
+		menu.innerHTML =
+			'<button class="slash-opt" data-bact="up">↑ Nach oben</button>' +
+			'<button class="slash-opt" data-bact="down">↓ Nach unten</button>' +
+			'<button class="slash-opt" data-bact="dup">⧉ Duplizieren</button>' +
+			'<button class="slash-opt" data-bact="copy">📋 Text kopieren</button>' +
+			'<button class="slash-opt" data-bact="card">🃏 Karteikarte aus Block</button>' +
+			'<div class="menu-sep"></div><div class="menu-label">Umwandeln in</div>' +
+			TURN_TYPES.map(([t, label]) => '<button class="slash-opt" data-bact="turn:' + t + '">' + label + "</button>").join("") +
+			'<div class="menu-sep"></div><button class="slash-opt danger" data-bact="del">🗑 Löschen</button>';
+		host.appendChild(menu);
+		const blkEl = host.querySelector('.blk[data-bid="' + bid + '"]');
+		if (blkEl) {
+			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
+			menu.style.top = (r.top - hr.top + host.scrollTop + 24) + "px";
+			menu.style.left = Math.max(0, r.left - hr.left) + "px";
+		}
+	}
+
+	async function runBlockAction(act) {
+		const idx = blocks.findIndex((x) => x.id === blockMenuId);
+		closeBlockMenu();
+		if (idx === -1) return;
+		const b = blocks[idx];
+		if (act === "up" && idx > 0) { blocks.splice(idx - 1, 0, blocks.splice(idx, 1)[0]); }
+		else if (act === "down" && idx < blocks.length - 1) { blocks.splice(idx + 1, 0, blocks.splice(idx, 1)[0]); }
+		else if (act === "dup") { blocks.splice(idx + 1, 0, newBlock(b.type, b.raw, { indent: b.indent, checked: b.checked })); }
+		else if (act === "del") { blocks.splice(idx, 1); if (!blocks.length) blocks.push(newBlock("p", "")); }
+		else if (act === "copy") {
+			try { await navigator.clipboard.writeText(b.raw); U.toast("Block kopiert.", "success"); } catch { U.toast("Zwischenablage blockiert.", "error"); }
+			return;
+		}
+		else if (act === "card") { await createCardFrom(plainTextOf(b)); return; }
+		else if (act.startsWith("turn:")) { convertBlock(b, act.slice(5)); }
+		await save();
+		draw();
+	}
+
+	// ---------- KI-Aktionen auf markiertem Text + Karteikarte aus Auswahl ----------
+	const SEL_AI = [
+		["improve", "✦ Verbessern", "Verbessere den folgenden Text sprachlich und stilistisch. Behalte Sprache, Bedeutung und Markdown-Formatierung bei. Antworte NUR mit dem überarbeiteten Text."],
+		["shorter", "− Kürzen", "Kürze den folgenden Text auf das Wesentliche. Behalte Sprache und Markdown bei. Antworte NUR mit dem gekürzten Text."],
+		["longer", "＋ Erweitern", "Erweitere den folgenden Text mit sinnvollen Details. Behalte Sprache und Markdown bei. Antworte NUR mit dem erweiterten Text."],
+		["fix", "✓ Korrigieren", "Korrigiere Rechtschreibung und Grammatik im folgenden Text. Ändere sonst nichts. Antworte NUR mit dem korrigierten Text."],
+	];
+
+	async function createCardFrom(text) {
+		const clean = String(text || "").trim();
+		if (!clean) { U.toast("Kein Text ausgewählt.", "error"); return; }
+		let front = clean.slice(0, 300), back = "";
+		try {
+			const raw = await AI.complete('Erstelle aus folgendem Text GENAU EINE Karteikarte. Antworte NUR als JSON {"front":"kurze Frage","back":"kurze Antwort"}:\n\n' + clean.slice(0, 4000));
+			const j = JSON.parse(raw.replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+			if (j.front && j.back) { front = j.front; back = j.back; }
+		} catch { /* KI offline — Rohtext als Vorderseite */ }
+		await STATE.dispatch("cardCreate", { id: U.uid(), front, back, pageId });
+		U.toast("🃏 Karteikarte erstellt" + (back ? "." : " — Rückseite bitte im Karten-Browser ergänzen."), "success");
+	}
+
+	async function runSelAi(actionId) {
+		const ta = host ? host.querySelector(".blk-input") : null;
+		const b = blocks.find((x) => x.id === activeId);
+		if (!ta || !b || ta.selectionStart === ta.selectionEnd) return;
+		const s = ta.selectionStart, e2 = ta.selectionEnd;
+		const sel = ta.value.slice(s, e2);
+		if (actionId === "cardsel") { await createCardFrom(sel); return; }
+		const def = SEL_AI.find((x) => x[0] === actionId);
+		if (!def) return;
+		const tb = host.querySelector(".sel-toolbar");
+		if (tb) tb.classList.add("busy");
+		try {
+			const out = (await AI.complete(def[2] + "\n\n" + sel)).trim();
+			if (out) {
+				ta.value = ta.value.slice(0, s) + out + ta.value.slice(e2);
+				b.raw = ta.value;
+				autoGrow(ta);
+				ta.focus();
+				ta.selectionStart = s;
+				ta.selectionEnd = s + out.length;
+				saveSoon();
+			}
+		} catch (err) {
+			U.toast("KI-Aktion fehlgeschlagen: " + (err.message || err), "error");
+		}
+		if (tb) tb.classList.remove("busy");
+	}
+
+	// ---------- [[Seitenverlinkung mit Autovervollständigung ----------
+	function closeLinkMenu() {
+		linkMenu = null;
+		const m = host && host.querySelector(".link-menu");
+		if (m) m.remove();
+	}
+
+	function openLinkMenu(query) {
+		const q = String(query || "").toLowerCase();
+		const items = STATE.activePages()
+			.filter((pg) => pg.id !== pageId && (!q || pg.title.toLowerCase().includes(q)))
+			.slice(0, 8);
+		if (!items.length) { closeLinkMenu(); return; }
+		const keep = linkMenu && linkMenu.query === query ? linkMenu.index : 0;
+		linkMenu = { items, index: Math.min(keep, items.length - 1), query };
+		let menu = host.querySelector(".link-menu");
+		if (!menu) { menu = document.createElement("div"); menu.className = "slash-menu link-menu"; host.appendChild(menu); }
+		menu.innerHTML = '<div class="menu-label">Seite verlinken</div>' + items.map((pg2, i) =>
+			'<button class="slash-opt' + (i === linkMenu.index ? " active" : "") + '" data-linkpick="' + pg2.id + '">' + (pg2.icon ? U.esc(pg2.icon) + " " : "📝 ") + U.esc(pg2.title) + "</button>").join("");
+		const blkEl = host.querySelector('.blk[data-bid="' + activeId + '"]');
+		if (blkEl) {
+			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
+			menu.style.top = (r.bottom - hr.top + host.scrollTop + 4) + "px";
+			menu.style.left = (r.left - hr.left + 46) + "px";
+		}
+	}
+
+	function insertPageLink(pg2) {
+		const ta = host ? host.querySelector(".blk-input") : null;
+		const b = blocks.find((x) => x.id === activeId);
+		if (!ta || !b || !pg2) { closeLinkMenu(); return; }
+		const caret = ta.selectionStart;
+		const before = ta.value.slice(0, caret).replace(/\[\[[^\[\]]*$/, "");
+		const link = "[" + pg2.title.replace(/[\[\]]/g, "") + "](#" + pg2.id + ")";
+		ta.value = before + link + ta.value.slice(caret);
+		b.raw = ta.value;
+		autoGrow(ta);
+		ta.focus();
+		ta.selectionStart = ta.selectionEnd = before.length + link.length;
+		saveSoon();
+		closeLinkMenu();
+	}
+
+	// Wort-/Zeichenzähler unten rechts im Editor
+	function editorCounterHtml() {
+		const text = blocks.map((b) => plainTextOf(b)).join("\n").trim();
+		const words = (text.match(/\S+/g) || []).length;
+		return '<div class="editor-counter"><span>' + words + " Wörter · " + text.length + " Zeichen</span></div>";
 	}
 
 	// ---------- Auswahl-Toolbar (Fett/Kursiv/Code/Farben/Link) ----------
@@ -447,7 +631,10 @@ export const EDITOR = (() => {
 				'<button data-link="1" title="Link einfügen">🔗</button>' +
 				'<button data-colormenu="c" title="Textfarbe">A</button>' +
 				'<button data-colormenu="bg" title="Hintergrundfarbe">▉</button>' +
-				'<div class="color-menu" hidden></div>';
+				'<button data-aimenu="1" title="KI-Aktionen auf der Auswahl">✦</button>' +
+				'<button data-ai="cardsel" title="Karteikarte aus Auswahl">🃏</button>' +
+				'<div class="color-menu" hidden></div>' +
+				'<div class="ai-menu" hidden></div>';
 			// mousedown abfangen, damit die Textauswahl in der Textarea erhalten bleibt
 			tb.addEventListener("mousedown", (e) => { if (!e.target.closest(".color-menu")) e.preventDefault(); });
 			host.appendChild(tb);
@@ -610,6 +797,10 @@ export const EDITOR = (() => {
 			// Slash-Menü, solange nur "/befehl" im Block steht
 			if (/^\/\S*$/.test(ta.value) && b.type === "p") openSlash(ta.value.slice(1));
 			else closeSlash();
+			// [[Titel → Seitenverlinkung mit Vorschlagsliste (wie in Notion)
+			const lm = ta.value.slice(0, ta.selectionStart).match(/\[\[([^\[\]]*)$/);
+			if (lm) openLinkMenu(lm[1]);
+			else closeLinkMenu();
 		});
 
 		host.addEventListener("keydown", (e) => {
@@ -631,6 +822,12 @@ export const EDITOR = (() => {
 				}
 				return;
 			}
+			if (linkMenu) {
+				if (e.key === "ArrowDown") { e.preventDefault(); linkMenu.index = (linkMenu.index + 1) % linkMenu.items.length; openLinkMenu(linkMenu.query); return; }
+				if (e.key === "ArrowUp") { e.preventDefault(); linkMenu.index = (linkMenu.index - 1 + linkMenu.items.length) % linkMenu.items.length; openLinkMenu(linkMenu.query); return; }
+				if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertPageLink(linkMenu.items[linkMenu.index]); return; }
+				if (e.key === "Escape") { e.preventDefault(); closeLinkMenu(); return; }
+			}
 			if (slash) {
 				if (e.key === "ArrowDown") { e.preventDefault(); slash.index = (slash.index + 1) % slash.items.length; drawSlash(); return; }
 				if (e.key === "ArrowUp") { e.preventDefault(); slash.index = (slash.index - 1 + slash.items.length) % slash.items.length; drawSlash(); return; }
@@ -651,6 +848,27 @@ export const EDITOR = (() => {
 		host.addEventListener("keyup", maybeToolbar);
 
 		host.addEventListener("click", (e) => {
+			if (!e.target.closest(".block-menu") && !e.target.closest(".blk-handle")) closeBlockMenu();
+			const bact = e.target.closest("[data-bact]");
+			if (bact) { runBlockAction(bact.dataset.bact); return; }
+			const lpick = e.target.closest("[data-linkpick]");
+			if (lpick) { insertPageLink(S.pages[lpick.dataset.linkpick]); return; }
+			const aim = e.target.closest("[data-aimenu]");
+			if (aim) {
+				const m = host.querySelector(".ai-menu");
+				if (m) {
+					m.innerHTML = SEL_AI.map(([id, label]) => '<button data-ai="' + id + '">' + label + "</button>").join("");
+					m.hidden = !m.hidden;
+				}
+				return;
+			}
+			const aiBtn = e.target.closest("[data-ai]");
+			if (aiBtn) {
+				const m = host.querySelector(".ai-menu");
+				if (m) m.hidden = true;
+				runSelAi(aiBtn.dataset.ai);
+				return;
+			}
 			const slashBtn = e.target.closest("[data-slash]");
 			if (slashBtn) { applySlash(Number(slashBtn.dataset.slash)); return; }
 			const wrapBtn = e.target.closest("[data-wrap]");
@@ -691,7 +909,9 @@ export const EDITOR = (() => {
 				openSlash("");
 				return;
 			}
-			if (e.target.closest(".blk-handle") || e.target.closest("a")) return;
+			const handleBtn = e.target.closest(".blk-handle");
+			if (handleBtn) { openBlockMenu(handleBtn.dataset.handle); return; }
+			if (e.target.closest(".block-menu") || e.target.closest(".link-menu") || e.target.closest("a")) return;
 			// Klick unter den letzten Block → neuen Absatz anhängen (wie Notion)
 			if (e.target.classList.contains("blk-tail")) {
 				commitActive();
@@ -787,6 +1007,8 @@ export const EDITOR = (() => {
 		if (!blocks.length) blocks.push(newBlock("p", ""));
 		activeId = null;
 		slash = null;
+		linkMenu = null;
+		blockMenuId = null;
 		dragBid = null;
 		setSelAll(false);
 		wireGlobal();

@@ -11,6 +11,7 @@ import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { NLM } from "./notebooklm.js";
+import { POPOVERS } from "./popovers.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -24,7 +25,8 @@ function render() {
 	renderTabs();
 	renderChat();
 	if (S.view === "chat") renderMainChatLog();
-	renderPendingChip();
+	renderPendingChip("side");
+	renderPendingChip("full");
 	renderStatusDot();
 	renderModelBar();
 	const due = STATE.dueCards().length;
@@ -64,10 +66,11 @@ function currentModelLabel() {
 // Modell-Chip unten rechts im großen Chat-Fenster (wie in Notion).
 function renderModelBar() {
 	const label = currentModelLabel();
+	const modelIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="currentColor"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></svg>';
 	const chip = U.el("btnModelChipFull");
-	if (chip) chip.innerHTML = '<span class="chip-label">' + U.esc(label) + '</span> <span class="model-caret">▾</span>';
+	if (chip) { chip.innerHTML = modelIcon; chip.title = "Modell: " + label; }
 	const icon = U.el("btnModelMenu");
-	if (icon) icon.title = "Modell: " + label;
+	if (icon) { icon.innerHTML = modelIcon; icon.title = "Modell: " + label; }
 	renderModelMenu();
 }
 
@@ -79,38 +82,32 @@ function modelMenuInnerHtml() {
 	const curProviderId = S.settings.aiProviderId || "";
 	const curModel = S.settings.aiModel || "";
 	const live = S.availableModels || [];
-	let html = "";
-	if (S.modelMenuLoading) html += '<div class="menu-note">Modelle werden geladen…</div>';
-	if (!providers.length) html += '<div class="menu-note">Noch keine Quelle eingerichtet — Einstellungen → KI.</div>';
-	const opt = (prId, value, label, active) =>
-		'<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
-			'<span class="menu-item-label">' + U.esc(label) + "</span>" +
-			(active ? '<span class="menu-check">✓</span>' : "") +
-		"</button>";
+	const section = S.modelMenuSection || "root";
+	const back = '<button class="model-submenu-back" data-modelmenuback="1">‹ Zurück</button>';
+	if (section === "root") {
+		const thinking = S.settings.thinkingLevel || "auto";
+		return '<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>' + U.esc(currentModelLabel()) + ' ›</small></button>' +
+			'<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>' + U.esc(thinking === "auto" ? "Automatisch" : thinking[0].toUpperCase() + thinking.slice(1)) + ' ›</small></button>';
+	}
+	if (section === "thinking") {
+		const cur = S.settings.thinkingLevel || "auto";
+		const levels = [["auto", "Automatisch"], ["low", "Niedrig"], ["medium", "Mittel"], ["high", "Hoch"]];
+		return back + '<div class="menu-label">Thinking-Stufe</div><div class="menu-note">Wirkt nur bei Modellen und APIs, die Thinking unterstützen.</div>' +
+			levels.map(([id, label]) => '<button class="menu-item' + (id === cur ? " active" : "") + '" data-thinkinglevel="' + id + '">' +
+				'<span class="menu-item-label">' + label + '</span>' + (id === cur ? '<span class="menu-check">✓</span>' : "") + '</button>').join("");
+	}
+	let html = back + '<div class="menu-label">Verfügbare Modelle</div>';
+	if (S.modelMenuLoading) return html + '<div class="menu-note">Modelle werden geladen…</div>';
+	const opt = (prId, value, active) => '<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
+		'<span class="menu-item-label">' + U.esc(value) + '</span>' + (active ? '<span class="menu-check">✓</span>' : "") + '</button>';
 	providers.forEach((pr) => {
 		const liveForPr = live.filter((m) => m.providerId === pr.id);
-		const liveIds = new Set(liveForPr.map((m) => m.id));
-		const presetsForPr = AI.MODEL_PRESETS.filter((p) => p.provider === pr.id && !liveIds.has(p.value));
-		const isCurrentCustom = pr.id === curProviderId && curModel && !liveIds.has(curModel) && !presetsForPr.some((p) => p.value === curModel);
-		if (!liveForPr.length && !presetsForPr.length && !isCurrentCustom) return;
-		html += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>";
-		html += liveForPr.map((m) => opt(pr.id, m.id, m.id, pr.id === curProviderId && m.id === curModel)).join("");
-		html += presetsForPr.map((p) => opt(pr.id, p.value, p.label, pr.id === curProviderId && p.value === curModel)).join("");
-		if (isCurrentCustom) html += opt(pr.id, curModel, curModel, true);
+		if (!liveForPr.length) return;
+		html += '<div class="menu-label">' + U.esc(pr.name || pr.id) + '</div>' +
+			liveForPr.map((m) => opt(pr.id, m.id, pr.id === curProviderId && m.id === curModel)).join("");
 	});
-	if (providers.length) {
-		const pick = S.customModelProviderPick || curProviderId || providers[0].id;
-		html += '<div class="menu-sep"></div><div class="menu-label">Eigenes Modell</div>' +
-			'<div class="menu-custom">' +
-				(providers.length > 1
-					? '<div class="menu-chips">' + providers.map((pr) =>
-						'<button class="menu-chip' + (pr.id === pick ? " active" : "") + '" data-customprov="' + U.esc(pr.id) + '">' + U.esc(pr.name || pr.id) + "</button>"
-					).join("") + "</div>"
-					: "") +
-				'<div class="menu-custom-row"><input id="customModelInput" placeholder="Modellname eingeben…"><button data-modelcustomapply="1">Setzen</button></div>' +
-			"</div>";
-	}
-	return html;
+	return html === back + '<div class="menu-label">Verfügbare Modelle</div>'
+		? html + '<div class="menu-note">Gerade ist kein Modell erreichbar oder geladen.</div>' : html;
 }
 
 // Zeigt/versteckt beide Dropdown-Container (kleines Panel + großes Chat-Fenster)
@@ -123,7 +120,12 @@ function renderModelMenu() {
 		const which = id === "modelMenuFull" ? "full" : "panel";
 		const show = S.modelMenuOpen && (S.modelMenuAnchor || "panel") === which;
 		el.hidden = !show;
-		if (show) el.innerHTML = inner;
+		if (show) {
+			el.innerHTML = inner;
+			// Beide Chat-Varianten verwenden dieselbe Messung und erscheinen dadurch
+			// direkt über ihrem jeweiligen Regler-Icon.
+			POPOVERS.position(U.el(which === "full" ? "btnModelChipFull" : "btnModelMenu"), el, { prefer: "above", gap: 6 });
+		}
 	});
 }
 
@@ -170,20 +172,6 @@ function renderSidebar() {
 			html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 		}
 	}
-	// 💬 Chats: eigener einklappbarer Abschnitt unter dem Seitenbaum —
-	// nicht mehr hinter dem Dateien/Chats-Umschalter versteckt.
-	const chatsCollapsed = COLLAPSE.isCollapsed("sec:chats");
-	html += '<div class="ws-head"><button class="row-chevron ws-chevron' + (chatsCollapsed ? "" : " open") + '" data-collapse="sec:chats" title="Ein-/Ausklappen">▸</button>' +
-		'<span class="ws-name">Chats</span>' +
-		'<button class="mini" data-newchat="1" title="Neuer Chat">+</button></div>';
-	if (!chatsCollapsed) {
-		const sessions = (typeof CHATS !== "undefined") ? CHATS.load().slice(0, 8) : [];
-		html += sessions.map((s) =>
-			'<div class="row' + (s.id === S.currentChatId && S.view === "chat" ? " active" : "") + '" data-chat="' + s.id + '">' +
-			'<span class="row-title">💬 ' + U.esc(s.title || "Chat") + "</span>" +
-			'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
-		).join("") || '<div class="empty small">Noch keine Chats</div>';
-	}
 	tree.innerHTML = html;
 }
 
@@ -195,6 +183,7 @@ function chatListHtml() {
 		'<div class="row' + (s.id === S.currentChatId ? " active" : "") + '" data-chat="' + s.id + '">' +
 		'<span class="row-title">' + U.esc(s.title || "Chat") + "</span>" +
 		'<span class="hint">' + U.fmtDate(s.updated || s.created) + "</span>" +
+		'<button class="row-add" data-chatrename="' + s.id + '" title="Chat umbenennen">✎</button>' +
 		'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
 	).join("");
 	return html;
@@ -421,42 +410,59 @@ function breadcrumbHtml(pg) {
 	return html;
 }
 
-// Home als Dashboard: bündelt fällige Karten, die heutige Daily Note und den
-// Backup-Status als klickbare Kacheln — EIN Einstieg statt drei konkurrierender.
+// Persönliches Home-Dashboard: konfigurierbare Widgets, Schnellaktionen und
+// zuletzt verwendete Inhalte. Es ersetzt KEINE Navigation — die drei Hauptpillen
+// Home, Chat und Bibliothek bleiben unverändert und eindeutig.
 function renderHome(main) {
-	const pages = STATE.activePages(); // Papierkorb-Seiten zählen nicht mit und erscheinen nicht unter "Zuletzt bearbeitet"
-	const recent = pages.slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 8);
+	const pages = STATE.activePages();
+	const recent = pages.slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 8);
+	const favorites = pages.filter((p) => p.favorite).sort((a, b) => (b.updated || "").localeCompare(a.updated || ""));
+	const pdfs = pages.filter((p) => p.pdfId).sort((a, b) => (b.updated || "").localeCompare(a.updated || ""));
+	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
 	const due = STATE.dueCards().length;
-	// Backup-Erinnerung: IndexedDB kann vom Browser geräumt werden — nach 7 Tagen ohne Export erinnern.
-	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup"); // alter Schlüssel als Fallback
-	const bkDays = lastBk ? Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5) : null;
+	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup");
+	const bkDays = lastBk ? Math.max(0, Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5)) : null;
 	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
 	const todayKey = localDayKey(new Date());
 	const daily = pages.find((p) => p.daily === todayKey);
-	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").slice(0, 46) : "";
-	main.innerHTML =
-		'<div class="home">' +
-			"<h1>Guten Tag 👋</h1>" +
-			'<p class="hint">' + pages.length + " Seiten · " + Object.keys(S.cards).length + " Karteikarten</p>" +
-			'<div class="home-tiles">' +
-				'<button class="home-tile' + (due ? " attention" : "") + '" id="btnReviewHome">' +
-					'<span class="tile-num">🃏 ' + due + '</span><span class="tile-label">Karten fällig</span>' +
-					'<span class="tile-action">' + (due ? "Jetzt lernen →" : "Alles wiederholt 🎉") + "</span></button>" +
-				'<button class="home-tile" id="btnDailyHome">' +
-					'<span class="tile-num">📅</span><span class="tile-label">Daily Note heute</span>' +
-					'<span class="tile-action">' + (daily ? (dailyLine ? U.esc(dailyLine) : "Öffnen →") : "Anlegen →") + "</span></button>" +
-				'<button class="home-tile' + (bkDue ? " attention" : "") + '" id="btnBackupNow">' +
-					'<span class="tile-num">💾</span><span class="tile-label">Backup</span>' +
-					'<span class="tile-action">' + (bkDays === null ? "Noch keins — jetzt sichern →" : "Vor " + bkDays + " Tag" + (bkDays === 1 ? "" : "en") + " — erneut sichern →") + "</span></button>" +
-			"</div>" +
-			"<h3>Zuletzt bearbeitet</h3>" +
-			(recent.length
-				? '<div class="home-grid">' + recent.map((pg) =>
-					'<div class="home-card" data-page="' + pg.id + '"><span>' + (pg.icon || (pg.pdfId ? "📄" : "📝")) + " " + U.esc(pg.title) + "</span>" +
-					'<span class="hint">' + U.fmtDate(pg.updated) + "</span></div>"
-				).join("") + "</div>"
-				: '<p class="hint">Noch keine Seiten — lege über das + neben einem Workspace eine an.</p>') +
-		"</div>";
+	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").replace(/^#+\s*/, "").slice(0, 54) : "";
+	const hour = new Date().getHours();
+	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
+	const widgetOrder = SETTINGS.dashboardWidgets();
+	const tile = (id, cls, icon, number, label, action, attrs) =>
+		'<button class="home-widget home-widget-' + id + (cls ? " " + cls : "") + '" ' + (attrs || "") + '>' +
+			'<span class="widget-icon">' + icon + '</span><span class="widget-copy"><span class="widget-value">' + U.esc(String(number)) +
+			'</span><span class="widget-label">' + U.esc(label) + '</span><span class="widget-action">' + U.esc(action) + '</span></span></button>';
+	const widgets = {
+		continue: recent[0]
+			? tile("continue", "wide", recent[0].icon || (recent[0].pdfId ? "📄" : "📝"), recent[0].title, "Weitermachen", "Zuletzt bearbeitet · " + U.fmtDate(recent[0].updated), 'data-page="' + recent[0].id + '"')
+			: tile("continue", "wide muted", "✦", "Erste Seite", "Weitermachen", "Jetzt eine Seite anlegen", 'data-homeaction="newpage"'),
+		daily: tile("daily", "", "📅", daily ? "Heute" : "Neu", "Daily Note", dailyLine || (daily ? "Öffnen" : "Tagesseite anlegen"), 'data-homeaction="daily"'),
+		cards: tile("cards", due ? "attention" : "", "🃏", due, "Karten fällig", due ? "Lernsession starten" : "Alles erledigt", 'data-homeaction="cards"'),
+		favorites: tile("favorites", "", "★", favorites.length, "Favoriten", favorites[0] ? favorites[0].title : "Noch nichts angeheftet", favorites[0] ? 'data-page="' + favorites[0].id + '"' : 'data-homeaction="library"'),
+		chats: tile("chats", "", "✦", chats.length, "Chats", chats[0] ? (chats[0].title || "Letzten Chat öffnen") : "Neuen Chat beginnen", chats[0] ? 'data-chat="' + chats[0].id + '"' : 'data-homeaction="newchat"'),
+		pdfs: tile("pdfs", "", "▤", pdfs.length, "PDFs", pdfs[0] ? pdfs[0].title : "Noch keine PDFs", pdfs[0] ? 'data-page="' + pdfs[0].id + '"' : 'data-homeaction="library"'),
+		backup: tile("backup", bkDue ? "attention" : "", "↥", bkDays === null ? "—" : bkDays + " T", "Backup", bkDays === null ? "Erstes Backup erstellen" : "Zuletzt vor " + bkDays + " Tag" + (bkDays === 1 ? "" : "en"), 'data-homeaction="backup"'),
+	};
+	const recentPages = recent.length
+		? '<div class="home-recent-grid">' + recent.map((pg) => '<button class="recent-card" data-page="' + pg.id + '">' +
+			'<span class="recent-icon">' + U.esc(pg.icon || (pg.pdfId ? "📄" : "📝")) + '</span><span class="recent-copy"><b>' + U.esc(pg.title) +
+			'</b><small>' + U.fmtDate(pg.updated) + '</small></span><span class="recent-arrow">›</span></button>').join("") + '</div>'
+		: '<div class="empty-state"><span>✦</span><b>Dein Workspace ist bereit</b><p>Lege die erste Seite an oder importiere ein PDF.</p><button data-homeaction="newpage">Neue Seite</button></div>';
+	const recentChats = chats.slice(0, 4).map((chat) => '<button class="home-list-row" data-chat="' + chat.id + '"><span>✦</span><b>' +
+		U.esc(chat.title || "Chat") + '</b><small>' + U.fmtDate(chat.updated || chat.created) + '</small><i>›</i></button>').join("");
+	main.innerHTML = '<div class="home home-v2">' +
+		'<header class="home-hero"><div><span class="home-eyebrow">IMPALA67</span><h1>' + greeting + ' 👋</h1><p>' +
+		pages.length + ' Seiten · ' + Object.keys(S.cards).length + ' Karteikarten · ' + chats.length + ' Chats</p></div>' +
+		'<button class="home-customize" data-set="look" title="Dashboard und Design anpassen">⚙ Anpassen</button></header>' +
+		'<div class="quick-actions"><button data-homeaction="newpage">＋ Neue Seite</button><button data-homeaction="search">⌕ Suchen</button>' +
+		'<button data-homeaction="newchat">✦ Neuer Chat</button><button data-homeaction="library">▦ Bibliothek</button></div>' +
+		'<section class="home-widget-grid">' + widgetOrder.map((id) => widgets[id] || "").join("") + '</section>' +
+		'<section class="home-section"><div class="section-head"><div><span class="section-kicker">ARBEIT</span><h2>Zuletzt bearbeitet</h2></div>' +
+		'<button data-homeaction="library">Alle in der Bibliothek ›</button></div>' + recentPages + '</section>' +
+		(recentChats ? '<section class="home-section"><div class="section-head"><div><span class="section-kicker">KI</span><h2>Letzte Chats</h2></div>' +
+		'<button data-homeaction="chats">Alle Chats ›</button></div><div class="home-list">' + recentChats + '</div></section>' : '') +
+		'</div>';
 }
 
 // Papierkorb: gelöschte Seiten mit Wiederherstellen / Endgültig-löschen-Optionen.
@@ -607,6 +613,7 @@ function userMsgHtml(m) {
 		(m.content ? U.esc(m.content) : "") +
 		(m.image ? '<img class="msg-img" src="' + m.image + '" alt="Anhang">' : "") +
 		(m.textFile ? fileChipHtml(m) : "") +
+		(m.pdfFile ? '<div class="file-chip"><span>📄 ' + U.esc(m.pdfFile.name) + ' · ' + (m.pdfFile.pages || "?") + ' Seiten</span></div>' : "") +
 		"</div>";
 }
 
@@ -658,7 +665,22 @@ function questionCardHtml(m) {
 
 // Nach dem Setzen von innerHTML wird LaTeX gerendert (KaTeX) und Code eingefärbt (highlight.js) —
 // beides live, auch während die Antwort noch streamt.
+function renderSideContextChip() {
+	const chip = U.el("sideContextChip");
+	if (!chip) return;
+	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
+	if (!pg) {
+		chip.hidden = true;
+		chip.innerHTML = "";
+		return;
+	}
+	chip.hidden = false;
+	chip.innerHTML = '<span class="side-context-icon">📄</span><span class="side-context-title">' +
+		U.esc(pg.title || "Unbenannte Seite") + '</span><span class="side-context-note">Seitenkontext</span>';
+}
+
 function renderChat() {
+	renderSideContextChip();
 	const log = U.el("chatLog");
 	if (!log) return;
 	log.innerHTML = chatMsgListHtml(S.sideChat);
@@ -680,14 +702,16 @@ function renderFullChat(main) {
 			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' : "") +
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
 			'<form id="mainChatForm" class="chat-form-full">' +
-				'<button type="button" id="btnAttachFull" title="PDF oder Bild anhängen">+</button>' +
+				'<div id="mainPendingChip" hidden></div>' +
+				'<button type="button" id="btnAttachFull" title="Fotos und Dateien hinzufügen">+</button>' +
+				'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
 				'<textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>' +
-				'<button type="button" id="btnModelChipFull" class="model-chip" title="Modell wählen"></button>' +
 				'<button type="submit" title="Senden">➤</button>' +
 				'<div id="modelMenuFull" class="model-menu" hidden></div>' +
 			"</form>" +
 		"</div>";
 	renderMainChatLog();
+	renderPendingChip("full");
 	const inp = U.el("mainChatInput");
 	if (empty && inp) inp.focus();
 }
@@ -726,6 +750,7 @@ function assistantMsgHtml(m) {
 	const refineOpen = S.refineOpenMid === m.mid;
 	html += '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
 		'<div class="msg-tools">' +
+			'<button class="msg-tool-btn" data-copymsg="' + m.mid + '" title="Antwort in die Zwischenablage kopieren">📋 Kopieren</button>' +
 			'<button class="msg-tool-btn" data-refinetoggle="' + m.mid + '" title="Antwort anpassen">✦ Anpassen</button>' +
 			(refineOpen
 				? '<div class="refine-menu">' +
@@ -748,28 +773,53 @@ function editCardHtml(m) {
 	return '<div class="edit-card">' +
 		'<div class="edit-title">' + U.esc(m.summary || (label + " " + title)) + '</div>' +
 		'<div class="edit-actions-row">' +
-			'<button class="btn-show-changes" data-difftoggle="' + m.mid + '">' + (m.diffExpanded ? "Änderungen ausblenden" : "Änderungen anzeigen") + '</button>' +
+			'<button class="btn-show-changes" data-difftoggle="' + m.mid + '">Änderungen anzeigen</button>' +
 			'<button class="btn-undo-icon" data-undo="' + m.mid + '" ' + (m.undone ? "disabled" : "") + ' title="Rückgängig machen">↺</button>' +
 		'</div>' +
 		'<div class="edit-subtitle">' + label + '</div>' +
 		'<div class="edit-files-list">' +
 			'<div class="edit-file-item">📄 ' + U.esc(title) + '</div>' +
 		'</div>' +
-		(m.diffExpanded ? '<div class="diff-block">' + (diffHtml || '<span class="hint">Keine Textunterschiede</span>') + "</div>" : "") +
 		"</div>";
 }
 
-function renderPendingChip() {
-	const chip = U.el("pendingChip");
+function openChangePreview(m) {
+	const o = U.el("overlay");
+	if (!o || !m) return;
+	const title = m.pageTitle || "Unbenannte Seite";
+	const label = m.created ? "Seite erstellt" : "Seite geändert";
+	const diff = m.after.content && m.before.content ? U.diffLines(m.before.content, m.after.content) : [];
+	const diffHtml = diff.map((d) => '<div class="change-line ' + d.type + '">' +
+		(d.type === "add" ? "+ " : d.type === "del" ? "− " : "  ") + U.esc(d.text) + "</div>").join("");
+	o.hidden = false;
+	o.innerHTML = '<div class="modal change-preview">' +
+		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
+		'<header class="change-preview-head"><span class="change-preview-icon">📄</span><span><b>' + U.esc(title) + '</b><small>' + label + ' · KI</small></span></header>' +
+		'<div class="change-preview-bar"><span>Änderungen</span><button class="btn-undo-change" data-undo="' + m.mid + '" ' + (m.undone ? "disabled" : "") + '>↺ Rückgängig</button></div>' +
+		'<div class="change-preview-diff">' + (diffHtml || '<div class="hint">Keine Textunterschiede verfügbar.</div>') + '</div>' +
+		'</div>';
+}
+
+function renderPendingChip(type) {
+	const chip = U.el(type === "full" ? "mainPendingChip" : "pendingChip");
 	if (!chip) return;
+	if (S.pendingAttachmentTarget !== type) {
+		chip.hidden = true;
+		chip.innerHTML = "";
+		return;
+	}
 	if (S.pendingImage) {
 		chip.hidden = false;
-		chip.innerHTML = '<img src="' + S.pendingImage + '" alt=""> Bild angehängt ' +
-			'<button id="btnRemoveImage" title="Entfernen">✕</button>';
+		chip.innerHTML = '<img src="' + S.pendingImage + '" alt=""> <span>Bild</span>' +
+			'<button data-removeattachment="1" title="Entfernen">✕</button>';
 	} else if (S.pendingTextFile) {
 		chip.hidden = false;
 		chip.innerHTML = '📄 ' + U.esc(S.pendingTextFile.name) + ' (' + S.pendingTextFile.size + ' Zeichen) wird als Datei angehängt ' +
 			'<button id="btnRemoveTextFile" title="Entfernen">✕</button>';
+	} else if (S.pendingPdf) {
+		chip.hidden = false;
+		chip.innerHTML = '📄 ' + U.esc(S.pendingPdf.name) + ' (' + (S.pendingPdf.pages || "?") + ' Seiten) wird als PDF-Kontext angehängt ' +
+			'<button id="btnRemovePdf" title="Entfernen">✕</button>';
 	} else {
 		chip.hidden = true;
 		chip.innerHTML = "";
@@ -832,7 +882,10 @@ function openReview() {
 					'<button data-grade="4" data-card="' + c.id + '">Einfach</button>' +
 				"</div>"
 			: '<div class="modal-actions"><button id="btnShowBack">Antwort zeigen</button></div>') +
-		'<div class="modal-actions"><button id="btnCloseOverlay">Beenden</button></div>'
+		'<div class="modal-actions review-tools">' +
+			'<button data-ankiedit="' + c.id + '" title="Karte bearbeiten">✎ Bearbeiten</button>' +
+			'<button data-reviewsuspend="' + c.id + '" title="Karte aussetzen (zählt nicht mehr als fällig)">⏸ Aussetzen</button>' +
+			'<button id="btnCloseOverlay">Beenden</button></div>'
 	);
 }
 
@@ -878,5 +931,6 @@ export const RENDER = {
 	renderLibrary: (...args) => LIBRARY.renderLibrary(...args),
 	libCardHtml: (...args) => LIBRARY.libCardHtml(...args),
 	renderModelBar,
-	renderPendingChip
+	renderPendingChip,
+	openChangePreview
 };

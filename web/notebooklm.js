@@ -114,11 +114,18 @@ export const NLM = (() => {
 		}
 	}
 	function hideEmbeddedIfActive() {
-		if (!embedded) return;
+		// Nicht auf den lokalen Status vertrauen: Das Webview kann noch sichtbar sein,
+		// obwohl ein vorheriger Aufruf fehlgeschlagen oder verspätet angekommen ist.
+		if (resizeObserverNlm) {
+			resizeObserverNlm.disconnect();
+			resizeObserverNlm = null;
+		}
 		embedded = false;
 		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
 	}
 	window.addEventListener("resize", () => positionEmbedded(false));
+	// tabs.js meldet das Schließen synchron, noch bevor die Ansicht neu gerendert wird.
+	window.addEventListener("impala67:nlm-hide", hideEmbeddedIfActive);
 	function renderPane(main) {
 		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">Downloads landen automatisch in Impala</span></div><div id="nlmHost" class="nlm-host"></div></div>';
 		const host = document.getElementById("nlmHost");

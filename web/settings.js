@@ -24,10 +24,30 @@ export async function checkAI() {
 	renderStatusDot();
 }
 
-// Theme (dunkel/hell) — Gerätewahl in localStorage, Standard: dunkel.
-export function applyTheme() {
-	document.body.classList.toggle("light", (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light");
+// Zentrale Darstellungsoptionen. Alles wird als Gerätewahl in localStorage gespeichert,
+// damit Theme, Akzent, Dichte und Bewegung nicht durch den Drive-Sync überschrieben werden.
+const ACCENT_THEMES = {
+	blue:   { solid: "#5e9fe8", soft: "rgba(94,159,232,.12)", border: "rgba(94,159,232,.36)" },
+	violet: { solid: "#a78bfa", soft: "rgba(167,139,250,.12)", border: "rgba(167,139,250,.36)" },
+	green:  { solid: "#72bc8f", soft: "rgba(114,188,143,.12)", border: "rgba(114,188,143,.36)" },
+	orange: { solid: "#de9255", soft: "rgba(222,146,85,.12)", border: "rgba(222,146,85,.36)" },
+};
+
+export function applyAppearance() {
+	const theme = localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark";
+	const density = localStorage.getItem("impala67Density") || "comfortable";
+	const motion = localStorage.getItem("impala67Motion") || "full";
+	const accentName = localStorage.getItem("impala67Accent") || "blue";
+	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
+	document.body.classList.toggle("light", theme === "light");
+	document.body.classList.toggle("density-compact", density === "compact");
+	document.body.classList.toggle("reduce-motion", motion === "reduced");
+	document.body.style.setProperty("--accent", accent.solid);
+	document.body.style.setProperty("--accent-soft", accent.soft);
+	document.body.style.setProperty("--accent-border", accent.border);
 }
+
+export function applyTheme() { applyAppearance(); }
 
 // Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
 export async function applyBg() {
@@ -146,13 +166,33 @@ export function openSettings(section) {
 			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
 			'<p class="hint" id="notionStatus"></p>';
 	} else if (sec === "look") {
-		const theme = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light" ? "light" : "dark"; // alter Schlüssel als Fallback
-		body = '<h4>Design</h4><div class="row-btns">' +
-			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '">🌙 Dunkel</button>' +
-			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '">☀️ Hell</button></div>' +
-			'<h4 style="margin-top:14px">Hintergrund</h4>' +
-			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dunkel überblendet, damit Text lesbar bleibt.</p>' +
-			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>';
+		const theme = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light" ? "light" : "dark";
+		const accent = localStorage.getItem("impala67Accent") || "blue";
+		const density = localStorage.getItem("impala67Density") || "comfortable";
+		const motion = localStorage.getItem("impala67Motion") || "full";
+		const widgets = dashboardWidgets();
+		const widgetLabel = Object.fromEntries(DASHBOARD_WIDGETS.map((w) => [w.id, w.label]));
+		body = '<h4>Design</h4><div class="row-btns appearance-choice">' +
+			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '">Dunkel</button>' +
+			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '">Hell</button></div>' +
+			'<h4>Akzentfarbe</h4><div class="accent-picker">' + ["blue", "violet", "green", "orange"].map((name) =>
+				'<button data-accent="' + name + '" class="accent-swatch accent-' + name + (accent === name ? " active" : "") + '" title="' + name + '"></button>').join("") + '</div>' +
+			'<h4>Darstellungsdichte</h4><div class="row-btns appearance-choice">' +
+			'<button id="btnDensityComfortable" class="' + (density === "comfortable" ? "active" : "") + '">Komfortabel</button>' +
+			'<button id="btnDensityCompact" class="' + (density === "compact" ? "active" : "") + '">Kompakt</button></div>' +
+			'<h4>Bewegung</h4><div class="row-btns appearance-choice">' +
+			'<button id="btnMotionFull" class="' + (motion === "full" ? "active" : "") + '">Sanft</button>' +
+			'<button id="btnMotionReduced" class="' + (motion === "reduced" ? "active" : "") + '">Reduziert</button></div>' +
+			'<h4>Home-Dashboard</h4><p class="hint">Widgets ein-/ausblenden und mit den Pfeilen anordnen.</p>' +
+			'<div class="dashboard-settings">' + widgets.map((id, i) => '<div class="dashboard-setting-row">' +
+				'<button data-dashtoggle="' + id + '" class="dash-visible" title="Widget ausblenden">✓</button>' +
+				'<span>' + U.esc(widgetLabel[id] || id) + '</span>' +
+				'<button data-dashmove="' + id + ':-1" ' + (i === 0 ? "disabled" : "") + '>↑</button>' +
+				'<button data-dashmove="' + id + ':1" ' + (i === widgets.length - 1 ? "disabled" : "") + '>↓</button></div>').join("") +
+			'<button data-dashadd="1" class="dashboard-add">＋ Ausgeblendetes Widget hinzufügen</button></div>' +
+			'<h4>Hintergrund</h4>' +
+			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dezent überblendet, damit Text lesbar bleibt.</p>' +
+			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
 	} else if (sec === "backup") {
 		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
 			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
@@ -389,10 +429,66 @@ export async function handleBackupNow() {
 	if (S.view === "home") render();
 }
 
+export const DASHBOARD_WIDGETS = [
+	{ id: "continue", label: "Weitermachen" },
+	{ id: "daily", label: "Daily Note" },
+	{ id: "cards", label: "Fällige Karten" },
+	{ id: "favorites", label: "Favoriten" },
+	{ id: "chats", label: "Letzte Chats" },
+	{ id: "pdfs", label: "Importierte PDFs" },
+	{ id: "backup", label: "Backup" },
+];
+
+export function dashboardWidgets() {
+	try {
+		const saved = JSON.parse(localStorage.getItem("impala67DashboardWidgets") || "null");
+		if (Array.isArray(saved)) return saved.filter((id) => DASHBOARD_WIDGETS.some((w) => w.id === id));
+	} catch { /* Standard verwenden */ }
+	return DASHBOARD_WIDGETS.map((w) => w.id);
+}
+
+function saveDashboardWidgets(ids) {
+	localStorage.setItem("impala67DashboardWidgets", JSON.stringify(ids));
+}
+
+export function handleDashboardToggle(id) {
+	const ids = dashboardWidgets().filter((x) => x !== id);
+	saveDashboardWidgets(ids);
+	openSettings("look");
+}
+
+export function handleDashboardMove(id, direction) {
+	const ids = dashboardWidgets();
+	const from = ids.indexOf(id);
+	const to = from + Number(direction);
+	if (from < 0 || to < 0 || to >= ids.length) return;
+	[ids[from], ids[to]] = [ids[to], ids[from]];
+	saveDashboardWidgets(ids);
+	openSettings("look");
+}
+
+export function handleDashboardAdd() {
+	const ids = dashboardWidgets();
+	const hidden = DASHBOARD_WIDGETS.find((w) => !ids.includes(w.id));
+	if (hidden) ids.push(hidden.id);
+	else { U.toast("Alle Dashboard-Widgets sind bereits sichtbar.", "success"); return; }
+	saveDashboardWidgets(ids);
+	openSettings("look");
+}
+
+export function handleAppearanceSelect(kind, value) {
+	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion" };
+	if (!keys[kind]) return;
+	localStorage.setItem(keys[kind], value);
+	applyAppearance();
+	openSettings("look");
+}
+
 export function handleThemeSelect(theme) {
 	localStorage.setItem("impala67Theme", theme);
-	localStorage.removeItem("notionTheme"); // alten Schlüssel aufräumen — gelesen wird er nur noch als Fallback
-	applyTheme();
+	localStorage.removeItem("notionTheme");
+	applyAppearance();
+	openSettings("look");
 }
 
 export async function handleFileBgChange(e) {
@@ -422,6 +518,7 @@ export async function handleImportChange(e) {
 export const SETTINGS = {
 	checkAI,
 	applyTheme,
+	applyAppearance,
 	applyBg,
 	renderNotionJob,
 	openSettings,
@@ -439,6 +536,12 @@ export const SETTINGS = {
 	handleDriveSync,
 	handleBackupNow,
 	handleThemeSelect,
+	handleAppearanceSelect,
+	handleDashboardToggle,
+	handleDashboardMove,
+	handleDashboardAdd,
+	dashboardWidgets,
+	DASHBOARD_WIDGETS,
 	handleFileBgChange,
 	handleImportChange
 };

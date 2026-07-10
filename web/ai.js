@@ -114,6 +114,10 @@ export const AI = (() => {
 	async function chatOnce(messages, tools, onDelta, onReasoning) {
 		const { model } = cfg();
 		const body = { model, messages, temperature: 0.4 };
+		// reasoning_effort ist keine allgemeine OpenAI-kompatible Erweiterung.
+		// Darum nur für die OpenAI-Quelle senden; andere Server bleiben kompatibel.
+		const thinking = S.settings.thinkingLevel || "auto";
+		if (thinking !== "auto" && (activeProvider() || {}).id === "openai") body.reasoning_effort = thinking;
 		if (tools && tools.length) { body.tools = tools; body.tool_choice = "auto"; }
 		if (!onDelta) {
 			const res = await request("/chat/completions", body);
@@ -269,11 +273,18 @@ export const AI = (() => {
 		type = type || "side";
 		const targetChat = type === "side" ? S.sideChat : S.chat;
 
-		const image = S.pendingImage;
-		const textFile = S.pendingTextFile;
-		S.pendingImage = null;
-		S.pendingTextFile = null;
-		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile });
+		// Ein Anhang gehört ausschließlich zu dem Chat, in dem er ausgewählt wurde.
+		const useAttachment = S.pendingAttachmentTarget === type;
+		const image = useAttachment ? S.pendingImage : null;
+		const textFile = useAttachment ? S.pendingTextFile : null;
+		const pdfFile = useAttachment ? S.pendingPdf : null;
+		if (useAttachment) {
+			S.pendingImage = null;
+			S.pendingTextFile = null;
+			S.pendingPdf = null;
+			S.pendingAttachmentTarget = null;
+		}
+		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile, pdfFile });
 		// Multimodal: angehängte Bilder werden als image_url mitgeschickt (Gemini/Gemma Vision).
 		// Angehängte Textdateien werden dem Modell als Kontext mitgegeben, im Chat aber nur als Datei-Chip gezeigt.
 		const history = targetChat.slice(-16)
@@ -281,6 +292,7 @@ export const AI = (() => {
 			.map((m) => {
 				let content = m.content || "";
 				if (m.textFile) content = (content ? content + "\n\n" : "") + "[Angehängte Datei: " + m.textFile.name + "]\n" + m.textFile.content;
+				if (m.pdfFile) content = (content ? content + "\n\n" : "") + "[Angehängtes PDF: " + m.pdfFile.name + "]\n" + m.pdfFile.content;
 				if (m.image) return { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] };
 				return { role: m.role, content };
 			});
