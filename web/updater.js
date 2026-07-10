@@ -1,8 +1,23 @@
-// updater.js — prüft beim Start auf ein neues Windows-Paket.
-// FIX (Audit): fragt jetzt per Banner nach, statt mitten in der Sitzung ungefragt
-// herunterzuladen, zu installieren und neu zu starten.
-// Läuft nur innerhalb der Tauri-App (window.__TAURI__ vorhanden); im normalen
-// Browser/PWA passiert hier nichts, die Datei ist dann einfach wirkungslos.
+// updater.js — Version + Update-Check (Tauri-Banner beim Start, PWA/Settings manuell).
+// APP_VERSION bei Release/auto-version mitbumpen (gleicher Stand wie package.json).
+window.APP_VERSION = "0.2.18";
+
+// Manueller Check aus Einstellungen → Update (Desktop + PWA).
+window.checkAppUpdate = async function checkAppUpdate() {
+	const cur = String(window.APP_VERSION || "").replace(/^v/, "");
+	if (window.__TAURI__ && window.__TAURI__.updater) {
+		const update = await window.__TAURI__.updater.check();
+		if (!update) return { ok: true, latest: cur, current: cur, hasUpdate: false };
+		return { ok: true, latest: String(update.version || "").replace(/^v/, ""), current: cur, hasUpdate: true, update: update };
+	}
+	const res = await fetch("https://github.com/prinzpuma/Impala67/releases/latest/download/latest.json", { cache: "no-store" });
+	if (!res.ok) throw new Error("HTTP " + res.status);
+	const data = await res.json();
+	const latest = String(data.version || "").replace(/^v/, "");
+	return { ok: true, latest: latest || cur, current: cur, hasUpdate: !!(latest && latest !== cur) };
+};
+
+// Beim Start nur in der Tauri-App: Banner mit Installieren/Später.
 (async function () {
 	if (!window.__TAURI__ || !window.__TAURI__.updater) return;
 	try {

@@ -115,6 +115,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "notion", label: "Notion Sync" },
 	{ id: "backup", label: "Backup" },
 	{ id: "sync", label: "Sync" },
+	{ id: "update", label: "Update" },
 ];
 
 export function openSettings(section) {
@@ -245,6 +246,13 @@ export function openSettings(section) {
 			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
 				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
 		}
+	} else if (sec === "update") {
+		const ver = window.APP_VERSION || "unbekannt";
+		const platform = window.__TAURI__ ? "Windows (Desktop)" : "PWA / Browser";
+		body = '<p class="hint">Aktuelle Version: <b>v' + U.esc(String(ver)) + '</b><br>Plattform: ' + platform + '</p>' +
+			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button></div>' +
+			'<p class="hint" id="updateStatus"></p>' +
+			'<p class="hint">Desktop: signiertes Windows-Update. PWA: vergleicht mit dem neuesten GitHub-Release; danach Seite neu laden (Service Worker).</p>';
 	}
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	o.innerHTML = '<div class="modal settings-modal">' +
@@ -357,6 +365,38 @@ export async function handleAddProvider() {
 	providers.push({ id: U.uid(), name: "Neue Quelle", base: "", key: "" });
 	await STATE.dispatch("settingsSet", { aiProviders: providers });
 	openSettings("ki");
+}
+
+export async function handleCheckUpdate() {
+	const status = U.el("updateStatus");
+	const btn = U.el("btnCheckUpdate");
+	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
+	if (status) status.textContent = "Prüfe…";
+	try {
+		const r = await (window.checkAppUpdate ? window.checkAppUpdate() : Promise.reject(new Error("Update-Check nicht geladen")));
+		if (!r.hasUpdate) {
+			if (status) status.textContent = "✅ Du bist auf dem neuesten Stand (v" + (r.current || "?") + ").";
+			U.toast("Kein Update verfügbar.", "success");
+		} else if (window.__TAURI__ && r.update) {
+			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar — wird vorbereitet…";
+			try {
+				await r.update.downloadAndInstall();
+				if (status) status.textContent = "✅ Update installiert — Neustart…";
+				await window.__TAURI__.process.relaunch();
+			} catch (e) {
+				if (status) status.textContent = "⚠️ Installation fehlgeschlagen: " + (e.message || e);
+				U.toast("Update-Installation fehlgeschlagen.", "error");
+			}
+		} else {
+			if (status) status.textContent = "⬇️ Neuere Version v" + r.latest + " — Seite neu laden (PWA holt den Stand über den Service Worker).";
+			U.toast("Update v" + r.latest + " verfügbar — bitte neu laden.", "success");
+		}
+	} catch (e) {
+		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + (e.message || e);
+		U.toast("Update-Check fehlgeschlagen.", "error");
+		window.open("https://github.com/prinzpuma/Impala67/releases/latest", "_blank");
+	}
+	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }
 }
 
 export async function handleSaveSettings() {
@@ -543,6 +583,7 @@ export const SETTINGS = {
 	handleDriveLogout,
 	handleDriveSyncSettings,
 	handleAddProvider,
+	handleCheckUpdate,
 	handleSaveSettings,
 	handleClearBg,
 	handleResetAll,

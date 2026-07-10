@@ -1065,6 +1065,9 @@ function wireEvents() {
 			case "btnAddProvider":
 				await SETTINGS.handleAddProvider();
 				break;
+			case "btnCheckUpdate":
+				await SETTINGS.handleCheckUpdate();
+				break;
 			case "btnSaveSettings":
 				await SETTINGS.handleSaveSettings();
 				break;
