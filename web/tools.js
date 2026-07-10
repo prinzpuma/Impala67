@@ -60,6 +60,9 @@ export const TOOLS = (() => {
 			page_title: { type: "string" },
 			new_parent_title: { type: "string", description: "Leer lassen für oberste Ebene" },
 		}, ["page_title"]),
+		t("delete_page", "Verschiebt eine Seite (inkl. aller Unterseiten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Titeln zuerst ask_choice.", {
+			page_title: { type: "string", description: "Titel der zu löschenden Seite" },
+		}, ["page_title"]),
 		t("read_page", "Liest den Inhalt einer Seite.", {
 			page_title: { type: "string" },
 		}, ["page_title"]),
@@ -134,6 +137,44 @@ export const TOOLS = (() => {
 				}
 				await STATE.dispatch("pageMove", { id: pg.id, parentId: parent ? parent.id : null });
 				return { ok: true, title: pg.title, parent: parent ? parent.title : null };
+			}
+			case "delete_page": {
+				// Soft-Delete wie in der UI: pageTrash (Unterbaum mit). Bestätigung
+				// erzwingt ai.js vor dem Aufruf von run() — hier nur die Aktion selbst.
+				const pg = STATE.findPage(a.page_title);
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				// collectSubtree via aktiver Kinder-Zählung (pageTrash markiert den ganzen Baum)
+				const countKids = (id) => {
+					let n = 0;
+					for (const p of Object.values(S.pages)) {
+						if (!p.trashed && p.parentId === id) n += 1 + countKids(p.id);
+					}
+					return n;
+				};
+				const subtreeExtra = countKids(pg.id);
+				// Offene Tabs der Seite + Nachfahren schließen (wie app.js pagetrash)
+				const trashIds = new Set([pg.id]);
+				(function collect(pid) {
+					for (const p of Object.values(S.pages)) {
+						if (!p.trashed && p.parentId === pid && !trashIds.has(p.id)) {
+							trashIds.add(p.id);
+							collect(p.id);
+						}
+					}
+				})(pg.id);
+				S.tabs = (S.tabs || []).filter((tid) => !trashIds.has(tid));
+				if (S.currentPageId && trashIds.has(S.currentPageId)) {
+					S.currentPageId = null;
+					if (S.view === "page") S.view = "home";
+				}
+				await STATE.dispatch("pageTrash", { id: pg.id });
+				return {
+					ok: true,
+					title: pg.title,
+					trashed: true,
+					subpages: subtreeExtra,
+					note: "Im Papierkorb — wiederherstellbar. Endgültiges Löschen nur manuell im Papierkorb.",
+				};
 			}
 			case "read_page": {
 				const pg = STATE.findPage(a.page_title);

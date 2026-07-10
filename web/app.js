@@ -208,12 +208,56 @@ async function openHistory(pageId) {
 // Bewertet eine Karteikarte per FSRS und dispatcht das Ergebnis als EIN Event —
 // von beiden Lernorten (Anki-Browser-Inline-Bewertung UND Review-Modal) genutzt,
 // damit "grade" immer im Event-Payload steht (Tageslimits/Statistik werten das aus).
+// Schutz vor Doppel-Bewertung: rate()/dispatch() ist asynchron — ohne Sperre konnte
+// ein schneller Doppel-Tastendruck oder -Klick (Leertaste+Zifferntaste, zweimal auf
+// denselben Bewertungs-Knopf) dieselbe Karte zweimal bewerten, weil beide Aufrufe
+// noch denselben (alten) Kartenstand lasen, bevor der erste fertig war — das gab
+// kaputte/doppelte Intervalle.
+let _ratingInFlight = false;
 async function rateAndReviewCard(cardId, grade) {
+	if (_ratingInFlight) return null;
 	const card = S.cards[cardId];
 	if (!card) return null;
-	const srs = SRS.rate(card.srs, grade);
-	await STATE.dispatch("cardReview", { id: card.id, srs, grade });
-	return card;
+	_ratingInFlight = true;
+	try {
+		const srs = SRS.rate(card.srs, grade);
+		await STATE.dispatch("cardReview", { id: card.id, srs, grade });
+		return card;
+	} finally {
+		_ratingInFlight = false;
+	}
+}
+
+// Anki-Tastatur (docs.ankiweb.net/studying.html):
+// Space/Enter → Antwort; bei sichtbarer Antwort Space/Enter → Good (3).
+// 1–4 → Again/Hard/Good/Easy.
+function showStudyAnswer() {
+	if (S.view !== "anki" || S.ankiTab !== "study") return false;
+	// Space bei sichtbarer Antwort = Good (Anki-Standard)
+	if (S.reviewShowBack) return false;
+	const snap = STATE.studySnapshot(S.ankiDeck);
+	if (!snap.dueNow.length) return false;
+	S.reviewShowBack = true;
+	renderMain();
+	return true;
+}
+async function gradeStudyCard(grade) {
+	if (S.view !== "anki" || S.ankiTab !== "study") return false;
+	if (!S.reviewShowBack) return false;
+	const snap = STATE.studySnapshot(S.ankiDeck);
+	const c = snap.dueNow[0];
+	if (!c) return false;
+	const g = Math.max(1, Math.min(4, Number(grade) || 3));
+	await rateAndReviewCard(c.id, g);
+	S.reviewShowBack = false;
+	// dispatch() triggert onChange/render — Review-Show-Back ist vor dem nächsten Frame false
+	return true;
+}
+// Space/Enter: Antwort ODER Gut
+async function studySpaceOrEnter() {
+	if (S.view !== "anki" || S.ankiTab !== "study") return false;
+	if (!S.reviewShowBack) return showStudyAnswer();
+	return gradeStudyCard(3);
 }
 
 // Einheitlicher Einstieg für neue Chats — wird von Sidebar, Home und „+ Tab“-Menü genutzt.
@@ -290,7 +334,7 @@ function wireEvents() {
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-editmsg]," +
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
 		"[data-libws],[data-libinto],[data-libroot]," +
-		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankisort],[data-ankimore],[data-ankideckfilter]," +
+		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter]," +
 		"[data-ankisuspend],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
@@ -589,6 +633,7 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.ankishowback) { S.reviewShowBack = true; renderMain(); return; }
+		if (t.dataset.ankiwaitrefresh) { S.reviewShowBack = false; renderMain(); return; }
 		if (t.dataset.ankigrade) {
 			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade));
 			S.reviewShowBack = false;
@@ -1061,6 +1106,7 @@ function wireEvents() {
 				openAnki("study", null);
 				break;
 			case "btnShowBack": S.reviewShowBack = true; openReview(); break;
+			case "btnReviewRefresh": openReview(); break;
 			case "btnCards": openAnki("browser"); break;
 			case "btnDaily":
 				S.view = "daily";
@@ -1361,5 +1407,9 @@ export const APP = {
 	startNewChat,
 	createPageInNewTab,
 	// Für Strg+K-Aktionen (search.js) — „Karten verwalten“ & Co.
-	openAnki
+	openAnki,
+	rateAndReviewCard,
+	showStudyAnswer,
+	gradeStudyCard,
+	studySpaceOrEnter
 };

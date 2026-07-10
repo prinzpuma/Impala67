@@ -84,8 +84,10 @@ export const SRS = (() => {
 	// Reine due-Helfer für rate(): liefern nur das neue ISO-Datum zurück, statt wie
 	// vorher als Closures bei jedem rate()-Aufruf neu erzeugt zu werden und `s.due`
 	// selbst zu mutieren. Verhalten (inkl. Fuzzing) ist unverändert.
+	// Keine Rundung auf ganze Minuten mehr: Anki speichert Lernschritt-Fälligkeiten
+	// sekundengenau (z.B. Hard-Durchschnitt 5.5 Min = 5:30, nicht aufgerundet auf 6 Min).
 	const dueAfterMinutes = (now, m) => {
-		const mins = Math.max(1, Math.round(Number(m) || 1));
+		const mins = Math.max(0.0167, Number(m) || 1);
 		return new Date(now.getTime() + mins * 60e3).toISOString();
 	};
 	const dueAfterDays = (now, d, fuzz) => {
@@ -124,10 +126,24 @@ export const SRS = (() => {
 			const steps = relearn ? RELEARN_STEPS : LEARN_STEPS;
 			// Innerhalb der Lernschritte: Kurzzeit-Stabilität statt Tages-Formel
 			if (srs.state !== "new") s.stability = shortTermStability(s.stability || initStability(g), g);
-			if (g === 1) { s.step = 0; s.due = dueAfterMinutes(now, steps[0]); }
-			else if (g === 2) { s.due = dueAfterMinutes(now, steps[Math.min(s.step, steps.length - 1)] * 1.5); }
-			else if (g === 3) {
-				s.step += 1;
+			// Anki Learning-Steps (docs.ankiweb.net/deck-options.html):
+			// Again → Schritt 0, Delay steps[0]
+			// Hard  → 1. Schritt & ≥2 Steps: Mittelwert steps[0]+steps[1] (1m+10m→~6m);
+			//         späteren Step wiederholen; nur 1 Step: 1.5×
+			// Good  → nächster Step (New+Good: step 0→1, Delay 10m)
+			// Easy  → sofort graduieren
+			if (g === 1) {
+				s.step = 0;
+				s.due = dueAfterMinutes(now, steps[0]);
+			} else if (g === 2) {
+				const i = Math.min(s.step || 0, steps.length - 1);
+				let mins;
+				if (steps.length === 1) mins = steps[0] * 1.5;
+				else if (i === 0) mins = (steps[0] + steps[1]) / 2;
+				else mins = steps[i];
+				s.due = dueAfterMinutes(now, mins);
+			} else if (g === 3) {
+				s.step = (s.step || 0) + 1;
 				if (s.step < steps.length) s.due = dueAfterMinutes(now, steps[s.step]);
 				else { s.state = "review"; s.step = 0; s.due = dueAfterDays(now, nextInterval(s.stability), fuzz); }
 			} else {

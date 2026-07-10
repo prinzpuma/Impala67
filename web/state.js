@@ -473,6 +473,8 @@ export const STATE = (() => {
 
 	// Tageslimits (wie Anki): heute bereits gelernte neue Karten bzw. Wiederholungen
 	// zählen gegen das Limit des jeweiligen Stapels (aus dem Review-Protokoll).
+	// Learning/Relearning zählen NICHT gegen new/rev-Limits — sonst endet die
+	// Session nach einem Durchlauf, obwohl Minuten-Lernschritte noch offen sind.
 	function applyDailyLimits(cards) {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
@@ -485,9 +487,11 @@ export const STATE = (() => {
 			else usedRev[d] = (usedRev[d] || 0) + 1;
 		});
 		return cards.filter((c) => {
+			const st = (c.srs && c.srs.state) || "new";
+			if (st === "learning" || st === "relearning") return true;
 			const d = c.deck || "Standard";
 			const conf = deckConfOf(d);
-			if (c.srs.state === "new") {
+			if (st === "new") {
 				if ((usedNew[d] || 0) >= conf.newPerDay) return false;
 				usedNew[d] = (usedNew[d] || 0) + 1;
 			} else {
@@ -498,9 +502,135 @@ export const STATE = (() => {
 		});
 	}
 
-	const dueCards = () => applyDailyLimits(Object.values(S.cards)
-		.filter((c) => !c.suspended && new Date(c.srs.due) <= new Date())
-		.sort((a, b) => a.srs.due.localeCompare(b.srs.due)));
+	// Lokales Tagesende (nächste Mitternacht) — Lernkarten mit due davor zählen noch „heute“.
+	function endOfLocalDay(now = new Date()) {
+		return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+	}
+
+	function isLearnState(state) {
+		return state === "learning" || state === "relearning";
+	}
+
+	// Anki-Queue (v3-ähnlich, docs.ankiweb.net):
+	// 1) Intraday Learning fällig jetzt (zeitkritisch, kein Review-Limit)
+	// 2) Reviews fällig (Tageslimit)
+	// 3) New (Tageslimit; standardmäßig blockiert wenn Review-Limit voll)
+	// Learn-Ahead: wenn sonst nichts da ist, Learning bis 20 Min vorziehen.
+	// „Fertig jetzt“ = keine verfügbare Karte; spätere Learning-Karten heute bleiben geplant.
+	const LEARN_AHEAD_MS = 20 * 60e3;
+
+	function studySnapshot(deck, now = new Date()) {
+		const t = now instanceof Date ? now : new Date(now);
+		const eod = endOfLocalDay(t);
+		const aheadUntil = new Date(t.getTime() + LEARN_AHEAD_MS);
+		const inDeck = (c) => {
+			if (!c || c.suspended || !c.srs) return false;
+			if (!deck) return true;
+			const d = c.deck || "Standard";
+			return d === deck || d.startsWith(deck + "::");
+		};
+		const byDue = (a, b) => a.srs.due.localeCompare(b.srs.due);
+		const all = Object.values(S.cards).filter(inDeck);
+
+		// Intraday learning: due vor Tagesende und (typisch) Minuten-Schritte
+		const learnAll = all.filter((c) => isLearnState(c.srs.state));
+		const learnDueNow = learnAll.filter((c) => new Date(c.srs.due) <= t).sort(byDue);
+		// Noch nicht fällig, aber innerhalb Learn-Ahead (nur wenn sonst nichts zu tun)
+		const learnAhead = learnAll
+			.filter((c) => {
+				const d = new Date(c.srs.due);
+				return d > t && d <= aheadUntil && d < eod;
+			})
+			.sort(byDue);
+		// Später heute (nach Learn-Ahead) — Session „finished for now“, nicht „alles morgen“
+		const learnLaterToday = learnAll
+			.filter((c) => {
+				const d = new Date(c.srs.due);
+				return d > aheadUntil && d < eod;
+			})
+			.sort(byDue);
+
+		const reviewsRaw = all.filter((c) => c.srs.state === "review" && new Date(c.srs.due) <= t).sort(byDue);
+		const newRaw = all.filter((c) => c.srs.state === "new" && new Date(c.srs.due) <= t).sort(byDue);
+
+		// Tagesverbrauch aus Review-Log (wie Anki: first = new)
+		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+		const usedNew = {}, usedRev = {};
+		(S.reviews || []).forEach((r) => {
+			if (new Date(r.t) < dayStart) return;
+			const c = S.cards[r.cardId];
+			const d = c ? (c.deck || "Standard") : "Standard";
+			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
+			else usedRev[d] = (usedRev[d] || 0) + 1;
+		});
+		const takeLimited = (list, kind) => {
+			const out = [];
+			for (const c of list) {
+				const d = c.deck || "Standard";
+				const conf = deckConfOf(d);
+				if (kind === "new") {
+					// Anki default: New blockiert wenn Review-Limit erreicht
+					if ((usedRev[d] || 0) >= conf.revPerDay) continue;
+					if ((usedNew[d] || 0) >= conf.newPerDay) continue;
+					usedNew[d] = (usedNew[d] || 0) + 1;
+				} else {
+					if ((usedRev[d] || 0) >= conf.revPerDay) continue;
+					usedRev[d] = (usedRev[d] || 0) + 1;
+				}
+				out.push(c);
+			}
+			return out;
+		};
+		const limitedRev = takeLimited(reviewsRaw, "rev");
+		const limitedNew = takeLimited(newRaw, "new");
+
+		// Normale Queue: Learning jetzt → Reviews → New (Learning nie limitiert)
+		let dueNow = learnDueNow.concat(limitedRev).concat(limitedNew);
+		// Learn-Ahead nur wenn sonst die Queue leer wäre (Anki-Default 20 Min)
+		if (!dueNow.length && learnAhead.length) dueNow = learnAhead.slice();
+
+		const nextLearnAt = (() => {
+			const pool = learnAll
+				.filter((c) => new Date(c.srs.due) > t && new Date(c.srs.due) < eod)
+				.sort(byDue);
+			return pool.length ? new Date(pool[0].srs.due) : null;
+		})();
+
+		// verfügbar jetzt (inkl. Learn-Ahead) — „finished for now" wenn leer
+		const available = dueNow.length > 0;
+		const learnWaiting = learnAll
+			.filter((c) => new Date(c.srs.due) > t && new Date(c.srs.due) < eod)
+			.sort(byDue);
+
+		return {
+			dueNow,
+			learnDue: learnDueNow,
+			learnWaiting,
+			learnLaterToday,
+			reviewsDue: limitedRev,
+			newDue: limitedNew,
+			counts: {
+				// Anki-Übersicht: New | Learning | Review (Learning = alle offenen Lernschritte heute)
+				learn: learnDueNow.length + learnWaiting.length,
+				learnNow: learnDueNow.length,
+				learnWaiting: learnWaiting.length,
+				review: limitedRev.length,
+				neu: limitedNew.length,
+				total: dueNow.length + (available ? 0 : learnWaiting.length),
+			},
+			nextLearnAt,
+			// done = wirklich nichts mehr heute (auch keine späteren Lernschritte)
+			done: !available && learnWaiting.length === 0,
+			// finishedForNow = Anki „finished this deck for now" (später heute noch Learning)
+			finishedForNow: !available,
+			available,
+			now: t,
+			endOfDay: eod,
+			learnAheadMs: LEARN_AHEAD_MS,
+		};
+	}
+
+	const dueCards = () => studySnapshot(null).dueNow;
 
 	// Backlinks: Seiten, die die Zielseite per Titel erwähnen — bewusst einfacher
 	// Volltext-Scan, reicht für lokale Datenmengen völlig aus.
@@ -537,5 +667,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

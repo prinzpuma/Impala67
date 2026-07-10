@@ -1195,18 +1195,32 @@ function openCoverPicker() {
 function openReview() {
 	const o = U.el("overlay");
 	o.hidden = false;
-	const due = STATE.dueCards();
-	if (!due.length) {
+	const snap = STATE.studySnapshot(null);
+	if (snap.done) {
 		o.innerHTML = modal(
-			"<h3>Alles wiederholt 🎉</h3>" +
-			'<p class="hint">Gerade sind keine Karten fällig. Die KI legt beim Lernen automatisch neue an.</p>' +
+			"<h3>Gratulation! 🎉</h3>" +
+			'<p class="hint">Dieser Stapel ist für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
 			'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
 		);
 		return;
 	}
-	const c = due[0];
+	// Anki: statische „Congratulations“-Meldung, kein Live-Countdown (den gibt es in
+	// Anki nicht). „Erneut prüfen“ baut die Ansicht neu auf, OHNE reviewShowBack zu
+	// setzen — die vorherige Version tat das über btnShowBack fälschlich mit, wodurch
+	// eine inzwischen fällig gewordene Karte direkt mit aufgedeckter Rückseite gezeigt
+	// worden wäre, ohne die Vorderseite je zu sehen.
+	if (snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
+		o.innerHTML = modal(
+			"<h3>Geschafft! 🎉</h3>" +
+			'<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt. ' + snap.learnWaiting.length + " Lernkarte(n) sind später heute wieder dran.</p>" +
+			'<div class="modal-actions"><button id="btnReviewRefresh">Erneut prüfen</button><button id="btnCloseOverlay">Später</button></div>'
+		);
+		return;
+	}
+	const c = snap.dueNow[0];
+	const cnt = snap.counts;
 	o.innerHTML = modal(
-		"<h3>Wiederholen · noch " + due.length + " fällig</h3>" +
+		"<h3>" + cnt.neu + " neu · " + cnt.learn + " lernen · " + cnt.review + " wdh.</h3>" +
 		'<div class="card-face md">' + U.md(c.front) + "</div>" +
 		(S.reviewShowBack
 			? '<div class="card-face back md">' + U.md(c.back) + "</div>" +

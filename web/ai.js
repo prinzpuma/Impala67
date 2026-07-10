@@ -193,12 +193,13 @@ export const AI = (() => {
 			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App.",
 			"Antworte auf Deutsch, kompakt, in kleinen Schritten. Nutze LaTeX für Formeln (z.B. $I = U / R$ inline oder $$...$$ für eigene Zeilen) — das wird live gerendert.",
 			"Beim Schreiben in Seiten kannst du neben Markdown auch die Impala67-Erweiterungen nutzen: {red}Text{/} bzw. {bg-yellow}Text{/} für Text-/Hintergrundfarbe (gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==Text== zum Hervorheben und ':::columns ... :::split ... :::end' für Spalten.",
-			"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern und Karteikarten zu erstellen. Nutze sie aktiv:",
+			"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern/zu verschieben/zu löschen und Karteikarten zu erstellen. Nutze sie aktiv:",
 			"- Merkt sich die Person etwas schlecht oder beantwortet etwas falsch: lege mit create_flashcard eine karte an (kurze Frage, kurze Antwort).",
 			"- Soll Wissen gespeichert werden: create_page oder append_to_page.",
+			"- Seite verschieben: move_page. Seite löschen: delete_page (landet im Papierkorb; die App fragt im Chat zwingend nach Bestätigung).",
 			"- Für inhaltliche Fragen zu den Unterlagen: semantic_search (semantisch) oder search_notes (Stichwort), dann read_page.",
 			"- Ist eine Anfrage mehrdeutig und eine Entscheidung nötig, bevor du fortfährst (z.B. mehrere passende Seiten): nutze ask_choice mit 2-5 kurzen Optionen, statt zu raten.",
-			"- Sage nach Tool-Nutzung kurz, was du angelegt/geändert hast.",
+			"- Sage nach Tool-Nutzung kurz, was du angelegt/geändert/verschoben/gelöscht hast.",
 			"- WICHTIG: Schreibe NIEMALS Selbstgespräche/Meta-Kommentare in die sichtbare Antwort, z.B. NICHT 'The user said...', 'I should respond...', 'Ich sollte...', 'Der Nutzer möchte...'. Deine Antwort beginnt IMMER direkt mit dem eigentlichen Inhalt für die Person, ohne jede Erklärung deines Vorgehens.",
 			"- Falls du dennoch vor der eigentlichen Antwort ausführlich laut nachdenken musst, packe das AUSSCHLIESSLICH in <think>...</think> VOR der Antwort, niemals ungetaggt in den sichtbaren Text. Beispiel: '<think>Nutzer fragt X, ich prüfe zuerst Y.</think>Hier ist die Antwort: ...'",
 		];
@@ -357,6 +358,90 @@ export const AI = (() => {
 				for (const tc of msg.tool_calls) {
 					let args = {};
 					try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ungültiges JSON — leere Argumente */ }
+
+					// delete_page: IMMER Chat-Bestätigung erzwingen (wie ask_choice), bevor gelöscht wird.
+					// Soft-Delete → Papierkorb inkl. Unterseiten. Abbruch = kein dispatch.
+					if (tc.function.name === "delete_page") {
+						const titleArg = String((args && args.page_title) || "").trim();
+						const pg = titleArg ? STATE.findPage(titleArg) : null;
+						if (!pg) {
+							const err = { error: titleArg ? ("Seite nicht gefunden: " + titleArg) : "delete_page: page_title fehlt." };
+							if (onStep) onStep("delete_page");
+							targetChat.push({
+								mid: U.uid(), role: "tool", name: "delete_page",
+								detail: String(err.error).slice(0, 80), error: true,
+							});
+							scheduleRender();
+							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
+							continue;
+						}
+						// Unterseiten zählen (nur aktive), für den Bestätigungstext
+						const countKids = (id) => {
+							let n = 0;
+							for (const p of Object.values(S.pages)) {
+								if (!p.trashed && p.parentId === id) n += 1 + countKids(p.id);
+							}
+							return n;
+						};
+						const subN = countKids(pg.id);
+						const qText = subN
+							? ('Seite „' + pg.title + '“ inkl. ' + subN + ' Unterseite(n) in den Papierkorb?')
+							: ('Seite „' + pg.title + '“ in den Papierkorb?');
+						const qMid = U.uid();
+						if (type === "side") {
+							document.body.classList.remove("panel-collapsed");
+							const showBtn = U.el("btnShowPanel");
+							if (showBtn) showBtn.hidden = true;
+						}
+						S.aiStatus = "Warte auf Bestätigung…";
+						S.aiDraft = "";
+						S.aiThinkingDraft = "";
+						const answer = await new Promise((resolve) => {
+							pendingChoices[qMid] = resolve;
+							targetChat.push({
+								mid: qMid,
+								role: "question",
+								question: qText,
+								options: ["Ja, löschen", "Abbrechen"],
+								answered: false,
+							});
+							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						});
+						const qMsg = targetChat.find((x) => x.mid === qMid);
+						if (qMsg) {
+							qMsg.answered = true;
+							qMsg.answer = answer;
+						}
+						S.aiStatus = "…denkt nach…";
+						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
+						let out;
+						if (!confirmed) {
+							out = { cancelled: true, title: pg.title, note: "Löschen abgebrochen — nichts geändert." };
+						} else {
+							try {
+								out = await TOOLS.run("delete_page", { page_title: pg.title });
+							} catch (e) {
+								out = { error: String(e) };
+							}
+						}
+						if (onStep) onStep("delete_page");
+						// Tool-Chip nur bei Erfolg/Fehler — Abbruch bleibt an der beantworteten Frage-Karte
+						if (!out.cancelled) {
+							targetChat.push({
+								mid: U.uid(), role: "tool", name: "delete_page",
+								detail: String(pg.title).slice(0, 80),
+								error: !!(out && out.error),
+							});
+						}
+						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						messages.push({
+							role: "tool",
+							tool_call_id: tc.id,
+							content: JSON.stringify(out),
+						});
+						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_page:", e); }
+						continue;
+					}
 
 					// Rückfrage (Notion-Style): pausiert bis Klick, nur die Frage-Karte in der UI
 					// (kein extra Tool-Chip „Rückfrage gestellt“ — das wirkt wie Notion-Umfrage).

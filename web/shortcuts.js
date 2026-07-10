@@ -11,6 +11,14 @@ const renderSidebar = (...args) => RENDER.renderSidebar(...args);
 const renderMain = (...args) => RENDER.renderMain(...args);
 const closeOverlay = (...args) => APP.closeOverlay(...args);
 
+function isTypingTarget(el) {
+	if (!el || el === document.body) return false;
+	const tag = (el.tagName || "").toLowerCase();
+	if (tag === "input" || tag === "textarea" || tag === "select") return true;
+	if (el.isContentEditable) return true;
+	return !!(el.closest && el.closest("input, textarea, select, [contenteditable=true]"));
+}
+
 export function wireShortcuts() {
 	document.addEventListener("keydown", (e) => {
 		// Escape schließt: Befehls-Menü, Overlays (Einstellungen, Dialoge), das ⋯-Seitenmenü
@@ -31,6 +39,26 @@ export function wireShortcuts() {
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
 			e.preventDefault();
 			if (!SEARCH.isPaletteOpen()) SEARCH.openPalette();
+			return;
+		}
+
+		// Anki-Study: ␣/Enter = Antwort, bei Rückseite = Gut; 1–4 = bewerten
+		if (!e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target)) {
+			if (S.view === "anki" && S.ankiTab === "study") {
+				if (e.key === " " || e.key === "Enter") {
+					e.preventDefault();
+					if (APP.studySpaceOrEnter) APP.studySpaceOrEnter();
+					else if (APP.showStudyAnswer) APP.showStudyAnswer();
+					return;
+				}
+				if (e.key >= "1" && e.key <= "4") {
+					// Nur bei sichtbarer Antwort (sonst versehentlich bewerten)
+					if (!S.reviewShowBack) return;
+					e.preventDefault();
+					if (APP.gradeStudyCard) APP.gradeStudyCard(Number(e.key));
+					return;
+				}
+			}
 		}
 	});
 }

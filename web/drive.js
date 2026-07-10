@@ -34,6 +34,12 @@ export const DRIVE = (() => {
 	// ist aber Googles dokumentiertes Verhalten. Bei installierten Apps gilt das Secret laut
 	// Google ausdrücklich NICHT als geheim, es darf also in der App/Config liegen.
 	const desktopClientSecret = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || (S.settings && S.settings.driveDesktopClientSecret) || "";
+	// FIX (Diagnose invalid_client): zeigt bei einem fehlgeschlagenen Token-Tausch, AUS WELCHER
+	// QUELLE ID/Secret tatsächlich stammen (config.local.js vs. alter Einstellungen-Fallback) —
+	// sonst ist bei einem falschen/veralteten Secret nicht sichtbar, ob der Build config.local.js
+	// überhaupt einliest oder unbemerkt auf einen alten, manuell eingetragenen Wert zurückfällt.
+	const desktopClientIdSource = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) ? "config.local.js" : (S.settings && S.settings.driveDesktopClientId) ? "Einstellungen (alter Fallback!)" : "keine Quelle";
+	const desktopClientSecretSource = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) ? "config.local.js" : (S.settings && S.settings.driveDesktopClientSecret) ? "Einstellungen (alter Fallback!)" : "keine Quelle";
 	let token = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
@@ -70,7 +76,12 @@ export const DRIVE = (() => {
 		if (!res.ok) {
 			const raw = (await res.text()).slice(0, 200);
 			const safe = raw.replace(/[A-Za-z0-9_\-]{20,}/g, "[…]").replace(/GOCSPX-[A-Za-z0-9_\-]+/g, "[secret]");
-			throw new Error("Token-Tausch fehlgeschlagen: " + safe);
+			// FIX (Diagnose invalid_client): zusätzlich sichtbar machen, aus welcher Quelle ID/Secret
+			// kamen und wie lang das Secret ist (ohne den Wert selbst offenzulegen) — beim nächsten
+			// Fehlschlag sieht man dadurch sofort, ob z.B. config.local.js im Build fehlt und die App
+			// unbemerkt auf den alten Einstellungen-Fallback zurückfällt.
+			const diag = "Client-ID-Quelle: " + desktopClientIdSource() + ", Secret-Quelle: " + desktopClientSecretSource() + ", Secret-Länge: " + desktopClientSecret().length;
+			throw new Error("Token-Tausch fehlgeschlagen: " + safe + " — [" + diag + "]");
 		}
 		return res.json();
 	}

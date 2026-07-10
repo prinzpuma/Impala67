@@ -37,6 +37,10 @@ export const NLM = (() => {
 		".nlm-pane{display:flex;flex-direction:column;height:100%}",
 		".nlm-pane-hint{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(128,128,128,.3);flex:none}",
 		".nlm-host{flex:1;position:relative}",
+		".nlm-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;padding:28px 20px;text-align:center;box-sizing:border-box}",
+		".nlm-fallback h2{margin:0;font-size:1.25rem;font-weight:650}",
+		".nlm-fallback p{margin:0;max-width:420px;opacity:.75;line-height:1.45;font-size:13.5px}",
+		".nlm-fallback .row-btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}",
 	].join("\n");
 	document.head.appendChild(pickStyle);
 
@@ -46,13 +50,14 @@ export const NLM = (() => {
 		const t = T();
 		return t && t.core && t.core.invoke ? t.core.invoke(cmd, args) : Promise.reject(new Error("kein Tauri"));
 	};
-	// Browser: normaler Tab (kein popup=yes — das wirkte wie eine eigene Chrome-App).
-	// Google blockiert iframes (X-Frame-Options), deshalb kein Einbetten im Browser.
+	// Externes Öffnen (Browser-Tab / System-Browser). Kein popup=yes — wirkte wie eigene Chrome-App.
+	// Google blockiert iframes; im Browser bleibt der Impala-Tab offen + Fallback-UI (siehe renderPane).
 	const openFallbackDefault = () => {
 		const t = T();
 		if (t && t.shell && t.shell.open) t.shell.open(NLM_URL);
 		else window.open(NLM_URL, "_blank", "noopener,noreferrer");
 	};
+	const canEmbedNative = () => !!(T() && T().core && T().core.invoke);
 
 	// ---- Mini-Ablage für übernommene Downloads (eigene IndexedDB — bewusst getrennt
 	//      vom Event-Log, damit große Mediendateien nicht durch den Sync wandern) ----
@@ -113,8 +118,10 @@ export const NLM = (() => {
 	function hideWebviewOnly() {
 		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
 	}
-	async function positionEmbedded(closeTabOnFail) {
+	async function positionEmbedded() {
 		if (S.view !== "notebooklm") return;
+		// Browser / ohne Rust-Kommandos: kein natives Webview — Fallback-UI bleibt im Impala-Tab.
+		if (!canEmbedNative()) return;
 		// Strg+K / Dialoge: natives Webview deckt sonst die HTML-UI ab.
 		if (isAppUiBlocking()) {
 			uiPaused = true;
@@ -129,11 +136,26 @@ export const NLM = (() => {
 			uiPaused = false;
 		} catch (e) {
 			embedded = false;
-			if (closeTabOnFail) {
-				TABS.closeTab("nlm:main");
-				(pendingFallback || openFallbackDefault)();
-			}
+			// Tab NICHT schließen — Fallback-Pane im Impala-Tab anzeigen (Browser & fehlende Rust-Cmds).
+			showBrowserFallbackPane();
 		}
+	}
+	function showBrowserFallbackPane() {
+		const host = document.getElementById("nlmHost");
+		if (!host || host.dataset.nlmFallback === "1") return;
+		host.dataset.nlmFallback = "1";
+		host.innerHTML =
+			'<div class="nlm-fallback">' +
+				"<h2>📓 NotebookLM</h2>" +
+				'<p>Google erlaubt kein Einbetten im Browser (X-Frame/CSP). Dieser Impala-Tab bleibt offen — NotebookLM öffnest du bei Bedarf extern. In der Desktop-App liegt NotebookLM hier eingebettet.</p>' +
+				'<div class="row-btns">' +
+					'<button type="button" id="btnNlmOpenExt">↗ In Browser öffnen</button>' +
+					'<button type="button" id="btnNlmPickInPane">📚 Seiten als Quelle kopieren…</button>' +
+				"</div></div>";
+		const openBtn = document.getElementById("btnNlmOpenExt");
+		if (openBtn) openBtn.addEventListener("click", () => (pendingFallback || openFallbackDefault)());
+		const pickBtn = document.getElementById("btnNlmPickInPane");
+		if (pickBtn) pickBtn.addEventListener("click", () => openPicker(() => (pendingFallback || openFallbackDefault)()));
 	}
 	function syncEmbeddedToUi() {
 		if (S.view !== "notebooklm") return;
@@ -180,20 +202,28 @@ export const NLM = (() => {
 		uiPaused = false;
 		hideWebviewOnly();
 	}
-	window.addEventListener("resize", () => positionEmbedded(false));
+	window.addEventListener("resize", () => positionEmbedded());
 	// tabs.js meldet das Schließen synchron, noch bevor die Ansicht neu gerendert wird.
 	window.addEventListener("impala67:nlm-hide", hideEmbeddedIfActive);
 	watchAppUiOverlays();
 	function renderPane(main) {
-		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">Downloads landen automatisch in Impala</span></div><div id="nlmHost" class="nlm-host"></div></div>';
+		const embedOk = canEmbedNative();
+		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">' +
+			(embedOk ? "Downloads landen automatisch in Impala" : "Browser: Impala-Tab · NotebookLM öffnet extern") +
+			'</span></div><div id="nlmHost" class="nlm-host"></div></div>';
 		const host = document.getElementById("nlmHost");
 		if (resizeObserverNlm) resizeObserverNlm.disconnect();
+		if (!embedOk) {
+			// Impala-Tab behalten — kein erzwungenes Schließen + kein Auto-open im Chrome.
+			showBrowserFallbackPane();
+			return;
+		}
 		if (host && "ResizeObserver" in window) {
-			resizeObserverNlm = new ResizeObserver(() => positionEmbedded(false));
+			resizeObserverNlm = new ResizeObserver(() => positionEmbedded());
 			resizeObserverNlm.observe(host);
 		}
 		watchAppUiOverlays();
-		positionEmbedded(true);
+		positionEmbedded();
 	}
 	function open(openFallback) {
 		pendingFallback = openFallback || null;

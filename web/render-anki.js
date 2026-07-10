@@ -38,11 +38,20 @@ function ankiCardsOf(deck) {
 	});
 }
 
+// Anki hat für die „für den Moment fertig“-Ansicht KEINEN Hintergrund-Timer und
+// KEINE live tickende Sekunden-Anzeige — das war vorher selbst erfunden und
+// buggy (löste alle ~1 Sekunde einen Re-Render aus, auch wenn die nächste
+// Lernkarte erst in Stunden fällig war). Anki zeigt einfach eine statische
+// „Congratulations“-Meldung; man kommt per erneutem Öffnen des Stapels zurück.
+
+// Aktuell fällige Queue (Learning → Review → New) inkl. Tageslimits
 function ankiDueOf(deck) {
-	const now = new Date();
-	// Tageslimits aus den Stapel-Optionen gelten auch hier (wie in STATE.dueCards)
-	return STATE.applyDailyLimits(ankiCardsOf(deck).filter((c) => !c.suspended && new Date(c.srs.due) <= now)
-		.sort((a, b) => a.srs.due.localeCompare(b.srs.due)));
+	return STATE.studySnapshot(deck).dueNow;
+}
+// Study Now aktiv, solange heute noch etwas offen ist (inkl. späterer Learning-Schritte)
+function ankiStudyOpen(deck) {
+	const snap = STATE.studySnapshot(deck);
+	return !snap.done;
 }
 
 // Stapel-Baum für die linke Spalte: Unterstapel per "::"-Namensschema (wie in Anki),
@@ -129,15 +138,15 @@ function ankiDecksHtml() {
 			'<div class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
 			'<span class="deck-counts"><b class="cnt-due">' + due + '</b> fällig · <b class="cnt-new">' + neu + "</b> neu · " + cards.length + " gesamt" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
 			'<div class="deck-actions">' +
-				'<button data-ankistudy="' + U.esc(d) + '" ' + (due ? "" : "disabled") + ">▶ Lernen</button>" +
+				'<button data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">▶ Lernen</button>" +
 				'<button data-ankideckfilter="' + U.esc(d) + '">🔍 Durchsuchen</button>' +
 				'<button data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
 			"</div></div>";
 	}).join("");
-	const totalDue = ankiDueOf(null).length;
+	const totalOpen = STATE.studySnapshot(null).counts.total;
 	return '<div class="deck-list">' + rows + "</div>" +
 		'<div class="row-btns" style="margin-top:14px;max-width:720px">' +
-			'<button data-ankistudy="" ' + (totalDue ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalDue + " fällig)</button>" +
+			'<button data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalOpen + " offen)</button>" +
 			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
 }
 
@@ -268,35 +277,63 @@ function retentionTableHtml(reviews) {
 		"</tbody></table>";
 }
 
-// Lern-Ansicht: Vorderseite → Antwort zeigen → vier Bewertungen mit Intervall-Vorschau.
+// Lern-Ansicht — Anki-nah:
+// Queue Learning→Review→New, Learn-Ahead 20 Min, Space=Antwort / bei Rückseite=Gut.
 function ankiStudyHtml() {
-	const due = ankiDueOf(S.ankiDeck);
+	const snap = STATE.studySnapshot(S.ankiDeck);
 	const canUndo = typeof EXTRAS !== "undefined" && EXTRAS.canUndoReview();
-	const head = '<div class="hint study-head">Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · noch " + due.length + " fällig " +
-		'<button class="mini" data-ankiundo="1" ' + (canUndo ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button></div>';
-	if (!due.length) {
-		return head + '<div class="study-done"><h2>Alles wiederholt 🎉</h2>' +
-			'<p class="hint">In diesem Stapel ist gerade nichts fällig.</p>' +
+	const cnt = snap.counts;
+	// Anki-Deck-Übersicht: New | Learning | Review
+	const countsHtml =
+		'<span class="study-counts" title="Neu · Lernen · Wiederholen (wie Anki)">' +
+			'<b class="cnt-new">' + cnt.neu + '</b> neu · ' +
+			'<b class="cnt-learn">' + cnt.learn + '</b> lernen · ' +
+			'<b class="cnt-due">' + cnt.review + '</b> wdh.' +
+		'</span>';
+	const head = '<div class="hint study-head">Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · " + countsHtml + " " +
+		'<button class="mini" data-ankiundo="1" ' + (canUndo ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button>' +
+		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span></div>';
+
+	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
+	if (snap.done) {
+		return head + '<div class="study-done"><h2>Gratulation! 🎉</h2>' +
+			'<p class="hint">Du hast diesen Stapel für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
 			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
 	}
-	const c = due[0];
+
+	// Anki: „Congratulations! You have finished this deck for now.“ — Learning-Karten
+	// kommen später am Tag zurück. Anki zeigt hier eine STATISCHE Meldung ohne
+	// Live-Countdown; man aktualisiert manuell (Button) oder kommt später zurück.
+	if (snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
+		return head +
+			'<div class="study-wait study-card">' +
+				'<h2>Geschafft! 🎉</h2>' +
+				'<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt.</p>' +
+				'<p class="hint">' + snap.learnWaiting.length + ' Lernkarte(n) sind später heute wieder dran.</p>' +
+				'<div class="modal-actions">' +
+					'<button class="primary" data-ankiwaitrefresh="1">Erneut prüfen</button>' +
+					'<button data-ankitab="decks">Zur Stapelübersicht</button>' +
+				'</div></div>';
+	}
+
+	const c = snap.dueNow[0];
 	const pv = SRS.preview(c.srs);
 	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
 	let html = head + '<div class="study-card">' +
-		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× gelernt · " + (c.srs.lapses || 0) + " Fehler · Intervall " +
-			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage" : "—") + " · Stapel " + U.esc(c.deck || "Standard") +
-			(c.leech ? ' · <span class="leech-badge" title="Leech: fällt immer wieder durch — Karte umformulieren oder aufteilen!">🐛 Leech</span>' : "") + "</div>" +
+		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× · " + (c.srs.lapses || 0) + " Fehler · " +
+			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " T" : "Lernschritt") + " · " + U.esc(c.deck || "Standard") +
+			(c.leech ? ' · <span class="leech-badge" title="Leech">🐛 Leech</span>' : "") + "</div>" +
 		'<div class="card-face md">' + U.md(c.front) + "</div>";
 	if (S.reviewShowBack) {
 		html += '<div class="card-face back md">' + U.md(c.back) + "</div>" +
 			'<div class="grades">' +
-				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + "</span></button>" +
-				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + "</span></button>" +
-				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + "</span></button>" +
-				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + "</span></button>" +
-			"</div>";
+				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1</span></button>' +
+				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2</span></button>' +
+				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + '</span><span class="grade-key">3 / ␣</span></button>' +
+				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4</span></button>' +
+			'</div>';
 	} else {
-		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen</button></div>';
+		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen <span class="grade-key">␣</span></button></div>';
 	}
 	html += "</div>";
 	return html;
@@ -394,6 +431,7 @@ export const RENDER_ANKI = {
 	ankiDecks,
 	ankiCardsOf,
 	ankiDueOf,
+	ankiStudyOpen,
 	deckTreeHtml,
 	deckMenuHtml,
 	renderAnki,
