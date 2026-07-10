@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: release-$ github.ref 
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: [windows-latest]
-    runs-on: $ matrix.platform 
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,10 +43,10 @@ jobs:
       - name: config.local.js aus Secrets erzeugen
         shell: bash
         env:
-          CLIENT_ID: $ secrets.GOOGLE_DESKTOP_CLIENT_ID 
-          CLIENT_SECRET: $ secrets.GOOGLE_DESKTOP_CLIENT_SECRET 
+          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
-          cat > web/config.local.js << EOF
+          cat > web/config.local.js << 'EOF'
           window.APP_CONFIG = {
             GOOGLE_DESKTOP_CLIENT_ID: "$CLIENT_ID",
             GOOGLE_DESKTOP_CLIENT_SECRET: "$CLIENT_SECRET"
@@ -55,8 +55,8 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: $ secrets.GITHUB_TOKEN 
-          TAURI_SIGNING_PRIVATE_KEY: $ secrets.TAURI_SIGNING_PRIVATE_KEY 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: __VERSION__
           releaseName: "Impala67 v__VERSION__"
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: $ steps.deployment.outputs.page_url 
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
