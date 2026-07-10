@@ -1,34 +1,50 @@
 name: release
+
 on:
   push:
     tags: ["v*"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-$ github.ref 
+  cancel-in-progress: false
+
 jobs:
-  build:
+  build-windows:
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         platform: [windows-latest]
-    runs-on: ${{ matrix.platform }}
+    runs-on: $ matrix.platform 
     steps:
       - uses: actions/checkout@v4
+
       - name: Linux-Abhängigkeiten installieren
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec grep -l "packages.microsoft.com" {} \; | xargs -r sudo rm -f
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libxdo-dev libssl-dev
+
       - uses: dtolnay/rust-toolchain@stable
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm install
+
       - name: config.local.js aus Secrets erzeugen
         shell: bash
         env:
-          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+          CLIENT_ID: $ secrets.GOOGLE_DESKTOP_CLIENT_ID 
+          CLIENT_SECRET: $ secrets.GOOGLE_DESKTOP_CLIENT_SECRET 
         run: |
           cat > web/config.local.js << EOF
           window.APP_CONFIG = {
@@ -36,12 +52,27 @@ jobs:
             GOOGLE_DESKTOP_CLIENT_SECRET: "$CLIENT_SECRET"
           };
           EOF
+
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          GITHUB_TOKEN: $ secrets.GITHUB_TOKEN 
+          TAURI_SIGNING_PRIVATE_KEY: $ secrets.TAURI_SIGNING_PRIVATE_KEY 
         with:
           tagName: __VERSION__
           releaseName: "Impala67 v__VERSION__"
           releaseDraft: false
           includeUpdaterJson: true
+
+  deploy-pwa:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: $ steps.deployment.outputs.page_url 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
