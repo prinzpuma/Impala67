@@ -11,7 +11,7 @@
 // Nicht von Hand pflegen — Git bump't die Patch-Nummer auf main.
 //
 // NIE Merge-Konfliktmarker (<<<<<<< ======= >>>>>>>) committen — bricht die PWA.
-const BUILD_VERSION = "0.2.27";
+const BUILD_VERSION = "0.2.30";
 window.APP_VERSION = BUILD_VERSION;
 
 // Semver-Vergleich: 1 wenn a>b, -1 wenn a<b, 0 wenn gleich.
