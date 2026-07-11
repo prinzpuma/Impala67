@@ -688,7 +688,7 @@ function renderHome(main) {
 
 	main.innerHTML = '<div class="home home-v2 home-slim">' +
 		'<header class="home-hero"><div><h1>' + greeting + '</h1><p class="home-meta">' +
-		pages.length + " Seiten · " + Object.keys(S.cards).length + " Karten · " + chats.length + " Chats</p></div>" +
+		pages.length + " Seiten · " + ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length + " Karten · " + chats.length + " Chats</p></div>" +
 		'<button class="home-customize" data-set="look" title="Design anpassen">⚙</button></header>' +
 		conflictBanner +
 		'<div class="quick-actions">' +
@@ -705,21 +705,61 @@ function renderHome(main) {
 		"</div>";
 }
 
-// Papierkorb: gelöschte Seiten mit Wiederherstellen / Endgültig-löschen-Optionen.
+// Papierkorb: Seiten, Stapel und Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen.
 function renderTrash(main) {
-	const items = STATE.trashedPages();
-	let html = '<div class="library"><h1>🗑 Papierkorb</h1><p class="hint">Einträge werden nach 30 Tagen automatisch endgültig gelöscht.</p>';
-	html += items.length
-		? '<div class="trash-list">' + items.map((pg) =>
-			'<div class="trash-row">' +
-				'<span class="row-title">' + pageIconHtml(pg) + U.esc(pg.title) + "</span>" +
-				'<span class="hint">gelöscht ' + U.fmtDate(pg.trashedAt || pg.updated) + "</span>" +
-				'<button data-pagerestore="' + pg.id + '">↩ Wiederherstellen</button>' +
-				'<button data-pagepurge="' + pg.id + '" class="danger">🗑 Endgültig löschen</button>' +
-			"</div>"
-		).join("") + "</div>"
-		: '<p class="hint">Der Papierkorb ist leer.</p>';
-	html += "</div>";
+	const pages = STATE.trashedPages();
+	const decks = (STATE.trashedDeckRoots && STATE.trashedDeckRoots()) || [];
+	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
+	const empty = !pages.length && !decks.length && !cards.length;
+	let html = '<div class="library"><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p>';
+	if (empty) {
+		html += '<p class="hint">Der Papierkorb ist leer.</p></div>';
+		main.innerHTML = html;
+		return;
+	}
+	html += '<div class="trash-list">';
+	if (pages.length) {
+		html += '<div class="ws-head"><span class="ws-name">Seiten</span></div>' +
+			pages.map((pg) =>
+				'<div class="trash-row">' +
+					'<span class="row-title">' + pageIconHtml(pg) + U.esc(pg.title) + "</span>" +
+					'<span class="hint">gelöscht ' + U.fmtDate(pg.trashedAt || pg.updated) + "</span>" +
+					'<button data-pagerestore="' + pg.id + '">↩ Wiederherstellen</button>' +
+					'<button data-pagepurge="' + pg.id + '" class="danger">🗑 Endgültig löschen</button>' +
+				"</div>"
+			).join("");
+	}
+	if (decks.length) {
+		html += '<div class="ws-head"><span class="ws-name">Stapel</span></div>' +
+			decks.map((name) => {
+				const d = S.decks[name] || {};
+				const n = Object.values(S.cards).filter((c) => {
+					if (!c.trashed) return false;
+					const deck = c.deck || "Standard";
+					return deck === name || deck.startsWith(name + "::");
+				}).length;
+				return '<div class="trash-row">' +
+					'<span class="row-title">🃏 ' + U.esc(name) + (n ? " · " + n + " Karte(n)" : "") + "</span>" +
+					'<span class="hint">gelöscht ' + U.fmtDate(d.trashedAt || "") + "</span>" +
+					'<button data-deckrestore="' + U.esc(name) + '">↩ Wiederherstellen</button>' +
+					'<button data-deckpurge="' + U.esc(name) + '" class="danger">🗑 Endgültig löschen</button>' +
+				"</div>";
+			}).join("");
+	}
+	if (cards.length) {
+		html += '<div class="ws-head"><span class="ws-name">Karten</span></div>' +
+			cards.map((c) => {
+				const front = (c.front || "").replace(/\s+/g, " ").trim();
+				const short = front.length > 60 ? front.slice(0, 60) + "…" : front;
+				return '<div class="trash-row">' +
+					'<span class="row-title">🃏 ' + U.esc(short || "(leere Vorderseite)") + "</span>" +
+					'<span class="hint">' + U.esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || "") + "</span>" +
+					'<button data-cardrestore="' + c.id + '">↩ Wiederherstellen</button>' +
+					'<button data-cardpurge="' + c.id + '" class="danger">🗑 Endgültig löschen</button>' +
+				"</div>";
+			}).join("");
+	}
+	html += "</div></div>";
 	main.innerHTML = html;
 }
 
@@ -1242,7 +1282,7 @@ function openReview() {
 function openCards() {
 	const o = U.el("overlay");
 	o.hidden = false;
-	const cards = Object.values(S.cards).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
+	const cards = Object.values(S.cards).filter((c) => !c.trashed).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
 	const rows = cards.map((c) =>
 		'<div class="card-row">' +
 			'<textarea data-front="' + c.id + '" rows="2">' + U.esc(c.front) + "</textarea>" +

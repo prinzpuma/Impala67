@@ -6,7 +6,9 @@
 // Niemals APP_VERSION mit der Remote-Antwort überschreiben — sonst ist „Lokal“ immer
 // gleich „Remote“ und die Anzeige/Update-Erkennung ist falsch.
 //
-// Bei Release: BUILD_VERSION hier + web/version.json + web/latest.json.version gemeinsam setzen.
+// Bei Release: wird von .github/workflows/auto-version.yml gesetzt
+// (zusammen mit package.json, tauri.conf.json, web/version.json, web/latest.json).
+// Nicht von Hand pflegen — Git bump't die Patch-Nummer auf main.
 const BUILD_VERSION = "0.2.18";
 window.APP_VERSION = BUILD_VERSION;
 

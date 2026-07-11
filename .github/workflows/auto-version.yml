@@ -13,25 +13,68 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: <<<GH_PAT>>>
           fetch-depth: 0
 
       - name: Patch-Version erhoehen
         id: bump
         run: |
+          set -euo pipefail
           CURRENT=$(node -p "require('./src-tauri/tauri.conf.json').version")
           IFS='.' read -r MA MI PA <<< "$CURRENT"
           NEW="$MA.$MI.$((PA+1))"
-          node -e "const fs=require('fs');const p='./src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(p));j.version='$NEW';fs.writeFileSync(p, JSON.stringify(j, null, 2)+'\n');"
-          node -e "const fs=require('fs');const p='./package.json';const j=JSON.parse(fs.readFileSync(p));j.version='$NEW';fs.writeFileSync(p, JSON.stringify(j, null, 2)+'\n');"
-          echo "new=$NEW" >> $GITHUB_OUTPUT
+          export NEW
+          echo "Bump $CURRENT -> $NEW"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const NEW = process.env.NEW;
+
+          function writeJson(path, mutator) {
+            const j = JSON.parse(fs.readFileSync(path, 'utf8'));
+            mutator(j);
+            fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
+          }
+
+          writeJson('./src-tauri/tauri.conf.json', (j) => { j.version = NEW; });
+          writeJson('./package.json', (j) => { j.version = NEW; });
+
+          {
+            const p = './web/version.json';
+            let j = { name: 'Impala67' };
+            if (fs.existsSync(p)) j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            j.version = NEW;
+            j.updated = new Date().toISOString().slice(0, 10);
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          }
+
+          if (fs.existsSync('./web/latest.json')) {
+            writeJson('./web/latest.json', (j) => { j.version = NEW; });
+          }
+
+          {
+            const p = './web/updater.js';
+            let s = fs.readFileSync(p, 'utf8');
+            if (!/const BUILD_VERSION = "[^"]+"/.test(s)) {
+              console.error('BUILD_VERSION fehlt in web/updater.js');
+              process.exit(1);
+            }
+            s = s.replace(/const BUILD_VERSION = "[^"]+"/, 'const BUILD_VERSION = "' + NEW + '"');
+            fs.writeFileSync(p, s);
+          }
+
+          console.log('OK', NEW);
+          NODE
+
+          # Shell-Var fuer den naechsten Step (kein steps.outputs noetig)
+          echo "NEW=$NEW" >> "$GITHUB_ENV"
 
       - name: Committen, taggen, pushen
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json package.json
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.new }}"
-          git tag v${{ steps.bump.outputs.new }}
+          git add src-tauri/tauri.conf.json package.json web/version.json web/latest.json web/updater.js
+          git commit -m "chore: bump version to $NEW"
+          git tag "v$NEW"
           git push origin main
-          git push origin v${{ steps.bump.outputs.new }}
+          git push origin "v$NEW"

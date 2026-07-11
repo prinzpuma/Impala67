@@ -27,6 +27,8 @@ export const S = {
 		corsProxy: "", // eigener CORS-Proxy für den Notion-Sync (leer = öffentlicher corsproxy.io)
 		deckConf: {}, // Stapel-Optionen: Tageslimits + Leech-Verhalten je Stapel ("*" = Standardwerte)
 	},
+	// „Standard“ ist der Default-Name für Karten ohne Stapel — löschbar wie jeder andere Stapel
+	// (deckDelete entfernt Eintrag + Karten; neu angelegte Karten ohne Stapel legen ihn ggf. wieder an).
 	decks: { Standard: { name: "Standard", created: "" } }, // Karteikarten-Stapel; Unterstapel per "Eltern::Kind"-Namensschema
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
 	// Reiner UI-Zustand (nicht persistiert):
@@ -107,7 +109,9 @@ export const STATE = (() => {
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
 	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
 	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => n === from || n.startsWith(from + "::"));
-	const cardsInDeckTree = (from) => Object.values(S.cards).filter((c) => {
+	// includeTrashed: Rename/Move/Purge brauchen alle Karten; Lernen/UI nur aktive.
+	const cardsInDeckTree = (from, opts) => Object.values(S.cards).filter((c) => {
+		if (!(opts && opts.includeTrashed) && c.trashed) return false;
 		const d = c.deck || "Standard";
 		return d === from || d.startsWith(from + "::");
 	});
@@ -117,7 +121,9 @@ export const STATE = (() => {
 			S.decks[nn] = { ...S.decks[n], name: nn };
 			delete S.decks[n];
 		});
-		cardsInDeckTree(from).forEach((c) => { c.deck = to + (c.deck || "Standard").slice(from.length); });
+		cardsInDeckTree(from, { includeTrashed: true }).forEach((c) => {
+			c.deck = to + (c.deck || "Standard").slice(from.length);
+		});
 	}
 
 	// ---- Stapel-Optionen: Tageslimits + Leech-Verhalten (wie Anki, pro Stapel) ----
@@ -283,7 +289,30 @@ export const STATE = (() => {
 				if (c) Object.assign(c, p.patch);
 				break;
 			}
+			case "cardTrash": {
+				// Soft-Delete wie bei Seiten: Karte bleibt im Log, landet im Papierkorb.
+				const c = S.cards[p.id];
+				if (!c) break;
+				c.trashed = true;
+				c.trashedAt = ev.t;
+				break;
+			}
+			case "cardRestore": {
+				const c = S.cards[p.id];
+				if (!c) break;
+				c.trashed = false;
+				delete c.trashedAt;
+				// Stapel-Eintrag ggf. wiederherstellen, falls er mitgelöscht war
+				const d = c.deck || "Standard";
+				if (d && !S.decks[d]) S.decks[d] = { name: d, created: ev.t };
+				else if (S.decks[d] && S.decks[d].trashed) {
+					S.decks[d].trashed = false;
+					delete S.decks[d].trashedAt;
+				}
+				break;
+			}
 			case "cardDelete":
+				// Endgültig löschen (nur aus dem Papierkorb)
 				delete S.cards[p.id];
 				break;
 			case "deckCreate":
@@ -292,15 +321,42 @@ export const STATE = (() => {
 				S.decks[p.name] = { name: p.name, created: ev.t };
 				break;
 			case "deckRename":
-				// Benennt den Stapel samt aller Unterstapel um und zieht die Karten mit.
+				// Benennt den Stapel samt aller Unterstapel um und zieht die Karten mit
+				// (inkl. papierkorb-Karten, damit sie dem Stapel treu bleiben).
 				renameDeckTree(p.from, p.to);
 				break;
+			case "deckTrash":
+				// Soft-Delete: Stapel + Karten des Teilbaums → Papierkorb (wiederherstellbar).
+				// Auch „Standard“ ist trash-fähig. Review-Protokoll bleibt erhalten.
+				if (!p.name) break;
+				cardsInDeckTree(p.name, { includeTrashed: true }).forEach((c) => {
+					c.trashed = true;
+					c.trashedAt = ev.t;
+				});
+				deckSubtree(p.name).forEach((n) => {
+					if (!S.decks[n]) S.decks[n] = { name: n, created: ev.t };
+					S.decks[n].trashed = true;
+					S.decks[n].trashedAt = ev.t;
+				});
+				break;
+			case "deckRestore":
+				// Stapel + seine Karten aus dem Papierkorb zurückholen.
+				if (!p.name) break;
+				deckSubtree(p.name).forEach((n) => {
+					if (!S.decks[n]) return;
+					S.decks[n].trashed = false;
+					delete S.decks[n].trashedAt;
+				});
+				cardsInDeckTree(p.name, { includeTrashed: true }).forEach((c) => {
+					c.trashed = false;
+					delete c.trashedAt;
+				});
+				break;
 			case "deckDelete":
-				// FIX (11. Juli, wie Anki): Stapel löschen ENTFERNT auch die Karten des
-				// Teilbaums. Vorher wanderten sie unsichtbar nach "Standard" und tauchten
-				// nur noch in „Alle Stapel lernen“ auf (gemeldeter Bug). Das Review-
-				// Protokoll (S.reviews) bleibt für die Statistik vollständig erhalten.
-				cardsInDeckTree(p.name).forEach((c) => { delete S.cards[c.id]; });
+				// Endgültig: Stapel + Karten des Teilbaums unwiderruflich entfernen
+				// (Papierkorb → „Endgültig löschen“). Alt-Events deckDelete bleiben hard-delete.
+				if (!p.name) break;
+				cardsInDeckTree(p.name, { includeTrashed: true }).forEach((c) => { delete S.cards[c.id]; });
 				deckSubtree(p.name).forEach((n) => delete S.decks[n]);
 				break;
 			case "deckMove": {
@@ -314,12 +370,14 @@ export const STATE = (() => {
 				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
 				const to = prefix + from.split("::").pop() + " (Kopie)";
 				deckSubtree(from).forEach((n) => {
+					if (S.decks[n] && S.decks[n].trashed) return; // Papierkorb-Stapel nicht duplizieren
 					const nn = to + n.slice(from.length);
 					S.decks[nn] = { name: nn, created: ev.t };
 				});
 				cardsInDeckTree(from).forEach((c) => {
 					const id = U.uid();
-					S.cards[id] = { ...c, id, deck: to + (c.deck || "Standard").slice(from.length), srs: SRS.newCard(ev.t), created: ev.t };
+					S.cards[id] = { ...c, id, deck: to + (c.deck || "Standard").slice(from.length), srs: SRS.newCard(ev.t), created: ev.t, trashed: false };
+					delete S.cards[id].trashedAt;
 				});
 				break;
 			}
@@ -443,6 +501,29 @@ export const STATE = (() => {
 	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb-Seiten nirgends durchsickern.
 	const activePages = () => Object.values(S.pages).filter((pg) => !pg.trashed);
 
+	// Karteikarten: Soft-Delete analog zu Seiten (trashed / trashedAt).
+	const activeCards = () => Object.values(S.cards).filter((c) => !c.trashed);
+	const trashedCards = () => Object.values(S.cards)
+		.filter((c) => c.trashed)
+		.sort((a, b) => (b.trashedAt || "").localeCompare(a.trashedAt || ""));
+	// Nur Wurzel eines gelöschten Stapel-Teilbaums (Unterstapel stecken drin).
+	const trashedDeckRoots = () => {
+		const names = Object.keys(S.decks).filter((n) => S.decks[n] && S.decks[n].trashed);
+		return names
+			.filter((n) => !names.some((p) => p !== n && n.startsWith(p + "::")))
+			.sort((a, b) => (S.decks[b].trashedAt || "").localeCompare(S.decks[a].trashedAt || ""));
+	};
+	// Einzelkarten im Papierkorb, die NICHT schon über einen gelöschten Stapel abgedeckt sind.
+	const orphanTrashedCards = () => trashedCards().filter((c) => {
+		const d = c.deck || "Standard";
+		const parts = d.split("::");
+		for (let i = parts.length; i >= 1; i--) {
+			const path = parts.slice(0, i).join("::");
+			if (S.decks[path] && S.decks[path].trashed) return false;
+		}
+		return true;
+	});
+
 	const pageTitles = () => activePages().map((pg) => pg.title);
 
 	// PERF: EIN Durchlauf statt zweier separater .find()-Durchläufe (Exakt- und
@@ -527,7 +608,7 @@ export const STATE = (() => {
 		const eod = endOfLocalDay(t);
 		const aheadUntil = new Date(t.getTime() + LEARN_AHEAD_MS);
 		const inDeck = (c) => {
-			if (!c || c.suspended || !c.srs) return false;
+			if (!c || c.trashed || c.suspended || !c.srs) return false;
 			if (!deck) return true;
 			const d = c.deck || "Standard";
 			return d === deck || d.startsWith(deck + "::");
@@ -670,5 +751,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

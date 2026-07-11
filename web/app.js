@@ -338,7 +338,7 @@ function wireEvents() {
 		"[data-ankisuspend],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
-		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge]," +
+		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
 		"[data-pagetemplate],[data-tplblank],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
@@ -662,8 +662,10 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.ankidel) {
-			if (await U.confirm("Diese Karte wirklich löschen?", { title: "Karte löschen", ok: "Löschen", danger: true })) {
-				await STATE.dispatch("cardDelete", { id: t.dataset.ankidel });
+			// Soft-Delete → Papierkorb (wiederherstellbar)
+			if (await U.confirm("Diese Karte in den Papierkorb legen?", { title: "Karte löschen", ok: "In Papierkorb", danger: true })) {
+				await STATE.dispatch("cardTrash", { id: t.dataset.ankidel });
+				U.toast("Karte im Papierkorb.", "success");
 			}
 			return;
 		}
@@ -731,11 +733,14 @@ function wireEvents() {
 		if (t.dataset.deckdel) {
 			S.deckMenuOpenName = null;
 			const name = t.dataset.deckdel;
+			// Soft-Delete: Stapel + Karten des Teilbaums → Papierkorb (auch „Standard“).
 			const n = ankiCardsOf(name).length;
-			const msg = 'Stapel „' + name + '“ wirklich löschen?' + (n ? " " + n + ' Karte(n) wandern in „Standard“.' : "");
-			if (await U.confirm(msg, { title: "Stapel löschen", ok: "Löschen", danger: true })) {
-				await STATE.dispatch("deckDelete", { name });
+			const msg = 'Stapel „' + name + '“ in den Papierkorb legen?' +
+				(n ? " " + n + " Karte(n) (inkl. Unterstapel) wandern mit und sind wiederherstellbar." : "");
+			if (await U.confirm(msg, { title: "Stapel löschen", ok: "In Papierkorb", danger: true })) {
+				await STATE.dispatch("deckTrash", { name });
 				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
+				U.toast("Stapel im Papierkorb.", "success");
 			}
 			render();
 			return;
@@ -927,6 +932,44 @@ function wireEvents() {
 			}
 			return;
 		}
+		// Papierkorb: Karten & Stapel wiederherstellen / endgültig löschen
+		if (t.dataset.cardrestore) {
+			await STATE.dispatch("cardRestore", { id: t.dataset.cardrestore });
+			U.toast("Karte wiederhergestellt.", "success");
+			return;
+		}
+		if (t.dataset.cardpurge) {
+			const c = S.cards[t.dataset.cardpurge];
+			const label = c ? (c.front || "").slice(0, 40) : "Karte";
+			if (await U.confirm('Karte „' + label + (label.length >= 40 ? "…" : "") + '“ endgültig löschen? Das kann nicht rückgängig gemacht werden.', {
+				title: "Endgültig löschen", ok: "Löschen", danger: true,
+			})) {
+				await STATE.dispatch("cardDelete", { id: t.dataset.cardpurge });
+				render();
+			}
+			return;
+		}
+		if (t.dataset.deckrestore) {
+			await STATE.dispatch("deckRestore", { name: t.dataset.deckrestore });
+			U.toast("Stapel wiederhergestellt.", "success");
+			return;
+		}
+		if (t.dataset.deckpurge) {
+			const name = t.dataset.deckpurge;
+			const n = Object.values(S.cards).filter((c) => {
+				const d = c.deck || "Standard";
+				return d === name || d.startsWith(name + "::");
+			}).length;
+			if (await U.confirm('Stapel „' + name + '“ endgültig löschen?' +
+				(n ? " " + n + " Karte(n) werden unwiderruflich entfernt." : "") +
+				" Das kann nicht rückgängig gemacht werden.", {
+				title: "Endgültig löschen", ok: "Löschen", danger: true,
+			})) {
+				await STATE.dispatch("deckDelete", { name });
+				render();
+			}
+			return;
+		}
 
 		// Chat-Verlauf: neuer Chat / Chat auswählen
 		if (t.dataset.newchat) { startNewChat(); return; }
@@ -946,8 +989,8 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.carddel) {
-			if (await U.confirm("Diese Karte wirklich löschen?", { title: "Karte löschen", ok: "Löschen", danger: true })) {
-				await STATE.dispatch("cardDelete", { id: t.dataset.carddel });
+			if (await U.confirm("Diese Karte in den Papierkorb legen?", { title: "Karte löschen", ok: "In Papierkorb", danger: true })) {
+				await STATE.dispatch("cardTrash", { id: t.dataset.carddel });
 				openCards();
 			}
 			return;

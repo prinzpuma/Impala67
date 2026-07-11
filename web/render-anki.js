@@ -15,23 +15,41 @@ const modal = (...args) => RENDER.modal(...args);
 // Lern-Ansicht, Karten-Editor). Lädt in index.html direkt nach render.js.
 
 // ---------- Anki-Bereich (🃏-Tab): Stapel / Browser / Statistik / Lernen ----------
-// „Standard" ist der interne Default für Karten ohne expliziten Stapel — er taucht
-// nirgends in der UI auf (nicht im Baum, nicht in den Browser-Chips, nicht im Hauptbereich).
+// „Standard“ ist der Default-Name für Karten ohne expliziten Stapel — erscheint wie
+// jeder andere Stapel in Baum/Liste und ist löschbar (Karten im Teilbaum werden mitgelöscht).
 function ankiDecks() {
 	const set = new Set();
-	Object.keys(S.decks || {}).forEach((n) => { if (n !== "Standard") set.add(n); });
-	Object.values(S.cards).forEach((c) => { const d = c.deck || ""; if (d && d !== "Standard") set.add(d); });
+	// Nur aktive (nicht im Papierkorb) Stapel
+	Object.keys(S.decks || {}).forEach((n) => {
+		if (!n) return;
+		const d = S.decks[n];
+		if (d && d.trashed) return;
+		set.add(n);
+	});
+	// Auch Karten mit leerem/fehlendem deck-Feld zählen zu „Standard“ (ohne Papierkorb-Karten)
+	Object.values(S.cards).forEach((c) => {
+		if (!c || c.trashed) return;
+		const d = (c.deck || "Standard").trim();
+		if (d) set.add(d);
+	});
 	// Elternstapel ergänzen: "Mathe::Analysis" erzeugt automatisch auch "Mathe"
 	[...set].forEach((n) => {
 		const parts = n.split("::");
 		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
 	});
-	return [...set].sort((a, b) => a.localeCompare(b, "de"));
+	// „Standard“ oben, Rest alphabetisch (de)
+	return [...set].sort((a, b) => {
+		if (a === "Standard") return -1;
+		if (b === "Standard") return 1;
+		return a.localeCompare(b, "de");
+	});
 }
 
-// Karten eines Stapels INKLUSIVE aller Unterstapel ("Mathe" enthält "Mathe::Analysis")
+// Karten eines Stapels INKLUSIVE aller Unterstapel ("Mathe" enthält "Mathe::Analysis").
+// Papierkorb-Karten sind ausgeblendet (Soft-Delete).
 function ankiCardsOf(deck) {
 	return Object.values(S.cards).filter((c) => {
+		if (!c || c.trashed) return false;
 		if (!deck) return true;
 		const d = c.deck || "Standard";
 		return d === deck || d.startsWith(deck + "::");
@@ -56,10 +74,10 @@ function ankiStudyOpen(deck) {
 
 // Stapel-Baum für die linke Spalte: Unterstapel per "::"-Namensschema (wie in Anki),
 // ein-/ausklappbar wie der Seitenbaum, mit Fällig/Neu-Zählern und Aktionen je Zeile.
-// „Standard" und „Alle Stapel" tauchen NICHT auf — „Standard" ist nur der interne
-// Default für Karten ohne expliziten Stapel, und „Alle" ist überflüssig.
+// „Standard“ erscheint wie jeder andere Stapel (inkl. ⋯ → Löschen); „Alle Stapel“
+// bleibt überflüssig (Lernen über die Stapel-Übersicht).
 function deckTreeHtml() {
-	const all = ankiDecks().filter((n) => n !== "Standard");
+	const all = ankiDecks();
 	const kidsOf = (parent) => all.filter((n) => {
 		if (parent) return n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::");
 		return !n.includes("::");
@@ -100,7 +118,7 @@ function deckMenuHtml(name) {
 	return '<div class="page-menu">' +
 		'<button class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
 		'<button class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
-		'<button class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 Löschen</button>' +
+		'<button class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
 		"</div>";
 }
 
@@ -146,20 +164,9 @@ function ankiDecksHtml() {
 	// Sichtbarkeits-Fallback: „Standard“ erscheint als Zeile, sobald dort Karten
 	// liegen (z.B. Importe ohne Stapel) — vorher waren solche Karten nur über
 	// „Alle Stapel lernen“ erreichbar und wirkten wie Geisterkarten.
-	const stdCards = ankiCardsOf("Standard");
-	let stdRow = "";
-	if (stdCards.length) {
-		const stdNeu = stdCards.filter((c) => c.srs.state === "new" && !c.suspended).length;
-		const stdDue = ankiDueOf("Standard").length;
-		stdRow = '<div class="deck-row"><div class="deck-info"><span class="deck-name">Standard <span class="hint">(ohne Stapel)</span></span>' +
-			'<span class="deck-counts"><b class="cnt-due">' + stdDue + '</b> fällig · <b class="cnt-new">' + stdNeu + "</b> neu · " + stdCards.length + " gesamt</span></div>" +
-			'<div class="deck-actions">' +
-				'<button data-ankistudy="Standard" ' + (ankiStudyOpen("Standard") ? "" : "disabled") + ">▶ Lernen</button>" +
-				'<button data-ankideckfilter="Standard">🔍 Durchsuchen</button>' +
-			"</div></div>";
-	}
+	// „Standard“ steckt jetzt in ankiDecks() (normale Zeile, inkl. Sidebar-⋯ → Löschen).
 	const totalOpen = STATE.studySnapshot(null).counts.total;
-	return '<div class="deck-list">' + rows + stdRow + "</div>" +
+	return '<div class="deck-list">' + rows + "</div>" +
 		'<div class="row-btns" style="margin-top:14px;max-width:720px">' +
 			'<button data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalOpen + " offen)</button>" +
 			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
@@ -356,23 +363,33 @@ function ankiStudyHtml() {
 	return html;
 }
 
-// Stapel-Liste für den Editor: Baum + Karten + aktuell gewählter Anki-Stapel.
-// „Standard“ nur als letzter Fallback, wenn wirklich nichts existiert.
+// Stapel-Liste für den Editor: alle bekannten Stapel inkl. „Standard“ (falls vorhanden).
+// Fallback „Standard“, wenn noch gar kein Stapel existiert (neue Karte anlegen).
 function editorDecks() {
 	const set = new Set();
 	const add = (n) => {
 		const d = String(n || "").trim();
-		if (d && d !== "Standard") set.add(d);
+		if (d) set.add(d);
 	};
-	Object.keys(S.decks || {}).forEach(add);
-	Object.values(S.cards).forEach((c) => add(c && c.deck));
+	Object.keys(S.decks || {}).forEach((n) => {
+		if (S.decks[n] && S.decks[n].trashed) return;
+		add(n);
+	});
+	Object.values(S.cards).forEach((c) => {
+		if (!c || c.trashed) return;
+		add(c.deck || "Standard");
+	});
 	add(S.ankiDeck);
 	// Elternstapel aus Hierarchie mit aufnehmen
 	[...set].forEach((n) => {
 		const parts = n.split("::");
 		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
 	});
-	const list = [...set].sort((a, b) => a.localeCompare(b, "de"));
+	const list = [...set].sort((a, b) => {
+		if (a === "Standard") return -1;
+		if (b === "Standard") return 1;
+		return a.localeCompare(b, "de");
+	});
 	return list.length ? list : ["Standard"];
 }
 
@@ -395,9 +412,8 @@ function openCardEditor(cardId) {
 	const c = cardId ? S.cards[cardId] : null;
 	const decks = editorDecks();
 	// Vorauswahl: bestehende Karte → ihr Stapel; sonst aktiver Anki-Stapel; sonst erster Eintrag
-	let current = (c && c.deck) || S.ankiDeck || decks[0] || "Standard";
-	if (current === "Standard" && decks[0] && decks[0] !== "Standard") current = decks[0];
-	if (current !== "Standard" && !decks.includes(current)) decks.unshift(current);
+	let current = (c && (c.deck || "Standard")) || S.ankiDeck || decks[0] || "Standard";
+	if (!decks.includes(current)) decks.unshift(current);
 
 	const opts = decks.map((d) =>
 		'<option value="' + U.esc(d) + '"' + (d === current ? " selected" : "") + ">" + U.esc(d) + "</option>"
