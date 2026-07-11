@@ -161,7 +161,8 @@ export const EXTRAS = (() => {
 		return /[";\n\t]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 	};
 	function exportCsv() {
-		const cards = Object.values(S.cards);
+		// FIX: Papierkorb-Karten (Soft-Delete, 11. Juli) wanderten mit in den Export.
+		const cards = Object.values(S.cards).filter((c) => !c.trashed);
 		const csv = "front;back;deck\n" + cards.map((c) => [c.front, c.back, c.deck || "Standard"].map(csvEscape).join(";")).join("\n");
 		U.downloadText("impala67-karten.csv", csv);
 	}
@@ -239,7 +240,9 @@ export const EXTRAS = (() => {
 		const baseDeck = { mod: nowSec, usn: -1, collapsed: false, desc: "", dyn: 0, conf: 1, extendNew: 10, extendRev: 50, newToday: [0, 0], revToday: [0, 0], lrnToday: [0, 0], timeToday: [0, 0] };
 		const decks = { "1": { ...baseDeck, id: 1, name: "Default" } };
 		const deckIds = {};
-		[...new Set(Object.values(S.cards).map((c) => c.deck || "Standard"))].forEach((name, i) => {
+		// FIX: Papierkorb-Karten/-Stapel (Soft-Delete, 11. Juli) nicht mit exportieren.
+		const activeCards = Object.values(S.cards).filter((c) => !c.trashed);
+		[...new Set(activeCards.map((c) => c.deck || "Standard"))].forEach((name, i) => {
 			const id = 1000 + i;
 			deckIds[name] = id;
 			decks[String(id)] = { ...baseDeck, id, name };
@@ -252,7 +255,7 @@ export const EXTRAS = (() => {
 		const stmtC = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
 		let id = nowMs;
 		let pos = 1;
-		for (const c of Object.values(S.cards)) {
+		for (const c of activeCards) {
 			id += 1;
 			stmtN.run([id, U.uid().slice(0, 10), mid, nowSec, -1, "", (c.front || "") + "\x1f" + (c.back || ""), (c.front || "").slice(0, 80), 0, 0, ""]);
 			const isNew = c.srs.state === "new";

@@ -58,7 +58,12 @@ export const U = {
 			let done = false;
 			const onKey = (e) => {
 				if (e.key === "Escape") { e.preventDefault(); finish(false); }
-				else if (e.key === "Enter") { e.preventDefault(); finish(true); }
+				// FIX: Enter bestätigte bisher IMMER — auch wenn „Abbrechen“ (per Tab) fokussiert
+				// war. Bei destruktiven Dialogen fatal. Jetzt entscheidet der fokussierte Button.
+				else if (e.key === "Enter") {
+					e.preventDefault();
+					finish(document.activeElement !== U.el("dlgConfirmCancel"));
+				}
 			};
 			const finish = (ok) => {
 				if (done) return;
@@ -111,9 +116,12 @@ export const U = {
 		const src = String(text ?? "");
 		if (U._mdCache.has(src)) return U._mdCache.get(src);
 		const raw = U._markHighlights(src);
-		const html = window.marked
-			? U.sanitize(marked.parse(raw, { breaks: true }))
-			: "<pre>" + U.esc(raw) + "</pre>";
+		if (!window.marked) {
+			// FIX: Offline-Fallback NICHT cachen — sonst blieb der rohe <pre>-Text für
+			// immer im Cache, auch nachdem marked (CDN) später doch noch geladen wurde.
+			return "<pre>" + U.esc(raw) + "</pre>";
+		}
+		const html = U.sanitize(marked.parse(raw, { breaks: true }));
 		// Kleiner Cache: erspart erneutes Parsen bei jedem Voll-Render derselben Inhalte.
 		if (U._mdCache.size > 300) U._mdCache.clear();
 		U._mdCache.set(src, html);
@@ -266,14 +274,17 @@ export const U = {
 			const nameB = enc.encode(f.name);
 			const data = typeof f.text === "string" ? enc.encode(f.text) : new Uint8Array(f.text);
 			const crc = U.crc32(data);
-			chunks.push(num(0x04034b50, 4), num(20, 2), num(0, 2), num(0, 2), num(0, 2), num(0, 2),
+			// FIX: Bit 11 (0x0800) im General-Purpose-Flag setzen — Dateinamen sind UTF-8-kodiert.
+			// Ohne das Flag interpretieren Entpacker die Namen als CP437: Umlaute (Seiten-/
+			// Stapel-Namen wie "Prüfung.md") kamen als Zeichensalat an.
+			chunks.push(num(0x04034b50, 4), num(20, 2), num(0x0800, 2), num(0, 2), num(0, 2), num(0, 2),
 				num(crc, 4), num(data.length, 4), num(data.length, 4), num(nameB.length, 2), num(0, 2), nameB, data);
 			central.push({ nameB, size: data.length, crc, offset });
 			offset += 30 + nameB.length + data.length;
 		}
 		let cdSize = 0;
 		for (const c of central) {
-			chunks.push(num(0x02014b50, 4), num(20, 2), num(20, 2), num(0, 2), num(0, 2), num(0, 2), num(0, 2),
+			chunks.push(num(0x02014b50, 4), num(20, 2), num(20, 2), num(0x0800, 2), num(0, 2), num(0, 2), num(0, 2),
 				num(c.crc, 4), num(c.size, 4), num(c.size, 4), num(c.nameB.length, 2), num(0, 2), num(0, 2),
 				num(0, 2), num(0, 2), num(0, 4), num(c.offset, 4), c.nameB);
 			cdSize += 46 + c.nameB.length;

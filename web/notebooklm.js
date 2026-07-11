@@ -119,7 +119,13 @@ export const NLM = (() => {
 		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
 	}
 	async function positionEmbedded() {
-		if (S.view !== "notebooklm") return;
+		// FIX (offener Bug): beim Verlassen des NotebookLM-Tabs aktiv verstecken, statt
+		// nur zu returnen — das Webview blieb sonst sichtbar, wenn das "impala67:nlm-hide"-
+		// Event (closeTab) nicht oder zu spät ankam.
+		if (S.view !== "notebooklm") {
+			if (embedded || uiPaused) hideEmbeddedIfActive();
+			return;
+		}
 		// Browser / ohne Rust-Kommandos: kein natives Webview — Fallback-UI bleibt im Impala-Tab.
 		if (!canEmbedNative()) return;
 		// Strg+K / Dialoge: natives Webview deckt sonst die HTML-UI ab.
@@ -158,7 +164,14 @@ export const NLM = (() => {
 		if (pickBtn) pickBtn.addEventListener("click", () => openPicker(() => (pendingFallback || openFallbackDefault)()));
 	}
 	function syncEmbeddedToUi() {
-		if (S.view !== "notebooklm") return;
+		// FIX (offener Bug): der Body-MutationObserver ruft syncEmbeddedToUi bei jedem
+		// Re-Render auf — hier zusätzlich verstecken, sobald die Ansicht gewechselt hat.
+		// Damit verschwindet das Webview auch dann zuverlässig, wenn hideEmbeddedIfActive()
+		// beim Tab-Schließen nicht ausgelöst wurde.
+		if (S.view !== "notebooklm") {
+			if (embedded || uiPaused) hideEmbeddedIfActive();
+			return;
+		}
 		if (isAppUiBlocking()) {
 			if (!uiPaused) {
 				uiPaused = true;

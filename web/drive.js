@@ -316,5 +316,15 @@ export const DRIVE = (() => {
 		return syncInFlight;
 	}
 
-	return { login, logout, sync, isConnected: () => !!token };
+	// FIX: isConnected() kannte nur das In-Memory-Token — nach einem Reload zeigte die UI
+	// deshalb "nicht verbunden", obwohl in localStorage noch eine gültige Sitzung lag.
+	function isConnected() {
+		if (token) return true;
+		const savedToken = localStorage.getItem("impala67_drive_token");
+		const savedExpiry = localStorage.getItem("impala67_drive_token_expiry");
+		if (savedToken && savedExpiry && Date.now() < Number(savedExpiry)) return true;
+		return !!localStorage.getItem("impala67_drive_refresh_token");
+	}
+
+	return { login, logout, sync, isConnected };
 })();

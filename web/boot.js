@@ -12,7 +12,7 @@ const render = (...args) => RENDER.render(...args);
 const wireEvents = (...args) => APP.wireEvents(...args);
 
 const WELCOME_MD = [
-	"# 👋 Willkommen bei Empaer!",
+	"# 👋 Willkommen bei Impala67!",
 	"",
 	"Dein Local-First-Arbeitsraum für Notizen, PDFs, KI und Lernen – deine Daten bleiben auf deinem Gerät und lassen sich bei Bedarf synchronisieren.",
 	"",
@@ -20,7 +20,7 @@ const WELCOME_MD = [
 	"1. Öffne ⚙️ **Einstellungen**, richte eine KI-Quelle ein und wähle ein Modell.",
 	"2. Erstelle eine Notiz oder ein **GoodNotes-Heft** und arbeite mit dem KI-Chat direkt daneben.",
 	"",
-	"### Das kannst du mit Empaer machen",
+	"### Das kannst du mit Impala67 machen",
 	"- **Notizen, Unterseiten & Datenbanken**: Organisiere Inhalte in Workspaces, Tabellen und Vorlagen.",
 	"- **KI-Chat mit Tools**: Frage zu deinen Inhalten, überarbeite Texte oder lasse Seiten und Karteikarten erstellen.",
 	"- **PDFs & Bibliothek**: PDFs per KI einsortieren und alle Notizen, Hefte und Ordner durchsuchen.",

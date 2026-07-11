@@ -206,9 +206,15 @@ export async function handleModelMenuToggle(t) {
 	if (S.modelMenuOpen) {
 		S.modelMenuLoading = true;
 		renderModelMenu();
-		const models = await AI.listModels();
+		// FIX: schlug listModels() fehl (Server offline/Netzwerkfehler), blieb das Menü
+		// für immer im Lade-Zustand hängen — Fehler abfangen und Laden sauber beenden.
+		try {
+			S.availableModels = await AI.listModels();
+		} catch (e) {
+			S.availableModels = [];
+			U.toast("Modelle konnten nicht geladen werden: " + (e.message || e), "error");
+		}
 		S.modelMenuLoading = false;
-		S.availableModels = models;
 		renderModelMenu();
 		// Die Thinking-Stufen werden nicht aus einer Modellnamenliste geraten:
 		// Direkt nach dem Öffnen prüft die App das aktuell gewählte Modell und

@@ -261,140 +261,153 @@ export const HEFT = (() => {
 	}
 	function redraw() { if (doc) doc.pages.forEach((_, i) => redrawPage(i)); }
 
-	// ---------- Navigation v2: Scrollen, Pinch-Zoom, Doppeltipp (kompletter Rewrite) ----------
-	// Grundsätze:
-	// - 1 Finger  = Scrollen (delta-basiert, kein Sprung beim Fingerwechsel) + Trägheit
-	// - 2 Finger  = Pinch-Zoom um den Fingermittelpunkt. Während der Geste werden nur die
-	//   CSS-Größen angepasst (flüssig); die scharfe Canvas-Auflösung wird genau EINMAL am
-	//   Gestenende gerendert — kein Ruckeln mehr bei großen Heften.
-	// - Doppeltipp aufs Blatt = an den Bildschirm anpassen (Fit). Ist das Blatt bereits
-	//   angepasst, zoomt der Doppeltipp auf 2× an die getippte Stelle (wie GoodNotes).
-	// - 2-Finger-Tipp = Undo · 3-Finger-Tipp = Redo (kurz, ohne Bewegung)
-	// - Desktop: Strg/Cmd + Mausrad zoomt auf den Mauszeiger
-	const ZOOM_MIN = 1, ZOOM_MAX = 4; // 1 = Fit-to-width; darunter gibt es nichts zu sehen
+	// ---------- Navigation v3: frei zoomen, 2D-Pan, stabiler Fokuspunkt ----------
+	// Ein einziger CSS-Variablen-Write skaliert alle Seiten. Die teuren Canvas-Bitmaps
+	// werden erst nach der Geste neu gerendert. Der Zoom-Anker ist ein Punkt IM Blatt,
+	// nicht die Mitte des Scroll-Containers — dadurch kann man überall hineinzoomen.
+	const ZOOM_MIN = 1, ZOOM_MAX = 5;
 	const gesture = {
-		pointers: new Map(), // pointerId → { x, y, sx, sy }
-		mode: null,          // "scroll" | "pinch" | null
-		maxCount: 0,         // Finger-Maximum der laufenden Geste (2/3-Finger-Tipp)
-		moved: false,
-		startedAt: 0,
-		vx: 0, vy: 0, lastT: 0, // Geschwindigkeit in px/ms für die Trägheit
-		pinchDist: 0, pinchZoom: 1,
-		raf: 0,              // laufende Trägheits-/Zoom-Animation
-		lastTap: 0, tapX: 0, tapY: 0, // Doppeltipp-Erkennung
+		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
+		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
+		raf: 0, zoomFrame: 0, pendingZoom: null,
+		lastTap: 0, tapX: 0, tapY: 0,
 	};
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
-	function stopAnim() { if (gesture.raf) { cancelAnimationFrame(gesture.raf); gesture.raf = 0; } }
-	function navReset() {
-		stopAnim();
-		gesture.pointers.clear();
-		gesture.mode = null; gesture.maxCount = 0; gesture.moved = false;
-		gesture.vx = 0; gesture.vy = 0; gesture.lastTap = 0;
+	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
+	function stopAnim() {
+		if (gesture.raf) cancelAnimationFrame(gesture.raf);
+		if (gesture.zoomFrame) cancelAnimationFrame(gesture.zoomFrame);
+		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
 	}
-	// Ansicht anwenden. commit=false: nur CSS-Größe (schnell, während der Geste).
-	// commit=true: Canvas-Bitmaps in Zielauflösung neu rendern (scharf).
+	function navReset() {
+		stopAnim(); gesture.pointers.clear();
+		gesture.mode = null; gesture.maxCount = 0; gesture.moved = false;
+		gesture.vx = gesture.vy = 0; gesture.pinchAnchor = null; gesture.lastTap = 0;
+	}
 	function applyView(commit) {
-		const scroll = scrollEl();
-		if (!scroll) return;
-		const availW = scroll.clientWidth - 24;
-		const fit = Math.max(0.1, Math.min(availW / PAGE_W, 1));
+		const scroll = scrollEl(); if (!scroll) return;
+		const fit = Math.max(0.1, Math.min((scroll.clientWidth - 36) / PAGE_W, 1));
 		scale = fit * zoom;
-		const cssW = Math.round(PAGE_W * scale), cssH = Math.round(PAGE_H * scale);
-		canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
+		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
+		const pages = pagesEl();
+		if (pages) {
+			pages.style.setProperty("--heft-page-w", cssW + "px");
+			pages.style.setProperty("--heft-page-h", cssH + "px");
+		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (!commit) return;
-		const dpr = window.devicePixelRatio || 1;
+		const dpr = Math.min(2.5, window.devicePixelRatio || 1);
 		canvases.forEach((cv) => {
-			cv.width = Math.round(PAGE_W * scale * dpr);
-			cv.height = Math.round(PAGE_H * scale * dpr);
+			const w = Math.max(1, Math.round(PAGE_W * scale * dpr));
+			const h = Math.max(1, Math.round(PAGE_H * scale * dpr));
+			if (cv.width !== w) cv.width = w;
+			if (cv.height !== h) cv.height = h;
 		});
 		redraw();
 	}
 	function layout() { applyView(true); }
-	// Zoom um einen Fixpunkt (Viewport-Koordinaten): der Punkt unter dem Finger bleibt
-	// exakt unter dem Finger — die Scroll-Position wird passend nachgeführt.
-	function setZoom(next, clientX, clientY, commit) {
-		const scroll = scrollEl();
-		if (!scroll) return;
+	function canvasAt(clientX, clientY) {
+		const direct = document.elementFromPoint(clientX, clientY);
+		const hit = direct && direct.closest && direct.closest(".heft-canvas");
+		if (hit) return hit;
+		let best = canvases[idx] || canvases[0] || null, bd = Infinity;
+		canvases.forEach((cv) => {
+			const r = cv.getBoundingClientRect();
+			const dx = clientX < r.left ? r.left - clientX : clientX > r.right ? clientX - r.right : 0;
+			const dy = clientY < r.top ? r.top - clientY : clientY > r.bottom ? clientY - r.bottom : 0;
+			const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = cv; }
+		});
+		return best;
+	}
+	function makeZoomAnchor(clientX, clientY) {
+		const cv = canvasAt(clientX, clientY); if (!cv) return null;
+		const r = cv.getBoundingClientRect();
+		return { cv, nx: Math.max(0, Math.min(1, (clientX - r.left) / Math.max(1, r.width))), ny: Math.max(0, Math.min(1, (clientY - r.top) / Math.max(1, r.height))) };
+	}
+	function keepAnchor(anchor, clientX, clientY) {
+		const scroll = scrollEl(); if (!scroll || !anchor || !anchor.cv.isConnected) return;
+		const r = anchor.cv.getBoundingClientRect();
+		scroll.scrollLeft += r.left + r.width * anchor.nx - clientX;
+		scroll.scrollTop += r.top + r.height * anchor.ny - clientY;
+	}
+	function setZoom(next, clientX, clientY, commit, fixedAnchor) {
 		next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
-		const r = scroll.getBoundingClientRect();
-		const fx = clientX == null ? r.width / 2 : clientX - r.left;
-		const fy = clientY == null ? r.height / 2 : clientY - r.top;
-		const lx = (scroll.scrollLeft + fx) / scale;
-		const ly = (scroll.scrollTop + fy) / scale;
-		zoom = next;
-		applyView(commit);
-		scroll.scrollLeft = lx * scale - fx;
-		scroll.scrollTop = ly * scale - fy;
+		const anchor = fixedAnchor || makeZoomAnchor(clientX, clientY);
+		zoom = next; applyView(commit); keepAnchor(anchor, clientX, clientY);
+	}
+	function queueZoom(next, clientX, clientY, anchor) {
+		gesture.pendingZoom = { next, clientX, clientY, anchor };
+		if (gesture.zoomFrame) return;
+		gesture.zoomFrame = requestAnimationFrame(() => {
+			gesture.zoomFrame = 0;
+			const p = gesture.pendingZoom; gesture.pendingZoom = null;
+			if (p) setZoom(p.next, p.clientX, p.clientY, false, p.anchor);
+		});
 	}
 	function animateZoom(target, clientX, clientY) {
 		stopAnim();
-		const from = zoom, t0 = performance.now(), dur = 220;
-		const ease = (t) => 1 - Math.pow(1 - t, 3);
+		const from = zoom, anchor = makeZoomAnchor(clientX, clientY);
+		const t0 = performance.now(), dur = 280;
 		const step = (now) => {
-			const t = Math.min(1, (now - t0) / dur);
-			setZoom(from + (target - from) * ease(t), clientX, clientY, t >= 1);
-			gesture.raf = t < 1 ? requestAnimationFrame(step) : 0;
+			const t = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - t, 4);
+			setZoom(from + (target - from) * eased, clientX, clientY, false, anchor);
+			if (t < 1) gesture.raf = requestAnimationFrame(step);
+			else { gesture.raf = 0; applyView(true); keepAnchor(anchor, clientX, clientY); }
 		};
 		gesture.raf = requestAnimationFrame(step);
 	}
 	function startFling() {
-		const scroll = scrollEl();
-		if (!scroll) return;
-		let vx = gesture.vx * 16, vy = gesture.vy * 16; // px pro Frame (~60 fps)
-		if (Math.hypot(vx, vy) < 2.5) return;
-		const step = () => {
-			vx *= 0.94; vy *= 0.94;
-			scroll.scrollLeft -= vx;
-			scroll.scrollTop -= vy;
-			gesture.raf = Math.hypot(vx, vy) > 0.4 ? requestAnimationFrame(step) : 0;
+		const scroll = scrollEl(); if (!scroll) return;
+		let vx = gesture.vx * 16, vy = gesture.vy * 16;
+		if (Math.hypot(vx, vy) < 2) return;
+		let last = performance.now();
+		const step = (now) => {
+			const dt = Math.min(32, now - last) / 16.67; last = now;
+			const decay = Math.pow(0.92, dt); vx *= decay; vy *= decay;
+			const ox = scroll.scrollLeft, oy = scroll.scrollTop;
+			scroll.scrollLeft -= vx * dt; scroll.scrollTop -= vy * dt;
+			if (scroll.scrollLeft === ox) vx = 0; if (scroll.scrollTop === oy) vy = 0;
+			gesture.raf = Math.hypot(vx, vy) > 0.35 ? requestAnimationFrame(step) : 0;
 		};
 		gesture.raf = requestAnimationFrame(step);
 	}
 	function pinchPair() { const a = [...gesture.pointers.values()]; return a.length >= 2 ? [a[0], a[1]] : null; }
 	function beginPinch() {
-		const pair = pinchPair();
-		if (!pair) return;
+		const pair = pinchPair(); if (!pair) return;
+		const mx = (pair[0].x + pair[1].x) / 2, my = (pair[0].y + pair[1].y) / 2;
 		gesture.mode = "pinch";
 		gesture.pinchDist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
-		gesture.pinchZoom = zoom;
+		gesture.pinchZoom = zoom; gesture.pinchAnchor = makeZoomAnchor(mx, my);
 	}
 	function onTouchPointerDown(e) {
 		if (e.pointerType !== "touch" || !touchNavigates() || !scrollEl()) return;
-		e.preventDefault();
-		stopAnim();
+		e.preventDefault(); stopAnim();
 		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 		gesture.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
 		gesture.maxCount = Math.max(gesture.maxCount, gesture.pointers.size);
 		if (gesture.pointers.size === 1) {
 			gesture.mode = "scroll"; gesture.moved = false; gesture.startedAt = Date.now();
-			gesture.vx = 0; gesture.vy = 0; gesture.lastT = e.timeStamp;
+			gesture.vx = gesture.vy = 0; gesture.lastT = e.timeStamp;
 		} else beginPinch();
 	}
 	function onTouchPointerMove(e) {
-		const p = gesture.pointers.get(e.pointerId);
-		if (!p || e.pointerType !== "touch") return;
-		// Stift aufgesetzt → jeder Touch ist ab jetzt Handballen: Geste sofort beenden.
+		const p = gesture.pointers.get(e.pointerId); if (!p || e.pointerType !== "touch") return;
 		if (activePenPointers.size) { navReset(); return; }
-		const scroll = scrollEl();
-		if (!scroll) return;
+		const scroll = scrollEl(); if (!scroll) return;
 		e.preventDefault();
 		const dx = e.clientX - p.x, dy = e.clientY - p.y;
 		p.x = e.clientX; p.y = e.clientY;
-		if (Math.hypot(p.x - p.sx, p.y - p.sy) > 10) gesture.moved = true;
+		if (Math.hypot(p.x - p.sx, p.y - p.sy) > 7) gesture.moved = true;
 		if (gesture.mode === "pinch") {
-			const pair = pinchPair();
-			if (!pair) return;
+			const pair = pinchPair(); if (!pair) return;
 			const dist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
-			setZoom(gesture.pinchZoom * (dist / gesture.pinchDist), (pair[0].x + pair[1].x) / 2, (pair[0].y + pair[1].y) / 2, false);
+			const mx = (pair[0].x + pair[1].x) / 2, my = (pair[0].y + pair[1].y) / 2;
+			queueZoom(gesture.pinchZoom * dist / gesture.pinchDist, mx, my, gesture.pinchAnchor);
 			return;
 		}
-		// Scrollen: delta-basiert — kein Sprung beim Wechsel zwischen 1 und 2 Fingern
-		scroll.scrollLeft -= dx;
-		scroll.scrollTop -= dy;
+		scroll.scrollLeft -= dx; scroll.scrollTop -= dy;
 		const dt = Math.max(1, e.timeStamp - gesture.lastT);
-		gesture.vx = 0.75 * gesture.vx + 0.25 * (dx / dt);
-		gesture.vy = 0.75 * gesture.vy + 0.25 * (dy / dt);
-		gesture.lastT = e.timeStamp;
+		gesture.vx = 0.68 * gesture.vx + 0.32 * (dx / dt);
+		gesture.vy = 0.68 * gesture.vy + 0.32 * (dy / dt); gesture.lastT = e.timeStamp;
 	}
 	function onTouchPointerUp(e) {
 		if (!gesture.pointers.has(e.pointerId)) return;
@@ -403,43 +416,31 @@ export const HEFT = (() => {
 		gesture.pointers.delete(e.pointerId);
 		if (gesture.pointers.size >= 2) { beginPinch(); return; }
 		if (gesture.pointers.size === 1) {
-			// Von Pinch zurück zu Scroll: einmal scharf rendern, dann weiter delta-scrollen
-			if (wasPinch) applyView(true);
-			gesture.mode = "scroll";
-			gesture.vx = 0; gesture.vy = 0; gesture.lastT = e.timeStamp;
-			return;
+			if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(true); }
+			const left = [...gesture.pointers.values()][0]; left.sx = left.x; left.sy = left.y;
+			gesture.mode = "scroll"; gesture.vx = gesture.vy = 0; gesture.lastT = e.timeStamp; return;
 		}
-		// Letzter Finger ist oben
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
-		const count = gesture.maxCount;
-		gesture.maxCount = 0;
-		gesture.mode = null;
-		if (wasPinch) { applyView(true); return; }
+		const count = gesture.maxCount; gesture.maxCount = 0; gesture.mode = null;
+		if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(true); return; }
 		if (quick && count === 2) { undo(); return; }
 		if (quick && count >= 3) { redo(); return; }
 		if (quick && count === 1) {
-			// Doppeltipp: an den Bildschirm anpassen bzw. 2× an die getippte Stelle
 			const now = Date.now();
-			if (now - gesture.lastTap < 320 && Math.hypot(e.clientX - gesture.tapX, e.clientY - gesture.tapY) < 60) {
-				gesture.lastTap = 0;
-				if (zoom > 1.02) animateZoom(1, e.clientX, e.clientY);
-				else animateZoom(2, e.clientX, e.clientY);
-				return;
+			if (now - gesture.lastTap < 330 && Math.hypot(e.clientX - gesture.tapX, e.clientY - gesture.tapY) < 64) {
+				gesture.lastTap = 0; animateZoom(zoom > 1.04 ? 1 : 2.5, e.clientX, e.clientY); return;
 			}
-			gesture.lastTap = now; gesture.tapX = e.clientX; gesture.tapY = e.clientY;
-			return;
+			gesture.lastTap = now; gesture.tapX = e.clientX; gesture.tapY = e.clientY; return;
 		}
 		if (gesture.moved && count === 1) startFling();
 	}
-	// Desktop: Strg/Cmd + Mausrad zoomt auf den Mauszeiger. Der scharfe Commit wird
-	// kurz gebündelt, damit schnelles Radln nicht pro Tick voll rendert.
 	let wheelCommitT = 0;
 	function onWheelZoom(e) {
 		if (!e.ctrlKey && !e.metaKey) return;
 		e.preventDefault();
-		setZoom(zoom * (e.deltaY < 0 ? 1.12 : 0.9), e.clientX, e.clientY, false);
-		clearTimeout(wheelCommitT);
-		wheelCommitT = setTimeout(() => applyView(true), 140);
+		const factor = Math.exp(-e.deltaY * 0.0022);
+		queueZoom(zoom * factor, e.clientX, e.clientY, makeZoomAnchor(e.clientX, e.clientY));
+		clearTimeout(wheelCommitT); wheelCommitT = setTimeout(() => applyView(true), 160);
 	}
 
 	// ---------- Pointer (Apple Pencil / Maus / Finger) ----------
@@ -767,7 +768,7 @@ export const HEFT = (() => {
 			'</div>'
 		).join('');
 		// Chrome fliegt ÜBER dem Scroll — kein Platzverlust im Layout
-		return '<div class="heft-scroll">' + pages + '</div>' + toolbarHtml();
+		return '<div class="heft-scroll"><div class="heft-pages">' + pages + '</div></div>' + toolbarHtml();
 	}
 	// Nur das Options-Tray ist verschiebbar. Die Hauptleiste bleibt bewusst fix.
 	function onTrayPointerDown(e) {
@@ -1144,7 +1145,7 @@ export const HEFT = (() => {
 		const full = [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]];
 		if (!w || !h) return full;
 		try {
-			const dw = Math.min(420, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
+			const dw = Math.min(480, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
 			const c = document.createElement("canvas");
 			c.width = dw; c.height = dh;
 			const cx = c.getContext("2d", { willReadFrequently: true });
@@ -1152,54 +1153,95 @@ export const HEFT = (() => {
 			const d = cx.getImageData(0, 0, dw, dh).data;
 			const n = dw * dh;
 			const L = new Float32Array(n), sat = new Float32Array(n);
-			let sumL = 0;
+			const ca = new Float32Array(n), cb = new Float32Array(n), edge = new Float32Array(n);
+			let sumL = 0, borderL = 0, borderA = 0, borderB = 0, borderN = 0;
 			for (let i = 0; i < n; i++) {
 				const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
 				const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
 				L[i] = r * 0.299 + g * 0.587 + b * 0.114;
 				sat[i] = mx ? (mx - mn) / mx : 0;
-				sumL += L[i];
+				ca[i] = r - g; cb[i] = b - g; sumL += L[i];
+				const y = (i / dw) | 0, x2 = i % dw;
+				if (x2 < 3 || y < 3 || x2 >= dw - 3 || y >= dh - 3) {
+					borderL += L[i]; borderA += ca[i]; borderB += cb[i]; borderN++;
+				}
+			}
+			borderL /= Math.max(1, borderN); borderA /= Math.max(1, borderN); borderB /= Math.max(1, borderN);
+			for (let y = 1; y < dh - 1; y++) for (let x2 = 1; x2 < dw - 1; x2++) {
+				const i = y * dw + x2;
+				const gx = L[i + 1] - L[i - 1], gy = L[i + dw] - L[i - dw];
+				edge[i] = Math.abs(gx) + Math.abs(gy);
 			}
 			const meanL = sumL / n;
-			const blur = blurMap(L, dw, dh, 6);
-			// Papier: hell, relativ unbunt, nicht deutlich dunkler als der lokale Hintergrund
-			let mask = new Uint8Array(n);
-			const thrPaper = Math.max(95, meanL * 0.78);
-			for (let i = 0; i < n; i++) mask[i] = L[i] >= thrPaper && sat[i] < 0.3 && L[i] >= blur[i] * 0.86 ? 1 : 0;
-			// Schließen: Textlöcher im Blatt füllen (Dilatation → Erosion)
-			mask = morphPass(morphPass(mask, dw, dh, 1), dw, dh, 0);
-			// Zusammenhängende Komponenten fluten und bewerten. Nur die Randpixel der
-			// besten Komponente werden gesammelt — nie alle Pixel als JS-Array.
-			const seen = new Uint8Array(n), stack = new Int32Array(n);
+			const blur = blurMap(L, dw, dh, Math.max(5, Math.round(dw / 70)));
+			// Drei voneinander unabhängige Segmentierungen: helles Papier, Farbe gegen
+			// den am Bildrand gemessenen Tisch und eine kantenumschlossene Fläche. So
+			// funktionieren auch cremefarbene Blätter und weißes Papier auf hellem Tisch.
+			const lightMask = new Uint8Array(n), colorMask = new Uint8Array(n);
+			const thrPaper = Math.max(78, meanL * 0.70);
+			for (let i = 0; i < n; i++) {
+				const colorDelta = Math.hypot((L[i] - borderL) * 0.75, ca[i] - borderA, cb[i] - borderB);
+				lightMask[i] = L[i] >= thrPaper && sat[i] < 0.48 && L[i] >= blur[i] * 0.78 ? 1 : 0;
+				colorMask[i] = L[i] > 45 && colorDelta > 13 && (sat[i] < 0.72 || L[i] > borderL + 12) ? 1 : 0;
+			}
+			// Starke Kanten bilden eine Barriere. Vom Außenrand wird der Tisch geflutet;
+			// was von einer geschlossenen Blattkante umschlossen bleibt, ist Kandidat 3.
+			const edgeBarrier = new Uint8Array(n), outside = new Uint8Array(n), flood = new Int32Array(n);
+			let edgeMean = 0;
+			for (let i = 0; i < n; i++) edgeMean += edge[i];
+			const edgeThr = Math.max(18, edgeMean / n * 2.35);
+			for (let i = 0; i < n; i++) edgeBarrier[i] = edge[i] >= edgeThr ? 1 : 0;
+			const barrier = morphPass(edgeBarrier, dw, dh, 1);
+			let ft = 0;
+			const seed = (i) => { if (!outside[i] && !barrier[i]) { outside[i] = 1; flood[ft++] = i; } };
+			for (let x2 = 0; x2 < dw; x2++) { seed(x2); seed((dh - 1) * dw + x2); }
+			for (let y = 1; y < dh - 1; y++) { seed(y * dw); seed(y * dw + dw - 1); }
+			while (ft) {
+				const p = flood[--ft], x2 = p % dw, y = (p / dw) | 0;
+				if (x2 > 0) seed(p - 1); if (x2 < dw - 1) seed(p + 1);
+				if (y > 0) seed(p - dw); if (y < dh - 1) seed(p + dw);
+			}
+			const enclosedMask = new Uint8Array(n);
+			for (let i = 0; i < n; i++) enclosedMask[i] = outside[i] || barrier[i] ? 0 : 1;
+			const masks = [lightMask, colorMask, enclosedMask].map((m) => {
+				// Closing füllt Textlöcher, anschließendes Opening entfernt kleine Reflexe,
+				// ohne die Blattkante dauerhaft nach innen zu verschieben.
+				const closed = morphPass(morphPass(m, dw, dh, 1), dw, dh, 0);
+				return morphPass(morphPass(closed, dw, dh, 0), dw, dh, 1);
+			});
+			const stack = new Int32Array(n);
 			let best = null, bestScore = -1;
-			for (let s0 = 0; s0 < n; s0++) {
-				if (!mask[s0] || seen[s0]) continue;
-				let top = 0, area = 0, border = 0;
-				let minX = dw, maxX = 0, minY = dh, maxY = 0;
-				const boundary = [];
-				stack[top++] = s0; seen[s0] = 1;
-				while (top) {
-					const p = stack[--top];
-					area++;
-					const py = (p / dw) | 0, pxx = p % dw;
-					if (pxx < minX) minX = pxx; if (pxx > maxX) maxX = pxx;
-					if (py < minY) minY = py; if (py > maxY) maxY = py;
-					let bnd = pxx <= 0 || py <= 0 || pxx >= dw - 1 || py >= dh - 1;
-					if (bnd) border++;
-					if (pxx > 0) { const j = p - 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
-					if (pxx < dw - 1) { const j = p + 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
-					if (py > 0) { const j = p - dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
-					if (py < dh - 1) { const j = p + dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
-					if (bnd) boundary.push([pxx, py]);
+			for (let mi = 0; mi < masks.length; mi++) {
+				const mask = masks[mi], seen = new Uint8Array(n);
+				for (let s0 = 0; s0 < n; s0++) {
+					if (!mask[s0] || seen[s0]) continue;
+					let top = 0, area = 0, touches = 0, edgeSum = 0;
+					let minX = dw, maxX = 0, minY = dh, maxY = 0;
+					const boundary = [];
+					stack[top++] = s0; seen[s0] = 1;
+					while (top) {
+						const p = stack[--top], py = (p / dw) | 0, pxx = p % dw; area++;
+						if (pxx < minX) minX = pxx; if (pxx > maxX) maxX = pxx;
+						if (py < minY) minY = py; if (py > maxY) maxY = py;
+						let bnd = pxx <= 0 || py <= 0 || pxx >= dw - 1 || py >= dh - 1;
+						if (bnd) touches++;
+						if (pxx > 0) { const j = p - 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+						if (pxx < dw - 1) { const j = p + 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+						if (py > 0) { const j = p - dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+						if (py < dh - 1) { const j = p + dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+						if (bnd) { boundary.push([pxx, py]); edgeSum += edge[p]; }
+					}
+					if (area < n * 0.075 || area > n * 0.965 || boundary.length < 20) continue;
+					const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+					const fill = Math.min(1, area / (bw * bh)), aspect = bw / bh;
+					if (aspect < 0.24 || aspect > 4.2) continue;
+					const cx2 = (minX + maxX) / 2, cy2 = (minY + maxY) / 2;
+					const centerPenalty = Math.hypot(cx2 - dw / 2, cy2 - dh / 2) / Math.hypot(dw, dh);
+					const edgeBonus = Math.min(1.8, edgeSum / Math.max(1, boundary.length * edgeThr));
+					const touchPenalty = 1 - Math.min(0.72, touches / Math.max(1, boundary.length) * 2.5);
+					const sc = area * (0.45 + fill) * (0.8 + edgeBonus) * touchPenalty * (1 - centerPenalty * 0.35) * (mi === 2 ? 1.08 : 1);
+					if (sc > bestScore) { bestScore = sc; best = boundary; }
 				}
-				if (area < n * 0.08 || area > n * 0.97) continue; // zu klein / fast ganzes Bild = Tisch
-				const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
-				const rectFill = area / (bw * bh);
-				const aspect = bw / bh;
-				const aspectOk = aspect > 0.3 && aspect < 3.4 ? 1 : 0.4;
-				const borderFrac = border / Math.max(1, boundary.length);
-				const sc = area * (0.35 + rectFill) * aspectOk * (1 - Math.min(0.7, borderFrac * 2));
-				if (sc > bestScore) { bestScore = sc; best = boundary; }
 			}
 			if (!best) return full;
 			const hull = convexHull(best);
@@ -2303,12 +2345,12 @@ export const HEFT = (() => {
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
 		const keep = scroll.scrollTop;
-		scroll.innerHTML = doc.pages.map((_, i) =>
+		scroll.innerHTML = '<div class="heft-pages">' + doc.pages.map((_, i) =>
 			'<div class="heft-page-slot" data-hepage="' + i + '">' +
 				'<canvas class="heft-canvas"></canvas>' +
 				'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
 			'</div>'
-		).join('');
+		).join('') + '</div>';
 		bindCanvas();
 		layout();
 		scroll.scrollTop = keep;

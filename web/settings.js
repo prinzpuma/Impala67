@@ -283,10 +283,12 @@ export async function handleNotionSync(t) {
 	const tok = U.el("inpNotionToken").value.trim();
 	const pid = U.el("inpNotionPage").value.trim();
 	const prox = U.el("inpCorsProxy") ? U.el("inpCorsProxy").value.trim() : (S.settings.corsProxy || "");
+	// FIX: Validierung VOR dem Speichern — vorher überschrieb ein Klick mit leerem
+	// Token-Feld erst den gespeicherten Token mit "" und brach dann erst ab.
+	if (!tok) { U.toast("Token ist erforderlich.", "error"); return; }
 	S.notionToken = tok;
 	S.notionPageId = pid;
 	await STATE.dispatch("settingsSet", { notionToken: tok, notionPageId: pid, corsProxy: prox });
-	if (!tok) { U.toast("Token ist erforderlich.", "error"); return; }
 	S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
 	renderNotionJob();
 	const onStatus = (st, fraction) => {

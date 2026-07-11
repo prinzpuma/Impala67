@@ -257,6 +257,12 @@ export const STATE = (() => {
 					srs: p.srs || SRS.newCard(ev.t), created: ev.t,
 				};
 				if (p.deck && !S.decks[p.deck]) S.decks[p.deck] = { name: p.deck, created: ev.t };
+				// FIX: lag der Ziel-Stapel im Papierkorb, landete die neue Karte unsichtbar darin
+				// (Stapel-Liste zeigt ihn nicht, die Lern-Queue schon) — Stapel reaktivieren.
+				else if (p.deck && S.decks[p.deck].trashed) {
+					S.decks[p.deck].trashed = false;
+					delete S.decks[p.deck].trashedAt;
+				}
 				break;
 			case "cardReview": {
 				const c = S.cards[p.id];
@@ -369,7 +375,12 @@ export const STATE = (() => {
 				break;
 			case "deckMove": {
 				// Verschiebt einen Stapel samt Unterstapeln + Karten unter ein neues Eltern-Deck.
-				const to = ((p.target || "") ? p.target + "::" : "") + p.from.split("::").pop();
+				// FIX: fehlende Validierung + Zyklus-Schutz — ein Stapel darf nicht in sich selbst
+				// oder einen eigenen Unterstapel wandern (zerlegte vorher den Stapel-Baum).
+				if (!p.from) break;
+				const target = p.target || "";
+				if (target === p.from || target.startsWith(p.from + "::")) break;
+				const to = (target ? target + "::" : "") + p.from.split("::").pop();
 				if (to !== p.from) renameDeckTree(p.from, to);
 				break;
 			}

@@ -277,7 +277,13 @@ export const DB = (() => {
 				const heads = {};
 				for (const ev of evs) {
 					const p = ev.payload || {};
-					if (ev.type === "pageUpdate" && p.patch && typeof p.patch.content === "string" && (!extra || extra(ev))) heads[p.id] = ev;
+					if (ev.type === "pageUpdate" && p.patch && typeof p.patch.content === "string" && (!extra || extra(ev))) {
+						// FIX: bisher zählte das ZULETZT ITERIERTE Event als "Head" — die lokale
+						// Event-Liste ist aber nach Sequenz (nicht Zeit) geordnet: nach einem Import
+						// liegen ältere Events hinter neueren. Jetzt gewinnt (wie in lifecycleOf)
+						// das jüngste Event per Zeitstempel — sonst falsche Konflikt-Gewinner/Diffs.
+						if (!heads[p.id] || ev.t > heads[p.id].t) heads[p.id] = ev;
+					}
 				}
 				return heads;
 			};
