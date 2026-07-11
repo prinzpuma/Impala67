@@ -91,6 +91,7 @@ export const S = {
 	ankiBrowserLimit: 200, // Karten-Browser: max. gerenderte Zeilen („mehr anzeigen“ erhöht)
 	dailyMonth: null, // "YYYY-MM" im Daily-Notes-Kalender (null = aktueller Monat)
 	reviews: [], // Wiederholungs-Protokoll { cardId, t, grade } — aus dem Event-Log rekonstruiert
+	heftMeta: {}, // GoodNotes-Hefte: pageId → { rev, pages, bytes, updated } — Inhalt liegt als Blob heft:<pageId> in IndexedDB
 };
 
 export const STATE = (() => {
@@ -186,6 +187,9 @@ export const STATE = (() => {
 					icon: p.icon || null, cover: p.cover || null, coverImg: p.coverImg || null,
 					daily: p.daily || null, dailyRoot: p.dailyRoot || null,
 					db: p.db || null, props: p.props || null,
+					// Seitentyp: "notion" (Block-Editor) oder "heft" (GoodNotes-Notizbuch).
+					// Alt-Seiten ohne kind bleiben automatisch Notion-Seiten.
+					kind: p.kind === "heft" ? "heft" : "notion",
 					order: typeof p.order === "number" ? p.order : null,
 					created: ev.t, updated: ev.t,
 				};
@@ -222,6 +226,7 @@ export const STATE = (() => {
 				Object.values(S.pages).forEach((pg) => {
 					if (pg.parentId === p.id) pg.parentId = null; // Kinder wandern auf Root
 				});
+				delete S.heftMeta[p.id]; // Heft-Metadaten mit aufräumen
 				delete S.pages[p.id];
 				break;
 			case "pageTrash":
@@ -385,6 +390,13 @@ export const STATE = (() => {
 				// FIX: fehlende Validierung — ohne id keinen Workspace anlegen.
 				if (!p.id) break;
 				S.workspaces[p.id] = { id: p.id, name: p.name || "Workspace", created: ev.t };
+				break;
+			case "heftUpdated":
+				// GoodNotes-Heft gespeichert: nur Metadaten im Log (Badges, Bibliothek, Sync) —
+				// die Striche selbst liegen als EIN Blob heft:<pageId> in IndexedDB.
+				if (!p.pageId) break;
+				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, updated: ev.t };
+				if (S.pages[p.pageId]) S.pages[p.pageId].updated = ev.t;
 				break;
 			case "settingsSet":
 				Object.assign(S.settings, p);

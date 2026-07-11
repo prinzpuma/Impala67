@@ -12,8 +12,11 @@
 // v6: sql.js (.apkg-Import) in den CDN-Precache aufgenommen — der Anki-Import
 // funktioniert damit auch offline.
 // v13: version.json + latest.json im Precache (PWA-Update-Check same-origin)
-// v14: ink.js (GoodNotes-Ebene: Handschrift/Apple Pencil) in APP_FILES aufgenommen
-const CACHE = "impala67-v14";
+// v14: ink.js (GoodNotes-Ebene) — später wieder entfernt
+// v15: heft.js (GoodNotes-Hefte)
+// v16: ink.js entfernt — nur noch heft.js für Handschrift
+// v17: Heft-Taskbar v3 (Seiten-Popup, Bilder-Option, ＋-Menü, PDF-Scanner)
+const CACHE = "impala67-v17";
 
 const APP_FILES = [
 	"./",
@@ -51,7 +54,7 @@ const APP_FILES = [
 	"./render-anki.js",
 	"./extras.js",
 	"./notebooklm.js",
-	"./ink.js",
+	"./heft.js",
 ];
 
 // CDN-Bibliotheken beim Installieren vorab cachen (best effort) — damit Markdown,

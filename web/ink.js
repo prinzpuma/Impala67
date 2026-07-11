@@ -310,18 +310,23 @@ export const INK = (() => {
 	}
 
 	// ---------- Bootstrap: Styles + Floating-Button ----------
+	// Styles an Impala67-Tokens (styles.css) — kein fremdes Blau/Weiß-UI mehr.
 	const CSS = [
-		"#inkFab{position:fixed;right:18px;bottom:96px;z-index:9000;width:52px;height:52px;border-radius:50%;font-size:22px;border:1px solid var(--edge,#c9c9c9);background:var(--panel-solid,#fff);box-shadow:0 4px 16px rgba(0,0,0,.18);cursor:pointer}",
-		"#inkFab.has-ink::after{content:'';position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:#2f6fed}",
-		".ink-overlay{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.45);display:flex;flex-direction:column}",
-		".ink-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--panel-solid,#fff);border-bottom:1px solid var(--edge,#c9c9c9);padding:8px calc(10px + env(safe-area-inset-right)) 8px calc(10px + env(safe-area-inset-left));padding-top:calc(8px + env(safe-area-inset-top))}",
-		".ink-toolbar button{min-height:38px;min-width:38px;touch-action:manipulation}",
-		".ink-toolbar button.active{outline:2px solid #2f6fed;outline-offset:-2px}",
-		".ink-swatch{width:26px;height:26px;border-radius:50%;border:2px solid rgba(127,127,127,.35);padding:0}",
-		".ink-sep{width:1px;height:24px;background:var(--edge,#c9c9c9);margin:0 4px}",
+		"#inkFab{position:fixed;right:18px;bottom:96px;z-index:9000;width:52px;height:52px;border-radius:50%;font-size:22px;border:1px solid var(--edge);background:var(--panel-solid);color:var(--text);box-shadow:0 8px 24px var(--shadow);cursor:pointer}",
+		"#inkFab:hover{background:var(--surface-hover-strong)}",
+		"#inkFab.has-ink::after{content:'';position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}",
+		".ink-overlay{position:fixed;inset:0;z-index:9500;background:var(--overlay-bg);display:flex;flex-direction:column}",
+		".ink-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--menu-bg);border-bottom:1px solid var(--edge-soft);padding:8px calc(10px + env(safe-area-inset-right)) 8px calc(10px + env(safe-area-inset-left));padding-top:calc(8px + env(safe-area-inset-top))}",
+		".ink-toolbar button{min-height:38px;min-width:38px;touch-action:manipulation;background:var(--surface);color:var(--text);border-radius:8px}",
+		".ink-toolbar button:hover{background:var(--surface-hover-strong)}",
+		".ink-toolbar button.active{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-soft)}",
+		".ink-toolbar button.primary{background:var(--accent);color:#081018;font-weight:650}",
+		".ink-swatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--edge);padding:0}",
+		".ink-swatch.active{outline:2px solid var(--accent);outline-offset:1px}",
+		".ink-sep{width:1px;height:24px;background:var(--edge-soft);margin:0 4px}",
 		".ink-spacer{flex:1}",
-		".ink-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px}",
-		".ink-canvas{background:#fff repeating-linear-gradient(to bottom,transparent 0 27px,rgba(47,111,237,.14) 27px 28px);border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.35);touch-action:none}",
+		".ink-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px;background:radial-gradient(ellipse at center,var(--glow-1),var(--glow-3))}",
+		".ink-canvas{background:#fafaf8 repeating-linear-gradient(to bottom,transparent 0 27px,color-mix(in srgb,var(--accent) 18%,transparent) 27px 28px);border-radius:10px;border:1px solid var(--edge-soft);box-shadow:0 12px 40px var(--shadow-strong);touch-action:none}",
 	].join("\n");
 	function init() {
 		const st = document.createElement("style");

@@ -42,6 +42,37 @@ export const TOOLS = (() => {
 		return { question, options };
 	}
 
+	// Karte anhand des Vorderseiten-Texts finden (analog zu STATE.findPage) — exakter
+	// Treffer zuerst, sonst "beginnt mit", sonst "enthält". Optional auf einen Stapel
+	// (inkl. Unterstapel) eingegrenzt.
+	function findCard(front, deck) {
+		if (!front) return null;
+		const q = String(front).trim().toLowerCase();
+		if (!q) return null;
+		const pool = STATE.activeCards().filter((c) => {
+			if (!deck) return true;
+			const d = c.deck || "Standard";
+			return d === deck || d.startsWith(deck + "::");
+		});
+		let starts = null, partial = null;
+		for (const c of pool) {
+			const t = (c.front || "").toLowerCase();
+			if (t === q) return c;
+			if (!starts && t.startsWith(q)) starts = c;
+			if (!partial && t.includes(q)) partial = c;
+		}
+		return starts || partial;
+	}
+
+	// Stapelnamen case-insensitive auflösen (exakt, sonst "enthält") — analog zu findCard.
+	function resolveDeckName(name) {
+		if (!name) return null;
+		const q = String(name).trim().toLowerCase();
+		if (!q) return null;
+		const names = Object.keys(S.decks);
+		return names.find((n) => n.toLowerCase() === q) || names.find((n) => n.toLowerCase().includes(q)) || null;
+	}
+
 	const defs = [
 		t("create_page", "Erstellt eine neue Notiz-Seite.", {
 			title: { type: "string" },
@@ -63,6 +94,13 @@ export const TOOLS = (() => {
 		t("delete_page", "Verschiebt eine Seite (inkl. aller Unterseiten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Titeln zuerst ask_choice.", {
 			page_title: { type: "string", description: "Titel der zu löschenden Seite" },
 		}, ["page_title"]),
+		t("delete_flashcard", "Verschiebt EINE Karteikarte in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigem Text zuerst ask_choice.", {
+			front: { type: "string", description: "Text bzw. Anfang der Vorderseite zur Identifikation der Karte" },
+			deck: { type: "string", description: "Stapel zur Eingrenzung, falls mehrere Karten ähnlichen Text haben (optional)" },
+		}, ["front"]),
+		t("delete_deck", "Verschiebt einen Karteikarten-Stapel (inkl. Unterstapel und ALLER enthaltenen Karten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Namen zuerst ask_choice.", {
+			deck: { type: "string", description: "Name des Stapels, Unterstapel per 'Eltern::Kind'" },
+		}, ["deck"]),
 		t("read_page", "Liest den Inhalt einer Seite.", {
 			page_title: { type: "string" },
 		}, ["page_title"]),
@@ -185,6 +223,24 @@ export const TOOLS = (() => {
 					note: "Im Papierkorb — wiederherstellbar. Endgültiges Löschen nur manuell im Papierkorb.",
 				};
 			}
+			case "delete_flashcard": {
+				// Bestätigung erzwingt ai.js (wie bei delete_page) — hier nur die Aktion selbst.
+				const c = findCard(a.front, a.deck);
+				if (!c) return { error: "Karte nicht gefunden: " + a.front };
+				await STATE.dispatch("cardTrash", { id: c.id });
+				return { ok: true, front: c.front, trashed: true, note: "Im Papierkorb — wiederherstellbar." };
+			}
+			case "delete_deck": {
+				const match = resolveDeckName(a.deck);
+				if (!match) return { error: "Stapel nicht gefunden: " + a.deck };
+				const n = Object.values(S.cards).filter((c) => {
+					if (c.trashed) return false;
+					const d = c.deck || "Standard";
+					return d === match || d.startsWith(match + "::");
+				}).length;
+				await STATE.dispatch("deckTrash", { name: match });
+				return { ok: true, deck: match, trashed: true, cards: n, note: "Im Papierkorb — wiederherstellbar." };
+			}
 			case "read_page": {
 				const pg = STATE.findPage(a.page_title);
 				return pg
@@ -274,5 +330,5 @@ export const TOOLS = (() => {
 		}
 	}
 
-	return { defs, run, normalizeAskChoice };
+	return { defs, run, normalizeAskChoice, findCard, resolveDeckName };
 })();

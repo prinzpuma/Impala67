@@ -31,6 +31,7 @@ const renderModelBar = (...args) => RENDER.renderModelBar(...args);
 const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
 const renderSidebar = (...args) => RENDER.renderSidebar(...args);
 const renderMain = (...args) => RENDER.renderMain(...args);
+const renderTabs = (...args) => RENDER.renderTabs(...args);
 const openReview = (...args) => RENDER.openReview(...args);
 const openCards = (...args) => RENDER.openCards(...args);
 const openIconPicker = (...args) => RENDER.openIconPicker(...args);
@@ -125,20 +126,23 @@ async function duplicatePage(pageId, newParentId, newWsId) {
 	await STATE.dispatch("pageCreate", {
 		id, title: pg.title + (newParentId === undefined ? " (Kopie)" : ""), parentId, content: pg.content,
 		workspaceId: wsId, icon: pg.icon, cover: pg.cover, coverImg: pg.coverImg, tags: pg.tags,
+		kind: pg.kind || "notion",
 	});
 	const kids = STATE.childrenOf(pg.id, pg.workspaceId);
 	await Promise.all(kids.map((kid) => duplicatePage(kid.id, id, wsId))); // parallel statt sequenziell
 	return id;
 }
 
-// Neue Seite anlegen — optional mit Vorlage (tpl): übernimmt Titel/Inhalt/Icon/Tags der Vorlage.
-async function createPageIn(wsId, parentId, tpl) {
+// Neue Seite anlegen — kind: "notion" (Standard) oder "heft" (GoodNotes-Notizbuch).
+// Optional mit Vorlage (tpl): übernimmt Titel/Inhalt/Icon/Tags/Typ der Vorlage.
+async function createPageIn(wsId, parentId, tpl, kind) {
 	const id = U.uid();
 	S.currentWorkspaceId = wsId || S.currentWorkspaceId;
+	const k = kind || (tpl && tpl.kind) || "notion";
 	await STATE.dispatch("pageCreate", {
-		id, title: tpl ? tpl.title : "Neue Seite", parentId: parentId || null,
-		content: tpl ? tpl.content : "", icon: tpl ? tpl.icon : null, tags: tpl ? tpl.tags : [],
-		workspaceId: S.currentWorkspaceId,
+		id, title: tpl ? tpl.title : (k === "heft" ? "Neues Heft" : "Neue Seite"), parentId: parentId || null,
+		content: tpl ? tpl.content : "", icon: tpl ? tpl.icon : (k === "heft" ? "📓" : null), tags: tpl ? tpl.tags : [],
+		workspaceId: S.currentWorkspaceId, kind: k,
 	});
 	openPage(id);
 	render();
@@ -146,15 +150,11 @@ async function createPageIn(wsId, parentId, tpl) {
 	if (ti) { ti.focus(); ti.select(); }
 }
 
-// Gibt es Vorlagen, zuerst die Auswahl zeigen (wie Notions Vorlagen-Picker); sonst direkt anlegen.
+// Anlegen zeigt IMMER den Typ-Dialog (Notion-Seite oder GoodNotes-Heft) —
+// Vorlagen erscheinen darin als zusätzliche Optionen.
 async function newPageFlow(wsId, parentId) {
-	const tpls = STATE.activePages().filter((p) => p.isTemplate);
-	if (tpls.length) {
-		S.pendingNewPage = { wsId, parentId };
-		openTemplatePicker();
-	} else {
-		await createPageIn(wsId, parentId);
-	}
+	S.pendingNewPage = { wsId, parentId };
+	openTemplatePicker();
 }
 
 // Karteikarten-Bereich öffnen (🃏-Pille oben links): Stapel/Browser/Statistik/Lernen
@@ -339,7 +339,7 @@ function wireEvents() {
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
 		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
-		"[data-pagetemplate],[data-tplblank],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
+		"[data-pagetemplate],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {
@@ -773,16 +773,17 @@ function wireEvents() {
 			return;
 		}
 
-		// Vorlagen-Auswahl: leere Seite oder Vorlage als Startinhalt
-		if (t.dataset.tplblank) {
+		// Anlege-Dialog: Notion-Seite, GoodNotes-Heft oder Vorlage als Startinhalt
+		if (t.dataset.tplblank || t.dataset.tplheft) {
+			const kind = t.dataset.tplheft ? "heft" : "notion";
 			const p = S.pendingNewPage;
 			S.pendingNewPage = null;
 			closeOverlay();
 			if (p) {
 				const id = U.uid();
 				await STATE.dispatch("pageCreate", {
-					id, title: "Neue Seite", parentId: p.parentId || null, content: "",
-					icon: null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId,
+					id, title: kind === "heft" ? "Neues Heft" : "Neue Seite", parentId: p.parentId || null, content: "",
+					icon: kind === "heft" ? "📓" : null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId, kind,
 				});
 				openPage(id, p.newTab ? { newTab: true } : undefined);
 				const ti = document.getElementById("pageTitle");
@@ -800,6 +801,7 @@ function wireEvents() {
 				await STATE.dispatch("pageCreate", {
 					id, title: tpl.title, parentId: p.parentId || null, content: tpl.content || "",
 					icon: tpl.icon || null, tags: tpl.tags || [], workspaceId: p.wsId || S.currentWorkspaceId,
+					kind: tpl.kind || "notion",
 				});
 				openPage(id, p.newTab ? { newTab: true } : undefined);
 			}
@@ -1082,11 +1084,11 @@ function wireEvents() {
 			case "btnTogglePanel":
 				CHAT_FULLSCREEN.toggleChatFull(false);
 				document.body.classList.add("panel-collapsed");
-				U.el("btnShowPanel").hidden = false;
+				renderTabs();
 				break;
 			case "btnShowPanel":
 				document.body.classList.remove("panel-collapsed");
-				t.hidden = true;
+				renderTabs();
 				break;
 			case "btnSettings": SETTINGS.openSettings(); break;
 			case "btnMigrateNotion":
@@ -1190,7 +1192,17 @@ function wireEvents() {
 			case "btnExport":
 				await SETTINGS.handleBackupNow();
 				break;
-			case "btnSidebarToggle": document.body.classList.toggle("sidebar-open"); break;
+			case "btnSidebarToggle": {
+				// Mobile: Off-Canvas öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
+				const mobile = window.matchMedia("(max-width: 768px)").matches;
+				if (mobile) {
+					document.body.classList.toggle("sidebar-open");
+				} else {
+					const on = document.body.classList.toggle("sidebar-collapsed");
+					try { localStorage.setItem("impala67.sidebarCollapsed", on ? "1" : "0"); } catch { /* ignore */ }
+				}
+				break;
+			}
 			case "btnThemeDark":
 			case "btnThemeLight":
 				SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");

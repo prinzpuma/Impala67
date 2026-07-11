@@ -11,6 +11,7 @@ import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
 import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
+import { HEFT } from "./heft.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -20,6 +21,7 @@ const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
 // library.js und search.js (dort über RENDER.pageIconLabel/RENDER.pageIconHtml).
 function pageIconLabel(pg, fallback) {
 	if (pg.icon) return pg.icon;
+	if (pg.kind === "heft") return "📓";
 	if (pg.pdfId) return "📄";
 	return fallback === undefined ? "📝" : fallback;
 }
@@ -85,6 +87,12 @@ function onStateChange(type, ev) {
 		}
 		return;
 	}
+	// Heft gespeichert: der Canvas ist die Live-Ansicht — kein Full-Render nötig.
+	// Nur die Bibliothek (Metadaten/Vorschau) auffrischen, falls sie gerade offen ist.
+	if (type === "heftUpdated") {
+		if (S.view === "library") renderMain();
+		return;
+	}
 	// Modell-/Thinking-Umschalter: nur die Modell-Leiste, nicht die ganze App
 	if (type === "settingsSet") {
 		const keys = Object.keys(p);
@@ -113,6 +121,17 @@ function renderTopbar() {
 	if (lib) lib.classList.toggle("active", S.view === "library");
 	const daily = U.el("btnDaily");
 	if (daily) daily.classList.toggle("active", S.view === "daily");
+
+	// Mobile Bottom-Nav: dieselbe Aktiv-Logik wie die Desktop-Topbar-Pillen —
+	// vorher blieb die untere Leiste immer optisch neutral, egal welcher Bereich
+	// offen war (Inkonsistenz zur Desktop-Ansicht).
+	const chatFullOpen = document.body.classList.contains("chat-full") && !document.body.classList.contains("panel-collapsed");
+	const mHome = U.el("btnMobileHome");
+	const mCards = U.el("btnMobileCards");
+	const mAI = U.el("btnMobileAI");
+	if (mHome) mHome.classList.toggle("active", mode === "files" && S.view !== "library" && S.view !== "daily" && S.view !== "trash" && !chatFullOpen);
+	if (mCards) mCards.classList.toggle("active", mode === "anki");
+	if (mAI) mAI.classList.toggle("active", chatFullOpen);
 }
 
 function aiStatusMeta() {
@@ -344,7 +363,8 @@ function renderTabs() {
 	// Chat-Titel einmal laden (nicht pro Tab CHATS.load())
 	const chatById = new Map();
 	try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
-	let html = '<button class="navbtn" id="btnSidebarToggle" title="Seitenleiste ein-/ausblenden">☰</button>' +
+	const panelCollapsed = document.body.classList.contains("panel-collapsed");
+	let html = '<button class="navbtn" id="btnSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
 		'<button class="navbtn" id="btnNavBack" ' + (canBack ? "" : "disabled") + ' title="Zurück">‹</button>' +
 		'<button class="navbtn" id="btnNavForward" ' + (canFwd ? "" : "disabled") + ' title="Vor">›</button>' +
 		'<div class="tabstrip">';
@@ -371,6 +391,10 @@ function renderTabs() {
 	// Notion-artiges „+“: öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
 	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">＋</button>';
 	html += "</div>";
+	// KI-Button in der oberen Leiste (statt Floating-FAB unten rechts)
+	html += panelCollapsed
+		? '<button class="navbtn tabbar-ai" id="btnShowPanel" title="KI öffnen">✦</button>'
+		: '<button class="navbtn tabbar-ai" id="btnTogglePanel" title="KI einklappen">✦</button>';
 	bar.innerHTML = html;
 }
 
@@ -383,6 +407,8 @@ function renderMain() {
 	// Eingebettetes NotebookLM-Webview (Desktop) liegt als OS-Overlay über der UI —
 	// verlässt der Nutzer den Tab, muss es aktiv ausgeblendet werden (kein DOM-Element).
 	if (S.view !== "notebooklm") NLM.hideEmbeddedIfActive();
+	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit).
+	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
 	if (S.view === "library") { LIBRARY.renderLibrary(main); return; }
 	if (S.view === "anki") { renderAnki(main); return; }
 	if (S.view === "daily") { renderDaily(main); return; }
@@ -391,6 +417,23 @@ function renderMain() {
 	if (S.view === "notebooklm") { NLM.renderPane(main); return; }
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 	if (S.view === "home" || !pg) { renderHome(main); return; }
+
+	// GoodNotes-Heft: eigene Vollansicht (Papier, Stift, Seiten, Thumbnails) —
+	// Notion-Seiten darunter bleiben komplett unberührt (Block-Editor wie bisher).
+	if (pg.kind === "heft") {
+		main.innerHTML =
+			'<div class="page-meta heft-head">' +
+				'<div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
+				'<div class="heft-titlebar">' +
+					'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + pageIconLabel(pg) + "</button>" +
+					'<input id="pageTitle" value="' + U.esc(pg.title) + '" autocomplete="off">' +
+				"</div>" +
+			"</div>" +
+			'<div id="heftStage" class="heft-stage"></div>';
+		const stage = U.el("heftStage");
+		if (stage) HEFT.mount(stage, pg.id);
+		return;
+	}
 
 	// Wie in Notion: nur noch EINE, durchgehend bearbeitbare und angezeigte Ansicht —
 	// kein Moduswechsel mehr. Der Block-Editor (editor.js) ist immer aktiv.
@@ -839,18 +882,27 @@ function renderDaily(main) {
 		'<div class="cal-grid">' + cells + "</div></div>";
 }
 
-// Vorlagen-Auswahl beim Anlegen einer neuen Seite: "Leere Seite" oder eine der
-// als Vorlage markierten Seiten (⋯-Menü → Als Vorlage) als Startinhalt.
+// Anlege-Dialog: EIN Dialog, zwei klare Typen — Notion-Seite (Block-Editor) oder
+// GoodNotes-Heft (Papier + Stift). Vorlagen erscheinen darunter als Zusatzoptionen.
 function openTemplatePicker() {
 	const tpls = STATE.activePages().filter((p) => p.isTemplate);
 	const o = U.el("overlay");
 	o.hidden = false;
 	o.innerHTML = modal(
-		"<h3>Neue Seite</h3>" +
-		'<button class="tpl-opt" data-tplblank="1">📄 Leere Seite</button>' +
+		"<h3>Neu anlegen</h3>" +
+		'<div class="newpage-cards">' +
+			'<button type="button" class="newpage-card" data-tplblank="1">' +
+				'<span class="newpage-visual is-notion" aria-hidden="true"><i></i><i></i><i></i></span>' +
+				"<b>Notion-Seite</b><small>Blöcke · Markdown · Verlinkungen</small>" +
+			"</button>" +
+			'<button type="button" class="newpage-card" data-tplheft="1">' +
+				'<span class="newpage-visual is-heft" aria-hidden="true"><span></span></span>' +
+				"<b>GoodNotes-Heft</b><small>Papier · Stift · Seiten</small>" +
+			"</button>" +
+		"</div>" +
 		(tpls.length ? '<p class="hint">Oder aus einer Vorlage:</p>' : "") +
 		tpls.map((p) =>
-			'<button class="tpl-opt" data-tpluse="' + p.id + '">' + (p.icon ? U.esc(p.icon) + " " : "📑 ") + U.esc(p.title) + "</button>"
+			'<button class="tpl-opt" data-tpluse="' + p.id + '">' + (p.icon ? U.esc(p.icon) + " " : (p.kind === "heft" ? "📓 " : "📑 ")) + U.esc(p.title) + "</button>"
 		).join("") +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div>'
 	);
@@ -914,7 +966,7 @@ const TOOL_LABELS = {
 	create_page: "Seite erstellt", append_to_page: "Seite ergänzt", replace_page_content: "Seite überschrieben",
 	create_flashcard: "Karteikarte erstellt", create_cloze_card: "Cloze-Karten erstellt", move_page: "Seite verschoben",
 	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten", send_to_notebooklm: "An NotebookLM",
-	ask_choice: "Rückfrage gestellt",
+	ask_choice: "Rückfrage gestellt", delete_page: "Seite gelöscht", delete_flashcard: "Karte gelöscht", delete_deck: "Stapel gelöscht",
 };
 function toolChipHtml(m) {
 	return '<div class="tool-chip' + (m.error ? " err" : "") + '" title="Werkzeug: ' + U.esc(m.name) + '">⚙️ ' + U.esc(TOOL_LABELS[m.name] || m.name) +
@@ -1306,6 +1358,7 @@ export const RENDER = {
 	renderTopbar,
 	renderModelMenu,
 	renderSidebar,
+	renderHistoryModal,
 	renderMain,
 	openSettings: (...args) => SETTINGS.openSettings(...args),
 	openReview,
@@ -1322,6 +1375,8 @@ export const RENDER = {
 	ancestorsOf,
 	renderLibrary: (...args) => LIBRARY.renderLibrary(...args),
 	libCardHtml: (...args) => LIBRARY.libCardHtml(...args),
+	openIconPicker,
+	openCoverPicker,
 	renderModelBar,
 	renderPendingChip,
 	openChangePreview,

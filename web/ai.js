@@ -61,6 +61,31 @@ export const AI = (() => {
 		return res;
 	}
 
+	// Tool-Schemas für Google bereinigen: der OpenAI-Kompat-Layer von Google übersetzt sie ziemlich
+	// direkt in Gemini's natives Function-Calling-Schema (OpenAPI-3.0-Subset). Felder wie
+	// minItems/maxItems (z.B. bei ask_choice) sind dort NICHT zulässig und lösen bei Gemma
+	// häufig einen generischen "500 INTERNAL" aus — deshalb vor dem Senden entfernen.
+	function sanitizeToolSchema(schema) {
+		if (!schema || typeof schema !== "object") return schema;
+		if (Array.isArray(schema)) return schema.map(sanitizeToolSchema);
+		const drop = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema"]);
+		const out = {};
+		for (const k of Object.keys(schema)) {
+			if (drop.has(k)) continue;
+			const v = schema[k];
+			out[k] = (v && typeof v === "object") ? sanitizeToolSchema(v) : v;
+		}
+		return out;
+	}
+	function toolsForRequest(tools) {
+		if (!tools || !tools.length) return tools;
+		if ((activeProvider() || {}).id !== "google") return tools;
+		return tools.map((td) => ({
+			type: td.type,
+			function: { name: td.function.name, description: td.function.description, parameters: sanitizeToolSchema(td.function.parameters) },
+		}));
+	}
+
 	// Verbindungstest: fragt die Modell-Liste ab (für die Statusanzeige).
 	async function ping() {
 		const { base, key } = cfg();
@@ -118,7 +143,7 @@ export const AI = (() => {
 		// Darum nur für die OpenAI-Quelle senden; andere Server bleiben kompatibel.
 		const thinking = S.settings.thinkingLevel || "auto";
 		if (thinking !== "auto" && (activeProvider() || {}).id === "openai") body.reasoning_effort = thinking;
-		if (tools && tools.length) { body.tools = tools; body.tool_choice = "auto"; }
+		if (tools && tools.length) { body.tools = toolsForRequest(tools); body.tool_choice = "auto"; }
 		if (!onDelta) {
 			const res = await request("/chat/completions", body);
 			const m = (await res.json()).choices[0].message;
@@ -197,6 +222,7 @@ export const AI = (() => {
 			"- Merkt sich die Person etwas schlecht oder beantwortet etwas falsch: lege mit create_flashcard eine karte an (kurze Frage, kurze Antwort).",
 			"- Soll Wissen gespeichert werden: create_page oder append_to_page.",
 			"- Seite verschieben: move_page. Seite löschen: delete_page (landet im Papierkorb; die App fragt im Chat zwingend nach Bestätigung).",
+			"- Karte löschen: delete_flashcard. Stapel löschen: delete_deck (inkl. Unterstapel und aller enthaltenen Karten). Beide landen im Papierkorb; die App fragt im Chat zwingend nach Bestätigung.",
 			"- Für inhaltliche Fragen zu den Unterlagen: semantic_search (semantisch) oder search_notes (Stichwort), dann read_page.",
 			"- Ist eine Anfrage mehrdeutig und eine Entscheidung nötig, bevor du fortfährst (z.B. mehrere passende Seiten): nutze ask_choice mit 2-5 kurzen Optionen, statt zu raten.",
 			"- Sage nach Tool-Nutzung kurz, was du angelegt/geändert/verschoben/gelöscht hast.",
@@ -236,17 +262,30 @@ export const AI = (() => {
 	// technische Kennzeichnung gibt, wird satzweise heuristisch erkannt: typische "laut denken"-
 	// Einleitungen (Deutsch + Englisch, da manche Modelle auf Englisch "denken") werden von
 	// vorne weg als Denkprozess abgetrennt, bis ein Satz übrig bleibt, der NICHT mehr danach aussieht.
-	const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i'm going|let me|my instructions|as per|based on|since the|note:|first,|okay,|ok,|alright,|ich sollte|ich muss|ich werde|ich denke|ich kann|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
+	const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i am|i'm going|i'm|let me|my instructions|as per|based on|since the|however,|plan:|\d+[.)]|note:|first,|okay,|ok,|alright,|ich sollte|ich muss|ich werde|ich denke|ich kann|ich bin|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
 	function stripLeakedReasoning(text) {
 		if (!text) return { content: text, reasoning: "" };
 		// In Sätze zerlegen: normale Satzenden (". ", "! ", "? ", Zeilenumbruch) UND der Sonderfall
 		// "Satzende direkt gefolgt von Großbuchstabe ohne Leerzeichen" (typisches Leck-Artefakt).
 		const parts = text.split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/).filter(Boolean);
-		if (parts.length < 2) return { content: text, reasoning: "" };
-		let i = 0;
-		while (i < parts.length - 1 && THINK_LEADIN_RE.test(parts[i].trim())) i++;
-		if (i === 0) return { content: text, reasoning: "" };
-		return { content: parts.slice(i).join(" ").trim(), reasoning: parts.slice(0, i).join(" ").trim() };
+		if (!parts.length) return { content: text, reasoning: "" };
+		if (!THINK_LEADIN_RE.test(parts[0].trim())) return { content: text, reasoning: "" };
+		if (parts.length < 2) {
+			// Noch nur der (unvollständige) erste Satz da, sieht aber schon nach Denkprozess
+			// aus — komplett als Denkprozess werten (verhindert das kurze Aufblitzen von
+			// Meta-Text als "Antwort" ganz am Anfang des Streamings).
+			return { content: "", reasoning: text };
+		}
+		// FIX: nicht mehr beim ERSTEN nicht-passenden Satz abbrechen — das ließ z.B. einen
+		// Satz wie "I am the AI Coach von Impala67." (matcht kein Einleitungs-Muster) als
+		// sichtbaren Text durchrutschen, während der ganze Rest des Denkprozesses danach
+		// ungefiltert im Chat landete. Bis zum LETZTEN noch meta aussehenden Satz weiterscannen.
+		let lastMatch = 0;
+		for (let i = 1; i < parts.length; i++) {
+			if (THINK_LEADIN_RE.test(parts[i].trim())) lastMatch = i;
+		}
+		if (lastMatch >= parts.length - 1) return { content: "", reasoning: text };
+		return { content: parts.slice(lastMatch + 1).join(" ").trim(), reasoning: parts.slice(0, lastMatch + 1).join(" ").trim() };
 	}
 
 	function splitThink(raw, skipHeuristic) {
@@ -390,8 +429,7 @@ export const AI = (() => {
 						const qMid = U.uid();
 						if (type === "side") {
 							document.body.classList.remove("panel-collapsed");
-							const showBtn = U.el("btnShowPanel");
-							if (showBtn) showBtn.hidden = true;
+							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
 						}
 						S.aiStatus = "Warte auf Bestätigung…";
 						S.aiDraft = "";
@@ -443,6 +481,107 @@ export const AI = (() => {
 						continue;
 					}
 
+					// delete_flashcard: IMMER Chat-Bestätigung erzwingen (wie delete_page/ask_choice).
+					if (tc.function.name === "delete_flashcard") {
+						const frontArg = String((args && args.front) || "").trim();
+						const card = frontArg ? TOOLS.findCard(frontArg, args.deck) : null;
+						if (!card) {
+							const err = { error: frontArg ? ("Karte nicht gefunden: " + frontArg) : "delete_flashcard: front fehlt." };
+							if (onStep) onStep("delete_flashcard");
+							targetChat.push({
+								mid: U.uid(), role: "tool", name: "delete_flashcard",
+								detail: String(err.error).slice(0, 80), error: true,
+							});
+							scheduleRender();
+							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
+							continue;
+						}
+						const shortFront = String(card.front || "").replace(/\s+/g, " ").trim();
+						const qText = 'Karte „' + (shortFront.length > 60 ? shortFront.slice(0, 60) + "…" : shortFront) + '“ in den Papierkorb?';
+						const qMid = U.uid();
+						if (type === "side") {
+							document.body.classList.remove("panel-collapsed");
+							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
+						}
+						S.aiStatus = "Warte auf Bestätigung…";
+						S.aiDraft = "";
+						S.aiThinkingDraft = "";
+						const answer = await new Promise((resolve) => {
+							pendingChoices[qMid] = resolve;
+							targetChat.push({ mid: qMid, role: "question", question: qText, options: ["Ja, löschen", "Abbrechen"], answered: false });
+							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						});
+						const qMsg = targetChat.find((x) => x.mid === qMid);
+						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
+						S.aiStatus = "…denkt nach…";
+						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
+						let out;
+						if (!confirmed) {
+							out = { cancelled: true, front: card.front, note: "Löschen abgebrochen — nichts geändert." };
+						} else {
+							try { out = await TOOLS.run("delete_flashcard", { front: card.front, deck: card.deck }); }
+							catch (e) { out = { error: String(e) }; }
+						}
+						if (onStep) onStep("delete_flashcard");
+						if (!out.cancelled) {
+							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_flashcard", detail: shortFront.slice(0, 80), error: !!(out && out.error) });
+						}
+						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
+						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_flashcard:", e); }
+						continue;
+					}
+
+					// delete_deck: IMMER Chat-Bestätigung erzwingen — inkl. Unterstapel + Kartenzahl im Text.
+					if (tc.function.name === "delete_deck") {
+						const nameArg = String((args && args.deck) || "").trim();
+						const match = nameArg ? TOOLS.resolveDeckName(nameArg) : null;
+						if (!match) {
+							const err = { error: nameArg ? ("Stapel nicht gefunden: " + nameArg) : "delete_deck: deck fehlt." };
+							if (onStep) onStep("delete_deck");
+							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_deck", detail: String(err.error).slice(0, 80), error: true });
+							scheduleRender();
+							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
+							continue;
+						}
+						const cardN = Object.values(S.cards).filter((c) => !c.trashed && ((c.deck || "Standard") === match || (c.deck || "Standard").startsWith(match + "::"))).length;
+						const qText = cardN
+							? ('Stapel „' + match + '“ inkl. ' + cardN + ' Karte(n) in den Papierkorb?')
+							: ('Stapel „' + match + '“ in den Papierkorb?');
+						const qMid = U.uid();
+						if (type === "side") {
+							document.body.classList.remove("panel-collapsed");
+							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
+						}
+						S.aiStatus = "Warte auf Bestätigung…";
+						S.aiDraft = "";
+						S.aiThinkingDraft = "";
+						const answer = await new Promise((resolve) => {
+							pendingChoices[qMid] = resolve;
+							targetChat.push({ mid: qMid, role: "question", question: qText, options: ["Ja, löschen", "Abbrechen"], answered: false });
+							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						});
+						const qMsg = targetChat.find((x) => x.mid === qMid);
+						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
+						S.aiStatus = "…denkt nach…";
+						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
+						let out;
+						if (!confirmed) {
+							out = { cancelled: true, deck: match, note: "Löschen abgebrochen — nichts geändert." };
+						} else {
+							try { out = await TOOLS.run("delete_deck", { deck: match }); }
+							catch (e) { out = { error: String(e) }; }
+						}
+						if (onStep) onStep("delete_deck");
+						if (!out.cancelled) {
+							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_deck", detail: String(match).slice(0, 80), error: !!(out && out.error) });
+						}
+						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
+						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
+						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_deck:", e); }
+						continue;
+					}
+
 					// Rückfrage (Notion-Style): pausiert bis Klick, nur die Frage-Karte in der UI
 					// (kein extra Tool-Chip „Rückfrage gestellt“ — das wirkt wie Notion-Umfrage).
 					if (tc.function.name === "ask_choice") {
@@ -461,8 +600,7 @@ export const AI = (() => {
 						// Side-Chat: Panel sichtbar machen, sonst sieht man die Frage-Karte nicht.
 						if (type === "side") {
 							document.body.classList.remove("panel-collapsed");
-							const showBtn = U.el("btnShowPanel");
-							if (showBtn) showBtn.hidden = true;
+							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
 						}
 						S.aiStatus = "Warte auf deine Auswahl…";
 						S.aiDraft = "";

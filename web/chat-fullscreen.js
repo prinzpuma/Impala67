@@ -50,8 +50,7 @@ export function toggleChatFull(force) {
 	document.body.classList.toggle("chat-full", S.chatFull);
 	if (S.chatFull) {
 		document.body.classList.remove("panel-collapsed");
-		const btn = U.el("btnShowPanel");
-		if (btn) btn.hidden = true;
+		if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
 	}
 }
 

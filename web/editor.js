@@ -5,6 +5,7 @@ import { DB } from "./db.js";
 import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { AI } from "./ai.js";
+import { HEFT } from "./heft.js";
 
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 
@@ -46,6 +47,7 @@ export const EDITOR = (() => {
 		{ k: "code programm quelltext", label: "⌨ Code-Block", ins: "```javascript\n\n```", type: "code", caret: 14 },
 		{ k: "mermaid diagramm flowchart graph gantt", label: "⧐ Mermaid-Diagramm", ins: "```mermaid\ngraph TD\n\tA[Start] --> B[Ende]\n```", type: "code", caret: 11 },
 		{ k: "bild image foto hochladen", label: "🖼 Bild hochladen", ins: "", type: "p", action: "image" },
+		{ k: "heft goodnotes handschrift stift notizbuch zeichnen", label: "📓 GoodNotes-Heft einbetten", ins: "", type: "p", action: "heft" },
 		{ k: "trennlinie divider linie", label: "— Trennlinie", ins: "---", type: "divider" },
 		{ k: "tabelle table", label: "▦ Tabelle", ins: "| Spalte 1 | Spalte 2 |\n| --- | --- |\n|   |   |", type: "table" },
 		{ k: "spalten columns layout nebeneinander", label: "◫ 2 Spalten", ins: ":::columns\nLinke Spalte\n:::split\nRechte Spalte\n:::end", type: "columns" },
@@ -56,7 +58,7 @@ export const EDITOR = (() => {
 
 	function isSpecialStart(line) {
 		const t = line.trim();
-		return t.startsWith("```") || t === ":::columns" || t.startsWith("<details")
+		return t.startsWith("```") || t === ":::columns" || t.startsWith(":::heft") || t.startsWith("<details")
 			|| t.startsWith("|") || /^-{3,}$/.test(t) || /^#{1,3}\s/.test(t) || t.startsWith(">")
 			|| /^\s*[-*]\s/.test(line) || /^\s*\d+[.)]\s/.test(line);
 	}
@@ -76,6 +78,7 @@ export const EDITOR = (() => {
 				push("code", lines.slice(i, Math.min(j + 1, lines.length)).join("\n"));
 				i = j + 1; continue;
 			}
+			if (t.startsWith(":::heft")) { push("heft", t); i++; continue; }
 			if (t === ":::columns") {
 				let j = i + 1;
 				while (j < lines.length && lines[j].trim() !== ":::end") j++;
@@ -182,6 +185,12 @@ export const EDITOR = (() => {
 			case "columns":
 				return '<div class="blk-cols">' + splitColumns(b.raw).map((c) =>
 					'<div class="blk-col md">' + U.md(c) + "</div>").join("") + "</div>";
+			case "heft": {
+				// Eingebettetes GoodNotes-Heft: unterbricht den Markdown-Fluss als eigener
+				// Block; HEFT.hydrateEmbeds() füllt Vorschau + Öffnen-Knopf asynchron nach.
+				const mh = b.raw.match(/^:::heft\s+(\S+)/);
+				return '<div class="heft-embed" data-heftembed="' + (mh ? U.esc(mh[1]) : "") + '"><span class="hint">📓 Heft wird geladen…</span></div>';
+			}
 			default:
 				// p, quote, code, table, toggle: komplett über U.md rendern
 				return '<div class="md blk-p">' + U.md(b.raw) + "</div>";
@@ -213,6 +222,8 @@ export const EDITOR = (() => {
 		});
 		// Lokal gespeicherte Bilder (![...](img:...)) nachladen
 		if (typeof hydrateImages === "function") hydrateImages(host);
+		// Eingebettete GoodNotes-Hefte (:::heft <id>) mit Vorschau befüllen
+		HEFT.hydrateEmbeds(host);
 		if (activeId) {
 			const ta = host.querySelector(".blk-input");
 			if (ta) {
@@ -309,7 +320,7 @@ export const EDITOR = (() => {
 	// ---------- Tipp-Verhalten (Enter/Backspace/Tab/Pfeile wie in Notion) ----------
 	// Blocktyp live nachziehen, wenn der Nutzer selbst Marker tippt ("- ", "# ", "> ")
 	function retype(b) {
-		if (b.type === "code" || b.type === "table" || b.type === "toggle" || b.type === "columns") return;
+		if (b.type === "code" || b.type === "table" || b.type === "toggle" || b.type === "columns" || b.type === "heft") return;
 		const raw = b.raw;
 		let m;
 		if ((m = raw.match(/^(\s*)- \[( |x)\]/))) { b.type = "todo"; b.indent = indentLevel(m[1]); b.checked = m[2] === "x"; }
@@ -318,6 +329,7 @@ export const EDITOR = (() => {
 		else if ((m = raw.match(/^(#{1,3})\s/))) { b.type = "h" + m[1].length; delete b.indent; delete b.checked; }
 		else if (/^>\s*\[!/.test(raw)) { b.type = "callout"; }
 		else if (raw.startsWith(">")) { b.type = "quote"; }
+		else if (raw.startsWith(":::heft")) { b.type = "heft"; delete b.indent; delete b.checked; }
 		else { b.type = "p"; delete b.indent; delete b.checked; }
 	}
 
@@ -431,6 +443,28 @@ export const EDITOR = (() => {
 		const b = blocks.find((x) => x.id === activeId);
 		slash = null;
 		if (!item || !b) { drawSlash(); return; }
+		if (item.action === "heft") {
+			// Legt ein echtes Heft als Unterseite an und bettet es hier als Block ein —
+			// die Heft-Daten leben im Blob der Unterseite, NICHT im Markdown der Seite.
+			drawSlash();
+			const cur = S.pages[pageId];
+			const hid = U.uid();
+			STATE.dispatch("pageCreate", {
+				id: hid, title: (cur ? cur.title + " — " : "") + "Heft", parentId: pageId,
+				workspaceId: cur ? cur.workspaceId : "default", icon: "📓", kind: "heft",
+			}).then(() => {
+				b.raw = ":::heft " + hid;
+				b.type = "heft";
+				delete b.indent; delete b.checked;
+				const i2 = blocks.findIndex((x) => x.id === b.id);
+				const nb = newBlock("p", "");
+				blocks.splice(i2 + 1, 0, nb);
+				activeId = nb.id;
+				save();
+				draw({ caret: 0 });
+			});
+			return;
+		}
 		if (item.action === "image") {
 			drawSlash();
 			b.raw = "";
@@ -941,7 +975,7 @@ export const EDITOR = (() => {
 			const blkEl = e.target.closest(".blk");
 			if (blkEl && blkEl.dataset.bid !== activeId) {
 				const b = blocks.find((x) => x.id === blkEl.dataset.bid);
-				if (b && b.type === "toggle" && e.detail < 2) return;
+				if (b && (b.type === "toggle" || b.type === "heft") && e.detail < 2) return;
 				activate(blkEl.dataset.bid);
 			}
 		});

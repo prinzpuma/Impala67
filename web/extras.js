@@ -51,8 +51,9 @@ export const EXTRAS = (() => {
 		".backlinks-row{margin:2px 0 8px}.backlinks-chip{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px}.backlinks-chip:hover{background:rgba(128,128,128,.15);opacity:1}",
 		".tool-chip{width:fit-content;font-size:12.5px;opacity:.75;background:rgba(128,128,128,.12);border-radius:8px;padding:4px 10px;margin:2px 0}.tool-chip.err{color:#e5534b}",
 		".multitab-note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#3a2f14;color:#ffd66b;padding:10px 14px;border-radius:10px;z-index:1200;display:flex;gap:10px;align-items:center}",
-		// Mobile: Panel nicht mehr verstecken, sondern als Vollbild-Overlay öffnen
-		"@media (max-width:768px){body:not(.panel-collapsed) #panel{display:flex !important;position:fixed;inset:0;width:100vw;max-width:none;z-index:900}#btnShowPanel{display:block !important}}",
+		// Mobile: Panel als Vollbild-Overlay über der Bottom-Nav (z-index > 1200).
+		// KI-Toggle sitzt in der Tab-Leiste — kein Floating-FAB mehr.
+		"@media (max-width:768px){body:not(.panel-collapsed) #panel{display:flex !important;position:fixed;inset:0;width:100vw;max-width:none;z-index:1300;padding-bottom:env(safe-area-inset-bottom,0px)}}",
 	].join("\n");
 	document.head.appendChild(style);
 

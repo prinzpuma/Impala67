@@ -68,6 +68,12 @@ export async function initApp() {
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 	SETTINGS.applyTheme();
+	// Linke Sidebar: zuletzt eingeklappt? (Desktop — ☰ in der Tab-Leiste öffnet wieder)
+	try {
+		if (localStorage.getItem("impala67.sidebarCollapsed") === "1") {
+			document.body.classList.add("sidebar-collapsed");
+		}
+	} catch { /* ignore */ }
 	await STATE.load();
 	await purgeOldTrash();
 	await seedIfEmpty();

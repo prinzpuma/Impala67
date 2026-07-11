@@ -556,7 +556,8 @@ button.danger { color: var(--danger); }
 .md img { max-width: 100%; border-radius: 8px; display: block; margin: 6px 0; }
 
 /* ---------- Overlay / Modal ---------- */
-#overlay { position: fixed; inset: 0; z-index: 10;
+/* z-index bewusst über #mobileNav (1200): sonst liegt die Bottom-Nav auf Settings/Dialogen */
+#overlay { position: fixed; inset: 0; z-index: 1400;
 	background: rgba(3, 5, 10, 0.6); display: grid; place-items: center; }
 #overlay[hidden] { display: none; }
 .modal { width: min(520px, 92vw); padding: 24px; display: flex;
@@ -582,22 +583,37 @@ button.danger { color: var(--danger); }
 /* ---------- KI-Panel einklappen / Vollbild ---------- */
 body.panel-collapsed #panel { display: none; }
 body.panel-collapsed #app { grid-template-columns: 260px minmax(0, 1fr); }
-#btnShowPanel { position: fixed; right: 20px; bottom: 20px; z-index: 5;
-	width: 50px; height: 50px; border-radius: 50%; font-size: 22px;
-	background: rgba(30,33,40,0.95);
-	box-shadow: inset 0 1px 0 var(--surface-hover-strong), 0 8px 24px rgba(0,0,0,0.35); }
 body.chat-full #mainWrap { display: none; }
 body.chat-full #app { grid-template-columns: 260px 1fr; }
 body.chat-full #panel { grid-column: 2; max-width: 780px; width: 100%; justify-self: center;
 	border: none; background: transparent; }
 body.chat-full #chatLog { padding: 24px 8px; }
+
+/* ---------- Linke Sidebar einklappen + KI-Button in der Tab-Leiste ---------- */
+/* ☰ und ✦ sitzen in #tabbar — keine Floating-Buttons unten. */
+#tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px;
+	border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto; }
+#tabbar .tabstrip { flex: 1; min-width: 0; }
+#tabbar .tabbar-ai { margin-left: 4px; flex-shrink: 0; }
+body.panel-collapsed #tabbar .tabbar-ai { color: var(--accent); }
+@media (min-width: 769px) {
+	#btnSidebarToggle { display: inline-flex; }
+	body.sidebar-collapsed #sidebar { display: none; }
+	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 340px; }
+	body.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr); }
+	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr; }
+	body.density-compact.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 320px; }
+	body.density-compact.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr); }
+}
 #chatForm #btnAttach { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 17px;
 	border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: transparent; }
 #chatForm #btnAttach:hover { background: var(--surface-hover-strong); }
 /* Menüs am Chat-Composer: Anhang und Modell teilen dieselbe Fläche, Breite
    und Positionierungslogik. popovers.js setzt die festen Koordinaten dynamisch
    über bzw. unter dem jeweiligen Auslöser — keine fragilen bottom/left-Werte. */
-.attach-menu { position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 40px); }
+/* z-index über dem mobilen Vollbild-Panel (1300): #attachMenu liegt bewusst
+   außerhalb von #panel (siehe HTML-Kommentar) und würde sonst dahinter verschwinden. */
+.attach-menu { position: fixed; z-index: 1350; width: 300px; max-width: calc(100vw - 40px); }
 .attach-menu[hidden] { display: none; }
 .attach-menu-icon { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px;
 	font-size: 17px; line-height: 1; color: var(--text2); transform: rotate(-42deg); }
@@ -723,43 +739,104 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .katex-display { overflow-x: auto; overflow-y: hidden; margin: 0.6em 0 !important; }
 .katex { font-size: 1.02em; }
 
-/* ---------- Bibliothek: Baum-/Tabellen-/Board-Ansicht, Filter, Sortierung ---------- */
-.lib-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
-.lib-head h1 { margin-bottom: 0; }
-#libFilter { flex: 1; max-width: 260px; }
+/* ---------- Bibliothek = GoodNotes Documents-Regal (Impala67-Tokens) ---------- */
+.lib-docs .lib-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
+	gap: 14px 18px; margin-bottom: 14px; }
+.lib-head-left h1 { margin: 0 0 2px; letter-spacing: -.02em; }
+.lib-sub { margin: 0; font-size: 13px; }
+.lib-head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#libFilter { width: min(240px, 100%); background: var(--input-bg); }
 .lib-table th[data-libsort] { cursor: pointer; user-select: none; }
 .lib-table th[data-libsort]:hover { color: var(--text); }
-.tpl-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent);
-	border: 1px solid var(--accent-border); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.tpl-badge, .lib-tpl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent);
+	border: 1px solid var(--accent-border); border-radius: 4px; padding: 0 5px; margin-right: 4px; font-weight: 650; }
 
-/* GoodNotes-artige Kachel-Ansicht: Ordner-Kacheln + Dokument-Deckblätter */
+/* Documents-Tabs (Alle / Favoriten / …) — schlank wie GoodNotes, keine Chip-Wand */
+.lib-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding: 3px; width: fit-content;
+	max-width: 100%; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: 999px; }
+.lib-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 12px;
+	border-radius: 999px; background: transparent; color: var(--text2); font-size: 12.5px; font-weight: 600; }
+.lib-tab:hover { color: var(--text); background: var(--surface-hover); }
+.lib-tab.active { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 0 var(--edge-soft); }
+.lib-tab-n { font-size: 11px; font-weight: 600; color: var(--text2); opacity: .85; }
+.lib-tab.active .lib-tab-n { color: var(--accent); }
+.lib-tags { margin: 0 0 14px; }
+
 .lib-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 16px; font-size: 13px; color: var(--text2); }
 .lib-crumb { cursor: pointer; }
 .lib-crumb:hover { color: var(--text); text-decoration: underline; }
 .lib-crumb.current { color: var(--text); cursor: default; text-decoration: none; font-weight: 600; }
 .lib-crumb-sep { opacity: .4; }
-.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 26px 18px; align-items: start; }
-.lib-folder { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
-	text-align: left; min-height: 150px; padding: 16px; border: 1px solid var(--edge); border-radius: 12px;
-	background: var(--surface-subtle); }
-.lib-folder:hover { background: var(--surface-hover); }
-.lib-folder-ico { font-size: 38px; line-height: 1; }
-.lib-folder-name { font-weight: 600; margin-top: 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lib-folder-count { font-size: 12px; color: var(--text2); }
-.lib-card { cursor: pointer; display: flex; flex-direction: column; gap: 2px; position: relative; }
-.lib-cover { height: 210px; border-radius: 10px; border: 1px solid var(--surface-active); overflow: hidden;
-	position: relative; display: flex; align-items: flex-start; justify-content: flex-start; padding: 12px 14px 0;
-	background-size: cover; background-position: center;
-	box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: transform .12s, box-shadow .12s; }
-.lib-card:hover .lib-cover { transform: translateY(-2px); box-shadow: 0 8px 22px var(--shadow); }
-.lib-cover-icon { font-size: 28px; opacity: 0.92; text-shadow: 0 2px 6px var(--overlay-bg); }
-.lib-cover.has-img .lib-cover-icon { display: none; }
-.lib-card-title { font-size: 13.5px; font-weight: 600; margin-top: 8px; line-height: 1.3;
+.lib-back { min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: 8px; font-size: 16px;
+	background: var(--surface); color: var(--text2); }
+.lib-back:hover { background: var(--surface-hover); color: var(--text); }
+
+/* Regal: Portrait-Notebooks + farbige Ordner */
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 28px 20px; align-items: start; }
+.lib-card { cursor: pointer; display: flex; flex-direction: column; gap: 0; background: transparent; border: none; padding: 0; text-align: left; }
+.lib-card-visual { position: relative; }
+.lib-notebook { display: flex; align-items: stretch; height: 196px; filter: drop-shadow(0 8px 18px rgba(0,0,0,.32));
+	transition: transform .14s ease, filter .14s ease; }
+.lib-card:hover .lib-notebook, .lib-newdoc:hover .lib-newdoc-notebook {
+	transform: translateY(-3px); filter: drop-shadow(0 14px 24px rgba(0,0,0,.42)); }
+.lib-spine { width: 10px; flex-shrink: 0; border-radius: 4px 0 0 4px;
+	background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.08) 45%, rgba(0,0,0,.22));
+	box-shadow: inset -1px 0 0 rgba(255,255,255,.08); }
+.lib-cover { flex: 1; min-width: 0; height: 100%; border-radius: 0 10px 10px 0; border: 1px solid var(--edge-soft);
+	overflow: hidden; position: relative; display: flex; flex-direction: column; justify-content: space-between;
+	padding: 16px 12px 14px; background-size: cover; background-position: center; }
+.lib-cover-icon { font-size: 26px; line-height: 1; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.lib-cover-label { font-size: 12.5px; font-weight: 700; line-height: 1.25; color: #fff;
+	text-shadow: 0 1px 3px rgba(0,0,0,.45); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
+	-webkit-box-orient: vertical; overflow: hidden; }
+.lib-cover.has-img { padding: 0; }
+.lib-cover.has-img .lib-cover-shade { position: absolute; inset: 0;
+	background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.72)); }
+.lib-cover.has-img .lib-cover-label { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 1; }
+.lib-cover-empty { align-items: center; justify-content: center; border-style: dashed; background: var(--surface-subtle); }
+.lib-card-title { font-size: 13px; font-weight: 650; margin-top: 10px; line-height: 1.3; color: var(--text);
 	overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-.lib-card-date { font-size: 11.5px; color: var(--text2); }
-.lib-into { position: absolute; top: 8px; right: 8px; min-height: 0; padding: 3px 8px; font-size: 11.5px;
-	border-radius: 8px; background: var(--shadow-strong); color: #fff; }
-.lib-into:hover { background: rgba(0,0,0,0.78); }
+.lib-card-date { font-size: 11.5px; color: var(--text2); margin-top: 2px; }
+.lib-into { position: absolute; top: 8px; right: 8px; z-index: 2; min-height: 0; min-width: 24px; padding: 3px 7px;
+	font-size: 11px; font-weight: 700; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.12); }
+.lib-into:hover { background: rgba(0,0,0,.75); }
+.lib-fav { position: absolute; top: 8px; left: 14px; z-index: 2; font-size: 12px; color: #ffd56a;
+	text-shadow: 0 1px 3px rgba(0,0,0,.5); pointer-events: none; }
+.lib-ink-badge { position: absolute; bottom: 10px; right: 10px; z-index: 2; font-size: 12px;
+	padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff;
+	border: 1px solid rgba(255,255,255,.12); pointer-events: none; }
+
+/* Farbige Ordner (GoodNotes-ähnlich), flach und token-basiert */
+.lib-folder { display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: left;
+	padding: 0; background: transparent; border: none; min-height: 0; }
+.lib-folder-visual { position: relative; height: 118px; filter: drop-shadow(0 6px 14px rgba(0,0,0,.28));
+	transition: transform .14s ease, filter .14s ease; }
+.lib-folder:hover .lib-folder-visual { transform: translateY(-2px); filter: drop-shadow(0 10px 18px rgba(0,0,0,.36)); }
+.lib-folder-tab { position: absolute; top: 18px; left: 0; width: 42%; height: 22px; border-radius: 8px 10px 0 0;
+	background: var(--folder, #6a8fbf); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); }
+.lib-folder-body { position: absolute; left: 0; right: 0; bottom: 0; top: 32px; border-radius: 8px 12px 10px 10px;
+	background: linear-gradient(160deg, color-mix(in srgb, var(--folder, #6a8fbf) 88%, #fff), var(--folder, #6a8fbf));
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.16); }
+.lib-folder-name { font-weight: 650; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-folder-count { font-size: 12px; color: var(--text2); margin-top: -6px; }
+.lib-folder.tone-sky { --folder: #5b8fd4; }
+.lib-folder.tone-mint { --folder: #4fa88a; }
+.lib-folder.tone-lilac { --folder: #8b7cc8; }
+.lib-folder.tone-sand { --folder: #c4a35a; }
+.lib-folder.tone-rose { --folder: #c9788a; }
+.lib-folder.tone-slate { --folder: #7a8494; }
+
+/* + Neue Notiz als leerer Notebook-Slot */
+.lib-newdoc { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0;
+	background: transparent; border: none; color: var(--text2); text-align: left; }
+.lib-newdoc-notebook { display: flex; height: 196px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.2));
+	transition: transform .14s ease, filter .14s ease; }
+.lib-newdoc .lib-spine { background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.08)); }
+.lib-newdoc-plus { font-size: 32px; line-height: 1; color: var(--text2); }
+.lib-newdoc:hover .lib-cover-empty { border-color: var(--accent); background: var(--accent-soft); }
+.lib-newdoc:hover .lib-newdoc-plus, .lib-newdoc:hover .lib-card-title { color: var(--accent); }
+.lib-new { display: flex; gap: 8px; margin-top: 28px; max-width: 360px; }
+.lib-new input { flex: 1; }
 
 /* Board-Ansicht: eine Spalte je Workspace (einfaches Kanban) */
 .board { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
@@ -793,12 +870,11 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-table tr:hover td { background: var(--surface); }
 
 /* ---------- Bibliothek (Vollbild) & Chat-Verlauf ---------- */
-.library { padding: 32px 40px; overflow-y: auto; flex: 1; }
+.library { padding: 28px 36px 48px; overflow-y: auto; flex: 1; }
+.library.lib-docs { max-width: 1180px; }
 .library h1 { margin-bottom: 12px; }
 .library .row { font-size: 15px; padding: 8px 10px; }
 .chat-empty-hint { margin: -4px 0 10px; }
-.lib-new { display: flex; gap: 8px; margin-top: 28px; max-width: 360px; }
-.lib-new input { flex: 1; }
 .empty.small { padding: 4px 10px; font-size: 13px; text-align: left; }
 .row .hint { font-size: 11px; flex-shrink: 0; }
 
@@ -811,6 +887,30 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	#app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
 	#mainWrap { min-height: 60vh; }
 	#panel { min-height: 40vh; }
+}
+
+/* ---------- Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout-Popup, haptisches Feedback ---------- */
+@media (max-width: 768px) {
+	/* Größere Tipp-Flächen (Richtwert ~40px) für kleine Icon-Knöpfe, die am Desktop
+	   bewusst kompakt sind (Zeilen-Menüs, Tab-Schließen, Navigation, Bottom-Nav). */
+	.navbtn, .row-add, .tabchip-x, #mobileNav button, .tab { min-height: 40px; }
+	/* Langes Antippen zeigte bisher auf iOS/Android ein Auswahl-/Kopieren-Callout
+	   statt sofort die Aktion auszulösen — bei reinen Icon-Knöpfen ohne Textsinn
+	   unnötig und irritierend. Seiteninhalte (Editor, Chat-Text) bleiben unberührt. */
+	.navbtn, .row-add, .tabchip-x, .tabchip, #mobileNav button, .tab, .row {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	/* Sichtbares Antipp-Feedback statt der auf Touch nicht existierenden :hover-Zustände */
+	.navbtn:active, .row-add:active, .tabchip-x:active, .tabchip:active,
+	#mobileNav button:active, .tab:active, .row:active, .home-pill:active, .home-continue:active {
+		opacity: 0.6;
+	}
+	/* Sanftes Momentum-Scrolling (ältere iOS-Safari) für die wichtigsten Scroll-Container */
+	#tree, #chatLog, .tabstrip, .block-editor, .library, .home, #main {
+		-webkit-overflow-scrolling: touch;
+	}
 }
 
 /* ---------- Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Auswahl-Toolbar ---------- */
@@ -975,21 +1075,7 @@ button.primary:hover { filter: brightness(1.06); }
 .deck-tree-row .row-add { font-size: 12px; }
 .study-meta { text-align: center; }
 
-/* ---------- Bibliothek 2.0: Papier-Deckblätter mit Textvorschau, Neu-Kachel, Zurück-Knopf ---------- */
-.lib-cover.has-img { padding: 0; align-items: center; justify-content: center; }
-.lib-cover-paper { position: absolute; left: 10px; right: 10px; bottom: 10px; top: 56px; border-radius: 6px 6px 4px 4px;
-	background: rgba(250,250,248,0.94); color: #333; padding: 10px 10px 0; overflow: hidden;
-	display: flex; flex-direction: column; gap: 6px; }
-.lib-cover-paper:empty { display: none; }
-.lib-cover-paper i { font-style: normal; font-size: 9.5px; line-height: 1.35; color: #444; flex-shrink: 0;
-	border-bottom: 1px solid rgba(0,0,0,0.07); padding-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lib-back { min-height: 0; width: 26px; height: 26px; padding: 0; border-radius: 6px; font-size: 15px;
-	background: var(--edge-soft); }
-.lib-newdoc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-	min-height: 210px; border: 1px dashed rgba(255,255,255,0.22); border-radius: 10px;
-	background: transparent; color: var(--text2); font-size: 13px; }
-.lib-newdoc:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.lib-newdoc-plus { font-size: 30px; line-height: 1; }
+/* Legacy paper-preview entfernt — Covers nutzen .lib-notebook / .lib-cover-label */
 
 /* ---------- Mermaid-Diagramme (aus ```mermaid-Codeblöcken gerendert) ---------- */
 .mermaid-diagram { margin: 10px 0; padding: 14px; border-radius: 10px;
@@ -1055,18 +1141,22 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 @keyframes wiggle { 0%, 88%, 100% { transform: none; } 92% { transform: rotate(-8deg); } 96% { transform: rotate(8deg); } }
 .blk-check:checked { animation: pop .18s ease; }
 @keyframes pop { 50% { transform: scale(1.3); } }
-#btnShowPanel { transition: transform .12s ease, box-shadow .12s ease; }
-#btnShowPanel:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 28px var(--overlay-bg); }
+
 
 /* ---------- Mobile (≤ 768px): Off-Canvas-Sidebar + größere Klickziele ---------- */
-#btnSidebarToggle { display: none; }
+/* ☰ ist auf Desktop sichtbar (linke Spalte einklappen); Mobile: Off-Canvas öffnen */
 @media (max-width: 768px) {
 	#app { grid-template-columns: minmax(0, 1fr) !important; }
 	#sidebar { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(82vw, 320px);
 		background: var(--bg1); transform: translateX(-105%); transition: transform 0.2s ease; }
 	body.sidebar-open #sidebar { transform: none; box-shadow: 12px 0 40px var(--overlay-bg); }
 	#panel { display: none; }
-	#btnSidebarToggle { display: inline-flex; }
+	/* Tabbar-KI-Knopf (✦) ausblenden: er schaltet nur "panel-collapsed" um, wird auf
+	   Mobile aber per CSS (siehe extras.js) zum Vollbild-Mini-Panel gezwungen — ein
+	   ANDERER Zustand als der echte Vollbild-Chat-Tab, den btnMobileAI öffnet
+	   (setzt zusätzlich S.view = "chat"). Zwei Knöpfe mit zwei verschiedenen
+	   KI-Ansichten war eine Inkonsistenz — die Bottom-Nav übernimmt das jetzt allein. */
+	#tabbar .tabbar-ai { display: none; }
 	.menu-item, .side-foot button { min-height: 40px; }
 	.row { min-height: 36px; }
 }
@@ -1127,10 +1217,13 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 .side-foot { padding-top: 8px; border-top: 1px solid var(--edge-soft); }
 
 /* ---------- Mobile Bottom-Nav ---------- */
+/* Layering-Stack (Mobile):
+   content/app 1 · sidebar 30 · FABs 5 · menus 40 · mobileNav 1200 · overlay 1400 · palette 1500 · toasts 2000 */
 #mobileNav { display: none; }
 @media (max-width: 768px) {
-	body { padding-bottom: 64px; }
-	#app { min-height: calc(100vh - 62px); padding: 6px; }
+	/* padding-bottom nur einmal (inkl. Safe-Area) — doppelte Definition entfernt */
+	body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+	#app { min-height: calc(100dvh - 62px); padding: 6px; }
 	#mainWrap { border-radius: 10px; }
 	#mobileNav { position: fixed; z-index: 1200; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
 		display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; padding: 4px 6px;
@@ -1139,12 +1232,19 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 	#mobileNav button { min-width: 0; min-height: 46px; padding: 2px; display: flex; flex-direction: column;
 		align-items: center; justify-content: center; gap: 1px; color: var(--text2); background: transparent; }
 	#mobileNav button:hover, #mobileNav button:focus-visible { color: var(--accent); background: var(--accent-soft); }
+	/* Aktiver Bereich sichtbar machen — Desktop-Topbar tut das bereits, die Bottom-Nav bisher nicht */
+	#mobileNav button.active:not(.mobile-add) { color: var(--accent); background: var(--accent-soft); }
 	#mobileNav button span { font-size: 20px; line-height: 1; }
 	#mobileNav button small { font-size: 10px; }
 	#mobileNav .mobile-add { width: 44px; height: 44px; min-height: 44px; align-self: center; justify-self: center;
 		border-radius: 50%; color: var(--bg0); background: var(--accent); }
 	#mobileNav .mobile-add:hover { color: var(--bg0); background: var(--accent); filter: brightness(1.08); }
-	#btnShowPanel { display: none !important; }
+	/* Dialoge/Settings/Palette offen → Bottom-Nav aus dem Weg (kein Klick-/Sicht-Konflikt) */
+	body:has(#overlay:not([hidden])) #mobileNav,
+	body:has(#palette:not([hidden])) #mobileNav,
+	body:not(.panel-collapsed) #mobileNav {
+		display: none !important;
+	}
 	#palette { padding-top: 6vh; padding-bottom: 70px; }
 	.palette-box { max-height: 76vh; }
 }
@@ -1371,8 +1471,9 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	#pageTitle { font-size: 26px; }
 	.block-editor { padding-right: 8px; }
 	.blk-gutter { width: 38px; }
-	.lib-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 18px 12px; }
-	.lib-cover { height: 170px; }
+	.lib-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 22px 14px; }
+	.lib-notebook, .lib-newdoc-notebook { height: 168px; }
+	.lib-folder-visual { height: 100px; }
 }
 
 /* ---------- Sync-Konflikt: Popup + Homescreen-Banner ---------- */
@@ -1424,11 +1525,12 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 		width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg); }
 	body.chat-full #app { grid-template-columns: 220px 1fr; }
 	body.chat-full #panel { position: static; width: auto; box-shadow: none; }
+	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr); }
+	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr; }
 }
 
-/* Notch/Home-Indicator: Ränder respektieren (viewport-fit=cover ist in index.html gesetzt) */
+/* Notch/Home-Indicator: horizontale Safe-Areas (padding-bottom kommt aus Bottom-Nav-Block) */
 @media (max-width: 768px) {
-	body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 	#app { padding-left: max(6px, env(safe-area-inset-left));
 		padding-right: max(6px, env(safe-area-inset-right)); }
 }
@@ -1480,7 +1582,192 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 /* Stapel-Liste: „Standard (ohne Stapel)“-Zeile dezenter */
 .deck-name .hint { font-weight: 400; font-size: 12px; }
 
-/* Harmonie mit der GoodNotes-Ebene (ink.js): ✏️-Badge auf Bibliothek-Deckblättern
-   für Seiten mit Tinte (library.js kann es über INK.hasInk(pageId) setzen) */
-.lib-ink-badge { position: absolute; bottom: 8px; right: 8px; z-index: 1; font-size: 13px;
-	padding: 2px 7px; border-radius: 999px; background: var(--shadow-strong); color: #fff; }
+/* .lib-ink-badge sitzt bei den Documents-Regal-Styles weiter oben */
+
+/* ==========================================================================
+   Hybrid v6 (11. Juli 2026) — GoodNotes-Hefte: Anlege-Dialog, Heft-Ansicht,
+   Einbettung in Notion-Seiten, Dokumentblatt-Kacheln in der Bibliothek
+   ========================================================================== */
+
+/* Anlege-Dialog: zwei gleichwertige Typ-Karten (Notion-Seite / GoodNotes-Heft) */
+.newpage-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px; }
+.newpage-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+	padding: 14px; min-height: 0; text-align: left; background: var(--surface-subtle);
+	border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); }
+.newpage-card:hover { background: var(--surface-hover); border-color: var(--accent-border); }
+.newpage-card b { font-size: 14px; }
+.newpage-card small { font-size: 11.5px; color: var(--text2); }
+.newpage-visual { display: flex; width: 100%; height: 64px; margin-bottom: 10px;
+	border-radius: var(--radius-md); border: 1px solid var(--edge-soft); overflow: hidden; }
+.newpage-visual.is-notion { flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface-faint); }
+.newpage-visual.is-notion i { display: block; height: 6px; border-radius: 3px; background: var(--surface-active); }
+.newpage-visual.is-notion i:first-child { width: 55%; height: 8px; }
+.newpage-visual.is-notion i:nth-child(2) { width: 90%; }
+.newpage-visual.is-notion i:last-child { width: 72%; }
+.newpage-visual.is-heft { background: linear-gradient(120deg, #2b5876, #4e4376); }
+.newpage-visual.is-heft span { width: 9px; height: 100%;
+	background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 45%, rgba(0,0,0,.22)); }
+@media (max-width: 480px) { .newpage-cards { grid-template-columns: 1fr; } }
+
+/* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen Platz füllt */
+.heft-head { padding-bottom: 0; }
+.heft-titlebar { display: flex; align-items: center; gap: 8px; margin: 6px 0 8px; }
+.heft-titlebar .page-icon { font-size: 26px; }
+.heft-titlebar #pageTitle { font-size: 24px; padding: 0; }
+.heft-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Taskbar v3: links „Seiten“-Popup, Mitte Zeichenwerkzeuge + Bilder, rechts ＋-Menü — wie GoodNotes */
+.heft-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+	gap: 10px 14px; padding: 10px 14px; border-top: 1px solid var(--edge-soft);
+	border-bottom: 1px solid var(--edge-soft); background: var(--surface-faint); }
+.heft-tb-left, .heft-tb-center, .heft-tb-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.heft-tb-center { flex: 1; justify-content: center; }
+.heft-tb-right { margin-left: auto; }
+.heft-toolgroup { display: flex; align-items: center; gap: 2px; padding: 3px;
+	background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: 999px; }
+.heft-toolgroup button { min-height: 0; height: 32px; min-width: 34px; padding: 0 10px;
+	border-radius: 999px; background: transparent; color: var(--text2); font-size: 14px; }
+.heft-toolgroup button:hover { background: var(--surface-hover); color: var(--text); }
+.heft-toolgroup button.active { background: var(--accent-soft); color: var(--accent);
+	box-shadow: inset 0 0 0 1px var(--accent-border); }
+.heft-size { display: inline-flex !important; align-items: center; justify-content: center;
+	min-width: 32px !important; padding: 0 !important; }
+.heft-size i { display: block; border-radius: 50%; background: currentColor; opacity: .75; }
+.heft-size.active i { opacity: 1; background: var(--accent); }
+.heft-paper-label { font-size: 11.5px; font-weight: 650; margin-left: 4px; opacity: .85; }
+.heft-action { min-height: 0; height: 34px; padding: 0 14px; border-radius: 999px;
+	font-size: 12.5px; font-weight: 700; letter-spacing: .01em; white-space: nowrap;
+	border: 1px solid var(--edge); background: var(--surface-hover-strong); color: var(--text); }
+.heft-action:hover { background: var(--surface-active); }
+.heft-action.active { background: var(--accent-soft); color: var(--accent);
+	border-color: var(--accent-border); }
+.heft-action.heft-chat { background: var(--accent); color: #081018; border-color: transparent; }
+.heft-action.heft-chat:hover { filter: brightness(1.08); }
+.heft-swatch { width: 22px; height: 22px; min-width: 22px !important; padding: 0 !important;
+	border-radius: 50% !important; border: 2px solid transparent; background: var(--sw, #1c1c1e); }
+.heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.heft-pageno-inline { font-weight: 600; font-size: 11px; opacity: .7; margin-left: 6px; }
+.heft-action.heft-plus { min-width: 40px; padding: 0 13px; font-size: 17px; }
+@media (max-width: 720px) {
+	.heft-paper-label { display: none; }
+	.heft-toolbar { padding: 8px 10px; }
+}
+
+/* Papier-Bühne: vertikales Scrollen durch alle Seiten — jede Seite ein eigenes Blatt */
+.heft-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+	display: flex; flex-direction: column; align-items: center; gap: 24px;
+	padding: 24px 18px 48px; }
+.heft-page-slot { position: relative; flex-shrink: 0; }
+.heft-page-slot .heft-canvas { display: block; touch-action: none; border-radius: 4px; background: #fdfdf8;
+	box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 18px 48px var(--shadow-strong); }
+.heft-page-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+	font-size: 11px; color: var(--text2); white-space: nowrap; pointer-events: none; }
+
+/* Toolbar-Popups (Seiten / Bilder / ＋) — schweben über der Papier-Bühne */
+.heft-pop { position: absolute; z-index: 60; min-width: 230px; max-width: min(400px, calc(100% - 16px));
+	max-height: min(540px, 72vh); overflow-y: auto; padding: 10px;
+	background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg);
+	box-shadow: 0 16px 48px var(--shadow-strong); }
+.heft-pop-head { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em;
+	color: var(--text2); padding: 4px 4px 6px; }
+.heft-pop-sub { font-size: 11.5px; color: var(--text2); padding: 0 4px 8px; line-height: 1.4; }
+.heft-pop-sep { height: 1px; background: var(--edge-soft); margin: 8px 0; }
+.heft-pop-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+	background: transparent; color: var(--text); font-size: 13.5px; padding: 9px 10px; border-radius: 8px; }
+.heft-pop-row:hover { background: var(--surface-hover-strong); }
+
+/* Seiten-Popup: Thumbnail-Raster (Springen + Löschen) */
+.heft-pop-pages { width: 340px; }
+.heft-pop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.heft-pop-thumb { position: relative; border: 1px solid var(--edge-soft); border-radius: 8px; overflow: hidden;
+	background: #fdfdf8; cursor: pointer; }
+.heft-pop-thumb canvas { width: 100%; display: block; }
+.heft-pop-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.heft-pop-thumb > span { position: absolute; left: 6px; bottom: 4px; font-size: 10.5px; font-weight: 700;
+	color: #333; background: rgba(255,255,255,.82); padding: 0 5px; border-radius: 6px; pointer-events: none; }
+.heft-pop-del { position: absolute; top: 4px; right: 4px; min-height: 0; width: 22px; height: 22px; padding: 0;
+	font-size: 11px; border-radius: 6px; background: rgba(0,0,0,.55); color: #fff; opacity: 0; }
+.heft-pop-thumb:hover .heft-pop-del { opacity: 1; }
+
+/* ＋-Menü wie GoodNotes „Seite hinzufügen“: Segmente + Vorlagen-Karten + Aktionen */
+.heft-pop-plus { width: 330px; }
+.heft-seg-row { display: flex; gap: 4px; padding: 3px; margin: 0 0 10px; background: var(--surface-subtle);
+	border: 1px solid var(--edge-soft); border-radius: 999px; }
+.heft-seg { flex: 1; min-height: 30px; padding: 4px 6px; font-size: 12px; font-weight: 650; border-radius: 999px;
+	background: transparent; color: var(--text2); white-space: nowrap; }
+.heft-seg.active { background: var(--panel-solid); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+.heft-tpl-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
+.heft-tpl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; min-height: 0;
+	background: transparent; border: 1px solid transparent; border-radius: 10px; color: var(--text2);
+	font-size: 10.5px; text-align: center; line-height: 1.25; }
+.heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text); }
+.heft-tpl small { font-size: 9.5px; opacity: .7; }
+.heft-tpl-paper { display: block; width: 40px; height: 56px; border-radius: 4px; background: #fdfdf8; border: 1px solid var(--edge); }
+.heft-tpl-lined { background-image: repeating-linear-gradient(transparent 0 7px, rgba(70,110,180,.35) 7px 8px); }
+.heft-tpl-grid { background-image: repeating-linear-gradient(transparent 0 7px, rgba(70,110,180,.3) 7px 8px),
+	repeating-linear-gradient(90deg, transparent 0 7px, rgba(70,110,180,.3) 7px 8px); }
+.heft-tpl-dots { background-image: radial-gradient(rgba(60,80,120,.5) 1px, transparent 1.5px); background-size: 8px 8px; }
+
+/* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser, Scan-Streifen, Aktionen */
+.heft-scan { position: fixed; inset: 0; z-index: 1600; display: flex; flex-direction: column;
+	background: rgba(3,5,10,.97); color: #fff; }
+.heft-scan-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; flex-shrink: 0; }
+.heft-scan-top button { min-height: 0; width: 32px; height: 32px; padding: 0; border-radius: 8px;
+	background: rgba(255,255,255,.1); color: #fff; font-size: 14px; }
+.heft-scan-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center;
+	justify-content: center; overflow: hidden; }
+.heft-scan-stage video { max-width: 100%; max-height: 100%; }
+.heft-scan-frame { position: absolute; inset: 7% 10%; border: 2px dashed rgba(255,255,255,.45);
+	border-radius: 12px; pointer-events: none; }
+.heft-scan-nocam { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px;
+	text-align: center; color: rgba(255,255,255,.7); }
+.heft-scan-shots { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; flex-shrink: 0; }
+.heft-scan-shots img { height: 72px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); }
+.heft-scan-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;
+	padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.heft-scan-shutter { width: 62px; height: 62px; min-height: 62px; padding: 0; border-radius: 50%;
+	background: #fff; border: 4px solid rgba(255,255,255,.35); }
+.heft-scan-shutter:hover { background: #eee; }
+.heft-scan-shutter:disabled { opacity: .3; }
+.heft-scan-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.heft-scan-actions button, .heft-scan-nocam button { background: var(--accent); color: #081018;
+	font-weight: 650; border-radius: 10px; }
+.heft-scan-actions button:disabled { background: rgba(255,255,255,.14); color: rgba(255,255,255,.5); }
+
+/* Eingebettetes Heft in Notion-Seiten (:::heft <id>) — unterbricht den Textfluss */
+.heft-embed { display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 12px 14px;
+	border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.heft-embed:hover { border-color: var(--accent-border); }
+.heft-embed-paper { flex-shrink: 0; width: 72px; height: 102px; border-radius: 4px; overflow: hidden;
+	background: #fdfdf8; box-shadow: 0 6px 16px var(--shadow); }
+.heft-embed-paper canvas, .heft-embed-paper img { width: 100%; height: 100%; display: block; }
+.heft-embed-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.heft-embed-info b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heft-embed-info small { font-size: 12px; color: var(--text2); }
+.heft-embed-open { flex-shrink: 0; background: var(--accent); color: #081018; font-weight: 650; border-radius: 8px; }
+.heft-embed-open:hover { filter: brightness(1.06); }
+
+/* Bibliothek: Notion-Seiten als flaches Dokumentblatt — nur Hefte tragen das Notizbuch-Cover */
+.lib-docsheet { display: flex; flex-direction: column; gap: 6px; height: 196px; padding: 14px 12px;
+	border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--panel-solid);
+	box-shadow: 0 8px 18px rgba(0,0,0,.24); transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
+.lib-card:hover .lib-docsheet { transform: translateY(-3px); box-shadow: 0 14px 24px rgba(0,0,0,.34); border-color: var(--edge); }
+.lib-docsheet-icon { font-size: 22px; line-height: 1; }
+.lib-docsheet-title { font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--text);
+	display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lib-docsheet-text { font-size: 11px; color: var(--text2); line-height: 1.45;
+	display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lib-docsheet-lines { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
+.lib-docsheet-lines i { display: block; height: 4px; border-radius: 2px; background: var(--surface-active); }
+.lib-docsheet-lines i:nth-child(2) { width: 82%; }
+.lib-docsheet-lines i:last-child { width: 58%; }
+@media (max-width: 600px) { .lib-docsheet { height: 168px; } }
+
+/* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziele ebenfalls */
+@media (pointer: coarse) {
+	.heft-toolgroup button { height: 38px; min-width: 40px; }
+	.heft-swatch { width: 26px; height: 26px; min-width: 26px !important; }
+	.heft-pop-del { opacity: 1; }
+	.heft-seg { min-height: 36px; }
+	.heft-pop-row { min-height: 44px; }
+}
