@@ -6,14 +6,14 @@ on:
 
 jobs:
   bump:
-    if: "${{ !contains(github.event.head_commit.message, 'chore: bump version') }}"
+    if: "!contains(github.event.head_commit.message, 'chore: bump version')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: <<<GH_PAT>>>
           fetch-depth: 0
 
       - name: Patch-Version erhoehen
@@ -22,7 +22,15 @@ jobs:
           set -euo pipefail
           CURRENT=$(node -p "require('./src-tauri/tauri.conf.json').version")
           IFS='.' read -r MA MI PA <<< "$CURRENT"
-          NEW="$MA.$MI.$((PA+1))"
+          # Ein Force-Push kann einen früheren Bot-Commit zurücksetzen, nicht
+          # aber dessen bereits veröffentlichten Git-Tag. Deshalb immer die
+          # nächste noch freie Patch-Version bestimmen.
+          PA=$((PA+1))
+          NEW="$MA.$MI.$PA"
+          while git ls-remote --exit-code --tags origin "refs/tags/v$NEW" >/dev/null 2>&1; do
+            PA=$((PA+1))
+            NEW="$MA.$MI.$PA"
+          done
           export NEW
           echo "Bump $CURRENT -> $NEW"
 
@@ -71,6 +79,9 @@ jobs:
 
       - name: Committen, taggen, pushen
         run: |
+          # Tags aktualisieren, damit die freie Version oben zuverlässig über
+          # lokale und bereits auf GitHub vorhandene Tags entschieden wird.
+          git fetch --tags --force
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src-tauri/tauri.conf.json package.json web/version.json web/latest.json web/updater.js

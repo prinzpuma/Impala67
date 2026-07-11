@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
 	"version": "0.2.18",
 	"notes": "scanner, ui + PWA-Update-Check; Merge ohne Konfliktmarker",
 	"pub_date": "2026-07-11T00:00:00Z",
@@ -9,3 +10,15 @@
 		}
 	}
 }
+=======
+  "version": "0.2.29",
+  "notes": "PWA-Update-Check (same-origin version.json) + Sync-Fixes",
+  "pub_date": "2026-07-11T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRVlc3elAxOTZqS0praWRyY0RMTDg1bnU3SHhJWmQzRDgzSnduNWZZZ2oyZHQ0em1LcDlTQjBCWjJ2Q1pKZFN4QUVjaUM5K1loT1FzbnZueG9JK2tEZjhHSXU3NWdIYkE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzNDUzOTgzCWZpbGU6SW1wYWxhNjdfMC4xLjFfeDY0LXNldHVwLmV4ZQpZOGdZMEV4TlpUSFlUQVVwY28yODJONjRmTXBQMDlzREt0R2VZSXhSNlhGSHBYMmpBZ1NPYjNqRHZvdDNOVC84UFVZS2FadW9uNFpJUXYrYkg4SWZCdz09Cg==",
+      "url": "https://github.com/prinzpuma/Impala67/releases/download/v0.1.1/Impala67_0.1.1_x64-setup.exe"
+    }
+  }
+}
+>>>>>>> f979254a44d313a9c5d9dae19e6b9610dbff1087
