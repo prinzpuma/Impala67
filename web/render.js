@@ -132,14 +132,15 @@ function fillAiStatusChip(chip, meta) {
 }
 function renderStatusDot() {
 	const meta = aiStatusMeta();
-	// Side-Panel nur füllen, wenn Panel sichtbar (Chat offen)
-	const panelOpen = !document.body.classList.contains("panel-collapsed") || document.body.classList.contains("chat-full");
+	// Side-Panel-Chip IMMER befüllen — auch wenn das Panel eingeklappt ist.
+	// FIX: Früher wurde bei body.panel-collapsed die Pille übersprungen/geleert.
+	// Beim Aufklappen (btnShowPanel) lief kein erneutes renderStatusDot → leere Pille
+	// im kleinen Chat, während der große Chat (renderFullChat) sie frisch füllte.
+	// Das Panel selbst ist per CSS versteckt (body.panel-collapsed #panel), der DOM-Stand
+	// muss trotzdem aktuell bleiben, damit der Status beim Öffnen sofort sichtbar ist.
 	const sideChip = U.el("aiStatusChip");
-	if (sideChip) {
-		if (panelOpen) fillAiStatusChip(sideChip, meta);
-		else sideChip.hidden = true;
-	}
-	// Vollbild-Chat: nur wenn view === chat
+	if (sideChip) fillAiStatusChip(sideChip, meta);
+	// Vollbild-Chat: nur wenn view === chat (Chip wird bei renderFullChat neu erzeugt)
 	const fullChip = U.el("aiStatusChipFull");
 	if (fullChip) {
 		if (S.view === "chat") fillAiStatusChip(fullChip, meta);

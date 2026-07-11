@@ -247,12 +247,17 @@ export function openSettings(section) {
 				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
 		}
 	} else if (sec === "update") {
-		const ver = window.APP_VERSION || "unbekannt";
+		const ver = (typeof window.getAppVersion === "function" ? window.getAppVersion() : null)
+			|| window.APP_VERSION || "unbekannt";
 		const platform = window.__TAURI__ ? "Windows (Desktop)" : "PWA / Browser";
-		body = '<p class="hint">Aktuelle Version: <b>v' + U.esc(String(ver)) + '</b><br>Plattform: ' + platform + '</p>' +
-			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button></div>' +
-			'<p class="hint" id="updateStatus"></p>' +
-			'<p class="hint">Desktop: signiertes Windows-Update. PWA: vergleicht mit dem neuesten GitHub-Release; danach Seite neu laden (Service Worker).</p>';
+		body = '<p class="hint">Lokal (läuft): <b id="updateLocalVer">v' + U.esc(String(ver).replace(/^v/i, "")) + '</b><br>' +
+			'Server / Remote: <b id="updateRemoteVer">wird geprüft…</b><br>Plattform: ' + platform + '</p>' +
+			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button>' +
+			(window.__TAURI__ ? "" : '<button id="btnApplyPwaUpdate" hidden>Jetzt neu laden</button>') +
+			"</div>" +
+			'<p class="hint" id="updateStatus">Prüfe Version…</p>' +
+			'<p class="hint">PWA liest <code>version.json</code> von dieser App-URL (nicht das GitHub-Release-Asset). ' +
+			'Dateien im <code>web/</code>-Ordner deployen: <code>version.json</code>, <code>updater.js</code>, <code>latest.json</code>.</p>';
 	}
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	o.innerHTML = '<div class="modal settings-modal">' +
@@ -263,6 +268,11 @@ export function openSettings(section) {
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
 	// KI-Tab: Status-Banner mit aktuellem Ping-Ergebnis füllen
 	if (sec === "ki") renderStatusDot();
+	// Update-Tab: Remote-Version sofort prüfen (Lokal + Server sichtbar)
+	if (sec === "update") {
+		// next tick: DOM muss erst im Overlay stehen
+		setTimeout(() => { handleCheckUpdate().catch(() => {}); }, 0);
+	}
 }
 
 // Einstellungen-Aktionen aus wireEvents:
@@ -370,33 +380,66 @@ export async function handleAddProvider() {
 export async function handleCheckUpdate() {
 	const status = U.el("updateStatus");
 	const btn = U.el("btnCheckUpdate");
+	const applyBtn = U.el("btnApplyPwaUpdate");
+	const localEl = U.el("updateLocalVer");
+	const remoteEl = U.el("updateRemoteVer");
 	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
+	if (applyBtn) applyBtn.hidden = true;
 	if (status) status.textContent = "Prüfe…";
+	// Lokal immer aus dem laufenden Bundle anzeigen
+	const running = window.APP_VERSION || "unbekannt";
+	if (localEl) localEl.textContent = "v" + String(running).replace(/^v/i, "");
 	try {
 		const r = await (window.checkAppUpdate ? window.checkAppUpdate() : Promise.reject(new Error("Update-Check nicht geladen")));
-		if (!r.hasUpdate) {
-			if (status) status.textContent = "✅ Du bist auf dem neuesten Stand (v" + (r.current || "?") + ").";
-			U.toast("Kein Update verfügbar.", "success");
-		} else if (window.__TAURI__ && r.update) {
-			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar — wird vorbereitet…";
-			try {
-				await r.update.downloadAndInstall();
-				if (status) status.textContent = "✅ Update installiert — Neustart…";
-				await window.__TAURI__.process.relaunch();
-			} catch (e) {
-				if (status) status.textContent = "⚠️ Installation fehlgeschlagen: " + (e.message || e);
-				U.toast("Update-Installation fehlgeschlagen.", "error");
+		if (localEl && r.current) localEl.textContent = "v" + r.current;
+		if (remoteEl && r.latest) remoteEl.textContent = "v" + r.latest + (r.source ? " (" + r.source + ")" : "");
+		if (r.hasUpdate) {
+			if (window.__TAURI__ && r.update) {
+				if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar — wird vorbereitet…";
+				try {
+					await r.update.downloadAndInstall();
+					if (status) status.textContent = "✅ Update installiert — Neustart…";
+					await window.__TAURI__.process.relaunch();
+				} catch (e) {
+					if (status) status.textContent = "⚠️ Installation fehlgeschlagen: " + (e.message || e);
+					U.toast("Update-Installation fehlgeschlagen.", "error");
+				}
+			} else {
+				if (status) status.textContent = "⬇️ Server hat v" + r.latest + ", du läufst v" + r.current + " — neu laden.";
+				if (applyBtn) applyBtn.hidden = false;
+				U.toast("Update v" + r.latest + " verfügbar.", "success");
 			}
+		} else if (r.remoteOlder) {
+			if (status) status.textContent = "ℹ️ Lokal v" + r.current + " ist neuer als Remote v" + r.latest +
+				" (Quelle: " + (r.source || "?") + "). Kein Update nötig — Remote ggf. veraltet.";
+			U.toast("Lokal ist neuer als Remote.", "success");
 		} else {
-			if (status) status.textContent = "⬇️ Neuere Version v" + r.latest + " — Seite neu laden (PWA holt den Stand über den Service Worker).";
-			U.toast("Update v" + r.latest + " verfügbar — bitte neu laden.", "success");
+			if (status) status.textContent = "✅ Auf dem neuesten Stand: v" + (r.current || "?") +
+				(r.source ? " · Quelle: " + r.source : "") + ".";
+			U.toast("Kein Update verfügbar.", "success");
 		}
 	} catch (e) {
 		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + (e.message || e);
+		if (remoteEl) remoteEl.textContent = "Fehler";
 		U.toast("Update-Check fehlgeschlagen.", "error");
-		window.open("https://github.com/prinzpuma/Impala67/releases/latest", "_blank");
 	}
 	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }
+}
+
+// PWA: SW updaten + Reload (aus updater.js)
+export async function handleApplyPwaUpdate() {
+	const status = U.el("updateStatus");
+	const applyBtn = U.el("btnApplyPwaUpdate");
+	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = "Lädt…"; }
+	if (status) status.textContent = "⬇️ Update wird geladen…";
+	try {
+		if (typeof window.applyPwaUpdate === "function") await window.applyPwaUpdate();
+		else location.reload();
+	} catch (e) {
+		if (status) status.textContent = "⚠️ Reload fehlgeschlagen: " + (e.message || e);
+		U.toast("Update-Reload fehlgeschlagen.", "error");
+		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Jetzt neu laden"; }
+	}
 }
 
 export async function handleSaveSettings() {
@@ -584,6 +627,7 @@ export const SETTINGS = {
 	handleDriveSyncSettings,
 	handleAddProvider,
 	handleCheckUpdate,
+	handleApplyPwaUpdate,
 	handleSaveSettings,
 	handleClearBg,
 	handleResetAll,

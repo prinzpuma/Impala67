@@ -1068,6 +1068,9 @@ function wireEvents() {
 			case "btnCheckUpdate":
 				await SETTINGS.handleCheckUpdate();
 				break;
+			case "btnApplyPwaUpdate":
+				await SETTINGS.handleApplyPwaUpdate();
+				break;
 			case "btnSaveSettings":
 				await SETTINGS.handleSaveSettings();
 				break;
