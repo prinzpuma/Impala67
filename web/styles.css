@@ -2069,8 +2069,10 @@ body.reduce-motion .heft-tray { animation: none; }
 	color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18); }
 
 /* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter-Chips, Aktionen */
-.heft-scan-edit { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
-	background: rgba(3,5,10,.97); }
+.heft-scan-edit { position: fixed; inset: 0; z-index: 1700; display: flex; flex-direction: column;
+	/* Vollständig deckend und viewport-gebunden: die Bearbeitung darf nie hinter
+	   der App bzw. der Kamera-Bühne landen. */
+	background: #03050a; }
 .heft-scan-editstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
 	overflow: hidden; padding: 10px; }
 .heft-scan-editstage canvas { touch-action: none; border-radius: 6px; box-shadow: 0 18px 48px rgba(0,0,0,.5); cursor: crosshair; }

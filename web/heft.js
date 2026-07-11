@@ -1714,7 +1714,12 @@ export const HEFT = (() => {
 		const img = new Image();
 		img.onload = () => {
 			if (!scanUI || !scanUI.edit || scanUI.edit.el !== ed) return;
-			const k = Math.max(0.02, Math.min((stage.clientWidth - 24) / img.naturalWidth, (stage.clientHeight - 24) / img.naturalHeight));
+			// Bei verschachtelten/fixed Overlays kann die Stage im ersten Layout-Frame
+			// noch 0×0 melden. Dann die Viewport-Größe verwenden, statt ein unsichtbares
+			// 1×1-Canvas zu erzeugen.
+			const stageW = stage.clientWidth || window.innerWidth;
+			const stageH = stage.clientHeight || Math.max(180, window.innerHeight - 170);
+			const k = Math.max(0.02, Math.min((stageW - 24) / img.naturalWidth, (stageH - 24) / img.naturalHeight));
 			cv.width = Math.max(1, Math.round(img.naturalWidth * k));
 			cv.height = Math.max(1, Math.round(img.naturalHeight * k));
 			const x = cv.getContext("2d");
@@ -1787,7 +1792,9 @@ export const HEFT = (() => {
 		const stage = ed.el.querySelector(".heft-scan-editstage");
 		const cv = ed.el.querySelector("canvas");
 		const sh = scanUI.shots[ed.i];
-		ed.k = Math.max(0.02, Math.min((stage.clientWidth - 24) / sh.w, (stage.clientHeight - 24) / sh.h));
+		const stageW = stage.clientWidth || window.innerWidth;
+		const stageH = stage.clientHeight || Math.max(180, window.innerHeight - 170);
+		ed.k = Math.max(0.02, Math.min((stageW - 24) / sh.w, (stageH - 24) / sh.h));
 		cv.width = Math.max(1, Math.round(sh.w * ed.k));
 		cv.height = Math.max(1, Math.round(sh.h * ed.k));
 		drawEdit();
