@@ -717,6 +717,8 @@ button.danger { color: var(--danger); }
 .conflict-line.local-only .conflict-line-marker { color: var(--danger); }
 .conflict-line.remote-only .conflict-line-marker { color: var(--success); }
 .conflict-empty { color: var(--text2); padding: 12px; }
+/* Lange Konfliktseiten werden vollständig gezeigt; keine Platzhalter statt Inhalt. */
+.conflict-fulltext { margin: 0; min-height: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: var(--text); }
 .conflict-key { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: -4px 0 0; color: var(--text2); font-size: 11.5px; }
 .conflict-key span:first-child { color: #f2b0a9; }
 .conflict-key span:nth-child(2) { color: #a9dfba; }
@@ -1926,8 +1928,10 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-page-slot { position: relative; flex-shrink: 0; }
 .heft-page-slot .heft-canvas {
 	display: block;
-	/* 1 Finger scrollt die Seite; zwei Finger werden in heft.js als Pinch verarbeitet. */
-	touch-action: pan-x pan-y;
+	/* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, Ein-Finger-Scroll und Pinch selbst. */
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
 	border-radius: 4px; background: #fdfdf8;
 	box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 18px 48px var(--shadow-strong);
 }

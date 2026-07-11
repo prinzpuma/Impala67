@@ -637,37 +637,44 @@ function openConflictResolver(index) {
 	const left = c.localContent || "";
 	const right = c.remoteContent || "";
 	const hasTextComparison = !c.conflictType && (!!left || !!right);
-	const diff = hasTextComparison ? U.diffLines(left, right) : [];
-	const paneHtml = (side) => diff.filter((d) => d.type === "same" || (side === "local" ? d.type === "del" : d.type === "add")).map((d) => {
-		const changed = d.type !== "same";
-		const cls = changed ? (side === "local" ? "local-only" : "remote-only") : "same";
-		const marker = changed ? (side === "local" ? "−" : "+") : "";
-		return '<div class="conflict-line ' + cls + '"><span class="conflict-line-marker">' + marker + "</span>" + (U.esc(d.text) || "&nbsp;") + "</div>";
-	}).join("") || '<div class="conflict-empty">Kein Text vorhanden.</div>';
+	const lineCount = (text) => String(text).split("\n").length;
+	// U.diffLines wechselt bei sehr langen Seiten bewusst in einen groben Modus,
+	// um den Browser nicht mit einer quadratischen Diff-Matrix zu blockieren.
+	// Der frühere Resolver zeigte dann nur dessen Platzhalter — nicht den Inhalt.
+	const coarseComparison = hasTextComparison && (lineCount(left) > 400 || lineCount(right) > 400);
+	const diff = hasTextComparison && !coarseComparison ? U.diffLines(left, right) : [];
+	const paneHtml = (side) => {
+		if (coarseComparison) {
+			const content = side === "local" ? left : right;
+			return '<pre class="conflict-fulltext">' + (U.esc(content) || "(Kein Text vorhanden.)") + "</pre>";
+		}
+		return diff.filter((d) => d.type === "same" || (side === "local" ? d.type === "del" : d.type === "add")).map((d) => {
+			const changed = d.type !== "same";
+			const cls = changed ? (side === "local" ? "local-only" : "remote-only") : "same";
+			const marker = changed ? (side === "local" ? "−" : "+") : "";
+			return '<div class="conflict-line ' + cls + '"><span class="conflict-line-marker">' + marker + "</span>" + (U.esc(d.text) || "&nbsp;") + "</div>";
+		}).join("") || '<div class="conflict-empty">Kein Text vorhanden.</div>';
+	};
 	const winnerLabel = c.winner === "local" ? "Dieses Gerät" : "Drive / anderes Gerät";
 	const conflictSummary = c.conflictType === "delete-change"
-		? "Eine Seite wurde auf einem Gerät gelöscht, während sie auf dem anderen Gerät geändert oder verschoben wurde."
-		: "Dieselbe Seite wurde seit dem letzten Sync auf beiden Geräten bearbeitet.";
+		? "Auf einem Gerät wurde die Seite gelöscht, während sie auf dem anderen Gerät noch geändert oder verschoben wurde. Die App kann diese beiden Aktionen nicht automatisch zusammenführen."
+		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.";
 	const comparisonHtml = hasTextComparison
-		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div><p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>'
+		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div>' + (coarseComparison ? '<p class="conflict-key">Lange Seite: Beide vollständigen Inhalte werden gezeigt. Eine zeilenweise Markierung wäre hier zu langsam.</p>' : '<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>')
 		: '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
 	o.hidden = false;
 	o.innerHTML = '<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Sync-Konflikt' +
-		(items.length > 1 ? " (" + (i + 1) + "/" + items.length + ")" : "") + "</b><small>" +
-		U.esc(c.title || "Seite") + "</small></span></header>" +
-		'<div class="conflict-reason"><b>Was ist passiert?</b> ' + U.esc(conflictSummary) +
-		(c.legacy ? "" : '<br><span class="hint">Gewinner nach Zeitstempel: <b>' + U.esc(winnerLabel) + "</b></span>") +
+		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Synchronisation braucht eine Entscheidung' +
+		(items.length > 1 ? " · " + (i + 1) + " von " + items.length : "") + "</b><small>“" +
+		U.esc(c.title || "Seite") + "”</small></span></header>" +
+		'<div class="conflict-reason"><b>Warum sehe ich das?</b> ' + U.esc(conflictSummary) +
+		(c.legacy ? "" : '<br><span class="hint">Die App empfiehlt: <b>' + U.esc(winnerLabel) + "</b> behalten, weil dieser Stand den neueren Zeitstempel hat.</span>") +
 		"</div>" +
 		comparisonHtml +
 		'<div class="conflict-actions">' +
-		(items.length > 1 ? '<button data-conflictnav="-1">‹ Zurück</button><button data-conflictnav="1">Weiter ›</button>' : "") +
-		(c.pageId ? '<button data-conflictpage="' + U.esc(c.pageId) + '">Original öffnen</button>' : "") +
-		(c.conflictPageId ? '<button data-conflictpage="' + U.esc(c.conflictPageId) + '">Gerettete Kopie öffnen</button>' : "") +
-		'<button class="primary" data-conflictresolve="keep-winner">Aktuellen Gewinner behalten</button>' +
-		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Kopie in Original übernehmen</button>' : "") +
-		'<button data-conflictresolve="keep-both">Beide Seiten behalten</button>' +
+		'<button class="primary" data-conflictresolve="keep-winner">Empfehlung übernehmen</button>' +
+		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Stattdessen anderen Stand übernehmen</button>' : "") +
 		"</div></div>";
 }
 async function resolveConflict(action) {

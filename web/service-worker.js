@@ -26,7 +26,10 @@
 // v25: Tesseract.js für lokale Heft-OCR
 // v26: Scanner-Fix — randfestes bilineares Sampling und Validierung manueller Zuschnitte
 // v27: Scanner-Ablauf — Autoaufnahme nur einmal je Blatt, Berechtigungs-Fallback, kein Fallback-Crop
-const CACHE = "impala67-v27";
+// v28: Scanner-UX — Auto-Scan standardmäßig aus, sichtbare letzte Scan-Vorschau
+// v29: Scanner-Workflow — Kachel-Vorschau erst bei Antippen, kein automatischer Zuschnitt
+// v30: Scanner-Zuschnitt — robuste Papier-Ecken, Sicherheitsrand, ohne Auto-Zuschnitt-Menü
+const CACHE = "impala67-v30";
 
 const APP_FILES = [
 	"./",

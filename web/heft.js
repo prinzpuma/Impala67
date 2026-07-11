@@ -40,8 +40,10 @@ export const HEFT = (() => {
 	const touchPointers = new Map(); // aktive Finger für Scrollen/Pinch-Zoom
 	let pinch = null;                // { distance, midX, midY, startZoom }
 	let touchTap = null;             // Zwei-/Drei-Finger-Tap für Undo/Redo
-	// onlyPen default true: Palm Rejection für Apple Pencil
-	let tool = "pen", color = COLORS[0], size = 3, onlyPen = true, penSeen = false;
+	// onlyPen default true: Palm Rejection für Apple Pencil.
+	// Aktive Stifte werden separat verfolgt, damit ein Handballen nie als Scroll-Geste zählt.
+	let tool = "pen", color = COLORS[0], size = 3, onlyPen = true;
+	const activePenPointers = new Set();
 	let expanded = false;    // Options-Tray erst nach Klick auf Schreiben/Radierer
 	let trayPos = null;      // {x,y} nur für das verschiebbare Options-Tray
 	let trayDrag = null;     // laufender Drag des Options-Trays
@@ -286,34 +288,48 @@ export const HEFT = (() => {
 			Math.round((e.pressure || 0.5) * 100) / 100,
 		];
 	};
-	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penSeen);
+	// Finger sind entweder Navigation (Standard) oder – nach bewusster Umschaltung – Zeichenwerkzeug.
+	// Während ein Stift aufliegt, werden sämtliche Touch-Ereignisse als Handballen verworfen.
+	const rejected = (e) => e.pointerType === "touch" && (onlyPen || activePenPointers.size > 0);
+	const touchNavigates = () => onlyPen && activePenPointers.size === 0;
 	const near = (p, x, y, r) => { const dx = p[0] - x, dy = p[1] - y; return dx * dx + dy * dy <= r * r; };
-	// ---------- Touch: 1 Finger = nativer Scroll · 2 Finger = Pinch-Zoom ----------
+	// ---------- Touch: 1 Finger = Scroll · 2 Finger = Pinch-Zoom ----------
+	// Die Navigation wird vollständig selbst gesteuert. Dadurch konkurriert der Browser
+	// nicht mehr mit Stift-Eingaben um dieselbe Geste.
 	function touchDistance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 	function touchMid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 	function touchPair() { const a = [...touchPointers.values()]; return a.length >= 2 ? [a[0], a[1]] : null; }
 	function onTouchPointerDown(e) {
-		if (e.pointerType !== "touch") return;
+		if (e.pointerType !== "touch" || !touchNavigates() || !host) return;
+		const scroll = host.querySelector('.heft-scroll');
+		if (!scroll) return;
+		e.preventDefault();
 		if (!touchTap) touchTap = { count: 0, started: Date.now(), moved: false };
 		touchTap.count++;
-		touchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, cv: e.currentTarget });
+		touchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, scrollLeft: scroll.scrollLeft, scrollTop: scroll.scrollTop });
+		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 		const pair = touchPair();
-		if (!pair || !host) return;
+		if (!pair) return;
 		const mid = touchMid(pair[0], pair[1]);
 		pinch = { distance: Math.max(1, touchDistance(pair[0], pair[1])), midX: mid.x, midY: mid.y, startZoom: zoom };
-		// Zweiter Finger: Browser-Geste blockieren, damit nur das Papier zoomt.
-		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 	}
 	function onTouchPointerMove(e) {
-		if (e.pointerType !== "touch" || !touchPointers.has(e.pointerId)) return;
+		if (e.pointerType !== "touch" || !touchPointers.has(e.pointerId) || !host) return;
+		// Sobald der Stift aufsetzt, ist jeder Touch ein Handballen – laufende Finger-Gesten abbrechen.
+		if (activePenPointers.size) { touchPointers.clear(); pinch = null; touchTap = null; return; }
 		const p = touchPointers.get(e.pointerId);
 		if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 12 && touchTap) touchTap.moved = true;
 		p.x = e.clientX; p.y = e.clientY;
-		const pair = touchPair();
-		if (!pinch || !pair || !host) return; // ein Finger bleibt nativer Scroll
-		e.preventDefault();
 		const scroll = host.querySelector('.heft-scroll');
 		if (!scroll) return;
+		e.preventDefault();
+		const pair = touchPair();
+		if (!pair || !pinch) {
+			// Ein Finger verschiebt ausschließlich die Papierfläche.
+			scroll.scrollLeft = Math.max(0, p.scrollLeft - (e.clientX - p.sx));
+			scroll.scrollTop = Math.max(0, p.scrollTop - (e.clientY - p.sy));
+			return;
+		}
 		const dist = Math.max(1, touchDistance(pair[0], pair[1]));
 		const nextZoom = Math.max(0.55, Math.min(4, pinch.startZoom * (dist / pinch.distance)));
 		if (Math.abs(nextZoom - zoom) < 0.003) return;
@@ -329,7 +345,8 @@ export const HEFT = (() => {
 		scroll.scrollTop = Math.max(0, logicalY * scale - focalY);
 	}
 	function onTouchPointerUp(e) {
-		if (e.pointerType !== "touch") return;
+		if (e.pointerType !== "touch" || !touchPointers.has(e.pointerId)) return;
+		e.preventDefault();
 		touchPointers.delete(e.pointerId);
 		const pair = touchPair();
 		if (pair) {
@@ -341,8 +358,8 @@ export const HEFT = (() => {
 		// Zwei Finger tippen = Undo · drei Finger tippen = Redo. Scroll/Pinch lösen nichts aus.
 		const tap = touchTap; touchTap = null;
 		if (tap && !tap.moved && Date.now() - tap.started < 320) {
-			if (tap.count === 2) { e.preventDefault(); undo(); }
-			else if (tap.count >= 3) { e.preventDefault(); redo(); }
+			if (tap.count === 2) undo();
+			else if (tap.count >= 3) redo();
 		}
 	}
 	function pointInPolygon(p, poly) {
@@ -374,7 +391,7 @@ export const HEFT = (() => {
 		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
 	}
 	function onDown(e) {
-		if (e.pointerType === "pen") penSeen = true;
+		if (e.pointerType === "pen") activePenPointers.add(e.pointerId);
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -473,7 +490,8 @@ export const HEFT = (() => {
 			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(n - 2) });
 		}
 	}
-	function onUp() {
+	function onUp(e) {
+		if (e && e.pointerType === "pen") activePenPointers.delete(e.pointerId);
 		if (!drawing) return;
 		const pi = drawing.pageIdx;
 		const pg = doc.pages[pi];
@@ -961,14 +979,14 @@ export const HEFT = (() => {
 			'<div class="heft-scan-bar">' +
 				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen"></button>' +
 				'<div class="heft-scan-actions">' +
-					'<button type="button" data-hescanautocap="1" class="active" title="Bei ruhigem, gutem Dokument automatisch auslösen">⚡ Auto</button>' +
+					'<button type="button" data-hescanautocap="1" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
 					'<button type="button" data-hescanpdf="1" disabled>📄 Als PDF speichern</button>' +
 					'<button type="button" data-hescanheft="1" disabled>📓 In Heft einfügen</button>' +
 				'</div>' +
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: true, autoArmed: true, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: false, autoArmed: false, autoCooldown: 0 };
 		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
 		wrap.addEventListener("click", onScanClick);
 		try {
@@ -1134,8 +1152,9 @@ export const HEFT = (() => {
 		else if (d.hescanautocap) {
 			scanUI.autoCapture = !scanUI.autoCapture;
 			if (scanUI.autoCapture) { scanUI.autoArmed = true; scanUI.liveStable = 0; }
+			else { scanUI.autoArmed = false; }
 			b.classList.toggle("active", scanUI.autoCapture);
-			b.textContent = scanUI.autoCapture ? "⚡ Auto" : "⚡ Manuell";
+			b.textContent = scanUI.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
 		}
 		else if (d.hescanpick) scanPickFiles();
 		else if (d.hescancompare) {
@@ -1168,19 +1187,6 @@ export const HEFT = (() => {
 				const rb = scanUI.edit.el.querySelector("[data-hescanrot]");
 				if (rb) rb.textContent = "⟳ Drehen" + (scanUI.edit.rot ? " (" + (scanUI.edit.rot * 90) + "°)" : "");
 				liveReprocessEdit();
-			}
-		}
-		else if (d.hescanauto) {
-			const ed = scanUI.edit;
-			if (ed && ed.img) {
-				const sh = scanUI.shots[ed.i];
-				ed.quad = detectQuad(ed.img, sh.w, sh.h);
-				ed.cornerMode = true; // Ecken-Editor am Rohbild
-				layoutEdit();
-				liveReprocessEdit(); // sofort neu entzerren + aufbereiten
-			} else if (ed) {
-				// Bild noch am Laden — nach onload erneut versuchen
-				if (U.toast) U.toast("Bild wird geladen…");
 			}
 		}
 		else if (d.hescandel) {
@@ -1223,7 +1229,9 @@ export const HEFT = (() => {
 		const img = await loadImg(src);
 		// Immer die echten Bildmaße nutzen (sonst stimmen Quad/Warp nicht)
 		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
-		const sh = { src, w: iw, h: ih, quad: detectQuad(img, iw, ih), mode: "color", rot: 0, out: null, img };
+		// Auto-Zuschnitt bleibt aktiv. detectQuad() gibt bei unsicherer Erkennung
+		// das vollständige Bild zurück, statt einen fragwürdigen Zuschnitt zu erzwingen.
+		const sh = { src, w: iw, h: ih, quad: detectQuad(img, iw, ih), mode: "color", rot: 0, out: null, img }; 
 		await processShot(sh);
 		if (scanUI !== owner || !sh.out) return;
 		owner.shots.push(sh);
@@ -1239,6 +1247,8 @@ export const HEFT = (() => {
 			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
 				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span></button>';
 		}).join("");
+		// Die Kacheln bleiben klein, damit mehrere Aufnahmen schnell hintereinander
+		// erfasst werden können. Antippen öffnet erst dann die große Bearbeitung.
 		strip.scrollLeft = strip.scrollWidth;
 		const ready = scanUI.shots.filter((sh) => sh.out && sh.out.dataUrl);
 		const n = ready.length;
@@ -1408,23 +1418,18 @@ export const HEFT = (() => {
 			if (sc > bestScore) { bestScore = sc; best = { tl, tr, br, bl }; }
 		}
 		if (!best) return full;
-		// Ecken der besten Komponente: direkt aus dem Flood-Fill übernommen.
-		let tl = best.tl, tr = best.tr, br = best.br, bl = best.bl;
-		// Ecken an starken Kanten feinjustieren (±3 px)
-		const snap = (p) => {
-			const y0 = (p / dw) | 0, x0 = p % dw;
-			let bestP = p, bestE = edge[p];
-			for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-				const yy = y0 + dy, xx = x0 + dx;
-				if (yy < 1 || yy >= dh - 1 || xx < 1 || xx >= dw - 1) continue;
-				const i = yy * dw + xx;
-				if (edge[i] > bestE) { bestE = edge[i]; bestP = i; }
-			}
-			return bestP;
-		};
-		tl = snap(tl); tr = snap(tr); br = snap(br); bl = snap(bl);
+		// Ecken direkt aus der zusammenhängenden Papierfläche verwenden. Das frühere
+		// Snapping auf die jeweils stärkste Kante sprang bei Text, Karos oder Schatten
+		// oft auf eine innere Linie und erzeugte schiefe bzw. abgeschnittene Scans.
 		const pt = (p) => [(p % dw) / kk, ((p / dw) | 0) / kk];
-		const q = [pt(tl), pt(tr), pt(br), pt(bl)];
+		const raw = [pt(best.tl), pt(best.tr), pt(best.br), pt(best.bl)];
+		// Einen kleinen Sicherheitsrand nach außen lassen: erkannte Papierkanten sind
+		// wegen Schatten/Antialiasing meist etwas zu weit innen.
+		const centerX = raw.reduce((s, p) => s + p[0], 0) / 4, centerY = raw.reduce((s, p) => s + p[1], 0) / 4;
+		const q = raw.map((p) => [
+			Math.max(0, Math.min(w - 1, centerX + (p[0] - centerX) * 1.025)),
+			Math.max(0, Math.min(h - 1, centerY + (p[1] - centerY) * 1.025)),
+		]);
 		// Plausibilität
 		const areaQ = quadArea(q);
 		if (areaQ < w * h * 0.10 || areaQ > w * h * 0.97) return full;
@@ -1656,10 +1661,9 @@ export const HEFT = (() => {
 		sh.img = img;
 		sh.w = img.naturalWidth || sh.w;
 		sh.h = img.naturalHeight || sh.h;
-		// Immer frisch erkennen, wenn kein manuelles Quad gesetzt — oder wenn das alte
-		// Quad praktisch das ganze Bild ist (alte schlechte Erkennung)
-		const needDetect = !Array.isArray(sh.quad) || sh.quad.length !== 4 ||
-			quadArea(sh.quad) > sh.w * sh.h * 0.92;
+		// Ein vorhandener automatisch oder manuell bestimmter Zuschnitt bleibt stabil;
+		// nur ein fehlender/defekter Rahmen wird neu erkannt.
+		const needDetect = !Array.isArray(sh.quad) || sh.quad.length !== 4;
 		if (needDetect) sh.quad = detectQuad(img, sh.w, sh.h);
 		await tick();
 		let cv = warpPerspective(img, sh.w, sh.h, sh.quad);
@@ -1753,7 +1757,6 @@ export const HEFT = (() => {
 				'<button type="button" data-hescancompare="1">◑ Vorher/Nachher</button>' +
 				'<button type="button" data-hescancorners="1">⌜ Ecken anpassen</button>' +
 				'<button type="button" data-hescanrot="1">⟳ Drehen' + (sh.rot ? " (" + (sh.rot * 90) + "°)" : "") + '</button>' +
-				'<button type="button" data-hescanauto="1">◱ Auto-Zuschnitt</button>' +
 				'<button type="button" data-hescandel="1">🗑 Löschen</button>' +
 				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Fertig</button>' +
 			'</div>';
@@ -2052,7 +2055,7 @@ export const HEFT = (() => {
 		else if (d.hesize) size = parseFloat(d.hesize);
 		else if (d.heundo) { undo(); return; }
 		else if (d.heredo) { redo(); return; }
-		else if (d.heonlypen) { onlyPen = !onlyPen; if (!onlyPen) penSeen = false; }
+		else if (d.heonlypen) { onlyPen = !onlyPen; }
 		else if (d.hepapercycle) {
 			const pg = page(); if (!pg) return;
 			const i = PAPERS.findIndex((p) => p[0] === pg.paper);
@@ -2222,7 +2225,7 @@ export const HEFT = (() => {
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); holdTool = null; suppressEraserClick = false;
-		touchPointers.clear(); pinch = null; touchTap = null;
+		touchPointers.clear(); pinch = null; touchTap = null; activePenPointers.clear();
 		trayDrag = null;
 	}
 
