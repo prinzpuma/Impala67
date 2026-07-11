@@ -2,101 +2,128 @@ name: auto-version
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   bump:
     if: "!contains(github.event.head_commit.message, 'chore: bump version')"
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Patch-Version erhoehen
-        id: bump
+      - name: Patch-Version erhöhen
         run: |
           set -euo pipefail
+
           CURRENT=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          IFS='.' read -r MA MI PA <<< "$CURRENT"
-          # Ein Force-Push kann einen früheren Bot-Commit zurücksetzen, nicht
-          # aber dessen bereits veröffentlichten Git-Tag. Deshalb immer die
-          # nächste noch freie Patch-Version bestimmen.
-          PA=$((PA+1))
-          NEW="$MA.$MI.$PA"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          PATCH=$((PATCH + 1))
+          NEW="$MAJOR.$MINOR.$PATCH"
+
+          # Nach Force-Pushes können Tags weiter existieren, obwohl der
+          # zugehörige Commit verschwunden ist. Daher freie Version suchen.
           while git ls-remote --exit-code --tags origin "refs/tags/v$NEW" >/dev/null 2>&1; do
-            PA=$((PA+1))
-            NEW="$MA.$MI.$PA"
+            PATCH=$((PATCH + 1))
+            NEW="$MAJOR.$MINOR.$PATCH"
           done
+
           export NEW
           echo "Bump $CURRENT -> $NEW"
 
           node <<'NODE'
-          const fs = require('fs');
+          const fs = require("fs");
           const NEW = process.env.NEW;
 
           function writeJson(path, mutator) {
-            const j = JSON.parse(fs.readFileSync(path, 'utf8'));
-            mutator(j);
-            fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
+            const json = JSON.parse(fs.readFileSync(path, "utf8"));
+            mutator(json);
+            fs.writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
           }
 
-          writeJson('./src-tauri/tauri.conf.json', (j) => { j.version = NEW; });
-          writeJson('./package.json', (j) => { j.version = NEW; });
+          writeJson("./src-tauri/tauri.conf.json", (json) => {
+            json.version = NEW;
+          });
+
+          writeJson("./package.json", (json) => {
+            json.version = NEW;
+          });
 
           {
-            const p = './web/version.json';
-            let j = { name: 'Impala67' };
-            if (fs.existsSync(p)) j = JSON.parse(fs.readFileSync(p, 'utf8'));
-            j.version = NEW;
-            j.updated = new Date().toISOString().slice(0, 10);
-            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
-          }
+            const path = "./web/version.json";
+            let json = { name: "Impala67" };
 
-          if (fs.existsSync('./web/latest.json')) {
-            writeJson('./web/latest.json', (j) => { j.version = NEW; });
+            if (fs.existsSync(path)) {
+              json = JSON.parse(fs.readFileSync(path, "utf8"));
+            }
+
+            json.version = NEW;
+            json.updated = new Date().toISOString().slice(0, 10);
+
+            fs.writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
           }
 
           {
-            const p = './web/updater.js';
-            let s = fs.readFileSync(p, 'utf8');
-            if (!/const BUILD_VERSION = "[^"]+"/.test(s)) {
-              console.error('BUILD_VERSION fehlt in web/updater.js');
+            const path = "./web/updater.js";
+            let source = fs.readFileSync(path, "utf8");
+
+            if (!/const BUILD_VERSION = "[^"]+"/.test(source)) {
+              console.error("BUILD_VERSION fehlt in web/updater.js");
               process.exit(1);
             }
-            s = s.replace(/const BUILD_VERSION = "[^"]+"/, 'const BUILD_VERSION = "' + NEW + '"');
-            fs.writeFileSync(p, s);
+
+            source = source.replace(
+              /const BUILD_VERSION = "[^"]+"/,
+              `const BUILD_VERSION = "${NEW}"`
+            );
+
+            fs.writeFileSync(path, source);
           }
 
-          console.log('OK', NEW);
+          console.log(`Version ${NEW} vorbereitet`);
           NODE
 
-          # Shell-Var fuer den naechsten Step (kein steps.outputs noetig)
           echo "NEW=$NEW" >> "$GITHUB_ENV"
 
-      - name: Committen, taggen, pushen
+      - name: Committen, taggen und pushen
         run: |
-          # Tags aktualisieren, damit die freie Version oben zuverlässig über
-          # lokale und bereits auf GitHub vorhandene Tags entschieden wird.
+          set -euo pipefail
+
           git fetch --tags --force
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json package.json web/version.json web/latest.json web/updater.js
+
+          git add \
+            src-tauri/tauri.conf.json \
+            package.json \
+            web/version.json \
+            web/updater.js
+
           git commit -m "chore: bump version to $NEW"
           git tag "v$NEW"
+
           git push origin main
           git push origin "v$NEW"
 
-      - name: GitHub-Release erstellen
-        uses: actions/github-script@v8
+      - name: Windows-Release-Build auf dem neuen Tag starten
+        uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.repos.createRelease({
+            const tagRef = `v${process.env.NEW}`;
+            
+            await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: `v${process.env.NEW}`,
-              name: `Impala67 v${process.env.NEW}`,
-              generate_release_notes: true
-            })
+              workflow_id: "release.yml",
+              ref: tagRef
+            });
+
+            core.info(`release.yml wurde erfolgreich für den Tag ${tagRef} gestartet!`);
