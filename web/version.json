@@ -1,5 +1,12 @@
 {
+<<<<<<< HEAD
 	"version": "0.2.18",
 	"name": "Impala67",
 	"updated": "2026-07-11"
 }
+=======
+  "name": "Impala67",
+  "version": "0.2.28",
+  "updated": "2026-07-11"
+}
+>>>>>>> fd68edca20b491f2afbd921645c5ce49de541ea7
