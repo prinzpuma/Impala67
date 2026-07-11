@@ -143,8 +143,23 @@ function ankiDecksHtml() {
 				'<button data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
 			"</div></div>";
 	}).join("");
+	// Sichtbarkeits-Fallback: „Standard“ erscheint als Zeile, sobald dort Karten
+	// liegen (z.B. Importe ohne Stapel) — vorher waren solche Karten nur über
+	// „Alle Stapel lernen“ erreichbar und wirkten wie Geisterkarten.
+	const stdCards = ankiCardsOf("Standard");
+	let stdRow = "";
+	if (stdCards.length) {
+		const stdNeu = stdCards.filter((c) => c.srs.state === "new" && !c.suspended).length;
+		const stdDue = ankiDueOf("Standard").length;
+		stdRow = '<div class="deck-row"><div class="deck-info"><span class="deck-name">Standard <span class="hint">(ohne Stapel)</span></span>' +
+			'<span class="deck-counts"><b class="cnt-due">' + stdDue + '</b> fällig · <b class="cnt-new">' + stdNeu + "</b> neu · " + stdCards.length + " gesamt</span></div>" +
+			'<div class="deck-actions">' +
+				'<button data-ankistudy="Standard" ' + (ankiStudyOpen("Standard") ? "" : "disabled") + ">▶ Lernen</button>" +
+				'<button data-ankideckfilter="Standard">🔍 Durchsuchen</button>' +
+			"</div></div>";
+	}
 	const totalOpen = STATE.studySnapshot(null).counts.total;
-	return '<div class="deck-list">' + rows + "</div>" +
+	return '<div class="deck-list">' + rows + stdRow + "</div>" +
 		'<div class="row-btns" style="margin-top:14px;max-width:720px">' +
 			'<button data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalOpen + " offen)</button>" +
 			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
@@ -325,7 +340,9 @@ function ankiStudyHtml() {
 			(c.leech ? ' · <span class="leech-badge" title="Leech">🐛 Leech</span>' : "") + "</div>" +
 		'<div class="card-face md">' + U.md(c.front) + "</div>";
 	if (S.reviewShowBack) {
-		html += '<div class="card-face back md">' + U.md(c.back) + "</div>" +
+		// Anki-Look: Vorder-/Rückseite als EINE Karte mit Trennlinie statt zwei Boxen
+		html += '<hr class="study-divider">' +
+			'<div class="card-face back md">' + U.md(c.back) + "</div>" +
 			'<div class="grades">' +
 				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1</span></button>' +
 				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2</span></button>' +

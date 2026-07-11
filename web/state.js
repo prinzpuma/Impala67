@@ -296,9 +296,12 @@ export const STATE = (() => {
 				renameDeckTree(p.from, p.to);
 				break;
 			case "deckDelete":
-				// Löscht Stapel + Unterstapel; deren Karten wandern in "Standard" (nichts geht verloren).
+				// FIX (11. Juli, wie Anki): Stapel löschen ENTFERNT auch die Karten des
+				// Teilbaums. Vorher wanderten sie unsichtbar nach "Standard" und tauchten
+				// nur noch in „Alle Stapel lernen“ auf (gemeldeter Bug). Das Review-
+				// Protokoll (S.reviews) bleibt für die Statistik vollständig erhalten.
+				cardsInDeckTree(p.name).forEach((c) => { delete S.cards[c.id]; });
 				deckSubtree(p.name).forEach((n) => delete S.decks[n]);
-				cardsInDeckTree(p.name).forEach((c) => { c.deck = "Standard"; });
 				break;
 			case "deckMove": {
 				// Verschiebt einen Stapel samt Unterstapeln + Karten unter ein neues Eltern-Deck.

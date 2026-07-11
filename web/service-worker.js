@@ -12,7 +12,8 @@
 // v6: sql.js (.apkg-Import) in den CDN-Precache aufgenommen — der Anki-Import
 // funktioniert damit auch offline.
 // v13: version.json + latest.json im Precache (PWA-Update-Check same-origin)
-const CACHE = "impala67-v13";
+// v14: ink.js (GoodNotes-Ebene: Handschrift/Apple Pencil) in APP_FILES aufgenommen
+const CACHE = "impala67-v14";
 
 const APP_FILES = [
 	"./",
@@ -50,6 +51,7 @@ const APP_FILES = [
 	"./render-anki.js",
 	"./extras.js",
 	"./notebooklm.js",
+	"./ink.js",
 ];
 
 // CDN-Bibliotheken beim Installieren vorab cachen (best effort) — damit Markdown,

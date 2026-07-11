@@ -383,16 +383,30 @@ export async function handleCheckUpdate() {
 	const applyBtn = U.el("btnApplyPwaUpdate");
 	const localEl = U.el("updateLocalVer");
 	const remoteEl = U.el("updateRemoteVer");
+	const isPwa = !window.__TAURI__;
 	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
-	if (applyBtn) applyBtn.hidden = true;
+	// PWA: Reload-Button immer als Fallback sichtbar (nie Safari/externen Browser öffnen)
+	if (applyBtn) {
+		applyBtn.hidden = !isPwa;
+		applyBtn.disabled = false;
+		applyBtn.textContent = "App neu laden";
+	}
 	if (status) status.textContent = "Prüfe…";
-	// Lokal immer aus dem laufenden Bundle anzeigen
-	const running = window.APP_VERSION || "unbekannt";
+	// Lokal = laufendes Bundle (nie Remote darüber schreiben)
+	const running = (typeof window.getAppVersion === "function" && window.getAppVersion())
+		|| window.APP_VERSION || "unbekannt";
 	if (localEl) localEl.textContent = "v" + String(running).replace(/^v/i, "");
 	try {
-		const r = await (window.checkAppUpdate ? window.checkAppUpdate() : Promise.reject(new Error("Update-Check nicht geladen")));
+		if (typeof window.checkAppUpdate !== "function") {
+			throw new Error("Update-Modul nicht geladen (updater.js)");
+		}
+		const r = await window.checkAppUpdate();
 		if (localEl && r.current) localEl.textContent = "v" + r.current;
-		if (remoteEl && r.latest) remoteEl.textContent = "v" + r.latest + (r.source ? " (" + r.source + ")" : "");
+		if (remoteEl) {
+			remoteEl.textContent = r.latest
+				? ("v" + r.latest + (r.source ? " · " + r.source : ""))
+				: "—";
+		}
 		if (r.hasUpdate) {
 			if (window.__TAURI__ && r.update) {
 				if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar — wird vorbereitet…";
@@ -405,22 +419,29 @@ export async function handleCheckUpdate() {
 					U.toast("Update-Installation fehlgeschlagen.", "error");
 				}
 			} else {
-				if (status) status.textContent = "⬇️ Server hat v" + r.latest + ", du läufst v" + r.current + " — neu laden.";
-				if (applyBtn) applyBtn.hidden = false;
+				if (status) status.textContent = "⬇️ Neu: v" + r.latest + " (du: v" + r.current + "). Tippe „App neu laden“.";
+				if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = "Update laden"; }
 				U.toast("Update v" + r.latest + " verfügbar.", "success");
 			}
 		} else if (r.remoteOlder) {
-			if (status) status.textContent = "ℹ️ Lokal v" + r.current + " ist neuer als Remote v" + r.latest +
-				" (Quelle: " + (r.source || "?") + "). Kein Update nötig — Remote ggf. veraltet.";
-			U.toast("Lokal ist neuer als Remote.", "success");
+			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
+				" (Server älter — version.json beim Deploy mitbumpen).";
+			U.toast("Lokal neuer als Server-Stand.", "success");
 		} else {
-			if (status) status.textContent = "✅ Auf dem neuesten Stand: v" + (r.current || "?") +
-				(r.source ? " · Quelle: " + r.source : "") + ".";
-			U.toast("Kein Update verfügbar.", "success");
+			if (status) status.textContent = "✅ Aktuell: v" + (r.current || "?") +
+				(r.latest ? " · Server v" + r.latest : "") + ".";
+			U.toast("Kein Update nötig.", "success");
 		}
 	} catch (e) {
-		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + (e.message || e);
-		if (remoteEl) remoteEl.textContent = "Fehler";
+		// FIX iPad: früher window.open(GitHub) → Safari. Nie mehr extern öffnen.
+		const msg = (e && e.message) ? e.message : String(e);
+		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + msg +
+			(isPwa ? " — du kannst die App trotzdem neu laden." : "");
+		if (remoteEl) remoteEl.textContent = "nicht erreichbar";
+		if (applyBtn && isPwa) {
+			applyBtn.hidden = false;
+			applyBtn.textContent = "App neu laden";
+		}
 		U.toast("Update-Check fehlgeschlagen.", "error");
 	}
 	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }

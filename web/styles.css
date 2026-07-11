@@ -1440,3 +1440,47 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 		background: var(--panel-solid); border: 1px solid var(--edge-soft);
 		border-radius: 12px; padding: 6px; }
 }
+
+/* ==========================================================================
+   Anki-Lern-UI v5 (11. Juli 2026) — Lern-Ansicht wie in echtem Anki
+   ========================================================================== */
+/* Karte als ruhige Bühne: Vorder-/Rückseite ohne Boxen, Trennlinie wie Anki
+   (render-anki.js liefert dafür <hr class="study-divider"> zwischen den Seiten) */
+.study-card { max-width: 760px; }
+.study-card .card-face { border: none; background: transparent; padding: 26px 12px;
+	font-size: 17.5px; line-height: 1.6; }
+.study-card .card-face.back { border: none; }
+.study-divider { border: none; border-top: 1px solid var(--edge); margin: 0 12px; }
+.study-head { text-align: center; }
+.study-counts .cnt-learn { color: var(--danger); }
+/* Reiche Karten (Mermaid, Formeln, Bilder) mittig präsentieren */
+.study-card .card-face .mermaid-diagram { text-align: center; }
+.study-card .card-face img { margin-left: auto; margin-right: auto; }
+/* Bewertungsbuttons wie Anki: Nochmal rot · Schwer orange · Gut grün · Einfach blau,
+   Intervall-Vorschau OBEN (order: -1), Tastenkürzel dezent darunter */
+.study-card .grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+.study-card .grades [data-ankigrade] { border: 1px solid var(--edge); border-radius: 10px;
+	background: var(--surface-subtle); font-weight: 650; min-height: 58px; }
+.study-card .grades [data-ankigrade]:hover { background: var(--surface-hover); }
+.study-card .grades [data-ankigrade="1"] { color: #ff7369; border-color: rgba(255,115,105,.45); }
+.study-card .grades [data-ankigrade="2"] { color: #ffa344; border-color: rgba(255,163,68,.45); }
+.study-card .grades [data-ankigrade="3"] { color: #72bc8f; border-color: rgba(114,188,143,.45); }
+.study-card .grades [data-ankigrade="4"] { color: #6fc3ff; border-color: rgba(111,195,255,.45); }
+.study-card .grades .grade-ivl { order: -1; font-size: 12px; color: var(--text2); }
+.study-card .grades .grade-key { font-size: 10px; opacity: .5; }
+@media (max-width: 480px) {
+	.study-card .grades { gap: 6px; }
+	.study-card .grades [data-ankigrade] { min-height: 52px; padding: 6px 2px; font-size: 13px; }
+}
+/* „Antwort zeigen“ groß und mittig wie in Anki */
+.study-card .modal-actions { justify-content: center; }
+.study-card .modal-actions [data-ankishowback] { min-width: 220px; min-height: 44px;
+	background: var(--accent); color: #081018; font-weight: 650; border-radius: 10px; }
+.study-card .modal-actions [data-ankishowback] .grade-key { opacity: .55; margin-left: 6px; }
+/* Stapel-Liste: „Standard (ohne Stapel)“-Zeile dezenter */
+.deck-name .hint { font-weight: 400; font-size: 12px; }
+
+/* Harmonie mit der GoodNotes-Ebene (ink.js): ✏️-Badge auf Bibliothek-Deckblättern
+   für Seiten mit Tinte (library.js kann es über INK.hasInk(pageId) setzen) */
+.lib-ink-badge { position: absolute; bottom: 8px; right: 8px; z-index: 1; font-size: 13px;
+	padding: 2px 7px; border-radius: 999px; background: var(--shadow-strong); color: #fff; }

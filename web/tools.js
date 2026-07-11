@@ -73,12 +73,21 @@ export const TOOLS = (() => {
 		t("semantic_search", "Semantische Suche über alle Notizen (Embeddings; besser für inhaltliche Fragen).", {
 			query: { type: "string" },
 		}, ["query"]),
-		t("create_flashcard", "Erstellt eine Karteikarte für die Spaced-Repetition-Wiederholung.", {
-			front: { type: "string", description: "Frage / Vorderseite" },
-			back: { type: "string", description: "Antwort / Rückseite" },
+		t("create_flashcard", "Erstellt EINE Karteikarte für die Spaced-Repetition-Wiederholung. Beide Seiten sind volles Markdown — nutze aktiv LaTeX ($…$), Codeblöcke, Tabellen und Mermaid-Diagramme (```mermaid), wenn das das Verständnis verbessert (Abläufe, Hierarchien, Vergleiche). Regeln für gute Karten: eine Karte = ein Fakt (Minimum Information Principle), Vorderseite = eine konkrete Frage, Rückseite kurz + optional Beispiel/Diagramm. Für mehrere Karten create_flashcards verwenden.", {
+			front: { type: "string", description: "Frage / Vorderseite (Markdown)" },
+			back: { type: "string", description: "Antwort / Rückseite (Markdown, gern mit Formel, Codeblock oder Mermaid-Diagramm)" },
 			deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind' (optional, Standard: 'Standard')" },
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["front", "back"]),
+		t("create_flashcards", "Erstellt MEHRERE Karteikarten auf einmal — bevorzugt gegenüber vielen einzelnen create_flashcard-Aufrufen. Gleiche Markdown-Möglichkeiten und Qualitätsregeln wie create_flashcard (LaTeX, Codeblöcke, Tabellen, Mermaid-Diagramme; eine Karte = ein Fakt).", {
+			cards: {
+				type: "array",
+				items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] },
+				description: "Liste der Karten (front + back, jeweils Markdown)",
+			},
+			deck: { type: "string", description: "Zielstapel für alle Karten, Unterstapel per 'Eltern::Kind' (optional)" },
+			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
+		}, ["cards"]),
 		t("create_cloze_card", "Erstellt Lückentext-Karteikarten (Cloze). Lücken im Text als " + CLOZE_HINT + " markieren — pro Lücken-Nummer (c1, c2, …) entsteht eine eigene Karte.", {
 			text: { type: "string", description: "Text mit Cloze-Lücken" },
 			deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind' (optional)" },
@@ -217,6 +226,21 @@ export const TOOLS = (() => {
 					deck: a.deck || undefined,
 				});
 				return { ok: true, front: a.front, deck: a.deck || "Standard" };
+			}
+			case "create_flashcards": {
+				const list = Array.isArray(a.cards) ? a.cards.filter((c) => c && c.front && c.back) : [];
+				if (!list.length) return { error: "create_flashcards: cards-Liste ist leer oder unvollständig (front + back nötig)." };
+				const pg = a.page_title
+					? STATE.findPage(a.page_title)
+					: (S.currentPageId ? S.pages[S.currentPageId] : null);
+				// Sequentiell dispatchen — dispatch() ist ohnehin serialisiert (state.js)
+				for (const c of list) {
+					await STATE.dispatch("cardCreate", {
+						id: U.uid(), front: String(c.front), back: String(c.back),
+						pageId: pg ? pg.id : null, deck: a.deck || undefined,
+					});
+				}
+				return { ok: true, cards: list.length, deck: a.deck || "Standard" };
 			}
 			case "create_cloze_card": {
 				if (typeof EXTRAS === "undefined") return { error: "Cloze-Modul (extras.js) nicht geladen." };

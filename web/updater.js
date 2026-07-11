@@ -1,22 +1,14 @@
 // updater.js — Version + Update-Check (Tauri-Banner beim Start, PWA/Settings manuell).
-// Kanonische Version: version.json (neben dieser Datei). Fallback unten nur wenn Fetch fehlschlägt.
-// Bei Release: version.json + latest.json + ggf. Tauri package version gemeinsam anheben.
-window.APP_VERSION = "0.2.18";
-
-// Laufende Version aus version.json nachladen (same-origin / Modul-URL) — verhindert
-// „falsche Version“, wenn nur version.json deployed wurde oder der Fallback veraltet ist.
-try {
-	const verUrl = new URL("./version.json", import.meta.url);
-	verUrl.searchParams.set("t", String(Date.now()));
-	const verRes = await fetch(verUrl, { cache: "no-store" });
-	if (verRes.ok) {
-		const verData = await verRes.json();
-		const v = String((verData && verData.version) || "").replace(/^v/i, "").trim();
-		if (v) window.APP_VERSION = v;
-	}
-} catch (e) {
-	/* Fallback window.APP_VERSION bleibt */
-}
+//
+// WICHTIG — zwei verschiedene „Versionen“:
+//   BUILD_VERSION / APP_VERSION = die Version DIESES geladenen JS-Bundles (lokal/läuft).
+//   version.json auf dem Server     = deployed Stand (remote), frisch per no-store geladen.
+// Niemals APP_VERSION mit der Remote-Antwort überschreiben — sonst ist „Lokal“ immer
+// gleich „Remote“ und die Anzeige/Update-Erkennung ist falsch.
+//
+// Bei Release: BUILD_VERSION hier + web/version.json + web/latest.json.version gemeinsam setzen.
+const BUILD_VERSION = "0.2.18";
+window.APP_VERSION = BUILD_VERSION;
 
 // Semver-Vergleich: 1 wenn a>b, -1 wenn a<b, 0 wenn gleich.
 function cmpSemver(a, b) {
@@ -37,136 +29,104 @@ function normVer(v) {
 	return String(v || "").replace(/^v/i, "").trim();
 }
 
-// PWA: SW anstupsen + hard-ish Reload (network-first holt den Stand).
+// PWA: SW anstupsen + Reload (network-first holt den Stand). Kein externes Browser-Fenster.
 window.applyPwaUpdate = async function applyPwaUpdate() {
 	try {
 		if ("serviceWorker" in navigator) {
 			const regs = await navigator.serviceWorker.getRegistrations();
 			await Promise.all(regs.map((r) => r.update().catch(() => {})));
+			// Warte kurz, damit der neue SW aktiv werden kann
+			await new Promise((r) => setTimeout(r, 200));
 		}
 	} catch (e) {
 		console.warn("PWA-Update vorbereiten:", e);
 	}
-	// Cache-Bust: voller Reload der App
 	const u = new URL(location.href);
 	u.searchParams.set("_v", String(Date.now()));
-	location.replace(u.pathname + u.search + u.hash);
+	location.replace(u.pathname + u.search + (u.hash || ""));
 };
 
-// JSON von URL lesen; optional Cache-Bust-Query.
 async function fetchJson(url, bust) {
 	const u = new URL(url, location.href);
 	if (bust) u.searchParams.set("t", String(Date.now()));
-	const res = await fetch(u.toString(), { cache: "no-store" });
+	const res = await fetch(u.toString(), {
+		cache: "no-store",
+		credentials: "same-origin",
+	});
 	if (!res.ok) throw new Error("HTTP " + res.status + " @ " + u.pathname);
 	const ct = (res.headers.get("content-type") || "").toLowerCase();
-	// HTML-Fallback (SPA/404) nie als Version werten
 	if (ct.includes("text/html")) throw new Error("HTML statt JSON @ " + u.pathname);
 	return res.json();
 }
 
-// Neueste Version für PWA — Reihenfolge:
-// 1) same-origin version.json / latest.json (zuverlässig, kein CORS)
-// 2) GitHub Releases API
-// 3) raw.githubusercontent.com
-async function fetchLatestVersionPwa() {
+// Deployed Version für PWA: NUR same-origin (kein GitHub — das liefert oft die
+// Desktop-Release-Nummer 0.1.x und öffnet auf iPad im Fehlerfall den Safari-Tab).
+async function fetchDeployedVersionPwa() {
 	const errors = [];
-	const tryOne = async (label, fn) => {
+	for (const file of ["./version.json", "./latest.json"]) {
 		try {
-			const r = await fn();
-			if (r && r.latest) return r;
-			throw new Error(label + ": leer");
+			const data = await fetchJson(file, true);
+			const latest = normVer(data.version);
+			if (latest) return { latest, source: file.replace(/^\.\//, "") };
+			throw new Error("leere version");
 		} catch (e) {
-			errors.push(label + ": " + (e && e.message ? e.message : e));
-			return null;
+			errors.push(file + ": " + (e && e.message ? e.message : e));
 		}
-	};
-
-	// 1) Deployed App (gleiche Origin) — das ist die Wahrheit für die PWA
-	let hit = await tryOne("version.json", async () => {
-		const data = await fetchJson("./version.json", true);
-		return { latest: normVer(data.version), source: "version.json" };
-	});
-	if (hit) return hit;
-
-	hit = await tryOne("latest.json", async () => {
-		const data = await fetchJson("./latest.json", true);
-		return { latest: normVer(data.version), source: "latest.json" };
-	});
-	if (hit) return hit;
-
-	// 2) GitHub API (kann bei privatem Repo / Rate-Limit scheitern)
-	hit = await tryOne("GitHub API", async () => {
-		const res = await fetch("https://api.github.com/repos/prinzpuma/Impala67/releases/latest", {
-			cache: "no-store",
-			headers: { Accept: "application/vnd.github+json" },
-		});
+	}
+	// Modul-relative URL als Extra-Versuch (falls App unter Unterpfad liegt)
+	try {
+		const u = new URL("./version.json", import.meta.url);
+		u.searchParams.set("t", String(Date.now()));
+		const res = await fetch(u, { cache: "no-store" });
 		if (!res.ok) throw new Error("HTTP " + res.status);
 		const data = await res.json();
-		const latest = normVer(data.tag_name || data.name || "");
-		if (!latest) throw new Error("keine tag_name");
-		return { latest, source: "github-api" };
-	});
-	if (hit) return hit;
-
-	// 3) raw.githubusercontent.com
-	for (const path of [
-		"https://raw.githubusercontent.com/prinzpuma/Impala67/main/web/version.json",
-		"https://raw.githubusercontent.com/prinzpuma/Impala67/main/web/latest.json",
-		"https://raw.githubusercontent.com/prinzpuma/Impala67/refactor/cleanup/web/version.json",
-		"https://raw.githubusercontent.com/prinzpuma/Impala67/refactor/cleanup/web/latest.json",
-	]) {
-		hit = await tryOne(path, async () => {
-			const data = await fetchJson(path, true);
-			return { latest: normVer(data.version), source: "raw" };
-		});
-		if (hit) return hit;
+		const latest = normVer(data.version);
+		if (latest) return { latest, source: "version.json(module)" };
+	} catch (e) {
+		errors.push("module: " + (e && e.message ? e.message : e));
 	}
-
-	throw new Error(errors.slice(0, 3).join(" · ") || "Keine Versionsquelle erreichbar");
+	throw new Error(errors.join(" · ") || "version.json nicht erreichbar");
 }
 
-// Aktuelle laufende Version (nach version.json-Load / Fallback).
 window.getAppVersion = function getAppVersion() {
-	return normVer(window.APP_VERSION || "");
+	// Immer die gebaute Bundle-Version — nie Remote.
+	return normVer(window.APP_VERSION || BUILD_VERSION || "");
 };
 
-// Manueller Check aus Einstellungen → Update (Desktop + PWA).
+// Manueller Check (Desktop + PWA). Öffnet NIEMALS ein externes Browser-Fenster.
 window.checkAppUpdate = async function checkAppUpdate() {
-	// Nochmal version.json lesen — falls Settings vor dem ersten Load geöffnet wurden
-	// oder APP_VERSION zwischenzeitlich veraltet war.
-	try {
-		const data = await fetchJson("./version.json", true);
-		const v = normVer(data.version);
-		if (v) window.APP_VERSION = v;
-	} catch { /* Fallback behalten */ }
+	const cur = normVer(window.APP_VERSION || BUILD_VERSION || "");
+	if (!cur) throw new Error("BUILD_VERSION fehlt in updater.js");
 
-	const cur = normVer(window.APP_VERSION || "");
-	if (!cur) throw new Error("APP_VERSION fehlt (updater.js / version.json)");
-
+	// Desktop (Tauri)
 	if (window.__TAURI__ && window.__TAURI__.updater) {
-		const update = await window.__TAURI__.updater.check();
-		if (!update) return { ok: true, latest: cur, current: cur, hasUpdate: false, source: "tauri" };
-		const latest = normVer(update.version || "");
-		return {
-			ok: true,
-			latest: latest || cur,
-			current: cur,
-			hasUpdate: cmpSemver(latest, cur) > 0,
-			update: update,
-			source: "tauri",
-		};
+		try {
+			const update = await window.__TAURI__.updater.check();
+			if (!update) return { ok: true, latest: cur, current: cur, hasUpdate: false, source: "tauri" };
+			const latest = normVer(update.version || "");
+			return {
+				ok: true,
+				latest: latest || cur,
+				current: cur,
+				hasUpdate: cmpSemver(latest, cur) > 0,
+				update: update,
+				source: "tauri",
+			};
+		} catch (e) {
+			// Kein window.open — Fehler an die UI durchreichen
+			throw new Error("Tauri-Update: " + (e && e.message ? e.message : e));
+		}
 	}
 
-	// PWA / Browser — Remote = deployed version.json (same-origin), nicht altes GitHub-Release
-	const { latest, source } = await fetchLatestVersionPwa();
+	// PWA / Browser: deployed version.json vs. laufendes Bundle
+	const { latest, source } = await fetchDeployedVersionPwa();
 	const remote = latest || cur;
 	return {
 		ok: true,
 		latest: remote,
 		current: cur,
 		hasUpdate: cmpSemver(remote, cur) > 0,
-		source: source || "unknown",
+		source: source || "version.json",
 		remoteOlder: cmpSemver(remote, cur) < 0,
 	};
 };
