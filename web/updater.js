@@ -12,7 +12,7 @@
 <<<<<<< HEAD
 //
 // NIE Merge-Konfliktmarker (<<<<<<< ======= >>>>>>>) committen — bricht die PWA.
-const BUILD_VERSION = "0.2.18";
+const BUILD_VERSION = "0.2.28";
 =======
 <<<<<<< HEAD
 const BUILD_VERSION = "0.2.27";
