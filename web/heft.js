@@ -5,19 +5,20 @@ import { U } from "./util.js";
 
 // heft.js — GoodNotes-Kern für Impala67.
 //
-// Taskbar v7 (11. Juli 2026):
-// - Haupt-Pill bleibt IMMER fest zentriert oben (nie draggable)
-// - Nur das Options-Tray darunter ist separat frei verschiebbar
-// - Beide liegen über dem Papier, ohne Banner oder verlorenen Canvas-Platz
-// - Drag ist strikt auf den Tray-Griff begrenzt — Werkzeug-Klicks bleiben stabil
-// - Bilder wie in GoodNotes: einfügen (Datei/Kamera), mit dem Auswahl-Werkzeug verschieben,
-//   skalieren (Griff unten rechts) und löschen (✕ oben rechts oder Entf-Taste)
-// - Dokument-Scanner v2 („Dateien scannen"): Kamera (getUserMedia) → automatische
-//   Dokumenterkennung (größte helle, unbunte Fläche → 4 Ecken) → perspektivische
-//   Entzerrung (Homographie, bilineares Sampling) → Beleuchtung glätten + Filter
-//   (Farbe / S/W / Graustufen / Foto) → Nachbearbeitung pro Scan (Ecken ziehen,
-//   Filter, Drehen, Auto-Zuschnitt) → eigener minimaler PDF-1.4-Writer (JPEG/
-//   DCTDecode) → PDF-Download und/oder Scans als neue Heftseiten
+// v8 (11. Juli 2026) — kompletter Rewrite von Scanner + Navigation:
+// - Dokument-Scanner v3: Papier-Maske → größte Komponente → konvexe Hülle →
+//   flächenmaximales Viereck (findet auch GEDREHTE Blätter — die alte Extrempunkt-
+//   Suche versagte dort), Entzerrung per Homographie (bilinear), Beleuchtung
+//   rausrechnen + Filter, Live-Qualitäts-Anzeige mit echtem Erkennungs-Rahmen und
+//   Auto-Auslöser, Nachbearbeitung (Ecken/Filter/Drehen/Vergleich), eigener
+//   PDF-1.4-Writer (JPEG/DCTDecode) → PDF-Download und/oder Heftseiten
+// - Navigation v2: 1 Finger scrollt delta-basiert mit Trägheit, 2 Finger pinchen um
+//   den Fingermittelpunkt (während der Geste nur CSS-Größen — die scharfe Canvas-
+//   Auflösung wird genau EINMAL am Gestenende gerendert), Doppeltipp passt das Blatt
+//   an den Bildschirm an (erneut: 2× an die Tippstelle), 2-/3-Finger-Tipp =
+//   Undo/Redo, Strg/Cmd + Mausrad zoomt am Desktop
+// - Taskbar v7 unverändert: Haupt-Pill fest zentriert, nur das Options-Tray ist frei
+//   verschiebbar; Bilder wie in GoodNotes (einfügen, verschieben, skalieren, löschen)
 //
 // Persistenz: EIN Blob je Heft (heft:<pageId>) in IndexedDB. Damit wandert der Inhalt
 // automatisch durch Export/Backup und den Drive-Sync (Blob-Pipeline). Nur Metadaten
@@ -37,9 +38,7 @@ export const HEFT = (() => {
 	let host = null, pid = null, doc = null, idx = 0, scale = 1, zoom = 1;
 	let canvases = []; // wird nur beim Mount/Seitenumbau gesammelt, nicht pro Stiftbewegung gesucht
 	let pageSlots = []; // passende Seiten-Container für die Scroll-Erkennung
-	const touchPointers = new Map(); // aktive Finger für Scrollen/Pinch-Zoom
-	let pinch = null;                // { distance, midX, midY, startZoom }
-	let touchTap = null;             // Zwei-/Drei-Finger-Tap für Undo/Redo
+	// Navigation v2: gesamter Gesten-Zustand lebt in EINEM Objekt (siehe unten).
 	// onlyPen default true: Palm Rejection für Apple Pencil.
 	// Aktive Stifte werden separat verfolgt, damit ein Handballen nie als Scroll-Geste zählt.
 	let tool = "pen", color = COLORS[0], size = 3, onlyPen = true;
@@ -196,9 +195,10 @@ export const HEFT = (() => {
 		if (!c) {
 			c = new Image();
 			c.onload = () => {
-				Object.keys(thumbs).forEach((k) => delete thumbs[k]);
-				// Ein Bild betrifft nur seine eigene Heftseite. Alle Canvas-Seiten und
-				// sämtliche Popup-Thumbnails neu zu zeichnen war bei großen Heften teuer.
+				// FIX (v8): nur die Vorschauen DIESES Hefts invalidieren — vorher wurden
+				// die Thumbnails ALLER Hefte verworfen und teuer neu gerendert.
+				if (pid) Object.keys(thumbs).forEach((k) => { if (k.startsWith(pid + ":")) delete thumbs[k]; });
+				// Ein Bild betrifft nur seine eigene Heftseite.
 				if (host && doc) {
 					const pageIndex = doc.pages.findIndex((pg) => (pg.images || []).some((item) => item.id === im.id));
 					if (pageIndex !== -1) { redrawPage(pageIndex); renderThumb(pageIndex); }
@@ -260,23 +260,186 @@ export const HEFT = (() => {
 		renderPageTo(x, doc.pages[i], i);
 	}
 	function redraw() { if (doc) doc.pages.forEach((_, i) => redrawPage(i)); }
-	function layout() {
-		if (!host) return;
-		const scroll = host.querySelector('.heft-scroll');
+
+	// ---------- Navigation v2: Scrollen, Pinch-Zoom, Doppeltipp (kompletter Rewrite) ----------
+	// Grundsätze:
+	// - 1 Finger  = Scrollen (delta-basiert, kein Sprung beim Fingerwechsel) + Trägheit
+	// - 2 Finger  = Pinch-Zoom um den Fingermittelpunkt. Während der Geste werden nur die
+	//   CSS-Größen angepasst (flüssig); die scharfe Canvas-Auflösung wird genau EINMAL am
+	//   Gestenende gerendert — kein Ruckeln mehr bei großen Heften.
+	// - Doppeltipp aufs Blatt = an den Bildschirm anpassen (Fit). Ist das Blatt bereits
+	//   angepasst, zoomt der Doppeltipp auf 2× an die getippte Stelle (wie GoodNotes).
+	// - 2-Finger-Tipp = Undo · 3-Finger-Tipp = Redo (kurz, ohne Bewegung)
+	// - Desktop: Strg/Cmd + Mausrad zoomt auf den Mauszeiger
+	const ZOOM_MIN = 1, ZOOM_MAX = 4; // 1 = Fit-to-width; darunter gibt es nichts zu sehen
+	const gesture = {
+		pointers: new Map(), // pointerId → { x, y, sx, sy }
+		mode: null,          // "scroll" | "pinch" | null
+		maxCount: 0,         // Finger-Maximum der laufenden Geste (2/3-Finger-Tipp)
+		moved: false,
+		startedAt: 0,
+		vx: 0, vy: 0, lastT: 0, // Geschwindigkeit in px/ms für die Trägheit
+		pinchDist: 0, pinchZoom: 1,
+		raf: 0,              // laufende Trägheits-/Zoom-Animation
+		lastTap: 0, tapX: 0, tapY: 0, // Doppeltipp-Erkennung
+	};
+	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
+	function stopAnim() { if (gesture.raf) { cancelAnimationFrame(gesture.raf); gesture.raf = 0; } }
+	function navReset() {
+		stopAnim();
+		gesture.pointers.clear();
+		gesture.mode = null; gesture.maxCount = 0; gesture.moved = false;
+		gesture.vx = 0; gesture.vy = 0; gesture.lastTap = 0;
+	}
+	// Ansicht anwenden. commit=false: nur CSS-Größe (schnell, während der Geste).
+	// commit=true: Canvas-Bitmaps in Zielauflösung neu rendern (scharf).
+	function applyView(commit) {
+		const scroll = scrollEl();
 		if (!scroll) return;
 		const availW = scroll.clientWidth - 24;
-		// Fit-to-width als Basis; Pinch-Zoom multipliziert diese Ansicht bis 4×.
 		const fit = Math.max(0.1, Math.min(availW / PAGE_W, 1));
 		scale = fit * zoom;
-		const dpr = window.devicePixelRatio || 1;
 		const cssW = Math.round(PAGE_W * scale), cssH = Math.round(PAGE_H * scale);
+		canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
+		if (!commit) return;
+		const dpr = window.devicePixelRatio || 1;
 		canvases.forEach((cv) => {
-			cv.style.width = cssW + 'px';
-			cv.style.height = cssH + 'px';
 			cv.width = Math.round(PAGE_W * scale * dpr);
 			cv.height = Math.round(PAGE_H * scale * dpr);
 		});
 		redraw();
+	}
+	function layout() { applyView(true); }
+	// Zoom um einen Fixpunkt (Viewport-Koordinaten): der Punkt unter dem Finger bleibt
+	// exakt unter dem Finger — die Scroll-Position wird passend nachgeführt.
+	function setZoom(next, clientX, clientY, commit) {
+		const scroll = scrollEl();
+		if (!scroll) return;
+		next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+		const r = scroll.getBoundingClientRect();
+		const fx = clientX == null ? r.width / 2 : clientX - r.left;
+		const fy = clientY == null ? r.height / 2 : clientY - r.top;
+		const lx = (scroll.scrollLeft + fx) / scale;
+		const ly = (scroll.scrollTop + fy) / scale;
+		zoom = next;
+		applyView(commit);
+		scroll.scrollLeft = lx * scale - fx;
+		scroll.scrollTop = ly * scale - fy;
+	}
+	function animateZoom(target, clientX, clientY) {
+		stopAnim();
+		const from = zoom, t0 = performance.now(), dur = 220;
+		const ease = (t) => 1 - Math.pow(1 - t, 3);
+		const step = (now) => {
+			const t = Math.min(1, (now - t0) / dur);
+			setZoom(from + (target - from) * ease(t), clientX, clientY, t >= 1);
+			gesture.raf = t < 1 ? requestAnimationFrame(step) : 0;
+		};
+		gesture.raf = requestAnimationFrame(step);
+	}
+	function startFling() {
+		const scroll = scrollEl();
+		if (!scroll) return;
+		let vx = gesture.vx * 16, vy = gesture.vy * 16; // px pro Frame (~60 fps)
+		if (Math.hypot(vx, vy) < 2.5) return;
+		const step = () => {
+			vx *= 0.94; vy *= 0.94;
+			scroll.scrollLeft -= vx;
+			scroll.scrollTop -= vy;
+			gesture.raf = Math.hypot(vx, vy) > 0.4 ? requestAnimationFrame(step) : 0;
+		};
+		gesture.raf = requestAnimationFrame(step);
+	}
+	function pinchPair() { const a = [...gesture.pointers.values()]; return a.length >= 2 ? [a[0], a[1]] : null; }
+	function beginPinch() {
+		const pair = pinchPair();
+		if (!pair) return;
+		gesture.mode = "pinch";
+		gesture.pinchDist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
+		gesture.pinchZoom = zoom;
+	}
+	function onTouchPointerDown(e) {
+		if (e.pointerType !== "touch" || !touchNavigates() || !scrollEl()) return;
+		e.preventDefault();
+		stopAnim();
+		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+		gesture.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+		gesture.maxCount = Math.max(gesture.maxCount, gesture.pointers.size);
+		if (gesture.pointers.size === 1) {
+			gesture.mode = "scroll"; gesture.moved = false; gesture.startedAt = Date.now();
+			gesture.vx = 0; gesture.vy = 0; gesture.lastT = e.timeStamp;
+		} else beginPinch();
+	}
+	function onTouchPointerMove(e) {
+		const p = gesture.pointers.get(e.pointerId);
+		if (!p || e.pointerType !== "touch") return;
+		// Stift aufgesetzt → jeder Touch ist ab jetzt Handballen: Geste sofort beenden.
+		if (activePenPointers.size) { navReset(); return; }
+		const scroll = scrollEl();
+		if (!scroll) return;
+		e.preventDefault();
+		const dx = e.clientX - p.x, dy = e.clientY - p.y;
+		p.x = e.clientX; p.y = e.clientY;
+		if (Math.hypot(p.x - p.sx, p.y - p.sy) > 10) gesture.moved = true;
+		if (gesture.mode === "pinch") {
+			const pair = pinchPair();
+			if (!pair) return;
+			const dist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
+			setZoom(gesture.pinchZoom * (dist / gesture.pinchDist), (pair[0].x + pair[1].x) / 2, (pair[0].y + pair[1].y) / 2, false);
+			return;
+		}
+		// Scrollen: delta-basiert — kein Sprung beim Wechsel zwischen 1 und 2 Fingern
+		scroll.scrollLeft -= dx;
+		scroll.scrollTop -= dy;
+		const dt = Math.max(1, e.timeStamp - gesture.lastT);
+		gesture.vx = 0.75 * gesture.vx + 0.25 * (dx / dt);
+		gesture.vy = 0.75 * gesture.vy + 0.25 * (dy / dt);
+		gesture.lastT = e.timeStamp;
+	}
+	function onTouchPointerUp(e) {
+		if (!gesture.pointers.has(e.pointerId)) return;
+		e.preventDefault();
+		const wasPinch = gesture.mode === "pinch";
+		gesture.pointers.delete(e.pointerId);
+		if (gesture.pointers.size >= 2) { beginPinch(); return; }
+		if (gesture.pointers.size === 1) {
+			// Von Pinch zurück zu Scroll: einmal scharf rendern, dann weiter delta-scrollen
+			if (wasPinch) applyView(true);
+			gesture.mode = "scroll";
+			gesture.vx = 0; gesture.vy = 0; gesture.lastT = e.timeStamp;
+			return;
+		}
+		// Letzter Finger ist oben
+		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
+		const count = gesture.maxCount;
+		gesture.maxCount = 0;
+		gesture.mode = null;
+		if (wasPinch) { applyView(true); return; }
+		if (quick && count === 2) { undo(); return; }
+		if (quick && count >= 3) { redo(); return; }
+		if (quick && count === 1) {
+			// Doppeltipp: an den Bildschirm anpassen bzw. 2× an die getippte Stelle
+			const now = Date.now();
+			if (now - gesture.lastTap < 320 && Math.hypot(e.clientX - gesture.tapX, e.clientY - gesture.tapY) < 60) {
+				gesture.lastTap = 0;
+				if (zoom > 1.02) animateZoom(1, e.clientX, e.clientY);
+				else animateZoom(2, e.clientX, e.clientY);
+				return;
+			}
+			gesture.lastTap = now; gesture.tapX = e.clientX; gesture.tapY = e.clientY;
+			return;
+		}
+		if (gesture.moved && count === 1) startFling();
+	}
+	// Desktop: Strg/Cmd + Mausrad zoomt auf den Mauszeiger. Der scharfe Commit wird
+	// kurz gebündelt, damit schnelles Radln nicht pro Tick voll rendert.
+	let wheelCommitT = 0;
+	function onWheelZoom(e) {
+		if (!e.ctrlKey && !e.metaKey) return;
+		e.preventDefault();
+		setZoom(zoom * (e.deltaY < 0 ? 1.12 : 0.9), e.clientX, e.clientY, false);
+		clearTimeout(wheelCommitT);
+		wheelCommitT = setTimeout(() => applyView(true), 140);
 	}
 
 	// ---------- Pointer (Apple Pencil / Maus / Finger) ----------
@@ -293,75 +456,6 @@ export const HEFT = (() => {
 	const rejected = (e) => e.pointerType === "touch" && (onlyPen || activePenPointers.size > 0);
 	const touchNavigates = () => onlyPen && activePenPointers.size === 0;
 	const near = (p, x, y, r) => { const dx = p[0] - x, dy = p[1] - y; return dx * dx + dy * dy <= r * r; };
-	// ---------- Touch: 1 Finger = Scroll · 2 Finger = Pinch-Zoom ----------
-	// Die Navigation wird vollständig selbst gesteuert. Dadurch konkurriert der Browser
-	// nicht mehr mit Stift-Eingaben um dieselbe Geste.
-	function touchDistance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-	function touchMid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
-	function touchPair() { const a = [...touchPointers.values()]; return a.length >= 2 ? [a[0], a[1]] : null; }
-	function onTouchPointerDown(e) {
-		if (e.pointerType !== "touch" || !touchNavigates() || !host) return;
-		const scroll = host.querySelector('.heft-scroll');
-		if (!scroll) return;
-		e.preventDefault();
-		if (!touchTap) touchTap = { count: 0, started: Date.now(), moved: false };
-		touchTap.count++;
-		touchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, scrollLeft: scroll.scrollLeft, scrollTop: scroll.scrollTop });
-		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-		const pair = touchPair();
-		if (!pair) return;
-		const mid = touchMid(pair[0], pair[1]);
-		pinch = { distance: Math.max(1, touchDistance(pair[0], pair[1])), midX: mid.x, midY: mid.y, startZoom: zoom };
-	}
-	function onTouchPointerMove(e) {
-		if (e.pointerType !== "touch" || !touchPointers.has(e.pointerId) || !host) return;
-		// Sobald der Stift aufsetzt, ist jeder Touch ein Handballen – laufende Finger-Gesten abbrechen.
-		if (activePenPointers.size) { touchPointers.clear(); pinch = null; touchTap = null; return; }
-		const p = touchPointers.get(e.pointerId);
-		if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 12 && touchTap) touchTap.moved = true;
-		p.x = e.clientX; p.y = e.clientY;
-		const scroll = host.querySelector('.heft-scroll');
-		if (!scroll) return;
-		e.preventDefault();
-		const pair = touchPair();
-		if (!pair || !pinch) {
-			// Ein Finger verschiebt ausschließlich die Papierfläche.
-			scroll.scrollLeft = Math.max(0, p.scrollLeft - (e.clientX - p.sx));
-			scroll.scrollTop = Math.max(0, p.scrollTop - (e.clientY - p.sy));
-			return;
-		}
-		const dist = Math.max(1, touchDistance(pair[0], pair[1]));
-		const nextZoom = Math.max(0.55, Math.min(4, pinch.startZoom * (dist / pinch.distance)));
-		if (Math.abs(nextZoom - zoom) < 0.003) return;
-		const oldScale = scale;
-		const mid = touchMid(pair[0], pair[1]);
-		const r = scroll.getBoundingClientRect();
-		const focalX = mid.x - r.left, focalY = mid.y - r.top;
-		const logicalX = (scroll.scrollLeft + focalX) / oldScale;
-		const logicalY = (scroll.scrollTop + focalY) / oldScale;
-		zoom = nextZoom;
-		layout();
-		scroll.scrollLeft = Math.max(0, logicalX * scale - focalX);
-		scroll.scrollTop = Math.max(0, logicalY * scale - focalY);
-	}
-	function onTouchPointerUp(e) {
-		if (e.pointerType !== "touch" || !touchPointers.has(e.pointerId)) return;
-		e.preventDefault();
-		touchPointers.delete(e.pointerId);
-		const pair = touchPair();
-		if (pair) {
-			const mid = touchMid(pair[0], pair[1]);
-			pinch = { distance: Math.max(1, touchDistance(pair[0], pair[1])), midX: mid.x, midY: mid.y, startZoom: zoom };
-			return;
-		}
-		pinch = null;
-		// Zwei Finger tippen = Undo · drei Finger tippen = Redo. Scroll/Pinch lösen nichts aus.
-		const tap = touchTap; touchTap = null;
-		if (tap && !tap.moved && Date.now() - tap.started < 320) {
-			if (tap.count === 2) undo();
-			else if (tap.count >= 3) redo();
-		}
-	}
 	function pointInPolygon(p, poly) {
 		let hit = false;
 		for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -391,7 +485,7 @@ export const HEFT = (() => {
 		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
 	}
 	function onDown(e) {
-		if (e.pointerType === "pen") activePenPointers.add(e.pointerId);
+		if (e.pointerType === "pen") { activePenPointers.add(e.pointerId); stopAnim(); }
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -581,7 +675,7 @@ export const HEFT = (() => {
 		undoStack.push(a); redrawPage(pi); scheduleSave(); renderThumb(pi); updateChrome();
 	}
 
-	// ---------- Taskbar v6: freistehende Floating-Pill (GoodNotes-Platzeffizienz) ----------
+	// ---------- Taskbar v7: feste Haupt-Pill + verschiebbares Options-Tray ----------
 	function sizeLine(sz) {
 		const h = sz[1] <= 2 ? 1.5 : sz[1] <= 4 ? 3 : 5;
 		return '<button type="button" class="heft-size' + (size === sz[1] ? " active" : "") +
@@ -787,7 +881,7 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-pop-sep"></div>' +
 			'<button type="button" class="heft-pop-row" data-headdimg="1">🖼 Bild</button>' +
-			'<button type="button" class="heft-pop-row" data-heimport="1">⭳ Importieren</button>' +
+			'<button type="button" class="heft-pop-row" data-heimport="1">⬳ Importieren</button>' +
 			'<button type="button" class="heft-pop-row" data-hescan="1">📷 Dateien scannen</button>';
 	}
 	function updateChrome() {
@@ -960,349 +1054,13 @@ export const HEFT = (() => {
 		return at;
 	}
 
-	// ---------- Dateien scannen: Dokument-Scanner v2 ----------
-	// Wie GoodNotes/Office-Scanner: Aufnahme → automatische Dokumenterkennung →
-	// perspektivische Entzerrung → Beleuchtung glätten + Filter → Nachbearbeitung
-	// (Ecken ziehen, Filter wechseln, drehen) → PDF und/oder Heftseiten
+	// ---------- Dateien scannen: Dokument-Scanner v3 (kompletter Rewrite) ----------
+	// Pipeline wie GoodNotes/Office Lens: Aufnahme → Blatt-Erkennung → perspektivische
+	// Entzerrung → Beleuchtung rausrechnen + Filter → Nachbearbeitung → PDF/Heftseiten.
+	// Erkennung v4: Papier-Maske (hell + unbunt + nicht dunkler als lokaler Hintergrund)
+	// → größte plausible Fläche → konvexe Hülle → flächenmaximales Viereck. Das findet
+	// im Gegensatz zur alten Extrempunkt-Suche auch GEDREHTE Blätter zuverlässig.
 	const SCAN_MODES = [["color", "Farbe"], ["bw", "S/W"], ["gray", "Graustufen"], ["photo", "Foto"]];
-	async function openScanner() {
-		if (scanUI) return;
-		const wrap = document.createElement("div");
-		wrap.className = "heft-scan";
-		wrap.innerHTML =
-			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen">✕</button></div>' +
-			'<div class="heft-scan-stage"><video autoplay playsinline muted></video>' +
-				'<svg class="heft-scan-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="7,7 93,7 93,93 7,93"></polygon></svg>' +
-				'<div class="heft-scan-quality" data-hescanquality="1">Kamera wird geprüft…</div>' +
-				'<div class="heft-scan-hint">Blatt vollständig in den Rahmen legen. Grün = bereit; bei Gelb Kamera ruhiger halten oder Licht verbessern.</div></div>' +
-			'<div class="heft-scan-shots"></div>' +
-			'<div class="heft-scan-bar">' +
-				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen"></button>' +
-				'<div class="heft-scan-actions">' +
-					'<button type="button" data-hescanautocap="1" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
-					'<button type="button" data-hescanpdf="1" disabled>📄 Als PDF speichern</button>' +
-					'<button type="button" data-hescanheft="1" disabled>📓 In Heft einfügen</button>' +
-				'</div>' +
-			'</div>' +
-			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
-		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: false, autoArmed: false, autoCooldown: 0 };
-		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
-		wrap.addEventListener("click", onScanClick);
-		try {
-			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("getUserMedia fehlt");
-			// Zuerst „environment“, sonst irgendeine Kamera — verhindert OverconstrainedError auf Desktop
-			let stream = null;
-			try {
-				stream = await navigator.mediaDevices.getUserMedia({
-					video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
-					audio: false,
-				});
-			} catch (cameraError) {
-				// Nur bei einer nicht erfüllbaren Kamera-/Constraint-Wahl auf die
-				// allgemeine Kamera ausweichen. Bei verweigerter Berechtigung würde
-				// ein zweiter getUserMedia-Aufruf sonst erneut nachfragen bzw. den
-				// Foto-Fallback unnötig verzögern.
-				const name = cameraError && cameraError.name;
-				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw cameraError;
-				stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-			}
-			// Während await könnte geschlossen oder ein neuer Scanner geöffnet worden sein.
-			if (scanUI !== ui || !wrap.isConnected) { try { stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } return; }
-			ui.stream = stream;
-			const video = wrap.querySelector("video");
-			video.srcObject = stream;
-			video.muted = true;
-			video.setAttribute("playsinline", "");
-			// iOS/Safari: autoplay allein reicht oft nicht — sonst bleibt videoWidth=0 und der Auslöser tut nichts
-			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
-			startLiveQuality(video, ui);
-		} catch (e) {
-			// Keine Kamera / keine Freigabe → Fallback: Fotos auswählen (mit capture-Hint)
-			console.warn("Heft: Kamera nicht verfügbar", e);
-			if (scanUI === ui) {
-				wrap.querySelector(".heft-scan-stage").innerHTML =
-					'<div class="heft-scan-nocam"><p>Keine Kamera verfügbar oder Zugriff abgelehnt.</p>' +
-					'<button type="button" data-hescanpick="1">Fotos auswählen…</button></div>';
-				const shut = wrap.querySelector(".heft-scan-shutter");
-				if (shut) shut.disabled = true;
-			}
-		}
-	}
-	function closeScanner() {
-		if (!scanUI) return;
-		stopLiveQuality();
-		try { if (scanUI.stream) scanUI.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-		try { scanUI.wrap.remove(); } catch { /* ignore */ }
-		scanUI = null;
-	}
-	// Live-Prüfung vor dem Auslösen: Dokument-Quad, Helligkeit und Schärfe.
-	// Läuft bewusst nur ca. 3×/s auf einer kleinen Vorschau, nicht auf dem Vollbild.
-	function liveQualityFrame(video) {
-		const sw = 240, sh = Math.max(120, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
-		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
-		const x = c.getContext("2d", { willReadFrequently: true });
-		x.drawImage(video, 0, 0, sw, sh);
-		const px = x.getImageData(0, 0, sw, sh).data;
-		let sum = 0, sum2 = 0, count = 0, lap = 0;
-		const lum = new Uint8Array(sw * sh);
-		for (let i = 0; i < lum.length; i++) {
-			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
-			lum[i] = v; sum += v; sum2 += v * v; count++;
-		}
-		for (let y = 1; y < sh - 1; y += 2) for (let x2 = 1; x2 < sw - 1; x2 += 2) {
-			const i = y * sw + x2;
-			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - sw] - lum[i + sw]);
-		}
-		const mean = sum / count, contrast = Math.sqrt(Math.max(0, sum2 / count - mean * mean));
-		const sharp = lap / Math.max(1, ((sw - 2) * (sh - 2)) / 4);
-		// Leichter Live-Bounding-Box-Pass: absichtlich nicht detectQuad(), denn die
-		// vollständige Kanten-/Morphologie gehört erst zur Aufnahme und würde die Kamera ruckeln lassen.
-		const cut = Math.max(105, mean * 0.82);
-		let minX = sw, minY = sh, maxX = 0, maxY = 0, hit = 0;
-		for (let y = 2; y < sh - 2; y += 2) for (let x2 = 2; x2 < sw - 2; x2 += 2) {
-			const i = y * sw + x2;
-			if (lum[i] < cut) continue;
-			const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2];
-			if (Math.max(r, g, b) - Math.min(r, g, b) > 72) continue; // bunter Tisch ≠ Papier
-			hit++;
-			if (x2 < minX) minX = x2; if (x2 > maxX) maxX = x2;
-			if (y < minY) minY = y; if (y > maxY) maxY = y;
-		}
-		const bw = maxX - minX, bh = maxY - minY;
-		const found = hit > (sw * sh) * 0.018 && bw > sw * 0.28 && bh > sh * 0.28 &&
-			minX > 1 && minY > 1 && maxX < sw - 2 && maxY < sh - 2;
-		const padX = Math.max(2, bw * 0.025), padY = Math.max(2, bh * 0.025);
-		const quad = found
-			? [[minX - padX, minY - padY], [maxX + padX, minY - padY], [maxX + padX, maxY + padY], [minX - padX, maxY + padY]]
-			: [[sw * .07, sh * .07], [sw * .93, sh * .07], [sw * .93, sh * .93], [sw * .07, sh * .93]];
-		return { quad, found, mean, contrast, sharp, sw, sh };
-	}
-	function setLiveGuide(info) {
-		if (!scanUI) return;
-		const guide = scanUI.wrap.querySelector(".heft-scan-guide polygon");
-		const label = scanUI.wrap.querySelector("[data-hescanquality]");
-		if (!guide || !label) return;
-		const toPct = (p) => (p[0] / info.sw * 100).toFixed(1) + "," + (p[1] / info.sh * 100).toFixed(1);
-		guide.setAttribute("points", info.quad.map(toPct).join(" "));
-		const lightOK = info.mean >= 62 && info.mean <= 235;
-		const sharpOK = info.sharp >= 8;
-		const contrastOK = info.contrast >= 16;
-		const ready = info.found && lightOK && sharpOK && contrastOK;
-		guide.parentElement.classList.toggle("ready", ready);
-		guide.parentElement.classList.toggle("warn", !ready);
-		if (ready) label.textContent = "✓ Dokument erkannt · bereit";
-		else if (!info.found) label.textContent = "Blatt vollständig in den Rahmen legen";
-		else if (!sharpOK) label.textContent = "Kamera ruhiger halten";
-		else if (!lightOK) label.textContent = info.mean < 62 ? "Mehr Licht nötig" : "Zu hell / Spiegelung vermeiden";
-		else if (!contrastOK) label.textContent = "Kontrast zu gering";
-		return ready;
-	}
-	function startLiveQuality(video, owner) {
-		if (!owner || scanUI !== owner) return;
-		stopLiveQuality();
-		const check = () => {
-			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
-			try {
-				const ready = setLiveGuide(liveQualityFrame(video));
-				if (!ready) {
-					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto
-					// für die nächste Seite neu scharf sein. Das verhindert Duplikate
-					// bei einem ruhig liegen bleibenden Dokument.
-					owner.liveStable = 0;
-					owner.autoArmed = true;
-					return;
-				}
-				owner.liveStable++;
-				// Drei stabile Prüfrunden (~1 s) verhindern Fehlauslösungen beim Bewegen.
-				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 3 && Date.now() > owner.autoCooldown) {
-					owner.autoArmed = false;
-					owner.liveStable = 0;
-					owner.autoCooldown = Date.now() + 1800;
-					scanCapture(true);
-				}
-			} catch (e) { console.warn("Heft: Live-Scan-Prüfung fehlgeschlagen", e); }
-		};
-		check();
-		owner.liveTimer = setInterval(check, 340);
-	}
-	function stopLiveQuality() {
-		if (scanUI && scanUI.liveTimer) { clearInterval(scanUI.liveTimer); scanUI.liveTimer = 0; }
-	}
-	function setScanBusy(on, label) {
-		if (!scanUI) return;
-		scanUI.busy = !!on;
-		const el = scanUI.wrap.querySelector(".heft-scan-busy");
-		if (el) {
-			el.hidden = !on;
-			const sp = el.querySelector("span");
-			if (sp && label) sp.textContent = label;
-		}
-		const shut = scanUI.wrap.querySelector(".heft-scan-shutter");
-		if (shut) shut.disabled = !!on;
-	}
-	function onScanClick(e) {
-		const b = e.target.closest("button");
-		if (!b || !scanUI) return;
-		const d = b.dataset;
-		if (d.hescanclose) closeScanner();
-		else if (d.hescanshot) scanCapture();
-		else if (d.hescanpdf) { if (scanUI.shots.length) scanFinishPdf(); }
-		else if (d.hescanheft) { if (scanUI.shots.length) scanFinishHeft(); }
-		else if (d.hescanautocap) {
-			scanUI.autoCapture = !scanUI.autoCapture;
-			if (scanUI.autoCapture) { scanUI.autoArmed = true; scanUI.liveStable = 0; }
-			else { scanUI.autoArmed = false; }
-			b.classList.toggle("active", scanUI.autoCapture);
-			b.textContent = scanUI.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
-		}
-		else if (d.hescanpick) scanPickFiles();
-		else if (d.hescancompare) {
-			const ed = scanUI.edit;
-			if (ed) {
-				ed.compare = !ed.compare;
-				b.textContent = ed.compare ? "◐ Nur Scan" : "◑ Vorher/Nachher";
-				const sh = scanUI.shots[ed.i];
-				if (sh && sh.out) drawEditResult(sh);
-			}
-		}
-		else if (d.hescancorners) {
-			const ed = scanUI.edit;
-			if (ed && ed.img) { ed.cornerMode = true; layoutEdit(); }
-			else if (U.toast) U.toast("Rohbild wird geladen…");
-		}
-		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
-		else if (d.hescaneditback) closeEdit();
-		else if (d.hescanmode) {
-			// Filter sofort anwenden (nicht erst bei Übernehmen) — sonst wirken die Chips „tot"
-			if (scanUI.edit) {
-				scanUI.edit.mode = d.hescanmode;
-				scanUI.edit.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === scanUI.edit.mode));
-				liveReprocessEdit();
-			}
-		}
-		else if (d.hescanrot) {
-			if (scanUI.edit) {
-				scanUI.edit.rot = (scanUI.edit.rot + 1) % 4;
-				const rb = scanUI.edit.el.querySelector("[data-hescanrot]");
-				if (rb) rb.textContent = "⟳ Drehen" + (scanUI.edit.rot ? " (" + (scanUI.edit.rot * 90) + "°)" : "");
-				liveReprocessEdit();
-			}
-		}
-		else if (d.hescandel) {
-			if (scanUI.edit) { const i = scanUI.edit.i; closeEdit(); scanUI.shots.splice(i, 1); renderShots(); }
-		}
-		else if (d.hescandone) finishEdit();
-	}
-	async function scanCapture(isAuto = false) {
-		const owner = scanUI;
-		if (!owner || owner.busy) return;
-		// Ein manueller Scan zählt als Verarbeitung der aktuellen Seite. Auto darf
-		// dieselbe ruhige Ansicht danach nicht noch einmal erfassen.
-		if (!isAuto) { owner.autoArmed = false; owner.liveStable = 0; owner.autoCooldown = Date.now() + 1800; }
-		const video = owner.wrap.querySelector("video");
-		if (!video) return;
-		// Video noch nicht bereit (häufig auf iOS, wenn play() noch nicht durch ist)
-		if (!video.videoWidth || !video.videoHeight) {
-			try { await video.play(); } catch { /* ignore */ }
-			if (!video.videoWidth) {
-				if (U.toast) U.toast("Kamera startet noch — kurz warten und erneut tippen", "error");
-				return;
-			}
-		}
-		setScanBusy(true, "Aufnahme wird aufbereitet…");
-		try {
-			// Bei sehr großen Kamera-Streams begrenzen: spart Speicher ohne sichtbaren Textverlust.
-			const cap = 2048, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
-			const c = document.createElement("canvas");
-			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
-			c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
-			await addRawScan(c.toDataURL("image/jpeg", 0.92), c.width, c.height, owner);
-		} catch (e) {
-			console.warn("Heft: Scan fehlgeschlagen", e);
-			if (U.toast) U.toast("Scan fehlgeschlagen", "error");
-		}
-		if (scanUI === owner) setScanBusy(false);
-	}
-	// Rohbild → Dokument erkennen → entzerren → aufbereiten → in den Scan-Streifen
-	async function addRawScan(src, w, h, owner) {
-		const img = await loadImg(src);
-		// Immer die echten Bildmaße nutzen (sonst stimmen Quad/Warp nicht)
-		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
-		// Auto-Zuschnitt bleibt aktiv. detectQuad() gibt bei unsicherer Erkennung
-		// das vollständige Bild zurück, statt einen fragwürdigen Zuschnitt zu erzwingen.
-		const sh = { src, w: iw, h: ih, quad: detectQuad(img, iw, ih), mode: "color", rot: 0, out: null, img }; 
-		await processShot(sh);
-		if (scanUI !== owner || !sh.out) return;
-		owner.shots.push(sh);
-		renderShots();
-	}
-	function renderShots() {
-		if (!scanUI) return;
-		const strip = scanUI.wrap.querySelector(".heft-scan-shots");
-		if (!strip) return;
-		// out kann null sein, wenn die Aufbereitung fehlschlug — dann Rohbild zeigen
-		strip.innerHTML = scanUI.shots.map((sh, i) => {
-			const src = (sh.out && sh.out.dataUrl) || sh.src;
-			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
-				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span></button>';
-		}).join("");
-		// Die Kacheln bleiben klein, damit mehrere Aufnahmen schnell hintereinander
-		// erfasst werden können. Antippen öffnet erst dann die große Bearbeitung.
-		strip.scrollLeft = strip.scrollWidth;
-		const ready = scanUI.shots.filter((sh) => sh.out && sh.out.dataUrl);
-		const n = ready.length;
-		const pdfBtn = scanUI.wrap.querySelector("[data-hescanpdf]");
-		const heftBtn = scanUI.wrap.querySelector("[data-hescanheft]");
-		if (pdfBtn) { pdfBtn.disabled = !n; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
-		if (heftBtn) { heftBtn.disabled = !n; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
-	}
-	function scanPickFiles() {
-		const inp = document.createElement("input");
-		inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
-		inp.setAttribute("capture", "environment");
-		inp.onchange = async () => {
-			const owner = scanUI;
-			const files = Array.from(inp.files || []);
-			if (!files.length || !owner) return;
-			setScanBusy(true, "Fotos werden aufbereitet…");
-			for (const f of files) {
-				try {
-					const im = await fileToImageData(f, 2048);
-					if (scanUI !== owner) return;
-					await addRawScan(im.src, im.w, im.h, owner);
-				} catch (e) {
-					console.warn("Heft: Scan-Foto fehlgeschlagen", e);
-					if (U.toast) U.toast("Foto konnte nicht gelesen werden", "error");
-				}
-			}
-			if (scanUI === owner) setScanBusy(false);
-		};
-		inp.click();
-	}
-	// „Foto"-Filter: Kontrast strecken über 2%/98%-Luminanz-Perzentile — bewusst
-	// kanalgleich, damit Farben nicht kippen (für Fotos statt Dokumenten)
-	function enhanceScan(cv) {
-		const x = cv.getContext("2d");
-		const d = x.getImageData(0, 0, cv.width, cv.height);
-		const px = d.data;
-		const hist = new Uint32Array(256);
-		for (let i = 0; i < px.length; i += 4) hist[(px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8]++;
-		const total = px.length / 4;
-		let lo = 0, hi = 255, acc = 0;
-		for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= total * 0.02) { lo = i; break; } }
-		acc = 0;
-		for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= total * 0.02) { hi = i; break; } }
-		const span = Math.max(1, hi - lo);
-		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
-		for (let i = 0; i < px.length; i += 4) {
-			px[i] = clamp((px[i] - lo) * 255 / span);
-			px[i + 1] = clamp((px[i + 1] - lo) * 255 / span);
-			px[i + 2] = clamp((px[i + 2] - lo) * 255 / span);
-		}
-		x.putImageData(d, 0, 0);
-	}
-	// ---------- Scanner-Pipeline: Erkennung → Entzerrung → Aufbereitung ----------
 	const loadImg = (src) => new Promise((res, rej) => {
 		const im = new Image();
 		im.onload = () => res(im);
@@ -1315,133 +1073,187 @@ export const HEFT = (() => {
 		for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p[0] * r[1] - r[0] * p[1]; }
 		return Math.abs(a) / 2;
 	}
-	// Dokumenterkennung v3: helles unbuntes Papier + Kanten + morphologisches Schließen
-	// (Text-Löcher füllen) + Rechteck-Score. Deutlich robuster als reine Helligkeits-Flut.
-	function detectQuad(img, w, h) {
-		const full = [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]]; // Keine sichere Erkennung: niemals Inhalt abschneiden.
-		if (!w || !h) return full;
-		const dw = 400, kk = dw / w, dh = Math.max(12, Math.round(h * kk));
-		const c = document.createElement("canvas");
-		c.width = dw; c.height = dh;
-		const cx = c.getContext("2d", { willReadFrequently: true });
-		cx.drawImage(img, 0, 0, dw, dh);
-		const d = cx.getImageData(0, 0, dw, dh).data;
-		const n = dw * dh;
-		const L = new Float32Array(n), sat = new Float32Array(n);
-		let sumL = 0;
-		for (let i = 0; i < n; i++) {
-			const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
-			const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-			const lum = r * 0.299 + g * 0.587 + b * 0.114;
-			L[i] = lum; sat[i] = mx ? (mx - mn) / mx : 0; sumL += lum;
+	function isConvex(q) {
+		let sign = 0;
+		for (let i = 0; i < 4; i++) {
+			const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4];
+			const z = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+			if (!z) continue;
+			if (!sign) sign = z > 0 ? 1 : -1;
+			else if ((z > 0 ? 1 : -1) !== sign) return false;
 		}
-		const meanL = sumL / n;
-		// 3×3-Boxblur der Luminanz → lokaler Hintergrund
-		const blur = new Float32Array(n);
-		for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
-			let s = 0, ctn = 0;
-			for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-				const yy = y + dy, xx = x + dx;
-				if (yy < 0 || yy >= dh || xx < 0 || xx >= dw) continue;
-				s += L[yy * dw + xx]; ctn++;
+		return sign !== 0;
+	}
+	// Konvexe Hülle (Andrew Monotone Chain) — Grundlage der Eckensuche
+	function convexHull(pts) {
+		const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+		if (p.length < 3) return p;
+		const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+		const lower = [];
+		for (const pt of p) {
+			while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pt) <= 0) lower.pop();
+			lower.push(pt);
+		}
+		const upper = [];
+		for (let i = p.length - 1; i >= 0; i--) {
+			const pt = p[i];
+			while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pt) <= 0) upper.pop();
+			upper.push(pt);
+		}
+		lower.pop(); upper.pop();
+		return lower.concat(upper);
+	}
+	// Separabler Box-Blur mit Gleitsumme — O(n) statt O(n·r²) wie der alte 5×5-Schleifen-Blur
+	function blurMap(src, dw, dh, r) {
+		const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+		const pass = (inp, outp, len, stride, lines, lineStride) => {
+			for (let l = 0; l < lines; l++) {
+				const base = l * lineStride;
+				let acc = 0;
+				for (let i = -r; i <= r; i++) acc += inp[base + Math.min(len - 1, Math.max(0, i)) * stride];
+				for (let i = 0; i < len; i++) {
+					outp[base + i * stride] = acc / (2 * r + 1);
+					acc += inp[base + Math.min(len - 1, i + r + 1) * stride] - inp[base + Math.max(0, i - r) * stride];
+				}
 			}
-			blur[y * dw + x] = s / ctn;
-		}
-		// Sobel-Kantenstärke (Dokumentrand ist oft dunkler/kontrastreicher)
-		const edge = new Float32Array(n);
-		for (let y = 1; y < dh - 1; y++) for (let x = 1; x < dw - 1; x++) {
-			const i = y * dw + x;
-			const gx = -L[i - dw - 1] - 2 * L[i - 1] - L[i + dw - 1] + L[i - dw + 1] + 2 * L[i + 1] + L[i + dw + 1];
-			const gy = -L[i - dw - 1] - 2 * L[i - dw] - L[i - dw + 1] + L[i + dw - 1] + 2 * L[i + dw] + L[i + dw + 1];
-			edge[i] = Math.hypot(gx, gy);
-		}
-		// Papier-Maske: hell, relativ unbunt, nahe/über lokalem Hintergrund
-		// (schließt Schreibtisch ab, der dunkler oder bunter ist)
-		const mask0 = new Uint8Array(n);
-		const thrPaper = Math.max(95, meanL * 0.78);
-		for (let i = 0; i < n; i++) {
-			const paperLike = L[i] >= thrPaper && sat[i] < 0.28 && L[i] >= blur[i] * 0.88;
-			mask0[i] = paperLike ? 1 : 0;
-		}
-		// Morphologisches Schließen: Textlöcher im Blatt füllen (dilate → erode)
-		const morph = (src, dilate) => {
-			const out = new Uint8Array(n);
-			for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
-				let v = dilate ? 0 : 1;
-				for (let dy = -2; dy <= 2 && (dilate ? !v : v); dy++)
-					for (let dx = -2; dx <= 2 && (dilate ? !v : v); dx++) {
-						const yy = y + dy, xx = x + dx;
-						if (yy < 0 || yy >= dh || xx < 0 || xx >= dw) continue;
-						const m = src[yy * dw + xx];
-						if (dilate) { if (m) v = 1; } else { if (!m) v = 0; }
-					}
-				out[y * dw + x] = v;
-			}
-			return out;
 		};
-		const mask = morph(morph(mask0, true), false);
-		// Zusammenhängende Komponenten bewerten (nicht nur größte Fläche)
-		const seen = new Uint8Array(n), stack = new Int32Array(n);
-		// Nur Eck-/Flächenwerte speichern, nie alle Pixel einer Komponente als JS-Array.
-		let best = null, bestScore = -1;
-		for (let s0 = 0; s0 < n; s0++) {
-			if (!mask[s0] || seen[s0]) continue;
-			let top = 0, minX = dw, maxX = 0, minY = dh, maxY = 0, border = 0, eSum = 0, area = 0;
-			let tl = s0, tr = s0, br = s0, bl = s0, vTl = Infinity, vTr = -Infinity, vBr = -Infinity, vBl = Infinity;
-			stack[top++] = s0; seen[s0] = 1;
-			while (top) {
-				const p = stack[--top];
-				area++;
-				const py = (p / dw) | 0, pxx = p % dw;
-				const sm = pxx + py, df = pxx - py;
-				if (sm < vTl) { vTl = sm; tl = p; }
-				if (sm > vBr) { vBr = sm; br = p; }
-				if (df > vTr) { vTr = df; tr = p; }
-				if (df < vBl) { vBl = df; bl = p; }
-				if (pxx < minX) minX = pxx; if (pxx > maxX) maxX = pxx;
-				if (py < minY) minY = py; if (py > maxY) maxY = py;
-				if (pxx <= 1 || py <= 1 || pxx >= dw - 2 || py >= dh - 2) border++;
-				eSum += edge[p];
-				if (pxx > 0 && mask[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[top++] = p - 1; }
-				if (pxx < dw - 1 && mask[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[top++] = p + 1; }
-				if (py > 0 && mask[p - dw] && !seen[p - dw]) { seen[p - dw] = 1; stack[top++] = p - dw; }
-				if (py < dh - 1 && mask[p + dw] && !seen[p + dw]) { seen[p + dw] = 1; stack[top++] = p + dw; }
-			}
-			if (area < n * 0.08 || area > n * 0.96) continue; // zu klein / fast ganzes Bild = Tisch
-			const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
-			const rectFill = area / (bw * bh); // wie rechteckig die Fläche ist
-			const borderFrac = border / area;
-			const aspect = bw / bh;
-			const aspectOk = aspect > 0.35 && aspect < 2.9 ? 1 : 0.45;
-			// guter Dokument-Score: Fläche, Füllgrad, wenig Bildrand, etwas Kante am Rand
-			const sc = area * (0.35 + rectFill) * aspectOk * (1 - Math.min(0.7, borderFrac * 2)) * (1 + Math.min(1.2, eSum / (area * 40)));
-			if (sc > bestScore) { bestScore = sc; best = { tl, tr, br, bl }; }
+		pass(src, tmp, dw, 1, dh, dw);
+		pass(tmp, out, dh, dw, dw, 1);
+		return out;
+	}
+	// Separable Morphologie: pick=1 Dilatation, pick=0 Erosion (Radius 2)
+	function morphPass(src, dw, dh, pick) {
+		const n = dw * dh, mid = new Uint8Array(n), out = new Uint8Array(n);
+		for (let i = 0; i < n; i++) {
+			const x = i % dw;
+			let v = src[i] === pick;
+			for (let k = 1; k <= 2 && !v; k++) v = (x - k >= 0 && src[i - k] === pick) || (x + k < dw && src[i + k] === pick);
+			mid[i] = v ? pick : 1 - pick;
 		}
-		if (!best) return full;
-		// Ecken direkt aus der zusammenhängenden Papierfläche verwenden. Das frühere
-		// Snapping auf die jeweils stärkste Kante sprang bei Text, Karos oder Schatten
-		// oft auf eine innere Linie und erzeugte schiefe bzw. abgeschnittene Scans.
-		const pt = (p) => [(p % dw) / kk, ((p / dw) | 0) / kk];
-		const raw = [pt(best.tl), pt(best.tr), pt(best.br), pt(best.bl)];
-		// Einen kleinen Sicherheitsrand nach außen lassen: erkannte Papierkanten sind
-		// wegen Schatten/Antialiasing meist etwas zu weit innen.
-		const centerX = raw.reduce((s, p) => s + p[0], 0) / 4, centerY = raw.reduce((s, p) => s + p[1], 0) / 4;
-		const q = raw.map((p) => [
-			Math.max(0, Math.min(w - 1, centerX + (p[0] - centerX) * 1.025)),
-			Math.max(0, Math.min(h - 1, centerY + (p[1] - centerY) * 1.025)),
-		]);
-		// Plausibilität
-		const areaQ = quadArea(q);
-		if (areaQ < w * h * 0.10 || areaQ > w * h * 0.97) return full;
-		for (let i = 0; i < 4; i++) if (dist2d(q[i], q[(i + 1) % 4]) < Math.min(w, h) * 0.12) return full;
-		// Konvexität prüfen: bei einem gültigen Quad zeigen ALLE vier
-		// Kanten-Drehungen in dieselbe Richtung. Die frühere Prüfung verglich
-		// zwei Punkte an derselben Kante und verwarf dadurch sogar gute Rechtecke.
-		const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-		const turns = [cross(q[0], q[1], q[2]), cross(q[1], q[2], q[3]), cross(q[2], q[3], q[0]), cross(q[3], q[0], q[1])];
-		const pos = turns.every((v) => v > 0), neg = turns.every((v) => v < 0);
-		if (!pos && !neg) return full; // Selbstkreuzung oder eingeknickte Ecken
-		return q;
+		for (let i = 0; i < n; i++) {
+			const y = (i / dw) | 0;
+			let v = mid[i] === pick;
+			for (let k = 1; k <= 2 && !v; k++) v = (y - k >= 0 && mid[i - k * dw] === pick) || (y + k < dh && mid[i + k * dw] === pick);
+			out[i] = v ? pick : 1 - pick;
+		}
+		return out;
+	}
+	// Dokumenterkennung v4. Gibt bei unsicherer Erkennung IMMER das ganze Bild
+	// zurück — niemals Inhalt abschneiden.
+	function detectQuad(img, w, h) {
+		const full = [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]];
+		if (!w || !h) return full;
+		try {
+			const dw = Math.min(420, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
+			const c = document.createElement("canvas");
+			c.width = dw; c.height = dh;
+			const cx = c.getContext("2d", { willReadFrequently: true });
+			cx.drawImage(img, 0, 0, dw, dh);
+			const d = cx.getImageData(0, 0, dw, dh).data;
+			const n = dw * dh;
+			const L = new Float32Array(n), sat = new Float32Array(n);
+			let sumL = 0;
+			for (let i = 0; i < n; i++) {
+				const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+				const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+				L[i] = r * 0.299 + g * 0.587 + b * 0.114;
+				sat[i] = mx ? (mx - mn) / mx : 0;
+				sumL += L[i];
+			}
+			const meanL = sumL / n;
+			const blur = blurMap(L, dw, dh, 6);
+			// Papier: hell, relativ unbunt, nicht deutlich dunkler als der lokale Hintergrund
+			let mask = new Uint8Array(n);
+			const thrPaper = Math.max(95, meanL * 0.78);
+			for (let i = 0; i < n; i++) mask[i] = L[i] >= thrPaper && sat[i] < 0.3 && L[i] >= blur[i] * 0.86 ? 1 : 0;
+			// Schließen: Textlöcher im Blatt füllen (Dilatation → Erosion)
+			mask = morphPass(morphPass(mask, dw, dh, 1), dw, dh, 0);
+			// Zusammenhängende Komponenten fluten und bewerten. Nur die Randpixel der
+			// besten Komponente werden gesammelt — nie alle Pixel als JS-Array.
+			const seen = new Uint8Array(n), stack = new Int32Array(n);
+			let best = null, bestScore = -1;
+			for (let s0 = 0; s0 < n; s0++) {
+				if (!mask[s0] || seen[s0]) continue;
+				let top = 0, area = 0, border = 0;
+				let minX = dw, maxX = 0, minY = dh, maxY = 0;
+				const boundary = [];
+				stack[top++] = s0; seen[s0] = 1;
+				while (top) {
+					const p = stack[--top];
+					area++;
+					const py = (p / dw) | 0, pxx = p % dw;
+					if (pxx < minX) minX = pxx; if (pxx > maxX) maxX = pxx;
+					if (py < minY) minY = py; if (py > maxY) maxY = py;
+					let bnd = pxx <= 0 || py <= 0 || pxx >= dw - 1 || py >= dh - 1;
+					if (bnd) border++;
+					if (pxx > 0) { const j = p - 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (pxx < dw - 1) { const j = p + 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (py > 0) { const j = p - dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (py < dh - 1) { const j = p + dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (bnd) boundary.push([pxx, py]);
+				}
+				if (area < n * 0.08 || area > n * 0.97) continue; // zu klein / fast ganzes Bild = Tisch
+				const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+				const rectFill = area / (bw * bh);
+				const aspect = bw / bh;
+				const aspectOk = aspect > 0.3 && aspect < 3.4 ? 1 : 0.4;
+				const borderFrac = border / Math.max(1, boundary.length);
+				const sc = area * (0.35 + rectFill) * aspectOk * (1 - Math.min(0.7, borderFrac * 2));
+				if (sc > bestScore) { bestScore = sc; best = boundary; }
+			}
+			if (!best) return full;
+			const hull = convexHull(best);
+			if (hull.length < 4) return full;
+			// Start-Viereck aus Extrempunkten (x+y bzw. x−y) …
+			let tl = hull[0], tr = hull[0], br = hull[0], bl = hull[0];
+			for (const p of hull) {
+				if (p[0] + p[1] < tl[0] + tl[1]) tl = p;
+				if (p[0] + p[1] > br[0] + br[1]) br = p;
+				if (p[0] - p[1] > tr[0] - tr[1]) tr = p;
+				if (p[0] - p[1] < bl[0] - bl[1]) bl = p;
+			}
+			let quad = [tl, tr, br, bl];
+			// … dann Ecken gegen Hüllpunkte tauschen, solange die Fläche wächst.
+			// Extrempunkte allein versagen bei gedrehten Blättern (der v2-Bug); das
+			// flächenmaximale konvexe Viereck in der Hülle sind die echten Papierecken.
+			let improved = true, guard = 0;
+			while (improved && guard++ < 10) {
+				improved = false;
+				for (let ci = 0; ci < 4; ci++) {
+					let bestA = quadArea(quad), bestP = quad[ci];
+					for (const p of hull) {
+						const q2 = [quad[0], quad[1], quad[2], quad[3]];
+						q2[ci] = p;
+						const a2 = quadArea(q2);
+						if (a2 > bestA + 0.5 && isConvex(q2)) { bestA = a2; bestP = p; }
+					}
+					if (bestP !== quad[ci]) { quad[ci] = bestP; improved = true; }
+				}
+			}
+			// Reihenfolge tl→tr→br→bl herstellen (Winkelsortierung um den Schwerpunkt)
+			const cqx = (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4;
+			const cqy = (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4;
+			quad.sort((a, b) => Math.atan2(a[1] - cqy, a[0] - cqx) - Math.atan2(b[1] - cqy, b[0] - cqx));
+			let st = 0;
+			for (let i = 1; i < 4; i++) if (quad[i][0] + quad[i][1] < quad[st][0] + quad[st][1]) st = i;
+			quad = quad.slice(st).concat(quad.slice(0, st));
+			// Zurückskalieren, minimal nach außen (Schatten/Antialiasing), an den Rand klemmen
+			const q = quad.map((p) => [p[0] / kk, p[1] / kk]);
+			const ccx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4;
+			const ccy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+			for (const p of q) {
+				p[0] = Math.max(0, Math.min(w - 1, ccx + (p[0] - ccx) * 1.03));
+				p[1] = Math.max(0, Math.min(h - 1, ccy + (p[1] - ccy) * 1.03));
+			}
+			// Plausibilität — sonst lieber das ganze Bild behalten
+			const areaQ = quadArea(q);
+			if (areaQ < w * h * 0.1 || areaQ > w * h * 0.985 || !isConvex(q)) return full;
+			for (let i = 0; i < 4; i++) if (dist2d(q[i], q[(i + 1) % 4]) < Math.min(w, h) * 0.12) return full;
+			return q;
+		} catch (e) {
+			console.warn("Heft: Dokumenterkennung fehlgeschlagen", e);
+			return full;
+		}
 	}
 	// Homographie Ziel-Rechteck → Quell-Quad: 8×8-Gleichungssystem, Gauß mit Pivot
 	function homography(quad, W, H) {
@@ -1561,9 +1373,8 @@ export const HEFT = (() => {
 	}
 	function sampleMap(bg, fx, fy) {
 		const bw = bg.bw, bh = bg.bh, m = bg.map;
-		// Bilinear-Sampling braucht jeweils einen rechten und unteren Nachbarn.
-		// Am Bildrand war x0/y0 bisher bw-1/bh-1; der Zugriff auf +1 lieferte
-		// undefined → NaN → schwarze/verfälschte Ränder im fertigen Scan.
+		// Bilinear-Sampling braucht jeweils einen rechten und unteren Nachbarn —
+		// am Rand deshalb auf den vorletzten Eintrag klemmen (sonst NaN-Ränder).
 		let x = fx - 0.5, y = fy - 0.5;
 		if (x < 0) x = 0; else if (x > bw - 2.001) x = bw - 2.001;
 		if (y < 0) y = 0; else if (y > bh - 2.001) y = bh - 2.001;
@@ -1571,7 +1382,29 @@ export const HEFT = (() => {
 		return m[y0 * bw + x0] * (1 - dx) * (1 - dy) + m[y0 * bw + x0 + 1] * dx * (1 - dy) +
 			m[(y0 + 1) * bw + x0] * (1 - dx) * dy + m[(y0 + 1) * bw + x0 + 1] * dx * dy;
 	}
-	// Scan-Aufbereitung v3 — bewusst aggressiv, damit der Unterschied zum Rohfoto
+	// „Foto“-Filter: Kontrast strecken über 2%/98%-Luminanz-Perzentile — bewusst
+	// kanalgleich, damit Farben nicht kippen (für Fotos statt Dokumenten)
+	function enhanceScan(cv) {
+		const x = cv.getContext("2d");
+		const d = x.getImageData(0, 0, cv.width, cv.height);
+		const px = d.data;
+		const hist = new Uint32Array(256);
+		for (let i = 0; i < px.length; i += 4) hist[(px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8]++;
+		const total = px.length / 4;
+		let lo = 0, hi = 255, acc = 0;
+		for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= total * 0.02) { lo = i; break; } }
+		acc = 0;
+		for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= total * 0.02) { hi = i; break; } }
+		const span = Math.max(1, hi - lo);
+		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
+		for (let i = 0; i < px.length; i += 4) {
+			px[i] = clamp((px[i] - lo) * 255 / span);
+			px[i + 1] = clamp((px[i + 1] - lo) * 255 / span);
+			px[i + 2] = clamp((px[i + 2] - lo) * 255 / span);
+		}
+		x.putImageData(d, 0, 0);
+	}
+	// Scan-Aufbereitung — bewusst aggressiv, damit der Unterschied zum Rohfoto
 	// sofort erkennbar ist (wie Office Lens / GoodNotes):
 	// 1) Beleuchtung rausrechnen  2) Papier → weiß, Tinte → dunkler  3) leichter Unsharp
 	// 4) S/W mit harter, aber weicher Schwelle
@@ -1586,12 +1419,8 @@ export const HEFT = (() => {
 		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 		// Starke Papier-Aufhellung + Tinte halten (S-Kurve nach Weißabgleich)
 		const docTone = (v) => {
-			// Weißabgleich schon geschehen: v ≈ 0…255 auf weißem Papier
-			// helles Papier knallweiß, dunkle Striche dunkler
 			let t = Math.max(0, Math.min(1, v / 255));
-			// S-Kurve: Mitte absenken (Text), oben anheben (Papier)
 			t = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
-			// extra Push: alles über ~0.72 → Richtung 1.0
 			if (t > 0.72) t = 0.72 + (t - 0.72) * 1.9;
 			if (t < 0.35) t = t * 0.85;
 			return clamp(t * 255);
@@ -1602,9 +1431,9 @@ export const HEFT = (() => {
 				const i = (y * w + x2) * 4;
 				const g = Math.max(36, sampleMap(bg, x2 * kx, fy));
 				// Weißabgleich: durch geschätzte Papierhelligkeit teilen
-				let r = clamp(px[i] * 255 / g);
-				let g2 = clamp(px[i + 1] * 255 / g);
-				let b = clamp(px[i + 2] * 255 / g);
+				const r = clamp(px[i] * 255 / g);
+				const g2 = clamp(px[i + 1] * 255 / g);
+				const b = clamp(px[i + 2] * 255 / g);
 				if (mode === "color") {
 					px[i] = docTone(r);
 					px[i + 1] = docTone(g2);
@@ -1632,9 +1461,9 @@ export const HEFT = (() => {
 				const i = (y * w + x2) * 4;
 				for (let c = 0; c < 3; c++) {
 					const c0 = copy[i + c];
-					const blur =
+					const blur2 =
 						(copy[i - w * 4 + c] + copy[i + w * 4 + c] + copy[i - 4 + c] + copy[i + 4 + c] + c0 * 4) / 8;
-					px[i + c] = clamp(c0 + (c0 - blur) * amount);
+					px[i + c] = clamp(c0 + (c0 - blur2) * amount);
 				}
 			}
 		}
@@ -1675,8 +1504,305 @@ export const HEFT = (() => {
 		sh.out = { dataUrl: cv.toDataURL("image/jpeg", 0.92), w: cv.width, h: cv.height };
 	}
 
+	// ---------- Scanner-Overlay: Kamera, Live-Prüfung, Aufnahme ----------
+	async function openScanner() {
+		if (scanUI) return;
+		const wrap = document.createElement("div");
+		wrap.className = "heft-scan";
+		wrap.innerHTML =
+			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen">✕</button></div>' +
+			'<div class="heft-scan-stage"><video autoplay playsinline muted></video>' +
+				'<svg class="heft-scan-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="7,7 93,7 93,93 7,93"></polygon></svg>' +
+				'<div class="heft-scan-quality" data-hescanquality="1">Kamera wird geprüft…</div>' +
+				'<div class="heft-scan-hint">Blatt vollständig ins Bild legen. Grün = bereit; der Rahmen zeigt exakt den späteren Zuschnitt.</div></div>' +
+			'<div class="heft-scan-shots"></div>' +
+			'<div class="heft-scan-bar">' +
+				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen"></button>' +
+				'<div class="heft-scan-actions">' +
+					'<button type="button" data-hescanautocap="1" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
+					'<button type="button" data-hescanpdf="1" disabled>📄 Als PDF speichern</button>' +
+					'<button type="button" data-hescanheft="1" disabled>📓 In Heft einfügen</button>' +
+				'</div>' +
+			'</div>' +
+			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
+		document.body.appendChild(wrap);
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: false, autoArmed: false, autoCooldown: 0 };
+		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
+		wrap.addEventListener("click", onScanClick);
+		try {
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("getUserMedia fehlt");
+			// Zuerst „environment“, sonst irgendeine Kamera — verhindert OverconstrainedError auf Desktop
+			let stream = null;
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+					audio: false,
+				});
+			} catch (cameraError) {
+				// Nur bei einer nicht erfüllbaren Kamera-/Constraint-Wahl auf die allgemeine
+				// Kamera ausweichen. Bei verweigerter Berechtigung würde ein zweiter
+				// getUserMedia-Aufruf sonst erneut nachfragen bzw. den Fallback verzögern.
+				const name = cameraError && cameraError.name;
+				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw cameraError;
+				stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+			}
+			// Während await könnte geschlossen oder ein neuer Scanner geöffnet worden sein.
+			if (scanUI !== ui || !wrap.isConnected) { try { stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } return; }
+			ui.stream = stream;
+			const video = wrap.querySelector("video");
+			video.srcObject = stream;
+			video.muted = true;
+			video.setAttribute("playsinline", "");
+			// iOS/Safari: autoplay allein reicht oft nicht — sonst bleibt videoWidth=0 und der Auslöser tut nichts
+			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
+			startLiveQuality(video, ui);
+		} catch (e) {
+			// Keine Kamera / keine Freigabe → Fallback: Fotos auswählen (mit capture-Hint)
+			console.warn("Heft: Kamera nicht verfügbar", e);
+			if (scanUI === ui) {
+				wrap.querySelector(".heft-scan-stage").innerHTML =
+					'<div class="heft-scan-nocam"><p>Keine Kamera verfügbar oder Zugriff abgelehnt.</p>' +
+					'<button type="button" data-hescanpick="1">Fotos auswählen…</button></div>';
+				const shut = wrap.querySelector(".heft-scan-shutter");
+				if (shut) shut.disabled = true;
+			}
+		}
+	}
+	function closeScanner() {
+		if (!scanUI) return;
+		stopLiveQuality();
+		try { if (scanUI.stream) scanUI.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+		try { scanUI.wrap.remove(); } catch { /* ignore */ }
+		scanUI = null;
+	}
+	// Live-Prüfung vor dem Auslösen: kleine Vorschau → Helligkeit/Schärfe/Kontrast +
+	// ECHTE Dokumenterkennung. Der grüne Rahmen zeigt damit exakt den späteren
+	// Zuschnitt (v2 zeigte nur eine grobe Bounding-Box, die der Aufnahme oft widersprach).
+	function liveQualityFrame(video) {
+		const sw = 240, sh = Math.max(120, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
+		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
+		const x = c.getContext("2d", { willReadFrequently: true });
+		x.drawImage(video, 0, 0, sw, sh);
+		const px = x.getImageData(0, 0, sw, sh).data;
+		let sum = 0, sum2 = 0, lap = 0;
+		const lum = new Uint8Array(sw * sh);
+		for (let i = 0; i < lum.length; i++) {
+			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
+			lum[i] = v; sum += v; sum2 += v * v;
+		}
+		for (let y = 1; y < sh - 1; y += 2) for (let x2 = 1; x2 < sw - 1; x2 += 2) {
+			const i = y * sw + x2;
+			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - sw] - lum[i + sw]);
+		}
+		const count = sw * sh;
+		const mean = sum / count, contrast = Math.sqrt(Math.max(0, sum2 / count - mean * mean));
+		const sharp = lap / Math.max(1, ((sw - 2) * (sh - 2)) / 4);
+		const quad = detectQuad(c, sw, sh);
+		const found = quadArea(quad) < sw * sh * 0.96; // Vollbild-Fallback = nichts erkannt
+		return { quad, found, mean, contrast, sharp, sw, sh };
+	}
+	function setLiveGuide(info) {
+		if (!scanUI) return;
+		const guide = scanUI.wrap.querySelector(".heft-scan-guide polygon");
+		const label = scanUI.wrap.querySelector("[data-hescanquality]");
+		if (!guide || !label) return;
+		const toPct = (p) => (p[0] / info.sw * 100).toFixed(1) + "," + (p[1] / info.sh * 100).toFixed(1);
+		guide.setAttribute("points", info.quad.map(toPct).join(" "));
+		const lightOK = info.mean >= 62 && info.mean <= 235;
+		const sharpOK = info.sharp >= 8;
+		const contrastOK = info.contrast >= 16;
+		const ready = info.found && lightOK && sharpOK && contrastOK;
+		guide.parentElement.classList.toggle("ready", ready);
+		guide.parentElement.classList.toggle("warn", !ready);
+		if (ready) label.textContent = "✓ Dokument erkannt · bereit";
+		else if (!info.found) label.textContent = "Blatt vollständig ins Bild legen";
+		else if (!sharpOK) label.textContent = "Kamera ruhiger halten";
+		else if (!lightOK) label.textContent = info.mean < 62 ? "Mehr Licht nötig" : "Zu hell / Spiegelung vermeiden";
+		else if (!contrastOK) label.textContent = "Kontrast zu gering";
+		return ready;
+	}
+	function startLiveQuality(video, owner) {
+		if (!owner || scanUI !== owner) return;
+		stopLiveQuality();
+		const check = () => {
+			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
+			try {
+				const ready = setLiveGuide(liveQualityFrame(video));
+				if (!ready) {
+					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto für die
+					// nächste Seite neu scharf sein — verhindert Duplikate bei ruhig liegendem Blatt.
+					owner.liveStable = 0;
+					owner.autoArmed = true;
+					return;
+				}
+				owner.liveStable++;
+				// Drei stabile Prüfrunden (~1 s) verhindern Fehlauslösungen beim Bewegen.
+				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 3 && Date.now() > owner.autoCooldown) {
+					owner.autoArmed = false;
+					owner.liveStable = 0;
+					owner.autoCooldown = Date.now() + 1800;
+					scanCapture(true);
+				}
+			} catch (e) { console.warn("Heft: Live-Scan-Prüfung fehlgeschlagen", e); }
+		};
+		check();
+		owner.liveTimer = setInterval(check, 340);
+	}
+	function stopLiveQuality() {
+		if (scanUI && scanUI.liveTimer) { clearInterval(scanUI.liveTimer); scanUI.liveTimer = 0; }
+	}
+	function setScanBusy(on, label) {
+		if (!scanUI) return;
+		scanUI.busy = !!on;
+		const el = scanUI.wrap.querySelector(".heft-scan-busy");
+		if (el) {
+			el.hidden = !on;
+			const sp = el.querySelector("span");
+			if (sp && label) sp.textContent = label;
+		}
+		const shut = scanUI.wrap.querySelector(".heft-scan-shutter");
+		if (shut) shut.disabled = !!on;
+	}
+	function onScanClick(e) {
+		const b = e.target.closest("button");
+		if (!b || !scanUI) return;
+		const d = b.dataset;
+		if (d.hescanclose) closeScanner();
+		else if (d.hescanshot) scanCapture();
+		else if (d.hescanpdf) { if (scanUI.shots.length) scanFinishPdf(); }
+		else if (d.hescanheft) { if (scanUI.shots.length) scanFinishHeft(); }
+		else if (d.hescanautocap) {
+			scanUI.autoCapture = !scanUI.autoCapture;
+			if (scanUI.autoCapture) { scanUI.autoArmed = true; scanUI.liveStable = 0; }
+			else { scanUI.autoArmed = false; }
+			b.classList.toggle("active", scanUI.autoCapture);
+			b.textContent = scanUI.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
+		}
+		else if (d.hescanpick) scanPickFiles();
+		else if (d.hescancompare) {
+			const ed = scanUI.edit;
+			if (ed) {
+				ed.compare = !ed.compare;
+				b.textContent = ed.compare ? "◐ Nur Scan" : "◑ Vorher/Nachher";
+				const sh = scanUI.shots[ed.i];
+				if (sh && sh.out) drawEditResult(sh);
+			}
+		}
+		else if (d.hescancorners) {
+			const ed = scanUI.edit;
+			if (ed && ed.img) { ed.cornerMode = true; layoutEdit(); }
+			else if (U.toast) U.toast("Rohbild wird geladen…");
+		}
+		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
+		else if (d.hescaneditback) closeEdit();
+		else if (d.hescanmode) {
+			// Filter sofort anwenden (nicht erst bei Übernehmen) — sonst wirken die Chips „tot“
+			if (scanUI.edit) {
+				scanUI.edit.mode = d.hescanmode;
+				scanUI.edit.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === scanUI.edit.mode));
+				liveReprocessEdit();
+			}
+		}
+		else if (d.hescanrot) {
+			if (scanUI.edit) {
+				scanUI.edit.rot = (scanUI.edit.rot + 1) % 4;
+				const rb = scanUI.edit.el.querySelector("[data-hescanrot]");
+				if (rb) rb.textContent = "⟳ Drehen" + (scanUI.edit.rot ? " (" + (scanUI.edit.rot * 90) + "°)" : "");
+				liveReprocessEdit();
+			}
+		}
+		else if (d.hescandel) {
+			if (scanUI.edit) { const i = scanUI.edit.i; closeEdit(); scanUI.shots.splice(i, 1); renderShots(); }
+		}
+		else if (d.hescandone) finishEdit();
+	}
+	async function scanCapture(isAuto = false) {
+		const owner = scanUI;
+		if (!owner || owner.busy) return;
+		// Ein manueller Scan zählt als Verarbeitung der aktuellen Seite. Auto darf
+		// dieselbe ruhige Ansicht danach nicht noch einmal erfassen.
+		if (!isAuto) { owner.autoArmed = false; owner.liveStable = 0; owner.autoCooldown = Date.now() + 1800; }
+		const video = owner.wrap.querySelector("video");
+		if (!video) return;
+		// Video noch nicht bereit (häufig auf iOS, wenn play() noch nicht durch ist)
+		if (!video.videoWidth || !video.videoHeight) {
+			try { await video.play(); } catch { /* ignore */ }
+			if (!video.videoWidth) {
+				if (U.toast) U.toast("Kamera startet noch — kurz warten und erneut tippen", "error");
+				return;
+			}
+		}
+		setScanBusy(true, "Aufnahme wird aufbereitet…");
+		try {
+			// Bei sehr großen Kamera-Streams begrenzen: spart Speicher ohne sichtbaren Textverlust.
+			const cap = 2048, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
+			const c = document.createElement("canvas");
+			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
+			c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+			await addRawScan(c.toDataURL("image/jpeg", 0.92), c.width, c.height, owner);
+		} catch (e) {
+			console.warn("Heft: Scan fehlgeschlagen", e);
+			if (U.toast) U.toast("Scan fehlgeschlagen", "error");
+		}
+		if (scanUI === owner) setScanBusy(false);
+	}
+	// Rohbild → Dokument erkennen → entzerren → aufbereiten → in den Scan-Streifen
+	async function addRawScan(src, w, h, owner) {
+		const img = await loadImg(src);
+		// Immer die echten Bildmaße nutzen (sonst stimmen Quad/Warp nicht)
+		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
+		// Auto-Zuschnitt bleibt aktiv. detectQuad() gibt bei unsicherer Erkennung
+		// das vollständige Bild zurück, statt einen fragwürdigen Zuschnitt zu erzwingen.
+		const sh = { src, w: iw, h: ih, quad: detectQuad(img, iw, ih), mode: "color", rot: 0, out: null, img };
+		await processShot(sh);
+		if (scanUI !== owner || !sh.out) return;
+		owner.shots.push(sh);
+		renderShots();
+	}
+	function renderShots() {
+		if (!scanUI) return;
+		const strip = scanUI.wrap.querySelector(".heft-scan-shots");
+		if (!strip) return;
+		// out kann null sein, wenn die Aufbereitung fehlschlug — dann Rohbild zeigen
+		strip.innerHTML = scanUI.shots.map((sh, i) => {
+			const src = (sh.out && sh.out.dataUrl) || sh.src;
+			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
+				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span></button>';
+		}).join("");
+		strip.scrollLeft = strip.scrollWidth;
+		const ready = scanUI.shots.filter((sh) => sh.out && sh.out.dataUrl);
+		const n = ready.length;
+		const pdfBtn = scanUI.wrap.querySelector("[data-hescanpdf]");
+		const heftBtn = scanUI.wrap.querySelector("[data-hescanheft]");
+		if (pdfBtn) { pdfBtn.disabled = !n; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
+		if (heftBtn) { heftBtn.disabled = !n; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
+	}
+	function scanPickFiles() {
+		const inp = document.createElement("input");
+		inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+		inp.setAttribute("capture", "environment");
+		inp.onchange = async () => {
+			const owner = scanUI;
+			const files = Array.from(inp.files || []);
+			if (!files.length || !owner) return;
+			setScanBusy(true, "Fotos werden aufbereitet…");
+			for (const f of files) {
+				try {
+					const im = await fileToImageData(f, 2048);
+					if (scanUI !== owner) return;
+					await addRawScan(im.src, im.w, im.h, owner);
+				} catch (e) {
+					console.warn("Heft: Scan-Foto fehlgeschlagen", e);
+					if (U.toast) U.toast("Foto konnte nicht gelesen werden", "error");
+				}
+			}
+			if (scanUI === owner) setScanBusy(false);
+		};
+		inp.click();
+	}
+
 	// ---------- Scan-Nachbearbeitung: Ecken ziehen, Filter, Drehen ----------
-	// Schreibt Edit-Zustand zurück und rechnet den Scan SOFORT neu (Filter/Drehen/Auto
+	// Schreibt Edit-Zustand zurück und rechnet den Scan SOFORT neu (Filter/Drehen/Ecken
 	// sind damit echte Aktionen — nicht erst beim Schließen der Ansicht).
 	let liveSeq = 0;
 	async function liveReprocessEdit() {
@@ -1695,7 +1821,7 @@ export const HEFT = (() => {
 			// Scanner geschlossen/gewechselt oder neuere Aktion: Ergebnis nicht mehr in alte UI schreiben.
 			if (scanUI !== owner || seq !== liveSeq) return;
 			renderShots();
-			if (owner.edit && owner.edit.el === ed && sh.out) drawEditResult(sh);
+			if (owner.edit && owner.edit.el === ed.el && sh.out) drawEditResult(sh);
 		} catch (e) {
 			console.warn("Heft: Live-Aufbereitung fehlgeschlagen", e);
 			if (scanUI === owner && U.toast) U.toast("Scan-Aufbereitung fehlgeschlagen", "error");
@@ -1713,10 +1839,9 @@ export const HEFT = (() => {
 		if (!stage || !cv) return;
 		const img = new Image();
 		img.onload = () => {
-			if (!scanUI || !scanUI.edit || scanUI.edit.el !== ed) return;
+			if (!scanUI || !scanUI.edit || scanUI.edit.el !== ed.el) return;
 			// Bei verschachtelten/fixed Overlays kann die Stage im ersten Layout-Frame
-			// noch 0×0 melden. Dann die Viewport-Größe verwenden, statt ein unsichtbares
-			// 1×1-Canvas zu erzeugen.
+			// noch 0×0 melden. Dann die Viewport-Größe verwenden.
 			const stageW = stage.clientWidth || window.innerWidth;
 			const stageH = stage.clientHeight || Math.max(180, window.innerHeight - 170);
 			const k = Math.max(0.02, Math.min((stageW - 24) / img.naturalWidth, (stageH - 24) / img.naturalHeight));
@@ -1875,13 +2000,9 @@ export const HEFT = (() => {
 		ed.drag = -1;
 		if (was < 0) return;
 		const sh = scanUI.shots[ed.i];
-		// Gekreuzte oder extrem kleine Quads erzeugen eine singuläre Homographie:
-		// Der Scan wird dann schwarz, verzerrt oder der Browser wird sehr langsam.
-		// In diesem Fall den letzten gültigen Zuschnitt behalten.
-		const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-		const turns = ed.quad.map((p, i) => cross(p, ed.quad[(i + 1) % 4], ed.quad[(i + 2) % 4]));
-		const convex = turns.every((v) => v > 1) || turns.every((v) => v < -1);
-		if (!sh || quadArea(ed.quad) < sh.w * sh.h * 0.015 || !convex) {
+		// Gekreuzte oder extrem kleine Quads erzeugen eine singuläre Homographie —
+		// dann den letzten gültigen Zuschnitt behalten.
+		if (!sh || quadArea(ed.quad) < sh.w * sh.h * 0.015 || !isConvex(ed.quad)) {
 			ed.quad = sh && sh.quad ? sh.quad.map((p) => p.slice()) : ed.quad;
 			drawEdit();
 			if (U.toast) U.toast("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
@@ -1891,7 +2012,7 @@ export const HEFT = (() => {
 		liveReprocessEdit();
 	}
 	async function finishEdit() {
-		// Filter/Drehen/Ecken laufen live — „Fertig" speichert nur den Stand und schließt
+		// Filter/Drehen/Ecken laufen live — „Fertig“ speichert nur den Stand und schließt
 		const owner = scanUI;
 		const ed = owner && owner.edit;
 		if (!ed || !owner) return;
@@ -2171,7 +2292,11 @@ export const HEFT = (() => {
 	}
 	function bindScroll() {
 		const scroll = host.querySelector(".heft-scroll");
-		if (scroll) { scrollFn = onScroll; scroll.addEventListener("scroll", scrollFn, { passive: true }); }
+		if (!scroll) return;
+		scrollFn = onScroll;
+		scroll.addEventListener("scroll", scrollFn, { passive: true });
+		// Desktop: Strg/Cmd + Mausrad zoomt direkt auf der Papierfläche (statt Browser-Zoom)
+		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
 	}
 	function rebuildScroll() {
 		if (!host || !doc) return;
@@ -2196,7 +2321,7 @@ export const HEFT = (() => {
 		doc = await load(pageId);
 		if (pid !== pageId) return; // während des Ladens weggewechselt
 		idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
-		zoom = 1; touchPointers.clear(); pinch = null;
+		zoom = 1; navReset();
 		expanded = false; // Floating-Pill startet kompakt — Options erst nach Klick
 		// Haupt-Pill ist immer fest. Tray startet direkt darunter und kann danach verschoben werden.
 		trayPos = null; trayDrag = null;
@@ -2232,7 +2357,8 @@ export const HEFT = (() => {
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); holdTool = null; suppressEraserClick = false;
-		touchPointers.clear(); pinch = null; touchTap = null; activePenPointers.clear();
+		// Navigation vollständig zurücksetzen (Gesten, Trägheit, laufende Animationen)
+		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT);
 		trayDrag = null;
 	}
 
