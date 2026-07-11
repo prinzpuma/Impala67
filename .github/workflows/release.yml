@@ -1,4 +1,4 @@
-name: release
+name: Release
 
 on:
   push:
@@ -61,7 +61,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Impala67 ${{ github.ref_name }}
+          releaseName: "Impala67 ${{ github.ref_name }}"
           releaseBody: Siehe die Assets unten für den Windows-Installer.
           releaseDraft: false
           prerelease: false
@@ -69,6 +69,7 @@ jobs:
 
   deploy-pwa:
     name: PWA auf GitHub Pages veröffentlichen
+    needs: build-windows
     runs-on: ubuntu-latest
 
     environment:
