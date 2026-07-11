@@ -20,7 +20,7 @@ jobs:
     name: Pruefen und Version bestimmen
     runs-on: ubuntu-latest
     outputs:
-      version: $ steps.next.outputs.version 
+      version: ${{ steps.next.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -69,12 +69,12 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: $ steps.deployment.outputs.page_url 
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Version in PWA-Dateien setzen
-        run: node .github/scripts/set-version.mjs "$ needs.version.outputs.version "
+        run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
 
       - name: PWA-Dateien pruefen
         run: node --check web/updater.js
@@ -109,13 +109,13 @@ jobs:
 
       - name: Version in Build-Dateien setzen
         shell: bash
-        run: node .github/scripts/set-version.mjs "$ needs.version.outputs.version "
+        run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
 
       - name: config.local.js aus Secrets erzeugen
         shell: bash
         env:
-          CLIENT_ID: $ secrets.GOOGLE_DESKTOP_CLIENT_ID 
-          CLIENT_SECRET: $ secrets.GOOGLE_DESKTOP_CLIENT_SECRET 
+          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           node -e '
             const fs = require("fs");
@@ -133,12 +133,12 @@ jobs:
       - name: Tauri bauen und Installer veroeffentlichen
         uses: tauri-apps/tauri-action@v1
         env:
-          GITHUB_TOKEN: $ secrets.GITHUB_TOKEN 
-          TAURI_SIGNING_PRIVATE_KEY: $ secrets.TAURI_SIGNING_PRIVATE_KEY 
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: $ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v$ needs.version.outputs.version 
-          releaseName: "Impala67 v$ needs.version.outputs.version "
+          tagName: v${{ needs.version.outputs.version }}
+          releaseName: "Impala67 v${{ needs.version.outputs.version }}"
           releaseBody: Siehe die Assets unten fuer den Windows-Installer.
           releaseDraft: false
           prerelease: false
