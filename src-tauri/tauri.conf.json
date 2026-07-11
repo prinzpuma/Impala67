@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Impala67",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "identifier": "com.johncena.impala67",
   "build": {
     "frontendDist": "../web"

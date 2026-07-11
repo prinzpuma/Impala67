@@ -9,7 +9,11 @@
 // Bei Release: wird von .github/workflows/auto-version.yml gesetzt
 // (zusammen mit package.json, tauri.conf.json, web/version.json, web/latest.json).
 // Nicht von Hand pflegen — Git bump't die Patch-Nummer auf main.
+<<<<<<< HEAD
 const BUILD_VERSION = "0.2.18";
+=======
+const BUILD_VERSION = "0.2.26";
+>>>>>>> 23d9dcff596729ff15a6c7f90848239d33c4dc12
 window.APP_VERSION = BUILD_VERSION;
 
 // Semver-Vergleich: 1 wenn a>b, -1 wenn a<b, 0 wenn gleich.
