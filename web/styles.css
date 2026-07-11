@@ -749,13 +749,36 @@ body.chat-full #panel { grid-column: 2; max-width: 780px; width: 100%; justify-s
 	border: none; background: transparent; }
 body.chat-full #chatLog { padding: 24px 8px; }
 
-/* ---------- Linke Sidebar einklappen + KI-Button in der Tab-Leiste ---------- */
-/* ☰ und ✦ sitzen in #tabbar — keine Floating-Buttons unten. */
+/* ---------- Linke Sidebar + runder KI-Schnellzugriff ---------- */
 #tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px;
 	border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto; }
 #tabbar .tabstrip { flex: 1; min-width: 0; }
-#tabbar .tabbar-ai { margin-left: 4px; flex-shrink: 0; }
-body.panel-collapsed #tabbar .tabbar-ai { color: var(--accent); }
+
+/* Ruhiger Notion-artiger KI-Kreis unten rechts. Er erscheint nur, wenn das
+   Seitenpanel eingeklappt ist; im GoodNotes-Fokusmodus bleibt die Papierfläche
+   vollständig frei. */
+#btnAiFab {
+	position: fixed;
+	right: 22px;
+	bottom: 22px;
+	z-index: 1100;
+	display: grid;
+	place-items: center;
+	width: 42px;
+	height: 42px;
+	min-height: 42px;
+	padding: 0;
+	border: 1px solid var(--edge);
+	border-radius: 50%;
+	background: var(--menu-bg);
+	color: var(--text2);
+	box-shadow: 0 8px 24px var(--shadow);
+}
+#btnAiFab svg { width: 19px; height: 19px; }
+#btnAiFab:hover { color: var(--text); background: var(--surface-hover-strong); transform: translateY(-1px); }
+body:not(.panel-collapsed) #btnAiFab,
+body:has(#heftStage) #btnAiFab { display: none; }
+@media (max-width: 768px) { #btnAiFab { display: none; } }
 @media (min-width: 769px) {
 	#btnSidebarToggle { display: inline-flex; }
 	body.sidebar-collapsed #sidebar { display: none; }

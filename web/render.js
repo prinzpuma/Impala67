@@ -411,10 +411,8 @@ function renderTabs() {
 	// Notion-artiges „+“: öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
 	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">＋</button>';
 	html += "</div>";
-	// KI-Button in der oberen Leiste (statt Floating-FAB unten rechts)
-	html += panelCollapsed
-		? '<button class="navbtn tabbar-ai" id="btnShowPanel" title="KI öffnen">✦</button>'
-		: '<button class="navbtn tabbar-ai" id="btnTogglePanel" title="KI einklappen">✦</button>';
+	// Der KI-Zugriff sitzt als runder Notion-artiger Button unten rechts.
+	// In der Tab-Leiste bleibt dadurch nur die Navigation.
 	bar.innerHTML = html;
 }
 

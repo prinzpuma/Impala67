@@ -1098,6 +1098,12 @@ function wireEvents() {
 			case "btnMobileAI":
 				document.body.classList.remove("panel-collapsed");
 				CHAT_FULLSCREEN.toggleChatFull(true); break;
+			case "btnAiFab":
+				// Desktop-Schnellzugriff unten rechts: nur das Seitenpanel öffnen,
+				// damit die aktuelle Seite sichtbar bleibt.
+				document.body.classList.remove("panel-collapsed");
+				renderTabs();
+				break;
 			case "btnHome":
 				S.sidebarMode = "files";
 				// Aus Anki/Daily/Bibliothek/Papierkorb führt Home auch inhaltlich zurück
