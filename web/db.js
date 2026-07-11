@@ -364,6 +364,7 @@ export const DB = (() => {
 					deletedAt: del.t,
 					changedAt: moved.t,
 					conflictPageId,
+					conflictType: "delete-change",
 					eventId: "lifeconflict-" + moved.id,
 				});
 				fresh.push({

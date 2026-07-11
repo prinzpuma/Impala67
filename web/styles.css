@@ -694,6 +694,37 @@ button.danger { color: var(--danger); }
 .modal label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 4px; }
 .modal input { width: 100%; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
+/* ---------- Drive-Sync-Konflikte: zwei ruhige, direkt vergleichbare Seiten ---------- */
+.conflict-modal { width: min(1080px, 96vw); max-height: min(840px, 92vh); padding: 20px; gap: 12px; }
+.conflict-head { display: flex; align-items: center; gap: 10px; padding-right: 30px; }
+.conflict-head .conflict-icon { font-size: 24px; }
+.conflict-head span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.conflict-head small { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflict-reason { color: var(--text2); font-size: 13px; line-height: 1.5; }
+.conflict-reason b { color: var(--text); }
+.conflict-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
+.conflict-pane { min-width: 0; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; background: var(--surface-faint); }
+.conflict-pane header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--edge-soft); font-size: 13px; }
+.conflict-pane header small { color: var(--text2); font-size: 11px; white-space: nowrap; }
+.conflict-pane.local header { border-left: 3px solid rgba(233,115,102,.72); }
+.conflict-pane.remote header { border-left: 3px solid rgba(114,188,143,.72); }
+.conflict-pane-body { height: min(44vh, 430px); overflow: auto; padding: 6px; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.conflict-line { display: grid; grid-template-columns: 16px minmax(0, 1fr); padding: 2px 6px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 4px; }
+.conflict-line-marker { color: var(--text2); font-weight: 700; text-align: center; }
+.conflict-line.local-only { background: rgba(233,115,102,.16); color: #f2b0a9; }
+.conflict-line.remote-only { background: rgba(114,188,143,.16); color: #a9dfba; }
+.conflict-line.local-only .conflict-line-marker { color: var(--danger); }
+.conflict-line.remote-only .conflict-line-marker { color: var(--success); }
+.conflict-empty { color: var(--text2); padding: 12px; }
+.conflict-key { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: -4px 0 0; color: var(--text2); font-size: 11.5px; }
+.conflict-key span:first-child { color: #f2b0a9; }
+.conflict-key span:nth-child(2) { color: #a9dfba; }
+.conflict-no-compare { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid rgba(245,185,70,.32); border-radius: 10px; background: rgba(245,185,70,.08); color: var(--text2); font-size: 13px; }
+.conflict-no-compare b { color: var(--text); }
+.conflict-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.conflict-actions .primary { background: var(--accent); color: #081018; font-weight: 650; }
+@media (max-width: 700px) { .conflict-modal { padding: 16px; } .conflict-compare { grid-template-columns: 1fr; } .conflict-pane-body { height: min(29vh, 260px); } .conflict-actions > button { flex: 1 1 calc(50% - 7px); } }
 .hint { font-size: 13px; color: var(--text2); }
 .card-face { padding: 18px; border-radius: 10px; background: var(--surface);
 	border: 1px solid var(--edge); }

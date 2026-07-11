@@ -24,7 +24,9 @@
 // v23: Scanner v4 — Live-Qualität, Rahmen, Auto-Auslösen, Vorher/Nachher
 // v24: Scanner-Audit — Sitzungsisolierung, Bild-Cache, speicherärmerer Warp/Detect
 // v25: Tesseract.js für lokale Heft-OCR
-const CACHE = "impala67-v25";
+// v26: Scanner-Fix — randfestes bilineares Sampling und Validierung manueller Zuschnitte
+// v27: Scanner-Ablauf — Autoaufnahme nur einmal je Blatt, Berechtigungs-Fallback, kein Fallback-Crop
+const CACHE = "impala67-v27";
 
 const APP_FILES = [
 	"./",

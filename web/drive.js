@@ -41,6 +41,10 @@ export const DRIVE = (() => {
 	const desktopClientIdSource = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) ? "config.local.js" : (S.settings && S.settings.driveDesktopClientId) ? "Einstellungen (alter Fallback!)" : "keine Quelle";
 	const desktopClientSecretSource = () => (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) ? "config.local.js" : (S.settings && S.settings.driveDesktopClientSecret) ? "Einstellungen (alter Fallback!)" : "keine Quelle";
 	let token = null;
+	// Ein Sync darf pro App-Instanz nur einmal gleichzeitig laufen. Ohne diese
+	// Sperre können der Sidebar-Button und der Einstellungen-Button parallel
+	// denselben Remote-Stand lesen und anschließend gegeneinander hochladen.
+	let syncInFlight = null;
 
 	// Einmalige Übernahme der alten LocalStorage-Schlüssel (Projekt hieß früher "notion") —
 	// so bleibt die bestehende Google-Sitzung nach der Umbenennung erhalten.
@@ -262,7 +266,7 @@ export const DRIVE = (() => {
 
 	// Voller Sync: Remote-Stand laden → mergen (mit Konflikt-Erkennung) → Gesamtstand
 	// hochladen → Log lokal kompaktieren → Sync-Wasserstand setzen.
-	async function sync(onStatus) {
+	async function syncRaw(onStatus) {
 		// Token immer über getToken() beziehen — das im Speicher gehaltene Token
 		// kann abgelaufen sein (führte zu 401-Fehlern mitten in der Sitzung).
 		if (onStatus) onStatus("Mit Google verbinden…");
@@ -302,6 +306,14 @@ export const DRIVE = (() => {
 		await DB.compactLocal();
 		localStorage.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
 		return { imported, conflicts, conflictDetails };
+	}
+
+	function sync(onStatus) {
+		if (syncInFlight) {
+			throw new Error("Eine Drive-Synchronisierung läuft bereits. Bitte warte, bis sie abgeschlossen ist.");
+		}
+		syncInFlight = syncRaw(onStatus).finally(() => { syncInFlight = null; });
+		return syncInFlight;
 	}
 
 	return { login, logout, sync, isConnected: () => !!token };

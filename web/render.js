@@ -576,8 +576,20 @@ function breadcrumbHtml(pg) {
 
 // ---- Sync-Konflikte: Pending-Liste + Lösungs-Popup mit Diff -----
 const CONFLICT_KEY = "impala67_pending_conflicts";
+const RESOLVED_CONFLICT_KEY = "impala67_resolved_conflicts";
+function loadResolvedConflictIds() {
+	try { return new Set(JSON.parse(localStorage.getItem(RESOLVED_CONFLICT_KEY) || "[]")); } catch { return new Set(); }
+}
+function markConflictResolved(conflictPageId) {
+	if (!conflictPageId) return;
+	const ids = loadResolvedConflictIds();
+	ids.add(conflictPageId);
+	// Der Schlüssel ist nur eine lokale UI-Quittierung; klein halten, damit alte
+	// Konfliktkopien keinen dauerhaft wachsenden LocalStorage-Eintrag erzeugen.
+	localStorage.setItem(RESOLVED_CONFLICT_KEY, JSON.stringify([...ids].slice(-200)));
+}
 function isConflictPage(p) {
-	return !!(p && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
+	return !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
 }
 function loadPendingConflicts() {
 	try { return JSON.parse(localStorage.getItem(CONFLICT_KEY) || "[]"); } catch { return []; }
@@ -624,31 +636,38 @@ function openConflictResolver(index) {
 	if (!o) return;
 	const left = c.localContent || "";
 	const right = c.remoteContent || "";
-	const diff = U.diffLines(left, right);
-	const diffHtml = diff.map((d) => {
-		if (d.type === "same") return '<div class="change-line same">' + U.esc(d.text) + "</div>";
-		return '<div class="change-line ' + d.type + '">' + (d.type === "add" ? "+ " : "− ") + U.esc(d.text) + "</div>";
-	}).join("");
-	const winnerLabel = c.winner === "local" ? "dieses Gerät (neuerer Zeitstempel)" : "anderer Stand / Drive (neuerer Zeitstempel)";
+	const hasTextComparison = !c.conflictType && (!!left || !!right);
+	const diff = hasTextComparison ? U.diffLines(left, right) : [];
+	const paneHtml = (side) => diff.filter((d) => d.type === "same" || (side === "local" ? d.type === "del" : d.type === "add")).map((d) => {
+		const changed = d.type !== "same";
+		const cls = changed ? (side === "local" ? "local-only" : "remote-only") : "same";
+		const marker = changed ? (side === "local" ? "−" : "+") : "";
+		return '<div class="conflict-line ' + cls + '"><span class="conflict-line-marker">' + marker + "</span>" + (U.esc(d.text) || "&nbsp;") + "</div>";
+	}).join("") || '<div class="conflict-empty">Kein Text vorhanden.</div>';
+	const winnerLabel = c.winner === "local" ? "Dieses Gerät" : "Drive / anderes Gerät";
+	const conflictSummary = c.conflictType === "delete-change"
+		? "Eine Seite wurde auf einem Gerät gelöscht, während sie auf dem anderen Gerät geändert oder verschoben wurde."
+		: "Dieselbe Seite wurde seit dem letzten Sync auf beiden Geräten bearbeitet.";
+	const comparisonHtml = hasTextComparison
+		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div><p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>'
+		: '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
 	o.hidden = false;
 	o.innerHTML = '<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Sync-Konflikt' +
 		(items.length > 1 ? " (" + (i + 1) + "/" + items.length + ")" : "") + "</b><small>" +
 		U.esc(c.title || "Seite") + "</small></span></header>" +
-		'<div class="conflict-reason"><b>Warum?</b> ' + U.esc(c.reason || "") +
-		(c.legacy ? "" : '<br><span class="hint">Lokal: ' + U.esc(fmtConflictTime(c.localTime)) +
-		" · Remote: " + U.esc(fmtConflictTime(c.remoteTime)) + " · Gewinner: " + winnerLabel + "</span>") +
-		'<br><span class="hint">Im Diff: <b>−</b> nur auf diesem Gerät · <b>+</b> nur auf dem anderen Stand · unmarkiert = gleich.</span></div>' +
-		'<div class="conflict-legend"><span class="leg del">− nur hier</span><span class="leg add">+ anderer Stand</span><span class="leg same">gleich</span></div>' +
-		'<div class="change-preview-diff conflict-diff">' + (diffHtml || '<div class="hint">Keine Textunterschiede (oder nur Legacy-Kopie ohne Gegenseite).</div>') + "</div>" +
+		'<div class="conflict-reason"><b>Was ist passiert?</b> ' + U.esc(conflictSummary) +
+		(c.legacy ? "" : '<br><span class="hint">Gewinner nach Zeitstempel: <b>' + U.esc(winnerLabel) + "</b></span>") +
+		"</div>" +
+		comparisonHtml +
 		'<div class="conflict-actions">' +
 		(items.length > 1 ? '<button data-conflictnav="-1">‹ Zurück</button><button data-conflictnav="1">Weiter ›</button>' : "") +
 		(c.pageId ? '<button data-conflictpage="' + U.esc(c.pageId) + '">Original öffnen</button>' : "") +
-		(c.conflictPageId ? '<button data-conflictpage="' + U.esc(c.conflictPageId) + '">Konflikt-Kopie öffnen</button>' : "") +
-		'<button class="primary" data-conflictresolve="keep-winner">Gewinner behalten</button>' +
-		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Unterlegenen übernehmen</button>' : "") +
-		'<button data-conflictresolve="keep-both">Beide behalten</button>' +
+		(c.conflictPageId ? '<button data-conflictpage="' + U.esc(c.conflictPageId) + '">Gerettete Kopie öffnen</button>' : "") +
+		'<button class="primary" data-conflictresolve="keep-winner">Aktuellen Gewinner behalten</button>' +
+		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Kopie in Original übernehmen</button>' : "") +
+		'<button data-conflictresolve="keep-both">Beide Seiten behalten</button>' +
 		"</div></div>";
 }
 async function resolveConflict(action) {
@@ -662,10 +681,13 @@ async function resolveConflict(action) {
 	if ((action === "keep-winner" || action === "use-loser") && conf.conflictPageId && S.pages[conf.conflictPageId]) {
 		await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
 	}
-	// Pending bereinigen (auch wenn nur „beide behalten“ → aus der Warteschlange)
+	// Pending bereinigen (auch wenn nur „beide behalten“ → aus der Warteschlange).
+	// Die Kopie wird außerdem lokal als erledigt markiert; sonst erzeugte gerade
+	// „Beide behalten“ beim nächsten Start wieder denselben Banner/Dialog.
+	markConflictResolved(conf.conflictPageId);
 	const next = loadPendingConflicts().filter((x) => (x.conflictPageId || x.pageId) !== (conf.conflictPageId || conf.pageId));
 	savePendingConflicts(next);
-	if (next.length || (action === "keep-both" && legacyConflictItems().length)) {
+	if (next.length) {
 		openConflictResolver(Math.min(i, Math.max(0, next.length - 1)));
 		render();
 		return;

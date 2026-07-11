@@ -968,7 +968,7 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: true, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: true, autoArmed: true, autoCooldown: 0 };
 		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
 		wrap.addEventListener("click", onScanClick);
 		try {
@@ -980,7 +980,13 @@ export const HEFT = (() => {
 					video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
 					audio: false,
 				});
-			} catch {
+			} catch (cameraError) {
+				// Nur bei einer nicht erfüllbaren Kamera-/Constraint-Wahl auf die
+				// allgemeine Kamera ausweichen. Bei verweigerter Berechtigung würde
+				// ein zweiter getUserMedia-Aufruf sonst erneut nachfragen bzw. den
+				// Foto-Fallback unnötig verzögern.
+				const name = cameraError && cameraError.name;
+				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw cameraError;
 				stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
 			}
 			// Während await könnte geschlossen oder ein neuer Scanner geöffnet worden sein.
@@ -1081,12 +1087,21 @@ export const HEFT = (() => {
 			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
 			try {
 				const ready = setLiveGuide(liveQualityFrame(video));
-				scanUI.liveStable = ready ? scanUI.liveStable + 1 : 0;
+				if (!ready) {
+					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto
+					// für die nächste Seite neu scharf sein. Das verhindert Duplikate
+					// bei einem ruhig liegen bleibenden Dokument.
+					owner.liveStable = 0;
+					owner.autoArmed = true;
+					return;
+				}
+				owner.liveStable++;
 				// Drei stabile Prüfrunden (~1 s) verhindern Fehlauslösungen beim Bewegen.
-				if (scanUI.autoCapture && ready && scanUI.liveStable >= 3 && Date.now() > scanUI.autoCooldown) {
-					scanUI.liveStable = 0;
-					scanUI.autoCooldown = Date.now() + 1800;
-					scanCapture();
+				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 3 && Date.now() > owner.autoCooldown) {
+					owner.autoArmed = false;
+					owner.liveStable = 0;
+					owner.autoCooldown = Date.now() + 1800;
+					scanCapture(true);
 				}
 			} catch (e) { console.warn("Heft: Live-Scan-Prüfung fehlgeschlagen", e); }
 		};
@@ -1118,6 +1133,7 @@ export const HEFT = (() => {
 		else if (d.hescanheft) { if (scanUI.shots.length) scanFinishHeft(); }
 		else if (d.hescanautocap) {
 			scanUI.autoCapture = !scanUI.autoCapture;
+			if (scanUI.autoCapture) { scanUI.autoArmed = true; scanUI.liveStable = 0; }
 			b.classList.toggle("active", scanUI.autoCapture);
 			b.textContent = scanUI.autoCapture ? "⚡ Auto" : "⚡ Manuell";
 		}
@@ -1172,9 +1188,12 @@ export const HEFT = (() => {
 		}
 		else if (d.hescandone) finishEdit();
 	}
-	async function scanCapture() {
+	async function scanCapture(isAuto = false) {
 		const owner = scanUI;
 		if (!owner || owner.busy) return;
+		// Ein manueller Scan zählt als Verarbeitung der aktuellen Seite. Auto darf
+		// dieselbe ruhige Ansicht danach nicht noch einmal erfassen.
+		if (!isAuto) { owner.autoArmed = false; owner.liveStable = 0; owner.autoCooldown = Date.now() + 1800; }
 		const video = owner.wrap.querySelector("video");
 		if (!video) return;
 		// Video noch nicht bereit (häufig auf iOS, wenn play() noch nicht durch ist)
@@ -1289,7 +1308,7 @@ export const HEFT = (() => {
 	// Dokumenterkennung v3: helles unbuntes Papier + Kanten + morphologisches Schließen
 	// (Text-Löcher füllen) + Rechteck-Score. Deutlich robuster als reine Helligkeits-Flut.
 	function detectQuad(img, w, h) {
-		const full = [[w * 0.06, h * 0.06], [w * 0.94, h * 0.06], [w * 0.94, h * 0.94], [w * 0.06, h * 0.94]];
+		const full = [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]]; // Keine sichere Erkennung: niemals Inhalt abschneiden.
 		if (!w || !h) return full;
 		const dw = 400, kk = dw / w, dh = Math.max(12, Math.round(h * kk));
 		const c = document.createElement("canvas");
@@ -1488,8 +1507,11 @@ export const HEFT = (() => {
 				const den = hm[6] * x + hm[7] * y + 1;
 				let sx = (hm[0] * x + hm[1] * y + hm[2]) / den;
 				let sy = (hm[3] * x + hm[4] * y + hm[5]) / den;
-				if (sx < 0) sx = 0; else if (sx > iw - 1.001) sx = iw - 1.001;
-				if (sy < 0) sy = 0; else if (sy > ih - 1.001) sy = ih - 1.001;
+				// Bilinear-Sampling liest x0+1/y0+1. Daher Quellkoordinaten
+				// bewusst auf den vorletzten Pixel begrenzen, statt am Rand in die
+				// nächste Zeile bzw. hinter das Bild zu lesen.
+				if (sx < 0) sx = 0; else if (sx > iw - 2.001) sx = iw - 2.001;
+				if (sy < 0) sy = 0; else if (sy > ih - 2.001) sy = ih - 2.001;
 				const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0;
 				const i00 = (y0 * iw + x0) * 4, i10 = i00 + 4, i01 = i00 + iw * 4, i11 = i01 + 4;
 				const o = (y * W + x) * 4;
@@ -1534,9 +1556,12 @@ export const HEFT = (() => {
 	}
 	function sampleMap(bg, fx, fy) {
 		const bw = bg.bw, bh = bg.bh, m = bg.map;
+		// Bilinear-Sampling braucht jeweils einen rechten und unteren Nachbarn.
+		// Am Bildrand war x0/y0 bisher bw-1/bh-1; der Zugriff auf +1 lieferte
+		// undefined → NaN → schwarze/verfälschte Ränder im fertigen Scan.
 		let x = fx - 0.5, y = fy - 0.5;
-		if (x < 0) x = 0; else if (x > bw - 1.001) x = bw - 1.001;
-		if (y < 0) y = 0; else if (y > bh - 1.001) y = bh - 1.001;
+		if (x < 0) x = 0; else if (x > bw - 2.001) x = bw - 2.001;
+		if (y < 0) y = 0; else if (y > bh - 2.001) y = bh - 2.001;
 		const x0 = x | 0, y0 = y | 0, dx = x - x0, dy = y - y0;
 		return m[y0 * bw + x0] * (1 - dx) * (1 - dy) + m[y0 * bw + x0 + 1] * dx * (1 - dy) +
 			m[(y0 + 1) * bw + x0] * (1 - dx) * dy + m[(y0 + 1) * bw + x0 + 1] * dx * dy;
@@ -1838,8 +1863,22 @@ export const HEFT = (() => {
 		if (!ed) return;
 		const was = ed.drag;
 		ed.drag = -1;
+		if (was < 0) return;
+		const sh = scanUI.shots[ed.i];
+		// Gekreuzte oder extrem kleine Quads erzeugen eine singuläre Homographie:
+		// Der Scan wird dann schwarz, verzerrt oder der Browser wird sehr langsam.
+		// In diesem Fall den letzten gültigen Zuschnitt behalten.
+		const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+		const turns = ed.quad.map((p, i) => cross(p, ed.quad[(i + 1) % 4], ed.quad[(i + 2) % 4]));
+		const convex = turns.every((v) => v > 1) || turns.every((v) => v < -1);
+		if (!sh || quadArea(ed.quad) < sh.w * sh.h * 0.015 || !convex) {
+			ed.quad = sh && sh.quad ? sh.quad.map((p) => p.slice()) : ed.quad;
+			drawEdit();
+			if (U.toast) U.toast("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
+			return;
+		}
 		// Nach dem Ziehen einer Ecke: sofort neu entzerren + Filter anwenden
-		if (was >= 0) liveReprocessEdit();
+		liveReprocessEdit();
 	}
 	async function finishEdit() {
 		// Filter/Drehen/Ecken laufen live — „Fertig" speichert nur den Stand und schließt
