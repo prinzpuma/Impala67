@@ -88,3 +88,15 @@ jobs:
           git tag "v$NEW"
           git push origin main
           git push origin "v$NEW"
+
+      - name: GitHub-Release erstellen
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${process.env.NEW}`,
+              name: `Impala67 v${process.env.NEW}`,
+              generate_release_notes: true
+            })
