@@ -262,6 +262,12 @@ button.danger { color: var(--danger); }
 	display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .panel-title { font-weight: 600; font-size: 13px; letter-spacing: 0.4px; color: var(--text2); white-space: nowrap; }
+/* Kleine, bewusst sichtbare Diagnose-Schaltfläche: führt keine Chat-Nachricht aus,
+   sondern prüft Endpoint, Thinking-Parameter und Tool-Schema separat. */
+.ai-debug-btn { min-height: 0; padding: 3px 7px; border: 1px solid var(--edge-soft); border-radius: 999px;
+	background: transparent; color: var(--text2); font-size: 10.5px; font-weight: 650; }
+.ai-debug-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+.ai-debug-copy { min-height: 300px; resize: vertical; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
 .panel-head-right { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .chat-full-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 4px; }
 .chat-full-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -332,6 +338,117 @@ button.danger { color: var(--danger); }
 	padding: 6px 6px 6px 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 22px;
 	background: rgba(255,255,255,0.035); flex-shrink: 0; }
 #chatForm:focus-within { border-color: var(--accent); }
+/* Composer-Skelett: getrennte Text- und Aktionszone verhindert Symbol-Verschiebungen. */
+#chatForm, .chat-form-full {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+	padding: 8px 9px 7px 12px;
+	border: 1px solid rgba(255,255,255,.14);
+	border-radius: 18px;
+	background: #181a1f;
+	transition: min-height .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+#chatForm:focus-within, .chat-form-full:focus-within {
+	border-color: #2383e2;
+	box-shadow: 0 0 0 1px #2383e2;
+}
+/* Oben: ausschließlich der Text, volle Breite, ohne eigene Umrandung. */
+.composer-body { display: block; width: 100%; min-height: 38px; }
+.composer-body textarea {
+	display: block;
+	width: 100%;
+	min-height: 30px;
+	max-height: 220px;
+	overflow-y: auto;
+	resize: none;
+	border: 0 !important;
+	outline: 0 !important;
+	box-shadow: none !important;
+	background: transparent !important;
+	padding: 5px 2px 7px;
+}
+/* Unten: unveränderliche Aktionszeile. Plus + Einstellungen links, Senden rechts. */
+.composer-actions {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-height: 30px;
+	width: 100%;
+}
+.composer-actions-left { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+/* Senden ist fest am rechten Rand der unteren Zeile verankert. */
+.composer-actions > button[type="submit"] {
+	margin-left: auto !important;
+	width: 30px; height: 30px; min-height: 30px;
+	padding: 0; border-radius: 50%;
+	font-size: 20px; font-weight: 700; line-height: 1;
+}
+.composer-actions > button[type="submit"]:disabled { background: transparent; color: var(--text2); opacity: .55; }
+.composer-actions-left #btnAttach, .composer-actions-left #btnAttachFull,
+.composer-actions-left .composer-tool {
+	width: 28px; height: 28px; min-height: 28px;
+	padding: 0; border-radius: 7px;
+}
+#chatForm:has(#pendingChip:not([hidden])), .chat-form-full:has(#mainPendingChip:not([hidden])) { padding-top: 48px; }
+/* Composer: Textfeld oben, bestehende Aktions-Symbole dauerhaft unten. */
+#chatForm, .chat-form-full {
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 6px;
+	padding: 8px 8px 7px 12px;
+	border: 1px solid rgba(255,255,255,.14);
+	border-radius: 18px;
+	background: rgba(255,255,255,.035);
+	transition: min-height .12s ease, border-color .12s ease;
+}
+/* Einziger Fokus-Rahmen: die gesamte Composer-Box. */
+#chatForm:focus-within, .chat-form-full:focus-within {
+	border-color: #2383e2;
+	box-shadow: 0 0 0 1px #2383e2;
+}
+/* Text läuft über die volle obere Reihe von links nach rechts. */
+#chatInput, .chat-form-full textarea {
+	order: -1;
+	flex: 0 0 100%;
+	width: 100%;
+	min-height: 30px;
+	max-height: 220px;
+	overflow-y: auto;
+	resize: none;
+	border: none !important;
+	outline: none;
+	box-shadow: none !important;
+	background: transparent;
+	padding: 5px 2px 7px;
+}
+/* Untere Reihe behält die bestehende Reihenfolge: Anhang → Modell → Senden. */
+#chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1; }
+#chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2; }
+#chatForm button[type="submit"], .chat-form-full button[type="submit"] {
+	order: 3;
+	margin-left: 0;
+	width: 30px; height: 30px; min-height: 30px;
+	padding: 0; border-radius: 50%;
+	font-size: 20px; font-weight: 700; line-height: 1;
+}
+#chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled {
+	background: transparent; color: var(--text2); opacity: .55;
+}
+/* Composer wächst mit längeren Nachrichten; die Werkzeuge bleiben unten ausgerichtet. */
+#chatForm, .chat-form-full { align-items: flex-end; transition: min-height .12s ease; }
+#chatInput, .chat-form-full textarea {
+	min-height: 30px; max-height: 220px; overflow-y: auto;
+	resize: none;
+}
+#chatForm button[type="submit"], .chat-form-full button[type="submit"] {
+	width: 32px; height: 32px; min-height: 0; font-size: 21px; font-weight: 700; line-height: 1;
+}
+#chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled) { background: #8fd0ff; }
+#chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled {
+	background: var(--surface-active); color: var(--text2); opacity: .6;
+}
 #sideContextChip { flex: 0 0 100%; display: flex; align-items: center; gap: 5px; min-width: 0;
 	padding: 2px 2px 0; color: var(--text2); font-size: 12px; }
 #sideContextChip[hidden] { display: none; }
@@ -1647,50 +1764,142 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 .heft-titlebar #pageTitle { font-size: 24px; padding: 0; }
 .heft-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Taskbar v3: links „Seiten“-Popup, Mitte Zeichenwerkzeuge + Bilder, rechts ＋-Menü — wie GoodNotes */
-.heft-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-	gap: 10px 14px; padding: 10px 14px; border-top: 1px solid var(--edge-soft);
-	border-bottom: 1px solid var(--edge-soft); background: var(--surface-faint); }
-.heft-tb-left, .heft-tb-center, .heft-tb-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.heft-tb-center { flex: 1; justify-content: center; }
-.heft-tb-right { margin-left: auto; }
-.heft-toolgroup { display: flex; align-items: center; gap: 2px; padding: 3px;
-	background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: 999px; }
-.heft-toolgroup button { min-height: 0; height: 32px; min-width: 34px; padding: 0 10px;
-	border-radius: 999px; background: transparent; color: var(--text2); font-size: 14px; }
-.heft-toolgroup button:hover { background: var(--surface-hover); color: var(--text); }
-.heft-toolgroup button.active { background: var(--accent-soft); color: var(--accent);
-	box-shadow: inset 0 0 0 1px var(--accent-border); }
-.heft-size { display: inline-flex !important; align-items: center; justify-content: center;
-	min-width: 32px !important; padding: 0 !important; }
-.heft-size i { display: block; border-radius: 50%; background: currentColor; opacity: .75; }
-.heft-size.active i { opacity: 1; background: var(--accent); }
-.heft-paper-label { font-size: 11.5px; font-weight: 650; margin-left: 4px; opacity: .85; }
-.heft-action { min-height: 0; height: 34px; padding: 0 14px; border-radius: 999px;
-	font-size: 12.5px; font-weight: 700; letter-spacing: .01em; white-space: nowrap;
-	border: 1px solid var(--edge); background: var(--surface-hover-strong); color: var(--text); }
-.heft-action:hover { background: var(--surface-active); }
-.heft-action.active { background: var(--accent-soft); color: var(--accent);
-	border-color: var(--accent-border); }
-.heft-action.heft-chat { background: var(--accent); color: #081018; border-color: transparent; }
-.heft-action.heft-chat:hover { filter: brightness(1.08); }
-.heft-swatch { width: 22px; height: 22px; min-width: 22px !important; padding: 0 !important;
-	border-radius: 50% !important; border: 2px solid transparent; background: var(--sw, #1c1c1e); }
-.heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-.heft-pageno-inline { font-weight: 600; font-size: 11px; opacity: .7; margin-left: 6px; }
-.heft-action.heft-plus { min-width: 40px; padding: 0 13px; font-size: 17px; }
+/* Taskbar v6: freistehende Floating-Pill über dem Papier — kein Banner, null Layout-Höhe */
+.heft-stage { position: relative; }
+/* Chrome-Overlay: pointer-events nur auf den Pills, Papier bleibt vollflächig */
+.heft-chrome {
+	position: absolute; inset: 0; z-index: 50; pointer-events: none;
+}
+.heft-chrome > * { pointer-events: auto; }
+/* Freistehende, verschiebbare Werkzeug-Gruppe — default zentriert oben ÜBER dem Papier */
+.heft-float {
+	position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+	display: flex; flex-direction: column; align-items: center; gap: 8px;
+	z-index: 52; max-width: calc(100% - 24px);
+}
+.heft-float.is-dragging { opacity: .95; cursor: grabbing; z-index: 55; }
+/* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Options-Tray folgt */
+.heft-drag {
+	min-height: 0; height: 36px; min-width: 28px; padding: 0 4px;
+	border-radius: 999px; font-size: 13px; line-height: 1; letter-spacing: -2px;
+	background: transparent; border: none; color: rgba(255,255,255,.4);
+	cursor: grab; touch-action: none; flex-shrink: 0;
+}
+.heft-drag:hover { color: #fff; background: rgba(255,255,255,.1); }
+.heft-drag:active, .heft-float.is-dragging .heft-drag { cursor: grabbing; color: #8fd0ff; }
+/* Haupt-Pill (kompakt) — schwebend, kein Banner */
+.heft-pill {
+	display: flex; align-items: center; gap: 1px; padding: 4px 6px 4px 4px;
+	background: rgba(22, 32, 52, 0.94); border: 1px solid rgba(255,255,255,.14);
+	border-radius: 999px; box-shadow: 0 10px 28px rgba(0,0,0,.45);
+	backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+/* Options-Pill darunter — hängt an der Float-Gruppe, bewegt sich mit, KEIN Banner */
+.heft-tray {
+	display: flex; align-items: center; gap: 2px; padding: 5px 10px;
+	background: rgba(18, 22, 30, 0.96); border: 1px solid rgba(255,255,255,.14);
+	border-radius: 999px; box-shadow: 0 12px 32px rgba(0,0,0,.5);
+	max-width: min(92vw, 560px); overflow-x: auto; scrollbar-width: none;
+	backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+	animation: heftTrayIn .16s ease;
+}
+.heft-tray::-webkit-scrollbar { display: none; }
+@keyframes heftTrayIn {
+	from { opacity: 0; transform: translateY(-6px) scale(.98); }
+	to { opacity: 1; transform: none; }
+}
+body.reduce-motion .heft-tray { animation: none; }
+.heft-main, .heft-opt {
+	min-height: 0; height: 36px; min-width: 38px; padding: 0 9px;
+	border-radius: 999px; background: transparent; color: rgba(255,255,255,.78);
+	font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+}
+.heft-main:hover, .heft-opt:hover { background: rgba(255,255,255,.1); color: #fff; }
+.heft-main.active, .heft-opt.active {
+	background: rgba(111,195,255,.18); color: #8fd0ff;
+	box-shadow: inset 0 0 0 1px rgba(111,195,255,.35);
+}
+.heft-main.open { background: rgba(255,255,255,.14); color: #fff; }
+.heft-chev { font-size: 9px; opacity: .65; margin-left: 1px; line-height: 1; }
+.heft-main.open .heft-chev { opacity: 1; color: #8fd0ff; }
+.heft-sep {
+	width: 1px; height: 16px; margin: 0 6px; flex-shrink: 0;
+	background: rgba(255,255,255,.18);
+}
+.heft-size {
+	display: inline-flex !important; align-items: center; justify-content: center;
+	min-width: 34px !important; height: 36px; padding: 0 8px !important;
+	border-radius: 999px; background: transparent; color: rgba(255,255,255,.75);
+}
+.heft-size:hover { background: rgba(255,255,255,.1); color: #fff; }
+.heft-size.active { background: rgba(111,195,255,.18); color: #8fd0ff; }
+.heft-size i {
+	display: block; width: 18px; border-radius: 999px;
+	background: currentColor; opacity: .9;
+}
+.heft-size.active i { opacity: 1; background: #8fd0ff; }
+.heft-swatch {
+	width: 22px; height: 22px; min-width: 22px !important; min-height: 0 !important;
+	padding: 0 !important; border-radius: 50% !important;
+	border: 2px solid rgba(255,255,255,.18); background: var(--sw, #1c1c1e);
+}
+.heft-swatch:hover { transform: scale(1.08); }
+.heft-swatch.active {
+	border-color: #8fd0ff; box-shadow: 0 0 0 2px rgba(111,195,255,.25);
+}
+/* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein Banner */
+.heft-corner {
+	min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px;
+	font-size: 13px; font-weight: 700; white-space: nowrap;
+	border: 1px solid rgba(255,255,255,.14); background: #1a2a44; color: #fff;
+	box-shadow: 0 8px 20px rgba(0,0,0,.4);
+}
+.heft-corner:hover { background: #243656; }
+.heft-corner.active {
+	background: rgba(111,195,255,.18); color: #8fd0ff; border-color: rgba(111,195,255,.35);
+}
+.heft-corner-l { position: absolute; left: 12px; top: 12px; z-index: 51; }
+.heft-corner-r {
+	position: absolute; right: 12px; top: 12px; z-index: 51;
+	display: flex; gap: 6px;
+}
+.heft-corner.heft-chat {
+	background: var(--accent); color: #081018; border-color: transparent; min-width: 36px; padding: 0 12px;
+}
+.heft-corner.heft-chat:hover { filter: brightness(1.08); }
+.heft-corner.heft-plus { min-width: 36px; padding: 0 12px; font-size: 17px; }
+.heft-pageno-inline { font-weight: 650; font-size: 11px; opacity: .75; margin-left: 5px; }
+/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layout-Banner */
+.heft-scroll { flex: 1; min-height: 0; width: 100%; }
+/* Legacy-Aliase (alte Klassen sollen nicht brechen) */
+.heft-toolbar, .heft-mainbar, .heft-side-group, .heft-toolgroup,
+.heft-tb-left, .heft-tb-center, .heft-tb-right, .heft-opts { display: contents; }
+.heft-side, .heft-action { min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px; }
+.heft-paper-label { display: none; }
 @media (max-width: 720px) {
-	.heft-paper-label { display: none; }
-	.heft-toolbar { padding: 8px 10px; }
+	.heft-float { top: 8px; }
+	.heft-corner-l, .heft-corner-r { top: 8px; }
+	.heft-corner-l { left: 8px; }
+	.heft-corner-r { right: 8px; }
+	.heft-main, .heft-opt, .heft-size, .heft-corner, .heft-drag { min-width: 34px; height: 34px; padding: 0 7px; }
+	.heft-pageno-inline { display: none; }
+	.heft-scroll { padding-top: 52px; }
 }
 
-/* Papier-Bühne: vertikales Scrollen durch alle Seiten — jede Seite ein eigenes Blatt */
-.heft-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+/* Papier-Bühne: direkt per Finger scrollen; beim Pinch auch horizontal scrollen. */
+.heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto;
 	display: flex; flex-direction: column; align-items: center; gap: 24px;
-	padding: 24px 18px 48px; }
+	padding: 56px 18px 48px;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain; }
 .heft-page-slot { position: relative; flex-shrink: 0; }
-.heft-page-slot .heft-canvas { display: block; touch-action: none; border-radius: 4px; background: #fdfdf8;
-	box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 18px 48px var(--shadow-strong); }
+.heft-page-slot .heft-canvas {
+	display: block;
+	/* 1 Finger scrollt die Seite; zwei Finger werden in heft.js als Pinch verarbeitet. */
+	touch-action: pan-x pan-y;
+	border-radius: 4px; background: #fdfdf8;
+	box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 18px 48px var(--shadow-strong);
+}
 .heft-page-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
 	font-size: 11px; color: var(--text2); white-space: nowrap; pointer-events: none; }
 
@@ -1707,15 +1916,23 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	background: transparent; color: var(--text); font-size: 13.5px; padding: 9px 10px; border-radius: 8px; }
 .heft-pop-row:hover { background: var(--surface-hover-strong); }
 
-/* Seiten-Popup: Thumbnail-Raster (Springen + Löschen) */
-.heft-pop-pages { width: 340px; }
-.heft-pop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+/* Seiten-Popup: präzises, kompaktes Thumbnail-Menü statt großer leerer Fläche */
+.heft-pop-pages { width: min(300px, calc(100vw - 24px)); padding: 8px; }
+.heft-pop-pages .heft-pop-head { padding: 3px 4px 7px; }
+.heft-pop-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+	gap: 7px;
+	max-height: min(280px, 46vh);
+	overflow-y: auto;
+	padding: 1px;
+}
 .heft-pop-thumb { position: relative; border: 1px solid var(--edge-soft); border-radius: 8px; overflow: hidden;
 	background: #fdfdf8; cursor: pointer; }
 .heft-pop-thumb canvas { width: 100%; display: block; }
 .heft-pop-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-.heft-pop-thumb > span { position: absolute; left: 6px; bottom: 4px; font-size: 10.5px; font-weight: 700;
-	color: #333; background: rgba(255,255,255,.82); padding: 0 5px; border-radius: 6px; pointer-events: none; }
+.heft-pop-thumb > span { position: absolute; left: 4px; bottom: 3px; font-size: 10px; font-weight: 700;
+	color: #333; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 5px; pointer-events: none; }
 .heft-pop-del { position: absolute; top: 4px; right: 4px; min-height: 0; width: 22px; height: 22px; padding: 0;
 	font-size: 11px; border-radius: 6px; background: rgba(0,0,0,.55); color: #fff; opacity: 0; }
 .heft-pop-thumb:hover .heft-pop-del { opacity: 1; }
@@ -1750,6 +1967,18 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 .heft-scan-stage video { max-width: 100%; max-height: 100%; }
 .heft-scan-frame { position: absolute; inset: 7% 10%; border: 2px dashed rgba(255,255,255,.45);
 	border-radius: 12px; pointer-events: none; }
+/* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Aufnahme */
+.heft-scan-guide { position: absolute; inset: 4% 6%; width: 88%; height: 92%; pointer-events: none;
+	overflow: visible; transition: filter .16s ease; }
+.heft-scan-guide polygon { fill: rgba(245,185,70,.08); stroke: #f5b846; stroke-width: 1.3;
+	vector-effect: non-scaling-stroke; stroke-linejoin: round; transition: fill .16s ease, stroke .16s ease; }
+.heft-scan-guide.ready polygon { fill: rgba(90,210,142,.12); stroke: #61d68e; }
+.heft-scan-guide.warn polygon { fill: rgba(245,185,70,.08); stroke: #f5b846; }
+.heft-scan-quality { position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+	padding: 6px 12px; border-radius: 999px; background: rgba(3,5,10,.68); border: 1px solid rgba(255,255,255,.16);
+	color: rgba(255,255,255,.92); font-size: 12px; font-weight: 650; white-space: nowrap; pointer-events: none; }
+.heft-scan-actions [data-hescanautocap] { background: rgba(255,255,255,.1); color: #fff; }
+.heft-scan-actions [data-hescanautocap].active { background: #61d68e; color: #082014; }
 .heft-scan-nocam { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px;
 	text-align: center; color: rgba(255,255,255,.7); }
 .heft-scan-shots { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; flex-shrink: 0; }
@@ -1774,6 +2003,12 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 .heft-scan-actions button, .heft-scan-nocam button { background: var(--accent); color: #081018;
 	font-weight: 650; border-radius: 10px; }
 .heft-scan-actions button:disabled { background: rgba(255,255,255,.14); color: rgba(255,255,255,.5); }
+/* Busy-Overlay während Erkennung/Entzerrung/Filter — sonst wirkt der Scanner „eingefroren" */
+.heft-scan-busy { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center;
+	justify-content: center; background: rgba(3,5,10,.55); pointer-events: all; }
+.heft-scan-busy[hidden] { display: none !important; }
+.heft-scan-busy span { padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 650;
+	color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18); }
 
 /* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter-Chips, Aktionen */
 .heft-scan-edit { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
@@ -1789,6 +2024,8 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
 .heft-scan-editbar button { background: rgba(255,255,255,.1); color: #fff; border-radius: 10px; }
 .heft-scan-editbar .heft-scan-apply { background: var(--accent); color: #081018; font-weight: 650; }
+.heft-scan-editbar [data-hescancorners] { border: 1px solid rgba(111,195,255,.45); color: #bce6ff; }
+.heft-scan-editbar [data-hescancompare] { color: #f6d783; }
 @media (pointer: coarse) {
 	.heft-scan-modes button { min-height: 40px; }
 	.heft-scan-editbar button { min-height: 44px; }
@@ -1825,9 +2062,139 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 
 /* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziele ebenfalls */
 @media (pointer: coarse) {
-	.heft-toolgroup button { height: 38px; min-width: 40px; }
+	.heft-main, .heft-opt, .heft-size, .heft-side, .heft-corner, .heft-drag { height: 40px; min-width: 40px; }
 	.heft-swatch { width: 26px; height: 26px; min-width: 26px !important; }
 	.heft-pop-del { opacity: 1; }
 	.heft-seg { min-height: 36px; }
 	.heft-pop-row { min-height: 44px; }
+}
+
+/* ========================================================================== 
+   Taskbar v7 — feste Hauptleiste, separat verschiebbares Options-Tray
+   ========================================================================== */
+/* Hauptleiste bleibt an exakt dieser Stelle. Kein Drag, kein Layout-Shift. */
+.heft-chrome .heft-float {
+	position: absolute !important;
+	left: 50% !important;
+	top: 12px !important;
+	transform: translateX(-50%) !important;
+	display: block;
+	z-index: 52;
+	max-width: calc(100% - 132px);
+	pointer-events: auto;
+}
+/* Notion-kompakt, aber groß genug für präzise Stift-/Touch-Bedienung. */
+.heft-chrome .heft-pill {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 4px 6px;
+	background: #242221;
+	border: 1px solid rgba(255,255,255,.18);
+	border-radius: 11px;
+	box-shadow: 0 3px 10px rgba(0,0,0,.36);
+	backdrop-filter: none;
+}
+.heft-chrome .heft-main {
+	width: 36px;
+	min-width: 36px;
+	height: 36px;
+	min-height: 36px;
+	padding: 0;
+	border-radius: 7px;
+	font-size: 17px;
+	color: rgba(255,255,255,.92);
+}
+.heft-chrome .heft-main:hover { background: rgba(255,255,255,.12); }
+.heft-chrome .heft-main.active {
+	background: #2b6f84;
+	color: #fff;
+	box-shadow: none;
+}
+.heft-chrome .heft-main.open { background: #2b6f84; color: #fff; }
+/* Laser ist bewusst rot markiert — er hinterlässt keine permanenten Striche. */
+.heft-chrome .heft-main.heft-laser.active { background: #8f3434; color: #fff; }
+.heft-chrome .heft-chev { font-size: 7px; margin-left: -1px; }
+/* NUR dieses Tray ist beweglich. Standard: direkt unter der festen Hauptleiste. */
+.heft-chrome .heft-tray {
+	position: absolute;
+	left: 50%;
+	top: 62px;
+	transform: translateX(-50%);
+	z-index: 53;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px 6px;
+	max-width: min(94vw, 560px);
+	background: #242221;
+	border: 1px solid rgba(255,255,255,.18);
+	border-radius: 10px;
+	box-shadow: 0 5px 14px rgba(0,0,0,.42);
+	backdrop-filter: none;
+	touch-action: none;
+}
+.heft-chrome .heft-tray.is-dragging { opacity: .92; cursor: grabbing; }
+.heft-chrome .heft-tray-drag {
+	width: 24px;
+	min-width: 24px;
+	height: 28px;
+	min-height: 28px;
+	padding: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: rgba(255,255,255,.48);
+	font-size: 12px;
+	letter-spacing: -2px;
+	cursor: grab;
+	touch-action: none;
+}
+.heft-chrome .heft-tray-drag:hover { color: #fff; background: rgba(255,255,255,.12); }
+.heft-chrome .heft-tray-drag:active { cursor: grabbing; }
+.heft-chrome .heft-tray .heft-opt,
+.heft-chrome .heft-tray .heft-size {
+	width: 28px;
+	min-width: 28px !important;
+	height: 28px;
+	min-height: 28px;
+	padding: 0 !important;
+	border-radius: 6px;
+	font-size: 13px;
+}
+.heft-chrome .heft-tray .heft-opt.active,
+.heft-chrome .heft-tray .heft-size.active {
+	background: #2b6f84;
+	color: #fff;
+	box-shadow: none;
+}
+.heft-chrome .heft-tray .heft-size i { width: 15px; }
+.heft-chrome .heft-tray .heft-swatch {
+	width: 18px;
+	height: 18px;
+	min-width: 18px !important;
+	margin: 0 2px;
+}
+.heft-chrome .heft-tray .heft-sep { height: 18px; margin: 0 4px; }
+/* Eckaktionen bleiben klein, aber klar treffbar. */
+.heft-chrome .heft-corner {
+	height: 32px;
+	min-height: 32px;
+	min-width: 32px;
+	padding: 0 9px;
+	border-radius: 8px;
+	font-size: 13px;
+	background: #242221;
+	border-color: rgba(255,255,255,.16);
+	box-shadow: 0 3px 10px rgba(0,0,0,.34);
+}
+.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 8px; background: #242221; color: #fff; }
+.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 8px; font-size: 16px; }
+.heft-chrome .heft-corner-l { left: 10px; top: 12px; }
+.heft-chrome .heft-corner-r { right: 10px; top: 12px; }
+@media (max-width: 720px) {
+	.heft-chrome .heft-float { top: 8px !important; max-width: calc(100% - 108px); }
+	.heft-chrome .heft-tray { top: 54px; max-width: calc(100% - 16px); }
+	.heft-chrome .heft-corner-l, .heft-chrome .heft-corner-r { top: 8px; }
+	.heft-chrome .heft-corner-l { left: 8px; }
+	.heft-chrome .heft-corner-r { right: 8px; }
 }

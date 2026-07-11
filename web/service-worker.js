@@ -17,7 +17,14 @@
 // v16: ink.js entfernt — nur noch heft.js für Handschrift
 // v17: Heft-Taskbar v3 (Seiten-Popup, Bilder-Option, ＋-Menü, PDF-Scanner)
 // v18: Dokument-Scanner v2 (Dokumenterkennung, Entzerrung, Filter, Nachbearbeitung)
-const CACHE = "impala67-v18";
+// v19: Scanner-Bugfixes (Video-play, Busy-UI, Warp-Maße, null-sichere Exports)
+// v20: Scanner live-Filter/Drehen + stärkere Papier-Aufhellung
+// v21: Scanner v3 — robuste Dokumenterkennung + klar erkennbarer Scan-Look
+// v22: Scanner-Audit — korrekte konvexe Quad-Prüfung für Dokumenterkennung
+// v23: Scanner v4 — Live-Qualität, Rahmen, Auto-Auslösen, Vorher/Nachher
+// v24: Scanner-Audit — Sitzungsisolierung, Bild-Cache, speicherärmerer Warp/Detect
+// v25: Tesseract.js für lokale Heft-OCR
+const CACHE = "impala67-v25";
 
 const APP_FILES = [
 	"./",
@@ -72,6 +79,7 @@ const CDN_FILES = [
 	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css",
 	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js",
 	"https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js",
+	"https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
 	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js",
 	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
 ];

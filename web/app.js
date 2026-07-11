@@ -16,6 +16,7 @@ import { SEARCH } from "./search.js";
 import { SHORTCUTS } from "./shortcuts.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { POPOVERS } from "./popovers.js";
+import { AI } from "./ai.js";
 
 const render = (...args) => RENDER.render(...args);
 const openTemplatePicker = (...args) => RENDER.openTemplatePicker(...args);
@@ -55,6 +56,37 @@ export function closeOverlay() {
 	S.reviewShowBack = false;
 }
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt das #overlay wie alle anderen Dialoge.
+function mountFullChatDebugButton() {
+	const head = document.querySelector(".chat-full-head");
+	if (!head || head.querySelector("#btnAiDebugFull")) return;
+	const button = document.createElement("button");
+	button.type = "button";
+	button.id = "btnAiDebugFull";
+	button.className = "ai-debug-btn";
+	button.title = "Letztes KI-Debugprotokoll in die Zwischenablage kopieren";
+	button.textContent = "Debugprotokoll";
+	head.appendChild(button);
+}
+
+async function copyAiDebugTrace() {
+	const report = AI.debugReport();
+	try {
+		await navigator.clipboard.writeText(report);
+		U.toast("KI-Debugprotokoll kopiert — hier im Chat einfügen.", "success");
+	} catch {
+		// Clipboard kann bei file:// oder ohne Berechtigung blockiert sein. Dann
+		// erscheint der Bericht in einem auswählbaren Dialog statt verloren zu gehen.
+		const o = U.el("overlay");
+		if (!o) return;
+		o.hidden = false;
+		o.innerHTML = '<div class="modal modal-sm"><button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
+			'<h3>KI-Debugprotokoll</h3><p class="hint">Zwischenablage blockiert. Bitte den folgenden Text kopieren und hier einfügen.</p>' +
+			'<textarea class="ai-debug-copy" readonly>' + U.esc(report) + '</textarea></div>';
+		const area = o.querySelector("textarea");
+		if (area) { area.focus(); area.select(); }
+	}
+}
+
 function openPromptDialog(title, onSubmit, initial) {
 	const o = U.el("overlay");
 	if (!o) return;
@@ -145,7 +177,6 @@ async function createPageIn(wsId, parentId, tpl, kind) {
 		workspaceId: S.currentWorkspaceId, kind: k,
 	});
 	openPage(id);
-	render();
 	const ti = document.getElementById("pageTitle");
 	if (ti) { ti.focus(); ti.select(); }
 }
@@ -293,7 +324,24 @@ async function createPageInNewTab(wsId, parentId, tpl) {
 	return id;
 }
 
+// Chat-Composer: wächst mit dem Text; Sendetaste ist nur bei Inhalt aktiv.
+function syncComposer(input) {
+	if (!input) return;
+	const full = input.id === "mainChatInput";
+	const form = U.el(full ? "mainChatForm" : "chatForm");
+	const submit = U.el(full ? "mainChatSubmit" : "chatSubmit");
+	input.style.height = "auto";
+	const max = full ? 260 : 210;
+	input.style.height = Math.min(max, Math.max(30, input.scrollHeight)) + "px";
+	input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
+	if (form) form.classList.toggle("has-text", !!input.value.trim());
+	if (submit) submit.disabled = !input.value.trim();
+}
+
 function wireEvents() {
+	// STATE.dispatch() löst über STATE.onChange bereits einen gebündelten rAF-Render aus.
+	// Handler mit persistierten Änderungen rufen deshalb nicht zusätzlich render() auf;
+	// reine UI-Navigation ohne dispatch() rendert weiterhin sofort.
 	// Datenbank-Tabellen: Zellwert speichern (props der Zeilen-Seite) — normales
 	// pageUpdate-Event, damit Verlauf, Diff und Notion-Sync die Änderung mitbekommen.
 	document.addEventListener("change", async (e) => {
@@ -466,13 +514,11 @@ function wireEvents() {
 		if (t.hasAttribute("data-iconset")) {
 			if (S.currentPageId) await STATE.dispatch("pageUpdate", { id: S.currentPageId, patch: { icon: t.dataset.iconset || null } });
 			closeOverlay();
-			render();
 			return;
 		}
 		if (t.hasAttribute("data-coverset")) {
 			if (S.currentPageId) await STATE.dispatch("pageUpdate", { id: S.currentPageId, patch: { cover: t.dataset.coverset || null, coverImg: null } });
 			closeOverlay();
-			render();
 			return;
 		}
 
@@ -520,6 +566,19 @@ function wireEvents() {
 		if (t.dataset.modelsubmenu) {
 			S.modelMenuSection = t.dataset.modelsubmenu;
 			renderModelMenu();
+			if (S.modelMenuSection === "thinking") {
+				AI.detectThinkingCapabilities().then(() => renderModelMenu()).catch(() => renderModelMenu());
+			}
+			return;
+		}
+		if (t.dataset.thinkingprobe) {
+			const store = S.thinkingCapabilities || {};
+			const pr = (S.settings.aiProviders || []).find((item) => item.id === S.settings.aiProviderId);
+			const key = [S.settings.aiProviderId || "", String((pr && pr.base) || "").replace(/\/+$/, ""), S.settings.aiModel || ""].join("::");
+			delete store[key];
+			S.thinkingCapabilities = store;
+			renderModelMenu();
+			AI.detectThinkingCapabilities().then(() => renderModelMenu()).catch(() => renderModelMenu());
 			return;
 		}
 		if (t.dataset.modelmenuback) {
@@ -527,8 +586,8 @@ function wireEvents() {
 			renderModelMenu();
 			return;
 		}
-		if (t.dataset.thinkinglevel) {
-			await STATE.dispatch("settingsSet", { thinkingLevel: t.dataset.thinkinglevel });
+		if (t.dataset.thinkingenabled !== undefined) {
+			await STATE.dispatch("settingsSet", { thinkingEnabled: t.dataset.thinkingenabled === "1" });
 			S.modelMenuSection = "root";
 			renderModelMenu();
 			return;
@@ -543,6 +602,9 @@ function wireEvents() {
 			await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 			S.modelMenuOpen = false;
 			renderModelBar();
+			// Jede Auswahl startet die modellbezogene Probe sofort. Das Thinking-
+			// Menü zeigt später ausschließlich die bestätigten Stufen dieses Modells.
+			AI.detectThinkingCapabilities().then(renderModelBar, renderModelBar);
 			SETTINGS.checkAI();
 			return;
 		}
@@ -574,6 +636,7 @@ function wireEvents() {
 				await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 				S.modelMenuOpen = false;
 				renderModelBar();
+				AI.detectThinkingCapabilities().then(renderModelBar, renderModelBar);
 				SETTINGS.checkAI();
 			}
 			return;
@@ -704,7 +767,6 @@ function wireEvents() {
 			}
 			S.ankiDeck = deck === "Standard" ? null : deck;
 			closeOverlay();
-			render();
 			return;
 		}
 
@@ -731,7 +793,6 @@ function wireEvents() {
 				const full = (parent ? parent + "::" : "") + name.replace(/::/g, ":");
 				await STATE.dispatch("deckCreate", { name: full });
 				S.ankiDeck = full;
-				render();
 			});
 			return;
 		}
@@ -757,13 +818,11 @@ function wireEvents() {
 				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
 				U.toast("Stapel im Papierkorb.", "success");
 			}
-			render();
 			return;
 		}
 		if (t.dataset.deckduplicate) {
 			S.deckMenuOpenName = null;
 			await STATE.dispatch("deckDuplicate", { name: t.dataset.deckduplicate });
-			render();
 			return;
 		}
 
@@ -860,7 +919,6 @@ function wireEvents() {
 			S.pageMenuOpenId = null;
 			const pg = S.pages[t.dataset.pagefav];
 			if (pg) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { favorite: !pg.favorite } });
-			render();
 			return;
 		}
 		if (t.dataset.pagemove) {
@@ -885,7 +943,6 @@ function wireEvents() {
 			await setWs(moveId);
 			S.movePageId = null;
 			closeOverlay();
-			render();
 			return;
 		}
 		if (t.dataset.tagfilter) {
@@ -945,7 +1002,6 @@ function wireEvents() {
 				title: "Endgültig löschen", ok: "Löschen", danger: true,
 			})) {
 				await STATE.dispatch("pageDelete", { id: t.dataset.pagepurge });
-				render();
 			}
 			return;
 		}
@@ -962,7 +1018,6 @@ function wireEvents() {
 				title: "Endgültig löschen", ok: "Löschen", danger: true,
 			})) {
 				await STATE.dispatch("cardDelete", { id: t.dataset.cardpurge });
-				render();
 			}
 			return;
 		}
@@ -983,7 +1038,6 @@ function wireEvents() {
 				title: "Endgültig löschen", ok: "Löschen", danger: true,
 			})) {
 				await STATE.dispatch("deckDelete", { name });
-				render();
 			}
 			return;
 		}
@@ -1106,6 +1160,10 @@ function wireEvents() {
 				renderTabs();
 				break;
 			case "btnSettings": SETTINGS.openSettings(); break;
+			case "btnAiDebug":
+			case "btnAiDebugFull":
+				await copyAiDebugTrace();
+				break;
 			case "btnMigrateNotion":
 			case "btnNotionSync":
 				await SETTINGS.handleNotionSync(t);
@@ -1154,7 +1212,6 @@ function wireEvents() {
 						await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
 						await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
 						closeOverlay();
-						render();
 					} catch (err) {
 						alert("Bild konnte nicht als Cover gesetzt werden: " + err.message);
 					}
@@ -1193,7 +1250,6 @@ function wireEvents() {
 					await STATE.dispatch("pageUpdate", { id: S.histPageId, patch: { title: v.title, content: v.content } });
 					RAG.queuePage(S.histPageId);
 					closeOverlay();
-					render();
 				}
 				break;
 			}
@@ -1252,6 +1308,7 @@ function wireEvents() {
 		if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
 	}, 150);
 	document.addEventListener("input", (e) => {
+		if (e.target.id === "chatInput" || e.target.id === "mainChatInput") syncComposer(e.target);
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
 			LIBRARY.handleFilterInput(e);
@@ -1272,6 +1329,7 @@ function wireEvents() {
 		}
 		if (e.target.id === "modelSelect") {
 			await STATE.dispatch("settingsSet", { aiModel: e.target.value });
+			AI.detectThinkingCapabilities().then(renderModelBar, renderModelBar);
 			SETTINGS.checkAI();
 		}
 		if (e.target.id === "fileAttachment" && e.target.files[0]) {
@@ -1368,7 +1426,6 @@ function wireEvents() {
 		if ((moved.workspaceId || "default") !== (target.workspaceId || "default")) {
 			await STATE.dispatch("pageUpdate", { id: moved.id, patch: { workspaceId: target.workspaceId || "default" } });
 		}
-		render();
 	});
 	document.addEventListener("drop", async (e) => {
 		if (!dragId) return;
@@ -1410,13 +1467,13 @@ function wireEvents() {
 			e.preventDefault();
 			const inp = U.el("chatInput");
 			const text = inp.value.trim();
-			inp.value = "";
+			inp.value = ""; syncComposer(inp);
 			await sendChatMessage(text, "side");
 		} else if (e.target.id === "mainChatForm") {
 			e.preventDefault();
 			const inp = U.el("mainChatInput");
 			const text = inp.value.trim();
-			inp.value = "";
+			inp.value = ""; syncComposer(inp);
 			await sendChatMessage(text, "full");
 		}
 	});
@@ -1465,6 +1522,13 @@ function wireEvents() {
 	document.addEventListener("focusout", (e) => {
 		if (e.target.dataset.renamename || e.target.dataset.deckrenamename) commitRename(e.target);
 	});
+	// Der große Chat wird dynamisch nach jedem Tab-/Chat-Render aufgebaut. Der
+	// Observer hängt den Debug-Button deshalb ausschließlich in dessen Kopfzeile,
+	// nie in den kleinen Seiten-Chat.
+	const main = U.el("main");
+	if (main) new MutationObserver(mountFullChatDebugButton).observe(main, { childList: true, subtree: true });
+	mountFullChatDebugButton();
+
 	// Tastenkombinationen (Shortcuts) registrieren
 	SHORTCUTS.wireShortcuts();
 	// Langen geklebten Text automatisch als .txt-Anhang behandeln statt im Feld auszuschreiben

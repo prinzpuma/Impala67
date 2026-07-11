@@ -192,6 +192,15 @@ function renderModelBar() {
 	renderModelMenu();
 }
 
+function currentThinkingCapability() {
+	const provider = String(S.settings.aiProviderId || "");
+	const model = String(S.settings.aiModel || "");
+	const pr = (S.settings.aiProviders || []).find((item) => item.id === provider);
+	const base = String((pr && pr.base) || "").replace(/\/+$/, "");
+	const key = [provider, base, model].join("::");
+	return (S.thinkingCapabilities || {})[key] || null;
+}
+
 // Baut den Inhalt des einheitlichen Modell-Dropdowns: nach Quelle gruppiert, das
 // aktive Modell mit Häkchen, unten ein Bereich für ein frei eingetipptes Modell
 // (Quelle über Chips wählbar statt über ein hässliches natives <select>).
@@ -203,16 +212,27 @@ function modelMenuInnerHtml() {
 	const section = S.modelMenuSection || "root";
 	const back = '<button class="model-submenu-back" data-modelmenuback="1">‹ Zurück</button>';
 	if (section === "root") {
-		const thinking = S.settings.thinkingLevel || "auto";
-		return '<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>' + U.esc(currentModelLabel()) + ' ›</small></button>' +
-			'<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>' + U.esc(thinking === "auto" ? "Automatisch" : thinking[0].toUpperCase() + thinking.slice(1)) + ' ›</small></button>';
+		const enabled = S.settings.thinkingEnabled !== false;
+		const cap = currentThinkingCapability();
+		const label = enabled ? "Ein" : "Aus";
+		// Nie den Eintrag entfernen: Ein unbekanntes Modell darf nicht den
+		// Dropdown-Inhalt „wegblenden“. Die Unterseite erklärt stattdessen klar,
+		// ob der aktuelle Chat-Adapter eine Thinking-Stufe steuern kann.
+		const thinkingRow = '<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>' + U.esc(label) + ' ›</small></button>';
+		return '<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>' + U.esc(currentModelLabel()) + ' ›</small></button>' + thinkingRow;
 	}
 	if (section === "thinking") {
-		const cur = S.settings.thinkingLevel || "auto";
-		const levels = [["auto", "Automatisch"], ["low", "Niedrig"], ["medium", "Mittel"], ["high", "Hoch"]];
-		return back + '<div class="menu-label">Thinking-Stufe</div><div class="menu-note">Wirkt nur bei Modellen und APIs, die Thinking unterstützen.</div>' +
-			levels.map(([id, label]) => '<button class="menu-item' + (id === cur ? " active" : "") + '" data-thinkinglevel="' + id + '">' +
-				'<span class="menu-item-label">' + label + '</span>' + (id === cur ? '<span class="menu-check">✓</span>' : "") + '</button>').join("");
+		const cap = currentThinkingCapability();
+		if (!cap || cap.state === "loading") {
+			return back + '<div class="menu-label">Thinking</div><div class="menu-note">API-Fähigkeiten werden geprüft…</div>';
+		}
+		const enabled = S.settings.thinkingEnabled !== false;
+		const note = !cap || cap.state === "loading"
+			? "Modellinformationen werden geladen…"
+			: (cap.error || "Das Modell verwendet bei Aktivierung seine dokumentierte Standardtiefe.");
+		return back + '<div class="menu-label">Thinking</div><div class="menu-note">' + U.esc(note) + '</div>' +
+			[[true, "Ein"], [false, "Aus"]].map(([value, label]) => '<button class="menu-item' + (value === enabled ? " active" : "") + '" data-thinkingenabled="' + (value ? "1" : "0") + '">' +
+				'<span class="menu-item-label">' + label + '</span>' + (value === enabled ? '<span class="menu-check">✓</span>' : "") + '</button>').join("");
 	}
 	let html = back + '<div class="menu-label">Verfügbare Modelle</div>';
 	if (S.modelMenuLoading) return html + '<div class="menu-note">Modelle werden geladen…</div>';
@@ -418,18 +438,10 @@ function renderMain() {
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 	if (S.view === "home" || !pg) { renderHome(main); return; }
 
-	// GoodNotes-Heft: eigene Vollansicht (Papier, Stift, Seiten, Thumbnails) —
-	// Notion-Seiten darunter bleiben komplett unberührt (Block-Editor wie bisher).
+	// GoodNotes-Heft: Fokusmodus. Über der Papierfläche bleibt NUR die globale
+	// Tab-Leiste. Kein Breadcrumb, Titel oder Seitenkopf nimmt Schreibfläche weg.
 	if (pg.kind === "heft") {
-		main.innerHTML =
-			'<div class="page-meta heft-head">' +
-				'<div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
-				'<div class="heft-titlebar">' +
-					'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + pageIconLabel(pg) + "</button>" +
-					'<input id="pageTitle" value="' + U.esc(pg.title) + '" autocomplete="off">' +
-				"</div>" +
-			"</div>" +
-			'<div id="heftStage" class="heft-stage"></div>';
+		main.innerHTML = '<div id="heftStage" class="heft-stage" aria-label="' + U.esc(pg.title) + '"></div>';
 		const stage = U.el("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
 		return;
@@ -973,28 +985,92 @@ function toolChipHtml(m) {
 		(m.detail ? ' <span class="tool-detail">· ' + U.esc(m.detail) + "</span>" : "") + (m.error ? " — Fehler" : "") + "</div>";
 }
 
-function chatMsgListHtml(historyList) {
-	// Chronologische Reihenfolge beibehalten: Edit-Karten gehören ZUR Nachricht/Turn
-	// (direkt danach), NICHT ans absolute Chat-Ende (das war ein Fehler).
+function chatStaticHtml(historyList) {
+	// Fertige Nachrichten getrennt vom Live-Entwurf aufbauen. Beim Streamen bleibt
+	// dieser Teil unverändert und muss weder erneut als Markdown noch für Math/Code
+	// verarbeitet werden.
 	const list = historyList || [];
-	const parts = list.map((m) => {
+	return list.map((m) => {
 		if (m.role === "edit") return editCardHtml(m);
 		if (m.role === "question") return questionCardHtml(m);
 		if (m.role === "tool") return toolChipHtml(m);
 		if (m.role === "assistant") return assistantMsgHtml(m);
 		return userMsgHtml(m, list);
-	});
-	if (S.aiBusy) {
-		const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
-		if (historyList === activeList) {
-			// Während offener ask_choice-Karte keine zweite „busy“-Zeile — die Frage IST der Wartezustand.
-			const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
-			if (S.aiDraft) parts.push('<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>");
-			else if (S.aiThinkingDraft) parts.push(thinkingLiveHtml());
-			else if (!waitingChoice) parts.push('<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>");
+	}).join("");
+}
+
+function chatLiveHtml(historyList) {
+	if (!S.aiBusy) return "";
+	const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
+	if (historyList !== activeList) return "";
+	// Während offener ask_choice-Karte keine zweite „busy“-Zeile — die Frage IST der Wartezustand.
+	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
+	const parts = [];
+	// Denkprozess UND Antwort-Draft parallel zeigen. Vorher versteckte jedes
+	// aiDraft-Zeichen die Think-Box komplett — bei Heuristik-Lecks wirkte der
+	// ganze Denkprozess wie die normale Antwort.
+	if (S.aiThinkingDraft) parts.push(thinkingLiveHtml());
+	if (S.aiDraft) parts.push('<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>");
+	else if (!S.aiThinkingDraft && !waitingChoice) parts.push('<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>");
+	return parts.join("");
+}
+
+// Vollständige, aber sehr viel günstigere Änderungsprüfung als ein neues innerHTML
+// für den gesamten Verlauf. Die FNV-Signatur erkennt auch In-Place-Änderungen
+// (z.B. Undo, aufgeklapptes Thinking oder beantwortete Rückfragen).
+function chatHistorySignature(list) {
+	const text = JSON.stringify(list || []);
+	let hash = 2166136261;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 16777619);
+	}
+	return hash >>> 0;
+}
+
+function enhanceChatStatic(log, staticEnd) {
+	for (let node = log.firstChild; node && node !== staticEnd; node = node.nextSibling) {
+		if (node.nodeType === Node.ELEMENT_NODE) {
+			U.renderMath(node);
+			U.highlightCode(node);
 		}
 	}
-	return parts.join("");
+}
+
+function renderChatLog(log, historyList) {
+	const signature = chatHistorySignature(historyList);
+	let staticEnd = log._chatStaticEnd;
+	let live = log._chatLive;
+	// Fertige Nachrichten bleiben direkte Kinder des Logs. Das bewahrt vorhandene
+	// Flex-/CSS-Regeln und Event-Delegation; nur der Live-Bereich erhält einen
+	// unsichtbaren Container als gezieltes Patch-Ziel.
+	if (!staticEnd || !live || staticEnd.parentNode !== log || live.parentNode !== log) {
+		staticEnd = document.createComment("chat-static-end");
+		live = document.createElement("div");
+		live.className = "chat-live";
+		live.style.display = "contents";
+		log.replaceChildren(staticEnd, live);
+		log._chatStaticEnd = staticEnd;
+		log._chatLive = live;
+		log._chatStaticSignature = null;
+	}
+	if (log._chatStaticSignature !== signature) {
+		while (log.firstChild !== staticEnd) log.removeChild(log.firstChild);
+		const template = document.createElement("template");
+		template.innerHTML = chatStaticHtml(historyList);
+		staticEnd.before(template.content);
+		log._chatStaticSignature = signature;
+		enhanceChatStatic(log, staticEnd);
+	}
+	const liveHtml = chatLiveHtml(historyList);
+	if (live._chatHtml !== liveHtml) {
+		live.innerHTML = liveHtml;
+		live._chatHtml = liveHtml;
+		U.renderMath(live);
+		U.highlightCode(live);
+	}
+	// Gleiches Verhalten wie zuvor: bei neuen Antworten immer ans Ende folgen.
+	log.scrollTop = log.scrollHeight;
 }
 
 // Rückfrage-Karte (ask_choice) — Notion-Umfrage-Style: Frage + volle Options-Zeilen,
@@ -1036,10 +1112,7 @@ function renderChat() {
 	renderSideContextChip();
 	const log = U.el("chatLog");
 	if (!log) return;
-	log.innerHTML = chatMsgListHtml(S.sideChat);
-	U.renderMath(log);
-	U.highlightCode(log);
-	log.scrollTop = log.scrollHeight;
+	renderChatLog(log, S.sideChat);
 }
 
 // Ein Vollbild-Chat, der genau im Hauptbereich gerendert wird (gleiche Bausteine wie das Seitenpanel).
@@ -1059,10 +1132,11 @@ function renderFullChat(main) {
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
 			'<form id="mainChatForm" class="chat-form-full">' +
 				'<div id="mainPendingChip" hidden></div>' +
-				'<button type="button" id="btnAttachFull" title="Fotos und Dateien hinzufügen">+</button>' +
-				'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
-				'<textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>' +
-				'<button type="submit" title="Senden">➤</button>' +
+				'<div class="composer-body"><textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea></div>' +
+				'<div class="composer-actions"><div class="composer-actions-left">' +
+					'<button type="button" id="btnAttachFull" title="Fotos und Dateien hinzufügen">+</button>' +
+					'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
+				'</div><button id="mainChatSubmit" type="submit" title="Senden" disabled>↑</button></div>' +
 				'<div id="modelMenuFull" class="model-menu" hidden></div>' +
 			"</form>" +
 		"</div>";
@@ -1076,10 +1150,7 @@ function renderFullChat(main) {
 function renderMainChatLog() {
 	const log = U.el("mainChatLog");
 	if (!log) return;
-	log.innerHTML = chatMsgListHtml(S.chat);
-	U.renderMath(log);
-	U.highlightCode(log);
-	log.scrollTop = log.scrollHeight;
+	renderChatLog(log, S.chat);
 }
 
 // Einheitliche "Gedankengang"-Box: exakt dieselbe Struktur/Optik für live (während

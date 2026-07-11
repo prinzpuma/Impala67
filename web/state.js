@@ -15,7 +15,10 @@ export const S = {
 		],
 		aiProviderId: "local",
 		aiModel: "",
-		thinkingLevel: "auto", // "auto" | "low" | "medium" | "high" — wird nur an unterstützte APIs übergeben
+		// Thinking ist standardmäßig aktiv. Die UI bietet bewusst nur Ein/Aus;
+		// Provider wählen ihre dokumentierte Standardtiefe selbst.
+		thinkingEnabled: true,
+		thinkingLevel: "auto", // Altwert für bestehende Exporte; wird nicht mehr in der UI gesteuert
 		embedModel: "",
 		driveClientId: "100283147644-1ra4er2dc5r85k3mefd521hbm1ek3qpf.apps.googleusercontent.com",
 		customInstructions: "",

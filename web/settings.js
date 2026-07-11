@@ -491,6 +491,10 @@ export async function handleSaveSettings() {
 	checkAI();
 	RAG.reindexStale();
 	S.availableModels = [];
+	// Endpoint, Zugangsdaten oder Modell können sich geändert haben. Alte
+	// Capability-Ergebnisse dürfen das Thinking-Menü deshalb nicht überleben.
+	S.thinkingCapabilities = Object.create(null);
+	AI.detectThinkingCapabilities().catch(() => {});
 }
 
 export async function handleClearBg() {

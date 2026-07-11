@@ -152,7 +152,9 @@ export async function sendChatMessage(text, type) {
 export function handleReasoningToggle(t) {
 	if (t.id === "btnThinkLive") {
 		S.thinkingLiveExpanded = !S.thinkingLiveExpanded;
+		// Beide Chat-Flächen: Side-Panel und Vollbild (vorher blieb der große Chat stecken).
 		renderChat();
+		if (S.view === "chat" || S.aiActiveChatType === "full") renderMainChatLog();
 		return;
 	}
 	const m = S.chat.find((x) => x.mid === t.dataset.reasoningtoggle) || S.sideChat.find((x) => x.mid === t.dataset.reasoningtoggle);
@@ -208,6 +210,10 @@ export async function handleModelMenuToggle(t) {
 		S.modelMenuLoading = false;
 		S.availableModels = models;
 		renderModelMenu();
+		// Die Thinking-Stufen werden nicht aus einer Modellnamenliste geraten:
+		// Direkt nach dem Öffnen prüft die App das aktuell gewählte Modell und
+		// zeichnet das Menü nach Abschluss mit genau dessen Fähigkeiten neu.
+		AI.detectThinkingCapabilities().then(renderModelMenu, renderModelMenu);
 	}
 }
 

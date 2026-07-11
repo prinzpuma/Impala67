@@ -635,6 +635,16 @@ export const EDITOR = (() => {
 		}
 	}
 
+	// Die Seitenliste kann bei großen Workspaces teuer sein. Während "[[" getippt
+	// wird, genügt eine kurze Pause; vor dem Öffnen wird der aktuelle Text erneut
+	// geprüft, damit ein alter Debounce-Aufruf kein bereits geschlossenes Menü zeigt.
+	const openLinkMenuSoon = U.debounce((query, bid) => {
+		const ta = host && host.querySelector(".blk-input");
+		if (!ta || activeId !== bid) return;
+		const match = ta.value.slice(0, ta.selectionStart).match(/\[\[([^\[\]]*)$/);
+		if (match && match[1] === query) openLinkMenu(query);
+	}, 80);
+
 	function insertPageLink(pg2) {
 		const ta = host ? host.querySelector(".blk-input") : null;
 		const b = blocks.find((x) => x.id === activeId);
@@ -846,7 +856,7 @@ export const EDITOR = (() => {
 			else closeSlash();
 			// [[Titel → Seitenverlinkung mit Vorschlagsliste (wie in Notion)
 			const lm = ta.value.slice(0, ta.selectionStart).match(/\[\[([^\[\]]*)$/);
-			if (lm) openLinkMenu(lm[1]);
+			if (lm) openLinkMenuSoon(lm[1], b.id);
 			else closeLinkMenu();
 		});
 
@@ -939,7 +949,10 @@ export const EDITOR = (() => {
 					b.checked = !b.checked;
 					b.raw = b.raw.replace(/- \[( |x)\]/, b.checked ? "- [x]" : "- [ ]");
 					saveSoon();
-					draw();
+					// Checkbox direkt patchen: kein kompletter Editor-Neuaufbau nötig.
+					e.target.checked = b.checked;
+					const text = blkEl0.querySelector(".blk-litext");
+					if (text) text.classList.toggle("done", b.checked);
 				}
 				return;
 			}

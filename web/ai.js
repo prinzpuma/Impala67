@@ -7,11 +7,13 @@ import { RENDER } from "./render.js";
 import { CHATS } from "./chats.js";
 
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
-// Mit Streaming (SSE), Modellauswahl, Reasoning/Thinking-Erfassung, Verbindungs-
-// Ping, Embeddings und automatischer Diff-Erfassung für Seiten-Bearbeitungen.
+// Komplett-Rewrite (11. Juli 2026): gleiche Features, klare Struktur:
+//   Konfiguration → HTTP → Tool-Schemas → Thinking/Reasoning → Chat (Stream/Einmal)
+//   → System-Prompt → Agent-Loop → Rückfragen/refine.
 export const AI = (() => {
-	// Kuratierte Modell-Presets für die Dropdown-Auswahl im Chat-Panel.
-	// "Eigenes" Modelle (z.B. lokale LM-Studio-Namen) werden automatisch ergänzt.
+	// =========================================================================
+	// Konstanten
+	// =========================================================================
 	const MODEL_PRESETS = [
 		{ value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google" },
 		{ value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "google" },
@@ -21,151 +23,406 @@ export const AI = (() => {
 		{ value: "gpt-4.1-mini", label: "GPT-4.1 mini", provider: "openai" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
-	// Tools, die Seiteninhalte verändern — für diese wird automatisch ein
-	// Vorher/Nachher-Snapshot als "edit"-Chat-Nachricht (mit Undo) erzeugt.
+	// Tools mit Seiten-Änderung → automatische Edit-Karte (Diff + Undo) im Chat.
 	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content"]);
-	// Wartende Promise-Resolver für offene Rückfragen (ask_choice) — Schlüssel ist die
-	// Chat-Nachrichten-ID der Frage-Karte. Lebt nur solange die Seite offen bleibt.
-	const pendingChoices = {};
+	const MAX_AGENT_STEPS = 8;
+	const HISTORY_LIMIT = 16;
+	// Datenschutzfreundliches Laufzeitprotokoll für den Debug-Knopf: nur technische
+	// Metadaten und gekürzte Modell-Ausgaben, niemals API-Key oder Notizinhalte.
+	const DEBUG_LOG_LIMIT = 40;
+	const debugLog = [];
+	function debugEvent(kind, detail) {
+		debugLog.push({ at: new Date().toISOString(), kind, detail });
+		if (debugLog.length > DEBUG_LOG_LIMIT) debugLog.splice(0, debugLog.length - DEBUG_LOG_LIMIT);
+	}
+	function debugReport() {
+		const { base, model, providerId } = cfg();
+		const rows = debugLog.map((entry) => "[" + entry.at + "] " + entry.kind + "\n" + JSON.stringify(entry.detail, null, 2));
+		return [
+			"Impala67 KI-Debugprotokoll",
+			"Erstellt: " + new Date().toISOString(),
+			"Provider: " + (providerId || "—"),
+			"Modell: " + (model || "—"),
+			"Endpoint: " + (base || "—"),
+			"Hinweis: API-Schlüssel und Nutzereingaben sind nicht enthalten. Gekürzte Modellantworten können jedoch Inhalte daraus wiedergeben.",
+			"", rows.length ? rows.join("\n\n") : "Noch keine KI-Anfrage in dieser Sitzung protokolliert.",
+		].join("\n");
+	}
+	// Offene Rückfragen (ask_choice / Lösch-Bestätigungen): Frage-mid → resolve().
+	const pendingChoices = Object.create(null);
 
-	// Mehrere Quellen möglich (Einstellungen → KI): jede hat eigene Server-URL + eigenen
-	// API-Key. Die aktuell im Modell-Dropdown gewählte Quelle bestimmt, welche hier verwendet wird.
+	// =========================================================================
+	// Quellen & Konfiguration
+	// =========================================================================
 	function activeProvider() {
 		const providers = S.settings.aiProviders || [];
 		return providers.find((p) => p.id === S.settings.aiProviderId) || providers[0] || null;
 	}
-
 	function cfg() {
 		const pr = activeProvider();
 		return {
 			base: String((pr && pr.base) || "").replace(/\/+$/, ""),
 			key: (pr && pr.key) || "",
 			model: S.settings.aiModel || "",
+			providerId: (pr && pr.id) || "",
 		};
 	}
-
-	async function request(path, body) {
-		const { base, key } = cfg();
-		if (!base) throw new Error("Kein KI-Server konfiguriert (Einstellungen → KI).");
-		const res = await fetch(base + path, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...(key ? { Authorization: "Bearer " + key } : {}),
-			},
-			body: JSON.stringify(body),
-		});
-		if (!res.ok) {
-			throw new Error("KI-Fehler " + res.status + ": " + (await res.text()).slice(0, 300));
+	function thinkingCapabilityKey(config) {
+		const c = config || cfg();
+		return [c.providerId, c.base, c.model].join("::");
+	}
+	function thinkingCapabilityStore() {
+		return S.thinkingCapabilities || (S.thinkingCapabilities = Object.create(null));
+	}
+	// OpenAI-kompatible /models-Antworten enthalten keine einheitliche Thinking-
+	// Capability. Aktive Proben über /chat/completions wären kostenpflichtige
+	// Generierungen und sind deshalb ausgeschlossen. Stattdessen verwendet die App
+	// einen kleinen, versionierten Provider-Manifest: nur dokumentierte Kombinationen
+	// werden freigeschaltet, unbekannte Modelle bleiben bei „Automatisch“ ohne
+	// Reasoning-Parameter. Das Menü bleibt dabei immer bedienbar.
+	function declaredThinkingCapabilities(config) {
+		const model = String(config.model || "").toLowerCase();
+		// Gemini 2.5 unterstützt im OpenAI-kompatiblen Gateway low/medium/high;
+		// Google mappt sie auf 1k/8k/24k Thinking-Budget. Gemma erhält keine
+		// Freigabe, weil sie über diesen Gateway kein dokumentiertes Budget hat.
+		if (config.providerId === "google" && /^gemini-2\.5-(flash|pro)/.test(model)) {
+			return { levels: ["low", "medium", "high"], includeThoughts: true, source: "gemini-openai" };
 		}
+		// Lokale OpenAI-kompatible Server sind nicht einheitlich: LM Studio kann
+		// Reasoning ausgeben, bietet die steuerbare gpt-oss-Variante aber über
+		// /responses statt über den hier verwendeten /chat/completions-Adapter an.
+		return { levels: [], includeThoughts: false, source: "none" };
+	}
+	async function detectThinkingCapabilities() {
+		const config = cfg();
+		const key = thinkingCapabilityKey(config);
+		const store = thinkingCapabilityStore();
+		if (store[key]) return store[key];
+		const declared = declaredThinkingCapabilities(config);
+		const cap = store[key] = {
+			state: "ready",
+			levels: declared.levels,
+			includeThoughts: declared.includeThoughts,
+			error: config.model && !declared.levels.length
+				? "Für dieses Modell ist über den aktuellen Chat-Adapter keine steuerbare Thinking-Stufe dokumentiert."
+				: "",
+			source: declared.source,
+		};
+		debugEvent("Thinking-Fähigkeiten", { provider: config.providerId, model: config.model, state: cap.state, levels: cap.levels, source: cap.source, passive: true });
+		return cap;
+	}
+
+	// =========================================================================
+	// HTTP
+	// =========================================================================
+	class AiHttpError extends Error {
+		constructor(status, text) {
+			super("KI-Fehler " + status + ": " + String(text || "").slice(0, 300));
+			this.status = status;
+		}
+	}
+	async function request(path, body) {
+		const { base, key, providerId } = cfg();
+		if (!base) throw new Error("Kein KI-Server konfiguriert (Einstellungen → KI).");
+		const started = performance.now();
+		// Forensisches Debug: exakt das bereinigte Tool-Schema, das tatsächlich an
+		// Google geschickt wird. Nachrichten/Key werden bewusst NICHT protokolliert.
+		const toolSchemas = Array.isArray(body.tools) ? body.tools.map((tool) => ({
+			type: tool.type,
+			name: tool.function && tool.function.name,
+			description: tool.function && tool.function.description,
+			parameters: tool.function && tool.function.parameters,
+		})) : [];
+		const messageMeta = Array.isArray(body.messages) ? body.messages.map((message) => {
+			const content = message && message.content;
+			const chars = typeof content === "string" ? content.length : JSON.stringify(content || "").length;
+			return { role: (message && message.role) || "?", chars, hasToolCalls: !!(message && message.tool_calls && message.tool_calls.length) };
+		}) : [];
+		const meta = {
+			path, provider: providerId || "—", model: body.model || "—", stream: !!body.stream,
+			messageCount: messageMeta.length, messageChars: messageMeta.reduce((sum, message) => sum + message.chars, 0), messageMeta,
+			toolCount: toolSchemas.length, toolChoice: body.tool_choice || null, toolSchemas,
+			temperature: body.temperature, thinkingExtras: !!body.extra_body || !!body.reasoning_effort,
+			extraBody: body.extra_body || null, reasoningEffort: body.reasoning_effort || null,
+		};
+		debugEvent("HTTP-Anfrage", meta);
+		let res;
+		try {
+			res = await fetch(base + path, {
+				method: "POST",
+				headers: { "Content-Type": "application/json", ...(key ? { Authorization: "Bearer " + key } : {}) },
+				body: JSON.stringify(body),
+			});
+		} catch (error) {
+			debugEvent("Netzwerkfehler", { ...meta, ms: Math.round(performance.now() - started), error: String((error && error.message) || error) });
+			throw error;
+		}
+		if (!res.ok) {
+			const text = await res.text().catch(() => "");
+			debugEvent("HTTP-Fehler", { ...meta, status: res.status, requestId: res.headers.get("x-request-id") || res.headers.get("x-goog-request-id") || null, ms: Math.round(performance.now() - started), response: String(text).slice(0, 1000) });
+			throw new AiHttpError(res.status, text);
+		}
+		debugEvent("HTTP-Erfolg", { ...meta, status: res.status, requestId: res.headers.get("x-request-id") || res.headers.get("x-goog-request-id") || null, ms: Math.round(performance.now() - started) });
 		return res;
 	}
 
-	// Tool-Schemas für Google bereinigen: der OpenAI-Kompat-Layer von Google übersetzt sie ziemlich
-	// direkt in Gemini's natives Function-Calling-Schema (OpenAPI-3.0-Subset). Felder wie
-	// minItems/maxItems (z.B. bei ask_choice) sind dort NICHT zulässig und lösen bei Gemma
-	// häufig einen generischen "500 INTERNAL" aus — deshalb vor dem Senden entfernen.
+	// =========================================================================
+	// Tool-Schemas für Google bereinigen: der Kompat-Layer übersetzt in Geminis
+	// natives Schema (OpenAPI-3.0-Subset) — minItems/maxItems & Co. lösen dort
+	// gern einen generischen "500 INTERNAL" aus.
+	// =========================================================================
+	const DROPPED_SCHEMA_KEYS = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema", "examples"]);
 	function sanitizeToolSchema(schema) {
 		if (!schema || typeof schema !== "object") return schema;
 		if (Array.isArray(schema)) return schema.map(sanitizeToolSchema);
-		const drop = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema"]);
 		const out = {};
 		for (const k of Object.keys(schema)) {
-			if (drop.has(k)) continue;
+			if (DROPPED_SCHEMA_KEYS.has(k)) continue;
 			const v = schema[k];
-			out[k] = (v && typeof v === "object") ? sanitizeToolSchema(v) : v;
+			out[k] = v && typeof v === "object" ? sanitizeToolSchema(v) : v;
 		}
 		return out;
 	}
 	function toolsForRequest(tools) {
-		if (!tools || !tools.length) return tools;
-		if ((activeProvider() || {}).id !== "google") return tools;
+		if (!tools || !tools.length) return undefined;
+		if (cfg().providerId !== "google") return tools;
 		return tools.map((td) => ({
 			type: td.type,
-			function: { name: td.function.name, description: td.function.description, parameters: sanitizeToolSchema(td.function.parameters) },
+			function: {
+				name: td.function.name,
+				description: td.function.description,
+				parameters: sanitizeToolSchema(td.function.parameters),
+			},
 		}));
 	}
+	// Tool-Schemas sind für Gemma deutlich fehleranfälliger als ein normaler
+	// Chat-Aufruf. Sie werden daher nur dann geschickt, wenn der aktuelle Auftrag
+	// tatsächlich eine Aktion oder Recherche verlangt — nie bei „hi“/„denk mal
+	// nach“. Das bewahrt Tool-Calling, beseitigt aber die unnötigen 500er.
+	const TOOL_INTENT_RE = /\b(seite|seiten|notiz|notizen|karteikarte|karteikarten|karte\b|karten\b|stapel|deck|lösche|loesch|erstell|anleg|verschieb|hänge|haenge|ergänz|ergaenz|ersetz|such|finde|liste|zeig.*seiten|lies|lese|zusammenfass|recherch|notebooklm)\b/i;
+	function shouldOfferTools(userText) {
+		return TOOL_INTENT_RE.test(String(userText || ""));
+	}
+	const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-	// Verbindungstest: fragt die Modell-Liste ab (für die Statusanzeige).
+	// =========================================================================
+	// Status / Modelle / Embeddings
+	// =========================================================================
+	// Basis-URL ist immer vollständig (bei Google inkl. /v1beta/openai) — nie "/v1" anhängen.
 	async function ping() {
 		const { base, key } = cfg();
 		if (!base) return false;
 		try {
-			// Kein zusätzliches "/v1" anhängen: die Basis-URL enthält bei Google bereits den
-			// vollständigen Pfad (z.B. .../v1beta/openai) — genau wie bei /chat/completions weiter oben.
-			const res = await fetch(base + "/models", {
-				headers: key ? { Authorization: "Bearer " + key } : {},
-			});
+			const res = await fetch(base + "/models", { headers: key ? { Authorization: "Bearer " + key } : {} });
 			return res.ok;
-		} catch {
-			return false;
-		}
+		} catch { return false; }
 	}
-
-	// Fragt ALLE konfigurierten Quellen (Einstellungen → KI) parallel nach ihren Modellen ab
-	// und markiert jedes Ergebnis mit der zugehörigen Quelle — das Modell-Dropdown zeigt so
-	// automatisch alle verfügbaren Modelle aus jedem hinterlegten Server/API-Key gruppiert an.
 	async function listModels() {
 		const providers = (S.settings.aiProviders || []).filter((p) => p.base);
 		const lists = await Promise.all(providers.map(async (pr) => {
 			try {
-				// Auch hier: kein extra "/v1", die Basis-URL ist bereits vollständig (siehe ping() oben).
-				const url = pr.base.replace(/\/+$/, "");
-				const res = await fetch(url + "/models", {
+				const res = await fetch(pr.base.replace(/\/+$/, "") + "/models", {
 					headers: pr.key ? { Authorization: "Bearer " + pr.key } : {},
 				});
 				if (!res.ok) return [];
 				const data = await res.json();
 				return (data.data || []).map((m) => m.id).filter(Boolean).map((id) => ({ id, providerId: pr.id }));
-			} catch {
-				return []; // Quelle gerade nicht erreichbar — einfach überspringen
-			}
+			} catch { return []; } // Quelle gerade nicht erreichbar — überspringen
 		}));
 		return lists.flat();
 	}
-
-	// Embeddings (optional — Modell in den Einstellungen setzen, z.B. gemini-embedding-001 bei Gemini;
-	// das ältere text-embedding-004 wurde von Google mittlerweile abgeschaltet/nicht mehr unterstützt)
 	async function embed(texts) {
 		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
 		const res = await request("/embeddings", { model: S.settings.embedModel, input: texts });
-		const data = await res.json();
-		return data.data.map((d) => d.embedding);
+		return (await res.json()).data.map((d) => d.embedding);
 	}
 
-	// Ein Chat-Aufruf. Mit onDelta/onReasoning wird gestreamt (SSE), sonst normale Antwort.
-	// Reasoning-Modelle (z.B. DeepSeek-R1-artige Endpunkte) senden ihren Denkprozess
-	// meist als `delta.reasoning_content` oder `delta.reasoning` — beides wird erfasst.
+	// =========================================================================
+	// Thinking/Reasoning-Trennung — Reihenfolge:
+	//   1) native API-Felder (Gemini include_thoughts, DeepSeek reasoning_content)
+	//   2) <think>/<thinking>/<reasoning>-Tags im Content
+	//   3) Sticky-Heuristik als letzter Fallback (Gemma & Co. ohne Thought-API)
+	// =========================================================================
+	// Baut ausschließlich Parameter ein, die die Capability-Probe für GENAU dieses
+	// Modell und diesen Endpoint akzeptiert hat. Keine Modellnamen-Listen.
+	function applyThinkingToBody(body, withExtras) {
+		// Ein/Aus ist die einzige Nutzerwahl. Bei „Ein“ überlassen wir die Tiefe
+		// dem dokumentierten Provider-Standard statt selbst Budget-Stufen zu raten.
+		if (!withExtras || S.settings.thinkingEnabled === false) return false;
+		const cap = thinkingCapabilityStore()[thinkingCapabilityKey()];
+		if (!cap || cap.state !== "ready" || !cap.includeThoughts) return false;
+		body.extra_body = { google: { thinking_config: { include_thoughts: true } } };
+		return true;
+	}
+	// Reasoning-Anteile aus message/delta (Feldname je nach Backend verschieden).
+	function reasoningFrom(obj) {
+		if (!obj || typeof obj !== "object") return "";
+		if (typeof obj.reasoning_content === "string" && obj.reasoning_content) return obj.reasoning_content;
+		if (typeof obj.reasoning === "string" && obj.reasoning) return obj.reasoning;
+		if (Array.isArray(obj.content)) {
+			return obj.content
+				.filter((p) => p && (p.thought === true || p.type === "thinking" || p.type === "thought" || p.type === "reasoning"))
+				.map((p) => p.text || p.content || "")
+				.join("");
+		}
+		return "";
+	}
+	// Sichtbarer Antworttext aus string ODER Part-Array (Thought-Parts ausfiltern).
+	function textFrom(content) {
+		if (content == null) return "";
+		if (typeof content === "string") return content;
+		if (Array.isArray(content)) {
+			return content
+				.filter((p) => p && p.thought !== true && p.type !== "thinking" && p.type !== "thought" && p.type !== "reasoning")
+				.map((p) => (typeof p === "string" ? p : (p && (p.text || p.content)) || ""))
+				.join("");
+		}
+		return String(content);
+	}
+
+	// Gemma sendet den Denkblock als <thought> (nicht <think>). Beide Formen
+	// gehören ausschließlich in die Thinking-Box, nie in die sichtbare Antwort.
+	const THINK_TAGS = "think|thinking|thought|reasoning";
+	// Typische "laut denken"-Einleitungen (Deutsch + Englisch).
+	const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i am|i'm going|i'm|let me|let's|my instructions|as per|based on|since the|however,?|plan:|note:|first,|okay,?|ok,|alright,?|looking at|what could|we've|we have|if i\b|instead\b|this is\b|a smart\b|so i\b|wait,?|hmm|actually|perhaps|maybe|probably|for example|in this|in the|the previous|they (have|want|are|might)|their\b|to (test|check|see|verify|make|be|move|refine)|ich sollte|ich muss|ich werde|ich denke|ich kann|ich bin|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
+	// Klarer Nutzer-Antwort-Start (meist Deutsch laut System-Prompt).
+	const ANSWER_START_RE = /^(hallo\b|hi\b|hey\b|klar[,!.\s]|ja[,!.\s]|nein[,!.\s]|gut[,!.\s]|super\b|verstanden\b|alles klar|hier (ist|sind|die|der|das|meine|ein)\b|natürlich\b|gerne\b|okay[,!.\s]*(hier|ich|das|der|die)?|zusammengefasst\b|kurz gesagt|mein (konkreter )?vorschlag|konkret[:\s]|die antwort\b|fertig[:!.]|erledigt\b|ich habe\b|ich leg|ich erstell|ich lösch|ich verschieb|ich änder|seite „|karte „|stapel „|sure[,!.\s]|here('s| is)\b|of course\b)/i;
+	function normalizeThinkPart(s) {
+		return String(s || "").trim().replace(/^\d+[.)]\s*/, "").replace(/^[-*•]\s*/, "");
+	}
+	function isMetaThinkPart(s) {
+		const t = normalizeThinkPart(s);
+		return !t || THINK_LEADIN_RE.test(t);
+	}
+	function isAnswerStartPart(s) {
+		const t = normalizeThinkPart(s);
+		if (!t || t.length < 3 || isMetaThinkPart(t)) return false;
+		return ANSWER_START_RE.test(t);
+	}
+	// Sticky-Heuristik: sieht der ANFANG nach Denkprozess aus, bleibt ALLES
+	// reasoning, bis ein klarer Antwort-Start erkannt wird. Nur für Modelle ohne
+	// getrenntes Reasoning (z.B. Gemma).
+	function stripLeakedReasoning(text) {
+		if (!text) return { content: text, reasoning: "" };
+
+		// Einige OpenAI-kompatible Backends liefern Zeilenumbrüche als literal
+		// <br>-Tags. Der bisherige Satz-Split sah dann den gesamten Block als eine
+		// Einheit und ließ den Denktext durch. Für die Erkennung werden nur diese
+		// Umbrüche normalisiert; die sichtbare Antwort bleibt ansonsten unverändert.
+		const source = String(text);
+		const analysis = source.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ");
+		const parts = analysis.split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/).filter(Boolean);
+		if (!parts.length || !isMetaThinkPart(parts[0])) return { content: source, reasoning: "" };
+
+		// Fail closed: Beginnt die Antwort eindeutig als internes Selbstgespräch,
+		// erscheint davon nie etwas im Chat. Erst ein klarer Antwortbeginn gibt
+		// sichtbaren Text frei. Das gilt auch während des Streamings.
+		let answerStart = -1;
+		for (let i = 1; i < parts.length; i++) {
+			if (isAnswerStartPart(parts[i])) { answerStart = i; break; }
+		}
+		if (answerStart === -1) return { content: "", reasoning: analysis.trim() };
+		return {
+			content: parts.slice(answerStart).join("\n").trim(),
+			reasoning: parts.slice(0, answerStart).join("\n").trim(),
+		};
+	}
+	// Tags heraustrennen; ohne Tags optional die Heuristik anwenden.
+	function splitThink(raw, skipHeuristic) {
+		let reasoning = "";
+		let content = "";
+		const re = new RegExp("<(" + THINK_TAGS + ")>([\\s\\S]*?)<\\/\\1>", "g");
+		let last = 0, m;
+		while ((m = re.exec(raw))) { reasoning += m[2]; content += raw.slice(last, m.index); last = re.lastIndex; }
+		content += raw.slice(last);
+		// Offener (noch streamender) Denk-Block: Rest komplett als Denkprozess.
+		const openMatch = content.match(new RegExp("<(" + THINK_TAGS + ")>"));
+		if (openMatch) { reasoning += content.slice(openMatch.index + openMatch[0].length); content = content.slice(0, openMatch.index); }
+		if (!reasoning && !skipHeuristic) {
+			const leaked = stripLeakedReasoning(content);
+			content = leaked.content;
+			reasoning = leaked.reasoning;
+		}
+		return { content: content.trim(), reasoning: reasoning.trim() };
+	}
+
+	// =========================================================================
+	// Chat-Aufrufe. Mit onDelta/onReasoning → SSE-Streaming, sonst Einmal-Antwort.
+	// Bei 5xx VOR der ersten Ausgabe wird einmal OHNE Thinking-Extras wiederholt
+	// (Googles Kompat-Layer wirft bei manchen Modellen "500 INTERNAL").
+	// =========================================================================
 	async function chatOnce(messages, tools, onDelta, onReasoning) {
+		// Ein 500 vor dem ersten Token darf keinen Chat zerstören. Der bisherige
+		// Code gab bei tool-freien Chats bereits nach ZWEI schnellen Versuchen auf.
+		// Jetzt: vier kontrollierte Versuche mit wachsendem Backoff. Erst wenn Tools
+		// beteiligt sind, ist der letzte Versuch ohne Schema ein lesbarer Fallback.
+		let produced = false;
+		const run = (withExtras, requestTools) => doChat(messages, requestTools, onDelta, onReasoning, withExtras, () => { produced = true; });
+		const plans = [
+			{ label: "Standard", withExtras: true, tools },
+			{ label: "Retry ohne Thinking-Extras", withExtras: false, tools },
+			{ label: "Retry mit gleichem Request", withExtras: false, tools },
+			{ label: tools && tools.length ? "Fallback ohne Tool-Schema" : "Letzter Retry", withExtras: false, tools: tools && tools.length ? null : tools },
+		];
+		const waits = [0, 750, 1800, 3500];
+		let lastError = null;
+		for (let index = 0; index < plans.length; index++) {
+			const plan = plans[index];
+			if (index) {
+				debugEvent("Fallback", { step: plan.label, previousStatus: lastError && lastError.status, waitMs: waits[index] });
+				await sleep(waits[index]);
+			}
+			try {
+				const message = await run(plan.withExtras, plan.tools);
+				debugEvent("KI-Antwort", {
+					stream: !!onDelta, attempt: index + 1, mode: plan.label,
+					content: String(message.content || "").slice(0, 1200), reasoning: String(message.reasoning || "").slice(0, 1200),
+					rawContent: String(message._debugRawContent || "").slice(0, 1600),
+					toolCalls: (message.tool_calls || []).map((tc) => ({ id: tc.id || null, name: (tc.function || {}).name || null, arguments: (tc.function || {}).arguments || "" })).filter((tc) => tc.name),
+				});
+				return message;
+			} catch (error) {
+				const retryable = error instanceof AiHttpError && error.status >= 500 && !produced;
+				if (!retryable) throw error;
+				lastError = error;
+			}
+		}
+		throw lastError || new Error("KI-Anfrage fehlgeschlagen.");
+	}
+	async function doChat(messages, tools, onDelta, onReasoning, withExtras, markProduced) {
 		const { model } = cfg();
 		const body = { model, messages, temperature: 0.4 };
-		// reasoning_effort ist keine allgemeine OpenAI-kompatible Erweiterung.
-		// Darum nur für die OpenAI-Quelle senden; andere Server bleiben kompatibel.
-		const thinking = S.settings.thinkingLevel || "auto";
-		if (thinking !== "auto" && (activeProvider() || {}).id === "openai") body.reasoning_effort = thinking;
-		if (tools && tools.length) { body.tools = toolsForRequest(tools); body.tool_choice = "auto"; }
+		applyThinkingToBody(body, withExtras);
+		const reqTools = toolsForRequest(tools);
+		if (reqTools) { body.tools = reqTools; body.tool_choice = "auto"; }
 		if (!onDelta) {
 			const res = await request("/chat/completions", body);
-			const m = (await res.json()).choices[0].message;
-			// Strukturiertes Reasoning-Feld auch im Nicht-Streaming-Pfad erfassen —
-			// vorher wurde das hier verschluckt (Bug).
-			if (m.reasoning_content && !m.reasoning) m.reasoning = m.reasoning_content;
-			// splitThink IMMER anwenden (vorher nur bei wörtlichem "<think>" — dadurch wurden
-			// <thinking>/<reasoning>-Tags und ungetaggt ausgeschriebenes Denken hier NICHT gefiltert).
-			if (m.content) {
-				const split = splitThink(m.content);
-				m.content = split.content;
-				if (split.reasoning) m.reasoning = (m.reasoning ? m.reasoning + "\n" : "") + split.reasoning;
-			}
-			return m;
+			return finishMessage(await res.json());
 		}
 		body.stream = true;
 		const res = await request("/chat/completions", body);
+		return readStream(res, onDelta, onReasoning, markProduced);
+	}
+	// Einmal-Antwort normalisieren: Reasoning-Felder + Thought-Parts + Tags + Heuristik.
+	function finishMessage(data) {
+		const m = (data && data.choices && data.choices[0] && data.choices[0].message) || { role: "assistant", content: "" };
+		const rawContent = textFrom(m.content);
+		let reasoning = reasoningFrom(m);
+		const split = splitThink(rawContent, !!reasoning);
+		m.content = split.content;
+		if (split.reasoning) reasoning = reasoning ? reasoning + "\n" + split.reasoning : split.reasoning;
+		if (reasoning) m.reasoning = reasoning; else delete m.reasoning;
+		m._debugRawContent = rawContent;
+		return m;
+	}
+	async function readStream(res, onDelta, onReasoning, markProduced) {
 		const reader = res.body.getReader();
 		const dec = new TextDecoder();
 		const msg = { role: "assistant", content: "", reasoning: "", tool_calls: [] };
 		let rawContent = "";
+		let apiReasoning = ""; // echtes API-Reasoning — wird nie von der Heuristik überschrieben
 		let buf = "";
+		const emitReasoning = () => { if (onReasoning && msg.reasoning) onReasoning(msg.reasoning); };
 		for (;;) {
 			const { done, value } = await reader.read();
 			if (done) break;
@@ -176,60 +433,117 @@ export const AI = (() => {
 				const s = line.trim();
 				if (!s.startsWith("data:")) continue;
 				const payload = s.slice(5).trim();
-				if (payload === "[DONE]") continue;
-				let delta;
-				try { delta = JSON.parse(payload).choices[0].delta || {}; } catch { continue; }
-				const reasoningPiece = delta.reasoning_content || delta.reasoning || "";
-				if (reasoningPiece) { msg.reasoning += reasoningPiece; if (onReasoning) onReasoning(msg.reasoning); }
-				if (delta.content) {
-					rawContent += delta.content;
-					const split = splitThink(rawContent, !!msg.reasoning);
+				if (!payload || payload === "[DONE]") continue;
+				let delta = null;
+				try {
+					const choice = (JSON.parse(payload).choices || [])[0];
+					delta = (choice && choice.delta) || null;
+				} catch { continue; }
+				if (!delta) continue; // z.B. reine usage-Chunks
+				markProduced();
+				const apiPiece = reasoningFrom(delta);
+				if (apiPiece) { apiReasoning += apiPiece; msg.reasoning = apiReasoning; emitReasoning(); }
+				const textPiece = textFrom(delta.content);
+				if (textPiece) {
+					rawContent += textPiece;
+					// Heuristik nur ohne natives API-Reasoning anwenden.
+					const split = splitThink(rawContent, !!apiReasoning);
 					msg.content = split.content;
-					if (split.reasoning) { msg.reasoning = split.reasoning; if (onReasoning) onReasoning(msg.reasoning); }
+					msg.reasoning = split.reasoning
+						? (apiReasoning ? apiReasoning + "\n" + split.reasoning : split.reasoning)
+						: apiReasoning;
+					emitReasoning();
 					onDelta(msg.content);
 				}
 				for (const tc of delta.tool_calls || []) {
 					const i = tc.index || 0;
-					msg.tool_calls[i] = msg.tool_calls[i]
-						|| { id: "", type: "function", function: { name: "", arguments: "" } };
-					if (tc.id) msg.tool_calls[i].id = tc.id;
-					if (tc.function && tc.function.name) msg.tool_calls[i].function.name += tc.function.name;
-					if (tc.function && tc.function.arguments) msg.tool_calls[i].function.arguments += tc.function.arguments;
+					const slot = (msg.tool_calls[i] = msg.tool_calls[i] || { id: "", type: "function", function: { name: "", arguments: "" } });
+					if (tc.id) slot.id = tc.id;
+					if (tc.function && tc.function.name) slot.function.name += tc.function.name;
+					if (tc.function && tc.function.arguments) slot.function.arguments += tc.function.arguments;
 				}
 			}
 		}
 		if (!msg.tool_calls.length) delete msg.tool_calls;
 		if (!msg.reasoning) delete msg.reasoning;
+		msg._debugRawContent = rawContent;
 		return msg;
 	}
+	// Assistant-Nachricht für den API-Verlauf bereinigen: KEINE internen Felder
+	// (reasoning etc.) zurücksenden — unbekannte Felder sind eine 500er-Quelle.
+	function toApiMessage(msg) {
+		const out = { role: "assistant", content: msg.content || "" };
+		if (msg.tool_calls && msg.tool_calls.length) out.tool_calls = msg.tool_calls;
+		return out;
+	}
 
-	// Einfacher Einmal-Aufruf ohne Tools (z.B. für den PDF-Ingest)
+	// Isolierter Verbindungstest für die Debug-Schaltfläche. Er schreibt nichts in
+	// den Chat und gibt weder API-Key noch vollständige Inhalte preis. Die drei
+	// Proben trennen Server-/Thinking-/Tool-Schema-Fehler sauber voneinander.
+	async function debugProbe() {
+		const config = cfg();
+		const messages = [
+			{ role: "system", content: "Antworte ausschließlich mit OK." },
+			{ role: "user", content: "Schreibe OK." },
+		];
+		const runProbe = async (name, tools, withExtras) => {
+			const started = performance.now();
+			try {
+				const message = await doChat(messages, tools, null, null, withExtras, () => {});
+				return {
+					name, ok: true, ms: Math.round(performance.now() - started),
+					answer: String(message.content || "").slice(0, 120),
+					hasReasoning: !!message.reasoning,
+				};
+			} catch (error) {
+				return {
+					name, ok: false, ms: Math.round(performance.now() - started),
+					status: error instanceof AiHttpError ? error.status : null,
+					error: String((error && error.message) || error).slice(0, 260),
+				};
+			}
+		};
+		const pingOk = await ping();
+		const tests = [
+			await runProbe("Antwort mit Thinking-Parametern", null, true),
+			await runProbe("Antwort ohne Thinking-Parameter", null, false),
+			await runProbe("Antwort mit Tool-Schema", TOOLS.defs, false),
+		];
+		return {
+			provider: config.providerId || "—", model: config.model || "—",
+			base: config.base || "—", pingOk, tests,
+		};
+	}
+
+	// Einfacher Einmal-Aufruf ohne Tools (z.B. für den PDF-Ingest).
 	async function complete(prompt, system) {
 		const messages = [];
 		if (system) messages.push({ role: "system", content: system });
 		messages.push({ role: "user", content: prompt });
-		const msg = await chatOnce(messages);
-		return msg.content || "";
+		return (await chatOnce(messages)).content || "";
 	}
 
-	function systemPrompt(type) {
+	// =========================================================================
+	// System-Prompt
+	// =========================================================================
+	function systemPrompt(type, toolsEnabled) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const lines = [
 			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App.",
 			"Antworte auf Deutsch, kompakt, in kleinen Schritten. Nutze LaTeX für Formeln (z.B. $I = U / R$ inline oder $$...$$ für eigene Zeilen) — das wird live gerendert.",
 			"Beim Schreiben in Seiten kannst du neben Markdown auch die Impala67-Erweiterungen nutzen: {red}Text{/} bzw. {bg-yellow}Text{/} für Text-/Hintergrundfarbe (gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==Text== zum Hervorheben und ':::columns ... :::split ... :::end' für Spalten.",
-			"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern/zu verschieben/zu löschen und Karteikarten zu erstellen. Nutze sie aktiv:",
-			"- Merkt sich die Person etwas schlecht oder beantwortet etwas falsch: lege mit create_flashcard eine karte an (kurze Frage, kurze Antwort).",
-			"- Soll Wissen gespeichert werden: create_page oder append_to_page.",
-			"- Seite verschieben: move_page. Seite löschen: delete_page (landet im Papierkorb; die App fragt im Chat zwingend nach Bestätigung).",
-			"- Karte löschen: delete_flashcard. Stapel löschen: delete_deck (inkl. Unterstapel und aller enthaltenen Karten). Beide landen im Papierkorb; die App fragt im Chat zwingend nach Bestätigung.",
-			"- Für inhaltliche Fragen zu den Unterlagen: semantic_search (semantisch) oder search_notes (Stichwort), dann read_page.",
-			"- Ist eine Anfrage mehrdeutig und eine Entscheidung nötig, bevor du fortfährst (z.B. mehrere passende Seiten): nutze ask_choice mit 2-5 kurzen Optionen, statt zu raten.",
-			"- Sage nach Tool-Nutzung kurz, was du angelegt/geändert/verschoben/gelöscht hast.",
+			...(toolsEnabled ? [
+				"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern/zu verschieben/zu löschen und Karteikarten zu erstellen. Nutze sie aktiv.",
+				"- Wissen speichern: create_page oder append_to_page. Seite verschieben/löschen: move_page/delete_page (Löschen wird bestätigt).",
+				"- Karten: create_flashcard; löschen: delete_flashcard/delete_deck (wird bestätigt).",
+				"- Unterlagen: semantic_search oder search_notes, dann read_page. Bei Mehrdeutigkeit: ask_choice mit 2–5 Optionen.",
+				"- Sage nach Tool-Nutzung kurz, was angelegt/geändert/verschoben/gelöscht wurde.",
+			] : [
+				"Für diese Anfrage sind keine Werkzeuge freigegeben. Nenne keine internen Funktionsnamen und behaupte keine Änderungen an Seiten oder Karten.",
+			]),
 			"- WICHTIG: Schreibe NIEMALS Selbstgespräche/Meta-Kommentare in die sichtbare Antwort, z.B. NICHT 'The user said...', 'I should respond...', 'Ich sollte...', 'Der Nutzer möchte...'. Deine Antwort beginnt IMMER direkt mit dem eigentlichen Inhalt für die Person, ohne jede Erklärung deines Vorgehens.",
 			"- Falls du dennoch vor der eigentlichen Antwort ausführlich laut nachdenken musst, packe das AUSSCHLIESSLICH in <think>...</think> VOR der Antwort, niemals ungetaggt in den sichtbaren Text. Beispiel: '<think>Nutzer fragt X, ich prüfe zuerst Y.</think>Hier ist die Antwort: ...'",
 		];
-
 		if (cur) {
 			lines.push('Aktuell geöffnete Seite: "' + cur.title + '"');
 			if (type === "side") {
@@ -239,76 +553,18 @@ export const AI = (() => {
 		} else {
 			lines.push("Aktuell ist keine Seite geöffnet.");
 		}
-
 		lines.push("Vorhandene Seiten: " + (STATE.pageTitles().slice(0, 80).join(" | ") || "(noch keine)"));
-		// Nur was die Nutzerin/der Nutzer selbst explizit in den Einstellungen einträgt landet hier —
-		// keine automatisch abgeleiteten Annahmen über die Person.
+		// Nur explizit in den Einstellungen hinterlegte Zusatz-Anweisungen — keine
+		// automatisch abgeleiteten Annahmen über die Person.
 		if (S.settings.customInstructions && S.settings.customInstructions.trim()) {
 			lines.push("Zusätzliche Anweisungen (von der Nutzerin/dem Nutzer in den Einstellungen hinterlegt):\n" + S.settings.customInstructions.trim());
 		}
 		return lines.join("\n");
 	}
 
-	// Manche lokalen Reasoning-Modelle (z.B. DeepSeek-R1-Distillate über LM Studio) schreiben
-	// ihren Denkprozess NICHT in ein separates reasoning-Feld, sondern direkt als <think>...</think>
-	// innerhalb von content. Das trennen wir heraus, damit es nicht ungefiltert im Chat auftaucht.
-	// Deckt die gängigsten Tag-Namen ab, die lokale Reasoning-Modelle verwenden
-	// (DeepSeek-R1-artige Modelle nutzen meist <think>, manche <thinking> oder <reasoning>).
-	const THINK_TAGS = "think|thinking|reasoning";
-
-	// Fallback für Modelle, die GAR KEINE Tags nutzen (z.B. Gemma über die Google-API) und
-	// ihren Denkprozess einfach als normalen Fließtext VOR die eigentliche Antwort schreiben
-	// — manchmal sogar ohne Leerzeichen dazwischen ("...flashcards.Hallo!"). Da es dabei keine
-	// technische Kennzeichnung gibt, wird satzweise heuristisch erkannt: typische "laut denken"-
-	// Einleitungen (Deutsch + Englisch, da manche Modelle auf Englisch "denken") werden von
-	// vorne weg als Denkprozess abgetrennt, bis ein Satz übrig bleibt, der NICHT mehr danach aussieht.
-	const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i am|i'm going|i'm|let me|my instructions|as per|based on|since the|however,|plan:|\d+[.)]|note:|first,|okay,|ok,|alright,|ich sollte|ich muss|ich werde|ich denke|ich kann|ich bin|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
-	function stripLeakedReasoning(text) {
-		if (!text) return { content: text, reasoning: "" };
-		// In Sätze zerlegen: normale Satzenden (". ", "! ", "? ", Zeilenumbruch) UND der Sonderfall
-		// "Satzende direkt gefolgt von Großbuchstabe ohne Leerzeichen" (typisches Leck-Artefakt).
-		const parts = text.split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/).filter(Boolean);
-		if (!parts.length) return { content: text, reasoning: "" };
-		if (!THINK_LEADIN_RE.test(parts[0].trim())) return { content: text, reasoning: "" };
-		if (parts.length < 2) {
-			// Noch nur der (unvollständige) erste Satz da, sieht aber schon nach Denkprozess
-			// aus — komplett als Denkprozess werten (verhindert das kurze Aufblitzen von
-			// Meta-Text als "Antwort" ganz am Anfang des Streamings).
-			return { content: "", reasoning: text };
-		}
-		// FIX: nicht mehr beim ERSTEN nicht-passenden Satz abbrechen — das ließ z.B. einen
-		// Satz wie "I am the AI Coach von Impala67." (matcht kein Einleitungs-Muster) als
-		// sichtbaren Text durchrutschen, während der ganze Rest des Denkprozesses danach
-		// ungefiltert im Chat landete. Bis zum LETZTEN noch meta aussehenden Satz weiterscannen.
-		let lastMatch = 0;
-		for (let i = 1; i < parts.length; i++) {
-			if (THINK_LEADIN_RE.test(parts[i].trim())) lastMatch = i;
-		}
-		if (lastMatch >= parts.length - 1) return { content: "", reasoning: text };
-		return { content: parts.slice(lastMatch + 1).join(" ").trim(), reasoning: parts.slice(0, lastMatch + 1).join(" ").trim() };
-	}
-
-	function splitThink(raw, skipHeuristic) {
-		let reasoning = "";
-		let content = "";
-		const re = new RegExp("<(" + THINK_TAGS + ")>([\\s\\S]*?)<\\/\\1>", "g");
-		let last = 0, m;
-		while ((m = re.exec(raw))) { reasoning += m[2]; content += raw.slice(last, m.index); last = re.lastIndex; }
-		content += raw.slice(last);
-		// Noch offener Denkprozess-Block (Streaming noch nicht fertig) — Rest komplett als Denkprozess werten
-		const openMatch = content.match(new RegExp("<(" + THINK_TAGS + ")>"));
-		if (openMatch) { reasoning += content.slice(openMatch.index + openMatch[0].length); content = content.slice(0, openMatch.index); }
-		// Kein Tag gefunden/verwendet — heuristisch nach ungetaggtem, ausgeschriebenem Denkprozess suchen.
-		if (!reasoning && !skipHeuristic) {
-			const leaked = stripLeakedReasoning(content);
-			content = leaked.content;
-			reasoning = leaked.reasoning;
-		}
-		return { content: content.trim(), reasoning: reasoning.trim() };
-	}
-
-	// Chat speichern ohne APP (app.js exportiert saveCurrentChat nicht — und Import
-	// von chat-fullscreen.js hier wäre zyklisch: chat-fullscreen → ai → …).
+	// =========================================================================
+	// Chat-Persistenz (ohne APP-Import — wäre zyklisch: chat-fullscreen → ai → …)
+	// =========================================================================
 	function persistChat(type) {
 		const messages = type === "side" ? S.sideChat : S.chat;
 		const idKey = type === "side" ? "sideChatId" : "currentChatId";
@@ -329,23 +585,90 @@ export const AI = (() => {
 		CHATS.save(list);
 	}
 
-	// Agent-Loop mit Streaming: Text und Denkprozess erscheinen live, Tools laufen
-	// dazwischen. Seiten-ändernde Tools erzeugen Edit-Karten — die werden am ENDE
-	// dieses Turns (nach der finalen KI-Nachricht) angehängt, nicht mitten im Chat
-	// und nicht ans absolute Chat-Ende aller Turns.
+	// =========================================================================
+	// Lösch-Tools: EINE gemeinsame Bestätigungs-Pipeline (statt 3× Copy-Paste).
+	// Jede resolve() liefert: Fehler ODER { detail, question, runArgs, cancelled }.
+	// =========================================================================
+	const DELETE_SPECS = {
+		delete_page: {
+			resolve(args) {
+				const title = String((args && args.page_title) || "").trim();
+				if (!title) return { error: "delete_page: page_title fehlt." };
+				const pg = STATE.findPage(title);
+				if (!pg) return { error: "Seite nicht gefunden: " + title };
+				const countKids = (id) => {
+					let n = 0;
+					for (const p of Object.values(S.pages)) if (!p.trashed && p.parentId === id) n += 1 + countKids(p.id);
+					return n;
+				};
+				const subN = countKids(pg.id);
+				return {
+					detail: pg.title,
+					question: subN
+						? 'Seite „' + pg.title + '“ inkl. ' + subN + ' Unterseite(n) in den Papierkorb?'
+						: 'Seite „' + pg.title + '“ in den Papierkorb?',
+					runArgs: { page_title: pg.title },
+					cancelled: { cancelled: true, title: pg.title, note: "Löschen abgebrochen — nichts geändert." },
+				};
+			},
+		},
+		delete_flashcard: {
+			resolve(args) {
+				const front = String((args && args.front) || "").trim();
+				if (!front) return { error: "delete_flashcard: front fehlt." };
+				const card = TOOLS.findCard(front, args && args.deck);
+				if (!card) return { error: "Karte nicht gefunden: " + front };
+				const short = String(card.front || "").replace(/\s+/g, " ").trim();
+				const label = short.length > 60 ? short.slice(0, 60) + "…" : short;
+				return {
+					detail: short,
+					question: 'Karte „' + label + '“ in den Papierkorb?',
+					runArgs: { front: card.front, deck: card.deck },
+					cancelled: { cancelled: true, front: card.front, note: "Löschen abgebrochen — nichts geändert." },
+				};
+			},
+		},
+		delete_deck: {
+			resolve(args) {
+				const name = String((args && args.deck) || "").trim();
+				if (!name) return { error: "delete_deck: deck fehlt." };
+				const match = TOOLS.resolveDeckName(name);
+				if (!match) return { error: "Stapel nicht gefunden: " + name };
+				const cardN = Object.values(S.cards).filter((c) => {
+					if (c.trashed) return false;
+					const d = c.deck || "Standard";
+					return d === match || d.startsWith(match + "::");
+				}).length;
+				return {
+					detail: match,
+					question: cardN
+						? 'Stapel „' + match + '“ inkl. ' + cardN + ' Karte(n) in den Papierkorb?'
+						: 'Stapel „' + match + '“ in den Papierkorb?',
+					runArgs: { deck: match },
+					cancelled: { cancelled: true, deck: match, note: "Löschen abgebrochen — nichts geändert." },
+				};
+			},
+		},
+	};
+
+	// =========================================================================
+	// Agent-Loop: Streaming, Tools, Bestätigungen, Edit-Karten
+	// =========================================================================
 	async function agent(userText, type, onStep) {
 		type = type || "side";
 		const targetChat = type === "side" ? S.sideChat : S.chat;
-		// Edit-Karten dieses Agent-Laufs — flush nach finaler Assistant-Nachricht
-		const pendingEdits = [];
-		function flushPendingEdits() {
-			if (!pendingEdits.length) return;
-			for (const ed of pendingEdits) targetChat.push(ed);
-			pendingEdits.length = 0;
-			if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-		}
+		const renderLog = () => { if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog(); };
 
-		// Ein Anhang gehört ausschließlich zu dem Chat, in dem er ausgewählt wurde.
+		// Edit-Karten dieses Laufs — erst NACH der finalen Antwort anhängen.
+		const pendingEdits = [];
+		const flushPendingEdits = () => {
+			if (!pendingEdits.length) return;
+			targetChat.push(...pendingEdits);
+			pendingEdits.length = 0;
+			renderLog();
+		};
+
+		// Anhänge gehören exklusiv zu dem Chat, in dem sie gewählt wurden.
 		const useAttachment = S.pendingAttachmentTarget === type;
 		const image = useAttachment ? S.pendingImage : null;
 		const textFile = useAttachment ? S.pendingTextFile : null;
@@ -357,9 +680,9 @@ export const AI = (() => {
 			S.pendingAttachmentTarget = null;
 		}
 		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile, pdfFile });
-		// Multimodal: angehängte Bilder werden als image_url mitgeschickt (Gemini/Gemma Vision).
-		// Angehängte Textdateien werden dem Modell als Kontext mitgegeben, im Chat aber nur als Datei-Chip gezeigt.
-		const history = targetChat.slice(-16)
+
+		// Verlauf: Bilder als image_url (Vision), Text-/PDF-Anhänge als Kontext.
+		const history = targetChat.slice(-HISTORY_LIMIT)
 			.filter((m) => m.role === "user" || m.role === "assistant")
 			.map((m) => {
 				let content = m.content || "";
@@ -368,323 +691,151 @@ export const AI = (() => {
 				if (m.image) return { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] };
 				return { role: m.role, content };
 			});
-		const messages = [{ role: "system", content: systemPrompt(type) }, ...history];
+		const agentTools = shouldOfferTools(userText) ? TOOLS.defs : null;
+		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools) }, ...history];
+		debugEvent("Tool-Modus", { enabled: !!agentTools, reason: agentTools ? "Aktueller Auftrag benötigt Tools" : "Normaler Chat ohne Tool-Bedarf" });
 
-		// Streaming-Renders bündeln (max. 1 pro Frame) statt bei JEDEM einzelnen Token das
-		// komplette Chat-Log samt LaTeX/Code neu aufzubauen — das ließ besonders den Beginn
-		// einer Antwort (viele winzige Denkprozess-Häppchen, meist VOR der sichtbaren Antwort)
-		// spürbar ruckeln/laggen.
+		// Max. 1 Chat-Log-Rebuild pro Frame (LaTeX/Code-Rendering ist teuer).
 		let renderQueued = false;
-		function scheduleRender() {
+		const scheduleRender = () => {
 			if (renderQueued) return;
 			renderQueued = true;
-			requestAnimationFrame(() => {
-				renderQueued = false;
-				if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-			});
-		}
+			requestAnimationFrame(() => { renderQueued = false; renderLog(); });
+		};
 
-		for (let step = 0; step < 8; step++) {
+		// Frage-Karte anzeigen und auf Klick warten (ask_choice + Lösch-Bestätigungen).
+		async function waitForAnswer(question, options, status) {
+			const qMid = U.uid();
+			if (type === "side") {
+				document.body.classList.remove("panel-collapsed");
+				if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
+			}
+			S.aiStatus = status;
+			S.aiDraft = "";
+			S.aiThinkingDraft = "";
+			const answer = await new Promise((resolve) => {
+				pendingChoices[qMid] = resolve;
+				targetChat.push({ mid: qMid, role: "question", question, options, answered: false });
+				renderLog();
+			});
+			const qMsg = targetChat.find((x) => x.mid === qMid);
+			if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
+			S.aiStatus = "…denkt nach…";
+			return answer;
+		}
+		const pushToolChip = (name, detail, error) => {
+			targetChat.push({ mid: U.uid(), role: "tool", name, detail: String(detail || "").slice(0, 80), error: !!error });
+		};
+		const pushToolResult = (tc, out) => {
+			messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
+		};
+		const persist = () => { try { persistChat(type); } catch (e) { console.warn("Chat speichern:", e); } };
+
+		for (let step = 0; step < MAX_AGENT_STEPS; step++) {
 			S.aiDraft = "";
 			S.aiThinkingDraft = "";
 			const msg = await chatOnce(
-				messages, TOOLS.defs,
+				messages, agentTools,
 				(text) => { S.aiDraft = text; scheduleRender(); },
-				(text) => { S.aiThinkingDraft = text; scheduleRender(); }
+				(text) => { S.aiThinkingDraft = text; scheduleRender(); },
 			);
-			messages.push(msg);
-			if (msg.tool_calls && msg.tool_calls.length) {
-				for (const tc of msg.tool_calls) {
-					let args = {};
-					try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ungültiges JSON — leere Argumente */ }
+			// Bereinigt in den API-Verlauf (ohne interne Felder wie reasoning).
+			messages.push(toApiMessage(msg));
 
-					// delete_page: IMMER Chat-Bestätigung erzwingen (wie ask_choice), bevor gelöscht wird.
-					// Soft-Delete → Papierkorb inkl. Unterseiten. Abbruch = kein dispatch.
-					if (tc.function.name === "delete_page") {
-						const titleArg = String((args && args.page_title) || "").trim();
-						const pg = titleArg ? STATE.findPage(titleArg) : null;
-						if (!pg) {
-							const err = { error: titleArg ? ("Seite nicht gefunden: " + titleArg) : "delete_page: page_title fehlt." };
-							if (onStep) onStep("delete_page");
-							targetChat.push({
-								mid: U.uid(), role: "tool", name: "delete_page",
-								detail: String(err.error).slice(0, 80), error: true,
-							});
-							scheduleRender();
-							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
-							continue;
-						}
-						// Unterseiten zählen (nur aktive), für den Bestätigungstext
-						const countKids = (id) => {
-							let n = 0;
-							for (const p of Object.values(S.pages)) {
-								if (!p.trashed && p.parentId === id) n += 1 + countKids(p.id);
-							}
-							return n;
-						};
-						const subN = countKids(pg.id);
-						const qText = subN
-							? ('Seite „' + pg.title + '“ inkl. ' + subN + ' Unterseite(n) in den Papierkorb?')
-							: ('Seite „' + pg.title + '“ in den Papierkorb?');
-						const qMid = U.uid();
-						if (type === "side") {
-							document.body.classList.remove("panel-collapsed");
-							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
-						}
-						S.aiStatus = "Warte auf Bestätigung…";
-						S.aiDraft = "";
-						S.aiThinkingDraft = "";
-						const answer = await new Promise((resolve) => {
-							pendingChoices[qMid] = resolve;
-							targetChat.push({
-								mid: qMid,
-								role: "question",
-								question: qText,
-								options: ["Ja, löschen", "Abbrechen"],
-								answered: false,
-							});
-							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						});
-						const qMsg = targetChat.find((x) => x.mid === qMid);
-						if (qMsg) {
-							qMsg.answered = true;
-							qMsg.answer = answer;
-						}
-						S.aiStatus = "…denkt nach…";
-						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
-						let out;
-						if (!confirmed) {
-							out = { cancelled: true, title: pg.title, note: "Löschen abgebrochen — nichts geändert." };
-						} else {
-							try {
-								out = await TOOLS.run("delete_page", { page_title: pg.title });
-							} catch (e) {
-								out = { error: String(e) };
-							}
-						}
-						if (onStep) onStep("delete_page");
-						// Tool-Chip nur bei Erfolg/Fehler — Abbruch bleibt an der beantworteten Frage-Karte
-						if (!out.cancelled) {
-							targetChat.push({
-								mid: U.uid(), role: "tool", name: "delete_page",
-								detail: String(pg.title).slice(0, 80),
-								error: !!(out && out.error),
-							});
-						}
-						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						messages.push({
-							role: "tool",
-							tool_call_id: tc.id,
-							content: JSON.stringify(out),
-						});
-						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_page:", e); }
-						continue;
-					}
-
-					// delete_flashcard: IMMER Chat-Bestätigung erzwingen (wie delete_page/ask_choice).
-					if (tc.function.name === "delete_flashcard") {
-						const frontArg = String((args && args.front) || "").trim();
-						const card = frontArg ? TOOLS.findCard(frontArg, args.deck) : null;
-						if (!card) {
-							const err = { error: frontArg ? ("Karte nicht gefunden: " + frontArg) : "delete_flashcard: front fehlt." };
-							if (onStep) onStep("delete_flashcard");
-							targetChat.push({
-								mid: U.uid(), role: "tool", name: "delete_flashcard",
-								detail: String(err.error).slice(0, 80), error: true,
-							});
-							scheduleRender();
-							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
-							continue;
-						}
-						const shortFront = String(card.front || "").replace(/\s+/g, " ").trim();
-						const qText = 'Karte „' + (shortFront.length > 60 ? shortFront.slice(0, 60) + "…" : shortFront) + '“ in den Papierkorb?';
-						const qMid = U.uid();
-						if (type === "side") {
-							document.body.classList.remove("panel-collapsed");
-							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
-						}
-						S.aiStatus = "Warte auf Bestätigung…";
-						S.aiDraft = "";
-						S.aiThinkingDraft = "";
-						const answer = await new Promise((resolve) => {
-							pendingChoices[qMid] = resolve;
-							targetChat.push({ mid: qMid, role: "question", question: qText, options: ["Ja, löschen", "Abbrechen"], answered: false });
-							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						});
-						const qMsg = targetChat.find((x) => x.mid === qMid);
-						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
-						S.aiStatus = "…denkt nach…";
-						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
-						let out;
-						if (!confirmed) {
-							out = { cancelled: true, front: card.front, note: "Löschen abgebrochen — nichts geändert." };
-						} else {
-							try { out = await TOOLS.run("delete_flashcard", { front: card.front, deck: card.deck }); }
-							catch (e) { out = { error: String(e) }; }
-						}
-						if (onStep) onStep("delete_flashcard");
-						if (!out.cancelled) {
-							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_flashcard", detail: shortFront.slice(0, 80), error: !!(out && out.error) });
-						}
-						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
-						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_flashcard:", e); }
-						continue;
-					}
-
-					// delete_deck: IMMER Chat-Bestätigung erzwingen — inkl. Unterstapel + Kartenzahl im Text.
-					if (tc.function.name === "delete_deck") {
-						const nameArg = String((args && args.deck) || "").trim();
-						const match = nameArg ? TOOLS.resolveDeckName(nameArg) : null;
-						if (!match) {
-							const err = { error: nameArg ? ("Stapel nicht gefunden: " + nameArg) : "delete_deck: deck fehlt." };
-							if (onStep) onStep("delete_deck");
-							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_deck", detail: String(err.error).slice(0, 80), error: true });
-							scheduleRender();
-							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(err) });
-							continue;
-						}
-						const cardN = Object.values(S.cards).filter((c) => !c.trashed && ((c.deck || "Standard") === match || (c.deck || "Standard").startsWith(match + "::"))).length;
-						const qText = cardN
-							? ('Stapel „' + match + '“ inkl. ' + cardN + ' Karte(n) in den Papierkorb?')
-							: ('Stapel „' + match + '“ in den Papierkorb?');
-						const qMid = U.uid();
-						if (type === "side") {
-							document.body.classList.remove("panel-collapsed");
-							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
-						}
-						S.aiStatus = "Warte auf Bestätigung…";
-						S.aiDraft = "";
-						S.aiThinkingDraft = "";
-						const answer = await new Promise((resolve) => {
-							pendingChoices[qMid] = resolve;
-							targetChat.push({ mid: qMid, role: "question", question: qText, options: ["Ja, löschen", "Abbrechen"], answered: false });
-							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						});
-						const qMsg = targetChat.find((x) => x.mid === qMid);
-						if (qMsg) { qMsg.answered = true; qMsg.answer = answer; }
-						S.aiStatus = "…denkt nach…";
-						const confirmed = String(answer || "").toLowerCase().startsWith("ja");
-						let out;
-						if (!confirmed) {
-							out = { cancelled: true, deck: match, note: "Löschen abgebrochen — nichts geändert." };
-						} else {
-							try { out = await TOOLS.run("delete_deck", { deck: match }); }
-							catch (e) { out = { error: String(e) }; }
-						}
-						if (onStep) onStep("delete_deck");
-						if (!out.cancelled) {
-							targetChat.push({ mid: U.uid(), role: "tool", name: "delete_deck", detail: String(match).slice(0, 80), error: !!(out && out.error) });
-						}
-						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
-						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach delete_deck:", e); }
-						continue;
-					}
-
-					// Rückfrage (Notion-Style): pausiert bis Klick, nur die Frage-Karte in der UI
-					// (kein extra Tool-Chip „Rückfrage gestellt“ — das wirkt wie Notion-Umfrage).
-					if (tc.function.name === "ask_choice") {
-						const norm = TOOLS.normalizeAskChoice(args);
-						if (norm.error) {
-							if (onStep) onStep("ask_choice");
-							targetChat.push({
-								mid: U.uid(), role: "tool", name: "ask_choice",
-								detail: String(norm.error).slice(0, 80), error: true,
-							});
-							scheduleRender();
-							messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(norm) });
-							continue;
-						}
-						const qMid = U.uid();
-						// Side-Chat: Panel sichtbar machen, sonst sieht man die Frage-Karte nicht.
-						if (type === "side") {
-							document.body.classList.remove("panel-collapsed");
-							if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
-						}
-						S.aiStatus = "Warte auf deine Auswahl…";
-						S.aiDraft = "";
-						S.aiThinkingDraft = "";
-						const answer = await new Promise((resolve) => {
-							pendingChoices[qMid] = resolve;
-							targetChat.push({
-								mid: qMid,
-								role: "question",
-								question: norm.question,
-								options: norm.options,
-								answered: false,
-							});
-							if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						});
-						const qMsg = targetChat.find((x) => x.mid === qMid);
-						if (qMsg) {
-							qMsg.answered = true;
-							qMsg.answer = answer;
-						}
-						// Kein tool-Chip bei Erfolg — die beantwortete Karte reicht (Notion-Style).
-						S.aiStatus = "…denkt nach…";
-						if (onStep) onStep("ask_choice");
-						if (type === "side") RENDER.renderChat(); else RENDER.renderMainChatLog();
-						messages.push({
-							role: "tool",
-							tool_call_id: tc.id,
-							content: JSON.stringify({ answer, question: norm.question }),
-						});
-						// Zwischenstand speichern (beide Chat-Typen) — ohne APP.*
-						try { persistChat(type); } catch (e) { console.warn("Chat speichern nach ask_choice:", e); }
-						continue;
-					}
-
-					const mutating = MUTATING_TOOLS.has(tc.function.name);
-					let beforePageId = null;
-					let before = { title: "", content: "" };
-					if (mutating && tc.function.name !== "create_page") {
-						const pg = STATE.findPage(args.page_title);
-						if (pg) { beforePageId = pg.id; before = { title: pg.title, content: pg.content }; }
-					}
-					let out;
-					try {
-						out = await TOOLS.run(tc.function.name, args);
-					} catch (e) {
-						out = { error: String(e) };
-					}
-					if (onStep) onStep(tc.function.name);
-					// Tool-Anzeige im Chat (wie in Notion): welche Aktion lief — bei der
-					// semantischen Suche inklusive des verwendeten Embedding-Modells.
-					let detail = args.page_title || args.title || args.query || "";
-					if (tc.function.name === "semantic_search") detail = (detail ? detail + " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
-					targetChat.push({ mid: U.uid(), role: "tool", name: tc.function.name, detail: String(detail).slice(0, 80), error: !!(out && out.error) });
-					scheduleRender();
-					if (mutating && out && !out.error) {
-						let pageId = beforePageId;
-						let created = false;
-						if (tc.function.name === "create_page") {
-							const pg = STATE.findPage(args.title);
-							if (pg) { pageId = pg.id; created = true; }
-						}
-						if (pageId && S.pages[pageId]) {
-							const after = { title: S.pages[pageId].title, content: S.pages[pageId].content };
-							// Noch nicht pushen — erst nach der finalen KI-Antwort dieses Turns
-							// (Änderungsanzeige am Ende der Nachricht, nicht mitten im Turn / Chat-Ende).
-							pendingEdits.push({
-								mid: U.uid(), role: "edit", pageId, pageTitle: after.title,
-								before, after, created, undone: false,
-							});
-						}
-					}
-					messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
-				}
-				continue;
+			// Keine Tool-Calls → finale Antwort.
+			if (!msg.tool_calls || !msg.tool_calls.length) {
+				const finalMsg = {
+					mid: U.uid(), role: "assistant", content: msg.content || "",
+					reasoning: msg.reasoning || null, reasoningExpanded: false,
+				};
+				S.aiDraft = "";
+				S.aiThinkingDraft = "";
+				targetChat.push(finalMsg);
+				flushPendingEdits();
+				return finalMsg.content;
 			}
-			const finalMsg = {
-				mid: U.uid(), role: "assistant", content: msg.content || "",
-				reasoning: msg.reasoning || null, reasoningExpanded: false,
-			};
-			S.aiDraft = "";
-			S.aiThinkingDraft = "";
-			targetChat.push(finalMsg);
-			flushPendingEdits();
-			return finalMsg.content;
+
+			for (const tc of msg.tool_calls) {
+				const name = tc.function.name;
+				let args = {};
+				try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* leere Argumente */ }
+
+				// --- Lösch-Tools: gemeinsame Bestätigungs-Pipeline ---
+				if (DELETE_SPECS[name]) {
+					const spec = DELETE_SPECS[name].resolve(args);
+					if (spec.error) {
+						if (onStep) onStep(name);
+						pushToolChip(name, spec.error, true);
+						scheduleRender();
+						pushToolResult(tc, { error: spec.error });
+						continue;
+					}
+					const answer = await waitForAnswer(spec.question, ["Ja, löschen", "Abbrechen"], "Warte auf Bestätigung…");
+					const confirmed = String(answer || "").toLowerCase().startsWith("ja");
+					let out;
+					if (!confirmed) {
+						out = spec.cancelled;
+					} else {
+						try { out = await TOOLS.run(name, spec.runArgs); }
+						catch (e) { out = { error: String(e) }; }
+					}
+					if (onStep) onStep(name);
+					// Abbruch: kein Tool-Chip — die beantwortete Frage-Karte reicht.
+					if (!out.cancelled) pushToolChip(name, spec.detail, out && out.error);
+					renderLog();
+					pushToolResult(tc, out);
+					persist();
+					continue;
+				}
+
+				// --- Rückfrage (ask_choice): pausiert bis Klick, nur Frage-Karte in der UI ---
+				if (name === "ask_choice") {
+					const norm = TOOLS.normalizeAskChoice(args);
+					if (norm.error) {
+						if (onStep) onStep(name);
+						pushToolChip(name, norm.error, true);
+						scheduleRender();
+						pushToolResult(tc, norm);
+						continue;
+					}
+					const answer = await waitForAnswer(norm.question, norm.options, "Warte auf deine Auswahl…");
+					if (onStep) onStep(name);
+					renderLog();
+					pushToolResult(tc, { answer, question: norm.question });
+					persist();
+					continue;
+				}
+
+				// --- Normale Tools (inkl. Seiten-Änderungen mit Edit-Karte) ---
+				const mutating = MUTATING_TOOLS.has(name);
+				let beforePageId = null;
+				let before = { title: "", content: "" };
+				if (mutating && name !== "create_page") {
+					const pg = STATE.findPage(args.page_title);
+					if (pg) { beforePageId = pg.id; before = { title: pg.title, content: pg.content }; }
+				}
+				let out;
+				try { out = await TOOLS.run(name, args); }
+				catch (e) { out = { error: String(e) }; }
+				if (onStep) onStep(name);
+				let detail = args.page_title || args.title || args.query || "";
+				if (name === "semantic_search") detail = (detail ? detail + " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
+				pushToolChip(name, detail, out && out.error);
+				scheduleRender();
+				if (mutating && out && !out.error) {
+					let pageId = beforePageId;
+					let created = false;
+					if (name === "create_page") {
+						const pg = STATE.findPage(args.title);
+						if (pg) { pageId = pg.id; created = true; }
+					}
+					if (pageId && S.pages[pageId]) {
+						const after = { title: S.pages[pageId].title, content: S.pages[pageId].content };
+						pendingEdits.push({ mid: U.uid(), role: "edit", pageId, pageTitle: after.title, before, after, created, undone: false });
+					}
+				}
+				pushToolResult(tc, out);
+			}
 		}
 		S.aiDraft = "";
 		S.aiThinkingDraft = "";
@@ -694,27 +845,24 @@ export const AI = (() => {
 		return abort;
 	}
 
-	// Wird vom Klick-Handler einer Rückfrage-Karte aufgerufen, um den wartenden agent()-Aufruf fortzusetzen.
-	// Gibt true zurück, wenn eine offene Rückfrage aufgelöst wurde (Doppelklicks sonst harmlos).
+	// =========================================================================
+	// Rückfragen auflösen (Klick auf eine Frage-Karte) & Antwort anpassen
+	// =========================================================================
 	function resolveChoice(mid, answer) {
-		if (!pendingChoices[mid]) return false;
 		const resolve = pendingChoices[mid];
+		if (!resolve) return false;
 		delete pendingChoices[mid];
 		resolve(answer);
 		return true;
 	}
-
 	function hasPendingChoice() {
 		return Object.keys(pendingChoices).length > 0;
 	}
-
-	// Formuliert eine bestehende Antwort länger/kürzer um (wie Notions "Antwort anpassen").
-	// historyMessages ist der Gesprächsverlauf bis inkl. der anzupassenden Antwort.
+	// Formuliert eine bestehende Antwort länger/kürzer/gleich um.
 	async function refine(historyMessages, instruction, onDelta) {
 		const messages = [{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }];
-		const msg = await chatOnce(messages, null, onDelta);
-		return msg.content || "";
+		return (await chatOnce(messages, null, onDelta)).content || "";
 	}
 
-	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, MODEL_PRESETS };
+	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

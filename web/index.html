@@ -48,6 +48,8 @@ window.onunhandledrejection = function (event) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" crossorigin="anonymous">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" crossorigin="anonymous"></script>
+<!-- Lokale OCR-Ausführung für Handschrift-/Textsuche in GoodNotes-Heften. Die Bilddaten verlassen den Browser nicht. -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body class="panel-collapsed">
 <div id="bg"></div>
@@ -122,11 +124,18 @@ window.onunhandledrejection = function (event) {
 			<div id="sideContextChip" hidden></div>
 			<div id="pendingChip" hidden></div>
 			<button type="button" id="btnAttach" title="PDF oder Bild anhängen">+</button>
-			<button type="button" id="btnModelMenu" class="composer-tool" title="Modell wählen">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="#1b1c1f"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="#1b1c1f"/></svg>
-			</button>
-			<textarea id="chatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>
-			<button type="submit" title="Senden">➤</button>
+			<div class="composer-body">
+				<textarea id="chatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>
+			</div>
+			<div class="composer-actions">
+				<div class="composer-actions-left">
+					<button type="button" id="btnAttach" title="PDF oder Bild anhängen">+</button>
+					<button type="button" id="btnModelMenu" class="composer-tool" title="Modell wählen">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="#1b1c1f"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="#1b1c1f"/></svg>
+					</button>
+				</div>
+				<button id="chatSubmit" type="submit" title="Senden" disabled>↑</button>
+			</div>
 			<div id="modelMenu" class="model-menu" hidden></div>
 		</form>
 	</aside>
