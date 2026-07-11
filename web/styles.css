@@ -438,18 +438,28 @@ button.danger { color: var(--danger); }
 	min-height: 0; padding: 0; flex-shrink: 0; font-size: 14px; display: flex; align-items: center; justify-content: center; }
 #chatForm button[type="submit"]:hover, .chat-form-full button[type="submit"]:hover { background: #8fd0ff; }
 
-/* Thinking-/Reasoning-Anzeige: live (mini/ausklappbar) und finalisiert (eingeklappt) */
-.think-box { margin: 4px 0; padding: 8px 10px; border: 1px solid var(--surface-hover);
-	border-radius: 8px; background: var(--surface-faint); }
-.think-box.done { padding: 2px 0; background: none; border: none; }
-.think-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text2); }
-.think-head button, .think-toggle { background: transparent; border: none; color: var(--text2);
-	font-size: 12px; padding: 2px 6px; min-height: 0; }
-.think-head button:hover, .think-toggle:hover { color: var(--text); background: var(--surface-hover); }
-.think-body { font-size: 12.5px; color: var(--text2); white-space: pre-wrap;
-	font-family: Menlo, Consolas, monospace; margin-top: 4px; }
-.think-body.mini { max-height: 2.8em; overflow: hidden; }
-.think-body.full { max-height: 260px; overflow-y: auto; }
+/* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live (Streaming) und
+   finalisiert — Icon+Label+Chevron-Kopf, sanfte Höhen-Animation beim Auf-/
+   Zuklappen, weicher Fade-Verlauf statt hartem Abschneiden in der Live-Vorschau. */
+.think-box { margin: 4px 0 6px; border: 1px solid var(--edge-soft); border-radius: 10px;
+	background: var(--surface-faint); overflow: hidden; transition: border-color .15s ease; }
+.think-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 10px;
+	background: transparent; border: none; color: var(--text2); font-size: 12.5px; font-weight: 600;
+	text-align: left; min-height: 0; border-radius: 0; }
+.think-toggle:hover { background: var(--surface-hover); color: var(--text); }
+.think-icon { flex-shrink: 0; font-size: 13px; line-height: 1; }
+.think-box.live .think-icon { animation: thinkPulse 1.3s ease-in-out infinite; }
+@keyframes thinkPulse { 50% { opacity: .35; } }
+.think-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.think-chevron { flex-shrink: 0; font-size: 9px; color: var(--text2); transition: transform .15s ease; }
+.think-toggle[aria-expanded="true"] .think-chevron { transform: rotate(90deg); }
+.think-body-wrap { position: relative; max-height: 0; overflow: hidden; transition: max-height .2s ease; }
+.think-box.peek .think-body-wrap { max-height: 3em; }
+.think-box.expanded .think-body-wrap { max-height: 320px; }
+.think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+	height: 16px; background: linear-gradient(180deg, transparent, var(--surface-faint)); pointer-events: none; }
+.think-body { padding: 0 10px 9px; font-size: 12.5px; line-height: 1.5; color: var(--text2); white-space: pre-wrap; }
+.think-box.expanded .think-body { max-height: 320px; overflow-y: auto; }
 
 /* Highlight newly added blocks from diff */
 .blk.highlight-add .blk-body {
@@ -1144,12 +1154,26 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 
 
 /* ---------- Mobile (≤ 768px): Off-Canvas-Sidebar + größere Klickziele ---------- */
-/* ☰ ist auf Desktop sichtbar (linke Spalte einklappen); Mobile: Off-Canvas öffnen */
+/* ☰ ist auf Desktop sichtbar (linke Spalte einklappen); Mobile: Off-Canvas öffnen.
+   z-index 1250: bewusst ÜBER der Bottom-Nav (1200) — vorher lag die Sidebar bei
+   z-index 30 UNTER der Bottom-Nav, die dadurch den Sidebar-Fuß (Einstellungen,
+   Papierkorb, Sync, NotebookLM) verdeckte, sobald die Sidebar geöffnet wurde.
+   Die Bottom-Nav wird zusätzlich weiter unten per display:none ausgeblendet,
+   solange body.sidebar-open aktiv ist — der höhere z-index ist die zweite
+   Absicherung. */
 @media (max-width: 768px) {
 	#app { grid-template-columns: minmax(0, 1fr) !important; }
-	#sidebar { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(82vw, 320px);
-		background: var(--bg1); transform: translateX(-105%); transition: transform 0.2s ease; }
+	#sidebar { position: fixed; z-index: 1250; left: 0; top: 0; bottom: 0; width: min(82vw, 320px);
+		background: var(--bg1); transform: translateX(-105%); transition: transform 0.2s ease;
+		padding-bottom: max(14px, env(safe-area-inset-bottom)); }
 	body.sidebar-open #sidebar { transform: none; box-shadow: 12px 0 40px var(--overlay-bg); }
+	/* Abdunkler hinter der geöffneten Sidebar — zugleich die visuelle Fläche, auf die
+	   der Schließen-Klick-Handler in app.js reagiert (Klick außerhalb #sidebar). */
+	body.sidebar-open::before {
+		content: ""; position: fixed; inset: 0; z-index: 1240;
+		background: var(--overlay-bg); animation: sidebarScrimIn .18s ease;
+	}
+	@keyframes sidebarScrimIn { from { opacity: 0; } to { opacity: 1; } }
 	#panel { display: none; }
 	/* Tabbar-KI-Knopf (✦) ausblenden: er schaltet nur "panel-collapsed" um, wird auf
 	   Mobile aber per CSS (siehe extras.js) zum Vollbild-Mini-Panel gezwungen — ein
@@ -1218,7 +1242,10 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 
 /* ---------- Mobile Bottom-Nav ---------- */
 /* Layering-Stack (Mobile):
-   content/app 1 · sidebar 30 · FABs 5 · menus 40 · mobileNav 1200 · overlay 1400 · palette 1500 · toasts 2000 */
+   content/app 1 · FABs 5 · menus 40 · mobileNav 1200 · sidebar-scrim 1240 ·
+   sidebar (offen) 1250 · panel 1300 · attach-menu 1350 · overlay 1400 · palette 1500 ·
+   heft-scan 1600 · toasts 2000. Die Bottom-Nav wird zusätzlich per display:none
+   ausgeblendet, sobald die Sidebar, ein Dialog oder die Palette offen ist. */
 #mobileNav { display: none; }
 @media (max-width: 768px) {
 	/* padding-bottom nur einmal (inkl. Safe-Area) — doppelte Definition entfernt */
@@ -1239,9 +1266,13 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 	#mobileNav .mobile-add { width: 44px; height: 44px; min-height: 44px; align-self: center; justify-self: center;
 		border-radius: 50%; color: var(--bg0); background: var(--accent); }
 	#mobileNav .mobile-add:hover { color: var(--bg0); background: var(--accent); filter: brightness(1.08); }
-	/* Dialoge/Settings/Palette offen → Bottom-Nav aus dem Weg (kein Klick-/Sicht-Konflikt) */
+	/* Dialoge/Settings/Palette/Sidebar-Drawer offen → Bottom-Nav aus dem Weg (kein
+	   Klick-/Sicht-Konflikt). body.sidebar-open ist der eigentliche Bugfix: die
+	   Off-Canvas-Sidebar lag vorher unter der Bottom-Nav, der „Einstellungen“-Knopf
+	   im Sidebar-Fuß war dadurch unerreichbar. */
 	body:has(#overlay:not([hidden])) #mobileNav,
 	body:has(#palette:not([hidden])) #mobileNav,
+	body.sidebar-open #mobileNav,
 	body:not(.panel-collapsed) #mobileNav {
 		display: none !important;
 	}
@@ -1723,6 +1754,16 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	text-align: center; color: rgba(255,255,255,.7); }
 .heft-scan-shots { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; flex-shrink: 0; }
 .heft-scan-shots img { height: 72px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); }
+/* Scanner v2: klickbare Scan-Kacheln (öffnen die Nachbearbeitung) + Hinweis-Pille */
+.heft-scan-shot { position: relative; flex-shrink: 0; min-height: 0; padding: 0; border-radius: 8px;
+	overflow: hidden; border: 1px solid rgba(255,255,255,.25); background: transparent; }
+.heft-scan-shot img { border: none; border-radius: 0; }
+.heft-scan-shot span { position: absolute; left: 4px; bottom: 4px; font-size: 10px; font-weight: 700;
+	color: #fff; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: 6px; pointer-events: none; }
+.heft-scan-shot:hover { border-color: var(--accent); }
+.heft-scan-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+	max-width: 86%; text-align: center; font-size: 12px; color: rgba(255,255,255,.75);
+	background: rgba(0,0,0,.45); padding: 5px 12px; border-radius: 999px; pointer-events: none; }
 .heft-scan-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;
 	padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
 .heft-scan-shutter { width: 62px; height: 62px; min-height: 62px; padding: 0; border-radius: 50%;
@@ -1733,6 +1774,25 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 .heft-scan-actions button, .heft-scan-nocam button { background: var(--accent); color: #081018;
 	font-weight: 650; border-radius: 10px; }
 .heft-scan-actions button:disabled { background: rgba(255,255,255,.14); color: rgba(255,255,255,.5); }
+
+/* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter-Chips, Aktionen */
+.heft-scan-edit { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
+	background: rgba(3,5,10,.97); }
+.heft-scan-editstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+	overflow: hidden; padding: 10px; }
+.heft-scan-editstage canvas { touch-action: none; border-radius: 6px; box-shadow: 0 18px 48px rgba(0,0,0,.5); cursor: crosshair; }
+.heft-scan-modes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 8px 16px 0; flex-shrink: 0; }
+.heft-scan-modes button { min-height: 32px; padding: 4px 14px; border-radius: 999px; font-size: 12.5px;
+	font-weight: 650; background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
+.heft-scan-modes button.active { background: var(--accent); color: #081018; }
+.heft-scan-editbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; flex-shrink: 0;
+	padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.heft-scan-editbar button { background: rgba(255,255,255,.1); color: #fff; border-radius: 10px; }
+.heft-scan-editbar .heft-scan-apply { background: var(--accent); color: #081018; font-weight: 650; }
+@media (pointer: coarse) {
+	.heft-scan-modes button { min-height: 40px; }
+	.heft-scan-editbar button { min-height: 44px; }
+}
 
 /* Eingebettetes Heft in Notion-Seiten (:::heft <id>) — unterbricht den Textfluss */
 .heft-embed { display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 12px 14px;

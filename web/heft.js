@@ -13,9 +13,12 @@ import { U } from "./util.js";
 //   Bild, Importieren (Bilder + PDF via pdf.js), Dateien scannen (echter PDF-Scanner)
 // - Bilder wie in GoodNotes: einfügen (Datei/Kamera), mit dem Auswahl-Werkzeug verschieben,
 //   skalieren (Griff unten rechts) und löschen (✕ oben rechts oder Entf-Taste)
-// - PDF-Scanner: Kamera (getUserMedia) → Aufbereitung (Kontrast-/Weißabgleich über
-//   Luminanz-Perzentile) → eigener minimaler PDF-1.4-Writer (JPEG/DCTDecode) →
-//   PDF-Download und/oder Scans als neue Heftseiten
+// - Dokument-Scanner v2 („Dateien scannen"): Kamera (getUserMedia) → automatische
+//   Dokumenterkennung (größte helle, unbunte Fläche → 4 Ecken) → perspektivische
+//   Entzerrung (Homographie, bilineares Sampling) → Beleuchtung glätten + Filter
+//   (Farbe / S/W / Graustufen / Foto) → Nachbearbeitung pro Scan (Ecken ziehen,
+//   Filter, Drehen, Auto-Zuschnitt) → eigener minimaler PDF-1.4-Writer (JPEG/
+//   DCTDecode) → PDF-Download und/oder Scans als neue Heftseiten
 //
 // Persistenz: EIN Blob je Heft (heft:<pageId>) in IndexedDB. Damit wandert der Inhalt
 // automatisch durch Export/Backup und den Drive-Sync (Blob-Pipeline). Nur Metadaten
@@ -39,7 +42,7 @@ export const HEFT = (() => {
 	let sel = null;          // { pageIdx, imgId } — ausgewähltes Bild (Auswahl-Werkzeug)
 	let insertPos = "after"; // ＋-Menü: "before" | "after" | "last"
 	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / ＋)
-	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[] }
+	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[], edit, busy }
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
 	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [] });
@@ -701,14 +704,19 @@ export const HEFT = (() => {
 		return at;
 	}
 
-	// ---------- Dateien scannen: echter PDF-Scanner (Kamera → Aufbereitung → PDF) ----------
+	// ---------- Dateien scannen: Dokument-Scanner v2 ----------
+	// Wie GoodNotes/Office-Scanner: Aufnahme → automatische Dokumenterkennung →
+	// perspektivische Entzerrung → Beleuchtung glätten + Filter → Nachbearbeitung
+	// (Ecken ziehen, Filter wechseln, drehen) → PDF und/oder Heftseiten
+	const SCAN_MODES = [["color", "Farbe"], ["bw", "S/W"], ["gray", "Graustufen"], ["photo", "Foto"]];
 	async function openScanner() {
 		if (scanUI) return;
 		const wrap = document.createElement("div");
 		wrap.className = "heft-scan";
 		wrap.innerHTML =
 			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen">✕</button></div>' +
-			'<div class="heft-scan-stage"><video autoplay playsinline muted></video><div class="heft-scan-frame"></div></div>' +
+			'<div class="heft-scan-stage"><video autoplay playsinline muted></video><div class="heft-scan-frame"></div>' +
+				'<div class="heft-scan-hint">Dokument flach in den Rahmen halten — Zuschnitt und Aufbereitung passieren automatisch. Scans unten antippen zum Nachbearbeiten.</div></div>' +
 			'<div class="heft-scan-shots"></div>' +
 			'<div class="heft-scan-bar">' +
 				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen"></button>' +
@@ -718,7 +726,7 @@ export const HEFT = (() => {
 				'</div>' +
 			'</div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [] };
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false };
 		wrap.addEventListener("click", onScanClick);
 		try {
 			scanUI.stream = await navigator.mediaDevices.getUserMedia({
@@ -753,29 +761,63 @@ export const HEFT = (() => {
 		else if (d.hescanpdf) { if (scanUI.shots.length) scanFinishPdf(); }
 		else if (d.hescanheft) { if (scanUI.shots.length) scanFinishHeft(); }
 		else if (d.hescanpick) scanPickFiles();
+		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
+		else if (d.hescaneditback) closeEdit();
+		else if (d.hescanmode) {
+			if (scanUI.edit) {
+				scanUI.edit.mode = d.hescanmode;
+				scanUI.edit.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === scanUI.edit.mode));
+			}
+		}
+		else if (d.hescanrot) { if (scanUI.edit) scanUI.edit.rot = (scanUI.edit.rot + 1) % 4; }
+		else if (d.hescanauto) {
+			const ed = scanUI.edit;
+			if (ed && ed.img) { const sh = scanUI.shots[ed.i]; ed.quad = detectQuad(ed.img, sh.w, sh.h); drawEdit(); }
+		}
+		else if (d.hescandel) {
+			if (scanUI.edit) { const i = scanUI.edit.i; closeEdit(); scanUI.shots.splice(i, 1); renderShots(); }
+		}
+		else if (d.hescandone) finishEdit();
 	}
-	function scanCapture() {
+	async function scanCapture() {
 		const video = scanUI.wrap.querySelector("video");
-		if (!video || !video.videoWidth) return;
-		const c = document.createElement("canvas");
-		c.width = video.videoWidth; c.height = video.videoHeight;
-		c.getContext("2d").drawImage(video, 0, 0);
-		enhanceScan(c);
-		addShot(c.toDataURL("image/jpeg", 0.88), c.width, c.height);
+		if (!video || !video.videoWidth || scanUI.busy) return;
+		scanUI.busy = true;
+		const shut = scanUI.wrap.querySelector(".heft-scan-shutter");
+		if (shut) shut.disabled = true;
+		try {
+			const c = document.createElement("canvas");
+			c.width = video.videoWidth; c.height = video.videoHeight;
+			c.getContext("2d").drawImage(video, 0, 0);
+			await addRawScan(c.toDataURL("image/jpeg", 0.92), c.width, c.height);
+		} catch (e) { console.warn("Heft: Scan fehlgeschlagen", e); }
+		if (scanUI) {
+			scanUI.busy = false;
+			const s2 = scanUI.wrap.querySelector(".heft-scan-shutter");
+			if (s2) s2.disabled = false;
+		}
 	}
-	function addShot(dataUrl, w, h) {
-		scanUI.shots.push({ dataUrl, w, h });
+	// Rohbild → Dokument erkennen → entzerren → aufbereiten → in den Scan-Streifen
+	async function addRawScan(src, w, h) {
+		const img = await loadImg(src);
+		const sh = { src, w, h, quad: detectQuad(img, w, h), mode: "color", rot: 0, out: null };
+		await processShot(sh);
+		if (!scanUI) return;
+		scanUI.shots.push(sh);
+		renderShots();
+	}
+	function renderShots() {
+		if (!scanUI) return;
 		const strip = scanUI.wrap.querySelector(".heft-scan-shots");
-		const img = document.createElement("img");
-		img.src = dataUrl;
-		img.title = "Scan " + scanUI.shots.length;
-		strip.appendChild(img);
+		strip.innerHTML = scanUI.shots.map((sh, i) =>
+			'<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
+				'<img src="' + sh.out.dataUrl + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span></button>').join("");
 		strip.scrollLeft = strip.scrollWidth;
+		const n = scanUI.shots.length;
 		const pdfBtn = scanUI.wrap.querySelector("[data-hescanpdf]");
 		const heftBtn = scanUI.wrap.querySelector("[data-hescanheft]");
-		pdfBtn.disabled = false; heftBtn.disabled = false;
-		pdfBtn.textContent = "📄 Als PDF speichern (" + scanUI.shots.length + ")";
-		heftBtn.textContent = "📓 In Heft einfügen (" + scanUI.shots.length + ")";
+		if (pdfBtn) { pdfBtn.disabled = !n; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
+		if (heftBtn) { heftBtn.disabled = !n; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
 	}
 	function scanPickFiles() {
 		const inp = document.createElement("input");
@@ -784,22 +826,16 @@ export const HEFT = (() => {
 		inp.onchange = async () => {
 			for (const f of Array.from(inp.files || [])) {
 				try {
-					const im = await fileToImageData(f, 2200);
+					const im = await fileToImageData(f, 2400);
 					if (!scanUI) return;
-					const el = new Image();
-					await new Promise((res, rej) => { el.onload = res; el.onerror = rej; el.src = im.src; });
-					const c = document.createElement("canvas");
-					c.width = el.naturalWidth; c.height = el.naturalHeight;
-					c.getContext("2d").drawImage(el, 0, 0);
-					enhanceScan(c);
-					if (scanUI) addShot(c.toDataURL("image/jpeg", 0.88), c.width, c.height);
+					await addRawScan(im.src, im.w, im.h);
 				} catch (e) { console.warn("Heft: Scan-Foto fehlgeschlagen", e); }
 			}
 		};
 		inp.click();
 	}
-	// Scan-Aufbereitung: Kontrast strecken über 2%/98%-Luminanz-Perzentile (Papier wird weiß,
-	// Text satter) — bewusst kanalgleich, damit Farben nicht kippen
+	// „Foto"-Filter: Kontrast strecken über 2%/98%-Luminanz-Perzentile — bewusst
+	// kanalgleich, damit Farben nicht kippen (für Fotos statt Dokumenten)
 	function enhanceScan(cv) {
 		const x = cv.getContext("2d");
 		const d = x.getImageData(0, 0, cv.width, cv.height);
@@ -819,6 +855,358 @@ export const HEFT = (() => {
 			px[i + 2] = clamp((px[i + 2] - lo) * 255 / span);
 		}
 		x.putImageData(d, 0, 0);
+	}
+	// ---------- Scanner-Pipeline: Erkennung → Entzerrung → Aufbereitung ----------
+	const loadImg = (src) => new Promise((res, rej) => {
+		const im = new Image();
+		im.onload = () => res(im);
+		im.onerror = () => rej(new Error("Bild dekodieren fehlgeschlagen"));
+		im.src = src;
+	});
+	const dist2d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+	function quadArea(q) {
+		let a = 0;
+		for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p[0] * r[1] - r[0] * p[1]; }
+		return Math.abs(a) / 2;
+	}
+	// Automatische Dokumenterkennung: Papier = größte helle, unbunte zusammenhängende
+	// Fläche. Verkleinert analysieren, Flood-Fill, Ecken über Extremwerte von x±y.
+	// Findet sich nichts Plausibles, bleibt ein voller Rahmen mit 4% Rand.
+	function detectQuad(img, w, h) {
+		const dw = 320, kk = dw / w, dh = Math.max(8, Math.round(h * kk));
+		const c = document.createElement("canvas");
+		c.width = dw; c.height = dh;
+		const cx = c.getContext("2d");
+		cx.drawImage(img, 0, 0, dw, dh);
+		const d = cx.getImageData(0, 0, dw, dh).data;
+		const n = dw * dh;
+		const score = new Float32Array(n);
+		let mean = 0;
+		for (let i = 0; i < n; i++) {
+			const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+			const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+			const v = mx - (mx - mn) * 0.9; // hell und unbunt → hoher Wert (Papier)
+			score[i] = v; mean += v;
+		}
+		mean /= n;
+		let hiMean = 0, hiN = 0;
+		for (let i = 0; i < n; i++) if (score[i] > mean) { hiMean += score[i]; hiN++; }
+		const thr = hiN ? (mean + hiMean / hiN) / 2 : mean;
+		const mask = new Uint8Array(n);
+		for (let i = 0; i < n; i++) mask[i] = score[i] >= thr ? 1 : 0;
+		// Größte zusammenhängende Fläche (iterativer Flood-Fill, 4er-Nachbarschaft)
+		const seen = new Uint8Array(n), stack = new Int32Array(n);
+		let best = null, bestSize = 0;
+		for (let s0 = 0; s0 < n; s0++) {
+			if (!mask[s0] || seen[s0]) continue;
+			let top = 0;
+			stack[top++] = s0; seen[s0] = 1;
+			const px = [];
+			while (top) {
+				const p = stack[--top];
+				px.push(p);
+				const py = (p / dw) | 0, pxx = p % dw;
+				if (pxx > 0 && mask[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[top++] = p - 1; }
+				if (pxx < dw - 1 && mask[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[top++] = p + 1; }
+				if (py > 0 && mask[p - dw] && !seen[p - dw]) { seen[p - dw] = 1; stack[top++] = p - dw; }
+				if (py < dh - 1 && mask[p + dw] && !seen[p + dw]) { seen[p + dw] = 1; stack[top++] = p + dw; }
+			}
+			if (px.length > bestSize) { bestSize = px.length; best = px; }
+		}
+		const full = [[w * 0.04, h * 0.04], [w * 0.96, h * 0.04], [w * 0.96, h * 0.96], [w * 0.04, h * 0.96]];
+		if (!best || bestSize < n * 0.12) return full;
+		let tl = 0, tr = 0, br = 0, bl = 0, vTl = Infinity, vTr = -Infinity, vBr = -Infinity, vBl = Infinity;
+		for (const p of best) {
+			const py = (p / dw) | 0, pxx = p % dw;
+			const s = pxx + py, df = pxx - py;
+			if (s < vTl) { vTl = s; tl = p; }
+			if (s > vBr) { vBr = s; br = p; }
+			if (df > vTr) { vTr = df; tr = p; }
+			if (df < vBl) { vBl = df; bl = p; }
+		}
+		const pt = (p) => [(p % dw) / kk, ((p / dw) | 0) / kk];
+		const q = [pt(tl), pt(tr), pt(br), pt(bl)];
+		// Plausibilität: genug Fläche, keine entarteten Kanten — sonst voller Rahmen
+		if (quadArea(q) < w * h * 0.15) return full;
+		for (let i = 0; i < 4; i++) if (dist2d(q[i], q[(i + 1) % 4]) < Math.min(w, h) * 0.15) return full;
+		return q;
+	}
+	// Homographie Ziel-Rechteck → Quell-Quad: 8×8-Gleichungssystem, Gauß mit Pivot
+	function homography(quad, W, H) {
+		const dst = [[0, 0], [W, 0], [W, H], [0, H]];
+		const A = [], b = [];
+		for (let i = 0; i < 4; i++) {
+			const X = dst[i][0], Y = dst[i][1], x = quad[i][0], y = quad[i][1];
+			A.push([X, Y, 1, 0, 0, 0, -X * x, -Y * x]); b.push(x);
+			A.push([0, 0, 0, X, Y, 1, -X * y, -Y * y]); b.push(y);
+		}
+		for (let c = 0; c < 8; c++) {
+			let piv = c;
+			for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+			const tA = A[c]; A[c] = A[piv]; A[piv] = tA;
+			const tb = b[c]; b[c] = b[piv]; b[piv] = tb;
+			const pv = A[c][c] || 1e-9;
+			for (let r = c + 1; r < 8; r++) {
+				const f = A[r][c] / pv;
+				for (let k2 = c; k2 < 8; k2++) A[r][k2] -= f * A[c][k2];
+				b[r] -= f * b[c];
+			}
+		}
+		const hm = new Float64Array(8);
+		for (let r = 7; r >= 0; r--) {
+			let s = b[r];
+			for (let k2 = r + 1; k2 < 8; k2++) s -= A[r][k2] * hm[k2];
+			hm[r] = s / (A[r][r] || 1e-9);
+		}
+		return hm; // srcX = (h0·X + h1·Y + h2) / (h6·X + h7·Y + 1), srcY analog
+	}
+	// Perspektivische Entzerrung: Zielgröße aus den Kantenlängen des Quads,
+	// Rückwärts-Mapping mit bilinearem Sampling — kein Verzerren, keine Treppen
+	function warpPerspective(img, iw, ih, quad) {
+		let W = Math.round(Math.max(dist2d(quad[0], quad[1]), dist2d(quad[3], quad[2])));
+		let H = Math.round(Math.max(dist2d(quad[0], quad[3]), dist2d(quad[1], quad[2])));
+		const k = Math.min(1, 1600 / Math.max(W, H));
+		W = Math.max(8, Math.round(W * k));
+		H = Math.max(8, Math.round(H * k));
+		const sc = document.createElement("canvas");
+		sc.width = iw; sc.height = ih;
+		const scx = sc.getContext("2d");
+		scx.drawImage(img, 0, 0);
+		const sd = scx.getImageData(0, 0, iw, ih).data;
+		const out = document.createElement("canvas");
+		out.width = W; out.height = H;
+		const ox = out.getContext("2d");
+		const od = ox.createImageData(W, H);
+		const op = od.data;
+		const hm = homography(quad, W, H);
+		for (let y = 0; y < H; y++) {
+			for (let x = 0; x < W; x++) {
+				const den = hm[6] * x + hm[7] * y + 1;
+				let sx = (hm[0] * x + hm[1] * y + hm[2]) / den;
+				let sy = (hm[3] * x + hm[4] * y + hm[5]) / den;
+				if (sx < 0) sx = 0; else if (sx > iw - 1.001) sx = iw - 1.001;
+				if (sy < 0) sy = 0; else if (sy > ih - 1.001) sy = ih - 1.001;
+				const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0;
+				const i00 = (y0 * iw + x0) * 4, i10 = i00 + 4, i01 = i00 + iw * 4, i11 = i01 + 4;
+				const o = (y * W + x) * 4;
+				op[o] = sd[i00] * (1 - fx) * (1 - fy) + sd[i10] * fx * (1 - fy) + sd[i01] * (1 - fx) * fy + sd[i11] * fx * fy;
+				op[o + 1] = sd[i00 + 1] * (1 - fx) * (1 - fy) + sd[i10 + 1] * fx * (1 - fy) + sd[i01 + 1] * (1 - fx) * fy + sd[i11 + 1] * fx * fy;
+				op[o + 2] = sd[i00 + 2] * (1 - fx) * (1 - fy) + sd[i10 + 2] * fx * (1 - fy) + sd[i01 + 2] * (1 - fx) * fy + sd[i11 + 2] * fx * fy;
+				op[o + 3] = 255;
+			}
+		}
+		ox.putImageData(od, 0, 0);
+		return out;
+	}
+	// Beleuchtungskarte des Papiers: stark verkleinern, 2× Max-Filter (Text fällt aus
+	// der Schätzung heraus), 2× Box-Blur — beim Anwenden bilinear hochgerechnet
+	function backgroundMap(cv) {
+		const bw = Math.max(8, Math.round(cv.width / 16));
+		const bh = Math.max(8, Math.round(cv.height / 16));
+		const c = document.createElement("canvas");
+		c.width = bw; c.height = bh;
+		const cx = c.getContext("2d");
+		cx.drawImage(cv, 0, 0, bw, bh);
+		const d = cx.getImageData(0, 0, bw, bh).data;
+		let m = new Float32Array(bw * bh);
+		for (let i = 0; i < bw * bh; i++) m[i] = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8;
+		const pass3x3 = (src, useMax) => {
+			const dst = new Float32Array(bw * bh);
+			for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+				let acc = 0, cnt = 0;
+				for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+					const yy = Math.min(bh - 1, Math.max(0, y + dy));
+					const xx = Math.min(bw - 1, Math.max(0, x + dx));
+					const v = src[yy * bw + xx];
+					if (useMax) { if (v > acc) acc = v; } else { acc += v; cnt++; }
+				}
+				dst[y * bw + x] = useMax ? acc : acc / cnt;
+			}
+			return dst;
+		};
+		m = pass3x3(pass3x3(m, true), true);
+		m = pass3x3(pass3x3(m, false), false);
+		return { map: m, bw, bh };
+	}
+	function sampleMap(bg, fx, fy) {
+		const bw = bg.bw, bh = bg.bh, m = bg.map;
+		let x = fx - 0.5, y = fy - 0.5;
+		if (x < 0) x = 0; else if (x > bw - 1.001) x = bw - 1.001;
+		if (y < 0) y = 0; else if (y > bh - 1.001) y = bh - 1.001;
+		const x0 = x | 0, y0 = y | 0, dx = x - x0, dy = y - y0;
+		return m[y0 * bw + x0] * (1 - dx) * (1 - dy) + m[y0 * bw + x0 + 1] * dx * (1 - dy) +
+			m[(y0 + 1) * bw + x0] * (1 - dx) * dy + m[(y0 + 1) * bw + x0 + 1] * dx * dy;
+	}
+	// Filter: „Farbe" teilt jeden Kanal durch die Beleuchtung (Papier → weiß, Schatten
+	// weg, Farben bleiben), „S/W" legt eine weiche Schwelle darüber (Text tiefschwarz),
+	// „Graustufen" entfernt Farbe mit etwas Kontrast, „Foto" = enhanceScan (Perzentile)
+	function applyScanMode(cv, mode) {
+		if (mode === "photo") { enhanceScan(cv); return; }
+		const w = cv.width, h = cv.height;
+		const x = cv.getContext("2d");
+		const bg = backgroundMap(cv);
+		const d = x.getImageData(0, 0, w, h);
+		const px = d.data;
+		const kx = bg.bw / w, ky = bg.bh / h;
+		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
+		for (let y = 0; y < h; y++) {
+			const fy = y * ky;
+			for (let x2 = 0; x2 < w; x2++) {
+				const i = (y * w + x2) * 4;
+				const g = Math.max(48, sampleMap(bg, x2 * kx, fy));
+				if (mode === "color") {
+					px[i] = clamp(px[i] * 255 / g);
+					px[i + 1] = clamp(px[i + 1] * 255 / g);
+					px[i + 2] = clamp(px[i + 2] * 255 / g);
+				} else {
+					const v = clamp(((px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8) * 255 / g);
+					let o;
+					if (mode === "bw") {
+						// Weiche Schwelle (Smoothstep 140…210): Text tiefschwarz, Papier reinweiß
+						let t = (v - 140) / 70;
+						t = t < 0 ? 0 : t > 1 ? 1 : t;
+						o = 255 * t * t * (3 - 2 * t);
+					} else {
+						o = clamp((v - 128) * 1.15 + 128); // Graustufen mit etwas Kontrast
+					}
+					px[i] = px[i + 1] = px[i + 2] = o;
+				}
+			}
+		}
+		x.putImageData(d, 0, 0);
+	}
+	// 90°-Drehung(en) für die Nachbearbeitung
+	function rotateCanvas(cv, rot) {
+		const r = ((rot % 4) + 4) % 4;
+		if (!r) return cv;
+		const c = document.createElement("canvas");
+		if (r === 2) { c.width = cv.width; c.height = cv.height; } else { c.width = cv.height; c.height = cv.width; }
+		const x = c.getContext("2d");
+		x.translate(c.width / 2, c.height / 2);
+		x.rotate(r * Math.PI / 2);
+		x.drawImage(cv, -cv.width / 2, -cv.height / 2);
+		return c;
+	}
+	// Ein Scan: Rohbild → entzerren → Filter → Drehung → fertige Scan-Seite
+	async function processShot(sh) {
+		const img = await loadImg(sh.src);
+		let cv = warpPerspective(img, sh.w, sh.h, sh.quad);
+		applyScanMode(cv, sh.mode);
+		if (sh.rot) cv = rotateCanvas(cv, sh.rot);
+		sh.out = { dataUrl: cv.toDataURL("image/jpeg", 0.9), w: cv.width, h: cv.height };
+	}
+
+	// ---------- Scan-Nachbearbeitung: Ecken ziehen, Filter, Drehen ----------
+	function openEdit(i) {
+		const sh = scanUI.shots[i];
+		if (!sh) return;
+		closeEdit();
+		const ed = document.createElement("div");
+		ed.className = "heft-scan-edit";
+		ed.innerHTML =
+			'<div class="heft-scan-top"><b>Scan ' + (i + 1) + ' bearbeiten</b><button type="button" data-hescaneditback="1" title="Zurück">✕</button></div>' +
+			'<div class="heft-scan-editstage"><canvas></canvas></div>' +
+			'<div class="heft-scan-modes">' + SCAN_MODES.map((m) =>
+				'<button type="button" data-hescanmode="' + m[0] + '" class="' + (sh.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>').join("") + '</div>' +
+			'<div class="heft-scan-editbar">' +
+				'<button type="button" data-hescanrot="1">⟳ Drehen</button>' +
+				'<button type="button" data-hescanauto="1">◱ Auto-Zuschnitt</button>' +
+				'<button type="button" data-hescandel="1">🗑 Löschen</button>' +
+				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Übernehmen</button>' +
+			'</div>';
+		scanUI.wrap.appendChild(ed);
+		scanUI.edit = { i, el: ed, quad: sh.quad.map((p) => p.slice()), mode: sh.mode, rot: sh.rot, img: null, drag: -1, k: 1 };
+		const cv = ed.querySelector("canvas");
+		cv.addEventListener("pointerdown", onEditDown);
+		cv.addEventListener("pointermove", onEditMove);
+		cv.addEventListener("pointerup", onEditUp);
+		cv.addEventListener("pointercancel", onEditUp);
+		loadImg(sh.src).then((img) => { if (scanUI && scanUI.edit && scanUI.edit.el === ed) { scanUI.edit.img = img; layoutEdit(); } });
+	}
+	function closeEdit() {
+		if (scanUI && scanUI.edit) { scanUI.edit.el.remove(); scanUI.edit = null; }
+	}
+	function layoutEdit() {
+		const ed = scanUI && scanUI.edit;
+		if (!ed || !ed.img) return;
+		const stage = ed.el.querySelector(".heft-scan-editstage");
+		const cv = ed.el.querySelector("canvas");
+		const sh = scanUI.shots[ed.i];
+		ed.k = Math.max(0.02, Math.min((stage.clientWidth - 24) / sh.w, (stage.clientHeight - 24) / sh.h));
+		cv.width = Math.max(1, Math.round(sh.w * ed.k));
+		cv.height = Math.max(1, Math.round(sh.h * ed.k));
+		drawEdit();
+	}
+	function drawEdit() {
+		const ed = scanUI && scanUI.edit;
+		if (!ed || !ed.img) return;
+		const cv = ed.el.querySelector("canvas");
+		const x = cv.getContext("2d");
+		const k = ed.k, q = ed.quad;
+		x.clearRect(0, 0, cv.width, cv.height);
+		x.drawImage(ed.img, 0, 0, cv.width, cv.height);
+		// Außenbereich abdunkeln (evenodd: Rechteck minus Quad)
+		x.save();
+		x.fillStyle = "rgba(3,5,10,0.55)";
+		x.beginPath();
+		x.rect(0, 0, cv.width, cv.height);
+		x.moveTo(q[0][0] * k, q[0][1] * k);
+		for (let i = 3; i >= 1; i--) x.lineTo(q[i][0] * k, q[i][1] * k);
+		x.closePath();
+		x.fill("evenodd");
+		x.restore();
+		// Rahmen + Eck-Griffe
+		x.strokeStyle = "#6fc3ff"; x.lineWidth = 2;
+		x.beginPath();
+		x.moveTo(q[0][0] * k, q[0][1] * k);
+		for (let i = 1; i < 4; i++) x.lineTo(q[i][0] * k, q[i][1] * k);
+		x.closePath();
+		x.stroke();
+		q.forEach((p) => {
+			x.beginPath(); x.arc(p[0] * k, p[1] * k, 10, 0, Math.PI * 2);
+			x.fillStyle = "rgba(111,195,255,0.25)"; x.fill();
+			x.beginPath(); x.arc(p[0] * k, p[1] * k, 5, 0, Math.PI * 2);
+			x.fillStyle = "#6fc3ff"; x.fill();
+		});
+	}
+	function editPos(e, cv) {
+		const r = cv.getBoundingClientRect();
+		return [(e.clientX - r.left) / scanUI.edit.k, (e.clientY - r.top) / scanUI.edit.k];
+	}
+	function onEditDown(e) {
+		const ed = scanUI && scanUI.edit;
+		if (!ed || !ed.img) return;
+		e.preventDefault();
+		e.currentTarget.setPointerCapture(e.pointerId);
+		const p = editPos(e, e.currentTarget);
+		const rr = 34 / ed.k;
+		let best = -1, bd = rr * rr;
+		ed.quad.forEach((q, i) => {
+			const dx = q[0] - p[0], dy = q[1] - p[1];
+			if (dx * dx + dy * dy <= bd) { bd = dx * dx + dy * dy; best = i; }
+		});
+		ed.drag = best;
+	}
+	function onEditMove(e) {
+		const ed = scanUI && scanUI.edit;
+		if (!ed || ed.drag < 0) return;
+		e.preventDefault();
+		const sh = scanUI.shots[ed.i];
+		const p = editPos(e, e.currentTarget);
+		ed.quad[ed.drag] = [Math.min(sh.w, Math.max(0, p[0])), Math.min(sh.h, Math.max(0, p[1]))];
+		drawEdit();
+	}
+	function onEditUp() { if (scanUI && scanUI.edit) scanUI.edit.drag = -1; }
+	async function finishEdit() {
+		const ed = scanUI.edit;
+		if (!ed) return;
+		const sh = scanUI.shots[ed.i];
+		sh.quad = ed.quad.map((p) => p.slice());
+		sh.mode = ed.mode;
+		sh.rot = ed.rot;
+		closeEdit();
+		try { await processShot(sh); } catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
+		renderShots();
 	}
 	// Minimaler PDF-1.4-Writer: je Scan eine A4-Seite mit eingebettetem JPEG (DCTDecode).
 	// Keine externe Lib nötig — erzeugt ein echtes, überall lesbares PDF.
@@ -868,7 +1256,7 @@ export const HEFT = (() => {
 	}
 	function scanFinishPdf() {
 		try {
-			const bytes = buildPdf(scanUI.shots);
+			const bytes = buildPdf(scanUI.shots.map((sh) => sh.out));
 			U.downloadBlob("scan-" + new Date().toISOString().slice(0, 10) + ".pdf", new Blob([bytes], { type: "application/pdf" }));
 			if (U.toast) U.toast("PDF mit " + scanUI.shots.length + " Seite(n) gespeichert");
 		} catch (e) {
@@ -877,13 +1265,13 @@ export const HEFT = (() => {
 		}
 	}
 	function scanFinishHeft() {
-		const shots = scanUI.shots;
+		const outs = scanUI.shots.map((sh) => sh.out);
 		closeScanner();
-		if (!doc || !shots.length) return;
+		if (!doc || !outs.length) return;
 		let at = insertIndex();
-		shots.forEach((sh) => { doc.pages.splice(at, 0, imagePage({ src: sh.dataUrl, w: sh.w, h: sh.h }, "blank", true)); at++; });
+		outs.forEach((o) => { doc.pages.splice(at, 0, imagePage({ src: o.dataUrl, w: o.w, h: o.h }, "blank", true)); at++; });
 		scheduleSave(); rebuildScroll(); go(at - 1);
-		if (U.toast) U.toast(shots.length + " Scan(s) als Heftseiten eingefügt");
+		if (U.toast) U.toast(outs.length + " Scan(s) als Heftseiten eingefügt");
 	}
 
 	// ---------- Klicks (delegiert am Host — fängt auch die Popups) ----------
@@ -932,7 +1320,8 @@ export const HEFT = (() => {
 		const t = e.target;
 		if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
 		if (e.key === "Escape") {
-			if (scanUI) { e.preventDefault(); closeScanner(); }
+			if (scanUI && scanUI.edit) { e.preventDefault(); closeEdit(); }
+			else if (scanUI) { e.preventDefault(); closeScanner(); }
 			else if (pop) { e.preventDefault(); closePop(); }
 			return;
 		}

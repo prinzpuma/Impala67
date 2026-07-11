@@ -326,6 +326,21 @@ function wireEvents() {
 		}
 	});
 
+	// Mobile Off-Canvas-Sidebar: Tippen außerhalb (Abdunkler oder sichtbarer Rest
+	// der Hauptfläche) sowie Escape schließen die Sidebar — vorher gab es dafür,
+	// einmal offen, gar keinen Weg zum Schließen außer erneut auf ☰ zu tippen
+	// (der aber von der offenen Sidebar selbst verdeckt wurde).
+	document.addEventListener("click", (e) => {
+		if (!document.body.classList.contains("sidebar-open")) return;
+		if (e.target.closest("#sidebar") || e.target.closest("#btnSidebarToggle")) return;
+		document.body.classList.remove("sidebar-open");
+	});
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+			document.body.classList.remove("sidebar-open");
+		}
+	});
+
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,
 	// damit sie unabhängig vom Tag (button/span) zuverlässig ausgelöst werden.
 	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-newchat],[data-newpage]," +

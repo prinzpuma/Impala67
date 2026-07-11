@@ -1082,27 +1082,42 @@ function renderMainChatLog() {
 	log.scrollTop = log.scrollHeight;
 }
 
-// Während des Streamings: Mini-Ansicht mit den letzten 2 Zeilen, ausklappbar.
+// Einheitliche "Gedankengang"-Box: exakt dieselbe Struktur/Optik für live (während
+// des Streamings) und finalisiert (nach Abschluss) — vorher zwei komplett
+// unterschiedlich aussehende Bausteine. Jetzt: Icon+Label+Chevron-Kopf, sanfte
+// Höhen-Animation beim Auf-/Zuklappen, weicher Fade-Verlauf statt hartem
+// Abschneiden in der Live-Vorschau.
+function thinkBoxHtml(opts) {
+	const expanded = !!opts.expanded;
+	const stateClass = expanded ? " expanded" : (opts.live ? " peek" : "");
+	return '<div class="think-box' + (opts.live ? " live" : "") + stateClass + '">' +
+		'<button type="button" class="think-toggle" ' + opts.toggleAttr + ' aria-expanded="' + (expanded ? "true" : "false") + '">' +
+			'<span class="think-icon">' + (opts.live ? "🧠" : "💭") + '</span>' +
+			'<span class="think-label">' + U.esc(opts.label) + '</span>' +
+			'<span class="think-chevron">▸</span>' +
+		"</button>" +
+		'<div class="think-body-wrap"><div class="think-body">' + U.esc(opts.text || "") + "</div></div>" +
+	"</div>";
+}
+
+// Während des Streamings: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar.
 function thinkingLiveHtml() {
 	const full = S.aiThinkingDraft;
 	const expanded = !!S.thinkingLiveExpanded;
-	return '<div class="think-box">' +
-		'<div class="think-head"><span>🧠 Denkt nach…</span>' +
-		'<button id="btnThinkLive">' + (expanded ? "Einklappen ▾" : "Ausklappen ▸") + "</button></div>" +
-		'<div class="think-body' + (expanded ? " full" : " mini") + '">' + U.esc(expanded ? full : U.lastLines(full, 2)) + "</div>" +
-		"</div>";
+	return thinkBoxHtml({
+		text: expanded ? full : U.lastLines(full, 2),
+		expanded, live: true, label: "Denkt nach…", toggleAttr: 'id="btnThinkLive"',
+	});
 }
 
 // Nach Abschluss: komplett eingeklappte Leiste, die man wieder aufklappen kann.
 function assistantMsgHtml(m) {
 	let html = "";
 	if (m.reasoning) {
-		const expanded = !!m.reasoningExpanded;
-		html += '<div class="think-box done">' +
-			'<button class="think-toggle" data-reasoningtoggle="' + m.mid + '">' +
-			(expanded ? "▾ Gedankengang" : "▸ Gedankengang anzeigen") + "</button>" +
-			(expanded ? '<div class="think-body full">' + U.esc(m.reasoning) + "</div>" : "") +
-			"</div>";
+		html += thinkBoxHtml({
+			text: m.reasoning, expanded: !!m.reasoningExpanded, live: false,
+			label: "Gedankengang", toggleAttr: 'data-reasoningtoggle="' + m.mid + '"',
+		});
 	}
 	const refineOpen = S.refineOpenMid === m.mid;
 	html += '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +

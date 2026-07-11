@@ -16,7 +16,8 @@
 // v15: heft.js (GoodNotes-Hefte)
 // v16: ink.js entfernt — nur noch heft.js für Handschrift
 // v17: Heft-Taskbar v3 (Seiten-Popup, Bilder-Option, ＋-Menü, PDF-Scanner)
-const CACHE = "impala67-v17";
+// v18: Dokument-Scanner v2 (Dokumenterkennung, Entzerrung, Filter, Nachbearbeitung)
+const CACHE = "impala67-v18";
 
 const APP_FILES = [
 	"./",
