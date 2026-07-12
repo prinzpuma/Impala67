@@ -26,9 +26,22 @@ window.onunhandledrejection = function (event) {
 		event.reason && event.reason.stack);
 };
 </script>
+<script>
+// PWA-/Safari-Wiederherstellung: Transiente Bedienebenen gehören nie in einen
+// frischen App-Start. Ohne Reset kann eine alte Navigator-/Overlay-Schicht sichtbar
+// unsichtbar über der Oberfläche liegen und sämtliche Klicks abfangen.
+function resetTransientUiLayers() {
+	document.body.classList.remove("mnav-open");
+	["overlay", "palette", "attachMenu", "modelMenu"].forEach((id) => {
+		const el = document.getElementById(id);
+		if (el) el.hidden = true;
+	});
+}
+window.addEventListener("pageshow", resetTransientUiLayers);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=38">
+<link rel="stylesheet" href="styles.css?build=39">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f13">
@@ -181,7 +194,7 @@ window.onunhandledrejection = function (event) {
      Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
-<script type="module" src="main.js?build=38"></script>
+<script type="module" src="main.js?build=39"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
@@ -202,7 +215,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=38", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=39", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

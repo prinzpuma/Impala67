@@ -39,7 +39,8 @@
 // v36: schneller Drive-Sync — sync-core.js + Statusanzeige
 // v37: Einheitlicher Updater — „Suchen" prüft nur noch, Installieren ist ein eigener Schritt
 // v38: Heft-Fokus am Tablet — Vollbild-Animation wenn Sidebar ausgeblendet
-const CACHE = "impala67-v38";
+// v39: PWA-Startschutz — transiente Overlay-Ebenen können keine Klicks blockieren
+const CACHE = "impala67-v39";
 
 const APP_FILES = [
 	"./",

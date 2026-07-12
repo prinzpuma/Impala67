@@ -709,7 +709,12 @@ button.danger { color: var(--danger); }
 /* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-Pille (1210) */
 #overlay { position: fixed; inset: 0; z-index: 1400;
 	background: rgba(3, 5, 10, 0.6); display: grid; place-items: center; }
-#overlay[hidden] { display: none; }
+/* Versteckte Ebenen dürfen niemals Klicks abfangen — wichtig bei iPad-Safari,
+   das eine wiederhergestellte PWA-Ansicht gelegentlich vor dem ersten Render zeigt. */
+#overlay[hidden], #palette[hidden], .attach-menu[hidden], .model-menu[hidden] {
+	display: none !important;
+	pointer-events: none !important;
+}
 .modal { width: min(520px, 92vw); padding: 24px; display: flex;
 	flex-direction: column; gap: 12px;
 	background: var(--menu-bg); box-shadow: 0 16px 48px var(--shadow); }
@@ -2298,6 +2303,11 @@ body.reduce-motion .heft-tray { animation: none; }
 	   Dialoge (#overlay 1400) und Palette (1500) sind body-Kinder und liegen darüber. */
 	body.mnav-open #app::after { content: ""; position: fixed; inset: 0; z-index: 1240;
 		background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease; }
+	/* Sicherheitsnetz: Ein Pseudo-Element darf außerhalb des tatsächlich geöffneten
+	   Navigator-Sheets niemals Eingaben verschlucken. Der explizite Default schützt
+	   auch gegen wiederhergestellte Safari-/PWA-Ansichten. */
+	#app::after { pointer-events: none; }
+	body.mnav-open #app::after { pointer-events: auto; }
 	@keyframes mnavScrimIn { from { opacity: 0; } to { opacity: 1; } }
 
 	/* KI-Panel als Vollbild-Sheet — ersetzt display:none + extras.js-Hack */
