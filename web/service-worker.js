@@ -33,7 +33,8 @@
 //       die neuen Dateien unabhängig von einem alten Offline-Cache abrufen.
 // v32: Mobile Shell v2 — Dock-Pille + Bottom-Sheet-Navigator (Bottom-Nav & Off-Canvas entfernt)
 // v33: Scanner-Ecken bleiben im vollständigen Rohbild editierbar.
-const CACHE = "impala67-v33";
+// v34: iPadOS-Update-Fix — App-Dateien umgehen zusätzlich den Safari-HTTP-Cache.
+const CACHE = "impala67-v34";
 
 const APP_FILES = [
 	"./",
@@ -142,7 +143,11 @@ self.addEventListener("fetch", (e) => {
 			// (kein Strg+Shift+R mehr nötig); offline dient der Cache als Fallback.
 			if (sameOrigin) {
 				try {
-					const res = await fetch(e.request);
+					// iPadOS kann auch hinter einem network-first Worker noch eine alte HTTP-
+					// Cache-Antwort liefern. App-Module, CSS und HTML müssen deshalb wirklich
+					// vom Netz kommen; der Cache bleibt ausschließlich Offline-Fallback.
+					const freshReq = new Request(e.request, { cache: "no-store" });
+					const res = await fetch(freshReq);
 					if (res && res.ok && !isHtmlFallback(e.request, res)) cache.put(e.request, res.clone());
 					return res;
 				} catch {

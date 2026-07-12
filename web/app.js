@@ -1093,9 +1093,13 @@ function wireEvents() {
 		}
 
 		switch (t.id) {
-			// Mobile Shell v2 — Dock-Pille: ☰ Navigator-Sheet, ＋ Neu, ✦ KI-Sheet
+			// Mobile Shell v2 — Dock-Pille: ☰ Navigator-Sheet, 🃏 Karten, ＋ Neu, ✦ KI-Sheet
 			case "btnMNav":
 				document.body.classList.toggle("mnav-open");
+				break;
+			case "btnMCards":
+				document.body.classList.remove("mnav-open");
+				openAnki();
 				break;
 			case "btnMNew":
 				document.body.classList.remove("mnav-open");

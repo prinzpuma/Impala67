@@ -154,37 +154,37 @@ export const STATE = (() => {
 		return { ...DECK_DEFAULTS, ...(all["*"] || {}) };
 	}
 
-	// ---- Geheimnisse (API-Keys, Notion-Token) — pro Gerät in localStorage ----
-	// Sie gehören NICHT ins Event-Log: das Log wandert in Exporte + Drive-Sync.
-	function loadSecrets() {
-		// Fallback auf den alten Schlüssel (Projekt hieß früher "notion") — Keys bleiben so erhalten.
+	// ---- Zugangsdaten im persönlichen Drive-Sync ----------------------------
+	// Auf ausdrücklichen Wunsch gehören API-Keys, Notion-Token, CORS-Proxy und
+	// Desktop-OAuth-Konfiguration in den verschlüsselungslosen, aber privaten
+	// appDataFolder des eigenen Google-Kontos. Sie werden daher wie alle anderen
+	// settingsSet-Daten im Event-Log gespeichert und auf andere Geräte repliziert.
+	// Die alte localStorage-Ablage bleibt nur als einmalige Migrationsquelle.
+	function loadLegacySecrets() {
 		try { return JSON.parse(localStorage.getItem("impala67.secrets") || localStorage.getItem("notion.secrets") || "{}"); } catch { return {}; }
 	}
-	function stripSecrets(payload) {
-		const sec = loadSecrets();
-		const p = { ...payload };
-		if ("notionToken" in p) { sec.notionToken = p.notionToken || ""; p.notionToken = ""; }
-		if ("corsProxy" in p) { sec.corsProxy = p.corsProxy || ""; p.corsProxy = ""; }
-		// FIX (Audit): Desktop-OAuth-Secret gehörte bisher ins Event-Log/Export — wie andere Secrets nur pro Gerät in localStorage.
-		if ("driveDesktopClientSecret" in p) { sec.driveDesktopClientSecret = p.driveDesktopClientSecret || ""; p.driveDesktopClientSecret = ""; }
-		if (Array.isArray(p.aiProviders)) {
-			sec.providerKeys = {};
-			p.aiProviders = p.aiProviders.map((pr) => {
-				if (pr.key) sec.providerKeys[pr.id] = pr.key;
-				return { ...pr, key: "" };
-			});
-		}
-		try { localStorage.setItem("impala67.secrets", JSON.stringify(sec)); } catch (e) { console.warn(e); }
-		return p;
-	}
-	function applySecrets() {
-		const sec = loadSecrets();
-		if (sec.notionToken) S.settings.notionToken = sec.notionToken;
-		if (sec.corsProxy) S.settings.corsProxy = sec.corsProxy;
-		if (sec.driveDesktopClientSecret) S.settings.driveDesktopClientSecret = sec.driveDesktopClientSecret;
-		(S.settings.aiProviders || []).forEach((pr) => {
-			if (sec.providerKeys && sec.providerKeys[pr.id]) pr.key = sec.providerKeys[pr.id];
+	function stripSecrets(payload) { return { ...payload }; }
+	function applySecrets() { /* Credentials kommen jetzt direkt aus dem Event-Log. */ }
+	async function migrateLegacySecretsToSync() {
+		const sec = loadLegacySecrets();
+		const patch = {};
+		if (sec.notionToken && !S.settings.notionToken) patch.notionToken = sec.notionToken;
+		if (sec.corsProxy && !S.settings.corsProxy) patch.corsProxy = sec.corsProxy;
+		if (sec.driveDesktopClientSecret && !S.settings.driveDesktopClientSecret) patch.driveDesktopClientSecret = sec.driveDesktopClientSecret;
+		const keys = sec.providerKeys || {};
+		let providersChanged = false;
+		const providers = (S.settings.aiProviders || []).map((pr) => {
+			if (!pr.key && keys[pr.id]) { providersChanged = true; return { ...pr, key: keys[pr.id] }; }
+			return pr;
 		});
+		if (providersChanged) patch.aiProviders = providers;
+		if (Object.keys(patch).length) await dispatch("settingsSet", patch);
+		// Nach erfolgreicher Übernahme nicht mehr lokal überlagern; die Werte liegen
+		// ab jetzt im synchronisierten Event-Log und damit im persönlichen Drive.
+		if (Object.keys(patch).length) {
+			localStorage.removeItem("impala67.secrets");
+			localStorage.removeItem("notion.secrets");
+		}
 	}
 
 	function reduce(ev) {
@@ -503,7 +503,7 @@ export const STATE = (() => {
 	async function load() {
 		const evs = await loadSortedEvents();
 		evs.forEach(reduce);
-		applySecrets(); // Keys liegen pro Gerät in localStorage, nicht im Log
+		applySecrets(); // Kompatibilitäts-Hook; Zugangsdaten liegen im Event-Log.
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze
@@ -818,5 +818,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, load, migrateLegacySecretsToSync, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

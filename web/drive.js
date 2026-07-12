@@ -1,5 +1,5 @@
 "use strict";
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
@@ -346,5 +346,57 @@ export const DRIVE = (() => {
 		return !!localStorage.getItem("impala67_drive_refresh_token");
 	}
 
-	return { login, logout, sync, isConnected };
+	// ---------- Automatischer Drive-Sync --------------------------------------
+	// Nur nach einer bereits erfolgten Anmeldung: niemals ein Login-Popup aus
+	// einem Timer heraus öffnen. Änderungen werden gebündelt; zusätzlich ziehen
+	// wir beim Start, beim Zurückkehren und in sichtbaren Sitzungen regelmäßig.
+	const AUTO_DELAY_MS = 1500;
+	const AUTO_INTERVAL_MS = 120000;
+	let autoTimer = 0;
+	let autoInterval = 0;
+	let autoStarted = false;
+	let autoResultHandler = null;
+	const autoEnabled = () => localStorage.getItem("impala67.driveAutoSync") !== "0";
+
+	async function autoSync(reason) {
+		if (!autoEnabled() || !isConnected()) return null;
+		try {
+			// Manuelle und automatische Läufe nie parallel mergen. Ein bereits
+			// laufender manueller Sync bleibt dessen eigener UI-Flow.
+			if (syncInFlight) return null;
+			const result = await sync();
+			if (autoResultHandler) autoResultHandler(result, reason);
+			return result;
+		} catch (e) {
+			// Automatik bleibt ruhig; der manuelle Button zeigt Fehler weiterhin an.
+			console.warn("Automatischer Drive-Sync (" + reason + ") fehlgeschlagen:", e);
+			return null;
+		}
+	}
+	function scheduleAutoSync(reason) {
+		if (!autoEnabled() || !isConnected()) return;
+		clearTimeout(autoTimer);
+		autoTimer = setTimeout(() => { autoSync(reason); }, AUTO_DELAY_MS);
+	}
+	function startAutoSync(onResult) {
+		if (typeof onResult === "function") autoResultHandler = onResult;
+		if (autoStarted) return autoSync("start");
+		autoStarted = true;
+		// Jede persistierte Änderung — auch Tabs und eingeklappte Äste — wird
+		// mit kurzer Verzögerung gesichert.
+		STATE.onAfterDispatch(() => scheduleAutoSync("change"));
+		document.addEventListener("visibilitychange", () => {
+			if (document.hidden) autoSync("background");
+			else autoSync("foreground");
+		});
+		// pagehide ist ein Best-Effort-Flush beim Schließen. Zusätzlich startet der
+		// visibilitychange-Handler meist schon vorher, was im Browser zuverlässiger ist.
+		window.addEventListener("pagehide", () => { autoSync("close"); });
+		autoInterval = window.setInterval(() => {
+			if (!document.hidden) autoSync("interval");
+		}, AUTO_INTERVAL_MS);
+		return autoSync("start");
+	}
+
+	return { login, logout, sync, isConnected, startAutoSync };
 })();

@@ -368,6 +368,16 @@ function finishDriveSync({ imported, conflicts, conflictDetails }) {
 }
 
 export async function handleDriveSyncSettings(t) {
+	// iPad/Safari: Ein abgelaufener Browser-Token kann beim stillen OAuth-Check
+	// kurz ein Google-Popup öffnen und sofort wieder schließen. Vor dem Sync daher
+	// ausschließlich den lokal bekannten Sitzungsstatus prüfen; abgelaufene
+	// Sitzungen führen gezielt zum sichtbaren „Mit Google anmelden“-Button.
+	if (!DRIVE.isConnected()) {
+		S.driveUserEmail = null;
+		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
+		openSettings("sync");
+		return;
+	}
 	t.disabled = true;
 	const old = t.textContent;
 	try {
@@ -377,6 +387,32 @@ export async function handleDriveSyncSettings(t) {
 	}
 	t.disabled = false;
 	t.textContent = old;
+}
+
+// Automatische Syncs sollen nicht alle zwei Minuten Toasts erzeugen. Nur wenn
+// ein anderes Gerät wirklich neue Änderungen geliefert hat oder ein Konflikt
+// vorliegt, informieren wir und laden für einen konsistenten Event-Log-Replay neu.
+let autoReloadScheduled = false;
+function handleAutomaticDriveSync(result) {
+	if (!result) return;
+	const details = result.conflictDetails || [];
+	if (details.length) RENDER.mergePendingConflicts(details);
+	if (details.length || result.conflicts) {
+		RENDER.openConflictResolver(0);
+		return;
+	}
+	if (result.imported > 0 && !autoReloadScheduled) {
+		autoReloadScheduled = true;
+		U.toast("Änderungen von einem anderen Gerät übernommen — App wird aktualisiert.", "success");
+		setTimeout(() => location.reload(), 700);
+	}
+}
+
+// Wird einmal beim App-Start aufgerufen. Der erste Lauf zieht den aktuellen
+// Drive-Stand; danach sichern Debounce, Sichtbarkeitswechsel, Intervall und
+// pagehide die Änderungen automatisch.
+export function startAutoDriveSync() {
+	return DRIVE.startAutoSync(handleAutomaticDriveSync);
 }
 
 export async function handleAddProvider() {
@@ -542,6 +578,16 @@ export async function handleDriveSync(t) {
 		openSettings("sync");
 		return;
 	}
+	// Keinen stillen OAuth-Aufruf aus dem Sync-Button starten: iPadOS zeigt ihn
+	// oft kurz als Popup. Nur mit einem noch lokal gültigen Token synchronisieren;
+	// sonst wird die Anmeldung klar und ausschließlich durch den Login-Button
+	// ausgelöst.
+	if (!DRIVE.isConnected()) {
+		S.driveUserEmail = null;
+		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
+		openSettings("sync");
+		return;
+	}
 	t.disabled = true;
 	const old = t.innerHTML; // Button enthält jetzt ein SVG-Icon — textContent würde es zerstören
 	try {
@@ -659,6 +705,7 @@ export const SETTINGS = {
 	handleDriveLogin,
 	handleDriveLogout,
 	handleDriveSyncSettings,
+	startAutoDriveSync,
 	handleAddProvider,
 	handleCheckUpdate,
 	handleApplyPwaUpdate,

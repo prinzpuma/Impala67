@@ -28,7 +28,7 @@ window.onunhandledrejection = function (event) {
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?build=34">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f13">
@@ -155,9 +155,14 @@ window.onunhandledrejection = function (event) {
 <!-- Mobile Shell v2: EINE schwebende Dock-Pille statt Bottom-Nav-Leiste.
      ☰ öffnet die komplette Sidebar als Bottom-Sheet (volle Desktop-Funktionalität:
      Baum, Chats, Stapel, Suche, Bibliothek, Sync, Papierkorb, Einstellungen),
-     ＋ legt eine Seite/ein Heft an, ✦ öffnet das KI-Sheet. CSS: „Mobile Shell v2". -->
+     🃏 öffnet Karteikarten direkt, ＋ legt eine Seite/ein Heft an, ✦ öffnet das
+     KI-Sheet. CSS: „Mobile Shell v2". -->
 <nav id="mDock" aria-label="Mobile Schnellzugriffe">
 	<button id="btnMNav" type="button" title="Navigator öffnen"><span>☰</span><small>Menü</small></button>
+	<button id="btnMCards" type="button" title="Karteikarten öffnen">
+		<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="13" height="13" rx="2"/><path d="M8.5 4.5 19 2l2 10.5"/></svg>
+		<small>Karten</small>
+	</button>
 	<button id="btnMNew" type="button" class="mdock-new" title="Neue Seite"><span>＋</span><small>Neu</small></button>
 	<button id="btnMAi" type="button" title="KI öffnen"><span>✦</span><small>KI</small></button>
 </nav>
@@ -176,7 +181,7 @@ window.onunhandledrejection = function (event) {
      Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
-<script type="module" src="main.js"></script>
+<script type="module" src="main.js?build=34"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
@@ -197,7 +202,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=33", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=34", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

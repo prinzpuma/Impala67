@@ -108,6 +108,9 @@ export async function initApp() {
 		}
 	} catch { /* ignore */ }
 	await STATE.load();
+	// Einmalig: bereits lokal gespeicherte API-/Notion-Zugangsdaten in den
+	// synchronisierten Event-Log übernehmen, bevor der Start-Sync nach Drive läuft.
+	await STATE.migrateLegacySecretsToSync();
 	await purgeOldTrash();
 	await seedIfEmpty();
 	// Der synchronisierte Arbeitsbereich wird geladen, bevor die erste Ansicht
@@ -117,6 +120,9 @@ export async function initApp() {
 	SETTINGS.applyBg();
 	render();
 	SETTINGS.checkAI();
+	// Nach erfolgreicher früherer Google-Anmeldung sofort Drive abgleichen.
+	// Ohne gespeicherte Sitzung bleibt der Lauf still und öffnet kein Login-Popup.
+	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.

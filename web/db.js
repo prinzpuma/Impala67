@@ -250,19 +250,11 @@ export const DB = (() => {
 
 	async function exportAll() {
 		ensureOpen();
-		// Keys/Tokens niemals exportieren: alte settingsSet-Events werden beim Export
-		// bereinigt (neue enthalten ohnehin keine Secrets mehr — siehe state.js).
-		// Kompaktiert exportieren: Drive-Datei & Backups enthalten keine toten Zwischenstände.
-		const events = compactEvents(await allEvents()).map((ev) => {
-			if (ev.type !== "settingsSet" || !ev.payload) return ev;
-			const p = { ...ev.payload };
-			if (p.notionToken) p.notionToken = "";
-			if (p.corsProxy) p.corsProxy = "";
-			// FIX (Audit): Alt-Events mit Desktop-Secret aus Export/Drive-Sync entfernen
-			if (p.driveDesktopClientSecret) p.driveDesktopClientSecret = "";
-			if (Array.isArray(p.aiProviders)) p.aiProviders = p.aiProviders.map((pr) => ({ ...pr, key: "" }));
-			return { ...ev, payload: p };
-		});
+		// Der Export ist der private Drive-Backup-Container des Nutzers. Er enthält
+		// bewusst den vollständigen settingsSet-Stand inklusive API-Keys und
+		// Notion-/Desktop-Zugangsdaten, damit ein zweites eigenes Gerät ohne erneute
+		// Einrichtung weiterarbeiten kann.
+		const events = compactEvents(await allEvents());
 		const keys = await allBlobKeys();
 		const blobs = {};
 		for (const k of keys) {

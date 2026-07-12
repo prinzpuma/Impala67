@@ -2225,7 +2225,7 @@ body.reduce-motion .heft-tray { animation: none; }
    Komplett neues Mobile-Konzept. Ersetzt: Bottom-Nav-Leiste (#mobileNav),
    Off-Canvas-Drawer (body.sidebar-open) und das aus extras.js injizierte
    Panel-Overlay-CSS.
-   • EINE schwebende Dock-Pille unten mittig: ☰ Navigator · ＋ Neu · ✦ KI.
+   • EINE schwebende Dock-Pille unten mittig: ☰ Navigator · 🃏 Karten · ＋ Neu · ✦ KI.
    • ☰ öffnet die komplette Sidebar als Bottom-Sheet (body.mnav-open) — Baum,
      Chats, Stapel, Suche und Sidebar-Fuß (Bibliothek, Sync, Papierkorb,
      Einstellungen, NotebookLM) sind 1:1 die Desktop-Elemente, nichts doppelt.
@@ -2271,7 +2271,8 @@ body.reduce-motion .heft-tray { animation: none; }
 		padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 	#tabbar .tabbar-ai { display: none; } /* ✦ übernimmt die Dock-Pille */
 
-	/* Dock-Pille */
+	/* Dock-Pille — vier direkte Hauptaktionen; die gemeinsame Breite bleibt auch
+	   auf schmalen Geräten kompakt und lässt die Safe-Areas frei. */
 	#mDock { position: fixed; z-index: 1210; left: 50%; transform: translateX(-50%);
 		bottom: max(10px, env(safe-area-inset-bottom));
 		display: flex; align-items: center; gap: 2px; padding: 4px;
@@ -2282,11 +2283,15 @@ body.reduce-motion .heft-tray { animation: none; }
 		gap: 1px; border-radius: 999px; color: var(--text2); background: transparent;
 		-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 	#mDock button span { font-size: 19px; line-height: 1.1; }
+	/* Das Karten-Symbol teilt exakt das SVG mit dem Desktop-Button #btnAnki. */
+	#mDock button svg { width: 19px; height: 19px; stroke: currentColor; }
 	#mDock button small { font-size: 10px; }
 	#mDock button:active { color: var(--accent); background: var(--accent-soft); }
 	#mDock .mdock-new span { color: var(--accent); }
-	/* ☰ bleibt über dem offenen Sheet liegen und wirkt dort als Schließen-Knopf */
-	body.mnav-open #mDock { z-index: 1260; }
+	/* Das geöffnete Navigator-Sheet gehört vollständig dem Inhalt: Die Dock-Pille
+	   verschwindet, damit sie weder den Sidebar-Fuß noch dessen Touch-Ziele überdeckt.
+	   Schließen: Abdunkler antippen oder Escape. */
+	body.mnav-open #mDock { display: none; }
 	/* Dock aus dem Weg: KI-Sheet, Dialoge, Palette, Heft-Bühne, Tastatur offen */
 	body:not(.panel-collapsed) #mDock,
 	body:has(#overlay:not([hidden])) #mDock,
