@@ -29,7 +29,9 @@
 // v28: Scanner-UX — Auto-Scan standardmäßig aus, sichtbare letzte Scan-Vorschau
 // v29: Scanner-Workflow — Kachel-Vorschau erst bei Antippen, kein automatischer Zuschnitt
 // v30: Scanner-Zuschnitt — robuste Papier-Ecken, Sicherheitsrand, ohne Auto-Zuschnitt-Menü
-const CACHE = "impala67-v30";
+// v31: Heft-Zoom/Scanner-Update — eigener Cache-Schlüssel, damit installierte iPad-PWAs
+//       die neuen Dateien unabhängig von einem alten Offline-Cache abrufen.
+const CACHE = "impala67-v31";
 
 const APP_FILES = [
 	"./",
