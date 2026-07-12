@@ -2258,8 +2258,10 @@ body.reduce-motion .heft-tray { animation: none; }
 	#sidebar::before { content: ""; position: absolute; top: 8px; left: 50%;
 		width: 40px; height: 4px; border-radius: 2px;
 		transform: translateX(-50%); background: var(--edge); }
-	/* Abdunkler — Klick darauf schließt (Handler in app.js) */
-	body.mnav-open::after { content: ""; position: fixed; inset: 0; z-index: 1240;
+	/* Abdunkler liegt im selben Stacking-Kontext wie das Sheet. Zuvor war er als
+	   body::after außerhalb von #app (z-index: 1); dadurch lag er trotz z-index 1240
+	   ÜBER #sidebar, deren z-index 1250 nur innerhalb von #app gelten konnte. */
+	#app::after { content: ""; position: fixed; inset: 0; z-index: 1240;
 		background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease; }
 	@keyframes mnavScrimIn { from { opacity: 0; } to { opacity: 1; } }
 
