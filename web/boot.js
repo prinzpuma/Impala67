@@ -7,6 +7,7 @@ import { SETTINGS } from "./settings.js";
 import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { APP } from "./app.js";
+import { TABS } from "./tabs.js";
 
 const render = (...args) => RENDER.render(...args);
 const wireEvents = (...args) => APP.wireEvents(...args);
@@ -39,8 +40,8 @@ export async function seedIfEmpty() {
 	S.currentPageId = id;
 }
 
-// Papierkorb automatisch leeren: Seiten, die länger als 30 Tage im Papierkorb
-// liegen, werden beim Start endgültig gelöscht (wie in Notion).
+// Papierkorb automatisch leeren: Seiten, Stapel und Karten, die länger als 30 Tage
+// im Papierkorb liegen, werden beim Start endgültig gelöscht (wie in Notion).
 export async function purgeOldTrash() {
 	const cutoff = Date.now() - 30 * 864e5;
 	for (const pg of STATE.trashedPages()) {
@@ -48,6 +49,45 @@ export async function purgeOldTrash() {
 			await STATE.dispatch("pageDelete", { id: pg.id });
 		}
 	}
+	// FIX (Verbesserung): bisher wurden nur Seiten entsorgt — Papierkorb-Stapel und
+	// -Karten sammelten sich für immer an. Stapel-Teilbäume über ihre Wurzel löschen
+	// (deckDelete entfernt Unterstapel + Karten mit), danach übrige Einzelkarten.
+	for (const name of STATE.trashedDeckRoots()) {
+		const d = S.decks[name];
+		if (d && d.trashedAt && new Date(d.trashedAt).getTime() < cutoff) {
+			await STATE.dispatch("deckDelete", { name });
+		}
+	}
+	for (const c of STATE.orphanTrashedCards()) {
+		if (c.trashedAt && new Date(c.trashedAt).getTime() < cutoff) {
+			await STATE.dispatch("cardDelete", { id: c.id });
+		}
+	}
+}
+
+// Blob-Garbage-Collector: PDF- und Heft-Blobs endgültig gelöschter Seiten blieben
+// bisher für immer in IndexedDB liegen (pageDelete löscht nur den Zustand — beim
+// Event-Replay gibt es keine Blob-Löschung). Läuft nach dem Laden im Hintergrund.
+export async function purgeOrphanBlobs() {
+	try {
+		const pdfIds = new Set();
+		Object.values(S.pages).forEach((pg) => { if (pg.pdfId) pdfIds.add(pg.pdfId); });
+		const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+		let removed = 0;
+		for (const k of await DB.allBlobKeys()) {
+			const key = String(k);
+			if (key === "bgImage") continue;
+			if (key.startsWith("heft:")) {
+				// Heft-Striche, deren Seite es nicht mehr gibt
+				if (!S.pages[key.slice(5)]) { await DB.delBlob(key); removed++; }
+			} else if (isUuid(key) && !pdfIds.has(key)) {
+				// UUID-Schlüssel = PDF-Blob; unbekannte andere Schlüssel bleiben unangetastet
+				await DB.delBlob(key);
+				removed++;
+			}
+		}
+		if (removed) console.info("Blob-GC: " + removed + " verwaiste Blobs entfernt.");
+	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
 }
 
 export async function initApp() {
@@ -70,6 +110,9 @@ export async function initApp() {
 	await STATE.load();
 	await purgeOldTrash();
 	await seedIfEmpty();
+	// Der synchronisierte Arbeitsbereich wird geladen, bevor die erste Ansicht
+	// erscheint. Ohne gültigen gespeicherten Tab bleibt die Startseite sichtbar.
+	await TABS.restoreSession();
 	wireEvents();
 	SETTINGS.applyBg();
 	render();
@@ -80,6 +123,8 @@ export async function initApp() {
 	setInterval(pingAiStatusIfVisible, 60000);
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	RAG.reindexStale();
+	// Verwaiste Blobs im Hintergrund entsorgen (blockiert den Start nicht).
+	purgeOrphanBlobs();
 }
 
 function pingAiStatusIfVisible() {
@@ -99,5 +144,6 @@ if (document.readyState === "loading") {
 export const BOOT = {
 	seedIfEmpty,
 	purgeOldTrash,
+	purgeOrphanBlobs,
 	initApp
 };

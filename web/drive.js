@@ -150,7 +150,15 @@ export const DRIVE = (() => {
 		});
 
 		const codePromise = new Promise((resolve, reject) => {
+			// FIX (Verbesserung): brach der Nutzer den Login im Browser ab, wartete dieses
+			// Promise für immer und der lokale Redirect-Server lief weiter — nach 2 Minuten
+			// aufgeben und den Server aufräumen.
+			const timer = setTimeout(() => {
+				window.__TAURI__.core.invoke("cancel_oauth_server", { port }).catch(() => {});
+				reject(new Error("Google-Login abgebrochen: keine Antwort innerhalb von 2 Minuten. Bitte erneut versuchen."));
+			}, 120000);
 			window.__TAURI__.event.once("redirect_uri", (event) => {
+				clearTimeout(timer);
 				try {
 					const url = new URL(event.payload);
 					const err = url.searchParams.get("error");
@@ -247,7 +255,14 @@ export const DRIVE = (() => {
 		const q = encodeURIComponent("name='" + FILE_NAME + "' or name='" + LEGACY_FILE_NAME + "'");
 		const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + q + "&fields=files(id,modifiedTime)");
 		const { files } = await res.json();
-		return files[0] || null;
+		if (!files || !files.length) return null;
+		// FIX (Verbesserung): existieren Alt- UND Neu-Datei gleichzeitig, gewann bisher
+		// willkürlich files[0] — jetzt gewinnt die zuletzt geänderte Datei; die übrigen
+		// werden nach dem erfolgreichen Upload als Duplikate entsorgt (Stand ist gemerged).
+		files.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
+		const file = files[0];
+		file.duplicateIds = files.slice(1).map((f) => f.id);
+		return file;
 	}
 
 	async function upload(fileId, content) {
@@ -301,6 +316,11 @@ export const DRIVE = (() => {
 		}
 		if (onStatus) onStatus("Hochladen…");
 		await upload(file ? file.id : null, await DB.exportAll());
+		// Duplikate (z.B. Alt-Datei neben der neuen) nach dem erfolgreichen Upload
+		// entsorgen — ihr Stand wurde oben gemerged und steckt im hochgeladenen Gesamtstand.
+		for (const dupId of (file && file.duplicateIds) || []) {
+			await api("/drive/v3/files/" + dupId, { method: "DELETE" }).catch(() => {});
+		}
 		// Nach erfolgreichem Sync: Log lokal kompaktieren (der Stand ist gesichert) und
 		// den Wasserstand auf die dann höchste Sequenznummer setzen.
 		await DB.compactLocal();

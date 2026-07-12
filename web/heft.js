@@ -286,13 +286,17 @@ export const HEFT = (() => {
 	}
 	function applyView(commit) {
 		const scroll = scrollEl(); if (!scroll) return;
-		const fit = Math.max(0.1, Math.min((scroll.clientWidth - 36) / PAGE_W, 1));
+		// Die tatsächliche Innenbreite ist entscheidend: im Hochformat hatten Padding und
+		// Scrollbar bislang einen Teil der Zoom-Breite verschluckt.
+		const innerW = Math.max(1, scroll.clientWidth - 36);
+		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, 1));
 		scale = fit * zoom;
 		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
 		const pages = pagesEl();
 		if (pages) {
 			pages.style.setProperty("--heft-page-w", cssW + "px");
 			pages.style.setProperty("--heft-page-h", cssH + "px");
+			pages.style.minWidth = Math.max(innerW, cssW) + "px";
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (!commit) return;
 		const dpr = Math.min(2.5, window.devicePixelRatio || 1);
@@ -304,7 +308,16 @@ export const HEFT = (() => {
 		});
 		redraw();
 	}
-	function layout() { applyView(true); }
+	// Beim Drehen des Geräts bzw. beim Ein-/Ausblenden von UI bleibt derselbe Punkt
+	// der Seite im Sichtfenster. Ohne diesen Anker sprang die Hochkant-Ansicht sichtbar.
+	function layout() {
+		const scroll = scrollEl();
+		if (!scroll || !canvases.length) { applyView(true); return; }
+		const r = scroll.getBoundingClientRect();
+		const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+		const anchor = makeZoomAnchor(cx, cy);
+		applyView(true); keepAnchor(anchor, cx, cy);
+	}
 	function canvasAt(clientX, clientY) {
 		const direct = document.elementFromPoint(clientX, clientY);
 		const hit = direct && direct.closest && direct.closest(".heft-canvas");

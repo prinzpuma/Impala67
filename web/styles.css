@@ -257,6 +257,20 @@ button.danger { color: var(--danger); }
 .question-card .q-hint { margin-top: 8px; font-size: 11.5px; color: var(--text2); opacity: .8; }
 /* ---------- Panel (KI) ---------- */
 #panel { display: flex; flex-direction: column; overflow: hidden; position: relative; }
+/* Das Seitenpanel behält immer eine feste Composer-Zeile am unteren Rand.
+   Der Chat-Log darf nur den verbleibenden Platz einnehmen – nie die Eingabe
+   aus dem sichtbaren Bereich drücken. */
+#panel > #chatLog { flex: 1 1 auto; min-height: 0; }
+#panel > #chatForm {
+	display: flex !important;
+	flex: 0 0 auto !important;
+	flex-direction: column !important;
+	width: auto;
+	min-height: 78px;
+	margin: 10px !important;
+	position: relative;
+	z-index: 2;
+}
 .panel-head { padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--edge);
 	font-weight: 600; font-size: 13px; letter-spacing: 0.6px; color: var(--text2);
 	display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1942,20 +1956,24 @@ body.reduce-motion .heft-tray { animation: none; }
 	.heft-scroll { padding-top: 52px; }
 }
 
-/* Papier-Bühne v3: echte 2D-Scrollfläche. Der innere Seiten-Container wird bei
-   Zoom breiter als der Viewport, ohne dass Flexbox die linke Hälfte abschneidet. */
+/* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. Kein Flex-Shrink und keine
+   automatische Zentrierung auf der Scroll-Achse — beides verursachte im Hochformat
+   Sprünge und ließ die linke/rechte Blattkante zeitweise unerreichbar werden. */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto;
+	display: block; position: relative;
 	padding: 56px 18px 48px;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
-	scrollbar-gutter: stable both-edges; }
+	scrollbar-gutter: stable both-edges;
+	contain: layout paint; }
 .heft-pages {
 	--heft-page-w: 1px; --heft-page-h: 1px;
-	width: max-content; min-width: 100%;
-	display: flex; flex-direction: column; align-items: center; gap: 24px;
+	width: max-content; min-width: 100%; min-height: 100%;
+	display: grid; grid-auto-flow: row; justify-items: center; align-content: start;
+	gap: 24px; isolation: isolate;
 }
 .heft-page-slot {
-	position: relative; flex: 0 0 auto;
+	position: relative; box-sizing: content-box;
 	width: var(--heft-page-w); height: var(--heft-page-h);
 }
 .heft-page-slot .heft-canvas {

@@ -499,7 +499,9 @@ function wireEvents() {
 
 		// Ein-/Ausklappen (Workspace oder Seite mit Unterseiten)
 		if (t.dataset.collapse) {
-			COLLAPSE.toggle(t.dataset.collapse);
+			// treeOpen ist ein synchronisiertes Event. Erst nach der Persistenz
+			// neu zeichnen, damit der Default (eingeklappt) nie kurz aufblitzt.
+			await COLLAPSE.toggle(t.dataset.collapse);
 			if (S.view === "library") renderMain(); else renderSidebar();
 			return;
 		}

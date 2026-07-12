@@ -1,14 +1,16 @@
 "use strict";
 
-// ---------- Ein-/Ausklapp-Zustand (Sidebar-Baum), überlebt einen Neustart ----------
+import { S, STATE } from "./state.js";
+
+// ---------- Ein-/Ausklapp-Zustand (Sidebar-Baum), geräteübergreifend ----------
+// Standard ist bewusst EINGEKLAPPT: Nur explizit geöffnete Knoten stehen in
+// S.treeOpen. Die Änderungen sind Event-Log-Ereignisse und gehen damit durch
+// Export, Import und Drive-Sync; localStorage wäre nur gerätelokal.
 export const COLLAPSE = (() => {
-	let set = new Set();
-	try { set = new Set(JSON.parse(localStorage.getItem("impala67.collapsed") || localStorage.getItem("notion.collapsed") || "[]")); } catch { /* leer starten */ }
-	function persist() {
-		try { localStorage.setItem("impala67.collapsed", JSON.stringify([...set])); } catch (e) { console.warn(e); }
+	const isCollapsed = (key) => !S.treeOpen[key];
+	async function toggle(key) {
+		if (!key) return;
+		await STATE.dispatch("uiTreeSet", { key, open: isCollapsed(key) });
 	}
-	return {
-		isCollapsed: (key) => set.has(key),
-		toggle(key) { set.has(key) ? set.delete(key) : set.add(key); persist(); },
-	};
+	return { isCollapsed, toggle };
 })();

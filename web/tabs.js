@@ -1,6 +1,6 @@
 "use strict";
 
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { CHATS } from "./chats.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
@@ -8,6 +8,23 @@ import { U } from "./util.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderTabs = (...args) => RENDER.renderTabs(...args);
+
+// Der Tab-Arbeitsbereich wird als EIN kleiner Snapshot gespeichert: Reihenfolge
+// und aktiver Tab gehören zusammen. Chats werden absichtlich nicht repliziert,
+// weil ihr Inhalt derzeit ausschließlich lokal in chats.js liegt.
+const syncableTabs = () => S.tabs.filter((id) => (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main").slice(-12);
+let saveTimer = 0;
+function saveSessionSoon() {
+	clearTimeout(saveTimer);
+	saveTimer = setTimeout(() => {
+		STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId }).catch((e) => console.warn("Tabs konnten nicht gespeichert werden:", e));
+	}, 350);
+}
+function saveSessionNow() {
+	clearTimeout(saveTimer);
+	saveTimer = 0;
+	return STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId });
+}
 
 // ---------- Zentrale Navigation: Notion-artig ----------
 // Standard: Navigation ändert nur den AKTIVEN Tab (ersetzt dessen Inhalt).
@@ -70,6 +87,7 @@ export function openPage(pageId, opts) {
 		S.navHistory.push(pageId);
 		S.navIndex = S.navHistory.length - 1;
 	}
+	if (!opts.restoreSession) saveSessionSoon();
 	POPOVERS.blurActive();
 	render();
 }
@@ -113,6 +131,7 @@ export async function closeTab(pageId) {
 	const i = S.tabs.indexOf(pageId);
 	if (i === -1) return;
 	S.tabs.splice(i, 1);
+	saveSessionSoon();
 	if (S.activeTabId === pageId) {
 		const next = S.tabs[i] || S.tabs[i - 1] || null;
 		if (next) {
@@ -142,10 +161,27 @@ export function navForward() {
 	if (id) openPage(id, { skipHistory: true });
 }
 
+// Wird nach STATE.load() aufgerufen. Ungültige/gelöschte Seiten werden ignoriert;
+// die letzte gültige aktive Seite ist anschließend direkt geöffnet.
+export async function restoreSession() {
+	const tabs = syncableTabs();
+	const active = tabs.includes(S.activeTabId) ? S.activeTabId : (tabs[tabs.length - 1] || null);
+	if (tabs.length !== S.tabs.length || active !== S.activeTabId) {
+		S.tabs = tabs;
+		S.activeTabId = active;
+		await saveSessionNow();
+	}
+	if (active) openPage(active, { skipHistory: true, restoreSession: true });
+}
+
+// Beim Gerätewechsel/Schließen nicht auf den Debounce warten.
+window.addEventListener("pagehide", () => { saveSessionNow().catch(() => {}); });
+
 export const TABS = {
 	openPage,
 	openNewTab,
 	closeTab,
 	navBack,
-	navForward
+	navForward,
+	restoreSession
 };

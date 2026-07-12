@@ -125,6 +125,14 @@ export const DB = (() => {
 		ensureOpen();
 		return val(db.transaction("blobs").objectStore("blobs").get(id));
 	}
+	// Einzelnen Blob löschen — der Blob-Garbage-Collector in boot.js räumt damit
+	// verwaiste PDF-/Heft-Blobs endgültig gelöschter Seiten auf.
+	async function delBlob(id) {
+		ensureOpen();
+		const t = db.transaction("blobs", "readwrite");
+		t.objectStore("blobs").delete(id);
+		return done(t);
+	}
 	async function allBlobKeys() {
 		ensureOpen();
 		return val(db.transaction("blobs").objectStore("blobs").getAllKeys());
@@ -169,6 +177,12 @@ export const DB = (() => {
 	//    („endgültig löschen“ entfernt den Inhalt damit auch wirklich aus dem Log).
 	// Alles andere (Create/Move/Trash/Reviews/Deck-Events) bleibt unangetastet — die
 	// Events sind klein und teils reihenfolge-abhängig (Subtree-/Zyklus-Logik).
+	// Verlaufs-Schutz: so viele jüngste Inhalts-Stände je Seite überleben die
+	// Kompaktierung — der Seitenverlauf (pageHistory liest das Event-Log) bleibt
+	// dadurch auch nach einem Drive-Sync nutzbar, statt komplett zu verschwinden.
+	// Deterministisch (N jüngste per Zeitstempel) — drop-only bleibt erfüllt.
+	const KEEP_CONTENT_VERSIONS = 10;
+
 	function compactEvents(events) {
 		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
 		const pageDeletedAt = {}, cardDeletedAt = {};
@@ -178,6 +192,7 @@ export const DB = (() => {
 			if (ev.type === "cardDelete") cardDeletedAt[ev.payload.id] = ev.t;
 		}
 		const covered = {}; // Ziel -> Felder, die bereits von NEUEREN Events gesetzt werden
+		const contentKept = {}; // Seite -> Anzahl behaltener Inhalts-Stände (Verlaufs-Schutz)
 		const keep = [];
 		for (let i = sorted.length - 1; i >= 0; i--) { // rückwärts: neueste zuerst
 			const ev = sorted[i], p = ev.payload || {};
@@ -190,6 +205,14 @@ export const DB = (() => {
 			if (bucket && patch) {
 				const seen = covered[bucket] || (covered[bucket] = new Set());
 				const keys = Object.keys(patch);
+				// Verlaufs-Schutz: die jüngsten N Inhalts-Stände einer Seite immer behalten,
+				// damit der Seitenverlauf die Kompaktierung überlebt.
+				if (ev.type === "pageUpdate" && typeof patch.content === "string" && (contentKept[p.id] || 0) < KEEP_CONTENT_VERSIONS) {
+					contentKept[p.id] = (contentKept[p.id] || 0) + 1;
+					keys.forEach((k) => seen.add(k));
+					keep.push(ev);
+					continue;
+				}
 				if (keys.length && keys.every((k) => seen.has(k))) continue; // komplett überschrieben
 				keys.forEach((k) => seen.add(k));
 			}
@@ -249,6 +272,24 @@ export const DB = (() => {
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
 
+	// Jüngster Inhalts-Stand je Seite (per Zeitstempel, wie beim Log-Replay) — Kern der
+	// Konflikt-Erkennung. Als eigene, pure Funktion herausgelöst und exportiert, damit
+	// test/test-core.mjs sie ohne IndexedDB direkt testen kann.
+	// FIX: bisher zählte das ZULETZT ITERIERTE Event als "Head" — die lokale
+	// Event-Liste ist aber nach Sequenz (nicht Zeit) geordnet: nach einem Import
+	// liegen ältere Events hinter neueren. Jetzt gewinnt (wie in lifecycleOf)
+	// das jüngste Event per Zeitstempel — sonst falsche Konflikt-Gewinner/Diffs.
+	function contentHeadsOf(evs, extra) {
+		const heads = {};
+		for (const ev of evs) {
+			const p = ev.payload || {};
+			if (ev.type === "pageUpdate" && p.patch && typeof p.patch.content === "string" && (!extra || extra(ev))) {
+				if (!heads[p.id] || ev.t > heads[p.id].t) heads[p.id] = ev;
+			}
+		}
+		return heads;
+	}
+
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
 	// opts (nur beim Drive-Sync gesetzt):
 	//   unsyncedAfterSeq — Sequenznummer des letzten erfolgreichen Uploads. Lokale Events
@@ -273,22 +314,8 @@ export const DB = (() => {
 		let conflictCount = 0;
 		const conflictDetails = [];
 		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length) {
-			const contentHeads = (evs, extra) => {
-				const heads = {};
-				for (const ev of evs) {
-					const p = ev.payload || {};
-					if (ev.type === "pageUpdate" && p.patch && typeof p.patch.content === "string" && (!extra || extra(ev))) {
-						// FIX: bisher zählte das ZULETZT ITERIERTE Event als "Head" — die lokale
-						// Event-Liste ist aber nach Sequenz (nicht Zeit) geordnet: nach einem Import
-						// liegen ältere Events hinter neueren. Jetzt gewinnt (wie in lifecycleOf)
-						// das jüngste Event per Zeitstempel — sonst falsche Konflikt-Gewinner/Diffs.
-						if (!heads[p.id] || ev.t > heads[p.id].t) heads[p.id] = ev;
-					}
-				}
-				return heads;
-			};
-			const localHeads = contentHeads(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
-			const remoteHeads = contentHeads(fresh);
+			const localHeads = contentHeadsOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
+			const remoteHeads = contentHeadsOf(fresh);
 			for (const [id, remote] of Object.entries(remoteHeads)) {
 				const mine = localHeads[id];
 				if (!mine || mine.payload.patch.content === remote.payload.patch.content) continue;
@@ -440,5 +467,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, compactEvents, compactLocal, maxSeq, putBlob, getBlob, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, compactEvents, compactLocal, contentHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

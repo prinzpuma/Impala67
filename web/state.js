@@ -34,7 +34,9 @@ export const S = {
 	// (deckDelete entfernt Eintrag + Karten; neu angelegte Karten ohne Stapel legen ihn ggf. wieder an).
 	decks: { Standard: { name: "Standard", created: "" } }, // Karteikarten-Stapel; Unterstapel per "Eltern::Kind"-Namensschema
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
-	// Reiner UI-Zustand (nicht persistiert):
+	// Nur geöffnete Sidebar-Knoten werden gespeichert. Fehlende Einträge sind
+	// absichtlich eingeklappt, damit neue Seiten/Workspaces standardmäßig zu sind.
+	treeOpen: {},
 	chat: [], // Haupt-Chatverlauf (Vollbild-Tab)
 	sideChat: [], // Verlauf für das kleine KI-Seitenpanel
 	sideChatId: null, // eigene gespeicherte Chat-Sitzung des Seitenpanels
@@ -109,6 +111,15 @@ export const STATE = (() => {
 	// Reihenfolge laufen. Jetzt läuft höchstens ein dispatch() gleichzeitig, streng
 	// in Aufrufreihenfolge; ein Fehlschlag blockiert nachfolgende Aufrufe nicht.
 	let _dispatchChain = Promise.resolve();
+
+	// Offizieller Hook-Mechanismus statt Monkeypatching (extras.js überschrieb bisher
+	// STATE.dispatch — fragil, weil von der Modul-Ladereihenfolge abhängig).
+	// before-Hooks laufen VOR dem Persistieren (z.B. Undo-Snapshot des alten Stands),
+	// after-Hooks NACH reduce()+onChange (z.B. Event an andere Tabs funken).
+	// Hook-Fehler werden geloggt, brechen dispatch aber nie ab.
+	const _dispatchHooks = { before: [], after: [] };
+	const onBeforeDispatch = (fn) => { _dispatchHooks.before.push(fn); };
+	const onAfterDispatch = (fn) => { _dispatchHooks.after.push(fn); };
 
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
 	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
@@ -215,8 +226,12 @@ export const STATE = (() => {
 				// Zyklus-Schutz: eine Seite darf nie unter sich selbst oder einen eigenen
 				// Nachfahren wandern (führte zu Endlos-Rekursion, z.B. beim Papierkorb).
 				let anc = p.parentId, ok = true, hops = 0;
-				while (anc && hops++ < 10000) {
+				while (anc) {
 					if (anc === p.id) { ok = false; break; }
+					// Defensiv: bricht die Ahnen-Suche wegen eines Zyklus in Alt-Daten am
+					// Hops-Limit ab, den Move ABLEHNEN — vorher blieb ok = true und der
+					// Move wurde trotz nicht prüfbarer Hierarchie angewendet.
+					if (++hops > 10000) { ok = false; break; }
 					anc = (S.pages[anc] || {}).parentId || null;
 				}
 				if (ok) pg.parentId = p.parentId || null;
@@ -412,6 +427,25 @@ export const STATE = (() => {
 				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, updated: ev.t };
 				if (S.pages[p.pageId]) S.pages[p.pageId].updated = ev.t;
 				break;
+			case "uiTreeSet":
+				// Operation statt Gesamtsnapshot: Öffnen verschiedener Äste auf zwei
+				// Offline-Geräten wird beim Log-Merge nicht gegenseitig überschrieben.
+				if (!p.key) break;
+				if (p.open) S.treeOpen[p.key] = true;
+				else delete S.treeOpen[p.key];
+				break;
+			case "uiTabsSet": {
+				// Tabs sind ein atomarer Arbeitsbereich-Snapshot. Chats bleiben lokal,
+				// weil ihr Verlauf derzeit nicht durch den Drive-Sync repliziert wird.
+				const seen = new Set();
+				S.tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((id) => {
+					if (typeof id !== "string" || seen.has(id)) return false;
+					seen.add(id);
+					return !!(S.pages[id] && !S.pages[id].trashed) || id === "nlm:main";
+				}).slice(-12);
+				S.activeTabId = S.tabs.includes(p.activeTabId) ? p.activeTabId : (S.tabs[S.tabs.length - 1] || null);
+				break;
+			}
 			case "settingsSet":
 				Object.assign(S.settings, p);
 				break;
@@ -420,6 +454,9 @@ export const STATE = (() => {
 
 	async function dispatchOne(type, payload) {
 		if (type === "settingsSet") payload = stripSecrets(payload);
+		for (const fn of _dispatchHooks.before) {
+			try { fn(type, payload); } catch (e) { console.warn("dispatch-Hook (before):", e); }
+		}
 		const ev = { id: U.uid(), t: U.now(), type, payload };
 		// Erst persistieren, dann anwenden — sonst zeigt die UI bei einem
 		// Speicherfehler (z.B. Quota voll) Änderungen, die nie gespeichert wurden.
@@ -433,6 +470,9 @@ export const STATE = (() => {
 		if (type === "settingsSet") applySecrets();
 		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
 		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
+		for (const fn of _dispatchHooks.after) {
+			try { fn(ev); } catch (e) { console.warn("dispatch-Hook (after):", e); }
+		}
 		return ev;
 	}
 
@@ -777,5 +817,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, load, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();
