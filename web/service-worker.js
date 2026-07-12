@@ -31,7 +31,9 @@
 // v30: Scanner-Zuschnitt — robuste Papier-Ecken, Sicherheitsrand, ohne Auto-Zuschnitt-Menü
 // v31: Heft-Zoom/Scanner-Update — eigener Cache-Schlüssel, damit installierte iPad-PWAs
 //       die neuen Dateien unabhängig von einem alten Offline-Cache abrufen.
-const CACHE = "impala67-v31";
+// v32: Mobile Shell v2 — Dock-Pille + Bottom-Sheet-Navigator (Bottom-Nav & Off-Canvas entfernt)
+// v33: Scanner-Ecken bleiben im vollständigen Rohbild editierbar.
+const CACHE = "impala67-v33";
 
 const APP_FILES = [
 	"./",

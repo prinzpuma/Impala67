@@ -1859,8 +1859,15 @@ export const HEFT = (() => {
 	// ---------- Scan-Nachbearbeitung: Ecken ziehen, Filter, Drehen ----------
 	// Schreibt Edit-Zustand zurück und rechnet den Scan SOFORT neu (Filter/Drehen/Ecken
 	// sind damit echte Aktionen — nicht erst beim Schließen der Ansicht).
-	let liveSeq = 0;
-	async function liveReprocessEdit() {
+	let liveSeq = 0, editCommitT = 0;
+	// Ecken dürfen nacheinander und beliebig oft verschoben werden. Währenddessen
+	// bleibt immer das vollständige Rohfoto sichtbar; die teure Entzerrung läuft
+	// gebündelt im Hintergrund statt die Edit-Ansicht nach jedem Griff zu verlassen.
+	function queueCornerReprocess() {
+		clearTimeout(editCommitT);
+		editCommitT = setTimeout(() => { editCommitT = 0; liveReprocessEdit(true); }, 160);
+	}
+	async function liveReprocessEdit(quiet = false) {
 		const owner = scanUI;
 		const ed = owner && owner.edit;
 		if (!ed || !owner) return;
@@ -1870,18 +1877,23 @@ export const HEFT = (() => {
 		sh.mode = ed.mode;
 		sh.rot = ed.rot;
 		const seq = ++liveSeq;
-		setScanBusy(true, "Filter wird angewendet…");
+		if (!quiet) setScanBusy(true, "Filter wird angewendet…");
 		try {
 			await processShot(sh);
 			// Scanner geschlossen/gewechselt oder neuere Aktion: Ergebnis nicht mehr in alte UI schreiben.
 			if (scanUI !== owner || seq !== liveSeq) return;
 			renderShots();
-			if (owner.edit && owner.edit.el === ed.el && sh.out) drawEditResult(sh);
+			if (owner.edit && owner.edit.el === ed.el) {
+				ed.dirty = false;
+				// Im Ecken-Modus niemals auf die zugeschnittene Vorschau wechseln: das
+				// vollständige Bild samt allen vier Griffen bleibt unmittelbar editierbar.
+				if (!ed.cornerMode && sh.out) drawEditResult(sh);
+			}
 		} catch (e) {
 			console.warn("Heft: Live-Aufbereitung fehlgeschlagen", e);
 			if (scanUI === owner && U.toast) U.toast("Scan-Aufbereitung fehlgeschlagen", "error");
 		} finally {
-			if (scanUI === owner && seq === liveSeq) setScanBusy(false);
+			if (!quiet && scanUI === owner && seq === liveSeq) setScanBusy(false);
 		}
 	}
 	// Nach Filter/Drehen: fertiges Ergebnis im Edit-Canvas anzeigen.
@@ -1946,7 +1958,10 @@ export const HEFT = (() => {
 				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Fertig</button>' +
 			'</div>';
 		scanUI.wrap.appendChild(ed);
-		scanUI.edit = { i, el: ed, quad: (sh.quad || []).map((p) => p.slice()), mode: sh.mode || "color", rot: sh.rot || 0, img: null, drag: -1, k: 1, cornerMode: false, compare: false };
+		// sh.src bleibt das vollständige Rohfoto. Der Zuschnitt wird ausschließlich als
+		// Quad gespeichert — deshalb lassen sich alle Ecken jederzeit auch wieder nach
+		// außen ziehen, selbst nachdem bereits ein Scan-Ergebnis berechnet wurde.
+		scanUI.edit = { i, el: ed, quad: (sh.quad || []).map((p) => p.slice()), mode: sh.mode || "color", rot: sh.rot || 0, img: null, drag: -1, k: 1, cornerMode: false, compare: false, dirty: false };
 		const cv = ed.querySelector("canvas");
 		cv.addEventListener("pointerdown", onEditDown);
 		cv.addEventListener("pointermove", onEditMove);
@@ -1964,6 +1979,7 @@ export const HEFT = (() => {
 		else loadImg(sh.src).then((img) => { sh.img = img; setRaw(img); }).catch((e) => console.warn("Heft: Rohbild laden fehlgeschlagen", e));
 	}
 	function closeEdit() {
+		clearTimeout(editCommitT); editCommitT = 0;
 		if (scanUI && scanUI.edit) { scanUI.edit.el.remove(); scanUI.edit = null; }
 	}
 	function layoutEdit() {
@@ -2063,8 +2079,10 @@ export const HEFT = (() => {
 			if (U.toast) U.toast("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
 			return;
 		}
-		// Nach dem Ziehen einer Ecke: sofort neu entzerren + Filter anwenden
-		liveReprocessEdit();
+		// Der Rohbild-/Eckenmodus bleibt aktiv. Die Vorschau wird nach einer kurzen
+		// Pause aktualisiert, ohne die Griffe zu entfernen oder das Bild zuzuschneiden.
+		ed.dirty = true;
+		queueCornerReprocess();
 	}
 	async function finishEdit() {
 		// Filter/Drehen/Ecken laufen live — „Fertig“ speichert nur den Stand und schließt
@@ -2076,10 +2094,12 @@ export const HEFT = (() => {
 			sh.quad = ed.quad.map((p) => p.slice());
 			sh.mode = ed.mode;
 			sh.rot = ed.rot;
-			// Falls noch kein out (z.B. Live noch am Laufen): einmal sicher nachrechnen
-			if (!sh.out) {
+			// Ausstehende Eckbewegungen werden beim Übernehmen garantiert aus dem vollen
+			// Rohbild gerechnet — nie aus einem bereits zugeschnittenen Zwischenergebnis.
+			clearTimeout(editCommitT); editCommitT = 0;
+			if (!sh.out || ed.dirty) {
 				setScanBusy(true, "Scan wird aufbereitet…");
-				try { await processShot(sh); } catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
+				try { await processShot(sh); ed.dirty = false; } catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
 				if (scanUI === owner) setScanBusy(false);
 			}
 		}

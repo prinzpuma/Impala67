@@ -32,7 +32,7 @@ function saveSessionNow() {
 // Ist die Zielseite bereits in einem anderen Tab offen → dorthin wechseln (kein Doppel-Tab).
 export function openPage(pageId, opts) {
 	opts = opts || {};
-	document.body.classList.remove("sidebar-open"); // Mobile: Off-Canvas-Sidebar schließen
+	document.body.classList.remove("mnav-open"); // Mobile Shell v2: Navigator-Sheet schließen
 	if (S.highlightedPageId && S.highlightedPageId !== pageId) {
 		S.highlightedPageId = null;
 		S.highlightedDiff = null;

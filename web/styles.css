@@ -697,7 +697,7 @@ button.danger { color: var(--danger); }
 .md img { max-width: 100%; border-radius: 8px; display: block; margin: 6px 0; }
 
 /* ---------- Overlay / Modal ---------- */
-/* z-index bewusst über #mobileNav (1200): sonst liegt die Bottom-Nav auf Settings/Dialogen */
+/* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-Pille (1210) */
 #overlay { position: fixed; inset: 0; z-index: 1400;
 	background: rgba(3, 5, 10, 0.6); display: grid; place-items: center; }
 #overlay[hidden] { display: none; }
@@ -1095,19 +1095,19 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 /* ---------- Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout-Popup, haptisches Feedback ---------- */
 @media (max-width: 768px) {
 	/* Größere Tipp-Flächen (Richtwert ~40px) für kleine Icon-Knöpfe, die am Desktop
-	   bewusst kompakt sind (Zeilen-Menüs, Tab-Schließen, Navigation, Bottom-Nav). */
-	.navbtn, .row-add, .tabchip-x, #mobileNav button, .tab { min-height: 40px; }
+	   bewusst kompakt sind (Zeilen-Menüs, Tab-Schließen, Navigation). */
+	.navbtn, .row-add, .tabchip-x, .tab { min-height: 40px; }
 	/* Langes Antippen zeigte bisher auf iOS/Android ein Auswahl-/Kopieren-Callout
 	   statt sofort die Aktion auszulösen — bei reinen Icon-Knöpfen ohne Textsinn
 	   unnötig und irritierend. Seiteninhalte (Editor, Chat-Text) bleiben unberührt. */
-	.navbtn, .row-add, .tabchip-x, .tabchip, #mobileNav button, .tab, .row {
+	.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row {
 		-webkit-touch-callout: none;
 		-webkit-user-select: none;
 		user-select: none;
 	}
 	/* Sichtbares Antipp-Feedback statt der auf Touch nicht existierenden :hover-Zustände */
 	.navbtn:active, .row-add:active, .tabchip-x:active, .tabchip:active,
-	#mobileNav button:active, .tab:active, .row:active, .home-pill:active, .home-continue:active {
+	.tab:active, .row:active, .home-pill:active, .home-continue:active {
 		opacity: 0.6;
 	}
 	/* Sanftes Momentum-Scrolling (ältere iOS-Safari) für die wichtigsten Scroll-Container */
@@ -1346,37 +1346,7 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 @keyframes pop { 50% { transform: scale(1.3); } }
 
 
-/* ---------- Mobile (≤ 768px): Off-Canvas-Sidebar + größere Klickziele ---------- */
-/* ☰ ist auf Desktop sichtbar (linke Spalte einklappen); Mobile: Off-Canvas öffnen.
-   z-index 1250: bewusst ÜBER der Bottom-Nav (1200) — vorher lag die Sidebar bei
-   z-index 30 UNTER der Bottom-Nav, die dadurch den Sidebar-Fuß (Einstellungen,
-   Papierkorb, Sync, NotebookLM) verdeckte, sobald die Sidebar geöffnet wurde.
-   Die Bottom-Nav wird zusätzlich weiter unten per display:none ausgeblendet,
-   solange body.sidebar-open aktiv ist — der höhere z-index ist die zweite
-   Absicherung. */
-@media (max-width: 768px) {
-	#app { grid-template-columns: minmax(0, 1fr) !important; }
-	#sidebar { position: fixed; z-index: 1250; left: 0; top: 0; bottom: 0; width: min(82vw, 320px);
-		background: var(--bg1); transform: translateX(-105%); transition: transform 0.2s ease;
-		padding-bottom: max(14px, env(safe-area-inset-bottom)); }
-	body.sidebar-open #sidebar { transform: none; box-shadow: 12px 0 40px var(--overlay-bg); }
-	/* Abdunkler hinter der geöffneten Sidebar — zugleich die visuelle Fläche, auf die
-	   der Schließen-Klick-Handler in app.js reagiert (Klick außerhalb #sidebar). */
-	body.sidebar-open::before {
-		content: ""; position: fixed; inset: 0; z-index: 1240;
-		background: var(--overlay-bg); animation: sidebarScrimIn .18s ease;
-	}
-	@keyframes sidebarScrimIn { from { opacity: 0; } to { opacity: 1; } }
-	#panel { display: none; }
-	/* Tabbar-KI-Knopf (✦) ausblenden: er schaltet nur "panel-collapsed" um, wird auf
-	   Mobile aber per CSS (siehe extras.js) zum Vollbild-Mini-Panel gezwungen — ein
-	   ANDERER Zustand als der echte Vollbild-Chat-Tab, den btnMobileAI öffnet
-	   (setzt zusätzlich S.view = "chat"). Zwei Knöpfe mit zwei verschiedenen
-	   KI-Ansichten war eine Inkonsistenz — die Bottom-Nav übernimmt das jetzt allein. */
-	#tabbar .tabbar-ai { display: none; }
-	.menu-item, .side-foot button { min-height: 40px; }
-	.row { min-height: 36px; }
-}
+/* ---------- Mobile: komplett neu — siehe „Mobile Shell v2“ am Dateiende ---------- */
 
 
 /* ---------- Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay ---------- */
@@ -1433,45 +1403,7 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 .topbar { gap: 3px; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); }
 .side-foot { padding-top: 8px; border-top: 1px solid var(--edge-soft); }
 
-/* ---------- Mobile Bottom-Nav ---------- */
-/* Layering-Stack (Mobile):
-   content/app 1 · FABs 5 · menus 40 · mobileNav 1200 · sidebar-scrim 1240 ·
-   sidebar (offen) 1250 · panel 1300 · attach-menu 1350 · overlay 1400 · palette 1500 ·
-   heft-scan 1600 · toasts 2000. Die Bottom-Nav wird zusätzlich per display:none
-   ausgeblendet, sobald die Sidebar, ein Dialog oder die Palette offen ist. */
-#mobileNav { display: none; }
-@media (max-width: 768px) {
-	/* padding-bottom nur einmal (inkl. Safe-Area) — doppelte Definition entfernt */
-	body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
-	#app { min-height: calc(100dvh - 62px); padding: 6px; }
-	#mainWrap { border-radius: 10px; }
-	#mobileNav { position: fixed; z-index: 1200; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
-		display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; padding: 4px 6px;
-		background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 16px;
-		box-shadow: 0 12px 32px var(--shadow-strong); }
-	#mobileNav button { min-width: 0; min-height: 46px; padding: 2px; display: flex; flex-direction: column;
-		align-items: center; justify-content: center; gap: 1px; color: var(--text2); background: transparent; }
-	#mobileNav button:hover, #mobileNav button:focus-visible { color: var(--accent); background: var(--accent-soft); }
-	/* Aktiver Bereich sichtbar machen — Desktop-Topbar tut das bereits, die Bottom-Nav bisher nicht */
-	#mobileNav button.active:not(.mobile-add) { color: var(--accent); background: var(--accent-soft); }
-	#mobileNav button span { font-size: 20px; line-height: 1; }
-	#mobileNav button small { font-size: 10px; }
-	#mobileNav .mobile-add { width: 44px; height: 44px; min-height: 44px; align-self: center; justify-self: center;
-		border-radius: 50%; color: var(--bg0); background: var(--accent); }
-	#mobileNav .mobile-add:hover { color: var(--bg0); background: var(--accent); filter: brightness(1.08); }
-	/* Dialoge/Settings/Palette/Sidebar-Drawer offen → Bottom-Nav aus dem Weg (kein
-	   Klick-/Sicht-Konflikt). body.sidebar-open ist der eigentliche Bugfix: die
-	   Off-Canvas-Sidebar lag vorher unter der Bottom-Nav, der „Einstellungen“-Knopf
-	   im Sidebar-Fuß war dadurch unerreichbar. */
-	body:has(#overlay:not([hidden])) #mobileNav,
-	body:has(#palette:not([hidden])) #mobileNav,
-	body.sidebar-open #mobileNav,
-	body:not(.panel-collapsed) #mobileNav {
-		display: none !important;
-	}
-	#palette { padding-top: 6vh; padding-bottom: 70px; }
-	.palette-box { max-height: 76vh; }
-}
+/* (Mobile Bottom-Nav entfernt — ersetzt durch die Dock-Pille in „Mobile Shell v2“, Dateiende) */
 /* Desktop: Karteikarten bleiben in der Topbar (rechts neben Chat).
    Daily bleibt versteckt (Strg+K / Home-Pill); NotebookLM sitzt im Side-Foot. */
 @media (min-width: 769px) {
@@ -1753,13 +1685,7 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr; }
 }
 
-/* Notch/Home-Indicator: horizontale Safe-Areas (padding-bottom kommt aus Bottom-Nav-Block) */
-@media (max-width: 768px) {
-	#app { padding-left: max(6px, env(safe-area-inset-left));
-		padding-right: max(6px, env(safe-area-inset-right)); }
-}
-
-/* Lernen auf Touch: Bewertungsleiste bleibt über der Bottom-Nav erreichbar */
+/* Lernen auf Touch: Bewertungsleiste bleibt über der Dock-Pille erreichbar */
 @media (pointer: coarse) and (max-width: 768px) {
 	.study-card { padding-bottom: 84px; }
 	.study-card .grades { position: sticky; bottom: 70px; z-index: 2;
@@ -2291,4 +2217,88 @@ body.reduce-motion .heft-tray { animation: none; }
 	.heft-chrome .heft-corner-l, .heft-chrome .heft-corner-r { top: 8px; }
 	.heft-chrome .heft-corner-l { left: 8px; }
 	.heft-chrome .heft-corner-r { right: 8px; }
+}
+
+/* ==========================================================================
+   Mobile Shell v2 (12. Juli 2026) — Dock-Pille + Bottom-Sheet-Navigator
+   ==========================================================================
+   Komplett neues Mobile-Konzept. Ersetzt: Bottom-Nav-Leiste (#mobileNav),
+   Off-Canvas-Drawer (body.sidebar-open) und das aus extras.js injizierte
+   Panel-Overlay-CSS.
+   • EINE schwebende Dock-Pille unten mittig: ☰ Navigator · ＋ Neu · ✦ KI.
+   • ☰ öffnet die komplette Sidebar als Bottom-Sheet (body.mnav-open) — Baum,
+     Chats, Stapel, Suche und Sidebar-Fuß (Bibliothek, Sync, Papierkorb,
+     Einstellungen, NotebookLM) sind 1:1 die Desktop-Elemente, nichts doppelt.
+   • ✦ blendet das KI-Panel als Vollbild-Sheet ein (body:not(.panel-collapsed));
+     ✕ im Panel-Kopf schließt es.
+   Layering: Dock 1210 · Sheet-Scrim 1240 · Sheet 1250 (Dock darüber: 1260) ·
+   KI-Sheet 1300 · attach-menu 1350 · overlay 1400 · palette 1500 ·
+   heft-scan 1600 · toasts 2000. */
+#mDock { display: none; }
+@media (max-width: 768px) {
+	#app { grid-template-columns: minmax(0, 1fr) !important; padding: 6px;
+		padding-left: max(6px, env(safe-area-inset-left));
+		padding-right: max(6px, env(safe-area-inset-right)); }
+	#mainWrap { border-radius: 10px; }
+	/* Platz am Listen-/Editor-/Chat-Ende, damit die Dock-Pille nichts verdeckt */
+	#main { padding-bottom: 84px; }
+	.chat-full-wrap { padding-bottom: 84px; }
+
+	/* Navigator-Sheet: die komplette Sidebar fährt von unten hoch */
+	#sidebar { position: fixed; z-index: 1250; left: 0; right: 0; bottom: 0; top: auto;
+		width: auto; height: min(78dvh, 640px);
+		background: var(--menu-bg); border-top: 1px solid var(--edge);
+		border-radius: 18px 18px 0 0; box-shadow: 0 -18px 48px var(--shadow-strong);
+		padding: 20px 14px max(14px, env(safe-area-inset-bottom));
+		transform: translateY(105%); visibility: hidden;
+		transition: transform 0.22s ease, visibility 0s linear 0.22s; }
+	body.mnav-open #sidebar { transform: none; visibility: visible;
+		transition: transform 0.22s ease; }
+	/* Grabber-Griff */
+	#sidebar::before { content: ""; position: absolute; top: 8px; left: 50%;
+		width: 40px; height: 4px; border-radius: 2px;
+		transform: translateX(-50%); background: var(--edge); }
+	/* Abdunkler — Klick darauf schließt (Handler in app.js) */
+	body.mnav-open::after { content: ""; position: fixed; inset: 0; z-index: 1240;
+		background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease; }
+	@keyframes mnavScrimIn { from { opacity: 0; } to { opacity: 1; } }
+
+	/* KI-Panel als Vollbild-Sheet — ersetzt display:none + extras.js-Hack */
+	#panel { display: none; }
+	body:not(.panel-collapsed) #panel { display: flex; position: fixed; inset: 0;
+		z-index: 1300; width: 100vw; max-width: none;
+		border: none; border-radius: 0; background: var(--panel-solid);
+		padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+	#tabbar .tabbar-ai { display: none; } /* ✦ übernimmt die Dock-Pille */
+
+	/* Dock-Pille */
+	#mDock { position: fixed; z-index: 1210; left: 50%; transform: translateX(-50%);
+		bottom: max(10px, env(safe-area-inset-bottom));
+		display: flex; align-items: center; gap: 2px; padding: 4px;
+		background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 999px;
+		box-shadow: 0 12px 32px var(--shadow-strong); }
+	#mDock button { min-width: 56px; min-height: 44px; padding: 3px 10px;
+		display: flex; flex-direction: column; align-items: center; justify-content: center;
+		gap: 1px; border-radius: 999px; color: var(--text2); background: transparent;
+		-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+	#mDock button span { font-size: 19px; line-height: 1.1; }
+	#mDock button small { font-size: 10px; }
+	#mDock button:active { color: var(--accent); background: var(--accent-soft); }
+	#mDock .mdock-new span { color: var(--accent); }
+	/* ☰ bleibt über dem offenen Sheet liegen und wirkt dort als Schließen-Knopf */
+	body.mnav-open #mDock { z-index: 1260; }
+	/* Dock aus dem Weg: KI-Sheet, Dialoge, Palette, Heft-Bühne, Tastatur offen */
+	body:not(.panel-collapsed) #mDock,
+	body:has(#overlay:not([hidden])) #mDock,
+	body:has(#palette:not([hidden])) #mDock,
+	body:has(.heft-stage) #mDock,
+	body:has(#pageTitle:focus) #mDock,
+	body:has(.block-editor :focus) #mDock,
+	body:has(#mainChatInput:focus) #mDock { display: none; }
+
+	/* Touch-Ziele im Sheet + Palette über der Tastatur */
+	.menu-item, .side-foot button { min-height: 40px; }
+	.row { min-height: 36px; }
+	#palette { padding-top: 6vh; padding-bottom: 70px; }
+	.palette-box { max-height: 76vh; }
 }

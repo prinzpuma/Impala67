@@ -152,13 +152,14 @@ window.onunhandledrejection = function (event) {
 	<button id="attachMention"><span class="attach-menu-icon">@</span><span>Seiten oder Personen erwähnen…</span></button>
 </div>
 
-<!-- Mobile: fünf feste Hauptziele statt Desktop-Sidebar in kleiner Breite -->
-<nav id="mobileNav" aria-label="Mobile Navigation">
-	<button id="btnMobileHome" title="Home"><span>⌂</span><small>Home</small></button>
-	<button id="btnMobileSearch" title="Suchen"><span>⌕</span><small>Suche</small></button>
-	<button id="btnMobileAdd" class="mobile-add" title="Neue Seite"><span>＋</span><small>Neu</small></button>
-	<button id="btnMobileCards" title="Karten"><span>▱</span><small>Karten</small></button>
-	<button id="btnMobileAI" title="KI-Chat"><span>✦</span><small>KI</small></button>
+<!-- Mobile Shell v2: EINE schwebende Dock-Pille statt Bottom-Nav-Leiste.
+     ☰ öffnet die komplette Sidebar als Bottom-Sheet (volle Desktop-Funktionalität:
+     Baum, Chats, Stapel, Suche, Bibliothek, Sync, Papierkorb, Einstellungen),
+     ＋ legt eine Seite/ein Heft an, ✦ öffnet das KI-Sheet. CSS: „Mobile Shell v2". -->
+<nav id="mDock" aria-label="Mobile Schnellzugriffe">
+	<button id="btnMNav" type="button" title="Navigator öffnen"><span>☰</span><small>Menü</small></button>
+	<button id="btnMNew" type="button" class="mdock-new" title="Neue Seite"><span>＋</span><small>Neu</small></button>
+	<button id="btnMAi" type="button" title="KI öffnen"><span>✦</span><small>KI</small></button>
 </nav>
 
 <!-- KI- und Sidebar-Toggle sitzen in der Tab-Leiste (#tabbar), keine Floating-FABs -->
@@ -196,7 +197,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=31", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=33", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

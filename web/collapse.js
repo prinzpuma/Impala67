@@ -3,11 +3,12 @@
 import { S, STATE } from "./state.js";
 
 // ---------- Ein-/Ausklapp-Zustand (Sidebar-Baum), geräteübergreifend ----------
-// Standard ist bewusst EINGEKLAPPT: Nur explizit geöffnete Knoten stehen in
-// S.treeOpen. Die Änderungen sind Event-Log-Ereignisse und gehen damit durch
-// Export, Import und Drive-Sync; localStorage wäre nur gerätelokal.
+// Seiten sind standardmäßig EINGEKLAPPT; Workspaces dagegen AUSGEKLAPPT.
+// treeOpen enthält daher offene Seiten und (nur bei explizitem Schließen) den
+// Wert false für Workspaces. Die Änderungen gehen durch Event-Log und Drive-Sync.
 export const COLLAPSE = (() => {
-	const isCollapsed = (key) => !S.treeOpen[key];
+	const isWorkspace = (key) => String(key).startsWith("ws:");
+	const isCollapsed = (key) => isWorkspace(key) ? S.treeOpen[key] === false : !S.treeOpen[key];
 	async function toggle(key) {
 		if (!key) return;
 		await STATE.dispatch("uiTreeSet", { key, open: isCollapsed(key) });

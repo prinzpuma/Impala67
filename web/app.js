@@ -374,18 +374,21 @@ function wireEvents() {
 		}
 	});
 
-	// Mobile Off-Canvas-Sidebar: Tippen außerhalb (Abdunkler oder sichtbarer Rest
-	// der Hauptfläche) sowie Escape schließen die Sidebar — vorher gab es dafür,
-	// einmal offen, gar keinen Weg zum Schließen außer erneut auf ☰ zu tippen
-	// (der aber von der offenen Sidebar selbst verdeckt wurde).
+	// Mobile Shell v2 — Navigator-Sheet (body.mnav-open): Tippen auf den Abdunkler
+	// oder Escape schließt das Sheet. Aktionen im Sheet, die die Hauptansicht
+	// wechseln, schließen es mit (Seiten/Chats erledigt bereits openPage in tabs.js;
+	// die Topbar-Pillen Home/Chat/Suche wechseln nur den Sheet-Inhalt und bleiben offen).
 	document.addEventListener("click", (e) => {
-		if (!document.body.classList.contains("sidebar-open")) return;
-		if (e.target.closest("#sidebar") || e.target.closest("#btnSidebarToggle")) return;
-		document.body.classList.remove("sidebar-open");
+		if (!document.body.classList.contains("mnav-open")) return;
+		if (e.target.closest("#mDock") || e.target.closest("#btnSidebarToggle")) return;
+		if (!e.target.closest("#sidebar")) { document.body.classList.remove("mnav-open"); return; }
+		if (e.target.closest("#btnLibrary, #btnTrash, #btnDaily, #btnAnki, [data-deckopen], [data-ankistudy]")) {
+			document.body.classList.remove("mnav-open");
+		}
 	});
 	document.addEventListener("keydown", (e) => {
-		if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
-			document.body.classList.remove("sidebar-open");
+		if (e.key === "Escape" && document.body.classList.contains("mnav-open")) {
+			document.body.classList.remove("mnav-open");
 		}
 	});
 
@@ -1090,16 +1093,21 @@ function wireEvents() {
 		}
 
 		switch (t.id) {
-			// Home: wechselt NUR die Sidebar zur Datei-Übersicht (wie in Notion)
-			case "btnMobileHome":
-				S.view = "home"; S.sidebarMode = "files"; toggleChatFull(false); render(); break;
-			case "btnMobileSearch": SEARCH.openPalette(); break;
-			case "btnMobileAdd":
-				await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null); break;
-			case "btnMobileCards": openAnki(); break;
-			case "btnMobileAI":
+			// Mobile Shell v2 — Dock-Pille: ☰ Navigator-Sheet, ＋ Neu, ✦ KI-Sheet
+			case "btnMNav":
+				document.body.classList.toggle("mnav-open");
+				break;
+			case "btnMNew":
+				document.body.classList.remove("mnav-open");
+				await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
+				break;
+			case "btnMAi":
+				// Gleiche Mechanik wie der Desktop-FAB (Panel einblenden) — das
+				// Vollbild-Layout kommt rein aus CSS („Mobile Shell v2", styles.css).
+				document.body.classList.remove("mnav-open");
 				document.body.classList.remove("panel-collapsed");
-				CHAT_FULLSCREEN.toggleChatFull(true); break;
+				renderTabs();
+				break;
 			case "btnAiFab":
 				// Desktop-Schnellzugriff unten rechts: nur das Seitenpanel öffnen,
 				// damit die aktuelle Seite sichtbar bleibt.
@@ -1272,10 +1280,10 @@ function wireEvents() {
 				await SETTINGS.handleBackupNow();
 				break;
 			case "btnSidebarToggle": {
-				// Mobile: Off-Canvas öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
+				// Mobile: Navigator-Sheet öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
 				const mobile = window.matchMedia("(max-width: 768px)").matches;
 				if (mobile) {
-					document.body.classList.toggle("sidebar-open");
+					document.body.classList.toggle("mnav-open");
 				} else {
 					const on = document.body.classList.toggle("sidebar-collapsed");
 					try { localStorage.setItem("impala67.sidebarCollapsed", on ? "1" : "0"); } catch { /* ignore */ }

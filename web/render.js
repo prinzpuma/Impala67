@@ -122,16 +122,9 @@ function renderTopbar() {
 	const daily = U.el("btnDaily");
 	if (daily) daily.classList.toggle("active", S.view === "daily");
 
-	// Mobile Bottom-Nav: dieselbe Aktiv-Logik wie die Desktop-Topbar-Pillen —
-	// vorher blieb die untere Leiste immer optisch neutral, egal welcher Bereich
-	// offen war (Inkonsistenz zur Desktop-Ansicht).
-	const chatFullOpen = document.body.classList.contains("chat-full") && !document.body.classList.contains("panel-collapsed");
-	const mHome = U.el("btnMobileHome");
-	const mCards = U.el("btnMobileCards");
-	const mAI = U.el("btnMobileAI");
-	if (mHome) mHome.classList.toggle("active", mode === "files" && S.view !== "library" && S.view !== "daily" && S.view !== "trash" && !chatFullOpen);
-	if (mCards) mCards.classList.toggle("active", mode === "anki");
-	if (mAI) mAI.classList.toggle("active", chatFullOpen);
+	// Mobile Shell v2: die Dock-Pille (☰/＋/✦) ist eine reine Aktions-Leiste ohne
+	// Bereichs-Zustand — Aktiv-Zustände zeigt das Navigator-Sheet selbst über die
+	// Topbar-Pillen oben (dieselben Elemente wie am Desktop, nichts doppelt).
 }
 
 function aiStatusMeta() {

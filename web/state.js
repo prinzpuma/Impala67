@@ -34,8 +34,8 @@ export const S = {
 	// (deckDelete entfernt Eintrag + Karten; neu angelegte Karten ohne Stapel legen ihn ggf. wieder an).
 	decks: { Standard: { name: "Standard", created: "" } }, // Karteikarten-Stapel; Unterstapel per "Eltern::Kind"-Namensschema
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
-	// Nur geöffnete Sidebar-Knoten werden gespeichert. Fehlende Einträge sind
-	// absichtlich eingeklappt, damit neue Seiten/Workspaces standardmäßig zu sind.
+	// Seiten sind ohne Eintrag eingeklappt; Workspaces dagegen ausgeklappt.
+	// Ein explizit geschlossener Workspace wird mit false gespeichert.
 	treeOpen: {},
 	chat: [], // Haupt-Chatverlauf (Vollbild-Tab)
 	sideChat: [], // Verlauf für das kleine KI-Seitenpanel
@@ -432,6 +432,7 @@ export const STATE = (() => {
 				// Offline-Geräten wird beim Log-Merge nicht gegenseitig überschrieben.
 				if (!p.key) break;
 				if (p.open) S.treeOpen[p.key] = true;
+				else if (String(p.key).startsWith("ws:")) S.treeOpen[p.key] = false;
 				else delete S.treeOpen[p.key];
 				break;
 			case "uiTabsSet": {
