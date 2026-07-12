@@ -220,7 +220,7 @@ function ankiBrowserHtml() {
 			"<th></th>" +
 		"</tr></thead><tbody>" +
 		shown.map((c, i) =>
-			(!S.ankiDeck && (!i || (shown[i - 1].deck || "Standard") !== (c.deck || "Standard")
+			((!S.ankiDeck && (!i || (shown[i - 1].deck || "Standard") !== (c.deck || "Standard")))
 				? '<tr class="anki-deck-group"><td colspan="8">Stapel: ' + U.esc(c.deck || "Standard") + "</td></tr>" : "") +
 			'<tr class="' + (c.suspended ? "suspended" : "") + '">' +
 				'<td class="anki-front" data-ankiedit="' + c.id + '" title="Zum Bearbeiten klicken">' + U.esc(c.front.length > 90 ? c.front.slice(0, 90) + "…" : c.front) + "</td>" +
