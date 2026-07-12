@@ -1,10 +1,17 @@
-// updater.js — Version + Update-Check (Tauri-Banner beim Start, PWA/Settings manuell).
+// updater.js — Version + Update-Check (einheitlich: Suchen prüft nur, Installieren installiert).
 //
 // WICHTIG — zwei verschiedene „Versionen“:
 //   BUILD_VERSION / APP_VERSION = die Version DIESES geladenen JS-Bundles (lokal/läuft).
-//   version.json auf dem Server     = deployed Stand (remote), frisch per no-store geladen.
+//   version.json (PWA) bzw. Tauri-Manifest = deployed Stand (remote), frisch geladen.
 // Niemals APP_VERSION mit der Remote-Antwort überschreiben — sonst ist „Lokal“ immer
 // gleich „Remote“ und die Anzeige/Update-Erkennung ist falsch.
+//
+// EINHEITLICHER ABLAUF auf beiden Plattformen (Desktop + PWA):
+//   1) checkAppUpdate()   prüft NUR und merkt sich ein gefundenes Update — installiert nie.
+//   2) installAppUpdate() installiert das gemerkte Update (Tauri: Download + Neustart,
+//      PWA: Service-Worker aktualisieren, auf Aktivierung warten, cache-bustender Reload).
+// Vorher installierte die Tauri-Variante direkt beim „Nach Updates suchen“ — und die
+// PWA-Variante verließ sich auf einen festen 200-ms-Schlaf (Race auf iPad-Safari).
 //
 // Bei Release: wird von .github/workflows/auto-version.yml gesetzt
 // (zusammen mit package.json, tauri.conf.json, web/version.json, web/latest.json).
@@ -53,21 +60,79 @@ function normVer(v) {
 	return String(v || "").replace(/^v/i, "").trim();
 }
 
-// PWA: SW anstupsen + Reload (network-first holt den Stand). Kein externes Browser-Fenster.
-window.applyPwaUpdate = async function applyPwaUpdate() {
+// Zwischen „suchen“ und „installieren“ gemerktes Update: { version, install() } | null
+let pendingUpdate = null;
+
+// Tauri v1 und v2 haben unterschiedliche Updater-APIs — der Adapter liefert für beide
+// dieselbe Form { version, install() } bzw. null, wenn kein Update vorliegt.
+async function tauriCheck() {
+	const t = window.__TAURI__;
+	if (!t || !t.updater) return null;
+	// v2: updater.check() → Update-Objekt (oder null) mit downloadAndInstall()
+	if (typeof t.updater.check === "function") {
+		const u = await t.updater.check();
+		if (!u || u.available === false) return null;
+		return {
+			version: normVer(u.version || (u.manifest && u.manifest.version) || ""),
+			install: () => u.downloadAndInstall(),
+		};
+	}
+	// v1: updater.checkUpdate() → { shouldUpdate, manifest } + separates installUpdate()
+	if (typeof t.updater.checkUpdate === "function") {
+		const r = await t.updater.checkUpdate();
+		if (!r || !r.shouldUpdate) return null;
+		return {
+			version: normVer((r.manifest && r.manifest.version) || ""),
+			install: () => t.updater.installUpdate(),
+		};
+	}
+	return null;
+}
+
+async function tauriRelaunch() {
+	const t = window.__TAURI__;
+	if (t && t.process && typeof t.process.relaunch === "function") return t.process.relaunch();
+	if (t && t.app && typeof t.app.relaunch === "function") return t.app.relaunch();
+	throw new Error("Neustart-API nicht verfügbar — App bitte manuell neu starten.");
+}
+
+// Auf die Aktivierung eines neuen Service-Workers warten (statt festem Schlaf).
+function waitForActivation(reg) {
+	return new Promise((resolve) => {
+		const w = reg.installing || reg.waiting;
+		if (!w || w.state === "activated" || w.state === "redundant") return resolve();
+		w.addEventListener("statechange", () => {
+			if (w.state === "activated" || w.state === "redundant") resolve();
+		});
+	});
+}
+
+async function refreshServiceWorker() {
+	if (!("serviceWorker" in navigator)) return;
 	try {
-		if ("serviceWorker" in navigator) {
-			const regs = await navigator.serviceWorker.getRegistrations();
-			await Promise.all(regs.map((r) => r.update().catch(() => {})));
-			// Warte kurz, damit der neue SW aktiv werden kann
-			await new Promise((r) => setTimeout(r, 200));
-		}
+		const regs = await navigator.serviceWorker.getRegistrations();
+		await Promise.all(regs.map((r) => r.update().catch(() => {})));
+		// FIX: der feste 200-ms-Schlaf war ein Race — jetzt echtes Warten auf die
+		// Aktivierung, mit hartem Timeout (iPad-Safari bleibt sonst in "installing" hängen).
+		await Promise.race([
+			Promise.all(regs.map(waitForActivation)),
+			new Promise((r) => setTimeout(r, 4000)),
+		]);
 	} catch (e) {
 		console.warn("PWA-Update vorbereiten:", e);
 	}
+}
+
+function reloadWithCacheBust() {
 	const u = new URL(location.href);
 	u.searchParams.set("_v", String(Date.now()));
-	location.replace(u.pathname + u.search + (u.hash || ""));
+	location.replace(u.toString());
+}
+
+// Kompatibilität: älterer Einstiegspunkt — nutzt denselben Pfad wie installAppUpdate (PWA).
+window.applyPwaUpdate = async function applyPwaUpdate() {
+	await refreshServiceWorker();
+	reloadWithCacheBust();
 };
 
 async function fetchJson(url, bust) {
@@ -117,23 +182,25 @@ window.getAppVersion = function getAppVersion() {
 	return normVer(window.APP_VERSION || BUILD_VERSION || "");
 };
 
-// Manueller Check (Desktop + PWA). Öffnet NIEMALS ein externes Browser-Fenster.
+// Schritt 1 (beide Plattformen): NUR prüfen. Installiert wird ausschließlich über
+// installAppUpdate() — auch auf dem Desktop nichts mehr direkt beim Suchen.
 window.checkAppUpdate = async function checkAppUpdate() {
 	const cur = normVer(window.APP_VERSION || BUILD_VERSION || "");
 	if (!cur) throw new Error("BUILD_VERSION fehlt in updater.js");
 
 	// Desktop (Tauri)
-	if (window.__TAURI__ && window.__TAURI__.updater) {
+	if (window.__TAURI__) {
 		try {
-			const update = await window.__TAURI__.updater.check();
-			if (!update) return { ok: true, latest: cur, current: cur, hasUpdate: false, source: "tauri" };
-			const latest = normVer(update.version || "");
+			const u = await tauriCheck();
+			// Tauri meldet nur dann ein Update, wenn das Manifest neuer ist. Fehlt die
+			// Versionsnummer im Manifest, vertrauen wir dieser Entscheidung.
+			const hasUpdate = !!u && (!u.version || cmpSemver(u.version, cur) > 0);
+			pendingUpdate = hasUpdate ? u : null;
 			return {
 				ok: true,
-				latest: latest || cur,
+				latest: (u && u.version) || cur,
 				current: cur,
-				hasUpdate: cmpSemver(latest, cur) > 0,
-				update: update,
+				hasUpdate,
 				source: "tauri",
 			};
 		} catch (e) {
@@ -145,51 +212,81 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	// PWA / Browser: deployed version.json vs. laufendes Bundle
 	const { latest, source } = await fetchDeployedVersionPwa();
 	const remote = latest || cur;
+	const hasUpdate = cmpSemver(remote, cur) > 0;
+	pendingUpdate = hasUpdate ? { version: remote, install: null } : null;
 	return {
 		ok: true,
 		latest: remote,
 		current: cur,
-		hasUpdate: cmpSemver(remote, cur) > 0,
+		hasUpdate,
 		source: source || "version.json",
 		remoteOlder: cmpSemver(remote, cur) < 0,
 	};
 };
 
+// Schritt 2 (beide Plattformen): das gefundene Update installieren.
+// onStatus (optional) bekommt Fortschrittstexte für die UI.
+window.installAppUpdate = async function installAppUpdate(onStatus) {
+	const say = (s) => { try { if (typeof onStatus === "function") onStatus(s); } catch { /* UI weg */ } };
+	if (window.__TAURI__) {
+		let u = pendingUpdate && typeof pendingUpdate.install === "function" ? pendingUpdate : null;
+		if (!u) {
+			say("Suche Update…");
+			u = await tauriCheck();
+		}
+		if (!u) throw new Error("Kein Update gefunden — erst „Nach Updates suchen“.");
+		say("⬇️ Update" + (u.version ? " v" + u.version : "") + " wird geladen…");
+		await u.install();
+		pendingUpdate = null;
+		say("✅ Update installiert — Neustart…");
+		await tauriRelaunch();
+		return { restarted: true };
+	}
+	// PWA: Service-Worker aktualisieren, auf Aktivierung warten, dann frisch laden.
+	say("⬇️ Update wird geladen…");
+	await refreshServiceWorker();
+	pendingUpdate = null;
+	say("🔄 App wird neu geladen…");
+	reloadWithCacheBust();
+	return { reloaded: true };
+};
+
 // Beim Start nur in der Tauri-App: Banner mit Installieren/Später.
+// Installiert wird über denselben einheitlichen Pfad wie in den Einstellungen.
 (async function () {
 	if (!window.__TAURI__ || !window.__TAURI__.updater) return;
+	let update = null;
 	try {
-		const update = await window.__TAURI__.updater.check();
-		if (!update) return;
-		const banner = document.createElement("div");
-		banner.style = "position:fixed;bottom:16px;left:16px;z-index:50;padding:10px 14px;border-radius:10px;" +
-			"background:#1f2127;color:#fff;font:13px sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5);" +
-			"display:flex;gap:10px;align-items:center;";
-		const label = document.createElement("span");
-		label.textContent = "⬇️ Update " + update.version + " verfügbar";
-		const btnNow = document.createElement("button");
-		btnNow.textContent = "Jetzt installieren";
-		btnNow.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:#6fc3ff;color:#06090f;";
-		const btnLater = document.createElement("button");
-		btnLater.textContent = "Später";
-		btnLater.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;";
-		banner.append(label, btnNow, btnLater);
-		document.body.appendChild(banner);
-		btnLater.addEventListener("click", () => banner.remove());
-		btnNow.addEventListener("click", async () => {
-			btnNow.remove();
-			btnLater.remove();
-			try {
-				label.textContent = "⬇️ Update " + update.version + " wird geladen…";
-				await update.downloadAndInstall();
-				label.textContent = "✅ Update installiert — Neustart…";
-				await window.__TAURI__.process.relaunch();
-			} catch (e) {
-				label.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
-				setTimeout(() => banner.remove(), 8000);
-			}
-		});
+		update = await tauriCheck();
 	} catch (e) {
 		console.warn("Update-Check fehlgeschlagen:", e);
+		return;
 	}
+	if (!update) return;
+	pendingUpdate = update;
+	const banner = document.createElement("div");
+	banner.style = "position:fixed;bottom:16px;left:16px;z-index:50;padding:10px 14px;border-radius:10px;" +
+		"background:#1f2127;color:#fff;font:13px sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5);" +
+		"display:flex;gap:10px;align-items:center;";
+	const label = document.createElement("span");
+	label.textContent = "⬇️ Update " + (update.version ? "v" + update.version + " " : "") + "verfügbar";
+	const btnNow = document.createElement("button");
+	btnNow.textContent = "Jetzt installieren";
+	btnNow.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:#6fc3ff;color:#06090f;";
+	const btnLater = document.createElement("button");
+	btnLater.textContent = "Später";
+	btnLater.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;";
+	banner.append(label, btnNow, btnLater);
+	document.body.appendChild(banner);
+	btnLater.addEventListener("click", () => banner.remove());
+	btnNow.addEventListener("click", async () => {
+		btnNow.remove();
+		btnLater.remove();
+		try {
+			await window.installAppUpdate((s) => { label.textContent = s; });
+		} catch (e) {
+			label.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
+			setTimeout(() => banner.remove(), 8000);
+		}
+	});
 })();

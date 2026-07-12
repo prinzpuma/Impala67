@@ -28,7 +28,7 @@ window.onunhandledrejection = function (event) {
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=34">
+<link rel="stylesheet" href="styles.css?build=37">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f13">
@@ -88,9 +88,9 @@ window.onunhandledrejection = function (event) {
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 14h4l2 2h4l2-2h4"/></svg>
 				<span>Bibliothek</span>
 			</button>
-			<button id="btnDriveSync">
+			<button id="btnDriveSync" class="sync-idle" title="Synchronisiert">
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.3A6 6 0 1 0 6 17h12a3.5 3.5 0 0 0 0-7Z"/></svg>
-				<span>Sync</span>
+				<span id="driveSyncLabel">Gespeichert</span>
 			</button>
 			<button id="btnTrash">
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
@@ -181,7 +181,7 @@ window.onunhandledrejection = function (event) {
      Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
-<script type="module" src="main.js?build=34"></script>
+<script type="module" src="main.js?build=37"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
@@ -202,7 +202,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=34", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=37", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

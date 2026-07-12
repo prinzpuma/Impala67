@@ -122,6 +122,18 @@ export async function initApp() {
 	SETTINGS.checkAI();
 	// Nach erfolgreicher früherer Google-Anmeldung sofort Drive abgleichen.
 	// Ohne gespeicherte Sitzung bleibt der Lauf still und öffnet kein Login-Popup.
+	// Kleine, unaufdringliche Zustandsanzeige am vorhandenen Sync-Knopf.
+	window.addEventListener("impala67:sync-status", (e) => {
+		const d = (e && e.detail) || {};
+		const btn = U.el("btnDriveSync"), label = U.el("driveSyncLabel");
+		if (!btn || !label) return;
+		btn.classList.remove("sync-idle", "sync-syncing", "sync-ok", "sync-waiting", "sync-error");
+		btn.classList.add("sync-" + (d.state || "idle"));
+		label.textContent = d.label || "Sync";
+		btn.title = d.detail || d.label || "Drive-Sync";
+	});
+	window.addEventListener("online", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Online · wartet" } })));
+	window.addEventListener("offline", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Offline · wartet" } })));
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);

@@ -115,6 +115,14 @@ export const DB = (() => {
 		ensureOpen();
 		return val(db.transaction("events").objectStore("events").getAll());
 	}
+	async function eventsAfterSeq(seq) {
+		ensureOpen();
+		const min = Number(seq || 0);
+		// Importierte Remote-Events sind bereits in Drive vorhanden und dürfen nicht
+		// als lokales Echo erneut hochgeladen werden. Lokal erzeugte Konfliktkopien
+		// tragen das Flag nicht und werden normal synchronisiert.
+		return (await allEvents()).filter((ev) => Number(ev.seq || 0) > min && !ev._remote);
+	}
 	async function putBlob(id, buf, meta) {
 		ensureOpen();
 		const t = db.transaction("blobs", "readwrite");
@@ -299,6 +307,9 @@ export const DB = (() => {
 		const local = await allEvents();
 		const existing = new Set(local.map((e) => e.id));
 		const fresh = incomingEvents.filter((ev) => ev && ev.id && !existing.has(ev.id));
+		// Nur echte Drive-Downloads als Remote markieren. Ein manueller Backup-Import
+		// ist eine lokale Nutzeraktion und muss anschließend normal hochgeladen werden.
+		const incomingFreshIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
 		// Konflikt-Erkennung: dieselbe Seite wurde seit dem letzten Sync lokal UND auf einem
 		// anderen Gerät inhaltlich geändert. Der Log-Merge entscheidet still per „späterer
 		// Zeitstempel gewinnt“ — der unterlegene Stand wird hier als Konfliktkopie gerettet.
@@ -404,13 +415,19 @@ export const DB = (() => {
 				conflictCount++;
 			}
 		}
-		fresh.forEach((ev) => { delete ev.seq; }); // neue lokale Sequenznummer
+		fresh.forEach((ev) => {
+			delete ev.seq; // neue lokale Sequenznummer
+			if (incomingFreshIds.has(ev.id)) ev._remote = true;
+		});
 		if (fresh.length) await addEvents(fresh);
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
 		for (const [k, v] of Object.entries(blobs)) {
 			if (!(await getBlob(k))) await putBlob(k, U.b64ToBuf(v.b64), v.meta);
 		}
-		return { added: fresh.length, conflicts: conflictCount, conflictDetails };
+		// importedEvents ermöglicht Live-Replay ohne location.reload(). Kopien sind
+		// wichtig, damit UI-Code keine Objekte aus dem Import-Payload mutiert.
+		return { added: fresh.length, conflicts: conflictCount, conflictDetails,
+			importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
 	}
 
 	async function resetDatabase() {
@@ -459,5 +476,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, compactEvents, compactLocal, contentHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

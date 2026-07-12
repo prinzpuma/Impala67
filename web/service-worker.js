@@ -34,7 +34,12 @@
 // v32: Mobile Shell v2 — Dock-Pille + Bottom-Sheet-Navigator (Bottom-Nav & Off-Canvas entfernt)
 // v33: Scanner-Ecken bleiben im vollständigen Rohbild editierbar.
 // v34: iPadOS-Update-Fix — App-Dateien umgehen zusätzlich den Safari-HTTP-Cache.
-const CACHE = "impala67-v34";
+// v35: Mobile Shell v2.1 — Scrim nur bei offenem Navigator (#app::after + mnav-open-Guard),
+//      Einstellungs-Dialog auf dem Handy gestapelt statt zweispaltig
+// v36: schneller Drive-Sync — sync-core.js + Statusanzeige
+// v37: Einheitlicher Updater — „Suchen" prüft nur noch, Installieren ist ein eigener Schritt
+// v38: Heft-Fokus am Tablet — Vollbild-Animation wenn Sidebar ausgeblendet
+const CACHE = "impala67-v38";
 
 const APP_FILES = [
 	"./",
@@ -56,6 +61,7 @@ const APP_FILES = [
 	"./ai.js",
 	"./rag.js",
 	"./drive.js",
+	"./sync-core.js",
 	"./pdfs.js",
 	"./editor.js",
 	"./render.js",

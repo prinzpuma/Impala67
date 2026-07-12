@@ -259,8 +259,10 @@ export function openSettings(section) {
 		const platform = window.__TAURI__ ? "Windows (Desktop)" : "PWA / Browser";
 		body = '<p class="hint">Lokal (läuft): <b id="updateLocalVer">v' + U.esc(String(ver).replace(/^v/i, "")) + '</b><br>' +
 			'Server / Remote: <b id="updateRemoteVer">wird geprüft…</b><br>Plattform: ' + platform + '</p>' +
+			// Einheitlich (Desktop + PWA): der Installieren-Knopf existiert auf beiden
+			// Plattformen und wird von handleCheckUpdate ein-/ausgeblendet und beschriftet.
 			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button>' +
-			(window.__TAURI__ ? "" : '<button id="btnApplyPwaUpdate" hidden>Jetzt neu laden</button>') +
+			'<button id="btnApplyPwaUpdate" hidden>Update installieren</button>' +
 			"</div>" +
 			'<p class="hint" id="updateStatus">Prüfe Version…</p>' +
 			'<p class="hint">PWA liest <code>version.json</code> von dieser App-URL (nicht das GitHub-Release-Asset). ' +
@@ -355,16 +357,19 @@ function finishDriveSync({ imported, conflicts, conflictDetails }) {
 	const details = conflictDetails || [];
 	if (details.length) RENDER.mergePendingConflicts(details);
 	const n = details.length || conflicts || 0;
-	if (imported > 0) {
-		U.toast(n ? "Sync fertig — " + imported + " Änderungen, " + n + " Konflikt(e). Lösungsdialog folgt…" : "Sync fertig — " + imported + " Änderungen übernommen. Die App lädt neu.", n ? "error" : "success");
-		setTimeout(() => location.reload(), 900);
-		return;
-	}
+	// drive.js hat importierte Events bereits deterministisch in STATE eingespielt;
+	// kein location.reload() mehr — Editor, Tabs und Scrollposition bleiben erhalten.
 	if (n > 0) {
+		U.toast("Sync fertig — " + imported + " Änderungen, " + n + " Konflikt(e).", "error");
 		RENDER.openConflictResolver(0);
 		return;
 	}
-	U.toast("Sync abgeschlossen — keine neuen Änderungen.", "success");
+	if (imported > 0) {
+		U.toast(imported + " Änderungen von einem anderen Gerät übernommen.", "success");
+		render();
+		return;
+	}
+	U.toast("Sync abgeschlossen — alles aktuell.", "success");
 }
 
 export async function handleDriveSyncSettings(t) {
@@ -401,10 +406,10 @@ function handleAutomaticDriveSync(result) {
 		RENDER.openConflictResolver(0);
 		return;
 	}
-	if (result.imported > 0 && !autoReloadScheduled) {
-		autoReloadScheduled = true;
-		U.toast("Änderungen von einem anderen Gerät übernommen — App wird aktualisiert.", "success");
-		setTimeout(() => location.reload(), 700);
+	if (result.imported > 0) {
+		// Live-Replay ist bereits erfolgt; nur gezielt neu rendern, ohne den Nutzer
+		// aus Editor, Heft oder Tab-Kontext zu werfen.
+		render();
 	}
 }
 
@@ -428,11 +433,12 @@ export async function handleCheckUpdate() {
 	const applyBtn = U.el("btnApplyPwaUpdate");
 	const localEl = U.el("updateLocalVer");
 	const remoteEl = U.el("updateRemoteVer");
-	const isPwa = !window.__TAURI__;
+	const isTauri = !!window.__TAURI__;
 	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
-	// PWA: Reload-Button immer als Fallback sichtbar (nie Safari/externen Browser öffnen)
+	// Einheitlich: Suchen zeigt nur an. Der Installieren-Knopf erscheint erst, wenn
+	// wirklich ein Update gefunden wurde (PWA: zusätzlich als Reload-Fallback).
 	if (applyBtn) {
-		applyBtn.hidden = !isPwa;
+		applyBtn.hidden = isTauri;
 		applyBtn.disabled = false;
 		applyBtn.textContent = "App neu laden";
 	}
@@ -453,21 +459,11 @@ export async function handleCheckUpdate() {
 				: "—";
 		}
 		if (r.hasUpdate) {
-			if (window.__TAURI__ && r.update) {
-				if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar — wird vorbereitet…";
-				try {
-					await r.update.downloadAndInstall();
-					if (status) status.textContent = "✅ Update installiert — Neustart…";
-					await window.__TAURI__.process.relaunch();
-				} catch (e) {
-					if (status) status.textContent = "⚠️ Installation fehlgeschlagen: " + (e.message || e);
-					U.toast("Update-Installation fehlgeschlagen.", "error");
-				}
-			} else {
-				if (status) status.textContent = "⬇️ Neu: v" + r.latest + " (du: v" + r.current + "). Tippe „App neu laden“.";
-				if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = "Update laden"; }
-				U.toast("Update v" + r.latest + " verfügbar.", "success");
-			}
+			// FIX: Desktop installierte hier früher sofort selbst. Jetzt auf BEIDEN
+			// Plattformen zweistufig — installiert wird erst über den Knopf.
+			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „" + (isTauri ? "Update installieren" : "Update laden") + "“.";
+			if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = isTauri ? "Update installieren" : "Update laden"; }
+			U.toast("Update v" + r.latest + " verfügbar.", "success");
 		} else if (r.remoteOlder) {
 			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
 				" (Server älter — version.json beim Deploy mitbumpen).";
@@ -481,9 +477,9 @@ export async function handleCheckUpdate() {
 		// FIX iPad: früher window.open(GitHub) → Safari. Nie mehr extern öffnen.
 		const msg = (e && e.message) ? e.message : String(e);
 		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + msg +
-			(isPwa ? " — du kannst die App trotzdem neu laden." : "");
+			(isTauri ? "" : " — du kannst die App trotzdem neu laden.");
 		if (remoteEl) remoteEl.textContent = "nicht erreichbar";
-		if (applyBtn && isPwa) {
+		if (applyBtn && !isTauri) {
 			applyBtn.hidden = false;
 			applyBtn.textContent = "App neu laden";
 		}
@@ -492,19 +488,26 @@ export async function handleCheckUpdate() {
 	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }
 }
 
-// PWA: SW updaten + Reload (aus updater.js)
+// Einheitlicher Installieren-Knopf (Desktop + PWA) — installAppUpdate aus updater.js
+// übernimmt die Plattform-Unterschiede (Tauri: Download + Neustart, PWA: SW + Reload).
 export async function handleApplyPwaUpdate() {
 	const status = U.el("updateStatus");
 	const applyBtn = U.el("btnApplyPwaUpdate");
-	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = "Lädt…"; }
+	const isTauri = !!window.__TAURI__;
+	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = isTauri ? "Installiert…" : "Lädt…"; }
 	if (status) status.textContent = "⬇️ Update wird geladen…";
 	try {
-		if (typeof window.applyPwaUpdate === "function") await window.applyPwaUpdate();
-		else location.reload();
+		if (typeof window.installAppUpdate === "function") {
+			await window.installAppUpdate((st) => { if (status) status.textContent = st; });
+		} else if (typeof window.applyPwaUpdate === "function") {
+			await window.applyPwaUpdate();
+		} else {
+			location.reload();
+		}
 	} catch (e) {
-		if (status) status.textContent = "⚠️ Reload fehlgeschlagen: " + (e.message || e);
-		U.toast("Update-Reload fehlgeschlagen.", "error");
-		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Jetzt neu laden"; }
+		if (status) status.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
+		U.toast("Update fehlgeschlagen.", "error");
+		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = isTauri ? "Update installieren" : "Jetzt neu laden"; }
 	}
 }
 

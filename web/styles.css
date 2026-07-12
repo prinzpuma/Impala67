@@ -114,6 +114,15 @@ button {
 button:hover { background: rgba(255,255,255,0.11); }
 button.danger { color: var(--danger); }
 #btnReview.attention { color: var(--accent); }
+/* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. Farbe ergänzt den Text,
+   ist aber nie der einzige Statuskanal. */
+#btnDriveSync.sync-syncing { color: var(--accent); }
+#btnDriveSync.sync-syncing svg { animation: syncPulse 1s ease-in-out infinite; }
+#btnDriveSync.sync-ok { color: var(--success); }
+#btnDriveSync.sync-waiting { color: var(--text2); }
+#btnDriveSync.sync-error { color: var(--danger); }
+@keyframes syncPulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { #btnDriveSync.sync-syncing svg { animation: none; } }
 .empty { color: var(--text2); padding: 16px; text-align: center; }
 
 /* Ein-/Ausklapp-Pfeile (Workspaces und Seiten mit Unterseiten) */
@@ -1685,6 +1694,27 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr; }
 }
 
+/* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht ausgeblendet,
+   wächst die Papier-Bühne mit einer weichen Übergangs-Animation auf den gesamten
+   Bildschirm — Außenabstand, Zwischenräume, Rahmen und Eckenrundung verschwinden.
+   Die Transition liegt dauerhaft auf #app/#mainWrap (nur in der Heft-Ansicht),
+   damit auch das Wieder-Einblenden der Seitenleiste in beide Richtungen gleitet. */
+@media (pointer: coarse) and (min-width: 769px) {
+	body:has(.heft-stage) #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1); }
+	body:has(.heft-stage) #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1); }
+}
+@media (pointer: coarse) and (min-width: 769px) and (max-width: 1024px) {
+	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald die Sidebar weg ist */
+	body.sidebar-collapsed:has(.heft-stage) #app { padding: 0; gap: 0; }
+	body.sidebar-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent; }
+}
+@media (pointer: coarse) and (min-width: 1025px) {
+	/* Große Tablets (iPad quer): das KI-Panel ist eine echte Grid-Spalte —
+	   Vollbild erst, wenn Seitenleiste UND Panel geschlossen sind */
+	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #app { padding: 0; gap: 0; }
+	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent; }
+}
+
 /* Lernen auf Touch: Bewertungsleiste bleibt über der Dock-Pille erreichbar */
 @media (pointer: coarse) and (max-width: 768px) {
 	.study-card { padding-bottom: 84px; }
@@ -2258,10 +2288,15 @@ body.reduce-motion .heft-tray { animation: none; }
 	#sidebar::before { content: ""; position: absolute; top: 8px; left: 50%;
 		width: 40px; height: 4px; border-radius: 2px;
 		transform: translateX(-50%); background: var(--edge); }
-	/* Abdunkler liegt im selben Stacking-Kontext wie das Sheet. Zuvor war er als
-	   body::after außerhalb von #app (z-index: 1); dadurch lag er trotz z-index 1240
-	   ÜBER #sidebar, deren z-index 1250 nur innerhalb von #app gelten konnte. */
-	#app::after { content: ""; position: fixed; inset: 0; z-index: 1240;
+	/* Abdunkler — Regeln für Korrektheit (Layering-Bugs von heute, beide behoben):
+	   1. Er MUSS im Stacking-Kontext von #app liegen (#app::after), nicht auf body:
+	      #app hat z-index 1 — ein body-Overlay mit z-index 1240 läge sonst über der
+	      GESAMTEN #sidebar, deren z-index 1250 nur innerhalb von #app zählt.
+	   2. Er MUSS an body.mnav-open gebunden sein — ohne die Bedingung deckte er
+	      dauerhaft die ganze App ab („Hintergrund nicht mehr bedienbar“).
+	   Innerhalb von #app gilt: Scrim 1240 < Sheet 1250 → Sheet immer bedienbar;
+	   Dialoge (#overlay 1400) und Palette (1500) sind body-Kinder und liegen darüber. */
+	body.mnav-open #app::after { content: ""; position: fixed; inset: 0; z-index: 1240;
 		background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease; }
 	@keyframes mnavScrimIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -2303,9 +2338,107 @@ body.reduce-motion .heft-tray { animation: none; }
 	body:has(.block-editor :focus) #mDock,
 	body:has(#mainChatInput:focus) #mDock { display: none; }
 
+	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt schmaler
+	   Seitenspalte — sonst quetschen sich Navigation und Inhalt in ~350px Breite. */
+	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh); }
+	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px;
+		padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge); }
+	.set-item { padding: 6px 10px; }
+
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
 	.menu-item, .side-foot button { min-height: 40px; }
 	.row { min-height: 36px; }
 	#palette { padding-top: 6vh; padding-bottom: 70px; }
 	.palette-box { max-height: 76vh; }
+}
+
+/* ===========================================================================
+   Karteikarten — ruhige, Anki-inspirierte Stapel- und Browseransicht
+   =========================================================================== */
+.library.anki {
+	width: 100%;
+	max-width: none;
+	padding: 32px clamp(20px, 4vw, 56px) 56px;
+	background: linear-gradient(180deg, rgba(255,255,255,.018), transparent 160px);
+}
+.library.anki .lib-head {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px 12px;
+	max-width: 1120px;
+	margin: 0 auto 28px;
+	padding-bottom: 18px;
+	border-bottom: 1px solid var(--edge-soft);
+}
+.library.anki .lib-head h1 { margin: 0 auto 0 0; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.03em; }
+.library.anki .mode-btns { padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-subtle); }
+.library.anki .mode-btns button { min-height: 34px; padding: 6px 12px; font-weight: 600; }
+.library.anki .mode-btns button.active { border-radius: 7px; background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge); }
+.anki-deck-table { max-width: 1120px; margin: 0 auto; border: 1px solid var(--edge); border-radius: 12px; overflow: hidden; background: var(--surface-faint); }
+.deck-table-head, .deck-row { display: grid; grid-template-columns: minmax(260px, 1fr) 74px 82px 74px minmax(214px, auto); align-items: center; }
+.deck-table-head { min-height: 40px; padding: 0 16px; background: rgba(0,0,0,.16); border-bottom: 1px solid var(--edge); color: var(--text2); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.deck-table-head > span:not(:first-child), .deck-number { text-align: center; }
+.deck-actions-head { text-align: right; }
+.deck-list { max-width: none; gap: 0; }
+.deck-row { margin-left: 0 !important; min-height: 68px; padding: 10px 16px; border: 0; border-radius: 0; border-bottom: 1px solid var(--edge-soft); background: transparent; transition: background .14s ease; }
+.deck-row:last-child { border-bottom: 0; }
+.deck-row:hover { background: var(--surface-hover); }
+.deck-info { display: grid; grid-template-columns: 18px minmax(0, auto); align-items: center; column-gap: 8px; min-width: 0; padding-left: calc(var(--deck-depth) * 22px); }
+.deck-tree-mark { color: var(--text2); text-align: center; font-size: 12px; }
+.deck-name { min-width: 0; font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deck-meta { grid-column: 2; margin-top: 1px; color: var(--text2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deck-number { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px; }
+.cnt-learn { color: #77b6f7; }
+.deck-actions { justify-content: flex-end; gap: 6px; }
+.deck-actions button { min-height: 34px; padding: 5px 10px; font-size: 12.5px; }
+.deck-study { background: var(--accent); color: #081018; font-weight: 700; }
+.deck-study:hover { background: #8fd0ff; }
+.deck-browse, .deck-add { background: var(--surface); }
+.deck-add { min-width: 34px; padding: 0 !important; font-size: 18px !important; }
+.anki-deck-footer { display: flex; gap: 8px; max-width: 1120px; margin: 16px auto 0; }
+.anki-deck-footer button { min-height: 40px; }
+.anki-deck-footer .primary span { margin-left: 5px; font-size: 12px; font-weight: 500; opacity: .75; }
+.anki-toolbar { max-width: 1120px; margin: 0 auto 14px; padding: 12px; border: 1px solid var(--edge-soft); border-radius: 12px; background: var(--surface-faint); }
+#ankiSearch { min-height: 40px; max-width: 360px; }
+.anki-toolbar .menu-chips { margin: 0; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; padding-bottom: 2px; }
+.anki-toolbar .menu-chip { white-space: nowrap; min-height: 30px; }
+.anki-browser-table { max-width: 1120px; margin: 0 auto; overflow: auto; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-faint); }
+.anki-table { min-width: 760px; margin: 0; }
+.anki-table th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: var(--menu-bg); }
+.anki-table td { padding: 10px 12px; }
+.anki-table .anki-deck-group td { padding: 8px 12px; cursor: default; background: rgba(111,195,255,.08); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+.anki-table .anki-deck-group:hover td { background: rgba(111,195,255,.08); }
+.anki-rowbtns { text-align: right; }
+
+@media (max-width: 700px) {
+	.library.anki { padding: 20px 16px calc(112px + env(safe-area-inset-bottom)); }
+	.library.anki .lib-head { align-items: stretch; gap: 10px; margin-bottom: 18px; padding-bottom: 14px; }
+	.library.anki .lib-head h1 { flex: 1 0 100%; font-size: 26px; }
+	.library.anki .mode-btns { order: 2; width: 100%; }
+	.library.anki .mode-btns button { flex: 1; padding-inline: 8px; }
+	.library.anki .lib-head > button:not(.mode-btns button) { flex: 1 1 calc(50% - 6px); min-height: 42px; }
+	.anki-deck-table { border-radius: 10px; }
+	.deck-table-head, .deck-row { grid-template-columns: minmax(0, 1fr) 42px 42px 42px; }
+	.deck-table-head { min-height: 34px; padding: 0 10px; font-size: 10px; }
+	.deck-actions-head, .deck-actions { display: none; }
+	.deck-row { min-height: 64px; padding: 8px 10px; }
+	.deck-info { padding-left: calc(var(--deck-depth) * 14px); column-gap: 5px; }
+	.deck-name { font-size: 14px; }
+	.deck-meta { font-size: 11px; }
+	.deck-number { font-size: 14px; }
+	.anki-deck-footer { display: grid; grid-template-columns: 1fr; margin-top: 12px; }
+	.anki-deck-footer button { width: 100%; min-height: 44px; }
+	.anki-toolbar { padding: 10px; gap: 8px; }
+	#ankiSearch { flex-basis: 100%; max-width: none; width: 100%; }
+	.anki-browser-table { margin-inline: -2px; border-radius: 10px; }
+	.anki-table { min-width: 590px; }
+	.anki-table th:nth-child(5), .anki-table td:nth-child(5), .anki-table th:nth-child(6), .anki-table td:nth-child(6), .anki-table th:nth-child(7), .anki-table td:nth-child(7) { display: none; }
+	.anki-table .anki-deck-group td { display: table-cell !important; }
+	.anki-table td, .anki-table th { padding-inline: 9px; }
+	.anki-rowbtns button { min-width: 36px; min-height: 36px; }
+}
+
+@media (pointer: coarse) {
+	.deck-actions button, .anki-toolbar .menu-chip { min-height: 40px; }
 }

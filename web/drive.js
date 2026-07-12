@@ -1,6 +1,8 @@
 "use strict";
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
+import { U } from "./util.js";
+import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
 // drive.js — Google-Drive-Sync über den unsichtbaren App-Speicher (appDataFolder).
 // Technischer Hintergrund: Google verlangt für JEDE App eine registrierte OAuth
 // Client-ID (das ist eine Plattform-Vorgabe von Google, keine Impala67-Beschränkung).
@@ -17,7 +19,15 @@ import { DB } from "./db.js";
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json";
-	const LEGACY_FILE_NAME = "notion-sync.json"; // vor der Umbenennung — wird beim nächsten Upload automatisch auf den neuen Namen umgestellt
+	const LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar
+	const SNAPSHOT_NAME = "impala67-snapshot-v2.json.gz";
+	const DELTA_PREFIX = "impala67-delta-v2-";
+	const BLOB_PREFIX = "impala67-blob-v2-";
+	const DEVICE_ID = (() => {
+		let id = localStorage.getItem("impala67_drive_device_id");
+		if (!id) { id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2); localStorage.setItem("impala67_drive_device_id", id); }
+		return id;
+	})();
 	// Desktop-OAuth-Client (Typ "Desktop-App", Google Cloud Console). Das Secret
 	// ist bei diesem App-Typ laut Google kein echtes Geheimnis (installierte Apps
 	// können ohnehin keine Geheimnisse wahren) — normaler, vorgesehener Fall.
@@ -266,66 +276,159 @@ export const DRIVE = (() => {
 	}
 
 	async function upload(fileId, content) {
-		const meta = { name: FILE_NAME, ...(fileId ? {} : { parents: ["appDataFolder"] }) };
-		const boundary = "impala67" + Date.now();
-		const body =
-			"--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
-			"\r\n--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + content +
-			"\r\n--" + boundary + "--";
-		await api("/upload/drive/v3/files" + (fileId ? "/" + fileId : "") + "?uploadType=multipart", {
-			method: fileId ? "PATCH" : "POST",
-			headers: { "Content-Type": "multipart/related; boundary=" + boundary },
-			body,
-		});
+		const bytes = new TextEncoder().encode(content);
+		return uploadNamed(FILE_NAME, bytes, "identity", fileId);
 	}
 
-	// Voller Sync: Remote-Stand laden → mergen (mit Konflikt-Erkennung) → Gesamtstand
-	// hochladen → Log lokal kompaktieren → Sync-Wasserstand setzen.
-	async function syncRaw(onStatus) {
-		// Token immer über getToken() beziehen — das im Speicher gehaltene Token
-		// kann abgelaufen sein (führte zu 401-Fehlern mitten in der Sitzung).
-		if (onStatus) onStatus("Mit Google verbinden…");
-		await getToken(false);
-		if (onStatus) onStatus("Remote-Stand laden…");
-		let file = await findFile();
-		let imported = 0, conflicts = 0;
-		let conflictDetails = [];
-		// Konflikt-Erkennung braucht den Wasserstand des letzten Uploads: nur lokale
-		// Events DANACH können mit Änderungen anderer Geräte kollidieren.
-		const importOpts = {
-			unsyncedAfterSeq: Number(localStorage.getItem("impala67_drive_synced_seq") || 0),
-			pageInfo: (id) => S.pages[id],
+	function emitSyncStatus(state, label, detail) {
+		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
+	}
+
+	async function listSyncFiles() {
+		const q = encodeURIComponent("trashed=false");
+		const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + q + "&pageSize=1000&fields=files(id,name,modifiedTime,size,appProperties)");
+		const data = await res.json();
+		return data.files || [];
+	}
+
+	async function uploadNamed(name, bytes, encoding, fileId, appProperties) {
+		const meta = {
+			name,
+			...(fileId ? {} : { parents: ["appDataFolder"] }),
+			appProperties: { encoding: encoding || "identity", ...(appProperties || {}) },
 		};
-		if (file) {
-			const res = await api("/drive/v3/files/" + file.id + "?alt=media");
-			const r = await DB.importAll(await res.text(), importOpts);
-			imported = r.added; conflicts = r.conflicts || 0;
-			conflictDetails = r.conflictDetails || [];
-			// FIX (Audit): Lost-Update-Schutz — hat ein anderes Gerät WÄHREND dieses Syncs
-			// hochgeladen (modifiedTime geändert), dessen Stand erst noch übernehmen, sonst
-			// würde der folgende Upload ihn kommentarlos überschreiben. importAll ist
-			// idempotent (Log-Merge) — doppeltes Einspielen ist unkritisch.
-			const again = await findFile();
-			if (again && (again.id !== file.id || again.modifiedTime !== file.modifiedTime)) {
-				const res2 = await api("/drive/v3/files/" + again.id + "?alt=media");
-				const r2 = await DB.importAll(await res2.text(), importOpts);
-				imported += r2.added; conflicts += r2.conflicts || 0;
-				conflictDetails = conflictDetails.concat(r2.conflictDetails || []);
-				file = again;
+		const boundary = "impala67" + Date.now() + Math.random().toString(16).slice(2);
+		const head = "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
+			"\r\n--" + boundary + "\r\nContent-Type: application/octet-stream\r\n\r\n";
+		const tail = "\r\n--" + boundary + "--";
+		const body = new Blob([head, bytes, tail]);
+		const res = await api("/upload/drive/v3/files" + (fileId ? "/" + fileId : "") + "?uploadType=multipart&fields=id,name,modifiedTime,appProperties", {
+			method: fileId ? "PATCH" : "POST",
+			headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body,
+		});
+		return res.json();
+	}
+
+	async function downloadPayload(file) {
+		const res = await api("/drive/v3/files/" + file.id + "?alt=media");
+		const bytes = new Uint8Array(await res.arrayBuffer());
+		const encoding = (file.appProperties && file.appProperties.encoding) || (file.name.endsWith(".gz") ? "gzip" : "identity");
+		return decodeJson(bytes, encoding);
+	}
+
+	function replayImported(events) {
+		const list = (events || []).slice().sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")));
+		for (const ev of list) STATE.reduce(ev);
+		if (list.length && typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
+	}
+
+	function loadKnownIds(key) {
+		try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); }
+	}
+	function saveKnownIds(key, set) {
+		localStorage.setItem(key, JSON.stringify(boundedKnownIds([...set])));
+	}
+
+	// Sync v2: kleine gzip-Deltas + deduplizierte Blob-Dateien. Unveränderte
+	// Remote-Dateien werden anhand ihrer ID/modifiedTime gar nicht mehr geladen.
+	async function syncRaw(onStatus) {
+		const setStatus = (state, text) => { emitSyncStatus(state, text); if (onStatus) onStatus(text); };
+		setStatus("syncing", "Synchronisiere…");
+		await getToken(false);
+		const files = await listSyncFiles();
+		const uploadedSeq = Number(localStorage.getItem("impala67_drive_uploaded_seq") || 0);
+		const importOpts = { unsyncedAfterSeq: uploadedSeq, pageInfo: (id) => S.pages[id], remote: true };
+		let imported = 0, conflicts = 0;
+		let conflictDetails = [], importedEvents = [];
+
+		// Snapshot nur laden, wenn sich modifiedTime geändert hat. Altformat bleibt
+		// vollständig kompatibel und wird beim ersten v2-Sync übernommen.
+		const snapshot = newestFile(files, [SNAPSHOT_NAME, FILE_NAME, LEGACY_FILE_NAME]);
+		const snapStamp = snapshot ? snapshot.id + ":" + snapshot.modifiedTime : "";
+		if (snapshot && localStorage.getItem("impala67_drive_snapshot_stamp") !== snapStamp) {
+			setStatus("syncing", "Remote-Stand übernehmen…");
+			const payload = await downloadPayload(snapshot);
+			const r = await DB.importAll(JSON.stringify(payload), importOpts);
+			imported += r.added; conflicts += r.conflicts || 0;
+			conflictDetails.push(...(r.conflictDetails || []));
+			importedEvents.push(...(r.importedEvents || []));
+			localStorage.setItem("impala67_drive_snapshot_stamp", snapStamp);
+		}
+
+		// Nur bislang unbekannte Delta-Shards laden.
+		const knownDeltaIds = loadKnownIds("impala67_drive_known_deltas");
+		const remoteDeltas = unseenRemoteFiles(files.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
+		for (const file of remoteDeltas) {
+			const payload = await downloadPayload(file);
+			const r = await DB.importAll(JSON.stringify(payload), importOpts);
+			imported += r.added; conflicts += r.conflicts || 0;
+			conflictDetails.push(...(r.conflictDetails || []));
+			importedEvents.push(...(r.importedEvents || []));
+			knownDeltaIds.add(file.id);
+		}
+		saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
+
+		// Große Binärdaten separat: SHA-256 im Dateinamen verhindert erneute Uploads.
+		// Neue Geräte laden nur Blob-Dateien, deren Drive-ID lokal noch unbekannt ist.
+		const remoteBlobs = files.filter((f) => f.name.startsWith(BLOB_PREFIX));
+		const remoteBlobHashes = new Set(remoteBlobs.map((f) => f.name.slice(BLOB_PREFIX.length).replace(/\.json\.gz$/, "")));
+		const knownBlobIds = loadKnownIds("impala67_drive_known_blobs");
+		for (const file of unseenRemoteFiles(remoteBlobs, knownBlobIds)) {
+			const payload = await downloadPayload(file);
+			if (payload && payload.id && !(await DB.getBlob(payload.id))) await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
+			knownBlobIds.add(file.id);
+		}
+		for (const id of await DB.allBlobKeys()) {
+			const rec = await DB.getBlob(id);
+			if (!rec || !rec.buf) continue;
+			const raw = new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
+			const hash = await sha256Hex(raw);
+			if (remoteBlobHashes.has(hash)) continue;
+			const packed = await encodeJson(JSON.parse(new TextDecoder().decode(raw)));
+			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash });
+			remoteBlobHashes.add(hash); knownBlobIds.add(created.id);
+		}
+		saveKnownIds("impala67_drive_known_blobs", knownBlobIds);
+
+		// Nur Events seit dem letzten erfolgreichen Upload als Delta senden.
+		const localMaxSeq = await DB.maxSeq();
+		let uploaded = 0;
+		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
+			const events = await DB.eventsAfterSeq(uploadedSeq);
+			if (events.length) {
+				setStatus("syncing", "Änderungen hochladen…");
+				const payload = { app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} };
+				const packed = await encodeJson(payload);
+				const name = DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz";
+				const created = await uploadNamed(name, packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
+				knownDeltaIds.add(created.id);
+				uploaded = events.length;
 			}
+			// Auch wenn seit dem letzten Upload ausschließlich bereits vorhandene
+			// Remote-Events lokale Sequenzen erhielten, den Wasserstand vorrücken.
+			localStorage.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
 		}
-		if (onStatus) onStatus("Hochladen…");
-		await upload(file ? file.id : null, await DB.exportAll());
-		// Duplikate (z.B. Alt-Datei neben der neuen) nach dem erfolgreichen Upload
-		// entsorgen — ihr Stand wurde oben gemerged und steckt im hochgeladenen Gesamtstand.
-		for (const dupId of (file && file.duplicateIds) || []) {
-			await api("/drive/v3/files/" + dupId, { method: "DELETE" }).catch(() => {});
+
+		// Viele Deltas gelegentlich zu einem kompakten Snapshot zusammenfassen.
+		// Vor dem Löschen wird nur die zuvor gelistete, bereits gemergte Menge entfernt;
+		// parallel neu angelegte Shards anderer Geräte bleiben unangetastet.
+		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
+		if (listedDeltas.length >= 50) {
+			setStatus("syncing", "Sync-Stand optimieren…");
+			const payload = JSON.parse(await DB.exportAll());
+			payload.blobs = {}; // Blobs liegen v2 separat und werden nicht doppelt hochgeladen.
+			const packed = await encodeJson(payload);
+			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
+			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot && oldSnapshot.id, { protocol: "2" });
+			for (const f of listedDeltas) await api("/drive/v3/files/" + f.id, { method: "DELETE" }).catch(() => {});
+			localStorage.removeItem("impala67_drive_snapshot_stamp");
+			localStorage.removeItem("impala67_drive_known_deltas");
 		}
-		// Nach erfolgreichem Sync: Log lokal kompaktieren (der Stand ist gesichert) und
-		// den Wasserstand auf die dann höchste Sequenznummer setzen.
-		await DB.compactLocal();
+
+		replayImported(importedEvents);
 		localStorage.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
-		return { imported, conflicts, conflictDetails };
+		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
+		return { imported, uploaded, conflicts, conflictDetails, importedEvents };
 	}
 
 	function sync(onStatus) {
@@ -350,8 +453,8 @@ export const DRIVE = (() => {
 	// Nur nach einer bereits erfolgten Anmeldung: niemals ein Login-Popup aus
 	// einem Timer heraus öffnen. Änderungen werden gebündelt; zusätzlich ziehen
 	// wir beim Start, beim Zurückkehren und in sichtbaren Sitzungen regelmäßig.
-	const AUTO_DELAY_MS = 1500;
-	const AUTO_INTERVAL_MS = 120000;
+	const AUTO_DELAY_MS = 3000;
+	const AUTO_INTERVAL_MS = 180000;
 	let autoTimer = 0;
 	let autoInterval = 0;
 	let autoStarted = false;
@@ -360,6 +463,7 @@ export const DRIVE = (() => {
 
 	async function autoSync(reason) {
 		if (!autoEnabled() || !isConnected()) return null;
+		if (navigator.onLine === false) { emitSyncStatus("waiting", "Offline · wartet"); return null; }
 		try {
 			// Manuelle und automatische Läufe nie parallel mergen. Ein bereits
 			// laufender manueller Sync bleibt dessen eigener UI-Flow.
@@ -369,6 +473,7 @@ export const DRIVE = (() => {
 			return result;
 		} catch (e) {
 			// Automatik bleibt ruhig; der manuelle Button zeigt Fehler weiterhin an.
+			emitSyncStatus(navigator.onLine === false ? "waiting" : "error", navigator.onLine === false ? "Offline · wartet" : "Sync pausiert", e && e.message);
 			console.warn("Automatischer Drive-Sync (" + reason + ") fehlgeschlagen:", e);
 			return null;
 		}
@@ -376,7 +481,15 @@ export const DRIVE = (() => {
 	function scheduleAutoSync(reason) {
 		if (!autoEnabled() || !isConnected()) return;
 		clearTimeout(autoTimer);
-		autoTimer = setTimeout(() => { autoSync(reason); }, AUTO_DELAY_MS);
+		emitSyncStatus(navigator.onLine === false ? "waiting" : "waiting", navigator.onLine === false ? "Offline · wartet" : "Speichert…");
+		autoTimer = setTimeout(() => {
+			// Nie mitten in einer Texteingabe Remote-Änderungen einspielen. Solange
+			// aktiv geschrieben wird, ruhig weiter bündeln und fünf Sekunden später prüfen.
+			const ae = document.activeElement;
+			const editing = !!(ae && (ae.id === "pageTitle" || ae.classList.contains("blk-input") || ae.classList.contains("db-cell")));
+			if (editing) { autoTimer = setTimeout(() => scheduleAutoSync(reason), 5000); return; }
+			autoSync(reason);
+		}, AUTO_DELAY_MS);
 	}
 	function startAutoSync(onResult) {
 		if (typeof onResult === "function") autoResultHandler = onResult;

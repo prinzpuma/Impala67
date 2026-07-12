@@ -151,24 +151,26 @@ function ankiDecksHtml() {
 		const cards = ankiCardsOf(d);
 		const neu = cards.filter((c) => c.srs.state === "new" && !c.suspended).length;
 		const due = ankiDueOf(d).length;
+		const learn = cards.filter((c) => !c.suspended && (c.srs.state === "learning" || c.srs.state === "relearning") && new Date(c.srs.due) <= new Date()).length;
 		const susp = cards.filter((c) => c.suspended).length;
-		return '<div class="deck-row" style="margin-left:' + (depth * 24) + 'px">' +
-			'<div class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
-			'<span class="deck-counts"><b class="cnt-due">' + due + '</b> fällig · <b class="cnt-new">' + neu + "</b> neu · " + cards.length + " gesamt" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
+		return '<div class="deck-row" style="--deck-depth:' + depth + '">' +
+			'<div class="deck-info"><span class="deck-tree-mark" aria-hidden="true">' + (depth ? "↳" : "▸") + '</span><span class="deck-name">' + U.esc(label) + "</span>" +
+			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
+			'<div class="deck-number cnt-new" title="Neue Karten">' + neu + "</div>" +
+			'<div class="deck-number cnt-learn" title="Lernkarten">' + learn + "</div>" +
+			'<div class="deck-number cnt-due" title="Fällige Karten">' + due + "</div>" +
 			'<div class="deck-actions">' +
-				'<button data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">▶ Lernen</button>" +
-				'<button data-ankideckfilter="' + U.esc(d) + '">🔍 Durchsuchen</button>' +
-				'<button data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
+				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">Lernen</button>" +
+				'<button class="deck-browse" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">Durchsuchen</button>' +
+				'<button class="deck-add" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
 			"</div></div>";
 	}).join("");
-	// Sichtbarkeits-Fallback: „Standard“ erscheint als Zeile, sobald dort Karten
-	// liegen (z.B. Importe ohne Stapel) — vorher waren solche Karten nur über
-	// „Alle Stapel lernen“ erreichbar und wirkten wie Geisterkarten.
-	// „Standard“ steckt jetzt in ankiDecks() (normale Zeile, inkl. Sidebar-⋯ → Löschen).
 	const totalOpen = STATE.studySnapshot(null).counts.total;
-	return '<div class="deck-list">' + rows + "</div>" +
-		'<div class="row-btns" style="margin-top:14px;max-width:720px">' +
-			'<button data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen (" + totalOpen + " offen)</button>" +
+	return '<div class="anki-deck-table" role="table">' +
+		'<div class="deck-table-head" role="row"><span>Stapel</span><span>Neu</span><span>Lernen</span><span>Fällig</span><span class="deck-actions-head">Aktionen</span></div>' +
+		'<div class="deck-list">' + rows + "</div></div>" +
+		'<div class="anki-deck-footer">' +
+			'<button class="primary" data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen <span>" + totalOpen + " offen</span></button>" +
 			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
 }
 
@@ -189,7 +191,16 @@ function ankiBrowserHtml() {
 		if (key === "created") return c.created;
 		return c.srs.due;
 	};
-	cards = cards.slice().sort((a, b) => { const va = val(a), vb = val(b); return (va < vb ? -1 : va > vb ? 1 : 0) * dir; });
+	// Im Gesamt-Browser stehen die Karten zuerst nach Stapel gruppiert — wie in Anki.
+	// Innerhalb eines Stapels gilt weiterhin die gewählte Spaltensortierung.
+	cards = cards.slice().sort((a, b) => {
+		if (!S.ankiDeck) {
+			const deckCompare = (a.deck || "Standard").localeCompare(b.deck || "Standard", "de");
+			if (deckCompare) return deckCompare;
+		}
+		const va = val(a), vb = val(b);
+		return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+	});
 	// Nur ein Fenster rendern — 2000+ Zeilen auf einmal machten den Tab spürbar zäh.
 	const shown = cards.slice(0, S.ankiBrowserLimit || 200);
 	const arrow = (k) => (key === k ? (dir === 1 ? " ↑" : " ↓") : "");
@@ -198,7 +209,7 @@ function ankiBrowserHtml() {
 	const stateLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" };
 	return '<div class="anki-toolbar"><input id="ankiSearch" placeholder="Karten durchsuchen…" autocomplete="off" value="' + U.esc(S.ankiSearch || "") + '">' +
 		'<div class="menu-chips">' + chips + "</div></div>" +
-		'<table class="lib-table anki-table"><thead><tr>' +
+		'<div class="anki-browser-table"><table class="lib-table anki-table"><thead><tr>' +
 			'<th data-ankisort="front" title="Klicken zum Sortieren">Vorderseite' + arrow("front") + "</th>" +
 			'<th data-ankisort="deck" title="Klicken zum Sortieren">Stapel' + arrow("deck") + "</th>" +
 			'<th data-ankisort="state" title="Klicken zum Sortieren">Status' + arrow("state") + "</th>" +
@@ -208,7 +219,9 @@ function ankiBrowserHtml() {
 			'<th data-ankisort="lapses" title="Klicken zum Sortieren">Fehler' + arrow("lapses") + "</th>" +
 			"<th></th>" +
 		"</tr></thead><tbody>" +
-		shown.map((c) =>
+		shown.map((c, i) =>
+			(!S.ankiDeck && (!i || (shown[i - 1].deck || "Standard") !== (c.deck || "Standard")
+				? '<tr class="anki-deck-group"><td colspan="8">Stapel: ' + U.esc(c.deck || "Standard") + "</td></tr>" : "") +
 			'<tr class="' + (c.suspended ? "suspended" : "") + '">' +
 				'<td class="anki-front" data-ankiedit="' + c.id + '" title="Zum Bearbeiten klicken">' + U.esc(c.front.length > 90 ? c.front.slice(0, 90) + "…" : c.front) + "</td>" +
 				"<td>" + U.esc(c.deck || "Standard") + "</td>" +
@@ -222,7 +235,7 @@ function ankiBrowserHtml() {
 					'<button data-ankisuspend="' + c.id + '" title="' + (c.suspended ? "Fortsetzen" : "Aussetzen") + '">' + (c.suspended ? "▶" : "⏸") + "</button>" +
 					'<button data-ankidel="' + c.id + '" class="danger" title="Löschen">🗑</button>' +
 				"</td></tr>"
-		).join("") + "</tbody></table>" +
+		).join("") + "</tbody></table></div>" +
 		(cards.length > shown.length ? '<div class="row-btns" style="margin-top:8px"><button data-ankimore="1">↓ ' + (cards.length - shown.length) + " weitere Karten anzeigen</button></div>" : "") +
 		(!cards.length ? '<div class="empty small">Keine Karten' + (q ? " für diese Suche" : "") + "</div>" : "");
 }
