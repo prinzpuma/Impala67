@@ -81,21 +81,23 @@ export const EXTRAS = (() => {
 		bc.postMessage({ kind: "hello", from: TAB_ID });
 	}
 
-	// ---- dispatch-Wrapper: Undo-Stapel füllen + Events an andere Tabs funken ----
+	// ---- Dispatch-Hooks: Undo-Stapel füllen + Events an andere Tabs funken ----
 	// (Das Event ist beim Eintreffen im anderen Tab bereits in IndexedDB gespeichert —
 	// dort wird es nur noch auf den In-Memory-Zustand angewendet.)
-	const origDispatch = STATE.dispatch;
+	// FIX (Verbesserung): statt STATE.dispatch zu monkeypatchen (fragil — hing von der
+	// Modul-Ladereihenfolge ab und ging bei einem weiteren Wrapper leicht verloren)
+	// laufen beide Erweiterungen jetzt über den offiziellen Hook-Mechanismus aus state.js.
 	const undoStack = [];
-	STATE.dispatch = async function (type, payload) {
+	STATE.onBeforeDispatch((type, payload) => {
 		if (type === "cardReview" && payload && S.cards[payload.id]) {
 			const c = S.cards[payload.id];
 			undoStack.push({ id: payload.id, srs: JSON.parse(JSON.stringify(c.srs)), wasSuspended: !!c.suspended });
 			if (undoStack.length > 50) undoStack.shift();
 		}
-		const ev = await origDispatch(type, payload);
+	});
+	STATE.onAfterDispatch((ev) => {
 		if (bc && ev) bc.postMessage({ kind: "event", ev, from: TAB_ID });
-		return ev;
-	};
+	});
 
 	// ---- Review-Undo (Sitzung): letzte Bewertung rückgängig machen ----
 	const canUndoReview = () => undoStack.length > 0;
@@ -540,7 +542,12 @@ export const EXTRAS = (() => {
 		// Touch: Doppel-Tipp auf der Bewertungsleiste würde sonst die nächste Karte
 		// gleich mitbewerten — nach dem ersten Tipp bis zum Re-Render sperren.
 		if ((el = q(".grades button")) && !el.disabled) {
-			el.closest(".grades").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+			const gradeBtns = el.closest(".grades").querySelectorAll("button");
+			gradeBtns.forEach((b) => { b.disabled = true; });
+			// Sicherheitsnetz: bleibt das Re-Render aus (z.B. Dispatch-Fehler), nach 1,5 s
+			// wieder freigeben, statt die Leiste dauerhaft zu sperren. Nach einem normalen
+			// Re-Render sind das ohnehin ersetzte alte Knoten — unkritisch.
+			setTimeout(() => { gradeBtns.forEach((b) => { b.disabled = false; }); }, 1500);
 		}
 	});
 

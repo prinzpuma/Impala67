@@ -16,11 +16,18 @@ const render = (...args) => RENDER.render(...args);
 const closeOverlay = (...args) => APP.closeOverlay(...args);
 const openPage = (...args) => TABS.openPage(...args);
 
-// Verbindungsstatus automatisch prüfen (beim Start, nach Einstellungen, alle 60s)
+// Verbindungsstatus automatisch prüfen (beim Start, nach Einstellungen, alle 60s).
+// FIX (Verbesserung): Intervall, visibilitychange und „Einstellungen speichern“ konnten
+// sich überlappen — ein später eintreffendes, veraltetes Ping-Ergebnis überschrieb dann
+// ein neueres. Ein Lauf-Token lässt nur das Ergebnis des jüngsten Aufrufs zählen.
+let _checkAiRun = 0;
 export async function checkAI() {
+	const run = ++_checkAiRun;
 	S.aiOnline = null;
 	renderStatusDot();
-	S.aiOnline = await AI.ping();
+	const online = await AI.ping();
+	if (run !== _checkAiRun) return; // inzwischen läuft ein neuerer Check
+	S.aiOnline = online;
 	renderStatusDot();
 }
 

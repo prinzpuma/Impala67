@@ -14,6 +14,25 @@ export const U = {
 
 	el: (id) => document.getElementById(id),
 
+	// Sicherer DOM-Bau statt innerHTML-String-Konkatenation (XSS-anfällig, sobald ein
+	// U.esc() vergessen wird): U.h("button", { id: "x", class: "danger", onclick: fn }, "Label").
+	// Strings werden Textknoten (automatisch escaped), Elemente werden angehängt,
+	// on*-Funktionen werden als Event-Listener registriert, true/false/null steuern
+	// Attribute. Für neue Dialoge bevorzugen — U.confirm() unten ist die Referenz.
+	h(tag, attrs, ...children) {
+		const node = document.createElement(tag);
+		for (const [k, v] of Object.entries(attrs || {})) {
+			if (v == null || v === false) continue;
+			if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+			else if (v === true) node.setAttribute(k, "");
+			else node.setAttribute(k, String(v));
+		}
+		for (const c of children.flat()) {
+			if (c != null) node.append(c.nodeType ? c : String(c));
+		}
+		return node;
+	},
+
 	// In-App-Toast statt alert(): kleine Meldung unten mittig, verschwindet von selbst.
 	// type: "info" (Standard), "success", "error" — Fehler bleiben etwas länger stehen.
 	// Styles: styles.css (#toasts/.toast). Blockiert nichts — anders als alert().
@@ -46,14 +65,15 @@ export const U = {
 			const okLabel = opts.ok || "OK";
 			const cancelLabel = opts.cancel || "Abbrechen";
 			const danger = !!opts.danger;
-			o.innerHTML = '<div class="modal modal-sm">' +
-				"<h3>" + U.esc(title) + "</h3>" +
-				'<p class="hint" style="white-space:pre-wrap">' + U.esc(String(message ?? "")) + "</p>" +
-				'<div class="modal-actions">' +
-					'<button type="button" id="dlgConfirmCancel">' + U.esc(cancelLabel) + "</button>" +
-					'<button type="button" id="dlgConfirmOk"' + (danger ? ' class="danger"' : "") + '>' +
-						U.esc(okLabel) + "</button>" +
-				"</div></div>";
+			// Referenz-Umsetzung für U.h(): DOM-Bau statt innerHTML-Strings — Texte sind
+			// automatisch escaped, kein vergessenes U.esc() mehr möglich.
+			o.innerHTML = "";
+			o.appendChild(U.h("div", { class: "modal modal-sm" },
+				U.h("h3", null, title),
+				U.h("p", { class: "hint", style: "white-space:pre-wrap" }, String(message ?? "")),
+				U.h("div", { class: "modal-actions" },
+					U.h("button", { type: "button", id: "dlgConfirmCancel" }, cancelLabel),
+					U.h("button", { type: "button", id: "dlgConfirmOk", class: danger ? "danger" : null }, okLabel))));
 			o.hidden = false;
 			let done = false;
 			const onKey = (e) => {

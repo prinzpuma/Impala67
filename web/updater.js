@@ -15,16 +15,36 @@ const BUILD_VERSION = "0.2.27";
 window.APP_VERSION = BUILD_VERSION;
 
 // Semver-Vergleich: 1 wenn a>b, -1 wenn a<b, 0 wenn gleich.
+// FIX (Verbesserung): Prerelease-Tags nach Semver-Spezifikation vergleichen — vorher
+// zählten sie als 0 und "0.2.27-rc1" galt als gleich "0.2.27" (RC würde nie durch das
+// finale Release ersetzt bzw. umgekehrt fälschlich als Update angeboten).
 function cmpSemver(a, b) {
-	const parse = (v) => String(v || "").replace(/^v/i, "").split(/[.+\-]/).map((p) => {
-		const n = parseInt(p, 10);
-		return Number.isFinite(n) ? n : 0;
-	});
+	const parse = (v) => {
+		const s = String(v || "").replace(/^v/i, "").split("+")[0].trim(); // Build-Metadaten zählen nicht
+		const dash = s.indexOf("-");
+		const core = (dash < 0 ? s : s.slice(0, dash)).split(".").map((p) => {
+			const n = parseInt(p, 10);
+			return Number.isFinite(n) ? n : 0;
+		});
+		return { core, pre: dash < 0 ? [] : s.slice(dash + 1).split(".") };
+	};
 	const pa = parse(a), pb = parse(b);
-	const len = Math.max(pa.length, pb.length);
+	const len = Math.max(pa.core.length, pb.core.length);
 	for (let i = 0; i < len; i++) {
-		const d = (pa[i] || 0) - (pb[i] || 0);
+		const d = (pa.core[i] || 0) - (pb.core[i] || 0);
 		if (d) return d > 0 ? 1 : -1;
+	}
+	// Gleicher Kern: Version OHNE Prerelease ist die höhere ("1.0.0-rc1" < "1.0.0").
+	if (pa.pre.length && !pb.pre.length) return -1;
+	if (!pa.pre.length && pb.pre.length) return 1;
+	for (let i = 0; i < Math.max(pa.pre.length, pb.pre.length); i++) {
+		const x = pa.pre[i], y = pb.pre[i];
+		if (x === undefined) return -1; // kürzere Prerelease-Liste ist die kleinere
+		if (y === undefined) return 1;
+		const nx = /^\d+$/.test(x), ny = /^\d+$/.test(y);
+		if (nx && ny) { const d = Number(x) - Number(y); if (d) return d > 0 ? 1 : -1; }
+		else if (nx !== ny) { return nx ? -1 : 1; } // numerisch < alphanumerisch
+		else if (x !== y) { return x < y ? -1 : 1; }
 	}
 	return 0;
 }

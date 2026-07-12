@@ -1084,6 +1084,12 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	#app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
 	#mainWrap { min-height: 60vh; }
 	#panel { min-height: 40vh; }
+	/* Ein Heft ist eine eigene Vollbild-Bühne. Ohne diese Ausnahme scrollte bei
+	   Hochkant-Zoom die gesamte Dokumentseite — inklusive linker Seitenleiste —
+	   statt ausschließlich die Papierfläche. */
+	body:has(.heft-stage) { overflow: hidden; }
+	body:has(.heft-stage) #app { height: 100dvh; min-height: 0; }
+	body:has(.heft-stage) #mainWrap { min-height: 0; }
 }
 
 /* ---------- Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout-Popup, haptisches Feedback ---------- */
