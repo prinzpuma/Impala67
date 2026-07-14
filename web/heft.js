@@ -282,7 +282,7 @@ export const HEFT = (() => {
 	// Speicherlimit erreicht ist. Ein konservatives Budget plus Kantenlimit
 	// verhindert weiße Seiten beim starken Zoom.
 	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 8_000_000, MAX_CANVAS_DIM = 4096;
-	let visibleRenderTimer = 0, lastInteractiveRender = 0;
+	let visibleRenderTimer = 0, zoomSettleTimer = 0;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
 		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
@@ -320,16 +320,8 @@ export const HEFT = (() => {
 			pages.style.minWidth = Math.max(innerW, cssW) + "px";
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (commit) renderVisiblePages();
-		else {
-			// Während eines Pinchs bleibt CSS-Scaling sofort flüssig. Zusätzlich wird
-			// höchstens alle 110 ms scharf nachgerendert – deutlich klarer als eine
-			// reine Gesten-Ende-Lösung, ohne jeden Pointer-Frame teuer zu rasterisieren.
-			const now = performance.now();
-			if (now - lastInteractiveRender > 110) {
-				lastInteractiveRender = now;
-				scheduleVisibleRender(0);
-			}
-		}
+		// Während der Geste wird ausschließlich per CSS skaliert. Das hält Pinch-Zoom
+		// flüssig und vermeidet große Canvas-Allokationen in jedem Pointer-Frame.
 	}
 	function visiblePageIndices() {
 		const scroll = scrollEl(); if (!scroll) return [];
@@ -371,6 +363,12 @@ export const HEFT = (() => {
 	function scheduleVisibleRender(delay = 90) {
 		clearTimeout(visibleRenderTimer);
 		visibleRenderTimer = setTimeout(() => { visibleRenderTimer = 0; renderVisiblePages(); }, delay);
+	}
+	// Nach einer kurzen Zoom-Pause werden nur die sichtbaren Seiten neu aufgebaut:
+	// PDF-/Bild-Hintergrund und Vektor-Handschrift laufen gemeinsam durch renderPageTo().
+	function scheduleZoomSettleRender() {
+		clearTimeout(zoomSettleTimer);
+		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; renderVisiblePages(); }, 140);
 	}
 	// Beim Drehen des Geräts bzw. beim Ein-/Ausblenden von UI bleibt derselbe Punkt
 	// der Seite im Sichtfenster. Ohne diesen Anker sprang die Hochkant-Ansicht sichtbar.
@@ -428,7 +426,7 @@ export const HEFT = (() => {
 			const t = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - t, 4);
 			setZoom(from + (target - from) * eased, clientX, clientY, false, anchor);
 			if (t < 1) gesture.raf = requestAnimationFrame(step);
-			else { gesture.raf = 0; applyView(true); keepAnchor(anchor, clientX, clientY); }
+			else { gesture.raf = 0; applyView(false); keepAnchor(anchor, clientX, clientY); scheduleZoomSettleRender(); }
 		};
 		gesture.raf = requestAnimationFrame(step);
 	}
@@ -493,13 +491,13 @@ export const HEFT = (() => {
 		gesture.pointers.delete(e.pointerId);
 		if (gesture.pointers.size >= 2) { beginPinch(); return; }
 		if (gesture.pointers.size === 1) {
-			if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(true); }
+			if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(false); scheduleZoomSettleRender(); }
 			const left = [...gesture.pointers.values()][0]; left.sx = left.x; left.sy = left.y;
 			gesture.mode = "scroll"; gesture.vx = gesture.vy = 0; gesture.lastT = e.timeStamp; return;
 		}
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
 		const count = gesture.maxCount; gesture.maxCount = 0; gesture.mode = null;
-		if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(true); return; }
+		if (wasPinch) { if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); } applyView(false); scheduleZoomSettleRender(); return; }
 		if (quick && count === 2) { undo(); return; }
 		if (quick && count >= 3) { redo(); return; }
 		if (quick && count === 1) {
@@ -519,7 +517,7 @@ export const HEFT = (() => {
 		e.preventDefault();
 		const factor = Math.exp(-e.deltaY * 0.0022);
 		queueZoom(zoom * factor, e.clientX, e.clientY, makeZoomAnchor(e.clientX, e.clientY));
-		clearTimeout(wheelCommitT); wheelCommitT = setTimeout(() => applyView(true), 160);
+		clearTimeout(wheelCommitT); wheelCommitT = setTimeout(() => scheduleZoomSettleRender(), 160);
 	}
 
 	// ---------- Pointer (Apple Pencil / Maus / Finger) ----------
