@@ -1433,11 +1433,14 @@ export const HEFT = (() => {
 			// den am Bildrand gemessenen Tisch und eine kantenumschlossene Fläche. So
 			// funktionieren auch cremefarbene Blätter und weißes Papier auf hellem Tisch.
 			const lightMask = new Uint8Array(n), colorMask = new Uint8Array(n);
-			const thrPaper = Math.max(78, meanL * 0.70);
+			// Ein fester, globaler Helligkeitsboden schnitt beschattete Papierbereiche
+			// (häufig die untere Blattkante, wo Hand/Telefon Licht blockieren) aus der
+			// Papiermaske heraus — die erkannten Ecken rückten dann nach innen.
+			const thrPaper = Math.max(58, meanL * 0.55);
 			for (let i = 0; i < n; i++) {
 				const colorDelta = Math.hypot((L[i] - borderL) * 0.75, ca[i] - borderA, cb[i] - borderB);
 				lightMask[i] = L[i] >= thrPaper && sat[i] < 0.48 && L[i] >= blur[i] * 0.78 ? 1 : 0;
-				colorMask[i] = L[i] > 45 && colorDelta > 13 && (sat[i] < 0.72 || L[i] > borderL + 12) ? 1 : 0;
+				colorMask[i] = L[i] > 32 && colorDelta > 13 && (sat[i] < 0.72 || L[i] > borderL + 12) ? 1 : 0;
 			}
 			// Starke Kanten bilden eine Barriere. Vom Außenrand wird der Tisch geflutet;
 			// was von einer geschlossenen Blattkante umschlossen bleibt, ist Kandidat 3.
@@ -1464,6 +1467,13 @@ export const HEFT = (() => {
 				const closed = morphPass(morphPass(m, dw, dh, 1), dw, dh, 0);
 				return morphPass(morphPass(closed, dw, dh, 0), dw, dh, 1);
 			});
+			// Bei Schatten kann eine einzelne Maske genau eine Ecke verlieren. Ein vierter,
+			// konservativer Kandidat vereinigt die unabhängigen Hinweise; die anschließende
+			// Form-/Kantenbewertung entscheidet weiter gegen Tische und Hintergründe.
+			const combinedMask = new Uint8Array(n);
+			for (let i = 0; i < n; i++) combinedMask[i] = (lightMask[i] && (colorMask[i] || enclosedMask[i])) || (colorMask[i] && enclosedMask[i]) ? 1 : 0;
+			const combinedClosed = morphPass(morphPass(combinedMask, dw, dh, 1), dw, dh, 0);
+			masks.push(morphPass(morphPass(combinedClosed, dw, dh, 0), dw, dh, 1));
 			const stack = new Int32Array(n);
 			let best = null, bestScore = -1;
 			for (let mi = 0; mi < masks.length; mi++) {
@@ -1494,7 +1504,7 @@ export const HEFT = (() => {
 					const centerPenalty = Math.hypot(cx2 - dw / 2, cy2 - dh / 2) / Math.hypot(dw, dh);
 					const edgeBonus = Math.min(1.8, edgeSum / Math.max(1, boundary.length * edgeThr));
 					const touchPenalty = 1 - Math.min(0.72, touches / Math.max(1, boundary.length) * 2.5);
-					const sc = area * (0.45 + fill) * (0.8 + edgeBonus) * touchPenalty * (1 - centerPenalty * 0.35) * (mi === 2 ? 1.08 : 1);
+					const sc = area * (0.45 + fill) * (0.8 + edgeBonus) * touchPenalty * (1 - centerPenalty * 0.35) * (mi >= 2 ? 1.08 : 1);
 					if (sc > bestScore) { bestScore = sc; best = boundary; }
 				}
 			}
@@ -1539,8 +1549,8 @@ export const HEFT = (() => {
 			const ccx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4;
 			const ccy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
 			for (const p of q) {
-				p[0] = Math.max(0, Math.min(w - 1, ccx + (p[0] - ccx) * 1.03));
-				p[1] = Math.max(0, Math.min(h - 1, ccy + (p[1] - ccy) * 1.03));
+				p[0] = Math.max(0, Math.min(w - 1, ccx + (p[0] - ccx) * 1.045));
+				p[1] = Math.max(0, Math.min(h - 1, ccy + (p[1] - ccy) * 1.045));
 			}
 			// Plausibilität — sonst lieber das ganze Bild behalten
 			const areaQ = quadArea(q);
@@ -1651,8 +1661,9 @@ export const HEFT = (() => {
 		const cx = c.getContext("2d");
 		cx.drawImage(cv, 0, 0, bw, bh);
 		const d = cx.getImageData(0, 0, bw, bh).data;
-		let m = new Float32Array(bw * bh);
-		for (let i = 0; i < bw * bh; i++) m[i] = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8;
+		// Getrennte Kanal-Karten statt nur einer Luminanz-Karte — sonst bewahrt der
+		// "Weißabgleich" nur die Helligkeit, nicht die Farbe. Ein Schatten mit
+		// warmem Farbstich (z. B. Zimmerlicht) blieb dadurch gelblich.
 		const pass3x3 = (src, useMax) => {
 			const dst = new Float32Array(bw * bh);
 			for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
@@ -1667,20 +1678,21 @@ export const HEFT = (() => {
 			}
 			return dst;
 		};
-		m = pass3x3(pass3x3(m, true), true);
-		m = pass3x3(pass3x3(m, false), false);
-		return { map: m, bw, bh };
+		const smooth = (m) => pass3x3(pass3x3(pass3x3(pass3x3(m, true), true), false), false);
+		let mr = new Float32Array(bw * bh), mg = new Float32Array(bw * bh), mb = new Float32Array(bw * bh);
+		for (let i = 0; i < bw * bh; i++) { mr[i] = d[i * 4]; mg[i] = d[i * 4 + 1]; mb[i] = d[i * 4 + 2]; }
+		mr = smooth(mr); mg = smooth(mg); mb = smooth(mb);
+		return { r: mr, g: mg, b: mb, bw, bh };
 	}
-	function sampleMap(bg, fx, fy) {
-		const bw = bg.bw, bh = bg.bh, m = bg.map;
+	function sampleMap(map, bw, bh, fx, fy) {
 		// Bilinear-Sampling braucht jeweils einen rechten und unteren Nachbarn —
 		// am Rand deshalb auf den vorletzten Eintrag klemmen (sonst NaN-Ränder).
 		let x = fx - 0.5, y = fy - 0.5;
 		if (x < 0) x = 0; else if (x > bw - 2.001) x = bw - 2.001;
 		if (y < 0) y = 0; else if (y > bh - 2.001) y = bh - 2.001;
 		const x0 = x | 0, y0 = y | 0, dx = x - x0, dy = y - y0;
-		return m[y0 * bw + x0] * (1 - dx) * (1 - dy) + m[y0 * bw + x0 + 1] * dx * (1 - dy) +
-			m[(y0 + 1) * bw + x0] * (1 - dx) * dy + m[(y0 + 1) * bw + x0 + 1] * dx * dy;
+		return map[y0 * bw + x0] * (1 - dx) * (1 - dy) + map[y0 * bw + x0 + 1] * dx * (1 - dy) +
+			map[(y0 + 1) * bw + x0] * (1 - dx) * dy + map[(y0 + 1) * bw + x0 + 1] * dx * dy;
 	}
 	// „Foto“-Filter: Kontrast strecken über 2%/98%-Luminanz-Perzentile — bewusst
 	// kanalgleich, damit Farben nicht kippen (für Fotos statt Dokumenten)
@@ -1733,8 +1745,10 @@ export const HEFT = (() => {
 			let samples = 0;
 			for (let sy = 0; sy < h; sy += 4) for (let sx = 0; sx < w; sx += 4) {
 				const i = (sy * w + sx) * 4;
-				const base = Math.max(36, sampleMap(bg, sx * kx, sy * ky));
-				const rr = clamp(px[i] * 255 / base), gg = clamp(px[i + 1] * 255 / base), bb = clamp(px[i + 2] * 255 / base);
+				const baseR = Math.max(36, sampleMap(bg.r, bg.bw, bg.bh, sx * kx, sy * ky));
+				const baseG = Math.max(36, sampleMap(bg.g, bg.bw, bg.bh, sx * kx, sy * ky));
+				const baseB = Math.max(36, sampleMap(bg.b, bg.bw, bg.bh, sx * kx, sy * ky));
+				const rr = clamp(px[i] * 255 / baseR), gg = clamp(px[i + 1] * 255 / baseG), bb = clamp(px[i + 2] * 255 / baseB);
 				hist[docTone((rr * 77 + gg * 150 + bb * 29) >> 8)]++; samples++;
 			}
 			const percentile = (p) => {
@@ -1749,11 +1763,14 @@ export const HEFT = (() => {
 			const fy = y * ky;
 			for (let x2 = 0; x2 < w; x2++) {
 				const i = (y * w + x2) * 4;
-				const g = Math.max(36, sampleMap(bg, x2 * kx, fy));
-				// Weißabgleich: durch geschätzte Papierhelligkeit teilen
-				const r = clamp(px[i] * 255 / g);
-				const g2 = clamp(px[i + 1] * 255 / g);
-				const b = clamp(px[i + 2] * 255 / g);
+				// Weißabgleich je Kanal einzeln: eine gemeinsame Helligkeits-Karte hat
+				// einen Farbstich im Schatten (z. B. Gelbstich) nur abgedunkelt, nicht entfernt.
+				const gr = Math.max(36, sampleMap(bg.r, bg.bw, bg.bh, x2 * kx, fy));
+				const gg = Math.max(36, sampleMap(bg.g, bg.bw, bg.bh, x2 * kx, fy));
+				const gb = Math.max(36, sampleMap(bg.b, bg.bw, bg.bh, x2 * kx, fy));
+				const r = clamp(px[i] * 255 / gr);
+				const g2 = clamp(px[i + 1] * 255 / gg);
+				const b = clamp(px[i + 2] * 255 / gb);
 				if (mode === "color") {
 					px[i] = docTone(r);
 					px[i + 1] = docTone(g2);
@@ -1821,9 +1838,15 @@ export const HEFT = (() => {
 			const i = y * w + x2;
 			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - w] - lum[i + w]);
 		}
+		let dark = 0, bright = 0;
+		for (let i = 0; i < lum.length; i++) { if (lum[i] < 28) dark++; if (lum[i] > 245) bright++; }
 		const contrast = Math.sqrt(Math.max(0, sum2 / lum.length - Math.pow(sum / lum.length, 2)));
 		const sharp = lap / Math.max(1, (w - 2) * (h - 2));
-		return { sharp, contrast, soft: sharp < 5.5, flat: contrast < 13 };
+		const darkRatio = dark / lum.length, brightRatio = bright / lum.length;
+		// Qualitätsprüfung ist ein Hinweis, kein Blocker: Ein Scan bleibt speicherbar,
+		// bekommt aber bei Unschärfe, wenig Kontrast oder starken Clippings ein Badge.
+		return { sharp, contrast, darkRatio, brightRatio, soft: sharp < 5.5, flat: contrast < 13,
+			tooDark: darkRatio > 0.18, glare: brightRatio > 0.92 && contrast < 18 };
 	}
 	// Ein Scan: Rohbild → entzerren → Filter → Drehung → fertige Scan-Seite
 	// tick() gibt dem Browser zwischen den schweren Schritten Luft (sonst „eingefroren“)
@@ -1878,7 +1901,7 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, autoCapture: false, autoArmed: false, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
 		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
 		wrap.addEventListener("click", onScanClick);
 		try {
@@ -1944,6 +1967,28 @@ export const HEFT = (() => {
 	// Live-Prüfung vor dem Auslösen: kleine Vorschau → Helligkeit/Schärfe/Kontrast +
 	// ECHTE Dokumenterkennung. Der grüne Rahmen zeigt damit exakt den späteren
 	// Zuschnitt (v2 zeigte nur eine grobe Bounding-Box, die der Aufnahme oft widersprach).
+	function quadDelta(a, b) {
+		if (!a || !b || a.length !== 4 || b.length !== 4) return Infinity;
+		let sum = 0;
+		for (let i = 0; i < 4; i++) sum += Math.hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]);
+		return sum / 4;
+	}
+	function stabilizeLiveInfo(info, owner) {
+		if (!info.found) { owner.liveHistory = []; return info; }
+		const last = owner.liveHistory && owner.liveHistory[owner.liveHistory.length - 1];
+		const jump = last ? quadDelta(info.quad, last.quad) : 0;
+		// Bei einem echten Bildwechsel nicht über alte Ecken mitteln.
+		if (jump > Math.max(info.sw, info.sh) * 0.14) owner.liveHistory = [];
+		const entry = { quad: info.quad.map((p) => p.slice()), mean: info.mean, sharp: info.sharp, contrast: info.contrast };
+		(owner.liveHistory || (owner.liveHistory = [])).push(entry);
+		if (owner.liveHistory.length > 5) owner.liveHistory.shift();
+		const hist = owner.liveHistory;
+		const quad = info.quad.map((_, i) => [
+			hist.reduce((s, f) => s + f.quad[i][0], 0) / hist.length,
+			hist.reduce((s, f) => s + f.quad[i][1], 0) / hist.length,
+		]);
+		return { ...info, quad, jitter: hist.length > 1 ? quadDelta(entry.quad, quad) : Infinity, stable: hist.length >= 3 && jump < Math.max(info.sw, info.sh) * 0.035 };
+	}
 	function liveQualityFrame(video) {
 		const sw = 240, sh = Math.max(120, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
 		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
@@ -1965,7 +2010,9 @@ export const HEFT = (() => {
 		const sharp = lap / Math.max(1, ((sw - 2) * (sh - 2)) / 4);
 		const quad = detectQuad(c, sw, sh);
 		const found = quadArea(quad) < sw * sh * 0.96; // Vollbild-Fallback = nichts erkannt
-		return { quad, found, mean, contrast, sharp, sw, sh };
+		const area = quadArea(quad) / Math.max(1, sw * sh);
+		const margin = found ? Math.min(...quad.map((p) => Math.min(p[0], p[1], sw - 1 - p[0], sh - 1 - p[1]))) : 0;
+		return { quad, found, mean, contrast, sharp, area, margin, sw, sh };
 	}
 	function setLiveGuide(info, video) {
 		if (!scanUI) return;
@@ -1985,15 +2032,19 @@ export const HEFT = (() => {
 		const lightOK = info.mean >= 62 && info.mean <= 235;
 		const sharpOK = info.sharp >= 8;
 		const contrastOK = info.contrast >= 16;
-		const ready = info.found && lightOK && sharpOK && contrastOK;
-		guide.parentElement.classList.toggle("ready", ready);
-		guide.parentElement.classList.toggle("warn", !ready);
-		if (ready) label.textContent = "✓ Dokument erkannt · bereit";
+		const framingOK = info.area >= 0.12 && info.area <= 0.90 && info.margin >= 2;
+		const ready = info.found && lightOK && sharpOK && contrastOK && framingOK;
+		const stableReady = ready && info.stable;
+		guide.parentElement.classList.toggle("ready", stableReady);
+		guide.parentElement.classList.toggle("warn", !stableReady);
+		if (stableReady) label.textContent = "✓ Dokument stabil erkannt · bereit";
 		else if (!info.found) label.textContent = "Blatt vollständig ins Bild legen";
+		else if (!framingOK) label.textContent = "Blattrand vollständig sichtbar halten";
 		else if (!sharpOK) label.textContent = "Kamera ruhiger halten";
 		else if (!lightOK) label.textContent = info.mean < 62 ? "Mehr Licht nötig" : "Zu hell / Spiegelung vermeiden";
 		else if (!contrastOK) label.textContent = "Kontrast zu gering";
-		return ready;
+		else label.textContent = "Dokument wird stabilisiert…";
+		return stableReady;
 	}
 	function startLiveQuality(video, owner) {
 		if (!owner || scanUI !== owner) return;
@@ -2001,7 +2052,8 @@ export const HEFT = (() => {
 		const check = () => {
 			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
 			try {
-				const ready = setLiveGuide(liveQualityFrame(video), video);
+				const info = stabilizeLiveInfo(liveQualityFrame(video), owner);
+				const ready = setLiveGuide(info, video);
 				if (!ready) {
 					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto für die
 					// nächste Seite neu scharf sein — verhindert Duplikate bei ruhig liegendem Blatt.
@@ -2010,8 +2062,9 @@ export const HEFT = (() => {
 					return;
 				}
 				owner.liveStable++;
-				// Drei stabile Prüfrunden (~1 s) verhindern Fehlauslösungen beim Bewegen.
-				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 3 && Date.now() > owner.autoCooldown) {
+				// Fünf stabile Prüfrunden (~1,7 s) plus geglättete Ecken: Auto-Scan
+				// löst konservativ aus und nie auf einem einzelnen guten Zufallsframe.
+				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 5 && Date.now() > owner.autoCooldown) {
 					owner.autoArmed = false;
 					owner.liveStable = 0;
 					owner.autoCooldown = Date.now() + 1800;
@@ -2152,7 +2205,7 @@ export const HEFT = (() => {
 		strip.innerHTML = scanUI.shots.map((sh, i) => {
 			const src = (sh.out && sh.out.dataUrl) || sh.src;
 			const quality = sh.out && sh.out.quality;
-			const note = !sh.autoCrop ? "Vollbild" : (quality && quality.soft ? "Weich" : (quality && quality.flat ? "Kontrast" : ""));
+			const note = !sh.autoCrop ? "Vollbild" : (quality && quality.soft ? "Weich" : (quality && quality.tooDark ? "Dunkel" : (quality && quality.glare ? "Spiegelung" : (quality && quality.flat ? "Kontrast" : ""))));
 			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
 				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span>' +
 				(note ? '<small>' + note + '</small>' : "") + '</button>';
