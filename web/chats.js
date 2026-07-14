@@ -38,7 +38,17 @@ function mergedSessions() {
 		if (session) byId.set(session.id, session);
 	}
 	for (const item of Object.values(S.chatSessions || {})) {
-		if (!item || item.deleted) continue;
+		if (!item || !item.id) continue;
+		// BUGFIX (15. Juli): Lösch-Tombstones müssen den localStorage-Cache
+		// überstimmen. Vorher wurden gelöschte Sitzungen hier nur übersprungen —
+		// die alte Kopie aus localStorage blieb in der Liste und der nächste
+		// save() belebte den Chat per chatUpsert wieder (gelöschte Chats tauchten
+		// nach einem Sync bzw. auf anderen Geräten wieder auf).
+		if (item.deleted) {
+			const cached = byId.get(String(item.id));
+			if (!cached || String(item.deletedAt || "") >= String(cached.updated || "")) byId.delete(String(item.id));
+			continue;
+		}
 		const session = normalize(item);
 		if (!session) continue;
 		const old = byId.get(session.id);
@@ -68,6 +78,11 @@ export const CHATS = {
 		const active = new Set(sessions.map((session) => session.id));
 		for (const session of sessions) {
 			const current = S.chatSessions && S.chatSessions[session.id];
+			// BUGFIX (15. Juli): eine gelöschte Sitzung darf nur wiederbelebt werden,
+			// wenn die zu speichernde Kopie NEUER als der Lösch-Zeitpunkt ist (z.B.
+			// bewusst fortgesetzter Chat) — sonst machte ein veralteter
+			// localStorage-Stand das Löschen still rückgängig.
+			if (current && current.deleted && String(current.deletedAt || "") >= String(session.updated || "")) continue;
 			// Nur echte Änderungen erzeugen ein Event; verhindert Drive-Upload-Schleifen.
 			if (!current || current.deleted || String(current.updated) !== String(session.updated) || JSON.stringify(current.messages) !== JSON.stringify(session.messages) || current.title !== session.title) {
 				queueSync("chatUpsert", session);

@@ -275,10 +275,8 @@ export const DRIVE = (() => {
 		return file;
 	}
 
-	async function upload(fileId, content) {
-		const bytes = new TextEncoder().encode(content);
-		return uploadNamed(FILE_NAME, bytes, "identity", fileId);
-	}
+	// Aufräum-Paket (15. Juli): tote Funktion upload() entfernt — seit Sync v2
+	// laufen alle Uploads über uploadNamed().
 
 	function emitSyncStatus(state, label, detail) {
 		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
@@ -453,16 +451,38 @@ export const DRIVE = (() => {
 			if (!current && (!isHeft || legacyHefts.has(legacyId))) await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
 			knownBlobIds.add(file.id);
 		}
+		// PERF (15. Juli): Upload-Hash je Blob cachen — vorher wurde bei JEDEM Sync
+		// jeder lokale Blob komplett serialisiert und SHA-256-gehasht, nur um
+		// festzustellen, dass er längst in Drive liegt. Der Cache invalidiert sich
+		// über contentHash (Hefte ändern ihn bei jedem Speichern) bzw. Größe
+		// (PDF-Blobs sind immutable).
+		let uploadHashCache = {};
+		try { uploadHashCache = JSON.parse(localStorage.getItem("impala67_drive_upload_hashes") || "{}"); } catch { uploadHashCache = {}; }
+		let uploadHashCacheDirty = false;
+		const serializeBlob = (id, rec) => new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
 		for (const id of await DB.allBlobKeys()) {
 			const rec = await DB.getBlob(id);
 			if (!rec || !rec.buf) continue;
-			const raw = new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
-			const hash = await sha256Hex(raw);
+			const contentHash = (rec.meta && rec.meta.hash) || "";
+			const size = rec.buf.byteLength || 0;
+			const cached = uploadHashCache[id];
+			let raw = null;
+			let hash;
+			if (cached && cached.contentHash === contentHash && cached.size === size) {
+				hash = cached.hash;
+			} else {
+				raw = serializeBlob(id, rec);
+				hash = await sha256Hex(raw);
+				uploadHashCache[id] = { contentHash, size, hash };
+				uploadHashCacheDirty = true;
+			}
 			if (remoteBlobHashes.has(hash)) continue;
+			if (!raw) raw = serializeBlob(id, rec);
 			const packed = await encodeJson(JSON.parse(new TextDecoder().decode(raw)));
-			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash, blobId: id, contentHash: (rec.meta && rec.meta.hash) || "" });
+			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash, blobId: id, contentHash });
 			remoteBlobHashes.add(hash); knownBlobIds.add(created.id);
 		}
+		if (uploadHashCacheDirty) localStorage.setItem("impala67_drive_upload_hashes", JSON.stringify(uploadHashCache));
 		saveKnownIds("impala67_drive_known_blobs", knownBlobIds);
 		// Alte, nicht mehr von einem aktuellen Heft-Head referenzierte Versionen
 		// aufräumen. Die Datei-Liste stammt vom Sync-Start; parallel neue Uploads
@@ -478,7 +498,9 @@ export const DRIVE = (() => {
 		const localMaxSeq = await DB.maxSeq();
 		let uploaded = 0;
 		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
-			const events = await DB.eventsAfterSeq(uploadedSeq);
+			// SECURITY (15. Juli): Zugangsdaten (API-Keys etc.) aus Alt-Events nie mit
+			// hochladen — neue Events sind dank state.js/stripSecrets bereits sauber.
+			const events = (await DB.eventsAfterSeq(uploadedSeq)).map(DB.redactSecretsFromEvent);
 			if (events.length) {
 				setStatus("syncing", "Änderungen hochladen…");
 				const payload = { app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} };
@@ -499,8 +521,9 @@ export const DRIVE = (() => {
 		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
 		if (listedDeltas.length >= 50) {
 			setStatus("syncing", "Sync-Stand optimieren…");
-			const payload = JSON.parse(await DB.exportAll());
-			payload.blobs = {}; // Blobs liegen v2 separat und werden nicht doppelt hochgeladen.
+			// PERF+SECURITY (15. Juli): Blobs gar nicht erst kodieren (liegen v2
+			// separat) und keine Zugangsdaten aus Alt-Events in den Snapshot schreiben.
+			const payload = JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: true }));
 			const packed = await encodeJson(payload);
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot && oldSnapshot.id, { protocol: "2" });

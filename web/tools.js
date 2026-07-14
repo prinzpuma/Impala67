@@ -74,12 +74,12 @@ export const TOOLS = (() => {
 	}
 
 	const defs = [
-		t("create_page", "Erstellt eine neue Notiz-Seite.", {
+		t("create_page", "Erstellt eine neue Notiz-Seite. Inhalt ist Markdown; zusätzlich verfügbar: {red}Text{/} bzw. {bg-yellow}Text{/} (Farben gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==hervorheben== und ':::columns … :::split … :::end' für Spalten.", {
 			title: { type: "string" },
 			parent_title: { type: "string", description: "Titel der Elternseite (optional)" },
-			content: { type: "string", description: "Markdown-Inhalt" },
+			content: { type: "string", description: "Markdown-Inhalt (inkl. Impala67-Erweiterungen, LaTeX $…$)" },
 		}, ["title"]),
-		t("append_to_page", "Hängt Markdown an eine bestehende Seite an.", {
+		t("append_to_page", "Hängt Markdown an eine bestehende Seite an (gleiche Formatier-Möglichkeiten wie create_page).", {
 			page_title: { type: "string" },
 			content: { type: "string" },
 		}, ["page_title", "content"]),
@@ -101,6 +101,7 @@ export const TOOLS = (() => {
 		t("delete_deck", "Verschiebt einen Karteikarten-Stapel (inkl. Unterstapel und ALLER enthaltenen Karten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Namen zuerst ask_choice.", {
 			deck: { type: "string", description: "Name des Stapels, Unterstapel per 'Eltern::Kind'" },
 		}, ["deck"]),
+		t("get_context", "Liefert den aktuellen App-Kontext: Datum/Uhrzeit, geöffnete Seite (inkl. Inhalt, gekürzt), zuletzt bearbeitete Seiten, Karteikarten-Lernstatus und Seitenanzahl. Zuerst aufrufen, wenn Kontext über die App oder das Lernen nötig ist.", {}, []),
 		t("read_page", "Liest den Inhalt einer Seite.", {
 			page_title: { type: "string" },
 		}, ["page_title"]),
@@ -240,6 +241,28 @@ export const TOOLS = (() => {
 				}).length;
 				await STATE.dispatch("deckTrash", { name: match });
 				return { ok: true, deck: match, trashed: true, cards: n, note: "Im Papierkorb — wiederherstellbar." };
+			}
+			case "get_context": {
+				// Ersetzt die früheren Kontext-Listen im System-Prompt (Prompt-Diät,
+				// 15. Juli): die KI ruft diese Daten nur ab, wenn sie sie braucht.
+				const now = new Date();
+				const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
+				const body = cur ? String(cur.content || "") : "";
+				const recent = STATE.activePages()
+					.slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || ""))).slice(0, 8)
+					.map((pg) => ({ title: pg.title, updated: String(pg.updated || "").slice(0, 10) }));
+				let study = null;
+				try {
+					const snap = STATE.studySnapshot(null);
+					study = { neu: snap.counts.neu, review: snap.counts.review, learn: snap.counts.learn };
+				} catch { /* Lernstatus optional */ }
+				return {
+					now: now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr",
+					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Rest per read_page]" : "") } : null,
+					recentPages: recent,
+					study,
+					pageCount: STATE.activePages().length,
+				};
 			}
 			case "read_page": {
 				const pg = STATE.findPage(a.page_title);

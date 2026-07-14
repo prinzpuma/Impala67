@@ -1264,6 +1264,9 @@ function wireEvents() {
 			case "btnAddProvider":
 				await SETTINGS.handleAddProvider();
 				break;
+			case "btnRefreshEmbedding":
+				await SETTINGS.refreshEmbeddingModels();
+				break;
 			case "btnCheckUpdate":
 				await SETTINGS.handleCheckUpdate();
 				break;

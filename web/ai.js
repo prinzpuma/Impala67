@@ -5,6 +5,8 @@ import { TOOLS } from "./tools.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
 import { CHATS } from "./chats.js";
+import { THINK } from "./think-heuristik.js";
+import { RAG } from "./rag.js";
 
 // ai.js — KI-Adapter (OpenAI-kompatibel: LM Studio, OpenAI, Google Gemini).
 // Komplett-Rewrite (11. Juli 2026): gleiche Features, klare Struktur:
@@ -26,7 +28,12 @@ export const AI = (() => {
 	// Tools mit Seiten-Änderung → automatische Edit-Karte (Diff + Undo) im Chat.
 	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content"]);
 	const MAX_AGENT_STEPS = 8;
-	const HISTORY_LIMIT = 16;
+	// Dynamisches Verlaufsfenster (15. Juli): lokale Modelle haben kleine Kontexte
+	// (16 Nachrichten), Cloud-Modelle (Gemini/GPT, 128k–1M Token Kontext) vertragen
+	// deutlich mehr — lange Chats bleiben kohärent, ohne lokale Server zu überladen.
+	function historyLimit() {
+		return cfg().providerId === "local" ? 16 : 48;
+	}
 	// Datenschutzfreundliches Laufzeitprotokoll für den Debug-Knopf: nur technische
 	// Metadaten und gekürzte Modell-Ausgaben, niemals API-Key oder Notizinhalte.
 	const DEBUG_LOG_LIMIT = 40;
@@ -199,9 +206,16 @@ export const AI = (() => {
 	// Chat-Aufruf. Sie werden daher nur dann geschickt, wenn der aktuelle Auftrag
 	// tatsächlich eine Aktion oder Recherche verlangt — nie bei „hi“/„denk mal
 	// nach“. Das bewahrt Tool-Calling, beseitigt aber die unnötigen 500er.
-	const TOOL_INTENT_RE = /\b(seite|seiten|notiz|notizen|karteikarte|karteikarten|karte\b|karten\b|stapel|deck|lösche|loesch|erstell|anleg|verschieb|hänge|haenge|ergänz|ergaenz|ersetz|such|finde|liste|zeig.*seiten|lies|lese|zusammenfass|recherch|notebooklm)\b/i;
-	function shouldOfferTools(userText) {
-		return TOOL_INTENT_RE.test(String(userText || ""));
+	// BUGFIX (15. Juli): Die Erkennung war zu eng — „notiere das“, „schreib das
+	// auf“, englische Aufträge und Folge-Aufträge („mach das“, „ja, bitte“)
+	// bekamen keine Tools angeboten. Jetzt: breiteres Muster (DE+EN), und Tools
+	// bleiben aktiv, wenn in den letzten Runden bereits Tools benutzt wurden.
+	const TOOL_INTENT_RE = /\b(seite|seiten|notiz|notizen|notier|karteikarte|karteikarten|karte\b|karten\b|stapel|deck|lösche|loesch|erstell|anleg|verschieb|hänge|haenge|ergänz|ergaenz|ersetz|speicher|merk dir|schreib|aufschreiben|umbenenn|benenn|aktualisier|dokumentier|füge|fuege|such|finde|liste|zeig.*seiten|lies|lese|zusammenfass|recherch|notebooklm|page|pages|note|notes|flashcard|create|delete|remove|add|write|save|search|find|list|read|summari[sz]e|rename|update)\b/i;
+	function shouldOfferTools(userText, chatLog) {
+		if (TOOL_INTENT_RE.test(String(userText || ""))) return true;
+		// Folge-Aufträge: wurden zuletzt Tools/Edits/Rückfragen benutzt, bleibt das
+		// Tool-Angebot bestehen (sonst scheiterte „ja, mach das“ nach einer Aktion).
+		return (chatLog || []).slice(-10).some((m) => m && (m.role === "tool" || m.role === "edit" || m.role === "question"));
 	}
 	const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -230,6 +244,25 @@ export const AI = (() => {
 			} catch { return []; } // Quelle gerade nicht erreichbar — überspringen
 		}));
 		return lists.flat();
+	}
+	// /models kennt keinen einheitlichen Capability-Standard. Für die Auswahl
+	// filtern wir deshalb ausschließlich klar erkennbare Embedding-Modellnamen;
+	// Chat-Modelle tauchen dort nie versehentlich auf. Die Abfrage erfolgt nur
+	// gegen die aktuell gewählte Quelle, weil /embeddings über genau diese Quelle
+	// ausgeführt wird.
+	function isEmbeddingModel(id) {
+		return /(?:^|[-_/.])(embed(?:ding)?|text-embedding|nomic-embed|bge|e5|gte|jina-embeddings?|voyage|mxbai-embed|snowflake-arctic-embed)(?:$|[-_/.])/i.test(String(id || ""));
+	}
+	async function listEmbeddingModels() {
+		const pr = activeProvider();
+		if (!pr || !pr.base) return [];
+		const base = String(pr.base).replace(/\/+$/, "");
+		const res = await fetch(base + "/models", { headers: pr.key ? { Authorization: "Bearer " + pr.key } : {} });
+		if (!res.ok) throw new AiHttpError(res.status, await res.text().catch(() => ""));
+		const data = await res.json();
+		return (data.data || []).map((m) => m && m.id).filter(isEmbeddingModel)
+			.sort((a, b) => String(a).localeCompare(String(b)))
+			.map((id) => ({ id, providerId: pr.id, providerName: pr.name || "Aktive Quelle" }));
 	}
 	async function embed(texts) {
 		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
@@ -280,71 +313,10 @@ export const AI = (() => {
 		return String(content);
 	}
 
-	// Gemma sendet den Denkblock als <thought> (nicht <think>). Beide Formen
-	// gehören ausschließlich in die Thinking-Box, nie in die sichtbare Antwort.
-	const THINK_TAGS = "think|thinking|thought|reasoning";
-	// Typische "laut denken"-Einleitungen (Deutsch + Englisch).
-	const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i am|i'm going|i'm|let me|let's|my instructions|as per|based on|since the|however,?|plan:|note:|first,|okay,?|ok,|alright,?|looking at|what could|we've|we have|if i\b|instead\b|this is\b|a smart\b|so i\b|wait,?|hmm|actually|perhaps|maybe|probably|for example|in this|in the|the previous|they (have|want|are|might)|their\b|to (test|check|see|verify|make|be|move|refine)|ich sollte|ich muss|ich werde|ich denke|ich kann|ich bin|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
-	// Klarer Nutzer-Antwort-Start (meist Deutsch laut System-Prompt).
-	const ANSWER_START_RE = /^(hallo\b|hi\b|hey\b|klar[,!.\s]|ja[,!.\s]|nein[,!.\s]|gut[,!.\s]|super\b|verstanden\b|alles klar|hier (ist|sind|die|der|das|meine|ein)\b|natürlich\b|gerne\b|okay[,!.\s]*(hier|ich|das|der|die)?|zusammengefasst\b|kurz gesagt|mein (konkreter )?vorschlag|konkret[:\s]|die antwort\b|fertig[:!.]|erledigt\b|ich habe\b|ich leg|ich erstell|ich lösch|ich verschieb|ich änder|seite „|karte „|stapel „|sure[,!.\s]|here('s| is)\b|of course\b)/i;
-	function normalizeThinkPart(s) {
-		return String(s || "").trim().replace(/^\d+[.)]\s*/, "").replace(/^[-*•]\s*/, "");
-	}
-	function isMetaThinkPart(s) {
-		const t = normalizeThinkPart(s);
-		return !t || THINK_LEADIN_RE.test(t);
-	}
-	function isAnswerStartPart(s) {
-		const t = normalizeThinkPart(s);
-		if (!t || t.length < 3 || isMetaThinkPart(t)) return false;
-		return ANSWER_START_RE.test(t);
-	}
-	// Sticky-Heuristik: sieht der ANFANG nach Denkprozess aus, bleibt ALLES
-	// reasoning, bis ein klarer Antwort-Start erkannt wird. Nur für Modelle ohne
-	// getrenntes Reasoning (z.B. Gemma).
-	function stripLeakedReasoning(text) {
-		if (!text) return { content: text, reasoning: "" };
-
-		// Einige OpenAI-kompatible Backends liefern Zeilenumbrüche als literal
-		// <br>-Tags. Der bisherige Satz-Split sah dann den gesamten Block als eine
-		// Einheit und ließ den Denktext durch. Für die Erkennung werden nur diese
-		// Umbrüche normalisiert; die sichtbare Antwort bleibt ansonsten unverändert.
-		const source = String(text);
-		const analysis = source.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ");
-		const parts = analysis.split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/).filter(Boolean);
-		if (!parts.length || !isMetaThinkPart(parts[0])) return { content: source, reasoning: "" };
-
-		// Fail closed: Beginnt die Antwort eindeutig als internes Selbstgespräch,
-		// erscheint davon nie etwas im Chat. Erst ein klarer Antwortbeginn gibt
-		// sichtbaren Text frei. Das gilt auch während des Streamings.
-		let answerStart = -1;
-		for (let i = 1; i < parts.length; i++) {
-			if (isAnswerStartPart(parts[i])) { answerStart = i; break; }
-		}
-		if (answerStart === -1) return { content: "", reasoning: analysis.trim() };
-		return {
-			content: parts.slice(answerStart).join("\n").trim(),
-			reasoning: parts.slice(0, answerStart).join("\n").trim(),
-		};
-	}
-	// Tags heraustrennen; ohne Tags optional die Heuristik anwenden.
-	function splitThink(raw, skipHeuristic) {
-		let reasoning = "";
-		let content = "";
-		const re = new RegExp("<(" + THINK_TAGS + ")>([\\s\\S]*?)<\\/\\1>", "g");
-		let last = 0, m;
-		while ((m = re.exec(raw))) { reasoning += m[2]; content += raw.slice(last, m.index); last = re.lastIndex; }
-		content += raw.slice(last);
-		// Offener (noch streamender) Denk-Block: Rest komplett als Denkprozess.
-		const openMatch = content.match(new RegExp("<(" + THINK_TAGS + ")>"));
-		if (openMatch) { reasoning += content.slice(openMatch.index + openMatch[0].length); content = content.slice(0, openMatch.index); }
-		if (!reasoning && !skipHeuristic) {
-			const leaked = stripLeakedReasoning(content);
-			content = leaked.content;
-			reasoning = leaked.reasoning;
-		}
-		return { content: content.trim(), reasoning: reasoning.trim() };
-	}
+	// Sticky-Heuristik & Tag-Splitting: nach think-heuristik.js ausgelagert
+	// (Aufräum-Paket, 15. Juli) — reine Funktionen ohne App-Abhängigkeiten,
+	// direkt testbar in test/test-core.mjs.
+	const splitThink = THINK.splitThink;
 
 	// =========================================================================
 	// Chat-Aufrufe. Mit onDelta/onReasoning → SSE-Streaming, sonst Einmal-Antwort.
@@ -550,38 +522,34 @@ export const AI = (() => {
 	// =========================================================================
 	// System-Prompt
 	// =========================================================================
-	function systemPrompt(type, toolsEnabled) {
+	// System-Prompt v2 (15. Juli, abends): EXTREM entschlackt. Lange Start-Prompts
+	// voller statischer Listen (80 Seitentitel, Lernstatus, Formatierungs-Doku,
+	// ganze Seiteninhalte) verwässern die Aufmerksamkeit des Modells, kosten
+	// Latenz/Tokens und verschlechtern Tool-Calling messbar. Alles Abrufbare liegt
+	// jetzt in Tools (get_context, list_pages, read_page, semantic_search); die
+	// Formatierungs-Erweiterungen stehen in den Beschreibungen der Schreib-Tools.
+	// Relevante Notiz-Auszüge zur AKTUELLEN Frage liefert Auto-RAG (siehe agent()).
+	function systemPrompt(type, toolsEnabled, ragContext) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
+		const now = new Date();
 		const lines = [
-			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App.",
-			"Antworte auf Deutsch, kompakt, in kleinen Schritten. Nutze LaTeX für Formeln (z.B. $I = U / R$ inline oder $$...$$ für eigene Zeilen) — das wird live gerendert.",
-			"Beim Schreiben in Seiten kannst du neben Markdown auch die Impala67-Erweiterungen nutzen: {red}Text{/} bzw. {bg-yellow}Text{/} für Text-/Hintergrundfarbe (gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==Text== zum Hervorheben und ':::columns ... :::split ... :::end' für Spalten.",
-			...(toolsEnabled ? [
-				"Du hast Tools, um Seiten zu lesen/anzulegen/zu ändern/zu verschieben/zu löschen und Karteikarten zu erstellen. Nutze sie aktiv.",
-				"- Wissen speichern: create_page oder append_to_page. Seite verschieben/löschen: move_page/delete_page (Löschen wird bestätigt).",
-				"- Karten: create_flashcard; löschen: delete_flashcard/delete_deck (wird bestätigt).",
-				"- Unterlagen: semantic_search oder search_notes, dann read_page. Bei Mehrdeutigkeit: ask_choice mit 2–5 Optionen.",
-				"- Sage nach Tool-Nutzung kurz, was angelegt/geändert/verschoben/gelöscht wurde.",
-			] : [
-				"Für diese Anfrage sind keine Werkzeuge freigegeben. Nenne keine internen Funktionsnamen und behaupte keine Änderungen an Seiten oder Karten.",
-			]),
-			"- WICHTIG: Schreibe NIEMALS Selbstgespräche/Meta-Kommentare in die sichtbare Antwort, z.B. NICHT 'The user said...', 'I should respond...', 'Ich sollte...', 'Der Nutzer möchte...'. Deine Antwort beginnt IMMER direkt mit dem eigentlichen Inhalt für die Person, ohne jede Erklärung deines Vorgehens.",
-			"- Falls du dennoch vor der eigentlichen Antwort ausführlich laut nachdenken musst, packe das AUSSCHLIESSLICH in <think>...</think> VOR der Antwort, niemals ungetaggt in den sichtbaren Text. Beispiel: '<think>Nutzer fragt X, ich prüfe zuerst Y.</think>Hier ist die Antwort: ...'",
+			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App. Antworte auf Deutsch, kompakt. Formeln als LaTeX ($...$ inline, $$...$$ als Block).",
+			"Heute: " + now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr.",
+			cur ? 'Geöffnete Seite: "' + cur.title + '"' : "Keine Seite geöffnet.",
+			toolsEnabled
+				? "Nutze deine Tools aktiv statt zu raten. Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Löschen wird immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz, was geändert wurde."
+				: "Für diese Anfrage sind keine Werkzeuge freigegeben. Nenne keine internen Funktionsnamen und behaupte keine Änderungen an Seiten oder Karten.",
+			"Niemals Selbstgespräche/Meta-Kommentare im sichtbaren Text ('Der Nutzer möchte…', 'I should…'). Ausführliches Nachdenken gehört AUSSCHLIESSLICH in <think>...</think> VOR der Antwort.",
 		];
-		if (cur) {
-			lines.push('Aktuell geöffnete Seite: "' + cur.title + '"');
-			if (type === "side") {
-				lines.push("Du wirst im kontextuellen Seitenpanel ausgeführt. Beziehe dich bei Fragen direkt auf den Inhalt der aktuellen Seite, falls relevant.");
-				lines.push("Inhalt der aktuell geöffneten Seite:\n" + (cur.content || "(Leere Seite)"));
-			}
-		} else {
-			lines.push("Aktuell ist keine Seite geöffnet.");
+		// Nur das Seitenpanel bekommt den Seiteninhalt direkt — das ist sein Zweck.
+		// Der Vollbild-Chat holt Inhalte bei Bedarf über get_context/read_page.
+		if (type === "side" && cur) {
+			const body = String(cur.content || "");
+			lines.push("Inhalt der geöffneten Seite" + (body.length > 6000 ? " (gekürzt)" : "") + ":\n" + (body.slice(0, 6000) || "(Leere Seite)"));
 		}
-		lines.push("Vorhandene Seiten: " + (STATE.pageTitles().slice(0, 80).join(" | ") || "(noch keine)"));
-		// Nur explizit in den Einstellungen hinterlegte Zusatz-Anweisungen — keine
-		// automatisch abgeleiteten Annahmen über die Person.
+		if (ragContext) lines.push("Automatisch gefundene, möglicherweise relevante Notiz-Auszüge:\n" + ragContext);
 		if (S.settings.customInstructions && S.settings.customInstructions.trim()) {
-			lines.push("Zusätzliche Anweisungen (von der Nutzerin/dem Nutzer in den Einstellungen hinterlegt):\n" + S.settings.customInstructions.trim());
+			lines.push("Zusätzliche Anweisungen (aus den Einstellungen):\n" + S.settings.customInstructions.trim());
 		}
 		return lines.join("\n");
 	}
@@ -706,7 +674,7 @@ export const AI = (() => {
 		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile, pdfFile });
 
 		// Verlauf: Bilder als image_url (Vision), Text-/PDF-Anhänge als Kontext.
-		const history = targetChat.slice(-HISTORY_LIMIT)
+		const history = targetChat.slice(-historyLimit())
 			.filter((m) => m.role === "user" || m.role === "assistant")
 			.map((m) => {
 				let content = m.content || "";
@@ -715,8 +683,22 @@ export const AI = (() => {
 				if (m.image) return { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] };
 				return { role: m.role, content };
 			});
-		const agentTools = shouldOfferTools(userText) ? TOOLS.defs : null;
-		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools) }, ...history];
+		const agentTools = shouldOfferTools(userText, targetChat) ? TOOLS.defs : null;
+		// Auto-RAG (15. Juli): statt statischer Listen im Prompt werden die
+		// relevantesten Notiz-Auszüge zur AKTUELLEN Frage still eingebettet.
+		// Fehler oder fehlendes Embedding-Modell degradieren lautlos zu
+		// "kein Extra-Kontext" — nie zu einem Chat-Fehler.
+		let ragContext = "";
+		try {
+			if (RAG.enabled() && String(userText || "").trim().length >= 8) {
+				const hits = (await RAG.search(userText, 4)) || [];
+				ragContext = hits
+					.filter((h) => (h.score == null || h.score >= 0.3) && h.snippet)
+					.map((h) => "• [" + h.title + "] " + h.snippet)
+					.join("\n");
+			}
+		} catch (e) { debugEvent("Auto-RAG übersprungen", { error: String((e && e.message) || e).slice(0, 200) }); }
+		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools, ragContext) }, ...history];
 		debugEvent("Tool-Modus", { enabled: !!agentTools, reason: agentTools ? "Aktueller Auftrag benötigt Tools" : "Normaler Chat ohne Tool-Bedarf" });
 
 		// Max. 1 Chat-Log-Rebuild pro Frame (LaTeX/Code-Rendering ist teuer).
@@ -776,6 +758,10 @@ export const AI = (() => {
 				S.aiThinkingDraft = "";
 				targetChat.push(finalMsg);
 				flushPendingEdits();
+				// BUGFIX (15. Juli): die finale Antwort wurde nur von den Lösch-/
+				// ask_choice-Zweigen gespeichert — ein Reload direkt nach der Antwort
+				// konnte den Chat verlieren. Jetzt nach jedem Abschluss persistieren.
+				persist();
 				return finalMsg.content;
 			}
 
@@ -859,6 +845,7 @@ export const AI = (() => {
 					}
 				}
 				pushToolResult(tc, out);
+				persist();
 			}
 		}
 		S.aiDraft = "";
@@ -866,6 +853,7 @@ export const AI = (() => {
 		const abort = "(Abgebrochen: zu viele Tool-Schritte.)";
 		targetChat.push({ mid: U.uid(), role: "assistant", content: abort });
 		flushPendingEdits();
+		persist();
 		return abort;
 	}
 
@@ -888,5 +876,5 @@ export const AI = (() => {
 		return (await chatOnce(messages, null, onDelta)).content || "";
 	}
 
-	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

@@ -171,8 +171,12 @@ export function openSettings(section) {
 	let body = "";
 	if (sec === "ki") {
 		const providers = S.settings.aiProviders || [];
-		body = '<div id="aiStatusSettings" class="ai-status-banner"></div>' +
-			"<h4>Quellen (mehrere KI-Server/API-Keys gleichzeitig möglich)</h4>" +
+		const embedValue = S.settings.embedModel || "";
+		body = '<section class="ai-settings">' +
+			'<header class="ai-settings-hero"><span class="ai-settings-hero-icon" aria-hidden="true">✦</span><span><b>Deine KI-Verbindungen</b><small>Wähle eine Quelle im Chat. API-Keys bleiben nur auf diesem Gerät.</small></span></header>' +
+			'<section class="ai-connection-card">' +
+			'<div class="ai-connection-head"><div><h4>Verbindungen</h4><p>Lokale Modelle und Cloud-APIs an einem Ort.</p></div><span class="ai-provider-count">' + providers.length + ' Quelle' + (providers.length === 1 ? '' : 'n') + '</span></div>' +
+			'<div id="aiStatusSettings" class="ai-status-banner"></div>' +
 			'<div class="provider-list">' + providers.map((pr) =>
 				'<div class="provider-card" data-provrow="' + pr.id + '">' +
 					'<div class="provider-card-head">' +
@@ -183,22 +187,22 @@ export function openSettings(section) {
 					'<input data-provkey="' + pr.id + '" type="password" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
 				"</div>"
 			).join("") + "</div>" +
-			'<button id="btnAddProvider">＋ Quelle hinzufügen</button>' +
-			// Schnell-Buttons für die drei Standard-Quellen — falls sie in älteren gespeicherten
-			// Einstellungen fehlen (settingsSet überschreibt die Default-Liste aus state.js).
-			'<div class="row-btns" style="margin-top:6px"><span class="hint">Schnell hinzufügen:</span>' +
-			'<button data-provpreset="local">🖥 LM Studio (lokal)</button>' +
-			'<button data-provpreset="google">✨ Google Gemini</button>' +
-			'<button data-provpreset="openai">🤖 OpenAI</button></div>' +
-			field("Embedding-Modell (optional, semantische Suche — nutzt die im Modell-Dropdown aktive Quelle)", "inpEmbed", S.settings.embedModel) +
-			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI (optional)</label>" +
-			'<textarea id="inpCustomInstructions" rows="3" placeholder="z.B. Studienfach, bevorzugte Sprache, Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div>" +
-			'<p class="hint">Lege für jede Quelle Server-URL + optionalen API-Key an, z.B.:<br>' +
-			"Google Gemini: https://generativelanguage.googleapis.com/v1beta/openai · Modelle z.B. gemma-4-31b-it, gemini-2.5-flash · Embeddings gemini-embedding-001.<br>" +
-			"OpenAI: https://api.openai.com/v1 · Embeddings text-embedding-3-small.<br>" +
-			"Lokal: z.B. http://localhost:1234/v1 (LM Studio, Port 1234, CORS aktivieren, kein Key nötig).<br>" +
-			"Welches Modell aktiv ist, wählst du oben im Modell-Dropdown — dort erscheinen alle Quellen gruppiert mit ihren live abgefragten Modellen. Die KI kennt nur, was du hier selbst einträgst.</p>" +
-			saveActionsHtml;
+			'<div class="ai-provider-add"><button id="btnAddProvider">＋ Eigene Quelle</button><span>Für jeden OpenAI-kompatiblen Server.</span></div>' +
+			'</section>' +
+			// Schnell-Buttons für die drei häufigsten Quellen.
+			'<section class="ai-presets"><div><h4>Schnellstart</h4><p>Fügt die Konfiguration ein – du kannst sie danach anpassen.</p></div>' +
+			'<div class="ai-preset-grid"><button data-provpreset="local"><span>🖥</span><b>LM Studio</b><small>Lokal auf diesem Gerät</small></button>' +
+			'<button data-provpreset="google"><span>✨</span><b>Google Gemini</b><small>Gemini API</small></button>' +
+			'<button data-provpreset="openai"><span>◉</span><b>OpenAI</b><small>OpenAI API</small></button></div></section>' +
+			'<details class="ai-settings-advanced"><summary><span>Erweitert</span><small>Embeddings & persönliche Anweisungen</small></summary><div class="ai-settings-advanced-body">' +
+			'<div class="embedding-picker"><label for="inpEmbed">Embedding-Modell</label><div class="embedding-picker-row">' +
+			'<select id="inpEmbed" data-currentembed="' + U.esc(embedValue) + '" disabled><option value="' + U.esc(embedValue) + '">' + U.esc(embedValue || "Modelle werden geladen…") + '</option></select>' +
+			'<button type="button" id="btnRefreshEmbedding" title="Embedding-Modelle neu laden">↻</button></div>' +
+			'<p id="embeddingModelHint" class="hint">Nur Modelle der aktuell im Chat gewählten Quelle.</p></div>' +
+			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI</label>" +
+			'<textarea id="inpCustomInstructions" rows="4" placeholder="z. B. Studienfach, bevorzugte Sprache oder Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div></div></details>" +
+			'<p class="ai-settings-note">Die aktive KI und das Modell wählst du direkt im Chat. Gespeicherte Schlüssel werden nicht synchronisiert.</p>' +
+			saveActionsHtml + "</section>";
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
 		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
@@ -319,7 +323,10 @@ export function openSettings(section) {
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
 	// KI-Tab: Status-Banner mit aktuellem Ping-Ergebnis füllen
-	if (sec === "ki") renderStatusDot();
+	if (sec === "ki") {
+		renderStatusDot();
+		queueMicrotask(() => { refreshEmbeddingModels(); });
+	}
 	// Update-Tab: Remote-Version sofort prüfen (Lokal + Server sichtbar)
 	if (sec === "update") {
 		// next tick: DOM muss erst im Overlay stehen
@@ -554,6 +561,35 @@ export async function handleApplyPwaUpdate() {
 	}
 }
 
+// Lädt nur tatsächlich verfügbare Embedding-Modelle der aktiven Chat-Quelle.
+// Das aktuelle Modell bleibt sichtbar, auch wenn die Quelle gerade offline ist.
+export async function refreshEmbeddingModels() {
+	const select = U.el("inpEmbed");
+	const hint = U.el("embeddingModelHint");
+	if (!select) return;
+	const current = select.dataset.currentembed || select.value || "";
+	select.disabled = true;
+	if (hint) hint.textContent = "Lade Modelle der aktiven Quelle…";
+	try {
+		const found = await AI.listEmbeddingModels();
+		const models = found.map((m) => m.id);
+		if (current && !models.includes(current)) models.push(current);
+		select.innerHTML = '<option value="">Kein Embedding-Modell</option>' + models.map((id) =>
+			'<option value="' + U.esc(id) + '">' + U.esc(id) + (id === current && !found.some((m) => m.id === id) ? " (gespeichert)" : "") + "</option>"
+		).join("");
+		select.value = current;
+		if (hint) hint.textContent = found.length
+			? found.length + " verfügbares Embedding-Modell · aktive Quelle: " + U.esc((found[0] && found[0].providerName) || "")
+			: "Keine Embedding-Modelle erkannt. Prüfe Quelle oder lade ein Embedding-Modell.";
+	} catch (err) {
+		select.innerHTML = '<option value="' + U.esc(current) + '">' + U.esc(current || "Kein Modell verfügbar") + "</option>";
+		select.value = current;
+		if (hint) hint.textContent = "Modelle konnten nicht geladen werden.";
+	} finally {
+		select.disabled = false;
+	}
+}
+
 export async function handleSaveSettings() {
 	const patch = {};
 	const g = (id) => document.getElementById(id);
@@ -762,6 +798,7 @@ export const SETTINGS = {
 	handleDriveSyncSettings,
 	startAutoDriveSync,
 	handleAddProvider,
+	refreshEmbeddingModels,
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
 	handleSaveSettings,

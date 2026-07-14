@@ -2,6 +2,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
+import { HANDSCHRIFT } from "./handschrift.js";
 
 // heft.js — GoodNotes-Kern für Impala67.
 //
@@ -70,7 +71,61 @@ export const HEFT = (() => {
 	let insertPos = "after"; // ＋-Menü: "before" | "after" | "last"
 	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / ＋)
 	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[], edit, busy }
-	let ocrBusy = false, ocrTimer = 0; // stille Hintergrund-Indexierung für die normale Suche
+	let ocrBusy = false, ocrTimer = 0; // Legacy-Flags der alten Tesseract-Indexierung (s. Handschrift v2 unten)
+
+	// ---------- Handschrift-Erkennung v2 (15. Juli 2026, Notion AI) ----------
+	// Die alte, rein lokale Tesseract-Indexierung liest Handschrift praktisch nicht
+	// (Tesseract ist für DRUCKSCHRIFT gebaut) — Ergebnis: unbrauchbarer ocrText.
+	// v2 delegiert an handschrift.js: bevorzugt liest das Vision-Modell der aktiven
+	// KI-Quelle (Gemini/GPT) die gerenderte Seite, lokal bleibt Tesseract mit
+	// besserer Vorverarbeitung der Fallback. Debounced pro Heftseite + 45-s-Cooldown
+	// (häufige Schreibpausen lösen keine Aufruf-Flut aus). Das Ergebnis landet wie
+	// bisher als pg.ocrText im Heft-Dokument und via saveNow() im durchsuchbaren
+	// heftUpdated-Event. Die alte scheduleHandwritingIndex-Implementierung weiter
+	// unten ist damit tot und kann lokal gelöscht werden.
+	const ocrQueueV2 = new Set();
+	const ocrLastRun = new Map(); // "pid:pageIdx" → Zeitstempel des letzten Laufs
+	let ocrTimerV2 = 0, ocrBusyV2 = false;
+	function scheduleHandwritingIndexV2(pi) {
+		if (!HANDSCHRIFT.available()) return;
+		ocrQueueV2.add(pi);
+		clearTimeout(ocrTimerV2);
+		ocrTimerV2 = setTimeout(runHandwritingIndexV2, 4000);
+	}
+	async function runHandwritingIndexV2() {
+		if (ocrBusyV2 || !doc || !pid) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runHandwritingIndexV2, 4000); return; }
+		const jobPid = pid, jobDoc = doc;
+		const indices = [...ocrQueueV2];
+		ocrQueueV2.clear();
+		ocrBusyV2 = true;
+		try {
+			for (const pi of indices) {
+				const key = jobPid + ":" + pi;
+				if (Date.now() - (ocrLastRun.get(key) || 0) < 45000) { ocrQueueV2.add(pi); continue; }
+				const pg = jobDoc.pages[pi];
+				if (!pg || !(pg.strokes && pg.strokes.length)) continue;
+				// Seite offscreen in mittlerer Auflösung rendern — reicht für die
+				// Erkennung, hält Speicher und Upload klein.
+				const cv = document.createElement("canvas");
+				const k = 1100 / PAGE_W;
+				cv.width = Math.round(PAGE_W * k); cv.height = Math.round(PAGE_H * k);
+				const x = cv.getContext("2d");
+				x.setTransform(k, 0, 0, k, 0, 0);
+				renderPageTo(x, pg, -1); // -1: nie Auswahl-/Lasso-Overlays mitrendern
+				ocrLastRun.set(key, Date.now());
+				const text = await HANDSCHRIFT.recognize(cv);
+				// Heft könnte während des await gewechselt worden sein.
+				if (pid !== jobPid || doc !== jobDoc || text == null) continue;
+				if (String(text).trim() !== String(pg.ocrText || "").trim()) {
+					pg.ocrText = String(text).trim();
+					scheduleSave();
+				}
+			}
+		} catch (e) { console.warn("Heft: Handschrift-Erkennung v2 fehlgeschlagen", e); }
+		ocrBusyV2 = false;
+		// Wegen Cooldown zurückgestellte Seiten später erneut versuchen.
+		if (ocrQueueV2.size) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runHandwritingIndexV2, 45000); }
+	}
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
 	// Versions-ID für die synchronisierte Heft-Binärdatei. Der Hash bindet das
@@ -890,7 +945,7 @@ export const HEFT = (() => {
 			// die Wet-Ink-Ebene leeren — kein Voll-Rerender, kein Lag.
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
-			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndex(pi);
+			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndexV2(pi);
 		}
 		drawing = null;
 		updateChrome();

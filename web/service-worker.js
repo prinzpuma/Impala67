@@ -59,7 +59,10 @@
 //       wird kurz im Cache abgelegt und danach an die App weitergereicht.
 // v49: Lernzeit v2 — synchronisierte Lern-Sitzungen, Aktivitätskategorien,
 //       editierbares Tagesprotokoll und Timer-Abschlusskarte.
-const CACHE = "impala67-v49";
+// v50: think-heuristik.js — Sticky-Thinking-Heuristik aus ai.js ausgelagert
+// v51: handschrift.js (Handschrift-Erkennung v2: Vision-KI + Tesseract-Fallback),
+//       Prompt-Diät + Auto-RAG (ai.js, tools.js, rag.js), RAG-Suche v2
+const CACHE = "impala67-v51";
 
 const APP_FILES = [
 	"./",
@@ -81,6 +84,8 @@ const APP_FILES = [
 	"./state.js",
 	"./tools.js",
 	"./ai.js",
+	"./think-heuristik.js",
+	"./handschrift.js",
 	"./rag.js",
 	"./drive.js",
 	"./sync-core.js",

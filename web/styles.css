@@ -31,12 +31,16 @@ body.density-compact #sidebar {
    komfortable Modus bleibt hier bewusst UNVERÄNDERT gegenüber dem Desktop —
    frueher flachte dieser Block faelschlich auch den komfortablen Modus ab. */
 @media (min-width: 769px) and (max-width: 1366px) and (pointer: coarse) {
-	/* 100dvh endet in der iPadOS-PWA oberhalb der Home-Indicator-Safe-Area. Die
-	   zusätzliche Inset-Höhe lässt die App-Fläche bis an den physischen
-	   Displayrand reichen — das gilt unabhängig vom gewählten Abstands-Modus. */
+	/* BUGFIX: In der installierten PWA mit viewport-fit=cover umfasst 100dvh
+	   bereits die VOLLE Bildschirmhöhe inklusive Home-Indicator-Safe-Area.
+	   Die frühere Addition von env(safe-area-inset-bottom) machte #app dadurch
+	   ~20px HÖHER als den Bildschirm — body hat overflow:hidden, also wurden
+	   genau der untere Rand, die Panel-Unterkanten und die Eckenrundungen
+	   abgeschnitten. Exakt 100dvh füllt den Bildschirm randgenau; den Abstand
+	   zum Home-Indicator regelt allein das Safe-Area-Padding weiter unten. */
 	#app {
-		height: max(100vh, calc(100dvh + env(safe-area-inset-bottom))) !important;
-		min-height: max(100vh, calc(100dvh + env(safe-area-inset-bottom))) !important;
+		height: 100dvh !important;
+		min-height: 100dvh !important;
 	}
 	/* Ab hier NUR der Kompaktmodus: die drei Arbeitsbereiche verschmelzen zu
 	   einer durchgehenden, randlosen App-Fläche. Der komfortable Modus nutzt
@@ -3300,3 +3304,108 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 		padding-bottom: env(safe-area-inset-bottom) !important;
 	}
 }
+
+/* ========================================================================== 
+   KI-Einstellungen — klare Verbindungen statt einer langen Formularwand
+   ========================================================================== */
+.ai-settings { display: grid; gap: 16px; padding-bottom: 4px; }
+.ai-settings-hero { display: flex; align-items: center; gap: 12px; padding: 2px 2px 0; }
+.ai-settings-hero-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-size: 21px; }
+.ai-settings-hero span:last-child { display: grid; gap: 2px; min-width: 0; }
+.ai-settings-hero b { font-size: 16px; letter-spacing: -.01em; }
+.ai-settings-hero small, .ai-connection-head p, .ai-provider-add span, .ai-presets p, .ai-settings-note { color: var(--text2); font-size: 12px; line-height: 1.45; }
+.ai-connection-card { padding: 14px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-faint); }
+.ai-connection-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.ai-connection-head h4, .ai-presets h4 { margin: 0; font-size: 14px; }
+.ai-connection-head p, .ai-presets p { margin: 2px 0 0; }
+.ai-provider-count { flex: 0 0 auto; padding: 3px 8px; border-radius: 999px; background: var(--surface); color: var(--text2); font-size: 11px; font-weight: 650; }
+.ai-settings .ai-status-banner { margin: 0 0 12px; border-radius: 8px; }
+.ai-settings .provider-list { display: grid; gap: 10px; }
+.ai-settings .provider-card { padding: 12px; border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-subtle); }
+.ai-settings .provider-card:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ai-settings .provider-card-head { margin-bottom: 8px; }
+.ai-settings .provider-card-head input { font-weight: 650; }
+.ai-settings .provider-card input + input { margin-top: 7px; }
+.ai-provider-add { display: flex; align-items: center; gap: 10px; padding-top: 12px; }
+.ai-provider-add button { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); font-weight: 650; }
+.ai-provider-add button:hover { background: var(--accent); color: #fff; }
+.ai-presets { display: grid; gap: 10px; padding: 2px 0; }
+.ai-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ai-preset-grid button { min-height: 86px; padding: 10px; border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-subtle); text-align: left; display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; align-content: center; }
+.ai-preset-grid button > span { grid-row: 1 / 3; align-self: center; font-size: 17px; }
+.ai-preset-grid b { font-size: 12.5px; line-height: 1.2; }
+.ai-preset-grid small { color: var(--text2); font-size: 10.5px; line-height: 1.35; }
+.ai-preset-grid button:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); transform: translateY(-1px); }
+.ai-settings-advanced { border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-faint); }
+.ai-settings-advanced summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; font-size: 13px; font-weight: 650; }
+.ai-settings-advanced summary::-webkit-details-marker { display: none; }
+.ai-settings-advanced summary::after { content: "›"; order: 3; color: var(--text2); font-size: 18px; transition: transform var(--motion-fast) ease; }
+.ai-settings-advanced[open] summary::after { transform: rotate(90deg); }
+.ai-settings-advanced summary small { margin-left: auto; color: var(--text2); font-size: 11.5px; font-weight: 400; }
+.ai-settings-advanced-body { display: grid; gap: 8px; padding: 0 12px 12px; border-top: 1px solid var(--edge-soft); }
+.ai-settings-advanced-body > div:first-child { margin-top: 12px; }
+.ai-settings-note { margin: -2px 2px 0; }
+.ai-settings .modal-actions { margin-top: 0; padding-top: 2px; }
+.ai-settings .modal-actions button { background: var(--accent); color: #fff; font-weight: 650; }
+@media (max-width: 560px) {
+	.ai-preset-grid { grid-template-columns: 1fr; }
+	.ai-preset-grid button { min-height: 58px; }
+	.ai-provider-add { align-items: flex-start; flex-direction: column; }
+	.ai-settings-advanced summary small { display: none; }
+}
+
+/* KI-Einstellungen v2: alles Wesentliche in einer ruhigen, kompakten Fläche. */
+.settings-body:has(.ai-settings) { padding-top: 16px; }
+.ai-settings { gap: 10px; }
+.ai-settings-hero { display: none; }
+.ai-connection-card { padding: 10px; border-radius: 10px; }
+.ai-connection-head { align-items: center; margin: 0 0 8px; }
+.ai-connection-head h4 { font-size: 13px; }
+.ai-connection-head p { display: none; }
+.ai-provider-count { padding: 2px 7px; font-size: 10.5px; }
+.ai-settings .ai-status-banner { min-height: 32px; margin: 0 0 8px; padding: 5px 8px; border-radius: 7px; font-size: 11.5px; }
+.ai-settings .ai-status-banner #btnRecheckAI { min-height: 24px; padding: 2px 7px; font-size: 11px; }
+.ai-settings .provider-list { gap: 6px; }
+.ai-settings .provider-card { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(160px, 1.3fr) minmax(130px, 1fr); gap: 6px; align-items: center; padding: 6px; border-radius: 8px; }
+.ai-settings .provider-card-head { display: flex; min-width: 0; margin: 0; gap: 3px; }
+.ai-settings .provider-card input { min-width: 0; height: 30px; padding: 5px 7px; border-radius: 6px; font-size: 12px; }
+.ai-settings .provider-card input + input { margin: 0; }
+.ai-settings .provider-card .icon-danger { width: 28px; height: 30px; flex: 0 0 28px; font-size: 12px; }
+.ai-provider-add { justify-content: space-between; padding-top: 8px; }
+.ai-provider-add button { min-height: 28px; padding: 3px 8px; font-size: 12px; }
+.ai-provider-add span { font-size: 10.5px; }
+.ai-presets { display: flex; align-items: center; gap: 7px; padding: 0; }
+.ai-presets > div:first-child { display: contents; }
+.ai-presets h4 { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.ai-presets p { display: none; }
+.ai-preset-grid { display: flex; flex: 1; gap: 5px; }
+.ai-preset-grid button { min-height: 28px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 7px; font-size: 11px; }
+.ai-preset-grid button > span { display: inline; font-size: 13px; }
+.ai-preset-grid b { font-size: 11px; font-weight: 600; }
+.ai-preset-grid small { display: none; }
+.ai-settings-advanced { border-radius: 8px; }
+.ai-settings-advanced summary { min-height: 32px; padding: 6px 9px; font-size: 12px; }
+.ai-settings-advanced summary::after { font-size: 16px; }
+.ai-settings-advanced summary small { font-size: 10.5px; }
+.ai-settings-advanced-body { padding: 0 9px 9px; }
+.ai-settings-note { display: none; }
+.ai-settings .modal-actions { position: sticky; bottom: -20px; margin: 0 -24px -20px; padding: 9px 24px; background: color-mix(in srgb, var(--menu-bg) 92%, transparent); border-top: 1px solid var(--edge-soft); }
+.ai-settings .modal-actions button { min-height: 30px; padding: 4px 11px; font-size: 12px; }
+@media (max-width: 620px) {
+	.ai-settings .provider-card { grid-template-columns: 1fr; gap: 5px; padding: 8px; }
+	.ai-settings .provider-card-head { gap: 5px; }
+	.ai-presets { align-items: flex-start; flex-direction: column; }
+	.ai-preset-grid { width: 100%; }
+	.ai-settings .modal-actions { bottom: -20px; }
+}
+
+/* Kompakte Auswahl: nur echte Embedding-Modelle der aktiven KI-Quelle.
+   Der KI-Tab behält bewusst dieselbe Dialoggröße und Navigation wie alle
+   anderen Einstellungen; komprimiert ist nur sein Inhalt. */
+.embedding-picker { display: grid; gap: 4px; }
+.embedding-picker > label { font-size: 12px !important; font-weight: 650; }
+.embedding-picker-row { display: flex; gap: 5px; align-items: center; }
+.embedding-picker-row select { flex: 1; min-width: 0; height: 30px; padding: 4px 28px 4px 8px; border-radius: 6px; font-size: 12px; }
+.embedding-picker-row button { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 6px; background: var(--surface); color: var(--text2); font-size: 15px; }
+.embedding-picker-row button:hover { color: var(--accent); background: var(--accent-soft); }
+.embedding-picker .hint { min-height: 16px; font-size: 10.5px; line-height: 1.35; }

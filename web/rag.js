@@ -14,15 +14,23 @@ export const RAG = (() => {
 
 	const enabled = () => !!S.settings.embedModel;
 
-	function chunk(text, size = 800) {
+	// Chunking v2 (15. Juli): Überschriften beginnen neue Chunks (thematisch
+	// saubere Treffer) und benachbarte Chunks überlappen sich leicht — Antworten,
+	// die genau auf einer Chunk-Grenze liegen, gehen nicht mehr verloren.
+	function chunk(text, size = 800, overlap = 120) {
 		const parts = [];
 		const paras = String(text || "").split(/\n\n+/);
 		let cur = "";
+		const push = () => { if (cur.trim()) parts.push(cur); };
 		for (const p of paras) {
-			if ((cur + "\n\n" + p).length > size && cur) { parts.push(cur); cur = p; }
-			else cur = cur ? cur + "\n\n" + p : p;
+			const isHeading = /^#{1,3}\s/.test(p);
+			if (cur && (isHeading || (cur + "\n\n" + p).length > size)) {
+				push();
+				// Überlappung: das Ende des letzten Chunks leitet den nächsten ein.
+				cur = (overlap ? cur.slice(-overlap) + "\n\n" : "") + p;
+			} else cur = cur ? cur + "\n\n" + p : p;
 		}
-		if (cur.trim()) parts.push(cur);
+		push();
 		return parts.slice(0, 80); // großzügiger, damit auch PDF-Volltext hineinpasst
 	}
 
@@ -51,10 +59,13 @@ export const RAG = (() => {
 		const chunks = chunk(text);
 		if (!chunks.length) { await DB.delVec(pageId); return; }
 		const vecs = await AI.embed(chunks);
+		// Normen einmalig beim Indexieren vorberechnen — die Suche spart sich damit
+		// pro Chunk eine komplette Betrags-Berechnung (spürbar bei vielen Seiten).
 		await DB.putVec(pageId, {
 			updated: pg.updated,
-			chunks: chunks.map((text, i) => ({ text, vec: vecs[i] })),
+			chunks: chunks.map((text, i) => ({ text, vec: vecs[i], norm: norm(vecs[i]) })),
 		});
+		vecCache = null; // Suche lädt beim nächsten Mal frisch
 	}
 
 	// Debounced-Warteschlange — wird nach Edits/Ingest aus app.js & pdfs.js befüllt.
@@ -81,26 +92,61 @@ export const RAG = (() => {
 		}
 	}
 
-	const cosine = (a, b) => {
-		let dot = 0, na = 0, nb = 0;
-		for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
-		return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
-	};
+	const norm = (v) => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * v[i]; return Math.sqrt(s) || 1; };
+	const dot = (a, b) => { let s = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) s += a[i] * b[i]; return s; };
 
-	async function search(query, k = 5) {
-		if (!enabled()) return null; // Aufrufer fällt auf Stichwortsuche zurück
+	// Suche v2 (15. Juli):
+	// - Vektoren werden im Speicher gecacht (IndexedDB-Volllast nur noch alle 30 s
+	//   bzw. nach eigenem Re-Index) statt bei JEDER Suche.
+	// - Query-Embeddings der letzten 20 Fragen werden wiederverwendet (Auto-RAG in
+	//   ai.js stellt oft ähnliche/identische Fragen erneut).
+	// - Vorberechnete Normen + reines Skalarprodukt statt kompletter Kosinus-Formel.
+	// - Max. 2 Treffer pro Seite: k Ergebnisse decken mehrere Seiten ab, statt dass
+	//   eine einzige lange Seite alle Plätze belegt.
+	// - Chunks mit fremder Embedding-Dimension (Modellwechsel) werden übersprungen
+	//   statt falsche Scores zu liefern; reindexStale() ersetzt sie ohnehin.
+	let vecCache = null, vecCacheAt = 0;
+	const queryCache = new Map();
+	async function allVecsCached() {
+		if (!vecCache || Date.now() - vecCacheAt > 30000) {
+			vecCache = await DB.allVecs();
+			vecCacheAt = Date.now();
+		}
+		return vecCache;
+	}
+	async function queryVec(query) {
+		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedModel || "");
+		if (queryCache.has(key)) return queryCache.get(key);
 		const [qv] = await AI.embed([query]);
-		const vecs = await DB.allVecs();
+		queryCache.set(key, qv);
+		if (queryCache.size > 20) queryCache.delete(queryCache.keys().next().value);
+		return qv;
+	}
+	async function search(query, k = 6) {
+		if (!enabled()) return null; // Aufrufer fällt auf Stichwortsuche zurück
+		const qv = await queryVec(query);
+		const qn = norm(qv);
+		const vecs = await allVecsCached();
 		const hits = [];
 		for (const [pageId, rec] of Object.entries(vecs)) {
 			const pg = S.pages[pageId];
 			if (!pg || pg.trashed) continue; // Papierkorb-Seiten nicht in Suchergebnissen
 			for (const c of rec.chunks) {
-				hits.push({ title: pg.title, snippet: c.text.slice(0, 300), score: cosine(qv, c.vec) });
+				if (!c.vec || c.vec.length !== qv.length) continue; // anderes Embedding-Modell
+				const score = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));
+				hits.push({ pageId, title: pg.title, snippet: c.text.slice(0, 400), score });
 			}
 		}
 		hits.sort((a, b) => b.score - a.score);
-		return hits.slice(0, k);
+		const perPage = Object.create(null);
+		const out = [];
+		for (const h of hits) {
+			if ((perPage[h.pageId] || 0) >= 2) continue;
+			perPage[h.pageId] = (perPage[h.pageId] || 0) + 1;
+			out.push({ title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000 });
+			if (out.length >= k) break;
+		}
+		return out;
 	}
 
 	return { queuePage, reindexStale, search, indexPage, enabled };

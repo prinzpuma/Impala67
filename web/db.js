@@ -118,10 +118,23 @@ export const DB = (() => {
 	async function eventsAfterSeq(seq) {
 		ensureOpen();
 		const min = Number(seq || 0);
+		// PERF (15. Juli): vorher wurde bei jedem Sync das GESAMTE Event-Log geladen
+		// und in JS gefiltert — jetzt liest ein Cursor nur den Bereich oberhalb des
+		// Sync-Wasserstands (IDBKeyRange.lowerBound, exklusiv).
 		// Importierte Remote-Events sind bereits in Drive vorhanden und dürfen nicht
 		// als lokales Echo erneut hochgeladen werden. Lokal erzeugte Konfliktkopien
 		// tragen das Flag nicht und werden normal synchronisiert.
-		return (await allEvents()).filter((ev) => Number(ev.seq || 0) > min && !ev._remote);
+		return new Promise((res, rej) => {
+			const out = [];
+			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(min, true));
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return res(out);
+				if (!cur.value._remote) out.push(cur.value);
+				cur.continue();
+			};
+			req.onerror = () => rej(req.error);
+		});
 	}
 	async function putBlob(id, buf, meta) {
 		ensureOpen();
@@ -256,18 +269,37 @@ export const DB = (() => {
 		});
 	}
 
-	async function exportAll() {
+	// SECURITY (15. Juli): settingsSet-Events aus alten App-Versionen können noch
+	// API-Keys/Token im Klartext enthalten. Für Drive-Snapshots/Deltas werden sie
+	// bereinigt — der MANUELLE Backup-Export behält sie bewusst (eigene Datei des
+	// Nutzers, damit ein zweites Gerät ohne erneute Einrichtung weiterarbeiten kann).
+	function redactSecretsFromEvent(ev) {
+		if (!ev || ev.type !== "settingsSet" || !ev.payload) return ev;
+		const p = { ...ev.payload };
+		let changed = false;
+		if (p.notionToken) { p.notionToken = ""; changed = true; }
+		if (p.driveDesktopClientSecret) { p.driveDesktopClientSecret = ""; changed = true; }
+		if (Array.isArray(p.aiProviders) && p.aiProviders.some((pr) => pr && pr.key)) {
+			p.aiProviders = p.aiProviders.map((pr) => (pr && pr.key ? { ...pr, key: "" } : pr));
+			changed = true;
+		}
+		return changed ? { ...ev, payload: p } : ev;
+	}
+
+	// opts.includeBlobs=false: PERF für den Drive-Snapshot — vorher wurden ALLE
+	// Blobs base64-kodiert, nur damit drive.js sie sofort wieder verwarf.
+	// opts.redactSecrets=true: keine Zugangsdaten im Drive-Sync (siehe oben).
+	async function exportAll(opts = {}) {
 		ensureOpen();
-		// Der Export ist der private Drive-Backup-Container des Nutzers. Er enthält
-		// bewusst den vollständigen settingsSet-Stand inklusive API-Keys und
-		// Notion-/Desktop-Zugangsdaten, damit ein zweites eigenes Gerät ohne erneute
-		// Einrichtung weiterarbeiten kann.
-		const events = compactEvents(await allEvents());
-		const keys = await allBlobKeys();
+		let events = compactEvents(await allEvents());
+		if (opts.redactSecrets) events = events.map(redactSecretsFromEvent);
 		const blobs = {};
-		for (const k of keys) {
-			const rec = await getBlob(k);
-			blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
+		if (opts.includeBlobs !== false) {
+			const keys = await allBlobKeys();
+			for (const k of keys) {
+				const rec = await getBlob(k);
+				blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
+			}
 		}
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
@@ -301,6 +333,38 @@ export const DB = (() => {
 			}
 		}
 		return heads;
+	}
+
+	// Rekonstruiert den letzten bekannten Stand einer Seite rein aus Events — als
+	// pure Funktion herausgelöst und exportiert (Aufräum-Paket, 15. Juli), damit
+	// test/test-core.mjs sie ohne IndexedDB direkt testen kann. Wichtig für den
+	// Lösch-Konflikt: die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id)
+	// wäre dann leer.
+	function reconstructPageFromEvents(events, id) {
+		const pg = { title: "Seite", content: "", kind: "notion", parentId: null, workspaceId: "default", heftMeta: null };
+		for (const ev of events) {
+			const p = ev.payload;
+			if (!p || (p.id !== id && p.pageId !== id)) continue;
+			if (ev.type === "pageCreate") {
+				if (p.title) pg.title = p.title;
+				if (p.content !== undefined) pg.content = p.content;
+				if (p.kind) pg.kind = p.kind;
+				if ("parentId" in p) pg.parentId = p.parentId || null;
+				if (p.workspaceId) pg.workspaceId = p.workspaceId;
+			} else if (ev.type === "pageUpdate" && p.patch) {
+				if (p.patch.title !== undefined) pg.title = p.patch.title;
+				if (p.patch.content !== undefined) pg.content = p.patch.content;
+				if (p.patch.kind !== undefined) pg.kind = p.patch.kind;
+				if ("parentId" in p.patch) pg.parentId = p.patch.parentId || null;
+				if (p.patch.workspaceId) pg.workspaceId = p.patch.workspaceId;
+			} else if (ev.type === "pageMove") {
+				pg.parentId = p.parentId || null;
+			} else if (ev.type === "heftUpdated") {
+				pg.kind = "heft";
+				pg.heftMeta = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, blobHash: p.blobHash };
+			}
+		}
+		return pg;
 	}
 
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
@@ -428,31 +492,9 @@ export const DB = (() => {
 				if (existing.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
 				
-				// Rekonstruiere den Inhaltsstand aus dem Event-Log, da die Seite lokal ggf.
-				// schon gelöscht ist und opts.pageInfo(id) dann leer wäre.
-				let pg = { title: "Seite", content: "", kind: "notion", parentId: null, workspaceId: "default", heftMeta: null };
-				for (const ev of [...local, ...fresh]) {
-					const p = ev.payload;
-					if (!p || (p.id !== id && p.pageId !== id)) continue;
-					if (ev.type === "pageCreate") {
-						if (p.title) pg.title = p.title;
-						if (p.content !== undefined) pg.content = p.content;
-						if (p.kind) pg.kind = p.kind;
-						if ("parentId" in p) pg.parentId = p.parentId || null;
-						if (p.workspaceId) pg.workspaceId = p.workspaceId;
-					} else if (ev.type === "pageUpdate" && p.patch) {
-						if (p.patch.title !== undefined) pg.title = p.patch.title;
-						if (p.patch.content !== undefined) pg.content = p.patch.content;
-						if (p.patch.kind !== undefined) pg.kind = p.patch.kind;
-						if ("parentId" in p.patch) pg.parentId = p.patch.parentId || null;
-						if (p.patch.workspaceId) pg.workspaceId = p.patch.workspaceId;
-					} else if (ev.type === "pageMove") {
-						pg.parentId = p.parentId || null;
-					} else if (ev.type === "heftUpdated") {
-						pg.kind = "heft";
-						pg.heftMeta = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, blobHash: p.blobHash };
-					}
-				}
+				// Inhaltsstand aus dem Event-Log rekonstruieren (pure Funktion, s.o.) —
+				// die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id) wäre leer.
+				const pg = reconstructPageFromEvents([...local, ...fresh], id);
 
 				const parentId = pg.parentId;
 				const details = {
@@ -555,5 +597,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, heftHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, heftHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();
