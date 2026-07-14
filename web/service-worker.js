@@ -51,7 +51,11 @@
 //       damit die Ränder tatsächlich randlos überschrieben werden.
 // v46: Problematischen body::after-Filler für Safe-Area entfernt, der einen
 //       weißen Rand über die App gezeichnet hat.
-const CACHE = "impala67-v46";
+// v47: iPad-Bugfix-Paket — ⋯-/Löschen-Menü (kein :active-transform auf .row,
+//       Re-Positionierung nach Sidebar-Rebuild), Drag & Drop im Baum
+//       (user-select:none bei pointer:coarse), Theme-Streifen (html ohne
+//       eigenen Hintergrund, Canvas nimmt body-Hintergrund).
+const CACHE = "impala67-v47";
 
 const APP_FILES = [
 	"./",

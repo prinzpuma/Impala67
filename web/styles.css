@@ -51,6 +51,23 @@ body.density-compact #sidebar {
 	#panel { border-left: 1px solid var(--edge-soft); }
 	#panel > #chatForm { margin-bottom: max(10px, env(safe-area-inset-bottom)) !important; }
 	body.density-compact #panel { top: 0; right: 0; bottom: 0; }
+	/* Die Canvas hinter der App (Safe-Area-/Overscroll-Bereich) traegt dieselbe
+	   Flaeche wie Sidebar und Panel — ein Randstreifen verschmilzt so in beiden
+	   Themes mit der App-Flaeche. */
+	body { background: var(--panel-solid); }
+}
+
+/* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne user-select:none
+   startet der lange Druck auf eine Baumzeile die TEXTAUSWAHL bzw. das Kopier-
+   Callout statt des nativen HTML5-Drags — Seiten liessen sich per Drag & Drop
+   weder verschieben noch verschachteln. (Bisher galt die Regel nur bis 768px
+   Breite und damit nie fuer iPads.) */
+@media (pointer: coarse) {
+	#tree .row, .deck-tree-row {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
 }
 
 
@@ -107,10 +124,17 @@ button, .row, .tab, .tabchip, .navbtn, .home-card, .lib-card,
 		transform var(--motion-fast) var(--ease-out),
 		opacity var(--motion-fast) ease;
 }
-button:not(:disabled):active, .tabchip:active, .row:active,
-.home-card:active, .lib-card:active, .deck-row:active, .cal-day:active {
+button:not(:disabled):active, .tabchip:active,
+.home-card:active, .lib-card:active, .cal-day:active {
 	transform: scale(.98);
 }
+/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform.
+   Ein transform macht die Zeile zum Containing Block für position:fixed —
+   das per popovers.js fixed positionierte ⋯-Menü in der Zeile landete dadurch
+   relativ zur Zeile statt zum Viewport. Auf iPadOS bleibt :active nach dem
+   Tipp zusätzlich "kleben", das Menü war damit dauerhaft unsichtbar
+   ("Löschen-Menü geht überhaupt nicht mehr"). Feedback jetzt über die Fläche. */
+.row:active, .deck-row:active { background: var(--surface-active); }
 /* Flächen heben sich beim Öffnen und beim Hover nur über Transform/Opacity ab. */
 .home-card:hover, .lib-card:hover, .deck-row:hover, .board-card:hover {
 	transform: translateY(-2px);
@@ -150,13 +174,16 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* iPadOS zeichnet die Flaeche ausserhalb der App-Box aus dem Dokument-Hintergrund.
-   Der fruehere Versuch setzte die Hintergrundfarbe auf html/body, wurde aber
-   von der folgenden body-Regel (gleiche Spezifitaet, spaeter im Code) sofort
-   wieder ueberschrieben -- der Streifen blieb sichtbar. Jetzt gibt es nur noch
-   EINE body-Hintergrundregel, und ein fest positionierter Fuellstreifen deckt
-   die Home-Indicator-Safe-Area unabhaengig von Layout-Eigenheiten zuverlaessig ab. */
-html, body { height: 100%; background: var(--bg0); }
+/* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus dem DOKUMENT-
+   Hintergrund. WICHTIG: html bekommt KEINEN eigenen Hintergrund! html lag
+   bisher immer auf dem dunklen :root-Wert von --bg0, denn das helle Theme
+   ueberschreibt die Variablen nur auf body (body.light). Sobald html einen
+   Hintergrund hat, nimmt die Browser-Canvas DIESEN statt den von body — der
+   sichtbare Streifen an der Home-Indicator-/Statusleisten-Kante der iPad-PWA.
+   Ohne html-Hintergrund uebernimmt die Canvas automatisch den theme-korrekten
+   body-Hintergrund (Standardpropagation nach CSS-Spez). */
+html { height: 100%; }
+body { height: 100%; }
 @media (display-mode: standalone), (pointer: coarse) {
 	html, body { min-height: 100dvh; }
 	#app { min-height: 100dvh; }
@@ -1458,8 +1485,8 @@ button.primary:hover { filter: brightness(1.06); }
 .anki-rowbtns { white-space: nowrap; }
 .anki-rowbtns button { min-height: 26px; padding: 2px 7px; font-size: 12px; background: transparent; }
 .anki-rowbtns button:hover { background: var(--surface-active); }
-.study-card { max-width: 680px; margin: 18px auto 0; display: flex; flex-direction: column; gap: 12px; }
-.study-done { text-align: center; margin-top: 60px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.study-card { margin: 18px auto 0; display: flex; flex-direction: column; gap: 12px; }
+.study-done { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .grades button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; }
 .grade-ivl { font-size: 11px; color: var(--text2); }
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 8px 0 18px; max-width: 860px; }
@@ -1928,13 +1955,8 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent; }
 }
 
-/* Lernen auf Touch: Bewertungsleiste bleibt über der Dock-Pille erreichbar */
-@media (pointer: coarse) and (max-width: 768px) {
-	.study-card { padding-bottom: 84px; }
-	.study-card .grades { position: sticky; bottom: 70px; z-index: 2;
-		background: var(--panel-solid); border: 1px solid var(--edge-soft);
-		border-radius: 12px; padding: 6px; }
-}
+/* Lernen auf Touch: Bewertungsleiste u. Bühne — siehe konsolidierter Fokusmodus-Abschnitt
+   weiter unten (deckt jetzt alle Geräte inkl. Touch einheitlich ab). */
 
 /* ==========================================================================
    Anki-Lern-UI v5 (11. Juli 2026) — Lern-Ansicht wie in echtem Anki
@@ -1946,7 +1968,7 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 	font-size: 17.5px; line-height: 1.6; }
 .study-card .card-face.back { border: none; }
 .study-divider { border: none; border-top: 1px solid var(--edge); margin: 0 12px; }
-.study-head { text-align: center; }
+.study-head { text-align: center; color: var(--text2); font-size: 13px; }
 .study-counts .cnt-learn { color: var(--danger); }
 /* Reiche Karten (Mermaid, Formeln, Bilder) mittig präsentieren */
 .study-card .card-face .mermaid-diagram { text-align: center; }
@@ -2594,96 +2616,23 @@ body.reduce-motion .heft-tray { animation: none; }
 body:has(.anki-study-mode) #tabbar { display: none; }
 
 /* Chrome-sicheres Bühnenraster: Flex-Ketten mit height:100% können dort bei
-   verschachtelten Panels kollabieren. Das explizite Grid vergibt die Resthöhe
-   zuverlässig an die Karte; Kopf und Bewertung bleiben immer sichtbar. */
+   verschachtelten Panels kollabieren. */
 body:has(.anki-study-mode) #mainWrap,
 body:has(.anki-study-mode) #main {
 	min-height: 0;
 	height: 100%;
 	overflow: hidden;
 }
-.anki-study-mode {
-	display: grid !important;
-	grid-template-rows: auto minmax(0, 1fr);
-	min-width: 0;
-	min-height: 0;
-	height: 100% !important;
-	overflow: hidden !important;
-}
-.anki-study-mode .study-head {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	align-items: center;
-	width: min(100%, 920px);
-	margin: 0 auto 10px;
-	text-align: center;
-}
+/* Kopf-Zeile: lange Stapelnamen/Zähler brechen nicht um, sondern kürzen mit Ellipsis. */
 .anki-study-mode .study-head > span:not(.study-keys) {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.anki-study-mode .study-head .study-keys {
-	grid-column: 1 / -1;
-	margin-top: 2px;
-	font-size: 11px;
-}
-.anki-study-mode .study-card {
-	display: grid;
-	grid-template-rows: auto minmax(0, 1fr) auto;
-	gap: 0;
-	width: min(100%, 920px);
-	height: 100%;
-	min-height: 0;
-	margin: 0 auto;
-	overflow: hidden;
-}
-/* Bei aufgedeckter Antwort teilen Vorder- und Rückseite die verfügbare Bühne. */
-.anki-study-mode .study-card:has(.card-face.back) {
-	grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
-}
-.anki-study-mode .study-card .study-meta { align-self: center; padding: 2px 0 6px; }
-.anki-study-mode .study-card .card-face {
-	min-width: 0;
-	min-height: 0;
-	overflow: auto;
-	align-self: stretch;
-	justify-content: center;
-	padding: clamp(18px, 4vw, 52px) clamp(8px, 4vw, 40px);
-}
-.anki-study-mode .study-card .modal-actions,
-.anki-study-mode .study-card .grades {
-	position: static !important;
-	align-self: stretch;
-	margin: 12px 0 0;
-	padding-bottom: 0;
-}
-.anki-study-mode .study-card .modal-actions button {
-	width: min(340px, 100%);
-	min-height: 50px;
-	margin: 0 auto;
-}
-.anki-study-mode .study-card .grades {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 8px;
-}
-.anki-study-mode .study-card .grades button { min-width: 0; min-height: 54px; }
 @media (max-width: 980px) {
 	body:has(.anki-study-mode) #app { height: 100dvh; min-height: 0; }
 	body:has(.anki-study-mode) #mainWrap { min-height: 0; }
-}
-@media (max-width: 600px) {
-	.anki-study-mode { padding: 8px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
-	.anki-study-mode .study-head { grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 4px; margin-bottom: 4px; font-size: 11px; }
-	.anki-study-mode .study-head .mini { font-size: 12px; padding: 0 5px; }
-	.anki-study-mode .study-head .study-keys { display: none; }
-	.anki-study-mode .study-card .card-face { padding: 14px 2px; font-size: clamp(17px, 5vw, 21px); }
-	.anki-study-mode .study-card .grades { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-	.anki-study-mode .study-card .grades button { min-height: 48px; font-size: 13px; }
-	.anki-study-mode .study-card .modal-actions { margin-top: 8px; }
-	.anki-study-mode .study-card .modal-actions button { width: 100%; min-height: 52px; }
 }
 .anki-study-mode {
 	display: flex;
@@ -2744,6 +2693,21 @@ body:has(.anki-study-mode) #main {
 	.anki-study-mode .study-card .grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 	.anki-study-mode .study-card .grades button { min-height: 50px; padding: 7px 4px; }
 	.anki-study-mode .study-card .modal-actions button { width: 100%; min-height: 48px; }
+}
+
+/* Tablet (iPad Hoch-/Querformat, 769–1024px): spürbarer, aber nicht übertriebener Rand
+   zwischen dem engen Telefon- und dem breiten Desktop-Layout. */
+@media (min-width: 769px) and (max-width: 1024px) {
+	.anki-study-mode { padding: clamp(16px, 2.4vw, 28px) clamp(24px, 4vw, 56px); }
+	.anki-study-mode .study-card .card-face { font-size: clamp(18px, 2vw, 21px); }
+}
+/* Touch-Geräte jeder Bildschirmbreite: Bewertungs-/Aktionsknöpfe bleiben komfortabel
+   groß genug zum Antippen, unabhängig vom Breakpoint. */
+@media (pointer: coarse) {
+	.anki-study-mode .study-card .grades button,
+	.anki-study-mode .study-card .modal-actions button {
+		min-height: 54px;
+	}
 }
 
 /* ===========================================================================

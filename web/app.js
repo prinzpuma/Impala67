@@ -583,9 +583,10 @@ function wireEvents() {
 			return;
 		}
 
-		// Icon-/Cover-Auswahl
-		if (t.dataset.iconpick) { openIconPicker(); return; }
-		if (t.dataset.coverpick) { openCoverPicker(); return; }
+		// Icon-/Cover-Auswahl (auch aus dem Topbar-⋯-Menü erreichbar — Menü vorher schließen,
+		// sonst bleibt es hinter dem Auswahl-Dialog offen)
+		if (t.dataset.iconpick) { if (S.topMenu) { S.topMenu = null; renderMain(); } openIconPicker(); return; }
+		if (t.dataset.coverpick) { if (S.topMenu) { S.topMenu = null; renderMain(); } openCoverPicker(); return; }
 		if (t.dataset.coverremove) {
 			if (S.currentPageId) await STATE.dispatch("pageUpdate", { id: S.currentPageId, patch: { cover: null, coverImg: null } });
 			return;
@@ -883,6 +884,7 @@ function wireEvents() {
 		// ⋯-Menü: Seite als Vorlage markieren / Markierung entfernen
 		if (t.dataset.pagetemplate) {
 			S.pageMenuOpenId = null;
+			S.topMenu = null; // auch im Topbar-⋯-Menü — sonst bleibt es nach der Aktion offen
 			const pg = S.pages[t.dataset.pagetemplate];
 			if (pg) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { isTemplate: !pg.isTemplate } });
 			return;
@@ -952,7 +954,8 @@ function wireEvents() {
 			// Scroll-Container der Seitenleiste (#tree, overflow:auto) abgeschnitten wird.
 			if (S.pageMenuOpenId) POPOVERS.position(
 				document.querySelector('[data-pagemenu="' + id + '"]'),
-				document.querySelector(".page-menu"), { align: "end", gap: 2 });
+				// :not(.top-menu): nie versehentlich das Topbar-⋯-Menü greifen
+				document.querySelector(".page-menu:not(.top-menu)"), { align: "end", gap: 2 });
 			return;
 		}
 		// ⋯-Menü: Seite umbenennen — wie bei Stapeln per Inline-Textfeld direkt in der Zeile.
@@ -964,6 +967,7 @@ function wireEvents() {
 		}
 		if (t.dataset.pagemove) {
 			S.pageMenuOpenId = null;
+			if (S.topMenu) { S.topMenu = null; renderMain(); } // Topbar-⋯-Menü schließen, sonst bleibt es hinter dem Dialog offen
 			renderSidebar();
 			openMoveDialog(t.dataset.pagemove);
 			return;
@@ -1016,6 +1020,7 @@ function wireEvents() {
 		}
 		if (t.dataset.pageduplicate) {
 			S.pageMenuOpenId = null;
+			S.topMenu = null; // FIX: Duplizieren aus dem Topbar-⋯-Menü ließ das Menü auf der neuen Seite offen
 			const newId = await duplicatePage(t.dataset.pageduplicate);
 			if (newId) openPage(newId);
 			else render();
@@ -1023,13 +1028,24 @@ function wireEvents() {
 		}
 		if (t.dataset.pagetrash) {
 			S.pageMenuOpenId = null;
+			S.topMenu = null; // Löschen ist auch im Topbar-⋯-Menü — sonst bleibt es offen
 			const id = t.dataset.pagetrash;
 			const pg = S.pages[id];
 			if (pg) {
-				// Alle offenen Tabs der Seite (und ihrer Unterseiten) schließen, da sie in den Papierkorb wandern.
-				S.tabs = S.tabs.filter((tid) => tid !== id);
-				if (S.currentPageId === id) { S.currentPageId = null; S.view = "home"; }
+				// Alle offenen Tabs der Seite UND ihrer Unterseiten schließen, da sie in den
+				// Papierkorb wandern. FIX (14. Juli 2026): Vorher wurde nur der Tab der Seite
+				// selbst geschlossen — Unterseiten-Tabs blieben als Geister-Tabs offen; war
+				// gerade eine Unterseite geöffnet, blieb die Ansicht auf dem Papierkorb-Inhalt.
+				const gone = new Set([id]);
+				(function collect(pid) {
+					for (const p of Object.values(S.pages)) if (p.parentId === pid && !gone.has(p.id)) { gone.add(p.id); collect(p.id); }
+				})(id);
+				S.tabs = S.tabs.filter((tid) => !gone.has(tid));
+				if (gone.has(S.currentPageId)) { S.currentPageId = null; S.view = "home"; }
 				await STATE.dispatch("pageTrash", { id });
+				U.toast("Seite im Papierkorb.", "success");
+			} else {
+				render(); // nur Menü-Zustand geändert, kein dispatch → sofort neu zeichnen
 			}
 			return;
 		}
@@ -1296,6 +1312,7 @@ function wireEvents() {
 				break;
 			case "btnDailyToday": await openDailyNote(localDayKey(new Date())); break;
 			case "btnHistory":
+				if (S.topMenu) { S.topMenu = null; renderMain(); } // ⋯-Menü schließen, sonst bleibt es hinter dem Verlauf-Dialog offen
 				if (S.currentPageId) await openHistory(S.currentPageId);
 				break;
 			case "btnHistRestore": {
@@ -1340,6 +1357,7 @@ function wireEvents() {
 			case "btnMotionReduced": SETTINGS.handleAppearanceSelect("motion", "reduced"); break;
 			case "btnImport": U.el("fileImport").click(); break;
 			case "btnOpenPdf":
+				S.topMenu = null; // FIX: render() zeichnete das noch offene ⋯-Menü sonst sofort wieder
 				S.pdfOpen = !S.pdfOpen;
 				if (document.activeElement) document.activeElement.blur();
 				render();

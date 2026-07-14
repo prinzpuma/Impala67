@@ -364,13 +364,22 @@ export const DRIVE = (() => {
 			const local = await DB.getBlob(key);
 			if (local && local.meta && local.meta.hash === wanted) continue;
 			const file = byContentHash.get(wanted);
-			if (!file) throw new Error("Die referenzierte Heft-Version " + wanted.slice(0, 12) + " fehlt in Drive. Sync wurde nicht teilweise angewendet.");
+			if (!file) {
+				// Race-Condition: Gerät A hat das Event schon hochgeladen, aber den Blob noch
+				// nicht — beim nächsten Sync-Zyklus ist der Blob dann vorhanden. Kein hart-
+				// er Abbruch, sonst kommt der Sync nie mehr in den Upload-Abschnitt.
+				console.warn("[reconcileHeftBlobs] Heft-Blob " + wanted.slice(0, 12) + " noch nicht in Drive — wird beim nächsten Sync-Zyklus erwartet.");
+				continue;
+			}
 			const payload = await downloadPayload(file);
 			// Ein Remote-Konflikt kopiert denselben Blob unter eine neue Seiten-ID.
 			// Die Datei bleibt daher korrekt beim Original-Heft benannt.
 			const conflict = (conflictDetails || []).find((c) => (c.conflictType === "heft" || c.conflictType === "delete-change") && c.conflictPageId === pageId);
 			const sourceKey = conflict ? "heft:" + conflict.pageId : key;
-			if (!payload || payload.id !== sourceKey || !payload.meta || payload.meta.hash !== wanted) throw new Error("Ungültige Heft-Datei für " + pageId + ".");
+			if (!payload || payload.id !== sourceKey || !payload.meta || payload.meta.hash !== wanted) {
+				console.warn("[reconcileHeftBlobs] Heft-Datei für " + pageId + " ungültig (id/hash stimmt nicht) — übersprungen.");
+				continue;
+			}
 			await DB.putBlob(key, U.b64ToBuf(payload.b64), payload.meta);
 		}
 		return new Set(Object.values(heads).map((ev) => ev.payload.blobHash));

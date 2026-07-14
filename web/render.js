@@ -328,6 +328,16 @@ function renderSidebar() {
 		}
 	}
 	tree.innerHTML = html;
+	// Wie beim Stapel-⋯-Menü: das offene Seiten-⋯-Menü nach JEDEM Rebuild neu
+	// fixed positionieren. Ohne das fiel das frisch eingebaute Menü auf sein
+	// CSS-Fallback zurück (position:absolute in der Zeile) und wurde vom
+	// overflow des Baums abgeschnitten — das ⋯-/Löschen-Menü verschwand, sobald
+	// irgendein Hintergrund-Render (Autosave, Sync, Dispatch) feuerte.
+	if (S.pageMenuOpenId) {
+		const anchor = tree.querySelector('[data-pagemenu="' + S.pageMenuOpenId + '"]');
+		const menu = tree.querySelector(".page-menu");
+		if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+	}
 }
 
 // Chat-Verlauf in der Sidebar (Chat-Modus) — die Volltextsuche über Titel UND Inhalte läuft jetzt im Befehls-Menü (Strg+K).

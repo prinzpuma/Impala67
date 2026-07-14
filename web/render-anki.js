@@ -256,7 +256,13 @@ function ankiStatsHtml() {
 	const learned = cards.filter((c) => c.srs.state === "review").length;
 	// Review-Events tragen ihren ursprünglichen Stapel, damit ein späterer Move
 	// historische Statistik nicht in den neuen Stapel verschiebt.
-	const reviews = (S.reviews || []).filter((r) => !S.ankiDeck || (r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard") === S.ankiDeck);
+	// BUG FIX: Unterstapel (z. B. "Mathe::Analysis") müssen beim Filtern
+	// eingeschlossen werden, damit Stats des Eltern-Stapels korrekt sind.
+	const reviews = (S.reviews || []).filter((r) => {
+		if (!S.ankiDeck) return true;
+		const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
+		return d === S.ankiDeck || d.startsWith(S.ankiDeck + "::");
+	});
 	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
 	const retention = graded.length ? Math.round(graded.filter((r) => r.grade > 1).length / graded.length * 100) : null;
 	const perDay = {};
@@ -336,7 +342,7 @@ function ankiStudyHtml() {
 		'</span>';
 	// Der Lernkopf bleibt bewusst klein, bietet aber immer einen klaren Rückweg
 	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
-	const head = '<div class="hint study-head">' +
+	const head = '<div class="study-head">' +
 		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel</button>' +
 		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · " + countsHtml + "</span>" +
 		'<button class="mini" data-ankiundo="1" ' + (canUndo ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button>' +
@@ -344,7 +350,7 @@ function ankiStudyHtml() {
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
 	if (snap.done) {
-		return head + '<div class="study-done"><h2>Gratulation! 🎉</h2>' +
+		return head + '<div class="study-done study-card"><h2>Gratulation! 🎉</h2>' +
 			'<p class="hint">Du hast diesen Stapel für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
 			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
 	}

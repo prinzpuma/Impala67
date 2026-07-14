@@ -1901,7 +1901,7 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
 		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
 		wrap.addEventListener("click", onScanClick);
 		try {
@@ -1932,7 +1932,18 @@ export const HEFT = (() => {
 			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
 			startLiveQuality(video, ui);
 			const track = stream.getVideoTracks && stream.getVideoTracks()[0];
-			if (track) track.addEventListener("ended", () => showCameraStopped(ui), { once: true });
+			if (track) {
+				// Fokus/Belichtung nur anfordern, wenn der Browser und genau diese Kamera
+				// den Modus melden. Nicht unterstützte Geräte bleiben unverändert.
+				try {
+					const caps = track.getCapabilities ? track.getCapabilities() : null;
+					const advanced = {};
+					if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.focusMode = "continuous";
+					if (caps && Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.exposureMode = "continuous";
+					if (Object.keys(advanced).length) await track.applyConstraints({ advanced: [advanced] });
+				} catch (constraintError) { console.info("Heft: Kamera-Automatik bleibt auf Gerätestandard", constraintError); }
+				track.addEventListener("ended", () => showCameraStopped(ui), { once: true });
+			}
 			video.addEventListener("error", () => showCameraStopped(ui), { once: true });
 		} catch (e) {
 			// Keine Kamera / keine Freigabe → Fallback: Fotos auswählen (mit capture-Hint)
@@ -1983,14 +1994,18 @@ export const HEFT = (() => {
 		(owner.liveHistory || (owner.liveHistory = [])).push(entry);
 		if (owner.liveHistory.length > 5) owner.liveHistory.shift();
 		const hist = owner.liveHistory;
-		const quad = info.quad.map((_, i) => [
-			hist.reduce((s, f) => s + f.quad[i][0], 0) / hist.length,
-			hist.reduce((s, f) => s + f.quad[i][1], 0) / hist.length,
-		]);
-		return { ...info, quad, jitter: hist.length > 1 ? quadDelta(entry.quad, quad) : Infinity, stable: hist.length >= 3 && jump < Math.max(info.sw, info.sh) * 0.035 };
+		const median = (values) => { const s = values.slice().sort((a, b) => a - b); return s[(s.length / 2) | 0]; };
+		// Median statt Mittelwert: ein einzelner falscher Eckentreffer zieht den Rahmen
+		// nicht mehr sichtbar weg. Stabilität wird über das ganze Fenster gemessen.
+		const quad = info.quad.map((_, i) => [median(hist.map((f) => f.quad[i][0])), median(hist.map((f) => f.quad[i][1]))]);
+		let spread = 0;
+		for (const frame of hist) spread = Math.max(spread, quadDelta(frame.quad, quad));
+		return { ...info, quad, jitter: spread, stable: hist.length >= 3 && spread < Math.max(info.sw, info.sh) * 0.035 };
 	}
 	function liveQualityFrame(video) {
-		const sw = 240, sh = Math.max(120, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
+		// 300 px bleiben leicht genug für die 340-ms-Prüfung, liefern aber deutlich
+		// präzisere kleine bzw. schräge Ecken als die bisherige 240-px-Analyse.
+		const sw = 300, sh = Math.max(150, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
 		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
 		const x = c.getContext("2d", { willReadFrequently: true });
 		x.drawImage(video, 0, 0, sw, sh);
@@ -2055,12 +2070,15 @@ export const HEFT = (() => {
 				const info = stabilizeLiveInfo(liveQualityFrame(video), owner);
 				const ready = setLiveGuide(info, video);
 				if (!ready) {
-					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto für die
-					// nächste Seite neu scharf sein — verhindert Duplikate bei ruhig liegendem Blatt.
 					owner.liveStable = 0;
-					owner.autoArmed = true;
+					// Nach einer Aufnahme erst neu scharfstellen, wenn das Dokument wirklich
+					// mehrere Frames verschwunden ist. Ein kurzer Fokus-/Lichtfehler darf nicht
+					// dieselbe ruhig liegende Seite doppelt erfassen.
+					owner.liveMissing = info.found ? 0 : owner.liveMissing + 1;
+					if (owner.liveMissing >= 3) owner.autoArmed = true;
 					return;
 				}
+				owner.liveMissing = 0;
 				owner.liveStable++;
 				// Fünf stabile Prüfrunden (~1,7 s) plus geglättete Ecken: Auto-Scan
 				// löst konservativ aus und nie auf einem einzelnen guten Zufallsframe.
@@ -2170,10 +2188,14 @@ export const HEFT = (() => {
 		setScanBusy(true, "Aufnahme wird aufbereitet…");
 		try {
 			// Bei sehr großen Kamera-Streams begrenzen: spart Speicher ohne sichtbaren Textverlust.
-			const cap = 2400, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
+			// 2600 entspricht dem Quelllimit der Entzerrung: keine unnötige Vorab-
+			// Reduktion mehr, aber weiterhin ein sicherer Speicherdeckel auf iPadOS.
+			const cap = 2600, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
 			const c = document.createElement("canvas");
 			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
-			c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+			const captureCtx = c.getContext("2d");
+			captureCtx.imageSmoothingEnabled = true; captureCtx.imageSmoothingQuality = "high";
+			captureCtx.drawImage(video, 0, 0, c.width, c.height);
 			// PNG nur als kurzlebender Rohpuffer; erst processShot exportiert einmal
 			// mit hoher JPEG-Qualität. Das verhindert doppelte Kompressionsartefakte.
 			await addRawScan(c.toDataURL("image/png"), c.width, c.height, owner);
