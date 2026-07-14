@@ -36,7 +36,8 @@ export const HEFT = (() => {
 	const thumbJobs = {}; // parallele Anfragen auf dieselbe Vorschau teilen sich einen Render
 	const imgCache = {}; // imageId → HTMLImageElement (dekodierte Bild-Objekte)
 	let host = null, pid = null, doc = null, idx = 0, scale = 1, zoom = 1;
-	let canvases = []; // wird nur beim Mount/Seitenumbau gesammelt, nicht pro Stiftbewegung gesucht
+	let canvases = []; // Basis-Canvas je Seite: schnelle Vorschau + Eingabe
+	let detailCanvases = []; // hochauflösende Viewport-Kacheln über sichtbaren Ausschnitten
 	let pageSlots = []; // passende Seiten-Container für die Scroll-Erkennung
 	// Navigation v2: gesamter Gesten-Zustand lebt in EINEM Objekt (siehe unten).
 	// onlyPen default true: Palm Rejection für Apple Pencil.
@@ -267,6 +268,10 @@ export const HEFT = (() => {
 		x.clearRect(0, 0, cv.width, cv.height);
 		applyTransform(x);
 		renderPageTo(x, doc.pages[i], i);
+		// Veraltete Detailkachel ausblenden und aus den Vektorstrichen neu aufbauen.
+		const detail = detailCanvases[i];
+		if (detail) detail.style.display = "none";
+		scheduleDetailRender(60, true);
 	}
 	function redraw() { renderVisiblePages(); }
 
@@ -286,6 +291,7 @@ export const HEFT = (() => {
 	// aber unter der Schwelle, bei der Safari Canvas-Flächen weiß verwerfen kann.
 	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 12_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0;
+	let detailRenderTimer = 0, detailForceRender = false;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
 		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
@@ -323,6 +329,7 @@ export const HEFT = (() => {
 			pages.style.minWidth = Math.max(innerW, cssW) + "px";
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (commit) renderVisiblePages();
+		else hideDetailCanvases();
 		// Während der Geste wird ausschließlich per CSS skaliert. Das hält Pinch-Zoom
 		// flüssig und vermeidet große Canvas-Allokationen in jedem Pointer-Frame.
 	}
@@ -337,6 +344,57 @@ export const HEFT = (() => {
 				if (r.bottom >= sr.top - pad && r.top <= sr.bottom + pad) out.push(i);
 			});
 		return out;
+	}
+	function hideDetailCanvases() {
+		detailCanvases.forEach((cv) => { if (cv) cv.style.display = "none"; });
+	}
+	function scheduleDetailRender(delay = 0, force = false) {
+		detailForceRender = detailForceRender || force;
+		clearTimeout(detailRenderTimer);
+		detailRenderTimer = setTimeout(() => {
+			detailRenderTimer = 0;
+			const must = detailForceRender; detailForceRender = false;
+			renderDetailTiles(must);
+		}, delay);
+	}
+	// Hochauflösende Kachel nur für den tatsächlich sichtbaren Seitenausschnitt.
+	// Ihre Pixelmenge hängt vom Display statt von der kompletten A4-Seite ab.
+	function renderDetailTiles(force = false) {
+		const scroll = scrollEl();
+		if (!scroll || !doc) return;
+		const sr = scroll.getBoundingClientRect();
+		const dpr = Math.min(2, window.devicePixelRatio || 1);
+		const overscan = 180;
+		canvases.forEach((base, i) => {
+			const detail = detailCanvases[i], slot = pageSlots[i];
+			if (!base || !detail || !slot || !doc.pages[i]) return;
+			const pr = base.getBoundingClientRect();
+			const visible = pr.bottom > sr.top && pr.top < sr.bottom && pr.right > sr.left && pr.left < sr.right;
+			if (!visible) { detail.style.display = "none"; detail.__heftTile = null; return; }
+			const needX0 = Math.max(0, sr.left - pr.left), needY0 = Math.max(0, sr.top - pr.top);
+			const needX1 = Math.min(pr.width, sr.right - pr.left), needY1 = Math.min(pr.height, sr.bottom - pr.top);
+			const old = detail.__heftTile;
+			const sameScale = old && Math.abs(old.scale - scale) < 0.0001 && old.dpr === dpr;
+			const covered = sameScale && old.x <= needX0 && old.y <= needY0 && old.x + old.w >= needX1 && old.y + old.h >= needY1;
+			if (!force && covered) { detail.style.display = "block"; return; }
+			const x0 = Math.max(0, needX0 - overscan), y0 = Math.max(0, needY0 - overscan);
+			const x1 = Math.min(pr.width, needX1 + overscan), y1 = Math.min(pr.height, needY1 + overscan);
+			const tw = Math.max(1, x1 - x0), th = Math.max(1, y1 - y0);
+			const slotRect = slot.getBoundingClientRect();
+			detail.style.left = Math.round(pr.left - slotRect.left + x0) + "px";
+			detail.style.top = Math.round(pr.top - slotRect.top + y0) + "px";
+			detail.style.width = tw + "px"; detail.style.height = th + "px";
+			const pw = Math.max(1, Math.round(tw * dpr)), ph = Math.max(1, Math.round(th * dpr));
+			if (detail.width !== pw) detail.width = pw;
+			if (detail.height !== ph) detail.height = ph;
+			const x = detail.getContext("2d");
+			x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, pw, ph);
+			x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+			x.setTransform(dpr * scale, 0, 0, dpr * scale, -x0 * dpr, -y0 * dpr);
+			renderPageTo(x, doc.pages[i], i);
+			detail.__heftTile = { x: x0, y: y0, w: tw, h: th, scale, dpr };
+			detail.style.display = "block";
+		});
 	}
 	function renderVisiblePages() {
 		if (!doc) return;
@@ -368,6 +426,9 @@ export const HEFT = (() => {
 			if (cv.height !== h) cv.height = h;
 			if (needsRender) redrawPage(i);
 		});
+		// Über der sofort verfügbaren Basis nur den sichtbaren Ausschnitt in voller
+		// Displayauflösung rendern.
+		scheduleDetailRender(0);
 	}
 	function scheduleVisibleRender(delay = 90) {
 		clearTimeout(visibleRenderTimer);
@@ -2464,6 +2525,9 @@ export const HEFT = (() => {
 		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
 			scrollRenderFrame = 0;
 			renderVisiblePages();
+			// Die Kachel bewegt sich mit der Seite. Nur außerhalb ihres Overscans wird
+			// ein neuer sichtbarer Ausschnitt berechnet.
+			renderDetailTiles(false);
 		});
 		clearTimeout(onScroll.t);
 		onScroll.t = setTimeout(() => {
@@ -2502,6 +2566,17 @@ export const HEFT = (() => {
 		// DOM-Suche nur nach Mount/Rebuild; Zeichnen greift anschließend direkt zu.
 		canvases = host ? [...host.querySelectorAll(".heft-canvas")] : [];
 		pageSlots = canvases.map((cv) => cv.closest(".heft-page-slot"));
+		// Transparente Detail-Canvases liegen über der Basis, nehmen aber keine
+		// Pointer-Events an. Pro Seite existiert höchstens eine Viewport-Kachel.
+		detailCanvases = pageSlots.map((slot) => {
+			if (!slot) return null;
+			if (getComputedStyle(slot).position === "static") slot.style.position = "relative";
+			const d = document.createElement("canvas");
+			d.className = "heft-detail-canvas";
+			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "2", display: "none" });
+			slot.appendChild(d);
+			return d;
+		});
 		canvases.forEach((cv) => {
 			cv.addEventListener("pointerdown", onDown);
 			cv.addEventListener("pointermove", onMove);
