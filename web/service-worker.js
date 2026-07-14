@@ -49,7 +49,9 @@
 //       des gesamten Workers und ließen Chrome auf einem alten Cache stehen.
 // v45: !important Flag für #app Padding und Gap im iPad-Querformat ergänzt,
 //       damit die Ränder tatsächlich randlos überschrieben werden.
-const CACHE = "impala67-v45";
+// v46: Problematischen body::after-Filler für Safe-Area entfernt, der einen
+//       weißen Rand über die App gezeichnet hat.
+const CACHE = "impala67-v46";
 
 const APP_FILES = [
 	"./",

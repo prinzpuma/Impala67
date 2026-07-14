@@ -169,18 +169,6 @@ body {
 	background: var(--bg0);
 	overflow: hidden;
 }
-/* Malt die Safe-Area unter dem Home-Indicator aktiv mit der App-Hintergrundfarbe,
-   statt sich auf vh/dvh-Layoutberechnungen einzelner Container zu verlassen.
-   pointer-events: none, damit darunterliegende Klicks nie blockiert werden. */
-body::after {
-	content: "";
-	position: fixed;
-	left: 0; right: 0; bottom: 0;
-	height: env(safe-area-inset-bottom, 0px);
-	background: var(--bg0);
-	z-index: 2000;
-	pointer-events: none;
-}
 
 /* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
 #bg { position: fixed; inset: 0; z-index: 0;
