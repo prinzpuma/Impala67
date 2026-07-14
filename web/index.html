@@ -44,6 +44,9 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      nutzen. Die sichtbare Farbe kommt aus theme-color und wird in settings.js
      passend zum Hell-/Dunkelmodus aktualisiert. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- Die iPad-PWA darf bis hinter Status- und Home-Indicator-Leiste zeichnen;
+     die Safe-Area erhält dann die dunkle App-Fläche statt der iOS-Standardfarbe. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css?build=43">

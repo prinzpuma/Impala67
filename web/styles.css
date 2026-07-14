@@ -129,7 +129,14 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+/* iPadOS zeichnet die Fläche außerhalb der App-Box aus dem Dokument-Hintergrund.
+   Damit die Home-Indicator-Safe-Area nie als heller Streifen erscheint, teilen
+   html, body und die App immer dieselbe Theme-Fläche. */
+html, body { height: 100%; background: var(--panel-solid); }
+@media (display-mode: standalone), (pointer: coarse) {
+	html, body { min-height: 100dvh; background: var(--panel-solid); }
+	#app { min-height: 100dvh; background: var(--panel-solid); }
+}
 
 body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
