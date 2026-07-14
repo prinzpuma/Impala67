@@ -3348,9 +3348,12 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 /* Installierte iPadOS-PWA: Der sichere obere Bereich gehört optisch zum
    Hintergrund und erhält trotzdem genügend Abstand für nicht überlappende UI. */
 @media (display-mode: standalone) and (pointer: coarse) {
+	/* Die Tablet-Regel weiter oben setzt padding: 0 !important. Die Safe-Area
+	   muss dies explizit überstimmen, sonst liegt der Home Indicator über dem
+	   Heft und den unteren Bedienelementen. */
 	#app {
-		padding-top: max(8px, env(safe-area-inset-top));
-		padding-bottom: max(8px, env(safe-area-inset-bottom));
+		padding-top: max(8px, env(safe-area-inset-top)) !important;
+		padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
 	}
 	body.density-compact #app {
 		padding-top: env(safe-area-inset-top) !important;
