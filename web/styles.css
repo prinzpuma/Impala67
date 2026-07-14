@@ -28,7 +28,25 @@ body.density-compact #sidebar {
 }
 /* Auf iPads liegt das KI-Panel rechts als Overlay. Im Kompaktmodus schließt
    es bündig am Viewport an, ohne das responsive Grid selbst zu ersetzen. */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (min-width: 769px) and (max-width: 1366px) and (pointer: coarse) {
+	/* iPad im Querformat: die drei Arbeitsbereiche sind eine durchgehende
+	   App-Flaeche. Sie duerfen nicht in einem gepaddeten #app enden, denn
+	   dadurch blieben Sidebar und KI-Chat unten vor der Display-Ecke stehen. */
+	#app {
+		height: 100dvh;
+		min-height: 100dvh;
+		padding: 0;
+		gap: 0;
+		grid-template-columns: 220px minmax(0, 1fr) 320px;
+	}
+	#sidebar, #mainWrap, #panel {
+		height: 100%;
+		border-radius: 0;
+		border-top: 0;
+		border-bottom: 0;
+	}
+	#sidebar { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+	#panel > #chatForm { margin-bottom: max(10px, env(safe-area-inset-bottom)) !important; }
 	body.density-compact #panel { top: 0; right: 0; bottom: 0; }
 }
 

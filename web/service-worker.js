@@ -47,7 +47,9 @@
 // v43: Precache darf nicht an optionalen Dateien scheitern. Fehlende Favicon-
 //       oder Release-Metadaten verhinderten mit cache.addAll() die Aktivierung
 //       des gesamten Workers und ließen Chrome auf einem alten Cache stehen.
-const CACHE = "impala67-v43";
+// v44: iPad-Arbeitsflaeche randlos — Sidebar und KI-Chat reichen bis zu den
+//       unteren Displayecken; neuer Cache-Schluessel erzwingt das CSS-Update.
+const CACHE = "impala67-v44";
 
 const APP_FILES = [
 	"./",
