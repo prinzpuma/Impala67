@@ -281,8 +281,11 @@ export const HEFT = (() => {
 	// iPad/Safari leert Canvas-Flächen oft lautlos, bevor das theoretische
 	// Speicherlimit erreicht ist. Ein konservatives Budget plus Kantenlimit
 	// verhindert weiße Seiten beim starken Zoom.
-	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 8_000_000, MAX_CANVAS_DIM = 4096;
-	let visibleRenderTimer = 0, zoomSettleTimer = 0;
+	// Auf leistungsfähigen iPads darf eine sichtbare Seite bis 12 MP belegen. Das
+	// hält Vektor-Handschrift bei Maximalzoom klarer, bleibt mit 4096 px Kantenlimit
+	// aber unter der Schwelle, bei der Safari Canvas-Flächen weiß verwerfen kann.
+	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 12_000_000, MAX_CANVAS_DIM = 4096;
+	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
 		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
@@ -325,7 +328,9 @@ export const HEFT = (() => {
 	}
 	function visiblePageIndices() {
 		const scroll = scrollEl(); if (!scroll) return [];
-		const sr = scroll.getBoundingClientRect(), pad = Math.max(180, sr.height * .35), out = [];
+		// Mehr als eine Bildschirmhöhe vor und hinter dem Viewport vorladen. Dadurch
+		// sind die nächsten Seiten schon gerendert, bevor sie ins Sichtfeld scrollen.
+		const sr = scroll.getBoundingClientRect(), pad = Math.max(600, sr.height * 1.5), out = [];
 		pageSlots.forEach((slot, i) => {
 				if (!slot) return;
 				const r = slot.getBoundingClientRect();
@@ -355,9 +360,13 @@ export const HEFT = (() => {
 			cv.__heftDpr = safeDpr;
 			const w = Math.max(1, Math.round(PAGE_W * scale * safeDpr));
 			const h = Math.max(1, Math.round(PAGE_H * scale * safeDpr));
+			// Beim normalen Scrollen bereits fertige Seiten nicht erneut zeichnen.
+			// Nur neue/vorher freigegebene Seiten oder eine geänderte Zoomauflösung
+			// brauchen einen Render — das verhindert Ruckler trotz größerem Preload.
+			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
-			redrawPage(i);
+			if (needsRender) redrawPage(i);
 		});
 	}
 	function scheduleVisibleRender(delay = 90) {
@@ -2450,6 +2459,12 @@ export const HEFT = (() => {
 	// ---------- Scroll: aktuelle Seite erkennen (debounced) ----------
 	function onScroll() {
 		if (!host || !doc) return;
+		// Rendering nicht hinter zwei Debounces verstecken: spätestens im nächsten
+		// Frame die vorausgeladenen Seitenmenge aktualisieren.
+		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
+			scrollRenderFrame = 0;
+			renderVisiblePages();
+		});
 		clearTimeout(onScroll.t);
 		onScroll.t = setTimeout(() => {
 			if (!host || !doc) return;
@@ -2464,8 +2479,6 @@ export const HEFT = (() => {
 				if (d2 < bestD) { bestD = d2; best = i; }
 			});
 			if (best !== idx) { idx = best; updateChrome(); }
-			// Beim Scrollen werden nur die nun sichtbaren Seiten hochaufgelöst gehalten.
-			scheduleVisibleRender();
 		}, 80);
 	}
 
