@@ -2663,35 +2663,65 @@ body:has(.anki-study-mode) #main {
 	flex: 1 1 auto;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
+	/* Die Karte wird nicht vertikal zentriert: Die Frage bleibt immer oben,
+	   unabhängig davon, ob die Antwort gerade sichtbar ist oder wie lang sie ist. */
+	justify-content: flex-start;
 	margin: 0 auto;
+	/* Nur der Antwortbereich scrollt. Dadurch bleiben Frage und Aktion an
+	   ihren festen Stellen, statt als gesamte Karte mitzuwandern. */
 	overflow: hidden;
 }
-.anki-study-mode .study-card .study-meta { flex: 0 0 auto; }
+.anki-study-mode .study-card .study-meta { flex: 0 0 auto; text-align: center; }
 .anki-study-mode .study-card .card-face {
-	flex: 1 1 0;
+	/* Die Frage nimmt nur ihre natürliche Höhe ein und behält ihren festen Platz. */
+	flex: 0 0 auto;
 	min-height: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	overflow: auto;
-	padding: clamp(18px, 4vw, 44px) clamp(8px, 3vw, 28px);
+	text-align: center;
+	overflow: visible;
+	padding: clamp(18px, 4vw, 40px) clamp(8px, 3vw, 28px);
 	font-size: clamp(17px, 2.2vw, 22px);
+}
+/* Die Antwort erhält den gesamten verbleibenden Platz statt die Bühne 50/50
+   mit der meist kürzeren Frage zu teilen. */
+.anki-study-mode .study-card .card-face.back {
+	flex: 1 1 auto;
+	overflow: auto;
 }
 .anki-study-mode .study-card .card-face > * { width: 100%; }
 .anki-study-mode .study-card .grades,
 .anki-study-mode .study-card .modal-actions {
 	flex: 0 0 auto;
-	margin: 12px 0 0;
+	/* Auf der Vorderseite füllt dieser automatische Abstand die freie Bühne:
+	   „Antwort zeigen“ bleibt stets am unteren Rand derselben Position. */
+	margin: auto 0 0;
+	padding-top: 16px;
 }
 .anki-study-mode .study-card .grades button { min-height: 52px; }
+/* Mermaid erhält in Lernkarten die volle Antwortbreite. Mermaid setzt oft eine
+   kleine Inline-Breite auf das SVG; !important überschreibt genau diese Größe. */
+.anki-study-mode .study-card .card-face .mermaid-diagram {
+	width: 100%;
+	max-width: 980px;
+	margin: 18px auto;
+	padding: 0;
+	background: transparent;
+}
+.anki-study-mode .study-card .card-face .mermaid-diagram svg {
+	display: block;
+	width: 100% !important;
+	max-width: none !important;
+	height: auto !important;
+	margin: 0 auto;
+}
 @media (max-width: 600px) {
 	.anki-study-mode {
 		padding: 10px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 	}
 	.anki-study-mode .study-head { justify-content: flex-start; margin-bottom: 6px; font-size: 11.5px; }
 	.anki-study-mode .study-keys { display: none; }
-	.anki-study-mode .study-card { justify-content: flex-start; }
 	.anki-study-mode .study-card .card-face { padding: 18px 4px; font-size: 17px; }
 	.anki-study-mode .study-card .grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 	.anki-study-mode .study-card .grades button { min-height: 50px; padding: 7px 4px; }
@@ -3351,13 +3381,10 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 /* Installierte iPadOS-PWA: Der sichere obere Bereich gehört optisch zum
    Hintergrund und erhält trotzdem genügend Abstand für nicht überlappende UI. */
 @media (display-mode: standalone) and (pointer: coarse) {
-	/* Die Tablet-Regel weiter oben setzt padding: 0 !important. Die Safe-Area
-	   muss dies explizit überstimmen, sonst liegt der Home Indicator über dem
-	   Heft und den unteren Bedienelementen. */
-	#app {
-		padding-top: max(8px, env(safe-area-inset-top)) !important;
-		padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
-	}
+	/* Die App-Fläche reicht über die Safe Area (siehe iPad-Viewport-Regel).
+	   Im komfortablen Modus bleiben die bestehenden Tablet-Abstände unverändert:
+	   Sidebar und Chat-Composer berücksichtigen den unteren Inset bereits selbst.
+	   Nur die kompakte, randlose Oberfläche braucht Safe-Area-Innenabstand. */
 	body.density-compact #app {
 		padding-top: env(safe-area-inset-top) !important;
 		padding-bottom: env(safe-area-inset-bottom) !important;

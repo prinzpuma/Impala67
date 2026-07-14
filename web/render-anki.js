@@ -389,7 +389,7 @@ function ankiStudyHtml() {
 				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4</span></button>' +
 			'</div>';
 	} else {
-		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen <span class="grade-key">␣</span></button></div>';
+		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen</button></div>';
 	}
 	html += "</div>";
 	return html;

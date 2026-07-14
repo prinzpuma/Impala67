@@ -8,6 +8,7 @@ export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
 	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
+	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, sourceId, updated, deleted? }
 	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
 	settings: {
 		aiProviders: [
@@ -264,6 +265,31 @@ export const STATE = (() => {
 					if (pg) { pg.trashed = false; delete pg.trashedAt; }
 				});
 				break;
+			case "learningSessionUpsert": {
+				if (!p.id || !Number.isFinite(Number(p.durationSeconds))) break;
+				const current = S.learningSessions[p.id];
+				const updated = p.updated || ev.t;
+				if (current && String(current.updated || "") > String(updated)) break;
+				S.learningSessions[p.id] = {
+					id: p.id,
+					startedAt: p.startedAt || ev.t,
+					endedAt: p.endedAt || ev.t,
+					durationSeconds: Math.max(0, Math.round(Number(p.durationSeconds))),
+					category: p.category || "other",
+					sourceId: p.sourceId || null,
+					updated,
+					deleted: false,
+				};
+				break;
+			}
+			case "learningSessionDelete": {
+				if (!p.id) break;
+				const current = S.learningSessions[p.id] || { id: p.id };
+				const updated = p.updated || ev.t;
+				if (String(current.updated || "") > String(updated)) break;
+				S.learningSessions[p.id] = { ...current, deleted: true, updated };
+				break;
+			}
 			case "gradeAdd":
 				if (!p.id || !p.subject || !Number.isFinite(Number(p.grade))) break;
 				S.grades[p.id] = {

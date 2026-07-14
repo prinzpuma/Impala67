@@ -57,7 +57,9 @@
 //       eigenen Hintergrund, Canvas nimmt body-Hintergrund).
 // v48: pdfpaste.js + Web Share Target: PDF aus dem Android/iPadOS-Teilen-Dialog
 //       wird kurz im Cache abgelegt und danach an die App weitergereicht.
-const CACHE = "impala67-v48";
+// v49: Lernzeit v2 — synchronisierte Lern-Sitzungen, Aktivitätskategorien,
+//       editierbares Tagesprotokoll und Timer-Abschlusskarte.
+const CACHE = "impala67-v49";
 
 const APP_FILES = [
 	"./",
