@@ -278,7 +278,10 @@ export const HEFT = (() => {
 	// Speicherbedarf und Eingabepräzision stabil. Das Rendering arbeitet nur
 	// für sichtbare Seiten und verwendet einen festen Pixel-Budget-Deckel.
 	const ZOOM_MIN = 1, ZOOM_MAX = 3.5;
-	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 18_000_000;
+	// iPad/Safari leert Canvas-Flächen oft lautlos, bevor das theoretische
+	// Speicherlimit erreicht ist. Ein konservatives Budget plus Kantenlimit
+	// verhindert weiße Seiten beim starken Zoom.
+	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 8_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, lastInteractiveRender = 0;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
@@ -344,7 +347,13 @@ export const HEFT = (() => {
 		// Das Budget gilt pro sichtbarer Seite. Bei hohem Zoom wird DPR sanft
 		// reduziert, statt eine Canvasdimension zu erzeugen, die der Browser leert.
 		const nativeDpr = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
-		const safeDpr = Math.max(1, Math.min(nativeDpr, Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, PAGE_W * PAGE_H * scale * scale))));
+		const pageW = PAGE_W * scale, pageH = PAGE_H * scale;
+		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
+		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
+		// Bei extremem Zoom darf DPR unter 1 sinken. Das ist besser als eine von
+		// Safari verworfene (weiße) Canvas; sobald herausgezoomt wird, steigt die
+		// scharfe Auflösung automatisch wieder an.
+		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
 		canvases.forEach((cv, i) => {
 			if (!visible.has(i)) {
 				// Unsichtbare Seiten geben ihren großen Backing Store sofort frei.
@@ -1118,11 +1127,15 @@ export const HEFT = (() => {
 		const pdf = await lib.getDocument({ data: buf }).promise;
 		for (let i = 1; i <= pdf.numPages; i++) {
 			const p = await pdf.getPage(i);
-			const vp = p.getViewport({ scale: 2 });
+			// PDF-Seiten mit 3× statt 2× rasterisieren: beim Zoom deutlich schärfer,
+			// ohne die Speicher- und Importkosten eines 4×-Imports zu verursachen.
+			const vp = p.getViewport({ scale: 3 });
 			const c = document.createElement("canvas");
 			c.width = Math.round(vp.width); c.height = Math.round(vp.height);
 			await p.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
-			doc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.85), w: c.width, h: c.height }, "blank", true));
+			// Höhere JPEG-Qualität bewahrt feine Schrift und Formeln; JPEG bleibt für
+			// mehrseitige Skripte wesentlich kompakter und schneller als PNG.
+			doc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
 			at++;
 		}
 		return at;

@@ -42,7 +42,12 @@
 // v39: PWA-Startschutz — transiente Overlay-Ebenen können keine Klicks blockieren
 // v40: editor-v2.js — isolierter Rich-Text-Testeditor
 // v41: voice.js — Browser-Sprachsteuerung ohne Audio-Backend
-const CACHE = "impala67-v41";
+// v42: Chrome-Update-Fix — neuer Worker-Schlüssel erzwingt nach der Editor-
+//       Änderung eine atomare, aktuelle App-Version statt alter Worker/Module.
+// v43: Precache darf nicht an optionalen Dateien scheitern. Fehlende Favicon-
+//       oder Release-Metadaten verhinderten mit cache.addAll() die Aktivierung
+//       des gesamten Workers und ließen Chrome auf einem alten Cache stehen.
+const CACHE = "impala67-v43";
 
 const APP_FILES = [
 	"./",
@@ -50,7 +55,9 @@ const APP_FILES = [
 	"./styles.css",
 	"./manifest.json",
 	"./version.json",
-	"./latest.json",
+	// latest.json ist optional: updater.js fällt auf version.json zurück.
+	// icon.svg wird direkt aus dem Netz geladen; ein Favicon darf den Offline-
+	// Cache niemals als Pflichtdatei blockieren.
 	"./icon.svg",
 	"./main.js",
 	"./collapse.js",
