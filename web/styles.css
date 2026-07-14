@@ -3381,10 +3381,25 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 /* Installierte iPadOS-PWA: Der sichere obere Bereich gehört optisch zum
    Hintergrund und erhält trotzdem genügend Abstand für nicht überlappende UI. */
 @media (display-mode: standalone) and (pointer: coarse) {
-	/* Die App-Fläche reicht über die Safe Area (siehe iPad-Viewport-Regel).
-	   Im komfortablen Modus bleiben die bestehenden Tablet-Abstände unverändert:
-	   Sidebar und Chat-Composer berücksichtigen den unteren Inset bereits selbst.
-	   Nur die kompakte, randlose Oberfläche braucht Safe-Area-Innenabstand. */
+	/* Der komfortable Modus behält auf allen vier Seiten wieder dieselben
+	   Außenabstände wie das Desktop-Grundlayout. Die App-Fläche reicht trotzdem
+	   hinter den Home Indicator; das untere Inset steckt im Außenabstand. */
+	body:not(.density-compact) #app {
+		padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) !important;
+		gap: 12px !important;
+	}
+	body:not(.density-compact) #sidebar,
+	body:not(.density-compact) #mainWrap,
+	body:not(.density-compact) #panel {
+		border: 1px solid var(--edge-soft);
+		border-radius: var(--radius);
+	}
+	/* Der Safe-Area-Abstand liegt bereits am App-Rand; nicht noch einmal in
+	   Sidebar oder Chat addieren, sonst wären die unteren Abstände ungleich. */
+	body:not(.density-compact) #sidebar { padding-bottom: 14px; }
+	body:not(.density-compact) #panel > #chatForm { margin-bottom: 10px !important; }
+
+	/* Kompaktmodus bleibt absichtlich randlos. */
 	body.density-compact #app {
 		padding-top: env(safe-area-inset-top) !important;
 		padding-bottom: env(safe-area-inset-bottom) !important;
