@@ -9,10 +9,14 @@ import { U } from "./util.js";
 const render = (...args) => RENDER.render(...args);
 const renderTabs = (...args) => RENDER.renderTabs(...args);
 
-// Der Tab-Arbeitsbereich wird als EIN kleiner Snapshot gespeichert: Reihenfolge
-// und aktiver Tab gehören zusammen. Chats werden absichtlich nicht repliziert,
-// weil ihr Inhalt derzeit ausschließlich lokal in chats.js liegt.
-const syncableTabs = () => S.tabs.filter((id) => (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main").slice(-12);
+// Der Tab-Arbeitsbereich wird als kleiner Snapshot gespeichert: Reihenfolge
+// und aktiver Tab gehören zusammen. Chats sind jetzt Event-Log-/Drive-synchronisiert
+// und dürfen deshalb genauso wie Seiten als Tab gespeichert und wiederhergestellt werden.
+const syncableTabs = () => S.tabs.filter((id) => {
+	if (typeof id !== "string") return false;
+	if (id.startsWith("chat:")) return CHATS.load().some((chat) => chat.id === id.slice(5));
+	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main";
+}).slice(-12);
 let saveTimer = 0;
 function saveSessionSoon() {
 	clearTimeout(saveTimer);
@@ -147,11 +151,31 @@ export async function closeTab(pageId) {
 	}
 }
 
+// Die Home-Übersicht ist der feste Anfang der Navigation. Sie ist bewusst
+// kein künstlicher Seitentab: offene Dokument-/Chat-Tabs bleiben erhalten,
+// während die Übersicht jederzeit als neutraler Ausgangspunkt erreichbar ist.
+export function openHomeOverview() {
+	S.view = "home";
+	S.sidebarMode = "files";
+	S.currentPageId = null;
+	S.activeTabId = null;
+	S.navHistory = [];
+	S.navIndex = -1;
+	POPOVERS.blurActive();
+	render();
+}
+
 export function navBack() {
-	if (S.navIndex <= 0) return;
+	// Vom ersten Verlaufseintrag führt Zurück immer zur Home-Übersicht, nie in
+	// einen leeren oder alten Tab-Zustand.
+	if (S.navIndex <= 0) {
+		openHomeOverview();
+		return;
+	}
 	S.navIndex--;
 	const id = S.navHistory[S.navIndex];
 	if (id) openPage(id, { skipHistory: true });
+	else openHomeOverview();
 }
 
 export function navForward() {
@@ -161,8 +185,8 @@ export function navForward() {
 	if (id) openPage(id, { skipHistory: true });
 }
 
-// Wird nach STATE.load() aufgerufen. Ungültige/gelöschte Seiten werden ignoriert;
-// die letzte gültige aktive Seite ist anschließend direkt geöffnet.
+// Wird nach STATE.load() aufgerufen. Ungültige/gelöschte Seiten und Chats werden
+// ignoriert; die letzte gültige aktive Ansicht ist anschließend direkt geöffnet.
 export async function restoreSession() {
 	const tabs = syncableTabs();
 	const active = tabs.includes(S.activeTabId) ? S.activeTabId : (tabs[tabs.length - 1] || null);
@@ -183,5 +207,6 @@ export const TABS = {
 	closeTab,
 	navBack,
 	navForward,
+	openHomeOverview,
 	restoreSession
 };

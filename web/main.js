@@ -35,6 +35,9 @@ import { BOOT } from "./boot.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { VOICE } from "./voice.js";
+import { LERNZEIT } from "./lernzeit.js";
+import { SCHULNOTEN } from "./schulnoten.js";
+import "./pdfpaste.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -66,6 +69,8 @@ window.BOOT = BOOT;
 window.POPOVERS = POPOVERS;
 window.HEFT = HEFT;
 window.VOICE = VOICE;
+window.LERNZEIT = LERNZEIT;
+window.SCHULNOTEN = SCHULNOTEN;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

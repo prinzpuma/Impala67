@@ -8,6 +8,7 @@ import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
+import { CHATS } from "./chats.js";
 
 const render = (...args) => RENDER.render(...args);
 const wireEvents = (...args) => APP.wireEvents(...args);
@@ -111,6 +112,8 @@ export async function initApp() {
 	// Einmalig: bereits lokal gespeicherte API-/Notion-Zugangsdaten in den
 	// synchronisierten Event-Log übernehmen, bevor der Start-Sync nach Drive läuft.
 	await STATE.migrateLegacySecretsToSync();
+	// Alte lokale Chat-Verläufe einmalig in Event-Log/Drive übernehmen.
+	await CHATS.migrateLocal();
 	await purgeOldTrash();
 	await seedIfEmpty();
 	// Der synchronisierte Arbeitsbereich wird geladen, bevor die erste Ansicht

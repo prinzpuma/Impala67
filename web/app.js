@@ -26,6 +26,7 @@ const openNewTab = (...args) => TABS.openNewTab(...args);
 const closeTab = (...args) => TABS.closeTab(...args);
 const navBack = (...args) => TABS.navBack(...args);
 const navForward = (...args) => TABS.navForward(...args);
+const openHomeOverview = (...args) => TABS.openHomeOverview(...args);
 const saveCurrentChat = (...args) => CHAT_FULLSCREEN.saveCurrentChat(...args);
 const toggleChatFull = (...args) => CHAT_FULLSCREEN.toggleChatFull(...args);
 const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
@@ -414,6 +415,14 @@ function wireEvents() {
 		if (e.key === "Escape" && document.body.classList.contains("mnav-open")) {
 			document.body.classList.remove("mnav-open");
 		}
+	});
+
+	// Ein einzelner Home-Klick zeigt wie bisher den Dateibaum. Ein Doppelklick
+	// ist der eindeutige Sprung zur persönlichen Home-Übersicht.
+	document.addEventListener("dblclick", (e) => {
+		if (!e.target.closest || !e.target.closest("#btnHome")) return;
+		e.preventDefault();
+		openHomeOverview();
 	});
 
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,

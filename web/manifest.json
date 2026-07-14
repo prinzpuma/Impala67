@@ -7,6 +7,14 @@
 	"display": "standalone",
 	"background_color": "#0d0f13",
 	"theme_color": "#0d0f13",
+	"share_target": {
+		"action": "./share-target",
+		"method": "POST",
+		"enctype": "multipart/form-data",
+		"params": {
+			"files": [{ "name": "pdf", "accept": ["application/pdf"] }]
+		}
+	},
 	"icons": [
 		{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
 	]

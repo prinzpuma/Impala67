@@ -33,8 +33,11 @@ body.density-compact #sidebar {
 	   App-Flaeche. Sie duerfen nicht in einem gepaddeten #app enden, denn
 	   dadurch blieben Sidebar und KI-Chat unten vor der Display-Ecke stehen. */
 	#app {
-		height: 100dvh;
-		min-height: 100dvh;
+		/* 100dvh endet in der iPadOS-PWA oberhalb der Home-Indicator-Safe-Area.
+		   Die zusätzliche Inset-Höhe lässt die App-Fläche bis an den physischen
+		   Displayrand reichen; der spätere Safe-Area-Innenabstand hält Inhalte frei. */
+		height: max(100vh, calc(100dvh + env(safe-area-inset-bottom))) !important;
+		min-height: max(100vh, calc(100dvh + env(safe-area-inset-bottom))) !important;
 		padding: 0 !important;
 		gap: 0 !important;
 		grid-template-columns: 220px minmax(0, 1fr) 320px;

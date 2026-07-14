@@ -12,6 +12,8 @@ import { LIBRARY } from "./library.js";
 import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
+import { LERNZEIT } from "./lernzeit.js";
+import { SCHULNOTEN } from "./schulnoten.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -449,6 +451,7 @@ function renderMain() {
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
 	if (S.view === "library") { LIBRARY.renderLibrary(main); return; }
 	if (S.view === "anki") { renderAnki(main); return; }
+	if (S.view === "noten") { SCHULNOTEN.render(main); return; }
 	if (S.view === "daily") { renderDaily(main); return; }
 	if (S.view === "trash") { renderTrash(main); return; }
 	if (S.view === "chat") { renderFullChat(main); return; }
@@ -799,6 +802,8 @@ function renderHome(main) {
 			'<button class="home-pill' + (due ? " attention" : "") + '" data-homeaction="cards" title="Karteikarten">' +
 				'<span class="home-pill-ico">🃏</span><span class="home-pill-body"><b>' + due + " fällig</b><small>" +
 				(due ? "Jetzt lernen" : "Alles erledigt") + "</small></span></button>" +
+			'<button class="home-pill" data-noten-open="1" title="Schulnoten öffnen">' +
+				'<span class="home-pill-ico">🎓</span><span class="home-pill-body"><b>Noten</b><small>Eintragen & Schnitt ansehen</small></span></button>' +
 			(bkDue
 				? '<button class="home-pill attention" data-homeaction="backup" title="Backup">' +
 					'<span class="home-pill-ico">↥</span><span class="home-pill-body"><b>Backup</b><small>' +
@@ -845,6 +850,7 @@ function renderHome(main) {
 			? '<section class="home-section"><div class="section-head"><h2>Chats</h2>' +
 				'<button data-homeaction="chats">Alle ›</button></div><div class="home-list">' + recentChats + "</div></section>"
 			: "") +
+		LERNZEIT.homeWidgetHtml() +
 		"</div>";
 }
 

@@ -55,7 +55,9 @@
 //       Re-Positionierung nach Sidebar-Rebuild), Drag & Drop im Baum
 //       (user-select:none bei pointer:coarse), Theme-Streifen (html ohne
 //       eigenen Hintergrund, Canvas nimmt body-Hintergrund).
-const CACHE = "impala67-v47";
+// v48: pdfpaste.js + Web Share Target: PDF aus dem Android/iPadOS-Teilen-Dialog
+//       wird kurz im Cache abgelegt und danach an die App weitergereicht.
+const CACHE = "impala67-v48";
 
 const APP_FILES = [
 	"./",
@@ -81,6 +83,9 @@ const APP_FILES = [
 	"./drive.js",
 	"./sync-core.js",
 	"./pdfs.js",
+	"./pdfpaste.js",
+	"./lernzeit.js",
+	"./schulnoten.js",
 	"./editor.js",
 	"./render.js",
 	"./library.js",
@@ -135,6 +140,24 @@ self.addEventListener("activate", (e) => {
 			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
+});
+
+// Web Share Target: Android/iPadOS sendet ein PDF als POST an ./share-target.
+// Service Worker legt es nur einmal in einem separaten Cache ab und leitet dann
+// zur normalen App-URL weiter. pdfpaste.js löscht den temporären Eintrag direkt
+// nach dem erfolgreichen Import.
+self.addEventListener("fetch", (e) => {
+	const url = new URL(e.request.url);
+	if (e.request.method !== "POST" || url.origin !== self.location.origin || !url.pathname.endsWith("/share-target")) return;
+	e.respondWith((async () => {
+		const data = await e.request.formData();
+		const file = data.get("pdf");
+		if (file && file.type === "application/pdf") {
+			const shareCache = await caches.open("impala67-pdf-share");
+			await shareCache.put("/share-target-payload", new Response(file));
+		}
+		return Response.redirect(new URL("./index.html?share-target=1", self.location.href).href, 303);
+	})());
 });
 
 // Nur GET-Anfragen an die eigene Domain oder die genutzten CDNs behandeln —

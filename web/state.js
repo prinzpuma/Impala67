@@ -7,6 +7,8 @@ import { SRS } from "./srs.js";
 export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
+	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
+	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
 	settings: {
 		aiProviders: [
 			{ id: "google", name: "Google Gemini", base: "https://generativelanguage.googleapis.com/v1beta/openai", key: "" },
@@ -45,7 +47,7 @@ export const S = {
 	highlightedDiff: null, // Diff-Array für die Hervorhebung geänderter Blöcke
 	currentPageId: null,
 	currentWorkspaceId: "default",
-	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "daily" | "trash"
+	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "noten" | "daily" | "trash"
 	chatFull: false,
 	pendingImage: null,
 	pendingAttachmentTarget: null, // "side" | "full" — Chat, dem der ausgewählte Anhang gehört
@@ -262,6 +264,21 @@ export const STATE = (() => {
 					if (pg) { pg.trashed = false; delete pg.trashedAt; }
 				});
 				break;
+			case "gradeAdd":
+				if (!p.id || !p.subject || !Number.isFinite(Number(p.grade))) break;
+				S.grades[p.id] = {
+					id: p.id,
+					subject: String(p.subject).trim(),
+					grade: Math.min(6, Math.max(1, Number(p.grade))),
+					weight: Math.max(0.25, Number(p.weight) || 1),
+					date: p.date || ev.t.slice(0, 10),
+					comment: p.comment || "",
+					created: ev.t,
+				};
+				break;
+			case "gradeDelete":
+				if (S.grades[p.id]) S.grades[p.id].deleted = true;
+				break;
 			case "cardCreate":
 				// FIX: fehlende Validierung — analog zu pageCreate.
 				if (!p.id) break;
@@ -426,6 +443,31 @@ export const STATE = (() => {
 				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, ocrText: p.ocrText || "", updated: ev.t };
 				if (S.pages[p.pageId]) S.pages[p.pageId].updated = ev.t;
 				break;
+			case "chatUpsert": {
+				if (!p.id || !Array.isArray(p.messages)) break;
+				const current = S.chatSessions[p.id];
+				const updated = p.updated || ev.t;
+				// Last-write-wins pro Chat. So überschreibt ein älterer Import weder
+				// eine neuere Nachricht noch einen späteren Löschvorgang.
+				if (current && String(current.deletedAt || current.updated || "") > String(updated)) break;
+				S.chatSessions[p.id] = {
+					id: p.id,
+					title: p.title || "",
+					messages: p.messages,
+					created: p.created || ev.t,
+					updated,
+					deleted: false,
+				};
+				break;
+			}
+			case "chatDelete": {
+				if (!p.id) break;
+				const current = S.chatSessions[p.id] || { id: p.id };
+				const deletedAt = p.deletedAt || ev.t;
+				if (String(current.updated || current.deletedAt || "") > String(deletedAt)) break;
+				S.chatSessions[p.id] = { ...current, deleted: true, deletedAt };
+				break;
+			}
 			case "uiTreeSet":
 				// Operation statt Gesamtsnapshot: Öffnen verschiedener Äste auf zwei
 				// Offline-Geräten wird beim Log-Merge nicht gegenseitig überschrieben.
@@ -435,12 +477,16 @@ export const STATE = (() => {
 				else delete S.treeOpen[p.key];
 				break;
 			case "uiTabsSet": {
-				// Tabs sind ein atomarer Arbeitsbereich-Snapshot. Chats bleiben lokal,
-				// weil ihr Verlauf derzeit nicht durch den Drive-Sync repliziert wird.
+				// Seiten, NotebookLM UND Chats sind synchronisierte Tabs. Ein Chat-Tab
+				// ist nur gültig, wenn seine (ebenfalls synchronisierte) Sitzung existiert.
 				const seen = new Set();
 				S.tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((id) => {
 					if (typeof id !== "string" || seen.has(id)) return false;
 					seen.add(id);
+					if (id.startsWith("chat:")) {
+						const chat = S.chatSessions[id.slice(5)];
+						return !!(chat && !chat.deleted);
+					}
 					return !!(S.pages[id] && !S.pages[id].trashed) || id === "nlm:main";
 				}).slice(-12);
 				S.activeTabId = S.tabs.includes(p.activeTabId) ? p.activeTabId : (S.tabs[S.tabs.length - 1] || null);
