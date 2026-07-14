@@ -88,7 +88,7 @@ export const EXTRAS = (() => {
 	STATE.onBeforeDispatch((type, payload) => {
 		if (type === "cardReview" && payload && S.cards[payload.id]) {
 			const c = S.cards[payload.id];
-			undoStack.push({ id: payload.id, srs: JSON.parse(JSON.stringify(c.srs)), wasSuspended: !!c.suspended });
+			undoStack.push({ id: payload.id, reviewId: payload.reviewId, srs: JSON.parse(JSON.stringify(c.srs)), wasSuspended: !!c.suspended });
 			if (undoStack.length > 50) undoStack.shift();
 		}
 	});
@@ -101,7 +101,7 @@ export const EXTRAS = (() => {
 	async function undoReview() {
 		const u = undoStack.pop();
 		if (!u || !S.cards[u.id]) return;
-		await STATE.dispatch("cardReviewUndo", { id: u.id, srs: u.srs, unsuspend: !u.wasSuspended });
+		await STATE.dispatch("cardReviewUndo", { id: u.id, reviewId: u.reviewId, srs: u.srs, unsuspend: !u.wasSuspended });
 		S.reviewShowBack = false;
 		if (typeof render === "function") render();
 	}

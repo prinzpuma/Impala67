@@ -40,8 +40,38 @@ const ACCENT_THEMES = {
 	orange: { solid: "#de9255", soft: "rgba(222,146,85,.12)", border: "rgba(222,146,85,.36)" },
 };
 
+// Standard: Theme automatisch vom Betriebssystem übernehmen. Nur ein explizites
+// "0" deaktiviert die Erkennung; so erhalten auch bestehende Installationen ohne
+// gespeicherten Schlüssel direkt die sinnvolle Standard-Einstellung.
+const SYSTEM_THEME_KEY = "impala67FollowSystemTheme";
+let systemThemeQuery = null;
+let systemThemeListenerInstalled = false;
+
+function followsSystemTheme() {
+	return localStorage.getItem(SYSTEM_THEME_KEY) !== "0";
+}
+
+function resolvedTheme() {
+	if (followsSystemTheme() && window.matchMedia) {
+		return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+	}
+	return localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark";
+}
+
+function installSystemThemeListener() {
+	if (systemThemeListenerInstalled || !window.matchMedia) return;
+	systemThemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+	const onThemeChange = () => {
+		if (followsSystemTheme()) applyAppearance();
+	};
+	if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener("change", onThemeChange);
+	else if (systemThemeQuery.addListener) systemThemeQuery.addListener(onThemeChange);
+	systemThemeListenerInstalled = true;
+}
+
 export function applyAppearance() {
-	const theme = localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark";
+	installSystemThemeListener();
+	const theme = resolvedTheme();
 	const density = localStorage.getItem("impala67Density") || "comfortable";
 	const motion = localStorage.getItem("impala67Motion") || "full";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
@@ -179,15 +209,24 @@ export function openSettings(section) {
 			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
 			'<p class="hint" id="notionStatus"></p>';
 	} else if (sec === "look") {
-		const theme = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light" ? "light" : "dark";
+		const followSystemTheme = followsSystemTheme();
+		const theme = resolvedTheme();
+		const systemThemeLabel = theme === "light" ? "Hell" : "Dunkel";
 		const accent = localStorage.getItem("impala67Accent") || "blue";
 		const density = localStorage.getItem("impala67Density") || "comfortable";
 		const motion = localStorage.getItem("impala67Motion") || "full";
 		const widgets = dashboardWidgets();
 		const widgetLabel = Object.fromEntries(DASHBOARD_WIDGETS.map((w) => [w.id, w.label]));
-		body = '<h4>Design</h4><div class="row-btns appearance-choice">' +
-			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '">Dunkel</button>' +
-			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '">Hell</button></div>' +
+		body = '<h4>Design</h4>' +
+			'<section class="appearance-theme-card' + (followSystemTheme ? " is-auto" : "") + '">' +
+				'<div class="appearance-theme-copy"><span class="appearance-theme-icon" aria-hidden="true">◐</span><span>' +
+					'<b>Mit Gerätemodus synchronisieren</b><small>' + (followSystemTheme ? "Aktuell „" + systemThemeLabel + "“ · passt sich automatisch an" : "Manuelle Auswahl verwenden") + '</small>' +
+				'</span></div>' +
+				'<label class="theme-switch" title="Geräte-Theme automatisch übernehmen"><input id="inpThemeFollowSystem" type="checkbox"' + (followSystemTheme ? " checked" : "") + '><span aria-hidden="true"></span></label>' +
+			'</section>' +
+			'<div class="row-btns appearance-choice appearance-manual-theme">' +
+			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '"' + (followSystemTheme ? " disabled" : "") + '>◐ Dunkel</button>' +
+			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '"' + (followSystemTheme ? " disabled" : "") + '>☀ Hell</button></div>' +
 			'<h4>Akzentfarbe</h4><div class="accent-picker">' + ["blue", "violet", "green", "orange"].map((name) =>
 				'<button data-accent="' + name + '" class="accent-swatch accent-' + name + (accent === name ? " active" : "") + '" title="' + name + '"></button>').join("") + '</div>' +
 			'<h4>Darstellungsdichte</h4><div class="row-btns appearance-choice">' +
@@ -663,7 +702,16 @@ export function handleAppearanceSelect(kind, value) {
 	openSettings("look");
 }
 
+export function handleSystemThemeToggle(enabled) {
+	// Beim Ausschalten den gerade sichtbaren Modus als manuelle Auswahl behalten.
+	if (!enabled) localStorage.setItem("impala67Theme", resolvedTheme());
+	localStorage.setItem(SYSTEM_THEME_KEY, enabled ? "1" : "0");
+	applyAppearance();
+	openSettings("look");
+}
+
 export function handleThemeSelect(theme) {
+	localStorage.setItem(SYSTEM_THEME_KEY, "0");
 	localStorage.setItem("impala67Theme", theme);
 	localStorage.removeItem("notionTheme");
 	applyAppearance();
@@ -718,6 +766,7 @@ export const SETTINGS = {
 	handleDriveSync,
 	handleBackupNow,
 	handleThemeSelect,
+	handleSystemThemeToggle,
 	handleAppearanceSelect,
 	handleDashboardToggle,
 	handleDashboardMove,

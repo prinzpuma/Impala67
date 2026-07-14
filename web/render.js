@@ -679,12 +679,16 @@ function openConflictResolver(index) {
 		}).join("") || '<div class="conflict-empty">Kein Text vorhanden.</div>';
 	};
 	const winnerLabel = c.winner === "local" ? "Dieses Gerät" : "Drive / anderes Gerät";
-	const conflictSummary = c.conflictType === "delete-change"
+	const conflictSummary = c.reason || (c.conflictType === "delete-change"
 		? "Auf einem Gerät wurde die Seite gelöscht, während sie auf dem anderen Gerät noch geändert oder verschoben wurde. Die App kann diese beiden Aktionen nicht automatisch zusammenführen."
-		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.";
+		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.");
 	const comparisonHtml = hasTextComparison
 		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div>' + (coarseComparison ? '<p class="conflict-key">Lange Seite: Beide vollständigen Inhalte werden gezeigt. Eine zeilenweise Markierung wäre hier zu langsam.</p>' : '<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>')
-		: '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
+		: '<div class="conflict-no-compare"><b>' +
+		  (c.conflictType === "heft" ? "Kein visueller Vergleich von Handzeichnungen" : "Kein Textvergleich möglich") +
+		  '</b><span>' +
+		  (c.conflictType === "heft" ? "Handzeichnungen können nicht zeilenweise verglichen werden. Der ältere Stand wurde als Kopie gerettet. Öffne das Konflikt-Heft in der Bibliothek, um zu entscheiden, was du übernehmen möchtest." : "Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.") +
+		  '</span></div>';
 	o.hidden = false;
 	o.innerHTML = '<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
@@ -706,10 +710,32 @@ async function resolveConflict(action) {
 	const conf = list[i];
 	if (!conf) return;
 	if (action === "use-loser" && conf.pageId) {
-		await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: conf.loserContent } });
+		if (conf.conflictType === "heft") {
+			// Erst die noch sichtbare Winner-Ansicht schließen: unmount() könnte sonst
+			// den alten In-Memory-Stand zurückschreiben. Danach frisch aus dem Winner-Blob mounten.
+			if (HEFT.activeId === conf.pageId) HEFT.unmount(true);
+			const loserBlob = await DB.getBlob("heft:" + conf.conflictPageId);
+			if (loserBlob && loserBlob.buf && loserBlob.meta) {
+				await DB.putBlob("heft:" + conf.pageId, loserBlob.buf, { ...loserBlob.meta, hash: conf.loserHash });
+				await STATE.dispatch("heftUpdated", { pageId: conf.pageId, rev: loserBlob.meta.rev, pages: loserBlob.meta.pages || 1, bytes: loserBlob.buf.byteLength, blobHash: conf.loserHash });
+			}
+		} else if (conf.conflictType === "delete-change") {
+			// Die Konfliktkopie ist der gerettete Stand. Titel, Workspace und Elternordner
+			// werden aus dem Konflikt-Payload wiederhergestellt, statt sie auf Root zu lassen.
+			await STATE.dispatch("pageUpdate", { id: conf.conflictPageId, patch: {
+				title: conf.title,
+				parentId: conf.parentId || null,
+				workspaceId: conf.workspaceId || "default"
+			} });
+		} else {
+			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: conf.loserContent } });
+		}
 	}
-	if ((action === "keep-winner" || action === "use-loser") && conf.conflictPageId && S.pages[conf.conflictPageId]) {
-		await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
+	if (conf.conflictPageId && S.pages[conf.conflictPageId]) {
+		const shouldTrash = action === "keep-winner" || (action === "use-loser" && conf.conflictType !== "delete-change");
+		if (shouldTrash) {
+			await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
+		}
 	}
 	// Pending bereinigen (auch wenn nur „beide behalten“ → aus der Warteschlange).
 	// Die Kopie wird außerdem lokal als erledigt markiert; sonst erzeugte gerade

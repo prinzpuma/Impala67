@@ -322,6 +322,60 @@ export const DRIVE = (() => {
 		if (list.length && typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
 	}
 
+	function latestHeftHeads(events) {
+		const out = {};
+		for (const ev of events || []) {
+			const p = ev && ev.payload || {};
+			if (ev && ev.type === "heftUpdated" && p.pageId && p.blobHash && (!out[p.pageId] || ev.t > out[p.pageId].t)) out[p.pageId] = ev;
+		}
+		return out;
+	}
+	// Übergang für Hefte vor der Hash-Versionierung: nur wenn das JÜNGSTE
+	// Heft-Event noch keinen Hash trägt, darf der klassische Blob-Pfad greifen.
+	function legacyHeftIds(events) {
+		const latest = {};
+		for (const ev of events || []) {
+			const p = ev && ev.payload || {};
+			if (ev && ev.type === "heftUpdated" && p.pageId && (!latest[p.pageId] || ev.t > latest[p.pageId].t)) latest[p.pageId] = ev;
+		}
+		return new Set(Object.entries(latest).filter(([, ev]) => !ev.payload.blobHash).map(([id]) => id));
+	}
+
+	// Speichert den lokalen Verlierer, solange der Original-Blob noch vorhanden ist,
+	// und lädt danach fuer JEDE aktuelle Heft-Revision genau den im Event referenzierten Hash.
+	// Damit gibt es weder "Blob existiert schon"-Stale-Reads noch zufaellige Datei-Reihenfolgen.
+	async function reconcileHeftBlobs(remoteBlobs, conflictDetails) {
+		for (const c of conflictDetails || []) {
+			if ((c.conflictType === "heft" || c.conflictType === "delete-change") && c.loserSource === "local" && c.loserHash) {
+				const original = await DB.getBlob("heft:" + c.pageId);
+				if (original && original.buf && original.meta && original.meta.hash === c.loserHash) {
+					await DB.putBlob("heft:" + c.conflictPageId, original.buf, { ...original.meta, hash: c.loserHash });
+				}
+			}
+		}
+		const heads = latestHeftHeads(await DB.allEvents());
+		const byContentHash = new Map();
+		for (const f of remoteBlobs) {
+			const h = f.appProperties && f.appProperties.contentHash;
+			if (h) byContentHash.set(h, f);
+		}
+		for (const [pageId, ev] of Object.entries(heads)) {
+			const wanted = ev.payload.blobHash, key = "heft:" + pageId;
+			const local = await DB.getBlob(key);
+			if (local && local.meta && local.meta.hash === wanted) continue;
+			const file = byContentHash.get(wanted);
+			if (!file) throw new Error("Die referenzierte Heft-Version " + wanted.slice(0, 12) + " fehlt in Drive. Sync wurde nicht teilweise angewendet.");
+			const payload = await downloadPayload(file);
+			// Ein Remote-Konflikt kopiert denselben Blob unter eine neue Seiten-ID.
+			// Die Datei bleibt daher korrekt beim Original-Heft benannt.
+			const conflict = (conflictDetails || []).find((c) => (c.conflictType === "heft" || c.conflictType === "delete-change") && c.conflictPageId === pageId);
+			const sourceKey = conflict ? "heft:" + conflict.pageId : key;
+			if (!payload || payload.id !== sourceKey || !payload.meta || payload.meta.hash !== wanted) throw new Error("Ungültige Heft-Datei für " + pageId + ".");
+			await DB.putBlob(key, U.b64ToBuf(payload.b64), payload.meta);
+		}
+		return new Set(Object.values(heads).map((ev) => ev.payload.blobHash));
+	}
+
 	function loadKnownIds(key) {
 		try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); }
 	}
@@ -368,14 +422,26 @@ export const DRIVE = (() => {
 		}
 		saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 
-		// Große Binärdaten separat: SHA-256 im Dateinamen verhindert erneute Uploads.
-		// Neue Geräte laden nur Blob-Dateien, deren Drive-ID lokal noch unbekannt ist.
-		const remoteBlobs = files.filter((f) => f.name.startsWith(BLOB_PREFIX));
+		// Große Binärdaten separat. Hefte sind versioniert: der Event-Hash bestimmt
+		// exakt, welche Datei geladen wird; eine vorhandene alte Version wird ersetzt.
+		// Neueste Dateien zuerst: Altbestände ohne Versions-Metadaten bleiben damit
+		// wenigstens deterministisch. Neue Heft-Blobs werden zusätzlich per Hash geprüft.
+		const remoteBlobs = files.filter((f) => f.name.startsWith(BLOB_PREFIX))
+			.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
 		const remoteBlobHashes = new Set(remoteBlobs.map((f) => f.name.slice(BLOB_PREFIX.length).replace(/\.json\.gz$/, "")));
 		const knownBlobIds = loadKnownIds("impala67_drive_known_blobs");
+		const liveHeftHashes = await reconcileHeftBlobs(remoteBlobs, conflictDetails);
+		const legacyHefts = legacyHeftIds(await DB.allEvents());
 		for (const file of unseenRemoteFiles(remoteBlobs, knownBlobIds)) {
 			const payload = await downloadPayload(file);
-			if (payload && payload.id && !(await DB.getBlob(payload.id))) await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
+			if (!payload || !payload.id) { knownBlobIds.add(file.id); continue; }
+			const isHeft = String(payload.id).startsWith("heft:");
+			const legacyId = isHeft ? String(payload.id).slice("heft:".length) : "";
+			const current = await DB.getBlob(payload.id);
+			// Nicht-Heft-Blobs sind immutable. Bei alten, nicht versionierten Heften
+			// laden wir einmalig den neuesten Blob; der nächste Speichervorgang versieht
+			// sie automatisch mit einem Hash und wechselt auf den strengen Pfad oben.
+			if (!current && (!isHeft || legacyHefts.has(legacyId))) await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
 			knownBlobIds.add(file.id);
 		}
 		for (const id of await DB.allBlobKeys()) {
@@ -385,10 +451,19 @@ export const DRIVE = (() => {
 			const hash = await sha256Hex(raw);
 			if (remoteBlobHashes.has(hash)) continue;
 			const packed = await encodeJson(JSON.parse(new TextDecoder().decode(raw)));
-			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash });
+			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash, blobId: id, contentHash: (rec.meta && rec.meta.hash) || "" });
 			remoteBlobHashes.add(hash); knownBlobIds.add(created.id);
 		}
 		saveKnownIds("impala67_drive_known_blobs", knownBlobIds);
+		// Alte, nicht mehr von einem aktuellen Heft-Head referenzierte Versionen
+		// aufräumen. Die Datei-Liste stammt vom Sync-Start; parallel neue Uploads
+		// anderer Geräte werden daher nie versehentlich gelöscht.
+		for (const file of remoteBlobs) {
+			const ap = file.appProperties || {};
+			if (ap.blobId && ap.blobId.startsWith("heft:") && ap.contentHash && !liveHeftHashes.has(ap.contentHash)) {
+				await api("/drive/v3/files/" + file.id, { method: "DELETE" }).catch(() => {});
+			}
+		}
 
 		// Nur Events seit dem letzten erfolgreichen Upload als Delta senden.
 		const localMaxSeq = await DB.maxSeq();

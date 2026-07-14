@@ -264,8 +264,16 @@ async function rateAndReviewCard(cardId, grade) {
 	if (!card) return null;
 	_ratingInFlight = true;
 	try {
+		const wasNew = card.srs.state === "new";
+		const wasLearning = card.srs.state === "learning" || card.srs.state === "relearning";
 		const srs = SRS.rate(card.srs, grade);
-		await STATE.dispatch("cardReview", { id: card.id, srs, grade });
+		await STATE.dispatch("cardReview", {
+			id: card.id, srs, grade,
+			reviewId: U.uid(),
+			deck: card.deck || "Standard",
+			first: wasNew,
+			learning: wasLearning
+		});
 		return card;
 	} finally {
 		_ratingInFlight = false;
@@ -1368,6 +1376,10 @@ function wireEvents() {
 		}
 	});
 	document.addEventListener("change", async (e) => {
+		if (e.target.id === "inpThemeFollowSystem") {
+			SETTINGS.handleSystemThemeToggle(!!e.target.checked);
+			return;
+		}
 		if (e.target.id === "pageTitle") {
 			const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 			if (pg && e.target.value.trim()) {

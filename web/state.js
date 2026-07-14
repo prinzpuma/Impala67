@@ -281,22 +281,21 @@ export const STATE = (() => {
 				break;
 			case "cardReview": {
 				const c = S.cards[p.id];
-				const wasNew = !!(c && c.srs && c.srs.state === "new");
-				// FIX: fehlende Validierung — ohne srs-Payload den Kartenstand nicht zerstören
-				// (c.srs = undefined hätte die Karte bisher klaglos kaputt gemacht).
-				if (c && p.srs) {
-					c.srs = p.srs;
-					// Leech-Erkennung (wie Anki): fällt eine Karte zu oft durch, wird sie
-					// markiert und — je nach Stapel-Option — automatisch ausgesetzt.
-					const conf = deckConfOf(c.deck);
-					if ((p.grade || 0) === 1 && (c.srs.lapses || 0) >= conf.leechThreshold) {
-						c.leech = true;
-						if (conf.leechAction === "suspend") c.suspended = true;
-					}
+				// Verwaiste, verspätet importierte Reviews dürfen weder Statistik noch
+				// Tageslimits verändern. Ohne Karte ist kein gültiges Review anwendbar.
+				if (!c || !p.srs) break;
+				const wasNew = p.first != null ? !!p.first : c.srs.state === "new";
+				const wasLearning = p.learning != null ? !!p.learning : (c.srs.state === "learning" || c.srs.state === "relearning");
+				c.srs = p.srs;
+				const conf = deckConfOf(c.deck);
+				if ((p.grade || 0) === 1 && (c.srs.lapses || 0) >= conf.leechThreshold) {
+					c.leech = true;
+					if (conf.leechAction === "suspend") c.suspended = true;
 				}
-				// Protokoll für Statistik/Heatmap/Retention + Tageslimits (first = war neue Karte) —
-				// bewusst unabhängig davon, ob die Karte noch existiert (Statistik bleibt vollständig).
-				S.reviews.push({ cardId: p.id, t: ev.t, grade: p.grade || 0, first: wasNew });
+				// Deck und Art werden beim Ereignis eingefroren: spätere Deck-Moves dürfen
+				// historische Limits, Heatmap und Retention nicht rückwirkend umhängen.
+				S.reviews.push({ id: p.reviewId || ev.id, cardId: p.id, deck: p.deck || c.deck || "Standard", t: ev.t,
+					grade: p.grade || 0, first: wasNew, learning: wasLearning });
 				break;
 			}
 			case "cardReviewUndo": {
@@ -309,7 +308,7 @@ export const STATE = (() => {
 				if ((c.srs.lapses || 0) < deckConfOf(c.deck).leechThreshold) c.leech = false;
 				if (p.unsuspend) c.suspended = false;
 				for (let i = S.reviews.length - 1; i >= 0; i--) {
-					if (S.reviews[i].cardId === p.id) { S.reviews.splice(i, 1); break; }
+					if ((p.reviewId && S.reviews[i].id === p.reviewId) || (!p.reviewId && S.reviews[i].cardId === p.id)) { S.reviews.splice(i, 1); break; }
 				}
 				break;
 			}
@@ -634,8 +633,8 @@ export const STATE = (() => {
 		const usedNew = {}, usedRev = {};
 		(S.reviews || []).forEach((r) => {
 			if (new Date(r.t) < today) return;
-			const c = S.cards[r.cardId];
-			const d = c ? (c.deck || "Standard") : "Standard";
+			if (r.learning) return; // Lern-/Relearning-Schritte verbrauchen kein Review-Limit.
+			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
 		});
@@ -711,8 +710,8 @@ export const STATE = (() => {
 		const usedNew = {}, usedRev = {};
 		(S.reviews || []).forEach((r) => {
 			if (new Date(r.t) < dayStart) return;
-			const c = S.cards[r.cardId];
-			const d = c ? (c.deck || "Standard") : "Standard";
+			if (r.learning) return; // Lern-/Relearning-Schritte verbrauchen kein Review-Limit.
+			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
 		});

@@ -2900,3 +2900,289 @@ body.reduce-motion .heft-tray { animation: none; }
 .child-page-row .cp-icon { flex: none; width: 20px; text-align: center; }
 .child-page-row .cp-img { width: 18px; height: 18px; object-fit: cover; border-radius: 3px; vertical-align: -3px; }
 .child-page-row .cp-title { font-weight: 500; border-bottom: 1px solid rgba(255, 255, 255, 0.16); }
+
+/* ========================================================================== 
+   Compact mode + Light theme polish — 14. Juli 2026
+   ========================================================================== */
+
+/* Kompaktmodus bleibt flach, aber der Seitenchat bleibt eine eindeutig
+   abgetrennte Arbeitsfläche statt mit der Mitte zu verschmelzen. */
+@media (min-width: 1025px) {
+	body.density-compact #app {
+		gap: 0 !important;
+		padding: 0 !important;
+		grid-template-columns: 236px minmax(0, 1fr) 320px;
+	}
+	body.density-compact #sidebar {
+		border-right: 1px solid var(--edge) !important;
+	}
+	body.density-compact #panel {
+		border: 0 !important;
+		border-left: 1px solid var(--edge) !important;
+		background: var(--panel-solid);
+	}
+	body.density-compact .panel-head { border-bottom-color: var(--edge); }
+}
+
+/* Heller Modus: echte Papierflächen mit klarer, aber ruhiger Hierarchie. */
+body.light {
+	--bg0: #f7f7f5;
+	--bg1: #ffffff;
+	--panel-solid: #ffffff;
+	--menu-bg: #ffffff;
+	--bubble: #edf4fb;
+	--text: #2c2c2b;
+	--text2: #6f6d69;
+	--accent: #2783de;
+	--accent-soft: #e5f2fc;
+	--accent-border: rgba(39, 131, 222, .38);
+	--danger: #d84d43;
+	--danger-soft: #fce9e7;
+	--success: #37845a;
+	--success-soft: #e8f1ec;
+	--surface-faint: #fcfcfb;
+	--surface-subtle: #f8f8f6;
+	--surface: #f2f2ef;
+	--surface-hover: #ebebe8;
+	--surface-hover-strong: #e2e2de;
+	--surface-active: #d8d8d3;
+	--edge-soft: #ecece8;
+	--edge: #deded9;
+	--input-bg: #f7f7f5;
+	--overlay-bg: rgba(30, 30, 28, .22);
+	--shadow: rgba(30, 30, 28, .10);
+	--shadow-strong: rgba(30, 30, 28, .16);
+	--glow-1: #ffffff;
+	--glow-2: #fafaf8;
+	--glow-3: #f2f2ef;
+}
+
+/* Dunkle, fest codierte Restflächen für den Hellmodus überschreiben. */
+body.light #chatForm,
+body.light .chat-form-full {
+	background: #ffffff;
+	border-color: var(--edge);
+	box-shadow: 0 1px 2px rgba(30, 30, 28, .04);
+}
+body.light #chatForm:focus-within,
+body.light .chat-form-full:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+body.light .msg.user { background: var(--bubble); }
+body.light .md pre,
+body.light .blk-codewrap,
+body.light .v2-code pre,
+body.light .change-preview-diff {
+	background: #f4f4f2;
+	border-color: var(--edge);
+}
+body.light .blk-text a {
+	color: #2c2c2b;
+	text-decoration-color: rgba(44, 44, 43, .35);
+}
+body.light .blk-text:empty::before { color: rgba(44, 44, 43, .32); }
+body.light ::-webkit-scrollbar-thumb { background: rgba(44, 44, 43, .20); }
+
+/* ========================================================================== 
+   Light theme v2 — warmes Papier statt klinischem Weiß
+   ========================================================================== */
+body.light {
+	--bg0: #f2efe9;
+	--bg1: #faf8f4;
+	--panel-solid: #fffdfa;
+	--menu-bg: #fffdfa;
+	--bubble: #e4f0fb;
+	--text: #292926;
+	--text2: #706e68;
+	--accent: #2478c7;
+	--accent-soft: #ddecfa;
+	--accent-border: rgba(36, 120, 199, .36);
+	--surface-faint: #fdfbf7;
+	--surface-subtle: #f7f4ee;
+	--surface: #f0ede6;
+	--surface-hover: #e9e5dd;
+	--surface-hover-strong: #dfdad0;
+	--surface-active: #d5cec3;
+	--edge-soft: #e8e2d8;
+	--edge: #d9d2c7;
+	--input-bg: #f7f4ee;
+	--overlay-bg: rgba(46, 42, 35, .24);
+	--shadow: rgba(63, 53, 38, .10);
+	--shadow-strong: rgba(63, 53, 38, .18);
+	--glow-1: #fffdf9;
+	--glow-2: #f7f3ec;
+	--glow-3: #eee9e0;
+}
+
+/* Drei ruhige Ebenen statt einer endlosen weißen Fläche. */
+body.light #bg {
+	background: radial-gradient(1200px 760px at 76% -12%, #fffdf9 0%, #f6f1e9 52%, #ebe5da 100%);
+}
+body.light #sidebar { background: #f1ede6; }
+body.light #mainWrap { background: #fffdfa; }
+body.light #panel { background: #f8f6f1; }
+body.light .settings-nav,
+body.light .hist-list { background: #f1ede6; }
+body.light .settings-body { background: #fffdfa; }
+
+/* Unterschiedliche, funktionale Flächen machen Orientierung leichter. */
+body.light #tabbar { background: rgba(247, 244, 238, .72); }
+body.light .tabchip.active { background: #fffdfa; box-shadow: 0 1px 0 var(--edge); }
+body.light .tabchip-x:hover,
+body.light button:hover { background: var(--surface-hover); }
+body.light .row.active { box-shadow: inset 3px 0 0 var(--accent); }
+body.light .msg.user { border: 1px solid #cfe1f2; }
+body.light .think-box { background: #f5f2ec; border-color: #e1dbd0; }
+body.light .file-chip,
+body.light .edit-files-list { background: #f2efe9; border-color: var(--edge); }
+body.light .deck-table-head { background: #eeeae2; }
+body.light .anki-deck-group td { background: #e8f2fb; }
+
+/* Theme-Schalter: eigenständige, verständliche Karte statt Checkbox-Zeile. */
+.appearance-theme-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 14px;
+	border: 1px solid var(--edge);
+	border-radius: 12px;
+	background: var(--surface-faint);
+}
+.appearance-theme-card.is-auto {
+	border-color: var(--accent-border);
+	background: var(--accent-soft);
+}
+.appearance-theme-copy { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.appearance-theme-copy > span:last-child { display: grid; gap: 2px; }
+.appearance-theme-copy b { font-size: 14px; line-height: 1.25; }
+.appearance-theme-copy small { color: var(--text2); font-size: 12px; line-height: 1.35; }
+.appearance-theme-icon {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	flex: 0 0 34px;
+	border-radius: 10px;
+	background: var(--menu-bg);
+	border: 1px solid var(--edge-soft);
+	color: var(--accent);
+	font-size: 20px;
+}
+.theme-switch { position: relative; display: inline-flex !important; width: 44px; height: 26px; margin: 0 !important; flex: 0 0 44px; cursor: pointer; }
+.theme-switch input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none; }
+.theme-switch > span { width: 44px; height: 26px; border-radius: 999px; background: var(--surface-active); border: 1px solid var(--edge); transition: background-color .16s ease, border-color .16s ease; }
+.theme-switch > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--menu-bg); box-shadow: 0 1px 3px var(--shadow); transition: transform .16s ease; }
+.theme-switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+.theme-switch input:checked + span::after { transform: translateX(18px); }
+.theme-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+.appearance-manual-theme { margin-top: -4px; }
+@media (max-width: 480px) {
+	.appearance-theme-card { align-items: flex-start; }
+	.appearance-theme-copy { gap: 8px; }
+}
+
+/* Heft-Werkzeugleiste v2: eine flache, kompakte Werkzeugschiene. Die
+   Hauptaktionen bleiben sichtbar; Feinoptionen liegen weiterhin im separaten Tray. */
+.heft-chrome .heft-float { top: 10px !important; }
+.heft-chrome .heft-pill {
+	gap: 0;
+	padding: 3px;
+	border-radius: 10px;
+	box-shadow: none;
+}
+.heft-chrome .heft-main {
+	width: 32px;
+	min-width: 32px;
+	height: 32px;
+	min-height: 32px;
+	border-radius: 7px;
+	font-size: 15px;
+}
+.heft-chrome .heft-pill > .heft-sep {
+	height: 16px;
+	margin: 0 2px;
+}
+/* Das Options-Tray ist bewusst schmaler als die Hauptschiene und sitzt enger
+   darunter, ohne die Zeichenfläche optisch zu dominieren. */
+.heft-chrome .heft-tray {
+	top: 50px;
+	gap: 0;
+	padding: 2px 4px;
+	border-radius: 8px;
+	box-shadow: 0 4px 10px rgba(0,0,0,.20);
+}
+.heft-chrome .heft-tray-drag {
+	width: 20px;
+	min-width: 20px;
+	height: 24px;
+	min-height: 24px;
+	font-size: 10px;
+}
+.heft-chrome .heft-tray .heft-opt,
+.heft-chrome .heft-tray .heft-size {
+	width: 24px;
+	min-width: 24px !important;
+	height: 24px;
+	min-height: 24px;
+	border-radius: 6px;
+	font-size: 12px;
+}
+.heft-chrome .heft-tray .heft-swatch {
+	width: 16px;
+	height: 16px;
+	min-width: 16px !important;
+	margin: 0 1px;
+}
+.heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px; }
+.heft-chrome .heft-corner {
+	top: 10px;
+	height: 28px;
+	min-height: 28px;
+	min-width: 28px;
+	padding: 0 7px;
+	border-radius: 7px;
+	font-size: 12px;
+	box-shadow: none;
+}
+.heft-chrome .heft-corner.heft-chat,
+.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; }
+
+/* Heller Modus: warme, matte Papierwerkzeuge ohne schwere dunkle Kapseln. */
+body.light .heft-chrome .heft-pill,
+body.light .heft-chrome .heft-tray,
+body.light .heft-chrome .heft-corner,
+body.light .heft-chrome .heft-corner.heft-chat {
+	background: #fffaf4;
+	color: #403d38;
+	border-color: #d9d2c7;
+	box-shadow: 0 3px 10px rgba(71, 57, 37, .11);
+}
+body.light .heft-chrome .heft-main { background: transparent; color: #625e56; }
+body.light .heft-chrome .heft-main:hover,
+body.light .heft-chrome .heft-corner:hover,
+body.light .heft-chrome .heft-tray-drag:hover { background: #eee7dc; color: #292926; }
+body.light .heft-chrome .heft-main.active,
+body.light .heft-chrome .heft-main.open {
+	background: #ddecfa;
+	color: #1e6eb9;
+	box-shadow: inset 0 0 0 1px rgba(36, 120, 199, .25);
+}
+body.light .heft-chrome .heft-main.heft-laser.active {
+	background: #fce9e7;
+	color: #c94b42;
+	box-shadow: inset 0 0 0 1px rgba(201, 75, 66, .28);
+}
+body.light .heft-chrome .heft-pill > .heft-sep,
+body.light .heft-chrome .heft-tray .heft-sep { background: #ded6ca; }
+body.light .heft-chrome .heft-tray-drag { color: #918a80; }
+body.light .heft-chrome .heft-tray .heft-opt.active,
+body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; color: #fff; }
+
+@media (max-width: 720px) {
+	.heft-chrome .heft-float { top: 8px !important; }
+	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: 14px; }
+	.heft-chrome .heft-tray { top: 44px; }
+	.heft-chrome .heft-corner { top: 8px; }
+}

@@ -248,8 +248,10 @@ function ankiStatsHtml() {
 	const due = cards.filter((c) => !c.suspended && new Date(c.srs.due) <= now).length;
 	const neu = cards.filter((c) => c.srs.state === "new").length;
 	const learned = cards.filter((c) => c.srs.state === "review").length;
-	const reviews = (S.reviews || []).filter((r) => !S.ankiDeck || (S.cards[r.cardId] && (S.cards[r.cardId].deck || "Standard") === S.ankiDeck));
-	const graded = reviews.filter((r) => r.grade > 0);
+	// Review-Events tragen ihren ursprünglichen Stapel, damit ein späterer Move
+	// historische Statistik nicht in den neuen Stapel verschiebt.
+	const reviews = (S.reviews || []).filter((r) => !S.ankiDeck || (r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard") === S.ankiDeck);
+	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
 	const retention = graded.length ? Math.round(graded.filter((r) => r.grade > 1).length / graded.length * 100) : null;
 	const perDay = {};
 	reviews.forEach((r) => { const k = localDayKey(r.t); perDay[k] = (perDay[k] || 0) + 1; });
@@ -299,7 +301,7 @@ function heatmapHtml(reviews) {
 // „Echte" Retention wie in Anki: Anteil bestandener Wiederholungen (Bewertung > 1),
 // ohne Erstbewertungen neuer Karten, je Zeitraum.
 function retentionTableHtml(reviews) {
-	const graded = reviews.filter((r) => r.grade > 0 && !r.first);
+	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
 	const cut = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString(); };
 	const row = (label, list) => {
 		const pass = list.filter((r) => r.grade > 1).length;

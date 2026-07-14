@@ -290,6 +290,19 @@ export const DB = (() => {
 		return heads;
 	}
 
+	// Jüngste versionierte Heft-Binärdatei je Seite. Der Hash ist Teil des Events,
+	// damit der Drive-Sync nie mehr eine beliebige Blob-Datei auswählen muss.
+	function heftHeadsOf(evs, extra) {
+		const heads = {};
+		for (const ev of evs) {
+			const p = ev.payload || {};
+			if (ev.type === "heftUpdated" && p.pageId && p.blobHash && (!extra || extra(ev))) {
+				if (!heads[p.pageId] || ev.t > heads[p.pageId].t) heads[p.pageId] = ev;
+			}
+		}
+		return heads;
+	}
+
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
 	// opts (nur beim Drive-Sync gesetzt):
 	//   unsyncedAfterSeq — Sequenznummer des letzten erfolgreichen Uploads. Lokale Events
@@ -354,6 +367,31 @@ export const DB = (() => {
 				conflictCount++;
 			}
 
+
+			// Heft-Inhalt ist ein versionierter Blob. Anders als bei Text kann ein
+			// Zeitstempel-Gewinner den anderen Blob nicht still ersetzen: der unterlegene
+			// Stand wird als eigenes Heft gerettet und Drive kopiert exakt dessen Hash.
+			const localHefts = heftHeadsOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
+			const remoteHefts = heftHeadsOf(fresh);
+			for (const [id, remote] of Object.entries(remoteHefts)) {
+				const mine = localHefts[id];
+				if (!mine || mine.payload.blobHash === remote.payload.blobHash) continue;
+				const loser = mine.t <= remote.t ? mine : remote;
+				if (existing.has("heftconflict-" + loser.id)) continue;
+				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
+				const conflictPageId = "heftconflictpg-" + loser.id;
+				const loserSource = loser === mine ? "local" : "remote";
+				const winner = mine.t <= remote.t ? "remote" : "local";
+				conflictDetails.push({ pageId: id, title: info.title || "Heft", conflictPageId,
+					conflictType: "heft", loserSource, loserHash: loser.payload.blobHash, winner,
+					reason: "Dieses Heft wurde auf zwei Geräten geändert. Der ältere Stand wurde als separates Konflikt-Heft gesichert." });
+				fresh.push(
+					{ id: "heftconflict-" + loser.id, t: U.now(), type: "pageCreate", payload: { id: conflictPageId, title: "⚠ Konflikt-Heft: " + (info.title || "Heft"), content: "", parentId: info.parentId || null, workspaceId: info.workspaceId || "default", kind: "heft" } },
+					{ id: "heftconflictmeta-" + loser.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, rev: loser.payload.rev || 1, pages: loser.payload.pages || 1, bytes: loser.payload.bytes || 0, blobHash: loser.payload.blobHash } }
+				);
+				conflictCount++;
+			}
+
 			// Konflikt-Erkennung (2): Löschen wettstreitet mit Verschieben/Ändern. Wird eine Seite auf
 			// einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync
 			// verschoben, wiederhergestellt oder sonst geändert wurde, gewinnt beim Log-Merge immer das
@@ -383,35 +421,76 @@ export const DB = (() => {
 			const localLifecycle = lifecycleOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
 			const remoteLifecycle = lifecycleOf(fresh);
 			const lifecyclePairs = [
-				...Object.keys(localDeletes).filter((id) => remoteLifecycle[id]).map((id) => ({ id, del: localDeletes[id], moved: remoteLifecycle[id] })),
-				...Object.keys(remoteDeletes).filter((id) => localLifecycle[id]).map((id) => ({ id, del: remoteDeletes[id], moved: localLifecycle[id] })),
+				...Object.keys(localDeletes).filter((id) => remoteLifecycle[id]).map((id) => ({ id, del: localDeletes[id], moved: remoteLifecycle[id], loserSource: "remote" })),
+				...Object.keys(remoteDeletes).filter((id) => localLifecycle[id]).map((id) => ({ id, del: remoteDeletes[id], moved: localLifecycle[id], loserSource: "local" })),
 			];
-			for (const { id, del, moved } of lifecyclePairs) {
+			for (const { id, del, moved, loserSource } of lifecyclePairs) {
 				if (existing.has("lifeconflict-" + moved.id)) continue;
-				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
-				const title = (moved.payload && moved.payload.title) || info.title || "Seite";
-				const content = info.content != null ? info.content : ((moved.payload && moved.payload.patch && moved.payload.patch.content) || "");
-				const parentId = (moved.type === "pageMove" && moved.payload.parentId) || info.parentId || null;
 				const conflictPageId = "conflictpg-" + moved.id;
-				conflictDetails.push({
+				
+				// Rekonstruiere den Inhaltsstand aus dem Event-Log, da die Seite lokal ggf.
+				// schon gelöscht ist und opts.pageInfo(id) dann leer wäre.
+				let pg = { title: "Seite", content: "", kind: "notion", parentId: null, workspaceId: "default", heftMeta: null };
+				for (const ev of [...local, ...fresh]) {
+					const p = ev.payload;
+					if (!p || (p.id !== id && p.pageId !== id)) continue;
+					if (ev.type === "pageCreate") {
+						if (p.title) pg.title = p.title;
+						if (p.content !== undefined) pg.content = p.content;
+						if (p.kind) pg.kind = p.kind;
+						if ("parentId" in p) pg.parentId = p.parentId || null;
+						if (p.workspaceId) pg.workspaceId = p.workspaceId;
+					} else if (ev.type === "pageUpdate" && p.patch) {
+						if (p.patch.title !== undefined) pg.title = p.patch.title;
+						if (p.patch.content !== undefined) pg.content = p.patch.content;
+						if (p.patch.kind !== undefined) pg.kind = p.patch.kind;
+						if ("parentId" in p.patch) pg.parentId = p.patch.parentId || null;
+						if (p.patch.workspaceId) pg.workspaceId = p.patch.workspaceId;
+					} else if (ev.type === "pageMove") {
+						pg.parentId = p.parentId || null;
+					} else if (ev.type === "heftUpdated") {
+						pg.kind = "heft";
+						pg.heftMeta = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, blobHash: p.blobHash };
+					}
+				}
+
+				const parentId = pg.parentId;
+				const details = {
 					pageId: id,
-					title,
+					title: pg.title,
 					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
 					deletedAt: del.t,
 					changedAt: moved.t,
 					conflictPageId,
 					conflictType: "delete-change",
+					parentId,
+					workspaceId: pg.workspaceId,
 					eventId: "lifeconflict-" + moved.id,
-				});
+				};
+				if (pg.kind === "heft" && pg.heftMeta && pg.heftMeta.blobHash) {
+					details.loserHash = pg.heftMeta.blobHash;
+					details.loserSource = loserSource;
+				}
+				conflictDetails.push(details);
+
 				fresh.push({
 					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate",
 					payload: {
 						id: conflictPageId,
-						title: "⚠ Konflikt (gelöscht/verschoben): " + title,
-						content,
-						parentId, workspaceId: info.workspaceId || "default",
+						title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title,
+						content: pg.content,
+						parentId, workspaceId: pg.workspaceId,
+						kind: pg.kind
 					},
 				});
+				if (pg.kind === "heft" && pg.heftMeta && pg.heftMeta.blobHash) {
+					fresh.push({
+						id: "lifeconflictmeta-" + moved.id, t: U.now(), type: "heftUpdated",
+						payload: {
+							pageId: conflictPageId, rev: pg.heftMeta.rev, pages: pg.heftMeta.pages, bytes: pg.heftMeta.bytes, blobHash: pg.heftMeta.blobHash
+						}
+					});
+				}
 				conflictCount++;
 			}
 		}
@@ -476,5 +555,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, heftHeadsOf, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

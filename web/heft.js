@@ -73,6 +73,13 @@ export const HEFT = (() => {
 	let ocrBusy = false, ocrTimer = 0; // stille Hintergrund-Indexierung für die normale Suche
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
+	// Versions-ID für die synchronisierte Heft-Binärdatei. Der Hash bindet das
+	// Metadaten-Event eindeutig an genau einen Blob in Drive.
+	async function blobHash(buf) {
+		const bytes = new Uint8Array(buf);
+		const digest = await crypto.subtle.digest("SHA-256", bytes);
+		return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+	}
 	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [] });
 	const emptyDoc = () => ({ v: 1, rev: 1, pages: [newPage()] });
 	const page = () => (doc ? doc.pages[idx] : null);
@@ -148,13 +155,15 @@ export const HEFT = (() => {
 		const savePid = pid, saveDoc = doc;
 		saveDoc.rev = (saveDoc.rev || 1) + 1;
 		const bytes = enc.encode(JSON.stringify(saveDoc));
+		const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+		const contentHash = await blobHash(buf);
 		Object.keys(thumbs).forEach((k) => { if (k.startsWith(savePid + ":")) delete thumbs[k]; });
 		try {
-			await DB.putBlob(KEY(savePid), bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { type: "application/json", kind: "heft", rev: saveDoc.rev });
+			await DB.putBlob(KEY(savePid), buf, { type: "application/json", kind: "heft", rev: saveDoc.rev, hash: contentHash });
 			// Nur erkannter Text wird in den kleinen Metadaten-Index übernommen;
 			// Bilder und Striche bleiben weiterhin ausschließlich im Heft-Blob.
 			const ocrText = saveDoc.pages.map((pg) => pg.ocrText || "").filter(Boolean).join("\n");
-			await STATE.dispatch("heftUpdated", { pageId: savePid, rev: saveDoc.rev, pages: saveDoc.pages.length, bytes: bytes.byteLength, ocrText });
+			await STATE.dispatch("heftUpdated", { pageId: savePid, rev: saveDoc.rev, pages: saveDoc.pages.length, bytes: bytes.byteLength, ocrText, blobHash: contentHash });
 		} catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
 	}
 	const hasHeft = (p) => !!((S.heftMeta && S.heftMeta[p]) || docs[p]);
@@ -2736,10 +2745,15 @@ export const HEFT = (() => {
 		scheduleHandwritingIndex(idx);
 		purgeOrphanLegacyInk();
 	}
-	function unmount() {
+	function unmount(discardPending = false) {
 		closePop();
 		closeScanner();
-		if (saveT) saveNow(); // bewusst ohne await — saveNow macht vorher einen Schnappschuss
+		// Konflikt-Auflösung kann bewusst einen älteren Stand wählen. Dann darf ein
+		// noch ausstehender Timer den gerade gewählten Blob nicht wieder überschreiben.
+		if (saveT) {
+			if (discardPending) { clearTimeout(saveT); saveT = 0; }
+			else saveNow(); // bewusst ohne await — saveNow macht vorher einen Schnappschuss
+		}
 		if (host) {
 			host.removeEventListener("click", onHostClick);
 			host.removeEventListener("pointerdown", onHostPointerDown);
