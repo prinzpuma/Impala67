@@ -125,8 +125,14 @@ function deckMenuHtml(name) {
 
 function renderAnki(main) {
 	const tab = S.ankiTab || "decks";
+	const isStudy = tab === "study";
 	const tbtn = (id, label) => '<button data-ankitab="' + id + '" class="' + (tab === id ? "active" : "") + '">' + label + "</button>";
-	let html = '<div class="library anki"><div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
+	// Während einer Wiederholung bleibt die Oberfläche bewusst frei von
+	// Verwaltungsaktionen. Die Lernansicht selbst enthält nur die kompakte
+	// Status-/Zurück-Leiste und die Karte; Stapel, Browser und Optionen stehen
+	// nach dem Lernen wieder in der normalen Kopfzeile zur Verfügung.
+	let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
+	if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
 		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + "</div>" +
 		'<button data-ankinewcard="1">＋ Neue Karte</button>' +
 		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
@@ -328,7 +334,11 @@ function ankiStudyHtml() {
 			'<b class="cnt-learn">' + cnt.learn + '</b> lernen · ' +
 			'<b class="cnt-due">' + cnt.review + '</b> wdh.' +
 		'</span>';
-	const head = '<div class="hint study-head">Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · " + countsHtml + " " +
+	// Der Lernkopf bleibt bewusst klein, bietet aber immer einen klaren Rückweg
+	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
+	const head = '<div class="hint study-head">' +
+		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel</button>' +
+		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · " + countsHtml + "</span>" +
 		'<button class="mini" data-ankiundo="1" ' + (canUndo ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button>' +
 		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span></div>';
 

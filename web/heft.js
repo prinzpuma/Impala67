@@ -840,7 +840,17 @@ export const HEFT = (() => {
 			if (closed) {
 				let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 				pts.forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); });
-				shape = { type: "ellipse", cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rx: (maxX - minX) / 2, ry: (maxY - minY) / 2 };
+				const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = (maxX - minX) / 2, ry = (maxY - minY) / 2;
+				let errRect = 0, errEllipse = 0;
+				pts.forEach((p) => {
+					const dxRect = Math.min(Math.abs(p[0] - minX), Math.abs(p[0] - maxX));
+					const dyRect = Math.min(Math.abs(p[1] - minY), Math.abs(p[1] - maxY));
+					errRect += Math.min(dxRect, dyRect);
+					const nx = rx ? (p[0] - cx) / rx : 0, ny = ry ? (p[1] - cy) / ry : 0;
+					errEllipse += Math.abs(Math.hypot(nx, ny) - 1) * Math.max(rx, ry);
+				});
+				if (errRect < errEllipse * 0.85) shape = { type: "rect", x1: minX, y1: minY, x2: maxX, y2: maxY };
+				else shape = { type: "ellipse", cx, cy, rx, ry };
 			} else if (maxDev < Math.max(8, len * .08)) shape = { type: "line", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
 			else shape = { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
 			const stroke = { tool: "shape", color, size, pts: [a, b], shape };
@@ -1191,8 +1201,9 @@ export const HEFT = (() => {
 		inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) cb(f); };
 		inp.click();
 	}
-	function fileToImageData(f, maxDim) {
-		// Datei → verkleinertes JPEG-dataURL (bleibt im Heft-Blob serialisierbar)
+	function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) {
+		// Datei → verkleinertes Data-URL. Scanner übergibt PNG, damit das Original
+		// vor der finalen Aufbereitung nicht bereits verlustbehaftet komprimiert ist.
 		return new Promise((resolve, reject) => {
 			const r = new FileReader();
 			r.onerror = () => reject(new Error("Datei lesen fehlgeschlagen"));
@@ -1207,7 +1218,7 @@ export const HEFT = (() => {
 					const x = c.getContext("2d");
 					x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); // PNG-Transparenz → weiß
 					x.drawImage(img, 0, 0, w, h);
-					resolve({ src: c.toDataURL("image/jpeg", 0.86), w, h });
+					resolve({ src: mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL(mime, quality), w, h });
 				};
 				img.onerror = () => reject(new Error("Bild dekodieren fehlgeschlagen"));
 				img.src = r.result;
@@ -1387,7 +1398,9 @@ export const HEFT = (() => {
 		const full = [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]];
 		if (!w || !h) return full;
 		try {
-			const dw = Math.min(480, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
+			// Aufnahme: mehr Analyseauflösung für präzisere Ecken. Die Live-Vorschau
+			// bleibt klein, weil ihr Bild ohnehin nur 240 px breit ist.
+			const dw = Math.min(720, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
 			const c = document.createElement("canvas");
 			c.width = dw; c.height = dh;
 			const cx = c.getContext("2d", { willReadFrequently: true });
@@ -1580,12 +1593,15 @@ export const HEFT = (() => {
 		}
 		let W = Math.round(Math.max(dist2d(quad[0], quad[1]), dist2d(quad[3], quad[2])));
 		let H = Math.round(Math.max(dist2d(quad[0], quad[3]), dist2d(quad[1], quad[2])));
-		// Ausgabe auf 1280 px begrenzen, Eingabe separat auf 1800 px: gleiche Lesbarkeit,
-		// deutlich weniger Speicher als ein Vollauflösungs-Canvas der Kamera.
-		const k = Math.min(1, 1280 / Math.max(W, H, 1));
+		// Scan-Ausgabe erhält genug Reserve für kleine Schrift, Formeln und OCR.
+		// Kanten- UND Pixelbudget begrenzen Speicher auf iPadOS, statt pauschal auf
+		// 1280 px herunterzuskalieren.
+		const edgeScale = Math.min(1, 2200 / Math.max(W, H, 1));
+		const pixelScale = Math.min(1, Math.sqrt(4_800_000 / Math.max(1, W * H)));
+		const k = Math.min(edgeScale, pixelScale);
 		W = Math.max(8, Math.round(W * k));
 		H = Math.max(8, Math.round(H * k));
-		const sourceScale = Math.min(1, 1800 / Math.max(iw, ih, 1));
+		const sourceScale = Math.min(1, 2600 / Math.max(iw, ih, 1));
 		if (sourceScale < 1) {
 			quad = quad.map((p) => [p[0] * sourceScale, p[1] * sourceScale]);
 			iw = Math.max(2, Math.round(iw * sourceScale));
@@ -1709,6 +1725,26 @@ export const HEFT = (() => {
 			if (t < 0.35) t = t * 0.85;
 			return clamp(t * 255);
 		};
+		// S/W-Schwelle aus dem tatsächlichen Scan ableiten. Das bewahrt hellen
+		// Bleistift und blasse Schrift besser als der alte feste Bereich 110…200.
+		let bwLow = 110, bwSpan = 90;
+		if (mode === "bw") {
+			const hist = new Uint32Array(256);
+			let samples = 0;
+			for (let sy = 0; sy < h; sy += 4) for (let sx = 0; sx < w; sx += 4) {
+				const i = (sy * w + sx) * 4;
+				const base = Math.max(36, sampleMap(bg, sx * kx, sy * ky));
+				const rr = clamp(px[i] * 255 / base), gg = clamp(px[i + 1] * 255 / base), bb = clamp(px[i + 2] * 255 / base);
+				hist[docTone((rr * 77 + gg * 150 + bb * 29) >> 8)]++; samples++;
+			}
+			const percentile = (p) => {
+				let acc = 0, target = samples * p;
+				for (let n = 0; n < 256; n++) { acc += hist[n]; if (acc >= target) return n; }
+				return 255;
+			};
+			const dark = percentile(.01), light = percentile(.92), span = light - dark;
+			if (span >= 48) { bwLow = clamp(dark + span * .12); bwSpan = Math.max(55, span * .62); }
+		}
 		for (let y = 0; y < h; y++) {
 			const fy = y * ky;
 			for (let x2 = 0; x2 < w; x2++) {
@@ -1727,7 +1763,7 @@ export const HEFT = (() => {
 					let o;
 					if (mode === "bw") {
 						// Smoothstep 110…200 — Text schwarz, Papier weiß, klar erkennbar
-						let t = (v - 110) / 90;
+						let t = (v - bwLow) / bwSpan;
 						t = t < 0 ? 0 : t > 1 ? 1 : t;
 						o = clamp(255 * t * t * (3 - 2 * t));
 					} else {
@@ -1765,27 +1801,59 @@ export const HEFT = (() => {
 		x.drawImage(cv, -cv.width / 2, -cv.height / 2);
 		return c;
 	}
+	// Prüft das fertige, entzerrte Bild statt nur den Live-Stream. Die Kennzahl
+	// ist bewusst ein Hinweis, kein Blocker: schlechte Lichtverhältnisse dürfen
+	// weiterhin als Foto gesichert und später manuell bearbeitet werden.
+	function scanOutputQuality(cv) {
+		const max = 360, k = Math.min(1, max / Math.max(cv.width, cv.height));
+		const w = Math.max(2, Math.round(cv.width * k)), h = Math.max(2, Math.round(cv.height * k));
+		const probe = document.createElement("canvas"); probe.width = w; probe.height = h;
+		const x = probe.getContext("2d", { willReadFrequently: true });
+		x.drawImage(cv, 0, 0, w, h);
+		const px = x.getImageData(0, 0, w, h).data;
+		let sum = 0, sum2 = 0, lap = 0;
+		const lum = new Uint8Array(w * h);
+		for (let i = 0; i < lum.length; i++) {
+			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
+			lum[i] = v; sum += v; sum2 += v * v;
+		}
+		for (let y = 1; y < h - 1; y++) for (let x2 = 1; x2 < w - 1; x2++) {
+			const i = y * w + x2;
+			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - w] - lum[i + w]);
+		}
+		const contrast = Math.sqrt(Math.max(0, sum2 / lum.length - Math.pow(sum / lum.length, 2)));
+		const sharp = lap / Math.max(1, (w - 2) * (h - 2));
+		return { sharp, contrast, soft: sharp < 5.5, flat: contrast < 13 };
+	}
 	// Ein Scan: Rohbild → entzerren → Filter → Drehung → fertige Scan-Seite
 	// tick() gibt dem Browser zwischen den schweren Schritten Luft (sonst „eingefroren“)
 	const tick = () => new Promise((r) => setTimeout(r, 0));
-	async function processShot(sh) {
-		// Rohbild je Scan nur einmal dekodieren — Filter/Drehen/Ecken nutzen denselben Cache.
+	async function processShot(sh, snapshot) {
+		// Jeder Lauf verarbeitet einen unveränderlichen Schnappschuss von Ecken,
+		// Filter und Drehung. So kann ein älterer Async-Lauf nie ein neueres
+		// Bearbeitungsergebnis überschreiben.
 		const img = sh.img || await loadImg(sh.src);
 		sh.img = img;
 		sh.w = img.naturalWidth || sh.w;
 		sh.h = img.naturalHeight || sh.h;
-		// Ein vorhandener automatisch oder manuell bestimmter Zuschnitt bleibt stabil;
-		// nur ein fehlender/defekter Rahmen wird neu erkannt.
-		const needDetect = !Array.isArray(sh.quad) || sh.quad.length !== 4;
-		if (needDetect) sh.quad = detectQuad(img, sh.w, sh.h);
+		let quad = snapshot && snapshot.quad ? snapshot.quad.map((p) => p.slice()) : sh.quad;
+		if (!Array.isArray(quad) || quad.length !== 4) {
+			quad = detectQuad(img, sh.w, sh.h);
+			if (!snapshot) sh.quad = quad;
+		}
+		const mode = (snapshot && snapshot.mode) || sh.mode || "color";
+		const rot = snapshot && snapshot.rot != null ? snapshot.rot : (sh.rot || 0);
 		await tick();
-		let cv = warpPerspective(img, sh.w, sh.h, sh.quad);
+		let cv = warpPerspective(img, sh.w, sh.h, quad);
 		await tick();
-		applyScanMode(cv, sh.mode || "color");
+		applyScanMode(cv, mode);
 		await tick();
-		if (sh.rot) cv = rotateCanvas(cv, sh.rot);
-		// JPEG etwas höher — Scan-Text bleibt schärfer
-		sh.out = { dataUrl: cv.toDataURL("image/jpeg", 0.92), w: cv.width, h: cv.height };
+		if (rot) cv = rotateCanvas(cv, rot);
+		// Ein einziger finaler JPEG-Export: Rohaufnahme und Zwischenpipeline bleiben
+		// verlustfrei, damit Textkanten nicht durch doppelte Kompression ausfransen.
+		const out = { dataUrl: cv.toDataURL("image/jpeg", 0.96), w: cv.width, h: cv.height, quality: scanOutputQuality(cv) };
+		if (!snapshot || snapshot.commit !== false) sh.out = out;
+		return out;
 	}
 
 	// ---------- Scanner-Overlay: Kamera, Live-Prüfung, Aufnahme ----------
@@ -1840,6 +1908,9 @@ export const HEFT = (() => {
 			// iOS/Safari: autoplay allein reicht oft nicht — sonst bleibt videoWidth=0 und der Auslöser tut nichts
 			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
 			startLiveQuality(video, ui);
+			const track = stream.getVideoTracks && stream.getVideoTracks()[0];
+			if (track) track.addEventListener("ended", () => showCameraStopped(ui), { once: true });
+			video.addEventListener("error", () => showCameraStopped(ui), { once: true });
 		} catch (e) {
 			// Keine Kamera / keine Freigabe → Fallback: Fotos auswählen (mit capture-Hint)
 			console.warn("Heft: Kamera nicht verfügbar", e);
@@ -1851,6 +1922,17 @@ export const HEFT = (() => {
 				if (shut) shut.disabled = true;
 			}
 		}
+	}
+	function showCameraStopped(owner) {
+		if (!owner || scanUI !== owner || !owner.wrap.isConnected) return;
+		stopLiveQuality();
+		try { if (owner.stream) owner.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+		owner.stream = null;
+		const stage = owner.wrap.querySelector(".heft-scan-stage");
+		if (stage) stage.innerHTML = '<div class="heft-scan-nocam"><p>Kameraverbindung wurde unterbrochen.</p><button type="button" data-hescanpick="1">Fotos auswählen…</button><small>Bereits aufgenommene Scans bleiben erhalten.</small></div>';
+		const shut = owner.wrap.querySelector(".heft-scan-shutter");
+		if (shut) shut.disabled = true;
+		if (U.toast) U.toast("Kamera wurde beendet — du kannst Fotos auswählen.", "error");
 	}
 	function closeScanner() {
 		if (!scanUI) return;
@@ -1885,12 +1967,20 @@ export const HEFT = (() => {
 		const found = quadArea(quad) < sw * sh * 0.96; // Vollbild-Fallback = nichts erkannt
 		return { quad, found, mean, contrast, sharp, sw, sh };
 	}
-	function setLiveGuide(info) {
+	function setLiveGuide(info, video) {
 		if (!scanUI) return;
+		const stage = scanUI.wrap.querySelector(".heft-scan-stage");
 		const guide = scanUI.wrap.querySelector(".heft-scan-guide polygon");
 		const label = scanUI.wrap.querySelector("[data-hescanquality]");
-		if (!guide || !label) return;
-		const toPct = (p) => (p[0] / info.sw * 100).toFixed(1) + "," + (p[1] / info.sh * 100).toFixed(1);
+		if (!stage || !guide || !label || !video) return;
+		// Das Video kann innerhalb der Bühne Letterboxing haben. Der Rahmen wird
+		// deshalb auf das reale Video-Rechteck statt auf die gesamte Bühne gemappt.
+		const sr = stage.getBoundingClientRect(), vr = video.getBoundingClientRect();
+		const left = (vr.left - sr.left) / Math.max(1, sr.width) * 100;
+		const top = (vr.top - sr.top) / Math.max(1, sr.height) * 100;
+		const width = vr.width / Math.max(1, sr.width) * 100;
+		const height = vr.height / Math.max(1, sr.height) * 100;
+		const toPct = (p) => (left + p[0] / info.sw * width).toFixed(1) + "," + (top + p[1] / info.sh * height).toFixed(1);
 		guide.setAttribute("points", info.quad.map(toPct).join(" "));
 		const lightOK = info.mean >= 62 && info.mean <= 235;
 		const sharpOK = info.sharp >= 8;
@@ -1911,7 +2001,7 @@ export const HEFT = (() => {
 		const check = () => {
 			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
 			try {
-				const ready = setLiveGuide(liveQualityFrame(video));
+				const ready = setLiveGuide(liveQualityFrame(video), video);
 				if (!ready) {
 					// Erst wenn das Blatt den Rahmen wieder verlassen hat, darf Auto für die
 					// nächste Seite neu scharf sein — verhindert Duplikate bei ruhig liegendem Blatt.
@@ -1983,6 +2073,7 @@ export const HEFT = (() => {
 			// Filter sofort anwenden (nicht erst bei Übernehmen) — sonst wirken die Chips „tot“
 			if (scanUI.edit) {
 				scanUI.edit.mode = d.hescanmode;
+				scanUI.edit.dirty = true;
 				scanUI.edit.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === scanUI.edit.mode));
 				liveReprocessEdit();
 			}
@@ -1990,6 +2081,7 @@ export const HEFT = (() => {
 		else if (d.hescanrot) {
 			if (scanUI.edit) {
 				scanUI.edit.rot = (scanUI.edit.rot + 1) % 4;
+				scanUI.edit.dirty = true;
 				const rb = scanUI.edit.el.querySelector("[data-hescanrot]");
 				if (rb) rb.textContent = "⟳ Drehen" + (scanUI.edit.rot ? " (" + (scanUI.edit.rot * 90) + "°)" : "");
 				liveReprocessEdit();
@@ -2008,10 +2100,16 @@ export const HEFT = (() => {
 		if (!isAuto) { owner.autoArmed = false; owner.liveStable = 0; owner.autoCooldown = Date.now() + 1800; }
 		const video = owner.wrap.querySelector("video");
 		if (!video) return;
+		// Sperre SOFORT setzen — nicht erst nach dem await. Sonst konnte ein zweiter
+		// Tastendruck oder der Auto-Scan-Timer während des video.play()-Awaits eine
+		// zweite, parallele Aufnahme auslösen (owner.busy war bis dahin noch false).
+		setScanBusy(true, "Kamera wird vorbereitet…");
 		// Video noch nicht bereit (häufig auf iOS, wenn play() noch nicht durch ist)
 		if (!video.videoWidth || !video.videoHeight) {
 			try { await video.play(); } catch { /* ignore */ }
+			if (scanUI !== owner) return;
 			if (!video.videoWidth) {
+				setScanBusy(false);
 				if (U.toast) U.toast("Kamera startet noch — kurz warten und erneut tippen", "error");
 				return;
 			}
@@ -2019,11 +2117,13 @@ export const HEFT = (() => {
 		setScanBusy(true, "Aufnahme wird aufbereitet…");
 		try {
 			// Bei sehr großen Kamera-Streams begrenzen: spart Speicher ohne sichtbaren Textverlust.
-			const cap = 2048, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
+			const cap = 2400, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
 			const c = document.createElement("canvas");
 			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
 			c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
-			await addRawScan(c.toDataURL("image/jpeg", 0.92), c.width, c.height, owner);
+			// PNG nur als kurzlebender Rohpuffer; erst processShot exportiert einmal
+			// mit hoher JPEG-Qualität. Das verhindert doppelte Kompressionsartefakte.
+			await addRawScan(c.toDataURL("image/png"), c.width, c.height, owner);
 		} catch (e) {
 			console.warn("Heft: Scan fehlgeschlagen", e);
 			if (U.toast) U.toast("Scan fehlgeschlagen", "error");
@@ -2037,7 +2137,8 @@ export const HEFT = (() => {
 		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
 		// Auto-Zuschnitt bleibt aktiv. detectQuad() gibt bei unsicherer Erkennung
 		// das vollständige Bild zurück, statt einen fragwürdigen Zuschnitt zu erzwingen.
-		const sh = { src, w: iw, h: ih, quad: detectQuad(img, iw, ih), mode: "color", rot: 0, out: null, img };
+		const quad = detectQuad(img, iw, ih);
+		const sh = { src, w: iw, h: ih, quad, autoCrop: quadArea(quad) < iw * ih * 0.96, mode: "color", rot: 0, out: null, img };
 		await processShot(sh);
 		if (scanUI !== owner || !sh.out) return;
 		owner.shots.push(sh);
@@ -2050,8 +2151,11 @@ export const HEFT = (() => {
 		// out kann null sein, wenn die Aufbereitung fehlschlug — dann Rohbild zeigen
 		strip.innerHTML = scanUI.shots.map((sh, i) => {
 			const src = (sh.out && sh.out.dataUrl) || sh.src;
+			const quality = sh.out && sh.out.quality;
+			const note = !sh.autoCrop ? "Vollbild" : (quality && quality.soft ? "Weich" : (quality && quality.flat ? "Kontrast" : ""));
 			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
-				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span></button>';
+				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span>' +
+				(note ? '<small>' + note + '</small>' : "") + '</button>';
 		}).join("");
 		strip.scrollLeft = strip.scrollWidth;
 		const ready = scanUI.shots.filter((sh) => sh.out && sh.out.dataUrl);
@@ -2072,7 +2176,7 @@ export const HEFT = (() => {
 			setScanBusy(true, "Fotos werden aufbereitet…");
 			for (const f of files) {
 				try {
-					const im = await fileToImageData(f, 2048);
+					const im = await fileToImageData(f, 2400, "image/png");
 					if (scanUI !== owner) return;
 					await addRawScan(im.src, im.w, im.h, owner);
 				} catch (e) {
@@ -2102,20 +2206,24 @@ export const HEFT = (() => {
 		if (!ed || !owner) return;
 		const sh = owner.shots[ed.i];
 		if (!sh) return;
-		sh.quad = ed.quad.map((p) => p.slice());
-		sh.mode = ed.mode;
-		sh.rot = ed.rot;
+		const snapshot = { quad: ed.quad.map((p) => p.slice()), mode: ed.mode, rot: ed.rot, commit: false };
+		sh.quad = snapshot.quad.map((p) => p.slice());
+		sh.mode = snapshot.mode;
+		sh.rot = snapshot.rot;
+		// Das Vollbild-/Zuschnitt-Label im Scan-Streifen muss den zuletzt vom Nutzer
+		// gewählten Zuschnitt widerspiegeln, nicht nur die allererste Auto-Erkennung.
+		sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
 		const seq = ++liveSeq;
 		if (!quiet) setScanBusy(true, "Filter wird angewendet…");
 		try {
-			await processShot(sh);
-			// Scanner geschlossen/gewechselt oder neuere Aktion: Ergebnis nicht mehr in alte UI schreiben.
+			const out = await processShot(sh, snapshot);
+			// Scanner geschlossen/gewechselt oder neuere Aktion: ein älterer Lauf darf
+			// weder Vorschau noch Export-Ergebnis überschreiben.
 			if (scanUI !== owner || seq !== liveSeq) return;
+			sh.out = out;
 			renderShots();
 			if (owner.edit && owner.edit.el === ed.el) {
 				ed.dirty = false;
-				// Im Ecken-Modus niemals auf die zugeschnittene Vorschau wechseln: das
-				// vollständige Bild samt allen vier Griffen bleibt unmittelbar editierbar.
 				if (!ed.cornerMode && sh.out) drawEditResult(sh);
 			}
 		} catch (e) {
@@ -2323,12 +2431,20 @@ export const HEFT = (() => {
 			sh.quad = ed.quad.map((p) => p.slice());
 			sh.mode = ed.mode;
 			sh.rot = ed.rot;
+			sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
 			// Ausstehende Eckbewegungen werden beim Übernehmen garantiert aus dem vollen
 			// Rohbild gerechnet — nie aus einem bereits zugeschnittenen Zwischenergebnis.
 			clearTimeout(editCommitT); editCommitT = 0;
 			if (!sh.out || ed.dirty) {
+				// Laufende Live-Aufbereitung entwerten und den sichtbaren Endstand einmal
+				// atomar rechnen, bevor „Fertig“ die Bearbeitung schließt.
+				const seq = ++liveSeq;
+				const snapshot = { quad: ed.quad.map((p) => p.slice()), mode: ed.mode, rot: ed.rot, commit: false };
 				setScanBusy(true, "Scan wird aufbereitet…");
-				try { await processShot(sh); ed.dirty = false; } catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
+				try {
+					const out = await processShot(sh, snapshot);
+					if (scanUI === owner && seq === liveSeq) { sh.out = out; ed.dirty = false; }
+				} catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
 				if (scanUI === owner) setScanBusy(false);
 			}
 		}
@@ -2765,6 +2881,11 @@ export const HEFT = (() => {
 		if (resizeFn) { window.removeEventListener("resize", resizeFn); resizeFn = null; }
 		if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
 		scrollFn = null;
+		if (pid) {
+			const closedPid = pid;
+			Object.keys(thumbs).forEach((k) => { if (k.startsWith(closedPid + ":")) delete thumbs[k]; });
+		}
+		Object.keys(imgCache).forEach((k) => { imgCache[k].src = ""; delete imgCache[k]; });
 		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = [];
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();

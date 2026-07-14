@@ -2198,7 +2198,7 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-scan-frame { position: absolute; inset: 7% 10%; border: 2px dashed rgba(255,255,255,.45);
 	border-radius: 12px; pointer-events: none; }
 /* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Aufnahme */
-.heft-scan-guide { position: absolute; inset: 4% 6%; width: 88%; height: 92%; pointer-events: none;
+.heft-scan-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
 	overflow: visible; transition: filter .16s ease; }
 .heft-scan-guide polygon { fill: rgba(245,185,70,.08); stroke: #f5b846; stroke-width: 1.3;
 	vector-effect: non-scaling-stroke; stroke-linejoin: round; transition: fill .16s ease, stroke .16s ease; }
@@ -2219,6 +2219,8 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-scan-shot img { border: none; border-radius: 0; }
 .heft-scan-shot span { position: absolute; left: 4px; bottom: 4px; font-size: 10px; font-weight: 700;
 	color: #fff; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: 6px; pointer-events: none; }
+.heft-scan-shot small { position: absolute; right: 4px; bottom: 4px; padding: 0 5px; border-radius: 6px;
+	background: rgba(183,124,42,.88); color: #fff; font-size: 9px; font-weight: 700; pointer-events: none; }
 .heft-scan-shot:hover { border-color: var(--accent); }
 .heft-scan-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
 	max-width: 86%; text-align: center; font-size: 12px; color: rgba(255,255,255,.75);
@@ -2550,6 +2552,74 @@ body.reduce-motion .heft-tray { animation: none; }
 	.row { min-height: 36px; }
 	#palette { padding-top: 6vh; padding-bottom: 70px; }
 	.palette-box { max-height: 76vh; }
+}
+
+/* ===========================================================================
+   Fokusmodus Karteikarten — beim Lernen keine Verwaltungsleiste und volle Bühne
+   =========================================================================== */
+/* Die Verwaltungsaktionen werden in render-anki.js im Lernmodus nicht mehr
+   erzeugt. Die globale Tab-Leiste verschwindet zusätzlich, damit besonders auf
+   kleinen Displays die Karte statt der Navigation im Fokus steht. */
+body:has(.anki-study-mode) #tabbar { display: none; }
+.anki-study-mode {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+	max-width: none;
+	padding: clamp(12px, 2.5vw, 28px) clamp(14px, 5vw, 72px) max(18px, env(safe-area-inset-bottom));
+	overflow: hidden;
+}
+.anki-study-mode .study-head {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	flex: 0 0 auto;
+	margin: 0 0 12px;
+	text-align: center;
+}
+.anki-study-mode .study-card {
+	width: min(100%, 920px);
+	min-height: 0;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	margin: 0 auto;
+	overflow: hidden;
+}
+.anki-study-mode .study-card .study-meta { flex: 0 0 auto; }
+.anki-study-mode .study-card .card-face {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: auto;
+	padding: clamp(18px, 4vw, 44px) clamp(8px, 3vw, 28px);
+	font-size: clamp(17px, 2.2vw, 22px);
+}
+.anki-study-mode .study-card .card-face > * { width: 100%; }
+.anki-study-mode .study-card .grades,
+.anki-study-mode .study-card .modal-actions {
+	flex: 0 0 auto;
+	margin: 12px 0 0;
+}
+.anki-study-mode .study-card .grades button { min-height: 52px; }
+@media (max-width: 600px) {
+	.anki-study-mode {
+		padding: 10px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+	}
+	.anki-study-mode .study-head { justify-content: flex-start; margin-bottom: 6px; font-size: 11.5px; }
+	.anki-study-mode .study-keys { display: none; }
+	.anki-study-mode .study-card { justify-content: flex-start; }
+	.anki-study-mode .study-card .card-face { padding: 18px 4px; font-size: 17px; }
+	.anki-study-mode .study-card .grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+	.anki-study-mode .study-card .grades button { min-height: 50px; padding: 7px 4px; }
+	.anki-study-mode .study-card .modal-actions button { width: 100%; min-height: 48px; }
 }
 
 /* ===========================================================================
@@ -3185,4 +3255,17 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: 14px; }
 	.heft-chrome .heft-tray { top: 44px; }
 	.heft-chrome .heft-corner { top: 8px; }
+}
+
+/* Installierte iPadOS-PWA: Der sichere obere Bereich gehört optisch zum
+   Hintergrund und erhält trotzdem genügend Abstand für nicht überlappende UI. */
+@media (display-mode: standalone) and (pointer: coarse) {
+	#app {
+		padding-top: max(8px, env(safe-area-inset-top));
+		padding-bottom: max(8px, env(safe-area-inset-bottom));
+	}
+	body.density-compact #app {
+		padding-top: env(safe-area-inset-top) !important;
+		padding-bottom: env(safe-area-inset-bottom) !important;
+	}
 }
