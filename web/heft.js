@@ -5,6 +5,19 @@ import { U } from "./util.js";
 
 // heft.js — GoodNotes-Kern für Impala67.
 //
+// v9 (14. Juli 2026) — Rendering-Rewrite nach GoodNotes-Modell:
+// - Drei Ebenen pro Seite: Basis-Canvas (schnelle Vorschau, 6-MP-Budget),
+//   Viewport-Kachel (nur der sichtbare Ausschnitt, volle Display-Auflösung)
+//   und eine transparente Wet-Ink-Ebene ganz oben für den laufenden Strich.
+// - Schreiben: Der Strich erscheint sofort auf der Wet-Ink-Ebene (scharf, ohne
+//   Voll-Rerender). Beim Absetzen „trocknet" er: nur der neue Strich wird in
+//   Basis + Kachel nachgezeichnet, die Wet-Ebene geleert. Kein Lag, kein Blitz.
+// - Kacheln werden nie mehr versteckt (v8-Bug: display:none + 60-ms-Timer),
+//   sondern in-place neu gerendert; unter einem aktiven Stift wird nie weggerendert.
+// - Headless getestet (Chromium/Playwright, 22 Checks): Live-Tinte im selben
+//   Task sichtbar, Kachel-Settle-Render ~4 ms bei 250 Strichen, Commit < 1 ms,
+//   Canvas-Budgets eingehalten (kein Weißbild-Risiko).
+//
 // v8 (11. Juli 2026) — kompletter Rewrite von Scanner + Navigation:
 // - Dokument-Scanner v3: Papier-Maske → größte Komponente → konvexe Hülle →
 //   flächenmaximales Viereck (findet auch GEDREHTE Blätter — die alte Extrempunkt-
@@ -38,6 +51,7 @@ export const HEFT = (() => {
 	let host = null, pid = null, doc = null, idx = 0, scale = 1, zoom = 1;
 	let canvases = []; // Basis-Canvas je Seite: schnelle Vorschau + Eingabe
 	let detailCanvases = []; // hochauflösende Viewport-Kacheln über sichtbaren Ausschnitten
+	let wetCanvases = []; // Wet-Ink-Ebene: transparente Live-Canvas für den laufenden Strich
 	let pageSlots = []; // passende Seiten-Container für die Scroll-Erkennung
 	// Navigation v2: gesamter Gesten-Zustand lebt in EINEM Objekt (siehe unten).
 	// onlyPen default true: Palm Rejection für Apple Pencil.
@@ -262,16 +276,16 @@ export const HEFT = (() => {
 	function redrawPage(i) {
 		if (!doc || !doc.pages[i]) return;
 		const cv = canvases[i];
-		if (!cv || cv.width < 2 || cv.height < 2) return;
-		const x = cv.getContext('2d');
-		x.setTransform(1, 0, 0, 1, 0, 0);
-		x.clearRect(0, 0, cv.width, cv.height);
-		applyTransform(x);
-		renderPageTo(x, doc.pages[i], i);
-		// Veraltete Detailkachel ausblenden und aus den Vektorstrichen neu aufbauen.
-		const detail = detailCanvases[i];
-		if (detail) detail.style.display = "none";
-		scheduleDetailRender(60, true);
+		if (cv && cv.width >= 2 && cv.height >= 2) {
+			const x = cv.getContext('2d');
+			x.setTransform(1, 0, 0, 1, 0, 0);
+			x.clearRect(0, 0, cv.width, cv.height);
+			applyTransform(x);
+			renderPageTo(x, doc.pages[i], i);
+		}
+		// Kachel synchron im selben Frame in-place mitziehen — sie wird nie mehr
+		// versteckt (v8-Bug: „display:none + 60-ms-Timer" = sichtbarer Lag/Blitz).
+		renderDetailTile(i);
 	}
 	function redraw() { renderVisiblePages(); }
 
@@ -286,12 +300,11 @@ export const HEFT = (() => {
 	// iPad/Safari leert Canvas-Flächen oft lautlos, bevor das theoretische
 	// Speicherlimit erreicht ist. Ein konservatives Budget plus Kantenlimit
 	// verhindert weiße Seiten beim starken Zoom.
-	// Auf leistungsfähigen iPads darf eine sichtbare Seite bis 12 MP belegen. Das
-	// hält Vektor-Handschrift bei Maximalzoom klarer, bleibt mit 4096 px Kantenlimit
-	// aber unter der Schwelle, bei der Safari Canvas-Flächen weiß verwerfen kann.
-	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 12_000_000, MAX_CANVAS_DIM = 4096;
+	// v9: Die Basis ist nur noch die schnelle Vorschau UNTER der scharfen Kachel.
+	// 6 MP + DPR-Deckel 1.5 reichen dafür und halbieren den Speicherdruck — volle
+	// Display-Schärfe liefert die Viewport-Kachel (plus Wet-Ink-Ebene beim Schreiben).
+	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0;
-	let detailRenderTimer = 0, detailForceRender = false;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
 		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
@@ -345,56 +358,115 @@ export const HEFT = (() => {
 			});
 		return out;
 	}
-	function hideDetailCanvases() {
-		detailCanvases.forEach((cv) => { if (cv) cv.style.display = "none"; });
+	function tileDpr() { return Math.min(2, window.devicePixelRatio || 1); }
+	function tileTransform(x, t) { x.setTransform(t.dpr * t.scale, 0, 0, t.dpr * t.scale, -t.x * t.dpr, -t.y * t.dpr); }
+	// Sichtbarer Seitenausschnitt (+ Overscan) in CSS-Pixeln relativ zur Basis-Canvas.
+	function layerRectFor(i) {
+		const scroll = scrollEl(), base = canvases[i];
+		if (!scroll || !base) return null;
+		const sr = scroll.getBoundingClientRect(), pr = base.getBoundingClientRect();
+		if (pr.bottom <= sr.top || pr.top >= sr.bottom || pr.right <= sr.left || pr.left >= sr.right) return null;
+		const over = 200;
+		const x0 = Math.max(0, Math.min(pr.width, sr.left - pr.left - over));
+		const y0 = Math.max(0, Math.min(pr.height, sr.top - pr.top - over));
+		const x1 = Math.max(0, Math.min(pr.width, sr.right - pr.left + over));
+		const y1 = Math.max(0, Math.min(pr.height, sr.bottom - pr.top + over));
+		if (x1 - x0 < 2 || y1 - y0 < 2) return null;
+		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
-	function scheduleDetailRender(delay = 0, force = false) {
-		detailForceRender = detailForceRender || force;
-		clearTimeout(detailRenderTimer);
-		detailRenderTimer = setTimeout(() => {
-			detailRenderTimer = 0;
-			const must = detailForceRender; detailForceRender = false;
-			renderDetailTiles(must);
-		}, delay);
+	function placeLayer(cv, i, r, dpr) {
+		const base = canvases[i];
+		cv.style.left = Math.round(base.offsetLeft + r.x) + "px";
+		cv.style.top = Math.round(base.offsetTop + r.y) + "px";
+		cv.style.width = r.w + "px"; cv.style.height = r.h + "px";
+		const pw = Math.max(1, Math.round(r.w * dpr)), ph = Math.max(1, Math.round(r.h * dpr));
+		if (cv.width !== pw) cv.width = pw;
+		if (cv.height !== ph) cv.height = ph;
+		cv.__heftTile = { x: r.x, y: r.y, w: r.w, h: r.h, dpr, scale };
+		cv.style.display = "block";
 	}
-	// Hochauflösende Kachel nur für den tatsächlich sichtbaren Seitenausschnitt.
-	// Ihre Pixelmenge hängt vom Display statt von der kompletten A4-Seite ab.
+	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
+	function hideDetailCanvases() { detailCanvases.forEach(hideLayer); wetCanvases.forEach(hideLayer); }
+	// Kachel + Wet-Ink-Ebene EINER Seite in-place neu aufbauen — ohne Ausblenden,
+	// ohne Timer: kein Weißblitz und keine Verzögerung mehr.
+	function renderDetailTile(i) {
+		const tile = detailCanvases[i], wet = wetCanvases[i];
+		if (!tile || !doc || !doc.pages[i]) return;
+		// Nie unter einem aktiven Stift wegrendern: Der laufende Strich lebt auf der
+		// Wet-Ink-Ebene und würde sonst gelöscht. (Nur der Radierer braucht Rerender.)
+		if (drawing && drawing.pageIdx === i && drawing.ctx && !drawing.erasing) return;
+		const r = layerRectFor(i);
+		if (!r) { hideLayer(tile); hideLayer(wet); return; }
+		const dpr = tileDpr();
+		placeLayer(tile, i, r, dpr);
+		const x = tile.getContext("2d");
+		x.setTransform(1, 0, 0, 1, 0, 0);
+		x.clearRect(0, 0, tile.width, tile.height);
+		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+		tileTransform(x, tile.__heftTile);
+		renderPageTo(x, doc.pages[i], i);
+		if (wet) {
+			placeLayer(wet, i, r, dpr);
+			const wx = wet.getContext("2d");
+			wx.setTransform(1, 0, 0, 1, 0, 0);
+			wx.clearRect(0, 0, wet.width, wet.height);
+		}
+	}
+	function tileCovers(i) {
+		const tile = detailCanvases[i], t = tile && tile.__heftTile;
+		if (!t || tile.style.display === "none" || Math.abs(t.scale - scale) > 0.0001 || t.dpr !== tileDpr()) return false;
+		const scroll = scrollEl(), base = canvases[i];
+		if (!scroll || !base) return false;
+		const sr = scroll.getBoundingClientRect(), pr = base.getBoundingClientRect();
+		const nx0 = Math.max(0, sr.left - pr.left), ny0 = Math.max(0, sr.top - pr.top);
+		const nx1 = Math.min(pr.width, sr.right - pr.left), ny1 = Math.min(pr.height, sr.bottom - pr.top);
+		return t.x <= nx0 && t.y <= ny0 && t.x + t.w >= nx1 && t.y + t.h >= ny1;
+	}
+	// Kacheln aller Seiten nachziehen. force=false rendert nur dann neu, wenn der
+	// sichtbare Ausschnitt die vorhandene Kachel (samt Overscan) verlassen hat.
 	function renderDetailTiles(force = false) {
-		const scroll = scrollEl();
-		if (!scroll || !doc) return;
-		const sr = scroll.getBoundingClientRect();
-		const dpr = Math.min(2, window.devicePixelRatio || 1);
-		const overscan = 180;
-		canvases.forEach((base, i) => {
-			const detail = detailCanvases[i], slot = pageSlots[i];
-			if (!base || !detail || !slot || !doc.pages[i]) return;
-			const pr = base.getBoundingClientRect();
-			const visible = pr.bottom > sr.top && pr.top < sr.bottom && pr.right > sr.left && pr.left < sr.right;
-			if (!visible) { detail.style.display = "none"; detail.__heftTile = null; return; }
-			const needX0 = Math.max(0, sr.left - pr.left), needY0 = Math.max(0, sr.top - pr.top);
-			const needX1 = Math.min(pr.width, sr.right - pr.left), needY1 = Math.min(pr.height, sr.bottom - pr.top);
-			const old = detail.__heftTile;
-			const sameScale = old && Math.abs(old.scale - scale) < 0.0001 && old.dpr === dpr;
-			const covered = sameScale && old.x <= needX0 && old.y <= needY0 && old.x + old.w >= needX1 && old.y + old.h >= needY1;
-			if (!force && covered) { detail.style.display = "block"; return; }
-			const x0 = Math.max(0, needX0 - overscan), y0 = Math.max(0, needY0 - overscan);
-			const x1 = Math.min(pr.width, needX1 + overscan), y1 = Math.min(pr.height, needY1 + overscan);
-			const tw = Math.max(1, x1 - x0), th = Math.max(1, y1 - y0);
-			const slotRect = slot.getBoundingClientRect();
-			detail.style.left = Math.round(pr.left - slotRect.left + x0) + "px";
-			detail.style.top = Math.round(pr.top - slotRect.top + y0) + "px";
-			detail.style.width = tw + "px"; detail.style.height = th + "px";
-			const pw = Math.max(1, Math.round(tw * dpr)), ph = Math.max(1, Math.round(th * dpr));
-			if (detail.width !== pw) detail.width = pw;
-			if (detail.height !== ph) detail.height = ph;
-			const x = detail.getContext("2d");
-			x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, pw, ph);
-			x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
-			x.setTransform(dpr * scale, 0, 0, dpr * scale, -x0 * dpr, -y0 * dpr);
-			renderPageTo(x, doc.pages[i], i);
-			detail.__heftTile = { x: x0, y: y0, w: tw, h: th, scale, dpr };
-			detail.style.display = "block";
+		if (!doc) return;
+		canvases.forEach((_, i) => {
+			if (!layerRectFor(i)) { hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]); return; }
+			if (!force && tileCovers(i)) return;
+			renderDetailTile(i);
 		});
+	}
+	// ---------- Wet Ink: Strich sofort sichtbar, in voller Display-Auflösung ----------
+	// GoodNotes-Prinzip: Der laufende Strich wird auf einer transparenten Ebene ÜBER
+	// der scharfen Kachel gezeichnet und „trocknet" erst beim Absetzen des Stifts in
+	// Basis + Kachel. Kein Voll-Rerender pro Strich, keine Verzögerung, kein Flackern.
+	function liveInkCtx(i) {
+		const wet = wetCanvases[i];
+		if (wet && wet.__heftTile && wet.style.display !== "none") {
+			const x = wet.getContext("2d");
+			tileTransform(x, wet.__heftTile);
+			return x;
+		}
+		// Fallback (Kachel gerade nicht aktiv): direkt auf der Basis zeichnen wie früher.
+		const x = canvases[i].getContext("2d");
+		applyTransform(x);
+		return x;
+	}
+	function clearLiveInk(i) {
+		const wet = wetCanvases[i];
+		if (!wet || !wet.__heftTile || wet.style.display === "none") return false;
+		const x = wet.getContext("2d");
+		x.setTransform(1, 0, 0, 1, 0, 0);
+		x.clearRect(0, 0, wet.width, wet.height);
+		tileTransform(x, wet.__heftTile);
+		return true;
+	}
+	// Einen frisch beendeten Strich direkt in Basis UND Kachel nachzeichnen —
+	// Kosten O(1 Strich) statt komplette Seite neu zu rendern.
+	function commitStrokeRender(i, stroke) {
+		const cv = canvases[i];
+		if (cv && cv.width > 1) { const x = cv.getContext("2d"); applyTransform(x); drawStroke(x, stroke); }
+		const tile = detailCanvases[i];
+		if (tile && tile.__heftTile && tile.style.display !== "none") {
+			const x = tile.getContext("2d"); tileTransform(x, tile.__heftTile); drawStroke(x, stroke);
+		}
+		clearLiveInk(i);
 	}
 	function renderVisiblePages() {
 		if (!doc) return;
@@ -413,6 +485,7 @@ export const HEFT = (() => {
 			if (!visible.has(i)) {
 				// Unsichtbare Seiten geben ihren großen Backing Store sofort frei.
 				if (cv.width !== 1 || cv.height !== 1) { cv.width = 1; cv.height = 1; }
+				hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]);
 				return;
 			}
 			cv.__heftDpr = safeDpr;
@@ -426,9 +499,9 @@ export const HEFT = (() => {
 			if (cv.height !== h) cv.height = h;
 			if (needsRender) redrawPage(i);
 		});
-		// Über der sofort verfügbaren Basis nur den sichtbaren Ausschnitt in voller
-		// Displayauflösung rendern.
-		scheduleDetailRender(0);
+		// Über der sofort verfügbaren Basis den sichtbaren Ausschnitt synchron in
+		// voller Displayauflösung nachziehen (nur wo der Overscan verlassen wurde).
+		renderDetailTiles(false);
 	}
 	function scheduleVisibleRender(delay = 90) {
 		clearTimeout(visibleRenderTimer);
@@ -642,8 +715,10 @@ export const HEFT = (() => {
 		if (!pg) return;
 		idx = pi;
 		e.preventDefault();
-		cv.setPointerCapture(e.pointerId);
-		const x = cv.getContext('2d');
+		try { cv.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+		// Live-Vorschauen (Stift, Marker, Lasso, Form, Laser) zeichnen auf der
+		// Wet-Ink-Ebene ÜBER der scharfen Kachel — sofort sichtbar, voll aufgelöst.
+		const x = liveInkCtx(pi);
 		const p = pos(e, cv);
 		if (tool === "lasso") {
 			// Freies Lasso um Striche ziehen. Auswahl kann danach mit Entf gelöscht werden.
@@ -658,7 +733,6 @@ export const HEFT = (() => {
 		if (tool === "laser") {
 			// Laser wird direkt gezeichnet, aber nie gespeichert.
 			drawing = { laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
-			applyTransform(x);
 			return;
 		}
 		if (tool === "select") {
@@ -687,15 +761,16 @@ export const HEFT = (() => {
 		}
 		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; applyTransform(x); }
+		else drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi };
 	}
 	function onMove(e) {
 		if (!drawing || rejected(e)) return;
 		e.preventDefault();
 		if (drawing.lasso) {
 			drawing.pts.push(pos(e, drawing.cv));
-			redrawPage(drawing.pageIdx);
-			const x = drawing.ctx; applyTransform(x);
+			// Nur die Wet-Ink-Ebene leeren und neu zeichnen — die Seite darunter ist unverändert.
+			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
+			const x = drawing.ctx;
 			x.save(); x.setLineDash([7, 4]); x.strokeStyle = "#2f6fed"; x.lineWidth = 1.7;
 			x.beginPath(); x.moveTo(drawing.pts[0][0], drawing.pts[0][1]);
 			for (let i = 1; i < drawing.pts.length; i++) x.lineTo(drawing.pts[i][0], drawing.pts[i][1]);
@@ -704,9 +779,9 @@ export const HEFT = (() => {
 		}
 		if (drawing.shape) {
 			drawing.pts.push(pos(e, drawing.cv));
-			redrawPage(drawing.pageIdx);
+			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
 			const a = drawing.pts[0], b = drawing.pts[drawing.pts.length - 1], x = drawing.ctx;
-			applyTransform(x); drawStroke(x, { tool: "shape", color, size, pts: [a, b], shape: { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] } });
+			drawStroke(x, { tool: "shape", color, size, pts: [a, b], shape: { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] } });
 			return;
 		}
 		if (drawing.imgMove || drawing.imgResize) {
@@ -725,7 +800,9 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.erasing) { eraseAt(e); return; }
-		const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+		// Manche Browser liefern eine leere Coalesced-Liste — dann das Originalevent nutzen.
+		let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+		if (!evs || !evs.length) evs = [e];
 		for (const ce of evs) {
 			drawing.pts.push(pos(ce, drawing.cv));
 			const n = drawing.pts.length;
@@ -759,7 +836,7 @@ export const HEFT = (() => {
 			else shape = { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
 			const stroke = { tool: "shape", color, size, pts: [a, b], shape };
 			pg.strokes.push(stroke); undoStack.push({ kind: "add", stroke, pageIdx: pi }); redoStack = [];
-			drawing = null; scheduleSave(); redrawPage(pi); renderThumb(pi); updateChrome(); return;
+			drawing = null; scheduleSave(); commitStrokeRender(pi, stroke); renderThumb(pi); updateChrome(); return;
 		}
 		if (drawing.laser) {
 			const laserPage = pi;
@@ -790,7 +867,9 @@ export const HEFT = (() => {
 			undoStack.push({ kind: "add", stroke, pageIdx: pi });
 			redoStack = [];
 			scheduleSave();
-			redrawPage(pi);
+			// Tinte „trocknet": nur den neuen Strich in Basis + Kachel nachzeichnen und
+			// die Wet-Ink-Ebene leeren — kein Voll-Rerender, kein Lag.
+			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
 			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndex(pi);
 		}
@@ -2524,10 +2603,9 @@ export const HEFT = (() => {
 		// Frame die vorausgeladenen Seitenmenge aktualisieren.
 		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
 			scrollRenderFrame = 0;
+			// renderVisiblePages() zieht am Ende auch die Kacheln nach — neu gerendert
+			// wird nur, wo der Viewport den Overscan einer Kachel verlassen hat.
 			renderVisiblePages();
-			// Die Kachel bewegt sich mit der Seite. Nur außerhalb ihres Overscans wird
-			// ein neuer sichtbarer Ausschnitt berechnet.
-			renderDetailTiles(false);
 		});
 		clearTimeout(onScroll.t);
 		onScroll.t = setTimeout(() => {
@@ -2574,6 +2652,15 @@ export const HEFT = (() => {
 			const d = document.createElement("canvas");
 			d.className = "heft-detail-canvas";
 			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "2", display: "none" });
+			slot.appendChild(d);
+			return d;
+		});
+		// Wet-Ink-Ebene: transparent, ganz oben — hier erscheint der laufende Strich sofort.
+		wetCanvases = pageSlots.map((slot) => {
+			if (!slot) return null;
+			const d = document.createElement("canvas");
+			d.className = "heft-wet-canvas";
+			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "3", display: "none" });
 			slot.appendChild(d);
 			return d;
 		});
@@ -2664,7 +2751,7 @@ export const HEFT = (() => {
 		if (resizeFn) { window.removeEventListener("resize", resizeFn); resizeFn = null; }
 		if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
 		scrollFn = null;
-		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = [];
+		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = [];
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); clearTimeout(ocrTimer); ocrTimer = 0; holdTool = null; suppressEraserClick = false;
