@@ -129,13 +129,16 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* iPadOS zeichnet die Fläche außerhalb der App-Box aus dem Dokument-Hintergrund.
-   Damit die Home-Indicator-Safe-Area nie als heller Streifen erscheint, teilen
-   html, body und die App immer dieselbe Theme-Fläche. */
-html, body { height: 100%; background: var(--panel-solid); }
+/* iPadOS zeichnet die Flaeche ausserhalb der App-Box aus dem Dokument-Hintergrund.
+   Der fruehere Versuch setzte die Hintergrundfarbe auf html/body, wurde aber
+   von der folgenden body-Regel (gleiche Spezifitaet, spaeter im Code) sofort
+   wieder ueberschrieben -- der Streifen blieb sichtbar. Jetzt gibt es nur noch
+   EINE body-Hintergrundregel, und ein fest positionierter Fuellstreifen deckt
+   die Home-Indicator-Safe-Area unabhaengig von Layout-Eigenheiten zuverlaessig ab. */
+html, body { height: 100%; background: var(--bg0); }
 @media (display-mode: standalone), (pointer: coarse) {
-	html, body { min-height: 100dvh; background: var(--panel-solid); }
-	#app { min-height: 100dvh; background: var(--panel-solid); }
+	html, body { min-height: 100dvh; }
+	#app { min-height: 100dvh; }
 }
 
 body {
@@ -144,6 +147,18 @@ body {
 	color: var(--text);
 	background: var(--bg0);
 	overflow: hidden;
+}
+/* Malt die Safe-Area unter dem Home-Indicator aktiv mit der App-Hintergrundfarbe,
+   statt sich auf vh/dvh-Layoutberechnungen einzelner Container zu verlassen.
+   pointer-events: none, damit darunterliegende Klicks nie blockiert werden. */
+body::after {
+	content: "";
+	position: fixed;
+	left: 0; right: 0; bottom: 0;
+	height: env(safe-area-inset-bottom, 0px);
+	background: var(--bg0);
+	z-index: 2000;
+	pointer-events: none;
 }
 
 /* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
