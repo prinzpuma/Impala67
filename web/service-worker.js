@@ -47,9 +47,9 @@
 // v43: Precache darf nicht an optionalen Dateien scheitern. Fehlende Favicon-
 //       oder Release-Metadaten verhinderten mit cache.addAll() die Aktivierung
 //       des gesamten Workers und ließen Chrome auf einem alten Cache stehen.
-// v44: iPad-Arbeitsflaeche randlos — Sidebar und KI-Chat reichen bis zu den
-//       unteren Displayecken; neuer Cache-Schluessel erzwingt das CSS-Update.
-const CACHE = "impala67-v44";
+// v45: !important Flag für #app Padding und Gap im iPad-Querformat ergänzt,
+//       damit die Ränder tatsächlich randlos überschrieben werden.
+const CACHE = "impala67-v45";
 
 const APP_FILES = [
 	"./",

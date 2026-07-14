@@ -35,8 +35,8 @@ body.density-compact #sidebar {
 	#app {
 		height: 100dvh;
 		min-height: 100dvh;
-		padding: 0;
-		gap: 0;
+		padding: 0 !important;
+		gap: 0 !important;
 		grid-template-columns: 220px minmax(0, 1fr) 320px;
 	}
 	#sidebar, #mainWrap, #panel {
@@ -44,8 +44,11 @@ body.density-compact #sidebar {
 		border-radius: 0;
 		border-top: 0;
 		border-bottom: 0;
+		border-left: 0;
+		border-right: 0;
 	}
-	#sidebar { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+	#sidebar { border-right: 1px solid var(--edge-soft); padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+	#panel { border-left: 1px solid var(--edge-soft); }
 	#panel > #chatForm { margin-bottom: max(10px, env(safe-area-inset-bottom)) !important; }
 	body.density-compact #panel { top: 0; right: 0; bottom: 0; }
 }
