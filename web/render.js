@@ -34,14 +34,16 @@ function pageIconHtml(pg, fallback) {
 // während des Tippens zu überspringen (Editor besitzt dann die Live-Ansicht).
 function isEditingBlock() {
 	const ae = document.activeElement;
-	return !!(ae && ae.classList && ae.classList.contains("blk-input"));
+	return !!(ae && ((ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit"))) ||
+		(ae.isContentEditable && ae.closest && ae.closest(".block-editor"))));
 }
 
 // Fokus-Ziele, bei denen ein Neuaufbau von #main den Cursor/die Eingabe zerstören
 // würde (Titel, Filter, Token-Felder, Block-/DB-Zellen-Editor).
 const PROTECTED_FOCUS_IDS = new Set(["pageTitle", "inpWsName", "inpNotionToken", "inpNotionPage", "libFilter", "ankiSearch"]);
 function isProtectedFocus(ae) {
-	return !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || (ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("db-cell"))));
+	return !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || (ae.isContentEditable && ae.closest && ae.closest(".block-editor")) || (ae.classList &&
+		(ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit") || ae.classList.contains("db-cell"))));
 }
 
 // render.js — UI-Aufbau im Notion-Stil: einklappbare Sidebar (Workspaces/Seiten
@@ -79,6 +81,14 @@ function onStateChange(type, ev) {
 	// Reiner Content-Patch: Editor besitzt die Live-Ansicht — Sidebar/Tabs/Chat
 	// neu bauen wäre O(Seitenbaum + Chat-Markdown/Math) ohne sichtbaren Gewinn.
 	if (type === "pageUpdate" && p.patch && Object.keys(p.patch).length === 1 && "content" in p.patch) {
+		// Editor-eigener Autosave: sein DOM/Scroll ist bereits konsistent (der
+		// Block-Editor hat sich nach jeder Änderung selbst neu gezeichnet). dispatch()
+		// feuert dieses Event erst NACH dem asynchronen IndexedDB-Write, also oft in
+		// einem Moment, in dem der Fokus kurz nicht in einem Textfeld liegt (z.B.
+		// nach Undo mit reiner Blockauswahl). isEditingBlock() hielt das früher
+		// fälschlich für eine externe Änderung und baute #main (inkl. .page-scroll)
+		// komplett neu auf — der frische Scroll-Container startete dann immer bei 0.
+		if (p.viaEditor) return;
 		if (isEditingBlock()) return;
 		// Externe Content-Änderung der geöffneten Seite (z.B. KI-Tool) → nur Main
 		if (p.id === S.currentPageId && S.view === "page") {
@@ -294,6 +304,13 @@ function renderSidebar() {
 	// Seitenbaum im Home-Tab: Unterstapel anlegen, ein-/ausklappen, umbenennen.
 	if (S.view === "anki") {
 		tree.innerHTML = deckTreeHtml();
+		// Wie Seiten-⋯: nach dem Rebuild fixed positionieren, sonst clippt #tree.
+		if (S.deckMenuOpenName) {
+			const name = S.deckMenuOpenName;
+			const anchor = tree.querySelector('[data-deckmenu="' + CSS.escape(name) + '"]');
+			const menu = tree.querySelector('[data-deckmenu-panel="' + CSS.escape(name) + '"]');
+			if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+		}
 		return;
 	}
 
@@ -441,8 +458,10 @@ function renderMain() {
 	// Wie in Notion: nur noch EINE, durchgehend bearbeitbare und angezeigte Ansicht —
 	// kein Moduswechsel mehr. Der Block-Editor (editor.js) ist immer aktiv.
 	main.innerHTML =
-		'<div class="page-meta">' +
-			'<div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
+		// Navigation gehört zur Seiten-Chrome oben links; die eigentliche Seite
+		// bleibt davon unabhängig als zentrierte Dokumentfläche ausgerichtet.
+		'<div class="page-chrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
+		'<div class="page-scroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
 				? '<div class="page-cover ' + (pg.coverImg ? "has-img" : "cover-" + pg.cover) + '"' + (pg.coverImg ? ' data-coverimg="' + U.esc(pg.coverImg) + '"' : "") + '><div class="cover-btns">' +
 					'<button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button>' +
@@ -452,19 +471,32 @@ function renderMain() {
 				'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + pageIconLabel(pg) + "</button>" +
 				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">＋ Cover</button>' : "") +
 			"</div>" +
-			'<input id="pageTitle" value="' + U.esc(pg.title) + '" autocomplete="off">' +
+			// Ein mehrzeilig wachsender Titel wie in Notion – ein <input> würde lange
+			// Seitennamen zwangsläufig abschneiden.
+			'<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">' + U.esc(pg.title) + "</textarea>" +
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.db ? dbTableHtml(pg) : "") +
-		'<div class="editor-wrap"><div id="blockEditor" class="block-editor"></div></div>' +
+		'<div class="editor-wrap"><div id="blockEditor" class="block-editor"></div></div></div>' +
 		// src="about:blank" verhindert die Chrome-Warnung "Unsafe attempt to load URL file://..."
 		// (ein iframe ohne src lädt sonst die eigene Seiten-URL als Platzhalter).
 		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" src="about:blank" title="PDF"></iframe>' : "");
 	hydrateCovers(main);
-	if (typeof EDITOR !== "undefined") {
-		const beHost = U.el("blockEditor");
-		if (beHost) EDITOR.mount(beHost, pg.id);
+	// Titelhöhe direkt an den Inhalt koppeln. Der Listener gehört zur frisch
+	// gerenderten Seite und kann deshalb ohne globalen Zustand auskommen.
+	const titleInput = U.el("pageTitle");
+	if (titleInput) {
+		const fitTitle = () => {
+			titleInput.style.height = "auto";
+			titleInput.style.height = Math.max(44, titleInput.scrollHeight) + "px";
+		};
+		fitTitle();
+		titleInput.addEventListener("input", fitTitle);
 	}
+	const beHost = U.el("blockEditor");
+	// Ein Editor für alles: der WYSIWYG-Editor (editor.js) beherrscht alle
+	// Blockstrukturen — keine Legacy-Weiche mehr.
+	if (beHost) EDITOR.mount(beHost, pg.id);
 	if (S.pdfOpen && pg.pdfId) {
 		PDFS.urlFor(pg.pdfId).then((u) => {
 			const f = U.el("pdfFrame");

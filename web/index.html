@@ -41,7 +41,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=39">
+<link rel="stylesheet" href="styles.css?build=40">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f13">
@@ -145,6 +145,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="#1b1c1f"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="#1b1c1f"/></svg>
 					</button>
 				</div>
+				<button type="button" id="btnVoice" class="composer-tool" title="Spracheingabe starten (Alt+Leertaste)">🎙</button>
 				<button id="chatSubmit" type="submit" title="Senden" disabled>↑</button>
 			</div>
 			<div id="modelMenu" class="model-menu" hidden></div>
@@ -194,7 +195,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
-<script type="module" src="main.js?build=39"></script>
+<script type="module" src="main.js?build=40"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
@@ -215,7 +216,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=39", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=40", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

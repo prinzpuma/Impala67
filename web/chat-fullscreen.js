@@ -8,6 +8,7 @@ import { PDFS } from "./pdfs.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
 import { TABS } from "./tabs.js";
+import { VOICE } from "./voice.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderChat = (...args) => RENDER.renderChat(...args);
@@ -131,12 +132,16 @@ export async function sendChatMessage(text, type) {
 		const fallback = S.pendingAttachmentTarget === type && S.pendingPdf ? "Analysiere das angehängte PDF."
 			: S.pendingAttachmentTarget === type && S.pendingTextFile ? "Fasse die angehängte Datei zusammen."
 			: "Beschreibe das angehängte Bild.";
-		await AI.agent(text || fallback, type, (tool) => {
+		const answer = await AI.agent(text || fallback, type, (tool) => {
 			S.aiStatus = "⚙ " + tool + "…";
 			if (type === "side") renderChat();
 			else renderMainChatLog();
 		});
+		// Nur Antworten auf eine Spracheingabe vorlesen — getippte Chats bleiben still.
+		if (VOICE.consumeReply()) VOICE.speak(answer);
 	} catch (err) {
+		// Ein fehlgeschlagener Voice-Turn darf nicht die nächste Text-Antwort vorlesen.
+		VOICE.consumeReply();
 		const targetList = type === "side" ? S.sideChat : S.chat;
 		targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message });
 	}

@@ -34,6 +34,7 @@ import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { BOOT } from "./boot.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
+import { VOICE } from "./voice.js";
 
 // Übergangsweise alle Module an window binden,
 // damit alle bestehenden Zugriffe reibungslos funktionieren.
@@ -64,6 +65,7 @@ window.CHAT_FULLSCREEN = CHAT_FULLSCREEN;
 window.BOOT = BOOT;
 window.POPOVERS = POPOVERS;
 window.HEFT = HEFT;
+window.VOICE = VOICE;
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

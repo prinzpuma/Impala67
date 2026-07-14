@@ -6,6 +6,7 @@ import { RENDER } from "./render.js";
 import { APP } from "./app.js";
 import { SEARCH } from "./search.js";
 import { POPOVERS } from "./popovers.js";
+import { VOICE } from "./voice.js";
 
 const renderSidebar = (...args) => RENDER.renderSidebar(...args);
 const renderMain = (...args) => RENDER.renderMain(...args);
@@ -23,6 +24,7 @@ export function wireShortcuts() {
 	document.addEventListener("keydown", (e) => {
 		// Escape schließt: Befehls-Menü, Overlays (Einstellungen, Dialoge), das ⋯-Seitenmenü
 		if (e.key === "Escape") {
+			if (VOICE.isActive()) { VOICE.stop(); return; }
 			if (SEARCH.isPaletteOpen()) { SEARCH.closePalette(); return; }
 			const closed = POPOVERS.closeAll();
 			if (closed.model) RENDER.renderModelMenu();
@@ -33,6 +35,14 @@ export function wireShortcuts() {
 			const o = U.el("overlay");
 			if (o && !o.hidden) { closeOverlay(); return; }
 			if (S.pageMenuOpenId) { S.pageMenuOpenId = null; renderSidebar(); if (S.view === "library") renderMain(); return; }
+		}
+
+		// Alt+Leertaste startet/stoppt Spracheingabe für den kontextuellen Side-Chat.
+		// Kein Dauerhören: ein Durchgang, dann wird die vorhandene Chat-Pipeline genutzt.
+		if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "Space") {
+			e.preventDefault();
+			VOICE.toggle("side");
+			return;
 		}
 
 		// Strg/Cmd+K öffnet wie in Notion das Befehls-Menü (Suche + Aktionen)

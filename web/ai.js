@@ -403,6 +403,19 @@ export const AI = (() => {
 		const res = await request("/chat/completions", body);
 		return readStream(res, onDelta, onReasoning, markProduced);
 	}
+	// Gemini sendet bei Tool-Calls eine opaque Thought-Signatur zurück. Sie darf
+	// weder angezeigt noch verändert werden, muss aber mit der Assistant-Nachricht
+	// unverändert in den nächsten API-Request zurück. Der Kompatibilitäts-Layer
+	// verwendet je nach Modell direkte Felder oder extra_content.google.
+	function copyGeminiThoughtMetadata(source, target) {
+		if (cfg().providerId !== "google" || !source || !target) return;
+		const extra = source.extra_content;
+		const signature = source.thought_signature || source.thoughtSignature ||
+			(extra && extra.google && (extra.google.thought_signature || extra.google.thoughtSignature));
+		if (signature) target.thought_signature = signature;
+		if (extra && typeof extra === "object") target.extra_content = JSON.parse(JSON.stringify(extra));
+	}
+
 	// Einmal-Antwort normalisieren: Reasoning-Felder + Thought-Parts + Tags + Heuristik.
 	function finishMessage(data) {
 		const m = (data && data.choices && data.choices[0] && data.choices[0].message) || { role: "assistant", content: "" };
@@ -440,6 +453,8 @@ export const AI = (() => {
 					delta = (choice && choice.delta) || null;
 				} catch { continue; }
 				if (!delta) continue; // z.B. reine usage-Chunks
+				// Auch bei Streaming kann Gemini die Signatur am Delta oder Tool-Delta liefern.
+				copyGeminiThoughtMetadata(delta, msg);
 				markProduced();
 				const apiPiece = reasoningFrom(delta);
 				if (apiPiece) { apiReasoning += apiPiece; msg.reasoning = apiReasoning; emitReasoning(); }
@@ -458,6 +473,7 @@ export const AI = (() => {
 				for (const tc of delta.tool_calls || []) {
 					const i = tc.index || 0;
 					const slot = (msg.tool_calls[i] = msg.tool_calls[i] || { id: "", type: "function", function: { name: "", arguments: "" } });
+					copyGeminiThoughtMetadata(tc, slot);
 					if (tc.id) slot.id = tc.id;
 					if (tc.function && tc.function.name) slot.function.name += tc.function.name;
 					if (tc.function && tc.function.arguments) slot.function.arguments += tc.function.arguments;
@@ -469,11 +485,19 @@ export const AI = (() => {
 		msg._debugRawContent = rawContent;
 		return msg;
 	}
-	// Assistant-Nachricht für den API-Verlauf bereinigen: KEINE internen Felder
-	// (reasoning etc.) zurücksenden — unbekannte Felder sind eine 500er-Quelle.
+	// Assistant-Nachricht für den API-Verlauf bereinigen. Interne Anzeige-Felder
+	// (reasoning etc.) gehen nie zurück; Gemini-Thought-Signaturen sind dagegen
+	// Protokoll-Metadaten und müssen bei Tool-Folgeaufrufen erhalten bleiben.
 	function toApiMessage(msg) {
 		const out = { role: "assistant", content: msg.content || "" };
-		if (msg.tool_calls && msg.tool_calls.length) out.tool_calls = msg.tool_calls;
+		if (msg.tool_calls && msg.tool_calls.length) {
+			out.tool_calls = msg.tool_calls.map((call) => {
+				const clean = { ...call, function: call.function ? { ...call.function } : call.function };
+				copyGeminiThoughtMetadata(call, clean);
+				return clean;
+			});
+		}
+		copyGeminiThoughtMetadata(msg, out);
 		return out;
 	}
 

@@ -15,6 +15,7 @@ import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
 import { SHORTCUTS } from "./shortcuts.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
+import { VOICE } from "./voice.js";
 import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 
@@ -66,6 +67,18 @@ function mountFullChatDebugButton() {
 	button.title = "Letztes KI-Debugprotokoll in die Zwischenablage kopieren";
 	button.textContent = "Debugprotokoll";
 	head.appendChild(button);
+	// Der große Chat wird dynamisch gerendert. Deshalb den Voice-Button hier
+	// unmittelbar links vor der Sendetaste einhängen, statt Markup zu duplizieren.
+	const submit = document.getElementById("mainChatSubmit");
+	if (submit && !document.getElementById("btnVoiceFull")) {
+		const voice = document.createElement("button");
+		voice.type = "button";
+		voice.id = "btnVoiceFull";
+		voice.className = "composer-tool";
+		voice.title = "Spracheingabe starten (Alt+Leertaste)";
+		voice.textContent = "🎙";
+		submit.before(voice);
+	}
 }
 
 async function copyAiDebugTrace() {
@@ -367,7 +380,10 @@ function wireEvents() {
 		const a = e.target.closest("a");
 		if (!a) return;
 		const href = a.getAttribute("href") || "";
-		const id = href.replace(/^(#|\/)/, "").replace(/-/g, "");
+		const rawId = href.replace(/^(#|\/)/, "");
+		// Importierte Seiten können UUIDs mit ODER ohne Bindestriche verwenden.
+		// Erst den exakten Wert prüfen, erst danach auf das alte Normalformat fallen.
+		const id = S.pages[rawId] ? rawId : rawId.replace(/-/g, "");
 		if (S.pages[id]) {
 			e.preventDefault();
 			openPage(id);
@@ -409,6 +425,54 @@ function wireEvents() {
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {
+		// --- Stapel-⋯ ZUERST, BEVOR closeOutside die Sidebar neu rendert ---
+		// Bug: closeOutside + data-deckopen liefen im selben Klick und zerstörten
+		// das Menü ("springt kurz weg und verschwindet" / Löschen wirkungslos).
+		const deckMenuBtn = e.target.closest("[data-deckmenu]");
+		if (deckMenuBtn) {
+			e.preventDefault();
+			e.stopPropagation();
+			const name = deckMenuBtn.dataset.deckmenu;
+			const open = S.deckMenuOpenName !== name;
+			S.pageMenuOpenId = null;
+			S.topMenu = null;
+			S.modelMenuOpen = false;
+			S.deckMenuOpenName = open ? name : null;
+			renderSidebar(); // positioniert offenes Menü in render.js
+			return;
+		}
+		const deckAction = e.target.closest("[data-deckdel],[data-deckrename],[data-deckduplicate]");
+		if (deckAction) {
+			e.preventDefault();
+			e.stopPropagation();
+			const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate;
+			S.deckMenuOpenName = null;
+			renderSidebar();
+			if (deckAction.hasAttribute("data-deckrename")) {
+				S.renamingDeck = name;
+				renderSidebar();
+				const inp = document.querySelector('[data-deckrenamename="' + CSS.escape(name) + '"]');
+				if (inp) { inp.focus(); inp.select(); }
+				return;
+			}
+			if (deckAction.hasAttribute("data-deckduplicate")) {
+				await STATE.dispatch("deckDuplicate", { name });
+				return;
+			}
+			// data-deckdel
+			const n = ankiCardsOf(name).length;
+			const msg = 'Stapel „' + name + '“ in den Papierkorb legen?' +
+				(n ? " " + n + " Karte(n) (inkl. Unterstapel) wandern mit und sind wiederherstellbar." : "");
+			if (await U.confirm(msg, { title: "Stapel löschen", ok: "In Papierkorb", danger: true })) {
+				await STATE.dispatch("deckTrash", { name });
+				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
+				U.toast("Stapel im Papierkorb.", "success");
+			} else {
+				render();
+			}
+			return;
+		}
+
 		const t = e.target.closest(CLICKABLE);
 		// Eine Außenklick-Logik für alle Popovers (Anhang, Modell, Seite, Stapel, Topbar).
 		const closedPopovers = POPOVERS.closeOutside(e.target);
@@ -427,6 +491,8 @@ function wireEvents() {
 		}
 		if (t.dataset.dashadd) { SETTINGS.handleDashboardAdd(); return; }
 		if (t.dataset.removeattachment) { CHAT_FULLSCREEN.handleRemoveAttachment(); return; }
+		if (t.id === "btnVoice") { VOICE.toggle("side"); return; }
+		if (t.id === "btnVoiceFull") { VOICE.toggle("full"); return; }
 
 		// Chat umbenennen (Sidebar-Chatliste) — gleicher Dialog wie bei Stapeln
 		if (t.dataset.chatrename) {
@@ -775,21 +841,12 @@ function wireEvents() {
 			return;
 		}
 
-		// ---------- Stapel-Baum (Sidebar + Stapel-Tab): öffnen, anlegen, umbenennen, löschen ----------
-		if (t.hasAttribute("data-deckopen")) {
+		// ---------- Stapel-Baum: Stapel öffnen (nicht bei ⋯ / + / Menü) ----------
+		if (t.hasAttribute("data-deckopen") && !e.target.closest(".row-add, .page-menu, input, button")) {
 			S.ankiDeck = t.dataset.deckopen || null;
+			S.deckMenuOpenName = null;
 			if (S.ankiTab === "study") S.ankiTab = "decks";
 			render();
-			return;
-		}
-		// ⋯-Menü je Stapel (wie bei Seiten): öffnen/schließen, Umbenennen, Löschen.
-		if (t.dataset.deckmenu) {
-			const name = t.dataset.deckmenu;
-			S.deckMenuOpenName = S.deckMenuOpenName === name ? null : name;
-			renderSidebar();
-			if (S.deckMenuOpenName) POPOVERS.position(
-				document.querySelector('[data-deckmenu="' + name + '"]'),
-				document.querySelector(".page-menu"), { align: "end", gap: 2 });
 			return;
 		}
 		if (t.dataset.decknew || t.dataset.decksub) {
@@ -799,35 +856,6 @@ function wireEvents() {
 				await STATE.dispatch("deckCreate", { name: full });
 				S.ankiDeck = full;
 			});
-			return;
-		}
-		if (t.dataset.deckrename) {
-			// Inline-Umbenennen: statt prompt() ein Textfeld direkt in der Zeile zeigen.
-			const from = t.dataset.deckrename;
-			S.deckMenuOpenName = null;
-			S.renamingDeck = from;
-			renderSidebar();
-			const inp = document.querySelector('[data-deckrenamename="' + CSS.escape(from) + '"]');
-			if (inp) { inp.focus(); inp.select(); }
-			return;
-		}
-		if (t.dataset.deckdel) {
-			S.deckMenuOpenName = null;
-			const name = t.dataset.deckdel;
-			// Soft-Delete: Stapel + Karten des Teilbaums → Papierkorb (auch „Standard“).
-			const n = ankiCardsOf(name).length;
-			const msg = 'Stapel „' + name + '“ in den Papierkorb legen?' +
-				(n ? " " + n + " Karte(n) (inkl. Unterstapel) wandern mit und sind wiederherstellbar." : "");
-			if (await U.confirm(msg, { title: "Stapel löschen", ok: "In Papierkorb", danger: true })) {
-				await STATE.dispatch("deckTrash", { name });
-				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
-				U.toast("Stapel im Papierkorb.", "success");
-			}
-			return;
-		}
-		if (t.dataset.deckduplicate) {
-			S.deckMenuOpenName = null;
-			await STATE.dispatch("deckDuplicate", { name: t.dataset.deckduplicate });
 			return;
 		}
 
@@ -1376,11 +1404,23 @@ function wireEvents() {
 	// dragType unterscheidet beide ("page" vs "deck").
 	let dragId = null, dragType = null, dropZone = null;
 	document.addEventListener("dragstart", (e) => {
+		// ⋯ / + / Inputs in der Zeile dürfen KEINEN Drag starten — sonst frisst
+		// der Browser den Klick und das Menü flackert nur kurz auf.
+		if (e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) {
+			e.preventDefault();
+			return;
+		}
 		const pageRow = e.target.closest("[data-page]");
 		if (pageRow) { dragId = pageRow.dataset.page; dragType = "page"; e.dataTransfer.effectAllowed = "move"; return; }
 		const deckRow = e.target.closest("[data-deck]");
 		if (deckRow) { dragId = deckRow.dataset.deck; dragType = "deck"; e.dataTransfer.effectAllowed = "move"; return; }
 	});
+	// mousedown auf Zeilen-Buttons: Drag der Eltern-Zeile unterbinden
+	document.addEventListener("mousedown", (e) => {
+		if (e.target.closest(".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
+			e.stopPropagation();
+		}
+	}, true);
 	const clearDropMarks = () => {
 		document.querySelectorAll(".row.drop-target,.row.drop-before,.row.drop-after").forEach((r) => {
 			r.classList.remove("drop-target", "drop-before", "drop-after");

@@ -101,8 +101,8 @@ function deckTreeHtml() {
 				: '<span class="row-title">🃏 ' + U.esc(label) + "</span>") +
 			(due ? '<span class="deck-badge due" title="fällig">' + due + "</span>" : "") +
 			(neu ? '<span class="deck-badge" title="neu">' + neu + "</span>" : "") +
-			'<button class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
-			'<button class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
+			'<button type="button" class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
+			'<button type="button" class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
 			(menuOpen ? deckMenuHtml(name) : "") +
 			"</div>";
 		if (kids.length && !collapsed) html += kids.map((k) => rowFor(k, depth + 1)).join("");
@@ -115,10 +115,11 @@ function deckTreeHtml() {
 
 // Notion-artiges ⋯-Menü je Stapel (wie pageMenuHtml bei Seiten): Umbenennen, Duplizieren, Löschen.
 function deckMenuHtml(name) {
-	return '<div class="page-menu">' +
-		'<button class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
-		'<button class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
-		'<button class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
+	// data-deckmenu-panel markiert das Stapel-Popover eindeutig (nicht mit Seiten-⋯ verwechseln).
+	return '<div class="page-menu" data-deckmenu-panel="' + U.esc(name) + '">' +
+		'<button type="button" class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
+		'<button type="button" class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
+		'<button type="button" class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
 		"</div>";
 }
 

@@ -3,1078 +3,2236 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { RAG } from "./rag.js";
-import { RENDER } from "./render.js";
-import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
+import { AI } from "./ai.js";
 
-const hydrateImages = (...args) => RENDER.hydrateImages(...args);
-
-// editor.js — Notion-artiger Block-Editor über Markdown (Live-Preview-Hybrid).
-// Grundprinzip: Markdown bleibt die EINZIGE Wahrheit. Event-Log, Verlauf, Diffs,
-// KI-Tools, Notion-Import und Drive-Sync arbeiten unverändert auf pg.content.
-// Die Seite wird in Blöcke zerlegt; der aktive Block wird als roher Markdown-
-// Ausschnitt in einer Textarea bearbeitet, alle anderen Blöcke sind fertig
-// gerendert (inkl. LaTeX + Code-Highlighting). Enter/Backspace/Pfeiltasten
-// verhalten sich wie in Notion, ⠠-Handles verschieben Blöcke per Drag & Drop.
+// editor.js — WYSIWYG-REWRITE (12. Juli 2026). Der einzige Editor der App.
+// Interne Wahrheit: strukturierte Blockobjekte. Der DOM bleibt beim Tippen
+// bestehen (echtes WYSIWYG, kein Modus-Wechsel, keine sichtbare Markdown-Roh-
+// ansicht). Markdown wird NUR im Hintergrund erzeugt/gelesen (pg.content),
+// damit Event-Log, Drive-Sync, Verlauf, Diffs, RAG und Import kompatibel bleiben.
+// Wie im echten Notion ist jede Strukturänderung eine "Transaktion":
+// mutate() = History-Checkpoint → Mutation → serialize → dispatch("pageUpdate").
 export const EDITOR = (() => {
-	let host = null;      // Container (#blockEditor), wird bei jedem renderMain neu gemountet
-	let pageId = null;    // aktuell bearbeitete Seite
-	let blocks = [];      // geparste Blockliste
-	let activeId = null;  // Block im Bearbeiten-Modus (Textarea)
-	let dragBid = null;   // Block, der gerade per ⠠ gezogen wird
-	let slash = null;     // { items, index } solange das Slash-Menü offen ist
-	let linkMenu = null;  // { items, index, query } — [[Seitenverlinkung
-	let blockMenuId = null; // Block, dessen ⚠-Menü gerade offen ist
-	let selAll = false;   // true = "alles ausgewählt" (Strg+A über alle Blöcke)
+	// Diese Datei wird als Markdown-Codeblock gespiegelt — deshalb nie ein
+	// literales Dreifach-Backtick im Quelltext:
+	const FENCE = "``" + "`";
+
+	// ---------- Zustand ----------
+	let host = null;          // #blockEditor-Container (pro renderMain neu)
+	let pageId = null;
+	let blocks = [];          // Blockobjekte = interne Wahrheit dieser Sitzung
+	let slash = null;         // { items, index, bid }
+	let linkMenu = null;      // { items, index, query, bid }
+	let blockMenuId = null;
+	let mathEdit = null;      // { bid } oder { bid, spanEl } — Gleichungs-Popover
+	let dragBid = null;
+	let composing = false;    // IME aktiv → keine Live-Transformationen
+	let selRange = null;      // Blockauswahl { from, to } (Indizes in blocks)
+	let selAnchor = null;
+	let selAll = false;
+	let gutterDrag = false;
+	let gutterFrom = -1;
+	let ctrlAArmed = false;   // zweistufiges Strg+A wie in Notion
+	let lastColor = "bg:yellow"; // Strg+Shift+H = letzte Farbe erneut
+	let saveTimer = 0;
+	let histTimer = 0;
+	let histPending = false;
+	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
+	let histFocus = null;
+	let renderBoundary = null; // einmalige DOM-Marke für exakte Merge-Caretposition
+	let scrollReserve = 0;     // wächst beim Löschen am Seitenende gegen Browser-Clamping
+	const undoStacks = {};    // je Seite: [{ json, focus }]
+	const redoStacks = {};
+	let styleInjected = false;
+	let globalWired = false;
+	// mount() kann für denselben DOM-Host mehrfach laufen (z. B. nach einem
+	// App-Render). Listener dürfen dann nicht doppelt hängen: doppelte input-/
+	// keydown-Handler erzeugen sonst doppelte Mutationen, ungleiches Löschtempo
+	// und eine History, die scheinbar zufällig Schritte überspringt.
+	const wiredHosts = new WeakSet();
+	const HISTORY_LIMIT = 200;
 
 	const LISTY = { bullet: 1, number: 1, todo: 1 };
-	const MULTILINE = { code: 1, table: 1, toggle: 1, columns: 1, quote: 1, callout: 1 };
+	// Blocktypen mit EINEM editierbaren Rich-Text-Feld (block.text)
+	const TEXTY = { p: 1, h1: 1, h2: 1, h3: 1, bullet: 1, number: 1, todo: 1, quote: 1 };
 	const COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"];
+	const COLOR_META_RE = /^<!--@c:([a-z]+)?(?:;bg:([a-z]+))?-->$/;
+	const IMAGE_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
+	const HEFT_RE = /^:::heft\s+(\S+)/;
 
-	// Slash-Menü-Einträge: k = Suchbegriffe, ins = eingefügtes Markdown,
-	// caret = Cursorposition nach dem Einfügen (Standard: ans Ende)
-	const SLASH = [
-		{ k: "text absatz paragraph", label: "Text", ins: "", type: "p" },
-		{ k: "h1 überschrift heading gross", label: "H1 · Überschrift 1", ins: "# ", type: "h1" },
-		{ k: "h2 überschrift heading", label: "H2 · Überschrift 2", ins: "## ", type: "h2" },
-		{ k: "h3 überschrift heading klein", label: "H3 · Überschrift 3", ins: "### ", type: "h3" },
-		{ k: "aufzählung liste bullet punkte", label: "• Aufzählungsliste", ins: "- ", type: "bullet" },
-		{ k: "nummerierte liste zahlen", label: "1. Nummerierte Liste", ins: "1. ", type: "number" },
-		{ k: "todo aufgabe checkbox haken", label: "☑ To-do-Liste", ins: "- [ ] ", type: "todo" },
-		{ k: "toggle aufklappen details", label: "▸ Toggle-Block", ins: "<details><summary>Titel</summary>\nInhalt\n</details>", type: "toggle", caret: 18 },
-		{ k: "zitat quote", label: "❝ Zitat", ins: "> ", type: "quote" },
-		{ k: "callout hinweis box info farbe", label: "💡 Callout (Farbwort im Marker änderbar)", ins: "> [!blue] ", type: "callout" },
-		{ k: "code programm quelltext", label: "⌨ Code-Block", ins: "```javascript\n\n```", type: "code", caret: 14 },
-		{ k: "mermaid diagramm flowchart graph gantt", label: "⧐ Mermaid-Diagramm", ins: "```mermaid\ngraph TD\n\tA[Start] --> B[Ende]\n```", type: "code", caret: 11 },
-		{ k: "bild image foto hochladen", label: "🖼 Bild hochladen", ins: "", type: "p", action: "image" },
-		{ k: "heft goodnotes handschrift stift notizbuch zeichnen", label: "📓 GoodNotes-Heft einbetten", ins: "", type: "p", action: "heft" },
-		{ k: "trennlinie divider linie", label: "— Trennlinie", ins: "---", type: "divider" },
-		{ k: "tabelle table", label: "▦ Tabelle", ins: "| Spalte 1 | Spalte 2 |\n| --- | --- |\n|   |   |", type: "table" },
-		{ k: "spalten columns layout nebeneinander", label: "◫ 2 Spalten", ins: ":::columns\nLinke Spalte\n:::split\nRechte Spalte\n:::end", type: "columns" },
-	];
+	const uid = () => U.uid();
+	const esc = (t) => U.esc(String(t ?? ""));
 
-	// ---------- Markdown → Blockliste ----------
-	const indentLevel = (ws) => Math.floor(String(ws || "").replace(/\t/g, "  ").length / 2);
-
-	function isSpecialStart(line) {
-		const t = line.trim();
-		return t.startsWith("```") || t === ":::columns" || t.startsWith(":::heft") || t.startsWith("<details")
-			|| t.startsWith("|") || /^-{3,}$/.test(t) || /^#{1,3}\s/.test(t) || t.startsWith(">")
-			|| /^\s*[-*]\s/.test(line) || /^\s*\d+[.)]\s/.test(line);
+	// ---------- Modell: Block-Fabriken & Baum-Navigation ----------
+	function newBlock(kind) {
+		// Eine Blockauswahl erzeugt NUR Struktur, nie Platzhaltertext.
+		if (kind === "table") return { id: uid(), type: "table", rows: [["", ""], ["", ""]] };
+		if (kind === "columns") return { id: uid(), type: "columns", columns: [[newBlock("p")], [newBlock("p")]] };
+		if (kind === "code") return { id: uid(), type: "code", language: "javascript", text: "" };
+		if (kind === "math") return { id: uid(), type: "math", text: "" };
+		if (kind === "divider") return { id: uid(), type: "divider" };
+		if (kind === "callout") return { id: uid(), type: "callout", color: "blue", children: [newBlock("p")] };
+		if (kind === "toggle") return { id: uid(), type: "toggle", summary: "", open: true, children: [newBlock("p")] };
+		if (kind === "todo") return { id: uid(), type: "todo", checked: false, indent: 0, text: "" };
+		if (kind === "bullet" || kind === "number") return { id: uid(), type: kind, indent: 0, text: "" };
+		if (kind === "h1" || kind === "h2" || kind === "h3" || kind === "quote") return { id: uid(), type: kind, text: "" };
+		return { id: uid(), type: "p", text: "" };
 	}
 
-	function parse(md) {
-		const lines = String(md ?? "").split("\n");
-		const out = [];
-		let i = 0;
-		const push = (type, raw, extra) => out.push(Object.assign({ id: U.uid(), type, raw }, extra || {}));
-		while (i < lines.length) {
-			const line = lines[i];
-			const t = line.trim();
-			if (t === "") { i++; continue; }
-			if (t.startsWith("```")) {
-				let j = i + 1;
-				while (j < lines.length && !lines[j].trim().startsWith("```")) j++;
-				push("code", lines.slice(i, Math.min(j + 1, lines.length)).join("\n"));
-				i = j + 1; continue;
+	// Sucht einen Block auch in Callout-Kindern, Toggle-Kindern und Spalten.
+	// parent = umschließender Block (macht verschachtelte Blöcke als Einheit behandelbar).
+	function findContext(id, list = blocks, parent = null) {
+		for (let index = 0; index < list.length; index++) {
+			const block = list[index];
+			if (block.id === id) return { list, index, block, parent };
+			if (block.children) {
+				const nested = findContext(id, block.children, block);
+				if (nested) return nested;
 			}
-			if (t.startsWith(":::heft")) { push("heft", t); i++; continue; }
-			if (t === ":::columns") {
-				let j = i + 1;
-				while (j < lines.length && lines[j].trim() !== ":::end") j++;
-				push("columns", lines.slice(i, Math.min(j + 1, lines.length)).join("\n"));
-				i = j + 1; continue;
+			if (block.columns) {
+				for (const column of block.columns) {
+					const found = findContext(id, column, block);
+					if (found) return found;
+				}
 			}
-			if (t.startsWith("<details")) {
-				let j = i;
-				while (j < lines.length && !lines[j].includes("</details>")) j++;
-				push("toggle", lines.slice(i, Math.min(j + 1, lines.length)).join("\n"));
-				i = j + 1; continue;
-			}
-			if (t.startsWith("|")) {
-				let j = i;
-				while (j < lines.length && lines[j].trim().startsWith("|")) j++;
-				push("table", lines.slice(i, j).join("\n"));
-				i = j; continue;
-			}
-			if (/^-{3,}$/.test(t)) { push("divider", "---"); i++; continue; }
-			let m = t.match(/^(#{1,3})\s+/);
-			if (m) { push("h" + m[1].length, t); i++; continue; }
-			if (t.startsWith(">")) {
-				let j = i;
-				while (j < lines.length && lines[j].trim().startsWith(">")) j++;
-				const seg = lines.slice(i, j).join("\n");
-				push(/^>\s*\[!([a-z]+)\]/.test(t) ? "callout" : "quote", seg);
-				i = j; continue;
-			}
-			m = line.match(/^(\s*)- \[( |x)\]/);
-			if (m) { push("todo", line, { indent: indentLevel(m[1]), checked: m[2] === "x" }); i++; continue; }
-			m = line.match(/^(\s*)[-*]\s+/);
-			if (m) { push("bullet", line, { indent: indentLevel(m[1]) }); i++; continue; }
-			m = line.match(/^(\s*)\d+[.)]\s+/);
-			if (m) { push("number", line, { indent: indentLevel(m[1]) }); i++; continue; }
-			let j = i;
-			while (j < lines.length && lines[j].trim() !== "" && !isSpecialStart(lines[j])) j++;
-			push("p", lines.slice(i, j).join("\n"));
-			i = Math.max(j, i + 1);
 		}
-		return out;
+		return null;
+	}
+	const findBlock = (id) => { const c = findContext(id); return c && c.block; };
+	// Index im TOP-LEVEL-Array. Für verschachtelte Blöcke (Callout/Toggle/Spalte)
+	// wandert die Suche den Elternpfad hoch — sonst schlägt selectBlocks fehl
+	// (topIndexOf fand z. B. ein Bild in einem Callout nie).
+	const topIndexOf = (b) => {
+		if (!b) return -1;
+		let c = findContext(b.id || b);
+		while (c && c.parent) c = findContext(c.parent.id);
+		return c ? c.index : -1;
+	};
+	// Selektiert den äußersten Top-Level-Block eines (ggf. verschachtelten) Blocks.
+	function selectTopOf(b) {
+		const i = topIndexOf(b);
+		if (i >= 0) { selAnchor = i; selectBlocks(i, i); return true; }
+		return false;
 	}
 
-	// Blockliste → Markdown: Listenpunkte direkt untereinander, sonst Leerzeile dazwischen
-	function serialize(list) {
-		let out = "";
-		list.forEach((b, idx) => {
-			if (idx > 0) out += (LISTY[b.type] && LISTY[list[idx - 1].type]) ? "\n" : "\n\n";
-			out += b.raw;
-		});
-		return out;
+	// Tiefe Kopie mit NEUEN IDs (für Duplizieren) — sonst kollidieren DOM-Anker.
+	function reassignIds(b) {
+		b.id = uid();
+		if (b.children) b.children.forEach(reassignIds);
+		if (b.columns) b.columns.forEach((col) => col.forEach(reassignIds));
+		return b;
 	}
+	const cloneBlock = (b) => reassignIds(JSON.parse(JSON.stringify(b)));
 
-	// ---------- Hilfen ----------
-	const newBlock = (type, raw, extra) => Object.assign({ id: U.uid(), type, raw }, extra || {});
-	const indentOf = (b) => b.indent || 0;
-	const listText = (b) => b.raw.replace(/^\s*(- \[( |x)\]\s?|[-*]\s+|\d+[.)]\s+)/, "");
-
-	function markerOf(b) {
-		const ind = "  ".repeat(indentOf(b));
-		if (b.type === "todo") return ind + "- [ ] ";
-		if (b.type === "bullet") return ind + "- ";
-		if (b.type === "number") return ind + "1. ";
+	function plainTextOf(b) {
+		if (TEXTY[b.type]) return String(b.text || "");
+		if (b.type === "code" || b.type === "math") return String(b.text || "");
+		if (b.type === "callout" || b.type === "toggle") {
+			return (b.type === "toggle" ? String(b.summary || "") + "\n" : "") +
+				(b.children || []).map(plainTextOf).join("\n");
+		}
+		if (b.type === "table") return (b.rows || []).map((r) => r.join(" ")).join("\n");
+		if (b.type === "columns") return (b.columns || []).map((col) => col.map(plainTextOf).join("\n")).join("\n");
+		if (b.type === "image") return b.alt || "";
 		return "";
 	}
 
-	function splitColumns(raw) {
-		const inner = String(raw).replace(/^:::columns\n?/, "").replace(/\n?:::end$/, "");
-		return inner.split(/\n:::split\n/);
+	// ---------- Inline: Markdown → Rich-HTML → Markdown (verlustfreier Roundtrip) ----------
+	const LT = String.fromCharCode(60);
+	const tag = (name, inner, attrs) => LT + name + (attrs || "") + ">" + inner + LT + "/" + name + ">";
+
+	// Rendert den Inline-Markdown eines Textblocks als echten Rich-Text.
+	// Inline-Formeln ($…$) werden zu nicht-editierbaren Chips mit data-md —
+	// KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
+	function inlineHtml(text) {
+		return esc(text)
+			.replace(/\$([^$\n]+)\$/g, (_, f) => LT + 'span class="blk-imath" contenteditable="false" data-md="$' + esc(f) + '$" title="Formel bearbeiten">' + esc(f) + LT + "/span>")
+			.replace(/\{(bg-)?(gray|red|orange|yellow|green|blue|purple|pink)\}([\s\S]*?)\{\/\}/g,
+				(_, bg, color, v) => tag("span", v, ' class="' + (bg ? "hl-" : "c-") + color + '"'))
+			.replace(/==([^=\n]+)==/g, (_, v) => tag("mark", v))
+			.replace(/\x60([^\x60]+)\x60/g, (_, v) => tag("code", v))
+			.replace(/\*\*([^*]+)\*\*/g, (_, v) => tag("strong", v))
+			.replace(/~~([^~]+)~~/g, (_, v) => tag("s", v))
+			.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, pre, v) => pre + tag("em", v))
+			.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => tag("a", label, ' href="' + href + '"'))
+			.replace(/\n/g, LT + "br>");
 	}
 
-	// ---------- Ansicht (gerenderte Blöcke) ----------
-	function viewHtml(b, list, idx) {
-		switch (b.type) {
-			case "h1": case "h2": case "h3": {
-				const lvl = b.type[1];
-				return "<h" + lvl + ' class="blk-h">' + U.mdInline(b.raw.replace(/^#{1,3}\s+/, "")) + "</h" + lvl + ">";
-			}
-			case "divider": return '<hr class="blk-hr">';
-			case "todo":
-				return '<div class="blk-li" style="padding-left:' + indentOf(b) * 24 + 'px">' +
-					'<input type="checkbox" class="blk-check"' + (b.checked ? " checked" : "") + ">" +
-					'<span class="blk-litext' + (b.checked ? " done" : "") + '">' + U.mdInline(listText(b)) + "</span></div>";
-			case "bullet":
-				return '<div class="blk-li" style="padding-left:' + indentOf(b) * 24 + 'px"><span class="blk-marker">•</span>' +
-					'<span class="blk-litext">' + U.mdInline(listText(b)) + "</span></div>";
-			case "number": {
-				// Nummer ermitteln: vorangehende nummerierte Punkte gleicher Einrückung zählen
-				let n = 1;
-				for (let k = idx - 1; k >= 0; k--) {
-					const prev = list[k];
-					if (prev.type === "number" && indentOf(prev) === indentOf(b)) n++;
-					else if (LISTY[prev.type] && indentOf(prev) > indentOf(b)) continue;
-					else break;
-				}
-				return '<div class="blk-li" style="padding-left:' + indentOf(b) * 24 + 'px"><span class="blk-marker">' + n + ".</span>" +
-					'<span class="blk-litext">' + U.mdInline(listText(b)) + "</span></div>";
-			}
-			case "callout": {
-				const m = b.raw.match(/^>\s*\[!([a-z]+)\]\s?([\s\S]*)$/);
-				const color = m ? m[1] : "gray";
-				const body = m ? m[2].replace(/\n>\s?/g, "\n") : b.raw;
-				return '<div class="blk-callout co-' + U.esc(color) + '"><div class="md">' + U.md(body) + "</div></div>";
-			}
-			case "columns":
-				return '<div class="blk-cols">' + splitColumns(b.raw).map((c) =>
-					'<div class="blk-col md">' + U.md(c) + "</div>").join("") + "</div>";
-			case "heft": {
-				// Eingebettetes GoodNotes-Heft: unterbricht den Markdown-Fluss als eigener
-				// Block; HEFT.hydrateEmbeds() füllt Vorschau + Öffnen-Knopf asynchron nach.
-				const mh = b.raw.match(/^:::heft\s+(\S+)/);
-				return '<div class="heft-embed" data-heftembed="' + (mh ? U.esc(mh[1]) : "") + '"><span class="hint">📓 Heft wird geladen…</span></div>';
-			}
-			default:
-				// p, quote, code, table, toggle: komplett über U.md rendern
-				return '<div class="md blk-p">' + U.md(b.raw) + "</div>";
+	// DOM eines editierbaren Feldes → Inline-Markdown (exakte Umkehrung von inlineHtml).
+	// Hinweis: \x60 = Backtick — als Hex-Escape geschrieben, damit diese Datei
+	// beim Spiegeln als Markdown-Codeblock nie kaputt-formatiert werden kann.
+	function inlineMarkdown(node) {
+		if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || "";
+		if (node.nodeType !== Node.ELEMENT_NODE) return "";
+		if (node.dataset && node.dataset.md) return node.dataset.md; // Formel-Chip
+		const t = node.tagName.toLowerCase();
+		const inner = [...node.childNodes].map(inlineMarkdown).join("");
+		if (t === "br") return "\n";
+		if (t === "strong" || t === "b") return "**" + inner + "**";
+		if (t === "em" || t === "i") return "*" + inner + "*";
+		if (t === "s" || t === "del" || t === "strike") return "~~" + inner + "~~";
+		if (t === "code") return "\x60" + inner + "\x60";
+		if (t === "mark") return "==" + inner + "==";
+		if (t === "a") return "[" + inner + "](" + (node.getAttribute("href") || "") + ")";
+		if (t === "span") {
+			const cls = node.className || "";
+			let m = cls.match(/(?:^|\s)c-([a-z]+)/);
+			if (m) return "{" + m[1] + "}" + inner + "{/}";
+			m = cls.match(/(?:^|\s)hl-([a-z]+)/);
+			if (m) return "{bg-" + m[1] + "}" + inner + "{/}";
+			return inner;
 		}
+		if (t === "div" || t === "p") return inner + "\n";
+		return inner;
+	}
+	// Unsichtbare Steuerzeichen (Zero-Width-Space, -Joiner, BOM) entfernen — bewusst
+	// über Zeichencodes statt unsichtbarer Literale, damit nichts wegkanonisiert wird.
+	const INVISIBLES_RE = new RegExp("[" + String.fromCharCode(8203) + String.fromCharCode(8204) + String.fromCharCode(65279) + "]", "g");
+	function mdFromEditable(el) {
+		return [...el.childNodes].map(inlineMarkdown).join("").replace(INVISIBLES_RE, "").replace(/\n+$/, "");
 	}
 
-	const editHtml = (b) => '<textarea class="blk-input" rows="1" spellcheck="false" placeholder="Schreib etwas — „/“ für Befehle…">' + U.esc(b.raw) + "</textarea>";
+	// Feldinhalt am Caret in zwei Markdown-Hälften teilen. Der Schnitt läuft über
+	// DOM-Ranges (sichtbare Koordinaten) — Formatierung, Chips und Links bleiben
+	// auf beiden Seiten korrekt, egal wie stark Markdown- und Sichttext abweichen.
+	function splitFieldAtCaret(field, fallbackText) {
+		const sel = window.getSelection();
+		if (sel && sel.rangeCount && field.contains(sel.anchorNode)) {
+			const r = sel.getRangeAt(0);
+			const vorR = document.createRange();
+			vorR.selectNodeContents(field);
+			vorR.setEnd(r.startContainer, r.startOffset);
+			const nachR = document.createRange();
+			nachR.selectNodeContents(field);
+			nachR.setStart(r.endContainer, r.endOffset);
+			const zuMd = (frag) => {
+				const t = document.createElement("div");
+				t.appendChild(frag);
+				return mdFromEditable(t);
+			};
+			return { vor: zuMd(vorR.cloneContents()), nach: zuMd(nachR.cloneContents()) };
+		}
+		const t = String(fallbackText || "");
+		return { vor: t, nach: "" };
+	}
 
-	function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
-
-	// ---------- Zeichnen ----------
-	function draw(focus) {
-		if (!host) return;
-		blockMenuId = null;
-		linkMenu = null;
-		host.innerHTML = blocks.map((b, idx) => {
-			const isNew = S.highlightedPageId === pageId && S.highlightedDiff && S.highlightedDiff.some((d) => d.type === "add" && d.text.trim() === b.raw.trim());
-			return '<div class="blk' + (isNew ? " highlight-add" : "") + '" data-bid="' + b.id + '">' +
-				'<div class="blk-gutter">' +
-					'<button class="blk-plus" data-plus="' + b.id + '" title="Block darunter einfügen">+</button>' +
-					'<button class="blk-handle" draggable="true" data-handle="' + b.id + '" title="Ziehen zum Verschieben">⠠</button>' +
-				"</div>" +
-				'<div class="blk-body">' + (b.id === activeId ? editHtml(b) : viewHtml(b, blocks, idx)) + "</div>" +
-			"</div>";
-		}).join("") + '<div class="blk-tail"></div>' + editorCounterHtml();
-		// LaTeX + Code-Highlighting nur in gerenderten (nicht aktiven) Blöcken
-		host.querySelectorAll(".blk").forEach((el) => {
-			if (el.dataset.bid !== activeId) { U.renderMath(el); U.highlightCode(el); }
+	// Formel-Chips nach dem Rendern mit KaTeX hübsch machen (data-md bleibt Quelle).
+	function hydrateInlineMath(root) {
+		(root || host).querySelectorAll(".blk-imath").forEach((el) => {
+			if (el.dataset.hydrated) return;
+			el.dataset.hydrated = "1";
+			// data-md enthält "$…$" — Delimiter entfernen und direkt mit KaTeX rendern
+			// (renderMathInElement findet im Chip-Text keine Delimiter mehr).
+			const f = String(el.dataset.md || "").replace(/^\$+|\$+$/g, "");
+			try { if (window.katex && f) katex.render(f, el, { throwOnError: false }); } catch { /* Quelltext bleibt sichtbar */ }
 		});
-		// Lokal gespeicherte Bilder (![...](img:...)) nachladen
-		if (typeof hydrateImages === "function") hydrateImages(host);
-		// Eingebettete GoodNotes-Hefte (:::heft <id>) mit Vorschau befüllen
-		HEFT.hydrateEmbeds(host);
-		if (activeId) {
-			const ta = host.querySelector(".blk-input");
-			if (ta) {
-				autoGrow(ta);
-				ta.focus();
-				const pos = focus && focus.caret !== undefined ? focus.caret : ta.value.length;
-				ta.selectionStart = ta.selectionEnd = Math.min(pos, ta.value.length);
+	}
+
+	// ---------- parse(): Markdown (pg.content) → Blockobjekte ----------
+	// Wird genau EINMAL beim mount() aufgerufen — danach ist `blocks` die Wahrheit.
+	function parse(md) {
+		const lines = String(md || "").replace(/\r\n?/g, "\n").split("\n");
+		const out = [];
+		let pendingColor = null; // <!--@c:...--> gilt für den nächsten Block
+		let i = 0;
+
+		const applyColor = (b) => {
+			if (pendingColor) {
+				if (pendingColor.c) b.textColor = pendingColor.c;
+				if (pendingColor.bg) b.bgColor = pendingColor.bg;
+				pendingColor = null;
 			}
+			return b;
+		};
+
+		while (i < lines.length) {
+			const line = lines[i];
+
+			if (!line.trim()) { i++; continue; }
+
+			const colorMeta = line.trim().match(COLOR_META_RE);
+			if (colorMeta) { pendingColor = { c: colorMeta[1], bg: colorMeta[2] }; i++; continue; }
+
+			// Code-Zaun
+			if (line.startsWith(FENCE)) {
+				const language = line.slice(3).trim() || "text";
+				const buf = [];
+				i++;
+				while (i < lines.length && !lines[i].startsWith(FENCE)) buf.push(lines[i++]);
+				i++;
+				out.push(applyColor({ id: uid(), type: "code", language, text: buf.join("\n") }));
+				continue;
+			}
+
+			// Formel-Block — auch einzeilig: $$E = mc^2$$
+			const mOne = line.trim().match(/^\$\$(.+?)\$\$$/);
+			if (mOne) {
+				out.push(applyColor({ id: uid(), type: "math", text: mOne[1].trim() }));
+				i++;
+				continue;
+			}
+			if (line.trim() === "$$") {
+				const buf = [];
+				i++;
+				while (i < lines.length && lines[i].trim() !== "$$") buf.push(lines[i++]);
+				i++;
+				out.push(applyColor({ id: uid(), type: "math", text: buf.join("\n") }));
+				continue;
+			}
+
+			// Heft-Einbettung
+			const heft = line.match(HEFT_RE);
+			if (heft) { out.push(applyColor({ id: uid(), type: "heft", heftId: heft[1] })); i++; continue; }
+
+			// Spalten (rekursiv geparst)
+			if (/^:::columns\b/.test(line)) {
+				const cols = [[]];
+				let depth = 1;
+				const buf = [];
+				i++;
+				while (i < lines.length && depth > 0) {
+					const l = lines[i];
+					if (/^:::columns\b/.test(l)) depth++;
+					if (/^:::end\b/.test(l)) { depth--; if (!depth) { i++; break; } }
+					if (depth === 1 && /^:::split\b/.test(l)) {
+						cols[cols.length - 1] = parse(buf.join("\n"));
+						buf.length = 0; cols.push([]); i++; continue;
+					}
+					buf.push(l); i++;
+				}
+				cols[cols.length - 1] = parse(buf.join("\n"));
+				cols.forEach((c) => { if (!c.length) c.push(newBlock("p")); });
+				out.push(applyColor({ id: uid(), type: "columns", columns: cols }));
+				continue;
+			}
+
+			// Toggle <details>
+			if (/^<details\b/i.test(line.trim())) {
+				const open = /\bopen\b/i.test(line);
+				const buf = [];
+				let summary = "";
+				// <summary> darf auch direkt in der <details>-Zeile stehen (Altbestand/Import)
+				const sm0 = line.match(/<summary>([\s\S]*?)<\/summary>/i);
+				if (sm0) summary = sm0[1];
+				i++;
+				while (i < lines.length && !/^<\/details>/i.test(lines[i].trim())) {
+					const sm = lines[i].match(/^\s*<summary>([\s\S]*?)<\/summary>/i);
+					if (sm) { summary = sm[1]; i++; continue; }
+					buf.push(lines[i]); i++;
+				}
+				i++;
+				const children = parse(buf.join("\n"));
+				if (!children.length) children.push(newBlock("p"));
+				out.push(applyColor({ id: uid(), type: "toggle", summary, open, children }));
+				continue;
+			}
+
+			// Callout `> [!farbe]` (Kinder = eingerückte >-Zeilen, rekursiv)
+			const co = line.match(/^>\s*\[!([a-z]+)\]\s*(.*)$/);
+			if (co) {
+				const buf = co[2] ? [co[2]] : [];
+				i++;
+				while (i < lines.length && /^>/.test(lines[i])) {
+					buf.push(lines[i].replace(/^>\s?/, "")); i++;
+				}
+				const children = parse(buf.join("\n"));
+				if (!children.length) children.push(newBlock("p"));
+				out.push(applyColor({ id: uid(), type: "callout", color: co[1], children }));
+				continue;
+			}
+
+			// Zitat (mehrzeilig)
+			if (/^>\s?/.test(line)) {
+				const buf = [];
+				while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ""));
+				out.push(applyColor({ id: uid(), type: "quote", text: buf.join("\n") }));
+				continue;
+			}
+
+			// GFM-Tabelle
+			if (/^\s*\|.*\|\s*$/.test(line)) {
+				const rows = [];
+				while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+					const raw = lines[i].trim().replace(/^\|/, "").replace(/\|$/, "");
+					if (!/^[\s:|-]+$/.test(raw)) {
+						rows.push(raw.split(/(?<!\\)\|/).map((c) => c.replace(/\\\|/g, "|").trim()));
+					}
+					i++;
+				}
+				const width = Math.max(2, ...rows.map((r) => r.length));
+				rows.forEach((r) => { while (r.length < width) r.push(""); });
+				if (!rows.length) rows.push(["", ""], ["", ""]);
+				out.push(applyColor({ id: uid(), type: "table", rows }));
+				continue;
+			}
+
+			// Trennlinie
+			if (/^\s*---+\s*$/.test(line)) { out.push(applyColor({ id: uid(), type: "divider" })); i++; continue; }
+
+			// Bild
+			const img = line.match(IMAGE_RE);
+			if (img) { out.push(applyColor({ id: uid(), type: "image", alt: img[1], src: img[2] })); i++; continue; }
+
+			// Überschriften
+			const h = line.match(/^(#{1,3})\s+(.*)$/);
+			if (h) {
+				out.push(applyColor({ id: uid(), type: "h" + h[1].length, text: h[2] }));
+				i++; continue;
+			}
+
+			// Listen (Einrückung = 2 Leerzeichen oder 1 Tab pro Ebene)
+			const li = line.match(/^(\s*)([-*]|\d+[.)])\s+(.*)$/);
+			if (li) {
+				const indent = Math.floor(li[1].replace(/\t/g, "  ").length / 2);
+				const rest = li[3];
+				const todo = rest.match(/^\[( |x|X)\]\s?(.*)$/);
+				if (todo && /^[-*]$/.test(li[2])) {
+					out.push(applyColor({ id: uid(), type: "todo", checked: todo[1].toLowerCase() === "x", indent, text: todo[2] }));
+				} else if (/^[-*]$/.test(li[2])) {
+					out.push(applyColor({ id: uid(), type: "bullet", indent, text: rest }));
+				} else {
+					out.push(applyColor({ id: uid(), type: "number", indent, text: rest }));
+				}
+				i++; continue;
+			}
+
+			// Absatz (Folgezeilen bis Leerzeile gehören dazu, außer neue Blockstarts)
+			const buf = [line];
+			i++;
+			while (i < lines.length && lines[i].trim() &&
+				!/^(#{1,3}\s|>|\s*([-*]|\d+[.)])\s|\s*\||\s*---+\s*$|:::|<details\b|\$\$)/.test(lines[i]) &&
+				!lines[i].startsWith(FENCE) && !COLOR_META_RE.test(lines[i].trim()) && !IMAGE_RE.test(lines[i])) {
+				buf.push(lines[i]); i++;
+			}
+			out.push(applyColor({ id: uid(), type: "p", text: buf.join("\n") }));
 		}
-		renderToolbar(null);
+		return out;
 	}
 
-	// ---------- Speichern (debounced, wie der alte Markdown-Editor) ----------
-	async function save() {
-		const pg = pageId ? S.pages[pageId] : null;
-		if (!pg) return;
-		const md = serialize(blocks);
-		if (md !== pg.content) {
-			pushUndo(pg.id, pg.content);
-			await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: md } });
-			if (typeof RAG !== "undefined") RAG.queuePage(pg.id);
+	// ---------- serialize(): Blockobjekte → Markdown (nur im Hintergrund) ----------
+	function serializeBlock(b) {
+		const colorMeta = (b.textColor || b.bgColor)
+			? "<!--@c:" + (b.textColor || "") + (b.bgColor ? ";bg:" + b.bgColor : "") + "-->\n"
+			: "";
+		const ind = "  ".repeat(b.indent || 0);
+		switch (b.type) {
+			case "h1": return colorMeta + "# " + (b.text || "");
+			case "h2": return colorMeta + "## " + (b.text || "");
+			case "h3": return colorMeta + "### " + (b.text || "");
+			case "bullet": return colorMeta + ind + "- " + (b.text || "");
+			case "number": return colorMeta + ind + "1. " + (b.text || "");
+			case "todo": return colorMeta + ind + "- [" + (b.checked ? "x" : " ") + "] " + (b.text || "");
+			case "quote": return colorMeta + String(b.text || "").split("\n").map((l) => "> " + l).join("\n");
+			case "divider": return "---";
+			case "image": return "![" + (b.alt || "") + "](" + (b.src || "") + ")";
+			case "heft": return ":::heft " + (b.heftId || "");
+			case "code": return FENCE + (b.language || "text") + "\n" + (b.text || "") + "\n" + FENCE;
+			case "math": return "$$\n" + (b.text || "") + "\n$$";
+			case "table":
+				return (b.rows || []).map((row, ri) => {
+					const cells = row.map((c) => String(c || "").replace(/\|/g, "\\|").replace(/\n/g, " "));
+					const line = "| " + cells.join(" | ") + " |";
+					return ri === 0 ? line + "\n|" + row.map(() => " --- ").join("|") + "|" : line;
+				}).join("\n");
+			case "callout":
+				return colorMeta + "> [!" + (b.color || "blue") + "]\n" +
+					serializeList(b.children || []).split("\n").map((l) => "> " + l).join("\n");
+			case "toggle":
+				return "<details" + (b.open ? " open" : "") + ">\n<summary>" + (b.summary || "") + "</summary>\n\n" +
+					serializeList(b.children || []) + "\n</details>";
+			case "columns":
+				return ":::columns\n" + (b.columns || []).map((col) => serializeList(col)).join("\n:::split\n") + "\n:::end";
+			default: return colorMeta + String(b.text || "");
 		}
 	}
-	const saveSoon = U.debounce(save, 700);
-
-	// ---------- Undo/Redo über Blockgrenzen (Strg+Z / Strg+Shift+Z bzw. Strg+Y) ----------
-	// Das native Textarea-Undo gilt nur im aktiven Block; diese Stapel sichern den
-	// gesamten Seiteninhalt bei jeder Änderung (max. 100 Stände je Seite).
-	const undoStacks = {};
-	const redoStacks = {};
-	function pushUndo(pid, md) {
-		const st = undoStacks[pid] || (undoStacks[pid] = []);
-		if (st[st.length - 1] === md) return;
-		st.push(md);
-		if (st.length > 100) st.shift();
-		redoStacks[pid] = [];
+	function serializeList(list) {
+		const parts = [];
+		for (let k = 0; k < list.length; k++) {
+			const cur = list[k];
+			const prev = list[k - 1];
+			// Listen gleicher Art bleiben zusammenhängend (keine Leerzeile),
+			// alles andere wird durch Leerzeilen getrennt — wie bisher gespeichert.
+			const glue = prev && LISTY[prev.type] && LISTY[cur.type] ? "\n" : "\n\n";
+			parts.push((k ? glue : "") + serializeBlock(cur));
+		}
+		return parts.join("");
 	}
-	async function undoRedo(redo) {
-		const pg = pageId ? S.pages[pageId] : null;
-		if (!pg) return;
-		const from = redo ? (redoStacks[pageId] || []) : (undoStacks[pageId] || []);
-		if (!from.length) return;
+	const serialize = () => serializeList(blocks);
+
+	// ---------- Fokus / Caret ----------
+	function caretInfo() {
+		const sel = window.getSelection();
+		if (!sel || !sel.rangeCount || !host) return null;
+		const el = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+		const field = el && el.closest && el.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
+		if (!field || !host.contains(field)) return null;
+		const range = sel.getRangeAt(0).cloneRange();
+		range.selectNodeContents(field);
+		range.setEnd(sel.anchorNode, sel.anchorOffset);
+		return {
+			bid: field.dataset.btext || field.dataset.bsummary || field.dataset.bcode || (field.dataset.bcell || "").split(":")[0],
+			cell: field.dataset.bcell || null,
+			kind: field.dataset.bsummary ? "summary" : field.dataset.bcode ? "code" : field.dataset.bcell ? "cell" : "text",
+			offset: range.toString().length,
+		};
+	}
+
+	// Caret an Zeichen-Offset in einem contenteditable-Feld setzen.
+	function setCaret(field, offset) {
+		if (!field) return;
+		// Der Browser darf beim Fokus nie irgendeinen Vorfahren scrollen. Ein
+		// scrollIntoView() ist hier absichtlich verboten: selbst mit „nearest“ kann
+		// Chromium bei einem frisch aufgebauten contenteditable den äußeren
+		// Dokument-Scroller versetzen.
+		field.focus({ preventScroll: true });
+		const sel = window.getSelection();
+		if (!sel) return;
+		if (offset == null) offset = Infinity;
+		let remaining = offset, gesetzt = false;
+		const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+		let node = null, last = null;
+		while ((node = walker.nextNode())) {
+			last = node;
+			const len = node.nodeValue.length;
+			if (remaining <= len) {
+				sel.collapse(node, remaining);
+				gesetzt = true;
+				break;
+			}
+			remaining -= len;
+		}
+		if (!gesetzt) {
+			if (last) sel.collapse(last, last.nodeValue.length);
+			else sel.collapse(field, field.childNodes.length);
+		}
+		keepCaretVisible();
+	}
+
+	// Notion hat genau EINEN Seitenscroller am rechten Fensterrand. Nur dieser
+	// darf bewegt werden; niemals #blockEditor oder ein beliebiger Vorfahr.
+	function scrollRoot() {
+		return host && (host.closest(".page-scroll") || host);
+	}
+
+	function keepCaretVisible() {
+		const root = scrollRoot();
+		const sel = window.getSelection();
+		if (!root || !sel || !sel.rangeCount) return;
+		const rr = root.getBoundingClientRect();
+		let cr = sel.getRangeAt(0).getBoundingClientRect();
+		if (!cr || (!cr.width && !cr.height)) {
+			const el = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+			cr = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+		}
+		if (!cr) return;
+		const pad = 18;
+		if (cr.top < rr.top + pad) root.scrollTop -= (rr.top + pad - cr.top);
+		else if (cr.bottom > rr.bottom - pad) root.scrollTop += (cr.bottom - (rr.bottom - pad));
+	}
+
+	function focusBoundary(marker) {
+		if (!marker) return false;
+		const field = marker.closest("[data-btext]");
+		if (!field) return false;
+		field.focus({ preventScroll: true });
+		const sel = window.getSelection();
+		const range = document.createRange();
+		range.setStartBefore(marker);
+		range.collapse(true);
+		sel.removeAllRanges();
+		sel.addRange(range);
+		// Die Marke darf beim nächsten Backspace nicht als „leeres Zeichen“ im Weg
+		// stehen. Nach remove() bleibt die Range am gleichen DOM-Grenzpunkt.
+		marker.remove();
+		keepCaretVisible();
+		return true;
+	}
+
+	function fieldOf(bid, kind, cell) {
+		if (!host) return null;
+		if (kind === "cell" && cell) return host.querySelector('[data-bcell="' + cell + '"]');
+		if (kind === "summary") return host.querySelector('[data-bsummary="' + bid + '"]');
+		if (kind === "code") return host.querySelector('[data-bcode="' + bid + '"]');
+		return host.querySelector('[data-btext="' + bid + '"]');
+	}
+
+	function focusBlock(bid, offset, kind, cell) {
+		const field = fieldOf(bid, kind || "text", cell);
+		if (field) setCaret(field, offset);
+		else {
+			// Nicht-Text-Block (Bild, Trennlinie …) → äußersten Top-Level-Block selektieren
+			// (auch tief verschachtelt: Tabelle in Callout in Toggle).
+			const c = findContext(bid);
+			if (c) selectTopOf(c.block);
+		}
+	}
+
+	// ---------- Undo/Redo: seitenweite Snapshots + Caret-Restore ----------
+	// Wie Notion: App-eigene History, NIE die Browser-History (execCommand).
+	function snapshotJson() { return JSON.stringify(blocks); }
+
+	function commitHistory() {
+		if (!histPending) return;
+		histPending = false;
+		const stack = undoStacks[pageId] || (undoStacks[pageId] = []);
+		const root = scrollRoot();
+		stack.push({ json: histState, focus: histFocus, scrollTop: root ? root.scrollTop : 0 });
+		if (stack.length > HISTORY_LIMIT) stack.shift();
+		redoStacks[pageId] = [];
+		histState = snapshotJson();
+	}
+
+	// checkpoint(): VOR einer Änderung aufrufen. Tipp-Änderungen werden 700ms
+	// gebündelt (ein Undo-Schritt pro Tipp-Phase, wie in Notion), strukturelle
+	// Änderungen (force) schreiben sofort fest.
+	function checkpoint(force) {
+		if (!histPending) {
+			histPending = true;
+			histFocus = caretInfo();
+		}
+		clearTimeout(histTimer);
+		if (force) commitHistory();
+		else histTimer = setTimeout(commitHistory, 700);
+	}
+
+	function undoRedo(redo) {
+		commitHistory();
+		const from = redo ? redoStacks[pageId] : undoStacks[pageId];
 		const to = redo ? (undoStacks[pageId] || (undoStacks[pageId] = [])) : (redoStacks[pageId] || (redoStacks[pageId] = []));
-		to.push(pg.content);
-		const md = from.pop();
-		activeId = null;
-		closeSlash();
-		await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: md } });
-		blocks = parse(md);
-		draw();
-	}
-
-	// Aktiven Block festschreiben: der bearbeitete Text kann mehrere Blöcke ergeben
-	// PERF: Bei 1:1-Commit die Block-ID behalten — sonst invalidiert jeder Fokuswechsel
-	// den inkrementellen draw()-Pfad (parse() vergibt sonst neue UUIDs).
-	function commitActive() {
-		if (!activeId) return;
-		const ta = host ? host.querySelector(".blk-input") : null;
-		const idx = blocks.findIndex((x) => x.id === activeId);
-		const keepId = activeId;
-		activeId = null;
-		closeSlash();
-		closeLinkMenu();
-		if (idx === -1) return;
-		const val = ta ? ta.value : blocks[idx].raw;
-		if (!val.trim()) {
-			blocks[idx] = newBlock("p", "");
-			blocks[idx].id = keepId;
-		} else {
-			const parsed = parse(val);
-			if (parsed.length === 1) parsed[0].id = keepId;
-			blocks.splice(idx, 1, ...parsed);
+		if (!from || !from.length) { U.toast(redo ? "Nichts zu wiederholen" : "Nichts rückgängig zu machen"); return; }
+		const entry = from.pop();
+		const root = scrollRoot();
+		to.push({ json: snapshotJson(), focus: caretInfo(), scrollTop: root ? root.scrollTop : 0 });
+		if (to.length > HISTORY_LIMIT) to.shift();
+		blocks = JSON.parse(entry.json);
+		histState = entry.json;
+		histPending = false;
+		// Alte Blockauswahl verwerfen — ihre Indizes zeigen nach dem Undo ins Leere
+		selRange = null;
+		selAnchor = null;
+		render({ anchorId: entry.focus && entry.focus.bid });
+		if (entry.focus) focusBlock(entry.focus.bid, entry.focus.offset, entry.focus.kind, entry.focus.cell);
+		// Scroll NACH dem Fokus wiederherstellen, sonst zieht keepCaretVisible/focus
+		// den Viewport oft an den Seitenanfang.
+		if (root && typeof entry.scrollTop === "number") {
+			root.scrollTop = entry.scrollTop;
+			requestAnimationFrame(() => { root.scrollTop = entry.scrollTop; });
 		}
-		saveSoon();
+		save(true);
 	}
 
-	function activate(bid, caret) {
-		if (activeId && activeId !== bid) commitActive();
-		activeId = bid;
-		draw({ caret });
+	// ---------- Speichern (Hintergrund-Markdown) ----------
+	function save(now) {
+		clearTimeout(saveTimer);
+		const run = () => {
+			const pg = S.pages[pageId];
+			if (!pg) return;
+			const content = serialize();
+			if (content === pg.content) return;
+			// viaEditor: dieser Autosave kommt vom Editor selbst — sein DOM/Scroll ist
+			// längst konsistent (render() lief schon in mutate()/undoRedo()). dispatch()
+			// persistiert asynchron (erst nach dem IndexedDB-Write feuert onStateChange),
+			// also lange NACH unserer eigenen Fokus-/Scroll-Wiederherstellung — und oft
+			// genau dann, wenn der Fokus (z.B. nach einem strukturellen Undo mit reiner
+			// Blockauswahl statt Textfokus) nicht mehr in einem Textfeld liegt. render.js
+			// hielt das für eine EXTERNE Änderung und baute #main komplett neu auf —
+			// der frische Scroll-Container begann dann immer bei 0 („springt nach oben“).
+			STATE.dispatch("pageUpdate", { id: pageId, patch: { content }, viaEditor: true });
+			RAG.queuePage(pageId);
+		};
+		if (now) run();
+		else saveTimer = setTimeout(run, 450);
 	}
 
-	function commitAndActivate(idx2, caretMode) {
-		const target = blocks[idx2];
-		if (!target) return;
-		const tid = target.id;
-		commitActive();
-		const t2 = blocks.find((x) => x.id === tid);
-		if (!t2) return;
-		activeId = tid;
-		draw({ caret: caretMode === "end" ? t2.raw.length : 0 });
+	// mutate(): die eine Transaktions-Klammer für ALLE Strukturänderungen.
+	function mutate(fn, opts) {
+		checkpoint(!(opts && opts.soft));
+		fn();
+		// Nach Struktur-Mutation muss histState dem IST-Zustand entsprechen.
+		// checkpoint(force) hat zuvor den Vorzustand committed und histState auf den
+		// Snapshot VOR fn() gesetzt — ohne diese Korrektur hinkt die History hinterher
+		// und Strg+Z stellt oft denselben Stand wieder her (wirkt wie "tut nichts").
+		if (!(opts && opts.soft)) {
+			histState = snapshotJson();
+			histPending = false;
+		}
+		if (!(opts && opts.noRender)) render(opts);
+		save(!!(opts && opts.saveNow));
 	}
 
-	// ---------- Tipp-Verhalten (Enter/Backspace/Tab/Pfeile wie in Notion) ----------
-	// Blocktyp live nachziehen, wenn der Nutzer selbst Marker tippt ("- ", "# ", "> ")
-	function retype(b) {
-		if (b.type === "code" || b.type === "table" || b.type === "toggle" || b.type === "columns" || b.type === "heft") return;
-		const raw = b.raw;
-		let m;
-		if ((m = raw.match(/^(\s*)- \[( |x)\]/))) { b.type = "todo"; b.indent = indentLevel(m[1]); b.checked = m[2] === "x"; }
-		else if ((m = raw.match(/^(\s*)[-*]\s/))) { b.type = "bullet"; b.indent = indentLevel(m[1]); delete b.checked; }
-		else if ((m = raw.match(/^(\s*)\d+[.)]\s/))) { b.type = "number"; b.indent = indentLevel(m[1]); delete b.checked; }
-		else if ((m = raw.match(/^(#{1,3})\s/))) { b.type = "h" + m[1].length; delete b.indent; delete b.checked; }
-		else if (/^>\s*\[!/.test(raw)) { b.type = "callout"; }
-		else if (raw.startsWith(">")) { b.type = "quote"; }
-		else if (raw.startsWith(":::heft")) { b.type = "heft"; delete b.indent; delete b.checked; }
-		else { b.type = "p"; delete b.indent; delete b.checked; }
+	// ---------- Rendern (WYSIWYG — identisches Design in Ruhe & Bearbeitung) ----------
+	const colorStyle = (b) => {
+		let s = "";
+		if (b.textColor) s += "color:var(--c-" + b.textColor + ");";
+		if (b.bgColor) s += "background:var(--bg-" + b.bgColor + ");";
+		return s ? ' style="' + s + '"' : "";
+	};
+
+	// Ein editierbares Rich-Text-Feld. data-btext/-bsummary/-bcell/-bcode sind
+	// die einzigen Anker, über die Events dem Modell zugeordnet werden.
+	function editable(b, opts) {
+		const o = opts || {};
+		const attr = o.attr || ('data-btext="' + b.id + '"');
+		const cls = "blk-text" + (o.cls ? " " + o.cls : "");
+		const raw = o.raw != null ? o.raw : (b.text || "");
+		let html = o.plain ? esc(raw) : inlineHtml(raw);
+		if (!o.plain && renderBoundary && renderBoundary.bid === b.id && o.attr == null) {
+			html = inlineHtml(renderBoundary.before) + '<span data-caret-boundary="1"></span>' + inlineHtml(renderBoundary.after);
+		}
+		return '<div class="' + cls + '" ' + attr + ' contenteditable="true" spellcheck="false" data-placeholder="' +
+			esc(o.ph || "") + '"' + (o.style || "") + ">" + html + "</div>";
 	}
 
-	function onEnter(ta, b, e) {
-		if (MULTILINE[b.type]) {
-			if (b.type === "quote" || b.type === "callout") {
-				// Enter setzt die Zitat-/Callout-Zeile fort ("> " wird automatisch vorangestellt)
-				e.preventDefault();
-				const s = ta.selectionStart;
-				ta.value = ta.value.slice(0, s) + "\n> " + ta.value.slice(ta.selectionEnd);
-				ta.selectionStart = ta.selectionEnd = s + 3;
-				b.raw = ta.value;
-				autoGrow(ta);
-				saveSoon();
+	// Code-Text → HTML mit Syntax-Highlight. U.highlightCode arbeitet auf DOM-
+	// Elementen — hier brauchen wir aber einen HTML-String (hljs global per CDN).
+	function codeHtml(text, language) {
+		const src = String(text || "");
+		if (window.hljs) {
+			try {
+				if (language && hljs.getLanguage(language)) return hljs.highlight(src, { language }).value;
+			} catch { /* unten escaped */ }
+		}
+		return esc(src);
+	}
+
+	function blockHtml(b, ctx) {
+		const nested = ctx && ctx.nested;
+		const ind = b.indent ? ' style="margin-left:' + (b.indent * 26) + 'px"' : "";
+		let inner = "";
+
+		switch (b.type) {
+			case "h1": case "h2": case "h3":
+				inner = editable(b, { cls: "blk-" + b.type, ph: "Überschrift " + b.type[1], style: colorStyle(b) });
+				break;
+			case "bullet":
+				inner = '<div class="blk-li"' + ind + '><span class="blk-marker">•</span>' +
+					editable(b, { ph: "Liste", style: colorStyle(b) }) + "</div>";
+				break;
+			case "number": {
+				inner = '<div class="blk-li"' + ind + '><span class="blk-marker blk-num" data-bnum="' + b.id + '">1.</span>' +
+					editable(b, { ph: "Liste", style: colorStyle(b) }) + "</div>";
+				break;
 			}
-			return; // Code/Tabelle/Toggle/Spalten: Enter = normale neue Zeile
+			case "todo":
+				inner = '<div class="blk-li"' + ind + '><span class="blk-marker"><input type="checkbox" data-btodo="' +
+					b.id + '"' + (b.checked ? " checked" : "") + "></span>" +
+					editable(b, { cls: b.checked ? "blk-done" : "", ph: "To-do", style: colorStyle(b) }) + "</div>";
+				break;
+			case "quote":
+				inner = '<blockquote class="blk-quote"' + colorStyle(b) + ">" + editable(b, { ph: "Zitat" }) + "</blockquote>";
+				break;
+			case "divider":
+				inner = '<hr class="blk-hr">';
+				break;
+			case "code":
+				// Immer contenteditable-<pre> — nie eine Textarea (kein Designwechsel).
+				// Syntax-Highlight passiert nur bei render(), nicht während des Tippens
+				// (sonst springt der Caret); beim Verlassen wird neu gerendert.
+				inner = '<div class="blk-codewrap">' +
+					'<button class="blk-codelang" data-bcodelang="' + b.id + '">' + esc(b.language || "text") + "</button>" +
+					'<pre class="blk-code"><code class="blk-text" data-bcode="' + b.id +
+					'" contenteditable="true" spellcheck="false">' + codeHtml(b.text, b.language) +
+					"</code></pre></div>";
+				break;
+			case "math":
+				// Gleichung wie in Notion: gerendert anzeigen, Klick öffnet Popover.
+				inner = '<div class="blk-math" data-bmath="' + b.id + '" tabindex="0">' +
+					(String(b.text || "").trim()
+						? '<span class="blk-mathview" data-mathsrc="' + esc(b.text) + '">' + esc(b.text) + "</span>"
+						: '<span class="blk-mathempty">Neue Gleichung — klicken zum Bearbeiten</span>') +
+					"</div>";
+				break;
+			case "image":
+				inner = '<figure class="blk-img"><img data-imgsrc="' + esc(b.src || "") + '" alt="' + esc(b.alt || "") +
+					'" draggable="false">' + (b.alt ? "<figcaption>" + esc(b.alt) + "</figcaption>" : "") + "</figure>";
+				break;
+			case "heft":
+				inner = '<div class="blk-heft" data-heft="' + esc(b.heftId || "") + '"></div>';
+				break;
+			case "table": {
+				const rows = (b.rows || []).map((row, ri) =>
+					"<tr>" + row.map((cell, ci) => {
+						const t = ri === 0 ? "th" : "td";
+						return "<" + t + ">" + editable(b, {
+							attr: 'data-bcell="' + b.id + ":" + ri + ":" + ci + '"',
+							raw: cell, cls: "blk-cell",
+						}) + "</" + t + ">";
+					}).join("") + "</tr>").join("");
+				inner = '<div class="blk-tablewrap"><table class="blk-table">' + rows + "</table>" +
+					'<button class="blk-tbtn blk-tbtn-col" data-btablecol="' + b.id + '" title="Spalte hinzufügen">+</button>' +
+					'<button class="blk-tbtn blk-tbtn-row" data-btablerow="' + b.id + '" title="Zeile hinzufügen">+</button></div>';
+				break;
+			}
+			case "callout":
+				inner = '<div class="blk-callout blk-callout-' + (b.color || "blue") + '"' + colorStyle(b) + ">" +
+					'<button class="blk-calloutdot" data-bcalloutcolor="' + b.id + '" title="Farbe"></button>' +
+					'<div class="blk-children">' + (b.children || []).map((ch) => blockHtml(ch, { nested: true })).join("") + "</div></div>";
+				break;
+			case "toggle":
+				inner = '<div class="blk-toggle' + (b.open ? " open" : "") + '">' +
+					'<div class="blk-togglehead"><button class="blk-togglearrow" data-btogglearrow="' + b.id + '">' +
+					(b.open ? "▾" : "▸") + "</button>" +
+					editable(b, { attr: 'data-bsummary="' + b.id + '"', raw: b.summary || "", ph: "Toggle" }) + "</div>" +
+					(b.open ? '<div class="blk-children blk-togglebody">' +
+						(b.children || []).map((ch) => blockHtml(ch, { nested: true })).join("") + "</div>" : "") +
+					"</div>";
+				break;
+			case "columns":
+				inner = '<div class="blk-columns">' + (b.columns || []).map((col, ci) =>
+					'<div class="blk-column" data-bcolumn="' + b.id + ":" + ci + '">' +
+					col.map((ch) => blockHtml(ch, { nested: true })).join("") + "</div>").join("") + "</div>";
+				break;
+			default:
+				inner = editable(b, { ph: "Schreib etwas, oder drücke „/“ für Befehle …", style: colorStyle(b) });
 		}
-		e.preventDefault();
-		const before = ta.value.slice(0, ta.selectionStart);
-		const after = ta.value.slice(ta.selectionEnd);
-		if (LISTY[b.type] && !listText(b).trim() && !after.trim()) {
-			// Leeres Listenelement + Enter → zurück zu normalem Text (wie Notion)
-			b.type = "p"; b.raw = ""; delete b.indent; delete b.checked;
-			saveSoon();
-			draw({ caret: 0 });
-			return;
-		}
-		const idx = blocks.findIndex((x) => x.id === b.id);
-		b.raw = before;
-		const marker = LISTY[b.type] ? markerOf(b) : "";
-		const nb = LISTY[b.type]
-			? newBlock(b.type, marker + after, { indent: indentOf(b) })
-			: newBlock("p", after);
-		blocks.splice(idx + 1, 0, nb);
-		activeId = nb.id;
-		saveSoon();
-		draw({ caret: marker.length });
+
+		// Jeder Block bekommt Handle (⋮⋮) + Plus — wie in Notion links im Gutter.
+		return '<div class="blk" data-blk="' + b.id + '" data-btype="' + b.type + '">' +
+			(nested ? "" : '<div class="blk-gutter" contenteditable="false">' +
+				'<button class="blk-plus" data-bplus="' + b.id + '" title="Block darunter einfügen">+</button>' +
+				'<button class="blk-handle" data-bhandle="' + b.id + '" draggable="true" title="Ziehen oder klicken">⋮⋮</button></div>') +
+			'<div class="blk-body">' + inner + "</div></div>";
 	}
 
-	function onBackspace(ta, b, e) {
-		if (ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
-		const idx = blocks.findIndex((x) => x.id === b.id);
-		if (LISTY[b.type]) {
-			// Erst ausrücken, dann Marker entfernen (→ normaler Absatz) — wie in Notion
-			e.preventDefault();
-			if (indentOf(b) > 0) { setIndent(b, ta, -1); return; }
-			b.type = "p"; b.raw = listText(b); delete b.indent; delete b.checked;
-			saveSoon();
-			draw({ caret: 0 });
-			return;
-		}
-		if (idx <= 0 || MULTILINE[b.type]) return;
-		e.preventDefault();
-		const prev = blocks[idx - 1];
-		if (prev.type === "divider") { blocks.splice(idx - 1, 1); saveSoon(); draw({ caret: 0 }); return; }
-		if (MULTILINE[prev.type] || LISTY[prev.type]) { commitAndActivate(idx - 1, "end"); return; }
-		// Mit dem vorherigen Text-Block verschmelzen
-		const caret = prev.raw.length;
-		prev.raw += ta.value;
-		blocks.splice(idx, 1);
-		activeId = prev.id;
-		saveSoon();
-		draw({ caret });
+	// render(): kompletter Neuaufbau des Editors aus `blocks`.
+	// Wird NUR bei Strukturänderungen aufgerufen — reines Tippen verändert den
+	// DOM direkt (contenteditable) und synchronisiert nur das Modell.
+	// Unterseiten-Verweise wie in Notion am Ende des Inhalts — klickbare
+	// Seitenzeilen (die Navigation übernimmt die data-page-Delegation in app.js).
+	function childPagesHtml() {
+		const pg = S.pages[pageId];
+		if (!pg) return "";
+		const kinder = STATE.childrenOf(pageId, pg.workspaceId);
+		if (!kinder.length) return "";
+		return '<div class="child-pages" contenteditable="false">' + kinder.map((k) => {
+			const ic = k.icon || (k.pdfId ? "📄" : k.kind === "heft" ? "📓" : "📝");
+			const icHtml = /^(https?:|data:)/.test(ic) ? '<img class="cp-img" src="' + esc(ic) + '" alt="">' : esc(ic);
+			return '<button type="button" class="child-page-row" data-page="' + esc(k.id) + '">' +
+				'<span class="cp-icon">' + icHtml + "</span>" +
+				'<span class="cp-title">' + esc(k.title || "Ohne Titel") + "</span>" +
+				"</button>";
+		}).join("") + "</div>";
 	}
 
-	function setIndent(b, ta, delta) {
-		const cur = indentOf(b);
-		const next = Math.max(0, Math.min(6, cur + delta));
-		if (next === cur) return;
-		const caret = Math.max(0, ta.selectionStart + (next - cur) * 2);
-		b.indent = next;
-		b.raw = "  ".repeat(next) + ta.value.replace(/^\s*/, "");
-		saveSoon();
-		draw({ caret });
+	function render(opts) {
+		if (!host) return;
+		if (!blocks.length) blocks.push(newBlock("p"));
+		const o = opts || {};
+		const root = scrollRoot();
+		const current = caretInfo();
+		const anchorId = o.anchorId || (current && current.bid);
+		const oldAnchor = anchorId && host.querySelector('.blk[data-blk="' + anchorId + '"]');
+		// Nicht eine absolute Scrollzahl, sondern einen überlebenden Block als
+		// visuellen Anker sichern. Das bleibt auch korrekt, wenn über ihm Blöcke
+		// verschwinden oder die Gesamthöhe beim Löschen kleiner wird.
+		const snap = {
+			scrollTop: root ? root.scrollTop : 0,
+			anchorId,
+			anchorTop: oldAnchor ? oldAnchor.getBoundingClientRect().top : null,
+		};
+		renderBoundary = o.boundary || null;
+		host.innerHTML = blocks.map((b) => blockHtml(b)).join("") +
+			childPagesHtml() +
+			'<div class="blk-tail" data-btail="1"' + (scrollReserve ? ' style="min-height:calc(25vh + ' + scrollReserve + 'px)"' : "") + '></div>';
+		renderBoundary = null;
+		renumber();
+		hydrate();
+		applySelectionClasses();
+		if (root) {
+			if (snap.anchorTop != null) {
+				const next = host.querySelector('.blk[data-blk="' + snap.anchorId + '"]');
+				if (next) {
+					const desired = root.scrollTop + next.getBoundingClientRect().top - snap.anchorTop;
+					const max = Math.max(0, root.scrollHeight - root.clientHeight);
+					// Am Seitenende klemmt der Browser scrollTop automatisch auf das neue
+					// Maximum, sobald eine Zeile verschwindet. Genau dadurch wanderte der
+					// Inhalt bei jedem Merge nach unten/oben. Eine dynamische Endreserve
+					// nimmt die entfernte Höhe auf, damit der visuelle Anker mathematisch
+					// überhaupt an derselben Bildschirmposition bleiben kann.
+					if (desired > max) {
+						scrollReserve += Math.ceil(desired - max);
+						const tail = host.querySelector("[data-btail]");
+						if (tail) tail.style.minHeight = "calc(25vh + " + scrollReserve + "px)";
+					}
+					root.scrollTop = desired;
+				}
+				else root.scrollTop = snap.scrollTop;
+			} else root.scrollTop = snap.scrollTop;
+		}
 	}
 
-	function onArrow(ta, b, e) {
-		const idx = blocks.findIndex((x) => x.id === b.id);
-		if (e.key === "ArrowUp" && !ta.value.slice(0, ta.selectionStart).includes("\n")) {
-			if (idx > 0) { e.preventDefault(); commitAndActivate(idx - 1, "end"); }
-		} else if (e.key === "ArrowDown" && !ta.value.slice(ta.selectionEnd).includes("\n")) {
-			if (idx < blocks.length - 1) { e.preventDefault(); commitAndActivate(idx + 1, 0); }
+	// Nummerierte Listen: fortlaufende Zähler je Ebene (wie Notion).
+	function renumber() {
+		const counters = {};
+		let prevListy = false;
+		const walk = (list) => {
+			for (const b of list) {
+				if (b.type === "number") {
+					const depth = b.indent || 0;
+					if (!prevListy) for (const k in counters) delete counters[k];
+					counters[depth] = (counters[depth] || 0) + 1;
+					for (const k in counters) if (+k > depth) delete counters[k];
+					const el = host.querySelector('[data-bnum="' + b.id + '"]');
+					if (el) el.textContent = counters[depth] + ".";
+					prevListy = true;
+				} else {
+					prevListy = LISTY[b.type] ? true : false;
+					if (!LISTY[b.type]) for (const k in counters) delete counters[k];
+				}
+				if (b.children) walk(b.children);
+				if (b.columns) b.columns.forEach(walk);
+			}
+		};
+		walk(blocks);
+	}
+
+	// Asynchrone Anreicherung nach dem HTML-Aufbau: Bilder, Hefte, Formeln, Code.
+	function hydrate() {
+		// Bild-Blobs aus IndexedDB laden
+		host.querySelectorAll("img[data-imgsrc]").forEach(async (img) => {
+			const src = img.dataset.imgsrc;
+			if (!src) return;
+			if (src.startsWith("img:")) {
+				try {
+					const blob = await DB.getBlob(src);
+					if (blob) img.src = URL.createObjectURL(new Blob([blob.data], { type: blob.meta && blob.meta.type || "image/png" }));
+				} catch { img.alt = "Bild fehlt"; }
+			} else {
+				img.src = src;
+			}
+		});
+		// Heft-Einbettungen
+		try { HEFT.hydrateEmbeds(host); } catch { /* Heft-Modul optional */ }
+		// Formel-Blöcke mit KaTeX rendern (Quelle bleibt in data-mathsrc)
+		host.querySelectorAll(".blk-mathview").forEach((el) => {
+			if (el.dataset.hydrated) return;
+			el.dataset.hydrated = "1";
+			const f = String(el.dataset.mathsrc || el.textContent || "");
+			try { if (window.katex && f) katex.render(f, el, { throwOnError: false, displayMode: true }); } catch { /* Roh-LaTeX bleibt sichtbar */ }
+		});
+		hydrateInlineMath(host);
+	}
+
+	// Highlight eines Codeblocks neu aufbauen (nur bei Fokusverlust — nie beim
+	// Tippen, sonst springt der Caret).
+	function rehighlight(bid) {
+		const b = findBlock(bid);
+		const el = fieldOf(bid, "code");
+		if (b && el && document.activeElement !== el) {
+			el.innerHTML = codeHtml(b.text, b.language);
 		}
+	}
+
+	// ---------- Blockauswahl (Esc / Handle-Klick / Gutter-Drag / Strg+A Stufe 2) ----------
+	function applySelectionClasses() {
+		host.querySelectorAll(".blk.selected").forEach((el) => el.classList.remove("selected"));
+		if (!selRange) return;
+		for (let k = selRange.from; k <= selRange.to; k++) {
+			const b = blocks[k];
+			const el = b && host.querySelector('[data-blk="' + b.id + '"]');
+			if (el) el.classList.add("selected");
+		}
+	}
+	function selectBlocks(from, to) {
+		if (from < 0 || to < 0 || !blocks.length) { clearSelection(); return; }
+		selRange = { from: Math.min(from, to), to: Math.max(from, to) };
+		if (selAnchor == null) selAnchor = from;
+		const sel = window.getSelection();
+		if (sel) sel.removeAllRanges(); // Text-Caret raus — jetzt gilt Blockauswahl
+		applySelectionClasses();
+		// Auswahl sichtbar halten OHNE scrollIntoView — das wirft den Viewport
+		// in Chromium oft an den Seitenanfang, sobald KaTeX/Bilder die Höhe ändern.
+		const erster = blocks[selRange.from];
+		const el = erster && host ? host.querySelector('.blk[data-blk="' + erster.id + '"]') : null;
+		if (el) {
+			const root = scrollRoot();
+			if (root) {
+				const er = el.getBoundingClientRect();
+				const rr = root.getBoundingClientRect();
+				if (er.top < rr.top + 8) root.scrollTop -= (rr.top + 8 - er.top);
+				else if (er.bottom > rr.bottom - 8) root.scrollTop += (er.bottom - (rr.bottom - 8));
+			}
+		}
+	}
+	function clearSelection() {
+		selRange = null; selAnchor = null; selAll = false; ctrlAArmed = false;
+		if (host) applySelectionClasses();
+	}
+	function deleteSelectedBlocks(directionKey) {
+		if (!selRange) return;
+		const { from, to } = selRange;
+		const prevBlock = from > 0 ? blocks[from - 1] : null;
+		const nextBlock = to + 1 < blocks.length ? blocks[to + 1] : null;
+		mutate(() => { blocks.splice(from, to - from + 1); });
+		clearSelection();
+		// Backspace: ans ENDE des vorherigen Blocks (wie Notion).
+		// Delete/Entf: an den ANFANG des folgenden Blocks.
+		if (directionKey === "Backspace" && prevBlock && findBlock(prevBlock.id)) {
+			focusNeighbor(prevBlock, -1);
+		} else if (nextBlock && findBlock(nextBlock.id)) {
+			focusNeighbor(nextBlock, 1);
+		} else if (prevBlock && findBlock(prevBlock.id)) {
+			focusNeighbor(prevBlock, -1);
+		} else if (blocks[0]) {
+			focusNeighbor(blocks[0], 1);
+		}
+	}
+
+	// ---------- Popover-Gerüst (Slash, Links, Blockmenü, Farben, Gleichung) ----------
+	function closeMenus() {
+		document.querySelectorAll(".blk-menu, .blk-mathpop").forEach((el) => el.remove());
+		slash = null; linkMenu = null; blockMenuId = null; mathEdit = null;
+	}
+	function openMenu(anchorEl, html, cls) {
+		closeMenus();
+		const menu = document.createElement("div");
+		menu.className = "blk-menu " + (cls || "");
+		menu.innerHTML = html;
+		document.body.appendChild(menu);
+		const r = anchorEl.getBoundingClientRect();
+		const mw = menu.offsetWidth || 280, mh = menu.offsetHeight || 200;
+		let x = r.left, y = r.bottom + 4;
+		if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
+		if (x + mw > innerWidth - 8) x = Math.max(8, innerWidth - mw - 8);
+		menu.style.left = x + "px";
+		menu.style.top = y + "px";
+		return menu;
 	}
 
 	// ---------- Slash-Menü ----------
-	function openSlash(q) {
-		const query = String(q || "").toLowerCase();
-		const items = SLASH.filter((s2) => !query || s2.k.includes(query) || s2.label.toLowerCase().includes(query));
-		slash = items.length ? { items, index: 0 } : null;
-		drawSlash();
+	const SLASH = [
+		{ k: "p", icon: "¶", label: "Text", hint: "Einfacher Absatz" },
+		{ k: "h1", icon: "H1", label: "Überschrift 1", hint: "# " },
+		{ k: "h2", icon: "H2", label: "Überschrift 2", hint: "## " },
+		{ k: "h3", icon: "H3", label: "Überschrift 3", hint: "### " },
+		{ k: "todo", icon: "☑", label: "To-do-Liste", hint: "[] " },
+		{ k: "bullet", icon: "•", label: "Aufzählung", hint: "- " },
+		{ k: "number", icon: "1.", label: "Nummerierte Liste", hint: "1. " },
+		{ k: "toggle", icon: "▸", label: "Toggle-Liste", hint: "> aufklappbar" },
+		{ k: "quote", icon: "”", label: "Zitat", hint: "> " },
+		{ k: "callout", icon: "💡", label: "Callout", hint: "Hervorgehobener Kasten" },
+		{ k: "code", icon: "</>", label: "Code", hint: "Codeblock mit Syntax" },
+		{ k: "math", icon: "√", label: "Gleichung", hint: "KaTeX-Formel" },
+		{ k: "table", icon: "▦", label: "Tabelle", hint: "Einfache Tabelle" },
+		{ k: "columns", icon: "▫▫", label: "2 Spalten", hint: "Nebeneinander" },
+		{ k: "divider", icon: "—", label: "Trennlinie", hint: "---" },
+		{ k: "image", icon: "🏞", label: "Bild", hint: "Hochladen" },
+		{ k: "heft", icon: "📓", label: "Heft", hint: "Handschrift-Einbettung" },
+		{ k: "link", icon: "🔗", label: "Seite verlinken", hint: "[[" },
+	];
+
+	function openSlash(bid, query) {
+		const q = (query || "").toLowerCase();
+		const items = SLASH.filter((s) => !q || s.label.toLowerCase().includes(q) || s.k.includes(q));
+		if (!items.length) { closeMenus(); return; }
+		const field = fieldOf(bid, "text");
+		if (!field) return;
+		const keepIndex = slash && slash.bid === bid ? Math.min(slash.index, items.length - 1) : 0;
+		const html = items.map((s, k) =>
+			'<div class="blk-mi' + (k === keepIndex ? " active" : "") + '" data-slashpick="' + s.k + '">' +
+			'<span class="blk-mi-ic">' + s.icon + '</span><span>' + esc(s.label) +
+			'<small>' + esc(s.hint) + "</small></span></div>").join("");
+		openMenu(field, html, "blk-slashmenu");
+		slash = { items, index: keepIndex, bid, query: q };
 	}
-	function closeSlash() { if (slash) { slash = null; drawSlash(); } }
-	function drawSlash() {
-		const menu0 = host ? host.querySelector(".slash-menu") : null;
-		if (!slash) { if (menu0) menu0.remove(); return; }
-		let menu = menu0;
-		if (!menu) { menu = document.createElement("div"); menu.className = "slash-menu"; host.appendChild(menu); }
-		menu.innerHTML = slash.items.map((s2, i) =>
-			'<button class="slash-opt' + (i === slash.index ? " active" : "") + '" data-slash="' + i + '">' + s2.label + "</button>"
-		).join("");
-		const blkEl = host.querySelector('.blk[data-bid="' + activeId + '"]');
-		if (blkEl) {
-			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
-			menu.style.top = (r.bottom - hr.top + host.scrollTop + 4) + "px";
-			menu.style.left = (r.left - hr.left + 46) + "px";
+
+	// Führt eine Slash-Auswahl aus: "/befehl" aus dem Text entfernen, Block wandeln.
+	function applySlash(kind) {
+		if (!slash) return;
+		const bid = slash.bid;
+		closeMenus();
+		const c = findContext(bid);
+		if (!c) return;
+		const text = String(c.block.text || "").replace(/\/[^/]*$/, "");
+		if (kind === "link") {
+			mutate(() => { c.block.text = text + "[["; }, { soft: true });
+			focusBlock(bid, text.length + 2);
+			openLinkMenu(bid, "");
+			return;
 		}
-	}
-	function applySlash(i) {
-		const item = slash && slash.items[i];
-		const b = blocks.find((x) => x.id === activeId);
-		slash = null;
-		if (!item || !b) { drawSlash(); return; }
-		if (item.action === "heft") {
-			// Legt ein echtes Heft als Unterseite an und bettet es hier als Block ein —
-			// die Heft-Daten leben im Blob der Unterseite, NICHT im Markdown der Seite.
-			drawSlash();
-			const cur = S.pages[pageId];
-			const hid = U.uid();
-			STATE.dispatch("pageCreate", {
-				id: hid, title: (cur ? cur.title + " — " : "") + "Heft", parentId: pageId,
-				workspaceId: cur ? cur.workspaceId : "default", icon: "📓", kind: "heft",
-			}).then(() => {
-				b.raw = ":::heft " + hid;
-				b.type = "heft";
-				delete b.indent; delete b.checked;
-				const i2 = blocks.findIndex((x) => x.id === b.id);
-				const nb = newBlock("p", "");
-				blocks.splice(i2 + 1, 0, nb);
-				activeId = nb.id;
-				save();
-				draw({ caret: 0 });
+		if (kind === "image") {
+			mutate(() => { c.block.text = text; }, { soft: true });
+			pickImage(bid);
+			return;
+		}
+		if (kind === "heft") {
+			mutate(() => {
+				const heftPageId = uid();
+				STATE.dispatch("pageCreate", {
+					id: heftPageId, title: "Heft", parentId: pageId,
+					workspaceId: S.pages[pageId] && S.pages[pageId].workspaceId, icon: "📓", kind: "heft",
+				});
+				const nb = { id: uid(), type: "heft", heftId: heftPageId };
+				c.block.text = text;
+				c.list.splice(c.index + 1, 0, nb);
 			});
 			return;
 		}
-		if (item.action === "image") {
-			drawSlash();
-			b.raw = "";
-			const inp = document.createElement("input");
-			inp.type = "file";
-			inp.accept = "image/*";
-			inp.multiple = true;
-			inp.onchange = () => { if (inp.files && inp.files.length) insertImages([...inp.files], host.querySelector('.blk[data-bid="' + b.id + '"]')); };
-			inp.click();
-			return;
-		}
-		b.raw = item.ins;
-		b.type = item.type;
-		delete b.indent; delete b.checked;
-		saveSoon();
-		if (item.type === "divider") {
-			// Trennlinie direkt festschreiben und neuen Absatz darunter aktivieren
-			const idx = blocks.findIndex((x) => x.id === b.id);
-			const nb = newBlock("p", "");
-			blocks.splice(idx + 1, 0, nb);
-			activeId = nb.id;
-			draw({ caret: 0 });
-			return;
-		}
-		draw({ caret: item.caret !== undefined ? item.caret : item.ins.length });
+		mutate(() => {
+			if (TEXTY[c.block.type] && (kind === "table" || kind === "columns" || kind === "code" || kind === "math" ||
+				kind === "divider" || kind === "callout" || kind === "toggle")) {
+				// Strukturblock: Rest-Text bleibt als eigener Block erhalten
+				const nb = newBlock(kind);
+				if (kind === "callout" && text) nb.children = [{ id: uid(), type: "p", text }];
+				if (kind === "toggle" && text) nb.summary = text;
+				if (text && kind !== "callout" && kind !== "toggle") {
+					c.block.text = text;
+					c.list.splice(c.index + 1, 0, nb);
+				} else {
+					c.list.splice(c.index, 1, nb);
+				}
+				setTimeout(() => {
+					if (kind === "table") focusBlock(nb.id, 0, "cell", nb.id + ":0:0");
+					else if (kind === "toggle") focusBlock(nb.id, null, "summary");
+					else if (kind === "code") focusBlock(nb.id, 0, "code");
+					else if (kind === "math") openMathPop(nb.id);
+					else if (nb.children) focusBlock(nb.children[0].id, 0);
+					else if (kind !== "divider") focusBlock(nb.id, 0);
+				}, 0);
+			} else {
+				turnInto(c.block, kind);
+				c.block.text = text;
+				focusBlock(bid, text.length);
+			}
+		});
 	}
 
-	// ---------- Block-Menü (Klick auf ⠠): Verschieben, Umwandeln, Duplizieren … ----------
-	const TURN_TYPES = [["p", "Text"], ["h1", "Überschrift 1"], ["h2", "Überschrift 2"], ["h3", "Überschrift 3"], ["bullet", "• Liste"], ["number", "1. Liste"], ["todo", "☑ To-do"], ["quote", "❝ Zitat"], ["callout", "💡 Callout"], ["code", "⌨ Code"]];
-
-	function plainTextOf(b) {
-		if (b.type === "code") return b.raw.replace(/^```[^\n]*\n?/, "").replace(/\n?```$/, "");
-		if (LISTY[b.type]) return listText(b);
-		return b.raw.replace(/^#{1,3}\s+/, "").replace(/^>\s*(\[![a-z]+\]\s?)?/gm, "");
+	// ---------- [[ Seiten-Link-Menü ----------
+	function openLinkMenu(bid, query) {
+		const q = (query || "").toLowerCase();
+		const items = STATE.activePages()
+			.filter((p) => p.id !== pageId && (!q || String(p.title || "").toLowerCase().includes(q)))
+			.slice(0, 8);
+		const field = fieldOf(bid, "text");
+		if (!field) return;
+		const keepIndex = linkMenu && linkMenu.bid === bid ? Math.min(linkMenu.index, Math.max(0, items.length - 1)) : 0;
+		const html = items.length
+			? items.map((p, k) =>
+				'<div class="blk-mi' + (k === keepIndex ? " active" : "") + '" data-linkpick="' + p.id + '">' +
+				'<span class="blk-mi-ic">' + esc(p.icon || "📄") + "</span><span>" + esc(p.title || "Ohne Titel") + "</span></div>").join("")
+			: '<div class="blk-mi disabled">Keine Seite gefunden</div>';
+		openMenu(field, html, "blk-linkmenu");
+		linkMenu = { items, index: keepIndex, bid, query: q };
 	}
 
-	function convertBlock(b, type) {
-		const text = plainTextOf(b);
-		const P = { p: "", h1: "# ", h2: "## ", h3: "### ", bullet: "- ", number: "1. ", todo: "- [ ] ", quote: "> ", callout: "> [!blue] " };
-		b.raw = type === "code" ? "```\n" + text + "\n```" : (P[type] || "") + text;
-		b.type = type;
-		delete b.indent;
-		delete b.checked;
+	function applyLink(pid) {
+		if (!linkMenu) return;
+		const bid = linkMenu.bid;
+		closeMenus();
+		const c = findContext(bid);
+		const page = S.pages[pid];
+		if (!c || !page) return;
+		mutate(() => {
+			const link = "[" + (page.title || "Ohne Titel") + "](#" + pid + ")";
+			c.block.text = String(c.block.text || "").replace(/\[\[[^\]]*$/, link);
+			focusBlock(bid, null);
+		});
 	}
 
-	function closeBlockMenu() {
-		blockMenuId = null;
-		const m = host && host.querySelector(".block-menu");
-		if (m) m.remove();
-	}
-
-	function openBlockMenu(bid) {
-		if (blockMenuId === bid) { closeBlockMenu(); return; }
-		closeBlockMenu();
-		blockMenuId = bid;
-		const menu = document.createElement("div");
-		menu.className = "slash-menu block-menu";
-		menu.innerHTML =
-			'<button class="slash-opt" data-bact="up">↑ Nach oben</button>' +
-			'<button class="slash-opt" data-bact="down">↓ Nach unten</button>' +
-			'<button class="slash-opt" data-bact="dup">⧉ Duplizieren</button>' +
-			'<button class="slash-opt" data-bact="copy">📋 Text kopieren</button>' +
-			'<button class="slash-opt" data-bact="card">🃏 Karteikarte aus Block</button>' +
-			'<div class="menu-sep"></div><div class="menu-label">Umwandeln in</div>' +
-			TURN_TYPES.map(([t, label]) => '<button class="slash-opt" data-bact="turn:' + t + '">' + label + "</button>").join("") +
-			'<div class="menu-sep"></div><button class="slash-opt danger" data-bact="del">🗑 Löschen</button>';
-		host.appendChild(menu);
-		const blkEl = host.querySelector('.blk[data-bid="' + bid + '"]');
-		if (blkEl) {
-			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
-			menu.style.top = (r.top - hr.top + host.scrollTop + 24) + "px";
-			menu.style.left = Math.max(0, r.left - hr.left) + "px";
-		}
-	}
-
-	async function runBlockAction(act) {
-		const idx = blocks.findIndex((x) => x.id === blockMenuId);
-		closeBlockMenu();
-		if (idx === -1) return;
-		const b = blocks[idx];
-		if (act === "up" && idx > 0) { blocks.splice(idx - 1, 0, blocks.splice(idx, 1)[0]); }
-		else if (act === "down" && idx < blocks.length - 1) { blocks.splice(idx + 1, 0, blocks.splice(idx, 1)[0]); }
-		else if (act === "dup") { blocks.splice(idx + 1, 0, newBlock(b.type, b.raw, { indent: b.indent, checked: b.checked })); }
-		else if (act === "del") { blocks.splice(idx, 1); if (!blocks.length) blocks.push(newBlock("p", "")); }
-		else if (act === "copy") {
-			try { await navigator.clipboard.writeText(b.raw); U.toast("Block kopiert.", "success"); } catch { U.toast("Zwischenablage blockiert.", "error"); }
-			return;
-		}
-		else if (act === "card") { await createCardFrom(plainTextOf(b)); return; }
-		else if (act.startsWith("turn:")) { convertBlock(b, act.slice(5)); }
-		await save();
-		draw();
-	}
-
-	// ---------- KI-Aktionen auf markiertem Text + Karteikarte aus Auswahl ----------
-	const SEL_AI = [
-		["improve", "✦ Verbessern", "Verbessere den folgenden Text sprachlich und stilistisch. Behalte Sprache, Bedeutung und Markdown-Formatierung bei. Antworte NUR mit dem überarbeiteten Text."],
-		["shorter", "− Kürzen", "Kürze den folgenden Text auf das Wesentliche. Behalte Sprache und Markdown bei. Antworte NUR mit dem gekürzten Text."],
-		["longer", "＋ Erweitern", "Erweitere den folgenden Text mit sinnvollen Details. Behalte Sprache und Markdown bei. Antworte NUR mit dem erweiterten Text."],
-		["fix", "✓ Korrigieren", "Korrigiere Rechtschreibung und Grammatik im folgenden Text. Ändere sonst nichts. Antworte NUR mit dem korrigierten Text."],
+	// ---------- ⋮⋮-Blockmenü (Umwandeln, Farbe, Duplizieren, Löschen …) ----------
+	const TURN_TYPES = [
+		["p", "Text"], ["h1", "Überschrift 1"], ["h2", "Überschrift 2"], ["h3", "Überschrift 3"],
+		["todo", "To-do-Liste"], ["bullet", "Aufzählung"], ["number", "Nummerierte Liste"],
+		["toggle", "Toggle-Liste"], ["quote", "Zitat"], ["callout", "Callout"], ["code", "Code"],
 	];
 
-	async function createCardFrom(text) {
-		const clean = String(text || "").trim();
-		if (!clean) { U.toast("Kein Text ausgewählt.", "error"); return; }
-		let front = clean.slice(0, 300), back = "";
-		try {
-			const raw = await AI.complete('Erstelle aus folgendem Text GENAU EINE Karteikarte. Antworte NUR als JSON {"front":"kurze Frage","back":"kurze Antwort"}:\n\n' + clean.slice(0, 4000));
-			const j = JSON.parse(raw.replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
-			if (j.front && j.back) { front = j.front; back = j.back; }
-		} catch { /* KI offline — Rohtext als Vorderseite */ }
-		await STATE.dispatch("cardCreate", { id: U.uid(), front, back, pageId });
-		U.toast("🃏 Karteikarte erstellt" + (back ? "." : " — Rückseite bitte im Karten-Browser ergänzen."), "success");
+	function openBlockMenu(bid, anchorEl) {
+		const b = findBlock(bid);
+		if (!b) return;
+		const turn = TEXTY[b.type] || b.type === "toggle" || b.type === "callout" || b.type === "code"
+			? '<div class="blk-msec">Umwandeln in</div>' + TURN_TYPES.map(([k, label]) =>
+				'<div class="blk-mi' + (b.type === k ? " active" : "") + '" data-turninto="' + bid + ":" + k + '">' + esc(label) + "</div>").join("")
+			: "";
+		const colors = TEXTY[b.type] || b.type === "callout"
+			? '<div class="blk-msec">Farbe</div><div class="blk-colorrow">' +
+				COLORS.map((cname) => '<button class="blk-cdot c-' + cname + '" data-bcolor="' + bid + ":c:" + cname + '" title="' + cname + '"></button>').join("") +
+				'</div><div class="blk-colorrow">' +
+				COLORS.map((cname) => '<button class="blk-cdot hl-' + cname + '" data-bcolor="' + bid + ":bg:" + cname + '" title="' + cname + ' Hintergrund"></button>').join("") +
+				'<button class="blk-cdot" data-bcolor="' + bid + ':none:" title="Farbe entfernen">✕</button></div>'
+			: "";
+		const html = turn + colors +
+			'<div class="blk-msec"></div>' +
+			'<div class="blk-mi" data-bdup="' + bid + '">Duplizieren <small>Strg+D</small></div>' +
+			'<div class="blk-mi" data-bcopy="' + bid + '">Als Markdown kopieren</div>' +
+			(TEXTY[b.type] ? '<div class="blk-mi" data-bflash="' + bid + '">Lernkarte erstellen</div>' : "") +
+			'<div class="blk-mi danger" data-bdel="' + bid + '">Löschen <small>Entf</small></div>';
+		openMenu(anchorEl, html, "blk-blockmenu");
+		blockMenuId = bid;
 	}
 
-	async function runSelAi(actionId) {
-		const ta = host ? host.querySelector(".blk-input") : null;
-		const b = blocks.find((x) => x.id === activeId);
-		if (!ta || !b || ta.selectionStart === ta.selectionEnd) return;
-		const s = ta.selectionStart, e2 = ta.selectionEnd;
-		const sel = ta.value.slice(s, e2);
-		if (actionId === "cardsel") { await createCardFrom(sel); return; }
-		const def = SEL_AI.find((x) => x[0] === actionId);
-		if (!def) return;
-		const tb = host.querySelector(".sel-toolbar");
-		if (tb) tb.classList.add("busy");
-		try {
-			const out = (await AI.complete(def[2] + "\n\n" + sel)).trim();
-			if (out) {
-				ta.value = ta.value.slice(0, s) + out + ta.value.slice(e2);
-				b.raw = ta.value;
-				autoGrow(ta);
-				ta.focus();
-				ta.selectionStart = s;
-				ta.selectionEnd = s + out.length;
-				saveSoon();
+	// ---------- Gleichungs-Popover (Block- und Inline-Formeln, wie Notion) ----------
+	function openMathPop(bid, spanEl) {
+		closeMenus();
+		const anchor = spanEl || host.querySelector('[data-bmath="' + bid + '"]');
+		if (!anchor) return;
+		const src = spanEl
+			? String(spanEl.dataset.md || "").replace(/^\$|\$$/g, "")
+			: String((findBlock(bid) || {}).text || "");
+		const pop = document.createElement("div");
+		pop.className = "blk-mathpop";
+		pop.innerHTML = '<textarea class="blk-mathinput" rows="2" placeholder="E = mc^2">' + esc(src) + "</textarea>" +
+			'<div class="blk-mathfoot"><small>Esc = abbrechen</small><button class="blk-mathok">Fertig ↵</button></div>';
+		document.body.appendChild(pop);
+		const r = anchor.getBoundingClientRect();
+		pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + "px";
+		pop.style.top = (r.bottom + 6) + "px";
+		mathEdit = { bid, spanEl: spanEl || null };
+		const ta = pop.querySelector("textarea");
+		ta.focus();
+		ta.select();
+	}
+
+	function commitMathPop() {
+		const pop = document.querySelector(".blk-mathpop");
+		if (!pop || !mathEdit) { closeMenus(); return; }
+		const value = pop.querySelector("textarea").value.trim();
+		const { bid, spanEl } = mathEdit;
+		closeMenus();
+		if (spanEl) {
+			// Inline-Formel: data-md des Chips im Modelltext ersetzen
+			const field = spanEl.closest("[data-btext],[data-bcell],[data-bsummary]");
+			if (!field) return;
+			if (value) spanEl.dataset.md = "$" + value + "$";
+			else spanEl.remove();
+			syncFieldToModel(field);
+			mutate(() => {}, { soft: true });
+			return;
+		}
+		const c = findContext(bid);
+		if (!c) return;
+		mutate(() => {
+			if (value) c.block.text = value;
+			else c.list.splice(c.index, 1, { id: c.block.id, type: "p", text: "" });
+		});
+	}
+
+	// ---------- Bild auswählen/hochladen ----------
+	function pickImage(bid) {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = "image/*";
+		input.onchange = async () => {
+			const file = input.files && input.files[0];
+			if (!file) return;
+			await insertImageFile(file, bid);
+		};
+		input.click();
+	}
+	async function insertImageFile(file, afterBid) {
+		const buf = await U.readAsBuffer(file);
+		const blobId = "img:" + uid();
+		await DB.putBlob(blobId, buf, { type: file.type, name: file.name });
+		mutate(() => {
+			const nb = { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
+			const c = afterBid && findContext(afterBid);
+			if (c) {
+				if (TEXTY[c.block.type] && !String(c.block.text || "").trim()) c.list.splice(c.index, 1, nb);
+				else c.list.splice(c.index + 1, 0, nb);
+			} else {
+				blocks.push(nb);
 			}
-		} catch (err) {
-			U.toast("KI-Aktion fehlgeschlagen: " + (err.message || err), "error");
+		});
+	}
+
+	// ---------- Umwandeln ("Turn into") ----------
+	function turnInto(b, kind) {
+		if (b.type === kind) return;
+		const keepText = plainTextOf(b);
+		if (kind === "callout") {
+			const child = { id: uid(), type: "p", text: TEXTY[b.type] ? String(b.text || "") : keepText };
+			delete b.text; delete b.indent; delete b.checked;
+			b.type = "callout"; b.color = b.color || "blue"; b.children = [child];
+			return;
 		}
-		if (tb) tb.classList.remove("busy");
-	}
-
-	// ---------- [[Seitenverlinkung mit Autovervollständigung ----------
-	function closeLinkMenu() {
-		linkMenu = null;
-		const m = host && host.querySelector(".link-menu");
-		if (m) m.remove();
-	}
-
-	function openLinkMenu(query) {
-		const q = String(query || "").toLowerCase();
-		const items = STATE.activePages()
-			.filter((pg) => pg.id !== pageId && (!q || pg.title.toLowerCase().includes(q)))
-			.slice(0, 8);
-		if (!items.length) { closeLinkMenu(); return; }
-		const keep = linkMenu && linkMenu.query === query ? linkMenu.index : 0;
-		linkMenu = { items, index: Math.min(keep, items.length - 1), query };
-		let menu = host.querySelector(".link-menu");
-		if (!menu) { menu = document.createElement("div"); menu.className = "slash-menu link-menu"; host.appendChild(menu); }
-		menu.innerHTML = '<div class="menu-label">Seite verlinken</div>' + items.map((pg2, i) =>
-			'<button class="slash-opt' + (i === linkMenu.index ? " active" : "") + '" data-linkpick="' + pg2.id + '">' + (pg2.icon ? U.esc(pg2.icon) + " " : "📝 ") + U.esc(pg2.title) + "</button>").join("");
-		const blkEl = host.querySelector('.blk[data-bid="' + activeId + '"]');
-		if (blkEl) {
-			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
-			menu.style.top = (r.bottom - hr.top + host.scrollTop + 4) + "px";
-			menu.style.left = (r.left - hr.left + 46) + "px";
+		if (kind === "toggle") {
+			b.summary = TEXTY[b.type] ? String(b.text || "") : keepText;
+			delete b.text; delete b.indent; delete b.checked;
+			b.type = "toggle"; b.open = true; b.children = b.children || [newBlock("p")];
+			return;
 		}
-	}
-
-	// Die Seitenliste kann bei großen Workspaces teuer sein. Während "[[" getippt
-	// wird, genügt eine kurze Pause; vor dem Öffnen wird der aktuelle Text erneut
-	// geprüft, damit ein alter Debounce-Aufruf kein bereits geschlossenes Menü zeigt.
-	const openLinkMenuSoon = U.debounce((query, bid) => {
-		const ta = host && host.querySelector(".blk-input");
-		if (!ta || activeId !== bid) return;
-		const match = ta.value.slice(0, ta.selectionStart).match(/\[\[([^\[\]]*)$/);
-		if (match && match[1] === query) openLinkMenu(query);
-	}, 80);
-
-	function insertPageLink(pg2) {
-		const ta = host ? host.querySelector(".blk-input") : null;
-		const b = blocks.find((x) => x.id === activeId);
-		if (!ta || !b || !pg2) { closeLinkMenu(); return; }
-		const caret = ta.selectionStart;
-		const before = ta.value.slice(0, caret).replace(/\[\[[^\[\]]*$/, "");
-		const link = "[" + pg2.title.replace(/[\[\]]/g, "") + "](#" + pg2.id + ")";
-		ta.value = before + link + ta.value.slice(caret);
-		b.raw = ta.value;
-		autoGrow(ta);
-		ta.focus();
-		ta.selectionStart = ta.selectionEnd = before.length + link.length;
-		saveSoon();
-		closeLinkMenu();
-	}
-
-	// Wort-/Zeichenzähler unten rechts im Editor
-	function editorCounterHtml() {
-		const text = blocks.map((b) => plainTextOf(b)).join("\n").trim();
-		const words = (text.match(/\S+/g) || []).length;
-		return '<div class="editor-counter"><span>' + words + " Wörter · " + text.length + " Zeichen</span></div>";
-	}
-
-	// ---------- Auswahl-Toolbar (Fett/Kursiv/Code/Farben/Link) ----------
-	function renderToolbar(ta) {
-		let tb = host ? host.querySelector(".sel-toolbar") : null;
-		if (!ta || ta.selectionStart === ta.selectionEnd) { if (tb) tb.remove(); return; }
-		if (!tb) {
-			tb = document.createElement("div");
-			tb.className = "sel-toolbar";
-			tb.innerHTML =
-				'<button data-wrap="**|**" title="Fett"><b>B</b></button>' +
-				'<button data-wrap="*|*" title="Kursiv"><i>K</i></button>' +
-				'<button data-wrap="~~|~~" title="Durchgestrichen"><s>S</s></button>' +
-				'<button data-wrap="`|`" title="Inline-Code">‹›</button>' +
-				'<button data-wrap="==|==" title="Hervorheben">🖍</button>' +
-				'<button data-link="1" title="Link einfügen">🔗</button>' +
-				'<button data-colormenu="c" title="Textfarbe">A</button>' +
-				'<button data-colormenu="bg" title="Hintergrundfarbe">▉</button>' +
-				'<button data-aimenu="1" title="KI-Aktionen auf der Auswahl">✦</button>' +
-				'<button data-ai="cardsel" title="Karteikarte aus Auswahl">🃏</button>' +
-				'<div class="color-menu" hidden></div>' +
-				'<div class="ai-menu" hidden></div>';
-			// mousedown abfangen, damit die Textauswahl in der Textarea erhalten bleibt
-			tb.addEventListener("mousedown", (e) => { if (!e.target.closest(".color-menu")) e.preventDefault(); });
-			host.appendChild(tb);
+		if (kind === "code") {
+			b.text = keepText; b.language = b.language || "javascript";
+			delete b.children; delete b.indent; delete b.checked; delete b.summary;
+			b.type = "code";
+			return;
 		}
-		const blkEl = host.querySelector('.blk[data-bid="' + activeId + '"]');
-		if (blkEl) {
-			const r = blkEl.getBoundingClientRect(), hr = host.getBoundingClientRect();
-			tb.style.top = Math.max(0, r.top - hr.top + host.scrollTop - 38) + "px";
-			tb.style.left = (r.left - hr.left + 46) + "px";
+		// Zieltyp ist ein Textblock
+		b.text = TEXTY[b.type] || b.type === "code" ? String(b.text || "") : keepText;
+		delete b.children; delete b.columns; delete b.rows; delete b.summary; delete b.open; delete b.language;
+		if (kind === "todo") b.checked = !!b.checked; else delete b.checked;
+		if (!LISTY[kind]) delete b.indent;
+		b.type = kind;
+	}
+
+	// ---------- Modell-Sync beim Tippen ----------
+	// Der DOM ist während des Tippens führend; nach jedem input-Event wird der
+	// betroffene Feldinhalt zurück ins Modell geschrieben (kein Re-Render!).
+	function syncFieldToModel(field) {
+		const md = mdFromEditable(field);
+		if (field.dataset.bcell) {
+			const [bid, ri, ci] = field.dataset.bcell.split(":");
+			const b = findBlock(bid);
+			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = md;
+			return bid;
 		}
-	}
-
-	// Auswahl in der aktiven Textarea mit before/after umschließen (oder Platzhalter)
-	function wrapTa(before, after) {
-		const ta = host ? host.querySelector(".blk-input") : null;
-		const b = blocks.find((x) => x.id === activeId);
-		if (!ta || !b) return;
-		const s = ta.selectionStart, e2 = ta.selectionEnd;
-		const sel = ta.value.slice(s, e2) || "Text";
-		ta.value = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e2);
-		b.raw = ta.value;
-		autoGrow(ta);
-		ta.focus();
-		ta.selectionStart = s + before.length;
-		ta.selectionEnd = s + before.length + sel.length;
-		saveSoon();
-	}
-
-	function openColorMenu(kind) {
-		const menu = host ? host.querySelector(".color-menu") : null;
-		if (!menu) return;
-		menu.innerHTML = COLORS.map((c) =>
-			'<button class="color-dot ' + (kind === "bg" ? "hl-" : "c-") + c + '" data-color="' + kind + ":" + c + '" title="' + c + '">A</button>'
-		).join("");
-		menu.hidden = !menu.hidden;
-	}
-
-	// ---------- Alles auswählen (Strg+A über alle Blöcke, wie in Notion) ----------
-	function setSelAll(on) {
-		selAll = on;
-		if (host) host.classList.toggle("all-selected", on);
-	}
-
-	async function copyAllToClipboard() {
-		const md = serialize(blocks);
-		try {
-			await navigator.clipboard.writeText(md);
-		} catch {
-			// Fallback für file:// ohne Clipboard-Berechtigung
-			const tmp = document.createElement("textarea");
-			tmp.value = md;
-			tmp.style.position = "fixed";
-			tmp.style.opacity = "0";
-			document.body.appendChild(tmp);
-			tmp.select();
-			document.execCommand("copy");
-			tmp.remove();
+		if (field.dataset.bsummary) {
+			const b = findBlock(field.dataset.bsummary);
+			if (b) b.summary = md;
+			return field.dataset.bsummary;
 		}
+		if (field.dataset.bcode) {
+			const b = findBlock(field.dataset.bcode);
+			if (b) b.text = field.textContent || ""; // Code: reiner Text, kein Inline-MD
+			return field.dataset.bcode;
+		}
+		const b = findBlock(field.dataset.btext);
+		if (b) b.text = md;
+		return field.dataset.btext;
 	}
 
-	// Gesamten Seiteninhalt ersetzen (leer oder mit dem ersten getippten Zeichen)
-	function replaceAllBlocks(seed) {
-		setSelAll(false);
-		blocks = [newBlock("p", seed || "")];
-		activeId = blocks[0].id;
+	// ---------- Live-Transformationen (Markdown-Auslöser wie in Notion) ----------
+	// Greifen nur am Zeilen-/Blockanfang direkt nach einem Leerzeichen-Tastendruck.
+	const TRANSFORMS = [
+		[/^#\s$/, "h1"], [/^##\s$/, "h2"], [/^###\s$/, "h3"],
+		[/^[-*]\s$/, "bullet"], [/^1[.)]\s$/, "number"],
+		[/^\[\]\s$/, "todo"], [/^\[ \]\s$/, "todo"],
+		[/^>\s$/, "quote"],
+	];
+
+	// Nach input prüfen: "/befehl", "[[", Markdown-Trigger, "---", FENCE, "$$".
+	function handleLiveTriggers(field, e) {
+		if (composing || !field.dataset.btext) return false;
+		const bid = field.dataset.btext;
+		const c = findContext(bid);
+		if (!c || !TEXTY[c.block.type]) return false;
+		const text = String(c.block.text || "");
+		const caret = caretInfo();
+		const upto = caret ? text.slice(0, caret.offset) : text;
+
+		// Slash-Menü öffnen/aktualisieren
+		const sm = upto.match(/\/([a-zäöü0-9]*)$/i);
+		if (sm && (upto.length === sm[0].length || /\s\/[a-zäöü0-9]*$/i.test(upto))) {
+			openSlash(bid, sm[1]);
+			return false;
+		} else if (slash) closeMenus();
+
+		// [[ Link-Menü
+		const lm = upto.match(/\[\[([^\]]*)$/);
+		if (lm) { openLinkMenu(bid, lm[1]); return false; }
+		else if (linkMenu) closeMenus();
+
+		// Nur bei Leerzeichen als letztem Zeichen: Blocktyp-Trigger
+		if (e && e.data === " " && c.block.type === "p") {
+			for (const [re, kind] of TRANSFORMS) {
+				if (re.test(upto)) {
+					mutate(() => {
+						turnInto(c.block, kind);
+						c.block.text = text.slice(upto.length);
+					});
+					focusBlock(bid, 0);
+					return true;
+				}
+			}
+		}
+		// "---" → Trennlinie
+		if (text === "---") {
+			mutate(() => {
+				const nb = newBlock("p");
+				c.list.splice(c.index, 1, { id: c.block.id, type: "divider" }, nb);
+				focusBlock(nb.id, 0);
+			});
+			return true;
+		}
+		// Code-Zaun → Codeblock
+		if (text.startsWith(FENCE)) {
+			const language = text.slice(3).trim() || "javascript";
+			mutate(() => {
+				c.list.splice(c.index, 1, { id: c.block.id, type: "code", language, text: "" });
+				focusBlock(c.block.id, 0, "code");
+			});
+			return true;
+		}
+		// "$$" → Gleichungsblock mit Popover
+		if (text === "$$") {
+			mutate(() => {
+				c.list.splice(c.index, 1, { id: c.block.id, type: "math", text: "" });
+				setTimeout(() => openMathPop(c.block.id), 0);
+			});
+			return true;
+		}
+		// Inline-Markdown sofort hübsch rendern, sobald ein Muster VOLLSTÄNDIG ist
+		// (z.B. zweiter Stern von **fett** getippt) — Feld neu rendern + Caret halten.
+		if (e && /[*\x60~=$)\/}]/.test(e.data || "") &&
+			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|\$[^$\n]+\$|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
+			const off = caret ? caret.offset : null;
+			field.innerHTML = inlineHtml(text);
+			hydrateInlineMath(field);
+			setCaret(field, off);
+			return false;
+		}
+		return false;
+	}
+
+	// ---------- Inline-Formatierung (Auswahl → Strg+B/I/E/K, Farben) ----------
+	function wrapSelection(before, after) {
+		const sel = window.getSelection();
+		if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+		const caret = caretInfo();
+		if (!caret) return;
+		const field = fieldOf(caret.bid, caret.kind, caret.cell);
+		if (!field) return;
+		const r = sel.getRangeAt(0);
+		const vorR = document.createRange(); vorR.selectNodeContents(field); vorR.setEnd(r.startContainer, r.startOffset);
+		const midR = r.cloneRange();
+		const nachR = document.createRange(); nachR.selectNodeContents(field); nachR.setStart(r.endContainer, r.endOffset);
+		const zuMd = (frag) => { const t = document.createElement("div"); t.appendChild(frag); return mdFromEditable(t); };
+		const pre = zuMd(vorR.cloneContents()), mid = zuMd(midR.cloneContents()), post = zuMd(nachR.cloneContents());
+		const domStartOff = vorR.toString().length;
+		const domMidLen = midR.toString().length;
+		let next;
+		if (pre.endsWith(before) && post.startsWith(after)) {
+			next = pre.slice(0, -before.length) + mid + post.slice(after.length);
+		} else {
+			next = pre + before + mid + after + post;
+		}
+		checkpoint(true);
+		if (caret.kind === "cell") {
+			const [bid, ri, ci] = caret.cell.split(":");
+			const b = findBlock(bid);
+			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = next;
+		} else if (caret.kind === "summary") {
+			const b = findBlock(caret.bid); if (b) b.summary = next;
+		} else {
+			const b = findBlock(caret.bid); if (b) b.text = next;
+		}
+		field.innerHTML = inlineHtml(next);
+		hydrateInlineMath(field);
+		setCaret(field, domStartOff + domMidLen);
 		save();
-		draw({ caret: (seed || "").length });
+	}
+	const colorWrap = (spec) => {
+		lastColor = spec;
+		const [kind2, cname] = spec.split(":");
+		wrapSelection("{" + (kind2 === "bg" ? "bg-" : "") + cname + "}", "{/}");
+	};
+
+	// ---------- Tastatur (das Herzstück der Notion-Kopie) ----------
+	function onKeydown(e) {
+		const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
+		const mod = e.ctrlKey || e.metaKey;
+
+		// --- Menü-Navigation hat Vorrang ---
+		const menu = slash || linkMenu;
+		if (menu && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Tab" || e.key === "Escape")) {
+			e.preventDefault();
+			if (e.key === "Escape") { closeMenus(); return; }
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				const d = e.key === "ArrowDown" ? 1 : -1;
+				menu.index = (menu.index + d + menu.items.length) % Math.max(1, menu.items.length);
+				document.querySelectorAll(".blk-menu .blk-mi").forEach((el, k) => el.classList.toggle("active", k === menu.index));
+				return;
+			}
+			if (slash && slash.items[slash.index]) applySlash(slash.items[slash.index].k);
+			else if (linkMenu && linkMenu.items[linkMenu.index]) applyLink(linkMenu.items[linkMenu.index].id);
+			return;
+		}
+		if (mathEdit && e.key === "Escape") { e.preventDefault(); closeMenus(); return; }
+
+		// --- Undo/Redo IMMER app-eigen (nie Browser) ---
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undoRedo(false); return; }
+		if (mod && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) { e.preventDefault(); undoRedo(true); return; }
+
+		// --- Blockauswahl-Modus (kein Textfokus) ---
+		if (selRange && !field) { if (handleSelectionKeys(e)) return; }
+
+		if (!field) return;
+		const caret = caretInfo();
+
+		// --- Esc: Textfokus → Blockauswahl (wie Notion) ---
+		if (e.key === "Escape") {
+			const c0 = caret && findContext(caret.bid);
+			if (c0 && selectTopOf(c0.block)) {
+				e.preventDefault();
+				e.target.blur();
+			}
+			return;
+		}
+
+		// --- Zweistufiges Strg+A ---
+		if (mod && e.key.toLowerCase() === "a") {
+			const fieldText = field.textContent || "";
+			const selText = String(window.getSelection());
+			if (ctrlAArmed || (fieldText && selText === fieldText)) {
+				e.preventDefault();
+				selAll = true; selAnchor = 0;
+				selectBlocks(0, blocks.length - 1);
+				e.target.blur();
+				return;
+			}
+			ctrlAArmed = true; // Browser macht Stufe 1 (Feld auswählen)
+			return;
+		}
+		ctrlAArmed = false;
+
+		// --- Inline-Format-Shortcuts ---
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); wrapSelection("**", "**"); return; }
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "i") { e.preventDefault(); wrapSelection("*", "*"); return; }
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "e") { e.preventDefault(); wrapSelection("\x60", "\x60"); return; }
+		if (mod && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); wrapSelection("~~", "~~"); return; }
+		if (mod && e.shiftKey && e.key.toLowerCase() === "h") { e.preventDefault(); colorWrap(lastColor); return; }
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
+			e.preventDefault();
+			const url = prompt("Link-Adresse:");
+			if (url) wrapSelection("[", "](" + url + ")");
+			return;
+		}
+
+		const bid = caret && caret.bid;
+		const c = bid && findContext(bid);
+
+		// --- Strg+D: Block duplizieren ---
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "d" && c) {
+			e.preventDefault();
+			mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(JSON.parse(JSON.stringify(c.block)))); });
+			return;
+		}
+
+		// --- Strg+Shift+0-8: Blocktyp wechseln (wie Notion: 0=Text, 1-3=H, 4=Todo, 5=Bullet, 6=Nummer, 7=Toggle, 8=Code) ---
+		if (mod && e.shiftKey && /^[0-8]$/.test(e.key) && c) {
+			e.preventDefault();
+			const map = { 0: "p", 1: "h1", 2: "h2", 3: "h3", 4: "todo", 5: "bullet", 6: "number", 7: "toggle", 8: "code" };
+			const off = caret.offset;
+			mutate(() => { turnInto(c.block, map[e.key]); });
+			focusBlock(bid, off, map[e.key] === "toggle" ? "summary" : map[e.key] === "code" ? "code" : "text");
+			return;
+		}
+
+		// --- Strg+Shift+↑/↓: Block verschieben ---
+		if (mod && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && c) {
+			e.preventDefault();
+			const d = e.key === "ArrowUp" ? -1 : 1;
+			const ni = c.index + d;
+			if (ni < 0 || ni >= c.list.length) return;
+			const off = caret.offset;
+			mutate(() => { c.list.splice(ni, 0, c.list.splice(c.index, 1)[0]); });
+			focusBlock(bid, off, caret.kind, caret.cell);
+			return;
+		}
+
+		// --- Tabellen-Navigation: Tab/Shift+Tab/Enter, letzte Zelle+Tab = neue Zeile ---
+		if (field.dataset.bcell) { if (handleTableKeys(e, field)) return; }
+
+		// --- Codeblock: Tab = 2 Spaces, Enter = Zeilenumbruch, Escape via Pfeil unten am Ende ---
+		if (field.dataset.bcode) { if (handleCodeKeys(e, field)) return; }
+
+		// --- Toggle-Summary: Enter springt in den Toggle-Inhalt ---
+		if (field.dataset.bsummary && e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			const b = findBlock(field.dataset.bsummary);
+			if (!b) return;
+			mutate(() => {
+				b.open = true;
+				if (!b.children || !b.children.length) b.children = [newBlock("p")];
+			});
+			focusBlock(b.children[0].id, 0);
+			return;
+		}
+
+		if (!c || !field.dataset.btext) return;
+		handleTextBlockKeys(e, field, c, caret);
 	}
 
-	// Bilder als Blob in IndexedDB speichern und als eigene Bild-Blöcke einfügen
-	// (für Drag & Drop in den Editor sowie Einfügen aus der Zwischenablage).
-	async function insertImages(files, blkEl) {
-		commitActive();
-		let idx = blkEl ? blocks.findIndex((x) => x.id === blkEl.dataset.bid) : blocks.length - 1;
-		if (idx < 0) idx = blocks.length - 1;
-		for (const f of files) {
-			try {
-				const buf = await U.readAsBuffer(f);
-				const blobId = "img:" + U.uid();
-				await DB.putBlob(blobId, buf, { name: f.name || "bild", type: f.type });
-				const alt = String(f.name || "Bild").replace(/[\[\]()]/g, "");
-				blocks.splice(++idx, 0, newBlock("p", "![" + alt + "](" + blobId + ")"));
-			} catch (err) {
-				U.toast("Bild konnte nicht eingefügt werden: " + (err.message || err), "error");
+	// Enter/Backspace/Delete/Tab in normalen Textblöcken — exakt wie Notion.
+	function handleTextBlockKeys(e, field, c, caret) {
+		const b = c.block;
+		const text = String(b.text || "");
+		const off = caret ? caret.offset : text.length;
+		const atStart = off === 0 && String(window.getSelection()).length === 0;
+		const atEnd = off >= (field.textContent || "").length;
+
+		// Shift+Enter = weicher Umbruch im selben Block (Browser macht <br>) → ok
+		if (e.key === "Enter" && e.shiftKey) return;
+
+		if (e.key === "Enter") {
+			e.preventDefault();
+			closeMenus();
+			// Leeres Listenelement + Enter = ausrücken bzw. zu Text (wie Notion)
+			if (LISTY[b.type] && !text.trim()) {
+				mutate(() => {
+					if ((b.indent || 0) > 0) b.indent--;
+					else turnInto(b, "p");
+				});
+				focusBlock(b.id, 0);
+				return;
+			}
+			let neuId = null;
+			mutate(() => {
+				// Split in SICHTBAREN Koordinaten: beide Caret-Hälften werden einzeln
+				// zurück nach Markdown übersetzt. text.slice(off) mischte Sicht- und
+				// Markdown-Offsets und riss formatierte Zeilen an der falschen Stelle.
+				const teile = splitFieldAtCaret(field, text);
+				const before = teile.vor, after = teile.nach;
+				b.text = before;
+				// Listen setzen sich fort; Überschriften/Zitate erzeugen Text darunter
+				const nb = LISTY[b.type]
+					? { id: uid(), type: b.type, indent: b.indent || 0, text: after, ...(b.type === "todo" ? { checked: false } : {}) }
+					: { id: uid(), type: "p", text: after };
+				c.list.splice(c.index + 1, 0, nb);
+				neuId = nb.id;
+			});
+			// Fokus SOFORT (synchron) an den Anfang des neuen Blocks setzen — wie in
+			// Notion. Der frühere setTimeout-Fokus kam einen Tick zu spät und
+			// verursachte Caret-Sprünge direkt nach Enter.
+			if (neuId) focusBlock(neuId, 0);
+			return;
+		}
+
+		if (e.key === "Tab") {
+			e.preventDefault();
+			if (!LISTY[b.type]) return; // wie Notion (vereinfachtes Modell): nur Listen-Ebenen
+			mutate(() => {
+				if (e.shiftKey) { if ((b.indent || 0) > 0) b.indent--; }
+				else {
+					// Nur einrücken, wenn ein Listenelement darüber existiert (Notion-Regel)
+					const prev = c.list[c.index - 1];
+					if (prev && LISTY[prev.type] && (b.indent || 0) <= (prev.indent || 0)) b.indent = (b.indent || 0) + 1;
+				}
+			}, { soft: true });
+			render();
+			focusBlock(b.id, off);
+			return;
+		}
+
+		if (e.key === "Backspace" && atStart) {
+			e.preventDefault();
+			// Stufe 1: Sonderformat verliert zuerst sein Format (→ Text) …
+			if (b.type !== "p") {
+				mutate(() => {
+					if (LISTY[b.type] && (b.indent || 0) > 0) b.indent--; // Liste rückt erst aus
+					else turnInto(b, "p");
+				});
+				focusBlock(b.id, 0);
+				return;
+			}
+			// Stufe 2: mit dem Vorgänger verschmelzen
+			const prev = c.list[c.index - 1];
+			if (!prev) {
+				// Anfang einer Kind-Liste (Callout/Toggle/Spalte): Block vor den Elternblock ziehen
+				if (c.parent) {
+					const pc = findContext(c.parent.id);
+					if (c.parent.type === "toggle") {
+						focusBlock(c.parent.id, null, "summary");
+						return;
+					}
+					if (pc && !text.trim() && c.list.length > 1) {
+						mutate(() => { c.list.splice(c.index, 1); });
+						focusBlock(pc.block.id, null, pc.block.type === "toggle" ? "summary" : undefined);
+						return;
+					}
+					if (pc && !pc.parent) {
+						selAnchor = pc.index;
+						selectBlocks(pc.index, pc.index);
+						field.blur();
+					}
+				}
+				return;
+			}
+			if (TEXTY[prev.type]) {
+				// Die Nahtstelle wird beim Rendern als echte DOM-Grenze markiert. Ein
+				// Zahlenoffset ist prinzipiell falsch: <br>, Links und KaTeX-Chips haben
+				// andere DOM-Längen als ihr sichtbarer bzw. gespeicherter Text.
+				const boundary = { bid: prev.id, before: String(prev.text || ""), after: text };
+				mutate(() => {
+					prev.text = String(prev.text || "") + text;
+					c.list.splice(c.index, 1);
+				}, { anchorId: prev.id, boundary });
+				if (!focusBoundary(host.querySelector("[data-caret-boundary]"))) focusBlock(prev.id, null);
+				return;
+			}
+			// Vorgänger ist Struktur (Tabelle, Bild, Trennlinie …)
+			if (!text.trim()) {
+				// Leerer Absatz nach einem Strukturblock: den Leerblock entfernen und
+				// dann in den letzten editierbaren Teil des Vorgängerblocks springen.
+				// Notion löscht Tabellen/Code/Toggle/Callout hier NICHT als Ganzes.
+				mutate(() => { c.list.splice(c.index, 1); });
+				if (prev.type !== "divider" && prev.type !== "image" && prev.type !== "math" && prev.type !== "heft") {
+					focusNeighbor(prev, -1);
+					return;
+				}
+				selectTopOf(prev);
+			} else if (prev.type === "divider") {
+				if (selectTopOf(prev)) field.blur();
+			} else {
+				if (prev.type !== "image" && prev.type !== "math" && prev.type !== "heft") {
+					focusNeighbor(prev, -1);
+					return;
+				}
+				if (selectTopOf(prev)) field.blur();
+			}
+			return;
+		}
+
+		if (e.key === "Delete" && atEnd) {
+			const next = c.list[c.index + 1];
+			if (!next) return;
+			e.preventDefault();
+			if (TEXTY[next.type]) {
+				mutate(() => {
+					b.text = text + String(next.text || "");
+					c.list.splice(c.index + 1, 1);
+				});
+				focusBlock(b.id, off);
+			} else if (next.type === "divider") {
+				if (selectTopOf(next)) field.blur();
+			}
+			return;
+		}
+
+		// ↑/↓ an Blockgrenzen: in Nachbarblock wechseln (Browser bleibt sonst hängen)
+		if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+			const d = e.key === "ArrowUp" ? -1 : 1;
+			const edge = d < 0 ? off === 0 : atEnd;
+			if (!edge || /\n/.test(text)) return; // mehrzeilig: Browser navigiert selbst
+			const neighbor = c.list[c.index + d];
+			if (neighbor) {
+				e.preventDefault();
+				focusNeighbor(neighbor, d);
 			}
 		}
-		await save();
-		draw();
 	}
 
-	// Globale Tastatur-/Maus-Handler für den Alles-ausgewählt-Modus. Nur EINMAL
-	// registriert (der Editor-Container selbst wird bei jedem renderMain neu gebaut).
-	let globalWired = false;
+	// Fokus sinnvoll in einen Nachbarblock setzen (auch Struktur-Blöcke).
+	// Gibt true zurück, wenn Fokus/Selektion gesetzt wurde (auch bei Blockauswahl).
+	function focusNeighbor(nb, d) {
+		if (!nb) return false;
+		if (TEXTY[nb.type]) { focusBlock(nb.id, d < 0 ? null : 0); return true; }
+		if (nb.type === "toggle") {
+			if (d < 0 && nb.open && nb.children && nb.children.length) {
+				return focusNeighbor(nb.children[nb.children.length - 1], d);
+			}
+			focusBlock(nb.id, d < 0 ? null : 0, "summary");
+			return true;
+		}
+		if (nb.type === "code") { focusBlock(nb.id, d < 0 ? null : 0, "code"); return true; }
+		if (nb.type === "table" && nb.rows && nb.rows.length) {
+			const ri = d < 0 ? nb.rows.length - 1 : 0;
+			const ci = d < 0 ? nb.rows[ri].length - 1 : 0;
+			focusBlock(nb.id, null, "cell", nb.id + ":" + ri + ":" + ci);
+			return true;
+		}
+		if (nb.type === "callout" && nb.children && nb.children.length) {
+			return focusNeighbor(d < 0 ? nb.children[nb.children.length - 1] : nb.children[0], d);
+		}
+		if (nb.type === "columns" && nb.columns && nb.columns.length) {
+			const cols = d < 0 ? [...nb.columns].reverse() : nb.columns;
+			const col = cols.find((c) => c && c.length);
+			if (col) return focusNeighbor(d < 0 ? col[col.length - 1] : col[0], d);
+		}
+		// Bild/Divider/Math/Heft (oder leerer Container): Top-Level-Block selektieren
+		return selectTopOf(nb);
+	}
+
+	// Tabellen: Tab = nächste Zelle (letzte Zelle → neue Zeile), Shift+Tab = zurück,
+	// Enter = Zelle darunter (letzte Zeile → neue Zeile), Backspace in leerer
+	// Tabelle löscht sie NICHT versehentlich — nur über Blockauswahl/Menü (wie Notion).
+	function handleTableKeys(e, field) {
+		const [bid, riS, ciS] = field.dataset.bcell.split(":");
+		const ri = +riS, ci = +ciS;
+		const b = findBlock(bid);
+		if (!b || !b.rows) return false;
+		const lastRow = b.rows.length - 1, lastCol = b.rows[0].length - 1;
+
+		if (e.key === "Tab") {
+			e.preventDefault();
+			let nr = ri, nc = ci + (e.shiftKey ? -1 : 1);
+			if (nc > lastCol) { nc = 0; nr++; }
+			if (nc < 0) { nc = lastCol; nr--; }
+			if (nr < 0) return true;
+			if (nr > lastRow) {
+				mutate(() => { b.rows.push(b.rows[0].map(() => "")); });
+			}
+			focusBlock(bid, null, "cell", bid + ":" + nr + ":" + nc);
+			return true;
+		}
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			if (ri >= lastRow) mutate(() => { b.rows.push(b.rows[0].map(() => "")); });
+			focusBlock(bid, null, "cell", bid + ":" + (ri + 1) + ":" + ci);
+			return true;
+		}
+		if (e.key === "Backspace") {
+			const caret = caretInfo();
+			const empty = !(field.textContent || "").length;
+			if (empty && caret && caret.offset === 0) {
+				e.preventDefault();
+				// Leere letzte Zeile per Backspace in Zelle 0 entfernen (Komfort)
+				if (ci === 0 && ri === lastRow && ri > 1 && b.rows[ri].every((x) => !String(x).trim())) {
+					mutate(() => { b.rows.pop(); });
+					focusBlock(bid, null, "cell", bid + ":" + (ri - 1) + ":" + lastCol);
+				} else if (ci > 0) {
+					focusBlock(bid, null, "cell", bid + ":" + ri + ":" + (ci - 1));
+				} else if (ri > 0) {
+					focusBlock(bid, null, "cell", bid + ":" + (ri - 1) + ":" + lastCol);
+				}
+				return true;
+			}
+			return false;
+		}
+		if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+			const d = e.key === "ArrowUp" ? -1 : 1;
+			const nr = ri + d;
+			if (nr >= 0 && nr <= lastRow) {
+				e.preventDefault();
+				focusBlock(bid, null, "cell", bid + ":" + nr + ":" + ci);
+				return true;
+			}
+			// Tabelle verlassen
+			const c = findContext(bid);
+			const neighbor = c && c.list[c.index + d];
+			if (neighbor) { e.preventDefault(); focusNeighbor(neighbor, d); return true; }
+		}
+		return false;
+	}
+
+	// Codeblock: Tab = 2 Leerzeichen, Enter = normaler Umbruch (Browser),
+	// Backspace am Anfang eines LEEREN Codeblocks → zurück zu Text.
+	function handleCodeKeys(e, field) {
+		const bid = field.dataset.bcode;
+		if (e.key === "Tab") {
+			e.preventDefault();
+			document.execCommand("insertText", false, "  ");
+			return true;
+		}
+		if (e.key === "Backspace") {
+			const b = findBlock(bid);
+			const caret = caretInfo();
+			if (b && caret && caret.offset === 0 && !String(b.text || "").length) {
+				e.preventDefault();
+				mutate(() => { turnInto(b, "p"); });
+				focusBlock(bid, 0);
+				return true;
+			}
+		}
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			const b = findBlock(bid);
+			const caret = caretInfo();
+			const text = String(b && b.text || "");
+			const d = e.key === "ArrowUp" ? -1 : 1;
+			const edge = d < 0 ? caret && caret.offset === 0 : caret && caret.offset >= text.length;
+			if (edge) {
+				const c = findContext(bid);
+				const neighbor = c && c.list[c.index + d];
+				if (neighbor) { e.preventDefault(); focusNeighbor(neighbor, d); return true; }
+				if (!neighbor && d > 0 && c && !c.parent) {
+					// Unter dem letzten Codeblock einen Absatz anlegen (sonst käme man nie raus)
+					e.preventDefault();
+					mutate(() => { const nb = newBlock("p"); blocks.push(nb); focusBlock(nb.id, 0); });
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// Tasten im Blockauswahl-Modus (kein Textfokus): Pfeile, Shift+Pfeile,
+	// Enter = Bearbeiten, Backspace/Entf = löschen, Strg+D = duplizieren, Esc = aufheben.
+	function handleSelectionKeys(e) {
+		if (e.key === "Escape") { e.preventDefault(); clearSelection(); return true; }
+		if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); mutateDeleteSelection(e.key); return true; }
+		if (e.key === "Enter") {
+			e.preventDefault();
+			const b = blocks[selRange.from];
+			clearSelection();
+			if (b) {
+				// focusNeighbor gibt true bei Blockauswahl zurück; sonst hat es
+				// den Caret selbst gesetzt. Kein zweiter focusBlock-Fallback danach.
+				if (!focusNeighbor(b, 1)) focusBlock(b.id, 0);
+			}
+			return true;
+		}
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+			e.preventDefault();
+			const { from, to } = selRange;
+			mutate(() => {
+				const copies = blocks.slice(from, to + 1).map((b) => cloneBlock(JSON.parse(JSON.stringify(b))));
+				blocks.splice(to + 1, 0, ...copies);
+			});
+			selectBlocks(to + 1, to + 1 + (to - from));
+			return true;
+		}
+		if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+			e.preventDefault();
+			const d = e.key === "ArrowUp" ? -1 : 1;
+			if (e.shiftKey) {
+				// Auswahl erweitern/verkleinern relativ zum Anker
+				const edge = d < 0 ? (selRange.from < selAnchor ? selRange.from : selRange.to)
+					: (selRange.to > selAnchor ? selRange.to : selRange.from);
+				const ne = Math.max(0, Math.min(blocks.length - 1, edge + d));
+				selectBlocks(Math.min(selAnchor, ne), Math.max(selAnchor, ne));
+			} else {
+				const k = Math.max(0, Math.min(blocks.length - 1, (d < 0 ? selRange.from : selRange.to) + d));
+				selAnchor = k;
+				selectBlocks(k, k);
+			}
+			return true;
+		}
+		return false;
+	}
+	function mutateDeleteSelection(key) { deleteSelectedBlocks(key); }
+
+	// ---------- Verkabelung am Host (pro mount) ----------
+	function wire() {
+		if (!host || wiredHosts.has(host)) return;
+		wiredHosts.add(host);
+		host.addEventListener("compositionstart", () => { composing = true; });
+		host.addEventListener("compositionend", (e) => {
+			composing = false;
+			const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
+			if (field) { checkpoint(); syncFieldToModel(field); save(); }
+		});
+
+		// Tippen: Modell synchronisieren + Live-Trigger prüfen (kein Re-Render)
+		host.addEventListener("input", (e) => {
+			if (composing) return;
+			const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
+			if (!field) return;
+			checkpoint();
+			syncFieldToModel(field);
+			handleLiveTriggers(field, e);
+			save();
+		});
+
+		host.addEventListener("keydown", onKeydown);
+
+		// Fokusverlust: Codeblöcke neu highlighten, Tipp-History festschreiben
+		host.addEventListener("focusout", (e) => {
+			const code = e.target.closest && e.target.closest("[data-bcode]");
+			if (code) setTimeout(() => rehighlight(code.dataset.bcode), 0);
+			commitHistory();
+		});
+
+		// Klicks: Checkboxen, Handles, Plus, Toggles, Tabellen-Buttons, Formeln …
+		host.addEventListener("click", (e) => {
+			const t = e.target;
+
+			const todo = t.closest && t.closest("[data-btodo]");
+			if (todo) {
+				const b = findBlock(todo.dataset.btodo);
+				if (b) mutate(() => { b.checked = todo.checked; });
+				return;
+			}
+			const plus = t.closest && t.closest("[data-bplus]");
+			if (plus) {
+				const c = findContext(plus.dataset.bplus);
+				if (c) {
+					mutate(() => {
+						const nb = newBlock("p");
+						nb.text = "/";
+						c.list.splice(c.index + 1, 0, nb);
+						focusBlock(nb.id, 1);
+						openSlash(nb.id, "");
+					});
+				}
+				return;
+			}
+			const handle = t.closest && t.closest("[data-bhandle]");
+			if (handle) { e.preventDefault(); openBlockMenu(handle.dataset.bhandle, handle); return; }
+
+			const arrow = t.closest && t.closest("[data-btogglearrow]");
+			if (arrow) {
+				const b = findBlock(arrow.dataset.btogglearrow);
+				if (b) mutate(() => { b.open = !b.open; }, { soft: true });
+				return;
+			}
+			const tRow = t.closest && t.closest("[data-btablerow]");
+			if (tRow) {
+				const b = findBlock(tRow.dataset.btablerow);
+				if (b) mutate(() => { b.rows.push(b.rows[0].map(() => "")); });
+				return;
+			}
+			const tCol = t.closest && t.closest("[data-btablecol]");
+			if (tCol) {
+				const b = findBlock(tCol.dataset.btablecol);
+				if (b) mutate(() => { b.rows.forEach((r) => r.push("")); });
+				return;
+			}
+			const coDot = t.closest && t.closest("[data-bcalloutcolor]");
+			if (coDot) {
+				const b = findBlock(coDot.dataset.bcalloutcolor);
+				if (b) mutate(() => {
+					const order = ["blue", "green", "yellow", "red", "gray", "purple"];
+					b.color = order[(order.indexOf(b.color || "blue") + 1) % order.length];
+				});
+				return;
+			}
+			const lang = t.closest && t.closest("[data-bcodelang]");
+			if (lang) {
+				const b = findBlock(lang.dataset.bcodelang);
+				if (!b) return;
+				const next = prompt("Sprache:", b.language || "javascript");
+				if (next != null) mutate(() => { b.language = next.trim() || "text"; });
+				return;
+			}
+			const mathBlk = t.closest && t.closest("[data-bmath]");
+			if (mathBlk) { openMathPop(mathBlk.dataset.bmath); return; }
+			const imath = t.closest && t.closest(".blk-imath");
+			if (imath) {
+				const caret = caretInfo();
+				openMathPop(caret && caret.bid, imath);
+				return;
+			}
+
+			// Seiteninterner Link [Titel](#pageId) → Seite öffnen
+			const a = t.closest && t.closest("a[href^='#']");
+			if (a) {
+				e.preventDefault();
+				const pid = a.getAttribute("href").slice(1);
+				if (S.pages[pid]) STATE.dispatch("navigate", { pageId: pid });
+				return;
+			}
+
+			// Klick auf den leeren Bereich unter dem letzten Block → neuer Absatz
+			if (t.dataset && t.dataset.btail != null) {
+				const last = blocks[blocks.length - 1];
+				if (last && TEXTY[last.type] && !String(last.text || "").trim()) {
+					focusBlock(last.id, 0);
+				} else {
+					mutate(() => {
+						const nb = newBlock("p");
+						blocks.push(nb);
+						focusBlock(nb.id, 0);
+					});
+				}
+				return;
+			}
+			// Klick in einen Block hebt eine bestehende Blockauswahl auf
+			if (selRange && t.closest && t.closest("[data-blk]")) clearSelection();
+		});
+
+		// ⋮⋮ Drag & Drop (nur Top-Level-Blöcke, wie bisher)
+		host.addEventListener("dragstart", (e) => {
+			const handle = e.target.closest && e.target.closest("[data-bhandle]");
+			if (!handle) { e.preventDefault(); return; }
+			dragBid = handle.dataset.bhandle;
+			e.dataTransfer.effectAllowed = "move";
+			e.dataTransfer.setData("text/plain", dragBid);
+		});
+		host.addEventListener("dragover", (e) => {
+			if (!dragBid) return;
+			e.preventDefault();
+			clearDropMarks();
+			const over = e.target.closest && e.target.closest("[data-blk]");
+			if (!over) return;
+			const r = over.getBoundingClientRect();
+			over.classList.add(e.clientY < r.top + r.height / 2 ? "drop-above" : "drop-below");
+		});
+		host.addEventListener("drop", async (e) => {
+			e.preventDefault();
+			clearDropMarks();
+			// Bild-Dateien direkt fallen lassen
+			if (e.dataTransfer.files && e.dataTransfer.files.length) {
+				const over = e.target.closest && e.target.closest("[data-blk]");
+				for (const f of e.dataTransfer.files) {
+					if (f.type.startsWith("image/")) await insertImageFile(f, over && over.dataset.blk);
+				}
+				dragBid = null;
+				return;
+			}
+			if (!dragBid) return;
+			const over = e.target.closest && e.target.closest("[data-blk]");
+			const src = findContext(dragBid);
+			dragBid = null;
+			if (!over || !src || src.parent) return;
+			const dst = findContext(over.dataset.blk);
+			if (!dst || dst.parent || dst.block.id === src.block.id) return;
+			const r = over.getBoundingClientRect();
+			const before = e.clientY < r.top + r.height / 2;
+			mutate(() => {
+				const [moved] = blocks.splice(src.index, 1);
+				let di = blocks.findIndex((x) => x.id === dst.block.id);
+				if (!before) di++;
+				blocks.splice(di, 0, moved);
+			});
+		});
+		host.addEventListener("dragend", () => { dragBid = null; clearDropMarks(); });
+
+		// Einfügen: Bilder als Blob, Text als Markdown-Blöcke bzw. Inline-Text
+		host.addEventListener("paste", async (e) => {
+			const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
+			const items = e.clipboardData && e.clipboardData.items || [];
+			for (const item of items) {
+				if (item.type && item.type.startsWith("image/")) {
+					e.preventDefault();
+					const caret = caretInfo();
+					await insertImageFile(item.getAsFile(), caret && caret.bid);
+					return;
+				}
+			}
+			if (!field) return;
+			e.preventDefault();
+			const text = e.clipboardData.getData("text/plain") || "";
+			if (!text) return;
+			checkpoint(true);
+			// Mehrzeiliger Markdown-Text in einen normalen Textblock → als Blöcke einfügen
+			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*]\s|\d+[.)]\s|>|\|)/m.test(text) && text.includes("\n")) {
+				const c = findContext(field.dataset.btext);
+				if (c && !c.parent) {
+					const pasted = parse(text);
+					mutate(() => {
+						c.list.splice(c.index + 1, 0, ...pasted);
+						if (!String(c.block.text || "").trim() && c.block.type === "p") c.list.splice(c.index, 1);
+					});
+					const last = pasted[pasted.length - 1];
+					if (last) focusBlock(last.id, null);
+					return;
+				}
+			}
+			// Sonst: als reiner Text an der Caret-Position (Browser-insertText hält den Caret korrekt)
+			document.execCommand("insertText", false, text);
+		});
+	}
+	function clearDropMarks() {
+		host.querySelectorAll(".drop-above,.drop-below").forEach((el) => el.classList.remove("drop-above", "drop-below"));
+	}
+
+	// ---------- Globale Verkabelung (einmalig, document-weit) ----------
 	function wireGlobal() {
 		if (globalWired) return;
 		globalWired = true;
-		document.addEventListener("keydown", (e) => {
-			if (!host || !document.body.contains(host)) { selAll = false; return; }
+
+		// Klicks in Menüs/Popovern (liegen außerhalb des Hosts im body)
+		document.addEventListener("click", (e) => {
 			const t = e.target;
-			const inField = t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable);
-			const key = (e.key || "").toLowerCase();
-			// Undo/Redo über Blockgrenzen — außerhalb von Eingabefeldern (dort gilt das native Undo)
-			if ((e.ctrlKey || e.metaKey) && !inField && (key === "z" || key === "y")) {
-				e.preventDefault();
-				undoRedo(key === "y" || e.shiftKey);
-				return;
-			}
-			if (!selAll) {
-				// Strg+A außerhalb jedes Eingabefelds → ganze Seite auswählen
-				if ((e.ctrlKey || e.metaKey) && key === "a" && !inField) {
-					e.preventDefault();
-					commitActive();
-					setSelAll(true);
-					draw();
+
+			const sp = t.closest && t.closest("[data-slashpick]");
+			if (sp) { applySlash(sp.dataset.slashpick); return; }
+			const lp = t.closest && t.closest("[data-linkpick]");
+			if (lp) { applyLink(lp.dataset.linkpick); return; }
+
+			const ti = t.closest && t.closest("[data-turninto]");
+			if (ti) {
+				const [bid, kind] = ti.dataset.turninto.split(":");
+				closeMenus();
+				const b = findBlock(bid);
+				if (b) {
+					mutate(() => { turnInto(b, kind); });
+					focusBlock(bid, null, kind === "toggle" ? "summary" : kind === "code" ? "code" : "text");
 				}
 				return;
 			}
-			// Modus "alles ausgewählt":
-			if ((e.ctrlKey || e.metaKey) && key === "a") { e.preventDefault(); return; }
-			if ((e.ctrlKey || e.metaKey) && key === "c") { e.preventDefault(); copyAllToClipboard(); return; }
-			if ((e.ctrlKey || e.metaKey) && key === "x") {
-				e.preventDefault();
-				copyAllToClipboard().then(() => replaceAllBlocks(""));
+			const bc = t.closest && t.closest("[data-bcolor]");
+			if (bc) {
+				const [bid, kind, cname] = bc.dataset.bcolor.split(":");
+				closeMenus();
+				const b = findBlock(bid);
+				if (b) mutate(() => {
+					if (kind === "none") { delete b.textColor; delete b.bgColor; }
+					else if (kind === "c") { b.textColor = cname; delete b.bgColor; }
+					else { b.bgColor = cname; delete b.textColor; }
+				});
 				return;
 			}
-			if ((e.ctrlKey || e.metaKey) && key === "v") {
-				// Auswahl ersetzen: frischer leerer Block, das native Einfügen landet darin
-				replaceAllBlocks("");
+			const dup = t.closest && t.closest("[data-bdup]");
+			if (dup) {
+				const c = findContext(dup.dataset.bdup);
+				closeMenus();
+				if (c) mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(JSON.parse(JSON.stringify(c.block)))); });
 				return;
 			}
-			if (key === "backspace" || key === "delete") { e.preventDefault(); replaceAllBlocks(""); return; }
-			if (key === "escape") { e.preventDefault(); setSelAll(false); return; }
-			// Tippen ersetzt die gesamte Auswahl (wie in Notion)
-			if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-				e.preventDefault();
-				replaceAllBlocks(e.key);
+			const cp = t.closest && t.closest("[data-bcopy]");
+			if (cp) {
+				const b = findBlock(cp.dataset.bcopy);
+				closeMenus();
+				if (b) { navigator.clipboard.writeText(serializeBlock(b)); U.toast("Als Markdown kopiert"); }
 				return;
 			}
-		});
-		// Linksklick irgendwo hebt die Alles-Auswahl wieder auf
-		document.addEventListener("mousedown", (e) => { if (selAll && e.button === 0) setSelAll(false); });
-		// Klick außerhalb des Editors schreibt den aktiven Block fest (Commit-on-blur, wie in Notion):
-		// sonst bleibt der Block als Roh-Textarea stehen, wenn man z.B. in den Titel oder die Sidebar klickt.
-		document.addEventListener("mousedown", (e) => {
-			if (!activeId || e.button !== 0) return;
-			if (!host || !document.body.contains(host)) return;
-			if (e.target.closest(".block-editor")) return;
-			commitActive();
-			draw();
+			const fl = t.closest && t.closest("[data-bflash]");
+			if (fl) {
+				const b = findBlock(fl.dataset.bflash);
+				closeMenus();
+				if (b) {
+					STATE.dispatch("cardCreate", { id: uid(), front: plainTextOf(b), back: "", pageId });
+					U.toast("Lernkarte erstellt ��� Rückseite in Anki ergänzen");
+				}
+				return;
+			}
+			const del = t.closest && t.closest("[data-bdel]");
+			if (del) {
+				const c = findContext(del.dataset.bdel);
+				closeMenus();
+				if (c) mutate(() => { c.list.splice(c.index, 1); });
+				return;
+			}
+			const mok = t.closest && t.closest(".blk-mathok");
+			if (mok) { commitMathPop(); return; }
+
+			// Klick außerhalb: Menüs schließen (Gleichungs-Popover wird übernommen),
+			// Klick außerhalb des Editors hebt die Blockauswahl auf
+			if (!t.closest || !t.closest(".blk-menu")) {
+				if (t.closest && t.closest(".blk-mathpop")) { /* im Popover weitertippen */ }
+				else if (mathEdit) commitMathPop();
+				else closeMenus();
+			}
+			if (selRange && host && !host.contains(t)) clearSelection();
+		}, true);
+
+		// Enter im Gleichungs-Popover bestätigt (Shift+Enter = neue Zeile)
+		document.addEventListener("keydown", (e) => {
+			if (mathEdit && e.target.closest && e.target.closest(".blk-mathpop")) {
+				if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitMathPop(); }
+				if (e.key === "Escape") { e.preventDefault(); closeMenus(); }
+				return;
+			}
+			// Blockauswahl-Tasten auch ohne Editor-Fokus (nach Esc liegt der Fokus im body).
+			// Wichtig: Events, die der Editor bereits behandelt hat (defaultPrevented),
+			// hier ignorieren. Sonst loescht derselbe Backspace, der einen Strukturblock
+			// (Tabelle, Bild, Code, Callout, Toggle, Spalten) gerade erst ausgewaehlt hat,
+			// ihn im selben Tastendruck wieder — Datenverlust. Wie in Notion gilt:
+			// erster Backspace waehlt aus, erst der zweite loescht.
+			if (e.defaultPrevented) return;
+			if (selRange && host && document.activeElement && !host.contains(document.activeElement)) {
+				handleSelectionKeys(e);
+				if (e.defaultPrevented) return;
+			}
+			// Strg+Z / Strg+Y wirken wie in Notion IMMER auf den Editor — auch wenn
+			// der Fokus außerhalb liegt (z.B. auf dem body nach einer Blockauswahl).
+			// Fremde Eingabefelder (Titel, Suche, Popover) behalten ihr Browser-Undo.
+			const mod = e.ctrlKey || e.metaKey;
+			if (mod && host && document.body.contains(host)) {
+				const ae = document.activeElement;
+				const fremdesFeld = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || (ae.isContentEditable && !host.contains(ae)));
+				if (!fremdesFeld && !(ae && host.contains(ae))) {
+					const k = (e.key || "").toLowerCase();
+					if (k === "z" && !e.shiftKey) { e.preventDefault(); undoRedo(false); return; }
+					if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); undoRedo(true); return; }
+				}
+			}
 		});
 	}
 
-	// ---------- Event-Verkabelung (pro Mount; der Container entsteht bei jedem renderMain neu) ----------
-	function wire() {
-		host.addEventListener("input", (e) => {
-			const ta = e.target;
-			if (!ta.classList || !ta.classList.contains("blk-input")) return;
-			autoGrow(ta);
-			const b = blocks.find((x) => x.id === activeId);
-			if (!b) return;
-			b.raw = ta.value;
-			retype(b);
-			saveSoon();
-			// Slash-Menü, solange nur "/befehl" im Block steht
-			if (/^\/\S*$/.test(ta.value) && b.type === "p") openSlash(ta.value.slice(1));
-			else closeSlash();
-			// [[Titel → Seitenverlinkung mit Vorschlagsliste (wie in Notion)
-			const lm = ta.value.slice(0, ta.selectionStart).match(/\[\[([^\[\]]*)$/);
-			if (lm) openLinkMenuSoon(lm[1], b.id);
-			else closeLinkMenu();
-		});
-
-		host.addEventListener("keydown", (e) => {
-			const ta = e.target;
-			if (!ta.classList || !ta.classList.contains("blk-input")) return;
-			const b = blocks.find((x) => x.id === activeId);
-			if (!b) return;
-			// Strg+A: erste Betätigung markiert den Blocktext (nativ); ist schon der ganze
-			// Block markiert (oder er ist leer), wird die GANZE Seite ausgewählt — dann
-			// kopiert Strg+C alles, Entf/Backspace löscht alles, Tippen ersetzt alles.
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
-				const whole = !ta.value.length || (ta.selectionStart === 0 && ta.selectionEnd === ta.value.length);
-				if (whole) {
-					e.preventDefault();
-					ta.blur();
-					commitActive();
-					setSelAll(true);
-					draw();
-				}
-				return;
-			}
-			if (linkMenu) {
-				if (e.key === "ArrowDown") { e.preventDefault(); linkMenu.index = (linkMenu.index + 1) % linkMenu.items.length; openLinkMenu(linkMenu.query); return; }
-				if (e.key === "ArrowUp") { e.preventDefault(); linkMenu.index = (linkMenu.index - 1 + linkMenu.items.length) % linkMenu.items.length; openLinkMenu(linkMenu.query); return; }
-				if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertPageLink(linkMenu.items[linkMenu.index]); return; }
-				if (e.key === "Escape") { e.preventDefault(); closeLinkMenu(); return; }
-			}
-			if (slash) {
-				if (e.key === "ArrowDown") { e.preventDefault(); slash.index = (slash.index + 1) % slash.items.length; drawSlash(); return; }
-				if (e.key === "ArrowUp") { e.preventDefault(); slash.index = (slash.index - 1 + slash.items.length) % slash.items.length; drawSlash(); return; }
-				if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applySlash(slash.index); return; }
-				if (e.key === "Escape") { e.preventDefault(); closeSlash(); return; }
-			}
-			if (e.key === "Enter" && !e.shiftKey) { onEnter(ta, b, e); return; }
-			if (e.key === "Backspace") { onBackspace(ta, b, e); return; }
-			if (e.key === "Tab" && LISTY[b.type]) { e.preventDefault(); setIndent(b, ta, e.shiftKey ? -1 : 1); return; }
-			if (e.key === "Escape") { commitActive(); draw(); return; }
-			if (e.key === "ArrowUp" || e.key === "ArrowDown") onArrow(ta, b, e);
-		});
-
-		const maybeToolbar = (e) => {
-			if (e.target.classList && e.target.classList.contains("blk-input")) renderToolbar(e.target);
-		};
-		host.addEventListener("mouseup", maybeToolbar);
-		host.addEventListener("keyup", maybeToolbar);
-
-		host.addEventListener("click", (e) => {
-			if (!e.target.closest(".block-menu") && !e.target.closest(".blk-handle")) closeBlockMenu();
-			const bact = e.target.closest("[data-bact]");
-			if (bact) { runBlockAction(bact.dataset.bact); return; }
-			const lpick = e.target.closest("[data-linkpick]");
-			if (lpick) { insertPageLink(S.pages[lpick.dataset.linkpick]); return; }
-			const aim = e.target.closest("[data-aimenu]");
-			if (aim) {
-				const m = host.querySelector(".ai-menu");
-				if (m) {
-					m.innerHTML = SEL_AI.map(([id, label]) => '<button data-ai="' + id + '">' + label + "</button>").join("");
-					m.hidden = !m.hidden;
-				}
-				return;
-			}
-			const aiBtn = e.target.closest("[data-ai]");
-			if (aiBtn) {
-				const m = host.querySelector(".ai-menu");
-				if (m) m.hidden = true;
-				runSelAi(aiBtn.dataset.ai);
-				return;
-			}
-			const slashBtn = e.target.closest("[data-slash]");
-			if (slashBtn) { applySlash(Number(slashBtn.dataset.slash)); return; }
-			const wrapBtn = e.target.closest("[data-wrap]");
-			if (wrapBtn) { const p2 = wrapBtn.dataset.wrap.split("|"); wrapTa(p2[0], p2[1]); return; }
-			if (e.target.closest("[data-link]")) { wrapTa("[", "](https://)"); return; }
-			const cm = e.target.closest("[data-colormenu]");
-			if (cm) { openColorMenu(cm.dataset.colormenu); return; }
-			const cpick = e.target.closest("[data-color]");
-			if (cpick) {
-				const kc = cpick.dataset.color.split(":");
-				wrapTa(kc[0] === "bg" ? "{bg-" + kc[1] + "}" : "{" + kc[1] + "}", "{/}");
-				const menu = host.querySelector(".color-menu");
-				if (menu) menu.hidden = true;
-				return;
-			}
-			// To-do direkt in der Ansicht abhaken (ohne den Block zu öffnen)
-			if (e.target.classList.contains("blk-check")) {
-				const blkEl0 = e.target.closest(".blk");
-				const b = blkEl0 && blocks.find((x) => x.id === blkEl0.dataset.bid);
-				if (b && b.type === "todo") {
-					b.checked = !b.checked;
-					b.raw = b.raw.replace(/- \[( |x)\]/, b.checked ? "- [x]" : "- [ ]");
-					saveSoon();
-					// Checkbox direkt patchen: kein kompletter Editor-Neuaufbau nötig.
-					e.target.checked = b.checked;
-					const text = blkEl0.querySelector(".blk-litext");
-					if (text) text.classList.toggle("done", b.checked);
-				}
-				return;
-			}
-			// "+" → neuen Block darunter anlegen und Slash-Menü öffnen
-			const plus = e.target.closest(".blk-plus");
-			if (plus) {
-				const anchor = plus.dataset.plus;
-				commitActive();
-				const idx = blocks.findIndex((x) => x.id === anchor);
-				const nb = newBlock("p", "/");
-				blocks.splice((idx === -1 ? blocks.length - 1 : idx) + 1, 0, nb);
-				activeId = nb.id;
-				draw({ caret: 1 });
-				openSlash("");
-				return;
-			}
-			const handleBtn = e.target.closest(".blk-handle");
-			if (handleBtn) { openBlockMenu(handleBtn.dataset.handle); return; }
-			if (e.target.closest(".block-menu") || e.target.closest(".link-menu") || e.target.closest("a")) return;
-			// Klick unter den letzten Block → neuen Absatz anhängen (wie Notion)
-			if (e.target.classList.contains("blk-tail")) {
-				commitActive();
-				const last = blocks[blocks.length - 1];
-				if (last && last.type === "p" && !last.raw.trim()) { activeId = last.id; draw({ caret: 0 }); return; }
-				const nb = newBlock("p", "");
-				blocks.push(nb);
-				activeId = nb.id;
-				draw({ caret: 0 });
-				return;
-			}
-			// Block anklicken → bearbeiten (Toggle-Blöcke erst per Doppelklick,
-			// damit das native Auf-/Zuklappen per Einfachklick funktioniert)
-			const blkEl = e.target.closest(".blk");
-			if (blkEl && blkEl.dataset.bid !== activeId) {
-				const b = blocks.find((x) => x.id === blkEl.dataset.bid);
-				if (b && (b.type === "toggle" || b.type === "heft") && e.detail < 2) return;
-				activate(blkEl.dataset.bid);
-			}
-		});
-
-		// Drag & Drop über die ⠠-Handles
-		host.addEventListener("dragstart", (e) => {
-			const h = e.target.closest(".blk-handle");
-			if (h) { dragBid = h.dataset.handle; e.dataTransfer.effectAllowed = "move"; }
-		});
-		host.addEventListener("dragover", (e) => {
-			if (!dragBid) return;
-			const blkEl = e.target.closest(".blk");
-			if (!blkEl) return;
-			e.preventDefault();
-			clearDropMarks();
-			const r = blkEl.getBoundingClientRect();
-			blkEl.classList.add(e.clientY < r.top + r.height / 2 ? "drop-before" : "drop-after");
-		});
-		host.addEventListener("drop", (e) => {
-			if (!dragBid) return;
-			e.preventDefault();
-			const blkEl = e.target.closest(".blk");
-			clearDropMarks();
-			if (blkEl && blkEl.dataset.bid !== dragBid) {
-				const from = blocks.findIndex((x) => x.id === dragBid);
-				if (from !== -1) {
-					const r = blkEl.getBoundingClientRect();
-					const after = e.clientY >= r.top + r.height / 2;
-					const moved = blocks.splice(from, 1)[0];
-					const to = blocks.findIndex((x) => x.id === blkEl.dataset.bid);
-					blocks.splice(to + (after ? 1 : 0), 0, moved);
-					saveSoon();
-					draw();
-				}
-			}
-			dragBid = null;
-		});
-		host.addEventListener("dragend", () => { clearDropMarks(); dragBid = null; });
-
-		// ---------- Bilder: Drag & Drop in den Editor oder Einfügen aus der Zwischenablage ----------
-		host.addEventListener("dragover", (e) => {
-			if (dragBid) return;
-			const items = e.dataTransfer ? e.dataTransfer.items : null;
-			if (items && [...items].some((it) => it.kind === "file")) e.preventDefault();
-		});
-		host.addEventListener("drop", async (e) => {
-			if (dragBid) return;
-			const files = e.dataTransfer ? [...e.dataTransfer.files] : [];
-			const imgs = files.filter((f) => f.type && f.type.startsWith("image/"));
-			if (!imgs.length) return;
-			e.preventDefault();
-			await insertImages(imgs, e.target.closest(".blk"));
-		});
-		host.addEventListener("paste", async (e) => {
-			if (!e.target.classList || !e.target.classList.contains("blk-input")) return;
-			const items = e.clipboardData ? [...e.clipboardData.items] : [];
-			const imgs = items.filter((it) => it.type && it.type.startsWith("image/")).map((it) => it.getAsFile()).filter(Boolean);
-			if (!imgs.length) return;
-			e.preventDefault();
-			await insertImages(imgs, e.target.closest(".blk"));
-		});
-	}
-
-	function clearDropMarks() {
-		host.querySelectorAll(".drop-before,.drop-after").forEach((el) => el.classList.remove("drop-before", "drop-after"));
-	}
-
-	// ---------- Mount: wird von renderMain() für den Modus "blocks" aufgerufen ----------
-	function mount(container, pid) {
-		// Seitenwechsel: letzte ungespeicherte Änderungen der vorherigen Seite sofort sichern
-		if (pageId && pageId !== pid) save();
-		host = container;
-		pageId = pid;
+	// ---------- mount() ----------
+	// render.js ruft mount(host, pageId) bei jedem renderMain — parse nur dann,
+	// wenn die Seite gewechselt hat oder der Inhalt extern (Sync) geändert wurde.
+	function mount(el, pid) {
 		const pg = S.pages[pid];
-		blocks = parse(pg ? pg.content : "");
-		if (!blocks.length) blocks.push(newBlock("p", ""));
-		activeId = null;
-		slash = null;
-		linkMenu = null;
-		blockMenuId = null;
-		dragBid = null;
-		setSelAll(false);
-		wireGlobal();
+		if (!el || !pg) return;
+		const pageChanged = pid !== pageId;
+		const externallyChanged = !pageChanged && serialize() !== (pg.content || "") && !histPending;
+		host = el;
+		host.classList.add("block-editor");
+		if (pageChanged || externallyChanged || !blocks.length) {
+			if (pageChanged) { clearSelection(); closeMenus(); }
+			if (pageChanged) scrollReserve = 0;
+			pageId = pid;
+			blocks = parse(pg.content || "");
+			histState = snapshotJson();
+			histPending = false;
+		}
+		render();
 		wire();
-		draw();
+		wireGlobal();
 	}
 
-	return { mount, parse, serialize, undoRedo };
+	return { mount, parse, serialize, undoRedo, undo: () => undoRedo(false), redo: () => undoRedo(true) };
 })();

@@ -79,9 +79,11 @@ export function closeOutside(target) {
 	const keep = target && target.closest
 		? target.closest("#attachMenu,#btnAttach,#btnAttachFull") ? "attach"
 		: target.closest(".model-menu,#btnModelMenu,#btnModelChipFull") ? "model"
+		// Stapel-⋯ und sein Panel MÜSSEN vor dem generischen .page-menu stehen,
+		// sonst schließt closeAll das Stapel-Menü beim Klick auf „In Papierkorb“.
+		: target.closest("[data-deckmenu],[data-deckmenu-panel],[data-deckdel],[data-deckrename],[data-deckduplicate]") ? "deck"
 		: target.closest("[data-pagemenu]") ? "page"
-		: target.closest("[data-deckmenu]") ? "deck"
-		: target.closest(".page-menu:not(.top-menu)") ? (S.pageMenuOpenId ? "page" : "deck")
+		: target.closest(".page-menu:not(.top-menu)") ? (S.deckMenuOpenName ? "deck" : "page")
 		: target.closest(".top-menu,[data-sharemenu],[data-morepagemenu]") ? "top"
 		: ""
 		: "";

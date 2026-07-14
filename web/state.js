@@ -424,7 +424,7 @@ export const STATE = (() => {
 				// GoodNotes-Heft gespeichert: nur Metadaten im Log (Badges, Bibliothek, Sync) —
 				// die Striche selbst liegen als EIN Blob heft:<pageId> in IndexedDB.
 				if (!p.pageId) break;
-				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, updated: ev.t };
+				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, ocrText: p.ocrText || "", updated: ev.t };
 				if (S.pages[p.pageId]) S.pages[p.pageId].updated = ev.t;
 				break;
 			case "uiTreeSet":
@@ -613,7 +613,9 @@ export const STATE = (() => {
 		return activePages().map((pg) => {
 			// FIX: "title + \n + content" wurde vorher zweimal berechnet (einmal für hay,
 			// einmal für raw) — jetzt nur noch einmal.
-			const raw = pg.title + "\n" + pg.content;
+			// Bei Heften ergänzt der lokal gespeicherte Handschrift-Index die normale
+			// Seitensuche. Das Ergebnis bleibt eine reguläre Seiten-Fundstelle.
+			const raw = pg.title + "\n" + pg.content + "\n" + ((S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "");
 			const hay = raw.toLowerCase();
 			const idx = hay.indexOf(q);
 			if (idx < 0) return null;

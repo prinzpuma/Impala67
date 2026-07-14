@@ -46,7 +46,7 @@ export const HEFT = (() => {
 	let expanded = false;    // Options-Tray erst nach Klick auf Schreiben/Radierer
 	let trayPos = null;      // {x,y} nur für das verschiebbare Options-Tray
 	let trayDrag = null;     // laufender Drag des Options-Trays
-	let drawing = null, saveT = 0, resizeFn = null, scrollFn = null;
+	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null, scrollFn = null;
 	let undoStack = [], redoStack = [];
 	let sel = null;          // { pageIdx, imgId } — ausgewähltes Bild (Auswahl-Werkzeug)
 	let lassoSel = null;     // { pageIdx, strokes[] } — Auswahl von Freihand-Strichen
@@ -55,7 +55,7 @@ export const HEFT = (() => {
 	let insertPos = "after"; // ＋-Menü: "before" | "after" | "last"
 	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / ＋)
 	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[], edit, busy }
-	let ocrBusy = false;     // lokale Texterkennung läuft
+	let ocrBusy = false, ocrTimer = 0; // stille Hintergrund-Indexierung für die normale Suche
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
 	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [] });
@@ -136,7 +136,10 @@ export const HEFT = (() => {
 		Object.keys(thumbs).forEach((k) => { if (k.startsWith(savePid + ":")) delete thumbs[k]; });
 		try {
 			await DB.putBlob(KEY(savePid), bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { type: "application/json", kind: "heft", rev: saveDoc.rev });
-			await STATE.dispatch("heftUpdated", { pageId: savePid, rev: saveDoc.rev, pages: saveDoc.pages.length, bytes: bytes.byteLength });
+			// Nur erkannter Text wird in den kleinen Metadaten-Index übernommen;
+			// Bilder und Striche bleiben weiterhin ausschließlich im Heft-Blob.
+			const ocrText = saveDoc.pages.map((pg) => pg.ocrText || "").filter(Boolean).join("\n");
+			await STATE.dispatch("heftUpdated", { pageId: savePid, rev: saveDoc.rev, pages: saveDoc.pages.length, bytes: bytes.byteLength, ocrText });
 		} catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
 	}
 	const hasHeft = (p) => !!((S.heftMeta && S.heftMeta[p]) || docs[p]);
@@ -248,24 +251,35 @@ export const HEFT = (() => {
 			if (im) drawSelection(x, im);
 		}
 	}
-	function applyTransform(x) { const dpr = window.devicePixelRatio || 1; x.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0); }
+	// Jeder Canvas kennt seine tatsächlich gerenderte Pixelratio. Sie kann bei
+	// großem Zoom kleiner als devicePixelRatio sein, damit nie riesige Backing Stores
+	// entstehen, die auf iPad/Safari zu Weißbildern oder Speicherabbrüchen führen.
+	function applyTransform(x) {
+		const dpr = x.canvas.__heftDpr || 1;
+		x.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+	}
 	function redrawPage(i) {
 		if (!doc || !doc.pages[i]) return;
 		const cv = canvases[i];
-		if (!cv) return;
+		if (!cv || cv.width < 2 || cv.height < 2) return;
 		const x = cv.getContext('2d');
 		x.setTransform(1, 0, 0, 1, 0, 0);
 		x.clearRect(0, 0, cv.width, cv.height);
 		applyTransform(x);
 		renderPageTo(x, doc.pages[i], i);
 	}
-	function redraw() { if (doc) doc.pages.forEach((_, i) => redrawPage(i)); }
+	function redraw() { renderVisiblePages(); }
 
 	// ---------- Navigation v3: frei zoomen, 2D-Pan, stabiler Fokuspunkt ----------
 	// Ein einziger CSS-Variablen-Write skaliert alle Seiten. Die teuren Canvas-Bitmaps
 	// werden erst nach der Geste neu gerendert. Der Zoom-Anker ist ein Punkt IM Blatt,
 	// nicht die Mitte des Scroll-Containers — dadurch kann man überall hineinzoomen.
-	const ZOOM_MIN = 1, ZOOM_MAX = 5;
+	// Seiten sind kein Infinite Canvas: Der feste Maximalzoom hält Matrix,
+	// Speicherbedarf und Eingabepräzision stabil. Das Rendering arbeitet nur
+	// für sichtbare Seiten und verwendet einen festen Pixel-Budget-Deckel.
+	const ZOOM_MIN = 1, ZOOM_MAX = 3.5;
+	const MAX_RENDER_DPR = 2.5, MAX_RENDER_PIXELS = 18_000_000;
+	let visibleRenderTimer = 0, lastInteractiveRender = 0;
 	const gesture = {
 		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
 		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
@@ -289,7 +303,11 @@ export const HEFT = (() => {
 		// Die tatsächliche Innenbreite ist entscheidend: im Hochformat hatten Padding und
 		// Scrollbar bislang einen Teil der Zoom-Breite verschluckt.
 		const innerW = Math.max(1, scroll.clientWidth - 36);
-		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, 1));
+		const innerH = Math.max(1, scroll.clientHeight - 36);
+		// Zoom 1 bedeutet immer „ganze Seite sichtbar“ – in Breite UND Höhe.
+		// Dadurch entspricht der Doppeltipp dem Notion-Verhalten statt nur auf
+		// Seitenbreite zu springen.
+		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, innerH / PAGE_H, 1));
 		scale = fit * zoom;
 		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
 		const pages = pagesEl();
@@ -298,15 +316,52 @@ export const HEFT = (() => {
 			pages.style.setProperty("--heft-page-h", cssH + "px");
 			pages.style.minWidth = Math.max(innerW, cssW) + "px";
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
-		if (!commit) return;
-		const dpr = Math.min(2.5, window.devicePixelRatio || 1);
-		canvases.forEach((cv) => {
-			const w = Math.max(1, Math.round(PAGE_W * scale * dpr));
-			const h = Math.max(1, Math.round(PAGE_H * scale * dpr));
+		if (commit) renderVisiblePages();
+		else {
+			// Während eines Pinchs bleibt CSS-Scaling sofort flüssig. Zusätzlich wird
+			// höchstens alle 110 ms scharf nachgerendert – deutlich klarer als eine
+			// reine Gesten-Ende-Lösung, ohne jeden Pointer-Frame teuer zu rasterisieren.
+			const now = performance.now();
+			if (now - lastInteractiveRender > 110) {
+				lastInteractiveRender = now;
+				scheduleVisibleRender(0);
+			}
+		}
+	}
+	function visiblePageIndices() {
+		const scroll = scrollEl(); if (!scroll) return [];
+		const sr = scroll.getBoundingClientRect(), pad = Math.max(180, sr.height * .35), out = [];
+		pageSlots.forEach((slot, i) => {
+				if (!slot) return;
+				const r = slot.getBoundingClientRect();
+				if (r.bottom >= sr.top - pad && r.top <= sr.bottom + pad) out.push(i);
+			});
+		return out;
+	}
+	function renderVisiblePages() {
+		if (!doc) return;
+		const visible = new Set(visiblePageIndices());
+		// Das Budget gilt pro sichtbarer Seite. Bei hohem Zoom wird DPR sanft
+		// reduziert, statt eine Canvasdimension zu erzeugen, die der Browser leert.
+		const nativeDpr = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
+		const safeDpr = Math.max(1, Math.min(nativeDpr, Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, PAGE_W * PAGE_H * scale * scale))));
+		canvases.forEach((cv, i) => {
+			if (!visible.has(i)) {
+				// Unsichtbare Seiten geben ihren großen Backing Store sofort frei.
+				if (cv.width !== 1 || cv.height !== 1) { cv.width = 1; cv.height = 1; }
+				return;
+			}
+			cv.__heftDpr = safeDpr;
+			const w = Math.max(1, Math.round(PAGE_W * scale * safeDpr));
+			const h = Math.max(1, Math.round(PAGE_H * scale * safeDpr));
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
+			redrawPage(i);
 		});
-		redraw();
+	}
+	function scheduleVisibleRender(delay = 90) {
+		clearTimeout(visibleRenderTimer);
+		visibleRenderTimer = setTimeout(() => { visibleRenderTimer = 0; renderVisiblePages(); }, delay);
 	}
 	// Beim Drehen des Geräts bzw. beim Ein-/Ausblenden von UI bleibt derselbe Punkt
 	// der Seite im Sichtfenster. Ohne diesen Anker sprang die Hochkant-Ansicht sichtbar.
@@ -441,7 +496,9 @@ export const HEFT = (() => {
 		if (quick && count === 1) {
 			const now = Date.now();
 			if (now - gesture.lastTap < 330 && Math.hypot(e.clientX - gesture.tapX, e.clientY - gesture.tapY) < 64) {
-				gesture.lastTap = 0; animateZoom(zoom > 1.04 ? 1 : 2.5, e.clientX, e.clientY); return;
+				// Doppeltipp am Tablet: stets zur vollständigen Seitengröße zurück.
+				// Kein Toggle auf einen beliebigen Nahzoom – das bleibt dem Pinch vorbehalten.
+				gesture.lastTap = 0; animateZoom(1, e.clientX, e.clientY); return;
 			}
 			gesture.lastTap = now; gesture.tapX = e.clientX; gesture.tapY = e.clientY; return;
 		}
@@ -658,6 +715,7 @@ export const HEFT = (() => {
 			scheduleSave();
 			redrawPage(pi);
 			renderThumb(pi);
+			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndex(pi);
 		}
 		drawing = null;
 		updateChrome();
@@ -748,17 +806,17 @@ export const HEFT = (() => {
 						writeIcon + '<span class="heft-chev">▾</span></button>' +
 					'<button type="button" data-hetool="eraser" class="heft-main' + (tool === "eraser" ? " active" : "") +
 						(showEraser ? " open" : "") + '" title="Radierer">⌫</button>' +
-					'<button type="button" data-hetool="select" class="heft-main' + (tool === "select" ? " active" : "") +
-						'" title="Bilder auswählen">⬚</button>' +
+					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
 						'" title="Lasso — Striche auswählen">⌁</button>' +
 					'<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
 						'" title="Laserpointer — nicht speichern">⊙</button>' +
 					'<button type="button" data-hetool="shape" class="heft-main' + (tool === "shape" ? " active" : "") +
 						'" title="Formen — Linie, Rechteck, Kreis">▱</button>' +
-					'<button type="button" data-heocr="1" class="heft-main" title="Handschrift suchen / Seite indexieren"' + (ocrBusy ? " disabled" : "") + '>⌕</button>' +
+					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heimgmenu="1" class="heft-main' +
-						(pop && pop.dataset.kind === "img" ? " active" : "") + '" title="Bilder">🖼</button>' +
+						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">🖼</button>' +
+					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig"' +
 						(undoStack.length ? "" : " disabled") + '>↺</button>' +
 					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen"' +
@@ -874,9 +932,11 @@ export const HEFT = (() => {
 	}
 	function imgPopHtml() {
 		return '<div class="heft-pop-head">Bilder</div>' +
+			'<button type="button" class="heft-pop-row" data-hetool="select">⬚ Bilder auswählen & bearbeiten</button>' +
+			'<div class="heft-pop-sep"></div>' +
 			'<button type="button" class="heft-pop-row" data-heimgadd="1">🖼 Bild hinzufügen</button>' +
 			'<button type="button" class="heft-pop-row" data-heimgcam="1">📷 Bild aufnehmen</button>' +
-			'<div class="heft-pop-sub">Eingefügte Bilder mit dem Auswahl-Werkzeug (⬚) verschieben, skalieren oder löschen.</div>';
+			'<div class="heft-pop-sub">Ausgewählte Bilder lassen sich direkt auf der Seite verschieben, skalieren oder löschen.</div>';
 	}
 	function plusPopHtml() {
 		const seg = (k, lbl) => '<button type="button" class="heft-seg' + (insertPos === k ? ' active' : '') + '" data-hepos="' + k + '">' + lbl + '</button>';
@@ -2179,42 +2239,104 @@ export const HEFT = (() => {
 	}
 
 	// ---------- Klicks (delegiert am Host — fängt auch die Popups) ----------
-	// Lokale OCR: Canvas wird direkt im Browser erkannt, Text wird im Heft-Blob gespeichert.
-	async function searchHandwriting() {
-		if (!doc || ocrBusy) return;
-		const query = prompt("Handschrift durchsuchen\n\nSuchbegriff eingeben. Leere Eingabe indexiert zuerst die aktuelle Seite.", "");
-		if (query && query.trim()) {
-			const q = query.trim().toLocaleLowerCase("de");
-			const found = doc.pages.findIndex((p) => (p.ocrText || "").toLocaleLowerCase("de").includes(q));
-			if (found >= 0) { go(found); if (U.toast) U.toast("Treffer auf Seite " + (found + 1)); }
-			else if (U.toast) U.toast("Kein Treffer in indexierten Seiten — Seite zuerst mit ⌕ indexieren.");
-			return;
-		}
-		if (!window.Tesseract || !window.Tesseract.recognize) {
-			if (U.toast) U.toast("OCR-Modul wird noch geladen — danach erneut versuchen.", "error");
-			return;
-		}
-		const cv = host && host.querySelectorAll(".heft-canvas")[idx];
-		if (!cv) return;
-		ocrBusy = true; updateChrome();
+	// Handschrift wird nach einer Schreibpause still lokal indexiert. Die Ergebnisse
+	// erscheinen dadurch in der normalen Strg/Cmd+K-Suche – ohne separates Werkzeug,
+	// Prompt oder künstliche zweite Suche.
+	// OCR erhält eine saubere, hochaufgelöste Schreibfläche statt eines Screenshots
+	// mit Papierlinien, Griffen und UI. Tesseract kann damit Blockschrift und klare
+	// Druckschrift wesentlich zuverlässiger als auf der gerenderten Heftseite lesen.
+	function handwritingSignature(pg) {
+		return (pg.strokes || []).map((s) => (s.tool || "pen") + ":" + (s.size || 0) + ":" + ((s.pts && s.pts.length) || 0)).join("|");
+	}
+	function handwritingOcrCanvas(pageIndex, fallbackCanvas) {
+		const pg = doc && doc.pages[pageIndex];
+		const strokes = pg && pg.strokes ? pg.strokes : [];
+		// Bei importierten Bild-/Scan-Seiten gibt es keine editierbaren Striche.
+		// Dann bleibt der vorhandene Canvas die sinnvolle Fallback-Quelle.
+		if (!strokes.length) return fallbackCanvas;
+		const k = 1.8;
+		const out = document.createElement("canvas");
+		out.width = Math.round(PAGE_W * k); out.height = Math.round(PAGE_H * k);
+		const x = out.getContext("2d", { willReadFrequently: true });
+		x.fillStyle = "#fff"; x.fillRect(0, 0, out.width, out.height);
+		x.scale(k, k);
+		strokes.forEach((s) => {
+			// Einheitliche dunkle Tinte und etwas kräftigere Linien erhöhen den
+			// Kontrast; Marker werden als normale Schrift statt transparent gerendert.
+			const clean = { ...s, color: "#111827", size: Math.max(2.4, s.size || 3), tool: s.tool === "marker" ? "pen" : s.tool };
+			drawStroke(x, clean);
+		});
+		return out;
+	}
+	function scheduleHandwritingIndex(pageIndex) {
+		clearTimeout(ocrTimer);
+		// Erst nach einer echten Schreibpause: keine OCR-Jobs während des Schreibens.
+		ocrTimer = setTimeout(() => { indexHandwritingPage(pageIndex); }, 2600);
+	}
+	// Native Browser-Erkennung ist der bevorzugte Pfad: Sie verarbeitet echte
+	// Stiftstriche statt eines Bildes, benötigt kein zusätzliches Modell und bleibt
+	// lokal. Nicht unterstützte Browser fallen kontrolliert auf OCR zurück.
+	async function nativeHandwritingText(pg) {
+		if (!("createHandwritingRecognizer" in navigator) || !("HandwritingStroke" in window)) return null;
+		let recognizer = null, drawing = null;
 		try {
-			if (U.toast) U.toast("Handschrift wird lokal erkannt…");
-			const result = await window.Tesseract.recognize(cv, "deu+eng", { logger: () => {} });
-			const text = ((result && result.data && result.data.text) || "").trim();
-			page().ocrText = text;
-			scheduleSave();
-			if (U.toast) U.toast(text ? "Seite indexiert — ⌕ durchsucht nun die Handschrift." : "Kein Text erkannt.", text ? "success" : "error");
+			const constraints = { languages: ["de"] };
+			if (typeof navigator.queryHandwritingRecognizerSupport === "function") {
+				const support = await navigator.queryHandwritingRecognizerSupport(constraints);
+				if (!support) return null;
+			}
+			recognizer = await navigator.createHandwritingRecognizer(constraints);
+			drawing = recognizer.startDrawing({ recognitionType: "text", inputType: "stylus", alternatives: 1 });
+			for (const ink of pg.strokes || []) {
+				if (!ink.pts || !ink.pts.length) continue;
+				const stroke = new HandwritingStroke();
+				ink.pts.forEach((pt, i) => stroke.addPoint({ x: pt[0], y: pt[1], t: i * 16 }));
+				drawing.addStroke(stroke);
+			}
+			const predictions = await drawing.getPrediction();
+			return predictions && predictions[0] && predictions[0].text ? predictions[0].text.trim() : "";
 		} catch (err) {
-			console.warn("Heft: OCR fehlgeschlagen", err);
-			if (U.toast) U.toast("Texterkennung konnte nicht geladen werden.", "error");
-		} finally { ocrBusy = false; updateChrome(); }
+			console.info("Native Handschrifterkennung nicht verfügbar:", err);
+			return null;
+		} finally {
+			try { if (drawing) drawing.clear(); } catch { /* ignore */ }
+			try { if (recognizer) recognizer.finish(); } catch { /* ignore */ }
+		}
+	}
+	async function indexHandwritingPage(pageIndex) {
+		if (!doc || ocrBusy) return;
+		const pg = doc.pages[pageIndex];
+		const cv = host && host.querySelectorAll(".heft-canvas")[pageIndex];
+		if (!pg || !cv || cv.width < 2 || cv.height < 2) return;
+		const signature = handwritingSignature(pg);
+		if (pg.ocrSourceSig === signature) return; // unveränderte Seite nie doppelt erkennen
+		ocrBusy = true;
+		try {
+			let text = await nativeHandwritingText(pg);
+			if (text === null && window.Tesseract && window.Tesseract.recognize) {
+				const source = handwritingOcrCanvas(pageIndex, cv);
+				const result = await window.Tesseract.recognize(source, "deu+eng", {
+					logger: () => {}, tessedit_pageseg_mode: "6", preserve_interword_spaces: "1",
+				});
+				text = ((result && result.data && result.data.text) || "")
+					.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+				const confidence = Number(result && result.data && result.data.confidence) || 0;
+				if (confidence < 25 && text.length < 8) text = "";
+			}
+			if (text !== null && doc && doc.pages[pageIndex]) {
+				doc.pages[pageIndex].ocrText = text;
+				doc.pages[pageIndex].ocrSourceSig = signature;
+				scheduleSave();
+			}
+		} catch (err) {
+			console.warn("Heft: Hintergrund-OCR fehlgeschlagen", err);
+		} finally { ocrBusy = false; }
 	}
 	function onHostClick(e) {
 		const b = e.target.closest("button, .heft-pop-thumb");
 		if (!b || !doc) return;
 		const d = b.dataset;
 		if (suppressEraserClick && d.hetool === "eraser") return;
-		if (d.heocr) { searchHandwriting(); return; }
 		if (d.hepagesmenu) { togglePop("pages", b); return; }
 		if (d.heplusmenu) { togglePop("plus", b); return; }
 		if (d.heimgmenu) { togglePop("img", b); return; }
@@ -2245,8 +2367,9 @@ export const HEFT = (() => {
 				// Variante im Expand-Panel — Optionen bleiben offen
 				tool = d.hetool; expanded = true;
 			} else {
-				// Auswahl, Lasso und Laser: kein Options-Tray
+				// Bildauswahl, Lasso und Laser: kein Options-Tray
 				tool = d.hetool; expanded = false;
+				if (d.hetool === "select") closePop();
 			}
 			if (tool !== "lasso") lassoSel = null;
 			if (tool !== "select" && sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
@@ -2330,6 +2453,8 @@ export const HEFT = (() => {
 				if (d2 < bestD) { bestD = d2; best = i; }
 			});
 			if (best !== idx) { idx = best; updateChrome(); }
+			// Beim Scrollen werden nur die nun sichtbaren Seiten hochaufgelöst gehalten.
+			scheduleVisibleRender();
 		}, 80);
 	}
 
@@ -2408,10 +2533,21 @@ export const HEFT = (() => {
 		document.addEventListener("keydown", onKey);
 		resizeFn = () => layout();
 		window.addEventListener("resize", resizeFn);
+		// Das Einklappen der linken Seitenleiste verändert häufig nur die Breite
+		// des Heft-Containers, nicht die Fenstergröße. ResizeObserver reagiert
+		// genau auf diesen Layoutwechsel und passt die Seite sofort erneut ein.
+		if (window.ResizeObserver) {
+			resizeObserver = new ResizeObserver(() => layout());
+			resizeObserver.observe(host);
+		}
 		bindCanvas();
 		bindScroll();
 		bindTrayDrag();
 		layout();
+		// Auch bereits vorhandene Notizen werden beim Öffnen still nachindexiert.
+		// Zuvor lief OCR nur nach einem NEUEN Stiftstrich; dadurch blieben ältere
+		// Hefte in der normalen Suche unsichtbar.
+		scheduleHandwritingIndex(idx);
 		purgeOrphanLegacyInk();
 	}
 	function unmount() {
@@ -2427,13 +2563,14 @@ export const HEFT = (() => {
 		}
 		document.removeEventListener("keydown", onKey);
 		if (resizeFn) { window.removeEventListener("resize", resizeFn); resizeFn = null; }
+		if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
 		scrollFn = null;
 		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = [];
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
-		clearTimeout(holdTimer); holdTool = null; suppressEraserClick = false;
+		clearTimeout(holdTimer); clearTimeout(ocrTimer); ocrTimer = 0; holdTool = null; suppressEraserClick = false;
 		// Navigation vollständig zurücksetzen (Gesten, Trägheit, laufende Animationen)
-		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT);
+		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0;
 		trayDrag = null;
 	}
 

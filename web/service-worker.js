@@ -40,7 +40,9 @@
 // v37: Einheitlicher Updater — „Suchen" prüft nur noch, Installieren ist ein eigener Schritt
 // v38: Heft-Fokus am Tablet — Vollbild-Animation wenn Sidebar ausgeblendet
 // v39: PWA-Startschutz — transiente Overlay-Ebenen können keine Klicks blockieren
-const CACHE = "impala67-v39";
+// v40: editor-v2.js — isolierter Rich-Text-Testeditor
+// v41: voice.js — Browser-Sprachsteuerung ohne Audio-Backend
+const CACHE = "impala67-v41";
 
 const APP_FILES = [
 	"./",
@@ -76,6 +78,7 @@ const APP_FILES = [
 	"./boot.js",
 	"./app.js",
 	"./updater.js",
+	"./voice.js",
 	"./render-anki.js",
 	"./extras.js",
 	"./notebooklm.js",
