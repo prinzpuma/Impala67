@@ -3045,37 +3045,6 @@ body:has(.anki-study-mode) #main {
 }
 
 /* Heller Modus: echte Papierflächen mit klarer, aber ruhiger Hierarchie. */
-body.light {
-	--bg0: #f7f7f5;
-	--bg1: #ffffff;
-	--panel-solid: #ffffff;
-	--menu-bg: #ffffff;
-	--bubble: #edf4fb;
-	--text: #2c2c2b;
-	--text2: #6f6d69;
-	--accent: #2783de;
-	--accent-soft: #e5f2fc;
-	--accent-border: rgba(39, 131, 222, .38);
-	--danger: #d84d43;
-	--danger-soft: #fce9e7;
-	--success: #37845a;
-	--success-soft: #e8f1ec;
-	--surface-faint: #fcfcfb;
-	--surface-subtle: #f8f8f6;
-	--surface: #f2f2ef;
-	--surface-hover: #ebebe8;
-	--surface-hover-strong: #e2e2de;
-	--surface-active: #d8d8d3;
-	--edge-soft: #ecece8;
-	--edge: #deded9;
-	--input-bg: #f7f7f5;
-	--overlay-bg: rgba(30, 30, 28, .22);
-	--shadow: rgba(30, 30, 28, .10);
-	--shadow-strong: rgba(30, 30, 28, .16);
-	--glow-1: #ffffff;
-	--glow-2: #fafaf8;
-	--glow-3: #f2f2ef;
-}
 
 /* Dunkle, fest codierte Restflächen für den Hellmodus überschreiben. */
 body.light #chatForm,
@@ -3118,6 +3087,10 @@ body.light {
 	--accent: #2478c7;
 	--accent-soft: #ddecfa;
 	--accent-border: rgba(36, 120, 199, .36);
+	--danger: #d84d43;
+	--danger-soft: #fce9e7;
+	--success: #37845a;
+	--success-soft: #e8f1ec;
 	--surface-faint: #fdfbf7;
 	--surface-subtle: #f7f4ee;
 	--surface: #f0ede6;
@@ -3307,14 +3280,21 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 	.heft-chrome .heft-corner { top: 8px; }
 }
 
-/* Installierte iPadOS-PWA: Der sichere obere Bereich gehört optisch zum
-   Hintergrund und erhält trotzdem genügend Abstand für nicht überlappende UI. */
+/* Installierte iPadOS-PWA: Der sichere obere UND untere Bereich muss in
+   JEDEM Dichte-Modus vom Inhalt freigehalten werden — sonst verschwinden die
+   letzten Sidebar-/Panel-Zeilen unter der Home-Indicator-Leiste. Vorher galt
+   die feste 12px-Desktop-Polsterung unverändert auch hier, obwohl sie die
+   Safe-Area gar nicht einrechnet — das Ergebnis war ein randloses, am unteren
+   Gerätesteg abgeschnittenes Layout im komfortablen Modus. */
 @media (display-mode: standalone) and (pointer: coarse) {
-	/* Der komfortable Modus braucht hier keine Sonderregel mehr: Der iPad-
-	   Querformat-Block oben ist jetzt auf den Kompaktmodus beschränkt, daher
-	   nutzt der komfortable Modus automatisch dieselben Basisregeln wie der
-	   Desktop — Grid, Padding, Gap, Radius und Hintergrund sind identisch.
-	   Nur der randlose Kompaktmodus braucht eigenen Safe-Area-Innenabstand. */
+	/* Komfortabler Modus: exakt derselbe 12px-Rand wie am Desktop, oben/unten
+	   zusätzlich um die Safe-Area erweitert statt sie zu ignorieren. */
+	body:not(.density-compact) #app {
+		padding-top: max(12px, env(safe-area-inset-top)) !important;
+		padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+	}
+	/* Der randlose Kompaktmodus braucht eigenen Safe-Area-Innenabstand statt
+	   des sonst dort geltenden Null-Paddings. */
 	body.density-compact #app {
 		padding-top: env(safe-area-inset-top) !important;
 		padding-bottom: env(safe-area-inset-bottom) !important;
