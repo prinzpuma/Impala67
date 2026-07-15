@@ -59,10 +59,17 @@ export const RAG = (() => {
 		const chunks = chunk(text);
 		if (!chunks.length) { await DB.delVec(pageId); return; }
 		const vecs = await AI.embed(chunks);
+		// Unvollständige Embedding-Antworten verwerfen statt einen halben Index zu
+		// speichern — queuePage fängt den Fehler und die Seite bleibt „stale“.
+		if (!Array.isArray(vecs) || vecs.length !== chunks.length || vecs.some((v) => !v || !v.length)) {
+			throw new Error("Embedding unvollständig für Seite " + pageId);
+		}
 		// Normen einmalig beim Indexieren vorberechnen — die Suche spart sich damit
 		// pro Chunk eine komplette Betrags-Berechnung (spürbar bei vielen Seiten).
+		// model wird mitgespeichert: reindexStale() erkennt daran einen Modellwechsel.
 		await DB.putVec(pageId, {
 			updated: pg.updated,
+			model: S.settings.embedModel,
 			chunks: chunks.map((text, i) => ({ text, vec: vecs[i], norm: norm(vecs[i]) })),
 		});
 		vecCache = null; // Suche lädt beim nächsten Mal frisch
@@ -83,12 +90,19 @@ export const RAG = (() => {
 	}
 
 	// Fehlende/veraltete Seiten nachindexieren (beim Start und nach ⚙️-Änderung).
+	// Modellwechsel-Fix (15. Juli, später): Vorher wurde nur der Seitenstand
+	// verglichen — nach einem Wechsel des Embedding-Modells blieben ALLE Vektoren
+	// alt, und die Suche fand still nichts mehr (andere Dimension) oder lieferte
+	// falsche Scores (gleiche Dimension, inkompatibler Vektorraum). Jetzt wird
+	// jeder Eintrag neu indexiert, dessen model nicht zum aktuellen Modell passt
+	// (Alt-Einträge ohne model-Feld werden dabei einmalig migriert).
 	async function reindexStale() {
 		if (!enabled()) return;
 		const vecs = await DB.allVecs();
+		const model = S.settings.embedModel;
 		for (const pg of STATE.activePages()) {
 			const v = vecs[pg.id];
-			if (!v || v.updated !== pg.updated) queuePage(pg.id);
+			if (!v || v.updated !== pg.updated || v.model !== model) queuePage(pg.id);
 		}
 	}
 
@@ -131,6 +145,7 @@ export const RAG = (() => {
 		for (const [pageId, rec] of Object.entries(vecs)) {
 			const pg = S.pages[pageId];
 			if (!pg || pg.trashed) continue; // Papierkorb-Seiten nicht in Suchergebnissen
+			if (rec.model && rec.model !== S.settings.embedModel) continue; // alter Index nach Modellwechsel — reindexStale() baut ihn neu
 			for (const c of rec.chunks) {
 				if (!c.vec || c.vec.length !== qv.length) continue; // anderes Embedding-Modell
 				const score = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));

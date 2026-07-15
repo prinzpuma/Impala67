@@ -62,7 +62,28 @@
 // v50: think-heuristik.js — Sticky-Thinking-Heuristik aus ai.js ausgelagert
 // v51: handschrift.js (Handschrift-Erkennung v2: Vision-KI + Tesseract-Fallback),
 //       Prompt-Diät + Auto-RAG (ai.js, tools.js, rag.js), RAG-Suche v2
-const CACHE = "impala67-v51";
+// v52: Heft-Text-Boxen — KI schreibt sichtbar in Hefte (heft.js, tools.js),
+//      RAG v2.1 Modellwechsel-Fix (rag.js)
+// v53: Datei-Split — Scanner-Bildverarbeitung (SCANCORE) aus heft.js nach
+//      heft-scan.js ausgelagert; neue Datei im Precache
+// v54: NotebookLM-Inbox + Bibliothek v2 — Downloads als Artefakte mit Art/Herkunft,
+//      Einordnen-Dialog + #nlm:-Einbettungen (notebooklm.js); Bibliothek mit
+//      Ansichts-Umschalter Notion/GoodNotes/NotebookLM (library.js, state.js)
+// v55: GoodNotes-Bibliothek — Ordner immer erstellbar (kein Auto-Jump in den
+//      einzigen Workspace) + Cover-Picker pro Heft (library.js)
+// v56: GoodNotes-Bibliothek — einheitlicher „＋ Neu“-Ablauf für Heft/Ordner,
+//      Heft-Cover bereits beim Anlegen, diskretes Kontextmenü je Heft
+// v57: Eigenständiger GoodNotes-Dateibaum: Ordnerhierarchie und Reihenfolge
+//      getrennt von Notion, Drag-and-drop von Heften und Unterordnern
+// v58: GoodNotes-Dokumente v2 — Screenshot-orientierte Dokumentenansicht,
+//      eigener Root, Breadcrumbs und echte Drag-and-drop-Ablage
+// v59: GoodNotes-Finalisierung — keine Notion-Unterseiten-Aktionen im Regal,
+//      Cache-Bump nach Syntax- und Interaktionsprüfung
+// v60: GoodNotes-Ordneroptionen (sicheres Löschen) + einheitlicher
+//      Bibliothekskopf in Notion, GoodNotes und NotebookLM
+// v61: Hefte können aus GoodNotes in den Papierkorb; Papierkorb hat eine
+//      bestätigte Aktion zum vollständigen, endgültigen Leeren
+const CACHE = "impala67-v61";
 
 const APP_FILES = [
 	"./",
@@ -110,6 +131,7 @@ const APP_FILES = [
 	"./extras.js",
 	"./notebooklm.js",
 	"./heft.js",
+	"./heft-scan.js",
 ];
 
 // CDN-Bibliotheken beim Installieren vorab cachen (best effort) — damit Markdown,

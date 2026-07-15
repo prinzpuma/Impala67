@@ -1,14 +1,4 @@
 "use strict";
-// srs.js — voller FSRS-Scheduler (FSRS-5-Formeln, Standardparameter) mit Anki-artigen
-// Lernschritten für Minuten-Intervalle. Gespeichert werden weiterhin
-// stability / difficulty / due / reps / lapses / state / step / last — dieselben
-// Felder wie vorher (FSRS-lite) und wie ts-fsrs: keine Datenmigration nötig.
-//
-// Code-Stil-Rewrite (10. Juli 2026): ALLE Formeln/Konstanten sind unverändert
-// (test-core.mjs prüft sie exakt gegen die FSRS-5-Referenz) — nur due-Berechnung
-// in rate() wurde aus zwei Closures, die bei JEDEM Aufruf neu erzeugt wurden
-// (dueMins/dueDays), in zwei reine, wiederverwendbare Helfer ausgelagert
-// (dueAfterMinutes/dueAfterDays). Gleiches Ergebnis, weniger doppelter Code.
 export const SRS = (() => {
 	// FSRS-5-Standardgewichte w0…w18 (wie ts-fsrs) — w0…w3 sind die Start-Stabilitäten
 	// für Nochmal/Schwer/Gut/Einfach, der Rest steuert Schwierigkeit & Stabilitätswachstum.

@@ -4,6 +4,7 @@ import { U } from "./util.js";
 import { EXTRAS } from "./extras.js";
 import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
+import { HEFT } from "./heft.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
 export const TOOLS = (() => {
@@ -83,7 +84,12 @@ export const TOOLS = (() => {
 			page_title: { type: "string" },
 			content: { type: "string" },
 		}, ["page_title", "content"]),
-		t("replace_page_content", "Ersetzt den kompletten Inhalt einer Seite (vorsichtig verwenden).", {
+		t("write_to_heft", "Schreibt SICHTBAREN Text in ein Handschrift-Heft: fügt eine Text-Box unter dem bisherigen Inhalt ein (bei Platzmangel automatisch neue Heftseite). Nur reiner Text mit Zeilenumbrüchen — kein Markdown/LaTeX (wird auf der Heftseite nicht gerendert). Für Hefte IMMER dieses Tool statt append_to_page.", {
+			page_title: { type: "string", description: "Titel des Hefts" },
+			text: { type: "string", description: "Reiner Text (\\n für Absätze)" },
+			heft_page: { type: "number", description: "Heftseite (1-basiert, optional — Standard: letzte Seite)" },
+		}, ["page_title", "text"]),
+		t("replace_page_content", "Ersetzt den kompletten Inhalt einer Seite (vorsichtig verwenden). Funktioniert nicht bei Handschrift-Heften.", {
 			page_title: { type: "string" },
 			content: { type: "string" },
 		}, ["page_title", "content"]),
@@ -164,14 +170,29 @@ export const TOOLS = (() => {
 			case "append_to_page": {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				// BUGFIX (15. Juli): Hefte rendern nur den Blob (Striche/Bilder/Texte) —
+				// Markdown in pg.content wäre unsichtbar. Deshalb auf sichtbare Text-Box umleiten.
+				if (pg.kind === "heft") return await run("write_to_heft", { page_title: a.page_title, text: a.content });
 				await STATE.dispatch("pageUpdate", {
 					id: pg.id, patch: { content: (pg.content ? pg.content + "\n\n" : "") + a.content },
 				});
 				return { ok: true, title: pg.title };
 			}
+			case "write_to_heft": {
+				const pg = STATE.findPage(a.page_title);
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (pg.kind !== "heft") return { error: "\"" + pg.title + "\" ist kein Handschrift-Heft — nutze append_to_page." };
+				if (typeof HEFT.addText !== "function") return { error: "Heft-Modul ohne addText — heft.js aktualisieren." };
+				const opts = {};
+				if (a.heft_page != null) opts.pageIndex = Math.max(0, (Number(a.heft_page) || 1) - 1);
+				const res = await HEFT.addText(pg.id, a.text, opts);
+				if (!res || !res.ok) return { error: "Ins Heft schreiben fehlgeschlagen: " + ((res && res.error) || "unbekannt") };
+				return { ok: true, title: pg.title, heftPage: res.pageIndex + 1, addedPage: !!res.addedPage, note: "Sichtbar als Text-Box auf Heftseite " + (res.pageIndex + 1) + " eingefügt." };
+			}
 			case "replace_page_content": {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht ersetzt werden — write_to_heft fügt sichtbaren Text hinzu." };
 				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: a.content || "" } });
 				return { ok: true, title: pg.title };
 			}
@@ -266,9 +287,13 @@ export const TOOLS = (() => {
 			}
 			case "read_page": {
 				const pg = STATE.findPage(a.page_title);
-				return pg
-					? { title: pg.title, content: (pg.content || "").slice(0, 12000), hasPdf: !!pg.pdfId }
-					: { error: "Seite nicht gefunden: " + a.page_title };
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (pg.kind === "heft") {
+					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
+					const meta = (S.heftMeta && S.heftMeta[pg.id]) || {};
+					return { title: pg.title, heft: true, pages: meta.pages || 1, content: String(meta.ocrText || "").slice(0, 12000), note: "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft." };
+				}
+				return { title: pg.title, content: (pg.content || "").slice(0, 12000), hasPdf: !!pg.pdfId };
 			}
 			case "list_pages":
 				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar

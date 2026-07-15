@@ -6,13 +6,6 @@ import { RAG } from "./rag.js";
 import { HEFT } from "./heft.js";
 import { AI } from "./ai.js";
 
-// editor.js — WYSIWYG-REWRITE (12. Juli 2026). Der einzige Editor der App.
-// Interne Wahrheit: strukturierte Blockobjekte. Der DOM bleibt beim Tippen
-// bestehen (echtes WYSIWYG, kein Modus-Wechsel, keine sichtbare Markdown-Roh-
-// ansicht). Markdown wird NUR im Hintergrund erzeugt/gelesen (pg.content),
-// damit Event-Log, Drive-Sync, Verlauf, Diffs, RAG und Import kompatibel bleiben.
-// Wie im echten Notion ist jede Strukturänderung eine "Transaktion":
-// mutate() = History-Checkpoint → Mutation → serialize → dispatch("pageUpdate").
 export const EDITOR = (() => {
 	// Diese Datei wird als Markdown-Codeblock gespiegelt — deshalb nie ein
 	// literales Dreifach-Backtick im Quelltext:

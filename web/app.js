@@ -179,22 +179,6 @@ async function duplicatePage(pageId, newParentId, newWsId) {
 	return id;
 }
 
-// Neue Seite anlegen — kind: "notion" (Standard) oder "heft" (GoodNotes-Notizbuch).
-// Optional mit Vorlage (tpl): übernimmt Titel/Inhalt/Icon/Tags/Typ der Vorlage.
-async function createPageIn(wsId, parentId, tpl, kind) {
-	const id = U.uid();
-	S.currentWorkspaceId = wsId || S.currentWorkspaceId;
-	const k = kind || (tpl && tpl.kind) || "notion";
-	await STATE.dispatch("pageCreate", {
-		id, title: tpl ? tpl.title : (k === "heft" ? "Neues Heft" : "Neue Seite"), parentId: parentId || null,
-		content: tpl ? tpl.content : "", icon: tpl ? tpl.icon : (k === "heft" ? "📓" : null), tags: tpl ? tpl.tags : [],
-		workspaceId: S.currentWorkspaceId, kind: k,
-	});
-	openPage(id);
-	const ti = document.getElementById("pageTitle");
-	if (ti) { ti.focus(); ti.select(); }
-}
-
 // Anlegen zeigt IMMER den Typ-Dialog (Notion-Seite oder GoodNotes-Heft) —
 // Vorlagen erscheinen darin als zusätzliche Optionen.
 async function newPageFlow(wsId, parentId) {
@@ -1071,6 +1055,25 @@ function wireEvents() {
 			}
 			return;
 		}
+		// Papierkorb vollständig und endgültig leeren. Die Reihenfolge ist wichtig:
+		// erst Seiten, dann Stapel, danach verwaiste Karten; alles bleibt bis zur
+		// Bestätigung unverändert und wird als einzelne, synchronisierbare Events gelöscht.
+		if (t.dataset.trashclear) {
+			const pageIds = STATE.trashedPages().map((p) => p.id);
+			const deckRoots = STATE.trashedDeckRoots();
+			const cardIds = STATE.orphanTrashedCards().map((c) => c.id);
+			const total = pageIds.length + deckRoots.length + cardIds.length;
+			if (!total) { U.toast("Der Papierkorb ist bereits leer.", "success"); return; }
+			if (!await U.confirm("Alle " + total + " Elemente im Papierkorb endgültig löschen? Das kann nicht rückgängig gemacht werden.", {
+				title: "Papierkorb leeren", ok: "Endgültig löschen", danger: true,
+			})) return;
+			for (const id of pageIds) await STATE.dispatch("pageDelete", { id });
+			for (const name of deckRoots) await STATE.dispatch("deckDelete", { name });
+			for (const id of cardIds) await STATE.dispatch("cardDelete", { id });
+			U.toast("Papierkorb geleert.", "success");
+			return;
+		}
+
 		// Papierkorb: Karten & Stapel wiederherstellen / endgültig löschen
 		if (t.dataset.cardrestore) {
 			await STATE.dispatch("cardRestore", { id: t.dataset.cardrestore });

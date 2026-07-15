@@ -860,7 +860,8 @@ function renderTrash(main) {
 	const decks = (STATE.trashedDeckRoots && STATE.trashedDeckRoots()) || [];
 	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
 	const empty = !pages.length && !decks.length && !cards.length;
-	let html = '<div class="library"><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p>';
+	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div>' +
+		'<button class="danger" data-trashclear="1">Papierkorb leeren</button></div>';
 	if (empty) {
 		html += '<p class="hint">Der Papierkorb ist leer.</p></div>';
 		main.innerHTML = html;

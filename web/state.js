@@ -37,6 +37,10 @@ export const S = {
 	// (deckDelete entfernt Eintrag + Karten; neu angelegte Karten ohne Stapel legen ihn ggf. wieder an).
 	decks: { Standard: { name: "Standard", created: "" } }, // Karteikarten-Stapel; Unterstapel per "Eltern::Kind"-Namensschema
 	workspaces: { default: { id: "default", name: "Privat", created: "" } },
+	// Eigenständiger GoodNotes-Dateibaum. Bewusst NICHT aus Notion-Workspaces
+	// abgeleitet: Ordner, Reihenfolge und Verschachtelung bleiben ausschließlich
+	// in der GoodNotes-Ansicht und tauchen nie im Notion-Baum auf.
+	gnFolders: {}, // id → { id, title, parentId, order, created, updated }
 	// Seiten sind ohne Eintrag eingeklappt; Workspaces dagegen ausgeklappt.
 	// Ein explizit geschlossener Workspace wird mit false gespeichert.
 	treeOpen: {},
@@ -81,6 +85,8 @@ export const S = {
 	customModelProviderPick: null, // im Dropdown gewählte Quelle für ein eigenes Modell
 	editingMsgId: null, // mid einer Nutzer-Nachricht, die gerade bearbeitet wird
 	refineOpenMid: null, // mid einer Assistenten-Antwort, deren "Anpassen"-Menü offen ist
+	libMode: "notion", // Bibliothek-Ansicht: "notion" (Dokumente/Seitenbaum) | "hefte" (GoodNotes-Regal) | "nlm" (NotebookLM-Mediathek)
+	nlmLibFilter: "all", // NotebookLM-Mediathek-Filter: "all" | "inbox" | "audio" | "video" | "mindmap" | "slides"
 	libView: "grid", // Bibliothek: "grid" (GoodNotes-Kacheln) | "table"
 	libFolder: null, // aktueller Ordner der Kachel-Ansicht: null = Wurzel (Workspaces), sonst { wsId, pageId|null }
 	libSort: "updated", // Tabellen-Sortierung: "title" | "updated" | "created"
@@ -208,6 +214,9 @@ export const STATE = (() => {
 					// Alt-Seiten ohne kind bleiben automatisch Notion-Seiten.
 					kind: p.kind === "heft" ? "heft" : "notion",
 					order: typeof p.order === "number" ? p.order : null,
+					// Eigene GoodNotes-Ablage, getrennt von parentId/order des Notion-Baums.
+					gnFolderId: p.gnFolderId || null,
+					gnOrder: typeof p.gnOrder === "number" ? p.gnOrder : null,
 					created: ev.t, updated: ev.t,
 				};
 				break;
@@ -462,6 +471,50 @@ export const STATE = (() => {
 				if (!p.id) break;
 				S.workspaces[p.id] = { id: p.id, name: p.name || "Workspace", created: ev.t };
 				break;
+			case "gnFolderCreate":
+				if (!p.id) break;
+				S.gnFolders[p.id] = {
+					id: p.id, title: p.title || "Neuer Ordner", parentId: p.parentId || null,
+					order: typeof p.order === "number" ? p.order : Date.now(),
+					created: ev.t, updated: ev.t,
+				};
+				break;
+			case "gnFolderMove": {
+				const folder = S.gnFolders[p.id];
+				if (!folder) break;
+				// Kein Ordner darf in sich selbst oder einen eigenen Nachfahren fallen.
+				let cur = p.parentId || null, valid = true, hops = 0;
+				while (cur) {
+					if (cur === p.id || ++hops > 10000) { valid = false; break; }
+					cur = (S.gnFolders[cur] || {}).parentId || null;
+				}
+				if (!valid) break;
+				folder.parentId = p.parentId || null;
+				if (typeof p.order === "number") folder.order = p.order;
+				folder.updated = ev.t;
+				break;
+			}
+			case "gnItemMove": {
+				const pg = S.pages[p.id];
+				if (!pg || pg.kind !== "heft") break;
+				// Nur Hefte leben im GoodNotes-Dateibaum; Notion-Seiten bleiben unberührt.
+				if (p.folderId && !S.gnFolders[p.folderId]) break;
+				pg.gnFolderId = p.folderId || null;
+				if (typeof p.order === "number") pg.gnOrder = p.order;
+				pg.updated = ev.t;
+				break;
+			}
+			case "gnFolderDelete": {
+				const folder = S.gnFolders[p.id];
+				if (!folder) break;
+				// Löschen entfernt nur den Ordner selbst. Direkte Hefte und Unterordner
+				// landen eine Ebene höher – weder GoodNotes-Inhalt noch Notion-Seiten gehen verloren.
+				const parentId = folder.parentId || null;
+				Object.values(S.gnFolders).forEach((f) => { if (f.parentId === folder.id) f.parentId = parentId; });
+				Object.values(S.pages).forEach((pg) => { if (pg.gnFolderId === folder.id) pg.gnFolderId = parentId; });
+				delete S.gnFolders[folder.id];
+				break;
+			}
 			case "heftUpdated":
 				// GoodNotes-Heft gespeichert: nur Metadaten im Log (Badges, Bibliothek, Sync) —
 				// die Striche selbst liegen als EIN Blob heft:<pageId> in IndexedDB.

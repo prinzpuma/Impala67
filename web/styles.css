@@ -26,49 +26,12 @@ body.density-compact #sidebar {
 	border-right: 1px solid var(--edge-soft);
 	border-radius: 0;
 }
-/* Auf iPads liegt das KI-Panel rechts als Overlay. Im Kompaktmodus schließt
-   es bündig am Viewport an, ohne das responsive Grid selbst zu ersetzen. Der
-   komfortable Modus bleibt hier bewusst UNVERÄNDERT gegenüber dem Desktop —
-   frueher flachte dieser Block faelschlich auch den komfortablen Modus ab. */
-@media (min-width: 769px) and (max-width: 1366px) and (pointer: coarse) {
-	/* BUGFIX: In der installierten PWA mit viewport-fit=cover umfasst 100dvh
-	   bereits die VOLLE Bildschirmhöhe inklusive Home-Indicator-Safe-Area.
-	   Die frühere Addition von env(safe-area-inset-bottom) machte #app dadurch
-	   ~20px HÖHER als den Bildschirm — body hat overflow:hidden, also wurden
-	   genau der untere Rand, die Panel-Unterkanten und die Eckenrundungen
-	   abgeschnitten. Exakt 100dvh füllt den Bildschirm randgenau; den Abstand
-	   zum Home-Indicator regelt allein das Safe-Area-Padding weiter unten. */
-	#app {
-		height: 100dvh !important;
-		min-height: 100dvh !important;
-	}
-	/* Ab hier NUR der Kompaktmodus: die drei Arbeitsbereiche verschmelzen zu
-	   einer durchgehenden, randlosen App-Fläche. Der komfortable Modus nutzt
-	   weiterhin exakt dasselbe Grid, Padding, Gap, Radius und Hintergrund wie
-	   am Desktop (siehe die generischen #app-/#sidebar-/#panel-Regeln weiter unten). */
-	body.density-compact #app {
-		padding: 0 !important;
-		gap: 0 !important;
-		grid-template-columns: 220px minmax(0, 1fr) 320px;
-	}
-	body.density-compact #sidebar,
-	body.density-compact #mainWrap,
-	body.density-compact #panel {
-		height: 100%;
-		border-radius: 0;
-		border-top: 0;
-		border-bottom: 0;
-		border-left: 0;
-		border-right: 0;
-	}
-	body.density-compact #sidebar { border-right: 1px solid var(--edge-soft); padding-bottom: max(14px, env(safe-area-inset-bottom)); }
-	body.density-compact #panel { border-left: 1px solid var(--edge-soft); top: 0; right: 0; bottom: 0; }
-	body.density-compact #panel > #chatForm { margin-bottom: max(10px, env(safe-area-inset-bottom)) !important; }
-	/* Die Canvas hinter der App (Safe-Area-/Overscroll-Bereich) traegt dieselbe
-	   Flaeche wie Sidebar und Panel — ein Randstreifen verschmilzt so nur im
-	   Kompaktmodus mit der App-Flaeche. */
-	body.density-compact { background: var(--panel-solid); }
-}
+/* iPad-Höhen und -Ränder: zentral im Abschnitt „iPad-Rahmen v5“ am DATEIENDE.
+   Hier stehen bewusst KEINE iPad-spezifischen #app-Overrides mehr — die
+   frühere Mischung aus drei konkurrierenden Blöcken (100dvh-!important hier,
+   Safe-Area-Padding an #app am Dateiende, Extra-Abstände in den Panels)
+   erzeugte die asymmetrischen Ränder im Komfortmodus und die abgeschnittene
+   Unterkante bzw. den hellen Randstreifen im Kompaktmodus. */
 
 /* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne user-select:none
    startet der lange Druck auf eine Baumzeile die TEXTAUSWAHL bzw. das Kopier-
@@ -129,16 +92,14 @@ body.density-compact #sidebar {
 
 /* ---------- Bewegungsprinzipien: ruhig, konsistent, performant ---------- */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückmeldung. */
-button, .row, .tab, .tabchip, .navbtn, .home-card, .lib-card,
-.cal-day, .deck-row, .board-card, .page-menu button, .menu-item {
+button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item {
 	transition: background-color var(--motion-fast) ease,
 		color var(--motion-fast) ease,
 		border-color var(--motion-fast) ease,
 		transform var(--motion-fast) var(--ease-out),
 		opacity var(--motion-fast) ease;
 }
-button:not(:disabled):active, .tabchip:active,
-.home-card:active, .lib-card:active, .cal-day:active {
+button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active {
 	transform: scale(.98);
 }
 /* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform.
@@ -149,7 +110,7 @@ button:not(:disabled):active, .tabchip:active,
    ("Löschen-Menü geht überhaupt nicht mehr"). Feedback jetzt über die Fläche. */
 .row:active, .deck-row:active { background: var(--surface-active); }
 /* Flächen heben sich beim Öffnen und beim Hover nur über Transform/Opacity ab. */
-.home-card:hover, .lib-card:hover, .deck-row:hover, .board-card:hover {
+.lib-card:hover, .deck-row:hover {
 	transform: translateY(-2px);
 }
 /* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einblendung. */
@@ -157,9 +118,7 @@ button:not(:disabled):active, .tabchip:active,
 	from { opacity: 0; transform: translateY(6px) scale(.985); }
 	to { opacity: 1; transform: none; }
 }
-#overlay:not([hidden]) .modal,
-.page-menu, .attach-menu:not([hidden]), .model-menu:not([hidden]),
-.slash-menu, .sel-toolbar, .color-menu:not([hidden]), .v2-slash-menu:not([hidden]) {
+#overlay:not([hidden]) .modal, .page-menu, .attach-menu:not([hidden]), .model-menu:not([hidden]) {
 	animation: uiEnter var(--motion-base) var(--ease-out) both;
 }
 /* Der aktive Arbeitsbereich reagiert beim Ein-/Ausblenden der Navigation nicht
@@ -429,7 +388,6 @@ button.danger { color: var(--danger); }
 .ai-status-banner #btnRecheckAI { margin-left: auto; }
 /* ask_choice-Karten */
 .question-card.pending { border-color: rgba(94,159,232,.35); }
-.question-card .q-hint { margin-top: 8px; font-size: 11.5px; color: var(--text2); opacity: .8; }
 /* ---------- Panel (KI) ---------- */
 #panel { display: flex; flex-direction: column; overflow: hidden; position: relative; }
 /* Das Seitenpanel behält immer eine feste Composer-Zeile am unteren Rand.
@@ -462,16 +420,10 @@ button.danger { color: var(--danger); }
 .chat-full-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #btnTogglePanel, #btnChatExpand { min-height: 0; padding: 4px 10px; border: none; background: transparent; }
 /* ---------- Modell-Auswahl: kompaktes Icon im kleinen Chat, Chip im großen Chat ---------- */
-.model-caret { opacity: .6; flex-shrink: 0; }
 .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%;
 	display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text2); }
 .composer-tool:hover { background: var(--surface-hover-strong); color: var(--text); }
 .composer-tool svg { width: 17px; height: 17px; display: block; }
-.model-chip { min-height: 0; height: 30px; padding: 0 10px 0 12px; flex-shrink: 0; border-radius: 16px;
-	display: flex; align-items: center; gap: 4px; max-width: 220px; font-size: 12.5px;
-	background: var(--edge-soft); color: var(--text2); }
-.model-chip:hover { background: rgba(255,255,255,0.12); color: var(--text); }
-.model-chip .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Einheitliches Dropdown (öffnet über der Eingabezeile) — gleiches Design wie alle Menüs */
 .model-menu { position: fixed; left: 8px; z-index: 40;
@@ -491,15 +443,11 @@ button.danger { color: var(--danger); }
 .menu-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-check { color: var(--accent); flex-shrink: 0; font-size: 12px; }
 .menu-sep { height: 1px; background: var(--surface-hover); margin: 6px 4px; }
-.menu-custom { padding: 2px 4px 4px; }
 .menu-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .menu-chip { min-height: 0; padding: 4px 9px; font-size: 11.5px; border-radius: 12px;
 	background: var(--surface); color: var(--text2); }
 .menu-chip:hover { background: var(--surface-active); color: var(--text); }
 .menu-chip.active { background: var(--accent-soft); color: var(--accent); }
-.menu-custom-row { display: flex; gap: 6px; }
-.menu-custom-row input { flex: 1; min-width: 0; }
-.menu-custom-row button { flex-shrink: 0; }
 /* Modell-Menü: zwei schlanke Notion-artige Untermenüs statt einer langen Modellliste. */
 .model-submenu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
 	padding: 9px 8px; text-align: left; background: transparent; color: var(--text); font-size: 13px; }
@@ -644,19 +592,8 @@ button.danger { color: var(--danger); }
 .side-context-icon { font-size: 13px; }
 .side-context-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .side-context-note { margin-left: auto; font-size: 10.5px; color: var(--text2); }
-.change-preview { width: min(820px, 94vw); max-height: min(720px, 84vh); padding: 0; overflow: hidden; }
-.change-preview-head { display: flex; align-items: center; gap: 10px; padding: 18px 48px 14px 20px; border-bottom: 1px solid var(--edge); }
-.change-preview-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; background: var(--surface); }
-.change-preview-head span:last-child { min-width: 0; display: flex; flex-direction: column; }
-.change-preview-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.change-preview-head small { margin-top: 2px; color: var(--text2); font-size: 12px; }
-.change-preview-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 10px 20px; font-size: 12px; color: var(--text2); border-bottom: 1px solid var(--edge-soft); }
 .btn-undo-change { min-height: 28px; padding: 3px 9px; background: transparent; color: var(--text2); font-size: 12px; }
 .btn-undo-change:hover { background: var(--surface-hover); color: var(--text); }
-.change-preview-diff { overflow: auto; max-height: calc(min(720px, 84vh) - 120px); padding: 12px 16px 18px; font: 12.5px/1.55 Menlo, Consolas, monospace; background: rgba(0,0,0,0.12); }
-.change-line { padding: 1px 7px; white-space: pre-wrap; border-radius: 3px; }
-.change-line.add { color: #9fdcb4; background: rgba(114,188,143,0.15); }
-.change-line.del { color: #f0a89f; background: rgba(233,115,102,0.15); text-decoration: line-through; }
 
 /* ---------- Notion-artige Änderungs-Vorschau: große „Seite“ fliegt heraus ---------- */
 #overlay.change-overlay {
@@ -768,12 +705,6 @@ button.danger { color: var(--danger); }
 .think-box.expanded .think-body { max-height: 320px; overflow-y: auto; }
 
 /* Blockmarkierung als durchgehende Fläche wie in Notion – keine farbige Kontur. */
-.blk.highlight-add {
-	background: rgba(114,188,143,0.18);
-	border-radius: 5px;
-	transition: background-color 0.4s ease;
-}
-.blk.highlight-add .blk-body { background: transparent; box-shadow: none; }
 
 /* Edit-Karten: Notion-artige Diff-/Undo-Anzeige nach KI-Bearbeitungen */
 .edit-card {
@@ -852,8 +783,6 @@ button.danger { color: var(--danger); }
 	font-size: 13.5px;
 	color: var(--text);
 }
-.diff-block { margin-top: 8px; font-family: Menlo, Consolas, monospace; font-size: 12px;
-	max-height: 220px; overflow-y: auto; border-top: 1px solid var(--surface-hover); padding-top: 6px; }
 /* ---------- Markdown ---------- */
 .md h1, .md h2, .md h3 { margin: 0.9em 0 0.4em; line-height: 1.3; }
 .md h1 { font-size: 1.6em; } .md h2 { font-size: 1.3em; } .md h3 { font-size: 1.1em; }
@@ -1035,10 +964,6 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .home h1 { margin-bottom: 4px; }
 .home h3 { margin: 22px 0 10px; color: var(--text2); font-size: 13px;
 	text-transform: uppercase; letter-spacing: 0.5px; }
-.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.home-card { padding: 14px; border: 1px solid var(--edge); border-radius: 10px; cursor: pointer;
-	display: flex; flex-direction: column; gap: 6px; background: var(--surface-subtle); }
-.home-card:hover { background: var(--surface-hover); }
 
 .settings-modal { flex-direction: row; gap: 0; padding: 0; width: min(720px, 94vw);
 	height: min(520px, 84vh); overflow: hidden; position: relative; }
@@ -1179,9 +1104,6 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-into:hover { background: rgba(0,0,0,.75); }
 .lib-fav { position: absolute; top: 8px; left: 14px; z-index: 2; font-size: 12px; color: #ffd56a;
 	text-shadow: 0 1px 3px rgba(0,0,0,.5); pointer-events: none; }
-.lib-ink-badge { position: absolute; bottom: 10px; right: 10px; z-index: 2; font-size: 12px;
-	padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff;
-	border: 1px solid rgba(255,255,255,.12); pointer-events: none; }
 
 /* Farbige Ordner (GoodNotes-ähnlich), flach und token-basiert */
 .lib-folder { display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: left;
@@ -1196,12 +1118,6 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	box-shadow: inset 0 1px 0 rgba(255,255,255,.16); }
 .lib-folder-name { font-weight: 650; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-folder-count { font-size: 12px; color: var(--text2); margin-top: -6px; }
-.lib-folder.tone-sky { --folder: #5b8fd4; }
-.lib-folder.tone-mint { --folder: #4fa88a; }
-.lib-folder.tone-lilac { --folder: #8b7cc8; }
-.lib-folder.tone-sand { --folder: #c4a35a; }
-.lib-folder.tone-rose { --folder: #c9788a; }
-.lib-folder.tone-slate { --folder: #7a8494; }
 
 /* + Neue Notiz als leerer Notebook-Slot */
 .lib-newdoc { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0;
@@ -1217,13 +1133,6 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 
 /* Board-Ansicht: eine Spalte je Workspace (einfaches Kanban) */
 .board { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
-.board-col { min-width: 220px; max-width: 280px; flex: 1; background: var(--surface-faint);
-	border: 1px solid var(--edge-soft); border-radius: 10px; padding: 8px; }
-.board-col-head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-	color: var(--text2); padding: 2px 4px 8px; }
-.board-card { padding: 10px 12px; border: 1px solid var(--edge); border-radius: 8px; cursor: pointer;
-	background: var(--menu-bg); margin-bottom: 6px; font-size: 14px; }
-.board-card:hover { background: var(--surface-hover); }
 
 /* Vorlagen-Auswahl beim Seiten-Anlegen */
 .tpl-opt { text-align: left; }
@@ -1344,22 +1253,6 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 
 
 /* Slash-Menü und schwebende Auswahl-Toolbar */
-.slash-menu { position: absolute; z-index: 7; min-width: 250px; max-height: 280px; overflow-y: auto;
-	background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px; padding: 6px;
-	box-shadow: 0 12px 32px var(--shadow); display: flex; flex-direction: column; gap: 2px; }
-.slash-opt { text-align: left; background: transparent; font-size: 13.5px; color: var(--text2); }
-.slash-opt:hover, .slash-opt.active { background: var(--surface-hover-strong); color: var(--text); }
-.sel-toolbar { position: absolute; z-index: 7; display: flex; gap: 2px; padding: 4px;
-	background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 12px 32px var(--shadow); }
-.sel-toolbar > button { min-height: 0; width: 28px; height: 26px; padding: 0; background: transparent; font-size: 13px; }
-.sel-toolbar > button:hover { background: var(--surface-active); }
-.color-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; display: grid; grid-template-columns: repeat(4, 1fr);
-	gap: 4px; padding: 6px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px;
-	box-shadow: 0 12px 32px var(--shadow); }
-.color-menu[hidden] { display: none; }
-.color-dot { width: 24px; height: 24px; min-height: 0; padding: 0; border-radius: 6px;
-	border: 1px solid rgba(255,255,255,0.18); font-size: 12px; background: var(--surface); }
-.color-dot:hover { outline: 2px solid var(--accent); }
 
 /* Textfarben ({red}…{/}) und Hintergrundfarben ({bg-red}…{/}) — Notion-Palette */
 .c-gray { color: #9b9b9b; } .c-red { color: #ff7369; } .c-orange { color: #ffa344; }
@@ -1375,14 +1268,6 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 .hl-pink { background: rgba(226,85,161,0.28); border-radius: 3px; padding: 0 2px; }
 
 /* Farbige Callouts (> [!blue] …) */
-.blk-callout.co-gray { background: rgba(155,155,155,0.10); }
-.blk-callout.co-red { background: rgba(255,115,105,0.10); border-color: rgba(255,115,105,0.25); }
-.blk-callout.co-orange { background: rgba(255,163,68,0.10); border-color: rgba(255,163,68,0.25); }
-.blk-callout.co-yellow { background: rgba(255,220,73,0.10); border-color: rgba(255,220,73,0.25); }
-.blk-callout.co-green { background: rgba(77,171,154,0.10); border-color: rgba(77,171,154,0.25); }
-.blk-callout.co-blue { background: rgba(82,156,202,0.10); border-color: rgba(82,156,202,0.25); }
-.blk-callout.co-purple { background: rgba(154,109,215,0.10); border-color: rgba(154,109,215,0.25); }
-.blk-callout.co-pink { background: rgba(226,85,161,0.10); border-color: rgba(226,85,161,0.25); }
 
 /* ---------- Mehrquellen-KI-Einstellungen & Modell-Dropdown-Erweiterung ---------- */
 .provider-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
@@ -1396,8 +1281,6 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 .icon-danger:hover { background: var(--danger-soft); }
 
 /* ---------- Alles auswählen (Strg+A): eine zusammenhängende Blockmarkierung ---------- */
-.block-editor.all-selected .blk { background: rgba(35,131,226,0.30); border-radius: 5px; }
-.block-editor.all-selected .blk-body { background: transparent; }
 
 /* ---------- Karten-Editor (Modal): klar, mit echtem Stapel-Select ---------- */
 .card-editor { display: flex; flex-direction: column; gap: 10px; }
@@ -1424,7 +1307,6 @@ button.primary:hover { filter: brightness(1.06); }
 .deck-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px;
 	border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-subtle); }
 .deck-name { font-weight: 700; font-size: 16px; display: block; }
-.deck-counts { font-size: 12.5px; color: var(--text2); }
 .cnt-due { color: var(--accent); }
 .cnt-new { color: var(--success); }
 .deck-actions { display: flex; gap: 6px; flex-shrink: 0; }
@@ -1483,21 +1365,13 @@ button.primary:hover { filter: brightness(1.06); }
 .mermaid-diagram svg { max-width: 100%; height: auto; }
 
 /* ---------- Suche: Fundstellen-Vorschau ---------- */
-.search-snip { margin: -2px 8px 8px 26px; padding: 4px 8px; font-size: 12px; color: var(--text2);
-	background: var(--surface); border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; }
-.search-snip mark { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 1px; }
 
 /* ---------- Backup-Erinnerung (Home) ---------- */
-.backup-banner { margin: 10px 0; padding: 8px 12px; border: 1px solid var(--edge); border-radius: 8px;
-	background: rgba(245,217,10,0.07); color: var(--text2); font-size: 13px; }
 
 /* ---------- Tag-Chips + Vorlagen-Galerie (Bibliothek) ---------- */
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .tag-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; color: var(--text2); font-size: 12px; }
 .tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-.tpl-gallery { margin: 8px 0 4px; }
-.tpl-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.tpl-item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--edge); border-radius: 8px; background: var(--menu-bg); font-size: 13px; }
 
 /* ---------- Eingabe-/Verschieben-Dialoge ---------- */
 .modal-sm { max-width: 420px; }
@@ -1566,16 +1440,6 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 }
 
 /* ---------- Home als Dashboard: Kacheln für Fällig / Daily / Backup ---------- */
-.home-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-	gap: 10px; margin: 14px 0 22px; }
-.home-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-	padding: 14px; background: var(--surface-subtle); border: 1px solid var(--edge);
-	border-radius: var(--radius); text-align: left; color: var(--text); cursor: pointer; font: inherit; }
-.home-tile:hover { background: var(--accent-soft); }
-.home-tile.attention { border-color: rgba(111,195,255,0.5); }
-.home-tile .tile-num { font-size: 21px; font-weight: 700; }
-.home-tile .tile-label { font-size: 11.5px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
-.home-tile .tile-action { font-size: 13px; color: var(--accent); }
 
 /* Tastenkürzel-Hinweis in Menüs (⋯ → Rückgängig/Wiederholen) */
 .menu-hint { font-size: 11px; color: var(--text2); }
@@ -1606,15 +1470,14 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 }
 
 /* Einheitliche Interaktionszustände und bessere Tastaturbedienung */
-button, input, textarea, select, .row, .home-card, .lib-card, .cal-day {
+button, input, textarea, select, .row, .lib-card, .cal-day {
 	-webkit-tap-highlight-color: transparent;
 }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
-[tabindex]:focus-visible, .row:focus-visible, .home-card:focus-visible {
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible, .row:focus-visible {
 	outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--focus-ring);
 }
 button:disabled { opacity: .38; cursor: default; transform: none !important; }
-.modal, .page-menu, .model-menu, .slash-menu, .sel-toolbar, .palette-box {
+.modal, .page-menu, .model-menu, .palette-box {
 	border-radius: var(--radius-lg);
 }
 input, textarea, select, .row, .menu-item { border-radius: var(--radius-md); }
@@ -1623,7 +1486,7 @@ input, textarea, select, .row, .menu-item { border-radius: var(--radius-md); }
 .home, .library, .chat-full-wrap { font-size: var(--text-md); }
 .home h1, .library h1, .chat-full-wrap h1 { font-size: var(--text-xl); letter-spacing: -.025em; line-height: 1.15; }
 .home h2, .library h2 { font-size: var(--text-lg); letter-spacing: -.015em; }
-.hint, small, .menu-note, .widget-label, .section-kicker { font-size: var(--text-sm); }
+.hint, small, .menu-note { font-size: var(--text-sm); }
 .md { max-width: 76ch; }
 
 /* Optionale kompakte Dichte — nur Abstände, nie Lesbarkeit reduzieren */
@@ -1636,7 +1499,6 @@ body.density-compact #sidebar { padding: 10px 8px; gap: 6px; }
 body.density-compact .row { padding-top: 4px; padding-bottom: 4px; }
 body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px; }
 body.density-compact .home { padding: 24px 28px; }
-body.density-compact .home-widget { min-height: 118px; padding: 15px; }
 body.density-compact .library { padding: 24px 30px; }
 
 /* Reduzierte Bewegung: auch manuell wählbar, zusätzlich zum Betriebssystem */
@@ -1655,10 +1517,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .accent-picker { display: flex; gap: 10px; padding: 4px 0; }
 .accent-swatch { width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
 .accent-swatch.active { box-shadow: 0 0 0 2px var(--menu-bg), 0 0 0 4px currentColor; }
-.accent-blue { background: #5e9fe8; color: #5e9fe8; }
-.accent-violet { background: #a78bfa; color: #a78bfa; }
-.accent-green { background: #72bc8f; color: #72bc8f; }
-.accent-orange { background: #de9255; color: #de9255; }
 .dashboard-settings { display: flex; flex-direction: column; gap: 5px; }
 .dashboard-setting-row { display: grid; grid-template-columns: 32px 1fr 32px 32px; gap: 5px; align-items: center;
 	padding: 7px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint); }
@@ -1672,7 +1530,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .home-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
 .home-hero h1 { margin: 0 0 4px; font-size: 1.65rem; font-weight: 700; letter-spacing: -.02em; }
 .home-hero p, .home-meta { color: var(--text2); font-size: 13.5px; margin: 0; }
-.home-eyebrow, .section-kicker { display: block; color: var(--accent); font-size: 10px; font-weight: 750; letter-spacing: .14em; }
 .home-customize { background: transparent; color: var(--text2); border: 1px solid var(--edge-soft);
 	min-width: 36px; min-height: 36px; padding: 0 10px; border-radius: 10px; }
 .home-customize:hover { color: var(--text); border-color: var(--edge); }
@@ -1683,8 +1540,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .quick-actions button:hover { color: var(--text); border-color: var(--edge); }
 
 /* Alte Widget-Kacheln: keine Deko-Kreise mehr; Layout bleibt nur für Fallbacks harmlos */
-.home-widget-grid { display: none; }
-.home-widget, .home-widget::before, .home-widget::after { content: none; display: none; }
 
 /* Eine klare „Weitermachen“-Zeile statt großer Kachel */
 .home-section-continue { margin-top: 4px; }
@@ -1714,10 +1569,9 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .section-head h2 { margin: 0; font-size: 13px; font-weight: 650; color: var(--text2); letter-spacing: .02em; }
 .section-head > button { background: transparent; color: var(--text2); font-size: 12.5px; min-height: 28px; padding: 2px 6px; }
 .section-head > button:hover { color: var(--accent); }
-.home-recent-grid { display: grid; grid-template-columns: 1fr; gap: 2px; }
-.recent-card, .home-list-row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+.home-list-row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
 	background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); padding: 8px 10px; }
-.recent-card:hover, .home-list-row:hover { background: var(--surface-subtle); border-color: var(--edge-soft); }
+.home-list-row:hover { background: var(--surface-subtle); border-color: var(--edge-soft); }
 .recent-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; background: var(--surface); font-size: 18px; }
 .recent-icon.sm { width: 28px; height: 28px; font-size: 14px; border-radius: 8px; }
 .recent-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
@@ -1735,10 +1589,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .empty-state button { margin-top: 4px; background: var(--accent); color: #081018; }
 
 /* Wiederverwendbarer Ladezustand für spätere asynchrone Bereiche */
-.skeleton { position: relative; overflow: hidden; min-height: 14px; border-radius: var(--radius-sm); background: var(--surface); }
-.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
-	background: linear-gradient(90deg, transparent, var(--surface-hover-strong), transparent); animation: skeleton 1.25s infinite; }
-@keyframes skeleton { to { transform: translateX(100%); } }
+
 
 @media (max-width: 600px) {
 	.home-v2 { padding: 22px 14px 88px; max-width: none; }
@@ -1759,38 +1610,21 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 @media (max-width: 980px) { #app { min-height: 100dvh; height: auto; } }
 
 /* Block-Menü (Klick auf ⠿) und [[Seiten-Link-Menü nutzen den Slash-Menü-Stil */
-.block-menu { min-width: 215px; z-index: 8; }
-.block-menu .menu-label { padding: 6px 8px 2px; }
-.link-menu { z-index: 8; }
-.slash-opt.danger { color: var(--danger); }
-.slash-opt.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
 /* KI-Menü der Auswahl-Toolbar (✦) */
-.sel-toolbar.busy { opacity: .55; pointer-events: none; }
-.ai-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; display: flex; flex-direction: column; gap: 2px;
-	padding: 5px; min-width: 175px; background: var(--menu-bg); border: 1px solid var(--edge);
-	border-radius: var(--radius-lg); box-shadow: 0 12px 32px var(--shadow); }
-.ai-menu[hidden] { display: none; }
-.ai-menu button { min-height: 30px; width: 100%; text-align: left; background: transparent; font-size: 13px; }
-.ai-menu button:hover { background: var(--surface-hover-strong); }
 
 /* Wort-/Zeichenzähler unten rechts im Editor */
-.editor-counter { position: sticky; bottom: 6px; display: flex; justify-content: flex-end; pointer-events: none; }
-.editor-counter span { padding: 3px 10px; border-radius: 999px; font-size: 11px; color: var(--text2);
-	background: var(--panel-solid); border: 1px solid var(--edge-soft); }
 
 /* Review-Overlay: Bearbeiten/Aussetzen links, Beenden rechts */
 .review-tools { justify-content: flex-start; }
 .review-tools #btnCloseOverlay { margin-left: auto; }
 
 /* Smart-Sammlungen in der Bibliothek */
-.smart-row { margin: 2px 0 10px; }
 
 /* Touch-Geräte: Gutter dauerhaft sichtbar + größere Ziele (kein Hover vorhanden) */
 @media (pointer: coarse) {
 	.blk-gutter { opacity: .55; }
 	.blk-plus, .blk-handle { width: 28px; height: 30px; font-size: 16px; }
-	.sel-toolbar > button { width: 36px; height: 34px; font-size: 15px; }
 	.row-add, .msg-tool-btn, .addcover-btn, .cover-btns { opacity: 1; }
 }
 
@@ -1805,7 +1639,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 		border-bottom: 1px solid var(--edge); padding: 10px 8px; }
 	.set-item { white-space: nowrap; flex-shrink: 0; }
 	.hist-list { width: 100%; max-height: 30dvh; border-right: none; border-bottom: 1px solid var(--edge); }
-	.change-preview-diff { max-height: 55dvh; }
 	.grades { flex-wrap: wrap; }
 	.grades button { min-height: 48px; }
 	.page-meta { padding: 10px 16px 4px; }
@@ -1825,8 +1658,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .conflict-banner-copy b { color: var(--danger); }
 .conflict-banner-copy span { font-size: 12.5px; color: var(--text2); }
 .conflict-banner button { flex-shrink: 0; background: var(--danger); color: #fff; font-weight: 650; }
-.home-widget.conflict { border-color: rgba(233,115,102,0.45);
-	background: linear-gradient(135deg, rgba(233,115,102,0.14), var(--surface-subtle) 62%); }
 .conflict-modal { width: min(880px, 96vw); max-height: min(820px, 90vh); padding: 0; overflow: hidden; gap: 0; }
 .conflict-head { display: flex; align-items: center; gap: 12px; padding: 18px 48px 12px 20px; border-bottom: 1px solid var(--edge); }
 .conflict-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
@@ -1840,7 +1671,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .conflict-legend .leg.add { background: rgba(114,188,143,0.15); color: #9fdcb4; }
 .conflict-legend .leg.same { background: var(--surface); }
 .conflict-diff { max-height: min(420px, 48vh); }
-.change-line.same { color: var(--text2); opacity: .85; }
 .conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;
 	padding: 12px 16px 16px; border-top: 1px solid var(--edge-soft); }
 .conflict-actions button.primary { background: var(--accent); color: #081018; font-weight: 650; }
@@ -1854,7 +1684,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
    ========================================================================== */
 /* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Zoom unterbinden */
 html, body { overscroll-behavior: none; }
-button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .palette-item {
+button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	touch-action: manipulation;
 }
 
@@ -1961,10 +1791,6 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 @media (max-width: 480px) { .newpage-cards { grid-template-columns: 1fr; } }
 
 /* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen Platz füllt */
-.heft-head { padding-bottom: 0; }
-.heft-titlebar { display: flex; align-items: center; gap: 8px; margin: 6px 0 8px; }
-.heft-titlebar .page-icon { font-size: 26px; }
-.heft-titlebar #pageTitle { font-size: 24px; padding: 0; }
 .heft-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Taskbar v6: freistehende Floating-Pill über dem Papier — kein Banner, null Layout-Höhe */
@@ -1982,14 +1808,6 @@ button, .row, .tab, .tabchip, .home-card, .lib-card, .cal-day, .menu-item, .pale
 }
 .heft-float.is-dragging { opacity: .95; cursor: grabbing; z-index: 55; }
 /* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Options-Tray folgt */
-.heft-drag {
-	min-height: 0; height: 36px; min-width: 28px; padding: 0 4px;
-	border-radius: 999px; font-size: 13px; line-height: 1; letter-spacing: -2px;
-	background: transparent; border: none; color: rgba(255,255,255,.4);
-	cursor: grab; touch-action: none; flex-shrink: 0;
-}
-.heft-drag:hover { color: #fff; background: rgba(255,255,255,.1); }
-.heft-drag:active, .heft-float.is-dragging .heft-drag { cursor: grabbing; color: #8fd0ff; }
 /* Haupt-Pill (kompakt) — schwebend, kein Banner */
 .heft-pill {
 	display: flex; align-items: center; gap: 1px; padding: 4px 6px 4px 4px;
@@ -2075,16 +1893,12 @@ body.reduce-motion .heft-tray { animation: none; }
 /* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layout-Banner */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; }
 /* Legacy-Aliase (alte Klassen sollen nicht brechen) */
-.heft-toolbar, .heft-mainbar, .heft-side-group, .heft-toolgroup,
-.heft-tb-left, .heft-tb-center, .heft-tb-right, .heft-opts { display: contents; }
-.heft-side, .heft-action { min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px; }
-.heft-paper-label { display: none; }
 @media (max-width: 720px) {
 	.heft-float { top: 8px; }
 	.heft-corner-l, .heft-corner-r { top: 8px; }
 	.heft-corner-l { left: 8px; }
 	.heft-corner-r { right: 8px; }
-	.heft-main, .heft-opt, .heft-size, .heft-corner, .heft-drag { min-width: 34px; height: 34px; padding: 0 7px; }
+	.heft-main, .heft-opt, .heft-size, .heft-corner { min-width: 34px; height: 34px; padding: 0 7px; }
 	.heft-pageno-inline { display: none; }
 	.heft-scroll { padding-top: 52px; }
 }
@@ -2170,10 +1984,6 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text); }
 .heft-tpl small { font-size: 9.5px; opacity: .7; }
 .heft-tpl-paper { display: block; width: 40px; height: 56px; border-radius: 4px; background: #fdfdf8; border: 1px solid var(--edge); }
-.heft-tpl-lined { background-image: repeating-linear-gradient(transparent 0 7px, rgba(70,110,180,.35) 7px 8px); }
-.heft-tpl-grid { background-image: repeating-linear-gradient(transparent 0 7px, rgba(70,110,180,.3) 7px 8px),
-	repeating-linear-gradient(90deg, transparent 0 7px, rgba(70,110,180,.3) 7px 8px); }
-.heft-tpl-dots { background-image: radial-gradient(rgba(60,80,120,.5) 1px, transparent 1.5px); background-size: 8px 8px; }
 
 /* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser, Scan-Streifen, Aktionen */
 .heft-scan { position: fixed; inset: 0; z-index: 1600; display: flex; flex-direction: column;
@@ -2184,8 +1994,6 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-scan-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center;
 	justify-content: center; overflow: hidden; }
 .heft-scan-stage video { max-width: 100%; max-height: 100%; }
-.heft-scan-frame { position: absolute; inset: 7% 10%; border: 2px dashed rgba(255,255,255,.45);
-	border-radius: 12px; pointer-events: none; }
 /* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Aufnahme */
 .heft-scan-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
 	overflow: visible; transition: filter .16s ease; }
@@ -2258,14 +2066,6 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-embed { display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 12px 14px;
 	border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle); }
 .heft-embed:hover { border-color: var(--accent-border); }
-.heft-embed-paper { flex-shrink: 0; width: 72px; height: 102px; border-radius: 4px; overflow: hidden;
-	background: #fdfdf8; box-shadow: 0 6px 16px var(--shadow); }
-.heft-embed-paper canvas, .heft-embed-paper img { width: 100%; height: 100%; display: block; }
-.heft-embed-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.heft-embed-info b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.heft-embed-info small { font-size: 12px; color: var(--text2); }
-.heft-embed-open { flex-shrink: 0; background: var(--accent); color: #081018; font-weight: 650; border-radius: 8px; }
-.heft-embed-open:hover { filter: brightness(1.06); }
 
 /* Bibliothek: Notion-Seiten als flaches Dokumentblatt — nur Hefte tragen das Notizbuch-Cover */
 .lib-docsheet { display: flex; flex-direction: column; gap: 6px; height: 196px; padding: 14px 12px;
@@ -2285,7 +2085,7 @@ body.reduce-motion .heft-tray { animation: none; }
 
 /* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziele ebenfalls */
 @media (pointer: coarse) {
-	.heft-main, .heft-opt, .heft-size, .heft-side, .heft-corner, .heft-drag { height: 40px; min-width: 40px; }
+	.heft-main, .heft-opt, .heft-size, .heft-corner { height: 40px; min-width: 40px; }
 	.heft-swatch { width: 26px; height: 26px; min-width: 26px !important; }
 	.heft-pop-del { opacity: 1; }
 	.heft-seg { min-height: 36px; }
@@ -2496,8 +2296,7 @@ body.reduce-motion .heft-tray { animation: none; }
 	body:not(.panel-collapsed) #panel { display: flex; position: fixed; inset: 0;
 		z-index: 1300; width: 100vw; max-width: none;
 		border: none; border-radius: 0; background: var(--panel-solid);
-		padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-	#tabbar .tabbar-ai { display: none; } /* ✦ übernimmt die Dock-Pille */
+		padding-bottom: max(10px, env(safe-area-inset-bottom)); } /* ✦ übernimmt die Dock-Pille */
 
 	/* Dock-Pille — vier direkte Hauptaktionen; die gemeinsame Breite bleibt auch
 	   auf schmalen Geräten kompakt und lässt die Safe-Areas frei. */
@@ -3063,10 +2862,7 @@ body.light .chat-form-full:focus-within {
 	box-shadow: 0 0 0 3px var(--accent-soft);
 }
 body.light .msg.user { background: var(--bubble); }
-body.light .md pre,
-body.light .blk-codewrap,
-body.light .v2-code pre,
-body.light .change-preview-diff {
+body.light .md pre, body.light .blk-codewrap {
 	background: #f4f4f2;
 	border-color: var(--edge);
 }
@@ -3284,24 +3080,79 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 	.heft-chrome .heft-corner { top: 8px; }
 }
 
-/* Installierte iPadOS-PWA: Der sichere obere UND untere Bereich muss in
-   JEDEM Dichte-Modus vom Inhalt freigehalten werden — sonst verschwinden die
-   letzten Sidebar-/Panel-Zeilen unter der Home-Indicator-Leiste. Vorher galt
-   die feste 12px-Desktop-Polsterung unverändert auch hier, obwohl sie die
-   Safe-Area gar nicht einrechnet — das Ergebnis war ein randloses, am unteren
-   Gerätesteg abgeschnittenes Layout im komfortablen Modus. */
-@media (display-mode: standalone) and (pointer: coarse) {
-	/* Komfortabler Modus: exakt derselbe 12px-Rand wie am Desktop, oben/unten
-	   zusätzlich um die Safe-Area erweitert statt sie zu ignorieren. */
-	body:not(.density-compact) #app {
-		padding-top: max(12px, env(safe-area-inset-top)) !important;
-		padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+/* ==========================================================================
+   iPad-Rahmen v5 (15. Juli 2026) — EINE Quelle der Wahrheit für Höhe,
+   Außenabstand und Safe-Areas am iPad (Safari UND installierte PWA).
+   Ersetzt drei früher konkurrierende Regelblöcke, deren Summe die Bugs
+   erzeugte:
+   – Komfortmodus: oben/unten max(12px, safe-area) ≈ 20–24px, links/rechts
+     fest 12px → sichtbar ASYMMETRISCHE Ränder um die Panels.
+   – Kompaktmodus: Safe-Area-Padding an #app bei exakt 100dvh Höhe →
+     unterste Kante abgeschnitten bzw. heller Randstreifen am Home-Indicator.
+   Prinzipien:
+   1. 100dvh ist mit viewport-fit=cover bereits die volle Bildschirmhöhe —
+      Höhe und Safe-Area werden NIE addiert.
+   2. Komfortmodus: EIN Rahmenmaß (--ipad-frame) auf allen vier Seiten —
+      die Abstände zu den Bildschirmrändern sind dadurch immer symmetrisch.
+   3. Kompaktmodus: #app bleibt komplett randlos (0 Padding, 0 Gap); die
+      Panelflächen laufen bis an jede Bildschirmkante — kein Streifen, nichts
+      abgeschnitten. Die Safe-Area wird stattdessen ALS INNENABSTAND in
+      Sidebar und Chat-Composer freigehalten.
+   Ansonsten gilt am iPad exakt das Desktop-Layout (Grid, Radius, Farben).
+   ========================================================================== */
+@media (pointer: coarse) and (min-width: 769px) {
+	:root {
+		/* Größte Safe-Area-Kante, mindestens der 12px-Desktop-Rand.
+		   Im Browser (Safe-Areas = 0) ergibt das exakt den Desktop-Rand. */
+		--ipad-frame: max(12px, env(safe-area-inset-top), env(safe-area-inset-right), env(safe-area-inset-bottom), env(safe-area-inset-left));
 	}
-	/* Der randlose Kompaktmodus braucht eigenen Safe-Area-Innenabstand statt
-	   des sonst dort geltenden Null-Paddings. */
+	/* Randgenau den Bildschirm füllen — überstimmt die height:auto-Regel
+	   der schmalen Breakpoints (Hochformat-iPads fallen sonst hinein). */
+	#app {
+		height: 100dvh !important;
+		min-height: 100dvh !important;
+	}
+	/* Komfortmodus: identischer Rahmen auf allen vier Seiten = symmetrisch.
+	   Bewusst OHNE !important, damit der Heft-Fokusmodus (padding: 0 bei
+	   ausgeblendeter Seitenleiste) weiterhin gewinnt. */
+	body:not(.density-compact) #app {
+		padding: var(--ipad-frame);
+	}
+	/* Kompaktmodus: randlose App-Fläche ohne jedes Außenpadding. */
 	body.density-compact #app {
-		padding-top: env(safe-area-inset-top) !important;
-		padding-bottom: env(safe-area-inset-bottom) !important;
+		padding: 0 !important;
+		gap: 0 !important;
+	}
+	body.density-compact #sidebar,
+	body.density-compact #mainWrap,
+	body.density-compact #panel {
+		height: 100%;
+		border-radius: 0;
+	}
+	/* Inhalt bleibt über dem Home-Indicator bzw. unter der Statusleiste —
+	   als INNENABSTAND, damit die Flächen selbst bis zur Kante durchlaufen. */
+	body.density-compact #sidebar {
+		padding-top: max(10px, env(safe-area-inset-top));
+		padding-bottom: max(14px, env(safe-area-inset-bottom));
+	}
+	body.density-compact #panel > #chatForm {
+		margin-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+	}
+	/* Hinter und neben den Flächen darf nie eine fremde Farbe durchscheinen. */
+	body.density-compact,
+	body.density-compact #app { background: var(--panel-solid); }
+}
+/* Schmales iPad (Hochformat, 769–1024px): das KI-Panel ist hier ein
+   fixed-Overlay — es folgt im Komfortmodus demselben Rahmenmaß und dockt im
+   Kompaktmodus randlos mit Trennlinie an die Bildschirmkante an. */
+@media (pointer: coarse) and (min-width: 769px) and (max-width: 1024px) {
+	body:not(.density-compact) #panel {
+		top: var(--ipad-frame); right: var(--ipad-frame); bottom: var(--ipad-frame);
+	}
+	body.density-compact #app { grid-template-columns: 220px minmax(0, 1fr) 320px; }
+	body.density-compact #panel {
+		top: 0; right: 0; bottom: 0;
+		border-left: 1px solid var(--edge-soft);
 	}
 }
 
