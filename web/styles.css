@@ -130,21 +130,9 @@ button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active
 		border-color var(--motion-base) ease,
 		opacity var(--motion-base) ease;
 }
-/* Die bevorzugte Einstellung „Reduziert“ und die Systemvorgabe haben Vorrang. */
-body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
-	animation-duration: 1ms !important;
-	animation-iteration-count: 1 !important;
-	transition-duration: 1ms !important;
-	scroll-behavior: auto !important;
-}
-@media (prefers-reduced-motion: reduce) {
-	*, *::before, *::after {
-		animation-duration: 1ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 1ms !important;
-		scroll-behavior: auto !important;
-	}
-}
+/* UI-Fix v7: doppelte Reduce-Motion-Blöcke entfernt — die kanonische Fassung
+	(.001ms) steht im Design-System v2 weiter unten und gewann als spätere Regel
+	ohnehin schon die Kaskade. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -473,22 +461,24 @@ button.danger { color: var(--danger); }
 .msg.user:hover .msg-edit.locked { opacity: 0.85; color: var(--text2); cursor: not-allowed; }
 .msg.assistant { align-self: stretch; background: none; border: none; padding: 2px 0; }
 .msg.busy { color: var(--text2); font-style: italic; }
-/* Eingabe-Pille wie in Notions KI-Panel: abgerundet, Anhang-Button links,
-	ruder-förmiger Send-Button rechts in Akzentfarbe. */
-#chatForm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px; position: relative;
-	padding: 6px 6px 6px 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 22px;
-	background: rgba(255,255,255,0.035); flex-shrink: 0; }
-#chatForm:focus-within { border-color: var(--accent); }
-/* Composer-Skelett: getrennte Text- und Aktionszone verhindert Symbol-Verschiebungen. */
+/* UI-Fix v7 (Konsolidierung): #chatForm/.chat-form-full waren 4× mit
+	widersprüchlichen Werten definiert, der Senden-Knopf 3× — die Kaskade war
+	unlesbar (gleiche Fehlerklasse wie der iPad-Rahmen-Bug). Jetzt gilt: EIN
+	kanonischer Block direkt darunter; hier bleiben nur die Panel-spezifischen
+	Layout-Eigenschaften des Seiten-Composers. */
+#chatForm { margin: 10px; position: relative; flex-shrink: 0; }
+/* Composer (kanonisch): Textfeld oben über volle Breite, Aktionszeile unten.
+	Werte = Netto-Ergebnis der früheren Kaskade — optisch unverändert. */
 #chatForm, .chat-form-full {
 	display: flex;
 	flex-direction: column;
-	align-items: stretch;
-	gap: 0;
-	padding: 8px 9px 7px 12px;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 6px;
+	padding: 8px 8px 7px 12px;
 	border: 1px solid rgba(255,255,255,.14);
 	border-radius: 18px;
-	background: #181a1f;
+	background: rgba(255,255,255,.035);
 	transition: min-height .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 #chatForm:focus-within, .chat-form-full:focus-within {
@@ -533,58 +523,36 @@ button.danger { color: var(--danger); }
 	padding: 0; border-radius: 7px;
 }
 #chatForm:has(#pendingChip:not([hidden])), .chat-form-full:has(#mainPendingChip:not([hidden])) { padding-top: 48px; }
-/* Composer: Textfeld oben, bestehende Aktions-Symbole dauerhaft unten. */
-#chatForm, .chat-form-full {
-	flex-wrap: wrap;
-	align-items: flex-end;
-	gap: 6px;
-	padding: 8px 8px 7px 12px;
-	border: 1px solid rgba(255,255,255,.14);
-	border-radius: 18px;
-	background: rgba(255,255,255,.035);
-	transition: min-height .12s ease, border-color .12s ease;
-}
-/* Einziger Fokus-Rahmen: die gesamte Composer-Box. */
-#chatForm:focus-within, .chat-form-full:focus-within {
-	border-color: #2383e2;
-	box-shadow: 0 0 0 1px #2383e2;
-}
-/* Text läuft über die volle obere Reihe von links nach rechts. */
+/* (UI-Fix v7: Duplikat-Block entfernt — Composer ist oben kanonisch definiert.) */
+/* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte aus vorher
+	drei konkurrierenden Eingabefeld-Definitionen). */
 #chatInput, .chat-form-full textarea {
 	order: -1;
-	flex: 0 0 100%;
+	flex: 1;
 	width: 100%;
 	min-height: 30px;
-	max-height: 220px;
+	max-height: 160px;
 	overflow-y: auto;
 	resize: none;
 	border: none !important;
 	outline: none;
 	box-shadow: none !important;
 	background: transparent;
-	padding: 5px 2px 7px;
+	padding: 6px 0;
 }
 /* Untere Reihe behält die bestehende Reihenfolge: Anhang → Modell → Senden. */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1; }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2; }
+/* Senden-Knopf (kanonisch, UI-Fix v7: konsolidiert aus vorher drei Definitionen —
+	Werte = bisheriges Netto-Ergebnis der Kaskade). */
 #chatForm button[type="submit"], .chat-form-full button[type="submit"] {
 	order: 3;
 	margin-left: 0;
-	width: 30px; height: 30px; min-height: 30px;
-	padding: 0; border-radius: 50%;
-	font-size: 20px; font-weight: 700; line-height: 1;
-}
-#chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled {
-	background: transparent; color: var(--text2); opacity: .55;
-}
-/* Composer wächst mit längeren Nachrichten; die Werkzeuge bleiben unten ausgerichtet. */
-#chatForm, .chat-form-full { align-items: flex-end; transition: min-height .12s ease; }
-#chatInput, .chat-form-full textarea {
-	min-height: 30px; max-height: 220px; overflow-y: auto;
-	resize: none;
-}
-#chatForm button[type="submit"], .chat-form-full button[type="submit"] {
-	width: 32px; height: 32px; min-height: 0; font-size: 21px; font-weight: 700; line-height: 1;
+	width: 30px; height: 30px; min-height: 0;
+	padding: 0; border-radius: 50%; flex-shrink: 0;
+	background: var(--accent); color: #06090f;
+	font-size: 14px; font-weight: 700; line-height: 1;
+	display: flex; align-items: center; justify-content: center;
 }
 #chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled) { background: #8fd0ff; }
 #chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled {
@@ -679,11 +647,8 @@ button.danger { color: var(--danger); }
 	.change-page-title { font-size: 22px; }
 	.change-page-flyout { width: 100%; max-height: 92dvh; }
 }
-#chatInput { flex: 1; resize: none; border: none; background: transparent; padding: 6px 0; max-height: 160px; }
-#chatForm button[type="submit"], .chat-form-full button[type="submit"] {
-	background: var(--accent); color: #06090f; border-radius: 50%; width: 30px; height: 30px;
-	min-height: 0; padding: 0; flex-shrink: 0; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-#chatForm button[type="submit"]:hover, .chat-form-full button[type="submit"]:hover { background: #8fd0ff; }
+/* (UI-Fix v7: Legacy-Definitionen für Eingabefeld + Senden-Knopf entfernt —
+	kanonische Blöcke siehe Composer-Abschnitt weiter oben.) */
 
 /* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live (Streaming) und
    finalisiert — Icon+Label+Chevron-Kopf, sanfte Höhen-Animation beim Auf-/
@@ -1250,7 +1215,8 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 .blk-p p { margin: 0; }
 .blk .md > :first-child { margin-top: 0; }
 .blk .md > :last-child { margin-bottom: 0; }
-.blk-callout { border-radius: 8px; padding: 10px 14px; border: 1px solid var(--surface-hover); }
+/* UI-Fix v7: .blk-callout-Duplikat entfernt — kanonische Definition im
+	Editor-Abschnitt (der Rahmen von hier wurde dorthin übernommen). */
 .blk-cols { display: flex; gap: 18px; }
 .blk-col { flex: 1; min-width: 0; }
 @media (max-width: 720px) { .blk-cols { flex-direction: column; } }
@@ -1538,7 +1504,15 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .settings-body h4 { margin-top: var(--space-4); margin-bottom: var(--space-2); }
 .appearance-choice button.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
 .accent-picker { display: flex; gap: 10px; padding: 4px 0; }
-.accent-swatch { width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.accent-swatch { width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent; color: var(--text2); }
+/* BUGFIX Farbwechsel: die vier Buttons hatten nie eine eigene Füllfarbe —
+   alle sahen identisch (leer/grau) aus und der aktive Ring (currentColor)
+   zeigte ebenfalls nur die Standard-Textfarbe statt des gewählten Akzents.
+   Werte = dieselben Farben wie ACCENT_THEMES in settings.js. */
+.accent-swatch.accent-blue { background: #5e9fe8; color: #5e9fe8; }
+.accent-swatch.accent-violet { background: #a78bfa; color: #a78bfa; }
+.accent-swatch.accent-green { background: #72bc8f; color: #72bc8f; }
+.accent-swatch.accent-orange { background: #de9255; color: #de9255; }
 .accent-swatch.active { box-shadow: 0 0 0 2px var(--menu-bg), 0 0 0 4px currentColor; }
 .dashboard-settings { display: flex; flex-direction: column; gap: 5px; }
 .dashboard-setting-row { display: grid; grid-template-columns: 32px 1fr 32px 32px; gap: 5px; align-items: center;
@@ -2732,10 +2706,11 @@ body:has(.anki-study-mode) #main {
 .blk-tbtn-col { top: 6px; right: 0; width: 16px; height: calc(100% - 26px); }
 .blk-tbtn-row { bottom: 0; left: 0; height: 16px; width: calc(100% - 20px); }
 
-/* --- Callout --- */
+/* --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren Duplikat übernommen) --- */
 .blk-callout {
 	display: flex; gap: 10px; width: 100%; margin: 4px 0;
 	padding: 16px 16px 16px 14px; border-radius: 6px;
+	border: 1px solid var(--surface-hover);
 	background: rgba(255,255,255,0.045);
 }
 .blk-callout .blk-children { flex: 1; min-width: 0; }
@@ -3294,3 +3269,50 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .embedding-picker-row button { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 6px; background: var(--surface); color: var(--text2); font-size: 15px; }
 .embedding-picker-row button:hover { color: var(--accent); background: var(--accent-soft); }
 .embedding-picker .hint { min-height: 16px; font-size: 10.5px; line-height: 1.35; }
+
+/* ==========================================================================
+   Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips, Kennzahlen-
+   Reihe, Telemetrie-Insights und ausklappbare Bereiche (<details data-fold>,
+   den Zustand merkt sich render.js in localStorage). Das Lernzeit-Widget
+   stylt lernzeit.js selbst (#lernzeitStyles). Dazu: Konfidenz-Reihe im
+   Lernmodus (telemetrie.js).
+   ========================================================================== */
+.home-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px; }
+.home-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+	border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: 12px; color: var(--text2); }
+.home-chip b { color: var(--text); font-weight: 650; }
+.home-chip.warn { border-color: rgba(255, 213, 106, 0.35); background: rgba(255, 213, 106, 0.08); }
+.home-statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.home-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px;
+	border: 1px solid var(--edge-soft); border-radius: 12px; background: var(--surface-subtle); }
+.home-stat b { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.home-stat small { font-size: 11.5px; color: var(--text2); }
+.home-stat.accent b { color: var(--accent); }
+.home-stat.good b { color: #72bc8f; }
+.home-streak-flame { font-size: 15px; margin-right: 3px; }
+/* Ausklappbare Home-Bereiche */
+.home-fold { border: 1px solid var(--edge-soft); border-radius: 12px; background: var(--surface-faint); margin-top: 12px; }
+.home-fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 11px 14px;
+	cursor: pointer; font-size: 13px; font-weight: 650; color: var(--text2); user-select: none; }
+.home-fold > summary::-webkit-details-marker { display: none; }
+.home-fold > summary .fold-meta { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--text2); }
+.home-fold > summary::after { content: "›"; margin-left: 6px; font-size: 15px; color: var(--text2);
+	transition: transform .12s ease; }
+.home-fold[open] > summary { color: var(--text); }
+.home-fold[open] > summary::after { transform: rotate(90deg); }
+.home-fold-body { padding: 2px 14px 12px; }
+.fold-foot { margin-top: 8px; display: flex; justify-content: flex-end; }
+/* Telemetrie-Insights */
+.insight-list { display: flex; flex-direction: column; gap: 6px; }
+.insight { display: flex; gap: 10px; align-items: flex-start; padding: 9px 11px;
+	border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-subtle); font-size: 13px; }
+.insight-ico { flex-shrink: 0; font-size: 15px; line-height: 1.4; }
+.insight b { display: block; }
+.insight small { display: block; color: var(--text2); font-size: 12px; margin-top: 1px; }
+.insight.empty { border-style: dashed; background: transparent; }
+/* Konfidenz-Abfrage im Lernmodus (telemetrie.js) */
+.confidence-row { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.confidence-row .menu-chip.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+@media (max-width: 600px) {
+	.home-statgrid { grid-template-columns: repeat(2, 1fr); }
+}
