@@ -83,7 +83,14 @@
 //      Bibliothekskopf in Notion, GoodNotes und NotebookLM
 // v61: Hefte können aus GoodNotes in den Papierkorb; Papierkorb hat eine
 //      bestätigte Aktion zum vollständigen, endgültigen Leeren
-const CACHE = "impala67-v61";
+// v62: iPad-Rahmen v6 — Komfortmodus-Außenabstände pro Achse (--ipad-frame-x/-y)
+//      statt Maximum aller Safe-Area-Kanten auf allen vier Seiten (styles.css)
+// v63: UI-Fixes v7 (Touch-Sichtbarkeit, Z-Index-Skala, Composer-CSS konsolidiert,
+//      flexible Tab-Breite, Kontrast) + Home v3 (persönliches Dashboard mit
+//      Kennzahlen, Insights, ausklappbaren Bereichen) + Lernzeit v3 (Widget mit
+//      Folds, Timer mit Pause, Wochenziel, Streak) + NEU telemetrie.js
+//      (Lern-Telemetrie über das Event-Log) — neue Datei im Precache.
+const CACHE = "impala67-v63";
 
 const APP_FILES = [
 	"./",
@@ -113,6 +120,7 @@ const APP_FILES = [
 	"./pdfs.js",
 	"./pdfpaste.js",
 	"./lernzeit.js",
+	"./telemetrie.js",
 	"./schulnoten.js",
 	"./editor.js",
 	"./render.js",

@@ -14,6 +14,7 @@ import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
+import { TELE } from "./telemetrie.js";
 
 const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
 const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
@@ -767,9 +768,30 @@ async function resolveConflict(action) {
 	render();
 }
 
-// Persönliches Home: ruhig, wenig Flächen — Fokus statt Widget-Wand.
-// Keine großen Dashboard-Kacheln mehr; nur Hero, Aktionen, Heute-Leiste und Listen.
-// (Dashboard-Widget-Einstellungen bleiben in den Settings, steuern hier aber nichts mehr.)
+// Home v3 (15. Juli 2026): persönliches Dashboard — Begrüßung mit Datum,
+// Lern-Kennzahlen (Lernzeit, Streak, fällige Karten, Erfolgsquote), Heute-Leiste,
+// Telemetrie-Insights (telemetrie.js) und ausklappbare Bereiche, die sich ihren
+// Zustand merken. Das ebenfalls ausklappbare Lernzeit-Widget liefert lernzeit.js.
+const HOME_FOLD_KEY = "impala67HomeFolds";
+function homeFolds() {
+	try { return JSON.parse(localStorage.getItem(HOME_FOLD_KEY) || "{}") || {}; } catch { return {}; }
+}
+function homeFoldOpen(id, fallback) {
+	const folds = homeFolds();
+	return folds[id] === undefined ? fallback : !!folds[id];
+}
+function homeFold(id, summary, body, fallbackOpen) {
+	return '<details class="home-fold" data-fold="' + id + '"' + (homeFoldOpen(id, fallbackOpen) ? " open" : "") +
+		'><summary>' + summary + '</summary><div class="home-fold-body">' + body + '</div></details>';
+}
+// <details>-Zustand persistieren — "toggle" blubbert nicht, daher Capture-Phase.
+document.addEventListener("toggle", (event) => {
+	const el = event.target;
+	if (!el || !el.matches || !el.matches("details[data-fold]")) return;
+	const folds = homeFolds();
+	folds[el.getAttribute("data-fold")] = el.open;
+	localStorage.setItem(HOME_FOLD_KEY, JSON.stringify(folds));
+}, true);
 function renderHome(main) {
 	const pages = STATE.activePages();
 	const pendingConflicts = loadPendingConflicts();
@@ -786,6 +808,14 @@ function renderHome(main) {
 	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").replace(/^#+\s*/, "").slice(0, 48) : "";
 	const hour = new Date().getHours();
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
+	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+	const cardCount = ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length;
+	const lz = LERNZEIT.statsForHome();
+	// Erfolgsquote der letzten 30 Tage — echte Wiederholungen (ohne Erstbewertungen
+	// und Lernschritte), gleiche Definition wie die Retention in der Statistik.
+	const cut30 = new Date(Date.now() - 30 * 864e5).toISOString();
+	const graded30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0 && !r.first && !r.learning);
+	const retention30 = graded30.length >= 10 ? Math.round(graded30.filter((r) => r.grade > 1).length / graded30.length * 100) : null;
 
 	const conflictBanner = conflictCount
 		? '<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ' + conflictCount + " Sync-Konflikt" + (conflictCount === 1 ? "" : "e") +
@@ -834,21 +864,37 @@ function renderHome(main) {
 		U.esc(chat.title || "Chat") + "</b><small>" + U.fmtDate(chat.updated || chat.created) + "</small><i>›</i></button>"
 	).join("");
 
+	// Kennzahlen-Reihe: heute gelernt, Streak, fällige Karten, Erfolgsquote
+	const stats =
+		'<div class="home-statgrid">' +
+			'<div class="home-stat accent"><b>' + LERNZEIT.fmt(lz.todaySeconds) + '</b><small>heute gelernt</small></div>' +
+			'<div class="home-stat"><b><span class="home-streak-flame">🔥</span>' + lz.streakDays + '</b><small>' + (lz.streakDays === 1 ? "Tag Streak" : "Tage Streak") + '</small></div>' +
+			'<div class="home-stat' + (due ? " accent" : "") + '"><b>' + due + '</b><small>Karten fällig</small></div>' +
+			'<div class="home-stat' + (retention30 !== null && retention30 >= 85 ? " good" : "") + '"><b>' + (retention30 === null ? "—" : retention30 + " %") + '</b><small>Erfolgsquote (30 Tage)</small></div>' +
+		"</div>";
+
 	main.innerHTML = '<div class="home home-v2 home-slim">' +
-		'<header class="home-hero"><div><h1>' + greeting + '</h1><p class="home-meta">' +
-		pages.length + " Seiten · " + ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length + " Karten · " + chats.length + " Chats</p></div>" +
+		'<header class="home-hero"><div><h1>' + greeting + ' 👋</h1><p class="home-meta">' + dateLine + "</p>" +
+		'<div class="home-hero-meta">' +
+			'<span class="home-chip">📄 <b>' + pages.length + '</b> Seiten</span>' +
+			'<span class="home-chip">🃏 <b>' + cardCount + '</b> Karten</span>' +
+			'<span class="home-chip">✦ <b>' + chats.length + '</b> Chats</span>' +
+			'<span class="home-chip' + (lz.goalPct < 100 ? " warn" : "") + '">🎯 Wochenziel <b>' + lz.goalPct + ' %</b></span>' +
+		"</div></div>" +
 		'<button class="home-customize" data-set="look" title="Design anpassen">⚙</button></header>' +
 		conflictBanner +
+		stats +
 		'<div class="quick-actions">' +
 			'<button data-homeaction="newpage">＋ Neue Seite</button>' +
 		"</div>" +
 		'<section class="home-section home-section-continue">' + continueBlock + "</section>" +
 		todayPills +
-		'<section class="home-section"><div class="section-head"><h2>Zuletzt</h2>' +
-		'<button data-homeaction="library">Alle ›</button></div>' + recentPages + "</section>" +
+		homeFold("insights", '🧠 Lern-Insights <span class="fold-meta">aus deiner Telemetrie</span>', TELE.homeInsightsHtml(), true) +
+		homeFold("recent", '📄 Zuletzt <span class="fold-meta">' + pages.length + ' Seiten</span>',
+			recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true) +
 		(recentChats
-			? '<section class="home-section"><div class="section-head"><h2>Chats</h2>' +
-				'<button data-homeaction="chats">Alle ›</button></div><div class="home-list">' + recentChats + "</div></section>"
+			? homeFold("chats", '✦ Chats <span class="fold-meta">' + chats.length + '</span>',
+				'<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false)
 			: "") +
 		LERNZEIT.homeWidgetHtml() +
 		"</div>";

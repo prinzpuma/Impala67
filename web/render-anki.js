@@ -389,7 +389,14 @@ function ankiStudyHtml() {
 				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4</span></button>' +
 			'</div>';
 	} else {
-		html += '<div class="modal-actions"><button data-ankishowback="1">Antwort zeigen</button></div>';
+		// Telemetrie (telemetrie.js): optionale Selbsteinschätzung VOR dem Aufdecken.
+		// Rein beobachtend — beeinflusst weder Queue noch Bewertung, wird aber mit dem
+		// Review protokolliert (Kalibrierung: Gefühl vs. tatsächlicher Erfolg).
+		html += '<div class="confidence-row"><span class="hint">Wie sicher bist du?</span>' +
+			'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">😎 Sicher</button>' +
+			'<button type="button" class="menu-chip" data-confidence="unsure" title="Ich bin unsicher">🤔 Unsicher</button>' +
+			'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">🎲 Geraten</button></div>' +
+			'<div class="modal-actions"><button data-ankishowback="1" data-card="' + c.id + '">Antwort zeigen</button></div>';
 	}
 	html += "</div>";
 	return html;

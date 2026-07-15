@@ -256,6 +256,12 @@ export function openSettings(section) {
 	} else if (sec === "backup") {
 		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
 			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
+			// Lern-Telemetrie: Rohdaten-Export für eigene Auswertungen. Der Klick auf
+			// #btnTeleExport wird zentral in telemetrie.js behandelt (Capture-Listener) —
+			// hier ist bewusst KEINE Verdrahtung nötig.
+			'<h4 style="margin-top:14px">Lerndaten (Telemetrie)</h4>' +
+			'<p class="hint">Alle Lern-Telemetriedaten (Bewertungen mit Denk- und Antwortzeiten, Sitzungen, Fokus-Ereignisse, Selbsteinschätzung) als JSON — z. B. für eigene Auswertungen.</p>' +
+			'<div class="row-btns"><button id="btnTeleExport">📊 Lerndaten exportieren</button></div>' +
 			'<h4 style="margin-top:14px">Workspace als Markdown-ZIP</h4>' +
 			'<p class="hint">Alle Seiten eines Workspace als .md-Dateien (Ordnerstruktur = Seitenbaum) — in jedem Editor nutzbar.</p>' +
 			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>

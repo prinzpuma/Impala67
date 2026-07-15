@@ -105,6 +105,7 @@ export const S = {
 	ankiBrowserLimit: 200, // Karten-Browser: max. gerenderte Zeilen („mehr anzeigen“ erhöht)
 	dailyMonth: null, // "YYYY-MM" im Daily-Notes-Kalender (null = aktueller Monat)
 	reviews: [], // Wiederholungs-Protokoll { cardId, t, grade } — aus dem Event-Log rekonstruiert
+	telemetry: [], // Lern-Telemetrie (telemetrie.js): { id, t, kind, data } — aus dem Event-Log rekonstruiert, synct wie alles über Drive
 	heftMeta: {}, // GoodNotes-Hefte: pageId → { rev, pages, bytes, updated } — Inhalt liegt als Blob heft:<pageId> in IndexedDB
 };
 
@@ -297,6 +298,15 @@ export const STATE = (() => {
 				const updated = p.updated || ev.t;
 				if (String(current.updated || "") > String(updated)) break;
 				S.learningSessions[p.id] = { ...current, deleted: true, updated };
+				break;
+			}
+			case "teleEvent": {
+				// Lern-Telemetrie (telemetrie.js): bewusst EIN generischer Ereignistyp —
+				// die Bedeutung steckt in kind/data (review, studyStart/End, focusLoss,
+				// timer*, …). Läuft über das Event-Log und synchronisiert damit wie jede
+				// andere Änderung automatisch über Drive.
+				if (!p.kind) break;
+				S.telemetry.push({ id: p.id || ev.id, t: ev.t, kind: String(p.kind), data: p.data || {} });
 				break;
 			}
 			case "gradeAdd":

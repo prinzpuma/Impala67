@@ -2,11 +2,23 @@
 
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { TELE } from "./telemetrie.js";
+
+// lernzeit.js — Lernzeit v3 (15. Juli 2026)
+// v3: Home-Widget komplett neu — ausklappbare Bereiche (Woche, Aktivität,
+// Protokoll) mit gemerktem Zustand, prominente Timer-Karte mit Pause/Fortsetzen
+// und Fortschrittsbalken, Wochenziel mit Zielbalken, Tages-Streak und
+// Telemetrie-Anbindung (telemetrie.js). Die Erfassungs-Engine (automatische
+// Segmente, Idle-Tier, Kategorie-Split) ist unverändert aus v2 übernommen.
 
 export const LERNZEIT = (() => {
 	const IDLE_MS = 60000;
 	const TICK_MS = 5000;
 	const TIMER_KEY = "impala67_lernzeit_timer_end";
+	const TIMER_MIN_KEY = "impala67_lernzeit_timer_minutes";
+	const TIMER_PAUSE_KEY = "impala67_lernzeit_timer_paused_left";
+	const GOAL_KEY = "impala67WeekGoalMinutes";
+	const FOLD_KEY = "impala67LzFolds";
 	const CATEGORIES = {
 		cards: { icon: "🃏", label: "Karteikarten" },
 		notebook: { icon: "📓", label: "Hefte" },
@@ -20,6 +32,7 @@ export const LERNZEIT = (() => {
 	let current = null;
 	let animal = null;
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
+	let timerPausedLeft = Number(localStorage.getItem(TIMER_PAUSE_KEY) || 0);
 
 	function iso() { return new Date().toISOString(); }
 	function dayKey(value) {
@@ -100,21 +113,72 @@ export const LERNZEIT = (() => {
 		overlay.innerHTML = '<div class="modal lz-done"><h3>🎉 Lernblock geschafft</h3><p><b>' + minutes + ' Minuten</b> fokussiert gelernt. Gute Arbeit!</p><div class="modal-actions"><button data-lz-start="5">5 Min weiter</button><button data-lz-close="1">Pause machen</button></div></div>';
 	}
 
+	// ---------- Timer (v3: mit Pause/Fortsetzen + Fortschritt) ----------
+	function timerRunning() { return timerEndsAt > Date.now(); }
+	function timerPaused() { return !timerRunning() && timerPausedLeft > 0; }
+	function timerTotalMin() { return Math.max(1, Math.round(Number(localStorage.getItem(TIMER_MIN_KEY)) || 25)); }
+	function startTimer(minutes) {
+		const min = Math.max(5, Math.min(240, Number(minutes) || 25));
+		timerEndsAt = Date.now() + min * 60000;
+		timerPausedLeft = 0;
+		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
+		localStorage.setItem(TIMER_MIN_KEY, String(min));
+		localStorage.removeItem(TIMER_PAUSE_KEY);
+		lastActivityAt = Date.now();
+		openSegment();
+		TELE.log("timerStart", { minutes: min });
+		renderHomeWidget();
+	}
+	function pauseTimer() {
+		if (!timerRunning()) return;
+		timerPausedLeft = Math.max(1000, timerEndsAt - Date.now());
+		timerEndsAt = 0;
+		localStorage.removeItem(TIMER_KEY);
+		localStorage.setItem(TIMER_PAUSE_KEY, String(timerPausedLeft));
+		TELE.log("timerPause", { leftMs: timerPausedLeft });
+		renderHomeWidget();
+	}
+	function resumeTimer() {
+		if (!timerPaused()) return;
+		timerEndsAt = Date.now() + timerPausedLeft;
+		timerPausedLeft = 0;
+		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
+		localStorage.removeItem(TIMER_PAUSE_KEY);
+		lastActivityAt = Date.now();
+		openSegment();
+		TELE.log("timerResume", {});
+		renderHomeWidget();
+	}
+	async function stopTimer() {
+		const leftMs = timerRunning() ? timerEndsAt - Date.now() : timerPausedLeft;
+		TELE.log("timerStop", { plannedMin: timerTotalMin(), leftMs: Math.max(0, leftMs) });
+		timerEndsAt = 0;
+		timerPausedLeft = 0;
+		localStorage.removeItem(TIMER_KEY);
+		localStorage.removeItem(TIMER_PAUSE_KEY);
+		await closeSegment();
+		renderHomeWidget();
+	}
+
 	function tick() {
 		if (document.hidden || animal) return;
 		if (Date.now() - lastActivityAt >= IDLE_MS) { showAnimal(); return; }
 		openSegment();
 		maybeSplitSegment();
 		if (timerEndsAt && Date.now() >= timerEndsAt) {
-			const minutes = Math.max(1, Math.round((Number(localStorage.getItem("impala67_lernzeit_timer_minutes")) || 25)));
+			const minutes = timerTotalMin();
 			timerEndsAt = 0;
+			timerPausedLeft = 0;
 			localStorage.removeItem(TIMER_KEY);
+			localStorage.removeItem(TIMER_PAUSE_KEY);
+			TELE.log("timerDone", { minutes });
 			closeSegment();
 			openTimerDone(minutes);
 		}
 		refreshLive();
 	}
 
+	// ---------- Auswertung ----------
 	function totalForDay(key) {
 		let total = activeSessions().filter((s) => dayKey(s.startedAt) === key).reduce((sum, s) => sum + s.durationSeconds, 0);
 		if (key === dayKey() && current) total += Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000));
@@ -129,27 +193,114 @@ export const LERNZEIT = (() => {
 	function sessionsToday() {
 		return activeSessions().filter((s) => dayKey(s.startedAt) === dayKey()).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
 	}
-
-	function homeWidgetHtml() {
-		const today = totalForDay(dayKey());
-		const categories = groupedToday();
-		let max = 1;
-		const week = Array.from({ length: 7 }, (_, index) => {
+	function weekData() {
+		return Array.from({ length: 7 }, (_, index) => {
 			const d = new Date(); d.setDate(d.getDate() - (6 - index));
-			const seconds = totalForDay(dayKey(d)); max = Math.max(max, seconds);
-			return { d, seconds };
+			return { d, seconds: totalForDay(dayKey(d)) };
 		});
-		const running = timerEndsAt > Date.now();
-		const left = running ? Math.ceil((timerEndsAt - Date.now()) / 60000) : 0;
-		const cats = Object.entries(categories).filter(([, seconds]) => seconds > 0).map(([id, seconds]) =>
-			'<span class="lz-category">' + CATEGORIES[id].icon + ' ' + CATEGORIES[id].label + ' · ' + fmt(seconds) + '</span>').join("") || '<span class="hint">Aktivität erscheint automatisch beim Lernen.</span>';
-		const log = sessionsToday().slice(0, 5).map((s) => '<div class="lz-log-row"><span>' + CATEGORIES[s.category].icon + ' <b>' + CATEGORIES[s.category].label + '</b><small>' + new Date(s.startedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + ' · ' + fmt(s.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + s.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + s.id + '">🗑</button></span></div>').join("") || '<p class="hint lz-empty">Heute noch keine abgeschlossene Lerneinheit.</p>';
-		return '<section class="lz-widget" id="lzWidget"><header class="section-head"><div><h2>⏱ Lernzeit</h2><span class="hint">' + (current ? CATEGORIES[current.category].icon + ' läuft gerade: ' + CATEGORIES[current.category].label : 'Bereit für deinen nächsten Lernblock') + '</span></div><b class="lz-total" data-lz-today>' + fmt(today) + '</b></header>' +
-			'<div class="lz-summary"><div class="lz-bars">' + week.map(({ d, seconds }) => '<div class="lz-bar-col"><i style="height:' + Math.max(5, Math.round(seconds / max * 100)) + '%"></i><small>' + d.toLocaleDateString("de-DE", { weekday: "short" }) + '</small></div>').join("") + '</div><div class="lz-categories">' + cats + '</div></div>' +
-			'<div class="lz-timer-card">' + (running
-				? '<div><small>Lerntimer läuft</small><b data-lz-timer-label>Noch ' + left + ' min</b></div><button class="mini" data-lz-stop="1">Beenden</button>'
-				: '<div><small>Fokusblock starten</small><b>Wie lange möchtest du lernen?</b></div><div class="lz-timer-actions"><button data-lz-start="25">25 min</button><button data-lz-start="45">45 min</button><button data-lz-start="60">60 min</button><input id="lzCustomMinutes" type="number" min="5" max="240" value="25" aria-label="Eigene Minuten"><button class="mini" data-lz-custom="1">Start</button></div>') + '</div>' +
-			'<div class="lz-log-head"><b>Heute</b><button class="mini" data-lz-add="1">＋ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div></section>';
+	}
+	// Streak: aufeinanderfolgende Tage mit ≥ 5 min Lernzeit. Ein noch „leerer“
+	// heutiger Tag bricht die Serie nicht — sie zählt dann ab gestern.
+	function streakDays() {
+		const MIN = 5 * 60;
+		let streak = 0;
+		for (let i = 0; i < 365; i++) {
+			const d = new Date(); d.setDate(d.getDate() - i);
+			if (totalForDay(dayKey(d)) >= MIN) streak++;
+			else if (i === 0) continue;
+			else break;
+		}
+		return streak;
+	}
+	function weekGoalMinutes() { return Math.max(30, Number(localStorage.getItem(GOAL_KEY)) || 300); }
+	function cycleGoal() {
+		const presets = [120, 300, 480, 720];
+		const next = presets[(presets.indexOf(weekGoalMinutes()) + 1 + presets.length) % presets.length];
+		localStorage.setItem(GOAL_KEY, String(next));
+		TELE.log("goalChange", { minutes: next });
+		renderHomeWidget();
+		U.toast("🎯 Wochenziel: " + Math.round(next / 60 * 10) / 10 + " h", "success");
+	}
+	// Kennzahlen für die Home-Seite (render.js) — eine Quelle für alle Widgets.
+	function statsForHome() {
+		const goal = weekGoalMinutes();
+		const week = weekData();
+		const weekSeconds = week.reduce((sum, x) => sum + x.seconds, 0);
+		return {
+			todaySeconds: totalForDay(dayKey()),
+			weekSeconds,
+			weekDays: week,
+			streakDays: streakDays(),
+			weekGoalMinutes: goal,
+			goalPct: Math.round(weekSeconds / 60 / goal * 100),
+			categoriesToday: groupedToday(),
+		};
+	}
+
+	// ---------- Ausklappbare Widget-Bereiche (Zustand wird gemerkt) ----------
+	function folds() {
+		try { return JSON.parse(localStorage.getItem(FOLD_KEY) || "{}") || {}; } catch { return {}; }
+	}
+	function foldOpen(id, fallback) {
+		const f = folds();
+		return f[id] === undefined ? fallback : !!f[id];
+	}
+	document.addEventListener("toggle", (event) => {
+		const el = event.target;
+		if (!el || !el.matches || !el.matches("details[data-lzfold]")) return;
+		const f = folds();
+		f[el.getAttribute("data-lzfold")] = el.open;
+		localStorage.setItem(FOLD_KEY, JSON.stringify(f));
+	}, true);
+	function fold(id, summary, body, fallbackOpen) {
+		return '<details class="lz-fold" data-lzfold="' + id + '"' + (foldOpen(id, fallbackOpen) ? " open" : "") +
+			'><summary>' + summary + '</summary><div class="lz-fold-body">' + body + '</div></details>';
+	}
+
+	// ---------- Widget ----------
+	function timerCardHtml() {
+		if (timerRunning()) {
+			const totalMs = timerTotalMin() * 60000;
+			const leftMs = Math.max(0, timerEndsAt - Date.now());
+			const pctDone = Math.min(100, Math.max(0, Math.round((1 - leftMs / totalMs) * 100)));
+			return '<div class="lz-timer-card running"><div class="lz-timer-info"><small>Lerntimer läuft — ' + timerTotalMin() + ' min geplant</small>' +
+				'<b data-lz-timer-label>Noch ' + Math.max(1, Math.ceil(leftMs / 60000)) + ' min</b>' +
+				'<div class="lz-progress"><i data-lz-timer-bar style="width:' + pctDone + '%"></i></div></div>' +
+				'<div class="lz-timer-actions"><button data-lz-pause="1">⏸ Pause</button><button class="mini" data-lz-stop="1">Beenden</button></div></div>';
+		}
+		if (timerPaused()) {
+			return '<div class="lz-timer-card paused"><div class="lz-timer-info"><small>Timer pausiert</small><b>Noch ' + Math.max(1, Math.ceil(timerPausedLeft / 60000)) + ' min übrig</b></div>' +
+				'<div class="lz-timer-actions"><button class="primary" data-lz-resume="1">▶ Weiter</button><button class="mini" data-lz-stop="1">Beenden</button></div></div>';
+		}
+		return '<div class="lz-timer-card"><div class="lz-timer-info"><small>Fokusblock starten</small><b>Wie lange möchtest du lernen?</b></div>' +
+			'<div class="lz-timer-actions"><button data-lz-start="15">15</button><button data-lz-start="25">25</button><button data-lz-start="45">45</button><button data-lz-start="60">60</button>' +
+			'<input id="lzCustomMinutes" type="number" min="5" max="240" value="25" aria-label="Eigene Minuten"><button class="mini primary" data-lz-custom="1">Start</button></div></div>';
+	}
+	function homeWidgetHtml() {
+		const stats = statsForHome();
+		const max = Math.max(1, ...stats.weekDays.map((x) => x.seconds));
+		const bars = stats.weekDays.map(({ d, seconds }, index) =>
+			'<div class="lz-bar-col' + (index === 6 ? ' today' : '') + '" title="' + fmt(seconds) + '"><i style="height:' + Math.max(5, Math.round(seconds / max * 100)) + '%"></i><small>' + d.toLocaleDateString("de-DE", { weekday: "short" }) + '</small></div>').join("");
+		const goalPct = Math.min(100, stats.goalPct);
+		const weekBody = '<div class="lz-bars">' + bars + '</div>' +
+			'<div class="lz-goal"><span>🎯 Wochenziel: <b>' + fmt(stats.weekSeconds) + '</b> von ' + Math.round(stats.weekGoalMinutes / 60 * 10) / 10 + ' h (' + stats.goalPct + ' %)</span>' +
+			'<button class="mini" data-lz-goal="1" title="Ziel ändern: 2 h → 5 h → 8 h → 12 h">Ziel ändern</button></div>' +
+			'<div class="lz-progress lz-goal-bar"><i style="width:' + goalPct + '%"></i></div>';
+		const categories = stats.categoriesToday;
+		const catTotal = Math.max(1, Object.values(categories).reduce((a, b) => a + b, 0));
+		const catRows = Object.entries(categories).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([id, s]) =>
+			'<div class="lz-cat-row"><span>' + CATEGORIES[id].icon + ' ' + CATEGORIES[id].label + '</span><div class="lz-progress"><i style="width:' + Math.round(s / catTotal * 100) + '%"></i></div><small>' + fmt(s) + '</small></div>').join("") ||
+			'<p class="hint lz-empty">Aktivität erscheint automatisch beim Lernen — Karteikarten, Hefte, Notizen und KI werden getrennt gezählt.</p>';
+		const log = sessionsToday().slice(0, 8).map((s) => '<div class="lz-log-row"><span>' + CATEGORIES[s.category].icon + ' <b>' + CATEGORIES[s.category].label + '</b><small>' + new Date(s.startedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + ' · ' + fmt(s.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + s.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + s.id + '">🗑</button></span></div>').join("") || '<p class="hint lz-empty">Heute noch keine abgeschlossene Lerneinheit.</p>';
+		const logBody = '<div class="lz-log-head"><b>' + sessionsToday().length + ' Einheit(en) heute</b><button class="mini" data-lz-add="1">＋ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>';
+		return '<section class="lz-widget" id="lzWidget"><header class="section-head"><div><h2>⏱ Lernzeit</h2><span class="hint">' +
+			(current ? CATEGORIES[current.category].icon + ' läuft gerade: ' + CATEGORIES[current.category].label : (timerPaused() ? '⏸ Timer pausiert' : 'Bereit für deinen nächsten Lernblock')) + '</span></div>' +
+			'<div class="lz-head-right"><b class="lz-total" data-lz-today>' + fmt(stats.todaySeconds) + '</b><small>🔥 ' + stats.streakDays + (stats.streakDays === 1 ? ' Tag' : ' Tage') + ' Streak</small></div></header>' +
+			timerCardHtml() +
+			fold("week", "📊 Diese Woche", weekBody, true) +
+			fold("cats", "🧭 Aktivität heute", catRows, false) +
+			fold("log", "📝 Protokoll heute", logBody, false) +
+			'</section>';
 	}
 
 	function refreshLive() {
@@ -157,19 +308,15 @@ export const LERNZEIT = (() => {
 		if (total) total.textContent = fmt(totalForDay(dayKey()));
 		const label = document.querySelector("[data-lz-timer-label]");
 		if (label && timerEndsAt) label.textContent = "Noch " + Math.max(1, Math.ceil((timerEndsAt - Date.now()) / 60000)) + " min";
+		const bar = document.querySelector("[data-lz-timer-bar]");
+		if (bar && timerEndsAt) {
+			const totalMs = timerTotalMin() * 60000;
+			bar.style.width = Math.min(100, Math.max(0, Math.round((1 - (timerEndsAt - Date.now()) / totalMs) * 100))) + "%";
+		}
 	}
 	function renderHomeWidget() {
 		const old = document.getElementById("lzWidget");
 		if (old) old.outerHTML = homeWidgetHtml();
-	}
-	function startTimer(minutes) {
-		const min = Math.max(5, Math.min(240, Number(minutes) || 25));
-		timerEndsAt = Date.now() + min * 60000;
-		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
-		localStorage.setItem("impala67_lernzeit_timer_minutes", String(min));
-		lastActivityAt = Date.now();
-		openSegment();
-		renderHomeWidget();
 	}
 	async function saveManual(id, minutes, category, date) {
 		const old = id && S.learningSessions[id];
@@ -197,23 +344,26 @@ export const LERNZEIT = (() => {
 	document.addEventListener("visibilitychange", () => { if (document.hidden) closeSegment(); else lastActivityAt = Date.now(); });
 	window.addEventListener("pagehide", () => { closeSegment(); });
 	document.addEventListener("click", async (event) => {
-		const target = event.target.closest && event.target.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close]");
+		const target = event.target.closest && event.target.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close]");
 		if (!target) return;
 		if (target.dataset.lzStart) startTimer(target.dataset.lzStart);
 		else if (target.dataset.lzCustom) startTimer((document.getElementById("lzCustomMinutes") || {}).value);
-		else if (target.dataset.lzStop) { timerEndsAt = 0; localStorage.removeItem(TIMER_KEY); await closeSegment(); renderHomeWidget(); }
+		else if (target.dataset.lzPause) pauseTimer();
+		else if (target.dataset.lzResume) resumeTimer();
+		else if (target.dataset.lzGoal) cycleGoal();
+		else if (target.dataset.lzStop) { await stopTimer(); }
 		else if (target.dataset.lzAdd !== undefined) editModal(null);
 		else if (target.dataset.lzEdit) editModal(target.dataset.lzEdit);
-		else if (target.dataset.lzDelete) { await STATE.dispatch("learningSessionDelete", { id: target.dataset.lzDelete, updated: iso() }); }
-		else if (target.dataset.lzSave !== undefined) { await saveManual(target.dataset.lzSave || null, (document.getElementById("lzEditMinutes") || {}).value, (document.getElementById("lzEditCategory") || {}).value, (document.getElementById("lzEditDay") || {}).value); const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } }
+		else if (target.dataset.lzDelete) { await STATE.dispatch("learningSessionDelete", { id: target.dataset.lzDelete, updated: iso() }); renderHomeWidget(); }
+		else if (target.dataset.lzSave !== undefined) { await saveManual(target.dataset.lzSave || null, (document.getElementById("lzEditMinutes") || {}).value, (document.getElementById("lzEditCategory") || {}).value, (document.getElementById("lzEditDay") || {}).value); const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } renderHomeWidget(); }
 		else if (target.dataset.lzClose !== undefined) { const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } }
 	});
 
 	const style = document.createElement("style");
 	style.id = "lernzeitStyles";
-	style.textContent = `#lzAnimal{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;display:grid;justify-items:center;gap:4px;width:min(340px,calc(100vw - 32px));padding:16px;border:1px solid var(--accent-border);border-radius:16px;background:var(--panel-solid);color:var(--text);box-shadow:0 18px 45px var(--shadow);cursor:pointer}#lzAnimal span{font-size:42px}#lzAnimal small{color:var(--text2);font-size:12px}.lz-widget{width:min(980px,100%);margin:22px auto;padding:20px 22px;border:1px solid var(--edge-soft);border-radius:14px;background:var(--surface-subtle)}.lz-total{font-size:24px}.lz-summary{display:flex;gap:22px;align-items:stretch;margin:14px 0}.lz-bars{display:flex;gap:8px;align-items:end;height:86px;min-width:210px;flex:1}.lz-bar-col{height:100%;flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:5px}.lz-bar-col i{display:block;width:100%;max-width:28px;background:linear-gradient(#7aa2ff,#4d6fff);border-radius:6px 6px 2px 2px}.lz-bar-col small{font-size:10px;color:var(--text2)}.lz-categories{display:flex;flex-wrap:wrap;align-content:center;gap:6px;flex:1}.lz-category{padding:5px 8px;border-radius:7px;background:var(--surface);font-size:12px}.lz-timer-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-border)}.lz-timer-card small,.lz-timer-card b{display:block}.lz-timer-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.lz-timer-actions input{width:64px}.lz-log-head{display:flex;justify-content:space-between;align-items:center;margin:18px 0 6px}.lz-log-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--edge-soft);font-size:13px}.lz-log-row small{margin-left:8px;color:var(--text2)}.lz-log-row .mini{min-height:25px;padding:2px 6px;font-size:11px}.lz-empty{padding:10px 0}.lz-edit-modal label{display:grid;gap:5px;margin:12px 0;font-size:13px}.lz-done{text-align:center}.lz-done p{margin:10px 0 18px}@media(max-width:700px){.lz-widget{padding:16px}.lz-summary{flex-direction:column}.lz-timer-card{align-items:flex-start;flex-direction:column}.lz-log-row{align-items:flex-start;flex-direction:column}`;
+	style.textContent = `#lzAnimal{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;display:grid;justify-items:center;gap:4px;width:min(340px,calc(100vw - 32px));padding:16px;border:1px solid var(--accent-border);border-radius:16px;background:var(--panel-solid);color:var(--text);box-shadow:0 18px 45px var(--shadow);cursor:pointer}#lzAnimal span{font-size:42px}#lzAnimal small{color:var(--text2);font-size:12px}.lz-widget{width:min(980px,100%);margin:22px auto 8px;padding:18px 20px;border:1px solid var(--edge-soft);border-radius:14px;background:var(--surface-subtle)}.lz-head-right{display:grid;justify-items:end;gap:2px}.lz-head-right small{color:var(--text2);font-size:11.5px}.lz-total{font-size:24px}.lz-timer-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent-border);margin:12px 0 10px}.lz-timer-card.paused{background:var(--surface);border-style:dashed}.lz-timer-info{flex:1;min-width:180px}.lz-timer-card small{display:block;color:var(--text2)}.lz-timer-card b{display:block;font-size:16px;margin:2px 0 6px}.lz-timer-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.lz-timer-actions input{width:64px}.lz-progress{height:6px;border-radius:3px;background:var(--surface-active);overflow:hidden}.lz-progress i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .3s ease}.lz-fold{border:1px solid var(--edge-soft);border-radius:10px;background:var(--surface-faint);margin-top:8px}.lz-fold>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:13px;font-weight:650;color:var(--text2);user-select:none}.lz-fold>summary::-webkit-details-marker{display:none}.lz-fold>summary::after{content:"›";margin-left:auto;font-size:15px;transition:transform .12s ease}.lz-fold[open]>summary{color:var(--text)}.lz-fold[open]>summary::after{transform:rotate(90deg)}.lz-fold-body{padding:4px 12px 12px}.lz-bars{display:flex;gap:8px;align-items:end;height:86px}.lz-bar-col{height:100%;flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:5px}.lz-bar-col i{display:block;width:100%;max-width:28px;background:linear-gradient(#7aa2ff,#4d6fff);border-radius:6px 6px 2px 2px}.lz-bar-col.today i{background:linear-gradient(#9ecbff,#5f8dff);box-shadow:0 0 0 1px var(--accent-border)}.lz-bar-col small{font-size:10px;color:var(--text2)}.lz-goal{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0 6px;font-size:12.5px;color:var(--text2)}.lz-goal b{color:var(--text)}.lz-cat-row{display:grid;grid-template-columns:130px 1fr 70px;align-items:center;gap:10px;padding:5px 0;font-size:12.5px}.lz-cat-row small{text-align:right;color:var(--text2)}.lz-log-head{display:flex;justify-content:space-between;align-items:center;margin:2px 0 6px}.lz-log-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--edge-soft);font-size:13px}.lz-log-row small{margin-left:8px;color:var(--text2)}.lz-log-row .mini{min-height:25px;padding:2px 6px;font-size:11px}.lz-empty{padding:6px 0}.lz-edit-modal label{display:grid;gap:5px;margin:12px 0;font-size:13px}.lz-done{text-align:center}.lz-done p{margin:10px 0 18px}@media(max-width:700px){.lz-widget{padding:14px}.lz-timer-card{flex-direction:column;align-items:stretch}.lz-cat-row{grid-template-columns:110px 1fr 60px}.lz-log-row{align-items:flex-start;flex-direction:column}}`;
 	if (!document.getElementById(style.id)) document.head.appendChild(style);
 
 	setInterval(tick, TICK_MS);
-	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer };
+	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome };
 })();
