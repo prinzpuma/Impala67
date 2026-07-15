@@ -1,43 +1,23 @@
-/* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeldesign */
+/* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeld… */
 
-/* Kompaktmodus: eine durchgehende Notion-ähnliche App-Fläche.
-   Die spätere Dichte-Regel setzt sonst erneut 8px Abstand; !important ist
-   hier absichtlich nötig. #app bleibt im normalen Dokumentfluss, damit alle
-   bestehenden Desktop-, Tablet- und Mobil-Layouts weiter korrekt reagieren. */
+/* Kompakt (density-compact): randlose Fläche, Panels bis Kante,… */
 body.density-compact { background: var(--panel-solid); }
 body.density-compact #bg { display: none; }
-body.density-compact #app {
-	width: 100%;
-	min-width: 0;
-	height: 100dvh;
-	gap: 0 !important;
-	padding: 0 !important;
-	background: var(--panel-solid);
-}
-body.density-compact #mainWrap,
-body.density-compact #panel {
-	border: 0;
-	border-radius: 0;
-}
-/* Die Sidebar bleibt als eigene Navigationsspalte klar vom Arbeitsbereich
-   getrennt – flach wie in Notion, aber ohne Außenkarte oder Rundungen. */
-body.density-compact #sidebar {
-	border: 0;
-	border-right: 1px solid var(--edge-soft);
-	border-radius: 0;
-}
-/* iPad-Höhen und -Ränder: zentral im Abschnitt „iPad-Rahmen v5“ am DATEIENDE.
-   Hier stehen bewusst KEINE iPad-spezifischen #app-Overrides mehr — die
-   frühere Mischung aus drei konkurrierenden Blöcken (100dvh-!important hier,
-   Safe-Area-Padding an #app am Dateiende, Extra-Abstände in den Panels)
-   erzeugte die asymmetrischen Ränder im Komfortmodus und die abgeschnittene
-   Unterkante bzw. den hellen Randstreifen im Kompaktmodus. */
+body.density-compact #app { width: 100%; min-width: 0; gap: 0 !important; padding: 0 !important;
+	grid-template-columns: 236px minmax(0, 1fr) 320px; background: var(--panel-solid); }
+body.density-compact.panel-collapsed #app { grid-template-columns: 236px minmax(0, 1fr); }
+body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0; }
+body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid); }
+body.density-compact .panel-head { border-bottom-color: var(--edge); }
+body.density-compact #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0;
+	padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px; }
+body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px); }
+body.density-compact .row { padding-top: 4px; padding-bottom: 4px; }
+body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px; }
+body.density-compact .home { padding: 24px 28px; }
+body.density-compact .library { padding: 24px 30px; }
 
-/* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne user-select:none
-   startet der lange Druck auf eine Baumzeile die TEXTAUSWAHL bzw. das Kopier-
-   Callout statt des nativen HTML5-Drags — Seiten liessen sich per Drag & Drop
-   weder verschieben noch verschachteln. (Bisher galt die Regel nur bis 768px
-   Breite und damit nie fuer iPads.) */
+/* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne u… */
 @media (pointer: coarse) {
 	#tree .row, .deck-tree-row {
 		-webkit-touch-callout: none;
@@ -45,7 +25,6 @@ body.density-compact #sidebar {
 		user-select: none;
 	}
 }
-
 
 :root {
 	/* Kernfarben */
@@ -55,8 +34,7 @@ body.density-compact #sidebar {
 	--menu-bg: #1f2127;
 	--bubble: #2c2e33;
 	--text: rgba(255, 255, 255, 0.92);
-	/* UI-Fix v7 (Kontrast): 0.60 → 0.68 — kleiner Meta-Text (11–12px) erreichte
-	   mit 60 % Weiß auf dunklen Flächen keinen WCAG-AA-Kontrast. */
+	/* UI-Fix v7 (Kontrast): 0.60 → 0.68 — kleiner Meta-Text (11–12px… */
 	--text2: rgba(255, 255, 255, 0.68);
 	--accent: #6fc3ff;
 	--accent-soft: rgba(111, 195, 255, 0.12);
@@ -65,7 +43,7 @@ body.density-compact #sidebar {
 	--danger-soft: rgba(233, 115, 102, 0.14);
 	--success: #72bc8f;
 	--success-soft: rgba(114, 188, 143, 0.15);
-	/* Neutrale Flächen — alle Komponenten greifen auf dieselbe Skala zu */
+	/* Neutrale Flächen — alle Komponenten greifen auf dieselbe Skala… */
 	--surface-faint: rgba(255, 255, 255, 0.02);
 	--surface-subtle: rgba(255, 255, 255, 0.03);
 	--surface: rgba(255, 255, 255, 0.04);
@@ -82,9 +60,7 @@ body.density-compact #sidebar {
 	--glow-2: #0b0d11;
 	--glow-3: #08090c;
 	--radius: 12px;
-	/* Einheitliches Motion-System: nur kurze, funktionale Übergänge.
-	   Transform + Opacity bleiben auf dem Compositor und verursachen keine
-	   teuren Layout-Neuberechnungen beim Navigieren oder Rendern. */
+	/* Einheitliches Motion-System: nur kurze, funktionale Übergänge. */
 	--ease-out: cubic-bezier(.2, .8, .2, 1);
 	--ease-spring: cubic-bezier(.22, 1, .36, 1);
 	--motion-fast: 120ms;
@@ -92,8 +68,8 @@ body.density-compact #sidebar {
 	--motion-slow: 260ms;
 }
 
-/* ---------- Bewegungsprinzipien: ruhig, konsistent, performant ---------- */
-/* Kleine direkte Interaktionen erhalten eine einheitliche Rückmeldung. */
+/* == Bewegungsprinzipien: ruhig, konsistent, performant == */
+/* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item {
 	transition: background-color var(--motion-fast) ease,
 		color var(--motion-fast) ease,
@@ -104,52 +80,32 @@ button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-men
 button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active {
 	transform: scale(.98);
 }
-/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform.
-   Ein transform macht die Zeile zum Containing Block für position:fixed —
-   das per popovers.js fixed positionierte ⋯-Menü in der Zeile landete dadurch
-   relativ zur Zeile statt zum Viewport. Auf iPadOS bleibt :active nach dem
-   Tipp zusätzlich "kleben", das Menü war damit dauerhaft unsichtbar
-   ("Löschen-Menü geht überhaupt nicht mehr"). Feedback jetzt über die Fläche. */
+/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN tr… */
 .row:active, .deck-row:active { background: var(--surface-active); }
-/* Flächen heben sich beim Öffnen und beim Hover nur über Transform/Opacity ab. */
+/* Flächen heben sich beim Öffnen und beim Hover nur über Transfo… */
 .lib-card:hover, .deck-row:hover {
 	transform: translateY(-2px);
 }
-/* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einblendung. */
+/* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einble… */
 @keyframes uiEnter {
 	from { opacity: 0; transform: translateY(6px) scale(.985); }
-	to { opacity: 1; transform: none; }
+
 }
 #overlay:not([hidden]) .modal, .page-menu, .attach-menu:not([hidden]), .model-menu:not([hidden]) {
 	animation: uiEnter var(--motion-base) var(--ease-out) both;
 }
-/* Der aktive Arbeitsbereich reagiert beim Ein-/Ausblenden der Navigation nicht
-   mit einer kostspieligen Layout-Animation, sondern mit einer sanften Fläche. */
+/* Der aktive Arbeitsbereich reagiert beim Ein-/Ausblenden der Na… */
 #sidebar, #mainWrap, #panel {
 	transition: background-color var(--motion-base) ease,
 		border-color var(--motion-base) ease,
 		opacity var(--motion-base) ease;
 }
-/* UI-Fix v7: doppelte Reduce-Motion-Blöcke entfernt — die kanonische Fassung
-	(.001ms) steht im Design-System v2 weiter unten und gewann als spätere Regel
-	ohnehin schon die Kaskade. */
+/* UI-Fix v7: doppelte Reduce-Motion-Blöcke entfernt — die kanoni… */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus dem DOKUMENT-
-   Hintergrund. WICHTIG: html bekommt KEINEN eigenen Hintergrund! html lag
-   bisher immer auf dem dunklen :root-Wert von --bg0, denn das helle Theme
-   ueberschreibt die Variablen nur auf body (body.light). Sobald html einen
-   Hintergrund hat, nimmt die Browser-Canvas DIESEN statt den von body — der
-   sichtbare Streifen an der Home-Indicator-/Statusleisten-Kante der iPad-PWA.
-   Ohne html-Hintergrund uebernimmt die Canvas automatisch den theme-korrekten
-   body-Hintergrund (Standardpropagation nach CSS-Spez). */
-html { height: 100%; }
-body { height: 100%; }
-@media (display-mode: standalone), (pointer: coarse) {
-	html, body { min-height: 100dvh; }
-	#app { min-height: 100dvh; }
-}
+/* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus… */
+html, body { height: 100%; }
 
 body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -166,7 +122,8 @@ body {
 
 #app { position: relative; z-index: 1;
 	display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px;
-	gap: 12px; height: 100vh; padding: 12px;
+	gap: 12px; height: 100dvh;
+	padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 }
 
 /* Flache Panels, dezente Kanten, kein Glas-Look */
@@ -177,7 +134,7 @@ body {
 	min-height: 0;
 }
 
-/* ---------- Sidebar ---------- */
+/* == Sidebar == */
 #sidebar { display: flex; flex-direction: column; padding: 14px 10px; gap: 10px; }
 #search { width: 100%; }
 input, textarea, select {
@@ -185,7 +142,7 @@ input, textarea, select {
 	border: 1px solid var(--edge); border-radius: 8px;
 	padding: 8px 10px; font: inherit; outline: none;
 }
-/* Native Selects: dunkles OS-Popup + eigener Chevron statt hässlichem System-Look */
+/* Native Selects: dunkles OS-Popup + eigener Chevron statt hässl… */
 select {
 	appearance: none; -webkit-appearance: none; cursor: pointer; color-scheme: dark;
 	padding-right: 30px;
@@ -225,8 +182,7 @@ button {
 button:hover { background: rgba(255,255,255,0.11); }
 button.danger { color: var(--danger); }
 #btnReview.attention { color: var(--accent); }
-/* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. Farbe ergänzt den Text,
-   ist aber nie der einzige Statuskanal. */
+/* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. */
 #btnDriveSync.sync-syncing { color: var(--accent); }
 #btnDriveSync.sync-syncing svg { animation: syncPulse 1s ease-in-out infinite; }
 #btnDriveSync.sync-ok { color: var(--success); }
@@ -238,13 +194,13 @@ button.danger { color: var(--danger); }
 
 /* Ein-/Ausklapp-Pfeile (Workspaces und Seiten mit Unterseiten) */
 .row-chevron { min-height: 0; width: 16px; height: 16px; padding: 0; background: transparent;
-	color: var(--text2); font-size: 9px; display: flex; align-items: center; justify-content: center;
+	color: var(--text2); font-size: 10px; display: flex; align-items: center; justify-content: center;
 	transition: transform .12s; flex-shrink: 0; }
 .row-chevron.open { transform: rotate(90deg); }
 .row-chevron.spacer { visibility: hidden; }
 .row-chevron:hover { background: var(--surface-active); }
 
-/* Floating-Menüs: eine Surface für ⋯/Teilen/Anhang/Refine (wie model-menu) */
+/* Floating-Menüs: eine Surface für ⋯/Teilen/Anhang/Refine (wie m… */
 .row { position: relative; }
 .page-menu, .attach-menu, .refine-menu {
 	display: flex; flex-direction: column; gap: 2px; padding: 5px; min-width: 180px;
@@ -263,14 +219,14 @@ button.danger { color: var(--danger); }
 .page-menu button.danger { color: var(--danger); }
 .page-menu button.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
-/* Papierkorb: Liste gelöschter Seiten mit Wiederherstellen/Endgültig-löschen */
+/* Papierkorb: Liste gelöschter Seiten mit Wiederherstellen/Endgü… */
 .trash-list { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
 .trash-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
 	border: 1px solid var(--edge-soft); }
 .trash-row .row-title { flex: 1; }
-.trash-row button { font-size: 12.5px; min-height: 28px; }
+.trash-row button { font-size: 13px; min-height: 28px; }
 
-/* ---------- Hauptbereich ---------- */
+/* == Hauptbereich == */
 #mainWrap { display: flex; flex-direction: column; overflow: hidden; }
 #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 #tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px;
@@ -279,11 +235,9 @@ button.danger { color: var(--danger); }
 .navbtn:disabled { opacity: .3; cursor: default; }
 .navbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
 .tabstrip { display: flex; gap: 2px; overflow-x: auto; }
-/* UI-Fix v7: Tabs flexibel statt starr 170px — wenige Tabs dürfen ihre volle
-	Breite nutzen, viele schrumpfen bis 96px, erst danach scrollt die Leiste.
-	Lange Titel werden weiterhin mit Ellipsis abgeschnitten. */
+/* UI-Fix v7: Tabs flexibel statt starr 170px — wenige Tabs dürfe… */
 .tabchip { display: flex; align-items: center; gap: 6px; padding: 5px 4px 5px 10px; border-radius: 6px;
-	cursor: pointer; font-size: 12.5px; color: var(--text2); white-space: nowrap;
+	cursor: pointer; font-size: 13px; color: var(--text2); white-space: nowrap;
 	flex: 0 1 170px; min-width: 96px; max-width: 170px; }
 .tabchip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabchip:hover { background: var(--edge-soft); }
@@ -295,9 +249,7 @@ button.danger { color: var(--danger); }
 	color: var(--text2); background: transparent; border: none; border-radius: 6px; min-height: 28px; }
 .tabchip-new:hover { background: var(--edge-soft); color: var(--text); }
 
-/* Seiten-Chrome und Dokumentfläche sind bewusst getrennt:
-   Pfad/Aktionen bleiben oben links; Titel und Inhalt stehen auf einer ruhigen,
-   zentrierten Notion-ähnlichen Lesespalte. */
+/* Seiten-Chrome und Dokumentfläche sind bewusst getrennt: Pfad/A… */
 .page-chrome { flex: 0 0 auto; padding: 7px 14px; min-height: 38px; }
 .page-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .page-meta { width: min(760px, 100%); margin: 0 auto; padding: 4px 24px 6px; flex-shrink: 0; }
@@ -326,7 +278,7 @@ button.danger { color: var(--danger); }
 .page-toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 0 10px;
 	border-bottom: 1px solid var(--edge-soft); }
 
-/* ---------- KI-Status-Pille (nur Chat-Header) ---------- */
+/* == KI-Status-Pille (nur Chat-Header) == */
 .dot {
 	display: inline-block;
 	width: 7px;
@@ -350,7 +302,7 @@ button.danger { color: var(--danger); }
 	border: 1px solid var(--edge-soft);
 	background: rgba(255,255,255,.04);
 	color: var(--text2);
-	font-size: 11.5px;
+	font-size: 12px;
 	font-weight: 600;
 	line-height: 1.2;
 	letter-spacing: 0;
@@ -380,11 +332,9 @@ button.danger { color: var(--danger); }
 .ai-status-banner #btnRecheckAI { margin-left: auto; }
 /* ask_choice-Karten */
 .question-card.pending { border-color: rgba(94,159,232,.35); }
-/* ---------- Panel (KI) ---------- */
+/* == Panel (KI) == */
 #panel { display: flex; flex-direction: column; overflow: hidden; position: relative; }
-/* Das Seitenpanel behält immer eine feste Composer-Zeile am unteren Rand.
-   Der Chat-Log darf nur den verbleibenden Platz einnehmen – nie die Eingabe
-   aus dem sichtbaren Bereich drücken. */
+/* Das Seitenpanel behält immer eine feste Composer-Zeile am unte… */
 #panel > #chatLog { flex: 1 1 auto; min-height: 0; }
 #panel > #chatForm {
 	display: flex !important;
@@ -401,8 +351,7 @@ button.danger { color: var(--danger); }
 	display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .panel-title { font-weight: 600; font-size: 13px; letter-spacing: 0.4px; color: var(--text2); white-space: nowrap; }
-/* Kleine, bewusst sichtbare Diagnose-Schaltfläche: führt keine Chat-Nachricht aus,
-   sondern prüft Endpoint, Thinking-Parameter und Tool-Schema separat. */
+/* Kleine, bewusst sichtbare Diagnose-Schaltfläche: führt keine C… */
 .ai-debug-btn { min-height: 0; padding: 3px 7px; border: 1px solid var(--edge-soft); border-radius: 999px;
 	background: transparent; color: var(--text2); font-size: 11px; font-weight: 650; } /* UI-Fix v7: min. 11px */
 .ai-debug-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
@@ -411,23 +360,22 @@ button.danger { color: var(--danger); }
 .chat-full-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 4px; }
 .chat-full-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #btnTogglePanel, #btnChatExpand { min-height: 0; padding: 4px 10px; border: none; background: transparent; }
-/* ---------- Modell-Auswahl: kompaktes Icon im kleinen Chat, Chip im großen Chat ---------- */
+/* == Modell-Auswahl: kompaktes Icon im kleinen Chat, Chip im groß == */
 .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%;
 	display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text2); }
 .composer-tool:hover { background: var(--surface-hover-strong); color: var(--text); }
 .composer-tool svg { width: 17px; height: 17px; display: block; }
 
-/* Einheitliches Dropdown (öffnet über der Eingabezeile) — gleiches Design wie alle Menüs */
+/* Einheitliches Dropdown (öffnet über der Eingabezeile) — gleich… */
 .model-menu { position: fixed; left: 8px; z-index: var(--z-menu);
 	width: 300px; max-width: calc(100vw - 40px); max-height: 340px; overflow-y: auto;
 	background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px;
 	box-shadow: 0 12px 32px var(--shadow); padding: 6px; }
 .model-menu[hidden] { display: none; }
-/* Die feste Rechtsausrichtung wird bewusst aufgehoben: popovers.js positioniert
-   das Menü im kleinen und großen Chat direkt über dem jeweiligen Regler-Icon. */
+/* Die feste Rechtsausrichtung wird bewusst aufgehoben: popovers.… */
 #modelMenuFull { left: auto; right: auto; }
 .menu-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 8px 8px 3px; } /* UI-Fix v7: min. 11px */
-.menu-note { font-size: 12.5px; color: var(--text2); padding: 8px; }
+.menu-note { font-size: 13px; color: var(--text2); padding: 8px; }
 .menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
 	text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 7px 8px; border-radius: 6px; }
 .menu-item:hover { background: var(--surface-hover); color: var(--text); }
@@ -436,16 +384,16 @@ button.danger { color: var(--danger); }
 .menu-check { color: var(--accent); flex-shrink: 0; font-size: 12px; }
 .menu-sep { height: 1px; background: var(--surface-hover); margin: 6px 4px; }
 .menu-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.menu-chip { min-height: 0; padding: 4px 9px; font-size: 11.5px; border-radius: 12px;
+.menu-chip { min-height: 0; padding: 4px 9px; font-size: 12px; border-radius: 12px;
 	background: var(--surface); color: var(--text2); }
 .menu-chip:hover { background: var(--surface-active); color: var(--text); }
 .menu-chip.active { background: var(--accent-soft); color: var(--accent); }
-/* Modell-Menü: zwei schlanke Notion-artige Untermenüs statt einer langen Modellliste. */
+/* Modell-Menü: zwei schlanke Notion-artige Untermenüs statt eine… */
 .model-submenu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
 	padding: 9px 8px; text-align: left; background: transparent; color: var(--text); font-size: 13px; }
 .model-submenu-row:hover { background: var(--surface-hover); }
 .model-submenu-row small { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
-.model-submenu-back { min-height: 28px; margin: 2px 4px 5px; padding: 3px 6px; background: transparent; color: var(--text2); font-size: 12.5px; }
+.model-submenu-back { min-height: 28px; margin: 2px 4px 5px; padding: 3px 6px; background: transparent; color: var(--text2); font-size: 13px; }
 .model-submenu-back:hover { background: var(--surface-hover); color: var(--text); }
 #chatLog { flex: 1; overflow-y: auto; padding: 12px; display: flex;
 	flex-direction: column; gap: 10px; }
@@ -461,14 +409,9 @@ button.danger { color: var(--danger); }
 .msg.user:hover .msg-edit.locked { opacity: 0.85; color: var(--text2); cursor: not-allowed; }
 .msg.assistant { align-self: stretch; background: none; border: none; padding: 2px 0; }
 .msg.busy { color: var(--text2); font-style: italic; }
-/* UI-Fix v7 (Konsolidierung): #chatForm/.chat-form-full waren 4× mit
-	widersprüchlichen Werten definiert, der Senden-Knopf 3× — die Kaskade war
-	unlesbar (gleiche Fehlerklasse wie der iPad-Rahmen-Bug). Jetzt gilt: EIN
-	kanonischer Block direkt darunter; hier bleiben nur die Panel-spezifischen
-	Layout-Eigenschaften des Seiten-Composers. */
+/* UI-Fix v7 (Konsolidierung): #chatForm/.chat-form-full waren 4×… */
 #chatForm { margin: 10px; position: relative; flex-shrink: 0; }
-/* Composer (kanonisch): Textfeld oben über volle Breite, Aktionszeile unten.
-	Werte = Netto-Ergebnis der früheren Kaskade — optisch unverändert. */
+/* Composer (kanonisch): Textfeld oben über volle Breite, Aktions… */
 #chatForm, .chat-form-full {
 	display: flex;
 	flex-direction: column;
@@ -485,7 +428,7 @@ button.danger { color: var(--danger); }
 	border-color: #2383e2;
 	box-shadow: 0 0 0 1px #2383e2;
 }
-/* Oben: ausschließlich der Text, volle Breite, ohne eigene Umrandung. */
+/* Oben: ausschließlich der Text, volle Breite, ohne eigene Umran… */
 .composer-body { display: block; width: 100%; min-height: 38px; }
 .composer-body textarea {
 	display: block;
@@ -500,7 +443,7 @@ button.danger { color: var(--danger); }
 	background: transparent !important;
 	padding: 5px 2px 7px;
 }
-/* Unten: unveränderliche Aktionszeile. Plus + Einstellungen links, Senden rechts. */
+/* Unten: unveränderliche Aktionszeile. Plus + Einstellungen link… */
 .composer-actions {
 	display: flex;
 	align-items: center;
@@ -520,12 +463,11 @@ button.danger { color: var(--danger); }
 .composer-actions-left #btnAttach, .composer-actions-left #btnAttachFull,
 .composer-actions-left .composer-tool {
 	width: 28px; height: 28px; min-height: 28px;
-	padding: 0; border-radius: 7px;
+	padding: 0; border-radius: 8px;
 }
 #chatForm:has(#pendingChip:not([hidden])), .chat-form-full:has(#mainPendingChip:not([hidden])) { padding-top: 48px; }
-/* (UI-Fix v7: Duplikat-Block entfernt — Composer ist oben kanonisch definiert.) */
-/* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte aus vorher
-	drei konkurrierenden Eingabefeld-Definitionen). */
+/* (UI-Fix v7: Duplikat-Block entfernt — Composer ist oben kanoni… */
+/* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte… */
 #chatInput, .chat-form-full textarea {
 	order: -1;
 	flex: 1;
@@ -540,11 +482,10 @@ button.danger { color: var(--danger); }
 	background: transparent;
 	padding: 6px 0;
 }
-/* Untere Reihe behält die bestehende Reihenfolge: Anhang → Modell → Senden. */
+/* Untere Reihe behält die bestehende Reihenfolge: Anhang → Model… */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1; }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2; }
-/* Senden-Knopf (kanonisch, UI-Fix v7: konsolidiert aus vorher drei Definitionen —
-	Werte = bisheriges Netto-Ergebnis der Kaskade). */
+/* Senden-Knopf (kanonisch, UI-Fix v7: konsolidiert aus vorher dr… */
 #chatForm button[type="submit"], .chat-form-full button[type="submit"] {
 	order: 3;
 	margin-left: 0;
@@ -563,11 +504,11 @@ button.danger { color: var(--danger); }
 #sideContextChip[hidden] { display: none; }
 .side-context-icon { font-size: 13px; }
 .side-context-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.side-context-note { margin-left: auto; font-size: 11.5px; color: var(--text2); } /* UI-Fix v7: Kontrast/Lesbarkeit */
+.side-context-note { margin-left: auto; font-size: 12px; color: var(--text2); } /* UI-Fix v7: Kontrast/Lesbarkeit */
 .btn-undo-change { min-height: 28px; padding: 3px 9px; background: transparent; color: var(--text2); font-size: 12px; }
 .btn-undo-change:hover { background: var(--surface-hover); color: var(--text); }
 
-/* ---------- Notion-artige Änderungs-Vorschau: große „Seite“ fliegt heraus ---------- */
+/* == Notion-artige Änderungs-Vorschau: große „Seite“ fliegt herau == */
 #overlay.change-overlay {
 	place-items: center;
 	align-content: center;
@@ -586,7 +527,7 @@ button.danger { color: var(--danger); }
 }
 @keyframes changeFlyIn {
 	from { opacity: 0; transform: translateY(28px) scale(.96); }
-	to { opacity: 1; transform: none; }
+
 }
 .change-page-toolbar {
 	display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -635,7 +576,7 @@ button.danger { color: var(--danger); }
 .highlight-page-del { background: rgba(233,115,102,0.10); border-radius: 10px; padding: 8px 12px; opacity: .9; }
 .change-page-legend {
 	display: flex; gap: 12px; flex-wrap: wrap;
-	padding: 8px 4px 0; font-size: 11.5px; color: var(--text2);
+	padding: 8px 4px 0; font-size: 12px; color: var(--text2);
 }
 .change-page-legend .leg { padding: 2px 8px; border-radius: 999px; }
 .change-page-legend .leg.add { background: rgba(114,188,143,0.15); color: #9fdcb4; }
@@ -647,42 +588,39 @@ button.danger { color: var(--danger); }
 	.change-page-title { font-size: 22px; }
 	.change-page-flyout { width: 100%; max-height: 92dvh; }
 }
-/* (UI-Fix v7: Legacy-Definitionen für Eingabefeld + Senden-Knopf entfernt —
-	kanonische Blöcke siehe Composer-Abschnitt weiter oben.) */
+/* (UI-Fix v7: Legacy-Definitionen für Eingabefeld + Senden-Knopf… */
 
-/* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live (Streaming) und
-   finalisiert — Icon+Label+Chevron-Kopf, sanfte Höhen-Animation beim Auf-/
-   Zuklappen, weicher Fade-Verlauf statt hartem Abschneiden in der Live-Vorschau. */
+/* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live… */
 .think-box { margin: 4px 0 6px; border: 1px solid var(--edge-soft); border-radius: 10px;
 	background: var(--surface-faint); overflow: hidden; transition: border-color .15s ease; }
 .think-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 10px;
-	background: transparent; border: none; color: var(--text2); font-size: 12.5px; font-weight: 600;
+	background: transparent; border: none; color: var(--text2); font-size: 13px; font-weight: 600;
 	text-align: left; min-height: 0; border-radius: 0; }
 .think-toggle:hover { background: var(--surface-hover); color: var(--text); }
 .think-icon { flex-shrink: 0; font-size: 13px; line-height: 1; }
 .think-box.live .think-icon { animation: thinkPulse 1.3s ease-in-out infinite; }
 @keyframes thinkPulse { 50% { opacity: .35; } }
 .think-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.think-chevron { flex-shrink: 0; font-size: 9px; color: var(--text2); transition: transform .15s ease; }
+.think-chevron { flex-shrink: 0; font-size: 10px; color: var(--text2); transition: transform .15s ease; }
 .think-toggle[aria-expanded="true"] .think-chevron { transform: rotate(90deg); }
 .think-body-wrap { position: relative; max-height: 0; overflow: hidden; transition: max-height .2s ease; }
 .think-box.peek .think-body-wrap { max-height: 3em; }
 .think-box.expanded .think-body-wrap { max-height: 320px; }
 .think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0;
 	height: 16px; background: linear-gradient(180deg, transparent, var(--surface-faint)); pointer-events: none; }
-.think-body { padding: 0 10px 9px; font-size: 12.5px; line-height: 1.5; color: var(--text2); white-space: pre-wrap; }
+.think-body { padding: 0 10px 9px; font-size: 13px; line-height: 1.5; color: var(--text2); white-space: pre-wrap; }
 .think-box.expanded .think-body { max-height: 320px; overflow-y: auto; }
 
-/* Blockmarkierung als durchgehende Fläche wie in Notion – keine farbige Kontur. */
+/* Blockmarkierung als durchgehende Fläche wie in Notion – keine… */
 
-/* Edit-Karten: Notion-artige Diff-/Undo-Anzeige nach KI-Bearbeitungen */
+/* Edit-Karten: Notion-artige Diff-/Undo-Anzeige nach KI-Bearbeit… */
 .edit-card {
 	border: 1px solid var(--surface-hover);
 	border-radius: 12px;
 	padding: 14px 16px;
 	background: var(--surface-faint);
 	box-shadow: 0 4px 12px var(--input-bg);
-	font-size: 13.5px;
+	font-size: 14px;
 	margin: 8px 0;
 }
 .edit-title {
@@ -749,10 +687,10 @@ button.danger { color: var(--danger); }
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 13.5px;
+	font-size: 14px;
 	color: var(--text);
 }
-/* ---------- Markdown ---------- */
+/* == Markdown == */
 .md h1, .md h2, .md h3 { margin: 0.9em 0 0.4em; line-height: 1.3; }
 .md h1 { font-size: 1.6em; } .md h2 { font-size: 1.3em; } .md h3 { font-size: 1.1em; }
 .md p, .md ul, .md ol, .md pre, .md blockquote, .md table { margin: 0.5em 0; }
@@ -769,12 +707,11 @@ button.danger { color: var(--danger); }
 .md th, .md td { border: 1px solid var(--edge); padding: 4px 10px; }
 .md img { max-width: 100%; border-radius: 8px; display: block; margin: 6px 0; }
 
-/* ---------- Overlay / Modal ---------- */
-/* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-Pille (1210) */
+/* == Overlay / Modal == */
+/* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-… */
 #overlay { position: fixed; inset: 0; z-index: var(--z-overlay);
 	background: rgba(3, 5, 10, 0.6); display: grid; place-items: center; }
-/* Versteckte Ebenen dürfen niemals Klicks abfangen — wichtig bei iPad-Safari,
-   das eine wiederhergestellte PWA-Ansicht gelegentlich vor dem ersten Render zeigt. */
+/* Versteckte Ebenen dürfen niemals Klicks abfangen — wichtig bei… */
 #overlay[hidden], #palette[hidden], .attach-menu[hidden], .model-menu[hidden] {
 	display: none !important;
 	pointer-events: none !important;
@@ -787,12 +724,11 @@ button.danger { color: var(--danger); }
 .modal input { width: 100%; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 
-/* ---------- Drive-Sync-Konflikte: zwei ruhige, direkt vergleichbare Seiten ---------- */
-.conflict-modal { width: min(1080px, 96vw); max-height: min(840px, 92vh); padding: 20px; gap: 12px; }
+/* == Drive-Sync-Konflikte: zwei ruhige, direkt vergleichbare Seit == */
 .conflict-head { display: flex; align-items: center; gap: 10px; padding-right: 30px; }
 .conflict-head .conflict-icon { font-size: 24px; }
 .conflict-head span:last-child { display: flex; flex-direction: column; min-width: 0; }
-.conflict-head small { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .conflict-reason { color: var(--text2); font-size: 13px; line-height: 1.5; }
 .conflict-reason b { color: var(--text); }
 .conflict-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
@@ -809,16 +745,16 @@ button.danger { color: var(--danger); }
 .conflict-line.local-only .conflict-line-marker { color: var(--danger); }
 .conflict-line.remote-only .conflict-line-marker { color: var(--success); }
 .conflict-empty { color: var(--text2); padding: 12px; }
-/* Lange Konfliktseiten werden vollständig gezeigt; keine Platzhalter statt Inhalt. */
+/* Lange Konfliktseiten werden vollständig gezeigt; keine Platzha… */
 .conflict-fulltext { margin: 0; min-height: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: var(--text); }
-.conflict-key { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: -4px 0 0; color: var(--text2); font-size: 11.5px; }
+.conflict-key { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: -4px 0 0; color: var(--text2); font-size: 12px; }
 .conflict-key span:first-child { color: #f2b0a9; }
 .conflict-key span:nth-child(2) { color: #a9dfba; }
 .conflict-no-compare { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid rgba(245,185,70,.32); border-radius: 10px; background: rgba(245,185,70,.08); color: var(--text2); font-size: 13px; }
 .conflict-no-compare b { color: var(--text); }
 .conflict-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .conflict-actions .primary { background: var(--accent); color: #081018; font-weight: 650; }
-@media (max-width: 700px) { .conflict-modal { padding: 16px; } .conflict-compare { grid-template-columns: 1fr; } .conflict-pane-body { height: min(29vh, 260px); } .conflict-actions > button { flex: 1 1 calc(50% - 7px); } }
+@media (max-width: 700px) { .conflict-compare { grid-template-columns: 1fr; } .conflict-pane-body { height: min(29vh, 260px); } .conflict-actions > button { flex: 1 1 calc(50% - 7px); } }
 .hint { font-size: 13px; color: var(--text2); }
 .card-face { padding: 18px; border-radius: 10px; background: var(--surface);
 	border: 1px solid var(--edge); }
@@ -832,7 +768,7 @@ button.danger { color: var(--danger); }
 .cover-swatch { width: 52px; height: 36px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); padding: 0; }
 .cover-swatch:hover { outline: 2px solid var(--accent); }
 
-/* ---------- KI-Panel einklappen / Vollbild ---------- */
+/* == KI-Panel einklappen / Vollbild == */
 body.panel-collapsed #panel { display: none; }
 body.panel-collapsed #app { grid-template-columns: 260px minmax(0, 1fr); }
 body.chat-full #mainWrap { display: none; }
@@ -841,13 +777,11 @@ body.chat-full #panel { grid-column: 2; max-width: 780px; width: 100%; justify-s
 	border: none; background: transparent; }
 body.chat-full #chatLog { padding: 24px 8px; }
 
-/* ---------- Linke Sidebar + runder KI-Schnellzugriff ---------- */
-/* #tabbar-Grundlayout steht bereits im Hauptbereich; hier nur die lokale Erweiterung. */
+/* == Linke Sidebar + runder KI-Schnellzugriff == */
+/* #tabbar-Grundlayout steht bereits im Hauptbereich; hier nur di… */
 #tabbar .tabstrip { flex: 1; min-width: 0; }
 
-/* Ruhiger Notion-artiger KI-Kreis unten rechts. Er erscheint nur, wenn das
-   Seitenpanel eingeklappt ist; im GoodNotes-Fokusmodus bleibt die Papierfläche
-   vollständig frei. */
+/* Ruhiger Notion-artiger KI-Kreis unten rechts. */
 #btnAiFab {
 	position: fixed;
 	right: 22px;
@@ -882,11 +816,8 @@ body:has(#heftStage) #btnAiFab { display: none; }
 #chatForm #btnAttach { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 17px;
 	border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: transparent; }
 #chatForm #btnAttach:hover { background: var(--surface-hover-strong); }
-/* Menüs am Chat-Composer: Anhang und Modell teilen dieselbe Fläche, Breite
-   und Positionierungslogik. popovers.js setzt die festen Koordinaten dynamisch
-   über bzw. unter dem jeweiligen Auslöser — keine fragilen bottom/left-Werte. */
-/* z-index über dem mobilen Vollbild-Panel (1300): #attachMenu liegt bewusst
-   außerhalb von #panel (siehe HTML-Kommentar) und würde sonst dahinter verschwinden. */
+/* Menüs am Chat-Composer: Anhang und Modell teilen dieselbe Fläc… */
+/* z-index über dem mobilen Vollbild-Panel (1300): #attachMenu li… */
 .attach-menu { position: fixed; z-index: var(--z-attach); width: 300px; max-width: calc(100vw - 40px); }
 .attach-menu[hidden] { display: none; }
 .attach-menu-icon { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px;
@@ -897,17 +828,17 @@ body:has(#heftStage) #btnAiFab { display: none; }
 #pendingChip[hidden], #mainPendingChip[hidden] { display: none; }
 #pendingChip img, #mainPendingChip img { height: 32px; border-radius: 6px; }
 #pendingChip button, #mainPendingChip button { min-height: 0; margin-left: auto; padding: 2px 5px; border: none; background: transparent; }
-/* Der Anhang erweitert die Eingabeleiste ausschließlich nach oben; die untere Bedienzeile bleibt unverändert. */
+/* Der Anhang erweitert die Eingabeleiste ausschließlich nach obe… */
 #chatForm:has(#pendingChip:not([hidden])) { min-height: 88px; padding-top: 52px; }
 .chat-form-full { flex-wrap: wrap; }
 .chat-form-full:has(#mainPendingChip:not([hidden])) { min-height: 88px; padding-top: 52px; }
 .chat-form-full #mainPendingChip { margin: 0; }
 .msg-img { display: block; max-width: 180px; border-radius: 8px; margin-top: 6px; }
 
-/* ---------- Topbar-Tabs (Home / Chats / Bibliothek / Suche) ---------- */
-/* flex-wrap: bei vielen Tabs (🃏/📅/🔍) bricht die Leiste um, statt Knöpfe abzuschneiden */
+/* == Topbar-Tabs (Home / Chats / Bibliothek / Suche) == */
+/* flex-wrap: bei vielen Tabs (🃏/📅/🔍) bricht die Leiste um, st… */
 .topbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
-/* Such-Taste immer am rechten Rand der Sidebar-Topbar (unabhängig von sichtbaren Tabs) */
+/* Such-Taste immer am rechten Rand der Sidebar-Topbar (unabhängi… */
 .topbar #btnSearchToggle { margin-left: auto; }
 .tab { display: flex; align-items: center; border: none; background: transparent;
 	border-radius: 999px; padding: 6px 9px; color: var(--text2); min-height: 32px; flex-shrink: 0;
@@ -915,10 +846,10 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .tab:hover { background: var(--surface-hover); }
 .tab.active { background: var(--surface-active); color: var(--text); }
 .tab svg { display: block; }
-.tab .tab-label { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden;
+.tab .tab-label { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden;
 	max-width: 0; opacity: 0; margin-left: 0;
 	transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease; }
-/* Nur die aktive Pille zeigt das Label — renderTopbar setzt genau eine .active */
+/* Nur die aktive Pille zeigt das Label — renderTopbar setzt gena… */
 .tab.active .tab-label { max-width: 110px; opacity: 1; margin-left: 6px; }
 .topbar .tab:not(.active) .tab-label { max-width: 0 !important; opacity: 0 !important; margin-left: 0 !important; }
 #search[hidden] { display: none; }
@@ -949,8 +880,8 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .settings-body { flex: 1; padding: 20px 24px; display: flex; flex-direction: column;
 	gap: 12px; overflow-y: auto; }
 
-/* ---------- Status, Split-Editor, PDF, Kartenmanager ---------- */
-/* .dot / .ai-status-chip: siehe „KI-Status-Pille“ weiter oben — hier keine Doppeldefinition. */
+/* == Status, Split-Editor, PDF, Kartenmanager == */
+/* .dot / .ai-status-chip: siehe „KI-Status-Pille“ weiter oben —… */
 .mode-btns { display: flex; border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; }
 .mode-btns button { border: none; border-radius: 0; min-height: 34px; }
 .mode-btns button.active { background: var(--accent-soft); color: var(--accent); }
@@ -966,14 +897,13 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .card-row .card-meta { display: flex; justify-content: space-between; align-items: center;
 	font-size: 12px; color: var(--text2); }
 
-/* ---------- Datei-Chip (geklebter Text als .txt), Drive-Login, Vollbild-Chat-Tab, Fortschrittsbalken ---------- */
+/* == Datei-Chip (geklebter Text als .txt), Drive-Login, Vollbild- == */
 .file-chip { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 10px;
 	border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; background: rgba(0,0,0,0.2); font-size: 13px; }
 .file-chip button { min-height: 0; padding: 3px 8px; font-size: 12px; }
 .drive-connected { padding: 10px 12px; border-radius: 8px; background: rgba(114,188,143,0.12);
 	border: 1px solid rgba(114,188,143,0.3); margin-bottom: 4px; }
-/* Vollbild-Chat-Tab: gleiche Anordnung wie Notions (nicht-Vollbild) KI-Panel —
-	Log füllt den verfügbaren Platz, Eingabefeld bleibt fix unten und zentriert. */
+/* Vollbild-Chat-Tab: gleiche Anordnung wie Notions (nicht-Vollbi… */
 .chat-full-wrap { display: flex; flex-direction: column; height: 100%; padding: 28px 40px 20px; overflow: hidden; }
 .chat-full-wrap h1 { flex-shrink: 0; margin-bottom: 4px; }
 .chat-full-wrap .chat-empty-hint { flex-shrink: 0; }
@@ -992,7 +922,7 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .progress-bar.indeterminate .progress-fill { width: 30%; animation: progressSlide 1.1s ease-in-out infinite; }
 @keyframes progressSlide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
 
-/* ---------- Rückfrage-Karten (ask_choice), Antwort-Anpassen (länger/kürzer), Markieren, LaTeX, Code ---------- */
+/* == Rückfrage-Karten (ask_choice), Antwort-Anpassen (länger/kürz == */
 .question-card { border: 1px solid rgba(111,195,255,0.25); border-radius: 10px; padding: 10px 12px;
 	background: rgba(111,195,255,0.06); }
 .question-card.answered { opacity: .92; }
@@ -1002,7 +932,7 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .q-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .q-picked { font-size: 13px; color: var(--text2); }
 .msg-tools { margin-top: 4px; position: relative; }
-.msg-tool-btn { font-size: 11.5px; min-height: 0; padding: 3px 8px; background: transparent; color: var(--text2); opacity: 0; transition: opacity .12s; }
+.msg-tool-btn { font-size: 12px; min-height: 0; padding: 3px 8px; background: transparent; color: var(--text2); opacity: 0; transition: opacity .12s; }
 .msg.assistant:hover .msg-tool-btn { opacity: 1; }
 .msg-tool-btn:hover { background: var(--surface-hover); color: var(--text); }
 .refine-menu { position: absolute; top: 100%; left: 0; z-index: 6; margin-top: 2px; }
@@ -1010,7 +940,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .katex-display { overflow-x: auto; overflow-y: hidden; margin: 0.6em 0 !important; }
 .katex { font-size: 1.02em; }
 
-/* ---------- Bibliothek = GoodNotes Documents-Regal (Impala67-Tokens) ---------- */
+/* == Bibliothek = GoodNotes Documents-Regal (Impala67-Tokens) == */
 .lib-docs .lib-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
 	gap: 14px 18px; margin-bottom: 14px; }
 .lib-head-left h1 { margin: 0 0 2px; letter-spacing: -.02em; }
@@ -1022,11 +952,11 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .tpl-badge, .lib-tpl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent);
 	border: 1px solid var(--accent-border); border-radius: 4px; padding: 0 5px; margin-right: 4px; font-weight: 650; }
 
-/* Documents-Tabs (Alle / Favoriten / …) — schlank wie GoodNotes, keine Chip-Wand */
+/* Documents-Tabs (Alle / Favoriten / …) — schlank wie GoodNotes,… */
 .lib-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding: 3px; width: fit-content;
 	max-width: 100%; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: 999px; }
 .lib-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 12px;
-	border-radius: 999px; background: transparent; color: var(--text2); font-size: 12.5px; font-weight: 600; }
+	border-radius: 999px; background: transparent; color: var(--text2); font-size: 13px; font-weight: 600; }
 .lib-tab:hover { color: var(--text); background: var(--surface-hover); }
 .lib-tab.active { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 0 var(--edge-soft); }
 .lib-tab-n { font-size: 11px; font-weight: 600; color: var(--text2); opacity: .85; }
@@ -1057,7 +987,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	overflow: hidden; position: relative; display: flex; flex-direction: column; justify-content: space-between;
 	padding: 16px 12px 14px; background-size: cover; background-position: center; }
 .lib-cover-icon { font-size: 26px; line-height: 1; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
-.lib-cover-label { font-size: 12.5px; font-weight: 700; line-height: 1.25; color: #fff;
+.lib-cover-label { font-size: 13px; font-weight: 700; line-height: 1.25; color: #fff;
 	text-shadow: 0 1px 3px rgba(0,0,0,.45); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
 	-webkit-box-orient: vertical; overflow: hidden; }
 .lib-cover.has-img { padding: 0; }
@@ -1067,7 +997,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-cover-empty { align-items: center; justify-content: center; border-style: dashed; background: var(--surface-subtle); }
 .lib-card-title { font-size: 13px; font-weight: 650; margin-top: 10px; line-height: 1.3; color: var(--text);
 	overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-.lib-card-date { font-size: 11.5px; color: var(--text2); margin-top: 2px; }
+.lib-card-date { font-size: 12px; color: var(--text2); margin-top: 2px; }
 .lib-into { position: absolute; top: 8px; right: 8px; z-index: 2; min-height: 0; min-width: 24px; padding: 3px 7px;
 	font-size: 11px; font-weight: 700; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.12); }
 .lib-into:hover { background: rgba(0,0,0,.75); }
@@ -1085,7 +1015,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-folder-body { position: absolute; left: 0; right: 0; bottom: 0; top: 32px; border-radius: 8px 12px 10px 10px;
 	background: linear-gradient(160deg, color-mix(in srgb, var(--folder, #6a8fbf) 88%, #fff), var(--folder, #6a8fbf));
 	box-shadow: inset 0 1px 0 rgba(255,255,255,.16); }
-.lib-folder-name { font-weight: 650; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-folder-name { font-weight: 650; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-folder-count { font-size: 12px; color: var(--text2); margin-top: -6px; }
 
 /* + Neue Notiz als leerer Notebook-Slot */
@@ -1106,13 +1036,13 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 /* Vorlagen-Auswahl beim Seiten-Anlegen */
 .tpl-opt { text-align: left; }
 
-/* Seitenverlauf: Versionsliste links, Vorschau rechts (wie das Einstellungen-Modal) */
+/* Seitenverlauf: Versionsliste links, Vorschau rechts (wie das E… */
 .hist-modal { flex-direction: row; gap: 0; padding: 0; width: min(860px, 96vw);
 	height: min(560px, 86vh); overflow: hidden; position: relative; }
 .hist-list { width: 220px; border-right: 1px solid var(--edge); padding: 16px 10px;
 	display: flex; flex-direction: column; gap: 4px; overflow-y: auto; background: rgba(0,0,0,0.15); }
 .hist-list h3 { padding: 0 4px 6px; }
-.hist-item { text-align: left; background: transparent; font-size: 12.5px; color: var(--text2); }
+.hist-item { text-align: left; background: transparent; font-size: 13px; color: var(--text2); }
 .hist-item:hover { background: var(--surface-hover); color: var(--text); }
 .hist-item.active { background: var(--accent-soft); color: var(--text); }
 .hist-preview { flex: 1; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
@@ -1124,7 +1054,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-table td { padding: 8px 10px; border-bottom: 1px solid var(--surface); font-size: 14px; cursor: pointer; }
 .lib-table tr:hover td { background: var(--surface); }
 
-/* ---------- Bibliothek (Vollbild) & Chat-Verlauf ---------- */
+/* == Bibliothek (Vollbild) & Chat-Verlauf == */
 .library { padding: 28px 36px 48px; overflow-y: auto; flex: 1; }
 .library.lib-docs { max-width: 1180px; }
 .library h1 { margin-bottom: 12px; }
@@ -1133,7 +1063,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .empty.small { padding: 4px 10px; font-size: 13px; text-align: left; }
 .row .hint { font-size: 11px; flex-shrink: 0; }
 
-/* ---------- Scrollbars & Responsive ---------- */
+/* == Scrollbars & Responsive == */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
 
@@ -1142,41 +1072,35 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	#app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
 	#mainWrap { min-height: 60vh; }
 	#panel { min-height: 40vh; }
-	/* Ein Heft ist eine eigene Vollbild-Bühne. Ohne diese Ausnahme scrollte bei
-	   Hochkant-Zoom die gesamte Dokumentseite — inklusive linker Seitenleiste —
-	   statt ausschließlich die Papierfläche. */
+	/* Ein Heft ist eine eigene Vollbild-Bühne. */
 	body:has(.heft-stage) { overflow: hidden; }
 	body:has(.heft-stage) #app { height: 100dvh; min-height: 0; }
 	body:has(.heft-stage) #mainWrap { min-height: 0; }
 }
 
-/* ---------- Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout-Popup, haptisches Feedback ---------- */
+/* == Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout == */
 @media (max-width: 768px) {
-	/* Größere Tipp-Flächen (Richtwert ~40px) für kleine Icon-Knöpfe, die am Desktop
-	   bewusst kompakt sind (Zeilen-Menüs, Tab-Schließen, Navigation). */
+	/* Größere Tipp-Flächen (Richtwert ~40px) für kleine Icon-Knöpfe,… */
 	.navbtn, .row-add, .tabchip-x, .tab { min-height: 40px; }
-	/* Langes Antippen zeigte bisher auf iOS/Android ein Auswahl-/Kopieren-Callout
-	   statt sofort die Aktion auszulösen — bei reinen Icon-Knöpfen ohne Textsinn
-	   unnötig und irritierend. Seiteninhalte (Editor, Chat-Text) bleiben unberührt. */
+	/* Langes Antippen zeigte bisher auf iOS/Android ein Auswahl-/Kop… */
 	.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row {
 		-webkit-touch-callout: none;
 		-webkit-user-select: none;
 		user-select: none;
 	}
-	/* Sichtbares Antipp-Feedback statt der auf Touch nicht existierenden :hover-Zustände */
+	/* Sichtbares Antipp-Feedback statt der auf Touch nicht existiere… */
 	.navbtn:active, .row-add:active, .tabchip-x:active, .tabchip:active,
 	.tab:active, .row:active, .home-pill:active, .home-continue:active {
 		opacity: 0.6;
 	}
-	/* Sanftes Momentum-Scrolling (ältere iOS-Safari) für die wichtigsten Scroll-Container */
+	/* Sanftes Momentum-Scrolling (ältere iOS-Safari) für die wichtig… */
 	#tree, #chatLog, .tabstrip, .block-editor, .library, .home, #main {
 		-webkit-overflow-scrolling: touch;
 	}
 }
 
-/* ---------- Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Auswahl-Toolbar ---------- */
-/* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokumenttext stehen –
-   keine Code-Optik und kein optischer Moduswechsel. */
+/* == Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Au == */
+/* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokument… */
 .block-editor { position: relative; overflow: visible; padding: 8px 24px 28vh; max-width: 760px; width: 100%; margin: 0 auto; }
 .blk { display: flex; align-items: flex-start; gap: 2px; border-radius: 6px; position: relative; }
 .blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 4px; opacity: 0; transition: opacity .1s; }
@@ -1194,7 +1118,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 	font-family: inherit; font-size: 16px; }
 .blk-input:hover { background: var(--surface-faint); }
 .blk-input:focus { background: var(--surface-subtle); border-color: transparent; box-shadow: none; }
-/* Rich-Text-Blöcke sind dauerhaft editierbar und sehen im Fokus exakt wie beim Lesen aus. */
+/* Rich-Text-Blöcke sind dauerhaft editierbar und sehen im Fokus… */
 .blk-rich-edit { min-width: 0; min-height: 1.6em; outline: none; caret-color: var(--accent); }
 .blk-rich-edit:focus { outline: none; box-shadow: none; }
 .blk-rich-edit > .md { pointer-events: none; }
@@ -1215,16 +1139,14 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 .blk-p p { margin: 0; }
 .blk .md > :first-child { margin-top: 0; }
 .blk .md > :last-child { margin-bottom: 0; }
-/* UI-Fix v7: .blk-callout-Duplikat entfernt — kanonische Definition im
-	Editor-Abschnitt (der Rahmen von hier wurde dorthin übernommen). */
+/* UI-Fix v7: .blk-callout-Duplikat entfernt — kanonische Definit… */
 .blk-cols { display: flex; gap: 18px; }
 .blk-col { flex: 1; min-width: 0; }
 @media (max-width: 720px) { .blk-cols { flex-direction: column; } }
 
-
 /* Slash-Menü und schwebende Auswahl-Toolbar */
 
-/* Textfarben ({red}…{/}) und Hintergrundfarben ({bg-red}…{/}) — Notion-Palette */
+/* Textfarben ({red}…{/}) und Hintergrundfarben ({bg-red}…{/}) —… */
 .c-gray { color: #9b9b9b; } .c-red { color: #ff7369; } .c-orange { color: #ffa344; }
 .c-yellow { color: #ffdc49; } .c-green { color: #4dab9a; } .c-blue { color: #529cca; }
 .c-purple { color: #9a6dd7; } .c-pink { color: #e255a1; }
@@ -1239,7 +1161,7 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 
 /* Farbige Callouts (> [!blue] …) */
 
-/* ---------- Mehrquellen-KI-Einstellungen & Modell-Dropdown-Erweiterung ---------- */
+/* == Mehrquellen-KI-Einstellungen & Modell-Dropdown-Erweiterung == */
 .provider-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
 .provider-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
 	border: 1px solid var(--edge); border-radius: 10px; background: var(--surface-faint); }
@@ -1250,12 +1172,12 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 	background: transparent; color: var(--danger); border-radius: 6px; }
 .icon-danger:hover { background: var(--danger-soft); }
 
-/* ---------- Alles auswählen (Strg+A): eine zusammenhängende Blockmarkierung ---------- */
+/* == Alles auswählen (Strg+A): eine zusammenhängende Blockmarkier == */
 
-/* ---------- Karten-Editor (Modal): klar, mit echtem Stapel-Select ---------- */
+/* == Karten-Editor (Modal): klar, mit echtem Stapel-Select == */
 .card-editor { display: flex; flex-direction: column; gap: 10px; }
 .card-editor h3 { margin: 0 0 2px; }
-.card-editor label { font-size: 12.5px; color: var(--text2); font-weight: 600; }
+.card-editor label { font-size: 13px; color: var(--text2); font-weight: 600; }
 .card-editor textarea, .card-editor select, .card-editor .card-deck-new { width: 100%; }
 .card-editor textarea { min-height: 88px; resize: vertical; line-height: 1.45; }
 .card-deck-row { display: flex; flex-direction: column; gap: 6px; }
@@ -1272,7 +1194,7 @@ h1.blk-h { font-size: 1.7em; } h2.blk-h { font-size: 1.35em; } h3.blk-h { font-s
 button.primary { background: var(--accent); color: #081018; font-weight: 650; }
 button.primary:hover { filter: brightness(1.06); }
 
-/* ---------- Anki-Bereich: Stapel, Browser, Statistik, Lernen ---------- */
+/* == Anki-Bereich: Stapel, Browser, Statistik, Lernen == */
 .deck-list { display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
 .deck-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px;
 	border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-subtle); }
@@ -1305,7 +1227,7 @@ button.primary:hover { filter: brightness(1.06); }
 .bar-label { font-size: 10px; color: var(--text2); }
 .bar-chart.forecast .bar { background: var(--success); }
 
-/* ---------- Daily Notes: Monatskalender ---------- */
+/* == Daily Notes: Monatskalender == */
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 980px; }
 .cal-head-row { margin-bottom: 6px; }
 .cal-dow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 0 4px; }
@@ -1315,44 +1237,44 @@ button.primary:hover { filter: brightness(1.06); }
 .cal-day.other { visibility: hidden; }
 .cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .cal-day.has-note { background: var(--accent-soft); }
-.cal-num { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.cal-num { font-size: 13px; font-weight: 600; color: var(--text2); }
 .cal-day.today .cal-num { color: var(--accent); }
-.cal-snippet { font-size: 11.5px; color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
+.cal-snippet { font-size: 12px; color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
 
-/* ---------- Stapel-Baum in der Sidebar (Anki-Tab) ---------- */
-.deck-badge { flex-shrink: 0; font-size: 11px; min-width: 18px; text-align: center; border-radius: 9px; /* UI-Fix v7 */
+/* == Stapel-Baum in der Sidebar (Anki-Tab) == */
+.deck-badge { flex-shrink: 0; font-size: 11px; min-width: 18px; text-align: center; border-radius: 10px; /* UI-Fix v7 */
 	padding: 1px 5px; margin-left: 2px; background: rgba(114,188,143,0.16); color: var(--success); }
 .deck-badge.due { background: var(--accent-soft); color: var(--accent); }
 .deck-tree-row .row-add { font-size: 12px; }
 .study-meta { text-align: center; }
 
-/* Legacy paper-preview entfernt — Covers nutzen .lib-notebook / .lib-cover-label */
+/* Legacy paper-preview entfernt — Covers nutzen .lib-notebook /… */
 
-/* ---------- Mermaid-Diagramme (aus ```mermaid-Codeblöcken gerendert) ---------- */
+/* == Mermaid-Diagramme (aus ```mermaid-Codeblöcken gerendert) == */
 .mermaid-diagram { margin: 10px 0; padding: 14px; border-radius: 10px;
 	background: var(--surface); border: 1px solid var(--surface-hover);
 	overflow-x: auto; text-align: center; }
 .mermaid-diagram svg { max-width: 100%; height: auto; }
 
-/* ---------- Suche: Fundstellen-Vorschau ---------- */
+/* == Suche: Fundstellen-Vorschau == */
 
-/* ---------- Backup-Erinnerung (Home) ---------- */
+/* == Backup-Erinnerung (Home) == */
 
-/* ---------- Tag-Chips + Vorlagen-Galerie (Bibliothek) ---------- */
+/* == Tag-Chips + Vorlagen-Galerie (Bibliothek) == */
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .tag-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; color: var(--text2); font-size: 12px; }
 .tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 
-/* ---------- Eingabe-/Verschieben-Dialoge ---------- */
+/* == Eingabe-/Verschieben-Dialoge == */
 .modal-sm { max-width: 420px; }
 .move-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 8px 0; }
 
-/* ---------- Helles Theme (Gerätewahl in den Einstellungen) ---------- */
+/* == Helles Theme (Gerätewahl in den Einstellungen) == */
 
-/* ---------- Toasts (In-App-Meldungen statt alert()) — siehe U.toast in util.js ---------- */
+/* == Toasts (In-App-Meldungen statt alert()) — siehe U.toast in u == */
 #toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: var(--z-toast);
 	display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
-.toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: 10px; font-size: 13.5px;
+.toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: 10px; font-size: 14px;
 	background: var(--menu-bg); color: var(--text); border: 1px solid var(--edge);
 	box-shadow: 0 12px 32px var(--shadow); animation: toastIn .22s ease; pointer-events: auto; }
 .toast.success { border-color: rgba(114,188,143,0.45); }
@@ -1360,7 +1282,7 @@ button.primary:hover { filter: brightness(1.06); }
 .toast.hide { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.97); } }
 
-/* ---------- Feinschliff: einheitliche dezente Übergänge + kleine Spielereien ---------- */
+/* == Feinschliff: einheitliche dezente Übergänge + kleine Spieler == */
 button { transition: background .15s ease, color .15s ease, transform .08s ease; }
 button:active:not(.row-chevron) { transform: scale(.97); }
 .side-foot button { display: flex; align-items: center; gap: 8px; }
@@ -1370,11 +1292,9 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 .blk-check:checked { animation: pop .18s ease; }
 @keyframes pop { 50% { transform: scale(1.3); } }
 
+/* == Mobile: komplett neu — siehe „Mobile Shell v2“ am Dateiende == */
 
-/* ---------- Mobile: komplett neu — siehe „Mobile Shell v2“ am Dateiende ---------- */
-
-
-/* ---------- Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay ---------- */
+/* == Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay == */
 #palette { position: fixed; inset: 0; z-index: var(--z-palette); background: var(--overlay-bg);
 	display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
 #palette[hidden] { display: none; }
@@ -1395,13 +1315,13 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 .palette-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-snip { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-item mark { background: transparent; color: var(--accent); font-weight: 600; }
-.palette-kind { flex-shrink: 0; font-size: 11.5px; color: var(--text2); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-kind { flex-shrink: 0; font-size: 12px; color: var(--text2); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Plus-Tab-Menü (Notion: „In neuem Tab öffnen…“) */
 .palette-newtab #paletteInput { font-size: 15px; }
 .palette-foot {
 	display: flex; gap: 14px; flex-wrap: wrap;
 	padding: 8px 12px; border-top: 1px solid var(--edge-soft);
-	font-size: 11.5px; color: var(--text2);
+	font-size: 12px; color: var(--text2);
 }
 .palette-foot kbd {
 	display: inline-block; min-width: 1.4em; padding: 1px 5px; margin-right: 4px;
@@ -1409,27 +1329,24 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 	font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; color: var(--text2);
 }
 
-/* ---------- Home als Dashboard: Kacheln für Fällig / Daily / Backup ---------- */
+/* == Home als Dashboard: Kacheln für Fällig / Daily / Backup == */
 
 /* Tastenkürzel-Hinweis in Menüs (⋯ → Rückgängig/Wiederholen) */
 .menu-hint { font-size: 11px; color: var(--text2); }
 
-/* ---------- Entrümpelte Navigation ---------- */
+/* == Entrümpelte Navigation == */
 .topbar { gap: 3px; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); }
 .side-foot { padding-top: 8px; border-top: 1px solid var(--edge-soft); }
 
-/* (Mobile Bottom-Nav entfernt — ersetzt durch die Dock-Pille in „Mobile Shell v2“, Dateiende) */
-/* Desktop: Karteikarten bleiben in der Topbar (rechts neben Chat).
-   Daily bleibt versteckt (Strg+K / Home-Pill); NotebookLM sitzt im Side-Foot. */
+/* (Mobile Bottom-Nav entfernt — ersetzt durch die Dock-Pille in… */
+/* Desktop: Karteikarten bleiben in der Topbar (rechts neben Chat). */
 @media (min-width: 769px) {
 	.topbar #btnDaily { display: none; }
 	.side-foot #btnCards { display: none; }
 }
-/* Karten-Pille nutzt dieselbe Label-Regel wie Home/Chat (nur .active aufgeklappt) */
+/* Karten-Pille nutzt dieselbe Label-Regel wie Home/Chat (nur .ac… */
 
-/* ========================================================================== 
-   Design-System v2 — zentrale Skalen statt komponentenweiser Einzelwerte
-   ========================================================================== */
+/* == Design-System v2 — zentrale Skalen statt komponentenweiser E == */
 :root {
 	--space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
 	--space-5: 24px; --space-6: 32px; --space-7: 48px;
@@ -1438,11 +1355,7 @@ button:active:not(.row-chevron) { transform: scale(.97); }
 	--content-width: 920px;
 	--focus-ring: 0 0 0 3px var(--accent-soft);
 
-	/* UI-Fix v7: dokumentierte Z-Index-Skala statt magischer Einzelwerte.
-	   Reihenfolge (aufsteigend): Menüs < Editor-Popover < FAB < Dock < Scrim <
-	   Navigator-Sheet < KI-Sheet < Anhang-Menü < Overlay < Palette < Scanner <
-	   Scanner-Editor < Toasts. Lokale Kleinwerte (0–9, Heft-interne 50–60)
-	   bleiben bewusst lokal. */
+	/* UI-Fix v7: dokumentierte Z-Index-Skala statt magischer Einzelw… */
 	--z-menu: 40;           /* Modell-/Kontext-Menüs */
 	--z-editor-pop: 400;    /* Slash-/Block-/Mathe-Popover im Editor */
 	--z-fab: 1100;          /* runder KI-Knopf unten rechts */
@@ -1478,19 +1391,7 @@ input, textarea, select, .row, .menu-item { border-radius: var(--radius-md); }
 .hint, small, .menu-note { font-size: var(--text-sm); }
 .md { max-width: 76ch; }
 
-/* Optionale kompakte Dichte — nur Abstände, nie Lesbarkeit reduzieren */
-body.density-compact #app { gap: 8px; padding: 8px; grid-template-columns: 236px minmax(0,1fr) 320px; }
-/* Ist das KI-Panel geschlossen, darf seine dritte Grid-Spalte nicht bestehen
-   bleiben. Sonst wird der Arbeitsbereich bei ausgeklappter Sidebar zu weit
-   nach links gedrückt und rechts bleibt eine leere schwarze Fläche zurück. */
-body.density-compact.panel-collapsed #app { grid-template-columns: 236px minmax(0,1fr); }
-body.density-compact #sidebar { padding: 10px 8px; gap: 6px; }
-body.density-compact .row { padding-top: 4px; padding-bottom: 4px; }
-body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px; }
-body.density-compact .home { padding: 24px 28px; }
-body.density-compact .library { padding: 24px 30px; }
-
-/* Reduzierte Bewegung: auch manuell wählbar, zusätzlich zum Betriebssystem */
+/* Reduzierte Bewegung: auch manuell wählbar, zusätzlich zum Betr… */
 body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
 	animation-duration: .001ms !important; animation-iteration-count: 1 !important;
 	transition-duration: .001ms !important; scroll-behavior: auto !important;
@@ -1505,10 +1406,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .appearance-choice button.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
 .accent-picker { display: flex; gap: 10px; padding: 4px 0; }
 .accent-swatch { width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent; color: var(--text2); }
-/* BUGFIX Farbwechsel: die vier Buttons hatten nie eine eigene Füllfarbe —
-   alle sahen identisch (leer/grau) aus und der aktive Ring (currentColor)
-   zeigte ebenfalls nur die Standard-Textfarbe statt des gewählten Akzents.
-   Werte = dieselben Farben wie ACCENT_THEMES in settings.js. */
+/* BUGFIX Farbwechsel: die vier Buttons hatten nie eine eigene Fü… */
 .accent-swatch.accent-blue { background: #5e9fe8; color: #5e9fe8; }
 .accent-swatch.accent-violet { background: #a78bfa; color: #a78bfa; }
 .accent-swatch.accent-green { background: #72bc8f; color: #72bc8f; }
@@ -1521,12 +1419,12 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .dashboard-setting-row .dash-visible { color: var(--success); }
 .dashboard-add { margin-top: 4px; background: transparent; border: 1px dashed var(--edge); color: var(--text2); }
 
-/* Persönliches Home — schlank, ohne Widget-Wand und ohne Deko-Kreise */
+/* Persönliches Home — schlank, ohne Widget-Wand und ohne Deko-Kr… */
 .home-v2 { width: 100%; max-width: 720px; margin: 0 auto; padding: 36px 32px 56px; }
 .home-slim .home-hero { margin-bottom: var(--space-4); }
 .home-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
 .home-hero h1 { margin: 0 0 4px; font-size: 1.65rem; font-weight: 700; letter-spacing: -.02em; }
-.home-hero p, .home-meta { color: var(--text2); font-size: 13.5px; margin: 0; }
+.home-hero p, .home-meta { color: var(--text2); font-size: 14px; margin: 0; }
 .home-customize { background: transparent; color: var(--text2); border: 1px solid var(--edge-soft);
 	min-width: 36px; min-height: 36px; padding: 0 10px; border-radius: 10px; }
 .home-customize:hover { color: var(--text); border-color: var(--edge); }
@@ -1536,7 +1434,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .quick-actions button:first-child { background: var(--accent); color: #081018; border-color: transparent; font-weight: 650; }
 .quick-actions button:hover { color: var(--text); border-color: var(--edge); }
 
-/* Alte Widget-Kacheln: keine Deko-Kreise mehr; Layout bleibt nur für Fallbacks harmlos */
+/* Alte Widget-Kacheln: keine Deko-Kreise mehr; Layout bleibt nur… */
 
 /* Eine klare „Weitermachen“-Zeile statt großer Kachel */
 .home-section-continue { margin-top: 4px; }
@@ -1546,7 +1444,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .home-continue:hover { background: var(--surface-hover); border-color: var(--edge); }
 .home-continue.muted { color: var(--text2); }
 .home-continue .recent-copy { gap: 1px; }
-.home-continue .recent-copy small:first-child { text-transform: none; letter-spacing: 0; font-size: 11.5px; color: var(--text2); }
+.home-continue .recent-copy small:first-child { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text2); }
 .home-continue .recent-copy b { font-size: 15px; }
 
 /* Kompakte Heute-Leiste (Daily / Karten / Backup nur wenn fällig) */
@@ -1559,20 +1457,20 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .home-pill-ico { font-size: 16px; line-height: 1; flex-shrink: 0; }
 .home-pill-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .home-pill-body b { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-pill-body small { font-size: 11.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-pill-body small { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .home-section { margin-top: 28px; }
 .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 .section-head h2 { margin: 0; font-size: 13px; font-weight: 650; color: var(--text2); letter-spacing: .02em; }
-.section-head > button { background: transparent; color: var(--text2); font-size: 12.5px; min-height: 28px; padding: 2px 6px; }
+.section-head > button { background: transparent; color: var(--text2); font-size: 13px; min-height: 28px; padding: 2px 6px; }
 .section-head > button:hover { color: var(--accent); }
 .home-list-row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
 	background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); padding: 8px 10px; }
 .home-list-row:hover { background: var(--surface-subtle); border-color: var(--edge-soft); }
-.recent-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; background: var(--surface); font-size: 18px; }
+.recent-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; background: var(--surface); font-size: 18px; }
 .recent-icon.sm { width: 28px; height: 28px; font-size: 14px; border-radius: 8px; }
 .recent-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.recent-copy b, .home-list-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13.5px; }
+.recent-copy b, .home-list-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
 .recent-copy small, .home-list-row small { color: var(--text2); font-weight: 400; font-size: 12px; }
 .recent-arrow, .home-list-row i { margin-left: auto; color: var(--text2); font-style: normal; flex-shrink: 0; }
 .home-list { display: flex; flex-direction: column; gap: 1px; }
@@ -1587,7 +1485,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 
 /* Wiederverwendbarer Ladezustand für spätere asynchrone Bereiche */
 
-
 @media (max-width: 600px) {
 	.home-v2 { padding: 22px 14px 88px; max-width: none; }
 	.home-hero { align-items: center; }
@@ -1599,14 +1496,12 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.home-list-row small { display: none; }
 }
 
-/* ==========================================================================
-   Feature-Politur v3 — Block-Menü, KI-Auswahl, [[Links, Mobile-Reife
-   ========================================================================== */
-/* dvh statt vh: die mobile Browser-Adressleiste verdeckt sonst den unteren Rand */
+/* == Feature-Politur v3 — Block-Menü, KI-Auswahl, [[Links, Mobile == */
+/* dvh statt vh: die mobile Browser-Adressleiste verdeckt sonst d… */
 #app { height: 100dvh; }
 @media (max-width: 980px) { #app { min-height: 100dvh; height: auto; } }
 
-/* Block-Menü (Klick auf ⠿) und [[Seiten-Link-Menü nutzen den Slash-Menü-Stil */
+/* Block-Menü (Klick auf ⠿) und [[Seiten-Link-Menü nutzen den Sla… */
 
 /* KI-Menü der Auswahl-Toolbar (✦) */
 
@@ -1618,18 +1513,17 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 
 /* Smart-Sammlungen in der Bibliothek */
 
-/* Touch-Geräte: Gutter dauerhaft sichtbar + größere Ziele (kein Hover vorhanden) */
+/* Touch-Geräte: Gutter dauerhaft sichtbar + größere Ziele (kein… */
 @media (pointer: coarse) {
 	.blk-gutter { opacity: .55; }
 	.blk-plus, .blk-handle { width: 28px; height: 30px; font-size: 16px; }
 	.row-add, .msg-tool-btn, .addcover-btn, .cover-btns { opacity: 1; }
-	/* UI-Fix v7: auch Nachrichten-Bearbeiten und Tabellen-Steuerknöpfe waren
-	   bisher NUR über Hover erreichbar — auf Touch-Geräten unsichtbar. */
+	/* UI-Fix v7: auch Nachrichten-Bearbeiten und Tabellen-Steuerknöp… */
 	.msg-edit { opacity: .75; }
 	.blk-tablewrap .blk-tbtn { opacity: .6; }
 }
 
-/* Mobile: Dialoge als Bottom-Sheets in voller Breite mit sicherem unteren Abstand */
+/* Mobile: Dialoge als Bottom-Sheets in voller Breite mit sichere… */
 @media (max-width: 600px) {
 	#overlay { place-items: end center; }
 	.modal { width: 100%; max-width: 100%; max-height: 88dvh; overflow-y: auto;
@@ -1651,13 +1545,13 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.lib-folder-visual { height: 100px; }
 }
 
-/* ---------- Sync-Konflikt: Popup + Homescreen-Banner ---------- */
+/* == Sync-Konflikt: Popup + Homescreen-Banner == */
 .conflict-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px;
 	margin: 0 0 18px; padding: 12px 14px; border-radius: var(--radius-lg);
 	background: rgba(233,115,102,0.10); border: 1px solid rgba(233,115,102,0.40); }
 .conflict-banner-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .conflict-banner-copy b { color: var(--danger); }
-.conflict-banner-copy span { font-size: 12.5px; color: var(--text2); }
+.conflict-banner-copy span { font-size: 13px; color: var(--text2); }
 .conflict-banner button { flex-shrink: 0; background: var(--danger); color: #fff; font-weight: 650; }
 .conflict-modal { width: min(880px, 96vw); max-height: min(820px, 90vh); padding: 0; overflow: hidden; gap: 0; }
 .conflict-head { display: flex; align-items: center; gap: 12px; padding: 18px 48px 12px 20px; border-bottom: 1px solid var(--edge); }
@@ -1665,8 +1559,8 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	background: rgba(233,115,102,0.16); font-size: 18px; }
 .conflict-head span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .conflict-head small { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conflict-reason { padding: 12px 20px; font-size: 13.5px; line-height: 1.45; border-bottom: 1px solid var(--edge-soft); }
-.conflict-legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 20px; font-size: 11.5px; color: var(--text2); }
+.conflict-reason { padding: 12px 20px; font-size: 14px; line-height: 1.45; border-bottom: 1px solid var(--edge-soft); }
+.conflict-legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 20px; font-size: 12px; color: var(--text2); }
 .conflict-legend .leg { padding: 2px 8px; border-radius: 999px; }
 .conflict-legend .leg.del { background: rgba(233,115,102,0.15); color: #f0a89f; }
 .conflict-legend .leg.add { background: rgba(114,188,143,0.15); color: #9fdcb4; }
@@ -1680,20 +1574,17 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.conflict-diff { max-height: 42dvh; }
 }
 
-/* ==========================================================================
-   iPad & Touch v4 — Tablet-Layout (769–1024px), Safe-Areas, Touch-Feinschliff
-   ========================================================================== */
-/* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Zoom unterbinden */
+/* == iPad & Touch v4 — Tablet-Layout (769–1024px), Safe-Areas, To == */
+/* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Z… */
 html, body { overscroll-behavior: none; }
 button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	touch-action: manipulation;
 }
 
-/* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalten-Grid ist hier
-   zu breit — Sidebar schmaler, KI-Panel als Overlay von rechts statt fester Spalte */
+/* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
 @media (min-width: 769px) and (max-width: 1024px) {
 	#app { grid-template-columns: 220px minmax(0, 1fr); }
-	#panel { position: fixed; z-index: 25; top: 12px; right: 12px; bottom: 12px;
+	#panel { position: fixed; z-index: 25; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom));
 		width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg); }
 	body.chat-full #app { grid-template-columns: 220px 1fr; }
 	body.chat-full #panel { position: static; width: auto; box-shadow: none; }
@@ -1701,35 +1592,26 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr; }
 }
 
-/* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht ausgeblendet,
-   wächst die Papier-Bühne mit einer weichen Übergangs-Animation auf den gesamten
-   Bildschirm — Außenabstand, Zwischenräume, Rahmen und Eckenrundung verschwinden.
-   Die Transition liegt dauerhaft auf #app/#mainWrap (nur in der Heft-Ansicht),
-   damit auch das Wieder-Einblenden der Seitenleiste in beide Richtungen gleitet. */
+/* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
 @media (pointer: coarse) and (min-width: 769px) {
 	body:has(.heft-stage) #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1); }
 	body:has(.heft-stage) #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1); }
 }
 @media (pointer: coarse) and (min-width: 769px) and (max-width: 1024px) {
-	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald die Sidebar weg ist */
+	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald di… */
 	body.sidebar-collapsed:has(.heft-stage) #app { padding: 0; gap: 0; }
 	body.sidebar-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent; }
 }
 @media (pointer: coarse) and (min-width: 1025px) {
-	/* Große Tablets (iPad quer): das KI-Panel ist eine echte Grid-Spalte —
-	   Vollbild erst, wenn Seitenleiste UND Panel geschlossen sind */
+	/* Große Tablets (iPad quer): das KI-Panel ist eine echte Grid-Sp… */
 	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #app { padding: 0; gap: 0; }
 	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent; }
 }
 
-/* Lernen auf Touch: Bewertungsleiste u. Bühne — siehe konsolidierter Fokusmodus-Abschnitt
-   weiter unten (deckt jetzt alle Geräte inkl. Touch einheitlich ab). */
+/* Lernen auf Touch: Bewertungsleiste u. */
 
-/* ==========================================================================
-   Anki-Lern-UI v5 (11. Juli 2026) — Lern-Ansicht wie in echtem Anki
-   ========================================================================== */
-/* Karte als ruhige Bühne: Vorder-/Rückseite ohne Boxen, Trennlinie wie Anki
-   (render-anki.js liefert dafür <hr class="study-divider"> zwischen den Seiten) */
+/* == Anki-Lern-UI v5 (11. Juli 2026) — Lern-Ansicht wie in echtem == */
+/* Karte als ruhige Bühne: Vorder-/Rückseite ohne Boxen, Trennlin… */
 .study-card { max-width: 760px; }
 .study-card .card-face { border: none; background: transparent; padding: 26px 12px;
 	font-size: 17.5px; line-height: 1.6; }
@@ -1740,8 +1622,7 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 /* Reiche Karten (Mermaid, Formeln, Bilder) mittig präsentieren */
 .study-card .card-face .mermaid-diagram { text-align: center; }
 .study-card .card-face img { margin-left: auto; margin-right: auto; }
-/* Bewertungsbuttons wie Anki: Nochmal rot · Schwer orange · Gut grün · Einfach blau,
-   Intervall-Vorschau OBEN (order: -1), Tastenkürzel dezent darunter */
+/* Bewertungsbuttons wie Anki: Nochmal rot · Schwer orange · Gut… */
 .study-card .grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
 .study-card .grades [data-ankigrade] { border: 1px solid var(--edge); border-radius: 10px;
 	background: var(--surface-subtle); font-weight: 650; min-height: 58px; }
@@ -1766,19 +1647,16 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 
 /* .lib-ink-badge sitzt bei den Documents-Regal-Styles weiter oben */
 
-/* ==========================================================================
-   Hybrid v6 (11. Juli 2026) — GoodNotes-Hefte: Anlege-Dialog, Heft-Ansicht,
-   Einbettung in Notion-Seiten, Dokumentblatt-Kacheln in der Bibliothek
-   ========================================================================== */
+/* == Hybrid v6 (11. Juli 2026) — GoodNotes-Hefte: Anlege-Dialog,  == */
 
-/* Anlege-Dialog: zwei gleichwertige Typ-Karten (Notion-Seite / GoodNotes-Heft) */
+/* Anlege-Dialog: zwei gleichwertige Typ-Karten (Notion-Seite / G… */
 .newpage-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px; }
 .newpage-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
 	padding: 14px; min-height: 0; text-align: left; background: var(--surface-subtle);
 	border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); }
 .newpage-card:hover { background: var(--surface-hover); border-color: var(--accent-border); }
 .newpage-card b { font-size: 14px; }
-.newpage-card small { font-size: 11.5px; color: var(--text2); }
+.newpage-card small { font-size: 12px; color: var(--text2); }
 .newpage-visual { display: flex; width: 100%; height: 64px; margin-bottom: 10px;
 	border-radius: var(--radius-md); border: 1px solid var(--edge-soft); overflow: hidden; }
 .newpage-visual.is-notion { flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface-faint); }
@@ -1791,24 +1669,24 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 45%, rgba(0,0,0,.22)); }
 @media (max-width: 480px) { .newpage-cards { grid-template-columns: 1fr; } }
 
-/* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen Platz füllt */
+/* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen P… */
 .heft-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Taskbar v6: freistehende Floating-Pill über dem Papier — kein Banner, null Layout-Höhe */
+/* Taskbar v6: freistehende Floating-Pill über dem Papier — kein… */
 .heft-stage { position: relative; }
-/* Chrome-Overlay: pointer-events nur auf den Pills, Papier bleibt vollflächig */
+/* Chrome-Overlay: pointer-events nur auf den Pills, Papier bleib… */
 .heft-chrome {
 	position: absolute; inset: 0; z-index: 50; pointer-events: none;
 }
 .heft-chrome > * { pointer-events: auto; }
-/* Freistehende, verschiebbare Werkzeug-Gruppe — default zentriert oben ÜBER dem Papier */
+/* Freistehende, verschiebbare Werkzeug-Gruppe — default zentrier… */
 .heft-float {
 	position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
 	display: flex; flex-direction: column; align-items: center; gap: 8px;
 	z-index: 52; max-width: calc(100% - 24px);
 }
 .heft-float.is-dragging { opacity: .95; cursor: grabbing; z-index: 55; }
-/* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Options-Tray folgt */
+/* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Opti… */
 /* Haupt-Pill (kompakt) — schwebend, kein Banner */
 .heft-pill {
 	display: flex; align-items: center; gap: 1px; padding: 4px 6px 4px 4px;
@@ -1816,7 +1694,7 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	border-radius: 999px; box-shadow: 0 10px 28px rgba(0,0,0,.45);
 	backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-/* Options-Pill darunter — hängt an der Float-Gruppe, bewegt sich mit, KEIN Banner */
+/* Options-Pill darunter — hängt an der Float-Gruppe, bewegt sich… */
 .heft-tray {
 	display: flex; align-items: center; gap: 2px; padding: 5px 10px;
 	background: rgba(18, 22, 30, 0.96); border: 1px solid rgba(255,255,255,.14);
@@ -1842,7 +1720,7 @@ body.reduce-motion .heft-tray { animation: none; }
 	box-shadow: inset 0 0 0 1px rgba(111,195,255,.35);
 }
 .heft-main.open { background: rgba(255,255,255,.14); color: #fff; }
-.heft-chev { font-size: 9px; opacity: .65; margin-left: 1px; line-height: 1; }
+.heft-chev { font-size: 10px; opacity: .65; margin-left: 1px; line-height: 1; }
 .heft-main.open .heft-chev { opacity: 1; color: #8fd0ff; }
 .heft-sep {
 	width: 1px; height: 16px; margin: 0 6px; flex-shrink: 0;
@@ -1869,7 +1747,7 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-swatch.active {
 	border-color: #8fd0ff; box-shadow: 0 0 0 2px rgba(111,195,255,.25);
 }
-/* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein Banner */
+/* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
 .heft-corner {
 	min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px;
 	font-size: 13px; font-weight: 700; white-space: nowrap;
@@ -1891,7 +1769,7 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-corner.heft-chat:hover { filter: brightness(1.08); }
 .heft-corner.heft-plus { min-width: 36px; padding: 0 12px; font-size: 17px; }
 .heft-pageno-inline { font-weight: 650; font-size: 11px; opacity: .75; margin-left: 5px; }
-/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layout-Banner */
+/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layo… */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; }
 /* Legacy-Aliase (alte Klassen sollen nicht brechen) */
 @media (max-width: 720px) {
@@ -1904,9 +1782,7 @@ body.reduce-motion .heft-tray { animation: none; }
 	.heft-scroll { padding-top: 52px; }
 }
 
-/* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. Kein Flex-Shrink und keine
-   automatische Zentrierung auf der Scroll-Achse — beides verursachte im Hochformat
-   Sprünge und ließ die linke/rechte Blattkante zeitweise unerreichbar werden. */
+/* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto;
 	display: block; position: relative;
 	padding: 56px 18px 48px;
@@ -1926,7 +1802,7 @@ body.reduce-motion .heft-tray { animation: none; }
 }
 .heft-page-slot .heft-canvas {
 	display: block; width: var(--heft-page-w); height: var(--heft-page-h);
-	/* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-Pan und Pinch selbst. */
+	/* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-P… */
 	touch-action: none;
 	user-select: none;
 	-webkit-user-select: none;
@@ -1937,20 +1813,20 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-page-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
 	font-size: 11px; color: var(--text2); white-space: nowrap; pointer-events: none; }
 
-/* Toolbar-Popups (Seiten / Bilder / ＋) — schweben über der Papier-Bühne */
+/* Toolbar-Popups (Seiten / Bilder / ＋) — schweben über der Papie… */
 .heft-pop { position: absolute; z-index: 60; min-width: 230px; max-width: min(400px, calc(100% - 16px));
 	max-height: min(540px, 72vh); overflow-y: auto; padding: 10px;
 	background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg);
 	box-shadow: 0 16px 48px var(--shadow-strong); }
 .heft-pop-head { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em;
 	color: var(--text2); padding: 4px 4px 6px; }
-.heft-pop-sub { font-size: 11.5px; color: var(--text2); padding: 0 4px 8px; line-height: 1.4; }
+.heft-pop-sub { font-size: 12px; color: var(--text2); padding: 0 4px 8px; line-height: 1.4; }
 .heft-pop-sep { height: 1px; background: var(--edge-soft); margin: 8px 0; }
 .heft-pop-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-	background: transparent; color: var(--text); font-size: 13.5px; padding: 9px 10px; border-radius: 8px; }
+	background: transparent; color: var(--text); font-size: 14px; padding: 9px 10px; border-radius: 8px; }
 .heft-pop-row:hover { background: var(--surface-hover-strong); }
 
-/* Seiten-Popup: präzises, kompaktes Thumbnail-Menü statt großer leerer Fläche */
+/* Seiten-Popup: präzises, kompaktes Thumbnail-Menü statt großer… */
 .heft-pop-pages { width: min(300px, calc(100vw - 24px)); padding: 8px; }
 .heft-pop-pages .heft-pop-head { padding: 3px 4px 7px; }
 .heft-pop-grid {
@@ -1966,12 +1842,12 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-pop-thumb canvas { width: 100%; display: block; }
 .heft-pop-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .heft-pop-thumb > span { position: absolute; left: 4px; bottom: 3px; font-size: 10px; font-weight: 700;
-	color: #333; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 5px; pointer-events: none; }
+	color: #333; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 6px; pointer-events: none; }
 .heft-pop-del { position: absolute; top: 4px; right: 4px; min-height: 0; width: 22px; height: 22px; padding: 0;
 	font-size: 11px; border-radius: 6px; background: rgba(0,0,0,.55); color: #fff; opacity: 0; }
 .heft-pop-thumb:hover .heft-pop-del { opacity: 1; }
 
-/* ＋-Menü wie GoodNotes „Seite hinzufügen“: Segmente + Vorlagen-Karten + Aktionen */
+/* ＋-Menü wie GoodNotes „Seite hinzufügen“: Segmente + Vorlagen-K… */
 .heft-pop-plus { width: 330px; }
 .heft-seg-row { display: flex; gap: 4px; padding: 3px; margin: 0 0 10px; background: var(--surface-subtle);
 	border: 1px solid var(--edge-soft); border-radius: 999px; }
@@ -1981,12 +1857,12 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-tpl-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
 .heft-tpl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; min-height: 0;
 	background: transparent; border: 1px solid transparent; border-radius: 10px; color: var(--text2);
-	font-size: 10.5px; text-align: center; line-height: 1.25; }
+	font-size: 11px; text-align: center; line-height: 1.25; }
 .heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text); }
-.heft-tpl small { font-size: 9.5px; opacity: .7; }
+.heft-tpl small { font-size: 10px; opacity: .7; }
 .heft-tpl-paper { display: block; width: 40px; height: 56px; border-radius: 4px; background: #fdfdf8; border: 1px solid var(--edge); }
 
-/* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser, Scan-Streifen, Aktionen */
+/* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser,… */
 .heft-scan { position: fixed; inset: 0; z-index: var(--z-scan); display: flex; flex-direction: column;
 	background: rgba(3,5,10,.97); color: #fff; }
 .heft-scan-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; flex-shrink: 0; }
@@ -1995,7 +1871,7 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-scan-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center;
 	justify-content: center; overflow: hidden; }
 .heft-scan-stage video { max-width: 100%; max-height: 100%; }
-/* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Aufnahme */
+/* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Auf… */
 .heft-scan-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
 	overflow: visible; transition: filter .16s ease; }
 .heft-scan-guide polygon { fill: rgba(245,185,70,.08); stroke: #f5b846; stroke-width: 1.3;
@@ -2011,14 +1887,14 @@ body.reduce-motion .heft-tray { animation: none; }
 	text-align: center; color: rgba(255,255,255,.7); }
 .heft-scan-shots { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; flex-shrink: 0; }
 .heft-scan-shots img { height: 72px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); }
-/* Scanner v2: klickbare Scan-Kacheln (öffnen die Nachbearbeitung) + Hinweis-Pille */
+/* Scanner v2: klickbare Scan-Kacheln (öffnen die Nachbearbeitung… */
 .heft-scan-shot { position: relative; flex-shrink: 0; min-height: 0; padding: 0; border-radius: 8px;
 	overflow: hidden; border: 1px solid rgba(255,255,255,.25); background: transparent; }
 .heft-scan-shot img { border: none; border-radius: 0; }
 .heft-scan-shot span { position: absolute; left: 4px; bottom: 4px; font-size: 10px; font-weight: 700;
 	color: #fff; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: 6px; pointer-events: none; }
 .heft-scan-shot small { position: absolute; right: 4px; bottom: 4px; padding: 0 5px; border-radius: 6px;
-	background: rgba(183,124,42,.88); color: #fff; font-size: 9px; font-weight: 700; pointer-events: none; }
+	background: rgba(183,124,42,.88); color: #fff; font-size: 10px; font-weight: 700; pointer-events: none; }
 .heft-scan-shot:hover { border-color: var(--accent); }
 .heft-scan-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
 	max-width: 86%; text-align: center; font-size: 12px; color: rgba(255,255,255,.75);
@@ -2033,23 +1909,22 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-scan-actions button, .heft-scan-nocam button { background: var(--accent); color: #081018;
 	font-weight: 650; border-radius: 10px; }
 .heft-scan-actions button:disabled { background: rgba(255,255,255,.14); color: rgba(255,255,255,.5); }
-/* Busy-Overlay während Erkennung/Entzerrung/Filter — sonst wirkt der Scanner „eingefroren" */
+/* Busy-Overlay während Erkennung/Entzerrung/Filter — sonst wirkt… */
 .heft-scan-busy { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center;
 	justify-content: center; background: rgba(3,5,10,.55); pointer-events: all; }
 .heft-scan-busy[hidden] { display: none !important; }
 .heft-scan-busy span { padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 650;
 	color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18); }
 
-/* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter-Chips, Aktionen */
+/* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter… */
 .heft-scan-edit { position: fixed; inset: 0; z-index: var(--z-scan-edit); display: flex; flex-direction: column;
-	/* Vollständig deckend und viewport-gebunden: die Bearbeitung darf nie hinter
-	   der App bzw. der Kamera-Bühne landen. */
+	/* Vollständig deckend und viewport-gebunden: die Bearbeitung dar… */
 	background: #03050a; }
 .heft-scan-editstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
 	overflow: hidden; padding: 10px; }
 .heft-scan-editstage canvas { touch-action: none; border-radius: 6px; box-shadow: 0 18px 48px rgba(0,0,0,.5); cursor: crosshair; }
 .heft-scan-modes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 8px 16px 0; flex-shrink: 0; }
-.heft-scan-modes button { min-height: 32px; padding: 4px 14px; border-radius: 999px; font-size: 12.5px;
+.heft-scan-modes button { min-height: 32px; padding: 4px 14px; border-radius: 999px; font-size: 13px;
 	font-weight: 650; background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
 .heft-scan-modes button.active { background: var(--accent); color: #081018; }
 .heft-scan-editbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; flex-shrink: 0;
@@ -2063,18 +1938,18 @@ body.reduce-motion .heft-tray { animation: none; }
 	.heft-scan-editbar button { min-height: 44px; }
 }
 
-/* Eingebettetes Heft in Notion-Seiten (:::heft <id>) — unterbricht den Textfluss */
+/* Eingebettetes Heft in Notion-Seiten (:::heft <id>) — unterbric… */
 .heft-embed { display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 12px 14px;
 	border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle); }
 .heft-embed:hover { border-color: var(--accent-border); }
 
-/* Bibliothek: Notion-Seiten als flaches Dokumentblatt — nur Hefte tragen das Notizbuch-Cover */
+/* Bibliothek: Notion-Seiten als flaches Dokumentblatt — nur Heft… */
 .lib-docsheet { display: flex; flex-direction: column; gap: 6px; height: 196px; padding: 14px 12px;
 	border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--panel-solid);
 	box-shadow: 0 8px 18px rgba(0,0,0,.24); transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
 .lib-card:hover .lib-docsheet { transform: translateY(-3px); box-shadow: 0 14px 24px rgba(0,0,0,.34); border-color: var(--edge); }
 .lib-docsheet-icon { font-size: 22px; line-height: 1; }
-.lib-docsheet-title { font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--text);
+.lib-docsheet-title { font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--text);
 	display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-docsheet-text { font-size: 11px; color: var(--text2); line-height: 1.45;
 	display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -2084,7 +1959,7 @@ body.reduce-motion .heft-tray { animation: none; }
 .lib-docsheet-lines i:last-child { width: 58%; }
 @media (max-width: 600px) { .lib-docsheet { height: 168px; } }
 
-/* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziele ebenfalls */
+/* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziel… */
 @media (pointer: coarse) {
 	.heft-main, .heft-opt, .heft-size, .heft-corner { height: 40px; min-width: 40px; }
 	.heft-swatch { width: 26px; height: 26px; min-width: 26px !important; }
@@ -2093,42 +1968,39 @@ body.reduce-motion .heft-tray { animation: none; }
 	.heft-pop-row { min-height: 44px; }
 }
 
-/* ========================================================================== 
-   Taskbar v7 — feste Hauptleiste, separat verschiebbares Options-Tray
-   ========================================================================== */
-/* Hauptleiste bleibt an exakt dieser Stelle. Kein Drag, kein Layout-Shift. */
+/* == Taskbar v7 — feste Hauptleiste, separat verschiebbares Optio == */
+/* Hauptleiste bleibt an exakt dieser Stelle. Kein Drag, kein Lay… */
 .heft-chrome .heft-float {
 	position: absolute !important;
 	left: 50% !important;
-	top: 12px !important;
+	top: 10px !important;
 	transform: translateX(-50%) !important;
 	display: block;
 	z-index: 52;
 	max-width: calc(100% - 132px);
 	pointer-events: auto;
 }
-/* GoodNotes-Werkzeugleiste: klar gruppiert, ruhig und fingerfreundlich.
-   Keine Glas- oder Schwebekarten-Optik; nur eine kompakte, gut lesbare Leiste. */
+/* GoodNotes-Werkzeugleiste: klar gruppiert, ruhig und fingerfreu… */
 .heft-chrome .heft-pill {
 	display: flex;
 	align-items: center;
-	gap: 2px;
-	padding: 5px;
+	gap: 0;
+	padding: 3px;
 	background: #1d1f24;
 	border: 1px solid rgba(255,255,255,.14);
-	border-radius: 12px;
-	box-shadow: 0 8px 20px rgba(0,0,0,.28);
+	border-radius: 10px;
+	box-shadow: none;
 	backdrop-filter: none;
 }
 .heft-chrome .heft-main {
-	width: 38px;
-	min-width: 38px;
-	height: 38px;
-	min-height: 38px;
+	width: 32px;
+	min-width: 32px;
+	height: 32px;
+	min-height: 32px;
 	padding: 0;
 	border-radius: 8px;
 	background: transparent;
-	font-size: 17px;
+	font-size: 15px;
 	color: rgba(255,255,255,.78);
 }
 .heft-chrome .heft-main:hover { background: rgba(255,255,255,.09); color: #fff; }
@@ -2138,50 +2010,45 @@ body.reduce-motion .heft-tray { animation: none; }
 	color: #b9dcff;
 	box-shadow: inset 0 0 0 1px rgba(94,159,232,.34);
 }
-/* Laser ist bewusst rot markiert — er hinterlässt keine permanenten Striche. */
+/* Laser ist bewusst rot markiert — er hinterlässt keine permanen… */
 .heft-chrome .heft-main.heft-laser.active { background: rgba(224,72,62,.26); color: #ffd0ca; box-shadow: inset 0 0 0 1px rgba(224,72,62,.4); }
 .heft-chrome .heft-pill > .heft-sep {
 	width: 1px;
-	height: 20px;
-	margin: 0 3px;
+	height: 16px;
+	margin: 0 2px;
 	background: rgba(255,255,255,.12);
 }
 .heft-chrome .heft-chev { font-size: 7px; margin-left: -1px; }
-@media (max-width: 720px) {
-	.heft-chrome .heft-pill { gap: 1px; padding: 3px; }
-	.heft-chrome .heft-main { width: 30px; min-width: 30px; height: 30px; min-height: 30px; border-radius: 7px; font-size: 15px; }
-	.heft-chrome .heft-pill > .heft-sep { margin: 0 2px; height: 16px; }
-}
-/* NUR dieses Tray ist beweglich. Standard: direkt unter der festen Hauptleiste. */
+/* NUR dieses Tray ist beweglich. Standard: direkt unter der fest… */
 .heft-chrome .heft-tray {
 	position: absolute;
 	left: 50%;
-	top: 62px;
+	top: 50px;
 	transform: translateX(-50%);
 	z-index: 53;
 	display: flex;
 	align-items: center;
-	gap: 2px;
-	padding: 3px 6px;
+	gap: 0;
+	padding: 2px 4px;
 	max-width: min(94vw, 560px);
 	background: #242221;
 	border: 1px solid rgba(255,255,255,.18);
-	border-radius: 10px;
-	box-shadow: 0 5px 14px rgba(0,0,0,.42);
+	border-radius: 8px;
+	box-shadow: 0 4px 10px rgba(0,0,0,.20);
 	backdrop-filter: none;
 	touch-action: none;
 }
 .heft-chrome .heft-tray.is-dragging { opacity: .92; cursor: grabbing; }
 .heft-chrome .heft-tray-drag {
-	width: 24px;
-	min-width: 24px;
-	height: 28px;
-	min-height: 28px;
+	width: 20px;
+	min-width: 20px;
+	height: 24px;
+	min-height: 24px;
 	padding: 0;
 	border-radius: 6px;
 	background: transparent;
 	color: rgba(255,255,255,.48);
-	font-size: 12px;
+	font-size: 10px;
 	letter-spacing: -2px;
 	cursor: grab;
 	touch-action: none;
@@ -2190,13 +2057,13 @@ body.reduce-motion .heft-tray { animation: none; }
 .heft-chrome .heft-tray-drag:active { cursor: grabbing; }
 .heft-chrome .heft-tray .heft-opt,
 .heft-chrome .heft-tray .heft-size {
-	width: 28px;
-	min-width: 28px !important;
-	height: 28px;
-	min-height: 28px;
+	width: 24px;
+	min-width: 24px !important;
+	height: 24px;
+	min-height: 24px;
 	padding: 0 !important;
 	border-radius: 6px;
-	font-size: 13px;
+	font-size: 12px;
 }
 .heft-chrome .heft-tray .heft-opt.active,
 .heft-chrome .heft-tray .heft-size.active {
@@ -2206,58 +2073,47 @@ body.reduce-motion .heft-tray { animation: none; }
 }
 .heft-chrome .heft-tray .heft-size i { width: 15px; }
 .heft-chrome .heft-tray .heft-swatch {
-	width: 18px;
-	height: 18px;
-	min-width: 18px !important;
-	margin: 0 2px;
+	width: 16px;
+	height: 16px;
+	min-width: 16px !important;
+	margin: 0 1px;
 }
-.heft-chrome .heft-tray .heft-sep { height: 18px; margin: 0 4px; }
+.heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px; }
 /* Eckaktionen bleiben klein, aber klar treffbar. */
 .heft-chrome .heft-corner {
-	height: 32px;
-	min-height: 32px;
-	min-width: 32px;
-	padding: 0 9px;
+	top: 10px;
+	height: 28px;
+	min-height: 28px;
+	min-width: 28px;
+	padding: 0 7px;
 	border-radius: 8px;
-	font-size: 13px;
+	font-size: 12px;
 	background: #242221;
 	border-color: rgba(255,255,255,.16);
-	box-shadow: 0 3px 10px rgba(0,0,0,.34);
+	box-shadow: none;
 }
-.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 8px; background: #242221; color: #fff; }
-.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 8px; font-size: 16px; }
+.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: #242221; color: #fff; }
+.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; font-size: 16px; }
 .heft-chrome .heft-corner-l { left: 10px; top: 12px; }
 .heft-chrome .heft-corner-r { right: 10px; top: 12px; }
 @media (max-width: 720px) {
 	.heft-chrome .heft-float { top: 8px !important; max-width: calc(100% - 108px); }
-	.heft-chrome .heft-tray { top: 54px; max-width: calc(100% - 16px); }
+	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: 14px; }
+	.heft-chrome .heft-tray { top: 44px; max-width: calc(100% - 16px); }
+	.heft-chrome .heft-corner { top: 8px; }
 	.heft-chrome .heft-corner-l, .heft-chrome .heft-corner-r { top: 8px; }
 	.heft-chrome .heft-corner-l { left: 8px; }
 	.heft-chrome .heft-corner-r { right: 8px; }
 }
 
-/* ==========================================================================
-   Mobile Shell v2 (12. Juli 2026) — Dock-Pille + Bottom-Sheet-Navigator
-   ==========================================================================
-   Komplett neues Mobile-Konzept. Ersetzt: Bottom-Nav-Leiste (#mobileNav),
-   Off-Canvas-Drawer (body.sidebar-open) und das aus extras.js injizierte
-   Panel-Overlay-CSS.
-   • EINE schwebende Dock-Pille unten mittig: ☰ Navigator · 🃏 Karten · ＋ Neu · ✦ KI.
-   • ☰ öffnet die komplette Sidebar als Bottom-Sheet (body.mnav-open) — Baum,
-     Chats, Stapel, Suche und Sidebar-Fuß (Bibliothek, Sync, Papierkorb,
-     Einstellungen, NotebookLM) sind 1:1 die Desktop-Elemente, nichts doppelt.
-   • ✦ blendet das KI-Panel als Vollbild-Sheet ein (body:not(.panel-collapsed));
-     ✕ im Panel-Kopf schließt es.
-   Layering: Dock 1210 · Sheet-Scrim 1240 · Sheet 1250 (Dock darüber: 1260) ·
-   KI-Sheet 1300 · attach-menu 1350 · overlay 1400 · palette 1500 ·
-   heft-scan 1600 · toasts 2000. */
+/* == Mobile Shell v2 (12. Juli 2026) — Dock-Pille + Bottom-Sheet- == */
 #mDock { display: none; }
 @media (max-width: 768px) {
 	#app { grid-template-columns: minmax(0, 1fr) !important; padding: 6px;
 		padding-left: max(6px, env(safe-area-inset-left));
 		padding-right: max(6px, env(safe-area-inset-right)); }
 	#mainWrap { border-radius: 10px; }
-	/* Platz am Listen-/Editor-/Chat-Ende, damit die Dock-Pille nichts verdeckt */
+	/* Platz am Listen-/Editor-/Chat-Ende, damit die Dock-Pille nicht… */
 	#main { padding-bottom: 84px; }
 	.chat-full-wrap { padding-bottom: 84px; }
 
@@ -2275,32 +2131,22 @@ body.reduce-motion .heft-tray { animation: none; }
 	#sidebar::before { content: ""; position: absolute; top: 8px; left: 50%;
 		width: 40px; height: 4px; border-radius: 2px;
 		transform: translateX(-50%); background: var(--edge); }
-	/* Abdunkler — Regeln für Korrektheit (Layering-Bugs von heute, beide behoben):
-	   1. Er MUSS im Stacking-Kontext von #app liegen (#app::after), nicht auf body:
-	      #app hat z-index 1 — ein body-Overlay mit z-index 1240 läge sonst über der
-	      GESAMTEN #sidebar, deren z-index 1250 nur innerhalb von #app zählt.
-	   2. Er MUSS an body.mnav-open gebunden sein — ohne die Bedingung deckte er
-	      dauerhaft die ganze App ab („Hintergrund nicht mehr bedienbar“).
-	   Innerhalb von #app gilt: Scrim 1240 < Sheet 1250 → Sheet immer bedienbar;
-	   Dialoge (#overlay 1400) und Palette (1500) sind body-Kinder und liegen darüber. */
+	/* Abdunkler — Regeln für Korrektheit (Layering-Bugs von heute, b… */
 	body.mnav-open #app::after { content: ""; position: fixed; inset: 0; z-index: var(--z-scrim);
 		background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease; }
-	/* Sicherheitsnetz: Ein Pseudo-Element darf außerhalb des tatsächlich geöffneten
-	   Navigator-Sheets niemals Eingaben verschlucken. Der explizite Default schützt
-	   auch gegen wiederhergestellte Safari-/PWA-Ansichten. */
+	/* Sicherheitsnetz: Ein Pseudo-Element darf außerhalb des tatsäch… */
 	#app::after { pointer-events: none; }
 	body.mnav-open #app::after { pointer-events: auto; }
 	@keyframes mnavScrimIn { from { opacity: 0; } to { opacity: 1; } }
 
-	/* KI-Panel als Vollbild-Sheet — ersetzt display:none + extras.js-Hack */
+	/* KI-Panel als Vollbild-Sheet — ersetzt display:none + extras.js… */
 	#panel { display: none; }
 	body:not(.panel-collapsed) #panel { display: flex; position: fixed; inset: 0;
 		z-index: var(--z-ai-sheet); width: 100vw; max-width: none;
 		border: none; border-radius: 0; background: var(--panel-solid);
 		padding-bottom: max(10px, env(safe-area-inset-bottom)); } /* ✦ übernimmt die Dock-Pille */
 
-	/* Dock-Pille — vier direkte Hauptaktionen; die gemeinsame Breite bleibt auch
-	   auf schmalen Geräten kompakt und lässt die Safe-Areas frei. */
+	/* Dock-Pille — vier direkte Hauptaktionen; die gemeinsame Breite… */
 	#mDock { position: fixed; z-index: var(--z-dock); left: 50%; transform: translateX(-50%);
 		bottom: max(10px, env(safe-area-inset-bottom));
 		display: flex; align-items: center; gap: 2px; padding: 4px;
@@ -2311,16 +2157,14 @@ body.reduce-motion .heft-tray { animation: none; }
 		gap: 1px; border-radius: 999px; color: var(--text2); background: transparent;
 		-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 	#mDock button span { font-size: 19px; line-height: 1.1; }
-	/* Das Karten-Symbol teilt exakt das SVG mit dem Desktop-Button #btnAnki. */
+	/* Das Karten-Symbol teilt exakt das SVG mit dem Desktop-Button #… */
 	#mDock button svg { width: 19px; height: 19px; stroke: currentColor; }
 	#mDock button small { font-size: 10px; }
 	#mDock button:active { color: var(--accent); background: var(--accent-soft); }
 	#mDock .mdock-new span { color: var(--accent); }
-	/* Das geöffnete Navigator-Sheet gehört vollständig dem Inhalt: Die Dock-Pille
-	   verschwindet, damit sie weder den Sidebar-Fuß noch dessen Touch-Ziele überdeckt.
-	   Schließen: Abdunkler antippen oder Escape. */
+	/* Das geöffnete Navigator-Sheet gehört vollständig dem Inhalt: D… */
 	body.mnav-open #mDock { display: none; }
-	/* Dock aus dem Weg: KI-Sheet, Dialoge, Palette, Heft-Bühne, Tastatur offen */
+	/* Dock aus dem Weg: KI-Sheet, Dialoge, Palette, Heft-Bühne, Tast… */
 	body:not(.panel-collapsed) #mDock,
 	body:has(#overlay:not([hidden])) #mDock,
 	body:has(#palette:not([hidden])) #mDock,
@@ -2329,8 +2173,7 @@ body.reduce-motion .heft-tray { animation: none; }
 	body:has(.block-editor :focus) #mDock,
 	body:has(#mainChatInput:focus) #mDock { display: none; }
 
-	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt schmaler
-	   Seitenspalte — sonst quetschen sich Navigation und Inhalt in ~350px Breite. */
+	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile obe… */
 	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh); }
 	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px;
 		padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge); }
@@ -2343,23 +2186,18 @@ body.reduce-motion .heft-tray { animation: none; }
 	.palette-box { max-height: 76vh; }
 }
 
-/* ===========================================================================
-   Fokusmodus Karteikarten — beim Lernen keine Verwaltungsleiste und volle Bühne
-   =========================================================================== */
-/* Die Verwaltungsaktionen werden in render-anki.js im Lernmodus nicht mehr
-   erzeugt. Die globale Tab-Leiste verschwindet zusätzlich, damit besonders auf
-   kleinen Displays die Karte statt der Navigation im Fokus steht. */
+/* == Fokusmodus Karteikarten — beim Lernen keine Verwaltungsleist == */
+/* Die Verwaltungsaktionen werden in render-anki.js im Lernmodus… */
 body:has(.anki-study-mode) #tabbar { display: none; }
 
-/* Chrome-sicheres Bühnenraster: Flex-Ketten mit height:100% können dort bei
-   verschachtelten Panels kollabieren. */
+/* Chrome-sicheres Bühnenraster: Flex-Ketten mit height:100% könn… */
 body:has(.anki-study-mode) #mainWrap,
 body:has(.anki-study-mode) #main {
 	min-height: 0;
 	height: 100%;
 	overflow: hidden;
 }
-/* Kopf-Zeile: lange Stapelnamen/Zähler brechen nicht um, sondern kürzen mit Ellipsis. */
+/* Kopf-Zeile: lange Stapelnamen/Zähler brechen nicht um, sondern… */
 .anki-study-mode .study-head > span:not(.study-keys) {
 	min-width: 0;
 	overflow: hidden;
@@ -2396,17 +2234,15 @@ body:has(.anki-study-mode) #main {
 	flex: 1 1 auto;
 	display: flex;
 	flex-direction: column;
-	/* Die Karte wird nicht vertikal zentriert: Die Frage bleibt immer oben,
-	   unabhängig davon, ob die Antwort gerade sichtbar ist oder wie lang sie ist. */
+	/* Die Karte wird nicht vertikal zentriert: Die Frage bleibt imme… */
 	justify-content: flex-start;
 	margin: 0 auto;
-	/* Nur der Antwortbereich scrollt. Dadurch bleiben Frage und Aktion an
-	   ihren festen Stellen, statt als gesamte Karte mitzuwandern. */
+	/* Nur der Antwortbereich scrollt. */
 	overflow: hidden;
 }
 .anki-study-mode .study-card .study-meta { flex: 0 0 auto; text-align: center; }
 .anki-study-mode .study-card .card-face {
-	/* Die Frage nimmt nur ihre natürliche Höhe ein und behält ihren festen Platz. */
+	/* Die Frage nimmt nur ihre natürliche Höhe ein und behält ihren… */
 	flex: 0 0 auto;
 	min-height: 0;
 	display: flex;
@@ -2417,8 +2253,7 @@ body:has(.anki-study-mode) #main {
 	padding: clamp(18px, 4vw, 40px) clamp(8px, 3vw, 28px);
 	font-size: clamp(17px, 2.2vw, 22px);
 }
-/* Die Antwort erhält den gesamten verbleibenden Platz statt die Bühne 50/50
-   mit der meist kürzeren Frage zu teilen. */
+/* Die Antwort erhält den gesamten verbleibenden Platz statt die… */
 .anki-study-mode .study-card .card-face.back {
 	flex: 1 1 auto;
 	overflow: auto;
@@ -2427,14 +2262,12 @@ body:has(.anki-study-mode) #main {
 .anki-study-mode .study-card .grades,
 .anki-study-mode .study-card .modal-actions {
 	flex: 0 0 auto;
-	/* Auf der Vorderseite füllt dieser automatische Abstand die freie Bühne:
-	   „Antwort zeigen“ bleibt stets am unteren Rand derselben Position. */
+	/* Auf der Vorderseite füllt dieser automatische Abstand die frei… */
 	margin: auto 0 0;
 	padding-top: 16px;
 }
 .anki-study-mode .study-card .grades button { min-height: 52px; }
-/* Mermaid erhält in Lernkarten die volle Antwortbreite. Mermaid setzt oft eine
-   kleine Inline-Breite auf das SVG; !important überschreibt genau diese Größe. */
+/* Mermaid erhält in Lernkarten die volle Antwortbreite. */
 .anki-study-mode .study-card .card-face .mermaid-diagram {
 	width: 100%;
 	max-width: 980px;
@@ -2453,7 +2286,7 @@ body:has(.anki-study-mode) #main {
 	.anki-study-mode {
 		padding: 10px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 	}
-	.anki-study-mode .study-head { justify-content: flex-start; margin-bottom: 6px; font-size: 11.5px; }
+	.anki-study-mode .study-head { justify-content: flex-start; margin-bottom: 6px; font-size: 12px; }
 	.anki-study-mode .study-keys { display: none; }
 	.anki-study-mode .study-card .card-face { padding: 18px 4px; font-size: 17px; }
 	.anki-study-mode .study-card .grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
@@ -2461,14 +2294,12 @@ body:has(.anki-study-mode) #main {
 	.anki-study-mode .study-card .modal-actions button { width: 100%; min-height: 48px; }
 }
 
-/* Tablet (iPad Hoch-/Querformat, 769–1024px): spürbarer, aber nicht übertriebener Rand
-   zwischen dem engen Telefon- und dem breiten Desktop-Layout. */
+/* Tablet (iPad Hoch-/Querformat, 769–1024px): spürbarer, aber ni… */
 @media (min-width: 769px) and (max-width: 1024px) {
 	.anki-study-mode { padding: clamp(16px, 2.4vw, 28px) clamp(24px, 4vw, 56px); }
 	.anki-study-mode .study-card .card-face { font-size: clamp(18px, 2vw, 21px); }
 }
-/* Touch-Geräte jeder Bildschirmbreite: Bewertungs-/Aktionsknöpfe bleiben komfortabel
-   groß genug zum Antippen, unabhängig vom Breakpoint. */
+/* Touch-Geräte jeder Bildschirmbreite: Bewertungs-/Aktionsknöpfe… */
 @media (pointer: coarse) {
 	.anki-study-mode .study-card .grades button,
 	.anki-study-mode .study-card .modal-actions button {
@@ -2476,9 +2307,7 @@ body:has(.anki-study-mode) #main {
 	}
 }
 
-/* ===========================================================================
-   Karteikarten — ruhige, Anki-inspirierte Stapel- und Browseransicht
-   =========================================================================== */
+/* == Karteikarten — ruhige, Anki-inspirierte Stapel- und Browsera == */
 .library.anki {
 	width: 100%;
 	max-width: none;
@@ -2498,11 +2327,9 @@ body:has(.anki-study-mode) #main {
 .library.anki .lib-head h1 { margin: 0 auto 0 0; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.03em; }
 .library.anki .mode-btns { padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-subtle); }
 .library.anki .mode-btns button { min-height: 34px; padding: 6px 12px; font-weight: 600; }
-.library.anki .mode-btns button.active { border-radius: 7px; background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge); }
+.library.anki .mode-btns button.active { border-radius: 8px; background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge); }
 .anki-deck-table { max-width: 1120px; margin: 0 auto; border: 1px solid var(--edge); border-radius: 12px; overflow: hidden; background: var(--surface-faint); }
-/* Kopf und Zeilen verwenden dieselben festen Zähl-/Aktionsspalten. Der
-   frühere auto-Maximalwert der Aktionsspalte wurde je Zeile unterschiedlich
-   breit und verschob so Neu, Lernen und Fällig gegenüber ihren Zahlen. */
+/* Kopf und Zeilen verwenden dieselben festen Zähl-/Aktionsspalten. */
 .deck-table-head, .deck-row {
 	display: grid;
 	width: 100%;
@@ -2523,7 +2350,7 @@ body:has(.anki-study-mode) #main {
 .deck-number { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px; }
 .cnt-learn { color: #77b6f7; }
 .deck-actions { justify-content: flex-end; gap: 6px; }
-.deck-actions button { min-height: 34px; padding: 5px 10px; font-size: 12.5px; }
+.deck-actions button { min-height: 34px; padding: 5px 10px; font-size: 13px; }
 .deck-study { background: var(--accent); color: #081018; font-weight: 700; }
 .deck-study:hover { background: #8fd0ff; }
 .deck-browse, .deck-add { background: var(--surface); }
@@ -2575,13 +2402,9 @@ body:has(.anki-study-mode) #main {
 	.deck-actions button, .anki-toolbar .menu-chip { min-height: 40px; }
 }
 
-/* ============================================================
-   WYSIWYG-Editor (editor.js) — Notion-Look, 13. Juli 2026
-   Alle .blk-*-Klassen des Editor-Rewrites. Dunkles Notion-Design:
-   ruhige Typografie, dezente Hover-Flächen, echte Tabellen-Rahmen.
-   ============================================================ */
+/* == WYSIWYG-Editor (editor.js) — Notion-Look, 13. Juli 2026 Alle == */
 
-/* --- Editierbare Felder --- */
+/* == --- Editierbare Felder --- == */
 .blk-text {
 	flex: 1; min-width: 0; min-height: 1.5em;
 	padding: 3px 2px; outline: none; border: none;
@@ -2593,7 +2416,7 @@ body:has(.anki-study-mode) #main {
 .blk-text a:hover { text-decoration-color: rgba(255,255,255,0.7); }
 .blk-text code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; color: #eb5757; background: rgba(135,131,120,0.15); border-radius: 3px; padding: 0.2em 0.4em; }
 
-/* Platzhalter: Überschriften/Listen immer wenn leer, Absätze nur mit Fokus (wie Notion) */
+/* Platzhalter: Überschriften/Listen immer wenn leer, Absätze nur… */
 .blk-text:empty::before { content: attr(data-placeholder); color: rgba(255,255,255,0.22); pointer-events: none; float: left; height: 0; }
 .blk [data-btype] .blk-text:empty::before { content: ""; }
 .blk .blk-text:empty:focus::before,
@@ -2602,13 +2425,13 @@ body:has(.anki-study-mode) #main {
 .blk[data-btype="h3"] .blk-text:empty::before,
 .blk[data-btype="toggle"] .blk-text:empty::before { content: attr(data-placeholder); }
 
-/* --- Überschriften --- */
+/* == --- Überschriften --- == */
 .blk-h1 { font-size: 1.875em; font-weight: 700; line-height: 1.3; margin-top: 22px; }
 .blk-h2 { font-size: 1.5em; font-weight: 600; line-height: 1.3; margin-top: 16px; }
 .blk-h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin-top: 10px; }
 .blk:first-child .blk-h1, .blk:first-child .blk-h2, .blk:first-child .blk-h3 { margin-top: 0; }
 
-/* --- Listen (Bullet / Nummer / To-do) --- */
+/* == --- Listen (Bullet / Nummer / To-do) --- == */
 .blk-li { display: flex; align-items: flex-start; width: 100%; }
 .blk-marker {
 	width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
@@ -2620,16 +2443,16 @@ body:has(.anki-study-mode) #main {
 }
 .blk-done { text-decoration: line-through; color: rgba(255,255,255,0.38); }
 
-/* --- Zitat --- */
+/* == --- Zitat --- == */
 .blk-quote {
 	margin: 0; width: 100%; border-left: 3px solid var(--text);
 	padding: 2px 0 2px 14px; font-size: 16px;
 }
 
-/* --- Trennlinie --- */
+/* == --- Trennlinie --- == */
 .blk-hr { width: 100%; border: none; border-top: 1px solid rgba(255,255,255,0.13); margin: 13px 0; }
 
-/* --- Codeblock --- */
+/* == --- Codeblock --- == */
 .blk-codewrap {
 	position: relative; width: 100%; margin: 4px 0;
 	background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055);
@@ -2653,7 +2476,7 @@ body:has(.anki-study-mode) #main {
 .blk-codewrap:hover .blk-codelang, .blk-codewrap:focus-within .blk-codelang { opacity: 1; }
 .blk-codelang:hover { background: var(--surface-hover); color: var(--text); }
 
-/* --- Gleichungen (Block + Inline-Chip) --- */
+/* == --- Gleichungen (Block + Inline-Chip) --- == */
 .blk-math {
 	width: 100%; padding: 10px 8px; text-align: center; cursor: pointer;
 	border-radius: 4px; outline: none; overflow-x: auto;
@@ -2681,12 +2504,12 @@ body:has(.anki-study-mode) #main {
 }
 .blk-mathok:hover { background: #1d74c9; }
 
-/* --- Bild --- */
+/* == --- Bild --- == */
 .blk-img { margin: 4px 0; width: 100%; }
 .blk-img img { max-width: 100%; border-radius: 3px; display: block; }
 .blk-img figcaption { font-size: 13px; color: var(--text2); padding-top: 6px; }
 
-/* --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile leicht getönt) --- */
+/* == --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile lei == */
 .blk-tablewrap { position: relative; width: 100%; padding: 6px 20px 20px 0; }
 .blk-table { border-collapse: collapse; width: 100%; font-size: 14px; table-layout: fixed; }
 .blk-table th, .blk-table td {
@@ -2706,7 +2529,7 @@ body:has(.anki-study-mode) #main {
 .blk-tbtn-col { top: 6px; right: 0; width: 16px; height: calc(100% - 26px); }
 .blk-tbtn-row { bottom: 0; left: 0; height: 16px; width: calc(100% - 20px); }
 
-/* --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren Duplikat übernommen) --- */
+/* == --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren D == */
 .blk-callout {
 	display: flex; gap: 10px; width: 100%; margin: 4px 0;
 	padding: 16px 16px 16px 14px; border-radius: 6px;
@@ -2739,7 +2562,7 @@ body:has(.anki-study-mode) #main {
 .blk-callout-purple .blk-calloutdot { background: #9a6dd7; }
 .blk-callout-pink   .blk-calloutdot { background: #e255a1; }
 
-/* --- Toggle --- */
+/* == --- Toggle --- == */
 .blk-toggle { width: 100%; }
 .blk-togglehead { display: flex; align-items: flex-start; }
 .blk-togglearrow {
@@ -2751,26 +2574,26 @@ body:has(.anki-study-mode) #main {
 .blk-togglearrow:hover { background: var(--surface-active); }
 .blk-togglebody { padding-left: 24px; }
 
-/* --- Spalten --- */
+/* == --- Spalten --- == */
 .blk-columns { display: flex; gap: 32px; width: 100%; }
 .blk-column { flex: 1; min-width: 0; }
 @media (max-width: 640px) { .blk-columns { flex-direction: column; gap: 0; } }
 
-/* --- Verschachtelte Blöcke (Callout/Toggle/Spalten) --- */
+/* == --- Verschachtelte Blöcke (Callout/Toggle/Spalten) --- == */
 .blk-children .blk .blk-body { padding: 1px 0; }
 
-/* --- Heft-Einbettung --- */
+/* == --- Heft-Einbettung --- == */
 .blk-heft { width: 100%; min-height: 40px; border-radius: 6px; background: var(--surface-subtle); }
 
-/* --- Blockauswahl (Esc / Handle / Strg+A Stufe 2) --- */
+/* == --- Blockauswahl (Esc / Handle / Strg+A Stufe 2) --- == */
 .blk.selected { background: rgba(35,131,226,0.22); }
 .blk.selected .blk-body { border-radius: 4px; }
 
-/* --- Drag-&-Drop-Ziellinien --- */
+/* == --- Drag-&-Drop-Ziellinien --- == */
 .blk.drop-above { box-shadow: 0 -2px 0 #2383e2; }
 .blk.drop-below { box-shadow: 0 2px 0 #2383e2; }
 
-/* --- Menüs: Slash / Link / Block --- */
+/* == --- Menüs: Slash / Link / Block --- == */
 .blk-menu {
 	position: fixed; z-index: var(--z-editor-pop); min-width: 260px; max-width: 330px;
 	max-height: 340px; overflow-y: auto;
@@ -2783,7 +2606,7 @@ body:has(.anki-study-mode) #main {
 }
 .blk-mi {
 	display: flex; align-items: center; gap: 10px;
-	padding: 6px 10px; border-radius: 5px; cursor: pointer;
+	padding: 6px 10px; border-radius: 6px; cursor: pointer;
 	font-size: 14px; color: var(--text); user-select: none;
 }
 .blk-mi:hover, .blk-mi.active { background: var(--surface-hover-strong); }
@@ -2798,7 +2621,7 @@ body:has(.anki-study-mode) #main {
 	font-size: 13px;
 }
 
-/* --- Farbreihen im Blockmenü --- */
+/* == --- Farbreihen im Blockmenü --- == */
 .blk-colorrow { display: flex; gap: 6px; padding: 4px 10px 6px; flex-wrap: wrap; }
 .blk-cdot {
 	width: 20px; height: 20px; border-radius: 50%; cursor: pointer; padding: 0; min-height: 0;
@@ -2815,10 +2638,10 @@ body:has(.anki-study-mode) #main {
 .blk-cdot.hl-green { background: rgba(77,171,154,0.4); } .blk-cdot.hl-blue { background: rgba(82,156,202,0.4); }
 .blk-cdot.hl-purple { background: rgba(154,109,215,0.4); } .blk-cdot.hl-pink { background: rgba(226,85,161,0.4); }
 
-/* --- KaTeX im Editor: Farbe erbt vom Text --- */
+/* == --- KaTeX im Editor: Farbe erbt vom Text --- == */
 .block-editor .katex { color: var(--text); font-size: 1.06em; }
 
-/* ---------- Unterseiten-Verweise am Seitenende (wie Notion-Seitenzeilen) ---------- */
+/* == Unterseiten-Verweise am Seitenende (wie Notion-Seitenzeilen) == */
 .child-pages { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 4px; }
 .child-page-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; border-radius: 6px; cursor: pointer; }
 .child-page-row:hover { background: rgba(255, 255, 255, 0.055); }
@@ -2826,32 +2649,11 @@ body:has(.anki-study-mode) #main {
 .child-page-row .cp-img { width: 18px; height: 18px; object-fit: cover; border-radius: 3px; vertical-align: -3px; }
 .child-page-row .cp-title { font-weight: 500; border-bottom: 1px solid rgba(255, 255, 255, 0.16); }
 
-/* ========================================================================== 
-   Compact mode + Light theme polish — 14. Juli 2026
-   ========================================================================== */
+/* == Compact mode + Light theme polish — 14. Juli 2026 == */
 
-/* Kompaktmodus bleibt flach, aber der Seitenchat bleibt eine eindeutig
-   abgetrennte Arbeitsfläche statt mit der Mitte zu verschmelzen. */
-@media (min-width: 1025px) {
-	body.density-compact #app {
-		gap: 0 !important;
-		padding: 0 !important;
-		grid-template-columns: 236px minmax(0, 1fr) 320px;
-	}
-	body.density-compact #sidebar {
-		border-right: 1px solid var(--edge) !important;
-	}
-	body.density-compact #panel {
-		border: 0 !important;
-		border-left: 1px solid var(--edge) !important;
-		background: var(--panel-solid);
-	}
-	body.density-compact .panel-head { border-bottom-color: var(--edge); }
-}
+/* Heller Modus: echte Papierflächen mit klarer, aber ruhiger Hie… */
 
-/* Heller Modus: echte Papierflächen mit klarer, aber ruhiger Hierarchie. */
-
-/* Dunkle, fest codierte Restflächen für den Hellmodus überschreiben. */
+/* Dunkle, fest codierte Restflächen für den Hellmodus überschrei… */
 body.light #chatForm,
 body.light .chat-form-full {
 	background: #ffffff;
@@ -2875,9 +2677,7 @@ body.light .blk-text a {
 body.light .blk-text:empty::before { color: rgba(44, 44, 43, .32); }
 body.light ::-webkit-scrollbar-thumb { background: rgba(44, 44, 43, .20); }
 
-/* ========================================================================== 
-   Light theme v2 — warmes Papier statt klinischem Weiß
-   ========================================================================== */
+/* == Light theme v2 — warmes Papier statt klinischem Weiß == */
 body.light {
 	--bg0: #f2efe9;
 	--bg1: #faf8f4;
@@ -2921,7 +2721,7 @@ body.light .settings-nav,
 body.light .hist-list { background: #f1ede6; }
 body.light .settings-body { background: #fffdfa; }
 
-/* Unterschiedliche, funktionale Flächen machen Orientierung leichter. */
+/* Unterschiedliche, funktionale Flächen machen Orientierung leic… */
 body.light #tabbar { background: rgba(247, 244, 238, .72); }
 body.light .tabchip.active { background: #fffdfa; box-shadow: 0 1px 0 var(--edge); }
 body.light .tabchip-x:hover,
@@ -2934,7 +2734,7 @@ body.light .edit-files-list { background: #f2efe9; border-color: var(--edge); }
 body.light .deck-table-head { background: #eeeae2; }
 body.light .anki-deck-group td { background: #e8f2fb; }
 
-/* Theme-Schalter: eigenständige, verständliche Karte statt Checkbox-Zeile. */
+/* Theme-Schalter: eigenständige, verständliche Karte statt Check… */
 .appearance-theme-card {
 	display: flex;
 	align-items: center;
@@ -2978,73 +2778,7 @@ body.light .anki-deck-group td { background: #e8f2fb; }
 	.appearance-theme-copy { gap: 8px; }
 }
 
-/* Heft-Werkzeugleiste v2: eine flache, kompakte Werkzeugschiene. Die
-   Hauptaktionen bleiben sichtbar; Feinoptionen liegen weiterhin im separaten Tray. */
-.heft-chrome .heft-float { top: 10px !important; }
-.heft-chrome .heft-pill {
-	gap: 0;
-	padding: 3px;
-	border-radius: 10px;
-	box-shadow: none;
-}
-.heft-chrome .heft-main {
-	width: 32px;
-	min-width: 32px;
-	height: 32px;
-	min-height: 32px;
-	border-radius: 7px;
-	font-size: 15px;
-}
-.heft-chrome .heft-pill > .heft-sep {
-	height: 16px;
-	margin: 0 2px;
-}
-/* Das Options-Tray ist bewusst schmaler als die Hauptschiene und sitzt enger
-   darunter, ohne die Zeichenfläche optisch zu dominieren. */
-.heft-chrome .heft-tray {
-	top: 50px;
-	gap: 0;
-	padding: 2px 4px;
-	border-radius: 8px;
-	box-shadow: 0 4px 10px rgba(0,0,0,.20);
-}
-.heft-chrome .heft-tray-drag {
-	width: 20px;
-	min-width: 20px;
-	height: 24px;
-	min-height: 24px;
-	font-size: 10px;
-}
-.heft-chrome .heft-tray .heft-opt,
-.heft-chrome .heft-tray .heft-size {
-	width: 24px;
-	min-width: 24px !important;
-	height: 24px;
-	min-height: 24px;
-	border-radius: 6px;
-	font-size: 12px;
-}
-.heft-chrome .heft-tray .heft-swatch {
-	width: 16px;
-	height: 16px;
-	min-width: 16px !important;
-	margin: 0 1px;
-}
-.heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px; }
-.heft-chrome .heft-corner {
-	top: 10px;
-	height: 28px;
-	min-height: 28px;
-	min-width: 28px;
-	padding: 0 7px;
-	border-radius: 7px;
-	font-size: 12px;
-	box-shadow: none;
-}
-.heft-chrome .heft-corner.heft-chat,
-.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; }
-
-/* Heller Modus: warme, matte Papierwerkzeuge ohne schwere dunkle Kapseln. */
+/* Heller Modus: warme, matte Papierwerkzeuge ohne schwere dunkle… */
 body.light .heft-chrome .heft-pill,
 body.light .heft-chrome .heft-tray,
 body.light .heft-chrome .heft-corner,
@@ -3075,99 +2809,7 @@ body.light .heft-chrome .heft-tray-drag { color: #918a80; }
 body.light .heft-chrome .heft-tray .heft-opt.active,
 body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; color: #fff; }
 
-@media (max-width: 720px) {
-	.heft-chrome .heft-float { top: 8px !important; }
-	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: 14px; }
-	.heft-chrome .heft-tray { top: 44px; }
-	.heft-chrome .heft-corner { top: 8px; }
-}
-
-/* ==========================================================================
-   iPad-Rahmen v5 (15. Juli 2026) — EINE Quelle der Wahrheit für Höhe,
-   Außenabstand und Safe-Areas am iPad (Safari UND installierte PWA).
-   Ersetzt drei früher konkurrierende Regelblöcke, deren Summe die Bugs
-   erzeugte:
-   – Komfortmodus: oben/unten max(12px, safe-area) ≈ 20–24px, links/rechts
-     fest 12px → sichtbar ASYMMETRISCHE Ränder um die Panels.
-   – Kompaktmodus: Safe-Area-Padding an #app bei exakt 100dvh Höhe →
-     unterste Kante abgeschnitten bzw. heller Randstreifen am Home-Indicator.
-   Prinzipien:
-   1. 100dvh ist mit viewport-fit=cover bereits die volle Bildschirmhöhe —
-      Höhe und Safe-Area werden NIE addiert.
-   2. Komfortmodus: EIN Rahmenmaß (--ipad-frame) auf allen vier Seiten —
-      die Abstände zu den Bildschirmrändern sind dadurch immer symmetrisch.
-   3. Kompaktmodus: #app bleibt komplett randlos (0 Padding, 0 Gap); die
-      Panelflächen laufen bis an jede Bildschirmkante — kein Streifen, nichts
-      abgeschnitten. Die Safe-Area wird stattdessen ALS INNENABSTAND in
-      Sidebar und Chat-Composer freigehalten.
-   Ansonsten gilt am iPad exakt das Desktop-Layout (Grid, Radius, Farben).
-   ========================================================================== */
-@media (pointer: coarse) and (min-width: 769px) {
-	:root {
-		/* BUGFIX iPad-Rahmen v6 (15. Juli 2026): v5 nahm die GRÖSSTE Safe-Area-
-		   Kante (PWA: Statusleiste/Home-Indicator ≈ 20–24px) und legte sie auf
-		   ALLE VIER Seiten — die Rundherum-Abstände im Komfortmodus waren dadurch
-		   viel zu hoch. Jetzt EIN Rahmenmaß PRO ACHSE: oben/unten bzw. links/rechts
-		   bleiben weiterhin exakt symmetrisch (das war der Sinn von v5), aber eine
-		   Achse wächst nur noch, wenn IHRE eigene Safe-Area es verlangt. Ergebnis:
-		   links/rechts wieder 12px wie am Desktop, oben/unten nur so viel wie
-		   Statusleiste/Home-Indicator brauchen. Browser (Safe-Areas = 0): 12px. */
-		--ipad-frame-x: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
-		--ipad-frame-y: max(12px, env(safe-area-inset-top), env(safe-area-inset-bottom));
-	}
-	/* Randgenau den Bildschirm füllen — überstimmt die height:auto-Regel
-	   der schmalen Breakpoints (Hochformat-iPads fallen sonst hinein). */
-	#app {
-		height: 100dvh !important;
-		min-height: 100dvh !important;
-	}
-	/* Komfortmodus: identischer Rahmen auf allen vier Seiten = symmetrisch.
-	   Bewusst OHNE !important, damit der Heft-Fokusmodus (padding: 0 bei
-	   ausgeblendeter Seitenleiste) weiterhin gewinnt. */
-	body:not(.density-compact) #app {
-		padding: var(--ipad-frame-y) var(--ipad-frame-x);
-	}
-	/* Kompaktmodus: randlose App-Fläche ohne jedes Außenpadding. */
-	body.density-compact #app {
-		padding: 0 !important;
-		gap: 0 !important;
-	}
-	body.density-compact #sidebar,
-	body.density-compact #mainWrap,
-	body.density-compact #panel {
-		height: 100%;
-		border-radius: 0;
-	}
-	/* Inhalt bleibt über dem Home-Indicator bzw. unter der Statusleiste —
-	   als INNENABSTAND, damit die Flächen selbst bis zur Kante durchlaufen. */
-	body.density-compact #sidebar {
-		padding-top: max(10px, env(safe-area-inset-top));
-		padding-bottom: max(14px, env(safe-area-inset-bottom));
-	}
-	body.density-compact #panel > #chatForm {
-		margin-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-	}
-	/* Hinter und neben den Flächen darf nie eine fremde Farbe durchscheinen. */
-	body.density-compact,
-	body.density-compact #app { background: var(--panel-solid); }
-}
-/* Schmales iPad (Hochformat, 769–1024px): das KI-Panel ist hier ein
-   fixed-Overlay — es folgt im Komfortmodus demselben Rahmenmaß und dockt im
-   Kompaktmodus randlos mit Trennlinie an die Bildschirmkante an. */
-@media (pointer: coarse) and (min-width: 769px) and (max-width: 1024px) {
-	body:not(.density-compact) #panel {
-		top: var(--ipad-frame-y); right: var(--ipad-frame-x); bottom: var(--ipad-frame-y);
-	}
-	body.density-compact #app { grid-template-columns: 220px minmax(0, 1fr) 320px; }
-	body.density-compact #panel {
-		top: 0; right: 0; bottom: 0;
-		border-left: 1px solid var(--edge-soft);
-	}
-}
-
-/* ========================================================================== 
-   KI-Einstellungen — klare Verbindungen statt einer langen Formularwand
-   ========================================================================== */
+/* == KI-Einstellungen — klare Verbindungen statt einer langen For == */
 .ai-settings { display: grid; gap: 16px; padding-bottom: 4px; }
 .ai-settings-hero { display: flex; align-items: center; gap: 12px; padding: 2px 2px 0; }
 .ai-settings-hero-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-size: 21px; }
@@ -3193,15 +2835,15 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .ai-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .ai-preset-grid button { min-height: 86px; padding: 10px; border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-subtle); text-align: left; display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; align-content: center; }
 .ai-preset-grid button > span { grid-row: 1 / 3; align-self: center; font-size: 17px; }
-.ai-preset-grid b { font-size: 12.5px; line-height: 1.2; }
-.ai-preset-grid small { color: var(--text2); font-size: 10.5px; line-height: 1.35; }
+.ai-preset-grid b { font-size: 13px; line-height: 1.2; }
+.ai-preset-grid small { color: var(--text2); font-size: 11px; line-height: 1.35; }
 .ai-preset-grid button:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); transform: translateY(-1px); }
 .ai-settings-advanced { border: 1px solid var(--edge-soft); border-radius: 10px; background: var(--surface-faint); }
 .ai-settings-advanced summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; font-size: 13px; font-weight: 650; }
 .ai-settings-advanced summary::-webkit-details-marker { display: none; }
 .ai-settings-advanced summary::after { content: "›"; order: 3; color: var(--text2); font-size: 18px; transition: transform var(--motion-fast) ease; }
 .ai-settings-advanced[open] summary::after { transform: rotate(90deg); }
-.ai-settings-advanced summary small { margin-left: auto; color: var(--text2); font-size: 11.5px; font-weight: 400; }
+.ai-settings-advanced summary small { margin-left: auto; color: var(--text2); font-size: 12px; font-weight: 400; }
 .ai-settings-advanced-body { display: grid; gap: 8px; padding: 0 12px 12px; border-top: 1px solid var(--edge-soft); }
 .ai-settings-advanced-body > div:first-child { margin-top: 12px; }
 .ai-settings-note { margin: -2px 2px 0; }
@@ -3214,7 +2856,7 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 	.ai-settings-advanced summary small { display: none; }
 }
 
-/* KI-Einstellungen v2: alles Wesentliche in einer ruhigen, kompakten Fläche. */
+/* KI-Einstellungen v2: alles Wesentliche in einer ruhigen, kompa… */
 .settings-body:has(.ai-settings) { padding-top: 16px; }
 .ai-settings { gap: 10px; }
 .ai-settings-hero { display: none; }
@@ -3222,8 +2864,8 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .ai-connection-head { align-items: center; margin: 0 0 8px; }
 .ai-connection-head h4 { font-size: 13px; }
 .ai-connection-head p { display: none; }
-.ai-provider-count { padding: 2px 7px; font-size: 10.5px; }
-.ai-settings .ai-status-banner { min-height: 32px; margin: 0 0 8px; padding: 5px 8px; border-radius: 7px; font-size: 11.5px; }
+.ai-provider-count { padding: 2px 7px; font-size: 11px; }
+.ai-settings .ai-status-banner { min-height: 32px; margin: 0 0 8px; padding: 5px 8px; border-radius: 8px; font-size: 12px; }
 .ai-settings .ai-status-banner #btnRecheckAI { min-height: 24px; padding: 2px 7px; font-size: 11px; }
 .ai-settings .provider-list { gap: 6px; }
 .ai-settings .provider-card { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(160px, 1.3fr) minmax(130px, 1fr); gap: 6px; align-items: center; padding: 6px; border-radius: 8px; }
@@ -3233,20 +2875,20 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .ai-settings .provider-card .icon-danger { width: 28px; height: 30px; flex: 0 0 28px; font-size: 12px; }
 .ai-provider-add { justify-content: space-between; padding-top: 8px; }
 .ai-provider-add button { min-height: 28px; padding: 3px 8px; font-size: 12px; }
-.ai-provider-add span { font-size: 10.5px; }
+.ai-provider-add span { font-size: 11px; }
 .ai-presets { display: flex; align-items: center; gap: 7px; padding: 0; }
 .ai-presets > div:first-child { display: contents; }
 .ai-presets h4 { font-size: 11px; color: var(--text2); white-space: nowrap; }
 .ai-presets p { display: none; }
 .ai-preset-grid { display: flex; flex: 1; gap: 5px; }
-.ai-preset-grid button { min-height: 28px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 7px; font-size: 11px; }
+.ai-preset-grid button { min-height: 28px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 8px; font-size: 11px; }
 .ai-preset-grid button > span { display: inline; font-size: 13px; }
 .ai-preset-grid b { font-size: 11px; font-weight: 600; }
 .ai-preset-grid small { display: none; }
 .ai-settings-advanced { border-radius: 8px; }
 .ai-settings-advanced summary { min-height: 32px; padding: 6px 9px; font-size: 12px; }
 .ai-settings-advanced summary::after { font-size: 16px; }
-.ai-settings-advanced summary small { font-size: 10.5px; }
+.ai-settings-advanced summary small { font-size: 11px; }
 .ai-settings-advanced-body { padding: 0 9px 9px; }
 .ai-settings-note { display: none; }
 .ai-settings .modal-actions { position: sticky; bottom: -20px; margin: 0 -24px -20px; padding: 9px 24px; background: color-mix(in srgb, var(--menu-bg) 92%, transparent); border-top: 1px solid var(--edge-soft); }
@@ -3259,24 +2901,16 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 	.ai-settings .modal-actions { bottom: -20px; }
 }
 
-/* Kompakte Auswahl: nur echte Embedding-Modelle der aktiven KI-Quelle.
-   Der KI-Tab behält bewusst dieselbe Dialoggröße und Navigation wie alle
-   anderen Einstellungen; komprimiert ist nur sein Inhalt. */
+/* Kompakte Auswahl: nur echte Embedding-Modelle der aktiven KI-Q… */
 .embedding-picker { display: grid; gap: 4px; }
 .embedding-picker > label { font-size: 12px !important; font-weight: 650; }
 .embedding-picker-row { display: flex; gap: 5px; align-items: center; }
 .embedding-picker-row select { flex: 1; min-width: 0; height: 30px; padding: 4px 28px 4px 8px; border-radius: 6px; font-size: 12px; }
 .embedding-picker-row button { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 6px; background: var(--surface); color: var(--text2); font-size: 15px; }
 .embedding-picker-row button:hover { color: var(--accent); background: var(--accent-soft); }
-.embedding-picker .hint { min-height: 16px; font-size: 10.5px; line-height: 1.35; }
+.embedding-picker .hint { min-height: 16px; font-size: 11px; line-height: 1.35; }
 
-/* ==========================================================================
-   Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips, Kennzahlen-
-   Reihe, Telemetrie-Insights und ausklappbare Bereiche (<details data-fold>,
-   den Zustand merkt sich render.js in localStorage). Das Lernzeit-Widget
-   stylt lernzeit.js selbst (#lernzeitStyles). Dazu: Konfidenz-Reihe im
-   Lernmodus (telemetrie.js).
-   ========================================================================== */
+/* == Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips == */
 .home-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px; }
 .home-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
 	border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: 12px; color: var(--text2); }
@@ -3286,7 +2920,7 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .home-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px;
 	border: 1px solid var(--edge-soft); border-radius: 12px; background: var(--surface-subtle); }
 .home-stat b { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-.home-stat small { font-size: 11.5px; color: var(--text2); }
+.home-stat small { font-size: 12px; color: var(--text2); }
 .home-stat.accent b { color: var(--accent); }
 .home-stat.good b { color: #72bc8f; }
 .home-streak-flame { font-size: 15px; margin-right: 3px; }
@@ -3295,7 +2929,7 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 .home-fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 11px 14px;
 	cursor: pointer; font-size: 13px; font-weight: 650; color: var(--text2); user-select: none; }
 .home-fold > summary::-webkit-details-marker { display: none; }
-.home-fold > summary .fold-meta { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--text2); }
+.home-fold > summary .fold-meta { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--text2); }
 .home-fold > summary::after { content: "›"; margin-left: 6px; font-size: 15px; color: var(--text2);
 	transition: transform .12s ease; }
 .home-fold[open] > summary { color: var(--text); }

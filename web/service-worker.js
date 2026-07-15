@@ -90,7 +90,10 @@
 //      Kennzahlen, Insights, ausklappbaren Bereichen) + Lernzeit v3 (Widget mit
 //      Folds, Timer mit Pause, Wochenziel, Streak) + NEU telemetrie.js
 //      (Lern-Telemetrie über das Event-Log) — neue Datei im Precache.
-const CACHE = "impala67-v63";
+// v64: styles.css-Refactor — 12 % kleiner: Kommentare komprimiert, Duplikate
+//      zusammengeführt, iPad-Sonderrahmen komplett entfernt (UI = Desktop,
+//      Safe-Area nur noch als max()-Innenabstand), Statusleiste opak (index.html).
+const CACHE = "impala67-v64";
 
 const APP_FILES = [
 	"./",

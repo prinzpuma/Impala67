@@ -40,16 +40,13 @@ function resetTransientUiLayers() {
 window.addEventListener("pageshow", resetTransientUiLayers);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<!-- iPadOS/iOS: als Home-Screen-App die Safe Area bis hinter die Statusleiste
-     nutzen. Die sichtbare Farbe kommt aus theme-color und wird in settings.js
-     passend zum Hell-/Dunkelmodus aktualisiert. -->
+<!-- PWA-Meta: theme-color kommt aus settings.js (hell/dunkel). -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- Die iPad-PWA darf bis hinter Status- und Home-Indicator-Leiste zeichnen;
-     die Safe-Area erhält dann die dunkle App-Fläche statt der iOS-Standardfarbe. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Statusleiste opak: App beginnt unterhalb der Leiste — gleiche UI wie am Desktop. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=47">
+<link rel="stylesheet" href="styles.css?build=48">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#05070d">
