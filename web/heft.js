@@ -40,7 +40,13 @@ export const HEFT = (() => {
 	// Navigation v2: gesamter Gesten-Zustand lebt in EINEM Objekt (siehe unten).
 	// onlyPen default true: Palm Rejection für Apple Pencil.
 	// Aktive Stifte werden separat verfolgt, damit ein Handballen nie als Scroll-Geste zählt.
-	let tool = "pen", color = COLORS[0], size = 3, onlyPen = true;
+	// 💾 QoL (18. Juli 2026): Werkzeug-Einstellungen überleben App-Neustarts
+	const savedTools = (() => { try { return JSON.parse(localStorage.getItem("impala67HeftTools") || "{}"); } catch (err) { return {}; } })();
+	let tool = "pen", color = savedTools.color || COLORS[0], size = savedTools.size || 3, onlyPen = savedTools.onlyPen !== false;
+	let eraserSize = savedTools.eraserSize || 16; // Radierer hat eine EIGENE Größe — das Tray wirkt jetzt wirklich
+	let inlineEd = null;     // offener Inline-Text-Editor { ta, pi, txt|null, x, y }
+	let lastEmptyTap = null; // Doppeltipp-Erkennung auf freier Fläche (Text anlegen)
+	function saveToolPrefs() { try { localStorage.setItem("impala67HeftTools", JSON.stringify({ color, size, onlyPen, eraserSize })); } catch (err) { /* egal */ } }
 	const activePenPointers = new Set();
 	let expanded = false;    // Options-Tray erst nach Klick auf Schreiben/Radierer
 	let trayPos = null;      // {x,y} nur für das verschiebbare Options-Tray
@@ -51,8 +57,8 @@ export const HEFT = (() => {
 	let lassoSel = null;     // { pageIdx, strokes[] } — Auswahl von Freihand-Strichen
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
 	const laserTimers = new Set();
-	let insertPos = "after"; // ＋-Menü: "before" | "after" | "last"
-	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / ＋)
+	let insertPos = "after"; // +-Menü: "before" | "after" | "last"
+	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / +)
 	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[], edit, busy }
 
 	// ---------- Handschrift-Erkennung v2 (15. Juli 2026, Notion AI) ----------
@@ -366,7 +372,7 @@ export const HEFT = (() => {
 	function drawLassoSelection(x, strokes) {
 		if (!strokes || !strokes.length) return;
 		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-		strokes.forEach((s) => (s.pts || []).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
+		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
 		if (!isFinite(minX)) return;
 		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
 		x.strokeRect(minX - 9, minY - 9, maxX - minX + 18, maxY - minY + 18); x.restore();
@@ -396,7 +402,7 @@ export const HEFT = (() => {
 			if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
 		pg.strokes.forEach((s) => drawStroke(x, s));
-		(pg.texts || []).forEach((t) => drawTextBox(x, t));
+		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); }); // hidden: gerade im Inline-Editor geöffnet
 		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
 			const im = sel.imgId ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
@@ -830,16 +836,52 @@ export const HEFT = (() => {
 		return hit;
 	}
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
-	function eraseAt(e) {
-		const p0 = pos(e, drawing.cv), r = 14, pg = doc.pages[drawing.pageIdx];
-		const keep = [], removed = [];
-		outer: for (const s of pg.strokes) {
-			for (const pt of s.pts) {
-				const dx = pt[0] - p0[0], dy = pt[1] - p0[1];
-				if (dx * dx + dy * dy <= r * r) { removed.push(s); continue outer; }
-			}
-			keep.push(s);
+	// 🩹 BUGFIX (18. Juli 2026): Radierer & Lasso prüften nur die ROH-Punkte
+	// eines Strichs. Bei schnell gezogenen Strichen liegen die weit auseinander
+	// und Form-Snap-Striche besitzen nur noch 1 Roh-Punkt — die Mitte einer
+	// langen Linie war damit unlöschbar und fürs Lasso unsichtbar. Jetzt zählt
+	// die echte Geometrie: Abstand zum SEGMENT + abgetastete Form-Umrisse.
+	const segDist2 = (px, py, ax, ay, bx, by) => {
+		const dx = bx - ax, dy = by - ay;
+		const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / ((dx * dx + dy * dy) || 1)));
+		const qx = ax + t * dx, qy = ay + t * dy;
+		return (px - qx) * (px - qx) + (py - qy) * (py - qy);
+	};
+	function strokeOutline(s) {
+		const sh = s.shape;
+		const pts = [];
+		if (sh && sh.type === "line") {
+			for (let i = 0; i <= 16; i++) pts.push([sh.x1 + (sh.x2 - sh.x1) * i / 16, sh.y1 + (sh.y2 - sh.y1) * i / 16]);
+			return pts;
 		}
+		if (sh && sh.type === "rect") {
+			const cs = [[sh.x1, sh.y1], [sh.x2, sh.y1], [sh.x2, sh.y2], [sh.x1, sh.y2], [sh.x1, sh.y1]];
+			for (let k = 0; k < 4; k++) for (let i = 0; i < 8; i++) {
+				const t = i / 8;
+				pts.push([cs[k][0] + (cs[k + 1][0] - cs[k][0]) * t, cs[k][1] + (cs[k + 1][1] - cs[k][1]) * t]);
+			}
+			pts.push([sh.x1, sh.y1]);
+			return pts;
+		}
+		if (sh && (sh.type === "ellipse" || sh.type === "circle")) {
+			const rx = sh.rx != null ? sh.rx : sh.r, ry = sh.ry != null ? sh.ry : sh.r;
+			for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2; pts.push([sh.cx + Math.cos(a) * rx, sh.cy + Math.sin(a) * ry]); }
+			return pts;
+		}
+		return s.pts || [];
+	}
+	function strokeHitAt(s, x, y, r) {
+		const pts = strokeOutline(s);
+		if (!pts.length) return false;
+		const rr = r + (s.size || 2) / 2, rr2 = rr * rr;
+		if (pts.length === 1) { const dx = pts[0][0] - x, dy = pts[0][1] - y; return dx * dx + dy * dy <= rr2; }
+		for (let i = 1; i < pts.length; i++) if (segDist2(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= rr2) return true;
+		return false;
+	}
+	function eraseAt(e) {
+		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
+		const keep = [], removed = [];
+		for (const s of pg.strokes) (strokeHitAt(s, p0[0], p0[1], r) ? removed : keep).push(s);
 		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
 	}
 	function onDown(e) {
@@ -860,11 +902,6 @@ export const HEFT = (() => {
 		if (tool === "lasso") {
 			// Freies Lasso um Striche ziehen. Auswahl kann danach mit Entf gelöscht werden.
 			drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
-			return;
-		}
-		if (tool === "shape") {
-			// Rohbewegung sammeln; beim Loslassen wird Linie/Rechteck/Ellipse erkannt.
-			drawing = { shape: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (tool === "laser") {
@@ -892,15 +929,9 @@ export const HEFT = (() => {
 			if (ht) {
 				const now = Date.now();
 				if (sel && sel.txtId === ht.id && now - (sel.tapAt || 0) < 400) {
-					// Doppeltipp auf ausgewählten Text: bearbeiten
-					const next = prompt("Text bearbeiten:", ht.text);
-					if (next != null && String(next) !== ht.text) {
-						undoStack.push({ kind: "txtEdit", txt: ht, prev: ht.text, pageIdx: pi }); redoStack = [];
-						ht.text = String(next);
-						scheduleSave();
-					}
+					// Doppeltipp auf ausgewählten Text: DIREKT auf der Seite bearbeiten (kein Popup)
 					sel = { pageIdx: pi, txtId: ht.id, tapAt: 0 };
-					redrawPage(pi); renderThumb(pi); updateChrome();
+					openTextEditor(pi, ht.x, ht.y, ht);
 					return;
 				}
 				sel = { pageIdx: pi, txtId: ht.id, tapAt: now };
@@ -928,12 +959,76 @@ export const HEFT = (() => {
 				sel = { pageIdx: pi, imgId: hit.id };
 				drawing = { imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
 				redrawPage(pi);
-			} else if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
+				lastEmptyTap = null;
+			} else {
+				// ✍️ Doppeltipp auf freie Fläche: neue Text-Box direkt dort anlegen
+				const now2 = Date.now();
+				if (lastEmptyTap && lastEmptyTap.pi === pi && now2 - lastEmptyTap.t < 450 && Math.hypot(p[0] - lastEmptyTap.p[0], p[1] - lastEmptyTap.p[1]) < 40) {
+					lastEmptyTap = null;
+					openTextEditor(pi, Math.max(20, p[0] - 10), Math.max(20, p[1] - 20), null);
+					return;
+				}
+				lastEmptyTap = { pi, t: now2, p };
+				if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
+			}
 			return;
 		}
 		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi };
+		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
+		// Platzsparend: Während des Schreibens tritt die Werkzeugleiste zurück
+		// (halbtransparent, keine Klicks) — mehr freie Fläche, weniger Ablenkung.
+		const chromeEl = host && host.querySelector(".heft-chrome");
+		if (chromeEl) chromeEl.classList.add("heft-writing");
+	}
+	// ✏️ Form-Snap (ersetzt das Formen-Werkzeug): Strich am Ende kurz gedrückt
+	// halten → gerade Linie; geschlossene Züge werden zu Kreis/Ellipse/Rechteck.
+	let snapTimer = null; // eigener Timer — holdTimer gehört dem Radierer-Halten-Modus
+	function armHoldSnap(p) {
+		if (snapTimer) clearTimeout(snapTimer);
+		snapTimer = null;
+		if (!drawing || drawing.snapped || drawing.laser || !(drawing.tool === "pen" || drawing.tool === "marker")) return;
+		drawing.holdAnchor = p;
+		snapTimer = setTimeout(trySnapShape, 550);
+	}
+	function trySnapShape() {
+		snapTimer = null;
+		if (!drawing || drawing.snapped || !drawing.pts || drawing.pts.length < 8) return;
+		const shape = fitShape(drawing.pts);
+		if (!shape) return;
+		drawing.snapped = shape;
+		if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
+		drawStroke(drawing.ctx, { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0]], shape });
+		if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) { /* egal */ } }
+	}
+	// Erkennt Linie / Ellipse (Kreis) / Rechteck; unklare Kritzelei bleibt Freihand (null).
+	function fitShape(pts) {
+		const a = pts[0], b = pts[pts.length - 1];
+		const w = b[0] - a[0], h = b[1] - a[1], len = Math.hypot(w, h);
+		let pathLen = 0;
+		for (let i = 1; i < pts.length; i++) pathLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+		if (pathLen < 30) return null; // Punkte/Tupfer nie begradigen
+		let maxDev = 0;
+		for (const p of pts) maxDev = Math.max(maxDev, Math.abs(h * (p[0] - a[0]) - w * (p[1] - a[1])) / Math.max(1, len));
+		const closed = pts.length > 10 && Math.hypot(b[0] - a[0], b[1] - a[1]) < Math.max(18, pathLen * 0.2);
+		if (closed) {
+			let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+			pts.forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); });
+			const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = (maxX - minX) / 2, ry = (maxY - minY) / 2;
+			if (rx < 10 || ry < 10) return null;
+			let errRect = 0, errEllipse = 0;
+			pts.forEach((p) => {
+				const dxRect = Math.min(Math.abs(p[0] - minX), Math.abs(p[0] - maxX));
+				const dyRect = Math.min(Math.abs(p[1] - minY), Math.abs(p[1] - maxY));
+				errRect += Math.min(dxRect, dyRect);
+				const nx = rx ? (p[0] - cx) / rx : 0, ny = ry ? (p[1] - cy) / ry : 0;
+				errEllipse += Math.abs(Math.hypot(nx, ny) - 1) * Math.max(rx, ry);
+			});
+			if (errRect < errEllipse * 0.85) return { type: "rect", x1: minX, y1: minY, x2: maxX, y2: maxY };
+			return { type: "ellipse", cx, cy, rx, ry };
+		}
+		if (maxDev < Math.max(10, len * 0.1)) return { type: "line", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
+		return null;
 	}
 	function onMove(e) {
 		if (!drawing || rejected(e)) return;
@@ -949,11 +1044,14 @@ export const HEFT = (() => {
 			x.stroke(); x.restore();
 			return;
 		}
-		if (drawing.shape) {
-			drawing.pts.push(pos(e, drawing.cv));
+		if (drawing.snapped) {
+			// Nach dem Form-Snap: Linien-Endpunkt folgt dem Stift weiter,
+			// Kreis/Ellipse/Rechteck bleiben stehen (wie in Apple Notes).
+			const pSnap = pos(e, drawing.cv);
+			drawing.pts.push(pSnap);
+			if (drawing.snapped.type === "line") { drawing.snapped.x2 = pSnap[0]; drawing.snapped.y2 = pSnap[1]; }
 			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
-			const a = drawing.pts[0], b = drawing.pts[drawing.pts.length - 1], x = drawing.ctx;
-			drawStroke(x, { tool: "shape", color, size, pts: [a, b], shape: { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] } });
+			drawStroke(drawing.ctx, { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0]], shape: drawing.snapped });
 			return;
 		}
 		if (drawing.imgMove || drawing.imgResize) {
@@ -982,45 +1080,27 @@ export const HEFT = (() => {
 			const n = drawing.pts.length;
 			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(n - 2) });
 		}
+		// Halte-Erkennung: bewegt sich der Stift kaum noch (< 6 px), begradigt
+		// trySnapShape() den Strich nach kurzem Halten zur sauberen Form.
+		const lastP = drawing.pts[drawing.pts.length - 1];
+		if (!drawing.holdAnchor || Math.hypot(lastP[0] - drawing.holdAnchor[0], lastP[1] - drawing.holdAnchor[1]) > 6) armHoldSnap(lastP);
 	}
 	function onUp(e) {
 		if (e && e.pointerType === "pen") activePenPointers.delete(e.pointerId);
+		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+		const chromeUp = host && host.querySelector(".heft-chrome");
+		if (chromeUp) chromeUp.classList.remove("heft-writing");
 		if (!drawing) return;
 		const pi = drawing.pageIdx;
 		const pg = doc.pages[pi];
 		if (!pg) { drawing = null; return; }
 		if (drawing.lasso) {
 			const poly = drawing.pts;
-			const hits = pg.strokes.filter((s) => (s.pts || []).some((p) => pointInPolygon(p, poly)));
+			// Geometrie- statt Roh-Punkte: fängt auch Form-Snap-Striche (1 Roh-Punkt)
+			// und schnell gezogene Striche mit großen Punktabständen zuverlässig.
+			const hits = poly.length >= 3 ? pg.strokes.filter((s) => strokeOutline(s).some((p) => pointInPolygon(p, poly))) : [];
 			lassoSel = hits.length ? { pageIdx: pi, strokes: hits } : null;
 			drawing = null; redrawPage(pi); updateChrome(); return;
-		}
-		if (drawing.shape) {
-			const pts = drawing.pts, a = pts[0], b = pts[pts.length - 1];
-			const w = b[0] - a[0], h = b[1] - a[1], len = Math.hypot(w, h);
-			let maxDev = 0;
-			for (const p of pts) maxDev = Math.max(maxDev, Math.abs(h * (p[0] - a[0]) - w * (p[1] - a[1])) / Math.max(1, len));
-			const closed = pts.length > 10 && Math.hypot(b[0] - a[0], b[1] - a[1]) < Math.max(18, Math.min(Math.abs(w), Math.abs(h)) * .65);
-			let shape;
-			if (closed) {
-				let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-				pts.forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); });
-				const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = (maxX - minX) / 2, ry = (maxY - minY) / 2;
-				let errRect = 0, errEllipse = 0;
-				pts.forEach((p) => {
-					const dxRect = Math.min(Math.abs(p[0] - minX), Math.abs(p[0] - maxX));
-					const dyRect = Math.min(Math.abs(p[1] - minY), Math.abs(p[1] - maxY));
-					errRect += Math.min(dxRect, dyRect);
-					const nx = rx ? (p[0] - cx) / rx : 0, ny = ry ? (p[1] - cy) / ry : 0;
-					errEllipse += Math.abs(Math.hypot(nx, ny) - 1) * Math.max(rx, ry);
-				});
-				if (errRect < errEllipse * 0.85) shape = { type: "rect", x1: minX, y1: minY, x2: maxX, y2: maxY };
-				else shape = { type: "ellipse", cx, cy, rx, ry };
-			} else if (maxDev < Math.max(8, len * .08)) shape = { type: "line", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
-			else shape = { type: "rect", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
-			const stroke = { tool: "shape", color, size, pts: [a, b], shape };
-			pg.strokes.push(stroke); undoStack.push({ kind: "add", stroke, pageIdx: pi }); redoStack = [];
-			drawing = null; scheduleSave(); commitStrokeRender(pi, stroke); renderThumb(pi); updateChrome(); return;
 		}
 		if (drawing.laser) {
 			const laserPage = pi;
@@ -1045,8 +1125,11 @@ export const HEFT = (() => {
 				renderThumb(pi);
 			}
 		} else {
-			// Nur serialisierbare Felder speichern — nie Canvas/DOM am Stroke hängen
-			const stroke = { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
+			// Nur serialisierbare Felder speichern — nie Canvas/DOM am Stroke hängen.
+			// Form-Snap: wurde der Strich per Halten begradigt, als saubere Form sichern.
+			const stroke = drawing.snapped
+				? { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
+				: { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
 			pg.strokes.push(stroke);
 			undoStack.push({ kind: "add", stroke, pageIdx: pi });
 			redoStack = [];
@@ -1077,6 +1160,7 @@ export const HEFT = (() => {
 			// [Seiten-Liste, betroffene Objekte, fügt-Redo-hinzu?]
 			const spec = {
 				add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false], lassoDel: ["strokes", a.strokes, false],
+				lassoDup: ["strokes", a.strokes, true],
 				imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
 				txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],
 			}[a.kind];
@@ -1086,6 +1170,7 @@ export const HEFT = (() => {
 			else {
 				pg[key] = (pg[key] || []).filter((o) => !items.includes(o));
 				if (sel && items.some((o) => o.id && (sel.imgId === o.id || sel.txtId === o.id))) sel = null;
+				if (lassoSel && items.some((o) => lassoSel.strokes.includes(o))) lassoSel = null;
 			}
 		}
 		toStack.push(a);
@@ -1105,13 +1190,37 @@ export const HEFT = (() => {
 		if (!trayPos) return ""; // CSS: direkt unter der festen Haupt-Pill
 		return ' style="left:' + Math.round(trayPos.x) + 'px;top:' + Math.round(trayPos.y) + 'px;transform:none"';
 	}
+	// Platzsparmodus der Werkzeugleiste (17. Juli): Zustand überlebt Rerenders.
+	let chromeMin = false;
 	function toolbarHtml() {
 		const curPaper = page() ? page().paper : "lined";
 		const paperMeta = PAPERS.find((p) => p[0] === curPaper) || PAPERS[0];
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
-		const writeIcon = tool === "marker" ? "▮" : "✎";
+		// SVG-Icons wie im freigegebenen Toolbar-Redesign statt Text-Glyphen
+		const svgPen = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5a2.6 2.6 0 0 1 3.7 3.7L7.7 20.2 2.5 21.5l1.3-5.2z"/><path d="M14.5 6l3.5 3.5"/></svg>';
+		const svgMarker = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5l4 4L9.5 18.5h-4v-4z"/><path d="M4 21.5h16"/></svg>';
+		const svgEraser = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9l-4.3-4.3a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L13.5 18"/><path d="M8.5 9.5l6 6"/></svg>';
+		const svgLasso = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="9.5" rx="7.5" ry="5.5" stroke-dasharray="3.2 3"/><path d="M7.5 14.5c-2.2 1.8-.6 4.3 1.5 4.1 2-.2 1.2 2-.8 2.9"/></svg>';
+		const svgLaser = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4"/><path d="M12 4.2v2.2M12 17.6v2.2M4.2 12h2.2M17.6 12h2.2M6.5 6.5l1.6 1.6M15.9 15.9l1.6 1.6M17.5 6.5l-1.6 1.6M8.1 15.9l-1.6 1.6"/></svg>';
+		const svgImage = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l5-5 3.5 3.5 2.5-2.5 4 4"/></svg>';
+		const svgUndo = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5L4 9.5 8.5 14"/><path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/></svg>';
+		const svgRedo = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 5L20 9.5 15.5 14"/><path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/></svg>';
+		const writeIcon = tool === "marker" ? svgMarker : svgPen;
+		// Platzsparmodus: eingeklappt schrumpft die Leiste auf EINEN Knopf mit
+		// Farb-Indikator — maximale Schreibfläche. Ein Tipp klappt wieder aus.
+		if (chromeMin) {
+			return '<div class="heft-chrome heft-chrome-min" aria-hidden="false">' +
+				'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
+					'<div class="heft-pill heft-pill-min">' +
+						'<button type="button" data-heexpand="1" class="heft-main" title="Werkzeugleiste ausklappen">' +
+							writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span>' +
+							'<span class="heft-chev">▾</span></button>' +
+					'</div>' +
+				'</div>' +
+			'</div>';
+		}
 		// Hauptleiste bleibt fest. Nur das separate Options-Tray erhält einen Drag-Griff.
 		let tray = "";
 		if (showWrite) {
@@ -1119,9 +1228,9 @@ export const HEFT = (() => {
 				'<div class="heft-tray" data-hetray="1" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
 					'<button type="button" data-hetool="pen" class="heft-opt' + (tool === "pen" ? " active" : "") +
-						'" title="Stift">✎</button>' +
+						'" title="Stift">' + svgPen + '</button>' +
 					'<button type="button" data-hetool="marker" class="heft-opt' + (tool === "marker" ? " active" : "") +
-						'" title="Marker">▮</button>' +
+						'" title="Marker">' + svgMarker + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					SIZES.map(sizeLine).join("") +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
@@ -1135,10 +1244,12 @@ export const HEFT = (() => {
 						(onlyPen ? "🖊" : "✋") + '</button>' +
 				'</div>';
 		} else if (showEraser) {
+			// 🩹 QoL-Fix: eigene Radierer-Größen — die Stift-Stärken hier hatten NIE eine Wirkung (Radius war fest 14)
 			tray =
 				'<div class="heft-tray" data-hetray="1" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
-					SIZES.map(sizeLine).join("") +
+					[["Klein", 10], ["Mittel", 16], ["Groß", 30]].map((z) => '<button type="button" class="heft-size' + (eraserSize === z[1] ? " active" : "") +
+						'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
 				'</div>';
 		}
 		// Overlay: kein Banner. Die Haupt-Pill sitzt fest, das Tray wird separat gerendert.
@@ -1150,31 +1261,33 @@ export const HEFT = (() => {
 				'<div class="heft-pill">' +
 					'<button type="button" data-hewrite="1" class="heft-main' + (writeOn ? " active" : "") +
 						(showWrite ? " open" : "") + '" title="Schreiben">' +
-						writeIcon + '<span class="heft-chev">▾</span></button>' +
+						writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span><span class="heft-chev">▾</span></button>' +
 					'<button type="button" data-hetool="eraser" class="heft-main' + (tool === "eraser" ? " active" : "") +
-						(showEraser ? " open" : "") + '" title="Radierer">⌫</button>' +
+						(showEraser ? " open" : "") + '" title="Radierer">' + svgEraser + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
-						'" title="Lasso — Striche auswählen">⌁</button>' +
+						'" title="Lasso — Striche auswählen">' + svgLasso + '</button>' +
+					// Formen-Werkzeug entfernt: Strich am Ende einfach kurz gedrückt
+					// halten → wird automatisch zu Linie/Kreis/Ellipse/Rechteck (Form-Snap).
 					'<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
-						'" title="Laserpointer — nicht speichern">⊙</button>' +
-					'<button type="button" data-hetool="shape" class="heft-main' + (tool === "shape" ? " active" : "") +
-						'" title="Formen — Linie, Rechteck, Kreis">▱</button>' +
+						'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heimgmenu="1" class="heft-main' +
-						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">🖼</button>' +
+						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig"' +
-						(undoStack.length ? "" : " disabled") + '>↺</button>' +
+						(undoStack.length ? "" : " disabled") + '>' + svgUndo + '</button>' +
 					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen"' +
-						(redoStack.length ? "" : " disabled") + '>↻</button>' +
+						(redoStack.length ? "" : " disabled") + '>' + svgRedo + '</button>' +
+					'<span class="heft-sep" aria-hidden="true"></span>' +
+					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">⌄</button>' +
 				'</div>' +
 			'</div>' +
 			tray +
 			'<div class="heft-corner-r">' +
 				'<button type="button" class="heft-corner heft-chat" data-hechat="1" title="KI-Chat">✦</button>' +
 				'<button type="button" class="heft-corner heft-plus' + (pop && pop.dataset.kind === "plus" ? " active" : "") +
-					'" data-heplusmenu="1" title="Seite hinzufügen">＋</button>' +
+					'" data-heplusmenu="1" title="Seite hinzufügen">+</button>' +
 			'</div>' +
 		'</div>';
 	}
@@ -1186,7 +1299,7 @@ export const HEFT = (() => {
 			'</div>'
 		).join('');
 		// Chrome fliegt ÜBER dem Scroll — kein Platzverlust im Layout
-		return '<div class="heft-scroll"><div class="heft-pages">' + pages + '</div></div>' + toolbarHtml();
+		return '<div class="heft-scroll"><div class="heft-pages">' + pages + addPageGhostHtml() + '</div></div>' + toolbarHtml();
 	}
 	// Nur das Options-Tray ist verschiebbar. Die Hauptleiste bleibt bewusst fix.
 	function onTrayPointerDown(e) {
@@ -1220,7 +1333,7 @@ export const HEFT = (() => {
 		trayDrag = null;
 	}
 
-	// ---------- Toolbar-Popups (Seiten / Bilder / ＋) ----------
+	// ---------- Toolbar-Popups (Seiten / Bilder / +) ----------
 	function closePop() {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
@@ -1275,6 +1388,7 @@ export const HEFT = (() => {
 		return '<div class="heft-pop-head">Bilder</div>' +
 			'<button type="button" class="heft-pop-row" data-hetool="select">⬚ Bilder & Texte auswählen & bearbeiten</button>' +
 			'<div class="heft-pop-sep"></div>' +
+			'<button type="button" class="heft-pop-row" data-hetextadd="1">✍️ Text schreiben</button>' +
 			'<button type="button" class="heft-pop-row" data-heimgadd="1">🖼 Bild hinzufügen</button>' +
 			'<button type="button" class="heft-pop-row" data-heimgcam="1">📷 Bild aufnehmen</button>' +
 			'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
@@ -1299,13 +1413,117 @@ export const HEFT = (() => {
 			'<button type="button" class="heft-pop-row" data-heimport="1">⬳ Importieren</button>' +
 			'<button type="button" class="heft-pop-row" data-hescan="1">📷 Dateien scannen</button>';
 	}
+	// ✍️ Inline-Text-Editor (18. Juli 2026): Texte werden DIREKT auf der Seite
+	// geschrieben und bearbeitet — kein prompt()-Popup mehr. Doppeltipp mit dem
+	// Auswahl-Werkzeug auf eine Text-Box bearbeitet sie, Doppeltipp auf freie
+	// Fläche legt dort eine neue Box an (in der aktuellen Stiftfarbe).
+	function openTextEditor(pi, px, py, txt) {
+		closeTextEditor(true);
+		const slot = host && host.querySelectorAll(".heft-page-slot")[pi];
+		const cvEl = slot && slot.querySelector("canvas");
+		const pg = doc && doc.pages[pi];
+		if (!cvEl || !pg) return;
+		const k = cvEl.getBoundingClientRect().width / PAGE_W;
+		const fs = txt && txt.size ? txt.size : 30;
+		const w = txt ? txt.w : Math.max(240, Math.min(420, PAGE_W - px - 40));
+		const ta = document.createElement("textarea");
+		ta.className = "heft-text-editor";
+		ta.value = txt ? txt.text : "";
+		ta.style.left = ((txt ? txt.x : px) * k + cvEl.offsetLeft) + "px";
+		ta.style.top = ((txt ? txt.y : py) * k + cvEl.offsetTop) + "px";
+		ta.style.width = Math.max(80, w * k) + "px";
+		ta.style.font = "500 " + (fs * k) + "px ui-rounded, 'Segoe Print', sans-serif";
+		ta.style.lineHeight = String(TEXT_LH);
+		ta.style.color = txt ? (txt.color || "#1c1c1e") : color;
+		slot.appendChild(ta);
+		inlineEd = { ta, pi, txt, x: px, y: py };
+		if (txt) { txt.hidden = true; redrawPage(pi); } // Original ausblenden, sonst doppelt sichtbar
+		const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+		fit();
+		ta.addEventListener("input", fit);
+		ta.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+		ta.addEventListener("keydown", (ev) => {
+			ev.stopPropagation();
+			if (ev.key === "Escape") { ev.preventDefault(); closeTextEditor(false); }
+			else if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); closeTextEditor(true); }
+		});
+		ta.addEventListener("blur", () => closeTextEditor(true));
+		setTimeout(() => ta.focus(), 40);
+	}
+	function closeTextEditor(commit) {
+		if (!inlineEd) return;
+		const { ta, pi, txt, x: px, y: py } = inlineEd;
+		inlineEd = null;
+		const val = String(ta.value || "");
+		ta.remove();
+		const pg = doc && doc.pages[pi];
+		if (txt) delete txt.hidden;
+		if (!pg) return;
+		const body = val.replace(/\s+$/, "");
+		if (commit && txt && body.trim() && body !== txt.text) {
+			undoStack.push({ kind: "txtEdit", txt, prev: txt.text, pageIdx: pi }); redoStack = [];
+			txt.text = body; scheduleSave();
+		} else if (commit && txt && !body.trim()) {
+			pg.texts = textsOf(pg).filter((t2) => t2 !== txt);
+			undoStack.push({ kind: "txtDel", txt, pageIdx: pi }); redoStack = [];
+			if (sel && sel.txtId === txt.id) sel = null;
+			scheduleSave();
+		} else if (commit && !txt && body.trim()) {
+			const t = { id: U.uid(), text: body, x: px, y: py, w: Math.max(240, Math.min(420, PAGE_W - px - 40)), h: 60, size: 30, color };
+			textsOf(pg).push(t);
+			undoStack.push({ kind: "txtAdd", txt: t, pageIdx: pi }); redoStack = [];
+			sel = { pageIdx: pi, txtId: t.id, tapAt: 0 };
+			scheduleSave();
+		}
+		redrawPage(pi); renderThumb(pi); updateChrome();
+	}
 	function updateChrome() {
 		if (!host || !doc) return;
 		const chrome = host.querySelector(".heft-chrome");
 		if (chrome) { const t = document.createElement("div"); t.innerHTML = toolbarHtml(); chrome.replaceWith(t.firstChild); }
 		else host.insertAdjacentHTML("beforeend", toolbarHtml());
 		bindTrayDrag();
+		updateLassoBar();
 		refreshPagesPop();
+	}
+	// 🪢 Lasso-Aktionsleiste: auf dem iPad gibt es keine Entf-Taste — nach einer
+	// Auswahl erscheint darum eine schwebende Leiste mit Löschen/Aufheben.
+	function updateLassoBar() {
+		if (!host) return;
+		let bar = host.querySelector(".heft-lasso-bar");
+		if (!lassoSel || !lassoSel.strokes.length) { if (bar) bar.remove(); return; }
+		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
+		const n = lassoSel.strokes.length;
+		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + "</span>" +
+			'<button type="button" data-helassodup="1">⧉ Duplizieren</button>' +
+			'<button type="button" data-helassodel="1">🗑 Löschen</button>' +
+			'<button type="button" data-helassoclear="1">Aufheben</button>';
+	}
+	function duplicateLassoSelection() {
+		if (!lassoSel || !doc) return;
+		const pg = doc.pages[lassoSel.pageIdx];
+		if (!pg) return;
+		// Kopien leicht versetzt einfügen und direkt als neue Auswahl übernehmen
+		const copies = lassoSel.strokes.map((s) => {
+			const c = JSON.parse(JSON.stringify(s));
+			(c.pts || []).forEach((p) => { p[0] += 28; p[1] += 28; });
+			if (c.shape) { const sh = c.shape; ["x1", "x2", "cx"].forEach((k2) => { if (sh[k2] != null) sh[k2] += 28; }); ["y1", "y2", "cy"].forEach((k2) => { if (sh[k2] != null) sh[k2] += 28; }); }
+			return c;
+		});
+		pg.strokes.push(...copies);
+		undoStack.push({ kind: "lassoDup", strokes: copies, pageIdx: lassoSel.pageIdx }); redoStack = [];
+		lassoSel = { pageIdx: lassoSel.pageIdx, strokes: copies };
+		scheduleSave(); redrawPage(lassoSel.pageIdx); renderThumb(lassoSel.pageIdx); updateChrome();
+	}
+	function deleteLassoSelection() {
+		if (!lassoSel || !doc) return;
+		const pg = doc.pages[lassoSel.pageIdx];
+		if (!pg) { lassoSel = null; updateChrome(); return; }
+		const strokes = lassoSel.strokes.slice();
+		pg.strokes = pg.strokes.filter((s) => !strokes.includes(s));
+		undoStack.push({ kind: "lassoDel", strokes, pageIdx: lassoSel.pageIdx }); redoStack = [];
+		const lpi = lassoSel.pageIdx; lassoSel = null;
+		scheduleSave(); redrawPage(lpi); renderThumb(lpi); updateChrome();
 	}
 	function bindTrayDrag() {
 		const tray = host && host.querySelector("[data-hetray]");
@@ -1336,7 +1554,9 @@ export const HEFT = (() => {
 	function go(i) {
 		if (!doc) return;
 		idx = Math.max(0, Math.min(doc.pages.length - 1, i));
-		undoStack = []; redoStack = []; drawing = null;
+		// 🩹 QoL-Fix: Blättern löscht den Undo-Verlauf NICHT mehr — jede Aktion
+		// kennt ihre Seite (pageIdx), Undo funktioniert seitenübergreifend.
+		drawing = null;
 		const slot = host && host.querySelectorAll(".heft-page-slot")[idx];
 		if (slot) slot.scrollIntoView({ behavior: "smooth", block: "center" });
 		updateChrome();
@@ -2205,6 +2425,9 @@ export const HEFT = (() => {
 		const b = e.target.closest("button, .heft-pop-thumb");
 		if (!b || !doc) return;
 		const d = b.dataset;
+		if (d.helassodup) { duplicateLassoSelection(); return; }
+		if (d.helassodel) { deleteLassoSelection(); return; }
+		if (d.helassoclear) { const lpi = lassoSel && lassoSel.pageIdx; lassoSel = null; if (lpi != null) redrawPage(lpi); updateChrome(); return; }
 		if (suppressEraserClick && d.hetool === "eraser") return;
 		if (d.hepagesmenu) { togglePop("pages", b); return; }
 		if (d.heplusmenu) { togglePop("plus", b); return; }
@@ -2217,9 +2440,11 @@ export const HEFT = (() => {
 			return;
 		}
 		if (d.headdtpl) { closePop(); addPageAt(d.headdtpl); return; }
+		if (d.headdend) { addPageAtEnd(); return; }
 		if (d.headdimg) { closePop(); pickImage(false, addImagePageFromFile); return; }
 		if (d.heimport) { closePop(); importFiles(); return; }
 		if (d.hescan) { closePop(); openScanner(); return; }
+		if (d.hetextadd) { closePop(); tool = "select"; expanded = false; openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
 		if (d.hewrite) {
@@ -2248,8 +2473,11 @@ export const HEFT = (() => {
 			if (tool === "eraser" || tool === "select") { tool = "pen"; expanded = true; }
 		}
 		else if (d.hesize) size = parseFloat(d.hesize);
+		else if (d.heerasersize) eraserSize = parseFloat(d.heerasersize);
 		else if (d.heundo) { undo(); return; }
 		else if (d.heredo) { redo(); return; }
+		else if (d.hecollapse) { chromeMin = true; updateChrome(); return; }
+		else if (d.heexpand) { chromeMin = false; updateChrome(); return; }
 		else if (d.heonlypen) { onlyPen = !onlyPen; }
 		else if (d.hepapercycle) {
 			const pg = page(); if (!pg) return;
@@ -2264,11 +2492,18 @@ export const HEFT = (() => {
 			return;
 		}
 		else return;
+		saveToolPrefs();
 		updateChrome();
 	}
 	function onKey(e) {
 		const t = e.target;
 		if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+		// ⌨️ QoL: Strg/Cmd+Z = Rückgängig · Strg/Cmd+Shift+Z oder Strg+Y = Wiederholen
+		if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z" || e.key === "y")) {
+			e.preventDefault();
+			if (e.key === "y" || e.shiftKey) redo(); else undo();
+			return;
+		}
 		if (e.key === "Escape") {
 			if (scanUI && scanUI.edit) { e.preventDefault(); closeEdit(); }
 			else if (scanUI) { e.preventDefault(); closeScanner(); }
@@ -2276,15 +2511,8 @@ export const HEFT = (() => {
 			return;
 		}
 		if ((e.key === "Delete" || e.key === "Backspace") && lassoSel && doc) {
-			const pg = doc.pages[lassoSel.pageIdx];
-			if (pg) {
-				e.preventDefault();
-				const strokes = lassoSel.strokes.slice();
-				pg.strokes = pg.strokes.filter((s) => !strokes.includes(s));
-				undoStack.push({ kind: "lassoDel", strokes, pageIdx: lassoSel.pageIdx }); redoStack = [];
-				const lpi = lassoSel.pageIdx; lassoSel = null;
-				scheduleSave(); redrawPage(lpi); renderThumb(lpi); updateChrome();
-			}
+			e.preventDefault();
+			deleteLassoSelection();
 			return;
 		}
 		if ((e.key === "Delete" || e.key === "Backspace") && sel && doc) {
@@ -2398,6 +2626,35 @@ export const HEFT = (() => {
 		// Desktop: Strg/Cmd + Mausrad zoomt direkt auf der Papierfläche (statt Browser-Zoom)
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
 	}
+	// ➕ QoL + Bugfix von der „kommt noch“-Seite: neue Seite direkt am Heft-Ende —
+	// als Geisterknopf UND per Runterzieh-Geste (auf der letzten Seite weiter
+	// hochschieben, kurz halten, loslassen → neue Seite im gleichen Papierstil).
+	const addPageGhostHtml = () => '<button type="button" class="heft-addpage" data-headdend="1">＋ Neue Seite</button>';
+	let pull = null; // { y0, startAtEnd, armed }
+	function addPageAtEnd() {
+		const prevPos = insertPos;
+		insertPos = "last";
+		addPageAt(doc && doc.pages.length ? doc.pages[doc.pages.length - 1].paper : "lined");
+		insertPos = prevPos;
+	}
+	function bindPullToAdd() {
+		const scroll = scrollEl();
+		if (!scroll || scroll.dataset.hepull) return;
+		scroll.dataset.hepull = "1";
+		const atEnd = () => scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4;
+		scroll.addEventListener("touchstart", (ev) => { pull = { y0: ev.touches[0].clientY, startAtEnd: atEnd(), armed: false }; }, { passive: true });
+		scroll.addEventListener("touchmove", (ev) => {
+			if (!pull || !pull.startAtEnd) return;
+			const dy = pull.y0 - ev.touches[0].clientY;
+			const btn = scroll.querySelector(".heft-addpage");
+			if (atEnd() && dy > 70) { pull.armed = true; if (btn) { btn.classList.add("armed"); btn.textContent = "⬆ Loslassen: neue Seite"; } }
+			else if (pull.armed) { pull.armed = false; if (btn) { btn.classList.remove("armed"); btn.textContent = "＋ Neue Seite"; } }
+		}, { passive: true });
+		scroll.addEventListener("touchend", () => {
+			if (pull && pull.armed) addPageAtEnd();
+			pull = null;
+		});
+	}
 	function rebuildScroll() {
 		if (!host || !doc) return;
 		const scroll = host.querySelector(".heft-scroll");
@@ -2408,7 +2665,7 @@ export const HEFT = (() => {
 				'<canvas class="heft-canvas"></canvas>' +
 				'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
 			'</div>'
-		).join('') + '</div>';
+		).join('') + addPageGhostHtml() + '</div>';
 		bindCanvas();
 		layout();
 		scroll.scrollTop = keep;
@@ -2426,6 +2683,7 @@ export const HEFT = (() => {
 		// Haupt-Pill ist immer fest. Tray startet direkt darunter und kann danach verschoben werden.
 		trayPos = null; trayDrag = null;
 		host.innerHTML = viewHtml();
+		bindPullToAdd();
 		host.addEventListener("click", onHostClick);
 		host.addEventListener("pointerdown", onHostPointerDown);
 		host.addEventListener("pointerup", onHostPointerUp);

@@ -154,28 +154,36 @@ export async function closeTab(pageId) {
 // Die Home-Übersicht ist der feste Anfang der Navigation. Sie ist bewusst
 // kein künstlicher Seitentab: offene Dokument-/Chat-Tabs bleiben erhalten,
 // während die Übersicht jederzeit als neutraler Ausgangspunkt erreichbar ist.
-export function openHomeOverview() {
+export function openHomeOverview(opts) {
 	S.view = "home";
 	S.sidebarMode = "files";
 	S.currentPageId = null;
 	S.activeTabId = null;
-	S.navHistory = [];
-	S.navIndex = -1;
+	// FIX Zurück-Logik (17. Juli): Kommt man per „Zurück“ zur Übersicht, bleibt
+	// der Verlauf erhalten — „Vorwärts“ führt danach wieder zur Seite zurück.
+	// Nur ein direkter Sprung zur Übersicht (Logo/Home) beginnt frisch.
+	if (!(opts && opts.keepHistory)) {
+		S.navHistory = [];
+		S.navIndex = -1;
+	}
 	POPOVERS.blurActive();
 	render();
 }
 
 export function navBack() {
-	// Vom ersten Verlaufseintrag führt Zurück immer zur Home-Übersicht, nie in
-	// einen leeren oder alten Tab-Zustand.
+	// Vom ersten Verlaufseintrag führt Zurück zur Home-Übersicht — der Verlauf
+	// bleibt erhalten (Index -1 = „vor dem ersten Eintrag“). Vorher wurde der
+	// Verlauf hier gelöscht: „Vorwärts“ war danach immer tot und weiteres
+	// „Zurück“ fühlte sich willkürlich an — das war die komische Zurück-Logik.
 	if (S.navIndex <= 0) {
-		openHomeOverview();
+		S.navIndex = -1;
+		openHomeOverview({ keepHistory: true });
 		return;
 	}
 	S.navIndex--;
 	const id = S.navHistory[S.navIndex];
 	if (id) openPage(id, { skipHistory: true });
-	else openHomeOverview();
+	else openHomeOverview({ keepHistory: true });
 }
 
 export function navForward() {

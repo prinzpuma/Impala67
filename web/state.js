@@ -805,6 +805,9 @@ export const STATE = (() => {
 	// Learn-Ahead: wenn sonst nichts da ist, Learning bis 20 Min vorziehen.
 	// „Fertig jetzt“ = keine verfügbare Karte; spätere Learning-Karten heute bleiben geplant.
 	const LEARN_AHEAD_MS = 20 * 60e3;
+	// Overlearning-Sperre: frisch bewertete Karten erst wieder zeigen, wenn sie wirklich
+	// fällig sind (kein vorgezogenes Learn-Ahead-Drillen direkt nach der Bewertung).
+	const OVERLEARN_LOCK_MS = 10 * 60e3;
 
 	function studySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
@@ -871,10 +874,36 @@ export const STATE = (() => {
 		const limitedRev = takeLimited(reviewsRaw, "rev");
 		const limitedNew = takeLimited(newRaw, "new");
 
+		// Overlearning-Sperre: frisch bewertete Karten (< 10 Min) nicht vorzeitig per
+		// Learn-Ahead zeigen — sofortiges Nochmal-Drillen füttert nur das Kurzzeit-
+		// gedächtnis („Illusion of Competence“). Wirklich fällige Karten sperrt das nie.
+		const lockCut = t.getTime() - OVERLEARN_LOCK_MS;
+		const freshRated = new Set((S.reviews || [])
+			.filter((r) => new Date(r.t).getTime() > lockCut)
+			.map((r) => r.cardId));
+		const lockOn = localStorage.getItem("impala67Overlearn") !== "off"; // Einstellung: Overlearning-Sperre
+		const aheadFree = lockOn ? learnAhead.filter((c) => !freshRated.has(c.id)) : learnAhead.slice();
+		const lockedAhead = learnAhead.length - aheadFree.length;
+
+		// Interleaved Practice („Gemischt lernen“): Reviews+New stapelübergreifend
+		// deterministisch mischen (Hash aus Karten-ID + Tag → stabil über Re-Render,
+		// Tastatur und Klick sehen dieselbe Karte).
+		let revNew = limitedRev.concat(limitedNew);
+		if (S.ankiMix) {
+			const day = t.toISOString().slice(0, 10);
+			const mixKey = (id) => {
+				let h = 0;
+				const str = id + day;
+				for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+				return h;
+			};
+			revNew = revNew.slice().sort((a, b) => mixKey(a.id) - mixKey(b.id));
+		}
+
 		// Normale Queue: Learning jetzt → Reviews → New (Learning nie limitiert)
-		let dueNow = learnDueNow.concat(limitedRev).concat(limitedNew);
+		let dueNow = learnDueNow.concat(revNew);
 		// Learn-Ahead nur wenn sonst die Queue leer wäre (Anki-Default 20 Min)
-		if (!dueNow.length && learnAhead.length) dueNow = learnAhead.slice();
+		if (!dueNow.length && aheadFree.length) dueNow = aheadFree.slice();
 
 		const nextLearnAt = (() => {
 			const pool = learnAll
@@ -906,6 +935,7 @@ export const STATE = (() => {
 				total: dueNow.length + (available ? 0 : learnWaiting.length),
 			},
 			nextLearnAt,
+			lockedAhead,
 			// done = wirklich nichts mehr heute (auch keine späteren Lernschritte)
 			done: !available && learnWaiting.length === 0,
 			// finishedForNow = Anki „finished this deck for now" (später heute noch Learning)

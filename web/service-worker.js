@@ -93,7 +93,16 @@
 // v64: styles.css-Refactor — 12 % kleiner: Kommentare komprimiert, Duplikate
 //      zusammengeführt, iPad-Sonderrahmen komplett entfernt (UI = Desktop,
 //      Safe-Area nur noch als max()-Innenabstand), Statusleiste opak (index.html).
-const CACHE = "impala67-v64";
+// v65: Neuer-Tab-„+“ als kleiner quadratischer Knopf direkt hinter dem letzten
+//      Tab (Browser-Standard) statt tab-breiter Fläche (min-width-Bug in .tabchip-new).
+// v66: Phase 1 komplett — Overlearning-Sperre (frisch bewertete Karten nicht mehr
+//      sofort per Learn-Ahead drillbar, Hinweis „Kurzzeitgedächtnis-Falle“) und
+//      Interleaved Practice (🔀 Gemischt lernen: Reviews+New stapelübergreifend
+//      deterministisch gemischt). state.js, render-anki.js, app.js.
+// v71: Bugfix-Paket Chat/Gedankengang — Live-Think-Box in-place gepatcht +
+//      pointerdown-Toggle (render.js, app.js), Tool-Gating für Abruf-Fragen,
+//      Netzwerk-Retry bei "Failed to fetch", rollierende Chat-Zusammenfassung (ai.js)
+const CACHE = "impala67-v76"; // v76: ✍️ Inline-Text-Editor, ➕ Pull-to-add-Seite, 🩹 Radierer-Größen, ⧉ Lasso-Duplizieren + 10 QoL // v75: 🧽 Radierer trifft die echte Strich-Geometrie (auch Form-Snap-Linien) + 🪢 Lasso-Fix mit Aktionsleiste // v74: 📈 Lern-Analyse (analyse.js) + 🤖 Graph-KI (Entitäten, Synthese-Fragen, Mapping-Karten) // v73: 🕸 Wissensgraph (neues Modul graph.js), Form-Snap statt Formen-Tool + SVG-Toolbar-Icons, 🧑‍🏫 Feynman-Lernmodus beim Stapel-Start, Tool-Angebot v3 (Schalter + request_tools) // v72: 🧪 Experimente (Phase 2 KI-Lernmodi, neues Modul experimente.js), Anki-Lernlayout, kompakte Heft-Toolbar mit Schreib-Rückzug, Zurück-Logik-Fix, Neuer-Chat-Button, Tool-Gating v2 // v70: Performance-Runde (Chat-Signatur ohne Stringify, Stream-Drossel, Papierkorb-GC im Hintergrund) // v68: Feinschliff v9 (native Controls, +-Zeichen, Touch-Ziele, Autofill)
 
 const APP_FILES = [
 	"./",
@@ -125,6 +134,9 @@ const APP_FILES = [
 	"./lernzeit.js",
 	"./telemetrie.js",
 	"./schulnoten.js",
+	"./experimente.js",
+	"./graph.js",
+	"./analyse.js",
 	"./editor.js",
 	"./render.js",
 	"./library.js",

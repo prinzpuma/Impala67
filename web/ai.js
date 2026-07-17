@@ -57,6 +57,10 @@ export const AI = (() => {
 	}
 	// Offene Rückfragen (ask_choice / Lösch-Bestätigungen): Frage-mid → resolve().
 	const pendingChoices = Object.create(null);
+	// Rollierende Chat-Zusammenfassung je Chat (Kontext über das Verlaufsfenster
+	// hinaus, 17. Juli): summaryKey → { count, text }. Nur im Speicher — beim Reload
+	// wird sie beim nächsten Überlauf einfach neu aufgebaut.
+	const chatSummaries = Object.create(null);
 
 	// =========================================================================
 	// Quellen & Konfiguration
@@ -202,21 +206,22 @@ export const AI = (() => {
 			},
 		}));
 	}
-	// Tool-Schemas sind für Gemma deutlich fehleranfälliger als ein normaler
-	// Chat-Aufruf. Sie werden daher nur dann geschickt, wenn der aktuelle Auftrag
-	// tatsächlich eine Aktion oder Recherche verlangt — nie bei „hi“/„denk mal
-	// nach“. Das bewahrt Tool-Calling, beseitigt aber die unnötigen 500er.
-	// BUGFIX (15. Juli): Die Erkennung war zu eng — „notiere das“, „schreib das
-	// auf“, englische Aufträge und Folge-Aufträge („mach das“, „ja, bitte“)
-	// bekamen keine Tools angeboten. Jetzt: breiteres Muster (DE+EN), und Tools
-	// bleiben aktiv, wenn in den letzten Runden bereits Tools benutzt wurden.
-	const TOOL_INTENT_RE = /\b(seite|seiten|notiz|notizen|notier|karteikarte|karteikarten|karte\b|karten\b|stapel|deck|lösche|loesch|erstell|anleg|verschieb|hänge|haenge|ergänz|ergaenz|ersetz|speicher|merk dir|schreib|aufschreiben|umbenenn|benenn|aktualisier|dokumentier|füge|fuege|such|finde|liste|zeig.*seiten|lies|lese|zusammenfass|recherch|notebooklm|page|pages|note|notes|flashcard|create|delete|remove|add|write|save|search|find|list|read|summari[sz]e|rename|update)\b/i;
-	function shouldOfferTools(userText, chatLog) {
-		if (TOOL_INTENT_RE.test(String(userText || ""))) return true;
-		// Folge-Aufträge: wurden zuletzt Tools/Edits/Rückfragen benutzt, bleibt das
-		// Tool-Angebot bestehen (sonst scheiterte „ja, mach das“ nach einer Aktion).
-		return (chatLog || []).slice(-10).some((m) => m && (m.role === "tool" || m.role === "edit" || m.role === "question"));
-	}
+	// Tool-Angebot v3 (17. Juli, abends): Die Wortlisten-Heuristik ist komplett
+	// entfernt. Standard („Tools immer mitsenden“, Einstellungen → KI): ALLE
+	// Werkzeuge gehen bei jeder Anfrage mit. Ausgeschaltet: nur das Meta-Werkzeug
+	// unten geht mit — ruft die KI es auf, läuft DIESELBE Anfrage sofort mit der
+	// vollen Liste weiter. So entscheidet das MODELL statt einer Regex.
+	const META_TOOL_DEF = {
+		type: "function",
+		function: {
+			name: "request_tools",
+			description: "Schaltet die vollständige Werkzeugliste frei (Notizen lesen/erstellen/ändern, Suche, Karteikarten, NotebookLM …). Rufe dieses Werkzeug auf, sobald die Anfrage Zugriff auf Notizen, Karten, Hefte oder Aktionen im Workspace erfordern könnte.",
+			parameters: { type: "object", properties: {}, required: [] },
+		},
+	};
+	// Einmal freigeschaltet, bleiben die Werkzeuge für die Sitzung verfügbar —
+	// sonst scheiterte „ja, mach das“ direkt nach einer Freischaltung wieder.
+	let toolsUnlocked = false;
 	const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 	// =========================================================================
@@ -354,10 +359,18 @@ export const AI = (() => {
 				});
 				return message;
 			} catch (error) {
-				const retryable = error instanceof AiHttpError && error.status >= 500 && !produced;
+				// BUGFIX (17. Juli): "Failed to fetch" (Netzwerk/CORS/kurzer Ausfall) ist
+				// ein TypeError, kein AiHttpError — er wurde nie erneut versucht und
+				// landete als kryptische Meldung im Chat. Jetzt: dieselben Backoff-
+				// Retries wie bei 5xx, solange noch nichts gestreamt wurde.
+				const isNetworkError = !(error instanceof AiHttpError) && (error instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(String((error && error.message) || error)));
+				const retryable = !produced && ((error instanceof AiHttpError && error.status >= 500) || isNetworkError);
 				if (!retryable) throw error;
 				lastError = error;
 			}
+		}
+		if (lastError && !(lastError instanceof AiHttpError)) {
+			throw new Error("Keine Verbindung zum KI-Server (" + String((lastError && lastError.message) || lastError) + "). Prüfe Internet, Endpoint und CORS in den Einstellungen → KI.");
 		}
 		throw lastError || new Error("KI-Anfrage fehlgeschlagen.");
 	}
@@ -529,7 +542,7 @@ export const AI = (() => {
 	// jetzt in Tools (get_context, list_pages, read_page, semantic_search); die
 	// Formatierungs-Erweiterungen stehen in den Beschreibungen der Schreib-Tools.
 	// Relevante Notiz-Auszüge zur AKTUELLEN Frage liefert Auto-RAG (siehe agent()).
-	function systemPrompt(type, toolsEnabled, ragContext) {
+	function systemPrompt(type, toolsEnabled, ragContext, chatSummary) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const now = new Date();
 		const lines = [
@@ -538,7 +551,7 @@ export const AI = (() => {
 			cur ? 'Geöffnete Seite: "' + cur.title + '"' : "Keine Seite geöffnet.",
 			toolsEnabled
 				? "Nutze deine Tools aktiv statt zu raten. Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Löschen wird immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz, was geändert wurde."
-				: "Für diese Anfrage sind keine Werkzeuge freigegeben. Nenne keine internen Funktionsnamen und behaupte keine Änderungen an Seiten oder Karten.",
+				: "Für diese Anfrage sind keine Werkzeuge aktiv. Antworte direkt aus dem vorhandenen Kontext. Sprich NIE über Werkzeuge, fehlenden Daten-Zugriff oder „dieses Chat-Fenster“ und behaupte keine Suchen oder Änderungen. Wären Notiz-Inhalte nötig, bitte den Nutzer, die Frage konkret zu formulieren (z. B. „Durchsuche meine Notizen nach …“).",
 			"Niemals Selbstgespräche/Meta-Kommentare im sichtbaren Text ('Der Nutzer möchte…', 'I should…'). Ausführliches Nachdenken gehört AUSSCHLIESSLICH in <think>...</think> VOR der Antwort.",
 		];
 		// Nur das Seitenpanel bekommt den Seiteninhalt direkt — das ist sein Zweck.
@@ -548,6 +561,9 @@ export const AI = (() => {
 			lines.push("Inhalt der geöffneten Seite" + (body.length > 6000 ? " (gekürzt)" : "") + ":\n" + (body.slice(0, 6000) || "(Leere Seite)"));
 		}
 		if (ragContext) lines.push("Automatisch gefundene, möglicherweise relevante Notiz-Auszüge:\n" + ragContext);
+		// Kontextbasierte Chat-Länge (17. Juli): ältere, nicht mehr mitgeschickte
+		// Nachrichten fließen als rollierende Zusammenfassung ein (wie in Notion).
+		if (chatSummary) lines.push("Zusammenfassung des bisherigen Gesprächs (ältere Nachrichten, nicht mehr im Verlauf):\n" + chatSummary);
 		if (S.settings.customInstructions && S.settings.customInstructions.trim()) {
 			lines.push("Zusätzliche Anweisungen (aus den Einstellungen):\n" + S.settings.customInstructions.trim());
 		}
@@ -683,7 +699,17 @@ export const AI = (() => {
 				if (m.image) return { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] };
 				return { role: m.role, content };
 			});
-		const agentTools = shouldOfferTools(userText, targetChat) ? TOOLS.defs : null;
+		// Tool-Angebot v3 (17. Juli, abends): keine Heuristik mehr. Einstellung
+		// „Tools immer mitsenden“ (Standard AN) → volle Liste bei jeder Anfrage.
+		// AUS → nur das Meta-Werkzeug request_tools; fordert die KI damit die
+		// Werkzeuge an, läuft dieselbe Anfrage sofort mit der vollen Liste weiter.
+		const fullToolDefs = () => {
+			let defs = TOOLS.defs.slice();
+			// 🧪 Experimente: optionale Zusatz-Werkzeuge (z. B. Wissenslücken-Detektor)
+			if (window.EXP && typeof window.EXP.extraToolDefs === "function") defs = defs.concat(window.EXP.extraToolDefs());
+			return defs;
+		};
+		let agentTools = (S.settings.alwaysSendTools !== false || toolsUnlocked) ? fullToolDefs() : [META_TOOL_DEF];
 		// Auto-RAG (15. Juli): statt statischer Listen im Prompt werden die
 		// relevantesten Notiz-Auszüge zur AKTUELLEN Frage still eingebettet.
 		// Fehler oder fehlendes Embedding-Modell degradieren lautlos zu
@@ -698,15 +724,51 @@ export const AI = (() => {
 					.join("\n");
 			}
 		} catch (e) { debugEvent("Auto-RAG übersprungen", { error: String((e && e.message) || e).slice(0, 200) }); }
-		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools, ragContext) }, ...history];
+		// Kontextbasierte Chat-Länge (17. Juli): Nachrichten JENSEITS des Verlaufs-
+		// fensters gehen nicht mehr verloren, sondern werden inkrementell zusammen-
+		// gefasst (alte Zusammenfassung + neu herausgefallene Nachrichten) und in den
+		// System-Prompt eingebettet. Auffrischung erst ab 4 neuen Überlauf-Nachrichten;
+		// Fehler degradieren lautlos zu "keine Zusammenfassung" — nie zu einem Chat-Fehler.
+		let chatSummary = "";
+		try {
+			const convo = targetChat.filter((m) => m.role === "user" || m.role === "assistant");
+			const overflow = convo.slice(0, Math.max(0, convo.length - historyLimit()));
+			if (overflow.length) {
+				const summaryKey = type + ":" + ((type === "side" ? S.sideChatId : S.currentChatId) || "neu");
+				const cached = chatSummaries[summaryKey];
+				if (cached && overflow.length - cached.count < 4) {
+					chatSummary = cached.text;
+				} else {
+					const fresh = cached ? overflow.slice(cached.count) : overflow;
+					const transcript = fresh.map((m) => (m.role === "user" ? "Nutzer: " : "KI: ") + String(m.content || "").replace(/\s+/g, " ").slice(0, 600)).join("\n");
+					const summaryMsg = await chatOnce([
+						{ role: "system", content: "Du fasst einen Chat-Verlauf zusammen. Maximal 120 Wörter. Behalte Fakten, Namen, Entscheidungen, offene Aufgaben und Nutzer-Vorlieben. Antworte NUR mit der Zusammenfassung." },
+						{ role: "user", content: (cached ? "Bisherige Zusammenfassung:\n" + cached.text + "\n\nNeue Nachrichten:\n" : "Verlauf:\n") + transcript },
+					]);
+					const summaryText = String(summaryMsg.content || "").trim();
+					if (summaryText) {
+						chatSummaries[summaryKey] = { count: overflow.length, text: summaryText };
+						chatSummary = summaryText;
+					} else if (cached) chatSummary = cached.text;
+				}
+			}
+		} catch (e) { debugEvent("Chat-Zusammenfassung übersprungen", { error: String((e && e.message) || e).slice(0, 200) }); }
+		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools, ragContext, chatSummary) }, ...history];
 		debugEvent("Tool-Modus", { enabled: !!agentTools, reason: agentTools ? "Aktueller Auftrag benötigt Tools" : "Normaler Chat ohne Tool-Bedarf" });
 
 		// Max. 1 Chat-Log-Rebuild pro Frame (LaTeX/Code-Rendering ist teuer).
-		let renderQueued = false;
+		// PERF (Feinschliff v11): vorher bis zu 60 Rebuilds/s (rAF) — Markdown/KaTeX
+		// über den wachsenden Draft wurde bei langen Antworten spürbar teuer.
+		// ~12 Rebuilds/s sind optisch identisch flüssig.
+		let renderQueued = false, lastLiveRender = 0;
 		const scheduleRender = () => {
 			if (renderQueued) return;
 			renderQueued = true;
-			requestAnimationFrame(() => { renderQueued = false; renderLog(); });
+			setTimeout(() => {
+				renderQueued = false;
+				lastLiveRender = Date.now();
+				renderLog();
+			}, Math.max(16, 80 - (Date.now() - lastLiveRender)));
 		};
 
 		// Frage-Karte anzeigen und auf Klick warten (ask_choice + Lösch-Bestätigungen).
@@ -769,6 +831,17 @@ export const AI = (() => {
 				const name = tc.function.name;
 				let args = {};
 				try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* leere Argumente */ }
+
+				// --- Meta-Werkzeug (Sparmodus): volle Werkzeugliste freischalten ---
+				if (name === "request_tools") {
+					toolsUnlocked = true;
+					agentTools = fullToolDefs();
+					if (onStep) onStep(name);
+					pushToolChip(name, "Werkzeuge freigeschaltet");
+					scheduleRender();
+					pushToolResult(tc, { ok: true, hinweis: "Alle Werkzeuge sind jetzt in dieser Anfrage verfügbar." });
+					continue;
+				}
 
 				// --- Lösch-Tools: gemeinsame Bestätigungs-Pipeline ---
 				if (DELETE_SPECS[name]) {

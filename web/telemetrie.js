@@ -21,6 +21,7 @@ import { U } from "./util.js";
 export const TELE = (() => {
 	// ---------- Ereignis-Log ----------
 	function log(kind, data) {
+		if (localStorage.getItem("impala67Telemetry") === "off") return; // Einstellung: Aufzeichnung aus
 		try { STATE.dispatch("teleEvent", { id: U.uid(), kind, data: data || {} }).catch(() => {}); }
 		catch { /* Telemetrie ist nie kritisch */ }
 	}

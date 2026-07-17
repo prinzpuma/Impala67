@@ -409,6 +409,20 @@ function wireEvents() {
 		openHomeOverview();
 	});
 
+	// BUGFIX (17. Juli): Die Live-„Denkt nach…“-Box reagiert auf pointerdown statt
+	// click. Während des Streamings wurde der Live-Bereich laufend neu aufgebaut;
+	// lag zwischen Mousedown und Mouseup ein Rebuild, ging der click verloren und
+	// die Box ließ sich während der Generierung nicht ausklappen. pointerdown
+	// feuert sofort auf dem noch vorhandenen Element (render.js patcht die Box
+	// zusätzlich in-place, dieser Listener ist das Sicherheitsnetz).
+	document.addEventListener("pointerdown", (e) => {
+		if (e.button !== undefined && e.button !== 0) return;
+		const t = e.target.closest && e.target.closest("#btnThinkLive");
+		if (!t) return;
+		e.preventDefault();
+		CHAT_FULLSCREEN.handleReasoningToggle(t);
+	});
+
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,
 	// damit sie unabhängig vom Tag (button/span) zuverlässig ausgelöst werden.
 	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-newchat],[data-newpage]," +
@@ -505,6 +519,21 @@ function wireEvents() {
 				CHATS.save(list);
 				render();
 			}, s.title || "");
+			return;
+		}
+		// Schnellstart-Chip im leeren Chat: Prompt-Anfang einsetzen, Cursor ans Ende
+		if (t.dataset.chatsuggest) {
+			const inp = U.el("mainChatInput") || U.el("chatInput");
+			if (inp) { inp.value = t.dataset.chatsuggest; inp.focus(); inp.dispatchEvent(new Event("input", { bubbles: true })); }
+			return;
+		}
+		// Codeblock kopieren (Knopf wird in U.highlightCode eingefügt)
+		if (t.dataset.codecopy) {
+			const pre = t.closest("pre");
+			const code = pre && pre.querySelector("code");
+			if (code) navigator.clipboard.writeText(code.innerText.replace(/\s*$/, "\n")).then(
+				() => U.toast("Code kopiert.", "success"),
+				() => U.toast("Zwischenablage blockiert.", "error"));
 			return;
 		}
 		// KI-Antwort in die Zwischenablage kopieren
@@ -613,8 +642,10 @@ function wireEvents() {
 			return;
 		}
 
-		// Thinking-Prozess: live (während Streaming) oder finalisiert ausklappen
-		if (t.id === "btnThinkLive" || t.dataset.reasoningtoggle) {
+		// Thinking-Prozess (finalisiert) ausklappen. Die LIVE-Box läuft über den
+		// pointerdown-Listener oben — hier nur abfangen, damit nichts doppelt feuert.
+		if (t.id === "btnThinkLive") return;
+		if (t.dataset.reasoningtoggle) {
 			CHAT_FULLSCREEN.handleReasoningToggle(t);
 			return;
 		}
@@ -778,6 +809,10 @@ function wireEvents() {
 		if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; S.reviewShowBack = false; renderMain(); return; }
 		if (t.hasAttribute("data-ankistudy")) {
 			S.ankiDeck = t.dataset.ankistudy || null;
+			// Interleaved Practice: nur der „Gemischt lernen“-Button aktiviert den Misch-Modus
+			S.ankiMix = t.hasAttribute("data-ankimix");
+			// 🧑‍🏫 Feynman-Modus als eigene Lern-Option aus der Stapel-Übersicht
+			S.ankiFeyn = t.hasAttribute("data-ankifeyn");
 			S.ankiTab = "study";
 			S.reviewShowBack = false;
 			renderMain();
@@ -1202,6 +1237,15 @@ function wireEvents() {
 				if (document.activeElement) document.activeElement.blur();
 				render();
 				break;
+			case "btnChatNew":
+				// Neuer Chat im KI-Seitenpanel: die bisherige Unterhaltung ist bereits
+				// gesichert und bleibt über die Chat-Liste in der Sidebar erreichbar.
+				CHAT_FULLSCREEN.saveSideChat();
+				S.sideChat = [];
+				S.sideChatId = null;
+				render();
+				if (U.toast) U.toast("Neuer Chat gestartet");
+				break;
 			case "btnChatExpand":
 				CHAT_FULLSCREEN.toggleChatFull();
 				break;
@@ -1370,6 +1414,15 @@ function wireEvents() {
 			case "btnDensityCompact": SETTINGS.handleAppearanceSelect("density", "compact"); break;
 			case "btnMotionFull": SETTINGS.handleAppearanceSelect("motion", "full"); break;
 			case "btnMotionReduced": SETTINGS.handleAppearanceSelect("motion", "reduced"); break;
+			case "btnFontS": SETTINGS.handleAppearanceSelect("fontsize", "s"); break;
+			case "btnFontM": SETTINGS.handleAppearanceSelect("fontsize", "m"); break;
+			case "btnFontL": SETTINGS.handleAppearanceSelect("fontsize", "l"); break;
+			case "btnLockOn": SETTINGS.handleAppearanceSelect("overlearn", "on"); break;
+			case "btnLockOff": SETTINGS.handleAppearanceSelect("overlearn", "off"); break;
+			case "btnConfOn": SETTINGS.handleAppearanceSelect("confidence", "on"); break;
+			case "btnConfOff": SETTINGS.handleAppearanceSelect("confidence", "off"); break;
+			case "btnTeleOn": SETTINGS.handleAppearanceSelect("telemetry", "on"); break;
+			case "btnTeleOff": SETTINGS.handleAppearanceSelect("telemetry", "off"); break;
 			case "btnImport": U.el("fileImport").click(); break;
 			case "btnOpenPdf":
 				S.topMenu = null; // FIX: render() zeichnete das noch offene ⋯-Menü sonst sofort wieder

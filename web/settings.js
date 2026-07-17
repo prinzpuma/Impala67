@@ -72,7 +72,7 @@ function installSystemThemeListener() {
 export function applyAppearance() {
 	installSystemThemeListener();
 	const theme = resolvedTheme();
-	const density = localStorage.getItem("impala67Density") || "comfortable";
+	const density = localStorage.getItem("impala67Density") || "compact";
 	const motion = localStorage.getItem("impala67Motion") || "full";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
@@ -83,6 +83,9 @@ export function applyAppearance() {
 	if (themeColor) themeColor.content = theme === "light" ? "#f2efe9" : "#05070d";
 	document.body.classList.toggle("density-compact", density === "compact");
 	document.body.classList.toggle("reduce-motion", motion === "reduced");
+	const fontSize = localStorage.getItem("impala67FontSize") || "m";
+	document.body.classList.toggle("font-s", fontSize === "s");
+	document.body.classList.toggle("font-l", fontSize === "l");
 	document.body.style.setProperty("--accent", accent.solid);
 	document.body.style.setProperty("--accent-soft", accent.soft);
 	document.body.style.setProperty("--accent-border", accent.border);
@@ -155,6 +158,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "look", label: "Darstellung" },
 	{ id: "notion", label: "Notion Sync" },
 	{ id: "backup", label: "Backup" },
+	{ id: "experimente", label: "🧪 Experimente" },
 	{ id: "sync", label: "Sync" },
 	{ id: "update", label: "Update" },
 ];
@@ -187,13 +191,15 @@ export function openSettings(section) {
 					'<input data-provkey="' + pr.id + '" type="password" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
 				"</div>"
 			).join("") + "</div>" +
-			'<div class="ai-provider-add"><button id="btnAddProvider">＋ Eigene Quelle</button><span>Für jeden OpenAI-kompatiblen Server.</span></div>' +
+			'<div class="ai-provider-add"><button id="btnAddProvider">+ Eigene Quelle</button><span>Für jeden OpenAI-kompatiblen Server.</span></div>' +
 			'</section>' +
 			// Schnell-Buttons für die drei häufigsten Quellen.
 			'<section class="ai-presets"><div><h4>Schnellstart</h4><p>Fügt die Konfiguration ein – du kannst sie danach anpassen.</p></div>' +
 			'<div class="ai-preset-grid"><button data-provpreset="local"><span>🖥</span><b>LM Studio</b><small>Lokal auf diesem Gerät</small></button>' +
 			'<button data-provpreset="google"><span>✨</span><b>Google Gemini</b><small>Gemini API</small></button>' +
 			'<button data-provpreset="openai"><span>◉</span><b>OpenAI</b><small>OpenAI API</small></button></div></section>' +
+			// Tool-Angebot v3: Werkzeug-Zugriff der KI (Standard AN — alle Tools bei jeder Anfrage)
+			'<section class="ai-tools-toggle"><label><input type="checkbox" id="inpAlwaysTools"' + (S.settings.alwaysSendTools !== false ? " checked" : "") + '><span><b>Tools immer mitsenden</b><small>Empfohlen. Ausgeschaltet erhält die KI nur ein Meta-Werkzeug („request_tools“) und fordert die volle Liste selbst an, wenn sie sie braucht — spart Tokens bei kleinen lokalen Modellen.</small></span></label></section>' +
 			'<details class="ai-settings-advanced"><summary><span>Erweitert</span><small>Embeddings & persönliche Anweisungen</small></summary><div class="ai-settings-advanced-body">' +
 			'<div class="embedding-picker"><label for="inpEmbed">Embedding-Modell</label><div class="embedding-picker-row">' +
 			'<select id="inpEmbed" data-currentembed="' + U.esc(embedValue) + '" disabled><option value="' + U.esc(embedValue) + '">' + U.esc(embedValue || "Modelle werden geladen…") + '</option></select>' +
@@ -221,8 +227,12 @@ export function openSettings(section) {
 		const theme = resolvedTheme();
 		const systemThemeLabel = theme === "light" ? "Hell" : "Dunkel";
 		const accent = localStorage.getItem("impala67Accent") || "blue";
-		const density = localStorage.getItem("impala67Density") || "comfortable";
+		const density = localStorage.getItem("impala67Density") || "compact";
 		const motion = localStorage.getItem("impala67Motion") || "full";
+		const fontSize = localStorage.getItem("impala67FontSize") || "m";
+		const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
+		const confidence = localStorage.getItem("impala67Confidence") !== "off";
+		const telemetry = localStorage.getItem("impala67Telemetry") !== "off";
 		const widgets = dashboardWidgets();
 		const widgetLabel = Object.fromEntries(DASHBOARD_WIDGETS.map((w) => [w.id, w.label]));
 		body = '<h4>Design</h4>' +
@@ -243,30 +253,54 @@ export function openSettings(section) {
 			'<h4>Bewegung</h4><div class="row-btns appearance-choice">' +
 			'<button id="btnMotionFull" class="' + (motion === "full" ? "active" : "") + '">Sanft</button>' +
 			'<button id="btnMotionReduced" class="' + (motion === "reduced" ? "active" : "") + '">Reduziert</button></div>' +
+			'<h4>Schriftgröße</h4><div class="row-btns appearance-choice">' +
+			'<button id="btnFontS" class="' + (fontSize === "s" ? "active" : "") + '">Klein</button>' +
+			'<button id="btnFontM" class="' + (fontSize === "m" ? "active" : "") + '">Normal</button>' +
+			'<button id="btnFontL" class="' + (fontSize === "l" ? "active" : "") + '">Groß</button></div>' +
+			'<h4>Lernen</h4>' +
+			'<p class="hint">Overlearning-Sperre: frisch bewertete Karten sind kurz gesperrt statt sofort wieder dran (schützt vor dem Kurzzeitgedächtnis-Effekt).</p>' +
+			'<div class="row-btns appearance-choice">' +
+			'<button id="btnLockOn" class="' + (overlearn ? "active" : "") + '">Sperre an</button>' +
+			'<button id="btnLockOff" class="' + (!overlearn ? "active" : "") + '">Aus</button></div>' +
+			'<p class="hint">Selbsteinschätzung („Wie sicher bist du?“) vor dem Aufdecken der Antwort.</p>' +
+			'<div class="row-btns appearance-choice">' +
+			'<button id="btnConfOn" class="' + (confidence ? "active" : "") + '">Abfrage an</button>' +
+			'<button id="btnConfOff" class="' + (!confidence ? "active" : "") + '">Aus</button></div>' +
+			'<p class="hint">Lern-Telemetrie (nur lokal): zeichnet Denk-/Antwortzeiten und Sitzungen für die Home-Insights auf.</p>' +
+			'<div class="row-btns appearance-choice">' +
+			'<button id="btnTeleOn" class="' + (telemetry ? "active" : "") + '">Aufzeichnung an</button>' +
+			'<button id="btnTeleOff" class="' + (!telemetry ? "active" : "") + '">Aus</button></div>' +
 			'<h4>Home-Dashboard</h4><p class="hint">Widgets ein-/ausblenden und mit den Pfeilen anordnen.</p>' +
 			'<div class="dashboard-settings">' + widgets.map((id, i) => '<div class="dashboard-setting-row">' +
 				'<button data-dashtoggle="' + id + '" class="dash-visible" title="Widget ausblenden">✓</button>' +
 				'<span>' + U.esc(widgetLabel[id] || id) + '</span>' +
 				'<button data-dashmove="' + id + ':-1" ' + (i === 0 ? "disabled" : "") + '>↑</button>' +
 				'<button data-dashmove="' + id + ':1" ' + (i === widgets.length - 1 ? "disabled" : "") + '>↓</button></div>').join("") +
-			'<button data-dashadd="1" class="dashboard-add">＋ Ausgeblendetes Widget hinzufügen</button></div>' +
+			'<button data-dashadd="1" class="dashboard-add">+ Ausgeblendetes Widget hinzufügen</button></div>' +
 			'<h4>Hintergrund</h4>' +
 			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dezent überblendet, damit Text lesbar bleibt.</p>' +
 			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
+	} else if (sec === "experimente") {
+		// 🧪 Experimentelle Features (Phase 2 — KI-Lernmodi). Die Sektion wird
+		// komplett von experimente.js gerendert; die Schalter verdrahten sich dort
+		// selbst per Capture-Listener (gleiches Muster wie telemetrie.js) — hier
+		// ist bewusst KEINE Verdrahtung nötig. Standardmäßig ist alles AUS.
+		body = (window.EXP && window.EXP.settingsHtml) ? window.EXP.settingsHtml() :
+			'<p class="hint">Experimente-Modul (experimente.js) nicht geladen.</p>';
 	} else if (sec === "backup") {
 		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
 			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
 			// Lern-Telemetrie: Rohdaten-Export für eigene Auswertungen. Der Klick auf
 			// #btnTeleExport wird zentral in telemetrie.js behandelt (Capture-Listener) —
 			// hier ist bewusst KEINE Verdrahtung nötig.
-			'<h4 style="margin-top:14px">Lerndaten (Telemetrie)</h4>' +
+			'<h4>Lerndaten (Telemetrie)</h4>' +
 			'<p class="hint">Alle Lern-Telemetriedaten (Bewertungen mit Denk- und Antwortzeiten, Sitzungen, Fokus-Ereignisse, Selbsteinschätzung) als JSON — z. B. für eigene Auswertungen.</p>' +
 			'<div class="row-btns"><button id="btnTeleExport">📊 Lerndaten exportieren</button></div>' +
-			'<h4 style="margin-top:14px">Workspace als Markdown-ZIP</h4>' +
+			'<h4>Workspace als Markdown-ZIP</h4>' +
 			'<p class="hint">Alle Seiten eines Workspace als .md-Dateien (Ordnerstruktur = Seitenbaum) — in jedem Editor nutzbar.</p>' +
 			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>
 				'<button data-zipws="' + U.esc(ws.id) + '">🗜 ' + U.esc(ws.name) + "</button>").join("") + "</div>" +
-			'<h4 style="margin-top:20px; color:var(--danger)">⚠️ Gefahrenzone</h4>' +
+			'<h4 class="danger-label">⚠️ Gefahrenzone</h4>' +
 			'<p class="hint">Löscht alle lokalen Seiten und deren Versionsverlauf unwiderruflich von diesem Gerät. Deine Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
 			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
 	} else if (sec === "sync") {
@@ -619,6 +653,7 @@ export async function handleSaveSettings() {
 	if (g("inpDriveDesktop")) patch.driveDesktopClientId = g("inpDriveDesktop").value.trim(); // FIX: Desktop-Client-ID-Fallback
 	if (g("inpDriveDesktopSecret")) patch.driveDesktopClientSecret = g("inpDriveDesktopSecret").value.trim(); // Google verlangt das Secret auch mit PKCE (Desktop-Client)
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
+	if (g("inpAlwaysTools")) patch.alwaysSendTools = g("inpAlwaysTools").checked; // Tool-Angebot v3
 	await STATE.dispatch("settingsSet", patch);
 	closeOverlay();
 	checkAI();
@@ -741,7 +776,7 @@ export function handleDashboardAdd() {
 }
 
 export function handleAppearanceSelect(kind, value) {
-	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion" };
+	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry" };
 	if (!keys[kind]) return;
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();

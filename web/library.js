@@ -354,7 +354,7 @@ export function renderHefteShelf(main) {
 	let html = '<div class="library lib-docs lib-shelf gn-shelf">' +
 		'<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div>" +
 		'<div class="lib-head-tools"><input id="libFilter" placeholder="Suchen" autocomplete="off" value="' + U.esc(S.libFilter || "") + '">' +
-		'<button class="lib-new-action" data-libshelfnew="1">＋ Neu</button></div></div>' +
+		'<button class="lib-new-action" data-libshelfnew="1">+ Neu</button></div></div>' +
 		'<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>" +
 		'<div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
 			? gnFolderHtml(item.value)

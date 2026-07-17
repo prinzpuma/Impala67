@@ -135,7 +135,7 @@ function renderTopbar() {
 	const daily = U.el("btnDaily");
 	if (daily) daily.classList.toggle("active", S.view === "daily");
 
-	// Mobile Shell v2: die Dock-Pille (☰/＋/✦) ist eine reine Aktions-Leiste ohne
+	// Mobile Shell v2: die Dock-Pille (☰/+/✦) ist eine reine Aktions-Leiste ohne
 	// Bereichs-Zustand — Aktiv-Zustände zeigt das Navigator-Sheet selbst über die
 	// Topbar-Pillen oben (dieselben Elemente wie am Desktop, nichts doppelt).
 }
@@ -346,7 +346,7 @@ function renderSidebar() {
 // Chat-Verlauf in der Sidebar (Chat-Modus) — die Volltextsuche über Titel UND Inhalte läuft jetzt im Befehls-Menü (Strg+K).
 function chatListHtml() {
 	const sessions = (typeof CHATS !== "undefined") ? CHATS.load() : [];
-	let html = '<div class="row" data-newchat="1"><span class="row-title">＋ Neuer Chat</span></div>';
+	let html = '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>';
 	html += sessions.map((s) =>
 		'<div class="row' + (s.id === S.currentChatId ? " active" : "") + '" data-chat="' + s.id + '">' +
 		'<span class="row-title">' + U.esc(s.title || "Chat") + "</span>" +
@@ -431,8 +431,8 @@ function renderTabs() {
 			'<span class="tabchip-title">' + title + '</span>' +
 			'<button class="tabchip-x" data-tabclose="' + id + '" title="Schließen">✕</button></div>';
 	}).join("");
-	// Notion-artiges „+“: öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
-	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">＋</button>';
+	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
+	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">+</button>';
 	html += "</div>";
 	// Der KI-Zugriff sitzt als runder Notion-artiger Button unten rechts.
 	// In der Tab-Leiste bleibt dadurch nur die Navigation.
@@ -483,7 +483,7 @@ function renderMain() {
 				: "") +
 			'<div class="page-heading">' +
 				'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + pageIconLabel(pg) + "</button>" +
-				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">＋ Cover</button>' : "") +
+				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">+ Cover</button>' : "") +
 			"</div>" +
 			// Ein mehrzeilig wachsender Titel wie in Notion – ein <input> würde lange
 			// Seitennamen zwangsläufig abschneiden.
@@ -586,7 +586,7 @@ function dbTableHtml(pg) {
 				: '<td><input class="db-cell" data-dbrow="' + r.id + '" data-dbcol="' + U.esc(c.name) + '" value="' + U.esc((r.props || {})[c.name] || "") + '"></td>').join("") +
 		"</tr>").join("") +
 		"</tbody></table>" +
-		'<div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="' + pg.id + '">＋ Neue Zeile</button></div></div>';
+		'<div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="' + pg.id + '">+ Neue Zeile</button></div></div>';
 }
 
 // Breadcrumb: Workspace › Elternseiten › aktuelle Seite (wie in Notion)
@@ -885,7 +885,7 @@ function renderHome(main) {
 		conflictBanner +
 		stats +
 		'<div class="quick-actions">' +
-			'<button data-homeaction="newpage">＋ Neue Seite</button>' +
+			'<button data-homeaction="newpage">+ Neue Seite</button>' +
 		"</div>" +
 		'<section class="home-section home-section-continue">' + continueBlock + "</section>" +
 		todayPills +
@@ -1140,31 +1140,47 @@ function chatStaticHtml(historyList) {
 	}).join("");
 }
 
-function chatLiveHtml(historyList) {
-	if (!S.aiBusy) return "";
+function chatLiveParts(historyList) {
+	if (!S.aiBusy) return { think: "", rest: "" };
 	const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
-	if (historyList !== activeList) return "";
+	if (historyList !== activeList) return { think: "", rest: "" };
 	// Während offener ask_choice-Karte keine zweite „busy“-Zeile — die Frage IST der Wartezustand.
 	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
-	const parts = [];
 	// Denkprozess UND Antwort-Draft parallel zeigen. Vorher versteckte jedes
 	// aiDraft-Zeichen die Think-Box komplett — bei Heuristik-Lecks wirkte der
 	// ganze Denkprozess wie die normale Antwort.
-	if (S.aiThinkingDraft) parts.push(thinkingLiveHtml());
-	if (S.aiDraft) parts.push('<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>");
-	else if (!S.aiThinkingDraft && !waitingChoice) parts.push('<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>");
-	return parts.join("");
+	const think = S.aiThinkingDraft ? thinkingLiveHtml() : "";
+	let rest = "";
+	if (S.aiDraft) rest = '<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>";
+	else if (!S.aiThinkingDraft && !waitingChoice) rest = '<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>";
+	return { think, rest };
 }
 
 // Vollständige, aber sehr viel günstigere Änderungsprüfung als ein neues innerHTML
 // für den gesamten Verlauf. Die FNV-Signatur erkennt auch In-Place-Änderungen
 // (z.B. Undo, aufgeklapptes Thinking oder beantwortete Rückfragen).
 function chatHistorySignature(list) {
-	const text = JSON.stringify(list || []);
+	// PERF (Feinschliff v11): vorher wurde der GESAMTE Verlauf pro Aufruf per
+	// JSON.stringify in einen Riesen-String verwandelt (inkl. Bild-Daten-URLs)
+	// und erst dann gehasht — viel Allokation/GC in jedem Render. Jetzt werden
+	// die Felder direkt in den FNV-Hash gefaltet, ohne Zwischenstring.
 	let hash = 2166136261;
-	for (let i = 0; i < text.length; i++) {
-		hash ^= text.charCodeAt(i);
+	const add = (s) => {
+		for (let i = 0; i < s.length; i++) {
+			hash ^= s.charCodeAt(i);
+			hash = Math.imul(hash, 16777619);
+		}
+		hash ^= 30; // Feldtrenner (Record Separator)
 		hash = Math.imul(hash, 16777619);
+	};
+	for (const m of list || []) {
+		for (const k in m) {
+			const v = m[k];
+			add(k);
+			if (v == null) add("");
+			else if (typeof v === "object") add(JSON.stringify(v));
+			else add(String(v));
+		}
 	}
 	return hash >>> 0;
 }
@@ -1203,15 +1219,50 @@ function renderChatLog(log, historyList) {
 		log._chatStaticSignature = signature;
 		enhanceChatStatic(log, staticEnd);
 	}
-	const liveHtml = chatLiveHtml(historyList);
-	if (live._chatHtml !== liveHtml) {
-		live.innerHTML = liveHtml;
-		live._chatHtml = liveHtml;
-		U.renderMath(live);
-		U.highlightCode(live);
+	// BUGFIX (17. Juli): Der Live-Bereich wurde bisher bei JEDEM Streaming-Delta
+	// komplett per innerHTML ersetzt (~alle 80 ms). Lag zwischen Mousedown und
+	// Mouseup ein Rebuild, ging der Klick verloren — die „Denkt nach…“-Box ließ
+	// sich während der Generierung praktisch nie ausklappen. Jetzt: Think-Box und
+	// Antwort-Draft getrennt patchen; wächst nur der Denktext, wird ausschließlich
+	// der Textknoten aktualisiert und der Toggle-Button bleibt stabil im DOM.
+	const liveParts = chatLiveParts(historyList);
+	let thinkHost = live._thinkHost;
+	let restHost = live._restHost;
+	if (!thinkHost || !restHost || thinkHost.parentNode !== live || restHost.parentNode !== live) {
+		thinkHost = document.createElement("div");
+		thinkHost.style.display = "contents";
+		restHost = document.createElement("div");
+		restHost.style.display = "contents";
+		live.replaceChildren(thinkHost, restHost);
+		live._thinkHost = thinkHost;
+		live._restHost = restHost;
+		thinkHost._structure = null;
+		restHost._chatHtml = null;
 	}
-	// Gleiches Verhalten wie zuvor: bei neuen Antworten immer ans Ende folgen.
-	log.scrollTop = log.scrollHeight;
+	const thinkStructure = liveParts.think ? "think:" + (S.thinkingLiveExpanded ? "1" : "0") : "";
+	if (thinkHost._structure !== thinkStructure) {
+		thinkHost.innerHTML = liveParts.think;
+		thinkHost._structure = thinkStructure;
+	} else if (liveParts.think) {
+		const body = thinkHost.querySelector(".think-body");
+		const thinkText = S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2);
+		if (body && body.textContent !== thinkText) {
+			body.textContent = thinkText;
+			// Aufgeklappt: automatisch am unteren Ende bleiben, damit der neueste
+			// Gedanke sichtbar ist, ohne dass der Nutzer nachscrollen muss.
+			if (S.thinkingLiveExpanded) body.scrollTop = body.scrollHeight;
+		}
+	}
+	if (restHost._chatHtml !== liveParts.rest) {
+		restHost.innerHTML = liveParts.rest;
+		restHost._chatHtml = liveParts.rest;
+		U.renderMath(restHost);
+		U.highlightCode(restHost);
+	}
+	// Ans Ende folgen — aber nur, wenn der Nutzer nicht gerade hochgescrollt hat,
+	// um etwas nachzulesen (sonst reißt das Streaming die Ansicht immer nach unten).
+	const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
+	if (nearBottom || !log._chatAutoScrolled) { log.scrollTop = log.scrollHeight; log._chatAutoScrolled = true; }
 }
 
 // Rückfrage-Karte (ask_choice) — Notion-Umfrage-Style: Frage + volle Options-Zeilen,
@@ -1269,7 +1320,14 @@ function renderFullChat(main) {
 				'<button type="button" class="ai-status-chip" id="aiStatusChipFull" title="KI-Status" data-aistatus="1"></button>' +
 				'<h1>✦ ' + U.esc(title) + "</h1>" +
 			"</div>" +
-			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' : "") +
+			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' +
+				// Schnellstart-Chips: setzen einen Prompt-Anfang ins Eingabefeld (kein Auto-Senden)
+				'<div class="chat-suggests">' +
+				'<button type="button" data-chatsuggest="Erkläre mir Schritt für Schritt: ">💡 Erkläre mir…</button>' +
+				'<button type="button" data-chatsuggest="Erstelle Karteikarten zu: ">🃏 Karteikarten zu…</button>' +
+				'<button type="button" data-chatsuggest="Fasse kompakt zusammen: ">📄 Fasse zusammen…</button>' +
+				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">🎯 Quiz mich zu…</button>' +
+				'</div>' : "") +
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
 			'<form id="mainChatForm" class="chat-form-full">' +
 				'<div id="mainPendingChip" hidden></div>' +
@@ -1427,7 +1485,7 @@ function openChangePreview(m) {
 				"</div>" +
 				bodyHtml +
 			"</article>" +
-			'<div class="change-page-legend"><span class="leg add">＋ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div>' +
+			'<div class="change-page-legend"><span class="leg add">+ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div>' +
 		"</div>";
 	const sheet = o.querySelector(".change-page-sheet");
 	if (sheet) {

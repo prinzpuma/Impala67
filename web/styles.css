@@ -109,7 +109,7 @@ html, body { height: 100%; }
 
 body {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-	font-size: 16px; line-height: 1.5;
+	font-size: var(--font-base, 16px); line-height: 1.5;
 	color: var(--text);
 	background: var(--bg0);
 	overflow: hidden;
@@ -241,12 +241,13 @@ button.danger { color: var(--danger); }
 	flex: 0 1 170px; min-width: 96px; max-width: 170px; }
 .tabchip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabchip:hover { background: var(--edge-soft); }
-.tabchip.active { background: rgba(255,255,255,0.11); color: var(--text); }
+.tabchip.active { background: rgba(255,255,255,0.11); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
 .tabchip-x { min-height: 0; padding: 0 4px; background: transparent; color: var(--text2); font-size: 11px; }
 .tabchip-x:hover { color: var(--text); background: rgba(255,255,255,0.14); }
-/* Notion-artiges „+“ am Ende der Tab-Leiste */
-.tabchip-new { width: 32px; flex-shrink: 0; justify-content: center; padding: 5px 0; font-size: 16px;
-	color: var(--text2); background: transparent; border: none; border-radius: 6px; min-height: 28px; }
+/* Neuer-Tab-„+“: kleiner quadratischer Knopf direkt hinter dem letzten Tab (Browser-Standard) */
+.tabchip-new { flex: 0 0 auto; width: 28px; min-width: 28px; max-width: 28px; min-height: 26px;
+	justify-content: center; padding: 0; font-size: 17px; line-height: 1;
+	color: var(--text2); background: transparent; border: none; border-radius: 6px; }
 .tabchip-new:hover { background: var(--edge-soft); color: var(--text); }
 
 /* Seiten-Chrome und Dokumentfläche sind bewusst getrennt: Pfad/A… */
@@ -425,8 +426,8 @@ button.danger { color: var(--danger); }
 	transition: min-height .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 #chatForm:focus-within, .chat-form-full:focus-within {
-	border-color: #2383e2;
-	box-shadow: 0 0 0 1px #2383e2;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 1px var(--accent);
 }
 /* Oben: ausschließlich der Text, volle Breite, ohne eigene Umran… */
 .composer-body { display: block; width: 100%; min-height: 38px; }
@@ -495,7 +496,7 @@ button.danger { color: var(--danger); }
 	font-size: 14px; font-weight: 700; line-height: 1;
 	display: flex; align-items: center; justify-content: center;
 }
-#chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled) { background: #8fd0ff; }
+#chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled) { filter: brightness(1.15); } /* folgt der Akzentfarbe statt hartem Hellblau */
 #chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled {
 	background: var(--surface-active); color: var(--text2); opacity: .6;
 }
@@ -833,7 +834,7 @@ body:has(#heftStage) #btnAiFab { display: none; }
 .chat-form-full { flex-wrap: wrap; }
 .chat-form-full:has(#mainPendingChip:not([hidden])) { min-height: 88px; padding-top: 52px; }
 .chat-form-full #mainPendingChip { margin: 0; }
-.msg-img { display: block; max-width: 180px; border-radius: 8px; margin-top: 6px; }
+.msg-img { display: block; max-width: min(280px, 100%); border-radius: 8px; margin-top: 6px; }
 
 /* == Topbar-Tabs (Home / Chats / Bibliothek / Suche) == */
 /* flex-wrap: bei vielen Tabs (🃏/📅/🔍) bricht die Leiste um, st… */
@@ -876,7 +877,7 @@ body:has(#heftStage) #btnAiFab { display: none; }
 	display: flex; flex-direction: column; gap: 2px; background: rgba(0,0,0,0.15); }
 .set-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text2); }
 .set-item:hover { background: var(--edge-soft); }
-.set-item.active { background: var(--accent-soft); color: var(--text); }
+.set-item.active { background: var(--accent-soft); color: var(--accent); }
 .settings-body { flex: 1; padding: 20px 24px; display: flex; flex-direction: column;
 	gap: 12px; overflow-y: auto; }
 
@@ -1052,7 +1053,7 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .lib-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
 	color: var(--text2); padding: 6px 10px; border-bottom: 1px solid var(--edge); }
 .lib-table td { padding: 8px 10px; border-bottom: 1px solid var(--surface); font-size: 14px; cursor: pointer; }
-.lib-table tr:hover td { background: var(--surface); }
+.lib-table tr:hover td { background: var(--surface-hover); }
 
 /* == Bibliothek (Vollbild) & Chat-Verlauf == */
 .library { padding: 28px 36px 48px; overflow-y: auto; flex: 1; }
@@ -1064,8 +1065,12 @@ mark { background: #f5d90a55; color: inherit; border-radius: 3px; padding: 0 2px
 .row .hint { font-size: 11px; flex-shrink: 0; }
 
 /* == Scrollbars & Responsive == */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(148,158,178,.28); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148,158,178,.45); background-clip: content-box; border: 2px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+body.light ::-webkit-scrollbar-thumb { background: rgba(60,60,60,.30); background-clip: content-box; border: 2px solid transparent; }
+:root { scrollbar-width: thin; scrollbar-color: rgba(148,158,178,.35) transparent; }
 
 @media (max-width: 980px) {
 	body { overflow: auto; }
@@ -1272,7 +1277,7 @@ button.primary:hover { filter: brightness(1.06); }
 /* == Helles Theme (Gerätewahl in den Einstellungen) == */
 
 /* == Toasts (In-App-Meldungen statt alert()) — siehe U.toast in u == */
-#toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: var(--z-toast);
+#toasts { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-toast);
 	display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: 10px; font-size: 14px;
 	background: var(--menu-bg); color: var(--text); border: 1px solid var(--edge);
@@ -1378,7 +1383,7 @@ button, input, textarea, select, .row, .lib-card, .cal-day {
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible, .row:focus-visible {
 	outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--focus-ring);
 }
-button:disabled { opacity: .38; cursor: default; transform: none !important; }
+button:disabled { opacity: .38; cursor: not-allowed; transform: none !important; }
 .modal, .page-menu, .model-menu, .palette-box {
 	border-radius: var(--radius-lg);
 }
@@ -1638,7 +1643,17 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item {
 	.study-card .grades [data-ankigrade] { min-height: 52px; padding: 6px 2px; font-size: 13px; }
 }
 /* „Antwort zeigen“ groß und mittig wie in Anki */
-.study-card .modal-actions { justify-content: center; }
+/* Selbsteinschätzung und Fälligkeitszähler bilden einen festen Block direkt
+   oberhalb der Aufdecken-Aktion — unabhängig von der verfügbaren Bühnenhöhe. */
+.study-reveal-controls { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.study-reveal-controls .confidence-row, .study-reveal-controls .study-counts-row {
+	display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px;
+}
+.study-reveal-controls .study-counts-row { min-height: 20px; }
+.study-card .modal-actions { justify-content: center; margin: 0; }
+.study-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; margin: 10px 0 0; padding: 0; }
+.study-footer-options { display: flex; align-items: center; gap: 4px; }
+.study-footer .mini { min-height: 32px; }
 .study-card .modal-actions [data-ankishowback] { min-width: 220px; min-height: 44px;
 	background: var(--accent); color: #081018; font-weight: 650; border-radius: 10px; }
 .study-card .modal-actions [data-ankishowback] .grade-key { opacity: .55; margin-left: 6px; }
@@ -2188,7 +2203,9 @@ body.reduce-motion .heft-tray { animation: none; }
 
 /* == Fokusmodus Karteikarten — beim Lernen keine Verwaltungsleist == */
 /* Die Verwaltungsaktionen werden in render-anki.js im Lernmodus… */
-body:has(.anki-study-mode) #tabbar { display: none; }
+/* FIX (17. Juli): Die Tab-Leiste wird beim Lernen NICHT mehr ausgeblendet —
+   oben funktioniert die normale Seiten-/Tab-Logik weiter (Bug aus „kommt
+   noch“), die Sidebar bleibt wie überall über ☰ einklappbar. */
 
 /* Chrome-sicheres Bühnenraster: Flex-Ketten mit height:100% könn… */
 body:has(.anki-study-mode) #mainWrap,
@@ -2950,3 +2967,152 @@ body.light .heft-chrome .heft-tray .heft-size.active { background: #2478c7; colo
 @media (max-width: 600px) {
 	.home-statgrid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
+:root { color-scheme: dark; } /* native Controls (Datum, Checkbox, Scroll) im Dunkel-Look */
+body.light { color-scheme: light; }
+::selection { background: var(--accent-soft); color: var(--text); }
+body.font-s { --font-base: 15px; }
+body.font-l { --font-base: 18px; }
+button:not(:disabled) { cursor: pointer; }
+img { -webkit-user-drag: none; }
+#tabbar, .deck-row, .study-head, .grades { -webkit-user-select: none; user-select: none; }
+#tabbar { scrollbar-width: none; }
+#tabbar::-webkit-scrollbar { display: none; }
+.hint { line-height: 1.5; }
+.modal-actions button { min-height: 32px; }
+#overlay:not([hidden]) { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.settings-body h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); font-weight: 600; }
+.row-btns button.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+/* Bewertungs-Knoepfe farbkodiert: rot/orange/akzent/gruen */
+.grades [data-ankigrade="1"] { box-shadow: inset 0 -3px 0 rgba(233,115,102,.55); }
+.grades [data-ankigrade="2"] { box-shadow: inset 0 -3px 0 rgba(222,146,85,.55); }
+.grades [data-ankigrade="3"] { box-shadow: inset 0 -3px 0 var(--accent-border); }
+.grades [data-ankigrade="4"] { box-shadow: inset 0 -3px 0 rgba(114,188,143,.55); }
+@media (pointer: coarse) {
+	/* Touch: Tastatur-Hinweise sind unlogisch; 16px-Inputs verhindern iOS-Auto-Zoom */
+	.grade-key, .study-keys { display: none !important; }
+	input, textarea, select { font-size: max(16px, 1em); }
+}
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
+:root { accent-color: var(--accent); } /* native Checkboxen/Radios/Progress in Akzentfarbe */
+::placeholder { color: var(--text2); opacity: .7; }
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+	-webkit-box-shadow: inset 0 0 0 1000px var(--surface); -webkit-text-fill-color: var(--text);
+	caret-color: var(--text); transition: background-color 9999s ease-out; }
+button { transition: background-color .15s ease, color .15s ease, border-color .15s ease, opacity .15s ease, box-shadow .15s ease; }
+button.danger:hover:not(:disabled) { background: var(--danger-soft); }
+button, .tabchip, .row, .deck-row { -webkit-touch-callout: none; } /* kein iPad-Langdruck-Menue auf UI-Chrome */
+.bar-label, .study-head, .row .hint, .ai-provider-count { font-variant-numeric: tabular-nums; }
+h3, h4 { text-wrap: balance; }
+.settings-body h4.danger-label { color: var(--danger); }
+@media (pointer: coarse) {
+	.mini { height: 30px; }
+	.modal-x { width: 36px; height: 36px; }
+}
+
+/* == Feinschliff v10: KI-Chat == */
+.md pre { position: relative; }
+.code-copy { position: absolute; top: 6px; right: 6px; min-height: 0; width: 26px; height: 26px; padding: 0;
+	font-size: 12px; line-height: 1; background: var(--surface); border: 1px solid var(--edge); border-radius: 6px;
+	opacity: 0; display: grid; place-items: center; }
+.md pre:hover .code-copy, .code-copy:focus-visible { opacity: 1; }
+.ai-status-chip.offline { color: var(--danger); } /* statt hartem Hellrot (im Hellmodus unlesbar) */
+.chat-suggests { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; flex-shrink: 0; }
+.chat-suggests button { font-size: 13px; padding: 7px 12px; border-radius: 999px; background: var(--surface);
+	border: 1px solid var(--edge); color: var(--text2); }
+.chat-suggests button:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+@media (pointer: coarse) {
+	/* Touch hat kein Hover: Bearbeiten/Kopieren/Anpassen und Code-Kopieren immer zeigen */
+	.msg-tool-btn, .msg-edit, .code-copy { opacity: 1; }
+}
+
+/* ================= Anki-Lernlayout (17. Juli) ================= */
+/* Zähler „neu · lernen · wdh.“ stehen wie in Anki direkt ÜBER der Aktion */
+.study-counts-row { text-align: center; font-size: 13px; color: var(--text2); margin: 10px 0 2px; }
+/* Fußleiste wie Anki: Bearbeiten unten links, Optionen unten rechts */
+.study-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
+
+/* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */
+.heft-chrome { transition: opacity .18s ease; }
+.heft-chrome.heft-writing { opacity: .12; pointer-events: none; }
+.heft-chrome .heft-main { position: relative; width: 30px; height: 30px; }
+.heft-chrome .heft-color-dot { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 3px; border-radius: 2px; pointer-events: none; }
+.heft-pill-min .heft-main { width: 38px; }
+.heft-min-btn { opacity: .8; }
+@media (max-width: 720px) { .heft-chrome .heft-main { width: 27px; height: 27px; } }
+
+/* ================= 🧪 Experimente (experimente.js) ================= */
+.exp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 10px; margin: 0 0 8px; cursor: pointer; }
+.exp-row input[type="checkbox"] { margin-top: 3px; flex: 0 0 auto; }
+.exp-row b { display: block; margin-bottom: 2px; }
+.exp-modal-backdrop { position: fixed; inset: 0; z-index: 1300; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 18px; }
+.exp-modal { background: var(--bg, #1d1f24); border: 1px solid var(--edge); border-radius: 12px; width: min(640px, 100%); max-height: 85vh; overflow: auto; padding: 16px 18px; }
+.exp-modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.exp-answer { width: 100%; min-height: 64px; margin: 8px 0; }
+.exp-feedback, .exp-feynout:not(:empty), .exp-hint-box { border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+.exp-hint-box { max-width: 560px; margin: 10px auto 0; text-align: left; }
+.exp-hint-line { padding: 4px 0; }
+.exp-hint-line + .exp-hint-line { border-top: 1px dashed var(--edge); }
+.exp-mc-opt { display: block; width: 100%; text-align: left; margin: 6px 0; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 10px; }
+.exp-mc-opt.correct { border-color: rgba(114, 188, 143, .8); background: rgba(114, 188, 143, .12); }
+.exp-mc-opt.wrong { border-color: rgba(255, 115, 105, .8); background: rgba(255, 115, 105, .12); }
+.exp-mc-opt.off { opacity: .55; }
+.exp-pretest-q { margin: 10px 0; }
+.exp-pretest-q textarea { width: 100%; min-height: 44px; margin-top: 4px; }
+.exp-wait { padding: 14px 0; color: var(--text2); }
+.exp-honesty { text-align: center; margin: 6px 0; }
+
+/* ---------- Einstellungen → KI: „Tools immer mitsenden“ (Tool-Angebot v3) ---------- */
+.ai-tools-toggle { margin: 14px 0 4px; }
+.ai-tools-toggle label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.ai-tools-toggle input { margin-top: 3px; }
+.ai-tools-toggle small { display: block; color: var(--text2); margin-top: 2px; }
+
+/* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
+.deck-feyn { white-space: nowrap; }
+
+/* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
+.heft-chrome .heft-main svg, .heft-chrome .heft-opt svg { display: block; pointer-events: none; }
+
+/* ---------- 🕸 Wissensgraph (graph.js) ---------- */
+.graph-overlay { position: fixed; inset: 0; z-index: 1280; background: var(--bg, #191919); display: flex; flex-direction: column; }
+.graph-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(140, 150, 165, .25); }
+.graph-head h2 { margin: 0; font-size: 16px; flex: 1; }
+.graph-head input { width: min(220px, 40vw); }
+.graph-head button { min-width: 34px; min-height: 34px; }
+.graph-legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text2); padding: 6px 14px; }
+.graph-legend b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.graph-canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+.graph-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.graph-ki { font-size: 12px; }
+.graph-panel { padding: 8px 14px; font-size: 13px; border-bottom: 1px solid rgba(140, 150, 165, .25); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.graph-panel small { display: block; width: 100%; color: var(--text2); }
+.graph-panel button { min-height: 30px; }
+
+/* ---------- 📈 Lern-Analyse (analyse.js) ---------- */
+.ana-block { margin-top: 18px; padding-top: 10px; border-top: 1px solid rgba(140, 150, 165, .25); }
+.ana-note { font-size: 12px; color: var(--text2); margin: 6px 0 12px; }
+.ana-chrono { display: flex; gap: 2px; margin-bottom: 16px; }
+.ana-hour { flex: 1; height: 26px; border-radius: 4px; position: relative; }
+.ana-hour span { position: absolute; top: 100%; left: 0; font-size: 10px; color: var(--text2); }
+.ana-problems { display: flex; flex-direction: column; gap: 6px; }
+.ana-problem { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg2, rgba(140, 150, 165, .08)); border-radius: 8px; padding: 8px 10px; }
+.ana-problem small { display: block; color: var(--text2); }
+.ana-problem button { min-height: 32px; white-space: nowrap; }
+
+/* ---------- 🪢 Lasso-Aktionsleiste (heft.js) — iPad hat keine Entf-Taste ---------- */
+.heft-lasso-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 78px; z-index: 60; display: flex; gap: 8px; align-items: center; background: var(--bg2, #26282d); border: 1px solid rgba(140, 150, 165, .35); border-radius: 12px; padding: 6px 10px; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+.heft-lasso-bar span { color: var(--text2); padding: 0 2px; }
+.heft-lasso-bar button { min-height: 34px; white-space: nowrap; }
+
+/* ---------- ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18. Juli) ---------- */
+.heft-page-slot { position: relative; }
+.heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed #2f6fed; border-radius: 6px; padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px; }
+.heft-addpage { display: block; margin: 12px auto 30px; min-height: 44px; padding: 0 24px; border: 1.5px dashed rgba(140, 150, 165, .5); border-radius: 12px; background: transparent; color: var(--text2); font-size: 14px; }
+.heft-addpage.armed { border-color: #2f6fed; color: #2f6fed; }
+.card-face.tappable { cursor: pointer; }

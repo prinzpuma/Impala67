@@ -46,7 +46,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=48">
+<link rel="stylesheet" href="styles.css?build=52">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#05070d">
@@ -102,6 +102,11 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
 				<span>NotebookLM</span>
 			</button>
+			<!-- 🕸 Wissensgraph (graph.js hört selbst per Capture-Listener auf diesen Knopf) -->
+			<button id="btnGraph" title="Wissensgraph — Seiten & Verknüpfungen mit FSRS-Färbung">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.4 7 15.6 7.7M7 8.4l1.3 7.1M16.3 10.2l-5.6 6"/></svg>
+				<span>Wissensgraph</span>
+			</button>
 			<button id="btnLibrary" title="Bibliothek">
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 14h4l2 2h4l2-2h4"/></svg>
 				<span>Bibliothek</span>
@@ -133,6 +138,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 				<span class="panel-title">KI-Coach</span>
 			</div>
 			<span class="panel-head-right">
+				<button id="btnChatNew" title="Neuen Chat starten">＋</button>
 				<button id="btnChatExpand" title="Vollbild">⛶</button>
 				<button id="btnTogglePanel" title="KI einklappen">✕</button>
 			</span>

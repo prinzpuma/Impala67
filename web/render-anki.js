@@ -134,7 +134,7 @@ function renderAnki(main) {
 	let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
 	if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
 		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + "</div>" +
-		'<button data-ankinewcard="1">＋ Neue Karte</button>' +
+		'<button data-ankinewcard="1">+ Neue Karte</button>' +
 		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
 		'<button data-ankiimport="1" title="CSV oder Anki-Paket (.apkg) importieren">⬇ Import</button>' +
 		'<button data-ankiexport="1" title="Als CSV oder Anki-Paket (.apkg) exportieren">⬆ Export</button></div>';
@@ -168,8 +168,10 @@ function ankiDecksHtml() {
 			'<div class="deck-number cnt-due" title="Fällige Karten">' + due + "</div>" +
 			'<div class="deck-actions">' +
 				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">Lernen</button>" +
+				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, jetzt beim Start wählbar)
+				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (ankiStudyOpen(d) ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
 				'<button class="deck-browse" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">Durchsuchen</button>' +
-				'<button class="deck-add" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
+				'<button class="deck-add" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">+</button>' +
 			"</div></div>";
 	}).join("");
 	const totalOpen = STATE.studySnapshot(null).counts.total;
@@ -178,7 +180,9 @@ function ankiDecksHtml() {
 		'<div class="deck-list">' + rows + "</div></div>" +
 		'<div class="anki-deck-footer">' +
 			'<button class="primary" data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen <span>" + totalOpen + " offen</span></button>" +
-			'<button data-decknew="1">＋ Neuer Stapel</button></div>';
+			'<button data-ankistudy="" data-ankimix="1" ' + (ankiStudyOpen(null) ? "" : "disabled") + ' title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt lernen</button>' +
+			'<button data-ankistudy="" data-ankifeyn="1" ' + (ankiStudyOpen(null) ? "" : "disabled") + ' title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
+			'<button data-decknew="1">+ Neuer Stapel</button></div>';
 }
 
 // Karten-Browser: Suche, Stapel-Filter-Chips, sortierbare Spalten, Zeilen-Aktionen.
@@ -289,7 +293,9 @@ function ankiStatsHtml() {
 		"<h3>Prognose — nächste 7 Tage</h3>" +
 		'<div class="bar-chart forecast">' + fc.map((x) => '<div class="bar-wrap" title="' + x.label + ": " + x.n + '"><div class="bar" style="height:' + Math.round(x.n / fcMax * 100) + '%"></div><div class="bar-label">' + x.label + "</div></div>").join("") + "</div>" +
 		"<h3>Aktivität — letzte 12 Monate</h3>" + heatmapHtml(reviews) +
-		"<h3>Echte Retention</h3>" + retentionTableHtml(reviews);
+		"<h3>Echte Retention</h3>" + retentionTableHtml(reviews) +
+		// 📈 Phase 3: Lern-Analyse aus analyse.js (Beobachtungen aus der Telemetrie)
+		(window.ANALYSE ? window.ANALYSE.statsHtml() : "");
 }
 
 // GitHub-artige Aktivitäts-Heatmap: 53 Wochen × 7 Tage, Farbstufe = Wiederholungen pro Tag.
@@ -344,8 +350,7 @@ function ankiStudyHtml() {
 	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
 	const head = '<div class="study-head">' +
 		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel</button>' +
-		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b> · " + countsHtml + "</span>" +
-		'<button class="mini" data-ankiundo="1" ' + (canUndo ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button>' +
+		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · 🔀 gemischt" : "") + (S.ankiFeyn ? " · 🧑‍🏫 Feynman" : "") + "</span>" +
 		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span></div>';
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
@@ -364,6 +369,7 @@ function ankiStudyHtml() {
 				'<h2>Geschafft! 🎉</h2>' +
 				'<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt.</p>' +
 				'<p class="hint">' + snap.learnWaiting.length + ' Lernkarte(n) sind später heute wieder dran.</p>' +
+				(snap.lockedAhead ? '<p class="hint">🔒 Kurzzeitgedächtnis-Falle: ' + snap.lockedAhead + ' frisch bewertete Karte(n) sind kurz gesperrt — sofortiges Nochmal-Drillen fühlt sich gut an, landet aber nicht im Langzeitgedächtnis.</p>' : "") +
 				'<div class="modal-actions">' +
 					'<button class="primary" data-ankiwaitrefresh="1">Erneut prüfen</button>' +
 					'<button data-ankitab="decks">Zur Stapelübersicht</button>' +
@@ -377,11 +383,15 @@ function ankiStudyHtml() {
 		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× · " + (c.srs.lapses || 0) + " Fehler · " +
 			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " T" : "Lernschritt") + " · " + U.esc(c.deck || "Standard") +
 			(c.leech ? ' · <span class="leech-badge" title="Leech">🐛 Leech</span>' : "") + "</div>" +
-		'<div class="card-face md">' + U.md(c.front) + "</div>";
+		// 👆 QoL: Tipp auf die Vorderseite deckt die Antwort auf (wie in Anki mobil)
+		'<div class="card-face md' + (S.reviewShowBack ? "" : " tappable") + '"' +
+			(S.reviewShowBack ? "" : ' data-ankishowback="1" data-card="' + c.id + '" title="Tippen zum Aufdecken"') + '>' + U.md(c.front) + "</div>";
 	if (S.reviewShowBack) {
 		// Anki-Look: Vorder-/Rückseite als EINE Karte mit Trennlinie statt zwei Boxen
 		html += '<hr class="study-divider">' +
 			'<div class="card-face back md">' + U.md(c.back) + "</div>" +
+			// Anki-Layout: Zähler „neu · lernen · wdh.“ direkt über den Buttons
+			'<div class="study-counts-row">' + countsHtml + "</div>" +
 			'<div class="grades">' +
 				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1</span></button>' +
 				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2</span></button>' +
@@ -392,14 +402,34 @@ function ankiStudyHtml() {
 		// Telemetrie (telemetrie.js): optionale Selbsteinschätzung VOR dem Aufdecken.
 		// Rein beobachtend — beeinflusst weder Queue noch Bewertung, wird aber mit dem
 		// Review protokolliert (Kalibrierung: Gefühl vs. tatsächlicher Erfolg).
-		html += '<div class="confidence-row"><span class="hint">Wie sicher bist du?</span>' +
-			'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">😎 Sicher</button>' +
-			'<button type="button" class="menu-chip" data-confidence="unsure" title="Ich bin unsicher">🤔 Unsicher</button>' +
-			'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">🎲 Geraten</button></div>' +
-			'<div class="modal-actions"><button data-ankishowback="1" data-card="' + c.id + '">Antwort zeigen</button></div>';
+		const confOn = localStorage.getItem("impala67Confidence") !== "off"; // Einstellung: Selbsteinschätzung
+		html += '<div class="study-reveal-controls">' +
+			(confOn ? '<div class="confidence-row"><span class="hint">Wie sicher bist du?</span>' +
+				'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">😎 Sicher</button>' +
+				'<button type="button" class="menu-chip" data-confidence="unsure" title="Ich bin unsicher">🤔 Unsicher</button>' +
+				'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">🎲 Geraten</button></div>' : "") +
+			// Zähler und Selbsteinschätzung bleiben unmittelbar beim Aufdecken.
+			'<div class="study-counts-row">' + countsHtml + "</div>" +
+			'<div class="modal-actions">' +
+				// 🧑‍🏫 Feynman-Lernmodus (beim Stapel-Start gewählt): Erklären ist der Hauptknopf,
+				// der Dialog kommt aus experimente.js (data-expfeynstart, Capture-Listener).
+				(S.ankiFeyn ? '<button class="primary" data-expfeynstart="1" title="Erst in eigenen Worten erklären — die KI prüft gegen die Rückseite">🧑‍🏫 Erklären</button>' : "") +
+				'<button data-ankishowback="1" data-card="' + c.id + '">Antwort zeigen</button></div>' +
+			'</div>';
 	}
-	html += "</div>";
+	html += "</div>" + studyFooterHtml(c);
 	return html;
+}
+
+// Anki-Fußleiste im Lernmodus: „✎ Bearbeiten“ unten links, „⚙️ Optionen“ unten
+// rechts — beide Aktionen existierten bereits (data-ankiedit / data-deckconf).
+function studyFooterHtml(c) {
+	return '<div class="study-footer">' +
+		'<button class="mini" data-ankiedit="' + c.id + '" title="Diese Karte bearbeiten">✎ Bearbeiten</button>' +
+		'<div class="study-footer-options">' +
+			'<button class="mini" data-deckconf="' + U.esc(c.deck || S.ankiDeck || "Standard") + '" title="Stapel-Optionen">⚙️ Optionen</button>' +
+		'</div>' +
+	'</div>';
 }
 
 // Stapel-Liste für den Editor: alle bekannten Stapel inkl. „Standard“ (falls vorhanden).
@@ -466,7 +496,7 @@ function openCardEditor(cardId) {
 		'<label for="cardDeck">Stapel</label>' +
 		'<div class="card-deck-row">' +
 			'<select id="cardDeck">' + opts +
-				'<option value="__new__">＋ Neuer Stapel…</option>' +
+				'<option value="__new__">+ Neuer Stapel…</option>' +
 			"</select>" +
 			'<input id="cardDeckNew" class="card-deck-new" placeholder="Name des neuen Stapels" autocomplete="off" hidden>' +
 		"</div>" +

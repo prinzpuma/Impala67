@@ -357,7 +357,12 @@ export const EXTRAS = (() => {
 				'<option value="suspend"' + (conf.leechAction === "suspend" ? " selected" : "") + ">Karte aussetzen</option>" +
 				'<option value="mark"' + (conf.leechAction === "mark" ? " selected" : "") + ">Nur markieren</option></select></div>" +
 			'<p class="hint">Unterstapel erben die Einstellungen ihres Eltern-Stapels; „*“ gilt für alle.</p>' +
-			'<div class="modal-actions"><button id="btnDeckConfSave">Speichern</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
+			'<div class="modal-actions"><button id="btnDeckConfUndo" ' + (canUndoReview() ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button><button id="btnDeckConfSave">Speichern</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
+		const undoButton = U.el("btnDeckConfUndo");
+		if (undoButton) undoButton.addEventListener("click", async () => {
+			o.hidden = true;
+			await undoReview();
+		});
 		U.el("btnDeckConfSave").addEventListener("click", async () => {
 			const dc = { ...(S.settings.deckConf || {}) };
 			dc[key] = {

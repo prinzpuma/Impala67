@@ -114,7 +114,6 @@ export async function initApp() {
 	await STATE.migrateLegacySecretsToSync();
 	// Alte lokale Chat-Verläufe einmalig in Event-Log/Drive übernehmen.
 	await CHATS.migrateLocal();
-	await purgeOldTrash();
 	await seedIfEmpty();
 	// Der synchronisierte Arbeitsbereich wird geladen, bevor die erste Ansicht
 	// erscheint. Ohne gültigen gespeicherten Tab bleibt die Startseite sichtbar.
@@ -144,6 +143,10 @@ export async function initApp() {
 	setInterval(pingAiStatusIfVisible, 60000);
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	RAG.reindexStale();
+	// PERF (Feinschliff v11): purgeOldTrash lief bisher VOR dem ersten Render und
+	// blockierte den Start mit awaited IndexedDB-Writes (jede alte Papierkorb-Seite
+	// = ein eigener dispatch). Jetzt im Hintergrund nach dem ersten Render.
+	purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
 	// Verwaiste Blobs im Hintergrund entsorgen (blockiert den Start nicht).
 	purgeOrphanBlobs();
 }

@@ -179,6 +179,15 @@ export const U = {
 	highlightCode(el) {
 		if (!el) return;
 		U.renderMermaid(el);
+		// Kopier-Knopf an jedem Codeblock (idempotent; funktioniert auch ohne hljs)
+		el.querySelectorAll("pre").forEach((pre) => {
+			const code = pre.querySelector("code");
+			if (!code || code.classList.contains("language-mermaid") || pre.querySelector(".code-copy")) return;
+			const btn = document.createElement("button");
+			btn.type = "button"; btn.className = "code-copy"; btn.dataset.codecopy = "1";
+			btn.title = "Code kopieren"; btn.textContent = "📋";
+			pre.appendChild(btn);
+		});
 		if (!window.hljs) return;
 		el.querySelectorAll("pre code").forEach((block) => {
 			if (block.classList.contains("language-mermaid")) return;
