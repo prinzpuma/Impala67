@@ -857,11 +857,14 @@ export const HEFT = (() => {
 		if (quick && count === 1 && e.changedTouches.length) {
 			const t = e.changedTouches[0], now = Date.now();
 			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
-				// 🔍 FIX (18. Juli, spät): Doppeltipp ist jetzt ein TOGGLE wie in
-				// GoodNotes — eingezoomt? → sanft zur ganzen Seite zurück. Übersicht?
-				// → weich auf Schreibzoom (220 %) genau um den Tipp-Punkt herum.
+				// 🔍 FIX (18. Juli, spät v2): Doppeltipp zoomt ZUERST REIN — weich auf
+				// Schreibzoom um den Tipp-Punkt herum (der Anker hält den Punkt unter dem
+				// Finger). Erst wenn schon deutlich eingezoomt ist (>= 190 %), passt der
+				// nächste Doppeltipp die ganze Seite wieder ein. Vorher kippte der Toggle
+				// bereits ab 115 % zurück — nach leichtem Pinch-Zoom fühlte sich dadurch
+				// JEDER Doppeltipp wie „Seite einpassen“ an statt reinzuzoomen.
 				gesture.lastTap = 0;
-				animateZoom(zoom > 1.15 ? 1 : 2.2, t.clientX, t.clientY);
+				animateZoom(zoom >= 1.9 ? 1 : Math.max(2.2, Math.min(ZOOM_MAX, zoom * 1.8)), t.clientX, t.clientY);
 				return;
 			}
 			gesture.lastTap = now; gesture.tapX = t.clientX; gesture.tapY = t.clientY;

@@ -1713,6 +1713,31 @@ function wireEvents() {
 	document.addEventListener("paste", (e) => {
 		CHAT_FULLSCREEN.handlePaste(e);
 	});
+
+	// 📱 FIX (18. Juli, spät): iPad-Tastatur — iOS schiebt die App beim Öffnen
+	// der Bildschirmtastatur nach oben, stellt den Fenster-Scroll nach dem
+	// Einklappen aber nicht zuverlässig zurück (App „hängt oben“). Sobald die
+	// Tastatur zugeht (Visual Viewport wieder ~volle Höhe) oder kein
+	// Eingabefeld mehr den Fokus hat, wird das Fenster auf 0/0 zurückgesetzt.
+	const isEditing = () => {
+		const a = document.activeElement;
+		return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
+	};
+	const resetViewportScroll = () => {
+		if (isEditing()) return; // Tastatur ist (noch) offen → nichts tun
+		window.scrollTo(0, 0);
+		document.documentElement.scrollTop = 0;
+		document.body.scrollTop = 0;
+	};
+	if (window.visualViewport) {
+		let kbOpen = false;
+		window.visualViewport.addEventListener("resize", () => {
+			const open = window.visualViewport.height < window.innerHeight * 0.82;
+			if (kbOpen && !open) setTimeout(resetViewportScroll, 60);
+			kbOpen = open;
+		});
+	}
+	document.addEventListener("focusout", () => setTimeout(resetViewportScroll, 100));
 }
 
 export const APP = {

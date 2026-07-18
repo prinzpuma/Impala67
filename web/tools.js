@@ -5,6 +5,7 @@ import { EXTRAS } from "./extras.js";
 import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
+import { CHATS } from "./chats.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
 export const TOOLS = (() => {
@@ -89,6 +90,10 @@ export const TOOLS = (() => {
 			text: { type: "string", description: "Reiner Text (\\n für Absätze)" },
 			heft_page: { type: "number", description: "Heftseite (1-basiert, optional — Standard: letzte Seite)" },
 		}, ["page_title", "text"]),
+		t("get_heft_page_image", "Holt eine Heftseite als BILD in den Chat, damit du Handschrift, Skizzen und Diagramme selbst ansehen kannst (Vision). Das Bild kommt direkt nach den Tool-Ergebnissen als eigene Nutzer-Nachricht bei dir an. Ohne page_title wird das gerade geöffnete Heft verwendet. Wenn du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das ehrlich statt zu raten.", {
+			page_title: { type: "string", description: "Titel des Hefts (optional — Standard: gerade geöffnetes Heft)" },
+			heft_page: { type: "number", description: "Heftseite (1-basiert, optional — Standard: gerade sichtbare Seite)" },
+		}, []),
 		t("replace_page_content", "Ersetzt den kompletten Inhalt einer Seite (vorsichtig verwenden). Funktioniert nicht bei Handschrift-Heften.", {
 			page_title: { type: "string" },
 			content: { type: "string" },
@@ -153,6 +158,19 @@ export const TOOLS = (() => {
 					description: "2–5 kurze, eindeutige Antwortoptionen",
 				},
 			}, ["question", "options"]),
+		// 🧮 Taschenrechner (18. Juli, spät v3): nutzt die eingebundene math.js-
+		// Bibliothek statt eines selbstgeschriebenen Parsers — dadurch Matrizen,
+		// komplexe Zahlen, Einheiten und symbolische Ableitungen quasi gratis.
+		t("calculate", "Rechnet einen mathematischen Ausdruck EXAKT aus (math.js-Syntax) — nutze dieses Tool für JEDE nicht-triviale Rechnung statt selbst im Kopf zu rechnen. Kann: Grundrechenarten/Potenzen/Wurzeln/Brüche, Trigonometrie & Logarithmus, komplexe Zahlen (2+3i), Einheiten-Umrechnung ('5 km/h to m/s'), Vektoren/Matrizen ('[[1,2],[3,4]] * [[5],[6]]', 'det([[1,2],[3,4]])', 'inv(...)', 'transpose(...)'), symbolische Ableitungen ('derivative(\"x^2*sin(x)\", \"x\")'). Bestimmte Integrale NICHT direkt in math.js-Syntax, sondern als eigene Sonderform: 'integrate(\"sin(x)\", \"x\", 0, pi)' (wird numerisch berechnet, liefert eine Dezimalzahl statt einer Formel).", {
+			expression: { type: "string", description: "Ausdruck in math.js-Syntax, z.B. 'sqrt(2)+3^2', '[[1,2],[3,4]]*[[5],[6]]', 'derivative(\"x^2\",\"x\")' oder 'integrate(\"x^2\",\"x\",0,3)'" },
+		}, ["expression"]),
+		// 🔎 Chatverlauf-Rückwertssuche (18. Juli, spät v3): die KI kann gezielt in
+		// FRüHEREN Chats (auch außerhalb des aktuellen Kontextfensters) nach Stichworten
+		// oder Dateinamen suchen, statt bei langen Verläufen den Anfang zu "vergessen".
+		t("search_chat_history", "Durchsucht ALLE früheren Chat-Verläufe (auch andere Chats, nicht nur den aktuellen) nach einem Stichwort — auch in Namen/Inhalten angehängter Dateien (PDF/Text). Nützlich, wenn eine früher erwähnte Datei, Zahl oder Entscheidung nicht mehr im aktuellen Gesprächsfenster steht.", {
+			query: { type: "string", description: "Suchbegriff (Stichwort, Dateiname o.ä.)" },
+			limit: { type: "number", description: "Max. Anzahl Treffer (Standard 15, max. 30)" },
+		}, ["query"]),
 	];
 
 	async function run(name, a) {
@@ -372,6 +390,57 @@ export const TOOLS = (() => {
 					question: norm.question,
 					options: norm.options,
 				};
+			}
+			case "calculate": {
+				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") return { error: "Mathe-Modul (math.js) nicht geladen — evtl. noch offline/kein Netz beim ersten Start." };
+				const expr = String(a.expression || "").trim();
+				if (!expr) return { error: "calculate: expression fehlt." };
+				try {
+					// Sonderform integrate("f(x)", "x", a, b) — math.js kann das nicht nativ,
+					// daher hier per Simpson-Regel selbst numerisch lösen.
+					const intMatch = expr.match(/^integrate\(\s*(['"])([\s\S]*?)\1\s*,\s*(['"])([\s\S]*?)\3\s*,\s*([\s\S]+?)\s*,\s*([\s\S]+?)\s*\)$/);
+					if (intMatch) {
+						const [, , fnExpr, , varName, loStr, hiStr] = intMatch;
+						const lo = Number(window.math.evaluate(loStr));
+						const hi = Number(window.math.evaluate(hiStr));
+						if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { error: "integrate: Grenzen konnten nicht ausgewertet werden." };
+						const compiled = window.math.compile(fnExpr);
+						const N = 500; // gerade Anzahl für Simpson-Regel
+						const h = (hi - lo) / N;
+						let sum = compiled.evaluate({ [varName]: lo }) + compiled.evaluate({ [varName]: hi });
+						for (let i = 1; i < N; i++) sum += compiled.evaluate({ [varName]: lo + i * h }) * (i % 2 === 0 ? 2 : 4);
+						const value = (h / 3) * sum;
+						return { ok: true, expression: expr, result: window.math.format(value, { precision: 10 }), note: "Numerisch berechnet (Simpson-Regel) — kein symbolisches Ergebnis." };
+					}
+					const result = window.math.evaluate(expr);
+					return { ok: true, expression: expr, result: window.math.format(result, { precision: 12 }) };
+				} catch (e) {
+					return { error: "Rechenfehler: " + String((e && e.message) || e) };
+				}
+			}
+			case "search_chat_history": {
+				const q = String(a.query || "").trim().toLowerCase();
+				if (!q) return { error: "search_chat_history: query fehlt." };
+				const limit = Math.max(1, Math.min(30, Number(a.limit) || 15));
+				const hits = [];
+				for (const session of CHATS.load()) {
+					for (const m of session.messages || []) {
+						if (m.role !== "user" && m.role !== "assistant") continue;
+						const parts = [];
+						if (typeof m.content === "string" && m.content) parts.push(m.content);
+						if (m.textFile) parts.push("[Datei: " + m.textFile.name + "]", String(m.textFile.content || ""));
+						if (m.pdfFile) parts.push("[PDF: " + m.pdfFile.name + "]", String(m.pdfFile.content || ""));
+						if (m.image) parts.push("[Bild-Anhang]");
+						const text = parts.join("\n");
+						const idx = text.toLowerCase().indexOf(q);
+						if (idx === -1) continue;
+						const from = Math.max(0, idx - 60), to = Math.min(text.length, idx + q.length + 60);
+						const snippet = (from > 0 ? "…" : "") + text.slice(from, to).replace(/\s+/g, " ").trim() + (to < text.length ? "…" : "");
+						hits.push({ chatTitle: session.title || "(ohne Titel)", updated: String(session.updated || "").slice(0, 16).replace("T", " "), role: m.role, snippet });
+					}
+				}
+				hits.sort((x, y) => String(y.updated).localeCompare(String(x.updated)));
+				return { results: hits.slice(0, limit), totalMatches: hits.length };
 			}
 			default:
 				return { error: "Unbekanntes Tool: " + name };

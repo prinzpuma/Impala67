@@ -86,10 +86,32 @@ export const DB = (() => {
 	// konnten die DB parallel öffnen und die Migration doppelt anstoßen (Race Condition).
 	// Jetzt liefert ein laufender open() denselben Promise an alle Aufrufer; schlägt er
 	// fehl, wird der nächste Aufruf einen neuen Versuch starten.
+	// 📱 FIX (18. Juli, spät v2): iPadOS/Safari lässt indexedDB.open() nach einem
+	// erzwungenen App-Kill gelegentlich für immer hängen (weder onsuccess noch
+	// onerror feuern) — die App blieb dann dunkel und unbedienbar, bis man sie
+	// mehrfach neu startete. Bekannter PWA-Workaround: Timeout + neuer Versuch;
+	// ab dem zweiten Versuch antwortet Safari praktisch immer.
+	async function openWithRetry(attempts = 4) {
+		let lastErr = null;
+		for (let i = 0; i < attempts; i++) {
+			try {
+				return await Promise.race([
+					openRaw("impala67", 2),
+					new Promise((_, rej) => setTimeout(() => rej(new Error("IndexedDB antwortet nicht (Versuch " + (i + 1) + ")")), 3000 + i * 2000)),
+				]);
+			} catch (e) {
+				lastErr = e;
+				console.warn("DB-Open fehlgeschlagen, neuer Versuch:", e);
+				await new Promise((r) => setTimeout(r, 250));
+			}
+		}
+		throw lastErr || new Error("IndexedDB ließ sich nicht öffnen.");
+	}
+
 	function open() {
 		if (!openPromise) {
 			openPromise = (async () => {
-				db = await openRaw("impala67", 2);
+				db = await openWithRetry();
 				await migrateLegacy();
 			})().catch((e) => { openPromise = null; throw e; });
 		}

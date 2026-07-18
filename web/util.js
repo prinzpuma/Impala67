@@ -119,6 +119,30 @@ export const U = {
 		return U.colorize(String(text ?? "").replace(/==([^=\n]+)==/g, (_, t) => "<mark>" + U.esc(t) + "</mark>"));
 	},
 
+	// 🧮 FIX (18. Juli, spät v2): LaTeX bulletproof. Formeln ($…$, $$…$$, \(…\),
+	// \[…\]) werden VOR dem Markdown-Parser durch Platzhalter ersetzt und nach dem
+	// Parsen unverändert wieder eingesetzt. Vorher zerpflückte marked die Formeln:
+	// & wurde zu "&amp;" (sichtbar als "amp;" in Matrizen), \\ und \{ verloren
+	// Backslashes, mehrzeilige $$…$$-Blöcke wurden in <p>/<li> zerteilt — KaTeX
+	// fand die Delimiter dann nicht mehr. Code-Blöcke und Inline-Code bleiben
+	// unangetastet (erste Regex-Alternative, dort wird nicht maskiert).
+	_mathMaskRe: /(```[\s\S]*?(?:```|$)|`[^`\n]*`)|(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$[^$\n]+?\$)/g,
+	_maskMath(src) {
+		const stash = [];
+		const text = String(src ?? "").replace(U._mathMaskRe, (m, code) => {
+			if (code) return code;
+			stash.push(m);
+			return "" + (stash.length - 1) + "";
+		});
+		return { text, stash };
+	},
+	// escape=false liefert die Formel als Rohtext zurück (für Text-Fallbacks),
+	// sonst HTML-escaped — KaTeX liest den escapeten Text später korrekt als
+	// Klartext aus dem DOM (&amp; → &).
+	_unmaskMath(html, stash, escape) {
+		return String(html).replace(/(\d+)/g, (_, i) => (escape === false ? stash[+i] || "" : U.esc(stash[+i] || "")));
+	},
+
 	// HTML gegen XSS bereinigen: DOMPurify (per CDN), sonst konservativer Basis-Filter.
 	sanitize(html) {
 		if (window.DOMPurify) return DOMPurify.sanitize(html);
@@ -135,16 +159,18 @@ export const U = {
 	md(text) {
 		const src = String(text ?? "");
 		if (U._mdCache.has(src)) return U._mdCache.get(src);
-		const raw = U._markHighlights(src);
+		// 🧮 Formeln maskieren → Markdown parsen → Formeln 1:1 wieder einsetzen.
+		const masked = U._maskMath(src);
+		const raw = U._markHighlights(masked.text);
 		if (!window.marked) {
 			// FIX: Offline-Fallback NICHT cachen — sonst blieb der rohe <pre>-Text für
 			// immer im Cache, auch nachdem marked (CDN) später doch noch geladen wurde.
-			return "<pre>" + U.esc(raw) + "</pre>";
+			return "<pre>" + U.esc(U._unmaskMath(raw, masked.stash, false)) + "</pre>";
 		}
 		// `breaks: true` erzeugt <br>-Knoten innerhalb mehrzeiliger $$…$$-Blöcke.
 		// KaTeX Auto-Render kann Delimiter nicht über solche DOM-Grenzen hinweg
 		// erkennen; ohne erzwungene Soft-Breaks bleibt der LaTeX-Block zusammen.
-		const html = U.sanitize(marked.parse(raw, { breaks: false }));
+		const html = U._unmaskMath(U.sanitize(marked.parse(raw, { breaks: false })), masked.stash);
 		// Kleiner Cache: erspart erneutes Parsen bei jedem Voll-Render derselben Inhalte.
 		if (U._mdCache.size > 300) U._mdCache.clear();
 		U._mdCache.set(src, html);
@@ -154,11 +180,14 @@ export const U = {
 	// Nur Inline-Markdown (einzelne Zeile, ohne <p>-Wrapper) — für Blockzeilen
 	// im Block-Editor (Überschriften, Listenpunkte, To-dos).
 	mdInline(text) {
-		const raw = U._markHighlights(text);
+		// 🧮 gleiche Formel-Maskierung wie in md() — auch einzeilige Blockzeilen
+		// (Listenpunkte, Überschriften) enthalten oft $…$ mit _ ^ & \\.
+		const masked = U._maskMath(text);
+		const raw = U._markHighlights(masked.text);
 		if (window.marked && marked.parseInline) {
-			try { return U.sanitize(marked.parseInline(raw, { breaks: true })); } catch { /* Fallback unten */ }
+			try { return U._unmaskMath(U.sanitize(marked.parseInline(raw, { breaks: true })), masked.stash); } catch { /* Fallback unten */ }
 		}
-		return U.esc(raw);
+		return U.esc(U._unmaskMath(raw, masked.stash, false));
 	},
 
 	// LaTeX live rendern: $...$ / $$...$$ / \(...\) / \[...\] in einem DOM-Element.

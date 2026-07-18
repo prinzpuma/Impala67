@@ -68,9 +68,32 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" crossorigin="anonymous"></script>
 <!-- Lokale OCR-Ausführung für Handschrift-/Textsuche in GoodNotes-Heften. Die Bilddaten verlassen den Browser nicht. -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" crossorigin="anonymous"></script>
+<!-- 🧮 Taschenrechner-Tool (18. Juli, spät v3): math.js liefert Grundrechenarten,
+     Brüche, komplexe Zahlen, Vektoren/Matrizen, Einheiten-Umrechnung und symbolische
+     Ableitungen — fertig, ohne einen eigenen Rechner/Parser schreiben zu müssen
+     (siehe tools.js, Tool "calculate"). Bestimmte Integrale löst tools.js selbst
+     numerisch (Simpson-Regel), das kann math.js nicht nativ. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js" crossorigin="anonymous"></script>
 </head>
 <body class="panel-collapsed">
 <div id="bg"></div>
+<!-- 📱 Boot-Splash (18. Juli, spät v2): sofort sichtbares Start-Feedback statt dunklem
+     Nichts am iPad. boot.js aktualisiert den Phasen-Text (#bootSplashMsg) und entfernt
+     den Splash nach dem ersten Render; bei Start-Fehlern zeigt boot.js hier eine
+     Meldung mit „Neu laden“-Knopf. Styles inline, damit sie ohne styles.css wirken. -->
+<div id="bootSplash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#111114;color:#ddd;font-family:system-ui,-apple-system,sans-serif">
+	<div style="width:34px;height:34px;border-radius:50%;border:3px solid #444;border-top-color:#9a8cff;animation:bootspin 0.9s linear infinite"></div>
+	<div id="bootSplashMsg">Impala67 startet…</div>
+	<style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
+</div>
+<script>
+	// Hängt der Start länger als 12 s (z.B. IndexedDB antwortet nicht): Ausweg anbieten.
+	// Nach erfolgreichem Start ist #bootSplashMsg entfernt — dann passiert hier nichts.
+	setTimeout(function () {
+		var m = document.getElementById("bootSplashMsg");
+		if (m) m.innerHTML = "Der Start dauert ungewöhnlich lange … <button onclick=\"location.reload()\" style=\"font:inherit;margin-left:8px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#2a2a2e;color:inherit\">🔄 Neu laden</button>";
+	}, 12000);
+</script>
 
 <div id="app">
 	<aside id="sidebar">

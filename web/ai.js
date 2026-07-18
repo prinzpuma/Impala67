@@ -808,14 +808,23 @@ export const AI = (() => {
 		};
 		const persist = () => { try { persistChat(type); } catch (e) { console.warn("Chat speichern:", e); } };
 
+		// 💭 FIX (18. Juli, spät v2): Gedankengang über ALLE Agent-Schritte sammeln.
+		// Vorher wurde S.aiThinkingDraft vor jedem Schritt geleert und die finale
+		// Nachricht bekam nur das Reasoning des LETZTEN chatOnce-Aufrufs — bei
+		// Tool-Läufen „buggte“ der sichtbare Gedankengang weg und gespeichert wurde
+		// nur ein Bruchteil. Jetzt bleibt er während des ganzen Laufs sichtbar und
+		// wird vollständig an der finalen Antwort gespeichert.
+		let runReasoning = "";
+		const addRunReasoning = (piece) => { if (piece) runReasoning = runReasoning ? runReasoning + "\n\n" + piece : piece; };
 		for (let step = 0; step < MAX_AGENT_STEPS; step++) {
 			S.aiDraft = "";
-			S.aiThinkingDraft = "";
+			S.aiThinkingDraft = runReasoning;
 			const msg = await chatOnce(
 				messages, agentTools,
 				(text) => { S.aiDraft = text; scheduleRender(); },
-				(text) => { S.aiThinkingDraft = text; scheduleRender(); },
+				(text) => { S.aiThinkingDraft = runReasoning ? runReasoning + "\n\n" + text : text; scheduleRender(); },
 			);
+			addRunReasoning(msg.reasoning);
 			// Bereinigt in den API-Verlauf (ohne interne Felder wie reasoning).
 			messages.push(toApiMessage(msg));
 
@@ -823,7 +832,8 @@ export const AI = (() => {
 			if (!msg.tool_calls || !msg.tool_calls.length) {
 				const finalMsg = {
 					mid: U.uid(), role: "assistant", content: msg.content || "",
-					reasoning: msg.reasoning || null, reasoningExpanded: false,
+					// 💭 kompletter Gedankengang des Laufs (alle Schritte), nicht nur der letzte
+					reasoning: runReasoning || null, reasoningExpanded: false,
 				};
 				S.aiDraft = "";
 				S.aiThinkingDraft = "";
@@ -836,10 +846,52 @@ export const AI = (() => {
 				return finalMsg.content;
 			}
 
+			// 📓 Bilder aus get_heft_page_image — erst NACH allen Tool-Antworten dieses
+			// Schritts anhängen (zwischen assistant(tool_calls) und den tool-Antworten
+			// darf protokollseitig keine andere Nachricht stehen).
+			const pendingImageMessages = [];
 			for (const tc of msg.tool_calls) {
 				const name = tc.function.name;
 				let args = {};
 				try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* leere Argumente */ }
+
+				// --- 📓 Heftseite als Bild holen (Vision-Tool, 18. Juli spät v2) ---
+				// Die KI kann sich Heftseiten selbst als Bild in den Verlauf holen. Das
+				// Bild wird als eigene user-Nachricht injiziert (tool-Antworten können
+				// keine Bilder transportieren).
+				if (name === "get_heft_page_image") {
+					let out;
+					let pageNo = 0;
+					try {
+						const HEFT = window.HEFT;
+						if (!HEFT || typeof HEFT.pageAsDataUrl !== "function") throw new Error("Heft-Modul nicht verfügbar.");
+						let heftId = null;
+						if (args.page_title) {
+							const pg = STATE.findPage(args.page_title);
+							if (!pg) throw new Error("Keine Seite mit Titel „" + args.page_title + "“ gefunden.");
+							if (pg.kind !== "heft") throw new Error("„" + pg.title + "“ ist kein Handschrift-Heft.");
+							heftId = pg.id;
+						} else if (HEFT.activeId) {
+							heftId = HEFT.activeId;
+						} else {
+							throw new Error("Es ist gerade kein Heft geöffnet — bitte page_title angeben.");
+						}
+						const pageIdx = args.heft_page ? Math.max(0, Math.floor(args.heft_page) - 1) : (HEFT.activeId === heftId ? (HEFT.activeIndex || 0) : 0);
+						pageNo = pageIdx + 1;
+						const dataUrl = await HEFT.pageAsDataUrl(heftId, pageIdx);
+						pendingImageMessages.push({ role: "user", content: [
+							{ type: "text", text: "[Automatisch angehängt: Heftseite " + pageNo + " als Bild" + (args.page_title ? " aus „" + args.page_title + "“" : "") + "]" },
+							{ type: "image_url", image_url: { url: dataUrl } },
+						] });
+						out = { ok: true, hinweis: "Heftseite " + pageNo + " folgt direkt nach den Tool-Ergebnissen als Bild-Nachricht. Falls du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das kurz und ehrlich." };
+					} catch (e) { out = { error: String((e && e.message) || e) }; }
+					if (onStep) onStep(name);
+					pushToolChip(name, (args.page_title || "aktuelles Heft") + (pageNo ? " · Seite " + pageNo : ""), out && out.error);
+					scheduleRender();
+					pushToolResult(tc, out);
+					persist();
+					continue;
+				}
 
 				// --- Meta-Werkzeug (Sparmodus): volle Werkzeugliste freischalten ---
 				if (name === "request_tools") {
@@ -929,6 +981,8 @@ export const AI = (() => {
 				pushToolResult(tc, out);
 				persist();
 			}
+			// 📓 angeforderte Heftseiten-Bilder jetzt anhängen (siehe oben)
+			if (pendingImageMessages.length) messages.push(...pendingImageMessages);
 		}
 		S.aiDraft = "";
 		S.aiThinkingDraft = "";

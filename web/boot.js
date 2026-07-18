@@ -91,6 +91,10 @@ export async function purgeOrphanBlobs() {
 	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
 }
 
+// 📱 Boot-Feedback (18. Juli, spät v2): Phasen-Text im Boot-Splash aus index.html —
+// statt dunklem Nichts sieht man beim Start, WO er gerade steht (bzw. hängt).
+const bootMsg = (t) => { const m = document.getElementById("bootSplashMsg"); if (m) m.textContent = t; };
+
 export async function initApp() {
 	// FIX (Start-Bug-Paket, 9. Juli): state.js ruft nach jedem dispatch() den Hook
 	// STATE.onChange auf — das alte implizite globale render() ist seit dem
@@ -98,6 +102,7 @@ export async function initApp() {
 	// PERF (10. Juli): selektiver Hook statt blindem Full-Render (Content-Autosave
 	// überspringt Sidebar/Tabs/Chat; sonst rAF-coalesced) — siehe RENDER.onStateChange.
 	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);
+	bootMsg("Datenbank öffnen…");
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -108,6 +113,7 @@ export async function initApp() {
 			document.body.classList.add("sidebar-collapsed");
 		}
 	} catch { /* ignore */ }
+	bootMsg("Arbeitsbereich laden…");
 	await STATE.load();
 	// Einmalig: bereits lokal gespeicherte API-/Notion-Zugangsdaten in den
 	// synchronisierten Event-Log übernehmen, bevor der Start-Sync nach Drive läuft.
@@ -121,6 +127,9 @@ export async function initApp() {
 	wireEvents();
 	SETTINGS.applyBg();
 	render();
+	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
+	const splash = document.getElementById("bootSplash");
+	if (splash) splash.remove();
 	SETTINGS.checkAI();
 	// Nach erfolgreicher früherer Google-Anmeldung sofort Drive abgleichen.
 	// Ohne gespeicherte Sitzung bleibt der Lauf still und öffnet kein Login-Popup.
@@ -159,10 +168,31 @@ function showPendingConflictsIfAny() {
 	if (RENDER.loadPendingConflicts && RENDER.loadPendingConflicts().length) RENDER.openConflictResolver(0);
 }
 
+// 🩺 FIX (18. Juli, spät v2): Der Start konnte am iPad ewig „dunkel“ hängen (v.a.
+// wenn IndexedDB nach einem Safari-Kill nicht antwortet). Jetzt: sichtbarer
+// Boot-Splash mit Phasen-Text (index.html), DB-Open mit Timeout+Retry (db.js)
+// und eine klare Fehlermeldung mit „Neu laden“-Knopf statt schwarzem Bildschirm.
+function bootFail(e) {
+	console.error("Start fehlgeschlagen:", e);
+	const s = document.getElementById("bootSplash");
+	if (!s) return;
+	s.innerHTML = "";
+	const wrap = document.createElement("div");
+	wrap.style.cssText = "text-align:center;padding:24px;max-width:420px";
+	const msg = document.createElement("div");
+	msg.textContent = "⚠️ Start fehlgeschlagen: " + String((e && e.message) || e);
+	msg.style.cssText = "margin-bottom:14px;line-height:1.5";
+	const btn = document.createElement("button");
+	btn.textContent = "🔄 Neu laden";
+	btn.style.cssText = "font:inherit;padding:8px 18px;border-radius:8px;border:1px solid #555;background:#2a2a2e;color:inherit";
+	btn.addEventListener("click", () => location.reload());
+	wrap.append(msg, btn);
+	s.appendChild(wrap);
+}
 if (document.readyState === "loading") {
-	window.addEventListener("DOMContentLoaded", initApp);
+	window.addEventListener("DOMContentLoaded", () => initApp().catch(bootFail));
 } else {
-	initApp();
+	initApp().catch(bootFail);
 }
 
 export const BOOT = {
