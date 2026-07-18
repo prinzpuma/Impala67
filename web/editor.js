@@ -259,19 +259,30 @@ export const EDITOR = (() => {
 				continue;
 			}
 
-			// Formel-Block — auch einzeilig: $$E = mc^2$$
-			const mOne = line.trim().match(/^\$\$(.+?)\$\$$/);
-			if (mOne) {
-				out.push(applyColor({ id: uid(), type: "math", text: mOne[1].trim() }));
-				i++;
-				continue;
-			}
-			if (line.trim() === "$$") {
+			// Formel-Block: $$…$$ darf einzeilig sein, aber auch direkt nach
+			// dem öffnenden Delimiter beginnen (z. B. $$\\begin{pmatrix} …).
+			const mathStart = line.trim().match(/^\$\$(.*)$/);
+			if (mathStart) {
 				const buf = [];
-				i++;
-				while (i < lines.length && lines[i].trim() !== "$$") buf.push(lines[i++]);
-				i++;
-				out.push(applyColor({ id: uid(), type: "math", text: buf.join("\n") }));
+				const first = mathStart[1];
+				const firstEnd = first.indexOf("$$");
+				if (firstEnd >= 0) {
+					buf.push(first.slice(0, firstEnd));
+					i++;
+				} else {
+					buf.push(first);
+					i++;
+					while (i < lines.length) {
+						const end = lines[i].indexOf("$$");
+						if (end >= 0) {
+							buf.push(lines[i].slice(0, end));
+							i++;
+							break;
+						}
+						buf.push(lines[i++]);
+					}
+				}
+				out.push(applyColor({ id: uid(), type: "math", text: buf.join("\n").trim() }));
 				continue;
 			}
 

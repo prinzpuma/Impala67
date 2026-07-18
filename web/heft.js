@@ -520,15 +520,12 @@ export const HEFT = (() => {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
 		if (gesture.zoomFrame) cancelAnimationFrame(gesture.zoomFrame);
 		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
-		// 🔍 Unterbrochene Doppeltipp-Animation: GPU-Vorschau entfernen und den
-		// erreichten Zwischenstand EINMAL echt übernehmen — sonst bliebe ein
-		// hängender CSS-Transform auf .heft-pages zurück.
+		// 🪄 Unterbrochenes FLIP-Gleiten: das echte End-Layout liegt bereits an —
+		// nur den GPU-Transform entfernen (= Animation sofort fertigstellen).
 		if (gesture.dtap) {
-			const d = gesture.dtap;
-			gesture.dtap = null;
+			gesture.dtap = false;
 			const pgs = pagesEl();
 			if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
-			setZoom(d.current, d.clientX, d.clientY, false, d.anchor);
 		}
 	}
 	function navReset() {
@@ -778,37 +775,49 @@ export const HEFT = (() => {
 			if (p) setZoom(p.next, p.clientX, p.clientY, false, p.anchor);
 		});
 	}
-	function animateZoom(target, clientX, clientY) {
-		stopAnim();
-		target = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, target));
-		const from = zoom, anchor = makeZoomAnchor(clientX, clientY);
+	// 🪄 FLIP-Gleiten (18. Juli, spät v3): ZUERST wird das echte End-Layout
+	// angewendet (inkl. Zentrierung und Scroll-Klemmung — ein einziges Relayout),
+	// DANN startet die Ansicht per GPU-Transform optisch an der ALTEN Position
+	// und gleitet in die neue. Der Endzustand der Animation IST das finale
+	// Layout — das Blatt springt also nie mehr hart um, wenn es sich beim
+	// Rauszoomen wieder mittig zentriert, sondern schwebt sichtbar dorthin.
+	function flipGlide(cv, first, dur) {
 		const pgs = pagesEl();
-		// 🔍 FIX (18. Juli, spät v3): Der Doppeltipp-Zoom lief bisher pro Frame über
-		// setZoom() — jeder Animations-Frame änderte die CSS-Breite ALLER Seiten
-		// (Relayout des kompletten Stapels, exakt die Ursache des alten
-		// Pinch-Ruckelns). Jetzt animiert der Doppeltipp wie der Pinch als reine
-		// GPU-Transformation auf .heft-pages; der echte Zoom (Layout + scharfes
-		// Rendern) wird am Ende EINMAL angewendet — kein Ruckeln, kein Snap-Sprung.
-		if (!pgs) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
-		const pr = pgs.getBoundingClientRect();
-		pgs.style.transformOrigin = (clientX - pr.left) + "px " + (clientY - pr.top) + "px";
+		if (!pgs || !cv || !cv.isConnected || !first) { scheduleZoomSettleRender(); return; }
+		const pr = pgs.getBoundingClientRect(), last = cv.getBoundingClientRect();
+		const s = first.width / Math.max(1, last.width);
+		const dx = (first.left - pr.left) - (last.left - pr.left) * s;
+		const dy = (first.top - pr.top) - (last.top - pr.top) * s;
+		// Praktisch deckungsgleich? Dann reicht das scharfe Nachrendern.
+		if (Math.abs(1 - s) < 0.003 && Math.abs(dx) < 1.5 && Math.abs(dy) < 1.5) { scheduleZoomSettleRender(); return; }
+		pgs.style.transformOrigin = "0 0";
 		pgs.style.willChange = "transform";
-		const t0 = performance.now(), dur = 280;
-		gesture.dtap = { current: from, clientX, clientY, anchor };
+		pgs.style.transform = "translate(" + dx + "px, " + dy + "px) scale(" + s + ")";
+		gesture.dtap = true;
+		const t0 = performance.now();
 		const step = (now) => {
-			const t = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - t, 4);
-			const next = from + (target - from) * eased;
-			if (gesture.dtap) gesture.dtap.current = next;
-			pgs.style.transform = "scale(" + (next / from) + ")";
-			if (t < 1) gesture.raf = requestAnimationFrame(step);
-			else {
-				gesture.raf = 0; gesture.dtap = null;
+			const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+			if (t < 1) {
+				pgs.style.transform = "translate(" + (dx * (1 - e)) + "px, " + (dy * (1 - e)) + "px) scale(" + (s + (1 - s) * e) + ")";
+				gesture.raf = requestAnimationFrame(step);
+			} else {
+				gesture.raf = 0; gesture.dtap = false;
 				pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = "";
-				setZoom(target, clientX, clientY, false, anchor);
 				scheduleZoomSettleRender();
 			}
 		};
 		gesture.raf = requestAnimationFrame(step);
+	}
+	function animateZoom(target, clientX, clientY) {
+		stopAnim();
+		target = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, target));
+		const anchor = makeZoomAnchor(clientX, clientY);
+		// 🔍 Doppeltipp-Zoom = FLIP: End-Layout sofort anwenden, dann hingleiten —
+		// GPU-flüssig, und die Endposition stimmt garantiert (kein Snap-Sprung).
+		if (!anchor) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
+		const first = anchor.cv.getBoundingClientRect();
+		setZoom(target, clientX, clientY, false, anchor);
+		flipGlide(anchor.cv, first, 320);
 	}
 	// ---------- Navigation v4 (18. Juli 2026): natives Scrollen ----------
 	// Ein-Finger-Scrollen samt Trägheit übernimmt der BROWSER (touch-action
@@ -844,14 +853,20 @@ export const HEFT = (() => {
 	function settlePinch() {
 		// 🚀 FIX (18. Juli, spät v2): GPU-Vorschau entfernen und den finalen Zoom
 		// EINMAL echt anwenden (statt Relayout pro Frame während der Geste).
+		// 🪄 v3: Weicht das End-Layout von der Vorschau ab (z. B. weil sich das
+		// Blatt beim Rauszoomen wieder zentriert oder der Scroll geklemmt wird),
+		// springt es nicht mehr hart um, sondern gleitet per FLIP in die Mitte.
 		const g = gesture.pinch;
 		gesture.pinch = null;
 		if (gesture.zoomFrame) { cancelAnimationFrame(gesture.zoomFrame); gesture.zoomFrame = 0; }
+		const cv = g && g.anchor && g.anchor.cv && g.anchor.cv.isConnected ? g.anchor.cv : null;
+		const first = cv ? cv.getBoundingClientRect() : null;
 		const pgs = pagesEl();
 		if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
 		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
 		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
-		applyView(false); scheduleZoomSettleRender();
+		applyView(false);
+		if (first) flipGlide(cv, first, 200); else scheduleZoomSettleRender();
 	}
 	// iPadOS meldet Apple-Pencil-Touches als touchType "stylus" — nie als Finger zählen.
 	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
