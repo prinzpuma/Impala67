@@ -7,6 +7,10 @@ import { SCANCORE } from "./heft-scan.js";
 
 // heft.js — GoodNotes-Kern für Impala67.
 //
+// v11 (18. Juli 2026): Navigation v4 — Ein-Finger-Scrollen läuft NATIV über den
+// Browser (touch-action) statt über eigene Pointer-Gesten. Eigene Logik nur noch
+// für Pinch-Zoom, Tipp-Gesten (Doppeltipp/Undo/Redo), Pencil-/Palm-Schutz und
+// Pull-to-Add. Scharfe Viewport-Kacheln rendern erst nach kurzer Scroll-Pause.
 // v10 (15. Juli 2026): Datei entschlackt — der Bildverarbeitungs-Kern des
 // Dokument-Scanners (Blatt-Erkennung, Entzerrung, Filter, Qualität) lebt jetzt
 // unverändert in heft-scan.js (Import SCANCORE). Hier bleiben UI, Eingabe,
@@ -491,10 +495,9 @@ export const HEFT = (() => {
 	// 6 MP + DPR-Deckel 1.5 reichen dafür und halbieren den Speicherdruck — volle
 	// Display-Schärfe liefert die Viewport-Kachel (plus Wet-Ink-Ebene beim Schreiben).
 	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
-	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0;
+	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
 	const gesture = {
-		pointers: new Map(), mode: null, maxCount: 0, moved: false, startedAt: 0,
-		vx: 0, vy: 0, lastT: 0, pinchDist: 0, pinchZoom: 1, pinchAnchor: null,
+		touches: new Map(), pinch: null, maxCount: 0, moved: false, startedAt: 0,
 		raf: 0, zoomFrame: 0, pendingZoom: null,
 		lastTap: 0, tapX: 0, tapY: 0,
 	};
@@ -506,9 +509,8 @@ export const HEFT = (() => {
 		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
 	}
 	function navReset() {
-		stopAnim(); gesture.pointers.clear();
-		gesture.mode = null; gesture.maxCount = 0; gesture.moved = false;
-		gesture.vx = gesture.vy = 0; gesture.pinchAnchor = null; gesture.lastTap = 0;
+		stopAnim(); gesture.touches.clear();
+		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0;
 	}
 	function applyView(commit) {
 		const scroll = scrollEl(); if (!scroll) return;
@@ -655,7 +657,7 @@ export const HEFT = (() => {
 		}
 		clearLiveInk(i);
 	}
-	function renderVisiblePages() {
+	function renderVisiblePages(skipTiles = false) {
 		if (!doc) return;
 		const visible = new Set(visiblePageIndices());
 		// Das Budget gilt pro sichtbarer Seite. Bei hohem Zoom wird DPR sanft
@@ -686,9 +688,11 @@ export const HEFT = (() => {
 			if (cv.height !== h) cv.height = h;
 			if (needsRender) redrawPage(i);
 		});
-		// Über der sofort verfügbaren Basis den sichtbaren Ausschnitt synchron in
-		// voller Displayauflösung nachziehen (nur wo der Overscan verlassen wurde).
-		renderDetailTiles(false);
+		// Über der sofort verfügbaren Basis den sichtbaren Ausschnitt in voller
+		// Displayauflösung nachziehen (nur wo der Overscan verlassen wurde).
+		// Während einer laufenden Scrollbewegung wird das übersprungen — die scharfen
+		// Kacheln folgen nach der Scroll-Pause (Blur→Scharf-Muster wie GoodNotes).
+		if (!skipTiles) renderDetailTiles(false);
 	}
 	function scheduleVisibleRender(delay = 90) {
 		clearTimeout(visibleRenderTimer);
@@ -760,91 +764,98 @@ export const HEFT = (() => {
 		};
 		gesture.raf = requestAnimationFrame(step);
 	}
-	function startFling() {
-		const scroll = scrollEl(); if (!scroll) return;
-		let vx = gesture.vx * 16, vy = gesture.vy * 16;
-		if (Math.hypot(vx, vy) < 2) return;
-		let last = performance.now();
-		const step = (now) => {
-			const dt = Math.min(32, now - last) / 16.67; last = now;
-			const decay = Math.pow(0.92, dt); vx *= decay; vy *= decay;
-			const ox = scroll.scrollLeft, oy = scroll.scrollTop;
-			scroll.scrollLeft -= vx * dt; scroll.scrollTop -= vy * dt;
-			if (scroll.scrollLeft === ox) vx = 0; if (scroll.scrollTop === oy) vy = 0;
-			gesture.raf = Math.hypot(vx, vy) > 0.35 ? requestAnimationFrame(step) : 0;
-		};
-		gesture.raf = requestAnimationFrame(step);
+	// ---------- Navigation v4 (18. Juli 2026): natives Scrollen ----------
+	// Ein-Finger-Scrollen samt Trägheit übernimmt der BROWSER (touch-action
+	// "pan-x pan-y" auf Scroll-Container und Canvases) — das selbstgebaute
+	// Pointer-Fling aus v3 ist ersatzlos entfallen. Ergebnis: sofortiger
+	// Scrollstart, echte Systemträgheit, Rubber-Band — das direkte Gefühl wie in
+	// GoodNotes/nativen Apps. Eigene Gesten nur noch, wo der Browser nichts hat:
+	// • Pinch-Zoom (2 Finger, Touch-Events mit preventDefault)
+	// • Doppeltipp = Seite einpassen · 2-/3-Finger-Tipp = Undo/Redo
+	// • Pencil-/Palm-Schutz: Stylus-Touches scrollen nie nativ; solange ein
+	//   Stift aufliegt, sperrt touch-action neu aufsetzende Finger-Pans.
+	// Pull-to-Add (letzte Seite hochziehen → neue Seite) bleibt unverändert:
+	// seine passiven Touch-Listener vertragen sich mit nativem Scroll.
+	function applyTouchAction() {
+		// touch-action bestimmt, was der Browser mit Fingern (und auf Windows/
+		// Android auch mit Stiften) tun darf. Standard: natives Pannen. Sobald
+		// Finger zeichnen dürfen (onlyPen aus) oder ein Stift aufliegt
+		// (Handballen!), wird natives Scrollen für NEUE Touches gesperrt.
+		const mode = touchNavigates() ? "pan-x pan-y" : "none";
+		const scroll = scrollEl();
+		if (scroll) scroll.style.touchAction = mode;
+		canvases.forEach((cv) => { if (cv) cv.style.touchAction = mode; });
 	}
-	function pinchPair() { const a = [...gesture.pointers.values()]; return a.length >= 2 ? [a[0], a[1]] : null; }
+	// Windows-/Android-Stifte: dort gilt touch-action auch für den Stift. Hover
+	// feuert vor dem Aufsetzen — natives Pannen rechtzeitig abschalten, damit
+	// der Stift zeichnet statt zu scrollen.
+	function onPenBoundary(e) {
+		if (e.pointerType !== "pen") return;
+		if (e.type === "pointerover") e.currentTarget.style.touchAction = "none";
+		else if (!activePenPointers.size) applyTouchAction();
+	}
 	// Gemeinsames Pinch-Ende: ausstehenden Zoom-Frame anwenden, dann scharf nachrendern.
 	function settlePinch() {
 		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
 		applyView(false); scheduleZoomSettleRender();
 	}
-	function beginPinch() {
-		const pair = pinchPair(); if (!pair) return;
-		const mx = (pair[0].x + pair[1].x) / 2, my = (pair[0].y + pair[1].y) / 2;
-		gesture.mode = "pinch";
-		gesture.pinchDist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
-		gesture.pinchZoom = zoom; gesture.pinchAnchor = makeZoomAnchor(mx, my);
+	// iPadOS meldet Apple-Pencil-Touches als touchType "stylus" — nie als Finger zählen.
+	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
+	const touchMid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+	const touchDist = (t) => Math.max(1, Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY));
+	function onTouchStart(e) {
+		// Safari behandelt den Pencil beim Scrollen wie einen Finger — abfangen,
+		// sonst pannt die Seite unter dem zeichnenden Stift weg.
+		if (fingersOf(e.changedTouches).length !== e.changedTouches.length) e.preventDefault();
+		if (!touchNavigates()) return;
+		for (const t of fingersOf(e.changedTouches)) gesture.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
+		const fingers = fingersOf(e.touches);
+		gesture.maxCount = Math.max(gesture.maxCount, fingers.length);
+		if (gesture.touches.size === 1) { stopAnim(); gesture.moved = false; gesture.startedAt = Date.now(); }
+		if (fingers.length >= 2 && !gesture.pinch) {
+			// Ab dem zweiten Finger übernehmen wir: preventDefault stoppt den nativen
+			// 2-Finger-Pan, ab hier läuft unser Pinch-Zoom (CSS-only, Commit nach der Geste).
+			e.preventDefault(); stopAnim();
+			const [mx, my] = touchMid(fingers);
+			gesture.pinch = { d0: touchDist(fingers), zoom0: zoom, anchor: makeZoomAnchor(mx, my) };
+		}
 	}
-	function onTouchPointerDown(e) {
-		if (e.pointerType !== "touch" || !touchNavigates() || !scrollEl()) return;
-		e.preventDefault(); stopAnim();
-		try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-		gesture.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
-		gesture.maxCount = Math.max(gesture.maxCount, gesture.pointers.size);
-		if (gesture.pointers.size === 1) {
-			gesture.mode = "scroll"; gesture.moved = false; gesture.startedAt = Date.now();
-			gesture.vx = gesture.vy = 0; gesture.lastT = e.timeStamp;
-		} else beginPinch();
-	}
-	function onTouchPointerMove(e) {
-		const p = gesture.pointers.get(e.pointerId); if (!p || e.pointerType !== "touch") return;
+	function onTouchMove(e) {
 		if (activePenPointers.size) { navReset(); return; }
-		const scroll = scrollEl(); if (!scroll) return;
-		e.preventDefault();
-		const dx = e.clientX - p.x, dy = e.clientY - p.y;
-		p.x = e.clientX; p.y = e.clientY;
-		if (Math.hypot(p.x - p.sx, p.y - p.sy) > 7) gesture.moved = true;
-		if (gesture.mode === "pinch") {
-			const pair = pinchPair(); if (!pair) return;
-			const dist = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
-			const mx = (pair[0].x + pair[1].x) / 2, my = (pair[0].y + pair[1].y) / 2;
-			queueZoom(gesture.pinchZoom * dist / gesture.pinchDist, mx, my, gesture.pinchAnchor);
-			return;
+		for (const t of e.changedTouches) {
+			const s = gesture.touches.get(t.identifier);
+			if (s && Math.hypot(t.clientX - s.x, t.clientY - s.y) > 7) gesture.moved = true;
 		}
-		scroll.scrollLeft -= dx; scroll.scrollTop -= dy;
-		const dt = Math.max(1, e.timeStamp - gesture.lastT);
-		gesture.vx = 0.68 * gesture.vx + 0.32 * (dx / dt);
-		gesture.vy = 0.68 * gesture.vy + 0.32 * (dy / dt); gesture.lastT = e.timeStamp;
+		const fingers = fingersOf(e.touches);
+		if (gesture.pinch && fingers.length >= 2) {
+			e.preventDefault();
+			const [mx, my] = touchMid(fingers);
+			queueZoom(gesture.pinch.zoom0 * touchDist(fingers) / gesture.pinch.d0, mx, my, gesture.pinch.anchor);
+		}
 	}
-	function onTouchPointerUp(e) {
-		if (!gesture.pointers.has(e.pointerId)) return;
-		e.preventDefault();
-		const wasPinch = gesture.mode === "pinch";
-		gesture.pointers.delete(e.pointerId);
-		if (gesture.pointers.size >= 2) { beginPinch(); return; }
-		if (gesture.pointers.size === 1) {
-			if (wasPinch) settlePinch();
-			const left = [...gesture.pointers.values()][0]; left.sx = left.x; left.sy = left.y;
-			gesture.mode = "scroll"; gesture.vx = gesture.vy = 0; gesture.lastT = e.timeStamp; return;
-		}
+	function onTouchEnd(e) {
+		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
+		if (gesture.pinch && fingersOf(e.touches).length < 2) { gesture.pinch = null; settlePinch(); }
+		if (e.touches.length) return;
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
-		const count = gesture.maxCount; gesture.maxCount = 0; gesture.mode = null;
-		if (wasPinch) { settlePinch(); return; }
+		const count = gesture.maxCount; gesture.maxCount = 0;
 		if (quick && count === 2) { undo(); return; }
 		if (quick && count >= 3) { redo(); return; }
-		if (quick && count === 1) {
-			const now = Date.now();
-			if (now - gesture.lastTap < 330 && Math.hypot(e.clientX - gesture.tapX, e.clientY - gesture.tapY) < 64) {
+		if (quick && count === 1 && e.changedTouches.length) {
+			const t = e.changedTouches[0], now = Date.now();
+			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
 				// Doppeltipp am Tablet: stets zur vollständigen Seitengröße zurück.
 				// Kein Toggle auf einen beliebigen Nahzoom – das bleibt dem Pinch vorbehalten.
-				gesture.lastTap = 0; animateZoom(1, e.clientX, e.clientY); return;
+				gesture.lastTap = 0; animateZoom(1, t.clientX, t.clientY); return;
 			}
-			gesture.lastTap = now; gesture.tapX = e.clientX; gesture.tapY = e.clientY; return;
+			gesture.lastTap = now; gesture.tapX = t.clientX; gesture.tapY = t.clientY;
 		}
-		if (gesture.moved && count === 1) startFling();
+	}
+	function onTouchCancel(e) {
+		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
+		if (gesture.pinch && fingersOf(e.touches).length < 2) { gesture.pinch = null; settlePinch(); }
+		// Übernimmt der native Scroll die Geste, feuert touchcancel — nie als Tipp werten.
+		gesture.moved = true;
 	}
 	let wheelCommitT = 0;
 	function onWheelZoom(e) {
@@ -927,7 +938,8 @@ export const HEFT = (() => {
 		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
 	}
 	function onDown(e) {
-		if (e.pointerType === "pen") { activePenPointers.add(e.pointerId); stopAnim(); }
+		// Palm-Schutz: solange der Stift aufliegt, dürfen NEUE Finger-Touches nicht nativ scrollen.
+		if (e.pointerType === "pen") { activePenPointers.add(e.pointerId); stopAnim(); applyTouchAction(); }
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -1148,7 +1160,7 @@ export const HEFT = (() => {
 		if (!drawing.holdAnchor || Math.hypot(lastP[0] - drawing.holdAnchor[0], lastP[1] - drawing.holdAnchor[1]) > 6) armHoldSnap(lastP);
 	}
 	function onUp(e) {
-		if (e && e.pointerType === "pen") activePenPointers.delete(e.pointerId);
+		if (e && e.pointerType === "pen") { activePenPointers.delete(e.pointerId); if (!activePenPointers.size) applyTouchAction(); }
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
 		const chromeUp = host && host.querySelector(".heft-chrome");
 		if (chromeUp) chromeUp.classList.remove("heft-writing");
@@ -2548,7 +2560,7 @@ export const HEFT = (() => {
 		else if (d.heredo) { redo(); return; }
 		else if (d.hecollapse) { chromeMin = true; updateChrome(); return; }
 		else if (d.heexpand) { chromeMin = false; updateChrome(); return; }
-		else if (d.heonlypen) { onlyPen = !onlyPen; }
+		else if (d.heonlypen) { onlyPen = !onlyPen; applyTouchAction(); }
 		else if (d.hepapercycle) {
 			const pg = page(); if (!pg) return;
 			const i = PAPERS.findIndex((p) => p[0] === pg.paper);
@@ -2611,14 +2623,15 @@ export const HEFT = (() => {
 	// ---------- Scroll: aktuelle Seite erkennen (debounced) ----------
 	function onScroll() {
 		if (!host || !doc) return;
-		// Rendering nicht hinter zwei Debounces verstecken: spätestens im nächsten
-		// Frame die vorausgeladenen Seitenmenge aktualisieren.
+		// Während der Scrollbewegung nur die günstige Basis-Ebene nachziehen (rAF).
+		// Die scharfen Viewport-Kacheln folgen erst nach einer kurzen Scroll-Pause —
+		// so bleibt der native Scroll flüssig, statt pro Frame große Canvases zu rastern.
 		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
 			scrollRenderFrame = 0;
-			// renderVisiblePages() zieht am Ende auch die Kacheln nach — neu gerendert
-			// wird nur, wo der Viewport den Overscan einer Kachel verlassen hat.
-			renderVisiblePages();
+			renderVisiblePages(true);
 		});
+		clearTimeout(scrollSettleTimer);
+		scrollSettleTimer = setTimeout(() => { scrollSettleTimer = 0; renderVisiblePages(); }, 120);
 		clearTimeout(onScroll.t);
 		onScroll.t = setTimeout(() => {
 			if (!host || !doc) return;
@@ -2681,12 +2694,12 @@ export const HEFT = (() => {
 			cv.addEventListener("pointermove", onMove);
 			cv.addEventListener("pointerup", onUp);
 			cv.addEventListener("pointercancel", onUp);
-			// Separat von der Zeichenlogik: Finger scrollen/zoomen direkt auf dem Blatt.
-			cv.addEventListener("pointerdown", onTouchPointerDown, { passive: false });
-			cv.addEventListener("pointermove", onTouchPointerMove, { passive: false });
-			cv.addEventListener("pointerup", onTouchPointerUp, { passive: false });
-			cv.addEventListener("pointercancel", onTouchPointerUp, { passive: false });
+			// Stift-Hover (Windows/Android): natives Pannen abschalten, BEVOR der Stift aufsetzt.
+			cv.addEventListener("pointerover", onPenBoundary);
+			cv.addEventListener("pointerout", onPenBoundary);
 		});
+		// Navigation v4: Finger scrollen NATIV — der Browser übernimmt Pan und Trägheit.
+		applyTouchAction();
 	}
 	function bindScroll() {
 		const scroll = host.querySelector(".heft-scroll");
@@ -2695,6 +2708,13 @@ export const HEFT = (() => {
 		scroll.addEventListener("scroll", scrollFn, { passive: true });
 		// Desktop: Strg/Cmd + Mausrad zoomt direkt auf der Papierfläche (statt Browser-Zoom)
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
+		// Navigation v4: Ein Finger scrollt NATIV. Die Touch-Listener fangen nur noch
+		// Pinch-Zoom (2 Finger), Doppeltipp und 2-/3-Finger-Tipp (Undo/Redo) ab.
+		scroll.addEventListener("touchstart", onTouchStart, { passive: false });
+		scroll.addEventListener("touchmove", onTouchMove, { passive: false });
+		scroll.addEventListener("touchend", onTouchEnd);
+		scroll.addEventListener("touchcancel", onTouchCancel);
+		scroll.style.overscrollBehavior = "contain"; // kein Browser-Pull-to-Refresh im Heft
 	}
 	// ➕ QoL + Bugfix von der „kommt noch“-Seite: neue Seite direkt am Heft-Ende —
 	// als Geisterknopf UND per Runterzieh-Geste (auf der letzten Seite weiter
@@ -2808,7 +2828,7 @@ export const HEFT = (() => {
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
 		// Navigation vollständig zurücksetzen (Gesten, Trägheit, laufende Animationen)
-		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0;
+		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		trayDrag = null;
 	}
 
