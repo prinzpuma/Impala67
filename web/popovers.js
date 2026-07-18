@@ -99,4 +99,57 @@ export function blurActive() {
 	if (ae && typeof ae.blur === "function") ae.blur();
 }
 
+// 🪟 Außenklick auf den abgedunkelten Hintergrund schließt jedes Overlay-Modal
+// (Einstellungen, Dialoge, Verlauf …) — vorher blieb z. B. das Einstellungsfenster
+// stehen, bis man das ✕ traf. Der Klick zählt nur, wenn er WIRKLICH auf dem
+// Hintergrund startet (nicht in der Modal-Box), damit kein Dialog beim
+// Verwischen einer Textauswahl verschwindet.
+document.addEventListener("pointerdown", (e) => {
+	const o = document.getElementById("overlay");
+	if (!o || o.hidden || e.target !== o) return;
+	const x = o.querySelector("#btnCloseOverlay");
+	if (x) x.click();
+	else { o.hidden = true; o.innerHTML = ""; }
+}, true);
+
+// 👆 Kontextmenüs aufgepeppt: Rechtsklick (Maus) oder langer Druck (iPad/Stift)
+// auf eine Zeile öffnet direkt deren ⋯-Menü — überall dort, wo die Zeile schon
+// einen Menü-Knopf besitzt (Seiten- und Stapelzeilen in Sidebar & Listen).
+function rowMenuButton(target) {
+	const row = target && target.closest ? target.closest(".row,.tree-row,.home-list-row,.lib-card,.deck-row") : null;
+	return row ? row.querySelector("[data-pagemenu],[data-deckmenu]") : null;
+}
+function openRowMenu(btn) {
+	if (!btn) return false;
+	if (navigator.vibrate) { try { navigator.vibrate(10); } catch { /* egal */ } }
+	btn.click();
+	return true;
+}
+document.addEventListener("contextmenu", (e) => {
+	const btn = rowMenuButton(e.target);
+	if (btn) { e.preventDefault(); openRowMenu(btn); }
+});
+// Langer Druck (550 ms, max. 10 px Bewegung) als Rechtsklick-Ersatz für Touch/Stift.
+let lpTimer = null, lpStart = null, lpFired = false;
+document.addEventListener("pointerdown", (e) => {
+	if (e.pointerType === "mouse") return;
+	const btn = rowMenuButton(e.target);
+	if (!btn) return;
+	lpStart = { x: e.clientX, y: e.clientY };
+	lpFired = false;
+	clearTimeout(lpTimer);
+	// Erst das Menü öffnen, DANN lpFired setzen — sonst würde der synthetische
+	// btn.click() vom Schlucker unten gleich wieder verschluckt.
+	lpTimer = setTimeout(() => { openRowMenu(btn); lpFired = true; lpTimer = null; }, 550);
+}, true);
+document.addEventListener("pointermove", (e) => {
+	if (lpTimer && lpStart && Math.hypot(e.clientX - lpStart.x, e.clientY - lpStart.y) > 10) { clearTimeout(lpTimer); lpTimer = null; }
+}, true);
+["pointerup", "pointercancel"].forEach((type) => document.addEventListener(type, () => { clearTimeout(lpTimer); lpTimer = null; }, true));
+// Nach einem langen Druck den nachfolgenden echten Klick schlucken — sonst
+// würde die Seite geöffnet und das frisch geöffnete Menü sofort wieder geschlossen.
+document.addEventListener("click", (e) => {
+	if (lpFired) { lpFired = false; e.preventDefault(); e.stopPropagation(); }
+}, true);
+
 export const POPOVERS = { position, toggleElement, closeAll, closeOutside, blurActive };

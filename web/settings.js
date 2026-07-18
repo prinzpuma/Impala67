@@ -315,6 +315,13 @@ export function openSettings(section) {
 		const modeHint = '<p class="hint">' + (inTauri
 			? "Desktop-App: Anmeldung über den System-Browser (OAuth-Client Typ „Desktop-App“)."
 			: "Browser/PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).") + "</p>";
+		// FIX: Nach einem App-Neustart war S.driveUserEmail leer, obwohl Token/Refresh-Token
+		// lokal noch gültig waren — die Sektion zeigte fälschlich „Mit Google anmelden“ und
+		// sprang erst nach einem Klick auf „Verbunden als …“. Jetzt wird die beim Login
+		// gemerkte E-Mail wiederhergestellt, solange die Drive-Sitzung noch gültig ist.
+		if (!S.driveUserEmail && DRIVE.isConnected && DRIVE.isConnected()) {
+			S.driveUserEmail = localStorage.getItem("impala67_drive_email") || "Google-Konto";
+		}
 		if (S.driveUserEmail) {
 			// 1) Bereits verbunden — egal auf welchem Weg.
 			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
@@ -428,6 +435,9 @@ export async function handleDriveLogin(t) {
 	try {
 		const info = await DRIVE.login();
 		S.driveUserEmail = (info && info.email) ? info.email : "Google-Konto";
+		// E-Mail pro Gerät merken, damit die Sync-Sektion nach einem Neustart sofort
+		// „✅ Verbunden als …“ zeigt (nur Anzeige — Tokens verwaltet drive.js selbst).
+		try { localStorage.setItem("impala67_drive_email", S.driveUserEmail); } catch (err) { /* egal */ }
 		openSettings("sync");
 	} catch (err) {
 		U.toast("Anmeldung fehlgeschlagen: " + err.message, "error");
@@ -439,6 +449,7 @@ export async function handleDriveLogin(t) {
 export function handleDriveLogout() {
 	DRIVE.logout();
 	S.driveUserEmail = null;
+	try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
 	openSettings("sync");
 }
 
@@ -469,6 +480,7 @@ export async function handleDriveSyncSettings(t) {
 	// Sitzungen führen gezielt zum sichtbaren „Mit Google anmelden“-Button.
 	if (!DRIVE.isConnected()) {
 		S.driveUserEmail = null;
+		try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
 		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
 		openSettings("sync");
 		return;
@@ -707,6 +719,7 @@ export async function handleDriveSync(t) {
 	// ausgelöst.
 	if (!DRIVE.isConnected()) {
 		S.driveUserEmail = null;
+		try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
 		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
 		openSettings("sync");
 		return;

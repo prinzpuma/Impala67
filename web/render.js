@@ -210,6 +210,28 @@ function currentThinkingCapability() {
 // Baut den Inhalt des einheitlichen Modell-Dropdowns: nach Quelle gruppiert, das
 // aktive Modell mit Häkchen, unten ein Bereich für ein frei eingetipptes Modell
 // (Quelle über Chips wählbar statt über ein hässliches natives <select>).
+// ★ Modell-Favoriten (18. Juli): angepinnte Modelle stehen quellenübergreifend ganz
+// oben im Dropdown. Gespeichert lokal als "providerId::modelId" — bewusst nicht
+// synchronisiert, weil Quellen-IDs pro Gerät verschieden sein können.
+const MODEL_FAV_KEY = "impala67FavModels";
+function favModels() {
+	try { return new Set(JSON.parse(localStorage.getItem(MODEL_FAV_KEY) || "[]")); } catch (err) { return new Set(); }
+}
+function toggleFavModel(key) {
+	const s = favModels();
+	if (s.has(key)) s.delete(key); else s.add(key);
+	try { localStorage.setItem(MODEL_FAV_KEY, JSON.stringify([...s])); } catch (err) { /* egal */ }
+}
+// Capture-Listener, damit der Stern NICHT gleichzeitig das Modell umschaltet
+document.addEventListener("click", (e) => {
+	const b = e.target && e.target.closest && e.target.closest("[data-modelfav]");
+	if (!b) return;
+	e.preventDefault();
+	e.stopPropagation();
+	toggleFavModel(b.dataset.modelfav);
+	renderModelMenu();
+}, true);
+
 function modelMenuInnerHtml() {
 	const providers = S.settings.aiProviders || [];
 	const curProviderId = S.settings.aiProviderId || "";
@@ -242,10 +264,23 @@ function modelMenuInnerHtml() {
 	}
 	let html = back + '<div class="menu-label">Verfügbare Modelle</div>';
 	if (S.modelMenuLoading) return html + '<div class="menu-note">Modelle werden geladen…</div>';
-	const opt = (prId, value, active) => '<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
-		'<span class="menu-item-label">' + U.esc(value) + '</span>' + (active ? '<span class="menu-check">✓</span>' : "") + '</button>';
+	const favSet = favModels();
+	const opt = (prId, value, active) => {
+		const favKey = prId + "::" + value;
+		const fav = favSet.has(favKey);
+		return '<div class="model-row">' +
+			'<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
+			'<span class="menu-item-label">' + U.esc(value) + '</span>' + (active ? '<span class="menu-check">✓</span>' : "") + '</button>' +
+			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + U.esc(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit ganz nach oben pinnen") + '">' + (fav ? "★" : "☆") + '</button></div>';
+	};
+	// ★ Favoriten zuerst — quellenübergreifend ganz oben
+	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id));
+	if (favLive.length) {
+		html += '<div class="menu-label">★ Favoriten</div>' +
+			favLive.map((m) => opt(m.providerId, m.id, m.providerId === curProviderId && m.id === curModel)).join("");
+	}
 	providers.forEach((pr) => {
-		const liveForPr = live.filter((m) => m.providerId === pr.id);
+		const liveForPr = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
 		if (!liveForPr.length) return;
 		html += '<div class="menu-label">' + U.esc(pr.name || pr.id) + '</div>' +
 			liveForPr.map((m) => opt(pr.id, m.id, pr.id === curProviderId && m.id === curModel)).join("");
@@ -793,6 +828,11 @@ document.addEventListener("toggle", (event) => {
 	localStorage.setItem(HOME_FOLD_KEY, JSON.stringify(folds));
 }, true);
 function renderHome(main) {
+	// 📌 Scroll-Anker: Jede Aktion auf Home (Fold auf/zu, Pins, Sync …) löst ein
+	// komplettes Re-Render aus — vorher hüpfte die Seite danach immer wieder an
+	// den Anfang. Position vorher merken, nach dem Neuaufbau wiederherstellen.
+	const homeScroller = main.querySelector(".home");
+	const keepScroll = (homeScroller && homeScroller.scrollTop) || main.scrollTop || 0;
 	const pages = STATE.activePages();
 	const pendingConflicts = loadPendingConflicts();
 	const conflictPages = pages.filter(isConflictPage);
@@ -898,6 +938,14 @@ function renderHome(main) {
 			: "") +
 		LERNZEIT.homeWidgetHtml() +
 		"</div>";
+	if (keepScroll) {
+		main.scrollTop = keepScroll;
+		if (main.scrollTop !== keepScroll) {
+			// Falls nicht #main scrollt, sondern der .home-Container selbst
+			const h = main.querySelector(".home");
+			if (h) h.scrollTop = keepScroll;
+		}
+	}
 }
 
 // Papierkorb: Seiten, Stapel und Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen.
