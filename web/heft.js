@@ -377,6 +377,19 @@ export const HEFT = (() => {
 		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
 		x.strokeRect(minX - 9, minY - 9, maxX - minX + 18, maxY - minY + 18); x.restore();
 	}
+	// 🪢 Lasso-Verschieben (18. Juli 2026): Auswahl-Rahmen + Verschiebe-Geometrie.
+	function lassoBBox(strokes) {
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
+		return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+	}
+	function translateStroke(s, dx, dy) {
+		if (Array.isArray(s.pts)) s.pts.forEach((p) => { p[0] += dx; p[1] += dy; });
+		const sh = s.shape;
+		if (!sh) return;
+		if (sh.x1 != null) { sh.x1 += dx; sh.y1 += dy; sh.x2 += dx; sh.y2 += dy; }
+		if (sh.cx != null) { sh.cx += dx; sh.cy += dy; }
+	}
 	function drawSelection(x, im) {
 		x.save();
 		x.strokeStyle = "#2f6fed"; x.lineWidth = 1.5; x.setLineDash([6, 4]);
@@ -900,6 +913,15 @@ export const HEFT = (() => {
 		const x = liveInkCtx(pi);
 		const p = pos(e, cv);
 		if (tool === "lasso") {
+			// 🪢 FIX (18. Juli 2026): Zug INNERHALB des Auswahl-Rahmens verschiebt die
+			// Auswahl (wie in GoodNotes) — außerhalb beginnt wie bisher ein neues Lasso.
+			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
+				const bb = lassoBBox(lassoSel.strokes);
+				if (bb && p[0] >= bb.minX - 12 && p[0] <= bb.maxX + 12 && p[1] >= bb.minY - 12 && p[1] <= bb.maxY + 12) {
+					drawing = { lassoMove: true, strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
+					return;
+				}
+			}
 			// Freies Lasso um Striche ziehen. Auswahl kann danach mit Entf gelöscht werden.
 			drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
@@ -1044,6 +1066,17 @@ export const HEFT = (() => {
 			x.stroke(); x.restore();
 			return;
 		}
+		if (drawing.lassoMove) {
+			// 🪢 Auswahl live mitziehen — Strich-Punkte und Form-Koordinaten wandern mit.
+			const pm = pos(e, drawing.cv);
+			const dx = pm[0] - drawing.last[0], dy = pm[1] - drawing.last[1];
+			if (dx || dy) {
+				drawing.strokes.forEach((s) => translateStroke(s, dx, dy));
+				drawing.dx += dx; drawing.dy += dy; drawing.last = pm;
+				redrawPage(drawing.pageIdx);
+			}
+			return;
+		}
 		if (drawing.snapped) {
 			// Nach dem Form-Snap: Linien-Endpunkt folgt dem Stift weiter,
 			// Kreis/Ellipse/Rechteck bleiben stehen (wie in Apple Notes).
@@ -1102,6 +1135,13 @@ export const HEFT = (() => {
 			lassoSel = hits.length ? { pageIdx: pi, strokes: hits } : null;
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
+		if (drawing.lassoMove) {
+			if (drawing.dx || drawing.dy) {
+				undoStack.push({ kind: "lassoMove", strokes: drawing.strokes, dx: drawing.dx, dy: drawing.dy, pageIdx: pi }); redoStack = [];
+				scheduleSave(); renderThumb(pi);
+			}
+			drawing = null; redrawPage(pi); updateChrome(); return;
+		}
 		if (drawing.laser) {
 			const laserPage = pi;
 			const timer = setTimeout(() => { laserTimers.delete(timer); redrawPage(laserPage); }, 900);
@@ -1154,7 +1194,8 @@ export const HEFT = (() => {
 		const a = fromStack.pop(); if (!a || !doc) return;
 		const pi = a.pageIdx != null ? a.pageIdx : idx;
 		const pg = doc.pages[pi]; if (!pg) return;
-		if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
+		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
+		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
 		else {
 			// [Seiten-Liste, betroffene Objekte, fügt-Redo-hinzu?]
@@ -1494,7 +1535,7 @@ export const HEFT = (() => {
 		if (!lassoSel || !lassoSel.strokes.length) { if (bar) bar.remove(); return; }
 		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
 		const n = lassoSel.strokes.length;
-		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + "</span>" +
+		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt</span>" +
 			'<button type="button" data-helassodup="1">⧉ Duplizieren</button>' +
 			'<button type="button" data-helassodel="1">🗑 Löschen</button>' +
 			'<button type="button" data-helassoclear="1">Aufheben</button>';

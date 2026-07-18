@@ -282,6 +282,20 @@ export const DRIVE = (() => {
 		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
 	}
 
+	// PERF (18. Juli, Sync v3): kleiner Parallel-Helfer — führt fn für alle Items
+	// mit begrenzter Gleichzeitigkeit aus (Downloads/Uploads liefen vorher strikt
+	// nacheinander, jede Datei kostete eine volle Netz-Rundreise).
+	async function mapLimit(items, limit, fn) {
+		const list = items || [];
+		const out = new Array(list.length);
+		let next = 0;
+		const workers = Array.from({ length: Math.max(1, Math.min(limit, list.length)) }, async () => {
+			while (next < list.length) { const i = next++; out[i] = await fn(list[i], i); }
+		});
+		await Promise.all(workers);
+		return out;
+	}
+
 	async function listSyncFiles() {
 		const q = encodeURIComponent("trashed=false");
 		const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + q + "&pageSize=1000&fields=files(id,name,modifiedTime,size,appProperties)");
@@ -342,7 +356,7 @@ export const DRIVE = (() => {
 	// Speichert den lokalen Verlierer, solange der Original-Blob noch vorhanden ist,
 	// und lädt danach fuer JEDE aktuelle Heft-Revision genau den im Event referenzierten Hash.
 	// Damit gibt es weder "Blob existiert schon"-Stale-Reads noch zufaellige Datei-Reihenfolgen.
-	async function reconcileHeftBlobs(remoteBlobs, conflictDetails) {
+	async function reconcileHeftBlobs(remoteBlobs, conflictDetails, allEvs, uploadHashCache, localBlobKeys) {
 		for (const c of conflictDetails || []) {
 			if ((c.conflictType === "heft" || c.conflictType === "delete-change") && c.loserSource === "local" && c.loserHash) {
 				const original = await DB.getBlob("heft:" + c.pageId);
@@ -351,7 +365,7 @@ export const DRIVE = (() => {
 				}
 			}
 		}
-		const heads = latestHeftHeads(await DB.allEvents());
+		const heads = latestHeftHeads(allEvs);
 		const byContentHash = new Map();
 		for (const f of remoteBlobs) {
 			const h = f.appProperties && f.appProperties.contentHash;
@@ -359,6 +373,14 @@ export const DRIVE = (() => {
 		}
 		for (const [pageId, ev] of Object.entries(heads)) {
 			const wanted = ev.payload.blobHash, key = "heft:" + pageId;
+			// PERF-Fastpath (Sync v3): laut Upload-Hash-Cache liegt lokal bereits exakt
+			// dieser Stand — dann muss das Heft nicht aus IndexedDB gelesen werden.
+			// ROBUSTHEIT (Sync v3.1): zusätzlich muss der Schlüssel wirklich in IndexedDB
+			// existieren (localBlobKeys kommt aus einem billigen getAllKeys) — wurde die
+			// Datenbank geleert, aber der localStorage-Cache überlebte, würde das Heft
+			// sonst nie wieder heruntergeladen.
+			const cached = uploadHashCache && uploadHashCache[key];
+			if (cached && cached.contentHash === wanted && localBlobKeys.has(key)) continue;
 			const local = await DB.getBlob(key);
 			if (local && local.meta && local.meta.hash === wanted) continue;
 			const file = byContentHash.get(wanted);
@@ -419,14 +441,21 @@ export const DRIVE = (() => {
 		// Nur bislang unbekannte Delta-Shards laden.
 		const knownDeltaIds = loadKnownIds("impala67_drive_known_deltas");
 		const remoteDeltas = unseenRemoteFiles(files.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
-		for (const file of remoteDeltas) {
-			const payload = await downloadPayload(file);
-			const r = await DB.importAll(JSON.stringify(payload), importOpts);
+		// PERF (Sync v3): Shards parallel herunterladen (4 gleichzeitig) und dann in
+		// EINEM importAll mergen — vorher lief jeder Shard einzeln durch importAll,
+		// und jeder Aufruf las das komplette lokale Event-Log erneut aus IndexedDB.
+		// Der Log-Merge dedupliziert per Event-ID; die Konflikt-Erkennung sieht so
+		// sogar den korrekten jüngsten Remote-Head über alle Shards hinweg.
+		if (remoteDeltas.length) setStatus("syncing", remoteDeltas.length + " Änderungspaket(e) laden…");
+		const deltaPayloads = await mapLimit(remoteDeltas, 4, (file) => downloadPayload(file));
+		const deltaEvents = deltaPayloads.flatMap((p) => (p && Array.isArray(p.events)) ? p.events : []);
+		if (deltaEvents.length) {
+			const r = await DB.importAll(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: deltaEvents, blobs: {} }), importOpts);
 			imported += r.added; conflicts += r.conflicts || 0;
 			conflictDetails.push(...(r.conflictDetails || []));
 			importedEvents.push(...(r.importedEvents || []));
-			knownDeltaIds.add(file.id);
 		}
+		remoteDeltas.forEach((file) => knownDeltaIds.add(file.id));
 		saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 
 		// Große Binärdaten separat. Hefte sind versioniert: der Event-Hash bestimmt
@@ -437,11 +466,22 @@ export const DRIVE = (() => {
 			.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
 		const remoteBlobHashes = new Set(remoteBlobs.map((f) => f.name.slice(BLOB_PREFIX.length).replace(/\.json\.gz$/, "")));
 		const knownBlobIds = loadKnownIds("impala67_drive_known_blobs");
-		const liveHeftHashes = await reconcileHeftBlobs(remoteBlobs, conflictDetails);
-		const legacyHefts = legacyHeftIds(await DB.allEvents());
-		for (const file of unseenRemoteFiles(remoteBlobs, knownBlobIds)) {
+		// PERF (Sync v3): das Event-Log nur EINMAL lesen (vorher 2×) und den
+		// Upload-Hash-Cache schon hier laden — er dient jetzt auch reconcileHeftBlobs
+		// als Fastpath, damit unveränderte Hefte nicht mehr aus IndexedDB kommen.
+		let uploadHashCache = {};
+		try { uploadHashCache = JSON.parse(localStorage.getItem("impala67_drive_upload_hashes") || "{}"); } catch { uploadHashCache = {}; }
+		let uploadHashCacheDirty = false;
+		const allEvs = await DB.allEvents();
+		// ROBUSTHEIT (Sync v3.1): billiger Existenz-Index (nur Schlüssel, keine Blob-Daten) —
+		// der Heft-Fastpath verlässt sich damit nie auf einen Cache-Eintrag ohne echten Blob.
+		const localBlobKeys = new Set(await DB.allBlobKeys());
+		const liveHeftHashes = await reconcileHeftBlobs(remoteBlobs, conflictDetails, allEvs, uploadHashCache, localBlobKeys);
+		const legacyHefts = legacyHeftIds(allEvs);
+		// PERF (Sync v3): unbekannte Blob-Dateien parallel (4 gleichzeitig) laden.
+		await mapLimit(unseenRemoteFiles(remoteBlobs, knownBlobIds), 4, async (file) => {
 			const payload = await downloadPayload(file);
-			if (!payload || !payload.id) { knownBlobIds.add(file.id); continue; }
+			if (!payload || !payload.id) { knownBlobIds.add(file.id); return; }
 			const isHeft = String(payload.id).startsWith("heft:");
 			const legacyId = isHeft ? String(payload.id).slice("heft:".length) : "";
 			const current = await DB.getBlob(payload.id);
@@ -450,22 +490,25 @@ export const DRIVE = (() => {
 			// sie automatisch mit einem Hash und wechselt auf den strengen Pfad oben.
 			if (!current && (!isHeft || legacyHefts.has(legacyId))) await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
 			knownBlobIds.add(file.id);
-		}
-		// PERF (15. Juli): Upload-Hash je Blob cachen — vorher wurde bei JEDEM Sync
-		// jeder lokale Blob komplett serialisiert und SHA-256-gehasht, nur um
-		// festzustellen, dass er längst in Drive liegt. Der Cache invalidiert sich
-		// über contentHash (Hefte ändern ihn bei jedem Speichern) bzw. Größe
-		// (PDF-Blobs sind immutable).
-		let uploadHashCache = {};
-		try { uploadHashCache = JSON.parse(localStorage.getItem("impala67_drive_upload_hashes") || "{}"); } catch { uploadHashCache = {}; }
-		let uploadHashCacheDirty = false;
+		});
+		// PERF (18. Juli, Sync v3): Blob-Vollscan abgeschafft. Vorher wurde bei JEDEM
+		// Sync jeder lokale Blob (alle PDFs + Hefte!) komplett aus IndexedDB gelesen
+		// und serialisiert, nur um per Hash festzustellen, dass er längst in Drive
+		// liegt. Jetzt gilt: steht ein Blob im Hash-Cache UND liegt sein Hash bereits
+		// remote, wird er GAR NICHT mehr gelesen — Nicht-Hefte sind immutable, bei
+		// Heften bestätigt der Event-Head-Hash (liveHeftHashes), dass der gecachte
+		// Stand noch der aktuelle ist. Geänderte/neue Blobs laufen wie bisher durch
+		// Serialisierung + SHA-256 (der strenge Pfad bleibt also erhalten).
 		const serializeBlob = (id, rec) => new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
+		const toUpload = [];
 		for (const id of await DB.allBlobKeys()) {
+			const cached = uploadHashCache[id];
+			const isHeft = String(id).startsWith("heft:");
+			if (cached && remoteBlobHashes.has(cached.hash) && (!isHeft || liveHeftHashes.has(cached.contentHash))) continue;
 			const rec = await DB.getBlob(id);
 			if (!rec || !rec.buf) continue;
 			const contentHash = (rec.meta && rec.meta.hash) || "";
 			const size = rec.buf.byteLength || 0;
-			const cached = uploadHashCache[id];
 			let raw = null;
 			let hash;
 			if (cached && cached.contentHash === contentHash && cached.size === size) {
@@ -478,29 +521,41 @@ export const DRIVE = (() => {
 			}
 			if (remoteBlobHashes.has(hash)) continue;
 			if (!raw) raw = serializeBlob(id, rec);
-			const packed = await encodeJson(JSON.parse(new TextDecoder().decode(raw)));
-			const created = await uploadNamed(BLOB_PREFIX + hash + ".json.gz", packed.bytes, packed.encoding, null, { hash, blobId: id, contentHash });
-			remoteBlobHashes.add(hash); knownBlobIds.add(created.id);
+			toUpload.push({ id, raw, hash, contentHash });
+			remoteBlobHashes.add(hash);
 		}
+		// PERF (Sync v3): neue Blobs parallel hochladen (3 gleichzeitig).
+		if (toUpload.length) setStatus("syncing", toUpload.length + " Datei(en) hochladen…");
+		await mapLimit(toUpload, 3, async (u) => {
+			const packed = await encodeJson(JSON.parse(new TextDecoder().decode(u.raw)));
+			const created = await uploadNamed(BLOB_PREFIX + u.hash + ".json.gz", packed.bytes, packed.encoding, null, { hash: u.hash, blobId: u.id, contentHash: u.contentHash });
+			knownBlobIds.add(created.id);
+		});
 		if (uploadHashCacheDirty) localStorage.setItem("impala67_drive_upload_hashes", JSON.stringify(uploadHashCache));
 		saveKnownIds("impala67_drive_known_blobs", knownBlobIds);
 		// Alte, nicht mehr von einem aktuellen Heft-Head referenzierte Versionen
 		// aufräumen. Die Datei-Liste stammt vom Sync-Start; parallel neue Uploads
 		// anderer Geräte werden daher nie versehentlich gelöscht.
-		for (const file of remoteBlobs) {
+		// PERF (Sync v3.1): veraltete Heft-Versionen parallel löschen (4 gleichzeitig)
+		// statt Datei für Datei zu warten.
+		const staleHeftFiles = remoteBlobs.filter((file) => {
 			const ap = file.appProperties || {};
-			if (ap.blobId && ap.blobId.startsWith("heft:") && ap.contentHash && !liveHeftHashes.has(ap.contentHash)) {
-				await api("/drive/v3/files/" + file.id, { method: "DELETE" }).catch(() => {});
-			}
-		}
+			return !!(ap.blobId && ap.blobId.startsWith("heft:") && ap.contentHash && !liveHeftHashes.has(ap.contentHash));
+		});
+		await mapLimit(staleHeftFiles, 4, (file) => api("/drive/v3/files/" + file.id, { method: "DELETE" }).catch(() => {}));
 
 		// Nur Events seit dem letzten erfolgreichen Upload als Delta senden.
 		const localMaxSeq = await DB.maxSeq();
 		let uploaded = 0;
 		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
-			// SECURITY (15. Juli): Zugangsdaten (API-Keys etc.) aus Alt-Events nie mit
-			// hochladen — neue Events sind dank state.js/stripSecrets bereits sauber.
-			const events = (await DB.eventsAfterSeq(uploadedSeq)).map(DB.redactSecretsFromEvent);
+			// FIX (18. Juli, API-Key-Sync): Die Redaction hier hat den GEWOLLTEN
+			// Einstellungs-Sync kaputt gemacht — state.js repliziert API-Keys, Notion-
+			// Token & Co. ausdrücklich über das Event-Log (stripSecrets ist dort ein
+			// No-op), aber der Upload hat sie wieder geleert. Schlimmer: ein geleertes
+			// aiProviders-Event ÜBERSCHRIEB auf dem Zielgerät vorhandene Keys mit "".
+			// Der appDataFolder ist privater App-Speicher im eigenen Google-Konto
+			// (gleiche Vertraulichkeit wie localStorage) — daher keine Redaction mehr.
+			const events = await DB.eventsAfterSeq(uploadedSeq);
 			if (events.length) {
 				setStatus("syncing", "Änderungen hochladen…");
 				const payload = { app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} };
@@ -521,13 +576,16 @@ export const DRIVE = (() => {
 		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
 		if (listedDeltas.length >= 50) {
 			setStatus("syncing", "Sync-Stand optimieren…");
-			// PERF+SECURITY (15. Juli): Blobs gar nicht erst kodieren (liegen v2
-			// separat) und keine Zugangsdaten aus Alt-Events in den Snapshot schreiben.
-			const payload = JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: true }));
+			// PERF (15. Juli): Blobs gar nicht erst kodieren (liegen v2 separat).
+			// FIX (18. Juli): redactSecrets entfernt — sonst löscht das Kompaktieren
+			// die (gewollt synchronisierten) API-Keys wieder aus dem gemeinsamen Log.
+			const payload = JSON.parse(await DB.exportAll({ includeBlobs: false }));
 			const packed = await encodeJson(payload);
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot && oldSnapshot.id, { protocol: "2" });
-			for (const f of listedDeltas) await api("/drive/v3/files/" + f.id, { method: "DELETE" }).catch(() => {});
+			// PERF (Sync v3.1): alte Delta-Shards parallel löschen (4 gleichzeitig) —
+			// vorher 50+ Requests nacheinander, das dominierte den Kompaktier-Lauf.
+			await mapLimit(listedDeltas, 4, (f) => api("/drive/v3/files/" + f.id, { method: "DELETE" }).catch(() => {}));
 			localStorage.removeItem("impala67_drive_snapshot_stamp");
 			localStorage.removeItem("impala67_drive_known_deltas");
 		}

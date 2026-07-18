@@ -3069,9 +3069,29 @@ h3, h4 { text-wrap: balance; }
 
 /* ---------- Einstellungen → KI: „Tools immer mitsenden“ (Tool-Angebot v3) ---------- */
 .ai-tools-toggle { margin: 14px 0 4px; }
-.ai-tools-toggle label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-.ai-tools-toggle input { margin-top: 3px; }
-.ai-tools-toggle small { display: block; color: var(--text2); margin-top: 2px; }
+.ai-tools-toggle label { display: flex; width: 100%; gap: 10px; align-items: flex-start; cursor: pointer; }
+/* Checkbox nicht vom globalen Input-Styling (Padding, Hintergrund, Rahmen) verformen lassen — besonders auf iPadOS/Safari. */
+.ai-tools-toggle input[type="checkbox"] {
+	-webkit-appearance: checkbox;
+	appearance: auto;
+	width: 18px;
+	height: 18px;
+	min-width: 18px;
+	padding: 0;
+	margin: 3px 0 0;
+	background: initial;
+	border: initial;
+	border-radius: 4px;
+	accent-color: var(--accent);
+}
+/* Der Text darf innerhalb der schmalen Einstellungen-Spalte wirklich umbrechen. */
+.ai-tools-toggle label > span { flex: 1 1 auto; min-width: 0; }
+.ai-tools-toggle b { display: block; }
+.ai-tools-toggle small { display: block; color: var(--text2); margin-top: 2px; overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+	.ai-tools-toggle { margin-top: 10px; }
+	.ai-tools-toggle label { gap: 9px; }
+}
 
 /* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
 .deck-feyn { white-space: nowrap; }
