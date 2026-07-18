@@ -523,6 +523,9 @@ export const HEFT = (() => {
 	}
 	function navReset() {
 		stopAnim(); gesture.touches.clear();
+		// Falls eine Pinch-Vorschau (GPU-Transform) noch aktiv war: sauber entfernen.
+		const pgs = pagesEl();
+		if (pgs && pgs.style.transform) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
 		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0;
 	}
 	function applyView(commit) {
@@ -809,6 +812,14 @@ export const HEFT = (() => {
 	}
 	// Gemeinsames Pinch-Ende: ausstehenden Zoom-Frame anwenden, dann scharf nachrendern.
 	function settlePinch() {
+		// 🚀 FIX (18. Juli, spät v2): GPU-Vorschau entfernen und den finalen Zoom
+		// EINMAL echt anwenden (statt Relayout pro Frame während der Geste).
+		const g = gesture.pinch;
+		gesture.pinch = null;
+		if (gesture.zoomFrame) { cancelAnimationFrame(gesture.zoomFrame); gesture.zoomFrame = 0; }
+		const pgs = pagesEl();
+		if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
+		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
 		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
 		applyView(false); scheduleZoomSettleRender();
 	}
@@ -830,7 +841,17 @@ export const HEFT = (() => {
 			// 2-Finger-Pan, ab hier läuft unser Pinch-Zoom (CSS-only, Commit nach der Geste).
 			e.preventDefault(); stopAnim();
 			const [mx, my] = touchMid(fingers);
-			gesture.pinch = { d0: touchDist(fingers), zoom0: zoom, anchor: makeZoomAnchor(mx, my) };
+			// 🚀 FIX (18. Juli, spät v2): Pinch-Zoom läuft während der Geste NUR noch
+			// als GPU-Transform auf .heft-pages. Vorher änderte jeder Finger-Frame die
+			// CSS-Breite ALLER Seiten (Relayout des kompletten Stapels) — DAS war das
+			// Ruckeln. Der echte Zoom wird erst am Gesten-Ende EINMAL angewendet.
+			const pgs = pagesEl();
+			if (pgs) {
+				const pr = pgs.getBoundingClientRect();
+				pgs.style.transformOrigin = (mx - pr.left) + "px " + (my - pr.top) + "px";
+				pgs.style.willChange = "transform";
+			}
+			gesture.pinch = { d0: touchDist(fingers), zoom0: zoom, anchor: makeZoomAnchor(mx, my), mid0: [mx, my], mid: [mx, my], factor: 1 };
 		}
 	}
 	function onTouchMove(e) {
@@ -843,12 +864,22 @@ export const HEFT = (() => {
 		if (gesture.pinch && fingers.length >= 2) {
 			e.preventDefault();
 			const [mx, my] = touchMid(fingers);
-			queueZoom(gesture.pinch.zoom0 * touchDist(fingers) / gesture.pinch.d0, mx, my, gesture.pinch.anchor);
+			// GPU-Vorschau statt echtem Zoom pro Frame (kein Relayout während der Geste);
+			// Faktor so geclampt, dass die Vorschau nie über ZOOM_MIN/ZOOM_MAX hinausläuft.
+			const g = gesture.pinch;
+			g.factor = Math.max(ZOOM_MIN / g.zoom0, Math.min(ZOOM_MAX / g.zoom0, touchDist(fingers) / g.d0));
+			g.mid = [mx, my];
+			if (!gesture.zoomFrame) gesture.zoomFrame = requestAnimationFrame(() => {
+				gesture.zoomFrame = 0;
+				const gp = gesture.pinch, pgs = pagesEl();
+				if (!gp || !pgs) return;
+				pgs.style.transform = "translate(" + (gp.mid[0] - gp.mid0[0]) + "px, " + (gp.mid[1] - gp.mid0[1]) + "px) scale(" + gp.factor + ")";
+			});
 		}
 	}
 	function onTouchEnd(e) {
 		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
-		if (gesture.pinch && fingersOf(e.touches).length < 2) { gesture.pinch = null; settlePinch(); }
+		if (gesture.pinch && fingersOf(e.touches).length < 2) settlePinch();
 		if (e.touches.length) return;
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
 		const count = gesture.maxCount; gesture.maxCount = 0;
@@ -872,7 +903,7 @@ export const HEFT = (() => {
 	}
 	function onTouchCancel(e) {
 		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
-		if (gesture.pinch && fingersOf(e.touches).length < 2) { gesture.pinch = null; settlePinch(); }
+		if (gesture.pinch && fingersOf(e.touches).length < 2) settlePinch();
 		// Übernimmt der native Scroll die Geste, feuert touchcancel — nie als Tipp werten.
 		gesture.moved = true;
 	}

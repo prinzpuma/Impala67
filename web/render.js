@@ -498,6 +498,12 @@ function renderMain() {
 	// GoodNotes-Heft: Fokusmodus. Über der Papierfläche bleibt NUR die globale
 	// Tab-Leiste. Kein Breadcrumb, Titel oder Seitenkopf nimmt Schreibfläche weg.
 	if (pg.kind === "heft") {
+		// 📌 FIX (18. Juli, spät v2): Ist GENAU dieses Heft bereits gemountet,
+		// wird es NICHT neu aufgebaut. Vorher remountete jeder Hintergrund-Render
+		// (z. B. das „Lernst du noch?“-Lernzeit-Event, Sync, Statuswechsel) das
+		// komplette Heft — Scroll-Position, Zoom und Undo-Verlauf gingen verloren
+		// und die Ansicht sprang auf eine andere Seite.
+		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
 		main.innerHTML = '<div id="heftStage" class="heft-stage" aria-label="' + U.esc(pg.title) + '"></div>';
 		const stage = U.el("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
@@ -506,6 +512,12 @@ function renderMain() {
 
 	// Wie in Notion: nur noch EINE, durchgehend bearbeitbare und angezeigte Ansicht —
 	// kein Moduswechsel mehr. Der Block-Editor (editor.js) ist immer aktiv.
+	// 📌 FIX (18. Juli, spät v2): Scroll-Position der Seite über Hintergrund-
+	// Renders retten — der frisch gebaute .page-scroll startete sonst wieder
+	// ganz oben, z. B. wenn Lernzeit/Sync/Status ein Event feuerte.
+	const oldPageScroller = main.querySelector(".page-scroll");
+	const keepPageScroll = oldPageScroller && main.dataset.scrollPageId === pg.id ? oldPageScroller.scrollTop : 0;
+	main.dataset.scrollPageId = pg.id;
 	main.innerHTML =
 		// Navigation gehört zur Seiten-Chrome oben links; die eigentliche Seite
 		// bleibt davon unabhängig als zentrierte Dokumentfläche ausgerichtet.
@@ -531,6 +543,10 @@ function renderMain() {
 		// (ein iframe ohne src lädt sonst die eigene Seiten-URL als Platzhalter).
 		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" src="about:blank" title="PDF"></iframe>' : "");
 	hydrateCovers(main);
+	if (keepPageScroll) {
+		const sc = main.querySelector(".page-scroll");
+		if (sc) sc.scrollTop = keepPageScroll;
+	}
 	// Titelhöhe direkt an den Inhalt koppeln. Der Listener gehört zur frisch
 	// gerenderten Seite und kann deshalb ohne globalen Zustand auskommen.
 	const titleInput = U.el("pageTitle");
@@ -1398,8 +1414,29 @@ function renderFullChat(main) {
 	const s = S.currentChatId ? CHATS.load().find((x) => x.id === S.currentChatId) : null;
 	const title = (s && s.title) || "Neuer Chat";
 	const empty = !S.chat.length;
+	// 📌 FIX (18. Juli, spät v2): Ein bereits aufgebautes Chat-Fenster wird
+	// WIEDERVERWENDET statt bei jedem Hintergrund-Render (Lernzeit-Segment,
+	// Sync, Status-Ping …) komplett neu gebaut. Vorher entstand dabei ein
+	// frisches #mainChatLog, dessen Auto-Scroll die Ansicht ans Ende riss —
+	// „die Seite springt nach unten“ — und gerade getippter Text im
+	// Eingabefeld ging verloren. Jetzt wird nur der Log-Inhalt nachgeführt.
+	const oldWrap = main.querySelector(".chat-full-wrap");
+	if (oldWrap && oldWrap.dataset.chatid === String(S.currentChatId || "")) {
+		const h1 = oldWrap.querySelector(".chat-full-head h1");
+		const wantTitle = "✦ " + title;
+		if (h1 && h1.textContent !== wantTitle) h1.textContent = wantTitle;
+		if (!empty) {
+			const hint = oldWrap.querySelector(".chat-empty-hint");
+			if (hint) hint.remove();
+			const sug = oldWrap.querySelector(".chat-suggests");
+			if (sug) sug.remove();
+		}
+		renderMainChatLog();
+		renderPendingChip("full");
+		return;
+	}
 	main.innerHTML =
-		'<div class="chat-full-wrap">' +
+		'<div class="chat-full-wrap" data-chatid="' + U.esc(String(S.currentChatId || "")) + '">' +
 			'<div class="chat-full-head">' +
 				'<button type="button" class="ai-status-chip" id="aiStatusChipFull" title="KI-Status" data-aistatus="1"></button>' +
 				'<h1>✦ ' + U.esc(title) + "</h1>" +

@@ -1429,7 +1429,12 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .dashboard-add { margin-top: 4px; background: transparent; border: 1px dashed var(--edge); color: var(--text2); }
 
 /* Persönliches Home — schlank, ohne Widget-Wand und ohne Deko-Kr… */
-.home-v2 { width: 100%; max-width: 720px; margin: 0 auto; padding: 36px 32px 56px; }
+/* 🧭 FIX (18. Juli, spät v2): Die Home-Scroll-Leiste klebte mitten im Fenster,
+   weil die zentrierte 720-px-Spalte SELBST der Scroller war. Jetzt scrollt Home
+   in voller Breite (Scroll-Leiste am rechten Rand wie überall in der App),
+   nur der Inhalt bleibt als 720-px-Spalte zentriert. */
+.home-v2 { width: 100%; max-width: none; margin: 0; padding: 36px 32px 56px; }
+.home-v2 > * { width: 100%; max-width: 720px; margin-inline: auto; }
 .home-slim .home-hero { margin-bottom: var(--space-4); }
 .home-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
 .home-hero h1 { margin: 0 0 4px; font-size: 1.65rem; font-weight: 700; letter-spacing: -.02em; }
