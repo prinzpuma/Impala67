@@ -119,6 +119,7 @@ export async function refineMessage(mid, mode) {
 export async function sendChatMessage(text, type) {
 	type = type || "side";
 	const hasAttachment = S.pendingAttachmentTarget === type && (S.pendingImage || S.pendingTextFile || S.pendingPdf);
+	const hadImage = S.pendingAttachmentTarget === type && !!S.pendingImage;
 	if ((!text && !hasAttachment) || S.aiBusy) return;
 	S.aiBusy = true;
 	S.aiActiveChatType = type;
@@ -143,7 +144,11 @@ export async function sendChatMessage(text, type) {
 		// Ein fehlgeschlagener Voice-Turn darf nicht die nächste Text-Antwort vorlesen.
 		VOICE.consumeReply();
 		const targetList = type === "side" ? S.sideChat : S.chat;
-		targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message });
+		// 👁 Hinweis (18. Juli, spät): Scheitert eine Anfrage MIT Bild, liegt es
+		// meist an einem nicht vision-fähigen Modell — das sagen wir klar dazu,
+		// ohne an der Modell-Auswahl selbst irgendetwas zu ändern.
+		const visionHint = hadImage ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das aktuell gewählte Modell scheint keine Bilder zu unterstützen (nicht vision-fähig). Wähle für Bild-Fragen ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
+		targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message + visionHint });
 	}
 	S.aiBusy = false;
 	S.aiDraft = "";
@@ -360,6 +365,26 @@ export function handleFileImgChange(e) {
 
 export function handlePaste(e) {
 	if (e.target.id !== "chatInput" && e.target.id !== "mainChatInput") return;
+	// 🖼️ FIX (18. Juli, spät): Bilder aus der Zwischenablage (Screenshot,
+	// kopiertes Foto) landen jetzt als Bild-Anhang im Chat — vorher funktionierte
+	// Einfügen nur für Text.
+	const items = e.clipboardData ? [...e.clipboardData.items] : [];
+	const imgItem = items.find((it) => it.kind === "file" && it.type.startsWith("image/"));
+	if (imgItem) {
+		e.preventDefault();
+		const file = imgItem.getAsFile();
+		if (!file) return;
+		const r = new FileReader();
+		r.onload = () => {
+			S.pendingImage = r.result;
+			S.pendingTextFile = null;
+			S.pendingPdf = null;
+			S.pendingAttachmentTarget = e.target.id === "mainChatInput" ? "full" : "side";
+			renderPendingChip(S.pendingAttachmentTarget);
+		};
+		r.readAsDataURL(file);
+		return;
+	}
 	// FIX (Audit): window.clipboardData war ein toter IE-Fallback — entfernt.
 	const text = e.clipboardData ? e.clipboardData.getData("text/plain") || "" : "";
 	const lines = text.split("\n").length;

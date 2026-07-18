@@ -179,15 +179,52 @@ export const LERNZEIT = (() => {
 	}
 
 	// ---------- Auswertung ----------
+	// 🩹 FIX (18. Juli 2026): Zwei Geräte gleichzeitig → Zeit wurde DOPPELT gezählt.
+	// Ursache: Jedes Gerät schreibt eigene Segmente ins Event-Log; nach dem
+	// Drive-Sync liegen beide nebeneinander, und die Auswertung hat alle
+	// durationSeconds stumpf addiert. Jetzt: Intervall-VEREINIGUNG — zeitlich
+	// überlappende Segmente zählen nur einmal (Wanduhr-Zeit statt Summe).
+	function mergedSeconds(sessions) {
+		const intervals = sessions.map((s) => {
+			const start = new Date(s.startedAt).getTime();
+			const end = s.endedAt ? new Date(s.endedAt).getTime() : start + (s.durationSeconds || 0) * 1000;
+			return [start, Math.max(start, end)];
+		}).filter(([start]) => Number.isFinite(start)).sort((a, b) => a[0] - b[0]);
+		let total = 0;
+		let curStart = null;
+		let curEnd = null;
+		for (const [start, end] of intervals) {
+			if (curEnd === null || start > curEnd) {
+				if (curEnd !== null) total += curEnd - curStart;
+				curStart = start;
+				curEnd = end;
+			} else if (end > curEnd) {
+				curEnd = end;
+			}
+		}
+		if (curEnd !== null) total += curEnd - curStart;
+		return Math.round(total / 1000);
+	}
+	// Laufendes Segment als Pseudo-Session — nimmt an der Vereinigung teil,
+	// damit auch LIVE nichts doppelt zählt, wenn das andere Gerät gerade synct.
+	function currentAsSession() {
+		if (!current) return null;
+		return { startedAt: current.startedAt, endedAt: iso(), durationSeconds: Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000)), category: current.category };
+	}
 	function totalForDay(key) {
-		let total = activeSessions().filter((s) => dayKey(s.startedAt) === key).reduce((sum, s) => sum + s.durationSeconds, 0);
-		if (key === dayKey() && current) total += Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000));
-		return total;
+		const list = activeSessions().filter((s) => dayKey(s.startedAt) === key);
+		const live = key === dayKey() ? currentAsSession() : null;
+		if (live) list.push(live);
+		return mergedSeconds(list);
 	}
 	function groupedToday() {
+		const byCategory = {};
+		const today = activeSessions().filter((s) => dayKey(s.startedAt) === dayKey());
+		const live = currentAsSession();
+		if (live) today.push(live);
+		for (const session of today) (byCategory[session.category] = byCategory[session.category] || []).push(session);
 		const result = { cards: 0, notebook: 0, notes: 0, ai: 0, other: 0 };
-		for (const session of activeSessions().filter((s) => dayKey(s.startedAt) === dayKey())) result[session.category] = (result[session.category] || 0) + session.durationSeconds;
-		if (current) result[current.category] = (result[current.category] || 0) + Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000));
+		for (const key of Object.keys(byCategory)) result[key] = mergedSeconds(byCategory[key]);
 		return result;
 	}
 	function sessionsToday() {

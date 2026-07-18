@@ -52,6 +52,8 @@ export const HEFT = (() => {
 	let lastEmptyTap = null; // Doppeltipp-Erkennung auf freier Fläche (Text anlegen)
 	function saveToolPrefs() { try { localStorage.setItem("impala67HeftTools", JSON.stringify({ color, size, onlyPen, eraserSize })); } catch (err) { /* egal */ } }
 	const activePenPointers = new Set();
+	let lastPenUpAt = 0;      // 🖐️ Zeitpunkt des letzten Stift-Abhebens (Palm-Nachlauf)
+	const PEN_GRACE_MS = 400; // Finger bleiben so lange nach dem Stift-Lift gesperrt
 	let expanded = false;    // Options-Tray erst nach Klick auf Schreiben/Radierer
 	let trayPos = null;      // {x,y} nur für das verschiebbare Options-Tray
 	let trayDrag = null;     // laufender Drag des Options-Trays
@@ -303,9 +305,20 @@ export const HEFT = (() => {
 			x.beginPath(); x.fillStyle = s.color;
 			x.arc(pts[0][0], pts[0][1], segW(s.size, pts[0][2]) / 2, 0, Math.PI * 2); x.fill();
 		} else {
+			// 🖊️ FIX (18. Juli, spät): weiche quadratische Kurven durch die Segment-
+			// Mittelpunkte statt roher Punkt-zu-Punkt-Linien. Vorher stießen Segmente
+			// mit eigener Breite und runder Kappe hart aneinander — schnelle Striche
+			// wirkten wie eine Perlenkette aus Punkten. Die Druck-Breite wird über
+			// benachbarte Punkte geglättet, damit keine sichtbaren Sprünge entstehen.
+			let from = pts[0];
 			for (let i = 1; i < pts.length; i++) {
-				x.beginPath(); x.lineWidth = segW(s.size, pts[i][2]);
-				x.moveTo(pts[i - 1][0], pts[i - 1][1]); x.lineTo(pts[i][0], pts[i][1]); x.stroke();
+				const cur = pts[i];
+				const to = i < pts.length - 1 ? [(cur[0] + pts[i + 1][0]) / 2, (cur[1] + pts[i + 1][1]) / 2] : cur;
+				x.beginPath(); x.lineWidth = segW(s.size, ((pts[i - 1][2] || 0.5) + (cur[2] || 0.5)) / 2);
+				x.moveTo(from[0], from[1]);
+				x.quadraticCurveTo(cur[0], cur[1], to[0], to[1]);
+				x.stroke();
+				from = to;
 			}
 		}
 		x.restore();
@@ -821,7 +834,7 @@ export const HEFT = (() => {
 		}
 	}
 	function onTouchMove(e) {
-		if (activePenPointers.size) { navReset(); return; }
+		if (penRecently()) { navReset(); return; }
 		for (const t of e.changedTouches) {
 			const s = gesture.touches.get(t.identifier);
 			if (s && Math.hypot(t.clientX - s.x, t.clientY - s.y) > 7) gesture.moved = true;
@@ -844,9 +857,12 @@ export const HEFT = (() => {
 		if (quick && count === 1 && e.changedTouches.length) {
 			const t = e.changedTouches[0], now = Date.now();
 			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
-				// Doppeltipp am Tablet: stets zur vollständigen Seitengröße zurück.
-				// Kein Toggle auf einen beliebigen Nahzoom – das bleibt dem Pinch vorbehalten.
-				gesture.lastTap = 0; animateZoom(1, t.clientX, t.clientY); return;
+				// 🔍 FIX (18. Juli, spät): Doppeltipp ist jetzt ein TOGGLE wie in
+				// GoodNotes — eingezoomt? → sanft zur ganzen Seite zurück. Übersicht?
+				// → weich auf Schreibzoom (220 %) genau um den Tipp-Punkt herum.
+				gesture.lastTap = 0;
+				animateZoom(zoom > 1.15 ? 1 : 2.2, t.clientX, t.clientY);
+				return;
 			}
 			gesture.lastTap = now; gesture.tapX = t.clientX; gesture.tapY = t.clientY;
 		}
@@ -877,8 +893,13 @@ export const HEFT = (() => {
 	};
 	// Finger sind entweder Navigation (Standard) oder – nach bewusster Umschaltung – Zeichenwerkzeug.
 	// Während ein Stift aufliegt, werden sämtliche Touch-Ereignisse als Handballen verworfen.
-	const rejected = (e) => e.pointerType === "touch" && (onlyPen || activePenPointers.size > 0);
-	const touchNavigates = () => onlyPen && activePenPointers.size === 0;
+	// 🖐️ FIX (18. Juli, spät): Palm-Schutz mit Nachlauf — auch ~400 ms NACH dem
+	// Abheben des Stifts zählen Finger-Touches noch als Handballen. Vorher durfte
+	// der aufliegende Ballen sofort wieder scrollen, sobald der Stift zwischen
+	// zwei Wörtern kurz abhob — die Seite sprang beim Schreiben.
+	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
+	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
+	const touchNavigates = () => onlyPen && !penRecently();
 	const near = (p, x, y, r) => { const dx = p[0] - x, dy = p[1] - y; return dx * dx + dy * dy <= r * r; };
 	function pointInPolygon(p, poly) {
 		let hit = false;
@@ -1152,7 +1173,11 @@ export const HEFT = (() => {
 		for (const ce of evs) {
 			drawing.pts.push(pos(ce, drawing.cv));
 			const n = drawing.pts.length;
-			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(n - 2) });
+			// Stift: die letzten 3 Punkte als weiche Kurve nachziehen (passend zur
+			// finalen Darstellung). Marker bleibt bei 2 Punkten — sein Alpha würde
+			// bei überlappendem Nachzeichnen sonst fleckig dunkler.
+			const tail = drawing.tool === "marker" ? 2 : 3;
+			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(Math.max(0, n - tail)) });
 		}
 		// Halte-Erkennung: bewegt sich der Stift kaum noch (< 6 px), begradigt
 		// trySnapShape() den Strich nach kurzem Halten zur sauberen Form.
@@ -1160,7 +1185,16 @@ export const HEFT = (() => {
 		if (!drawing.holdAnchor || Math.hypot(lastP[0] - drawing.holdAnchor[0], lastP[1] - drawing.holdAnchor[1]) > 6) armHoldSnap(lastP);
 	}
 	function onUp(e) {
-		if (e && e.pointerType === "pen") { activePenPointers.delete(e.pointerId); if (!activePenPointers.size) applyTouchAction(); }
+		if (e && e.pointerType === "pen") {
+			activePenPointers.delete(e.pointerId);
+			lastPenUpAt = Date.now();
+			if (!activePenPointers.size) {
+				// touch-action bleibt für die Schutzfrist gesperrt; der zweite Aufruf
+				// gibt natives Finger-Scrollen danach wieder frei.
+				applyTouchAction();
+				setTimeout(applyTouchAction, PEN_GRACE_MS + 30);
+			}
+		}
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
 		const chromeUp = host && host.querySelector(".heft-chrome");
 		if (chromeUp) chromeUp.classList.remove("heft-writing");
@@ -2872,8 +2906,25 @@ export const HEFT = (() => {
 		}
 	}
 
+	// 👁 Chat-Anhang (18. Juli, spät): eine Heft-Seite als hochauflösendes PNG-
+	// Data-URL — damit kann die KI die Seite wie ein Foto "lesen" (Vision).
+	async function pageAsDataUrl(pageId, pageIdx, w = 1200) {
+		if (!pageId) return null;
+		const d = pageId === pid && doc ? doc : await load(pageId);
+		const pg = d && d.pages && d.pages[pageIdx || 0];
+		if (!pg) return null;
+		const c = document.createElement("canvas");
+		const k = w / PAGE_W;
+		c.width = w; c.height = Math.round(PAGE_H * k);
+		const x = c.getContext("2d");
+		x.setTransform(k, 0, 0, k, 0, 0);
+		renderPageTo(x, pg, -1);
+		return c.toDataURL("image/png");
+	}
+
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl,
 		get activeId() { return pid; },
+		get activeIndex() { return idx; },
 	};
 })();

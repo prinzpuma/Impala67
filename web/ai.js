@@ -688,6 +688,10 @@ export const AI = (() => {
 			S.pendingAttachmentTarget = null;
 		}
 		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile, pdfFile });
+		// 🩹 FIX (18. Juli, spät): Die eigene Nachricht erscheint SOFORT im Chat.
+		// Vorher wurde erst nach Auto-RAG/Zusammenfassung/erstem Token gerendert —
+		// der Chat wirkte nach dem Absenden wie eingefroren.
+		renderLog();
 
 		// Verlauf: Bilder als image_url (Vision), Text-/PDF-Anhänge als Kontext.
 		const history = targetChat.slice(-historyLimit())
@@ -753,7 +757,12 @@ export const AI = (() => {
 				}
 			}
 		} catch (e) { debugEvent("Chat-Zusammenfassung übersprungen", { error: String((e && e.message) || e).slice(0, 200) }); }
-		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools, ragContext, chatSummary) }, ...history];
+		// 👁 Vision-Hinweis (18. Juli, spät): Hängen Bilder im Verlauf (z. B. Heft-
+		// Seiten), soll ein nicht vision-fähiges Modell das offen sagen, statt zu
+		// raten. An der Modell-Auswahl selbst ändert sich dabei nichts.
+		const hasImages = history.some((m) => Array.isArray(m.content));
+		const visionNote = hasImages ? "\n\nAn Nachrichten können Bilder hängen (z. B. Heft-Seiten oder Screenshots). Wenn du Bilder technisch nicht empfangen oder nicht sehen kannst (kein Vision-Modell), erwähne das kurz und ehrlich, statt Inhalte zu raten." : "";
+		const messages = [{ role: "system", content: systemPrompt(type, !!agentTools, ragContext, chatSummary) + visionNote }, ...history];
 		debugEvent("Tool-Modus", { enabled: !!agentTools, reason: agentTools ? "Aktueller Auftrag benötigt Tools" : "Normaler Chat ohne Tool-Bedarf" });
 
 		// Max. 1 Chat-Log-Rebuild pro Frame (LaTeX/Code-Rendering ist teuer).

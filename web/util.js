@@ -141,7 +141,10 @@ export const U = {
 			// immer im Cache, auch nachdem marked (CDN) später doch noch geladen wurde.
 			return "<pre>" + U.esc(raw) + "</pre>";
 		}
-		const html = U.sanitize(marked.parse(raw, { breaks: true }));
+		// `breaks: true` erzeugt <br>-Knoten innerhalb mehrzeiliger $$…$$-Blöcke.
+		// KaTeX Auto-Render kann Delimiter nicht über solche DOM-Grenzen hinweg
+		// erkennen; ohne erzwungene Soft-Breaks bleibt der LaTeX-Block zusammen.
+		const html = U.sanitize(marked.parse(raw, { breaks: false }));
 		// Kleiner Cache: erspart erneutes Parsen bei jedem Voll-Render derselben Inhalte.
 		if (U._mdCache.size > 300) U._mdCache.clear();
 		U._mdCache.set(src, html);

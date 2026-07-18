@@ -18,6 +18,7 @@ import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { VOICE } from "./voice.js";
 import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
+import { HEFT } from "./heft.js";
 
 const render = (...args) => RENDER.render(...args);
 const openTemplatePicker = (...args) => RENDER.openTemplatePicker(...args);
@@ -1259,7 +1260,26 @@ function wireEvents() {
 				break;
 			case "btnAttach":
 			case "btnAttachFull":
+				// 📓 Heft-Anhang nur anbieten, wenn gerade ein Heft geöffnet ist.
+				if (U.el("attachHeft")) U.el("attachHeft").hidden = !HEFT.activeId;
 				CHAT_FULLSCREEN.handleAttachMenuToggle(t);
+				break;
+			case "attachHeft":
+				// 👁 Aktuelle Heft-Seite als Bild anhängen — die KI kann sie damit wie
+				// ein Foto "lesen" (Vision). Die Modell-Auswahl bleibt unangetastet.
+				U.el("attachMenu").hidden = true;
+				try {
+					const heftUrl = await HEFT.pageAsDataUrl(HEFT.activeId, HEFT.activeIndex);
+					if (!heftUrl) { U.toast("Öffne zuerst ein Heft, um eine Seite anzuhängen.", "error"); break; }
+					S.pendingImage = heftUrl;
+					S.pendingTextFile = null;
+					S.pendingPdf = null;
+					S.pendingAttachmentTarget = S.attachTarget || "side";
+					RENDER.renderPendingChip(S.pendingAttachmentTarget);
+					U.toast("Heft-Seite angehängt — sie geht mit der nächsten Nachricht an die KI.", "success");
+				} catch (err) {
+					U.toast("Heft-Seite konnte nicht angehängt werden: " + err.message, "error");
+				}
 				break;
 			case "attachFile":
 				U.el("attachMenu").hidden = true;
