@@ -660,9 +660,17 @@ export const DRIVE = (() => {
 		if (typeof onResult === "function") autoResultHandler = onResult;
 		if (autoStarted) return autoSync("start");
 		autoStarted = true;
-		// Jede persistierte Änderung — auch Tabs und eingeklappte Äste — wird
-		// mit kurzer Verzögerung gesichert.
-		STATE.onAfterDispatch(() => scheduleAutoSync("change"));
+		// 🔕 (18. Juli 2026): Reine UI-Zustands-Events (aktueller Tab & Co.) stoßen
+		// KEINEN Auto-Sync mehr an — vorher löste jeder Tab-Wechsel drei Sekunden
+		// später einen kompletten Sync aus. Die Events landen weiterhin im Log und
+		// wandern beim nächsten inhaltlichen Sync, beim manuellen Sync, beim
+		// Öffnen/Verlassen der App (start/foreground/background/close) oder
+		// spätestens mit dem 3-Minuten-Intervall mit.
+		const UI_ONLY_EVENTS = new Set(["uiTabsSet"]);
+		STATE.onAfterDispatch((ev) => {
+			if (ev && UI_ONLY_EVENTS.has(ev.type)) return;
+			scheduleAutoSync("change");
+		});
 		document.addEventListener("visibilitychange", () => {
 			if (document.hidden) autoSync("background");
 			else autoSync("foreground");

@@ -424,6 +424,35 @@ export const HEFT = (() => {
 			if (tx) drawSelection(x, tx);
 		}
 	}
+	// 🆚 Sync-Konflikt-Vorschau (18. Juli 2026): zeichnet die erste Seite eines
+	// beliebigen Heft-Blobs in ein übergebenes Canvas — unabhängig vom gerade
+	// geöffneten Heft. render.js zeigt damit im Konflikt-Popup beide Stände
+	// nebeneinander. Rückgabe: Seitenzahl des Blobs (0 = keine Vorschau möglich).
+	async function renderBlobPreview(blobKey, cv) {
+		try {
+			const rec = await DB.getBlob(blobKey);
+			if (!rec || !rec.buf) return 0;
+			const d = JSON.parse(new TextDecoder().decode(rec.buf));
+			const pg = d && d.pages && d.pages[0];
+			if (!pg) return 0;
+			const k = cv.width / PAGE_W;
+			cv.height = Math.round(PAGE_H * k); // setzt die Höhe UND leert das Canvas
+			const x = cv.getContext("2d");
+			x.setTransform(k, 0, 0, k, 0, 0);
+			paintPaper(x, PAGE_W, PAGE_H, pg.paper);
+			(pg.images || []).forEach((im) => {
+				const el = imgEl(im);
+				if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
+			});
+			(pg.strokes || []).forEach((s) => drawStroke(x, s));
+			(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
+			return d.pages.length;
+		} catch (e) {
+			console.warn("Heft-Konflikt-Vorschau fehlgeschlagen:", e);
+			return 0;
+		}
+	}
+
 	// Jeder Canvas kennt seine tatsächlich gerenderte Pixelratio. Sie kann bei
 	// großem Zoom kleiner als devicePixelRatio sein, damit nie riesige Backing Stores
 	// entstehen, die auf iPad/Safari zu Weißbildern oder Speicherabbrüchen führen.
@@ -2824,7 +2853,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview,
 		get activeId() { return pid; },
 	};
 })();

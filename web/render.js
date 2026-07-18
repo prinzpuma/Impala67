@@ -696,6 +696,44 @@ function legacyConflictItems() {
 		legacy: true,
 	}));
 }
+// 🆚 (18. Juli 2026): Das Konflikt-Popup zeigt jetzt IMMER beide Stände
+// nebeneinander — Hefte als gezeichnete Vorschau der ersten Seite (aus den
+// lokalen Blobs), Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie.
+function conflictPaneHead(label, time) {
+	return "<header><b>" + label + "</b>" + (time ? "<small>" + U.esc(fmtConflictTime(time)) + "</small>" : "") + "</header>";
+}
+function conflictHeftPane(side, label, time, blobKey) {
+	return '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="' + U.esc(blobKey) + '"></canvas><small class="conflict-heft-note"></small></div></section>';
+}
+function buildSpecialComparisonHtml(c) {
+	const notePane = (side, label, time, note) => '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body"><div class="conflict-empty">' + U.esc(note) + "</div></div></section>";
+	const textPane = (side, label, time, text) => '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body"><pre class="conflict-fulltext">' + (U.esc(text) || "(Kein Text vorhanden.)") + "</pre></div></section>";
+	if (c.conflictType === "heft") {
+		const winnerKey = "heft:" + c.pageId, loserKey = "heft:" + c.conflictPageId;
+		return '<div class="conflict-compare">' +
+			conflictHeftPane("local", "Dieses Gerät", c.localTime, c.winner === "local" ? winnerKey : loserKey) +
+			conflictHeftPane("remote", "Drive / anderes Gerät", c.remoteTime, c.winner === "local" ? loserKey : winnerKey) +
+			'</div><p class="conflict-key">Vorschau: jeweils die erste Heft-Seite. Der unterlegene Stand liegt zusätzlich als „⚠ Konflikt-Heft“ in der Bibliothek.</p>';
+	}
+	if (c.conflictType === "delete-change") {
+		const kept = c.loserHash
+			? conflictHeftPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, "heft:" + c.conflictPageId)
+			: textPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, ((S.pages[c.conflictPageId] || {}).content || ""));
+		return '<div class="conflict-compare">' +
+			notePane("local", "🗑 Gelöscht", c.deletedAt, "Die Seite wurde auf einem Gerät endgültig gelöscht. Beim Zusammenführen gewinnt das Löschen — der andere Stand wurde als Kopie gerettet (rechts).") +
+			kept + "</div>";
+	}
+	return '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
+}
+function fillConflictHeftPreviews(root) {
+	root.querySelectorAll("canvas[data-conflictheft]").forEach(async (cv) => {
+		const note = cv.parentElement ? cv.parentElement.querySelector(".conflict-heft-note") : null;
+		let pages = 0;
+		try { pages = await HEFT.renderBlobPreview(cv.dataset.conflictheft, cv); } catch (e) { console.warn("Konflikt-Vorschau:", e); }
+		if (!pages) { if (note) note.textContent = "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."; return; }
+		if (note) note.textContent = pages > 1 ? "Seite 1 von " + pages : "";
+	});
+}
 function openConflictResolver(index) {
 	let items = loadPendingConflicts();
 	if (!items.length) items = legacyConflictItems();
@@ -733,11 +771,7 @@ function openConflictResolver(index) {
 		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.");
 	const comparisonHtml = hasTextComparison
 		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div>' + (coarseComparison ? '<p class="conflict-key">Lange Seite: Beide vollständigen Inhalte werden gezeigt. Eine zeilenweise Markierung wäre hier zu langsam.</p>' : '<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>')
-		: '<div class="conflict-no-compare"><b>' +
-		  (c.conflictType === "heft" ? "Kein visueller Vergleich von Handzeichnungen" : "Kein Textvergleich möglich") +
-		  '</b><span>' +
-		  (c.conflictType === "heft" ? "Handzeichnungen können nicht zeilenweise verglichen werden. Der ältere Stand wurde als Kopie gerettet. Öffne das Konflikt-Heft in der Bibliothek, um zu entscheiden, was du übernehmen möchtest." : "Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.") +
-		  '</span></div>';
+		: buildSpecialComparisonHtml(c);
 	o.hidden = false;
 	o.innerHTML = '<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
@@ -752,6 +786,8 @@ function openConflictResolver(index) {
 		'<button class="primary" data-conflictresolve="keep-winner">Empfehlung übernehmen</button>' +
 		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Stattdessen anderen Stand übernehmen</button>' : "") +
 		"</div></div>";
+	// 🆚 Heft-Vorschauen asynchron aus den lokalen Blobs nachladen (Helfer oben).
+	fillConflictHeftPreviews(o);
 }
 async function resolveConflict(action) {
 	const list = S.conflictResolveList || loadPendingConflicts();
