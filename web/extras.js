@@ -42,12 +42,9 @@ export const EXTRAS = (() => {
 		".study-countdown{font-size:1.35rem;margin:12px 0}",
 		".grades button{position:relative}",
 		".grade-key{display:block;font-size:11px;opacity:.55;margin-top:2px}",
-		// Notion-artige Topbar (Teilen / ★ / ⋯) + Rückverweise-Chip + Tool-Chips im Chat
-		".page-topbar{display:flex;align-items:center;gap:8px}.page-topbar .breadcrumb{flex:1;min-width:0}",
-		".topbar-actions{display:flex;align-items:center;gap:2px}",
-		".topbar-wrap{position:relative;display:inline-block}",
-		".topbar-btn{background:none;border:none;padding:4px 9px;border-radius:6px;cursor:pointer;font-size:14px;color:inherit}.topbar-btn:hover{background:rgba(128,128,128,.15)}.topbar-btn.fav-active{color:#f2b02c}",
-		".top-menu{position:absolute;right:0;top:110%;z-index:600;min-width:240px}",
+		// (FIX 19. Juli: Das Topbar-CSS — Teilen/★/⋯ samt .top-menu — lebt jetzt
+		// fest in styles.css, damit die Seiten-Topbar nicht vom Laden dieses
+		// Moduls abhängt.) Rückverweise-Chip + Tool-Chips im Chat:
 		".backlinks-row{margin:2px 0 8px}.backlinks-chip{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px}.backlinks-chip:hover{background:rgba(128,128,128,.15);opacity:1}",
 		".tool-chip{width:fit-content;font-size:12.5px;opacity:.75;background:rgba(128,128,128,.12);border-radius:8px;padding:4px 10px;margin:2px 0}.tool-chip.err{color:#e5534b}",
 		".multitab-note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#3a2f14;color:#ffd66b;padding:10px 14px;border-radius:10px;z-index:1200;display:flex;gap:10px;align-items:center}",
@@ -499,16 +496,15 @@ export const EXTRAS = (() => {
 	document.addEventListener("click", async (e) => {
 		const q = (sel) => e.target.closest(sel);
 		let el;
-		// Topbar-Menüs (Teilen / ⋯): öffnen/schließen; Klick außerhalb oder auf einen Menüpunkt schließt
-		if (q("[data-sharemenu]")) { const old = S.topMenu; POPOVERS.closeAll("top"); S.topMenu = old === "share" ? null : "share"; render(); return; }
-		if (q("[data-morepagemenu]")) { const old = S.topMenu; POPOVERS.closeAll("top"); S.topMenu = old === "more" ? null : "more"; render(); return; }
-		if (S.topMenu && (!q(".top-menu") || q(".top-menu .menu-item"))) {
-			S.topMenu = null;
-			setTimeout(() => { if (typeof render === "function") render(); }, 0); // erst app.js-Handler wirken lassen
-		}
+		// FIX (19. Juli): Öffnen/Schließen der Topbar-Menüs (Teilen / ⋯) läuft
+		// jetzt zentral in app.js VOR dessen closeOutside-Logik — kein zweiter
+		// Listener mehr, der zeitversetzt am selben S.topMenu arbeitet. Die
+		// Menüpunkte unten schließen das Menü jeweils selbst explizit.
 		if (q("[data-backlinks]")) { S.backlinksOpen = !S.backlinksOpen; render(); return; }
-		if ((el = q("[data-exportmd]"))) { exportPageMd(el.dataset.exportmd); return; }
+		if ((el = q("[data-exportmd]"))) { S.topMenu = null; exportPageMd(el.dataset.exportmd); render(); return; }
 		if ((el = q("[data-copylink]"))) {
+			S.topMenu = null;
+			render();
 			const link = "#" + el.dataset.copylink;
 			(navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(
 				() => U.toast("Interner Link kopiert: " + link + " — auf anderen Seiten als [Text](" + link + ") einfügen.", "success"),
@@ -537,8 +533,8 @@ export const EXTRAS = (() => {
 		if ((el = q("[data-deckconf]"))) { openDeckConf(el.dataset.deckconf === "*" ? "" : el.dataset.deckconf); return; }
 		if (q("[data-ankiexport]")) { openAnkiIo("export"); return; }
 		if (q("[data-ankiimport]")) { openAnkiIo("import"); return; }
-		if ((el = q("[data-exportpdf]"))) { exportPagePdf(el.dataset.exportpdf); return; }
-		if ((el = q("[data-cardsfromhl]"))) { await cardsFromHighlights(el.dataset.cardsfromhl); if (typeof render === "function") render(); return; }
+		if ((el = q("[data-exportpdf]"))) { S.topMenu = null; exportPagePdf(el.dataset.exportpdf); render(); return; }
+		if ((el = q("[data-cardsfromhl]"))) { S.topMenu = null; await cardsFromHighlights(el.dataset.cardsfromhl); if (typeof render === "function") render(); return; }
 		if (q("[data-clozewrap]")) { clozeWrapSelection(); return; }
 		if (q("[data-clozesave]")) { await clozeSaveFromEditor(); return; }
 		// Touch: Doppel-Tipp auf der Bewertungsleiste würde sonst die nächste Karte

@@ -489,6 +489,27 @@ function wireEvents() {
 			return;
 		}
 
+		// --- Topbar-Menüs (Teilen / ⋯) ZUERST, BEVOR closeOutside läuft ---
+		// FIX (19. Juli): Öffnen/Schließen lief bisher in extras.js in einem
+		// ZWEITEN document-Listener NACH diesem hier — zwei Handler arbeiteten
+		// am selben S.topMenu, dazwischen liefen closeOutside + renderMain.
+		// Zusätzlich blurActive(): renderMain() überspringt den Neuaufbau,
+		// solange der Fokus im Block-Editor/Titel liegt (isProtectedFocus) —
+		// das Menü wurde dann trotz gesetztem S.topMenu nie gezeichnet.
+		const topMenuBtn = e.target.closest("[data-sharemenu],[data-morepagemenu]");
+		if (topMenuBtn) {
+			e.preventDefault();
+			e.stopPropagation();
+			const which = topMenuBtn.hasAttribute("data-sharemenu") ? "share" : "more";
+			const open = S.topMenu !== which;
+			const changed = POPOVERS.closeAll("top");
+			POPOVERS.blurActive();
+			S.topMenu = open ? which : null;
+			if (changed.sidebar) renderSidebar();
+			renderMain();
+			return;
+		}
+
 		const t = e.target.closest(CLICKABLE);
 		// Eine Außenklick-Logik für alle Popovers (Anhang, Modell, Seite, Stapel, Topbar).
 		const closedPopovers = POPOVERS.closeOutside(e.target);
