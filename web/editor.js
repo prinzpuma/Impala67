@@ -17,6 +17,7 @@ export const EDITOR = (() => {
 	let blocks = [];          // Blockobjekte = interne Wahrheit dieser Sitzung
 	let slash = null;         // { items, index, bid }
 	let linkMenu = null;      // { items, index, query, bid }
+	let linkMenuTimer = 0;    // PERF: Debounce für openLinkMenu beim Tippen hinter "[["
 	let blockMenuId = null;
 	let mathEdit = null;      // { bid } oder { bid, spanEl } — Gleichungs-Popover
 	let dragBid = null;
@@ -1310,10 +1311,18 @@ export const EDITOR = (() => {
 			return false;
 		} else if (slash) closeMenus();
 
-		// [[ Link-Menü
+		// [[ Link-Menü — PERF (18. Juli, Audit-Punkt): Folgezeichen debounced (80 ms).
+		// Vorher lief STATE.activePages() + Titel-Filter bei JEDEM Tastendruck hinter
+		// "[[". Das erste Öffnen bleibt sofort; nur die Suche beim Weitertippen wird
+		// gebündelt. Der Guard im Timer verhindert ein Wiederöffnen nach closeMenus().
 		const lm = upto.match(/\[\[([^\]]*)$/);
-		if (lm) { openLinkMenu(bid, lm[1]); return false; }
-		else if (linkMenu) closeMenus();
+		if (lm) {
+			clearTimeout(linkMenuTimer);
+			if (!linkMenu) openLinkMenu(bid, lm[1]);
+			else linkMenuTimer = setTimeout(() => { if (linkMenu) openLinkMenu(bid, lm[1]); }, 80);
+			return false;
+		}
+		else if (linkMenu) { clearTimeout(linkMenuTimer); closeMenus(); }
 
 		// Nur bei Leerzeichen als letztem Zeichen: Blocktyp-Trigger
 		if (e && e.data === " " && c.block.type === "p") {

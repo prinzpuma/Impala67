@@ -520,6 +520,16 @@ export const HEFT = (() => {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
 		if (gesture.zoomFrame) cancelAnimationFrame(gesture.zoomFrame);
 		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
+		// 🔍 Unterbrochene Doppeltipp-Animation: GPU-Vorschau entfernen und den
+		// erreichten Zwischenstand EINMAL echt übernehmen — sonst bliebe ein
+		// hängender CSS-Transform auf .heft-pages zurück.
+		if (gesture.dtap) {
+			const d = gesture.dtap;
+			gesture.dtap = null;
+			const pgs = pagesEl();
+			if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
+			setZoom(d.current, d.clientX, d.clientY, false, d.anchor);
+		}
 	}
 	function navReset() {
 		stopAnim(); gesture.touches.clear();
@@ -770,13 +780,33 @@ export const HEFT = (() => {
 	}
 	function animateZoom(target, clientX, clientY) {
 		stopAnim();
+		target = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, target));
 		const from = zoom, anchor = makeZoomAnchor(clientX, clientY);
+		const pgs = pagesEl();
+		// 🔍 FIX (18. Juli, spät v3): Der Doppeltipp-Zoom lief bisher pro Frame über
+		// setZoom() — jeder Animations-Frame änderte die CSS-Breite ALLER Seiten
+		// (Relayout des kompletten Stapels, exakt die Ursache des alten
+		// Pinch-Ruckelns). Jetzt animiert der Doppeltipp wie der Pinch als reine
+		// GPU-Transformation auf .heft-pages; der echte Zoom (Layout + scharfes
+		// Rendern) wird am Ende EINMAL angewendet — kein Ruckeln, kein Snap-Sprung.
+		if (!pgs) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
+		const pr = pgs.getBoundingClientRect();
+		pgs.style.transformOrigin = (clientX - pr.left) + "px " + (clientY - pr.top) + "px";
+		pgs.style.willChange = "transform";
 		const t0 = performance.now(), dur = 280;
+		gesture.dtap = { current: from, clientX, clientY, anchor };
 		const step = (now) => {
 			const t = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - t, 4);
-			setZoom(from + (target - from) * eased, clientX, clientY, false, anchor);
+			const next = from + (target - from) * eased;
+			if (gesture.dtap) gesture.dtap.current = next;
+			pgs.style.transform = "scale(" + (next / from) + ")";
 			if (t < 1) gesture.raf = requestAnimationFrame(step);
-			else { gesture.raf = 0; applyView(false); keepAnchor(anchor, clientX, clientY); scheduleZoomSettleRender(); }
+			else {
+				gesture.raf = 0; gesture.dtap = null;
+				pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = "";
+				setZoom(target, clientX, clientY, false, anchor);
+				scheduleZoomSettleRender();
+			}
 		};
 		gesture.raf = requestAnimationFrame(step);
 	}

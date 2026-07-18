@@ -53,6 +53,12 @@ function isProtectedFocus(ae) {
 // oder Chat-Verlauf), Tab-Leiste mit Zurück/Vor, Notion-artiger Seitenkopf
 // (Breadcrumb, Icon, Cover), Chat mit Modellwahl, Thinking- und Edit-Karten.
 function render() {
+	// PERF (18. Juli, Audit-Punkt „Doppel-render() nach dispatch“): Läuft ein
+	// expliziter render()-Aufruf (z.B. direkt nach einem dispatch im Handler), wird
+	// ein noch ausstehender, per rAF geplanter Render storniert — er würde denselben
+	// Zustand unmittelbar danach ein zweites Mal komplett aufbauen. Zentral hier
+	// gelöst, statt Dutzende render()-Aufrufe in app.js einzeln anzufassen.
+	if (_renderRaf) { cancelAnimationFrame(_renderRaf); _renderRaf = 0; }
 	renderSidebar();
 	renderMain();
 	renderTabs();
@@ -318,6 +324,18 @@ function wsHeadHtml(ws) {
 		'<button class="mini" data-newpage="' + ws.id + '" title="Neue Seite in ' + U.esc(ws.name) + '">+</button></div>';
 }
 
+// PERF (18. Juli): identisches Markup nicht erneut parsen/layouten — der komplette
+// Neuaufbau von Sidebar/Tab-Leiste bei JEDEM Hintergrund-Render war reine DOM-Arbeit
+// ohne sichtbare Änderung. Der String-Vergleich ist um Größenordnungen billiger als
+// innerHTML (HTML-Parsen + Style/Layout + GC der alten Knoten).
+function setHtmlIfChanged(el, html, key) {
+	const k = key || "_lastHtml";
+	if (el[k] === html) return false;
+	el.innerHTML = html;
+	el[k] = html;
+	return true;
+}
+
 // Sidebar: "files" = Workspaces mit einklappbarem Seitenbaum, "chats" = Chat-Verlauf
 function renderSidebar() {
 	renderTopbar();
@@ -334,14 +352,14 @@ function renderSidebar() {
 	// Explizit gewählter Chat-Modus hat Vorrang — sonst ist die Chat-Liste
 	// aus der Anki-Ansicht heraus nie erreichbar (Chat-Knopf wirkte "tot").
 	if (S.sidebarMode === "chats") {
-		tree.innerHTML = chatListHtml();
+		setHtmlIfChanged(tree, chatListHtml());
 		return;
 	}
 
 	// Im Karteikarten-Bereich zeigt die linke Spalte den Stapel-Baum — wie der
 	// Seitenbaum im Home-Tab: Unterstapel anlegen, ein-/ausklappen, umbenennen.
 	if (S.view === "anki") {
-		tree.innerHTML = deckTreeHtml();
+		setHtmlIfChanged(tree, deckTreeHtml());
 		// Wie Seiten-⋯: nach dem Rebuild fixed positionieren, sonst clippt #tree.
 		if (S.deckMenuOpenName) {
 			const name = S.deckMenuOpenName;
@@ -365,7 +383,7 @@ function renderSidebar() {
 			html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 		}
 	}
-	tree.innerHTML = html;
+	setHtmlIfChanged(tree, html);
 	// Wie beim Stapel-⋯-Menü: das offene Seiten-⋯-Menü nach JEDEM Rebuild neu
 	// fixed positionieren. Ohne das fiel das frisch eingebaute Menü auf sein
 	// CSS-Fallback zurück (position:absolute in der Zeile) und wurde vom
@@ -471,7 +489,8 @@ function renderTabs() {
 	html += "</div>";
 	// Der KI-Zugriff sitzt als runder Notion-artiger Button unten rechts.
 	// In der Tab-Leiste bleibt dadurch nur die Navigation.
-	bar.innerHTML = html;
+	// PERF (18. Juli): unverändertes Markup überspringen (siehe setHtmlIfChanged).
+	setHtmlIfChanged(bar, html);
 }
 
 function renderMain() {
@@ -907,7 +926,15 @@ function renderHome(main) {
 	// und Lernschritte), gleiche Definition wie die Retention in der Statistik.
 	const cut30 = new Date(Date.now() - 30 * 864e5).toISOString();
 	const graded30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0 && !r.first && !r.learning);
-	const retention30 = graded30.length >= 10 ? Math.round(graded30.filter((r) => r.grade > 1).length / graded30.length * 100) : null;
+	// 🩹 FIX (18. Juli, spät v3): Die Kachel zeigte „—“, während die Lern-Insights
+	// direkt darunter bereits eine Erfolgsquote aus denselben 30 Tagen nannten
+	// (z. B. „61 % · 23 Reviews“). Grund: Hier waren ≥ 10 ECHTE Wiederholungen
+	// (ohne Erstbewertungen/Lernschritte) Pflicht. Bei zu kleiner Stichprobe
+	// fällt die Kachel jetzt auf alle bewerteten Reviews zurück (dieselbe breite
+	// Definition wie die Insights), statt widersprüchlich nichts zu zeigen.
+	const gradedWide30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0);
+	const retentionPool = graded30.length >= 10 ? graded30 : (gradedWide30.length >= 10 ? gradedWide30 : null);
+	const retention30 = retentionPool ? Math.round(retentionPool.filter((r) => r.grade > 1).length / retentionPool.length * 100) : null;
 
 	const conflictBanner = conflictCount
 		? '<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ' + conflictCount + " Sync-Konflikt" + (conflictCount === 1 ? "" : "e") +
@@ -965,7 +992,7 @@ function renderHome(main) {
 			'<div class="home-stat' + (retention30 !== null && retention30 >= 85 ? " good" : "") + '"><b>' + (retention30 === null ? "—" : retention30 + " %") + '</b><small>Erfolgsquote (30 Tage)</small></div>' +
 		"</div>";
 
-	main.innerHTML = '<div class="home home-v2 home-slim">' +
+	const homeHtml = '<div class="home home-v2 home-slim">' +
 		'<header class="home-hero"><div><h1>' + greeting + ' 👋</h1><p class="home-meta">' + dateLine + "</p>" +
 		'<div class="home-hero-meta">' +
 			'<span class="home-chip">📄 <b>' + pages.length + '</b> Seiten</span>' +
@@ -990,6 +1017,13 @@ function renderHome(main) {
 			: "") +
 		LERNZEIT.homeWidgetHtml() +
 		"</div>";
+	// PERF (18. Juli): Home nur neu aufbauen, wenn sich das Markup wirklich geändert
+	// hat — Hintergrund-Events (Sync, Status-Ping, Lernzeit) bauten das komplette
+	// Dashboard sonst bei jedem Render neu auf. Bei unverändertem Markup entfällt
+	// auch die Scroll-Wiederherstellung, weil nichts angefasst wird.
+	if (main._lastHomeHtml === homeHtml && main.querySelector(".home")) return;
+	main.innerHTML = homeHtml;
+	main._lastHomeHtml = homeHtml;
 	if (keepScroll) {
 		main.scrollTop = keepScroll;
 		if (main.scrollTop !== keepScroll) {

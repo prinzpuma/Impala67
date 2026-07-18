@@ -115,6 +115,17 @@ export const STATE = (() => {
 	let _childIdx = null;
 	function bustChildIdx() { _childIdx = null; }
 
+	// PERF (18. Juli): Memoization für backlinksOf() und studySnapshot()/dueCards().
+	// Beide liefen bei JEDEM Page-/Full-Render komplett neu (Volltext-Scan über alle
+	// Seiten bzw. kompletter Queue-Aufbau über alle Karten) — spürbar bei großen
+	// Workspaces. Invalidierung über Revisionszähler in reduce(); studySnapshot
+	// bekommt zusätzlich eine kurze Zeitschranke (2 s), weil Fälligkeiten zeitabhängig
+	// sind. Ergebnis und Verhalten bleiben identisch, nur Doppelarbeit entfällt.
+	let _pageRev = 0;            // zählt alle seitenrelevanten Events
+	let _cardRev = 0;            // zählt Karten-/Stapel-/Review-/Settings-Events
+	const _backlinkCache = { rev: -1, map: new Map() };
+	const _snapCache = { rev: -1, t: 0, map: new Map() };
+
 	// Race-Condition-Fix (10. Juli): serialisiert dispatch()-Aufrufe. Zwei parallele
 	// dispatch()-Aufrufe persistierten bisher unabhängig voneinander — je nachdem,
 	// welches DB.addEvent() zuerst fertig wurde, konnte reduce() in der falschen
@@ -199,6 +210,10 @@ export const STATE = (() => {
 
 	function reduce(ev) {
 		const p = ev.payload || {};
+		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
+		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
+		if (ev.type.startsWith("page")) _pageRev++;
+		if (ev.type.startsWith("card") || ev.type.startsWith("deck") || ev.type === "settingsSet") _cardRev++;
 		switch (ev.type) {
 			case "pageCreate":
 				// FIX: fehlende Validierung — ohne id konnte eine "undefined"-Seite entstehen.
@@ -809,7 +824,29 @@ export const STATE = (() => {
 	// fällig sind (kein vorgezogenes Learn-Ahead-Drillen direkt nach der Bewertung).
 	const OVERLEARN_LOCK_MS = 10 * 60e3;
 
-	function studySnapshot(deck, now = new Date()) {
+	// PERF (18. Juli): studySnapshot memoiziert — der komplette Queue-Aufbau (Filter,
+	// Sortierungen, Tageslimits über alle Karten + Reviews) lief bei jedem Render neu
+	// (Home-Widget, Anki-Ansicht, Badges). Cache gilt bis zum nächsten Karten-/Stapel-/
+	// Review-/Settings-Event, maximal 2 Sekunden (Fälligkeiten sind zeitabhängig).
+	// Aufrufe mit explizitem now umgehen den Cache vollständig (z.B. Tests/Statistik).
+	function studySnapshot(deck, now) {
+		if (now !== undefined) return computeStudySnapshot(deck, now);
+		const key = (deck || "") + "|" + (S.ankiMix ? 1 : 0) + "|" + (localStorage.getItem("impala67Overlearn") || "");
+		const t = Date.now();
+		if (_snapCache.rev !== _cardRev || t - _snapCache.t > 2000) {
+			_snapCache.map.clear();
+			_snapCache.rev = _cardRev;
+			_snapCache.t = t;
+		}
+		let snap = _snapCache.map.get(key);
+		if (!snap) {
+			snap = computeStudySnapshot(deck);
+			_snapCache.map.set(key, snap);
+		}
+		return snap;
+	}
+
+	function computeStudySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
 		const eod = endOfLocalDay(t);
 		const aheadUntil = new Date(t.getTime() + LEARN_AHEAD_MS);
@@ -947,15 +984,23 @@ export const STATE = (() => {
 		};
 	}
 
-	const dueCards = () => studySnapshot(null).dueNow;
+	// .slice(): Aufrufer dürfen das Ergebnis verändern, ohne den Cache zu beschädigen.
+	const dueCards = () => studySnapshot(null).dueNow.slice();
 
 	// Backlinks: Seiten, die die Zielseite per Titel erwähnen — bewusst einfacher
 	// Volltext-Scan, reicht für lokale Datenmengen völlig aus.
 	function backlinksOf(pageId) {
 		const target = S.pages[pageId];
 		if (!target || !target.title || target.title === "Ohne Titel") return [];
+		// PERF (18. Juli): memoiziert bis zum nächsten seitenrelevanten Event —
+		// vorher lief der Volltext-Scan über ALLE Seiten bei jedem Render erneut.
+		if (_backlinkCache.rev !== _pageRev) { _backlinkCache.map.clear(); _backlinkCache.rev = _pageRev; }
+		const cached = _backlinkCache.map.get(pageId);
+		if (cached) return cached.slice();
 		const t = target.title.toLowerCase();
-		return activePages().filter((pg) => pg.id !== pageId && (pg.content || "").toLowerCase().includes(t));
+		const result = activePages().filter((pg) => pg.id !== pageId && (pg.content || "").toLowerCase().includes(t));
+		_backlinkCache.map.set(pageId, result);
+		return result.slice();
 	}
 
 	// Seitenverlauf: rekonstruiert alle früheren Versionen einer Seite aus dem

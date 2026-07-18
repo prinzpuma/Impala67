@@ -1433,8 +1433,22 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
    weil die zentrierte 720-px-Spalte SELBST der Scroller war. Jetzt scrollt Home
    in voller Breite (Scroll-Leiste am rechten Rand wie überall in der App),
    nur der Inhalt bleibt als 720-px-Spalte zentriert. */
-.home-v2 { width: 100%; max-width: none; margin: 0; padding: 36px 32px 56px; }
-.home-v2 > * { width: 100%; max-width: 720px; margin-inline: auto; }
+/* 🏠 FIX (18. Juli, spät v3): „Anordnung auf der Homeseite komplett verbuggt“ —
+   Kennzahlen-Kacheln und Heute-Pillen konnten links NEBEN Hero/Bereichen landen
+   statt untereinander. Home erzwingt jetzt eine ECHTE einspaltige Anordnung als
+   Flex-Spalte: jedes Element bekommt garantiert seine eigene Zeile, zentriert
+   auf 720 px — unabhängig davon, was einzelne Kinder (Grid/Flex) selbst tun. */
+.home-v2 { width: 100%; max-width: none; margin: 0; padding: 36px 32px 56px;
+	display: flex; flex-direction: column; align-items: center; }
+.home-v2 > * { width: 100%; max-width: 720px; margin-inline: auto; flex: 0 0 auto; }
+
+/* 🩹 Fallback (18. Juli, spät v3): Kern-Layout des ⏱ Lernzeit-Widgets zusätzlich
+   hier absichern — auf einem Gerät klebten „Fokusblock starten“ und „Wie lange
+   möchtest du lernen?“ in EINER Zeile und die Ausklapp-Bereiche zeigten native
+   ▶-Marker, weil das von lernzeit.js injizierte <style> nicht (mehr) aktiv war. */
+.lz-timer-card small, .lz-timer-card b { display: block; }
+.lz-fold > summary { list-style: none; }
+.lz-fold > summary::-webkit-details-marker { display: none; }
 .home-slim .home-hero { margin-bottom: var(--space-4); }
 .home-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
 .home-hero h1 { margin: 0 0 4px; font-size: 1.65rem; font-weight: 700; letter-spacing: -.02em; }
