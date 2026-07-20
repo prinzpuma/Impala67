@@ -5,80 +5,54 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 
-// heft.js — GoodNotes-Kern für Impala67.
-//
-// v11 (18. Juli 2026): Navigation v4 — Ein-Finger-Scrollen läuft NATIV über den
-// Browser (touch-action) statt über eigene Pointer-Gesten. Eigene Logik nur noch
-// für Pinch-Zoom, Tipp-Gesten (Doppeltipp/Undo/Redo), Pencil-/Palm-Schutz und
-// Pull-to-Add. Scharfe Viewport-Kacheln rendern erst nach kurzer Scroll-Pause.
-// v10 (15. Juli 2026): Datei entschlackt — der Bildverarbeitungs-Kern des
-// Dokument-Scanners (Blatt-Erkennung, Entzerrung, Filter, Qualität) lebt jetzt
-// unverändert in heft-scan.js (Import SCANCORE). Hier bleiben UI, Eingabe,
-// Rendering, Navigation, Seiten/Bilder/Texte und der Scan-Ablauf.
-// v9: Drei Render-Ebenen je Seite (Basis-Vorschau, scharfe Viewport-Kachel,
-// Wet-Ink) — der Strich erscheint sofort und „trocknet" beim Absetzen.
-// v8: Dokument-Scanner v3 + Navigation v2 (Trägheits-Scroll, Pinch-Zoom,
-// Doppeltipp = einpassen, 2-/3-Finger-Tipp = Undo/Redo).
-//
-// Persistenz: EIN Blob je Heft (heft:<pageId>) in IndexedDB. Damit wandert der Inhalt
-// automatisch durch Export/Backup und den Drive-Sync (Blob-Pipeline). Nur Metadaten
-// laufen als leichtes Event `heftUpdated` durchs Log — keine Stroke-Flut im Event-Log.
+// heft.js — GoodNotes-Kern für Impala67 (v12: KISS/DRY-Refactor, funktionsgleich zu v11).
+// Persistenz: EIN Blob je Heft ("heft:" + pageId) in IndexedDB; Metadaten via "heftUpdated"-Event.
+// Scanner-Bildverarbeitung lebt in heft-scan.js (SCANCORE), Handschrift-OCR in handschrift.js.
+
 export const HEFT = (() => {
-	const PAGE_W = 1000, PAGE_H = 1414; // logisches A4
+	const PAGE_W = 1000, PAGE_H = 1414;
 	const KEY = (p) => "heft:" + p;
 	const INK_LEGACY = (p) => "impala67.ink." + p;
 	const COLORS = ["#1c1c1e", "#2f6fed", "#e0483e", "#1f9d55", "#f5b800", "#8b7cc8"];
 	const SIZES = [["F", 1.6], ["M", 3], ["B", 5.5]];
 	const PAPERS = [["lined", "☰", "Liniert"], ["grid", "▦", "Kariert"], ["dots", "⣿", "Punkte"], ["blank", "▢", "Blanko"]];
 
-	const docs = {};     // pid → Dokument (Cache)
-	const thumbs = {};   // "pid:index:breite" → dataURL
+	const docs = {};
+	const thumbs = {};
 	const dropThumbs = (p) => Object.keys(thumbs).forEach((k) => { if (k.startsWith(p + ":")) delete thumbs[k]; });
-	const thumbJobs = {}; // parallele Anfragen auf dieselbe Vorschau teilen sich einen Render
-	const imgCache = {}; // imageId → HTMLImageElement (dekodierte Bild-Objekte)
+	const thumbJobs = {};
+	const imgCache = {};
 	let host = null, pid = null, doc = null, idx = 0, scale = 1, zoom = 1;
-	let canvases = []; // Basis-Canvas je Seite: schnelle Vorschau + Eingabe
-	let detailCanvases = []; // hochauflösende Viewport-Kacheln über sichtbaren Ausschnitten
-	let wetCanvases = []; // Wet-Ink-Ebene: transparente Live-Canvas für den laufenden Strich
-	let pageSlots = []; // passende Seiten-Container für die Scroll-Erkennung
-	// Navigation v2: gesamter Gesten-Zustand lebt in EINEM Objekt (siehe unten).
-	// onlyPen default true: Palm Rejection für Apple Pencil.
-	// Aktive Stifte werden separat verfolgt, damit ein Handballen nie als Scroll-Geste zählt.
-	// 💾 QoL (18. Juli 2026): Werkzeug-Einstellungen überleben App-Neustarts
+	let canvases = [];
+	let detailCanvases = [];
+	let wetCanvases = [];
+	let pageSlots = [];
+
 	const savedTools = (() => { try { return JSON.parse(localStorage.getItem("impala67HeftTools") || "{}"); } catch (err) { return {}; } })();
 	let tool = "pen", color = savedTools.color || COLORS[0], size = savedTools.size || 3, onlyPen = savedTools.onlyPen !== false;
-	let eraserSize = savedTools.eraserSize || 16; // Radierer hat eine EIGENE Größe — das Tray wirkt jetzt wirklich
-	let inlineEd = null;     // offener Inline-Text-Editor { ta, pi, txt|null, x, y }
-	let lastEmptyTap = null; // Doppeltipp-Erkennung auf freier Fläche (Text anlegen)
-	function saveToolPrefs() { try { localStorage.setItem("impala67HeftTools", JSON.stringify({ color, size, onlyPen, eraserSize })); } catch (err) { /* egal */ } }
+	let eraserSize = savedTools.eraserSize || 16;
+	let inlineEd = null;
+	let lastEmptyTap = null;
+	function saveToolPrefs() { try { localStorage.setItem("impala67HeftTools", JSON.stringify({ color, size, onlyPen, eraserSize })); } catch (err) {  } }
 	const activePenPointers = new Set();
-	let lastPenUpAt = 0;      // 🖐️ Zeitpunkt des letzten Stift-Abhebens (Palm-Nachlauf)
-	const PEN_GRACE_MS = 400; // Finger bleiben so lange nach dem Stift-Lift gesperrt
-	let expanded = false;    // Options-Tray erst nach Klick auf Schreiben/Radierer
-	let trayPos = null;      // {x,y} nur für das verschiebbare Options-Tray
-	let trayDrag = null;     // laufender Drag des Options-Trays
+	let lastPenUpAt = 0;
+	const PEN_GRACE_MS = 400;
+	let expanded = false;
+	let trayPos = null;
+	let trayDrag = null;
 	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null, scrollFn = null;
 	let undoStack = [], redoStack = [];
-	let sel = null;          // { pageIdx, imgId } — ausgewähltes Bild (Auswahl-Werkzeug)
-	let lassoSel = null;     // { pageIdx, strokes[] } — Auswahl von Freihand-Strichen
+	const pushUndo = (a) => { undoStack.push(a); redoStack = []; };
+	let sel = null;
+	let lassoSel = null;
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
 	const laserTimers = new Set();
-	let insertPos = "after"; // +-Menü: "before" | "after" | "last"
-	let pop = null;          // offenes Toolbar-Popup (Seiten / Bilder / +)
-	let scanUI = null;       // Scanner-Overlay { wrap, stream, shots[], edit, busy }
+	let insertPos = "after";
+	let pop = null;
+	let scanUI = null;
 
-	// ---------- Handschrift-Erkennung v2 (15. Juli 2026, Notion AI) ----------
-	// Die alte, rein lokale Tesseract-Indexierung liest Handschrift praktisch nicht
-	// (Tesseract ist für DRUCKSCHRIFT gebaut) — Ergebnis: unbrauchbarer ocrText.
-	// v2 delegiert an handschrift.js: bevorzugt liest das Vision-Modell der aktiven
-	// KI-Quelle (Gemini/GPT) die gerenderte Seite, lokal bleibt Tesseract mit
-	// besserer Vorverarbeitung der Fallback. Debounced pro Heftseite + 45-s-Cooldown
-	// (häufige Schreibpausen lösen keine Aufruf-Flut aus). Das Ergebnis landet wie
-	// bisher als pg.ocrText im Heft-Dokument und via saveNow() im durchsuchbaren
-	// heftUpdated-Event. Die alte scheduleHandwritingIndex-Implementierung weiter
-	// unten ist damit tot und kann lokal gelöscht werden.
 	const ocrQueueV2 = new Set();
-	const ocrLastRun = new Map(); // "pid:pageIdx" → Zeitstempel des letzten Laufs
+	const ocrLastRun = new Map();
 	let ocrTimerV2 = 0, ocrBusyV2 = false;
 	function scheduleHandwritingIndexV2(pi) {
 		if (!HANDSCHRIFT.available()) return;
@@ -98,17 +72,11 @@ export const HEFT = (() => {
 				if (Date.now() - (ocrLastRun.get(key) || 0) < 45000) { ocrQueueV2.add(pi); continue; }
 				const pg = jobDoc.pages[pi];
 				if (!pg || !(pg.strokes && pg.strokes.length)) continue;
-				// Seite offscreen in mittlerer Auflösung rendern — reicht für die
-				// Erkennung, hält Speicher und Upload klein.
-				const cv = document.createElement("canvas");
-				const k = 1100 / PAGE_W;
-				cv.width = Math.round(PAGE_W * k); cv.height = Math.round(PAGE_H * k);
-				const x = cv.getContext("2d");
-				x.setTransform(k, 0, 0, k, 0, 0);
-				renderPageTo(x, pg, -1); // -1: nie Auswahl-/Lasso-Overlays mitrendern
+
+				const cv = renderPageCanvas(pg, 1100);
 				ocrLastRun.set(key, Date.now());
 				const text = await HANDSCHRIFT.recognize(cv);
-				// Heft könnte während des await gewechselt worden sein.
+
 				if (pid !== jobPid || doc !== jobDoc || text == null) continue;
 				if (String(text).trim() !== String(pg.ocrText || "").trim()) {
 					pg.ocrText = String(text).trim();
@@ -117,13 +85,12 @@ export const HEFT = (() => {
 			}
 		} catch (e) { console.warn("Heft: Handschrift-Erkennung v2 fehlgeschlagen", e); }
 		ocrBusyV2 = false;
-		// Wegen Cooldown zurückgestellte Seiten später erneut versuchen.
+
 		if (ocrQueueV2.size) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runHandwritingIndexV2, 45000); }
 	}
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
-	// Versions-ID für die synchronisierte Heft-Binärdatei. Der Hash bindet das
-	// Metadaten-Event eindeutig an genau einen Blob in Drive.
+
 	async function blobHash(buf) {
 		const bytes = new Uint8Array(buf);
 		const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -134,7 +101,6 @@ export const HEFT = (() => {
 	const page = () => (doc ? doc.pages[idx] : null);
 	const imagesOf = (pg) => (pg.images || (pg.images = []));
 
-	// ---------- Legacy ink.js (localStorage-Overlay) ----------
 	function takeLegacyInk(p) {
 		try {
 			const raw = localStorage.getItem(INK_LEGACY(p));
@@ -158,10 +124,9 @@ export const HEFT = (() => {
 				if (pg && pg.kind === "heft") return;
 				localStorage.removeItem(k);
 			});
-		} catch { /* ignore */ }
+		} catch {  }
 	}
 
-	// ---------- Persistenz ----------
 	async function load(p) {
 		if (docs[p]) return docs[p];
 		let d = null;
@@ -173,9 +138,9 @@ export const HEFT = (() => {
 			}
 		} catch (e) { console.warn("Heft: Laden fehlgeschlagen", e); }
 		if (!d) d = emptyDoc();
-		// Ältere Hefte kennen pg.images/pg.texts noch nicht — nachrüsten
+
 		d.pages.forEach((pg) => { if (!Array.isArray(pg.images)) pg.images = []; if (!Array.isArray(pg.texts)) pg.texts = []; });
-		// Legacy-Ink: nur in leeres Heft (keine Striche irgendwo) übernehmen
+
 		const empty = d.pages.every((pg) => !(pg.strokes && pg.strokes.length));
 		if (empty) {
 			const legacy = takeLegacyInk(p);
@@ -190,14 +155,14 @@ export const HEFT = (() => {
 				} catch (e) { console.warn("Heft: Legacy-Ink speichern fehlgeschlagen", e); }
 			}
 		} else {
-			try { localStorage.removeItem(INK_LEGACY(p)); } catch { /* ignore */ }
+			try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
 		}
 		docs[p] = d;
 		return d;
 	}
 	function scheduleSave() { clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
-	// Gemeinsamer Persistenz-Pfad für das gemountete Heft (saveNow) und für
-	// Schreib-Zugriffe von außen (addText — auch wenn das Heft NICHT geöffnet ist).
+	const refresh = (i) => { scheduleSave(); redrawPage(i); renderThumb(i); updateChrome(); };
+
 	async function persistDoc(savePid, saveDoc) {
 		saveDoc.rev = (saveDoc.rev || 1) + 1;
 		const bytes = enc.encode(JSON.stringify(saveDoc));
@@ -205,9 +170,7 @@ export const HEFT = (() => {
 		const contentHash = await blobHash(buf);
 		dropThumbs(savePid);
 		await DB.putBlob(KEY(savePid), buf, { type: "application/json", kind: "heft", rev: saveDoc.rev, hash: contentHash });
-		// Erkannte Handschrift UND getippte Text-Boxen fließen in den kleinen
-		// Metadaten-Index — beides ist damit über die normale Suche auffindbar;
-		// Bilder und Striche bleiben weiterhin ausschließlich im Heft-Blob.
+
 		const ocrText = saveDoc.pages
 			.map((pg) => [pg.ocrText || "", (pg.texts || []).map((t) => t.text).join("\n")].filter(Boolean).join("\n"))
 			.filter(Boolean).join("\n");
@@ -216,16 +179,12 @@ export const HEFT = (() => {
 	async function saveNow() {
 		clearTimeout(saveT);
 		if (!pid || !doc) return;
-		// Schnappschuss VOR dem ersten await: unmount() ruft saveNow() bewusst OHNE await
-		// auf und setzt pid/doc danach sofort auf null.
+
 		const savePid = pid, saveDoc = doc;
 		try { await persistDoc(savePid, saveDoc); }
 		catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
 	}
-	// ---------- Von außen ins Heft schreiben (KI-Tools, 15. Juli 2026) ----------
-	// Fügt eine sichtbare Text-Box ein — funktioniert auch bei nicht geöffnetem Heft.
-	// Platzierung: unter dem bisherigen Inhalt der letzten (oder angegebenen) Seite;
-	// reicht der Platz nicht, wird automatisch eine neue Seite angehängt.
+
 	function contentBottom(pg) {
 		let y = 40;
 		(pg.strokes || []).forEach((s) => (s.pts || []).forEach((p) => { if (p[1] > y) y = p[1]; }));
@@ -241,7 +200,7 @@ export const HEFT = (() => {
 		let pg = d.pages[pi], addedPage = false;
 		const size = Math.max(16, Math.min(60, Number(opts.size) || 30));
 		const w = Math.max(240, Math.min(PAGE_W - 120, Number(opts.w) || PAGE_W - 160));
-		// Höhe vorab offscreen messen (drawTextBox hält sie danach aktuell)
+
 		const probe = document.createElement("canvas").getContext("2d");
 		const t = { id: U.uid(), text: body, x: 80, y: 0, w, h: 60, size, color: String(opts.color || "#1c1c1e") };
 		t.h = Math.round(wrapTextLines(probe, t).length * size * TEXT_LH + TEXT_PAD * 2);
@@ -252,8 +211,8 @@ export const HEFT = (() => {
 		t.y = Math.min(y, PAGE_H - 80);
 		textsOf(pg).push(t);
 		if (pid === p && doc === d) {
-			// Heft ist gerade geöffnet: live aktualisieren, normaler Save-Pfad (debounced)
-			undoStack.push({ kind: "txtAdd", txt: t, pageIdx: pi }); redoStack = [];
+
+			pushUndo({ kind: "txtAdd", txt: t, pageIdx: pi });
 			if (addedPage) rebuildScroll(); else redrawPage(pi);
 			renderThumb(pi); updateChrome();
 			scheduleSave();
@@ -265,7 +224,6 @@ export const HEFT = (() => {
 	const hasHeft = (p) => !!((S.heftMeta && S.heftMeta[p]) || docs[p]);
 	const pagesOf = (p) => (S.heftMeta && S.heftMeta[p] && S.heftMeta[p].pages) || (docs[p] ? docs[p].pages.length : 1);
 
-	// ---------- Papier + Striche + Bilder ----------
 	function paintPaper(x, w, h, kind) {
 		x.fillStyle = "#fbfaf7";
 		x.fillRect(0, 0, w, h);
@@ -305,11 +263,7 @@ export const HEFT = (() => {
 			x.beginPath(); x.fillStyle = s.color;
 			x.arc(pts[0][0], pts[0][1], segW(s.size, pts[0][2]) / 2, 0, Math.PI * 2); x.fill();
 		} else {
-			// 🖊️ FIX (18. Juli, spät): weiche quadratische Kurven durch die Segment-
-			// Mittelpunkte statt roher Punkt-zu-Punkt-Linien. Vorher stießen Segmente
-			// mit eigener Breite und runder Kappe hart aneinander — schnelle Striche
-			// wirkten wie eine Perlenkette aus Punkten. Die Druck-Breite wird über
-			// benachbarte Punkte geglättet, damit keine sichtbaren Sprünge entstehen.
+
 			let from = pts[0];
 			for (let i = 1; i < pts.length; i++) {
 				const cur = pts[i];
@@ -323,13 +277,7 @@ export const HEFT = (() => {
 		}
 		x.restore();
 	}
-	// ---------- Text-Boxen (15. Juli 2026, Notion AI) ----------
-	// Getippter Text im Heft — primär damit die KI SICHTBAR in Hefte schreiben kann
-	// (bisher landete append_to_page im nie gerenderten pg.content). Modell:
-	// { id, text, x, y, w, h, size, color } in pg.texts; gerendert mit Zeilenumbruch
-	// über den Strichen. Mit dem Auswahl-Werkzeug (⬚) verschiebbar, über den Griff
-	// in der Breite skalierbar (Höhe folgt dem Umbruch), über ✕ löschbar; Doppeltipp
-	// öffnet die Textbearbeitung. Inhalt fließt über persistDoc() in die Suche.
+
 	const textsOf = (pg) => (pg.texts || (pg.texts = []));
 	const TEXT_LH = 1.4, TEXT_PAD = 10;
 	function wrapTextLines(x, t) {
@@ -351,13 +299,13 @@ export const HEFT = (() => {
 		x.save();
 		const lines = wrapTextLines(x, t);
 		const lh = (t.size || 30) * TEXT_LH;
-		t.h = Math.round(lines.length * lh + TEXT_PAD * 2); // Höhe folgt dem Umbruch
+		t.h = Math.round(lines.length * lh + TEXT_PAD * 2);
 		x.fillStyle = t.color || "#1c1c1e";
 		x.textBaseline = "top";
 		lines.forEach((line, i) => x.fillText(line, t.x + TEXT_PAD, t.y + TEXT_PAD + i * lh));
 		x.restore();
 	}
-	// Bilder und Text-Boxen teilen sich denselben Treffertest (oberstes Objekt zuerst).
+
 	const hitBox = (arr, p) => {
 		for (let i = arr.length - 1; i >= 0; i--) {
 			const o = arr[i];
@@ -366,16 +314,15 @@ export const HEFT = (() => {
 		return null;
 	};
 	const hitText = (pg, p) => hitBox(textsOf(pg), p);
-	// Bild-Objekte: dekodierte Image-Elemente cachen; nach dem Laden einmal neu zeichnen
+
 	function imgEl(im) {
 		let c = imgCache[im.id];
 		if (!c) {
 			c = new Image();
 			c.onload = () => {
-				// FIX (v8): nur die Vorschauen DIESES Hefts invalidieren — vorher wurden
-				// die Thumbnails ALLER Hefte verworfen und teuer neu gerendert.
+
 				if (pid) dropThumbs(pid);
-				// Ein Bild betrifft nur seine eigene Heftseite.
+
 				if (host && doc) {
 					const pageIndex = doc.pages.findIndex((pg) => (pg.images || []).some((item) => item.id === im.id));
 					if (pageIndex !== -1) { redrawPage(pageIndex); renderThumb(pageIndex); }
@@ -387,14 +334,12 @@ export const HEFT = (() => {
 		return c;
 	}
 	function drawLassoSelection(x, strokes) {
-		if (!strokes || !strokes.length) return;
-		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
-		if (!isFinite(minX)) return;
+		const bb = lassoBBox(strokes || []);
+		if (!bb) return;
 		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
-		x.strokeRect(minX - 9, minY - 9, maxX - minX + 18, maxY - minY + 18); x.restore();
+		x.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18); x.restore();
 	}
-	// 🪢 Lasso-Verschieben (18. Juli 2026): Auswahl-Rahmen + Verschiebe-Geometrie.
+
 	function lassoBBox(strokes) {
 		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
@@ -412,10 +357,10 @@ export const HEFT = (() => {
 		x.strokeStyle = "#2f6fed"; x.lineWidth = 1.5; x.setLineDash([6, 4]);
 		x.strokeRect(im.x, im.y, im.w, im.h);
 		x.setLineDash([]);
-		// Griff unten rechts: Skalieren
+
 		x.fillStyle = "#2f6fed";
 		x.beginPath(); x.arc(im.x + im.w, im.y + im.h, 7, 0, Math.PI * 2); x.fill();
-		// ✕ oben rechts: Löschen
+
 		x.fillStyle = "#e0483e";
 		x.beginPath(); x.arc(im.x + im.w, im.y, 9, 0, Math.PI * 2); x.fill();
 		x.strokeStyle = "#fff"; x.lineWidth = 2;
@@ -432,7 +377,7 @@ export const HEFT = (() => {
 			if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
 		pg.strokes.forEach((s) => drawStroke(x, s));
-		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); }); // hidden: gerade im Inline-Editor geöffnet
+		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
 		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
 			const im = sel.imgId ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
@@ -441,10 +386,7 @@ export const HEFT = (() => {
 			if (tx) drawSelection(x, tx);
 		}
 	}
-	// 🆚 Sync-Konflikt-Vorschau (18. Juli 2026): zeichnet die erste Seite eines
-	// beliebigen Heft-Blobs in ein übergebenes Canvas — unabhängig vom gerade
-	// geöffneten Heft. render.js zeigt damit im Konflikt-Popup beide Stände
-	// nebeneinander. Rückgabe: Seitenzahl des Blobs (0 = keine Vorschau möglich).
+
 	async function renderBlobPreview(blobKey, cv) {
 		try {
 			const rec = await DB.getBlob(blobKey);
@@ -452,17 +394,8 @@ export const HEFT = (() => {
 			const d = JSON.parse(new TextDecoder().decode(rec.buf));
 			const pg = d && d.pages && d.pages[0];
 			if (!pg) return 0;
-			const k = cv.width / PAGE_W;
-			cv.height = Math.round(PAGE_H * k); // setzt die Höhe UND leert das Canvas
-			const x = cv.getContext("2d");
-			x.setTransform(k, 0, 0, k, 0, 0);
-			paintPaper(x, PAGE_W, PAGE_H, pg.paper);
-			(pg.images || []).forEach((im) => {
-				const el = imgEl(im);
-				if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
-			});
-			(pg.strokes || []).forEach((s) => drawStroke(x, s));
-			(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
+			if (!Array.isArray(pg.strokes)) pg.strokes = [];
+			paintInto(cv, pg, -1);
 			return d.pages.length;
 		} catch (e) {
 			console.warn("Heft-Konflikt-Vorschau fehlgeschlagen:", e);
@@ -470,9 +403,6 @@ export const HEFT = (() => {
 		}
 	}
 
-	// Jeder Canvas kennt seine tatsächlich gerenderte Pixelratio. Sie kann bei
-	// großem Zoom kleiner als devicePixelRatio sein, damit nie riesige Backing Stores
-	// entstehen, die auf iPad/Safari zu Weißbildern oder Speicherabbrüchen führen.
 	function applyTransform(x) {
 		const dpr = x.canvas.__heftDpr || 1;
 		x.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
@@ -487,26 +417,13 @@ export const HEFT = (() => {
 			applyTransform(x);
 			renderPageTo(x, doc.pages[i], i);
 		}
-		// Kachel synchron im selben Frame in-place mitziehen — sie wird nie mehr
-		// versteckt (v8-Bug: „display:none + 60-ms-Timer" = sichtbarer Lag/Blitz).
+
 		renderDetailTile(i);
 	}
 	function redraw() { renderVisiblePages(); }
 
-	// ---------- Navigation v3: frei zoomen, 2D-Pan, stabiler Fokuspunkt ----------
-	// Ein einziger CSS-Variablen-Write skaliert alle Seiten. Die teuren Canvas-Bitmaps
-	// werden erst nach der Geste neu gerendert. Der Zoom-Anker ist ein Punkt IM Blatt,
-	// nicht die Mitte des Scroll-Containers — dadurch kann man überall hineinzoomen.
-	// Seiten sind kein Infinite Canvas: Der feste Maximalzoom hält Matrix,
-	// Speicherbedarf und Eingabepräzision stabil. Das Rendering arbeitet nur
-	// für sichtbare Seiten und verwendet einen festen Pixel-Budget-Deckel.
 	const ZOOM_MIN = 1, ZOOM_MAX = 3.5;
-	// iPad/Safari leert Canvas-Flächen oft lautlos, bevor das theoretische
-	// Speicherlimit erreicht ist. Ein konservatives Budget plus Kantenlimit
-	// verhindert weiße Seiten beim starken Zoom.
-	// v9: Die Basis ist nur noch die schnelle Vorschau UNTER der scharfen Kachel.
-	// 6 MP + DPR-Deckel 1.5 reichen dafür und halbieren den Speicherdruck — volle
-	// Display-Schärfe liefert die Viewport-Kachel (plus Wet-Ink-Ebene beim Schreiben).
+
 	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
 	const gesture = {
@@ -516,34 +433,28 @@ export const HEFT = (() => {
 	};
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
+	const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+	const clearPagesFx = (pgs = pagesEl()) => { if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; } };
 	function stopAnim() {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
 		if (gesture.zoomFrame) cancelAnimationFrame(gesture.zoomFrame);
 		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
-		// 🪄 Unterbrochenes FLIP-Gleiten: das echte End-Layout liegt bereits an —
-		// nur den GPU-Transform entfernen (= Animation sofort fertigstellen).
-		if (gesture.dtap) {
-			gesture.dtap = false;
-			const pgs = pagesEl();
-			if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
-		}
+
+		if (gesture.dtap) { gesture.dtap = false; clearPagesFx(); }
 	}
 	function navReset() {
 		stopAnim(); gesture.touches.clear();
-		// Falls eine Pinch-Vorschau (GPU-Transform) noch aktiv war: sauber entfernen.
-		const pgs = pagesEl();
-		if (pgs && pgs.style.transform) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
+
+		clearPagesFx();
 		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0;
 	}
 	function applyView(commit) {
 		const scroll = scrollEl(); if (!scroll) return;
-		// Die tatsächliche Innenbreite ist entscheidend: im Hochformat hatten Padding und
-		// Scrollbar bislang einen Teil der Zoom-Breite verschluckt.
+
 		const innerW = Math.max(1, scroll.clientWidth - 36);
 		const innerH = Math.max(1, scroll.clientHeight - 36);
-		// Zoom 1 bedeutet immer „ganze Seite sichtbar“ – in Breite UND Höhe.
-		// Dadurch entspricht der Doppeltipp dem Notion-Verhalten statt nur auf
-		// Seitenbreite zu springen.
+
 		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, innerH / PAGE_H, 1));
 		scale = fit * zoom;
 		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
@@ -555,13 +466,11 @@ export const HEFT = (() => {
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (commit) renderVisiblePages();
 		else hideDetailCanvases();
-		// Während der Geste wird ausschließlich per CSS skaliert. Das hält Pinch-Zoom
-		// flüssig und vermeidet große Canvas-Allokationen in jedem Pointer-Frame.
+
 	}
 	function visiblePageIndices() {
 		const scroll = scrollEl(); if (!scroll) return [];
-		// Mehr als eine Bildschirmhöhe vor und hinter dem Viewport vorladen. Dadurch
-		// sind die nächsten Seiten schon gerendert, bevor sie ins Sichtfeld scrollen.
+
 		const sr = scroll.getBoundingClientRect(), pad = Math.max(600, sr.height * 1.5), out = [];
 		pageSlots.forEach((slot, i) => {
 				if (!slot) return;
@@ -572,7 +481,7 @@ export const HEFT = (() => {
 	}
 	function tileDpr() { return Math.min(2, window.devicePixelRatio || 1); }
 	function tileTransform(x, t) { x.setTransform(t.dpr * t.scale, 0, 0, t.dpr * t.scale, -t.x * t.dpr, -t.y * t.dpr); }
-	// Sichtbarer Seitenausschnitt (+ Overscan) in CSS-Pixeln relativ zur Basis-Canvas.
+
 	function layerRectFor(i) {
 		const scroll = scrollEl(), base = canvases[i];
 		if (!scroll || !base) return null;
@@ -599,13 +508,11 @@ export const HEFT = (() => {
 	}
 	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
 	function hideDetailCanvases() { detailCanvases.forEach(hideLayer); wetCanvases.forEach(hideLayer); }
-	// Kachel + Wet-Ink-Ebene EINER Seite in-place neu aufbauen — ohne Ausblenden,
-	// ohne Timer: kein Weißblitz und keine Verzögerung mehr.
+
 	function renderDetailTile(i) {
 		const tile = detailCanvases[i], wet = wetCanvases[i];
 		if (!tile || !doc || !doc.pages[i]) return;
-		// Nie unter einem aktiven Stift wegrendern: Der laufende Strich lebt auf der
-		// Wet-Ink-Ebene und würde sonst gelöscht. (Nur der Radierer braucht Rerender.)
+
 		if (drawing && drawing.pageIdx === i && drawing.ctx && !drawing.erasing) return;
 		const r = layerRectFor(i);
 		if (!r) { hideLayer(tile); hideLayer(wet); return; }
@@ -634,8 +541,7 @@ export const HEFT = (() => {
 		const nx1 = Math.min(pr.width, sr.right - pr.left), ny1 = Math.min(pr.height, sr.bottom - pr.top);
 		return t.x <= nx0 && t.y <= ny0 && t.x + t.w >= nx1 && t.y + t.h >= ny1;
 	}
-	// Kacheln aller Seiten nachziehen. force=false rendert nur dann neu, wenn der
-	// sichtbare Ausschnitt die vorhandene Kachel (samt Overscan) verlassen hat.
+
 	function renderDetailTiles(force = false) {
 		if (!doc) return;
 		canvases.forEach((_, i) => {
@@ -644,10 +550,7 @@ export const HEFT = (() => {
 			renderDetailTile(i);
 		});
 	}
-	// ---------- Wet Ink: Strich sofort sichtbar, in voller Display-Auflösung ----------
-	// GoodNotes-Prinzip: Der laufende Strich wird auf einer transparenten Ebene ÜBER
-	// der scharfen Kachel gezeichnet und „trocknet" erst beim Absetzen des Stifts in
-	// Basis + Kachel. Kein Voll-Rerender pro Strich, keine Verzögerung, kein Flackern.
+
 	function liveInkCtx(i) {
 		const wet = wetCanvases[i];
 		if (wet && wet.__heftTile && wet.style.display !== "none") {
@@ -655,7 +558,7 @@ export const HEFT = (() => {
 			tileTransform(x, wet.__heftTile);
 			return x;
 		}
-		// Fallback (Kachel gerade nicht aktiv): direkt auf der Basis zeichnen wie früher.
+
 		const x = canvases[i].getContext("2d");
 		applyTransform(x);
 		return x;
@@ -669,8 +572,7 @@ export const HEFT = (() => {
 		tileTransform(x, wet.__heftTile);
 		return true;
 	}
-	// Einen frisch beendeten Strich direkt in Basis UND Kachel nachzeichnen —
-	// Kosten O(1 Strich) statt komplette Seite neu zu rendern.
+
 	function commitStrokeRender(i, stroke) {
 		const cv = canvases[i];
 		if (cv && cv.width > 1) { const x = cv.getContext("2d"); applyTransform(x); drawStroke(x, stroke); }
@@ -683,19 +585,16 @@ export const HEFT = (() => {
 	function renderVisiblePages(skipTiles = false) {
 		if (!doc) return;
 		const visible = new Set(visiblePageIndices());
-		// Das Budget gilt pro sichtbarer Seite. Bei hohem Zoom wird DPR sanft
-		// reduziert, statt eine Canvasdimension zu erzeugen, die der Browser leert.
+
 		const nativeDpr = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
 		const pageW = PAGE_W * scale, pageH = PAGE_H * scale;
 		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
 		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
-		// Bei extremem Zoom darf DPR unter 1 sinken. Das ist besser als eine von
-		// Safari verworfene (weiße) Canvas; sobald herausgezoomt wird, steigt die
-		// scharfe Auflösung automatisch wieder an.
+
 		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
 		canvases.forEach((cv, i) => {
 			if (!visible.has(i)) {
-				// Unsichtbare Seiten geben ihren großen Backing Store sofort frei.
+
 				if (cv.width !== 1 || cv.height !== 1) { cv.width = 1; cv.height = 1; }
 				hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]);
 				return;
@@ -703,32 +602,25 @@ export const HEFT = (() => {
 			cv.__heftDpr = safeDpr;
 			const w = Math.max(1, Math.round(PAGE_W * scale * safeDpr));
 			const h = Math.max(1, Math.round(PAGE_H * scale * safeDpr));
-			// Beim normalen Scrollen bereits fertige Seiten nicht erneut zeichnen.
-			// Nur neue/vorher freigegebene Seiten oder eine geänderte Zoomauflösung
-			// brauchen einen Render — das verhindert Ruckler trotz größerem Preload.
+
 			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
 			if (needsRender) redrawPage(i);
 		});
-		// Über der sofort verfügbaren Basis den sichtbaren Ausschnitt in voller
-		// Displayauflösung nachziehen (nur wo der Overscan verlassen wurde).
-		// Während einer laufenden Scrollbewegung wird das übersprungen — die scharfen
-		// Kacheln folgen nach der Scroll-Pause (Blur→Scharf-Muster wie GoodNotes).
+
 		if (!skipTiles) renderDetailTiles(false);
 	}
 	function scheduleVisibleRender(delay = 90) {
 		clearTimeout(visibleRenderTimer);
 		visibleRenderTimer = setTimeout(() => { visibleRenderTimer = 0; renderVisiblePages(); }, delay);
 	}
-	// Nach einer kurzen Zoom-Pause werden nur die sichtbaren Seiten neu aufgebaut:
-	// PDF-/Bild-Hintergrund und Vektor-Handschrift laufen gemeinsam durch renderPageTo().
+
 	function scheduleZoomSettleRender() {
 		clearTimeout(zoomSettleTimer);
 		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; renderVisiblePages(); }, 140);
 	}
-	// Beim Drehen des Geräts bzw. beim Ein-/Ausblenden von UI bleibt derselbe Punkt
-	// der Seite im Sichtfenster. Ohne diesen Anker sprang die Hochkant-Ansicht sichtbar.
+
 	function layout() {
 		const scroll = scrollEl();
 		if (!scroll || !canvases.length) { applyView(true); return; }
@@ -753,7 +645,7 @@ export const HEFT = (() => {
 	function makeZoomAnchor(clientX, clientY) {
 		const cv = canvasAt(clientX, clientY); if (!cv) return null;
 		const r = cv.getBoundingClientRect();
-		return { cv, nx: Math.max(0, Math.min(1, (clientX - r.left) / Math.max(1, r.width))), ny: Math.max(0, Math.min(1, (clientY - r.top) / Math.max(1, r.height))) };
+		return { cv, nx: clamp((clientX - r.left) / Math.max(1, r.width), 0, 1), ny: clamp((clientY - r.top) / Math.max(1, r.height), 0, 1) };
 	}
 	function keepAnchor(anchor, clientX, clientY) {
 		const scroll = scrollEl(); if (!scroll || !anchor || !anchor.cv.isConnected) return;
@@ -762,7 +654,7 @@ export const HEFT = (() => {
 		scroll.scrollTop += r.top + r.height * anchor.ny - clientY;
 	}
 	function setZoom(next, clientX, clientY, commit, fixedAnchor) {
-		next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+		next = clamp(next, ZOOM_MIN, ZOOM_MAX);
 		const anchor = fixedAnchor || makeZoomAnchor(clientX, clientY);
 		zoom = next; applyView(commit); keepAnchor(anchor, clientX, clientY);
 	}
@@ -775,12 +667,7 @@ export const HEFT = (() => {
 			if (p) setZoom(p.next, p.clientX, p.clientY, false, p.anchor);
 		});
 	}
-	// 🪄 FLIP-Gleiten (18. Juli, spät v3): ZUERST wird das echte End-Layout
-	// angewendet (inkl. Zentrierung und Scroll-Klemmung — ein einziges Relayout),
-	// DANN startet die Ansicht per GPU-Transform optisch an der ALTEN Position
-	// und gleitet in die neue. Der Endzustand der Animation IST das finale
-	// Layout — das Blatt springt also nie mehr hart um, wenn es sich beim
-	// Rauszoomen wieder mittig zentriert, sondern schwebt sichtbar dorthin.
+
 	function flipGlide(cv, first, dur) {
 		const pgs = pagesEl();
 		if (!pgs || !cv || !cv.isConnected || !first) { scheduleZoomSettleRender(); return; }
@@ -788,7 +675,7 @@ export const HEFT = (() => {
 		const s = first.width / Math.max(1, last.width);
 		const dx = (first.left - pr.left) - (last.left - pr.left) * s;
 		const dy = (first.top - pr.top) - (last.top - pr.top) * s;
-		// Praktisch deckungsgleich? Dann reicht das scharfe Nachrendern.
+
 		if (Math.abs(1 - s) < 0.003 && Math.abs(dx) < 1.5 && Math.abs(dy) < 1.5) { scheduleZoomSettleRender(); return; }
 		pgs.style.transformOrigin = "0 0";
 		pgs.style.willChange = "transform";
@@ -802,7 +689,7 @@ export const HEFT = (() => {
 				gesture.raf = requestAnimationFrame(step);
 			} else {
 				gesture.raf = 0; gesture.dtap = false;
-				pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = "";
+				clearPagesFx(pgs);
 				scheduleZoomSettleRender();
 			}
 		};
@@ -810,71 +697,48 @@ export const HEFT = (() => {
 	}
 	function animateZoom(target, clientX, clientY) {
 		stopAnim();
-		target = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, target));
+		target = clamp(target, ZOOM_MIN, ZOOM_MAX);
 		const anchor = makeZoomAnchor(clientX, clientY);
-		// 🔍 Doppeltipp-Zoom = FLIP: End-Layout sofort anwenden, dann hingleiten —
-		// GPU-flüssig, und die Endposition stimmt garantiert (kein Snap-Sprung).
+
 		if (!anchor) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
 		const first = anchor.cv.getBoundingClientRect();
 		setZoom(target, clientX, clientY, false, anchor);
 		flipGlide(anchor.cv, first, 320);
 	}
-	// ---------- Navigation v4 (18. Juli 2026): natives Scrollen ----------
-	// Ein-Finger-Scrollen samt Trägheit übernimmt der BROWSER (touch-action
-	// "pan-x pan-y" auf Scroll-Container und Canvases) — das selbstgebaute
-	// Pointer-Fling aus v3 ist ersatzlos entfallen. Ergebnis: sofortiger
-	// Scrollstart, echte Systemträgheit, Rubber-Band — das direkte Gefühl wie in
-	// GoodNotes/nativen Apps. Eigene Gesten nur noch, wo der Browser nichts hat:
-	// • Pinch-Zoom (2 Finger, Touch-Events mit preventDefault)
-	// • Doppeltipp = Seite einpassen · 2-/3-Finger-Tipp = Undo/Redo
-	// • Pencil-/Palm-Schutz: Stylus-Touches scrollen nie nativ; solange ein
-	//   Stift aufliegt, sperrt touch-action neu aufsetzende Finger-Pans.
-	// Pull-to-Add (letzte Seite hochziehen → neue Seite) bleibt unverändert:
-	// seine passiven Touch-Listener vertragen sich mit nativem Scroll.
+
 	function applyTouchAction() {
-		// touch-action bestimmt, was der Browser mit Fingern (und auf Windows/
-		// Android auch mit Stiften) tun darf. Standard: natives Pannen. Sobald
-		// Finger zeichnen dürfen (onlyPen aus) oder ein Stift aufliegt
-		// (Handballen!), wird natives Scrollen für NEUE Touches gesperrt.
+
 		const mode = touchNavigates() ? "pan-x pan-y" : "none";
 		const scroll = scrollEl();
 		if (scroll) scroll.style.touchAction = mode;
 		canvases.forEach((cv) => { if (cv) cv.style.touchAction = mode; });
 	}
-	// Windows-/Android-Stifte: dort gilt touch-action auch für den Stift. Hover
-	// feuert vor dem Aufsetzen — natives Pannen rechtzeitig abschalten, damit
-	// der Stift zeichnet statt zu scrollen.
+
 	function onPenBoundary(e) {
 		if (e.pointerType !== "pen") return;
 		if (e.type === "pointerover") e.currentTarget.style.touchAction = "none";
 		else if (!activePenPointers.size) applyTouchAction();
 	}
-	// Gemeinsames Pinch-Ende: ausstehenden Zoom-Frame anwenden, dann scharf nachrendern.
+
 	function settlePinch() {
-		// 🚀 FIX (18. Juli, spät v2): GPU-Vorschau entfernen und den finalen Zoom
-		// EINMAL echt anwenden (statt Relayout pro Frame während der Geste).
-		// 🪄 v3: Weicht das End-Layout von der Vorschau ab (z. B. weil sich das
-		// Blatt beim Rauszoomen wieder zentriert oder der Scroll geklemmt wird),
-		// springt es nicht mehr hart um, sondern gleitet per FLIP in die Mitte.
+
 		const g = gesture.pinch;
 		gesture.pinch = null;
 		if (gesture.zoomFrame) { cancelAnimationFrame(gesture.zoomFrame); gesture.zoomFrame = 0; }
 		const cv = g && g.anchor && g.anchor.cv && g.anchor.cv.isConnected ? g.anchor.cv : null;
 		const first = cv ? cv.getBoundingClientRect() : null;
-		const pgs = pagesEl();
-		if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; }
+		clearPagesFx();
 		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
 		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
 		applyView(false);
 		if (first) flipGlide(cv, first, 200); else scheduleZoomSettleRender();
 	}
-	// iPadOS meldet Apple-Pencil-Touches als touchType "stylus" — nie als Finger zählen.
+
 	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
 	const touchMid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
 	const touchDist = (t) => Math.max(1, Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY));
 	function onTouchStart(e) {
-		// Safari behandelt den Pencil beim Scrollen wie einen Finger — abfangen,
-		// sonst pannt die Seite unter dem zeichnenden Stift weg.
+
 		if (fingersOf(e.changedTouches).length !== e.changedTouches.length) e.preventDefault();
 		if (!touchNavigates()) return;
 		for (const t of fingersOf(e.changedTouches)) gesture.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
@@ -882,14 +746,10 @@ export const HEFT = (() => {
 		gesture.maxCount = Math.max(gesture.maxCount, fingers.length);
 		if (gesture.touches.size === 1) { stopAnim(); gesture.moved = false; gesture.startedAt = Date.now(); }
 		if (fingers.length >= 2 && !gesture.pinch) {
-			// Ab dem zweiten Finger übernehmen wir: preventDefault stoppt den nativen
-			// 2-Finger-Pan, ab hier läuft unser Pinch-Zoom (CSS-only, Commit nach der Geste).
+
 			e.preventDefault(); stopAnim();
 			const [mx, my] = touchMid(fingers);
-			// 🚀 FIX (18. Juli, spät v2): Pinch-Zoom läuft während der Geste NUR noch
-			// als GPU-Transform auf .heft-pages. Vorher änderte jeder Finger-Frame die
-			// CSS-Breite ALLER Seiten (Relayout des kompletten Stapels) — DAS war das
-			// Ruckeln. Der echte Zoom wird erst am Gesten-Ende EINMAL angewendet.
+
 			const pgs = pagesEl();
 			if (pgs) {
 				const pr = pgs.getBoundingClientRect();
@@ -909,10 +769,9 @@ export const HEFT = (() => {
 		if (gesture.pinch && fingers.length >= 2) {
 			e.preventDefault();
 			const [mx, my] = touchMid(fingers);
-			// GPU-Vorschau statt echtem Zoom pro Frame (kein Relayout während der Geste);
-			// Faktor so geclampt, dass die Vorschau nie über ZOOM_MIN/ZOOM_MAX hinausläuft.
+
 			const g = gesture.pinch;
-			g.factor = Math.max(ZOOM_MIN / g.zoom0, Math.min(ZOOM_MAX / g.zoom0, touchDist(fingers) / g.d0));
+			g.factor = clamp(touchDist(fingers) / g.d0, ZOOM_MIN / g.zoom0, ZOOM_MAX / g.zoom0);
 			g.mid = [mx, my];
 			if (!gesture.zoomFrame) gesture.zoomFrame = requestAnimationFrame(() => {
 				gesture.zoomFrame = 0;
@@ -933,12 +792,7 @@ export const HEFT = (() => {
 		if (quick && count === 1 && e.changedTouches.length) {
 			const t = e.changedTouches[0], now = Date.now();
 			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
-				// 🔍 FIX (18. Juli, spät v2): Doppeltipp zoomt ZUERST REIN — weich auf
-				// Schreibzoom um den Tipp-Punkt herum (der Anker hält den Punkt unter dem
-				// Finger). Erst wenn schon deutlich eingezoomt ist (>= 190 %), passt der
-				// nächste Doppeltipp die ganze Seite wieder ein. Vorher kippte der Toggle
-				// bereits ab 115 % zurück — nach leichtem Pinch-Zoom fühlte sich dadurch
-				// JEDER Doppeltipp wie „Seite einpassen“ an statt reinzuzoomen.
+
 				gesture.lastTap = 0;
 				animateZoom(zoom >= 1.9 ? 1 : Math.max(2.2, Math.min(ZOOM_MAX, zoom * 1.8)), t.clientX, t.clientY);
 				return;
@@ -949,7 +803,7 @@ export const HEFT = (() => {
 	function onTouchCancel(e) {
 		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
 		if (gesture.pinch && fingersOf(e.touches).length < 2) settlePinch();
-		// Übernimmt der native Scroll die Geste, feuert touchcancel — nie als Tipp werten.
+
 		gesture.moved = true;
 	}
 	let wheelCommitT = 0;
@@ -961,7 +815,6 @@ export const HEFT = (() => {
 		clearTimeout(wheelCommitT); wheelCommitT = setTimeout(() => scheduleZoomSettleRender(), 160);
 	}
 
-	// ---------- Pointer (Apple Pencil / Maus / Finger) ----------
 	const pos = (e, cv) => {
 		const r = cv.getBoundingClientRect();
 		return [
@@ -970,12 +823,7 @@ export const HEFT = (() => {
 			Math.round((e.pressure || 0.5) * 100) / 100,
 		];
 	};
-	// Finger sind entweder Navigation (Standard) oder – nach bewusster Umschaltung – Zeichenwerkzeug.
-	// Während ein Stift aufliegt, werden sämtliche Touch-Ereignisse als Handballen verworfen.
-	// 🖐️ FIX (18. Juli, spät): Palm-Schutz mit Nachlauf — auch ~400 ms NACH dem
-	// Abheben des Stifts zählen Finger-Touches noch als Handballen. Vorher durfte
-	// der aufliegende Ballen sofort wieder scrollen, sobald der Stift zwischen
-	// zwei Wörtern kurz abhob — die Seite sprang beim Schreiben.
+
 	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
 	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
 	const touchNavigates = () => onlyPen && !penRecently();
@@ -989,11 +837,7 @@ export const HEFT = (() => {
 		return hit;
 	}
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
-	// 🩹 BUGFIX (18. Juli 2026): Radierer & Lasso prüften nur die ROH-Punkte
-	// eines Strichs. Bei schnell gezogenen Strichen liegen die weit auseinander
-	// und Form-Snap-Striche besitzen nur noch 1 Roh-Punkt — die Mitte einer
-	// langen Linie war damit unlöschbar und fürs Lasso unsichtbar. Jetzt zählt
-	// die echte Geometrie: Abstand zum SEGMENT + abgetastete Form-Umrisse.
+
 	const segDist2 = (px, py, ax, ay, bx, by) => {
 		const dx = bx - ax, dy = by - ay;
 		const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / ((dx * dx + dy * dy) || 1)));
@@ -1038,7 +882,7 @@ export const HEFT = (() => {
 		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
 	}
 	function onDown(e) {
-		// Palm-Schutz: solange der Stift aufliegt, dürfen NEUE Finger-Touches nicht nativ scrollen.
+
 		if (e.pointerType === "pen") { activePenPointers.add(e.pointerId); stopAnim(); applyTouchAction(); }
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
@@ -1048,14 +892,12 @@ export const HEFT = (() => {
 		if (!pg) return;
 		idx = pi;
 		e.preventDefault();
-		try { cv.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-		// Live-Vorschauen (Stift, Marker, Lasso, Form, Laser) zeichnen auf der
-		// Wet-Ink-Ebene ÜBER der scharfen Kachel — sofort sichtbar, voll aufgelöst.
+		try { cv.setPointerCapture(e.pointerId); } catch {  }
+
 		const x = liveInkCtx(pi);
 		const p = pos(e, cv);
 		if (tool === "lasso") {
-			// 🪢 FIX (18. Juli 2026): Zug INNERHALB des Auswahl-Rahmens verschiebt die
-			// Auswahl (wie in GoodNotes) — außerhalb beginnt wie bisher ein neues Lasso.
+
 			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
 				const bb = lassoBBox(lassoSel.strokes);
 				if (bb && p[0] >= bb.minX - 12 && p[0] <= bb.maxX + 12 && p[1] >= bb.minY - 12 && p[1] <= bb.maxY + 12) {
@@ -1063,28 +905,28 @@ export const HEFT = (() => {
 					return;
 				}
 			}
-			// Freies Lasso um Striche ziehen. Auswahl kann danach mit Entf gelöscht werden.
+
 			drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (tool === "laser") {
-			// Laser wird direkt gezeichnet, aber nie gespeichert.
+
 			drawing = { laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (tool === "select") {
-			// Text-Boxen zuerst prüfen — sie liegen visuell über den Strichen
+
 			const st = sel && sel.pageIdx === pi && sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
 			if (st && near(p, st.x + st.w, st.y, 16)) {
-				// ✕ oben rechts: Text löschen
+
 				pg.texts = textsOf(pg).filter((t2) => t2 !== st);
-				undoStack.push({ kind: "txtDel", txt: st, pageIdx: pi }); redoStack = [];
+				pushUndo({ kind: "txtDel", txt: st, pageIdx: pi });
 				sel = null;
-				scheduleSave(); redrawPage(pi); renderThumb(pi); updateChrome();
+				refresh(pi);
 				return;
 			}
 			if (st && near(p, st.x + st.w, st.y + (st.h || 60), 16)) {
-				// Griff unten rechts: Breite ändern — die Höhe folgt dem Zeilenumbruch
+
 				drawing = { imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
 				return;
 			}
@@ -1092,7 +934,7 @@ export const HEFT = (() => {
 			if (ht) {
 				const now = Date.now();
 				if (sel && sel.txtId === ht.id && now - (sel.tapAt || 0) < 400) {
-					// Doppeltipp auf ausgewählten Text: DIREKT auf der Seite bearbeiten (kein Popup)
+
 					sel = { pageIdx: pi, txtId: ht.id, tapAt: 0 };
 					openTextEditor(pi, ht.x, ht.y, ht);
 					return;
@@ -1102,18 +944,18 @@ export const HEFT = (() => {
 				redrawPage(pi);
 				return;
 			}
-			// Auswahl-Werkzeug: Bilder antippen, verschieben, skalieren, löschen
+
 			const im = sel && sel.pageIdx === pi ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
 			if (im && near(p, im.x + im.w, im.y, 16)) {
-				// ✕ oben rechts: Bild löschen
+
 				pg.images = imagesOf(pg).filter((i2) => i2 !== im);
-				undoStack.push({ kind: "imgDel", img: im, pageIdx: pi }); redoStack = [];
+				pushUndo({ kind: "imgDel", img: im, pageIdx: pi });
 				sel = null;
-				scheduleSave(); redrawPage(pi); renderThumb(pi); updateChrome();
+				refresh(pi);
 				return;
 			}
 			if (im && near(p, im.x + im.w, im.y + im.h, 16)) {
-				// Griff unten rechts: Skalieren (Seitenverhältnis bleibt)
+
 				drawing = { imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
 				return;
 			}
@@ -1124,7 +966,7 @@ export const HEFT = (() => {
 				redrawPage(pi);
 				lastEmptyTap = null;
 			} else {
-				// ✍️ Doppeltipp auf freie Fläche: neue Text-Box direkt dort anlegen
+
 				const now2 = Date.now();
 				if (lastEmptyTap && lastEmptyTap.pi === pi && now2 - lastEmptyTap.t < 450 && Math.hypot(p[0] - lastEmptyTap.p[0], p[1] - lastEmptyTap.p[1]) < 40) {
 					lastEmptyTap = null;
@@ -1139,14 +981,12 @@ export const HEFT = (() => {
 		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
 		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
-		// Platzsparend: Während des Schreibens tritt die Werkzeugleiste zurück
-		// (halbtransparent, keine Klicks) — mehr freie Fläche, weniger Ablenkung.
+
 		const chromeEl = host && host.querySelector(".heft-chrome");
 		if (chromeEl) chromeEl.classList.add("heft-writing");
 	}
-	// ✏️ Form-Snap (ersetzt das Formen-Werkzeug): Strich am Ende kurz gedrückt
-	// halten → gerade Linie; geschlossene Züge werden zu Kreis/Ellipse/Rechteck.
-	let snapTimer = null; // eigener Timer — holdTimer gehört dem Radierer-Halten-Modus
+
+	let snapTimer = null;
 	function armHoldSnap(p) {
 		if (snapTimer) clearTimeout(snapTimer);
 		snapTimer = null;
@@ -1162,15 +1002,15 @@ export const HEFT = (() => {
 		drawing.snapped = shape;
 		if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
 		drawStroke(drawing.ctx, { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0]], shape });
-		if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) { /* egal */ } }
+		if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {  } }
 	}
-	// Erkennt Linie / Ellipse (Kreis) / Rechteck; unklare Kritzelei bleibt Freihand (null).
+
 	function fitShape(pts) {
 		const a = pts[0], b = pts[pts.length - 1];
 		const w = b[0] - a[0], h = b[1] - a[1], len = Math.hypot(w, h);
 		let pathLen = 0;
 		for (let i = 1; i < pts.length; i++) pathLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-		if (pathLen < 30) return null; // Punkte/Tupfer nie begradigen
+		if (pathLen < 30) return null;
 		let maxDev = 0;
 		for (const p of pts) maxDev = Math.max(maxDev, Math.abs(h * (p[0] - a[0]) - w * (p[1] - a[1])) / Math.max(1, len));
 		const closed = pts.length > 10 && Math.hypot(b[0] - a[0], b[1] - a[1]) < Math.max(18, pathLen * 0.2);
@@ -1198,7 +1038,7 @@ export const HEFT = (() => {
 		e.preventDefault();
 		if (drawing.lasso) {
 			drawing.pts.push(pos(e, drawing.cv));
-			// Nur die Wet-Ink-Ebene leeren und neu zeichnen — die Seite darunter ist unverändert.
+
 			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
 			const x = drawing.ctx;
 			x.save(); x.setLineDash([7, 4]); x.strokeStyle = "#2f6fed"; x.lineWidth = 1.7;
@@ -1208,7 +1048,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.lassoMove) {
-			// 🪢 Auswahl live mitziehen — Strich-Punkte und Form-Koordinaten wandern mit.
+
 			const pm = pos(e, drawing.cv);
 			const dx = pm[0] - drawing.last[0], dy = pm[1] - drawing.last[1];
 			if (dx || dy) {
@@ -1219,8 +1059,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.snapped) {
-			// Nach dem Form-Snap: Linien-Endpunkt folgt dem Stift weiter,
-			// Kreis/Ellipse/Rechteck bleiben stehen (wie in Apple Notes).
+
 			const pSnap = pos(e, drawing.cv);
 			drawing.pts.push(pSnap);
 			if (drawing.snapped.type === "line") { drawing.snapped.x2 = pSnap[0]; drawing.snapped.y2 = pSnap[1]; }
@@ -1236,7 +1075,7 @@ export const HEFT = (() => {
 				im.x = Math.min(PAGE_W - 20, Math.max(20 - im.w, o.x + dx));
 				im.y = Math.min(PAGE_H - 20, Math.max(20 - im.h, o.y + dy));
 			} else if (drawing.isText) {
-				im.w = Math.max(120, o.w + dx); // Höhe folgt beim Rendern dem Zeilenumbruch
+				im.w = Math.max(120, o.w + dx);
 			} else {
 				const w = Math.max(40, o.w + dx);
 				im.w = w; im.h = w * (o.h / o.w);
@@ -1246,20 +1085,17 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.erasing) { eraseAt(e); return; }
-		// Manche Browser liefern eine leere Coalesced-Liste — dann das Originalevent nutzen.
+
 		let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
 		if (!evs || !evs.length) evs = [e];
 		for (const ce of evs) {
 			drawing.pts.push(pos(ce, drawing.cv));
 			const n = drawing.pts.length;
-			// Stift: die letzten 3 Punkte als weiche Kurve nachziehen (passend zur
-			// finalen Darstellung). Marker bleibt bei 2 Punkten — sein Alpha würde
-			// bei überlappendem Nachzeichnen sonst fleckig dunkler.
+
 			const tail = drawing.tool === "marker" ? 2 : 3;
 			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(Math.max(0, n - tail)) });
 		}
-		// Halte-Erkennung: bewegt sich der Stift kaum noch (< 6 px), begradigt
-		// trySnapShape() den Strich nach kurzem Halten zur sauberen Form.
+
 		const lastP = drawing.pts[drawing.pts.length - 1];
 		if (!drawing.holdAnchor || Math.hypot(lastP[0] - drawing.holdAnchor[0], lastP[1] - drawing.holdAnchor[1]) > 6) armHoldSnap(lastP);
 	}
@@ -1268,8 +1104,7 @@ export const HEFT = (() => {
 			activePenPointers.delete(e.pointerId);
 			lastPenUpAt = Date.now();
 			if (!activePenPointers.size) {
-				// touch-action bleibt für die Schutzfrist gesperrt; der zweite Aufruf
-				// gibt natives Finger-Scrollen danach wieder frei.
+
 				applyTouchAction();
 				setTimeout(applyTouchAction, PEN_GRACE_MS + 30);
 			}
@@ -1283,15 +1118,14 @@ export const HEFT = (() => {
 		if (!pg) { drawing = null; return; }
 		if (drawing.lasso) {
 			const poly = drawing.pts;
-			// Geometrie- statt Roh-Punkte: fängt auch Form-Snap-Striche (1 Roh-Punkt)
-			// und schnell gezogene Striche mit großen Punktabständen zuverlässig.
+
 			const hits = poly.length >= 3 ? pg.strokes.filter((s) => strokeOutline(s).some((p) => pointInPolygon(p, poly))) : [];
 			lassoSel = hits.length ? { pageIdx: pi, strokes: hits } : null;
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (drawing.lassoMove) {
 			if (drawing.dx || drawing.dy) {
-				undoStack.push({ kind: "lassoMove", strokes: drawing.strokes, dx: drawing.dx, dy: drawing.dy, pageIdx: pi }); redoStack = [];
+				pushUndo({ kind: "lassoMove", strokes: drawing.strokes, dx: drawing.dx, dy: drawing.dy, pageIdx: pi });
 				scheduleSave(); renderThumb(pi);
 			}
 			drawing = null; redrawPage(pi); updateChrome(); return;
@@ -1304,7 +1138,7 @@ export const HEFT = (() => {
 		if (drawing.imgMove || drawing.imgResize) {
 			const { im, orig, moved } = drawing;
 			if (moved && (im.x !== orig.x || im.y !== orig.y || im.w !== orig.w)) {
-				undoStack.push({ kind: "imgMod", im, pageIdx: pi, prev: orig }); redoStack = [];
+				pushUndo({ kind: "imgMod", im, pageIdx: pi, prev: orig });
 				scheduleSave(); renderThumb(pi);
 			}
 			drawing = null;
@@ -1313,23 +1147,19 @@ export const HEFT = (() => {
 		}
 		if (drawing.erasing) {
 			if (drawing.removed.length) {
-				undoStack.push({ kind: "erase", removed: drawing.removed, pageIdx: pi });
-				redoStack = [];
+				pushUndo({ kind: "erase", removed: drawing.removed, pageIdx: pi });
 				scheduleSave();
 				renderThumb(pi);
 			}
 		} else {
-			// Nur serialisierbare Felder speichern — nie Canvas/DOM am Stroke hängen.
-			// Form-Snap: wurde der Strich per Halten begradigt, als saubere Form sichern.
+
 			const stroke = drawing.snapped
 				? { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
 				: { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
 			pg.strokes.push(stroke);
-			undoStack.push({ kind: "add", stroke, pageIdx: pi });
-			redoStack = [];
+			pushUndo({ kind: "add", stroke, pageIdx: pi });
 			scheduleSave();
-			// Tinte „trocknet": nur den neuen Strich in Basis + Kachel nachzeichnen und
-			// die Wet-Ink-Ebene leeren — kein Voll-Rerender, kein Lag.
+
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
 			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndexV2(pi);
@@ -1338,12 +1168,6 @@ export const HEFT = (() => {
 		updateChrome();
 	}
 
-	// ---------- Undo / Redo (Striche, Bilder, Texte — mit pageIdx) ----------
-	// EINE gemeinsame Implementierung statt zweier Spiegel-Funktionen: Jede Aktion
-	// ist entweder ein Wertetausch (imgMod/txtEdit — selbstinvers) oder ein
-	// Hinzufügen/Entfernen von Objekten, das beim Redo in Originalrichtung und beim
-	// Undo umgekehrt läuft. Vorher musste jeder Aktions-Typ in undo() UND redo()
-	// separat gepflegt werden — eine klassische Quelle für Vergiss-Bugs.
 	function applyHistory(fromStack, toStack, isRedo) {
 		const a = fromStack.pop(); if (!a || !doc) return;
 		const pi = a.pageIdx != null ? a.pageIdx : idx;
@@ -1352,7 +1176,7 @@ export const HEFT = (() => {
 		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
 		else {
-			// [Seiten-Liste, betroffene Objekte, fügt-Redo-hinzu?]
+
 			const spec = {
 				add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false], lassoDel: ["strokes", a.strokes, false],
 				lassoDup: ["strokes", a.strokes, true],
@@ -1369,12 +1193,11 @@ export const HEFT = (() => {
 			}
 		}
 		toStack.push(a);
-		redrawPage(pi); scheduleSave(); renderThumb(pi); updateChrome();
+		refresh(pi);
 	}
 	function undo() { applyHistory(undoStack, redoStack, false); }
 	function redo() { applyHistory(redoStack, undoStack, true); }
 
-	// ---------- Taskbar v7: feste Haupt-Pill + verschiebbares Options-Tray ----------
 	function sizeLine(sz) {
 		const h = sz[1] <= 2 ? 1.5 : sz[1] <= 4 ? 3 : 5;
 		return '<button type="button" class="heft-size' + (size === sz[1] ? " active" : "") +
@@ -1382,29 +1205,29 @@ export const HEFT = (() => {
 			'<i style="height:' + h + 'px"></i></button>';
 	}
 	function trayStyle() {
-		if (!trayPos) return ""; // CSS: direkt unter der festen Haupt-Pill
+		if (!trayPos) return "";
 		return ' style="left:' + Math.round(trayPos.x) + 'px;top:' + Math.round(trayPos.y) + 'px;transform:none"';
 	}
-	// Platzsparmodus der Werkzeugleiste (17. Juli): Zustand überlebt Rerenders.
+
 	let chromeMin = false;
+	const icon = (p) => '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
 	function toolbarHtml() {
 		const curPaper = page() ? page().paper : "lined";
 		const paperMeta = PAPERS.find((p) => p[0] === curPaper) || PAPERS[0];
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
-		// SVG-Icons wie im freigegebenen Toolbar-Redesign statt Text-Glyphen
-		const svgPen = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5a2.6 2.6 0 0 1 3.7 3.7L7.7 20.2 2.5 21.5l1.3-5.2z"/><path d="M14.5 6l3.5 3.5"/></svg>';
-		const svgMarker = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5l4 4L9.5 18.5h-4v-4z"/><path d="M4 21.5h16"/></svg>';
-		const svgEraser = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9l-4.3-4.3a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L13.5 18"/><path d="M8.5 9.5l6 6"/></svg>';
-		const svgLasso = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="9.5" rx="7.5" ry="5.5" stroke-dasharray="3.2 3"/><path d="M7.5 14.5c-2.2 1.8-.6 4.3 1.5 4.1 2-.2 1.2 2-.8 2.9"/></svg>';
-		const svgLaser = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4"/><path d="M12 4.2v2.2M12 17.6v2.2M4.2 12h2.2M17.6 12h2.2M6.5 6.5l1.6 1.6M15.9 15.9l1.6 1.6M17.5 6.5l-1.6 1.6M8.1 15.9l-1.6 1.6"/></svg>';
-		const svgImage = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l5-5 3.5 3.5 2.5-2.5 4 4"/></svg>';
-		const svgUndo = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5L4 9.5 8.5 14"/><path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/></svg>';
-		const svgRedo = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 5L20 9.5 15.5 14"/><path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/></svg>';
+
+		const svgPen = icon('<path d="M17 3.5a2.6 2.6 0 0 1 3.7 3.7L7.7 20.2 2.5 21.5l1.3-5.2z"/><path d="M14.5 6l3.5 3.5"/>');
+		const svgMarker = icon('<path d="M14.5 5.5l4 4L9.5 18.5h-4v-4z"/><path d="M4 21.5h16"/>');
+		const svgEraser = icon('<path d="M20 20H9l-4.3-4.3a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L13.5 18"/><path d="M8.5 9.5l6 6"/>');
+		const svgLasso = icon('<ellipse cx="12" cy="9.5" rx="7.5" ry="5.5" stroke-dasharray="3.2 3"/><path d="M7.5 14.5c-2.2 1.8-.6 4.3 1.5 4.1 2-.2 1.2 2-.8 2.9"/>');
+		const svgLaser = icon('<circle cx="12" cy="12" r="2.4"/><path d="M12 4.2v2.2M12 17.6v2.2M4.2 12h2.2M17.6 12h2.2M6.5 6.5l1.6 1.6M15.9 15.9l1.6 1.6M17.5 6.5l-1.6 1.6M8.1 15.9l-1.6 1.6"/>');
+		const svgImage = icon('<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l5-5 3.5 3.5 2.5-2.5 4 4"/>');
+		const svgUndo = icon('<path d="M8.5 5L4 9.5 8.5 14"/><path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/>');
+		const svgRedo = icon('<path d="M15.5 5L20 9.5 15.5 14"/><path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/>');
 		const writeIcon = tool === "marker" ? svgMarker : svgPen;
-		// Platzsparmodus: eingeklappt schrumpft die Leiste auf EINEN Knopf mit
-		// Farb-Indikator — maximale Schreibfläche. Ein Tipp klappt wieder aus.
+
 		if (chromeMin) {
 			return '<div class="heft-chrome heft-chrome-min" aria-hidden="false">' +
 				'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
@@ -1416,7 +1239,7 @@ export const HEFT = (() => {
 				'</div>' +
 			'</div>';
 		}
-		// Hauptleiste bleibt fest. Nur das separate Options-Tray erhält einen Drag-Griff.
+
 		let tray = "";
 		if (showWrite) {
 			tray =
@@ -1436,10 +1259,10 @@ export const HEFT = (() => {
 						paperMeta[2] + '">' + paperMeta[1] + '</button>' +
 					'<button type="button" data-heonlypen="1" class="heft-opt' + (onlyPen ? " active" : "") +
 						'" title="' + (onlyPen ? "Nur Stift zeichnet" : "Finger dürfen zeichnen") + '">' +
-						(onlyPen ? "🖊" : "✋") + '</button>' +
+						(onlyPen ? "���" : "✋") + '</button>' +
 				'</div>';
 		} else if (showEraser) {
-			// 🩹 QoL-Fix: eigene Radierer-Größen — die Stift-Stärken hier hatten NIE eine Wirkung (Radius war fest 14)
+
 			tray =
 				'<div class="heft-tray" data-hetray="1" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
@@ -1447,7 +1270,7 @@ export const HEFT = (() => {
 						'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
 				'</div>';
 		}
-		// Overlay: kein Banner. Die Haupt-Pill sitzt fest, das Tray wird separat gerendert.
+
 		return '<div class="heft-chrome" aria-hidden="false">' +
 			'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
 				'" data-hepagesmenu="1" title="Seiten">▤' +
@@ -1462,8 +1285,7 @@ export const HEFT = (() => {
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
 						'" title="Lasso — Striche auswählen">' + svgLasso + '</button>' +
-					// Formen-Werkzeug entfernt: Strich am Ende einfach kurz gedrückt
-					// halten → wird automatisch zu Linie/Kreis/Ellipse/Rechteck (Form-Snap).
+
 					'<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
 						'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
@@ -1486,17 +1308,13 @@ export const HEFT = (() => {
 			'</div>' +
 		'</div>';
 	}
-	function viewHtml() {
-		const pages = doc.pages.map((_, i) =>
-			'<div class="heft-page-slot" data-hepage="' + i + '">' +
-				'<canvas class="heft-canvas"></canvas>' +
-				'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
-			'</div>'
-		).join('');
-		// Chrome fliegt ÜBER dem Scroll — kein Platzverlust im Layout
-		return '<div class="heft-scroll"><div class="heft-pages">' + pages + addPageGhostHtml() + '</div></div>' + toolbarHtml();
-	}
-	// Nur das Options-Tray ist verschiebbar. Die Hauptleiste bleibt bewusst fix.
+	const pagesHtml = () => '<div class="heft-pages">' + doc.pages.map((_, i) =>
+		'<div class="heft-page-slot" data-hepage="' + i + '">' +
+			'<canvas class="heft-canvas"></canvas>' +
+			'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
+		'</div>').join('') + addPageGhostHtml() + '</div>';
+	const viewHtml = () => '<div class="heft-scroll">' + pagesHtml() + '</div>' + toolbarHtml();
+
 	function onTrayPointerDown(e) {
 		const grip = e.target.closest("[data-hetraydrag]");
 		const tray = e.target.closest("[data-hetray]");
@@ -1509,7 +1327,7 @@ export const HEFT = (() => {
 		tray.style.top = Math.round(trayPos.y) + "px";
 		tray.style.transform = "none";
 		tray.classList.add("is-dragging");
-		try { grip.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+		try { grip.setPointerCapture(e.pointerId); } catch {  }
 	}
 	function onTrayPointerMove(e) {
 		if (!trayDrag || !host || e.pointerId !== trayDrag.pid) return;
@@ -1523,12 +1341,11 @@ export const HEFT = (() => {
 	}
 	function onTrayPointerUp(e) {
 		if (!trayDrag || e.pointerId !== trayDrag.pid) return;
-		try { e.target.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+		try { e.target.releasePointerCapture(e.pointerId); } catch {  }
 		trayDrag.tray.classList.remove("is-dragging");
 		trayDrag = null;
 	}
 
-	// ---------- Toolbar-Popups (Seiten / Bilder / +) ----------
 	function closePop() {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
@@ -1546,7 +1363,7 @@ export const HEFT = (() => {
 		pop.dataset.kind = kind;
 		pop.innerHTML = html;
 		host.appendChild(pop);
-		// Unter dem Auslöser positionieren, am Host-Rand ausrichten
+
 		const hr = host.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
 		pop.style.top = Math.round(ar.bottom - hr.top + 6) + "px";
 		let left = Math.round(ar.left - hr.left);
@@ -1569,8 +1386,7 @@ export const HEFT = (() => {
 					(doc.pages.length > 1 ? '<button type="button" class="heft-pop-del" data-hedelpage="' + i + '" title="Seite löschen">🗑</button>' : '') +
 				'</div>').join('') + '</div>';
 	}
-	// Erst-Rendern aller Popup-Thumbnails läuft über renderThumb — vorher waren
-	// das zwei fast identische Render-Schleifen.
+
 	function paintPopThumbs() {
 		if (doc) doc.pages.forEach((_, i) => renderThumb(i));
 	}
@@ -1608,10 +1424,7 @@ export const HEFT = (() => {
 			'<button type="button" class="heft-pop-row" data-heimport="1">⬳ Importieren</button>' +
 			'<button type="button" class="heft-pop-row" data-hescan="1">📷 Dateien scannen</button>';
 	}
-	// ✍️ Inline-Text-Editor (18. Juli 2026): Texte werden DIREKT auf der Seite
-	// geschrieben und bearbeitet — kein prompt()-Popup mehr. Doppeltipp mit dem
-	// Auswahl-Werkzeug auf eine Text-Box bearbeitet sie, Doppeltipp auf freie
-	// Fläche legt dort eine neue Box an (in der aktuellen Stiftfarbe).
+
 	function openTextEditor(pi, px, py, txt) {
 		closeTextEditor(true);
 		const slot = host && host.querySelectorAll(".heft-page-slot")[pi];
@@ -1632,7 +1445,7 @@ export const HEFT = (() => {
 		ta.style.color = txt ? (txt.color || "#1c1c1e") : color;
 		slot.appendChild(ta);
 		inlineEd = { ta, pi, txt, x: px, y: py };
-		if (txt) { txt.hidden = true; redrawPage(pi); } // Original ausblenden, sonst doppelt sichtbar
+		if (txt) { txt.hidden = true; redrawPage(pi); }
 		const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
 		fit();
 		ta.addEventListener("input", fit);
@@ -1656,17 +1469,17 @@ export const HEFT = (() => {
 		if (!pg) return;
 		const body = val.replace(/\s+$/, "");
 		if (commit && txt && body.trim() && body !== txt.text) {
-			undoStack.push({ kind: "txtEdit", txt, prev: txt.text, pageIdx: pi }); redoStack = [];
+			pushUndo({ kind: "txtEdit", txt, prev: txt.text, pageIdx: pi });
 			txt.text = body; scheduleSave();
 		} else if (commit && txt && !body.trim()) {
 			pg.texts = textsOf(pg).filter((t2) => t2 !== txt);
-			undoStack.push({ kind: "txtDel", txt, pageIdx: pi }); redoStack = [];
+			pushUndo({ kind: "txtDel", txt, pageIdx: pi });
 			if (sel && sel.txtId === txt.id) sel = null;
 			scheduleSave();
 		} else if (commit && !txt && body.trim()) {
 			const t = { id: U.uid(), text: body, x: px, y: py, w: Math.max(240, Math.min(420, PAGE_W - px - 40)), h: 60, size: 30, color };
 			textsOf(pg).push(t);
-			undoStack.push({ kind: "txtAdd", txt: t, pageIdx: pi }); redoStack = [];
+			pushUndo({ kind: "txtAdd", txt: t, pageIdx: pi });
 			sel = { pageIdx: pi, txtId: t.id, tapAt: 0 };
 			scheduleSave();
 		}
@@ -1681,8 +1494,7 @@ export const HEFT = (() => {
 		updateLassoBar();
 		refreshPagesPop();
 	}
-	// 🪢 Lasso-Aktionsleiste: auf dem iPad gibt es keine Entf-Taste — nach einer
-	// Auswahl erscheint darum eine schwebende Leiste mit Löschen/Aufheben.
+
 	function updateLassoBar() {
 		if (!host) return;
 		let bar = host.querySelector(".heft-lasso-bar");
@@ -1698,15 +1510,14 @@ export const HEFT = (() => {
 		if (!lassoSel || !doc) return;
 		const pg = doc.pages[lassoSel.pageIdx];
 		if (!pg) return;
-		// Kopien leicht versetzt einfügen und direkt als neue Auswahl übernehmen
+
 		const copies = lassoSel.strokes.map((s) => {
 			const c = JSON.parse(JSON.stringify(s));
-			(c.pts || []).forEach((p) => { p[0] += 28; p[1] += 28; });
-			if (c.shape) { const sh = c.shape; ["x1", "x2", "cx"].forEach((k2) => { if (sh[k2] != null) sh[k2] += 28; }); ["y1", "y2", "cy"].forEach((k2) => { if (sh[k2] != null) sh[k2] += 28; }); }
+			translateStroke(c, 28, 28);
 			return c;
 		});
 		pg.strokes.push(...copies);
-		undoStack.push({ kind: "lassoDup", strokes: copies, pageIdx: lassoSel.pageIdx }); redoStack = [];
+		pushUndo({ kind: "lassoDup", strokes: copies, pageIdx: lassoSel.pageIdx });
 		lassoSel = { pageIdx: lassoSel.pageIdx, strokes: copies };
 		scheduleSave(); redrawPage(lassoSel.pageIdx); renderThumb(lassoSel.pageIdx); updateChrome();
 	}
@@ -1716,9 +1527,9 @@ export const HEFT = (() => {
 		if (!pg) { lassoSel = null; updateChrome(); return; }
 		const strokes = lassoSel.strokes.slice();
 		pg.strokes = pg.strokes.filter((s) => !strokes.includes(s));
-		undoStack.push({ kind: "lassoDel", strokes, pageIdx: lassoSel.pageIdx }); redoStack = [];
+		pushUndo({ kind: "lassoDel", strokes, pageIdx: lassoSel.pageIdx });
 		const lpi = lassoSel.pageIdx; lassoSel = null;
-		scheduleSave(); redrawPage(lpi); renderThumb(lpi); updateChrome();
+		refresh(lpi);
 	}
 	function bindTrayDrag() {
 		const tray = host && host.querySelector("[data-hetray]");
@@ -1729,19 +1540,21 @@ export const HEFT = (() => {
 		tray.addEventListener("pointerup", onTrayPointerUp);
 		tray.addEventListener("pointercancel", onTrayPointerUp);
 	}
-	// Thumbnail im Seiten-Popup aktualisieren (auch fürs Erst-Rendern genutzt)
-	function renderThumb(i) {
-		if (!pop || pop.dataset.kind !== "pages" || !doc || !doc.pages[i]) return;
-		const cv = pop.querySelectorAll(".heft-pop-thumb canvas")[i];
-		if (!cv) return;
+
+	// Seite in ein vorhandenes Canvas einpassen (Breite vorgegeben, Höhe folgt A4)
+	function paintInto(cv, pg, pi) {
 		const k = cv.width / PAGE_W;
 		cv.height = Math.round(PAGE_H * k); // setzt die Höhe UND leert das Canvas
 		const x = cv.getContext("2d");
 		x.setTransform(k, 0, 0, k, 0, 0);
-		renderPageTo(x, doc.pages[i], i);
+		renderPageTo(x, pg, pi);
+	}
+	function renderThumb(i) {
+		if (!pop || pop.dataset.kind !== "pages" || !doc || !doc.pages[i]) return;
+		const cv = pop.querySelectorAll(".heft-pop-thumb canvas")[i];
+		if (cv) paintInto(cv, doc.pages[i], i);
 	}
 
-	// ---------- Seiten-Operationen ----------
 	function insertIndex() {
 		if (!doc) return 0;
 		return insertPos === "before" ? idx : insertPos === "last" ? doc.pages.length : idx + 1;
@@ -1749,8 +1562,7 @@ export const HEFT = (() => {
 	function go(i) {
 		if (!doc) return;
 		idx = Math.max(0, Math.min(doc.pages.length - 1, i));
-		// 🩹 QoL-Fix: Blättern löscht den Undo-Verlauf NICHT mehr — jede Aktion
-		// kennt ihre Seite (pageIdx), Undo funktioniert seitenübergreifend.
+
 		drawing = null;
 		const slot = host && host.querySelectorAll(".heft-page-slot")[idx];
 		if (slot) slot.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1772,18 +1584,16 @@ export const HEFT = (() => {
 		scheduleSave(); rebuildScroll(); go(Math.min(i, doc.pages.length - 1));
 	}
 
-	// ---------- Bilder einfügen (Datei / Kamera) ----------
-	function pickImage(capture, cb) {
-		const inp = document.createElement("input");
-		inp.type = "file";
-		inp.accept = "image/*";
+	// EIN Datei-Dialog für Bilder, Import und Scanner (vorher 3x fast identisch)
+	function filePick({ accept = "image/*", multiple = false, capture = false } = {}, cb) {
+		const inp = Object.assign(document.createElement("input"), { type: "file", accept, multiple });
 		if (capture) inp.setAttribute("capture", "environment"); // öffnet auf Tablets/Handys direkt die Kamera
-		inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) cb(f); };
+		inp.onchange = () => { const files = Array.from(inp.files || []); if (files.length) cb(multiple ? files : files[0]); };
 		inp.click();
 	}
+	const pickImage = (capture, cb) => filePick({ capture }, cb);
 	function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) {
-		// Datei → verkleinertes Data-URL. Scanner übergibt PNG, damit das Original
-		// vor der finalen Aufbereitung nicht bereits verlustbehaftet komprimiert ist.
+
 		return new Promise((resolve, reject) => {
 			const r = new FileReader();
 			r.onerror = () => reject(new Error("Datei lesen fehlgeschlagen"));
@@ -1796,7 +1606,7 @@ export const HEFT = (() => {
 					const c = document.createElement("canvas");
 					c.width = w; c.height = h;
 					const x = c.getContext("2d");
-					x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); // PNG-Transparenz → weiß
+					x.fillStyle = "#fff"; x.fillRect(0, 0, w, h);
 					x.drawImage(img, 0, 0, w, h);
 					resolve({ src: mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL(mime, quality), w, h });
 				};
@@ -1813,18 +1623,18 @@ export const HEFT = (() => {
 			const k = Math.min((PAGE_W * 0.7) / im.w, (PAGE_H * 0.7) / im.h, 1);
 			const img = { id: U.uid(), src: im.src, x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k };
 			imagesOf(pg).push(img);
-			undoStack.push({ kind: "imgAdd", img, pageIdx: idx }); redoStack = [];
+			pushUndo({ kind: "imgAdd", img, pageIdx: idx });
 			sel = { pageIdx: idx, imgId: img.id };
-			tool = "select"; // direkt verschieben/skalieren können
-			expanded = false; // Auswahl braucht kein Expand-Panel
-			scheduleSave(); redrawPage(idx); renderThumb(idx); updateChrome();
+			tool = "select";
+			expanded = false;
+			refresh(idx);
 		} catch (e) {
 			console.warn("Heft: Bild einfügen fehlgeschlagen", e);
 			if (U.toast) U.toast("Bild konnte nicht eingefügt werden", "error");
 		}
 	}
 	function imagePage(im, paper, bleed) {
-		// Neue Seite mit Bild: bleed=true → randlos (Scans/PDF-Seiten), sonst mit Rand
+
 		const pg = newPage(paper || "blank");
 		const pad = bleed ? 0 : 40;
 		const k = Math.min((PAGE_W - pad * 2) / im.w, (PAGE_H - pad * 2) / im.h);
@@ -1838,15 +1648,8 @@ export const HEFT = (() => {
 		} catch (e) { console.warn("Heft: Bild-Seite fehlgeschlagen", e); }
 	}
 
-	// ---------- Importieren (Bilder + PDF via pdf.js) ----------
 	function importFiles() {
-		const inp = document.createElement("input");
-		inp.type = "file";
-		inp.accept = "image/*,application/pdf";
-		inp.multiple = true;
-		inp.onchange = async () => {
-			const files = Array.from(inp.files || []);
-			if (!files.length) return;
+		filePick({ accept: "image/*,application/pdf", multiple: true }, async (files) => {
 			let at = insertIndex();
 			for (const f of files) {
 				try {
@@ -1861,8 +1664,7 @@ export const HEFT = (() => {
 				}
 			}
 			scheduleSave(); rebuildScroll(); go(Math.max(0, at - 1));
-		};
-		inp.click();
+		});
 	}
 	async function importPdf(f, at) {
 		const lib = window.pdfjsLib;
@@ -1874,27 +1676,20 @@ export const HEFT = (() => {
 		const pdf = await lib.getDocument({ data: buf }).promise;
 		for (let i = 1; i <= pdf.numPages; i++) {
 			const p = await pdf.getPage(i);
-			// PDF-Seiten mit 3× statt 2× rasterisieren: beim Zoom deutlich schärfer,
-			// ohne die Speicher- und Importkosten eines 4×-Imports zu verursachen.
+
 			const vp = p.getViewport({ scale: 3 });
 			const c = document.createElement("canvas");
 			c.width = Math.round(vp.width); c.height = Math.round(vp.height);
 			await p.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
-			// Höhere JPEG-Qualität bewahrt feine Schrift und Formeln; JPEG bleibt für
-			// mehrseitige Skripte wesentlich kompakter und schneller als PNG.
+
 			doc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
 			at++;
 		}
 		return at;
 	}
 
-	// ---------- Dateien scannen: Dokument-Scanner v3 ----------
-	// Der Bildverarbeitungs-Kern (Blatt-Erkennung, Entzerrung, Filter, Qualität)
-	// wurde am 15. Juli 2026 UNVERÄNDERT nach heft-scan.js ausgelagert — hier
-	// bleiben nur Kamera-/Overlay-UI und der Scan-Ablauf.
 	const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot } = SCANCORE;
 
-	// ---------- Scanner-Overlay: Kamera, Live-Prüfung, Aufnahme ----------
 	async function openScanner() {
 		if (scanUI) return;
 		const wrap = document.createElement("div");
@@ -1917,11 +1712,11 @@ export const HEFT = (() => {
 			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
 		document.body.appendChild(wrap);
 		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
-		const ui = scanUI; // Besitzer dieser asynchronen Kamera-Sitzung
+		const ui = scanUI;
 		wrap.addEventListener("click", onScanClick);
 		try {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("getUserMedia fehlt");
-			// Zuerst „environment“, sonst irgendeine Kamera — verhindert OverconstrainedError auf Desktop
+
 			let stream = null;
 			try {
 				stream = await navigator.mediaDevices.getUserMedia({
@@ -1929,27 +1724,24 @@ export const HEFT = (() => {
 					audio: false,
 				});
 			} catch (cameraError) {
-				// Nur bei einer nicht erfüllbaren Kamera-/Constraint-Wahl auf die allgemeine
-				// Kamera ausweichen. Bei verweigerter Berechtigung würde ein zweiter
-				// getUserMedia-Aufruf sonst erneut nachfragen bzw. den Fallback verzögern.
+
 				const name = cameraError && cameraError.name;
 				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw cameraError;
 				stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
 			}
-			// Während await könnte geschlossen oder ein neuer Scanner geöffnet worden sein.
-			if (scanUI !== ui || !wrap.isConnected) { try { stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ } return; }
+
+			if (scanUI !== ui || !wrap.isConnected) { try { stream.getTracks().forEach((t) => t.stop()); } catch {  } return; }
 			ui.stream = stream;
 			const video = wrap.querySelector("video");
 			video.srcObject = stream;
 			video.muted = true;
 			video.setAttribute("playsinline", "");
-			// iOS/Safari: autoplay allein reicht oft nicht — sonst bleibt videoWidth=0 und der Auslöser tut nichts
+
 			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
 			startLiveQuality(video, ui);
 			const track = stream.getVideoTracks && stream.getVideoTracks()[0];
 			if (track) {
-				// Fokus/Belichtung nur anfordern, wenn der Browser und genau diese Kamera
-				// den Modus melden. Nicht unterstützte Geräte bleiben unverändert.
+
 				try {
 					const caps = track.getCapabilities ? track.getCapabilities() : null;
 					const advanced = {};
@@ -1961,7 +1753,7 @@ export const HEFT = (() => {
 			}
 			video.addEventListener("error", () => showCameraStopped(ui), { once: true });
 		} catch (e) {
-			// Keine Kamera / keine Freigabe → Fallback: Fotos auswählen (mit capture-Hint)
+
 			console.warn("Heft: Kamera nicht verfügbar", e);
 			if (scanUI === ui) {
 				wrap.querySelector(".heft-scan-stage").innerHTML =
@@ -1975,7 +1767,7 @@ export const HEFT = (() => {
 	function showCameraStopped(owner) {
 		if (!owner || scanUI !== owner || !owner.wrap.isConnected) return;
 		stopLiveQuality();
-		try { if (owner.stream) owner.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+		try { if (owner.stream) owner.stream.getTracks().forEach((t) => t.stop()); } catch {  }
 		owner.stream = null;
 		const stage = owner.wrap.querySelector(".heft-scan-stage");
 		if (stage) stage.innerHTML = '<div class="heft-scan-nocam"><p>Kameraverbindung wurde unterbrochen.</p><button type="button" data-hescanpick="1">Fotos auswählen…</button><small>Bereits aufgenommene Scans bleiben erhalten.</small></div>';
@@ -1986,13 +1778,11 @@ export const HEFT = (() => {
 	function closeScanner() {
 		if (!scanUI) return;
 		stopLiveQuality();
-		try { if (scanUI.stream) scanUI.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-		try { scanUI.wrap.remove(); } catch { /* ignore */ }
+		try { if (scanUI.stream) scanUI.stream.getTracks().forEach((t) => t.stop()); } catch {  }
+		try { scanUI.wrap.remove(); } catch {  }
 		scanUI = null;
 	}
-	// Live-Prüfung vor dem Auslösen: kleine Vorschau → Helligkeit/Schärfe/Kontrast +
-	// ECHTE Dokumenterkennung. Der grüne Rahmen zeigt damit exakt den späteren
-	// Zuschnitt (v2 zeigte nur eine grobe Bounding-Box, die der Aufnahme oft widersprach).
+
 	function quadDelta(a, b) {
 		if (!a || !b || a.length !== 4 || b.length !== 4) return Infinity;
 		let sum = 0;
@@ -2003,23 +1793,21 @@ export const HEFT = (() => {
 		if (!info.found) { owner.liveHistory = []; return info; }
 		const last = owner.liveHistory && owner.liveHistory[owner.liveHistory.length - 1];
 		const jump = last ? quadDelta(info.quad, last.quad) : 0;
-		// Bei einem echten Bildwechsel nicht über alte Ecken mitteln.
+
 		if (jump > Math.max(info.sw, info.sh) * 0.14) owner.liveHistory = [];
 		const entry = { quad: info.quad.map((p) => p.slice()), mean: info.mean, sharp: info.sharp, contrast: info.contrast };
 		(owner.liveHistory || (owner.liveHistory = [])).push(entry);
 		if (owner.liveHistory.length > 5) owner.liveHistory.shift();
 		const hist = owner.liveHistory;
 		const median = (values) => { const s = values.slice().sort((a, b) => a - b); return s[(s.length / 2) | 0]; };
-		// Median statt Mittelwert: ein einzelner falscher Eckentreffer zieht den Rahmen
-		// nicht mehr sichtbar weg. Stabilität wird über das ganze Fenster gemessen.
+
 		const quad = info.quad.map((_, i) => [median(hist.map((f) => f.quad[i][0])), median(hist.map((f) => f.quad[i][1]))]);
 		let spread = 0;
 		for (const frame of hist) spread = Math.max(spread, quadDelta(frame.quad, quad));
 		return { ...info, quad, jitter: spread, stable: hist.length >= 3 && spread < Math.max(info.sw, info.sh) * 0.035 };
 	}
 	function liveQualityFrame(video) {
-		// 300 px bleiben leicht genug für die 340-ms-Prüfung, liefern aber deutlich
-		// präzisere kleine bzw. schräge Ecken als die bisherige 240-px-Analyse.
+
 		const sw = 300, sh = Math.max(150, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
 		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
 		const x = c.getContext("2d", { willReadFrequently: true });
@@ -2039,7 +1827,7 @@ export const HEFT = (() => {
 		const mean = sum / count, contrast = Math.sqrt(Math.max(0, sum2 / count - mean * mean));
 		const sharp = lap / Math.max(1, ((sw - 2) * (sh - 2)) / 4);
 		const quad = detectQuad(c, sw, sh);
-		const found = quadArea(quad) < sw * sh * 0.96; // Vollbild-Fallback = nichts erkannt
+		const found = quadArea(quad) < sw * sh * 0.96;
 		const area = quadArea(quad) / Math.max(1, sw * sh);
 		const margin = found ? Math.min(...quad.map((p) => Math.min(p[0], p[1], sw - 1 - p[0], sh - 1 - p[1]))) : 0;
 		return { quad, found, mean, contrast, sharp, area, margin, sw, sh };
@@ -2050,8 +1838,7 @@ export const HEFT = (() => {
 		const guide = scanUI.wrap.querySelector(".heft-scan-guide polygon");
 		const label = scanUI.wrap.querySelector("[data-hescanquality]");
 		if (!stage || !guide || !label || !video) return;
-		// Das Video kann innerhalb der Bühne Letterboxing haben. Der Rahmen wird
-		// deshalb auf das reale Video-Rechteck statt auf die gesamte Bühne gemappt.
+
 		const sr = stage.getBoundingClientRect(), vr = video.getBoundingClientRect();
 		const left = (vr.left - sr.left) / Math.max(1, sr.width) * 100;
 		const top = (vr.top - sr.top) / Math.max(1, sr.height) * 100;
@@ -2086,17 +1873,14 @@ export const HEFT = (() => {
 				const ready = setLiveGuide(info, video);
 				if (!ready) {
 					owner.liveStable = 0;
-					// Nach einer Aufnahme erst neu scharfstellen, wenn das Dokument wirklich
-					// mehrere Frames verschwunden ist. Ein kurzer Fokus-/Lichtfehler darf nicht
-					// dieselbe ruhig liegende Seite doppelt erfassen.
+
 					owner.liveMissing = info.found ? 0 : owner.liveMissing + 1;
 					if (owner.liveMissing >= 3) owner.autoArmed = true;
 					return;
 				}
 				owner.liveMissing = 0;
 				owner.liveStable++;
-				// Fünf stabile Prüfrunden (~1,7 s) plus geglättete Ecken: Auto-Scan
-				// löst konservativ aus und nie auf einem einzelnen guten Zufallsframe.
+
 				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 5 && Date.now() > owner.autoCooldown) {
 					owner.autoArmed = false;
 					owner.liveStable = 0;
@@ -2156,7 +1940,7 @@ export const HEFT = (() => {
 		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
 		else if (d.hescaneditback) closeEdit();
 		else if (d.hescanmode) {
-			// Filter sofort anwenden (nicht erst bei Übernehmen) — sonst wirken die Chips „tot“
+
 			if (scanUI.edit) {
 				scanUI.edit.mode = d.hescanmode;
 				scanUI.edit.dirty = true;
@@ -2181,18 +1965,15 @@ export const HEFT = (() => {
 	async function scanCapture(isAuto = false) {
 		const owner = scanUI;
 		if (!owner || owner.busy) return;
-		// Ein manueller Scan zählt als Verarbeitung der aktuellen Seite. Auto darf
-		// dieselbe ruhige Ansicht danach nicht noch einmal erfassen.
+
 		if (!isAuto) { owner.autoArmed = false; owner.liveStable = 0; owner.autoCooldown = Date.now() + 1800; }
 		const video = owner.wrap.querySelector("video");
 		if (!video) return;
-		// Sperre SOFORT setzen — nicht erst nach dem await. Sonst konnte ein zweiter
-		// Tastendruck oder der Auto-Scan-Timer während des video.play()-Awaits eine
-		// zweite, parallele Aufnahme auslösen (owner.busy war bis dahin noch false).
+
 		setScanBusy(true, "Kamera wird vorbereitet…");
-		// Video noch nicht bereit (häufig auf iOS, wenn play() noch nicht durch ist)
+
 		if (!video.videoWidth || !video.videoHeight) {
-			try { await video.play(); } catch { /* ignore */ }
+			try { await video.play(); } catch {  }
 			if (scanUI !== owner) return;
 			if (!video.videoWidth) {
 				setScanBusy(false);
@@ -2202,17 +1983,14 @@ export const HEFT = (() => {
 		}
 		setScanBusy(true, "Aufnahme wird aufbereitet…");
 		try {
-			// Bei sehr großen Kamera-Streams begrenzen: spart Speicher ohne sichtbaren Textverlust.
-			// 2600 entspricht dem Quelllimit der Entzerrung: keine unnötige Vorab-
-			// Reduktion mehr, aber weiterhin ein sicherer Speicherdeckel auf iPadOS.
+
 			const cap = 2600, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
 			const c = document.createElement("canvas");
 			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
 			const captureCtx = c.getContext("2d");
 			captureCtx.imageSmoothingEnabled = true; captureCtx.imageSmoothingQuality = "high";
 			captureCtx.drawImage(video, 0, 0, c.width, c.height);
-			// PNG nur als kurzlebender Rohpuffer; erst processShot exportiert einmal
-			// mit hoher JPEG-Qualität. Das verhindert doppelte Kompressionsartefakte.
+
 			await addRawScan(c.toDataURL("image/png"), c.width, c.height, owner);
 		} catch (e) {
 			console.warn("Heft: Scan fehlgeschlagen", e);
@@ -2220,13 +1998,12 @@ export const HEFT = (() => {
 		}
 		if (scanUI === owner) setScanBusy(false);
 	}
-	// Rohbild → Dokument erkennen → entzerren → aufbereiten → in den Scan-Streifen
+
 	async function addRawScan(src, w, h, owner) {
 		const img = await loadImg(src);
-		// Immer die echten Bildmaße nutzen (sonst stimmen Quad/Warp nicht)
+
 		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
-		// Auto-Zuschnitt bleibt aktiv. detectQuad() gibt bei unsicherer Erkennung
-		// das vollständige Bild zurück, statt einen fragwürdigen Zuschnitt zu erzwingen.
+
 		const quad = detectQuad(img, iw, ih);
 		const sh = { src, w: iw, h: ih, quad, autoCrop: quadArea(quad) < iw * ih * 0.96, mode: "color", rot: 0, out: null, img };
 		await processShot(sh);
@@ -2238,7 +2015,7 @@ export const HEFT = (() => {
 		if (!scanUI) return;
 		const strip = scanUI.wrap.querySelector(".heft-scan-shots");
 		if (!strip) return;
-		// out kann null sein, wenn die Aufbereitung fehlschlug — dann Rohbild zeigen
+
 		strip.innerHTML = scanUI.shots.map((sh, i) => {
 			const src = (sh.out && sh.out.dataUrl) || sh.src;
 			const quality = sh.out && sh.out.quality;
@@ -2256,13 +2033,9 @@ export const HEFT = (() => {
 		if (heftBtn) { heftBtn.disabled = !n; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
 	}
 	function scanPickFiles() {
-		const inp = document.createElement("input");
-		inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
-		inp.setAttribute("capture", "environment");
-		inp.onchange = async () => {
+		filePick({ multiple: true, capture: true }, async (files) => {
 			const owner = scanUI;
-			const files = Array.from(inp.files || []);
-			if (!files.length || !owner) return;
+			if (!owner) return;
 			setScanBusy(true, "Fotos werden aufbereitet…");
 			for (const f of files) {
 				try {
@@ -2275,20 +2048,22 @@ export const HEFT = (() => {
 				}
 			}
 			if (scanUI === owner) setScanBusy(false);
-		};
-		inp.click();
+		});
 	}
 
-	// ---------- Scan-Nachbearbeitung: Ecken ziehen, Filter, Drehen ----------
-	// Schreibt Edit-Zustand zurück und rechnet den Scan SOFORT neu (Filter/Drehen/Ecken
-	// sind damit echte Aktionen — nicht erst beim Schließen der Ansicht).
 	let liveSeq = 0, editCommitT = 0;
-	// Ecken dürfen nacheinander und beliebig oft verschoben werden. Währenddessen
-	// bleibt immer das vollständige Rohfoto sichtbar; die teure Entzerrung läuft
-	// gebündelt im Hintergrund statt die Edit-Ansicht nach jedem Griff zu verlassen.
+
 	function queueCornerReprocess() {
 		clearTimeout(editCommitT);
 		editCommitT = setTimeout(() => { editCommitT = 0; liveReprocessEdit(true); }, 160);
+	}
+
+	function syncShotWithEdit(sh, ed) {
+		sh.quad = ed.quad.map((p) => p.slice());
+		sh.mode = ed.mode;
+		sh.rot = ed.rot;
+		sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
+		return { quad: sh.quad.map((p) => p.slice()), mode: sh.mode, rot: sh.rot, commit: false };
 	}
 	async function liveReprocessEdit(quiet = false) {
 		const owner = scanUI;
@@ -2296,19 +2071,13 @@ export const HEFT = (() => {
 		if (!ed || !owner) return;
 		const sh = owner.shots[ed.i];
 		if (!sh) return;
-		const snapshot = { quad: ed.quad.map((p) => p.slice()), mode: ed.mode, rot: ed.rot, commit: false };
-		sh.quad = snapshot.quad.map((p) => p.slice());
-		sh.mode = snapshot.mode;
-		sh.rot = snapshot.rot;
-		// Das Vollbild-/Zuschnitt-Label im Scan-Streifen muss den zuletzt vom Nutzer
-		// gewählten Zuschnitt widerspiegeln, nicht nur die allererste Auto-Erkennung.
-		sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
+
+		const snapshot = syncShotWithEdit(sh, ed);
 		const seq = ++liveSeq;
 		if (!quiet) setScanBusy(true, "Filter wird angewendet…");
 		try {
 			const out = await processShot(sh, snapshot);
-			// Scanner geschlossen/gewechselt oder neuere Aktion: ein älterer Lauf darf
-			// weder Vorschau noch Export-Ergebnis überschreiben.
+
 			if (scanUI !== owner || seq !== liveSeq) return;
 			sh.out = out;
 			renderShots();
@@ -2323,14 +2092,13 @@ export const HEFT = (() => {
 			if (!quiet && scanUI === owner && seq === liveSeq) setScanBusy(false);
 		}
 	}
-	// Gemeinsame Stage-Einpassung für Scan-Vorschau und Ecken-Editor (vorher zweimal identisch).
+
 	function fitStageScale(el, contentW, contentH) {
 		const stageW = el.clientWidth || window.innerWidth;
 		const stageH = el.clientHeight || Math.max(180, window.innerHeight - 170);
 		return Math.max(0.02, Math.min((stageW - 24) / contentW, (stageH - 24) / contentH));
 	}
-	// Nach Filter/Drehen: fertiges Ergebnis im Edit-Canvas anzeigen.
-	// Auf Wunsch mit echter Vorher/Nachher-Teilung statt einer kaum sichtbaren Änderung.
+
 	function drawEditResult(sh) {
 		const ed = scanUI && scanUI.edit;
 		if (!ed || !sh.out) return;
@@ -2340,8 +2108,7 @@ export const HEFT = (() => {
 		const img = new Image();
 		img.onload = () => {
 			if (!scanUI || !scanUI.edit || scanUI.edit.el !== ed.el) return;
-			// Bei verschachtelten/fixed Overlays kann die Stage im ersten Layout-Frame
-			// noch 0×0 melden. Dann die Viewport-Größe verwenden.
+
 			const k = fitStageScale(stage, img.naturalWidth, img.naturalHeight);
 			cv.width = Math.max(1, Math.round(img.naturalWidth * k));
 			cv.height = Math.max(1, Math.round(img.naturalHeight * k));
@@ -2349,7 +2116,7 @@ export const HEFT = (() => {
 			x.clearRect(0, 0, cv.width, cv.height);
 			if (ed.compare && ed.img) {
 				const half = cv.width / 2;
-				// Rohbild links; aufbereitete, entzerrte Seite rechts.
+
 				x.drawImage(ed.img, 0, 0, half, cv.height);
 				x.drawImage(img, half, 0, half, cv.height);
 				x.fillStyle = "rgba(3,5,10,.7)";
@@ -2389,16 +2156,14 @@ export const HEFT = (() => {
 				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Fertig</button>' +
 			'</div>';
 		scanUI.wrap.appendChild(ed);
-		// sh.src bleibt das vollständige Rohfoto. Der Zuschnitt wird ausschließlich als
-		// Quad gespeichert — deshalb lassen sich alle Ecken jederzeit auch wieder nach
-		// außen ziehen, selbst nachdem bereits ein Scan-Ergebnis berechnet wurde.
+
 		scanUI.edit = { i, el: ed, quad: (sh.quad || []).map((p) => p.slice()), mode: sh.mode || "color", rot: sh.rot || 0, img: null, drag: -1, k: 1, cornerMode: false, compare: false, dirty: false };
 		const cv = ed.querySelector("canvas");
 		cv.addEventListener("pointerdown", onEditDown);
 		cv.addEventListener("pointermove", onEditMove);
 		cv.addEventListener("pointerup", onEditUp);
 		cv.addEventListener("pointercancel", onEditUp);
-		// Zuerst fertiges Ergebnis zeigen; bereits dekodiertes Rohbild wiederverwenden.
+
 		if (sh.out) drawEditResult(sh);
 		const setRaw = (img) => {
 			if (scanUI && scanUI.edit && scanUI.edit.el === ed) {
@@ -2432,7 +2197,7 @@ export const HEFT = (() => {
 		const k = ed.k, q = ed.quad;
 		x.clearRect(0, 0, cv.width, cv.height);
 		x.drawImage(ed.img, 0, 0, cv.width, cv.height);
-		// Außenbereich abdunkeln (evenodd: Rechteck minus Quad)
+
 		x.save();
 		x.fillStyle = "rgba(3,5,10,0.55)";
 		x.beginPath();
@@ -2442,7 +2207,7 @@ export const HEFT = (() => {
 		x.closePath();
 		x.fill("evenodd");
 		x.restore();
-		// Rahmen + Eck-Griffe
+
 		x.strokeStyle = "#6fc3ff"; x.lineWidth = 2;
 		x.beginPath();
 		x.moveTo(q[0][0] * k, q[0][1] * k);
@@ -2458,7 +2223,7 @@ export const HEFT = (() => {
 	}
 	function editPos(e, cv) {
 		const r = cv.getBoundingClientRect();
-		// CSS kann das Canvas skalieren — auf Buffer-Koordinaten umrechnen, dann /k → Bildkoordinaten
+
 		const sx = cv.width / Math.max(1, r.width);
 		const sy = cv.height / Math.max(1, r.height);
 		const k = (scanUI.edit && scanUI.edit.k) || 1;
@@ -2467,7 +2232,7 @@ export const HEFT = (() => {
 	function onEditDown(e) {
 		const ed = scanUI && scanUI.edit;
 		if (!ed || !ed.img) return;
-		// Tippen auf die fertige Vorschau → Ecken-Modus (Rohbild + Griffe)
+
 		if (!ed.cornerMode) {
 			ed.cornerMode = true;
 			layoutEdit();
@@ -2500,38 +2265,30 @@ export const HEFT = (() => {
 		ed.drag = -1;
 		if (was < 0) return;
 		const sh = scanUI.shots[ed.i];
-		// Gekreuzte oder extrem kleine Quads erzeugen eine singuläre Homographie —
-		// dann den letzten gültigen Zuschnitt behalten.
+
 		if (!sh || quadArea(ed.quad) < sh.w * sh.h * 0.015 || !isConvex(ed.quad)) {
 			ed.quad = sh && sh.quad ? sh.quad.map((p) => p.slice()) : ed.quad;
 			drawEdit();
 			if (U.toast) U.toast("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
 			return;
 		}
-		// Der Rohbild-/Eckenmodus bleibt aktiv. Die Vorschau wird nach einer kurzen
-		// Pause aktualisiert, ohne die Griffe zu entfernen oder das Bild zuzuschneiden.
+
 		ed.dirty = true;
 		queueCornerReprocess();
 	}
 	async function finishEdit() {
-		// Filter/Drehen/Ecken laufen live — „Fertig“ speichert nur den Stand und schließt
+
 		const owner = scanUI;
 		const ed = owner && owner.edit;
 		if (!ed || !owner) return;
 		const sh = owner.shots[ed.i];
 		if (sh) {
-			sh.quad = ed.quad.map((p) => p.slice());
-			sh.mode = ed.mode;
-			sh.rot = ed.rot;
-			sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
-			// Ausstehende Eckbewegungen werden beim Übernehmen garantiert aus dem vollen
-			// Rohbild gerechnet — nie aus einem bereits zugeschnittenen Zwischenergebnis.
+			const snapshot = syncShotWithEdit(sh, ed);
+
 			clearTimeout(editCommitT); editCommitT = 0;
 			if (!sh.out || ed.dirty) {
-				// Laufende Live-Aufbereitung entwerten und den sichtbaren Endstand einmal
-				// atomar rechnen, bevor „Fertig“ die Bearbeitung schließt.
+
 				const seq = ++liveSeq;
-				const snapshot = { quad: ed.quad.map((p) => p.slice()), mode: ed.mode, rot: ed.rot, commit: false };
 				setScanBusy(true, "Scan wird aufbereitet…");
 				try {
 					const out = await processShot(sh, snapshot);
@@ -2544,8 +2301,7 @@ export const HEFT = (() => {
 		closeEdit();
 		renderShots();
 	}
-	// Minimaler PDF-1.4-Writer: je Scan eine A4-Seite mit eingebettetem JPEG (DCTDecode).
-	// Keine externe Lib nötig — erzeugt ein echtes, überall lesbares PDF.
+
 	function buildPdf(shots) {
 		const tenc = new TextEncoder();
 		const parts = [];
@@ -2590,9 +2346,11 @@ export const HEFT = (() => {
 		for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
 		return u;
 	}
+
+	const readyScanOuts = () => scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
 	function scanFinishPdf() {
 		try {
-			const outs = scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
+			const outs = readyScanOuts();
 			if (!outs.length) { if (U.toast) U.toast("Keine fertigen Scans zum Export", "error"); return; }
 			const bytes = buildPdf(outs);
 			U.downloadBlob("scan-" + new Date().toISOString().slice(0, 10) + ".pdf", new Blob([bytes], { type: "application/pdf" }));
@@ -2603,7 +2361,7 @@ export const HEFT = (() => {
 		}
 	}
 	function scanFinishHeft() {
-		const outs = scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
+		const outs = readyScanOuts();
 		closeScanner();
 		if (!doc || !outs.length) {
 			if (U.toast) U.toast("Keine fertigen Scans zum Einfügen", "error");
@@ -2615,7 +2373,6 @@ export const HEFT = (() => {
 		if (U.toast) U.toast(outs.length + " Scan(s) als Heftseiten eingefügt");
 	}
 
-	// ---------- Klicks (delegiert am Host — fängt auch die Popups) ----------
 	function onHostClick(e) {
 		const b = e.target.closest("button, .heft-pop-thumb");
 		if (!b || !doc) return;
@@ -2643,7 +2400,7 @@ export const HEFT = (() => {
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
 		if (d.hewrite) {
-			// Schreiben-Gruppe: erneut tippen klappt Optionen zu, sonst Stift + Expand
+
 			if (tool === "pen" || tool === "marker") expanded = !expanded;
 			else { tool = "pen"; expanded = true; }
 			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
@@ -2653,10 +2410,10 @@ export const HEFT = (() => {
 				if (tool === "eraser") expanded = !expanded;
 				else { tool = "eraser"; expanded = true; }
 			} else if (d.hetool === "pen" || d.hetool === "marker") {
-				// Variante im Expand-Panel — Optionen bleiben offen
+
 				tool = d.hetool; expanded = true;
 			} else {
-				// Bildauswahl, Lasso und Laser: kein Options-Tray
+
 				tool = d.hetool; expanded = false;
 				if (d.hetool === "select") closePop();
 			}
@@ -2681,9 +2438,9 @@ export const HEFT = (() => {
 			redrawPage(idx); scheduleSave(); renderThumb(idx);
 		}
 		else if (d.hechat) {
-			// Chat-Panel wieder einblenden (Heft läuft im Fokus-Modus)
+
 			document.body.classList.remove("panel-collapsed");
-			try { if (window.RENDER && window.RENDER.renderTabs) window.RENDER.renderTabs(); } catch { /* ignore */ }
+			try { if (window.RENDER && window.RENDER.renderTabs) window.RENDER.renderTabs(); } catch {  }
 			return;
 		}
 		else return;
@@ -2693,7 +2450,7 @@ export const HEFT = (() => {
 	function onKey(e) {
 		const t = e.target;
 		if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-		// ⌨️ QoL: Strg/Cmd+Z = Rückgängig · Strg/Cmd+Shift+Z oder Strg+Y = Wiederholen
+
 		if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z" || e.key === "y")) {
 			e.preventDefault();
 			if (e.key === "y" || e.shiftKey) redo(); else undo();
@@ -2711,9 +2468,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if ((e.key === "Delete" || e.key === "Backspace") && sel && doc) {
-			// BUGFIX (15. Juli 2026): Entf/Backspace löscht jetzt auch ausgewählte
-			// TEXT-Boxen — vorher funktionierte die Taste nur für Bilder, Texte
-			// ließen sich ausschließlich über das ✕ am Rahmen entfernen.
+
 			const pg = doc.pages[sel.pageIdx];
 			const im = pg && sel.imgId ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
 			const tx = pg && sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
@@ -2723,22 +2478,15 @@ export const HEFT = (() => {
 				else { pg.texts = textsOf(pg).filter((t2) => t2 !== tx); undoStack.push({ kind: "txtDel", txt: tx, pageIdx: sel.pageIdx }); }
 				redoStack = [];
 				const spi = sel.pageIdx; sel = null;
-				scheduleSave(); redrawPage(spi); renderThumb(spi); updateChrome();
+				refresh(spi);
 			}
 			return;
 		}
-		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-			e.preventDefault();
-			if (e.shiftKey) redo(); else undo();
-		}
 	}
 
-	// ---------- Scroll: aktuelle Seite erkennen (debounced) ----------
 	function onScroll() {
 		if (!host || !doc) return;
-		// Während der Scrollbewegung nur die günstige Basis-Ebene nachziehen (rAF).
-		// Die scharfen Viewport-Kacheln folgen erst nach einer kurzen Scroll-Pause —
-		// so bleibt der native Scroll flüssig, statt pro Frame große Canvases zu rastern.
+
 		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
 			scrollRenderFrame = 0;
 			renderVisiblePages(true);
@@ -2762,8 +2510,6 @@ export const HEFT = (() => {
 		}, 80);
 	}
 
-	// ---------- Mount / Unmount ----------
-	// Radierer gedrückt halten: temporär radieren, beim Loslassen automatisch zum vorherigen Tool zurück.
 	function onHostPointerDown(e) {
 		const eraser = e.target.closest && e.target.closest('[data-hetool="eraser"]');
 		if (!eraser || e.button > 0) return;
@@ -2779,11 +2525,10 @@ export const HEFT = (() => {
 		setTimeout(() => { suppressEraserClick = false; }, 0);
 	}
 	function bindCanvas() {
-		// DOM-Suche nur nach Mount/Rebuild; Zeichnen greift anschließend direkt zu.
+
 		canvases = host ? [...host.querySelectorAll(".heft-canvas")] : [];
 		pageSlots = canvases.map((cv) => cv.closest(".heft-page-slot"));
-		// Transparente Detail-Canvases liegen über der Basis, nehmen aber keine
-		// Pointer-Events an. Pro Seite existiert höchstens eine Viewport-Kachel.
+
 		detailCanvases = pageSlots.map((slot) => {
 			if (!slot) return null;
 			if (getComputedStyle(slot).position === "static") slot.style.position = "relative";
@@ -2793,7 +2538,7 @@ export const HEFT = (() => {
 			slot.appendChild(d);
 			return d;
 		});
-		// Wet-Ink-Ebene: transparent, ganz oben — hier erscheint der laufende Strich sofort.
+
 		wetCanvases = pageSlots.map((slot) => {
 			if (!slot) return null;
 			const d = document.createElement("canvas");
@@ -2807,11 +2552,11 @@ export const HEFT = (() => {
 			cv.addEventListener("pointermove", onMove);
 			cv.addEventListener("pointerup", onUp);
 			cv.addEventListener("pointercancel", onUp);
-			// Stift-Hover (Windows/Android): natives Pannen abschalten, BEVOR der Stift aufsetzt.
+
 			cv.addEventListener("pointerover", onPenBoundary);
 			cv.addEventListener("pointerout", onPenBoundary);
 		});
-		// Navigation v4: Finger scrollen NATIV — der Browser übernimmt Pan und Trägheit.
+
 		applyTouchAction();
 	}
 	function bindScroll() {
@@ -2819,21 +2564,18 @@ export const HEFT = (() => {
 		if (!scroll) return;
 		scrollFn = onScroll;
 		scroll.addEventListener("scroll", scrollFn, { passive: true });
-		// Desktop: Strg/Cmd + Mausrad zoomt direkt auf der Papierfläche (statt Browser-Zoom)
+
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
-		// Navigation v4: Ein Finger scrollt NATIV. Die Touch-Listener fangen nur noch
-		// Pinch-Zoom (2 Finger), Doppeltipp und 2-/3-Finger-Tipp (Undo/Redo) ab.
+
 		scroll.addEventListener("touchstart", onTouchStart, { passive: false });
 		scroll.addEventListener("touchmove", onTouchMove, { passive: false });
 		scroll.addEventListener("touchend", onTouchEnd);
 		scroll.addEventListener("touchcancel", onTouchCancel);
-		scroll.style.overscrollBehavior = "contain"; // kein Browser-Pull-to-Refresh im Heft
+		scroll.style.overscrollBehavior = "contain";
 	}
-	// ➕ QoL + Bugfix von der „kommt noch“-Seite: neue Seite direkt am Heft-Ende —
-	// als Geisterknopf UND per Runterzieh-Geste (auf der letzten Seite weiter
-	// hochschieben, kurz halten, loslassen → neue Seite im gleichen Papierstil).
+
 	const addPageGhostHtml = () => '<button type="button" class="heft-addpage" data-headdend="1">＋ Neue Seite</button>';
-	let pull = null; // { y0, startAtEnd, armed }
+	let pull = null;
 	function addPageAtEnd() {
 		const prevPos = insertPos;
 		insertPos = "last";
@@ -2863,12 +2605,7 @@ export const HEFT = (() => {
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
 		const keep = scroll.scrollTop;
-		scroll.innerHTML = '<div class="heft-pages">' + doc.pages.map((_, i) =>
-			'<div class="heft-page-slot" data-hepage="' + i + '">' +
-				'<canvas class="heft-canvas"></canvas>' +
-				'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
-			'</div>'
-		).join('') + addPageGhostHtml() + '</div>';
+		scroll.innerHTML = pagesHtml();
 		bindCanvas();
 		layout();
 		scroll.scrollTop = keep;
@@ -2879,11 +2616,11 @@ export const HEFT = (() => {
 		pid = pageId;
 		if (getComputedStyle(host).position === "static") host.style.position = "relative";
 		doc = await load(pageId);
-		if (pid !== pageId) return; // während des Ladens weggewechselt
+		if (pid !== pageId) return;
 		idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
 		zoom = 1; navReset();
-		expanded = false; // Floating-Pill startet kompakt — Options erst nach Klick
-		// Haupt-Pill ist immer fest. Tray startet direkt darunter und kann danach verschoben werden.
+		expanded = false;
+
 		trayPos = null; trayDrag = null;
 		host.innerHTML = viewHtml();
 		bindPullToAdd();
@@ -2894,9 +2631,7 @@ export const HEFT = (() => {
 		document.addEventListener("keydown", onKey);
 		resizeFn = () => layout();
 		window.addEventListener("resize", resizeFn);
-		// Das Einklappen der linken Seitenleiste verändert häufig nur die Breite
-		// des Heft-Containers, nicht die Fenstergröße. ResizeObserver reagiert
-		// genau auf diesen Layoutwechsel und passt die Seite sofort erneut ein.
+
 		if (window.ResizeObserver) {
 			resizeObserver = new ResizeObserver(() => layout());
 			resizeObserver.observe(host);
@@ -2905,20 +2640,17 @@ export const HEFT = (() => {
 		bindScroll();
 		bindTrayDrag();
 		layout();
-		// Auch bereits vorhandene Notizen werden beim Öffnen still nachindexiert.
-		// Zuvor lief OCR nur nach einem NEUEN Stiftstrich; dadurch blieben ältere
-		// Hefte in der normalen Suche unsichtbar.
+
 		scheduleHandwritingIndexV2(idx);
 		purgeOrphanLegacyInk();
 	}
 	function unmount(discardPending = false) {
 		closePop();
 		closeScanner();
-		// Konflikt-Auflösung kann bewusst einen älteren Stand wählen. Dann darf ein
-		// noch ausstehender Timer den gerade gewählten Blob nicht wieder überschreiben.
+
 		if (saveT) {
 			if (discardPending) { clearTimeout(saveT); saveT = 0; }
-			else saveNow(); // bewusst ohne await — saveNow macht vorher einen Schnappschuss
+			else saveNow();
 		}
 		if (host) {
 			host.removeEventListener("click", onHostClick);
@@ -2940,29 +2672,28 @@ export const HEFT = (() => {
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
-		// Navigation vollständig zurücksetzen (Gesten, Trägheit, laufende Animationen)
+
 		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		trayDrag = null;
 	}
 
-	// ---------- Thumbnails + Embeds (für Bibliothek und :::heft-Blöcke) ----------
+	function renderPageCanvas(pg, w, pageIdx = -1) {
+		const c = document.createElement("canvas");
+		c.width = w;
+		paintInto(c, pg, pageIdx);
+		return c;
+	}
 	async function thumbnail(pageId, pageIndex, width) {
 		const i = pageIndex || 0, w = width || 220;
 		const key = pageId + ":" + i + ":" + w;
 		if (thumbs[key]) return thumbs[key];
-		// Bibliothek und Einbettungen können dieselbe Vorschau gleichzeitig anfordern.
-		// Ein gemeinsames Promise verhindert doppelte Canvas-Renders in diesem Fall.
+
 		if (thumbJobs[key]) return thumbJobs[key];
 		const job = (async () => {
 			const d = await load(pageId);
 			const pg = d.pages[i];
 			if (!pg) return null;
-			const c = document.createElement("canvas");
-			const k = w / PAGE_W;
-			c.width = w; c.height = Math.round(PAGE_H * k);
-			const x = c.getContext("2d");
-			x.setTransform(k, 0, 0, k, 0, 0);
-			renderPageTo(x, pg, -1);
+			const c = renderPageCanvas(pg, w);
 			const url = c.toDataURL("image/png");
 			thumbs[key] = url;
 			return url;
@@ -2985,20 +2716,12 @@ export const HEFT = (() => {
 		}
 	}
 
-	// 👁 Chat-Anhang (18. Juli, spät): eine Heft-Seite als hochauflösendes PNG-
-	// Data-URL — damit kann die KI die Seite wie ein Foto "lesen" (Vision).
 	async function pageAsDataUrl(pageId, pageIdx, w = 1200) {
 		if (!pageId) return null;
 		const d = pageId === pid && doc ? doc : await load(pageId);
 		const pg = d && d.pages && d.pages[pageIdx || 0];
 		if (!pg) return null;
-		const c = document.createElement("canvas");
-		const k = w / PAGE_W;
-		c.width = w; c.height = Math.round(PAGE_H * k);
-		const x = c.getContext("2d");
-		x.setTransform(k, 0, 0, k, 0, 0);
-		renderPageTo(x, pg, -1);
-		return c.toDataURL("image/png");
+		return renderPageCanvas(pg, w).toDataURL("image/png");
 	}
 
 	return {

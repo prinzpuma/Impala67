@@ -20,67 +20,65 @@ import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
 
-const render = (...args) => RENDER.render(...args);
-const openTemplatePicker = (...args) => RENDER.openTemplatePicker(...args);
-const openPage = (...args) => TABS.openPage(...args);
-const openNewTab = (...args) => TABS.openNewTab(...args);
-const closeTab = (...args) => TABS.closeTab(...args);
-const navBack = (...args) => TABS.navBack(...args);
-const navForward = (...args) => TABS.navForward(...args);
-const openHomeOverview = (...args) => TABS.openHomeOverview(...args);
-const saveCurrentChat = (...args) => CHAT_FULLSCREEN.saveCurrentChat(...args);
-const toggleChatFull = (...args) => CHAT_FULLSCREEN.toggleChatFull(...args);
-const sendChatMessage = (...args) => CHAT_FULLSCREEN.sendChatMessage(...args);
-const renderModelBar = (...args) => RENDER.renderModelBar(...args);
-const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
-const renderSidebar = (...args) => RENDER.renderSidebar(...args);
-const renderMain = (...args) => RENDER.renderMain(...args);
-const renderTabs = (...args) => RENDER.renderTabs(...args);
-const openReview = (...args) => RENDER.openReview(...args);
-const openCards = (...args) => RENDER.openCards(...args);
-const openIconPicker = (...args) => RENDER.openIconPicker(...args);
-const openCoverPicker = (...args) => RENDER.openCoverPicker(...args);
-const localDayKey = (...args) => RENDER.localDayKey(...args);
-const renderHistoryModal = (...args) => RENDER.renderHistoryModal(...args);
-const ankiCardsOf = (...args) => RENDER_ANKI.ankiCardsOf(...args);
-const openCardEditor = (...args) => RENDER_ANKI.openCardEditor(...args);
-const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
+// Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
+// FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
+const render = (...a) => RENDER.render(...a);
+const openTemplatePicker = (...a) => RENDER.openTemplatePicker(...a);
+const openPage = (...a) => TABS.openPage(...a);
+const closeTab = (...a) => TABS.closeTab(...a);
+const navBack = (...a) => TABS.navBack(...a);
+const navForward = (...a) => TABS.navForward(...a);
+const openHomeOverview = (...a) => TABS.openHomeOverview(...a);
+const saveCurrentChat = (...a) => CHAT_FULLSCREEN.saveCurrentChat(...a);
+const toggleChatFull = (...a) => CHAT_FULLSCREEN.toggleChatFull(...a);
+const sendChatMessage = (...a) => CHAT_FULLSCREEN.sendChatMessage(...a);
+const renderModelBar = (...a) => RENDER.renderModelBar(...a);
+const renderModelMenu = (...a) => RENDER.renderModelMenu(...a);
+const renderSidebar = (...a) => RENDER.renderSidebar(...a);
+const renderMain = (...a) => RENDER.renderMain(...a);
+const renderTabs = (...a) => RENDER.renderTabs(...a);
+const openReview = (...a) => RENDER.openReview(...a);
+const openCards = (...a) => RENDER.openCards(...a);
+const openIconPicker = (...a) => RENDER.openIconPicker(...a);
+const openCoverPicker = (...a) => RENDER.openCoverPicker(...a);
+const localDayKey = (...a) => RENDER.localDayKey(...a);
+const renderHistoryModal = (...a) => RENDER.renderHistoryModal(...a);
+const ankiCardsOf = (...a) => RENDER_ANKI.ankiCardsOf(...a);
+const openCardEditor = (...a) => RENDER_ANKI.openCardEditor(...a);
+const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 
-// app.js — Initialisierung und Event-Verkabelung.
-
+// app.js v2 — Init + Event-Verkabelung. KISS/DRY-Refactor, funktionsgleich.
+const $ = (id) => U.el(id);
+const esc = (s) => U.esc(s);
+const blurActive = () => document.activeElement?.blur();
+const closeMnav = () => document.body.classList.remove("mnav-open");
+const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
+const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); ti.select(); } };
+// deck gleich name oder Unterstapel davon?
+const inDeck = (deck, name) => deck === name || deck.startsWith(name + "::");
+// Alle Nachfahren einer Seite inkl. ihrer selbst (Verschieben-Dialog, Papierkorb)
+function descendantsOf(pageId) {
+	const set = new Set([pageId]);
+	(function collect(pid) {
+		for (const p of Object.values(S.pages)) if (p.parentId === pid && !set.has(p.id)) { set.add(p.id); collect(p.id); }
+	})(pageId);
+	return set;
+}
 
 export function closeOverlay() {
-	const o = U.el("overlay");
-	if (o) {
-		o.hidden = true;
-		o.classList.remove("change-overlay");
-		o.innerHTML = "";
-	}
+	const o = $("overlay");
+	if (o) { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; }
 	S.reviewShowBack = false;
 }
-// Eigener Eingabe-Dialog statt window.prompt() — nutzt das #overlay wie alle anderen Dialoge.
+// Großer Chat wird dynamisch gerendert → Debug- und Voice-Button hier nachrüsten
+// (Kommentar saß vorher falsch: der prompt()-Hinweis gehört zu openPromptDialog)
 function mountFullChatDebugButton() {
 	const head = document.querySelector(".chat-full-head");
 	if (!head || head.querySelector("#btnAiDebugFull")) return;
-	const button = document.createElement("button");
-	button.type = "button";
-	button.id = "btnAiDebugFull";
-	button.className = "ai-debug-btn";
-	button.title = "Letztes KI-Debugprotokoll in die Zwischenablage kopieren";
-	button.textContent = "Debugprotokoll";
-	head.appendChild(button);
-	// Der große Chat wird dynamisch gerendert. Deshalb den Voice-Button hier
-	// unmittelbar links vor der Sendetaste einhängen, statt Markup zu duplizieren.
-	const submit = document.getElementById("mainChatSubmit");
-	if (submit && !document.getElementById("btnVoiceFull")) {
-		const voice = document.createElement("button");
-		voice.type = "button";
-		voice.id = "btnVoiceFull";
-		voice.className = "composer-tool";
-		voice.title = "Spracheingabe starten (Alt+Leertaste)";
-		voice.textContent = "🎙";
-		submit.before(voice);
-	}
+	const mk = (props) => Object.assign(document.createElement("button"), { type: "button", ...props });
+	head.appendChild(mk({ id: "btnAiDebugFull", className: "ai-debug-btn", title: "Letztes KI-Debugprotokoll in die Zwischenablage kopieren", textContent: "Debugprotokoll" }));
+	const submit = $("mainChatSubmit");
+	if (submit && !$("btnVoiceFull")) submit.before(mk({ id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)", textContent: "🎙" }));
 }
 
 async function copyAiDebugTrace() {
@@ -89,119 +87,101 @@ async function copyAiDebugTrace() {
 		await navigator.clipboard.writeText(report);
 		U.toast("KI-Debugprotokoll kopiert — hier im Chat einfügen.", "success");
 	} catch {
-		// Clipboard kann bei file:// oder ohne Berechtigung blockiert sein. Dann
-		// erscheint der Bericht in einem auswählbaren Dialog statt verloren zu gehen.
-		const o = U.el("overlay");
+		// Clipboard blockiert (file:// / Berechtigung) → auswählbarer Dialog statt Datenverlust
+		const o = $("overlay");
 		if (!o) return;
 		o.hidden = false;
 		o.innerHTML = '<div class="modal modal-sm"><button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 			'<h3>KI-Debugprotokoll</h3><p class="hint">Zwischenablage blockiert. Bitte den folgenden Text kopieren und hier einfügen.</p>' +
-			'<textarea class="ai-debug-copy" readonly>' + U.esc(report) + '</textarea></div>';
+			`<textarea class="ai-debug-copy" readonly>${esc(report)}</textarea></div>`;
 		const area = o.querySelector("textarea");
 		if (area) { area.focus(); area.select(); }
 	}
 }
 
+// Eigener Eingabe-Dialog statt window.prompt() — nutzt #overlay wie alle Dialoge
 function openPromptDialog(title, onSubmit, initial) {
-	const o = U.el("overlay");
+	const o = $("overlay");
 	if (!o) return;
-	o.innerHTML = '<div class="modal modal-sm">' +
-		"<h3>" + U.esc(title) + "</h3>" +
-		'<input id="dlgPromptInput" autocomplete="off" value="' + U.esc(initial || "") + '">' +
-		'<div class="modal-actions"><button id="dlgPromptCancel">Abbrechen</button><button id="dlgPromptOk">OK</button></div>' +
-		"</div>";
+	o.innerHTML = `<div class="modal modal-sm"><h3>${esc(title)}</h3><input id="dlgPromptInput" autocomplete="off" value="${esc(initial || "")}">` +
+		'<div class="modal-actions"><button id="dlgPromptCancel">Abbrechen</button><button id="dlgPromptOk">OK</button></div></div>';
 	o.hidden = false;
-	const inp = U.el("dlgPromptInput");
+	const inp = $("dlgPromptInput");
 	const submit = () => { const v = inp.value.trim(); closeOverlay(); if (v) onSubmit(v); };
-	U.el("dlgPromptOk").addEventListener("click", submit);
-	U.el("dlgPromptCancel").addEventListener("click", () => closeOverlay());
+	$("dlgPromptOk").addEventListener("click", submit);
+	$("dlgPromptCancel").addEventListener("click", () => closeOverlay());
 	inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
 	inp.focus();
 	inp.select();
 }
 
-// „Verschieben nach…“-Dialog: Ziel wählen (Workspace-Wurzel oder Seite, ohne eigene Nachfahren).
+// „Verschieben nach…“: Ziel = Workspace-Wurzel oder Seite (ohne eigene Nachfahren)
 function openMoveDialog(pageId) {
-	const o = U.el("overlay");
+	const o = $("overlay");
 	const pg = S.pages[pageId];
 	if (!o || !pg) return;
-	const bad = new Set([pageId]);
-	(function collect(pid) {
-		for (const p of Object.values(S.pages)) if (p.parentId === pid && !bad.has(p.id)) { bad.add(p.id); collect(p.id); }
-	})(pageId);
+	const bad = descendantsOf(pageId);
 	let items = "";
 	for (const ws of Object.values(S.workspaces)) {
-		items += '<button class="menu-item" data-movetarget="ws:' + U.esc(ws.id) + '">📁 ' + U.esc(ws.name) + "</button>";
+		items += `<button class="menu-item" data-movetarget="ws:${esc(ws.id)}">📁 ${esc(ws.name)}</button>`;
 		const walk = (parentId, depth) => {
 			for (const p of STATE.childrenOf(parentId, ws.id)) {
 				if (bad.has(p.id) || p.trashed) continue;
-				items += '<button class="menu-item" data-movetarget="pg:' + p.id + '" style="padding-left:' + (14 + depth * 16) + 'px">' +
-					(p.icon ? U.esc(p.icon) + " " : "📝 ") + U.esc(p.title) + "</button>";
+				items += `<button class="menu-item" data-movetarget="pg:${p.id}" style="padding-left:${14 + depth * 16}px">${p.icon ? esc(p.icon) + " " : "📝 "}${esc(p.title)}</button>`;
 				walk(p.id, depth + 1);
 			}
 		};
 		walk(null, 1);
 	}
-	o.innerHTML = '<div class="modal modal-sm"><h3>„' + U.esc(pg.title) + '“ verschieben nach…</h3>' +
-		'<div class="move-list">' + items + "</div>" +
+	o.innerHTML = `<div class="modal modal-sm"><h3>„${esc(pg.title)}“ verschieben nach…</h3><div class="move-list">${items}</div>` +
 		'<div class="modal-actions"><button id="dlgMoveCancel">Abbrechen</button></div></div>';
 	o.hidden = false;
 	S.movePageId = pageId;
-	U.el("dlgMoveCancel").addEventListener("click", () => closeOverlay());
+	$("dlgMoveCancel").addEventListener("click", () => closeOverlay());
 }
 
-
-
 function isDescendant(childId, ancestorId) {
-	let cur = S.pages[childId];
-	while (cur && cur.parentId) {
+	for (let cur = S.pages[childId]; cur && cur.parentId; cur = S.pages[cur.parentId]) {
 		if (cur.parentId === ancestorId) return true;
-		cur = S.pages[cur.parentId];
 	}
 	return false;
 }
 
-
-
-// Dupliziert eine Seite samt aller Unterseiten (wie in Notion), "(Kopie)" an den Titel angehängt.
+// Seite samt Unterseiten duplizieren (parallel); "(Kopie)" nur am Wurzel-Titel
 async function duplicatePage(pageId, newParentId, newWsId) {
 	const pg = S.pages[pageId];
 	if (!pg) return null;
 	const id = U.uid();
-	const parentId = newParentId !== undefined ? newParentId : pg.parentId;
 	const wsId = newWsId || pg.workspaceId;
 	await STATE.dispatch("pageCreate", {
-		id, title: pg.title + (newParentId === undefined ? " (Kopie)" : ""), parentId, content: pg.content,
-		workspaceId: wsId, icon: pg.icon, cover: pg.cover, coverImg: pg.coverImg, tags: pg.tags,
-		kind: pg.kind || "notion",
+		id, title: pg.title + (newParentId === undefined ? " (Kopie)" : ""),
+		parentId: newParentId !== undefined ? newParentId : pg.parentId,
+		content: pg.content, workspaceId: wsId, icon: pg.icon, cover: pg.cover,
+		coverImg: pg.coverImg, tags: pg.tags, kind: pg.kind || "notion",
 	});
-	const kids = STATE.childrenOf(pg.id, pg.workspaceId);
-	await Promise.all(kids.map((kid) => duplicatePage(kid.id, id, wsId))); // parallel statt sequenziell
+	await Promise.all(STATE.childrenOf(pg.id, pg.workspaceId).map((kid) => duplicatePage(kid.id, id, wsId)));
 	return id;
 }
 
-// Anlegen zeigt IMMER den Typ-Dialog (Notion-Seite oder GoodNotes-Heft) —
-// Vorlagen erscheinen darin als zusätzliche Optionen.
-async function newPageFlow(wsId, parentId) {
+// Anlegen zeigt IMMER den Typ-Dialog (Seite/Heft); Vorlagen darin als Zusatzoptionen
+function newPageFlow(wsId, parentId) {
 	S.pendingNewPage = { wsId, parentId };
 	openTemplatePicker();
 }
 
-// Karteikarten-Bereich öffnen (🃏-Pille oben links): Stapel/Browser/Statistik/Lernen
-// sidebarMode bleibt unberührt für den Dateibaum, aber die Topbar-Pille ist exklusiv „anki“
-// (renderTopbar priorisiert view==="anki" über sidebarMode).
+// 🃏-Bereich öffnen; Topbar-Pille ist exklusiv „anki“ (renderTopbar priorisiert view)
 function openAnki(tab, deck) {
 	S.view = "anki";
-	S.sidebarMode = "files"; // Stapel-Baum in der Sidebar (nicht Chat-Liste)
+	S.sidebarMode = "files"; // Stapel-Baum in der Sidebar, nicht Chat-Liste
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
 	S.reviewShowBack = false;
 	toggleChatFull(false);
-	if (document.activeElement) document.activeElement.blur();
+	blurActive();
 	render();
 }
 
-// Daily Note eines Tages öffnen — Seite (und der 📅-Sammelordner) werden bei Bedarf angelegt.
+// Daily Note öffnen — Seite (und 📅-Sammelordner) bei Bedarf anlegen
 async function openDailyNote(key) {
 	let pg = STATE.activePages().find((p) => p.daily === key);
 	if (!pg) {
@@ -212,37 +192,24 @@ async function openDailyNote(key) {
 			root = S.pages[rid];
 		}
 		const id = U.uid();
-		const d = new Date(key + "T12:00:00");
-		const title = d.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-		await STATE.dispatch("pageCreate", {
-			id, title, parentId: root.id, workspaceId: root.workspaceId || "default",
-			icon: "📅", daily: key, content: "",
-		});
+		const title = new Date(key + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+		await STATE.dispatch("pageCreate", { id, title, parentId: root.id, workspaceId: root.workspaceId || "default", icon: "📅", daily: key, content: "" });
 		pg = S.pages[id];
 	}
 	if (pg) openPage(pg.id);
 }
 
-// Ganzen Workspace als ZIP voller Markdown-Dateien exportieren (Ordnerstruktur = Seitenbaum)
-
-
-// Öffnet den Seitenverlauf (Versionen aus dem Event-Log rekonstruiert).
+// Seitenverlauf öffnen (Versionen aus dem Event-Log rekonstruiert)
 async function openHistory(pageId) {
-	const versions = await STATE.pageHistory(pageId);
-	S.histVersions = versions;
-	S.histIndex = versions.length - 1;
+	S.histVersions = await STATE.pageHistory(pageId);
+	S.histIndex = S.histVersions.length - 1;
 	S.histPageId = pageId;
 	renderHistoryModal();
 }
 
-// Bewertet eine Karteikarte per FSRS und dispatcht das Ergebnis als EIN Event —
-// von beiden Lernorten (Anki-Browser-Inline-Bewertung UND Review-Modal) genutzt,
-// damit "grade" immer im Event-Payload steht (Tageslimits/Statistik werten das aus).
-// Schutz vor Doppel-Bewertung: rate()/dispatch() ist asynchron — ohne Sperre konnte
-// ein schneller Doppel-Tastendruck oder -Klick (Leertaste+Zifferntaste, zweimal auf
-// denselben Bewertungs-Knopf) dieselbe Karte zweimal bewerten, weil beide Aufrufe
-// noch denselben (alten) Kartenstand lasen, bevor der erste fertig war — das gab
-// kaputte/doppelte Intervalle.
+// FSRS-Bewertung als EIN Event (Browser-Inline + Review-Modal), grade immer im
+// Payload (Tageslimits/Statistik). _ratingInFlight verhindert Doppel-Bewertung:
+// zwei schnelle Klicks/Tasten lasen sonst beide den alten Stand → kaputte Intervalle
 let _ratingInFlight = false;
 async function rateAndReviewCard(cardId, grade) {
 	if (_ratingInFlight) return null;
@@ -253,55 +220,38 @@ async function rateAndReviewCard(cardId, grade) {
 		const wasNew = card.srs.state === "new";
 		const wasLearning = card.srs.state === "learning" || card.srs.state === "relearning";
 		const srs = SRS.rate(card.srs, grade);
-		await STATE.dispatch("cardReview", {
-			id: card.id, srs, grade,
-			reviewId: U.uid(),
-			deck: card.deck || "Standard",
-			first: wasNew,
-			learning: wasLearning
-		});
+		await STATE.dispatch("cardReview", { id: card.id, srs, grade, reviewId: U.uid(), deck: card.deck || "Standard", first: wasNew, learning: wasLearning });
 		return card;
 	} finally {
 		_ratingInFlight = false;
 	}
 }
 
-// Anki-Tastatur (docs.ankiweb.net/studying.html):
-// Space/Enter → Antwort; bei sichtbarer Antwort Space/Enter → Good (3).
-// 1–4 → Again/Hard/Good/Easy.
+// Anki-Tastatur (docs.ankiweb.net/studying.html): Space/Enter → Antwort,
+// bei sichtbarer Antwort → Good(3); 1–4 → Again/Hard/Good/Easy
+const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 function showStudyAnswer() {
-	if (S.view !== "anki" || S.ankiTab !== "study") return false;
-	// Space bei sichtbarer Antwort = Good (Anki-Standard)
-	if (S.reviewShowBack) return false;
-	const snap = STATE.studySnapshot(S.ankiDeck);
-	if (!snap.dueNow.length) return false;
+	if (!inStudy() || S.reviewShowBack) return false;
+	if (!STATE.studySnapshot(S.ankiDeck).dueNow.length) return false;
 	S.reviewShowBack = true;
 	renderMain();
 	return true;
 }
 async function gradeStudyCard(grade) {
-	if (S.view !== "anki" || S.ankiTab !== "study") return false;
-	if (!S.reviewShowBack) return false;
-	const snap = STATE.studySnapshot(S.ankiDeck);
-	const c = snap.dueNow[0];
+	if (!inStudy() || !S.reviewShowBack) return false;
+	const c = STATE.studySnapshot(S.ankiDeck).dueNow[0];
 	if (!c) return false;
-	const g = Math.max(1, Math.min(4, Number(grade) || 3));
-	await rateAndReviewCard(c.id, g);
-	S.reviewShowBack = false;
-	// dispatch() triggert onChange/render — Review-Show-Back ist vor dem nächsten Frame false
+	await rateAndReviewCard(c.id, Math.max(1, Math.min(4, Number(grade) || 3)));
+	S.reviewShowBack = false; // dispatch triggert den Render
 	return true;
 }
-// Space/Enter: Antwort ODER Gut
 async function studySpaceOrEnter() {
-	if (S.view !== "anki" || S.ankiTab !== "study") return false;
-	if (!S.reviewShowBack) return showStudyAnswer();
-	return gradeStudyCard(3);
+	if (!inStudy()) return false;
+	return S.reviewShowBack ? gradeStudyCard(3) : showStudyAnswer();
 }
 
-// Einheitlicher Einstieg für neue Chats — wird von Sidebar, Home und „+ Tab“-Menü genutzt.
-// opts.newTab: Chat in neuem Tab öffnen (Notion-Stil, Plus in der Tab-Leiste).
-function startNewChat(opts) {
-	opts = opts || {};
+// Einheitlicher Einstieg für neue Chats (Sidebar, Home, „+ Tab“-Menü)
+function startNewChat(opts = {}) {
 	saveCurrentChat();
 	const newId = U.uid();
 	const list = CHATS.load();
@@ -312,45 +262,48 @@ function startNewChat(opts) {
 	openPage("chat:" + newId, opts.newTab ? { newTab: true } : undefined);
 }
 
-// Neue Seite direkt in einem neuen Tab (für „+ → Neue Seite“ im Tab-Menü).
+// Neue Seite direkt in neuem Tab („+ → Neue Seite“ im Tab-Menü)
 async function createPageInNewTab(wsId, parentId, tpl) {
 	const id = U.uid();
 	S.currentWorkspaceId = wsId || S.currentWorkspaceId;
 	await STATE.dispatch("pageCreate", {
-		id,
-		title: tpl ? tpl.title : "Neue Seite",
-		parentId: parentId || null,
-		content: tpl ? tpl.content : "",
-		icon: tpl ? tpl.icon : null,
-		tags: tpl ? tpl.tags : [],
-		workspaceId: S.currentWorkspaceId,
+		id, title: tpl ? tpl.title : "Neue Seite", parentId: parentId || null,
+		content: tpl ? tpl.content : "", icon: tpl ? tpl.icon : null,
+		tags: tpl ? tpl.tags : [], workspaceId: S.currentWorkspaceId,
 	});
 	openPage(id, { newTab: true });
-	const ti = document.getElementById("pageTitle");
-	if (ti) { ti.focus(); ti.select(); }
+	focusPageTitle();
 	return id;
 }
 
-// Chat-Composer: wächst mit dem Text; Sendetaste ist nur bei Inhalt aktiv.
+// Chat-Composer: wächst mit dem Text; Senden nur bei Inhalt aktiv
 function syncComposer(input) {
 	if (!input) return;
 	const full = input.id === "mainChatInput";
-	const form = U.el(full ? "mainChatForm" : "chatForm");
-	const submit = U.el(full ? "mainChatSubmit" : "chatSubmit");
-	input.style.height = "auto";
+	const form = $(full ? "mainChatForm" : "chatForm");
+	const submit = $(full ? "mainChatSubmit" : "chatSubmit");
 	const max = full ? 260 : 210;
+	input.style.height = "auto";
 	input.style.height = Math.min(max, Math.max(30, input.scrollHeight)) + "px";
 	input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
 	if (form) form.classList.toggle("has-text", !!input.value.trim());
 	if (submit) submit.disabled = !input.value.trim();
 }
 
+// Darstellungs-Buttons → handleAppearanceSelect(gruppe, wert) — statt 14 case-Zeilen
+const APPEARANCE_BTN = {
+	btnDensityComfortable: ["density", "comfortable"], btnDensityCompact: ["density", "compact"],
+	btnMotionFull: ["motion", "full"], btnMotionReduced: ["motion", "reduced"],
+	btnFontS: ["fontsize", "s"], btnFontM: ["fontsize", "m"], btnFontL: ["fontsize", "l"],
+	btnLockOn: ["overlearn", "on"], btnLockOff: ["overlearn", "off"],
+	btnConfOn: ["confidence", "on"], btnConfOff: ["confidence", "off"],
+	btnTeleOn: ["telemetry", "on"], btnTeleOff: ["telemetry", "off"],
+};
+
 function wireEvents() {
-	// STATE.dispatch() löst über STATE.onChange bereits einen gebündelten rAF-Render aus.
-	// Handler mit persistierten Änderungen rufen deshalb nicht zusätzlich render() auf;
-	// reine UI-Navigation ohne dispatch() rendert weiterhin sofort.
-	// Datenbank-Tabellen: Zellwert speichern (props der Zeilen-Seite) — normales
-	// pageUpdate-Event, damit Verlauf, Diff und Notion-Sync die Änderung mitbekommen.
+	// dispatch() rendert bereits rAF-gebündelt → nach dispatch kein extra render();
+	// reine UI-Navigation ohne dispatch rendert sofort.
+	// DB-Tabellen: Zellwert als normales pageUpdate (Verlauf/Diff/Sync greifen)
 	document.addEventListener("change", async (e) => {
 		const cell = e.target.closest(".db-cell");
 		if (!cell) return;
@@ -369,14 +322,11 @@ function wireEvents() {
 		await STATE.dispatch("pageCreate", { id: U.uid(), title: "Neue Zeile", parentId: dbPg.id, workspaceId: dbPg.workspaceId || "default", props: {} });
 	});
 
-	// Intercept clicks on links pointing to local pages
+	// Links auf lokale Seiten abfangen (importierte UUIDs mit ODER ohne Bindestriche)
 	document.addEventListener("click", (e) => {
 		const a = e.target.closest("a");
 		if (!a) return;
-		const href = a.getAttribute("href") || "";
-		const rawId = href.replace(/^(#|\/)/, "");
-		// Importierte Seiten können UUIDs mit ODER ohne Bindestriche verwenden.
-		// Erst den exakten Wert prüfen, erst danach auf das alte Normalformat fallen.
+		const rawId = (a.getAttribute("href") || "").replace(/^(#|\/)/, "");
 		const id = S.pages[rawId] ? rawId : rawId.replace(/-/g, "");
 		if (S.pages[id]) {
 			e.preventDefault();
@@ -384,38 +334,26 @@ function wireEvents() {
 		}
 	});
 
-	// Mobile Shell v2 — Navigator-Sheet (body.mnav-open): Tippen auf den Abdunkler
-	// oder Escape schließt das Sheet. Aktionen im Sheet, die die Hauptansicht
-	// wechseln, schließen es mit (Seiten/Chats erledigt bereits openPage in tabs.js;
-	// die Topbar-Pillen Home/Chat/Suche wechseln nur den Sheet-Inhalt und bleiben offen).
+	// Mobile Navigator-Sheet: Abdunkler/Escape schließt; Ansicht-wechselnde Aktionen auch
 	document.addEventListener("click", (e) => {
 		if (!document.body.classList.contains("mnav-open")) return;
 		if (e.target.closest("#mDock") || e.target.closest("#btnSidebarToggle")) return;
-		if (!e.target.closest("#sidebar")) { document.body.classList.remove("mnav-open"); return; }
-		if (e.target.closest("#btnLibrary, #btnTrash, #btnDaily, #btnAnki, [data-deckopen], [data-ankistudy]")) {
-			document.body.classList.remove("mnav-open");
-		}
+		if (!e.target.closest("#sidebar")) return closeMnav();
+		if (e.target.closest("#btnLibrary, #btnTrash, #btnDaily, #btnAnki, [data-deckopen], [data-ankistudy]")) closeMnav();
 	});
 	document.addEventListener("keydown", (e) => {
-		if (e.key === "Escape" && document.body.classList.contains("mnav-open")) {
-			document.body.classList.remove("mnav-open");
-		}
+		if (e.key === "Escape") closeMnav();
 	});
 
-	// Ein einzelner Home-Klick zeigt wie bisher den Dateibaum. Ein Doppelklick
-	// ist der eindeutige Sprung zur persönlichen Home-Übersicht.
+	// Home: Einzelklick = Dateibaum, Doppelklick = Home-Übersicht
 	document.addEventListener("dblclick", (e) => {
 		if (!e.target.closest || !e.target.closest("#btnHome")) return;
 		e.preventDefault();
 		openHomeOverview();
 	});
 
-	// BUGFIX (17. Juli): Die Live-„Denkt nach…“-Box reagiert auf pointerdown statt
-	// click. Während des Streamings wurde der Live-Bereich laufend neu aufgebaut;
-	// lag zwischen Mousedown und Mouseup ein Rebuild, ging der click verloren und
-	// die Box ließ sich während der Generierung nicht ausklappen. pointerdown
-	// feuert sofort auf dem noch vorhandenen Element (render.js patcht die Box
-	// zusätzlich in-place, dieser Listener ist das Sicherheitsnetz).
+	// FIX: Live-„Denkt nach…“-Box auf pointerdown — Rebuilds zwischen Mousedown/-up
+	// fraßen den click (render.js patcht zusätzlich in-place, das hier ist das Netz)
 	document.addEventListener("pointerdown", (e) => {
 		if (e.button !== undefined && e.button !== 0) return;
 		const t = e.target.closest && e.target.closest("#btnThinkLive");
@@ -441,9 +379,7 @@ function wireEvents() {
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {
-		// --- Stapel-⋯ ZUERST, BEVOR closeOutside die Sidebar neu rendert ---
-		// Bug: closeOutside + data-deckopen liefen im selben Klick und zerstörten
-		// das Menü ("springt kurz weg und verschwindet" / Löschen wirkungslos).
+		// Stapel-⋯ ZUERST, sonst zerstört closeOutside das Menü im selben Klick
 		const deckMenuBtn = e.target.closest("[data-deckmenu]");
 		if (deckMenuBtn) {
 			e.preventDefault();
@@ -481,7 +417,7 @@ function wireEvents() {
 				(n ? " " + n + " Karte(n) (inkl. Unterstapel) wandern mit und sind wiederherstellbar." : "");
 			if (await U.confirm(msg, { title: "Stapel löschen", ok: "In Papierkorb", danger: true })) {
 				await STATE.dispatch("deckTrash", { name });
-				if (S.ankiDeck && (S.ankiDeck === name || S.ankiDeck.startsWith(name + "::"))) S.ankiDeck = null;
+				if (S.ankiDeck && inDeck(S.ankiDeck, name)) S.ankiDeck = null;
 				U.toast("Stapel im Papierkorb.", "success");
 			} else {
 				render();
@@ -489,13 +425,8 @@ function wireEvents() {
 			return;
 		}
 
-		// --- Topbar-Menüs (Teilen / ⋯) ZUERST, BEVOR closeOutside läuft ---
-		// FIX (19. Juli): Öffnen/Schließen lief bisher in extras.js in einem
-		// ZWEITEN document-Listener NACH diesem hier — zwei Handler arbeiteten
-		// am selben S.topMenu, dazwischen liefen closeOutside + renderMain.
-		// Zusätzlich blurActive(): renderMain() überspringt den Neuaufbau,
-		// solange der Fokus im Block-Editor/Titel liegt (isProtectedFocus) —
-		// das Menü wurde dann trotz gesetztem S.topMenu nie gezeichnet.
+		// Topbar-Menüs (Teilen/⋯) VOR closeOutside; blurActive nötig, weil renderMain
+		// bei geschütztem Fokus (Editor/Titel) sonst nie neu zeichnet
 		const topMenuBtn = e.target.closest("[data-sharemenu],[data-morepagemenu]");
 		if (topMenuBtn) {
 			e.preventDefault();
@@ -545,7 +476,7 @@ function wireEvents() {
 		}
 		// Schnellstart-Chip im leeren Chat: Prompt-Anfang einsetzen, Cursor ans Ende
 		if (t.dataset.chatsuggest) {
-			const inp = U.el("mainChatInput") || U.el("chatInput");
+			const inp = $("mainChatInput") || $("chatInput");
 			if (inp) { inp.value = t.dataset.chatsuggest; inp.focus(); inp.dispatchEvent(new Event("input", { bubbles: true })); }
 			return;
 		}
@@ -601,8 +532,7 @@ function wireEvents() {
 			return;
 		}
 
-		// Schnellaktionen des Home-Dashboards. Navigation bleibt bewusst unverändert:
-		// Home/Chat/Bibliothek sind die drei Hauptpillen, das Dashboard startet nur Aktionen.
+		// Schnellaktionen des Home-Dashboards
 		if (t.dataset.homeaction) {
 			switch (t.dataset.homeaction) {
 				case "search": SEARCH.openPalette(); break;
@@ -618,10 +548,8 @@ function wireEvents() {
 			return;
 		}
 
-		// Ein-/Ausklappen (Workspace oder Seite mit Unterseiten)
+		// Ein-/Ausklappen — erst nach Persistenz zeichnen (kein Aufblitzen des Defaults)
 		if (t.dataset.collapse) {
-			// treeOpen ist ein synchronisiertes Event. Erst nach der Persistenz
-			// neu zeichnen, damit der Default (eingeklappt) nie kurz aufblitzt.
 			await COLLAPSE.toggle(t.dataset.collapse);
 			if (S.view === "library") renderMain(); else renderSidebar();
 			return;
@@ -629,8 +557,8 @@ function wireEvents() {
 
 		// Icon-/Cover-Auswahl (auch aus dem Topbar-⋯-Menü erreichbar — Menü vorher schließen,
 		// sonst bleibt es hinter dem Auswahl-Dialog offen)
-		if (t.dataset.iconpick) { if (S.topMenu) { S.topMenu = null; renderMain(); } openIconPicker(); return; }
-		if (t.dataset.coverpick) { if (S.topMenu) { S.topMenu = null; renderMain(); } openCoverPicker(); return; }
+		if (t.dataset.iconpick) { closeTopMenu(); openIconPicker(); return; }
+		if (t.dataset.coverpick) { closeTopMenu(); openCoverPicker(); return; }
 		if (t.dataset.coverremove) {
 			if (S.currentPageId) await STATE.dispatch("pageUpdate", { id: S.currentPageId, patch: { cover: null, coverImg: null } });
 			return;
@@ -693,7 +621,7 @@ function wireEvents() {
 			S.modelMenuSection = t.dataset.modelsubmenu;
 			renderModelMenu();
 			if (S.modelMenuSection === "thinking") {
-				AI.detectThinkingCapabilities().then(() => renderModelMenu()).catch(() => renderModelMenu());
+				AI.detectThinkingCapabilities().then(renderModelMenu, renderModelMenu);
 			}
 			return;
 		}
@@ -704,7 +632,7 @@ function wireEvents() {
 			delete store[key];
 			S.thinkingCapabilities = store;
 			renderModelMenu();
-			AI.detectThinkingCapabilities().then(() => renderModelMenu()).catch(() => renderModelMenu());
+			AI.detectThinkingCapabilities().then(renderModelMenu, renderModelMenu);
 			return;
 		}
 		if (t.dataset.modelmenuback) {
@@ -745,17 +673,17 @@ function wireEvents() {
 
 		// Quelle für ein eigenes Modell wählen (Chips im Modell-Dropdown) — Eingabe bleibt erhalten
 		if (t.dataset.customprov) {
-			const keep = (document.getElementById("customModelInput") || {}).value || "";
+			const keep = ($("customModelInput") || {}).value || "";
 			S.customModelProviderPick = t.dataset.customprov;
 			renderModelMenu();
-			const inp2 = document.getElementById("customModelInput");
+			const inp2 = $("customModelInput");
 			if (inp2) { inp2.value = keep; inp2.focus(); }
 			return;
 		}
 
 		// Eigenes Modell für die gewählte Quelle setzen (unten im Modell-Dropdown)
 		if (t.dataset.modelcustomapply) {
-			const inp = document.getElementById("customModelInput");
+			const inp = $("customModelInput");
 			const providerId = S.customModelProviderPick || S.settings.aiProviderId;
 			const model = inp ? inp.value.trim() : "";
 			if (model) {
@@ -880,8 +808,8 @@ function wireEvents() {
 		if (t.dataset.ankiedit) { openCardEditor(t.dataset.ankiedit); return; }
 		if (t.dataset.ankinewcard) { openCardEditor(null); return; }
 		if (t.dataset.cardeditorsave) {
-			const front = (U.el("cardFront") || {}).value || "";
-			const back = (U.el("cardBack") || {}).value || "";
+			const front = ($("cardFront") || {}).value || "";
+			const back = ($("cardBack") || {}).value || "";
 			// Stapel aus Select bzw. „Neuer Stapel“-Feld (kein freies datalist mehr)
 			const deck = (RENDER_ANKI.readCardEditorDeck && RENDER_ANKI.readCardEditorDeck()) || "Standard";
 			if (!front.trim()) { U.toast("Die Vorderseite darf nicht leer sein.", "error"); return; }
@@ -953,8 +881,7 @@ function wireEvents() {
 					icon: kind === "heft" ? "📓" : null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId, kind,
 				});
 				openPage(id, p.newTab ? { newTab: true } : undefined);
-				const ti = document.getElementById("pageTitle");
-				if (ti) { ti.focus(); ti.select(); }
+				focusPageTitle();
 			}
 			return;
 		}
@@ -1017,7 +944,7 @@ function wireEvents() {
 		}
 		if (t.dataset.pagemove) {
 			S.pageMenuOpenId = null;
-			if (S.topMenu) { S.topMenu = null; renderMain(); } // Topbar-⋯-Menü schließen, sonst bleibt es hinter dem Dialog offen
+			closeTopMenu(); // sonst bleibt das Topbar-⋯-Menü hinter dem Dialog offen
 			renderSidebar();
 			openMoveDialog(t.dataset.pagemove);
 			return;
@@ -1082,14 +1009,8 @@ function wireEvents() {
 			const id = t.dataset.pagetrash;
 			const pg = S.pages[id];
 			if (pg) {
-				// Alle offenen Tabs der Seite UND ihrer Unterseiten schließen, da sie in den
-				// Papierkorb wandern. FIX (14. Juli 2026): Vorher wurde nur der Tab der Seite
-				// selbst geschlossen — Unterseiten-Tabs blieben als Geister-Tabs offen; war
-				// gerade eine Unterseite geöffnet, blieb die Ansicht auf dem Papierkorb-Inhalt.
-				const gone = new Set([id]);
-				(function collect(pid) {
-					for (const p of Object.values(S.pages)) if (p.parentId === pid && !gone.has(p.id)) { gone.add(p.id); collect(p.id); }
-				})(id);
+				// Tabs der Seite UND aller Unterseiten schließen (sonst Geister-Tabs)
+				const gone = descendantsOf(id);
 				S.tabs = S.tabs.filter((tid) => !gone.has(tid));
 				if (gone.has(S.currentPageId)) { S.currentPageId = null; S.view = "home"; }
 				await STATE.dispatch("pageTrash", { id });
@@ -1154,10 +1075,7 @@ function wireEvents() {
 		}
 		if (t.dataset.deckpurge) {
 			const name = t.dataset.deckpurge;
-			const n = Object.values(S.cards).filter((c) => {
-				const d = c.deck || "Standard";
-				return d === name || d.startsWith(name + "::");
-			}).length;
+			const n = Object.values(S.cards).filter((c) => inDeck(c.deck || "Standard", name)).length;
 			if (await U.confirm('Stapel „' + name + '“ endgültig löschen?' +
 				(n ? " " + n + " Karte(n) werden unwiderruflich entfernt." : "") +
 				" Das kann nicht rückgängig gemacht werden.", {
@@ -1213,23 +1131,25 @@ function wireEvents() {
 			return;
 		}
 
+		// Darstellungs-Umschalter über die Map statt 14 case-Zeilen
+		const appearance = APPEARANCE_BTN[t.id];
+		if (appearance) { SETTINGS.handleAppearanceSelect(...appearance); return; }
+
 		switch (t.id) {
-			// Mobile Shell v2 — Dock-Pille: ☰ Navigator-Sheet, 🃏 Karten, ＋ Neu, ✦ KI-Sheet
+			// Mobile Dock: ☰ Navigator, 🃏 Karten, ＋ Neu, ✦ KI-Sheet (Layout rein aus CSS)
 			case "btnMNav":
 				document.body.classList.toggle("mnav-open");
 				break;
 			case "btnMCards":
-				document.body.classList.remove("mnav-open");
+				closeMnav();
 				openAnki();
 				break;
 			case "btnMNew":
-				document.body.classList.remove("mnav-open");
+				closeMnav();
 				await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
 				break;
 			case "btnMAi":
-				// Gleiche Mechanik wie der Desktop-FAB (Panel einblenden) — das
-				// Vollbild-Layout kommt rein aus CSS („Mobile Shell v2", styles.css).
-				document.body.classList.remove("mnav-open");
+				closeMnav();
 				document.body.classList.remove("panel-collapsed");
 				renderTabs();
 				break;
@@ -1256,17 +1176,15 @@ function wireEvents() {
 				S.view = "library";
 				S.libFolder = null;
 				toggleChatFull(false);
-				if (document.activeElement) document.activeElement.blur();
+				blurActive();
 				render();
 				break;
-			case "btnChatNew":
-				// Neuer Chat im KI-Seitenpanel: die bisherige Unterhaltung ist bereits
-				// gesichert und bleibt über die Chat-Liste in der Sidebar erreichbar.
+			case "btnChatNew": // alte Unterhaltung ist gesichert, bleibt in der Chat-Liste
 				CHAT_FULLSCREEN.saveSideChat();
 				S.sideChat = [];
 				S.sideChatId = null;
 				render();
-				if (U.toast) U.toast("Neuer Chat gestartet");
+				U.toast("Neuer Chat gestartet");
 				break;
 			case "btnChatExpand":
 				CHAT_FULLSCREEN.toggleChatFull();
@@ -1282,13 +1200,13 @@ function wireEvents() {
 			case "btnAttach":
 			case "btnAttachFull":
 				// 📓 Heft-Anhang nur anbieten, wenn gerade ein Heft geöffnet ist.
-				if (U.el("attachHeft")) U.el("attachHeft").hidden = !HEFT.activeId;
+				if ($("attachHeft")) $("attachHeft").hidden = !HEFT.activeId;
 				CHAT_FULLSCREEN.handleAttachMenuToggle(t);
 				break;
 			case "attachHeft":
 				// 👁 Aktuelle Heft-Seite als Bild anhängen — die KI kann sie damit wie
 				// ein Foto "lesen" (Vision). Die Modell-Auswahl bleibt unangetastet.
-				U.el("attachMenu").hidden = true;
+				$("attachMenu").hidden = true;
 				try {
 					const heftUrl = await HEFT.pageAsDataUrl(HEFT.activeId, HEFT.activeIndex);
 					if (!heftUrl) { U.toast("Öffne zuerst ein Heft, um eine Seite anzuhängen.", "error"); break; }
@@ -1303,11 +1221,11 @@ function wireEvents() {
 				}
 				break;
 			case "attachFile":
-				U.el("attachMenu").hidden = true;
-				U.el("fileAttachment").click();
+				$("attachMenu").hidden = true;
+				$("fileAttachment").click();
 				break;
 			case "attachMention":
-				U.el("attachMenu").hidden = true;
+				$("attachMenu").hidden = true;
 				U.toast("Seiten- und Personen-Erwähnungen folgen als Nächstes.", "success");
 				break;
 			case "btnRemoveImage":
@@ -1368,7 +1286,7 @@ function wireEvents() {
 			case "btnModelChipFull":
 				await CHAT_FULLSCREEN.handleModelMenuToggle(t);
 				break;
-			case "btnPickBg": U.el("fileBg").click(); break;
+			case "btnPickBg": $("fileBg").click(); break;
 			case "btnCoverUpload": {
 				const pid = S.currentPageId;
 				if (!pid) break;
@@ -1407,12 +1325,12 @@ function wireEvents() {
 				S.view = "daily";
 				S.dailyMonth = null;
 				toggleChatFull(false);
-				if (document.activeElement) document.activeElement.blur();
+				blurActive();
 				render();
 				break;
 			case "btnDailyToday": await openDailyNote(localDayKey(new Date())); break;
 			case "btnHistory":
-				if (S.topMenu) { S.topMenu = null; renderMain(); } // ⋯-Menü schließen, sonst bleibt es hinter dem Verlauf-Dialog offen
+				closeTopMenu(); // sonst bleibt das ⋯-Menü hinter dem Verlauf-Dialog offen
 				if (S.currentPageId) await openHistory(S.currentPageId);
 				break;
 			case "btnHistRestore": {
@@ -1451,24 +1369,11 @@ function wireEvents() {
 			case "btnThemeLight":
 				SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");
 				break;
-			case "btnDensityComfortable": SETTINGS.handleAppearanceSelect("density", "comfortable"); break;
-			case "btnDensityCompact": SETTINGS.handleAppearanceSelect("density", "compact"); break;
-			case "btnMotionFull": SETTINGS.handleAppearanceSelect("motion", "full"); break;
-			case "btnMotionReduced": SETTINGS.handleAppearanceSelect("motion", "reduced"); break;
-			case "btnFontS": SETTINGS.handleAppearanceSelect("fontsize", "s"); break;
-			case "btnFontM": SETTINGS.handleAppearanceSelect("fontsize", "m"); break;
-			case "btnFontL": SETTINGS.handleAppearanceSelect("fontsize", "l"); break;
-			case "btnLockOn": SETTINGS.handleAppearanceSelect("overlearn", "on"); break;
-			case "btnLockOff": SETTINGS.handleAppearanceSelect("overlearn", "off"); break;
-			case "btnConfOn": SETTINGS.handleAppearanceSelect("confidence", "on"); break;
-			case "btnConfOff": SETTINGS.handleAppearanceSelect("confidence", "off"); break;
-			case "btnTeleOn": SETTINGS.handleAppearanceSelect("telemetry", "on"); break;
-			case "btnTeleOff": SETTINGS.handleAppearanceSelect("telemetry", "off"); break;
-			case "btnImport": U.el("fileImport").click(); break;
+			case "btnImport": $("fileImport").click(); break;
 			case "btnOpenPdf":
-				S.topMenu = null; // FIX: render() zeichnete das noch offene ⋯-Menü sonst sofort wieder
+				S.topMenu = null; // sonst zeichnet render() das offene ⋯-Menü sofort wieder
 				S.pdfOpen = !S.pdfOpen;
-				if (document.activeElement) document.activeElement.blur();
+				blurActive();
 				render();
 				break;
 			case "btnResetAll":
@@ -1476,7 +1381,7 @@ function wireEvents() {
 				break;
 			case "btnTrash":
 				S.view = "trash";
-				if (document.activeElement) document.activeElement.blur();
+				blurActive();
 				render();
 				break;
 		}
@@ -1486,8 +1391,8 @@ function wireEvents() {
 	// PERF (10. Juli): Anki-Suche debounced — vorher Full-Render der Browser-Tabelle pro Tastendruck
 	const debouncedAnkiSearch = U.debounce((value, pos) => {
 		S.ankiSearch = value;
-		renderAnki(U.el("main"));
-		const inp = U.el("ankiSearch");
+		renderAnki($("main"));
+		const inp = $("ankiSearch");
 		if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
 	}, 150);
 	document.addEventListener("input", (e) => {
@@ -1537,14 +1442,10 @@ function wireEvents() {
 		}
 	});
 
-	// Drag & Drop: Seite auf Seite ziehen = Unterseite; auf freien Baum = oberste Ebene.
-	// Gleiches gilt für Stapel: Stapel auf Stapel ziehen = Unterstapel; auf freien
-	// Baum = Stammebene. dragId kann eine Seiten-ID oder ein Stapelname sein;
-	// dragType unterscheidet beide ("page" vs "deck").
+	// Drag & Drop: auf Zeile = Unterseite/-stapel, auf freien Baum = Wurzelebene; dragType = "page"|"deck"
 	let dragId = null, dragType = null, dropZone = null;
 	document.addEventListener("dragstart", (e) => {
-		// ⋯ / + / Inputs in der Zeile dürfen KEINEN Drag starten — sonst frisst
-		// der Browser den Klick und das Menü flackert nur kurz auf.
+		// ⋯ / + / Inputs dürfen KEINEN Drag starten — sonst frisst der Browser den Klick
 		if (e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) {
 			e.preventDefault();
 			return;
@@ -1574,8 +1475,7 @@ function wireEvents() {
 		if (pageRow || deckRow || e.target.closest("#tree")) {
 			e.preventDefault();
 			clearDropMarks();
-			// Drei Zonen beim Ziehen über eine Seiten-Zeile: oberes Viertel = DAVOR
-			// einsortieren, unteres Viertel = DANACH, Mitte = als Unterseite (wie bisher).
+			// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = Unterseite
 			dropZone = "into";
 			if (pageRow && dragType === "page") {
 				const r = pageRow.getBoundingClientRect();
@@ -1591,7 +1491,7 @@ function wireEvents() {
 			else if (deckRow) deckRow.classList.add("drop-target");
 		}
 	});
-	document.addEventListener("dragend", () => { dropZone = null; clearDropMarks(); });
+	document.addEventListener("dragend", () => { dragId = null; dragType = null; dropZone = null; clearDropMarks(); }); // FIX: war doppelt registriert, dragType wurde nie zurückgesetzt
 	// Einsortieren VOR/NACH einer Seite (Sortier-Zonen) — läuft VOR dem allgemeinen
 	// Drop-Handler und stoppt ihn, wenn eine Sortier-Zone getroffen wurde.
 	document.addEventListener("drop", async (e) => {
@@ -1631,7 +1531,7 @@ function wireEvents() {
 		const pageRow = e.target.closest("[data-page]");
 		const deckRow = e.target.closest("[data-deck]");
 		const inTree = e.target.closest("#tree");
-		document.querySelectorAll(".row.drop-target").forEach((r) => r.classList.remove("drop-target"));
+		clearDropMarks(); // FIX: entfernt auch hängende blaue Sortier-Ränder
 		if (!pageRow && !deckRow && !inTree) { dragId = null; dragType = null; return; }
 		e.preventDefault();
 		if (dragType === "page") {
@@ -1641,10 +1541,10 @@ function wireEvents() {
 			}
 		} else if (dragType === "deck") {
 			const targetDeck = deckRow ? deckRow.dataset.deck : "";
-			// Verhindern: Stapel in sich selbst oder in eigenen Unterstapel ziehen (Zyklus).
+			// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
 			if (targetDeck !== dragId && targetDeck !== "Standard" && !targetDeck.startsWith(dragId + "::")) {
 				await STATE.dispatch("deckMove", { from: dragId, target: targetDeck });
-				if (S.ankiDeck && (S.ankiDeck === dragId || S.ankiDeck.startsWith(dragId + "::"))) {
+				if (S.ankiDeck && inDeck(S.ankiDeck, dragId)) {
 					const label = dragId.split("::").pop();
 					const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
 					S.ankiDeck = newRoot + S.ankiDeck.slice(dragId.length);
@@ -1654,33 +1554,22 @@ function wireEvents() {
 		dragId = null;
 		dragType = null;
 	});
-	document.addEventListener("dragend", () => {
-		document.querySelectorAll(".row.drop-target").forEach((r) => r.classList.remove("drop-target"));
-		dragId = null;
-	});
-
-	// Chat — sowohl das Seitenpanel-Formular als auch das Vollbild-Chat-Tab-Formular
-	// (letzteres wird bei jedem Render neu erzeugt, daher über Delegation abgefangen).
+	// Chat-Formulare (Panel + Vollbild) per Delegation — Vollbild-Form wird pro Render neu erzeugt
+	const CHAT_FORMS = { chatForm: ["chatInput", "side"], mainChatForm: ["mainChatInput", "full"] };
 	document.addEventListener("submit", async (e) => {
-		if (e.target.id === "chatForm") {
-			e.preventDefault();
-			const inp = U.el("chatInput");
-			const text = inp.value.trim();
-			inp.value = ""; syncComposer(inp);
-			await sendChatMessage(text, "side");
-		} else if (e.target.id === "mainChatForm") {
-			e.preventDefault();
-			const inp = U.el("mainChatInput");
-			const text = inp.value.trim();
-			inp.value = ""; syncComposer(inp);
-			await sendChatMessage(text, "full");
-		}
+		const def = CHAT_FORMS[e.target.id];
+		if (!def) return;
+		e.preventDefault();
+		const inp = $(def[0]);
+		const text = inp.value.trim();
+		inp.value = ""; syncComposer(inp);
+		await sendChatMessage(text, def[1]);
 	});
 	// Enter sendet, Shift+Enter = Zeilenumbruch (Seitenpanel + Vollbild-Chat)
 	document.addEventListener("keydown", (e) => {
 		if (e.key !== "Enter" || e.shiftKey) return;
-		if (e.target.id === "chatInput") { e.preventDefault(); U.el("chatForm").requestSubmit(); }
-		else if (e.target.id === "mainChatInput") { e.preventDefault(); U.el("mainChatForm").requestSubmit(); }
+		if (e.target.id === "chatInput") { e.preventDefault(); $("chatForm").requestSubmit(); }
+		else if (e.target.id === "mainChatInput") { e.preventDefault(); $("mainChatForm").requestSubmit(); }
 	});
 
 	// ---------- Inline-Umbenennen (Seiten + Stapel) — Enter bestätigt, Esc/Blur bricht ab ----------
@@ -1704,7 +1593,7 @@ function wireEvents() {
 				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
 				const to = prefix + newLabel;
 				await STATE.dispatch("deckRename", { from, to });
-				if (S.ankiDeck && (S.ankiDeck === from || S.ankiDeck.startsWith(from + "::"))) S.ankiDeck = to + S.ankiDeck.slice(from.length);
+				if (S.ankiDeck && inDeck(S.ankiDeck, from)) S.ankiDeck = to + S.ankiDeck.slice(from.length);
 			}
 			render();
 		}
@@ -1721,10 +1610,8 @@ function wireEvents() {
 	document.addEventListener("focusout", (e) => {
 		if (e.target.dataset.renamename || e.target.dataset.deckrenamename) commitRename(e.target);
 	});
-	// Der große Chat wird dynamisch nach jedem Tab-/Chat-Render aufgebaut. Der
-	// Observer hängt den Debug-Button deshalb ausschließlich in dessen Kopfzeile,
-	// nie in den kleinen Seiten-Chat.
-	const main = U.el("main");
+	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
+	const main = $("main");
 	if (main) new MutationObserver(mountFullChatDebugButton).observe(main, { childList: true, subtree: true });
 	mountFullChatDebugButton();
 
@@ -1735,11 +1622,8 @@ function wireEvents() {
 		CHAT_FULLSCREEN.handlePaste(e);
 	});
 
-	// 📱 FIX (18. Juli, spät): iPad-Tastatur — iOS schiebt die App beim Öffnen
-	// der Bildschirmtastatur nach oben, stellt den Fenster-Scroll nach dem
-	// Einklappen aber nicht zuverlässig zurück (App „hängt oben“). Sobald die
-	// Tastatur zugeht (Visual Viewport wieder ~volle Höhe) oder kein
-	// Eingabefeld mehr den Fokus hat, wird das Fenster auf 0/0 zurückgesetzt.
+	// 📱 FIX iPad-Tastatur: iOS stellt den Fenster-Scroll nach dem Einklappen nicht
+	// zurück (App „hängt oben“) → beim Schließen/Fokusverlust auf 0/0 zurücksetzen
 	const isEditing = () => {
 		const a = document.activeElement;
 		return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);

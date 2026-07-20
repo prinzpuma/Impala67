@@ -16,48 +16,37 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { TELE } from "./telemetrie.js";
 
-const deckTreeHtml = (...args) => RENDER_ANKI.deckTreeHtml(...args);
-const renderAnki = (...args) => RENDER_ANKI.renderAnki(...args);
-
-// Gemeinsamer Icon-Helfer: eigenes Icon > PDF-Symbol > Fallback (Standard 📝).
-// Ersetzt 8 vorher verstreute, fast identische Kopien in dieser Datei sowie in
-// library.js und search.js (dort über RENDER.pageIconLabel/RENDER.pageIconHtml).
-function pageIconLabel(pg, fallback) {
-	if (pg.icon) return pg.icon;
-	if (pg.kind === "heft") return "📓";
-	if (pg.pdfId) return "📄";
-	return fallback === undefined ? "📝" : fallback;
-}
-function pageIconHtml(pg, fallback) {
-	const icon = pageIconLabel(pg, fallback);
-	return icon ? U.esc(icon) + " " : "";
+// v13: KISS/DRY-Refactor, funktionsgleich zu v12. Fixes: openReview crasht nicht
+// mehr bei leerer dueNow-Queue; toter Code entfernt (cap/note im Modell-Menü,
+// panelCollapsed in renderTabs). DRY: lsGet/lsSet, openOverlay, blobUrl, trashRow.
+const esc = (s) => U.esc(s);
+const $ = (id) => U.el(id);
+const lsGet = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* egal */ } };
+function openOverlay(html) {
+	const o = $("overlay");
+	if (!o) return null;
+	o.hidden = false;
+	o.innerHTML = html;
+	return o;
 }
 
-// Aktiv im Block-Editor? Wird an mehreren Stellen gebraucht, um Re-Renders
-// während des Tippens zu überspringen (Editor besitzt dann die Live-Ansicht).
-function isEditingBlock() {
-	const ae = document.activeElement;
-	return !!(ae && ((ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit"))) ||
-		(ae.isContentEditable && ae.closest && ae.closest(".block-editor"))));
-}
+const deckTreeHtml = (...a) => RENDER_ANKI.deckTreeHtml(...a);
+const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 
-// Fokus-Ziele, bei denen ein Neuaufbau von #main den Cursor/die Eingabe zerstören
-// würde (Titel, Filter, Token-Felder, Block-/DB-Zellen-Editor).
+// Icon: eigenes > Heft > PDF > Fallback (auch von library.js/search.js genutzt)
+const pageIconLabel = (pg, fb = "📝") => pg.icon || (pg.kind === "heft" ? "📓" : pg.pdfId ? "📄" : fb);
+const pageIconHtml = (pg, fb) => { const i = pageIconLabel(pg, fb); return i ? esc(i) + " " : ""; };
+
+// Fokus-Wächter: Re-Renders überspringen, solange der Nutzer tippt
+const inBlockEditor = (ae) => !!(ae && ((ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit"))) || (ae.isContentEditable && ae.closest && ae.closest(".block-editor"))));
+const isEditingBlock = () => inBlockEditor(document.activeElement);
 const PROTECTED_FOCUS_IDS = new Set(["pageTitle", "inpWsName", "inpNotionToken", "inpNotionPage", "libFilter", "ankiSearch"]);
-function isProtectedFocus(ae) {
-	return !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || (ae.isContentEditable && ae.closest && ae.closest(".block-editor")) || (ae.classList &&
-		(ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit") || ae.classList.contains("db-cell"))));
-}
+const isProtectedFocus = (ae) => !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || inBlockEditor(ae) || (ae.classList && ae.classList.contains("db-cell")));
 
-// render.js — UI-Aufbau im Notion-Stil: einklappbare Sidebar (Workspaces/Seiten
-// oder Chat-Verlauf), Tab-Leiste mit Zurück/Vor, Notion-artiger Seitenkopf
-// (Breadcrumb, Icon, Cover), Chat mit Modellwahl, Thinking- und Edit-Karten.
+// render.js — UI-Aufbau im Notion-Stil: Sidebar, Tabs, Seitenkopf, Chat.
 function render() {
-	// PERF (18. Juli, Audit-Punkt „Doppel-render() nach dispatch“): Läuft ein
-	// expliziter render()-Aufruf (z.B. direkt nach einem dispatch im Handler), wird
-	// ein noch ausstehender, per rAF geplanter Render storniert — er würde denselben
-	// Zustand unmittelbar danach ein zweites Mal komplett aufbauen. Zentral hier
-	// gelöst, statt Dutzende render()-Aufrufe in app.js einzeln anzufassen.
+	// Expliziter render() storniert einen ausstehenden rAF-Render (sonst Doppel-Aufbau)
 	if (_renderRaf) { cancelAnimationFrame(_renderRaf); _renderRaf = 0; }
 	renderSidebar();
 	renderMain();
@@ -68,51 +57,32 @@ function render() {
 	renderPendingChip("full");
 	renderStatusDot();
 	renderModelBar();
-	const due = STATE.dueCards().length;
-	const el = U.el("dueCount");
-	if (el) el.textContent = due;
+	const due = $("dueCount");
+	if (due) due.textContent = STATE.dueCards().length;
 }
 
-// PERF (10. Juli): Full-Render nach jedem dispatch() war der teuerste Hot Path.
-// Content-Autosave (editor.save → pageUpdate {content}) triggert keinen Full-Render
-// mehr, solange der Block-Editor den Fokus hat. Mehrere dispatches in einem Frame
-// werden per rAF zu einem Render zusammengezogen.
+// PERF: mehrere dispatches pro Frame → EIN Render (rAF-gebündelt)
 let _renderRaf = 0;
 function scheduleRender() {
 	if (_renderRaf) return;
-	_renderRaf = requestAnimationFrame(() => {
-		_renderRaf = 0;
-		render();
-	});
+	_renderRaf = requestAnimationFrame(() => { _renderRaf = 0; render(); });
 }
 function onStateChange(type, ev) {
-	const p = (ev && ev.payload) || {};
-	// Reiner Content-Patch: Editor besitzt die Live-Ansicht — Sidebar/Tabs/Chat
-	// neu bauen wäre O(Seitenbaum + Chat-Markdown/Math) ohne sichtbaren Gewinn.
+	const p = ev?.payload || {};
+	// Reiner Content-Patch: Editor besitzt die Live-Ansicht. viaEditor = eigener
+	// Autosave (Fokus-Check würde nach dem async IndexedDB-Write fälschlich anschlagen
+	// und #main samt Scroll neu bauen). Extern geänderte offene Seite → nur Main.
 	if (type === "pageUpdate" && p.patch && Object.keys(p.patch).length === 1 && "content" in p.patch) {
-		// Editor-eigener Autosave: sein DOM/Scroll ist bereits konsistent (der
-		// Block-Editor hat sich nach jeder Änderung selbst neu gezeichnet). dispatch()
-		// feuert dieses Event erst NACH dem asynchronen IndexedDB-Write, also oft in
-		// einem Moment, in dem der Fokus kurz nicht in einem Textfeld liegt (z.B.
-		// nach Undo mit reiner Blockauswahl). isEditingBlock() hielt das früher
-		// fälschlich für eine externe Änderung und baute #main (inkl. .page-scroll)
-		// komplett neu auf — der frische Scroll-Container startete dann immer bei 0.
-		if (p.viaEditor) return;
-		if (isEditingBlock()) return;
-		// Externe Content-Änderung der geöffneten Seite (z.B. KI-Tool) → nur Main
-		if (p.id === S.currentPageId && S.view === "page") {
-			renderMain();
-			return;
-		}
+		if (p.viaEditor || isEditingBlock()) return;
+		if (p.id === S.currentPageId && S.view === "page") renderMain();
 		return;
 	}
-	// Heft gespeichert: der Canvas ist die Live-Ansicht — kein Full-Render nötig.
-	// Nur die Bibliothek (Metadaten/Vorschau) auffrischen, falls sie gerade offen ist.
+	// Heft: Canvas ist die Live-Ansicht — nur die Bibliothek auffrischen, falls offen
 	if (type === "heftUpdated") {
 		if (S.view === "library") renderMain();
 		return;
 	}
-	// Modell-/Thinking-Umschalter: nur die Modell-Leiste, nicht die ganze App
+	// Modell-/Thinking-Umschalter: nur die Modell-Leiste
 	if (type === "settingsSet") {
 		const keys = Object.keys(p);
 		if (keys.length && keys.every((k) => k === "aiModel" || k === "aiProviderId" || k === "thinkingLevel")) {
@@ -124,26 +94,14 @@ function onStateChange(type, ev) {
 }
 
 function renderTopbar() {
-	// Genau EINE UI-Pille aufgeklappt.
-	// Expliziter Chat-Modus (Sidebar-Chatliste) hat Vorrang vor Anki — sonst
-	// bleibt nach Karten → Chat die Karten-Pille aktiv und die Chat-Pille wächst
-	// erst, wenn man einen Chat anklickt (openPage setzt view auf "chat").
-	const mode = S.sidebarMode === "chats" ? "chats"
-		: (S.view === "anki" ? "anki" : "files");
-	const home = U.el("btnHome");
-	const chat = U.el("btnChatTab");
-	const anki = U.el("btnAnki");
-	if (home) home.classList.toggle("active", mode === "files");
-	if (chat) chat.classList.toggle("active", mode === "chats");
-	if (anki) anki.classList.toggle("active", mode === "anki");
-	const lib = U.el("btnLibrary");
-	if (lib) lib.classList.toggle("active", S.view === "library");
-	const daily = U.el("btnDaily");
-	if (daily) daily.classList.toggle("active", S.view === "daily");
-
-	// Mobile Shell v2: die Dock-Pille (☰/+/✦) ist eine reine Aktions-Leiste ohne
-	// Bereichs-Zustand — Aktiv-Zustände zeigt das Navigator-Sheet selbst über die
-	// Topbar-Pillen oben (dieselben Elemente wie am Desktop, nichts doppelt).
+	// Genau EINE Pille aktiv; expliziter Chat-Modus hat Vorrang vor Anki
+	const mode = S.sidebarMode === "chats" ? "chats" : S.view === "anki" ? "anki" : "files";
+	const set = (id, on) => { const b = $(id); if (b) b.classList.toggle("active", on); };
+	set("btnHome", mode === "files");
+	set("btnChatTab", mode === "chats");
+	set("btnAnki", mode === "anki");
+	set("btnLibrary", S.view === "library");
+	set("btnDaily", S.view === "daily");
 }
 
 function aiStatusMeta() {
@@ -152,83 +110,64 @@ function aiStatusMeta() {
 	return { cls: "checking", title: "KI-Status wird geprüft…", label: "KI …" };
 }
 
-// KI-Status-Pille nur im Chat (Side-Panel-Header + Vollbild-Chat-Header).
-// Nicht in Tab-Leiste / FAB / Mobile — dort stört sie und ist oft unsichtbar relevant.
+// KI-Status-Pille nur im Chat (Side-Panel + Vollbild)
 function fillAiStatusChip(chip, meta) {
 	if (!chip) return;
-	chip.className = "ai-status-chip" + (meta.cls ? " " + meta.cls : "");
+	chip.className = "ai-status-chip " + meta.cls;
 	chip.title = meta.title + " — Klick: erneut prüfen";
-	chip.innerHTML = '<span class="dot ' + meta.cls + '"></span><span class="ai-status-label">' + U.esc(meta.label) + "</span>";
+	chip.innerHTML = `<span class="dot ${meta.cls}"></span><span class="ai-status-label">${esc(meta.label)}</span>`;
 	chip.hidden = false;
 }
 function renderStatusDot() {
 	const meta = aiStatusMeta();
-	// Side-Panel-Chip IMMER befüllen — auch wenn das Panel eingeklappt ist.
-	// FIX: Früher wurde bei body.panel-collapsed die Pille übersprungen/geleert.
-	// Beim Aufklappen (btnShowPanel) lief kein erneutes renderStatusDot → leere Pille
-	// im kleinen Chat, während der große Chat (renderFullChat) sie frisch füllte.
-	// Das Panel selbst ist per CSS versteckt (body.panel-collapsed #panel), der DOM-Stand
-	// muss trotzdem aktuell bleiben, damit der Status beim Öffnen sofort sichtbar ist.
-	const sideChip = U.el("aiStatusChip");
-	if (sideChip) fillAiStatusChip(sideChip, meta);
-	// Vollbild-Chat: nur wenn view === chat (Chip wird bei renderFullChat neu erzeugt)
-	const fullChip = U.el("aiStatusChipFull");
+	// FIX: Side-Chip IMMER befüllen (auch bei body.panel-collapsed) — der DOM muss
+	// beim Aufklappen aktuell sein, sonst bleibt die Pille im kleinen Chat leer
+	fillAiStatusChip($("aiStatusChip"), meta);
+	const fullChip = $("aiStatusChipFull");
 	if (fullChip) {
 		if (S.view === "chat") fillAiStatusChip(fullChip, meta);
 		else fullChip.hidden = true;
 	}
-	const set = U.el("aiStatusSettings");
+	const set = $("aiStatusSettings");
 	if (set) {
-		set.className = "ai-status-banner" + (meta.cls ? " " + meta.cls : "");
-		set.innerHTML = '<span class="dot ' + meta.cls + '"></span><span>' + U.esc(meta.title) + '</span>' +
-			'<button type="button" id="btnRecheckAI" class="mini">Erneut prüfen</button>';
+		set.className = "ai-status-banner " + meta.cls;
+		set.innerHTML = `<span class="dot ${meta.cls}"></span><span>${esc(meta.title)}</span><button type="button" id="btnRecheckAI" class="mini">Erneut prüfen</button>`;
 	}
 }
 
-// Aktuelles Modell als lesbares Label ("Quelle · modell").
 function currentModelLabel() {
 	const cur = S.settings.aiModel || "";
 	const pr = (S.settings.aiProviders || []).find((p) => p.id === S.settings.aiProviderId);
-	return cur ? ((pr ? pr.name + " · " : "") + cur) : "Kein Modell";
+	return cur ? (pr ? pr.name + " · " : "") + cur : "Kein Modell";
 }
 
-// Aktualisiert beide Auslöser: das kompakte Icon im kleinen Chat-Panel und den
-// Modell-Chip unten rechts im großen Chat-Fenster (wie in Notion).
+// Beide Auslöser (kleines Panel + großer Chat) bekommen dasselbe Icon/Label
 function renderModelBar() {
 	const label = currentModelLabel();
-	const modelIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="currentColor"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></svg>';
-	const chip = U.el("btnModelChipFull");
-	if (chip) { chip.innerHTML = modelIcon; chip.title = "Modell: " + label; }
-	const icon = U.el("btnModelMenu");
-	if (icon) { icon.innerHTML = modelIcon; icon.title = "Modell: " + label; }
+	const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="currentColor"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></svg>';
+	for (const id of ["btnModelChipFull", "btnModelMenu"]) {
+		const b = $(id);
+		if (b) { b.innerHTML = icon; b.title = "Modell: " + label; }
+	}
 	renderModelMenu();
 }
 
 function currentThinkingCapability() {
-	const provider = String(S.settings.aiProviderId || "");
-	const model = String(S.settings.aiModel || "");
-	const pr = (S.settings.aiProviders || []).find((item) => item.id === provider);
+	const pr = (S.settings.aiProviders || []).find((p) => p.id === S.settings.aiProviderId);
 	const base = String((pr && pr.base) || "").replace(/\/+$/, "");
-	const key = [provider, base, model].join("::");
+	const key = [String(S.settings.aiProviderId || ""), base, String(S.settings.aiModel || "")].join("::");
 	return (S.thinkingCapabilities || {})[key] || null;
 }
 
-// Baut den Inhalt des einheitlichen Modell-Dropdowns: nach Quelle gruppiert, das
-// aktive Modell mit Häkchen, unten ein Bereich für ein frei eingetipptes Modell
-// (Quelle über Chips wählbar statt über ein hässliches natives <select>).
-// ★ Modell-Favoriten (18. Juli): angepinnte Modelle stehen quellenübergreifend ganz
-// oben im Dropdown. Gespeichert lokal als "providerId::modelId" — bewusst nicht
-// synchronisiert, weil Quellen-IDs pro Gerät verschieden sein können.
+// ★ Modell-Favoriten: "providerId::modelId", bewusst lokal (Quellen-IDs sind gerätespezifisch)
 const MODEL_FAV_KEY = "impala67FavModels";
-function favModels() {
-	try { return new Set(JSON.parse(localStorage.getItem(MODEL_FAV_KEY) || "[]")); } catch (err) { return new Set(); }
-}
+const favModels = () => new Set(lsGet(MODEL_FAV_KEY, []));
 function toggleFavModel(key) {
 	const s = favModels();
-	if (s.has(key)) s.delete(key); else s.add(key);
-	try { localStorage.setItem(MODEL_FAV_KEY, JSON.stringify([...s])); } catch (err) { /* egal */ }
+	s.has(key) ? s.delete(key) : s.add(key);
+	lsSet(MODEL_FAV_KEY, [...s]);
 }
-// Capture-Listener, damit der Stern NICHT gleichzeitig das Modell umschaltet
+// Capture: Stern darf nicht gleichzeitig das Modell umschalten
 document.addEventListener("click", (e) => {
 	const b = e.target && e.target.closest && e.target.closest("[data-modelfav]");
 	if (!b) return;
@@ -240,335 +179,232 @@ document.addEventListener("click", (e) => {
 
 function modelMenuInnerHtml() {
 	const providers = S.settings.aiProviders || [];
-	const curProviderId = S.settings.aiProviderId || "";
+	const curPr = S.settings.aiProviderId || "";
 	const curModel = S.settings.aiModel || "";
 	const live = S.availableModels || [];
 	const section = S.modelMenuSection || "root";
 	const back = '<button class="model-submenu-back" data-modelmenuback="1">‹ Zurück</button>';
+	const enabled = S.settings.thinkingEnabled !== false;
 	if (section === "root") {
-		const enabled = S.settings.thinkingEnabled !== false;
-		const cap = currentThinkingCapability();
-		const label = enabled ? "Ein" : "Aus";
-		// Nie den Eintrag entfernen: Ein unbekanntes Modell darf nicht den
-		// Dropdown-Inhalt „wegblenden“. Die Unterseite erklärt stattdessen klar,
-		// ob der aktuelle Chat-Adapter eine Thinking-Stufe steuern kann.
-		const thinkingRow = '<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>' + U.esc(label) + ' ›</small></button>';
-		return '<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>' + U.esc(currentModelLabel()) + ' ›</small></button>' + thinkingRow;
+		// Thinking-Eintrag nie ausblenden — die Unterseite erklärt die Fähigkeit selbst
+		return `<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>${esc(currentModelLabel())} ›</small></button>` +
+			`<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>${enabled ? "Ein" : "Aus"} ›</small></button>`;
 	}
 	if (section === "thinking") {
 		const cap = currentThinkingCapability();
-		if (!cap || cap.state === "loading") {
-			return back + '<div class="menu-label">Thinking</div><div class="menu-note">API-Fähigkeiten werden geprüft…</div>';
-		}
-		const enabled = S.settings.thinkingEnabled !== false;
-		const note = !cap || cap.state === "loading"
-			? "Modellinformationen werden geladen…"
-			: (cap.error || "Das Modell verwendet bei Aktivierung seine dokumentierte Standardtiefe.");
-		return back + '<div class="menu-label">Thinking</div><div class="menu-note">' + U.esc(note) + '</div>' +
-			[[true, "Ein"], [false, "Aus"]].map(([value, label]) => '<button class="menu-item' + (value === enabled ? " active" : "") + '" data-thinkingenabled="' + (value ? "1" : "0") + '">' +
-				'<span class="menu-item-label">' + label + '</span>' + (value === enabled ? '<span class="menu-check">✓</span>' : "") + '</button>').join("");
+		if (!cap || cap.state === "loading") return back + '<div class="menu-label">Thinking</div><div class="menu-note">API-Fähigkeiten werden geprüft…</div>';
+		return back + '<div class="menu-label">Thinking</div><div class="menu-note">' + esc(cap.error || "Das Modell verwendet bei Aktivierung seine dokumentierte Standardtiefe.") + "</div>" +
+			[[true, "Ein"], [false, "Aus"]].map(([v, label]) =>
+				`<button class="menu-item${v === enabled ? " active" : ""}" data-thinkingenabled="${v ? "1" : "0"}"><span class="menu-item-label">${label}</span>${v === enabled ? '<span class="menu-check">✓</span>' : ""}</button>`).join("");
 	}
-	let html = back + '<div class="menu-label">Verfügbare Modelle</div>';
-	if (S.modelMenuLoading) return html + '<div class="menu-note">Modelle werden geladen…</div>';
+	const head = back + '<div class="menu-label">Verfügbare Modelle</div>';
+	if (S.modelMenuLoading) return head + '<div class="menu-note">Modelle werden geladen…</div>';
 	const favSet = favModels();
 	const opt = (prId, value, active) => {
-		const favKey = prId + "::" + value;
-		const fav = favSet.has(favKey);
-		return '<div class="model-row">' +
-			'<button class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(prId) + "::" + U.esc(value) + '">' +
-			'<span class="menu-item-label">' + U.esc(value) + '</span>' + (active ? '<span class="menu-check">✓</span>' : "") + '</button>' +
-			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + U.esc(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit ganz nach oben pinnen") + '">' + (fav ? "★" : "☆") + '</button></div>';
+		const favKey = prId + "::" + value, fav = favSet.has(favKey);
+		return `<div class="model-row"><button class="menu-item${active ? " active" : ""}" data-modelset="${esc(prId)}::${esc(value)}"><span class="menu-item-label">${esc(value)}</span>${active ? '<span class="menu-check">✓</span>' : ""}</button>` +
+			`<button type="button" class="model-fav${fav ? " on" : ""}" data-modelfav="${esc(favKey)}" title="${fav ? "Favorit entfernen" : "Als Favorit ganz nach oben pinnen"}">${fav ? "★" : "☆"}</button></div>`;
 	};
-	// ★ Favoriten zuerst — quellenübergreifend ganz oben
+	const rows = (ms) => ms.map((m) => opt(m.providerId, m.id, m.providerId === curPr && m.id === curModel)).join("");
+	// ★ Favoriten quellenübergreifend zuerst
 	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id));
-	if (favLive.length) {
-		html += '<div class="menu-label">★ Favoriten</div>' +
-			favLive.map((m) => opt(m.providerId, m.id, m.providerId === curProviderId && m.id === curModel)).join("");
+	let body = favLive.length ? '<div class="menu-label">★ Favoriten</div>' + rows(favLive) : "";
+	for (const pr of providers) {
+		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
+		if (rest.length) body += `<div class="menu-label">${esc(pr.name || pr.id)}</div>` + rows(rest);
 	}
-	providers.forEach((pr) => {
-		const liveForPr = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
-		if (!liveForPr.length) return;
-		html += '<div class="menu-label">' + U.esc(pr.name || pr.id) + '</div>' +
-			liveForPr.map((m) => opt(pr.id, m.id, pr.id === curProviderId && m.id === curModel)).join("");
-	});
-	return html === back + '<div class="menu-label">Verfügbare Modelle</div>'
-		? html + '<div class="menu-note">Gerade ist kein Modell erreichbar oder geladen.</div>' : html;
+	return head + (body || '<div class="menu-note">Gerade ist kein Modell erreichbar oder geladen.</div>');
 }
 
-// Zeigt/versteckt beide Dropdown-Container (kleines Panel + großes Chat-Fenster)
-// und befüllt den gerade geöffneten mit demselben Inhalt — ein Design für beide.
+// EIN Inhalt für beide Dropdown-Container (kleines Panel + großes Chat-Fenster)
 function renderModelMenu() {
 	const inner = modelMenuInnerHtml();
-	["modelMenu", "modelMenuFull"].forEach((id) => {
-		const el = U.el(id);
-		if (!el) return;
+	for (const id of ["modelMenu", "modelMenuFull"]) {
+		const m = $(id);
+		if (!m) continue;
 		const which = id === "modelMenuFull" ? "full" : "panel";
 		const show = S.modelMenuOpen && (S.modelMenuAnchor || "panel") === which;
-		el.hidden = !show;
+		m.hidden = !show;
 		if (show) {
-			el.innerHTML = inner;
-			// Beide Chat-Varianten verwenden dieselbe Messung und erscheinen dadurch
-			// direkt über ihrem jeweiligen Regler-Icon.
-			POPOVERS.position(U.el(which === "full" ? "btnModelChipFull" : "btnModelMenu"), el, { prefer: "above", gap: 6 });
+			m.innerHTML = inner;
+			POPOVERS.position($(which === "full" ? "btnModelChipFull" : "btnModelMenu"), m, { prefer: "above", gap: 6 });
 		}
-	});
+	}
 }
 
-// ---------- Ein-/Ausklappen (Workspaces + Unterseiten, bleibt über Neustarts erhalten) ----------
+// ---------- Sidebar (Collapse-Zustand bleibt über Neustarts erhalten) ----------
 function wsHeadHtml(ws) {
 	const key = "ws:" + ws.id;
-	const collapsed = COLLAPSE.isCollapsed(key);
-	return '<div class="ws-head">' +
-		'<button class="row-chevron ws-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + key + '" title="Ein-/Ausklappen">▸</button>' +
-		'<span class="ws-name">' + U.esc(ws.name) + "</span>" +
-		'<button class="mini" data-newpage="' + ws.id + '" title="Neue Seite in ' + U.esc(ws.name) + '">+</button></div>';
+	return `<div class="ws-head"><button class="row-chevron ws-chevron${COLLAPSE.isCollapsed(key) ? "" : " open"}" data-collapse="${key}" title="Ein-/Ausklappen">▸</button><span class="ws-name">${esc(ws.name)}</span><button class="mini" data-newpage="${ws.id}" title="Neue Seite in ${esc(ws.name)}">+</button></div>`;
 }
 
-// PERF (18. Juli): identisches Markup nicht erneut parsen/layouten — der komplette
-// Neuaufbau von Sidebar/Tab-Leiste bei JEDEM Hintergrund-Render war reine DOM-Arbeit
-// ohne sichtbare Änderung. Der String-Vergleich ist um Größenordnungen billiger als
-// innerHTML (HTML-Parsen + Style/Layout + GC der alten Knoten).
-function setHtmlIfChanged(el, html, key) {
-	const k = key || "_lastHtml";
-	if (el[k] === html) return false;
+// PERF: identisches Markup nicht erneut parsen/layouten — Stringvergleich ist
+// um Größenordnungen billiger als innerHTML
+function setHtmlIfChanged(el, html, key = "_lastHtml") {
+	if (el[key] === html) return false;
 	el.innerHTML = html;
-	el[k] = html;
+	el[key] = html;
 	return true;
 }
 
-// Sidebar: "files" = Workspaces mit einklappbarem Seitenbaum, "chats" = Chat-Verlauf
+// "files" = Workspaces mit Seitenbaum, "chats" = Chat-Verlauf
 function renderSidebar() {
 	renderTopbar();
-	const tree = U.el("tree");
+	const tree = $("tree");
 	if (!tree) return;
-	// FIX: ein Hintergrund-Render (z.B. durch einen Content-Patch anderswo) konnte
-	// bisher mitten im Umbenennen einer Seite/eines Stapels den kompletten Baum neu
-	// aufbauen und dabei Fokus + bereits getippten Text im Umbenennen-Feld zerstören.
-	// Der eigentliche Commit-/Abbrechen-Render läuft weiterhin normal durch, weil er
-	// die renamingPageId/renamingDeck-Flags VOR dem Aufruf von render() bereits leert.
+	// FIX: Hintergrund-Render darf laufendes Umbenennen (Fokus + Text) nicht zerstören;
+	// Commit/Abbrechen leert die Flags VOR render() und läuft normal durch
 	const ae = document.activeElement;
 	if ((S.renamingPageId || S.renamingDeck) && ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)) return;
-
-	// Explizit gewählter Chat-Modus hat Vorrang — sonst ist die Chat-Liste
-	// aus der Anki-Ansicht heraus nie erreichbar (Chat-Knopf wirkte "tot").
-	if (S.sidebarMode === "chats") {
-		setHtmlIfChanged(tree, chatListHtml());
-		return;
-	}
-
-	// Im Karteikarten-Bereich zeigt die linke Spalte den Stapel-Baum — wie der
-	// Seitenbaum im Home-Tab: Unterstapel anlegen, ein-/ausklappen, umbenennen.
+	// Expliziter Chat-Modus hat Vorrang (sonst aus Anki heraus nie erreichbar)
+	if (S.sidebarMode === "chats") return void setHtmlIfChanged(tree, chatListHtml());
 	if (S.view === "anki") {
 		setHtmlIfChanged(tree, deckTreeHtml());
-		// Wie Seiten-⋯: nach dem Rebuild fixed positionieren, sonst clippt #tree.
+		// Offenes ⋯-Menü nach Rebuild fixed neu positionieren, sonst clippt #tree
 		if (S.deckMenuOpenName) {
-			const name = S.deckMenuOpenName;
-			const anchor = tree.querySelector('[data-deckmenu="' + CSS.escape(name) + '"]');
-			const menu = tree.querySelector('[data-deckmenu-panel="' + CSS.escape(name) + '"]');
+			const name = CSS.escape(S.deckMenuOpenName);
+			const anchor = tree.querySelector(`[data-deckmenu="${name}"]`);
+			const menu = tree.querySelector(`[data-deckmenu-panel="${name}"]`);
 			if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
 		}
 		return;
 	}
-
-	let html = "";
-	// ★ Favoriten — gepinnte Seiten immer oben in der Sidebar
+	// ★ Favoriten immer oben, dann Workspaces mit Seitenbaum
 	const favs = STATE.activePages().filter((p) => p.favorite);
-	if (favs.length) {
-		html += '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' +
-			favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("");
-	}
+	let html = favs.length ? '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' + favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("") : "";
 	for (const ws of Object.values(S.workspaces)) {
 		html += wsHeadHtml(ws);
-		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) {
-			html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
-		}
+		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 	}
 	setHtmlIfChanged(tree, html);
-	// Wie beim Stapel-⋯-Menü: das offene Seiten-⋯-Menü nach JEDEM Rebuild neu
-	// fixed positionieren. Ohne das fiel das frisch eingebaute Menü auf sein
-	// CSS-Fallback zurück (position:absolute in der Zeile) und wurde vom
-	// overflow des Baums abgeschnitten — das ⋯-/Löschen-Menü verschwand, sobald
-	// irgendein Hintergrund-Render (Autosave, Sync, Dispatch) feuerte.
+	// dito: offenes Seiten-⋯-Menü nach JEDEM Rebuild neu positionieren
 	if (S.pageMenuOpenId) {
-		const anchor = tree.querySelector('[data-pagemenu="' + S.pageMenuOpenId + '"]');
+		const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
 		const menu = tree.querySelector(".page-menu");
 		if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
 	}
 }
 
-// Chat-Verlauf in der Sidebar (Chat-Modus) — die Volltextsuche über Titel UND Inhalte läuft jetzt im Befehls-Menü (Strg+K).
+// Chat-Verlauf in der Sidebar (Volltextsuche läuft im Befehls-Menü, Strg+K)
 function chatListHtml() {
-	const sessions = (typeof CHATS !== "undefined") ? CHATS.load() : [];
-	let html = '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>';
-	html += sessions.map((s) =>
-		'<div class="row' + (s.id === S.currentChatId ? " active" : "") + '" data-chat="' + s.id + '">' +
-		'<span class="row-title">' + U.esc(s.title || "Chat") + "</span>" +
-		'<span class="hint">' + U.fmtDate(s.updated || s.created) + "</span>" +
-		'<button class="row-add" data-chatrename="' + s.id + '" title="Chat umbenennen">✎</button>' +
-		'<button class="row-add danger" data-chatdel="' + s.id + '" title="Chat löschen">🗑</button></div>'
-	).join("");
-	return html;
+	return '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>' +
+		CHATS.load().map((s) =>
+			`<div class="row${s.id === S.currentChatId ? " active" : ""}" data-chat="${s.id}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
+			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">✎</button><button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">🗑</button></div>`).join("");
 }
 
 function branchHtml(parentId, depth, wsId) {
-	if (depth > 8) return "";
-	return STATE.childrenOf(parentId, wsId).map((pg) => rowHtml(pg, depth, wsId)).join("");
+	return depth > 8 ? "" : STATE.childrenOf(parentId, wsId).map((pg) => rowHtml(pg, depth, wsId)).join("");
 }
 
 function rowHtml(pg, depth, wsId) {
 	const active = pg.id === S.currentPageId && S.view === "page" ? " active" : "";
-	const kids = STATE.childrenOf(pg.id, wsId || pg.workspaceId);
-	const hasKids = kids.length > 0;
+	const hasKids = STATE.childrenOf(pg.id, wsId || pg.workspaceId).length > 0;
 	const collapsed = COLLAPSE.isCollapsed(pg.id);
-	const chevron = hasKids
-		? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">▸</button>'
-		: '<span class="row-chevron spacer"></span>';
-	const childHtml = hasKids && !collapsed ? branchHtml(pg.id, depth + 1, wsId || pg.workspaceId) : "";
-	const menuOpen = S.pageMenuOpenId === pg.id;
-	const renaming = S.renamingPageId === pg.id;
-	return '<div class="row' + active + '" draggable="true" data-page="' + pg.id + '" style="padding-left:'
-		+ (6 + depth * 16) + 'px">' +
-		chevron +
-		(renaming
-			? '<input class="row-rename-input" data-renamename="' + U.esc(pg.id) + '" value="' + U.esc(pg.title) + '" autocomplete="off">'
-			: '<span class="row-title">' + pageIconHtml(pg, "") + U.esc(pg.title) + "</span>") +
-		'<button class="row-add" data-pagemenu="' + pg.id + '" title="Weitere Optionen">⋯</button>' +
-		'<button class="row-add" data-addchild="' + pg.id + '" title="Unterseite anlegen">+</button>' +
-		(menuOpen ? pageMenuHtml(pg) : "") +
-		"</div>" + childHtml;
+	return `<div class="row${active}" draggable="true" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
+		(hasKids ? `<button class="row-chevron${collapsed ? "" : " open"}" data-collapse="${pg.id}" title="Ein-/Ausklappen">▸</button>` : '<span class="row-chevron spacer"></span>') +
+		(S.renamingPageId === pg.id
+			? `<input class="row-rename-input" data-renamename="${esc(pg.id)}" value="${esc(pg.title)}" autocomplete="off">`
+			: `<span class="row-title">${pageIconHtml(pg, "")}${esc(pg.title)}</span>`) +
+		`<button class="row-add" data-pagemenu="${pg.id}" title="Weitere Optionen">⋯</button>` +
+		`<button class="row-add" data-addchild="${pg.id}" title="Unterseite anlegen">+</button>` +
+		(S.pageMenuOpenId === pg.id ? pageMenuHtml(pg) : "") +
+		"</div>" + (hasKids && !collapsed ? branchHtml(pg.id, depth + 1, wsId || pg.workspaceId) : "");
 }
 
-// Notion-artiges ⋯-Menü je Seite: Umbenennen, Duplizieren, Vorlage, Löschen (→ Papierkorb).
+// Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
+const menuBtn = (attr, id, label, cls = "") => `<button class="menu-item${cls}" data-${attr}="${id}">${label}</button>`;
+const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, "📋 Duplizieren") + menuBtn("pagetemplate", pg.id, "📑 " + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
+const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, "📦 Verschieben nach…") + menuBtn("pagetrash", pg.id, "🗑 Löschen", " danger");
 function pageMenuHtml(pg) {
-	return '<div class="page-menu">' +
-		'<button class="menu-item" data-pagerename="' + pg.id + '">✎ Umbenennen</button>' +
-		'<button class="menu-item" data-pageduplicate="' + pg.id + '">📋 Duplizieren</button>' +
-		'<button class="menu-item" data-pagetemplate="' + pg.id + '">📑 ' + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage") + "</button>" +
-		'<button class="menu-item" data-pagefav="' + pg.id + '">' + (pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + "</button>" +
-		'<button class="menu-item" data-pagemove="' + pg.id + '">📦 Verschieben nach…</button>' +
-		'<button class="menu-item danger" data-pagetrash="' + pg.id + '">🗑 Löschen</button>' +
-		"</div>";
+	return '<div class="page-menu">' + menuBtn("pagerename", pg.id, "✎ Umbenennen") + dupTplItems(pg) +
+		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + moveTrashItems(pg) + "</div>";
 }
 
-// ---------- Tab-Leiste (Zurück/Vor + offene Seiten UND Chats, wie eine Notion-Tableiste) ----------
+// ---------- Tab-Leiste (Zurück/Vor + offene Seiten UND Chats) ----------
 function renderTabs() {
-	const bar = U.el("tabbar");
+	const bar = $("tabbar");
 	if (!bar) return;
-	const canBack = S.navIndex > 0;
-	const canFwd = S.navIndex < S.navHistory.length - 1;
 	// Chat-Titel einmal laden (nicht pro Tab CHATS.load())
 	const chatById = new Map();
 	try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
-	const panelCollapsed = document.body.classList.contains("panel-collapsed");
 	let html = '<button class="navbtn" id="btnSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
-		'<button class="navbtn" id="btnNavBack" ' + (canBack ? "" : "disabled") + ' title="Zurück">‹</button>' +
-		'<button class="navbtn" id="btnNavForward" ' + (canFwd ? "" : "disabled") + ' title="Vor">›</button>' +
+		`<button class="navbtn" id="btnNavBack" ${S.navIndex > 0 ? "" : "disabled"} title="Zurück">‹</button>` +
+		`<button class="navbtn" id="btnNavForward" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +
 		'<div class="tabstrip">';
 	html += S.tabs.map((id) => {
-		let title = "";
-		const isChat = id.startsWith("chat:");
-		const isNlm = id === "nlm:main";
-		if (isChat) {
-			const s = chatById.get(id.slice(5));
-			// ✦ statt 💬 — gleiches KI-Markenzeichen wie Home/FAB, kein lila Bubble-Emoji
-			title = "✦ " + U.esc(s ? (s.title || "Chat") : "Chat");
-		} else if (isNlm) {
-			title = "📓 NotebookLM";
-		} else {
+		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main";
+		let title;
+		if (isChat) title = "✦ " + esc(chatById.get(id.slice(5))?.title || "Chat"); // ✦ = KI-Markenzeichen wie Home/FAB
+		else if (isNlm) title = "📓 NotebookLM";
+		else {
 			const pg = S.pages[id];
 			if (!pg) return "";
-			title = pageIconHtml(pg) + U.esc(pg.title);
+			title = pageIconHtml(pg) + esc(pg.title);
 		}
 		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (!isChat && !isNlm && S.view === "page")) ? " active" : "";
-		return '<div class="tabchip' + active + '" data-tabopen="' + id + '">' +
-			'<span class="tabchip-title">' + title + '</span>' +
-			'<button class="tabchip-x" data-tabclose="' + id + '" title="Schließen">✕</button></div>';
+		return `<div class="tabchip${active}" data-tabopen="${id}"><span class="tabchip-title">${title}</span><button class="tabchip-x" data-tabclose="${id}" title="Schließen">✕</button></div>`;
 	}).join("");
 	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
-	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">+</button>';
-	html += "</div>";
-	// Der KI-Zugriff sitzt als runder Notion-artiger Button unten rechts.
-	// In der Tab-Leiste bleibt dadurch nur die Navigation.
-	// PERF (18. Juli): unverändertes Markup überspringen (siehe setHtmlIfChanged).
+	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">+</button></div>';
 	setHtmlIfChanged(bar, html);
 }
 
 function renderMain() {
 	// Nicht neu bauen, während der Nutzer tippt (Cursor bleibt erhalten)
 	if (isProtectedFocus(document.activeElement)) return;
-
-	const main = U.el("main");
+	const main = $("main");
 	if (!main) return;
-	// Eingebettetes NotebookLM-Webview (Desktop) liegt als OS-Overlay über der UI —
-	// verlässt der Nutzer den Tab, muss es aktiv ausgeblendet werden (kein DOM-Element).
+	// Eingebettetes NotebookLM-Webview ist ein OS-Overlay → aktiv ausblenden
 	if (S.view !== "notebooklm") NLM.hideEmbeddedIfActive();
-	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit).
+	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
-	if (S.view === "library") { LIBRARY.renderLibrary(main); return; }
-	if (S.view === "anki") { renderAnki(main); return; }
-	if (S.view === "noten") { SCHULNOTEN.render(main); return; }
-	if (S.view === "daily") { renderDaily(main); return; }
-	if (S.view === "trash") { renderTrash(main); return; }
-	if (S.view === "chat") { renderFullChat(main); return; }
-	if (S.view === "notebooklm") { NLM.renderPane(main); return; }
+	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), daily: renderDaily, trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
+	if (views[S.view]) return void views[S.view](main);
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
-	if (S.view === "home" || !pg) { renderHome(main); return; }
+	if (S.view === "home" || !pg) return void renderHome(main);
 
-	// GoodNotes-Heft: Fokusmodus. Über der Papierfläche bleibt NUR die globale
-	// Tab-Leiste. Kein Breadcrumb, Titel oder Seitenkopf nimmt Schreibfläche weg.
+	// Heft = Fokusmodus: nur die globale Tab-Leiste über der Papierfläche.
+	// FIX: dasselbe gemountete Heft NIE remounten — sonst verlieren Hintergrund-
+	// Renders Scroll/Zoom/Undo und die Ansicht springt auf eine andere Seite
 	if (pg.kind === "heft") {
-		// 📌 FIX (18. Juli, spät v2): Ist GENAU dieses Heft bereits gemountet,
-		// wird es NICHT neu aufgebaut. Vorher remountete jeder Hintergrund-Render
-		// (z. B. das „Lernst du noch?“-Lernzeit-Event, Sync, Statuswechsel) das
-		// komplette Heft — Scroll-Position, Zoom und Undo-Verlauf gingen verloren
-		// und die Ansicht sprang auf eine andere Seite.
 		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
-		main.innerHTML = '<div id="heftStage" class="heft-stage" aria-label="' + U.esc(pg.title) + '"></div>';
-		const stage = U.el("heftStage");
+		main.innerHTML = `<div id="heftStage" class="heft-stage" aria-label="${esc(pg.title)}"></div>`;
+		const stage = $("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
 		return;
 	}
 
-	// Wie in Notion: nur noch EINE, durchgehend bearbeitbare und angezeigte Ansicht —
-	// kein Moduswechsel mehr. Der Block-Editor (editor.js) ist immer aktiv.
-	// 📌 FIX (18. Juli, spät v2): Scroll-Position der Seite über Hintergrund-
-	// Renders retten — der frisch gebaute .page-scroll startete sonst wieder
-	// ganz oben, z. B. wenn Lernzeit/Sync/Status ein Event feuerte.
-	const oldPageScroller = main.querySelector(".page-scroll");
-	const keepPageScroll = oldPageScroller && main.dataset.scrollPageId === pg.id ? oldPageScroller.scrollTop : 0;
+	// EINE durchgehend editierbare Ansicht (Block-Editor immer aktiv).
+	// Scroll-Position über Hintergrund-Renders retten (.page-scroll startete sonst bei 0)
+	const oldScroller = main.querySelector(".page-scroll");
+	const keepPageScroll = oldScroller && main.dataset.scrollPageId === pg.id ? oldScroller.scrollTop : 0;
 	main.dataset.scrollPageId = pg.id;
 	main.innerHTML =
-		// Navigation gehört zur Seiten-Chrome oben links; die eigentliche Seite
-		// bleibt davon unabhängig als zentrierte Dokumentfläche ausgerichtet.
 		'<div class="page-chrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
 		'<div class="page-scroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
-				? '<div class="page-cover ' + (pg.coverImg ? "has-img" : "cover-" + pg.cover) + '"' + (pg.coverImg ? ' data-coverimg="' + U.esc(pg.coverImg) + '"' : "") + '><div class="cover-btns">' +
-					'<button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button>' +
-					"</div></div>"
+				? `<div class="page-cover ${pg.coverImg ? "has-img" : "cover-" + pg.cover}"${pg.coverImg ? ` data-coverimg="${esc(pg.coverImg)}"` : ""}><div class="cover-btns"><button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button></div></div>`
 				: "") +
 			'<div class="page-heading">' +
-				'<button class="page-icon" data-iconpick="1" title="Icon ändern">' + pageIconLabel(pg) + "</button>" +
+				`<button class="page-icon" data-iconpick="1" title="Icon ändern">${pageIconLabel(pg)}</button>` +
 				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">+ Cover</button>' : "") +
 			"</div>" +
-			// Ein mehrzeilig wachsender Titel wie in Notion – ein <input> würde lange
-			// Seitennamen zwangsläufig abschneiden.
-			'<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">' + U.esc(pg.title) + "</textarea>" +
+			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
+			`<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.db ? dbTableHtml(pg) : "") +
 		'<div class="editor-wrap"><div id="blockEditor" class="block-editor"></div></div></div>' +
-		// src="about:blank" verhindert die Chrome-Warnung "Unsafe attempt to load URL file://..."
-		// (ein iframe ohne src lädt sonst die eigene Seiten-URL als Platzhalter).
+		// src="about:blank" verhindert Chromes "Unsafe attempt to load URL file://..."
 		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" src="about:blank" title="PDF"></iframe>' : "");
 	hydrateCovers(main);
 	if (keepPageScroll) {
 		const sc = main.querySelector(".page-scroll");
 		if (sc) sc.scrollTop = keepPageScroll;
 	}
-	// Titelhöhe direkt an den Inhalt koppeln. Der Listener gehört zur frisch
-	// gerenderten Seite und kann deshalb ohne globalen Zustand auskommen.
-	const titleInput = U.el("pageTitle");
+	// Titelhöhe an den Inhalt koppeln (Listener gehört zur frischen Seite)
+	const titleInput = $("pageTitle");
 	if (titleInput) {
 		const fitTitle = () => {
 			titleInput.style.height = "auto";
@@ -577,36 +413,25 @@ function renderMain() {
 		fitTitle();
 		titleInput.addEventListener("input", fitTitle);
 	}
-	const beHost = U.el("blockEditor");
-	// Ein Editor für alles: der WYSIWYG-Editor (editor.js) beherrscht alle
-	// Blockstrukturen — keine Legacy-Weiche mehr.
+	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
-	if (S.pdfOpen && pg.pdfId) {
-		PDFS.urlFor(pg.pdfId).then((u) => {
-			const f = U.el("pdfFrame");
-			if (f && u) f.src = u;
-		});
-	}
+	if (S.pdfOpen && pg.pdfId) PDFS.urlFor(pg.pdfId).then((u) => {
+		const f = $("pdfFrame");
+		if (f && u) f.src = u;
+	});
 }
 
-// Notion-artige Topbar rechts: Teilen-Menü, Favoriten-Stern, ⋯-Menü.
-// Verhalten: Stern & Menüpunkte laufen über app.js, Menü-Auf/Zu über extras.js.
+// Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
 	return '<div class="topbar-actions">' +
-		'<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>' +
-			(S.topMenu === "share" ? shareMenuHtml(pg) : "") + "</span>" +
-		'<button class="topbar-btn' + (pg.favorite ? " fav-active" : "") + '" data-pagefav="' + pg.id + '" title="' + (pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen") + '">' + (pg.favorite ? "★" : "☆") + "</button>" +
-		'<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>' +
-			(S.topMenu === "more" ? moreMenuHtml(pg) : "") + "</span>" +
-	"</div>";
+		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
+		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
+		`<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>${S.topMenu === "more" ? moreMenuHtml(pg) : ""}</span></div>`;
 }
 
 function shareMenuHtml(pg) {
-	return '<div class="page-menu top-menu">' +
-		'<button class="menu-item" data-exportpdf="' + pg.id + '">🖨 Als PDF exportieren / drucken</button>' +
-		'<button class="menu-item" data-exportmd="' + pg.id + '">⬇ Als Markdown (.md) speichern</button>' +
-		'<button class="menu-item" data-copylink="' + pg.id + '">🔗 Internen Link kopieren</button>' +
-	"</div>";
+	return '<div class="page-menu top-menu">' + menuBtn("exportpdf", pg.id, "🖨 Als PDF exportieren / drucken") +
+		menuBtn("exportmd", pg.id, "⬇ Als Markdown (.md) speichern") + menuBtn("copylink", pg.id, "🔗 Internen Link kopieren") + "</div>";
 }
 
 function moreMenuHtml(pg) {
@@ -619,91 +444,62 @@ function moreMenuHtml(pg) {
 		(pg.pdfId ? '<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen ? "📄 PDF schließen" : "📄 PDF anzeigen") + "</button>" : "") +
 		'<button class="menu-item" data-iconpick="1">😀 Icon ändern</button>' +
 		'<button class="menu-item" data-coverpick="1">🖼 Cover ändern</button>' +
-		(marks ? '<button class="menu-item" data-cardsfromhl="' + pg.id + '">🃏 Karten aus Markierungen (' + marks + ")</button>" : "") +
-		'<button class="menu-item" data-pageduplicate="' + pg.id + '">📋 Duplizieren</button>' +
-		'<button class="menu-item" data-pagetemplate="' + pg.id + '">📑 ' + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage") + "</button>" +
-		'<button class="menu-item" data-pagemove="' + pg.id + '">📦 Verschieben nach…</button>' +
-		'<button class="menu-item danger" data-pagetrash="' + pg.id + '">🗑 Löschen</button>' +
-	"</div>";
+		(marks ? menuBtn("cardsfromhl", pg.id, `🃏 Karten aus Markierungen (${marks})`) : "") +
+		dupTplItems(pg) + moveTrashItems(pg) + "</div>";
 }
 
-// „↙ N Rückverweise“ unter dem Titel (wie in Notion) — Klick klappt die Liste auf.
+// „↙ N Rückverweise“ unter dem Titel — Klick klappt die Liste auf
 function backlinksChipHtml(pg) {
 	const links = STATE.backlinksOf(pg.id);
 	if (!links.length) return "";
-	let html = '<div class="backlinks-row"><button class="backlinks-chip" data-backlinks="1">↙ ' + links.length + " Rückverweise</button>";
-	if (S.backlinksOpen) {
-		html += '<div class="backlinks">' + links.slice(0, 20).map((l) =>
-			'<span class="crumb" data-page="' + l.id + '">' + pageIconHtml(l) + U.esc(l.title) + "</span>").join("") + "</div>";
-	}
-	return html + "</div>";
+	return `<div class="backlinks-row"><button class="backlinks-chip" data-backlinks="1">↙ ${links.length} Rückverweise</button>` +
+		(S.backlinksOpen ? '<div class="backlinks">' + links.slice(0, 20).map((l) => `<span class="crumb" data-page="${l.id}">${pageIconHtml(l)}${esc(l.title)}</span>`).join("") + "</div>" : "") + "</div>";
 }
 
-// ---------- Datenbank-Ansicht (echte Datenbanken statt kopierter Tabellen) ----------
-// Eine Datenbank-Seite (pg.db) zeigt ihre Unterseiten als editierbare Tabelle:
-// Spalten = pg.db.schema, Zellwerte = props der Zeilen-Seiten. Zellen-Änderungen
-// laufen als normales pageUpdate-Event → Verlauf, Diff und Notion-Sync greifen.
+// Datenbank-Seite (pg.db): Unterseiten als editierbare Tabelle; Zell-Änderungen
+// laufen als pageUpdate-Event (Verlauf/Diff/Sync greifen)
 function dbTableHtml(pg) {
 	const cols = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
-	const rows = STATE.childrenOf(pg.id, pg.workspaceId);
 	const RO = { formula: 1, rollup: 1, created_time: 1, last_edited_time: 1, created_by: 1, last_edited_by: 1, people: 1, relation: 1, files: 1, button: 1, unique_id: 1, verification: 1 };
 	return '<div class="db-view md"><table class="db-table"><thead><tr><th>Name</th>' +
-		cols.map((c) => "<th title='" + U.esc(c.type || "text") + "'>" + U.esc(c.name) + "</th>").join("") +
-		"</tr></thead><tbody>" +
-		rows.map((r) => '<tr><td><span class="crumb" data-page="' + r.id + '">' + pageIconHtml(r) + U.esc(r.title) + "</span></td>" +
-			cols.map((c) => RO[c.type]
-				? '<td><span class="hint">' + U.esc((r.props || {})[c.name] || "") + "</span></td>"
-				: '<td><input class="db-cell" data-dbrow="' + r.id + '" data-dbcol="' + U.esc(c.name) + '" value="' + U.esc((r.props || {})[c.name] || "") + '"></td>').join("") +
-		"</tr>").join("") +
-		"</tbody></table>" +
-		'<div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="' + pg.id + '">+ Neue Zeile</button></div></div>';
+		cols.map((c) => `<th title='${esc(c.type || "text")}'>${esc(c.name)}</th>`).join("") + "</tr></thead><tbody>" +
+		STATE.childrenOf(pg.id, pg.workspaceId).map((r) => `<tr><td><span class="crumb" data-page="${r.id}">${pageIconHtml(r)}${esc(r.title)}</span></td>` +
+			cols.map((c) => {
+				const v = esc((r.props || {})[c.name] || "");
+				return RO[c.type] ? `<td><span class="hint">${v}</span></td>` : `<td><input class="db-cell" data-dbrow="${r.id}" data-dbcol="${esc(c.name)}" value="${v}"></td>`;
+			}).join("") + "</tr>").join("") +
+		`</tbody></table><div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="${pg.id}">+ Neue Zeile</button></div></div>`;
 }
 
-// Breadcrumb: Workspace › Elternseiten › aktuelle Seite (wie in Notion)
+// Breadcrumb: Workspace › Eltern › aktuelle Seite
 function ancestorsOf(pg) {
 	const chain = [];
-	let cur = pg;
-	while (cur && cur.parentId) {
-		cur = S.pages[cur.parentId];
-		if (cur) chain.unshift(cur);
-	}
+	for (let cur = S.pages[pg.parentId]; cur; cur = S.pages[cur.parentId]) chain.unshift(cur);
 	return chain;
 }
 
 function breadcrumbHtml(pg) {
 	const ws = S.workspaces[pg.workspaceId] || { name: "Privat" };
-	const chain = ancestorsOf(pg);
-	let html = '<div class="breadcrumb"><span class="crumb" data-crumbws="1">' + U.esc(ws.name) + "</span>";
-	chain.forEach((a) => {
-		html += '<span class="crumb-sep">/</span><span class="crumb" data-page="' + a.id + '">' + U.esc(a.title) + "</span>";
-	});
-	html += '<span class="crumb-sep">/</span><span class="crumb current">' + U.esc(pg.title) + "</span></div>";
-	return html;
+	return `<div class="breadcrumb"><span class="crumb" data-crumbws="1">${esc(ws.name)}</span>` +
+		ancestorsOf(pg).map((a) => `<span class="crumb-sep">/</span><span class="crumb" data-page="${a.id}">${esc(a.title)}</span>`).join("") +
+		`<span class="crumb-sep">/</span><span class="crumb current">${esc(pg.title)}</span></div>`;
 }
 
 // ---- Sync-Konflikte: Pending-Liste + Lösungs-Popup mit Diff -----
 const CONFLICT_KEY = "impala67_pending_conflicts";
 const RESOLVED_CONFLICT_KEY = "impala67_resolved_conflicts";
-function loadResolvedConflictIds() {
-	try { return new Set(JSON.parse(localStorage.getItem(RESOLVED_CONFLICT_KEY) || "[]")); } catch { return new Set(); }
-}
+const DATETIME_OPTS = { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" };
+const loadResolvedConflictIds = () => new Set(lsGet(RESOLVED_CONFLICT_KEY, []));
 function markConflictResolved(conflictPageId) {
 	if (!conflictPageId) return;
-	const ids = loadResolvedConflictIds();
-	ids.add(conflictPageId);
-	// Der Schlüssel ist nur eine lokale UI-Quittierung; klein halten, damit alte
-	// Konfliktkopien keinen dauerhaft wachsenden LocalStorage-Eintrag erzeugen.
-	localStorage.setItem(RESOLVED_CONFLICT_KEY, JSON.stringify([...ids].slice(-200)));
+	// nur lokale UI-Quittierung; klein halten (kein wachsender LocalStorage)
+	lsSet(RESOLVED_CONFLICT_KEY, [...loadResolvedConflictIds().add(conflictPageId)].slice(-200));
 }
-function isConflictPage(p) {
-	return !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
-}
-function loadPendingConflicts() {
-	try { return JSON.parse(localStorage.getItem(CONFLICT_KEY) || "[]"); } catch { return []; }
-}
+const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
+const loadPendingConflicts = () => lsGet(CONFLICT_KEY, []);
 function savePendingConflicts(list) {
 	if (!list || !list.length) localStorage.removeItem(CONFLICT_KEY);
-	else localStorage.setItem(CONFLICT_KEY, JSON.stringify(list));
+	else lsSet(CONFLICT_KEY, list);
 }
 function mergePendingConflicts(details) {
 	const map = new Map(loadPendingConflicts().map((c) => [c.conflictPageId || c.pageId, c]));
@@ -711,38 +507,26 @@ function mergePendingConflicts(details) {
 	savePendingConflicts([...map.values()]);
 }
 function fmtConflictTime(iso) {
-	try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }); }
-	catch { return iso || "?"; }
+	try { return new Date(iso).toLocaleString("de-DE", DATETIME_OPTS); } catch { return iso || "?"; }
 }
 function legacyConflictItems() {
 	return STATE.activePages().filter(isConflictPage).map((p) => ({
 		pageId: null,
 		title: (p.title || "").replace(/^⚠ Konflikt:\s*/, "").split(" — Stand")[0],
 		reason: "Unterlegener Stand einer früheren Sync-Kollision. Vergleiche den Text und entscheide, was behalten wird.",
-		localContent: p.content || "",
-		remoteContent: "",
-		localTime: p.updated,
-		remoteTime: null,
-		winner: "remote",
-		loserContent: p.content || "",
-		loserTime: p.updated,
-		conflictPageId: p.id,
-		eventId: null,
-		legacy: true,
+		localContent: p.content || "", remoteContent: "",
+		localTime: p.updated, remoteTime: null,
+		winner: "remote", loserContent: p.content || "", loserTime: p.updated,
+		conflictPageId: p.id, eventId: null, legacy: true,
 	}));
 }
-// 🆚 (18. Juli 2026): Das Konflikt-Popup zeigt jetzt IMMER beide Stände
-// nebeneinander — Hefte als gezeichnete Vorschau der ersten Seite (aus den
-// lokalen Blobs), Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie.
-function conflictPaneHead(label, time) {
-	return "<header><b>" + label + "</b>" + (time ? "<small>" + U.esc(fmtConflictTime(time)) + "</small>" : "") + "</header>";
-}
-function conflictHeftPane(side, label, time, blobKey) {
-	return '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="' + U.esc(blobKey) + '"></canvas><small class="conflict-heft-note"></small></div></section>';
-}
+// Popup zeigt IMMER beide Stände: Hefte als Blob-Vorschau der ersten Seite,
+// Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie
+const conflictPaneHead = (label, time) => `<header><b>${label}</b>${time ? `<small>${esc(fmtConflictTime(time))}</small>` : ""}</header>`;
+const conflictHeftPane = (side, label, time, blobKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"></canvas><small class="conflict-heft-note"></small></div></section>`;
 function buildSpecialComparisonHtml(c) {
-	const notePane = (side, label, time, note) => '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body"><div class="conflict-empty">' + U.esc(note) + "</div></div></section>";
-	const textPane = (side, label, time, text) => '<section class="conflict-pane ' + side + '">' + conflictPaneHead(label, time) + '<div class="conflict-pane-body"><pre class="conflict-fulltext">' + (U.esc(text) || "(Kein Text vorhanden.)") + "</pre></div></section>";
+	const notePane = (side, label, time, note) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><div class="conflict-empty">${esc(note)}</div></div></section>`;
+	const textPane = (side, label, time, text) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
 	if (c.conflictType === "heft") {
 		const winnerKey = "heft:" + c.pageId, loserKey = "heft:" + c.conflictPageId;
 		return '<div class="conflict-compare">' +
@@ -762,67 +546,54 @@ function buildSpecialComparisonHtml(c) {
 }
 function fillConflictHeftPreviews(root) {
 	root.querySelectorAll("canvas[data-conflictheft]").forEach(async (cv) => {
-		const note = cv.parentElement ? cv.parentElement.querySelector(".conflict-heft-note") : null;
+		const note = cv.parentElement?.querySelector(".conflict-heft-note");
 		let pages = 0;
 		try { pages = await HEFT.renderBlobPreview(cv.dataset.conflictheft, cv); } catch (e) { console.warn("Konflikt-Vorschau:", e); }
-		if (!pages) { if (note) note.textContent = "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."; return; }
-		if (note) note.textContent = pages > 1 ? "Seite 1 von " + pages : "";
+		if (note) note.textContent = pages ? (pages > 1 ? "Seite 1 von " + pages : "") : "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor.";
 	});
 }
 function openConflictResolver(index) {
 	let items = loadPendingConflicts();
 	if (!items.length) items = legacyConflictItems();
-	if (!items.length) { U.toast("Keine offenen Konflikte.", "success"); return; }
+	if (!items.length) return void U.toast("Keine offenen Konflikte.", "success");
 	const i = Math.max(0, Math.min(Number(index) || 0, items.length - 1));
 	S.conflictResolveIndex = i;
 	S.conflictResolveList = items;
 	const c = items[i];
-	const o = U.el("overlay");
-	if (!o) return;
-	const left = c.localContent || "";
-	const right = c.remoteContent || "";
+	const left = c.localContent || "", right = c.remoteContent || "";
 	const hasTextComparison = !c.conflictType && (!!left || !!right);
-	const lineCount = (text) => String(text).split("\n").length;
-	// U.diffLines wechselt bei sehr langen Seiten bewusst in einen groben Modus,
-	// um den Browser nicht mit einer quadratischen Diff-Matrix zu blockieren.
-	// Der frühere Resolver zeigte dann nur dessen Platzhalter — nicht den Inhalt.
-	const coarseComparison = hasTextComparison && (lineCount(left) > 400 || lineCount(right) > 400);
-	const diff = hasTextComparison && !coarseComparison ? U.diffLines(left, right) : [];
+	// U.diffLines wechselt bei sehr langen Seiten in einen groben Modus (keine
+	// quadratische Diff-Matrix) → dann beide Volltexte zeigen statt Platzhalter
+	const lines = (t) => String(t).split("\n").length;
+	const coarse = hasTextComparison && (lines(left) > 400 || lines(right) > 400);
+	const diff = hasTextComparison && !coarse ? U.diffLines(left, right) : [];
 	const paneHtml = (side) => {
-		if (coarseComparison) {
-			const content = side === "local" ? left : right;
-			return '<pre class="conflict-fulltext">' + (U.esc(content) || "(Kein Text vorhanden.)") + "</pre>";
-		}
+		if (coarse) return '<pre class="conflict-fulltext">' + (esc(side === "local" ? left : right) || "(Kein Text vorhanden.)") + "</pre>";
 		return diff.filter((d) => d.type === "same" || (side === "local" ? d.type === "del" : d.type === "add")).map((d) => {
 			const changed = d.type !== "same";
-			const cls = changed ? (side === "local" ? "local-only" : "remote-only") : "same";
-			const marker = changed ? (side === "local" ? "−" : "+") : "";
-			return '<div class="conflict-line ' + cls + '"><span class="conflict-line-marker">' + marker + "</span>" + (U.esc(d.text) || "&nbsp;") + "</div>";
+			return `<div class="conflict-line ${changed ? (side === "local" ? "local-only" : "remote-only") : "same"}"><span class="conflict-line-marker">${changed ? (side === "local" ? "−" : "+") : ""}</span>${esc(d.text) || "&nbsp;"}</div>`;
 		}).join("") || '<div class="conflict-empty">Kein Text vorhanden.</div>';
 	};
 	const winnerLabel = c.winner === "local" ? "Dieses Gerät" : "Drive / anderes Gerät";
 	const conflictSummary = c.reason || (c.conflictType === "delete-change"
 		? "Auf einem Gerät wurde die Seite gelöscht, während sie auf dem anderen Gerät noch geändert oder verschoben wurde. Die App kann diese beiden Aktionen nicht automatisch zusammenführen."
 		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.");
+	const pane = (side, label, time) => `<section class="conflict-pane ${side}"><header><b>${label}</b><small>${esc(fmtConflictTime(time))}</small></header><div class="conflict-pane-body">${paneHtml(side)}</div></section>`;
 	const comparisonHtml = hasTextComparison
-		? '<div class="conflict-compare"><section class="conflict-pane local"><header><b>Dieses Gerät</b><small>' + U.esc(fmtConflictTime(c.localTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("local") + '</div></section><section class="conflict-pane remote"><header><b>Drive / anderes Gerät</b><small>' + U.esc(fmtConflictTime(c.remoteTime)) + '</small></header><div class="conflict-pane-body">' + paneHtml("remote") + '</div></section></div>' + (coarseComparison ? '<p class="conflict-key">Lange Seite: Beide vollständigen Inhalte werden gezeigt. Eine zeilenweise Markierung wäre hier zu langsam.</p>' : '<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>')
+		? '<div class="conflict-compare">' + pane("local", "Dieses Gerät", c.localTime) + pane("remote", "Drive / anderes Gerät", c.remoteTime) + "</div>" +
+			(coarse ? '<p class="conflict-key">Lange Seite: Beide vollständigen Inhalte werden gezeigt. Eine zeilenweise Markierung wäre hier zu langsam.</p>' : '<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span></p>')
 		: buildSpecialComparisonHtml(c);
-	o.hidden = false;
-	o.innerHTML = '<div class="modal conflict-modal">' +
+	const o = openOverlay('<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Synchronisation braucht eine Entscheidung' +
-		(items.length > 1 ? " · " + (i + 1) + " von " + items.length : "") + "</b><small>“" +
-		U.esc(c.title || "Seite") + "”</small></span></header>" +
-		'<div class="conflict-reason"><b>Warum sehe ich das?</b> ' + U.esc(conflictSummary) +
-		(c.legacy ? "" : '<br><span class="hint">Die App empfiehlt: <b>' + U.esc(winnerLabel) + "</b> behalten, weil dieser Stand den neueren Zeitstempel hat.</span>") +
-		"</div>" +
-		comparisonHtml +
-		'<div class="conflict-actions">' +
-		'<button class="primary" data-conflictresolve="keep-winner">Empfehlung übernehmen</button>' +
+		(items.length > 1 ? ` · ${i + 1} von ${items.length}` : "") + `</b><small>“${esc(c.title || "Seite")}”</small></span></header>` +
+		'<div class="conflict-reason"><b>Warum sehe ich das?</b> ' + esc(conflictSummary) +
+		(c.legacy ? "" : `<br><span class="hint">Die App empfiehlt: <b>${esc(winnerLabel)}</b> behalten, weil dieser Stand den neueren Zeitstempel hat.</span>`) +
+		"</div>" + comparisonHtml +
+		'<div class="conflict-actions"><button class="primary" data-conflictresolve="keep-winner">Empfehlung übernehmen</button>' +
 		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Stattdessen anderen Stand übernehmen</button>' : "") +
-		"</div></div>";
-	// 🆚 Heft-Vorschauen asynchron aus den lokalen Blobs nachladen (Helfer oben).
-	fillConflictHeftPreviews(o);
+		"</div></div>");
+	if (o) fillConflictHeftPreviews(o);
 }
 async function resolveConflict(action) {
 	const list = S.conflictResolveList || loadPendingConflicts();
@@ -831,8 +602,8 @@ async function resolveConflict(action) {
 	if (!conf) return;
 	if (action === "use-loser" && conf.pageId) {
 		if (conf.conflictType === "heft") {
-			// Erst die noch sichtbare Winner-Ansicht schließen: unmount() könnte sonst
-			// den alten In-Memory-Stand zurückschreiben. Danach frisch aus dem Winner-Blob mounten.
+			// Winner-Ansicht erst schließen (unmount könnte alten In-Memory-Stand
+			// zurückschreiben), dann Loser-Blob in den Winner-Slot kopieren
 			if (HEFT.activeId === conf.pageId) HEFT.unmount(true);
 			const loserBlob = await DB.getBlob("heft:" + conf.conflictPageId);
 			if (loserBlob && loserBlob.buf && loserBlob.meta) {
@@ -840,297 +611,175 @@ async function resolveConflict(action) {
 				await STATE.dispatch("heftUpdated", { pageId: conf.pageId, rev: loserBlob.meta.rev, pages: loserBlob.meta.pages || 1, bytes: loserBlob.buf.byteLength, blobHash: conf.loserHash });
 			}
 		} else if (conf.conflictType === "delete-change") {
-			// Die Konfliktkopie ist der gerettete Stand. Titel, Workspace und Elternordner
-			// werden aus dem Konflikt-Payload wiederhergestellt, statt sie auf Root zu lassen.
-			await STATE.dispatch("pageUpdate", { id: conf.conflictPageId, patch: {
-				title: conf.title,
-				parentId: conf.parentId || null,
-				workspaceId: conf.workspaceId || "default"
-			} });
+			// Gerettete Kopie: Titel/Workspace/Elternordner aus dem Payload zurück (nicht Root)
+			await STATE.dispatch("pageUpdate", { id: conf.conflictPageId, patch: { title: conf.title, parentId: conf.parentId || null, workspaceId: conf.workspaceId || "default" } });
 		} else {
 			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: conf.loserContent } });
 		}
 	}
-	if (conf.conflictPageId && S.pages[conf.conflictPageId]) {
-		const shouldTrash = action === "keep-winner" || (action === "use-loser" && conf.conflictType !== "delete-change");
-		if (shouldTrash) {
-			await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
-		}
+	if (conf.conflictPageId && S.pages[conf.conflictPageId] &&
+		(action === "keep-winner" || (action === "use-loser" && conf.conflictType !== "delete-change"))) {
+		await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
 	}
-	// Pending bereinigen (auch wenn nur „beide behalten“ → aus der Warteschlange).
-	// Die Kopie wird außerdem lokal als erledigt markiert; sonst erzeugte gerade
-	// „Beide behalten“ beim nächsten Start wieder denselben Banner/Dialog.
+	// Pending bereinigen + Kopie lokal quittieren (sonst kommt derselbe Banner/Dialog
+	// bei „Beide behalten“ nach dem nächsten Start wieder)
 	markConflictResolved(conf.conflictPageId);
 	const next = loadPendingConflicts().filter((x) => (x.conflictPageId || x.pageId) !== (conf.conflictPageId || conf.pageId));
 	savePendingConflicts(next);
-	if (next.length) {
-		openConflictResolver(Math.min(i, Math.max(0, next.length - 1)));
-		render();
-		return;
-	}
-	const o = U.el("overlay");
+	if (next.length) { openConflictResolver(Math.min(i, next.length - 1)); render(); return; }
+	const o = $("overlay");
 	if (o) { o.hidden = true; o.innerHTML = ""; }
 	U.toast("Konflikt erledigt.", "success");
 	render();
 }
 
-// Home v3 (15. Juli 2026): persönliches Dashboard — Begrüßung mit Datum,
-// Lern-Kennzahlen (Lernzeit, Streak, fällige Karten, Erfolgsquote), Heute-Leiste,
-// Telemetrie-Insights (telemetrie.js) und ausklappbare Bereiche, die sich ihren
-// Zustand merken. Das ebenfalls ausklappbare Lernzeit-Widget liefert lernzeit.js.
+// Home v3: persönliches Dashboard — Begrüßung, Kennzahlen, Heute-Leiste,
+// Telemetrie-Insights, ausklappbare Bereiche mit gemerktem Zustand
 const HOME_FOLD_KEY = "impala67HomeFolds";
-function homeFolds() {
-	try { return JSON.parse(localStorage.getItem(HOME_FOLD_KEY) || "{}") || {}; } catch { return {}; }
-}
-function homeFoldOpen(id, fallback) {
-	const folds = homeFolds();
-	return folds[id] === undefined ? fallback : !!folds[id];
-}
-function homeFold(id, summary, body, fallbackOpen) {
-	return '<details class="home-fold" data-fold="' + id + '"' + (homeFoldOpen(id, fallbackOpen) ? " open" : "") +
-		'><summary>' + summary + '</summary><div class="home-fold-body">' + body + '</div></details>';
-}
-// <details>-Zustand persistieren — "toggle" blubbert nicht, daher Capture-Phase.
-document.addEventListener("toggle", (event) => {
-	const el = event.target;
+const homeFolds = () => lsGet(HOME_FOLD_KEY, {}) || {};
+const homeFoldOpen = (id, fb) => { const f = homeFolds(); return f[id] === undefined ? fb : !!f[id]; };
+const homeFold = (id, summary, body, fbOpen) => `<details class="home-fold" data-fold="${id}"${homeFoldOpen(id, fbOpen) ? " open" : ""}><summary>${summary}</summary><div class="home-fold-body">${body}</div></details>`;
+// <details>-Zustand persistieren — "toggle" blubbert nicht → Capture-Phase
+document.addEventListener("toggle", (e) => {
+	const el = e.target;
 	if (!el || !el.matches || !el.matches("details[data-fold]")) return;
-	const folds = homeFolds();
-	folds[el.getAttribute("data-fold")] = el.open;
-	localStorage.setItem(HOME_FOLD_KEY, JSON.stringify(folds));
+	lsSet(HOME_FOLD_KEY, { ...homeFolds(), [el.getAttribute("data-fold")]: el.open });
 }, true);
 function renderHome(main) {
-	// 📌 Scroll-Anker: Jede Aktion auf Home (Fold auf/zu, Pins, Sync …) löst ein
-	// komplettes Re-Render aus — vorher hüpfte die Seite danach immer wieder an
-	// den Anfang. Position vorher merken, nach dem Neuaufbau wiederherstellen.
+	// Scroll-Anker: jedes Re-Render (Fold, Pins, Sync…) hüpfte sonst nach oben
 	const homeScroller = main.querySelector(".home");
 	const keepScroll = (homeScroller && homeScroller.scrollTop) || main.scrollTop || 0;
 	const pages = STATE.activePages();
-	const pendingConflicts = loadPendingConflicts();
-	const conflictPages = pages.filter(isConflictPage);
-	const conflictCount = Math.max(pendingConflicts.length, conflictPages.length);
+	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
 	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 6);
 	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
 	const due = STATE.dueCards().length;
 	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup");
 	const bkDays = lastBk ? Math.max(0, Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5)) : null;
 	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
-	const todayKey = localDayKey(new Date());
-	const daily = pages.find((p) => p.daily === todayKey);
+	const daily = pages.find((p) => p.daily === localDayKey(new Date()));
 	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").replace(/^#+\s*/, "").slice(0, 48) : "";
 	const hour = new Date().getHours();
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 	const cardCount = ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length;
 	const lz = LERNZEIT.statsForHome();
-	// Erfolgsquote der letzten 30 Tage — echte Wiederholungen (ohne Erstbewertungen
-	// und Lernschritte), gleiche Definition wie die Retention in der Statistik.
+	// Erfolgsquote 30 Tage: echte Wiederholungen wie die Statistik-Retention.
+	// FIX: bei < 10 strengen Reviews auf alle bewerteten zurückfallen (gleiche
+	// breite Definition wie die Insights) statt widersprüchlich „—“ zu zeigen
 	const cut30 = new Date(Date.now() - 30 * 864e5).toISOString();
 	const graded30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0 && !r.first && !r.learning);
-	// 🩹 FIX (18. Juli, spät v3): Die Kachel zeigte „—“, während die Lern-Insights
-	// direkt darunter bereits eine Erfolgsquote aus denselben 30 Tagen nannten
-	// (z. B. „61 % · 23 Reviews“). Grund: Hier waren ≥ 10 ECHTE Wiederholungen
-	// (ohne Erstbewertungen/Lernschritte) Pflicht. Bei zu kleiner Stichprobe
-	// fällt die Kachel jetzt auf alle bewerteten Reviews zurück (dieselbe breite
-	// Definition wie die Insights), statt widersprüchlich nichts zu zeigen.
 	const gradedWide30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0);
-	const retentionPool = graded30.length >= 10 ? graded30 : (gradedWide30.length >= 10 ? gradedWide30 : null);
-	const retention30 = retentionPool ? Math.round(retentionPool.filter((r) => r.grade > 1).length / retentionPool.length * 100) : null;
+	const pool = graded30.length >= 10 ? graded30 : (gradedWide30.length >= 10 ? gradedWide30 : null);
+	const retention30 = pool ? Math.round(pool.filter((r) => r.grade > 1).length / pool.length * 100) : null;
 
 	const conflictBanner = conflictCount
-		? '<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ' + conflictCount + " Sync-Konflikt" + (conflictCount === 1 ? "" : "e") +
-			"</b><span>Gleiche Seite auf mehreren Geräten geändert — Diff prüfen & lösen.</span></div>" +
-			'<button data-conflictopen="0">Jetzt lösen</button></div>'
+		? `<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ${conflictCount} Sync-Konflikt${conflictCount === 1 ? "" : "e"}</b><span>Gleiche Seite auf mehreren Geräten geändert — Diff prüfen & lösen.</span></div><button data-conflictopen="0">Jetzt lösen</button></div>`
 		: "";
 
 	// Kompakte „Heute“-Leiste statt großer Widget-Kacheln
-	const todayPills =
-		'<div class="home-today">' +
-			'<button class="home-pill" data-homeaction="daily" title="Daily Note">' +
-				'<span class="home-pill-ico">📅</span><span class="home-pill-body"><b>Daily</b><small>' +
-				U.esc(dailyLine || (daily ? "Öffnen" : "Heute anlegen")) + "</small></span></button>" +
-			'<button class="home-pill' + (due ? " attention" : "") + '" data-homeaction="cards" title="Karteikarten">' +
-				'<span class="home-pill-ico">🃏</span><span class="home-pill-body"><b>' + due + " fällig</b><small>" +
-				(due ? "Jetzt lernen" : "Alles erledigt") + "</small></span></button>" +
-			'<button class="home-pill" data-noten-open="1" title="Schulnoten öffnen">' +
-				'<span class="home-pill-ico">🎓</span><span class="home-pill-body"><b>Noten</b><small>Eintragen & Schnitt ansehen</small></span></button>' +
-			(bkDue
-				? '<button class="home-pill attention" data-homeaction="backup" title="Backup">' +
-					'<span class="home-pill-ico">↥</span><span class="home-pill-body"><b>Backup</b><small>' +
-					(bkDays === null ? "Noch keins" : "Vor " + bkDays + " Tag" + (bkDays === 1 ? "" : "en")) +
-					"</small></span></button>"
-				: "") +
+	const pill = (cls, attr, title, ico, b, small) => `<button class="home-pill${cls}" ${attr} title="${title}"><span class="home-pill-ico">${ico}</span><span class="home-pill-body"><b>${b}</b><small>${small}</small></span></button>`;
+	const todayPills = '<div class="home-today">' +
+		pill("", 'data-homeaction="daily"', "Daily Note", "📅", "Daily", esc(dailyLine || (daily ? "Öffnen" : "Heute anlegen"))) +
+		pill(due ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", due + " fällig", due ? "Jetzt lernen" : "Alles erledigt") +
+		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", "Eintragen & Schnitt ansehen") +
+		(bkDue ? pill(" attention", 'data-homeaction="backup"', "Backup", "↥", "Backup", bkDays === null ? "Noch keins" : `Vor ${bkDays} Tag${bkDays === 1 ? "" : "en"}`) : "") +
 		"</div>";
 
 	const continueBlock = recent[0]
-		? '<button class="home-continue" data-page="' + recent[0].id + '">' +
-			'<span class="recent-icon">' + U.esc(pageIconLabel(recent[0])) + '</span>' +
-			'<span class="recent-copy"><small>Weitermachen</small><b>' + U.esc(recent[0].title) +
-			'</b><small>Zuletzt · ' + U.fmtDate(recent[0].updated) + '</small></span><span class="recent-arrow">›</span></button>'
-		: '<button class="home-continue muted" data-homeaction="newpage">' +
-			'<span class="recent-icon">✦</span><span class="recent-copy"><small>Start</small><b>Erste Seite anlegen</b>' +
-			'<small>Workspace ist noch leer</small></span><span class="recent-arrow">›</span></button>';
+		? `<button class="home-continue" data-page="${recent[0].id}"><span class="recent-icon">${esc(pageIconLabel(recent[0]))}</span><span class="recent-copy"><small>Weitermachen</small><b>${esc(recent[0].title)}</b><small>Zuletzt · ${U.fmtDate(recent[0].updated)}</small></span><span class="recent-arrow">›</span></button>`
+		: '<button class="home-continue muted" data-homeaction="newpage"><span class="recent-icon">✦</span><span class="recent-copy"><small>Start</small><b>Erste Seite anlegen</b><small>Workspace ist noch leer</small></span><span class="recent-arrow">›</span></button>';
 
+	const listRow = (attr, ico, b, small) => `<button class="home-list-row" ${attr}><span class="recent-icon sm">${ico}</span><b>${b}</b><small>${small}</small><i>›</i></button>`;
 	const recentPages = recent.length
-		? '<div class="home-list">' + recent.map((pg) =>
-			'<button class="home-list-row" data-page="' + pg.id + '">' +
-			'<span class="recent-icon sm">' + U.esc(pageIconLabel(pg)) + "</span><b>" + U.esc(pg.title) +
-			"</b><small>" + U.fmtDate(pg.updated) + "</small><i>›</i></button>").join("") + "</div>"
-		: '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p>' +
-			'<button data-homeaction="newpage">Neue Seite</button></div>';
+		? '<div class="home-list">' + recent.map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg)), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
+		: '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p><button data-homeaction="newpage">Neue Seite</button></div>';
+	const recentChats = chats.slice(0, 3).map((c) => listRow(`data-chat="${c.id}"`, "✦", esc(c.title || "Chat"), U.fmtDate(c.updated || c.created))).join("");
 
-	const recentChats = chats.slice(0, 3).map((chat) =>
-		'<button class="home-list-row" data-chat="' + chat.id + '"><span class="recent-icon sm">✦</span><b>' +
-		U.esc(chat.title || "Chat") + "</b><small>" + U.fmtDate(chat.updated || chat.created) + "</small><i>›</i></button>"
-	).join("");
-
-	// Kennzahlen-Reihe: heute gelernt, Streak, fällige Karten, Erfolgsquote
-	const stats =
-		'<div class="home-statgrid">' +
-			'<div class="home-stat accent"><b>' + LERNZEIT.fmt(lz.todaySeconds) + '</b><small>heute gelernt</small></div>' +
-			'<div class="home-stat"><b><span class="home-streak-flame">🔥</span>' + lz.streakDays + '</b><small>' + (lz.streakDays === 1 ? "Tag Streak" : "Tage Streak") + '</small></div>' +
-			'<div class="home-stat' + (due ? " accent" : "") + '"><b>' + due + '</b><small>Karten fällig</small></div>' +
-			'<div class="home-stat' + (retention30 !== null && retention30 >= 85 ? " good" : "") + '"><b>' + (retention30 === null ? "—" : retention30 + " %") + '</b><small>Erfolgsquote (30 Tage)</small></div>' +
-		"</div>";
+	// Kennzahlen: heute gelernt, Streak, fällige Karten, Erfolgsquote
+	const stats = '<div class="home-statgrid">' +
+		`<div class="home-stat accent"><b>${LERNZEIT.fmt(lz.todaySeconds)}</b><small>heute gelernt</small></div>` +
+		`<div class="home-stat"><b><span class="home-streak-flame">🔥</span>${lz.streakDays}</b><small>${lz.streakDays === 1 ? "Tag Streak" : "Tage Streak"}</small></div>` +
+		`<div class="home-stat${due ? " accent" : ""}"><b>${due}</b><small>Karten fällig</small></div>` +
+		`<div class="home-stat${retention30 !== null && retention30 >= 85 ? " good" : ""}"><b>${retention30 === null ? "—" : retention30 + " %"}</b><small>Erfolgsquote (30 Tage)</small></div></div>`;
 
 	const homeHtml = '<div class="home home-v2 home-slim">' +
-		'<header class="home-hero"><div><h1>' + greeting + ' 👋</h1><p class="home-meta">' + dateLine + "</p>" +
-		'<div class="home-hero-meta">' +
-			'<span class="home-chip">📄 <b>' + pages.length + '</b> Seiten</span>' +
-			'<span class="home-chip">🃏 <b>' + cardCount + '</b> Karten</span>' +
-			'<span class="home-chip">✦ <b>' + chats.length + '</b> Chats</span>' +
-			'<span class="home-chip' + (lz.goalPct < 100 ? " warn" : "") + '">🎯 Wochenziel <b>' + lz.goalPct + ' %</b></span>' +
-		"</div></div>" +
-		'<button class="home-customize" data-set="look" title="Design anpassen">⚙</button></header>' +
-		conflictBanner +
-		stats +
-		'<div class="quick-actions">' +
-			'<button data-homeaction="newpage">+ Neue Seite</button>' +
-		"</div>" +
+		`<header class="home-hero"><div><h1>${greeting} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
+			`<span class="home-chip">📄 <b>${pages.length}</b> Seiten</span><span class="home-chip">🃏 <b>${cardCount}</b> Karten</span><span class="home-chip">✦ <b>${chats.length}</b> Chats</span>` +
+			`<span class="home-chip${lz.goalPct < 100 ? " warn" : ""}">🎯 Wochenziel <b>${lz.goalPct} %</b></span>` +
+		'</div></div><button class="home-customize" data-set="look" title="Design anpassen">⚙</button></header>' +
+		conflictBanner + stats +
+		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
 		'<section class="home-section home-section-continue">' + continueBlock + "</section>" +
 		todayPills +
 		homeFold("insights", '🧠 Lern-Insights <span class="fold-meta">aus deiner Telemetrie</span>', TELE.homeInsightsHtml(), true) +
-		homeFold("recent", '📄 Zuletzt <span class="fold-meta">' + pages.length + ' Seiten</span>',
-			recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true) +
-		(recentChats
-			? homeFold("chats", '✦ Chats <span class="fold-meta">' + chats.length + '</span>',
-				'<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false)
-			: "") +
-		LERNZEIT.homeWidgetHtml() +
-		"</div>";
-	// PERF (18. Juli): Home nur neu aufbauen, wenn sich das Markup wirklich geändert
-	// hat — Hintergrund-Events (Sync, Status-Ping, Lernzeit) bauten das komplette
-	// Dashboard sonst bei jedem Render neu auf. Bei unverändertem Markup entfällt
-	// auch die Scroll-Wiederherstellung, weil nichts angefasst wird.
+		homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true) +
+		(recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "") +
+		LERNZEIT.homeWidgetHtml() + "</div>";
+	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat
 	if (main._lastHomeHtml === homeHtml && main.querySelector(".home")) return;
 	main.innerHTML = homeHtml;
 	main._lastHomeHtml = homeHtml;
 	if (keepScroll) {
 		main.scrollTop = keepScroll;
 		if (main.scrollTop !== keepScroll) {
-			// Falls nicht #main scrollt, sondern der .home-Container selbst
-			const h = main.querySelector(".home");
+			const h = main.querySelector(".home"); // falls .home selbst scrollt
 			if (h) h.scrollTop = keepScroll;
 		}
 	}
 }
 
-// Papierkorb: Seiten, Stapel und Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen.
+// Papierkorb: Seiten, Stapel, Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen
+const trashRow = (kind, id, title, hint) =>
+	`<div class="trash-row"><span class="row-title">${title}</span><span class="hint">${hint}</span>` +
+	`<button data-${kind}restore="${id}">↩ Wiederherstellen</button><button data-${kind}purge="${id}" class="danger">🗑 Endgültig löschen</button></div>`;
 function renderTrash(main) {
 	const pages = STATE.trashedPages();
 	const decks = (STATE.trashedDeckRoots && STATE.trashedDeckRoots()) || [];
 	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
-	const empty = !pages.length && !decks.length && !cards.length;
-	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div>' +
-		'<button class="danger" data-trashclear="1">Papierkorb leeren</button></div>';
-	if (empty) {
-		html += '<p class="hint">Der Papierkorb ist leer.</p></div>';
-		main.innerHTML = html;
+	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div><button class="danger" data-trashclear="1">Papierkorb leeren</button></div>';
+	if (!pages.length && !decks.length && !cards.length) {
+		main.innerHTML = html + '<p class="hint">Der Papierkorb ist leer.</p></div>';
 		return;
 	}
+	const head = (label) => `<div class="ws-head"><span class="ws-name">${label}</span></div>`;
 	html += '<div class="trash-list">';
-	if (pages.length) {
-		html += '<div class="ws-head"><span class="ws-name">Seiten</span></div>' +
-			pages.map((pg) =>
-				'<div class="trash-row">' +
-					'<span class="row-title">' + pageIconHtml(pg) + U.esc(pg.title) + "</span>" +
-					'<span class="hint">gelöscht ' + U.fmtDate(pg.trashedAt || pg.updated) + "</span>" +
-					'<button data-pagerestore="' + pg.id + '">↩ Wiederherstellen</button>' +
-					'<button data-pagepurge="' + pg.id + '" class="danger">🗑 Endgültig löschen</button>' +
-				"</div>"
-			).join("");
-	}
-	if (decks.length) {
-		html += '<div class="ws-head"><span class="ws-name">Stapel</span></div>' +
-			decks.map((name) => {
-				const d = S.decks[name] || {};
-				const n = Object.values(S.cards).filter((c) => {
-					if (!c.trashed) return false;
-					const deck = c.deck || "Standard";
-					return deck === name || deck.startsWith(name + "::");
-				}).length;
-				return '<div class="trash-row">' +
-					'<span class="row-title">🃏 ' + U.esc(name) + (n ? " · " + n + " Karte(n)" : "") + "</span>" +
-					'<span class="hint">gelöscht ' + U.fmtDate(d.trashedAt || "") + "</span>" +
-					'<button data-deckrestore="' + U.esc(name) + '">↩ Wiederherstellen</button>' +
-					'<button data-deckpurge="' + U.esc(name) + '" class="danger">🗑 Endgültig löschen</button>' +
-				"</div>";
-			}).join("");
-	}
-	if (cards.length) {
-		html += '<div class="ws-head"><span class="ws-name">Karten</span></div>' +
-			cards.map((c) => {
-				const front = (c.front || "").replace(/\s+/g, " ").trim();
-				const short = front.length > 60 ? front.slice(0, 60) + "…" : front;
-				return '<div class="trash-row">' +
-					'<span class="row-title">🃏 ' + U.esc(short || "(leere Vorderseite)") + "</span>" +
-					'<span class="hint">' + U.esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || "") + "</span>" +
-					'<button data-cardrestore="' + c.id + '">↩ Wiederherstellen</button>' +
-					'<button data-cardpurge="' + c.id + '" class="danger">🗑 Endgültig löschen</button>' +
-				"</div>";
-			}).join("");
-	}
-	html += "</div></div>";
-	main.innerHTML = html;
+	if (pages.length) html += head("Seiten") + pages.map((pg) => trashRow("page", pg.id, pageIconHtml(pg) + esc(pg.title), "gelöscht " + U.fmtDate(pg.trashedAt || pg.updated))).join("");
+	if (decks.length) html += head("Stapel") + decks.map((name) => {
+		const n = Object.values(S.cards).filter((c) => c.trashed && ((c.deck || "Standard") === name || (c.deck || "Standard").startsWith(name + "::"))).length;
+		return trashRow("deck", esc(name), "🃏 " + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
+	}).join("");
+	if (cards.length) html += head("Karten") + cards.map((c) => {
+		const front = (c.front || "").replace(/\s+/g, " ").trim();
+		return trashRow("card", c.id, "🃏 " + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
+	}).join("");
+	main.innerHTML = html + "</div></div>";
 }
 
-// ---------- GoodNotes-artige Bibliothek: Deckblätter (eigenes Bild oder vorgefertigt) ----------
-const COVER_URLS = {}; // blobId → Object-URL (einmal je Sitzung erzeugt und gecacht)
-
-
-async function coverObjectUrl(blobId) {
-	if (COVER_URLS[blobId]) return COVER_URLS[blobId];
+// Blob → Object-URL, einmal je Sitzung gecacht (Cover + Inline-Bilder)
+const COVER_URLS = {}, IMG_URLS = {};
+async function blobUrl(cache, id, fallbackType) {
+	if (cache[id]) return cache[id];
 	try {
-		const rec = await DB.getBlob(blobId);
+		const rec = await DB.getBlob(id);
 		if (!rec || !rec.buf || !rec.buf.byteLength) return null;
-		const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/jpeg" }));
-		COVER_URLS[blobId] = url;
-		return url;
-	} catch (e) { console.warn("Cover konnte nicht geladen werden:", e); return null; }
+		return (cache[id] = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || fallbackType })));
+	} catch (e) { console.warn("Blob konnte nicht geladen werden:", e); return null; }
 }
 
-// Lädt eigene Cover-Bilder nach dem Rendern nach (innerHTML kann kein async).
+// Cover/Bilder nach dem Rendern nachladen (innerHTML kann kein async)
 function hydrateCovers(root) {
 	(root || document).querySelectorAll("[data-coverimg]").forEach(async (el) => {
 		if (el.dataset.coverHydrated) return;
 		el.dataset.coverHydrated = "1";
-		const u = await coverObjectUrl(el.dataset.coverimg);
-		if (u) el.style.backgroundImage = "url('" + u + "')";
+		const u = await blobUrl(COVER_URLS, el.dataset.coverimg, "image/jpeg");
+		if (u) el.style.backgroundImage = `url('${u}')`;
 	});
 }
-
-// Lädt lokal gespeicherte Bilder (![...](img:...)) in gerendertem Markdown nach.
-const IMG_URLS = {};
 function hydrateImages(root) {
 	(root || document).querySelectorAll('img[src^="img:"]').forEach(async (img) => {
-		const id = img.getAttribute("src");
-		if (IMG_URLS[id]) { img.src = IMG_URLS[id]; return; }
-		try {
-			const rec = await DB.getBlob(id);
-			if (!rec || !rec.buf || !rec.buf.byteLength) return;
-			const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/png" }));
-			IMG_URLS[id] = url;
-			img.src = url;
-		} catch (e) { console.warn("Bild konnte nicht geladen werden:", e); }
+		const u = await blobUrl(IMG_URLS, img.getAttribute("src"), "image/png");
+		if (u) img.src = u;
 	});
 }
 
@@ -1140,114 +789,82 @@ function localDayKey(x) {
 	return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-// ---------- Daily Notes (📅-Tab): Monatskalender, jeder Tag ist eine eigene Seite ----------
+// Daily Notes (📅): Monatskalender, jeder Tag eine eigene Seite
 function renderDaily(main) {
 	const now = new Date();
 	const cur = S.dailyMonth ? new Date(S.dailyMonth + "-01T12:00:00") : new Date(now.getFullYear(), now.getMonth(), 1);
 	const y = cur.getFullYear(), mo = cur.getMonth();
-	const monthLabel = cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
 	const todayKey = localDayKey(now);
 	const notes = {};
 	STATE.activePages().forEach((p) => { if (p.daily) notes[p.daily] = p; });
 	const startOffset = (new Date(y, mo, 1).getDay() + 6) % 7; // Montag = 0
-	const daysInMonth = new Date(y, mo + 1, 0).getDate();
-	let cells = "";
-	for (let i = 0; i < startOffset; i++) cells += '<div class="cal-day other"></div>';
-	for (let d = 1; d <= daysInMonth; d++) {
+	let cells = '<div class="cal-day other"></div>'.repeat(startOffset);
+	for (let d = 1, days = new Date(y, mo + 1, 0).getDate(); d <= days; d++) {
 		const key = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
 		const pg = notes[key];
 		const snippet = pg ? ((pg.content || "").split("\n").find((l) => l.trim()) || "") : "";
-		cells += '<div class="cal-day' + (key === todayKey ? " today" : "") + (pg ? " has-note" : "") + '" data-dailyday="' + key + '" title="' + key + '">' +
-			'<span class="cal-num">' + d + "</span>" +
-			(pg ? '<span class="cal-snippet">' + U.esc(snippet.slice(0, 70)) + "</span>" : "") +
-		"</div>";
+		cells += `<div class="cal-day${key === todayKey ? " today" : ""}${pg ? " has-note" : ""}" data-dailyday="${key}" title="${key}"><span class="cal-num">${d}</span>${pg ? `<span class="cal-snippet">${esc(snippet.slice(0, 70))}</span>` : ""}</div>`;
 	}
 	main.innerHTML = '<div class="library daily"><div class="lib-head"><h1>📅 Daily Notes</h1>' +
 		'<div class="mode-btns"><button data-dailynav="-1" title="Voriger Monat">‹</button><button id="btnDailyToday">Heute</button><button data-dailynav="1" title="Nächster Monat">›</button></div>' +
-		'<span class="hint">' + monthLabel + " — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>" +
-		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => '<div class="cal-dow">' + d + "</div>").join("") + "</div>" +
+		`<span class="hint">${cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>` +
+		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => `<div class="cal-dow">${d}</div>`).join("") + "</div>" +
 		'<div class="cal-grid">' + cells + "</div></div>";
 }
 
-// Anlege-Dialog: EIN Dialog, zwei klare Typen — Notion-Seite (Block-Editor) oder
-// GoodNotes-Heft (Papier + Stift). Vorlagen erscheinen darunter als Zusatzoptionen.
+// Anlege-Dialog: Notion-Seite oder GoodNotes-Heft, Vorlagen darunter
 function openTemplatePicker() {
 	const tpls = STATE.activePages().filter((p) => p.isTemplate);
-	const o = U.el("overlay");
-	o.hidden = false;
-	o.innerHTML = modal(
+	openOverlay(modal(
 		"<h3>Neu anlegen</h3>" +
 		'<div class="newpage-cards">' +
-			'<button type="button" class="newpage-card" data-tplblank="1">' +
-				'<span class="newpage-visual is-notion" aria-hidden="true"><i></i><i></i><i></i></span>' +
-				"<b>Notion-Seite</b><small>Blöcke · Markdown · Verlinkungen</small>" +
-			"</button>" +
-			'<button type="button" class="newpage-card" data-tplheft="1">' +
-				'<span class="newpage-visual is-heft" aria-hidden="true"><span></span></span>' +
-				"<b>GoodNotes-Heft</b><small>Papier · Stift · Seiten</small>" +
-			"</button>" +
+			'<button type="button" class="newpage-card" data-tplblank="1"><span class="newpage-visual is-notion" aria-hidden="true"><i></i><i></i><i></i></span><b>Notion-Seite</b><small>Blöcke · Markdown · Verlinkungen</small></button>' +
+			'<button type="button" class="newpage-card" data-tplheft="1"><span class="newpage-visual is-heft" aria-hidden="true"><span></span></span><b>GoodNotes-Heft</b><small>Papier · Stift · Seiten</small></button>' +
 		"</div>" +
 		(tpls.length ? '<p class="hint">Oder aus einer Vorlage:</p>' : "") +
-		tpls.map((p) =>
-			'<button class="tpl-opt" data-tpluse="' + p.id + '">' + (p.icon ? U.esc(p.icon) + " " : (p.kind === "heft" ? "📓 " : "📑 ")) + U.esc(p.title) + "</button>"
-		).join("") +
+		tpls.map((p) => `<button class="tpl-opt" data-tpluse="${p.id}">${p.icon ? esc(p.icon) + " " : (p.kind === "heft" ? "📓 " : "📑 ")}${esc(p.title)}</button>`).join("") +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div>'
-	);
+	));
 }
 
-// Seitenverlauf-Dialog: Versionsliste links (aus dem Event-Log), Vorschau rechts,
-// Wiederherstellen erzeugt ein NEUES Event — der Verlauf selbst bleibt vollständig erhalten.
+// Verlauf: Versionsliste (Event-Log) links, Vorschau rechts; Wiederherstellen
+// erzeugt ein NEUES Event — der Verlauf bleibt vollständig
 function renderHistoryModal() {
-	const o = U.el("overlay");
-	o.hidden = false;
 	const vs = S.histVersions || [];
 	const idx = Math.max(0, Math.min(S.histIndex, vs.length - 1));
 	const v = vs[idx];
 	const items = vs.map((x, i) => ({ x, i })).reverse().slice(0, 50).map(({ x, i }) =>
-		'<button class="hist-item' + (i === idx ? " active" : "") + '" data-histversion="' + i + '">' +
-			new Date(x.t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) +
-			(i === vs.length - 1 ? ' <span class="hint">aktuell</span>' : "") +
-		"</button>"
-	).join("");
-	o.innerHTML = '<div class="modal hist-modal">' +
+		`<button class="hist-item${i === idx ? " active" : ""}" data-histversion="${i}">${new Date(x.t).toLocaleString("de-DE", DATETIME_OPTS)}${i === vs.length - 1 ? ' <span class="hint">aktuell</span>' : ""}</button>`).join("");
+	const o = openOverlay('<div class="modal hist-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="hist-list"><h3>🕘 Verlauf</h3>' + (items || '<p class="hint">Keine Versionen</p>') + "</div>" +
-		'<div class="hist-preview"><h3>' + U.esc(v ? v.title : "") + "</h3>" +
-			'<div class="md hist-md">' + (v ? U.md(v.content) : "") + "</div>" +
-			'<div class="modal-actions"><button id="btnHistRestore" ' + (!v || idx === vs.length - 1 ? "disabled" : "") + ">↩ Diese Version wiederherstellen</button></div>" +
-		"</div></div>";
-	const pv = o.querySelector(".hist-md");
+		`<div class="hist-preview"><h3>${esc(v ? v.title : "")}</h3><div class="md hist-md">${v ? U.md(v.content) : ""}</div>` +
+		`<div class="modal-actions"><button id="btnHistRestore" ${!v || idx === vs.length - 1 ? "disabled" : ""}>↩ Diese Version wiederherstellen</button></div></div></div>`);
+	const pv = o && o.querySelector(".hist-md");
 	if (pv) { U.renderMath(pv); U.highlightCode(pv); hydrateImages(pv); }
 }
 
-// ---------- Chat: Nachrichten, Thinking-Prozess (live + finalisiert), Edit-Karten mit Undo, Datei-Chips ----------
-// historyList = der Chat, in dem die Nachricht steht (side ODER full) — sonst greift die
-// Bearbeiten-Sperre im Seitenpanel nie (früher immer nur S.chat geprüft).
+// ---------- Chat: Nachrichten, Thinking (live + final), Edit-Karten, Datei-Chips ----------
+// historyList = der Chat, in dem die Nachricht steht (side ODER full) — sonst
+// greift die Bearbeiten-Sperre im Seitenpanel nie (früher nur S.chat geprüft)
 function userMsgHtml(m, historyList) {
-	// Wie in Notion: Bearbeiten ist gesperrt, solange darunter noch nicht rückgängig
-	// gemachte Seitenänderungen (edit-Karten) stehen.
+	// Bearbeiten gesperrt, solange darunter nicht rückgängig gemachte Edits stehen
 	const list = historyList || S.chat;
 	const idx = list.findIndex((x) => x.mid === m.mid);
 	const locked = idx !== -1 && list.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
 	return '<div class="msg user">' +
-		'<button class="msg-edit' + (locked ? " locked" : "") + '" data-editmsg="' + m.mid + '" title="' +
-			(locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten") + '">' + (locked ? "🔒" : "✎") + "</button>" +
-		(m.content ? U.esc(m.content) : "") +
-		(m.image ? '<img class="msg-img" src="' + m.image + '" alt="Anhang">' : "") +
+		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${locked ? "🔒" : "✎"}</button>` +
+		(m.content ? esc(m.content) : "") +
+		(m.image ? `<img class="msg-img" src="${m.image}" alt="Anhang">` : "") +
 		(m.textFile ? fileChipHtml(m) : "") +
-		(m.pdfFile ? '<div class="file-chip"><span>📄 ' + U.esc(m.pdfFile.name) + ' · ' + (m.pdfFile.pages || "?") + ' Seiten</span></div>' : "") +
+		(m.pdfFile ? `<div class="file-chip"><span>📄 ${esc(m.pdfFile.name)} · ${m.pdfFile.pages || "?"} Seiten</span></div>` : "") +
 		"</div>";
 }
 
-// Lange geklebte Texte werden nicht ausgeschrieben, sondern als kleine .txt-Karte
-// gezeigt (herunterladbar); das Modell bekommt den Inhalt trotzdem als Kontext.
-function fileChipHtml(m) {
-	return '<div class="file-chip"><span>📄 ' + U.esc(m.textFile.name) + " · " + m.textFile.size + ' Zeichen</span>' +
-		'<button data-filedownload="' + m.mid + '">Herunterladen</button></div>';
-}
+// Lange geklebte Texte als .txt-Karte (Modell bekommt den Inhalt trotzdem als Kontext)
+const fileChipHtml = (m) => `<div class="file-chip"><span>📄 ${esc(m.textFile.name)} · ${m.textFile.size} Zeichen</span><button data-filedownload="${m.mid}">Herunterladen</button></div>`;
 
-// Werkzeug-Anzeige wie in Notion („Hat … verwendet“): kleine graue Karte je Tool-Aufruf,
-// bei der semantischen Suche inklusive des verwendeten Embedding-Modells (aus ai.js).
+// Werkzeug-Karte je Tool-Aufruf („Hat … verwendet“)
 const TOOL_LABELS = {
 	read_page: "Seite gelesen", search_notes: "Notizen durchsucht", semantic_search: "Semantische Suche",
 	create_page: "Seite erstellt", append_to_page: "Seite ergänzt", replace_page_content: "Seite überschrieben",
@@ -1255,86 +872,56 @@ const TOOL_LABELS = {
 	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten", send_to_notebooklm: "An NotebookLM",
 	ask_choice: "Rückfrage gestellt", delete_page: "Seite gelöscht", delete_flashcard: "Karte gelöscht", delete_deck: "Stapel gelöscht",
 };
-function toolChipHtml(m) {
-	return '<div class="tool-chip' + (m.error ? " err" : "") + '" title="Werkzeug: ' + U.esc(m.name) + '">⚙️ ' + U.esc(TOOL_LABELS[m.name] || m.name) +
-		(m.detail ? ' <span class="tool-detail">· ' + U.esc(m.detail) + "</span>" : "") + (m.error ? " — Fehler" : "") + "</div>";
-}
+const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">⚙️ ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
 
-function chatStaticHtml(historyList) {
-	// Fertige Nachrichten getrennt vom Live-Entwurf aufbauen. Beim Streamen bleibt
-	// dieser Teil unverändert und muss weder erneut als Markdown noch für Math/Code
-	// verarbeitet werden.
-	const list = historyList || [];
-	return list.map((m) => {
-		if (m.role === "edit") return editCardHtml(m);
-		if (m.role === "question") return questionCardHtml(m);
-		if (m.role === "tool") return toolChipHtml(m);
-		if (m.role === "assistant") return assistantMsgHtml(m);
-		return userMsgHtml(m, list);
-	}).join("");
+// Fertige Nachrichten getrennt vom Live-Entwurf — bleibt beim Streamen unangetastet
+function chatStaticHtml(list = []) {
+	return list.map((m) =>
+		m.role === "edit" ? editCardHtml(m)
+		: m.role === "question" ? questionCardHtml(m)
+		: m.role === "tool" ? toolChipHtml(m)
+		: m.role === "assistant" ? assistantMsgHtml(m)
+		: userMsgHtml(m, list)).join("");
 }
 
 function chatLiveParts(historyList) {
 	if (!S.aiBusy) return { think: "", rest: "" };
 	const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
 	if (historyList !== activeList) return { think: "", rest: "" };
-	// Während offener ask_choice-Karte keine zweite „busy“-Zeile — die Frage IST der Wartezustand.
+	// Offene ask_choice-Karte IST der Wartezustand — keine zweite busy-Zeile
 	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
-	// Denkprozess UND Antwort-Draft parallel zeigen. Vorher versteckte jedes
-	// aiDraft-Zeichen die Think-Box komplett — bei Heuristik-Lecks wirkte der
-	// ganze Denkprozess wie die normale Antwort.
+	// Think-Box UND Draft parallel — sonst wirkt geleaktes Reasoning wie die Antwort
 	const think = S.aiThinkingDraft ? thinkingLiveHtml() : "";
-	let rest = "";
-	if (S.aiDraft) rest = '<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>";
-	else if (!S.aiThinkingDraft && !waitingChoice) rest = '<div class="msg assistant busy">' + U.esc(S.aiStatus || "…") + "</div>";
+	const rest = S.aiDraft ? '<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>"
+		: (!S.aiThinkingDraft && !waitingChoice ? '<div class="msg assistant busy">' + esc(S.aiStatus || "…") + "</div>" : "");
 	return { think, rest };
 }
 
-// Vollständige, aber sehr viel günstigere Änderungsprüfung als ein neues innerHTML
-// für den gesamten Verlauf. Die FNV-Signatur erkennt auch In-Place-Änderungen
-// (z.B. Undo, aufgeklapptes Thinking oder beantwortete Rückfragen).
+// FNV-Signatur statt innerHTML-Neuaufbau — erkennt auch In-Place-Änderungen
+// (Undo, aufgeklapptes Thinking, beantwortete Rückfragen). PERF: Felder direkt
+// in den Hash falten, kein JSON.stringify des ganzen Verlaufs (Bild-Data-URLs!)
 function chatHistorySignature(list) {
-	// PERF (Feinschliff v11): vorher wurde der GESAMTE Verlauf pro Aufruf per
-	// JSON.stringify in einen Riesen-String verwandelt (inkl. Bild-Daten-URLs)
-	// und erst dann gehasht — viel Allokation/GC in jedem Render. Jetzt werden
-	// die Felder direkt in den FNV-Hash gefaltet, ohne Zwischenstring.
 	let hash = 2166136261;
-	const add = (s) => {
-		for (let i = 0; i < s.length; i++) {
-			hash ^= s.charCodeAt(i);
-			hash = Math.imul(hash, 16777619);
-		}
-		hash ^= 30; // Feldtrenner (Record Separator)
+	const add = (v) => {
+		const s = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+		for (let i = 0; i < s.length; i++) { hash ^= s.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+		hash ^= 30; // Feldtrenner
 		hash = Math.imul(hash, 16777619);
 	};
-	for (const m of list || []) {
-		for (const k in m) {
-			const v = m[k];
-			add(k);
-			if (v == null) add("");
-			else if (typeof v === "object") add(JSON.stringify(v));
-			else add(String(v));
-		}
-	}
+	for (const m of list || []) for (const k in m) { add(k); add(m[k]); }
 	return hash >>> 0;
 }
 
 function enhanceChatStatic(log, staticEnd) {
-	for (let node = log.firstChild; node && node !== staticEnd; node = node.nextSibling) {
-		if (node.nodeType === Node.ELEMENT_NODE) {
-			U.renderMath(node);
-			U.highlightCode(node);
-		}
-	}
+	for (let n = log.firstChild; n && n !== staticEnd; n = n.nextSibling)
+		if (n.nodeType === Node.ELEMENT_NODE) { U.renderMath(n); U.highlightCode(n); }
 }
 
 function renderChatLog(log, historyList) {
 	const signature = chatHistorySignature(historyList);
-	let staticEnd = log._chatStaticEnd;
-	let live = log._chatLive;
-	// Fertige Nachrichten bleiben direkte Kinder des Logs. Das bewahrt vorhandene
-	// Flex-/CSS-Regeln und Event-Delegation; nur der Live-Bereich erhält einen
-	// unsichtbaren Container als gezieltes Patch-Ziel.
+	let staticEnd = log._chatStaticEnd, live = log._chatLive;
+	// Fertige Nachrichten bleiben direkte Kinder (CSS/Event-Delegation); nur der
+	// Live-Bereich bekommt einen unsichtbaren Container als Patch-Ziel
 	if (!staticEnd || !live || staticEnd.parentNode !== log || live.parentNode !== log) {
 		staticEnd = document.createComment("chat-static-end");
 		live = document.createElement("div");
@@ -1347,21 +934,17 @@ function renderChatLog(log, historyList) {
 	}
 	if (log._chatStaticSignature !== signature) {
 		while (log.firstChild !== staticEnd) log.removeChild(log.firstChild);
-		const template = document.createElement("template");
-		template.innerHTML = chatStaticHtml(historyList);
-		staticEnd.before(template.content);
+		const tpl = document.createElement("template");
+		tpl.innerHTML = chatStaticHtml(historyList);
+		staticEnd.before(tpl.content);
 		log._chatStaticSignature = signature;
 		enhanceChatStatic(log, staticEnd);
 	}
-	// BUGFIX (17. Juli): Der Live-Bereich wurde bisher bei JEDEM Streaming-Delta
-	// komplett per innerHTML ersetzt (~alle 80 ms). Lag zwischen Mousedown und
-	// Mouseup ein Rebuild, ging der Klick verloren — die „Denkt nach…“-Box ließ
-	// sich während der Generierung praktisch nie ausklappen. Jetzt: Think-Box und
-	// Antwort-Draft getrennt patchen; wächst nur der Denktext, wird ausschließlich
-	// der Textknoten aktualisiert und der Toggle-Button bleibt stabil im DOM.
+	// FIX: Live-Bereich nicht mehr pro Streaming-Delta per innerHTML ersetzen —
+	// Klicks zwischen Mousedown/-up gingen verloren, die Think-Box ließ sich nie
+	// aufklappen. Think und Draft getrennt patchen, Toggle bleibt stabil im DOM
 	const liveParts = chatLiveParts(historyList);
-	let thinkHost = live._thinkHost;
-	let restHost = live._restHost;
+	let thinkHost = live._thinkHost, restHost = live._restHost;
 	if (!thinkHost || !restHost || thinkHost.parentNode !== live || restHost.parentNode !== live) {
 		thinkHost = document.createElement("div");
 		thinkHost.style.display = "contents";
@@ -1382,9 +965,7 @@ function renderChatLog(log, historyList) {
 		const thinkText = S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2);
 		if (body && body.textContent !== thinkText) {
 			body.textContent = thinkText;
-			// Aufgeklappt: automatisch am unteren Ende bleiben, damit der neueste
-			// Gedanke sichtbar ist, ohne dass der Nutzer nachscrollen muss.
-			if (S.thinkingLiveExpanded) body.scrollTop = body.scrollHeight;
+			if (S.thinkingLiveExpanded) body.scrollTop = body.scrollHeight; // am neuesten Gedanken bleiben
 		}
 	}
 	if (restHost._chatHtml !== liveParts.rest) {
@@ -1393,219 +974,138 @@ function renderChatLog(log, historyList) {
 		U.renderMath(restHost);
 		U.highlightCode(restHost);
 	}
-	// Ans Ende folgen — aber nur, wenn der Nutzer nicht gerade hochgescrollt hat,
-	// um etwas nachzulesen (sonst reißt das Streaming die Ansicht immer nach unten).
+	// Ans Ende folgen — außer der Nutzer hat hochgescrollt, um nachzulesen
 	const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
 	if (nearBottom || !log._chatAutoScrolled) { log.scrollTop = log.scrollHeight; log._chatAutoScrolled = true; }
 }
 
-// Rückfrage-Karte (ask_choice) — Notion-Umfrage-Style: Frage + volle Options-Zeilen,
-// nach Klick nur die gewählte Antwort (kein extra Tool-Chip).
+// Rückfrage-Karte (ask_choice): Frage + Options-Zeilen, nach Klick nur die Antwort
 function questionCardHtml(m) {
 	if (m.answered) {
-		return '<div class="msg assistant question-card answered">' +
-			'<div class="q-label">Rückfrage</div>' +
-			'<div class="q-text">' + U.esc(m.question) + "</div>" +
-			'<div class="q-picked"><span class="q-check">✓</span> <b>' + U.esc(m.answer) + "</b></div></div>";
+		return `<div class="msg assistant question-card answered"><div class="q-label">Rückfrage</div><div class="q-text">${esc(m.question)}</div><div class="q-picked"><span class="q-check">✓</span> <b>${esc(m.answer)}</b></div></div>`;
 	}
 	const opts = Array.isArray(m.options) ? m.options : [];
-	return '<div class="msg assistant question-card pending" data-qmid="' + U.esc(m.mid) + '">' +
-		'<div class="q-label">Rückfrage</div>' +
-		'<div class="q-text">' + U.esc(m.question) + "</div>" +
-		'<div class="q-options">' + opts.map((o, i) =>
-			'<button type="button" class="q-opt" data-answerq="' + U.esc(m.mid) + '" data-answeridx="' + i + '">' +
-			'<span class="q-opt-label">' + U.esc(o) + "</span></button>"
-		).join("") + "</div></div>";
+	return `<div class="msg assistant question-card pending" data-qmid="${esc(m.mid)}"><div class="q-label">Rückfrage</div><div class="q-text">${esc(m.question)}</div><div class="q-options">` +
+		opts.map((o, i) => `<button type="button" class="q-opt" data-answerq="${esc(m.mid)}" data-answeridx="${i}"><span class="q-opt-label">${esc(o)}</span></button>`).join("") + "</div></div>";
 }
 
-// Nach dem Setzen von innerHTML wird LaTeX gerendert (KaTeX) und Code eingefärbt (highlight.js) —
-// beides live, auch während die Antwort noch streamt.
 function renderSideContextChip() {
-	const chip = U.el("sideContextChip");
+	const chip = $("sideContextChip");
 	if (!chip) return;
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
-	if (!pg) {
-		chip.hidden = true;
-		chip.innerHTML = "";
-		return;
-	}
-	chip.hidden = false;
-	chip.innerHTML = '<span class="side-context-icon">📄</span><span class="side-context-title">' +
-		U.esc(pg.title || "Unbenannte Seite") + '</span><span class="side-context-note">Seitenkontext</span>';
+	chip.hidden = !pg;
+	chip.innerHTML = pg ? `<span class="side-context-icon">📄</span><span class="side-context-title">${esc(pg.title || "Unbenannte Seite")}</span><span class="side-context-note">Seitenkontext</span>` : "";
 }
 
 function renderChat() {
 	renderSideContextChip();
-	const log = U.el("chatLog");
-	if (!log) return;
-	renderChatLog(log, S.sideChat);
+	const log = $("chatLog");
+	if (log) renderChatLog(log, S.sideChat);
 }
 
-// Ein Vollbild-Chat, der genau im Hauptbereich gerendert wird (gleiche Bausteine wie das Seitenpanel).
-// Layout wie Notions eigenes KI-Panel: Log wächst nach oben, das Eingabefeld bleibt
-// fest unten und ist horizontal zentriert — unabhängig von der Nachrichtenzahl.
+// Vollbild-Chat im Hauptbereich — gleiche Bausteine wie das Seitenpanel.
+// FIX: bestehendes Chat-Fenster WIEDERVERWENDEN statt pro Hintergrund-Render neu
+// bauen — sonst riss ein frisches #mainChatLog die Ansicht per Auto-Scroll nach
+// unten und getippter Text im Eingabefeld ging verloren
 function renderFullChat(main) {
 	const s = S.currentChatId ? CHATS.load().find((x) => x.id === S.currentChatId) : null;
 	const title = (s && s.title) || "Neuer Chat";
 	const empty = !S.chat.length;
-	// 📌 FIX (18. Juli, spät v2): Ein bereits aufgebautes Chat-Fenster wird
-	// WIEDERVERWENDET statt bei jedem Hintergrund-Render (Lernzeit-Segment,
-	// Sync, Status-Ping …) komplett neu gebaut. Vorher entstand dabei ein
-	// frisches #mainChatLog, dessen Auto-Scroll die Ansicht ans Ende riss —
-	// „die Seite springt nach unten“ — und gerade getippter Text im
-	// Eingabefeld ging verloren. Jetzt wird nur der Log-Inhalt nachgeführt.
 	const oldWrap = main.querySelector(".chat-full-wrap");
 	if (oldWrap && oldWrap.dataset.chatid === String(S.currentChatId || "")) {
 		const h1 = oldWrap.querySelector(".chat-full-head h1");
 		const wantTitle = "✦ " + title;
 		if (h1 && h1.textContent !== wantTitle) h1.textContent = wantTitle;
 		if (!empty) {
-			const hint = oldWrap.querySelector(".chat-empty-hint");
-			if (hint) hint.remove();
-			const sug = oldWrap.querySelector(".chat-suggests");
-			if (sug) sug.remove();
+			oldWrap.querySelector(".chat-empty-hint")?.remove();
+			oldWrap.querySelector(".chat-suggests")?.remove();
 		}
 		renderMainChatLog();
 		renderPendingChip("full");
 		return;
 	}
 	main.innerHTML =
-		'<div class="chat-full-wrap" data-chatid="' + U.esc(String(S.currentChatId || "")) + '">' +
-			'<div class="chat-full-head">' +
-				'<button type="button" class="ai-status-chip" id="aiStatusChipFull" title="KI-Status" data-aistatus="1"></button>' +
-				'<h1>✦ ' + U.esc(title) + "</h1>" +
-			"</div>" +
+		`<div class="chat-full-wrap" data-chatid="${esc(String(S.currentChatId || ""))}">` +
+			'<div class="chat-full-head"><button type="button" class="ai-status-chip" id="aiStatusChipFull" title="KI-Status" data-aistatus="1"></button>' +
+			`<h1>✦ ${esc(title)}</h1></div>` +
+			// Schnellstart-Chips setzen einen Prompt-Anfang ins Eingabefeld (kein Auto-Senden)
 			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' +
-				// Schnellstart-Chips: setzen einen Prompt-Anfang ins Eingabefeld (kein Auto-Senden)
 				'<div class="chat-suggests">' +
 				'<button type="button" data-chatsuggest="Erkläre mir Schritt für Schritt: ">💡 Erkläre mir…</button>' +
 				'<button type="button" data-chatsuggest="Erstelle Karteikarten zu: ">🃏 Karteikarten zu…</button>' +
 				'<button type="button" data-chatsuggest="Fasse kompakt zusammen: ">📄 Fasse zusammen…</button>' +
-				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">🎯 Quiz mich zu…</button>' +
-				'</div>' : "") +
+				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">🎯 Quiz mich zu…</button></div>' : "") +
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
-			'<form id="mainChatForm" class="chat-form-full">' +
-				'<div id="mainPendingChip" hidden></div>' +
+			'<form id="mainChatForm" class="chat-form-full"><div id="mainPendingChip" hidden></div>' +
 				'<div class="composer-body"><textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea></div>' +
 				'<div class="composer-actions"><div class="composer-actions-left">' +
 					'<button type="button" id="btnAttachFull" title="Fotos und Dateien hinzufügen">+</button>' +
 					'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
 				'</div><button id="mainChatSubmit" type="submit" title="Senden" disabled>↑</button></div>' +
-				'<div id="modelMenuFull" class="model-menu" hidden></div>' +
-			"</form>" +
-		"</div>";
+				'<div id="modelMenuFull" class="model-menu" hidden></div></form></div>';
 	renderMainChatLog();
 	renderPendingChip("full");
 	renderStatusDot();
-	const inp = U.el("mainChatInput");
+	const inp = $("mainChatInput");
 	if (empty && inp) inp.focus();
 }
 
 function renderMainChatLog() {
-	const log = U.el("mainChatLog");
-	if (!log) return;
-	renderChatLog(log, S.chat);
+	const log = $("mainChatLog");
+	if (log) renderChatLog(log, S.chat);
 }
 
-// Einheitliche "Gedankengang"-Box: exakt dieselbe Struktur/Optik für live (während
-// des Streamings) und finalisiert (nach Abschluss) — vorher zwei komplett
-// unterschiedlich aussehende Bausteine. Jetzt: Icon+Label+Chevron-Kopf, sanfte
-// Höhen-Animation beim Auf-/Zuklappen, weicher Fade-Verlauf statt hartem
-// Abschneiden in der Live-Vorschau.
+// EINE "Gedankengang"-Box für live UND finalisiert (gleiche Struktur/Optik)
 function thinkBoxHtml(opts) {
 	const expanded = !!opts.expanded;
-	const stateClass = expanded ? " expanded" : (opts.live ? " peek" : "");
-	return '<div class="think-box' + (opts.live ? " live" : "") + stateClass + '">' +
-		'<button type="button" class="think-toggle" ' + opts.toggleAttr + ' aria-expanded="' + (expanded ? "true" : "false") + '">' +
-			'<span class="think-icon">' + (opts.live ? "🧠" : "💭") + '</span>' +
-			'<span class="think-label">' + U.esc(opts.label) + '</span>' +
-			'<span class="think-chevron">▸</span>' +
-		"</button>" +
-		'<div class="think-body-wrap"><div class="think-body">' + U.esc(opts.text || "") + "</div></div>" +
-	"</div>";
+	return `<div class="think-box${opts.live ? " live" : ""}${expanded ? " expanded" : opts.live ? " peek" : ""}">` +
+		`<button type="button" class="think-toggle" ${opts.toggleAttr} aria-expanded="${expanded ? "true" : "false"}">` +
+			`<span class="think-icon">${opts.live ? "🧠" : "💭"}</span><span class="think-label">${esc(opts.label)}</span><span class="think-chevron">▸</span></button>` +
+		`<div class="think-body-wrap"><div class="think-body">${esc(opts.text || "")}</div></div></div>`;
 }
 
-// Während des Streamings: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar.
-function thinkingLiveHtml() {
-	const full = S.aiThinkingDraft;
-	const expanded = !!S.thinkingLiveExpanded;
-	return thinkBoxHtml({
-		text: expanded ? full : U.lastLines(full, 2),
-		expanded, live: true, label: "Denkt nach…", toggleAttr: 'id="btnThinkLive"',
-	});
-}
+// Live: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar
+const thinkingLiveHtml = () => thinkBoxHtml({
+	text: S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2),
+	expanded: !!S.thinkingLiveExpanded, live: true, label: "Denkt nach…", toggleAttr: 'id="btnThinkLive"',
+});
 
-// Nach Abschluss: komplett eingeklappte Leiste, die man wieder aufklappen kann.
 function assistantMsgHtml(m) {
-	let html = "";
-	if (m.reasoning) {
-		html += thinkBoxHtml({
-			text: m.reasoning, expanded: !!m.reasoningExpanded, live: false,
-			label: "Gedankengang", toggleAttr: 'data-reasoningtoggle="' + m.mid + '"',
-		});
-	}
-	const refineOpen = S.refineOpenMid === m.mid;
-	html += '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
-		'<div class="msg-tools">' +
-			'<button class="msg-tool-btn" data-copymsg="' + m.mid + '" title="Antwort in die Zwischenablage kopieren">📋 Kopieren</button>' +
-			'<button class="msg-tool-btn" data-refinetoggle="' + m.mid + '" title="Antwort anpassen">✦ Anpassen</button>' +
-			(refineOpen
-				? '<div class="refine-menu">' +
-					'<button data-refine="' + m.mid + '" data-mode="longer">⬆️ Länger</button>' +
-					'<button data-refine="' + m.mid + '" data-mode="same">↔️ Gleich</button>' +
-					'<button data-refine="' + m.mid + '" data-mode="shorter">⬇️ Kürzer</button>' +
-					"</div>"
-				: "") +
-		"</div></div>";
-	return html;
+	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
+	const refine = S.refineOpenMid === m.mid
+		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">⬆️ Länger</button><button data-refine="${m.mid}" data-mode="same">↔️ Gleich</button><button data-refine="${m.mid}" data-mode="shorter">⬇️ Kürzer</button></div>`
+		: "";
+	return think + '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
+		`<div class="msg-tools"><button class="msg-tool-btn" data-copymsg="${m.mid}" title="Antwort in die Zwischenablage kopieren">📋 Kopieren</button>` +
+		`<button class="msg-tool-btn" data-refinetoggle="${m.mid}" title="Antwort anpassen">✦ Anpassen</button>${refine}</div></div>`;
 }
 
 function editCardHtml(m) {
 	const title = m.pageTitle || "Unbenannt";
 	const label = m.created ? "Hat erstellt" : "Hat geändert";
-	const icon = (m.after && m.after.icon) || (S.pages[m.pageId] && S.pages[m.pageId].icon) || "📄";
-	return '<div class="edit-card' + (m.undone ? " undone" : "") + '">' +
-		'<div class="edit-title">' + U.esc(m.summary || (label + " " + title)) + "</div>" +
-		'<div class="edit-actions-row">' +
-			'<button class="btn-show-changes" data-difftoggle="' + m.mid + '">Änderungen anzeigen</button>' +
-			'<button class="btn-undo-icon" data-undo="' + m.mid + '" ' + (m.undone ? "disabled" : "") + ' title="Rückgängig machen">↺</button>' +
-		"</div>" +
-		'<div class="edit-subtitle">' + label + "</div>" +
-		'<div class="edit-files-list">' +
-			'<div class="edit-file-item">' + U.esc(icon) + " " + U.esc(title) + "</div>" +
-		"</div></div>";
+	const icon = m.after?.icon || S.pages[m.pageId]?.icon || "📄";
+	return `<div class="edit-card${m.undone ? " undone" : ""}"><div class="edit-title">${esc(m.summary || (label + " " + title))}</div>` +
+		`<div class="edit-actions-row"><button class="btn-show-changes" data-difftoggle="${m.mid}">Änderungen anzeigen</button>` +
+		`<button class="btn-undo-icon" data-undo="${m.mid}" ${m.undone ? "disabled" : ""} title="Rückgängig machen">↺</button></div>` +
+		`<div class="edit-subtitle">${label}</div><div class="edit-files-list"><div class="edit-file-item">${esc(icon)} ${esc(title)}</div></div></div>`;
 }
 
-// Baut eine seitenartige Vorschau (wie die echte Seite), mit grün/rot markierten Diff-Zeilen.
-// Notion-Stil: große „Seite“ fliegt aus dem Overlay, nicht nur ein Code-Diff.
+// Seitenartige Diff-Vorschau: grün/rot markierte Blöcke statt Code-Diff
 function changePageBodyHtml(beforeContent, afterContent) {
-	const before = String(beforeContent || "");
-	const after = String(afterContent || "");
-	if (!before && after) {
-		// Neu erstellt: ganze Seite als „hinzugefügt“
-		return '<div class="change-page-body md highlight-page-add">' + U.md(after) + "</div>";
-	}
-	if (!after && before) {
-		return '<div class="change-page-body md highlight-page-del">' + U.md(before) + "</div>";
-	}
+	const before = String(beforeContent || ""), after = String(afterContent || "");
+	if (!before && after) return '<div class="change-page-body md highlight-page-add">' + U.md(after) + "</div>";
+	if (!after && before) return '<div class="change-page-body md highlight-page-del">' + U.md(before) + "</div>";
 	const diff = typeof U.diffLines === "function" ? U.diffLines(before, after) : [];
-	if (!diff.length) {
-		return '<div class="change-page-body md">' + U.md(after) + "</div>";
-	}
-	// Zeilenweise Diff → wie Seite lesbar, mit farbigen Blöcken (nicht Monospace-Code)
+	if (!diff.length) return '<div class="change-page-body md">' + U.md(after) + "</div>";
 	const chunks = [];
-	let buf = [];
-	let kind = "same";
+	let buf = [], kind = "same";
 	const flush = () => {
 		if (!buf.length) return;
-		const text = buf.join("\n");
+		chunks.push(`<div class="change-block ${kind} md">` + U.md(buf.join("\n")) + "</div>");
 		buf = [];
-		if (kind === "add") chunks.push('<div class="change-block add md">' + U.md(text) + "</div>");
-		else if (kind === "del") chunks.push('<div class="change-block del md">' + U.md(text) + "</div>");
-		else chunks.push('<div class="change-block same md">' + U.md(text) + "</div>");
 	};
 	diff.forEach((d) => {
-		const t = d.type === "add" ? "add" : d.type === "del" ? "del" : "same";
+		const t = d.type === "add" || d.type === "del" ? d.type : "same";
 		if (t !== kind) { flush(); kind = t; }
 		buf.push(d.text);
 	});
@@ -1614,217 +1114,128 @@ function changePageBodyHtml(beforeContent, afterContent) {
 }
 
 function openChangePreview(m) {
-	const o = U.el("overlay");
+	const o = $("overlay");
 	if (!o || !m) return;
-	const before = m.before || {};
-	const after = m.after || {};
+	const before = m.before || {}, after = m.after || {};
 	const title = after.title || m.pageTitle || before.title || "Unbenannte Seite";
-	const icon = after.icon || (S.pages[m.pageId] && S.pages[m.pageId].icon) || "📄";
-	const label = m.created ? "Seite erstellt" : "Seite geändert";
-	const bodyHtml = changePageBodyHtml(before.content, after.content);
+	const icon = after.icon || S.pages[m.pageId]?.icon || "📄";
 	o.hidden = false;
 	o.classList.add("change-overlay");
 	o.innerHTML =
 		'<div class="change-page-flyout" role="dialog" aria-label="Änderungsvorschau">' +
 			'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-			'<div class="change-page-toolbar">' +
-				'<span class="change-page-badge">' + (m.created ? "Neu" : "Geändert") + " · KI</span>" +
-				'<span class="hint">' + U.esc(label) + "</span>" +
-				'<button class="btn-undo-change" data-undo="' + m.mid + '" ' + (m.undone ? "disabled" : "") + '>↺ Rückgängig</button>' +
-				(m.pageId ? '<button type="button" class="mini" data-openchangepage="' + U.esc(m.pageId) + '">Seite öffnen</button>' : "") +
-			"</div>" +
-			'<article class="change-page-sheet">' +
-				'<div class="change-page-heading">' +
-					'<span class="change-page-icon">' + U.esc(icon) + "</span>" +
-					'<h1 class="change-page-title">' + U.esc(title) + "</h1>" +
-				"</div>" +
-				bodyHtml +
-			"</article>" +
-			'<div class="change-page-legend"><span class="leg add">+ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div>' +
-		"</div>";
+			`<div class="change-page-toolbar"><span class="change-page-badge">${m.created ? "Neu" : "Geändert"} · KI</span>` +
+			`<span class="hint">${m.created ? "Seite erstellt" : "Seite geändert"}</span>` +
+			`<button class="btn-undo-change" data-undo="${m.mid}" ${m.undone ? "disabled" : ""}>↺ Rückgängig</button>` +
+			(m.pageId ? `<button type="button" class="mini" data-openchangepage="${esc(m.pageId)}">Seite öffnen</button>` : "") + "</div>" +
+			`<article class="change-page-sheet"><div class="change-page-heading"><span class="change-page-icon">${esc(icon)}</span><h1 class="change-page-title">${esc(title)}</h1></div>` +
+			changePageBodyHtml(before.content, after.content) + "</article>" +
+			'<div class="change-page-legend"><span class="leg add">+ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div></div>';
 	const sheet = o.querySelector(".change-page-sheet");
-	if (sheet) {
-		U.renderMath(sheet);
-		U.highlightCode(sheet);
-		hydrateImages(sheet);
-	}
-	// „Seite öffnen“: Vorschau schließen und Seite navigieren
-	const openBtn = o.querySelector("[data-openchangepage]");
-	if (openBtn) {
-		openBtn.addEventListener("click", () => {
-			o.hidden = true;
-			o.classList.remove("change-overlay");
-			o.innerHTML = "";
-			if (typeof window.openPage === "function") window.openPage(openBtn.dataset.openchangepage);
-			else if (S.pages[openBtn.dataset.openchangepage]) {
-				S.currentPageId = openBtn.dataset.openchangepage;
-				S.view = "page";
-				render();
-			}
-		});
-	}
-	// Overlay-Klick außerhalb schließt
-	const onBg = (e) => { if (e.target === o) { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; o.removeEventListener("click", onBg); } };
+	if (sheet) { U.renderMath(sheet); U.highlightCode(sheet); hydrateImages(sheet); }
+	const close = () => { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; };
+	// „Seite öffnen“: Vorschau schließen und navigieren
+	o.querySelector("[data-openchangepage]")?.addEventListener("click", (e) => {
+		const id = e.currentTarget.dataset.openchangepage;
+		close();
+		if (typeof window.openPage === "function") window.openPage(id);
+		else if (S.pages[id]) { S.currentPageId = id; S.view = "page"; render(); }
+	});
+	// Klick auf den Overlay-Hintergrund schließt
+	const onBg = (e) => { if (e.target === o) { close(); o.removeEventListener("click", onBg); } };
 	o.addEventListener("click", onBg);
 }
 
 function renderPendingChip(type) {
-	const chip = U.el(type === "full" ? "mainPendingChip" : "pendingChip");
+	const chip = $(type === "full" ? "mainPendingChip" : "pendingChip");
 	if (!chip) return;
-	if (S.pendingAttachmentTarget !== type) {
-		chip.hidden = true;
-		chip.innerHTML = "";
-		return;
+	let html = "";
+	if (S.pendingAttachmentTarget === type) {
+		if (S.pendingImage) html = `<img src="${S.pendingImage}" alt=""> <span>Bild</span><button data-removeattachment="1" title="Entfernen">✕</button>`;
+		else if (S.pendingTextFile) html = `📄 ${esc(S.pendingTextFile.name)} (${S.pendingTextFile.size} Zeichen) wird als Datei angehängt <button id="btnRemoveTextFile" title="Entfernen">✕</button>`;
+		else if (S.pendingPdf) html = `📄 ${esc(S.pendingPdf.name)} (${S.pendingPdf.pages || "?"} Seiten) wird als PDF-Kontext angehängt <button id="btnRemovePdf" title="Entfernen">✕</button>`;
 	}
-	if (S.pendingImage) {
-		chip.hidden = false;
-		chip.innerHTML = '<img src="' + S.pendingImage + '" alt=""> <span>Bild</span>' +
-			'<button data-removeattachment="1" title="Entfernen">✕</button>';
-	} else if (S.pendingTextFile) {
-		chip.hidden = false;
-		chip.innerHTML = '📄 ' + U.esc(S.pendingTextFile.name) + ' (' + S.pendingTextFile.size + ' Zeichen) wird als Datei angehängt ' +
-			'<button id="btnRemoveTextFile" title="Entfernen">✕</button>';
-	} else if (S.pendingPdf) {
-		chip.hidden = false;
-		chip.innerHTML = '📄 ' + U.esc(S.pendingPdf.name) + ' (' + (S.pendingPdf.pages || "?") + ' Seiten) wird als PDF-Kontext angehängt ' +
-			'<button id="btnRemovePdf" title="Entfernen">✕</button>';
-	} else {
-		chip.hidden = true;
-		chip.innerHTML = "";
-	}
+	chip.hidden = !html;
+	chip.innerHTML = html;
 }
 
 // ---------- Modals ----------
 function modal(inner) {
 	return '<div class="modal">' + inner + "</div>";
 }
+const closeAction = '<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>';
 
 function openIconPicker() {
 	if (!S.currentPageId) return;
 	const icons = ["📝", "📘", "📕", "📙", "📗", "🧪", "🧮", "⚡", "🧢", "📐", "🔬", "💡", "🎯", "📊", "🗂", "📎", "✅", "⭐", "🔥", "🎓", "🧠", "📚", "🛠", "🚀"];
-	const o = U.el("overlay");
-	o.hidden = false;
-	o.innerHTML = modal(
+	openOverlay(modal(
 		"<h3>Icon wählen</h3>" +
-		'<div class="icon-grid">' + icons.map((i) => '<button class="icon-opt" data-iconset="' + i + '">' + i + "</button>").join("") + "</div>" +
+		'<div class="icon-grid">' + icons.map((i) => `<button class="icon-opt" data-iconset="${i}">${i}</button>`).join("") + "</div>" +
 		'<div class="modal-actions"><button data-iconset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
-	);
+	));
 }
 
 function openCoverPicker() {
 	if (!S.currentPageId) return;
-	const covers = ["sunset", "ocean", "forest", "grape", "mono"];
-	const o = U.el("overlay");
-	o.hidden = false;
-	o.innerHTML = modal(
+	openOverlay(modal(
 		"<h3>Cover wählen</h3>" +
-		'<div class="cover-grid">' + covers.map((c) => '<button class="cover-swatch cover-' + c + '" data-coverset="' + c + '"></button>').join("") + "</div>" +
+		'<div class="cover-grid">' + ["sunset", "ocean", "forest", "grape", "mono"].map((c) => `<button class="cover-swatch cover-${c}" data-coverset="${c}"></button>`).join("") + "</div>" +
 		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
 		'<div class="row-btns"><button id="btnCoverUpload">🖼 Eigenes Bild wählen</button></div>' +
 		'<div class="modal-actions"><button data-coverset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
-	);
+	));
 }
 
 function openReview() {
-	const o = U.el("overlay");
-	o.hidden = false;
 	const snap = STATE.studySnapshot(null);
 	if (snap.done) {
-		o.innerHTML = modal(
-			"<h3>Gratulation! 🎉</h3>" +
-			'<p class="hint">Dieser Stapel ist für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
-			'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
-		);
-		return;
+		return void openOverlay(modal("<h3>Gratulation! 🎉</h3>" +
+			'<p class="hint">Dieser Stapel ist für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' + closeAction));
 	}
-	// Anki: statische „Congratulations“-Meldung, kein Live-Countdown (den gibt es in
-	// Anki nicht). „Erneut prüfen“ baut die Ansicht neu auf, OHNE reviewShowBack zu
-	// setzen — die vorherige Version tat das über btnShowBack fälschlich mit, wodurch
-	// eine inzwischen fällig gewordene Karte direkt mit aufgedeckter Rückseite gezeigt
-	// worden wäre, ohne die Vorderseite je zu sehen.
+	// Wie Anki: statische Meldung, kein Live-Countdown. „Erneut prüfen“ baut neu auf
+	// OHNE reviewShowBack — sonst zeigte eine inzwischen fällige Karte direkt die Rückseite
 	if (snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
-		o.innerHTML = modal(
-			"<h3>Geschafft! 🎉</h3>" +
-			'<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt. ' + snap.learnWaiting.length + " Lernkarte(n) sind später heute wieder dran.</p>" +
-			'<div class="modal-actions"><button id="btnReviewRefresh">Erneut prüfen</button><button id="btnCloseOverlay">Später</button></div>'
-		);
-		return;
+		return void openOverlay(modal("<h3>Geschafft! 🎉</h3>" +
+			`<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt. ${snap.learnWaiting.length} Lernkarte(n) sind später heute wieder dran.</p>` +
+			'<div class="modal-actions"><button id="btnReviewRefresh">Erneut prüfen</button><button id="btnCloseOverlay">Später</button></div>'));
 	}
 	const c = snap.dueNow[0];
+	// FIX: leere dueNow-Queue crashte hier vorher (undefined.front)
+	if (!c) return void openOverlay(modal("<h3>Gratulation! 🎉</h3>" + '<p class="hint">Gerade ist keine Karte fällig.</p>' + closeAction));
 	const cnt = snap.counts;
-	o.innerHTML = modal(
-		"<h3>" + cnt.neu + " neu · " + cnt.learn + " lernen · " + cnt.review + " wdh.</h3>" +
+	openOverlay(modal(
+		`<h3>${cnt.neu} neu · ${cnt.learn} lernen · ${cnt.review} wdh.</h3>` +
 		'<div class="card-face md">' + U.md(c.front) + "</div>" +
 		(S.reviewShowBack
-			? '<div class="card-face back md">' + U.md(c.back) + "</div>" +
-				'<div class="grades">' +
-					'<button data-grade="1" data-card="' + c.id + '">Nochmal</button>' +
-					'<button data-grade="2" data-card="' + c.id + '">Schwer</button>' +
-					'<button data-grade="3" data-card="' + c.id + '">Gut</button>' +
-					'<button data-grade="4" data-card="' + c.id + '">Einfach</button>' +
-				"</div>"
+			? '<div class="card-face back md">' + U.md(c.back) + '</div><div class="grades">' +
+				[[1, "Nochmal"], [2, "Schwer"], [3, "Gut"], [4, "Einfach"]].map(([g, l]) => `<button data-grade="${g}" data-card="${c.id}">${l}</button>`).join("") + "</div>"
 			: '<div class="modal-actions"><button id="btnShowBack">Antwort zeigen</button></div>') +
-		'<div class="modal-actions review-tools">' +
-			'<button data-ankiedit="' + c.id + '" title="Karte bearbeiten">✎ Bearbeiten</button>' +
-			'<button data-reviewsuspend="' + c.id + '" title="Karte aussetzen (zählt nicht mehr als fällig)">⏸ Aussetzen</button>' +
-			'<button id="btnCloseOverlay">Beenden</button></div>'
-	);
+		`<div class="modal-actions review-tools"><button data-ankiedit="${c.id}" title="Karte bearbeiten">✎ Bearbeiten</button>` +
+		`<button data-reviewsuspend="${c.id}" title="Karte aussetzen (zählt nicht mehr als fällig)">⏸ Aussetzen</button>` +
+		'<button id="btnCloseOverlay">Beenden</button></div>'
+	));
 }
 
 function openCards() {
-	const o = U.el("overlay");
-	o.hidden = false;
 	const cards = Object.values(S.cards).filter((c) => !c.trashed).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
 	const rows = cards.map((c) =>
-		'<div class="card-row">' +
-			'<textarea data-front="' + c.id + '" rows="2">' + U.esc(c.front) + "</textarea>" +
-			'<textarea data-back="' + c.id + '" rows="2">' + U.esc(c.back) + "</textarea>" +
-			'<div class="card-meta"><span>fällig: ' + U.fmtDate(c.srs.due) + " · Wdh. " + (c.srs.reps || 0) + "</span>" +
-			'<span><button data-cardsave="' + c.id + '">Speichern</button> ' +
-			'<button data-carddel="' + c.id + '" class="danger">Löschen</button></span></div>' +
-		"</div>"
-	).join("");
-	o.innerHTML = modal(
-		"<h3>Karten verwalten (" + cards.length + ")</h3>" +
-		'<div class="cards-list">' + (rows || '<p class="hint">Noch keine Karten.</p>') + "</div>" +
-		'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div>'
-	);
+		`<div class="card-row"><textarea data-front="${c.id}" rows="2">${esc(c.front)}</textarea><textarea data-back="${c.id}" rows="2">${esc(c.back)}</textarea>` +
+		`<div class="card-meta"><span>fällig: ${U.fmtDate(c.srs.due)} · Wdh. ${c.srs.reps || 0}</span>` +
+		`<span><button data-cardsave="${c.id}">Speichern</button> <button data-carddel="${c.id}" class="danger">Löschen</button></span></div></div>`).join("");
+	openOverlay(modal(`<h3>Karten verwalten (${cards.length})</h3>` +
+		'<div class="cards-list">' + (rows || '<p class="hint">Noch keine Karten.</p>') + "</div>" + closeAction));
 }
 
 export const RENDER = {
-	render,
-	onStateChange,
-	scheduleRender,
-	renderTopbar,
-	renderModelMenu,
-	renderSidebar,
-	renderHistoryModal,
-	renderMain,
-	openSettings: (...args) => SETTINGS.openSettings(...args),
-	openReview,
-	openCards,
-	renderChat,
-	renderMainChatLog,
-	openTemplatePicker,
-	renderStatusDot,
-	renderTabs,
-	hydrateImages,
-	localDayKey,
-	modal,
-	hydrateCovers,
-	ancestorsOf,
-	renderLibrary: (...args) => LIBRARY.renderLibrary(...args),
-	libCardHtml: (...args) => LIBRARY.libCardHtml(...args),
-	openIconPicker,
-	openCoverPicker,
-	renderModelBar,
-	renderPendingChip,
-	openChangePreview,
-	loadPendingConflicts,
-	savePendingConflicts,
-	mergePendingConflicts,
-	openConflictResolver,
-	resolveConflict,
-	pageIconLabel,
-	pageIconHtml
+	render, onStateChange, scheduleRender,
+	renderTopbar, renderModelMenu, renderModelBar, renderStatusDot,
+	renderSidebar, renderTabs, renderMain, renderHistoryModal,
+	renderChat, renderMainChatLog, renderPendingChip, openChangePreview,
+	openTemplatePicker, openReview, openCards, openIconPicker, openCoverPicker,
+	hydrateImages, hydrateCovers, localDayKey, modal, ancestorsOf,
+	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
+	pageIconLabel, pageIconHtml,
+	openSettings: (...a) => SETTINGS.openSettings(...a),
+	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
+	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),
 };
