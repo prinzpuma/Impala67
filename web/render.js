@@ -523,16 +523,17 @@ function legacyConflictItems() {
 // Popup zeigt IMMER beide Stände: Hefte als Blob-Vorschau der ersten Seite,
 // Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie
 const conflictPaneHead = (label, time) => `<header><b>${label}</b>${time ? `<small>${esc(fmtConflictTime(time))}</small>` : ""}</header>`;
-const conflictHeftPane = (side, label, time, blobKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"></canvas><small class="conflict-heft-note"></small></div></section>`;
+const conflictHeftPane = (side, label, time, blobKey, peerKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"${peerKey ? ` data-conflictheftpeer="${esc(peerKey)}"` : ""}></canvas><small class="conflict-heft-note"></small></div></section>`;
 function buildSpecialComparisonHtml(c) {
 	const notePane = (side, label, time, note) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><div class="conflict-empty">${esc(note)}</div></div></section>`;
 	const textPane = (side, label, time, text) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
 	if (c.conflictType === "heft") {
 		const winnerKey = "heft:" + c.pageId, loserKey = "heft:" + c.conflictPageId;
+		const localKey = c.winner === "local" ? winnerKey : loserKey, remoteKey = c.winner === "local" ? loserKey : winnerKey;
 		return '<div class="conflict-compare">' +
-			conflictHeftPane("local", "Dieses Gerät", c.localTime, c.winner === "local" ? winnerKey : loserKey) +
-			conflictHeftPane("remote", "Drive / anderes Gerät", c.remoteTime, c.winner === "local" ? loserKey : winnerKey) +
-			'</div><p class="conflict-key">Vorschau: jeweils die erste Heft-Seite. Der unterlegene Stand liegt zusätzlich als „⚠ Konflikt-Heft“ in der Bibliothek.</p>';
+			conflictHeftPane("local", "Dieses Gerät", c.localTime, localKey, remoteKey) +
+			conflictHeftPane("remote", "Drive / anderes Gerät", c.remoteTime, remoteKey, localKey) +
+			'</div><p class="conflict-key">Vorschau: die erste abweichende Heft-Seite. Der unterlegene Stand liegt zusätzlich als „⚠ Konflikt-Heft“ in der Bibliothek.</p>';
 	}
 	if (c.conflictType === "delete-change") {
 		const kept = c.loserHash
@@ -547,9 +548,15 @@ function buildSpecialComparisonHtml(c) {
 function fillConflictHeftPreviews(root) {
 	root.querySelectorAll("canvas[data-conflictheft]").forEach(async (cv) => {
 		const note = cv.parentElement?.querySelector(".conflict-heft-note");
-		let pages = 0;
-		try { pages = await HEFT.renderBlobPreview(cv.dataset.conflictheft, cv); } catch (e) { console.warn("Konflikt-Vorschau:", e); }
-		if (note) note.textContent = pages ? (pages > 1 ? "Seite 1 von " + pages : "") : "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor.";
+		const { conflictheft: key, conflictheftpeer: peerKey } = cv.dataset;
+		let result = null;
+		try {
+			const pageIndex = peerKey ? await HEFT.findDivergentPage(key, peerKey) : 0;
+			result = await HEFT.renderBlobPreview(key, cv, pageIndex);
+		} catch (e) { console.warn("Konflikt-Vorschau:", e); }
+		if (!note) return;
+		note.textContent = !result ? "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."
+			: result.pageCount > 1 ? `Seite ${result.pageIndex + 1} von ${result.pageCount}` : "";
 	});
 }
 function openConflictResolver(index) {

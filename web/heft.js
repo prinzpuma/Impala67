@@ -181,6 +181,7 @@ export const HEFT = (() => {
 		const contentHash = await blobHash(buf);
 		dropThumbs(savePid);
 		await DB.putBlob(KEY(savePid), buf, { type: "application/json", kind: "heft", rev: saveDoc.rev, hash: contentHash });
+		await maybeSnapshot(savePid, buf, saveDoc.rev);
 
 		const ocrText = saveDoc.pages
 			.map((pg) => [pg.ocrText || "", (pg.texts || []).map((t) => t.text).join("\n")].filter(Boolean).join("\n"))
@@ -194,6 +195,80 @@ export const HEFT = (() => {
 		const savePid = pid, saveDoc = doc;
 		try { await persistDoc(savePid, saveDoc); }
 		catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
+	}
+
+	// ---- Verlauf: lokale Snapshots je Heft (siehe "kommt noch") ----
+	// Zeitstempel + rev stecken im Blob-Key ("heftver:<pid>:<t>:<rev>") — Auflisten und
+	// Aufräumen brauchen so nur allBlobKeys(), keine Meta-Reads. Bewusst NICHT über Drive
+	// gesynct: Snapshots erzeugen keine heftUpdated-Events, der Sync sieht sie nie.
+	const VER_PREFIX = (p) => "heftver:" + p + ":";
+	const VER_TTL = 24 * 60 * 60 * 1000, VER_GAP = 10 * 60 * 1000, VER_MAX = 20;
+	const verLast = {}; // letzter Snapshot-Zeitpunkt je Heft (spart Key-Scan bei jedem Save)
+	async function listSnapshots(p) {
+		const pre = VER_PREFIX(p);
+		return (await DB.allBlobKeys())
+			.filter((k) => k.startsWith(pre))
+			.map((k) => { const [t, rev] = k.slice(pre.length).split(":"); return { key: k, t: Number(t) || 0, rev: Number(rev) || 0 }; })
+			.sort((a, b) => b.t - a.t);
+	}
+	async function pruneSnapshots(p) {
+		const cutoff = Date.now() - VER_TTL;
+		const all = await listSnapshots(p);
+		const keep = all.filter((s, i) => i < VER_MAX && s.t >= cutoff);
+		for (const s of all) if (!keep.includes(s)) await DB.delBlob(s.key);
+		return keep;
+	}
+	async function writeSnapshot(p, buf, rev) {
+		const t = Date.now();
+		await DB.putBlob(VER_PREFIX(p) + t + ":" + rev, buf, { type: "application/json", kind: "heftver" });
+		verLast[p] = t;
+	}
+	async function maybeSnapshot(p, buf, rev) {
+		try {
+			if (!verLast[p]) { const s = await listSnapshots(p); verLast[p] = s.length ? s[0].t : 0; }
+			if (Date.now() - verLast[p] < VER_GAP) return; // gedrosselt: max. alle 10 Min.
+			await writeSnapshot(p, buf, rev);
+			await pruneSnapshots(p);
+		} catch (e) { console.warn("Heft: Verlauf-Snapshot fehlgeschlagen", e); }
+	}
+	async function restoreSnapshot(p, key) {
+		const rec = await DB.getBlob(key);
+		if (!rec || !rec.buf) { if (U.toast) U.toast("Snapshot nicht mehr vorhanden", "error"); return; }
+		const cur = pid === p && doc ? doc : await load(p);
+		// Sicherheitsnetz: aktuellen Stand IMMER sichern — Wiederherstellen ist damit selbst umkehrbar.
+		const curBytes = enc.encode(JSON.stringify(cur));
+		await writeSnapshot(p, curBytes.buffer.slice(curBytes.byteOffset, curBytes.byteOffset + curBytes.byteLength), cur.rev || 1);
+		const d = JSON.parse(dec.decode(rec.buf));
+		d.pages.forEach((pg) => { if (!Array.isArray(pg.images)) pg.images = []; if (!Array.isArray(pg.texts)) pg.texts = []; });
+		d.rev = cur.rev || 1; // persistDoc zählt auf rev+1 hoch → Sync sieht den restaurierten Stand als neu
+		docs[p] = d;
+		await persistDoc(p, d);
+		if (pid === p) {
+			doc = d; idx = Math.min(idx, d.pages.length - 1); sel = null; lassoSel = null; undoStack = []; redoStack = [];
+			rebuildScroll(); updateChrome();
+		}
+		if (U.toast) U.toast("Heft-Stand wiederhergestellt");
+	}
+	async function openVerlaufPop() {
+		if (!pop || !pid) return;
+		const owner = pop;
+		owner.dataset.kind = "verlauf";
+		owner.innerHTML = '<div class="heft-pop-head">Verlauf wird geladen…</div>';
+		let snaps = [];
+		try { snaps = await pruneSnapshots(pid); } catch (e) { console.warn("Heft: Verlauf laden fehlgeschlagen", e); }
+		if (pop !== owner) return; // Pop wurde inzwischen geschlossen/ersetzt
+		const fmt = (t) => new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+		owner.__verSnaps = snaps;
+		owner.innerHTML = '<div class="heft-pop-head">Verlauf (letzte 24 h)</div>' +
+			(snaps.length
+				? '<div class="heft-pop-grid">' + snaps.map((s, i) =>
+					'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
+						'<canvas width="92" height="130"></canvas><span>' + fmt(s.t) + '</span></div>').join("") + '</div>' +
+					'<div class="heft-pop-sub">Antippen stellt den Stand wieder her — der aktuelle Stand wird vorher im Verlauf gesichert. Snapshots entstehen automatisch (max. alle 10 Min.), bleiben 24 h und nur auf diesem Gerät.</div>'
+				: '<div class="heft-pop-sub">Noch keine Snapshots — sie entstehen automatisch beim Schreiben (max. alle 10 Min., 24 h aufbewahrt, nur auf diesem Gerät).</div>') +
+			'<button type="button" class="heft-pop-row" data-hepagesback="1">← Zurück</button>';
+		const cvs = owner.querySelectorAll(".heft-pop-thumb canvas");
+		snaps.forEach((s, i) => { if (cvs[i]) renderBlobPreview(s.key, cvs[i]); });
 	}
 
 	function contentBottom(pg) {
@@ -398,18 +473,40 @@ export const HEFT = (() => {
 		}
 	}
 
-	async function renderBlobPreview(blobKey, cv) {
+	// pageIndex: welche Seite gezeigt wird (Default 0). Rückgabe null bei Fehler,
+	// sonst { pageIndex, pageCount } — vorher fix Seite 0, ohne Rückmeldung welche
+	// Seite es war (Konflikt-Popup zeigte dadurch bei Hefts immer "Seite 1").
+	async function renderBlobPreview(blobKey, cv, pageIndex = 0) {
 		try {
 			const rec = await DB.getBlob(blobKey);
-			if (!rec || !rec.buf) return 0;
+			if (!rec || !rec.buf) return null;
 			const d = JSON.parse(new TextDecoder().decode(rec.buf));
-			const pg = d && d.pages && d.pages[0];
-			if (!pg) return 0;
+			if (!d || !Array.isArray(d.pages) || !d.pages.length) return null;
+			const pi = Math.max(0, Math.min(d.pages.length - 1, pageIndex));
+			const pg = d.pages[pi];
 			if (!Array.isArray(pg.strokes)) pg.strokes = [];
 			paintInto(cv, pg, -1);
-			return d.pages.length;
+			return { pageIndex: pi, pageCount: d.pages.length };
 		} catch (e) {
 			console.warn("Heft-Konflikt-Vorschau fehlgeschlagen:", e);
+			return null;
+		}
+	}
+
+	// Erste Seite, auf der sich zwei Heft-Blobs inhaltlich unterscheiden — damit
+	// das Konflikt-Popup die tatsächlich abweichende Seite zeigt statt immer Seite 1.
+	async function findDivergentPage(keyA, keyB) {
+		try {
+			const [a, b] = await Promise.all([DB.getBlob(keyA), DB.getBlob(keyB)]);
+			if (!a || !a.buf || !b || !b.buf) return 0;
+			const pagesA = JSON.parse(new TextDecoder().decode(a.buf)).pages || [];
+			const pagesB = JSON.parse(new TextDecoder().decode(b.buf)).pages || [];
+			for (let i = 0; i < Math.max(pagesA.length, pagesB.length); i++) {
+				if (JSON.stringify(pagesA[i] || null) !== JSON.stringify(pagesB[i] || null)) return i;
+			}
+			return 0;
+		} catch (e) {
+			console.warn("Heft: Divergenz-Suche fehlgeschlagen", e);
 			return 0;
 		}
 	}
@@ -440,7 +537,7 @@ export const HEFT = (() => {
 	const gesture = {
 		touches: new Map(), pinch: null, maxCount: 0, moved: false, startedAt: 0,
 		raf: 0, zoomFrame: 0, pendingZoom: null,
-		lastTap: 0, tapX: 0, tapY: 0,
+		lastTap: 0, tapX: 0, tapY: 0, lastTwoTap: 0,
 	};
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
@@ -458,7 +555,7 @@ export const HEFT = (() => {
 		stopAnim(); gesture.touches.clear();
 
 		clearPagesFx();
-		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0;
+		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0; gesture.lastTwoTap = 0;
 	}
 	function applyView(commit) {
 		const scroll = scrollEl(); if (!scroll) return;
@@ -798,7 +895,14 @@ export const HEFT = (() => {
 		if (e.touches.length) return;
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
 		const count = gesture.maxCount; gesture.maxCount = 0;
-		if (quick && count === 2) { undo(); return; }
+		if (quick && count === 2) {
+			// Undo erst beim DOPPEL-Tipp mit zwei Fingern (vorher reichte EIN Zwei-Finger-Tipp —
+			// zu viele versehentliche Rückgängig beim Umgreifen/Abstützen).
+			const now2f = Date.now();
+			if (now2f - gesture.lastTwoTap < 500) { gesture.lastTwoTap = 0; undo(); }
+			else gesture.lastTwoTap = now2f;
+			return;
+		}
 		if (quick && count >= 3) { redo(); return; }
 		if (quick && count === 1 && e.changedTouches.length) {
 			const t = e.changedTouches[0], now = Date.now();
@@ -886,11 +990,19 @@ export const HEFT = (() => {
 		for (let i = 1; i < pts.length; i++) if (segDist2(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= rr2) return true;
 		return false;
 	}
+	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
+	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
 	function eraseAt(e) {
 		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
 		const keep = [], removed = [];
 		for (const s of pg.strokes) (strokeHitAt(s, p0[0], p0[1], r) ? removed : keep).push(s);
-		if (removed.length) { pg.strokes = keep; drawing.removed.push(...removed); redrawPage(drawing.pageIdx); }
+		if (removed.length) {
+			pg.strokes = keep; drawing.removed.push(...removed);
+			// PERF: höchstens EIN Redraw pro Frame — Pointer-Events feuern (v.a. mit
+			// Coalescing) deutlich öfter als der Bildschirm zeichnet; Radieren auf
+			// vollen Seiten ruckelte dadurch.
+			redrawNextFrame(drawing.pageIdx);
+		}
 	}
 	function onDown(e) {
 
@@ -1065,7 +1177,7 @@ export const HEFT = (() => {
 			if (dx || dy) {
 				drawing.strokes.forEach((s) => translateStroke(s, dx, dy));
 				drawing.dx += dx; drawing.dy += dy; drawing.last = pm;
-				redrawPage(drawing.pageIdx);
+				redrawNextFrame(drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event
 			}
 			return;
 		}
@@ -1405,7 +1517,8 @@ export const HEFT = (() => {
 				? '<button type="button" class="heft-pop-row" data-heexppdf="1"' + (n ? '' : ' disabled') + '>📄 Als PDF exportieren (' + n + ')</button>' +
 					'<button type="button" class="heft-pop-row" data-heexpimg="1"' + (n ? '' : ' disabled') + '>🖼 Als Bild(er) exportieren (' + n + ')</button>' +
 					'<button type="button" class="heft-pop-row" data-heexpcancel="1">Abbrechen</button>'
-				: '<button type="button" class="heft-pop-row" data-heexpstart="1">⬆ Exportieren als PDF oder Bild…</button>');
+				: '<button type="button" class="heft-pop-row" data-heexpstart="1">⬆ Exportieren als PDF oder Bild…</button>' +
+					'<button type="button" class="heft-pop-row" data-heverlauf="1">🕘 Verlauf (letzte 24 h)…</button>');
 	}
 
 	function paintPopThumbs() {
@@ -2392,14 +2505,19 @@ export const HEFT = (() => {
 	}
 	const exportName = (pageId) => (String((S.pages[pageId] && S.pages[pageId].title) || "Heft").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Heft");
 	const exportIdxs = (d, indices) => (indices && indices.length ? indices : d.pages.map((_, i) => i));
+	// FIX unscharfe Exporte: vorher 1600px Breite (~190 dpi auf A4) — jetzt 300 dpi.
+	const EXPORT_W = 2480;
+	const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 	async function exportPdf(pageId, indices) {
 		const d = await loadDocFor(pageId);
 		if (!d) return;
 		const idxs = exportIdxs(d, indices);
-		const shots = idxs.map((i) => {
-			const c = renderPageCanvas(d.pages[i], 1600);
-			return { dataUrl: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height };
-		});
+		const shots = [];
+		for (const i of idxs) {
+			const c = renderPageCanvas(d.pages[i], EXPORT_W);
+			shots.push({ dataUrl: c.toDataURL("image/jpeg", 0.95), w: c.width, h: c.height });
+			await nextFrame(); // 300-dpi-Seiten sind teuer — UI zwischen den Seiten atmen lassen
+		}
 		U.downloadBlob(exportName(pageId) + ".pdf", new Blob([buildPdf(shots)], { type: "application/pdf" }));
 		if (U.toast) U.toast("PDF mit " + idxs.length + " Seite(n) gespeichert");
 	}
@@ -2407,10 +2525,15 @@ export const HEFT = (() => {
 		const d = await loadDocFor(pageId);
 		if (!d) return;
 		const idxs = exportIdxs(d, indices);
-		idxs.forEach((i) => {
-			const c = renderPageCanvas(d.pages[i], 1600);
+		for (let n = 0; n < idxs.length; n++) {
+			const i = idxs[n];
+			const c = renderPageCanvas(d.pages[i], EXPORT_W);
 			U.downloadBlob(exportName(pageId) + "-seite-" + (i + 1) + ".png", new Blob([dataUrlBytes(c.toDataURL("image/png"))], { type: "image/png" }));
-		});
+			// FIX "Fehlermeldung nach dem Export": mehrere Downloads im selben Tick werden
+			// vom Browser geblockt — der zweite Aufruf warf, der catch meldete "Export
+			// fehlgeschlagen", obwohl die erste Datei längst gespeichert war. Jetzt gestaffelt.
+			if (n < idxs.length - 1) await new Promise((r) => setTimeout(r, 350));
+		}
 		if (U.toast) U.toast(idxs.length + " Bild(er) gespeichert");
 	}
 	function exportSelected(kind) {
@@ -2419,7 +2542,9 @@ export const HEFT = (() => {
 		closePop();
 		(kind === "pdf" ? exportPdf(pid, idxs) : exportImages(pid, idxs)).catch((e) => {
 			console.warn("Heft: Export fehlgeschlagen", e);
-			if (U.toast) U.toast("Export fehlgeschlagen", "error");
+			// Echte Ursache anzeigen statt pauschal "fehlgeschlagen" — sonst ist der
+			// nächste Bug-Report wieder nur "kommt immer eine fehlermeldung".
+			if (U.toast) U.toast("Export fehlgeschlagen: " + ((e && e.message) || e), "error");
 		});
 	}
 
@@ -2464,6 +2589,19 @@ export const HEFT = (() => {
 		if (d.heexpcancel) { exportSel = null; refreshPagesPop(); return; }
 		if (d.heexppdf) { exportSelected("pdf"); return; }
 		if (d.heexpimg) { exportSelected("img"); return; }
+		if (d.heverlauf) { openVerlaufPop(); return; }
+		if (d.hepagesback) { if (pop) { pop.dataset.kind = "pages"; pop.innerHTML = pagesPopHtml(); paintPopThumbs(); } return; }
+		if (d.heverrestore != null) {
+			const s = pop && pop.__verSnaps && pop.__verSnaps[Number(d.heverrestore)];
+			if (!s) return;
+			if (!confirm("Diesen Stand wiederherstellen? Der aktuelle Stand wird vorher im Verlauf gesichert.")) return;
+			closePop();
+			restoreSnapshot(pid, s.key).catch((e2) => {
+				console.warn("Heft: Wiederherstellen fehlgeschlagen", e2);
+				if (U.toast) U.toast("Wiederherstellen fehlgeschlagen: " + ((e2 && e2.message) || e2), "error");
+			});
+			return;
+		}
 		if (d.hedelpage != null) { e.stopPropagation(); deletePageAt(Number(d.hedelpage)); return; }
 		if (d.hethumb != null) {
 			const ti = Number(d.hethumb);
@@ -2728,6 +2866,7 @@ export const HEFT = (() => {
 
 		scheduleHandwritingIndexV2(idx);
 		purgeOrphanLegacyInk();
+		pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
 	}
 	function unmount(discardPending = false) {
 		closePop();
@@ -2759,6 +2898,7 @@ export const HEFT = (() => {
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
 
 		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
+		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
 		trayDrag = null;
 	}
 
@@ -2810,7 +2950,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, findDivergentPage, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

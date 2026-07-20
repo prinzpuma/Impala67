@@ -1,96 +1,64 @@
 "use strict";
 import { U } from "./util.js";
-// db.js — IndexedDB-Persistenz: Event-Log (append-only) + PDF-Blobs.
-// Sync-Modell: Export = Log + Blobs als JSON. Import = Log-Merge (nur unbekannte
-// Events werden übernommen, sortiert nach Zeitstempel deterministisch abgespielt).
-// Ein späterer Google-Drive-Sync ersetzt nur Export/Import durch die Drive-API —
-// am Datenmodell ändert sich nichts.
-//
-// Rewrite (10. Juli 2026): ensureOpen()/validateEvent() ergänzt (fehlende Validierung),
-// open() memoisiert gegen parallele Doppel-Aufrufe, migrateLegacy() liest Keys+Werte
-// jetzt aus derselben Transaktion, addEvent() ist nur noch ein addEvents()-Alias
-// (vorher doppelter Code), resetDatabase() behandelt beide deleteDatabase()-Aufrufe
-// jetzt mit echter Fehlerbehandlung, importAll() validiert data.events, allVecs()
-// liest parallel statt sequenziell.
+// db.js — IndexedDB-Persistenz: append-only Event-Log + Blobs (PDF/Heft) + Vecs (RAG).
+// Sync = Log-Merge: Union per Event-id, Replay deterministisch nach Zeitstempel.
+// Rewrite (20. Juli 2026): KISS/DRY-Kompaktierung, öffentliche API unverändert. Fixes:
+// • allVecs/exportAll lesen Keys+Werte aus EINER Transaktion (vorher eine Transaktion je Key)
+// • importAll prüft Blob-Existenz über ein Key-Set statt getBlob() pro Blob
+// • reconstructPageFromEvents sortiert nach Zeit — lokale Liste ist seq-geordnet, nach einem
+//   Import überschrieben sonst ÄLTERE Patches den neueren Stand (gleiche Falle wie contentHeadsOf-Fix)
+// • deletesOf: jüngstes Event per t statt Array-Reihenfolge (dito)
 export const DB = (() => {
-	let db = null;
-	let openPromise = null; // Memoisiert offene/laufende open()-Aufrufe (verhindert Doppel-Open-Race)
+	let db = null, openPromise = null; // openPromise memoisiert open() gegen Doppel-Open-Races
 
-	// FIX: vorher führte ein Aufruf vor open() zu einem kryptischen
-	// "Cannot read properties of null" beim ersten db.transaction(...).
-	function ensureOpen() {
-		if (!db) throw new Error("DB.open() muss zuerst aufgerufen werden.");
-	}
-
-	// FIX: fehlende Validierung — ein Event ohne id/t/type ließ sich bisher klaglos
-	// ins append-only Log schreiben und sorgte später für schwer auffindbare Bugs.
-	function validateEvent(ev) {
+	const ensureOpen = () => { if (!db) throw new Error("DB.open() muss zuerst aufgerufen werden."); };
+	const validateEvent = (ev) => {
 		if (!ev || typeof ev !== "object") throw new Error("Event muss ein Objekt sein.");
 		if (!ev.id || !ev.t || !ev.type) throw new Error("Event benötigt id, t und type.");
-	}
+	};
+
+	const done = (t) => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = t.onabort = () => rej(t.error); });
+	const val = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+	// Generische Store-Zugriffe — ersetzen 8 fast identische Funktionsrümpfe.
+	const rw = (name, fn) => { ensureOpen(); const t = db.transaction(name, "readwrite"); fn(t.objectStore(name)); return done(t); };
+	const ro = (name, fn) => { ensureOpen(); return val(fn(db.transaction(name).objectStore(name))); };
+	const dump = async (name) => { // Keys+Werte konsistent aus DERSELBEN readonly-Transaktion
+		ensureOpen();
+		const s = db.transaction(name).objectStore(name);
+		const [keys, vals] = await Promise.all([val(s.getAllKeys()), val(s.getAll())]);
+		return keys.map((k, i) => [k, vals[i]]);
+	};
 
 	function openRaw(name, version) {
 		return new Promise((resolve, reject) => {
 			const req = version ? indexedDB.open(name, version) : indexedDB.open(name);
 			req.onupgradeneeded = () => {
-				// Ohne Versionsangabe wird nur GEPRÜFT, ob die DB existiert — nie neu anlegen.
-				if (!version) { req.transaction.abort(); resolve(null); return; }
+				if (!version) { req.transaction.abort(); resolve(null); return; } // ohne Version: nur Existenz prüfen, nie anlegen
 				const d = req.result;
-				if (!d.objectStoreNames.contains("events")) {
-					d.createObjectStore("events", { keyPath: "seq", autoIncrement: true });
-				}
-				if (!d.objectStoreNames.contains("blobs")) d.createObjectStore("blobs");
-				if (!d.objectStoreNames.contains("vecs")) d.createObjectStore("vecs");
+				if (!d.objectStoreNames.contains("events")) d.createObjectStore("events", { keyPath: "seq", autoIncrement: true });
+				for (const s of ["blobs", "vecs"]) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s);
 			};
 			req.onsuccess = () => resolve(req.result);
 			req.onerror = () => reject(req.error);
 		});
 	}
 
-	const done = (t) => new Promise((res, rej) => {
-		t.oncomplete = () => res();
-		t.onerror = () => rej(t.error);
-		t.onabort = () => rej(t.error);
-	});
-	const val = (r) => new Promise((res, rej) => {
-		r.onsuccess = () => res(r.result);
-		r.onerror = () => rej(r.error);
-	});
-
-	// Einmalige Migration: die Datenbank hieß vor der Umbenennung "notion". Beim ersten
-	// Start unter dem neuen Namen werden alle Stores kopiert — die alte DB bleibt als
-	// Sicherheitsnetz liegen (wird erst bei resetDatabase mit entsorgt).
+	// Einmalige Migration der Alt-DB "notion"; Alt-DB bleibt als Sicherheitsnetz bis resetDatabase liegen.
 	async function migrateLegacy() {
-		const hasEvents = await val(db.transaction("events").objectStore("events").count());
-		if (hasEvents) return;
+		if (await ro("events", (s) => s.count())) return;
 		let legacy = null;
 		try { legacy = await openRaw("notion"); } catch { return; }
-		if (!legacy || !legacy.objectStoreNames.contains("events")) { if (legacy) legacy.close(); return; }
+		if (!legacy || !legacy.objectStoreNames.contains("events")) { legacy?.close(); return; }
 		for (const store of ["events", "blobs", "vecs"]) {
 			if (!legacy.objectStoreNames.contains(store)) continue;
-			// FIX: Keys + Werte jetzt aus DERSELBEN Quell-Transaktion lesen (vorher zwei
-			// separate readonly-Transaktionen — theoretisch inkonsistent, falls zwischen
-			// beiden noch geschrieben wird) und parallel statt nacheinander abgefragt.
-			const srcStore = legacy.transaction(store).objectStore(store);
-			const [keys, vals] = await Promise.all([val(srcStore.getAllKeys()), val(srcStore.getAll())]);
-			const destTx = db.transaction(store, "readwrite");
-			const destStore = destTx.objectStore(store);
-			vals.forEach((v, i) => { if (store === "events") destStore.put(v); else destStore.put(v, keys[i]); });
-			await done(destTx);
+			const src = legacy.transaction(store).objectStore(store);
+			const [keys, vals] = await Promise.all([val(src.getAllKeys()), val(src.getAll())]);
+			await rw(store, (dst) => vals.forEach((v, i) => (store === "events" ? dst.put(v) : dst.put(v, keys[i]))));
 		}
 		legacy.close();
 	}
 
-	// FIX: mehrfache/parallele open()-Aufrufe teilten sich bisher KEINEN gemeinsamen
-	// Zustand — zwei gleichzeitige Aufrufe (z.B. durch einen doppelten Boot-Pfad)
-	// konnten die DB parallel öffnen und die Migration doppelt anstoßen (Race Condition).
-	// Jetzt liefert ein laufender open() denselben Promise an alle Aufrufer; schlägt er
-	// fehl, wird der nächste Aufruf einen neuen Versuch starten.
-	// 📱 FIX (18. Juli, spät v2): iPadOS/Safari lässt indexedDB.open() nach einem
-	// erzwungenen App-Kill gelegentlich für immer hängen (weder onsuccess noch
-	// onerror feuern) — die App blieb dann dunkel und unbedienbar, bis man sie
-	// mehrfach neu startete. Bekannter PWA-Workaround: Timeout + neuer Versuch;
-	// ab dem zweiten Versuch antwortet Safari praktisch immer.
+	// iPadOS/Safari: open() kann nach App-Kill ewig hängen (weder onsuccess noch onerror) → Timeout + Retry.
 	async function openWithRetry(attempts = 4) {
 		let lastErr = null;
 		for (let i = 0; i < attempts; i++) {
@@ -109,12 +77,8 @@ export const DB = (() => {
 	}
 
 	function open() {
-		if (!openPromise) {
-			openPromise = (async () => {
-				db = await openWithRetry();
-				await migrateLegacy();
-			})().catch((e) => { openPromise = null; throw e; });
-		}
+		openPromise ??= (async () => { db = await openWithRetry(); await migrateLegacy(); })()
+			.catch((e) => { openPromise = null; throw e; }); // Fehlschlag → nächster Aufruf versucht neu
 		return openPromise;
 	}
 
@@ -124,31 +88,18 @@ export const DB = (() => {
 		const list = Array.isArray(evs) ? evs : [evs];
 		if (!list.length) return;
 		list.forEach(validateEvent);
-		const t = db.transaction("events", "readwrite");
-		const store = t.objectStore("events");
-		list.forEach((ev) => store.add(ev));
-		return done(t);
+		return rw("events", (s) => list.forEach((ev) => s.add(ev)));
 	}
-	// addEvent war vorher fast identischer Code (eigene Transaktion, ein add()) —
-	// jetzt nur noch ein Alias auf addEvents([ev]) (dedupliziert).
 	const addEvent = (ev) => addEvents([ev]);
+	const allEvents = () => ro("events", (s) => s.getAll());
 
-	async function allEvents() {
+	// Cursor liest nur oberhalb des Sync-Wasserstands. _remote-Events (echte Drive-Downloads) sind
+	// kein lokales Echo und werden nicht erneut hochgeladen; Konfliktkopien syncen normal.
+	function eventsAfterSeq(seq) {
 		ensureOpen();
-		return val(db.transaction("events").objectStore("events").getAll());
-	}
-	async function eventsAfterSeq(seq) {
-		ensureOpen();
-		const min = Number(seq || 0);
-		// PERF (15. Juli): vorher wurde bei jedem Sync das GESAMTE Event-Log geladen
-		// und in JS gefiltert — jetzt liest ein Cursor nur den Bereich oberhalb des
-		// Sync-Wasserstands (IDBKeyRange.lowerBound, exklusiv).
-		// Importierte Remote-Events sind bereits in Drive vorhanden und dürfen nicht
-		// als lokales Echo erneut hochgeladen werden. Lokal erzeugte Konfliktkopien
-		// tragen das Flag nicht und werden normal synchronisiert.
 		return new Promise((res, rej) => {
 			const out = [];
-			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(min, true));
+			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(Number(seq || 0), true));
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
@@ -158,105 +109,48 @@ export const DB = (() => {
 			req.onerror = () => rej(req.error);
 		});
 	}
-	async function putBlob(id, buf, meta) {
-		ensureOpen();
-		const t = db.transaction("blobs", "readwrite");
-		t.objectStore("blobs").put({ buf, meta }, id);
-		return done(t);
-	}
-	async function getBlob(id) {
-		ensureOpen();
-		return val(db.transaction("blobs").objectStore("blobs").get(id));
-	}
-	// Einzelnen Blob löschen — der Blob-Garbage-Collector in boot.js räumt damit
-	// verwaiste PDF-/Heft-Blobs endgültig gelöschter Seiten auf.
-	async function delBlob(id) {
-		ensureOpen();
-		const t = db.transaction("blobs", "readwrite");
-		t.objectStore("blobs").delete(id);
-		return done(t);
-	}
-	async function allBlobKeys() {
-		ensureOpen();
-		return val(db.transaction("blobs").objectStore("blobs").getAllKeys());
-	}
 
-	// Embedding-Vektoren (RAG) — nicht Teil des Event-Logs, lokal neu berechenbar
-	async function putVec(pageId, rec) {
-		ensureOpen();
-		const t = db.transaction("vecs", "readwrite");
-		t.objectStore("vecs").put(rec, pageId);
-		return done(t);
-	}
-	async function getVec(pageId) {
-		ensureOpen();
-		return val(db.transaction("vecs").objectStore("vecs").get(pageId));
-	}
-	async function delVec(pageId) {
-		ensureOpen();
-		const t = db.transaction("vecs", "readwrite");
-		t.objectStore("vecs").delete(pageId);
-		return done(t);
-	}
-	async function allVecs() {
-		ensureOpen();
-		const keys = await val(db.transaction("vecs").objectStore("vecs").getAllKeys());
-		// PERF: parallel statt einer sequenziellen await-Schleife über getVec().
-		const entries = await Promise.all(keys.map(async (k) => [k, await getVec(k)]));
-		return Object.fromEntries(entries);
-	}
+	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
+	const getBlob = (id) => ro("blobs", (s) => s.get(id));
+	const delBlob = (id) => rw("blobs", (s) => s.delete(id)); // Blob-GC lebt in boot.js
+	const allBlobKeys = () => ro("blobs", (s) => s.getAllKeys());
 
-	// ---- Log-Kompaktierung -----------------------------------------------------
-	// Verlustfrei & deterministisch (drop-only): gleiche Event-Menge => gleiches
-	// Ergebnis auf jedem Gerät => der Log-Merge (Union nach Event-id) bleibt
-	// konsistent, auch wenn Geräte zu unterschiedlichen Zeitpunkten kompaktieren.
-	//
-	// Zwei Regeln:
-	// 1. Patch-Events (pageUpdate/cardUpdate/settingsSet) sind wirkungslos, wenn ALLE
-	//    ihre Felder von neueren Patches desselben Ziels überschrieben werden.
-	//    pageUpdate trägt bei jedem Edit den vollen content — DER Speicherfresser:
-	//    von hunderten Zwischenständen einer Seite überlebt nur der letzte.
-	// 2. pageUpdate/cardUpdate endgültig gelöschter Seiten/Karten sind wirkungslos
-	//    („endgültig löschen“ entfernt den Inhalt damit auch wirklich aus dem Log).
-	// Alles andere (Create/Move/Trash/Reviews/Deck-Events) bleibt unangetastet — die
-	// Events sind klein und teils reihenfolge-abhängig (Subtree-/Zyklus-Logik).
-	// Verlaufs-Schutz: so viele jüngste Inhalts-Stände je Seite überleben die
-	// Kompaktierung — der Seitenverlauf (pageHistory liest das Event-Log) bleibt
-	// dadurch auch nach einem Drive-Sync nutzbar, statt komplett zu verschwinden.
-	// Deterministisch (N jüngste per Zeitstempel) — drop-only bleibt erfüllt.
+	// Vecs (RAG-Embeddings): nicht Teil des Event-Logs, lokal neu berechenbar.
+	const putVec = (pageId, rec) => rw("vecs", (s) => s.put(rec, pageId));
+	const getVec = (pageId) => ro("vecs", (s) => s.get(pageId));
+	const delVec = (pageId) => rw("vecs", (s) => s.delete(pageId));
+	const allVecs = async () => Object.fromEntries(await dump("vecs"));
+
+	// ---- Log-Kompaktierung: verlustfrei & deterministisch (drop-only) → Log-Merge bleibt konsistent,
+	// auch wenn Geräte zu unterschiedlichen Zeitpunkten kompaktieren. Regeln:
+	// 1. Patch-Events (pageUpdate/cardUpdate/settingsSet) fliegen, wenn ALLE Felder von neueren Patches
+	//    desselben Ziels überschrieben sind (pageUpdate trägt vollen content = DER Speicherfresser).
+	// 2. Updates endgültig gelöschter Seiten/Karten fliegen. Rest bleibt (klein, teils reihenfolge-abhängig).
+	// Verlaufs-Schutz: N jüngste Inhalts-Stände je Seite überleben — pageHistory liest das Event-Log.
 	const KEEP_CONTENT_VERSIONS = 10;
-
 	function compactEvents(events) {
 		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
-		const pageDeletedAt = {}, cardDeletedAt = {};
+		const deletedAt = { page: {}, card: {} };
 		for (const ev of sorted) {
 			if (!ev.payload) continue;
-			if (ev.type === "pageDelete") pageDeletedAt[ev.payload.id] = ev.t;
-			if (ev.type === "cardDelete") cardDeletedAt[ev.payload.id] = ev.t;
+			if (ev.type === "pageDelete") deletedAt.page[ev.payload.id] = ev.t;
+			if (ev.type === "cardDelete") deletedAt.card[ev.payload.id] = ev.t;
 		}
-		const covered = {}; // Ziel -> Felder, die bereits von NEUEREN Events gesetzt werden
-		const contentKept = {}; // Seite -> Anzahl behaltener Inhalts-Stände (Verlaufs-Schutz)
-		const keep = [];
+		const covered = {}, contentKept = {}, keep = [];
 		for (let i = sorted.length - 1; i >= 0; i--) { // rückwärts: neueste zuerst
 			const ev = sorted[i], p = ev.payload || {};
-			if (ev.type === "pageUpdate" && pageDeletedAt[p.id] && ev.t <= pageDeletedAt[p.id]) continue;
-			if (ev.type === "cardUpdate" && cardDeletedAt[p.id] && ev.t <= cardDeletedAt[p.id]) continue;
-			let bucket = null, patch = null;
-			if (ev.type === "pageUpdate") { bucket = "page:" + p.id; patch = p.patch; }
-			else if (ev.type === "cardUpdate") { bucket = "card:" + p.id; patch = p.patch; }
-			else if (ev.type === "settingsSet") { bucket = "settings"; patch = p; }
+			if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
+			if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
+			const [bucket, patch] =
+				ev.type === "pageUpdate" ? ["page:" + p.id, p.patch] :
+				ev.type === "cardUpdate" ? ["card:" + p.id, p.patch] :
+				ev.type === "settingsSet" ? ["settings", p] : [null, null];
 			if (bucket && patch) {
-				const seen = covered[bucket] || (covered[bucket] = new Set());
+				const seen = covered[bucket] ??= new Set();
 				const keys = Object.keys(patch);
-				// Verlaufs-Schutz: die jüngsten N Inhalts-Stände einer Seite immer behalten,
-				// damit der Seitenverlauf die Kompaktierung überlebt.
 				if (ev.type === "pageUpdate" && typeof patch.content === "string" && (contentKept[p.id] || 0) < KEEP_CONTENT_VERSIONS) {
-					contentKept[p.id] = (contentKept[p.id] || 0) + 1;
-					keys.forEach((k) => seen.add(k));
-					keep.push(ev);
-					continue;
-				}
-				if (keys.length && keys.every((k) => seen.has(k))) continue; // komplett überschrieben
+					contentKept[p.id] = (contentKept[p.id] || 0) + 1; // Verlaufs-Schutz: immer behalten
+				} else if (keys.length && keys.every((k) => seen.has(k))) continue; // komplett überschrieben
 				keys.forEach((k) => seen.add(k));
 			}
 			keep.push(ev);
@@ -264,24 +158,18 @@ export const DB = (() => {
 		return keep.reverse();
 	}
 
-	// Lokalen Event-Store kompaktiert neu schreiben. Nur nach erfolgreichem Sync
-	// aufrufen: die Sequenznummern werden neu vergeben, der Sync-Wasserstand
-	// (impala67_drive_synced_seq) muss danach neu gesetzt werden. Unter minDrop
-	// gesparten Events lohnt das Neuschreiben nicht.
+	// Nur nach erfolgreichem Sync aufrufen: Seq-Nummern werden neu vergeben, der Sync-Wasserstand
+	// (impala67_drive_synced_seq) muss danach neu gesetzt werden. Unter minDrop lohnt das Neuschreiben nicht.
 	async function compactLocal(minDrop = 200) {
-		ensureOpen();
 		const evs = await allEvents();
 		const compacted = compactEvents(evs);
-		if (evs.length - compacted.length < minDrop) return 0;
-		const t = db.transaction("events", "readwrite");
-		const store = t.objectStore("events");
-		store.clear();
-		compacted.forEach((ev) => { const e = { ...ev }; delete e.seq; store.add(e); });
-		await done(t);
-		return evs.length - compacted.length;
+		const dropped = evs.length - compacted.length;
+		if (dropped < minDrop) return 0;
+		await rw("events", (s) => { s.clear(); compacted.forEach(({ seq, ...ev }) => s.add(ev)); });
+		return dropped;
 	}
 
-	// Höchste lokale Sequenznummer — Basis des Sync-Wasserstands („war was schon hochgeladen?“).
+	// Höchste lokale Sequenznummer — Basis des Sync-Wasserstands.
 	function maxSeq() {
 		ensureOpen();
 		return new Promise((res, rej) => {
@@ -291,97 +179,65 @@ export const DB = (() => {
 		});
 	}
 
-	// SECURITY (15. Juli): settingsSet-Events aus alten App-Versionen können noch
-	// API-Keys/Token im Klartext enthalten. Für Drive-Snapshots/Deltas werden sie
-	// bereinigt — der MANUELLE Backup-Export behält sie bewusst (eigene Datei des
-	// Nutzers, damit ein zweites Gerät ohne erneute Einrichtung weiterarbeiten kann).
+	// SECURITY: settingsSet-Events aus alten Versionen können Klartext-Secrets enthalten. Für
+	// Drive-Snapshots/Deltas bereinigen — der MANUELLE Backup-Export behält sie bewusst.
 	function redactSecretsFromEvent(ev) {
 		if (!ev || ev.type !== "settingsSet" || !ev.payload) return ev;
 		const p = { ...ev.payload };
 		let changed = false;
-		if (p.notionToken) { p.notionToken = ""; changed = true; }
-		if (p.driveDesktopClientSecret) { p.driveDesktopClientSecret = ""; changed = true; }
-		if (Array.isArray(p.aiProviders) && p.aiProviders.some((pr) => pr && pr.key)) {
-			p.aiProviders = p.aiProviders.map((pr) => (pr && pr.key ? { ...pr, key: "" } : pr));
+		for (const k of ["notionToken", "driveDesktopClientSecret"]) if (p[k]) { p[k] = ""; changed = true; }
+		if (Array.isArray(p.aiProviders) && p.aiProviders.some((pr) => pr?.key)) {
+			p.aiProviders = p.aiProviders.map((pr) => (pr?.key ? { ...pr, key: "" } : pr));
 			changed = true;
 		}
 		return changed ? { ...ev, payload: p } : ev;
 	}
 
-	// opts.includeBlobs=false: PERF für den Drive-Snapshot — vorher wurden ALLE
-	// Blobs base64-kodiert, nur damit drive.js sie sofort wieder verwarf.
-	// opts.redactSecrets=true: keine Zugangsdaten im Drive-Sync (siehe oben).
+	// includeBlobs=false: PERF für den Drive-Snapshot (Blobs würden sofort wieder verworfen).
 	async function exportAll(opts = {}) {
-		ensureOpen();
 		let events = compactEvents(await allEvents());
 		if (opts.redactSecrets) events = events.map(redactSecretsFromEvent);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
-			const keys = await allBlobKeys();
-			for (const k of keys) {
-				const rec = await getBlob(k);
-				blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
-			}
+			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
 		}
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
 
-	// Jüngster Inhalts-Stand je Seite (per Zeitstempel, wie beim Log-Replay) — Kern der
-	// Konflikt-Erkennung. Als eigene, pure Funktion herausgelöst und exportiert, damit
-	// test/test-core.mjs sie ohne IndexedDB direkt testen kann.
-	// FIX: bisher zählte das ZULETZT ITERIERTE Event als "Head" — die lokale
-	// Event-Liste ist aber nach Sequenz (nicht Zeit) geordnet: nach einem Import
-	// liegen ältere Events hinter neueren. Jetzt gewinnt (wie in lifecycleOf)
-	// das jüngste Event per Zeitstempel — sonst falsche Konflikt-Gewinner/Diffs.
-	function contentHeadsOf(evs, extra) {
+	// Jüngstes passendes Event je Ziel per ZEITSTEMPEL — Seq-Reihenfolge lügt nach Imports.
+	const headsOf = (evs, keyOf, extra) => {
 		const heads = {};
 		for (const ev of evs) {
-			const p = ev.payload || {};
-			if (ev.type === "pageUpdate" && p.patch && typeof p.patch.content === "string" && (!extra || extra(ev))) {
-				if (!heads[p.id] || ev.t > heads[p.id].t) heads[p.id] = ev;
-			}
+			const id = keyOf(ev);
+			if (id != null && (!extra || extra(ev)) && (!heads[id] || ev.t > heads[id].t)) heads[id] = ev;
 		}
 		return heads;
-	}
+	};
+	// Jüngster Inhalts-Stand je Seite — Kern der Konflikt-Erkennung (pure, test/test-core.mjs testet direkt).
+	const contentHeadsOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageUpdate" && typeof ev.payload?.patch?.content === "string" ? ev.payload.id : null), extra);
+	// Jüngste versionierte Heft-Binärdatei je Seite — der Hash im Event bestimmt exakt die Drive-Blob-Datei.
+	const heftHeadsOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "heftUpdated" && ev.payload?.pageId && ev.payload?.blobHash ? ev.payload.pageId : null), extra);
 
-	// Jüngste versionierte Heft-Binärdatei je Seite. Der Hash ist Teil des Events,
-	// damit der Drive-Sync nie mehr eine beliebige Blob-Datei auswählen muss.
-	function heftHeadsOf(evs, extra) {
-		const heads = {};
-		for (const ev of evs) {
-			const p = ev.payload || {};
-			if (ev.type === "heftUpdated" && p.pageId && p.blobHash && (!extra || extra(ev))) {
-				if (!heads[p.pageId] || ev.t > heads[p.pageId].t) heads[p.pageId] = ev;
-			}
-		}
-		return heads;
-	}
-
-	// Rekonstruiert den letzten bekannten Stand einer Seite rein aus Events — als
-	// pure Funktion herausgelöst und exportiert (Aufräum-Paket, 15. Juli), damit
-	// test/test-core.mjs sie ohne IndexedDB direkt testen kann. Wichtig für den
-	// Lösch-Konflikt: die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id)
-	// wäre dann leer.
+	// Letzter bekannter Stand einer Seite rein aus Events (pure, exportiert für Tests). Wichtig beim
+	// Lösch-Konflikt: die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id) wäre leer.
 	function reconstructPageFromEvents(events, id) {
 		const pg = { title: "Seite", content: "", kind: "notion", parentId: null, workspaceId: "default", heftMeta: null };
-		for (const ev of events) {
+		const apply = (src, isPatch) => {
+			if (isPatch ? src.title !== undefined : src.title) pg.title = src.title;
+			if (src.content !== undefined) pg.content = src.content;
+			if (isPatch ? src.kind !== undefined : src.kind) pg.kind = src.kind;
+			if ("parentId" in src) pg.parentId = src.parentId || null;
+			if (src.workspaceId) pg.workspaceId = src.workspaceId;
+		};
+		const relevant = events
+			.filter((ev) => ev.payload && (ev.payload.id === id || ev.payload.pageId === id))
+			.sort((a, b) => (a.t || "").localeCompare(b.t || "")); // FIX: Zeit- statt Seq-Reihenfolge
+		for (const ev of relevant) {
 			const p = ev.payload;
-			if (!p || (p.id !== id && p.pageId !== id)) continue;
-			if (ev.type === "pageCreate") {
-				if (p.title) pg.title = p.title;
-				if (p.content !== undefined) pg.content = p.content;
-				if (p.kind) pg.kind = p.kind;
-				if ("parentId" in p) pg.parentId = p.parentId || null;
-				if (p.workspaceId) pg.workspaceId = p.workspaceId;
-			} else if (ev.type === "pageUpdate" && p.patch) {
-				if (p.patch.title !== undefined) pg.title = p.patch.title;
-				if (p.patch.content !== undefined) pg.content = p.patch.content;
-				if (p.patch.kind !== undefined) pg.kind = p.patch.kind;
-				if ("parentId" in p.patch) pg.parentId = p.patch.parentId || null;
-				if (p.patch.workspaceId) pg.workspaceId = p.patch.workspaceId;
-			} else if (ev.type === "pageMove") {
-				pg.parentId = p.parentId || null;
-			} else if (ev.type === "heftUpdated") {
+			if (ev.type === "pageCreate") apply(p, false);
+			else if (ev.type === "pageUpdate" && p.patch) apply(p.patch, true);
+			else if (ev.type === "pageMove") pg.parentId = p.parentId || null;
+			else if (ev.type === "heftUpdated") {
 				pg.kind = "heft";
 				pg.heftMeta = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, blobHash: p.blobHash };
 			}
@@ -390,56 +246,42 @@ export const DB = (() => {
 	}
 
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
-	// opts (nur beim Drive-Sync gesetzt):
-	//   unsyncedAfterSeq — Sequenznummer des letzten erfolgreichen Uploads. Lokale Events
-	//     danach kennt noch kein anderes Gerät → Basis der Konflikt-Erkennung.
-	//   pageInfo(id) — liefert {title, parentId, workspaceId} für Konfliktkopien.
-	// Rückgabe: { added, conflicts, conflictDetails }.
+	// opts (nur Drive-Sync): unsyncedAfterSeq = Seq des letzten Uploads (Basis der Konflikt-Erkennung),
+	// pageInfo(id) → {title,parentId,workspaceId}, remote = echter Drive-Download.
+	// Rückgabe: { added, conflicts, conflictDetails, importedEvents }.
 	async function importAll(json, opts = {}) {
 		ensureOpen();
 		const data = JSON.parse(json);
-		// Alt-Exporte (app: "notion") bleiben importierbar — gleiche Datenstruktur, nur anderer Name.
-		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei.");
-		// FIX: fehlende Validierung — eine kaputte/fremde Exportdatei mit data.events als
-		// Nicht-Array brach bisher mit einem kryptischen ".filter is not a function" ab.
-		const incomingEvents = Array.isArray(data.events) ? data.events : [];
+		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei."); // Alt-Exporte bleiben importierbar
+		const incoming = Array.isArray(data.events) ? data.events : []; // kaputte Exporte nicht crashen lassen
 		const local = await allEvents();
 		const existing = new Set(local.map((e) => e.id));
-		const fresh = incomingEvents.filter((ev) => ev && ev.id && !existing.has(ev.id));
-		// Nur echte Drive-Downloads als Remote markieren. Ein manueller Backup-Import
-		// ist eine lokale Nutzeraktion und muss anschließend normal hochgeladen werden.
-		const incomingFreshIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
-		// Konflikt-Erkennung: dieselbe Seite wurde seit dem letzten Sync lokal UND auf einem
-		// anderen Gerät inhaltlich geändert. Der Log-Merge entscheidet still per „späterer
-		// Zeitstempel gewinnt“ — der unterlegene Stand wird hier als Konfliktkopie gerettet.
-		// conflictDetails speist das Lösungs-Popup (Grund + Diff) und den Homescreen-Banner.
-		let conflictCount = 0;
+		const fresh = incoming.filter((ev) => ev && ev.id && !existing.has(ev.id));
+		// Nur echte Drive-Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
+		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
+		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
 		const conflictDetails = [];
 		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length) {
-			const localHeads = contentHeadsOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
-			const remoteHeads = contentHeadsOf(fresh);
+			const localOnly = (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq; // seit letztem Sync, kennt kein anderes Gerät
+			const info = (id) => (opts.pageInfo && opts.pageInfo(id)) || {};
+
+			// (1) Inhalts-Konflikt: gleiche Seite lokal UND remote geändert. Replay: späterer Zeitstempel
+			// gewinnt still — der unterlegene Stand wird als Konfliktkopie gerettet.
+			const localHeads = contentHeadsOf(local, localOnly), remoteHeads = contentHeadsOf(fresh);
 			for (const [id, remote] of Object.entries(remoteHeads)) {
 				const mine = localHeads[id];
 				if (!mine || mine.payload.patch.content === remote.payload.patch.content) continue;
-				const loser = mine.t <= remote.t ? mine : remote; // Replay: späterer Zeitstempel gewinnt
+				const loser = mine.t <= remote.t ? mine : remote;
 				if (existing.has("conflict-" + loser.id)) continue;
-				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
-				const title = info.title || "Seite";
-				const winner = mine.t <= remote.t ? "remote" : "local";
-				const conflictPageId = "conflictpg-" + loser.id;
+				const pi = info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
 				conflictDetails.push({
-					pageId: id,
-					title,
+					pageId: id, title,
 					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät am Inhalt geändert. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
-					localContent: mine.payload.patch.content,
-					remoteContent: remote.payload.patch.content,
-					localTime: mine.t,
-					remoteTime: remote.t,
-					winner,
-					loserContent: loser.payload.patch.content,
-					loserTime: loser.t,
-					conflictPageId,
-					eventId: "conflict-" + loser.id,
+					localContent: mine.payload.patch.content, remoteContent: remote.payload.patch.content,
+					localTime: mine.t, remoteTime: remote.t,
+					winner: mine.t <= remote.t ? "remote" : "local",
+					loserContent: loser.payload.patch.content, loserTime: loser.t,
+					conflictPageId, eventId: "conflict-" + loser.id,
 				});
 				fresh.push({
 					id: "conflict-" + loser.id, t: U.now(), type: "pageCreate",
@@ -447,175 +289,99 @@ export const DB = (() => {
 						id: conflictPageId,
 						title: "⚠ Konflikt: " + title + " — Stand " + loser.t.slice(0, 16).replace("T", " "),
 						content: loser.payload.patch.content,
-						parentId: info.parentId || null, workspaceId: info.workspaceId || "default",
+						parentId: pi.parentId || null, workspaceId: pi.workspaceId || "default",
 					},
 				});
-				conflictCount++;
 			}
 
-
-			// Heft-Inhalt ist ein versionierter Blob. Anders als bei Text kann ein
-			// Zeitstempel-Gewinner den anderen Blob nicht still ersetzen: der unterlegene
-			// Stand wird als eigenes Heft gerettet und Drive kopiert exakt dessen Hash.
-			const localHefts = heftHeadsOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
-			const remoteHefts = heftHeadsOf(fresh);
+			// (2) Heft-Konflikt: versionierter Blob — ein Zeitstempel-Gewinner kann den anderen Blob nicht
+			// still ersetzen. Verlierer wird als eigenes Heft gerettet, Drive kopiert exakt dessen Hash.
+			const localHefts = heftHeadsOf(local, localOnly), remoteHefts = heftHeadsOf(fresh);
 			for (const [id, remote] of Object.entries(remoteHefts)) {
 				const mine = localHefts[id];
 				if (!mine || mine.payload.blobHash === remote.payload.blobHash) continue;
 				const loser = mine.t <= remote.t ? mine : remote;
 				if (existing.has("heftconflict-" + loser.id)) continue;
-				const info = (opts.pageInfo && opts.pageInfo(id)) || {};
-				const conflictPageId = "heftconflictpg-" + loser.id;
-				const loserSource = loser === mine ? "local" : "remote";
-				const winner = mine.t <= remote.t ? "remote" : "local";
-				conflictDetails.push({ pageId: id, title: info.title || "Heft", conflictPageId,
-					conflictType: "heft", loserSource, loserHash: loser.payload.blobHash, winner,
-					reason: "Dieses Heft wurde auf zwei Geräten geändert. Der ältere Stand wurde als separates Konflikt-Heft gesichert." });
+				const pi = info(id), conflictPageId = "heftconflictpg-" + loser.id;
+				conflictDetails.push({
+					pageId: id, title: pi.title || "Heft", conflictPageId, conflictType: "heft",
+					loserSource: loser === mine ? "local" : "remote", loserHash: loser.payload.blobHash,
+					winner: mine.t <= remote.t ? "remote" : "local",
+					reason: "Dieses Heft wurde auf zwei Geräten geändert. Der ältere Stand wurde als separates Konflikt-Heft gesichert.",
+				});
 				fresh.push(
-					{ id: "heftconflict-" + loser.id, t: U.now(), type: "pageCreate", payload: { id: conflictPageId, title: "⚠ Konflikt-Heft: " + (info.title || "Heft"), content: "", parentId: info.parentId || null, workspaceId: info.workspaceId || "default", kind: "heft" } },
-					{ id: "heftconflictmeta-" + loser.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, rev: loser.payload.rev || 1, pages: loser.payload.pages || 1, bytes: loser.payload.bytes || 0, blobHash: loser.payload.blobHash } }
+					{ id: "heftconflict-" + loser.id, t: U.now(), type: "pageCreate", payload: { id: conflictPageId, title: "⚠ Konflikt-Heft: " + (pi.title || "Heft"), content: "", parentId: pi.parentId || null, workspaceId: pi.workspaceId || "default", kind: "heft" } },
+					{ id: "heftconflictmeta-" + loser.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, rev: loser.payload.rev || 1, pages: loser.payload.pages || 1, bytes: loser.payload.bytes || 0, blobHash: loser.payload.blobHash } },
 				);
-				conflictCount++;
 			}
 
-			// Konflikt-Erkennung (2): Löschen wettstreitet mit Verschieben/Ändern. Wird eine Seite auf
-			// einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync
-			// verschoben, wiederhergestellt oder sonst geändert wurde, gewinnt beim Log-Merge immer das
-			// Löschen (die Seite verschwindet) — der Verschiebe-/Änderungsversuch ginge sonst
-			// stillschweigend verloren (Bug: dafür wurde bisher kein Konflikt erkannt). Wie beim
-			// Inhalts-Konflikt oben retten wir den unterlegenen Stand als Kopie, statt das Löschen
-			// zu unterdrücken.
-			const lifecycleTypes = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore"]);
-			const deletesOf = (evs, extra) => {
-				const out = {};
-				for (const ev of evs) {
-					if (ev.type === "pageDelete" && ev.payload && (!extra || extra(ev))) out[ev.payload.id] = ev;
-				}
-				return out;
-			};
-			const lifecycleOf = (evs, extra) => {
-				const out = {};
-				for (const ev of evs) {
-					if (lifecycleTypes.has(ev.type) && ev.payload && (!extra || extra(ev))) {
-						if (!out[ev.payload.id] || ev.t > out[ev.payload.id].t) out[ev.payload.id] = ev; // jüngstes zählt
-					}
-				}
-				return out;
-			};
-			const localDeletes = deletesOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
-			const remoteDeletes = deletesOf(fresh);
-			const localLifecycle = lifecycleOf(local, (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq);
-			const remoteLifecycle = lifecycleOf(fresh);
-			const lifecyclePairs = [
-				...Object.keys(localDeletes).filter((id) => remoteLifecycle[id]).map((id) => ({ id, del: localDeletes[id], moved: remoteLifecycle[id], loserSource: "remote" })),
-				...Object.keys(remoteDeletes).filter((id) => localLifecycle[id]).map((id) => ({ id, del: remoteDeletes[id], moved: localLifecycle[id], loserSource: "local" })),
+			// (3) Endgültig-gelöscht vs. verschoben/geändert: Löschen gewinnt beim Merge immer — der andere
+			// Stand ginge sonst still verloren und wird als Kopie gerettet.
+			const LIFE = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore"]);
+			const deletesOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageDelete" && ev.payload ? ev.payload.id : null), extra);
+			const lifecycleOf = (evs, extra) => headsOf(evs, (ev) => (LIFE.has(ev.type) && ev.payload ? ev.payload.id : null), extra);
+			const localDel = deletesOf(local, localOnly), remoteDel = deletesOf(fresh);
+			const localLife = lifecycleOf(local, localOnly), remoteLife = lifecycleOf(fresh);
+			const pairs = [
+				...Object.keys(localDel).filter((id) => remoteLife[id]).map((id) => ({ id, del: localDel[id], moved: remoteLife[id], loserSource: "remote" })),
+				...Object.keys(remoteDel).filter((id) => localLife[id]).map((id) => ({ id, del: remoteDel[id], moved: localLife[id], loserSource: "local" })),
 			];
-			for (const { id, del, moved, loserSource } of lifecyclePairs) {
+			for (const { id, del, moved, loserSource } of pairs) {
 				if (existing.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
-				
-				// Inhaltsstand aus dem Event-Log rekonstruieren (pure Funktion, s.o.) —
-				// die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id) wäre leer.
-				const pg = reconstructPageFromEvents([...local, ...fresh], id);
-
-				const parentId = pg.parentId;
-				const details = {
-					pageId: id,
-					title: pg.title,
+				const pg = reconstructPageFromEvents([...local, ...fresh], id); // Seite ist lokal ggf. schon weg
+				const isHeft = pg.kind === "heft" && pg.heftMeta?.blobHash;
+				conflictDetails.push({
+					pageId: id, title: pg.title,
 					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
-					deletedAt: del.t,
-					changedAt: moved.t,
-					conflictPageId,
-					conflictType: "delete-change",
-					parentId,
-					workspaceId: pg.workspaceId,
-					eventId: "lifeconflict-" + moved.id,
-				};
-				if (pg.kind === "heft" && pg.heftMeta && pg.heftMeta.blobHash) {
-					details.loserHash = pg.heftMeta.blobHash;
-					details.loserSource = loserSource;
-				}
-				conflictDetails.push(details);
-
+					deletedAt: del.t, changedAt: moved.t, conflictPageId, conflictType: "delete-change",
+					parentId: pg.parentId, workspaceId: pg.workspaceId, eventId: "lifeconflict-" + moved.id,
+					...(isHeft ? { loserHash: pg.heftMeta.blobHash, loserSource } : {}),
+				});
 				fresh.push({
 					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate",
-					payload: {
-						id: conflictPageId,
-						title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title,
-						content: pg.content,
-						parentId, workspaceId: pg.workspaceId,
-						kind: pg.kind
-					},
+					payload: { id: conflictPageId, title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title, content: pg.content, parentId: pg.parentId, workspaceId: pg.workspaceId, kind: pg.kind },
 				});
-				if (pg.kind === "heft" && pg.heftMeta && pg.heftMeta.blobHash) {
-					fresh.push({
-						id: "lifeconflictmeta-" + moved.id, t: U.now(), type: "heftUpdated",
-						payload: {
-							pageId: conflictPageId, rev: pg.heftMeta.rev, pages: pg.heftMeta.pages, bytes: pg.heftMeta.bytes, blobHash: pg.heftMeta.blobHash
-						}
-					});
-				}
-				conflictCount++;
+				if (isHeft) fresh.push({ id: "lifeconflictmeta-" + moved.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, ...pg.heftMeta } });
 			}
 		}
-		fresh.forEach((ev) => {
-			delete ev.seq; // neue lokale Sequenznummer
-			if (incomingFreshIds.has(ev.id)) ev._remote = true;
-		});
+		fresh.forEach((ev) => { delete ev.seq; if (remoteIds.has(ev.id)) ev._remote = true; }); // neue lokale Seq
 		if (fresh.length) await addEvents(fresh);
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
-		for (const [k, v] of Object.entries(blobs)) {
-			if (!(await getBlob(k))) await putBlob(k, U.b64ToBuf(v.b64), v.meta);
-		}
-		// importedEvents ermöglicht Live-Replay ohne location.reload(). Kopien sind
-		// wichtig, damit UI-Code keine Objekte aus dem Import-Payload mutiert.
-		return { added: fresh.length, conflicts: conflictCount, conflictDetails,
-			importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
+		const have = new Set(await allBlobKeys());
+		for (const [k, v] of Object.entries(blobs)) if (!have.has(k)) await putBlob(k, U.b64ToBuf(v.b64), v.meta);
+		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
+		return { added: fresh.length, conflicts: conflictDetails.length, conflictDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
 	}
 
 	async function resetDatabase() {
-		if (db) db.close();
+		db?.close();
 		db = null;
-		openPromise = null; // nach dem Reset muss ein neuer open()-Aufruf wieder wirklich öffnen
+		openPromise = null; // nächster open() muss wieder wirklich öffnen
 		const deleteDb = (name) => new Promise((resolve, reject) => {
 			const req = indexedDB.deleteDatabase(name);
 			req.onsuccess = () => resolve();
 			req.onerror = () => reject(req.error);
-			// Ohne diesen Handler bleibt das Promise für immer offen, wenn ein anderer Tab
-			// dieselbe Datenbank noch geöffnet hält (weder onsuccess noch onerror feuern dann).
+			// Ohne onblocked bliebe das Promise ewig offen, wenn ein anderer Tab die DB noch offen hält.
 			req.onblocked = () => reject(new Error("Datenbank ist noch in einem anderen Tab geöffnet. Bitte alle anderen Tabs dieser App schließen und erneut versuchen."));
 		});
-		// FIX: das Löschen der Alt-Datenbank ("notion") lief bisher komplett ohne
-		// Fehlerbehandlung nebenher (fire-and-forget) — Fehler verschwanden stillschweigend.
-		// Jetzt: nicht fatal (die Haupt-DB wird trotzdem gelöscht), aber sichtbar geloggt.
-		await deleteDb("notion").catch((e) => console.warn("Alt-Datenbank 'notion' konnte nicht gelöscht werden:", e));
+		await deleteDb("notion").catch((e) => console.warn("Alt-Datenbank 'notion' konnte nicht gelöscht werden:", e)); // nicht fatal
 		await deleteDb("impala67");
 	}
 
-	async function clearPages() {
+	// Seiten-Reset: Page-Events, Vecs und Blobs (außer Hintergrundbild) entsorgen — Settings überleben.
+	// Löschungen synchron im onsuccess anstoßen: nach einem await wäre die Transaktion (Safari) ggf. schon zu.
+	function clearPages() {
 		ensureOpen();
 		const t = db.transaction(["events", "vecs", "blobs"], "readwrite");
-		const evStore = t.objectStore("events");
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore"]);
-		// Löschungen synchron im onsuccess-Callback anstoßen: nach einem await kann
-		// die Transaktion (v.a. in Safari) bereits automatisch geschlossen sein.
-		const req = evStore.getAll();
-		req.onsuccess = () => {
-			for (const ev of req.result) {
-				if (pageTypes.has(ev.type)) evStore.delete(ev.seq);
-			}
-		};
+		const evStore = t.objectStore("events");
+		const evReq = evStore.getAll();
+		evReq.onsuccess = () => evReq.result.forEach((ev) => { if (pageTypes.has(ev.type)) evStore.delete(ev.seq); });
 		t.objectStore("vecs").clear();
-		// FIX (Audit): PDF-Blobs gehören zu den gelöschten Seiten und blieben bisher als
-		// Speicherleck in IndexedDB zurück. Alles außer dem Hintergrundbild entsorgen —
-		// Einstellungen (und damit das Hintergrundbild) sollen den Reset überleben.
 		const blobStore = t.objectStore("blobs");
 		const keysReq = blobStore.getAllKeys();
-		keysReq.onsuccess = () => {
-			for (const k of keysReq.result) {
-				if (k !== "bgImage") blobStore.delete(k);
-			}
-		};
+		keysReq.onsuccess = () => keysReq.result.forEach((k) => { if (k !== "bgImage") blobStore.delete(k); });
 		return done(t);
 	}
 
