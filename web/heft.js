@@ -128,7 +128,17 @@ export const HEFT = (() => {
 	}
 
 	async function load(p) {
-		if (docs[p]) return docs[p];
+		// Sync-Fix: docs[p] ist ein reiner In-Memory-Cache und wurde bisher NIE
+		// invalidiert, wenn ein anderes Gerät dasselbe Heft synchronisiert hat —
+		// reconcileHeftBlobs (drive.js) schreibt den neuen Blob nur in IndexedDB,
+		// nie in docs. S.heftMeta[p].rev wird dagegen bei JEDEM heftUpdated-Event
+		// aktuell gehalten, auch bei importierten Sync-Events (STATE.reduce in
+		// replayImported). Weicht rev ab, ist der Cache veraltet und wird verworfen —
+		// genau das verursachte den Bug "neue Heftseite kommt trotz Sync nicht an,
+		// erst nach App-Neustart".
+		const meta = S.heftMeta && S.heftMeta[p];
+		const stale = docs[p] && meta && meta.rev !== docs[p].rev;
+		if (docs[p] && !stale) return docs[p];
 		let d = null;
 		try {
 			const rec = await DB.getBlob(KEY(p));
