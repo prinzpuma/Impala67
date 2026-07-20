@@ -1003,6 +1003,26 @@ function renderChat() {
 	if (log) renderChatLog(log, S.sideChat);
 }
 
+// PERF (Tab-Wechsel): Chat-Log-DOM je Chat wiederverwenden. Beim Wechsel zwischen
+// (langen) Chats wurden sonst ALLE Nachrichten inkl. KaTeX/Code-Highlighting neu
+// aufgebaut — renderChatLog patcht auf dem gecachten DOM nur noch Unterschiede.
+const CHATLOG_CACHE = new Map(); // chatId → <div class="chat-log-full">
+function cachedChatLog(chatId) {
+	let el = CHATLOG_CACHE.get(chatId);
+	if (!el) {
+		el = document.createElement("div");
+		el.className = "chat-log-full";
+		el.addEventListener("scroll", () => { el._keepScroll = el.scrollTop; }, { passive: true });
+		CHATLOG_CACHE.set(chatId, el);
+		for (const key of CHATLOG_CACHE.keys()) { // Cache klein halten (älteste zuerst raus)
+			if (CHATLOG_CACHE.size <= 6) break;
+			CHATLOG_CACHE.delete(key);
+		}
+	}
+	el.id = "mainChatLog";
+	return el;
+}
+
 // Vollbild-Chat im Hauptbereich — gleiche Bausteine wie das Seitenpanel.
 // FIX: bestehendes Chat-Fenster WIEDERVERWENDEN statt pro Hintergrund-Render neu
 // bauen — sonst riss ein frisches #mainChatLog die Ansicht per Auto-Scroll nach
@@ -1043,6 +1063,15 @@ function renderFullChat(main) {
 					'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
 				'</div><button id="mainChatSubmit" type="submit" title="Senden" disabled>↑</button></div>' +
 				'<div id="modelMenuFull" class="model-menu" hidden></div></form></div>';
+	// Frisches Log-Element gegen das gecachte DOM dieses Chats tauschen
+	if (S.currentChatId) {
+		const fresh = $("mainChatLog");
+		const cached = cachedChatLog(String(S.currentChatId));
+		if (fresh && cached !== fresh) {
+			fresh.replaceWith(cached);
+			cached.scrollTop = cached._keepScroll || 0;
+		}
+	}
 	renderMainChatLog();
 	renderPendingChip("full");
 	renderStatusDot();
@@ -1151,11 +1180,15 @@ function renderPendingChip(type) {
 	if (!chip) return;
 	let html = "";
 	if (S.pendingAttachmentTarget === type) {
-		if (S.pendingImage) html = `<img src="${S.pendingImage}" alt=""> <span>Bild</span><button data-removeattachment="1" title="Entfernen">✕</button>`;
-		else if (S.pendingTextFile) html = `📄 ${esc(S.pendingTextFile.name)} (${S.pendingTextFile.size} Zeichen) wird als Datei angehängt <button id="btnRemoveTextFile" title="Entfernen">✕</button>`;
-		else if (S.pendingPdf) html = `📄 ${esc(S.pendingPdf.name)} (${S.pendingPdf.pages || "?"} Seiten) wird als PDF-Kontext angehängt <button id="btnRemovePdf" title="Entfernen">✕</button>`;
+		// EIN Markup für alle Anhang-Arten (Bild/Text/PDF): Icon · Titel · Meta · ✕
+		const att = (ico, name, meta, btnAttr) =>
+			`<span class="chip-ico">${ico}</span><span class="chip-body"><b>${esc(name)}</b><small>${esc(meta)}</small></span><button class="chip-x" ${btnAttr} title="Anhang entfernen">✕</button>`;
+		if (S.pendingImage) html = att(`<img src="${S.pendingImage}" alt="">`, "Bild", "wird mitgesendet", 'data-removeattachment="1"');
+		else if (S.pendingTextFile) html = att("📄", S.pendingTextFile.name, S.pendingTextFile.size + " Zeichen · wird als Datei angehängt", 'id="btnRemoveTextFile"');
+		else if (S.pendingPdf) html = att("📄", S.pendingPdf.name, (S.pendingPdf.pages || "?") + " Seiten · wird als PDF-Kontext angehängt", 'id="btnRemovePdf"');
 	}
 	chip.hidden = !html;
+	chip.classList.toggle("attach-chip", !!html);
 	chip.innerHTML = html;
 }
 

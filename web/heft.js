@@ -49,6 +49,7 @@ export const HEFT = (() => {
 	const laserTimers = new Set();
 	let insertPos = "after";
 	let pop = null;
+	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
 	let scanUI = null;
 
 	const ocrQueueV2 = new Set();
@@ -1222,8 +1223,6 @@ export const HEFT = (() => {
 	let chromeMin = false;
 	const icon = (p) => '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
 	function toolbarHtml() {
-		const curPaper = page() ? page().paper : "lined";
-		const paperMeta = PAPERS.find((p) => p[0] === curPaper) || PAPERS[0];
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
@@ -1236,6 +1235,11 @@ export const HEFT = (() => {
 		const svgImage = icon('<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l5-5 3.5 3.5 2.5-2.5 4 4"/>');
 		const svgUndo = icon('<path d="M8.5 5L4 9.5 8.5 14"/><path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/>');
 		const svgRedo = icon('<path d="M15.5 5L20 9.5 15.5 14"/><path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/>');
+		const svgHand = icon('<path d="M8.5 11.5V5.2a1.3 1.3 0 0 1 2.6 0V10m0-5.5a1.3 1.3 0 0 1 2.6 0V10m0-3.8a1.3 1.3 0 0 1 2.6 0v6.6c0 3.9-2.5 6.4-5.9 6.4-2.6 0-4.1-1.2-5.3-3.3l-2-3.6c-.5-.9-.2-1.9.7-2.3.8-.4 1.7-.1 2.2.7l1.5 2.3z"/>');
+		const svgPages = icon('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9.5h16M4 15h16"/>');
+		const svgPlus = icon('<path d="M12 5v14M5 12h14"/>');
+		const svgSpark = icon('<path d="M12 3.5l1.9 4.9 4.9 1.9-4.9 1.9L12 17.1l-1.9-4.9-4.9-1.9 4.9-1.9z"/>');
+		const svgChevDown = icon('<path d="M6 9.5l6 6 6-6"/>');
 		const writeIcon = tool === "marker" ? svgMarker : svgPen;
 
 		if (chromeMin) {
@@ -1263,13 +1267,11 @@ export const HEFT = (() => {
 					SIZES.map(sizeLine).join("") +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					COLORS.map((c) => '<button type="button" class="heft-swatch' + (color === c ? " active" : "") +
-						'" data-hecolor="' + c + '" style="--sw:' + c + '" title="Farbe"></button>').join("") +
+						'" data-hecolor="' + c + '" style="--sw:' + c + ';background:' + c + '" title="Farbe"></button>').join("") +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hepapercycle="1" class="heft-opt" title="Papier: ' +
-						paperMeta[2] + '">' + paperMeta[1] + '</button>' +
 					'<button type="button" data-heonlypen="1" class="heft-opt' + (onlyPen ? " active" : "") +
 						'" title="' + (onlyPen ? "Nur Stift zeichnet" : "Finger dürfen zeichnen") + '">' +
-						(onlyPen ? "���" : "✋") + '</button>' +
+						(onlyPen ? svgPen : svgHand) + '</button>' +
 				'</div>';
 		} else if (showEraser) {
 
@@ -1283,7 +1285,7 @@ export const HEFT = (() => {
 
 		return '<div class="heft-chrome" aria-hidden="false">' +
 			'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
-				'" data-hepagesmenu="1" title="Seiten">▤' +
+				'" data-hepagesmenu="1" title="Seiten">' + svgPages +
 				'<span class="heft-pageno-inline">' + (idx + 1) + '/' + doc.pages.length + '</span></button>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
@@ -1307,14 +1309,14 @@ export const HEFT = (() => {
 					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen"' +
 						(redoStack.length ? "" : " disabled") + '>' + svgRedo + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">⌄</button>' +
+					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>' +
 				'</div>' +
 			'</div>' +
 			tray +
 			'<div class="heft-corner-r">' +
-				'<button type="button" class="heft-corner heft-chat" data-hechat="1" title="KI-Chat">✦</button>' +
+				'<button type="button" class="heft-corner heft-chat" data-hechat="1" title="KI-Chat">' + svgSpark + '</button>' +
 				'<button type="button" class="heft-corner heft-plus' + (pop && pop.dataset.kind === "plus" ? " active" : "") +
-					'" data-heplusmenu="1" title="Seite hinzufügen">+</button>' +
+					'" data-heplusmenu="1" title="Seite hinzufügen">' + svgPlus + '</button>' +
 			'</div>' +
 		'</div>';
 	}
@@ -1359,6 +1361,7 @@ export const HEFT = (() => {
 	function closePop() {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
+		exportSel = null;
 	}
 	function onDocPointerDown(e) {
 		if (!pop) return;
@@ -1388,13 +1391,21 @@ export const HEFT = (() => {
 		else if (kind === "img") openPop(anchor, imgPopHtml(), "img", "heft-pop-img");
 	}
 	function pagesPopHtml() {
-		return '<div class="heft-pop-head">Seiten</div>' +
+		const picking = !!exportSel;
+		const n = picking ? exportSel.size : 0;
+		return '<div class="heft-pop-head">' + (picking ? 'Seiten für Export antippen' : 'Seiten') + '</div>' +
 			'<div class="heft-pop-grid">' + doc.pages.map((_, i) =>
-				'<div class="heft-pop-thumb' + (i === idx ? ' active' : '') + '" data-hethumb="' + i + '" role="button" tabindex="0" title="Seite ' + (i + 1) + '">' +
+				'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="button" tabindex="0" title="Seite ' + (i + 1) + '">' +
 					'<canvas width="92" height="130"></canvas>' +
-					'<span>' + (i + 1) + '</span>' +
-					(doc.pages.length > 1 ? '<button type="button" class="heft-pop-del" data-hedelpage="' + i + '" title="Seite löschen">🗑</button>' : '') +
-				'</div>').join('') + '</div>';
+					'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
+					(!picking && doc.pages.length > 1 ? '<button type="button" class="heft-pop-del" data-hedelpage="' + i + '" title="Seite löschen">🗑</button>' : '') +
+				'</div>').join('') + '</div>' +
+			'<div class="heft-pop-sep"></div>' +
+			(picking
+				? '<button type="button" class="heft-pop-row" data-heexppdf="1"' + (n ? '' : ' disabled') + '>📄 Als PDF exportieren (' + n + ')</button>' +
+					'<button type="button" class="heft-pop-row" data-heexpimg="1"' + (n ? '' : ' disabled') + '>🖼 Als Bild(er) exportieren (' + n + ')</button>' +
+					'<button type="button" class="heft-pop-row" data-heexpcancel="1">Abbrechen</button>'
+				: '<button type="button" class="heft-pop-row" data-heexpstart="1">⬆ Exportieren als PDF oder Bild…</button>');
 	}
 
 	function paintPopThumbs() {
@@ -1428,6 +1439,11 @@ export const HEFT = (() => {
 			'<div class="heft-tpl-row">' +
 				tpl(curPaper, "Aktuelle Vorlage", "A4") +
 				PAPERS.filter((p) => p[0] !== curPaper).map((p) => tpl(p[0], p[2], "")).join("") +
+			'</div>' +
+			'<div class="heft-pop-head">Vorlage dieser Seite ändern</div>' +
+			'<div class="heft-tpl-row">' +
+				PAPERS.map((p) => '<button type="button" class="heft-tpl' + (p[0] === curPaper ? ' active' : '') + '" data-hesetpaper="' + p[0] + '">' +
+					'<i class="heft-tpl-paper heft-tpl-' + p[0] + '"></i><span>' + p[2] + '</span></button>').join("") +
 			'</div>' +
 			'<div class="heft-pop-sep"></div>' +
 			'<button type="button" class="heft-pop-row" data-headdimg="1">🖼 Bild</button>' +
@@ -1495,11 +1511,17 @@ export const HEFT = (() => {
 		}
 		redrawPage(pi); renderThumb(pi); updateChrome();
 	}
+	// Kein Neuaufbau, wenn sich nichts geändert hat — vorher wurde die Leiste bei
+	// JEDEM Strich komplett ersetzt (Flackern, Icons kurz weg, "springt hin und her").
+	let lastChromeHtml = "";
 	function updateChrome() {
 		if (!host || !doc) return;
+		const html = toolbarHtml();
 		const chrome = host.querySelector(".heft-chrome");
-		if (chrome) { const t = document.createElement("div"); t.innerHTML = toolbarHtml(); chrome.replaceWith(t.firstChild); }
-		else host.insertAdjacentHTML("beforeend", toolbarHtml());
+		if (chrome && html === lastChromeHtml) { updateLassoBar(); refreshPagesPop(); return; }
+		lastChromeHtml = html;
+		if (chrome) { const t = document.createElement("div"); t.innerHTML = html; chrome.replaceWith(t.firstChild); }
+		else host.insertAdjacentHTML("beforeend", html);
 		bindTrayDrag();
 		updateLassoBar();
 		refreshPagesPop();
@@ -2357,6 +2379,50 @@ export const HEFT = (() => {
 		return u;
 	}
 
+	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
+	// DRY: nutzt renderPageCanvas fürs Zeichnen und buildPdf aus dem Scanner.
+	async function loadDocFor(pageId) {
+		const d = pageId === pid && doc ? doc : await load(pageId);
+		if (!d) return null;
+		// Bilder vorab dekodieren, sonst fehlen sie auf frisch geladenen Canvases
+		const jobs = [];
+		d.pages.forEach((pg) => (pg.images || []).forEach((im) => { const el = imgEl(im); if (el.decode) jobs.push(el.decode().catch(() => {})); }));
+		await Promise.all(jobs);
+		return d;
+	}
+	const exportName = (pageId) => (String((S.pages[pageId] && S.pages[pageId].title) || "Heft").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Heft");
+	const exportIdxs = (d, indices) => (indices && indices.length ? indices : d.pages.map((_, i) => i));
+	async function exportPdf(pageId, indices) {
+		const d = await loadDocFor(pageId);
+		if (!d) return;
+		const idxs = exportIdxs(d, indices);
+		const shots = idxs.map((i) => {
+			const c = renderPageCanvas(d.pages[i], 1600);
+			return { dataUrl: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height };
+		});
+		U.downloadBlob(exportName(pageId) + ".pdf", new Blob([buildPdf(shots)], { type: "application/pdf" }));
+		if (U.toast) U.toast("PDF mit " + idxs.length + " Seite(n) gespeichert");
+	}
+	async function exportImages(pageId, indices) {
+		const d = await loadDocFor(pageId);
+		if (!d) return;
+		const idxs = exportIdxs(d, indices);
+		idxs.forEach((i) => {
+			const c = renderPageCanvas(d.pages[i], 1600);
+			U.downloadBlob(exportName(pageId) + "-seite-" + (i + 1) + ".png", new Blob([dataUrlBytes(c.toDataURL("image/png"))], { type: "image/png" }));
+		});
+		if (U.toast) U.toast(idxs.length + " Bild(er) gespeichert");
+	}
+	function exportSelected(kind) {
+		if (!pid || !exportSel || !exportSel.size) return;
+		const idxs = [...exportSel].sort((a, b) => a - b);
+		closePop();
+		(kind === "pdf" ? exportPdf(pid, idxs) : exportImages(pid, idxs)).catch((e) => {
+			console.warn("Heft: Export fehlgeschlagen", e);
+			if (U.toast) U.toast("Export fehlgeschlagen", "error");
+		});
+	}
+
 	const readyScanOuts = () => scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
 	function scanFinishPdf() {
 		try {
@@ -2394,8 +2460,17 @@ export const HEFT = (() => {
 		if (d.hepagesmenu) { togglePop("pages", b); return; }
 		if (d.heplusmenu) { togglePop("plus", b); return; }
 		if (d.heimgmenu) { togglePop("img", b); return; }
+		if (d.heexpstart) { exportSel = new Set(doc.pages.map((_, i) => i)); refreshPagesPop(); return; }
+		if (d.heexpcancel) { exportSel = null; refreshPagesPop(); return; }
+		if (d.heexppdf) { exportSelected("pdf"); return; }
+		if (d.heexpimg) { exportSelected("img"); return; }
 		if (d.hedelpage != null) { e.stopPropagation(); deletePageAt(Number(d.hedelpage)); return; }
-		if (d.hethumb != null) { go(Number(d.hethumb)); return; }
+		if (d.hethumb != null) {
+			const ti = Number(d.hethumb);
+			if (exportSel) { exportSel.has(ti) ? exportSel.delete(ti) : exportSel.add(ti); refreshPagesPop(); }
+			else go(ti);
+			return;
+		}
 		if (d.hepos) {
 			insertPos = d.hepos;
 			if (pop) pop.querySelectorAll(".heft-seg").forEach((s) => s.classList.toggle("active", s.dataset.hepos === insertPos));
@@ -2441,10 +2516,10 @@ export const HEFT = (() => {
 		else if (d.hecollapse) { chromeMin = true; updateChrome(); return; }
 		else if (d.heexpand) { chromeMin = false; updateChrome(); return; }
 		else if (d.heonlypen) { onlyPen = !onlyPen; applyTouchAction(); }
-		else if (d.hepapercycle) {
+		else if (d.hesetpaper) {
 			const pg = page(); if (!pg) return;
-			const i = PAPERS.findIndex((p) => p[0] === pg.paper);
-			pg.paper = PAPERS[(i + 1) % PAPERS.length][0];
+			pg.paper = d.hesetpaper;
+			closePop();
 			redrawPage(idx); scheduleSave(); renderThumb(idx);
 		}
 		else if (d.hechat) {
@@ -2735,7 +2810,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

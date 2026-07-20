@@ -5,6 +5,7 @@ import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
 import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
+import { HEFT } from "./heft.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -48,6 +49,22 @@ export const EXTRAS = (() => {
 		".backlinks-row{margin:2px 0 8px}.backlinks-chip{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px}.backlinks-chip:hover{background:rgba(128,128,128,.15);opacity:1}",
 		".tool-chip{width:fit-content;font-size:12.5px;opacity:.75;background:rgba(128,128,128,.12);border-radius:8px;padding:4px 10px;margin:2px 0}.tool-chip.err{color:#e5534b}",
 		".multitab-note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#3a2f14;color:#ffd66b;padding:10px 14px;border-radius:10px;z-index:1200;display:flex;gap:10px;align-items:center}",
+		// Seitenkontext + Anhang-Chips: EINE ruhige Zeile — Icon · Titel · Meta · ✕
+		// (Fix: Anzeige für angeheftete Dateien/Text sah schlecht aus, Abstände stimmten nicht)
+		"#sideContextChip{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 0 8px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:rgba(128,128,128,.08);font-size:12.5px}",
+		"#sideContextChip .side-context-icon{flex:none}",
+		"#sideContextChip .side-context-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}",
+		"#sideContextChip .side-context-note{flex:none;opacity:.6;font-size:11.5px}",
+		".attach-chip{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;border:1px solid rgba(128,128,128,.25);border-radius:12px;background:rgba(128,128,128,.08)}",
+		".attach-chip .chip-ico{flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:17px;border-radius:8px;background:rgba(128,128,128,.14);overflow:hidden}",
+		".attach-chip .chip-ico img{width:100%;height:100%;object-fit:cover}",
+		".attach-chip .chip-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}",
+		".attach-chip .chip-body b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+		".attach-chip .chip-body small{font-size:11px;opacity:.6}",
+		".attach-chip .chip-x{flex:none;border:none;background:none;color:inherit;opacity:.55;cursor:pointer;font-size:13px;padding:4px 6px;border-radius:6px}",
+		".attach-chip .chip-x:hover{opacity:1;background:rgba(128,128,128,.15)}",
+		".file-chip{display:flex;align-items:center;gap:10px;padding:7px 10px;margin:4px 0;border:1px solid rgba(128,128,128,.22);border-radius:10px;background:rgba(128,128,128,.08);font-size:12.5px}",
+		".file-chip button{margin-left:auto;border:1px solid rgba(128,128,128,.3);background:none;color:inherit;border-radius:8px;padding:4px 9px;cursor:pointer;font-size:12px}",
 	].join("\n");
 	document.head.appendChild(style);
 
@@ -408,17 +425,27 @@ export const EXTRAS = (() => {
 		}
 	}
 
-	// ---- Seite als PDF exportieren: Druckfenster mit gerendertem Markdown ----
+	// ---- Seite als PDF exportieren ----
+	// Hefte: echte PDF-Datei direkt aus den Heftseiten (heft.js) — kein Druckfenster.
+	// Notiz-Seiten: Druckfenster mit gerendertem Markdown; schließt sich nach dem
+	// Drucken selbst und hat sichtbare Knöpfe (vorher hing man dort ohne Ausweg fest).
 	function exportPagePdf(pageId) {
 		const pg = S.pages[pageId];
 		if (!pg) return;
+		if (pg.kind === "heft") {
+			HEFT.exportPdf(pageId).catch((e) => { console.warn("Heft-PDF fehlgeschlagen:", e); U.toast("PDF-Export fehlgeschlagen", "error"); });
+			return;
+		}
 		const w = window.open("", "_blank");
 		if (!w) { U.toast("Popup blockiert — bitte für diese Seite erlauben.", "error"); return; }
 		w.document.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + U.esc(pg.title) + "</title>" +
 			'<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">' +
-			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}</style>" +
-			"</head><body><h1>" + U.esc((pg.icon ? pg.icon + " " : "") + pg.title) + "</h1>" + U.md(pg.content || "") + "</body></html>");
+			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}" +
+			".pdf-bar{position:fixed;top:10px;right:10px;display:flex;gap:8px}.pdf-bar button{font:13px -apple-system,'Segoe UI',sans-serif;padding:7px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}@media print{.pdf-bar{display:none}}</style>" +
+			"</head><body><div class=\"pdf-bar\"><button onclick=\"window.print()\">🖨 Drucken / PDF</button><button onclick=\"window.close()\">✕ Schließen</button></div>" +
+			"<h1>" + U.esc((pg.icon ? pg.icon + " " : "") + pg.title) + "</h1>" + U.md(pg.content || "") + "</body></html>");
 		w.document.close();
+		w.onafterprint = () => { try { w.close(); } catch (e) { /* egal */ } };
 		setTimeout(() => { try { w.focus(); w.print(); } catch (e) { console.warn(e); } }, 600);
 	}
 
