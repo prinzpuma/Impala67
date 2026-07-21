@@ -21,6 +21,7 @@ export const GRAPH = (() => {
 	let nodes = [], edges = [], byId = Object.create(null);
 	let view = { x: 0, y: 0, k: 1 };
 	let drag = null, hover = null, filter = "", ticks = 0;
+	let needsDraw = true; // 🔋 Akku-Schoner: draw() läuft nur bei Änderungen, nicht 60×/s im Leerlauf
 	let goal = null; // sanft angesteuerte Zielansicht { x, y, k } — loop() interpoliert dorthin
 
 	// ---------- Daten ----------
@@ -141,6 +142,7 @@ export const GRAPH = (() => {
 			nodes.forEach((n) => { byId[n.id] = n; });
 			edges = edges.filter((e2) => byId[e2.a] && byId[e2.b]);
 		}
+		needsDraw = true;
 	}
 
 	// ---------- 🤖 KI-Ausbau (Phase 4): Entitäten · Synthese · Mapping ----------
@@ -424,18 +426,51 @@ export const GRAPH = (() => {
 	// ---------- Physik: kleiner Force-Layout ohne Bibliothek ----------
 	function tick() {
 		const rep = 1400, spring = 0.012, springLen = 90, damp = 0.86;
-		for (let i = 0; i < nodes.length; i++) {
-			const a = nodes[i];
-			for (let j = i + 1; j < nodes.length; j++) {
-				const b = nodes[j];
-				let dx = a.x - b.x, dy = a.y - b.y;
-				let d2 = dx * dx + dy * dy;
-				if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
-				if (d2 > 160000) continue; // weit weg → vernachlässigbar
-				const d = Math.sqrt(d2), f = rep / d2;
-				dx /= d; dy /= d;
-				a.vx += dx * f; a.vy += dy * f;
-				b.vx -= dx * f; b.vy -= dy * f;
+		if (nodes.length <= 250) {
+			// Kleine Graphen: Alle-gegen-Alle bleibt hier am schnellsten (kein Gitter-Overhead).
+			for (let i = 0; i < nodes.length; i++) {
+				const a = nodes[i];
+				for (let j = i + 1; j < nodes.length; j++) {
+					const b = nodes[j];
+					let dx = a.x - b.x, dy = a.y - b.y;
+					let d2 = dx * dx + dy * dy;
+					if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+					if (d2 > 160000) continue; // weit weg → vernachlässigbar
+					const d = Math.sqrt(d2), f = rep / d2;
+					dx /= d; dy /= d;
+					a.vx += dx * f; a.vy += dy * f;
+					b.vx -= dx * f; b.vy -= dy * f;
+				}
+			}
+		} else {
+			// PERF: Nachbarschafts-Gitter statt O(n²) bei großen Workspaces. Paare jenseits
+			// 400 px wurden schon vorher übersprungen (d2 > 160000) — mit Zellgröße 400
+			// liegen alle relevanten Paare in den 3×3-Nachbarzellen. Jedes Paar wird von
+			// beiden Seiten je einmal besucht und wendet die Kraft nur auf a an →
+			// identische Gesamtkraft pro Knoten wie vorher, aber ~O(n) statt O(n²).
+			const CELL = 400;
+			const grid = new Map();
+			for (const n of nodes) {
+				const k = Math.floor(n.x / CELL) + ":" + Math.floor(n.y / CELL);
+				let cell = grid.get(k);
+				if (!cell) { cell = []; grid.set(k, cell); }
+				cell.push(n);
+			}
+			for (const a of nodes) {
+				const cx = Math.floor(a.x / CELL), cy = Math.floor(a.y / CELL);
+				for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
+					const cell = grid.get(gx + ":" + gy);
+					if (!cell) continue;
+					for (const b of cell) {
+						if (b === a) continue;
+						let dx = a.x - b.x, dy = a.y - b.y;
+						let d2 = dx * dx + dy * dy;
+						if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+						if (d2 > 160000) continue; // weit weg → vernachlässigbar
+						const d = Math.sqrt(d2), f = rep / d2;
+						a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+					}
+				}
 			}
 		}
 		edges.forEach((e) => {
@@ -518,7 +553,12 @@ export const GRAPH = (() => {
 			view.x += vel.x; view.y += vel.y;
 			vel.x *= 0.92; vel.y *= 0.92;
 		}
-		draw();
+		// 🔋 Akku-Schoner: im Leerlauf (Layout ruhig, keine Geste/Animation) NICHT neu
+		// zeichnen — vorher lief draw() dauerhaft mit 60 FPS, solange der Graph offen war.
+		// Interaktionen (Hover, Zoom, Suche, Kanten-Löschen, build) setzen needsDraw.
+		const animating = ticks <= 300 || goal || drag || pinch || Math.abs(vel.x) > 0.4 || Math.abs(vel.y) > 0.4;
+		if (cv && cv.width !== Math.round(cv.clientWidth * (window.devicePixelRatio || 1))) needsDraw = true;
+		if (animating || needsDraw) { draw(); needsDraw = false; }
 		raf = requestAnimationFrame(loop);
 	}
 
@@ -550,6 +590,7 @@ export const GRAPH = (() => {
 		view.x = (sx - r.left) - r.width / 2 - wx * nk;
 		view.y = (sy - r.top) - r.height / 2 - wy * nk;
 		goal = null;
+		needsDraw = true;
 	}
 	// Nächste Verbindung am Punkt p (Weltkoordinaten) — für Tipp-auf-Linie
 	function edgeAt(p) {
@@ -587,7 +628,7 @@ export const GRAPH = (() => {
 			zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.k0 * (d / pinch.d0));
 			return;
 		}
-		if (!drag) { hover = nodeAt(toWorld(e)); return; }
+		if (!drag) { const h = nodeAt(toWorld(e)); if (h !== hover) { hover = h; needsDraw = true; } return; }
 		if (drag.pan) {
 			view.x = drag.vx + (e.clientX - drag.x);
 			view.y = drag.vy + (e.clientY - drag.y);
@@ -628,6 +669,7 @@ export const GRAPH = (() => {
 				if (btn) btn.addEventListener("click", () => {
 					hideEdge(ed.a, ed.b);
 					edges = edges.filter((e2) => e2 !== ed);
+					needsDraw = true;
 					panel("🔗 Verbindung entfernt — Wiederherstellen geht über den 🧠-Themen-Dialog.");
 				});
 			} else { panel(""); }
@@ -671,13 +713,13 @@ export const GRAPH = (() => {
 		cv = overlay.querySelector("canvas");
 		ctx = cv.getContext("2d");
 		overlay.querySelector(".graph-close").addEventListener("click", close);
-		overlay.querySelector(".graph-search").addEventListener("input", (e) => { filter = e.target.value || ""; });
+		overlay.querySelector(".graph-search").addEventListener("input", (e) => { filter = e.target.value || ""; needsDraw = true; });
 		// ⏎ QoL: Enter in der Suche springt zum ersten Treffer und zoomt heran
 		overlay.querySelector(".graph-search").addEventListener("keydown", (e) => {
 			if (e.key !== "Enter") return;
 			const q = (filter || "").trim().toLowerCase();
 			const n = q && nodes.find((n2) => n2.title.toLowerCase().includes(q));
-			if (n) { view.k = Math.max(view.k, 1.4); view.x = -n.x * view.k; view.y = -n.y * view.k; }
+			if (n) { view.k = Math.max(view.k, 1.4); view.x = -n.x * view.k; view.y = -n.y * view.k; needsDraw = true; }
 		});
 		overlay.querySelectorAll(".graph-zoom").forEach((b) => b.addEventListener("click", () => {
 			if (b.dataset.gz === "fit") { const o = { x: view.x, y: view.y, k: view.k }; fitView(); goal = { x: view.x, y: view.y, k: view.k }; view.x = o.x; view.y = o.y; view.k = o.k; return; } // ⌂ gleitet sanft hin // ⌂ Ansicht einpassen

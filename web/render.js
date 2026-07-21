@@ -325,9 +325,13 @@ function pageMenuHtml(pg) {
 function renderTabs() {
 	const bar = $("tabbar");
 	if (!bar) return;
-	// Chat-Titel einmal laden (nicht pro Tab CHATS.load())
+	// Chat-Titel einmal laden (nicht pro Tab CHATS.load()) — PERF (Audit 21. Juli):
+	// und NUR, wenn überhaupt Chat-Tabs offen sind. Sonst parste jeder einzelne Render
+	// den kompletten Chat-Verlauf aus localStorage, obwohl kein Tab ihn braucht.
 	const chatById = new Map();
-	try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
+	if (S.tabs.some((id) => id.startsWith("chat:"))) {
+		try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
+	}
 	let html = '<button class="navbtn" id="btnSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
 		`<button class="navbtn" id="btnNavBack" ${S.navIndex > 0 ? "" : "disabled"} title="Zurück">‹</button>` +
 		`<button class="navbtn" id="btnNavForward" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +

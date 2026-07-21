@@ -26,6 +26,12 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 // Perf v4: ein allBlobKeys-Read statt zwei; Blob-Upload gzippt die bereits
 // serialisierten Bytes direkt (vorher decode→parse→stringify→encode); tote
 // findFile()-Logik entfernt; Parallelität moderat erhöht (6 statt 4).
+// v5 (21.7.2026): Changes API statt Voll-Listing — listSyncFiles() pflegt einen
+// lokalen Datei-Index (localStorage, atomar MIT dem pageToken) und holt per
+// changes.list nur noch, was sich seit dem letzten Sync geändert hat. Fallback
+// auf Voll-Listing bei Erst-Sync oder ungültigem Token (Drive 404/410); eigene
+// Uploads/Deletes aktualisieren den Index sofort. Skaliert damit unabhängig
+// von der wachsenden Delta-/Blob-Dateizahl (Kompaktierung greift erst ab 50).
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json", LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar
@@ -46,6 +52,7 @@ export const DRIVE = (() => {
 	const srcOf = (k, fallback) => cfg(k) ? "config.local.js" : fallback ? "Einstellungen (alter Fallback!)" : "keine Quelle";
 	let token = null;
 	let syncInFlight = null; // nie zwei Syncs parallel (Sidebar-Button + Einstellungen + Auto)
+	let flushMode = false; // pagehide: Uploads mit keepalive absetzen (überleben das Schließen)
 
 	// Einmalige Key-Migration (Projekt hieß früher "notion") — Sitzung bleibt erhalten.
 	for (const k of ["drive_token", "drive_token_expiry", "drive_refresh_token"]) {
@@ -167,12 +174,41 @@ export const DRIVE = (() => {
 	const login = async () => { await getToken(true); return fetchUserInfo(); }; // Ein-Klick: Token + E-Mail
 	const logout = () => { token = null; ["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k)); };
 
-	async function api(path, opts = {}) {
+	// Uhren-Drift-Erkennung: der Log-Merge entscheidet Konflikte per Zeitstempel (LWW) —
+	// eine falsch gehende Geräteuhr „gewinnt“ sonst systematisch und still. Der Date-Header
+	// jeder Drive-Antwort dient als kostenlose Referenzzeit; syncRaw warnt oberhalb der Schwelle.
+	let clockSkewMs = 0;
+	const CLOCK_SKEW_WARN_MS = 120000;
+	// Ab dieser Schwelle wird der gemessene Versatz aktiv in U.now() hineinkorrigiert:
+	// Event-Zeitstempel entstehen dann in (ungefährer) Serverzeit — LWW-Konflikte werden
+	// fair entschieden, statt dass die falsch gehende Uhr systematisch „gewinnt“.
+	// Unterhalb der Schwelle bleibt alles unangetastet (Netz-Latenz verrauscht kleine Werte).
+	const CLOCK_APPLY_MS = 15000;
+	async function api(path, opts = {}, attempt = 0) {
 		const res = await fetch("https://www.googleapis.com" + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
+		const serverDate = Date.parse(res.headers.get("date") || "");
+		if (serverDate) {
+			clockSkewMs = Date.now() - serverDate;
+			U.setClockOffset(Math.abs(clockSkewMs) > CLOCK_APPLY_MS ? clockSkewMs : 0);
+		}
+		// Abgelaufenes/entzogenes Token mitten im Sync: EINMAL still erneuern und wieder-
+		// holen statt hart abzubrechen (ein langer Sync kann die Token-Laufzeit überdauern).
+		if (res.status === 401 && attempt === 0) {
+			token = null;
+			LS.removeItem("impala67_drive_token");
+			await getToken(false);
+			return api(path, opts, 1);
+		}
+		// Rate-Limit/Serverfehler: kurzer exponentieller Backoff mit Jitter statt sofortigem
+		// Fehlschlag — Drive drosselt gelegentlich (429) und 5xx sind fast immer transient.
+		if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+			await new Promise((r) => setTimeout(r, (500 << attempt) * (1 + Math.random())));
+			return api(path, opts, attempt + 1);
+		}
 		if (!res.ok) throw new Error("Drive-Fehler " + res.status + ": " + (await res.text()).slice(0, 200));
 		return res;
 	}
-	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" }).catch(() => {});
+	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" }).then(() => indexRemove(fileId)).catch(() => {});
 
 	const emitSyncStatus = (state, label, detail) =>
 		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
@@ -188,9 +224,68 @@ export const DRIVE = (() => {
 		return out;
 	}
 
+	// ---------- Datei-Index + Changes API (v5) ----------
+	// Statt bei jedem Sync ALLE Dateien zu listen, pflegt ein lokaler Index den
+	// Stand des appDataFolder; changes.list (pageToken) liefert nur die Deltas
+	// seit dem letzten Sync. Index + Token liegen atomar in EINEM localStorage-
+	// Eintrag — so können sie nie auseinanderlaufen.
+	const IDX_KEY = "impala67_drive_file_index";
+	const slimFile = (f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime, size: f.size, appProperties: f.appProperties });
+	const loadIndex = () => { const idx = lsJson(IDX_KEY, null); return idx && idx.token && idx.files ? idx : null; };
+	const saveIndex = (idx) => LS.setItem(IDX_KEY, JSON.stringify(idx));
+	const indexPut = (file) => { const idx = loadIndex(); if (idx && file?.id) { idx.files[file.id] = slimFile(file); saveIndex(idx); } };
+	const indexRemove = (fileId) => { const idx = loadIndex(); if (idx?.files[fileId]) { delete idx.files[fileId]; saveIndex(idx); } };
+
+	async function fullFileListing() {
+		const out = [];
+		let pageToken = "";
+		do {
+			const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + encodeURIComponent("trashed=false") + "&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)" + (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : ""));
+			const json = await res.json();
+			out.push(...(json.files || []));
+			pageToken = json.nextPageToken || "";
+		} while (pageToken);
+		return out;
+	}
+
+	// Wendet alle Änderungen seit idx.token auf den Index an und rückt das Token
+	// auf newStartPageToken vor. Wirft bei ungültigem/abgelaufenem Token (404/410).
+	async function applyRemoteChanges(idx) {
+		let pageToken = idx.token;
+		while (pageToken) {
+			const res = await api("/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=" + encodeURIComponent(pageToken));
+			const json = await res.json();
+			for (const ch of json.changes || []) {
+				if (ch.removed || ch.file?.trashed) delete idx.files[ch.fileId];
+				else if (ch.file?.id) idx.files[ch.file.id] = slimFile(ch.file);
+			}
+			if (json.newStartPageToken) { idx.token = json.newStartPageToken; return; }
+			pageToken = json.nextPageToken || "";
+		}
+		throw new Error("changes.list lieferte weder nextPageToken noch newStartPageToken.");
+	}
+
 	async function listSyncFiles() {
-		const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + encodeURIComponent("trashed=false") + "&pageSize=1000&fields=files(id,name,modifiedTime,size,appProperties)");
-		return (await res.json()).files || [];
+		const idx = loadIndex();
+		if (idx) {
+			try {
+				await applyRemoteChanges(idx);
+				saveIndex(idx);
+				return Object.values(idx.files);
+			} catch (e) {
+				// Token abgelaufen/ungültig (Drive meldet 404 oder 410) → Index verwerfen
+				// und unten einmalig voll listen. Andere Fehler (Netz) normal weiterreichen.
+				if (!/Drive-Fehler (404|410)/.test(String(e?.message))) throw e;
+				console.warn("[listSyncFiles] Changes-Token ungültig — Fallback auf Voll-Listing.");
+				LS.removeItem(IDX_KEY);
+			}
+		}
+		// Erst-Sync/Fallback: Token VOR dem Listing holen — Änderungen in der Lücke
+		// tauchen dann höchstens doppelt auf (harmlos, alle Import-Pfade sind idempotent).
+		const token = (await (await api("/drive/v3/changes/startPageToken")).json()).startPageToken;
+		const files = await fullFileListing();
+		saveIndex({ token, files: Object.fromEntries(files.map((f) => [f.id, slimFile(f)])) });
+		return files;
 	}
 
 	async function uploadNamed(name, bytes, encoding, fileId, appProperties) {
@@ -203,8 +298,13 @@ export const DRIVE = (() => {
 		]);
 		const res = await api("/upload/drive/v3/files" + (fileId ? "/" + fileId : "") + "?uploadType=multipart&fields=id,name,modifiedTime,appProperties", {
 			method: fileId ? "PATCH" : "POST", headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body,
+			// pagehide-Flush: kleine Uploads (typisch das gzip-Delta) mit keepalive absetzen —
+			// sie überleben das Tab-Schließen (fetch-keepalive-Limit ~64 KB, daher die Schranke).
+			...(flushMode && body.size < 60000 ? { keepalive: true } : {}),
 		});
-		return res.json();
+		const json = await res.json();
+		indexPut(json); // Index sofort aktuell halten — nicht erst über changes.list im nächsten Zyklus
+		return json;
 	}
 
 	async function downloadPayload(file) {
@@ -300,6 +400,10 @@ export const DRIVE = (() => {
 		setStatus("syncing", "Synchronisiere…");
 		await getToken(false);
 		const files = await listSyncFiles();
+		if (Math.abs(clockSkewMs) > CLOCK_SKEW_WARN_MS) {
+			U.toast("⚠ Die Geräteuhr weicht ~" + Math.round(Math.abs(clockSkewMs) / 60000) + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
+			console.warn("[sync] Uhren-Drift gegen Drive:", clockSkewMs, "ms");
+		}
 		// [F4] Wasserstand klemmen: ein Wert über maxSeq (Kompaktierung/Restore) würde die
 		// Konflikt-Erkennung deaktivieren — Remote überschriebe lokale Änderungen still.
 		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), await DB.maxSeq());
@@ -418,7 +522,9 @@ export const DRIVE = (() => {
 		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
 		if (listedDeltas.length >= 50) {
 			setStatus("syncing", "Sync-Stand optimieren…");
-			const packed = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false })));
+			// redactSecrets:false — BEWUSST: API-Keys replizieren über den privaten
+			// appDataFolder aufs eigene Konto (exportAll redigiert sonst standardmäßig, db.js).
+			const packed = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: false })));
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
 			await mapLimit(listedDeltas, 6, (f) => del(f.id));
@@ -432,9 +538,20 @@ export const DRIVE = (() => {
 		return { imported, uploaded, conflicts, conflictDetails, importedEvents };
 	}
 
+	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
+	// localStorage — zwei gleichzeitig syncende Tabs überschrieben sich sonst gegenseitig
+	// (syncInFlight wirkt nur im eigenen Tab). ifAvailable: der zweite Tab wartet nicht,
+	// sein nächster Auto-Sync holt alles nach. Ohne Locks-API: bisheriges Verhalten.
+	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], importedEvents: [], skipped: "lock" };
+	const withSyncLock = (fn) => navigator.locks?.request
+		? navigator.locks.request("impala67-drive-sync", { ifAvailable: true }, (lock) => (lock ? fn() : IDLE_RESULT))
+		: fn();
 	function sync(onStatus) {
-		if (syncInFlight) throw new Error("Eine Drive-Synchronisierung läuft bereits. Bitte warte, bis sie abgeschlossen ist.");
-		syncInFlight = syncRaw(onStatus).finally(() => { syncInFlight = null; });
+		// Laufenden Sync zurückgeben statt Fehler werfen: Doppelklick auf den Sync-Knopf
+		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
+		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
+		if (syncInFlight) return syncInFlight;
+		syncInFlight = withSyncLock(() => syncRaw(onStatus)).finally(() => { syncInFlight = null; });
 		return syncInFlight;
 	}
 
@@ -449,7 +566,10 @@ export const DRIVE = (() => {
 	const autoEnabled = () => LS.getItem("impala67.driveAutoSync") !== "0";
 	const isEditing = () => {
 		const ae = document.activeElement;
-		return !!(ae && (ae.id === "pageTitle" || ae.classList.contains("blk-input") || ae.classList.contains("db-cell")));
+		// .heft-writing (heft.js): aktiver Stift-Strich — das Canvas ist nie activeElement,
+		// ein Remote-Replay mitten im Strich würde den Heft-Blob unter dem Stift ersetzen.
+		return !!(document.querySelector(".heft-writing") ||
+			(ae && (ae.id === "pageTitle" || ae.classList.contains("blk-input") || ae.classList.contains("db-cell"))));
 	};
 
 	async function autoSync(reason, force) {
@@ -491,7 +611,10 @@ export const DRIVE = (() => {
 		const UI_ONLY_EVENTS = new Set(["uiTabsSet"]);
 		STATE.onAfterDispatch((ev) => { if (!ev || !UI_ONLY_EVENTS.has(ev.type)) scheduleAutoSync("change"); });
 		document.addEventListener("visibilitychange", () => document.hidden ? autoSync("background", true) : autoSync("foreground"));
-		window.addEventListener("pagehide", () => autoSync("close", true)); // Best-Effort-Flush beim Schließen
+		window.addEventListener("pagehide", () => { // Best-Effort-Flush beim Schließen
+			flushMode = true;
+			autoSync("close", true).finally(() => { flushMode = false; });
+		});
 		window.setInterval(() => { if (!document.hidden) autoSync("interval"); }, AUTO_INTERVAL_MS);
 		return autoSync("start");
 	}

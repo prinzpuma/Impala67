@@ -74,8 +74,11 @@ export const TELE = (() => {
 		"data-ankiundo": () => { if (session && session.graded > 0) session.graded--; log("reviewUndo", {}); },
 		"data-ankitab": (v) => { if (session && v !== "study") endSession("nav"); },
 	};
+	// PERF (Audit 21. Juli): Selektor einmal bauen — dieser Capture-Listener läuft bei
+	// JEDEM Klick in der App; der String-Aufbau pro Klick war unnötige Arbeit.
+	const ACTION_SELECTOR = Object.keys(ACTIONS).map((a) => `[${a}]`).join(",") + ",#btnTeleExport";
 	document.addEventListener("click", (e) => {
-		const t = e.target?.closest?.(Object.keys(ACTIONS).map((a) => `[${a}]`).join(",") + ",#btnTeleExport");
+		const t = e.target?.closest?.(ACTION_SELECTOR);
 		if (!t) return;
 		const attr = Object.keys(ACTIONS).find((a) => t.hasAttribute(a));
 		if (attr) ACTIONS[attr](t.getAttribute(attr), t);
@@ -100,8 +103,15 @@ export const TELE = (() => {
 	const pct = (x) => Math.round(x * 100);
 
 	// Insights für die Home-Seite: nur Aussagen mit genug Daten, sonst Hinweis.
+	// PERF (Audit 21. Juli): Ergebnis cachen — die Home-Seite rendert bei jedem
+	// State-Event (auch Sync-Ticks), und diese Auswertung scannt das gesamte
+	// Telemetrie-Log mehrfach. Neu gerechnet wird nur bei neuen Daten oder neuer
+	// Stunde (die 7-/30-Tage-Fenster bewegen sich langsamer als eine Stunde).
+	let _insightsKey = "", _insightsHtml = "";
 	function homeInsightsHtml() {
 		const tele = S.telemetry || [];
+		const cacheKey = tele.length + ":" + (S.reviews || []).length + ":" + new Date().getHours();
+		if (cacheKey === _insightsKey && _insightsHtml) return _insightsHtml;
 		const reviews = tele.filter((e) => e.kind === "review" && e.data && e.data.grade > 0);
 		const row = (icon, title, sub) => `<div class="insight"><span class="insight-ico">${icon}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
 		const out = [];
@@ -182,10 +192,12 @@ export const TELE = (() => {
 				`${pct(hard.rate)} % Erfolgsquote (${hard.n} Reviews in 30 Tagen) — Karten vereinfachen oder in kleinere Schritte teilen.`));
 		}
 
-		return out.length
+		_insightsHtml = out.length
 			? `<div class="insight-list">${out.join("")}</div>`
 			: '<div class="insight empty"><span class="insight-ico">🧠</span><span><b>Noch zu wenig Daten für Insights</b>' +
 				'<small>Ab jetzt wird jede Bewertung mit Denkzeit, Tageszeit, Selbsteinschätzung und Fokus protokolliert. Nach ein paar Lerntagen erscheinen hier konkrete Empfehlungen.</small></span></div>';
+		_insightsKey = cacheKey;
+		return _insightsHtml;
 	}
 
 	// ---------- Export (Einstellungen → Backup) ----------

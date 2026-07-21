@@ -613,7 +613,14 @@ export const STATE = (() => {
 		try {
 			await DB.addEvent(ev);
 		} catch (e) {
-			alert("Speichern fehlgeschlagen (Speicherplatz voll?): " + (e && e.message ? e.message : e));
+			// Toast statt blockierendem alert() + konkrete Speicher-Diagnose,
+			// damit „Speicherplatz voll?“ keine Vermutung bleiben muss.
+			let quota = "";
+			try {
+				const est = await navigator.storage?.estimate?.();
+				if (est?.quota) quota = " — Speicher: " + Math.round((est.usage || 0) / 1048576) + " von " + Math.round(est.quota / 1048576) + " MB belegt";
+			} catch { /* Diagnose ist optional */ }
+			U.toast("Speichern fehlgeschlagen" + quota + ": " + (e && e.message ? e.message : e), "error");
 			throw e;
 		}
 		reduce(ev);
@@ -777,17 +784,26 @@ export const STATE = (() => {
 	// zählen gegen das Limit des jeweiligen Stapels (aus dem Review-Protokoll).
 	// Learning/Relearning zählen NICHT gegen new/rev-Limits — sonst endet die
 	// Session nach einem Durchlauf, obwohl Minuten-Lernschritte noch offen sind.
-	function applyDailyLimits(cards) {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
+	// DRY: Tagesverbrauch (heute gelernte neue Karten/Reviews je Stapel) aus dem
+	// Review-Protokoll — war vorher in applyDailyLimits UND computeStudySnapshot
+	// identisch dupliziert (jede Regeländerung musste zweimal gemacht werden).
+	// Learning/Relearning-Schritte verbrauchen kein Limit (wie Anki).
+	function dailyUsageSince(dayStart) {
 		const usedNew = {}, usedRev = {};
 		(S.reviews || []).forEach((r) => {
-			if (new Date(r.t) < today) return;
-			if (r.learning) return; // Lern-/Relearning-Schritte verbrauchen kein Review-Limit.
+			if (new Date(r.t) < dayStart) return;
+			if (r.learning) return;
 			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
 		});
+		return { usedNew, usedRev };
+	}
+
+	function applyDailyLimits(cards) {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const { usedNew, usedRev } = dailyUsageSince(today);
 		return cards.filter((c) => {
 			const st = (c.srs && c.srs.state) || "new";
 			if (st === "learning" || st === "relearning") return true;
@@ -880,16 +896,9 @@ export const STATE = (() => {
 		const reviewsRaw = all.filter((c) => c.srs.state === "review" && new Date(c.srs.due) <= t).sort(byDue);
 		const newRaw = all.filter((c) => c.srs.state === "new" && new Date(c.srs.due) <= t).sort(byDue);
 
-		// Tagesverbrauch aus Review-Log (wie Anki: first = new)
+		// Tagesverbrauch aus Review-Log (wie Anki: first = new) — DRY: dailyUsageSince()
 		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-		const usedNew = {}, usedRev = {};
-		(S.reviews || []).forEach((r) => {
-			if (new Date(r.t) < dayStart) return;
-			if (r.learning) return; // Lern-/Relearning-Schritte verbrauchen kein Review-Limit.
-			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
-			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
-			else usedRev[d] = (usedRev[d] || 0) + 1;
-		});
+		const { usedNew, usedRev } = dailyUsageSince(dayStart);
 		const takeLimited = (list, kind) => {
 			const out = [];
 			for (const c of list) {

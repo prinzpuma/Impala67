@@ -2,10 +2,33 @@
 // util.js — kleine Helfer, keine Abhängigkeiten
 export const U = {
 	uid: () => crypto.randomUUID(),
-	now: () => new Date().toISOString(),
 
-	esc: (s) => String(s ?? "").replace(/[&<>"']/g,
-		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
+	// Zeitquelle aller Event-Zeitstempel. Der Log-Merge entscheidet Konflikte per
+	// Zeitstempel (LWW) — eine falsch gehende Geräteuhr würde sonst systematisch und
+	// still „gewinnen“. drive.js misst den Versatz gegen den Date-Header der Drive-
+	// Antworten und meldet ihn über setClockOffset(); zusätzlich ist now() monoton:
+	// nie derselbe oder ein früherer Wert als beim letzten Aufruf, damit die
+	// deterministische Replay-Reihenfolge lokal nie kippen kann.
+	_clockOffsetMs: 0,
+	_lastNowMs: 0,
+	setClockOffset(ms) { U._clockOffsetMs = Number(ms) || 0; },
+	now: () => {
+		let t = Date.now() - U._clockOffsetMs;
+		if (t <= U._lastNowMs) t = U._lastNowMs + 1;
+		U._lastNowMs = t;
+		return new Date(t).toISOString();
+	},
+
+	// PERF (Audit 21. Juli): esc() ist die heißeste Funktion der UI — jeder Render baut
+	// damit jede Zeile/jeden Titel. Fast-Path: Strings ohne Sonderzeichen (der Normalfall)
+	// unverändert zurückgeben; Ersetzungs-Map einmal anlegen statt pro Treffer ein neues
+	// Objekt-Literal zu erzeugen.
+	_escTest: /[&<>"']/,
+	_escMap: { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" },
+	esc: (s) => {
+		s = String(s ?? "");
+		return U._escTest.test(s) ? s.replace(/[&<>"']/g, (c) => U._escMap[c]) : s;
+	},
 
 	debounce(fn, ms) {
 		let timer;
@@ -96,12 +119,18 @@ export const U = {
 			U.el("dlgConfirmOk").addEventListener("click", () => finish(true));
 			U.el("dlgConfirmCancel").addEventListener("click", () => finish(false));
 			document.addEventListener("keydown", onKey, true);
-			const okBtn = U.el("dlgConfirmOk");
-			if (okBtn) okBtn.focus();
+			// Bei destruktiven Dialogen (danger) startet der Fokus auf „Abbrechen“ —
+			// ein reflexhaftes Enter bestätigt so nie versehentlich das Löschen.
+			const focusBtn = U.el(danger ? "dlgConfirmCancel" : "dlgConfirmOk");
+			if (focusBtn) focusBtn.focus();
 		});
 	},
 
-	fmtDate: (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }),
+	// PERF (Audit 21. Juli): toLocaleDateString baut bei jedem Aufruf intern einen neuen
+	// Intl-Formatter (teuer, läuft in jedem Listen-Render pro Zeile). Einen Formatter
+	// wiederverwenden — identisches Format, ungültige Daten liefern wie bisher "Invalid Date".
+	_dateFmt: new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }),
+	fmtDate: (iso) => { const d = new Date(iso); return isNaN(d) ? "Invalid Date" : U._dateFmt.format(d); },
 
 	// Farb-Syntax: {red}Text{/} → farbiger Text, {bg-yellow}Text{/} → Hintergrundfarbe.
 	// Bleibt reiner Text im Markdown — Diffs, Sync, Verlauf und KI-Tools funktionieren unverändert.
@@ -127,12 +156,18 @@ export const U = {
 	// fand die Delimiter dann nicht mehr. Code-Blöcke und Inline-Code bleiben
 	// unangetastet (erste Regex-Alternative, dort wird nicht maskiert).
 	_mathMaskRe: /(```[\s\S]*?(?:```|$)|`[^`\n]*`)|(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$[^$\n]+?\$)/g,
+	// Platzhalter-Marker: bisher lagen die Private-Use-Zeichen UNSICHTBAR direkt im
+	// Quelltext ("") — Editoren, Copy/Paste oder Formatierer können solche Zeichen
+	// still verschlucken, und im Diff sieht man sie nicht. Jetzt als sichtbare
+	// \u-Escapes in benannten Konstanten (DRY: eine Definition, unten mitbenutzt).
+	_mathTokL: String.fromCharCode(0xe000),
+	_mathTokR: String.fromCharCode(0xe001),
 	_maskMath(src) {
 		const stash = [];
 		const text = String(src ?? "").replace(U._mathMaskRe, (m, code) => {
 			if (code) return code;
 			stash.push(m);
-			return "" + (stash.length - 1) + "";
+			return U._mathTokL + (stash.length - 1) + U._mathTokR;
 		});
 		return { text, stash };
 	},
@@ -140,17 +175,32 @@ export const U = {
 	// sonst HTML-escaped — KaTeX liest den escapeten Text später korrekt als
 	// Klartext aus dem DOM (&amp; → &).
 	_unmaskMath(html, stash, escape) {
-		return String(html).replace(/(\d+)/g, (_, i) => (escape === false ? stash[+i] || "" : U.esc(stash[+i] || "")));
+		// DRY: exakt dieselben Marker-Konstanten wie _maskMath — Regex einmal lazy aufgebaut.
+		U._mathUnmaskRe = U._mathUnmaskRe || new RegExp(U._mathTokL + "([0-9]+)" + U._mathTokR, "g");
+		return String(html).replace(U._mathUnmaskRe, (_, i) => (escape === false ? stash[+i] || "" : U.esc(stash[+i] || "")));
 	},
 
-	// HTML gegen XSS bereinigen: DOMPurify (per CDN), sonst konservativer Basis-Filter.
+	// HTML gegen XSS bereinigen: DOMPurify (per CDN, liegt im Service-Worker-Precache).
+	// Offline-Fallback (Audit 21. Juli): DOM-basierte Allowlist statt Regex — Regex-Filter
+	// sind gegen die Browser-„Reparatur“ von kaputtem Markup prinzipiell umgehbar. Derselbe
+	// Parser, der das HTML später rendert, entscheidet hier: gefährliche Container fliegen
+	// samt Inhalt, unbekannte Tags werden zu Text entpackt, Attribute nur per Allowlist +
+	// URL-Schema-Prüfung (https/mailto/relativ/#, data: nur für Bilder in src).
+	_dropTags: new Set(["script", "style", "iframe", "object", "embed", "form", "link", "meta", "base", "noscript", "template"]),
+	_safeTags: new Set(["a", "abbr", "b", "blockquote", "br", "code", "del", "details", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "ins", "kbd", "li", "mark", "ol", "p", "pre", "s", "small", "span", "strong", "sub", "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "u", "ul"]),
+	_safeAttrs: new Set(["alt", "class", "colspan", "href", "rowspan", "src", "title"]),
 	sanitize(html) {
 		if (window.DOMPurify) return DOMPurify.sanitize(html);
-		return String(html)
-			.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, "")
-			.replace(/<\/?(iframe|object|embed|form|meta|link|base)\b[^>]*>/gi, "")
-			.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-			.replace(/(href|src)\s*=\s*(["']?)\s*javascript:[^"'\s>]*/gi, "$1=$2#");
+		const body = new DOMParser().parseFromString(String(html ?? ""), "text/html").body;
+		for (const el of [...body.querySelectorAll("*")]) {
+			if (U._dropTags.has(el.localName)) { el.remove(); continue; }
+			if (!U._safeTags.has(el.localName)) { el.replaceWith(...el.childNodes); continue; }
+			for (const a of [...el.attributes]) {
+				const urlOk = !/^(href|src)$/.test(a.name) || /^(https?:|mailto:|#|\.{0,2}\/|data:image\/)/i.test(a.value.trim());
+				if (!U._safeAttrs.has(a.name) || !urlOk) el.removeAttribute(a.name);
+			}
+		}
+		return body.innerHTML;
 	},
 
 	// Markdown → HTML. marked kommt per CDN; offline gibt es einen sicheren Fallback.
@@ -172,7 +222,10 @@ export const U = {
 		// erkennen; ohne erzwungene Soft-Breaks bleibt der LaTeX-Block zusammen.
 		const html = U._unmaskMath(U.sanitize(marked.parse(raw, { breaks: false })), masked.stash);
 		// Kleiner Cache: erspart erneutes Parsen bei jedem Voll-Render derselben Inhalte.
-		if (U._mdCache.size > 300) U._mdCache.clear();
+		// PERF (Audit 21. Juli): nur den ältesten Eintrag verdrängen statt clear() — das
+		// Komplett-Leeren erzwang periodisch ein Neu-Parsen ALLER sichtbaren Inhalte in
+		// einem Frame (spürbarer Ruckler in langen Chats).
+		if (U._mdCache.size > 300) U._mdCache.delete(U._mdCache.keys().next().value);
 		U._mdCache.set(src, html);
 		return html;
 	},

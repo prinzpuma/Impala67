@@ -58,10 +58,23 @@ const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); 
 const inDeck = (deck, name) => deck === name || deck.startsWith(name + "::");
 // Alle Nachfahren einer Seite inkl. ihrer selbst (Verschieben-Dialog, Papierkorb)
 function descendantsOf(pageId) {
+	// PERF: EIN Durchlauf baut den Eltern→Kinder-Index, danach werden nur noch echte
+	// Kinder besucht — vorher scannte JEDE Rekursionsebene ALLE Seiten (O(n²) bei
+	// tiefen Bäumen; spürbares Haken bei Verschieben/Papierkorb in großen Workspaces).
+	const byParent = new Map();
+	for (const p of Object.values(S.pages)) {
+		const k = p.parentId || null;
+		let kids = byParent.get(k);
+		if (!kids) { kids = []; byParent.set(k, kids); }
+		kids.push(p.id);
+	}
 	const set = new Set([pageId]);
-	(function collect(pid) {
-		for (const p of Object.values(S.pages)) if (p.parentId === pid && !set.has(p.id)) { set.add(p.id); collect(p.id); }
-	})(pageId);
+	const stack = [pageId];
+	while (stack.length) {
+		for (const kid of byParent.get(stack.pop()) || []) {
+			if (!set.has(kid)) { set.add(kid); stack.push(kid); }
+		}
+	}
 	return set;
 }
 

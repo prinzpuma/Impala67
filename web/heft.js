@@ -19,6 +19,7 @@ export const HEFT = (() => {
 
 	const docs = {};
 	const thumbs = {};
+	const THUMB_MAX = 60; // Speicher-Limit: Data-URLs sammelten sich sonst unbegrenzt an
 	const dropThumbs = (p) => Object.keys(thumbs).forEach((k) => { if (k.startsWith(p + ":")) delete thumbs[k]; });
 	const thumbJobs = {};
 	const imgCache = {};
@@ -42,7 +43,8 @@ export const HEFT = (() => {
 	let trayDrag = null;
 	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null, scrollFn = null;
 	let undoStack = [], redoStack = [];
-	const pushUndo = (a) => { undoStack.push(a); redoStack = []; };
+	const UNDO_MAX = 100; // Speicher-Limit: stundenlanges Schreiben ließ den Stack unbegrenzt wachsen
+	const pushUndo = (a) => { undoStack.push(a); if (undoStack.length > UNDO_MAX) undoStack.shift(); redoStack = []; };
 	let sel = null;
 	let lassoSel = null;
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
@@ -55,14 +57,19 @@ export const HEFT = (() => {
 	const ocrQueueV2 = new Set();
 	const ocrLastRun = new Map();
 	let ocrTimerV2 = 0, ocrBusyV2 = false;
+	// OCR nur im Leerlauf starten: das 1100px-Canvas-Rendern blockierte sonst kurz das
+	// Scrollen/Schreiben (Mikroruckler). requestIdleCallback wartet auf eine ruhige Phase
+	// (max. +10 s); Safari ohne die API verhält sich exakt wie bisher.
+	const runOcrWhenIdle = () => (window.requestIdleCallback ? window.requestIdleCallback(() => runHandwritingIndexV2(), { timeout: 10000 }) : runHandwritingIndexV2());
 	function scheduleHandwritingIndexV2(pi) {
 		if (!HANDSCHRIFT.available()) return;
 		ocrQueueV2.add(pi);
 		clearTimeout(ocrTimerV2);
-		ocrTimerV2 = setTimeout(runHandwritingIndexV2, 4000);
+		ocrTimerV2 = setTimeout(runOcrWhenIdle, 4000);
 	}
 	async function runHandwritingIndexV2() {
-		if (ocrBusyV2 || !doc || !pid) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runHandwritingIndexV2, 4000); return; }
+		// Nach unmount NICHT neu einplanen — sonst tickte der 4-s-Timer ewig weiter (Akku).
+		if (ocrBusyV2 || !doc || !pid) { clearTimeout(ocrTimerV2); if (doc && pid) ocrTimerV2 = setTimeout(runOcrWhenIdle, 4000); return; }
 		const jobPid = pid, jobDoc = doc;
 		const indices = [...ocrQueueV2];
 		ocrQueueV2.clear();
@@ -87,7 +94,7 @@ export const HEFT = (() => {
 		} catch (e) { console.warn("Heft: Handschrift-Erkennung v2 fehlgeschlagen", e); }
 		ocrBusyV2 = false;
 
-		if (ocrQueueV2.size) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runHandwritingIndexV2, 45000); }
+		if (ocrQueueV2.size) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runOcrWhenIdle, 45000); }
 	}
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
@@ -2697,9 +2704,9 @@ export const HEFT = (() => {
 			const tx = pg && sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
 			if (im || tx) {
 				e.preventDefault();
-				if (im) { pg.images = pg.images.filter((i2) => i2 !== im); undoStack.push({ kind: "imgDel", img: im, pageIdx: sel.pageIdx }); }
-				else { pg.texts = textsOf(pg).filter((t2) => t2 !== tx); undoStack.push({ kind: "txtDel", txt: tx, pageIdx: sel.pageIdx }); }
-				redoStack = [];
+				// pushUndo statt direktem push: Limit greift, redoStack wird zentral geleert
+				if (im) { pg.images = pg.images.filter((i2) => i2 !== im); pushUndo({ kind: "imgDel", img: im, pageIdx: sel.pageIdx }); }
+				else { pg.texts = textsOf(pg).filter((t2) => t2 !== tx); pushUndo({ kind: "txtDel", txt: tx, pageIdx: sel.pageIdx }); }
 				const spi = sel.pageIdx; sel = null;
 				refresh(spi);
 			}
@@ -2921,6 +2928,10 @@ export const HEFT = (() => {
 			const c = renderPageCanvas(pg, w);
 			const url = c.toDataURL("image/png");
 			thumbs[key] = url;
+			// Speicher-Limit (FIFO): Thumbnails vieler Hefte (Embeds/Bibliothek) wuchsen
+			// unbegrenzt — älteste Einträge fliegen raus und werden bei Bedarf neu gerendert.
+			const keys = Object.keys(thumbs);
+			for (let i = 0; i < keys.length - THUMB_MAX; i++) delete thumbs[keys[i]];
 			return url;
 		})();
 		thumbJobs[key] = job;

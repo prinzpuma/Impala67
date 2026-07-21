@@ -49,7 +49,11 @@ export const DB = (() => {
 		let legacy = null;
 		try { legacy = await openRaw("notion"); } catch { return; }
 		if (!legacy || !legacy.objectStoreNames.contains("events")) { legacy?.close(); return; }
-		for (const store of ["events", "blobs", "vecs"]) {
+		// "events" bewusst ZULETZT: jeder Store kopiert atomar in EINER Transaktion, und
+		// der Migrations-Check oben schaut auf events.count(). Bricht die Migration mitten-
+		// drin ab (Tab zu, Crash), ist events noch leer und der nächste Start setzt die
+		// Kopie einfach fort — vorher blockierte ein teilmigrierter Stand für immer.
+		for (const store of ["blobs", "vecs", "events"]) {
 			if (!legacy.objectStoreNames.contains(store)) continue;
 			const src = legacy.transaction(store).objectStore(store);
 			const [keys, vals] = await Promise.all([val(src.getAllKeys()), val(src.getAll())]);
@@ -126,8 +130,13 @@ export const DB = (() => {
 	// 1. Patch-Events (pageUpdate/cardUpdate/settingsSet) fliegen, wenn ALLE Felder von neueren Patches
 	//    desselben Ziels überschrieben sind (pageUpdate trägt vollen content = DER Speicherfresser).
 	// 2. Updates endgültig gelöschter Seiten/Karten fliegen. Rest bleibt (klein, teils reihenfolge-abhängig).
+	// 3. UI-Zustand: uiTabsSet ist ein Gesamtsnapshot (nur der jüngste zählt), uiTreeSet eine
+	//    Operation je key (jüngstes Event je key genügt) — beide fluteten das Log sonst dauerhaft.
+	// 4. teleEvent: Roh-Telemetrie verfällt nach TELE_KEEP_DAYS (drop-only, kein Merge-Konflikt —
+	//    ältere Auswertungen verlieren nur Alt-Daten, nie aktuelle).
 	// Verlaufs-Schutz: N jüngste Inhalts-Stände je Seite überleben — pageHistory liest das Event-Log.
 	const KEEP_CONTENT_VERSIONS = 10;
+	const TELE_KEEP_DAYS = 90;
 	function compactEvents(events) {
 		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
 		const deletedAt = { page: {}, card: {} };
@@ -137,8 +146,14 @@ export const DB = (() => {
 			if (ev.type === "cardDelete") deletedAt.card[ev.payload.id] = ev.t;
 		}
 		const covered = {}, contentKept = {}, keep = [];
+		const teleCutoff = new Date(Date.now() - TELE_KEEP_DAYS * 864e5).toISOString();
+		let uiTabsKept = false;
+		const uiTreeKeys = new Set();
 		for (let i = sorted.length - 1; i >= 0; i--) { // rückwärts: neueste zuerst
 			const ev = sorted[i], p = ev.payload || {};
+			if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
+			else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
+			else if (ev.type === "teleEvent" && ev.t < teleCutoff) continue;
 			if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
 			if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
 			const [bucket, patch] =
@@ -179,8 +194,10 @@ export const DB = (() => {
 		});
 	}
 
-	// SECURITY: settingsSet-Events aus alten Versionen können Klartext-Secrets enthalten. Für
-	// Drive-Snapshots/Deltas bereinigen — der MANUELLE Backup-Export behält sie bewusst.
+	// SECURITY: entfernt Klartext-Secrets aus settingsSet-Events. Der Drive-Sync nutzt das
+	// BEWUSST NICHT — API-Keys & Co. sollen übers Event-Log auf die eigenen Geräte replizieren
+	// (appDataFolder = privater App-Speicher im eigenen Konto, siehe state.js). Gedacht für
+	// Exporte, die das eigene Konto verlassen (z.B. geteilte Backups).
 	function redactSecretsFromEvent(ev) {
 		if (!ev || ev.type !== "settingsSet" || !ev.payload) return ev;
 		const p = { ...ev.payload };
@@ -194,9 +211,14 @@ export const DB = (() => {
 	}
 
 	// includeBlobs=false: PERF für den Drive-Snapshot (Blobs würden sofort wieder verworfen).
+	// SECURITY (secure by default): Secrets werden standardmäßig entfernt — Exporte können
+	// das eigene Konto verlassen (geteilte Backups, Bug-Reports). NUR der Drive-Sync opts
+	// mit redactSecrets:false aus, weil er Keys bewusst über den privaten appDataFolder
+	// aufs eigene Konto repliziert (siehe state.js). Vorher war Redaction opt-in — ein
+	// vergessenes Flag exportierte Klartext-Keys.
 	async function exportAll(opts = {}) {
 		let events = compactEvents(await allEvents());
-		if (opts.redactSecrets) events = events.map(redactSecretsFromEvent);
+		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
 			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
@@ -349,7 +371,9 @@ export const DB = (() => {
 		if (fresh.length) await addEvents(fresh);
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
 		const have = new Set(await allBlobKeys());
-		for (const [k, v] of Object.entries(blobs)) if (!have.has(k)) await putBlob(k, U.b64ToBuf(v.b64), v.meta);
+		// PERF: fehlende Blobs in EINER Transaktion statt einer je Blob (Erst-Import mit vielen PDFs/Heften).
+		const missing = Object.entries(blobs).filter(([k]) => !have.has(k));
+		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
 		return { added: fresh.length, conflicts: conflictDetails.length, conflictDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
 	}
@@ -374,7 +398,13 @@ export const DB = (() => {
 	function clearPages() {
 		ensureOpen();
 		const t = db.transaction(["events", "vecs", "blobs"], "readwrite");
-		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore"]);
+		// FIX (Umsetzungs-Runde 21. Juli): auch Heft-Metadaten, GoodNotes-Ordner und die
+		// seitenbezogenen UI-Events entsorgen — sonst überlebten heftUpdated/gnFolder*/
+		// uiTreeSet/uiTabsSet den Reset und referenzierten Seiten, die es nicht mehr gibt.
+		// Hinweis bleibt: bereits gesyncte Events können per Drive-Merge zurückkehren —
+		// der Seiten-Reset ist ein LOKALER Neuanfang, kein Drive-Reset.
+		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore",
+			"heftUpdated", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
 		const evStore = t.objectStore("events");
 		const evReq = evStore.getAll();
 		evReq.onsuccess = () => evReq.result.forEach((ev) => { if (pageTypes.has(ev.type)) evStore.delete(ev.seq); });
