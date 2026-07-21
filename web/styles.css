@@ -208,6 +208,10 @@ button.danger { color: var(--danger) }
 .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text2) }
 .composer-tool:hover { background: var(--surface-hover-strong); color: var(--text) }
 .composer-tool svg { width: 17px; height: 17px; display: block }
+/* Chat-UI: SVG-Icons statt Emojis — einheitliche Größen an allen Chat-Knöpfen */
+.row-add svg, .msg-edit svg, .code-copy svg { width: 13px; height: 13px; display: block; margin: auto }
+.msg-tool-btn svg, .tool-chip svg, .think-icon svg, .refine-menu svg { width: 14px; height: 14px; display: inline-block; vertical-align: -3px }
+.panel-head-right button svg { width: 15px; height: 15px; display: block }
 /* Einheitliches Dropdown (öffnet über der Eingabezeile) — gleich… */
 .model-menu { position: fixed; left: 8px; z-index: var(--z-menu); width: 300px; max-width: calc(100vw - 40px); max-height: 340px; overflow-y: auto; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 12px 32px var(--shadow); padding: 6px }
 .model-menu[hidden] { display: none }
@@ -419,10 +423,6 @@ button.danger { color: var(--danger) }
 /* == KI-Panel einklappen / Vollbild == */
 body.panel-collapsed #panel { display: none }
 body.panel-collapsed #app { grid-template-columns: 260px minmax(0, 1fr) }
-body.chat-full #mainWrap { display: none }
-body.chat-full #app { grid-template-columns: 260px 1fr }
-body.chat-full #panel { grid-column: 2; max-width: 780px; width: 100%; justify-self: center; border: none; background: transparent }
-body.chat-full #chatLog { padding: 24px 8px }
 /* == Linke Sidebar + runder KI-Schnellzugriff == */
 /* #tabbar-Grundlayout steht bereits im Hauptbereich; hier nur di… */
 #tabbar .tabstrip { flex: 1; min-width: 0 }
@@ -439,7 +439,6 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab { display: 
 	body.sidebar-collapsed #sidebar { display: none }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 340px }
 	body.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
-	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr }
 	body.density-compact.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 320px }
 	body.density-compact.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
 }
@@ -1093,10 +1092,7 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { t
 @media (min-width: 769px) and (max-width: 1024px) {
 	#app { grid-template-columns: 220px minmax(0, 1fr) }
 	#panel { position: fixed; z-index: 25; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
-	body.chat-full #app { grid-template-columns: 220px 1fr }
-	body.chat-full #panel { position: static; width: auto; box-shadow: none }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
-	body.sidebar-collapsed.chat-full #app { grid-template-columns: 1fr }
 }
 /* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
 @media (pointer: coarse) and (min-width: 769px) {
@@ -1203,7 +1199,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-swatch:hover { transform: scale(1.08) }
 .heft-swatch.active { border-color: #8fd0ff; box-shadow: 0 0 0 2px rgba(111,195,255,.25) }
 /* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
-.heft-corner { min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; border: 1px solid rgba(255,255,255,.14); background: #1a2a44; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.4) }
+.heft-corner { min-height: 0; height: 36px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; border: 1px solid rgba(255,255,255,.14); background: #1a2a44; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.4); display: inline-flex; align-items: center; justify-content: center; gap: 4px }
 .heft-corner:hover { background: #243656 }
 .heft-corner.active { background: rgba(111,195,255,.18); color: #8fd0ff; border-color: rgba(111,195,255,.35) }
 .heft-corner-l { position: absolute; left: 12px; top: 12px; z-index: 51 }
@@ -2043,7 +2039,7 @@ h3, h4 { text-wrap: balance }
 /* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
 .deck-feyn { white-space: nowrap }
 /* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
-.heft-chrome .heft-main svg, .heft-chrome .heft-opt svg { display: block; pointer-events: none }
+.heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
 /* ---------- 🕸 Wissensgraph (graph.js) ---------- */
 .graph-overlay { position: fixed; inset: 0; z-index: 1280; background: var(--bg, #191919); display: flex; flex-direction: column }
 .graph-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(140, 150, 165, .25) }

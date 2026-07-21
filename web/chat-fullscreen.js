@@ -26,8 +26,12 @@ function saveChat(messages, idKey) {
 		S[idKey] = s.id;
 		list.unshift(s);
 	}
+	// FIX: "updated" nur bei ECHTER Änderung anfassen. Vorher bumpte jeder
+	// Chat-Wechsel den Zeitstempel des alten Chats — die nach "updated" sortierte
+	// Chat-Liste ordnete sich direkt unter dem Klick um und der Wechsel wirkte kaputt.
+	const changed = JSON.stringify(s.messages) !== JSON.stringify(messages);
 	s.messages = messages;
-	s.updated = U.now();
+	if (changed || !s.updated) s.updated = U.now();
 	if (!s.title) {
 		const first = messages.find((m) => m.role === "user");
 		s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
@@ -45,15 +49,8 @@ export function saveSideChat() {
 	saveChat(S.sideChat, "sideChatId");
 }
 
-// KI-Vollbildmodus (wie Notion AI)
-export function toggleChatFull(force) {
-	S.chatFull = force === undefined ? !S.chatFull : force;
-	document.body.classList.toggle("chat-full", S.chatFull);
-	if (S.chatFull) {
-		document.body.classList.remove("panel-collapsed");
-		if (typeof RENDER.renderTabs === "function") RENDER.renderTabs();
-	}
-}
+// Der frühere Vollbildmodus (body.chat-full / toggleChatFull) ist entfernt:
+// Der Seitenchat wird stattdessen als eigener Chat-Tab geöffnet (app.js, btnChatExpand).
 
 // Formuliert eine KI-Antwort länger, kürzer oder in gleicher Länge um (wie Gemini).
 // FIX: sucht jetzt sowohl in S.chat (Vollbild) als auch S.sideChat (Seitenpanel).
@@ -249,6 +246,9 @@ export async function handleDeleteChat(t) {
 		S.chat = []; S.currentChatId = null;
 		if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
 	}
+	// FIX: war der gelöschte Chat der Seitenpanel-Chat, hätte der nächste
+	// saveSideChat() ihn als neue Sitzung wiederbelebt — Verknüpfung lösen.
+	if (S.sideChatId === id) { S.sideChat = []; S.sideChatId = null; }
 	render();
 }
 
@@ -266,7 +266,9 @@ export function handleEditUserMessage(t) {
 		if (isSide) S.sideChat = S.sideChat.slice(0, idx);
 		else S.chat = S.chat.slice(0, idx);
 		render();
-		const inp = S.view === "chat" ? U.el("mainChatInput") : U.el("chatInput");
+		// FIX: Ziel-Composer nach dem CHAT wählen, nicht nach der Ansicht — eine
+		// Seitenpanel-Nachricht landete sonst im Eingabefeld des großen Chats.
+		const inp = isSide ? U.el("chatInput") : U.el("mainChatInput");
 		if (inp) { inp.value = old.content || ""; inp.focus(); }
 	}
 }
@@ -399,7 +401,6 @@ export function handlePaste(e) {
 export const CHAT_FULLSCREEN = {
 	saveCurrentChat,
 	saveSideChat,
-	toggleChatFull,
 	refineMessage,
 	sendChatMessage,
 	handleReasoningToggle,

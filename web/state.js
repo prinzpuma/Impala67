@@ -56,7 +56,6 @@ export const S = {
 	currentPageId: null,
 	currentWorkspaceId: "default",
 	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "noten" | "daily" | "trash"
-	chatFull: false,
 	pendingImage: null,
 	pendingAttachmentTarget: null, // "side" | "full" — Chat, dem der ausgewählte Anhang gehört
 	attachTarget: "side", // zuletzt geöffneter Datei-Dialog; erst nach Dateiauswahl wird der Anhang zugeordnet

@@ -50,6 +50,9 @@ export function openPage(pageId, opts) {
 		S.chat = s ? s.messages || [] : [];
 		S.view = "chat";
 		S.sidebarMode = "chats"; // eine Topbar-Pille: Chat
+		// FIX: Ein Chat lebt nur an EINER Stelle. Hing dieselbe Sitzung noch am
+		// Seitenpanel, überschrieben sich Panel und Tab beim Speichern gegenseitig.
+		if (S.sideChatId === chatId) { S.sideChat = []; S.sideChatId = null; }
 	} else if (isNlm) {
 		S.view = "notebooklm";
 	} else {

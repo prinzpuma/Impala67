@@ -34,6 +34,21 @@ function openOverlay(html) {
 const deckTreeHtml = (...a) => RENDER_ANKI.deckTreeHtml(...a);
 const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 
+// Kleine Inline-SVG-Icons für die Chat-UI — statt Emojis, konsistent mit den
+// übrigen SVG-Icons der App. stroke: currentColor → färbt sich per CSS mit.
+const svgIcon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const ICONS = {
+	pen: svgIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+	trash: svgIcon('<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
+	copy: svgIcon('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'),
+	gear: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M2 12h3M19 12h3M4.9 19.1l2.2-2.2M16.9 7.1l2.2-2.2"/>'),
+	think: svgIcon('<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/>'),
+	lock: svgIcon('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
+	arrowUp: svgIcon('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
+	arrowDown: svgIcon('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
+	arrowSame: svgIcon('<path d="M4 12h16"/><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/>'),
+};
+
 // Icon: eigenes > Heft > PDF > Fallback (auch von library.js/search.js genutzt)
 const pageIconLabel = (pg, fb = "📝") => pg.icon || (pg.kind === "heft" ? "📓" : pg.pdfId ? "📄" : fb);
 const pageIconHtml = (pg, fb) => { const i = pageIconLabel(pg, fb); return i ? esc(i) + " " : ""; };
@@ -293,7 +308,7 @@ function chatListHtml() {
 	return '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>' +
 		CHATS.load().map((s) =>
 			`<div class="row${s.id === S.currentChatId ? " active" : ""}" data-chat="${s.id}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
-			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">✎</button><button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">🗑</button></div>`).join("");
+			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button><button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button></div>`).join("");
 }
 
 function branchHtml(parentId, depth, wsId) {
@@ -867,7 +882,7 @@ function userMsgHtml(m, historyList) {
 	const idx = list.findIndex((x) => x.mid === m.mid);
 	const locked = idx !== -1 && list.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
 	return '<div class="msg user">' +
-		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${locked ? "🔒" : "✎"}</button>` +
+		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${locked ? ICONS.lock : ICONS.pen}</button>` +
 		(m.content ? esc(m.content) : "") +
 		(m.image ? `<img class="msg-img" src="${m.image}" alt="Anhang">` : "") +
 		(m.textFile ? fileChipHtml(m) : "") +
@@ -886,7 +901,7 @@ const TOOL_LABELS = {
 	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten", send_to_notebooklm: "An NotebookLM",
 	ask_choice: "Rückfrage gestellt", delete_page: "Seite gelöscht", delete_flashcard: "Karte gelöscht", delete_deck: "Stapel gelöscht",
 };
-const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">⚙️ ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
+const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">${ICONS.gear} ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
 
 // Fertige Nachrichten getrennt vom Live-Entwurf — bleibt beim Streamen unangetastet
 function chatStaticHtml(list = []) {
@@ -1103,7 +1118,7 @@ function thinkBoxHtml(opts) {
 	const expanded = !!opts.expanded;
 	return `<div class="think-box${opts.live ? " live" : ""}${expanded ? " expanded" : opts.live ? " peek" : ""}">` +
 		`<button type="button" class="think-toggle" ${opts.toggleAttr} aria-expanded="${expanded ? "true" : "false"}">` +
-			`<span class="think-icon">${opts.live ? "🧠" : "💭"}</span><span class="think-label">${esc(opts.label)}</span><span class="think-chevron">▸</span></button>` +
+			`<span class="think-icon">${ICONS.think}</span><span class="think-label">${esc(opts.label)}</span><span class="think-chevron">▸</span></button>` +
 		`<div class="think-body-wrap"><div class="think-body">${esc(opts.text || "")}</div></div></div>`;
 }
 
@@ -1116,10 +1131,10 @@ const thinkingLiveHtml = () => thinkBoxHtml({
 function assistantMsgHtml(m) {
 	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
 	const refine = S.refineOpenMid === m.mid
-		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">⬆️ Länger</button><button data-refine="${m.mid}" data-mode="same">↔️ Gleich</button><button data-refine="${m.mid}" data-mode="shorter">⬇️ Kürzer</button></div>`
+		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">${ICONS.arrowUp} Länger</button><button data-refine="${m.mid}" data-mode="same">${ICONS.arrowSame} Gleich</button><button data-refine="${m.mid}" data-mode="shorter">${ICONS.arrowDown} Kürzer</button></div>`
 		: "";
 	return think + '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
-		`<div class="msg-tools"><button class="msg-tool-btn" data-copymsg="${m.mid}" title="Antwort in die Zwischenablage kopieren">📋 Kopieren</button>` +
+		`<div class="msg-tools"><button class="msg-tool-btn" data-copymsg="${m.mid}" title="Antwort in die Zwischenablage kopieren">${ICONS.copy} Kopieren</button>` +
 		`<button class="msg-tool-btn" data-refinetoggle="${m.mid}" title="Antwort anpassen">✦ Anpassen</button>${refine}</div></div>`;
 }
 

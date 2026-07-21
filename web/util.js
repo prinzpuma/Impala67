@@ -270,7 +270,8 @@ export const U = {
 			if (!code || code.classList.contains("language-mermaid") || pre.querySelector(".code-copy")) return;
 			const btn = document.createElement("button");
 			btn.type = "button"; btn.className = "code-copy"; btn.dataset.codecopy = "1";
-			btn.title = "Code kopieren"; btn.textContent = "📋";
+			btn.title = "Code kopieren";
+			btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 			pre.appendChild(btn);
 		});
 		if (!window.hljs) return;

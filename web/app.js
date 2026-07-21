@@ -30,7 +30,6 @@ const navBack = (...a) => TABS.navBack(...a);
 const navForward = (...a) => TABS.navForward(...a);
 const openHomeOverview = (...a) => TABS.openHomeOverview(...a);
 const saveCurrentChat = (...a) => CHAT_FULLSCREEN.saveCurrentChat(...a);
-const toggleChatFull = (...a) => CHAT_FULLSCREEN.toggleChatFull(...a);
 const sendChatMessage = (...a) => CHAT_FULLSCREEN.sendChatMessage(...a);
 const renderModelBar = (...a) => RENDER.renderModelBar(...a);
 const renderModelMenu = (...a) => RENDER.renderModelMenu(...a);
@@ -91,7 +90,12 @@ function mountFullChatDebugButton() {
 	const mk = (props) => Object.assign(document.createElement("button"), { type: "button", ...props });
 	head.appendChild(mk({ id: "btnAiDebugFull", className: "ai-debug-btn", title: "Letztes KI-Debugprotokoll in die Zwischenablage kopieren", textContent: "Debugprotokoll" }));
 	const submit = $("mainChatSubmit");
-	if (submit && !$("btnVoiceFull")) submit.before(mk({ id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)", textContent: "🎙" }));
+	if (submit && !$("btnVoiceFull")) {
+		// SVG statt Emoji — konsistent mit den übrigen Icons (voice.js pflegt den Zustand)
+		const voiceBtn = mk({ id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)" });
+		voiceBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
+		submit.before(voiceBtn);
+	}
 }
 
 async function copyAiDebugTrace() {
@@ -189,7 +193,6 @@ function openAnki(tab, deck) {
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
 	S.reviewShowBack = false;
-	toggleChatFull(false);
 	blurActive();
 	render();
 }
@@ -265,6 +268,9 @@ async function studySpaceOrEnter() {
 
 // Einheitlicher Einstieg für neue Chats (Sidebar, Home, „+ Tab“-Menü)
 function startNewChat(opts = {}) {
+	// Während die KI streamt, würde ein neuer Chat S.chat unter dem laufenden
+	// Lauf austauschen — die Antwort landete im falschen Chat.
+	if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 	saveCurrentChat();
 	const newId = U.uid();
 	const list = CHATS.load();
@@ -1145,9 +1151,12 @@ function wireEvents() {
 			return;
 		}
 
-		// Chat-Verlauf: neuer Chat / Chat auswählen
+		// Chat-Verlauf: neuer Chat / Chat auswählen. Während die KI streamt, würde
+		// ein Wechsel S.chat unter dem laufenden Lauf austauschen — die Antwort
+		// landete im falschen Chat. Deshalb kurz blocken statt still korrumpieren.
 		if (t.dataset.newchat) { startNewChat(); return; }
 		if (t.dataset.chat) {
+			if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 			saveCurrentChat();
 			openPage("chat:" + t.dataset.chat);
 			return;
@@ -1234,20 +1243,29 @@ function wireEvents() {
 			case "btnLibrary":
 				S.view = "library";
 				S.libFolder = null;
-				toggleChatFull(false);
 				blurActive();
 				render();
 				break;
 			case "btnChatNew": // alte Unterhaltung ist gesichert, bleibt in der Chat-Liste
+				if (S.aiBusy && S.aiActiveChatType === "side") { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); break; }
 				CHAT_FULLSCREEN.saveSideChat();
 				S.sideChat = [];
 				S.sideChatId = null;
 				render();
 				U.toast("Neuer Chat gestartet");
 				break;
-			case "btnChatExpand":
-				CHAT_FULLSCREEN.toggleChatFull();
+			case "btnChatExpand": {
+				// Ersetzt den alten Vollbildmodus: Seitenchat als eigenen Tab öffnen.
+				if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); break; }
+				CHAT_FULLSCREEN.saveSideChat();
+				const sideId = S.sideChatId;
+				S.sideChat = [];
+				S.sideChatId = null;
+				document.body.classList.add("panel-collapsed");
+				if (sideId) openPage("chat:" + sideId, { newTab: true });
+				else startNewChat({ newTab: true });
 				break;
+			}
 			case "btnNavBack": navBack(); break;
 			case "btnNavForward": navForward(); break;
 			case "btnSearchToggle":
@@ -1297,7 +1315,6 @@ function wireEvents() {
 				CHAT_FULLSCREEN.handleRemovePdf();
 				break;
 			case "btnTogglePanel":
-				CHAT_FULLSCREEN.toggleChatFull(false);
 				document.body.classList.add("panel-collapsed");
 				renderTabs();
 				break;
@@ -1389,7 +1406,6 @@ function wireEvents() {
 			case "btnDaily":
 				S.view = "daily";
 				S.dailyMonth = null;
-				toggleChatFull(false);
 				blurActive();
 				render();
 				break;

@@ -14,10 +14,14 @@ function toast(message, kind) {
 	if (window.U && typeof window.U.toast === "function") window.U.toast(message, kind || "success");
 }
 
+// SVG-Icons statt Emoji/Textzeichen — passend zu den übrigen Icons der App.
+const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
+const STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>';
+
 function updateButton() {
 	document.querySelectorAll("#btnVoice, #btnVoiceFull").forEach((btn) => {
 		btn.classList.toggle("active", listening);
-		btn.textContent = listening ? "■" : "🎙";
+		btn.innerHTML = listening ? STOP_SVG : MIC_SVG;
 		btn.title = listening ? "Aufnahme stoppen" : "Spracheingabe starten (Alt+Leertaste)";
 	});
 }

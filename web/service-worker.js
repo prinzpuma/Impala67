@@ -8,7 +8,7 @@
 // Build & Release“). Der frühere ~100-Zeilen-Kommentar-Verlauf hat in einer bei jedem
 // Update ausgelieferten Datei nichts verloren (Ballast bei jedem Download, Merge-
 // Konflikt bei jedem Bump). Hier steht nur noch der aktuelle Cache-Schlüssel.
-const CACHE = "impala67-v92"; // v92: 🎨 Design-Politur (21. Juli): ROOT-CAUSE-FIX „Seite springt nach oben“ (app.js: focusout-Reset nur noch bei echter Bildschirmtastatur + tote #-Anker abgefangen), Touch-Ziele ≥44px, mehr Whitespace in Menüs/Chat, Chat-Typografie = Editor (16px/1.6), Light-Mode-Kontrast erhöht, DRY: doppelte button-Transitions & Reduce-Motion-Blöcke entfernt (styles.css, index.html ?build=53)
+const CACHE = "impala67-v93"; // v92: 🎨 Design-Politur (21. Juli): ROOT-CAUSE-FIX „Seite springt nach oben“ (app.js: focusout-Reset nur noch bei echter Bildschirmtastatur + tote #-Anker abgefangen), Touch-Ziele ≥44px, mehr Whitespace in Menüs/Chat, Chat-Typografie = Editor (16px/1.6), Light-Mode-Kontrast erhöht, DRY: doppelte button-Transitions & Reduce-Motion-Blöcke entfernt (styles.css, index.html ?build=53)
 
 const APP_FILES = [
 	"./",
