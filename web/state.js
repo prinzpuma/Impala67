@@ -23,6 +23,9 @@ export const S = {
 		thinkingEnabled: true,
 		thinkingLevel: "auto", // Altwert für bestehende Exporte; wird nicht mehr in der UI gesteuert
 		embedModel: "",
+		// Quelle für /embeddings — unabhängig von der im Chat aktiven Quelle wählbar (⚙️ → KI).
+		// "" = automatisch (aktive Chat-Quelle als Fallback, siehe ai.js embedProvider()).
+		embedProviderId: "",
 		driveClientId: "100283147644-1ra4er2dc5r85k3mefd521hbm1ek3qpf.apps.googleusercontent.com",
 		customInstructions: "",
 		notionToken: "", // Notion-Integrationstoken für Import + Zwei-Wege-Sync

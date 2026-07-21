@@ -676,10 +676,40 @@ function wireEvents() {
 			return;
 		}
 
+		// Verbindung EINER Quelle testen (Einstellungen → KI) — nutzt die aktuellen Feldwerte
+		if (t.dataset.provtest) {
+			await SETTINGS.handleProviderTest(t);
+			return;
+		}
+		// Vorgeschlagene Server-URL übernehmen (z. B. fehlendes /v1) und direkt erneut testen
+		if (t.dataset.provfixbase) {
+			const row = document.querySelector('[data-provrow="' + t.dataset.provfixbase + '"]');
+			const baseInput = row && row.querySelector("[data-provbase]");
+			if (baseInput) baseInput.value = t.dataset.base || "";
+			await SETTINGS.testProviderRow(t.dataset.provfixbase);
+			return;
+		}
+
 		// Quelle entfernen (Einstellungen → KI)
 		if (t.dataset.provdel) {
-			const providers = (S.settings.aiProviders || []).filter((p) => p.id !== t.dataset.provdel);
-			await STATE.dispatch("settingsSet", { aiProviders: providers });
+			// FIX: erst die aktuellen (ungespeicherten) Feldwerte ALLER Zeilen einsammeln —
+			// vorher verwarf das Löschen einer Quelle die offenen Eingaben der anderen.
+			const rows = Array.from(document.querySelectorAll("[data-provrow]"));
+			const fromDom = rows.map((row) => {
+				const val = (sel) => { const el = row.querySelector(sel); return el ? el.value.trim() : ""; };
+				return { id: row.dataset.provrow, name: val("[data-provname]") || row.dataset.provrow, base: val("[data-provbase]"), key: val("[data-provkey]") };
+			});
+			const providers = (fromDom.length ? fromDom : (S.settings.aiProviders || [])).filter((p) => p.id !== t.dataset.provdel);
+			const patch = { aiProviders: providers };
+			// FIX: war die gelöschte Quelle im Chat aktiv, zeigten aiProviderId/aiModel ins Leere
+			// (z. B. aktive Quelle „google" + Modell „local-model" → garantiert keine Verbindung).
+			if (S.settings.aiProviderId === t.dataset.provdel) {
+				patch.aiProviderId = providers[0] ? providers[0].id : "";
+				patch.aiModel = "";
+			}
+			// FIX: dito für die Embedding-Quelle — zurück auf „automatisch".
+			if (S.settings.embedProviderId === t.dataset.provdel) patch.embedProviderId = "";
+			await STATE.dispatch("settingsSet", patch);
 			SETTINGS.openSettings("ki");
 			return;
 		}

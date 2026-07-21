@@ -129,7 +129,9 @@ export const RAG = (() => {
 		return vecCache;
 	}
 	async function queryVec(query) {
-		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedModel || "");
+		// Embedding-Quelle gehört mit in den Cache-Schlüssel: derselbe Modellname über eine
+		// andere Quelle darf keine gecachten Query-Vektoren der alten Quelle wiederverwenden.
+		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedProviderId || "") + "::" + (S.settings.embedModel || "");
 		if (queryCache.has(key)) return queryCache.get(key);
 		const [qv] = await AI.embed([query]);
 		queryCache.set(key, qv);

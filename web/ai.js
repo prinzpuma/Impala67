@@ -14,6 +14,11 @@ import { RAG } from "./rag.js";
 //  [F2] Gestreamte tool_calls ohne index werden per id/letztem Slot gemerged (manche OpenRouter-Routen).
 //  [F3] Sparmodus (Tools aus): System-Prompt beschreibt request_tools statt nicht verfügbarer Tools,
 //       wird nach Freischaltung aktualisiert; Debug „Tool-Modus" nennt den echten Grund.
+// Update 21.7.2026 (Einstellungen → KI):
+//  [F4] Embeddings laufen über eine EIGENE Quelle (settings.embedProviderId) statt implizit über
+//       die aktive Chat-Quelle; listEmbeddingModels() durchsucht dafür ALLE konfigurierten Quellen.
+//  [F5] pingProvider(): Verbindungstest je Quelle mit konkreter Diagnose (Key ungültig,
+//       /v1 vergessen, Server aus / CORS) für die neuen „Verbindung testen"-Buttons.
 export const AI = (() => {
 	// ---- Konstanten ----
 	const MODEL_PRESETS = [
@@ -59,6 +64,9 @@ export const AI = (() => {
 		const ps = S.settings.aiProviders || [];
 		return ps.find((p) => p.id === S.settings.aiProviderId) || ps[0] || null;
 	}
+	const providerById = (id) => (id && (S.settings.aiProviders || []).find((p) => p.id === id)) || null;
+	// [F4] Embedding-Quelle: explizit gewählte Quelle (⚙️ → KI → Embeddings), sonst aktive Chat-Quelle.
+	const embedProvider = () => providerById(S.settings.embedProviderId) || activeProvider();
 	function cfg() {
 		const pr = activeProvider();
 		return { base: String(pr?.base || "").replace(/\/+$/, ""), key: pr?.key || "", model: S.settings.aiModel || "", providerId: pr?.id || "" };
@@ -174,19 +182,68 @@ export const AI = (() => {
 		}));
 		return lists.flat();
 	}
-	// Nur klar erkennbare Embedding-Modellnamen, nur gegen die AKTIVE Quelle (/embeddings läuft über sie).
+	// Nur klar erkennbare Embedding-Modellnamen. [F4]: ALLE konfigurierten Quellen werden
+	// durchsucht — das Embedding-Modell ist nicht mehr an die aktive Chat-Quelle gebunden.
 	const isEmbeddingModel = (id) => /(?:^|[-_/.])(embed(?:ding)?|text-embedding|nomic-embed|bge|e5|gte|jina-embeddings?|voyage|mxbai-embed|snowflake-arctic-embed)(?:$|[-_/.])/i.test(String(id || ""));
 	async function listEmbeddingModels() {
-		const pr = activeProvider();
-		if (!pr?.base) return [];
-		return (await modelIds(pr.base, pr.key)).filter(isEmbeddingModel)
-			.sort((a, b) => String(a).localeCompare(String(b)))
-			.map((id) => ({ id, providerId: pr.id, providerName: pr.name || "Aktive Quelle" }));
+		const providers = (S.settings.aiProviders || []).filter((p) => p.base);
+		const lists = await Promise.all(providers.map(async (pr) => {
+			try {
+				return (await modelIds(pr.base, pr.key)).filter(isEmbeddingModel)
+					.sort((a, b) => String(a).localeCompare(String(b)))
+					.map((id) => ({ id, providerId: pr.id, providerName: pr.name || pr.id }));
+			} catch { return []; } // Quelle gerade nicht erreichbar → überspringen
+		}));
+		return lists.flat();
 	}
+	// [F4] /embeddings läuft direkt gegen die Embedding-Quelle (embedProvider) — NICHT mehr
+	// über request(), das immer die aktive CHAT-Quelle nutzt. Damit funktioniert z. B. ein
+	// lokales LM-Studio-Embedding-Modell auch, während im Chat Gemini oder OpenAI aktiv ist.
 	async function embed(texts) {
 		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
-		const res = await request("/embeddings", { model: S.settings.embedModel, input: texts });
+		const pr = embedProvider();
+		if (!pr?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
+		const base = String(pr.base).replace(/\/+$/, "");
+		const started = performance.now();
+		let res;
+		try {
+			res = await fetch(base + "/embeddings", { method: "POST", headers: { "Content-Type": "application/json", ...auth(pr.key) }, body: JSON.stringify({ model: S.settings.embedModel, input: texts }) });
+		} catch (error) {
+			debugEvent("Embedding-Netzwerkfehler", { provider: pr.id, model: S.settings.embedModel, error: String(error?.message || error) });
+			throw error;
+		}
+		if (!res.ok) {
+			const text = await res.text().catch(() => "");
+			debugEvent("Embedding-Fehler", { provider: pr.id, model: S.settings.embedModel, status: res.status, ms: Math.round(performance.now() - started), response: String(text).slice(0, 400) });
+			throw new AiHttpError(res.status, text);
+		}
 		return (await res.json()).data.map((d) => d.embedding);
+	}
+	// [F5] Verbindungstest je Quelle (Einstellungen → KI → „Verbindung testen"). Diagnostiziert
+	// die häufigsten Ursachen dafür, dass keine Verbindung zustande kommt: unvollständige URL
+	// (fehlendes /v1), ungültiger API-Key, Server aus / falscher Port / CORS blockiert.
+	async function pingProvider(pr) {
+		if (!pr || !String(pr.base || "").trim()) return { ok: false, error: "Keine Server-URL eingetragen." };
+		const base = String(pr.base).trim().replace(/\/+$/, "");
+		const started = performance.now();
+		const elapsed = () => Math.round(performance.now() - started);
+		try {
+			const ids = await modelIds(base, pr.key);
+			return { ok: true, models: ids.length, ms: elapsed() };
+		} catch (error) {
+			if (error instanceof AiHttpError) {
+				if (error.status === 401 || error.status === 403) return { ok: false, ms: elapsed(), status: error.status, error: "Server erreichbar, aber der API-Key fehlt oder ist ungültig (HTTP " + error.status + ")." };
+				if (error.status === 404 && !/\/v\d+/i.test(base)) {
+					// Häufigster Stolperstein: Basis-URL ohne API-Pfad (z. B. „http://localhost:1234" statt „…/v1")
+					try {
+						await modelIds(base + "/v1", pr.key);
+						return { ok: false, ms: elapsed(), status: 404, suggestedBase: base + "/v1", error: "Unter dieser URL gibt es keinen /models-Endpunkt — mit „" + base + "/v1" + "“ antwortet der Server." };
+					} catch { /* Vorschlag passt auch nicht → generische 404-Meldung */ }
+				}
+				return { ok: false, ms: elapsed(), status: error.status, error: "Server antwortet mit HTTP " + error.status + ". Prüfe, ob die URL auf den OpenAI-kompatiblen API-Stamm zeigt (endet meist auf /v1)." };
+			}
+			return { ok: false, ms: elapsed(), error: "Keine Verbindung: " + String(error?.message || error) + ". Mögliche Ursachen: Server läuft nicht, falscher Port, oder CORS blockiert (LM Studio: Developer → „Enable CORS" aktivieren)." };
+		}
 	}
 
 	// ---- Thinking/Reasoning: 1) native API-Felder 2) <think>-Tags 3) Sticky-Heuristik (Gemma & Co.) ----
@@ -753,5 +810,5 @@ export const AI = (() => {
 		return (await chatOnce([{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }], null, onDelta)).content || "";
 	}
 
-	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

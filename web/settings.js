@@ -176,19 +176,27 @@ export function openSettings(section) {
 	if (sec === "ki") {
 		const providers = S.settings.aiProviders || [];
 		const embedValue = S.settings.embedModel || "";
+		const embedProv = S.settings.embedProviderId || "";
+		const activeId = S.settings.aiProviderId || (providers[0] || {}).id || "";
 		body = '<section class="ai-settings">' +
-			'<header class="ai-settings-hero"><span class="ai-settings-hero-icon" aria-hidden="true">✦</span><span><b>Deine KI-Verbindungen</b><small>Wähle eine Quelle im Chat. API-Keys bleiben nur auf diesem Gerät.</small></span></header>' +
+			// FIX Text: Keys replizieren über den privaten Drive-App-Speicher (state.js) —
+			// die alte Aussage „bleiben nur auf diesem Gerät" stimmte nicht mehr.
+			'<header class="ai-settings-hero"><span class="ai-settings-hero-icon" aria-hidden="true">✦</span><span><b>Deine KI-Verbindungen</b><small>Wähle eine Quelle im Chat. API-Keys wandern nur in den privaten Drive-App-Speicher deiner eigenen Geräte.</small></span></header>' +
 			'<section class="ai-connection-card">' +
-			'<div class="ai-connection-head"><div><h4>Verbindungen</h4><p>Lokale Modelle und Cloud-APIs an einem Ort.</p></div><span class="ai-provider-count">' + providers.length + ' Quelle' + (providers.length === 1 ? '' : 'n') + '</span></div>' +
+			'<div class="ai-connection-head"><div><h4>Verbindungen</h4><p>Lokale Modelle und Cloud-APIs an einem Ort — jede Quelle einzeln testbar.</p></div><span class="ai-provider-count">' + providers.length + ' Quelle' + (providers.length === 1 ? '' : 'n') + '</span></div>' +
 			'<div id="aiStatusSettings" class="ai-status-banner"></div>' +
 			'<div class="provider-list">' + providers.map((pr) =>
 				'<div class="provider-card" data-provrow="' + pr.id + '">' +
 					'<div class="provider-card-head">' +
 						'<input data-provname="' + pr.id + '" placeholder="Name der Quelle" value="' + U.esc(pr.name) + '">' +
+						(pr.id === activeId ? '<span class="menu-chip active provider-active-badge" title="Diese Quelle ist gerade im Chat aktiv">aktiv im Chat</span>' : "") +
 						'<button data-provdel="' + pr.id + '" class="icon-danger" title="Quelle entfernen">🗑</button>' +
 					"</div>" +
-					'<input data-provbase="' + pr.id + '" placeholder="Server-URL (OpenAI-kompatibel)" value="' + U.esc(pr.base) + '">' +
-					'<input data-provkey="' + pr.id + '" type="password" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
+					'<input data-provbase="' + pr.id + '" placeholder="Server-URL (OpenAI-kompatibel, z. B. http://localhost:1234/v1)" value="' + U.esc(pr.base) + '">' +
+					'<input data-provkey="' + pr.id + '" type="password" autocomplete="off" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
+					// Verbindungstest je Quelle — nutzt die aktuellen Feldwerte, Speichern vorher nicht nötig.
+					'<div class="row-btns provider-card-foot"><button type="button" data-provtest="' + pr.id + '">Verbindung testen</button></div>' +
+					'<p class="hint provider-status" data-provstatus="' + pr.id + '"></p>' +
 				"</div>"
 			).join("") + "</div>" +
 			'<div class="ai-provider-add"><button id="btnAddProvider">+ Eigene Quelle</button><span>Für jeden OpenAI-kompatiblen Server.</span></div>' +
@@ -200,14 +208,16 @@ export function openSettings(section) {
 			'<button data-provpreset="openai"><span>◉</span><b>OpenAI</b><small>OpenAI API</small></button></div></section>' +
 			// Tool-Angebot v3: Werkzeug-Zugriff der KI (Standard AN — alle Tools bei jeder Anfrage)
 			'<section class="ai-tools-toggle"><label><input type="checkbox" id="inpAlwaysTools"' + (S.settings.alwaysSendTools !== false ? " checked" : "") + '><span><b>Tools immer mitsenden</b><small>Empfohlen. Ausgeschaltet erhält die KI nur ein Meta-Werkzeug („request_tools“) und fordert die volle Liste selbst an, wenn sie sie braucht — spart Tokens bei kleinen lokalen Modellen.</small></span></label></section>' +
-			'<details class="ai-settings-advanced"><summary><span>Erweitert</span><small>Embeddings & persönliche Anweisungen</small></summary><div class="ai-settings-advanced-body">' +
-			'<div class="embedding-picker"><label for="inpEmbed">Embedding-Modell</label><div class="embedding-picker-row">' +
-			'<select id="inpEmbed" data-currentembed="' + U.esc(embedValue) + '" disabled><option value="' + U.esc(embedValue) + '">' + U.esc(embedValue || "Modelle werden geladen…") + '</option></select>' +
+			'<details class="ai-settings-advanced" open><summary><span>Embeddings & Anweisungen</span><small>Semantische Suche (RAG) und persönliche Anweisungen</small></summary><div class="ai-settings-advanced-body">' +
+			'<div class="embedding-picker"><label for="inpEmbed">Embedding-Modell (semantische Suche)</label><div class="embedding-picker-row">' +
+			// Option-Werte sind "quelleId::modell" — die Auswahl legt Modell UND Quelle fest,
+			// unabhängig davon, welche Quelle gerade im Chat aktiv ist. [F4]
+			'<select id="inpEmbed" data-currentembed="' + U.esc(embedValue) + '" data-currentprov="' + U.esc(embedProv) + '" disabled><option value="' + U.esc(embedValue ? embedProv + "::" + embedValue : "") + '">' + U.esc(embedValue || "Modelle werden geladen…") + '</option></select>' +
 			'<button type="button" id="btnRefreshEmbedding" title="Embedding-Modelle neu laden">↻</button></div>' +
-			'<p id="embeddingModelHint" class="hint">Nur Modelle der aktuell im Chat gewählten Quelle.</p></div>' +
+			'<p id="embeddingModelHint" class="hint">Alle Quellen werden durchsucht — Embeddings laufen unabhängig von der im Chat aktiven Quelle.</p></div>' +
 			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI</label>" +
 			'<textarea id="inpCustomInstructions" rows="4" placeholder="z. B. Studienfach, bevorzugte Sprache oder Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div></div></details>" +
-			'<p class="ai-settings-note">Die aktive KI und das Modell wählst du direkt im Chat. Gespeicherte Schlüssel werden nicht synchronisiert.</p>' +
+			'<p class="ai-settings-note">Die aktive KI und das Modell wählst du direkt im Chat. Schlüssel synchronisieren sich ausschließlich in den privaten Drive-App-Speicher deines eigenen Google-Kontos.</p>' +
 			saveActionsHtml + "</section>";
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
@@ -369,10 +379,11 @@ export function openSettings(section) {
 		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
-	// KI-Tab: Status-Banner mit aktuellem Ping-Ergebnis füllen
+	// KI-Tab: Status-Banner füllen, Embedding-Modelle über ALLE Quellen laden und
+	// jede Quelle einzeln durchpingen — jede Karte zeigt ihren eigenen Status.
 	if (sec === "ki") {
 		renderStatusDot();
-		queueMicrotask(() => { refreshEmbeddingModels(); });
+		queueMicrotask(() => { refreshEmbeddingModels(); testAllProviders(); });
 	}
 	// Update-Tab: Remote-Version sofort prüfen (Lokal + Server sichtbar)
 	if (sec === "update") {
@@ -523,7 +534,13 @@ export function startAutoDriveSync() {
 }
 
 export async function handleAddProvider() {
-	const providers = (S.settings.aiProviders || []).slice();
+	// FIX: aktuelle (ungespeicherte) Feldwerte übernehmen — vorher verwarf das
+	// Neu-Rendern beim Hinzufügen einer Quelle alle noch nicht gespeicherten Eingaben.
+	const rows = Array.from(document.querySelectorAll("[data-provrow]"));
+	const providers = rows.length ? rows.map((row) => {
+		const val = (sel) => { const el = row.querySelector(sel); return el ? el.value.trim() : ""; };
+		return { id: row.dataset.provrow, name: val("[data-provname]") || row.dataset.provrow, base: val("[data-provbase]"), key: val("[data-provkey]") };
+	}) : (S.settings.aiProviders || []).slice();
 	providers.push({ id: U.uid(), name: "Neue Quelle", base: "", key: "" });
 	await STATE.dispatch("settingsSet", { aiProviders: providers });
 	openSettings("ki");
@@ -613,29 +630,65 @@ export async function handleApplyPwaUpdate() {
 	}
 }
 
-// Lädt nur tatsächlich verfügbare Embedding-Modelle der aktiven Chat-Quelle.
-// Das aktuelle Modell bleibt sichtbar, auch wenn die Quelle gerade offline ist.
+// Verbindungstest für EINE Quellen-Karte mit den aktuellen (auch ungespeicherten)
+// Feldwerten — man muss also nicht erst speichern, um eine Änderung zu prüfen.
+export async function testProviderRow(id, btn) {
+	const row = document.querySelector('[data-provrow="' + id + '"]');
+	if (!row) return;
+	const val = (sel) => { const el = row.querySelector(sel); return el ? el.value.trim() : ""; };
+	const box = row.querySelector("[data-provstatus]");
+	if (btn) { btn.disabled = true; btn.textContent = "Teste…"; }
+	if (box) { box.classList.remove("ok", "warn", "bad"); box.textContent = "⏳ Verbindung wird geprüft…"; }
+	const r = await AI.pingProvider({ id, name: val("[data-provname]") || id, base: val("[data-provbase]"), key: val("[data-provkey]") });
+	if (btn) { btn.disabled = false; btn.textContent = "Verbindung testen"; }
+	if (!box) return; // Einstellungen wurden inzwischen geschlossen/gewechselt
+	box.classList.remove("ok", "warn", "bad");
+	if (r.ok) {
+		box.classList.add("ok");
+		box.textContent = "✅ Verbunden — " + r.models + " Modell(e), " + r.ms + " ms";
+	} else if (r.suggestedBase) {
+		// Diagnose mit Lösungsvorschlag (z. B. fehlendes /v1) — ein Klick übernimmt die URL.
+		box.classList.add("warn");
+		box.innerHTML = "⚠️ " + U.esc(r.error) + ' <button type="button" data-provfixbase="' + U.esc(id) + '" data-base="' + U.esc(r.suggestedBase) + '">URL übernehmen & erneut testen</button>';
+	} else {
+		box.classList.add("bad");
+		box.textContent = "⛔ " + (r.error || "Verbindung fehlgeschlagen.");
+	}
+}
+export const handleProviderTest = (t) => testProviderRow(t.dataset.provtest, t);
+// Beim Öffnen des KI-Tabs: alle Quellen parallel durchpingen — jede Karte zeigt ihren Status.
+export function testAllProviders() {
+	return Promise.all(Array.from(document.querySelectorAll("[data-provrow]")).map((row) => testProviderRow(row.dataset.provrow)));
+}
+
+// Lädt verfügbare Embedding-Modelle ALLER Quellen (nicht nur der aktiven Chat-Quelle).
+// Option-Werte sind als "quelleId::modell" kodiert — beim Speichern wird daraus
+// embedProviderId + embedModel, damit Embeddings quellen-unabhängig laufen. [F4]
 export async function refreshEmbeddingModels() {
 	const select = U.el("inpEmbed");
 	const hint = U.el("embeddingModelHint");
 	if (!select) return;
-	const current = select.dataset.currentembed || select.value || "";
+	const current = select.dataset.currentembed || "";
+	const currentProv = select.dataset.currentprov || "";
+	const currentValue = current ? currentProv + "::" + current : "";
 	select.disabled = true;
-	if (hint) hint.textContent = "Lade Modelle der aktiven Quelle…";
+	if (hint) hint.textContent = "Lade Embedding-Modelle aller Quellen…";
 	try {
 		const found = await AI.listEmbeddingModels();
-		const models = found.map((m) => m.id);
-		if (current && !models.includes(current)) models.push(current);
-		select.innerHTML = '<option value="">Kein Embedding-Modell</option>' + models.map((id) =>
-			'<option value="' + U.esc(id) + '">' + U.esc(id) + (id === current && !found.some((m) => m.id === id) ? " (gespeichert)" : "") + "</option>"
-		).join("");
-		select.value = current;
+		// Gespeichertes Modell exakt (Quelle+Modell) oder wenigstens per Modellnamen wiederfinden
+		const exact = found.find((m) => m.id === current && (!currentProv || m.providerId === currentProv));
+		const options = found.map((m) =>
+			'<option value="' + U.esc(m.providerId + "::" + m.id) + '">' + U.esc(m.id) + " — " + U.esc(m.providerName) + "</option>");
+		if (current && !exact) options.push('<option value="' + U.esc(currentValue) + '">' + U.esc(current) + " (gespeichert — Quelle gerade nicht erreichbar?)</option>");
+		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>' + options.join("");
+		select.value = exact ? exact.providerId + "::" + exact.id : currentValue;
+		// FIX: kein U.esc() mehr in textContent — das zeigte HTML-Entities als Klartext.
 		if (hint) hint.textContent = found.length
-			? found.length + " verfügbares Embedding-Modell · aktive Quelle: " + U.esc((found[0] && found[0].providerName) || "")
-			: "Keine Embedding-Modelle erkannt. Prüfe Quelle oder lade ein Embedding-Modell.";
+			? found.length + " Embedding-Modell(e) über " + new Set(found.map((m) => m.providerId)).size + " Quelle(n) gefunden — die Auswahl legt auch die Quelle fest."
+			: "Keine Embedding-Modelle erkannt. Lade z. B. in LM Studio ein Embedding-Modell oder prüfe die Quellen oben.";
 	} catch (err) {
-		select.innerHTML = '<option value="' + U.esc(current) + '">' + U.esc(current || "Kein Modell verfügbar") + "</option>";
-		select.value = current;
+		select.innerHTML = '<option value="' + U.esc(currentValue) + '">' + U.esc(current || "Kein Modell verfügbar") + "</option>";
+		select.value = currentValue;
 		if (hint) hint.textContent = "Modelle konnten nicht geladen werden.";
 	} finally {
 		select.disabled = false;
@@ -647,6 +700,12 @@ export async function handleSaveSettings() {
 	const g = (id) => document.getElementById(id);
 	const provRows = document.querySelectorAll("[data-provrow]");
 	if (provRows.length) {
+		// FIX: Server-URL normalisieren — Nutzer kleben oft komplette Endpunkt-Pfade
+		// (…/chat/completions, …/models) oder Slash-Enden ein; beides verhinderte danach
+		// jede Verbindung, weil ai.js selbst bewusst nichts anhängt oder abschneidet.
+		const cleanBase = (raw) => String(raw || "").trim()
+			.replace(/\/+$/, "")
+			.replace(/\/(chat\/completions|completions|responses|models|embeddings)$/i, "");
 		patch.aiProviders = Array.from(provRows).map((row) => {
 			const id = row.dataset.provrow;
 			const nameEl = row.querySelector("[data-provname]");
@@ -655,12 +714,19 @@ export async function handleSaveSettings() {
 			return {
 				id,
 				name: nameEl && nameEl.value.trim() ? nameEl.value.trim() : id,
-				base: baseEl ? baseEl.value.trim() : "",
+				base: baseEl ? cleanBase(baseEl.value) : "",
 				key: keyEl ? keyEl.value.trim() : "",
 			};
 		});
 	}
-	if (g("inpEmbed")) patch.embedModel = g("inpEmbed").value.trim();
+	if (g("inpEmbed")) {
+		// Option-Wert "quelleId::modell" → Quelle + Modell getrennt speichern; Embeddings
+		// laufen damit unabhängig von der im Chat aktiven Quelle. [F4]
+		const raw = g("inpEmbed").value;
+		const sep = raw.indexOf("::");
+		patch.embedProviderId = sep === -1 ? "" : raw.slice(0, sep);
+		patch.embedModel = (sep === -1 ? raw : raw.slice(sep + 2)).trim();
+	}
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
 	if (g("inpDriveDesktop")) patch.driveDesktopClientId = g("inpDriveDesktop").value.trim(); // FIX: Desktop-Client-ID-Fallback
 	if (g("inpDriveDesktopSecret")) patch.driveDesktopClientSecret = g("inpDriveDesktopSecret").value.trim(); // Google verlangt das Secret auch mit PKCE (Desktop-Client)
@@ -853,6 +919,9 @@ export const SETTINGS = {
 	startAutoDriveSync,
 	handleAddProvider,
 	refreshEmbeddingModels,
+	testProviderRow,
+	testAllProviders,
+	handleProviderTest,
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
 	handleSaveSettings,
