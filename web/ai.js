@@ -242,7 +242,9 @@ export const AI = (() => {
 				}
 				return { ok: false, ms: elapsed(), status: error.status, error: "Server antwortet mit HTTP " + error.status + ". Prüfe, ob die URL auf den OpenAI-kompatiblen API-Stamm zeigt (endet meist auf /v1)." };
 			}
-			return { ok: false, ms: elapsed(), error: "Keine Verbindung: " + String(error?.message || error) + ". Mögliche Ursachen: Server läuft nicht, falscher Port, oder CORS blockiert (LM Studio: Developer → „Enable CORS" aktivieren)." };
+			// FIX: Deutsche Anführungszeichen „…“ — kein ASCII-" im String, sonst bricht der JS-Parser ab
+			// ("Unexpected identifier 'aktivieren'").
+			return { ok: false, ms: elapsed(), error: "Keine Verbindung: " + String(error?.message || error) + ". Mögliche Ursachen: Server läuft nicht, falscher Port, oder CORS blockiert (LM Studio: Developer → „Enable CORS“ aktivieren)." };
 		}
 	}
 
