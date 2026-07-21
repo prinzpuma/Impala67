@@ -391,6 +391,7 @@ function wireEvents() {
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,
 	// damit sie unabhängig vom Tag (button/span) zuverlässig ausgelöst werden.
 	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-newchat],[data-newpage]," +
+		"[data-conflictheftnav]," +
 		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-undo],[data-difftoggle]," +
 		"[data-reasoningtoggle],[data-iconset],[data-coverset],[data-coverpick],[data-coverremove]," +
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-editmsg]," +
@@ -555,6 +556,34 @@ function wireEvents() {
 		if (t.dataset.conflictpage) {
 			closeOverlay();
 			openPage(t.dataset.conflictpage);
+			return;
+		}
+
+		// Bug-3-Fix: Vor/Zurück-Navigation in der Heft-Konflikt-Vorschau
+		if (t.dataset.conflictheftnav !== undefined) {
+			const key = t.dataset.conflictheftkey;
+			const section = t.closest(".conflict-pane");
+			if (!section || !key) return;
+			const cv = section.querySelector("canvas[data-conflictheft='" + CSS.escape(key) + "']");
+			if (!cv) return;
+			const currentIndex = Number(cv.dataset.conflictheftpageindex || 0);
+			const pageCount = Number(cv.dataset.conflictheftpagecount || 1);
+			const delta = Number(t.dataset.conflictheftnav);
+			const newIndex = Math.max(0, Math.min(pageCount - 1, currentIndex + delta));
+			if (newIndex === currentIndex) return;
+			const note = section.querySelector(".conflict-heft-note");
+			try {
+				const result = await HEFT.renderBlobPreview(key, cv, newIndex);
+				if (result) {
+					cv.dataset.conflictheftpageindex = String(result.pageIndex);
+					cv.dataset.conflictheftpagecount = String(result.pageCount);
+					if (note) note.textContent = result.pageCount > 1 ? `Seite ${result.pageIndex + 1} von ${result.pageCount}` : "";
+					const prev = section.querySelector("[data-conflictheftnav='-1']");
+					const next = section.querySelector("[data-conflictheftnav='1']");
+					if (prev) prev.disabled = result.pageIndex <= 0;
+					if (next) next.disabled = result.pageIndex >= result.pageCount - 1;
+				}
+			} catch (err) { console.warn("Heft-Nav:", err); }
 			return;
 		}
 

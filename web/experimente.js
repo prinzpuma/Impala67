@@ -141,17 +141,35 @@ export const EXP = (() => {
 			if (on("variation")) applyVariation(cardEl, card);
 			const extras = [];
 			// Kein Doppel-Knopf: Im Feynman-LERNMODUS (S.ankiFeyn, beim Stapel-Start
-			// gewählt) rendert render-anki.js „Erklären“ bereits fest in die Karte.
-			if (on("feynman") && !cardEl.querySelector("[data-expfeynstart]")) extras.push('<button type="button" class="mini" data-expfeynstart="1">🧑‍🏫 Erst erklären</button>');
+			// gewählt) rendert render-anki.js das Erklär-Feld bereits INLINE in die
+			// Karte (.feyn-inline) — dann keinen zusätzlichen Dialog-Knopf anbieten.
+			if (on("feynman") && !S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1">🧑‍🏫 Erst erklären</button>');
+			hydrateFeynInline(cardEl, card);
 			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1">💡 Hinweis</button>');
 			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1">🎯 Als Quiz</button>');
 			const actions = showBtn.closest(".modal-actions");
 			if (extras.length && actions) actions.insertAdjacentHTML("beforeend", extras.join(""));
-		} else if (cardEl.querySelector(".grades") && hintsUsedFor === card.id) {
-			// Rückseite: Ehrlichkeits-Notiz, wenn Hinweise benutzt wurden
-			cardEl.querySelector(".grades").insertAdjacentHTML("beforebegin",
-				'<div class="hint exp-honesty">💡 Mit Hinweisen abgerufen — bewerte ehrlich (eher „Schwer“).</div>');
-			hintsUsedFor = null;
+		} else if (cardEl.querySelector(".grades")) {
+			const grades = cardEl.querySelector(".grades");
+			// Rückseite (Feynman-Lernmodus): Das KI-Feedback erscheint ÜBER den
+			// Bewertungs-Buttons statt in einem Dialog — der Notenvorschlag wird
+			// direkt am passenden Button markiert. So bleibt der komplette Fluss
+			// (erklären → prüfen → aufdecken → bewerten) in EINER Karte.
+			if (feynVerdict && feynVerdict.cardId === card.id) {
+				grades.insertAdjacentHTML("beforebegin", '<div class="exp-feynout feyn-verdict">' + feynVerdict.html + "</div>");
+				const gb = grades.querySelector('[data-ankigrade="' + feynVerdict.note + '"]');
+				if (gb) {
+					gb.classList.add("grade-suggest");
+					gb.insertAdjacentHTML("beforeend", '<span class="grade-ai" title="Vorschlag der KI aus deiner Erklärung">🧑‍🏫 KI-Vorschlag</span>');
+				}
+				feynVerdict = null;
+			}
+			// Ehrlichkeits-Notiz, wenn Hinweise benutzt wurden
+			if (hintsUsedFor === card.id) {
+				grades.insertAdjacentHTML("beforebegin",
+					'<div class="hint exp-honesty">💡 Mit Hinweisen abgerufen — bewerte ehrlich (eher „Schwer“).</div>');
+				hintsUsedFor = null;
+			}
 		}
 	}
 
@@ -278,7 +296,46 @@ export const EXP = (() => {
 	}
 
 	// ---------- 🧑‍🏫 Feynman-Modus ----------
+	// Zwei Wege:
+	// (a) Experiment „Erst erklären“ auf einer normalen Karte → kleiner Dialog (openFeynman).
+	// (b) Feynman-LERNMODUS (S.ankiFeyn, beim Stapel-Start gewählt): render-anki.js baut
+	//     das Erklär-Feld direkt in die Lernkarte ein (.feyn-inline) — kein Dialog, kein
+	//     Kontextwechsel. Nach „Prüfen & aufdecken“ wird die Karte automatisch aufgedeckt;
+	//     das Feedback landet über den Bewertungs-Buttons (siehe enhance()).
 	let feynCard = null;
+	let feynVerdict = null; // { cardId, note, html } — Feedback für die Rückseite
+	let feynDraft = null; // { cardId, text } — Tipptext übersteht ein Re-Render
+	function hydrateFeynInline(cardEl, card) {
+		const box = cardEl.querySelector(".feyn-inline");
+		if (!box) return;
+		const ta = box.querySelector(".exp-answer");
+		if (!ta) return;
+		// Entwurf wiederherstellen (Re-Render z. B. durch Selbsteinschätzungs-Chips)
+		if (feynDraft && feynDraft.cardId !== card.id) feynDraft = null;
+		if (feynDraft && !ta.value) ta.value = feynDraft.text;
+		// Fokus direkt ins Feld — Erklären ist in diesem Modus der Hauptweg
+		if (!ta.value) setTimeout(() => { if (document.body.contains(ta)) ta.focus(); }, 0);
+	}
+	// Entwurf merken + Tastatur: ␣/1–4 dürfen im Erklär-Feld KEINE Lern-Shortcuts
+	// auslösen; Strg/⌘+Enter startet die Prüfung direkt aus dem Textfeld.
+	document.addEventListener("input", (e) => {
+		const t = e.target;
+		if (t && t.classList && t.classList.contains("exp-answer") && t.closest(".feyn-inline")) {
+			const card = currentCard();
+			feynDraft = card ? { cardId: card.id, text: t.value } : null;
+		}
+	}, true);
+	document.addEventListener("keydown", (e) => {
+		const t = e.target;
+		if (!t || !t.classList || !t.classList.contains("exp-answer")) return;
+		if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+			const wrap = t.closest(".feyn-inline, .exp-modal");
+			const check = wrap && wrap.querySelector("[data-expfeyncheck]");
+			if (check) { e.preventDefault(); check.click(); }
+			return;
+		}
+		e.stopPropagation();
+	}, true);
 	function openFeynman() {
 		const card = currentCard();
 		if (!card) return;
@@ -292,28 +349,44 @@ export const EXP = (() => {
 			'<div class="exp-feynout"></div>');
 	}
 	async function checkFeynman(btn) {
-		const modal = btn.closest(".exp-modal");
-		if (!modal || !feynCard) return;
-		const txt = (modal.querySelector(".exp-answer") || {}).value || "";
+		// Funktioniert im Dialog (.exp-modal, Experiment-Knopf) UND inline in der
+		// Lernkarte (.feyn-inline, Feynman-Lernmodus) — gleiche Prüfung, andere Ausgabe.
+		const wrap = btn.closest(".feyn-inline") || btn.closest(".exp-modal");
+		if (!wrap) return;
+		const inline = wrap.classList.contains("feyn-inline");
+		const card = inline ? currentCard() : feynCard;
+		if (!card) return;
+		const txt = (wrap.querySelector(".exp-answer") || {}).value || "";
 		if (!txt.trim()) { if (U.toast) U.toast("Erst erklären — tippen oder diktieren"); return; }
 		btn.disabled = true;
+		const oldLabel = btn.textContent;
 		btn.textContent = "Prüfe …";
 		try {
-			const raw = await ask("Karteikarte:\nFrage: " + feynCard.front + "\nMusterantwort: " + feynCard.back +
+			const raw = await ask("Karteikarte:\nFrage: " + card.front + "\nMusterantwort: " + card.back +
 				"\n\nErklärung des Lernenden:\n" + txt.trim() +
 				'\n\nBewerte die Erklärung als Rubrik. Antworte NUR als JSON:\n{"getroffen":["Kernpunkt …"],"fehlend":["…"],"falsch":["…"],"note":3,"kommentar":"1–2 Sätze"}\nnote: 1=Nochmal, 2=Schwer, 3=Gut, 4=Einfach.');
 			const j = parseJson(raw) || {};
 			const li = (arr, icon) => (Array.isArray(arr) ? arr : []).map((x) => "<li>" + icon + " " + U.esc(String(x)) + "</li>").join("");
 			const names = { 1: "Nochmal", 2: "Schwer", 3: "Gut", 4: "Einfach" };
-			modal.querySelector(".exp-feynout").innerHTML =
-				"<ul>" + li(j.getroffen, "✅") + li(j.fehlend, "⚠️ fehlt:") + li(j.falsch, "❌") + "</ul>" +
-				"<p>" + U.esc(String(j.kommentar || "")) + "</p>" +
-				"<p><b>KI-Vorschlag: „" + (names[j.note] || "Gut") + "“</b> — bestätige mit den normalen Bewertungs-Buttons. Die Entscheidung bleibt bei dir.</p>";
+			const note = names[j.note] ? Number(j.note) : 3;
+			const rubric = "<ul>" + li(j.getroffen, "✅") + li(j.fehlend, "⚠️ fehlt:") + li(j.falsch, "❌") + "</ul>" +
+				"<p>" + U.esc(String(j.kommentar || "")) + "</p>";
+			const verdictHtml = rubric + "<p><b>KI-Vorschlag: „" + names[note] + "“</b> — bestätige mit den Bewertungs-Buttons. Die Entscheidung bleibt bei dir.</p>";
+			if (inline) {
+				// Lernmodus: Feedback wandert auf die Rückseite (enhance() rendert es
+				// über den Bewertungs-Buttons) — Karte automatisch aufdecken.
+				feynVerdict = { cardId: card.id, note, html: verdictHtml };
+				feynDraft = null;
+				const show = document.querySelector('.anki-study-mode [data-ankishowback]');
+				if (show) { show.click(); return; } // Re-Render — die Karte samt Button existiert danach neu
+			} else {
+				wrap.querySelector(".exp-feynout").innerHTML = verdictHtml;
+			}
 		} catch (err) {
-			modal.querySelector(".exp-feynout").innerHTML = '<p class="hint">KI nicht erreichbar — später erneut versuchen.</p>';
+			wrap.querySelector(".exp-feynout").innerHTML = '<p class="hint">KI nicht erreichbar — später erneut versuchen.</p>';
 		}
 		btn.disabled = false;
-		btn.textContent = "Von der KI prüfen lassen";
+		btn.textContent = oldLabel;
 	}
 	// Diktat über die Web Speech API (läuft lokal im Browser, wie voice.js)
 	let rec = null;
@@ -321,7 +394,7 @@ export const EXP = (() => {
 		const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 		if (!SR) { if (U.toast) U.toast("Diktat wird von diesem Browser nicht unterstützt"); return; }
 		if (rec) { try { rec.stop(); } catch (err) {} rec = null; btn.classList.remove("active"); return; }
-		const ta = btn.closest(".exp-modal").querySelector(".exp-answer");
+		const ta = btn.closest(".exp-modal, .feyn-inline").querySelector(".exp-answer");
 		rec = new SR();
 		rec.lang = "de-DE";
 		rec.continuous = true;
@@ -476,7 +549,25 @@ export const EXP = (() => {
 	}
 
 	// ---------- Anlauf ----------
+	// Styles für die Inline-Feynman-UI kommen aus dem Modul selbst (wie die
+	// gesamte Verdrahtung hier) — styles.css bleibt unangetastet.
+	function injectCss() {
+		if (document.getElementById("expFeynCss")) return;
+		const st = document.createElement("style");
+		st.id = "expFeynCss";
+		st.textContent =
+			".feyn-inline{margin-top:10px;padding:12px 14px;border:1px dashed var(--border,rgba(128,128,128,.4));border-radius:10px;text-align:left}" +
+			".feyn-inline-head{margin-bottom:2px}" +
+			".feyn-inline .exp-answer{width:100%;box-sizing:border-box;margin:8px 0 6px;resize:vertical}" +
+			".feyn-inline-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}" +
+			".feyn-verdict{margin:10px auto 4px;padding:10px 14px;border-radius:10px;background:var(--surface-hover,rgba(128,128,128,.12));text-align:left;max-width:640px}" +
+			".feyn-verdict ul{margin:4px 0;padding-left:18px}" +
+			".grades .grade-suggest{outline:2px solid var(--accent,#2f6fed);outline-offset:2px}" +
+			".grade-ai{display:block;font-size:10px;opacity:.8}";
+		document.head.appendChild(st);
+	}
 	function init() {
+		injectCss();
 		new MutationObserver(scheduleEnhance).observe(document.body, { childList: true, subtree: true });
 		scheduleEnhance();
 	}

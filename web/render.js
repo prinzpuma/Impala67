@@ -358,7 +358,7 @@ function renderTabs() {
 		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main";
 		let title;
 		if (isChat) title = "✦ " + esc(chatById.get(id.slice(5))?.title || "Chat"); // ✦ = KI-Markenzeichen wie Home/FAB
-		else if (isNlm) title = "📓 NotebookLM";
+		else if (isNlm) title = "📓 Gemini Notebook";
 		else {
 			const pg = S.pages[id];
 			if (!pg) return "";
@@ -377,8 +377,6 @@ function renderMain() {
 	if (isProtectedFocus(document.activeElement)) return;
 	const main = $("main");
 	if (!main) return;
-	// Eingebettetes NotebookLM-Webview ist ein OS-Overlay → aktiv ausblenden
-	if (S.view !== "notebooklm") NLM.hideEmbeddedIfActive();
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
 	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), daily: renderDaily, trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
@@ -520,8 +518,18 @@ function markConflictResolved(conflictPageId) {
 const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
 const loadPendingConflicts = () => lsGet(CONFLICT_KEY, []);
 function savePendingConflicts(list) {
-	if (!list || !list.length) localStorage.removeItem(CONFLICT_KEY);
-	else lsSet(CONFLICT_KEY, list);
+	if (!list || !list.length) { localStorage.removeItem(CONFLICT_KEY); return; }
+	// Bug-1-Fix: localContent/remoteContent können die localStorage-Quota sprengen.
+	// Fallback: ohne Textfelder speichern — beim Öffnen des Dialogs werden sie aus
+	// S.pages rekonstruiert (solange die Sitzung läuft ist das verlustfrei).
+	try {
+		localStorage.setItem(CONFLICT_KEY, JSON.stringify(list));
+	} catch {
+		try {
+			const slim = list.map(({ localContent, remoteContent, loserContent, ...rest }) => rest);
+			localStorage.setItem(CONFLICT_KEY, JSON.stringify(slim));
+		} catch { /* egal */ }
+	}
 }
 function mergePendingConflicts(details) {
 	const map = new Map(loadPendingConflicts().map((c) => [c.conflictPageId || c.pageId, c]));
@@ -545,7 +553,7 @@ function legacyConflictItems() {
 // Popup zeigt IMMER beide Stände: Hefte als Blob-Vorschau der ersten Seite,
 // Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie
 const conflictPaneHead = (label, time) => `<header><b>${label}</b>${time ? `<small>${esc(fmtConflictTime(time))}</small>` : ""}</header>`;
-const conflictHeftPane = (side, label, time, blobKey, peerKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"${peerKey ? ` data-conflictheftpeer="${esc(peerKey)}"` : ""}></canvas><small class="conflict-heft-note"></small></div></section>`;
+const conflictHeftPane = (side, label, time, blobKey, peerKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"${peerKey ? ` data-conflictheftpeer="${esc(peerKey)}"` : ""}></canvas><div class="conflict-heft-nav"><button class="conflict-heft-prev" data-conflictheftnav="-1" data-conflictheftkey="${esc(blobKey)}" disabled>‹</button><small class="conflict-heft-note"></small><button class="conflict-heft-next" data-conflictheftnav="1" data-conflictheftkey="${esc(blobKey)}" disabled>›</button></div></div></section>`;
 function buildSpecialComparisonHtml(c) {
 	const notePane = (side, label, time, note) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><div class="conflict-empty">${esc(note)}</div></div></section>`;
 	const textPane = (side, label, time, text) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
@@ -567,18 +575,35 @@ function buildSpecialComparisonHtml(c) {
 	}
 	return '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
 }
+// Aktualisiert Seitenindex, Hinweistext und Vor/Zurück-Buttons am Heft-Canvas.
+function updateHeftNavControls(cv, note, pageIndex, pageCount, hasResult) {
+	if (note) {
+		note.textContent = !hasResult
+			? "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."
+			: pageCount > 1 ? `Seite ${pageIndex + 1} von ${pageCount}` : "";
+	}
+	cv.dataset.conflictheftpageindex = String(pageIndex);
+	cv.dataset.conflictheftpagecount = String(pageCount);
+	const section = cv.closest(".conflict-pane");
+	if (!section) return;
+	const prev = section.querySelector("[data-conflictheftnav='-1']");
+	const next = section.querySelector("[data-conflictheftnav='1']");
+	if (prev) prev.disabled = !hasResult || pageIndex <= 0;
+	if (next) next.disabled = !hasResult || pageIndex >= pageCount - 1;
+}
 function fillConflictHeftPreviews(root) {
 	root.querySelectorAll("canvas[data-conflictheft]").forEach(async (cv) => {
-		const note = cv.parentElement?.querySelector(".conflict-heft-note");
+		const section = cv.closest(".conflict-pane");
+		const note = section?.querySelector(".conflict-heft-note");
 		const { conflictheft: key, conflictheftpeer: peerKey } = cv.dataset;
 		let result = null;
+		let pageIndex = 0;
 		try {
-			const pageIndex = peerKey ? await HEFT.findDivergentPage(key, peerKey) : 0;
+			// Bug-2-Fix: findet die erste wirklich abweichende Seite; 0 wenn Blob noch fehlt
+			pageIndex = peerKey ? await HEFT.findDivergentPage(key, peerKey) : 0;
 			result = await HEFT.renderBlobPreview(key, cv, pageIndex);
 		} catch (e) { console.warn("Konflikt-Vorschau:", e); }
-		if (!note) return;
-		note.textContent = !result ? "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."
-			: result.pageCount > 1 ? `Seite ${result.pageIndex + 1} von ${result.pageCount}` : "";
+		updateHeftNavControls(cv, note, result ? result.pageIndex : 0, result ? result.pageCount : 1, !!result);
 	});
 }
 function openConflictResolver(index) {
@@ -588,7 +613,22 @@ function openConflictResolver(index) {
 	const i = Math.max(0, Math.min(Number(index) || 0, items.length - 1));
 	S.conflictResolveIndex = i;
 	S.conflictResolveList = items;
-	const c = items[i];
+	let c = items[i];
+	// Bug-1-Fix: Textfelder können fehlen, wenn localStorage-Quota beim Speichern überschritten wurde.
+	// Rekonstruktion aus dem Live-Zustand: Konfliktkopie (conflictPageId) enthält den Verlierer-Stand,
+	// die Original-Seite (pageId) enthält den Gewinner-Stand.
+	if (!c.conflictType && !c.localContent && !c.remoteContent && c.pageId && c.conflictPageId) {
+		const winnerPg = S.pages[c.pageId];
+		const loserPg = S.pages[c.conflictPageId];
+		if (winnerPg || loserPg) {
+			const winnerContent = (winnerPg || {}).content || "";
+			const loserContent = (loserPg || {}).content || "";
+			c = { ...c,
+				localContent: c.winner === "remote" ? loserContent : winnerContent,
+				remoteContent: c.winner === "remote" ? winnerContent : loserContent,
+			};
+		}
+	}
 	const left = c.localContent || "", right = c.remoteContent || "";
 	const hasTextComparison = !c.conflictType && (!!left || !!right);
 	// U.diffLines wechselt bei sehr langen Seiten in einen groben Modus (keine

@@ -2,31 +2,38 @@
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
-// notebooklm.js — NotebookLM-Anbindung v3: Artefakt-Inbox + Einordnen. OHNE fremde APIs.
-// • Überall (Web, Desktop, Mobil): Seiten-Picker → Inhalte als EINE Quelle in die
-//   Zwischenablage (in NotebookLM: „Quelle hinzufügen → Kopierter Text" → Strg+V)
-// • Desktop (Tauri): NotebookLM EINGEBETTET im Hauptfenster (wirkt wie ein Tab) +
-//   Downloads (Podcasts, Videos, Mind Maps, Folien …) werden abgefangen.
-//   Braucht die Rust-Kommandos nlm_webview/nlm_read_file (siehe Doku-Seite) —
-//   fehlen sie, greift automatisch der Fenster-Fallback (openNotebookLM aus extras.js).
-// • NEU v3 — Downloads sind strukturierte ARTEFAKTE statt nackter Blobs:
-//   { id, name, blob, ts, kind, mime, size, sourcePageIds, placedPageId }
-//   - kind-Erkennung: Dateiendung → MIME → Magic Bytes (NotebookLM garantiert nichts;
-//     Audio Overview/Video/Mind Map/Folien PDF+PPTX werden so zuverlässig erkannt)
-//   - Herkunft: die zuletzt als Quelle kopierten Seiten (6 h gültig, localStorage) —
-//     der nächste Download „gehört" mit hoher Wahrscheinlichkeit zu diesen Seiten
-//   - Inbox-Prinzip: NIE automatisch in Seiten schreiben. Nach dem Download zeigt
-//     ein kleiner Toast „Einordnen / Öffnen / Später"; der Einordnen-Dialog bietet
-//     Quellseite / neue Unterseite / andere Seite / nur Mediathek behalten.
-//   - Einbettung als Markdown-Link [🎧 …](#nlm:<id>) — Klick öffnet den Player
-//     (Capture-Delegation); der Blob bleibt in IndexedDB und wandert NICHT durch
-//     den Drive-Sync (sync-freundlich, keine Riesen-Blobs im Seiteninhalt).
-//   - Bibliothek: library.js zeigt Inbox + Mediathek über listArtifacts()/playById()/…
-// • KI-Tool send_to_notebooklm (tools.js) nutzt sendPages().
+// notebooklm.js — Gemini-Notebook-Anbindung v4. OHNE fremde APIs.
+// Google hat NotebookLM am 16.07.2026 in „Gemini Notebook" umbenannt — gleiches
+// Produkt, neuer Name. Alles Sichtbare heißt hier deshalb Gemini Notebook.
+// Technische Bezeichner bleiben BEWUSST stabil (Dateiname, NLM-Export, "#nlm:"-Links,
+// "nlm:main"-Tab, IndexedDB "impala67-nlm", localStorage-Schlüssel): bestehende
+// Einbettungs-Links in Seiten und gespeicherte Tab-Sitzungen laufen unverändert weiter.
+//
+// v4 = Neuschrieb nach KISS/DRY:
+// • Öffnen: IMMER eigenes Fenster (Tauri) bzw. Browser-Tab — openExternal(), EINE
+//   Stelle (vorher doppelt in extras.js + hier). Das native Einbetten im Haupt-
+//   fenster (nlm_webview + Positions-/Overlay-Observer, ~200 Zeilen) ist ersatzlos
+//   entfernt: es hing an Rust-Kommandos, die nie zuverlässig existierten, und war
+//   die Hauptquelle der Bugs (verdeckte Dialoge, hängen gebliebene Webviews).
+// • Dateidownload geht jetzt WIRKLICH: Kein Browser darf Downloads einer fremden
+//   Website automatisch abfangen — darauf zu bauen war der alte Fehler. Der
+//   verlässliche Weg ist explizit: in Gemini Notebook normal herunterladen und im
+//   📓-Tab importieren (Knopf oder Drag & Drop) → Inbox → Einordnen. Der Tauri-
+//   Auto-Abgriff ("nlm-download"-Event) bleibt als Bonus — jetzt mit Warte-
+//   Wiederholung, falls window.__TAURI__ erst nach dem Modul-Start bereitsteht.
+// • Quellen: Seiten-Picker → Inhalte als EINE Quelle in die Zwischenablage
+//   (in Gemini Notebook: „Quelle hinzufügen → Kopierter Text" → Einfügen).
+// • Artefakte unverändert strukturiert: { id, name, blob, ts, kind, mime, size,
+//   sourcePageIds, placedPageId } · Inbox-Prinzip: NIE automatisch in Seiten
+//   schreiben · Einbettung als Markdown-Link [🎧 …](#nlm:<id>) · Blobs bleiben in
+//   IndexedDB und wandern nicht durch den Drive-Sync · Bibliothek: library.js (📥).
 export const NLM = (() => {
-	// ---- Picker-/Inbox-Styles (eigenes <style>, wie in extras.js) ----
-	const pickStyle = document.createElement("style");
-	pickStyle.textContent = [
+	const PRODUCT = "Gemini Notebook";
+	const PRODUCT_URL = "https://notebooklm.google.com/"; // leitet seit der Umbenennung auf Gemini Notebook weiter
+
+	// ---- Styles (eigenes <style>, wie extras.js/library.js) ----
+	const style = document.createElement("style");
+	style.textContent = [
 		".nlm-modal{width:min(480px,92vw)}",
 		".nlm-search{width:100%;box-sizing:border-box;padding:7px 10px;margin:6px 0 8px;border-radius:8px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;font-size:13.5px}",
 		".nlm-quickrow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center}",
@@ -47,14 +54,7 @@ export const NLM = (() => {
 		".nlm-tag{display:inline-block;font-size:10px;opacity:.9;background:rgba(76,141,255,.18);color:#4c8dff;padding:1px 7px;border-radius:20px;margin-left:7px;vertical-align:middle}",
 		".nlm-empty{padding:14px;text-align:center;opacity:.6;font-size:13px}",
 		".nlm-count{opacity:.65;font-size:12.5px;margin-left:auto}",
-		".nlm-pane{display:flex;flex-direction:column;height:100%}",
-		".nlm-pane-hint{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(128,128,128,.3);flex:none}",
-		".nlm-host{flex:1;position:relative}",
-		".nlm-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;padding:28px 20px;text-align:center;box-sizing:border-box}",
-		".nlm-fallback h2{margin:0;font-size:1.25rem;font-weight:650}",
-		".nlm-fallback p{margin:0;max-width:420px;opacity:.75;line-height:1.45;font-size:13.5px}",
-		".nlm-fallback .row-btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}",
-		// NEU v3: Inbox-Toast (unten rechts, bewusst dunkel wie übliche Toasts)
+		// Inbox-Toast (unten rechts, bewusst dunkel wie übliche Toasts)
 		".nlm-inbox-toast{position:fixed;right:16px;bottom:16px;z-index:9999;background:#1e1f24;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:320px;font-size:13px}",
 		".nlm-inbox-toast .nlm-it-title{font-weight:650;margin-bottom:2px}",
 		".nlm-inbox-toast .nlm-it-name{opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:290px}",
@@ -63,26 +63,44 @@ export const NLM = (() => {
 		".nlm-inbox-toast button{font-size:12.5px;padding:4px 10px;border-radius:8px;border:none;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}",
 		".nlm-inbox-toast button:hover{background:rgba(255,255,255,.25)}",
 		".nlm-inbox-toast button.nlm-it-primary{background:#4c8dff}",
-		// NEU v3: Einordnen-Dialog
+		// Einordnen-Dialog
 		".nlm-place-list{display:flex;flex-direction:column;gap:6px;margin:10px 0}",
 		".nlm-place-opt{text-align:left;padding:10px 12px;border-radius:9px;border:1px solid rgba(128,128,128,.25);background:rgba(128,128,128,.08);color:inherit;cursor:pointer;font-size:13.5px}",
 		".nlm-place-opt:hover{background:rgba(76,141,255,.14);border-color:#4c8dff}",
+		// v4: 📓-Tab (Hub) mit Import-Ablagefläche
+		".nlm-hub{max-width:820px;margin:0 auto;padding:30px 24px;overflow:auto;height:100%;box-sizing:border-box}",
+		".nlm-hub h1{margin:0 0 4px}",
+		".nlm-hub-actions{margin:16px 0 10px}",
+		".nlm-drop{border:2px dashed rgba(128,128,128,.4);border-radius:12px;padding:26px 18px;text-align:center;opacity:.75;font-size:13.5px;margin:6px 0 22px;transition:border-color .12s,background .12s,opacity .12s}",
+		".nlm-drop.drag{border-color:#4c8dff;background:rgba(76,141,255,.08);opacity:1}",
+		".nlm-hub-sub{margin:0 0 8px}",
 	].join("\n");
-	document.head.appendChild(pickStyle);
+	document.head.appendChild(style);
 
-	const NLM_URL = "https://notebooklm.google.com/";
+	// ---- Öffnen: eigenes Tauri-Fenster (zweiter Klick fokussiert nur) oder Browser-Tab.
+	//      Google blockiert iframes (X-Frame-Options/CSP) — deshalb immer extern.
+	//      Tauri v2 braucht die Capability "core:webview:allow-create-webview-window";
+	//      fehlt sie, meldet das Fenster tauri://error und wir öffnen im System-Browser. ----
 	const T = () => window.__TAURI__ || null;
-	const invoke = (cmd, args) => {
+	function openBrowserTab() {
 		const t = T();
-		return t && t.core && t.core.invoke ? t.core.invoke(cmd, args) : Promise.reject(new Error("kein Tauri"));
-	};
-	// Externes Öffnen (Browser-Tab / System-Browser). Kein popup=yes — wirkte wie eigene Chrome-App.
-	const openFallbackDefault = () => {
+		if (t && t.shell && t.shell.open) t.shell.open(PRODUCT_URL);
+		else window.open(PRODUCT_URL, "_blank", "noopener,noreferrer");
+	}
+	async function openExternal() {
 		const t = T();
-		if (t && t.shell && t.shell.open) t.shell.open(NLM_URL);
-		else window.open(NLM_URL, "_blank", "noopener,noreferrer");
-	};
-	const canEmbedNative = () => !!(T() && T().core && T().core.invoke);
+		if (t && t.webviewWindow && t.webviewWindow.WebviewWindow) {
+			try {
+				const existing = await t.webviewWindow.WebviewWindow.getByLabel("notebooklm");
+				if (existing) { existing.setFocus().catch(() => {}); return; }
+				const win = new t.webviewWindow.WebviewWindow("notebooklm", { url: PRODUCT_URL, title: PRODUCT, width: 1280, height: 860 });
+				// Fehler meldet Tauri ASYNCHRON über tauri://error (nicht als Exception) → Fallback.
+				win.once("tauri://error", (e) => { console.warn(PRODUCT + "-Fenster fehlgeschlagen, öffne im Browser:", e); openBrowserTab(); });
+				return;
+			} catch (e) { console.warn(PRODUCT + "-Fenster fehlgeschlagen, öffne im Browser:", e); }
+		}
+		openBrowserTab();
+	}
 
 	// ---- Artefakt-Arten: Anzeige-Icons/-Labels je kind --------------------------
 	const KINDS = {
@@ -103,7 +121,7 @@ export const NLM = (() => {
 		pdf: "slides-pdf", pptx: "slides-pptx",
 		txt: "text", md: "text",
 	};
-	// kind-Erkennung: Endung → MIME → Magic Bytes. NotebookLM dokumentiert seine
+	// kind-Erkennung: Endung → MIME → Magic Bytes. Gemini Notebook dokumentiert seine
 	// Download-Formate nicht verbindlich — deshalb niemals nur auf .mp3 & Co. verlassen.
 	function sniffKind(name, head, mime) {
 		const ext = (String(name || "").split(".").pop() || "").toLowerCase();
@@ -117,7 +135,7 @@ export const NLM = (() => {
 		const b = head || new Uint8Array(0);
 		if (b.length >= 4) {
 			if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "slides-pdf"; // %PDF
-			if (b[0] === 0x50 && b[1] === 0x4b) return "slides-pptx"; // PK → Office/ZIP (NotebookLM: PPTX)
+			if (b[0] === 0x50 && b[1] === 0x4b) return "slides-pptx"; // PK → Office/ZIP (PPTX)
 			if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) return "audio"; // ID3 → MP3
 			if (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) return "audio"; // nackter MPEG-Frame
 			if (b[0] === 0x89 && b[1] === 0x50) return "mindmap"; // PNG
@@ -128,9 +146,9 @@ export const NLM = (() => {
 		return "file";
 	}
 
-	// ---- Herkunft (Provenance): welche Seiten wurden zuletzt an NotebookLM kopiert? ----
-	// Der nächste abgefangene Download gehört mit hoher Wahrscheinlichkeit zu genau
-	// diesen Seiten — 6 h gültig, danach lieber KEINE Vermutung als eine falsche.
+	// ---- Herkunft (Provenance): welche Seiten wurden zuletzt als Quelle kopiert? ----
+	// Der nächste Import/Download gehört mit hoher Wahrscheinlichkeit zu genau diesen
+	// Seiten — 6 h gültig, danach lieber KEINE Vermutung als eine falsche.
 	const PROV_KEY = "impala67.nlmSources";
 	const PROV_TTL = 6 * 3600e3;
 	function rememberSources(ids) {
@@ -144,8 +162,8 @@ export const NLM = (() => {
 		} catch { return []; }
 	}
 
-	// ---- Mini-Ablage für übernommene Downloads (eigene IndexedDB — bewusst getrennt
-	//      vom Event-Log, damit große Mediendateien nicht durch den Sync wandern) ----
+	// ---- Artefakt-Ablage (eigene IndexedDB — bewusst getrennt vom Event-Log,
+	//      damit große Mediendateien nicht durch den Drive-Sync wandern) ----
 	function dbOpen() {
 		return new Promise((res, rej) => {
 			const r = indexedDB.open("impala67-nlm", 1);
@@ -156,7 +174,7 @@ export const NLM = (() => {
 	}
 	const store = (db, mode) => db.transaction("files", mode).objectStore("files");
 	const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-	async function fileAdd(name, blob, extra) {
+	async function fileAdd(name, blob) {
 		let head = new Uint8Array(0);
 		try { head = new Uint8Array(await blob.slice(0, 12).arrayBuffer()); } catch {}
 		const rec = {
@@ -164,7 +182,6 @@ export const NLM = (() => {
 			kind: sniffKind(name, head, blob.type),
 			mime: blob.type || "", size: blob.size || 0,
 			sourcePageIds: recentSources(), placedPageId: null,
-			...(extra || {}),
 		};
 		const db = await dbOpen();
 		await req(store(db, "readwrite").put(rec));
@@ -201,170 +218,42 @@ export const NLM = (() => {
 		await req(store(db, "readwrite").delete(id));
 	}
 
-	// ---- Seiten → Quelltext für NotebookLM ----
+	// ---- Seiten → Quelltext für Gemini Notebook ----
 	const pageText = (pg) => "# " + (pg.title || "Ohne Titel") + "\n\n" + (pg.content || "");
 	async function copyPages(ids) {
 		const text = ids.map((id) => S.pages[id]).filter(Boolean).map(pageText).join("\n\n---\n\n");
 		if (!text.trim()) { U.toast("Die gewählten Seiten sind leer.", "error"); return false; }
-		rememberSources(ids); // Herkunft für den nächsten abgefangenen Download merken
+		rememberSources(ids); // Herkunft für den nächsten Import merken
 		try { await navigator.clipboard.writeText(text); }
 		catch (e) { prompt("Zwischenablage blockiert — Text mit Strg+C kopieren:", text); return true; }
-		U.toast('📋 ' + ids.length + ' Seite(n) kopiert — in NotebookLM: „Quelle hinzufügen → Kopierter Text" → Einfügen.', "success");
+		U.toast('📋 ' + ids.length + ' Seite(n) kopiert — in ' + PRODUCT + ': „Quelle hinzufügen → Kopierter Text" → Einfügen.', "success");
 		return true;
 	}
 
-	// ---- NotebookLM eingebettet im Hauptfenster (nur Desktop). Das Webview liegt ÜBER der
-	//      App-UI (natives Tauri-Layer) — Größen in CSS-Pixeln
-	//      (Tauri LogicalPosition/LogicalSize rechnen selbst mit dem Display-Scaling).
-	//      Deshalb: bei #overlay / #palette (Strg+K, Neue Seite, Dialoge) kurz ausblenden. ----
-	let embedded = false;
-	let uiPaused = false;
-	let pendingFallback = null;
-	let resizeObserverNlm = null;
-	let uiWatchReady = false;
-	function hostRect() {
-		const host = document.getElementById("nlmHost");
-		return host ? host.getBoundingClientRect() : null;
+	// ---- Download-Import: DER verlässliche Weg (funktioniert in Browser UND Desktop) ----
+	async function importFiles(list) {
+		const files = [...(list || [])].filter((f) => f && typeof f.size === "number");
+		if (!files.length) return 0;
+		let last = null;
+		for (const f of files) last = await fileAdd(f.name || "gemini-notebook-datei", f);
+		if (files.length === 1) showInboxToast(last);
+		else U.toast("📥 " + files.length + " Dateien in die Inbox übernommen (Bibliothek → 📥).", "success");
+		refreshHubList();
+		return files.length;
 	}
-	function isAppUiBlocking() {
-		const o = document.getElementById("overlay");
-		if (o && !o.hidden) return true;
-		const p = document.getElementById("palette");
-		if (p && !p.hidden) return true;
-		return false;
-	}
-	function hideWebviewOnly() {
-		invoke("nlm_webview", { show: false, x: 0, y: 0, w: 0, h: 0 }).catch(() => {});
-	}
-	async function positionEmbedded() {
-		// FIX (offener Bug): beim Verlassen des NotebookLM-Tabs aktiv verstecken, statt
-		// nur zu returnen — das Webview blieb sonst sichtbar, wenn das "impala67:nlm-hide"-
-		// Event (closeTab) nicht oder zu spät ankam.
-		if (S.view !== "notebooklm") {
-			if (embedded || uiPaused) hideEmbeddedIfActive();
-			return;
-		}
-		// Browser / ohne Rust-Kommandos: kein natives Webview — Fallback-UI bleibt im Impala-Tab.
-		if (!canEmbedNative()) return;
-		// Strg+K / Dialoge: natives Webview deckt sonst die HTML-UI ab.
-		if (isAppUiBlocking()) {
-			uiPaused = true;
-			hideWebviewOnly();
-			return;
-		}
-		const r = hostRect();
-		if (!r || r.width < 2 || r.height < 2) return;
-		try {
-			await invoke("nlm_webview", { show: true, x: r.left, y: r.top, w: r.width, h: r.height });
-			embedded = true;
-			uiPaused = false;
-		} catch (e) {
-			embedded = false;
-			// Tab NICHT schließen — Fallback-Pane im Impala-Tab anzeigen (Browser & fehlende Rust-Cmds).
-			showBrowserFallbackPane();
-		}
-	}
-	function showBrowserFallbackPane() {
-		const host = document.getElementById("nlmHost");
-		if (!host || host.dataset.nlmFallback === "1") return;
-		host.dataset.nlmFallback = "1";
-		host.innerHTML =
-			'<div class="nlm-fallback">' +
-				"<h2>📓 NotebookLM</h2>" +
-				'<p>Google erlaubt kein Einbetten im Browser (X-Frame/CSP). Dieser Impala-Tab bleibt offen — NotebookLM öffnest du bei Bedarf extern. In der Desktop-App liegt NotebookLM hier eingebettet.</p>' +
-				'<div class="row-btns">' +
-					'<button type="button" id="btnNlmOpenExt">↗ In Browser öffnen</button>' +
-					'<button type="button" id="btnNlmPickInPane">📚 Seiten als Quelle kopieren…</button>' +
-				"</div></div>";
-		const openBtn = document.getElementById("btnNlmOpenExt");
-		if (openBtn) openBtn.addEventListener("click", () => (pendingFallback || openFallbackDefault)());
-		const pickBtn = document.getElementById("btnNlmPickInPane");
-		if (pickBtn) pickBtn.addEventListener("click", () => openPicker(() => (pendingFallback || openFallbackDefault)()));
-	}
-	function syncEmbeddedToUi() {
-		// FIX (offener Bug): der Body-MutationObserver ruft syncEmbeddedToUi bei jedem
-		// Re-Render auf — hier zusätzlich verstecken, sobald die Ansicht gewechselt hat.
-		// Damit verschwindet das Webview auch dann zuverlässig, wenn hideEmbeddedIfActive()
-		// beim Tab-Schließen nicht ausgelöst wurde.
-		if (S.view !== "notebooklm") {
-			if (embedded || uiPaused) hideEmbeddedIfActive();
-			return;
-		}
-		if (isAppUiBlocking()) {
-			if (!uiPaused) {
-				uiPaused = true;
-				hideWebviewOnly();
-			}
-			return;
-		}
-		if (uiPaused || embedded) {
-			uiPaused = false;
-			positionEmbedded(false);
-		}
-	}
-	function watchAppUiOverlays() {
-		if (uiWatchReady) return;
-		uiWatchReady = true;
-		const watched = new WeakSet();
-		const attach = (el) => {
-			if (!el || watched.has(el)) return;
-			watched.add(el);
-			const mo = new MutationObserver(() => syncEmbeddedToUi());
-			mo.observe(el, { attributes: true, attributeFilter: ["hidden", "class", "style"] });
-		};
-		attach(document.getElementById("overlay"));
-		attach(document.getElementById("palette"));
-		// #palette wird lazy in search.js erzeugt — nachziehen, sobald es im DOM ist.
-		const bodyMo = new MutationObserver(() => {
-			attach(document.getElementById("overlay"));
-			attach(document.getElementById("palette"));
-			syncEmbeddedToUi();
-		});
-		bodyMo.observe(document.body, { childList: true, subtree: true });
-	}
-	function hideEmbeddedIfActive() {
-		// Nicht auf den lokalen Status vertrauen: Das Webview kann noch sichtbar sein,
-		// obwohl ein vorheriger Aufruf fehlgeschlagen oder verspätet angekommen ist.
-		if (resizeObserverNlm) {
-			resizeObserverNlm.disconnect();
-			resizeObserverNlm = null;
-		}
-		embedded = false;
-		uiPaused = false;
-		hideWebviewOnly();
-	}
-	window.addEventListener("resize", () => positionEmbedded());
-	// tabs.js meldet das Schließen synchron, noch bevor die Ansicht neu gerendert wird.
-	window.addEventListener("impala67:nlm-hide", hideEmbeddedIfActive);
-	watchAppUiOverlays();
-	function renderPane(main) {
-		const embedOk = canEmbedNative();
-		main.innerHTML = '<div class="nlm-pane"><div class="nlm-pane-hint"><strong>📓 NotebookLM</strong><span class="hint">' +
-			(embedOk ? "Downloads landen automatisch in der Inbox (Bibliothek → 📥 NotebookLM)" : "Browser: Impala-Tab · NotebookLM öffnet extern") +
-			'</span></div><div id="nlmHost" class="nlm-host"></div></div>';
-		const host = document.getElementById("nlmHost");
-		if (resizeObserverNlm) resizeObserverNlm.disconnect();
-		if (!embedOk) {
-			// Impala-Tab behalten — kein erzwungenes Schließen + kein Auto-open im Chrome.
-			showBrowserFallbackPane();
-			return;
-		}
-		if (host && "ResizeObserver" in window) {
-			resizeObserverNlm = new ResizeObserver(() => positionEmbedded());
-			resizeObserverNlm.observe(host);
-		}
-		watchAppUiOverlays();
-		positionEmbedded();
-	}
-	function open(openFallback) {
-		pendingFallback = openFallback || null;
-		TABS.openPage("nlm:main");
+	function pickImportFiles() {
+		const inp = document.createElement("input");
+		inp.type = "file";
+		inp.multiple = true;
+		inp.addEventListener("change", () => { importFiles(inp.files); });
+		inp.click();
 	}
 
 	// ---- Einbettung in Seiten: Markdown-Link [🎧 …](#nlm:<id>) --------------------
 	// Bewusst ein normaler Link statt eines eigenen Block-Typs: funktioniert sofort in
-	// Editor, Suche und Sync; der Klick wird hier per Capture-Delegation abgefangen.
-	const embedMd = (f) => "\n\n" + kindIcon(f.kind) + " [NotebookLM-" + kindLabel(f.kind) + ": " +
+	// Editor, Suche und Sync; der Klick wird per Capture-Delegation abgefangen.
+	// Das "#nlm:"-Präfix bleibt aus Kompatibilität zu bestehenden Links erhalten.
+	const embedMd = (f) => "\n\n" + kindIcon(f.kind) + " [Gemini-Notebook-" + kindLabel(f.kind) + ": " +
 		String(f.name || "Datei").replace(/[\[\]]/g, "") + "](#nlm:" + f.id + ")\n";
 	document.addEventListener("click", (e) => {
 		const a = e.target && e.target.closest && e.target.closest('a[href^="#nlm:"]');
@@ -389,8 +278,8 @@ export const NLM = (() => {
 			icon: kindIcon(f.kind),
 			parentId: parentPg ? parentPg.id : null,
 			workspaceId: (parentPg && parentPg.workspaceId) || S.currentWorkspaceId || "default",
-			content: "NotebookLM-" + kindLabel(f.kind) + " vom " + new Date(f.ts).toLocaleDateString("de-DE") + embedMd(f),
-			tags: ["notebooklm"],
+			content: "Gemini-Notebook-" + kindLabel(f.kind) + " vom " + new Date(f.ts).toLocaleDateString("de-DE") + embedMd(f),
+			tags: ["notebooklm"], // Tag bleibt technisch stabil (bestehende Filter/Seiten)
 		});
 		await fileUpdate(f.id, { placedPageId: id });
 		U.toast("✅ Unterseite angelegt.", "success");
@@ -427,7 +316,7 @@ export const NLM = (() => {
 		const keep = o.querySelector("[data-keep]");
 		if (keep) keep.addEventListener("click", () => {
 			o.hidden = true;
-			U.toast("📥 Bleibt in der Mediathek (Bibliothek → 📥 NotebookLM).", "success");
+			U.toast("📥 Bleibt in der Mediathek (Bibliothek → 📥).", "success");
 		});
 	}
 	function openPagePickDialog(f) {
@@ -456,7 +345,7 @@ export const NLM = (() => {
 		U.el("nlmPlaceSearch").addEventListener("input", (e) => { U.el("nlmPlaceList").innerHTML = rowsHtml(e.target.value); bind(); });
 	}
 
-	// ---- Inbox-Toast: nach jedem abgefangenen Download — NIE automatisch einbetten ----
+	// ---- Inbox-Toast: nach jedem Import/Abgriff — NIE automatisch einbetten ----
 	function showInboxToast(rec) {
 		document.querySelectorAll(".nlm-inbox-toast").forEach((n) => n.remove());
 		const el = document.createElement("div");
@@ -476,15 +365,25 @@ export const NLM = (() => {
 			close();
 			if (b.dataset.a === "place") openPlaceDialog(rec.id);
 			else if (b.dataset.a === "play") play(rec);
-			// "later": Datei bleibt in der Inbox (Bibliothek → 📥 NotebookLM)
+			// "later": Datei bleibt in der Inbox (📓-Tab bzw. Bibliothek → 📥)
 		});
 	}
 
-	// ---- Downloads aus dem NotebookLM-Webview übernehmen (Rust meldet "nlm-download").
-	//      Payload: String (Pfad, alt) ODER Objekt { path, file_name, mime, size } (neu) ----
-	(function initDownloadListener() {
+	// ---- Bonus: Tauri-Auto-Abgriff. Rust meldet "nlm-download" (String-Pfad, alt,
+	//      oder Objekt { path, file_name, mime, size }); Datei lesen per nlm_read_file.
+	//      Fehlen die Kommandos, passiert nichts — der Import oben ist der verlässliche
+	//      Weg. NEU: Warte-Wiederholung, weil window.__TAURI__ je nach Plattform erst
+	//      NACH diesem Modul initialisiert ist (daran scheiterte der alte Listener still). ----
+	const invoke = (cmd, args) => {
 		const t = T();
-		if (!(t && t.event && t.event.listen)) return;
+		return t && t.core && t.core.invoke ? t.core.invoke(cmd, args) : Promise.reject(new Error("kein Tauri"));
+	};
+	(function initAutoCapture(tries) {
+		const t = T();
+		if (!(t && t.event && t.event.listen)) {
+			if (tries < 20) setTimeout(() => initAutoCapture(tries + 1), 500);
+			return;
+		}
 		t.event.listen("nlm-download", async (m) => {
 			const pay = (m && m.payload) || "";
 			const structured = pay && typeof pay === "object";
@@ -492,15 +391,16 @@ export const NLM = (() => {
 			if (!path) return;
 			try {
 				const bytes = await invoke("nlm_read_file", { path });
-				const name = (structured && pay.file_name) || path.split(/[\\/]/).pop() || "notebooklm-datei";
+				const name = (structured && pay.file_name) || path.split(/[\\/]/).pop() || "gemini-notebook-datei";
 				const mime = (structured && pay.mime) || "";
 				const rec = await fileAdd(name, mime ? new Blob([bytes], { type: mime }) : new Blob([bytes]));
 				showInboxToast(rec);
+				refreshHubList();
 			} catch (e) { U.toast("Download-Übernahme fehlgeschlagen: " + (e.message || e), "error"); }
 		}).catch(() => {});
-	})();
+	})(0);
 
-	// ---- Seiten hierarchisch sortieren (Eltern vor Kindern, mit Tiefe + Kind-Info fürs Einklappen) ----
+	// ---- Seiten hierarchisch sortieren (Eltern vor Kindern, mit Tiefe + Kind-Info) ----
 	function pageTree(pages) {
 		const byParent = new Map();
 		pages.forEach((pg) => {
@@ -525,7 +425,7 @@ export const NLM = (() => {
 		return out;
 	}
 
-	// ---- Seiten-Picker: Suchfeld + eingerueckte Baumliste + Schnellauswahl ----
+	// ---- Seiten-Picker: Suchfeld + eingerückte Baumliste + Schnellauswahl ----
 	function openPicker(onDone) {
 		const pages = STATE.activePages();
 		if (!pages.length) { U.toast("Keine Seiten vorhanden.", "error"); return; }
@@ -562,12 +462,12 @@ export const NLM = (() => {
 		}
 		function updateCount() { const c = U.el("nlmCount"); if (c) c.textContent = picked.size + " ausgewählt"; }
 
-		o.innerHTML = '<div class="modal nlm-modal"><h3>📚 Seiten für NotebookLM auswählen</h3>' +
-			'<p class="hint">Kopiert die Inhalte als eine Quelle in die Zwischenablage — in NotebookLM dann „Quelle hinzufügen → Kopierter Text" wählen und einfügen.</p>' +
+		o.innerHTML = '<div class="modal nlm-modal"><h3>📚 Seiten für ' + PRODUCT + ' auswählen</h3>' +
+			'<p class="hint">Kopiert die Inhalte als eine Quelle in die Zwischenablage — in ' + PRODUCT + ' dann „Quelle hinzufügen → Kopierter Text" wählen und einfügen.</p>' +
 			'<input type="search" class="nlm-search" id="nlmSearch" placeholder="Seiten durchsuchen…">' +
 			'<div class="nlm-quickrow"><button id="nlmAll">Alle</button><button id="nlmNone">Keine</button><button id="nlmCurOnly">Nur aktuelle Seite</button><span class="nlm-count" id="nlmCount"></span></div>' +
 			'<div class="nlm-list" id="nlmList">' + listHtml("") + "</div>" +
-			'<div class="modal-actions"><button id="btnNlmCopy">📋 Kopieren & NotebookLM öffnen</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
+			'<div class="modal-actions"><button id="btnNlmCopy">📋 Kopieren & ' + PRODUCT + ' öffnen</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
 
 		function bindRows() {
 			const list = U.el("nlmList");
@@ -577,8 +477,8 @@ export const NLM = (() => {
 				row.classList.toggle("nlm-picked");
 				updateCount();
 			}));
-			list.querySelectorAll("[data-nlmtoggle]").forEach((t) => t.addEventListener("click", () => {
-				const id = t.dataset.nlmtoggle;
+			list.querySelectorAll("[data-nlmtoggle]").forEach((t2) => t2.addEventListener("click", () => {
+				const id = t2.dataset.nlmtoggle;
 				if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
 				U.el("nlmList").innerHTML = listHtml(U.el("nlmSearch").value);
 				bindRows();
@@ -634,7 +534,7 @@ export const NLM = (() => {
 	async function playById(id) {
 		const f = await fileGet(id);
 		if (f) play(f);
-		else U.toast("Datei nicht (mehr) in der NotebookLM-Mediathek.", "error");
+		else U.toast("Datei nicht (mehr) in der Mediathek.", "error");
 	}
 	async function saveById(id) {
 		const f = await fileGet(id);
@@ -644,8 +544,55 @@ export const NLM = (() => {
 	function placeById(id) { return openPlaceDialog(id); }
 	const listArtifacts = () => fileList();
 
-	// ---- 📓-Dialog (Topbar-Knopf, aus extras.js aufgerufen) ----
-	async function openDialog(openFallback) {
+	// ---- 📓-Tab (Ansicht "notebooklm", Tab-ID "nlm:main"): Hub für alles ----
+	// Zeilen nutzen dieselben data-nlmlib*-Attribute und -Styles wie die Bibliothek
+	// (library.js delegiert dokumentweit) — keine doppelte Knopf-Logik (DRY).
+	function hubRowHtml(f) {
+		const src = (f.sourcePageIds || []).map((id) => S.pages[id]).filter((p) => p && !p.trashed);
+		return '<div class="nlm-lib-row nlm-lib-inbox">' +
+			'<span class="nlm-lib-icon">' + kindIcon(f.kind) + "</span>" +
+			'<span class="nlm-lib-main"><span class="nlm-lib-name">' + U.esc(f.name) + "</span>" +
+			'<span class="nlm-lib-sub">' + kindLabel(f.kind) + " · " + U.fmtDate(new Date(f.ts).toISOString()) +
+			(src.length ? " · Quelle: " + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 50)) : "") + "</span></span>" +
+			'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">▶</button>' +
+			'<button data-nlmlibplace="' + f.id + '" title="Einordnen">📌</button>' +
+			'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">⬇</button>' +
+			'<button data-nlmlibdel="' + f.id + '" title="Löschen">🗑</button></span></div>';
+	}
+	async function refreshHubList() {
+		const box = U.el("nlmHubList");
+		if (!box) return;
+		const inbox = (await fileList().catch(() => [])).filter((f) => !f.placedPageId);
+		box.innerHTML = inbox.map(hubRowHtml).join("") ||
+			'<div class="empty small">Inbox ist leer. Importierte Downloads erscheinen hier — alle (auch eingeordnete) Dateien: Bibliothek → 📥.</div>';
+	}
+	function renderPane(main) {
+		main.innerHTML = '<div class="nlm-hub">' +
+			"<h1>📓 " + PRODUCT + "</h1>" +
+			'<p class="hint">Google hat NotebookLM in ' + PRODUCT + ' umbenannt — gleiches Produkt, neuer Name. Einbetten in der App blockiert Google, deshalb öffnet es extern.</p>' +
+			'<div class="row-btns nlm-hub-actions">' +
+				'<button id="btnNlmHubCopy">📚 Seiten als Quelle kopieren…</button>' +
+				'<button id="btnNlmHubOpen">↗ ' + PRODUCT + ' öffnen</button>' +
+				'<button id="btnNlmHubImport">📥 Download importieren…</button></div>' +
+			'<div class="nlm-drop" id="nlmDrop">Heruntergeladene Datei aus ' + PRODUCT + ' (Podcast, Video, Mind Map, Folien …) hier ablegen — sie landet in der Inbox und lässt sich in Seiten einordnen.</div>' +
+			'<h4 class="nlm-hub-sub">📥 Inbox</h4><div id="nlmHubList"></div></div>';
+		U.el("btnNlmHubCopy").addEventListener("click", () => openPicker(openExternal));
+		U.el("btnNlmHubOpen").addEventListener("click", openExternal);
+		U.el("btnNlmHubImport").addEventListener("click", pickImportFiles);
+		const drop = U.el("nlmDrop");
+		["dragover", "dragenter"].forEach((t2) => drop.addEventListener(t2, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+		drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+		drop.addEventListener("drop", (e) => {
+			e.preventDefault();
+			drop.classList.remove("drag");
+			importFiles(e.dataTransfer && e.dataTransfer.files);
+		});
+		refreshHubList();
+	}
+	const open = () => TABS.openPage("nlm:main");
+
+	// ---- 📓-Dialog (Sidebar-Knopf, via extras.js verdrahtet) ----
+	async function openDialog() {
 		const files = await fileList().catch(() => []);
 		const o = U.el("overlay");
 		o.hidden = false;
@@ -653,22 +600,25 @@ export const NLM = (() => {
 			'<span style="flex:none">' + kindIcon(f.kind) + "</span>" +
 			'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + U.esc(f.name) + (f.placedPageId ? "" : ' <span class="nlm-tag">Inbox</span>') + "</span>" +
 			'<button data-nlmplay="' + f.id + '">▶</button><button data-nlmplace="' + f.id + '" title="Einordnen">📌</button><button data-nlmsave="' + f.id + '">⬇</button><button data-nlmdel="' + f.id + '">🗑</button></div>').join("");
-		o.innerHTML = '<div class="modal"><h3>📓 NotebookLM</h3>' +
-			'<div class="row-btns"><button id="btnNlmPick">📚 Seiten als Quelle kopieren…</button><button id="btnNlmOpen">📓 NotebookLM öffnen</button></div>' +
-			(files.length ? "<h4>📥 Mediathek</h4>" + rows : '<p class="hint">Downloads aus dem NotebookLM-Tab (Desktop) landen automatisch in der Inbox — vollständige Ansicht: Bibliothek → 📥 NotebookLM.</p>') +
-			'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div></div>';
-		U.el("btnNlmPick").addEventListener("click", () => openPicker(() => open(openFallback)));
-		U.el("btnNlmOpen").addEventListener("click", () => { o.hidden = true; open(openFallback); });
+		o.innerHTML = '<div class="modal"><h3>📓 ' + PRODUCT + '</h3>' +
+			'<p class="hint">Ehemals NotebookLM — Google hat das Produkt umbenannt.</p>' +
+			'<div class="row-btns"><button id="btnNlmPick">📚 Seiten als Quelle kopieren…</button><button id="btnNlmOpen">↗ ' + PRODUCT + ' öffnen</button><button id="btnNlmImport">📥 Download importieren…</button></div>' +
+			(files.length ? "<h4>📥 Mediathek</h4>" + rows : '<p class="hint">Noch keine Dateien — in ' + PRODUCT + ' herunterladen und hier bzw. im 📓-Tab importieren (Knopf oder Drag & Drop).</p>') +
+			'<div class="modal-actions"><button id="btnNlmTab">📓 Import-Tab öffnen</button><button id="btnCloseOverlay">Schließen</button></div></div>';
+		U.el("btnNlmPick").addEventListener("click", () => openPicker(openExternal));
+		U.el("btnNlmOpen").addEventListener("click", () => { o.hidden = true; openExternal(); });
+		U.el("btnNlmImport").addEventListener("click", () => { o.hidden = true; pickImportFiles(); });
+		U.el("btnNlmTab").addEventListener("click", () => { o.hidden = true; open(); });
 		o.querySelectorAll("[data-nlmplay]").forEach((b) => b.addEventListener("click", () => playById(b.dataset.nlmplay)));
 		o.querySelectorAll("[data-nlmplace]").forEach((b) => b.addEventListener("click", () => { o.hidden = true; openPlaceDialog(b.dataset.nlmplace); }));
 		o.querySelectorAll("[data-nlmsave]").forEach((b) => b.addEventListener("click", () => saveById(b.dataset.nlmsave)));
 		o.querySelectorAll("[data-nlmdel]").forEach((b) => b.addEventListener("click", async () => {
 			await fileDel(b.dataset.nlmdel);
-			openDialog(openFallback); // Liste neu aufbauen
+			openDialog(); // Liste neu aufbauen
 		}));
 	}
 
-	// ---- KI-Tool (tools.js → send_to_notebooklm): Seiten kopieren + NotebookLM öffnen ----
+	// ---- KI-Tool (tools.js → send_to_notebooklm): Seiten kopieren + Gemini Notebook öffnen ----
 	async function sendPages(titles) {
 		let pages;
 		if (titles && titles.length) {
@@ -684,13 +634,13 @@ export const NLM = (() => {
 			pages = [cur];
 		}
 		if (!(await copyPages(pages.map((p) => p.id)))) return { error: "Die Seiten sind leer." };
-		open(openFallbackDefault);
-		return { ok: true, copied: pages.length, hint: 'Inhalte liegen in der Zwischenablage — in NotebookLM „Quelle hinzufügen → Kopierter Text" wählen und einfügen, dann z.B. Audio-Übersicht (Lernpodcast) erstellen. Spätere Downloads landen in der Inbox (Bibliothek → 📥 NotebookLM) und kennen diese Seiten als Herkunft.' };
+		openExternal();
+		return { ok: true, copied: pages.length, hint: 'Inhalte liegen in der Zwischenablage — in Gemini Notebook (ehemals NotebookLM) „Quelle hinzufügen → Kopierter Text" wählen und einfügen, dann z.B. Audio-Übersicht (Lernpodcast) erstellen. Heruntergeladene Ergebnisse anschließend im 📓-Tab der App importieren (Knopf oder Drag & Drop) — sie kennen diese Seiten als Herkunft.' };
 	}
 
 	return {
-		openDialog, sendPages, renderPane, hideEmbeddedIfActive,
-		// NEU v3 — für die Bibliothek (library.js) und Einbettungs-Links:
+		openDialog, openExternal, sendPages, renderPane, importFiles,
 		listArtifacts, playById, saveById, deleteById, placeById, kindIcon, kindLabel,
+		hideEmbeddedIfActive: () => {}, // Kompatibilität: früherer Webview-Modus (v3) — bewusst No-Op
 	};
 })();

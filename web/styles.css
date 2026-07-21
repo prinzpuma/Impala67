@@ -401,7 +401,11 @@ button.danger { color: var(--danger) }
 /* 🆚 Heft-Konflikte: gerenderte Seiten-Vorschau beider Stände nebeneinander */
 .conflict-heft-body { display: flex; flex-direction: column; gap: 6px; font: inherit }
 .conflict-heft-body canvas { width: 100%; height: auto; background: #fff; border: 1px solid var(--edge-soft); border-radius: 8px }
-.conflict-heft-note { color: var(--text2); font-size: 11px }
+/* Bug-3-Fix: Navigationsleiste für mehrseitige Heft-Vorschauen */
+.conflict-heft-nav { display: flex; align-items: center; gap: 6px; justify-content: center }
+.conflict-heft-nav .conflict-heft-prev, .conflict-heft-nav .conflict-heft-next { min-height: 0; height: 22px; width: 26px; padding: 0; font-size: 15px; line-height: 1; background: var(--surface); color: var(--text2); border-radius: 4px; display: flex; align-items: center; justify-content: center }
+.conflict-heft-nav .conflict-heft-prev:not(:disabled):hover, .conflict-heft-nav .conflict-heft-next:not(:disabled):hover { background: var(--surface-hover); color: var(--text) }
+.conflict-heft-note { flex: 1; text-align: center; color: var(--text2); font-size: 11px }
 .conflict-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px }
 .conflict-actions .primary { background: var(--accent); color: #081018; font-weight: 650 }
 @media (max-width: 700px) {
@@ -2083,3 +2087,14 @@ h3, h4 { text-wrap: balance }
 /* 🧠 Themen-Analyse-Optionen im Graph-Panel */
 .graph-panel label { font-size: 13px; color: var(--text, #ddd) }
 .graph-panel small { display: block; margin-top: 4px; opacity: .75 }
+/* == ⚙️ Einstellungen v2 (21. Juli): ruhigere Navigation, klarere Abschnitte, weniger Text == */
+.settings-nav { gap: 3px }
+.set-item { font-size: 13px; font-weight: 600; border-radius: var(--radius-md) }
+.set-item.active { box-shadow: inset 0 0 0 1px var(--accent-border) }
+.settings-body:not(:has(.ai-settings)) > h3 { margin: 0 0 2px; padding-bottom: 10px; border-bottom: 1px solid var(--edge-soft); font-size: 15px; font-weight: 700; letter-spacing: -.01em }
+.settings-body > h3 + h4 { margin-top: 0 }
+.settings-body .hint { font-size: 12.5px; line-height: 1.45 }
+.settings-body h4 + .hint { margin-top: -6px }
+.settings-body #btnSaveSettings, .settings-body #btnDriveLogin { background: var(--accent); color: #081018; font-weight: 650 }
+.settings-body #btnSaveSettings:hover, .settings-body #btnDriveLogin:hover { filter: brightness(1.08) }
+.settings-body .row-btns button, .settings-body .appearance-choice button { min-height: 30px; font-size: 13px }

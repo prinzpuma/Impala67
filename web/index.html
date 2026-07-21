@@ -128,10 +128,10 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 		</div>
 		<nav id="tree"></nav>
 		<div class="side-foot">
-			<!-- Sekundäre Navigation: NotebookLM über Bibliothek -->
-			<button id="btnNotebookLM" title="NotebookLM">
+			<!-- Sekundäre Navigation: Gemini Notebook (ehemals NotebookLM) über Bibliothek -->
+			<button id="btnNotebookLM" title="Gemini Notebook (ehemals NotebookLM)">
 				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
-				<span>NotebookLM</span>
+				<span>Gemini Notebook</span>
 			</button>
 			<!-- 🕸 Wissensgraph (graph.js hört selbst per Capture-Listener auf diesen Knopf) -->
 			<button id="btnGraph" title="Wissensgraph — Seiten & Verknüpfungen mit FSRS-Färbung">
@@ -239,7 +239,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<script type="module" src="main.js?build=50"></script>
+<script type="module" src="main.js?build=52"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
@@ -260,15 +260,15 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=50", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=52", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}
 }
 
-// NotebookLM-Button: Die Logik liegt jetzt gebündelt in extras.js (openNotebookLM) —
-// Modul statt Inline-Script, wie alle anderen Buttons auch. Das Inline-Script hier
-// bleibt bewusst auf die PWA-/Service-Worker-Registrierung oben beschränkt.
+// Gemini-Notebook-Button (ehemals NotebookLM): Die Logik liegt gebündelt in
+// notebooklm.js (NLM.openDialog/openExternal). Das Inline-Script hier bleibt
+// bewusst auf die PWA-/Service-Worker-Registrierung oben beschränkt.
 </script>
 </body>
 </html>

@@ -144,7 +144,7 @@ export const TOOLS = (() => {
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["text"]),
 		t("list_due_cards", "Listet aktuell fällige Karteikarten.", {}, []),
-		t("send_to_notebooklm", "Bereitet Notiz-Seiten als NotebookLM-Quelle vor: kopiert ihre Inhalte in die Zwischenablage und öffnet NotebookLM — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
+		t("send_to_notebooklm", "Bereitet Notiz-Seiten als Quelle für Gemini Notebook (ehemals NotebookLM) vor: kopiert ihre Inhalte in die Zwischenablage und öffnet Gemini Notebook — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
 			page_titles: { type: "array", items: { type: "string" }, description: "Titel der Seiten (leer = aktuelle Seite)" },
 		}, []),
 		t("ask_choice", "Stellt EINE kurze Rückfrage mit 2–5 anklickbaren Optionen und wartet auf die Auswahl. NUR bei echter Mehrdeutigkeit (z.B. mehrere passende Seiten). Keine Ja/Nein-Floskeln, keine Meta-Fragen. Optionen müssen vollständig und sofort nutzbar sein (keine Platzhalter).",
@@ -378,7 +378,7 @@ export const TOOLS = (() => {
 					due: STATE.dueCards().slice(0, 20).map((c) => ({ front: c.front, due: c.srs.due })),
 				};
 			case "send_to_notebooklm":
-				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet NotebookLM
+				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook
 				return await NLM.sendPages(a.page_titles || []);
 			case "ask_choice": {
 				// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und

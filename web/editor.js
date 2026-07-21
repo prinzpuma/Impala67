@@ -54,6 +54,16 @@ export const EDITOR = (() => {
 	const COLOR_META_RE = /^<!--@c:([a-z]+)?(?:;bg:([a-z]+))?-->$/;
 	const IMAGE_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
 	const HEFT_RE = /^:::heft\s+(\S+)/;
+	// Datei-/Medienblock: ":::file <src> <Anzeigename>" — src ist "file:<id>" (IndexedDB)
+	// oder eine externe URL. EIN Blocktyp für ALLE Formate (KISS) — was er anzeigt,
+	// entscheidet der MIME-Typ erst beim Hydrieren (Video/Audio/PDF/Bild/Download).
+	const FILE_RE = /^:::file\s+(\S+)(?:\s+(.*))?$/;
+	// MIME-Typ aus der Dateiendung raten — für externe URLs und Dateien ohne file.type.
+	const MIME_EXT = { mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska", mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", flac: "audio/flac", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", avif: "image/avif" };
+	const mimeFromName = (name) => {
+		const m = String(name || "").toLowerCase().match(/\.([a-z0-9]+)(?:[?#].*)?$/);
+		return (m && MIME_EXT[m[1]]) || "";
+	};
 
 	const uid = () => U.uid();
 	const esc = (t) => U.esc(String(t ?? ""));
@@ -129,6 +139,7 @@ export const EDITOR = (() => {
 		if (b.type === "table") return (b.rows || []).map((r) => r.join(" ")).join("\n");
 		if (b.type === "columns") return (b.columns || []).map((col) => col.map(plainTextOf).join("\n")).join("\n");
 		if (b.type === "image") return b.alt || "";
+		if (b.type === "file") return b.name || "";
 		return "";
 	}
 
@@ -290,6 +301,10 @@ export const EDITOR = (() => {
 			const heft = line.match(HEFT_RE);
 			if (heft) { out.push(applyColor({ id: uid(), type: "heft", heftId: heft[1] })); i++; continue; }
 
+			// Datei-/Medien-Einbettung
+			const fil = line.match(FILE_RE);
+			if (fil) { out.push(applyColor({ id: uid(), type: "file", src: fil[1], name: fil[2] || "" })); i++; continue; }
+
 			// Spalten (rekursiv geparst)
 			if (/^:::columns\b/.test(line)) {
 				const cols = [[]];
@@ -375,9 +390,19 @@ export const EDITOR = (() => {
 			// Trennlinie
 			if (/^\s*---+\s*$/.test(line)) { out.push(applyColor({ id: uid(), type: "divider" })); i++; continue; }
 
-			// Bild
+			// Bild — ![…](video.mp4)/(…mp3)/(…pdf) ist KEIN Bild: als Medienblock einhängen.
+			// FIX: genau so entstand der „MP4 lässt sich nicht abspielen“-Bug — die Datei
+			// landete als kaputtes <img> statt als abspielbares <video>.
 			const img = line.match(IMAGE_RE);
-			if (img) { out.push(applyColor({ id: uid(), type: "image", alt: img[1], src: img[2] })); i++; continue; }
+			if (img) {
+				const mm = mimeFromName(img[2]);
+				if (/^(video|audio)\//.test(mm) || mm === "application/pdf") {
+					out.push(applyColor({ id: uid(), type: "file", src: img[2], name: img[1] }));
+				} else {
+					out.push(applyColor({ id: uid(), type: "image", alt: img[1], src: img[2] }));
+				}
+				i++; continue;
+			}
 
 			// Überschriften
 			const h = line.match(/^(#{1,3})\s+(.*)$/);
@@ -432,6 +457,7 @@ export const EDITOR = (() => {
 			case "divider": return "---";
 			case "image": return "![" + (b.alt || "") + "](" + (b.src || "") + ")";
 			case "heft": return ":::heft " + (b.heftId || "");
+			case "file": return ":::file " + (b.src || "") + (b.name ? " " + b.name : "");
 			case "code": return FENCE + (b.language || "text") + "\n" + (b.text || "") + "\n" + FENCE;
 			case "math": return "$$\n" + (b.text || "") + "\n$$";
 			case "table":
@@ -752,6 +778,13 @@ export const EDITOR = (() => {
 				inner = '<figure class="blk-img"><img data-imgsrc="' + esc(b.src || "") + '" alt="' + esc(b.alt || "") +
 					'" draggable="false">' + (b.alt ? "<figcaption>" + esc(b.alt) + "</figcaption>" : "") + "</figure>";
 				break;
+			case "file":
+				// contenteditable="false": Player-Bedienelemente (Video/Audio/PDF) müssen
+				// klickbar sein und dürfen nie Teil des editierbaren Textflusses werden.
+				inner = '<figure class="blk-file" data-filesrc="' + esc(b.src || "") + '" data-fileblk="' + b.id +
+					'" contenteditable="false"><div class="blk-file-row"><span class="blk-file-ic">📎</span>' +
+					'<span class="blk-file-name">' + esc(b.name || "Datei") + "</span></div></figure>";
+				break;
 			case "heft":
 				inner = '<div class="blk-heft" data-heft="' + esc(b.heftId || "") + '"></div>';
 				break;
@@ -901,12 +934,18 @@ export const EDITOR = (() => {
 			if (src.startsWith("img:")) {
 				try {
 					const blob = await DB.getBlob(src);
-					if (blob) img.src = URL.createObjectURL(new Blob([blob.data], { type: blob.meta && blob.meta.type || "image/png" }));
+					// FIX: DB.putBlob speichert { buf, meta } — hier wurde blob.data gelesen
+					// (undefined) → hochgeladene Bilder blieben unsichtbar. blob.data bleibt
+					// als Fallback für Alt-Datensätze aus der früheren "notion"-DB lesbar.
+					if (blob) img.src = URL.createObjectURL(new Blob([blob.buf || blob.data], { type: blob.meta && blob.meta.type || "image/png" }));
 				} catch { img.alt = "Bild fehlt"; }
 			} else {
 				img.src = src;
 			}
 		});
+		// Datei-/Medienblöcke: Blob (oder externe URL) laden und je nach MIME-Typ als
+		// Video-, Audio-, PDF-, Bild- oder Download-Element anzeigen.
+		host.querySelectorAll(".blk-file[data-filesrc]").forEach(hydrateFileBlock);
 		// Heft-Einbettungen
 		try { HEFT.hydrateEmbeds(host); } catch { /* Heft-Modul optional */ }
 		// Formel-Blöcke mit KaTeX rendern (Quelle bleibt in data-mathsrc)
@@ -917,6 +956,38 @@ export const EDITOR = (() => {
 			try { if (window.katex && f) katex.render(f, el, { throwOnError: false, displayMode: true }); } catch { /* Roh-LaTeX bleibt sichtbar */ }
 		});
 		hydrateInlineMath(host);
+	}
+
+	// Medien-Ansicht eines Dateiblocks: der MIME-Typ entscheidet, nicht der Blocktyp.
+	function fileViewHtml(url, mime, name, bid) {
+		const cap = name ? "<figcaption>" + esc(name) + "</figcaption>" : "";
+		if (mime.startsWith("video/")) return '<video class="blk-media" src="' + esc(url) + '" controls preload="metadata" playsinline></video>' + cap;
+		if (mime.startsWith("audio/")) return '<div class="blk-file-row"><span class="blk-file-ic">🎧</span><span class="blk-file-name">' + esc(name || "Audio") + '</span></div><audio class="blk-media" src="' + esc(url) + '" controls preload="metadata"></audio>';
+		if (mime.startsWith("image/")) return '<img class="blk-media" src="' + esc(url) + '" alt="' + esc(name) + '" draggable="false">' + cap;
+		if (mime === "application/pdf") return '<iframe class="blk-media blk-pdfframe" src="' + esc(url) + '" title="' + esc(name || "PDF") + '"></iframe>' + cap;
+		// Unbekanntes Format: Zeile mit Download-Knopf (Delegation über data-fdl in wire()).
+		return '<div class="blk-file-row"><span class="blk-file-ic">📎</span><span class="blk-file-name">' + esc(name || "Datei") + '</span><button type="button" class="blk-file-dl" data-fdl="' + bid + '">⬇ Herunterladen</button></div>';
+	}
+
+	async function hydrateFileBlock(fig) {
+		if (fig.dataset.hydrated) return;
+		fig.dataset.hydrated = "1";
+		const src = fig.dataset.filesrc || "";
+		const bid = fig.dataset.fileblk || "";
+		const b = findBlock(bid) || {};
+		const name = b.name || "";
+		let url = src, mime = mimeFromName(name) || mimeFromName(src);
+		if (src.startsWith("file:")) {
+			try {
+				const rec = await DB.getBlob(src);
+				if (!rec) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
+				mime = (rec.meta && rec.meta.type) || mime;
+				// Object-URLs leben bis zum Seitenwechsel — bewusst nicht pro Render revoken,
+				// sonst stoppt ein laufendes Video beim nächsten render() mitten im Abspielen.
+				url = URL.createObjectURL(new Blob([rec.buf || rec.data], { type: mime }));
+			} catch { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei konnte nicht geladen werden</span></div>'; return; }
+		}
+		fig.innerHTML = fileViewHtml(url, mime || "", name, bid);
 	}
 
 	// Highlight eines Codeblocks neu aufbauen (nur bei Fokusverlust — nie beim
@@ -1023,6 +1094,7 @@ export const EDITOR = (() => {
 		{ k: "columns", icon: "▫▫", label: "2 Spalten", hint: "Nebeneinander" },
 		{ k: "divider", icon: "—", label: "Trennlinie", hint: "---" },
 		{ k: "image", icon: "🏞", label: "Bild", hint: "Hochladen" },
+		{ k: "file", icon: "📎", label: "Datei / Medien", hint: "Video, Audio, PDF …" },
 		{ k: "heft", icon: "📓", label: "Heft", hint: "Handschrift-Einbettung" },
 		{ k: "link", icon: "🔗", label: "Seite verlinken", hint: "[[" },
 	];
@@ -1056,9 +1128,9 @@ export const EDITOR = (() => {
 			openLinkMenu(bid, "");
 			return;
 		}
-		if (kind === "image") {
+		if (kind === "image" || kind === "file") {
 			mutate(() => { c.block.text = text; }, { soft: true });
-			pickImage(bid);
+			pickFile(bid, kind === "image" ? "image/*" : "");
 			return;
 		}
 		if (kind === "heft") {
@@ -1212,24 +1284,29 @@ export const EDITOR = (() => {
 		});
 	}
 
-	// ---------- Bild auswählen/hochladen ----------
-	function pickImage(bid) {
+	// ---------- Datei/Bild auswählen & hochladen (EIN Pfad für alle Formate) ----------
+	// accept="image/*" nur für den Bild-Befehl; der Datei-Befehl nimmt alles.
+	function pickFile(bid, accept) {
 		const input = document.createElement("input");
 		input.type = "file";
-		input.accept = "image/*";
+		if (accept) input.accept = accept;
+		input.multiple = true;
 		input.onchange = async () => {
-			const file = input.files && input.files[0];
-			if (!file) return;
-			await insertImageFile(file, bid);
+			for (const file of input.files || []) await insertFileBlock(file, bid);
 		};
 		input.click();
 	}
-	async function insertImageFile(file, afterBid) {
+	// EINE Funktion für ALLE Uploads (DRY — ersetzt insertImageFile): Bilder werden
+	// Bildblöcke, alles andere (Video, Audio, PDF, beliebige Dateien) ein Dateiblock.
+	async function insertFileBlock(file, afterBid) {
+		const isImg = (file.type || mimeFromName(file.name)).startsWith("image/");
 		const buf = await U.readAsBuffer(file);
-		const blobId = "img:" + uid();
-		await DB.putBlob(blobId, buf, { type: file.type, name: file.name });
+		const blobId = (isImg ? "img:" : "file:") + uid();
+		await DB.putBlob(blobId, buf, { type: file.type || mimeFromName(file.name), name: file.name });
 		mutate(() => {
-			const nb = { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
+			const nb = isImg
+				? { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }
+				: { id: uid(), type: "file", src: blobId, name: file.name };
 			const c = afterBid && findContext(afterBid);
 			if (c) {
 				if (TEXTY[c.block.type] && !String(c.block.text || "").trim()) c.list.splice(c.index, 1, nb);
@@ -1669,7 +1746,7 @@ export const EDITOR = (() => {
 				// dann in den letzten editierbaren Teil des Vorgängerblocks springen.
 				// Notion löscht Tabellen/Code/Toggle/Callout hier NICHT als Ganzes.
 				mutate(() => { c.list.splice(c.index, 1); });
-				if (prev.type !== "divider" && prev.type !== "image" && prev.type !== "math" && prev.type !== "heft") {
+				if (prev.type !== "divider" && prev.type !== "image" && prev.type !== "file" && prev.type !== "math" && prev.type !== "heft") {
 					focusNeighbor(prev, -1);
 					return;
 				}
@@ -1677,7 +1754,7 @@ export const EDITOR = (() => {
 			} else if (prev.type === "divider") {
 				if (selectTopOf(prev)) field.blur();
 			} else {
-				if (prev.type !== "image" && prev.type !== "math" && prev.type !== "heft") {
+				if (prev.type !== "image" && prev.type !== "file" && prev.type !== "math" && prev.type !== "heft") {
 					focusNeighbor(prev, -1);
 					return;
 				}
@@ -1996,12 +2073,34 @@ export const EDITOR = (() => {
 				return;
 			}
 
-			// Seiteninterner Link [Titel](#pageId) → Seite öffnen
-			const a = t.closest && t.closest("a[href^='#']");
-			if (a) {
+			// Download-Knopf eines Dateiblocks (Format ohne Inline-Ansicht)
+			const fdl = t.closest && t.closest("[data-fdl]");
+			if (fdl) {
+				const b = findBlock(fdl.dataset.fdl);
+				if (b && String(b.src || "").startsWith("file:")) {
+					DB.getBlob(b.src).then((rec) => {
+						if (rec) U.downloadBlob(b.name || "Datei", new Blob([rec.buf || rec.data], { type: rec.meta && rec.meta.type || "" }));
+						else U.toast("Datei nicht gefunden", "error");
+					});
+				} else if (b && b.src) {
+					window.open(b.src, "_blank", "noopener");
+				}
+				return;
+			}
+
+			// FIX: contenteditable folgt Klicks auf <a> NIE von selbst — verlinkte Dateien
+			// und URLs wirkten deshalb „tot“. Interne #seiten-Links navigieren in der App,
+			// alles andere öffnet extern in einem neuen Tab.
+			const a = t.closest && t.closest("a[href]");
+			if (a && host.contains(a)) {
 				e.preventDefault();
-				const pid = a.getAttribute("href").slice(1);
-				if (S.pages[pid]) STATE.dispatch("navigate", { pageId: pid });
+				const href = a.getAttribute("href") || "";
+				if (href.startsWith("#")) {
+					const pid = href.slice(1);
+					if (S.pages[pid]) STATE.dispatch("navigate", { pageId: pid });
+					return;
+				}
+				window.open(href, "_blank", "noopener");
 				return;
 			}
 
@@ -2043,11 +2142,12 @@ export const EDITOR = (() => {
 		host.addEventListener("drop", async (e) => {
 			e.preventDefault();
 			clearDropMarks();
-			// Bild-Dateien direkt fallen lassen
+			// Dateien direkt fallen lassen — ALLE Formate (Bilder als Bildblock,
+			// Video/Audio/PDF/Sonstiges als Dateiblock), nicht mehr nur Bilder.
 			if (e.dataTransfer.files && e.dataTransfer.files.length) {
 				const over = e.target.closest && e.target.closest("[data-blk]");
 				for (const f of e.dataTransfer.files) {
-					if (f.type.startsWith("image/")) await insertImageFile(f, over && over.dataset.blk);
+					await insertFileBlock(f, over && over.dataset.blk);
 				}
 				dragBid = null;
 				return;
@@ -2075,10 +2175,14 @@ export const EDITOR = (() => {
 			const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
 			const items = e.clipboardData && e.clipboardData.items || [];
 			for (const item of items) {
-				if (item.type && item.type.startsWith("image/")) {
+				// ALLE Datei-Anhänge aus der Zwischenablage übernehmen (Screenshots,
+				// kopierte Videos/PDFs …) — nicht mehr nur Bilder.
+				if (item.kind === "file") {
+					const f = item.getAsFile();
+					if (!f) continue;
 					e.preventDefault();
 					const caret = caretInfo();
-					await insertImageFile(item.getAsFile(), caret && caret.bid);
+					await insertFileBlock(f, caret && caret.bid);
 					return;
 				}
 			}
@@ -2224,6 +2328,25 @@ export const EDITOR = (() => {
 		});
 	}
 
+	// ---------- Styles für Datei-/Medienblöcke (einmalig injiziert, wie notebooklm.js) ----------
+	function injectStyles() {
+		if (styleInjected) return;
+		styleInjected = true;
+		const st = document.createElement("style");
+		st.textContent = [
+			".blk-file{margin:6px 0;max-width:100%}",
+			".blk-media{display:block;max-width:100%;border-radius:8px}",
+			"video.blk-media{width:100%;max-height:480px;background:#000}",
+			"audio.blk-media{width:100%;margin-top:6px}",
+			"iframe.blk-pdfframe{width:100%;height:520px;border:1px solid rgba(128,128,128,.35);background:#fff}",
+			".blk-file-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(128,128,128,.35);border-radius:8px}",
+			".blk-file-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".blk-file-dl{flex:none;font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;cursor:pointer}",
+			".blk-file figcaption{font-size:12px;opacity:.65;margin-top:3px}",
+		].join("\n");
+		document.head.appendChild(st);
+	}
+
 	// ---------- mount() ----------
 	// render.js ruft mount(host, pageId) bei jedem renderMain — parse nur dann,
 	// wenn die Seite gewechselt hat oder der Inhalt extern (Sync) geändert wurde.
@@ -2234,6 +2357,7 @@ export const EDITOR = (() => {
 		const externallyChanged = !pageChanged && serialize() !== (pg.content || "") && !histPending;
 		host = el;
 		host.classList.add("block-editor");
+		injectStyles();
 		if (pageChanged || externallyChanged || !blocks.length) {
 			if (pageChanged) { clearSelection(); closeMenus(); }
 			if (pageChanged) scrollReserve = 0;

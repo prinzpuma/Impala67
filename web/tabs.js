@@ -131,9 +131,6 @@ export async function closeTab(pageId) {
 			if (!(await U.confirm(msg, { title: "Chat schließen", ok: "Schließen", danger: true }))) return;
 		}
 	}
-	// Das eingebettete NotebookLM-Webview liegt über der App-Oberfläche und muss
-	// verschwinden, bevor der Tab entfernt und die nächste Ansicht gerendert wird.
-	if (pageId === "nlm:main") window.dispatchEvent(new Event("impala67:nlm-hide"));
 	// Index erneut holen: während des Bestätigungsdialogs kann sich die Tab-Liste geändert haben.
 	const i = S.tabs.indexOf(pageId);
 	if (i === -1) return;

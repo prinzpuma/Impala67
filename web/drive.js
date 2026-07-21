@@ -536,6 +536,18 @@ export const DRIVE = (() => {
 			LS.removeItem("impala67_drive_known_deltas");
 		}
 
+		// Bug-4-Fix Post-Upload-Sweep: Deltas anderer Clients einlesen, die WÄHREND unseres Syncs
+		// hochgeladen wurden. Der initiale listSyncFiles()-Aufruf lag vor unserem Upload — ein
+		// gleichzeitig synchender Tab fehlt sonst und beide Clients divergieren nach dem Sync.
+		const filesAfter = await listSyncFiles();
+		const lateDeltas = unseenRemoteFiles(filesAfter.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
+		if (lateDeltas.length) {
+			setStatus("syncing", lateDeltas.length + " nachträgliche(s) Änderungspaket(e) einlesen…");
+			const lateEvents = (await mapLimit(lateDeltas, 6, downloadPayload)).flatMap((p) => Array.isArray(p?.events) ? p.events : []);
+			if (lateEvents.length) await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} }));
+			lateDeltas.forEach((f) => knownDeltaIds.add(f.id));
+			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
+		}
 		replayImported(importedEvents);
 		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
 		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
@@ -547,8 +559,10 @@ export const DRIVE = (() => {
 	// (syncInFlight wirkt nur im eigenen Tab). ifAvailable: der zweite Tab wartet nicht,
 	// sein nächster Auto-Sync holt alles nach. Ohne Locks-API: bisheriges Verhalten.
 	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], importedEvents: [], skipped: "lock" };
+	// Bug-4-Fix: kein ifAvailable — zweiter Tab wartet auf ersten, statt still übersprungen zu werden.
+	// Erst NACH dem ersten Sync lädt Tab 2 die frisch hochgeladenen Deltas und ist dann wirklich aktuell.
 	const withSyncLock = (fn) => navigator.locks?.request
-		? navigator.locks.request("impala67-drive-sync", { ifAvailable: true }, (lock) => (lock ? fn() : IDLE_RESULT))
+		? navigator.locks.request("impala67-drive-sync", fn)
 		: fn();
 	function sync(onStatus) {
 		// Laufenden Sync zurückgeben statt Fehler werfen: Doppelklick auf den Sync-Knopf

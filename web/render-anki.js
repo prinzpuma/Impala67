@@ -410,11 +410,24 @@ function ankiStudyHtml() {
 				'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">🎲 Geraten</button></div>' : "") +
 			// Zähler und Selbsteinschätzung bleiben unmittelbar beim Aufdecken.
 			'<div class="study-counts-row">' + countsHtml + "</div>" +
+			// 🧑‍🏫 Feynman-Lernmodus (beim Stapel-Start gewählt): KEIN Dialog mehr —
+			// das Erklär-Feld ist direkt in die Karte eingebaut. Diktat & Prüfung
+			// verdrahtet experimente.js (data-expfeynmic / data-expfeyncheck, Capture);
+			// nach der Prüfung deckt es die Karte automatisch auf und zeigt das
+			// Feedback über den Bewertungs-Buttons (kein Kontextwechsel mehr).
+			(S.ankiFeyn
+				? '<div class="feyn-inline" data-feyncard="' + c.id + '">' +
+					'<div class="hint feyn-inline-head">🧑‍🏫 Erkläre die Antwort in eigenen Worten — so einfach, dass es ein Kind versteht.</div>' +
+					'<textarea class="exp-answer" rows="4" placeholder="Meine Erklärung … (Strg+Enter = prüfen)"></textarea>' +
+					'<div class="row-btns feyn-inline-actions">' +
+						'<button type="button" class="mini" data-expfeynmic="1" title="Diktieren statt tippen (Web Speech API)">🎙️ Diktieren</button>' +
+						'<button type="button" class="primary" data-expfeyncheck="1" title="Die KI prüft deine Erklärung gegen die Rückseite, deckt auf und schlägt eine Note vor">Prüfen & aufdecken</button>' +
+					'</div>' +
+					'<div class="exp-feynout"></div>' +
+				'</div>'
+				: "") +
 			'<div class="modal-actions">' +
-				// 🧑‍🏫 Feynman-Lernmodus (beim Stapel-Start gewählt): Erklären ist der Hauptknopf,
-				// der Dialog kommt aus experimente.js (data-expfeynstart, Capture-Listener).
-				(S.ankiFeyn ? '<button class="primary" data-expfeynstart="1" title="Erst in eigenen Worten erklären — die KI prüft gegen die Rückseite">🧑‍🏫 Erklären</button>' : "") +
-				'<button data-ankishowback="1" data-card="' + c.id + '">Antwort zeigen</button></div>' +
+				'<button data-ankishowback="1" data-card="' + c.id + '"' + (S.ankiFeyn ? ' class="mini" title="Direkt aufdecken, ohne vorher zu erklären"' : "") + '>' + (S.ankiFeyn ? "Ohne Erklärung aufdecken" : "Antwort zeigen") + '</button></div>' +
 			'</div>';
 	}
 	html += "</div>" + studyFooterHtml(c);

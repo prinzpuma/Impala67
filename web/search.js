@@ -85,7 +85,7 @@ function actionItems() {
 		{ type: "action", icon: "▱", label: "Karten verwalten", run: () => APP.openAnki("browser") },
 		{ type: "action", icon: "📅", label: "Daily Note von heute öffnen", run: () => APP.openDailyNote(RENDER.localDayKey(new Date())) },
 		{ type: "action", icon: "🗓", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
-		{ type: "action", icon: "📓", label: "NotebookLM öffnen", run: click("btnNotebookLM") },
+		{ type: "action", icon: "📓", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
 		{ type: "action", icon: light ? "🌙" : "☀️", label: light ? "Dunkles Design" : "Helles Design", run: () => {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");
 			SETTINGS.applyTheme();

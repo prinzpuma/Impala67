@@ -483,41 +483,11 @@ export const EXTRAS = (() => {
 		U.downloadText(safe + ".md", "# " + pg.title + "\n\n" + (pg.content || ""));
 	}
 
-	// ---- NotebookLM als „eigener Tab“ (aus index.html hierher verschoben — Modul statt Inline-Script) ----
-	// Google blockiert das Einbetten per iframe (X-Frame-Options/CSP), daher eigenes Fenster:
-	// in der Tauri-App ein natives App-Fenster, sonst System-Browser bzw. randarmes Popup.
-	// Hinweis Tauri v2: das native Fenster braucht die Capability "core:webview:allow-create-webview-window"
-	// (src-tauri/capabilities/default.json) — fehlt sie, greift automatisch der Fallback.
-	async function openNotebookLM() {
-		const url = "https://notebooklm.google.com/";
-		const T = window.__TAURI__;
-		// Browser: normaler Tab. popup=yes wirkte wie eine eigene Chrome-App-Fenster.
-		// iframe ist unmöglich (X-Frame-Options/CSP von Google).
-		const openExtern = () => {
-			if (T && T.shell && T.shell.open) T.shell.open(url);
-			else window.open(url, "_blank", "noopener,noreferrer");
-		};
-		if (T && T.webviewWindow && T.webviewWindow.WebviewWindow) {
-			try {
-				// Zweiter Klick: existiert das Fenster schon, nur in den Vordergrund holen.
-				const existing = await T.webviewWindow.WebviewWindow.getByLabel("notebooklm");
-				if (existing) { existing.setFocus().catch(() => {}); return; }
-				const win = new T.webviewWindow.WebviewWindow("notebooklm", { url, title: "NotebookLM", width: 1280, height: 860 });
-				// Fehler meldet Tauri ASYNCHRON über tauri://error (nicht als Exception) → Fallback.
-				win.once("tauri://error", (e) => {
-					console.warn("NotebookLM-Fenster fehlgeschlagen, öffne im System-Browser:", e);
-					openExtern();
-				});
-				return;
-			} catch (e) { console.warn("NotebookLM-Fenster fehlgeschlagen, öffne extern:", e); }
-		}
-		openExtern();
-	}
+	// ---- 📓-Knopf in der Sidebar: Gemini-Notebook-Dialog (ehemals NotebookLM) ----
+	// Die komplette Öffnen-/Fenster-Logik lebt jetzt in notebooklm.js (NLM.openExternal),
+	// damit sie nur an EINER Stelle existiert (DRY) — hier nur noch die Verdrahtung.
 	const btnNlm = document.getElementById("btnNotebookLM");
-	// 📓-Dialog (notebooklm.js): Seiten als Quelle in die Zwischenablage, NotebookLM öffnen
-	// (Desktop: eingebettet im Hauptfenster + Download-Abgriff, sonst Fenster-Fallback oben)
-	// und übernommene Downloads abspielen/exportieren.
-	if (btnNlm) btnNlm.addEventListener("click", () => NLM.openDialog(openNotebookLM));
+	if (btnNlm) btnNlm.addEventListener("click", () => NLM.openDialog());
 
 	// ---- Eigene Event-Delegation für alle neuen Knöpfe (app.js bleibt unberührt) ----
 	document.addEventListener("click", async (e) => {
@@ -576,5 +546,5 @@ export const EXTRAS = (() => {
 		}
 	});
 
-	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd, openNotebookLM };
+	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd };
 })();

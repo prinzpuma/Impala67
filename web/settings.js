@@ -156,11 +156,11 @@ const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings"
 export const SETTINGS_SECTIONS = [
 	{ id: "ki", label: "KI" },
 	{ id: "look", label: "Darstellung" },
-	{ id: "notion", label: "Notion Sync" },
-	{ id: "backup", label: "Backup" },
-	{ id: "experimente", label: "🧪 Experimente" },
 	{ id: "sync", label: "Sync" },
+	{ id: "notion", label: "Notion" },
+	{ id: "backup", label: "Backup" },
 	{ id: "update", label: "Update" },
+	{ id: "experimente", label: "Experimente" },
 ];
 
 export function openSettings(section) {
@@ -271,13 +271,10 @@ export function openSettings(section) {
 		'</section>';
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
-		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
-			field("Notion Seiten-ID (Wurzelseite für den Sync; leer = alle freigegebenen Seiten)", "inpNotionPage", S.settings.notionPageId || S.notionPageId) +
-			field("Eigener CORS-Proxy (optional, z.B. https://dein-worker.workers.dev/?; leer = corsproxy.io)", "inpCorsProxy", S.settings.corsProxy || "") +
-			'<p class="hint">1) Auf notion.so/my-integrations eine interne Integration erstellen, Token kopieren.<br>' +
-			'2) In Notion die gewünschten Seiten über „Teilen“ mit der Integration freigeben.<br>' +
-			"3) <b>⬇ Import</b> holt alles einmalig. <b>⇅ Zwei-Wege-Sync</b> gleicht danach in beide Richtungen ab: die jeweils neuere Version gewinnt, lokal neue Seiten werden in deinem Notion unter der Wurzelseite angelegt.<br>" +
-			"Hinweis: Notions API erlaubt keine direkten Browseranfragen (CORS). Ohne eigenen Proxy laufen die Anfragen über den öffentlichen corsproxy.io — sicherer ist ein eigener Mini-Proxy (Cloudflare Worker), dessen URL du oben einträgst.</p>" +
+		body = field("Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
+			field("Wurzelseiten-ID (leer = alle freigegebenen Seiten)", "inpNotionPage", S.settings.notionPageId || S.notionPageId) +
+			field("CORS-Proxy (optional; leer = corsproxy.io)", "inpCorsProxy", S.settings.corsProxy || "") +
+			'<p class="hint">Integration auf notion.so/my-integrations erstellen, Seiten dort per „Teilen“ freigeben. <b>⬇ Import</b> holt alles einmalig, <b>⇅ Zwei-Wege-Sync</b> gleicht danach in beide Richtungen ab.</p>' +
 			(last ? '<p class="hint">Letzter Sync: ' + U.fmtDate(last) + "</p>" : "") +
 			'<div class="modal-actions"><button id="btnMigrateNotion">⬇ Import</button><button id="btnNotionSync">⇅ Zwei-Wege-Sync</button><button id="btnNotionCancel" class="danger" hidden>⏹ Abbrechen</button></div>' +
 			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
@@ -318,19 +315,19 @@ export function openSettings(section) {
 			'<button id="btnFontM" class="' + (fontSize === "m" ? "active" : "") + '">Normal</button>' +
 			'<button id="btnFontL" class="' + (fontSize === "l" ? "active" : "") + '">Groß</button></div>' +
 			'<h4>Lernen</h4>' +
-			'<p class="hint">Overlearning-Sperre: frisch bewertete Karten sind kurz gesperrt statt sofort wieder dran (schützt vor dem Kurzzeitgedächtnis-Effekt).</p>' +
+			'<p class="hint">Overlearning-Sperre — frisch bewertete Karten bleiben kurz gesperrt.</p>' +
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnLockOn" class="' + (overlearn ? "active" : "") + '">Sperre an</button>' +
 			'<button id="btnLockOff" class="' + (!overlearn ? "active" : "") + '">Aus</button></div>' +
-			'<p class="hint">Selbsteinschätzung („Wie sicher bist du?“) vor dem Aufdecken der Antwort.</p>' +
+			'<p class="hint">Selbsteinschätzung vor dem Aufdecken der Antwort.</p>' +
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnConfOn" class="' + (confidence ? "active" : "") + '">Abfrage an</button>' +
 			'<button id="btnConfOff" class="' + (!confidence ? "active" : "") + '">Aus</button></div>' +
-			'<p class="hint">Lern-Telemetrie (nur lokal): zeichnet Denk-/Antwortzeiten und Sitzungen für die Home-Insights auf.</p>' +
+			'<p class="hint">Lern-Telemetrie (nur lokal) für die Home-Insights.</p>' +
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnTeleOn" class="' + (telemetry ? "active" : "") + '">Aufzeichnung an</button>' +
 			'<button id="btnTeleOff" class="' + (!telemetry ? "active" : "") + '">Aus</button></div>' +
-			'<h4>Home-Dashboard</h4><p class="hint">Widgets ein-/ausblenden und mit den Pfeilen anordnen.</p>' +
+			'<h4>Home-Dashboard</h4>' +
 			'<div class="dashboard-settings">' + widgets.map((id, i) => '<div class="dashboard-setting-row">' +
 				'<button data-dashtoggle="' + id + '" class="dash-visible" title="Widget ausblenden">✓</button>' +
 				'<span>' + U.esc(widgetLabel[id] || id) + '</span>' +
@@ -338,7 +335,6 @@ export function openSettings(section) {
 				'<button data-dashmove="' + id + ':1" ' + (i === widgets.length - 1 ? "disabled" : "") + '>↓</button></div>').join("") +
 			'<button data-dashadd="1" class="dashboard-add">+ Ausgeblendetes Widget hinzufügen</button></div>' +
 			'<h4>Hintergrund</h4>' +
-			'<p class="hint">Eigenes Hintergrundbild für die App. Es wird lokal gespeichert und dezent überblendet, damit Text lesbar bleibt.</p>' +
 			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
 	} else if (sec === "experimente") {
 		// 🧪 Experimentelle Features (Phase 2 — KI-Lernmodi). Die Sektion wird
@@ -348,20 +344,20 @@ export function openSettings(section) {
 		body = (window.EXP && window.EXP.settingsHtml) ? window.EXP.settingsHtml() :
 			'<p class="hint">Experimente-Modul (experimente.js) nicht geladen.</p>';
 	} else if (sec === "backup") {
-		body = '<p class="hint">Manuelles Backup als JSON-Datei (Event-Log + PDFs). Ein Import wird konfliktfrei zusammengeführt (Log-Merge) — ideal auch über einen Google-Drive-Ordner.</p>' +
+		body = '<p class="hint">Backup als JSON-Datei (Event-Log + PDFs) — ein Import wird konfliktfrei zusammengeführt.</p>' +
 			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
 			// Lern-Telemetrie: Rohdaten-Export für eigene Auswertungen. Der Klick auf
 			// #btnTeleExport wird zentral in telemetrie.js behandelt (Capture-Listener) —
 			// hier ist bewusst KEINE Verdrahtung nötig.
 			'<h4>Lerndaten (Telemetrie)</h4>' +
-			'<p class="hint">Alle Lern-Telemetriedaten (Bewertungen mit Denk- und Antwortzeiten, Sitzungen, Fokus-Ereignisse, Selbsteinschätzung) als JSON — z. B. für eigene Auswertungen.</p>' +
+			'<p class="hint">Alle Lern-Telemetriedaten als JSON für eigene Auswertungen.</p>' +
 			'<div class="row-btns"><button id="btnTeleExport">📊 Lerndaten exportieren</button></div>' +
 			'<h4>Workspace als Markdown-ZIP</h4>' +
-			'<p class="hint">Alle Seiten eines Workspace als .md-Dateien (Ordnerstruktur = Seitenbaum) — in jedem Editor nutzbar.</p>' +
+			'<p class="hint">Alle Seiten als .md-Dateien (Ordnerstruktur = Seitenbaum).</p>' +
 			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>
 				'<button data-zipws="' + U.esc(ws.id) + '">🗜 ' + U.esc(ws.name) + "</button>").join("") + "</div>" +
 			'<h4 class="danger-label">⚠️ Gefahrenzone</h4>' +
-			'<p class="hint">Löscht alle lokalen Seiten und deren Versionsverlauf unwiderruflich von diesem Gerät. Deine Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
+			'<p class="hint">Löscht alle lokalen Seiten unwiderruflich. Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
 			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
 	} else if (sec === "sync") {
 		// AUFGERÄUMT: EIN klarer Zweig pro Zustand — Desktop-App (Tauri) und Browser/PWA
@@ -385,22 +381,18 @@ export function openSettings(section) {
 		if (S.driveUserEmail) {
 			// 1) Bereits verbunden — egal auf welchem Weg.
 			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
-				'<p class="hint">Deine Notizen synchronisieren sich mit deinem privaten Google-Drive-App-Speicher (für andere Apps unsichtbar).</p>' +
+				'<p class="hint">Sync läuft über deinen privaten Google-Drive-App-Speicher.</p>' +
 				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
 		} else if (inTauri && (!desktopId || !desktopSecret)) {
 			// 2) Desktop-App ohne vollständige Desktop-Zugangsdaten (config.local.js fehlte im Build).
 			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", S.settings.driveDesktopClientId || desktopId) +
 				field("Google Desktop-Client-Secret (GOCSPX-…)", "inpDriveDesktopSecret", S.settings.driveDesktopClientSecret || "", "password") +
-				'<p class="hint">Beides steht in der Google Cloud Console direkt beim OAuth-Client vom Typ „Desktop-App“. Google verlangt das Secret beim Token-Tausch auch mit PKCE — bei Desktop-Apps gilt es laut Google ausdrücklich nicht als geheim. Einmal speichern, danach reicht ein Klick auf „Mit Google anmelden“. Alternativ: <code>web/config.local.js</code> befüllen und die App neu bauen.</p>' +
+				'<p class="hint">Beides steht in der Google Cloud Console beim OAuth-Client „Desktop-App“. Einmal speichern — danach reicht „Mit Google anmelden“. Alternativ <code>web/config.local.js</code> befüllen.</p>' +
 				saveActionsHtml;
 		} else if (!inTauri && !S.settings.driveClientId) {
 			// 3) Browser/PWA ohne Web-Client-ID.
 			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
-				'<p class="hint">Google verlangt für jede App eine registrierte Client-ID — das ist einmalig nötig:<br>' +
-				"1) Google Cloud Console → Drive-API aktivieren.<br>" +
-				'2) OAuth-Client vom Typ „Webanwendung“ anlegen, <code>' + location.origin + '</code> als autorisierten Ursprung eintragen.<br>' +
-				"3) Client-ID hier einfügen und speichern.<br>" +
-				"Danach reicht wirklich nur noch ein Klick auf „Mit Google anmelden“.</p>" +
+				'<p class="hint">Einmalig: Google Cloud Console → Drive-API aktivieren, OAuth-Client „Webanwendung“ mit <code>' + location.origin + '</code> als Ursprung anlegen, Client-ID hier speichern.</p>' +
 				saveActionsHtml;
 		} else {
 			// 4) Client-ID vorhanden — nur noch anmelden.
@@ -418,16 +410,14 @@ export function openSettings(section) {
 			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button>' +
 			'<button id="btnApplyPwaUpdate" hidden>Update installieren</button>' +
 			"</div>" +
-			'<p class="hint" id="updateStatus">Prüfe Version…</p>' +
-			'<p class="hint">PWA liest <code>version.json</code> von dieser App-URL (nicht das GitHub-Release-Asset). ' +
-			'Dateien im <code>web/</code>-Ordner deployen: <code>version.json</code>, <code>updater.js</code>, <code>latest.json</code>.</p>';
+			'<p class="hint" id="updateStatus">Prüfe Version…</p>';
 	}
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
 	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>' + (sec === "ki" ? "KI" : "Einstellungen") + '</h3>' + body + "</div></div>";
+		'<div class="settings-body"><h3>' + U.esc(((SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
 	// KI-Tab: Status + Inhalte des aktiven Unter-Tabs laden (lazy je Tab).

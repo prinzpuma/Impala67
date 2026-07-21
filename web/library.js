@@ -185,15 +185,15 @@ function openLibCoverPicker(pageId) {
 		'<button type="button" id="btnCloseOverlay">Schließen</button></div></div>'; 
 }
 
-// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 📥 NotebookLM ----------
+// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 📥 Gemini Notebook ----------
 // Dasselbe Heft existiert nur EINMAL (eine Seiten-ID) — die Ansichten sind nur
 // verschiedene Zuordnungen: Notion = Seitenbaum (Hefte als normale Unterseiten),
-// GoodNotes = flaches Regal mit Ordnern (= Workspaces), NotebookLM = Artefakt-
+// GoodNotes = flaches Regal mit Ordnern (= Workspaces), Gemini Notebook = Artefakt-
 // Mediathek (Inbox + eingeordnete Downloads). Keine Kopien, nie zwei IDs.
 function libModeTabsHtml() {
 	const mode = S.libMode || "notion";
 	const b = (m, label) => '<button class="lib-mode' + (mode === m ? " active" : "") + '" data-libmode="' + m + '">' + label + "</button>";
-	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("nlm", "📥 NotebookLM") + "</div>";
+	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("nlm", "📥 Gemini Notebook") + "</div>";
 }
 
 export function renderLibrary(main) {
@@ -366,7 +366,7 @@ export function renderHefteShelf(main) {
 	hydrateCovers(main);
 }
 
-// ---------- NotebookLM-Ansicht: Inbox (noch nicht eingeordnet) + Mediathek ----------
+// ---------- Gemini-Notebook-Ansicht (ehemals NotebookLM): Inbox + Mediathek ----------
 const NLM_FILTERS = [["all", "Alle"], ["inbox", "📥 Inbox"], ["audio", "🎧 Podcasts"], ["video", "🎬 Videos"], ["mindmap", "🧠 Mind Maps"], ["slides", "📑 Folien"]];
 export function renderNlmLibrary(main) {
 	main.innerHTML = '<div class="library lib-docs lib-nlm">' +
@@ -400,7 +400,7 @@ export function renderNlmLibrary(main) {
 				'<button data-nlmlibdel="' + f.id + '" title="Löschen">🗑</button></span></div>';
 		}).join("");
 		body.innerHTML = '<div class="lib-tabs">' + tabs + "</div>" +
-			(rows || '<div class="empty small">Noch keine NotebookLM-Dateien — Downloads aus dem 📓-Tab (Desktop) landen automatisch hier.</div>');
+			(rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im 📓-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>');
 	});
 }
 
