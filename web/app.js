@@ -335,15 +335,22 @@ function wireEvents() {
 		await STATE.dispatch("pageCreate", { id: U.uid(), title: "Neue Zeile", parentId: dbPg.id, workspaceId: dbPg.workspaceId || "default", props: {} });
 	});
 
-	// Links auf lokale Seiten abfangen (importierte UUIDs mit ODER ohne Bindestriche)
+	// Links auf lokale Seiten abfangen (importierte UUIDs mit ODER ohne Bindestriche).
+	// FIX „Seite springt nach oben“ (Teil 1): tote/leere #-Anker (href="#" oder
+	// unbekannte IDs) lösten bisher die Browser-Hash-Navigation aus — und die
+	// scrollt das Dokument an den Anfang. Interne Anker ohne echtes Ziel werden
+	// deshalb IMMER abgefangen, nicht nur bekannte Seiten-IDs.
 	document.addEventListener("click", (e) => {
 		const a = e.target.closest("a");
 		if (!a) return;
-		const rawId = (a.getAttribute("href") || "").replace(/^(#|\/)/, "");
+		const href = a.getAttribute("href") || "";
+		const rawId = href.replace(/^(#|\/)/, "");
 		const id = S.pages[rawId] ? rawId : rawId.replace(/-/g, "");
 		if (S.pages[id]) {
 			e.preventDefault();
 			openPage(id);
+		} else if (href.startsWith("#")) {
+			e.preventDefault();
 		}
 	});
 
@@ -660,7 +667,7 @@ function wireEvents() {
 			return;
 		}
 
-		// Modell aus der eigenen Dropdown-Liste wählen (Wert kodiert als "quelleId::modell")
+		// Modell wählen (Chat-Dropdown ODER Einstellungen → KI) — Wert "quelleId::modell"
 		if (t.dataset.modelset) {
 			const raw = t.dataset.modelset;
 			const sep = raw.indexOf("::");
@@ -669,10 +676,18 @@ function wireEvents() {
 			await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 			S.modelMenuOpen = false;
 			renderModelBar();
+			// Auswahl in offenen KI-Einstellungen sofort als aktiv markieren
+			if (typeof SETTINGS.paintSettingsModels === "function") SETTINGS.paintSettingsModels();
 			// Jede Auswahl startet die modellbezogene Probe sofort. Das Thinking-
 			// Menü zeigt später ausschließlich die bestätigten Stufen dieses Modells.
 			AI.detectThinkingCapabilities().then(renderModelBar, renderModelBar);
 			SETTINGS.checkAI();
+			return;
+		}
+
+		// KI-Einstellungen: horizontaler Unter-Tab (Modelle | Quellen | Mehr)
+		if (t.dataset.aitab) {
+			SETTINGS.switchKiTab(t.dataset.aitab);
 			return;
 		}
 
@@ -710,6 +725,7 @@ function wireEvents() {
 			// FIX: dito für die Embedding-Quelle — zurück auf „automatisch".
 			if (S.settings.embedProviderId === t.dataset.provdel) patch.embedProviderId = "";
 			await STATE.dispatch("settingsSet", patch);
+			S.settingsKiTab = "sources";
 			SETTINGS.openSettings("ki");
 			return;
 		}
@@ -1313,6 +1329,12 @@ function wireEvents() {
 			case "btnAddProvider":
 				await SETTINGS.handleAddProvider();
 				break;
+			case "btnRefreshModels":
+				await SETTINGS.refreshChatModels();
+				break;
+			case "btnApplyCustomModel":
+				await SETTINGS.handleApplyCustomModel();
+				break;
 			case "btnRefreshEmbedding":
 				await SETTINGS.refreshEmbeddingModels();
 				break;
@@ -1665,14 +1687,21 @@ function wireEvents() {
 		CHAT_FULLSCREEN.handlePaste(e);
 	});
 
-	// 📱 FIX iPad-Tastatur: iOS stellt den Fenster-Scroll nach dem Einklappen nicht
-	// zurück (App „hängt oben“) → beim Schließen/Fokusverlust auf 0/0 zurücksetzen
+	// 📱 FIX iPad-Tastatur v2 — ROOT-CAUSE-FIX „Seite springt nach oben“ (Teil 2):
+	// Der frühere pauschale focusout-Listener setzte auf ALLEN Geräten bei JEDEM
+	// Fokusverlust den Scroll auf 0/0 zurück — daher der Sprung nach oben, egal wo
+	// man in der App war. Jetzt gilt (KISS): zurückgesetzt wird nur noch, wenn
+	// (a) vorher wirklich eine Bildschirmtastatur offen war (visualViewport) und
+	// (b) das Fenster tatsächlich verschoben ist. Sonst passiert exakt nichts.
 	const isEditing = () => {
 		const a = document.activeElement;
 		return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
 	};
+	const viewportDisplaced = () =>
+		window.scrollY > 0 || document.documentElement.scrollTop > 0 || document.body.scrollTop > 0 ||
+		(window.visualViewport && window.visualViewport.offsetTop > 0);
 	const resetViewportScroll = () => {
-		if (isEditing()) return; // Tastatur ist (noch) offen → nichts tun
+		if (isEditing() || !viewportDisplaced()) return; // Tastatur offen ODER nichts verschoben → nichts tun
 		window.scrollTo(0, 0);
 		document.documentElement.scrollTop = 0;
 		document.body.scrollTop = 0;
@@ -1684,8 +1713,11 @@ function wireEvents() {
 			if (kbOpen && !open) setTimeout(resetViewportScroll, 60);
 			kbOpen = open;
 		});
+		// Fokusverlust NUR bei offener Tastatur nachziehen — nie mehr global.
+		document.addEventListener("focusout", () => {
+			if (kbOpen) setTimeout(resetViewportScroll, 100);
+		});
 	}
-	document.addEventListener("focusout", () => setTimeout(resetViewportScroll, 100));
 }
 
 export const APP = {

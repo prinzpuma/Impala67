@@ -42,7 +42,7 @@ body.density-compact .library { padding: 24px 30px }
 :root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent: #6fc3ff; --accent-soft: rgba(111, 195, 255, 0.12); --accent-border: rgba(111, 195, 255, 0.35); --danger: #e97366; --danger-soft: rgba(233, 115, 102, 0.14); --success: #72bc8f; --success-soft: rgba(114, 188, 143, 0.15); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --shadow: rgba(0, 0, 0, 0.50); --shadow-strong: rgba(0, 0, 0, 0.55); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --radius: 12px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; scrollbar-width: thin; scrollbar-color: rgba(148,158,178,.35) transparent; --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-xs: 12px; --text-sm: 13px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --focus-ring: 0 0 0 3px var(--accent-soft); --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; color-scheme: dark; accent-color: var(--accent) }
 /* == Bewegungsprinzipien: ruhig, konsistent, performant == */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
-button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease }
+button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
 button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active { transform: scale(.98) }
 /* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN tr… */
 .row:active, .deck-row:active { background: var(--surface-active) }
@@ -75,7 +75,7 @@ body.light select { color-scheme: light; background-image: url("data:image/svg+x
 select option, select optgroup { background: var(--menu-bg); color: var(--text) }
 input:focus, textarea:focus, select:focus { border-color: var(--accent) }
 #tree { flex: 1; overflow-y: auto }
-.row { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-radius: 8px; cursor: pointer; color: var(--text2) }
+.row { display: flex; align-items: center; gap: 2px; padding: 7px 8px; border-radius: 8px; cursor: pointer; color: var(--text2) }
 .row-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px }
 .row-add { opacity: 0; min-height: 0; height: 22px; padding: 0 7px; border: none; background: transparent; color: var(--text2); font-size: 15px; line-height: 1 }
 .row:hover .row-add { opacity: 1 }
@@ -114,7 +114,7 @@ button.danger { color: var(--danger) }
 .row { position: relative }
 .page-menu, .attach-menu, .refine-menu { display: flex; flex-direction: column; gap: 2px; padding: 5px; min-width: 180px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg, 10px); box-shadow: 0 12px 32px var(--shadow) }
 .page-menu { position: absolute; top: 100%; right: 6px; z-index: 9; margin-top: 2px }
-.page-menu button, .attach-menu button, .refine-menu button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 7px 8px; border: none; border-radius: 6px; min-height: 32px }
+.page-menu button, .attach-menu button, .refine-menu button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 8px 10px; border: none; border-radius: 6px; min-height: 34px }
 .page-menu button:hover, .attach-menu button:hover, .refine-menu button:hover { background: var(--surface-hover-strong); color: var(--text) }
 .page-menu button.danger { color: var(--danger) }
 .page-menu button.danger:hover { background: var(--danger-soft); color: var(--danger) }
@@ -216,7 +216,7 @@ button.danger { color: var(--danger) }
 .menu-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 8px 8px 3px }
 /* UI-Fix v7: min. 11px */
 .menu-note { font-size: 13px; color: var(--text2); padding: 8px }
-.menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 7px 8px; border-radius: 6px }
+.menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: 13px; padding: 8px 10px; border-radius: 6px }
 .menu-item:hover { background: var(--surface-hover); color: var(--text) }
 .menu-item.active { background: var(--accent-soft); color: var(--text) }
 .menu-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -232,9 +232,10 @@ button.danger { color: var(--danger) }
 .model-submenu-row small { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2) }
 .model-submenu-back { min-height: 28px; margin: 2px 4px 5px; padding: 3px 6px; background: transparent; color: var(--text2); font-size: 13px }
 .model-submenu-back:hover { background: var(--surface-hover); color: var(--text) }
-#chatLog { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px }
-.msg { font-size: 15px; line-height: 1.55; max-width: 100% }
-.msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble); border-radius: 12px; padding: 8px 12px; position: relative }
+#chatLog { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px }
+/* Konsistenz: Chat nutzt exakt die Editor-Typografie (16px / 1.6) — KI wirkt „aus einem Guss“ */
+.msg { font-size: var(--font-base, 16px); line-height: 1.6; max-width: 100% }
+.msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble); border-radius: 12px; padding: 10px 14px; position: relative }
 .msg-edit { position: absolute; top: -10px; left: -10px; min-height: 0; width: 22px; height: 22px; padding: 0; border-radius: 50%; background: var(--panel-solid); border: 1px solid var(--edge); font-size: 11px; opacity: 0; transition: opacity .12s }
 .msg.user:hover .msg-edit { opacity: 1 }
 .msg-edit:hover { color: var(--accent) }
@@ -291,7 +292,7 @@ button.danger { color: var(--danger) }
 .change-page-icon { font-size: 36px; line-height: 1 }
 .change-page-title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; color: var(--text) }
 .change-page-body { max-width: 720px }
-.change-page-body.md, .change-block.md { font-size: 15px; line-height: 1.55 }
+.change-page-body.md, .change-block.md { font-size: 15px; line-height: 1.6 }
 .change-block { border-radius: 6px; padding: 2px 8px; margin: 2px 0 }
 .change-block.add { background: rgba(114,188,143,0.16); box-shadow: inset 3px 0 0 rgba(114,188,143,0.75) }
 .change-block.del { background: rgba(233,115,102,0.12); box-shadow: inset 3px 0 0 rgba(233,115,102,0.7); opacity: .85; text-decoration: line-through; text-decoration-color: rgba(233,115,102,.55) }
@@ -481,7 +482,7 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab { display: 
 .home { padding: 28px 32px; overflow-y: auto }
 .home h1 { margin-bottom: 4px }
 .home h3 { margin: 22px 0 10px; color: var(--text2); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px }
-.settings-modal { flex-direction: row; gap: 0; padding: 0; width: min(720px, 94vw); height: min(520px, 84vh); overflow: hidden; position: relative }
+.settings-modal { flex-direction: row; gap: 0; padding: 0; width: min(720px, 94vw); height: min(520px, 84vh); max-height: 84vh; overflow: hidden; position: relative; align-items: stretch }
 /* ✕ oben rechts (wie in Notion) statt Schließen-Button unten */
 .modal-x { position: absolute; top: 10px; right: 10px; z-index: 2; min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: 6px; background: transparent; color: var(--text2); font-size: 14px; display: flex; align-items: center; justify-content: center }
 .modal-x:hover { background: var(--surface-active); color: var(--text) }
@@ -489,7 +490,7 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab { display: 
 .set-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text2) }
 .set-item:hover { background: var(--edge-soft) }
 .set-item.active { background: var(--accent-soft); color: var(--accent) }
-.settings-body { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto }
+.settings-body { flex: 1; min-width: 0; min-height: 0; padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto }
 /* == Status, Split-Editor, PDF, Kartenmanager == */
 /* .dot / .ai-status-chip: siehe „KI-Status-Pille“ weiter oben —… */
 .mode-btns { display: flex; border: 1px solid var(--edge); border-radius: 8px; overflow: hidden }
@@ -644,7 +645,8 @@ body.light ::-webkit-scrollbar-thumb { background: rgba(60,60,60,.30); backgroun
 /* == Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout == */
 @media (max-width: 768px) {
 	/* Größere Tipp-Flächen (Richtwert ~40px) für kleine Icon-Knöpfe,… */
-	.navbtn, .row-add, .tabchip-x, .tab { min-height: 40px }
+	.navbtn, .row-add, .tabchip-x, .tab { min-height: 44px }
+	.navbtn, .tab { min-width: 44px }
 	/* Langes Antippen zeigte bisher auf iOS/Android ein Auswahl-/Kop… */
 	.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
 	/* Sichtbares Antipp-Feedback statt der auf Touch nicht existiere… */
@@ -821,8 +823,7 @@ button.primary:hover { filter: brightness(1.06) }
 	from { opacity: 0; transform: translateY(10px) scale(.97) }
 }
 /* == Feinschliff: einheitliche dezente Übergänge + kleine Spieler == */
-button { transition: background .15s ease, color .15s ease, transform .08s ease }
-button:active:not(.row-chevron) { transform: scale(.97) }
+/* DRY: Button-Übergänge + :active-Scale sind kanonisch oben im Bewegungssystem (Design-System v2) definiert */
 .side-foot button { display: flex; align-items: center; gap: 8px }
 .side-foot button svg, .tab svg { flex-shrink: 0 }
 #btnReview.attention svg { animation: wiggle 2.6s ease-in-out infinite }
@@ -1416,8 +1417,8 @@ body.reduce-motion .heft-tray { animation: none }
 	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge) }
 	.set-item { padding: 6px 10px }
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
-	.menu-item, .side-foot button { min-height: 40px }
-	.row { min-height: 36px }
+	.menu-item, .side-foot button { min-height: 44px }
+	.row { min-height: 44px }
 	#palette { padding-top: 6vh; padding-bottom: 70px }
 	.palette-box { max-height: 76vh }
 }
@@ -1687,7 +1688,7 @@ body.light .blk-text a { color: #2c2c2b; text-decoration-color: rgba(44, 44, 43,
 body.light .blk-text:empty::before { color: rgba(44, 44, 43, .32) }
 body.light ::-webkit-scrollbar-thumb { background: rgba(44, 44, 43, .20) }
 /* == Light theme v2 — warmes Papier statt klinischem Weiß == */
-body.light { --bg0: #f2efe9; --bg1: #faf8f4; --panel-solid: #fffdfa; --menu-bg: #fffdfa; --bubble: #e4f0fb; --text: #292926; --text2: #706e68; --accent: #2478c7; --accent-soft: #ddecfa; --accent-border: rgba(36, 120, 199, .36); --danger: #d84d43; --danger-soft: #fce9e7; --success: #37845a; --success-soft: #e8f1ec; --surface-faint: #fdfbf7; --surface-subtle: #f7f4ee; --surface: #f0ede6; --surface-hover: #e9e5dd; --surface-hover-strong: #dfdad0; --surface-active: #d5cec3; --edge-soft: #e8e2d8; --edge: #d9d2c7; --input-bg: #f7f4ee; --overlay-bg: rgba(46, 42, 35, .24); --shadow: rgba(63, 53, 38, .10); --shadow-strong: rgba(63, 53, 38, .18); --glow-1: #fffdf9; --glow-2: #f7f3ec; --glow-3: #eee9e0 }
+body.light { --bg0: #f2efe9; --bg1: #faf8f4; --panel-solid: #fffdfa; --menu-bg: #fffdfa; --bubble: #e4f0fb; --text: #292926; --text2: #5c5a54; --accent: #2478c7; --accent-soft: #ddecfa; --accent-border: rgba(36, 120, 199, .36); --danger: #d84d43; --danger-soft: #fce9e7; --success: #37845a; --success-soft: #e8f1ec; --surface-faint: #fdfbf7; --surface-subtle: #f7f4ee; --surface: #f0ede6; --surface-hover: #e9e5dd; --surface-hover-strong: #dfdad0; --surface-active: #d5cec3; --edge-soft: #ddd6ca; --edge: #c9c1b2; --input-bg: #f7f4ee; --overlay-bg: rgba(46, 42, 35, .24); --shadow: rgba(63, 53, 38, .10); --shadow-strong: rgba(63, 53, 38, .18); --glow-1: #fffdf9; --glow-2: #f7f3ec; --glow-3: #eee9e0 }
 /* Drei ruhige Ebenen statt einer endlosen weißen Fläche. */
 body.light #bg { background: radial-gradient(1200px 760px at 76% -12%, #fffdf9 0%, #f6f1e9 52%, #ebe5da 100%) }
 body.light #sidebar { background: #f1ede6 }
@@ -1780,45 +1781,35 @@ body.light .heft-chrome .heft-tray .heft-opt.active, body.light .heft-chrome .he
 	.ai-provider-add { align-items: flex-start; flex-direction: column }
 	.ai-settings-advanced summary small { display: none }
 }
-/* KI-Einstellungen v2: alles Wesentliche in einer ruhigen, kompa… */
-.settings-body:has(.ai-settings) { padding-top: 16px }
-.ai-settings { gap: 10px }
+/* KI-Einstellungen: Body füllt die Modal-Höhe; Pane scrollt; Speichern fix unten.
+   overflow:hidden nur hier — andere Settings-Tabs brauchen normalen Body-Scroll. */
+.settings-body:has(.ai-settings) { padding: 14px 16px 0; gap: 10px; overflow: hidden }
+.settings-body:has(.ai-settings) > h3 { flex: 0 0 auto; margin: 0 0 2px; font-size: 15px; font-weight: 700 }
 .ai-settings-hero { display: none }
 .ai-connection-head { align-items: center; margin: 0 0 8px }
 .ai-connection-head h4 { font-size: 13px }
 .ai-connection-head p { display: none }
-.ai-settings .ai-status-banner { min-height: 32px; margin: 0 0 8px; padding: 5px 8px; border-radius: 8px; font-size: 12px }
-.ai-settings .ai-status-banner #btnRecheckAI { min-height: 24px; padding: 2px 7px; font-size: 11px }
+.ai-settings .ai-status-banner { flex: 0 0 auto; min-height: 34px; margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px }
+.ai-settings .ai-status-banner #btnRecheckAI { min-height: 26px; padding: 2px 8px; font-size: 11px }
 .ai-settings .provider-list { gap: 6px }
-.ai-settings .provider-card { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(160px, 1.3fr) minmax(130px, 1fr); gap: 6px; align-items: center; padding: 6px; border-radius: 8px }
-.ai-settings .provider-card-head { display: flex; min-width: 0; margin: 0; gap: 3px }
-.ai-settings .provider-card input { min-width: 0; height: 30px; padding: 5px 7px; border-radius: 6px; font-size: 12px }
-.ai-settings .provider-card input + input { margin: 0 }
-.ai-settings .provider-card .icon-danger { width: 28px; height: 30px; flex: 0 0 28px; font-size: 12px }
-.ai-provider-add { justify-content: space-between; padding-top: 8px }
-.ai-provider-add button { min-height: 28px; padding: 3px 8px; font-size: 12px }
-.ai-provider-add span { font-size: 11px }
+.ai-provider-add { justify-content: flex-start; flex-wrap: wrap; padding-top: 4px; gap: 6px }
+.ai-provider-add button { min-height: 30px; padding: 4px 10px; font-size: 12px }
 .ai-presets > div:first-child { display: contents }
-.ai-presets h4 { font-size: 11px; color: var(--text2); white-space: nowrap }
-.ai-presets p { display: none }
+.ai-presets h4, .ai-presets p { display: none }
 .ai-preset-grid { display: flex; flex: 1; gap: 5px }
 .ai-preset-grid button { min-height: 28px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 8px; font-size: 11px }
 .ai-preset-grid button > span { display: inline; font-size: 13px }
 .ai-preset-grid b { font-size: 11px; font-weight: 600 }
 .ai-preset-grid small { display: none }
 .ai-settings-advanced { border-radius: 8px }
-.ai-settings-advanced summary { min-height: 32px; padding: 6px 9px; font-size: 12px }
-.ai-settings-advanced summary::after { font-size: 16px }
-.ai-settings-advanced summary small { font-size: 11px }
-.ai-settings-advanced-body { padding: 0 9px 9px }
-.ai-settings .modal-actions { position: sticky; bottom: -20px; margin: 0 -24px -20px; padding: 9px 24px; background: color-mix(in srgb, var(--menu-bg) 92%, transparent); border-top: 1px solid var(--edge-soft) }
-.ai-settings .modal-actions button { min-height: 30px; padding: 4px 11px; font-size: 12px }
+/* Speichern: feste Fußleiste im KI-Panel — nie abgeschnitten */
+.ai-settings > .modal-actions,
+.ai-settings > .ai-settings-foot { flex: 0 0 auto; position: static !important; margin: 0 -16px 0 !important; padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important; background: var(--menu-bg); border-top: 1px solid var(--edge-soft); justify-content: flex-end; bottom: auto !important }
+.ai-settings > .modal-actions button,
+.ai-settings > .ai-settings-foot button { min-height: 34px; padding: 6px 16px; font-size: 13px; font-weight: 650 }
 @media (max-width: 620px) {
-	.ai-settings .provider-card { grid-template-columns: 1fr; gap: 5px; padding: 8px }
-	.ai-settings .provider-card-head { gap: 5px }
 	.ai-presets { align-items: flex-start; flex-direction: column }
 	.ai-preset-grid { width: 100% }
-	.ai-settings .modal-actions { bottom: -20px }
 }
 /* Kompakte Auswahl: nur echte Embedding-Modelle der aktiven KI-Q… */
 .embedding-picker { display: grid; gap: 4px }
@@ -1888,13 +1879,10 @@ img { -webkit-user-drag: none }
 	.grade-key, .study-keys { display: none !important }
 	input, textarea, select { font-size: max(16px, 1em) }
 }
-@media (prefers-reduced-motion: reduce) {
-	*, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important }
-}
+/* DRY: Reduce-Motion ist kanonisch weiter oben definiert (body.reduce-motion + Media-Query) — Duplikat entfernt */
 /* native Checkboxen/Radios/Progress in Akzentfarbe */
 ::placeholder { color: var(--text2); opacity: .7 }
 input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-box-shadow: inset 0 0 0 1000px var(--surface); -webkit-text-fill-color: var(--text); caret-color: var(--text); transition: background-color 9999s ease-out }
-button { transition: background-color .15s ease, color .15s ease, border-color .15s ease, opacity .15s ease, box-shadow .15s ease }
 button.danger:hover:not(:disabled) { background: var(--danger-soft) }
 button, .tabchip, .row, .deck-row { -webkit-touch-callout: none }
 /* kein iPad-Langdruck-Menue auf UI-Chrome */
@@ -1902,8 +1890,11 @@ button, .tabchip, .row, .deck-row { -webkit-touch-callout: none }
 h3, h4 { text-wrap: balance }
 .settings-body h4.danger-label { color: var(--danger) }
 @media (pointer: coarse) {
-	.mini { height: 30px }
-	.modal-x { width: 36px; height: 36px }
+	/* Apple-HIG: ≥44×44px Tippfläche für kleine Bedienelemente; inline sitzende Mini-Knöpfe mind. 40px */
+	.mini { height: 40px; min-width: 40px }
+	.modal-x { width: 44px; height: 44px }
+	.composer-tool, #chatForm #btnAttach, .chat-form-full #btnAttachFull { width: 38px; height: 38px }
+	.msg-tool-btn { min-height: 38px }
 }
 /* == Feinschliff v10: KI-Chat == */
 .md pre { position: relative }
@@ -1954,17 +1945,100 @@ h3, h4 { text-wrap: balance }
 .exp-wait { padding: 14px 0; color: var(--text2) }
 .exp-honesty { text-align: center; margin: 6px 0 }
 /* ---------- Einstellungen → KI: „Tools immer mitsenden“ (Tool-Angebot v3) ---------- */
-.ai-tools-toggle { margin: 14px 0 4px }
+.ai-tools-toggle { margin: 8px 0 4px; display: flex; width: 100%; gap: 10px; align-items: flex-start; cursor: pointer }
 .ai-tools-toggle label { display: flex; width: 100%; gap: 10px; align-items: flex-start; cursor: pointer }
 /* Checkbox vom globalen Input-Styling (Padding/BG/Rahmen) ausnehmen — iPadOS/Safari */
 .ai-tools-toggle input[type="checkbox"] { -webkit-appearance: checkbox; appearance: auto; width: 18px; height: 18px; min-width: 18px; padding: 0; margin: 3px 0 0; background: initial; border: initial; border-radius: 4px; accent-color: var(--accent) }
 /* Der Text darf innerhalb der schmalen Einstellungen-Spalte wirklich umbrechen. */
-.ai-tools-toggle label > span { flex: 1 1 auto; min-width: 0 }
+.ai-tools-toggle label > span, .ai-tools-toggle > span { flex: 1 1 auto; min-width: 0 }
 .ai-tools-toggle b { display: block }
 .ai-tools-toggle small { display: block; color: var(--text2); margin-top: 2px; overflow-wrap: anywhere }
 @media (max-width: 620px) {
 	.ai-tools-toggle { margin-top: 10px }
 	.ai-tools-toggle label { gap: 9px }
+}
+/* ---------- KI-Settings v7: kompakt wie zuvor, wenig Text ---------- */
+.ai-settings { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1 1 auto; overflow: hidden }
+.ai-tabs { flex: 0 0 auto; display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface-subtle); border: 1px solid var(--edge-soft) }
+.ai-tab { flex: 1; min-height: 28px; padding: 4px 8px; border: none; border-radius: 6px; background: transparent; color: var(--text2); font-size: 12px; font-weight: 650; cursor: pointer }
+.ai-tab:hover { color: var(--text); background: var(--surface-hover) }
+.ai-tab.active { background: var(--panel-solid); color: var(--text); box-shadow: inset 0 0 0 1px var(--edge-soft) }
+.ai-tab-panes { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column }
+.ai-tab-pane { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 1px 10px; -webkit-overflow-scrolling: touch }
+.ai-tab-pane[hidden] { display: none !important }
+.ai-pane-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 6px }
+.ai-active-pill { display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% - 36px); min-height: 26px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--text); font-size: 12px }
+.ai-active-pill b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650 }
+.ai-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto }
+.ai-icon-btn { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 6px; border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text2); font-size: 13px; display: grid; place-items: center; flex: 0 0 28px }
+.ai-icon-btn:hover { color: var(--text); border-color: var(--edge); background: var(--surface-hover) }
+.ai-icon-btn.danger { color: var(--danger) }
+.ai-icon-btn.danger:hover { background: var(--danger-soft) }
+.ai-ghost-btn { min-height: 28px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--edge-soft); background: transparent; color: var(--text); font-size: 12px; font-weight: 600 }
+.ai-ghost-btn:hover { background: var(--surface-hover); border-color: var(--edge) }
+.ai-chip-btn { min-height: 26px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text2); font-size: 11px; font-weight: 600 }
+.ai-chip-btn:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft) }
+.ai-soft-meta { margin: 0; font-size: 11px; color: var(--text2); line-height: 1.35 }
+.ai-soft-meta[hidden] { display: none !important }
+/* Modell-Liste — kompakt */
+.settings-model-list { flex: 1 1 auto; min-height: 120px; overflow-y: auto; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-faint); padding: 3px }
+.settings-model-list .menu-label { padding: 6px 8px 2px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--text2) }
+.settings-model-list .menu-note { padding: 12px 8px; text-align: center; color: var(--text2); font-size: 12px }
+.settings-model-list .model-row { align-items: stretch; gap: 2px; margin: 1px 0 }
+.settings-model-list .model-row .menu-item { flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; min-height: 36px; border-radius: 6px }
+.settings-model-list .menu-item-label { white-space: normal; line-height: 1.25; font-size: 12.5px; font-weight: 600; color: var(--text) }
+.settings-model-src { font-size: 11px; color: var(--text2); line-height: 1.15 }
+.settings-model-list .model-row .menu-item.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.settings-model-list .model-row .menu-item.active .settings-model-src { color: var(--accent) }
+.settings-model-list .model-fav { width: 30px; min-height: 36px; border-radius: 6px; font-size: 13px; color: var(--text2) }
+.settings-model-list .model-fav.on, .settings-model-list .model-fav:hover { color: #e8c65a }
+.settings-custom-model { flex: 0 0 auto; display: grid; grid-template-columns: 1fr minmax(100px, .7fr) 28px; gap: 5px; align-items: center }
+.settings-custom-model input, .settings-custom-model select { min-width: 0; height: 30px; font-size: 12px; padding: 4px 8px; border-radius: 6px }
+/* Quellen — kompakt */
+.ai-settings .provider-list { display: grid; gap: 6px }
+.ai-settings details.provider-card { display: block; padding: 0; overflow: hidden; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-faint) }
+.ai-settings details.provider-card[open] { border-color: var(--edge); background: var(--surface-subtle) }
+.ai-settings .provider-card-summary { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: pointer; list-style: none; font-size: 12.5px; user-select: none }
+.ai-settings .provider-card-summary::-webkit-details-marker { display: none }
+.ai-settings .provider-card-summary::before { content: "›"; color: var(--text2); font-size: 12px; transition: transform .12s ease; flex: 0 0 auto }
+.ai-settings details.provider-card[open] > .provider-card-summary::before { transform: rotate(90deg) }
+.ai-settings .provider-card-title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ai-settings .provider-summary-url { margin-left: auto; font-size: 11px; color: var(--text2); max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ai-settings .provider-active-badge { font-size: 10px; font-weight: 650; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border) }
+.ai-settings .provider-card-body { display: grid; gap: 6px; padding: 0 9px 9px }
+.ai-settings .provider-card-body input { width: 100%; height: 30px; font-size: 12px; padding: 4px 8px; border-radius: 6px }
+.ai-settings .provider-card-foot { display: flex; align-items: center; gap: 6px; margin-top: 1px }
+.ai-settings .provider-status { min-height: 0; margin: 0; font-size: 11px; line-height: 1.35; color: var(--text2) }
+.ai-settings .provider-status:empty { display: none }
+.ai-settings .provider-status.ok { color: var(--success) }
+.ai-settings .provider-status.warn { color: #e8c65a }
+.ai-settings .provider-status.bad { color: var(--danger) }
+.ai-settings .ai-provider-add { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 2px 0 0 }
+/* Mehr-Tab — kompakt */
+.ai-more-stack { display: grid; gap: 8px; padding-bottom: 2px }
+.ai-toggle-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-faint) }
+.ai-toggle-card:hover { border-color: var(--edge); background: var(--surface-subtle) }
+.ai-toggle-copy b { font-size: 13px; font-weight: 650; color: var(--text) }
+.ai-field-card { display: grid; gap: 6px; padding: 9px 10px; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-faint) }
+.ai-field-card label, .ai-field-label-row label { font-size: 11px; font-weight: 650; color: var(--text2); letter-spacing: .04em; text-transform: uppercase }
+.ai-field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px }
+.ai-select-block, .ai-field-card select, .ai-field-card textarea { width: 100%; border-radius: 6px; font-size: 12.5px }
+.ai-select-block, .ai-field-card select { height: 30px; padding: 4px 28px 4px 8px }
+.ai-field-card textarea { min-height: 72px; padding: 7px 9px; line-height: 1.45; resize: vertical }
+/* Fuß — kompakt wie früher */
+.ai-settings > .modal-actions,
+.ai-settings > .ai-settings-foot { flex: 0 0 auto; position: static !important; margin: 0 -16px 0 !important; padding: 8px 16px calc(10px + env(safe-area-inset-bottom, 0px)) !important; background: var(--menu-bg); border-top: 1px solid var(--edge-soft); justify-content: flex-end }
+.ai-settings > .ai-settings-foot button { min-height: 30px; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 650 }
+.ai-settings .ai-tools-toggle { display: none }
+/* Status-Banner im KI-Tab wieder schlank */
+.ai-settings .ai-status-banner { min-height: 28px; padding: 4px 8px; border-radius: 6px; font-size: 12px }
+.ai-settings .ai-status-banner #btnRecheckAI { min-height: 22px; padding: 1px 6px; font-size: 11px }
+@media (max-width: 560px) {
+	.settings-modal { width: min(100vw, 94vw); height: min(520px, 84vh); max-height: 84vh }
+	.settings-custom-model { grid-template-columns: 1fr 28px }
+	.settings-custom-model select { grid-column: 1 / -1; order: 3 }
+	.ai-settings .provider-summary-url { display: none }
+	.settings-model-list { min-height: 100px }
 }
 /* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
 .deck-feyn { white-space: nowrap }

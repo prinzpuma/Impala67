@@ -178,47 +178,97 @@ export function openSettings(section) {
 		const embedValue = S.settings.embedModel || "";
 		const embedProv = S.settings.embedProviderId || "";
 		const activeId = S.settings.aiProviderId || (providers[0] || {}).id || "";
-		body = '<section class="ai-settings">' +
-			// FIX Text: Keys replizieren über den privaten Drive-App-Speicher (state.js) —
-			// die alte Aussage „bleiben nur auf diesem Gerät" stimmte nicht mehr.
-			'<header class="ai-settings-hero"><span class="ai-settings-hero-icon" aria-hidden="true">✦</span><span><b>Deine KI-Verbindungen</b><small>Wähle eine Quelle im Chat. API-Keys wandern nur in den privaten Drive-App-Speicher deiner eigenen Geräte.</small></span></header>' +
-			'<section class="ai-connection-card">' +
-			'<div class="ai-connection-head"><div><h4>Verbindungen</h4><p>Lokale Modelle und Cloud-APIs an einem Ort — jede Quelle einzeln testbar.</p></div><span class="ai-provider-count">' + providers.length + ' Quelle' + (providers.length === 1 ? '' : 'n') + '</span></div>' +
-			'<div id="aiStatusSettings" class="ai-status-banner"></div>' +
+		const activeModel = S.settings.aiModel || "";
+		const activeName = ((providers.find((p) => p.id === activeId) || {}).name) || activeId || "—";
+		const currentLabel = activeModel ? (activeName + " · " + activeModel) : "Kein Modell gewählt";
+		// Horizontaler Unter-Tab merken (Modelle | Quellen | Mehr) — nur einer sichtbar.
+		const kiTab = S.settingsKiTab || "models";
+		const tabBtn = (id, label) =>
+			'<button type="button" class="ai-tab' + (kiTab === id ? " active" : "") + '" data-aitab="' + id + '">' + label + "</button>";
+		const pane = (id, html) =>
+			'<div class="ai-tab-pane" data-aitabpane="' + id + '"' + (kiTab === id ? "" : " hidden") + '>' + html + "</div>";
+
+		// UI v6: wenig Text, große Flächen, klare Hierarchie — Erklärungen nur als title/placeholder.
+		const modelsPane =
+			'<div class="ai-pane-head">' +
+				'<div class="ai-active-pill" title="Aktives Chat-Modell"><span class="ai-active-dot" aria-hidden="true"></span><b id="aiCurrentModelLabel">' + U.esc(currentLabel) + '</b></div>' +
+				'<button type="button" id="btnRefreshModels" class="ai-icon-btn" title="Neu laden" aria-label="Modelle neu laden">↻</button>' +
+			'</div>' +
+			'<div id="settingsModelList" class="settings-model-list"><div class="menu-note">Lädt…</div></div>' +
+			'<p id="settingsModelHint" class="ai-soft-meta" hidden></p>' +
+			'<div class="settings-custom-model" title="Modell manuell setzen">' +
+				'<input id="inpCustomModel" type="text" placeholder="Modell-ID…" value="' + U.esc(activeModel) + '" autocomplete="off">' +
+				'<select id="inpCustomModelProv" aria-label="Quelle">' + providers.map((pr) =>
+					'<option value="' + U.esc(pr.id) + '"' + (pr.id === activeId ? " selected" : "") + '>' + U.esc(pr.name || pr.id) + "</option>"
+				).join("") + '</select>' +
+				'<button type="button" id="btnApplyCustomModel" class="ai-icon-btn" title="Übernehmen" aria-label="Modell übernehmen">✓</button>' +
+			'</div>';
+
+		const sourcesPane =
 			'<div class="provider-list">' + providers.map((pr) =>
-				'<div class="provider-card" data-provrow="' + pr.id + '">' +
-					'<div class="provider-card-head">' +
-						'<input data-provname="' + pr.id + '" placeholder="Name der Quelle" value="' + U.esc(pr.name) + '">' +
-						(pr.id === activeId ? '<span class="menu-chip active provider-active-badge" title="Diese Quelle ist gerade im Chat aktiv">aktiv im Chat</span>' : "") +
-						'<button data-provdel="' + pr.id + '" class="icon-danger" title="Quelle entfernen">🗑</button>' +
-					"</div>" +
-					'<input data-provbase="' + pr.id + '" placeholder="Server-URL (OpenAI-kompatibel, z. B. http://localhost:1234/v1)" value="' + U.esc(pr.base) + '">' +
-					'<input data-provkey="' + pr.id + '" type="password" autocomplete="off" placeholder="API-Key (optional)" value="' + U.esc(pr.key) + '">' +
-					// Verbindungstest je Quelle — nutzt die aktuellen Feldwerte, Speichern vorher nicht nötig.
-					'<div class="row-btns provider-card-foot"><button type="button" data-provtest="' + pr.id + '">Verbindung testen</button></div>' +
-					'<p class="hint provider-status" data-provstatus="' + pr.id + '"></p>' +
-				"</div>"
+				'<details class="provider-card" data-provrow="' + pr.id + '"' + (pr.id === activeId ? " open" : "") + '>' +
+					'<summary class="provider-card-summary">' +
+						'<span class="provider-card-title">' + U.esc(pr.name || pr.id) + '</span>' +
+						(pr.id === activeId ? '<span class="provider-active-badge">aktiv</span>' : "") +
+						'<span class="provider-summary-url">' + U.esc(String(pr.base || "").replace(/^https?:\/\//, "").slice(0, 28)) + '</span>' +
+					'</summary>' +
+					'<div class="provider-card-body">' +
+						'<input data-provname="' + pr.id + '" placeholder="Name" value="' + U.esc(pr.name) + '">' +
+						'<input data-provbase="' + pr.id + '" placeholder="http://localhost:1234/v1" value="' + U.esc(pr.base) + '">' +
+						'<input data-provkey="' + pr.id + '" type="password" autocomplete="off" placeholder="API-Key" value="' + U.esc(pr.key) + '">' +
+						'<div class="provider-card-foot">' +
+							'<button type="button" class="ai-ghost-btn" data-provtest="' + pr.id + '">Testen</button>' +
+							'<button type="button" data-provdel="' + pr.id + '" class="ai-icon-btn danger" title="Entfernen" aria-label="Quelle entfernen">🗑</button>' +
+						'</div>' +
+						'<p class="provider-status" data-provstatus="' + pr.id + '"></p>' +
+					'</div>' +
+				'</details>'
 			).join("") + "</div>" +
-			'<div class="ai-provider-add"><button id="btnAddProvider">+ Eigene Quelle</button><span>Für jeden OpenAI-kompatiblen Server.</span></div>' +
-			'</section>' +
-			// Schnell-Buttons für die drei häufigsten Quellen.
-			'<section class="ai-presets"><div><h4>Schnellstart</h4><p>Fügt die Konfiguration ein – du kannst sie danach anpassen.</p></div>' +
-			'<div class="ai-preset-grid"><button data-provpreset="local"><span>🖥</span><b>LM Studio</b><small>Lokal auf diesem Gerät</small></button>' +
-			'<button data-provpreset="google"><span>✨</span><b>Google Gemini</b><small>Gemini API</small></button>' +
-			'<button data-provpreset="openai"><span>◉</span><b>OpenAI</b><small>OpenAI API</small></button></div></section>' +
-			// Tool-Angebot v3: Werkzeug-Zugriff der KI (Standard AN — alle Tools bei jeder Anfrage)
-			'<section class="ai-tools-toggle"><label><input type="checkbox" id="inpAlwaysTools"' + (S.settings.alwaysSendTools !== false ? " checked" : "") + '><span><b>Tools immer mitsenden</b><small>Empfohlen. Ausgeschaltet erhält die KI nur ein Meta-Werkzeug („request_tools“) und fordert die volle Liste selbst an, wenn sie sie braucht — spart Tokens bei kleinen lokalen Modellen.</small></span></label></section>' +
-			'<details class="ai-settings-advanced" open><summary><span>Embeddings & Anweisungen</span><small>Semantische Suche (RAG) und persönliche Anweisungen</small></summary><div class="ai-settings-advanced-body">' +
-			'<div class="embedding-picker"><label for="inpEmbed">Embedding-Modell (semantische Suche)</label><div class="embedding-picker-row">' +
-			// Option-Werte sind "quelleId::modell" — die Auswahl legt Modell UND Quelle fest,
-			// unabhängig davon, welche Quelle gerade im Chat aktiv ist. [F4]
-			'<select id="inpEmbed" data-currentembed="' + U.esc(embedValue) + '" data-currentprov="' + U.esc(embedProv) + '" disabled><option value="' + U.esc(embedValue ? embedProv + "::" + embedValue : "") + '">' + U.esc(embedValue || "Modelle werden geladen…") + '</option></select>' +
-			'<button type="button" id="btnRefreshEmbedding" title="Embedding-Modelle neu laden">↻</button></div>' +
-			'<p id="embeddingModelHint" class="hint">Alle Quellen werden durchsucht — Embeddings laufen unabhängig von der im Chat aktiven Quelle.</p></div>' +
-			"<div><label for=\"inpCustomInstructions\">Eigene Anweisungen an die KI</label>" +
-			'<textarea id="inpCustomInstructions" rows="4" placeholder="z. B. Studienfach, bevorzugte Sprache oder Tonfall…">' + U.esc(S.settings.customInstructions) + "</textarea></div></div></details>" +
-			'<p class="ai-settings-note">Die aktive KI und das Modell wählst du direkt im Chat. Schlüssel synchronisieren sich ausschließlich in den privaten Drive-App-Speicher deines eigenen Google-Kontos.</p>' +
-			saveActionsHtml + "</section>";
+			'<div class="ai-provider-add">' +
+				'<button type="button" id="btnAddProvider" class="ai-ghost-btn">+ Quelle</button>' +
+				'<button type="button" data-provpreset="local" class="ai-chip-btn">LM Studio</button>' +
+				'<button type="button" data-provpreset="google" class="ai-chip-btn">Gemini</button>' +
+				'<button type="button" data-provpreset="openai" class="ai-chip-btn">OpenAI</button>' +
+			'</div>';
+
+		const morePane =
+			'<div class="ai-more-stack">' +
+				// Tools mitsenden: nutzt die bewährte, fehlerfreie .theme-switch-Klasse
+				// der Darstellungseinstellungen — verhindert Klick-Flackern und doppeltes Toggeln.
+				'<div class="ai-toggle-card" title="Alle Werkzeuge bei jeder Anfrage mitsenden">' +
+					'<span class="ai-toggle-copy"><b>Tools mitsenden</b></span>' +
+					'<label class="theme-switch"><input id="inpAlwaysTools" type="checkbox"' + (S.settings.alwaysSendTools !== false ? " checked" : "") + '><span aria-hidden="true"></span></label>' +
+				'</div>' +
+				'<div class="ai-field-card">' +
+					'<div class="ai-field-label-row"><label for="inpEmbed">Embedding</label>' +
+					'<button type="button" id="btnRefreshEmbedding" class="ai-icon-btn" title="Neu laden" aria-label="Embeddings neu laden">↻</button></div>' +
+					// "quelleId::modell" — unabhängig vom Chat-Modell. [F4]
+					'<select id="inpEmbed" class="ai-select-block" data-currentembed="' + U.esc(embedValue) + '" data-currentprov="' + U.esc(embedProv) + '" disabled>' +
+						'<option value="' + U.esc(embedValue ? embedProv + "::" + embedValue : "") + '">' + U.esc(embedValue || "Lädt…") + '</option></select>' +
+					'<p id="embeddingModelHint" class="ai-soft-meta" hidden></p>' +
+				'</div>' +
+				'<div class="ai-field-card">' +
+					'<label for="inpCustomInstructions">Anweisungen</label>' +
+					'<textarea id="inpCustomInstructions" rows="5" placeholder="Tonfall, Fach, Vorlieben…">' + U.esc(S.settings.customInstructions) + '</textarea>' +
+				'</div>' +
+			'</div>';
+
+		// Speichern bewusst AUSSERHALB der scrollbaren Panes — sonst wird der Knopf
+		// unten abgeschnitten (overflow der Body/Pane-Kette).
+		body = '<section class="ai-settings">' +
+			'<div id="aiStatusSettings" class="ai-status-banner"></div>' +
+			'<nav class="ai-tabs" role="tablist" aria-label="KI-Bereiche">' +
+				tabBtn("models", "Modelle") +
+				tabBtn("sources", "Quellen") +
+				tabBtn("more", "Mehr") +
+			'</nav>' +
+			'<div class="ai-tab-panes">' +
+				pane("models", modelsPane) +
+				pane("sources", sourcesPane) +
+				pane("more", morePane) +
+			'</div>' +
+			'<div class="modal-actions ai-settings-foot"><button type="button" id="btnSaveSettings">Speichern</button></div>' +
+		'</section>';
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
 		body = field("Notion Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
@@ -373,17 +423,17 @@ export function openSettings(section) {
 			'Dateien im <code>web/</code>-Ordner deployen: <code>version.json</code>, <code>updater.js</code>, <code>latest.json</code>.</p>';
 	}
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
-	o.innerHTML = '<div class="modal settings-modal">' +
+	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
+	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>Einstellungen</h3>' + body + "</div></div>";
+		'<div class="settings-body"><h3>' + (sec === "ki" ? "KI" : "Einstellungen") + '</h3>' + body + "</div></div>";
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
-	// KI-Tab: Status-Banner füllen, Embedding-Modelle über ALLE Quellen laden und
-	// jede Quelle einzeln durchpingen — jede Karte zeigt ihren eigenen Status.
+	// KI-Tab: Status + Inhalte des aktiven Unter-Tabs laden (lazy je Tab).
 	if (sec === "ki") {
 		renderStatusDot();
-		queueMicrotask(() => { refreshEmbeddingModels(); testAllProviders(); });
+		queueMicrotask(() => loadKiTabContent(S.settingsKiTab || "models"));
 	}
 	// Update-Tab: Remote-Version sofort prüfen (Lokal + Server sichtbar)
 	if (sec === "update") {
@@ -543,6 +593,7 @@ export async function handleAddProvider() {
 	}) : (S.settings.aiProviders || []).slice();
 	providers.push({ id: U.uid(), name: "Neue Quelle", base: "", key: "" });
 	await STATE.dispatch("settingsSet", { aiProviders: providers });
+	S.settingsKiTab = "sources"; // nach dem Anlegen im Quellen-Tab bleiben
 	openSettings("ki");
 }
 
@@ -630,6 +681,120 @@ export async function handleApplyPwaUpdate() {
 	}
 }
 
+// Horizontaler KI-Unter-Tab wechseln — ohne Full-Rerender, damit ungespeicherte
+// Eingaben in den anderen Panes erhalten bleiben.
+export function switchKiTab(tab) {
+	const id = tab === "sources" || tab === "more" ? tab : "models";
+	S.settingsKiTab = id;
+	document.querySelectorAll(".ai-tabs [data-aitab]").forEach((b) => {
+		b.classList.toggle("active", b.dataset.aitab === id);
+	});
+	document.querySelectorAll("[data-aitabpane]").forEach((p) => {
+		p.hidden = p.dataset.aitabpane !== id;
+	});
+	loadKiTabContent(id);
+}
+
+// Inhalte lazy nachladen, sobald der jeweilige Unter-Tab sichtbar wird.
+function loadKiTabContent(tab) {
+	if (tab === "models") refreshChatModels();
+	else if (tab === "more") refreshEmbeddingModels();
+	// sources: kein Auto-Ping — Nutzer testet gezielt pro Karte
+}
+
+// Zeichnet die Modell-Liste in den offenen KI-Einstellungen (Favoriten oben).
+// Nutzt S.availableModels (Cache) — ohne Netz. Nach Laden: refreshChatModels().
+export function paintSettingsModels() {
+	const host = U.el("settingsModelList");
+	const label = U.el("aiCurrentModelLabel");
+	if (!host) return;
+	const providers = S.settings.aiProviders || [];
+	const nameOf = (id) => ((providers.find((p) => p.id === id) || {}).name) || id || "";
+	const curPr = S.settings.aiProviderId || "";
+	const curModel = S.settings.aiModel || "";
+	if (label) label.textContent = curModel ? (nameOf(curPr) + " · " + curModel) : "Kein Modell gewählt";
+	const favSet = (typeof RENDER.favModels === "function") ? RENDER.favModels() : new Set();
+	const live = Array.isArray(S.availableModels) ? S.availableModels : [];
+	const row = (m) => {
+		const favKey = m.providerId + "::" + m.id;
+		const fav = favSet.has(favKey);
+		const active = m.providerId === curPr && m.id === curModel;
+		return '<div class="model-row">' +
+			'<button type="button" class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(m.providerId) + "::" + U.esc(m.id) + '">' +
+				'<span class="menu-item-label">' + U.esc(m.id) + "</span>" +
+				'<small class="settings-model-src">' + U.esc(nameOf(m.providerId)) + "</small>" +
+				(active ? '<span class="menu-check">✓</span>' : "") +
+			"</button>" +
+			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + U.esc(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit pinnen") + '">' + (fav ? "★" : "☆") + "</button></div>";
+	};
+	let body = "";
+	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id));
+	if (favLive.length) body += '<div class="menu-label">★ Favoriten</div>' + favLive.map(row).join("");
+	for (const pr of providers) {
+		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
+		if (rest.length) body += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>" + rest.map(row).join("");
+	}
+	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten
+	const seen = new Set(live.map((m) => m.providerId + "::" + m.id));
+	const orphans = [];
+	favSet.forEach((k) => { if (!seen.has(k)) orphans.push(k); });
+	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel)) orphans.push(curPr + "::" + curModel);
+	if (orphans.length) {
+		body += '<div class="menu-label">Gespeichert</div>' + orphans.map((k) => {
+			const sep = k.indexOf("::");
+			const prId = sep === -1 ? curPr : k.slice(0, sep);
+			const id = sep === -1 ? k : k.slice(sep + 2);
+			return row({ id, providerId: prId });
+		}).join("");
+	}
+	// Offline / keine Live-Liste: feste Vorschläge (Gemini/OpenAI/lokal) anbieten
+	if (!body && (AI.MODEL_PRESETS || []).length) {
+		body = '<div class="menu-label">Vorschläge</div>' + (AI.MODEL_PRESETS || []).map((p) =>
+			row({ id: p.value, providerId: p.provider })).join("");
+	}
+	host.innerHTML = body || '<div class="menu-note">Keine Modelle erreichbar. Quelle prüfen oder unten manuell eintragen.</div>';
+}
+
+// Lädt Chat-Modelle ALLER Quellen und zeichnet die Liste (inkl. Favoriten).
+export async function refreshChatModels() {
+	const host = U.el("settingsModelList");
+	const hint = U.el("settingsModelHint");
+	const btn = U.el("btnRefreshModels");
+	if (!host) return;
+	if (btn) btn.disabled = true;
+	if (hint) hint.textContent = "Lade Modelle aller Quellen…";
+	host.innerHTML = '<div class="menu-note">Modelle werden geladen…</div>';
+	try {
+		const found = await AI.listModels();
+		S.availableModels = found;
+		paintSettingsModels();
+		if (hint) {
+			// Meta-Zeile nur bei Fehlern zeigen — Erfolg braucht keinen Fließtext.
+			if (found.length) { hint.hidden = true; hint.textContent = ""; }
+			else { hint.hidden = false; hint.textContent = "Keine Modelle erreichbar — Quelle prüfen."; }
+		}
+	} catch (err) {
+		paintSettingsModels();
+		if (hint) hint.textContent = "Modelle konnten nicht geladen werden.";
+	} finally {
+		if (btn) btn.disabled = false;
+	}
+}
+
+// Manuelles Modell + Quelle aus den Feldern unter der Liste übernehmen.
+export async function handleApplyCustomModel() {
+	const model = (U.el("inpCustomModel") || {}).value?.trim() || "";
+	const providerId = (U.el("inpCustomModelProv") || {}).value || S.settings.aiProviderId || "";
+	if (!model) { U.toast("Bitte eine Modell-ID eintragen.", "error"); return; }
+	await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
+	paintSettingsModels();
+	renderStatusDot();
+	if (typeof RENDER.renderModelBar === "function") RENDER.renderModelBar();
+	AI.detectThinkingCapabilities().catch(() => {});
+	checkAI();
+	U.toast("Modell übernommen: " + model, "success");
+}
+
 // Verbindungstest für EINE Quellen-Karte mit den aktuellen (auch ungespeicherten)
 // Feldwerten — man muss also nicht erst speichern, um eine Änderung zu prüfen.
 export async function testProviderRow(id, btn) {
@@ -637,22 +802,22 @@ export async function testProviderRow(id, btn) {
 	if (!row) return;
 	const val = (sel) => { const el = row.querySelector(sel); return el ? el.value.trim() : ""; };
 	const box = row.querySelector("[data-provstatus]");
-	if (btn) { btn.disabled = true; btn.textContent = "Teste…"; }
-	if (box) { box.classList.remove("ok", "warn", "bad"); box.textContent = "⏳ Verbindung wird geprüft…"; }
+	if (btn) { btn.disabled = true; btn.textContent = "…"; }
+	if (box) { box.classList.remove("ok", "warn", "bad"); box.textContent = "Prüfe…"; }
 	const r = await AI.pingProvider({ id, name: val("[data-provname]") || id, base: val("[data-provbase]"), key: val("[data-provkey]") });
-	if (btn) { btn.disabled = false; btn.textContent = "Verbindung testen"; }
+	if (btn) { btn.disabled = false; btn.textContent = "Testen"; }
 	if (!box) return; // Einstellungen wurden inzwischen geschlossen/gewechselt
 	box.classList.remove("ok", "warn", "bad");
 	if (r.ok) {
 		box.classList.add("ok");
-		box.textContent = "✅ Verbunden — " + r.models + " Modell(e), " + r.ms + " ms";
+		box.textContent = "Verbunden · " + r.models + " Modelle · " + r.ms + " ms";
 	} else if (r.suggestedBase) {
 		// Diagnose mit Lösungsvorschlag (z. B. fehlendes /v1) — ein Klick übernimmt die URL.
 		box.classList.add("warn");
-		box.innerHTML = "⚠️ " + U.esc(r.error) + ' <button type="button" data-provfixbase="' + U.esc(id) + '" data-base="' + U.esc(r.suggestedBase) + '">URL übernehmen & erneut testen</button>';
+		box.innerHTML = U.esc(r.error || "URL unvollständig") + ' <button type="button" class="ai-ghost-btn" data-provfixbase="' + U.esc(id) + '" data-base="' + U.esc(r.suggestedBase) + '">/v1 übernehmen</button>';
 	} else {
 		box.classList.add("bad");
-		box.textContent = "⛔ " + (r.error || "Verbindung fehlgeschlagen.");
+		box.textContent = r.error || "Keine Verbindung";
 	}
 }
 export const handleProviderTest = (t) => testProviderRow(t.dataset.provtest, t);
@@ -683,13 +848,14 @@ export async function refreshEmbeddingModels() {
 		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>' + options.join("");
 		select.value = exact ? exact.providerId + "::" + exact.id : currentValue;
 		// FIX: kein U.esc() mehr in textContent — das zeigte HTML-Entities als Klartext.
-		if (hint) hint.textContent = found.length
-			? found.length + " Embedding-Modell(e) über " + new Set(found.map((m) => m.providerId)).size + " Quelle(n) gefunden — die Auswahl legt auch die Quelle fest."
-			: "Keine Embedding-Modelle erkannt. Lade z. B. in LM Studio ein Embedding-Modell oder prüfe die Quellen oben.";
+		if (hint) {
+			if (found.length) { hint.hidden = true; hint.textContent = ""; }
+			else { hint.hidden = false; hint.textContent = "Kein Embedding-Modell gefunden."; }
+		}
 	} catch (err) {
-		select.innerHTML = '<option value="' + U.esc(currentValue) + '">' + U.esc(current || "Kein Modell verfügbar") + "</option>";
+		select.innerHTML = '<option value="' + U.esc(currentValue) + '">' + U.esc(current || "—") + "</option>";
 		select.value = currentValue;
-		if (hint) hint.textContent = "Modelle konnten nicht geladen werden.";
+		if (hint) { hint.hidden = false; hint.textContent = "Konnte nicht geladen werden."; }
 	} finally {
 		select.disabled = false;
 	}
@@ -919,6 +1085,10 @@ export const SETTINGS = {
 	startAutoDriveSync,
 	handleAddProvider,
 	refreshEmbeddingModels,
+	refreshChatModels,
+	paintSettingsModels,
+	switchKiTab,
+	handleApplyCustomModel,
 	testProviderRow,
 	testAllProviders,
 	handleProviderTest,

@@ -76,6 +76,9 @@ export const RAG = (() => {
 	}
 
 	// Debounced-Warteschlange — wird nach Edits/Ingest aus app.js & pdfs.js befüllt.
+	// Fehler pro Batch gebündelt loggen (sonst spamt ein kaputtes Embedding-Modell die Console
+	// mit einer Zeile pro Seite). Bei wiederholtem gleichem Fehler bricht der Batch ab —
+	// die restlichen IDs bleiben stale und kommen im nächsten Zyklus wieder.
 	function queuePage(pageId) {
 		if (!enabled()) return;
 		queue.add(pageId);
@@ -83,9 +86,23 @@ export const RAG = (() => {
 		timer = setTimeout(async () => {
 			const ids = [...queue];
 			queue.clear();
+			let failN = 0, lastErr = null, lastMsg = "";
 			for (const id of ids) {
-				try { await indexPage(id); } catch (e) { console.warn("RAG-Index fehlgeschlagen:", e); }
+				try { await indexPage(id); }
+				catch (e) {
+					failN++;
+					lastErr = e;
+					const msg = String(e?.message || e);
+					// Gleicher Config-/API-Fehler → restliche Seiten überspringen (kein Mehrwert).
+					if (failN > 1 && msg === lastMsg) {
+						failN += ids.length - ids.indexOf(id) - 1;
+						break;
+					}
+					lastMsg = msg;
+				}
 			}
+			if (failN === 1) console.warn("RAG-Index fehlgeschlagen:", lastErr);
+			else if (failN > 1) console.warn("RAG-Index: " + failN + " Seite(n) fehlgeschlagen — " + lastMsg);
 		}, 2500);
 	}
 

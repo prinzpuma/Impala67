@@ -159,7 +159,8 @@ function currentThinkingCapability() {
 	return (S.thinkingCapabilities || {})[key] || null;
 }
 
-// ★ Modell-Favoriten: "providerId::modelId", bewusst lokal (Quellen-IDs sind gerätespezifisch)
+// ★ Modell-Favoriten: "providerId::modelId", bewusst lokal (Quellen-IDs sind gerätespezifisch).
+// Wird vom Chat-Dropdown UND den KI-Einstellungen genutzt (exportiert unten).
 const MODEL_FAV_KEY = "impala67FavModels";
 const favModels = () => new Set(lsGet(MODEL_FAV_KEY, []));
 function toggleFavModel(key) {
@@ -175,6 +176,8 @@ document.addEventListener("click", (e) => {
 	e.stopPropagation();
 	toggleFavModel(b.dataset.modelfav);
 	renderModelMenu();
+	// Favoriten-Liste in den offenen KI-Einstellungen live mitziehen
+	if (typeof SETTINGS.paintSettingsModels === "function") SETTINGS.paintSettingsModels();
 }, true);
 
 function modelMenuInnerHtml() {
@@ -1279,6 +1282,7 @@ export const RENDER = {
 	hydrateImages, hydrateCovers, localDayKey, modal, ancestorsOf,
 	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
 	pageIconLabel, pageIconHtml,
+	favModels, toggleFavModel, // Modell-Favoriten (Chat + Einstellungen → KI)
 	openSettings: (...a) => SETTINGS.openSettings(...a),
 	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
 	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),

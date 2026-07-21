@@ -357,6 +357,8 @@ export const DRIVE = (() => {
 			}
 		}
 		const heads = heftHeads(allEvs, true);
+		// Console bewusst gebündelt: bei Dutzenden fehlenden Blobs sonst unlesbar (ein Warn pro Sync).
+		let pendingRemote = 0, badHash = 0;
 		for (const [pageId, ev] of Object.entries(heads)) {
 			const wanted = ev.payload.blobHash, key = "heft:" + pageId;
 			// Fastpath: Upload-Cache kennt exakt diesen Stand UND der Schlüssel existiert
@@ -368,19 +370,21 @@ export const DRIVE = (() => {
 			const file = byContentHash.get(wanted);
 			if (!file) {
 				// Gerät A lädt Event vor Blob hoch — nächster Zyklus hat ihn. Kein harter Abbruch.
-				console.warn("[reconcileHeftBlobs] Heft-Blob " + wanted.slice(0, 12) + " noch nicht in Drive — nächster Sync-Zyklus.");
+				pendingRemote++;
 				continue;
 			}
 			const payload = await downloadPayload(file);
 			// [F1] Nur der Hash zählt. Konflikt-Kopien liegen remote unter der ORIGINAL-
 			// Seiten-id — der frühere id-Vergleich ließ sie auf Drittgeräten leer.
 			if (!payload?.b64 || payload.meta?.hash !== wanted) {
-				console.warn("[reconcileHeftBlobs] Heft-Datei für " + pageId + " ungültig (Hash stimmt nicht) — übersprungen.");
+				badHash++;
 				continue;
 			}
 			await DB.putBlob(key, U.b64ToBuf(payload.b64), payload.meta);
 			localBlobKeys.add(key);
 		}
+		if (pendingRemote) console.warn("[reconcileHeftBlobs] " + pendingRemote + " Heft-Blob(s) noch nicht in Drive — nächster Sync-Zyklus.");
+		if (badHash) console.warn("[reconcileHeftBlobs] " + badHash + " Heft-Datei(en) ungültig (Hash stimmt nicht) — übersprungen.");
 		// [F2] Fürs Konflikt-Popup: wurde die Kopie gefüllt, und wie groß ist sie?
 		for (const c of heftConflicts) {
 			const head = heads[c.conflictPageId];
