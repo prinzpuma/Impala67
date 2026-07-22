@@ -155,6 +155,7 @@ const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings"
 // Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
 export const SETTINGS_SECTIONS = [
 	{ id: "ki", label: "KI" },
+	{ id: "home", label: "Home" },
 	{ id: "look", label: "Darstellung" },
 	{ id: "sync", label: "Sync" },
 	{ id: "notion", label: "Notion" },
@@ -269,6 +270,25 @@ export function openSettings(section) {
 			'</div>' +
 			'<div class="modal-actions ai-settings-foot"><button type="button" id="btnSaveSettings">Speichern</button></div>' +
 		'</section>';
+	} else if (sec === "home") {
+		// 🏠 Home-Editor v2 (21. Juli): ersetzt die alte „Home-Dashboard“-Liste, die mit
+		// der echten Homeseite nichts zu tun hatte. HOME_SECTIONS (unten) sind exakt die
+		// Bereiche, die render.js → renderHome() zeichnet — 👁/🚫 steuert die Sichtbarkeit,
+		// ↑↓ die Reihenfolge; alles wirkt sofort, ganz ohne Speichern-Knopf.
+		const rows = homeLayout().map((e, i, arr) => {
+			const meta = HOME_SECTIONS.find((s) => s.id === e.id) || { label: e.id, hint: "" };
+			return '<div class="dashboard-setting-row"' + (e.on ? "" : ' style="opacity:.45"') + '>' +
+				'<button data-dashtoggle="' + U.esc(e.id) + '" class="dash-visible" title="' + (e.on ? "Bereich ausblenden" : "Bereich wieder einblenden") + '">' + (e.on ? "👁" : "🚫") + '</button>' +
+				'<span><b>' + U.esc(meta.label) + '</b>' + (meta.hint ? ' <small class="hint">· ' + U.esc(meta.hint) + '</small>' : "") + '</span>' +
+				'<button data-dashmove="' + U.esc(e.id) + ':-1"' + (i === 0 ? " disabled" : "") + ' title="Nach oben">↑</button>' +
+				'<button data-dashmove="' + U.esc(e.id) + ':1"' + (i === arr.length - 1 ? " disabled" : "") + ' title="Nach unten">↓</button></div>';
+		}).join("");
+		body = '<p class="hint">Deine Homeseite, deine Regeln: Begrüßungsname setzen, Bereiche per 👁/🚫 ein- und ausblenden und per ↑↓ sortieren — jede Änderung wirkt sofort.</p>' +
+			field("Anzeigename für die Begrüßung (leer = ohne Name; speichert beim Verlassen des Felds)", "inpHomeName", S.settings.homeUserName || "") +
+			'<h4>Bereiche der Homeseite</h4>' +
+			'<div class="dashboard-settings">' + rows +
+			'<button data-dashadd="1" class="dashboard-add">↺ Standard-Layout wiederherstellen</button></div>' +
+			'<p class="hint">Immer sichtbar: Begrüßung mit Kennzahlen-Chips, Sync-Konflikt-Hinweis und „+ Neue Seite“ — alles andere bestimmst du hier.</p>';
 	} else if (sec === "notion") {
 		const last = S.settings.notionLastSync;
 		body = field("Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
@@ -290,8 +310,6 @@ export function openSettings(section) {
 		const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
 		const confidence = localStorage.getItem("impala67Confidence") !== "off";
 		const telemetry = localStorage.getItem("impala67Telemetry") !== "off";
-		const widgets = dashboardWidgets();
-		const widgetLabel = Object.fromEntries(DASHBOARD_WIDGETS.map((w) => [w.id, w.label]));
 		body = '<h4>Design</h4>' +
 			'<section class="appearance-theme-card' + (followSystemTheme ? " is-auto" : "") + '">' +
 				'<div class="appearance-theme-copy"><span class="appearance-theme-icon" aria-hidden="true">◐</span><span>' +
@@ -327,13 +345,9 @@ export function openSettings(section) {
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnTeleOn" class="' + (telemetry ? "active" : "") + '">Aufzeichnung an</button>' +
 			'<button id="btnTeleOff" class="' + (!telemetry ? "active" : "") + '">Aus</button></div>' +
-			'<h4>Home-Dashboard</h4>' +
-			'<div class="dashboard-settings">' + widgets.map((id, i) => '<div class="dashboard-setting-row">' +
-				'<button data-dashtoggle="' + id + '" class="dash-visible" title="Widget ausblenden">✓</button>' +
-				'<span>' + U.esc(widgetLabel[id] || id) + '</span>' +
-				'<button data-dashmove="' + id + ':-1" ' + (i === 0 ? "disabled" : "") + '>↑</button>' +
-				'<button data-dashmove="' + id + ':1" ' + (i === widgets.length - 1 ? "disabled" : "") + '>↓</button></div>').join("") +
-			'<button data-dashadd="1" class="dashboard-add">+ Ausgeblendetes Widget hinzufügen</button></div>' +
+			'<h4>Home-Layout</h4>' +
+			'<p class="hint">Der Home-Editor ist umgezogen: Bereiche, Reihenfolge und Begrüßungsname findest du jetzt unter <b>Einstellungen → Home</b>.</p>' +
+			'<div class="row-btns"><button data-set="home">🏠 Home-Editor öffnen</button></div>' +
 			'<h4>Hintergrund</h4>' +
 			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
 	} else if (sec === "experimente") {
@@ -963,52 +977,70 @@ export async function handleBackupNow() {
 	if (S.view === "home") render();
 }
 
-export const DASHBOARD_WIDGETS = [
-	{ id: "continue", label: "Weitermachen" },
-	{ id: "daily", label: "Daily Note" },
-	{ id: "cards", label: "Fällige Karten" },
-	{ id: "favorites", label: "Favoriten" },
-	{ id: "chats", label: "Letzte Chats" },
-	{ id: "pdfs", label: "Importierte PDFs" },
-	{ id: "backup", label: "Backup" },
+// ---------- 🏠 Home-Editor: EINE Quelle der Wahrheit für die Homeseiten-Bereiche ----------
+// Ersetzt die alte DASHBOARD_WIDGETS-Liste, die renderHome() nie gelesen hat (Einstellungen
+// und Homeseite waren entkoppelt — Ausblenden war deshalb wirkungslos). Diese ids sind jetzt
+// exakt die Bereiche aus render.js → renderHome(); Sichtbarkeit UND Reihenfolge kommen aus
+// homeLayout(). Gespeichert als Gerätewahl (localStorage) wie Theme/Dichte — kein Drive-Sync.
+export const HOME_SECTIONS = [
+	{ id: "stats", label: "Kennzahlen", hint: "heute gelernt · Streak · fällig · Erfolgsquote" },
+	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
+	{ id: "continue", label: "Weitermachen", hint: "zuletzt bearbeitete Seite" },
+	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten · Backup" },
+	{ id: "insights", label: "Lern-Insights", hint: "Telemetrie-Auswertung" },
+	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
+	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
+	{ id: "recent", label: "Zuletzt", hint: "zuletzt bearbeitete Seiten" },
+	{ id: "chats", label: "Chats", hint: "letzte KI-Unterhaltungen" },
+	{ id: "lernzeit", label: "Lernzeit", hint: "Wochenziel & Verlauf" },
 ];
+const HOME_LAYOUT_KEY = "impala67HomeLayout";
 
-export function dashboardWidgets() {
-	try {
-		const saved = JSON.parse(localStorage.getItem("impala67DashboardWidgets") || "null");
-		if (Array.isArray(saved)) return saved.filter((id) => DASHBOARD_WIDGETS.some((w) => w.id === id));
-	} catch { /* Standard verwenden */ }
-	return DASHBOARD_WIDGETS.map((w) => w.id);
+// Liefert IMMER alle Bereiche: gespeicherte zuerst (in gespeicherter Reihenfolge),
+// neue/unbekannte Bereiche hängen sichtbar hinten an — robust gegen App-Updates.
+export function homeLayout() {
+	let saved = [];
+	try { saved = JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY)) || []; } catch { /* Standard */ }
+	const known = new Map(HOME_SECTIONS.map((s) => [s.id, s]));
+	const out = [];
+	for (const e of Array.isArray(saved) ? saved : []) {
+		if (e && known.has(e.id)) { out.push({ id: e.id, on: e.on !== false }); known.delete(e.id); }
+	}
+	for (const s of known.values()) out.push({ id: s.id, on: true });
+	return out;
 }
 
-function saveDashboardWidgets(ids) {
-	localStorage.setItem("impala67DashboardWidgets", JSON.stringify(ids));
-}
+const saveHomeLayout = (list) => { try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(list)); } catch { /* egal */ } };
 
+// Handler-Namen bleiben (DRY): app.js verdrahtet data-dashtoggle/-move/-add bereits —
+// nur die Bedeutung ist neu (Ausblenden statt Entfernen, ↺ Standard statt „Hinzufügen“).
 export function handleDashboardToggle(id) {
-	const ids = dashboardWidgets().filter((x) => x !== id);
-	saveDashboardWidgets(ids);
-	openSettings("look");
+	saveHomeLayout(homeLayout().map((e) => (e.id === id ? { id: e.id, on: !e.on } : e)));
+	openSettings("home");
 }
 
 export function handleDashboardMove(id, direction) {
-	const ids = dashboardWidgets();
-	const from = ids.indexOf(id);
+	const list = homeLayout();
+	const from = list.findIndex((e) => e.id === id);
 	const to = from + Number(direction);
-	if (from < 0 || to < 0 || to >= ids.length) return;
-	[ids[from], ids[to]] = [ids[to], ids[from]];
-	saveDashboardWidgets(ids);
-	openSettings("look");
+	if (from < 0 || to < 0 || to >= list.length) return;
+	[list[from], list[to]] = [list[to], list[from]];
+	saveHomeLayout(list);
+	openSettings("home");
 }
 
 export function handleDashboardAdd() {
-	const ids = dashboardWidgets();
-	const hidden = DASHBOARD_WIDGETS.find((w) => !ids.includes(w.id));
-	if (hidden) ids.push(hidden.id);
-	else { U.toast("Alle Dashboard-Widgets sind bereits sichtbar.", "success"); return; }
-	saveDashboardWidgets(ids);
-	openSettings("look");
+	localStorage.removeItem(HOME_LAYOUT_KEY);
+	U.toast("Home-Layout zurückgesetzt.", "success");
+	openSettings("home");
 }
+
+// Begrüßungsname speichert sich selbst (Capture-Muster wie telemetrie.js): synct als
+// normale Einstellung über Drive — und Umsortieren der Bereiche verwirft keine Eingabe.
+document.addEventListener("change", (e) => {
+	if (!e.target || e.target.id !== "inpHomeName") return;
+	STATE.dispatch("settingsSet", { homeUserName: e.target.value.trim() }).then(() => U.toast("Name gespeichert.", "success"));
+});
 
 export function handleAppearanceSelect(kind, value) {
 	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry" };
@@ -1095,8 +1127,8 @@ export const SETTINGS = {
 	handleDashboardToggle,
 	handleDashboardMove,
 	handleDashboardAdd,
-	dashboardWidgets,
-	DASHBOARD_WIDGETS,
+	homeLayout,
+	HOME_SECTIONS,
 	handleFileBgChange,
 	handleImportChange
 };

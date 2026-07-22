@@ -4,6 +4,7 @@ import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { TOOLS } from "./tools.js";
 import { PDFS } from "./pdfs.js";
+import { TELE } from "./telemetrie.js";
 
 // experimente.js — 🧪 Experimentelle KI-Lernmodi (Phase 2 aus „kommt noch“)
 // ---------------------------------------------------------------------------
@@ -16,6 +17,10 @@ import { PDFS } from "./pdfs.js";
 // sanfte Wrapper um TOOLS.run bzw. PDFS.ingest. Nötige Kern-Änderungen sind
 // minimal: settings.js ruft EXP.settingsHtml(), ai.js hängt EXP.extraToolDefs()
 // an die Tool-Liste, main.js importiert das Modul und setzt window.EXP.
+//
+// Telemetrie (21. Juli 2026): Jede Nutzung wird als expEvent geloggt; Karten-
+// Features markieren sich zusätzlich per TELE.mark → exp-Array im review-Event.
+// So kann analyse.js „Experimente × Erfolg“ auswerten (siehe track/trackCard).
 
 export const EXP = (() => {
 	// ---------- Katalog (Reihenfolge = Anzeige in den Einstellungen) ----------
@@ -32,6 +37,13 @@ export const EXP = (() => {
 
 	const flags = () => (S.settings && S.settings.experiments) || {};
 	const on = (k) => !!flags()[k];
+
+	// ---------- 🧪 → Telemetrie (Phase 2 messbar machen) ----------
+	// track: Nutzung als expEvent ins Telemetrie-Log (fire-and-forget, nie kritisch).
+	// trackCard: zusätzlich TELE.mark — landet als exp-Array im review-Event der
+	// AKTUELLEN Karte (nur für Features, die VOR der Bewertung laufen).
+	const track = (feature, data) => { try { TELE.log("expEvent", Object.assign({ feature }, data || {})); } catch (err) { /* Telemetrie ist nie kritisch */ } };
+	const trackCard = (feature, data) => { try { TELE.mark(feature); } catch (err) {} track(feature, data); };
 
 	function parseJson(raw) {
 		try {
@@ -121,6 +133,7 @@ export const EXP = (() => {
 	let hintLevel = 0;
 	let hintsUsedFor = null; // Karten-ID, für die Hinweise benutzt wurden
 	let lastCountedCard = null; // Variation zählt pro Karte, nicht pro Rerender
+	let varTrackedFor = null; // Telemetrie: Varianten-Anzeige 1× pro Karte loggen, nicht pro Re-Render
 
 	function scheduleEnhance() {
 		if (rafPending) return;
@@ -201,6 +214,7 @@ export const EXP = (() => {
 		const v = vars[Math.floor(seen / 3 - 1) % vars.length];
 		const face = cardEl.querySelector(".card-face");
 		if (!face || !v) return;
+		if (varTrackedFor !== card.id) { varTrackedFor = card.id; trackCard("variation", { cardId: card.id }); }
 		face.dataset.exporigHtml = face.innerHTML;
 		face.innerHTML = '<div class="hint">🔀 Variante · <button type="button" class="mini" data-expvarorig="1">Original zeigen</button></div>' + U.md(v);
 	}
@@ -242,6 +256,7 @@ export const EXP = (() => {
 		}
 		if (!hints[hintLevel]) return;
 		hintsUsedFor = card.id;
+		trackCard("scaffolding", { cardId: card.id, stufe: hintLevel + 1 });
 		let box = document.querySelector(".exp-hint-box");
 		if (!box) {
 			box = document.createElement("div");
@@ -268,7 +283,7 @@ export const EXP = (() => {
 			const j = parseJson(raw);
 			if (!j || !Array.isArray(j.optionen) || !j.optionen.some((o) => o && o.korrekt)) throw new Error("Unbrauchbare KI-Antwort");
 			const opts = j.optionen.slice(0, 4).sort(() => Math.random() - 0.5);
-			mcState = { opts };
+			mcState = { opts, cardId: card.id };
 			const body = bd.querySelector(".exp-modal-body");
 			if (!body) return;
 			body.innerHTML = '<div class="md">' + U.md(String(j.frage || card.front)) + "</div>" +
@@ -281,6 +296,8 @@ export const EXP = (() => {
 	}
 	function resolveMc(btn) {
 		if (!mcState) return;
+		const picked = mcState.opts[Number(btn.dataset.expmcopt)];
+		trackCard("mc", { cardId: mcState.cardId, korrekt: !!(picked && picked.korrekt) });
 		const all = document.querySelectorAll(".exp-mc-opt");
 		all.forEach((el) => {
 			const o = mcState.opts[Number(el.dataset.expmcopt)];
@@ -371,6 +388,7 @@ export const EXP = (() => {
 			const note = names[j.note] ? Number(j.note) : 3;
 			const rubric = "<ul>" + li(j.getroffen, "✅") + li(j.fehlend, "⚠️ fehlt:") + li(j.falsch, "❌") + "</ul>" +
 				"<p>" + U.esc(String(j.kommentar || "")) + "</p>";
+			trackCard("feynman", { cardId: card.id, note });
 			const verdictHtml = rubric + "<p><b>KI-Vorschlag: „" + names[note] + "“</b> — bestätige mit den Bewertungs-Buttons. Die Entscheidung bleibt bei dir.</p>";
 			if (inline) {
 				// Lernmodus: Feedback wandert auf die Rückseite (enhance() rendert es
@@ -417,6 +435,7 @@ export const EXP = (() => {
 		try {
 			const q = await ask("Karteikarte:\nFrage: " + card.front + "\nAntwort: " + card.back +
 				"\n\nStelle GENAU EINE kurze Warum- oder Wie-Folgefrage zu dieser Karte (nur die Frage, eine Zeile).");
+			track("elaboration", { cardId: card.id }); // läuft NACH der Bewertung → nur expEvent, kein Karten-Marker
 			const body = bd.querySelector(".exp-modal-body");
 			if (!body || !document.body.contains(bd)) return;
 			body.innerHTML = '<div class="md">' + U.md(q) + "</div>" +
@@ -450,6 +469,7 @@ export const EXP = (() => {
 	async function runFehlerDetektor() {
 		const thema = window.prompt("Zu welchem Thema soll die KI eine Erklärung mit eingebauten Fehlern schreiben?");
 		if (!thema) return;
+		track("fehler", { thema });
 		const bd = openModal("🕵️ Fehler-Detektor", '<div class="exp-wait">Text wird erstellt …</div>');
 		try {
 			const raw = await ask('Schreibe eine kurze Erklärung (5–8 Sätze) zum Thema „' + thema +
@@ -487,6 +507,7 @@ export const EXP = (() => {
 	async function preTest(page) {
 		const src = String(page.content || "").slice(0, 6000);
 		if (src.length < 200) return;
+		track("pretest", { pageId: page.id });
 		const bd = openModal("📖 Pre-Testing: " + (page.title || "Neues PDF"), '<div class="exp-wait">Vorab-Fragen werden erstellt …</div>');
 		try {
 			const raw = await ask("Textauszug:\n" + src +
@@ -535,6 +556,7 @@ export const EXP = (() => {
 				const title = (a && a.seite) || "";
 				const pg = typeof STATE.findPage === "function" ? STATE.findPage(title) : null;
 				if (!pg) return { error: "Seite nicht gefunden: " + title };
+				track("wissensluecken", { pageId: pg.id || null });
 				const raw = await ask("Notiz „" + (pg.title || title) + "“:\n" + String(pg.content || "").slice(0, 8000) +
 					'\n\nFinde Fachbegriffe, die verwendet, aber NIRGENDS in der Notiz definiert oder erklärt werden. Antworte NUR als JSON: {"begriffe":[{"begriff":"…","kontext":"kurzes Zitat","vorschlag":"Ein-Satz-Erklärung"}]}');
 				const j = parseJson(raw) || {};

@@ -3,13 +3,16 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 
-// telemetrie.js — Lern-Telemetrie v2 (Refactor 20. Juli 2026: KISS/DRY, gleiche Funktionalität)
-// Verhalten, Event-Formate und öffentliche API sind identisch zu v1 — nur kompakter:
+// telemetrie.js — Lern-Telemetrie v3 (21. Juli 2026: Experimente messbar machen)
+// Neu in v3 (DRY): TELE.mark(feature) — experimente.js markiert Nutzung pro Karte,
+// sie landet als exp-Array im review-Event; TELE.onReview(fn) liefert fertige
+// Review-Daten an Abonnenten (analyse.js) statt einer zweiten Zustandsmaschine.
+// Grundsätze unverändert:
 // 1. Alles läuft über das bestehende Event-Log (STATE.dispatch "teleEvent") und synct über Drive.
 // 2. KEINE Hooks in fremden Modulen: ein Capture-Click-Listener beobachtet die
 //    data-Attribute des Lernmodus (render-anki.js) — app.js, srs.js & Co. bleiben unangetastet.
-// 3. Öffentliche API unverändert: TELE.log / TELE.homeInsightsHtml / TELE.exportDump
-//    (Nutzer: lernzeit.js, render.js; #btnTeleExport aus settings.js wird weiter HIER behandelt).
+// 3. Öffentliche API: TELE.log / TELE.mark / TELE.onReview / TELE.homeInsightsHtml / TELE.exportDump
+//    (Nutzer: lernzeit.js, render.js, experimente.js, analyse.js; #btnTeleExport aus settings.js wird weiter HIER behandelt).
 // 4. Telemetrie darf den UI-Fluss NIE stören: fire-and-forget, alle Fehler werden geschluckt.
 
 export const TELE = (() => {
@@ -23,11 +26,22 @@ export const TELE = (() => {
 		catch { /* Telemetrie ist nie kritisch */ }
 	}
 
+	// ---------- 🧪 Experiment-Marker + Review-Abonnenten (v3) ----------
+	// EIN Ort sammelt, welche Experimente auf der aktuellen Karte benutzt wurden
+	// (experimente.js ruft mark()); onGrade hängt sie als exp-Array ans review-Event.
+	let expUsed = new Set();
+	const mark = (feature) => { if (feature) expUsed.add(String(feature)); };
+	// Abonnenten bekommen die fertigen review-Daten (analyse.js: Ehrlichkeits-/Pausen-Hinweise) —
+	// DRY: keine zweite Zustandsmaschine über dieselben Buttons in anderen Modulen.
+	const reviewSubs = [];
+	const onReview = (fn) => { if (typeof fn === "function") reviewSubs.push(fn); };
+
 	// ---------- Lern-Sitzung (Zustandsmaschine über die bestehenden Anki-Buttons) ----------
 	let session = null;
 
 	function startSession(deck) {
 		if (session) endSession("restart");
+		expUsed = new Set();
 		session = { startedAt: Date.now(), deck: deck || null, graded: 0,
 			frontShownAt: Date.now(), revealedAt: 0, confidence: null, cardHidden: false, hiddenCount: 0 };
 		log("studyStart", { deck: deck || null, due: STATE.dueCards ? STATE.dueCards().length : null, timer: timerActive() });
@@ -46,7 +60,7 @@ export const TELE = (() => {
 		const base = session || { frontShownAt: now, revealedAt: 0, graded: 0, confidence: null, cardHidden: false };
 		const revealed = base.revealedAt || now;
 		const d = new Date();
-		log("review", {
+		const data = {
 			cardId, deck: card.deck || "Standard", grade: Number(grade) || 0,
 			state: srs.state || null, reps: srs.reps || 0, lapses: srs.lapses || 0,
 			thinkMs: clamp(revealed - base.frontShownAt), // Denkzeit: Frage → „Antwort zeigen“
@@ -56,7 +70,11 @@ export const TELE = (() => {
 			confidence: base.confidence, // "sure" | "unsure" | "guess" | null
 			distracted: base.cardHidden, // App während dieser Karte verlassen?
 			timer: timerActive(),
-		});
+			exp: expUsed.size ? [...expUsed] : null, // 🧪 auf dieser Karte benutzte Experimente (TELE.mark)
+		};
+		log("review", data);
+		expUsed = new Set(); // Marker gelten pro Karte
+		reviewSubs.forEach((fn) => { try { fn(data); } catch (err) { /* Abonnenten sind nie kritisch */ } });
 		if (session) Object.assign(session, { graded: session.graded + 1, frontShownAt: now, revealedAt: 0, confidence: null, cardHidden: false });
 	}
 
@@ -220,5 +238,5 @@ export const TELE = (() => {
 		U.toast("Lerndaten exportiert.", "success");
 	}
 
-	return { log, homeInsightsHtml, exportDump };
+	return { log, mark, onReview, homeInsightsHtml, exportDump };
 })();

@@ -1941,6 +1941,31 @@ export const EDITOR = (() => {
 			}
 			return true;
 		}
+		// FIX „Strg+A doppelt → Strg+C kopiert nichts“: Stufe 2 blurt das Textfeld
+		// (Blockauswahl statt DOM-Textselektion) — der Browser hat dann NICHTS zu
+		// kopieren. Deshalb die ausgewählten Blöcke selbst als Markdown serialisieren
+		// und in die Zwischenablage schreiben.
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+			e.preventDefault();
+			const md = serializeList(blocks.slice(selRange.from, selRange.to + 1));
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(md).then(
+					() => U.toast("Kopiert"),
+					() => U.toast("Kopieren fehlgeschlagen", "error")
+				);
+			} else {
+				// Fallback ohne Clipboard-API (z. B. unsicherer Kontext / älterer Browser)
+				const ta = document.createElement("textarea");
+				ta.value = md;
+				ta.style.position = "fixed";
+				ta.style.opacity = "0";
+				document.body.appendChild(ta);
+				ta.select();
+				try { document.execCommand("copy"); U.toast("Kopiert"); } catch { U.toast("Kopieren fehlgeschlagen", "error"); }
+				ta.remove();
+			}
+			return true;
+		}
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
 			e.preventDefault();
 			const { from, to } = selRange;

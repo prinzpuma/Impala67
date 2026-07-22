@@ -702,8 +702,11 @@ async function resolveConflict(action) {
 	render();
 }
 
-// Home v3: persönliches Dashboard — Begrüßung, Kennzahlen, Heute-Leiste,
-// Telemetrie-Insights, ausklappbare Bereiche mit gemerktem Zustand
+// Home v4: persönliches Dashboard aus schaltbaren Bereichen. Sichtbarkeit und
+// Reihenfolge kommen aus SETTINGS.homeLayout() (Einstellungen → Home) — die
+// Bereichs-ids hier und in SETTINGS.HOME_SECTIONS sind identisch (EINE Quelle).
+// Neu: Begrüßung mit Namen, ✨ „Für dich heute“ (Tipps aus den Lerndaten),
+// 🃏 Stapel-Überblick (Klick lernt den Stapel) und ★ Favoriten.
 const HOME_FOLD_KEY = "impala67HomeFolds";
 const homeFolds = () => lsGet(HOME_FOLD_KEY, {}) || {};
 const homeFoldOpen = (id, fb) => { const f = homeFolds(); return f[id] === undefined ? fb : !!f[id]; };
@@ -722,7 +725,8 @@ function renderHome(main) {
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
 	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 6);
 	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
-	const due = STATE.dueCards().length;
+	const dueCards = STATE.dueCards();
+	const due = dueCards.length;
 	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup");
 	const bkDays = lastBk ? Math.max(0, Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5)) : null;
 	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
@@ -741,6 +745,14 @@ function renderHome(main) {
 	const gradedWide30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0);
 	const pool = graded30.length >= 10 ? graded30 : (gradedWide30.length >= 10 ? gradedWide30 : null);
 	const retention30 = pool ? Math.round(pool.filter((r) => r.grade > 1).length / pool.length * 100) : null;
+	// 🃏 fällige Karten je Wurzel-Stapel + ★-Seiten (Bereiche „Stapel“ / „Favoriten“)
+	const dueByDeck = {};
+	for (const c of dueCards) {
+		const root = (c.deck || "Standard").split("::")[0];
+		dueByDeck[root] = (dueByDeck[root] || 0) + 1;
+	}
+	const favPages = pages.filter((p) => p.favorite && !isConflictPage(p));
+	const homeName = ((S.settings || {}).homeUserName || "").trim();
 
 	const conflictBanner = conflictCount
 		? `<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ${conflictCount} Sync-Konflikt${conflictCount === 1 ? "" : "e"}</b><span>Gleiche Seite auf mehreren Geräten geändert — Diff prüfen & lösen.</span></div><button data-conflictopen="0">Jetzt lösen</button></div>`
@@ -765,6 +777,35 @@ function renderHome(main) {
 		: '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p><button data-homeaction="newpage">Neue Seite</button></div>';
 	const recentChats = chats.slice(0, 3).map((c) => listRow(`data-chat="${c.id}"`, "✦", esc(c.title || "Chat"), U.fmtDate(c.updated || c.created))).join("");
 
+	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
+	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
+	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
+	const okRate = (list) => list.filter((r) => r.grade > 1).length / list.length;
+	const graded = (S.reviews || []).filter((r) => r.grade > 0);
+	const cur7 = graded.filter((r) => r.t >= iso(7));
+	const prev7 = graded.filter((r) => r.t >= iso(14) && r.t < iso(7));
+	const trend = cur7.length >= 10 && prev7.length >= 10 ? okRate(cur7) - okRate(prev7) : null;
+	const leeches = Object.values(S.cards).filter((c) => !c.trashed && !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
+	const tips = [];
+	if (lz.todaySeconds === 0 && lz.streakDays > 0 && hour >= 15) tips.push(['data-homeaction="cards"', "🔥", `${lz.streakDays}-Tage-Streak in Gefahr`, "Heute noch nichts gelernt — schon 5 Minuten zählen."]);
+	if (due > 0) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
+	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(okRate(cur7) * 100)} % diese Woche (davor ${Math.round(okRate(prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
+	if (leeches >= 3) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
+	if (bkDue) tips.push(['data-homeaction="backup"', "↥", "Backup fällig", bkDays === null ? "Noch nie gesichert — ein Klick genügt." : `Letztes Backup vor ${bkDays} Tag${bkDays === 1 ? "" : "en"}.`]);
+	if (!daily && hour >= 17) tips.push(['data-homeaction="daily"', "📅", "Noch keine Daily Note", "Ein kurzer Tagesrückblick festigt das Gelernte."]);
+	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(okRate(cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
+	if (!tips.length) tips.push(['data-homeaction="library"', "✅", "Alles im grünen Bereich", "Nichts Dringendes — guter Moment zum Vertiefen oder Aufräumen."]);
+	const forYou = '<div class="home-list">' + tips.slice(0, 3).map((tp) => listRow(tp[0], tp[1], tp[2], tp[3])).join("") + "</div>";
+
+	// 🃏 Stapel-Überblick (Klick = diesen Stapel lernen) und ★ Favoriten
+	const deckNames = Object.keys(dueByDeck).sort((a, b) => dueByDeck[b] - dueByDeck[a]).slice(0, 6);
+	const deckRows = deckNames.length
+		? '<div class="home-list">' + deckNames.map((d) => listRow(`data-ankistudy="${esc(d)}"`, "🃏", esc(d), dueByDeck[d] + " fällig — jetzt lernen")).join("") + "</div>"
+		: '<div class="empty-state compact"><b>Nichts fällig</b><p>Alle Stapel sind für den Moment gelernt. 🎉</p></div>';
+	const favRows = favPages.length
+		? '<div class="home-list">' + favPages.slice(0, 6).map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg, "★")), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
+		: '<div class="empty-state compact"><b>Noch keine Favoriten</b><p>Der ☆-Stern oben rechts auf einer Seite pinnt sie hierher.</p></div>';
+
 	// Kennzahlen: heute gelernt, Streak, fällige Karten, Erfolgsquote
 	const stats = '<div class="home-statgrid">' +
 		`<div class="home-stat accent"><b>${LERNZEIT.fmt(lz.todaySeconds)}</b><small>heute gelernt</small></div>` +
@@ -772,19 +813,28 @@ function renderHome(main) {
 		`<div class="home-stat${due ? " accent" : ""}"><b>${due}</b><small>Karten fällig</small></div>` +
 		`<div class="home-stat${retention30 !== null && retention30 >= 85 ? " good" : ""}"><b>${retention30 === null ? "—" : retention30 + " %"}</b><small>Erfolgsquote (30 Tage)</small></div></div>`;
 
+	// Bereichs-Bausteine — ids identisch mit SETTINGS.HOME_SECTIONS (Einstellungen → Home)
+	const SECTION_HTML = {
+		stats,
+		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
+		continue: '<section class="home-section home-section-continue">' + continueBlock + "</section>",
+		today: todayPills,
+		insights: homeFold("insights", '🧠 Lern-Insights <span class="fold-meta">aus deiner Telemetrie</span>', TELE.homeInsightsHtml(), true),
+		decks: homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true),
+		favorites: homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true),
+		recent: homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true),
+		chats: recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "",
+		lernzeit: LERNZEIT.homeWidgetHtml(),
+	};
+	const sectionsHtml = SETTINGS.homeLayout().filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
 	const homeHtml = '<div class="home home-v2 home-slim">' +
-		`<header class="home-hero"><div><h1>${greeting} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
+		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
 			`<span class="home-chip">📄 <b>${pages.length}</b> Seiten</span><span class="home-chip">🃏 <b>${cardCount}</b> Karten</span><span class="home-chip">✦ <b>${chats.length}</b> Chats</span>` +
 			`<span class="home-chip${lz.goalPct < 100 ? " warn" : ""}">🎯 Wochenziel <b>${lz.goalPct} %</b></span>` +
-		'</div></div><button class="home-customize" data-set="look" title="Design anpassen">⚙</button></header>' +
-		conflictBanner + stats +
+		'</div></div><button class="home-customize" data-set="home" title="Homeseite anpassen (Bereiche & Begrüßung)">⚙</button></header>' +
+		conflictBanner +
 		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
-		'<section class="home-section home-section-continue">' + continueBlock + "</section>" +
-		todayPills +
-		homeFold("insights", '🧠 Lern-Insights <span class="fold-meta">aus deiner Telemetrie</span>', TELE.homeInsightsHtml(), true) +
-		homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true) +
-		(recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "") +
-		LERNZEIT.homeWidgetHtml() + "</div>";
+		sectionsHtml + "</div>";
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat
 	if (main._lastHomeHtml === homeHtml && main.querySelector(".home")) return;
 	main.innerHTML = homeHtml;

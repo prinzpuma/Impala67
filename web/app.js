@@ -859,7 +859,10 @@ function wireEvents() {
 			S.ankiFeyn = t.hasAttribute("data-ankifeyn");
 			S.ankiTab = "study";
 			S.reviewShowBack = false;
-			renderMain();
+			// Home v4: der Stapel-Überblick startet das Lernen direkt von der Homeseite —
+			// dafür ggf. in die Anki-Ansicht wechseln (innerhalb von Anki wie bisher).
+			if (S.view !== "anki") { S.view = "anki"; S.sidebarMode = "files"; render(); }
+			else renderMain();
 			return;
 		}
 		if (t.dataset.ankishowback) { S.reviewShowBack = true; renderMain(); return; }

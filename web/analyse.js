@@ -3,6 +3,7 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { AI } from "./ai.js";
+import { TELE } from "./telemetrie.js";
 
 // analyse.js — 📈 Lern-Analyse (Phase 3 aus „kommt noch", 17. Juli 2026)
 // Wertet die seit Phase 0 gesammelte Telemetrie (telemetrie.js) aus und zeigt
@@ -10,8 +11,11 @@ import { AI } from "./ai.js";
 // 1. Alles sind BEOBACHTUNGEN, keine Regeln — Confounder (Tageszeit, Fach,
 //    Kartenschwierigkeit) stecken ungefiltert mit drin, darum vorsichtige Sprache.
 // 2. Mindestdatenmengen: ohne genug Reviews erscheint ein ehrlicher Hinweis statt Statistik-Theater.
-// 3. Muster telemetrie.js: Capture-Listener + eigene Auswertung, keine Eingriffe in
-//    srs.js/app.js — render-anki.js hängt nur window.ANALYSE.statsHtml() an die Statistik.
+// 3. Keine Eingriffe in srs.js/app.js — render-anki.js hängt nur
+//    window.ANALYSE.statsHtml() an die Statistik.
+// 4. DRY (Refactor 21. Juli 2026): Review-Daten kommen fertig aus telemetrie.js
+//    (TELE.onReview) — die frühere zweite Zustandsmaschine über dieselben
+//    Lern-Buttons ist ersatzlos entfernt.
 
 export const ANALYSE = (() => {
 	const reviews = () => (S.telemetry || []).filter((e) => e.kind === "review" && e.data && e.data.grade > 0);
@@ -121,24 +125,19 @@ export const ANALYSE = (() => {
 	}
 
 	// ---------- 4) Ehrlichkeits-Hinweis + 5) Pausen-Hinweis ----------
-	// Eigene Mini-Zustandsmaschine über dieselben Lern-Buttons wie telemetrie.js.
-	let frontAt = 0, revealAt = 0, recent = [], lastHint = 0, lastPause = 0;
-	document.addEventListener("click", (e) => {
-		const t = e.target && e.target.closest ? e.target.closest("[data-ankistudy],[data-ankishowback],[data-ankigrade],[data-anacard]") : null;
-		if (!t) return;
-		if (t.hasAttribute("data-anacard")) { cardFromPage(t.getAttribute("data-anacard")); return; }
+	// DRY: telemetrie.js liefert die fertigen Review-Daten (grade, thinkMs, pos)
+	// per TELE.onReview — keine eigene Zustandsmaschine über die Lern-Buttons mehr.
+	let recent = [], lastHint = 0, lastPause = 0;
+	TELE.onReview((r) => {
 		const now = Date.now();
-		if (t.hasAttribute("data-ankistudy")) { frontAt = now; revealAt = 0; recent = []; return; }
-		if (t.hasAttribute("data-ankishowback")) { if (!revealAt) revealAt = now; return; }
-		const grade = Number(t.getAttribute("data-ankigrade")) || 0;
-		const thinkMs = revealAt && frontAt ? Math.min(300000, Math.max(0, revealAt - frontAt)) : 0;
-		recent.push({ grade, thinkMs });
+		if (r.pos === 0) recent = []; // neue Sitzung
+		recent.push({ grade: r.grade, thinkMs: r.thinkMs });
 		if (recent.length > 12) recent.shift();
 		// 4) Latenz als Ehrlichkeits-Signal: lange gezögert, aber „Gut/Einfach“?
 		//    Nur ein dezenter Hinweis — NIE ein automatisches Herabstufen.
-		if (grade >= 3 && thinkMs > 20000 && now - lastHint > 120000) {
+		if (r.grade >= 3 && r.thinkMs > 20000 && now - lastHint > 120000) {
 			lastHint = now;
-			U.toast("🤔 " + Math.round(thinkMs / 1000) + " s überlegt und dann „Gut“? Ehrlich bewerten hilft dem Planer.");
+			U.toast("🤔 " + Math.round(r.thinkMs / 1000) + " s überlegt und dann „Gut“? Ehrlich bewerten hilft dem Planer.");
 		}
 		// 5) Pausen-Hinweis statt „Aufmerksamkeits-Prädiktion“: steigen Fehlerquote
 		//    UND Denkzeit innerhalb der Sitzung, wird EINMAL eine Pause vorgeschlagen.
@@ -152,14 +151,36 @@ export const ANALYSE = (() => {
 				U.toast("🪫 Fehler und Denkzeit steigen — 5 Minuten Pause bringen hier mehr als Weitermachen.");
 			}
 		}
-		frontAt = now; revealAt = 0;
+	});
+	// Der ＋-Karte-Button aus den Problemzonen ist der einzige verbliebene Klick-Handler.
+	document.addEventListener("click", (e) => {
+		const t = e.target && e.target.closest ? e.target.closest("[data-anacard]") : null;
+		if (t) cardFromPage(t.getAttribute("data-anacard"));
 	}, true);
+
+	// ---------- 6) Experimente × Erfolg (macht Phase 2 messbar) ----------
+	// Reviews, bei denen ein Karten-Experiment benutzt wurde (exp-Array aus
+	// telemetrie.js v3), gegen die Basisquote. Mindestdatenmengen wie überall.
+	const EXP_NAMES = { feynman: "🧑‍🏫 Feynman", scaffolding: "💡 Hinweise", variation: "🔀 Variation", mc: "🎯 Quiz" };
+	function expHtml() {
+		const rs = reviews();
+		const base = rs.filter((e) => !Array.isArray(e.data.exp) || !e.data.exp.length);
+		const rows = Object.entries(EXP_NAMES)
+			.map(([key, label]) => { const list = rs.filter((e) => Array.isArray(e.data.exp) && e.data.exp.includes(key)); return { label, n: list.length, rate: rate(list) }; })
+			.filter((x) => x.n >= 15);
+		if (!rows.length || base.length < 30) return "";
+		return "<h4>Experimente × Erfolg</h4>" +
+			'<table class="lib-table"><thead><tr><th>Experiment</th><th>Reviews</th><th>richtig</th></tr></thead><tbody>' +
+			rows.map((x) => "<tr><td>" + x.label + "</td><td>" + x.n + "</td><td>" + pct(x.rate) + "</td></tr>").join("") +
+			"<tr><td>ohne Experimente</td><td>" + base.length + "</td><td>" + pct(rate(base)) + "</td></tr></tbody></table>" +
+			'<div class="ana-note">Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
+	}
 
 	// ---------- Statistik-Tab (render-anki.js hängt das an) ----------
 	function statsHtml() {
-		const html = positionHtml() + chronoHtml() + problemHtml();
+		const html = positionHtml() + chronoHtml() + expHtml() + problemHtml();
 		return '<div class="ana-block"><h3>📈 Lern-Analyse (Beobachtungen)</h3>' +
-			(html || '<div class="ana-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
+			(html || '<div class="ana-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Erfolg und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
 			"</div>";
 	}
 
