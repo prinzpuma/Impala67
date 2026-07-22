@@ -246,16 +246,22 @@ async function rateAndReviewCard(cardId, grade) {
 // Anki-Tastatur (docs.ankiweb.net/studying.html): Space/Enter → Antwort,
 // bei sichtbarer Antwort → Good(3); 1–4 → Again/Hard/Good/Easy
 const inStudy = () => S.view === "anki" && S.ankiTab === "study";
-function showStudyAnswer() {
+// Bug-Fix („kommt noch“, 22. Juli): Die sichtbare Karte wird beim Aufdecken in
+// S.reviewCardId festgepinnt. Vorher lasen Aufdecken UND Bewerten blind dueNow[0] —
+// ändert sich die Queue dazwischen (Learning-Karte wird fällig), sprang die Ansicht
+// auf eine andere Karte bzw. Space/Enter bewertete die falsche Karte.
+function showStudyAnswer(cardId) {
 	if (!inStudy() || S.reviewShowBack) return false;
-	if (!STATE.studySnapshot(S.ankiDeck).dueNow.length) return false;
+	const c = STATE.studySnapshot(S.ankiDeck).dueNow[0];
+	if (!c) return false;
+	S.reviewCardId = cardId || c.id;
 	S.reviewShowBack = true;
 	renderMain();
 	return true;
 }
 async function gradeStudyCard(grade) {
 	if (!inStudy() || !S.reviewShowBack) return false;
-	const c = STATE.studySnapshot(S.ankiDeck).dueNow[0];
+	const c = S.cards[S.reviewCardId] || STATE.studySnapshot(S.ankiDeck).dueNow[0];
 	if (!c) return false;
 	await rateAndReviewCard(c.id, Math.max(1, Math.min(4, Number(grade) || 3)));
 	S.reviewShowBack = false; // dispatch triggert den Render
@@ -872,7 +878,9 @@ function wireEvents() {
 			else renderMain();
 			return;
 		}
-		if (t.dataset.ankishowback) { S.reviewShowBack = true; renderMain(); return; }
+		// DRY: Klick auf „Antwort zeigen“ nutzt denselben Aufdeck-Pfad wie die
+		// Leertaste — inkl. Festpinnen der sichtbaren Karte (Bug-Fix, s. oben).
+		if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return; }
 		if (t.dataset.ankiwaitrefresh) { S.reviewShowBack = false; renderMain(); return; }
 		if (t.dataset.ankigrade) {
 			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade));
@@ -927,7 +935,10 @@ function wireEvents() {
 			} else {
 				await STATE.dispatch("cardUpdate", { id: t.dataset.cardeditorsave, patch: { front, back, deck } });
 			}
-			S.ankiDeck = deck === "Standard" ? null : deck;
+			// Bug-Fix (Karteikarten): Nicht mitten im Lernen den aktiven Stapel
+			// wechseln — ✎ Bearbeiten im Lernmodus kappte sonst die laufende
+			// Session auf den Stapel der gerade bearbeiteten Karte.
+			if (S.ankiTab !== "study") S.ankiDeck = deck === "Standard" ? null : deck;
 			closeOverlay();
 			return;
 		}

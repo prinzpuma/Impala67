@@ -58,6 +58,10 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#05070d">
+<!-- Bug-Fix („kommt noch“, 22. Juli, „neues icon“): Der Favicon-Link stand ungültig
+     unten im <body> — manche Browser ignorierten ihn dort und zeigten das neue
+     Vektor-Icon (icon.svg) nicht. Er gehört hierher in den <head>. -->
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
 <!-- CDN-Bibliotheken: Markdown-Rendering + PDF-Textextraktion + Google Login + LaTeX (KaTeX) + Code-Highlighting -->
 <!-- CDN-Bibliotheken: crossorigin ist Voraussetzung für die SRI-Integritätsprüfung.
@@ -238,7 +242,6 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
      HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
      lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
-<link rel="icon" href="icon.svg" type="image/svg+xml">
 <script type="module" src="main.js?build=52"></script>
 <script>
 // PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
@@ -260,7 +263,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=52", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=53", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

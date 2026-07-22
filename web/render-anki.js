@@ -387,16 +387,21 @@ function ankiStudyHtml() {
 				'</div></div>';
 	}
 
-	const c = snap.dueNow[0];
+	// Bug-Fix („kommt noch“, 22. Juli): Nach dem Aufdecken IMMER die festgepinnte
+	// Karte (S.reviewCardId, gesetzt in app.js beim Aufdecken) zeigen — die Queue
+	// kann sich zwischen Frage und Aufdecken ändern (Learning-Karten werden fällig),
+	// dann sprang die Rückseite auf eine ANDERE Karte als die gezeigte Frage.
+	const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || snap.dueNow[0];
 	const pv = SRS.preview(c.srs);
 	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
 	let html = head + '<div class="study-card">' +
 		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× · " + (c.srs.lapses || 0) + " Fehler · " +
 			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " T" : "Lernschritt") + " · " + U.esc(c.deck || "Standard") +
 			(c.leech ? ' · <span class="leech-badge" title="Leech">🐛 Leech</span>' : "") + "</div>" +
-		// 👆 QoL: Tipp auf die Vorderseite deckt die Antwort auf (wie in Anki mobil)
-		'<div class="card-face md' + (S.reviewShowBack ? "" : " tappable") + '"' +
-			(S.reviewShowBack ? "" : ' data-ankishowback="1" data-card="' + c.id + '" title="Tippen zum Aufdecken"') + '>' + U.md(c.front) + "</div>";
+		// Bug-Fix („kommt noch“, 22. Juli): Klick/Tipp auf die Frage deckt NICHT mehr
+		// auf — das löste versehentliches Aufdecken aus (z. B. beim Markieren/Scrollen).
+		// Aufdecken nur noch bewusst über „Antwort zeigen“ bzw. die Leertaste.
+		'<div class="card-face md">' + U.md(c.front) + "</div>";
 	if (S.reviewShowBack) {
 		// Anki-Look: Vorder-/Rückseite als EINE Karte mit Trennlinie statt zwei Boxen
 		html += '<hr class="study-divider">' +
