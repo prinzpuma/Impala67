@@ -1535,8 +1535,13 @@ export const EDITOR = (() => {
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undoRedo(false); return; }
 		if (mod && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) { e.preventDefault(); undoRedo(true); return; }
 
-		// --- Blockauswahl-Modus (kein Textfokus) ---
-		if (selRange && !field) { if (handleSelectionKeys(e)) return; }
+		// --- Blockauswahl-Modus ---
+		// Wichtig: Nach Maus-Markierung über mehrere Blöcke bleibt oft noch ein
+		// contenteditable fokussiert. selectBlocks() hat die DOM-Textselektion
+		// bereits geleert — der Browser hätte bei Strg+C also nichts zu kopieren.
+		// Deshalb dieselben Blockauswahl-Tasten (Copy, Entf, Pfeile …) IMMER
+		// bevorzugen, sobald selRange gesetzt ist — nicht nur ohne Textfokus.
+		if (selRange && handleSelectionKeys(e)) return;
 
 		if (!field) return;
 		const caret = caretInfo();
@@ -1950,21 +1955,30 @@ export const EDITOR = (() => {
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
 			e.preventDefault();
 			const md = serializeList(blocks.slice(selRange.from, selRange.to + 1));
-			if (navigator.clipboard && navigator.clipboard.writeText) {
+			// In der Tauri/WebView-Umgebung ist navigator.clipboard zwar vorhanden,
+			// writeText() wird aber teilweise trotzdem mit NotAllowedError abgelehnt.
+			// execCommand muss deshalb zuerst und synchron im Tastatur-Event laufen;
+			// nur falls das nicht geht, probieren wir die moderne Clipboard-API.
+			const ta = document.createElement("textarea");
+			ta.value = md;
+			ta.setAttribute("readonly", "");
+			ta.style.position = "fixed";
+			ta.style.left = "-9999px";
+			ta.style.top = "0";
+			document.body.appendChild(ta);
+			ta.select();
+			let copied = false;
+			try { copied = document.execCommand("copy"); } catch { /* unten Clipboard-API */ }
+			ta.remove();
+			if (copied) {
+				U.toast("Kopiert");
+			} else if (navigator.clipboard && navigator.clipboard.writeText) {
 				navigator.clipboard.writeText(md).then(
 					() => U.toast("Kopiert"),
 					() => U.toast("Kopieren fehlgeschlagen", "error")
 				);
 			} else {
-				// Fallback ohne Clipboard-API (z. B. unsicherer Kontext / älterer Browser)
-				const ta = document.createElement("textarea");
-				ta.value = md;
-				ta.style.position = "fixed";
-				ta.style.opacity = "0";
-				document.body.appendChild(ta);
-				ta.select();
-				try { document.execCommand("copy"); U.toast("Kopiert"); } catch { U.toast("Kopieren fehlgeschlagen", "error"); }
-				ta.remove();
+				U.toast("Kopieren fehlgeschlagen", "error");
 			}
 			return true;
 		}

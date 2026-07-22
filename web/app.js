@@ -1708,18 +1708,21 @@ function wireEvents() {
 	document.addEventListener("pointerdown", (e) => {
 		if (e.button !== undefined && e.button !== 0) return;
 		const row = e.target.closest("#tree .row[data-page]");
-		if (!row || e.target.closest("button, input, a, .page-menu")) return;
+		if (!row || e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) return;
 		pageDrag = { id: row.dataset.page, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, row };
 	});
 	document.addEventListener("pointermove", (e) => {
 		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
 		if (!pageDrag.dragging) {
 			if (Math.hypot(e.clientX - pageDrag.startX, e.clientY - pageDrag.startY) < PAGE_DRAG_THRESHOLD) return;
-			pageDrag.dragging = true;
-			// Touch-Scroll erst JETZT unterbinden (Drag erkannt) — ein normaler Wisch zum
-			// Scrollen der Seitenleiste, der auf einer Zeile beginnt, bleibt so unangetastet.
-			pageDrag.row.style.touchAction = "none";
-			pageDrag.row.setPointerCapture?.(pageDrag.pointerId);
+			// FIX (Absturz "pageDrag.ghost.style" von undefined, 22. Juli): Ghost ERST
+			// vollständig aufbauen und NUR bei Erfolg auf pageDrag schreiben — "dragging"
+			// zuletzt setzen. Vorher stand dragging=true schon fest, bevor das Ghost
+			// erzeugt war; warf setPointerCapture() dazwischen (z. B. Zeile durch einen
+			// Re-Render inzwischen aus dem DOM entfernt), blieb dragging=true ohne Ghost
+			// stehen — jeder weitere pointermove crashte auf pageDrag.ghost.style.
+			// setPointerCapture ist hier unnötig (Zielsuche läuft über
+			// document.elementFromPoint statt über e.target) und daher entfernt (KISS).
 			const pg = S.pages[pageDrag.id];
 			const ghost = document.createElement("div");
 			ghost.className = "row drag-ghost";
@@ -1730,13 +1733,25 @@ function wireEvents() {
 			});
 			ghost.textContent = (pg?.icon ? pg.icon + " " : "") + (pg?.title || "");
 			document.body.appendChild(ghost);
+			// Touch-Scroll erst JETZT unterbinden (Drag erkannt) — ein normaler Wisch zum
+			// Scrollen der Seitenleiste, der auf einer Zeile beginnt, bleibt so unangetastet.
+			pageDrag.row.style.touchAction = "none";
 			pageDrag.ghost = ghost;
+			pageDrag.dragging = true;
 		}
+		if (!pageDrag.ghost) return; // Sicherheitsnetz: ohne Ghost keine Drag-Anzeige möglich
 		e.preventDefault();
 		pageDrag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
 		const under = document.elementFromPoint(e.clientX, e.clientY);
 		const overRow = under?.closest?.("#tree .row[data-page]");
-		if (overRow && overRow.dataset.page !== pageDrag.id) {
+		// Über der eigenen Zeile: KEIN Ziel (sonst landete die Seite fälschlich in der
+		// Wurzel — der else-if-Zweig für freie Baumfläche griff, weil overRow zwar
+		// existierte, aber per id-Check verworfen wurde).
+		if (overRow && overRow.dataset.page === pageDrag.id) {
+			pageDrag.target = undefined;
+			pageDrag.zone = null;
+			clearDropMarks();
+		} else if (overRow) {
 			pageDrag.target = overRow.dataset.page;
 			pageDrag.zone = dropZoneFor(overRow, e.clientY);
 			markDropZone(overRow, pageDrag.zone);
