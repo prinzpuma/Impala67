@@ -319,7 +319,10 @@ function rowHtml(pg, depth, wsId) {
 	const active = pg.id === S.currentPageId && S.view === "page" ? " active" : "";
 	const hasKids = STATE.childrenOf(pg.id, wsId || pg.workspaceId).length > 0;
 	const collapsed = COLLAPSE.isCollapsed(pg.id);
-	return `<div class="row${active}" draggable="true" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
+	// Bug-Fix („kommt noch“, 22. Juli): kein draggable="true" mehr — HTML5-DnD wird in
+	// Tauri abgefangen und startet auf iPad nur per Long-Press. Das Verschieben läuft
+	// jetzt über Pointer-Events in app.js (ein Code-Pfad für Maus, Touch und Tauri).
+	return `<div class="row${active}" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
 		(hasKids ? `<button class="row-chevron${collapsed ? "" : " open"}" data-collapse="${pg.id}" title="Ein-/Ausklappen">▸</button>` : '<span class="row-chevron spacer"></span>') +
 		(S.renamingPageId === pg.id
 			? `<input class="row-rename-input" data-renamename="${esc(pg.id)}" value="${esc(pg.title)}" autocomplete="off">`

@@ -2,6 +2,12 @@
 export const SRS = (() => {
 	// FSRS-5-Standardgewichte w0…w18 (wie ts-fsrs) — w0…w3 sind die Start-Stabilitäten
 	// für Nochmal/Schwer/Gut/Einfach, der Rest steuert Schwierigkeit & Stabilitätswachstum.
+	// KEIN Bug („kommt noch“, 22. Juli): „Einfach“ auf einer NEUEN Karte ⇒ ~16 Tage.
+	// Das ist korrektes FSRS-5-Verhalten: Start-Stabilität w3 ≈ 15.69 Tage, und wegen
+	// I(0.9, S) = S ist das erste Intervall genau die Stabilität ⇒ round(15.69) = 16.
+	// Anki mit aktiviertem FSRS zeigt für Easy auf einer neuen Karte denselben Wert.
+	// „Einfach“ ist für triviale Karten gedacht — im Zweifel „Gut“ drücken (graduiert
+	// über die Lernschritte, erstes Review-Intervall dann w2 ≈ 3 Tage).
 	const W = [0.40255, 1.18385, 3.173, 15.69105, 7.1949, 0.5345, 1.4604, 0.0046, 1.54575,
 		0.1192, 1.01925, 1.9395, 0.11, 0.29605, 2.2698, 0.2315, 2.9898, 0.51655, 0.6621];
 	const DECAY = -0.5;

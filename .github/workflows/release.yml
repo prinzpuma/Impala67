@@ -22,7 +22,7 @@ jobs:
     outputs:
       version: ${{ steps.next.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Konfliktmarker und Dateien pruefen
         run: |
@@ -71,7 +71,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Version in PWA-Dateien setzen
         run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
@@ -95,13 +95,13 @@ jobs:
       - deploy-pwa
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Node-Abhaengigkeiten installieren

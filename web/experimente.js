@@ -62,6 +62,20 @@ export const EXP = (() => {
 			return (snap && snap.dueNow && snap.dueNow[0]) || null;
 		} catch (e) { return null; }
 	}
+	// Bug-Fix („kommt noch“, 22. Juli, Feynman): die ANGEZEIGTE Karte — gleiche
+	// Logik wie render-anki.js: Nach dem Aufdecken zählt die festgepinnte Karte
+	// (S.reviewCardId), NICHT der Queue-Kopf. Die Queue kann sich zwischen Frage
+	// und Aufdecken/Prüfen ändern (Learning-Karten werden fällig) — der Feynman-
+	// Modus prüfte bzw. markierte sonst eine ANDERE Karte als die gezeigte.
+	function displayedCard() {
+		if (S.reviewShowBack && S.reviewCardId && S.cards[S.reviewCardId]) return S.cards[S.reviewCardId];
+		return currentCard();
+	}
+
+	// Bug-Fix („kommt noch“, 22. Juli): LaTeX wurde nicht überall gerendert —
+	// dynamisch eingefügtes Experiment-HTML (Modals, Feynman-Feedback, Varianten,
+	// Quiz) lief nie durch U.renderMath. Helfer nach jedem innerHTML aufrufen.
+	const mathify = (el) => { try { if (el && typeof U.renderMath === "function") U.renderMath(el); } catch (err) { /* KaTeX optional */ } };
 
 	// ---------- Leichtes eigenes Modal ----------
 	function openModal(title, bodyHtml) {
@@ -75,6 +89,7 @@ export const EXP = (() => {
 			if (e.target === bd || (e.target.closest && e.target.closest("[data-expclose]"))) closeModal();
 		});
 		document.body.appendChild(bd);
+		mathify(bd);
 		return bd;
 	}
 	function closeModal() {
@@ -144,7 +159,7 @@ export const EXP = (() => {
 		const cardEl = document.querySelector(".anki-study-mode .study-card");
 		if (!cardEl || cardEl.dataset.expdone) return;
 		cardEl.dataset.expdone = "1";
-		const card = currentCard();
+		const card = displayedCard();
 		if (!card) return;
 		const showBtn = cardEl.querySelector("[data-ankishowback]");
 		if (showBtn) {
@@ -170,6 +185,7 @@ export const EXP = (() => {
 			// (erklären → prüfen → aufdecken → bewerten) in EINER Karte.
 			if (feynVerdict && feynVerdict.cardId === card.id) {
 				grades.insertAdjacentHTML("beforebegin", '<div class="exp-feynout feyn-verdict">' + feynVerdict.html + "</div>");
+				mathify(cardEl.querySelector(".feyn-verdict"));
 				const gb = grades.querySelector('[data-ankigrade="' + feynVerdict.note + '"]');
 				if (gb) {
 					gb.classList.add("grade-suggest");
@@ -217,6 +233,7 @@ export const EXP = (() => {
 		if (varTrackedFor !== card.id) { varTrackedFor = card.id; trackCard("variation", { cardId: card.id }); }
 		face.dataset.exporigHtml = face.innerHTML;
 		face.innerHTML = '<div class="hint">🔀 Variante · <button type="button" class="mini" data-expvarorig="1">Original zeigen</button></div>' + U.md(v);
+		mathify(face);
 	}
 	function showOriginalFront(btn) {
 		const face = btn.closest(".card-face");
@@ -289,6 +306,7 @@ export const EXP = (() => {
 			body.innerHTML = '<div class="md">' + U.md(String(j.frage || card.front)) + "</div>" +
 				opts.map((o, i) => '<button type="button" class="exp-mc-opt" data-expmcopt="' + i + '">' + U.esc(String(o.text)) + "</button>").join("") +
 				'<p class="hint">Nach deinem Klick kommt sofort die Auflösung mit Erklärung — so prägt sich kein Distraktor ein.</p>';
+			mathify(body);
 		} catch (err) {
 			closeModal();
 			if (U.toast) U.toast("Quiz nicht möglich: " + ((err && err.message) || err));
@@ -309,6 +327,7 @@ export const EXP = (() => {
 				el.insertAdjacentHTML("beforeend", '<div class="hint">' + U.esc(String(o.warum)) + "</div>");
 			}
 		});
+		mathify(document.querySelector(".exp-modal"));
 		mcState = null;
 	}
 
@@ -338,8 +357,10 @@ export const EXP = (() => {
 	document.addEventListener("input", (e) => {
 		const t = e.target;
 		if (t && t.classList && t.classList.contains("exp-answer") && t.closest(".feyn-inline")) {
-			const card = currentCard();
-			feynDraft = card ? { cardId: card.id, text: t.value } : null;
+			// Bug-Fix: Entwurf an die eingebettete Karten-ID binden, nicht an den Queue-Kopf
+			const box = t.closest(".feyn-inline");
+			const id = (box.dataset && box.dataset.feyncard) || (currentCard() || {}).id;
+			feynDraft = id ? { cardId: id, text: t.value } : null;
 		}
 	}, true);
 	document.addEventListener("keydown", (e) => {
@@ -371,7 +392,10 @@ export const EXP = (() => {
 		const wrap = btn.closest(".feyn-inline") || btn.closest(".exp-modal");
 		if (!wrap) return;
 		const inline = wrap.classList.contains("feyn-inline");
-		const card = inline ? currentCard() : feynCard;
+		// Bug-Fix: inline IMMER die eingebettete Karten-ID (data-feyncard aus
+		// render-anki.js) nehmen — nicht den Queue-Kopf, der sich zwischenzeitlich
+		// ändern kann (die KI prüfte sonst gegen die Rückseite der FALSCHEN Karte).
+		const card = inline ? (S.cards[wrap.dataset.feyncard] || displayedCard()) : feynCard;
 		if (!card) return;
 		const txt = (wrap.querySelector(".exp-answer") || {}).value || "";
 		if (!txt.trim()) { if (U.toast) U.toast("Erst erklären — tippen oder diktieren"); return; }
@@ -398,7 +422,9 @@ export const EXP = (() => {
 				const show = document.querySelector('.anki-study-mode [data-ankishowback]');
 				if (show) { show.click(); return; } // Re-Render — die Karte samt Button existiert danach neu
 			} else {
-				wrap.querySelector(".exp-feynout").innerHTML = verdictHtml;
+				const out = wrap.querySelector(".exp-feynout");
+				out.innerHTML = verdictHtml;
+				mathify(out);
 			}
 		} catch (err) {
 			wrap.querySelector(".exp-feynout").innerHTML = '<p class="hint">KI nicht erreichbar — später erneut versuchen.</p>';
@@ -442,6 +468,7 @@ export const EXP = (() => {
 				'<textarea class="exp-answer" rows="3" placeholder="Deine Begründung …"></textarea>' +
 				'<div class="row-btns"><button type="button" data-expwhy="1">Prüfen</button>' +
 				'<button type="button" data-expclose="1">Überspringen</button></div>';
+			mathify(body);
 			body.querySelector("[data-expwhy]").addEventListener("click", async (ev) => {
 				const b = ev.currentTarget;
 				const ans = (body.querySelector(".exp-answer") || {}).value || "";
@@ -453,6 +480,7 @@ export const EXP = (() => {
 						"\nBegründung des Lernenden: " + ans.trim() +
 						"\n\nGib in 2–3 Sätzen Feedback: Was stimmt, was fehlt, was ist falsch?");
 					body.insertAdjacentHTML("beforeend", '<div class="exp-feedback md">' + U.md(fb) + "</div>");
+					mathify(body.querySelector(".exp-feedback"));
 					b.remove();
 				} catch (err) {
 					b.disabled = false;
@@ -481,6 +509,7 @@ export const EXP = (() => {
 			body.innerHTML = '<div class="md">' + U.md(String(j.text)) + "</div>" +
 				'<p class="hint">Finde die 2 eingebauten Fehler! Die Auflösung wird danach IMMER angezeigt — sonst prägen sich Fehler ein (Misinformation-Risiko).</p>' +
 				'<div class="row-btns"><button type="button" data-expreveal="1">Auflösung zeigen</button></div>';
+			mathify(body);
 			body.querySelector("[data-expreveal]").addEventListener("click", (ev) => {
 				ev.currentTarget.remove();
 				body.insertAdjacentHTML("beforeend", "<ul>" + (Array.isArray(j.fehler) ? j.fehler : []).map((f) =>
@@ -520,6 +549,7 @@ export const EXP = (() => {
 			body.innerHTML = '<p class="hint">Beantworte aus dem Bauch — <b>falsch raten ist erwünscht!</b> Erfolgloses Vorab-Raten verbessert nachweislich das spätere Behalten (Pre-Testing-Effekt).</p>' +
 				fragen.map((f, i) => '<div class="exp-pretest-q"><b>' + (i + 1) + ". " + U.esc(String(f.q)) + '</b><textarea rows="2" placeholder="Deine Vermutung …"></textarea></div>').join("") +
 				'<div class="row-btns"><button type="button" data-expreveal="1">Musterantworten zeigen — dann lesen</button></div>';
+			mathify(body);
 			body.querySelector("[data-expreveal]").addEventListener("click", (ev) => {
 				ev.currentTarget.remove();
 				body.querySelectorAll(".exp-pretest-q").forEach((el, i) => {

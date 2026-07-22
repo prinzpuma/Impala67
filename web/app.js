@@ -1573,25 +1573,9 @@ function wireEvents() {
 		}
 	});
 
-	// Drag & Drop: auf Zeile = Unterseite/-stapel, auf freien Baum = Wurzelebene; dragType = "page"|"deck"
-	let dragId = null, dragType = null, dropZone = null;
-	document.addEventListener("dragstart", (e) => {
-		// ⋯ / + / Inputs dürfen KEINEN Drag starten — sonst frisst der Browser den Klick
-		if (e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) {
-			e.preventDefault();
-			return;
-		}
-		const pageRow = e.target.closest("[data-page]");
-		if (pageRow) { dragId = pageRow.dataset.page; dragType = "page"; e.dataTransfer.effectAllowed = "move"; return; }
-		const deckRow = e.target.closest("[data-deck]");
-		if (deckRow) { dragId = deckRow.dataset.deck; dragType = "deck"; e.dataTransfer.effectAllowed = "move"; return; }
-	});
-	// mousedown auf Zeilen-Buttons: Drag der Eltern-Zeile unterbinden
-	document.addEventListener("mousedown", (e) => {
-		if (e.target.closest(".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
-			e.stopPropagation();
-		}
-	}, true);
+	// ---------- Verschieben in der Sidebar ----------
+	// Stapel: weiterhin HTML5 Drag & Drop (unverändert — dort nicht als Bug gemeldet).
+	// Seiten: Pointer-Events statt HTML5-DnD, s. u. (Bug-Fix „kommt noch“, 22. Juli).
 	const clearDropMarks = () => {
 		document.querySelectorAll(".row.drop-target,.row.drop-before,.row.drop-after").forEach((r) => {
 			r.classList.remove("drop-target", "drop-before", "drop-after");
@@ -1599,79 +1583,56 @@ function wireEvents() {
 			r.style.borderBottom = "";
 		});
 	};
-	document.addEventListener("dragover", (e) => {
-		if (!dragId) return;
-		const pageRow = e.target.closest("[data-page]");
-		const deckRow = e.target.closest("[data-deck]");
-		if (pageRow || deckRow || e.target.closest("#tree")) {
-			e.preventDefault();
-			clearDropMarks();
-			// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = Unterseite/-stapel
-			// (gilt jetzt auch für Stapel — Sortieren per Drag & Drop wie bei Seiten)
-			dropZone = "into";
-			const zoneRow = (dragType === "page" && pageRow) || (dragType === "deck" && deckRow) || null;
-			if (zoneRow) {
-				const r = zoneRow.getBoundingClientRect();
-				const y = e.clientY - r.top;
-				if (y < r.height * 0.25) dropZone = "before";
-				else if (y > r.height * 0.75) dropZone = "after";
-			}
-			const markRow = pageRow || deckRow;
-			if (markRow) {
-				if (dropZone === "before" && markRow === zoneRow) { markRow.classList.add("drop-before"); markRow.style.borderTop = "2px solid #4a9eff"; }
-				else if (dropZone === "after" && markRow === zoneRow) { markRow.classList.add("drop-after"); markRow.style.borderBottom = "2px solid #4a9eff"; }
-				else markRow.classList.add("drop-target");
-			}
-		}
-	});
-	document.addEventListener("dragend", () => { dragId = null; dragType = null; dropZone = null; clearDropMarks(); }); // FIX: war doppelt registriert, dragType wurde nie zurückgesetzt
-	// Einsortieren VOR/NACH einer Seite (Sortier-Zonen) — läuft VOR dem allgemeinen
-	// Drop-Handler und stoppt ihn, wenn eine Sortier-Zone getroffen wurde.
-	document.addEventListener("drop", async (e) => {
-		if (!dragId || dragType !== "page" || dropZone === "into" || dropZone == null) return;
-		const pageRow = e.target.closest("[data-page]");
-		if (!pageRow) return;
-		const zone = dropZone;
-		e.preventDefault();
-		e.stopImmediatePropagation();
+	const markDropZone = (row, zone) => {
 		clearDropMarks();
-		const target = S.pages[pageRow.dataset.page];
-		const moved = S.pages[dragId];
-		dragId = null; dragType = null; dropZone = null;
-		if (!target || !moved || target.id === moved.id || isDescendant(target.id, moved.id)) return;
-		// Geschwister des Ziels in Anzeige-Reihenfolge; neue Position = Mittelwert
-		// der Sortierschlüssel der künftigen Nachbarn (STATE.sortKeyOf).
-		const sibs = STATE.childrenOf(target.parentId || null, target.workspaceId || "default").filter((p) => p.id !== moved.id);
-		const idx = sibs.findIndex((p) => p.id === target.id);
-		if (idx === -1) return;
-		const pos = zone === "before" ? idx : idx + 1;
-		const prev = sibs[pos - 1], next = sibs[pos];
-		const kPrev = prev ? STATE.sortKeyOf(prev) : null;
-		const kNext = next ? STATE.sortKeyOf(next) : null;
-		let order;
-		if (kPrev != null && kNext != null) order = (kPrev + kNext) / 2;
-		else if (kPrev != null) order = kPrev + 60000;
-		else if (kNext != null) order = kNext - 60000;
-		else order = Date.now();
-		await STATE.dispatch("pageMove", { id: moved.id, parentId: target.parentId || null, order });
-		// Workspace angleichen, falls über Workspace-Grenzen einsortiert wurde
-		if ((moved.workspaceId || "default") !== (target.workspaceId || "default")) {
-			await STATE.dispatch("pageUpdate", { id: moved.id, patch: { workspaceId: target.workspaceId || "default" } });
+		if (!row) return;
+		if (zone === "before") { row.classList.add("drop-before"); row.style.borderTop = "2px solid #4a9eff"; }
+		else if (zone === "after") { row.classList.add("drop-after"); row.style.borderBottom = "2px solid #4a9eff"; }
+		else row.classList.add("drop-target");
+	};
+	// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = als Kind/Unterstapel
+	const dropZoneFor = (row, clientY) => {
+		const r = row.getBoundingClientRect();
+		const y = clientY - r.top;
+		if (y < r.height * 0.25) return "before";
+		if (y > r.height * 0.75) return "after";
+		return "into";
+	};
+	// mousedown auf Zeilen-Buttons: Drag der Eltern-Zeile unterbinden
+	document.addEventListener("mousedown", (e) => {
+		if (e.target.closest(".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
+			e.stopPropagation();
 		}
+	}, true);
+
+	// Stapel (Decks): unverändertes HTML5 Drag & Drop
+	let deckDragId = null, deckDropZone = null;
+	document.addEventListener("dragstart", (e) => {
+		if (e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) { e.preventDefault(); return; }
+		const deckRow = e.target.closest("[data-deck]");
+		if (deckRow) { deckDragId = deckRow.dataset.deck; e.dataTransfer.effectAllowed = "move"; }
 	});
-	// Einsortieren VOR/NACH einem Stapel — Stapel sortieren in der linken Spalte jetzt
-	// per Drag & Drop wie Seiten (Reihenfolge via deckReorder-Events, order in S.decks).
+	document.addEventListener("dragover", (e) => {
+		if (!deckDragId) return;
+		const deckRow = e.target.closest("[data-deck]");
+		if (!deckRow && !e.target.closest("#tree")) return;
+		e.preventDefault();
+		deckDropZone = deckRow ? dropZoneFor(deckRow, e.clientY) : "into";
+		markDropZone(deckRow, deckDropZone);
+	});
+	document.addEventListener("dragend", () => { deckDragId = null; deckDropZone = null; clearDropMarks(); });
+	// Einsortieren VOR/NACH einem Stapel (Reihenfolge via deckReorder-Events, order in S.decks)
 	document.addEventListener("drop", async (e) => {
-		if (!dragId || dragType !== "deck" || dropZone === "into" || dropZone == null) return;
+		if (!deckDragId || deckDropZone === "into" || deckDropZone == null) return;
 		const deckRow = e.target.closest("[data-deck]");
 		if (!deckRow) return;
-		const zone = dropZone;
+		const zone = deckDropZone;
 		e.preventDefault();
 		e.stopImmediatePropagation();
 		clearDropMarks();
 		const target = deckRow.dataset.deck;
-		const moved = dragId;
-		dragId = null; dragType = null; dropZone = null;
+		const moved = deckDragId;
+		deckDragId = null; deckDropZone = null;
 		if (!target || target === moved || target.startsWith(moved + "::")) return;
 		// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
 		const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
@@ -1686,33 +1647,120 @@ function wireEvents() {
 		}
 	});
 	document.addEventListener("drop", async (e) => {
-		if (!dragId) return;
-		const pageRow = e.target.closest("[data-page]");
+		if (!deckDragId) return;
 		const deckRow = e.target.closest("[data-deck]");
 		const inTree = e.target.closest("#tree");
-		clearDropMarks(); // FIX: entfernt auch hängende blaue Sortier-Ränder
-		if (!pageRow && !deckRow && !inTree) { dragId = null; dragType = null; return; }
+		clearDropMarks();
+		if (!deckRow && !inTree) { deckDragId = null; return; }
 		e.preventDefault();
-		if (dragType === "page") {
-			const targetId = pageRow ? pageRow.dataset.page : null;
-			if (targetId !== dragId && !(targetId && isDescendant(targetId, dragId))) {
-				await STATE.dispatch("pageMove", { id: dragId, parentId: targetId });
-			}
-		} else if (dragType === "deck") {
-			const targetDeck = deckRow ? deckRow.dataset.deck : "";
-			// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
-			if (targetDeck !== dragId && targetDeck !== "Standard" && !targetDeck.startsWith(dragId + "::")) {
-				await STATE.dispatch("deckMove", { from: dragId, target: targetDeck });
-				if (S.ankiDeck && inDeck(S.ankiDeck, dragId)) {
-					const label = dragId.split("::").pop();
-					const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
-					S.ankiDeck = newRoot + S.ankiDeck.slice(dragId.length);
-				}
+		const targetDeck = deckRow ? deckRow.dataset.deck : "";
+		// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
+		if (targetDeck !== deckDragId && targetDeck !== "Standard" && !targetDeck.startsWith(deckDragId + "::")) {
+			await STATE.dispatch("deckMove", { from: deckDragId, target: targetDeck });
+			if (S.ankiDeck && inDeck(S.ankiDeck, deckDragId)) {
+				const label = deckDragId.split("::").pop();
+				const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
+				S.ankiDeck = newRoot + S.ankiDeck.slice(deckDragId.length);
 			}
 		}
-		dragId = null;
-		dragType = null;
+		deckDragId = null;
 	});
+
+	// Seiten (Pages): Pointer-Events statt HTML5-DnD — Bug-Fix „kommt noch“ (22. Juli):
+	// HTML5-Drag&Drop wird im Tauri-Webview abgefangen, bevor es den DOM erreicht, und
+	// startet auf iPad nur per Long-Press (kollidiert mit dem Scrollen). Pointer-Events
+	// (pointerdown/-move/-up) laufen in Browser, Tauri UND auf Touch identisch — EIN
+	// Code-Pfad statt Plattform-Sonderfälle. Dieselbe Zielfindung (davor/danach/als Kind)
+	// und dieselben dispatch-Aufrufe wie vorher, nur die Eingabe-Ereignisse sind ersetzt.
+	async function movePageRelative(movedId, targetId, zone) {
+		const target = S.pages[targetId], moved = S.pages[movedId];
+		if (!target || !moved || target.id === moved.id || isDescendant(target.id, moved.id)) return;
+		// Geschwister des Ziels in Anzeige-Reihenfolge; neue Position = Mittelwert der
+		// Sortierschlüssel der künftigen Nachbarn (STATE.sortKeyOf).
+		const sibs = STATE.childrenOf(target.parentId || null, target.workspaceId || "default").filter((p) => p.id !== moved.id);
+		const idx = sibs.findIndex((p) => p.id === target.id);
+		if (idx === -1) return;
+		const pos = zone === "before" ? idx : idx + 1;
+		const prev = sibs[pos - 1], next = sibs[pos];
+		const kPrev = prev ? STATE.sortKeyOf(prev) : null;
+		const kNext = next ? STATE.sortKeyOf(next) : null;
+		const order = kPrev != null && kNext != null ? (kPrev + kNext) / 2 : kPrev != null ? kPrev + 60000 : kNext != null ? kNext - 60000 : Date.now();
+		await STATE.dispatch("pageMove", { id: moved.id, parentId: target.parentId || null, order });
+		// Workspace angleichen, falls über Workspace-Grenzen einsortiert wurde
+		if ((moved.workspaceId || "default") !== (target.workspaceId || "default")) {
+			await STATE.dispatch("pageUpdate", { id: moved.id, patch: { workspaceId: target.workspaceId || "default" } });
+		}
+	}
+	async function movePageInto(movedId, targetId) {
+		if (targetId && (targetId === movedId || isDescendant(targetId, movedId))) return;
+		await STATE.dispatch("pageMove", { id: movedId, parentId: targetId || null });
+	}
+
+	const PAGE_DRAG_THRESHOLD = 6; // px, bevor aus einem Tipp ein Drag wird (KISS: eine Schwelle für Maus+Touch)
+	let pageDrag = null; // { id, pointerId, startX, startY, dragging, row, ghost, target, zone }
+	function endPageDrag() {
+		if (!pageDrag) return;
+		pageDrag.ghost?.remove();
+		if (pageDrag.row) pageDrag.row.style.touchAction = "";
+		clearDropMarks();
+		pageDrag = null;
+	}
+	document.addEventListener("pointerdown", (e) => {
+		if (e.button !== undefined && e.button !== 0) return;
+		const row = e.target.closest("#tree .row[data-page]");
+		if (!row || e.target.closest("button, input, a, .page-menu")) return;
+		pageDrag = { id: row.dataset.page, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, row };
+	});
+	document.addEventListener("pointermove", (e) => {
+		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
+		if (!pageDrag.dragging) {
+			if (Math.hypot(e.clientX - pageDrag.startX, e.clientY - pageDrag.startY) < PAGE_DRAG_THRESHOLD) return;
+			pageDrag.dragging = true;
+			// Touch-Scroll erst JETZT unterbinden (Drag erkannt) — ein normaler Wisch zum
+			// Scrollen der Seitenleiste, der auf einer Zeile beginnt, bleibt so unangetastet.
+			pageDrag.row.style.touchAction = "none";
+			pageDrag.row.setPointerCapture?.(pageDrag.pointerId);
+			const pg = S.pages[pageDrag.id];
+			const ghost = document.createElement("div");
+			ghost.className = "row drag-ghost";
+			Object.assign(ghost.style, {
+				position: "fixed", left: "0", top: "0", width: pageDrag.row.getBoundingClientRect().width + "px",
+				pointerEvents: "none", opacity: "0.9", zIndex: "9999",
+				background: "var(--bg-elevated, #fff)", boxShadow: "0 4px 14px rgba(0,0,0,.18)",
+			});
+			ghost.textContent = (pg?.icon ? pg.icon + " " : "") + (pg?.title || "");
+			document.body.appendChild(ghost);
+			pageDrag.ghost = ghost;
+		}
+		e.preventDefault();
+		pageDrag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+		const under = document.elementFromPoint(e.clientX, e.clientY);
+		const overRow = under?.closest?.("#tree .row[data-page]");
+		if (overRow && overRow.dataset.page !== pageDrag.id) {
+			pageDrag.target = overRow.dataset.page;
+			pageDrag.zone = dropZoneFor(overRow, e.clientY);
+			markDropZone(overRow, pageDrag.zone);
+		} else if (under?.closest?.("#tree")) {
+			pageDrag.target = null; // freie Fläche im Baum = Wurzelebene
+			pageDrag.zone = "into";
+			clearDropMarks();
+		} else {
+			pageDrag.target = undefined; // außerhalb des Baums abgesetzt = ungültiges Ziel
+			clearDropMarks();
+		}
+	}, { passive: false });
+	document.addEventListener("pointerup", async (e) => {
+		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
+		const { id, dragging, target, zone, row } = pageDrag;
+		endPageDrag();
+		if (!dragging) return; // reiner Tipp/Klick — der normale Seiten-Öffnen-Handler übernimmt
+		// Der Browser feuert nach dem Drag noch ein "click" auf dieselbe Zeile — einmalig unterdrücken
+		row.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+		if (target === undefined) return;
+		if (target && zone !== "into") await movePageRelative(id, target, zone);
+		else await movePageInto(id, target || null);
+	});
+	document.addEventListener("pointercancel", (e) => { if (pageDrag && e.pointerId === pageDrag.pointerId) endPageDrag(); });
 	// Chat-Formulare (Panel + Vollbild) per Delegation — Vollbild-Form wird pro Render neu erzeugt
 	const CHAT_FORMS = { chatForm: ["chatInput", "side"], mainChatForm: ["mainChatInput", "full"] };
 	document.addEventListener("submit", async (e) => {
