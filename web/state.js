@@ -432,6 +432,13 @@ export const STATE = (() => {
 				// (inkl. papierkorb-Karten, damit sie dem Stapel treu bleiben).
 				renameDeckTree(p.from, p.to);
 				break;
+			case "deckReorder":
+				// Manuelle Stapel-Reihenfolge (Drag & Drop in der linken Spalte, 22. Juli).
+				// Seiten haben pageMove+order — Stapel bekommen ihr order am Deck-Eintrag.
+				if (!p.name || typeof p.order !== "number") break;
+				if (!S.decks[p.name]) S.decks[p.name] = { name: p.name, created: ev.t };
+				S.decks[p.name].order = p.order;
+				break;
 			case "deckTrash":
 				// Soft-Delete: Stapel + Karten des Teilbaums → Papierkorb (wiederherstellbar).
 				// Auch „Standard“ ist trash-fähig. Review-Protokoll bleibt erhalten.

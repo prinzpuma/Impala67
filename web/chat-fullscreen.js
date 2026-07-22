@@ -112,6 +112,20 @@ export async function refineMessage(mid, mode) {
 	render();
 }
 
+// Senden-Button ⇄ ⏹-Abbrechen spiegeln (app.js hält den Zustand beim Tippen via syncComposer)
+function updateSubmitButtons() {
+	for (const [id, full] of [["chatSubmit", false], ["mainChatSubmit", true]]) {
+		const btn = document.getElementById(id);
+		if (!btn) continue;
+		const busy = S.aiBusy && S.aiActiveChatType === (full ? "full" : "side");
+		const inp = document.getElementById(full ? "mainChatInput" : "chatInput");
+		btn.disabled = busy ? false : !(inp && inp.value.trim());
+		btn.textContent = busy ? "⏹" : "↑";
+		btn.title = busy ? "Antwort abbrechen" : "Senden";
+		btn.classList.toggle("busy", busy);
+	}
+}
+
 // ---------- Gemeinsame Sende-Logik für Seitenpanel UND Vollbild-Chat-Tab ----------
 export async function sendChatMessage(text, type) {
 	type = type || "side";
@@ -126,6 +140,7 @@ export async function sendChatMessage(text, type) {
 	S.thinkingLiveExpanded = false;
 	if (type === "side") renderChat();
 	else renderMainChatLog();
+	updateSubmitButtons(); // Senden-Button sofort als ⏹-Abbrechen zeigen
 	try {
 		const fallback = S.pendingAttachmentTarget === type && S.pendingPdf ? "Analysiere das angehängte PDF."
 			: S.pendingAttachmentTarget === type && S.pendingTextFile ? "Fasse die angehängte Datei zusammen."
@@ -141,11 +156,16 @@ export async function sendChatMessage(text, type) {
 		// Ein fehlgeschlagener Voice-Turn darf nicht die nächste Text-Antwort vorlesen.
 		VOICE.consumeReply();
 		const targetList = type === "side" ? S.sideChat : S.chat;
-		// 👁 Hinweis (18. Juli, spät): Scheitert eine Anfrage MIT Bild, liegt es
-		// meist an einem nicht vision-fähigen Modell — das sagen wir klar dazu,
-		// ohne an der Modell-Auswahl selbst irgendetwas zu ändern.
-		const visionHint = hadImage ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das aktuell gewählte Modell scheint keine Bilder zu unterstützen (nicht vision-fähig). Wähle für Bild-Fragen ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
-		targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message + visionHint });
+		if (err && err.name === "AbortError") {
+			// ⏹ Über den Senden-Button abgebrochen — Teilantwort behalten, kein Fehler-Ton.
+			targetList.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*" });
+		} else {
+			// 👁 Hinweis (18. Juli, spät): Scheitert eine Anfrage MIT Bild, liegt es
+			// meist an einem nicht vision-fähigen Modell — das sagen wir klar dazu,
+			// ohne an der Modell-Auswahl selbst irgendetwas zu ändern.
+			const visionHint = hadImage ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das aktuell gewählte Modell scheint keine Bilder zu unterstützen (nicht vision-fähig). Wähle für Bild-Fragen ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
+			targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message + visionHint });
+		}
 	}
 	S.aiBusy = false;
 	S.aiDraft = "";
@@ -153,6 +173,7 @@ export async function sendChatMessage(text, type) {
 	if (type === "side") saveSideChat();
 	else saveCurrentChat();
 	render();
+	updateSubmitButtons(); // ⏹ zurück zu ↑
 }
 
 // Event-Delegation-Hilfen aus app.js:

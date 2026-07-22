@@ -2098,3 +2098,12 @@ h3, h4 { text-wrap: balance }
 .settings-body #btnSaveSettings, .settings-body #btnDriveLogin { background: var(--accent); color: #081018; font-weight: 650 }
 .settings-body #btnSaveSettings:hover, .settings-body #btnDriveLogin:hover { filter: brightness(1.08) }
 .settings-body .row-btns button, .settings-body .appearance-choice button { min-height: 30px; font-size: 13px }
+
+/* == „kommt noch“-Runde (22. Juli): ✕ auf Home-Bereichen, ⏹-Abbrechen, 🗑 Stapel-Löschen == */
+.home-fold > summary .fold-hide { margin-left: auto; padding: 0 6px; opacity: 0; transition: opacity var(--motion-fast) var(--ease-out) }
+.home-fold > summary:hover .fold-hide, .home-fold > summary:focus-within .fold-hide { opacity: .85 }
+.home-sec { position: relative }
+.home-sec > .home-sec-hide { position: absolute; top: 6px; right: 6px; z-index: 2; padding: 0 6px; opacity: 0; transition: opacity var(--motion-fast) var(--ease-out) }
+.home-sec:hover > .home-sec-hide, .home-sec:focus-within > .home-sec-hide { opacity: .85 }
+#chatSubmit.busy, #mainChatSubmit.busy { background: var(--danger-soft); color: var(--danger) }
+.deck-actions .deck-del { color: var(--danger) }

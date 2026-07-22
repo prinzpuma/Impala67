@@ -37,10 +37,18 @@ function ankiDecks() {
 		const parts = n.split("::");
 		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
 	});
-	// „Standard“ oben, Rest alphabetisch (de)
+	// „Standard“ oben, dann manuelle Drag&Drop-Reihenfolge (order aus deckReorder),
+	// Rest weiterhin alphabetisch (de) — Stapel ohne order sortieren hinter denen mit.
+	const orderOf = (n) => (S.decks[n] && typeof S.decks[n].order === "number" ? S.decks[n].order : null);
 	return [...set].sort((a, b) => {
 		if (a === "Standard") return -1;
 		if (b === "Standard") return 1;
+		const oa = orderOf(a), ob = orderOf(b);
+		if (oa !== null || ob !== null) {
+			if (oa === null) return 1;
+			if (ob === null) return -1;
+			if (oa !== ob) return oa - ob;
+		}
 		return a.localeCompare(b, "de");
 	});
 }
@@ -172,6 +180,9 @@ function ankiDecksHtml() {
 				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (ankiStudyOpen(d) ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
 				'<button class="deck-browse" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">Durchsuchen</button>' +
 				'<button class="deck-add" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">+</button>' +
+				// 🗑 Direkt-Löschen („kommt noch“, 22. Juli) — nutzt den bestehenden
+				// [data-deckdel]-Handler in app.js (Nachfrage + Soft-Delete via deckTrash).
+				'<button class="deck-del danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">🗑</button>' +
 			"</div></div>";
 	}).join("");
 	const totalOpen = STATE.studySnapshot(null).counts.total;

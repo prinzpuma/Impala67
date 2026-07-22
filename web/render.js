@@ -727,9 +727,8 @@ function renderHome(main) {
 	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
 	const dueCards = STATE.dueCards();
 	const due = dueCards.length;
-	const lastBk = localStorage.getItem("impala67LastBackup") || localStorage.getItem("notionLastBackup");
-	const bkDays = lastBk ? Math.max(0, Math.floor((Date.now() - new Date(lastBk).getTime()) / 864e5)) : null;
-	const bkDue = pages.length > 3 && (bkDays === null || bkDays > 7);
+	// Backup-Empfehlungen bewusst entfernt („kommt noch“, 22. Juli): kein Backup-Pill
+	// und kein Backup-Tipp mehr — Backups laufen weiter über Einstellungen → Backup.
 	const daily = pages.find((p) => p.daily === localDayKey(new Date()));
 	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").replace(/^#+\s*/, "").slice(0, 48) : "";
 	const hour = new Date().getHours();
@@ -764,7 +763,6 @@ function renderHome(main) {
 		pill("", 'data-homeaction="daily"', "Daily Note", "📅", "Daily", esc(dailyLine || (daily ? "Öffnen" : "Heute anlegen"))) +
 		pill(due ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", due + " fällig", due ? "Jetzt lernen" : "Alles erledigt") +
 		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", "Eintragen & Schnitt ansehen") +
-		(bkDue ? pill(" attention", 'data-homeaction="backup"', "Backup", "↥", "Backup", bkDays === null ? "Noch keins" : `Vor ${bkDays} Tag${bkDays === 1 ? "" : "en"}`) : "") +
 		"</div>";
 
 	const continueBlock = recent[0]
@@ -791,7 +789,6 @@ function renderHome(main) {
 	if (due > 0) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
 	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(okRate(cur7) * 100)} % diese Woche (davor ${Math.round(okRate(prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
 	if (leeches >= 3) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
-	if (bkDue) tips.push(['data-homeaction="backup"', "↥", "Backup fällig", bkDays === null ? "Noch nie gesichert — ein Klick genügt." : `Letztes Backup vor ${bkDays} Tag${bkDays === 1 ? "" : "en"}.`]);
 	if (!daily && hour >= 17) tips.push(['data-homeaction="daily"', "📅", "Noch keine Daily Note", "Ein kurzer Tagesrückblick festigt das Gelernte."]);
 	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(okRate(cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
 	if (!tips.length) tips.push(['data-homeaction="library"', "✅", "Alles im grünen Bereich", "Nichts Dringendes — guter Moment zum Vertiefen oder Aufräumen."]);
@@ -826,6 +823,8 @@ function renderHome(main) {
 		chats: recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "",
 		lernzeit: LERNZEIT.homeWidgetHtml(),
 	};
+	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
+	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
 	const sectionsHtml = SETTINGS.homeLayout().filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
 	const homeHtml = '<div class="home home-v2 home-slim">' +
 		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +

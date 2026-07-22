@@ -21,6 +21,8 @@ export const EDITOR = (() => {
 	let blockMenuId = null;
 	let mathEdit = null;      // { bid } oder { bid, spanEl } — Gleichungs-Popover
 	let dragBid = null;
+	let mouseSelFrom = -1;    // Startblock eines Maus-Drags — Markieren über Blockgrenzen
+	let crossSelJust = false; // Klick direkt nach Cross-Block-Drag darf die Auswahl nicht löschen
 	let composing = false;    // IME aktiv → keine Live-Transformationen
 	let selRange = null;      // Blockauswahl { from, to } (Indizes in blocks)
 	let selAnchor = null;
@@ -2143,8 +2145,38 @@ export const EDITOR = (() => {
 				}
 				return;
 			}
-			// Klick in einen Block hebt eine bestehende Blockauswahl auf
+			// Klick in einen Block hebt eine bestehende Blockauswahl auf — außer direkt
+			// nach einem Drag über Blockgrenzen (dieser Klick gehört noch zum Drag)
+			if (crossSelJust) { crossSelJust = false; return; }
 			if (selRange && t.closest && t.closest("[data-blk]")) clearSelection();
+		});
+
+		// Markieren über Zeilen hinweg („kommt noch“, 22. Juli): Jeder Block ist ein
+		// eigenes contenteditable, daher endet native Textauswahl hart an der Block-
+		// grenze. Zieht die Maus vom Text eines Blocks in einen anderen, wechseln wir
+		// wie Notion in die Blockauswahl (selectBlocks) — kopieren/löschen/färben etc.
+		// funktionieren dann über die bestehenden Blockauswahl-Shortcuts.
+		host.addEventListener("mousedown", (e) => {
+			mouseSelFrom = -1;
+			if (e.button !== 0) return;
+			if (e.target.closest('.blk-gutter, button, input, a, [contenteditable="false"]')) return;
+			const over = e.target.closest("[data-blk]");
+			if (over) mouseSelFrom = blocks.findIndex((b) => b.id === over.dataset.blk);
+		});
+		host.addEventListener("mouseover", (e) => {
+			if (mouseSelFrom < 0 || !(e.buttons & 1)) return;
+			const over = e.target.closest("[data-blk]");
+			if (!over) return;
+			const idx = blocks.findIndex((b) => b.id === over.dataset.blk);
+			if (idx === -1) return;
+			if (idx === mouseSelFrom) {
+				// zurück im Startblock: Blockauswahl aufheben, normale Textauswahl gilt wieder
+				if (selRange) { clearSelection(); crossSelJust = false; }
+				return;
+			}
+			selAnchor = mouseSelFrom;
+			selectBlocks(Math.min(mouseSelFrom, idx), Math.max(mouseSelFrom, idx));
+			crossSelJust = true;
 		});
 
 		// ⋮⋮ Drag & Drop (nur Top-Level-Blöcke, wie bisher)

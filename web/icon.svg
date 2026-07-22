@@ -1,4 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<!-- Einheitliches App-Icon („kommt noch“, 22. Juli): reine Vektorformen statt
+	     Emoji-Font — das 🔮-Emoji wurde je nach Plattform (Windows/Android/iOS/Linux)
+	     unterschiedlich gerendert. Diese Kristallkugel sieht als Favicon, PWA-Icon,
+	     Apple-Touch-Icon und im Tauri-Installer überall identisch aus. -->
+	<defs>
+		<radialGradient id="ball" cx="38%" cy="30%" r="78%">
+			<stop offset="0%" stop-color="#cfbcff"/>
+			<stop offset="45%" stop-color="#8b6cf0"/>
+			<stop offset="100%" stop-color="#4b2ea6"/>
+		</radialGradient>
+		<linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+			<stop offset="0%" stop-color="#3a2f5c"/>
+			<stop offset="100%" stop-color="#241c3d"/>
+		</linearGradient>
+	</defs>
 	<rect width="512" height="512" rx="100" fill="#0d0f13"/>
-	<text x="256" y="350" font-size="280" text-anchor="middle">🔮</text>
+	<!-- Sockel -->
+	<path d="M162 434h188c15 0 23-17 13-28l-32-36H181l-32 36c-10 11-2 28 13 28z" fill="url(#base)"/>
+	<!-- Kugel -->
+	<circle cx="256" cy="232" r="152" fill="url(#ball)"/>
+	<!-- Glanzlichter -->
+	<circle cx="204" cy="176" r="46" fill="#ffffff" opacity=".35"/>
+	<circle cx="310" cy="296" r="28" fill="#ffffff" opacity=".10"/>
+	<!-- Funkeln -->
+	<path d="M394 96l9 24 24 9-24 9-9 24-9-24-24-9 24-9z" fill="#e8defc"/>
+	<path d="M118 128l6 16 16 6-16 6-6 16-6-16-16-6 16-6z" fill="#b9a5f5" opacity=".9"/>
 </svg>

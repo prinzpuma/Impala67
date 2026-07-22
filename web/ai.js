@@ -102,6 +102,13 @@ export const AI = (() => {
 			this.retryAfterMs = retryAfterMs || 0;
 		}
 	}
+	// ⏹ Laufende Chat-Anfrage abbrechen („kommt noch“, 22. Juli): Der Senden-Button
+	// wird während S.aiBusy zum Stopp-Button (app.js) — abortActive() reißt die fetch-
+	// Verbindung UND das laufende Stream-Lesen sofort ab (gleiches Signal).
+	let currentAbort = null;
+	function abortActive() {
+		if (currentAbort) currentAbort.abort();
+	}
 	async function request(path, body) {
 		const { base, key, providerId } = cfg();
 		if (!base) throw new Error("Kein KI-Server konfiguriert (Einstellungen → KI).");
@@ -122,7 +129,8 @@ export const AI = (() => {
 		debugEvent("HTTP-Anfrage", meta);
 		let res;
 		try {
-			res = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body) });
+			currentAbort = new AbortController();
+			res = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: currentAbort.signal });
 		} catch (error) {
 			debugEvent("Netzwerkfehler", { ...meta, ms: Math.round(performance.now() - started), error: String(error?.message || error) });
 			throw error;
@@ -301,6 +309,7 @@ export const AI = (() => {
 				});
 				return msg;
 			} catch (error) {
+				if (error && error.name === "AbortError") throw error; // ⏹ Nutzer-Abbruch: niemals retrien
 				const isNetworkError = !(error instanceof AiHttpError) && (error instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(String(error?.message || error)));
 				const retryable = !produced && ((error instanceof AiHttpError && (error.status >= 500 || error.status === 429)) || isNetworkError);
 				if (!retryable) throw error;
@@ -812,5 +821,5 @@ export const AI = (() => {
 		return (await chatOnce([{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }], null, onDelta)).content || "";
 	}
 
-	return { chatOnce, complete, agent, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

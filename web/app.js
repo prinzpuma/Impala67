@@ -306,7 +306,14 @@ function syncComposer(input) {
 	input.style.height = Math.min(max, Math.max(30, input.scrollHeight)) + "px";
 	input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
 	if (form) form.classList.toggle("has-text", !!input.value.trim());
-	if (submit) submit.disabled = !input.value.trim();
+	// ⏹ Während die KI antwortet, ist der Senden-Button ein Abbrechen-Button (immer aktiv)
+	const busy = S.aiBusy && S.aiActiveChatType === (full ? "full" : "side");
+	if (submit) {
+		submit.disabled = busy ? false : !input.value.trim();
+		submit.textContent = busy ? "⏹" : "↑";
+		submit.title = busy ? "Antwort abbrechen" : "Senden";
+		submit.classList.toggle("busy", busy);
+	}
 }
 
 // Darstellungs-Buttons → handleAppearanceSelect(gruppe, wert) — statt 14 case-Zeilen
@@ -1588,20 +1595,22 @@ function wireEvents() {
 		if (pageRow || deckRow || e.target.closest("#tree")) {
 			e.preventDefault();
 			clearDropMarks();
-			// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = Unterseite
+			// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = Unterseite/-stapel
+			// (gilt jetzt auch für Stapel — Sortieren per Drag & Drop wie bei Seiten)
 			dropZone = "into";
-			if (pageRow && dragType === "page") {
-				const r = pageRow.getBoundingClientRect();
+			const zoneRow = (dragType === "page" && pageRow) || (dragType === "deck" && deckRow) || null;
+			if (zoneRow) {
+				const r = zoneRow.getBoundingClientRect();
 				const y = e.clientY - r.top;
 				if (y < r.height * 0.25) dropZone = "before";
 				else if (y > r.height * 0.75) dropZone = "after";
 			}
-			if (pageRow) {
-				if (dropZone === "before") { pageRow.classList.add("drop-before"); pageRow.style.borderTop = "2px solid #4a9eff"; }
-				else if (dropZone === "after") { pageRow.classList.add("drop-after"); pageRow.style.borderBottom = "2px solid #4a9eff"; }
-				else pageRow.classList.add("drop-target");
+			const markRow = pageRow || deckRow;
+			if (markRow) {
+				if (dropZone === "before" && markRow === zoneRow) { markRow.classList.add("drop-before"); markRow.style.borderTop = "2px solid #4a9eff"; }
+				else if (dropZone === "after" && markRow === zoneRow) { markRow.classList.add("drop-after"); markRow.style.borderBottom = "2px solid #4a9eff"; }
+				else markRow.classList.add("drop-target");
 			}
-			else if (deckRow) deckRow.classList.add("drop-target");
 		}
 	});
 	document.addEventListener("dragend", () => { dragId = null; dragType = null; dropZone = null; clearDropMarks(); }); // FIX: war doppelt registriert, dragType wurde nie zurückgesetzt
@@ -1639,6 +1648,32 @@ function wireEvents() {
 			await STATE.dispatch("pageUpdate", { id: moved.id, patch: { workspaceId: target.workspaceId || "default" } });
 		}
 	});
+	// Einsortieren VOR/NACH einem Stapel — Stapel sortieren in der linken Spalte jetzt
+	// per Drag & Drop wie Seiten (Reihenfolge via deckReorder-Events, order in S.decks).
+	document.addEventListener("drop", async (e) => {
+		if (!dragId || dragType !== "deck" || dropZone === "into" || dropZone == null) return;
+		const deckRow = e.target.closest("[data-deck]");
+		if (!deckRow) return;
+		const zone = dropZone;
+		e.preventDefault();
+		e.stopImmediatePropagation();
+		clearDropMarks();
+		const target = deckRow.dataset.deck;
+		const moved = dragId;
+		dragId = null; dragType = null; dropZone = null;
+		if (!target || target === moved || target.startsWith(moved + "::")) return;
+		// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
+		const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
+		if (parentOf(target) !== parentOf(moved)) return;
+		const sibs = RENDER_ANKI.ankiDecks().filter((n) => parentOf(n) === parentOf(target) && n !== moved);
+		const idx = sibs.indexOf(target);
+		if (idx === -1) return;
+		sibs.splice(zone === "before" ? idx : idx + 1, 0, moved);
+		// Reihenfolge komplett neu durchnummerieren — robust gegen fehlende order-Werte
+		for (let i = 0; i < sibs.length; i++) {
+			await STATE.dispatch("deckReorder", { name: sibs[i], order: (i + 1) * 1000 });
+		}
+	});
 	document.addEventListener("drop", async (e) => {
 		if (!dragId) return;
 		const pageRow = e.target.closest("[data-page]");
@@ -1673,6 +1708,8 @@ function wireEvents() {
 		const def = CHAT_FORMS[e.target.id];
 		if (!def) return;
 		e.preventDefault();
+		// ⏹ Läuft gerade eine Antwort, bricht der Senden-Button sie ab statt zu senden
+		if (S.aiBusy) { AI.abortActive(); return; }
 		const inp = $(def[0]);
 		const text = inp.value.trim();
 		inp.value = ""; syncComposer(inp);

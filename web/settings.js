@@ -986,7 +986,7 @@ export const HOME_SECTIONS = [
 	{ id: "stats", label: "Kennzahlen", hint: "heute gelernt · Streak · fällig · Erfolgsquote" },
 	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
 	{ id: "continue", label: "Weitermachen", hint: "zuletzt bearbeitete Seite" },
-	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten · Backup" },
+	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten" },
 	{ id: "insights", label: "Lern-Insights", hint: "Telemetrie-Auswertung" },
 	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
 	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
