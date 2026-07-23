@@ -9,6 +9,7 @@ import { RENDER } from "./render.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { CHATS } from "./chats.js";
+import { MOBILE } from "./mobile.js";
 
 const render = (...args) => RENDER.render(...args);
 const wireEvents = (...args) => APP.wireEvents(...args);
@@ -127,6 +128,8 @@ export async function initApp() {
 	wireEvents();
 	SETTINGS.applyBg();
 	render();
+	// 📱 Mobile Shell v3: Leiste/Sheets aktivieren — am Handy ggf. direkt in die Karten.
+	MOBILE.init();
 	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();

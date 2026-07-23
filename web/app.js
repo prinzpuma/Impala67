@@ -50,7 +50,6 @@ const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 const $ = (id) => U.el(id);
 const esc = (s) => U.esc(s);
 const blurActive = () => document.activeElement?.blur();
-const closeMnav = () => document.body.classList.remove("mnav-open");
 const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
 const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); ti.select(); } };
 // deck gleich name oder Unterstapel davon?
@@ -371,17 +370,6 @@ function wireEvents() {
 		} else if (href.startsWith("#")) {
 			e.preventDefault();
 		}
-	});
-
-	// Mobile Navigator-Sheet: Abdunkler/Escape schließt; Ansicht-wechselnde Aktionen auch
-	document.addEventListener("click", (e) => {
-		if (!document.body.classList.contains("mnav-open")) return;
-		if (e.target.closest("#mDock") || e.target.closest("#btnSidebarToggle")) return;
-		if (!e.target.closest("#sidebar")) return closeMnav();
-		if (e.target.closest("#btnLibrary, #btnTrash, #btnDaily, #btnAnki, [data-deckopen], [data-ankistudy]")) closeMnav();
-	});
-	document.addEventListener("keydown", (e) => {
-		if (e.key === "Escape") closeMnav();
 	});
 
 	// Home: Einzelklick = Dateibaum, Doppelklick = Home-Übersicht
@@ -1267,23 +1255,6 @@ function wireEvents() {
 		if (appearance) { SETTINGS.handleAppearanceSelect(...appearance); return; }
 
 		switch (t.id) {
-			// Mobile Dock: ☰ Navigator, 🃏 Karten, ＋ Neu, ✦ KI-Sheet (Layout rein aus CSS)
-			case "btnMNav":
-				document.body.classList.toggle("mnav-open");
-				break;
-			case "btnMCards":
-				closeMnav();
-				openAnki();
-				break;
-			case "btnMNew":
-				closeMnav();
-				await newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
-				break;
-			case "btnMAi":
-				closeMnav();
-				document.body.classList.remove("panel-collapsed");
-				renderTabs();
-				break;
 			case "btnAiFab":
 				// Desktop-Schnellzugriff unten rechts: nur das Seitenpanel öffnen,
 				// damit die aktuelle Seite sichtbar bleibt.

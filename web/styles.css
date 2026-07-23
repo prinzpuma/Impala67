@@ -840,7 +840,7 @@ button.primary:hover { filter: brightness(1.06) }
 @keyframes pop {
 	50% { transform: scale(1.3) }
 }
-/* == Mobile: komplett neu — siehe „Mobile Shell v2“ am Dateiende == */
+/* == Mobile: siehe mobile.js — Mobile Shell v3 == */
 /* == Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay == */
 #palette { position: fixed; inset: 0; z-index: var(--z-palette); background: var(--overlay-bg); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh }
 #palette[hidden] { display: none }
@@ -1388,46 +1388,12 @@ body.reduce-motion .heft-tray { animation: none }
 	.heft-chrome .heft-corner-l { left: 8px }
 	.heft-chrome .heft-corner-r { right: 8px }
 }
-/* == Mobile Shell v2 (12. Juli 2026) — Dock-Pille + Bottom-Sheet- == */
-#mDock { display: none }
+/* == Mobile Shell v3 (23. Juli 2026) — die komplette Handy-Schale lebt in mobile.js == */
+/* Leiste, Navigator-Sheet und KI-Vollbild werden dort als gescopte Styles (body.m3)
+   injiziert — EINE Quelle der Wahrheit statt verteilter Media-Query-Sonderfälle.
+   Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
 @media (max-width: 768px) {
-	#app { grid-template-columns: minmax(0, 1fr) !important; padding: 6px; padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)) }
-	#mainWrap { border-radius: 10px }
-	/* Platz am Listen-/Editor-/Chat-Ende, damit die Dock-Pille nicht… */
-	#main { padding-bottom: 84px }
-	.chat-full-wrap { padding-bottom: 84px }
-	/* Navigator-Sheet: die komplette Sidebar fährt von unten hoch */
-	#sidebar { position: fixed; z-index: var(--z-mobile-sheet); left: 0; right: 0; bottom: 0; top: auto; width: auto; height: min(78dvh, 640px); background: var(--menu-bg); border-top: 1px solid var(--edge); border-radius: 18px 18px 0 0; box-shadow: 0 -18px 48px var(--shadow-strong); padding: 20px 14px max(14px, env(safe-area-inset-bottom)); transform: translateY(105%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s }
-	body.mnav-open #sidebar { transform: none; visibility: visible; transition: transform 0.22s ease }
-	/* Grabber-Griff */
-	#sidebar::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; border-radius: 2px; transform: translateX(-50%); background: var(--edge) }
-	/* Abdunkler — Regeln für Korrektheit (Layering-Bugs von heute, b… */
-	body.mnav-open #app::after { content: ""; position: fixed; inset: 0; z-index: var(--z-scrim); background: var(--overlay-bg); animation: mnavScrimIn 0.18s ease }
-	/* Sicherheitsnetz: Ein Pseudo-Element darf außerhalb des tatsäch… */
-	#app::after { pointer-events: none }
-	body.mnav-open #app::after { pointer-events: auto }
-	@keyframes mnavScrimIn {
-		from { opacity: 0 }
-		to { opacity: 1 }
-	}
-	/* KI-Panel als Vollbild-Sheet — ersetzt display:none + extras.js… */
-	#panel { display: none }
-	body:not(.panel-collapsed) #panel { display: flex; position: fixed; inset: 0; z-index: var(--z-ai-sheet); width: 100vw; max-width: none; border: none; border-radius: 0; background: var(--panel-solid); padding-bottom: max(10px, env(safe-area-inset-bottom)) }
-	/* ✦ übernimmt die Dock-Pille */
-	/* Dock-Pille — vier direkte Hauptaktionen; die gemeinsame Breite… */
-	#mDock { position: fixed; z-index: var(--z-dock); left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 999px; box-shadow: 0 12px 32px var(--shadow-strong) }
-	#mDock button { min-width: 56px; min-height: 44px; padding: 3px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 999px; color: var(--text2); background: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
-	#mDock button span { font-size: 19px; line-height: 1.1 }
-	/* Das Karten-Symbol teilt exakt das SVG mit dem Desktop-Button #… */
-	#mDock button svg { width: 19px; height: 19px; stroke: currentColor }
-	#mDock button small { font-size: 10px }
-	#mDock button:active { color: var(--accent); background: var(--accent-soft) }
-	#mDock .mdock-new span { color: var(--accent) }
-	/* Das geöffnete Navigator-Sheet gehört vollständig dem Inhalt: D… */
-	body.mnav-open #mDock { display: none }
-	/* Dock aus dem Weg: KI-Sheet, Dialoge, Palette, Heft-Bühne, Tast… */
-	body:not(.panel-collapsed) #mDock, body:has(#overlay:not([hidden])) #mDock, body:has(#palette:not([hidden])) #mDock, body:has(.heft-stage) #mDock, body:has(#pageTitle:focus) #mDock, body:has(.block-editor :focus) #mDock, body:has(#mainChatInput:focus) #mDock { display: none }
-	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile obe… */
+	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt Spalte links */
 	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh) }
 	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge) }
 	.set-item { padding: 6px 10px }
