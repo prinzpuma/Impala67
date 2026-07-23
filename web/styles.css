@@ -840,7 +840,7 @@ button.primary:hover { filter: brightness(1.06) }
 @keyframes pop {
 	50% { transform: scale(1.3) }
 }
-/* == Mobile: siehe mobile.js — Mobile Shell v3 == */
+/* == Mobile: eigenständige App-Schale in mobile.js + mobile.css == */
 /* == Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay == */
 #palette { position: fixed; inset: 0; z-index: var(--z-palette); background: var(--overlay-bg); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh }
 #palette[hidden] { display: none }
@@ -1388,10 +1388,8 @@ body.reduce-motion .heft-tray { animation: none }
 	.heft-chrome .heft-corner-l { left: 8px }
 	.heft-chrome .heft-corner-r { right: 8px }
 }
-/* == Mobile Shell v3 (23. Juli 2026) — die komplette Handy-Schale lebt in mobile.js == */
-/* Leiste, Navigator-Sheet und KI-Vollbild werden dort als gescopte Styles (body.m3)
-   injiziert — EINE Quelle der Wahrheit statt verteilter Media-Query-Sonderfälle.
-   Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
+/* == Mobile UI v4 (23. Juli 2026) — eigene App-Schale in mobile.js + mobile.css == */
+/* Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
 @media (max-width: 768px) {
 	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt Spalte links */
 	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh) }

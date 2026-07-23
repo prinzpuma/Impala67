@@ -4,158 +4,121 @@ import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
 
-// mobile.js — 📱 Mobile Shell v3 (23. Juli 2026). Komplett-Neubau; ersetzt die
-// Dock-Pille „Mobile Shell v2“ (vorher verteilt über app.js/styles.css/index.html).
-//
-// Leitidee (KISS/DRY): Die Handy-Oberfläche ist NUR eine Schale um die
-// bestehenden Module — kein doppelter Render-Code. Zwei Haupt-Anwendungsfälle
-// stehen im Zentrum: 🃏 Karteikarten schnell lernen und ✦ der KI kurz eine
-// Frage zu den Notizen stellen. Alles andere bleibt über das Menü-Sheet
-// erreichbar (voller Funktionsumfang der Desktop-App).
-//
-//   🃏 Karten → TABS.openPage("anki:main") — Stapel + Lern-Bühne aus render-anki.js
-//   ✦ KI     → bestehendes KI-Panel (#panel) als Vollbild-Sheet, Eingabe fokussiert
-//   ＋ Neu   → APP.newPageFlow (derselbe Fluss wie am Desktop)
-//   ☰ Menü  → bestehende Sidebar (#sidebar) als Bottom-Sheet (Baum, Suche,
-//             Bibliothek, Graph, NotebookLM, Sync, Papierkorb, Einstellungen)
-//
-// Zustände (bewusst wenige, alle am <body>):
-//   m3         Handy-Layout aktiv (matchMedia ≤ 768px — EINE Quelle der Wahrheit,
-//              alle Styles hängen an dieser Klasse statt an eigenen Media-Queries)
-//   mnav-open  Navigator-Sheet offen (bestehender Klassen-Vertrag: tabs.js
-//              schließt das Sheet bei jeder Navigation)
-//   m3-typing  Bildschirmtastatur im Inhalt aktiv → Leiste weicht aus (robustes
-//              focusin/focusout statt der fragilen :has(:focus)-Heuristiken von v2)
-
+// Mobile UI v4 — eigenständige Smartphone-Navigation. Die Fachlogik bleibt in
+// den vorhandenen Modulen; mobile.js besitzt ausschließlich Navigation/Zustand.
 export const MOBILE = (() => {
-	const mq = window.matchMedia("(max-width: 768px)");
+	const mq = matchMedia("(max-width: 820px)");
 	const body = document.body;
-	const isTyping = (el) => !!el && (el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName || ""));
-	const closeSheets = () => { body.classList.remove("mnav-open"); body.classList.add("panel-collapsed"); };
+	let started = false;
+	const icon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
+	const icons = {
+		learn: icon('<rect x="3" y="7" width="14" height="14" rx="2"/><path d="m8 4 11-2 2 11"/>'),
+		notes: icon('<path d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5"/>'),
+		ai: icon('<path d="m12 3 1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3Z"/>'),
+		more: icon('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),
+		search: icon('<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>'),
+		plus: icon('<path d="M12 5v14M5 12h14"/>'),
+		close: icon('<path d="m6 6 12 12M18 6 6 18"/>'),
+	};
 
-	// Fällige Karten über alle Stapel — studySnapshot ist in state.js memoisiert, daher billig.
-	function dueCount() {
+	const dueCount = () => {
 		try {
 			const c = STATE.studySnapshot(null).counts;
 			return (c.neu || 0) + (c.learn || 0) + (c.review || 0);
 		} catch { return 0; }
-	}
+	};
+	const typingTarget = (el) => !!el && (el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName || ""));
+	const closeDrawer = () => body.classList.remove("mnav-open");
 
-	function updateBadge() {
-		const b = document.getElementById("m3badge");
-		if (!b) return;
-		const n = dueCount();
-		b.hidden = !n;
-		b.textContent = n > 99 ? "99+" : String(n);
-	}
-
-	// ---- Leiste + Scrim einmalig einhängen (das Markup gehört vollständig diesem Modul) ----
 	function mount() {
-		if (document.getElementById("m3nav")) return;
-		const scrim = document.createElement("div");
-		scrim.id = "m3scrim";
-		scrim.addEventListener("click", closeSheets);
+		if (document.getElementById("mobileNav")) return;
+		const header = document.createElement("header");
+		header.id = "mobileHeader";
+		header.innerHTML = '<strong id="mobileTitle">Notizen</strong><div><button data-mobile-action="search" aria-label="Suchen">' + icons.search + '</button><button class="primary" data-mobile-action="new" aria-label="Neu erstellen">' + icons.plus + '</button></div>';
+
 		const nav = document.createElement("nav");
-		nav.id = "m3nav";
-		nav.setAttribute("aria-label", "Mobile Navigation");
-		nav.innerHTML =
-			'<button type="button" data-m3="cards" title="Karteikarten lernen"><span>🃏</span><small>Karten</small><i id="m3badge" hidden></i></button>' +
-			'<button type="button" data-m3="ai" title="KI zu den Notizen fragen"><span>✦</span><small>KI</small></button>' +
-			'<button type="button" data-m3="new" title="Neue Seite anlegen"><span>＋</span><small>Neu</small></button>' +
-			'<button type="button" data-m3="menu" title="Navigator und alle Funktionen"><span>☰</span><small>Menü</small></button>';
-		nav.addEventListener("click", onNav);
-		body.append(scrim, nav);
-		injectCss();
+		nav.id = "mobileNav";
+		nav.setAttribute("aria-label", "Hauptnavigation");
+		nav.innerHTML = [
+			["learn", icons.learn, "Lernen"],
+			["notes", icons.notes, "Notizen"],
+			["ai", icons.ai, "KI"],
+			["more", icons.more, "Mehr"],
+		].map(([key, svg, label]) => `<button data-mobile="${key}">${svg}<span>${label}</span>${key === "learn" ? '<i id="mobileDue" hidden></i>' : ""}</button>`).join("");
+
+		const drawerHead = document.createElement("div");
+		drawerHead.id = "mobileDrawerHead";
+		drawerHead.innerHTML = '<div><b>Impala67</b><small>Alle Bereiche</small></div><button data-mobile-action="close" aria-label="Menü schließen">' + icons.close + "</button>";
+		const searchTab = document.getElementById("btnSearchToggle");
+		if (searchTab && !searchTab.querySelector(".tab-label")) searchTab.insertAdjacentHTML("beforeend", '<span class="tab-label">Suche</span>');
+		document.getElementById("sidebar")?.prepend(drawerHead);
+		body.append(header, nav);
+		body.addEventListener("click", onClick);
 	}
 
-	async function onNav(e) {
-		const btn = e.target.closest("[data-m3]");
-		if (!btn) return;
-		if (btn.dataset.m3 === "menu") { body.classList.add("panel-collapsed"); body.classList.toggle("mnav-open"); return; }
-		closeSheets();
-		switch (btn.dataset.m3) {
-			case "cards": TABS.openPage("anki:main"); break;
-			case "ai": openAiSheet(); break;
-			case "new": await APP.newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null); break;
+	async function onClick(e) {
+		const tab = e.target.closest?.("[data-mobile]")?.dataset.mobile;
+		const action = e.target.closest?.("[data-mobile-action]")?.dataset.mobileAction;
+		if (tab) {
+			if (tab !== "more") closeDrawer();
+			if (tab === "learn") APP.openAnki("study", null);
+			else if (tab === "notes") TABS.openHomeOverview();
+			else if (tab === "ai") openAI();
+			else if (tab === "more") body.classList.toggle("mnav-open");
+			updateUI();
+			return;
+		}
+		if (action === "close") closeDrawer();
+		else if (action === "new") await APP.newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
+		else if (action === "search") {
+			body.classList.add("mnav-open");
+			document.getElementById("btnSearchToggle")?.click();
+			setTimeout(() => document.getElementById("search")?.focus(), 40);
+		}
+		if (body.classList.contains("mnav-open") && e.target.closest?.("#tree .row, #btnHome, #btnChatTab, #btnAnki, #btnDaily, #btnNotebookLM, #btnGraph, #btnLibrary, #btnTrash, #btnSettings")) closeDrawer();
+		if (e.target.closest?.("#btnTogglePanel")) setTimeout(updateUI);
+	}
+
+	function openAI() {
+		closeDrawer();
+		body.classList.remove("panel-collapsed");
+		RENDER.renderTabs();
+		setTimeout(() => document.getElementById("chatInput")?.focus(), 30);
+	}
+
+	function updateUI() {
+		if (!body.classList.contains("mobile-ui")) return;
+		const panelOpen = !body.classList.contains("panel-collapsed");
+		const active = body.classList.contains("mnav-open") ? "more" : panelOpen ? "ai" : S.view === "anki" ? "learn" : "notes";
+		document.querySelectorAll("#mobileNav [data-mobile]").forEach((b) => b.classList.toggle("active", b.dataset.mobile === active));
+		const title = document.getElementById("mobileTitle");
+		if (title) title.textContent = S.view === "anki" ? "Karteikarten" : S.view === "library" ? "Bibliothek" : S.view === "chat" ? "Chat" : "Notizen";
+		const badge = document.getElementById("mobileDue");
+		if (badge) {
+			const n = dueCount();
+			badge.hidden = !n;
+			badge.textContent = n > 99 ? "99+" : String(n);
 		}
 	}
 
-	// KI-Panel als Vollbild-Sheet öffnen und direkt lostippen lassen — der Kontext zu den
-	// Notizen (RAG/aktuelle Seite) kommt aus dem bestehenden Panel-Fluss, nichts dupliziert.
-	function openAiSheet() {
-		body.classList.remove("panel-collapsed");
-		RENDER.renderTabs();
-		document.getElementById("chatInput")?.focus();
-	}
-
-	function wire() {
-		mq.addEventListener("change", (e) => apply(e.matches));
-		// Sheet schließt bei Ansicht-wechselnden Aktionen in der Sidebar; Baum-Klicks
-		// schließt bereits tabs.js (Klassen-Vertrag mnav-open, siehe Kopfkommentar).
-		document.addEventListener("click", (e) => {
-			if (!body.classList.contains("mnav-open") || !e.target.closest) return;
-			if (e.target.closest("#btnLibrary, #btnTrash, #btnDaily, #btnGraph, #btnNotebookLM, #btnSettings, #btnAnki, #btnChatTab, #btnHome, [data-deckopen], [data-ankistudy]")) body.classList.remove("mnav-open");
-		});
-		document.addEventListener("keydown", (e) => { if (e.key === "Escape") body.classList.remove("mnav-open"); });
-		// Bildschirmtastatur: solange im Inhalt getippt wird, verschwindet die Leiste.
-		document.addEventListener("focusin", (e) => {
-			if (body.classList.contains("m3") && isTyping(e.target) && e.target.closest("#mainWrap")) body.classList.add("m3-typing");
-		});
-		document.addEventListener("focusout", () => {
-			setTimeout(() => { if (!isTyping(document.activeElement)) body.classList.remove("m3-typing"); }, 60);
-		});
-		// Badge aktuell halten: nach jedem State-Event + minütlich (Fälligkeit ist zeitabhängig).
-		STATE.onAfterDispatch(() => { if (body.classList.contains("m3")) updateBadge(); });
-		setInterval(() => { if (body.classList.contains("m3")) updateBadge(); }, 60000);
-	}
-
+	function setTyping(on) { body.classList.toggle("mobile-typing", on); }
 	function apply(on) {
-		body.classList.toggle("m3", on);
-		if (on) { mount(); updateBadge(); }
-		else { body.classList.remove("mnav-open", "m3-typing"); }
+		body.classList.toggle("mobile-ui", on);
+		if (on) { mount(); updateUI(); }
+		else body.classList.remove("mnav-open", "mobile-typing");
 	}
 
-	// Einmalig aus boot.js NACH restoreSession()/render() aufrufen.
 	function init() {
-		wire();
+		if (started) return;
+		started = true;
 		apply(mq.matches);
-		// Schneller Lern-Einstieg: Am Handy startet die App direkt in den Karteikarten,
-		// wenn etwas fällig ist — der Haupt-Anwendungsfall unterwegs.
-		if (mq.matches && S.view !== "anki" && dueCount() > 0) TABS.openPage("anki:main");
-	}
-
-	// ---- Styles: alles an body.m3 gescopt — außerhalb des Handy-Layouts wirkungslos ----
-	function injectCss() {
-		if (document.getElementById("m3css")) return;
-		const st = document.createElement("style");
-		st.id = "m3css";
-		st.textContent = `
-/* Schale: eine Spalte, unten Platz für die Leiste */
-body.m3 #app { grid-template-columns: minmax(0, 1fr) !important; padding: 6px; padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)) }
-body.m3 #mainWrap { border-radius: 10px }
-body.m3 #main, body.m3 .chat-full-wrap { padding-bottom: calc(64px + env(safe-area-inset-bottom)) }
-body.m3 #btnAiFab { display: none }
-/* Untere Tab-Leiste: immer da, immer gleich — kein verstecktes Verhalten */
-#m3nav, #m3scrim { display: none }
-body.m3 #m3nav { position: fixed; z-index: var(--z-dock); left: 0; right: 0; bottom: 0; display: flex; padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: var(--menu-bg); border-top: 1px solid var(--edge) }
-body.m3 #m3nav button { position: relative; flex: 1; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 10px; background: transparent; color: var(--text2); -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
-body.m3 #m3nav button:active { color: var(--accent); background: var(--accent-soft) }
-body.m3 #m3nav span { font-size: 20px; line-height: 1.1 }
-body.m3 #m3nav small { font-size: 10px }
-body.m3 #m3badge { position: absolute; top: 3px; left: calc(50% + 8px); min-width: 18px; padding: 1px 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; font-style: normal; line-height: 1.5; text-align: center }
-/* Tastatur offen oder Heft-Bühne: Leiste weicht aus */
-body.m3.m3-typing #m3nav, body.m3:has(.heft-stage) #m3nav { display: none }
-body.m3.m3-typing #main { padding-bottom: 12px }
-/* Navigator-Sheet: die bestehende Sidebar fährt von unten hoch; EIN echtes Scrim-Element statt ::after-Tricks */
-body.m3 #sidebar { position: fixed; z-index: var(--z-mobile-sheet); left: 0; right: 0; bottom: 0; top: auto; width: auto; height: min(80dvh, 640px); background: var(--menu-bg); border-top: 1px solid var(--edge); border-radius: 18px 18px 0 0; box-shadow: 0 -18px 48px var(--shadow-strong); padding: 20px 14px max(14px, env(safe-area-inset-bottom)); transform: translateY(105%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s }
-body.m3.mnav-open #sidebar { transform: none; visibility: visible; transition: transform 0.22s ease }
-body.m3 #sidebar::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; border-radius: 2px; transform: translateX(-50%); background: var(--edge) }
-body.m3.mnav-open #m3scrim { display: block; position: fixed; inset: 0; z-index: var(--z-scrim); background: var(--overlay-bg) }
-/* ✦ KI: bestehendes Panel als Vollbild-Sheet — gleiche Logik, andere Präsentation */
-body.m3 #panel { display: none }
-body.m3:not(.panel-collapsed) #panel { display: flex; position: fixed; inset: 0; z-index: var(--z-ai-sheet); width: 100vw; max-width: none; border: none; border-radius: 0; background: var(--panel-solid); padding-bottom: max(10px, env(safe-area-inset-bottom)) }
-`;
-		document.head.append(st);
+		mq.addEventListener("change", (e) => apply(e.matches));
+		document.addEventListener("focusin", (e) => { if (mq.matches && typingTarget(e.target)) setTyping(true); });
+		document.addEventListener("focusout", () => setTimeout(() => setTyping(typingTarget(document.activeElement)), 80));
+		document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDrawer(); updateUI(); } });
+		STATE.onAfterDispatch(() => requestAnimationFrame(updateUI));
+		new MutationObserver(updateUI).observe(body, { attributes: true, attributeFilter: ["class"] });
+		setInterval(updateUI, 60000);
 	}
 
 	return { init };

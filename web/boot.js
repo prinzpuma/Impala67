@@ -128,7 +128,7 @@ export async function initApp() {
 	wireEvents();
 	SETTINGS.applyBg();
 	render();
-	// 📱 Mobile Shell v3: Leiste/Sheets aktivieren — am Handy ggf. direkt in die Karten.
+	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
 	MOBILE.init();
 	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
 	const splash = document.getElementById("bootSplash");
