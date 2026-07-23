@@ -391,6 +391,16 @@ function wireEvents() {
 		openHomeOverview();
 	});
 
+	// ＋ Neu-Menü der Karteikarten-Kopfzeile (render-anki.js, <details class="anki-new">):
+	// Auf-/Zuklappen macht der Browser nativ — hier nur schließen bei Außenklick oder
+	// nach einer gewählten Menü-Aktion (Neue Karte / Neuer Stapel / Import / Export).
+	document.addEventListener("click", (e) => {
+		if (!(e.target instanceof Element)) return;
+		document.querySelectorAll("details.anki-new[open]").forEach((d) => {
+			if (!d.contains(e.target) || e.target.closest(".anki-new-menu")) d.removeAttribute("open");
+		});
+	});
+
 	// FIX: Live-„Denkt nach…“-Box auf pointerdown — Rebuilds zwischen Mousedown/-up
 	// fraßen den click (render.js patcht zusätzlich in-place, das hier ist das Netz)
 	document.addEventListener("pointerdown", (e) => {

@@ -145,14 +145,20 @@ function renderAnki(main) {
 	// Status-/Zurück-Leiste und die Karte; Stapel, Browser und Optionen stehen
 	// nach dem Lernen wieder in der normalen Kopfzeile zur Verfügung.
 	let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
+	// 🃏 Übersicht-Redesign v2 (23. Juli): ruhige Kopfzeile — Tabs, ⚙️ Optionen, ⛶ und EIN
+	// „＋ Neu“-Menü (Karte / Stapel / Import / Export) statt vier gleichrangiger Buttons.
+	// <details> klappt nativ ohne eigenes JS auf; app.js schließt bei Außenklick/Menü-Aktion.
 	if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
 		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + "</div>" +
-		'<button data-ankinewcard="1">+ Neue Karte</button>' +
 		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
-		'<button data-ankiimport="1" title="CSV oder Anki-Paket (.apkg) importieren">⬇ Import</button>' +
-		'<button data-ankiexport="1" title="Als CSV oder Anki-Paket (.apkg) exportieren">⬆ Export</button>' +
 		// ⛶ Vollbild (23. Juli): Seitenleiste + Tab-Leiste ausblenden (erneut klicken = zurück)
-		'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button></div>';
+		'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button>' +
+		'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
+			'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
+			'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
+			'<button data-ankiimport="1">⬇ Import<small>CSV oder Anki-Paket (.apkg)</small></button>' +
+			'<button data-ankiexport="1">⬆ Export<small>CSV oder Anki-Paket (.apkg)</small></button>' +
+		"</div></details></div>";
 	if (tab === "browser") html += ankiBrowserHtml();
 	else if (tab === "stats") html += ankiStatsHtml();
 	else if (tab === "study") html += ankiStudyHtml();
@@ -180,43 +186,52 @@ function ankiDecksHtml() {
 	const rows = flat.map(({ name: d, depth }) => {
 		const label = d.split("::").pop();
 		const cards = ankiCardsOf(d);
-		// Bug-Fix („kommt noch“, 23. Juli): getrennte Anki-Zähler aus dem Lern-Snapshot.
-		// Vorher: „Neu“ = ALLE neuen Karten (ohne Tageslimit), „Fällig“ = die komplette
-		// Queue (inkl. neuer + Lernkarten — doppelt gezählt, faktisch dominierte der
-		// Neu-Wert), „Lernen“ nur die JETZT fälligen Schritte. Jetzt wie Anki:
-		// Neu (limitiert) | Lernen (alle offenen Lernschritte heute, inkl. erneut zu
-		// lernender Karten nach „Nochmal“) | Fällig (nur Wiederholungen, limitiert).
+		// Anki-Zähler aus dem Lern-Snapshot (Bug-Fix „kommt noch“, 23. Juli — wie Sidebar-Baum):
+		// Neu (limitiert) | Lernen (alle offenen Lernschritte heute) | Fällig (nur Wiederholungen).
 		const cnt = STATE.studySnapshot(d).counts;
-		const neu = cnt.neu;
-		const learn = cnt.learn;
-		const due = cnt.review;
+		const open = ankiStudyOpen(d);
 		const susp = cards.filter((c) => c.suspended).length;
 		return '<div class="deck-row" style="--deck-depth:' + depth + '">' +
-			'<div class="deck-info"><span class="deck-tree-mark" aria-hidden="true">' + (depth ? "↳" : "▸") + '</span><span class="deck-name">' + U.esc(label) + "</span>" +
-			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
-			'<div class="deck-number cnt-new" title="Neue Karten (heute, mit Tageslimit)">' + neu + "</div>" +
-			'<div class="deck-number cnt-learn" title="Lernkarten — offene Lernschritte heute, inkl. erneut zu lernender (falsch beantworteter) Karten">' + learn + "</div>" +
-			'<div class="deck-number cnt-due" title="Fällige Wiederholungen (mit Tageslimit)">' + due + "</div>" +
-			'<div class="deck-actions">' +
-				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">Lernen</button>" +
-				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, jetzt beim Start wählbar)
-				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (ankiStudyOpen(d) ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
-				'<button class="deck-browse" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">Durchsuchen</button>' +
-				'<button class="deck-add" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">+</button>' +
-				// 🗑 Direkt-Löschen („kommt noch“, 22. Juli) — nutzt den bestehenden
-				// [data-deckdel]-Handler in app.js (Nachfrage + Soft-Delete via deckTrash).
-				'<button class="deck-del danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">🗑</button>' +
-			"</div></div>";
+			'<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : "🃏") + "</span>" +
+			'<span class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
+			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
+			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
+				(cnt.review + cnt.learn + cnt.neu
+					? '<b class="cnt-due">' + cnt.review + " fällig</b><small>" + cnt.learn + " lernen · " + cnt.neu + " neu</small>"
+					: '<small class="deck-done">✓ fertig für heute</small>') +
+			"</span>" +
+			'<span class="deck-actions">' +
+				'<button class="deck-iconbtn" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">🔍</button>' +
+				'<button class="deck-iconbtn" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
+				// 🗑 Direkt-Löschen — nutzt weiterhin den bestehenden [data-deckdel]-Handler
+				// in app.js (Nachfrage + Soft-Delete via deckTrash).
+				'<button class="deck-iconbtn danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">🗑</button>' +
+				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (open ? "" : "disabled") + ">Lernen</button>" +
+				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, beim Start wählbar)
+				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (open ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
+			"</span></div>";
 	}).join("");
-	const totalOpen = STATE.studySnapshot(null).counts.total;
-	return '<div class="anki-deck-table" role="table">' +
-		'<div class="deck-table-head" role="row"><span>Stapel</span><span>Neu</span><span>Lernen</span><span>Fällig</span><span class="deck-actions-head">Aktionen</span></div>' +
-		'<div class="deck-list">' + rows + "</div></div>" +
-		'<div class="anki-deck-footer">' +
-			'<button class="primary" data-ankistudy="" ' + (ankiStudyOpen(null) ? "" : "disabled") + ">▶ Alle Stapel lernen <span>" + totalOpen + " offen</span></button>" +
-			'<button data-ankistudy="" data-ankimix="1" ' + (ankiStudyOpen(null) ? "" : "disabled") + ' title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt lernen</button>' +
-			'<button data-ankistudy="" data-ankifeyn="1" ' + (ankiStudyOpen(null) ? "" : "disabled") + ' title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
-			'<button data-decknew="1">+ Neuer Stapel</button></div>';
+	// 🃏 Übersicht-Redesign v2 (23. Juli): Hero „Heute“ mit EINEM klaren Einstieg statt der
+	// alten Fußleiste — dieselben Aktionen (Alle lernen / Feynman / Gemischt) und dieselben
+	// data-Attribute wie vorher, damit alle app.js-Handler unverändert greifen.
+	const g = STATE.studySnapshot(null).counts;
+	const openAll = ankiStudyOpen(null);
+	// grobe Sessionschätzung: ~2,5 Karten pro Minute, mindestens 1 Minute
+	const minutes = Math.max(1, Math.round(g.total / 2.5));
+	const hero = '<section class="anki-hero">' +
+		'<div class="anki-hero-main"><div class="anki-hero-eyebrow">Heute</div>' +
+		(g.total
+			? "<h2>" + g.total + (g.total === 1 ? " Karte wartet" : " Karten warten") + " auf dich.</h2>" +
+				"<p>" + g.review + " Wiederholung" + (g.review === 1 ? "" : "en") + ", " + g.learn + " Lernschritt" + (g.learn === 1 ? "" : "e") + ", " + g.neu + " neue Karte" + (g.neu === 1 ? "" : "n") + " — etwa " + minutes + " Minute" + (minutes === 1 ? "" : "n") + ".</p>"
+			: "<h2>Alles gelernt für heute. 🎉</h2><p>Keine fälligen Karten und keine offenen Lernschritte mehr.</p>") +
+		'<div class="anki-hero-actions">' +
+			'<button class="primary" data-ankistudy="" ' + (openAll ? "" : "disabled") + ">▶ Alle fälligen Karten lernen</button>" +
+			'<button class="hero-ghost" data-ankistudy="" data-ankifeyn="1" ' + (openAll ? "" : "disabled") + ' title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
+			'<button class="hero-quiet" data-ankistudy="" data-ankimix="1" ' + (openAll ? "" : "disabled") + ' title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt</button>' +
+		"</div></div>" +
+		'<div class="anki-hero-stat"><b>' + g.neu + "</b><small>neue Karte" + (g.neu === 1 ? "" : "n") + " bereit für deine nächste Session</small></div></section>";
+	return hero + '<div class="anki-sec"><h2>Deine Stapel</h2></div>' +
+		'<div class="deck-list">' + (rows || '<div class="empty small">Noch keine Stapel — über „＋ Neu“ einen anlegen</div>') + "</div>";
 }
 
 // Karten-Browser: Suche, Stapel-Filter-Chips, sortierbare Spalten, Zeilen-Aktionen.

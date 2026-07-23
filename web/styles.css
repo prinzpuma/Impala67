@@ -1489,30 +1489,53 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 .library.anki .mode-btns { padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-subtle) }
 .library.anki .mode-btns button { min-height: 34px; padding: 6px 12px; font-weight: 600 }
 .library.anki .mode-btns button.active { border-radius: 8px; background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge) }
-.anki-deck-table { max-width: 1120px; margin: 0 auto; border: 1px solid var(--edge); border-radius: 12px; overflow: hidden; background: var(--surface-faint) }
-/* Kopf und Zeilen verwenden dieselben festen Zähl-/Aktionsspalten. */
-.deck-table-head, .deck-row { display: grid; width: 100%; grid-template-columns: minmax(260px, 1fr) 74px 82px 74px 214px; align-items: center }
-.deck-table-head { min-height: 40px; padding: 0 16px; background: rgba(0,0,0,.16); border-bottom: 1px solid var(--edge); color: var(--text2); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase }
-.deck-table-head > span:not(:first-child), .deck-number { text-align: center }
-.deck-actions-head { text-align: right }
-.deck-row { margin-left: 0 !important; min-height: 68px; padding: 10px 16px; border: 0; border-radius: 0; border-bottom: 1px solid var(--edge-soft); background: transparent; transition: background .14s ease }
-.deck-row:last-child { border-bottom: 0 }
-.deck-row:hover { background: var(--surface-hover) }
-.deck-info { display: grid; grid-template-columns: 18px minmax(0, auto); align-items: center; column-gap: 8px; min-width: 0; padding-left: calc(var(--deck-depth) * 22px) }
-.deck-tree-mark { color: var(--text2); text-align: center; font-size: 12px }
+/* == 🃏 Stapel-Übersicht v2 (23. Juli): Hero „Heute“ + ruhige Karten-Zeilen statt Tabelle ==
+   DRY: EIN Grid je Zeile; Zähler/Aktionen erben die globalen Button-Basisstile. Die alte
+   Tabellen-/Fußleisten-CSS (anki-deck-table/-head/-footer, deck-number) ist ersetzt. */
+.anki-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(200px, .6fr); gap: 16px; max-width: 1120px; margin: 0 auto 30px }
+.anki-hero-main { padding: 26px 28px; border: 1px solid var(--accent-border); border-radius: 16px; background: linear-gradient(125deg, rgba(111,195,255,.14), var(--surface-subtle) 70%) }
+.anki-hero-eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
+.anki-hero-main h2 { margin: 8px 0 4px; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.15; letter-spacing: -.02em }
+.anki-hero-main p { margin: 0 0 18px; color: var(--text2); font-size: 13.5px }
+.anki-hero-actions { display: flex; flex-wrap: wrap; gap: 8px }
+.anki-hero-actions button { min-height: 40px; font-weight: 650 }
+.anki-hero-actions .hero-ghost { border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--text) }
+.anki-hero-actions .hero-quiet { border: 1px solid var(--edge); background: transparent; color: var(--text2) }
+.anki-hero-actions .hero-quiet:hover { color: var(--text) }
+.anki-hero-stat { display: flex; flex-direction: column; justify-content: center; padding: 20px 24px; border: 1px solid var(--edge); border-radius: 16px; background: var(--surface-faint) }
+.anki-hero-stat b { font-size: 40px; line-height: 1; font-weight: 780; color: var(--success) }
+.anki-hero-stat small { margin-top: 8px; color: var(--text2); font-size: 12.5px; line-height: 1.4 }
+.anki-sec { max-width: 1120px; margin: 0 auto 10px }
+.anki-sec h2 { margin: 0; font-size: 15px }
+.deck-list { max-width: 1120px; margin: 0 auto; gap: 8px }
+.deck-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 66px; padding: 12px 14px; margin-left: calc(var(--deck-depth, 0) * 22px); border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-subtle); transition: border-color .14s ease, background .14s ease }
+.deck-row:hover { border-color: var(--accent-border); background: var(--surface-hover) }
+.deck-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--surface-hover); font-size: 15px; color: var(--text2) }
+.deck-info { display: flex; flex-direction: column; min-width: 0 }
 .deck-name { min-width: 0; font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.deck-meta { grid-column: 2; margin-top: 1px; color: var(--text2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-.deck-number { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px }
+.deck-meta { margin-top: 1px; color: var(--text2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.deck-counts { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums }
+.deck-counts .cnt-due { font-size: 14px; font-weight: 700 }
+.deck-counts small, .deck-done { color: var(--text2); font-size: 11.5px }
 .cnt-learn { color: #77b6f7 }
-.deck-actions { justify-content: flex-end; gap: 6px }
+.deck-actions { justify-content: flex-end; gap: 6px; align-items: center }
 .deck-actions button { min-height: 34px; padding: 5px 10px; font-size: 13px }
 .deck-study { background: var(--accent); color: #081018; font-weight: 700 }
 .deck-study:hover { background: #8fd0ff }
-.deck-browse, .deck-add { background: var(--surface) }
-.deck-add { min-width: 34px; padding: 0 !important; font-size: 18px !important }
-.anki-deck-footer { display: flex; gap: 8px; max-width: 1120px; margin: 16px auto 0 }
-.anki-deck-footer button { min-height: 40px }
-.anki-deck-footer .primary span { margin-left: 5px; font-size: 12px; font-weight: 500; opacity: .75 }
+.deck-feyn { border: 1px solid var(--accent-border); background: var(--accent-soft) }
+.deck-iconbtn { min-width: 32px; padding: 5px 0 !important; background: transparent; color: var(--text2); opacity: 0; transition: opacity .12s ease }
+.deck-row:hover .deck-iconbtn, .deck-row:focus-within .deck-iconbtn { opacity: 1 }
+.deck-iconbtn:hover { background: var(--surface-active); color: var(--text) }
+@media (pointer: coarse) { .deck-iconbtn { opacity: 1 } }
+/* ＋ Neu-Menü in der Kopfzeile: natives <details>, gestylt wie die übrigen Popover */
+.anki-new { position: relative }
+.anki-new summary { list-style: none; display: inline-flex; align-items: center; min-height: 34px; padding: 6px 12px; border-radius: 8px; background: var(--accent); color: #081018; font-size: 14px; font-weight: 700; cursor: pointer; user-select: none }
+.anki-new summary::-webkit-details-marker { display: none }
+.anki-new summary:hover { filter: brightness(1.08) }
+.anki-new-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: var(--z-menu); display: flex; flex-direction: column; gap: 2px; width: 230px; padding: 5px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: 10px; box-shadow: 0 12px 32px var(--shadow); animation: uiEnter var(--motion-base) var(--ease-out) both }
+.anki-new-menu button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 8px 10px; border-radius: 7px; background: transparent; color: var(--text); font-size: 13px; font-weight: 650; text-align: left }
+.anki-new-menu button:hover { background: var(--accent-soft) }
+.anki-new-menu button small { color: var(--text2); font-size: 11px; font-weight: 400 }
 .anki-toolbar .menu-chips { margin: 0; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; padding-bottom: 2px }
 .anki-toolbar .menu-chip { white-space: nowrap; min-height: 30px }
 .anki-browser-table { max-width: 1120px; margin: 0 auto; overflow: auto; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-faint) }
@@ -1529,17 +1552,17 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 	.library.anki .mode-btns { order: 2; width: 100% }
 	.library.anki .mode-btns button { flex: 1; padding-inline: 8px }
 	.library.anki .lib-head > button:not(.mode-btns button) { flex: 1 1 calc(50% - 6px); min-height: 42px }
-	.anki-deck-table { border-radius: 10px }
-	.deck-table-head, .deck-row { grid-template-columns: minmax(0, 1fr) 42px 42px 42px }
-	.deck-table-head { min-height: 34px; padding: 0 10px; font-size: 10px }
-	.deck-actions-head, .deck-actions { display: none }
-	.deck-row { min-height: 64px; padding: 8px 10px }
-	.deck-info { padding-left: calc(var(--deck-depth) * 14px); column-gap: 5px }
+	.anki-hero { grid-template-columns: 1fr; margin-bottom: 20px }
+	.anki-hero-stat { display: none }
+	.anki-hero-main { padding: 20px 18px }
+	.anki-hero-actions button { flex: 1 1 100% }
+	.anki-new { flex: 1 1 calc(50% - 6px) }
+	.anki-new summary { width: 100%; justify-content: center; min-height: 42px }
+	.deck-row { grid-template-columns: 34px minmax(0, 1fr) auto; row-gap: 8px; padding: 10px; margin-left: calc(var(--deck-depth, 0) * 12px) }
+	.deck-actions { grid-column: 1 / -1 }
+	.deck-actions .deck-study, .deck-actions .deck-feyn { flex: 1; min-height: 40px }
 	.deck-name { font-size: 14px }
 	.deck-meta { font-size: 11px }
-	.deck-number { font-size: 14px }
-	.anki-deck-footer { display: grid; grid-template-columns: 1fr; margin-top: 12px }
-	.anki-deck-footer button { width: 100%; min-height: 44px }
 	.anki-toolbar { padding: 10px; gap: 8px }
 	#ankiSearch { flex-basis: 100%; max-width: none; width: 100% }
 	.anki-browser-table { margin-inline: -2px; border-radius: 10px }
@@ -1718,7 +1741,6 @@ body.light .row.active { box-shadow: inset 3px 0 0 var(--accent) }
 body.light .msg.user { border: 1px solid #cfe1f2 }
 body.light .think-box { background: #f5f2ec; border-color: #e1dbd0 }
 body.light .file-chip, body.light .edit-files-list { background: #f2efe9; border-color: var(--edge) }
-body.light .deck-table-head { background: #eeeae2 }
 body.light .anki-deck-group td { background: #e8f2fb }
 /* Theme-Schalter: eigenständige, verständliche Karte statt Check… */
 .appearance-theme-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface-faint) }
