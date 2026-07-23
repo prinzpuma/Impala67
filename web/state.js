@@ -590,7 +590,7 @@ export const STATE = (() => {
 				else delete S.treeOpen[p.key];
 				break;
 			case "uiTabsSet": {
-				// Seiten, NotebookLM UND Chats sind synchronisierte Tabs. Ein Chat-Tab
+				// Seiten, NotebookLM, Karteikarten (anki:main) UND Chats sind synchronisierte Tabs. Ein Chat-Tab
 				// ist nur gültig, wenn seine (ebenfalls synchronisierte) Sitzung existiert.
 				const seen = new Set();
 				S.tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((id) => {
@@ -600,7 +600,7 @@ export const STATE = (() => {
 						const chat = S.chatSessions[id.slice(5)];
 						return !!(chat && !chat.deleted);
 					}
-					return !!(S.pages[id] && !S.pages[id].trashed) || id === "nlm:main";
+					return !!(S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 				}).slice(-12);
 				S.activeTabId = S.tabs.includes(p.activeTabId) ? p.activeTabId : (S.tabs[S.tabs.length - 1] || null);
 				break;

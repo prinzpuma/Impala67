@@ -133,12 +133,17 @@ export const EXP = (() => {
 		if (d.expmc) { openMc(); return; }
 		if (d.expmcopt != null) { resolveMc(t); return; }
 		if (d.expvarorig != null) { showOriginalFront(t); return; }
-		// 🤔 Elaborative Interrogation: hängt sich an die normalen Bewertungs-
-		// Buttons. Capture läuft VOR app.js — die Karte ist noch die aktuelle.
-		if (d.ankigrade && on("elaboration")) {
-			const g = Number(d.ankigrade);
-			const card = currentCard();
-			if (g >= 3 && card && Math.random() < 0.25) setTimeout(() => askWhy(card), 350);
+		if (d.ankigrade) {
+			// Feynman-Feedback gehört zur soeben bewerteten Karte — jetzt verwerfen,
+			// sonst erschiene es erneut, wenn dieselbe Karte später nochmal drankommt.
+			feynVerdict = null;
+			// 🤔 Elaborative Interrogation: hängt sich an die normalen Bewertungs-
+			// Buttons. Capture läuft VOR app.js — die Karte ist noch die aktuelle.
+			if (on("elaboration")) {
+				const g = Number(d.ankigrade);
+				const card = currentCard();
+				if (g >= 3 && card && Math.random() < 0.25) setTimeout(() => askWhy(card), 350);
+			}
 		}
 	}, true);
 
@@ -183,7 +188,13 @@ export const EXP = (() => {
 			// Bewertungs-Buttons statt in einem Dialog — der Notenvorschlag wird
 			// direkt am passenden Button markiert. So bleibt der komplette Fluss
 			// (erklären → prüfen → aufdecken → bewerten) in EINER Karte.
-			if (feynVerdict && feynVerdict.cardId === card.id) {
+			// Bug-Fix (23. Juli, Feynman): Das Feedback bleibt bis zur Bewertung in
+			// feynVerdict stehen und wird nach JEDEM Re-Render neu eingesetzt. Vorher
+			// wurde es nach dem ersten Einfügen genullt — der Telemetrie-Event der
+			// Prüfung (trackCard → dispatch → Re-Render) baute die Lernansicht aber
+			// direkt danach neu auf und löschte das frisch eingefügte Feedback wieder
+			// aus dem DOM: die KI-Bewertung war nie (oder nur einen Frame lang) sichtbar.
+			if (feynVerdict && feynVerdict.cardId === card.id && !cardEl.querySelector(".feyn-verdict")) {
 				grades.insertAdjacentHTML("beforebegin", '<div class="exp-feynout feyn-verdict">' + feynVerdict.html + "</div>");
 				mathify(cardEl.querySelector(".feyn-verdict"));
 				const gb = grades.querySelector('[data-ankigrade="' + feynVerdict.note + '"]');
@@ -191,7 +202,6 @@ export const EXP = (() => {
 					gb.classList.add("grade-suggest");
 					gb.insertAdjacentHTML("beforeend", '<span class="grade-ai" title="Vorschlag der KI aus deiner Erklärung">🧑‍🏫 KI-Vorschlag</span>');
 				}
-				feynVerdict = null;
 			}
 			// Ehrlichkeits-Notiz, wenn Hinweise benutzt wurden
 			if (hintsUsedFor === card.id) {
@@ -421,6 +431,11 @@ export const EXP = (() => {
 				feynDraft = null;
 				const show = document.querySelector('.anki-study-mode [data-ankishowback]');
 				if (show) { show.click(); return; } // Re-Render — die Karte samt Button existiert danach neu
+				// Bug-Fix (23. Juli): Karte schon aufgedeckt (z. B. ␣ während „Prüfe …“) →
+				// Feedback direkt nachrüsten statt es still zu verwerfen.
+				const cardEl = document.querySelector(".anki-study-mode .study-card");
+				if (cardEl) { delete cardEl.dataset.expdone; scheduleEnhance(); }
+				return;
 			} else {
 				const out = wrap.querySelector(".exp-feynout");
 				out.innerHTML = verdictHtml;

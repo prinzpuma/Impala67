@@ -95,8 +95,13 @@ function deckTreeHtml() {
 		const kids = kidsOf(name);
 		const key = "deck:" + name;
 		const collapsed = COLLAPSE.isCollapsed(key);
-		const due = ankiDueOf(name).length;
-		const neu = ankiCardsOf(name).filter((c) => c.srs.state === "new" && !c.suspended).length;
+		// Bug-Fix („kommt noch“, 23. Juli): Badges aus dem Lern-Snapshot statt roher Zählung —
+		// „fällig“ = Wiederholungen + jetzt fällige Lernschritte (mit Tageslimit),
+		// „neu“ = neue Karten innerhalb des Tageslimits (wie Anki). Vorher zählte „fällig“
+		// die komplette Queue (inkl. neuer Karten) und „neu“ ALLE neuen Karten ohne Limit.
+		const cnt = STATE.studySnapshot(name).counts;
+		const due = cnt.review + cnt.learnNow;
+		const neu = cnt.neu;
 		const chevron = kids.length
 			? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
 			: '<span class="row-chevron spacer"></span>';
@@ -145,7 +150,9 @@ function renderAnki(main) {
 		'<button data-ankinewcard="1">+ Neue Karte</button>' +
 		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
 		'<button data-ankiimport="1" title="CSV oder Anki-Paket (.apkg) importieren">⬇ Import</button>' +
-		'<button data-ankiexport="1" title="Als CSV oder Anki-Paket (.apkg) exportieren">⬆ Export</button></div>';
+		'<button data-ankiexport="1" title="Als CSV oder Anki-Paket (.apkg) exportieren">⬆ Export</button>' +
+		// ⛶ Vollbild (23. Juli): Seitenleiste + Tab-Leiste ausblenden (erneut klicken = zurück)
+		'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button></div>';
 	if (tab === "browser") html += ankiBrowserHtml();
 	else if (tab === "stats") html += ankiStatsHtml();
 	else if (tab === "study") html += ankiStudyHtml();
@@ -160,20 +167,36 @@ function renderAnki(main) {
 // Stapel-Übersicht wie Ankis Deck-Liste: hierarchisch eingerückt (Unterstapel per "::"),
 // Zähler inklusive Unterstapel, Lernen/Durchsuchen/Unterstapel je Zeile.
 function ankiDecksHtml() {
-	const rows = ankiDecks().map((d) => {
-		const depth = d.split("::").length - 1;
+	// Bug-Fix („kommt noch“, 22. Juli): Unterstapel hierarchisch DIREKT unter ihrem
+	// Elternstapel einsortieren (wie im Sidebar-Baum). Vorher lief die flache
+	// ankiDecks()-Sortierung: Stapel mit Drag&Drop-order sortierten vor allen ohne —
+	// Unterstapel (ohne eigenen order) rutschten dadurch ans Listenende und standen
+	// zwar eingerückt (--deck-depth), aber unter dem falschen Eltern-Eintrag.
+	const all = ankiDecks();
+	const kidsOf = (parent) => all.filter((n) => (parent ? n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::") : !n.includes("::")));
+	const flat = [];
+	const walk = (parent, depth) => kidsOf(parent).forEach((n) => { flat.push({ name: n, depth }); walk(n, depth + 1); });
+	walk(null, 0);
+	const rows = flat.map(({ name: d, depth }) => {
 		const label = d.split("::").pop();
 		const cards = ankiCardsOf(d);
-		const neu = cards.filter((c) => c.srs.state === "new" && !c.suspended).length;
-		const due = ankiDueOf(d).length;
-		const learn = cards.filter((c) => !c.suspended && (c.srs.state === "learning" || c.srs.state === "relearning") && new Date(c.srs.due) <= new Date()).length;
+		// Bug-Fix („kommt noch“, 23. Juli): getrennte Anki-Zähler aus dem Lern-Snapshot.
+		// Vorher: „Neu“ = ALLE neuen Karten (ohne Tageslimit), „Fällig“ = die komplette
+		// Queue (inkl. neuer + Lernkarten — doppelt gezählt, faktisch dominierte der
+		// Neu-Wert), „Lernen“ nur die JETZT fälligen Schritte. Jetzt wie Anki:
+		// Neu (limitiert) | Lernen (alle offenen Lernschritte heute, inkl. erneut zu
+		// lernender Karten nach „Nochmal“) | Fällig (nur Wiederholungen, limitiert).
+		const cnt = STATE.studySnapshot(d).counts;
+		const neu = cnt.neu;
+		const learn = cnt.learn;
+		const due = cnt.review;
 		const susp = cards.filter((c) => c.suspended).length;
 		return '<div class="deck-row" style="--deck-depth:' + depth + '">' +
 			'<div class="deck-info"><span class="deck-tree-mark" aria-hidden="true">' + (depth ? "↳" : "▸") + '</span><span class="deck-name">' + U.esc(label) + "</span>" +
 			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></div>" +
-			'<div class="deck-number cnt-new" title="Neue Karten">' + neu + "</div>" +
-			'<div class="deck-number cnt-learn" title="Lernkarten">' + learn + "</div>" +
-			'<div class="deck-number cnt-due" title="Fällige Karten">' + due + "</div>" +
+			'<div class="deck-number cnt-new" title="Neue Karten (heute, mit Tageslimit)">' + neu + "</div>" +
+			'<div class="deck-number cnt-learn" title="Lernkarten — offene Lernschritte heute, inkl. erneut zu lernender (falsch beantworteter) Karten">' + learn + "</div>" +
+			'<div class="deck-number cnt-due" title="Fällige Wiederholungen (mit Tageslimit)">' + due + "</div>" +
 			'<div class="deck-actions">' +
 				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (ankiStudyOpen(d) ? "" : "disabled") + ">Lernen</button>" +
 				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, jetzt beim Start wählbar)
@@ -362,7 +385,9 @@ function ankiStudyHtml() {
 	const head = '<div class="study-head">' +
 		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel</button>' +
 		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · 🔀 gemischt" : "") + (S.ankiFeyn ? " · 🧑‍🏫 Feynman" : "") + "</span>" +
-		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span></div>';
+		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span>' +
+		// ⛶ Vollbild (23. Juli): gleicher Schalter wie in der Kopfzeile der Übersicht
+		'<button class="mini" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button></div>';
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
 	if (snap.done) {
@@ -394,17 +419,23 @@ function ankiStudyHtml() {
 	const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || snap.dueNow[0];
 	const pv = SRS.preview(c.srs);
 	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
+	// 🃏 Karten-Redesign v1 (22. Juli, Nacht): ruhige Kopfzeile statt langer Meta-Kette —
+	// Stapel links, Status rechts als Pille; Details (Wdh./Fehler/Intervall) nur noch als Tooltip.
 	let html = head + '<div class="study-card">' +
-		'<div class="hint study-meta">' + stLabel + " · " + (c.srs.reps || 0) + "× · " + (c.srs.lapses || 0) + " Fehler · " +
-			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " T" : "Lernschritt") + " · " + U.esc(c.deck || "Standard") +
-			(c.leech ? ' · <span class="leech-badge" title="Leech">🐛 Leech</span>' : "") + "</div>" +
+		'<div class="study-meta-bar" title="' + (c.srs.reps || 0) + " Wiederholungen · " + (c.srs.lapses || 0) + " Fehler · " +
+			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage Intervall" : "Lernschritt") + '">' +
+			'<span class="study-meta-deck">' + U.esc(c.deck || "Standard") + "</span>" +
+			(c.leech ? '<span class="leech-badge" title="Leech">🐛 Leech</span>' : "") +
+			'<span class="study-meta-state">' + stLabel + "</span>" +
+		"</div>" +
 		// Bug-Fix („kommt noch“, 22. Juli): Klick/Tipp auf die Frage deckt NICHT mehr
 		// auf — das löste versehentliches Aufdecken aus (z. B. beim Markieren/Scrollen).
 		// Aufdecken nur noch bewusst über „Antwort zeigen“ bzw. die Leertaste.
-		'<div class="card-face md">' + U.md(c.front) + "</div>";
+		'<div class="study-side-label">Frage</div>' +
+		'<div class="card-face front md">' + U.md(c.front) + "</div>";
 	if (S.reviewShowBack) {
-		// Anki-Look: Vorder-/Rückseite als EINE Karte mit Trennlinie statt zwei Boxen
-		html += '<hr class="study-divider">' +
+		// Anki-Look: Vorder-/Rückseite als EINE Karte; die Trennlinie trägt jetzt das Label „Antwort“
+		html += '<div class="study-divider"><span>Antwort</span></div>' +
 			'<div class="card-face back md">' + U.md(c.back) + "</div>" +
 			// Anki-Layout: Zähler „neu · lernen · wdh.“ direkt über den Buttons
 			'<div class="study-counts-row">' + countsHtml + "</div>" +

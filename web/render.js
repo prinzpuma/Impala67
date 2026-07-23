@@ -58,6 +58,15 @@ const inBlockEditor = (ae) => !!(ae && ((ae.classList && (ae.classList.contains(
 const isEditingBlock = () => inBlockEditor(document.activeElement);
 const PROTECTED_FOCUS_IDS = new Set(["pageTitle", "inpWsName", "inpNotionToken", "inpNotionPage", "libFilter", "ankiSearch"]);
 const isProtectedFocus = (ae) => !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || inBlockEditor(ae) || (ae.classList && ae.classList.contains("db-cell")));
+// Bug-Fix („kommt noch“, 23. Juli): von isProtectedFocus übersprungene Main-Renders
+// gingen bisher ERSATZLOS verloren — kam z. B. ein Drive-Sync an, während der Fokus
+// in einem geschützten Feld lag (Suche, Titel, Block-Editor, DB-Zelle), zeigte die
+// Hauptansicht (etwa die Stapelübersicht) bis zum Neuladen alte Daten. Der Sync-
+// Wächter in drive.js (isEditing) deckt nämlich nicht alle geschützten Felder ab.
+// Jetzt wird der übersprungene Render gemerkt und nachgeholt, sobald der Fokus das
+// Feld verlässt.
+let _mainRenderPending = false;
+document.addEventListener("focusout", () => { if (_mainRenderPending) scheduleRender(); });
 
 // render.js — UI-Aufbau im Notion-Stil: Sidebar, Tabs, Seitenkopf, Chat.
 function render() {
@@ -358,16 +367,17 @@ function renderTabs() {
 		`<button class="navbtn" id="btnNavForward" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +
 		'<div class="tabstrip">';
 	html += S.tabs.map((id) => {
-		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main";
+		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
 		let title;
 		if (isChat) title = "✦ " + esc(chatById.get(id.slice(5))?.title || "Chat"); // ✦ = KI-Markenzeichen wie Home/FAB
 		else if (isNlm) title = "📓 Gemini Notebook";
+		else if (isAnki) title = "🃏 Karteikarten"; // eigener Tab seit 23. Juli — gleiche Mechanik wie nlm:main
 		else {
 			const pg = S.pages[id];
 			if (!pg) return "";
 			title = pageIconHtml(pg) + esc(pg.title);
 		}
-		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (!isChat && !isNlm && S.view === "page")) ? " active" : "";
+		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (isAnki && S.view === "anki") || (!isChat && !isNlm && !isAnki && S.view === "page")) ? " active" : "";
 		return `<div class="tabchip${active}" data-tabopen="${id}"><span class="tabchip-title">${title}</span><button class="tabchip-x" data-tabclose="${id}" title="Schließen">✕</button></div>`;
 	}).join("");
 	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
@@ -376,8 +386,11 @@ function renderTabs() {
 }
 
 function renderMain() {
-	// Nicht neu bauen, während der Nutzer tippt (Cursor bleibt erhalten)
-	if (isProtectedFocus(document.activeElement)) return;
+	// Nicht neu bauen, während der Nutzer tippt (Cursor bleibt erhalten) — aber als
+	// ausstehend merken und per focusout-Listener (oben) nachholen, damit z. B. per
+	// Sync importierte Daten ohne App-Neuladen sichtbar werden.
+	if (isProtectedFocus(document.activeElement)) { _mainRenderPending = true; return; }
+	_mainRenderPending = false;
 	const main = $("main");
 	if (!main) return;
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)

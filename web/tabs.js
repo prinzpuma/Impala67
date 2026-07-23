@@ -15,7 +15,7 @@ const renderTabs = (...args) => RENDER.renderTabs(...args);
 const syncableTabs = () => S.tabs.filter((id) => {
 	if (typeof id !== "string") return false;
 	if (id.startsWith("chat:")) return CHATS.load().some((chat) => chat.id === id.slice(5));
-	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main";
+	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 }).slice(-12);
 let saveTimer = 0;
 function saveSessionSoon() {
@@ -55,6 +55,10 @@ export function openPage(pageId, opts) {
 		if (S.sideChatId === chatId) { S.sideChat = []; S.sideChatId = null; }
 	} else if (isNlm) {
 		S.view = "notebooklm";
+	} else if (pageId === "anki:main") {
+		// 🃏 Karteikarten als eigener Tab (23. Juli) — exakt dieselbe Mechanik wie nlm:main.
+		S.view = "anki";
+		S.sidebarMode = "files"; // Stapel-Baum in der Sidebar
 	} else {
 		const pg = S.pages[pageId];
 		if (!pg) return;
@@ -102,7 +106,7 @@ export function openPage(pageId, opts) {
 // Plus in der Tab-Leiste: neuen Tab mit der aktuellen Seite (oder Home-Seite) öffnen.
 export function openNewTab(pageId) {
 	const id = pageId || S.currentPageId || S.activeTabId;
-	if (!id || String(id).startsWith("chat:") || id === "nlm:main") {
+	if (!id || String(id).startsWith("chat:") || id === "nlm:main" || id === "anki:main") {
 		// Ohne konkrete Seite: leeren Tab-Zustand → Home, ohne Tab zu pushen
 		S.view = "home";
 		S.currentPageId = null;

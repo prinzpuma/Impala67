@@ -186,15 +186,15 @@ function newPageFlow(wsId, parentId) {
 	openTemplatePicker();
 }
 
-// 🃏-Bereich öffnen; Topbar-Pille ist exklusiv „anki“ (renderTopbar priorisiert view)
+// 🃏-Bereich öffnen — läuft seit 23. Juli als eigener Tab "anki:main" über TABS.openPage
+// (gleiche Mechanik wie nlm:main): view/sidebarMode, Tab-Leiste, Verlauf und Render
+// kommen von dort — die Sonderbehandlung hier entfällt (KISS).
 function openAnki(tab, deck) {
-	S.view = "anki";
-	S.sidebarMode = "files"; // Stapel-Baum in der Sidebar, nicht Chat-Liste
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
 	S.reviewShowBack = false;
 	blurActive();
-	render();
+	openPage("anki:main");
 }
 
 // Daily Note öffnen — Seite (und 📅-Sammelordner) bei Bedarf anlegen
@@ -410,7 +410,7 @@ function wireEvents() {
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-editmsg]," +
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
 		"[data-libws],[data-libinto],[data-libroot]," +
-		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter]," +
+		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter],[data-ankizen]," +
 		"[data-ankisuspend],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
@@ -863,6 +863,9 @@ function wireEvents() {
 		}
 
 		// ---------- Anki-Bereich: Tabs, Lernen, Bewerten, Sortieren, Karten-Verwaltung ----------
+		// ⛶ Vollbild (23. Juli): Body-Klasse blendet Seitenleiste + Tab-Leiste aus — rein per
+		// CSS auf die sichtbare Anki-Ansicht begrenzt (styles.css, :has), erneut klicken = zurück.
+		if (t.dataset.ankizen) { document.body.classList.toggle("anki-zen"); return; }
 		if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; S.reviewShowBack = false; renderMain(); return; }
 		if (t.hasAttribute("data-ankistudy")) {
 			S.ankiDeck = t.dataset.ankistudy || null;
@@ -873,8 +876,8 @@ function wireEvents() {
 			S.ankiTab = "study";
 			S.reviewShowBack = false;
 			// Home v4: der Stapel-Überblick startet das Lernen direkt von der Homeseite —
-			// dafür ggf. in die Anki-Ansicht wechseln (innerhalb von Anki wie bisher).
-			if (S.view !== "anki") { S.view = "anki"; S.sidebarMode = "files"; render(); }
+			// dafür ggf. in die Anki-Ansicht wechseln (seit 23. Juli als eigener Tab anki:main).
+			if (S.view !== "anki") openPage("anki:main");
 			else renderMain();
 			return;
 		}

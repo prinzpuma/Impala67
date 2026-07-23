@@ -32,29 +32,18 @@ export const EXTRAS = (() => {
 		".retention-table{max-width:520px}",
 		".page-footer{max-width:820px;margin:26px auto 60px;padding-top:10px;border-top:1px solid rgba(128,128,128,.25)}",
 		".backlinks h4{margin:12px 0 6px}.backlinks .crumb{margin-right:14px;cursor:pointer}",
-		".study-head button{margin-left:10px}",
-		".study-counts b{font-weight:600}",
-		".study-counts .cnt-learn{color:#6fc3ff}",
-		".study-counts .cnt-due{color:#72bc8f}",
-		".study-counts .cnt-new{color:#f2b02c}",
-		".study-counts .cnt-wait{color:#e9a66b}",
-		".study-keys{margin-left:10px;opacity:.65}",
-		".study-wait{text-align:center;padding:28px 18px}",
-		".study-countdown{font-size:1.35rem;margin:12px 0}",
-		".grades button{position:relative}",
-		".grade-key{display:block;font-size:11px;opacity:.55;margin-top:2px}",
+		// (KISS 23. Juli: Die Lernmodus-Basisregeln — .study-counts-Farben, .study-keys,
+		// .study-wait, .grade-key … — leben jetzt in styles.css bei den übrigen Lernmodus-
+		// Styles. Hier standen Duplikate mit hartkodierten Farben, die styles.css still überschrieben.)
 		// (FIX 19. Juli: Das Topbar-CSS — Teilen/★/⋯ samt .top-menu — lebt jetzt
 		// fest in styles.css, damit die Seiten-Topbar nicht vom Laden dieses
 		// Moduls abhängt.) Rückverweise-Chip + Tool-Chips im Chat:
 		".backlinks-row{margin:2px 0 8px}.backlinks-chip{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px}.backlinks-chip:hover{background:rgba(128,128,128,.15);opacity:1}",
 		".tool-chip{width:fit-content;font-size:12.5px;opacity:.75;background:rgba(128,128,128,.12);border-radius:8px;padding:4px 10px;margin:2px 0}.tool-chip.err{color:#e5534b}",
 		".multitab-note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#3a2f14;color:#ffd66b;padding:10px 14px;border-radius:10px;z-index:1200;display:flex;gap:10px;align-items:center}",
-		// Seitenkontext + Anhang-Chips: EINE ruhige Zeile — Icon · Titel · Meta · ✕
-		// (Fix: Anzeige für angeheftete Dateien/Text sah schlecht aus, Abstände stimmten nicht)
-		"#sideContextChip{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 0 8px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:rgba(128,128,128,.08);font-size:12.5px}",
-		"#sideContextChip .side-context-icon{flex:none}",
-		"#sideContextChip .side-context-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}",
-		"#sideContextChip .side-context-note{flex:none;opacity:.6;font-size:11.5px}",
+		// Anhang-Chips: EINE ruhige Zeile — Icon · Titel · Meta · ✕
+		// (KISS 23. Juli: #sideContextChip- und .file-chip-Regeln lebten doppelt — hier UND in
+		// styles.css mit widersprüchlichen Werten. Jetzt EINE Quelle: styles.css.)
 		".attach-chip{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;border:1px solid rgba(128,128,128,.25);border-radius:12px;background:rgba(128,128,128,.08)}",
 		".attach-chip .chip-ico{flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:17px;border-radius:8px;background:rgba(128,128,128,.14);overflow:hidden}",
 		".attach-chip .chip-ico img{width:100%;height:100%;object-fit:cover}",
@@ -63,8 +52,6 @@ export const EXTRAS = (() => {
 		".attach-chip .chip-body small{font-size:11px;opacity:.6}",
 		".attach-chip .chip-x{flex:none;border:none;background:none;color:inherit;opacity:.55;cursor:pointer;font-size:13px;padding:4px 6px;border-radius:6px}",
 		".attach-chip .chip-x:hover{opacity:1;background:rgba(128,128,128,.15)}",
-		".file-chip{display:flex;align-items:center;gap:10px;padding:7px 10px;margin:4px 0;border:1px solid rgba(128,128,128,.22);border-radius:10px;background:rgba(128,128,128,.08);font-size:12.5px}",
-		".file-chip button{margin-left:auto;border:1px solid rgba(128,128,128,.3);background:none;color:inherit;border-radius:8px;padding:4px 9px;cursor:pointer;font-size:12px}",
 	].join("\n");
 	document.head.appendChild(style);
 
@@ -537,7 +524,9 @@ export const EXTRAS = (() => {
 		// Touch: Doppel-Tipp auf der Bewertungsleiste würde sonst die nächste Karte
 		// gleich mitbewerten — nach dem ersten Tipp bis zum Re-Render sperren.
 		if ((el = q(".grades button")) && !el.disabled) {
-			const gradeBtns = el.closest(".grades").querySelectorAll("button");
+			// Fix (23. Juli): nur Knöpfe merken, die WIR sperren — aus anderem Grund bereits
+			// deaktivierte Knöpfe würde das Sicherheitsnetz sonst mit freischalten.
+			const gradeBtns = [...el.closest(".grades").querySelectorAll("button")].filter((b) => !b.disabled);
 			gradeBtns.forEach((b) => { b.disabled = true; });
 			// Sicherheitsnetz: bleibt das Re-Render aus (z.B. Dispatch-Fehler), nach 1,5 s
 			// wieder freigeben, statt die Leiste dauerhaft zu sperren. Nach einem normalen

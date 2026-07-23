@@ -105,9 +105,12 @@ export const AI = (() => {
 	// ⏹ Laufende Chat-Anfrage abbrechen („kommt noch“, 22. Juli): Der Senden-Button
 	// wird während S.aiBusy zum Stopp-Button (app.js) — abortActive() reißt die fetch-
 	// Verbindung UND das laufende Stream-Lesen sofort ab (gleiches Signal).
-	let currentAbort = null;
+	// Fix (23. Juli): EINE geteilte Variable brach bei parallelen Anfragen (z.B. Chat läuft,
+	// Verlaufs-Zusammenfassung startet) nur die ZULETZT gestartete ab — ⏹ stoppt jetzt ALLE laufenden.
+	let activeAborts = [];
 	function abortActive() {
-		if (currentAbort) currentAbort.abort();
+		activeAborts.forEach((ctrl) => ctrl.abort());
+		activeAborts = [];
 	}
 	async function request(path, body) {
 		const { base, key, providerId } = cfg();
@@ -128,9 +131,11 @@ export const AI = (() => {
 		};
 		debugEvent("HTTP-Anfrage", meta);
 		let res;
+		const ctrl = new AbortController();
+		activeAborts = activeAborts.filter((c) => !c.signal.aborted).slice(-8); // fertige/alte Controller nicht endlos horten
+		activeAborts.push(ctrl);
 		try {
-			currentAbort = new AbortController();
-			res = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: currentAbort.signal });
+			res = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: ctrl.signal });
 		} catch (error) {
 			debugEvent("Netzwerkfehler", { ...meta, ms: Math.round(performance.now() - started), error: String(error?.message || error) });
 			throw error;
@@ -446,6 +451,23 @@ export const AI = (() => {
 	}
 
 	// ---- System-Prompt (schlank; Abrufbares liegt in Tools, Auszüge liefert Auto-RAG) ----
+	// 🃏 Karteikarten-Kontext (23. Juli): Ist der Anki-Bereich offen, bekommt die KI
+	// Stapel, Tageszähler und die gerade sichtbare Lernkarte — analog zur geöffneten Seite.
+	function ankiContext() {
+		if (S.view !== "anki") return "";
+		const snap = STATE.studySnapshot(S.ankiDeck);
+		const cnt = snap.counts;
+		let line = "Geöffnet: Karteikarten-Bereich (Ansicht: " + (S.ankiTab || "decks") + "), Stapel: " +
+			(S.ankiDeck || "alle") + " — heute offen: " + cnt.neu + " neu, " + cnt.learn + " lernen, " + cnt.review + " wiederholen.";
+		const card = S.ankiTab === "study" ? ((S.reviewShowBack && S.cards[S.reviewCardId]) || snap.dueNow[0]) : null;
+		if (card) {
+			line += '\nSichtbare Lernkarte — Frage: "' + String(card.front || "").slice(0, 600) + '"';
+			line += S.reviewShowBack
+				? '\nAntwort (aufgedeckt): "' + String(card.back || "").slice(0, 600) + '"'
+				: "\nDie Antwort ist noch verdeckt — verrate sie nicht ungefragt, gib höchstens Hinweise.";
+		}
+		return line;
+	}
 	// toolsMode: true = volle Liste, "meta" = nur request_tools, sonst keine Tools [F3]
 	function systemPrompt(type, toolsMode, ragContext, chatSummary) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
@@ -458,12 +480,13 @@ export const AI = (() => {
 		const lines = [
 			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App. Antworte auf Deutsch, kompakt. Formeln als LaTeX ($...$ inline, $$...$$ als Block).",
 			"Heute: " + now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr.",
-			cur ? 'Geöffnete Seite: "' + cur.title + '"' : "Keine Seite geöffnet.",
+			S.view === "anki" ? ankiContext() : cur ? 'Geöffnete Seite: "' + cur.title + '"' : "Keine Seite geöffnet.",
 			toolLine,
 			"Niemals Selbstgespräche/Meta-Kommentare im sichtbaren Text ('Der Nutzer möchte…', 'I should…'). Ausführliches Nachdenken gehört AUSSCHLIESSLICH in <think>...</think> VOR der Antwort.",
 		];
 		// Nur das Seitenpanel bekommt den Seiteninhalt direkt; der Vollbild-Chat holt ihn per Tool.
-		if (type === "side" && cur) {
+		// Im Karteikarten-Bereich ersetzt der Anki-Kontext oben die Seite (keine irreführende Hintergrund-Seite).
+		if (type === "side" && cur && S.view !== "anki") {
 			const body = String(cur.content || "");
 			lines.push("Inhalt der geöffneten Seite" + (body.length > 6000 ? " (gekürzt)" : "") + ":\n" + (body.slice(0, 6000) || "(Leere Seite)"));
 		}
@@ -564,7 +587,12 @@ export const AI = (() => {
 		const image = useAttachment ? S.pendingImage : null;
 		const textFile = useAttachment ? S.pendingTextFile : null;
 		const pdfFile = useAttachment ? S.pendingPdf : null;
-		if (useAttachment) { S.pendingImage = S.pendingTextFile = S.pendingPdf = S.pendingAttachmentTarget = null; }
+		if (useAttachment) {
+			S.pendingImage = S.pendingTextFile = S.pendingPdf = S.pendingAttachmentTarget = null;
+			// Bug-Fix („kommt noch“, 22. Juli): Anhang-Chip SOFORT beim Absenden ausblenden —
+			// vorher blieb er bis zum nächsten Voll-Render (Ende der Antwort) im Composer stehen.
+			RENDER.renderPendingChip(type);
+		}
 		targetChat.push({ mid: U.uid(), role: "user", content: userText, image, textFile, pdfFile });
 		renderLog(); // eigene Nachricht sofort zeigen — nicht erst nach RAG/Zusammenfassung/erstem Token
 
@@ -785,7 +813,10 @@ export const AI = (() => {
 				if (mutating && out && !out.error) {
 					let pageId = beforePageId, created = false;
 					if (name === "create_page") {
-						const pg = STATE.findPage(args.title);
+						// Fix (23. Juli): bevorzugt die vom Tool zurückgegebene id — die reine
+						// Titel-Suche konnte bei zwei gleichnamigen Seiten die falsche Seite
+						// (und damit eine falsche Diff-/Undo-Karte) erwischen.
+						const pg = (out.id && S.pages[out.id]) || STATE.findPage(args.title);
 						if (pg) { pageId = pg.id; created = true; }
 					}
 					if (pageId && S.pages[pageId]) {

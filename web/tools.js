@@ -18,6 +18,10 @@ export const TOOLS = (() => {
 	// nirgends mit Template-/Platzhalter-Systemen kollidieren.
 	const CLOZE_HINT = "{" + "{c1::Antwort}" + "}";
 
+	// 🃏 Karten-Design-Spezifikation (22. Juli): kompaktes Standardformat für alle neuen Karten,
+	// damit die Lern-Ansicht ruhig und einheitlich aussieht (weniger Markdown-Wildwuchs).
+	const CARD_RULES = " Standardformat: Vorderseite = genau EINE konkrete Frage (ideal 8–20 Wörter, keine Überschriften). Rückseite = zuerst die Kernantwort in 1–2 Zeilen, danach optional max. 4 kurze Stichpunkte. Keine Überschrift wie 'Antwort:' (zeigt die App selbst), keine Einleitungen, keine kopierten Skriptabsätze. LaTeX ($…$) gern für Formeln; Tabellen, Codeblöcke und Mermaid-Diagramme NUR, wenn sie für den Abruf wirklich nötig sind. Eine Karte = ein Fakt (Minimum Information Principle) — lieber mehrere kleine Karten als eine große.";
+
 	// ask_choice: Argumente säubern/validieren (vom Agent-Loop vor der UI genutzt).
 	// - leere/doppelte Optionen raus
 	// - max. 5, min. 2
@@ -112,7 +116,7 @@ export const TOOLS = (() => {
 		t("delete_deck", "Verschiebt einen Karteikarten-Stapel (inkl. Unterstapel und ALLER enthaltenen Karten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Namen zuerst ask_choice.", {
 			deck: { type: "string", description: "Name des Stapels, Unterstapel per 'Eltern::Kind'" },
 		}, ["deck"]),
-		t("get_context", "Liefert den aktuellen App-Kontext: Datum/Uhrzeit, geöffnete Seite (inkl. Inhalt, gekürzt), zuletzt bearbeitete Seiten, Karteikarten-Lernstatus und Seitenanzahl. Zuerst aufrufen, wenn Kontext über die App oder das Lernen nötig ist.", {}, []),
+		t("get_context", "Liefert den aktuellen App-Kontext: Datum/Uhrzeit, geöffnete Seite (inkl. Inhalt, gekürzt), die im Lernmodus gerade geöffnete Karteikarte (currentCard mit Vorder-/Rückseite und Aufdeck-Status), zuletzt bearbeitete Seiten, Karteikarten-Lernstatus und Seitenanzahl. Zuerst aufrufen, wenn Kontext über die App, die aktuell offene Karte oder das Lernen nötig ist.", {}, []),
 		t("read_page", "Liest den Inhalt einer Seite.", {
 			page_title: { type: "string" },
 		}, ["page_title"]),
@@ -123,13 +127,13 @@ export const TOOLS = (() => {
 		t("semantic_search", "Semantische Suche über alle Notizen (Embeddings; besser für inhaltliche Fragen).", {
 			query: { type: "string" },
 		}, ["query"]),
-		t("create_flashcard", "Erstellt EINE Karteikarte für die Spaced-Repetition-Wiederholung. Beide Seiten sind volles Markdown — nutze aktiv LaTeX ($…$), Codeblöcke, Tabellen und Mermaid-Diagramme (```mermaid), wenn das das Verständnis verbessert (Abläufe, Hierarchien, Vergleiche). Regeln für gute Karten: eine Karte = ein Fakt (Minimum Information Principle), Vorderseite = eine konkrete Frage, Rückseite kurz + optional Beispiel/Diagramm. Für mehrere Karten create_flashcards verwenden.", {
+		t("create_flashcard", "Erstellt EINE Karteikarte für die Spaced-Repetition-Wiederholung. Beide Seiten sind Markdown." + CARD_RULES + " Für mehrere Karten create_flashcards verwenden.", {
 			front: { type: "string", description: "Frage / Vorderseite (Markdown)" },
-			back: { type: "string", description: "Antwort / Rückseite (Markdown, gern mit Formel, Codeblock oder Mermaid-Diagramm)" },
+			back: { type: "string", description: "Antwort / Rückseite (Markdown — Kernantwort zuerst, kurz halten)" },
 			deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind' (optional, Standard: 'Standard')" },
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["front", "back"]),
-		t("create_flashcards", "Erstellt MEHRERE Karteikarten auf einmal — bevorzugt gegenüber vielen einzelnen create_flashcard-Aufrufen. Gleiche Markdown-Möglichkeiten und Qualitätsregeln wie create_flashcard (LaTeX, Codeblöcke, Tabellen, Mermaid-Diagramme; eine Karte = ein Fakt).", {
+		t("create_flashcards", "Erstellt MEHRERE Karteikarten auf einmal — bevorzugt gegenüber vielen einzelnen create_flashcard-Aufrufen. Beide Seiten sind Markdown." + CARD_RULES, {
 			cards: {
 				type: "array",
 				items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] },
@@ -295,9 +299,32 @@ export const TOOLS = (() => {
 					const snap = STATE.studySnapshot(null);
 					study = { neu: snap.counts.neu, review: snap.counts.review, learn: snap.counts.learn };
 				} catch { /* Lernstatus optional */ }
+				// Bug-Fix („kommt noch“, 23. Juli): automatischer Kontext für die Karte, die
+				// gerade auf dem Bildschirm offen ist. Gleiche Karten-Logik wie die Lern-
+				// Ansicht (render-anki.js): nach dem Aufdecken zählt die festgepinnte Karte
+				// (S.reviewCardId), sonst die vorderste Karte der aktuellen Queue.
+				let currentCard = null;
+				try {
+					if (S.view === "anki" && (S.ankiTab || "decks") === "study") {
+						const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || STATE.studySnapshot(S.ankiDeck).dueNow[0] || null;
+						if (c) currentCard = {
+							front: c.front,
+							back: c.back,
+							deck: c.deck || "Standard",
+							state: c.srs.state,
+							reps: c.srs.reps || 0,
+							lapses: c.srs.lapses || 0,
+							revealed: !!S.reviewShowBack,
+							note: S.reviewShowBack
+								? "Die Rückseite ist bereits aufgedeckt."
+								: "Die Rückseite ist noch NICHT aufgedeckt — die Antwort nicht verraten, außer der Nutzer bittet ausdrücklich darum.",
+						};
+					}
+				} catch { /* Karten-Kontext optional */ }
 				return {
 					now: now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr",
 					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Rest per read_page]" : "") } : null,
+					currentCard,
 					recentPages: recent,
 					study,
 					pageCount: STATE.activePages().length,
