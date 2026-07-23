@@ -31,6 +31,42 @@ export const MOBILE = (() => {
 		body.classList.add("panel-collapsed");
 	};
 
+	// ---- Android/Browser-Zurück ----
+	// Jedes offene Sheet (Notizen/Mehr/KI) oder der Lernmodus bekommt einen
+	// History-Eintrag. So schließt die native Zurück-Geste/-Taste das Sheet,
+	// statt die App zu verlassen. Eine einzige Quelle der Wahrheit (DOM-Zustand)
+	// treibt push/pop — kein manuelles Buchhalten an jeder Aktion (DRY).
+	let sheetPushed = false;
+	let studyPushed = false;
+	let poppingState = false;
+
+	const sheetIsOpen = () =>
+		body.classList.contains("mnav-open") || body.classList.contains("mmore-open") || !body.classList.contains("panel-collapsed");
+
+	function syncHistory(studying) {
+		if (poppingState) return; // Zustand kam bereits aus popstate — nicht erneut buchen
+		const open = sheetIsOpen();
+		if (open && !sheetPushed) { sheetPushed = true; history.pushState({ mSheet: 1 }, ""); }
+		else if (!open && sheetPushed) { sheetPushed = false; history.back(); }
+
+		if (studying && !studyPushed) { studyPushed = true; history.pushState({ mStudy: 1 }, ""); }
+		else if (!studying && studyPushed) { studyPushed = false; history.back(); }
+	}
+
+	window.addEventListener("popstate", () => {
+		poppingState = true;
+		if (sheetPushed) {
+			sheetPushed = false;
+			body.classList.remove("mnav-open", "mmore-open");
+			body.classList.add("panel-collapsed");
+		} else if (studyPushed) {
+			studyPushed = false;
+			document.querySelector('[data-ankitab="decks"]')?.click();
+		}
+		updateUI();
+		poppingState = false;
+	});
+
 	function mount() {
 		if (document.getElementById("mNav")) return;
 
@@ -90,7 +126,8 @@ export const MOBILE = (() => {
 		initSwipe();
 	}
 
-	// Wisch-zurück-Geste: Rechts-Swipe schließt Overlays oder geht in der App zurück.
+	// Wisch-zurück-Geste (zusätzlich zur nativen Android-Geste, hilft z.B. auf iOS):
+	// ändert nur Klassen — syncHistory() in updateUI() hält den History-Stack konsistent.
 	function initSwipe() {
 		let x0 = 0, y0 = 0;
 		body.addEventListener("touchstart", (e) => {
@@ -101,10 +138,11 @@ export const MOBILE = (() => {
 			const dx = e.changedTouches[0].clientX - x0;
 			const dy = e.changedTouches[0].clientY - y0;
 			if (dx < 60 || Math.abs(dy) > Math.abs(dx) * 0.7) return; // zu kurz oder zu diagonal
-			if (body.classList.contains("mmore-open"))  { body.classList.remove("mmore-open");  updateUI(); return; }
-			if (body.classList.contains("mnav-open"))   { body.classList.remove("mnav-open");   updateUI(); return; }
+			if (body.classList.contains("mmore-open"))  { body.classList.remove("mmore-open");  body.classList.add("panel-collapsed"); updateUI(); return; }
+			if (body.classList.contains("mnav-open"))   { body.classList.remove("mnav-open");   body.classList.add("panel-collapsed"); updateUI(); return; }
 			if (!body.classList.contains("panel-collapsed")) { body.classList.add("panel-collapsed"); updateUI(); return; }
-			if (x0 < 44) window.history.back(); // linker Rand: Browser-Back
+			if (body.classList.contains("m-study")) { document.querySelector('[data-ankitab="decks"]')?.click(); updateUI(); return; }
+			if (x0 < 44) window.history.back(); // linker Rand ohne offenes Sheet: App-History
 		}, { passive: true });
 	}
 
@@ -159,10 +197,10 @@ export const MOBILE = (() => {
 		}
 	}
 
+	// Immer die Stapelübersicht zeigen — der Nutzer startet das Lernen selbst
+	// (über "▶ Alle fälligen Karten lernen" oder einen einzelnen Stapel).
 	function openLearn() {
-		const due = dueCount();
-		if (due > 0) APP.openAnki("study", null);
-		else APP.openAnki("decks", null);
+		APP.openAnki("decks", null);
 	}
 
 	function openAI() {
@@ -175,6 +213,7 @@ export const MOBILE = (() => {
 		if (!body.classList.contains("mobile-ui")) return;
 		const studying = !!document.querySelector(".anki-study-mode");
 		body.classList.toggle("m-study", studying);
+		syncHistory(studying);
 
 		const panelOpen = !body.classList.contains("panel-collapsed");
 		const moreOpen  = body.classList.contains("mmore-open");
