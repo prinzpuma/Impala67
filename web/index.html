@@ -55,7 +55,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css?build=55">
-<link rel="stylesheet" href="mobile.css?build=6">
+<link rel="stylesheet" href="mobile.css?build=7">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#05070d">
@@ -249,7 +249,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
 		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
 		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=59", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=60", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

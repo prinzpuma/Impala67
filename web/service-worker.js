@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v112"; // Mobile UI v5.1: Kopfzeilen, Empty-States, Feinschliff.
+const CACHE = "impala67-v113"; // Mobile UI v6: Icons-Nav, Home-Center, Bibliothek, Mehr-Sheet, Swipe-Back.
 
 const APP_FILES = [
 	"./",

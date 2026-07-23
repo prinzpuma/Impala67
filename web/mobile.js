@@ -4,12 +4,20 @@ import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
 
-// mobile.js — Mobile UI v5: eigene Handy-App, nicht die Desktop-Schale.
-// Lernen = sofortige Study-Ansicht. Notizen/KI/Mehr bleiben erreichbar.
+// mobile.js — Mobile UI v6: eigene Handy-App.
 export const MOBILE = (() => {
 	const mq = matchMedia("(max-width: 820px), (pointer: coarse) and (max-width: 1200px)");
 	const body = document.body;
 	let started = false;
+
+	// Minimalistische SVG-Icons
+	const IC = {
+		learn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`,
+		notes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+		home: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>`,
+		ai: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+		more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`,
+	};
 
 	const dueCount = () => {
 		try {
@@ -18,91 +26,139 @@ export const MOBILE = (() => {
 		} catch { return 0; }
 	};
 
-	const closeOverlay = () => {
-		body.classList.remove("mnav-open");
+	const closeAll = () => {
+		body.classList.remove("mnav-open", "mmore-open");
 		body.classList.add("panel-collapsed");
 	};
 
 	function mount() {
 		if (document.getElementById("mNav")) return;
 
+		// Top-Bar
 		const top = document.createElement("header");
 		top.id = "mTop";
 		top.innerHTML =
 			'<div class="mTop-left"><span id="mTitle">Impala</span><small id="mSub"></small></div>' +
 			'<div class="mTop-right">' +
-				'<button type="button" data-m="search" aria-label="Suchen">Suche</button>' +
-				'<button type="button" class="mPrimary" data-m="new" aria-label="Neu">Neu</button>' +
+				'<button type="button" data-m="search">Suche</button>' +
+				'<button type="button" class="mPrimary" data-m="new">Neu</button>' +
 			'</div>';
 
+		// Bottom Nav — 5 Tabs mit Icons
 		const nav = document.createElement("nav");
 		nav.id = "mNav";
-		nav.setAttribute("aria-label", "Mobile Navigation");
 		nav.innerHTML = [
-			["learn", "Lernen"],
-			["notes", "Notizen"],
-			["ai", "KI"],
-			["more", "Mehr"],
-		].map(([id, label]) =>
-			`<button type="button" data-m="${id}"><span>${label}</span>${id === "learn" ? '<i id="mDue" hidden></i>' : ""}</button>`
+			["learn", "Lernen",  IC.learn, ""],
+			["notes", "Notizen", IC.notes, ""],
+			["home",  "Home",    IC.home,  "mHome"],
+			["ai",    "KI",      IC.ai,    ""],
+			["more",  "Mehr",    IC.more,  ""],
+		].map(([id, label, icon, cls]) =>
+			`<button type="button" data-m="${id}"${cls ? ` class="${cls}"` : ""}>` +
+			icon +
+			`<span>${label}</span>` +
+			(id === "learn" ? '<i id="mDue" hidden></i>' : "") +
+			"</button>"
 		).join("");
 
-		const moreHead = document.createElement("div");
-		moreHead.id = "mMoreHead";
-		moreHead.innerHTML =
-			'<div><strong>Mehr</strong><small>Alle Bereiche</small></div>' +
-			'<button type="button" data-m="close" aria-label="Schließen">Schließen</button>';
+		// Bibliothek-Kopf für Sidebar (Notizen-Browser)
+		const libHead = document.createElement("div");
+		libHead.id = "mLibHead";
+		libHead.innerHTML = '<strong>Notizen</strong><button type="button" data-m="close" aria-label="Schließen">✕</button>';
 
-		const searchTab = document.getElementById("btnSearchToggle");
-		if (searchTab && !searchTab.querySelector(".tab-label"))
-			searchTab.insertAdjacentHTML("beforeend", '<span class="tab-label">Suche</span>');
+		// Mehr-Sheet (separates Overlay — keine doppelten Nav-Tabs)
+		const moreSheet = document.createElement("div");
+		moreSheet.id = "mMoreSheet";
+		moreSheet.innerHTML =
+			'<div class="mSheet-head"><strong>Mehr</strong><button type="button" data-m="closemore">✕</button></div>' +
+			'<div class="mSheet-grid">' +
+			[
+				["notebooklm", "🤖", "Gemini"],
+				["graph",      "🕸️", "Wissensgraph"],
+				["library",   "📖", "Bibliothek"],
+				["saved",     "🔖", "Gespeichert"],
+				["trash",     "🗑️", "Papierkorb"],
+				["settings",  "⚙️", "Einstellungen"],
+			].map(([a, ic, label]) =>
+				`<button type="button" data-maction="${a}"><span class="mBtn-ic">${ic}</span><span>${label}</span></button>`
+			).join("") +
+			'</div>';
 
-		document.getElementById("sidebar")?.prepend(moreHead);
-		body.append(top, nav);
+		document.getElementById("sidebar")?.prepend(libHead);
+		body.append(top, nav, moreSheet);
 		body.addEventListener("click", onClick);
+		initSwipe();
+	}
+
+	// Wisch-zurück-Geste: Rechts-Swipe schließt Overlays oder geht in der App zurück.
+	function initSwipe() {
+		let x0 = 0, y0 = 0;
+		body.addEventListener("touchstart", (e) => {
+			x0 = e.touches[0].clientX;
+			y0 = e.touches[0].clientY;
+		}, { passive: true });
+		body.addEventListener("touchend", (e) => {
+			const dx = e.changedTouches[0].clientX - x0;
+			const dy = e.changedTouches[0].clientY - y0;
+			if (dx < 60 || Math.abs(dy) > Math.abs(dx) * 0.7) return; // zu kurz oder zu diagonal
+			if (body.classList.contains("mmore-open"))  { body.classList.remove("mmore-open");  updateUI(); return; }
+			if (body.classList.contains("mnav-open"))   { body.classList.remove("mnav-open");   updateUI(); return; }
+			if (!body.classList.contains("panel-collapsed")) { body.classList.add("panel-collapsed"); updateUI(); return; }
+			if (x0 < 44) window.history.back(); // linker Rand: Browser-Back
+		}, { passive: true });
 	}
 
 	async function onClick(e) {
-		const act = e.target.closest?.("[data-m]")?.dataset.m;
+		const act = e.target.closest("[data-m]")?.dataset.m;
+		const mact = e.target.closest("[data-maction]")?.dataset.maction;
+
+		// Mehr-Sheet Feature-Buttons
+		if (mact) {
+			body.classList.remove("mmore-open");
+			const map = { notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", saved: "#btnSaved", trash: "#btnTrash", settings: "#btnSettings" };
+			document.querySelector(map[mact])?.click();
+			updateUI();
+			return;
+		}
+
 		if (!act) {
-			if (body.classList.contains("mnav-open") && e.target.closest?.("#tree .row, #btnHome, #btnChatTab, #btnAnki, #btnDaily, #btnNotebookLM, #btnGraph, #btnLibrary, #btnTrash, #btnSettings, [data-ankistudy], [data-deckopen]"))
+			// Overlay beim Tippen auf Tree-Einträge schließen
+			if (body.classList.contains("mnav-open") && e.target.closest("#tree .row, [data-ankistudy], [data-deckopen]"))
 				body.classList.remove("mnav-open");
 			return;
 		}
 
-		if (act === "close") {
-			body.classList.remove("mnav-open");
-			updateUI();
-			return;
-		}
+		if (act === "close")     { body.classList.remove("mnav-open");  updateUI(); return; }
+		if (act === "closemore") { body.classList.remove("mmore-open"); updateUI(); return; }
+
 		if (act === "search") {
-			body.classList.add("panel-collapsed", "mnav-open");
+			closeAll();
 			document.getElementById("btnSearchToggle")?.click();
 			setTimeout(() => document.getElementById("search")?.focus(), 40);
-			updateUI();
-			return;
+			updateUI(); return;
 		}
 		if (act === "new") {
-			closeOverlay();
+			closeAll();
 			await APP.newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
-			updateUI();
-			return;
+			updateUI(); return;
 		}
-		if (act === "more") {
+		if (act === "home")  { closeAll(); TABS.openHomeOverview(); updateUI(); return; }
+		if (act === "learn") { closeAll(); openLearn();             updateUI(); return; }
+		if (act === "ai")    { closeAll(); openAI();                updateUI(); return; }
+		if (act === "notes") {
+			body.classList.remove("mmore-open");
 			body.classList.add("panel-collapsed");
 			body.classList.toggle("mnav-open");
-			updateUI();
-			return;
+			updateUI(); return;
 		}
-
-		closeOverlay();
-		if (act === "learn") openLearn();
-		else if (act === "notes") TABS.openHomeOverview();
-		else if (act === "ai") openAI();
-		updateUI();
+		if (act === "more") {
+			body.classList.remove("mnav-open");
+			body.classList.add("panel-collapsed");
+			body.classList.toggle("mmore-open");
+			updateUI(); return;
+		}
 	}
 
-	// Handy: nicht die Desktop-Stapelverwaltung, sondern direkt die Lernbühne.
 	function openLearn() {
 		const due = dueCount();
 		if (due > 0) APP.openAnki("study", null);
@@ -115,58 +171,39 @@ export const MOBILE = (() => {
 		setTimeout(() => document.getElementById("chatInput")?.focus(), 30);
 	}
 
-	function syncStudyClass() {
-		const studying = !!document.querySelector(".anki-study-mode");
-		body.classList.toggle("m-study", studying);
-	}
-
 	function updateUI() {
 		if (!body.classList.contains("mobile-ui")) return;
-		syncStudyClass();
+		const studying = !!document.querySelector(".anki-study-mode");
+		body.classList.toggle("m-study", studying);
 
 		const panelOpen = !body.classList.contains("panel-collapsed");
-		const moreOpen = body.classList.contains("mnav-open");
-		const studying = body.classList.contains("m-study");
-		const active = moreOpen ? "more" : panelOpen ? "ai" : (S.view === "anki" || studying) ? "learn" : "notes";
+		const moreOpen  = body.classList.contains("mmore-open");
+		const notesOpen = body.classList.contains("mnav-open");
+		const active = moreOpen ? "more" : notesOpen ? "notes" : panelOpen ? "ai" :
+			(S.view === "anki" || studying) ? "learn" : "home";
 
 		document.querySelectorAll("#mNav [data-m]").forEach((b) => b.classList.toggle("on", b.dataset.m === active));
 
 		const title = document.getElementById("mTitle");
-		const sub = document.getElementById("mSub");
+		const sub   = document.getElementById("mSub");
 		if (title) {
-			if (moreOpen) title.textContent = "Mehr";
+			if (moreOpen)       title.textContent = "Mehr";
+			else if (notesOpen) title.textContent = "Notizen";
 			else if (panelOpen) title.textContent = "KI";
-			else if (S.view === "anki") title.textContent = studying ? "Lernen" : "Karten";
-			else if (S.view === "library") title.textContent = "Bibliothek";
-			else if (S.view === "chat") title.textContent = "Chat";
-			else title.textContent = "Notizen";
+			else if (studying)  title.textContent = "Lernen";
+			else if (S.view === "anki") title.textContent = "Karten";
+			else title.textContent = "Impala";
 		}
-		if (sub) {
-			const n = dueCount();
-			sub.textContent = n ? (n + " fällig") : "";
-			sub.hidden = !n || active !== "learn";
-		}
-
+		const n = dueCount();
+		if (sub) { sub.textContent = n ? n + " fällig" : ""; sub.hidden = !n || active !== "learn"; }
 		const badge = document.getElementById("mDue");
-		if (badge) {
-			const n = dueCount();
-			badge.hidden = !n;
-			badge.textContent = n > 99 ? "99+" : String(n);
-		}
-	}
-
-	function setTyping(on) {
-		body.classList.toggle("m-typing", on);
+		if (badge) { badge.hidden = !n; badge.textContent = n > 99 ? "99+" : String(n); }
 	}
 
 	function apply(on) {
 		body.classList.toggle("mobile-ui", on);
-		if (on) {
-			mount();
-			updateUI();
-		} else {
-			body.classList.remove("mnav-open", "m-typing", "m-study");
-		}
+		if (on) { mount(); updateUI(); }
+		else body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study");
 	}
 
 	function init() {
@@ -175,24 +212,19 @@ export const MOBILE = (() => {
 		apply(mq.matches);
 		mq.addEventListener("change", (e) => apply(e.matches));
 
-		// Nur echte Tastaturhöhe, nicht Fokus allein (KI-Fokus wäre sonst eine Sackgasse).
 		const syncKeyboard = () => {
 			const vv = window.visualViewport;
-			setTyping(!!vv && mq.matches && window.innerHeight - vv.height > 140);
+			body.classList.toggle("m-typing", !!vv && mq.matches && window.innerHeight - vv.height > 140);
 		};
 		window.visualViewport?.addEventListener("resize", syncKeyboard);
 		window.addEventListener("resize", syncKeyboard);
 
 		document.addEventListener("keydown", (e) => {
-			if (e.key === "Escape") {
-				body.classList.remove("mnav-open");
-				updateUI();
-			}
+			if (e.key === "Escape") { body.classList.remove("mnav-open", "mmore-open"); updateUI(); }
 		});
 
 		STATE.onAfterDispatch(() => requestAnimationFrame(updateUI));
 		new MutationObserver(updateUI).observe(body, { attributes: true, attributeFilter: ["class"] });
-		// Study-Markup kommt nach renderMain — DOM beobachten.
 		const main = document.getElementById("main");
 		if (main) new MutationObserver(updateUI).observe(main, { childList: true, subtree: true });
 		setInterval(updateUI, 60000);

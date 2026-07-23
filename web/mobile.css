@@ -1,9 +1,9 @@
-/* Impala67 Mobile UI v5 — eigene Phone-App, nicht Desktop-skaliert. */
-#mTop, #mNav, #mMoreHead { display: none }
+/* Impala67 Mobile UI v6 — eigene Phone-App, kein Desktop-Klon. */
+#mTop, #mNav, #mMoreHead, #mLibHead, #mMoreSheet { display: none }
 
 body.mobile-ui {
 	--m-top: calc(52px + env(safe-area-inset-top));
-	--m-bot: calc(62px + env(safe-area-inset-bottom));
+	--m-bot: calc(68px + env(safe-area-inset-bottom));
 	background: var(--panel-solid);
 	overflow: hidden;
 }
@@ -16,7 +16,6 @@ body.mobile-ui #app {
 	display: block !important;
 	width: 100%;
 	height: 100dvh;
-	min-height: 0;
 	padding: var(--m-top) 0 var(--m-bot) !important;
 	gap: 0 !important;
 	background: var(--panel-solid);
@@ -37,7 +36,9 @@ body.mobile-ui #main {
 	padding-bottom: 8px;
 }
 
-/* ---- Top bar ---- */
+/* ============================================================
+   TOP BAR
+   ============================================================ */
 body.mobile-ui #mTop {
 	position: fixed;
 	z-index: 1360;
@@ -56,7 +57,6 @@ body.mobile-ui #mTop .mTop-left {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	min-height: 36px;
 }
 body.mobile-ui #mTitle {
 	font-size: 18px;
@@ -64,15 +64,10 @@ body.mobile-ui #mTitle {
 	letter-spacing: -.02em;
 	line-height: 1.1;
 }
-body.mobile-ui #mSub {
-	color: var(--text2);
-	font-size: 11px;
-	font-weight: 650;
-}
+body.mobile-ui #mSub { color: var(--text2); font-size: 11px; font-weight: 650 }
 body.mobile-ui #mTop .mTop-right { display: flex; gap: 6px; flex-shrink: 0 }
-body.mobile-ui #mTop button,
-body.mobile-ui #mMoreHead button {
-	min-height: 36px;
+body.mobile-ui #mTop button {
+	min-height: 34px;
 	padding: 0 12px;
 	border-radius: 999px;
 	background: var(--surface-hover);
@@ -85,37 +80,69 @@ body.mobile-ui #mTop button.mPrimary {
 	color: #07131c;
 }
 
-/* ---- Bottom nav ---- */
+/* ============================================================
+   BOTTOM NAV — Icons + Labels, Home in der Mitte prominent
+   ============================================================ */
 body.mobile-ui #mNav {
 	position: fixed;
 	z-index: 1360;
 	inset: auto 0 0;
 	height: var(--m-bot);
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
-	padding: 4px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-left));
+	grid-template-columns: repeat(5, 1fr);
+	align-items: start;
+	padding: 6px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
 	background: var(--menu-bg);
 	border-top: 1px solid var(--edge);
 }
 body.mobile-ui #mNav button {
 	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 2px;
 	min-width: 0;
-	min-height: 50px;
-	padding: 4px 2px;
+	padding: 4px 2px 2px;
 	border-radius: 12px;
 	background: transparent;
 	color: var(--text2);
-	font-size: 12px;
+	font-size: 10px;
 	font-weight: 700;
+	line-height: 1.2;
+}
+body.mobile-ui #mNav button svg {
+	width: 22px;
+	height: 22px;
+	flex-shrink: 0;
 }
 body.mobile-ui #mNav button.on {
 	color: var(--accent);
-	background: var(--accent-soft);
 }
+/* Home-Button: größer, pill-förmig, farbiger Akzent */
+body.mobile-ui #mNav .mHome {
+	padding: 2px 4px 4px;
+}
+body.mobile-ui #mNav .mHome svg {
+	width: 28px;
+	height: 28px;
+	background: var(--accent);
+	color: #07131c;
+	border-radius: 14px;
+	padding: 4px;
+	box-sizing: border-box;
+}
+body.mobile-ui #mNav .mHome.on svg {
+	background: var(--accent);
+	color: #07131c;
+}
+body.mobile-ui #mNav .mHome.on { color: var(--accent) }
+
+/* Fälligkeits-Badge */
 body.mobile-ui #mDue {
 	position: absolute;
-	top: 2px;
-	right: calc(50% - 22px);
+	top: 0;
+	right: calc(50% - 24px);
 	min-width: 17px;
 	padding: 0 5px;
 	border-radius: 999px;
@@ -125,8 +152,31 @@ body.mobile-ui #mDue {
 	font-style: normal;
 }
 
-/* ---- More sheet: full app screen, not a desktop sidebar clone ---- */
-body.mobile-ui.mnav-open #mTop { display: none } /* Sheet bringt eigenen Kopf mit */
+/* ============================================================
+   NOTIZEN-BIBLIOTHEK (Sidebar als Bibliotheks-Sheet)
+   ============================================================ */
+body.mobile-ui #mLibHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex: 0 0 auto;
+	min-height: 52px;
+	padding: 0 0 12px;
+	border-bottom: 1px solid var(--edge-soft);
+}
+body.mobile-ui #mLibHead strong {
+	font-size: 22px;
+	letter-spacing: -.03em;
+}
+body.mobile-ui #mLibHead button {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: var(--surface-hover);
+	color: var(--text);
+	font-size: 16px;
+}
+
 body.mobile-ui #sidebar {
 	position: fixed;
 	z-index: 1350;
@@ -137,7 +187,7 @@ body.mobile-ui #sidebar {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	padding: calc(10px + env(safe-area-inset-top)) 14px calc(var(--m-bot) + 12px);
+	padding: calc(12px + env(safe-area-inset-top)) 14px calc(var(--m-bot) + 12px);
 	gap: 10px;
 	border: 0;
 	border-radius: 0;
@@ -153,55 +203,12 @@ body.mobile-ui.mnav-open #sidebar {
 	transition: transform .22s var(--ease-out);
 }
 body.mobile-ui #sidebar::before { display: none !important }
-body.mobile-ui #mMoreHead {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	flex: 0 0 auto;
-	min-height: 48px;
-}
-body.mobile-ui #mMoreHead strong {
-	display: block;
-	font-size: 22px;
-	letter-spacing: -.03em;
-}
-body.mobile-ui #mMoreHead small { color: var(--text2); font-size: 12px }
-body.mobile-ui #sidebar .topbar {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 6px;
-	padding: 0 0 10px;
-	border-bottom: 1px solid var(--edge-soft);
-}
-body.mobile-ui #sidebar .topbar .tab[hidden] { display: none !important } /* z.B. Daily */
-body.mobile-ui #sidebar .topbar .tab {
-	min-width: 0;
-	min-height: 52px;
-	padding: 6px 2px;
-	flex-direction: column;
-	justify-content: center;
-	gap: 3px;
-	border-radius: 12px;
-	background: var(--surface);
-	color: var(--text2);
-}
-body.mobile-ui #sidebar .topbar .tab.active {
-	background: var(--accent-soft);
-	color: var(--accent);
-}
-body.mobile-ui #sidebar .topbar .tab-label {
-	display: block !important;
-	max-width: none !important;
-	opacity: 1 !important;
-	margin: 0 !important;
-	font-size: 10px;
-	font-weight: 700;
-}
-body.mobile-ui #sidebar .topbar #btnSearchToggle { margin: 0 }
+/* Desktop-Topbar-Tabs (Home/Chat/Karten/Suche) raus — Navigation läuft über die Bottom-Bar */
+body.mobile-ui #sidebar .topbar { display: none !important }
+/* Notizen-Tree */
 body.mobile-ui #tree {
 	flex: 1 1 auto;
-	min-height: 120px;
+	min-height: 80px;
 	overflow: auto;
 }
 body.mobile-ui #tree .row {
@@ -209,30 +216,79 @@ body.mobile-ui #tree .row {
 	padding: 10px 12px;
 	border-radius: 12px;
 }
-body.mobile-ui #sidebar .side-foot {
+/* Heft-Umschalter (workspace/heft pills) bleibt sichtbar */
+body.mobile-ui #sidebar .side-foot { display: none !important } /* im Mehr-Sheet */
+
+/* ============================================================
+   MEHR-SHEET — Zusatzfunktionen & Einstellungen
+   ============================================================ */
+body.mobile-ui #mMoreSheet {
+	position: fixed;
+	z-index: 1355;
+	inset: 0;
+	width: 100%;
+	height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	padding: calc(16px + env(safe-area-inset-top)) 16px calc(var(--m-bot) + 16px);
+	gap: 16px;
+	background: var(--panel-solid);
+	transform: translateY(104%);
+	visibility: hidden;
+	transition: transform .22s var(--ease-out), visibility 0s linear .22s;
+}
+body.mobile-ui.mmore-open #mMoreSheet {
+	transform: none;
+	visibility: visible;
+	transition: transform .22s var(--ease-out);
+}
+body.mobile-ui .mSheet-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	flex: 0 0 auto;
+}
+body.mobile-ui .mSheet-head strong {
+	font-size: 28px;
+	font-weight: 800;
+	letter-spacing: -.04em;
+}
+body.mobile-ui .mSheet-head button {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: var(--surface-hover);
+	color: var(--text);
+	font-size: 16px;
+}
+body.mobile-ui .mSheet-grid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 8px;
-	max-height: 32dvh;
-	overflow: auto;
-	padding-top: 10px;
-	border-top: 1px solid var(--edge-soft);
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
 }
-body.mobile-ui #sidebar .side-foot button {
-	min-width: 0;
-	min-height: 46px;
-	padding: 10px;
-	border-radius: 12px;
+body.mobile-ui .mSheet-grid button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 90px;
+	border-radius: 18px;
 	background: var(--surface);
+	color: var(--text);
+	font-size: 12px;
+	font-weight: 700;
+	transition: background var(--motion-fast);
 }
-body.mobile-ui #sidebar .side-foot button span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+body.mobile-ui .mSheet-grid button:active { background: var(--surface-hover-strong) }
+body.mobile-ui .mBtn-ic {
+	font-size: 28px;
+	line-height: 1;
 }
 
-/* ---- AI full screen ---- */
+/* ============================================================
+   KI — Vollbild
+   ============================================================ */
 body.mobile-ui #panel { display: none }
 body.mobile-ui:not(.panel-collapsed) #panel {
 	position: fixed;
@@ -246,14 +302,15 @@ body.mobile-ui:not(.panel-collapsed) #panel {
 	background: var(--panel-solid);
 	padding-bottom: var(--m-bot);
 }
-body.mobile-ui:not(.panel-collapsed) #mTop { display: none } /* Panel bringt eigenen Kopf mit */
+body.mobile-ui:not(.panel-collapsed) #mTop { display: none }
 body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
-	content: "Frag mich zu deinen Notizen, Karten oder Plänen.";
+	content: "Stell mir eine Frage zu deinen Notizen, Karten oder Plänen.";
 	display: block;
-	margin: 40vh 32px 0;
+	margin: 38vh 32px 0;
 	text-align: center;
 	color: var(--text2);
-	font-size: 14px;
+	font-size: 15px;
+	line-height: 1.5;
 }
 body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
 	min-height: var(--m-top);
@@ -261,291 +318,178 @@ body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
 	border-bottom: 1px solid var(--edge-soft);
 }
 body.mobile-ui:not(.panel-collapsed) #btnChatExpand { display: none }
-body.mobile-ui:not(.panel-collapsed) #panel .panel-title {
-	font-size: 17px;
-	font-weight: 750;
-}
+body.mobile-ui:not(.panel-collapsed) #panel .panel-title { font-size: 17px; font-weight: 750 }
 body.mobile-ui:not(.panel-collapsed) #panel > #chatForm {
 	margin: 8px 10px 10px !important;
 }
 
-/* =========================================================
-   KARTEIKARTEN — Handy-first, nicht Desktop-Browser
-   ========================================================= */
-
-/* Übersicht: Desktop-Chrome weg, eine klare Lern-App */
+/* ============================================================
+   KARTEIKARTEN — Handy-first
+   ============================================================ */
 body.mobile-ui .library.anki {
 	width: 100%;
 	max-width: none;
 	padding: 12px 14px 24px !important;
 	background: none !important;
 }
-body.mobile-ui .library.anki .lib-head {
-	display: none !important; /* Tabs/Optionen/Neu/Vollbild: Desktop-Ballast */
-}
+body.mobile-ui .library.anki .lib-head { display: none !important }
+
+/* Hero */
 body.mobile-ui .anki-hero {
 	margin: 0 0 16px;
 	padding: 18px 16px;
 	border-radius: 18px;
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
-	box-shadow: none;
 }
-body.mobile-ui .anki-hero-main h2 {
-	font-size: 24px;
-	letter-spacing: -.03em;
-	line-height: 1.15;
-	margin: 4px 0 8px;
-}
-body.mobile-ui .anki-hero-main p {
-	font-size: 14px;
-	color: var(--text2);
-	margin: 0 0 14px;
-}
-body.mobile-ui .anki-hero-actions {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 8px;
-}
-body.mobile-ui .anki-hero-actions .primary {
-	min-height: 52px;
-	border-radius: 14px;
-	font-size: 16px;
-	font-weight: 750;
-}
+body.mobile-ui .anki-hero-main h2 { font-size: 24px; letter-spacing: -.03em; margin: 4px 0 8px }
+body.mobile-ui .anki-hero-main p { font-size: 14px; color: var(--text2); margin: 0 0 14px }
+body.mobile-ui .anki-hero-actions { display: grid; grid-template-columns: 1fr; gap: 8px }
+body.mobile-ui .anki-hero-actions .primary { min-height: 52px; border-radius: 14px; font-size: 16px; font-weight: 750 }
 body.mobile-ui .anki-hero-actions .hero-ghost,
-body.mobile-ui .anki-hero-actions .hero-quiet {
-	min-height: 44px;
-	border-radius: 12px;
-}
-body.mobile-ui .anki-hero-stat {
-	display: none; /* sekundäre Desktop-Stat-Kachel */
-}
+body.mobile-ui .anki-hero-actions .hero-quiet { min-height: 44px; border-radius: 12px }
+body.mobile-ui .anki-hero-stat { display: none }
+
+/* Stapel-Liste */
 body.mobile-ui .anki-sec h2 {
 	font-size: 13px;
 	text-transform: uppercase;
 	letter-spacing: .08em;
 	color: var(--text2);
-	margin: 8px 0 10px;
+	font-weight: 750;
+	margin: 16px 0 8px;
 }
-
-/* Stapel-Liste: eine Zeile = tippen zum Lernen, keine Icon-Leiste */
-body.mobile-ui .deck-list { display: flex; flex-direction: column; gap: 8px }
 body.mobile-ui .deck-row {
-	display: grid !important;
-	grid-template-columns: 1fr auto;
-	grid-template-areas:
-		"info study"
-		"meta study";
+	display: flex;
 	align-items: center;
-	gap: 2px 10px;
-	padding: 14px 14px !important;
-	border-radius: 16px;
+	gap: 12px;
+	padding: 14px 16px;
+	border-radius: 14px;
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
-	margin: 0 !important;
+	margin-bottom: 8px;
 }
-body.mobile-ui .deck-row .deck-ico { display: none }
-body.mobile-ui .deck-row .deck-info { grid-area: info; min-width: 0 }
-body.mobile-ui .deck-row .deck-name {
-	font-size: 16px;
-	font-weight: 700;
+body.mobile-ui .deck-ico { font-size: 22px; flex-shrink: 0 }
+body.mobile-ui .deck-info { flex: 1; min-width: 0 }
+body.mobile-ui .deck-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+body.mobile-ui .deck-meta { font-size: 12px; color: var(--text2); margin-top: 2px }
+body.mobile-ui .deck-counts,
+body.mobile-ui .deck-iconbtn,
+body.mobile-ui .deck-feyn { display: none }
+body.mobile-ui .deck-study {
+	min-height: 40px;
+	padding: 0 16px;
+	border-radius: 10px;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-weight: 750;
+	font-size: 14px;
+	flex-shrink: 0;
 }
-body.mobile-ui .deck-row .deck-meta {
-	grid-area: meta;
-	font-size: 12px;
-	color: var(--text2);
-}
-body.mobile-ui .deck-row .deck-counts {
-	display: none; /* Zahlen stecken schon im Hero / meta */
-}
-body.mobile-ui .deck-row .deck-actions {
-	grid-area: study;
+
+/* Lernmodus */
+body.mobile-ui.m-study #mTop { display: none !important }
+body.mobile-ui .anki-study-mode {
+	padding: 0 14px 16px;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	min-height: calc(100dvh - var(--m-top) - var(--m-bot));
 }
-body.mobile-ui .deck-row .deck-actions .deck-iconbtn,
-body.mobile-ui .deck-row .deck-actions .deck-feyn {
-	display: none !important; /* Durchsuchen/Unterstapel/Löschen/Feynman: über Mehr/Desktop */
+body.mobile-ui .study-head { display: none }
+body.mobile-ui .study-card {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	margin: 0;
+	max-width: none;
+	gap: 0;
 }
-body.mobile-ui .deck-row .deck-study {
-	min-width: 88px;
-	min-height: 44px;
-	border-radius: 12px;
+body.mobile-ui .study-card .card-face {
+	padding: 28px 16px;
+	font-size: 18px;
+	line-height: 1.55;
+	text-align: center;
+}
+body.mobile-ui .study-card .study-divider {
+	text-align: center;
+	color: var(--text2);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: .1em;
+	margin: 4px 0;
+}
+body.mobile-ui .study-counts-row { font-size: 12px; color: var(--text2); text-align: center; margin: 6px 0 10px }
+body.mobile-ui .confidence-row,
+body.mobile-ui .study-reveal-controls .mini,
+body.mobile-ui .study-keys,
+body.mobile-ui [data-ankizen] { display: none !important }
+body.mobile-ui .modal-actions [data-ankishowback] {
+	width: 100%;
+	min-height: 52px;
+	border-radius: 14px;
+	background: var(--accent);
+	color: #081018;
+	font-size: 17px;
+	font-weight: 750;
+	margin: 10px 0;
+}
+body.mobile-ui .grades {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 10px;
+	margin-top: 8px;
+}
+body.mobile-ui .grades [data-ankigrade] {
+	min-height: 64px;
+	border-radius: 14px;
+	font-size: 16px;
 	font-weight: 750;
 }
-
-/* Browser/Statistik am Handy ausblenden wenn jemand dorthin navigiert — Fokus Lernen */
-body.mobile-ui .anki-browser-table,
-body.mobile-ui .anki-toolbar,
-body.mobile-ui .retention-table,
-body.mobile-ui .heatmap,
-body.mobile-ui .bar-chart {
-	max-width: 100%;
-	overflow: auto;
-}
-
-/* ---- Study mode: echte Karten-App ---- */
-body.mobile-ui.m-study #mTop { display: none !important }
-body.mobile-ui.m-study #app { padding-top: 0 !important }
-body.mobile-ui.m-study #main {
-	overflow: hidden;
-	padding: 0 !important;
-}
-body.mobile-ui .anki-study-mode {
-	height: 100% !important;
-	max-width: none !important;
-	padding: max(8px, env(safe-area-inset-top)) 12px 8px !important;
-	background: none !important;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-}
-body.mobile-ui .anki-study-mode .study-head {
-	justify-content: space-between !important;
-	gap: 8px !important;
-	margin: 0 0 8px !important;
-	font-size: 12px !important;
-}
-body.mobile-ui .anki-study-mode .study-keys,
-body.mobile-ui .anki-study-mode [data-ankizen] {
-	display: none !important;
-}
-body.mobile-ui .anki-study-mode .study-head .mini {
-	min-height: 34px;
-	border-radius: 999px;
-	padding: 0 12px;
-}
-body.mobile-ui .anki-study-mode .study-card {
-	width: 100% !important;
-	max-width: none !important;
-	min-height: 0 !important;
-	flex: 1 1 auto !important;
-	margin: 0 !important;
-	padding: 16px 14px 12px !important;
-	border-radius: 20px !important;
-	border: 1px solid var(--edge) !important;
-	background: var(--surface) !important;
-	box-shadow: none !important;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
-}
-body.mobile-ui .anki-study-mode .study-meta-bar {
-	margin-bottom: 8px;
-	font-size: 12px;
-}
-body.mobile-ui .anki-study-mode .study-side-label,
-body.mobile-ui .anki-study-mode .study-divider span {
-	font-size: 10px;
-	letter-spacing: .1em;
-	text-transform: uppercase;
-	color: var(--text2);
-}
-body.mobile-ui .anki-study-mode .card-face {
-	flex: 1 1 auto;
-	display: flex !important;
-	align-items: center;
-	justify-content: center;
-	text-align: center;
-	padding: 12px 4px !important;
-	font-size: 20px !important;
-	line-height: 1.35 !important;
-	overflow: auto;
-	-webkit-overflow-scrolling: touch;
-}
-body.mobile-ui .anki-study-mode .card-face.back {
-	flex: 1 1 auto;
-	overflow: auto;
-}
-body.mobile-ui .anki-study-mode .study-reveal-controls,
-body.mobile-ui .anki-study-mode .grades {
-	flex: 0 0 auto;
-	margin-top: auto;
-}
-body.mobile-ui .anki-study-mode .study-counts-row {
-	justify-content: center;
-	margin: 6px 0 8px;
-	font-size: 12px;
-}
-body.mobile-ui .anki-study-mode .modal-actions {
-	display: grid;
-	grid-template-columns: 1fr;
-}
-body.mobile-ui .anki-study-mode .modal-actions [data-ankishowback] {
-	width: 100% !important;
-	min-width: 0 !important;
-	min-height: 54px !important;
-	border-radius: 16px !important;
-	font-size: 17px !important;
-	font-weight: 800 !important;
-}
-body.mobile-ui .anki-study-mode .grades {
-	display: grid !important;
-	grid-template-columns: 1fr 1fr !important;
-	gap: 8px !important;
-}
-body.mobile-ui .anki-study-mode .grades button {
-	min-height: 58px !important;
-	border-radius: 14px !important;
-	font-size: 15px !important;
-}
-body.mobile-ui .anki-study-mode .grades .grade-key {
-	display: none; /* Tastatur-Hinweise am Handy sinnlos */
-}
-body.mobile-ui .anki-study-mode .confidence-row {
-	display: none; /* optional, spart Höhe beim Lernen */
-}
-body.mobile-ui .anki-study-mode .feyn-inline textarea {
-	min-height: 96px;
-	font-size: 16px;
-}
-body.mobile-ui .anki-study-mode .study-done,
-body.mobile-ui .anki-study-mode .study-wait {
-	justify-content: center;
-	text-align: center;
-	padding: 28px 18px !important;
-}
-body.mobile-ui .anki-study-mode .study-done h2,
-body.mobile-ui .anki-study-mode .study-wait h2 {
-	font-size: 26px;
-}
-/* Study-Fußleiste: nur Bearbeiten, keine Desktop-Optionen */
+body.mobile-ui .grades .grade-key { display: none }
+body.mobile-ui .grades .grade-ivl { font-size: 11px; color: var(--text2) }
 body.mobile-ui .study-footer {
 	display: flex;
-	justify-content: flex-start;
-	gap: 8px;
-	padding: 8px 2px 0;
+	justify-content: center;
+	padding-top: 10px;
 }
-body.mobile-ui .study-footer-options,
-body.mobile-ui .anki-study-mode [data-deckconf],
-body.mobile-ui .anki-study-mode [data-ankizen] {
-	display: none !important;
+body.mobile-ui [data-deckconf],
+body.mobile-ui [data-ankizen] { display: none !important }
+
+/* ============================================================
+   FEYNMAN-MODUS — Light-Mode Fix
+   ============================================================ */
+body.light .feyn-inline {
+	background: #f5f5f0;
+	border-radius: 12px;
+	padding: 12px;
+	color: #1a1a1a;
+}
+body.light .feyn-inline textarea,
+body.light .feyn-inline input {
+	background: #ffffff;
+	color: #1a1a1a;
+	border-color: #d0d0cc;
+}
+body.light .exp-feynout:not(:empty) {
+	background: #f0f4f8;
+	color: #1a1a1a;
+	border-color: #c8d0da;
+}
+body.light .feyn-inline-head {
+	color: #444;
 }
 
-/* Home etwas ruhiger am Handy */
-body.mobile-ui .home {
-	padding: 16px 16px 28px !important;
-}
-body.mobile-ui .home h1 {
-	font-size: 28px !important;
-}
+/* ============================================================
+   SONSTIGES
+   ============================================================ */
+body.mobile-ui.mnav-open #mTop { display: none }
+body.mobile-ui.mmore-open #mTop { display: none }
+body.mobile-ui.m-study #mNav,
+body.mobile-ui.m-typing #mNav { transform: translateY(110%); transition: transform .18s var(--ease-out) }
+body.mobile-ui #mNav { transition: transform .18s var(--ease-out) }
 
-/* Tastatur offen */
-body.mobile-ui.m-typing #mNav { display: none }
-body.mobile-ui.m-typing { --m-bot: 0px }
-body.mobile-ui.m-typing #panel { padding-bottom: 0 }
-
-/* Study: Nav bleibt, aber dünner — oder aus wenn gewünscht? Behalten für Abbruch */
-body.mobile-ui.m-study #mNav {
-	background: color-mix(in srgb, var(--menu-bg) 92%, transparent);
-}
-
-@media (max-width: 380px) {
-	body.mobile-ui .anki-study-mode .card-face { font-size: 18px !important }
-	body.mobile-ui #mTitle { font-size: 16px }
-}
 @media (prefers-reduced-motion: reduce) {
 	body.mobile-ui #sidebar { transition: none }
+	body.mobile-ui #mMoreSheet { transition: none }
 }
