@@ -60,11 +60,18 @@ export const MOBILE = (() => {
 		const tab = e.target.closest?.("[data-mobile]")?.dataset.mobile;
 		const action = e.target.closest?.("[data-mobile-action]")?.dataset.mobileAction;
 		if (tab) {
-			if (tab !== "more") closeDrawer();
-			if (tab === "learn") APP.openAnki("study", null);
-			else if (tab === "notes") TABS.openHomeOverview();
-			else if (tab === "ai") openAI();
-			else if (tab === "more") body.classList.toggle("mnav-open");
+			// Jeder Tab ist eine eigenständige Ansicht. Besonders wichtig: „Mehr“
+			// beendet zuerst die KI-Ansicht, sonst läge der Drawer unsichtbar darunter.
+			if (tab === "more") {
+				body.classList.add("panel-collapsed");
+				body.classList.toggle("mnav-open");
+			} else {
+				closeDrawer();
+				if (tab !== "ai") body.classList.add("panel-collapsed");
+				if (tab === "learn") APP.openAnki("study", null);
+				else if (tab === "notes") TABS.openHomeOverview();
+				else if (tab === "ai") openAI();
+			}
 			updateUI();
 			return;
 		}
@@ -113,8 +120,16 @@ export const MOBILE = (() => {
 		started = true;
 		apply(mq.matches);
 		mq.addEventListener("change", (e) => apply(e.matches));
-		document.addEventListener("focusin", (e) => { if (mq.matches && typingTarget(e.target)) setTyping(true); });
-		document.addEventListener("focusout", () => setTimeout(() => setTyping(typingTarget(document.activeElement)), 80));
+		// Nicht allein auf Fokus reagieren: Beim Öffnen der KI wird das Feld bewusst
+		// fokussiert. Fokus ≠ sichtbare Tastatur; sonst verschwindet die Navigation
+		// sofort und die KI wird zur Sackgasse. Nur die tatsächlich verkleinerte
+		// VisualViewport-Höhe zählt als offene Bildschirmtastatur.
+		const syncKeyboard = () => {
+			const vv = window.visualViewport;
+			setTyping(!!vv && mq.matches && window.innerHeight - vv.height > 140);
+		};
+		window.visualViewport?.addEventListener("resize", syncKeyboard);
+		window.addEventListener("resize", syncKeyboard);
 		document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDrawer(); updateUI(); } });
 		STATE.onAfterDispatch(() => requestAnimationFrame(updateUI));
 		new MutationObserver(updateUI).observe(body, { attributes: true, attributeFilter: ["class"] });
