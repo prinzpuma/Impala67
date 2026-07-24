@@ -6,7 +6,13 @@ import { TABS } from "./tabs.js";
 
 // mobile.js — Mobile UI v6: eigene Handy-App.
 export const MOBILE = (() => {
-	const mq = matchMedia("(max-width: 820px), (pointer: coarse) and (max-width: 1200px)");
+	// Bug-Fix („kommt noch“, 24. Juli): iPads bekamen die Handy-UI statt der
+	// gewohnten iPad-(Desktop-)Ansicht — "(pointer: coarse) and (max-width: 1200px)"
+	// traf JEDES iPad (Touch + ≤1200px, hoch wie quer). Handy-UI jetzt nur noch für
+	// echte Phone-Formate: schmale Viewports (≤700px) oder Touch-Geräte im
+	// Querformat mit Phone-Höhe (≤500px). iPads (Hochformat ab 744px Breite,
+	// Querformat ab 744px Höhe) fallen damit wieder in die Desktop-/iPad-Ansicht.
+	const mq = matchMedia("(max-width: 700px), (pointer: coarse) and (max-height: 500px)");
 	const body = document.body;
 	let started = false;
 

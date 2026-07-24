@@ -24,8 +24,13 @@ import { TELE } from "./telemetrie.js";
 
 export const EXP = (() => {
 	// ---------- Katalog (Reihenfolge = Anzeige in den Einstellungen) ----------
+	// 🧑‍🏫 Feynman ist KEIN Experiment mehr („kommt noch“, 24. Juli): Der Modus hat
+	// sich als regulärer Lernmodus bewährt. Er wird beim Stapel-Start angeboten
+	// (render-anki.js: data-ankifeyn je Stapel + Hero) und der „Erst erklären“-Knopf
+	// erscheint ohne Opt-in auf jeder Karte (siehe enhance()). Die gesamte
+	// Feynman-Logik (openFeynman/checkFeynman/hydrateFeynInline) lebt weiterhin
+	// hier, hängt aber nicht mehr am experiments-Flag.
 	const FEATURES = [
-		["feynman", "🧑‍🏫 Feynman-Modus", "„Erst erklären“: Antwort in eigenen Worten tippen oder diktieren. Die KI prüft (getroffen / fehlend / falsch) und schlägt eine Note vor — bewertet wird weiterhin von dir."],
 		["elaboration", "🤔 Elaborative Interrogation", "Nach ca. jeder 4. gut beantworteten Karte fragt die KI „Und warum?“ nach — mit kurzem Feedback zu deiner Begründung."],
 		["variation", "🔀 Fragen-Variation", "Jede 3. Wiederholung wird die Vorderseite umformuliert, damit du das Konzept statt des Wortlauts lernst. Varianten werden lokal gecacht (offline-fähig)."],
 		["scaffolding", "💡 Gestufte Hinweise", "Statt sofort aufzudecken: Kategorie → Anfang/Struktur → Eselsbrücke. Erst nach dem ersten Abrufversuch — sonst leidet der Testing-Effekt."],
@@ -176,7 +181,8 @@ export const EXP = (() => {
 			// Kein Doppel-Knopf: Im Feynman-LERNMODUS (S.ankiFeyn, beim Stapel-Start
 			// gewählt) rendert render-anki.js das Erklär-Feld bereits INLINE in die
 			// Karte (.feyn-inline) — dann keinen zusätzlichen Dialog-Knopf anbieten.
-			if (on("feynman") && !S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1">🧑‍🏫 Erst erklären</button>');
+			// Feynman ist regulär (24. Juli): kein experiments-Flag mehr — Knopf immer anbieten.
+			if (!S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1">🧑‍🏫 Erst erklären</button>');
 			hydrateFeynInline(cardEl, card);
 			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1">💡 Hinweis</button>');
 			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1">🎯 Als Quiz</button>');
