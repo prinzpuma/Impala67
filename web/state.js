@@ -108,7 +108,13 @@ export const S = {
 	dailyMonth: null, // "YYYY-MM" im Daily-Notes-Kalender (null = aktueller Monat)
 	reviews: [], // Wiederholungs-Protokoll { cardId, t, grade } — aus dem Event-Log rekonstruiert
 	telemetry: [], // Lern-Telemetrie (telemetrie.js): { id, t, kind, data } — aus dem Event-Log rekonstruiert, synct wie alles über Drive
-	heftMeta: {}, // GoodNotes-Hefte: pageId → { rev, pages, bytes, updated } — Inhalt liegt als Blob heft:<pageId> in IndexedDB
+	// GoodNotes-Hefte (v8, 25. Juli 2026): Der Inhalt liegt NICHT mehr als Blob
+	// neben dem Log, sondern IM Log. Jeder Strich ist ein Event (heftOps), heftDocs
+	// ist das Ergebnis des Abspielens. Damit gilt für Hefte exakt dasselbe wie für
+	// Seiten und Karten: ein Transportweg, eine Reihenfolge, automatische
+	// Zusammenführung. Es gibt keine Heft-Dateien in Drive und keinen Müllsammler mehr.
+	heftDocs: {}, // pageId → { v:2, rev, pages: [{ id, paper, strokes, images, texts, ocrText }] }
+	heftMeta: {}, // pageId → { rev, pages, bytes, ocrText, updated } — aus heftDocs abgeleitet (Badges, Suche, Bibliothek)
 };
 
 export const STATE = (() => {
@@ -143,6 +149,18 @@ export const STATE = (() => {
 	const _dispatchHooks = { before: [], after: [] };
 	const onBeforeDispatch = (fn) => { _dispatchHooks.before.push(fn); };
 	const onAfterDispatch = (fn) => { _dispatchHooks.after.push(fn); };
+
+	// Importierte Fremd-Events laufen nicht durch dispatch(), sondern direkt durch
+	// reduce() (drive.js replayImported). Wer auf eingetroffene Fremdänderungen
+	// reagieren muss — z.B. ein offenes Heft, das sofort die Striche des anderen
+	// Geräts zeigen soll — hängt sich hier ein.
+	const _remoteHooks = [];
+	const onRemoteApplied = (fn) => { _remoteHooks.push(fn); };
+	const emitRemoteApplied = (types) => {
+		for (const fn of _remoteHooks) {
+			try { fn(types || []); } catch (e) { console.warn("remote-Hook:", e); }
+		}
+	};
 
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
 	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
@@ -207,6 +225,90 @@ export const STATE = (() => {
 		if (Object.keys(patch).length) {
 			localStorage.removeItem("impala67.secrets");
 			localStorage.removeItem("notion.secrets");
+		}
+	}
+
+	// ---- Hefte als Event-Log (v8) ------------------------------------------
+	// Striche sind Events. Der gesamte Zusammenführungs-Trick steckt in der Form
+	// der Operationen: Hinzufügen ist idempotent (gleiche ID = einmal), Entfernen
+	// ist idempotent (fehlt schon = nichts zu tun), Ersetzen ist
+	// Last-Write-Wins über die Log-Reihenfolge. Dadurch führen zwei Geräte, die
+	// gleichzeitig im selben Heft zeichnen, ihre Striche automatisch zusammen —
+	// ohne Konflikt, ohne Gewinner, ohne Verlierer-Kopie.
+	const heftNewPage = (id, paper) => ({ id, paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
+	const heftPageOf = (doc, key) => doc.pages.find((pg) => pg.id === key) || null;
+	const heftById = (list, id) => list.findIndex((x) => x && x.id === id);
+
+	function heftDocOf(pageId) {
+		let d = S.heftDocs[pageId];
+		if (!d) { d = { v: 2, rev: 0, pages: [] }; S.heftDocs[pageId] = d; }
+		return d;
+	}
+
+	// Grobe Größenschätzung für Badges/Bibliothek. Bewusst billig gerechnet statt
+	// per JSON.stringify — die Zahl ist reine Anzeige, kein Sync-Kriterium mehr.
+	function heftBytes(doc) {
+		let n = 0;
+		for (const pg of doc.pages) {
+			for (const s of pg.strokes) n += 40 + (s.pts ? s.pts.length * 14 : 60);
+			for (const im of pg.images) n += (im.src ? im.src.length : 0) + 60;
+			for (const tx of pg.texts) n += (tx.text ? tx.text.length : 0) + 60;
+		}
+		return n;
+	}
+
+	function heftSyncMeta(pageId, t) {
+		const doc = heftDocOf(pageId);
+		doc.rev++;
+		S.heftMeta[pageId] = {
+			rev: doc.rev,
+			pages: doc.pages.length,
+			bytes: heftBytes(doc),
+			ocrText: doc.pages.map((pg) => pg.ocrText || "").filter(Boolean).join("\n"),
+			updated: t,
+		};
+		if (S.pages[pageId]) S.pages[pageId].updated = t;
+	}
+
+	function applyHeftOps(pageId, ops) {
+		const doc = heftDocOf(pageId);
+		for (const op of ops) {
+			if (!op || !op.t) continue;
+			const pg = op.p ? heftPageOf(doc, op.p) : null;
+			switch (op.t) {
+				case "pg+": {
+					// Zwei Geräte hängen gleichzeitig eine Seite an: beide bleiben erhalten,
+					// die Reihenfolge ergibt sich aus der Log-Reihenfolge.
+					if (!op.page || !op.page.id || heftPageOf(doc, op.page.id)) break;
+					const at = Math.max(0, Math.min(typeof op.at === "number" ? op.at : doc.pages.length, doc.pages.length));
+					doc.pages.splice(at, 0, heftNewPage(op.page.id, op.page.paper));
+					break;
+				}
+				case "pg-": {
+					const i = doc.pages.findIndex((x) => x.id === op.p);
+					if (i >= 0) doc.pages.splice(i, 1);
+					break;
+				}
+				case "pgo": {
+					// Reihenfolge umsortieren. Unbekannte Seiten (vom anderen Gerät neu)
+					// hängen hinten an, statt verloren zu gehen.
+					const order = Array.isArray(op.order) ? op.order : [];
+					const rank = (id) => { const i = order.indexOf(id); return i < 0 ? 1e9 : i; };
+					doc.pages = doc.pages.map((pg2, i) => [pg2, i]).sort((a, b) => rank(a[0].id) - rank(b[0].id) || a[1] - b[1]).map((x) => x[0]);
+					break;
+				}
+				case "pgp": if (pg) pg.paper = op.paper || "lined"; break;
+				case "ocr": if (pg) pg.ocrText = op.text || ""; break;
+				case "s+": if (pg && op.o && op.o.id && heftById(pg.strokes, op.o.id) < 0) pg.strokes.push(op.o); break;
+				case "s=": if (pg && op.o && op.o.id) { const i = heftById(pg.strokes, op.o.id); if (i >= 0) pg.strokes[i] = op.o; else pg.strokes.push(op.o); } break;
+				case "s-": if (pg) { const k = new Set(op.ids || []); pg.strokes = pg.strokes.filter((s) => !k.has(s.id)); } break;
+				case "i+": if (pg && op.o && op.o.id && heftById(pg.images, op.o.id) < 0) pg.images.push(op.o); break;
+				case "i=": if (pg && op.o && op.o.id) { const i = heftById(pg.images, op.o.id); if (i >= 0) pg.images[i] = op.o; else pg.images.push(op.o); } break;
+				case "i-": if (pg) { const k = new Set(op.ids || []); pg.images = pg.images.filter((x) => !k.has(x.id)); } break;
+				case "x+": if (pg && op.o && op.o.id && heftById(pg.texts, op.o.id) < 0) pg.texts.push(op.o); break;
+				case "x=": if (pg && op.o && op.o.id) { const i = heftById(pg.texts, op.o.id); if (i >= 0) pg.texts[i] = op.o; else pg.texts.push(op.o); } break;
+				case "x-": if (pg) { const k = new Set(op.ids || []); pg.texts = pg.texts.filter((x) => !k.has(x.id)); } break;
+			}
 		}
 	}
 
@@ -275,6 +377,7 @@ export const STATE = (() => {
 					if (pg.parentId === p.id) pg.parentId = null; // Kinder wandern auf Root
 				});
 				delete S.heftMeta[p.id]; // Heft-Metadaten mit aufräumen
+				delete S.heftDocs[p.id]; // Heft-Inhalt mit aufräumen
 				delete S.pages[p.id];
 				break;
 			case "pageTrash":
@@ -549,12 +652,28 @@ export const STATE = (() => {
 				delete S.gnFolders[folder.id];
 				break;
 			}
-			case "heftUpdated":
-				// GoodNotes-Heft gespeichert: nur Metadaten im Log (Badges, Bibliothek, Sync) —
-				// die Striche selbst liegen als EIN Blob heft:<pageId> in IndexedDB.
-				if (!p.pageId) break;
-				S.heftMeta[p.pageId] = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, ocrText: p.ocrText || "", updated: ev.t };
-				if (S.pages[p.pageId]) S.pages[p.pageId].updated = ev.t;
+			case "heftOps":
+				// Der Normalfall: eine Handvoll Striche, Radierungen oder Seitenänderungen.
+				if (!p.pageId || !Array.isArray(p.ops) || !p.ops.length) break;
+				applyHeftOps(p.pageId, p.ops);
+				heftSyncMeta(p.pageId, ev.t);
+				break;
+			case "heftSnap":
+				// Verdichtung: ersetzt den kompletten Heft-Zustand. Wird periodisch
+				// geschrieben, damit db.js alle älteren heftOps desselben Hefts
+				// wegwerfen kann und das Log nicht unbegrenzt wächst.
+				if (!p.pageId || !p.doc || !Array.isArray(p.doc.pages)) break;
+				S.heftDocs[p.pageId] = {
+					v: 2, rev: 0,
+					pages: p.doc.pages.map((pg) => ({
+						id: pg.id, paper: pg.paper || "lined",
+						strokes: Array.isArray(pg.strokes) ? pg.strokes : [],
+						images: Array.isArray(pg.images) ? pg.images : [],
+						texts: Array.isArray(pg.texts) ? pg.texts : [],
+						ocrText: pg.ocrText || "",
+					})),
+				};
+				heftSyncMeta(p.pageId, ev.t);
 				break;
 			case "chatUpsert": {
 				if (!p.id || !Array.isArray(p.messages)) break;
@@ -1052,5 +1171,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, load, migrateLegacySecretsToSync, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, onRemoteApplied, emitRemoteApplied, load, migrateLegacySecretsToSync, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

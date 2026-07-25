@@ -19,6 +19,15 @@ import { U } from "./util.js";
 // • Hybride logische Uhr: importierte Zeitstempel heben die lokale Uhr an (U.observeTimes),
 //   Gleichstände werden deterministisch per Event-id gebrochen — vorher konnten bei exakt
 //   gleichem t BEIDE Geräte sich selbst als Verlierer sehen und je eine Kopie anlegen.
+// v8 (25. Juli 2026) — Hefte reisen als Events, nicht mehr als Blob:
+// • heftUpdated (Zeiger auf eine Drive-Binärdatei) ist ersetzt durch heftOps (Strich-Operationen)
+//   und heftSnap (Vollstand). Damit gibt es nur noch EINEN Transportweg: das Event-Log.
+// • Der komplette Heft-Konfliktzweig entfällt — Strich-Operationen zweier Geräte mischen sich
+//   von selbst (Union, idempotent), es gibt keinen Gewinner und keine Verlierer-Kopie mehr.
+// • heftHeadsOf entfällt ersatzlos (es gibt keine Blob-Hashes mehr, die abzugleichen wären).
+// • Kompaktierung: ein heftSnap macht alle älteren heftOps DESSELBEN Hefts überflüssig.
+// Bewusst OHNE Rückwärtskompatibilität (Einzelnutzer-Absprache): Alt-Hefte werden beim ersten
+// Öffnen aus dem lokalen Blob in einen heftSnap migriert (heft.js), danach ist der Blob Geschichte.
 export const DB = (() => {
 	let db = null, openPromise = null; // openPromise memoisiert open() gegen Doppel-Open-Races
 
@@ -156,7 +165,10 @@ export const DB = (() => {
 	// pageUpdate-Patches, die weiterhin ankommen müssen. Für pageUpdate ist Wieder-
 	// auferstehung nur ein Platz-, kein Korrektheitsproblem (Replay ist LWW über t).
 	const COMPACT_FLOOR_KEY = "impala67_compact_floor";
-	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "teleEvent"]);
+	// heftOps steht mit auf der Liste, weil ein heftSnap denselben Zustand vollständig ersetzt —
+	// verdichtete Strich-Operationen dürfen nicht über fremde Deltas zurückkehren (sie wären zwar
+	// idempotent, würden aber den Log wieder aufblähen, den der Snapshot gerade zusammengefasst hat).
+	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "teleEvent", "heftOps"]);
 	const compactFloor = () => localStorage.getItem(COMPACT_FLOOR_KEY) || "";
 	// Exportiert, damit test/test-sync.mjs genau diese Regel prüfen kann — der Fehler,
 	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
@@ -173,11 +185,16 @@ export const DB = (() => {
 		const teleCutoff = new Date(Date.now() - TELE_KEEP_DAYS * 864e5).toISOString();
 		let uiTabsKept = false;
 		const uiTreeKeys = new Set();
+		const heftSnapped = new Set(); // pageIds, für die (rückwärts gelesen) schon ein heftSnap steht
 		for (let i = sorted.length - 1; i >= 0; i--) { // rückwärts: neueste zuerst
 			const ev = sorted[i], p = ev.payload || {};
 			if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
 			else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
 			else if (ev.type === "teleEvent" && ev.t < teleCutoff) continue;
+			// Heft: der jüngste heftSnap je Seite beschreibt den ganzen Stand — alles Ältere
+			// desselben Hefts (Ops wie ältere Snapshots) ist damit redundant. Pro pageId, nicht global.
+			else if (ev.type === "heftSnap") { if (heftSnapped.has(p.pageId)) continue; heftSnapped.add(p.pageId); }
+			else if (ev.type === "heftOps" && heftSnapped.has(p.pageId)) continue;
 			if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
 			if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
 			const [bucket, patch] =
@@ -271,8 +288,6 @@ export const DB = (() => {
 	};
 	// Jüngster Inhalts-Stand je Seite — Kern der Konflikt-Erkennung (pure, test/test-core.mjs testet direkt).
 	const contentHeadsOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageUpdate" && typeof ev.payload?.patch?.content === "string" ? ev.payload.id : null), extra);
-	// Jüngste versionierte Heft-Binärdatei je Seite — der Hash im Event bestimmt exakt die Drive-Blob-Datei.
-	const heftHeadsOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "heftUpdated" && ev.payload?.pageId && ev.payload?.blobHash ? ev.payload.pageId : null), extra);
 
 	// Letzter bekannter Stand einer Seite rein aus Events (pure, exportiert für Tests). Wichtig beim
 	// Lösch-Konflikt: die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id) wäre leer.
@@ -293,10 +308,7 @@ export const DB = (() => {
 			if (ev.type === "pageCreate") apply(p, false);
 			else if (ev.type === "pageUpdate" && p.patch) apply(p.patch, true);
 			else if (ev.type === "pageMove") pg.parentId = p.parentId || null;
-			else if (ev.type === "heftUpdated") {
-				pg.kind = "heft";
-				pg.heftMeta = { rev: p.rev || 1, pages: p.pages || 1, bytes: p.bytes || 0, blobHash: p.blobHash };
-			}
+			else if (ev.type === "heftOps" || ev.type === "heftSnap") pg.kind = "heft"; // Inhalt lebt im Log, nicht in Metadaten
 		}
 		return pg;
 	}
@@ -450,29 +462,10 @@ export const DB = (() => {
 				});
 			}
 
-			// (2) Heft-Konflikt: versionierter Blob — ein Zeitstempel-Gewinner kann den anderen Blob nicht
-			// still ersetzen. Verlierer wird als eigenes Heft gerettet, Drive kopiert exakt dessen Hash.
-			const localHefts = heftHeadsOf(local, localOnly), remoteHefts = heftHeadsOf(fresh);
-			for (const [id, remote] of Object.entries(remoteHefts)) {
-				const mine = localHefts[id];
-				if (!mine || mine.payload.blobHash === remote.payload.blobHash) continue;
-				// Gleichstand wie oben deterministisch per id brechen (Binärdaten lassen sich nicht
-				// zusammenführen — hier bleibt es zwangsläufig bei „Verlierer retten“).
-				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
-				const loser = remoteWins ? mine : remote;
-				if (existing.has("heftconflict-" + loser.id)) continue;
-				const pi = info(id), conflictPageId = "heftconflictpg-" + loser.id;
-				conflictDetails.push({
-					pageId: id, title: pi.title || "Heft", conflictPageId, conflictType: "heft",
-					loserSource: loser === mine ? "local" : "remote", loserHash: loser.payload.blobHash,
-					winner: remoteWins ? "remote" : "local",
-					reason: "Dieses Heft wurde auf zwei Geräten geändert. Der ältere Stand wurde als separates Konflikt-Heft gesichert.",
-				});
-				fresh.push(
-					{ id: "heftconflict-" + loser.id, t: U.now(), type: "pageCreate", payload: { id: conflictPageId, title: "⚠ Konflikt-Heft: " + (pi.title || "Heft"), content: "", parentId: pi.parentId || null, workspaceId: pi.workspaceId || "default", kind: "heft" } },
-					{ id: "heftconflictmeta-" + loser.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, rev: loser.payload.rev || 1, pages: loser.payload.pages || 1, bytes: loser.payload.bytes || 0, blobHash: loser.payload.blobHash } },
-				);
-			}
+			// (2) Heft-Konflikte gibt es seit v8 nicht mehr. Hefte reisen als Strich-Operationen
+			// (heftOps/heftSnap) im selben Log wie alles andere: zwei Geräte, die gleichzeitig in
+			// dasselbe Heft zeichnen, ergeben die Vereinigung beider Striche. Nichts zu entscheiden,
+			// nichts zu retten — deshalb steht hier bewusst kein Code mehr.
 
 			// (3) Endgültig-gelöscht vs. verschoben/geändert: Löschen gewinnt beim Merge immer — der andere
 			// Stand ginge sonst still verloren und wird als Kopie gerettet.
@@ -489,19 +482,19 @@ export const DB = (() => {
 				if (existing.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
 				const pg = reconstructPageFromEvents([...local, ...fresh], id); // Seite ist lokal ggf. schon weg
-				const isHeft = pg.kind === "heft" && pg.heftMeta?.blobHash;
 				conflictDetails.push({
 					pageId: id, title: pg.title,
 					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
 					deletedAt: del.t, changedAt: moved.t, conflictPageId, conflictType: "delete-change",
 					parentId: pg.parentId, workspaceId: pg.workspaceId, eventId: "lifeconflict-" + moved.id,
-					...(isHeft ? { loserHash: pg.heftMeta.blobHash, loserSource } : {}),
+					loserSource,
 				});
 				fresh.push({
 					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate",
 					payload: { id: conflictPageId, title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title, content: pg.content, parentId: pg.parentId, workspaceId: pg.workspaceId, kind: pg.kind },
 				});
-				if (isHeft) fresh.push({ id: "lifeconflictmeta-" + moved.id, t: U.now(), type: "heftUpdated", payload: { pageId: conflictPageId, ...pg.heftMeta } });
+				// Heft-Striche werden hier NICHT mitkopiert: sie liegen als heftOps/heftSnap unter der
+				// ursprünglichen Seiten-id im Log und sind damit weiterhin vollständig vorhanden.
 			}
 		}
 		fresh.forEach((ev) => { delete ev.seq; if (remoteIds.has(ev.id)) ev._remote = true; }); // neue lokale Seq
@@ -541,7 +534,7 @@ export const DB = (() => {
 		// Hinweis bleibt: bereits gesyncte Events können per Drive-Merge zurückkehren —
 		// der Seiten-Reset ist ein LOKALER Neuanfang, kein Drive-Reset.
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore",
-			"heftUpdated", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
+			"heftOps", "heftSnap", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
 		const evStore = t.objectStore("events");
 		const evReq = evStore.getAll();
 		evReq.onsuccess = () => evReq.result.forEach((ev) => { if (pageTypes.has(ev.type)) evStore.delete(ev.seq); });
@@ -552,5 +545,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, heftHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

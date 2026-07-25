@@ -5,8 +5,26 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 
-// heft.js — GoodNotes-Kern für Impala67 (v12: KISS/DRY-Refactor, funktionsgleich zu v11).
-// Persistenz: EIN Blob je Heft ("heft:" + pageId) in IndexedDB; Metadaten via "heftUpdated"-Event.
+// heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
+//
+// PERSISTENZ-UMBAU: Hefte hatten bisher einen EIGENEN Transportweg — ein Blob je
+// Heft in IndexedDB, als Datei nach Drive gespiegelt, im Log stand nur ein Zeiger
+// ("heftUpdated" + blobHash). Das war die Ursache für sämtliche Heft-Sync-Fehler:
+// zwei Transportwege mit getrennter Reihenfolge, ein Müllsammler, der raten musste,
+// welche Datei noch gebraucht wird, Zeiger die ins Leere liefen, und pro Heft nur
+// Last-Write-Wins — gleichzeitiges Zeichnen auf zwei Geräten konnte nur EINEN
+// Stand überleben lassen.
+//
+// Jetzt gilt für Hefte dasselbe wie für Seiten und Karten: der Inhalt IST das Log.
+// Jede Änderung wird als "heftOps"-Event gespeichert (Strich hinzu, Striche weg,
+// Seite hinzu, …), state.js spielt sie zu S.heftDocs ab. Hier drin wird auf dem
+// abgespielten Dokument gezeichnet und beim Speichern nur noch der Unterschied
+// zum zuletzt veröffentlichten Stand als Operationsliste abgeschickt.
+//
+// Folge: keine Heft-Dateien in Drive, kein Müllsammler, keine Hash-Abgleiche, keine
+// Konflikt-Kopien — und zwei Geräte, die gleichzeitig im selben Heft zeichnen,
+// führen ihre Striche automatisch zusammen.
+//
 // Scanner-Bildverarbeitung lebt in heft-scan.js (SCANCORE), Handschrift-OCR in handschrift.js.
 
 export const HEFT = (() => {
@@ -99,13 +117,100 @@ export const HEFT = (() => {
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
 
-	async function blobHash(buf) {
-		const bytes = new Uint8Array(buf);
-		const digest = await crypto.subtle.digest("SHA-256", bytes);
-		return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
+
+	// ---- Veröffentlichen: Unterschied zum letzten Stand als Operationsliste ----
+	// published[pageId] ist bewusst KEINE Kopie des Dokuments, sondern ein
+	// Schatten aus IDs und billigen Signaturen. Eine echte Kopie wäre bei Heften
+	// mit eingebetteten Bildern teuer — zum Erkennen von "neu / geändert / weg"
+	// reicht die Signatur völlig.
+	const published = {};
+	const opsSince = {};   // veröffentlichte Operationen seit der letzten Verdichtung
+	const lastSnap = {};   // Zeitpunkt der letzten Verdichtung je Heft
+	const SNAP_MIN_OPS = 300, SNAP_MIN_GAP = 5 * 60 * 1000;
+
+	function sig(o) {
+		if (Array.isArray(o.pts)) {
+			const a = o.pts[0] || [], b = o.pts[o.pts.length - 1] || [];
+			return o.pts.length + "|" + a[0] + "," + a[1] + "|" + b[0] + "," + b[1] + "|" + o.color + "|" + o.size + "|" + (o.shape ? JSON.stringify(o.shape) : "");
+		}
+		if (o.src) return o.x + "," + o.y + "," + o.w + "," + o.h + "|" + o.src.length; // Bild: Pixel ändern sich nie, nur Rahmen
+		return JSON.stringify(o);
 	}
-	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [], texts: [] });
-	const emptyDoc = () => ({ v: 1, rev: 1, pages: [newPage()] });
+	const sigMap = (list) => new Map((list || []).map((o) => [o.id, sig(o)]));
+	const shadowOf = (d) => ({
+		pages: (d.pages || []).map((pg) => ({
+			id: pg.id, paper: pg.paper, ocrText: pg.ocrText || "",
+			s: sigMap(pg.strokes), i: sigMap(pg.images), x: sigMap(pg.texts),
+		})),
+	});
+
+	function diffList(ops, pgId, kind, oldMap, arr) {
+		const gone = new Set(oldMap ? oldMap.keys() : []);
+		for (const o of arr || []) {
+			if (!o || !o.id) continue;
+			const was = oldMap ? oldMap.get(o.id) : undefined;
+			if (was === undefined) ops.push({ t: kind + "+", p: pgId, o });
+			else { gone.delete(o.id); if (was !== sig(o)) ops.push({ t: kind + "=", p: pgId, o }); }
+		}
+		if (gone.size) ops.push({ t: kind + "-", p: pgId, ids: [...gone] });
+	}
+
+	function diffDoc(prev, next) {
+		const ops = [];
+		const old = (prev && prev.pages) || [];
+		const oldById = new Map(old.map((pg) => [pg.id, pg]));
+		const nextIds = next.pages.map((pg) => pg.id);
+		const nextSet = new Set(nextIds);
+		for (const pg of old) if (!nextSet.has(pg.id)) ops.push({ t: "pg-", p: pg.id });
+		let added = false;
+		next.pages.forEach((pg, i) => {
+			if (oldById.has(pg.id)) return;
+			ops.push({ t: "pg+", at: i, page: { id: pg.id, paper: pg.paper } });
+			added = true;
+		});
+		// Reihenfolge nur mitschicken, wenn sie sich wirklich geändert hat.
+		const keptBefore = old.filter((pg) => nextSet.has(pg.id)).map((pg) => pg.id).join(",");
+		const keptAfter = nextIds.filter((id) => oldById.has(id)).join(",");
+		if (added || keptBefore !== keptAfter) ops.push({ t: "pgo", order: nextIds });
+		for (const pg of next.pages) {
+			const was = oldById.get(pg.id);
+			if (was && was.paper !== pg.paper) ops.push({ t: "pgp", p: pg.id, paper: pg.paper });
+			if ((was ? was.ocrText : "") !== (pg.ocrText || "")) ops.push({ t: "ocr", p: pg.id, text: pg.ocrText || "" });
+			diffList(ops, pg.id, "s", was && was.s, pg.strokes);
+			diffList(ops, pg.id, "i", was && was.i, pg.images);
+			diffList(ops, pg.id, "x", was && was.x, pg.texts);
+		}
+		return ops;
+	}
+
+	// Alt-Bestände (Blob je Heft bzw. localStorage-Ink) werden beim ersten Öffnen
+	// EINMAL in ein heftSnap-Event überführt. Danach lebt das Heft nur noch im Log.
+	function normalizeDoc(d) {
+		const withId = (o) => (o && o.id ? o : { ...o, id: U.uid() });
+		const pages = (d && Array.isArray(d.pages) ? d.pages : []).map((pg) => ({
+			id: pg.id || U.uid(),
+			paper: pg.paper || "lined",
+			strokes: (pg.strokes || []).map(withId),
+			images: (pg.images || []).map(withId),
+			texts: (pg.texts || []).map(withId),
+			ocrText: pg.ocrText || "",
+		}));
+		return pages.length ? { v: 2, rev: 0, pages } : null;
+	}
+	async function readLegacyDoc(p) {
+		try {
+			const rec = await DB.getBlob(KEY(p));
+			if (rec && rec.buf && rec.buf.byteLength) {
+				const parsed = JSON.parse(dec.decode(rec.buf));
+				const norm = normalizeDoc(parsed);
+				if (norm) return norm;
+			}
+		} catch (e) { console.warn("Heft: Alt-Blob lesen fehlgeschlagen", e); }
+		const legacy = takeLegacyInk(p);
+		if (legacy) return normalizeDoc({ pages: [{ paper: "lined", strokes: legacy }] });
+		return null;
+	}
 	const page = () => (doc ? doc.pages[idx] : null);
 	const imagesOf = (pg) => (pg.images || (pg.images = []));
 
@@ -135,65 +240,76 @@ export const HEFT = (() => {
 		} catch {  }
 	}
 
+	// Das Dokument kommt jetzt aus dem abgespielten Log. docs[p] IST S.heftDocs[p] —
+	// dieselbe Objektreferenz. Trifft während des Zeichnens ein Fremd-Event ein,
+	// fügt der Reducer die Striche direkt in die Arrays ein, auf denen hier gezeichnet
+	// wird. Der alte Cache-Invalidierungs-Tanz über meta.rev entfällt ersatzlos.
 	async function load(p) {
-		// Sync-Fix: docs[p] ist ein reiner In-Memory-Cache und wurde bisher NIE
-		// invalidiert, wenn ein anderes Gerät dasselbe Heft synchronisiert hat —
-		// reconcileHeftBlobs (drive.js) schreibt den neuen Blob nur in IndexedDB,
-		// nie in docs. S.heftMeta[p].rev wird dagegen bei JEDEM heftUpdated-Event
-		// aktuell gehalten, auch bei importierten Sync-Events (STATE.reduce in
-		// replayImported). Weicht rev ab, ist der Cache veraltet und wird verworfen —
-		// genau das verursachte den Bug "neue Heftseite kommt trotz Sync nicht an,
-		// erst nach App-Neustart".
-		const meta = S.heftMeta && S.heftMeta[p];
-		const stale = docs[p] && meta && meta.rev !== docs[p].rev;
-		if (docs[p] && !stale) return docs[p];
-		let d = null;
-		try {
-			const rec = await DB.getBlob(KEY(p));
-			if (rec && rec.buf && rec.buf.byteLength) {
-				const parsed = JSON.parse(dec.decode(rec.buf));
-				if (parsed && Array.isArray(parsed.pages) && parsed.pages.length) d = parsed;
-			}
-		} catch (e) { console.warn("Heft: Laden fehlgeschlagen", e); }
-		if (!d) d = emptyDoc();
-
-		d.pages.forEach((pg) => { if (!Array.isArray(pg.images)) pg.images = []; if (!Array.isArray(pg.texts)) pg.texts = []; });
-
-		const empty = d.pages.every((pg) => !(pg.strokes && pg.strokes.length));
-		if (empty) {
-			const legacy = takeLegacyInk(p);
-			if (legacy) {
-				d.pages[0].strokes = legacy;
-				d.pages[0].paper = d.pages[0].paper || "lined";
-				docs[p] = d;
-				try {
-					const bytes = enc.encode(JSON.stringify(d));
-					await DB.putBlob(KEY(p), bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { type: "application/json", kind: "heft", rev: d.rev || 1 });
-					await STATE.dispatch("heftUpdated", { pageId: p, rev: d.rev || 1, pages: d.pages.length, bytes: bytes.byteLength });
-				} catch (e) { console.warn("Heft: Legacy-Ink speichern fehlgeschlagen", e); }
-			}
-		} else {
-			try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
+		let d = S.heftDocs[p];
+		if (!d || !d.pages.length) {
+			const legacy = await readLegacyDoc(p);
+			if (legacy) await STATE.dispatch("heftSnap", { pageId: p, doc: legacy });
+			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
+			d = S.heftDocs[p];
+			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
+			if (legacy) DB.delBlob(KEY(p)).catch(() => {});
 		}
+		try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
 		docs[p] = d;
+		if (!published[p]) published[p] = shadowOf(d);
 		return d;
 	}
+
+	// Fremdänderungen sind eingetroffen (drive.js → STATE.emitRemoteApplied).
+	// Eigene noch nicht veröffentlichte Striche werden vorher rausgeschickt, damit
+	// der neue Schatten sie nicht fälschlich als "vom Nutzer gelöscht" liest.
+	async function onRemoteApplied() {
+		try { if (pid && doc) await saveNow(); } catch (e) { console.warn("Heft: Flush vor Import fehlgeschlagen", e); }
+		for (const key of Object.keys(published)) {
+			const d = S.heftDocs[key];
+			if (d) { published[key] = shadowOf(d); docs[key] = d; }
+			else delete published[key];
+		}
+		if (!pid || !host) return;
+		const d = S.heftDocs[pid];
+		if (!d || !d.pages.length) return;
+		dropThumbs(pid);
+		const structural = doc !== d || d.pages.length !== canvases.length;
+		doc = d; docs[pid] = d;
+		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
+		sel = null; lassoSel = null;
+		if (structural) rebuildScroll(); else renderVisiblePages();
+		updateChrome();
+	}
+	STATE.onRemoteApplied(onRemoteApplied);
 	function scheduleSave() { clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
 	const refresh = (i) => { scheduleSave(); redrawPage(i); renderThumb(i); updateChrome(); };
 
+	// Speichern = Unterschied ermitteln und als Operationsliste ins Log schicken.
+	// Kein Blob, kein Hash, keine Datei — der Sync trägt das Event wie jedes andere.
 	async function persistDoc(savePid, saveDoc) {
-		saveDoc.rev = (saveDoc.rev || 1) + 1;
-		const bytes = enc.encode(JSON.stringify(saveDoc));
-		const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-		const contentHash = await blobHash(buf);
+		const ops = diffDoc(published[savePid], saveDoc);
+		if (!ops.length) return;
+		published[savePid] = shadowOf(saveDoc);
 		dropThumbs(savePid);
-		await DB.putBlob(KEY(savePid), buf, { type: "application/json", kind: "heft", rev: saveDoc.rev, hash: contentHash });
-		await maybeSnapshot(savePid, buf, saveDoc.rev);
+		await STATE.dispatch("heftOps", { pageId: savePid, ops });
+		opsSince[savePid] = (opsSince[savePid] || 0) + ops.length;
+		await maybeCompact(savePid, saveDoc);
+		await maybeSnapshot(savePid, saveDoc);
+	}
 
-		const ocrText = saveDoc.pages
-			.map((pg) => [pg.ocrText || "", (pg.texts || []).map((t) => t.text).join("\n")].filter(Boolean).join("\n"))
-			.filter(Boolean).join("\n");
-		await STATE.dispatch("heftUpdated", { pageId: savePid, rev: saveDoc.rev, pages: saveDoc.pages.length, bytes: bytes.byteLength, ocrText, blobHash: contentHash });
+	// Verdichtung: nach vielen Operationen einmal den Gesamtstand als heftSnap
+	// schreiben. db.js darf alle älteren heftOps desselben Hefts dann wegwerfen —
+	// so wächst das Log nicht mit jedem Strich für immer weiter.
+	async function maybeCompact(p, d) {
+		if ((opsSince[p] || 0) < SNAP_MIN_OPS) return;
+		if (Date.now() - (lastSnap[p] || 0) < SNAP_MIN_GAP) return;
+		opsSince[p] = 0;
+		lastSnap[p] = Date.now();
+		try {
+			await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: d.pages } });
+			published[p] = shadowOf(S.heftDocs[p] || d);
+		} catch (e) { console.warn("Heft: Verdichtung fehlgeschlagen", e); }
 	}
 	async function saveNow() {
 		clearTimeout(saveT);
@@ -225,16 +341,17 @@ export const HEFT = (() => {
 		for (const s of all) if (!keep.includes(s)) await DB.delBlob(s.key);
 		return keep;
 	}
+	const encodeDoc = (d) => { const b = enc.encode(JSON.stringify({ v: 2, pages: d.pages })); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
 	async function writeSnapshot(p, buf, rev) {
 		const t = Date.now();
 		await DB.putBlob(VER_PREFIX(p) + t + ":" + rev, buf, { type: "application/json", kind: "heftver" });
 		verLast[p] = t;
 	}
-	async function maybeSnapshot(p, buf, rev) {
+	async function maybeSnapshot(p, d) {
 		try {
 			if (!verLast[p]) { const s = await listSnapshots(p); verLast[p] = s.length ? s[0].t : 0; }
 			if (Date.now() - verLast[p] < VER_GAP) return; // gedrosselt: max. alle 10 Min.
-			await writeSnapshot(p, buf, rev);
+			await writeSnapshot(p, encodeDoc(d), (S.heftMeta[p] && S.heftMeta[p].rev) || 1);
 			await pruneSnapshots(p);
 		} catch (e) { console.warn("Heft: Verlauf-Snapshot fehlgeschlagen", e); }
 	}
@@ -243,13 +360,14 @@ export const HEFT = (() => {
 		if (!rec || !rec.buf) { if (U.toast) U.toast("Snapshot nicht mehr vorhanden", "error"); return; }
 		const cur = pid === p && doc ? doc : await load(p);
 		// Sicherheitsnetz: aktuellen Stand IMMER sichern — Wiederherstellen ist damit selbst umkehrbar.
-		const curBytes = enc.encode(JSON.stringify(cur));
-		await writeSnapshot(p, curBytes.buffer.slice(curBytes.byteOffset, curBytes.byteOffset + curBytes.byteLength), cur.rev || 1);
-		const d = JSON.parse(dec.decode(rec.buf));
-		d.pages.forEach((pg) => { if (!Array.isArray(pg.images)) pg.images = []; if (!Array.isArray(pg.texts)) pg.texts = []; });
-		d.rev = cur.rev || 1; // persistDoc zählt auf rev+1 hoch → Sync sieht den restaurierten Stand als neu
+		await writeSnapshot(p, encodeDoc(cur), (S.heftMeta[p] && S.heftMeta[p].rev) || 1);
+		const restored = normalizeDoc(JSON.parse(dec.decode(rec.buf)));
+		if (!restored) { if (U.toast) U.toast("Snapshot ist leer", "error"); return; }
+		// Wiederherstellen ist ein normales Event — es synchronisiert damit von allein.
+		await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: restored.pages } });
+		const d = S.heftDocs[p];
 		docs[p] = d;
-		await persistDoc(p, d);
+		published[p] = shadowOf(d);
 		if (pid === p) {
 			doc = d; idx = Math.min(idx, d.pages.length - 1); sel = null; lassoSel = null; undoStack = []; redoStack = [];
 			rebuildScroll(); updateChrome();
@@ -1283,9 +1401,11 @@ export const HEFT = (() => {
 			}
 		} else {
 
+			// Jeder Strich bekommt eine stabile ID — sie ist der Schlüssel dafür, dass
+			// zwei Geräte dieselben Striche als dieselben erkennen und nicht doppeln.
 			const stroke = drawing.snapped
-				? { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
-				: { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
+				? { id: U.uid(), tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
+				: { id: U.uid(), tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
 			pg.strokes.push(stroke);
 			pushUndo({ kind: "add", stroke, pageIdx: pi });
 			scheduleSave();
@@ -1665,6 +1785,7 @@ export const HEFT = (() => {
 
 		const copies = lassoSel.strokes.map((s) => {
 			const c = JSON.parse(JSON.stringify(s));
+			c.id = U.uid(); // Kopie ist ein eigener Strich, nicht derselbe an neuer Stelle
 			translateStroke(c, 28, 28);
 			return c;
 		});
