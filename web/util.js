@@ -552,6 +552,17 @@ export const U = {
 		r.readAsArrayBuffer(f);
 	}),
 
+	// Bild-Dateiauswahl-Dialog (Cover-Upload kam vorher zweimal fast wortgleich vor:
+	// app.js fürs Editor-Cover, library.js fürs Bibliotheks-Cover). Liefert die
+	// gewählte Datei oder null, wenn der Dialog ohne Auswahl geschlossen wird.
+	pickImageFile: () => new Promise((resolve) => {
+		const inp = document.createElement("input");
+		inp.type = "file";
+		inp.accept = "image/*";
+		inp.onchange = () => resolve((inp.files && inp.files[0]) || null);
+		inp.click();
+	}),
+
 	// ArrayBuffer ⇄ Base64 (für Export/Import der PDFs)
 	bufToB64(buf) {
 		const bytes = new Uint8Array(buf);

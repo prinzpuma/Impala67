@@ -1383,23 +1383,18 @@ function wireEvents() {
 			case "btnCoverUpload": {
 				const pid = S.currentPageId;
 				if (!pid) break;
-				const inp = document.createElement("input");
-				inp.type = "file";
-				inp.accept = "image/*";
-				inp.onchange = async () => {
-					const file = inp.files && inp.files[0];
-					if (!file) return;
-					try {
-						const buf = await U.readAsBuffer(file);
-						const blobId = "cover:" + U.uid();
-						await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
-						await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
-						closeOverlay();
-					} catch (err) {
-						alert("Bild konnte nicht als Cover gesetzt werden: " + err.message);
-					}
-				};
-				inp.click();
+				// U.pickImageFile: gemeinsamer Datei-Dialog (siehe auch library.js).
+				const file = await U.pickImageFile();
+				if (!file) break;
+				try {
+					const buf = await U.readAsBuffer(file);
+					const blobId = "cover:" + U.uid();
+					await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
+					await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
+					closeOverlay();
+				} catch (err) {
+					alert("Bild konnte nicht als Cover gesetzt werden: " + err.message);
+				}
 				break;
 			}
 			case "btnClearBg":

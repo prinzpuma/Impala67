@@ -17,36 +17,17 @@ const renderPendingChip = (...args) => RENDER.renderPendingChip(...args);
 const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
 const openPage = (...args) => TABS.openPage(...args);
 
-function saveChat(messages, idKey) {
-	if (!messages.length) return;
-	const list = CHATS.load();
-	let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
-	if (!s) {
-		s = { id: U.uid(), title: "", created: U.now(), messages: [] };
-		S[idKey] = s.id;
-		list.unshift(s);
-	}
-	// FIX: "updated" nur bei ECHTER Änderung anfassen. Vorher bumpte jeder
-	// Chat-Wechsel den Zeitstempel des alten Chats — die nach "updated" sortierte
-	// Chat-Liste ordnete sich direkt unter dem Klick um und der Wechsel wirkte kaputt.
-	const changed = JSON.stringify(s.messages) !== JSON.stringify(messages);
-	s.messages = messages;
-	if (changed || !s.updated) s.updated = U.now();
-	if (!s.title) {
-		const first = messages.find((m) => m.role === "user");
-		s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
-	}
-	CHATS.save(list);
-}
+// Gemeinsame Speicherlogik (Sitzung finden/anlegen, Titel, "updated"-Fix) lebt jetzt in
+// CHATS.persist — geteilt mit ai.js/persistChat (Seitenpanel-Chat).
 
 export function saveCurrentChat() {
-	saveChat(S.chat, "currentChatId");
+	CHATS.persist(S.chat, "currentChatId");
 }
 
 // Der kleine Seitenchat wird nach jeder Antwort als eigener Eintrag gesichert und
 // erscheint dadurch automatisch links in der Chat-Liste.
 export function saveSideChat() {
-	saveChat(S.sideChat, "sideChatId");
+	CHATS.persist(S.sideChat, "sideChatId");
 }
 
 // Der frühere Vollbildmodus (body.chat-full / toggleChatFull) ist entfernt:

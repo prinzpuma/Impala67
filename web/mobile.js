@@ -134,20 +134,30 @@ export const MOBILE = (() => {
 
 	// Wisch-zurück-Geste (zusätzlich zur nativen Android-Geste, hilft z.B. auf iOS):
 	// ändert nur Klassen — syncHistory() in updateUI() hält den History-Stack konsistent.
+	// 🐛 Fix (25. Juli): Die Geste war viel zu empfindlich — 60px Weg und eine sehr
+	// großzügige Diagonal-Toleranz (|dy| < 0,7·|dx|) reichten, egal wo auf dem Schirm
+	// und egal wie langsam. Beim Lernen führte deshalb schon ein leichtes Wischen über
+	// die Karte zurück zur Stapelliste — die Karteikarte „verschwand“ mitten im Lernen.
+	// Jetzt: mindestens 120px, klar waagerecht (|dy| ≤ 60px UND dx > 2,5·|dy|), zügig
+	// (< 600ms), nur Einfinger-Gesten — und im Lernmodus gar kein Wisch-Ausstieg mehr.
 	function initSwipe() {
-		let x0 = 0, y0 = 0;
+		let x0 = 0, y0 = 0, t0 = 0, multi = false;
 		body.addEventListener("touchstart", (e) => {
+			multi = e.touches.length > 1;
 			x0 = e.touches[0].clientX;
 			y0 = e.touches[0].clientY;
+			t0 = e.timeStamp;
 		}, { passive: true });
 		body.addEventListener("touchend", (e) => {
+			if (multi) return; // Zoom-/Zweifinger-Geste ist kein Zurück-Wisch
 			const dx = e.changedTouches[0].clientX - x0;
 			const dy = e.changedTouches[0].clientY - y0;
-			if (dx < 60 || Math.abs(dy) > Math.abs(dx) * 0.7) return; // zu kurz oder zu diagonal
+			const dt = e.timeStamp - t0;
+			if (dx < 120 || Math.abs(dy) > 60 || dx < Math.abs(dy) * 2.5 || dt > 600) return; // zu kurz, zu diagonal oder zu langsam
 			if (body.classList.contains("mmore-open"))  { body.classList.remove("mmore-open");  body.classList.add("panel-collapsed"); updateUI(); return; }
 			if (body.classList.contains("mnav-open"))   { body.classList.remove("mnav-open");   body.classList.add("panel-collapsed"); updateUI(); return; }
 			if (!body.classList.contains("panel-collapsed")) { body.classList.add("panel-collapsed"); updateUI(); return; }
-			if (body.classList.contains("m-study")) { document.querySelector('[data-ankitab="decks"]')?.click(); updateUI(); return; }
+			if (body.classList.contains("m-study")) return; // Lernen wird NICHT weggewischt — Ausstieg nur über die Fußleiste/Zurück-Taste
 			if (x0 < 44) window.history.back(); // linker Rand ohne offenes Sheet: App-History
 		}, { passive: true });
 	}

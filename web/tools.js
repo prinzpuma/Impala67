@@ -148,6 +148,11 @@ export const TOOLS = (() => {
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["text"]),
 		t("list_due_cards", "Listet aktuell fällige Karteikarten.", {}, []),
+		t("list_flashcards", "Listet vorhandene Karteikarten MIT Vorder- UND Rückseite auf (optional gefiltert nach Stapel und/oder Suchtext) — nützlich um Karten zu einem Thema durchzusehen, Duplikate zu erkennen oder bestehende Karten zu überarbeiten. Anders als list_due_cards NICHT auf fällige Karten beschränkt.", {
+			deck: { type: "string", description: "Nur Karten aus diesem Stapel (inkl. Unterstapel), optional" },
+			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (Groß-/Kleinschreibung egal), optional" },
+			limit: { type: "number", description: "Max. Anzahl Karten (Standard 30, max. 100)" },
+		}, []),
 		t("send_to_notebooklm", "Bereitet Notiz-Seiten als Quelle für Gemini Notebook (ehemals NotebookLM) vor: kopiert ihre Inhalte in die Zwischenablage und öffnet Gemini Notebook — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
 			page_titles: { type: "array", items: { type: "string" }, description: "Titel der Seiten (leer = aktuelle Seite)" },
 		}, []),
@@ -404,6 +409,26 @@ export const TOOLS = (() => {
 				return {
 					due: STATE.dueCards().slice(0, 20).map((c) => ({ front: c.front, due: c.srs.due })),
 				};
+			case "list_flashcards": {
+				let pool = STATE.activeCards();
+				if (a.deck) {
+					const match = resolveDeckName(a.deck);
+					if (!match) return { error: "Stapel nicht gefunden: " + a.deck };
+					pool = pool.filter((c) => {
+						const d = c.deck || "Standard";
+						return d === match || d.startsWith(match + "::");
+					});
+				}
+				if (a.query) {
+					const q = String(a.query).trim().toLowerCase();
+					if (q) pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
+				}
+				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
+				return {
+					cards: pool.slice(0, limit).map((c) => ({ front: c.front, back: c.back, deck: c.deck || "Standard" })),
+					totalMatches: pool.length,
+				};
+			}
 			case "send_to_notebooklm":
 				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook
 				return await NLM.sendPages(a.page_titles || []);

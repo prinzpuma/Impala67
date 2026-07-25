@@ -2172,3 +2172,56 @@ body.anki-zen:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) 34
 body.anki-zen.panel-collapsed:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) }
 body.anki-zen.density-compact:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) 320px }
 body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) }
+
+/* == 🐛 iPad-Fix-Runde (25. Juli): Karteikarten-Anzeige & Touch-Feinschliff == */
+/* Ausgangslage: iPads laufen seit dem 24.-Juli-Fix in mobile.js wieder in der
+   Desktop-Ansicht — die Lern-Bühne rechnete ihre Breite aber weiterhin gegen den
+   VIEWPORT (100vw), obwohl links die Seitenleiste (260px) und rechts das KI-Panel
+   (340px) stehen. Auf dem iPad war die Karte dadurch breiter als ihre Spalte und
+   wurde rechts abgeschnitten. Dazu vier Folgefehler: vh statt dvh (Safari-Leisten),
+   vier Bewertungsknöpfe in einer schmalen Spalte, kein Scrollen bei langen
+   Rückseiten und klebendes Hover nach dem Antippen. Alles rein additiv — die Regeln
+   stehen am Dateiende und überschreiben nur die genannten Eigenschaften. */
+/* [1] Die Bühne richtet sich nach ihrer SPALTE statt nach dem Viewport. */
+.anki-study-mode .study-card { width: min(820px, 100%); min-height: min(62dvh, 620px) }
+/* [2] Lange Rückseiten scrollen INNERHALB der Karte, statt aus ihr herauszulaufen
+   (flex:1 + min-height:0 macht das Scrollen im Flex-Container erst möglich). */
+.anki-study-mode .card-face { min-height: 0; overflow-y: auto; overscroll-behavior: contain }
+/* [3] Bewertung bricht nach dem PLATZ IN DER SPALTE um statt erst bei 560px
+   Viewport-Breite: breite Spalte = 4 nebeneinander, schmale iPad-Spalte = 2×2. */
+.anki-study-mode .grades { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)) }
+/* [4] Gestapeltes Layout (iPad-Hochformat ≤980px): 100vh zählt unter iPadOS die
+   ein- und ausfahrenden Safari-Leisten mit — die Bewertungsleiste rutschte unter
+   den Bildschirmrand. dvh wie überall sonst in dieser Datei. */
+@media (max-width: 980px) {
+	#app { min-height: 100dvh }
+}
+@media (max-width: 560px) {
+	.anki-study-mode .study-card { width: 100%; min-height: 58dvh }
+}
+/* [5] Touch kennt kein echtes Hover: nach dem Antippen blieben Stapel-Zeilen und
+   Bibliotheks-Karten dauerhaft angehoben stehen. */
+@media (hover: none) {
+	.lib-card:hover, .deck-row:hover { transform: none }
+}
+/* [6] Karten-Browser-Liste: dvh statt vh (gleicher Safari-Leisten-Grund wie [4]). */
+.cards-list { max-height: 55dvh }
+
+/* == 📐 Platznutzung auf Touch-Geräten (25. Juli, iPad) == */
+/* Um die Lern-Bühne blieb auf dem iPad viel Luft: 24px Außenabstand oben, nur 62dvh
+   Mindesthöhe und ein Innenpolster, das an der VIEWPORT-Breite hing (clamp(…, 4vw, 44px))
+   — in der schmalen Mittelspalte also unnötig groß. Greift nur auf Touch-Geräten ab
+   Tablet-Breite, die Maus-/Desktop-Darstellung bleibt exakt wie sie war. */
+@media (pointer: coarse) and (min-width: 701px) {
+	.library.anki, body.density-compact .library.anki { padding: 14px 16px 88px }
+	.anki-study-mode .study-card {
+		margin: 10px auto 0;
+		min-height: min(80dvh, 900px);
+		padding: clamp(16px, 2vw, 32px);
+		border-radius: 16px;
+	}
+	/* Etwas flachere Bewertungsknöpfe — der gewonnene Platz geht an den Karteninhalt. */
+	.anki-study-mode .grades button { min-height: 58px }
+	.anki-toolbar { margin-bottom: 10px; padding: 10px }
+	.kpi-row { margin: 6px 0 12px }
+}

@@ -539,26 +539,21 @@ document.addEventListener("click", async (e) => {
 	if ((el = hit("#btnLibCoverUpload"))) {
 		const pid = S.libCoverPageId;
 		if (!pid) return;
-		const inp = document.createElement("input");
-		inp.type = "file";
-		inp.accept = "image/*";
-		inp.onchange = async () => {
-			const file = inp.files && inp.files[0];
-			if (!file) return;
-			try {
-				const buf = await U.readAsBuffer(file);
-				const blobId = "cover:" + U.uid();
-				await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
-				await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
-				S.libCoverPageId = null;
-				const o = U.el("overlay");
-				if (o) { o.hidden = true; o.innerHTML = ""; }
-				if (S.view === "library") renderMain();
-			} catch (err) {
-				alert("Bild konnte nicht als Cover gesetzt werden: " + (err && err.message ? err.message : err));
-			}
-		};
-		inp.click();
+		// U.pickImageFile: gemeinsamer Datei-Dialog (siehe auch app.js).
+		const file = await U.pickImageFile();
+		if (!file) return;
+		try {
+			const buf = await U.readAsBuffer(file);
+			const blobId = "cover:" + U.uid();
+			await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
+			await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
+			S.libCoverPageId = null;
+			const o = U.el("overlay");
+			if (o) { o.hidden = true; o.innerHTML = ""; }
+			if (S.view === "library") renderMain();
+		} catch (err) {
+			alert("Bild konnte nicht als Cover gesetzt werden: " + (err && err.message ? err.message : err));
+		}
 		return;
 	}
 	if ((el = hit("[data-libnewheft]"))) {

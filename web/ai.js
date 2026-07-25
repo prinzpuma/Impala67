@@ -496,25 +496,12 @@ export const AI = (() => {
 		return lines.join("\n");
 	}
 
-	// ---- Chat-Persistenz (kein APP-Import — wäre zyklisch: chat-fullscreen → ai → …) ----
+	// ---- Chat-Persistenz (kein APP-Import — wäre zyklisch: chat-fullscreen → ai → …). Die eigentliche
+	// Logik (Sitzung finden/anlegen, speichern) steckt gemeinsam mit chat-fullscreen.js in CHATS.persist. ----
 	function persistChat(type) {
 		const messages = type === "side" ? S.sideChat : S.chat;
 		const idKey = type === "side" ? "sideChatId" : "currentChatId";
-		if (!messages.length) return;
-		const list = CHATS.load();
-		let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
-		if (!s) {
-			s = { id: U.uid(), title: "", created: U.now(), messages: [] };
-			S[idKey] = s.id;
-			list.unshift(s);
-		}
-		s.messages = messages;
-		s.updated = U.now();
-		if (!s.title) {
-			const first = messages.find((m) => m.role === "user");
-			s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
-		}
-		CHATS.save(list);
+		CHATS.persist(messages, idKey);
 	}
 
 	// ---- Lösch-Tools: EINE Bestätigungs-Pipeline. resolve() → Fehler ODER {detail,question,runArgs,cancelled} ----

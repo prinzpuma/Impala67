@@ -493,3 +493,33 @@ body.mobile-ui #mNav { transition: transform .18s var(--ease-out) }
 	body.mobile-ui #sidebar { transition: none }
 	body.mobile-ui #mMoreSheet { transition: none }
 }
+
+/* ============================================================
+   📐 Platz-Runde (25. Juli) — Handy nutzt den Schirm wirklich aus
+   ============================================================ */
+/* Im Lernmodus sind Kopfzeile (#mTop, display:none) und Bottom-Nav (#mNav,
+   ausgefahren) unsichtbar — #app reservierte ihren Platz (--m-top + --m-bot,
+   zusammen ~120px) aber weiter als Polster. Die Karte bekam dadurch nur rund
+   zwei Drittel der Höhe. Jetzt bleiben nur die Safe-Areas stehen. */
+body.mobile-ui.m-study #app {
+	padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important;
+}
+body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px !important }
+body.mobile-ui .anki-study-mode {
+	padding: 0 10px 10px;
+	min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+/* Mehr Karte, weniger Rand: Text skaliert mit der Gerätebreite. */
+body.mobile-ui .study-card { gap: 6px }
+body.mobile-ui .study-card .card-face {
+	padding: 16px 8px;
+	font-size: clamp(18px, 5vw, 25px);
+}
+body.mobile-ui .grades { gap: 8px; margin-top: 6px }
+body.mobile-ui .grades [data-ankigrade] { min-height: 60px }
+body.mobile-ui .modal-actions [data-ankishowback] { margin: 8px 0 }
+body.mobile-ui .study-footer { padding-top: 6px }
+/* Stapel-/Browser-Ansicht: schmalere Außenränder = spürbar breitere Zeilen. */
+body.mobile-ui .library.anki { padding: 10px 10px 20px !important }
+body.mobile-ui .anki-hero { margin-bottom: 12px; padding: 14px }
+body.mobile-ui .deck-row { padding: 13px 12px; margin-bottom: 7px }

@@ -1,6 +1,7 @@
 "use strict";
 
 import { S, STATE } from "./state.js";
+import { U } from "./util.js";
 
 // chats.js — Chat-Sitzungen: localStorage als schneller Cache, Event-Log (chatUpsert/chatDelete
 // via STATE.dispatch) als synchende Wahrheit. Rewrite (20. Juli 2026): KISS/DRY, API unverändert.
@@ -99,5 +100,30 @@ export const CHATS = {
 			const cur = S.chatSessions?.[s.id];
 			if (!cur || cur.deleted || String(s.updated) > String(cur.updated || "")) await STATE.dispatch("chatUpsert", s);
 		}
+	},
+
+	// Seitenpanel- und Vollbild-Chat riefen das bisher je einmal fast wortgleich selbst auf
+	// (ai.js/persistChat, chat-fullscreen.js/saveChat). Eine Stelle: Sitzung per idKey ("currentChatId"/
+	// "sideChatId") auf S finden oder anlegen, Nachrichten + Titel setzen, speichern.
+	persist(messages, idKey) {
+		if (!messages.length) return;
+		const list = this.load();
+		let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
+		if (!s) {
+			s = { id: U.uid(), title: "", created: U.now(), messages: [] };
+			S[idKey] = s.id;
+			list.unshift(s);
+		}
+		// "updated" nur bei ECHTER Änderung anfassen — sonst bumpt jeder Chat-Wechsel den
+		// Zeitstempel und die nach "updated" sortierte Chat-Liste ordnet sich beim bloßen
+		// Wechsel scheinbar grundlos um.
+		const changed = JSON.stringify(s.messages) !== JSON.stringify(messages);
+		s.messages = messages;
+		if (changed || !s.updated) s.updated = U.now();
+		if (!s.title) {
+			const first = messages.find((m) => m.role === "user");
+			s.title = first ? String(first.content).slice(0, 60) : "Neuer Chat";
+		}
+		this.save(list);
 	},
 };
