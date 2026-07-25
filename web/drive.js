@@ -46,11 +46,31 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 //      über den lokalen Event-Log — und schließt die Geister-Konflikt-Fehlerklasse
 //      strukturell: es gibt keinen zweiten Durchlauf mehr, der die Events des ersten für
 //      eigene ungesyncte Änderungen halten könnte.
+// v7 (25.7.2026), Heft-Blobs kamen nicht an:
+// [H1] Nachzügler-Deltas (Post-Upload-Sweep) brachten die heftUpdated-EVENTS mit, aber nie
+//      die zugehörigen Striche — der Blob-Abgleich war zu diesem Zeitpunkt längst gelaufen.
+//      Ergebnis: Sync meldet Erfolg, das Heft zeigt den alten Stand. Jetzt zweiter Durchgang.
+// [H2] Der Aufräumlauf löschte FREMDE Heft-Stände. syncRaw lädt erst den Blob und danach das
+//      Delta hoch; wer in genau diesem Fenster listet, sieht die neue Blob-Datei OHNE das
+//      zugehörige Event, hält sie für verwaist und löscht sie. Der vom Event referenzierte
+//      Hash war damit dauerhaft weg — die Zeichnung tauchte nirgends mehr auf, auch nach
+//      Neustart nicht. Jetzt: nur eigene/bekannte Hefte, Schonfrist, und Aufräumen erst NACH
+//      dem Delta-Upload.
+// [H3] Fehlende Blobs werden nicht mehr als „Synchronisiert“ verkauft, sondern gemeldet und
+//      mit wachsendem Abstand nachgeholt.
+// [H4] heftver:-Verlaufs-Snapshots (heft.js) wanderten entgegen ihrer Zusage nach Drive und
+//      auf alle anderen Geräte — sie sind ausdrücklich lokal gedacht.
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json", LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar
 	const SNAPSHOT_NAME = "impala67-snapshot-v2.json.gz";
 	const DELTA_PREFIX = "impala67-delta-v2-", BLOB_PREFIX = "impala67-blob-v2-";
+	// [H4] Der Heft-Verlauf (heft.js: "heftver:<pid>:<t>:<rev>", max. 20 Stück je Heft, 24 h)
+	// ist ausdrücklich gerätelokal — er erzeugt keine Events, ein anderes Gerät kann mit den
+	// Snapshots also gar nichts anfangen. Trotzdem lief er mit: die Upload-Schleife iteriert
+	// über ALLE Blob-Schlüssel. Pro Heft und Tag landeten so bis zu 20 Vollkopien in Drive,
+	// die jedes andere Gerät auch noch herunterlud und speicherte.
+	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:");
 	const LS = localStorage;
 	const lsJson = (k, fb) => { try { return JSON.parse(LS.getItem(k) ?? "null") ?? fb; } catch { return fb; } };
 	const DEVICE_ID = (() => {
@@ -406,7 +426,7 @@ export const DRIVE = (() => {
 			await DB.putBlob(key, U.b64ToBuf(payload.b64), payload.meta);
 			localBlobKeys.add(key);
 		}
-		if (pendingRemote) console.warn("[reconcileHeftBlobs] " + pendingRemote + " Heft-Blob(s) noch nicht in Drive — nächster Sync-Zyklus.");
+		if (pendingRemote) console.warn("[reconcileHeftBlobs] " + pendingRemote + " Heft-Blob(s) noch nicht in Drive — Nachlauf wird geplant.");
 		if (badHash) console.warn("[reconcileHeftBlobs] " + badHash + " Heft-Datei(en) ungültig (Hash stimmt nicht) — übersprungen.");
 		// [F2] Fürs Konflikt-Popup: wurde die Kopie gefüllt, und wie groß ist sie?
 		for (const c of heftConflicts) {
@@ -414,7 +434,9 @@ export const DRIVE = (() => {
 			if (head) { c.loserPages = head.payload.pages || 1; c.loserBytes = head.payload.bytes || 0; }
 			c.loserSaved = c.loserSaved || localBlobKeys.has("heft:" + c.conflictPageId);
 		}
-		return new Set(Object.values(heads).map((ev) => ev.payload.blobHash));
+		// [H3] Offene Punkte nach oben reichen statt nur in die Konsole zu schreiben: solange ein
+		// heftUpdated auf eine Datei zeigt, die (noch) nicht da ist, zeigt das Heft alte Striche.
+		return { hashes: new Set(Object.values(heads).map((ev) => ev.payload.blobHash)), pending: pendingRemote + badHash };
 	}
 
 	const loadKnownIds = (k) => new Set(lsJson(k, []));
@@ -488,11 +510,14 @@ export const DRIVE = (() => {
 		let cacheDirty = false;
 		const allEvs = await DB.allEvents(); // EIN Read für Heads + Legacy-Check
 		const localBlobKeys = new Set(await DB.allBlobKeys()); // EIN Read; wird unten mitgepflegt
-		const liveHeftHashes = await reconcileHeftBlobs(remoteBlobs, conflictDetails, allEvs, uploadHashCache, localBlobKeys);
+		const heftPass = await reconcileHeftBlobs(remoteBlobs, conflictDetails, allEvs, uploadHashCache, localBlobKeys);
+		const liveHeftHashes = heftPass.hashes;
+		let heftPending = heftPass.pending;
 		const legacyHefts = legacyHeftIds(allEvs);
 		// [G2] Vorfilter OHNE Download: appProperties.blobId steht in der Dateiliste. Fehlt er
 		// (Alt-Dateien vor v4), bleibt es beim alten Weg — laden und danach entscheiden.
 		const wantsBlob = (blobId) => {
+			if (LOCAL_ONLY_BLOB(blobId)) return false; // [H4] fremder Heft-Verlauf geht uns nichts an
 			if (localBlobKeys.has(blobId)) return false; // schon lokal
 			// Nicht-Hefte sind immutable; Alt-Hefte ohne Versionierung einmalig neuester Blob
 			// (der nächste Speichervorgang hasht sie und wechselt auf den strengen Pfad).
@@ -511,6 +536,7 @@ export const DRIVE = (() => {
 		const serializeBlob = (id, rec) => new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
 		const toUpload = [];
 		for (const id of localBlobKeys) {
+			if (LOCAL_ONLY_BLOB(id)) continue; // [H4] Heft-Verlauf bleibt auf diesem Gerät
 			const cached = uploadHashCache[id];
 			const isHeft = String(id).startsWith("heft:");
 			if (cached && remoteBlobHashes.has(cached.hash) && (!isHeft || liveHeftHashes.has(cached.contentHash))) continue;
@@ -538,12 +564,27 @@ export const DRIVE = (() => {
 		});
 		if (cacheDirty) LS.setItem("impala67_drive_upload_hashes", JSON.stringify(uploadHashCache));
 		LS.removeItem("impala67_drive_known_blobs"); // [G2] Altlast, wird nicht mehr geführt
-		// Nicht mehr referenzierte Heft-Versionen löschen. Datei-Liste stammt vom Sync-Start
-		// ⇒ parallel neu hochgeladene Dateien anderer Geräte sind nie betroffen.
-		await mapLimit(remoteBlobs.filter((f) => {
+		// [H2] Nicht mehr referenzierte Heft-Versionen löschen — aber nur solche, die dieses Gerät
+		// überhaupt beurteilen kann. Der alte Filter kannte ausschließlich die Heft-Köpfe im EIGENEN
+		// Event-Log. Ein Stand, dessen heftUpdated hier noch nicht angekommen war, sah damit aus wie
+		// eine verwaiste Datei — und wurde gelöscht. Das passierte zuverlässig, wenn zwei Geräte
+		// kurz nacheinander syncen: syncRaw lädt erst den Blob und erst danach das Delta hoch, wer
+		// in diesem Fenster listet, sieht genau eines von beidem. Der referenzierte Hash war danach
+		// dauerhaft weg, reconcileHeftBlobs lief für immer in „noch nicht in Drive“, und die frisch
+		// gezeichnete Seite tauchte auf keinem Gerät mehr auf — auch nach einem Neustart nicht.
+		// Drei Schutzregeln: (a) nur Hefte, zu denen wir einen Kopf kennen, (b) Schonfrist für
+		// frische Dateien, (c) gelöscht wird erst NACH dem Delta-Upload (weiter unten), damit unser
+		// eigener Kopf zu diesem Zeitpunkt in Drive liegt.
+		const GC_GRACE_MS = 3600000; // 1 h — deckt jedes realistische Blob/Delta-Fenster ab
+		const knownHeftPages = new Set(Object.keys(heftHeads(allEvs, true)).map((p) => "heft:" + p));
+		const staleHeftFiles = remoteBlobs.filter((f) => {
 			const ap = f.appProperties || {};
-			return ap.blobId?.startsWith("heft:") && ap.contentHash && !liveHeftHashes.has(ap.contentHash);
-		}), 6, (f) => del(f.id));
+			if (!ap.blobId?.startsWith("heft:") || !ap.contentHash) return false;
+			if (!knownHeftPages.has(ap.blobId)) return false;      // (a) Heft ist uns unbekannt
+			if (liveHeftHashes.has(ap.contentHash)) return false;  // aktueller Stand irgendeines Geräts
+			const age = Date.now() - Date.parse(f.modifiedTime || "");
+			return Number.isFinite(age) && age > GC_GRACE_MS;      // (b) Schonfrist
+		});
 
 		// Nur Events seit dem letzten Upload als Delta senden. Bewusst KEINE Redaction:
 		// state.js repliziert API-Keys übers Event-Log (appDataFolder = privater App-
@@ -562,6 +603,9 @@ export const DRIVE = (() => {
 			// Wasserstand auch vorrücken, wenn nur Remote-Echos lokale Sequenzen erhielten.
 			LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
 		}
+		// [H2] (c) Erst jetzt aufräumen: unser eigener Heft-Kopf liegt als Delta in Drive, andere
+		// Geräte können die verbleibenden Dateien also korrekt zuordnen.
+		if (staleHeftFiles.length) await mapLimit(staleHeftFiles, 6, (f) => del(f.id));
 
 		// Viele Deltas gelegentlich zu einem Snapshot kompaktieren. Gelöscht wird nur die
 		// zu Sync-Beginn gelistete (bereits gemergte) Menge — parallele Shards bleiben.
@@ -591,21 +635,39 @@ export const DRIVE = (() => {
 		if (lateDeltas.length) {
 			setStatus("syncing", lateDeltas.length + " nachträgliche(s) Änderungspaket(e) einlesen…");
 			const lateEvents = (await mapLimit(lateDeltas, 6, downloadPayload)).flatMap((p) => Array.isArray(p?.events) ? p.events : []);
-			if (lateEvents.length) await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} }));
+			if (lateEvents.length) {
+				await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} }));
+				// [H1] Genau hier fehlte der Heft-Inhalt. Die Nachzügler brachten das heftUpdated mit,
+				// der Blob-Abgleich war aber weiter oben schon gelaufen — die Striche wurden in diesem
+				// Sync nie geholt, und der Status meldete trotzdem „Synchronisiert“. Zweiter Durchgang
+				// mit der frischen Dateiliste; er ist idempotent (Hash-Vergleich) und meist ein No-op.
+				const lateBlobFiles = filesAfter.filter((f) => f.name.startsWith(BLOB_PREFIX))
+					.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
+				const pass2 = await reconcileHeftBlobs(lateBlobFiles, conflictDetails, await DB.allEvents(), uploadHashCache, localBlobKeys);
+				heftPending = pass2.pending;
+			}
 			lateDeltas.forEach((f) => knownDeltaIds.add(f.id));
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
 		replayImported(importedEvents);
 		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
-		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
-		return { imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, importedEvents };
+		// [H3] Ein unvollständiger Heft-Stand ist kein Erfolg. Sichtbar machen + gezielt nachfassen,
+		// statt still auf irgendeinen späteren Sync zu hoffen.
+		if (heftPending) {
+			setStatus("waiting", heftPending + (heftPending === 1 ? " Heft-Stand wird noch geholt" : " Heft-Stände werden noch geholt"));
+			scheduleHeftRetry();
+		} else {
+			heftRetries = 0;
+			setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
+		}
+		return { imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, importedEvents, heftPending };
 	}
 
 	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
 	// localStorage — zwei gleichzeitig syncende Tabs überschrieben sich sonst gegenseitig
 	// (syncInFlight wirkt nur im eigenen Tab). ifAvailable: der zweite Tab wartet nicht,
 	// sein nächster Auto-Sync holt alles nach. Ohne Locks-API: bisheriges Verhalten.
-	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], merged: 0, mergedDetails: [], importedEvents: [], skipped: "lock" };
+	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], merged: 0, mergedDetails: [], importedEvents: [], heftPending: 0, skipped: "lock" };
 	// Bug-4-Fix: kein ifAvailable — zweiter Tab wartet auf ersten, statt still übersprungen zu werden.
 	// Erst NACH dem ersten Sync lädt Tab 2 die frisch hochgeladenen Deltas und ist dann wirklich aktuell.
 	const withSyncLock = (fn) => navigator.locks?.request
@@ -665,6 +727,17 @@ export const DRIVE = (() => {
 			if (isEditing()) { autoTimer = setTimeout(() => scheduleAutoSync(reason), 5000); return; }
 			autoSync(reason);
 		}, AUTO_DELAY_MS);
+	}
+
+	// [H3] Ein heftUpdated kann Drive vor seinem Blob erreichen — das andere Gerät lädt erst den
+	// Blob und dann das Delta hoch, wer dazwischen liest, sieht nur eines von beidem. Früher blieb
+	// es bei einer Konsolenzeile und der Hoffnung auf den nächsten Sync (bei geschlossener App:
+	// nie). Jetzt wird mit wachsendem Abstand nachgefasst, bis die Striche da sind.
+	let heftRetryTimer = 0, heftRetries = 0;
+	function scheduleHeftRetry() {
+		if (heftRetries >= 5) { console.warn("[sync] Heft-Blob bleibt aus — Nachlauf aufgegeben, nächster regulärer Sync versucht es erneut."); return; }
+		clearTimeout(heftRetryTimer);
+		heftRetryTimer = setTimeout(() => autoSync("heft-nachlauf", true), 5000 * Math.pow(2, heftRetries++)); // 5 s → 80 s
 	}
 
 	function startAutoSync(onResult) {
