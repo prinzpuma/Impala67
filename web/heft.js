@@ -267,6 +267,7 @@ export const HEFT = (() => {
 		try { if (pid && doc) await saveNow(); } catch (e) { console.warn("Heft: Flush vor Import fehlgeschlagen", e); }
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
+			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
 			if (d) { published[key] = shadowOf(d); docs[key] = d; }
 			else delete published[key];
 		}
@@ -278,7 +279,17 @@ export const HEFT = (() => {
 		doc = d; docs[pid] = d;
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
 		sel = null; lassoSel = null;
-		if (structural) rebuildScroll(); else renderVisiblePages();
+		if (structural) rebuildScroll();
+		else {
+			// FIX (25. Juli, "Striche erscheinen erst nach dem Neuladen"): renderVisiblePages()
+			// zeichnet eine Seite nur dann neu, wenn sich die CANVAS-GRÖSSE geändert hat — das
+			// ist beim Scrollen und Zoomen richtig, nach einem Import aber genau falsch: die
+			// Größe bleibt gleich, der INHALT ist neu. Die fremden Striche standen dadurch zwar
+			// im Dokument, wurden aber nie auf den Bildschirm gebracht. Jetzt werden alle
+			// sichtbaren Seiten nach einem Import ausdrücklich neu gezeichnet.
+			renderVisiblePages(true);
+			visiblePageIndices().forEach(redrawPage);
+		}
 		updateChrome();
 	}
 	STATE.onRemoteApplied(onRemoteApplied);

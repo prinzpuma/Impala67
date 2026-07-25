@@ -49,6 +49,12 @@ const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 // app.js v2 — Init + Event-Verkabelung. KISS/DRY-Refactor, funktionsgleich.
 const $ = (id) => U.el(id);
 const esc = (s) => U.esc(s);
+// FIX (Absturz "e.target.closest is not a function"): e.target ist NICHT immer ein
+// Element. Bei Tastatur-, Fokus- und Drag-Ereignissen kann es das Dokument selbst
+// oder ein Textknoten sein — dort gibt es weder closest() noch dataset. Statt 20
+// Einzelabfragen gibt es genau zwei Helfer, die alle Delegations-Listener nutzen.
+const closestOf = (e, sel) => { const t = e && e.target; return t && t.nodeType === 1 && t.closest ? t.closest(sel) : null; };
+const dsOf = (e) => (e && e.target && e.target.dataset) || {};
 const blurActive = () => document.activeElement?.blur();
 const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
 const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); ti.select(); } };
@@ -336,7 +342,7 @@ function wireEvents() {
 	// reine UI-Navigation ohne dispatch rendert sofort.
 	// DB-Tabellen: Zellwert als normales pageUpdate (Verlauf/Diff/Sync greifen)
 	document.addEventListener("change", async (e) => {
-		const cell = e.target.closest(".db-cell");
+		const cell = closestOf(e, ".db-cell");
 		if (!cell) return;
 		const row = S.pages[cell.dataset.dbrow];
 		if (!row) return;
@@ -346,7 +352,7 @@ function wireEvents() {
 	});
 	// „＋ Neue Zeile“ in der Datenbank-Ansicht — wird beim nächsten Sync als echte Notion-Zeile angelegt
 	document.addEventListener("click", async (e) => {
-		const btn = e.target.closest("[data-dbnewrow]");
+		const btn = closestOf(e, "[data-dbnewrow]");
 		if (!btn) return;
 		const dbPg = S.pages[btn.dataset.dbnewrow];
 		if (!dbPg) return;
@@ -359,7 +365,7 @@ function wireEvents() {
 	// scrollt das Dokument an den Anfang. Interne Anker ohne echtes Ziel werden
 	// deshalb IMMER abgefangen, nicht nur bekannte Seiten-IDs.
 	document.addEventListener("click", (e) => {
-		const a = e.target.closest("a");
+		const a = closestOf(e, "a");
 		if (!a) return;
 		const href = a.getAttribute("href") || "";
 		const rawId = href.replace(/^(#|\/)/, "");
@@ -374,7 +380,7 @@ function wireEvents() {
 
 	// Home: Einzelklick = Dateibaum, Doppelklick = Home-Übersicht
 	document.addEventListener("dblclick", (e) => {
-		if (!e.target.closest || !e.target.closest("#btnHome")) return;
+		if (!closestOf(e, "#btnHome")) return;
 		e.preventDefault();
 		openHomeOverview();
 	});
@@ -393,7 +399,7 @@ function wireEvents() {
 	// fraßen den click (render.js patcht zusätzlich in-place, das hier ist das Netz)
 	document.addEventListener("pointerdown", (e) => {
 		if (e.button !== undefined && e.button !== 0) return;
-		const t = e.target.closest && e.target.closest("#btnThinkLive");
+		const t = closestOf(e, "#btnThinkLive");
 		if (!t) return;
 		e.preventDefault();
 		CHAT_FULLSCREEN.handleReasoningToggle(t);
@@ -418,7 +424,7 @@ function wireEvents() {
 
 	document.addEventListener("click", async (e) => {
 		// Stapel-⋯ ZUERST, sonst zerstört closeOutside das Menü im selben Klick
-		const deckMenuBtn = e.target.closest("[data-deckmenu]");
+		const deckMenuBtn = closestOf(e, "[data-deckmenu]");
 		if (deckMenuBtn) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -431,7 +437,7 @@ function wireEvents() {
 			renderSidebar(); // positioniert offenes Menü in render.js
 			return;
 		}
-		const deckAction = e.target.closest("[data-deckdel],[data-deckrename],[data-deckduplicate]");
+		const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate]");
 		if (deckAction) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -465,7 +471,7 @@ function wireEvents() {
 
 		// Topbar-Menüs (Teilen/⋯) VOR closeOutside; blurActive nötig, weil renderMain
 		// bei geschütztem Fokus (Editor/Titel) sonst nie neu zeichnet
-		const topMenuBtn = e.target.closest("[data-sharemenu],[data-morepagemenu]");
+		const topMenuBtn = closestOf(e, "[data-sharemenu],[data-morepagemenu]");
 		if (topMenuBtn) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -479,7 +485,7 @@ function wireEvents() {
 			return;
 		}
 
-		const t = e.target.closest(CLICKABLE);
+		const t = closestOf(e, CLICKABLE);
 		// Eine Außenklick-Logik für alle Popovers (Anhang, Modell, Seite, Stapel, Topbar).
 		const closedPopovers = POPOVERS.closeOutside(e.target);
 		if (closedPopovers.model) renderModelMenu();
@@ -945,7 +951,7 @@ function wireEvents() {
 		}
 
 		// ---------- Stapel-Baum: Stapel öffnen (nicht bei ⋯ / + / Menü) ----------
-		if (t.hasAttribute("data-deckopen") && !e.target.closest(".row-add, .page-menu, input, button")) {
+		if (t.hasAttribute("data-deckopen") && !closestOf(e, ".row-add, .page-menu, input, button")) {
 			S.ankiDeck = t.dataset.deckopen || null;
 			S.deckMenuOpenName = null;
 			if (S.ankiTab === "study") S.ankiTab = "decks";
@@ -1584,7 +1590,7 @@ function wireEvents() {
 	};
 	// mousedown auf Zeilen-Buttons: Drag der Eltern-Zeile unterbinden
 	document.addEventListener("mousedown", (e) => {
-		if (e.target.closest(".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
+		if (closestOf(e, ".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
 			e.stopPropagation();
 		}
 	}, true);
@@ -1592,14 +1598,14 @@ function wireEvents() {
 	// Stapel (Decks): unverändertes HTML5 Drag & Drop
 	let deckDragId = null, deckDropZone = null;
 	document.addEventListener("dragstart", (e) => {
-		if (e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) { e.preventDefault(); return; }
-		const deckRow = e.target.closest("[data-deck]");
+		if (closestOf(e, "button, input, a, .page-menu, .row-add, .row-chevron")) { e.preventDefault(); return; }
+		const deckRow = closestOf(e, "[data-deck]");
 		if (deckRow) { deckDragId = deckRow.dataset.deck; e.dataTransfer.effectAllowed = "move"; }
 	});
 	document.addEventListener("dragover", (e) => {
 		if (!deckDragId) return;
-		const deckRow = e.target.closest("[data-deck]");
-		if (!deckRow && !e.target.closest("#tree")) return;
+		const deckRow = closestOf(e, "[data-deck]");
+		if (!deckRow && !closestOf(e, "#tree")) return;
 		e.preventDefault();
 		deckDropZone = deckRow ? dropZoneFor(deckRow, e.clientY) : "into";
 		markDropZone(deckRow, deckDropZone);
@@ -1608,7 +1614,7 @@ function wireEvents() {
 	// Einsortieren VOR/NACH einem Stapel (Reihenfolge via deckReorder-Events, order in S.decks)
 	document.addEventListener("drop", async (e) => {
 		if (!deckDragId || deckDropZone === "into" || deckDropZone == null) return;
-		const deckRow = e.target.closest("[data-deck]");
+		const deckRow = closestOf(e, "[data-deck]");
 		if (!deckRow) return;
 		const zone = deckDropZone;
 		e.preventDefault();
@@ -1632,8 +1638,8 @@ function wireEvents() {
 	});
 	document.addEventListener("drop", async (e) => {
 		if (!deckDragId) return;
-		const deckRow = e.target.closest("[data-deck]");
-		const inTree = e.target.closest("#tree");
+		const deckRow = closestOf(e, "[data-deck]");
+		const inTree = closestOf(e, "#tree");
 		clearDropMarks();
 		if (!deckRow && !inTree) { deckDragId = null; return; }
 		e.preventDefault();
@@ -1681,6 +1687,10 @@ function wireEvents() {
 	}
 
 	const PAGE_DRAG_THRESHOLD = 6; // px, bevor aus einem Tipp ein Drag wird (KISS: eine Schwelle für Maus+Touch)
+	// iPad-Fix: Mit Finger war JEDER Wisch über einer Heft-Zeile sofort ein Drag —
+	// Scrollen der Seitenleiste verschob dadurch Hefte. Auf Touch gilt jetzt wie in
+	// Notion/GoodNotes: kurz halten, DANN ziehen. Wischt man vorher los, ist es Scrollen.
+	const TOUCH_HOLD_MS = 380;
 	let pageDrag = null; // { id, pointerId, startX, startY, dragging, row, ghost, target, zone }
 	function endPageDrag() {
 		if (!pageDrag) return;
@@ -1691,14 +1701,20 @@ function wireEvents() {
 	}
 	document.addEventListener("pointerdown", (e) => {
 		if (e.button !== undefined && e.button !== 0) return;
-		const row = e.target.closest("#tree .row[data-page]");
-		if (!row || e.target.closest("button, input, a, .page-menu, .row-add, .row-chevron")) return;
-		pageDrag = { id: row.dataset.page, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, row };
+		const row = closestOf(e, "#tree .row[data-page]");
+		if (!row || closestOf(e, "button, input, a, .page-menu, .row-add, .row-chevron")) return;
+		pageDrag = { id: row.dataset.page, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, row, touch: e.pointerType !== "mouse", downAt: Date.now() };
 	});
 	document.addEventListener("pointermove", (e) => {
 		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
 		if (!pageDrag.dragging) {
-			if (Math.hypot(e.clientX - pageDrag.startX, e.clientY - pageDrag.startY) < PAGE_DRAG_THRESHOLD) return;
+			const moved = Math.hypot(e.clientX - pageDrag.startX, e.clientY - pageDrag.startY);
+			if (pageDrag.touch && Date.now() - pageDrag.downAt < TOUCH_HOLD_MS) {
+				// Bewegung innerhalb der Haltezeit = Scrollwisch → Drag-Kandidat verwerfen
+				if (moved >= PAGE_DRAG_THRESHOLD) endPageDrag();
+				return;
+			}
+			if (moved < PAGE_DRAG_THRESHOLD) return;
 			// FIX (Absturz "pageDrag.ghost.style" von undefined, 22. Juli): Ghost ERST
 			// vollständig aufbauen und NUR bei Erfolg auf pageDrag schreiben — "dragging"
 			// zuletzt setzen. Vorher stand dragging=true schon fest, bevor das Ghost
@@ -1807,7 +1823,8 @@ function wireEvents() {
 		}
 	}
 	document.addEventListener("keydown", (e) => {
-		if (!e.target.dataset.renamename && !e.target.dataset.deckrenamename) return;
+		const ds = dsOf(e);
+		if (!ds.renamename && !ds.deckrenamename) return;
 		if (e.key === "Enter") { e.preventDefault(); commitRename(e.target); }
 		else if (e.key === "Escape") {
 			S.renamingPageId = null;
@@ -1816,7 +1833,8 @@ function wireEvents() {
 		}
 	});
 	document.addEventListener("focusout", (e) => {
-		if (e.target.dataset.renamename || e.target.dataset.deckrenamename) commitRename(e.target);
+		const ds = dsOf(e);
+		if (ds.renamename || ds.deckrenamename) commitRename(e.target);
 	});
 	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
 	const main = $("main");

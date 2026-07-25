@@ -396,6 +396,31 @@ export const DRIVE = (() => {
 	const loadKnownIds = (k) => new Set(lsJson(k, []));
 	const saveKnownIds = (k, set) => LS.setItem(k, JSON.stringify(boundedKnownIds([...set])));
 
+	// -- v8.1: Ballast gar nicht erst hochladen ------------------------------
+	// Drei Sorten Muell sind bisher durch die Leitung gewandert:
+	//  (a) reine Ansichts-Events (offene Tabs, aufgeklappte Baumzweige) - die
+	//      sind geraetespezifisch und auf dem anderen Geraet schlicht falsch.
+	//  (b) Telemetrie, die db.js lokal nach 90 Tagen sowieso wegwirft - sie
+	//      wurde hochgeladen, verteilt und sofort wieder verworfen.
+	//  (c) Heft-Striche, die im selben Paket schon von einem heftSnap
+	//      ueberholt wurden - der Snapshot enthaelt sie bereits.
+	const UPLOAD_SKIP_TYPES = new Set(["uiTabsSet", "uiTreeSet"]);
+	const TELE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+	const evTime = (ev) => (typeof ev.t === "number" ? ev.t : Date.parse(ev.t) || 0);
+	function pruneForUpload(events) {
+		const now = Date.now();
+		const snapSeq = new Map();
+		for (const ev of events) {
+			if (ev.type === "heftSnap" && ev.payload?.pageId) snapSeq.set(ev.payload.pageId, Math.max(snapSeq.get(ev.payload.pageId) || 0, ev.seq || 0));
+		}
+		return events.filter((ev) => {
+			if (UPLOAD_SKIP_TYPES.has(ev.type)) return false;
+			if (ev.type === "teleEvent" && now - evTime(ev) > TELE_MAX_AGE_MS) return false;
+			if (ev.type === "heftOps" && (snapSeq.get(ev.payload?.pageId) || 0) > (ev.seq || 0)) return false;
+			return true;
+		});
+	}
+
 	// Sync v4: gzip-Deltas + deduplizierte Blob-Dateien. Unveränderte Remote-Dateien
 	// werden anhand id/modifiedTime gar nicht erst geladen.
 	async function syncRaw(onStatus) {
@@ -517,7 +542,9 @@ export const DRIVE = (() => {
 		// Speicher im eigenen Konto); Redaction überschrieb Keys auf Zielgeräten mit "".
 		const localMaxSeq = await DB.maxSeq();
 		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
-			const events = await DB.eventsAfterSeq(uploadedSeq);
+			// uploaded_seq wandert trotzdem bis localMaxSeq weiter, damit
+			// aussortierte Events nicht beim naechsten Lauf wieder auftauchen.
+			const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
 			if (events.length) {
 				setStatus("syncing", "Änderungen hochladen…");
 				const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
@@ -599,8 +626,8 @@ export const DRIVE = (() => {
 	// ---------- Automatischer Drive-Sync ----------
 	// Nur nach erfolgter Anmeldung (nie Login-Popups aus Timern). Änderungen werden
 	// gebündelt; zusätzlich Start/Rückkehr/Intervall-Pulls in sichtbaren Sitzungen.
-	const AUTO_DELAY_MS = 3000, AUTO_INTERVAL_MS = 180000;
-	let autoTimer = 0, autoStarted = false, autoResultHandler = null;
+	const AUTO_DELAY_MS = 3000, AUTO_INTERVAL_MS = 180000, LIVE_INTERVAL_MS = 20000;
+	let autoTimer = 0, autoIntervalTimer = 0, autoStarted = false, autoResultHandler = null;
 	const autoEnabled = () => LS.getItem("impala67.driveAutoSync") !== "0";
 	const isEditing = () => {
 		const ae = document.activeElement;
@@ -654,7 +681,15 @@ export const DRIVE = (() => {
 			flushMode = true;
 			autoSync("close", true).finally(() => { flushMode = false; });
 		});
-		window.setInterval(() => { if (!document.hidden) autoSync("interval"); }, AUTO_INTERVAL_MS);
+		// Adaptiv: Ist gerade ein Heft offen, wird alle 20 s geschaut, sonst alle 3 min.
+		// So erscheinen fremde Striche fast live, ohne im Ruhezustand Traffic zu erzeugen.
+		const heftOpen = () => !!document.querySelector(".heft-chrome");
+		const tick = () => {
+			if (!document.hidden) autoSync("interval");
+			const next = !document.hidden && heftOpen() ? LIVE_INTERVAL_MS : AUTO_INTERVAL_MS;
+			autoIntervalTimer = window.setTimeout(tick, next);
+		};
+		autoIntervalTimer = window.setTimeout(tick, LIVE_INTERVAL_MS);
 		return autoSync("start");
 	}
 
