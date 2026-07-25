@@ -55,6 +55,109 @@ export const U = {
 		return U._escTest.test(s) ? s.replace(/[&<>"']/g, (c) => U._escMap[c]) : s;
 	},
 
+	// ---- morph(): DOM angleichen statt wegwerfen (Audit 25. Juli) ----
+	// PROBLEM: Die ganze App rendert mit `el.innerHTML = html`. Damit stirbt bei JEDEM
+	// Render alles, was im DOM lebt: Fokus, Cursor-Position, Scroll-Stand, offene
+	// <details>, laufende Videos, positionierte Menüs, gerenderte KaTeX-/hljs-Knoten,
+	// erzeugte Blob-URLs. render.js und editor.js retten das anschließend mit ~17
+	// Sonderfällen von Hand wieder ein (setHtmlIfChanged, isProtectedFocus,
+	// _mainRenderPending, keepPageScroll, CHATLOG_CACHE, scrollReserve, …).
+	//
+	// LÖSUNG: Was nicht ersetzt wird, muss auch nicht gerettet werden. morph() vergleicht
+	// das neue HTML kindweise mit dem bestehenden DOM und fasst nur an, was sich wirklich
+	// geändert hat. Kein Virtual DOM, keine Abhängigkeit, ~120 Zeilen.
+	//
+	// REGELN:
+	// - Gleicher Tag + gleiches data-key  → Knoten wiederverwenden, nur Attribute/Text angleichen.
+	// - Kein data-key                     → Position entscheidet (gleicher Tag = wiederverwenden).
+	// - Unterschiedlich                   → ersetzen (wie bisher).
+	// - data-owned="1"                    → Teilbaum gehört einem Modul (Heft-Canvas,
+	//                                       #blockEditor, <video>): NIE anfassen. Ersetzt
+	//                                       sechs Sonderfälle durch ein Attribut.
+	// - Fokussierte Eingabefelder behalten value/Cursor, solange der Knoten überlebt.
+	//
+	// Rückgabe: true, wenn irgendetwas geändert wurde (nützlich für Folgeschritte wie
+	// hydrate() oder POPOVERS.position).
+	// Attribute, die Module NACH dem Rendern selbst setzen (Hydrierung). Sie stehen nie
+	// im frisch erzeugten HTML — morph dürfte sie deshalb nicht als „entfernt“ behandeln,
+	// sonst liefe jede Hydrierung (Bild-Blob, KaTeX, Video) bei jedem Render erneut.
+	_morphKeepAttrs: new Set(["data-hydrated", "data-owned", "data-cover-hydrated", "data-mermaid-done", "src"]),
+	morph(el, html) {
+		if (!el) return false;
+		const tpl = document.createElement("template");
+		tpl.innerHTML = String(html ?? "");
+		return U._morphChildren(el, tpl.content);
+	},
+	_morphKey(node) {
+		return node.nodeType === 1 ? (node.getAttribute("data-key") || null) : null;
+	},
+	_morphChildren(oldParent, newParent) {
+		let changed = false;
+		// Index der vorhandenen Kinder mit data-key — erlaubt Umsortieren ohne Neubau.
+		const keyed = new Map();
+		for (const child of oldParent.childNodes) {
+			const k = U._morphKey(child);
+			if (k != null && !keyed.has(k)) keyed.set(k, child);
+		}
+		let cursor = oldParent.firstChild;
+		for (const wanted of [...newParent.childNodes]) {
+			const key = U._morphKey(wanted);
+			let match = null;
+			if (key != null && keyed.has(key)) {
+				const cand = keyed.get(key);
+				if (cand.nodeName === wanted.nodeName) match = cand;
+			} else if (cursor && cursor.nodeName === wanted.nodeName && U._morphKey(cursor) == null && key == null) {
+				match = cursor;
+			}
+			if (match) {
+				if (match !== cursor) { oldParent.insertBefore(match, cursor); changed = true; }
+				if (U._morphNode(match, wanted)) changed = true;
+				cursor = match.nextSibling;
+				if (key != null) keyed.delete(key);
+			} else {
+				oldParent.insertBefore(wanted, cursor);
+				changed = true;
+			}
+		}
+		// Übrig gebliebene alte Kinder entfernen.
+		while (cursor) {
+			const next = cursor.nextSibling;
+			cursor.remove();
+			changed = true;
+			cursor = next;
+		}
+		return changed;
+	},
+	_morphNode(oldNode, newNode) {
+		if (oldNode.nodeType === 3 || oldNode.nodeType === 8) {
+			if (oldNode.nodeValue !== newNode.nodeValue) { oldNode.nodeValue = newNode.nodeValue; return true; }
+			return false;
+		}
+		if (oldNode.nodeType !== 1) return false;
+		// Teilbaum gehört einem Modul — komplett in Ruhe lassen (Canvas, Editor, Video).
+		if (oldNode.dataset && oldNode.dataset.owned) return false;
+		let changed = false;
+		// Attribute angleichen
+		for (const a of [...newNode.attributes]) {
+			if (oldNode.getAttribute(a.name) !== a.value) { oldNode.setAttribute(a.name, a.value); changed = true; }
+		}
+		for (const a of [...oldNode.attributes]) {
+			if (newNode.hasAttribute(a.name) || U._morphKeepAttrs.has(a.name)) continue;
+			oldNode.removeAttribute(a.name);
+			changed = true;
+		}
+		// Formularzustand nicht über Attribute zerstören (der Nutzer tippt evtl. gerade).
+		if (oldNode === document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(oldNode.tagName)) return changed;
+		if (oldNode.tagName === "INPUT" && oldNode.value !== newNode.value) { oldNode.value = newNode.value; changed = true; }
+		// contenteditable-Inhalte gehören dem Editor, solange der Cursor drin steht.
+		if (oldNode.isContentEditable && oldNode.contains(document.activeElement)) return changed;
+		if (U._morphChildren(oldNode, newNode)) changed = true;
+		return changed;
+	},
+
+	// Bequemer Ersatz für `el.innerHTML = html` an allen Render-Stellen.
+	setHtml(el, html) { return U.morph(el, html); },
+
 	debounce(fn, ms) {
 		let timer;
 		return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };

@@ -73,24 +73,9 @@ export const PDFS = (() => {
 		return id;
 	}
 
-	// Objekt-URLs werden gecacht (für den Inline-Viewer im Hauptbereich)
-	const urlCache = {};
-	// Objekt-URLs beim Verlassen der Seite freigeben (Memory-Leak-Schutz)
-	window.addEventListener("pagehide", () => {
-		// Auch aus dem Cache entfernen — sonst liefert der Cache nach einer
-		// bfcache-Rückkehr tote (widerrufene) Objekt-URLs aus.
-		for (const k of Object.keys(urlCache)) {
-			URL.revokeObjectURL(urlCache[k]);
-			delete urlCache[k];
-		}
-	});
-	async function urlFor(pdfId) {
-		if (urlCache[pdfId]) return urlCache[pdfId];
-		const rec = await DB.getBlob(pdfId);
-		if (!rec) return null;
-		urlCache[pdfId] = URL.createObjectURL(new Blob([rec.buf], { type: "application/pdf" }));
-		return urlCache[pdfId];
-	}
+	// Ein Object-URL je PDF — Cache, Freigabe beim Löschen und der bfcache-Schutz
+	// (pagehide) liegen zentral in db.js.
+	const urlFor = (pdfId) => DB.blobUrl(pdfId, "application/pdf");
 
 	async function openViewer(pdfId) {
 		const url = await urlFor(pdfId);

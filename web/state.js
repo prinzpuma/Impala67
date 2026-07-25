@@ -115,6 +115,12 @@ export const S = {
 	// Zusammenführung. Es gibt keine Heft-Dateien in Drive und keinen Müllsammler mehr.
 	heftDocs: {}, // pageId → { v:2, rev, pages: [{ id, paper, strokes, images, texts, ocrText }] }
 	heftMeta: {}, // pageId → { rev, pages, bytes, ocrText, updated } — aus heftDocs abgeleitet (Badges, Suche, Bibliothek)
+	// Bilder, Scans und PDF-Seiten liegen NICHT mehr im Heft-Dokument, sondern hier:
+	// hash → dataURL. Das Heft merkt sich nur noch { id, ref: hash, x, y, w, h }.
+	// Grund: ein Foto ist schnell 1–3 MB. Steckte es im Heft-Dokument, wanderte es bei
+	// JEDEM Verschieben, Skalieren und in JEDEM Snapshot komplett neu durchs Event-Log.
+	// Jetzt wird es genau EINMAL geschrieben (heftBlob) und danach nur noch referenziert.
+	heftBlobs: {}, // hash → dataURL (unveränderlich; identische Bilder teilen sich einen Eintrag)
 };
 
 export const STATE = (() => {
@@ -251,7 +257,7 @@ export const STATE = (() => {
 		let n = 0;
 		for (const pg of doc.pages) {
 			for (const s of pg.strokes) n += 40 + (s.pts ? s.pts.length * 14 : 60);
-			for (const im of pg.images) n += (im.src ? im.src.length : 0) + 60;
+			for (const im of pg.images) n += (im.ref ? (S.heftBlobs[im.ref] || "").length : (im.src ? im.src.length : 0)) + 60;
 			for (const tx of pg.texts) n += (tx.text ? tx.text.length : 0) + 60;
 		}
 		return n;
@@ -674,6 +680,13 @@ export const STATE = (() => {
 					})),
 				};
 				heftSyncMeta(p.pageId, ev.t);
+				break;
+			case "heftBlob":
+				// Unveränderliche Bilddaten, adressiert über ihren Inhalts-Hash. Kommt derselbe
+				// Hash zweimal an (zwei Geräte fügen dasselbe Bild ein), gewinnt einfach der
+				// erste — der Inhalt ist per Definition identisch. Kein Konflikt möglich.
+				if (!p.hash || !p.data || S.heftBlobs[p.hash]) break;
+				S.heftBlobs[p.hash] = p.data;
 				break;
 			case "chatUpsert": {
 				if (!p.id || !Array.isArray(p.messages)) break;

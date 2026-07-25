@@ -53,20 +53,13 @@ const ICONS = {
 const pageIconLabel = (pg, fb = "📝") => pg.icon || (pg.kind === "heft" ? "📓" : pg.pdfId ? "📄" : fb);
 const pageIconHtml = (pg, fb) => { const i = pageIconLabel(pg, fb); return i ? esc(i) + " " : ""; };
 
-// Fokus-Wächter: Re-Renders überspringen, solange der Nutzer tippt
-const inBlockEditor = (ae) => !!(ae && ((ae.classList && (ae.classList.contains("blk-input") || ae.classList.contains("blk-rich-edit"))) || (ae.isContentEditable && ae.closest && ae.closest(".block-editor"))));
-const isEditingBlock = () => inBlockEditor(document.activeElement);
-const PROTECTED_FOCUS_IDS = new Set(["pageTitle", "inpWsName", "inpNotionToken", "inpNotionPage", "libFilter", "ankiSearch"]);
-const isProtectedFocus = (ae) => !!ae && (PROTECTED_FOCUS_IDS.has(ae.id) || inBlockEditor(ae) || (ae.classList && ae.classList.contains("db-cell")));
-// Bug-Fix („kommt noch“, 23. Juli): von isProtectedFocus übersprungene Main-Renders
-// gingen bisher ERSATZLOS verloren — kam z. B. ein Drive-Sync an, während der Fokus
-// in einem geschützten Feld lag (Suche, Titel, Block-Editor, DB-Zelle), zeigte die
-// Hauptansicht (etwa die Stapelübersicht) bis zum Neuladen alte Daten. Der Sync-
-// Wächter in drive.js (isEditing) deckt nämlich nicht alle geschützten Felder ab.
-// Jetzt wird der übersprungene Render gemerkt und nachgeholt, sobald der Fokus das
-// Feld verlässt.
-let _mainRenderPending = false;
-document.addEventListener("focusout", () => { if (_mainRenderPending) scheduleRender(); });
+// v14 (25. Juli): inBlockEditor, isEditingBlock, isProtectedFocus, PROTECTED_FOCUS_IDS und der ganze
+// _mainRenderPending-Nachhol-Mechanismus sind ersatzlos entfallen. Sie existierten nur,
+// weil renderMain() den Hauptbereich per innerHTML komplett neu baute und dabei jeden
+// Cursor mitriss. Seit U.morph nur noch Unterschiede angleicht (und fokussierte
+// Eingabefelder sowie data-owned-Bereiche gar nicht anfasst), darf jederzeit gerendert
+// werden — auch mitten im Tippen. Damit ist auch der Folgefehler weg, dass per Sync
+// importierte Daten bis zum nächsten Fokuswechsel unsichtbar blieben.
 
 // render.js — UI-Aufbau im Notion-Stil: Sidebar, Tabs, Seitenkopf, Chat.
 function render() {
@@ -93,11 +86,13 @@ function scheduleRender() {
 }
 function onStateChange(type, ev) {
 	const p = ev?.payload || {};
-	// Reiner Content-Patch: Editor besitzt die Live-Ansicht. viaEditor = eigener
-	// Autosave (Fokus-Check würde nach dem async IndexedDB-Write fälschlich anschlagen
-	// und #main samt Scroll neu bauen). Extern geänderte offene Seite → nur Main.
+	// Reiner Content-Patch: Editor besitzt die Live-Ansicht.
 	if (type === "pageUpdate" && p.patch && Object.keys(p.patch).length === 1 && "content" in p.patch) {
-		if (p.viaEditor || isEditingBlock()) return;
+		// viaEditor = eigener Autosave: der Editor-DOM ist bereits aktuell, ein Render wäre
+		// reine Arbeit ohne Wirkung. Der frühere isEditingBlock()-Ausschluss ist entfallen —
+		// eine EXTERNE Änderung (Drive-Sync) darf jetzt auch sichtbar werden, während getippt
+		// wird, weil U.morph den Cursor nicht mehr zerstört.
+		if (p.viaEditor) return;
 		if (p.id === S.currentPageId && S.view === "page") renderMain();
 		return;
 	}
@@ -266,10 +261,15 @@ function wsHeadHtml(ws) {
 }
 
 // PERF: identisches Markup nicht erneut parsen/layouten — Stringvergleich ist
-// um Größenordnungen billiger als innerHTML
+// um Größenordnungen billiger als innerHTML.
+// v14 (25. Juli): Bei Unterschieden wird der Baum jetzt per U.morph ANGEGLICHEN
+// statt weggeworfen. Nur wirklich geänderte Knoten fassen wir an; alles andere
+// (Fokus, Scroll, offene Menüs, laufende Umbenennungen, positionierte Popover)
+// überlebt den Render von selbst. Die Zeilen tragen dafür data-key (s. rowHtml /
+// renderTabs), damit Umsortieren/Einfügen keinen Neubau auslöst.
 function setHtmlIfChanged(el, html, key = "_lastHtml") {
 	if (el[key] === html) return false;
-	el.innerHTML = html;
+	U.morph(el, html);
 	el[key] = html;
 	return true;
 }
@@ -316,7 +316,7 @@ function renderSidebar() {
 function chatListHtml() {
 	return '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>' +
 		CHATS.load().map((s) =>
-			`<div class="row${s.id === S.currentChatId ? " active" : ""}" data-chat="${s.id}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
+			`<div class="row${s.id === S.currentChatId ? " active" : ""}" data-key="chat:${s.id}" data-chat="${s.id}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
 			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button><button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button></div>`).join("");
 }
 
@@ -331,7 +331,9 @@ function rowHtml(pg, depth, wsId) {
 	// Bug-Fix („kommt noch“, 22. Juli): kein draggable="true" mehr — HTML5-DnD wird in
 	// Tauri abgefangen und startet auf iPad nur per Long-Press. Das Verschieben läuft
 	// jetzt über Pointer-Events in app.js (ein Code-Pfad für Maus, Touch und Tauri).
-	return `<div class="row${active}" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
+	// data-key = stabile Identität der Zeile für U.morph: dieselbe Seite behält beim
+	// Neu-Rendern ihren DOM-Knoten, auch wenn sie im Baum die Position wechselt.
+	return `<div class="row${active}" data-key="pg:${pg.id}" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
 		(hasKids ? `<button class="row-chevron${collapsed ? "" : " open"}" data-collapse="${pg.id}" title="Ein-/Ausklappen">▸</button>` : '<span class="row-chevron spacer"></span>') +
 		(S.renamingPageId === pg.id
 			? `<input class="row-rename-input" data-renamename="${esc(pg.id)}" value="${esc(pg.title)}" autocomplete="off">`
@@ -378,7 +380,7 @@ function renderTabs() {
 			title = pageIconHtml(pg) + esc(pg.title);
 		}
 		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (isAnki && S.view === "anki") || (!isChat && !isNlm && !isAnki && S.view === "page")) ? " active" : "";
-		return `<div class="tabchip${active}" data-tabopen="${id}"><span class="tabchip-title">${title}</span><button class="tabchip-x" data-tabclose="${id}" title="Schließen">✕</button></div>`;
+		return `<div class="tabchip${active}" data-key="tab:${id}" data-tabopen="${id}"><span class="tabchip-title">${title}</span><button class="tabchip-x" data-tabclose="${id}" title="Schließen">✕</button></div>`;
 	}).join("");
 	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
 	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">+</button></div>';
@@ -386,11 +388,6 @@ function renderTabs() {
 }
 
 function renderMain() {
-	// Nicht neu bauen, während der Nutzer tippt (Cursor bleibt erhalten) — aber als
-	// ausstehend merken und per focusout-Listener (oben) nachholen, damit z. B. per
-	// Sync importierte Daten ohne App-Neuladen sichtbar werden.
-	if (isProtectedFocus(document.activeElement)) { _mainRenderPending = true; return; }
-	_mainRenderPending = false;
 	const main = $("main");
 	if (!main) return;
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
@@ -405,22 +402,23 @@ function renderMain() {
 	// Renders Scroll/Zoom/Undo und die Ansicht springt auf eine andere Seite
 	if (pg.kind === "heft") {
 		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
-		main.innerHTML = `<div id="heftStage" class="heft-stage" aria-label="${esc(pg.title)}"></div>`;
+		// data-owned: der Canvas gehört HEFT — U.morph fasst diesen Teilbaum nie an.
+		main.innerHTML = `<div id="heftStage" class="heft-stage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
 		const stage = $("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
 		return;
 	}
 
 	// EINE durchgehend editierbare Ansicht (Block-Editor immer aktiv).
-	// Scroll-Position über Hintergrund-Renders retten (.page-scroll startete sonst bei 0)
-	const oldScroller = main.querySelector(".page-scroll");
-	const keepPageScroll = oldScroller && main.dataset.scrollPageId === pg.id ? oldScroller.scrollTop : 0;
-	main.dataset.scrollPageId = pg.id;
-	main.innerHTML =
-		'<div class="page-chrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
-		'<div class="page-scroll"><div class="page-meta">' +
+	// v14: angleichen statt neu bauen. Die frühere Scroll-Rettung über
+	// main.dataset.scrollPageId entfällt — .page-scroll wird gar nicht mehr ersetzt und
+	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
+	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
+	U.morph(main,
+		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
+		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
-				? `<div class="page-cover ${pg.coverImg ? "has-img" : "cover-" + pg.cover}"${pg.coverImg ? ` data-coverimg="${esc(pg.coverImg)}"` : ""}><div class="cover-btns"><button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button></div></div>`
+				? `<div class="page-cover ${pg.coverImg ? "has-img" : "cover-" + pg.cover}" data-key="cover:${esc(pg.coverImg || pg.cover || "")}"${pg.coverImg ? ` data-coverimg="${esc(pg.coverImg)}"` : ""}><div class="cover-btns"><button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button></div></div>`
 				: "") +
 			'<div class="page-heading">' +
 				`<button class="page-icon" data-iconpick="1" title="Icon ändern">${pageIconLabel(pg)}</button>` +
@@ -431,15 +429,15 @@ function renderMain() {
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.db ? dbTableHtml(pg) : "") +
-		'<div class="editor-wrap"><div id="blockEditor" class="block-editor"></div></div></div>' +
+		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
+		// U.morph lässt ihn unangetastet.
+		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>' +
 		// src="about:blank" verhindert Chromes "Unsafe attempt to load URL file://..."
-		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" src="about:blank" title="PDF"></iframe>' : "");
+		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" data-key="pdfframe" data-owned="1" src="about:blank" title="PDF"></iframe>' : ""));
 	hydrateCovers(main);
-	if (keepPageScroll) {
-		const sc = main.querySelector(".page-scroll");
-		if (sc) sc.scrollTop = keepPageScroll;
-	}
-	// Titelhöhe an den Inhalt koppeln (Listener gehört zur frischen Seite)
+	// Titelhöhe an den Inhalt koppeln. WICHTIG: Das <textarea> überlebt den Render jetzt —
+	// der Listener darf deshalb nur EINMAL pro Element hängen, sonst sammeln sich mit
+	// jedem Render weitere Kopien an.
 	const titleInput = $("pageTitle");
 	if (titleInput) {
 		const fitTitle = () => {
@@ -447,7 +445,10 @@ function renderMain() {
 			titleInput.style.height = Math.max(44, titleInput.scrollHeight) + "px";
 		};
 		fitTitle();
-		titleInput.addEventListener("input", fitTitle);
+		if (!titleInput._fitWired) {
+			titleInput._fitWired = true;
+			titleInput.addEventListener("input", fitTitle);
+		}
 	}
 	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
@@ -572,7 +573,6 @@ function legacyConflictItems() {
 // Popup zeigt IMMER beide Stände: Hefte als Blob-Vorschau der ersten Seite,
 // Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie
 const conflictPaneHead = (label, time) => `<header><b>${label}</b>${time ? `<small>${esc(fmtConflictTime(time))}</small>` : ""}</header>`;
-const conflictHeftPane = (side, label, time, blobKey, peerKey) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body conflict-heft-body"><canvas width="420" data-conflictheft="${esc(blobKey)}"${peerKey ? ` data-conflictheftpeer="${esc(peerKey)}"` : ""}></canvas><div class="conflict-heft-nav"><button class="conflict-heft-prev" data-conflictheftnav="-1" data-conflictheftkey="${esc(blobKey)}" disabled>‹</button><small class="conflict-heft-note"></small><button class="conflict-heft-next" data-conflictheftnav="1" data-conflictheftkey="${esc(blobKey)}" disabled>›</button></div></div></section>`;
 function buildSpecialComparisonHtml(c) {
 	const notePane = (side, label, time, note) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><div class="conflict-empty">${esc(note)}</div></div></section>`;
 	const textPane = (side, label, time, text) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
@@ -584,55 +584,23 @@ function buildSpecialComparisonHtml(c) {
 			textPane("remote", "Geretteter Stand (Konfliktkopie)", c.loserTime, c.loserContent || c.localContent || "") +
 			'</div><p class="conflict-key">Zu diesem älteren Konflikt ist nur noch die gerettete Kopie vorhanden — der Gegen-Stand lässt sich nicht mehr rekonstruieren. Prüfe den Text und entscheide, ob du ihn behältst.</p>';
 	}
-	if (c.conflictType === "heft") {
-		const winnerKey = "heft:" + c.pageId, loserKey = "heft:" + c.conflictPageId;
-		const localKey = c.winner === "local" ? winnerKey : loserKey, remoteKey = c.winner === "local" ? loserKey : winnerKey;
-		return '<div class="conflict-compare">' +
-			conflictHeftPane("local", "Dieses Gerät", c.localTime, localKey, remoteKey) +
-			conflictHeftPane("remote", "Drive / anderes Gerät", c.remoteTime, remoteKey, localKey) +
-			'</div><p class="conflict-key">Vorschau: die erste abweichende Heft-Seite. Der unterlegene Stand liegt zusätzlich als „⚠ Konflikt-Heft“ in der Bibliothek.</p>';
-	}
+	// v8 (25. Juli): Heft-Striche liegen als Ereignisse im Log, nicht mehr als
+	// binärer Blob. Zwei Geräte können dieselbe Heft-Seite deshalb gar nicht mehr
+	// überschreiben — es gibt keine Heft-Konfliktkopie und folglich auch keine
+	// Canvas-Gegenüberstellung mehr. Der ganze Zweig ist ersatzlos entfallen.
 	if (c.conflictType === "delete-change") {
-		const kept = c.loserHash
-			? conflictHeftPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, "heft:" + c.conflictPageId)
-			: textPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, ((S.pages[c.conflictPageId] || {}).content || ""));
+		const kept = textPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, ((S.pages[c.conflictPageId] || {}).content || ""));
 		return '<div class="conflict-compare">' +
 			notePane("local", "🗑 Gelöscht", c.deletedAt, "Die Seite wurde auf einem Gerät endgültig gelöscht. Beim Zusammenführen gewinnt das Löschen — der andere Stand wurde als Kopie gerettet (rechts).") +
 			kept + "</div>";
 	}
 	return '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
 }
-// Aktualisiert Seitenindex, Hinweistext und Vor/Zurück-Buttons am Heft-Canvas.
-function updateHeftNavControls(cv, note, pageIndex, pageCount, hasResult) {
-	if (note) {
-		note.textContent = !hasResult
-			? "Vorschau nicht möglich — dieser Stand liegt lokal nicht (mehr) vor."
-			: pageCount > 1 ? `Seite ${pageIndex + 1} von ${pageCount}` : "";
-	}
-	cv.dataset.conflictheftpageindex = String(pageIndex);
-	cv.dataset.conflictheftpagecount = String(pageCount);
-	const section = cv.closest(".conflict-pane");
-	if (!section) return;
-	const prev = section.querySelector("[data-conflictheftnav='-1']");
-	const next = section.querySelector("[data-conflictheftnav='1']");
-	if (prev) prev.disabled = !hasResult || pageIndex <= 0;
-	if (next) next.disabled = !hasResult || pageIndex >= pageCount - 1;
-}
-function fillConflictHeftPreviews(root) {
-	root.querySelectorAll("canvas[data-conflictheft]").forEach(async (cv) => {
-		const section = cv.closest(".conflict-pane");
-		const note = section?.querySelector(".conflict-heft-note");
-		const { conflictheft: key, conflictheftpeer: peerKey } = cv.dataset;
-		let result = null;
-		let pageIndex = 0;
-		try {
-			// Bug-2-Fix: findet die erste wirklich abweichende Seite; 0 wenn Blob noch fehlt
-			pageIndex = peerKey ? await HEFT.findDivergentPage(key, peerKey) : 0;
-			result = await HEFT.renderBlobPreview(key, cv, pageIndex);
-		} catch (e) { console.warn("Konflikt-Vorschau:", e); }
-		updateHeftNavControls(cv, note, result ? result.pageIndex : 0, result ? result.pageCount : 1, !!result);
-	});
-}
+// v8: Es gibt keine Heft-Konfliktkopien mehr (s. o.) — die Canvas-Vorschau samt
+// Seitenblätterung und der Umweg über HEFT.findDivergentPage/renderBlobPreview sind
+// entfallen. Der Aufruf bleibt als leerer Haken stehen, damit der Dialog-Ablauf
+// unverändert bleibt.
+function fillConflictHeftPreviews() { /* nichts mehr zu tun */ }
 // ---- Zeilenvergleich: erst zuschneiden, dann ausrichten -------------------------
 // U.diffLines steigt oberhalb von 400 Zeilen in einen groben Modus aus (die O(n*m)-Matrix
 // würde sonst explodieren). Genau bei langen Seiten verschwand deshalb bisher JEDE
@@ -980,7 +948,7 @@ function renderHome(main) {
 	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
 	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
 	const sectionsHtml = SETTINGS.homeLayout().filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
-	const homeHtml = '<div class="home home-v2 home-slim">' +
+	const homeHtml = '<div class="home home-v2 home-slim" data-key="home">' +
 		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
 			`<span class="home-chip">📄 <b>${pages.length}</b> Seiten</span><span class="home-chip">🃏 <b>${cardCount}</b> Karten</span><span class="home-chip">✦ <b>${chats.length}</b> Chats</span>` +
 			`<span class="home-chip${lz.goalPct < 100 ? " warn" : ""}">🎯 Wochenziel <b>${lz.goalPct} %</b></span>` +
@@ -988,9 +956,12 @@ function renderHome(main) {
 		conflictBanner +
 		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
 		sectionsHtml + "</div>";
-	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat
+	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
+	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
+	// dadurch von allein erhalten (der keepScroll-Notnagel unten greift nur noch,
+	// wenn der Bereich komplett neu entsteht).
 	if (main._lastHomeHtml === homeHtml && main.querySelector(".home")) return;
-	main.innerHTML = homeHtml;
+	U.morph(main, homeHtml);
 	main._lastHomeHtml = homeHtml;
 	if (keepScroll) {
 		main.scrollTop = keepScroll;
@@ -1028,29 +999,24 @@ function renderTrash(main) {
 	main.innerHTML = html + "</div></div>";
 }
 
-// Blob → Object-URL, einmal je Sitzung gecacht (Cover + Inline-Bilder)
-const COVER_URLS = {}, IMG_URLS = {};
-async function blobUrl(cache, id, fallbackType) {
-	if (cache[id]) return cache[id];
-	try {
-		const rec = await DB.getBlob(id);
-		if (!rec || !rec.buf || !rec.buf.byteLength) return null;
-		return (cache[id] = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || fallbackType })));
-	} catch (e) { console.warn("Blob konnte nicht geladen werden:", e); return null; }
-}
-
 // Cover/Bilder nach dem Rendern nachladen (innerHTML kann kein async)
+// Object-URLs kommen aus DB.blobUrl — ein Cache für die ganze App (siehe db.js).
 function hydrateCovers(root) {
 	(root || document).querySelectorAll("[data-coverimg]").forEach(async (el) => {
 		if (el.dataset.coverHydrated) return;
 		el.dataset.coverHydrated = "1";
-		const u = await blobUrl(COVER_URLS, el.dataset.coverimg, "image/jpeg");
+		// data-owned: das Hintergrundbild steckt in einem style-Attribut, das im erzeugten
+		// Markup nicht vorkommt — ohne diesen Schutz würde U.morph es beim nächsten Render
+		// wieder entfernen und das Cover wäre weiß. Ein ANDERES Cover hat ein anderes
+		// data-key und bekommt darum trotzdem ein frisches Element.
+		el.dataset.owned = "1";
+		const u = await DB.blobUrl(el.dataset.coverimg, "image/jpeg");
 		if (u) el.style.backgroundImage = `url('${u}')`;
 	});
 }
 function hydrateImages(root) {
 	(root || document).querySelectorAll('img[src^="img:"]').forEach(async (img) => {
-		const u = await blobUrl(IMG_URLS, img.getAttribute("src"), "image/png");
+		const u = await DB.blobUrl(img.getAttribute("src"), "image/png");
 		if (u) img.src = u;
 	});
 }

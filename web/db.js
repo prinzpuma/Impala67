@@ -26,8 +26,25 @@ import { U } from "./util.js";
 //   von selbst (Union, idempotent), es gibt keinen Gewinner und keine Verlierer-Kopie mehr.
 // • heftHeadsOf entfällt ersatzlos (es gibt keine Blob-Hashes mehr, die abzugleichen wären).
 // • Kompaktierung: ein heftSnap macht alle älteren heftOps DESSELBEN Hefts überflüssig.
+// Nachtrag (25. Juli 2026): Bilder/Scans reisen als eigene, unveränderliche "heftBlob"-Events
+// (Inhalts-Hash → Bilddaten). Hefte referenzieren sie nur noch. Sie sind bewusst NICHT
+// droppable (ein lange offline gewesenes Gerät bräuchte sie sonst nie mehr bekommen können),
+// werden aber weggeworfen, sobald kein Heft sie mehr benutzt — siehe compactEvents unten.
 // Bewusst OHNE Rückwärtskompatibilität (Einzelnutzer-Absprache): Alt-Hefte werden beim ersten
 // Öffnen aus dem lokalen Blob in einen heftSnap migriert (heft.js), danach ist der Blob Geschichte.
+// Audit v9 (25. Juli 2026) — Befunde aus dem Zusammenspiel db.js × drive.js × sync-core.js:
+// [A1] heftOps fliegt nicht mehr pauschal unter der Kompaktierungs-Untergrenze durch. Das war echter
+//      Datenverlust: die Begründung, warum pageUpdate NICHT droppable ist ("ein lange offline
+//      gewesenes Gerät hat legitime alte Patches"), gilt für Striche wortgleich — nur ist ein
+//      verworfener Strich weg, während eine verworfene pageUpdate nur Platz kostet (Replay = LWW).
+// [A2] Selbst erzeugte Merge-/Konflikt-Events sind jetzt _derived und gelten nicht als "meine
+//      ungesyncten Änderungen" — sonst konfliktiert der Nachzügler-Sweep in drive.js gegen den
+//      eigenen Merge und legt Konfliktkopien ohne jede Nutzeraktion an.
+// [A3] merge3 verweigert leere Basis und Leerzeilen-Anker. Beides zusammen konnte zwei Fassungen
+//      still ineinander verweben und ok:true melden — schlimmer als jeder gemeldete Konflikt.
+// [A4] Kaputte Events werden aussortiert statt geworfen (EIN Event legte den Sync dauerhaft still),
+//      numerische Zeitstempel werden auf ISO normalisiert (drive.js akzeptierte sie, hier crashte es).
+// [A9] Konflikt-Titel/Eltern fallen auf das Log zurück, wenn der UI-Zustand veraltet ist (zweiter Tab).
 export const DB = (() => {
 	let db = null, openPromise = null; // openPromise memoisiert open() gegen Doppel-Open-Races
 
@@ -136,8 +153,49 @@ export const DB = (() => {
 
 	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
 	const getBlob = (id) => ro("blobs", (s) => s.get(id));
-	const delBlob = (id) => rw("blobs", (s) => s.delete(id)); // Blob-GC lebt in boot.js
 	const allBlobKeys = () => ro("blobs", (s) => s.getAllKeys());
+
+	// ---- Object-URLs: EIN Cache für die ganze App ---------------------------
+	// Vorher hatte fast jede Datei ihre eigene Lösung: render.js (COVER_URLS/IMG_URLS),
+	// editor.js (BLOB_URLS) und pdfs.js (urlCache) pflegten drei getrennte Caches mit
+	// derselben Logik, während settings.js bei JEDEM Aufruf einen neuen Object-URL fürs
+	// Hintergrundbild erzeugte, der nie freigegeben wurde. Ein Object-URL hält den
+	// kompletten Blob im Speicher — bei Fotos und PDFs sind das schnell Megabyte je Aufruf.
+	// Der Cache gehört neben den Blob-Speicher: nur hier ist bekannt, wann ein Blob
+	// verschwindet, und nur so kann die Freigabe überhaupt zuverlässig passieren.
+	const OBJECT_URLS = new Map(); // Blob-id → Object-URL
+	async function blobUrl(id, fallbackType) {
+		if (!id) return null;
+		const hit = OBJECT_URLS.get(id);
+		if (hit) return hit;
+		try {
+			const rec = await getBlob(id);
+			// rec.data = Alt-Datensätze aus der früheren "notion"-DB.
+			const buf = rec && (rec.buf || rec.data);
+			if (!buf || !buf.byteLength) return null;
+			const url = URL.createObjectURL(new Blob([buf], { type: (rec.meta && rec.meta.type) || fallbackType || "" }));
+			OBJECT_URLS.set(id, url);
+			return url;
+		} catch (e) {
+			console.warn("Blob konnte nicht geladen werden:", e);
+			return null;
+		}
+	}
+	function revokeBlobUrl(id) {
+		const url = OBJECT_URLS.get(id);
+		if (!url) return false;
+		URL.revokeObjectURL(url);
+		OBJECT_URLS.delete(id);
+		return true;
+	}
+	// Beim Löschen eines Blobs MUSS der Object-URL mitsterben: er zeigt sonst weiter auf
+	// Daten, die es nicht mehr gibt, und hält sie zugleich im Speicher fest.
+	const delBlob = (id) => { revokeBlobUrl(id); return rw("blobs", (s) => s.delete(id)); }; // Blob-GC lebt in boot.js
+	// Nach pagehide sind alle Object-URLs tot — ohne Leeren löge der Cache nach einer
+	// bfcache-Rückkehr mit widerrufenen URLs weiter (stand vorher nur in pdfs.js).
+	if (typeof window !== "undefined" && window.addEventListener) {
+		window.addEventListener("pagehide", () => { for (const id of [...OBJECT_URLS.keys()]) revokeBlobUrl(id); });
+	}
 
 	// Vecs (RAG-Embeddings): nicht Teil des Event-Logs, lokal neu berechenbar.
 	const putVec = (pageId, rec) => rw("vecs", (s) => s.put(rec, pageId));
@@ -172,7 +230,11 @@ export const DB = (() => {
 	const compactFloor = () => localStorage.getItem(COMPACT_FLOOR_KEY) || "";
 	// Exportiert, damit test/test-sync.mjs genau diese Regel prüfen kann — der Fehler,
 	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
-	const isLocalOnly = (ev, unsyncedAfterSeq) => (ev.seq || 0) > unsyncedAfterSeq && !ev._remote;
+	// [A2] _derived = von einem Import SELBST erzeugtes Merge-/Konflikt-Event. Es liegt über dem
+	// Wasserstand und ist nicht _remote, ist aber keine Bearbeitung DIESES Nutzers. Ohne die Ausnahme
+	// meldet der zweite importAll-Aufruf (drive.js, Post-Upload-Sweep) Konflikte gegen den eigenen Merge.
+	// Hochgeladen werden sie trotzdem — eventsAfterSeq filtert nur _remote.
+	const isLocalOnly = (ev, unsyncedAfterSeq) => (ev.seq || 0) > unsyncedAfterSeq && !ev._remote && !ev._derived;
 	function compactEvents(events) {
 		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
 		const deletedAt = { page: {}, card: {} };
@@ -211,7 +273,23 @@ export const DB = (() => {
 			}
 			keep.push(ev);
 		}
-		return keep.reverse();
+		keep.reverse();
+		// Bilddaten (heftBlob) sind unveränderlich: sie können nie "überschrieben" werden und
+		// fallen deshalb durch keine der Regeln oben. Weg dürfen sie trotzdem — aber nur, wenn
+		// KEIN behaltenes Heft-Event sie noch referenziert (Bild gelöscht, Seite entfernt,
+		// oder der neueste Snapshot enthält sie schlicht nicht mehr). Genau das ist der Grund,
+		// warum die Bilder überhaupt aus dem Heft-Dokument ausgezogen sind: so lässt sich der
+		// größte Speicherposten gezielt aufräumen, statt ihn in jedem Snapshot mitzuschleppen.
+		const usedRefs = new Set();
+		for (const ev of keep) {
+			const p = ev.payload || {};
+			if (ev.type === "heftOps") {
+				for (const op of p.ops || []) if (op && op.o && op.o.ref) usedRefs.add(op.o.ref);
+			} else if (ev.type === "heftSnap") {
+				for (const pg of (p.doc && p.doc.pages) || []) for (const im of pg.images || []) if (im && im.ref) usedRefs.add(im.ref);
+			}
+		}
+		return keep.filter((ev) => ev.type !== "heftBlob" || usedRefs.has(ev.payload && ev.payload.hash));
 	}
 
 	// Nur nach erfolgreichem Sync aufrufen: Seq-Nummern werden neu vergeben, der Sync-Wasserstand
@@ -309,6 +387,10 @@ export const DB = (() => {
 			else if (ev.type === "pageUpdate" && p.patch) apply(p.patch, true);
 			else if (ev.type === "pageMove") pg.parentId = p.parentId || null;
 			else if (ev.type === "heftOps" || ev.type === "heftSnap") pg.kind = "heft"; // Inhalt lebt im Log, nicht in Metadaten
+			// Alt-Logs (vor v8) kennen nur heftUpdated als Zeiger auf eine Drive-Binärdatei. Solche
+			// Events liegen auf lange nicht gesyncten Geräten weiterhin im Log — ohne diesen Zweig
+			// galt die Seite dort als normale Notiz und das Heft war unerreichbar.
+			else if (ev.type === "heftUpdated") { pg.kind = "heft"; pg.heftMeta = { rev: p.rev, pages: p.pages, bytes: p.bytes, blobHash: p.blobHash }; }
 		}
 		return pg;
 	}
@@ -347,6 +429,12 @@ export const DB = (() => {
 		if (mine === theirs) return { ok: true, text: mine, changed: false };
 		if (mine === base) return { ok: true, text: theirs, changed: true };
 		if (theirs === base) return { ok: true, text: mine, changed: false };
+		// [A3] Ohne belastbare gemeinsame Basis gibt es keinen Drei-Wege-Abgleich. base === "" tritt real
+		// auf (Verlaufsfenster KEEP_CONTENT_VERSIONS abgelaufen, pageCreate ohne content). B ist dann [""]
+		// und der Anker-Lauf unten ankert auf einer LEEREN Zeile, die es in fast jedem Markdown-Dokument
+		// gibt — Ergebnis war ok:true mit einem aus beiden Fassungen zusammengesteckten Text, ohne
+		// Konfliktmeldung und ohne Kopie. Lieber ehrlich Konflikt: der Aufrufer rettet dann beide Stände.
+		if (!String(base ?? "").trim()) return { ok: false };
 		const B = String(base ?? "").split("\n");
 		const M = String(mine ?? "").split("\n");
 		const T = String(theirs ?? "").split("\n");
@@ -357,6 +445,7 @@ export const DB = (() => {
 		const anchors = [];
 		let lastM = -1, lastT = -1;
 		for (let b = 0; b < B.length; b++) {
+			if (!B[b].trim()) continue; // [A3] Leerzeilen stehen überall — als Anker wertlos und gefährlich
 			const m = mMap.get(b), t = tMap.get(b);
 			if (m === undefined || t === undefined || m <= lastM || t <= lastT) continue;
 			anchors.push([b, m, t]);
@@ -392,8 +481,43 @@ export const DB = (() => {
 		const local = await allEvents();
 		const existing = new Set(local.map((e) => e.id));
 		const floor = compactFloor();
-		const fresh = incoming.filter((ev) => ev && ev.id && !existing.has(ev.id) &&
-			!(floor && ev.t < floor && DROPPABLE_TYPES.has(ev.type))); // keine Wiederauferstehung verdichteter Events
+		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,
+		// validateEvent verlangt aber auch t und type und WIRFT — damit flog die komplette
+		// addEvents-Transaktion. Und weil knownDeltaIds (drive.js) korrekterweise erst NACH
+		// erfolgreichem Import gesetzt wird, holte jeder folgende Sync exakt dasselbe Paket erneut.
+		// Der Fehler heilte nie aus, auf keinem Gerät. Jetzt: normalisieren, Unbrauchbares aussortieren.
+		// Nebenbei der t-Vertrag: drive.js akzeptiert Zahlen (evTime), hier wird überall localeCompare
+		// gerufen. Zahlen werden deshalb hier EINMAL auf ISO-Strings gezogen statt verworfen.
+		const normalized = incoming.map((ev) => {
+			if (!ev || typeof ev !== "object") return null;
+			const t = typeof ev.t === "number" ? new Date(ev.t).toISOString() : ev.t;
+			if (!ev.id || typeof ev.type !== "string" || typeof t !== "string" || !t) return null;
+			return t === ev.t ? ev : { ...ev, t };
+		});
+		const malformed = normalized.filter((ev) => !ev).length;
+		if (malformed) console.warn("[importAll] " + malformed + " unbrauchbare Event(s) übersprungen (fehlende id/t/type).");
+		// [A1] heftOps stand global in DROPPABLE_TYPES — mit derselben Begründung, die weiter oben für
+		// pageUpdate ausdrücklich ABGELEHNT wird. Der Unterschied ist entscheidend: eine verworfene
+		// pageUpdate kostet nur Platz (Replay ist LWW über t), ein verworfener Strich ist WEG. Ein Gerät,
+		// das lange offline gezeichnet hat, verlor seine Handschrift beim ersten Sync still — und weil
+		// dieses Gerät danach einen heftSnap schreibt, spiegelte sich der Verlust zurück.
+		// Jetzt gilt die Untergrenze für Hefte PRO SEITE und nur dann, wenn ein lokal vorhandener
+		// heftSnap den betroffenen Stand nachweislich abdeckt.
+		const heftSnapFloor = new Map(); // pageId -> t des jüngsten lokalen heftSnap
+		for (const ev of local) {
+			if (ev.type !== "heftSnap" || !ev.payload?.pageId) continue;
+			const cur = heftSnapFloor.get(ev.payload.pageId);
+			if (!cur || ev.t > cur) heftSnapFloor.set(ev.payload.pageId, ev.t);
+		}
+		const droppedByFloor = (ev) => {
+			if (!floor || ev.t >= floor) return false;
+			if (ev.type === "heftOps") {
+				const snapT = heftSnapFloor.get(ev.payload?.pageId);
+				return !!snapT && ev.t < snapT; // nur, wenn ein Snapshot diesen Stand wirklich enthält
+			}
+			return DROPPABLE_TYPES.has(ev.type);
+		};
+		const fresh = normalized.filter((ev) => ev && !existing.has(ev.id) && !droppedByFloor(ev));
 		// Nur echte Drive-Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
 		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
 		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
@@ -412,7 +536,15 @@ export const DB = (() => {
 			// importAll-Aufruf über dem Wasserstand und galten damit als "meine ungesyncten
 			// Änderungen" — Ergebnis waren "⚠ Konflikt"-Kopien ohne jede lokale Bearbeitung.
 			const localOnly = (ev) => isLocalOnly(ev, opts.unsyncedAfterSeq); // seit letztem Sync, kennt kein anderes Gerät
-			const info = (id) => (opts.pageInfo && opts.pageInfo(id)) || {};
+			// [A9] Der UI-Zustand (S.pages) kann veraltet sein: der zweite Tab betritt syncRaw mit dem Stand
+			// VOR dem Import des ersten (der Web Lock serialisiert nur, er teilt keinen Speicher). Titel und
+			// Ablageort einer Konfliktkopie waren dadurch falsch. Das Log ist die Wahrheit — also Rückfall.
+			const info = (id) => {
+				const pi = (opts.pageInfo && opts.pageInfo(id)) || null;
+				if (pi && pi.title) return pi;
+				const pg = reconstructPageFromEvents([...local, ...fresh], id);
+				return { title: pg.title, parentId: pg.parentId, workspaceId: pg.workspaceId };
+			};
 
 			// (1) Inhalts-Konflikt: gleiche Seite lokal UND remote geändert. Erst wird ein
 			// Drei-Wege-Abgleich versucht; nur bei echter Überlappung greift LWW + Konfliktkopie.
@@ -432,7 +564,7 @@ export const DB = (() => {
 				const m3 = merge3(reconstructPageFromEvents(commonEvents, id).content, mine.payload.patch.content, remote.payload.patch.content);
 				if (m3.ok) {
 					mergedDetails.push({ pageId: id, title: info(id).title || "Seite", localTime: mine.t, remoteTime: remote.t });
-					fresh.push({ id: mergeId, t: U.now(), type: "pageUpdate", payload: { id, patch: { content: m3.text } } });
+					fresh.push({ id: mergeId, t: U.now(), type: "pageUpdate", _derived: true, payload: { id, patch: { content: m3.text } } });
 					continue;
 				}
 				// (1b) Echte Überlappung: der spätere Zeitstempel gewinnt still, der unterlegene
@@ -452,7 +584,7 @@ export const DB = (() => {
 					conflictPageId, eventId: "conflict-" + loser.id,
 				});
 				fresh.push({
-					id: "conflict-" + loser.id, t: U.now(), type: "pageCreate",
+					id: "conflict-" + loser.id, t: U.now(), type: "pageCreate", _derived: true,
 					payload: {
 						id: conflictPageId,
 						title: "⚠ Konflikt: " + title + " — Stand " + loser.t.slice(0, 16).replace("T", " "),
@@ -490,7 +622,7 @@ export const DB = (() => {
 					loserSource,
 				});
 				fresh.push({
-					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate",
+					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate", _derived: true,
 					payload: { id: conflictPageId, title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title, content: pg.content, parentId: pg.parentId, workspaceId: pg.workspaceId, kind: pg.kind },
 				});
 				// Heft-Striche werden hier NICHT mitkopiert: sie liegen als heftOps/heftSnap unter der
@@ -505,7 +637,7 @@ export const DB = (() => {
 		const missing = Object.entries(blobs).filter(([k]) => !have.has(k));
 		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
-		return { added: fresh.length, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
+		return { added: fresh.length, malformed, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
 	}
 
 	async function resetDatabase() {
@@ -534,7 +666,7 @@ export const DB = (() => {
 		// Hinweis bleibt: bereits gesyncte Events können per Drive-Merge zurückkehren —
 		// der Seiten-Reset ist ein LOKALER Neuanfang, kein Drive-Reset.
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore",
-			"heftOps", "heftSnap", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
+			"heftOps", "heftSnap", "heftBlob", "heftUpdated", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
 		const evStore = t.objectStore("events");
 		const evReq = evStore.getAll();
 		evReq.onsuccess = () => evReq.result.forEach((ev) => { if (pageTypes.has(ev.type)) evStore.delete(ev.seq); });
@@ -545,5 +677,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

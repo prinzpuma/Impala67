@@ -98,9 +98,10 @@ export async function applyBg() {
 	const bg = U.el("bg");
 	if (!bg) return;
 	try {
-		const rec = await DB.getBlob("bgImage");
-		if (rec && rec.buf && rec.buf.byteLength) {
-			const url = URL.createObjectURL(new Blob([rec.buf], { type: (rec.meta && rec.meta.type) || "image/jpeg" }));
+		// DB.blobUrl cacht: vorher entstand bei JEDEM Aufruf (Theme-Wechsel, Akzentfarbe,
+		// Start) ein neuer Object-URL fürs selbe Bild, der nie freigegeben wurde.
+		const url = await DB.blobUrl("bgImage", "image/jpeg");
+		if (url) {
 			bg.style.backgroundImage = "linear-gradient(rgba(6,8,12,0.84), rgba(6,8,12,0.93)), url('" + url + "')";
 			bg.style.backgroundSize = "cover";
 			bg.style.backgroundPosition = "center";

@@ -37,7 +37,10 @@ export const EDITOR = (() => {
 	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
 	let histFocus = null;
 	let renderBoundary = null; // einmalige DOM-Marke für exakte Merge-Caretposition
-	let scrollReserve = 0;     // wächst beim Löschen am Seitenende gegen Browser-Clamping
+	// v3 (25. Juli): scrollReserve entfallen. Der Editor baut seinen DOM nicht mehr bei
+	// jedem Render neu auf (U.morph gleicht nur Unterschiede an) — dadurch ändert sich die
+	// Gesamthöhe nicht mehr schlagartig, der Browser klemmt scrollTop nicht mehr, und die
+	// ganze Anker-Rechnerei samt End-Reserve wird nicht mehr gebraucht.
 	const undoStacks = {};    // je Seite: [{ json, focus }]
 	const redoStacks = {};
 	let styleInjected = false;
@@ -48,6 +51,15 @@ export const EDITOR = (() => {
 	// und eine History, die scheinbar zufällig Schritte überspringt.
 	const wiredHosts = new WeakSet();
 	const HISTORY_LIMIT = 200;
+
+	// Object-URLs je Blob-ID EINMAL erzeugen und wiederverwenden.
+	// FIX (25. Juli, Speicherleck): hydrate() lief bisher bei JEDEM Render — also bei
+	// jedem Enter, jeder Listen-Umwandlung, jedem Undo — komplett neu, weil host.innerHTML
+	// alle Elemente ersetzte und die dataset.hydrated-Wachen deshalb nie greifen konnten.
+	// Pro Durchlauf entstand für JEDES Bild und JEDE Datei ein neuer Object-URL, der nie
+	// freigegeben wurde: auf einer bildlastigen Seite wuchs der Speicher mit jedem
+	// Tastendruck. Der gemeinsame Cache liegt jetzt in db.js (DB.blobUrl) — ein
+	// Object-URL je Blob für die ganze App, freigegeben beim Löschen des Blobs.
 
 	const LISTY = { bullet: 1, number: 1, todo: 1 };
 	// Blocktypen mit EINEM editierbaren Rich-Text-Feld (block.text)
@@ -154,7 +166,9 @@ export const EDITOR = (() => {
 	// KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
 	function inlineHtml(text) {
 		return esc(text)
-			.replace(/\$([^$\n]+)\$/g, (_, f) => LT + 'span class="blk-imath" contenteditable="false" data-md="$' + esc(f) + '$" title="Formel bearbeiten">' + esc(f) + LT + "/span>")
+			// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches
+			// KaTeX); bleibt sie gleich, bleibt der gerenderte Chip unangetastet stehen.
+			.replace(/\$([^$\n]+)\$/g, (_, f) => LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + esc(f) + '" data-md="$' + esc(f) + '$" title="Formel bearbeiten">' + esc(f) + LT + "/span>")
 			.replace(/\{(bg-)?(gray|red|orange|yellow|green|blue|purple|pink)\}([\s\S]*?)\{\/\}/g,
 				(_, bg, color, v) => tag("span", v, ' class="' + (bg ? "hl-" : "c-") + color + '"'))
 			.replace(/==([^=\n]+)==/g, (_, v) => tag("mark", v))
@@ -229,6 +243,10 @@ export const EDITOR = (() => {
 		(root || host).querySelectorAll(".blk-imath").forEach((el) => {
 			if (el.dataset.hydrated) return;
 			el.dataset.hydrated = "1";
+			// data-owned: ab hier steht KaTeX-DOM im Chip. U.morph würde es sonst beim
+			// nächsten Render gegen den rohen LaTeX-Text zurücktauschen. Eine GEÄNDERTE
+			// Formel hat ein anderes data-key und bekommt ohnehin ein frisches Element.
+			el.dataset.owned = "1";
 			// data-md enthält "$…$" — Delimiter entfernen und direkt mit KaTeX rendern
 			// (renderMathInElement findet im Chip-Text keine Delimiter mehr).
 			const f = String(el.dataset.md || "").replace(/^\$+|\$+$/g, "");
@@ -772,23 +790,26 @@ export const EDITOR = (() => {
 				// Gleichung wie in Notion: gerendert anzeigen, Klick öffnet Popover.
 				inner = '<div class="blk-math" data-bmath="' + b.id + '" tabindex="0">' +
 					(String(b.text || "").trim()
-						? '<span class="blk-mathview" data-mathsrc="' + esc(b.text) + '">' + esc(b.text) + "</span>"
+						? '<span class="blk-mathview" data-key="mv:' + esc(b.text) + '" data-mathsrc="' + esc(b.text) + '">' + esc(b.text) + "</span>"
 						: '<span class="blk-mathempty">Neue Gleichung — klicken zum Bearbeiten</span>') +
 					"</div>";
 				break;
 			case "image":
-				inner = '<figure class="blk-img"><img data-imgsrc="' + esc(b.src || "") + '" alt="' + esc(b.alt || "") +
+				// data-key = Quelle: gleiche Quelle → U.morph behält das bereits geladene <img>
+				// samt Blob-URL; andere Quelle → frisches Element, das neu hydriert wird.
+				inner = '<figure class="blk-img"><img data-key="img:' + esc(b.src || "") + '" data-imgsrc="' + esc(b.src || "") + '" alt="' + esc(b.alt || "") +
 					'" draggable="false">' + (b.alt ? "<figcaption>" + esc(b.alt) + "</figcaption>" : "") + "</figure>";
 				break;
 			case "file":
 				// contenteditable="false": Player-Bedienelemente (Video/Audio/PDF) müssen
 				// klickbar sein und dürfen nie Teil des editierbaren Textflusses werden.
-				inner = '<figure class="blk-file" data-filesrc="' + esc(b.src || "") + '" data-fileblk="' + b.id +
+				inner = '<figure class="blk-file" data-key="file:' + esc(b.src || "") + '" data-filesrc="' + esc(b.src || "") + '" data-fileblk="' + b.id +
 					'" contenteditable="false"><div class="blk-file-row"><span class="blk-file-ic">📎</span>' +
 					'<span class="blk-file-name">' + esc(b.name || "Datei") + "</span></div></figure>";
 				break;
 			case "heft":
-				inner = '<div class="blk-heft" data-heft="' + esc(b.heftId || "") + '"></div>';
+				// data-owned: den Inhalt füllt HEFT.hydrateEmbeds — U.morph fasst ihn nie an.
+				inner = '<div class="blk-heft" data-key="heft:' + esc(b.heftId || "") + '" data-owned="1" data-heft="' + esc(b.heftId || "") + '"></div>';
 				break;
 			case "table": {
 				const rows = (b.rows || []).map((row, ri) =>
@@ -828,7 +849,10 @@ export const EDITOR = (() => {
 		}
 
 		// Jeder Block bekommt Handle (⋮⋮) + Plus — wie in Notion links im Gutter.
-		return '<div class="blk" data-blk="' + b.id + '" data-btype="' + b.type + '">' +
+		// data-key = Block-ID: U.morph erkennt denselben Block wieder, auch wenn er im
+		// Dokument verrutscht. Nur wirklich geänderte Blöcke werden angefasst — daher
+		// bleiben Cursor, Auswahl, Scroll und laufende Medien beim Rendern erhalten.
+		return '<div class="blk" data-key="' + b.id + '" data-blk="' + b.id + '" data-btype="' + b.type + '">' +
 			(nested ? "" : '<div class="blk-gutter" contenteditable="false">' +
 				'<button class="blk-plus" data-bplus="' + b.id + '" title="Block darunter einfügen">+</button>' +
 				'<button class="blk-handle" data-bhandle="' + b.id + '" draggable="true" title="Ziehen oder klicken">⋮⋮</button></div>') +
@@ -859,47 +883,21 @@ export const EDITOR = (() => {
 		if (!host) return;
 		if (!blocks.length) blocks.push(newBlock("p"));
 		const o = opts || {};
-		const root = scrollRoot();
-		const current = caretInfo();
-		const anchorId = o.anchorId || (current && current.bid);
-		const oldAnchor = anchorId && host.querySelector('.blk[data-blk="' + anchorId + '"]');
-		// Nicht eine absolute Scrollzahl, sondern einen überlebenden Block als
-		// visuellen Anker sichern. Das bleibt auch korrekt, wenn über ihm Blöcke
-		// verschwinden oder die Gesamthöhe beim Löschen kleiner wird.
-		const snap = {
-			scrollTop: root ? root.scrollTop : 0,
-			anchorId,
-			anchorTop: oldAnchor ? oldAnchor.getBoundingClientRect().top : null,
-		};
 		renderBoundary = o.boundary || null;
-		host.innerHTML = blocks.map((b) => blockHtml(b)).join("") +
+		// v3 (25. Juli): DOM ANGLEICHEN statt wegwerfen. Vorher ersetzte jedes render()
+		// den kompletten Editor-Inhalt per innerHTML — bei jedem Enter, jeder Listen-
+		// Umwandlung, jedem Undo. Folgen: alle Bilder, Formeln, Codeblocks und Medien
+		// wurden neu aufgebaut (Tipp-Ruckeln auf langen Seiten), laufende Videos sprangen
+		// zurück auf Anfang, und die Scrollposition musste hinterher mühsam nachgerechnet
+		// werden. U.morph fasst jetzt nur die Blöcke an, die sich wirklich geändert haben
+		// (data-key = Block-ID) — alles andere bleibt physisch dasselbe DOM-Element.
+		U.morph(host, blocks.map((b) => blockHtml(b)).join("") +
 			childPagesHtml() +
-			'<div class="blk-tail" data-btail="1"' + (scrollReserve ? ' style="min-height:calc(25vh + ' + scrollReserve + 'px)"' : "") + '></div>';
+			'<div class="blk-tail" data-key="tail" data-btail="1"></div>');
 		renderBoundary = null;
 		renumber();
 		hydrate();
 		applySelectionClasses();
-		if (root) {
-			if (snap.anchorTop != null) {
-				const next = host.querySelector('.blk[data-blk="' + snap.anchorId + '"]');
-				if (next) {
-					const desired = root.scrollTop + next.getBoundingClientRect().top - snap.anchorTop;
-					const max = Math.max(0, root.scrollHeight - root.clientHeight);
-					// Am Seitenende klemmt der Browser scrollTop automatisch auf das neue
-					// Maximum, sobald eine Zeile verschwindet. Genau dadurch wanderte der
-					// Inhalt bei jedem Merge nach unten/oben. Eine dynamische Endreserve
-					// nimmt die entfernte Höhe auf, damit der visuelle Anker mathematisch
-					// überhaupt an derselben Bildschirmposition bleiben kann.
-					if (desired > max) {
-						scrollReserve += Math.ceil(desired - max);
-						const tail = host.querySelector("[data-btail]");
-						if (tail) tail.style.minHeight = "calc(25vh + " + scrollReserve + "px)";
-					}
-					root.scrollTop = desired;
-				}
-				else root.scrollTop = snap.scrollTop;
-			} else root.scrollTop = snap.scrollTop;
-		}
 	}
 
 	// Nummerierte Listen: fortlaufende Zähler je Ebene (wie Notion).
@@ -929,17 +927,20 @@ export const EDITOR = (() => {
 
 	// Asynchrone Anreicherung nach dem HTML-Aufbau: Bilder, Hefte, Formeln, Code.
 	function hydrate() {
-		// Bild-Blobs aus IndexedDB laden
+		// Bild-Blobs aus IndexedDB laden. Die dataset.hydrated-Wache greift jetzt wirklich:
+		// U.morph behält bereits geladene <img> als dasselbe Element, also läuft das hier
+		// pro Bild genau EINMAL statt bei jedem Tastendruck.
 		host.querySelectorAll("img[data-imgsrc]").forEach(async (img) => {
+			if (img.dataset.hydrated) return;
 			const src = img.dataset.imgsrc;
 			if (!src) return;
+			img.dataset.hydrated = "1";
 			if (src.startsWith("img:")) {
 				try {
-					const blob = await DB.getBlob(src);
-					// FIX: DB.putBlob speichert { buf, meta } — hier wurde blob.data gelesen
-					// (undefined) → hochgeladene Bilder blieben unsichtbar. blob.data bleibt
-					// als Fallback für Alt-Datensätze aus der früheren "notion"-DB lesbar.
-					if (blob) img.src = URL.createObjectURL(new Blob([blob.buf || blob.data], { type: blob.meta && blob.meta.type || "image/png" }));
+					// DB.putBlob speichert { buf, meta } — blob.data bleibt als Fallback für
+					// Alt-Datensätze aus der früheren "notion"-DB lesbar (siehe DB.blobUrl).
+					const u = await DB.blobUrl(src, "image/png");
+					if (u) img.src = u; else img.alt = "Bild fehlt";
 				} catch { img.alt = "Bild fehlt"; }
 			} else {
 				img.src = src;
@@ -951,10 +952,15 @@ export const EDITOR = (() => {
 		// Heft-Einbettungen
 		try { HEFT.hydrateEmbeds(host); } catch { /* Heft-Modul optional */ }
 		// Formel-Blöcke mit KaTeX rendern (Quelle bleibt in data-mathsrc)
+		// data-key hängt an der Formel: unveränderte Formeln behalten ihr KaTeX-DOM,
+		// geänderte bekommen ein frisches Element und werden hier neu gerendert.
 		host.querySelectorAll(".blk-mathview").forEach((el) => {
 			if (el.dataset.hydrated) return;
-			el.dataset.hydrated = "1";
 			const f = String(el.dataset.mathsrc || el.textContent || "");
+			el.dataset.hydrated = "1";
+			// data-owned wie beim Inline-Chip: das gerenderte KaTeX-DOM darf U.morph nicht
+			// gegen den Quelltext zurücktauschen.
+			el.dataset.owned = "1";
 			try { if (window.katex && f) katex.render(f, el, { throwOnError: false, displayMode: true }); } catch { /* Roh-LaTeX bleibt sichtbar */ }
 		});
 		hydrateInlineMath(host);
@@ -974,6 +980,9 @@ export const EDITOR = (() => {
 	async function hydrateFileBlock(fig) {
 		if (fig.dataset.hydrated) return;
 		fig.dataset.hydrated = "1";
+		// data-owned: ab jetzt gehört dieser Teilbaum dem Medien-Player. U.morph fasst ihn
+		// nie wieder an — ein laufendes Video läuft während Hintergrund-Renders weiter.
+		fig.dataset.owned = "1";
 		const src = fig.dataset.filesrc || "";
 		const bid = fig.dataset.fileblk || "";
 		const b = findBlock(bid) || {};
@@ -984,9 +993,11 @@ export const EDITOR = (() => {
 				const rec = await DB.getBlob(src);
 				if (!rec) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
 				mime = (rec.meta && rec.meta.type) || mime;
-				// Object-URLs leben bis zum Seitenwechsel — bewusst nicht pro Render revoken,
-				// sonst stoppt ein laufendes Video beim nächsten render() mitten im Abspielen.
-				url = URL.createObjectURL(new Blob([rec.buf || rec.data], { type: mime }));
+				// EIN Object-URL je Datei (DB.blobUrl) — vorher entstand pro Render ein neuer,
+				// der nie freigegeben wurde.
+				const u = await DB.blobUrl(src, mime);
+				if (!u) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
+				url = u;
 			} catch { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei konnte nicht geladen werden</span></div>'; return; }
 		}
 		fig.innerHTML = fileViewHtml(url, mime || "", name, bid);
@@ -2431,7 +2442,6 @@ export const EDITOR = (() => {
 		injectStyles();
 		if (pageChanged || externallyChanged || !blocks.length) {
 			if (pageChanged) { clearSelection(); closeMenus(); }
-			if (pageChanged) scrollReserve = 0;
 			pageId = pid;
 			blocks = parse(pg.content || "");
 			histState = snapshotJson();

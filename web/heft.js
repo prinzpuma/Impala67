@@ -134,7 +134,8 @@ export const HEFT = (() => {
 			const a = o.pts[0] || [], b = o.pts[o.pts.length - 1] || [];
 			return o.pts.length + "|" + a[0] + "," + a[1] + "|" + b[0] + "," + b[1] + "|" + o.color + "|" + o.size + "|" + (o.shape ? JSON.stringify(o.shape) : "");
 		}
-		if (o.src) return o.x + "," + o.y + "," + o.w + "," + o.h + "|" + o.src.length; // Bild: Pixel ändern sich nie, nur Rahmen
+		// Bild: die Pixel liegen als eigener Blob daneben und ändern sich nie — nur der Rahmen.
+		if (o.ref || o.src) return o.x + "," + o.y + "," + o.w + "," + o.h + "|" + (o.ref || o.src.length);
 		return JSON.stringify(o);
 	}
 	const sigMap = (list) => new Map((list || []).map((o) => [o.id, sig(o)]));
@@ -184,6 +185,49 @@ export const HEFT = (() => {
 		return ops;
 	}
 
+	// ---- Bilder, Scans und PDF-Seiten als eigene, unveränderliche Blob-Events ----
+	// Ein Foto oder Scan ist schnell 1–3 MB groß. Bisher steckte die komplette dataURL
+	// IM Bild-Objekt des Hefts. Folge: jedes Verschieben und jedes Skalieren schickte das
+	// ganze Bild erneut durchs Log (die Signatur änderte sich, also ging ein "i=" mit
+	// voller Nutzlast raus), und jeder Verdichtungs-Snapshot trug sämtliche Bilder noch
+	// einmal mit sich. Bei ein paar gescannten Seiten wuchs das Log dadurch in Minuten
+	// um zweistellige Megabyte — genau die Datenmenge, die der Sync danach hin- und
+	// hertragen musste.
+	// Jetzt wird der Bildinhalt GENAU EINMAL als "heftBlob" geschrieben; das Heft merkt
+	// sich nur noch den Inhalts-Hash ({ id, ref, x, y, w, h }, ca. 80 Byte). Verschieben
+	// kostet damit ein paar Byte statt ein paar Megabyte, und zwei Geräte, die dasselbe
+	// Bild einfügen, teilen sich automatisch einen Eintrag (gleicher Inhalt = gleicher Hash).
+	function hashData(str) {
+		// Zwei unabhängige 32-Bit-Hashes (FNV-1a + djb2) plus Länge. Bewusst kein SHA-256:
+		// das wäre asynchron und müsste in jeden Aufrufpfad hinein. Kollisionen sind bei
+		// 64 Bit + Länge praktisch ausgeschlossen, und der Inhalt ist ohnehin unveränderlich.
+		let a = 0x811c9dc5, b = 5381;
+		for (let i = 0; i < str.length; i++) {
+			const c = str.charCodeAt(i);
+			a = Math.imul(a ^ c, 0x01000193) >>> 0;
+			b = ((b * 33) ^ c) >>> 0;
+		}
+		return "b" + str.length.toString(36) + "-" + a.toString(36) + b.toString(36);
+	}
+	function blobRef(dataUrl) {
+		const hash = hashData(dataUrl);
+		if (!S.heftBlobs[hash]) {
+			// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
+			// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
+			S.heftBlobs[hash] = dataUrl;
+			STATE.dispatch("heftBlob", { hash, data: dataUrl }).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
+		}
+		return hash;
+	}
+	// Bildquelle auflösen: neue Bilder tragen ref, Alt-Bestände noch src.
+	const imgSrc = (im) => (im && im.ref ? (S.heftBlobs[im.ref] || "") : (im && im.src) || "");
+	// Alt-Bild (dataURL inline) beim ersten Anfassen in eine Referenz umschreiben.
+	function toRefImage(im) {
+		if (!im || !im.src || im.ref) return im;
+		const { src, ...rest } = im;
+		return { ...rest, ref: blobRef(src) };
+	}
+
 	// Alt-Bestände (Blob je Heft bzw. localStorage-Ink) werden beim ersten Öffnen
 	// EINMAL in ein heftSnap-Event überführt. Danach lebt das Heft nur noch im Log.
 	function normalizeDoc(d) {
@@ -192,7 +236,7 @@ export const HEFT = (() => {
 			id: pg.id || U.uid(),
 			paper: pg.paper || "lined",
 			strokes: (pg.strokes || []).map(withId),
-			images: (pg.images || []).map(withId),
+			images: (pg.images || []).map((im) => toRefImage(withId(im))),
 			texts: (pg.texts || []).map(withId),
 			ocrText: pg.ocrText || "",
 		}));
@@ -362,7 +406,7 @@ export const HEFT = (() => {
 		try {
 			if (!verLast[p]) { const s = await listSnapshots(p); verLast[p] = s.length ? s[0].t : 0; }
 			if (Date.now() - verLast[p] < VER_GAP) return; // gedrosselt: max. alle 10 Min.
-			await writeSnapshot(p, encodeDoc(d), (S.heftMeta[p] && S.heftMeta[p].rev) || 1);
+			await writeSnapshot(p, encodeDoc(d), ((d && d.pages) || []).length);
 			await pruneSnapshots(p);
 		} catch (e) { console.warn("Heft: Verlauf-Snapshot fehlgeschlagen", e); }
 	}
@@ -371,7 +415,7 @@ export const HEFT = (() => {
 		if (!rec || !rec.buf) { if (U.toast) U.toast("Snapshot nicht mehr vorhanden", "error"); return; }
 		const cur = pid === p && doc ? doc : await load(p);
 		// Sicherheitsnetz: aktuellen Stand IMMER sichern — Wiederherstellen ist damit selbst umkehrbar.
-		await writeSnapshot(p, encodeDoc(cur), (S.heftMeta[p] && S.heftMeta[p].rev) || 1);
+		await writeSnapshot(p, encodeDoc(cur), ((cur && cur.pages) || []).length);
 		const restored = normalizeDoc(JSON.parse(dec.decode(rec.buf)));
 		if (!restored) { if (U.toast) U.toast("Snapshot ist leer", "error"); return; }
 		// Wiederherstellen ist ein normales Event — es synchronisiert damit von allein.
@@ -443,8 +487,12 @@ export const HEFT = (() => {
 		}
 		return { ok: true, pageIndex: pi, addedPage };
 	}
-	const hasHeft = (p) => !!((S.heftMeta && S.heftMeta[p]) || docs[p]);
-	const pagesOf = (p) => (S.heftMeta && S.heftMeta[p] && S.heftMeta[p].pages) || (docs[p] ? docs[p].pages.length : 1);
+	// v8: das abgespielte Dokument ist die einzige Wahrheit. S.heftMeta war der
+	// abgeleitete Rest aus der Blob-Ära und konnte nach einem Import veraltete
+	// Seitenzahlen liefern (oder gar nicht mehr existieren).
+	const docOf = (p) => S.heftDocs[p] || docs[p] || null;
+	const hasHeft = (p) => { const d = docOf(p); return !!(d && d.pages && d.pages.length); };
+	const pagesOf = (p) => { const d = docOf(p); return d && d.pages && d.pages.length ? d.pages.length : 1; };
 
 	function paintPaper(x, w, h, kind) {
 		x.fillStyle = "#fbfaf7";
@@ -550,7 +598,7 @@ export const HEFT = (() => {
 					if (pageIndex !== -1) { redrawPage(pageIndex); renderThumb(pageIndex); }
 				}
 			};
-			c.src = im.src;
+			c.src = imgSrc(im);
 			imgCache[im.id] = c;
 		}
 		return c;
@@ -629,23 +677,8 @@ export const HEFT = (() => {
 		}
 	}
 
-	// Erste Seite, auf der sich zwei Heft-Blobs inhaltlich unterscheiden — damit
-	// das Konflikt-Popup die tatsächlich abweichende Seite zeigt statt immer Seite 1.
-	async function findDivergentPage(keyA, keyB) {
-		try {
-			const [a, b] = await Promise.all([DB.getBlob(keyA), DB.getBlob(keyB)]);
-			if (!a || !a.buf || !b || !b.buf) return 0;
-			const pagesA = JSON.parse(new TextDecoder().decode(a.buf)).pages || [];
-			const pagesB = JSON.parse(new TextDecoder().decode(b.buf)).pages || [];
-			for (let i = 0; i < Math.max(pagesA.length, pagesB.length); i++) {
-				if (JSON.stringify(pagesA[i] || null) !== JSON.stringify(pagesB[i] || null)) return i;
-			}
-			return 0;
-		} catch (e) {
-			console.warn("Heft: Divergenz-Suche fehlgeschlagen", e);
-			return 0;
-		}
-	}
+	// (findDivergentPage ist mit v8 entfallen: Heft-Konflikte kann es nicht mehr
+	// geben, weil zwei Geräte ihre Striche zusammenführen statt sich zu überschreiben.)
 
 	function applyTransform(x) {
 		const dpr = x.canvas.__heftDpr || 1;
@@ -1536,7 +1569,7 @@ export const HEFT = (() => {
 		return '<div class="heft-chrome" aria-hidden="false">' +
 			'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
 				'" data-hepagesmenu="1" title="Seiten">' + svgPages +
-				'<span class="heft-pageno-inline">' + (idx + 1) + '/' + doc.pages.length + '</span></button>' +
+				'<span class="heft-pageno-inline"></span></button>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
 					'<button type="button" data-hewrite="1" class="heft-main' + (writeOn ? " active" : "") +
@@ -1554,10 +1587,8 @@ export const HEFT = (() => {
 					'<button type="button" data-heimgmenu="1" class="heft-main' +
 						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig"' +
-						(undoStack.length ? "" : " disabled") + '>' + svgUndo + '</button>' +
-					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen"' +
-						(redoStack.length ? "" : " disabled") + '>' + svgRedo + '</button>' +
+					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig">' + svgUndo + '</button>' +
+					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen">' + svgRedo + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>' +
 				'</div>' +
@@ -1762,20 +1793,50 @@ export const HEFT = (() => {
 		}
 		redrawPage(pi); renderThumb(pi); updateChrome();
 	}
-	// Kein Neuaufbau, wenn sich nichts geändert hat — vorher wurde die Leiste bei
-	// JEDEM Strich komplett ersetzt (Flackern, Icons kurz weg, "springt hin und her").
+	// FIX (25. Juli, "Werkzeugleiste springt manchmal in Heften"):
+	// Zwei Angaben in der Leiste ändern sich ständig — der Seitenzähler (bei JEDEM
+	// Scrollen) und die Aktiv/Inaktiv-Zustände von Rückgängig/Wiederholen (bei JEDEM
+	// Strich). Solange beide im gerenderten HTML standen, war lastChromeHtml praktisch
+	// immer verschieden und die komplette Leiste wurde durch einen NEUEN DOM-Knoten
+	// ersetzt. Folge: die frei verschiebbare Optionen-Palette sprang an ihre
+	// Ausgangsposition zurück, ein offenes Menü verlor seinen Anker und die Leiste
+	// flackerte kurz. Beide Angaben werden deshalb nicht mehr gerendert, sondern
+	// direkt am lebenden Knoten nachgezogen — die Leiste bleibt dieselbe.
+	function syncVolatileChrome() {
+		if (!host || !doc) return;
+		const no = host.querySelector(".heft-pageno-inline");
+		if (no) {
+			const label = (idx + 1) + "/" + doc.pages.length;
+			if (no.textContent !== label) no.textContent = label;
+		}
+		const u = host.querySelector("[data-heundo]");
+		if (u) u.disabled = !undoStack.length;
+		const r = host.querySelector("[data-heredo]");
+		if (r) r.disabled = !redoStack.length;
+	}
+	// Die Seiten-Vorschau nur neu aufbauen, wenn sich wirklich etwas an ihr ändert —
+	// sonst wurden bei jedem Strich alle Miniaturen neu gezeichnet (Flackern).
+	let lastPopSig = "";
+	function refreshPagesPopIfNeeded() {
+		if (!pop || pop.dataset.kind !== "pages" || !doc) { lastPopSig = ""; return; }
+		const sigNow = doc.pages.length + "|" + idx + "|" + (exportSel ? [...exportSel].sort((a, b) => a - b).join(",") : "-");
+		if (sigNow === lastPopSig) return;
+		lastPopSig = sigNow;
+		refreshPagesPop();
+	}
 	let lastChromeHtml = "";
 	function updateChrome() {
 		if (!host || !doc) return;
 		const html = toolbarHtml();
 		const chrome = host.querySelector(".heft-chrome");
-		if (chrome && html === lastChromeHtml) { updateLassoBar(); refreshPagesPop(); return; }
+		if (chrome && html === lastChromeHtml) { syncVolatileChrome(); updateLassoBar(); refreshPagesPopIfNeeded(); return; }
 		lastChromeHtml = html;
 		if (chrome) { const t = document.createElement("div"); t.innerHTML = html; chrome.replaceWith(t.firstChild); }
 		else host.insertAdjacentHTML("beforeend", html);
 		bindTrayDrag();
+		syncVolatileChrome();
 		updateLassoBar();
-		refreshPagesPop();
+		refreshPagesPopIfNeeded();
 	}
 
 	function updateLassoBar() {
@@ -1905,7 +1966,7 @@ export const HEFT = (() => {
 			const pg = page(); if (!pg) return;
 			const im = await fileToImageData(f, 1400);
 			const k = Math.min((PAGE_W * 0.7) / im.w, (PAGE_H * 0.7) / im.h, 1);
-			const img = { id: U.uid(), src: im.src, x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k };
+			const img = { id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k };
 			imagesOf(pg).push(img);
 			pushUndo({ kind: "imgAdd", img, pageIdx: idx });
 			sel = { pageIdx: idx, imgId: img.id };
@@ -1922,7 +1983,7 @@ export const HEFT = (() => {
 		const pg = newPage(paper || "blank");
 		const pad = bleed ? 0 : 40;
 		const k = Math.min((PAGE_W - pad * 2) / im.w, (PAGE_H - pad * 2) / im.h);
-		pg.images.push({ id: U.uid(), src: im.src, x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k });
+		pg.images.push({ id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k });
 		return pg;
 	}
 	async function addImagePageFromFile(f) {
@@ -3039,6 +3100,7 @@ export const HEFT = (() => {
 		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
 		trayDrag = null;
+		lastChromeHtml = ""; lastPopSig = "";
 	}
 
 	function renderPageCanvas(pg, w, pageIdx = -1) {
@@ -3093,7 +3155,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, findDivergentPage, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

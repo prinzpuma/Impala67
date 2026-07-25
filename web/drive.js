@@ -56,6 +56,22 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 // zeichnet fremde Striche sofort nach, ohne Neustart und ohne Seitenwechsel.
 // Historie (v7/v7.1) entfernt: sie beschrieb ausschließlich Reparaturen an genau der Blob-
 // Mechanik, die es nicht mehr gibt.
+// v9 (25.7.2026), Audit über db.js × drive.js × sync-core.js — alles Befunde, die beim Lesen
+// EINER Datei unsichtbar sind:
+// [A2] Der Post-Upload-Sweep ist ein ZWEITER importAll-Aufruf und lief mit dem alten Wasserstand.
+//      [G4] hat die Geister-Konflikte damit nur für die Pull-Phase geschlossen: die im ersten
+//      Durchgang erzeugten merge3-/Konflikt-Events sind bewusst nicht _remote und lagen über
+//      uploadedSeq — der Sweep hielt sie für eigene Bearbeitungen und legte Konfliktkopien gegen
+//      den eigenen Merge an. Jetzt wird der Wasserstand vorher nachgezogen (+ _derived in db.js).
+// [A5] Auto-Sync hatte keine Obergrenze fürs Aufschieben: isEditing() prüfte nur den FOKUS, ein
+//      geparkter Cursor stoppte den Sync unbegrenzt. Jetzt Tipp-Erkennung + MAX_DEFER_MS.
+// [A6] Der pagehide-Flush lief über den vollen syncRaw (Lock, Listing, Downloads) und erreichte
+//      den keepalive-Upload praktisch nie. Jetzt eigener Kurzweg flushUpload() ohne Pull.
+// [A7] Nach jeder Snapshot-Runde wurde der Stempel gelöscht — das Gerät lud den Snapshot, den es
+//      gerade selbst hochgeladen hat, im Folgelauf komplett wieder herunter.
+// [A8] Der Uhren-Schätzer kannte kein Alter: ein einzelnes schnelles Sample von vor Stunden konnte
+//      den Offset festnageln, der über U.setClockOffset in JEDEN Zeitstempel fließt.
+// [A9] del() verschluckte Fehlschläge, während knownDeltaIds pauschal geleert wurde.
 // -- Archiv der Blob-Ära (v7, 25.7.2026), nur noch zur Einordnung:
 // [H1] Nachzügler-Deltas (Post-Upload-Sweep) brachten die heftUpdated-EVENTS mit, aber nie
 //      die zugehörigen Striche — der Blob-Abgleich war zu diesem Zeitpunkt längst gelaufen.
@@ -231,8 +247,12 @@ export const DRIVE = (() => {
 	// eine falsch gehende Geräteuhr „gewinnt“ sonst systematisch und still. Der Date-Header
 	// jeder Drive-Antwort dient als kostenlose Referenzzeit; syncRaw warnt oberhalb der Schwelle.
 	let clockSkewMs = 0;
-	let skewSamples = []; // [G1] Ringpuffer { offset, rtt } für den Minimum-RTT-Schätzer
+	let skewSamples = []; // [G1] Ringpuffer { offset, rtt, at } für den Minimum-RTT-Schätzer
 	const CLOCK_SKEW_WARN_MS = 120000;
+	// [A8] Samples altern. Ohne Alter konnte ein einzelnes sehr schnelles Sample von vor Stunden den
+	// Offset festnageln — auch nachdem die Geräteuhr längst per NTP korrigiert war. Der Offset fließt
+	// über U.setClockOffset in jeden neuen Zeitstempel und damit in jede LWW-Entscheidung.
+	const SKEW_MAX_AGE_MS = 600000; // 10 min
 	// Ab dieser Schwelle wird der gemessene Versatz aktiv in U.now() hineinkorrigiert:
 	// Event-Zeitstempel entstehen dann in (ungefährer) Serverzeit — LWW-Konflikte werden
 	// fair entschieden, statt dass die falsch gehende Uhr systematisch „gewinnt“.
@@ -248,8 +268,8 @@ export const DRIVE = (() => {
 			// des Round-Trips, sonst zählt jede ms Netzlatenz als Uhren-Drift. +500 ms gleicht die
 			// Sekunden-Auflösung des Headers aus (er ist immer abgerundet). Aus den letzten Samples
 			// gewinnt das mit der KLEINSTEN RTT — das ist das genaueste, Ausreißer fallen raus.
-			skewSamples.push({ offset: (t0 + t1) / 2 - (serverDate + 500), rtt: t1 - t0 });
-			if (skewSamples.length > 16) skewSamples.shift();
+			skewSamples.push({ offset: (t0 + t1) / 2 - (serverDate + 500), rtt: t1 - t0, at: t1 });
+			skewSamples = skewSamples.filter((s) => t1 - s.at < SKEW_MAX_AGE_MS).slice(-16); // [A8]
 			clockSkewMs = skewSamples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
 			U.setClockOffset(Math.abs(clockSkewMs) > CLOCK_APPLY_MS ? clockSkewMs : 0);
 		}
@@ -270,7 +290,12 @@ export const DRIVE = (() => {
 		if (!res.ok) throw new Error("Drive-Fehler " + res.status + ": " + (await res.text()).slice(0, 200));
 		return res;
 	}
-	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" }).then(() => indexRemove(fileId)).catch(() => {});
+	// [A9] Ergebnis melden statt verschlucken: beim Snapshot-Lauf wurden knownDeltaIds und der
+	// Snapshot-Stempel bisher unabhängig vom Erfolg geleert — ein einziges fehlgeschlagenes Delete
+	// zwang den nächsten Sync, Snapshot UND alle überlebenden Deltas erneut zu laden.
+	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" })
+		.then(() => { indexRemove(fileId); return true; })
+		.catch(() => false);
 
 	const emitSyncStatus = (state, label, detail) =>
 		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
@@ -566,20 +591,33 @@ export const DRIVE = (() => {
 			// appDataFolder aufs eigene Konto (exportAll redigiert sonst standardmäßig, db.js).
 			const packed = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: false })));
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
-			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
-			await mapLimit(listedDeltas, 6, (f) => del(f.id));
+			const createdSnap = await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
+			const deleted = await mapLimit(listedDeltas, 6, (f) => del(f.id));
 			// [G3] In-Memory UND persistiert gemeinsam leeren: ein bloßes removeItem ließ
 			// knownDeltaIds gefüllt zurück, und der Late-Sweep unten schrieb sie nur dann
 			// wieder weg, wenn zufällig ein spätes Delta existierte — der persistierte Zustand
 			// hängte also vom Zufall ab.
-			knownDeltaIds.clear();
+			// [A9] Nur die TATSÄCHLICH gelöschten Dateien vergessen. Ein pauschales clear() ließ überlebende
+			// Deltas als unbekannt zurück — der nächste Sync lud sie ein zweites Mal.
+			listedDeltas.forEach((f, i) => { if (deleted[i]) knownDeltaIds.delete(f.id); });
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
-			LS.removeItem("impala67_drive_snapshot_stamp");
+			// [A7] Den eigenen Snapshot nicht wieder herunterladen. Bisher stand hier removeItem, wodurch
+			// needSnapshot im Folgelauf garantiert true war: das Gerät holte den Snapshot, den es gerade
+			// selbst hochgeladen hat, und importierte ihn vollständig (ein kompletter Log-Durchlauf).
+			// uploadNamed fordert modifiedTime bereits mit an — die Information liegt also schon vor.
+			LS.setItem("impala67_drive_snapshot_stamp", createdSnap.id + ":" + createdSnap.modifiedTime);
 		}
 
 		// Bug-4-Fix Post-Upload-Sweep: Deltas anderer Clients einlesen, die WÄHREND unseres Syncs
 		// hochgeladen wurden. Der initiale listSyncFiles()-Aufruf lag vor unserem Upload — ein
 		// gleichzeitig synchender Tab fehlt sonst und beide Clients divergieren nach dem Sync.
+		// [A2] Wasserstand VOR dem zweiten Import nachziehen. [G4] hat die Geister-Konflikt-Fehlerklasse
+		// nur für die Pull-Phase strukturell geschlossen — dieser Sweep ist ein ZWEITER importAll-Aufruf.
+		// Mit dem alten uploadedSeq galten die soeben erzeugten merge3-/Konflikt-Events (bewusst nicht
+		// _remote, damit sie normal syncen) als "meine ungesyncten Änderungen" und wurden gegen späte
+		// Fremd-Deltas erneut in Konflikt gesetzt: Konfliktkopien ohne jede Nutzeraktion, bei jedem Lauf.
+		// Zweite Hälfte des Fixes: db.js kennt jetzt _derived (isLocalOnly).
+		importOpts.unsyncedAfterSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || uploadedSeq), await DB.maxSeq());
 		const filesAfter = await listSyncFiles();
 		const lateDeltas = unseenRemoteFiles(filesAfter.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
 		if (lateDeltas.length) {
@@ -599,6 +637,35 @@ export const DRIVE = (() => {
 		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.
 		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
 		return { imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, importedEvents };
+	}
+
+	// [A6] Kurzweg für pagehide: NUR hochladen — kein Pull, kein Lock-Warten, keine Blob-Runde.
+	// Alles, was vor dem Upload eine Netz-Rundreise braucht, ist beim Schließen verlorene Zeit; ohne
+	// gültiges Token im Speicher ist ohnehin nichts mehr zu retten. Scheitert der Upload (Paket über
+	// der keepalive-Schranke von ~64 KB), bleibt der Wasserstand stehen und der nächste Start holt es
+	// nach — ein ehrlicher Fehlschlag statt eines Flushs, der nur auf dem Papier stattfindet.
+	async function flushUpload() {
+		if (!autoEnabled() || !isConnected()) return;
+		const saved = validSavedToken();
+		if (!saved) return;
+		token = saved;
+		const localMaxSeq = await DB.maxSeq();
+		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), localMaxSeq);
+		if (!shouldUploadDelta(localMaxSeq, uploadedSeq)) return;
+		const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
+		if (!events.length) return;
+		flushMode = true;
+		try {
+			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
+			const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz",
+				packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
+			const known = loadKnownIds("impala67_drive_known_deltas");
+			known.add(created.id);
+			saveKnownIds("impala67_drive_known_deltas", known);
+			LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
+		} finally {
+			flushMode = false;
+		}
 	}
 
 	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
@@ -627,6 +694,13 @@ export const DRIVE = (() => {
 	// Nur nach erfolgter Anmeldung (nie Login-Popups aus Timern). Änderungen werden
 	// gebündelt; zusätzlich Start/Rückkehr/Intervall-Pulls in sichtbaren Sitzungen.
 	const AUTO_DELAY_MS = 3000, AUTO_INTERVAL_MS = 180000, LIVE_INTERVAL_MS = 20000;
+	// [A5] Obergrenze fürs Aufschieben. isEditing() sah bisher nur den FOKUS, nicht das Tippen — ein im
+	// Block geparkter Cursor (der Normalfall beim Lesen der eigenen Notizen) hielt die 5-s-Warteschleife
+	// beliebig lange am Laufen. Der Status stand dauerhaft auf "Speichert…", die Änderungen lagen
+	// unsynchronisiert herum, bis zufällig ein visibilitychange kam.
+	const MAX_DEFER_MS = 60000;
+	let deferSince = 0, lastKeyAt = 0;
+	document.addEventListener("keydown", () => { lastKeyAt = Date.now(); }, true);
 	let autoTimer = 0, autoIntervalTimer = 0, autoStarted = false, autoResultHandler = null;
 	const autoEnabled = () => LS.getItem("impala67.driveAutoSync") !== "0";
 	const isEditing = () => {
@@ -634,8 +708,9 @@ export const DRIVE = (() => {
 		// .heft-writing (heft.js): aktiver Stift-Strich — das Canvas ist nie activeElement.
 		// v8 wäre ein Replay mitten im Strich zwar nicht mehr zerstörerisch (fremde Striche kommen
 		// additiv dazu), aber ein Neuzeichnen unter dem laufenden Stift bleibt unschön.
-		return !!(document.querySelector(".heft-writing") ||
-			(ae && (ae.id === "pageTitle" || ae.classList.contains("blk-input") || ae.classList.contains("db-cell"))));
+		if (document.querySelector(".heft-writing")) return true;
+		if (Date.now() - lastKeyAt > 1500) return false; // [A5] Fokus allein ist keine Eingabe
+		return !!(ae && (ae.id === "pageTitle" || ae.classList.contains("blk-input") || ae.classList.contains("db-cell")));
 	};
 
 	async function autoSync(reason, force) {
@@ -659,11 +734,15 @@ export const DRIVE = (() => {
 
 	function scheduleAutoSync(reason) {
 		if (!autoEnabled() || !isConnected()) return;
+		if (!deferSince) deferSince = Date.now(); // [A5] Beginn des Aufschiebens merken
 		clearTimeout(autoTimer);
 		emitSyncStatus("waiting", navigator.onLine === false ? "Offline · wartet" : "Speichert…");
 		autoTimer = setTimeout(() => {
-			// Während getippt wird: weiter bündeln, in 5 s erneut prüfen.
-			if (isEditing()) { autoTimer = setTimeout(() => scheduleAutoSync(reason), 5000); return; }
+			// Während getippt wird: weiter bündeln, in 5 s erneut prüfen — aber [A5] höchstens
+			// MAX_DEFER_MS lang. Danach wird gesynct, egal wo der Cursor gerade steht. Nach v8 ist
+			// ein Replay ohnehin additiv, das ursprüngliche Ziel von [F3] bleibt gewahrt.
+			if (isEditing() && Date.now() - deferSince < MAX_DEFER_MS) { autoTimer = setTimeout(() => scheduleAutoSync(reason), 5000); return; }
+			deferSince = 0;
 			autoSync(reason);
 		}, AUTO_DELAY_MS);
 	}
@@ -677,10 +756,13 @@ export const DRIVE = (() => {
 		const UI_ONLY_EVENTS = new Set(["uiTabsSet"]);
 		STATE.onAfterDispatch((ev) => { if (!ev || !UI_ONLY_EVENTS.has(ev.type)) scheduleAutoSync("change"); });
 		document.addEventListener("visibilitychange", () => document.hidden ? autoSync("background", true) : autoSync("foreground"));
-		window.addEventListener("pagehide", () => { // Best-Effort-Flush beim Schließen
-			flushMode = true;
-			autoSync("close", true).finally(() => { flushMode = false; });
-		});
+		// [A6] Best-Effort-Flush beim Schließen — jetzt über den Kurzweg. Vorher lief hier der VOLLE
+		// syncRaw: Web Lock (ohne ifAvailable, kann also warten), getToken, listSyncFiles, Snapshot-
+		// und Delta-Downloads, Blob-Runde. Der Browser friert das Dokument nach pagehide binnen
+		// Millisekunden ein — der keepalive-Upload in uploadNamed wurde praktisch nie erreicht.
+		// Der versprochene Flush fand faktisch nicht statt. visibilitychange→hidden deckt den
+		// Regelfall ohnehin schon vollständig ab; das hier ist die letzte Rettung.
+		window.addEventListener("pagehide", () => { flushUpload().catch(() => {}); });
 		// Adaptiv: Ist gerade ein Heft offen, wird alle 20 s geschaut, sonst alle 3 min.
 		// So erscheinen fremde Striche fast live, ohne im Ruhezustand Traffic zu erzeugen.
 		const heftOpen = () => !!document.querySelector(".heft-chrome");
