@@ -86,9 +86,22 @@ export const SRS = (() => {
 		const mins = Math.max(0.0167, Number(m) || 1);
 		return new Date(now.getTime() + mins * 60e3).toISOString();
 	};
+	// Anki-Fuzz-Bänder: der relative Spielraum sinkt mit wachsendem Intervall.
+	// Vorher: ±10 % mit Math.round — bei 3 Tagen war die Streuung ±0.3 Tage und rundete
+	// damit fast immer auf 0; spürbar wurde der Fuzz erst ab ~10 Tagen. Genau die kurzen
+	// Intervalle verklumpen aber: alles, was zusammen gelernt wurde, wurde zusammen fällig.
+	const FUZZ_RANGES = [[2.5, 7, 0.15], [7, 20, 0.1], [20, Infinity, 0.05]];
+	const fuzzDays = (days) => {
+		if (days < 2.5) return days;
+		let delta = 1;
+		for (const [lo, hi, f] of FUZZ_RANGES) delta += f * Math.max(0, Math.min(days, hi) - lo);
+		const min = Math.max(2, Math.round(days - delta));
+		const max = Math.max(min, Math.round(days + delta));
+		return min + Math.floor(Math.random() * (max - min + 1));
+	};
 	const dueAfterDays = (now, d, fuzz) => {
 		let days = Math.max(1, Math.round(Number(d) || 1));
-		if (fuzz && days > 2) days += Math.round((Math.random() - 0.5) * Math.min(6, days * 0.1) * 2);
+		if (fuzz) days = fuzzDays(days);
 		days = clamp(days, 1, MAX_IVL);
 		return new Date(now.getTime() + days * 864e5).toISOString();
 	};
@@ -145,7 +158,12 @@ export const SRS = (() => {
 			} else {
 				s.state = "review";
 				s.step = 0;
-				s.stability = Math.max(s.stability, initStability(4));
+				// FSRS-5: Graduierung über die Kurzzeit-Formel statt eines künstlichen Bodens.
+				// Math.max(S, initStability(4)) hob eine zuvor mehrfach vergessene Karte auf
+				// ~15.7 Tage und ignorierte damit ihre Lapse-Historie.
+				// (Der 16-Tage-Wert für "Einfach" auf einer NEUEN Karte oben bleibt korrekt —
+				// der entsteht aus W[3] und I(0.9,S)=S, nicht aus dieser Zeile.)
+				s.stability = shortTermStability(s.stability || initStability(4), 4);
 				s.due = dueAfterDays(now, nextInterval(s.stability), fuzz);
 			}
 		} else if (g === 1) {
@@ -190,7 +208,7 @@ export const SRS = (() => {
 	const formulas = {
 		W, DECAY, FACTOR, REQUEST_RETENTION, MAX_IVL, MIN_STABILITY,
 		initStability, initDifficulty, retrievability, nextInterval,
-		nextDifficulty, recallStability, forgetStability, shortTermStability,
+		nextDifficulty, recallStability, forgetStability, shortTermStability, fuzzDays,
 	};
 
 	return { newCard, rate, preview, formulas };

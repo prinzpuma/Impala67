@@ -667,6 +667,11 @@ export const STATE = (() => {
 
 	async function load() {
 		const evs = await loadSortedEvents();
+		// Hybride logische Uhr (siehe util.js): nach einem Neustart steht _lastNowMs auf 0.
+		// Ohne diesen Anstoß könnte die erste Bearbeitung nach dem Start einen Zeitstempel
+		// bekommen, der VOR einem bereits importierten fremden Stand liegt — und im Replay
+		// damit ausgerechnet gegen den Stand verlieren, den sie ablösen soll.
+		if (evs.length) U.observeTime(evs[evs.length - 1].t);
 		evs.forEach(reduce);
 		applySecrets(); // Kompatibilitäts-Hook; Zugangsdaten liegen im Event-Log.
 	}

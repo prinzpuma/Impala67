@@ -3,20 +3,45 @@
 export const U = {
 	uid: () => crypto.randomUUID(),
 
-	// Zeitquelle aller Event-Zeitstempel. Der Log-Merge entscheidet Konflikte per
-	// Zeitstempel (LWW) — eine falsch gehende Geräteuhr würde sonst systematisch und
-	// still „gewinnen“. drive.js misst den Versatz gegen den Date-Header der Drive-
-	// Antworten und meldet ihn über setClockOffset(); zusätzlich ist now() monoton:
-	// nie derselbe oder ein früherer Wert als beim letzten Aufruf, damit die
-	// deterministische Replay-Reihenfolge lokal nie kippen kann.
+	// Zeitquelle aller Event-Zeitstempel — eine HYBRIDE LOGISCHE UHR (HLC).
+	// Der Log-Merge entscheidet Konflikte per Zeitstempel (LWW); eine falsch gehende
+	// Geräteuhr würde sonst systematisch und still „gewinnen“. Drei Schichten:
+	// 1. Physisch: drive.js misst den Versatz gegen den Date-Header der Drive-Antworten
+	//    (NTP-artig über die kleinste Round-Trip-Zeit) und meldet ihn über setClockOffset().
+	// 2. Monoton: now() liefert nie denselben oder einen früheren Wert als zuvor — die
+	//    deterministische Replay-Reihenfolge kann lokal nie kippen.
+	// 3. Logisch (Audit 25. Juli): observeTime() zieht die Uhr auf jeden GESEHENEN fremden
+	//    Zeitstempel hoch. Wer ein Event aus der „Zukunft“ importiert, vergibt danach
+	//    garantiert größere Zeitstempel — eine Bearbeitung, die nachweislich NACH einer
+	//    fremden Änderung passiert ist, gewinnt damit auch dann, wenn die eigene Uhr
+	//    nachgeht. Genau diese Happens-before-Garantie fehlt reinem Wall-Clock-LWW.
+	// Der Wert bleibt ein normaler ISO-String: kein Schema-Wechsel, alte Events und
+	// ältere App-Versionen bleiben vollständig kompatibel.
 	_clockOffsetMs: 0,
 	_lastNowMs: 0,
+	// Fremde Zeitstempel, die weiter als das in der Zukunft liegen, gelten als kaputte Uhr
+	// und werden NICHT übernommen — sonst zöge ein einziges Gerät mit falsch gestelltem
+	// Jahr die logische Uhr aller anderen dauerhaft mit sich.
+	_maxAdoptAheadMs: 864e5, // 24 h
 	setClockOffset(ms) { U._clockOffsetMs = Number(ms) || 0; },
 	now: () => {
 		let t = Date.now() - U._clockOffsetMs;
 		if (t <= U._lastNowMs) t = U._lastNowMs + 1;
 		U._lastNowMs = t;
 		return new Date(t).toISOString();
+	},
+	// Vor dem Verarbeiten importierter Events aufrufen. true = Zeitstempel übernommen.
+	observeTime(iso) {
+		const ms = Date.parse(iso);
+		if (!Number.isFinite(ms)) return false;
+		if (ms > Date.now() - U._clockOffsetMs + U._maxAdoptAheadMs) return false;
+		if (ms > U._lastNowMs) U._lastNowMs = ms;
+		return true;
+	},
+	observeTimes(list) {
+		let n = 0;
+		for (const ev of list || []) if (ev && ev.t && U.observeTime(ev.t)) n++;
+		return n;
 	},
 
 	// PERF (Audit 21. Juli): esc() ist die heißeste Funktion der UI — jeder Render baut

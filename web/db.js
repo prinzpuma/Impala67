@@ -8,6 +8,17 @@ import { U } from "./util.js";
 // • reconstructPageFromEvents sortiert nach Zeit — lokale Liste ist seq-geordnet, nach einem
 //   Import überschrieben sonst ÄLTERE Patches den neueren Stand (gleiche Falle wie contentHeadsOf-Fix)
 // • deletesOf: jüngstes Event per t statt Array-Reihenfolge (dito)
+// Audit-Fixes (25. Juli 2026) — gefunden über das Zusammenspiel mit drive.js, nicht in dieser Datei allein:
+// • importAll: _remote-Events zählen nicht mehr als "lokale Änderung" → keine Geister-Konflikte
+// • Kompaktierungs-Untergrenze (COMPACT_FLOOR_KEY) → der Merge bringt verdichtete Events nicht zurück
+// • compactLocal setzt die seq-basierten Sync-Marken zurück → keine still unhochgeladenen Events mehr
+// Ausbau (25. Juli 2026, zweite Runde):
+// • merge3(): echter Drei-Wege-Abgleich gegen den letzten GEMEINSAMEN Stand — zwei
+//   Bearbeitungen derselben Seite an verschiedenen Stellen werden jetzt zusammengeführt,
+//   statt per LWW eine „⚠ Konflikt“-Kopie zu erzeugen. Nur echte Überlappung bleibt Konflikt.
+// • Hybride logische Uhr: importierte Zeitstempel heben die lokale Uhr an (U.observeTimes),
+//   Gleichstände werden deterministisch per Event-id gebrochen — vorher konnten bei exakt
+//   gleichem t BEIDE Geräte sich selbst als Verlierer sehen und je eine Kopie anlegen.
 export const DB = (() => {
 	let db = null, openPromise = null; // openPromise memoisiert open() gegen Doppel-Open-Races
 
@@ -137,6 +148,19 @@ export const DB = (() => {
 	// Verlaufs-Schutz: N jüngste Inhalts-Stände je Seite überleben — pageHistory liest das Event-Log.
 	const KEEP_CONTENT_VERSIONS = 10;
 	const TELE_KEEP_DAYS = 90;
+	// Kompaktierungs-Untergrenze: alles ÄLTERE dieser Typen wurde bewusst verdichtet.
+	// Ohne die Marke schleust der (per Event-id idempotente) Merge wegkompaktierte Events
+	// aus fremden Deltas wieder ein — die Kompaktierung erreichte ihr Ziel dann NIE, und
+	// die 90-Tage-Telemetrie-Regel griff faktisch nicht.
+	// Bewusst NUR diese drei Typen: ein lange offline gewesenes Gerät hat legitime alte
+	// pageUpdate-Patches, die weiterhin ankommen müssen. Für pageUpdate ist Wieder-
+	// auferstehung nur ein Platz-, kein Korrektheitsproblem (Replay ist LWW über t).
+	const COMPACT_FLOOR_KEY = "impala67_compact_floor";
+	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "teleEvent"]);
+	const compactFloor = () => localStorage.getItem(COMPACT_FLOOR_KEY) || "";
+	// Exportiert, damit test/test-sync.mjs genau diese Regel prüfen kann — der Fehler,
+	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
+	const isLocalOnly = (ev, unsyncedAfterSeq) => (ev.seq || 0) > unsyncedAfterSeq && !ev._remote;
 	function compactEvents(events) {
 		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
 		const deletedAt = { page: {}, card: {} };
@@ -181,6 +205,16 @@ export const DB = (() => {
 		const dropped = evs.length - compacted.length;
 		if (dropped < minDrop) return 0;
 		await rw("events", (s) => { s.clear(); compacted.forEach(({ seq, ...ev }) => s.add(ev)); });
+		// Untergrenze setzen, damit fremde Deltas die verworfenen Events nicht zurückbringen.
+		localStorage.setItem(COMPACT_FLOOR_KEY, compacted.length ? compacted[0].t : U.now());
+		// Der seq-Raum ist komplett neu vergeben — jede seq-basierte Sync-Marke ist damit
+		// bedeutungslos. 0 = beim nächsten Sync alles erneut anbieten; importAll ist per
+		// Event-id idempotent, es entstehen also keine Duplikate.
+		// Vorher stand hier nur ein Kommentar: drive.js [F4] klemmte den zu hohen Wasserstand
+		// auf den GESCHRUMPFTEN maxSeq — darunter lagen dann nie hochgeladene Events, die
+		// eventsAfterSeq dauerhaft übersprang (stiller Verlust Richtung anderer Geräte).
+		localStorage.setItem("impala67_drive_uploaded_seq", "0");
+		localStorage.removeItem("impala67_drive_synced_seq");
 		return dropped;
 	}
 
@@ -267,6 +301,73 @@ export const DB = (() => {
 		return pg;
 	}
 
+	// ---- Drei-Wege-Abgleich (diff3) -------------------------------------------------
+	// Bisher entschied bei zwei gleichzeitig geänderten Fassungen DERSELBEN Seite allein der
+	// Zeitstempel: ein Gerät gewann, das andere bekam eine „⚠ Konflikt“-Kopie — auch dann,
+	// wenn die Bearbeitungen völlig verschiedene Absätze betrafen und sich gar nicht
+	// widersprachen. merge3 vergleicht beide Fassungen gegen den letzten GEMEINSAMEN Stand:
+	//   • nur eine Seite hat einen Abschnitt geändert → diese Änderung wird übernommen
+	//   • beide haben ihn identisch geändert          → einmal übernommen
+	//   • beide haben ihn unterschiedlich geändert    → echte Überlappung → ok:false, der
+	//     Aufrufer fällt auf LWW + Konfliktkopie zurück (es geht also nie etwas verloren)
+	// Pure Funktion ohne DB-Zugriff — test/test-sync.mjs prüft sie direkt.
+	const MERGE_MAX_LINES = 1200; // O(n*m)-Matrix: darüber lohnt der Versuch nicht
+	// LCS als Paar-Liste (Index in A, Index in B) — Grundlage beider Zwei-Wege-Diffs.
+	function lcsPairs(A, B) {
+		const n = A.length, m = B.length;
+		const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+		for (let i = n - 1; i >= 0; i--) {
+			const row = dp[i], next = dp[i + 1];
+			for (let j = m - 1; j >= 0; j--) {
+				row[j] = A[i] === B[j] ? next[j + 1] + 1 : Math.max(next[j], row[j + 1]);
+			}
+		}
+		const pairs = [];
+		let i = 0, j = 0;
+		while (i < n && j < m) {
+			if (A[i] === B[j]) { pairs.push([i, j]); i++; j++; }
+			else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+			else j++;
+		}
+		return pairs;
+	}
+	function merge3(base, mine, theirs) {
+		if (mine === theirs) return { ok: true, text: mine, changed: false };
+		if (mine === base) return { ok: true, text: theirs, changed: true };
+		if (theirs === base) return { ok: true, text: mine, changed: false };
+		const B = String(base ?? "").split("\n");
+		const M = String(mine ?? "").split("\n");
+		const T = String(theirs ?? "").split("\n");
+		if (B.length > MERGE_MAX_LINES || M.length > MERGE_MAX_LINES || T.length > MERGE_MAX_LINES) return { ok: false };
+		// Stabile Anker: Basiszeilen, die in BEIDEN Fassungen unverändert wiederkehren.
+		const mMap = new Map(lcsPairs(B, M));
+		const tMap = new Map(lcsPairs(B, T));
+		const anchors = [];
+		let lastM = -1, lastT = -1;
+		for (let b = 0; b < B.length; b++) {
+			const m = mMap.get(b), t = tMap.get(b);
+			if (m === undefined || t === undefined || m <= lastM || t <= lastT) continue;
+			anchors.push([b, m, t]);
+			lastM = m; lastT = t;
+		}
+		anchors.push([B.length, M.length, T.length]); // Abschluss-Anker
+		const out = [];
+		let b0 = 0, m0 = 0, t0 = 0;
+		for (const [b1, m1, t1] of anchors) {
+			const bChunk = B.slice(b0, b1).join("\n");
+			const mChunk = M.slice(m0, m1), tChunk = T.slice(t0, t1);
+			const mStr = mChunk.join("\n"), tStr = tChunk.join("\n");
+			if (mStr === tStr) out.push(...mChunk);        // beide gleich (auch: beide unverändert)
+			else if (mStr === bChunk) out.push(...tChunk); // nur die Gegenseite hat geändert
+			else if (tStr === bChunk) out.push(...mChunk); // nur dieses Gerät hat geändert
+			else return { ok: false };                     // echte Überlappung → Konfliktkopie
+			if (b1 < B.length) out.push(B[b1]);            // der Anker selbst
+			b0 = b1 + 1; m0 = m1 + 1; t0 = t1 + 1;
+		}
+		const text = out.join("\n");
+		return { ok: true, text, changed: text !== mine };
+	}
+
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
 	// opts (nur Drive-Sync): unsyncedAfterSeq = Seq des letzten Uploads (Basis der Konflikt-Erkennung),
 	// pageInfo(id) → {title,parentId,workspaceId}, remote = echter Drive-Download.
@@ -278,30 +379,63 @@ export const DB = (() => {
 		const incoming = Array.isArray(data.events) ? data.events : []; // kaputte Exporte nicht crashen lassen
 		const local = await allEvents();
 		const existing = new Set(local.map((e) => e.id));
-		const fresh = incoming.filter((ev) => ev && ev.id && !existing.has(ev.id));
+		const floor = compactFloor();
+		const fresh = incoming.filter((ev) => ev && ev.id && !existing.has(ev.id) &&
+			!(floor && ev.t < floor && DROPPABLE_TYPES.has(ev.type))); // keine Wiederauferstehung verdichteter Events
 		// Nur echte Drive-Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
 		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
 		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
+		// Hybride logische Uhr (siehe util.js): die eigene Uhr auf jeden gesehenen fremden
+		// Zeitstempel heben, BEVOR unten Merge-/Konflikt-Events mit U.now() entstehen. Sonst
+		// könnte eine nachgehende Geräteuhr Events datieren, die im Replay VOR dem gerade
+		// importierten Stand landen, den sie eigentlich ablösen sollen.
+		U.observeTimes(fresh);
 		const conflictDetails = [];
+		const mergedDetails = [];
 		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length) {
-			const localOnly = (ev) => (ev.seq || 0) > opts.unsyncedAfterSeq; // seit letztem Sync, kennt kein anderes Gerät
+			// _remote = echter Drive-Download. Solche Events bekommen beim Import zwar eine frische
+			// lokale seq (> unsyncedAfterSeq), sind aber NIE eine Änderung DIESES Geräts.
+			// Ohne den !_remote-Filter meldete ein Sync mit Snapshot UND Delta Konflikte gegen sich
+			// selbst: syncRaw importiert erst den Snapshot, dessen Events liegen im zweiten
+			// importAll-Aufruf über dem Wasserstand und galten damit als "meine ungesyncten
+			// Änderungen" — Ergebnis waren "⚠ Konflikt"-Kopien ohne jede lokale Bearbeitung.
+			const localOnly = (ev) => isLocalOnly(ev, opts.unsyncedAfterSeq); // seit letztem Sync, kennt kein anderes Gerät
 			const info = (id) => (opts.pageInfo && opts.pageInfo(id)) || {};
 
-			// (1) Inhalts-Konflikt: gleiche Seite lokal UND remote geändert. Replay: späterer Zeitstempel
-			// gewinnt still — der unterlegene Stand wird als Konfliktkopie gerettet.
+			// (1) Inhalts-Konflikt: gleiche Seite lokal UND remote geändert. Erst wird ein
+			// Drei-Wege-Abgleich versucht; nur bei echter Überlappung greift LWW + Konfliktkopie.
 			const localHeads = contentHeadsOf(local, localOnly), remoteHeads = contentHeadsOf(fresh);
+			// Letzter GEMEINSAMER Stand = alles, was dieses Gerät schon gesynct hatte bzw. selbst
+			// per Sync bekommen hat. Genau die Basis, von der beide Seiten losgelaufen sind.
+			const commonEvents = local.filter((ev) => !localOnly(ev));
 			for (const [id, remote] of Object.entries(remoteHeads)) {
 				const mine = localHeads[id];
 				if (!mine || mine.payload.patch.content === remote.payload.patch.content) continue;
-				const loser = mine.t <= remote.t ? mine : remote;
+				// (1a) Betreffen die beiden Bearbeitungen verschiedene Stellen, gibt es gar keinen
+				// Konflikt — beide werden übernommen. Die Merge-Event-id ist aus beiden Quell-ids
+				// abgeleitet und seitenunabhängig sortiert: beide Geräte erzeugen dieselbe id, der
+				// Merge ist damit idempotent und läuft nach dem Rück-Sync nicht doppelt.
+				const mergeId = "merge3-" + (mine.id < remote.id ? mine.id + "-" + remote.id : remote.id + "-" + mine.id);
+				if (existing.has(mergeId)) continue; // schon zusammengeführt — kein Konflikt mehr
+				const m3 = merge3(reconstructPageFromEvents(commonEvents, id).content, mine.payload.patch.content, remote.payload.patch.content);
+				if (m3.ok) {
+					mergedDetails.push({ pageId: id, title: info(id).title || "Seite", localTime: mine.t, remoteTime: remote.t });
+					fresh.push({ id: mergeId, t: U.now(), type: "pageUpdate", payload: { id, patch: { content: m3.text } } });
+					continue;
+				}
+				// (1b) Echte Überlappung: der spätere Zeitstempel gewinnt still, der unterlegene
+				// Stand wird als Kopie gerettet. Gleichstand deterministisch per id brechen, damit
+				// BEIDE Geräte denselben Verlierer wählen (sonst legt jede Seite eine Kopie an).
+				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
+				const loser = remoteWins ? mine : remote;
 				if (existing.has("conflict-" + loser.id)) continue;
 				const pi = info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
 				conflictDetails.push({
 					pageId: id, title,
-					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät am Inhalt geändert. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
+					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät geändert — und zwar an derselben Stelle, sodass sie sich nicht automatisch zusammenführen ließ. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
 					localContent: mine.payload.patch.content, remoteContent: remote.payload.patch.content,
 					localTime: mine.t, remoteTime: remote.t,
-					winner: mine.t <= remote.t ? "remote" : "local",
+					winner: remoteWins ? "remote" : "local",
 					loserContent: loser.payload.patch.content, loserTime: loser.t,
 					conflictPageId, eventId: "conflict-" + loser.id,
 				});
@@ -322,13 +456,16 @@ export const DB = (() => {
 			for (const [id, remote] of Object.entries(remoteHefts)) {
 				const mine = localHefts[id];
 				if (!mine || mine.payload.blobHash === remote.payload.blobHash) continue;
-				const loser = mine.t <= remote.t ? mine : remote;
+				// Gleichstand wie oben deterministisch per id brechen (Binärdaten lassen sich nicht
+				// zusammenführen — hier bleibt es zwangsläufig bei „Verlierer retten“).
+				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
+				const loser = remoteWins ? mine : remote;
 				if (existing.has("heftconflict-" + loser.id)) continue;
 				const pi = info(id), conflictPageId = "heftconflictpg-" + loser.id;
 				conflictDetails.push({
 					pageId: id, title: pi.title || "Heft", conflictPageId, conflictType: "heft",
 					loserSource: loser === mine ? "local" : "remote", loserHash: loser.payload.blobHash,
-					winner: mine.t <= remote.t ? "remote" : "local",
+					winner: remoteWins ? "remote" : "local",
 					reason: "Dieses Heft wurde auf zwei Geräten geändert. Der ältere Stand wurde als separates Konflikt-Heft gesichert.",
 				});
 				fresh.push(
@@ -375,7 +512,7 @@ export const DB = (() => {
 		const missing = Object.entries(blobs).filter(([k]) => !have.has(k));
 		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
-		return { added: fresh.length, conflicts: conflictDetails.length, conflictDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
+		return { added: fresh.length, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
 	}
 
 	async function resetDatabase() {
@@ -415,5 +552,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, contentHeadsOf, heftHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, heftHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

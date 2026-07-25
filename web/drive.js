@@ -32,6 +32,20 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 // auf Voll-Listing bei Erst-Sync oder ungültigem Token (Drive 404/410); eigene
 // Uploads/Deletes aktualisieren den Index sofort. Skaliert damit unabhängig
 // von der wachsenden Delta-/Blob-Dateizahl (Kompaktierung greift erst ab 50).
+// v6 (25.7.2026), Audit-Fixes:
+// [G1] Uhren-Drift per Minimum-RTT-Schätzer statt Einzelmessung — vorher wurde Netz-
+//      latenz als Drift gemessen (300 ms Mobilfunk = 300 ms Phantom-Drift) und floss
+//      über U.setClockOffset in die Event-Zeitstempel, also in JEDE LWW-Entscheidung.
+// [G2] known_blobs entfällt: boundedKnownIds kappte bei 2000 ids, wodurch ab ~2000
+//      Blob-Dateien jeder Sync die ältesten erneut VOLLSTÄNDIG herunterlud, nur um sie
+//      danach zu verwerfen. Die Entscheidung fällt jetzt über appProperties.blobId aus
+//      der ohnehin geladenen Dateiliste — vor dem Download.
+// [G3] Snapshot-Runde setzt knownDeltaIds in-memory UND persistiert gemeinsam zurück.
+// [G4] Pull-Phase: Snapshot + Delta-Shards laufen jetzt in EINEM importAll (vorher zwei)
+//      und werden parallel heruntergeladen. Spart pro Sync einen kompletten Lese-Durchlauf
+//      über den lokalen Event-Log — und schließt die Geister-Konflikt-Fehlerklasse
+//      strukturell: es gibt keinen zweiten Durchlauf mehr, der die Events des ersten für
+//      eigene ungesyncte Änderungen halten könnte.
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json", LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar
@@ -178,6 +192,7 @@ export const DRIVE = (() => {
 	// eine falsch gehende Geräteuhr „gewinnt“ sonst systematisch und still. Der Date-Header
 	// jeder Drive-Antwort dient als kostenlose Referenzzeit; syncRaw warnt oberhalb der Schwelle.
 	let clockSkewMs = 0;
+	let skewSamples = []; // [G1] Ringpuffer { offset, rtt } für den Minimum-RTT-Schätzer
 	const CLOCK_SKEW_WARN_MS = 120000;
 	// Ab dieser Schwelle wird der gemessene Versatz aktiv in U.now() hineinkorrigiert:
 	// Event-Zeitstempel entstehen dann in (ungefährer) Serverzeit — LWW-Konflikte werden
@@ -185,10 +200,18 @@ export const DRIVE = (() => {
 	// Unterhalb der Schwelle bleibt alles unangetastet (Netz-Latenz verrauscht kleine Werte).
 	const CLOCK_APPLY_MS = 15000;
 	async function api(path, opts = {}, attempt = 0) {
+		const t0 = Date.now();
 		const res = await fetch("https://www.googleapis.com" + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
+		const t1 = Date.now();
 		const serverDate = Date.parse(res.headers.get("date") || "");
 		if (serverDate) {
-			clockSkewMs = Date.now() - serverDate;
+			// [G1] NTP-Schätzer statt "Date.now() - serverDate": der Date-Header gilt in der MITTE
+			// des Round-Trips, sonst zählt jede ms Netzlatenz als Uhren-Drift. +500 ms gleicht die
+			// Sekunden-Auflösung des Headers aus (er ist immer abgerundet). Aus den letzten Samples
+			// gewinnt das mit der KLEINSTEN RTT — das ist das genaueste, Ausreißer fallen raus.
+			skewSamples.push({ offset: (t0 + t1) / 2 - (serverDate + 500), rtt: t1 - t0 });
+			if (skewSamples.length > 16) skewSamples.shift();
+			clockSkewMs = skewSamples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
 			U.setClockOffset(Math.abs(clockSkewMs) > CLOCK_APPLY_MS ? clockSkewMs : 0);
 		}
 		// Abgelaufenes/entzogenes Token mitten im Sync: EINMAL still erneuern und wieder-
@@ -412,31 +435,48 @@ export const DRIVE = (() => {
 		// Konflikt-Erkennung deaktivieren — Remote überschriebe lokale Änderungen still.
 		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), await DB.maxSeq());
 		const importOpts = { unsyncedAfterSeq: uploadedSeq, pageInfo: (id) => S.pages[id], remote: true };
-		let imported = 0, uploaded = 0, conflicts = 0;
-		const conflictDetails = [], importedEvents = [];
+		let imported = 0, uploaded = 0, conflicts = 0, merged = 0;
+		const conflictDetails = [], importedEvents = [], mergedDetails = [];
 		const importJson = async (json) => {
 			const r = await DB.importAll(json, importOpts);
-			imported += r.added; conflicts += r.conflicts || 0;
+			imported += r.added; conflicts += r.conflicts || 0; merged += r.merged || 0;
 			conflictDetails.push(...(r.conflictDetails || []));
+			mergedDetails.push(...(r.mergedDetails || [])); // automatisch zusammengeführte Seiten (db.js merge3)
 			importedEvents.push(...(r.importedEvents || []));
 		};
 
-		// Snapshot nur bei geänderter modifiedTime laden; Altformat bleibt kompatibel.
+		// ---- [G4] Pull: Snapshot + alle unbekannten Delta-Shards in EINEM Durchgang ----
+		// Vorher waren das ZWEI importAll-Aufrufe. Jeder liest den kompletten lokalen Event-Log
+		// in den Speicher — zwei Aufrufe = doppelte Arbeit bei jedem Sync. Schwerer wog aber:
+		// der zweite Aufruf sah die frisch importierten Events des ersten als „meine ungesyncten
+		// Änderungen“ und meldete Konflikte gegen den eigenen Sync (db.js/isLocalOnly). Mit einem
+		// einzigen Durchgang kann diese Fehlerklasse gar nicht mehr entstehen. Snapshot- und
+		// Delta-Downloads laufen zusätzlich parallel statt nacheinander.
 		const snapshot = newestFile(files, [SNAPSHOT_NAME, FILE_NAME, LEGACY_FILE_NAME]);
 		const snapStamp = snapshot ? snapshot.id + ":" + snapshot.modifiedTime : "";
-		if (snapshot && LS.getItem("impala67_drive_snapshot_stamp") !== snapStamp) {
-			setStatus("syncing", "Remote-Stand übernehmen…");
-			await importJson(JSON.stringify(await downloadPayload(snapshot)));
-			LS.setItem("impala67_drive_snapshot_stamp", snapStamp);
-		}
-
-		// Unbekannte Delta-Shards parallel laden und in EINEM importAll mergen (dedupliziert
-		// per Event-id; die Konflikt-Erkennung sieht den jüngsten Head über alle Shards).
+		const needSnapshot = !!snapshot && LS.getItem("impala67_drive_snapshot_stamp") !== snapStamp;
 		const knownDeltaIds = loadKnownIds("impala67_drive_known_deltas");
 		const remoteDeltas = unseenRemoteFiles(files.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
-		if (remoteDeltas.length) setStatus("syncing", remoteDeltas.length + " Änderungspaket(e) laden…");
-		const deltaEvents = (await mapLimit(remoteDeltas, 6, downloadPayload)).flatMap((p) => Array.isArray(p?.events) ? p.events : []);
-		if (deltaEvents.length) await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: deltaEvents, blobs: {} }));
+		if (needSnapshot || remoteDeltas.length) {
+			setStatus("syncing", needSnapshot ? "Remote-Stand übernehmen…" : remoteDeltas.length + " Änderungspaket(e) laden…");
+		}
+		const [snapPayload, deltaPayloads] = await Promise.all([
+			needSnapshot ? downloadPayload(snapshot) : null,
+			mapLimit(remoteDeltas, 6, downloadPayload),
+		]);
+		const pullEvents = [
+			...(Array.isArray(snapPayload?.events) ? snapPayload.events : []),
+			...deltaPayloads.flatMap((p) => Array.isArray(p?.events) ? p.events : []),
+		];
+		// Alt-Snapshots (Format v1, FILE_NAME/LEGACY_FILE_NAME) trugen ihre Blobs noch im selben
+		// Dokument — die müssen mit durch importAll, sonst gingen sie beim Zusammenlegen verloren.
+		const pullBlobs = snapPayload?.blobs && typeof snapPayload.blobs === "object" ? snapPayload.blobs : {};
+		if (pullEvents.length || Object.keys(pullBlobs).length) {
+			await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: pullEvents, blobs: pullBlobs }));
+		}
+		// „Gelesen“-Marken erst NACH erfolgreichem Import setzen: bricht der Import ab, wird das
+		// Paket beim nächsten Sync erneut geholt statt still übersprungen.
+		if (needSnapshot) LS.setItem("impala67_drive_snapshot_stamp", snapStamp);
 		remoteDeltas.forEach((f) => knownDeltaIds.add(f.id));
 		saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 
@@ -444,25 +484,27 @@ export const DRIVE = (() => {
 		const remoteBlobs = files.filter((f) => f.name.startsWith(BLOB_PREFIX))
 			.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
 		const remoteBlobHashes = new Set(remoteBlobs.map((f) => f.name.slice(BLOB_PREFIX.length).replace(/\.json\.gz$/, "")));
-		const knownBlobIds = loadKnownIds("impala67_drive_known_blobs");
-		const uploadHashCache = lsJson("impala67_drive_upload_hashes", {});
+		const uploadHashCache = lsJson("impala67_drive_upload_hashes", {}); // [G2] known_blobs entfiel
 		let cacheDirty = false;
 		const allEvs = await DB.allEvents(); // EIN Read für Heads + Legacy-Check
 		const localBlobKeys = new Set(await DB.allBlobKeys()); // EIN Read; wird unten mitgepflegt
 		const liveHeftHashes = await reconcileHeftBlobs(remoteBlobs, conflictDetails, allEvs, uploadHashCache, localBlobKeys);
 		const legacyHefts = legacyHeftIds(allEvs);
-		await mapLimit(unseenRemoteFiles(remoteBlobs, knownBlobIds), 6, async (file) => {
+		// [G2] Vorfilter OHNE Download: appProperties.blobId steht in der Dateiliste. Fehlt er
+		// (Alt-Dateien vor v4), bleibt es beim alten Weg — laden und danach entscheiden.
+		const wantsBlob = (blobId) => {
+			if (localBlobKeys.has(blobId)) return false; // schon lokal
+			// Nicht-Hefte sind immutable; Alt-Hefte ohne Versionierung einmalig neuester Blob
+			// (der nächste Speichervorgang hasht sie und wechselt auf den strengen Pfad).
+			return !String(blobId).startsWith("heft:") || legacyHefts.has(String(blobId).slice(5));
+		};
+		await mapLimit(remoteBlobs, 6, async (file) => {
+			const declared = file.appProperties?.blobId;
+			if (declared && !wantsBlob(declared)) return; // Download komplett gespart
 			const payload = await downloadPayload(file);
-			if (payload?.id) {
-				const isHeft = String(payload.id).startsWith("heft:");
-				// Nicht-Hefte sind immutable; Alt-Hefte ohne Versionierung einmalig neuester Blob
-				// (der nächste Speichervorgang hasht sie und wechselt auf den strengen Pfad).
-				if (!(await DB.getBlob(payload.id)) && (!isHeft || legacyHefts.has(String(payload.id).slice(5)))) {
-					await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
-					localBlobKeys.add(payload.id);
-				}
-			}
-			knownBlobIds.add(file.id);
+			if (!payload?.id || !wantsBlob(payload.id) || await DB.getBlob(payload.id)) return;
+			await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
+			localBlobKeys.add(payload.id);
 		});
 		// Upload nur für Blobs, die laut Hash-Cache noch nicht remote liegen — kein
 		// Vollscan über Blob-INHALTE mehr; bei Heften bestätigt der Head-Hash den Cache.
@@ -491,11 +533,11 @@ export const DRIVE = (() => {
 		if (toUpload.length) setStatus("syncing", toUpload.length + " Datei(en) hochladen…");
 		await mapLimit(toUpload, 3, async (u) => {
 			const packed = await gzipRaw(u.raw);
-			const created = await uploadNamed(BLOB_PREFIX + u.hash + ".json.gz", packed.bytes, packed.encoding, null, { hash: u.hash, blobId: u.id, contentHash: u.contentHash });
-			knownBlobIds.add(created.id);
+			// blobId in den appProperties ist jetzt Pflicht — [G2] entscheidet damit ohne Download.
+			await uploadNamed(BLOB_PREFIX + u.hash + ".json.gz", packed.bytes, packed.encoding, null, { hash: u.hash, blobId: u.id, contentHash: u.contentHash });
 		});
 		if (cacheDirty) LS.setItem("impala67_drive_upload_hashes", JSON.stringify(uploadHashCache));
-		saveKnownIds("impala67_drive_known_blobs", knownBlobIds);
+		LS.removeItem("impala67_drive_known_blobs"); // [G2] Altlast, wird nicht mehr geführt
 		// Nicht mehr referenzierte Heft-Versionen löschen. Datei-Liste stammt vom Sync-Start
 		// ⇒ parallel neu hochgeladene Dateien anderer Geräte sind nie betroffen.
 		await mapLimit(remoteBlobs.filter((f) => {
@@ -532,8 +574,13 @@ export const DRIVE = (() => {
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
 			await mapLimit(listedDeltas, 6, (f) => del(f.id));
+			// [G3] In-Memory UND persistiert gemeinsam leeren: ein bloßes removeItem ließ
+			// knownDeltaIds gefüllt zurück, und der Late-Sweep unten schrieb sie nur dann
+			// wieder weg, wenn zufällig ein spätes Delta existierte — der persistierte Zustand
+			// hängte also vom Zufall ab.
+			knownDeltaIds.clear();
+			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 			LS.removeItem("impala67_drive_snapshot_stamp");
-			LS.removeItem("impala67_drive_known_deltas");
 		}
 
 		// Bug-4-Fix Post-Upload-Sweep: Deltas anderer Clients einlesen, die WÄHREND unseres Syncs
@@ -551,14 +598,14 @@ export const DRIVE = (() => {
 		replayImported(importedEvents);
 		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
 		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
-		return { imported, uploaded, conflicts, conflictDetails, importedEvents };
+		return { imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, importedEvents };
 	}
 
 	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
 	// localStorage — zwei gleichzeitig syncende Tabs überschrieben sich sonst gegenseitig
 	// (syncInFlight wirkt nur im eigenen Tab). ifAvailable: der zweite Tab wartet nicht,
 	// sein nächster Auto-Sync holt alles nach. Ohne Locks-API: bisheriges Verhalten.
-	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], importedEvents: [], skipped: "lock" };
+	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], merged: 0, mergedDetails: [], importedEvents: [], skipped: "lock" };
 	// Bug-4-Fix: kein ifAvailable — zweiter Tab wartet auf ersten, statt still übersprungen zu werden.
 	// Erst NACH dem ersten Sync lädt Tab 2 die frisch hochgeladenen Deltas und ist dann wirklich aktuell.
 	const withSyncLock = (fn) => navigator.locks?.request
