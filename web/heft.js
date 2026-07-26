@@ -755,13 +755,28 @@ export const HEFT = (() => {
 		return v;
 	}
 	// Die EINZIGE Stelle, die die Ansicht auf den Bildschirm bringt.
+	// Waehrend einer Geste wird NUR das transform gesetzt (billig, deshalb
+	// fluessig) und der Layer per will-change fixiert. Beim Abschluss bzw. nach
+	// einer kurzen Pause wird der Layer wieder FREIGEGEBEN und alles in echter
+	// Aufloesung gezeichnet. Genau das fehlte: ein dauerhaftes
+	// will-change: transform friert die Rasterung des Layers auf einer Zoomstufe
+	// ein, der Browser skaliert danach nur noch ein altes Bild hoch - alles wirkte
+	// unscharf.
 	function paintView(commit) {
 		const pgs = pagesEl(); if (!pgs) return;
 		clampView(view);
 		scale = fitScale * view.k;
 		pgs.style.transform = "translate(" + (-view.x * view.k).toFixed(2) + "px, " + (-view.y * view.k).toFixed(2) + "px) scale(" + view.k.toFixed(4) + ")";
-		if (commit) renderVisiblePages();
-		else { renderVisiblePages(true); scheduleZoomSettleRender(); }
+		if (!commit) { pgs.style.willChange = "transform"; scheduleZoomSettleRender(); return; }
+		clearTimeout(zoomSettleTimer); zoomSettleTimer = 0;
+		sharpen();
+	}
+	// Scharf machen: Layer freigeben, damit der Browser neu rastert, dann Seiten
+	// und Detail-Kacheln fuer die aktuelle Zoomstufe fuellen.
+	function sharpen() {
+		const pgs = pagesEl(); if (!pgs) return;
+		pgs.style.willChange = "auto";
+		renderVisiblePages();
 		viewChanged();
 	}
 	function schedulePaint() {
@@ -954,7 +969,7 @@ export const HEFT = (() => {
 
 	function scheduleZoomSettleRender() {
 		clearTimeout(zoomSettleTimer);
-		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; renderVisiblePages(); }, 140);
+		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; sharpen(); }, 110);
 	}
 
 	// Nur bei Groessenaenderung oder Neuaufbau: fit neu bestimmen und den Mittelpunkt
@@ -975,7 +990,6 @@ export const HEFT = (() => {
 			// damit CSS und Rechnung nie auseinanderlaufen.
 			pgs.style.padding = padT + "px " + PAD_X + "px " + PAD_BOTTOM + "px";
 			pgs.style.transformOrigin = "0 0";
-			pgs.style.willChange = "transform";
 		}
 		const f = fitScale / prev;
 		view.x = cx * f - (vp.width / view.k) / 2;
