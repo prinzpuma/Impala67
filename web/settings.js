@@ -309,7 +309,10 @@ export function openSettings(section) {
 		const motion = localStorage.getItem("impala67Motion") || "full";
 		const fontSize = localStorage.getItem("impala67FontSize") || "m";
 		const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
-		const confidence = localStorage.getItem("impala67Confidence") !== "off";
+		// Standard ist jetzt „automatisch“: telemetrie.js erkennt die Sicherheit an der
+		// Antwortzeit, die Chips erscheinen nur nach ausdrücklichem Einschalten.
+		const confPref = localStorage.getItem("impala67Confidence");
+		const confidence = !!confPref && confPref !== "off";
 		const telemetry = localStorage.getItem("impala67Telemetry") !== "off";
 		body = '<h4>Design</h4>' +
 			'<section class="appearance-theme-card' + (followSystemTheme ? " is-auto" : "") + '">' +
@@ -338,10 +341,10 @@ export function openSettings(section) {
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnLockOn" class="' + (overlearn ? "active" : "") + '">Sperre an</button>' +
 			'<button id="btnLockOff" class="' + (!overlearn ? "active" : "") + '">Aus</button></div>' +
-			'<p class="hint">Selbsteinschätzung vor dem Aufdecken der Antwort.</p>' +
+			'<p class="hint">Selbsteinschätzung vor dem Aufdecken der Antwort — standardmäßig automatisch: die App liest an deiner Antwortzeit ab, wie sicher eine Karte saß. Nur einschalten, wenn du dich lieber selbst bewusst einschätzt.</p>' +
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnConfOn" class="' + (confidence ? "active" : "") + '">Abfrage an</button>' +
-			'<button id="btnConfOff" class="' + (!confidence ? "active" : "") + '">Aus</button></div>' +
+			'<button id="btnConfOff" class="' + (!confidence ? "active" : "") + '">Automatisch</button></div>' +
 			'<p class="hint">Lern-Telemetrie (nur lokal) für die Home-Insights.</p>' +
 			'<div class="row-btns appearance-choice">' +
 			'<button id="btnTeleOn" class="' + (telemetry ? "active" : "") + '">Aufzeichnung an</button>' +

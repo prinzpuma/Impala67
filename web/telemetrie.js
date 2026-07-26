@@ -20,6 +20,41 @@ export const TELE = (() => {
 	// bewusst über localStorage statt Import — vermeidet einen Zyklus mit lernzeit.js
 	const timerActive = () => Number(localStorage.getItem("impala67_lernzeit_timer_end") || 0) > Date.now();
 
+	// ⏱ Persönliche Denkzeit-Basis (25. Juli): Feste Sekunden-Schwellen taugen nichts —
+	// 20 s sind bei einer Formel-Karte normal und bei einer Vokabel eine Ewigkeit. Jede
+	// Karte wird deshalb mit dem EIGENEN Median verglichen (letzte 300 Bewertungen,
+	// ohne getippte Feynman-Karten). Ergebnis wird gecacht — das Log kann groß sein.
+	let _medKey = "", _medVal = 0;
+	function thinkMedian() {
+		const tele = S.telemetry || [];
+		const key = String(tele.length);
+		if (key === _medKey) return _medVal;
+		const vals = [];
+		for (let i = tele.length - 1; i >= 0 && vals.length < 300; i--) {
+			const e = tele[i];
+			if (!e || e.kind !== "review" || !e.data || e.data.typed) continue;
+			const ms = e.data.thinkMs;
+			if (Number.isFinite(ms) && ms > 400 && ms < 120000) vals.push(ms);
+		}
+		vals.sort((a, b) => a - b);
+		_medKey = key;
+		_medVal = vals.length >= 12 ? vals[vals.length >> 1] : 0; // zu wenig eigene Daten → kein Urteil
+		return _medVal;
+	}
+	// Selbsteinschätzung automatisch (25. Juli): „Wie sicher bist du?“ muss niemand mehr
+	// anklicken — zügige Antworten saßen sicher, sehr zögerliche waren geraten. Nur wenn
+	// genug eigene Daten vorliegen UND die Zeit nicht durch Tippen oder einen App-Wechsel
+	// verfälscht ist (im Feynman-Modus misst die Uhr Schreibarbeit, kein Zögern).
+	function autoConfidence(thinkMs, ctx) {
+		const med = thinkMedian();
+		if (!med || !Number.isFinite(thinkMs) || thinkMs <= 0) return null;
+		if (ctx && (ctx.typed || ctx.distracted)) return null;
+		if (thinkMs <= med * 0.6) return "sure";
+		if (thinkMs >= med * 2.5) return "guess";
+		if (thinkMs >= med * 1.4) return "unsure";
+		return null;
+	}
+
 	function log(kind, data) {
 		if (localStorage.getItem("impala67Telemetry") === "off") return; // Einstellung: Aufzeichnung aus
 		try { STATE.dispatch("teleEvent", { id: U.uid(), kind, data: data || {} }).catch(() => {}); }
@@ -43,7 +78,7 @@ export const TELE = (() => {
 		if (session) endSession("restart");
 		expUsed = new Set();
 		session = { startedAt: Date.now(), deck: deck || null, graded: 0,
-			frontShownAt: Date.now(), revealedAt: 0, confidence: null, cardHidden: false, hiddenCount: 0 };
+			frontShownAt: Date.now(), revealedAt: 0, confidence: null, cardHidden: false, hiddenCount: 0, typed: false };
 		log("studyStart", { deck: deck || null, due: STATE.dueCards ? STATE.dueCards().length : null, timer: timerActive() });
 	}
 	function endSession(reason) {
@@ -57,17 +92,22 @@ export const TELE = (() => {
 		const now = Date.now();
 		const card = S.cards[cardId] || {};
 		const srs = card.srs || {}; // Capture-Phase: srs ist hier noch der Stand VOR der Bewertung
-		const base = session || { frontShownAt: now, revealedAt: 0, graded: 0, confidence: null, cardHidden: false };
+		const base = session || { frontShownAt: now, revealedAt: 0, graded: 0, confidence: null, cardHidden: false, typed: false };
 		const revealed = base.revealedAt || now;
 		const d = new Date();
+		const thinkMs = clamp(revealed - base.frontShownAt);
+		// Getippt/diktiert (Feynman-Erklärfeld) → die Uhr maß Schreibarbeit, keine Denkpause.
+		const typed = !!base.typed || !!S.ankiFeyn || expUsed.has("feynman");
 		const data = {
 			cardId, deck: card.deck || "Standard", grade: Number(grade) || 0,
 			state: srs.state || null, reps: srs.reps || 0, lapses: srs.lapses || 0,
-			thinkMs: clamp(revealed - base.frontShownAt), // Denkzeit: Frage → „Antwort zeigen“
+			thinkMs, // Denkzeit: Frage → „Antwort zeigen“
 			gradeMs: clamp(now - revealed), // Bewertungszeit: „Antwort zeigen“ → Note
 			pos: base.graded, // wievielte Karte der Sitzung (Ermüdungs-Analyse)
 			hour: d.getHours(), dow: d.getDay(),
-			confidence: base.confidence, // "sure" | "unsure" | "guess" | null
+			confidence: base.confidence, // "sure" | "unsure" | "guess" | null (manuelle Chips, jetzt optional)
+			confidenceAuto: base.confidence ? null : autoConfidence(thinkMs, { typed, distracted: base.cardHidden }), // aus der Antwortzeit erkannt
+			typed, // Erklärung getippt/diktiert → Denkzeit NICHT als Zögern lesen
 			distracted: base.cardHidden, // App während dieser Karte verlassen?
 			timer: timerActive(),
 			exp: expUsed.size ? [...expUsed] : null, // 🧪 auf dieser Karte benutzte Experimente (TELE.mark)
@@ -75,7 +115,7 @@ export const TELE = (() => {
 		log("review", data);
 		expUsed = new Set(); // Marker gelten pro Karte
 		reviewSubs.forEach((fn) => { try { fn(data); } catch (err) { /* Abonnenten sind nie kritisch */ } });
-		if (session) Object.assign(session, { graded: session.graded + 1, frontShownAt: now, revealedAt: 0, confidence: null, cardHidden: false });
+		if (session) Object.assign(session, { graded: session.graded + 1, frontShownAt: now, revealedAt: 0, confidence: null, cardHidden: false, typed: false });
 	}
 
 	// Capture-Phase: läuft VOR den app.js-Handlern (und damit vor dem Re-Render und
@@ -101,6 +141,13 @@ export const TELE = (() => {
 		const attr = Object.keys(ACTIONS).find((a) => t.hasAttribute(a));
 		if (attr) ACTIONS[attr](t.getAttribute(attr), t);
 		else if (t.id === "btnTeleExport") exportDump();
+	}, true);
+
+	// Tippen/Diktieren im Feynman-Erklärfeld markieren — danach ist die gemessene Zeit
+	// Schreibzeit und darf weder als Zögern noch als Unsicherheit gedeutet werden.
+	document.addEventListener("input", (e) => {
+		const t = e.target;
+		if (session && t && t.classList && t.classList.contains("exp-answer")) session.typed = true;
 	}, true);
 
 	// Fokus-Verlust: App-Wechsel während Lern-Sitzung oder laufendem Timer.
@@ -160,19 +207,29 @@ export const TELE = (() => {
 			out.push(row("⚡", `Denkzeit: ${(med(timed) / 1000).toFixed(1)} s pro Karte (Median)`, "Zeit von Frage bis „Antwort zeigen“" + trend));
 		}
 
-		// 3) Kalibrierung: Selbsteinschätzung vs. tatsächlicher Erfolg
-		const withConf = reviews.filter((e) => e.data.confidence);
+		// 3) Kalibrierung: Einschätzung vs. tatsächlicher Erfolg. Bevorzugt die (jetzt
+		// optionalen) Chips; ohne sie zählt die automatisch aus der Antwortzeit erkannte
+		// Sicherheit — dann auch mit ehrlicher Formulierung („zügig“ statt „du warst sicher“).
+		const manualConf = reviews.filter((e) => e.data.confidence);
+		const useAuto = manualConf.filter((e) => e.data.confidence === "sure").length < 10;
+		const confKey = useAuto ? "confidenceAuto" : "confidence";
+		const withConf = useAuto ? reviews.filter((e) => !e.data.confidence && e.data.confidenceAuto) : manualConf;
 		const confRate = (key) => {
-			const list = withConf.filter((e) => e.data.confidence === key);
+			const list = withConf.filter((e) => e.data[confKey] === key);
 			return list.length >= 10 ? { n: list.length, rate: passRate(list) } : null;
 		};
 		const sure = confRate("sure"), guess = confRate("guess");
 		if (sure) {
 			const p = pct(sure.rate);
-			out.push(row("🎯", `Kalibrierung: „Sicher“-Karten stimmen zu ${p} %`,
+			out.push(row("🎯", useAuto
+				? `Zügig beantwortete Karten stimmen zu ${p} %`
+				: `Kalibrierung: „Sicher“-Karten stimmen zu ${p} %`,
 				p < 85
-					? "Du überschätzt dich etwas — bei „Sicher“ sollten ≥ 85 % stimmen. Antwort erst im Kopf formulieren, dann aufdecken."
-					: "Deine Selbsteinschätzung ist verlässlich." + (guess ? ` Geratene Karten: ${pct(guess.rate)} % Treffer.` : "")));
+					? (useAuto
+						? "Schnell heißt bei dir noch nicht sicher — lieber die Antwort erst vollständig im Kopf formulieren, dann aufdecken."
+						: "Du überschätzt dich etwas — bei „Sicher“ sollten ≥ 85 % stimmen. Antwort erst im Kopf formulieren, dann aufdecken.")
+					: (useAuto ? "Dein Bauchgefühl passt: schnelle Karten sitzen wirklich." : "Deine Selbsteinschätzung ist verlässlich.") +
+						(guess ? ` Lange gezögerte Karten: ${pct(guess.rate)} % Treffer.` : "")));
 		}
 
 		// 4) Ermüdung: Erfolg der ersten 20 Karten vs. Rest der Sitzung
@@ -238,5 +295,5 @@ export const TELE = (() => {
 		U.toast("Lerndaten exportiert.", "success");
 	}
 
-	return { log, mark, onReview, homeInsightsHtml, exportDump };
+	return { log, mark, onReview, thinkMedian, homeInsightsHtml, exportDump };
 })();

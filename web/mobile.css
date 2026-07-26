@@ -10,14 +10,14 @@ body.mobile-ui {
 body.mobile-ui #bg,
 body.mobile-ui #btnAiFab,
 body.mobile-ui #tabbar,
-body.mobile-ui #btnSidebarToggle { display: none !important }
+body.mobile-ui #btnSidebarToggle { display: none }
 
 body.mobile-ui #app {
-	display: block !important;
+	display: block;
 	width: 100%;
 	height: 100dvh;
-	padding: var(--m-top) 0 var(--m-bot) !important;
-	gap: 0 !important;
+	padding: var(--m-top) 0 var(--m-bot);
+	gap: 0;
 	background: var(--panel-solid);
 }
 body.mobile-ui #mainWrap {
@@ -60,24 +60,24 @@ body.mobile-ui #mTop .mTop-left {
 }
 body.mobile-ui #mTitle {
 	font-size: 18px;
-	font-weight: 750;
+	font-weight: 700;
 	letter-spacing: -.02em;
 	line-height: 1.1;
 }
-body.mobile-ui #mSub { color: var(--text2); font-size: 11px; font-weight: 650 }
+body.mobile-ui #mSub { color: var(--text2); font-size: var(--text-2xs); font-weight: 650 }
 body.mobile-ui #mTop .mTop-right { display: flex; gap: 6px; flex-shrink: 0 }
 body.mobile-ui #mTop button {
 	min-height: 34px;
 	padding: 0 12px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--surface-hover);
 	color: var(--text);
-	font-size: 13px;
+	font-size: var(--text-sm);
 	font-weight: 650;
 }
 body.mobile-ui #mTop button.mPrimary {
 	background: var(--accent);
-	color: #07131c;
+	color: var(--on-accent);
 }
 
 /* ============================================================
@@ -104,10 +104,10 @@ body.mobile-ui #mNav button {
 	gap: 2px;
 	min-width: 0;
 	padding: 4px 2px 2px;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--text2);
-	font-size: 10px;
+	font-size: var(--text-3xs);
 	font-weight: 700;
 	line-height: 1.2;
 }
@@ -127,14 +127,14 @@ body.mobile-ui #mNav .mHome svg {
 	width: 28px;
 	height: 28px;
 	background: var(--accent);
-	color: #07131c;
-	border-radius: 14px;
+	color: var(--on-accent);
+	border-radius: var(--radius-lg);
 	padding: 4px;
 	box-sizing: border-box;
 }
 body.mobile-ui #mNav .mHome.on svg {
 	background: var(--accent);
-	color: #07131c;
+	color: var(--on-accent);
 }
 body.mobile-ui #mNav .mHome.on { color: var(--accent) }
 
@@ -145,7 +145,7 @@ body.mobile-ui #mDue {
 	right: calc(50% - 24px);
 	min-width: 17px;
 	padding: 0 5px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--danger);
 	color: #fff;
 	font: 700 10px/16px system-ui;
@@ -202,9 +202,9 @@ body.mobile-ui.mnav-open #sidebar {
 	visibility: visible;
 	transition: transform .22s var(--ease-out);
 }
-body.mobile-ui #sidebar::before { display: none !important }
+body.mobile-ui #sidebar::before { display: none }
 /* Desktop-Topbar-Tabs (Home/Chat/Karten/Suche) raus — Navigation läuft über die Bottom-Bar */
-body.mobile-ui #sidebar .topbar { display: none !important }
+body.mobile-ui #sidebar .topbar { display: none }
 /* Notizen-Tree */
 body.mobile-ui #tree {
 	flex: 1 1 auto;
@@ -214,10 +214,10 @@ body.mobile-ui #tree {
 body.mobile-ui #tree .row {
 	min-height: 46px;
 	padding: 10px 12px;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 }
 /* Heft-Umschalter (workspace/heft pills) bleibt sichtbar */
-body.mobile-ui #sidebar .side-foot { display: none !important } /* im Mehr-Sheet */
+body.mobile-ui #sidebar .side-foot { display: none } /* im Mehr-Sheet */
 
 /* ============================================================
    MEHR-SHEET — Zusatzfunktionen & Einstellungen
@@ -250,7 +250,7 @@ body.mobile-ui .mSheet-head {
 }
 body.mobile-ui .mSheet-head strong {
 	font-size: 28px;
-	font-weight: 800;
+	font-weight: 700;
 	letter-spacing: -.04em;
 }
 body.mobile-ui .mSheet-head button {
@@ -273,10 +273,10 @@ body.mobile-ui .mSheet-grid button {
 	justify-content: center;
 	gap: 6px;
 	min-height: 90px;
-	border-radius: 18px;
+	border-radius: var(--radius-xl);
 	background: var(--surface);
 	color: var(--text);
-	font-size: 12px;
+	font-size: var(--text-xs);
 	font-weight: 700;
 	transition: background var(--motion-fast);
 }
@@ -306,10 +306,10 @@ body.mobile-ui:not(.panel-collapsed) #mTop { display: none }
 body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
 	content: "Stell mir eine Frage zu deinen Notizen, Karten oder Plänen.";
 	display: block;
-	margin: 38vh 32px 0;
+	margin: 38dvh 32px 0;
 	text-align: center;
 	color: var(--text2);
-	font-size: 15px;
+	font-size: var(--text-md);
 	line-height: 1.5;
 }
 body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
@@ -318,9 +318,9 @@ body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
 	border-bottom: 1px solid var(--edge-soft);
 }
 body.mobile-ui:not(.panel-collapsed) #btnChatExpand { display: none }
-body.mobile-ui:not(.panel-collapsed) #panel .panel-title { font-size: 17px; font-weight: 750 }
+body.mobile-ui:not(.panel-collapsed) #panel .panel-title { font-size: 17px; font-weight: 700 }
 body.mobile-ui:not(.panel-collapsed) #panel > #chatForm {
-	margin: 8px 10px 10px !important;
+	margin: 8px 10px 10px;
 }
 
 /* ============================================================
@@ -329,34 +329,33 @@ body.mobile-ui:not(.panel-collapsed) #panel > #chatForm {
 body.mobile-ui .library.anki {
 	width: 100%;
 	max-width: none;
-	padding: 12px 14px 24px !important;
-	background: none !important;
+	background: none;
 }
-body.mobile-ui .library.anki .lib-head { display: none !important }
+body.mobile-ui .library.anki .lib-head { display: none }
 
 /* Hero */
 body.mobile-ui .anki-hero {
 	margin: 0 0 16px;
 	padding: 18px 16px;
-	border-radius: 18px;
+	border-radius: var(--radius-xl);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
 }
 body.mobile-ui .anki-hero-main h2 { font-size: 24px; letter-spacing: -.03em; margin: 4px 0 8px }
-body.mobile-ui .anki-hero-main p { font-size: 14px; color: var(--text2); margin: 0 0 14px }
+body.mobile-ui .anki-hero-main p { font-size: var(--text-base); color: var(--text2); margin: 0 0 14px }
 body.mobile-ui .anki-hero-actions { display: grid; grid-template-columns: 1fr; gap: 8px }
-body.mobile-ui .anki-hero-actions .primary { min-height: 52px; border-radius: 14px; font-size: 16px; font-weight: 750 }
+body.mobile-ui .anki-hero-actions .primary { min-height: 52px; border-radius: var(--radius-lg); font-size: 16px; font-weight: 700 }
 body.mobile-ui .anki-hero-actions .hero-ghost,
-body.mobile-ui .anki-hero-actions .hero-quiet { min-height: 44px; border-radius: 12px }
+body.mobile-ui .anki-hero-actions .hero-quiet { min-height: 44px; border-radius: var(--radius-lg) }
 body.mobile-ui .anki-hero-stat { display: none }
 
 /* Stapel-Liste */
 body.mobile-ui .anki-sec h2 {
-	font-size: 13px;
+	font-size: var(--text-sm);
 	text-transform: uppercase;
 	letter-spacing: .08em;
 	color: var(--text2);
-	font-weight: 750;
+	font-weight: 700;
 	margin: 16px 0 8px;
 }
 body.mobile-ui .deck-row {
@@ -364,31 +363,31 @@ body.mobile-ui .deck-row {
 	align-items: center;
 	gap: 12px;
 	padding: 14px 16px;
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
 	margin-bottom: 8px;
 }
 body.mobile-ui .deck-ico { font-size: 22px; flex-shrink: 0 }
 body.mobile-ui .deck-info { flex: 1; min-width: 0 }
-body.mobile-ui .deck-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-body.mobile-ui .deck-meta { font-size: 12px; color: var(--text2); margin-top: 2px }
+body.mobile-ui .deck-name { font-weight: 700; font-size: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+body.mobile-ui .deck-meta { font-size: var(--text-xs); color: var(--text2); margin-top: 2px }
 body.mobile-ui .deck-counts,
 body.mobile-ui .deck-iconbtn,
 body.mobile-ui .deck-feyn { display: none }
 body.mobile-ui .deck-study {
 	min-height: 40px;
 	padding: 0 16px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--accent-soft);
 	color: var(--accent);
-	font-weight: 750;
-	font-size: 14px;
+	font-weight: 700;
+	font-size: var(--text-base);
 	flex-shrink: 0;
 }
 
 /* Lernmodus */
-body.mobile-ui.m-study #mTop { display: none !important }
+body.mobile-ui.m-study #mTop { display: none }
 body.mobile-ui .anki-study-mode {
 	padding: 0 14px 16px;
 	display: flex;
@@ -414,24 +413,24 @@ body.mobile-ui .study-card .card-face {
 body.mobile-ui .study-card .study-divider {
 	text-align: center;
 	color: var(--text2);
-	font-size: 11px;
+	font-size: var(--text-2xs);
 	text-transform: uppercase;
 	letter-spacing: .1em;
 	margin: 4px 0;
 }
-body.mobile-ui .study-counts-row { font-size: 12px; color: var(--text2); text-align: center; margin: 6px 0 10px }
+body.mobile-ui .study-counts-row { font-size: var(--text-xs); color: var(--text2); text-align: center; margin: 6px 0 10px }
 body.mobile-ui .confidence-row,
 body.mobile-ui .study-reveal-controls .mini,
 body.mobile-ui .study-keys,
-body.mobile-ui [data-ankizen] { display: none !important }
+body.mobile-ui [data-ankizen] { display: none }
 body.mobile-ui .modal-actions [data-ankishowback] {
 	width: 100%;
 	min-height: 52px;
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	background: var(--accent);
-	color: #081018;
+	color: var(--on-accent);
 	font-size: 17px;
-	font-weight: 750;
+	font-weight: 700;
 	margin: 10px 0;
 }
 body.mobile-ui .grades {
@@ -442,42 +441,41 @@ body.mobile-ui .grades {
 }
 body.mobile-ui .grades [data-ankigrade] {
 	min-height: 64px;
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	font-size: 16px;
-	font-weight: 750;
+	font-weight: 700;
 }
 body.mobile-ui .grades .grade-key { display: none }
-body.mobile-ui .grades .grade-ivl { font-size: 11px; color: var(--text2) }
+body.mobile-ui .grades .grade-ivl { font-size: var(--text-2xs); color: var(--text2) }
 body.mobile-ui .study-footer {
 	display: flex;
 	justify-content: center;
 	padding-top: 10px;
 }
-body.mobile-ui [data-deckconf],
-body.mobile-ui [data-ankizen] { display: none !important }
+body.mobile-ui [data-deckconf] { display: none }
 
 /* ============================================================
    FEYNMAN-MODUS — Light-Mode Fix
    ============================================================ */
 body.light .feyn-inline {
-	background: #f5f5f0;
-	border-radius: 12px;
+	background: var(--surface-subtle);
+	border-radius: var(--radius-lg);
 	padding: 12px;
-	color: #1a1a1a;
+	color: var(--text);
 }
 body.light .feyn-inline textarea,
 body.light .feyn-inline input {
-	background: #ffffff;
-	color: #1a1a1a;
-	border-color: #d0d0cc;
+	background: var(--panel-solid);
+	color: var(--text);
+	border-color: var(--edge);
 }
 body.light .exp-feynout:not(:empty) {
-	background: #f0f4f8;
-	color: #1a1a1a;
-	border-color: #c8d0da;
+	background: var(--accent-soft);
+	color: var(--text);
+	border-color: var(--accent-border);
 }
 body.light .feyn-inline-head {
-	color: #444;
+	color: var(--text2);
 }
 
 /* ============================================================
@@ -502,9 +500,9 @@ body.mobile-ui #mNav { transition: transform .18s var(--ease-out) }
    zusammen ~120px) aber weiter als Polster. Die Karte bekam dadurch nur rund
    zwei Drittel der Höhe. Jetzt bleiben nur die Safe-Areas stehen. */
 body.mobile-ui.m-study #app {
-	padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important;
+	padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
 }
-body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px !important }
+body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px }
 body.mobile-ui .anki-study-mode {
 	padding: 0 10px 10px;
 	min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -520,6 +518,6 @@ body.mobile-ui .grades [data-ankigrade] { min-height: 60px }
 body.mobile-ui .modal-actions [data-ankishowback] { margin: 8px 0 }
 body.mobile-ui .study-footer { padding-top: 6px }
 /* Stapel-/Browser-Ansicht: schmalere Außenränder = spürbar breitere Zeilen. */
-body.mobile-ui .library.anki { padding: 10px 10px 20px !important }
+body.mobile-ui .library.anki { padding: 10px 10px 20px }
 body.mobile-ui .anki-hero { margin-bottom: 12px; padding: 14px }
 body.mobile-ui .deck-row { padding: 13px 12px; margin-bottom: 7px }

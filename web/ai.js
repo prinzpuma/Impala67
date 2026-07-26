@@ -31,7 +31,10 @@ export const AI = (() => {
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content"]); // → Edit-Karte (Diff+Undo)
-	const MAX_AGENT_STEPS = 8;
+	// 12 statt 8 (25. Juli): Mit den neuen Karten-Verwaltungs-Tools sind Ketten wie
+	// list_decks → list_flashcards → move_flashcards → update_flashcard normal; bei 8
+	// Schritten brach die Antwort mitten in der Arbeit ab.
+	const MAX_AGENT_STEPS = 12;
 	const DEBUG_LOG_LIMIT = 40;
 	const historyLimit = () => (cfg().providerId === "local" ? 16 : 48); // lokal kleiner Kontext, Cloud 128k+
 	const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -473,7 +476,7 @@ export const AI = (() => {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const now = new Date();
 		const toolLine = toolsMode === true
-			? "Nutze deine Tools aktiv statt zu raten. Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Löschen wird immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz, was geändert wurde."
+			? "Nutze deine Tools aktiv statt zu raten, und führe mehrere Schritte selbstständig hintereinander aus (erst nachsehen, dann handeln). Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Karteikarten verwalten: list_decks und list_flashcards zeigen echte Stapel- und Kartennamen (nie Namen raten oder erfinden), move_flashcards verschiebt Karten in andere Stapel, update_flashcard korrigiert eine Karte unter Erhalt des Lernfortschritts, create_deck/rename_deck/move_deck ordnen Stapel, suspend_flashcards pausiert Karten, reset_card_progress setzt den Fortschritt zurück. Zum Ändern einer Karte NIE löschen und neu anlegen — dabei ginge der Lernfortschritt verloren; nutze update_flashcard bzw. move_flashcards. Löschen und Zurücksetzen werden immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz und konkret, was geändert wurde (Anzahl, Stapelnamen)."
 			: toolsMode === "meta"
 				? "Aktuell ist nur das Werkzeug request_tools verfügbar. Sobald die Anfrage Notizen, Karten, Hefte, Suche oder Aktionen im Workspace erfordern könnte, rufe ZUERST request_tools auf — danach stehen alle Werkzeuge in derselben Anfrage bereit. Sonst antworte direkt."
 				: "Für diese Anfrage sind keine Werkzeuge aktiv. Antworte direkt aus dem vorhandenen Kontext. Sprich NIE über Werkzeuge, fehlenden Daten-Zugriff oder „dieses Chat-Fenster“ und behaupte keine Suchen oder Änderungen. Wären Notiz-Inhalte nötig, bitte den Nutzer, die Frage konkret zu formulieren (z. B. „Durchsuche meine Notizen nach …“).";
@@ -504,8 +507,39 @@ export const AI = (() => {
 		CHATS.persist(messages, idKey);
 	}
 
-	// ---- Lösch-Tools: EINE Bestätigungs-Pipeline. resolve() → Fehler ODER {detail,question,runArgs,cancelled} ----
-	const DELETE_SPECS = {
+	// ---- Eingriffe mit Rückfrage: EINE Bestätigungs-Pipeline für alle Tools, die etwas
+	// unwiederbringlich oder großflächig verändern. resolve() → Fehler ODER
+	// {detail, question, runArgs, cancelled}; options überschreibt die Standard-Antworten.
+	const CONFIRM_SPECS = {
+		reset_card_progress: {
+			options: ["Ja, zurücksetzen", "Abbrechen"],
+			resolve(args) {
+				const front = String(args?.front || "").trim();
+				const deckArg = String(args?.deck || "").trim();
+				if (!front && !deckArg) return { error: "reset_card_progress: bitte front oder deck angeben." };
+				if (front) {
+					const card = TOOLS.findCard(front, deckArg || undefined);
+					if (!card) return { error: "Karte nicht gefunden: " + front };
+					const short = String(card.front || "").replace(/\s+/g, " ").trim();
+					const label = short.length > 60 ? short.slice(0, 60) + "…" : short;
+					return {
+						detail: short,
+						question: 'Lernfortschritt der Karte „' + label + '“ zurücksetzen? Sie gilt danach wieder als neu.',
+						runArgs: { front: card.front, deck: card.deck },
+						cancelled: { cancelled: true, front: card.front, note: "Zurücksetzen abgebrochen — nichts geändert." },
+					};
+				}
+				const match = TOOLS.resolveDeckName(deckArg);
+				if (!match) return { error: "Stapel nicht gefunden: " + deckArg };
+				const cardN = Object.values(S.cards).filter((c) => !c.trashed && ((c.deck || "Standard") === match || (c.deck || "Standard").startsWith(match + "::"))).length;
+				return {
+					detail: match,
+					question: 'Lernfortschritt von ' + cardN + ' Karte(n) im Stapel „' + match + '“ zurücksetzen? Alle gelten danach wieder als neu.',
+					runArgs: { deck: match },
+					cancelled: { cancelled: true, deck: match, note: "Zurücksetzen abgebrochen — nichts geändert." },
+				};
+			},
+		},
 		delete_page: {
 			resolve(args) {
 				const title = String(args?.page_title || "").trim();
@@ -745,8 +779,8 @@ export const AI = (() => {
 					continue;
 				}
 
-				if (DELETE_SPECS[name]) { // gemeinsame Lösch-Bestätigung
-					const spec = DELETE_SPECS[name].resolve(args);
+				if (CONFIRM_SPECS[name]) { // gemeinsame Bestätigung (Löschen, Fortschritt zurücksetzen …)
+					const spec = CONFIRM_SPECS[name].resolve(args);
 					if (spec.error) {
 						if (onStep) onStep(name);
 						pushToolChip(name, spec.error, true);
@@ -754,7 +788,7 @@ export const AI = (() => {
 						pushToolResult(tc, { error: spec.error });
 						continue;
 					}
-					const answer = await waitForAnswer(spec.question, ["Ja, löschen", "Abbrechen"], "Warte auf Bestätigung…");
+					const answer = await waitForAnswer(spec.question, CONFIRM_SPECS[name].options || ["Ja, löschen", "Abbrechen"], "Warte auf Bestätigung…");
 					let out;
 					if (!String(answer || "").toLowerCase().startsWith("ja")) out = spec.cancelled;
 					else { try { out = await TOOLS.run(name, spec.runArgs); } catch (e) { out = { error: String(e) }; } }
@@ -793,7 +827,11 @@ export const AI = (() => {
 				let out;
 				try { out = await TOOLS.run(name, args); } catch (e) { out = { error: String(e) }; }
 				if (onStep) onStep(name);
-				let detail = args.page_title || args.title || args.query || "";
+				// Chip-Text: Seiten-Tools zuerst, dann die Karten-/Stapel-Tools — vorher blieb
+				// der Chip bei jeder Karten-Aktion leer und man sah nicht, was passiert ist.
+				let detail = args.page_title || args.title || args.query || args.front
+					|| (args.fronts?.length ? args.fronts.slice(0, 2).join(" · ") + (args.fronts.length > 2 ? " +" + (args.fronts.length - 2) : "") : "")
+					|| (args.to_deck ? "→ " + args.to_deck : "") || args.new_name || args.deck || args.from_deck || args.name || "";
 				if (name === "semantic_search") detail = (detail ? detail + " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
 				pushToolChip(name, detail, out?.error);
 				scheduleRender();

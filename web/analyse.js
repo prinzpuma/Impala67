@@ -127,26 +127,42 @@ export const ANALYSE = (() => {
 	// ---------- 4) Ehrlichkeits-Hinweis + 5) Pausen-Hinweis ----------
 	// DRY: telemetrie.js liefert die fertigen Review-Daten (grade, thinkMs, pos)
 	// per TELE.onReview — keine eigene Zustandsmaschine über die Lern-Buttons mehr.
-	let recent = [], lastHint = 0, lastPause = 0;
+	let recent = [], lastHint = 0, lastPause = 0, hintShownThisSession = false;
 	TELE.onReview((r) => {
 		const now = Date.now();
-		if (r.pos === 0) recent = []; // neue Sitzung
-		recent.push({ grade: r.grade, thinkMs: r.thinkMs });
+		if (r.pos === 0) { recent = []; hintShownThisSession = false; } // neue Sitzung
+		// Getippte Karten (Feynman) liefern KEINE brauchbare Denkzeit — Note zählt, Zeit nicht.
+		recent.push({ grade: r.grade, thinkMs: r.typed ? null : r.thinkMs });
 		if (recent.length > 12) recent.shift();
-		// 4) Latenz als Ehrlichkeits-Signal: lange gezögert, aber „Gut/Einfach“?
-		//    Nur ein dezenter Hinweis — NIE ein automatisches Herabstufen.
-		if (r.grade >= 3 && r.thinkMs > 20000 && now - lastHint > 120000) {
+		// 4) Latenz als Ehrlichkeits-Signal — nur wenn die lange Zeit wirklich Zögern war.
+		//    FIX (25. Juli): Der Hinweis kam ständig und meist zu Unrecht. Im Feynman-Modus
+		//    tippt/diktiert man minutenlang eine Erklärung, bei Quiz, Hinweisen und Variation
+		//    läuft die Uhr ebenfalls weiter, und starre 20 s sind je nach Kartenlänge völlig
+		//    normal. Jetzt gilt: nicht getippt, nicht abgelenkt, keine Lernhilfe auf der Karte,
+		//    keine selbst gemeldete Unsicherheit — und mehrfach über der EIGENEN Median-Denkzeit.
+		//    Höchstens einmal pro Sitzung, nie ein automatisches Herabstufen.
+		const helpers = Array.isArray(r.exp) && r.exp.length > 0;
+		const gezoegert = !r.typed && !r.distracted && !helpers && r.confidence !== "unsure" && r.confidence !== "guess";
+		const med = (typeof TELE.thinkMedian === "function" && TELE.thinkMedian()) || 0;
+		const langsam = med ? r.thinkMs > Math.max(25000, med * 4) : r.thinkMs > 45000;
+		if (gezoegert && langsam && r.grade >= 3 && !hintShownThisSession && now - lastHint > 600000) {
+			hintShownThisSession = true;
 			lastHint = now;
-			U.toast("🤔 " + Math.round(r.thinkMs / 1000) + " s überlegt und dann „Gut“? Ehrlich bewerten hilft dem Planer.");
+			U.toast("🤔 " + Math.round(r.thinkMs / 1000) + " s bis zum Aufdecken und dann „" + (r.grade >= 4 ? "Einfach" : "Gut") + "“? Ehrlich bewerten hilft dem Planer.");
 		}
 		// 5) Pausen-Hinweis statt „Aufmerksamkeits-Prädiktion“: steigen Fehlerquote
 		//    UND Denkzeit innerhalb der Sitzung, wird EINMAL eine Pause vorgeschlagen.
+		//    Getippte Karten fließen nur über die Note ein, nicht über die Zeit.
 		if (recent.length >= 10 && now - lastPause > 20 * 60000) {
 			const half = Math.floor(recent.length / 2);
 			const a = recent.slice(0, half), b = recent.slice(half);
 			const errRate = (l) => l.filter((x) => x.grade === 1).length / Math.max(1, l.length);
-			const think = (l) => l.reduce((s, x) => s + x.thinkMs, 0) / Math.max(1, l.length);
-			if (errRate(b) >= 0.4 && errRate(b) > errRate(a) + 0.15 && think(b) > think(a) * 1.3) {
+			const think = (l) => {
+				const v = l.filter((x) => Number.isFinite(x.thinkMs));
+				return v.length >= 3 ? v.reduce((s, x) => s + x.thinkMs, 0) / v.length : 0;
+			};
+			const ta = think(a), tb = think(b);
+			if (errRate(b) >= 0.4 && errRate(b) > errRate(a) + 0.15 && ta && tb && tb > ta * 1.3) {
 				lastPause = now;
 				U.toast("🪫 Fehler und Denkzeit steigen — 5 Minuten Pause bringen hier mehr als Weitermachen.");
 			}

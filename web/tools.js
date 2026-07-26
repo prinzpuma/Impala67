@@ -1,6 +1,7 @@
 "use strict";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { SRS } from "./srs.js";
 import { EXTRAS } from "./extras.js";
 import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
@@ -79,6 +80,65 @@ export const TOOLS = (() => {
 		return names.find((n) => n.toLowerCase() === q) || names.find((n) => n.toLowerCase().includes(q)) || null;
 	}
 
+	// Karten-Auswahl für die Verwaltungs-Tools (verschieben, pausieren, zurücksetzen):
+	// entweder konkrete Karten (front/fronts) oder ein Filter aus Stapel + Suchtext.
+	// Liefert { cards } oder { error } — nie eine stille Teilauswahl bei Tippfehlern.
+	function selectCards(a, max) {
+		const wanted = (Array.isArray(a.fronts) ? a.fronts : []).concat(a.front ? [a.front] : []).filter(Boolean);
+		const seen = new Set();
+		const out = [];
+		const add = (c) => { if (c && !seen.has(c.id)) { seen.add(c.id); out.push(c); } };
+		const deckArg = a.deck || a.from_deck;
+		let deckName = null;
+		if (deckArg) {
+			deckName = resolveDeckName(deckArg);
+			if (!deckName) return { error: "Stapel nicht gefunden: " + deckArg };
+		}
+		if (wanted.length) {
+			const missing = [];
+			for (const f of wanted) {
+				const c = findCard(f, deckName);
+				if (c) add(c); else missing.push(String(f));
+			}
+			if (missing.length) return { error: "Karte(n) nicht gefunden: " + missing.join(" | ") };
+		} else {
+			if (!deckName && !a.query) return { error: "Auswahl fehlt — bitte front/fronts, deck bzw. from_deck und/oder query angeben." };
+			let pool = STATE.activeCards();
+			if (deckName) pool = pool.filter((c) => {
+				const d = c.deck || "Standard";
+				return d === deckName || d.startsWith(deckName + "::");
+			});
+			if (a.query) {
+				const q = String(a.query).trim().toLowerCase();
+				if (q) pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
+			}
+			pool.forEach(add);
+		}
+		const limit = Math.max(1, Math.min(max || 200, Number(a.limit) || (max || 200)));
+		return { cards: out.slice(0, limit), total: out.length, deck: deckName };
+	}
+
+	// Zielstapel sicherstellen: Eintrag anlegen bzw. aus dem Papierkorb zurückholen.
+	// Bewusst EXAKTER Namensvergleich (nicht das unscharfe resolveDeckName) — sonst
+	// landet ein neuer Stapel „Mathe 2“ stillschweigend im bestehenden „Mathe“.
+	async function ensureDeck(name) {
+		const clean = String(name || "").trim().replace(/^:+|:+$/g, "").trim();
+		if (!clean) return null;
+		const exact = Object.keys(S.decks).find((n) => n.toLowerCase() === clean.toLowerCase());
+		if (exact) {
+			if (S.decks[exact].trashed) await STATE.dispatch("deckRestore", { name: exact });
+			return exact;
+		}
+		await STATE.dispatch("deckCreate", { name: clean });
+		return clean;
+	}
+
+	// Karten eines Stapel-Teilbaums (aktiv, ohne Papierkorb).
+	const cardsOfDeck = (deck) => STATE.activeCards().filter((c) => {
+		const d = c.deck || "Standard";
+		return d === deck || d.startsWith(deck + "::");
+	});
+
 	const defs = [
 		t("create_page", "Erstellt eine neue Notiz-Seite. Inhalt ist Markdown; zusätzlich verfügbar: {red}Text{/} bzw. {bg-yellow}Text{/} (Farben gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==hervorheben== und ':::columns … :::split … :::end' für Spalten.", {
 			title: { type: "string" },
@@ -152,6 +212,46 @@ export const TOOLS = (() => {
 			deck: { type: "string", description: "Nur Karten aus diesem Stapel (inkl. Unterstapel), optional" },
 			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (Groß-/Kleinschreibung egal), optional" },
 			limit: { type: "number", description: "Max. Anzahl Karten (Standard 30, max. 100)" },
+		}, []),
+		// 🗂 Karten-Verwaltung (25. Juli): Die KI konnte Karten bisher nur anlegen, auflisten und
+		// löschen — verschieben, umbenennen, korrigieren, pausieren und zurücksetzen fehlten,
+		// obwohl das Event-Log (cardUpdate, deckRename, deckMove, deckCreate) das längst kann.
+		t("list_decks", "Listet alle Karteikarten-Stapel mit Kartenzahl (auch inkl. Unterstapel), pausierten Karten und dem heutigen Lernstand (neu/lernen/wiederholen). Vor dem Verschieben, Umbenennen oder Anlegen von Stapeln zuerst aufrufen, statt Namen zu raten.", {}, []),
+		t("create_deck", "Legt einen leeren Karteikarten-Stapel an. Unterstapel per 'Eltern::Kind'.", {
+			name: { type: "string", description: "Name des neuen Stapels" },
+		}, ["name"]),
+		t("rename_deck", "Benennt einen Stapel um. Unterstapel und ALLE enthaltenen Karten wandern automatisch mit.", {
+			deck: { type: "string", description: "Bisheriger Name" },
+			new_name: { type: "string", description: "Neuer vollständiger Name (Unterstapel per 'Eltern::Kind')" },
+		}, ["deck", "new_name"]),
+		t("move_deck", "Hängt einen Stapel samt Unterstapeln und Karten unter einen anderen Eltern-Stapel — oder auf die oberste Ebene.", {
+			deck: { type: "string", description: "Zu verschiebender Stapel" },
+			new_parent: { type: "string", description: "Ziel-Elternstapel; leer lassen für oberste Ebene" },
+		}, ["deck"]),
+		t("move_flashcards", "Verschiebt Karteikarten in einen ANDEREN Stapel. Auswahl entweder über fronts (konkrete Karten) oder über from_deck und/oder query — mindestens eine Angabe nötig. Existiert der Zielstapel noch nicht, wird er angelegt. Der Lernfortschritt der Karten bleibt vollständig erhalten.", {
+			to_deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind'" },
+			fronts: { type: "array", items: { type: "string" }, description: "Vorderseiten-Texte der zu verschiebenden Karten (optional)" },
+			from_deck: { type: "string", description: "Alle Karten aus diesem Stapel inkl. Unterstapel (optional)" },
+			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (optional)" },
+			limit: { type: "number", description: "Sicherheitsgrenze für Filter-Auswahlen (Standard/Max. 200)" },
+		}, ["to_deck"]),
+		t("update_flashcard", "Ändert EINE bestehende Karteikarte: Vorderseite, Rückseite und/oder Stapel. Zum Korrigieren von Fehlern oder Umformulieren — die Karte behält ihren Lernfortschritt (anders als Löschen + Neuanlegen)." + CARD_RULES, {
+			front: { type: "string", description: "Text bzw. Anfang der bisherigen Vorderseite zur Identifikation" },
+			deck: { type: "string", description: "Stapel zur Eingrenzung, falls mehrere Karten ähnlich beginnen (optional)" },
+			new_front: { type: "string", description: "Neue Vorderseite (optional)" },
+			new_back: { type: "string", description: "Neue Rückseite (optional)" },
+			new_deck: { type: "string", description: "Neuer Stapel (optional)" },
+		}, ["front"]),
+		t("suspend_flashcards", "Pausiert Karten (sie tauchen nicht mehr im Lernen auf) oder hebt die Pause wieder auf. Auswahl wie bei move_flashcards über fronts, deck und/oder query. Nützlich für Stoff, der gerade nicht dran ist, statt ihn zu löschen.", {
+			suspended: { type: "boolean", description: "true = pausieren, false = Pause aufheben" },
+			fronts: { type: "array", items: { type: "string" }, description: "Konkrete Karten (optional)" },
+			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional)" },
+			query: { type: "string", description: "Textfilter über Vorder-/Rückseite (optional)" },
+			limit: { type: "number", description: "Sicherheitsgrenze (Standard/Max. 200)" },
+		}, ["suspended"]),
+		t("reset_card_progress", "Setzt den Lernfortschritt zurück: Die Karten gelten wieder als „neu“ (Intervall, Leichtigkeit und Leech-Markierung zurück auf Start, Pause aufgehoben). Für falsch gelernten Stoff, den man von vorn beginnen will. Im Chat erscheint zwingend eine Bestätigung. Das Wiederholungs-Protokoll (Statistik) bleibt erhalten.", {
+			front: { type: "string", description: "Einzelne Karte über ihre Vorderseite (optional)" },
+			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional) — entweder front oder deck angeben" },
 		}, []),
 		t("send_to_notebooklm", "Bereitet Notiz-Seiten als Quelle für Gemini Notebook (ehemals NotebookLM) vor: kopiert ihre Inhalte in die Zwischenablage und öffnet Gemini Notebook — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
 			page_titles: { type: "array", items: { type: "string" }, description: "Titel der Seiten (leer = aktuelle Seite)" },
@@ -425,9 +525,126 @@ export const TOOLS = (() => {
 				}
 				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
 				return {
-					cards: pool.slice(0, limit).map((c) => ({ front: c.front, back: c.back, deck: c.deck || "Standard" })),
+					cards: pool.slice(0, limit).map((c) => ({
+						front: c.front, back: c.back, deck: c.deck || "Standard",
+						state: (c.srs && c.srs.state) || "new", due: (c.srs && c.srs.due) || null, suspended: !!c.suspended,
+					})),
 					totalMatches: pool.length,
 				};
+			}
+			case "list_decks": {
+				const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed).sort((x, y) => x.localeCompare(y));
+				const active = STATE.activeCards();
+				return {
+					decks: names.map((n) => {
+						const tree = cardsOfDeck(n);
+						let today = null;
+						try {
+							const cnt = STATE.studySnapshot(n).counts;
+							today = { neu: cnt.neu, lernen: cnt.learn, wiederholen: cnt.review };
+						} catch { /* Lernstand optional */ }
+						return {
+							name: n,
+							cards: active.filter((c) => (c.deck || "Standard") === n).length,
+							cardsInclSubdecks: tree.length,
+							suspended: tree.filter((c) => c.suspended).length,
+							today,
+						};
+					}),
+				};
+			}
+			case "create_deck": {
+				const name = String(a.name || "").trim();
+				if (!name) return { error: "create_deck: name fehlt." };
+				const existed = Object.keys(S.decks).some((n) => n.toLowerCase() === name.toLowerCase() && !S.decks[n].trashed);
+				const deck = await ensureDeck(name);
+				return { ok: true, deck, note: existed ? "Stapel gab es bereits — unverändert." : "Neu angelegt." };
+			}
+			case "rename_deck": {
+				const from = resolveDeckName(a.deck);
+				if (!from) return { error: "Stapel nicht gefunden: " + a.deck };
+				const to = String(a.new_name || "").trim().replace(/^:+|:+$/g, "").trim();
+				if (!to) return { error: "rename_deck: new_name fehlt." };
+				if (to === from) return { ok: true, deck: from, note: "Name unverändert." };
+				// Zyklus: der neue Pfad darf nicht innerhalb des Stapels selbst liegen.
+				if (to.startsWith(from + "::")) return { error: "Der neue Name liegt innerhalb des Stapels selbst — das ergäbe einen Zyklus." };
+				if (S.decks[to]) return { error: "Es gibt bereits einen Stapel „" + to + "“ — bitte anderen Namen wählen." };
+				const n = cardsOfDeck(from).length;
+				await STATE.dispatch("deckRename", { from, to });
+				return { ok: true, from, to, cards: n, note: "Unterstapel und Karten sind mitgewandert." };
+			}
+			case "move_deck": {
+				const from = resolveDeckName(a.deck);
+				if (!from) return { error: "Stapel nicht gefunden: " + a.deck };
+				let target = "";
+				if (String(a.new_parent || "").trim()) {
+					target = resolveDeckName(a.new_parent);
+					if (!target) return { error: "Ziel-Stapel nicht gefunden: " + a.new_parent };
+					if (target === from || target.startsWith(from + "::")) return { error: "Ein Stapel kann nicht in sich selbst oder einen eigenen Unterstapel wandern." };
+				}
+				const to = (target ? target + "::" : "") + from.split("::").pop();
+				if (to === from) return { ok: true, deck: from, note: "Der Stapel liegt bereits dort." };
+				if (S.decks[to]) return { error: "Am Zielort gibt es bereits einen Stapel „" + to + "“." };
+				await STATE.dispatch("deckMove", { from, target });
+				return { ok: true, from, to };
+			}
+			case "move_flashcards": {
+				if (!String(a.to_deck || "").trim()) return { error: "move_flashcards: to_deck fehlt." };
+				const sel = selectCards(a);
+				if (sel.error) return sel;
+				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+				const deck = await ensureDeck(a.to_deck);
+				if (!deck) return { error: "move_flashcards: to_deck ist leer." };
+				let moved = 0;
+				for (const c of sel.cards) {
+					if ((c.deck || "Standard") === deck) continue;
+					await STATE.dispatch("cardUpdate", { id: c.id, patch: { deck } });
+					moved++;
+				}
+				return {
+					ok: true, deck, moved, alreadyThere: sel.cards.length - moved,
+					examples: sel.cards.slice(0, 5).map((c) => String(c.front || "").slice(0, 60)),
+					note: "Lernfortschritt der Karten bleibt erhalten.",
+				};
+			}
+			case "update_flashcard": {
+				const c = findCard(a.front, a.deck);
+				if (!c) return { error: "Karte nicht gefunden: " + a.front };
+				const patch = {};
+				if (String(a.new_front || "").trim()) patch.front = String(a.new_front);
+				if (String(a.new_back || "").trim()) patch.back = String(a.new_back);
+				if (String(a.new_deck || "").trim()) patch.deck = await ensureDeck(a.new_deck);
+				if (!Object.keys(patch).length) return { error: "update_flashcard: nichts zu ändern — new_front, new_back oder new_deck angeben." };
+				await STATE.dispatch("cardUpdate", { id: c.id, patch });
+				return {
+					ok: true, changed: Object.keys(patch),
+					front: patch.front || c.front, back: patch.back || c.back, deck: patch.deck || c.deck || "Standard",
+					note: "Lernfortschritt bleibt erhalten.",
+				};
+			}
+			case "suspend_flashcards": {
+				if (typeof a.suspended !== "boolean") return { error: "suspend_flashcards: suspended (true/false) fehlt." };
+				const sel = selectCards(a);
+				if (sel.error) return sel;
+				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+				let changed = 0;
+				for (const c of sel.cards) {
+					if (!!c.suspended === a.suspended) continue;
+					await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: a.suspended } });
+					changed++;
+				}
+				return { ok: true, suspended: a.suspended, changed, unchanged: sel.cards.length - changed };
+			}
+			case "reset_card_progress": {
+				// Bestätigung erzwingt ai.js (wie bei den Lösch-Tools) — hier nur die Aktion selbst.
+				const sel = selectCards(a);
+				if (sel.error) return sel;
+				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+				const now = U.now();
+				for (const c of sel.cards) {
+					await STATE.dispatch("cardUpdate", { id: c.id, patch: { srs: SRS.newCard(now), leech: false, suspended: false } });
+				}
+				return { ok: true, reset: sel.cards.length, note: "Die Karten stehen wieder als „neu“ in der Warteschlange. Das Wiederholungs-Protokoll (Statistik/Heatmap) bleibt erhalten." };
 			}
 			case "send_to_notebooklm":
 				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook

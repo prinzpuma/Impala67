@@ -464,7 +464,11 @@ function ankiStudyHtml() {
 		// Telemetrie (telemetrie.js): optionale Selbsteinschätzung VOR dem Aufdecken.
 		// Rein beobachtend — beeinflusst weder Queue noch Bewertung, wird aber mit dem
 		// Review protokolliert (Kalibrierung: Gefühl vs. tatsächlicher Erfolg).
-		const confOn = localStorage.getItem("impala67Confidence") !== "off"; // Einstellung: Selbsteinschätzung
+		// Selbsteinschätzung (25. Juli): Die App erkennt jetzt selbst an der Antwortzeit, wie
+		// sicher eine Karte saß (telemetrie.js → confidenceAuto). Die Chips erscheinen daher
+		// nur noch, wenn man sie in den Einstellungen ausdrücklich einschaltet.
+		const confPref = localStorage.getItem("impala67Confidence");
+		const confOn = !!confPref && confPref !== "off"; // Einstellung: Selbsteinschätzung (Standard: automatisch)
 		html += '<div class="study-reveal-controls">' +
 			(confOn ? '<div class="confidence-row"><span class="hint">Wie sicher bist du?</span>' +
 				'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">😎 Sicher</button>' +
