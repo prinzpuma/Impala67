@@ -362,6 +362,7 @@ export const AI = (() => {
 		const dec = new TextDecoder();
 		const msg = { role: "assistant", content: "", reasoning: "", tool_calls: [] };
 		let rawContent = "", apiReasoning = "", buf = ""; // apiReasoning = echtes API-Reasoning, nie von der Heuristik überschrieben
+		let leakedReasoning = ""; // aus dem Text gezogener Denkteil (Tags/Heuristik) — wächst nur
 		const emitReasoning = () => { if (onReasoning && msg.reasoning) onReasoning(msg.reasoning); };
 		for (;;) {
 			const { done, value } = await reader.read();
@@ -386,7 +387,12 @@ export const AI = (() => {
 					rawContent += textPiece;
 					const split = splitThink(rawContent, !!apiReasoning); // Heuristik nur ohne API-Reasoning
 					msg.content = split.content;
-					msg.reasoning = split.reasoning ? (apiReasoning ? apiReasoning + "\n" + split.reasoning : split.reasoning) : apiReasoning;
+					// FIX (26. Juli): Der aus dem Text gezogene Denkteil darf beim Streamen nur noch
+					// WACHSEN. Wurde ein Denkblock durch ein späteres Token neu bewertet (z.B. weil ein
+					// halb gestreamtes <think>-Tag plötzlich anders greift), verschwand die ganze
+					// Gedankengang-Box mitten im Antworten.
+					if (split.reasoning.length >= leakedReasoning.length) leakedReasoning = split.reasoning;
+					msg.reasoning = leakedReasoning ? (apiReasoning ? apiReasoning + "\n" + leakedReasoning : leakedReasoning) : apiReasoning;
 					emitReasoning();
 					onDelta(msg.content);
 				}
@@ -476,7 +482,7 @@ export const AI = (() => {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const now = new Date();
 		const toolLine = toolsMode === true
-			? "Nutze deine Tools aktiv statt zu raten, und führe mehrere Schritte selbstständig hintereinander aus (erst nachsehen, dann handeln). Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Karteikarten verwalten: list_decks und list_flashcards zeigen echte Stapel- und Kartennamen (nie Namen raten oder erfinden), move_flashcards verschiebt Karten in andere Stapel, update_flashcard korrigiert eine Karte unter Erhalt des Lernfortschritts, create_deck/rename_deck/move_deck ordnen Stapel, suspend_flashcards pausiert Karten, reset_card_progress setzt den Fortschritt zurück. Zum Ändern einer Karte NIE löschen und neu anlegen — dabei ginge der Lernfortschritt verloren; nutze update_flashcard bzw. move_flashcards. Löschen und Zurücksetzen werden immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz und konkret, was geändert wurde (Anzahl, Stapelnamen)."
+			? "Nutze deine Tools aktiv statt zu raten, und führe mehrere Schritte selbstständig hintereinander aus (erst nachsehen, dann handeln). Kontext holen: get_context (zuletzt bearbeitete Seiten, Lernstatus, Inhalt der geöffneten Seite), list_pages, read_page, semantic_search/search_notes. Schreiben: create_page/append_to_page, create_flashcards. Karteikarten verwalten: list_decks und list_flashcards zeigen echte Stapel- und Kartennamen (nie Namen raten oder erfinden), move_flashcards verschiebt beliebig viele Karten in andere Stapel, delete_flashcards löscht mehrere Karten in EINEM Schritt (nie delete_flashcard mehrfach hintereinander), update_flashcard korrigiert eine Karte unter Erhalt des Lernfortschritts, create_deck/rename_deck/move_deck ordnen Stapel, suspend_flashcards pausiert Karten, reset_card_progress setzt den Fortschritt zurück. Zum Ändern einer Karte NIE löschen und neu anlegen — dabei ginge der Lernfortschritt verloren; nutze update_flashcard bzw. move_flashcards. Löschen und Zurücksetzen werden immer im Chat bestätigt. Bei Mehrdeutigkeit: ask_choice. Sage nach Tool-Nutzung kurz und konkret, was geändert wurde (Anzahl, Stapelnamen)."
 			: toolsMode === "meta"
 				? "Aktuell ist nur das Werkzeug request_tools verfügbar. Sobald die Anfrage Notizen, Karten, Hefte, Suche oder Aktionen im Workspace erfordern könnte, rufe ZUERST request_tools auf — danach stehen alle Werkzeuge in derselben Anfrage bereit. Sonst antworte direkt."
 				: "Für diese Anfrage sind keine Werkzeuge aktiv. Antworte direkt aus dem vorhandenen Kontext. Sprich NIE über Werkzeuge, fehlenden Daten-Zugriff oder „dieses Chat-Fenster“ und behaupte keine Suchen oder Änderungen. Wären Notiz-Inhalte nötig, bitte den Nutzer, die Frage konkret zu formulieren (z. B. „Durchsuche meine Notizen nach …“).";
@@ -569,6 +575,29 @@ export const AI = (() => {
 					question: 'Karte „' + label + '“ in den Papierkorb?',
 					runArgs: { front: card.front, deck: card.deck },
 					cancelled: { cancelled: true, front: card.front, note: "Löschen abgebrochen — nichts geändert." },
+				};
+			},
+		},
+		delete_flashcards: {
+			resolve(args) {
+				const sel = TOOLS.selectCards(args || {});
+				if (sel.error) return { error: sel.error };
+				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+				const short = (c) => {
+					const s = String(c.front || "").replace(/\s+/g, " ").trim();
+					return s.length > 50 ? s.slice(0, 50) + "…" : s;
+				};
+				const shown = sel.cards.slice(0, 3).map((c) => '„' + short(c) + '“').join(", ");
+				const rest = sel.cards.length - Math.min(3, sel.cards.length);
+				const n = sel.cards.length;
+				return {
+					detail: n + (n === 1 ? " Karte" : " Karten") + (sel.deck ? " · " + sel.deck : ""),
+					question: n === 1
+						? 'Karte „' + short(sel.cards[0]) + '“ in den Papierkorb?'
+						: n + " Karten" + (sel.deck ? ' aus „' + sel.deck + '“' : "") + " in den Papierkorb? " + shown + (rest > 0 ? " und " + rest + " weitere" : ""),
+					// ids statt fronts: eindeutig, selbst wenn zwei Karten gleich beginnen
+					runArgs: { ids: sel.cards.map((c) => c.id) },
+					cancelled: { cancelled: true, count: n, note: "Löschen abgebrochen — nichts geändert." },
 				};
 			},
 		},
@@ -691,7 +720,9 @@ export const AI = (() => {
 			}
 			S.aiStatus = status;
 			S.aiDraft = "";
-			S.aiThinkingDraft = "";
+			// FIX (26. Juli): NICHT mehr leeren — der bisher gesammelte Gedankengang blieb sonst
+			// genau in dem Moment weg, in dem man eine Rückfrage/Löschbestätigung beantwortet.
+			S.aiThinkingDraft = runReasoning;
 			const answer = await new Promise((resolve) => {
 				pendingChoices[qMid] = resolve;
 				targetChat.push({ mid: qMid, role: "question", question, options, answered: false });
@@ -857,7 +888,9 @@ export const AI = (() => {
 		S.aiDraft = "";
 		S.aiThinkingDraft = "";
 		const abort = "(Abgebrochen: zu viele Tool-Schritte.)";
-		targetChat.push({ mid: U.uid(), role: "assistant", content: abort });
+		// Gedankengang auch hier mitgeben — sonst war nach einem Abbruch nicht nachvollziehbar,
+		// was die KI in den vielen Schritten eigentlich vorhatte.
+		targetChat.push({ mid: U.uid(), role: "assistant", content: abort, reasoning: runReasoning || null, reasoningExpanded: false });
 		flushPendingEdits();
 		persist();
 		return abort;

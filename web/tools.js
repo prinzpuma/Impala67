@@ -173,6 +173,15 @@ export const TOOLS = (() => {
 			front: { type: "string", description: "Text bzw. Anfang der Vorderseite zur Identifikation der Karte" },
 			deck: { type: "string", description: "Stapel zur Eingrenzung, falls mehrere Karten ähnlichen Text haben (optional)" },
 		}, ["front"]),
+		// 26. Juli: Mehrere Karten auf einmal löschen — vorher musste die KI delete_flashcard
+		// für JEDE Karte einzeln aufrufen (je mit eigener Bestätigung) und war nach wenigen
+		// Karten am Schritt-Limit.
+		t("delete_flashcards", "Verschiebt MEHRERE Karteikarten auf einmal in den Papierkorb. Auswahl über fronts (konkrete Karten) und/oder deck + query — mindestens eine Angabe nötig. Wiederherstellbar. Im Chat erscheint zwingend EINE Bestätigung mit der genauen Anzahl. Zum Korrigieren oder Umsortieren von Karten NICHT löschen, sondern update_flashcard bzw. move_flashcards nutzen (Lernfortschritt).", {
+			fronts: { type: "array", items: { type: "string" }, description: "Vorderseiten-Texte der zu löschenden Karten (optional)" },
+			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional)" },
+			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (optional)" },
+			limit: { type: "number", description: "Sicherheitsgrenze für Filter-Auswahlen (Standard/Max. 200)" },
+		}, []),
 		t("delete_deck", "Verschiebt einen Karteikarten-Stapel (inkl. Unterstapel und ALLER enthaltenen Karten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Namen zuerst ask_choice.", {
 			deck: { type: "string", description: "Name des Stapels, Unterstapel per 'Eltern::Kind'" },
 		}, ["deck"]),
@@ -378,6 +387,27 @@ export const TOOLS = (() => {
 				if (!c) return { error: "Karte nicht gefunden: " + a.front };
 				await STATE.dispatch("cardTrash", { id: c.id });
 				return { ok: true, front: c.front, trashed: true, note: "Im Papierkorb — wiederherstellbar." };
+			}
+			case "delete_flashcards": {
+				// Bestätigung erzwingt ai.js. ids = exakte Auswahl, die in der Bestätigung stand
+				// (eindeutig, auch wenn zwei Karten denselben Vorderseiten-Text haben).
+				let cards;
+				if (Array.isArray(a.ids) && a.ids.length) {
+					cards = a.ids.map((id) => S.cards[id]).filter((c) => c && !c.trashed);
+					if (!cards.length) return { error: "Die vorgemerkten Karten gibt es nicht mehr." };
+				} else {
+					const sel = selectCards(a);
+					if (sel.error) return sel;
+					if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+					cards = sel.cards;
+				}
+				for (const c of cards) await STATE.dispatch("cardTrash", { id: c.id });
+				return {
+					ok: true, trashed: cards.length,
+					decks: [...new Set(cards.map((c) => c.deck || "Standard"))],
+					examples: cards.slice(0, 5).map((c) => String(c.front || "").replace(/\s+/g, " ").slice(0, 60)),
+					note: "Im Papierkorb — wiederherstellbar.",
+				};
 			}
 			case "delete_deck": {
 				const match = resolveDeckName(a.deck);
@@ -716,5 +746,5 @@ export const TOOLS = (() => {
 		}
 	}
 
-	return { defs, run, normalizeAskChoice, findCard, resolveDeckName };
+	return { defs, run, normalizeAskChoice, findCard, resolveDeckName, selectCards };
 })();

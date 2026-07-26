@@ -3,6 +3,7 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
+import { HEFT } from "./heft.js";
 // drive.js — Google-Drive-Sync über appDataFolder. v4 (20.7.2026): KISS/DRY-Rewrite.
 // Login: Browser/PWA = GIS-Popup (Client-ID aus Einstellungen). Desktop/Tauri =
 // Loopback-Flow RFC 8252 (Google blockt OAuth in Webviews) mit separatem
@@ -407,8 +408,20 @@ export const DRIVE = (() => {
 		return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: "gzip" };
 	}
 
-	function replayImported(events) {
+	// v10 (26.7.2026) [B1] Heft-Echo: heft.js schickt beim Speichern nur den Unterschied zum
+	// zuletzt veröffentlichten Stand. Bisher wurden die fremden Events zuerst abgespielt und das
+	// offene Heft erst DANACH informiert — sein Flush verglich also ein Dokument, das die fremden
+	// Striche schon enthielt, mit dem alten Schatten und hielt jeden empfangenen Strich für eine
+	// eigene Neuerung. Jeder fremde Strich wanderte damit sofort wieder hoch (und beim nächsten
+	// Sync beim Gegenüber erneut): das Log wuchs bei jedem Lauf, Striche konnten doppelt
+	// auftauchen. Jetzt bekommt das offene Heft VOR dem Abspielen die Gelegenheit, seine eigenen
+	// noch nicht veröffentlichten Striche rauszuschreiben — der Diff bleibt damit ehrlich.
+	async function replayImported(events) {
 		const list = (events || []).slice().sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")));
+		if (!list.length) return;
+		if (list.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
+			try { await HEFT.saveNow(); } catch (e) { console.warn("[sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", e); }
+		}
 		for (const ev of list) STATE.reduce(ev);
 		if (list.length && typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
 		// v8: Hefte kommen als heftOps/heftSnap herein. Ein offenes Heft hält seine Seiten im
@@ -631,7 +644,7 @@ export const DRIVE = (() => {
 			lateDeltas.forEach((f) => knownDeltaIds.add(f.id));
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
-		replayImported(importedEvents);
+		await replayImported(importedEvents);
 		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
 		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.

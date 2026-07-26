@@ -1109,6 +1109,14 @@ const TOOL_LABELS = {
 	create_flashcard: "Karteikarte erstellt", create_cloze_card: "Cloze-Karten erstellt", move_page: "Seite verschoben",
 	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten", send_to_notebooklm: "An NotebookLM",
 	ask_choice: "Rückfrage gestellt", delete_page: "Seite gelöscht", delete_flashcard: "Karte gelöscht", delete_deck: "Stapel gelöscht",
+	// 26. Juli: Karten-Verwaltung, Hefte und Werkzeuge zeigten bisher nur ihren rohen
+	// Tool-Namen im Chip (z.B. „move_flashcards“) — jetzt alle mit Klartext-Beschriftung.
+	create_flashcards: "Karteikarten erstellt", delete_flashcards: "Karten gelöscht", list_flashcards: "Karten durchgesehen",
+	list_decks: "Stapel aufgelistet", create_deck: "Stapel angelegt", rename_deck: "Stapel umbenannt", move_deck: "Stapel verschoben",
+	move_flashcards: "Karten verschoben", update_flashcard: "Karte überarbeitet", suspend_flashcards: "Karten pausiert",
+	reset_card_progress: "Lernfortschritt zurückgesetzt", get_context: "Kontext geholt",
+	write_to_heft: "Ins Heft geschrieben", get_heft_page_image: "Heftseite angesehen",
+	search_chat_history: "Frühere Chats durchsucht", calculate: "Gerechnet", request_tools: "Werkzeuge freigeschaltet",
 };
 const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">${ICONS.gear} ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
 
@@ -1157,6 +1165,13 @@ function enhanceChatStatic(log, staticEnd) {
 
 function renderChatLog(log, historyList) {
 	const signature = chatHistorySignature(historyList);
+	// FIX (26. Juli): Scroll-Position VOR jeder DOM-Änderung merken. Beim Rebuild werden alle
+	// fertigen Nachrichten entfernt und neu eingesetzt — dabei schrumpft scrollHeight kurz auf
+	// (fast) 0 und der Browser klemmt scrollTop auf 0. Genau das war der Sprung nach oben,
+	// sobald man eine Rückfrage/Löschbestätigung beantwortet hat (answered → neue Signatur →
+	// Rebuild): der Chat stand plötzlich am Anfang und der Gedankengang schien verschwunden.
+	const prevScrollTop = log.scrollTop;
+	const wasNearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
 	let staticEnd = log._chatStaticEnd, live = log._chatLive;
 	// Fertige Nachrichten bleiben direkte Kinder (CSS/Event-Delegation); nur der
 	// Live-Bereich bekommt einen unsichtbaren Container als Patch-Ziel
@@ -1177,6 +1192,9 @@ function renderChatLog(log, historyList) {
 		staticEnd.before(tpl.content);
 		log._chatStaticSignature = signature;
 		enhanceChatStatic(log, staticEnd);
+		// Nach dem Wiederaufbau zurück an die alte Stelle (nur wenn der Nutzer bewusst
+		// weiter oben gelesen hat — sonst übernimmt der Auto-Scroll unten).
+		if (!wasNearBottom && prevScrollTop > 0 && log.scrollTop !== prevScrollTop) log.scrollTop = prevScrollTop;
 	}
 	// FIX: Live-Bereich nicht mehr pro Streaming-Delta per innerHTML ersetzen —
 	// Klicks zwischen Mousedown/-up gingen verloren, die Think-Box ließ sich nie
@@ -1212,9 +1230,9 @@ function renderChatLog(log, historyList) {
 		U.renderMath(restHost);
 		U.highlightCode(restHost);
 	}
-	// Ans Ende folgen — außer der Nutzer hat hochgescrollt, um nachzulesen
-	const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
-	if (nearBottom || !log._chatAutoScrolled) { log.scrollTop = log.scrollHeight; log._chatAutoScrolled = true; }
+	// Ans Ende folgen — außer der Nutzer hat hochgescrollt, um nachzulesen. Maßgeblich ist
+	// die Position VOR dem Rebuild (danach wäre sie durch das Neu-Einsetzen verfälscht).
+	if (wasNearBottom || !log._chatAutoScrolled) { log.scrollTop = log.scrollHeight; log._chatAutoScrolled = true; }
 }
 
 // Rückfrage-Karte (ask_choice): Frage + Options-Zeilen, nach Klick nur die Antwort

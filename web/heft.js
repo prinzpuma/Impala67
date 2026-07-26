@@ -305,10 +305,16 @@ export const HEFT = (() => {
 	}
 
 	// Fremdänderungen sind eingetroffen (drive.js → STATE.emitRemoteApplied).
-	// Eigene noch nicht veröffentlichte Striche werden vorher rausgeschickt, damit
-	// der neue Schatten sie nicht fälschlich als "vom Nutzer gelöscht" liest.
+	// FIX (26. Juli, „der sync hat immer noch bugs beim heft sync“): Hier stand ein
+	// saveNow()-Flush — gedacht als Schutz für eigene, noch nicht veröffentlichte Striche.
+	// Er lief aber ZU SPÄT: drive.js spielt die fremden Events erst in S.heftDocs ein und
+	// meldet sich DANACH. Der Diff verglich also das bereits ergänzte Dokument mit dem
+	// alten Schatten — jeder empfangene fremde Strich sah wie eine eigene Neuerung aus und
+	// ging als „s+“-Operation sofort wieder hoch. Ergebnis: jedes Gerät schickte jeden
+	// fremden Strich zurück, das Log wuchs bei jedem Sync, und beim Hin- und Herspielen
+	// konnten Striche doppelt erscheinen. Der Flush passiert jetzt VOR dem Abspielen
+	// (drive.js → replayImported); hier wird nur noch der Schatten nachgezogen.
 	async function onRemoteApplied() {
-		try { if (pid && doc) await saveNow(); } catch (e) { console.warn("Heft: Flush vor Import fehlgeschlagen", e); }
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
 			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
