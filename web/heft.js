@@ -842,7 +842,10 @@ export const HEFT = (() => {
 	// stimmt die Kachel auch mitten in einer Geste, und ihre Kosten haengen an der
 	// Bildschirmgroesse statt am Zoomfaktor.
 	function tileDpr(r) {
-		const native = Math.min(2, window.devicePixelRatio || 1);
+		// Die Kachel ist die EINZIGE Quelle der Schärfe (die Basis-Seite bleibt bei fit) — sie darf
+		// deshalb die volle Geräteauflösung nutzen. Die alte 2er-Grenze machte 3x-Bildschirme
+		// dauerhaft weich, obwohl das Pixel-Budget noch Luft hatte.
+		const native = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
 		const w = Math.max(1, r.w * view.k), h = Math.max(1, r.h * view.k);
 		return Math.max(0.5, Math.min(native, Math.sqrt(MAX_RENDER_PIXELS / (w * h)), MAX_CANVAS_DIM / Math.max(w, h)));
 	}
@@ -858,14 +861,19 @@ export const HEFT = (() => {
 			w: base.offsetWidth, h: base.offsetHeight,
 		};
 	}
-	function layerRectFor(i, over = 140) {
+	function layerRectFor(i, over = 64) {
 		const vp = viewport(), o = pageOrigin(i);
 		if (!vp || !o) return null;
 		const vw = vp.width / view.k, vh = vp.height / view.k;
 		// Auf ganze Basis-Pixel runden: eine gebrochene Kachelkante wird sonst beim
 		// Anzeigen weich gerechnet.
-		const x0 = Math.floor(clamp(view.x - o.x - over, 0, o.w)), y0 = Math.floor(clamp(view.y - o.y - over, 0, o.h));
-		const x1 = Math.ceil(clamp(view.x + vw - o.x + over, 0, o.w)), y1 = Math.ceil(clamp(view.y + vh - o.y + over, 0, o.h));
+		// Der Rand zählt in BILDSCHIRM-Pixeln, nicht in Basis-Pixeln. Vorher wuchs er mit dem Zoom
+		// (bei k=5 über 700 Basis-Pixel je Seite): die Kachelfläche sprengte MAX_RENDER_PIXELS,
+		// tileDpr fiel unter 1 und die Kachel wurde HOCHSKALIERT — ausgerechnet beim Hineinzoomen.
+		// Kleinerer Rand (64 statt 140): Schärfe schlägt Vorausrendern.
+		const pad = over / view.k;
+		const x0 = Math.floor(clamp(view.x - o.x - pad, 0, o.w)), y0 = Math.floor(clamp(view.y - o.y - pad, 0, o.h));
+		const x1 = Math.ceil(clamp(view.x + vw - o.x + pad, 0, o.w)), y1 = Math.ceil(clamp(view.y + vh - o.y + pad, 0, o.h));
 		if (x1 - x0 < 2 || y1 - y0 < 2) return null;
 		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
@@ -908,7 +916,10 @@ export const HEFT = (() => {
 	}
 	function tileCovers(i) {
 		const tile = detailCanvases[i], t = tile && tile.__heftTile;
-		if (!t || tile.style.display === "none" || Math.abs(t.k - view.k) > 0.0001) return false;
+		// Eine Kachel mit HÖHERER Zoomstufe hat mehr Gerätepixel als nötig — sie ist scharf und
+		// darf bleiben. Der alte Exakt-Vergleich verwarf sie bei der kleinsten Bewegung, dadurch
+		// wurde bei jedem Frame neu gerendert (bzw. während der Geste gar nicht).
+		if (!t || tile.style.display === "none" || t.k < view.k - 0.0001) return false;
 		const need = layerRectFor(i, 0);
 		if (!need) return false;
 		return t.x <= need.x + 0.5 && t.y <= need.y + 0.5 &&

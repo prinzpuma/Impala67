@@ -139,12 +139,12 @@ export const DRIVE = (() => {
 		return { verifier, challenge: base64url(digest) };
 	}
 
-	// clientId gesetzt = Browser/PWA-Weg (öffentlicher Client, PKCE, KEIN Secret).
+	// clientId gesetzt = Browser/PWA-Weg (Web-Client, PKCE).
 	const tokenRequest = (params, clientId) => fetch("https://oauth2.googleapis.com/token", {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams(clientId
-			? { client_id: clientId, ...params }
+			? { client_id: clientId, ...(webSecret() ? { client_secret: webSecret() } : {}), ...params }
 			: { client_id: dcId(), ...(dcSecret() ? { client_secret: dcSecret() } : {}), ...params }),
 	});
 
@@ -220,6 +220,11 @@ export const DRIVE = (() => {
 	// ein Popup, das Safari im installierten PWA-Modus blockiert.
 	const PKCE_KEY = "impala67_drive_pkce";
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
+	// Googles Token-Endpunkt verlangt für Clients vom Typ „Webanwendung“ AUCH mit PKCE ein
+	// client_secret. Fehlt es, kann der Code-Tausch gar nicht gelingen (invalid_client) — genau
+	// das Bild „anmelden, zurück zur App, wieder anmelden“. Ohne Secret wird deshalb unten der
+	// GIS-Weg genommen statt einer Weiterleitung, die immer im Anmeldebildschirm endet.
+	const webSecret = () => cfg("GOOGLE_WEB_CLIENT_SECRET") || S.settings?.driveWebClientSecret || "";
 	// Google prueft die Weiterleitungs-URI zeichengenau. "/Impala67/index.html" und
 	// "/Impala67/" sind fuer Google zwei verschiedene URIs - deshalb wird das
 	// "index.html" abgeschnitten, damit immer die Verzeichnis-Form benutzt wird
@@ -230,7 +235,9 @@ export const DRIVE = (() => {
 		const clientId = webId();
 		if (!clientId) throw new Error("Keine Google Client-ID hinterlegt (einmalig in Einstellungen → Sync eintragen).");
 		const { verifier, challenge } = await pkcePair();
-		LS.setItem(PKCE_KEY, JSON.stringify({ verifier, t: Date.now() }));
+		// Die Client-ID reist MIT: config.local.js wird lazy geladen, beim Auswerten der
+		// Rückkehr war webId() deshalb oft "" — der Tausch lief dann gegen den Desktop-Client.
+		LS.setItem(PKCE_KEY, JSON.stringify({ verifier, clientId, t: Date.now() }));
 		location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
 			client_id: clientId, redirect_uri: webRedirect(), response_type: "code", scope: SCOPE,
 			access_type: "offline", prompt: "consent", include_granted_scopes: "true",
@@ -239,19 +246,33 @@ export const DRIVE = (() => {
 		return new Promise(() => {}); // die Seite wird verlassen
 	}
 
-	// Nach der Rückkehr von Google: Code gegen Tokens tauschen, Adresszeile aufräumen.
+	// Nach der Rückkehr von Google: ERST tauschen, DANN aufräumen. Vorher wurden Code-Parameter
+	// und PKCE-Merker gelöscht, BEVOR getauscht wurde — schlug der Tausch fehl, war beides weg,
+	// der Fehler wurde verschluckt (leeres catch beim Aufrufer) und die App zeigte einfach wieder
+	// „Mit Google anmelden“. Auch ein error-Parameter (z. B. redirect_uri_mismatch) blieb still.
+	const clearLoginParams = () => {
+		const url = new URL(location.href);
+		["code", "scope", "authuser", "prompt", "state", "error"].forEach((k) => url.searchParams.delete(k));
+		try { history.replaceState(null, "", url.toString()); } catch (err) { /* egal */ }
+	};
 	async function finishWebLogin() {
 		if (window.__TAURI__ || typeof location === "undefined") return false;
-		const url = new URL(location.href);
-		const code = url.searchParams.get("code");
+		const params = new URL(location.href).searchParams;
+		const err = params.get("error"), code = params.get("code");
+		if (err) { clearLoginParams(); LS.removeItem(PKCE_KEY); U.toast("Google-Anmeldung abgebrochen: " + err, "error"); return false; }
 		if (!code) return false;
 		let saved = null;
-		try { saved = JSON.parse(LS.getItem(PKCE_KEY) || "null"); } catch (err) { saved = null; }
+		try { saved = JSON.parse(LS.getItem(PKCE_KEY) || "null"); } catch (e) { saved = null; }
+		if (!saved?.verifier) { clearLoginParams(); LS.removeItem(PKCE_KEY); U.toast("Google-Anmeldung unvollständig (Sitzungsmerker fehlt) — bitte erneut anmelden.", "error"); return false; }
+		try {
+			saveToken(await exchangeCode(code, saved.verifier, webRedirect(), saved.clientId || webId()));
+		} catch (e) {
+			clearLoginParams(); LS.removeItem(PKCE_KEY);
+			U.toast("Google-Anmeldung fehlgeschlagen: " + ((e && e.message) || e), "error");
+			throw e;
+		}
+		clearLoginParams();
 		LS.removeItem(PKCE_KEY);
-		["code", "scope", "authuser", "prompt", "state"].forEach((k) => url.searchParams.delete(k));
-		try { history.replaceState(null, "", url.toString()); } catch (err) { /* egal */ }
-		if (!saved || !saved.verifier) return false;
-		saveToken(await exchangeCode(code, saved.verifier, webRedirect(), webId()));
 		try {
 			const info = await fetchUserInfo();
 			if (info && info.email) { S.driveUserEmail = info.email; LS.setItem("impala67_drive_email", info.email); }
@@ -266,6 +287,9 @@ export const DRIVE = (() => {
 			if (data?.access_token) { saveToken(data); return token; }
 		}
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
+		// Ohne Web-Client-Secret kann der Code-Tausch nicht gelingen (siehe webSecret) — dann
+		// lieber der alte GIS-Weg (Stundentoken, funktioniert) als eine Endlos-Anmeldung.
+		if (!webSecret()) return getTokenBrowserPopup(interactive);
 		return startWebLogin();
 	}
 
@@ -273,7 +297,9 @@ export const DRIVE = (() => {
 	function getTokenBrowserPopup(interactive) {
 		return new Promise((resolve, reject) => {
 			if (!window.google?.accounts) return reject(new Error("Google-Script nicht geladen (Internet nötig)."));
-			const clientId = S.settings.driveClientId;
+			// webId(): kennt auch config.local.js — vorher scheiterte der Notnagel-Weg, wenn die
+			// Client-ID nur im Build stand und nicht in den Einstellungen.
+			const clientId = webId();
 			if (!clientId) return reject(new Error("Keine Google Client-ID hinterlegt (einmalig in Einstellungen → Sync eintragen)."));
 			google.accounts.oauth2.initTokenClient({
 				client_id: clientId, scope: SCOPE,
@@ -857,8 +883,8 @@ export const DRIVE = (() => {
 		return autoSync("start");
 	}
 
-	// Rückkehr von der Google-Weiterleitung sofort auswerten (Browser/PWA).
-	finishWebLogin().catch(() => {});
-
-	return { login, logout, sync, isConnected, startAutoSync };
+	// Die Rückkehr von der Weiterleitung wird NICHT mehr beim Import ausgewertet: zu diesem
+	// Zeitpunkt gibt es weder S.settings noch config.local.js. boot.js ruft finishWebLogin()
+	// nach STATE.load() und vor dem ersten Sync auf — und kann Fehler auch anzeigen.
+	return { login, logout, sync, isConnected, startAutoSync, finishWebLogin };
 })();

@@ -10,6 +10,7 @@ import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { CHATS } from "./chats.js";
 import { MOBILE } from "./mobile.js";
+import { DRIVE } from "./drive.js";
 
 const render = (...args) => RENDER.render(...args);
 const wireEvents = (...args) => APP.wireEvents(...args);
@@ -148,6 +149,15 @@ export async function initApp() {
 	});
 	window.addEventListener("online", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Online · wartet" } })));
 	window.addEventListener("offline", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Offline · wartet" } })));
+	// Rückkehr von der Google-Weiterleitung HIER auswerten — nicht mehr beim Import von
+	// drive.js. Dort lief sie vor STATE.load() und vor config.local.js, die Client-ID war
+	// also leer und der Code-Tausch schlug still fehl (man landete wieder im Login).
+	try {
+		if (await DRIVE.finishWebLogin()) {
+			S.driveUserEmail = localStorage.getItem("impala67_drive_email") || "Google-Konto";
+			render();
+		}
+	} catch (e) { console.warn("Google-Anmeldung konnte nicht abgeschlossen werden:", e); }
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);
