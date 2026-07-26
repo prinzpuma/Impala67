@@ -220,7 +220,11 @@ export const DRIVE = (() => {
 	// ein Popup, das Safari im installierten PWA-Modus blockiert.
 	const PKCE_KEY = "impala67_drive_pkce";
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
-	const webRedirect = () => location.origin + location.pathname;
+	// Google prueft die Weiterleitungs-URI zeichengenau. "/Impala67/index.html" und
+	// "/Impala67/" sind fuer Google zwei verschiedene URIs - deshalb wird das
+	// "index.html" abgeschnitten, damit immer die Verzeichnis-Form benutzt wird
+	// (das ist die URI, die in der Google Cloud Console eingetragen sein muss).
+	const webRedirect = () => location.origin + location.pathname.replace(/index\.html?$/i, "");
 
 	async function startWebLogin() {
 		const clientId = webId();

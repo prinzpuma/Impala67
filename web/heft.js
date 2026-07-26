@@ -719,7 +719,11 @@ export const HEFT = (() => {
 	const PAD_X = 18, PAD_BOTTOM = 56;
 	const padTop = () => (window.innerWidth < 640 ? 36 : 46);
 
-	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
+	// Die Basis-Seite hat jetzt eine FESTE Groesse (fit, unabhaengig vom Zoom),
+	// deshalb darf sie in voller Geraeteauflaesung gefuellt werden. Die alte Grenze
+	// von 1.5 stammte aus der Zeit, als die Zeichenflaeche mit dem Zoom mitwuchs -
+	// auf einem 2x/3x-Bildschirm war dadurch jede Schrift dauerhaft weich.
+	const MAX_RENDER_DPR = 3, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
 	const gesture = {
 		pts: new Map(), pinch: null, last: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
