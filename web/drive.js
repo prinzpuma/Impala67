@@ -139,14 +139,17 @@ export const DRIVE = (() => {
 		return { verifier, challenge: base64url(digest) };
 	}
 
-	const tokenRequest = (params) => fetch("https://oauth2.googleapis.com/token", {
+	// clientId gesetzt = Browser/PWA-Weg (öffentlicher Client, PKCE, KEIN Secret).
+	const tokenRequest = (params, clientId) => fetch("https://oauth2.googleapis.com/token", {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: new URLSearchParams({ client_id: dcId(), ...(dcSecret() ? { client_secret: dcSecret() } : {}), ...params }),
+		body: new URLSearchParams(clientId
+			? { client_id: clientId, ...params }
+			: { client_id: dcId(), ...(dcSecret() ? { client_secret: dcSecret() } : {}), ...params }),
 	});
 
-	async function exchangeCode(code, verifier, redirectUri) {
-		const res = await tokenRequest({ code, redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier });
+	async function exchangeCode(code, verifier, redirectUri, clientId) {
+		const res = await tokenRequest({ code, redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier }, clientId);
 		if (!res.ok) {
 			// Fehlertext maskieren (kann Token-Fragmente enthalten) + Quellen-Diagnose für invalid_client.
 			const safe = (await res.text()).slice(0, 200).replace(/[A-Za-z0-9_\-]{20,}/g, "[…]").replace(/GOCSPX-[A-Za-z0-9_\-]+/g, "[secret]");
@@ -156,8 +159,8 @@ export const DRIVE = (() => {
 		return res.json();
 	}
 
-	const refreshDesktopToken = async (rt) => {
-		const res = await tokenRequest({ refresh_token: rt, grant_type: "refresh_token" });
+	const refreshDesktopToken = async (rt, clientId) => {
+		const res = await tokenRequest({ refresh_token: rt, grant_type: "refresh_token" }, clientId);
 		return res.ok ? res.json() : null;
 	};
 
@@ -210,8 +213,60 @@ export const DRIVE = (() => {
 		return token;
 	}
 
-	// Browser/PWA: Popup über Googles Identity-Bibliothek.
-	function getTokenBrowser(interactive) {
+	// Browser/PWA (26. Juli): Auth-Code-Flow mit PKCE per Weiterleitung im GLEICHEN
+	// Fenster. Bisher lief hier google.accounts.oauth2.initTokenClient — das liefert
+	// ausschliesslich einen Stundentoken und NIE einen Erneuerungs-Schlüssel. Nach einer
+	// Stunde galt die App deshalb als abgemeldet, und die „stille“ Erneuerung brauchte
+	// ein Popup, das Safari im installierten PWA-Modus blockiert.
+	const PKCE_KEY = "impala67_drive_pkce";
+	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
+	const webRedirect = () => location.origin + location.pathname;
+
+	async function startWebLogin() {
+		const clientId = webId();
+		if (!clientId) throw new Error("Keine Google Client-ID hinterlegt (einmalig in Einstellungen → Sync eintragen).");
+		const { verifier, challenge } = await pkcePair();
+		LS.setItem(PKCE_KEY, JSON.stringify({ verifier, t: Date.now() }));
+		location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+			client_id: clientId, redirect_uri: webRedirect(), response_type: "code", scope: SCOPE,
+			access_type: "offline", prompt: "consent", include_granted_scopes: "true",
+			code_challenge: challenge, code_challenge_method: "S256",
+		}));
+		return new Promise(() => {}); // die Seite wird verlassen
+	}
+
+	// Nach der Rückkehr von Google: Code gegen Tokens tauschen, Adresszeile aufräumen.
+	async function finishWebLogin() {
+		if (window.__TAURI__ || typeof location === "undefined") return false;
+		const url = new URL(location.href);
+		const code = url.searchParams.get("code");
+		if (!code) return false;
+		let saved = null;
+		try { saved = JSON.parse(LS.getItem(PKCE_KEY) || "null"); } catch (err) { saved = null; }
+		LS.removeItem(PKCE_KEY);
+		["code", "scope", "authuser", "prompt", "state"].forEach((k) => url.searchParams.delete(k));
+		try { history.replaceState(null, "", url.toString()); } catch (err) { /* egal */ }
+		if (!saved || !saved.verifier) return false;
+		saveToken(await exchangeCode(code, saved.verifier, webRedirect(), webId()));
+		try {
+			const info = await fetchUserInfo();
+			if (info && info.email) { S.driveUserEmail = info.email; LS.setItem("impala67_drive_email", info.email); }
+		} catch (err) { /* E-Mail ist Kosmetik */ }
+		return true;
+	}
+
+	async function getTokenBrowser(interactive) {
+		const rt = LS.getItem("impala67_drive_refresh_token");
+		if (rt) {
+			const data = await refreshDesktopToken(rt, webId());
+			if (data?.access_token) { saveToken(data); return token; }
+		}
+		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
+		return startWebLogin();
+	}
+
+	// Alter Popup-Weg, nur noch als Notnagel (falls die Weiterleitung blockiert wird).
+	function getTokenBrowserPopup(interactive) {
 		return new Promise((resolve, reject) => {
 			if (!window.google?.accounts) return reject(new Error("Google-Script nicht geladen (Internet nötig)."));
 			const clientId = S.settings.driveClientId;
@@ -696,8 +751,18 @@ export const DRIVE = (() => {
 		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
 		if (syncInFlight) return syncInFlight;
-		syncInFlight = withSyncLock(() => syncRaw(onStatus)).finally(() => { syncInFlight = null; });
+		syncInFlight = withSyncLock(async () => { await ensureFreshToken(); return syncRaw(onStatus); })
+			.finally(() => { syncInFlight = null; });
 		return syncInFlight;
+	}
+
+	// Zugang VORBEUGEND erneuern: läuft er in unter 5 Minuten ab, wird er still über den
+	// Erneuerungs-Schlüssel getauscht. Bisher passierte das erst nach einem 401 mitten im
+	// Sync — im PWA endete das in einem blockierten Anmeldefenster.
+	async function ensureFreshToken() {
+		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
+		if (token && exp && Date.now() < exp - 300000) return token;
+		try { return await getToken(false); } catch (err) { return null; }
 	}
 
 	// Kennt auch die in localStorage überdauernde Sitzung (nicht nur das In-Memory-Token).
@@ -787,6 +852,9 @@ export const DRIVE = (() => {
 		autoIntervalTimer = window.setTimeout(tick, LIVE_INTERVAL_MS);
 		return autoSync("start");
 	}
+
+	// Rückkehr von der Google-Weiterleitung sofort auswerten (Browser/PWA).
+	finishWebLogin().catch(() => {});
 
 	return { login, logout, sync, isConnected, startAutoSync };
 })();

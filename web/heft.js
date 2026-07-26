@@ -710,7 +710,7 @@ export const HEFT = (() => {
 	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
 	const gesture = {
-		touches: new Map(), pinch: null, maxCount: 0, moved: false, startedAt: 0,
+		touches: new Map(), pinch: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
 		raf: 0, zoomFrame: 0, pendingZoom: null,
 		lastTap: 0, tapX: 0, tapY: 0, lastTwoTap: 0,
 	};
@@ -730,7 +730,7 @@ export const HEFT = (() => {
 		stopAnim(); gesture.touches.clear();
 
 		clearPagesFx();
-		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0; gesture.lastTwoTap = 0;
+		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0; gesture.lastTwoTap = 0; gesture.restore = null;
 	}
 	function applyView(commit) {
 		const scroll = scrollEl(); if (!scroll) return;
@@ -738,7 +738,11 @@ export const HEFT = (() => {
 		const innerW = Math.max(1, scroll.clientWidth - 36);
 		const innerH = Math.max(1, scroll.clientHeight - 36);
 
-		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, innerH / PAGE_H, 1));
+		// GoodNotes-Verhalten (26. Juli): Einpassen NUR über die Breite. Bisher zappelte
+		// die Höhe mit (innerH / PAGE_H) — dadurch wurde immer die ganze Seite eingepasst
+		// und die Bildschirmbreite nie gefüllt.
+		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, 1));
+		void innerH;
 		scale = fit * zoom;
 		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
 		const pages = pagesEl();
@@ -746,6 +750,11 @@ export const HEFT = (() => {
 			pages.style.setProperty("--heft-page-w", cssW + "px");
 			pages.style.setProperty("--heft-page-h", cssH + "px");
 			pages.style.minWidth = Math.max(innerW, cssW) + "px";
+			// Solange noch Rand da ist, wird zentriert. Ist die Seite breiter als die
+			// Ansicht, wird NICHT mehr zentriert, sondern frei geschoben — vorher zog das
+			// Raster die Seite bei jedem Zoomschritt in die Mitte zurück (das ruckelige
+			// „Zentrieren“, das sich nicht wie Gummi anfühlte).
+			pages.classList.toggle("heft-free", cssW > innerW - 1);
 		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
 		if (commit) renderVisiblePages();
 		else hideDetailCanvases();
@@ -966,7 +975,9 @@ export const HEFT = (() => {
 		gesture.dtap = true;
 		const t0 = performance.now();
 		const step = (now) => {
-			const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+			// Gummi statt Anschlag: U.easeOutBack federt am Ende minimal über und zurück —
+			// genau das Gefühl, das beim Zentrieren/Einrasten der Seite gefehlt hat.
+			const t = Math.min(1, (now - t0) / dur), e = t >= 1 ? 1 : U.easeOutBack(t);
 			if (t < 1) {
 				pgs.style.transform = "translate(" + (dx * (1 - e)) + "px, " + (dy * (1 - e)) + "px) scale(" + (s + (1 - s) * e) + ")";
 				gesture.raf = requestAnimationFrame(step);
@@ -986,7 +997,7 @@ export const HEFT = (() => {
 		if (!anchor) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
 		const first = anchor.cv.getBoundingClientRect();
 		setZoom(target, clientX, clientY, false, anchor);
-		flipGlide(anchor.cv, first, 320);
+		flipGlide(anchor.cv, first, 380);
 	}
 
 	function applyTouchAction() {
@@ -1014,10 +1025,17 @@ export const HEFT = (() => {
 		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
 		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
 		applyView(false);
-		if (first) flipGlide(cv, first, 200); else scheduleZoomSettleRender();
+		if (first) flipGlide(cv, first, 300); else scheduleZoomSettleRender();
 	}
 
-	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
+	// Handballen (26. Juli): iPadOS meldet die Kontaktfläche in radiusX/radiusY — eine
+	// Fingerkuppe liegt bei ~10-25 px, ein aufliegender Handballen deutlich darüber.
+	// Bisher zählte er als normaler Finger und schob die Seite, WEIL er meist vor dem
+	// Stift aufliegt (penRecently() ist in diesem Moment noch falsch).
+	const PALM_RADIUS = 38;
+	const PALM_UNDO_MS = 350;
+	const isPalm = (t) => Math.max(t.radiusX || 0, t.radiusY || 0) > PALM_RADIUS;
+	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus" && !isPalm(t));
 	const touchMid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
 	const touchDist = (t) => Math.max(1, Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY));
 	function onTouchStart(e) {
@@ -1027,7 +1045,12 @@ export const HEFT = (() => {
 		for (const t of fingersOf(e.changedTouches)) gesture.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
 		const fingers = fingersOf(e.touches);
 		gesture.maxCount = Math.max(gesture.maxCount, fingers.length);
-		if (gesture.touches.size === 1) { stopAnim(); gesture.moved = false; gesture.startedAt = Date.now(); }
+		if (gesture.touches.size === 1) {
+			stopAnim(); gesture.moved = false; gesture.startedAt = Date.now();
+			// Position VOR der Berührung merken: setzt kurz danach der Stift auf, war es die
+			// Hand und das Verschieben wird in onDown zurückgenommen.
+			gesture.restore = U.scrollAnchor(scrollEl());
+		}
 		if (fingers.length >= 2 && !gesture.pinch) {
 
 			e.preventDefault(); stopAnim();
@@ -1181,7 +1204,13 @@ export const HEFT = (() => {
 	}
 	function onDown(e) {
 
-		if (e.pointerType === "pen") { activePenPointers.add(e.pointerId); stopAnim(); applyTouchAction(); }
+		if (e.pointerType === "pen") {
+			activePenPointers.add(e.pointerId); stopAnim(); applyTouchAction();
+			// Handballen-Nachsorge: hat eine Berührung Millisekunden vorher die Seite
+			// verschoben, war das die Hand — zurück auf die alte Position.
+			if (gesture.restore && Date.now() - gesture.startedAt < PALM_UNDO_MS) gesture.restore();
+			gesture.restore = null;
+		}
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -1837,7 +1866,19 @@ export const HEFT = (() => {
 		const chrome = host.querySelector(".heft-chrome");
 		if (chrome && html === lastChromeHtml) { syncVolatileChrome(); updateLassoBar(); refreshPagesPopIfNeeded(); return; }
 		lastChromeHtml = html;
-		if (chrome) { const t = document.createElement("div"); t.innerHTML = html; chrome.replaceWith(t.firstChild); }
+		// 26. Juli: Leiste ANGLEICHEN statt austauschen (U.morph). Das Ersetzen war die
+		// Ursache für das schlagartige Verschwinden: die neuen Knoten mussten ihren
+		// backdrop-filter (Unschärfe) erst neu aufbauen und die Einblend-Animation der
+		// Options-Leiste startete bei JEDER Kleinigkeit (Farbe, Werkzeug, Position) von
+		// vorn — dazwischen war für einen Frame nichts zu sehen.
+		if (chrome) {
+			const t = document.createElement("div"); t.innerHTML = html;
+			const fresh = t.firstElementChild;
+			if (fresh) {
+				if (chrome.className !== fresh.className) chrome.className = fresh.className;
+				U.morph(chrome, fresh.innerHTML);
+			}
+		}
 		else host.insertAdjacentHTML("beforeend", html);
 		bindTrayDrag();
 		syncVolatileChrome();
@@ -1882,9 +1923,14 @@ export const HEFT = (() => {
 		const lpi = lassoSel.pageIdx; lassoSel = null;
 		refresh(lpi);
 	}
+	let boundTray = null;
 	function bindTrayDrag() {
 		const tray = host && host.querySelector("[data-hetray]");
-		if (!tray || tray.dataset.hebound) return;
+		// Knoten-Identität statt Attribut prüfen: U.morph gleicht Attribute an das frische
+		// HTML an und würde eine Markierung wie data-hebound wieder entfernen — die
+		// Listener hängen dann mehrfach am selben Element.
+		if (!tray || boundTray === tray) return;
+		boundTray = tray;
 		tray.dataset.hebound = "1";
 		tray.addEventListener("pointerdown", onTrayPointerDown);
 		tray.addEventListener("pointermove", onTrayPointerMove);
@@ -3033,11 +3079,14 @@ export const HEFT = (() => {
 		if (!host || !doc) return;
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
-		const keep = scroll.scrollTop;
-		scroll.innerHTML = pagesHtml();
-		bindCanvas();
-		layout();
-		scroll.scrollTop = keep;
+		// 26. Juli: eigene Merk-Logik ersetzt durch den zentralen Scroll-Anker aus
+		// util.js — der zieht die Position auch über die nächsten Frames nach, sonst
+		// klemmte der Browser sie beim Aufbauen der Canvas-Seiten wieder weg.
+		U.keepScroll(scroll, () => {
+			scroll.innerHTML = pagesHtml();
+			bindCanvas();
+			layout();
+		});
 	}
 	async function mount(container, pageId) {
 		unmount();

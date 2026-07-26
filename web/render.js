@@ -840,9 +840,10 @@ document.addEventListener("toggle", (e) => {
 	lsSet(HOME_FOLD_KEY, { ...homeFolds(), [el.getAttribute("data-fold")]: el.open });
 }, true);
 function renderHome(main) {
-	// Scroll-Anker: jedes Re-Render (Fold, Pins, Sync…) hüpfte sonst nach oben
-	const homeScroller = main.querySelector(".home");
-	const keepScroll = (homeScroller && homeScroller.scrollTop) || main.scrollTop || 0;
+	// Scroll-Anker: jedes Re-Render (Fold, Pins, Sync…) hüpfte sonst nach oben.
+	// Zentral in util.js (U.scrollAnchor) — bewusst als Funktion übergeben, weil
+	// .home beim Rebuild ersetzt werden kann und dann neu gesucht werden muss.
+	const restoreScroll = U.scrollAnchor(() => main.querySelector(".home") || main);
 	const pages = STATE.activePages();
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
 	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 6);
@@ -958,18 +959,12 @@ function renderHome(main) {
 		sectionsHtml + "</div>";
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
-	// dadurch von allein erhalten (der keepScroll-Notnagel unten greift nur noch,
+	// dadurch von allein erhalten (der zentrale Scroll-Anker unten greift nur noch,
 	// wenn der Bereich komplett neu entsteht).
 	if (main._lastHomeHtml === homeHtml && main.querySelector(".home")) return;
 	U.morph(main, homeHtml);
 	main._lastHomeHtml = homeHtml;
-	if (keepScroll) {
-		main.scrollTop = keepScroll;
-		if (main.scrollTop !== keepScroll) {
-			const h = main.querySelector(".home"); // falls .home selbst scrollt
-			if (h) h.scrollTop = keepScroll;
-		}
-	}
+	restoreScroll();
 }
 
 // Papierkorb: Seiten, Stapel, Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen
@@ -1170,8 +1165,10 @@ function renderChatLog(log, historyList) {
 	// (fast) 0 und der Browser klemmt scrollTop auf 0. Genau das war der Sprung nach oben,
 	// sobald man eine Rückfrage/Löschbestätigung beantwortet hat (answered → neue Signatur →
 	// Rebuild): der Chat stand plötzlich am Anfang und der Gedankengang schien verschwunden.
-	const prevScrollTop = log.scrollTop;
-	const wasNearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 160;
+	// Zentral gelöst in util.js: U.scrollAnchor merkt Position UND "stand am Ende"
+	// und zieht beides über die nächsten Frames nach (Bilder/LaTeX brauchen Frames).
+	const restoreScroll = U.scrollAnchor(log, { bottomPad: 160 });
+	const wasNearBottom = restoreScroll.atBottom;
 	let staticEnd = log._chatStaticEnd, live = log._chatLive;
 	// Fertige Nachrichten bleiben direkte Kinder (CSS/Event-Delegation); nur der
 	// Live-Bereich bekommt einen unsichtbaren Container als Patch-Ziel
@@ -1194,7 +1191,7 @@ function renderChatLog(log, historyList) {
 		enhanceChatStatic(log, staticEnd);
 		// Nach dem Wiederaufbau zurück an die alte Stelle (nur wenn der Nutzer bewusst
 		// weiter oben gelesen hat — sonst übernimmt der Auto-Scroll unten).
-		if (!wasNearBottom && prevScrollTop > 0 && log.scrollTop !== prevScrollTop) log.scrollTop = prevScrollTop;
+		if (!wasNearBottom) restoreScroll();
 	}
 	// FIX: Live-Bereich nicht mehr pro Streaming-Delta per innerHTML ersetzen —
 	// Klicks zwischen Mousedown/-up gingen verloren, die Think-Box ließ sich nie
@@ -1233,6 +1230,7 @@ function renderChatLog(log, historyList) {
 	// Ans Ende folgen — außer der Nutzer hat hochgescrollt, um nachzulesen. Maßgeblich ist
 	// die Position VOR dem Rebuild (danach wäre sie durch das Neu-Einsetzen verfälscht).
 	if (wasNearBottom || !log._chatAutoScrolled) { log.scrollTop = log.scrollHeight; log._chatAutoScrolled = true; }
+	else restoreScroll();
 }
 
 // Rückfrage-Karte (ask_choice): Frage + Options-Zeilen, nach Klick nur die Antwort
@@ -1324,8 +1322,11 @@ function renderFullChat(main) {
 		const fresh = $("mainChatLog");
 		const cached = cachedChatLog(String(S.currentChatId));
 		if (fresh && cached !== fresh) {
+			const keep = cached._keepScroll || 0;
 			fresh.replaceWith(cached);
-			cached.scrollTop = cached._keepScroll || 0;
+			cached.scrollTop = keep;
+			// gleiche Nachzieh-Logik wie im zentralen Anker: die Höhe steht erst später
+			if (keep) requestAnimationFrame(() => { if (cached.scrollTop !== keep) cached.scrollTop = keep; });
 		}
 	}
 	renderMainChatLog();

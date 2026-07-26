@@ -1228,6 +1228,10 @@ body.reduce-motion .heft-tray { animation: none }
 /* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; display: block; position: relative; padding: 56px 18px 48px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; contain: layout paint }
 .heft-pages { --heft-page-w: 1px; --heft-page-h: 1px; width: max-content; min-width: 100%; min-height: 100%; display: grid; grid-auto-flow: row; justify-items: center; align-content: start; gap: 24px; isolation: isolate }
+/* Seite breiter als die Ansicht (hineingezoomt, kein Rand mehr): nicht mehr zentrieren,
+   sondern frei schieben — sonst zog das Raster die Seite bei jedem Zoomschritt zurück
+   in die Mitte (heft.js applyView setzt die Klasse, 26. Juli). */
+.heft-pages.heft-free { justify-items: start }
 .heft-page-slot { position: relative; box-sizing: content-box; width: var(--heft-page-w); height: var(--heft-page-h) }
 /* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-P… */
 /* FIX Zoom-Glide: will-change:width,height entfernt — kollidierte mit der transform-Animation (flipGlide in heft.js) auf .heft-pages und liess den Pinch-/Doppeltipp-Zoom auf Touch-Geräten (Safari/iPadOS) springen statt gleiten. Das nötige will-change:transform setzt heft.js bereits selbst dynamisch auf .heft-pages waehrend der Animation. */

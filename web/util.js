@@ -579,4 +579,79 @@ export const U = {
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 		return bytes.buffer;
 	},
+
+	// ── Scroll-Anker (26. Juli) ───────────────────────────────────────────────
+	// EINE zentrale Stelle für das Problem "Ansicht springt beim Neu-Aufbauen nach
+	// oben". Die Ursache war überall dieselbe: während eines Rebuilds schrumpft
+	// scrollHeight kurz, der Browser klemmt scrollTop auf einen kleineren Wert und
+	// stellt ihn danach nicht wieder her. Vorher wurde das in render.js (Home,
+	// Chat-Log, Chat-Cache) und heft.js jeweils einzeln nachgebessert — jede neue
+	// Ansicht brachte den Bug damit von Neuem mit.
+	// REGEL für neuen Code: wer innerHTML / replaceChildren / U.morph auf einen
+	// scrollbaren Bereich anwendet, klammert das in U.keepScroll(el, () => { … }).
+	scrollHost(el) {
+		for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+			const oy = getComputedStyle(n).overflowY;
+			if ((oy === "auto" || oy === "scroll" || oy === "overlay") && n.scrollHeight > n.clientHeight + 1) return n;
+		}
+		return el && el.nodeType === 1 ? el : null;
+	},
+	// target: Element ODER Funktion, die das Element liefert. Die Funktionsform ist
+	// wichtig, wenn der Container beim Rebuild ersetzt wird — dann wird er beim
+	// Wiederherstellen neu gesucht statt auf einer Leiche zu scrollen.
+	// bottomPad > 0: wer näher als so viele px am Ende stand, folgt dem NEUEN Ende
+	// (Chat-Verhalten) statt an der alten Pixelposition zu kleben.
+	scrollAnchor(target, { bottomPad = 0 } = {}) {
+		const pick = typeof target === "function" ? target : () => target;
+		const host0 = U.scrollHost(pick());
+		const top = host0 ? host0.scrollTop : 0;
+		const atBottom = !!host0 && bottomPad > 0 && host0.scrollHeight - top - host0.clientHeight < bottomPad;
+		const apply = () => {
+			const h = host0 && host0.isConnected ? host0 : U.scrollHost(pick());
+			if (!h) return;
+			if (atBottom) { if (h.scrollTop !== h.scrollHeight) h.scrollTop = h.scrollHeight; return; }
+			if (top && h.scrollTop !== top) h.scrollTop = top;
+		};
+		const restore = () => {
+			apply();
+			// Bilder, Canvas und LaTeX liefern ihre Höhe erst in den nächsten Frames —
+			// bis dahin würde der Browser die alte Position wieder wegklemmen.
+			if (typeof requestAnimationFrame === "function")
+				requestAnimationFrame(() => { apply(); requestAnimationFrame(apply); });
+		};
+		restore.top = top;
+		restore.atBottom = atBottom;
+		return restore;
+	},
+	// Bequeme Klammer: Position merken → DOM ändern → Position wiederherstellen.
+	keepScroll(target, mutate, opts) {
+		const restore = U.scrollAnchor(target, opts);
+		try { return mutate(); } finally { restore(); }
+	},
+
+	// ── Gummi-Kurve (26. Juli) ─────────────────────────────────────────────
+	// EINE Kurve für alles, was sich "wie GoodNotes" anfühlen soll: schnell los,
+	// weich aus, mit einem winzigen Überschwingen am Ende. Reines ease-out (bisher
+	// im Heft beim Zentrieren der Seite) ist rechnerisch korrekt, fühlt sich aber
+	// wie ein Anschlag an, weil nichts nachfedert.
+	easeOutBack(t, over = 1.06) {
+		const c = over * 1.7;
+		const p = t - 1;
+		return 1 + (c + 1) * p * p * p + c * p * p;
+	},
+	// Läuft dur ms und ruft step(t, eased) je Frame. Rückgabe bricht ab.
+	animate(dur, step, ease) {
+		if (typeof requestAnimationFrame !== "function") { step(1, 1); return () => {}; }
+		const f = ease || U.easeOutBack;
+		const t0 = performance.now();
+		let raf = 0, stopped = false;
+		const tick = (now) => {
+			if (stopped) return;
+			const t = Math.min(1, (now - t0) / Math.max(1, dur));
+			step(t, t >= 1 ? 1 : f(t));
+			if (t < 1) raf = requestAnimationFrame(tick);
+		};
+		raf = requestAnimationFrame(tick);
+		return () => { stopped = true; if (raf) cancelAnimationFrame(raf); };
+	},
 };
