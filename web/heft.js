@@ -881,7 +881,14 @@ export const HEFT = (() => {
 		const base = canvases[i], k = view.k;
 		cv.style.left = (base.offsetLeft + r.x) + "px";
 		cv.style.top = (base.offsetTop + r.y) + "px";
-		cv.style.width = r.w + "px"; cv.style.height = r.h + "px";
+		// iPad-Wurzel: .heft-pages traegt ein CSS scale(k). iOS/WebKit rastert einen
+		// zusammengesetzten Layer EINMAL und skaliert danach nur noch dieses alte Bild
+		// hoch - Chrome am PC rastert neu, deshalb war es nur am iPad weich. Die Kachel
+		// bekommt ihre Groesse deshalb in BILDSCHIRM-Pixeln plus scale(1/k): ihr
+		// Gesamtmassstab ist 1, es gibt fuer WebKit nichts mehr hochzuskalieren.
+		cv.style.transformOrigin = "0 0";
+		cv.style.transform = k === 1 ? "none" : "scale(" + (1 / k).toFixed(6) + ")";
+		cv.style.width = (r.w * k) + "px"; cv.style.height = (r.h * k) + "px";
 		const pw = Math.max(1, Math.round(r.w * dpr * k)), ph = Math.max(1, Math.round(r.h * dpr * k));
 		if (cv.width !== pw) cv.width = pw;
 		if (cv.height !== ph) cv.height = ph;
