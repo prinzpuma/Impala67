@@ -407,7 +407,7 @@ function wireEvents() {
 
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,
 	// damit sie unabhängig vom Tag (button/span) zuverlässig ausgelöst werden.
-	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-newchat],[data-newpage]," +
+	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-sidechat],[data-newchat],[data-newpage]," +
 		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-undo],[data-difftoggle]," +
 		"[data-reasoningtoggle],[data-iconset],[data-coverset],[data-coverpick],[data-coverremove]," +
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-editmsg]," +
@@ -502,6 +502,8 @@ function wireEvents() {
 		}
 		if (t.dataset.dashadd) { SETTINGS.handleDashboardAdd(); return; }
 		if (t.dataset.removeattachment) { CHAT_FULLSCREEN.handleRemoveAttachment(); return; }
+		// Seitenkontext abwählen — wie ein Anhang entfernen, gilt nur für die aktuelle Seite
+		if (t.dataset.removecontext) { S.sideContextOff = S.currentPageId; RENDER.renderChat(); return; }
 		if (t.id === "btnVoice") { VOICE.toggle("side"); return; }
 		if (t.id === "btnVoiceFull") { VOICE.toggle("full"); return; }
 
@@ -1183,6 +1185,18 @@ function wireEvents() {
 		// ein Wechsel S.chat unter dem laufenden Lauf austauschen — die Antwort
 		// landete im falschen Chat. Deshalb kurz blocken statt still korrumpieren.
 		if (t.dataset.newchat) { startNewChat(); return; }
+		// Verlauf im Seitenchat: alte Unterhaltung direkt im Panel weiterführen
+		// (kein Tab-Wechsel wie bei data-chat).
+		if (t.dataset.sidechat) {
+			if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
+			CHAT_FULLSCREEN.saveSideChat();
+			const s = CHATS.load().find((x) => x.id === t.dataset.sidechat);
+			S.chatHistOpen = false;
+			S.sideChat = s ? s.messages.slice() : [];
+			S.sideChatId = s ? s.id : null;
+			render();
+			return;
+		}
 		if (t.dataset.chat) {
 			if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 			saveCurrentChat();
@@ -1255,6 +1269,10 @@ function wireEvents() {
 				S.view = "library";
 				S.libFolder = null;
 				blurActive();
+				render();
+				break;
+			case "btnChatHist": // Verlauf-Dropdown; Liste baut render.js
+				S.chatHistOpen = !S.chatHistOpen;
 				render();
 				break;
 			case "btnChatNew": // alte Unterhaltung ist gesichert, bleibt in der Chat-Liste
@@ -1487,6 +1505,12 @@ function wireEvents() {
 		// Bibliotheks-Filter: live filtern, Fokus + Cursorposition nach dem Neuaufbau erhalten
 		if (e.target.id === "libFilter") {
 			LIBRARY.handleFilterInput(e);
+		}
+		// KI-Einstellungen: Modelle live filtern. Nur die Liste wird neu gezeichnet,
+		// das Suchfeld selbst nicht — Fokus und Cursor bleiben von allein.
+		if (e.target.id === "inpModelSearch") {
+			S.modelQuery = e.target.value;
+			SETTINGS.paintSettingsModels();
 		}
 		// Karten-Browser: live suchen (debounced), Fokus + Cursorposition erhalten
 		if (e.target.id === "ankiSearch") {

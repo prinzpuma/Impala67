@@ -196,6 +196,11 @@ export function openSettings(section) {
 				'<div class="ai-active-pill" title="Aktives Chat-Modell"><span class="ai-active-dot" aria-hidden="true"></span><b id="aiCurrentModelLabel">' + U.esc(currentLabel) + '</b></div>' +
 				'<button type="button" id="btnRefreshModels" class="ai-icon-btn" title="Neu laden" aria-label="Modelle neu laden">↻</button>' +
 			'</div>' +
+			// Suchfeld: bei mehreren Quellen ist die Liste sonst eine Wand aus Modell-IDs.
+			'<div class="ai-model-search">' +
+				'<input id="inpModelSearch" type="search" placeholder="LLM suchen (Name oder Quelle)…" autocomplete="off" value="' + U.esc(S.modelQuery || "") + '">' +
+				'<span id="aiModelCount" class="ai-soft-meta"></span>' +
+			'</div>' +
 			'<div id="settingsModelList" class="settings-model-list"><div class="menu-note">Lädt…</div></div>' +
 			'<p id="settingsModelHint" class="ai-soft-meta" hidden></p>' +
 			'<div class="settings-custom-model" title="Modell manuell setzen">' +
@@ -723,6 +728,12 @@ export function paintSettingsModels() {
 	if (label) label.textContent = curModel ? (nameOf(curPr) + " · " + curModel) : "Kein Modell gewählt";
 	const favSet = (typeof RENDER.favModels === "function") ? RENDER.favModels() : new Set();
 	const live = Array.isArray(S.availableModels) ? S.availableModels : [];
+	// Suche: filtert NUR die Anzeige. Favoriten, aktives Modell und die Gruppierung nach
+	// Quelle bleiben unverändert — ein Filter über der bestehenden Liste, keine zweite Liste.
+	const q = String(S.modelQuery || "").trim().toLowerCase();
+	const hit = (m) => !q || (String(m.id) + " " + nameOf(m.providerId)).toLowerCase().includes(q);
+	const count = U.el("aiModelCount");
+	if (count) count.textContent = q ? live.filter(hit).length + " von " + live.length : live.length + " Modelle";
 	const row = (m) => {
 		const favKey = m.providerId + "::" + m.id;
 		const fav = favSet.has(favKey);
@@ -736,10 +747,10 @@ export function paintSettingsModels() {
 			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + U.esc(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit pinnen") + '">' + (fav ? "★" : "☆") + "</button></div>";
 	};
 	let body = "";
-	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id));
+	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id) && hit(m));
 	if (favLive.length) body += '<div class="menu-label">★ Favoriten</div>' + favLive.map(row).join("");
 	for (const pr of providers) {
-		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
+		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id) && hit(m));
 		if (rest.length) body += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>" + rest.map(row).join("");
 	}
 	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten
@@ -747,20 +758,19 @@ export function paintSettingsModels() {
 	const orphans = [];
 	favSet.forEach((k) => { if (!seen.has(k)) orphans.push(k); });
 	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel)) orphans.push(curPr + "::" + curModel);
-	if (orphans.length) {
-		body += '<div class="menu-label">Gespeichert</div>' + orphans.map((k) => {
-			const sep = k.indexOf("::");
-			const prId = sep === -1 ? curPr : k.slice(0, sep);
-			const id = sep === -1 ? k : k.slice(sep + 2);
-			return row({ id, providerId: prId });
-		}).join("");
-	}
+	const orphanRows = orphans.map((k) => {
+		const sep = k.indexOf("::");
+		return { providerId: sep === -1 ? curPr : k.slice(0, sep), id: sep === -1 ? k : k.slice(sep + 2) };
+	}).filter(hit);
+	if (orphanRows.length) body += '<div class="menu-label">Gespeichert</div>' + orphanRows.map(row).join("");
 	// Offline / keine Live-Liste: feste Vorschläge (Gemini/OpenAI/lokal) anbieten
-	if (!body && (AI.MODEL_PRESETS || []).length) {
+	if (!body && !q && (AI.MODEL_PRESETS || []).length) {
 		body = '<div class="menu-label">Vorschläge</div>' + (AI.MODEL_PRESETS || []).map((p) =>
 			row({ id: p.value, providerId: p.provider })).join("");
 	}
-	host.innerHTML = body || '<div class="menu-note">Keine Modelle erreichbar. Quelle prüfen oder unten manuell eintragen.</div>';
+	host.innerHTML = body || (q
+		? '<div class="menu-note">Kein Modell passt zu „' + U.esc(q) + '“.</div>'
+		: '<div class="menu-note">Keine Modelle erreichbar. Quelle prüfen oder unten manuell eintragen.</div>');
 }
 
 // Lädt Chat-Modelle ALLER Quellen und zeichnet die Liste (inkl. Favoriten).

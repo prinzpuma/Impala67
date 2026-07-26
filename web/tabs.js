@@ -63,6 +63,9 @@ export function openPage(pageId, opts) {
 		const pg = S.pages[pageId];
 		if (!pg) return;
 		S.currentPageId = pageId;
+		// Abgewählter Seitenkontext im KI-Panel gilt nur für die aktuelle Sitzung auf der
+		// Seite — wer sie neu öffnet, bekommt den Kontext wieder (nichts wird gemerkt).
+		S.sideContextOff = null;
 		S.currentWorkspaceId = pg.workspaceId || "default";
 		S.view = "page";
 		S.sidebarMode = "files"; // eine Topbar-Pille: Home

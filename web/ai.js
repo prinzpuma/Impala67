@@ -495,7 +495,8 @@ export const AI = (() => {
 		];
 		// Nur das Seitenpanel bekommt den Seiteninhalt direkt; der Vollbild-Chat holt ihn per Tool.
 		// Im Karteikarten-Bereich ersetzt der Anki-Kontext oben die Seite (keine irreführende Hintergrund-Seite).
-		if (type === "side" && cur && S.view !== "anki") {
+		// Seitenkontext im Composer per ✕ abgewählt → Inhalt wirklich nicht mitsenden
+		if (type === "side" && cur && S.view !== "anki" && S.sideContextOff !== cur.id) {
 			const body = String(cur.content || "");
 			lines.push("Inhalt der geöffneten Seite" + (body.length > 6000 ? " (gekürzt)" : "") + ":\n" + (body.slice(0, 6000) || "(Leere Seite)"));
 		}

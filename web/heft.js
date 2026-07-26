@@ -59,6 +59,27 @@ export const HEFT = (() => {
 	let expanded = false;
 	let trayPos = null;
 	let trayDrag = null;
+	// Rückzug der Werkzeugleiste beim Schreiben — EINE Wahrheit.
+	// FIX (26. Juli, "Toolbar wird immer schlagartig transparent"): Die Klasse
+	// "heft-writing" wurde direkt an zwei Stellen ans DOM gehängt (onDown/onUp),
+	// während updateChrome() die className aus dem frisch gerenderten HTML
+	// überschreibt — dort steht sie nie drin. Jeder Render mitten im Strich (Seiten-
+	// zähler, Werkzeug-Hold, Thumbnail) riss die Leiste also auf volle Deckkraft und
+	// der nächste Strich riss sie wieder weg: das schlagartige Flackern. Jetzt hält ein
+	// Flag den Zustand, applyWriting() ist die einzige Stelle, die ihn ans DOM bringt,
+	// und das Zurückkommen ist kurz verzögert, damit Strich-für-Strich-Schreiben nicht
+	// dauernd blinkt.
+	let writing = false, writingOffT = 0;
+	function applyWriting() {
+		const el = host && host.querySelector(".heft-chrome");
+		if (el) el.classList.toggle("heft-writing", writing);
+	}
+	function setWriting(on) {
+		clearTimeout(writingOffT); writingOffT = 0;
+		if (on) { if (!writing) { writing = true; applyWriting(); } return; }
+		if (!writing) return;
+		writingOffT = setTimeout(() => { writingOffT = 0; writing = false; applyWriting(); }, 700);
+	}
 	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null, scrollFn = null;
 	let undoStack = [], redoStack = [];
 	const UNDO_MAX = 100; // Speicher-Limit: stundenlanges Schreiben ließ den Stack unbegrenzt wachsen
@@ -1261,7 +1282,25 @@ export const HEFT = (() => {
 	}
 	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
 	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
+	// Radierer-Feedback ("wo wirkt er?"): ein Ring in echter Radierer-Größe als DOM-Element
+	// im Host. Bewusst KEIN Canvas-Zeichnen — das hinterlässt Schlieren auf der Seite oder
+	// erzwingt zusätzliche Redraws; dieses Element folgt einfach dem Zeiger.
+	function showEraserRing(e) {
+		if (!host) return;
+		let ring = host.querySelector(".heft-eraser-ring");
+		if (!ring) { ring = document.createElement("div"); ring.className = "heft-eraser-ring"; host.appendChild(ring); }
+		const box = host.getBoundingClientRect(), d = eraserSize * 2 * view.k;
+		ring.style.width = ring.style.height = d + "px";
+		ring.style.left = (e.clientX - box.left) + "px";
+		ring.style.top = (e.clientY - box.top) + "px";
+		ring.hidden = false;
+	}
+	function hideEraserRing() {
+		const ring = host && host.querySelector(".heft-eraser-ring");
+		if (ring) ring.hidden = true;
+	}
 	function eraseAt(e) {
+		showEraserRing(e);
 		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
 		const keep = [], removed = [];
 		for (const s of pg.strokes) (strokeHitAt(s, p0[0], p0[1], r) ? removed : keep).push(s);
@@ -1380,8 +1419,7 @@ export const HEFT = (() => {
 		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
 		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
-		const chromeEl = host && host.querySelector(".heft-chrome");
-		if (chromeEl) chromeEl.classList.add("heft-writing");
+		setWriting(true);
 	}
 
 	let snapTimer = null;
@@ -1508,8 +1546,8 @@ export const HEFT = (() => {
 			}
 		}
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
-		const chromeUp = host && host.querySelector(".heft-chrome");
-		if (chromeUp) chromeUp.classList.remove("heft-writing");
+		setWriting(false);
+		hideEraserRing();
 		if (!drawing) return;
 		const pi = drawing.pageIdx;
 		const pg = doc.pages[pi];
@@ -1946,7 +1984,7 @@ export const HEFT = (() => {
 			const t = document.createElement("div"); t.innerHTML = html;
 			const fresh = t.firstElementChild;
 			if (fresh) {
-				if (chrome.className !== fresh.className) chrome.className = fresh.className;
+				if (chrome.className !== fresh.className) { chrome.className = fresh.className; applyWriting(); }
 				U.morph(chrome, fresh.innerHTML);
 			}
 		}
@@ -3129,10 +3167,15 @@ export const HEFT = (() => {
 			if (!pull || !pull.startAtEnd) return;
 			const dy = pull.y0 - ev.touches[0].clientY;
 			const btn = scroll.querySelector(".heft-addpage");
+			// Der Geist-Knopf stand vorher IMMER unter der letzten Seite. Jetzt holt erst das
+			// Hochziehen ihn hervor (ab 12px), ab 70px löst Loslassen aus.
+			if (btn) btn.classList.toggle("pulling", atEnd() && dy > 12);
 			if (atEnd() && dy > 70) { pull.armed = true; if (btn) { btn.classList.add("armed"); btn.textContent = "⬆ Loslassen: neue Seite"; } }
 			else if (pull.armed) { pull.armed = false; if (btn) { btn.classList.remove("armed"); btn.textContent = "＋ Neue Seite"; } }
 		}, { passive: true });
 		scroll.addEventListener("touchend", () => {
+			const btn = scroll.querySelector(".heft-addpage");
+			if (btn) { btn.classList.remove("pulling", "armed"); btn.textContent = "＋ Neue Seite"; }
 			if (pull && pull.armed) addPageAtEnd();
 			pull = null;
 		});
@@ -3216,6 +3259,7 @@ export const HEFT = (() => {
 		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
 		trayDrag = null;
+		clearTimeout(writingOffT); writingOffT = 0; writing = false;
 		lastChromeHtml = ""; lastPopSig = "";
 	}
 

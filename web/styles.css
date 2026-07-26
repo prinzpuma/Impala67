@@ -180,6 +180,10 @@ button.danger { color: var(--danger) }
 .ai-status-chip.online { border-color: var(--success-border) }
 .ai-status-chip.offline { border-color: var(--danger-border); color: var(--danger) }
 .ai-status-chip.checking { border-color: rgba(245,158,11,.35) }
+/* Im Seitenchat-Kopf nur der Punkt: „KI online“ als Text kostete die halbe Kopfzeile
+   (Titel + Verlauf/Neu/Schließen). Tooltip und Klick-zum-Prüfen bleiben. */
+.panel-head .ai-status-chip { padding: 4px; border-radius: var(--radius-pill) }
+.panel-head .ai-status-label { display: none }
 .ai-status-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius-lg); border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: var(--text-sm); color: var(--text2) }
 .ai-status-banner .dot { margin-left: 0 }
 .ai-status-banner.online { border-color: var(--success-border) }
@@ -272,11 +276,7 @@ button.danger { color: var(--danger) }
 #chatForm button[type="submit"], .chat-form-full button[type="submit"] { order: 3; margin-left: 0; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; flex-shrink: 0; background: var(--accent); color: var(--on-accent); font-size: var(--text-base); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center }
 /* folgt der Akzentfarbe statt hartem Hellblau */
 #chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled { background: var(--surface-active); color: var(--text2); opacity: .6 }
-#sideContextChip { flex: 0 0 100%; display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 0 8px; padding: 7px 10px; border: 1px solid rgba(128,128,128,.25); border-radius: var(--radius-lg); background: rgba(128,128,128,.08); color: var(--text2); font-size: var(--text-xs) }
-#sideContextChip[hidden] { display: none }
-.side-context-icon { flex: none; font-size: var(--text-sm) }
-.side-context-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text) }
-.side-context-note { flex: none; margin-left: auto; font-size: var(--text-2xs); opacity: .6; color: var(--text2) }
+/* Seitenkontext hat kein eigenes Design mehr — er nutzt die Anhang-Chip-Regeln unten. */
 /* UI-Fix v7: Kontrast/Lesbarkeit */
 .btn-undo-change { min-height: 28px; padding: 3px 9px; background: transparent; color: var(--text2); font-size: var(--text-xs) }
 .btn-undo-change:hover { background: var(--surface-hover); color: var(--text) }
@@ -452,13 +452,14 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 /* Bug-Fix („kommt noch“, 22. Juli): Anhang-Chip fließt als eigene Zeile OBEN im Composer mit,
    statt absolut positioniert (max-width 240px) über dem Text zu schweben — Chip und Prompt
    überlappten und schnitten sich gegenseitig ab. Volle Breite, lange Namen enden mit „…“. */
-#pendingChip, #mainPendingChip { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
-#pendingChip .chip-body, #mainPendingChip .chip-body { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.35 }
-#pendingChip .chip-body b, #mainPendingChip .chip-body b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-#pendingChip .chip-body small, #mainPendingChip .chip-body small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-#pendingChip[hidden], #mainPendingChip[hidden] { display: none }
+/* Gilt für JEDEN Chip im Composer — Bild, PDF, Textdatei und Seitenkontext. */
+#pendingChip, #mainPendingChip, #sideContextChip { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
+#pendingChip .chip-body, #mainPendingChip .chip-body, #sideContextChip .chip-body { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.35 }
+#pendingChip .chip-body b, #mainPendingChip .chip-body b, #sideContextChip .chip-body b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+#pendingChip .chip-body small, #mainPendingChip .chip-body small, #sideContextChip .chip-body small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+#pendingChip[hidden], #mainPendingChip[hidden], #sideContextChip[hidden] { display: none }
 #pendingChip img, #mainPendingChip img { height: 32px; border-radius: var(--radius-sm) }
-#pendingChip button, #mainPendingChip button { min-height: 0; margin-left: auto; padding: 2px 5px; border: none; background: transparent }
+#pendingChip button, #mainPendingChip button, #sideContextChip button { min-height: 0; margin-left: auto; padding: 2px 5px; border: none; background: transparent }
 /* Der Anhang erweitert die Eingabeleiste ausschließlich nach obe… */
 .chat-form-full { flex-wrap: wrap }
 .chat-form-full #mainPendingChip { margin: 0 }
@@ -1876,8 +1877,12 @@ h3, h4 { text-wrap: balance }
 /* Fußleiste wie Anki: Bearbeiten unten links, Optionen unten rechts */
 .study-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px }
 /* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */
-.heft-chrome { transition: opacity .18s ease }
-.heft-chrome.heft-writing { opacity: .12; pointer-events: none }
+/* 🐛 Fix (26. Juli, "Toolbar wird schlagartig transparent"): Der Rückzug bleibt, ist aber
+   weich und nicht mehr fast unsichtbar (.12 → .3). Die eigentliche Ursache des Flackerns
+   liegt in heft.js: EIN Flag + applyWriting() statt zweier DOM-Griffe, dazu verzögertes
+   Zurückkommen — vorher überschrieb jeder Render mitten im Strich die className. */
+.heft-chrome { transition: opacity .22s ease }
+.heft-chrome.heft-writing { opacity: .3; pointer-events: none }
 .heft-chrome .heft-main { position: relative; width: 30px; height: 30px }
 .heft-chrome .heft-color-dot { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 3px; border-radius: 2px; pointer-events: none }
 .heft-pill-min .heft-main { width: 38px }
@@ -1941,6 +1946,14 @@ h3, h4 { text-wrap: balance }
 .ai-chip-btn:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft) }
 .ai-soft-meta { margin: 0; font-size: var(--text-2xs); color: var(--text2); line-height: 1.35 }
 .ai-soft-meta[hidden] { display: none !important }
+/* Modell-Suche — eine Zeile: Feld + Trefferzähler */
+.ai-model-search { flex: 0 0 auto; display: flex; align-items: center; gap: 8px }
+.ai-model-search input { flex: 1; min-width: 0; height: 30px; padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text); font-size: var(--text-xs) }
+.ai-model-search input:focus { outline: none; border-color: var(--accent-border); background: var(--panel-solid) }
+.ai-model-search .ai-soft-meta { flex: 0 0 auto; white-space: nowrap }
+/* Quellen-Titel bleiben beim Scrollen stehen — sonst weiß man in langen Listen nicht,
+   zu welcher Quelle ein Modell gehört. */
+.settings-model-list .menu-label { position: sticky; top: -3px; z-index: 1; background: var(--surface-faint) }
 /* Modell-Liste — kompakt */
 .settings-model-list { flex: 1 1 auto; min-height: 120px; overflow-y: auto; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint); padding: 3px }
 .settings-model-list .menu-label { padding: 6px 8px 2px; font-size: var(--text-3xs); letter-spacing: .05em; text-transform: uppercase; color: var(--text2) }
@@ -2036,8 +2049,14 @@ h3, h4 { text-wrap: balance }
 /* == ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18.7) == */
 .heft-page-slot { position: relative }
 .heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px }
-.heft-addpage { display: block; margin: 12px auto 30px; min-height: 44px; padding: 0 24px; border: 1.5px dashed var(--edge); border-radius: var(--radius-lg); background: transparent; color: var(--text2); font-size: var(--text-base) }
+/* Geist-Knopf bleibt im Layout (die Scroll-Geometrie für atEnd() darf sich nicht ändern),
+   ist aber unsichtbar, bis man die letzte Seite nach oben zieht (heft.js/bindPullToAdd). */
+.heft-addpage { display: block; margin: 12px auto 30px; min-height: 44px; padding: 0 24px; border: 1.5px dashed var(--edge); border-radius: var(--radius-lg); background: transparent; color: var(--text2); font-size: var(--text-base); opacity: 0; transform: translateY(6px); transition: opacity .15s ease, transform .15s ease; pointer-events: none }
+.heft-addpage.pulling { opacity: 1; transform: none; pointer-events: auto }
 .heft-addpage.armed { border-color: var(--accent); color: var(--accent) }
+/* Radierer: Ring zeigt Ort UND Größe der Wirkung (heft.js/showEraserRing) */
+.heft-eraser-ring { position: absolute; z-index: 5; transform: translate(-50%, -50%); border: 1.5px solid rgba(150,150,150,.9); border-radius: 50%; background: rgba(150,150,150,.15); pointer-events: none }
+.heft-eraser-ring[hidden] { display: none }
 .card-face.tappable { cursor: pointer }
 /* ★ Modell-Favoriten im Modell-Dropdown (18. Juli) */
 .model-row { display: flex; align-items: stretch; gap: 2px }

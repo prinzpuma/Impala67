@@ -1247,12 +1247,43 @@ function renderSideContextChip() {
 	const chip = $("sideContextChip");
 	if (!chip) return;
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
-	chip.hidden = !pg;
-	chip.innerHTML = pg ? `<span class="side-context-icon">📄</span><span class="side-context-title">${esc(pg.title || "Unbenannte Seite")}</span><span class="side-context-note">Seitenkontext</span>` : "";
+	// Seitenkontext ist einfach ein weiterer Anhang-Chip: gleiches Markup, gleiche Klassen
+	// und dasselbe ✕ wie Bild/PDF/Textdatei. „Entfernt“ hält nur, bis die Seite neu
+	// geöffnet wird (tabs.js setzt S.sideContextOff zurück) — nichts wird gespeichert.
+	const show = !!pg && S.sideContextOff !== pg.id;
+	chip.hidden = !show;
+	chip.innerHTML = show
+		? `<span class="chip-ico">📄</span><span class="chip-body"><b>${esc(pg.title || "Unbenannte Seite")}</b><small>Seitenkontext · wird mitgesendet</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`
+		: "";
+}
+
+// Verlauf-Dropdown im Seitenchat — bewusst KEINE eigene Chat-Liste: dieselbe
+// CHATS.load()-Quelle wie die Sidebar, nur als kleines Menü am Uhr-Knopf. Die Auswahl
+// führt den alten Chat IM PANEL weiter (data-sidechat, app.js).
+function renderChatHistMenu() {
+	const m = $("chatHistMenu");
+	if (!m) return;
+	m.hidden = !S.chatHistOpen;
+	if (!S.chatHistOpen) return;
+	const list = CHATS.load();
+	m.innerHTML = list.length
+		? list.map((s) => `<div class="row${s.id === S.sideChatId ? " active" : ""}" data-sidechat="${esc(s.id)}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span></div>`).join("")
+		: '<div class="menu-note">Noch keine gespeicherten Chats.</div>';
+	POPOVERS.position($("btnChatHist"), m, { align: "end", gap: 6 });
+	if (!m._wired) { // einmalig: Klick daneben schließt das Menü
+		m._wired = true;
+		document.addEventListener("click", (e) => {
+			const t = e.target instanceof Element ? e.target : null;
+			if (!S.chatHistOpen || (t && (m.contains(t) || t.closest("#btnChatHist")))) return;
+			S.chatHistOpen = false;
+			m.hidden = true;
+		});
+	}
 }
 
 function renderChat() {
 	renderSideContextChip();
+	renderChatHistMenu();
 	const log = $("chatLog");
 	if (log) renderChatLog(log, S.sideChat);
 }

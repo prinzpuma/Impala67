@@ -174,13 +174,18 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 				<span class="panel-title">KI-Coach</span>
 			</div>
 			<span class="panel-head-right">
+				<button id="btnChatHist" title="Alte Chats öffnen (Verlauf)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></button>
 				<button id="btnChatNew" title="Neuen Chat starten">＋</button>
 				<button id="btnChatExpand" title="Chat in eigenem Tab öffnen"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5"/><path d="m19 5-8 8"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg></button>
 				<button id="btnTogglePanel" title="KI einklappen">✕</button>
 			</span>
 		</div>
 		<div id="chatLog"></div>
+		<!-- Verlauf-Dropdown des Seitenchats; Inhalt + Positionierung in render.js -->
+		<div id="chatHistMenu" class="model-menu" hidden></div>
 		<form id="chatForm">
+			<!-- Zeigt, dass die geöffnete Seite automatisch im Kontext liegt (systemPrompt, ai.js) -->
+			<div id="sideContextChip" hidden></div>
 			<div id="pendingChip" hidden></div>
 			<div class="composer-body">
 				<textarea id="chatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>
