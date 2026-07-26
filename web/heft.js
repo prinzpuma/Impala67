@@ -738,11 +738,10 @@ export const HEFT = (() => {
 		const innerW = Math.max(1, scroll.clientWidth - 36);
 		const innerH = Math.max(1, scroll.clientHeight - 36);
 
-		// GoodNotes-Verhalten (26. Juli): Einpassen NUR über die Breite. Bisher zappelte
-		// die Höhe mit (innerH / PAGE_H) — dadurch wurde immer die ganze Seite eingepasst
-		// und die Bildschirmbreite nie gefüllt.
-		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, 1));
-		void innerH;
+		// Grundansicht = GANZE Seite sichtbar (Breite UND Höhe). Das Einpassen nur über die
+		// Breite war falsch: die Seite war dadurch von Anfang an „reingezoomt“ und weil
+		// ZOOM_MIN = 1 ist, war kein Rauszoomen mehr möglich.
+		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, innerH / PAGE_H, 1));
 		scale = fit * zoom;
 		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
 		const pages = pagesEl();
@@ -941,9 +940,19 @@ export const HEFT = (() => {
 	}
 	function keepAnchor(anchor, clientX, clientY) {
 		const scroll = scrollEl(); if (!scroll || !anchor || !anchor.cv.isConnected) return;
-		const r = anchor.cv.getBoundingClientRect();
-		scroll.scrollLeft += r.left + r.width * anchor.nx - clientX;
-		scroll.scrollTop += r.top + r.height * anchor.ny - clientY;
+		// Zwei Durchgänge: der Browser klemmt scrollLeft/scrollTop auf den erlaubten
+		// Bereich, und der ändert sich beim Zoomen erst mit dem neuen Layout. Nach dem
+		// Klemmen stimmte die Rechnung aus dem ersten Durchgang nicht mehr — genau das war
+		// das Springen nach oben/unten beim Zoomen. Also nachmessen und den Rest
+		// korrigieren, statt einmal blind zu rechnen.
+		for (let pass = 0; pass < 2; pass++) {
+			const r = anchor.cv.getBoundingClientRect();
+			const dl = r.left + r.width * anchor.nx - clientX;
+			const dt = r.top + r.height * anchor.ny - clientY;
+			if (Math.abs(dl) < 0.5 && Math.abs(dt) < 0.5) break;
+			scroll.scrollLeft += dl;
+			scroll.scrollTop += dt;
+		}
 	}
 	function setZoom(next, clientX, clientY, commit, fixedAnchor) {
 		next = clamp(next, ZOOM_MIN, ZOOM_MAX);
@@ -975,9 +984,9 @@ export const HEFT = (() => {
 		gesture.dtap = true;
 		const t0 = performance.now();
 		const step = (now) => {
-			// Gummi statt Anschlag: U.easeOutBack federt am Ende minimal über und zurück —
-			// genau das Gefühl, das beim Zentrieren/Einrasten der Seite gefehlt hat.
-			const t = Math.min(1, (now - t0) / dur), e = t >= 1 ? 1 : U.easeOutBack(t);
+			// Ruhig auslaufen ohne Überschwingen (Gummi wieder entfernt), dafür deutlich
+			// länger — siehe Dauer an den Aufrufstellen (440 / 520 ms).
+			const t = Math.min(1, (now - t0) / dur), e = t >= 1 ? 1 : U.easeOutCubic(t);
 			if (t < 1) {
 				pgs.style.transform = "translate(" + (dx * (1 - e)) + "px, " + (dy * (1 - e)) + "px) scale(" + (s + (1 - s) * e) + ")";
 				gesture.raf = requestAnimationFrame(step);
@@ -997,7 +1006,7 @@ export const HEFT = (() => {
 		if (!anchor) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
 		const first = anchor.cv.getBoundingClientRect();
 		setZoom(target, clientX, clientY, false, anchor);
-		flipGlide(anchor.cv, first, 380);
+		flipGlide(anchor.cv, first, 520);
 	}
 
 	function applyTouchAction() {
@@ -1023,19 +1032,22 @@ export const HEFT = (() => {
 		const first = cv ? cv.getBoundingClientRect() : null;
 		clearPagesFx();
 		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
-		if (gesture.pendingZoom) { const p = gesture.pendingZoom; gesture.pendingZoom = null; setZoom(p.next, p.clientX, p.clientY, false, p.anchor); }
+		// Ein noch offener Zoom-Wunsch aus DERSELBEN Geste ist veraltet — die Zeile darüber
+		// hat den Zoom schon mit dem aktuellen Fingermittelpunkt gesetzt. Ihn zusätzlich
+		// anzuwenden verschob die Ansicht ein zweites Mal (Sprung am Ende der Geste).
+		gesture.pendingZoom = null;
 		applyView(false);
-		if (first) flipGlide(cv, first, 300); else scheduleZoomSettleRender();
+		if (first) flipGlide(cv, first, 440); else scheduleZoomSettleRender();
 	}
 
-	// Handballen (26. Juli): iPadOS meldet die Kontaktfläche in radiusX/radiusY — eine
-	// Fingerkuppe liegt bei ~10-25 px, ein aufliegender Handballen deutlich darüber.
-	// Bisher zählte er als normaler Finger und schob die Seite, WEIL er meist vor dem
-	// Stift aufliegt (penRecently() ist in diesem Moment noch falsch).
-	const PALM_RADIUS = 38;
+	// Handballen: KEINE Erkennung über die Kontaktfläche mehr (26. Juli zurückgenommen).
+	// Grund: ein Daumen meldet radiusX/radiusY genauso groß wie ein Handballen — der
+	// Daumen wurde damit ausgefiltert und die Zoom-Geste ging nur noch mit zwei
+	// Zeigefingern. Der Handballen wird stattdessen RÜCKWIRKEND behandelt: setzt der
+	// Stift innerhalb von PALM_UNDO_MS nach einer Berührung auf, war es die Hand und das
+	// Verschieben wird zurückgenommen (siehe onDown).
 	const PALM_UNDO_MS = 350;
-	const isPalm = (t) => Math.max(t.radiusX || 0, t.radiusY || 0) > PALM_RADIUS;
-	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus" && !isPalm(t));
+	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
 	const touchMid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
 	const touchDist = (t) => Math.max(1, Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY));
 	function onTouchStart(e) {

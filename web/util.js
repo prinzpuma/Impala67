@@ -631,18 +631,17 @@ export const U = {
 
 	// ── Gummi-Kurve (26. Juli) ─────────────────────────────────────────────
 	// EINE Kurve für alles, was sich "wie GoodNotes" anfühlen soll: schnell los,
-	// weich aus, mit einem winzigen Überschwingen am Ende. Reines ease-out (bisher
-	// im Heft beim Zentrieren der Seite) ist rechnerisch korrekt, fühlt sich aber
-	// wie ein Anschlag an, weil nichts nachfedert.
-	easeOutBack(t, over = 1.06) {
-		const c = over * 1.7;
-		const p = t - 1;
-		return 1 + (c + 1) * p * p * p + c * p * p;
+	// weich aus, KEIN Überschwingen: der Gummi-Effekt wurde am 26. Juli getestet und
+	// wieder entfernt — er wirkte unruhig. Ruhig auslaufen + längere Dauer ist das,
+	// was sich richtig anfühlt.
+	easeOutCubic(t) {
+		const p = 1 - t;
+		return 1 - p * p * p;
 	},
 	// Läuft dur ms und ruft step(t, eased) je Frame. Rückgabe bricht ab.
 	animate(dur, step, ease) {
 		if (typeof requestAnimationFrame !== "function") { step(1, 1); return () => {}; }
-		const f = ease || U.easeOutBack;
+		const f = ease || U.easeOutCubic;
 		const t0 = performance.now();
 		let raf = 0, stopped = false;
 		const tick = (now) => {
