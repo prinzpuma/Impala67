@@ -41,7 +41,7 @@ export const HEFT = (() => {
 	const dropThumbs = (p) => Object.keys(thumbs).forEach((k) => { if (k.startsWith(p + ":")) delete thumbs[k]; });
 	const thumbJobs = {};
 	const imgCache = {};
-	let host = null, pid = null, doc = null, idx = 0, scale = 1, zoom = 1;
+	let host = null, pid = null, doc = null, idx = 0, scale = 1, fitScale = 1;
 	let canvases = [];
 	let detailCanvases = [];
 	let wetCanvases = [];
@@ -686,9 +686,11 @@ export const HEFT = (() => {
 	// (findDivergentPage ist mit v8 entfallen: Heft-Konflikte kann es nicht mehr
 	// geben, weil zwei Geräte ihre Striche zusammenführen statt sich zu überschreiben.)
 
+	// Jede Zeichenflaeche merkt sich, mit welchem Massstab sie gefuellt wurde: die
+	// Basis-Seite immer mit fit (unabhaengig vom Zoom), die Detail-Kachel mit fit * k.
 	function applyTransform(x) {
-		const dpr = x.canvas.__heftDpr || 1;
-		x.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+		const cv = x.canvas, dpr = cv.__heftDpr || 1, s = cv.__heftScale || scale;
+		x.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
 	}
 	function redrawPage(i) {
 		if (!doc || !doc.pages[i]) return;
@@ -705,96 +707,138 @@ export const HEFT = (() => {
 	}
 	function redraw() { renderVisiblePages(); }
 
-	const ZOOM_MIN = 1, ZOOM_MAX = 3.5;
+	// --- Ansicht: EINE Wahrheit (26. Juli, Neubau) ---------------------------
+	// view = { x, y, k }: x/y ist die linke obere Ecke des sichtbaren Bereichs in
+	// BASIS-Pixeln (Layout ohne Zoom), k der Zoomfaktor. Angewendet wird
+	// ausschliesslich ein CSS-transform auf .heft-pages. Kein natives Scrollen, kein
+	// Umlayouten beim Zoomen, keine Nachkorrektur: der Punkt unter den Fingern bleibt
+	// per Konstruktion stehen. Dadurch sind keepAnchor, flipGlide, setZoom/queueZoom,
+	// das Grid-Zentrieren und das Wachsen der Zeichenflaechen beim Zoomen entfallen.
+	const ZOOM_MIN = 0.4, ZOOM_MAX = 6;
+	const view = { x: 0, y: 0, k: 1 };
+	const PAD_X = 18, PAD_BOTTOM = 56;
+	const padTop = () => (window.innerWidth < 640 ? 36 : 46);
 
 	const MAX_RENDER_DPR = 1.5, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
 	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
 	const gesture = {
-		touches: new Map(), pinch: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
-		raf: 0, zoomFrame: 0, pendingZoom: null,
+		pts: new Map(), pinch: null, last: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
+		raf: 0, fling: 0, anim: null, vx: 0, vy: 0, lastT: 0,
 		lastTap: 0, tapX: 0, tapY: 0, lastTwoTap: 0,
 	};
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
 	const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+	const viewport = () => { const s = scrollEl(); return s ? s.getBoundingClientRect() : null; };
+	const contentSize = () => { const p = pagesEl(); return p ? { w: p.offsetWidth, h: p.offsetHeight } : { w: 1, h: 1 }; };
 
-	const clearPagesFx = (pgs = pagesEl()) => { if (pgs) { pgs.style.transform = ""; pgs.style.transformOrigin = ""; pgs.style.willChange = ""; } };
 	function stopAnim() {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
-		if (gesture.zoomFrame) cancelAnimationFrame(gesture.zoomFrame);
-		gesture.raf = gesture.zoomFrame = 0; gesture.pendingZoom = null;
-
-		if (gesture.dtap) { gesture.dtap = false; clearPagesFx(); }
+		if (gesture.fling) cancelAnimationFrame(gesture.fling);
+		gesture.raf = gesture.fling = 0;
+		if (gesture.anim) { gesture.anim(); gesture.anim = null; }
 	}
 	function navReset() {
-		stopAnim(); gesture.touches.clear();
-
-		clearPagesFx();
-		gesture.pinch = null; gesture.maxCount = 0; gesture.moved = false; gesture.lastTap = 0; gesture.lastTwoTap = 0; gesture.restore = null;
+		stopAnim(); gesture.pts.clear();
+		gesture.pinch = null; gesture.last = null; gesture.maxCount = 0; gesture.moved = false;
+		gesture.vx = gesture.vy = 0; gesture.lastTap = 0; gesture.lastTwoTap = 0; gesture.restore = null;
 	}
-	function applyView(commit) {
-		const scroll = scrollEl(); if (!scroll) return;
-
-		const innerW = Math.max(1, scroll.clientWidth - 36);
-		const innerH = Math.max(1, scroll.clientHeight - 36);
-
-		// Grundansicht = GANZE Seite sichtbar (Breite UND Höhe). Das Einpassen nur über die
-		// Breite war falsch: die Seite war dadurch von Anfang an „reingezoomt“ und weil
-		// ZOOM_MIN = 1 ist, war kein Rauszoomen mehr möglich.
-		const fit = Math.max(0.1, Math.min(innerW / PAGE_W, innerH / PAGE_H, 1));
-		scale = fit * zoom;
-		const cssW = Math.max(1, PAGE_W * scale), cssH = Math.max(1, PAGE_H * scale);
-		const pages = pagesEl();
-		if (pages) {
-			pages.style.setProperty("--heft-page-w", cssW + "px");
-			pages.style.setProperty("--heft-page-h", cssH + "px");
-			pages.style.minWidth = Math.max(innerW, cssW) + "px";
-			// Solange noch Rand da ist, wird zentriert. Ist die Seite breiter als die
-			// Ansicht, wird NICHT mehr zentriert, sondern frei geschoben — vorher zog das
-			// Raster die Seite bei jedem Zoomschritt in die Mitte zurück (das ruckelige
-			// „Zentrieren“, das sich nicht wie Gummi anfühlte).
-			pages.classList.toggle("heft-free", cssW > innerW - 1);
-		} else canvases.forEach((cv) => { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; });
+	// Grenzen an EINER Stelle: passt der Inhalt in die Ansicht, wird zentriert,
+	// sonst am Rand gestoppt.
+	function clampView(v) {
+		const vp = viewport(); if (!vp) return v;
+		const c = contentSize();
+		v.k = clamp(v.k, ZOOM_MIN, ZOOM_MAX);
+		const vw = vp.width / v.k, vh = vp.height / v.k;
+		v.x = c.w <= vw ? (c.w - vw) / 2 : clamp(v.x, 0, c.w - vw);
+		v.y = c.h <= vh ? (c.h - vh) / 2 : clamp(v.y, 0, c.h - vh);
+		return v;
+	}
+	// Die EINZIGE Stelle, die die Ansicht auf den Bildschirm bringt.
+	function paintView(commit) {
+		const pgs = pagesEl(); if (!pgs) return;
+		clampView(view);
+		scale = fitScale * view.k;
+		pgs.style.transform = "translate(" + (-view.x * view.k).toFixed(2) + "px, " + (-view.y * view.k).toFixed(2) + "px) scale(" + view.k.toFixed(4) + ")";
 		if (commit) renderVisiblePages();
-		else hideDetailCanvases();
-
+		else { renderVisiblePages(true); scheduleZoomSettleRender(); }
+		viewChanged();
+	}
+	function schedulePaint() {
+		if (gesture.raf) return;
+		gesture.raf = requestAnimationFrame(() => { gesture.raf = 0; paintView(false); });
+	}
+	// Punkt unter (clientX, clientY) festhalten: ein Schritt, keine Korrektur.
+	function zoomAt(nextK, clientX, clientY, commit) {
+		const vp = viewport(); if (!vp) return;
+		const k = clamp(nextK, ZOOM_MIN, ZOOM_MAX);
+		const bx = view.x + (clientX - vp.left) / view.k, by = view.y + (clientY - vp.top) / view.k;
+		view.k = k; view.x = bx - (clientX - vp.left) / k; view.y = by - (clientY - vp.top) / k;
+		if (commit) paintView(true); else schedulePaint();
+	}
+	function animateTo(nx, ny, nk, dur = 300) {
+		stopAnim();
+		const from = { x: view.x, y: view.y, k: view.k };
+		const to = clampView({ x: nx, y: ny, k: nk });
+		gesture.anim = U.animate(dur, (t, e) => {
+			view.x = from.x + (to.x - from.x) * e;
+			view.y = from.y + (to.y - from.y) * e;
+			view.k = from.k + (to.k - from.k) * e;
+			paintView(t >= 1);
+			if (t >= 1) gesture.anim = null;
+		});
 	}
 	function visiblePageIndices() {
-		const scroll = scrollEl(); if (!scroll) return [];
-
-		const sr = scroll.getBoundingClientRect(), pad = Math.max(600, sr.height * 1.5), out = [];
+		const vp = viewport(); if (!vp) return [];
+		const vh = vp.height / view.k, pad = Math.max(300, vh * 0.75);
+		const top = view.y - pad, bot = view.y + vh + pad, out = [];
 		pageSlots.forEach((slot, i) => {
-				if (!slot) return;
-				const r = slot.getBoundingClientRect();
-				if (r.bottom >= sr.top - pad && r.top <= sr.bottom + pad) out.push(i);
-			});
+			if (!slot) return;
+			const t = slot.offsetTop, b = t + slot.offsetHeight;
+			if (b >= top && t <= bot) out.push(i);
+		});
 		return out;
 	}
-	function tileDpr() { return Math.min(2, window.devicePixelRatio || 1); }
-	function tileTransform(x, t) { x.setTransform(t.dpr * t.scale, 0, 0, t.dpr * t.scale, -t.x * t.dpr, -t.y * t.dpr); }
-
-	function layerRectFor(i) {
-		const scroll = scrollEl(), base = canvases[i];
-		if (!scroll || !base) return null;
-		const sr = scroll.getBoundingClientRect(), pr = base.getBoundingClientRect();
-		if (pr.bottom <= sr.top || pr.top >= sr.bottom || pr.right <= sr.left || pr.left >= sr.right) return null;
-		const over = 200;
-		const x0 = Math.max(0, Math.min(pr.width, sr.left - pr.left - over));
-		const y0 = Math.max(0, Math.min(pr.height, sr.top - pr.top - over));
-		const x1 = Math.max(0, Math.min(pr.width, sr.right - pr.left + over));
-		const y1 = Math.max(0, Math.min(pr.height, sr.bottom - pr.top + over));
+	// Detail-Kachel: deckt den sichtbaren Teil einer Seite scharf ab. Alles in
+	// BASIS-Pixeln aus view gerechnet (nicht aus getBoundingClientRect) — deshalb
+	// stimmt die Kachel auch mitten in einer Geste, und ihre Kosten haengen an der
+	// Bildschirmgroesse statt am Zoomfaktor.
+	function tileDpr(r) {
+		const native = Math.min(2, window.devicePixelRatio || 1);
+		const w = Math.max(1, r.w * view.k), h = Math.max(1, r.h * view.k);
+		return Math.max(0.5, Math.min(native, Math.sqrt(MAX_RENDER_PIXELS / (w * h)), MAX_CANVAS_DIM / Math.max(w, h)));
+	}
+	function tileTransform(x, t) {
+		const f = t.dpr * t.k;
+		x.setTransform(t.dpr * t.scale, 0, 0, t.dpr * t.scale, -t.x * f, -t.y * f);
+	}
+	function pageOrigin(i) {
+		const slot = pageSlots[i], base = canvases[i];
+		if (!slot || !base) return null;
+		return {
+			x: slot.offsetLeft + base.offsetLeft, y: slot.offsetTop + base.offsetTop,
+			w: base.offsetWidth, h: base.offsetHeight,
+		};
+	}
+	function layerRectFor(i, over = 140) {
+		const vp = viewport(), o = pageOrigin(i);
+		if (!vp || !o) return null;
+		const vw = vp.width / view.k, vh = vp.height / view.k;
+		const x0 = clamp(view.x - o.x - over, 0, o.w), y0 = clamp(view.y - o.y - over, 0, o.h);
+		const x1 = clamp(view.x + vw - o.x + over, 0, o.w), y1 = clamp(view.y + vh - o.y + over, 0, o.h);
 		if (x1 - x0 < 2 || y1 - y0 < 2) return null;
 		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
 	function placeLayer(cv, i, r, dpr) {
-		const base = canvases[i];
-		cv.style.left = Math.round(base.offsetLeft + r.x) + "px";
-		cv.style.top = Math.round(base.offsetTop + r.y) + "px";
+		const base = canvases[i], k = view.k;
+		cv.style.left = (base.offsetLeft + r.x) + "px";
+		cv.style.top = (base.offsetTop + r.y) + "px";
 		cv.style.width = r.w + "px"; cv.style.height = r.h + "px";
-		const pw = Math.max(1, Math.round(r.w * dpr)), ph = Math.max(1, Math.round(r.h * dpr));
+		const pw = Math.max(1, Math.round(r.w * dpr * k)), ph = Math.max(1, Math.round(r.h * dpr * k));
 		if (cv.width !== pw) cv.width = pw;
 		if (cv.height !== ph) cv.height = ph;
-		cv.__heftTile = { x: r.x, y: r.y, w: r.w, h: r.h, dpr, scale };
+		cv.__heftDpr = dpr; cv.__heftScale = fitScale * k;
+		cv.__heftTile = { x: r.x, y: r.y, w: r.w, h: r.h, dpr, k, scale: fitScale * k };
 		cv.style.display = "block";
 	}
 	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
@@ -807,7 +851,7 @@ export const HEFT = (() => {
 		if (drawing && drawing.pageIdx === i && drawing.ctx && !drawing.erasing) return;
 		const r = layerRectFor(i);
 		if (!r) { hideLayer(tile); hideLayer(wet); return; }
-		const dpr = tileDpr();
+		const dpr = tileDpr(r);
 		placeLayer(tile, i, r, dpr);
 		const x = tile.getContext("2d");
 		x.setTransform(1, 0, 0, 1, 0, 0);
@@ -824,13 +868,11 @@ export const HEFT = (() => {
 	}
 	function tileCovers(i) {
 		const tile = detailCanvases[i], t = tile && tile.__heftTile;
-		if (!t || tile.style.display === "none" || Math.abs(t.scale - scale) > 0.0001 || t.dpr !== tileDpr()) return false;
-		const scroll = scrollEl(), base = canvases[i];
-		if (!scroll || !base) return false;
-		const sr = scroll.getBoundingClientRect(), pr = base.getBoundingClientRect();
-		const nx0 = Math.max(0, sr.left - pr.left), ny0 = Math.max(0, sr.top - pr.top);
-		const nx1 = Math.min(pr.width, sr.right - pr.left), ny1 = Math.min(pr.height, sr.bottom - pr.top);
-		return t.x <= nx0 && t.y <= ny0 && t.x + t.w >= nx1 && t.y + t.h >= ny1;
+		if (!t || tile.style.display === "none" || Math.abs(t.k - view.k) > 0.0001) return false;
+		const need = layerRectFor(i, 0);
+		if (!need) return false;
+		return t.x <= need.x + 0.5 && t.y <= need.y + 0.5 &&
+			t.x + t.w >= need.x + need.w - 0.5 && t.y + t.h >= need.y + need.h - 0.5;
 	}
 
 	function renderDetailTiles(force = false) {
@@ -877,8 +919,11 @@ export const HEFT = (() => {
 		if (!doc) return;
 		const visible = new Set(visiblePageIndices());
 
+		// Die Basis-Seite wird IMMER in Basis-Aufloesung gefuellt, unabhaengig vom Zoom:
+		// beim Zoomen muss dadurch keine Zeichenflaeche wachsen und nichts neu gezeichnet
+		// werden. Die Schaerfe liefert die Detail-Kachel darueber.
 		const nativeDpr = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
-		const pageW = PAGE_W * scale, pageH = PAGE_H * scale;
+		const pageW = PAGE_W * fitScale, pageH = PAGE_H * fitScale;
 		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
 		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
 
@@ -890,9 +935,9 @@ export const HEFT = (() => {
 				hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]);
 				return;
 			}
-			cv.__heftDpr = safeDpr;
-			const w = Math.max(1, Math.round(PAGE_W * scale * safeDpr));
-			const h = Math.max(1, Math.round(PAGE_H * scale * safeDpr));
+			cv.__heftDpr = safeDpr; cv.__heftScale = fitScale;
+			const w = Math.max(1, Math.round(pageW * safeDpr));
+			const h = Math.max(1, Math.round(pageH * safeDpr));
 
 			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
@@ -912,197 +957,148 @@ export const HEFT = (() => {
 		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; renderVisiblePages(); }, 140);
 	}
 
+	// Nur bei Groessenaenderung oder Neuaufbau: fit neu bestimmen und den Mittelpunkt
+	// der Ansicht halten. Beim Zoomen wird das NIE aufgerufen.
 	function layout() {
-		const scroll = scrollEl();
-		if (!scroll || !canvases.length) { applyView(true); return; }
-		const r = scroll.getBoundingClientRect();
-		const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-		const anchor = makeZoomAnchor(cx, cy);
-		applyView(true); keepAnchor(anchor, cx, cy);
-	}
-	function canvasAt(clientX, clientY) {
-		const direct = document.elementFromPoint(clientX, clientY);
-		const hit = direct && direct.closest && direct.closest(".heft-canvas");
-		if (hit) return hit;
-		let best = canvases[idx] || canvases[0] || null, bd = Infinity;
-		canvases.forEach((cv) => {
-			const r = cv.getBoundingClientRect();
-			const dx = clientX < r.left ? r.left - clientX : clientX > r.right ? clientX - r.right : 0;
-			const dy = clientY < r.top ? r.top - clientY : clientY > r.bottom ? clientY - r.bottom : 0;
-			const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = cv; }
-		});
-		return best;
-	}
-	function makeZoomAnchor(clientX, clientY) {
-		const cv = canvasAt(clientX, clientY); if (!cv) return null;
-		const r = cv.getBoundingClientRect();
-		return { cv, nx: clamp((clientX - r.left) / Math.max(1, r.width), 0, 1), ny: clamp((clientY - r.top) / Math.max(1, r.height), 0, 1) };
-	}
-	function keepAnchor(anchor, clientX, clientY) {
-		const scroll = scrollEl(); if (!scroll || !anchor || !anchor.cv.isConnected) return;
-		// Zwei Durchgänge: der Browser klemmt scrollLeft/scrollTop auf den erlaubten
-		// Bereich, und der ändert sich beim Zoomen erst mit dem neuen Layout. Nach dem
-		// Klemmen stimmte die Rechnung aus dem ersten Durchgang nicht mehr — genau das war
-		// das Springen nach oben/unten beim Zoomen. Also nachmessen und den Rest
-		// korrigieren, statt einmal blind zu rechnen.
-		for (let pass = 0; pass < 2; pass++) {
-			const r = anchor.cv.getBoundingClientRect();
-			const dl = r.left + r.width * anchor.nx - clientX;
-			const dt = r.top + r.height * anchor.ny - clientY;
-			if (Math.abs(dl) < 0.5 && Math.abs(dt) < 0.5) break;
-			scroll.scrollLeft += dl;
-			scroll.scrollTop += dt;
+		const scroll = scrollEl(), pgs = pagesEl();
+		if (!scroll) return;
+		const vp = scroll.getBoundingClientRect();
+		const padT = padTop();
+		const availW = Math.max(1, vp.width - 2 * PAD_X), availH = Math.max(1, vp.height - padT - PAD_BOTTOM);
+		const prev = fitScale || 1;
+		const cx = view.x + (vp.width / view.k) / 2, cy = view.y + (vp.height / view.k) / 2;
+		fitScale = Math.max(0.05, Math.min(availW / PAGE_W, availH / PAGE_H, 1));
+		if (pgs) {
+			pgs.style.setProperty("--heft-page-w", (PAGE_W * fitScale) + "px");
+			pgs.style.setProperty("--heft-page-h", (PAGE_H * fitScale) + "px");
+			// Der Rand ist Teil des Inhalts und zoomt mit. JS ist die einzige Quelle dafuer,
+			// damit CSS und Rechnung nie auseinanderlaufen.
+			pgs.style.padding = padT + "px " + PAD_X + "px " + PAD_BOTTOM + "px";
+			pgs.style.transformOrigin = "0 0";
+			pgs.style.willChange = "transform";
 		}
+		const f = fitScale / prev;
+		view.x = cx * f - (vp.width / view.k) / 2;
+		view.y = cy * f - (vp.height / view.k) / 2;
+		paintView(true);
 	}
-	function setZoom(next, clientX, clientY, commit, fixedAnchor) {
-		next = clamp(next, ZOOM_MIN, ZOOM_MAX);
-		const anchor = fixedAnchor || makeZoomAnchor(clientX, clientY);
-		zoom = next; applyView(commit); keepAnchor(anchor, clientX, clientY);
-	}
-	function queueZoom(next, clientX, clientY, anchor) {
-		gesture.pendingZoom = { next, clientX, clientY, anchor };
-		if (gesture.zoomFrame) return;
-		gesture.zoomFrame = requestAnimationFrame(() => {
-			gesture.zoomFrame = 0;
-			const p = gesture.pendingZoom; gesture.pendingZoom = null;
-			if (p) setZoom(p.next, p.clientX, p.clientY, false, p.anchor);
-		});
+	function animateZoom(target, clientX, clientY, dur = 280) {
+		const vp = viewport(); if (!vp) return;
+		const k = clamp(target, ZOOM_MIN, ZOOM_MAX);
+		const bx = view.x + (clientX - vp.left) / view.k, by = view.y + (clientY - vp.top) / view.k;
+		animateTo(bx - (clientX - vp.left) / k, by - (clientY - vp.top) / k, k, dur);
 	}
 
-	function flipGlide(cv, first, dur) {
-		const pgs = pagesEl();
-		if (!pgs || !cv || !cv.isConnected || !first) { scheduleZoomSettleRender(); return; }
-		const pr = pgs.getBoundingClientRect(), last = cv.getBoundingClientRect();
-		const s = first.width / Math.max(1, last.width);
-		const dx = (first.left - pr.left) - (last.left - pr.left) * s;
-		const dy = (first.top - pr.top) - (last.top - pr.top) * s;
-
-		if (Math.abs(1 - s) < 0.003 && Math.abs(dx) < 1.5 && Math.abs(dy) < 1.5) { scheduleZoomSettleRender(); return; }
-		pgs.style.transformOrigin = "0 0";
-		pgs.style.willChange = "transform";
-		pgs.style.transform = "translate(" + dx + "px, " + dy + "px) scale(" + s + ")";
-		gesture.dtap = true;
-		const t0 = performance.now();
-		const step = (now) => {
-			// Ruhig auslaufen ohne Überschwingen (Gummi wieder entfernt), dafür deutlich
-			// länger — siehe Dauer an den Aufrufstellen (440 / 520 ms).
-			const t = Math.min(1, (now - t0) / dur), e = t >= 1 ? 1 : U.easeOutCubic(t);
-			if (t < 1) {
-				pgs.style.transform = "translate(" + (dx * (1 - e)) + "px, " + (dy * (1 - e)) + "px) scale(" + (s + (1 - s) * e) + ")";
-				gesture.raf = requestAnimationFrame(step);
-			} else {
-				gesture.raf = 0; gesture.dtap = false;
-				clearPagesFx(pgs);
-				scheduleZoomSettleRender();
-			}
-		};
-		gesture.raf = requestAnimationFrame(step);
-	}
-	function animateZoom(target, clientX, clientY) {
-		stopAnim();
-		target = clamp(target, ZOOM_MIN, ZOOM_MAX);
-		const anchor = makeZoomAnchor(clientX, clientY);
-
-		if (!anchor) { setZoom(target, clientX, clientY, false, anchor); scheduleZoomSettleRender(); return; }
-		const first = anchor.cv.getBoundingClientRect();
-		setZoom(target, clientX, clientY, false, anchor);
-		flipGlide(anchor.cv, first, 520);
-	}
-
+	// Alle Gesten macht heft.js selbst, es gibt kein natives Scrollen mehr.
 	function applyTouchAction() {
-
-		const mode = touchNavigates() ? "pan-x pan-y" : "none";
 		const scroll = scrollEl();
-		if (scroll) scroll.style.touchAction = mode;
-		canvases.forEach((cv) => { if (cv) cv.style.touchAction = mode; });
+		if (scroll) scroll.style.touchAction = "none";
+		canvases.forEach((cv) => { if (cv) cv.style.touchAction = "none"; });
 	}
 
 	function onPenBoundary(e) {
 		if (e.pointerType !== "pen") return;
 		if (e.type === "pointerover") e.currentTarget.style.touchAction = "none";
-		else if (!activePenPointers.size) applyTouchAction();
 	}
 
-	function settlePinch() {
-
-		const g = gesture.pinch;
-		gesture.pinch = null;
-		if (gesture.zoomFrame) { cancelAnimationFrame(gesture.zoomFrame); gesture.zoomFrame = 0; }
-		const cv = g && g.anchor && g.anchor.cv && g.anchor.cv.isConnected ? g.anchor.cv : null;
-		const first = cv ? cv.getBoundingClientRect() : null;
-		clearPagesFx();
-		if (g && g.factor !== 1) setZoom(g.zoom0 * g.factor, g.mid[0], g.mid[1], false, g.anchor);
-		// Ein noch offener Zoom-Wunsch aus DERSELBEN Geste ist veraltet — die Zeile darüber
-		// hat den Zoom schon mit dem aktuellen Fingermittelpunkt gesetzt. Ihn zusätzlich
-		// anzuwenden verschob die Ansicht ein zweites Mal (Sprung am Ende der Geste).
-		gesture.pendingZoom = null;
-		applyView(false);
-		if (first) flipGlide(cv, first, 440); else scheduleZoomSettleRender();
-	}
-
-	// Handballen: KEINE Erkennung über die Kontaktfläche mehr (26. Juli zurückgenommen).
-	// Grund: ein Daumen meldet radiusX/radiusY genauso groß wie ein Handballen — der
-	// Daumen wurde damit ausgefiltert und die Zoom-Geste ging nur noch mit zwei
-	// Zeigefingern. Der Handballen wird stattdessen RÜCKWIRKEND behandelt: setzt der
-	// Stift innerhalb von PALM_UNDO_MS nach einer Berührung auf, war es die Hand und das
-	// Verschieben wird zurückgenommen (siehe onDown).
+	// Handballen: KEINE Erkennung ueber die Kontaktflaeche (ein Daumen meldet die
+	// gleiche Flaeche). Setzt der Stift innerhalb von PALM_UNDO_MS nach einer
+	// Beruehrung auf, war es die Hand und die Verschiebung wird zurueckgenommen
+	// (siehe onDown).
 	const PALM_UNDO_MS = 350;
 	const fingersOf = (list) => [...list].filter((t) => t.touchType !== "stylus");
 	const touchMid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
 	const touchDist = (t) => Math.max(1, Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY));
+	// EIN Finger verschiebt nur im Stift-Modus (sonst zeichnet er), ZWEI Finger
+	// verschieben und zoomen immer.
+	const panWithOneFinger = () => touchNavigates();
+	function startGesture(fingers) {
+		if (fingers.length >= 2) {
+			gesture.pinch = { d0: touchDist(fingers), mid0: touchMid(fingers), k0: view.k, x0: view.x, y0: view.y };
+			gesture.last = null;
+		} else {
+			gesture.pinch = null;
+			gesture.last = fingers.length === 1 ? [fingers[0].clientX, fingers[0].clientY] : null;
+		}
+		gesture.lastT = performance.now();
+		gesture.vx = gesture.vy = 0;
+	}
 	function onTouchStart(e) {
-
-		if (fingersOf(e.changedTouches).length !== e.changedTouches.length) e.preventDefault();
-		if (!touchNavigates()) return;
-		for (const t of fingersOf(e.changedTouches)) gesture.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
 		const fingers = fingersOf(e.touches);
+		if (!fingers.length) return;
+		for (const t of fingersOf(e.changedTouches)) gesture.pts.set(t.identifier, { x: t.clientX, y: t.clientY });
 		gesture.maxCount = Math.max(gesture.maxCount, fingers.length);
-		if (gesture.touches.size === 1) {
-			stopAnim(); gesture.moved = false; gesture.startedAt = Date.now();
-			// Position VOR der Berührung merken: setzt kurz danach der Stift auf, war es die
-			// Hand und das Verschieben wird in onDown zurückgenommen.
-			gesture.restore = U.scrollAnchor(scrollEl());
+		if (gesture.pts.size === 1) {
+			gesture.moved = false; gesture.startedAt = Date.now();
+			// Ansicht VOR der Beruehrung merken (Handballen-Nachsorge in onDown).
+			const before = { x: view.x, y: view.y, k: view.k };
+			gesture.restore = () => { view.x = before.x; view.y = before.y; view.k = before.k; paintView(true); };
 		}
-		if (fingers.length >= 2 && !gesture.pinch) {
-
-			e.preventDefault(); stopAnim();
-			const [mx, my] = touchMid(fingers);
-
-			const pgs = pagesEl();
-			if (pgs) {
-				const pr = pgs.getBoundingClientRect();
-				pgs.style.transformOrigin = (mx - pr.left) + "px " + (my - pr.top) + "px";
-				pgs.style.willChange = "transform";
-			}
-			gesture.pinch = { d0: touchDist(fingers), zoom0: zoom, anchor: makeZoomAnchor(mx, my), mid0: [mx, my], mid: [mx, my], factor: 1 };
-		}
+		if (fingers.length < 2 && !panWithOneFinger()) return;
+		e.preventDefault(); stopAnim();
+		startGesture(fingers);
 	}
 	function onTouchMove(e) {
 		if (penRecently()) { navReset(); return; }
 		for (const t of e.changedTouches) {
-			const s = gesture.touches.get(t.identifier);
-			if (s && Math.hypot(t.clientX - s.x, t.clientY - s.y) > 7) gesture.moved = true;
+			const s = gesture.pts.get(t.identifier);
+			if (s && Math.hypot(t.clientX - s.x, t.clientY - s.y) > 6) gesture.moved = true;
 		}
 		const fingers = fingersOf(e.touches);
-		if (gesture.pinch && fingers.length >= 2) {
+		if (!fingers.length) return;
+		if (fingers.length >= 2) {
 			e.preventDefault();
-			const [mx, my] = touchMid(fingers);
-
-			const g = gesture.pinch;
-			g.factor = clamp(touchDist(fingers) / g.d0, ZOOM_MIN / g.zoom0, ZOOM_MAX / g.zoom0);
-			g.mid = [mx, my];
-			if (!gesture.zoomFrame) gesture.zoomFrame = requestAnimationFrame(() => {
-				gesture.zoomFrame = 0;
-				const gp = gesture.pinch, pgs = pagesEl();
-				if (!gp || !pgs) return;
-				pgs.style.transform = "translate(" + (gp.mid[0] - gp.mid0[0]) + "px, " + (gp.mid[1] - gp.mid0[1]) + "px) scale(" + gp.factor + ")";
-			});
+			if (!gesture.pinch) startGesture(fingers);
+			const g = gesture.pinch, vp = viewport();
+			if (!g || !vp) return;
+			const k = clamp(g.k0 * (touchDist(fingers) / g.d0), ZOOM_MIN, ZOOM_MAX);
+			const mid = touchMid(fingers);
+			// Der Basis-Punkt, der beim Gestenstart unter dem Fingermittelpunkt lag, liegt
+			// danach unter dem AKTUELLEN Mittelpunkt: Zoomen und Verschieben in EINER
+			// Rechnung, ohne Zwischenschritt und ohne Nachkorrektur.
+			const bx = g.x0 + (g.mid0[0] - vp.left) / g.k0, by = g.y0 + (g.mid0[1] - vp.top) / g.k0;
+			view.k = k;
+			view.x = bx - (mid[0] - vp.left) / k;
+			view.y = by - (mid[1] - vp.top) / k;
+			schedulePaint();
+			return;
 		}
+		if (!gesture.last || !panWithOneFinger()) return;
+		e.preventDefault();
+		const t = fingers[0], now = performance.now();
+		const dx = t.clientX - gesture.last[0], dy = t.clientY - gesture.last[1];
+		const dt = Math.max(8, now - gesture.lastT);
+		gesture.vx = dx / dt; gesture.vy = dy / dt; gesture.lastT = now;
+		gesture.last = [t.clientX, t.clientY];
+		view.x -= dx / view.k; view.y -= dy / view.k;
+		schedulePaint();
+	}
+	// Schwung nach dem Loslassen (das leistete vorher der native Scroller).
+	function startFling() {
+		let vx = gesture.vx, vy = gesture.vy, last = performance.now();
+		const step = (now) => {
+			const dt = Math.min(32, now - last); last = now;
+			const decay = Math.pow(0.996, dt);
+			vx *= decay; vy *= decay;
+			const px = view.x, py = view.y;
+			view.x -= vx * dt / view.k; view.y -= vy * dt / view.k;
+			paintView(false);
+			const still = Math.abs(view.x - px) < 0.15 && Math.abs(view.y - py) < 0.15;
+			if (Math.hypot(vx, vy) < 0.03 || still) { gesture.fling = 0; paintView(true); return; }
+			gesture.fling = requestAnimationFrame(step);
+		};
+		gesture.fling = requestAnimationFrame(step);
+	}
+	// true = es sind noch Finger unten, die Geste laeuft weiter.
+	function endGesture(e) {
+		for (const t of e.changedTouches) gesture.pts.delete(t.identifier);
+		const fingers = fingersOf(e.touches);
+		if (fingers.length) { startGesture(fingers); return true; }
+		gesture.pinch = null; gesture.last = null;
+		return false;
 	}
 	function onTouchEnd(e) {
-		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
-		if (gesture.pinch && fingersOf(e.touches).length < 2) settlePinch();
-		if (e.touches.length) return;
+		if (endGesture(e)) return;
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
 		const count = gesture.maxCount; gesture.maxCount = 0;
 		if (quick && count === 2) {
@@ -1119,25 +1115,27 @@ export const HEFT = (() => {
 			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
 
 				gesture.lastTap = 0;
-				animateZoom(zoom >= 1.9 ? 1 : Math.max(2.2, Math.min(ZOOM_MAX, zoom * 1.8)), t.clientX, t.clientY);
+				animateZoom(view.k >= 1.9 ? 1 : Math.max(2.2, Math.min(ZOOM_MAX, view.k * 1.8)), t.clientX, t.clientY);
 				return;
 			}
 			gesture.lastTap = now; gesture.tapX = t.clientX; gesture.tapY = t.clientY;
+			return;
 		}
+		if (gesture.moved && count === 1 && performance.now() - gesture.lastT < 90 && Math.hypot(gesture.vx, gesture.vy) > 0.25) startFling();
+		else paintView(true);
 	}
 	function onTouchCancel(e) {
-		for (const t of e.changedTouches) gesture.touches.delete(t.identifier);
-		if (gesture.pinch && fingersOf(e.touches).length < 2) settlePinch();
-
 		gesture.moved = true;
+		if (endGesture(e)) return;
+		paintView(true);
 	}
 	let wheelCommitT = 0;
 	function onWheelZoom(e) {
-		if (!e.ctrlKey && !e.metaKey) return;
-		e.preventDefault();
-		const factor = Math.exp(-e.deltaY * 0.0022);
-		queueZoom(zoom * factor, e.clientX, e.clientY, makeZoomAnchor(e.clientX, e.clientY));
-		clearTimeout(wheelCommitT); wheelCommitT = setTimeout(() => scheduleZoomSettleRender(), 160);
+		e.preventDefault(); stopAnim();
+		if (e.ctrlKey || e.metaKey) zoomAt(view.k * Math.exp(-e.deltaY * 0.0022), e.clientX, e.clientY, false);
+		else { view.x += e.deltaX / view.k; view.y += e.deltaY / view.k; schedulePaint(); }
+		clearTimeout(wheelCommitT);
+		wheelCommitT = setTimeout(() => paintView(true), 160);
 	}
 
 	const pos = (e, cv) => {
@@ -1974,7 +1972,8 @@ export const HEFT = (() => {
 
 		drawing = null;
 		const slot = host && host.querySelectorAll(".heft-page-slot")[idx];
-		if (slot) slot.scrollIntoView({ behavior: "smooth", block: "center" });
+		const vpGo = viewport();
+		if (slot && vpGo) animateTo(view.x, slot.offsetTop + slot.offsetHeight / 2 - (vpGo.height / view.k) / 2, view.k, 320);
 		updateChrome();
 	}
 	function addPageAt(paper, pageObj) {
@@ -2971,26 +2970,19 @@ export const HEFT = (() => {
 		}
 	}
 
-	function onScroll() {
+	// Nach jeder Ansichtsaenderung: welche Seite ist gerade die aktuelle?
+	function viewChanged() {
 		if (!host || !doc) return;
-
-		if (!scrollRenderFrame) scrollRenderFrame = requestAnimationFrame(() => {
-			scrollRenderFrame = 0;
-			renderVisiblePages(true);
-		});
 		clearTimeout(scrollSettleTimer);
-		scrollSettleTimer = setTimeout(() => { scrollSettleTimer = 0; renderVisiblePages(); }, 120);
-		clearTimeout(onScroll.t);
-		onScroll.t = setTimeout(() => {
+		scrollSettleTimer = setTimeout(() => {
+			scrollSettleTimer = 0;
 			if (!host || !doc) return;
-			const scroll = host.querySelector(".heft-scroll");
-			if (!scroll) return;
-			const mid = scroll.getBoundingClientRect().top + scroll.clientHeight / 2;
+			const vp = viewport(); if (!vp) return;
+			const mid = view.y + (vp.height / view.k) / 2;
 			let best = 0, bestD = Infinity;
 			pageSlots.forEach((slot, i) => {
 				if (!slot) return;
-				const r = slot.getBoundingClientRect();
-				const d2 = Math.abs((r.top + r.bottom) / 2 - mid);
+				const d2 = Math.abs(slot.offsetTop + slot.offsetHeight / 2 - mid);
 				if (d2 < bestD) { bestD = d2; best = i; }
 			});
 			if (best !== idx) { idx = best; updateChrome(); }
@@ -3049,16 +3041,13 @@ export const HEFT = (() => {
 	function bindScroll() {
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
-		scrollFn = onScroll;
-		scroll.addEventListener("scroll", scrollFn, { passive: true });
-
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
-
 		scroll.addEventListener("touchstart", onTouchStart, { passive: false });
 		scroll.addEventListener("touchmove", onTouchMove, { passive: false });
 		scroll.addEventListener("touchend", onTouchEnd);
 		scroll.addEventListener("touchcancel", onTouchCancel);
-		scroll.style.overscrollBehavior = "contain";
+		scroll.style.touchAction = "none";
+		scroll.style.overflow = "hidden";
 	}
 
 	const addPageGhostHtml = () => '<button type="button" class="heft-addpage" data-headdend="1">＋ Neue Seite</button>';
@@ -3073,7 +3062,7 @@ export const HEFT = (() => {
 		const scroll = scrollEl();
 		if (!scroll || scroll.dataset.hepull) return;
 		scroll.dataset.hepull = "1";
-		const atEnd = () => scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4;
+		const atEnd = () => { const vp = viewport(); return !!vp && view.y + vp.height / view.k >= contentSize().h - 6; };
 		scroll.addEventListener("touchstart", (ev) => { pull = { y0: ev.touches[0].clientY, startAtEnd: atEnd(), armed: false }; }, { passive: true });
 		scroll.addEventListener("touchmove", (ev) => {
 			if (!pull || !pull.startAtEnd) return;
@@ -3091,14 +3080,13 @@ export const HEFT = (() => {
 		if (!host || !doc) return;
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
-		// 26. Juli: eigene Merk-Logik ersetzt durch den zentralen Scroll-Anker aus
-		// util.js — der zieht die Position auch über die nächsten Frames nach, sonst
-		// klemmte der Browser sie beim Aufbauen der Canvas-Seiten wieder weg.
-		U.keepScroll(scroll, () => {
-			scroll.innerHTML = pagesHtml();
-			bindCanvas();
-			layout();
-		});
+		// Die Ansicht haengt nur an view, nicht am DOM: merken, neu aufbauen,
+		// zurueckschreiben. Kein Scroll-Anker und kein Nachziehen ueber Frames mehr.
+		const keep = { x: view.x, y: view.y, k: view.k };
+		scroll.innerHTML = pagesHtml();
+		bindCanvas();
+		view.x = keep.x; view.y = keep.y; view.k = keep.k;
+		layout();
 	}
 	async function mount(container, pageId) {
 		unmount();
@@ -3108,7 +3096,7 @@ export const HEFT = (() => {
 		doc = await load(pageId);
 		if (pid !== pageId) return;
 		idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
-		zoom = 1; navReset();
+		view.x = 0; view.y = 0; view.k = 1; navReset();
 		expanded = false;
 
 		trayPos = null; trayDrag = null;

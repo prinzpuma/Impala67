@@ -1223,15 +1223,15 @@ body.reduce-motion .heft-tray { animation: none }
 	.heft-corner-r { right: 8px }
 	.heft-main, .heft-opt, .heft-size, .heft-corner { min-width: 34px; height: 34px; padding: 0 7px }
 	.heft-pageno-inline { display: none }
-	.heft-scroll { padding-top: 52px }
 }
 /* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. */
-.heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; display: block; position: relative; padding: 56px 18px 48px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; contain: layout paint }
-.heft-pages { --heft-page-w: 1px; --heft-page-h: 1px; width: max-content; min-width: 100%; min-height: 100%; display: grid; grid-auto-flow: row; justify-items: center; align-content: start; gap: 24px; isolation: isolate }
-/* Seite breiter als die Ansicht (hineingezoomt, kein Rand mehr): nicht mehr zentrieren,
-   sondern frei schieben — sonst zog das Raster die Seite bei jedem Zoomschritt zurück
-   in die Mitte (heft.js applyView setzt die Klasse, 26. Juli). */
-.heft-pages.heft-free { justify-items: start }
+/* Kein natives Scrollen mehr: die Ansicht ist EIN transform auf .heft-pages, das heft.js aus view = { x, y, k } setzt. Padding, Zentrierung und Groesse kommen ebenfalls aus JS, damit CSS und Rechnung nicht auseinanderlaufen koennen. */
+.heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: hidden; display: block; position: relative; padding: 0; touch-action: none; overscroll-behavior: contain; contain: layout paint }
+.heft-pages { --heft-page-w: 1px; --heft-page-h: 1px; width: max-content; display: grid; grid-auto-flow: row; justify-items: center; align-content: start; gap: 24px; isolation: isolate; transform-origin: 0 0 }
+/* Kein Zentrieren über das Grid mehr: heft.js applyView setzt dafür symmetrisches
+   Padding, das Teil des scrollbaren Inhalts ist. Nur so bleibt die Seitenposition beim
+   Zoomen stetig und per scrollLeft/scrollTop steuerbar (26. Juli). */
+
 .heft-page-slot { position: relative; box-sizing: content-box; width: var(--heft-page-w); height: var(--heft-page-h) }
 /* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-P… */
 /* FIX Zoom-Glide: will-change:width,height entfernt — kollidierte mit der transform-Animation (flipGlide in heft.js) auf .heft-pages und liess den Pinch-/Doppeltipp-Zoom auf Touch-Geräten (Safari/iPadOS) springen statt gleiten. Das nötige will-change:transform setzt heft.js bereits selbst dynamisch auf .heft-pages waehrend der Animation. */
