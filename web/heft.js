@@ -770,8 +770,20 @@ export const HEFT = (() => {
 		const pgs = pagesEl(); if (!pgs) return;
 		clampView(view);
 		scale = fitScale * view.k;
-		pgs.style.transform = "translate(" + (-view.x * view.k).toFixed(2) + "px, " + (-view.y * view.k).toFixed(2) + "px) scale(" + view.k.toFixed(4) + ")";
-		if (!commit) { pgs.style.willChange = "transform"; scheduleZoomSettleRender(); return; }
+		// Auf GANZE Geraetepixel einrasten. Eine gebrochene Verschiebung laesst den
+		// Browser den ganzen Layer neu abtasten (bilinear) - Striche, Schrift und
+		// importierte PDF-Seiten werden dadurch weich, obwohl die Aufloesung stimmt.
+		const dprSnap = window.devicePixelRatio || 1;
+		const snap = (v) => Math.round(v * dprSnap) / dprSnap;
+		pgs.style.transform = "translate(" + snap(-view.x * view.k) + "px, " + snap(-view.y * view.k) + "px) scale(" + view.k.toFixed(4) + ")";
+		if (!commit) {
+			pgs.style.willChange = "transform";
+			// Waehrend der Geste die Seiten selbst schon fuellen (billig: feste Groesse,
+			// passiert pro Seite genau einmal), nur die teuren Detail-Kacheln warten.
+			renderVisiblePages(true);
+			scheduleZoomSettleRender();
+			return;
+		}
 		clearTimeout(zoomSettleTimer); zoomSettleTimer = 0;
 		sharpen();
 	}
@@ -807,9 +819,10 @@ export const HEFT = (() => {
 			if (t >= 1) gesture.anim = null;
 		});
 	}
-	function visiblePageIndices() {
+	// Alle Seiten, die hoechstens pad Basis-Pixel vom sichtbaren Bereich entfernt sind.
+	function pageIndicesWithin(pad) {
 		const vp = viewport(); if (!vp) return [];
-		const vh = vp.height / view.k, pad = Math.max(300, vh * 0.75);
+		const vh = vp.height / view.k;
 		const top = view.y - pad, bot = view.y + vh + pad, out = [];
 		pageSlots.forEach((slot, i) => {
 			if (!slot) return;
@@ -817,6 +830,12 @@ export const HEFT = (() => {
 			if (b >= top && t <= bot) out.push(i);
 		});
 		return out;
+	}
+	// Gezeichnet wird eine ganze Bildschirmhoehe im Voraus, damit eine Seite schon
+	// fertig ist, bevor sie ins Bild kommt.
+	function visiblePageIndices() {
+		const vp = viewport(); if (!vp) return [];
+		return pageIndicesWithin(Math.max(400, (vp.height / view.k) * 1.2));
 	}
 	// Detail-Kachel: deckt den sichtbaren Teil einer Seite scharf ab. Alles in
 	// BASIS-Pixeln aus view gerechnet (nicht aus getBoundingClientRect) — deshalb
@@ -843,8 +862,10 @@ export const HEFT = (() => {
 		const vp = viewport(), o = pageOrigin(i);
 		if (!vp || !o) return null;
 		const vw = vp.width / view.k, vh = vp.height / view.k;
-		const x0 = clamp(view.x - o.x - over, 0, o.w), y0 = clamp(view.y - o.y - over, 0, o.h);
-		const x1 = clamp(view.x + vw - o.x + over, 0, o.w), y1 = clamp(view.y + vh - o.y + over, 0, o.h);
+		// Auf ganze Basis-Pixel runden: eine gebrochene Kachelkante wird sonst beim
+		// Anzeigen weich gerechnet.
+		const x0 = Math.floor(clamp(view.x - o.x - over, 0, o.w)), y0 = Math.floor(clamp(view.y - o.y - over, 0, o.h));
+		const x1 = Math.ceil(clamp(view.x + vw - o.x + over, 0, o.w)), y1 = Math.ceil(clamp(view.y + vh - o.y + over, 0, o.h));
 		if (x1 - x0 < 2 || y1 - y0 < 2) return null;
 		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
@@ -937,6 +958,11 @@ export const HEFT = (() => {
 	function renderVisiblePages(skipTiles = false) {
 		if (!doc) return;
 		const visible = new Set(visiblePageIndices());
+		// Weiter aussen liegende Seiten behalten ihr Bild noch (Speicher gegen Ruckeln):
+		// beim Hin- und Herscrollen muss dieselbe Seite sonst dauernd neu gezeichnet
+		// werden, und genau das fuehlte sich wie "laedt ewig" an.
+		const vpKeep = viewport();
+		const keep = new Set(pageIndicesWithin(vpKeep ? (vpKeep.height / view.k) * 3.5 : 1200));
 
 		// Die Basis-Seite wird IMMER in Basis-Aufloesung gefuellt, unabhaengig vom Zoom:
 		// beim Zoomen muss dadurch keine Zeichenflaeche wachsen und nichts neu gezeichnet
@@ -949,8 +975,7 @@ export const HEFT = (() => {
 		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
 		canvases.forEach((cv, i) => {
 			if (!visible.has(i)) {
-
-				if (cv.width !== 1 || cv.height !== 1) { cv.width = 1; cv.height = 1; }
+				if (!keep.has(i) && (cv.width !== 1 || cv.height !== 1)) { cv.width = 1; cv.height = 1; }
 				hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]);
 				return;
 			}
