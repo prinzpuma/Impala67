@@ -159,9 +159,15 @@ export const DRIVE = (() => {
 		return res.json();
 	}
 
+	// 4xx = Google hat den Erneuerungs-Schlüssel abgelehnt (widerrufen/abgelaufen) → er ist tot und
+	// wird verworfen; sonst gilt die App über isConnected() weiter als angemeldet, während JEDE stille
+	// Erneuerung scheitert — genau das Bild „abgelaufen, hilft nur Neustart + einmal anmelden klicken“.
+	// 5xx/Netzfehler sind vorübergehend und dürfen den Schlüssel NICHT löschen.
 	const refreshDesktopToken = async (rt, clientId) => {
 		const res = await tokenRequest({ refresh_token: rt, grant_type: "refresh_token" }, clientId);
-		return res.ok ? res.json() : null;
+		if (res.ok) return res.json();
+		if (res.status < 500) LS.removeItem("impala67_drive_refresh_token");
+		return null;
 	};
 
 	function saveToken(data) {
@@ -170,6 +176,7 @@ export const DRIVE = (() => {
 		LS.setItem("impala67_drive_token", token);
 		LS.setItem("impala67_drive_token_expiry", String(Date.now() + (Number(data.expires_in) || 3600) * 1000 - 60000));
 		if (data.refresh_token) LS.setItem("impala67_drive_refresh_token", data.refresh_token);
+		scheduleRenew();
 	}
 
 	// EIN gemeinsamer Weg für Tauri UND PWA: gespeicherter Erneuerungs-Schlüssel zuerst.
@@ -795,6 +802,16 @@ export const DRIVE = (() => {
 		return syncInFlight;
 	}
 
+	// Der Zugang läuft gar nicht mehr ab, solange die App offen ist: nach jedem Token und beim Start
+	// wird die stille Erneuerung 5 min vor Ablauf eingeplant. Bisher wurde NUR zu Beginn eines Syncs
+	// geprüft — lag der Ablauf zwischen zwei Syncs oder ruhte die App, war die Sitzung tot.
+	let renewTimer = 0;
+	function scheduleRenew() {
+		clearTimeout(renewTimer);
+		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
+		if (exp) renewTimer = setTimeout(ensureFreshToken, Math.max(1000, exp - 300000 - Date.now()));
+	}
+
 	// Zugang VORBEUGEND erneuern: läuft er in unter 5 Minuten ab, wird er still über den
 	// Erneuerungs-Schlüssel getauscht. Bisher passierte das erst nach einem 401 mitten im
 	// Sync — im PWA endete das in einem blockierten Anmeldefenster.
@@ -866,6 +883,7 @@ export const DRIVE = (() => {
 
 	function startAutoSync(onResult) {
 		if (typeof onResult === "function") autoResultHandler = onResult;
+		scheduleRenew(); // auch die aus dem letzten Start übernommene Sitzung wird überwacht
 		if (autoStarted) return autoSync("start");
 		autoStarted = true;
 		// Reine UI-Events (Tab-Wechsel) stoßen keinen Sync an — sie wandern mit dem

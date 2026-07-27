@@ -41,6 +41,7 @@ import { SCHULNOTEN } from "./schulnoten.js";
 import { EXP } from "./experimente.js";
 import { GRAPH } from "./graph.js";
 import { ANALYSE } from "./analyse.js";
+import { CONTROLLER } from "./controller.js";
 import "./pdfpaste.js";
 
 // Übergangsweise alle Module an window binden,
@@ -79,6 +80,7 @@ window.SCHULNOTEN = SCHULNOTEN;
 window.EXP = EXP; // 🧪 Experimente — settings.js und ai.js greifen über window zu
 window.GRAPH = GRAPH; // 🕸 Wissensgraph — öffnet sich selbst über den Sidebar-Knopf #btnGraph
 window.ANALYSE = ANALYSE; // 📈 Lern-Analyse — render-anki.js hängt die Statistik-Sektion an
+window.CONTROLLER = CONTROLLER; // 🎮 Gamepad im Lernmodus — settings.js rendert den Abschnitt über window
 
 // RENDER-Funktionen an window binden
 window.render = RENDER.render;

@@ -866,7 +866,11 @@ export const HEFT = (() => {
 		// Die Kachel ist die EINZIGE Quelle der Schärfe (die Basis-Seite bleibt bei fit) — sie darf
 		// deshalb die volle Geräteauflösung nutzen. Die alte 2er-Grenze machte 3x-Bildschirme
 		// dauerhaft weich, obwohl das Pixel-Budget noch Luft hatte.
-		const native = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
+		// Überabtastung: bei Bildschirm-Zoom (k≈1) ist die Schrift sonst nur so fein wie ein
+		// Gerätepixel — 1,5× rendern und vom Browser herunterskalieren lassen macht dünne
+		// Striche deutlich glatter. Beim Hineinzoomen schneidet das Pixel-Budget unten das
+		// von selbst wieder weg.
+		const native = Math.min(MAX_RENDER_DPR, (window.devicePixelRatio || 1) * 1.5);
 		const w = Math.max(1, r.w * view.k), h = Math.max(1, r.h * view.k);
 		return Math.max(0.5, Math.min(native, Math.sqrt(MAX_RENDER_PIXELS / (w * h)), MAX_CANVAS_DIM / Math.max(w, h)));
 	}
@@ -1006,7 +1010,7 @@ export const HEFT = (() => {
 		// Die Basis-Seite wird IMMER in Basis-Aufloesung gefuellt, unabhaengig vom Zoom:
 		// beim Zoomen muss dadurch keine Zeichenflaeche wachsen und nichts neu gezeichnet
 		// werden. Die Schaerfe liefert die Detail-Kachel darueber.
-		const nativeDpr = Math.min(MAX_RENDER_DPR, window.devicePixelRatio || 1);
+		const nativeDpr = Math.min(MAX_RENDER_DPR, (window.devicePixelRatio || 1) * 1.5);
 		const pageW = PAGE_W * fitScale, pageH = PAGE_H * fitScale;
 		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
 		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
@@ -1302,42 +1306,25 @@ export const HEFT = (() => {
 		const ring = host && host.querySelector(".heft-eraser-ring");
 		if (ring) ring.hidden = true;
 	}
-	// Trennt einen Strich an der Radierer-Fläche auf und gibt die überlebenden Reste
-	// zurück — damit radiert der Radierer genau dort, wo der Ring angezeigt wird.
-	function splitStroke(s, x, y, r) {
-		if (s.shape || !s.pts || s.pts.length < 2) return [];
-		const rr = r + (s.size || 2) / 2, rr2 = rr * rr;
-		const out = []; let run = [];
-		for (const p of s.pts) {
-			const dx = p[0] - x, dy = p[1] - y;
-			if (dx * dx + dy * dy <= rr2) { if (run.length > 1) out.push(run); run = []; }
-			else run.push(p);
-		}
-		if (run.length > 1) out.push(run);
-		return out.map((pts) => ({ ...s, id: U.uid(), pts }));
-	}
+	// Strichradierer: ein berührter Strich geht GANZ weg. Das Auftrennen an der
+	// Radierer-Fläche ist wieder raus — es kostete pro Pointer-Event neue Strich-Objekte
+	// (samt neuen IDs, Sync-Ereignissen und Voll-Redraws) und war deshalb zäh.
 	function eraseAt(e) {
 		showEraserRing(e);
 		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
+		// PERF: Pointer-Events feuern viel dichter, als der Radierer breit ist —
+		// Mini-Schritte müssen nicht jedes Mal alle Striche der Seite prüfen.
+		const lp = drawing.lastErase;
+		if (lp && Math.hypot(p0[0] - lp[0], p0[1] - lp[1]) < r * 0.35) return;
+		drawing.lastErase = p0;
 		const keep = [], removed = [];
-		let changed = false;
-		// Vorher verschwand bei Berührung der GANZE Strich — das passte nie zur
-		// angezeigten Fläche. Jetzt bleibt außerhalb des Rings alles stehen.
 		for (const s of pg.strokes) {
-			if (!strokeHitAt(s, p0[0], p0[1], r)) { keep.push(s); continue; }
-			changed = true;
-			// Bruchstücke aus DEMSELBEN Radier-Zug gelten nicht als „entfernt“ — sonst
-			// holt Rückgängig Zwischenstücke zurück, die es nie gegeben hat.
-			const fi = drawing.added.indexOf(s);
-			if (fi >= 0) drawing.added.splice(fi, 1); else removed.push(s);
-			const rest = splitStroke(s, p0[0], p0[1], r);
-			keep.push(...rest); drawing.added.push(...rest);
+			if (strokeHitAt(s, p0[0], p0[1], r)) removed.push(s); else keep.push(s);
 		}
-		if (changed) {
+		if (removed.length) {
 			pg.strokes = keep; drawing.removed.push(...removed);
-			// PERF: höchstens EIN Redraw pro Frame — Pointer-Events feuern (v.a. mit
-			// Coalescing) deutlich öfter als der Bildschirm zeichnet; Radieren auf
-			// vollen Seiten ruckelte dadurch.
+			// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
+			// als Pointer-Events eintreffen.
 			redrawNextFrame(drawing.pageIdx);
 		}
 	}
@@ -1448,7 +1435,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
-		if (tool === "eraser") { drawing = { erasing: true, removed: [], added: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
 		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
 		setWriting(true);
@@ -1614,8 +1601,8 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.erasing) {
-			if (drawing.removed.length || drawing.added.length) {
-				pushUndo({ kind: "erase", removed: drawing.removed, added: drawing.added, pageIdx: pi });
+			if (drawing.removed.length) {
+				pushUndo({ kind: "erase", removed: drawing.removed, pageIdx: pi });
 				scheduleSave();
 				renderThumb(pi);
 			}
@@ -1645,17 +1632,11 @@ export const HEFT = (() => {
 		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
 		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
-		else if (a.kind === "erase") {
-			// Radieren trennt Striche auf: Rückgängig = Bruchstücke weg, Originale zurück.
-			const [drop, back] = isRedo ? [a.removed, a.added || []] : [a.added || [], a.removed];
-			pg.strokes = (pg.strokes || []).filter((o) => !drop.includes(o));
-			pg.strokes.push(...back);
-			lassoSel = null;
-		}
 		else {
 
 			const spec = {
-				add: ["strokes", [a.stroke], true], lassoDel: ["strokes", a.strokes, false],
+				add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false],
+				lassoDel: ["strokes", a.strokes, false],
 				lassoDup: ["strokes", a.strokes, true],
 				imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
 				txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],

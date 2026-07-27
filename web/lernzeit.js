@@ -88,6 +88,22 @@ export const LERNZEIT = (() => {
 		closeSegment().then(openSegment);
 	}
 
+	// Aktivität melden — EINE Stelle für alle Eingabewege. 🐛 Fix (27. Juli): Ein Gamepad
+	// erzeugt KEINE pointer-/keydown-Ereignisse. Die Erfassung hielt das Abfragen mit dem
+	// 🎮 Controller deshalb für Leerlauf, schob „Lernst du noch?“ mitten ins Bild — und
+	// weggeklickt bekam man es mit dem Pad auch nicht, weil das Tierchen nur auf
+	// pointerenter/click hört. Rückgabe: true, wenn das Tierchen dadurch verschwunden ist
+	// (dann war die Eingabe nur ein Aufwecken und soll nichts weiter auslösen).
+	function poke() {
+		lastActivityAt = Date.now();
+		if (!animal) return false;
+		animal.remove();
+		animal = null;
+		openSegment();
+		refreshLive();
+		return true;
+	}
+
 	function showAnimal() {
 		if (animal) return;
 		closeSegment();
@@ -95,12 +111,7 @@ export const LERNZEIT = (() => {
 		animal.type = "button";
 		animal.id = "lzAnimal";
 		animal.innerHTML = '<span>' + ANIMALS[Math.floor(Math.random() * ANIMALS.length)] + '</span><b>Lernst du noch?</b><small>Berühre mich oder fahre darüber, um die Lernzeit fortzusetzen.</small>';
-		const resume = () => {
-			animal.remove();
-			animal = null;
-			lastActivityAt = Date.now();
-			refreshLive();
-		};
+		const resume = () => poke();
 		animal.addEventListener("pointerenter", resume, { once: true });
 		animal.addEventListener("click", resume, { once: true });
 		document.body.appendChild(animal);
@@ -402,5 +413,5 @@ export const LERNZEIT = (() => {
 	// das Home-Widget erschien dann komplett ungestylt.
 
 	setInterval(tick, TICK_MS);
-	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome };
+	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke };
 })();

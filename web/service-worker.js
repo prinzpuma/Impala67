@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v114"; // Mobile UI v6.1: Android-Zurück schließt Sheets/Lernmodus, Lernen startet nicht mehr automatisch.
+const CACHE = "impala67-v118"; // 🎮 Controller-Eingaben zählen als Aktivität — kein „Lernst du noch?“ mehr mitten im Abfragen.
 
 const APP_FILES = [
 	"./",
@@ -41,6 +41,7 @@ const APP_FILES = [
 	"./experimente.js",
 	"./graph.js",
 	"./analyse.js",
+	"./controller.js",
 	"./editor.js",
 	"./render.js",
 	"./library.js",

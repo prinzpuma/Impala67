@@ -9,6 +9,10 @@ import { RENDER } from "./render.js";
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 const localDayKey = (...args) => RENDER.localDayKey(...args);
 const modal = (...args) => RENDER.modal(...args);
+// 🎮 Controller (27. Juli): Der Tastenhinweis steckt DIREKT in der Schaltfläche, die
+// die Taste auslöst — kein schwebendes Overlay, das etwas überdecken kann. Liefert
+// einen leeren String, solange kein Pad verbunden bzw. die Steuerung aus ist.
+const pad = (id) => (window.CONTROLLER ? window.CONTROLLER.badge(id) : "");
 
 // render-anki.js — aus render.js ausgelagert (Datei-Split): der komplette Anki-Bereich
 // (Stapel-Baum, Stapel-Liste, Karten-Browser, Statistik mit Heatmap & Retention,
@@ -398,7 +402,7 @@ function ankiStudyHtml() {
 	// Der Lernkopf bleibt bewusst klein, bietet aber immer einen klaren Rückweg
 	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
 	const head = '<div class="study-head">' +
-		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel</button>' +
+		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel' + pad("exit") + '</button>' +
 		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · 🔀 gemischt" : "") + (S.ankiFeyn ? " · 🧑‍🏫 Feynman" : "") + "</span>" +
 		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span>' +
 		// ⛶ Vollbild (23. Juli): gleicher Schalter wie in der Kopfzeile der Übersicht
@@ -455,10 +459,10 @@ function ankiStudyHtml() {
 			// Anki-Layout: Zähler „neu · lernen · wdh.“ direkt über den Buttons
 			'<div class="study-counts-row">' + countsHtml + "</div>" +
 			'<div class="grades">' +
-				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1</span></button>' +
-				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2</span></button>' +
-				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + '</span><span class="grade-key">3 / ␣</span></button>' +
-				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4</span></button>' +
+				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1' + pad("g1") + '</span></button>' +
+				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2' + pad("g2") + '</span></button>' +
+				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + '</span><span class="grade-key">3 / ␣' + pad("g3") + '</span></button>' +
+				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4' + pad("g4") + '</span></button>' +
 			'</div>';
 	} else {
 		// Telemetrie (telemetrie.js): optionale Selbsteinschätzung VOR dem Aufdecken.
@@ -493,7 +497,7 @@ function ankiStudyHtml() {
 				'</div>'
 				: "") +
 			'<div class="modal-actions">' +
-				'<button data-ankishowback="1" data-card="' + c.id + '"' + (S.ankiFeyn ? ' class="mini" title="Direkt aufdecken, ohne vorher zu erklären"' : "") + '>' + (S.ankiFeyn ? "Ohne Erklärung aufdecken" : "Antwort zeigen") + '</button></div>' +
+				'<button data-ankishowback="1" data-card="' + c.id + '"' + (S.ankiFeyn ? ' class="mini" title="Direkt aufdecken, ohne vorher zu erklären"' : "") + '>' + (S.ankiFeyn ? "Ohne Erklärung aufdecken" : "Antwort zeigen") + pad("show") + '</button></div>' +
 			'</div>';
 	}
 	html += "</div>" + studyFooterHtml(c);
@@ -504,8 +508,9 @@ function ankiStudyHtml() {
 // rechts — beide Aktionen existierten bereits (data-ankiedit / data-deckconf).
 function studyFooterHtml(c) {
 	return '<div class="study-footer">' +
-		'<button class="mini" data-ankiedit="' + c.id + '" title="Diese Karte bearbeiten">✎ Bearbeiten</button>' +
+		'<button class="mini" data-ankiedit="' + c.id + '" title="Diese Karte bearbeiten">✎ Bearbeiten' + pad("edit") + '</button>' +
 		'<div class="study-footer-options">' +
+			'<button class="mini" data-ankisuspend="' + c.id + '" title="Diese Karte aussetzen">⏸ Aussetzen' + pad("susp") + '</button>' +
 			'<button class="mini" data-deckconf="' + U.esc(c.deck || S.ankiDeck || "Standard") + '" title="Stapel-Optionen">⚙️ Optionen</button>' +
 		'</div>' +
 	'</div>';

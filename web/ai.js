@@ -477,8 +477,22 @@ export const AI = (() => {
 		}
 		return line;
 	}
+	// 👁 NUR die aktuell geöffnete Seite als Bild (Vision) — Handschrift, Skizzen und Layout gehen
+	// im Text verloren. Abwählbar über den ✕-Chip im Composer (S.sideContextOff).
+	async function pageContextImage() {
+		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
+		if (!cur || S.view === "anki" || S.sideContextOff === cur.id) return null;
+		if (cur.kind !== "heft" || typeof window.HEFT?.pageAsDataUrl !== "function") return null;
+		try {
+			const idx = window.HEFT.activeId === cur.id ? (window.HEFT.activeIndex || 0) : 0;
+			return { role: "user", content: [
+				{ type: "text", text: "[Seitenkontext: „" + cur.title + "“, Seite " + (idx + 1) + " als Bild]" },
+				{ type: "image_url", image_url: { url: await window.HEFT.pageAsDataUrl(cur.id, idx) } },
+			] };
+		} catch { return null; }
+	}
 	// toolsMode: true = volle Liste, "meta" = nur request_tools, sonst keine Tools [F3]
-	function systemPrompt(type, toolsMode, ragContext, chatSummary) {
+	function systemPrompt(toolsMode, ragContext, chatSummary) {
 		const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 		const now = new Date();
 		const toolLine = toolsMode === true
@@ -493,10 +507,10 @@ export const AI = (() => {
 			toolLine,
 			"Niemals Selbstgespräche/Meta-Kommentare im sichtbaren Text ('Der Nutzer möchte…', 'I should…'). Ausführliches Nachdenken gehört AUSSCHLIESSLICH in <think>...</think> VOR der Antwort.",
 		];
-		// Nur das Seitenpanel bekommt den Seiteninhalt direkt; der Vollbild-Chat holt ihn per Tool.
-		// Im Karteikarten-Bereich ersetzt der Anki-Kontext oben die Seite (keine irreführende Hintergrund-Seite).
-		// Seitenkontext im Composer per ✕ abgewählt → Inhalt wirklich nicht mitsenden
-		if (type === "side" && cur && S.view !== "anki" && S.sideContextOff !== cur.id) {
+		// 🐛 Fix (27. Juli): Der Seitenkontext hing am Chat-Typ und fehlte im Vollbild-Chat komplett.
+		// Jetzt bekommt JEDER Chat die geöffnete Seite — Text hier, Bild in pageContextImage().
+		// Im Karteikarten-Bereich ersetzt der Anki-Kontext oben die Seite; per ✕ im Composer abwählbar.
+		if (cur && S.view !== "anki" && S.sideContextOff !== cur.id) {
 			const body = String(cur.content || "");
 			lines.push("Inhalt der geöffneten Seite" + (body.length > 6000 ? " (gekürzt)" : "") + ":\n" + (body.slice(0, 6000) || "(Leere Seite)"));
 		}
@@ -696,11 +710,14 @@ export const AI = (() => {
 				}
 			}
 		} catch (e) { debugEvent("Chat-Zusammenfassung übersprungen", { error: String(e?.message || e).slice(0, 200) }); }
+		// 👁 Seitenkontext: die geöffnete Seite reist als Bild mit (nur sie, sonst nichts).
+		const ctxImage = await pageContextImage();
+		if (ctxImage) history.push(ctxImage);
 		// 👁 Vision-Hinweis: Modelle ohne Bild-Empfang sollen das offen sagen statt zu raten
 		const visionNote = history.some((m) => Array.isArray(m.content))
 			? "\n\nAn Nachrichten können Bilder hängen (z. B. Heft-Seiten oder Screenshots). Wenn du Bilder technisch nicht empfangen oder nicht sehen kannst (kein Vision-Modell), erwähne das kurz und ehrlich, statt Inhalte zu raten."
 			: "";
-		const sysMsg = (mode) => ({ role: "system", content: systemPrompt(type, mode, ragContext, chatSummary) + visionNote });
+		const sysMsg = (mode) => ({ role: "system", content: systemPrompt(mode, ragContext, chatSummary) + visionNote });
 		const messages = [sysMsg(metaOnly ? "meta" : true), ...history];
 		debugEvent("Tool-Modus", { mode: metaOnly ? "nur request_tools" : "volle Liste", reason: metaOnly ? "Einstellung »Tools immer mitsenden« ist aus" : (toolsUnlocked ? "in dieser Sitzung freigeschaltet" : "Standard: Tools immer mitsenden") }); // [F3]
 

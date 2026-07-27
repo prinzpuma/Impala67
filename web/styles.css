@@ -39,7 +39,7 @@ body.density-compact :where(.library) { padding: 24px 30px }
 /* Toasts — immer zuoberst */
 /* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
 /* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
-:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent: #6fc3ff; --accent-soft: rgba(111, 195, 255, 0.12); --accent-border: rgba(111, 195, 255, 0.35); --danger: #e97366; --danger-soft: rgba(233, 115, 102, 0.14); --success: #72bc8f; --success-soft: rgba(114, 188, 143, 0.15); --success-border: color-mix(in srgb, var(--success) 45%, transparent); --danger-border: color-mix(in srgb, var(--danger) 50%, transparent); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; scrollbar-width: thin; scrollbar-color: rgba(148,158,178,.35) transparent; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
+:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent: #6fc3ff; --accent-soft: rgba(111, 195, 255, 0.12); --accent-border: rgba(111, 195, 255, 0.35); --danger: #e97366; --danger-soft: rgba(233, 115, 102, 0.14); --success: #72bc8f; --success-soft: rgba(114, 188, 143, 0.15); --success-border: color-mix(in srgb, var(--success) 45%, transparent); --danger-border: color-mix(in srgb, var(--danger) 50%, transparent); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --scroll-thumb: rgba(148,158,178,.45); --scroll-thumb-hover: rgba(148,158,178,.7); --scroll-track: rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
 /* == Bewegungsprinzipien: ruhig, konsistent, performant == */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
@@ -627,9 +627,14 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .empty.small { padding: 4px 10px; font-size: var(--text-sm); text-align: left }
 .row .hint { font-size: var(--text-2xs); flex-shrink: 0 }
 /* == Scrollbars & Responsive == */
+/* 🐛 Fix (27. Juli): EINE globale Scrollleiste. Die von :root geerbten Standard-Eigenschaften
+   (scrollbar-width/-color) schalten in Chromium die ::-webkit-Regeln ab — die waren dort toter
+   Code mit anderen Farben, in älteren Safaris blieb nur die unsichtbare Overlay-Leiste. Beide
+   Wege nutzen jetzt dieselben Tokens: überall sichtbar, überall identisch. */
 ::-webkit-scrollbar { width: 10px; height: 10px }
-::-webkit-scrollbar-thumb { background: rgba(148,158,178,.28); border-radius: var(--radius-sm); border: 2px solid transparent; background-clip: content-box }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,158,178,.45); background-clip: content-box; border: 2px solid transparent }
+::-webkit-scrollbar-track { background: var(--scroll-track) }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-sm); border: 2px solid transparent; background-clip: content-box }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
 ::-webkit-scrollbar-corner { background: transparent }
 @media (max-width: 980px) {
 	body { overflow: auto }
@@ -2219,3 +2224,25 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 .toast { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
 /* Chat: eigene Nachrichten mit „Sprechblasen“-Ecke unten rechts — wirkt gesprochen statt wie eine Karte. */
 .msg.user { border-bottom-right-radius: var(--radius-xs) }
+
+/* == 🖥 Karteikarten am PC (27. Juli): Platznutzung wie zuvor schon Handy und iPad == */
+/* Ausgangslage: Handy (≤560px) und Touch ab Tablet-Breite haben längst eigene, dichtere
+   Regeln — die Maus-Darstellung lief noch mit den Werten des Redesigns v1: 24px Außenabstand,
+   62dvh Mindesthöhe, bis zu 44px Innenpolster und 66px hohe Bewertungsknopfe. Auf einem
+   16:9-Monitor stand die Frage dadurch in einer halbleeren Bühne, während Zähler und Aktion
+   weit auseinander lagen. Hier wird ausdrücklich nur pointer:fine ab Desktop-Breite dichter
+   gezogen — Touch und Mobile bleiben unverändert (keine doppelten Regeln). */
+@media (pointer: fine) and (min-width: 981px) {
+	.library.anki { padding: 16px 22px 88px }
+	.anki-study-mode .study-card { margin: 8px auto 0; min-height: min(74dvh, 780px); padding: clamp(16px, 1.6vw, 28px); gap: 10px; border-radius: var(--radius-xl) }
+	/* Bewertung: vier gleich breite, flachere Knopfe — der gewonnene Platz geht an den Karteninhalt. */
+	.anki-study-mode .grades { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px }
+	.anki-study-mode .grades button { min-height: 52px; padding: 6px }
+	.anki-study-mode .study-reveal-controls { gap: 8px }
+	.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { min-height: 42px }
+	/* Stapel-Übersicht und Statistik atmen ebenfalls weniger Leerraum. */
+	.deck-row { padding: 10px 14px }
+	.anki-toolbar { margin-bottom: 10px; padding: 10px }
+	.kpi-row { margin: 6px 0 12px }
+	.kpi { padding: 10px }
+}

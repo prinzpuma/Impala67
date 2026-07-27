@@ -162,6 +162,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "notion", label: "Notion" },
 	{ id: "backup", label: "Backup" },
 	{ id: "update", label: "Update" },
+	{ id: "controller", label: "Controller" },
 	{ id: "experimente", label: "Experimente" },
 ];
 
@@ -359,6 +360,12 @@ export function openSettings(section) {
 			'<div class="row-btns"><button data-set="home">🏠 Home-Editor öffnen</button></div>' +
 			'<h4>Hintergrund</h4>' +
 			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
+	} else if (sec === "controller") {
+		// 🎮 Controller (27. Juli): Der Abschnitt kommt komplett aus controller.js —
+		// Schalter, Belegung, Anlern-Modus, Deadzone und HUD verdrahten sich dort selbst
+		// per Capture-Listener (gleiches Muster wie experimente.js/telemetrie.js).
+		body = (window.CONTROLLER && window.CONTROLLER.settingsHtml) ? window.CONTROLLER.settingsHtml() :
+			'<p class="hint">Controller-Modul (controller.js) nicht geladen.</p>';
 	} else if (sec === "experimente") {
 		// 🧪 Experimentelle Features (Phase 2 — KI-Lernmodi). Die Sektion wird
 		// komplett von experimente.js gerendert; die Schalter verdrahten sich dort
