@@ -1234,6 +1234,12 @@ body.reduce-motion .heft-tray { animation: none }
    Zoomen stetig und per scrollLeft/scrollTop steuerbar (26. Juli). */
 
 .heft-page-slot { position: relative; box-sizing: content-box; width: var(--heft-page-w); height: var(--heft-page-h) }
+/* Handballen (27. Juli): Beim Aufliegen der Hand markierte der Browser Seitenzahl oder
+   ganze Seiteninhalte, die blaue Markierung blieb dann stehen. Im Heft wird nichts
+   markiert — Texteingaben (Notizfeld, Umbenennen) bleiben ausgenommen. */
+.heft-scroll, .heft-chrome, .heft-page-label { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+.heft-scroll input, .heft-scroll textarea, .heft-scroll [contenteditable="true"],
+.heft-chrome input, .heft-chrome textarea, .heft-chrome [contenteditable="true"] { -webkit-user-select: text; user-select: text }
 /* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-P… */
 /* FIX Zoom-Glide: will-change:width,height entfernt — kollidierte mit der transform-Animation (flipGlide in heft.js) auf .heft-pages und liess den Pinch-/Doppeltipp-Zoom auf Touch-Geräten (Safari/iPadOS) springen statt gleiten. Das nötige will-change:transform setzt heft.js bereits selbst dynamisch auf .heft-pages waehrend der Animation. */
 .heft-page-slot .heft-canvas { display: block; width: var(--heft-page-w); height: var(--heft-page-h); touch-action: none; user-select: none; -webkit-user-select: none; border-radius: var(--radius-xs); background: #fdfdf8; box-shadow: 0 1px 0 rgba(255,255,255,.06), var(--elev-3) }

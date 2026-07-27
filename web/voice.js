@@ -1,7 +1,11 @@
 "use strict";
+import { S } from "./state.js";
+import { U } from "./util.js";
 
-// voice.js — absichtlich ohne Abhängigkeiten: Die Web Speech API liefert die
-// kostenlose Eingabe/Ausgabe, die bestehende Chat-Pipeline bleibt unverändert.
+// voice.js — Web Speech API für Eingabe/Ausgabe. WICHTIG (27. Juli): früher griff
+// diese Datei auf window.S / window.U / window.CHAT_FULLSCREEN zu — die gibt es in
+// dieser Modul-App nicht, das Senden brach also still ab. Jetzt echte Importe und
+// das Absenden läuft über den Composer (siehe onresult).
 let recognition = null;
 let listening = false;
 // Sprachausgabe ist zunächst bewusst deaktiviert; der Voice-Modus transkribiert
@@ -11,7 +15,7 @@ let outputEnabled = false;
 let speakNextReply = false;
 
 function toast(message, kind) {
-	if (window.U && typeof window.U.toast === "function") window.U.toast(message, kind || "success");
+	U.toast(message, kind || "success");
 }
 
 // SVG-Icons statt Emoji/Textzeichen — passend zu den übrigen Icons der App.
@@ -59,16 +63,21 @@ function start(type) {
 	recognition.onresult = (event) => {
 		const text = String(event.results[0][0].transcript || "").trim();
 		if (!text) return;
-		if (window.S && window.S.aiBusy) {
+		if (S.aiBusy) {
 			toast("Die KI antwortet noch — bitte kurz warten.", "error");
 			return;
 		}
+		// Gesprochenes geht denselben Weg wie getippter Text: Eingabefeld füllen und das
+		// Formular abschicken. Vorher lief es direkt an sendChatMessage() vorbei am Composer —
+		// dadurch blieb der Anhang-/Seitenkontext-Chip stehen und wurde erneut mitgeschickt.
+		const full = (type || "side") === "full";
+		const input = document.getElementById(full ? "mainChatInput" : "chatInput");
+		const form = document.getElementById(full ? "mainChatForm" : "chatForm");
+		if (!input || !form) return toast("Chat-Eingabe ist nicht offen.", "error");
 		speakNextReply = true;
-		const chatType = type || "side";
-		window.CHAT_FULLSCREEN.sendChatMessage(text, chatType).catch((err) => {
-			speakNextReply = false;
-			toast("Sprachnachricht konnte nicht gesendet werden: " + err.message, "error");
-		});
+		input.value = input.value.trim() ? input.value.trim() + " " + text : text;
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+		form.requestSubmit();
 	};
 	recognition.onerror = (event) => {
 		if (event.error !== "aborted") toast("Spracheingabe: " + event.error, "error");

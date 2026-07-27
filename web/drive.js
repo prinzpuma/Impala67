@@ -172,13 +172,19 @@ export const DRIVE = (() => {
 		if (data.refresh_token) LS.setItem("impala67_drive_refresh_token", data.refresh_token);
 	}
 
+	// EIN gemeinsamer Weg für Tauri UND PWA: gespeicherter Erneuerungs-Schlüssel zuerst.
+	// Vorher stand dieser Block doppelt (Desktop + Browser) — jetzt eine Stelle.
+	async function tokenFromRefresh(clientId) {
+		const rt = LS.getItem("impala67_drive_refresh_token");
+		if (!rt) return null;
+		const data = await refreshDesktopToken(rt, clientId);
+		return data?.access_token ? (saveToken(data), token) : null;
+	}
+
 	// Desktop (Tauri): System-Browser + lokaler Redirect-Server statt Popup.
 	async function getTokenDesktop(interactive) {
-		const rt = LS.getItem("impala67_drive_refresh_token");
-		if (rt) {
-			const data = await refreshDesktopToken(rt);
-			if (data?.access_token) { saveToken(data); return token; }
-		}
+		const fromRefresh = await tokenFromRefresh();
+		if (fromRefresh) return fromRefresh;
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
 		// Klare Meldungen statt Googles kryptischer invalid_request/client_secret-Fehler.
 		if (!dcId()) throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt. Trage sie einmalig unter ⚙️ Einstellungen → Sync ein (OAuth-Client Typ „Desktop-App“ aus der Google Cloud Console) — oder befülle web/config.local.js und baue die App neu.");
@@ -281,10 +287,13 @@ export const DRIVE = (() => {
 	}
 
 	async function getTokenBrowser(interactive) {
-		const rt = LS.getItem("impala67_drive_refresh_token");
-		if (rt) {
-			const data = await refreshDesktopToken(rt, webId());
-			if (data?.access_token) { saveToken(data); return token; }
+		const fromRefresh = await tokenFromRefresh(webId());
+		if (fromRefresh) return fromRefresh;
+		// PWA hielt nur eine Stunde: ohne Erneuerungs-Schlüssel wurde hier abgebrochen und die
+		// App galt als abgemeldet. GIS kann still (ohne Klick, ohne Popup) einen neuen
+		// Stundentoken holen, solange die Google-Zustimmung steht — damit bleibt man angemeldet.
+		if (window.google?.accounts && webId()) {
+			try { return await getTokenBrowserPopup(false); } catch { /* still nicht möglich */ }
 		}
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
 		// Ohne Web-Client-Secret kann der Code-Tausch nicht gelingen (siehe webSecret) — dann

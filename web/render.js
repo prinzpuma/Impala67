@@ -1127,8 +1127,12 @@ function chatStaticHtml(list = []) {
 
 function chatLiveParts(historyList) {
 	if (!S.aiBusy) return { think: "", rest: "" };
-	const activeList = S.aiActiveChatType === "side" ? S.sideChat : S.chat;
-	if (historyList !== activeList) return { think: "", rest: "" };
+	// Maßgeblich ist der CHAT-TYP, nicht die Identität des Arrays: lädt man während einer
+	// laufenden Antwort einen anderen Chat, ist S.sideChat ein NEUES Array — die
+	// „Denkt nach“-Box verschwand dadurch mitten im Denken, obwohl die KI weiterlief.
+	const type = historyList === S.chat ? "full" : "side";
+	if ((S.aiActiveChatType || "side") !== type) return { think: "", rest: "" };
+	const activeList = historyList;
 	// Offene ask_choice-Karte IST der Wartezustand — keine zweite busy-Zeile
 	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
 	// Think-Box UND Draft parallel — sonst wirkt geleaktes Reasoning wie die Antwort

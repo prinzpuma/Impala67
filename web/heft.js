@@ -1289,7 +1289,10 @@ export const HEFT = (() => {
 		if (!host) return;
 		let ring = host.querySelector(".heft-eraser-ring");
 		if (!ring) { ring = document.createElement("div"); ring.className = "heft-eraser-ring"; host.appendChild(ring); }
-		const box = host.getBoundingClientRect(), d = eraserSize * 2 * view.k;
+		// GRÖSSE: eraserSize sind Seiten-Einheiten, der Ring lebt im unskalierten Host —
+		// maßgeblich ist deshalb scale (= fitScale * view.k). Vorher fehlte fitScale, der
+		// Ring war dadurch deutlich größer als die Fläche, die wirklich radiert.
+		const box = host.getBoundingClientRect(), d = eraserSize * 2 * scale;
 		ring.style.width = ring.style.height = d + "px";
 		ring.style.left = (e.clientX - box.left) + "px";
 		ring.style.top = (e.clientY - box.top) + "px";
@@ -1299,12 +1302,38 @@ export const HEFT = (() => {
 		const ring = host && host.querySelector(".heft-eraser-ring");
 		if (ring) ring.hidden = true;
 	}
+	// Trennt einen Strich an der Radierer-Fläche auf und gibt die überlebenden Reste
+	// zurück — damit radiert der Radierer genau dort, wo der Ring angezeigt wird.
+	function splitStroke(s, x, y, r) {
+		if (s.shape || !s.pts || s.pts.length < 2) return [];
+		const rr = r + (s.size || 2) / 2, rr2 = rr * rr;
+		const out = []; let run = [];
+		for (const p of s.pts) {
+			const dx = p[0] - x, dy = p[1] - y;
+			if (dx * dx + dy * dy <= rr2) { if (run.length > 1) out.push(run); run = []; }
+			else run.push(p);
+		}
+		if (run.length > 1) out.push(run);
+		return out.map((pts) => ({ ...s, id: U.uid(), pts }));
+	}
 	function eraseAt(e) {
 		showEraserRing(e);
 		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
 		const keep = [], removed = [];
-		for (const s of pg.strokes) (strokeHitAt(s, p0[0], p0[1], r) ? removed : keep).push(s);
-		if (removed.length) {
+		let changed = false;
+		// Vorher verschwand bei Berührung der GANZE Strich — das passte nie zur
+		// angezeigten Fläche. Jetzt bleibt außerhalb des Rings alles stehen.
+		for (const s of pg.strokes) {
+			if (!strokeHitAt(s, p0[0], p0[1], r)) { keep.push(s); continue; }
+			changed = true;
+			// Bruchstücke aus DEMSELBEN Radier-Zug gelten nicht als „entfernt“ — sonst
+			// holt Rückgängig Zwischenstücke zurück, die es nie gegeben hat.
+			const fi = drawing.added.indexOf(s);
+			if (fi >= 0) drawing.added.splice(fi, 1); else removed.push(s);
+			const rest = splitStroke(s, p0[0], p0[1], r);
+			keep.push(...rest); drawing.added.push(...rest);
+		}
+		if (changed) {
 			pg.strokes = keep; drawing.removed.push(...removed);
 			// PERF: höchstens EIN Redraw pro Frame — Pointer-Events feuern (v.a. mit
 			// Coalescing) deutlich öfter als der Bildschirm zeichnet; Radieren auf
@@ -1321,6 +1350,9 @@ export const HEFT = (() => {
 			if (gesture.restore && Date.now() - gesture.startedAt < PALM_UNDO_MS) gesture.restore();
 			gesture.restore = null;
 		}
+		// Handballen: eine bereits bestehende blaue Markierung wegräumen (CSS verhindert
+		// neue, das hier löst die alte auf — sonst blieb sie sichtbar hängen).
+		if (e.pointerType !== "mouse") { const sel = window.getSelection?.(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); }
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -1416,7 +1448,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
-		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		if (tool === "eraser") { drawing = { erasing: true, removed: [], added: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
 		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
 		setWriting(true);
@@ -1582,8 +1614,8 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.erasing) {
-			if (drawing.removed.length) {
-				pushUndo({ kind: "erase", removed: drawing.removed, pageIdx: pi });
+			if (drawing.removed.length || drawing.added.length) {
+				pushUndo({ kind: "erase", removed: drawing.removed, added: drawing.added, pageIdx: pi });
 				scheduleSave();
 				renderThumb(pi);
 			}
@@ -1613,10 +1645,17 @@ export const HEFT = (() => {
 		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
 		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
+		else if (a.kind === "erase") {
+			// Radieren trennt Striche auf: Rückgängig = Bruchstücke weg, Originale zurück.
+			const [drop, back] = isRedo ? [a.removed, a.added || []] : [a.added || [], a.removed];
+			pg.strokes = (pg.strokes || []).filter((o) => !drop.includes(o));
+			pg.strokes.push(...back);
+			lassoSel = null;
+		}
 		else {
 
 			const spec = {
-				add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false], lassoDel: ["strokes", a.strokes, false],
+				add: ["strokes", [a.stroke], true], lassoDel: ["strokes", a.strokes, false],
 				lassoDup: ["strokes", a.strokes, true],
 				imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
 				txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],
