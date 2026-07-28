@@ -486,10 +486,11 @@ export async function handleNotionSync(t) {
 	try {
 		if (isSync) {
 			const r = await NOTION_MIGRATOR.sync(tok, pid || null, onStatus);
-			S.notionJob.status = "✅ Sync fertig — " + r.pulled + " übernommen, " + r.pushed + " nach Notion übertragen, " + r.created + " in Notion angelegt" + (r.merged ? ", " + r.merged + " Duplikat(e) zusammengeführt" : "") + ".";
+			S.notionJob.status = "✅ Sync fertig — " + r.pulled + " übernommen, " + (r.skipped || 0) + " unverändert übersprungen, " + r.pushed + " nach Notion übertragen, " + r.created + " in Notion angelegt" + (r.merged ? ", " + r.merged + " Duplikat(e) zusammengeführt" : "") + ".";
 		} else {
 			const newId = await NOTION_MIGRATOR.migrate(tok, pid || null, onStatus);
-			S.notionJob.status = "✅ Import fertig!";
+			// Die Abschlusszeile („… übernommen · … unverändert übersprungen“) kommt jetzt
+			// aus migrate() selbst — hier nicht mehr mit „Import fertig!“ überschreiben.
 			if (newId) setTimeout(() => { closeOverlay(); openPage(newId); }, 600);
 		}
 		S.notionJob.fraction = 1;

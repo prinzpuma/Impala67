@@ -17,9 +17,16 @@ export const NOTION_MIGRATOR = (() => {
 		}
 	}
 
+	// Drosselung: früher schlief JEDER Aufruf pauschal 250 ms — ZUSÄTZLICH zur
+	// Netzwerklatenz über den CORS-Proxy, die allein meist schon über 300 ms liegt.
+	// Das hat jeden Lauf glatt verdoppelt. Jetzt wird nur noch die Lücke zum vorigen
+	// Request-Start aufgefüllt (Ziel ~3 Req/s); in der Praxis wartet also fast nie
+	// jemand künstlich. Echte Limit-Treffer fängt die 429-Schleife unten ab.
+	let lastReqStart = 0;
 	async function req(token, path, opts) {
-		// Drosselung: kurze Pause, um Notion API-Limits (3 Req/s) zu respektieren
-		await new Promise((resolve) => setTimeout(resolve, 250));
+		const wait = lastReqStart + 340 - Date.now();
+		if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+		lastReqStart = Date.now();
 
 		const url = (S.settings.corsProxy || "https://corsproxy.io/?") + encodeURIComponent("https://api.notion.com/v1" + path);
 
@@ -387,6 +394,7 @@ export const NOTION_MIGRATOR = (() => {
 		const existing = existingId ? S.pages[existingId] : null;
 		if (existing && !existing.trashed && known && Array.isArray(known.k)
 			&& redit && redit <= (known.r || "") && (existing.updated || "") <= (known.l || "")) {
+			if (ctx.stats) ctx.stats.skipped++;
 			return { id: existingId, childPageIds: known.k, skipped: true };
 		}
 
@@ -420,8 +428,8 @@ export const NOTION_MIGRATOR = (() => {
 						const q = await req(token, "/databases/" + dbId + "/query", { method: "POST", body });
 						for (const row of q.results || []) {
 							checkCancelled();
-							const rres = await pullRemotePage(token, row, { merged: ctx.merged, meta: ctx.meta, parentLocal: dbLocal, restoreTrashed: true });
-							for (const cid of rres.childPageIds) await importPageAndChildren(token, cid, rres.id, 0, { meta: ctx.meta, visited: new Set([cid]) });
+							const rres = await pullRemotePage(token, row, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, parentLocal: dbLocal, restoreTrashed: true });
+							for (const cid of rres.childPageIds) await importPageAndChildren(token, cid, rres.id, 0, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, visited: new Set([cid]) });
 						}
 						if (!q.has_more) break;
 						cursor = q.next_cursor;
@@ -471,6 +479,7 @@ export const NOTION_MIGRATOR = (() => {
 		// Gedächtnis für den nächsten Lauf: Remote-Stand, lokaler Stand, Kind-Seiten.
 		// Es wird hier geschrieben statt in den Aufrufern — eine Stelle, kein Ping-Pong.
 		if (meta) meta[nid] = { r: redit, l: (S.pages[id] || {}).updated || "", k: childPageIds };
+		if (ctx.stats) ctx.stats.pulled++;
 		return { id, childPageIds };
 	}
 
@@ -480,12 +489,9 @@ export const NOTION_MIGRATOR = (() => {
 		if ((depth || 0) > 20) return null;
 		const pgData = await req(token, "/pages/" + blockId);
 		const res = await pullRemotePage(token, pgData, {
-			merged: opts.merged, meta: opts.meta, parentLocal, restoreTrashed: true,
+			merged: opts.merged, meta: opts.meta, stats: opts.stats, parentLocal, restoreTrashed: true,
 		});
-		if (opts.counter) {
-			opts.counter.n++;
-			if (opts.onStatus) opts.onStatus(opts.counter.n, (S.pages[res.id] || {}).title || "");
-		}
+		if (opts.onStatus) opts.onStatus((S.pages[res.id] || {}).title || "");
 		for (const cid of res.childPageIds) {
 			if (opts.visited) {
 				if (opts.visited.has(cid)) continue;
@@ -819,39 +825,62 @@ export const NOTION_MIGRATOR = (() => {
 			// Identitätsleiter. Ein zweiter Import ist dadurch billig UND zerstörungsfrei.
 			const meta = { ...(S.settings.notionMeta || {}) };
 			const merged = { n: 0 };
-			const counter = { n: 0 };
-			const reportProgress = (n, title) => { if (onStatus) onStatus("Importiere (" + n + " Seiten bisher) — zuletzt „" + title + "“…", null); };
+			const stats = { pulled: 0, skipped: 0 };
+			const say = (s, f) => { if (onStatus) onStatus(s, f); };
+			const tally = () => stats.pulled + " übernommen · " + stats.skipped + " unverändert übersprungen";
+			const reportProgress = (title) => say("Importiere Unterseiten (" + tally() + ") — zuletzt „" + title + "“…", null);
 			const finish = async (result) => {
 				await alignWorkspaces();
 				await STATE.dispatch("settingsSet", { notionMeta: meta });
+				say("✅ Import fertig — " + tally() + (merged.n ? " · " + merged.n + " Duplikat(e) zusammengeführt" : "") + ".", 1);
 				return result;
 			};
-			if (pageId) {
-				if (onStatus) onStatus("Lese Notion-Seite…", null);
-				const rootId = await importPageAndChildren(token, pageId, undefined, 0, {
-					merged, meta, counter, visited: new Set([normId(pageId)]), onStatus: reportProgress,
-				});
-				return finish(rootId);
+			// Auch beim Import EINER Wurzelseite kommen die Metadaten jetzt aus der
+			// Suche: 100 Seiten pro Request statt einem GET pro Seite. Erst dadurch ist
+			// das Überspringen wirklich gratis — vorher kostete selbst eine unveränderte
+			// Seite einen eigenen API-Aufruf, nur um das festzustellen.
+			say("Lese Seitenliste aus Notion…", null);
+			const remote = await listRemotePages(token, (n) => say("Lese Seitenliste aus Notion… (" + n + ")", null));
+			let { order } = await topoOrder(token, remote);
+			const rootNid = pageId ? normId(pageId) : null;
+			if (rootNid) {
+				// Teilbaum unter der Wurzel bestimmen — order ist topologisch sortiert
+				// (Eltern vor Kindern), ein einziger Durchlauf genügt.
+				const inTree = new Set([rootNid]);
+				for (const r of order) {
+					const nid = normId(r.id);
+					if (inTree.has(nid)) continue;
+					const pnid = await remoteParentId(token, r);
+					if (pnid && inTree.has(pnid)) inTree.add(nid);
+				}
+				order = order.filter((r) => inTree.has(normId(r.id)));
+				if (!order.length) {
+					// Wurzel taucht in der Suche (noch) nicht auf, z. B. frisch geteilt und
+					// nicht indiziert → alter Weg: Baum Seite für Seite laden.
+					say("Lese Notion-Seite…", null);
+					const rootId = await importPageAndChildren(token, pageId, undefined, 0, {
+						merged, meta, stats, visited: new Set([rootNid]), onStatus: reportProgress,
+					});
+					return finish(rootId);
+				}
+			} else if (!remote.length) {
+				throw new Error("Keine freigegebenen Seiten gefunden. Teile Seiten in Notion zuerst mit deiner Integration.");
 			}
-			if (onStatus) onStatus("Suche freigegebene Notion-Seiten…", null);
-			const remote = await listRemotePages(token, (n) => { if (onStatus) onStatus("Suche freigegebene Notion-Seiten… (" + n + ")", null); });
-			if (!remote.length) throw new Error("Keine freigegebenen Seiten gefunden. Teile Seiten in Notion zuerst mit deiner Integration.");
-			const { order } = await topoOrder(token, remote);
 			let lastId = null;
 			const visited = new Set(order.map((r) => normId(r.id)));
 			for (let i = 0; i < order.length; i++) {
 				checkCancelled();
 				const { title } = titleAndIconOf(order[i]);
-				if (onStatus) onStatus("Importiere " + (i + 1) + "/" + order.length + " — „" + title + "“…", (i + 1) / order.length);
-				const res = await pullRemotePage(token, order[i], { merged, meta, restoreTrashed: true });
+				say("Importiere " + (i + 1) + "/" + order.length + " (" + tally() + ") — „" + title + "“…", (i + 1) / order.length);
+				const res = await pullRemotePage(token, order[i], { merged, meta, stats, restoreTrashed: true });
 				lastId = res.id;
 				for (const cid of res.childPageIds) {
 					if (visited.has(cid)) continue;
 					visited.add(cid);
-					await importPageAndChildren(token, cid, res.id, 0, { merged, meta, counter, visited, onStatus: reportProgress });
+					await importPageAndChildren(token, cid, res.id, 0, { merged, meta, stats, visited, onStatus: reportProgress });
 				}
 			}
-			return finish(lastId);
+			return finish(rootNid ? (localIdForRemote(rootNid) || lastId) : lastId);
 		},
 
 		async sync(token, rootPageId, onStatus) {
@@ -860,12 +889,13 @@ export const NOTION_MIGRATOR = (() => {
 			await migrateLinks();
 			IDX = buildIndex();
 			const mergedCounter = { n: 0 };
+			const stats = { pulled: 0, skipped: 0 };
 			const meta = { ...(S.settings.notionMeta || {}) };
 			say("Lese Notion-Seiten…", null);
 			const remote = await listRemotePages(token, (n) => say("Lese Notion-Seiten… (" + n + ")", null));
 			const remoteById = {};
 			remote.forEach((r) => { remoteById[normId(r.id)] = r; });
-			let pulled = 0, pushed = 0, created = 0;
+			let pushed = 0, created = 0;
 
 			const { order } = await topoOrder(token, remote);
 
@@ -882,13 +912,16 @@ export const NOTION_MIGRATOR = (() => {
 				const remoteChanged = !m || redit > (m.r || "");
 				const localChanged = !!localPg && (!m || (localPg.updated || "") > (m.l || ""));
 				if (!localPg || (remoteChanged && (!localChanged || redit >= (localPg.updated || "")))) {
-					say("⬇ Übernehme " + (i + 1) + "/" + order.length + "…", (i + 1) / (order.length + 1) * 0.5);
-					const res = await pullRemotePage(token, r, { merged: mergedCounter, meta });
-					pulled++;
+					say("⬇ Übernehme " + (i + 1) + "/" + order.length + " (" + stats.pulled + " übernommen · " + stats.skipped + " übersprungen)…", (i + 1) / (order.length + 1) * 0.5);
+					const res = await pullRemotePage(token, r, { merged: mergedCounter, meta, stats });
 					for (const cid of res.childPageIds) {
 						if (remoteById[cid] || localIdForRemote(cid)) continue;
-						await importPageAndChildren(token, cid, res.id, 0, { merged: mergedCounter, meta, visited: new Set([cid]) });
+						await importPageAndChildren(token, cid, res.id, 0, { merged: mergedCounter, meta, stats, visited: new Set([cid]) });
 					}
+				} else if (!remoteChanged) {
+					// Remote unverändert und lokal nichts zu holen: komplett übersprungen —
+					// null API-Aufrufe für diese Seite.
+					stats.skipped++;
 				}
 			}
 			await alignWorkspaces();
@@ -938,7 +971,7 @@ export const NOTION_MIGRATOR = (() => {
 			}
 
 			await STATE.dispatch("settingsSet", { notionMeta: meta, notionLastSync: U.now() });
-			return { pulled, pushed, created, merged: mergedCounter.n };
+			return { pulled: stats.pulled, skipped: stats.skipped, pushed, created, merged: mergedCounter.n };
 		},
 	};
 })();
