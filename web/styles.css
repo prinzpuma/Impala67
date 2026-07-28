@@ -39,7 +39,7 @@ body.density-compact :where(.library) { padding: 24px 30px }
 /* Toasts — immer zuoberst */
 /* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
 /* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
-:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent: #6fc3ff; --accent-soft: rgba(111, 195, 255, 0.12); --accent-border: rgba(111, 195, 255, 0.35); --danger: #e97366; --danger-soft: rgba(233, 115, 102, 0.14); --success: #72bc8f; --success-soft: rgba(114, 188, 143, 0.15); --success-border: color-mix(in srgb, var(--success) 45%, transparent); --danger-border: color-mix(in srgb, var(--danger) 50%, transparent); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --scroll-thumb: rgba(148,158,178,.45); --scroll-thumb-hover: rgba(148,158,178,.7); --scroll-track: rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
+:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --scroll-thumb: rgba(148,158,178,.45); --scroll-thumb-hover: rgba(148,158,178,.7); --scroll-track: rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
 /* == Bewegungsprinzipien: ruhig, konsistent, performant == */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
@@ -84,7 +84,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .row:hover { background: var(--surface); color: var(--text) }
 .row-rename-input { flex: 1; min-width: 0; font: inherit; font-size: var(--text-base); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-xs); padding: 1px 6px; outline: none }
 .row.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border) }
-.side-foot { display: flex; flex-direction: column; gap: 2px }
+.side-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--edge-soft) }
 .side-foot button { display: flex; align-items: center; gap: 8px; background: transparent; text-align: left; color: var(--text2) }
 .side-foot button:hover { background: var(--edge-soft); color: var(--text) }
 .row-btns { display: flex; gap: 8px }
@@ -244,7 +244,7 @@ button.danger { color: var(--danger) }
 /* Konsistenz: Chat nutzt exakt die Editor-Typografie (16px / 1.6) — KI wirkt „aus einem Guss“ */
 .msg { font-size: var(--font-base, 16px); line-height: 1.6; max-width: 100% }
 /* Bug-Fix („kommt noch“, 22. Juli): Zeilenumbrüche im gesendeten Prompt erhalten (pre-wrap) — mehrzeilige Eingaben wurden vorher zu EINER Zeile zusammengeschoben. */
-.msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble); border-radius: var(--radius-lg); padding: 10px 14px; position: relative; white-space: pre-wrap; overflow-wrap: anywhere }
+.msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble); border-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-xs); padding: 10px 14px; position: relative; white-space: pre-wrap; overflow-wrap: anywhere }
 .msg-edit { position: absolute; top: -10px; left: -10px; min-height: 0; width: 22px; height: 22px; padding: 0; border-radius: 50%; background: var(--panel-solid); border: 1px solid var(--edge); font-size: var(--text-2xs); opacity: 0; transition: opacity .12s }
 .msg.user:hover .msg-edit, .msg.user:focus-within .msg-edit { opacity: 1 }
 .msg-edit:hover { color: var(--accent) }
@@ -258,22 +258,22 @@ button.danger { color: var(--danger) }
 #chatForm:focus-within, .chat-form-full:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
 /* Oben: ausschließlich der Text, volle Breite, ohne eigene Umran… */
 .composer-body { display: block; width: 100%; min-height: 38px }
-.composer-body textarea { display: block; width: 100%; min-height: 30px; max-height: 220px; overflow-y: auto; resize: none; border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important; padding: 5px 2px 7px }
+.composer-body textarea { display: block; width: 100%; min-height: 30px; max-height: 220px; overflow-y: auto; resize: none; border: 0; outline: 0; box-shadow: none; background: transparent; padding: 5px 2px 7px }
 /* Unten: unveränderliche Aktionszeile. Plus + Einstellungen link… */
 .composer-actions { display: flex; align-items: center; gap: 6px; min-height: 30px; width: 100% }
 .composer-actions-left { display: flex; align-items: center; gap: 6px; flex: 0 0 auto }
 /* Senden ist fest am rechten Rand der unteren Zeile verankert. */
-/* DRY (Feinschliff v12): Größe/Form stehen kanonisch unten bei #chatForm button[type="submit"] — hier nur noch die Verankerung rechts. */
-.composer-actions > button[type="submit"] { margin-left: auto !important }
+/* DRY (Feinschliff v12): Größe/Form stehen kanonisch unten bei #chatForm button[type="submit"] — hier nur noch die Verankerung rechts. Das kanonische Regelwerk setzt kein margin-left mehr, deshalb reicht hier die normale Kaskade ohne !important. */
+.composer-actions > button[type="submit"] { margin-left: auto }
 .composer-actions > button[type="submit"]:disabled { background: transparent; color: var(--text2); opacity: .55 }
 .composer-actions-left #btnAttach, .composer-actions-left #btnAttachFull, .composer-actions-left .composer-tool { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: var(--radius-md) }
 /* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte… */
-#chatInput, .chat-form-full textarea { order: -1; flex: 1; width: 100%; min-height: 30px; max-height: 160px; overflow-y: auto; resize: none; border: none !important; outline: none; box-shadow: none !important; background: transparent; padding: 6px 0 }
+#chatInput, .chat-form-full textarea { order: -1; flex: 1; width: 100%; min-height: 30px; max-height: 160px; overflow-y: auto; resize: none; border: none; outline: none; box-shadow: none; background: transparent; padding: 6px 0 }
 /* Untere Reihe behält die bestehende Reihenfolge: Anhang → Model… */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1 }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2 }
 /* Senden-Knopf (kanonisch, UI-Fix v7: konsolidiert aus vorher dr… */
-#chatForm button[type="submit"], .chat-form-full button[type="submit"] { order: 3; margin-left: 0; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; flex-shrink: 0; background: var(--accent); color: var(--on-accent); font-size: var(--text-base); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center }
+#chatForm button[type="submit"], .chat-form-full button[type="submit"] { order: 3; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; flex-shrink: 0; background: var(--accent); color: var(--on-accent); font-size: var(--text-base); font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center }
 /* folgt der Akzentfarbe statt hartem Hellblau */
 #chatForm button[type="submit"]:disabled, .chat-form-full button[type="submit"]:disabled { background: var(--surface-active); color: var(--text2); opacity: .6 }
 /* Seitenkontext hat kein eigenes Design mehr — er nutzt die Anhang-Chip-Regeln unten. */
@@ -296,8 +296,8 @@ button.danger { color: var(--danger) }
 .change-page-body { max-width: 720px }
 .change-page-body.md, .change-block.md { font-size: var(--text-md); line-height: 1.6 }
 .change-block { border-radius: var(--radius-sm); padding: 2px 8px; margin: 2px 0 }
-.change-block.add { background: var(--success-soft); box-shadow: inset 3px 0 0 rgba(114,188,143,0.75) }
-.change-block.del { background: var(--danger-soft); box-shadow: inset 3px 0 0 rgba(233,115,102,0.7); opacity: .85; text-decoration: line-through; text-decoration-color: rgba(233,115,102,.55) }
+.change-block.add { background: var(--success-soft); box-shadow: inset 3px 0 0 rgb(var(--success-rgb) / .75) }
+.change-block.del { background: var(--danger-soft); box-shadow: inset 3px 0 0 rgb(var(--danger-rgb) / .7); opacity: .85; text-decoration: line-through; text-decoration-color: rgb(var(--danger-rgb) / .55) }
 .change-block.same { background: transparent }
 .highlight-page-add { background: var(--success-soft); border-radius: var(--radius-lg); padding: 8px 12px }
 .highlight-page-del { background: var(--danger-soft); border-radius: var(--radius-lg); padding: 8px 12px; opacity: .9 }
@@ -374,13 +374,13 @@ button.danger { color: var(--danger) }
 .conflict-pane { min-width: 0; border: 1px solid var(--edge); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-faint) }
 .conflict-pane header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-sm) }
 .conflict-pane header small { color: var(--text2); font-size: var(--text-2xs); white-space: nowrap }
-.conflict-pane.local header { border-left: 3px solid rgba(233,115,102,.72) }
-.conflict-pane.remote header { border-left: 3px solid rgba(114,188,143,.72) }
+.conflict-pane.local header { border-left: 3px solid rgb(var(--danger-rgb) / .72) }
+.conflict-pane.remote header { border-left: 3px solid rgb(var(--success-rgb) / .72) }
 .conflict-pane-body { height: min(44dvh, 430px); overflow: auto; padding: 6px; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
 .conflict-line { display: grid; grid-template-columns: 16px minmax(0, 1fr); padding: 2px 6px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--radius-xs) }
 .conflict-line-marker { color: var(--text2); font-weight: 700; text-align: center }
-.conflict-line.local-only { background: rgba(233,115,102,.16); color: #f2b0a9 }
-.conflict-line.remote-only { background: rgba(114,188,143,.16); color: #a9dfba }
+.conflict-line.local-only { background: rgb(var(--danger-rgb) / .16); color: #f2b0a9 }
+.conflict-line.remote-only { background: rgb(var(--success-rgb) / .16); color: #a9dfba }
 .conflict-line.local-only .conflict-line-marker { color: var(--danger) }
 .conflict-line.remote-only .conflict-line-marker { color: var(--success) }
 .conflict-empty { color: var(--text2); padding: 12px }
@@ -399,7 +399,6 @@ button.danger { color: var(--danger) }
 .conflict-heft-nav .conflict-heft-prev, .conflict-heft-nav .conflict-heft-next { min-height: 0; height: 22px; width: 26px; padding: 0; font-size: var(--text-md); line-height: 1; background: var(--surface); color: var(--text2); border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center }
 .conflict-heft-nav .conflict-heft-prev:not(:disabled):hover, .conflict-heft-nav .conflict-heft-next:not(:disabled):hover { background: var(--surface-hover); color: var(--text) }
 .conflict-heft-note { flex: 1; text-align: center; color: var(--text2); font-size: var(--text-2xs) }
-.conflict-actions .primary { background: var(--accent); color: var(--on-accent); font-weight: 650 }
 @media (max-width: 700px) {
 	.conflict-compare { grid-template-columns: 1fr }
 	.conflict-pane-body { height: min(29dvh, 260px) }
@@ -466,7 +465,7 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 .msg-img { display: block; max-width: min(280px, 100%); border-radius: var(--radius-md); margin-top: 6px }
 /* == Topbar-Tabs (Home / Chats / Bibliothek / Suche) == */
 /* flex-wrap: bei vielen Tabs (🃏/📅/🔍) bricht die Leiste um, st… */
-.topbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap }
+.topbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft) }
 /* Such-Taste immer am rechten Rand der Sidebar-Topbar (unabhängi… */
 .topbar #btnSearchToggle { margin-left: auto }
 .tab { display: flex; align-items: center; border: none; background: transparent; border-radius: var(--radius-pill); padding: 6px 9px; color: var(--text2); min-height: 32px; flex-shrink: 0; transition: background .18s ease, color .18s ease }
@@ -476,7 +475,6 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 .tab .tab-label { font-weight: 600; font-size: var(--text-base); white-space: nowrap; overflow: hidden; max-width: 0; opacity: 0; margin-left: 0; transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease }
 /* Nur die aktive Pille zeigt das Label — renderTopbar setzt gena… */
 .tab.active .tab-label { max-width: 110px; opacity: 1; margin-left: 6px }
-.topbar .tab:not(.active) .tab-label { max-width: 0 !important; opacity: 0 !important; margin-left: 0 !important }
 #search[hidden] { display: none }
 .ws-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; margin-top: 4px; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px; color: var(--text2); text-transform: uppercase }
 .ws-head .ws-name { flex: 1; padding-left: 2px }
@@ -489,7 +487,7 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 /* ✕ oben rechts (wie in Notion) statt Schließen-Button unten */
 .modal-x { position: absolute; top: 10px; right: 10px; z-index: 2; min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center }
 .modal-x:hover { background: var(--surface-active); color: var(--text) }
-.settings-nav { width: 180px; border-right: 1px solid var(--edge); padding: 16px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--surface) }
+.settings-nav { width: 180px; border-right: 1px solid var(--edge); padding: 16px 8px; display: flex; flex-direction: column; gap: 4px; background: var(--surface) }
 .set-item { padding: 8px 10px; border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-base); color: var(--text2) }
 .set-item:hover { background: var(--edge-soft) }
 .set-item.active { background: var(--accent-soft); color: var(--accent) }
@@ -750,18 +748,27 @@ h3.blk-h { font-size: 1.12em }
 .card-advanced summary { cursor: pointer; color: var(--text2); font-size: var(--text-sm); user-select: none }
 .card-advanced[open] summary { margin-bottom: 8px; color: var(--text) }
 .card-editor .modal-actions { margin-top: 4px }
-.card-editor .modal-actions .primary, button.primary { background: var(--accent); color: var(--on-accent); font-weight: 650 }
-/* ♻️ Politur v13 (DRY): EIN Primär-Hover statt acht Helligkeits-Varianten (1.06–1.15) */
-#chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled), button.primary:hover, .heft-corner.heft-chat:hover, .deck-study:hover, .anki-new summary:hover, .blk-mathok:hover, .ai-settings .modal-actions button:hover, .settings-body #btnSaveSettings:hover, .settings-body #btnDriveLogin:hover, .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover { filter: brightness(1.08) }
+/* ♻️ Primäraktion (kanonisch): EINE Liste definiert Aussehen UND Hover. Wer neu dazukommt,
+   wird hier eingetragen — dann stimmen Farbe und Hover automatisch überein. */
+.is-primary, button.primary, .card-editor .modal-actions .primary, #chatForm button[type="submit"], .chat-form-full button[type="submit"],
+.deck-study, .anki-new summary, .heft-corner.heft-chat, .blk-mathok,
+.settings-body #btnSaveSettings, .settings-body #btnDriveLogin,
+.ai-settings .modal-actions button,
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { background: var(--accent); color: var(--on-accent); font-weight: 650 }
+.is-primary:hover:not(:disabled), button.primary:hover:not(:disabled), #chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled),
+.deck-study:hover:not(:disabled), .anki-new summary:hover, .heft-corner.heft-chat:hover, .blk-mathok:hover:not(:disabled),
+.settings-body #btnSaveSettings:hover:not(:disabled), .settings-body #btnDriveLogin:hover:not(:disabled),
+.ai-settings .modal-actions button:hover:not(:disabled),
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { filter: brightness(1.08) }
 /* == Anki-Bereich: Stapel, Browser, Statistik, Lernen == */
 .deck-list { display: flex; flex-direction: column; max-width: none; gap: 0 }
-.deck-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle) }
+/* .deck-row-Layout: EINE kanonische Regel — siehe „Stapel-Übersicht v2“ (Grid mit deck-depth) */
 .deck-name { font-weight: 700; font-size: 16px; display: block }
 .cnt-due { color: var(--accent) }
 .cnt-new { color: var(--success) }
 .deck-actions { display: flex; gap: 6px; flex-shrink: 0 }
 .deck-actions button:disabled, .row-btns button:disabled { opacity: .4; cursor: default }
-.anki-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 1120px; margin: 0 auto 14px; padding: 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint) }
+.anki-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 1120px; margin: 0 auto 14px; padding: 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-xl); background: var(--surface-faint); box-shadow: inset 0 1px 0 rgba(255,255,255,.04) }
 #ankiSearch { flex: 1; min-width: 180px; min-height: 40px; max-width: 360px }
 .anki-table td.anki-front { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .anki-table tr.suspended td { opacity: .45 }
@@ -771,13 +778,12 @@ h3.blk-h { font-size: 1.12em }
 /* Lernen auf Touch: Bewertungsleiste u. */
 /* == Anki-Lern-UI v5 (11. Juli 2026) — Lern-Ansicht wie in echtem == */
 /* Karte als ruhige Bühne: Vorder-/Rückseite ohne Boxen, Trennlin… */
-.study-card { margin: 18px auto 0; display: flex; flex-direction: column; gap: 12px; max-width: 760px }
 .study-done { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center }
 .grades button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px }
 .grade-ivl { font-size: var(--text-2xs); color: var(--text2) }
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 8px 0 18px; max-width: 860px }
-.kpi { padding: 14px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); text-align: center }
-.kpi-num { font-size: 24px; font-weight: 700; color: var(--accent) }
+.kpi { padding: 16px 14px; border: 1px solid var(--edge); border-radius: var(--radius-xl); background: var(--surface-subtle); text-align: center; box-shadow: var(--elev-1), inset 0 1px 0 rgba(255,255,255,.05) }
+.kpi-num { font-size: var(--text-xl); font-weight: 700; letter-spacing: -.02em; color: var(--accent) }
 .kpi-label { font-size: var(--text-xs); color: var(--text2) }
 .library h3 { margin: 18px 0 8px; color: var(--text2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.5px }
 .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 130px; max-width: 720px; padding: 8px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg) }
@@ -859,9 +865,6 @@ h3.blk-h { font-size: 1.12em }
 /* == Home als Dashboard: Kacheln für Fällig / Daily / Backup == */
 /* Tastenkürzel-Hinweis in Menüs (⋯ → Rückgängig/Wiederholen) */
 .menu-hint { font-size: var(--text-2xs); color: var(--text2) }
-/* == Entrümpelte Navigation == */
-.topbar { gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft) }
-.side-foot { padding-top: 8px; border-top: 1px solid var(--edge-soft) }
 /* Desktop: Karteikarten bleiben in der Topbar (rechts neben Chat). */
 @media (min-width: 769px) {
 	.topbar #btnDaily { display: none }
@@ -870,7 +873,7 @@ h3.blk-h { font-size: 1.12em }
 /* Einheitliche Interaktionszustände und bessere Tastaturbedienung */
 button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-button:disabled { opacity: .38; cursor: not-allowed; transform: none !important }
+button:disabled { opacity: .38; cursor: not-allowed; transform: none }
 .modal, .page-menu, .model-menu, .palette-box { border-radius: var(--radius-lg) }
 input, textarea, select, .row, .menu-item { border-radius: var(--radius-md) }
 /* Konsistente Typografie */
@@ -1061,14 +1064,14 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.lib-folder-visual { height: 100px }
 }
 /* == Sync-Konflikt: Popup + Homescreen-Banner == */
-.conflict-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 18px; padding: 12px 14px; border-radius: var(--radius-lg); background: var(--danger-soft); border: 1px solid rgba(233,115,102,0.40) }
+.conflict-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 18px; padding: 12px 14px; border-radius: var(--radius-lg); background: var(--danger-soft); border: 1px solid rgb(var(--danger-rgb) / .4) }
 .conflict-banner-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px }
 .conflict-banner-copy b { color: var(--danger) }
 .conflict-banner-copy span { font-size: var(--text-sm); color: var(--text2) }
 .conflict-banner button { flex-shrink: 0; background: var(--danger); color: #fff; font-weight: 650 }
 .conflict-modal { width: min(880px, 96vw); max-height: min(820px, 90dvh); padding: 0; overflow: hidden; gap: 0 }
 .conflict-head { display: flex; align-items: center; gap: 12px; padding: 18px 48px 12px 20px; border-bottom: 1px solid var(--edge) }
-.conflict-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-lg); background: rgba(233,115,102,0.16); font-size: 18px }
+.conflict-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-lg); background: rgb(var(--danger-rgb) / .16); font-size: 18px }
 .conflict-head span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px }
 .conflict-head small { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .conflict-reason { padding: 12px 20px; color: var(--text2); font-size: var(--text-base); line-height: 1.45; border-bottom: 1px solid var(--edge-soft) }
@@ -1109,8 +1112,6 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { t
 	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #app { padding: 0; gap: 0 }
 	body.sidebar-collapsed.panel-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent }
 }
-.study-card .card-face { border: none; background: transparent; padding: 26px 12px; font-size: 17.5px; line-height: 1.6 }
-.study-card .card-face.back { border: none }
 .study-divider { border: none; border-top: 1px solid var(--edge); margin: 0 12px }
 .study-head { text-align: center; color: var(--text2); font-size: var(--text-sm) }
 .study-head button { margin-left: 10px }
@@ -1131,29 +1132,19 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { t
 .study-card .card-face .mermaid-diagram { text-align: center }
 .study-card .card-face img { margin-left: auto; margin-right: auto }
 /* Bewertungsbuttons wie Anki: Nochmal rot · Schwer orange · Gut… */
-.study-card .grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px }
-.study-card .grades [data-ankigrade] { border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); font-weight: 650; min-height: 58px }
-.study-card .grades [data-ankigrade]:hover { background: var(--surface-hover) }
-.study-card .grades [data-ankigrade="1"] { color: rgb(var(--c-red)); border-color: rgb(var(--c-red) / .45) }
-.study-card .grades [data-ankigrade="2"] { color: rgb(var(--c-orange)); border-color: rgb(var(--c-orange) / .45) }
-.study-card .grades [data-ankigrade="3"] { color: #72bc8f; border-color: rgba(114,188,143,.45) }
-.study-card .grades [data-ankigrade="4"] { color: #6fc3ff; border-color: rgba(111,195,255,.45) }
-.study-card .grades .grade-ivl { order: -1; font-size: var(--text-xs); color: var(--text2) }
-.study-card .grades .grade-key { font-size: var(--text-3xs); opacity: .5 }
 @media (max-width: 480px) {
-	.study-card .grades { gap: 6px }
-	.study-card .grades [data-ankigrade] { min-height: 52px; padding: 6px 2px; font-size: var(--text-sm) }
+	/* Nur die Schriftgröße: Höhe und Innenabstand regelt der 600px-Block darunter. */
+	.anki-study-mode .grades [data-ankigrade] { font-size: var(--text-sm) }
 }
 /* „Antwort zeigen“ groß und mittig wie in Anki */
 /* Selbsteinschätzung+Fälligkeitszähler: fester Block direkt über Aufdecken, unabhängig von Bühnenhöhe */
-.study-reveal-controls { display: flex; flex-direction: column; gap: 8px; margin-top: auto }
 .study-reveal-controls .confidence-row, .study-reveal-controls .study-counts-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px }
 .study-reveal-controls .study-counts-row { min-height: 20px }
 .study-card .modal-actions { justify-content: center; margin: 0 }
 .study-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; margin: 10px 0 0; padding: 0 }
 .study-footer-options { display: flex; align-items: center; gap: 4px }
 .study-footer .mini { min-height: 32px }
-.study-card .modal-actions [data-ankishowback] { min-width: 220px; min-height: 44px; background: var(--accent); color: var(--on-accent); font-weight: 650; border-radius: var(--radius-lg) }
+.study-card .modal-actions [data-ankishowback]:not(.mini) { min-width: 220px; min-height: 44px; background: var(--accent); color: var(--on-accent); font-weight: 650; border-radius: var(--radius-lg) }
 .study-card .modal-actions [data-ankishowback] .grade-key { opacity: .55; margin-left: 6px }
 /* Stapel-Liste: „Standard (ohne Stapel)“-Zeile dezenter */
 .deck-name .hint { font-weight: 400; font-size: var(--text-xs) }
@@ -1322,7 +1313,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-scan-editbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; flex-shrink: 0; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)) }
 .heft-scan-editbar button { background: var(--surface-active); color: #fff; border-radius: var(--radius-lg) }
 .heft-scan-editbar .heft-scan-apply { background: var(--accent); color: var(--on-accent); font-weight: 650 }
-.heft-scan-editbar [data-hescancorners] { border: 1px solid rgba(111,195,255,.45); color: #bce6ff }
+.heft-scan-editbar [data-hescancorners] { border: 1px solid rgb(var(--accent-rgb) / .45); color: #bce6ff }
 .heft-scan-editbar [data-hescancompare] { color: var(--warn) }
 @media (pointer: coarse) {
 	.heft-scan-modes button { min-height: 40px }
@@ -1414,18 +1405,8 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 	body:has(.anki-study-mode) #mainWrap { min-height: 0 }
 }
 .anki-study-mode { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; max-width: none; padding: clamp(12px, 2.5vw, 28px) clamp(14px, 5vw, 72px) max(18px, env(safe-area-inset-bottom)); overflow: hidden }
-.anki-study-mode .study-head { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; flex: 0 0 auto; margin: 0 0 12px; text-align: center }
-/* Die Karte wird nicht vertikal zentriert: Die Frage bleibt imme… */
-/* Nur der Antwortbereich scrollt. */
-.anki-study-mode .study-card { width: min(100%, 920px); min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-start; margin: 0 auto; overflow: hidden }
-/* Die Frage nimmt nur ihre natürliche Höhe ein und behält ihren… */
-.anki-study-mode .study-card .card-face { flex: 0 0 auto; min-height: 0; display: flex; align-items: center; justify-content: center; text-align: center; overflow: visible; padding: clamp(18px, 4vw, 40px) clamp(8px, 3vw, 28px); font-size: clamp(17px, 2.2vw, 22px) }
-/* Die Antwort erhält den gesamten verbleibenden Platz statt die… */
-.anki-study-mode .study-card .card-face.back { flex: 1 1 auto; overflow: auto }
-.anki-study-mode .study-card .card-face > * { width: 100% }
-/* Auf der Vorderseite füllt dieser automatische Abstand die frei… */
-.anki-study-mode .study-card .grades, .anki-study-mode .study-card .modal-actions { flex: 0 0 auto; margin: auto 0 0; padding-top: 16px }
-.anki-study-mode .study-card .grades button { min-height: 52px }
+.anki-study-mode .study-head { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; flex: 0 0 auto; margin: 0 0 12px; text-align: center; font-size: var(--text-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--text2) }
+/* Karte, Kartenflächen und Bewertung stehen kanonisch weiter unten (Lern-Bühne). */
 /* Mermaid erhält in Lernkarten die volle Antwortbreite. */
 .anki-study-mode .study-card .card-face .mermaid-diagram { width: 100%; max-width: 980px; margin: 18px auto; padding: 0; background: transparent }
 .anki-study-mode .study-card .card-face .mermaid-diagram svg { display: block; width: 100% !important; max-width: none !important; height: auto !important; margin: 0 auto }
@@ -1433,7 +1414,6 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 	.anki-study-mode { padding: 10px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
 	.anki-study-mode .study-head { justify-content: flex-start; margin-bottom: 6px; font-size: var(--text-xs) }
 	.anki-study-mode .study-keys { display: none }
-	.anki-study-mode .study-card .card-face { padding: 18px 4px; font-size: 17px }
 	.anki-study-mode .study-card .grades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
 	.anki-study-mode .study-card .grades button { min-height: 50px; padding: 7px 4px }
 	.anki-study-mode .study-card .modal-actions button { width: 100%; min-height: 48px }
@@ -1441,7 +1421,6 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 /* Tablet (iPad Hoch-/Querformat, 769–1024px): spürbarer, aber ni… */
 @media (min-width: 769px) and (max-width: 1024px) {
 	.anki-study-mode { padding: clamp(16px, 2.4vw, 28px) clamp(24px, 4vw, 56px) }
-	.anki-study-mode .study-card .card-face { font-size: clamp(18px, 2vw, 21px) }
 }
 /* Touch-Geräte jeder Bildschirmbreite: Bewertungs-/Aktionsknöpfe… */
 @media (pointer: coarse) {
@@ -1458,7 +1437,7 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
    DRY: EIN Grid je Zeile; Zähler/Aktionen erben die globalen Button-Basisstile. Die alte
    Tabellen-/Fußleisten-CSS (anki-deck-table/-head/-footer, deck-number) ist ersetzt. */
 .anki-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(200px, .6fr); gap: 16px; max-width: 1120px; margin: 0 auto 30px }
-.anki-hero-main { padding: 26px 28px; border: 1px solid var(--accent-border); border-radius: var(--radius-xl); background: linear-gradient(125deg, rgba(111,195,255,.14), var(--surface-subtle) 70%) }
+.anki-hero-main { padding: 26px 28px; border: 1px solid var(--accent-border); border-radius: var(--radius-xl); background: linear-gradient(125deg, rgb(var(--accent-rgb) / .14), var(--surface-subtle) 70%) }
 .anki-hero-eyebrow { font-size: var(--text-2xs); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
 .anki-hero-main h2 { margin: 8px 0 4px; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.15; letter-spacing: -.02em }
 .anki-hero-main p { margin: 0 0 18px; color: var(--text2); font-size: var(--text-sm) }
@@ -1473,8 +1452,8 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 .anki-sec { max-width: 1120px; margin: 0 auto 10px }
 .anki-sec h2 { margin: 0; font-size: var(--text-md) }
 .deck-list { max-width: 1120px; margin: 0 auto; gap: 8px }
-.deck-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 66px; padding: 12px 14px; margin-left: calc(var(--deck-depth, 0) * 22px); border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); transition: border-color .14s ease, background .14s ease }
-.deck-row:hover { border-color: var(--accent-border); background: var(--surface-hover) }
+.deck-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 66px; padding: 12px 14px; margin-left: calc(var(--deck-depth, 0) * 22px); border: 1px solid var(--edge); border-radius: var(--radius-xl); background: var(--surface-subtle); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: border-color .14s ease, background .14s ease, box-shadow .14s ease }
+.deck-row:hover { border-color: var(--accent-border); background: var(--surface-hover); box-shadow: var(--elev-1), inset 0 1px 0 rgba(255,255,255,.05) }
 .deck-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--surface-hover); font-size: var(--text-md); color: var(--text2) }
 .deck-info { display: flex; flex-direction: column; min-width: 0 }
 .deck-name { min-width: 0; font-size: var(--text-md); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -1485,15 +1464,15 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 .cnt-learn { color: var(--accent) }
 .deck-actions { justify-content: flex-end; gap: 6px; align-items: center }
 .deck-actions button { min-height: 34px; padding: 5px 10px; font-size: var(--text-sm) }
-.deck-study { background: var(--accent); color: var(--on-accent); font-weight: 700 }
+.deck-study { font-weight: 700 }
 .deck-feyn { border: 1px solid var(--accent-border); background: var(--accent-soft) }
-.deck-iconbtn { min-width: 32px; padding: 5px 0 !important; background: transparent; color: var(--text2); opacity: 0; transition: opacity .12s ease }
+.deck-actions .deck-iconbtn { min-width: 32px; padding: 5px 0; background: transparent; color: var(--text2); opacity: 0; transition: opacity .12s ease }
 .deck-row:hover .deck-iconbtn, .deck-row:focus-within .deck-iconbtn { opacity: 1 }
 .deck-iconbtn:hover { background: var(--surface-active); color: var(--text) }
 @media (pointer: coarse) { .deck-iconbtn { opacity: 1 } }
 /* ＋ Neu-Menü in der Kopfzeile: natives <details>, gestylt wie die übrigen Popover */
 .anki-new { position: relative }
-.anki-new summary { list-style: none; display: inline-flex; align-items: center; min-height: 34px; padding: 6px 12px; border-radius: var(--radius-md); background: var(--accent); color: var(--on-accent); font-size: var(--text-base); font-weight: 700; cursor: pointer; user-select: none }
+.anki-new summary { list-style: none; display: inline-flex; align-items: center; min-height: 34px; padding: 6px 12px; border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 700; cursor: pointer; user-select: none }
 .anki-new summary::-webkit-details-marker { display: none }
 .anki-new-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: var(--z-menu); display: flex; flex-direction: column; gap: 2px; width: 230px; padding: 6px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--elev-2); animation: uiEnter var(--motion-base) var(--ease-out) both }
 .anki-new-menu button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; border-radius: var(--radius-md); background: transparent; color: var(--text); font-size: var(--text-sm); font-weight: 650; text-align: left }
@@ -1505,8 +1484,8 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 .anki-table { min-width: 760px; margin: 0 }
 .anki-table th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: var(--menu-bg) }
 .anki-table td { padding: 10px 12px }
-.anki-table .anki-deck-group td { padding: 8px 12px; cursor: default; background: rgba(111,195,255,.08); color: var(--accent); font-size: var(--text-xs); font-weight: 700; letter-spacing: .03em }
-.anki-table .anki-deck-group:hover td { background: rgba(111,195,255,.08) }
+/* Gruppen-Zeile ist keine Aktion: gleiche Fläche im Ruhe- und Hover-Zustand (eine Regel statt zwei). */
+.anki-table .anki-deck-group td, .anki-table .anki-deck-group:hover td { padding: 8px 12px; cursor: default; background: rgb(var(--accent-rgb) / .08); color: var(--accent); font-size: var(--text-xs); font-weight: 700; letter-spacing: .03em }
 .anki-rowbtns { text-align: right }
 @media (max-width: 700px) {
 	.library.anki { padding: 20px 16px calc(112px + env(safe-area-inset-bottom)) }
@@ -1684,9 +1663,8 @@ body.light #chatForm:focus-within, body.light .chat-form-full:focus-within { bor
 body.light .msg.user { background: var(--bubble); border: 1px solid var(--accent-border) }
 body.light .md pre, body.light .blk-codewrap { background: var(--surface-subtle); border-color: var(--edge) }
 body.light .blk-text a { color: var(--text); text-decoration-color: rgba(44, 44, 43, .35) }
-body.light ::-webkit-scrollbar-thumb { background: rgba(44, 44, 43, .20); background-clip: content-box; border: 2px solid transparent }
 /* == Light theme v2 — warmes Papier statt klinischem Weiß == */
-body.light { --bg0: #f2efe9; --bg1: #faf8f4; --panel-solid: #fffdfa; --menu-bg: #fffdfa; --bubble: #e4f0fb; --text: #292926; --text2: #5c5a54; --accent: #2478c7; --accent-soft: #ddecfa; --accent-border: rgba(36, 120, 199, .36); --danger: #d84d43; --danger-soft: #fce9e7; --success: #37845a; --success-soft: #e8f1ec; --success-border: color-mix(in srgb, var(--success) 45%, transparent); --danger-border: color-mix(in srgb, var(--danger) 50%, transparent); --surface-faint: #fdfbf7; --surface-subtle: #f7f4ee; --surface: #f0ede6; --surface-hover: #e9e5dd; --surface-hover-strong: #dfdad0; --surface-active: #d5cec3; --edge-soft: #ddd6ca; --edge: #c9c1b2; --input-bg: #f7f4ee; --overlay-bg: rgba(46, 42, 35, .24); --elev-1: 0 1px 2px rgba(63,53,38,.10); --elev-2: 0 8px 20px rgba(63,53,38,.12); --elev-3: 0 18px 44px rgba(63,53,38,.16); --drop-1: 0 6px 14px rgba(63,53,38,.14); --drop-2: 0 12px 22px rgba(63,53,38,.20); --glow-1: #fffdf9; --glow-2: #f7f3ec; --glow-3: #eee9e0; --on-accent: #ffffff; --c-gray: 120 119 116; --c-red: 196 85 77; --c-orange: 203 123 55; --c-yellow: 194 147 67; --c-green: 84 129 100; --c-blue: 72 124 165; --c-purple: 138 103 171; --c-pink: 179 84 136 }
+body.light { --bg0: #f2efe9; --bg1: #faf8f4; --panel-solid: #fffdfa; --menu-bg: #fffdfa; --bubble: #e4f0fb; --text: #292926; --text2: #5c5a54; --accent-rgb: 36 120 199; --danger-rgb: 216 77 67; --success-rgb: 55 132 90; --accent: rgb(var(--accent-rgb)); --accent-soft: #ddecfa; --accent-border: rgb(var(--accent-rgb) / .36); --danger: rgb(var(--danger-rgb)); --danger-soft: #fce9e7; --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: #e8f1ec; --success-border: rgb(var(--success-rgb) / .45); --surface-faint: #fdfbf7; --surface-subtle: #f7f4ee; --surface: #f0ede6; --surface-hover: #e9e5dd; --surface-hover-strong: #dfdad0; --surface-active: #d5cec3; --edge-soft: #ddd6ca; --edge: #c9c1b2; --input-bg: #f7f4ee; --overlay-bg: rgba(46, 42, 35, .24); --elev-1: 0 1px 2px rgba(63,53,38,.10); --elev-2: 0 8px 20px rgba(63,53,38,.12); --elev-3: 0 18px 44px rgba(63,53,38,.16); --drop-1: 0 6px 14px rgba(63,53,38,.14); --drop-2: 0 12px 22px rgba(63,53,38,.20); --glow-1: #fffdf9; --glow-2: #f7f3ec; --glow-3: #eee9e0; --on-accent: #ffffff; --c-gray: 120 119 116; --c-red: 196 85 77; --c-orange: 203 123 55; --c-yellow: 194 147 67; --c-green: 84 129 100; --c-blue: 72 124 165; --c-purple: 138 103 171; --c-pink: 179 84 136; --scroll-thumb: rgba(44, 44, 43, .28); --scroll-thumb-hover: rgba(44, 44, 43, .45); --scroll-track: rgba(44, 44, 43, .06); scrollbar-color: var(--scroll-thumb) var(--scroll-track) }
 /* Drei ruhige Ebenen statt einer endlosen weißen Fläche. */
 body.light #bg { background: radial-gradient(1200px 760px at 76% -12%, var(--glow-1) 0%, #f6f1e9 52%, #ebe5da 100%) }
 body.light #sidebar { background: var(--surface-hover) }
@@ -1726,8 +1704,8 @@ body.light .anki-deck-group td { background: var(--bubble) }
 body.light .heft-chrome .heft-pill, body.light .heft-chrome .heft-tray, body.light .heft-chrome .heft-corner, body.light .heft-chrome .heft-corner.heft-chat { background: var(--panel-solid); color: var(--text); border-color: var(--edge-soft); box-shadow: var(--elev-1) }
 body.light .heft-chrome .heft-main { background: transparent; color: var(--text2) }
 body.light .heft-chrome .heft-main:hover, body.light .heft-chrome .heft-corner:hover, body.light .heft-chrome .heft-tray-drag:hover { background: var(--surface-hover); color: var(--text) }
-body.light .heft-chrome .heft-main.active, body.light .heft-chrome .heft-main.open { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(36, 120, 199, .25) }
-body.light .heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px rgba(201, 75, 66, .28) }
+body.light .heft-chrome .heft-main.active, body.light .heft-chrome .heft-main.open { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
+body.light .heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-border) }
 body.light .heft-chrome .heft-pill > .heft-sep, body.light .heft-chrome .heft-tray .heft-sep { background: var(--edge-soft) }
 body.light .heft-chrome .heft-tray-drag { color: var(--text2) }
 /* == KI-Einstellungen — klare Verbindungen statt einer langen For == */
@@ -1846,14 +1824,9 @@ img { -webkit-user-drag: none }
 #overlay:not([hidden]) { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px) }
 /* ♻️ Politur v13 (DRY): EIN kanonischer Aktiv-Zustand (accent-soft + Innenring) — ersetzt sechs identische Einzelregeln */
 .row-btns button.active, .appearance-choice button.active, .confidence-row .menu-chip.active, .heft-main.active, .heft-opt.active, .heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .settings-model-list .model-row .menu-item.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
-/* Bewertungs-Knoepfe farbkodiert: rot/orange/akzent/gruen */
-.grades [data-ankigrade="1"] { box-shadow: inset 0 -3px 0 rgba(233,115,102,.55) }
-.grades [data-ankigrade="2"] { box-shadow: inset 0 -3px 0 rgb(var(--c-orange) / .55) }
-.grades [data-ankigrade="3"] { box-shadow: inset 0 -3px 0 var(--accent-border) }
-.grades [data-ankigrade="4"] { box-shadow: inset 0 -3px 0 rgba(114,188,143,.55) }
 @media (pointer: coarse) {
 	/* Touch: Tastatur-Hinweise sind unlogisch; 16px-Inputs verhindern iOS-Auto-Zoom */
-	.grade-key, .study-keys { display: none !important }
+	.grade-key, .study-keys { display: none }
 	input, textarea, select { font-size: max(16px, 1em) }
 }
 /* native Checkboxen/Radios/Progress in Akzentfarbe */
@@ -1914,7 +1887,7 @@ h3, h4 { text-wrap: balance }
 .exp-hint-line { padding: 4px 0 }
 .exp-hint-line + .exp-hint-line { border-top: 1px dashed var(--edge) }
 .exp-mc-opt { display: block; width: 100%; text-align: left; margin: 6px 0; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg) }
-.exp-mc-opt.correct { border-color: rgba(114, 188, 143, .8); background: rgba(114, 188, 143, .12) }
+.exp-mc-opt.correct { border-color: rgb(var(--success-rgb) / .8); background: rgb(var(--success-rgb) / .12) }
 .exp-mc-opt.wrong { border-color: rgba(255, 115, 105, .8); background: rgba(255, 115, 105, .12) }
 .exp-mc-opt.off { opacity: .55 }
 .exp-pretest-q { margin: 10px 0 }
@@ -2079,14 +2052,12 @@ h3, h4 { text-wrap: balance }
 .graph-panel label { font-size: var(--text-sm); color: var(--text) }
 .graph-panel small { display: block; margin-top: 4px; opacity: .75 }
 /* == ⚙️ Einstellungen v2 (21. Juli): ruhigere Navigation, klarere Abschnitte, weniger Text == */
-.settings-nav { gap: 4px }
 .set-item { font-size: var(--text-sm); font-weight: 600; border-radius: var(--radius-md) }
 .set-item.active { box-shadow: inset 0 0 0 1px var(--accent-border) }
 .settings-body:not(:has(.ai-settings)) > h3 { margin: 0 0 2px; padding-bottom: 10px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-md); font-weight: 700; letter-spacing: -.01em }
 .settings-body > h3 + h4 { margin-top: 0 }
 .settings-body .hint { font-size: var(--text-xs); line-height: 1.45 }
 .settings-body h4 + .hint { margin-top: -6px }
-.settings-body #btnSaveSettings, .settings-body #btnDriveLogin { background: var(--accent); color: var(--on-accent); font-weight: 650 }
 .settings-body .row-btns button, .settings-body .appearance-choice button { min-height: 30px; font-size: var(--text-sm) }
 
 /* == „kommt noch“-Runde (22. Juli): ✕ auf Home-Bereichen, ⏹-Abbrechen, 🗑 Stapel-Löschen == */
@@ -2098,58 +2069,104 @@ h3, h4 { text-wrap: balance }
 #chatSubmit.busy, #mainChatSubmit.busy { background: var(--danger-soft); color: var(--danger) }
 .deck-actions .deck-del { color: var(--danger) }
 
-/* == 🃏 Karteikarten-Redesign v1 (22. Juli, Nacht): Lern-Ansicht als ruhige Karten-Bühne == */
-/* Ziel: EINE klar erkennbare Karte statt lose gestapelter Elemente — Frage zentriert auf einer
-   Bühne mit Mindesthöhe, „Antwort zeigen“ als eindeutiger nächster Schritt, Bewertung als
-   farbkodierte Leiste (mobil 2×2). Meta-Infos wandern in eine kleine Kopfzeile (Details im Tooltip). */
-.anki-study-mode .study-card { width: min(820px, 100%); max-width: none; min-height: min(62dvh, 620px); margin: 24px auto 0; padding: clamp(20px, 4vw, 44px); border: 1px solid var(--edge); border-radius: 20px; background: linear-gradient(145deg, var(--surface-hover), var(--surface-subtle)); box-shadow: var(--elev-3) }
+/* == 🃏 Lern-Bühne (kanonisch) ==
+   EINE klar erkennbare Karte: Frage oben, „Antwort zeigen“ als eindeutiger nächster Schritt,
+   Bewertung als farbkodierte Leiste. Karte, Kartenflächen und Bewertung standen vorher an vier
+   Stellen der Datei; mehrere dieser Regeln waren durch Spezifität bereits wirkungslos.
+   Dichte und Höhe laufen jetzt über vier Variablen — die Breakpoints setzen nur noch diese. */
+.anki-study-mode .study-card {
+	--stage-min-h: min(62dvh, 620px);
+	--stage-pad: clamp(20px, 4vw, 44px);
+	--stage-top: 24px;
+	--stage-gap: 12px;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	justify-content: flex-start;
+	gap: var(--stage-gap);
+	width: min(820px, 100%);
+	max-width: none;
+	min-height: var(--stage-min-h);
+	margin: var(--stage-top) auto 0;
+	padding: var(--stage-pad);
+	overflow: hidden;
+	border: 1px solid var(--edge);
+	border-radius: var(--radius-xl);
+	background: linear-gradient(145deg, var(--surface-hover), var(--surface-subtle));
+	box-shadow: var(--elev-3), inset 0 1px 0 rgba(255,255,255,.05);
+}
 /* Kopfzeile in der Karte: Stapel links, Status rechts als Pille — bewusst klein und ruhig */
 .study-meta-bar { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xs); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--text2) }
 .study-meta-deck { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left }
 .study-meta-state { flex-shrink: 0; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent) }
 /* FRAGE/ANTWORT-Labels: sofort klar, was gerade abgerufen werden soll */
 .study-side-label { font-size: var(--text-3xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text2); text-align: center; margin-top: 2px }
-/* Kartenflächen: keine eigenen Boxen mehr — die Bühne IST die Karte; Inhalt zentriert */
-.anki-study-mode .card-face { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; place-content: center; text-align: center; padding: 12px 0; border: none; background: transparent; font-size: clamp(17px, 1.6vw, 22px); line-height: 1.5 }
-.anki-study-mode .card-face.back { border: none }
-.anki-study-mode .card-face .md { max-width: 100% }
-/* Trennlinie mit Label statt nacktem <hr> */
-.anki-study-mode .study-divider { display: flex; align-items: center; gap: 12px; margin: 2px 0 }
+/* Kartenflächen: keine eigenen Boxen — die Bühne IST die Karte.
+   Die Frage behält ihre natürliche Höhe, nur die Antwort scrollt. */
+.anki-study-mode .study-card .card-face {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	min-height: 0;
+	padding: clamp(18px, 4vw, 40px) clamp(8px, 3vw, 28px);
+	overflow: visible;
+	overscroll-behavior: contain;
+	border: none;
+	background: transparent;
+	text-align: center;
+	font-size: clamp(17px, 2.2vw, 22px);
+	line-height: 1.5;
+}
+.anki-study-mode .study-card .card-face.back { flex: 1 1 auto; overflow: auto }
+.anki-study-mode .study-card .card-face > * { width: 100% }
+.anki-study-mode .study-card .card-face .md { max-width: 34rem; margin: 0 auto }
+/* Die Breakpoints der Kartenfläche stehen direkt hier: gleiche Spezifität wie die Regel darüber,
+   also entscheidet die Reihenfolge — getrennt aufbewahrt wäre das eine Falle. */
+@media (max-width: 600px) {
+	.anki-study-mode .study-card .card-face { padding: 18px 4px; font-size: 17px }
+}
+@media (min-width: 769px) and (max-width: 1024px) {
+	.anki-study-mode .study-card .card-face { font-size: clamp(18px, 2vw, 21px) }
+}
+/* Die Frage füllt den freien Platz nach unten, damit Bewertung und Aktion fest sitzen. */
+.anki-study-mode .study-card .grades,
+.anki-study-mode .study-card .modal-actions { flex: 0 0 auto; margin: auto 0 0; padding-top: 16px }
+/* Trennlinie mit Label statt nacktem <hr> — border-top der Basisregel explizit aus, sonst Doppellinie über dem Label */
+.anki-study-mode .study-divider { display: flex; align-items: center; gap: 12px; margin: 2px 0; border-top: none }
 .anki-study-mode .study-divider::before, .anki-study-mode .study-divider::after { content: ""; flex: 1; height: 1px; background: var(--edge) }
 .anki-study-mode .study-divider span { font-size: var(--text-3xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent) }
-/* „Antwort zeigen“ = DER nächste Schritt: groß, mittig, akzentfarben (Feynman-Mini-Variante bleibt klein) */
+/* „Antwort zeigen“ = DER nächste Schritt: groß, mittig, akzentfarben (Feynman-Mini-Variante bleibt klein).
+   Akzent-Schatten statt Vollton-Block, Hover hebt den Knopf leicht an. */
 .anki-study-mode .study-reveal-controls { display: flex; flex-direction: column; gap: 10px; margin-top: auto }
 .anki-study-mode .study-reveal-controls .modal-actions { justify-content: center; margin-top: 0 }
-.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { min-width: 220px; min-height: 48px; border-radius: var(--radius-lg); background: var(--accent); color: var(--on-accent); font-size: var(--text-md); font-weight: 700 }
-/* Bewertung: farbkodierte Karten-Leiste statt vier gleicher Formular-Buttons */
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { min-width: 220px; min-height: 48px; border-radius: var(--radius-lg); background: var(--accent); color: var(--on-accent); font-size: var(--text-md); font-weight: 700; box-shadow: 0 6px 24px rgb(var(--accent-rgb) / .28); transition: box-shadow var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out) }
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { box-shadow: 0 8px 30px rgb(var(--accent-rgb) / .38); transform: translateY(-1px) }
+/* Bewertung: vier gleiche Karten, Farbe zeigt sich erst im Hover — die Leiste wirkt ruhig,
+   die Bedeutung bleibt über den farbigen Text lesbar. Spaltenzahl und Abstand hängen am Breakpoint. */
 .anki-study-mode .grades { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px }
-.anki-study-mode .grades button { min-height: 66px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; font-weight: 650 }
-.anki-study-mode .grades button:hover { background: var(--surface-hover-strong) }
-.anki-study-mode .grades [data-ankigrade="1"] { border-color: rgba(233, 115, 102, .45); color: var(--danger) }
-.anki-study-mode .grades [data-ankigrade="2"] { border-color: rgb(var(--c-orange) / .45); color: rgb(var(--c-orange)) }
-.anki-study-mode .grades [data-ankigrade="3"] { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent) }
-.anki-study-mode .grades [data-ankigrade="4"] { border-color: rgba(114, 188, 143, .45); color: var(--success) }
-.anki-study-mode .grades .grade-ivl { font-size: var(--text-2xs); color: var(--text2) }
-.anki-study-mode .grades .grade-key { font-size: var(--text-3xs); color: var(--text2); opacity: .7 }
+.anki-study-mode .grades [data-ankigrade] { min-height: 58px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); box-shadow: none; font-weight: 650; transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out) }
+.anki-study-mode .grades [data-ankigrade]:hover { transform: translateY(-1px) }
+.anki-study-mode .grades [data-ankigrade="1"] { color: var(--danger) }
+.anki-study-mode .grades [data-ankigrade="2"] { color: rgb(var(--c-orange)) }
+.anki-study-mode .grades [data-ankigrade="3"] { color: var(--accent) }
+.anki-study-mode .grades [data-ankigrade="4"] { color: var(--success) }
+.anki-study-mode .grades [data-ankigrade="1"]:hover { background: var(--danger-soft); border-color: var(--danger-border) }
+.anki-study-mode .grades [data-ankigrade="2"]:hover { background: rgb(var(--c-orange) / .14); border-color: rgb(var(--c-orange) / .5) }
+.anki-study-mode .grades [data-ankigrade="3"]:hover { background: var(--accent-soft); border-color: var(--accent-border) }
+.anki-study-mode .grades [data-ankigrade="4"]:hover { background: var(--success-soft); border-color: var(--success-border) }
+.anki-study-mode .grades .grade-ivl { order: -1; font-size: var(--text-2xs); color: var(--text2) }
+.anki-study-mode .grades .grade-key { font-size: var(--text-3xs); color: var(--text2); opacity: .9 }
 /* Zähler-Zeile bleibt zentriert, rückt aber dichter an die Aktion */
 .anki-study-mode .study-counts-row { margin: 4px 0 0 }
-/* Mobil: kompaktere Bühne, Bewertung als 2×2-Grid mit vollen Tippflächen */
+/* Mobil: kompaktere Bühne (die 2×2-Bewertung regelt der 600px-Block weiter oben). */
 @media (max-width: 560px) {
-	.anki-study-mode .study-card { width: 100%; min-height: 58dvh; padding: 18px 14px; border-radius: var(--radius-xl) }
-	.anki-study-mode .grades button { min-height: 58px }
+	.anki-study-mode .study-card { --stage-min-h: 58dvh; --stage-pad: 18px 14px }
 }
 
-/* == 🐛 Bugfix-Runde (23. Juli): KI-Kreis überlappte „⚙️ Optionen“ == */
-/* Der fixe KI-Kreis unten rechts (22px + 42px = belegt die unteren ~64px am rechten Rand)
-   lag über der Lern-Fußleiste (⚙️ Optionen) und konnte auch die letzten Zeilen von
-   Browser/Stapel-Liste verdecken (padding-bottom der .library war nur 48px).
-   Der Karten-Bereich reserviert unten jetzt genug Platz für fixe Elemente — die 96px stehen
-   seit der Aufräum-Runde kanonisch oben in der .library.anki-Grundregel. */
-/* 🐛 Folge-Fix (Kompakt-Modus): body.density-compact .library { padding: 24px 30px } (oben in der Datei)
-   gewinnt per Spezifität (body + 2 Klassen) gegen .library.anki und setzte das padding-bottom im
-   Kompakt-Modus still auf 30px zurück — der KI-Kreis überlappte beim Karteikarten-Lernen wieder
-   die Fußleiste (⚙️ Optionen). Gelöst über :where() bei der Kompakt-Regel — sie verliert jetzt
-   absichtlich gegen .library.anki, das Duplikat entfällt. */
+/* Der feste KI-Kreis unten rechts darf die Lern-Fußleiste nicht verdecken: die 96px
+   Bodenabstand stehen kanonisch in .library.anki, und die Kompakt-Regel nutzt :where(),
+   damit sie absichtlich dagegen verliert. */
 /* Folge-Fix zum Redesign: „Gratulation“-/Warte-Karten erben die große Bühne (min-height 62dvh),
    ihr Inhalt klebte aber oben — jetzt auch vertikal zentriert. */
 .anki-study-mode .study-done, .anki-study-mode .study-wait { justify-content: center }
@@ -2164,47 +2181,27 @@ body.anki-zen.panel-collapsed:has(.library.anki) #app { grid-template-columns: m
 body.anki-zen.density-compact:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) 320px }
 body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-template-columns: minmax(0, 1fr) }
 
-/* == 🐛 iPad-Fix-Runde (25. Juli): Karteikarten-Anzeige & Touch-Feinschliff == */
-/* Ausgangslage: iPads laufen seit dem 24.-Juli-Fix in mobile.js wieder in der
-   Desktop-Ansicht — die Lern-Bühne rechnete ihre Breite aber weiterhin gegen den
-   VIEWPORT (100vw), obwohl links die Seitenleiste (260px) und rechts das KI-Panel
-   (340px) stehen. Auf dem iPad war die Karte dadurch breiter als ihre Spalte und
-   wurde rechts abgeschnitten. Dazu vier Folgefehler: vh statt dvh (Safari-Leisten),
-   vier Bewertungsknöpfe in einer schmalen Spalte, kein Scrollen bei langen
-   Rückseiten und klebendes Hover nach dem Antippen.
-   Aufräum-Runde (26. Juli): [1] Kartenbreite, [2] Scrollen in der Karte, [3] Umbruch der
-   Bewertung und [6] dvh der Karten-Liste stehen jetzt direkt in den kanonischen Regeln
-   weiter oben (Karteikarten-Redesign v1 bzw. .cards-list) statt als Nachtrag hier —
-   gleiche Darstellung, aber jede Eigenschaft nur noch an EINER Stelle. */
-/* [4] Gestapeltes Layout (iPad-Hochformat ≤980px): 100dvh zählt unter iPadOS die
-   ein- und ausfahrenden Safari-Leisten mit — die Bewertungsleiste rutschte unter
-   den Bildschirmrand. dvh wie überall sonst in dieser Datei. */
+/* iPad: 100dvh statt 100vh — unter iPadOS zählen die ein- und ausfahrenden
+   Safari-Leisten mit, sonst rutscht die Bewertungsleiste unter den Bildschirmrand. */
 @media (max-width: 980px) {
 	#app { min-height: 100dvh }
 }
-/* [5] Touch kennt kein echtes Hover: nach dem Antippen blieben Stapel-Zeilen und
-   Bibliotheks-Karten dauerhaft angehoben stehen. */
+/* Touch kennt kein echtes Hover: angetippte Karten blieben sonst angehoben stehen. */
 @media (hover: none) {
 	.lib-card:hover, .deck-row:hover { transform: none }
 }
 
-/* == 📐 Platznutzung auf Touch-Geräten (25. Juli, iPad) == */
-/* Um die Lern-Bühne blieb auf dem iPad viel Luft: 24px Außenabstand oben, nur 62dvh
-   Mindesthöhe und ein Innenpolster, das an der VIEWPORT-Breite hing (clamp(…, 4vw, 44px))
-   — in der schmalen Mittelspalte also unnötig groß. Greift nur auf Touch-Geräten ab
-   Tablet-Breite, die Maus-/Desktop-Darstellung bleibt exakt wie sie war. */
-@media (pointer: coarse) and (min-width: 701px) {
-	.library.anki { padding: 14px 16px 88px }
-	.anki-study-mode .study-card {
-		margin: 10px auto 0;
-		min-height: min(80dvh, 900px);
-		padding: clamp(16px, 2vw, 32px);
-		border-radius: var(--radius-xl);
-	}
-	/* Etwas flachere Bewertungsknöpfe — der gewonnene Platz geht an den Karteninhalt. */
-	.anki-study-mode .grades button { min-height: 58px }
+/* == 📐 Dichte ab Tablet-Breite ==
+   Werkzeugleiste und Kennzahlen sind auf jedem großen Schirm gleich dicht — das steht
+   einmal hier. Danach folgt nur noch, was sich zwischen Finger und Maus unterscheidet. */
+@media (min-width: 701px) {
 	.anki-toolbar { margin-bottom: 10px; padding: 10px }
 	.kpi-row { margin: 6px 0 12px }
+}
+/* Touch ab Tablet-Breite: größere Bühne, weil Finger mehr Fläche brauchen. */
+@media (pointer: coarse) and (min-width: 701px) {
+	.library.anki { padding: 14px 16px 88px }
+	.anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(80dvh, 900px); --stage-pad: clamp(16px, 2vw, 32px) }
 }
 
 /* == ✨ Feinschliff v12 (25. Juli): Typografie-Details, keine neue Struktur == */
@@ -2222,27 +2219,16 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 .page-menu, .attach-menu, .refine-menu, .model-menu { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
 .modal, .palette-box { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255,255,255,.05) }
 .toast { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
-/* Chat: eigene Nachrichten mit „Sprechblasen“-Ecke unten rechts — wirkt gesprochen statt wie eine Karte. */
-.msg.user { border-bottom-right-radius: var(--radius-xs) }
 
-/* == 🖥 Karteikarten am PC (27. Juli): Platznutzung wie zuvor schon Handy und iPad == */
-/* Ausgangslage: Handy (≤560px) und Touch ab Tablet-Breite haben längst eigene, dichtere
-   Regeln — die Maus-Darstellung lief noch mit den Werten des Redesigns v1: 24px Außenabstand,
-   62dvh Mindesthöhe, bis zu 44px Innenpolster und 66px hohe Bewertungsknopfe. Auf einem
-   16:9-Monitor stand die Frage dadurch in einer halbleeren Bühne, während Zähler und Aktion
-   weit auseinander lagen. Hier wird ausdrücklich nur pointer:fine ab Desktop-Breite dichter
-   gezogen — Touch und Mobile bleiben unverändert (keine doppelten Regeln). */
+/* Maus ab Desktop-Breite: dichter als Touch — der Zeiger trifft auch kleinere Ziele.
+   Der gewonnene Platz geht an den Karteninhalt. */
 @media (pointer: fine) and (min-width: 981px) {
 	.library.anki { padding: 16px 22px 88px }
-	.anki-study-mode .study-card { margin: 8px auto 0; min-height: min(74dvh, 780px); padding: clamp(16px, 1.6vw, 28px); gap: 10px; border-radius: var(--radius-xl) }
-	/* Bewertung: vier gleich breite, flachere Knopfe — der gewonnene Platz geht an den Karteninhalt. */
+	.anki-study-mode .study-card { --stage-top: 8px; --stage-min-h: min(74dvh, 780px); --stage-pad: clamp(16px, 1.6vw, 28px); --stage-gap: 10px }
 	.anki-study-mode .grades { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px }
-	.anki-study-mode .grades button { min-height: 52px; padding: 6px }
+	.anki-study-mode .grades button { padding: 6px }
 	.anki-study-mode .study-reveal-controls { gap: 8px }
 	.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { min-height: 42px }
-	/* Stapel-Übersicht und Statistik atmen ebenfalls weniger Leerraum. */
 	.deck-row { padding: 10px 14px }
-	.anki-toolbar { margin-bottom: 10px; padding: 10px }
-	.kpi-row { margin: 6px 0 12px }
 	.kpi { padding: 10px }
 }

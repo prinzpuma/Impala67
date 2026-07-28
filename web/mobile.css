@@ -362,11 +362,9 @@ body.mobile-ui .deck-row {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 14px 16px;
 	border-radius: var(--radius-lg);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
-	margin-bottom: 8px;
 }
 body.mobile-ui .deck-ico { font-size: 22px; flex-shrink: 0 }
 body.mobile-ui .deck-info { flex: 1; min-width: 0 }
@@ -440,7 +438,6 @@ body.mobile-ui .grades {
 	margin-top: 8px;
 }
 body.mobile-ui .grades [data-ankigrade] {
-	min-height: 64px;
 	border-radius: var(--radius-lg);
 	font-size: 16px;
 	font-weight: 700;
