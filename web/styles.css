@@ -207,7 +207,12 @@ button.danger { color: var(--danger) }
 .panel-head-right { display: flex; align-items: center; gap: 2px; flex-shrink: 0 }
 .chat-full-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 4px }
 .chat-full-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-#btnTogglePanel, #btnChatExpand { min-height: 0; padding: 4px 10px; border: none; background: transparent }
+/* 🎨 Chat-Redesign (28. Juli): Kopfzeilen-Symbole als EINE stille Regel — kein Kasten-Look mehr,
+   30px-Quadrat, Fläche erscheint erst beim Hover. Gilt für ALLE Knöpfe rechts im Panel-Kopf
+   (Verlauf/Neu/Vollbild/Schließen); die frühere Einzelregel für #btnTogglePanel/#btnChatExpand
+   entfällt (DRY). Status-Punkt und Diagnose-Pille behalten bewusst ihr eigenes Aussehen. */
+.panel-head-right button:not(.ai-status-chip):not(.ai-debug-btn) { min-height: 0; width: 30px; height: 30px; padding: 0; border: none; border-radius: var(--radius-md); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center }
+.panel-head-right button:not(.ai-status-chip):not(.ai-debug-btn):hover { background: var(--surface-hover); color: var(--text) }
 /* == Modell-Auswahl: kompaktes Icon im kleinen Chat, Chip im groß == */
 .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text2) }
 .composer-tool:hover { background: var(--surface-hover-strong); color: var(--text) }
@@ -450,17 +455,19 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 .attach-menu[hidden] { display: none }
 .attach-menu-icon { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; font-size: 17px; line-height: 1; color: var(--text2); transform: rotate(-42deg) }
 .attach-menu button:last-child .attach-menu-icon { transform: none; font-size: var(--text-md) }
-/* Bug-Fix („kommt noch“, 22. Juli): Anhang-Chip fließt als eigene Zeile OBEN im Composer mit,
-   statt absolut positioniert (max-width 240px) über dem Text zu schweben — Chip und Prompt
-   überlappten und schnitten sich gegenseitig ab. Volle Breite, lange Namen enden mit „…“. */
+/* 🎨 Chat-Redesign (28. Juli): Anhang als kleine Pille statt Zeile über volle Breite — Icon bzw.
+   Mini-Thumb + Name mit „…“, ✕ direkt daneben. Der Chip bleibt eigene Zeile OBEN im Composer
+   (Überlapp-Fix vom 22. Juli bleibt bestehen), nimmt aber nur noch so viel Platz wie sein Inhalt.
+   Die zweite Meta-Zeile (small) entfällt sichtbar — eine Regel weniger zu pflegen (KISS). */
 /* Gilt für JEDEN Chip im Composer — Bild, PDF, Textdatei und Seitenkontext. */
-#pendingChip, #mainPendingChip, #sideContextChip { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
-#pendingChip .chip-body, #mainPendingChip .chip-body, #sideContextChip .chip-body { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.35 }
-#pendingChip .chip-body b, #mainPendingChip .chip-body b, #sideContextChip .chip-body b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-#pendingChip .chip-body small, #mainPendingChip .chip-body small, #sideContextChip .chip-body small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+#pendingChip, #mainPendingChip, #sideContextChip { display: inline-flex; align-items: center; gap: 6px; width: auto; max-width: 100%; align-self: flex-start; min-height: 26px; padding: 3px 10px; border: 1px solid var(--edge); border-radius: var(--radius-pill); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
+#pendingChip .chip-body, #mainPendingChip .chip-body, #sideContextChip .chip-body { display: flex; align-items: center; min-width: 0; line-height: 1.35 }
+#pendingChip .chip-body b, #mainPendingChip .chip-body b, #sideContextChip .chip-body b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600 }
+#pendingChip .chip-body small, #mainPendingChip .chip-body small, #sideContextChip .chip-body small { display: none }
 #pendingChip[hidden], #mainPendingChip[hidden], #sideContextChip[hidden] { display: none }
-#pendingChip img, #mainPendingChip img { height: 32px; border-radius: var(--radius-sm) }
-#pendingChip button, #mainPendingChip button, #sideContextChip button { min-height: 0; margin-left: auto; padding: 2px 5px; border: none; background: transparent }
+#pendingChip img, #mainPendingChip img { width: 16px; height: 16px; object-fit: cover; border-radius: var(--radius-xs); flex-shrink: 0 }
+#pendingChip button, #mainPendingChip button, #sideContextChip button { min-height: 0; margin-left: 2px; padding: 0 3px; border: none; background: transparent; color: var(--text2); font-size: var(--text-2xs) }
+#pendingChip button:hover, #mainPendingChip button:hover, #sideContextChip button:hover { color: var(--text) }
 /* Der Anhang erweitert die Eingabeleiste ausschließlich nach obe… */
 .chat-form-full { flex-wrap: wrap }
 .chat-form-full #mainPendingChip { margin: 0 }
@@ -2095,7 +2102,9 @@ h3, h4 { text-wrap: balance }
    Stellen der Datei; mehrere dieser Regeln waren durch Spezifität bereits wirkungslos.
    Dichte und Höhe laufen jetzt über vier Variablen — die Breakpoints setzen nur noch diese. */
 .anki-study-mode .study-card {
-	--stage-min-h: min(62dvh, 620px);
+	/* Kartenhöhe: so groß wie möglich, aber 100dvh minus Reserve für Kopfzeile + Fußleiste —
+	   so bleibt „Bearbeiten/Aussetzen/Optionen“ IMMER im sichtbaren Bereich. */
+	--stage-min-h: min(62dvh, calc(100dvh - 200px), 620px);
 	--stage-pad: clamp(20px, 4vw, 44px);
 	--stage-top: 24px;
 	--stage-gap: 12px;
@@ -2214,9 +2223,11 @@ body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-tem
    Desktop-Modus. Der erste Tipp setzte dort nur den Hover-Zustand (Zeile hob sich an,
    ⋯-Knöpfe erschienen), erst der zweite drückte „Lernen“. */
 @media (any-pointer: coarse) {
-	:where(.lib-card, .deck-row, .kpi, .grades [data-ankigrade], .study-reveal-controls [data-ankishowback]):hover { transform: none }
-	:where(.lib-card, .deck-row):active { transform: scale(.995); background: var(--surface-hover) }
-	.deck-iconbtn { opacity: 1 }
+	/* ⚠️ Volle Selektoren statt :where(): :where hat NULL Gewicht — damit verloren diese
+	   Regeln gegen die Basis-Hover-Regeln und der Doppeltipp-Bug kam zurück (28. Juli). */
+	.lib-card:hover, .deck-row:hover, .kpi:hover, .grades [data-ankigrade]:hover, .study-reveal-controls [data-ankishowback]:hover { transform: none }
+	.lib-card:active, .deck-row:active { transform: scale(.995); background: var(--surface-hover) }
+	.deck-actions .deck-iconbtn { opacity: 1 }
 }
 
 /* == 📐 Dichte ab Tablet-Breite ==
@@ -2229,7 +2240,7 @@ body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-tem
 /* Touch ab Tablet-Breite: größere Bühne, weil Finger mehr Fläche brauchen. */
 @media (pointer: coarse) and (min-width: 701px) {
 	.library.anki { padding: 14px 16px 88px }
-	.anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(80dvh, 900px); --stage-pad: clamp(16px, 2vw, 32px) }
+	.anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(80dvh, calc(100dvh - 210px), 900px); --stage-pad: clamp(16px, 2vw, 32px) }
 }
 /* Kompakt-Modus (randlose Fläche): weniger Außenabstand, dafür mehr Karteninhalt — der Modus
    fehlte in der Lernansicht bisher komplett und erbte die komfortablen Abstände. */
@@ -2257,7 +2268,7 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
    Der gewonnene Platz geht an den Karteninhalt. */
 @media (pointer: fine) and (min-width: 981px) {
 	.library.anki { padding: 16px 22px 88px }
-	.anki-study-mode .study-card { --stage-top: 8px; --stage-min-h: min(74dvh, 780px); --stage-pad: clamp(16px, 1.6vw, 28px); --stage-gap: 10px }
+	.anki-study-mode .study-card { --stage-top: 8px; --stage-min-h: min(74dvh, calc(100dvh - 190px), 780px); --stage-pad: clamp(16px, 1.6vw, 28px); --stage-gap: 10px }
 	.anki-study-mode .grades { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px }
 	.anki-study-mode .grades button { padding: 6px }
 	.anki-study-mode .study-reveal-controls { gap: 8px }

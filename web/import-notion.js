@@ -145,20 +145,31 @@ export const NOTION_MIGRATOR = (() => {
 	}
 
 	// Verknüpft eine lokale Seite dauerhaft mit ihrer Notion-Seite.
-	async function linkPage(localId, nid) {
+	// meta (optional) MUSS mitgegeben werden, wenn es geladen ist: das Setzen von
+	// notionId ist eine lokale Änderung und hebt pg.updated. Ohne Nachführen von
+	// meta.l gälte die Seite beim nächsten Lauf als „lokal bearbeitet“ — sie würde nie
+	// mehr übersprungen und in sync() sogar unnötig nach Notion zurückgeschrieben.
+	async function linkPage(localId, nid, meta) {
 		if (!localId || !nid) return;
-		if ((S.pages[localId] || {}).notionId !== nid) await STATE.dispatch("pageUpdate", { id: localId, patch: { notionId: nid } });
+		if ((S.pages[localId] || {}).notionId !== nid) {
+			await STATE.dispatch("pageUpdate", { id: localId, patch: { notionId: nid } });
+			if (meta && meta[nid]) meta[nid].l = (S.pages[localId] || {}).updated || "";
+		}
 		if (IDX) { IDX.byNotionId.set(nid, localId); IDX.linked.add(localId); }
 	}
 
 	// Einmalige Übernahme der alten Verknüpfungen: settings.notionMap und die frühere
 	// Konvention "lokale ID IST die Notion-ID" wandern auf pg.notionId.
-	async function migrateLinks() {
+	async function migrateLinks(meta) {
 		const map = S.settings.notionMap || {};
 		for (const pg of Object.values(S.pages)) {
 			if (pg.notionId) continue;
 			const nid = map[pg.id] || (/^[0-9a-f]{32}$/.test(pg.id) ? pg.id : null);
-			if (nid) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { notionId: nid } });
+			if (!nid) continue;
+			await STATE.dispatch("pageUpdate", { id: pg.id, patch: { notionId: nid } });
+			// Ohne diese Zeile sähe der ERSTE Lauf nach dem Umzug jede Altseite als lokal
+			// bearbeitet — sync() hätte den kompletten Bestand nach Notion gepusht.
+			if (meta && meta[nid]) meta[nid].l = (S.pages[pg.id] || {}).updated || "";
 		}
 	}
 
@@ -166,6 +177,22 @@ export const NOTION_MIGRATOR = (() => {
 		if (IDX) return IDX.byNotionId.get(nid) || null;
 		for (const pg of Object.values(S.pages)) if (notionIdOf(pg) === nid) return pg.id;
 		return null;
+	}
+
+	// Nachlauf-Abgleich des Gedächtnisses. pullRemotePage() merkt sich den lokalen Stand
+	// direkt nach dem Schreiben einer Seite — aber alignWorkspaces() und Eltern-Umzüge
+	// laufen ERST DANACH und heben pg.updated erneut. Ohne diesen Abgleich gälte jede
+	// gerade importierte Seite beim nächsten Lauf wieder als lokal geändert: nie ein Skip,
+	// und in sync() ein Push von Inhalten, die gerade erst aus Notion kamen.
+	// Nur BERÜHRTE Seiten werden nachgezogen — eine echte, noch nicht gepushte
+	// Nutzeränderung darf dabei niemals stillschweigend verfallen.
+	function settleMeta(meta, touched) {
+		if (!meta || !touched) return;
+		for (const nid of touched) {
+			const localId = localIdForRemote(nid);
+			const pg = localId ? S.pages[localId] : null;
+			if (pg && meta[nid]) meta[nid].l = pg.updated || "";
+		}
 	}
 
 	// Identitätsleiter — von sicher nach plausibel:
@@ -392,7 +419,8 @@ export const NOTION_MIGRATOR = (() => {
 		const known = meta && meta[nid];
 		const existingId = localIdForRemote(nid);
 		const existing = existingId ? S.pages[existingId] : null;
-		if (existing && !existing.trashed && known && Array.isArray(known.k)
+		// known.f = „Stand unsicher“ (siehe Minutenrundung unten) — dann nie überspringen.
+		if (existing && !existing.trashed && known && Array.isArray(known.k) && !known.f
 			&& redit && redit <= (known.r || "") && (existing.updated || "") <= (known.l || "")) {
 			if (ctx.stats) ctx.stats.skipped++;
 			return { id: existingId, childPageIds: known.k, skipped: true };
@@ -421,15 +449,15 @@ export const NOTION_MIGRATOR = (() => {
 						await STATE.dispatch("pageUpdate", { id: dbLocal, patch: { title: dTitle, icon: dIcon, db: { schema } } });
 						if (S.pages[dbLocal].trashed) await STATE.dispatch("pageRestore", { id: dbLocal });
 					}
-					await linkPage(dbLocal, dbn);
+					await linkPage(dbLocal, dbn, ctx.meta);
 					let cursor;
 					for (let i = 0; i < 20; i++) {
 						const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
 						const q = await req(token, "/databases/" + dbId + "/query", { method: "POST", body });
 						for (const row of q.results || []) {
 							checkCancelled();
-							const rres = await pullRemotePage(token, row, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, parentLocal: dbLocal, restoreTrashed: true });
-							for (const cid of rres.childPageIds) await importPageAndChildren(token, cid, rres.id, 0, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, visited: new Set([cid]) });
+							const rres = await pullRemotePage(token, row, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, touched: ctx.touched, parentLocal: dbLocal, restoreTrashed: true });
+							for (const cid of rres.childPageIds) await importPageAndChildren(token, cid, rres.id, 0, { merged: ctx.merged, meta: ctx.meta, stats: ctx.stats, touched: ctx.touched, visited: new Set([cid]) });
 						}
 						if (!q.has_more) break;
 						cursor = q.next_cursor;
@@ -443,7 +471,7 @@ export const NOTION_MIGRATOR = (() => {
 		if (id && !(IDX && IDX.byNotionId.has(nid))) {
 			// Über Ort + Titel wiedererkannt: ab jetzt fest verknüpft — beim nächsten
 			// Lauf greift Stufe 1 der Leiter, es wird nie wieder geraten.
-			await linkPage(id, nid);
+			await linkPage(id, nid, meta);
 			if (ctx.merged) ctx.merged.n++;
 		}
 		if (id && S.pages[id] && S.pages[id].trashed && ctx.restoreTrashed) await STATE.dispatch("pageRestore", { id });
@@ -478,7 +506,17 @@ export const NOTION_MIGRATOR = (() => {
 		}
 		// Gedächtnis für den nächsten Lauf: Remote-Stand, lokaler Stand, Kind-Seiten.
 		// Es wird hier geschrieben statt in den Aufrufern — eine Stelle, kein Ping-Pong.
-		if (meta) meta[nid] = { r: redit, l: (S.pages[id] || {}).updated || "", k: childPageIds };
+		if (meta) {
+			// ACHTUNG: Notions last_edited_time ist auf MINUTEN gerundet. Wird eine Seite
+			// in derselben Minute erneut bearbeitet, meldet die API weiterhin denselben
+			// Zeitstempel — die Änderung wäre für immer unsichtbar. Frisch bearbeitete
+			// Stände gelten deshalb als unsicher (f) und werden im nächsten Lauf noch
+			// einmal geholt, statt übersprungen zu werden.
+			const age = redit ? Date.now() - Date.parse(redit) : NaN;
+			meta[nid] = { r: redit, l: (S.pages[id] || {}).updated || "", k: childPageIds };
+			if (!(age >= 120000)) meta[nid].f = 1;
+		}
+		if (ctx.touched) ctx.touched.add(nid);
 		if (ctx.stats) ctx.stats.pulled++;
 		return { id, childPageIds };
 	}
@@ -489,7 +527,7 @@ export const NOTION_MIGRATOR = (() => {
 		if ((depth || 0) > 20) return null;
 		const pgData = await req(token, "/pages/" + blockId);
 		const res = await pullRemotePage(token, pgData, {
-			merged: opts.merged, meta: opts.meta, stats: opts.stats, parentLocal, restoreTrashed: true,
+			merged: opts.merged, meta: opts.meta, stats: opts.stats, touched: opts.touched, parentLocal, restoreTrashed: true,
 		});
 		if (opts.onStatus) opts.onStatus((S.pages[res.id] || {}).title || "");
 		for (const cid of res.childPageIds) {
@@ -819,19 +857,29 @@ export const NOTION_MIGRATOR = (() => {
 
 		async migrate(token, pageId, onStatus) {
 			cancelled = false;
-			await migrateLinks();
-			IDX = buildIndex();
 			// migrate() ist jetzt sync() ohne Push: dasselbe Gedächtnis, dieselbe
 			// Identitätsleiter. Ein zweiter Import ist dadurch billig UND zerstörungsfrei.
+			// Das Gedächtnis wird VOR migrateLinks() geladen — die Umstellung schreibt
+			// notionId und muss meta.l mitziehen (siehe linkPage).
 			const meta = { ...(S.settings.notionMeta || {}) };
+			await migrateLinks(meta);
+			IDX = buildIndex();
 			const merged = { n: 0 };
 			const stats = { pulled: 0, skipped: 0 };
+			const touched = new Set();
 			const say = (s, f) => { if (onStatus) onStatus(s, f); };
 			const tally = () => stats.pulled + " übernommen · " + stats.skipped + " unverändert übersprungen";
 			const reportProgress = (title) => say("Importiere Unterseiten (" + tally() + ") — zuletzt „" + title + "“…", null);
+			// Zwischenspeichern: früher lebte das Gedächtnis nur in dieser Variable und wurde
+			// erst ganz am Schluss geschrieben. Ein Abbruch oder Netzfehler nach 300 Seiten warf
+			// damit die komplette Arbeit weg — der nächste Lauf begann wieder bei null.
+			const saveMeta = async () => {
+				settleMeta(meta, touched);
+				await STATE.dispatch("settingsSet", { notionMeta: meta });
+			};
 			const finish = async (result) => {
 				await alignWorkspaces();
-				await STATE.dispatch("settingsSet", { notionMeta: meta });
+				await saveMeta();
 				say("✅ Import fertig — " + tally() + (merged.n ? " · " + merged.n + " Duplikat(e) zusammengeführt" : "") + ".", 1);
 				return result;
 			};
@@ -859,7 +907,7 @@ export const NOTION_MIGRATOR = (() => {
 					// nicht indiziert → alter Weg: Baum Seite für Seite laden.
 					say("Lese Notion-Seite…", null);
 					const rootId = await importPageAndChildren(token, pageId, undefined, 0, {
-						merged, meta, stats, visited: new Set([rootNid]), onStatus: reportProgress,
+						merged, meta, stats, touched, visited: new Set([rootNid]), onStatus: reportProgress,
 					});
 					return finish(rootId);
 				}
@@ -868,17 +916,25 @@ export const NOTION_MIGRATOR = (() => {
 			}
 			let lastId = null;
 			const visited = new Set(order.map((r) => normId(r.id)));
-			for (let i = 0; i < order.length; i++) {
-				checkCancelled();
-				const { title } = titleAndIconOf(order[i]);
-				say("Importiere " + (i + 1) + "/" + order.length + " (" + tally() + ") — „" + title + "“…", (i + 1) / order.length);
-				const res = await pullRemotePage(token, order[i], { merged, meta, stats, restoreTrashed: true });
-				lastId = res.id;
-				for (const cid of res.childPageIds) {
-					if (visited.has(cid)) continue;
-					visited.add(cid);
-					await importPageAndChildren(token, cid, res.id, 0, { merged, meta, stats, visited, onStatus: reportProgress });
+			try {
+				for (let i = 0; i < order.length; i++) {
+					checkCancelled();
+					const { title } = titleAndIconOf(order[i]);
+					say("Importiere " + (i + 1) + "/" + order.length + " (" + tally() + ") — „" + title + "“…", (i + 1) / order.length);
+					const res = await pullRemotePage(token, order[i], { merged, meta, stats, touched, restoreTrashed: true });
+					lastId = res.id;
+					for (const cid of res.childPageIds) {
+						if (visited.has(cid)) continue;
+						visited.add(cid);
+						await importPageAndChildren(token, cid, res.id, 0, { merged, meta, stats, touched, visited, onStatus: reportProgress });
+					}
+					if ((i + 1) % 25 === 0) await saveMeta();
 				}
+			} catch (err) {
+				// Abbruch oder Netzfehler: das bisher Erreichte behalten, damit der nächste
+				// Lauf dort weitermacht statt alles noch einmal zu holen.
+				await saveMeta();
+				throw err;
 			}
 			return finish(rootNid ? (localIdForRemote(rootNid) || lastId) : lastId);
 		},
@@ -886,11 +942,17 @@ export const NOTION_MIGRATOR = (() => {
 		async sync(token, rootPageId, onStatus) {
 			cancelled = false;
 			const say = (s, f) => { if (onStatus) onStatus(s, f); };
-			await migrateLinks();
+			// Reihenfolge wie in migrate(): erst das Gedächtnis, dann die Verknüpfungen.
+			const meta = { ...(S.settings.notionMeta || {}) };
+			await migrateLinks(meta);
 			IDX = buildIndex();
 			const mergedCounter = { n: 0 };
 			const stats = { pulled: 0, skipped: 0 };
-			const meta = { ...(S.settings.notionMeta || {}) };
+			const touched = new Set();
+			const saveMeta = async (extra) => {
+				settleMeta(meta, touched);
+				await STATE.dispatch("settingsSet", { notionMeta: meta, ...(extra || {}) });
+			};
 			say("Lese Notion-Seiten…", null);
 			const remote = await listRemotePages(token, (n) => say("Lese Notion-Seiten… (" + n + ")", null));
 			const remoteById = {};
@@ -909,20 +971,24 @@ export const NOTION_MIGRATOR = (() => {
 				if (localPg && localPg.trashed) continue;
 				const m = meta[nid];
 				if (!localPg && localId && m) continue;
-				const remoteChanged = !m || redit > (m.r || "");
+				// m.f: letzter Stand war frisch bearbeitet und damit wegen der Minutenrundung
+				// nicht vertrauenswürdig — sicherheitshalber noch einmal holen.
+				const remoteChanged = !m || !!m.f || redit > (m.r || "");
 				const localChanged = !!localPg && (!m || (localPg.updated || "") > (m.l || ""));
 				if (!localPg || (remoteChanged && (!localChanged || redit >= (localPg.updated || "")))) {
 					say("⬇ Übernehme " + (i + 1) + "/" + order.length + " (" + stats.pulled + " übernommen · " + stats.skipped + " übersprungen)…", (i + 1) / (order.length + 1) * 0.5);
-					const res = await pullRemotePage(token, r, { merged: mergedCounter, meta, stats });
+					const res = await pullRemotePage(token, r, { merged: mergedCounter, meta, stats, touched });
 					for (const cid of res.childPageIds) {
 						if (remoteById[cid] || localIdForRemote(cid)) continue;
-						await importPageAndChildren(token, cid, res.id, 0, { merged: mergedCounter, meta, stats, visited: new Set([cid]) });
+						await importPageAndChildren(token, cid, res.id, 0, { merged: mergedCounter, meta, stats, touched, visited: new Set([cid]) });
 					}
 				} else if (!remoteChanged) {
 					// Remote unverändert und lokal nichts zu holen: komplett übersprungen —
 					// null API-Aufrufe für diese Seite.
 					stats.skipped++;
 				}
+				// Alle 25 Seiten sichern — ein Abbruch darf das Gedächtnis nicht verwerfen.
+				if ((i + 1) % 25 === 0) await saveMeta();
 			}
 			await alignWorkspaces();
 
@@ -951,7 +1017,9 @@ export const NOTION_MIGRATOR = (() => {
 					if (localChanged && !remoteNewer) {
 						await pushPage(token, pg, nid);
 						const fresh = await req(token, "/pages/" + nid);
-						meta[nid] = { ...(m || {}), r: fresh.last_edited_time || redit, l: pg.updated || "" };
+						// f: 1 — wir haben gerade selbst geschrieben, der Remote-Zeitstempel ist
+						// also brandneu und wegen der Minutenrundung nicht verlässlich.
+						meta[nid] = { ...(m || {}), r: fresh.last_edited_time || redit, l: (S.pages[pg.id] || {}).updated || pg.updated || "", f: 1 };
 						pushed++;
 					} else if (!m) {
 						meta[nid] = { r: redit, l: pg.updated || "" };
@@ -962,15 +1030,15 @@ export const NOTION_MIGRATOR = (() => {
 					if (!target) continue;
 					const newId = await createRemote(token, pg, target);
 					if (newId) {
-						await linkPage(pg.id, newId);
+						await linkPage(pg.id, newId, meta);
 						const fresh = await req(token, "/pages/" + newId);
-						meta[newId] = { r: fresh.last_edited_time || "", l: pg.updated || "" };
+						meta[newId] = { r: fresh.last_edited_time || "", l: (S.pages[pg.id] || {}).updated || "", f: 1 };
 						created++;
 					}
 				}
 			}
 
-			await STATE.dispatch("settingsSet", { notionMeta: meta, notionLastSync: U.now() });
+			await saveMeta({ notionLastSync: U.now() });
 			return { pulled: stats.pulled, skipped: stats.skipped, pushed, created, merged: mergedCounter.n };
 		},
 	};
