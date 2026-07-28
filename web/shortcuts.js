@@ -20,7 +20,43 @@ function isTypingTarget(el) {
 	return !!(el.closest && el.closest("input, textarea, select, [contenteditable=true]"));
 }
 
+// 🖱️ Mausrad-KLICK = Auto-Scroll (Windows-Geste): Klick setzt den Anker, Maus
+// hoch/runter ziehen scrollt stufenlos (Totzone 10px, beschleunigend). Ziehen und
+// loslassen beendet; kurzer Klick bleibt aktiv bis Klick/Taste/Rad/Fensterwechsel.
+function wireAutoScroll() {
+	let a = null; // { el, oy, y }
+	const stop = () => { a = null; document.body.style.cursor = ""; };
+	const scrollable = (el) => {
+		while (el && el !== document.body) {
+			if (el.scrollHeight - el.clientHeight > 4 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return el;
+			el = el.parentElement;
+		}
+		return document.scrollingElement;
+	};
+	document.addEventListener("mousedown", (e) => {
+		if (a) { stop(); e.preventDefault(); return; } // nächster Klick beendet die Geste
+		if (e.button !== 1 || (e.target.closest && e.target.closest("canvas, iframe, video"))) return;
+		e.preventDefault(); // kein Mittelklick-Einfügen, kein Link-in-neuem-Tab
+		a = { el: scrollable(e.target), oy: e.clientY, y: e.clientY };
+		document.body.style.cursor = "all-scroll";
+		(function frame() {
+			if (!a) return;
+			const d = a.y - a.oy, abs = Math.abs(d);
+			if (abs > 10) a.el.scrollTop += Math.sign(d) * Math.min(Math.pow((abs - 10) / 14, 1.4), 26);
+			requestAnimationFrame(frame);
+		})();
+	}, true);
+	document.addEventListener("mousemove", (e) => { if (a) a.y = e.clientY; });
+	document.addEventListener("mouseup", (e) => { if (a && e.button === 1 && Math.abs(e.clientY - a.oy) > 6) stop(); });
+	document.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefault(); }, true);
+	document.addEventListener("keydown", stop);
+	document.addEventListener("wheel", stop, { passive: true });
+	window.addEventListener("blur", stop);
+}
+
 export function wireShortcuts() {
+	wireAutoScroll();
+
 	document.addEventListener("keydown", (e) => {
 		// Escape schließt: Befehls-Menü, Overlays (Einstellungen, Dialoge), das ⋯-Seitenmenü
 		if (e.key === "Escape") {

@@ -5,7 +5,7 @@ import { SRS } from "./srs.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
 export const S = {
-	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, created, updated }
+	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, notionId, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
 	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
 	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, sourceId, updated, deleted? }
@@ -336,6 +336,11 @@ export const STATE = (() => {
 					icon: p.icon || null, cover: p.cover || null, coverImg: p.coverImg || null,
 					daily: p.daily || null, dailyRoot: p.dailyRoot || null,
 					db: p.db || null, props: p.props || null,
+					// Verknüpfung mit der Notion-Seite (import-notion.js). Sie hängt bewusst
+					// an der Seite selbst statt in settings.notionMap: so reist sie mit der
+					// Seite durchs Event-Log, statt in einem globalen Objekt zu liegen, das
+					// bei jedem Sync komplett neu geschrieben wird.
+					notionId: p.notionId || null,
 					// Seitentyp: "notion" (Block-Editor) oder "heft" (GoodNotes-Notizbuch).
 					// Alt-Seiten ohne kind bleiben automatisch Notion-Seiten.
 					kind: p.kind === "heft" ? "heft" : "notion",

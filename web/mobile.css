@@ -419,8 +419,9 @@ body.mobile-ui .study-card .study-divider {
 body.mobile-ui .study-counts-row { font-size: var(--text-xs); color: var(--text2); text-align: center; margin: 6px 0 10px }
 body.mobile-ui .confidence-row,
 body.mobile-ui .study-reveal-controls .mini,
-body.mobile-ui .study-keys,
-body.mobile-ui [data-ankizen] { display: none }
+body.mobile-ui .study-keys { display: none }
+/* 🐛 Fix (28. Juli): Die ⛶-Taste war auf dem Handy ausgeblendet — wer das Vollbild am
+   Rechner/iPad aktiviert hatte, kam hier nie wieder heraus. Sie bleibt jetzt erreichbar. */
 body.mobile-ui .modal-actions [data-ankishowback] {
 	width: 100%;
 	min-height: 52px;

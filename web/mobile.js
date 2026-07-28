@@ -12,7 +12,9 @@ export const MOBILE = (() => {
 	// echte Phone-Formate: schmale Viewports (≤700px) oder Touch-Geräte im
 	// Querformat mit Phone-Höhe (≤500px). iPads (Hochformat ab 744px Breite,
 	// Querformat ab 744px Höhe) fallen damit wieder in die Desktop-/iPad-Ansicht.
-	const mq = matchMedia("(max-width: 700px), (pointer: coarse) and (max-height: 500px)");
+	// Seit 28. Juli steht diese Abfrage nur noch EINMAL — in app.js (PLATFORM). Damit sind
+	// Handy-Schale, ☰-Verhalten und die CSS-Touch-Regeln garantiert derselben Meinung.
+	const mq = APP.PLATFORM.phoneQuery;
 	const body = document.body;
 	let started = false;
 

@@ -194,6 +194,32 @@ function newPageFlow(wsId, parentId) {
 // 🃏-Bereich öffnen — läuft seit 23. Juli als eigener Tab "anki:main" über TABS.openPage
 // (gleiche Mechanik wie nlm:main): view/sidebarMode, Tab-Leiste, Verlauf und Render
 // kommen von dort — die Sonderbehandlung hier entfällt (KISS).
+// == 🖐️ EINE Definition von „Touch“ und „Handy“ (28. Juli) ==
+// Vorher fragten vier Stellen unterschiedlich: max-width 700px, max-width 768px,
+// (pointer: coarse), (hover: none). iPadOS meldet im Desktop-Modus hover:hover/pointer:fine —
+// das iPad galt je nach Stelle mal als Handy, mal als Maus-Gerät. Quelle der Wahrheit sind
+// jetzt diese zwei Abfragen; das CSS liest das Ergebnis als body.is-touch / body.is-phone.
+const MQ_PHONE = matchMedia("(max-width: 700px), (pointer: coarse) and (max-height: 500px)");
+const MQ_TOUCH = matchMedia("(pointer: coarse), (hover: none)");
+const PLATFORM = {
+	phoneQuery: MQ_PHONE,
+	isPhone: () => MQ_PHONE.matches,
+	isTouch: () => MQ_TOUCH.matches || navigator.maxTouchPoints > 1,
+	sync() {
+		document.body.classList.toggle("is-touch", PLATFORM.isTouch());
+		document.body.classList.toggle("is-phone", PLATFORM.isPhone());
+	},
+};
+for (const q of [MQ_PHONE, MQ_TOUCH]) q.addEventListener("change", PLATFORM.sync);
+PLATFORM.sync();
+
+// ⛶ Karteikarten-Vollbild als Zustand statt als loser Body-Klasse — so weiß jede Ansicht,
+// dass es an ist, und es lässt sich überall wieder verlassen (⛶-Taste, auch auf dem Handy).
+function setAnkiZen(on) {
+	S.ankiZen = !!on;
+	document.body.classList.toggle("anki-zen", S.ankiZen);
+}
+
 function openAnki(tab, deck) {
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
@@ -257,9 +283,13 @@ const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 // auf eine andere Karte bzw. Space/Enter bewertete die falsche Karte.
 function showStudyAnswer(cardId) {
 	if (!inStudy() || S.reviewShowBack) return false;
-	const c = STATE.studySnapshot(S.ankiDeck).dueNow[0];
+	const due = STATE.studySnapshot(S.ankiDeck).dueNow;
+	// Die tatsächlich angezeigte Karte gewinnt; dueNow[0] ist nur der Fallback für die Leertaste.
+	// Vorher entschied dueNow[0] auch darüber, OB aufgedeckt wird — bei einer Queue-Änderung
+	// zwischen Render und Klick konnte so die falsche Karte festgepinnt werden.
+	const c = (cardId && due.find((x) => x.id === cardId)) || due[0];
 	if (!c) return false;
-	S.reviewCardId = cardId || c.id;
+	S.reviewCardId = c.id;
 	S.reviewShowBack = true;
 	renderMain();
 	return true;
@@ -842,7 +872,7 @@ function wireEvents() {
 		// ---------- Anki-Bereich: Tabs, Lernen, Bewerten, Sortieren, Karten-Verwaltung ----------
 		// ⛶ Vollbild (23. Juli): Body-Klasse blendet Seitenleiste + Tab-Leiste aus — rein per
 		// CSS auf die sichtbare Anki-Ansicht begrenzt (styles.css, :has), erneut klicken = zurück.
-		if (t.dataset.ankizen) { document.body.classList.toggle("anki-zen"); return; }
+		if (t.dataset.ankizen) { setAnkiZen(!S.ankiZen); return; }
 		if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; S.reviewShowBack = false; renderMain(); return; }
 		if (t.hasAttribute("data-ankistudy")) {
 			S.ankiDeck = t.dataset.ankistudy || null;
@@ -1461,7 +1491,7 @@ function wireEvents() {
 				break;
 			case "btnSidebarToggle": {
 				// Mobile: Navigator-Sheet öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
-				const mobile = window.matchMedia("(max-width: 768px)").matches;
+				const mobile = PLATFORM.isPhone(); // dieselbe Definition wie mobile.js und das CSS
 				if (mobile) {
 					document.body.classList.toggle("mnav-open");
 				} else {
@@ -1881,7 +1911,9 @@ export const APP = {
 	startNewChat,
 	createPageInNewTab,
 	// Für Strg+K-Aktionen (search.js) — „Karten verwalten“ & Co.
+	PLATFORM,
 	openAnki,
+	setAnkiZen,
 	rateAndReviewCard,
 	showStudyAnswer,
 	gradeStudyCard,

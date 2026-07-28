@@ -427,7 +427,10 @@ body.panel-collapsed #app { grid-template-columns: 260px minmax(0, 1fr) }
 #btnAiFab:hover { color: var(--text); background: var(--surface-hover-strong); transform: translateY(-1px) }
 /* 🐛 Fix (23. Juli): Heft-Ausblendung deckt jetzt auch .heft-stage ab — der Rest der
    Datei adressiert die Heft-Bühne per Klasse (body:has(.heft-stage)), hier stand nur die id. */
-body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.heft-stage) #btnAiFab { display: none }
+/* 🐛 Fix (28. Juli): Im Lernmodus und im Karteikarten-Vollbild lag der feste KI-Kreis genau
+   auf „⚙️ Optionen“ unten rechts. Gleiche Logik wie beim Heft: Bühne sichtbar → Kreis weg. */
+body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.heft-stage) #btnAiFab,
+body:has(.anki-study-mode) #btnAiFab, body.anki-zen #btnAiFab { display: none }
 @media (max-width: 768px) {
 	#btnAiFab { display: none }
 }
@@ -469,12 +472,27 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 /* Such-Taste immer am rechten Rand der Sidebar-Topbar (unabhängi… */
 .topbar #btnSearchToggle { margin-left: auto }
 .tab { display: flex; align-items: center; border: none; background: transparent; border-radius: var(--radius-pill); padding: 6px 9px; color: var(--text2); min-height: 32px; flex-shrink: 0; transition: background .18s ease, color .18s ease }
-.tab:hover { background: var(--surface-hover) }
-.tab.active { background: var(--surface-active); color: var(--text) }
+/* Hover nur mit echtem Zeiger: iPadOS meldet im Desktop-Modus hover:hover — dort kostete
+   der Hover-Zustand bisher den ERSTEN Tipp, erst der zweite löste den Klick aus. */
+body:not(.is-touch) .tab:hover { background: var(--surface-hover) }
+/* Aktive Pille ist auch ohne ausgeklapptes Label eindeutig: Akzentfläche + Innenrand. */
+.tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.tab.active svg { color: var(--accent) }
+/* Touch kennt kein Hover — sichtbares Antipp-Feedback auf JEDER Breite, nicht nur ≤768px. */
+body.is-touch .tab:active { background: var(--surface-hover-strong); transform: scale(.96) }
 .tab svg { display: block }
 .tab .tab-label { font-weight: 600; font-size: var(--text-base); white-space: nowrap; overflow: hidden; max-width: 0; opacity: 0; margin-left: 0; transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease }
 /* Nur die aktive Pille zeigt das Label — renderTopbar setzt gena… */
 .tab.active .tab-label { max-width: 110px; opacity: 1; margin-left: 6px }
+/* Touch: Leiste bleibt einzeilig. Fünf 42px-Pillen plus ausgeklapptes Label passen weder in
+   die komfortable (260px) noch in die kompakte (236px) Seitenleiste — die Leiste brach um und
+   sprang bei jedem Tab-Wechsel. Die aktive Pille erkennt man jetzt an der Akzentfläche. */
+body.is-touch .topbar { flex-wrap: nowrap }
+body.is-touch .tab { min-height: 42px; min-width: 42px; padding: 6px }
+body.is-touch .tab .tab-label { display: none }
+/* Kompakt-Modus: schmalere Seitenleiste (236px) und weniger Innenabstand — Pillen entsprechend. */
+body.is-touch.density-compact .topbar { gap: 2px }
+body.is-touch.density-compact .tab { min-height: 40px; min-width: 40px; padding: 5px }
 #search[hidden] { display: none }
 .ws-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; margin-top: 4px; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.5px; color: var(--text2); text-transform: uppercase }
 .ws-head .ws-name { flex: 1; padding-left: 2px }
@@ -1144,6 +1162,12 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { t
 .study-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; margin: 10px 0 0; padding: 0 }
 .study-footer-options { display: flex; align-items: center; gap: 4px }
 .study-footer .mini { min-height: 32px }
+/* Im Lernmodus gehört die Fußleiste zur Bühne: gleiche Breite wie die Karte, feste Zeile,
+   nie unter der Falz und nie unter dem KI-Kreis. */
+.anki-study-mode .study-footer { flex: 0 0 auto; width: min(820px, 100%); margin: 10px auto 0; padding-bottom: env(safe-area-inset-bottom, 0px) }
+.anki-study-mode .study-footer .mini { min-height: 36px }
+body.is-touch .anki-study-mode .study-footer .mini { min-height: 44px }
+body.density-compact .anki-study-mode .study-footer { margin-top: 6px }
 .study-card .modal-actions [data-ankishowback]:not(.mini) { min-width: 220px; min-height: 44px; background: var(--accent); color: var(--on-accent); font-weight: 650; border-radius: var(--radius-lg) }
 .study-card .modal-actions [data-ankishowback] .grade-key { opacity: .55; margin-left: 6px }
 /* Stapel-Liste: „Standard (ohne Stapel)“-Zeile dezenter */
@@ -1858,8 +1882,8 @@ h3, h4 { text-wrap: balance }
 /* ================= Anki-Lernlayout (17. Juli) ================= */
 /* Zähler „neu · lernen · wdh.“ stehen wie in Anki direkt ÜBER der Aktion */
 .study-counts-row { text-align: center; font-size: var(--text-sm); color: var(--text2); margin: 10px 0 2px }
-/* Fußleiste wie Anki: Bearbeiten unten links, Optionen unten rechts */
-.study-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px }
+/* Duplikat entfernt (28. Juli): Die Fußleiste steht kanonisch weiter oben bei .study-footer —
+   diese zweite, abweichende Regel überschrieb dort still die Abstände. */
 /* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */
 /* 🐛 Fix (26. Juli, "Toolbar wird schlagartig transparent"): Der Rückzug bleibt, ist aber
    weich und nicht mehr fast unsichtbar (.12 → .3). Die eigentliche Ursache des Flackerns
@@ -2086,7 +2110,11 @@ h3, h4 { text-wrap: balance }
 	gap: var(--stage-gap);
 	width: min(820px, 100%);
 	max-width: none;
-	min-height: var(--stage-min-h);
+	/* 🐛 Fix (28. Juli): min-height erzwang Kopfzeile + Karte + Fußleiste > Bildschirmhöhe,
+	   dadurch rutschte „Bearbeiten/Aussetzen/Optionen“ unter den sichtbaren Bereich.
+	   Jetzt ist die Bühnenhöhe ein Wunsch (flex-basis), kein Zwang. */
+	min-height: 0;
+	flex-basis: var(--stage-min-h);
 	margin: var(--stage-top) auto 0;
 	padding: var(--stage-pad);
 	overflow: hidden;
@@ -2190,6 +2218,11 @@ body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-tem
 @media (hover: none) {
 	.lib-card:hover, .deck-row:hover { transform: none }
 }
+/* Kanonisch: Touch-Regeln hängen an body.is-touch (app.js, PLATFORM), denn (hover: none) und
+   (pointer: coarse) greifen auf iPadOS im Desktop-Modus NICHT — genau dort brauchte „Lernen“
+   zwei Tipps, weil der erste nur den Hover-Zustand setzte. */
+body.is-touch :where(.lib-card, .deck-row, .kpi, .grades [data-ankigrade], .study-reveal-controls [data-ankishowback]):hover { transform: none }
+body.is-touch :where(.lib-card, .deck-row):active { transform: scale(.995); background: var(--surface-hover) }
 
 /* == 📐 Dichte ab Tablet-Breite ==
    Werkzeugleiste und Kennzahlen sind auf jedem großen Schirm gleich dicht — das steht
@@ -2201,8 +2234,18 @@ body.anki-zen.density-compact.panel-collapsed:has(.library.anki) #app { grid-tem
 /* Touch ab Tablet-Breite: größere Bühne, weil Finger mehr Fläche brauchen. */
 @media (pointer: coarse) and (min-width: 701px) {
 	.library.anki { padding: 14px 16px 88px }
-	.anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(80dvh, 900px); --stage-pad: clamp(16px, 2vw, 32px) }
 }
+/* Touch (iPad, auch wenn es sich als Desktop ausgibt): großzügige Bühne, aber so bemessen,
+   dass Kopfzeile + Karte + Fußleiste zusammen auf den Schirm passen. */
+body.is-touch .anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(68dvh, 820px); --stage-pad: clamp(16px, 2vw, 32px) }
+/* Bewertungs-/Aktionsknöpfe: die 54px-Fingergröße hing bisher an (pointer: coarse) und
+   verfehlte damit iPads im Desktop-Modus — jetzt an derselben Touch-Definition wie alles andere. */
+body.is-touch .anki-study-mode .study-card .grades button, body.is-touch .anki-study-mode .study-card .modal-actions button { min-height: 54px }
+/* Kompakt-Modus (randlose Fläche): weniger Außenabstand, dafür mehr Karteninhalt — der Modus
+   fehlte in der Lernansicht bisher komplett und erbte die komfortablen Abstände. */
+body.density-compact .anki-study-mode { padding: clamp(8px, 1.6vw, 18px) clamp(12px, 3vw, 40px) max(12px, env(safe-area-inset-bottom)) }
+body.density-compact .anki-study-mode .study-card { --stage-top: 8px; --stage-pad: clamp(14px, 1.8vw, 28px) }
+body.density-compact .library.anki { padding: 18px 24px 88px }
 
 /* == ✨ Feinschliff v12 (25. Juli): Typografie-Details, keine neue Struktur == */
 /* Zahlen springen beim Hochzählen nicht mehr in der Breite (Timer, Fällig-Zähler, Statistik). */
