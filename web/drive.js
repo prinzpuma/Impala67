@@ -139,6 +139,14 @@ export const DRIVE = (() => {
 		return { verifier, challenge: base64url(digest) };
 	}
 
+	// EINE Anmelde-URL für Desktop (Loopback) und Web (Weiterleitung) — bauten bisher beide je einzeln.
+	const authUrl = (clientId, redirectUri, challenge) =>
+		"https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+			client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: SCOPE,
+			access_type: "offline", prompt: "consent", include_granted_scopes: "true",
+			code_challenge: challenge, code_challenge_method: "S256",
+		});
+
 	// clientId gesetzt = Browser/PWA-Weg (Web-Client, PKCE).
 	const tokenRequest = (params, clientId) => fetch("https://oauth2.googleapis.com/token", {
 		method: "POST",
@@ -189,9 +197,8 @@ export const DRIVE = (() => {
 	}
 
 	// Desktop (Tauri): System-Browser + lokaler Redirect-Server statt Popup.
+	// Der stille Erneuerungs-Versuch läuft vorher zentral in getToken().
 	async function getTokenDesktop(interactive) {
-		const fromRefresh = await tokenFromRefresh();
-		if (fromRefresh) return fromRefresh;
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
 		// Klare Meldungen statt Googles kryptischer invalid_request/client_secret-Fehler.
 		if (!dcId()) throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt. Trage sie einmalig unter ⚙️ Einstellungen → Sync ein (OAuth-Client Typ „Desktop-App“ aus der Google Cloud Console) — oder befülle web/config.local.js und baue die App neu.");
@@ -199,10 +206,7 @@ export const DRIVE = (() => {
 		const { verifier, challenge } = await pkcePair();
 		const port = await window.__TAURI__.core.invoke("start_oauth_server");
 		const redirectUri = "http://localhost:" + port;
-		const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
-			client_id: dcId(), redirect_uri: redirectUri, response_type: "code", scope: SCOPE,
-			access_type: "offline", prompt: "consent", code_challenge: challenge, code_challenge_method: "S256",
-		});
+		const url = authUrl(dcId(), redirectUri, challenge);
 		const codePromise = new Promise((resolve, reject) => {
 			// Login-Abbruch im Browser: nach 2 min aufgeben + Redirect-Server aufräumen.
 			const timer = setTimeout(() => {
@@ -219,7 +223,7 @@ export const DRIVE = (() => {
 				} catch (e) { reject(e); }
 			});
 		});
-		await window.__TAURI__.shell.open(authUrl);
+		await window.__TAURI__.shell.open(url);
 		const code = await codePromise;
 		window.__TAURI__.core.invoke("cancel_oauth_server", { port }).catch(() => {});
 		saveToken(await exchangeCode(code, verifier, redirectUri));
@@ -251,11 +255,7 @@ export const DRIVE = (() => {
 		// Die Client-ID reist MIT: config.local.js wird lazy geladen, beim Auswerten der
 		// Rückkehr war webId() deshalb oft "" — der Tausch lief dann gegen den Desktop-Client.
 		LS.setItem(PKCE_KEY, JSON.stringify({ verifier, clientId, t: Date.now() }));
-		location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
-			client_id: clientId, redirect_uri: webRedirect(), response_type: "code", scope: SCOPE,
-			access_type: "offline", prompt: "consent", include_granted_scopes: "true",
-			code_challenge: challenge, code_challenge_method: "S256",
-		}));
+		location.assign(authUrl(clientId, webRedirect(), challenge));
 		return new Promise(() => {}); // die Seite wird verlassen
 	}
 
@@ -294,8 +294,6 @@ export const DRIVE = (() => {
 	}
 
 	async function getTokenBrowser(interactive) {
-		const fromRefresh = await tokenFromRefresh(webId());
-		if (fromRefresh) return fromRefresh;
 		// PWA hielt nur eine Stunde: ohne Erneuerungs-Schlüssel wurde hier abgebrochen und die
 		// App galt als abgemeldet. GIS kann still (ohne Klick, ohne Popup) einen neuen
 		// Stundentoken holen, solange die Google-Zustimmung steht — damit bleibt man angemeldet.
@@ -329,10 +327,12 @@ export const DRIVE = (() => {
 		return t && exp && Date.now() < exp ? t : null;
 	};
 
-	function getToken(interactive) {
+	// Stiller Erneuerungs-Versuch einmal zentral — stand vorher am Kopf beider Plattform-Pfade.
+	async function getToken(interactive) {
 		const saved = validSavedToken();
-		if (saved) return Promise.resolve(token = saved);
-		return window.__TAURI__ ? getTokenDesktop(interactive) : getTokenBrowser(interactive);
+		if (saved) return (token = saved);
+		const fromRefresh = await tokenFromRefresh(window.__TAURI__ ? "" : webId());
+		return fromRefresh || (window.__TAURI__ ? getTokenDesktop(interactive) : getTokenBrowser(interactive));
 	}
 
 	async function fetchUserInfo() {
