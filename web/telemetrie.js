@@ -11,8 +11,10 @@ import { U } from "./util.js";
 // 1. Alles läuft über das bestehende Event-Log (STATE.dispatch "teleEvent") und synct über Drive.
 // 2. KEINE Hooks in fremden Modulen: ein Capture-Click-Listener beobachtet die
 //    data-Attribute des Lernmodus (render-anki.js) — app.js, srs.js & Co. bleiben unangetastet.
-// 3. Öffentliche API: TELE.log / TELE.mark / TELE.onReview / TELE.homeInsightsHtml / TELE.exportDump
+// 3. Öffentliche API: TELE.log / TELE.mark / TELE.onReview / TELE.reviewEvents / TELE.passRate /
+//    TELE.thinkMedian / TELE.homeInsightsHtml / TELE.exportDump
 //    (Nutzer: lernzeit.js, render.js, experimente.js, analyse.js; #btnTeleExport aus settings.js wird weiter HIER behandelt).
+//    thinkMedian ist NICHT tot: analyse.js nutzt es als Schwelle für den Ehrlichkeits-Hinweis.
 // 4. Telemetrie darf den UI-Fluss NIE stören: fire-and-forget, alle Fehler werden geschluckt.
 
 export const TELE = (() => {
@@ -24,21 +26,31 @@ export const TELE = (() => {
 	// 20 s sind bei einer Formel-Karte normal und bei einer Vokabel eine Ewigkeit. Jede
 	// Karte wird deshalb mit dem EIGENEN Median verglichen (letzte 300 Bewertungen,
 	// ohne getippte Feynman-Karten). Ergebnis wird gecacht — das Log kann groß sein.
+	// EIN Median-Helfer für die ganze Datei (war doppelt: hier grob per Index, unten exakt).
+	const median = (list) => {
+		if (!list.length) return 0;
+		const s = [...list].sort((a, b) => a - b), m = s.length >> 1;
+		return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+	};
+	// Cache-Schlüssel: Länge ALLEIN reicht nicht — Log-Merge (drive.js) und Verdichtung
+	// (db.js) können gleich viele Events zurücklassen; die Caches blieben dann stale.
+	const logStamp = (list) => list.length + ":" + (list.length ? (list[list.length - 1].t || list[list.length - 1].id || "") : "");
+
 	let _medKey = "", _medVal = 0;
 	function thinkMedian() {
 		const tele = S.telemetry || [];
-		const key = String(tele.length);
+		const key = logStamp(tele);
 		if (key === _medKey) return _medVal;
+		const rs = reviewEvents(); // zurückgenommene Bewertungen sind hier schon draußen
 		const vals = [];
-		for (let i = tele.length - 1; i >= 0 && vals.length < 300; i--) {
-			const e = tele[i];
-			if (!e || e.kind !== "review" || !e.data || e.data.typed) continue;
+		for (let i = rs.length - 1; i >= 0 && vals.length < 300; i--) {
+			const e = rs[i];
+			if (e.data.typed) continue;
 			const ms = e.data.thinkMs;
 			if (Number.isFinite(ms) && ms > 400 && ms < 120000) vals.push(ms);
 		}
-		vals.sort((a, b) => a - b);
 		_medKey = key;
-		_medVal = vals.length >= 12 ? vals[vals.length >> 1] : 0; // zu wenig eigene Daten → kein Urteil
+		_medVal = vals.length >= 12 ? median(vals) : 0; // zu wenig eigene Daten → kein Urteil
 		return _medVal;
 	}
 	// Selbsteinschätzung automatisch (25. Juli): „Wie sicher bist du?“ muss niemand mehr
@@ -159,12 +171,20 @@ export const TELE = (() => {
 	window.addEventListener("pagehide", () => endSession("close"));
 
 	// ---------- Auswertung ----------
-	const median = (list) => {
-		if (!list.length) return 0;
-		const s = [...list].sort((a, b) => a - b), m = s.length >> 1;
-		return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+	// EINE Definition von „gültige Bewertung“ und „Erfolgsquote“ für alle Auswertungen —
+	// analyse.js hatte beides nachgebaut, die Quoten konnten dadurch auseinanderlaufen.
+	// Ein Undo nimmt die zuletzt gebuchte Bewertung zurück; ihr review-Event bleibt im
+	// Log stehen (append-only) und wurde bisher in JEDER Quote weiter mitgezählt.
+	const reviewEvents = () => {
+		const out = [];
+		for (const e of S.telemetry || []) {
+			if (!e || !e.data) continue;
+			if (e.kind === "review" && e.data.grade > 0) out.push(e);
+			else if (e.kind === "reviewUndo") out.pop(); // Log ist chronologisch → letzte Bewertung
+		}
+		return out;
 	};
-	const passRate = (list) => list.filter((e) => e.data.grade > 1).length / list.length;
+	const passRate = (list) => (list.length ? list.filter((e) => e.data.grade > 1).length / list.length : 0);
 	const pct = (x) => Math.round(x * 100);
 
 	// Insights für die Home-Seite: nur Aussagen mit genug Daten, sonst Hinweis.
@@ -175,9 +195,9 @@ export const TELE = (() => {
 	let _insightsKey = "", _insightsHtml = "";
 	function homeInsightsHtml() {
 		const tele = S.telemetry || [];
-		const cacheKey = tele.length + ":" + (S.reviews || []).length + ":" + new Date().getHours();
+		const cacheKey = logStamp(tele) + ":" + logStamp(S.reviews || []) + ":" + new Date().getHours();
 		if (cacheKey === _insightsKey && _insightsHtml) return _insightsHtml;
-		const reviews = tele.filter((e) => e.kind === "review" && e.data && e.data.grade > 0);
+		const reviews = reviewEvents();
 		const row = (icon, title, sub) => `<div class="insight"><span class="insight-ico">${icon}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
 		const out = [];
 
@@ -295,5 +315,5 @@ export const TELE = (() => {
 		U.toast("Lerndaten exportiert.", "success");
 	}
 
-	return { log, mark, onReview, thinkMedian, homeInsightsHtml, exportDump };
+	return { log, mark, onReview, reviewEvents, passRate, thinkMedian, homeInsightsHtml, exportDump };
 })();

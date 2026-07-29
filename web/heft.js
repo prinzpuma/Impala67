@@ -80,10 +80,15 @@ export const HEFT = (() => {
 		if (!writing) return;
 		writingOffT = setTimeout(() => { writingOffT = 0; writing = false; applyWriting(); }, 700);
 	}
-	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null, scrollFn = null;
+	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null;
 	let undoStack = [], redoStack = [];
 	const UNDO_MAX = 100; // Speicher-Limit: stundenlanges Schreiben ließ den Stack unbegrenzt wachsen
-	const pushUndo = (a) => { undoStack.push(a); if (undoStack.length > UNDO_MAX) undoStack.shift(); redoStack = []; };
+	// pageId mitschreiben: pageIdx driftet, sobald Seiten eingefügt/gelöscht/importiert
+	// werden -> Undo traf danach die falsche Seite. ID ist der stabile Anker.
+	const pushUndo = (a) => {
+		if (a.pageIdx != null && doc && doc.pages[a.pageIdx]) a.pageId = doc.pages[a.pageIdx].id;
+		undoStack.push(a); if (undoStack.length > UNDO_MAX) undoStack.shift(); redoStack = [];
+	};
 	let sel = null;
 	let lassoSel = null;
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
@@ -347,6 +352,9 @@ export const HEFT = (() => {
 		if (!d || !d.pages.length) return;
 		dropThumbs(pid);
 		const structural = doc !== d || d.pages.length !== canvases.length;
+		// Dokument komplett ersetzt (Snapshot-Import): Undo-Einträge zeigen auf Objekte des
+		// verworfenen Dokuments -> verwerfen statt blind anwenden.
+		if (doc && doc !== d) { undoStack = []; redoStack = []; }
 		doc = d; docs[pid] = d;
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
 		sel = null; lassoSel = null;
@@ -726,7 +734,6 @@ export const HEFT = (() => {
 
 		renderDetailTile(i);
 	}
-	function redraw() { renderVisiblePages(); }
 
 	// --- Ansicht: EINE Wahrheit (26. Juli, Neubau) ---------------------------
 	// view = { x, y, k }: x/y ist die linke obere Ecke des sichtbaren Bereichs in
@@ -745,7 +752,7 @@ export const HEFT = (() => {
 	// von 1.5 stammte aus der Zeit, als die Zeichenflaeche mit dem Zoom mitwuchs -
 	// auf einem 2x/3x-Bildschirm war dadurch jede Schrift dauerhaft weich.
 	const MAX_RENDER_DPR = 3, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
-	let visibleRenderTimer = 0, zoomSettleTimer = 0, scrollRenderFrame = 0, scrollSettleTimer = 0;
+	let zoomSettleTimer = 0, scrollSettleTimer = 0;
 	const gesture = {
 		pts: new Map(), pinch: null, last: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
 		raf: 0, fling: 0, anim: null, vx: 0, vy: 0, lastT: 0,
@@ -1034,11 +1041,6 @@ export const HEFT = (() => {
 
 		if (!skipTiles) renderDetailTiles(false);
 	}
-	function scheduleVisibleRender(delay = 90) {
-		clearTimeout(visibleRenderTimer);
-		visibleRenderTimer = setTimeout(() => { visibleRenderTimer = 0; renderVisiblePages(); }, delay);
-	}
-
 	function scheduleZoomSettleRender() {
 		clearTimeout(zoomSettleTimer);
 		zoomSettleTimer = setTimeout(() => { zoomSettleTimer = 0; sharpen(); }, 110);
@@ -1339,7 +1341,8 @@ export const HEFT = (() => {
 		}
 		// Handballen: eine bereits bestehende blaue Markierung wegräumen (CSS verhindert
 		// neue, das hier löst die alte auf — sonst blieb sie sichtbar hängen).
-		if (e.pointerType !== "mouse") { const sel = window.getSelection?.(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); }
+		// nicht 'sel' benennen: verdeckte die Heft-Auswahl im ganzen Block
+		if (e.pointerType !== "mouse") { const domSel = window.getSelection?.(); if (domSel && !domSel.isCollapsed) domSel.removeAllRanges(); }
 		if (rejected(e) || !doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
@@ -1627,8 +1630,9 @@ export const HEFT = (() => {
 
 	function applyHistory(fromStack, toStack, isRedo) {
 		const a = fromStack.pop(); if (!a || !doc) return;
-		const pi = a.pageIdx != null ? a.pageIdx : idx;
-		const pg = doc.pages[pi]; if (!pg) return;
+		// Seite über ID auflösen (Index driftet); Seite weg = Eintrag tot, nicht raten.
+		const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
+		const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
 		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
 		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
@@ -1643,11 +1647,18 @@ export const HEFT = (() => {
 			}[a.kind];
 			if (!spec) return;
 			const [key, items, addsOnRedo] = spec;
-			if (isRedo === addsOnRedo) (pg[key] || (pg[key] = [])).push(...items);
-			else {
-				pg[key] = (pg[key] || []).filter((o) => !items.includes(o));
-				if (sel && items.some((o) => o.id && (sel.imgId === o.id || sel.txtId === o.id))) sel = null;
-				if (lassoSel && items.some((o) => lassoSel.strokes.includes(o))) lassoSel = null;
+			// Abgleich über IDs statt Objekt-Identität: nach Sync-Import/Snapshot ist das
+			// Dokument ein NEUES Objekt mit gleichen IDs -> includes() traf nie (Undo wirkungslos)
+			// und push() legte Dubletten an.
+			const arr = pg[key] || (pg[key] = []);
+			const ids = new Set(items.map((o) => o.id));
+			if (isRedo === addsOnRedo) {
+				const have = new Set(arr.map((o) => o.id));
+				items.forEach((o) => { if (!have.has(o.id)) arr.push(o); });
+			} else {
+				pg[key] = arr.filter((o) => !ids.has(o.id));
+				if (sel && (ids.has(sel.imgId) || ids.has(sel.txtId))) sel = null;
+				if (lassoSel && lassoSel.strokes.some((s) => ids.has(s.id))) lassoSel = null;
 			}
 		}
 		toStack.push(a);
@@ -2215,7 +2226,7 @@ export const HEFT = (() => {
 		return at;
 	}
 
-	const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot } = SCANCORE;
+	const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats } = SCANCORE;
 
 	async function openScanner() {
 		if (scanUI) return;
@@ -2334,25 +2345,13 @@ export const HEFT = (() => {
 		return { ...info, quad, jitter: spread, stable: hist.length >= 3 && spread < Math.max(info.sw, info.sh) * 0.035 };
 	}
 	function liveQualityFrame(video) {
-
 		const sw = 300, sh = Math.max(150, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
 		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
-		const x = c.getContext("2d", { willReadFrequently: true });
-		x.drawImage(video, 0, 0, sw, sh);
-		const px = x.getImageData(0, 0, sw, sh).data;
-		let sum = 0, sum2 = 0, lap = 0;
-		const lum = new Uint8Array(sw * sh);
-		for (let i = 0; i < lum.length; i++) {
-			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
-			lum[i] = v; sum += v; sum2 += v * v;
-		}
-		for (let y = 1; y < sh - 1; y += 2) for (let x2 = 1; x2 < sw - 1; x2 += 2) {
-			const i = y * sw + x2;
-			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - sw] - lum[i + sw]);
-		}
-		const count = sw * sh;
-		const mean = sum / count, contrast = Math.sqrt(Math.max(0, sum2 / count - mean * mean));
-		const sharp = lap / Math.max(1, ((sw - 2) * (sh - 2)) / 4);
+		c.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, sw, sh);
+		// Kennzahlen aus SCANCORE.lumStats — genau die Formel, mit der danach auch der
+		// fertige Scan bewertet wird. Die Rechnung stand hier vorher ein zweites Mal.
+		// step 2: jedes zweite Pixel reicht dem 340-ms-Takt der Live-Prüfung.
+		const { mean, contrast, sharp } = lumStats(c, 2);
 		const quad = detectQuad(c, sw, sh);
 		const found = quadArea(quad) < sw * sh * 0.96;
 		const area = quadArea(quad) / Math.max(1, sw * sh);
@@ -3250,6 +3249,9 @@ export const HEFT = (() => {
 	function unmount(discardPending = false) {
 		closePop();
 		closeScanner();
+		// Offener Text-Editor MUSS vor dem Flush zu: inlineEd überlebte unmount, das nächste
+		// openTextEditor committete den alten Text ins dann geladene Heft.
+		closeTextEditor(true);
 
 		if (saveT) {
 			if (discardPending) { clearTimeout(saveT); saveT = 0; }
@@ -3265,20 +3267,16 @@ export const HEFT = (() => {
 		document.removeEventListener("keydown", onKey);
 		if (resizeFn) { window.removeEventListener("resize", resizeFn); resizeFn = null; }
 		if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
-		scrollFn = null;
-		if (pid) {
-			const closedPid = pid;
-			Object.keys(thumbs).forEach((k) => { if (k.startsWith(closedPid + ":")) delete thumbs[k]; });
-		}
+		if (pid) dropThumbs(pid); // war eine wortgleiche Kopie von dropThumbs
 		Object.keys(imgCache).forEach((k) => { imgCache[k].src = ""; delete imgCache[k]; });
 		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = [];
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
 
-		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(visibleRenderTimer); visibleRenderTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
+		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
-		trayDrag = null;
+		trayDrag = null; boundTray = null; // detached Knoten nicht festhalten
 		clearTimeout(writingOffT); writingOffT = 0; writing = false;
 		lastChromeHtml = ""; lastPopSig = "";
 	}

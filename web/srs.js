@@ -18,19 +18,22 @@ export const SRS = (() => {
 	const MAX_IVL = 36500;
 	const MIN_STABILITY = 0.1;
 	const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+	// WARUM: identische Absicherungen standen 5x (S), 3x (D), 2x (R) im File. Eine Quelle,
+	// damit die Grenzwerte nicht auseinanderlaufen.
+	const safeStab = (S) => Math.max(MIN_STABILITY, Number(S) || MIN_STABILITY);
+	const safeDiff = (D) => clamp(Number(D) || 5, 1, 10);
+	const safeRet = (R) => clamp(Number(R) || 0, 0, 1);
 
 	const initStability = (g) => Math.max(MIN_STABILITY, W[g - 1]);
 	const initDifficulty = (g) => clamp(W[4] - Math.exp(W[5] * (g - 1)) + 1, 1, 10);
 	// Abrufwahrscheinlichkeit nach t Tagen bei Stabilität S (FSRS-4.5/5 power curve)
 	const retrievability = (t, S) => {
-		const safeS = Math.max(MIN_STABILITY, S || MIN_STABILITY);
 		const safeT = Math.max(0, t || 0);
-		return Math.pow(1 + FACTOR * (safeT / safeS), DECAY);
+		return Math.pow(1 + FACTOR * (safeT / safeStab(S)), DECAY);
 	};
 	// Intervall, bei dem R auf die Ziel-Behaltensquote gefallen ist (I(0.9,S)=S)
 	const nextInterval = (S) => {
-		const safeS = Math.max(MIN_STABILITY, S || MIN_STABILITY);
-		const raw = (safeS / FACTOR) * (Math.pow(REQUEST_RETENTION, 1 / DECAY) - 1);
+		const raw = (safeStab(S) / FACTOR) * (Math.pow(REQUEST_RETENTION, 1 / DECAY) - 1);
 		// NaN/negativ → 1 Tag; nie 0 (Anki-kompatibel, FSRS-Intervall mind. 1 Tag im Review)
 		if (!Number.isFinite(raw) || raw <= 0) return 1;
 		return clamp(Math.round(raw), 1, MAX_IVL);
@@ -41,7 +44,7 @@ export const SRS = (() => {
 	//   D'    = D + ΔD·(10-D)/9   ← Linear Damping (fehlte zuvor!)
 	//   D''   = w7·D0(4) + (1-w7)·D'  ← Mean-Reversion Richtung Easy-Default
 	function nextDifficulty(D, g) {
-		const d0 = clamp(Number(D) || 5, 1, 10);
+		const d0 = safeDiff(D);
 		const grade = clamp(Number(g) || 3, 1, 4);
 		const delta = -W[6] * (grade - 3);
 		const damped = d0 + delta * (10 - d0) / 9;
@@ -49,9 +52,9 @@ export const SRS = (() => {
 	}
 	// Stabilität nach ERFOLGREICHER Wiederholung (grade 2-4)
 	function recallStability(D, S, R, g) {
-		const safeS = Math.max(MIN_STABILITY, S || MIN_STABILITY);
-		const safeD = clamp(Number(D) || 5, 1, 10);
-		const safeR = clamp(Number(R) || 0, 0, 1);
+		const safeS = safeStab(S);
+		const safeD = safeDiff(D);
+		const safeR = safeRet(R);
 		const hard = g === 2 ? W[15] : 1;
 		const easy = g === 4 ? W[16] : 1;
 		const next = safeS * (1 + Math.exp(W[8]) * (11 - safeD) * Math.pow(safeS, -W[9]) *
@@ -61,9 +64,10 @@ export const SRS = (() => {
 	}
 	// Stabilität nach VERGESSEN (grade 1) — nie größer als vorher
 	function forgetStability(D, S, R) {
-		const safeS = Math.max(MIN_STABILITY, S || MIN_STABILITY);
-		const safeD = clamp(Math.max(1, Number(D) || 5), 1, 10);
-		const safeR = clamp(Number(R) || 0, 0, 1);
+		const safeS = safeStab(S);
+		// WARUM: Math.max(1, ...) war doppelt gesichert - clamp begrenzt schon auf >= 1.
+		const safeD = safeDiff(D);
+		const safeR = safeRet(R);
 		const next = W[11] * Math.pow(safeD, -W[12]) * (Math.pow(safeS + 1, W[13]) - 1) *
 			Math.exp(W[14] * (1 - safeR));
 		const bounded = Math.min(Number.isFinite(next) ? next : MIN_STABILITY, safeS);
@@ -71,7 +75,7 @@ export const SRS = (() => {
 	}
 	// Kurzzeit-Anpassung während der Lernschritte (FSRS-5 „short term")
 	const shortTermStability = (S, g) => {
-		const safeS = Math.max(MIN_STABILITY, S || MIN_STABILITY);
+		const safeS = safeStab(S);
 		const grade = clamp(Number(g) || 3, 1, 4);
 		const next = safeS * Math.exp(W[17] * (grade - 3 + W[18]));
 		return Math.max(MIN_STABILITY, Number.isFinite(next) ? next : safeS);
@@ -158,12 +162,13 @@ export const SRS = (() => {
 			} else {
 				s.state = "review";
 				s.step = 0;
-				// FSRS-5: Graduierung über die Kurzzeit-Formel statt eines künstlichen Bodens.
-				// Math.max(S, initStability(4)) hob eine zuvor mehrfach vergessene Karte auf
-				// ~15.7 Tage und ignorierte damit ihre Lapse-Historie.
-				// (Der 16-Tage-Wert für "Einfach" auf einer NEUEN Karte oben bleibt korrekt —
-				// der entsteht aus W[3] und I(0.9,S)=S, nicht aus dieser Zeile.)
-				s.stability = shortTermStability(s.stability || initStability(4), 4);
+				// FSRS-5: Graduierung ohne künstlichen Boden — Math.max(S, initStability(4)) hob
+				// eine mehrfach vergessene Karte auf ~15.7 Tage und ignorierte ihre Lapse-Historie.
+				// FIX: hier lief die Kurzzeit-Formel ein ZWEITES Mal (die Zeile oben wendet sie
+				// bereits auf jede nicht-neue Lernkarte an) -> Easy bekam den Bonus doppelt (~x5.6).
+				// Bei einer NEUEN Karte lief sie genau einmal und ergab ~37 statt der oben
+				// dokumentierten ~16 Tage. S steht an dieser Stelle bereits korrekt — nicht erneut
+				// anwenden.
 				s.due = dueAfterDays(now, nextInterval(s.stability), fuzz);
 			}
 		} else if (g === 1) {
@@ -188,6 +193,10 @@ export const SRS = (() => {
 	function fmtIvl(ms) {
 		const min = ms / 60e3;
 		if (min < 60) return Math.max(1, Math.round(min)) + " Min";
+		// Stunden-Stufe fehlte: alles zwischen 1 h und 1,5 Tagen stand als "1 Tag" da,
+		// obwohl die Karte z.B. in 2 h wieder fällig ist. Ab ~23,5 h greift wieder "1 Tag".
+		const hours = min / 60;
+		if (hours < 23.5) return Math.round(hours) + " Std";
 		const days = min / 1440;
 		if (days < 1.5) return "1 Tag";
 		if (days < 31) return Math.round(days) + " Tage";

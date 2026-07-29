@@ -103,15 +103,25 @@ export const DB = (() => {
 	async function openWithRetry(attempts = 4) {
 		let lastErr = null;
 		for (let i = 0; i < attempts; i++) {
+			const opening = openRaw("impala67", 2);
+			let timer = 0;
 			try {
 				return await Promise.race([
-					openRaw("impala67", 2),
-					new Promise((_, rej) => setTimeout(() => rej(new Error("IndexedDB antwortet nicht (Versuch " + (i + 1) + ")")), 3000 + i * 2000)),
+					opening,
+					new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("IndexedDB antwortet nicht (Versuch " + (i + 1) + ")")), 3000 + i * 2000); }),
 				]);
 			} catch (e) {
+				// Der abgelaufene Versuch läuft im Hintergrund weiter. Kommt er später doch durch,
+				// MUSS die Verbindung geschlossen werden: eine vergessene offene Verbindung
+				// blockiert jeden Versionswechsel und resetDatabase (onblocked) — genau der
+				// Zustand, in dem die App „Datenbank ist noch in einem anderen Tab geöffnet“
+				// meldet, obwohl gar kein zweiter Tab offen ist.
+				opening.then((d) => { if (d && d !== db) d.close(); }).catch(() => {});
 				lastErr = e;
 				console.warn("DB-Open fehlgeschlagen, neuer Versuch:", e);
 				await new Promise((r) => setTimeout(r, 250));
+			} finally {
+				clearTimeout(timer); // sonst hängt der Wecker bis zu 11 s nach dem Erfolg nach
 			}
 		}
 		throw lastErr || new Error("IndexedDB ließ sich nicht öffnen.");
@@ -164,10 +174,17 @@ export const DB = (() => {
 	// Der Cache gehört neben den Blob-Speicher: nur hier ist bekannt, wann ein Blob
 	// verschwindet, und nur so kann die Freigabe überhaupt zuverlässig passieren.
 	const OBJECT_URLS = new Map(); // Blob-id → Object-URL
-	async function blobUrl(id, fallbackType) {
-		if (!id) return null;
+	// Laufender Aufbau je Blob-id. Ohne diese Sperre erzeugten zwei gleichzeitige Aufrufe
+	// (Editor und Vorschau hydrieren dasselbe Bild) ZWEI Object-URLs; die zweite überschrieb
+	// die erste in der Map, und die erste hielt ihren Blob bis zum Neuladen im Speicher fest.
+	const URL_PENDING = new Map();
+	function blobUrl(id, fallbackType) {
+		if (!id) return Promise.resolve(null);
 		const hit = OBJECT_URLS.get(id);
-		if (hit) return hit;
+		if (hit) return Promise.resolve(hit);
+		const laufend = URL_PENDING.get(id);
+		if (laufend) return laufend;
+		const p = (async () => {
 		try {
 			const rec = await getBlob(id);
 			// rec.data = Alt-Datensätze aus der früheren "notion"-DB.
@@ -180,6 +197,9 @@ export const DB = (() => {
 			console.warn("Blob konnte nicht geladen werden:", e);
 			return null;
 		}
+		})().finally(() => URL_PENDING.delete(id));
+		URL_PENDING.set(id, p);
+		return p;
 	}
 	function revokeBlobUrl(id) {
 		const url = OBJECT_URLS.get(id);
@@ -345,8 +365,15 @@ export const DB = (() => {
 	// mit redactSecrets:false aus, weil er Keys bewusst über den privaten appDataFolder
 	// aufs eigene Konto repliziert (siehe state.js). Vorher war Redaction opt-in — ein
 	// vergessenes Flag exportierte Klartext-Keys.
+	// _remote ("kam per Drive herein") und _derived ("selbst erzeugter Merge") sind GERÄTE-lokale
+	// Marken: sie steuern hier den Upload-Filter und die Konflikt-Erkennung. Mitexportiert gelten
+	// die Events auf dem Zielgerät als „schon gesynct“ — ein per Backup eingespielter Stand würde
+	// dort NIE hochgeladen (stiller Verlust Richtung aller anderen Geräte). seq fällt gleich mit:
+	// die Nummer gilt nur lokal und wird beim Import ohnehin neu vergeben.
+	const stripLocalFlags = ({ _remote, _derived, seq, ...ev }) => ev;
+
 	async function exportAll(opts = {}) {
-		let events = compactEvents(await allEvents());
+		let events = compactEvents(await allEvents()).map(stripLocalFlags);
 		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {

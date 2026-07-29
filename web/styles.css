@@ -813,17 +813,19 @@ h3.blk-h { font-size: 1.12em }
 .is-primary, button.primary, .card-editor .modal-actions .primary, #chatForm button[type="submit"], .chat-form-full button[type="submit"],
 .deck-study, .anki-new summary, .heft-corner.heft-chat, .blk-mathok,
 .settings-body #btnSaveSettings, .settings-body #btnDriveLogin,
-.ai-settings .modal-actions button,
-.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { background: var(--accent); color: var(--on-accent); font-weight: 650 }
+/* ♻️ Aufdeck-Knopf raus aus der Primär-Liste (29. Juli): identischer Selektor bei „Lern-Bühne" setzt Farbe/Gewicht ohnehin neu — war doppelt gepflegt. */
+.ai-settings .modal-actions button { background: var(--accent); color: var(--on-accent); font-weight: 650 }
 .is-primary:hover:not(:disabled), button.primary:hover:not(:disabled), #chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled),
 .deck-study:hover:not(:disabled), .anki-new summary:hover, .heft-corner.heft-chat:hover, .blk-mathok:hover:not(:disabled),
 .settings-body #btnSaveSettings:hover:not(:disabled), .settings-body #btnDriveLogin:hover:not(:disabled),
 .ai-settings .modal-actions button:hover:not(:disabled),
 .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { filter: brightness(1.08) }
 /* == Anki-Bereich: Stapel, Browser, Statistik, Lernen == */
-.deck-list { display: flex; flex-direction: column; max-width: none; gap: 0 }
+/* ♻️ Nur noch, was hier wirklich gilt: max-width/gap kommen aus „Stapel-Übersicht v2". */
+.deck-list { display: flex; flex-direction: column }
 /* .deck-row-Layout: EINE kanonische Regel — siehe „Stapel-Übersicht v2“ (Grid mit deck-depth) */
-.deck-name { font-weight: 700; font-size: 16px; display: block }
+/* ♻️ Schriftgrad/-gewicht setzt „Stapel-Übersicht v2" weiter unten; display:block bleibt, sonst greift dort das Abkürzen mit Auslassungspunkten nicht. */
+.deck-name { display: block }
 .cnt-due { color: var(--accent) }
 .cnt-new { color: var(--success) }
 .deck-actions { display: flex; gap: 6px; flex-shrink: 0 }
@@ -1238,13 +1240,14 @@ body.panel-collapsed:has(.anki-study-mode) .anki-study-mode .study-footer { padd
 .heft-chrome { position: absolute; inset: 0; z-index: 50; pointer-events: none }
 .heft-chrome > * { pointer-events: auto }
 /* Freistehende, verschiebbare Werkzeug-Gruppe — default zentrier… */
-.heft-float { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 52; max-width: calc(100% - 24px) }
+/* ♻️ Tot (29. Juli): jede Angabe wurde von „.heft-chrome .heft-float" (Taskbar v7, teils !important) überschrieben. */
 .heft-float.is-dragging { opacity: .95; cursor: grabbing; z-index: 55 }
 /* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Opti… */
 /* Haupt-Pill (kompakt) — schwebend, kein Banner */
-.heft-pill { display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 4px; background: rgba(22, 32, 52, 0.94); border: 1px solid var(--edge); border-radius: var(--radius-pill); box-shadow: var(--elev-2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px) }
+/* 🐛 Fix (29. Juli): Optik regelt Taskbar v7. Hier blieb nur -webkit-backdrop-filter: blur(10px) wirksam — v7 setzt nur die unpräfixierte Form auf none, Safari/iPad blieb also unscharf. */
 /* Options-Pill darunter — hängt an der Float-Gruppe, bewegt sich… */
-.heft-tray { display: flex; align-items: center; gap: 2px; padding: 5px 10px; background: rgba(18, 22, 30, 0.96); border: 1px solid var(--edge); border-radius: var(--radius-pill); box-shadow: var(--elev-3); max-width: min(92vw, 560px); overflow-x: auto; scrollbar-width: none; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: heftTrayIn .16s ease }
+/* 🐛 Nur noch, was Taskbar v7 nicht setzt. blur() raus: das -webkit-Pendant blieb auf Safari/iPad aktiv, obwohl v7 keinen Blur will. */
+.heft-tray { overflow-x: auto; scrollbar-width: none; animation: heftTrayIn .16s ease }
 .heft-tray::-webkit-scrollbar { display: none }
 @keyframes heftTrayIn {
 	from { opacity: 0; transform: translateY(-6px) scale(.98) }
@@ -1266,17 +1269,18 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-swatch:hover { transform: scale(1.08) }
 .heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
 /* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
-.heft-corner { min-height: 0; height: 36px; padding: 0 12px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 700; white-space: nowrap; border: 1px solid var(--edge); background: #1a2a44; color: #fff; box-shadow: var(--elev-2); display: inline-flex; align-items: center; justify-content: center; gap: 4px }
-.heft-corner:hover { background: #243656 }
-.heft-corner.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border) }
+/* ♻️ Größe/Farbe/Rahmen kommen aus Taskbar v7; hier bleibt nur, was dort nicht gesetzt wird. */
+.heft-corner { font-weight: 700; white-space: nowrap; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 4px }
+/* 🐛 Fix (29. Juli): Hover und Aktiv-Zustand waren wirkungslos — „.heft-chrome .heft-corner" ist spezifischer und setzte Hintergrund/Rahmen zurück. Jetzt im selben Kontext notiert. */
+.heft-chrome .heft-corner:hover { background: var(--surface-hover-strong) }
+.heft-chrome .heft-corner.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border) }
 .heft-corner-l { position: absolute; left: 12px; top: 12px; z-index: 51 }
 .heft-corner-r { position: absolute; right: 12px; top: 12px; z-index: 51; display: flex; gap: 6px }
 .heft-corner.heft-chat { background: var(--accent); color: var(--on-accent); border-color: transparent; min-width: 36px; padding: 0 12px }
 .heft-corner.heft-plus { min-width: 36px; padding: 0 12px; font-size: 17px }
 .heft-pageno-inline { font-weight: 650; font-size: var(--text-2xs); opacity: .75; margin-left: 5px }
 /* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layo… */
-.heft-scroll { flex: 1; min-height: 0; width: 100% }
-/* Legacy-Aliase (alte Klassen sollen nicht brechen) */
+/* ♻️ Duplikat entfernt (29. Juli): .heft-scroll galt zweimal — kanonisch unten bei „Papier-Bühne v4" (overflow/touch-action/contain). Leerer Legacy-Alias-Kommentar ohne Regeln ebenfalls weg. */
 @media (max-width: 720px) {
 	.heft-float { top: 8px }
 	.heft-corner-l, .heft-corner-r { top: 8px }
@@ -1516,7 +1520,8 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 .anki-sec { max-width: 1120px; margin: 0 auto 10px }
 .anki-sec h2 { margin: 0; font-size: var(--text-md) }
 .deck-list { max-width: 1120px; margin: 0 auto; gap: 8px }
-.deck-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 66px; padding: 12px 14px; margin-left: calc(var(--deck-depth, 0) * 22px); border: 1px solid var(--edge); border-radius: var(--radius-xl); background: var(--surface-subtle); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: border-color .14s ease, background .14s ease, box-shadow .14s ease }
+.deck-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 66px; padding: 12px 14px; margin-left: calc(var(--deck-depth, 0) * 22px); border: 1px solid var(--edge); border-radius: var(--radius-xl); background: var(--surface-subtle); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .14s ease }
+/* 🐛 Fix (29. Juli): transform fehlte hier, obwohl .deck-row:hover anhebt — diese Regel überschrieb die globale Übergangsliste, das Anheben sprang hart. */
 .deck-row:hover { border-color: var(--accent-border); background: var(--surface-hover); box-shadow: var(--elev-1), inset 0 1px 0 rgba(255,255,255,.05) }
 .deck-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--surface-hover); font-size: var(--text-md); color: var(--text2) }
 .deck-info { display: flex; flex-direction: column; min-width: 0 }
@@ -1936,7 +1941,8 @@ h3, h4 { text-wrap: balance }
    Zurückkommen — vorher überschrieb jeder Render mitten im Strich die className. */
 .heft-chrome { transition: opacity .22s ease }
 .heft-chrome.heft-writing { opacity: .3; pointer-events: none }
-.heft-chrome .heft-main { position: relative; width: 30px; height: 30px }
+/* 🐛 Fix (29. Juli): width/height 30px standen gegen min-width/min-height 32px aus Taskbar v7 — gerendert wurden ohnehin 32px, die 30 waren nur Widerspruch. */
+.heft-chrome .heft-main { position: relative }
 .heft-chrome .heft-color-dot { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 3px; border-radius: 2px; pointer-events: none }
 .heft-pill-min .heft-main { width: 38px }
 .heft-min-btn { opacity: .8 }
@@ -2100,7 +2106,7 @@ h3, h4 { text-wrap: balance }
 .heft-lasso-bar span { color: var(--text2); padding: 0 2px }
 .heft-lasso-bar button { min-height: 34px; white-space: nowrap }
 /* == ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18.7) == */
-.heft-page-slot { position: relative }
+/* ♻️ .heft-page-slot { position: relative } hier entfernt — steht identisch schon in der Bühnen-Geometrie oben. */
 .heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px }
 /* Geist-Knopf bleibt im Layout (die Scroll-Geometrie für atEnd() darf sich nicht ändern),
    ist aber unsichtbar, bis man die letzte Seite nach oben zieht (heft.js/bindPullToAdd). */

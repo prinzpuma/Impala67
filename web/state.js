@@ -127,7 +127,24 @@ export const STATE = (() => {
 	// PERF (10. Juli): Parent→Kinder-Index für childrenOf (Sidebar-Baum war O(n²)).
 	// Vor reduce deklariert, damit Invalidierung im Hot Path greift.
 	let _childIdx = null;
-	function bustChildIdx() { _childIdx = null; }
+	// EINE Quelle für „wer hängt unter wem“: Eltern→Kinder über ALLE Seiten (inkl.
+	// Papierkorb). Vorher existierte die gleiche Auswertung zweimal — gecacht in
+	// ensureChildIdx (nur aktive, sortiert) und ein zweites Mal in collectSubtree, das
+	// den Index bei JEDEM Aufruf komplett neu baute (Trash/Restore ganzer Bäume).
+	let _parentIdx = null;
+	function bustChildIdx() { _childIdx = null; _parentIdx = null; }
+	function ensureParentIdx() {
+		if (_parentIdx) return _parentIdx;
+		const m = new Map();
+		for (const pg of Object.values(S.pages)) {
+			const k = pg.parentId || "";
+			let arr = m.get(k);
+			if (!arr) { arr = []; m.set(k, arr); }
+			arr.push(pg);
+		}
+		_parentIdx = m;
+		return m;
+	}
 
 	// PERF (18. Juli): Memoization für backlinksOf() und studySnapshot()/dueCards().
 	// Beide liefen bei JEDEM Page-/Full-Render komplett neu (Volltext-Scan über alle
@@ -210,8 +227,6 @@ export const STATE = (() => {
 	function loadLegacySecrets() {
 		try { return JSON.parse(localStorage.getItem("impala67.secrets") || localStorage.getItem("notion.secrets") || "{}"); } catch { return {}; }
 	}
-	function stripSecrets(payload) { return { ...payload }; }
-	function applySecrets() { /* Credentials kommen jetzt direkt aus dem Event-Log. */ }
 	async function migrateLegacySecretsToSync() {
 		const sec = loadLegacySecrets();
 		const patch = {};
@@ -749,7 +764,11 @@ export const STATE = (() => {
 	}
 
 	async function dispatchOne(type, payload) {
-		if (type === "settingsSet") payload = stripSecrets(payload);
+		// Eigene Kopie: das Payload landet im append-only Log und darf sich nicht mehr
+		// ändern, wenn der Aufrufer sein Objekt danach weiterbenutzt. (Die früheren
+		// Haken stripSecrets/applySecrets waren seit dem Umzug der Zugangsdaten ins
+		// Event-Log reine No-Ops — irreführend und ersatzlos entfallen.)
+		if (type === "settingsSet") payload = { ...payload };
 		for (const fn of _dispatchHooks.before) {
 			try { fn(type, payload); } catch (e) { console.warn("dispatch-Hook (before):", e); }
 		}
@@ -770,7 +789,6 @@ export const STATE = (() => {
 			throw e;
 		}
 		reduce(ev);
-		if (type === "settingsSet") applySecrets();
 		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
 		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
 		for (const fn of _dispatchHooks.after) {
@@ -810,23 +828,15 @@ export const STATE = (() => {
 		// damit ausgerechnet gegen den Stand verlieren, den sie ablösen soll.
 		if (evs.length) U.observeTime(evs[evs.length - 1].t);
 		evs.forEach(reduce);
-		applySecrets(); // Kompatibilitäts-Hook; Zugangsdaten liegen im Event-Log.
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze
 	// Unterseiten-Struktur wandert gemeinsam rein bzw. wieder raus).
-	// PERF (10. Juli): baut EINMAL eine Eltern→Kinder-Liste über alle Seiten auf,
-	// statt bei jedem rekursiven Schritt erneut komplett über S.pages zu scannen
-	// (vorher O(n²) im Worst Case bei tiefen/breiten Bäumen). Iterativ mit einem
-	// Stack statt Rekursion, Zyklen-Schutz wie zuvor über ein Set.
+	// Iterativ mit Stack (kein Rekursionsüberlauf), Zyklen-Schutz über ein Set.
+	// Der Eltern→Kinder-Index kommt jetzt aus ensureParentIdx() und wird zwischen
+	// Aufrufen behalten — vorher O(alle Seiten) pro Trash-/Restore-Aufruf.
 	function collectSubtree(id) {
-		const byParent = new Map();
-		for (const pg of Object.values(S.pages)) {
-			const key = pg.parentId || null;
-			let kids = byParent.get(key);
-			if (!kids) { kids = []; byParent.set(key, kids); }
-			kids.push(pg.id);
-		}
+		const byParent = ensureParentIdx();
 		const result = [];
 		const visited = new Set();
 		const stack = [id];
@@ -835,8 +845,7 @@ export const STATE = (() => {
 			if (visited.has(cur)) continue; // Sicherheitsnetz gegen Zyklen in Alt-Daten
 			visited.add(cur);
 			result.push(cur);
-			const kids = byParent.get(cur);
-			if (kids) stack.push(...kids);
+			for (const kid of byParent.get(cur) || []) stack.push(kid.id);
 		}
 		return result;
 	}
@@ -846,15 +855,18 @@ export const STATE = (() => {
 	const sortKeyOf = (pg) => (typeof pg.order === "number" ? pg.order : (Date.parse(pg.created) || 0));
 	// PERF (10. Juli): childrenOf war O(n) pro Aufruf → Sidebar-Baum O(n²).
 	// Parent→Kinder-Index (_childIdx / bustChildIdx am IIFE-Kopf).
+	// Sichtbarer Baum = Papierkorb-Filter + Sortierung ÜBER dem gemeinsamen Eltern-Index.
 	function ensureChildIdx() {
 		if (_childIdx) return _childIdx;
 		const m = new Map();
-		for (const pg of Object.values(S.pages)) {
-			if (pg.trashed) continue;
-			const k = (pg.workspaceId || "default") + "\0" + (pg.parentId || "");
-			let arr = m.get(k);
-			if (!arr) { arr = []; m.set(k, arr); }
-			arr.push(pg);
+		for (const [parentId, kids] of ensureParentIdx()) {
+			for (const pg of kids) {
+				if (pg.trashed) continue;
+				const k = (pg.workspaceId || "default") + "\0" + parentId;
+				let arr = m.get(k);
+				if (!arr) { arr = []; m.set(k, arr); }
+				arr.push(pg);
+			}
 		}
 		for (const arr of m.values()) {
 			arr.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || a.created.localeCompare(b.created));
@@ -914,19 +926,33 @@ export const STATE = (() => {
 		return partial;
 	}
 
+	// PERF: Der Heuhaufen (Titel + Inhalt + Handschrift-Index, einmal kleingeschrieben)
+	// wird pro Seite EINMAL je Seitenrevision gebaut — vorher bei jedem Tastendruck für
+	// jede Seite neu, und Suchen ist der heißeste Pfad der App. Gleiche Invalidierung
+	// wie der Backlink-Cache (_pageRev), also automatisch korrekt beim Bearbeiten.
+	const _hayCache = { rev: -1, map: new Map() };
+	function haystackOf(pg) {
+		if (_hayCache.rev !== _pageRev) { _hayCache.map.clear(); _hayCache.rev = _pageRev; }
+		let e = _hayCache.map.get(pg.id);
+		if (!e) {
+			// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
+			const raw = pg.title + "\n" + pg.content + "\n" + ((S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "");
+			// contentLc: nur der Inhalt klein — genau das braucht backlinksOf, das es
+			// vorher pro Aufruf für ALLE Seiten neu erzeugt hat.
+			e = { raw, hay: raw.toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
+			_hayCache.map.set(pg.id, e);
+		}
+		return e;
+	}
+
 	function searchNotes(query) {
 		const q = String(query).toLowerCase();
 		if (!q) return [];
 		return activePages().map((pg) => {
-			// FIX: "title + \n + content" wurde vorher zweimal berechnet (einmal für hay,
-			// einmal für raw) — jetzt nur noch einmal.
-			// Bei Heften ergänzt der lokal gespeicherte Handschrift-Index die normale
-			// Seitensuche. Das Ergebnis bleibt eine reguläre Seiten-Fundstelle.
-			const raw = pg.title + "\n" + pg.content + "\n" + ((S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "");
-			const hay = raw.toLowerCase();
+			const { raw, hay, title } = haystackOf(pg);
 			const idx = hay.indexOf(q);
 			if (idx < 0) return null;
-			const score = (pg.title.toLowerCase().includes(q) ? 10 : 0) + hay.split(q).length - 1;
+			const score = (title.includes(q) ? 10 : 0) + hay.split(q).length - 1;
 			return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
 		}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
 	}
@@ -941,13 +967,15 @@ export const STATE = (() => {
 	// Learning/Relearning-Schritte verbrauchen kein Limit (wie Anki).
 	function dailyUsageSince(dayStart) {
 		const usedNew = {}, usedRev = {};
-		(S.reviews || []).forEach((r) => {
-			if (new Date(r.t) < dayStart) return;
-			if (r.learning) return;
+		// PERF: EIN Zeitstempel-String statt eines new Date(...) pro Protokoll-Eintrag.
+		// Beide Seiten sind ISO-UTC — der lexikografische Vergleich ist hier exakt.
+		const cut = dayStart.toISOString();
+		for (const r of S.reviews || []) {
+			if (r.t < cut || r.learning) continue;
 			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
-		});
+		}
 		return { usedNew, usedRev };
 	}
 
@@ -1017,6 +1045,9 @@ export const STATE = (() => {
 		const t = now instanceof Date ? now : new Date(now);
 		const eod = endOfLocalDay(t);
 		const aheadUntil = new Date(t.getTime() + LEARN_AHEAD_MS);
+		// PERF: Fälligkeiten sind ISO-UTC-Strings. Die Schranken EINMAL als String bilden und
+		// direkt vergleichen — vorher entstand pro Karte und pro Filterdurchlauf ein new Date().
+		const tIso = t.toISOString(), eodIso = eod.toISOString(), aheadIso = aheadUntil.toISOString();
 		const inDeck = (c) => {
 			if (!c || c.trashed || c.suspended || !c.srs) return false;
 			if (!deck) return true;
@@ -1028,24 +1059,17 @@ export const STATE = (() => {
 
 		// Intraday learning: due vor Tagesende und (typisch) Minuten-Schritte
 		const learnAll = all.filter((c) => isLearnState(c.srs.state));
-		const learnDueNow = learnAll.filter((c) => new Date(c.srs.due) <= t).sort(byDue);
-		// Noch nicht fällig, aber innerhalb Learn-Ahead (nur wenn sonst nichts zu tun)
-		const learnAhead = learnAll
-			.filter((c) => {
-				const d = new Date(c.srs.due);
-				return d > t && d <= aheadUntil && d < eod;
-			})
-			.sort(byDue);
+		const learnDueNow = learnAll.filter((c) => c.srs.due <= tIso).sort(byDue);
+		// Alles, was heute noch offen ist — EINMAL ermittelt. Learn-Ahead und „später heute“
+		// sind nur zwei Fenster derselben Liste (vorher drei getrennte Durchläufe, plus ein
+		// vierter identischer weiter unten für nextLearnAt).
+		const learnWaiting = learnAll.filter((c) => c.srs.due > tIso && c.srs.due < eodIso).sort(byDue);
+		const learnAhead = learnWaiting.filter((c) => c.srs.due <= aheadIso);
 		// Später heute (nach Learn-Ahead) — Session „finished for now“, nicht „alles morgen“
-		const learnLaterToday = learnAll
-			.filter((c) => {
-				const d = new Date(c.srs.due);
-				return d > aheadUntil && d < eod;
-			})
-			.sort(byDue);
+		const learnLaterToday = learnWaiting.filter((c) => c.srs.due > aheadIso);
 
-		const reviewsRaw = all.filter((c) => c.srs.state === "review" && new Date(c.srs.due) <= t).sort(byDue);
-		const newRaw = all.filter((c) => c.srs.state === "new" && new Date(c.srs.due) <= t).sort(byDue);
+		const reviewsRaw = all.filter((c) => c.srs.state === "review" && c.srs.due <= tIso).sort(byDue);
+		const newRaw = all.filter((c) => c.srs.state === "new" && c.srs.due <= tIso).sort(byDue);
 
 		// Tagesverbrauch aus Review-Log (wie Anki: first = new) — DRY: dailyUsageSince()
 		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate());
@@ -1074,10 +1098,9 @@ export const STATE = (() => {
 		// Overlearning-Sperre: frisch bewertete Karten (< 10 Min) nicht vorzeitig per
 		// Learn-Ahead zeigen — sofortiges Nochmal-Drillen füttert nur das Kurzzeit-
 		// gedächtnis („Illusion of Competence“). Wirklich fällige Karten sperrt das nie.
-		const lockCut = t.getTime() - OVERLEARN_LOCK_MS;
-		const freshRated = new Set((S.reviews || [])
-			.filter((r) => new Date(r.t).getTime() > lockCut)
-			.map((r) => r.cardId));
+		const lockCutIso = new Date(t.getTime() - OVERLEARN_LOCK_MS).toISOString();
+		const freshRated = new Set();
+		for (const r of S.reviews || []) if (r.t > lockCutIso) freshRated.add(r.cardId);
 		const lockOn = localStorage.getItem("impala67Overlearn") !== "off"; // Einstellung: Overlearning-Sperre
 		const aheadFree = lockOn ? learnAhead.filter((c) => !freshRated.has(c.id)) : learnAhead.slice();
 		const lockedAhead = learnAhead.length - aheadFree.length;
@@ -1102,18 +1125,11 @@ export const STATE = (() => {
 		// Learn-Ahead nur wenn sonst die Queue leer wäre (Anki-Default 20 Min)
 		if (!dueNow.length && aheadFree.length) dueNow = aheadFree.slice();
 
-		const nextLearnAt = (() => {
-			const pool = learnAll
-				.filter((c) => new Date(c.srs.due) > t && new Date(c.srs.due) < eod)
-				.sort(byDue);
-			return pool.length ? new Date(pool[0].srs.due) : null;
-		})();
+		// learnWaiting ist bereits nach Fälligkeit sortiert — der erste Eintrag IST der nächste.
+		const nextLearnAt = learnWaiting.length ? new Date(learnWaiting[0].srs.due) : null;
 
 		// verfügbar jetzt (inkl. Learn-Ahead) — „finished for now" wenn leer
 		const available = dueNow.length > 0;
-		const learnWaiting = learnAll
-			.filter((c) => new Date(c.srs.due) > t && new Date(c.srs.due) < eod)
-			.sort(byDue);
 
 		return {
 			dueNow,
@@ -1158,7 +1174,9 @@ export const STATE = (() => {
 		const cached = _backlinkCache.map.get(pageId);
 		if (cached) return cached.slice();
 		const t = target.title.toLowerCase();
-		const result = activePages().filter((pg) => pg.id !== pageId && (pg.content || "").toLowerCase().includes(t));
+		// PERF: kleingeschriebener Inhalt aus dem Haystack-Cache (gleiche Invalidierung
+		// über _pageRev) — Suche und Backlinks teilen sich ab jetzt EINEN Textindex.
+		const result = activePages().filter((pg) => pg.id !== pageId && haystackOf(pg).contentLc.includes(t));
 		_backlinkCache.map.set(pageId, result);
 		return result.slice();
 	}

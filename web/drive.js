@@ -360,7 +360,11 @@ export const DRIVE = (() => {
 	// fair entschieden, statt dass die falsch gehende Uhr systematisch „gewinnt“.
 	// Unterhalb der Schwelle bleibt alles unangetastet (Netz-Latenz verrauscht kleine Werte).
 	const CLOCK_APPLY_MS = 15000;
-	async function api(path, opts = {}, attempt = 0) {
+	// refreshed statt "attempt === 0": die stille Token-Erneuerung und der Backoff-Zähler sind
+	// zwei verschiedene Dinge, teilten sich aber einen Zähler. Nach einer einzigen 429-Wieder-
+	// holung war die Erneuerung für diesen Aufruf gesperrt — ein langer Sync starb also genau
+	// dann hart, wenn Drive drosselte UND das Token dabei ablief.
+	async function api(path, opts = {}, attempt = 0, refreshed = false) {
 		const t0 = Date.now();
 		const res = await fetch("https://www.googleapis.com" + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
 		const t1 = Date.now();
@@ -377,17 +381,17 @@ export const DRIVE = (() => {
 		}
 		// Abgelaufenes/entzogenes Token mitten im Sync: EINMAL still erneuern und wieder-
 		// holen statt hart abzubrechen (ein langer Sync kann die Token-Laufzeit überdauern).
-		if (res.status === 401 && attempt === 0) {
+		if (res.status === 401 && !refreshed) {
 			token = null;
 			LS.removeItem("impala67_drive_token");
 			await getToken(false);
-			return api(path, opts, 1);
+			return api(path, opts, attempt, true);
 		}
 		// Rate-Limit/Serverfehler: kurzer exponentieller Backoff mit Jitter statt sofortigem
 		// Fehlschlag — Drive drosselt gelegentlich (429) und 5xx sind fast immer transient.
 		if ((res.status === 429 || res.status >= 500) && attempt < 3) {
 			await new Promise((r) => setTimeout(r, (500 << attempt) * (1 + Math.random())));
-			return api(path, opts, attempt + 1);
+			return api(path, opts, attempt + 1, refreshed);
 		}
 		if (!res.ok) throw new Error("Drive-Fehler " + res.status + ": " + (await res.text()).slice(0, 200));
 		return res;
@@ -560,6 +564,26 @@ export const DRIVE = (() => {
 		});
 	}
 
+	// EIN Weg, ein Änderungspaket hochzuladen — syncRaw und flushUpload teilen ihn. Vorher stand
+	// die Paketbildung zweimal da: Dateiname, appProperties, „gelesen“-Liste und Wasserstand
+	// mussten an zwei Stellen identisch bleiben. Solche Zwillinge laufen mit der Zeit auseinander,
+	// und beim Sync fällt das erst auf, wenn Geräte divergieren.
+	async function uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds) {
+		const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
+		if (events.length) {
+			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
+			const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz",
+				packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
+			const known = knownDeltaIds || loadKnownIds("impala67_drive_known_deltas");
+			known.add(created.id); // [F5] sonst lädt der nächste Sync das eigene Paket erneut
+			saveKnownIds("impala67_drive_known_deltas", known);
+		}
+		// Wasserstand auch vorrücken, wenn nur Remote-Echos lokale Sequenzen erhielten oder alles
+		// Aussortierte weggefallen ist — sonst wird derselbe Bereich bei jedem Lauf neu geprüft.
+		LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
+		return events.length;
+	}
+
 	// Sync v4: gzip-Deltas + deduplizierte Blob-Dateien. Unveränderte Remote-Dateien
 	// werden anhand id/modifiedTime gar nicht erst geladen.
 	async function syncRaw(onStatus) {
@@ -681,19 +705,8 @@ export const DRIVE = (() => {
 		// Speicher im eigenen Konto); Redaction überschrieb Keys auf Zielgeräten mit "".
 		const localMaxSeq = await DB.maxSeq();
 		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
-			// uploaded_seq wandert trotzdem bis localMaxSeq weiter, damit
-			// aussortierte Events nicht beim naechsten Lauf wieder auftauchen.
-			const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
-			if (events.length) {
-				setStatus("syncing", "Änderungen hochladen…");
-				const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
-				const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz", packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
-				knownDeltaIds.add(created.id);
-				saveKnownIds("impala67_drive_known_deltas", knownDeltaIds); // [F5] sonst lädt der nächste Sync das eigene Paket erneut
-				uploaded = events.length;
-			}
-			// Wasserstand auch vorrücken, wenn nur Remote-Echos lokale Sequenzen erhielten.
-			LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
+			setStatus("syncing", "Änderungen hochladen…");
+			uploaded = await uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds);
 		}
 
 		// Viele Deltas gelegentlich zu einem Snapshot kompaktieren. Gelöscht wird nur die
@@ -760,33 +773,23 @@ export const DRIVE = (() => {
 	// nach — ein ehrlicher Fehlschlag statt eines Flushs, der nur auf dem Papier stattfindet.
 	async function flushUpload() {
 		if (!autoEnabled() || !isConnected()) return;
+		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch — zwei gleichzeitige
+		// Uploads erzeugen nur doppelte Pakete und schreiben beide am Wasserstand.
+		if (syncInFlight) return;
 		const saved = validSavedToken();
 		if (!saved) return;
 		token = saved;
 		const localMaxSeq = await DB.maxSeq();
 		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), localMaxSeq);
 		if (!shouldUploadDelta(localMaxSeq, uploadedSeq)) return;
-		const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
-		if (!events.length) return;
 		flushMode = true;
-		try {
-			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
-			const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz",
-				packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
-			const known = loadKnownIds("impala67_drive_known_deltas");
-			known.add(created.id);
-			saveKnownIds("impala67_drive_known_deltas", known);
-			LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
-		} finally {
-			flushMode = false;
-		}
+		try { await uploadDelta(uploadedSeq, localMaxSeq); } finally { flushMode = false; }
 	}
 
 	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
 	// localStorage — zwei gleichzeitig syncende Tabs überschrieben sich sonst gegenseitig
 	// (syncInFlight wirkt nur im eigenen Tab). ifAvailable: der zweite Tab wartet nicht,
 	// sein nächster Auto-Sync holt alles nach. Ohne Locks-API: bisheriges Verhalten.
-	const IDLE_RESULT = { imported: 0, uploaded: 0, conflicts: 0, conflictDetails: [], merged: 0, mergedDetails: [], importedEvents: [], skipped: "lock" };
 	// Bug-4-Fix: kein ifAvailable — zweiter Tab wartet auf ersten, statt still übersprungen zu werden.
 	// Erst NACH dem ersten Sync lädt Tab 2 die frisch hochgeladenen Deltas und ist dann wirklich aktuell.
 	const withSyncLock = (fn) => navigator.locks?.request

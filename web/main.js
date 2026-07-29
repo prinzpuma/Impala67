@@ -1,12 +1,5 @@
 "use strict";
 
-// Optional config.local.js laden
-try {
-	await import("./config.local.js");
-} catch (e) {
-	console.log("Lokale Konfiguration (config.local.js) nicht geladen oder nicht vorhanden.");
-}
-
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";
@@ -104,6 +97,19 @@ window.openCardEditor = RENDER_ANKI.openCardEditor;
 window.readCardEditorDeck = RENDER_ANKI.readCardEditorDeck;
 
 // APP-Funktionen an window binden
-window.seedIfEmpty = APP.seedIfEmpty;
+// FIX: seedIfEmpty/purgeOldTrash lagen nie in app.js, sondern in boot.js — die zwei
+// Bindings setzten window.* auf undefined. boot.js ruft beide selbst auf, kein anderer
+// Aufrufer im Projekt (geprüft): entfernt statt umgebogen.
 window.wireEvents = APP.wireEvents;
-window.purgeOldTrash = APP.purgeOldTrash;
+
+// config.local.js bewusst ZULETZT (stand vorher oben): statische Imports laufen
+// immer zuerst, das await verzögerte also nur die window-Bindings darunter —
+// Startlücke, in der boot.js/Module bereits laufen, window.* aber noch leer ist.
+// drive.js liest window.APP_CONFIG erst beim Login → späte Ladung unkritisch.
+try {
+	await import("./config.local.js");
+} catch (e) {
+	// Grund mitloggen: fehlende und kaputte Datei sahen vorher identisch aus,
+	// ein Syntaxfehler blieb still (Google-Login scheiterte erst viel später).
+	console.log("config.local.js nicht geladen:", (e && e.message) || e);
+}

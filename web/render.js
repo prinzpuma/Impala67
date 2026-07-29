@@ -84,6 +84,11 @@ function scheduleRender() {
 	if (_renderRaf) return;
 	_renderRaf = requestAnimationFrame(() => { _renderRaf = 0; render(); });
 }
+// Popover-Zustand (S.pageMenuOpenId, S.topMenu, S.deckMenuOpenName) wird direkt in
+// popovers.js gesetzt, nicht per dispatch. Ohne diesen Anstoss blieb ein geschlossenes
+// Menü als Geist im DOM stehen, bis irgendein anderes Ereignis ein Render auslöste.
+document.addEventListener("popovers:changed", scheduleRender);
+
 function onStateChange(type, ev) {
 	const p = ev?.payload || {};
 	// Reiner Content-Patch: Editor besitzt die Live-Ansicht.
@@ -596,11 +601,6 @@ function buildSpecialComparisonHtml(c) {
 	}
 	return '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
 }
-// v8: Es gibt keine Heft-Konfliktkopien mehr (s. o.) — die Canvas-Vorschau samt
-// Seitenblätterung und der Umweg über HEFT.findDivergentPage/renderBlobPreview sind
-// entfallen. Der Aufruf bleibt als leerer Haken stehen, damit der Dialog-Ablauf
-// unverändert bleibt.
-function fillConflictHeftPreviews() { /* nichts mehr zu tun */ }
 // ---- Zeilenvergleich: erst zuschneiden, dann ausrichten -------------------------
 // U.diffLines steigt oberhalb von 400 Zeilen in einen groben Modus aus (die O(n*m)-Matrix
 // würde sonst explodieren). Genau bei langen Seiten verschwand deshalb bisher JEDE
@@ -746,7 +746,7 @@ function openConflictResolver(index) {
 			`<span class="hint">${i + 1} von ${items.length}</span>` +
 			`<button type="button" class="mini" data-conflictnav="1" title="Nächster Konflikt">›</button></span>`
 		: "";
-	const o = openOverlay('<div class="modal conflict-modal">' +
+	openOverlay('<div class="modal conflict-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Synchronisation braucht eine Entscheidung' +
 		`</b><small>“${esc(c.title || "Seite")}”</small></span>` + navHtml + "</header>" +
@@ -757,7 +757,6 @@ function openConflictResolver(index) {
 		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Stattdessen anderen Stand übernehmen</button>' : "") +
 		(items.length > 1 ? '<button data-conflictnav="1">Später entscheiden ›</button>' : "") +
 		"</div></div>");
-	if (o) fillConflictHeftPreviews(o);
 }
 
 // ‹ / › zwischen Konflikten und Sprung zur nächsten Änderung. Capture-Phase wie beim
@@ -792,16 +791,9 @@ async function resolveConflict(action) {
 	const conf = list[i];
 	if (!conf) return;
 	if (action === "use-loser" && conf.pageId) {
-		if (conf.conflictType === "heft") {
-			// Winner-Ansicht erst schließen (unmount könnte alten In-Memory-Stand
-			// zurückschreiben), dann Loser-Blob in den Winner-Slot kopieren
-			if (HEFT.activeId === conf.pageId) HEFT.unmount(true);
-			const loserBlob = await DB.getBlob("heft:" + conf.conflictPageId);
-			if (loserBlob && loserBlob.buf && loserBlob.meta) {
-				await DB.putBlob("heft:" + conf.pageId, loserBlob.buf, { ...loserBlob.meta, hash: conf.loserHash });
-				await STATE.dispatch("heftUpdated", { pageId: conf.pageId, rev: loserBlob.meta.rev, pages: loserBlob.meta.pages || 1, bytes: loserBlob.buf.byteLength, blobHash: conf.loserHash });
-			}
-		} else if (conf.conflictType === "delete-change") {
+		// v8: Heft-Konflikte existieren nicht mehr (Striche liegen als Ereignisse im Log) —
+		// der frühere Blob-Kopier-Zweig war seither unerreichbar und ist entfallen.
+		if (conf.conflictType === "delete-change") {
 			// Gerettete Kopie: Titel/Workspace/Elternordner aus dem Payload zurück (nicht Root)
 			await STATE.dispatch("pageUpdate", { id: conf.conflictPageId, patch: { title: conf.title, parentId: conf.parentId || null, workspaceId: conf.workspaceId || "default" } });
 		} else {
@@ -862,11 +854,28 @@ function renderHome(main) {
 	// Erfolgsquote 30 Tage: echte Wiederholungen wie die Statistik-Retention.
 	// FIX: bei < 10 strengen Reviews auf alle bewerteten zurückfallen (gleiche
 	// breite Definition wie die Insights) statt widersprüchlich „—“ zu zeigen
-	const cut30 = new Date(Date.now() - 30 * 864e5).toISOString();
-	const graded30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0 && !r.first && !r.learning);
-	const gradedWide30 = (S.reviews || []).filter((r) => r.t >= cut30 && r.grade > 0);
-	const pool = graded30.length >= 10 ? graded30 : (gradedWide30.length >= 10 ? gradedWide30 : null);
-	const retention30 = pool ? Math.round(pool.filter((r) => r.grade > 1).length / pool.length * 100) : null;
+	// PERF: EIN Durchlauf über den (mit den Monaten sehr langen) Review-Log statt fünf
+	// Filter-Kopien pro Render. Gebraucht werden ohnehin nur Zähler, keine Listen:
+	// je Zeitfenster [Anzahl, davon richtig].
+	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
+	const cut30 = iso(30), cut14 = iso(14), cut7 = iso(7);
+	const win = { strict30: [0, 0], wide30: [0, 0], cur7: [0, 0], prev7: [0, 0] };
+	const bump = (w, ok) => { w[0]++; if (ok) w[1]++; };
+	for (const r of S.reviews || []) {
+		if (!(r.grade > 0)) continue;
+		const ok = r.grade > 1;
+		if (r.t >= cut30) {
+			bump(win.wide30, ok);
+			if (!r.first && !r.learning) bump(win.strict30, ok);
+		}
+		if (r.t >= cut7) bump(win.cur7, ok);
+		else if (r.t >= cut14) bump(win.prev7, ok);
+	}
+	const rate = (w) => w[1] / w[0];
+	// Strenge Definition, bei zu wenigen Daten die breite — sonst stand hier widersprüchlich „—“.
+	const pool = win.strict30[0] >= 10 ? win.strict30 : (win.wide30[0] >= 10 ? win.wide30 : null);
+	const retention30 = pool ? Math.round(rate(pool) * 100) : null;
+	const trend = win.cur7[0] >= 10 && win.prev7[0] >= 10 ? rate(win.cur7) - rate(win.prev7) : null;
 	// 🃏 fällige Karten je Wurzel-Stapel + ★-Seiten (Bereiche „Stapel“ / „Favoriten“)
 	const dueByDeck = {};
 	for (const c of dueCards) {
@@ -900,20 +909,14 @@ function renderHome(main) {
 
 	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
 	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
-	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
-	const okRate = (list) => list.filter((r) => r.grade > 1).length / list.length;
-	const graded = (S.reviews || []).filter((r) => r.grade > 0);
-	const cur7 = graded.filter((r) => r.t >= iso(7));
-	const prev7 = graded.filter((r) => r.t >= iso(14) && r.t < iso(7));
-	const trend = cur7.length >= 10 && prev7.length >= 10 ? okRate(cur7) - okRate(prev7) : null;
 	const leeches = Object.values(S.cards).filter((c) => !c.trashed && !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
 	const tips = [];
 	if (lz.todaySeconds === 0 && lz.streakDays > 0 && hour >= 15) tips.push(['data-homeaction="cards"', "🔥", `${lz.streakDays}-Tage-Streak in Gefahr`, "Heute noch nichts gelernt — schon 5 Minuten zählen."]);
 	if (due > 0) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
-	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(okRate(cur7) * 100)} % diese Woche (davor ${Math.round(okRate(prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
+	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(rate(win.cur7) * 100)} % diese Woche (davor ${Math.round(rate(win.prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
 	if (leeches >= 3) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
 	if (!daily && hour >= 17) tips.push(['data-homeaction="daily"', "📅", "Noch keine Daily Note", "Ein kurzer Tagesrückblick festigt das Gelernte."]);
-	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(okRate(cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
+	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(rate(win.cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
 	if (!tips.length) tips.push(['data-homeaction="library"', "✅", "Alles im grünen Bereich", "Nichts Dringendes — guter Moment zum Vertiefen oder Aufräumen."]);
 	const forYou = '<div class="home-list">' + tips.slice(0, 3).map((tp) => listRow(tp[0], tp[1], tp[2], tp[3])).join("") + "</div>";
 
@@ -977,7 +980,7 @@ function renderTrash(main) {
 	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
 	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div><button class="danger" data-trashclear="1">Papierkorb leeren</button></div>';
 	if (!pages.length && !decks.length && !cards.length) {
-		main.innerHTML = html + '<p class="hint">Der Papierkorb ist leer.</p></div>';
+		U.morph(main, html + '<p class="hint">Der Papierkorb ist leer.</p></div>');
 		return;
 	}
 	const head = (label) => `<div class="ws-head"><span class="ws-name">${label}</span></div>`;
@@ -991,7 +994,9 @@ function renderTrash(main) {
 		const front = (c.front || "").replace(/\s+/g, " ").trim();
 		return trashRow("card", c.id, "🃏 " + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
 	}).join("");
-	main.innerHTML = html + "</div></div>";
+	// U.morph statt innerHTML (Regel aus util.js): Scrollstand und Hover bleiben erhalten,
+	// wenn eine Zeile wiederhergestellt oder endgültig gelöscht wird.
+	U.morph(main, html + "</div></div>");
 }
 
 // Cover/Bilder nach dem Rendern nachladen (innerHTML kann kein async)
@@ -1038,11 +1043,11 @@ function renderDaily(main) {
 		const snippet = pg ? ((pg.content || "").split("\n").find((l) => l.trim()) || "") : "";
 		cells += `<div class="cal-day${key === todayKey ? " today" : ""}${pg ? " has-note" : ""}" data-dailyday="${key}" title="${key}"><span class="cal-num">${d}</span>${pg ? `<span class="cal-snippet">${esc(snippet.slice(0, 70))}</span>` : ""}</div>`;
 	}
-	main.innerHTML = '<div class="library daily"><div class="lib-head"><h1>📅 Daily Notes</h1>' +
+	U.morph(main, '<div class="library daily"><div class="lib-head"><h1>📅 Daily Notes</h1>' +
 		'<div class="mode-btns"><button data-dailynav="-1" title="Voriger Monat">‹</button><button id="btnDailyToday">Heute</button><button data-dailynav="1" title="Nächster Monat">›</button></div>' +
 		`<span class="hint">${cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>` +
 		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => `<div class="cal-dow">${d}</div>`).join("") + "</div>" +
-		'<div class="cal-grid">' + cells + "</div></div>";
+		'<div class="cal-grid">' + cells + "</div></div>");
 }
 
 // Anlege-Dialog: Notion-Seite oder GoodNotes-Heft, Vorlagen darunter
@@ -1145,11 +1150,19 @@ function chatLiveParts(historyList) {
 // FNV-Signatur statt innerHTML-Neuaufbau — erkennt auch In-Place-Änderungen
 // (Undo, aufgeklapptes Thinking, beantwortete Rückfragen). PERF: Felder direkt
 // in den Hash falten, kein JSON.stringify des ganzen Verlaufs (Bild-Data-URLs!)
+// PERF: Bilder liegen als Data-URL IM Verlauf (schnell mehrere MB Base64). Alles
+// zeichenweise zu hashen war damit die teuerste Schleife der App — und lief bei JEDEM
+// Render, zweimal (Panel + Vollbild). Lange Werte gehen deshalb nur über Länge, Anfang
+// und Ende ein: ein anderer Anhang ist immer ein anderer Wert, nie eine stille Änderung
+// in der Mitte.
+const SIG_MAX = 256;
 function chatHistorySignature(list) {
 	let hash = 2166136261;
+	const fold = (s) => { for (let i = 0; i < s.length; i++) { hash ^= s.charCodeAt(i); hash = Math.imul(hash, 16777619); } };
 	const add = (v) => {
 		const s = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-		for (let i = 0; i < s.length; i++) { hash ^= s.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+		if (s.length > SIG_MAX) { fold(String(s.length)); fold(s.slice(0, 64)); fold(s.slice(-64)); }
+		else fold(s);
 		hash ^= 30; // Feldtrenner
 		hash = Math.imul(hash, 16777619);
 	};

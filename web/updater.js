@@ -13,9 +13,11 @@
 // Vorher installierte die Tauri-Variante direkt beim „Nach Updates suchen“ — und die
 // PWA-Variante verließ sich auf einen festen 200-ms-Schlaf (Race auf iPad-Safari).
 //
-// Bei Release: wird von .github/workflows/auto-version.yml gesetzt
-// (zusammen mit package.json, tauri.conf.json, web/version.json, web/latest.json).
-// Nicht von Hand pflegen — Git bump't die Patch-Nummer auf main.
+// Bei Release: wird von .github/scripts/set-version.mjs im Lauf von release.yml gesetzt
+// (zusammen mit package.json, tauri.conf.json, web/version.json) — NUR innerhalb des
+// CI-Laufs, nichts davon wird nach main zurückcommittet. Der Wert hier ist deshalb
+// absichtlich älter als der Server-Stand. auto-version.yml gibt es seit 11. Juli nicht mehr.
+// Nicht von Hand pflegen.
 //
 // NIE Merge-Konfliktmarker (<<<<<<< ======= >>>>>>>) committen — bricht die PWA.
 const BUILD_VERSION = "0.2.27";
@@ -150,29 +152,24 @@ async function fetchJson(url, bust) {
 
 // Deployed Version für PWA: NUR same-origin (kein GitHub — das liefert oft die
 // Desktop-Release-Nummer 0.1.x und öffnet auf iPad im Fehlerfall den Safari-Tab).
+// FIX: latest.json als Fallback ENTFERNT — das ist das Tauri-Desktop-Manifest mit
+// EIGENER, meist niedrigerer Nummer. War version.json einmal nicht erreichbar,
+// verglich die PWA gegen die Desktop-Version und meldete „Server älter“ statt
+// eines echten Updates. Beide Versuche gehen jetzt über fetchJson (vorher lag der
+// zweite als handgeschriebene Kopie daneben — ohne HTML-Erkennung).
 async function fetchDeployedVersionPwa() {
 	const errors = [];
-	for (const file of ["./version.json", "./latest.json"]) {
+	// 1. relativ zur Seite, 2. relativ zum Modul (App liegt evtl. unter einem Unterpfad)
+	const tries = [["version.json", "./version.json"], ["version.json(module)", new URL("./version.json", import.meta.url)]];
+	for (const [source, url] of tries) {
 		try {
-			const data = await fetchJson(file, true);
+			const data = await fetchJson(url, true);
 			const latest = normVer(data.version);
-			if (latest) return { latest, source: file.replace(/^\.\//, "") };
+			if (latest) return { latest, source };
 			throw new Error("leere version");
 		} catch (e) {
-			errors.push(file + ": " + (e && e.message ? e.message : e));
+			errors.push(source + ": " + (e && e.message ? e.message : e));
 		}
-	}
-	// Modul-relative URL als Extra-Versuch (falls App unter Unterpfad liegt)
-	try {
-		const u = new URL("./version.json", import.meta.url);
-		u.searchParams.set("t", String(Date.now()));
-		const res = await fetch(u, { cache: "no-store" });
-		if (!res.ok) throw new Error("HTTP " + res.status);
-		const data = await res.json();
-		const latest = normVer(data.version);
-		if (latest) return { latest, source: "version.json(module)" };
-	} catch (e) {
-		errors.push("module: " + (e && e.message ? e.message : e));
 	}
 	throw new Error(errors.join(" · ") || "version.json nicht erreichbar");
 }
@@ -213,7 +210,8 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	const { latest, source } = await fetchDeployedVersionPwa();
 	const remote = latest || cur;
 	const hasUpdate = cmpSemver(remote, cur) > 0;
-	pendingUpdate = hasUpdate ? { version: remote, install: null } : null;
+	// PWA: nur die Nummer merken — installiert wird über Service-Worker + Reload.
+	pendingUpdate = hasUpdate ? { version: remote } : null;
 	return {
 		ok: true,
 		latest: remote,
@@ -270,12 +268,15 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 		"display:flex;gap:10px;align-items:center;";
 	const label = document.createElement("span");
 	label.textContent = "⬇️ Update " + (update.version ? "v" + update.version + " " : "") + "verfügbar";
-	const btnNow = document.createElement("button");
-	btnNow.textContent = "Jetzt installieren";
-	btnNow.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:#6fc3ff;color:#06090f;";
-	const btnLater = document.createElement("button");
-	btnLater.textContent = "Später";
-	btnLater.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;";
+	// Beide Knöpfe teilen dieselbe Basis-Optik — stand vorher zweimal wortgleich.
+	const mkBtn = (text, css) => {
+		const b = document.createElement("button");
+		b.textContent = text;
+		b.style = "font:inherit;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;" + css;
+		return b;
+	};
+	const btnNow = mkBtn("Jetzt installieren", "background:#6fc3ff;color:#06090f;");
+	const btnLater = mkBtn("Später", "background:rgba(255,255,255,.12);color:#fff;");
 	banner.append(label, btnNow, btnLater);
 	document.body.appendChild(banner);
 	btnLater.addEventListener("click", () => banner.remove());

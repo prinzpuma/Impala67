@@ -95,7 +95,7 @@ export const SCANCORE = (() => {
 		if (!w || !h) return full;
 		try {
 			// Aufnahme: mehr Analyseauflösung für präzisere Ecken. Die Live-Vorschau
-			// bleibt klein, weil ihr Bild ohnehin nur 240 px breit ist.
+			// bleibt klein, weil heft.js/liveQualityFrame nur 300 px breit prüft.
 			const dw = Math.min(720, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
 			const c = document.createElement("canvas");
 			c.width = dw; c.height = dh;
@@ -321,7 +321,10 @@ export const SCANCORE = (() => {
 		const sd = scx.getImageData(0, 0, iw, ih).data;
 		const out = document.createElement("canvas");
 		out.width = W; out.height = H;
-		const ox = out.getContext("2d");
+		// willReadFrequently MUSS hier stehen: applyScanMode holt fuer dasselbe Canvas
+		// spaeter erneut den 2D-Kontext, dabei werden die Optionen ignoriert (erster Aufruf
+		// gewinnt). Ohne Flag ist jedes getImageData/putImageData ein GPU-Rueckweg.
+		const ox = out.getContext("2d", { willReadFrequently: true });
 		const od = ox.createImageData(W, H);
 		const op = od.data;
 		const hm = homography(quad, W, H);
@@ -354,7 +357,9 @@ export const SCANCORE = (() => {
 		const bh = Math.max(8, Math.round(cv.height / 16));
 		const c = document.createElement("canvas");
 		c.width = bw; c.height = bh;
-		const cx = c.getContext("2d");
+		// Karte wird direkt danach ausgelesen -> Lese-Flag setzen, sonst ist getImageData
+		// je Scan ein langsamer GPU-Rueckweg.
+		const cx = c.getContext("2d", { willReadFrequently: true });
 		cx.drawImage(cv, 0, 0, bw, bh);
 		const d = cx.getImageData(0, 0, bw, bh).data;
 		// Getrennte Kanal-Karten statt nur einer Luminanz-Karte — sonst bewahrt der
@@ -380,20 +385,10 @@ export const SCANCORE = (() => {
 		mr = smooth(mr); mg = smooth(mg); mb = smooth(mb);
 		return { r: mr, g: mg, b: mb, bw, bh };
 	}
-	function sampleMap(map, bw, bh, fx, fy) {
-		// Bilinear-Sampling braucht jeweils einen rechten und unteren Nachbarn —
-		// am Rand deshalb auf den vorletzten Eintrag klemmen (sonst NaN-Ränder).
-		let x = fx - 0.5, y = fy - 0.5;
-		if (x < 0) x = 0; else if (x > bw - 2.001) x = bw - 2.001;
-		if (y < 0) y = 0; else if (y > bh - 2.001) y = bh - 2.001;
-		const x0 = x | 0, y0 = y | 0, dx = x - x0, dy = y - y0;
-		return map[y0 * bw + x0] * (1 - dx) * (1 - dy) + map[y0 * bw + x0 + 1] * dx * (1 - dy) +
-			map[(y0 + 1) * bw + x0] * (1 - dx) * dy + map[(y0 + 1) * bw + x0 + 1] * dx * dy;
-	}
 	// „Foto“-Filter: Kontrast strecken über 2%/98%-Luminanz-Perzentile — bewusst
 	// kanalgleich, damit Farben nicht kippen (für Fotos statt Dokumenten)
 	function enhanceScan(cv) {
-		const x = cv.getContext("2d");
+		const x = cv.getContext("2d", { willReadFrequently: true });
 		const d = x.getImageData(0, 0, cv.width, cv.height);
 		const px = d.data;
 		const hist = new Uint32Array(256);
@@ -404,11 +399,13 @@ export const SCANCORE = (() => {
 		acc = 0;
 		for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= total * 0.02) { hi = i; break; } }
 		const span = Math.max(1, hi - lo);
-		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
+		// Streckung ist eine reine 0…255-Abbildung -> Tabelle statt 3 Divisionen je Pixel.
+		const lut = new Uint8Array(256);
+		for (let v = 0; v < 256; v++) { const o = Math.round((v - lo) * 255 / span); lut[v] = o < 0 ? 0 : o > 255 ? 255 : o; }
 		for (let i = 0; i < px.length; i += 4) {
-			px[i] = clamp((px[i] - lo) * 255 / span);
-			px[i + 1] = clamp((px[i + 1] - lo) * 255 / span);
-			px[i + 2] = clamp((px[i + 2] - lo) * 255 / span);
+			px[i] = lut[px[i]];
+			px[i + 1] = lut[px[i + 1]];
+			px[i + 2] = lut[px[i + 2]];
 		}
 		x.putImageData(d, 0, 0);
 	}
@@ -425,27 +422,52 @@ export const SCANCORE = (() => {
 		const px = d.data;
 		const kx = bg.bw / w, ky = bg.bh / h;
 		const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
-		// Starke Papier-Aufhellung + Tinte halten (S-Kurve nach Weißabgleich)
-		const docTone = (v) => {
-			let t = Math.max(0, Math.min(1, v / 255));
+		// Starke Papier-Aufhellung + Tinte halten (S-Kurve nach Weißabgleich).
+		// Eingang ist IMMER ein ganzzahliger Kanalwert 0…255 -> Tabelle statt Kurve je Pixel
+		// (bei 4,8 MP sonst ~15 Mio. Auswertungen pro Scan). Werte bleiben identisch.
+		const docLut = new Uint8Array(256);
+		for (let v = 0; v < 256; v++) {
+			let t = v / 255;
 			t = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
 			if (t > 0.72) t = 0.72 + (t - 0.72) * 1.9;
 			if (t < 0.35) t = t * 0.85;
-			return clamp(t * 255);
+			docLut[v] = clamp(t * 255);
+		}
+		// Beleuchtungskarte: die Bilinear-Gewichte haengen nur an x bzw. y — einmal je
+		// Spalte/Zeile klemmen und rechnen statt 3x pro Pixel (r/g/b lasen dieselbe Stelle).
+		const colI = new Int32Array(w), colF = new Float32Array(w);
+		for (let x2 = 0; x2 < w; x2++) {
+			let fx = x2 * kx - 0.5;
+			if (fx < 0) fx = 0; else if (fx > bg.bw - 2.001) fx = bg.bw - 2.001;
+			const i0 = fx | 0;
+			colI[x2] = i0; colF[x2] = fx - i0;
+		}
+		const rowAt = (yy) => {
+			let fy = yy * ky - 0.5;
+			if (fy < 0) fy = 0; else if (fy > bg.bh - 2.001) fy = bg.bh - 2.001;
+			const i0 = fy | 0;
+			return { i0, f: fy - i0 };
 		};
+		// Weißabgleich je Kanal einzeln: eine gemeinsame Helligkeits-Karte hat einen
+		// Farbstich im Schatten (z. B. Gelbstich) nur abgedunkelt, nicht entfernt.
+		const base = (map, o, dx, dy) => Math.max(36,
+			map[o] * (1 - dx) * (1 - dy) + map[o + 1] * dx * (1 - dy) +
+			map[o + bg.bw] * (1 - dx) * dy + map[o + bg.bw + 1] * dx * dy);
 		// S/W-Schwelle aus dem tatsächlichen Scan ableiten. Das bewahrt hellen
 		// Bleistift und blasse Schrift besser als der alte feste Bereich 110…200.
 		let bwLow = 110, bwSpan = 90;
 		if (mode === "bw") {
 			const hist = new Uint32Array(256);
 			let samples = 0;
-			for (let sy = 0; sy < h; sy += 4) for (let sx = 0; sx < w; sx += 4) {
-				const i = (sy * w + sx) * 4;
-				const baseR = Math.max(36, sampleMap(bg.r, bg.bw, bg.bh, sx * kx, sy * ky));
-				const baseG = Math.max(36, sampleMap(bg.g, bg.bw, bg.bh, sx * kx, sy * ky));
-				const baseB = Math.max(36, sampleMap(bg.b, bg.bw, bg.bh, sx * kx, sy * ky));
-				const rr = clamp(px[i] * 255 / baseR), gg = clamp(px[i + 1] * 255 / baseG), bb = clamp(px[i + 2] * 255 / baseB);
-				hist[docTone((rr * 77 + gg * 150 + bb * 29) >> 8)]++; samples++;
+			for (let sy = 0; sy < h; sy += 4) {
+				const row = rowAt(sy);
+				for (let sx = 0; sx < w; sx += 4) {
+					const i = (sy * w + sx) * 4, o = row.i0 * bg.bw + colI[sx], fx = colF[sx];
+					const rr = clamp(px[i] * 255 / base(bg.r, o, fx, row.f));
+					const gg = clamp(px[i + 1] * 255 / base(bg.g, o, fx, row.f));
+					const bb = clamp(px[i + 2] * 255 / base(bg.b, o, fx, row.f));
+					hist[docLut[(rr * 77 + gg * 150 + bb * 29) >> 8]]++; samples++;
+				}
 			}
 			const percentile = (p) => {
 				let acc = 0, target = samples * p;
@@ -455,49 +477,42 @@ export const SCANCORE = (() => {
 			const dark = percentile(.01), light = percentile(.92), span = light - dark;
 			if (span >= 48) { bwLow = clamp(dark + span * .12); bwSpan = Math.max(55, span * .62); }
 		}
+		// Auch die Ausgabekurve (S/W-Smoothstep bzw. Graustufen-Kontrast) als Tabelle:
+		// Eingang ist der docLut-Wert, also wieder 0…255.
+		const monoLut = mode === "color" ? null : new Uint8Array(256);
+		if (monoLut) for (let v = 0; v < 256; v++) {
+			if (mode === "bw") {
+				let t = (v - bwLow) / bwSpan;
+				t = t < 0 ? 0 : t > 1 ? 1 : t;
+				monoLut[v] = clamp(255 * t * t * (3 - 2 * t));
+			} else monoLut[v] = clamp((v - 128) * 1.45 + 128);
+		}
 		for (let y = 0; y < h; y++) {
-			const fy = y * ky;
+			const row = rowAt(y);
 			for (let x2 = 0; x2 < w; x2++) {
-				const i = (y * w + x2) * 4;
-				// Weißabgleich je Kanal einzeln: eine gemeinsame Helligkeits-Karte hat
-				// einen Farbstich im Schatten (z. B. Gelbstich) nur abgedunkelt, nicht entfernt.
-				const gr = Math.max(36, sampleMap(bg.r, bg.bw, bg.bh, x2 * kx, fy));
-				const gg = Math.max(36, sampleMap(bg.g, bg.bw, bg.bh, x2 * kx, fy));
-				const gb = Math.max(36, sampleMap(bg.b, bg.bw, bg.bh, x2 * kx, fy));
-				const r = clamp(px[i] * 255 / gr);
-				const g2 = clamp(px[i + 1] * 255 / gg);
-				const b = clamp(px[i + 2] * 255 / gb);
-				if (mode === "color") {
-					px[i] = docTone(r);
-					px[i + 1] = docTone(g2);
-					px[i + 2] = docTone(b);
-				} else {
-					const v = docTone((r * 77 + g2 * 150 + b * 29) >> 8);
-					let o;
-					if (mode === "bw") {
-						// Smoothstep 110…200 — Text schwarz, Papier weiß, klar erkennbar
-						let t = (v - bwLow) / bwSpan;
-						t = t < 0 ? 0 : t > 1 ? 1 : t;
-						o = clamp(255 * t * t * (3 - 2 * t));
-					} else {
-						o = clamp((v - 128) * 1.45 + 128);
-					}
-					px[i] = px[i + 1] = px[i + 2] = o;
-				}
+				const i = (y * w + x2) * 4, o = row.i0 * bg.bw + colI[x2], fx = colF[x2];
+				const r = clamp(px[i] * 255 / base(bg.r, o, fx, row.f));
+				const g2 = clamp(px[i + 1] * 255 / base(bg.g, o, fx, row.f));
+				const b = clamp(px[i + 2] * 255 / base(bg.b, o, fx, row.f));
+				if (monoLut) px[i] = px[i + 1] = px[i + 2] = monoLut[docLut[(r * 77 + g2 * 150 + b * 29) >> 8]];
+				else { px[i] = docLut[r]; px[i + 1] = docLut[g2]; px[i + 2] = docLut[b]; }
 			}
 		}
-		// Leichter Unsharp-Mask (Text schärfer, Scan-Look)
+		// Leichter Unsharp-Mask (Text schärfer, Scan-Look). In S/W und Graustufen ist
+		// r=g=b — dort EINEN Kanal rechnen und kopieren statt dreimal dasselbe.
 		const copy = new Uint8ClampedArray(px);
 		const amount = 0.55;
+		const chans = monoLut ? 1 : 3;
 		for (let y = 1; y < h - 1; y++) {
 			for (let x2 = 1; x2 < w - 1; x2++) {
 				const i = (y * w + x2) * 4;
-				for (let c = 0; c < 3; c++) {
+				for (let c = 0; c < chans; c++) {
 					const c0 = copy[i + c];
 					const blur2 =
 						(copy[i - w * 4 + c] + copy[i + w * 4 + c] + copy[i - 4 + c] + copy[i + 4 + c] + c0 * 4) / 8;
 					px[i + c] = clamp(c0 + (c0 - blur2) * amount);
 				}
+				if (monoLut) px[i + 1] = px[i + 2] = px[i];
 			}
 		}
 		x.putImageData(d, 0, 0);
@@ -517,28 +532,36 @@ export const SCANCORE = (() => {
 	// Prüft das fertige, entzerrte Bild statt nur den Live-Stream. Die Kennzahl
 	// ist bewusst ein Hinweis, kein Blocker: schlechte Lichtverhältnisse dürfen
 	// weiterhin als Foto gesichert und später manuell bearbeitet werden.
+	// EINE Definition von Helligkeit, Kontrast und Schärfe. Die Live-Vorschau in heft.js
+	// hatte die identische Rechnung ein zweites Mal stehen — zwei Formeln für dieselbe
+	// Kennzahl liefen bei jeder Änderung auseinander (Live sagte "scharf", das Ergebnis
+	// bekam trotzdem ein "Weich"-Badge). step > 1 tastet die Laplace-Summe gröber ab —
+	// das braucht die Live-Prüfung alle 340 ms, die Ergebnisprüfung rechnet voll.
+	function lumStats(cv, step = 1) {
+		const w = cv.width, h = cv.height;
+		const px = cv.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+		const lum = new Uint8Array(w * h);
+		let sum = 0, sum2 = 0, dark = 0, bright = 0;
+		for (let i = 0; i < lum.length; i++) {
+			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
+			lum[i] = v; sum += v; sum2 += v * v;
+			if (v < 28) dark++; else if (v > 245) bright++;
+		}
+		let lap = 0, taps = 0;
+		for (let y = 1; y < h - 1; y += step) for (let x2 = 1; x2 < w - 1; x2 += step) {
+			const i = y * w + x2;
+			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - w] - lum[i + w]); taps++;
+		}
+		const mean = sum / lum.length;
+		return { mean, contrast: Math.sqrt(Math.max(0, sum2 / lum.length - mean * mean)),
+			sharp: lap / Math.max(1, taps), darkRatio: dark / lum.length, brightRatio: bright / lum.length };
+	}
 	function scanOutputQuality(cv) {
 		const max = 360, k = Math.min(1, max / Math.max(cv.width, cv.height));
 		const w = Math.max(2, Math.round(cv.width * k)), h = Math.max(2, Math.round(cv.height * k));
 		const probe = document.createElement("canvas"); probe.width = w; probe.height = h;
-		const x = probe.getContext("2d", { willReadFrequently: true });
-		x.drawImage(cv, 0, 0, w, h);
-		const px = x.getImageData(0, 0, w, h).data;
-		let sum = 0, sum2 = 0, lap = 0;
-		const lum = new Uint8Array(w * h);
-		for (let i = 0; i < lum.length; i++) {
-			const v = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
-			lum[i] = v; sum += v; sum2 += v * v;
-		}
-		for (let y = 1; y < h - 1; y++) for (let x2 = 1; x2 < w - 1; x2++) {
-			const i = y * w + x2;
-			lap += Math.abs(4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - w] - lum[i + w]);
-		}
-		let dark = 0, bright = 0;
-		for (let i = 0; i < lum.length; i++) { if (lum[i] < 28) dark++; if (lum[i] > 245) bright++; }
-		const contrast = Math.sqrt(Math.max(0, sum2 / lum.length - Math.pow(sum / lum.length, 2)));
-		const sharp = lap / Math.max(1, (w - 2) * (h - 2));
-		const darkRatio = dark / lum.length, brightRatio = bright / lum.length;
+		probe.getContext("2d", { willReadFrequently: true }).drawImage(cv, 0, 0, w, h);
+		const { sharp, contrast, darkRatio, brightRatio } = lumStats(probe);
 		// Qualitätsprüfung ist ein Hinweis, kein Blocker: Ein Scan bleibt speicherbar,
 		// bekommt aber bei Unschärfe, wenig Kontrast oder starken Clippings ein Badge.
 		return { sharp, contrast, darkRatio, brightRatio, soft: sharp < 5.5, flat: contrast < 13,
@@ -574,5 +597,7 @@ export const SCANCORE = (() => {
 		if (!snapshot || snapshot.commit !== false) sh.out = out;
 		return out;
 	}
-	return { SCAN_MODES, loadImg, dist2d, quadArea, isConvex, convexHull, blurMap, morphPass, detectQuad, homography, warpPerspective, backgroundMap, sampleMap, enhanceScan, applyScanMode, rotateCanvas, scanOutputQuality, tick, processShot };
+	// Nur die Namen, die heft.js wirklich zieht. Der Rest war oeffentlich ohne Aufrufer
+	// (Suche: nur heft.js importiert SCANCORE) — nicht mitpflegen, nicht wieder aufblaehen.
+	return { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats };
 })();

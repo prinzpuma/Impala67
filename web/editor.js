@@ -32,6 +32,7 @@ export const EDITOR = (() => {
 	let ctrlAArmed = false;   // zweistufiges Strg+A wie in Notion
 	let lastColor = "bg:yellow"; // Strg+Shift+H = letzte Farbe erneut
 	let saveTimer = 0;
+	let lastSaved = "";      // Inhalt, den der Editor selbst zuletzt geschrieben hat
 	let histTimer = 0;
 	let histPending = false;
 	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
@@ -51,6 +52,18 @@ export const EDITOR = (() => {
 	// und eine History, die scheinbar zufällig Schritte überspringt.
 	const wiredHosts = new WeakSet();
 	const HISTORY_LIMIT = 200;
+	// Verlaufsspeicher bleibt beschränkt: pro Seite bis HISTORY_LIMIT Schritte, aber nur
+	// für die letzten HISTORY_PAGES besuchten Seiten. Vorher hielt die App jeden
+	// Schnappschuss JEDER je geöffneten Seite bis zum Neuladen im Speicher — bei langen
+	// Sitzungen wuchs der Verbrauch unbegrenzt.
+	const HISTORY_PAGES = 3;
+	const histPages = [];
+	function touchHistoryPage(pid) {
+		const k = histPages.indexOf(pid);
+		if (k >= 0) histPages.splice(k, 1);
+		histPages.unshift(pid);
+		for (const alt of histPages.splice(HISTORY_PAGES)) { delete undoStacks[alt]; delete redoStacks[alt]; }
+	}
 
 	// Object-URLs je Blob-ID EINMAL erzeugen und wiederverwenden.
 	// FIX (25. Juli, Speicherleck): hydrate() lief bisher bei JEDEM Render — also bei
@@ -100,22 +113,46 @@ export const EDITOR = (() => {
 
 	// Sucht einen Block auch in Callout-Kindern, Toggle-Kindern und Spalten.
 	// parent = umschließender Block (macht verschachtelte Blöcke als Einheit behandelbar).
-	function findContext(id, list = blocks, parent = null) {
+	function scanContext(id, list, parent) {
 		for (let index = 0; index < list.length; index++) {
 			const block = list[index];
 			if (block.id === id) return { list, index, block, parent };
 			if (block.children) {
-				const nested = findContext(id, block.children, block);
+				const nested = scanContext(id, block.children, block);
 				if (nested) return nested;
 			}
 			if (block.columns) {
 				for (const column of block.columns) {
-					const found = findContext(id, column, block);
+					const found = scanContext(id, column, block);
 					if (found) return found;
 				}
 			}
 		}
 		return null;
+	}
+	// PERF: Blockzugriff über einen Index statt Baumsuche. findContext lief bei JEDEM
+	// Tastendruck mehrfach rekursiv durch den GANZEN Blockbaum (input →
+	// syncFieldToModel → findBlock, caretInfo → findContext, topIndexOf sogar je
+	// Elternebene erneut) — auf langen Seiten der Hauptgrund fürs Tipp-Ruckeln.
+	// Reines Tippen ändert die Struktur nicht, der Index bleibt also gültig.
+	let ctxIdx = null;
+	let ctxLive = true; // false = laufende Strukturmutation, Index nicht vertrauenswürdig
+	const bustCtxIdx = () => { ctxIdx = null; };
+	function buildCtxIdx(list, parent, map) {
+		for (let index = 0; index < list.length; index++) {
+			const block = list[index];
+			map.set(block.id, { list, index, block, parent });
+			if (block.children) buildCtxIdx(block.children, block, map);
+			if (block.columns) for (const column of block.columns) buildCtxIdx(column, block, map);
+		}
+		return map;
+	}
+	function findContext(id) {
+		// Während fn() in mutate() verschieben sich Indizes laufend — dort exakt wie
+		// früher direkt suchen, statt einen halbfertigen Index zu befragen.
+		if (!ctxLive) return scanContext(id, blocks, null);
+		if (!ctxIdx) ctxIdx = buildCtxIdx(blocks, null, new Map());
+		return ctxIdx.get(id) || null;
 	}
 	const findBlock = (id) => { const c = findContext(id); return c && c.block; };
 	// Index im TOP-LEVEL-Array. Für verschachtelte Blöcke (Callout/Toggle/Spalte)
@@ -657,6 +694,7 @@ export const EDITOR = (() => {
 		to.push({ json: snapshotJson(), focus: caretInfo(), scrollTop: root ? root.scrollTop : 0 });
 		if (to.length > HISTORY_LIMIT) to.shift();
 		blocks = JSON.parse(entry.json);
+		bustCtxIdx(); // andere Blockobjekte → alter Index zeigt ins Leere
 		histState = entry.json;
 		histPending = false;
 		// Alte Blockauswahl verwerfen — ihre Indizes zeigen nach dem Undo ins Leere
@@ -676,10 +714,16 @@ export const EDITOR = (() => {
 	// ---------- Speichern (Hintergrund-Markdown) ----------
 	function save(now) {
 		clearTimeout(saveTimer);
+		saveTimer = 0;
 		const run = () => {
 			const pg = S.pages[pageId];
 			if (!pg) return;
 			const content = serialize();
+			// lastSaved = Stand, den der Editor selbst geschrieben hat. Nur damit lässt sich
+			// später eine EXTERNE Änderung (Sync) von eigenen, noch nicht gespeicherten
+			// Tastendrücken unterscheiden — ohne bei jedem Render die ganze Seite neu zu
+			// serialisieren.
+			lastSaved = content;
 			if (content === pg.content) return;
 			// viaEditor: dieser Autosave kommt vom Editor selbst — sein DOM/Scroll ist
 			// längst konsistent (render() lief schon in mutate()/undoRedo()). dispatch()
@@ -693,13 +737,15 @@ export const EDITOR = (() => {
 			RAG.queuePage(pageId);
 		};
 		if (now) run();
-		else saveTimer = setTimeout(run, 450);
+		else saveTimer = setTimeout(() => { saveTimer = 0; run(); }, 450);
 	}
 
 	// mutate(): die eine Transaktions-Klammer für ALLE Strukturänderungen.
 	function mutate(fn, opts) {
 		checkpoint(!(opts && opts.soft));
-		fn();
+		// Strukturänderung: Blockindex verwerfen und während fn() direkt suchen.
+		ctxLive = false;
+		try { fn(); } finally { bustCtxIdx(); ctxLive = true; }
 		// Nach Struktur-Mutation muss histState dem IST-Zustand entsprechen.
 		// checkpoint(force) hat zuvor den Vorzustand committed und histState auf den
 		// Snapshot VOR fn() gesetzt — ohne diese Korrektur hinkt die History hinterher
@@ -881,7 +927,7 @@ export const EDITOR = (() => {
 
 	function render(opts) {
 		if (!host) return;
-		if (!blocks.length) blocks.push(newBlock("p"));
+		if (!blocks.length) { blocks.push(newBlock("p")); bustCtxIdx(); }
 		const o = opts || {};
 		renderBoundary = o.boundary || null;
 		// v3 (25. Juli): DOM ANGLEICHEN statt wegwerfen. Vorher ersetzte jedes render()
@@ -904,6 +950,11 @@ export const EDITOR = (() => {
 	function renumber() {
 		const counters = {};
 		let prevListy = false;
+		// PERF: alle Zähler-Marker EINMAL einsammeln. Vorher lief pro nummeriertem
+		// Eintrag ein eigener DOM-Selektor über den ganzen Editor — bei jedem Enter in
+		// einer langen Liste hunderte Suchläufe.
+		const nums = new Map();
+		host.querySelectorAll("[data-bnum]").forEach((el) => nums.set(el.dataset.bnum, el));
 		const walk = (list) => {
 			for (const b of list) {
 				if (b.type === "number") {
@@ -911,7 +962,7 @@ export const EDITOR = (() => {
 					if (!prevListy) for (const k in counters) delete counters[k];
 					counters[depth] = (counters[depth] || 0) + 1;
 					for (const k in counters) if (+k > depth) delete counters[k];
-					const el = host.querySelector('[data-bnum="' + b.id + '"]');
+					const el = nums.get(b.id);
 					if (el) el.textContent = counters[depth] + ".";
 					prevListy = true;
 				} else {
@@ -1468,7 +1519,14 @@ export const EDITOR = (() => {
 		// (z.B. zweiter Stern von **fett** getippt) — Feld neu rendern + Caret halten.
 		if (e && /[*\x60~=$)\/}]/.test(e.data || "") &&
 			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|\$[^$\n]+\$|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
-			const off = caret ? caret.offset : null;
+			// Der Caret muss in SICHTBAREN Zeichen gesetzt werden: nach dem Rendern sind die
+			// Markdown-Zeichen (** **, == ==, $…$) verschwunden. Mit dem rohen Markdown-Offset
+			// sprang der Caret um genau diese Zeichen zu weit nach rechts, sobald hinter der
+			// Fundstelle noch Text stand. splitFieldAtCaret liefert das Markdown VOR dem Caret
+			// exakt über DOM-Ranges — dessen Sichtlänge ist die gesuchte Position.
+			const probe = document.createElement("div");
+			probe.innerHTML = inlineHtml(splitFieldAtCaret(field, text).vor);
+			const off = probe.textContent.length;
 			field.innerHTML = inlineHtml(text);
 			hydrateInlineMath(field);
 			setCaret(field, off);
@@ -2272,7 +2330,6 @@ export const EDITOR = (() => {
 			e.preventDefault();
 			const text = e.clipboardData.getData("text/plain") || "";
 			if (!text) return;
-			checkpoint(true);
 			// Mehrzeiliger Markdown-Text in einen normalen Textblock → als Blöcke einfügen
 			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*]\s|\d+[.)]\s|>|\|)/m.test(text) && text.includes("\n")) {
 				const c = findContext(field.dataset.btext);
@@ -2288,6 +2345,9 @@ export const EDITOR = (() => {
 				}
 			}
 			// Sonst: als reiner Text an der Caret-Position (Browser-insertText hält den Caret korrekt)
+			// Verlaufsmarke erst HIER: im Block-Pfad setzt mutate() bereits eine eigene, zwei
+			// Marken pro Einfügen ließen das erste Strg+Z wirkungslos erscheinen.
+			checkpoint(true);
 			document.execCommand("insertText", false, text);
 		});
 	}
@@ -2436,14 +2496,27 @@ export const EDITOR = (() => {
 		const pg = S.pages[pid];
 		if (!el || !pg) return;
 		const pageChanged = pid !== pageId;
-		const externallyChanged = !pageChanged && serialize() !== (pg.content || "") && !histPending;
+		// Offene Rückstände VOR dem Seitenwechsel abschließen — noch mit den alten Blöcken:
+		// der Autosave (450 ms) hätte danach die neue Seite gesehen und die letzten
+		// Änderungen der alten stillschweigend verworfen, und der offene Verlaufsschritt
+		// (700 ms) wäre im Stapel der NEUEN Seite gelandet — ein Strg+Z dort hätte fremden
+		// Inhalt hergestellt.
+		if (pageChanged && pageId) {
+			if (saveTimer) save(true);
+			commitHistory();
+		}
+		// Externe Änderung = pg.content weicht von dem ab, was der Editor selbst geschrieben
+		// hat. Vorher wurde dafür bei JEDEM Render die komplette Seite neu serialisiert.
+		const externallyChanged = !pageChanged && (pg.content || "") !== lastSaved && !histPending;
 		host = el;
 		host.classList.add("block-editor");
 		injectStyles();
 		if (pageChanged || externallyChanged || !blocks.length) {
-			if (pageChanged) { clearSelection(); closeMenus(); }
+			if (pageChanged) { clearSelection(); closeMenus(); touchHistoryPage(pid); }
 			pageId = pid;
 			blocks = parse(pg.content || "");
+			bustCtxIdx(); // frisch geparste Blockobjekte
+			lastSaved = pg.content || "";
 			histState = snapshotJson();
 			histPending = false;
 		}

@@ -94,6 +94,8 @@ body.mobile-ui #mNav {
 	padding: 6px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
 	background: var(--menu-bg);
 	border-top: 1px solid var(--edge);
+	/* Transition hier, nicht in der Ausfahr-Regel: sonst zweimal dieselbe Angabe. */
+	transition: transform .18s var(--ease-out);
 }
 body.mobile-ui #mNav button {
 	position: relative;
@@ -132,10 +134,7 @@ body.mobile-ui #mNav .mHome svg {
 	padding: 4px;
 	box-sizing: border-box;
 }
-body.mobile-ui #mNav .mHome.on svg {
-	background: var(--accent);
-	color: var(--on-accent);
-}
+/* .mHome.on svg raus: Werte waren identisch zur Basisregel = toter Code. */
 body.mobile-ui #mNav .mHome.on { color: var(--accent) }
 
 /* Fälligkeits-Badge */
@@ -302,7 +301,6 @@ body.mobile-ui:not(.panel-collapsed) #panel {
 	background: var(--panel-solid);
 	padding-bottom: var(--m-bot);
 }
-body.mobile-ui:not(.panel-collapsed) #mTop { display: none }
 body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
 	content: "Stell mir eine Frage zu deinen Notizen, Karten oder Plänen.";
 	display: block;
@@ -330,13 +328,14 @@ body.mobile-ui .library.anki {
 	width: 100%;
 	max-width: none;
 	background: none;
+	padding: 10px 10px 20px;
 }
 body.mobile-ui .library.anki .lib-head { display: none }
 
 /* Hero */
 body.mobile-ui .anki-hero {
-	margin: 0 0 16px;
-	padding: 18px 16px;
+	margin: 0 0 12px;
+	padding: 14px;
 	border-radius: var(--radius-xl);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -362,6 +361,8 @@ body.mobile-ui .deck-row {
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	padding: 13px 12px;
+	margin-bottom: 7px;
 	border-radius: var(--radius-lg);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -385,12 +386,12 @@ body.mobile-ui .deck-study {
 }
 
 /* Lernmodus */
-body.mobile-ui.m-study #mTop { display: none }
+/* Maße der Platz-Runde stehen jetzt hier — Doppelregeln am Dateiende entfallen. */
 body.mobile-ui .anki-study-mode {
-	padding: 0 14px 16px;
+	padding: 0 10px 10px;
 	display: flex;
 	flex-direction: column;
-	min-height: calc(100dvh - var(--m-top) - var(--m-bot));
+	min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 body.mobile-ui .study-head { display: none }
 body.mobile-ui .study-card {
@@ -400,11 +401,11 @@ body.mobile-ui .study-card {
 	justify-content: center;
 	margin: 0;
 	max-width: none;
-	gap: 0;
+	gap: 6px;
 }
 body.mobile-ui .study-card .card-face {
-	padding: 28px 16px;
-	font-size: 18px;
+	padding: 16px 8px;
+	font-size: clamp(18px, 5vw, 25px);
 	line-height: 1.55;
 	text-align: center;
 }
@@ -430,15 +431,16 @@ body.mobile-ui .modal-actions [data-ankishowback] {
 	color: var(--on-accent);
 	font-size: 17px;
 	font-weight: 700;
-	margin: 10px 0;
+	margin: 8px 0;
 }
 body.mobile-ui .grades {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gap: 10px;
-	margin-top: 8px;
+	gap: 8px;
+	margin-top: 6px;
 }
 body.mobile-ui .grades [data-ankigrade] {
+	min-height: 60px;
 	border-radius: var(--radius-lg);
 	font-size: 16px;
 	font-weight: 700;
@@ -448,7 +450,7 @@ body.mobile-ui .grades .grade-ivl { font-size: var(--text-2xs); color: var(--tex
 body.mobile-ui .study-footer {
 	display: flex;
 	justify-content: center;
-	padding-top: 10px;
+	padding-top: 6px;
 }
 body.mobile-ui [data-deckconf] { display: none }
 
@@ -479,43 +481,24 @@ body.light .feyn-inline-head {
 /* ============================================================
    SONSTIGES
    ============================================================ */
-body.mobile-ui.mnav-open #mTop { display: none }
-body.mobile-ui.mmore-open #mTop { display: none }
+/* Kopfzeile aus, sobald eine Vollbild-Ebene läuft — eine Regel statt vier verstreuter. */
+body.mobile-ui.mnav-open #mTop,
+body.mobile-ui.mmore-open #mTop,
+body.mobile-ui.m-study #mTop,
+body.mobile-ui:not(.panel-collapsed) #mTop { display: none }
 body.mobile-ui.m-study #mNav,
-body.mobile-ui.m-typing #mNav { transform: translateY(110%); transition: transform .18s var(--ease-out) }
-body.mobile-ui #mNav { transition: transform .18s var(--ease-out) }
+body.mobile-ui.m-typing #mNav { transform: translateY(110%) }
 
 @media (prefers-reduced-motion: reduce) {
-	body.mobile-ui #sidebar { transition: none }
-	body.mobile-ui #mMoreSheet { transition: none }
+	/* #mNav fehlte hier — Fußleiste animierte trotz Systemeinstellung. */
+	body.mobile-ui #sidebar,
+	body.mobile-ui #mMoreSheet,
+	body.mobile-ui #mNav { transition: none }
 }
 
-/* ============================================================
-   📐 Platz-Runde (25. Juli) — Handy nutzt den Schirm wirklich aus
-   ============================================================ */
-/* Im Lernmodus sind Kopfzeile (#mTop, display:none) und Bottom-Nav (#mNav,
-   ausgefahren) unsichtbar — #app reservierte ihren Platz (--m-top + --m-bot,
-   zusammen ~120px) aber weiter als Polster. Die Karte bekam dadurch nur rund
-   zwei Drittel der Höhe. Jetzt bleiben nur die Safe-Areas stehen. */
-body.mobile-ui.m-study #app {
-	padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-}
+/* Polster nur, solange Kopf-/Fußleiste wirklich sichtbar sind: der Lernmodus blendet
+   beide aus, die Tastatur fährt die Fußleiste weg — sonst bleibt ein leerer Streifen. */
+body.mobile-ui.m-study #app { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) }
+body.mobile-ui.m-typing #app,
+body.mobile-ui.m-typing:not(.panel-collapsed) #panel { padding-bottom: env(safe-area-inset-bottom) }
 body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px }
-body.mobile-ui .anki-study-mode {
-	padding: 0 10px 10px;
-	min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-}
-/* Mehr Karte, weniger Rand: Text skaliert mit der Gerätebreite. */
-body.mobile-ui .study-card { gap: 6px }
-body.mobile-ui .study-card .card-face {
-	padding: 16px 8px;
-	font-size: clamp(18px, 5vw, 25px);
-}
-body.mobile-ui .grades { gap: 8px; margin-top: 6px }
-body.mobile-ui .grades [data-ankigrade] { min-height: 60px }
-body.mobile-ui .modal-actions [data-ankishowback] { margin: 8px 0 }
-body.mobile-ui .study-footer { padding-top: 6px }
-/* Stapel-/Browser-Ansicht: schmalere Außenränder = spürbar breitere Zeilen. */
-body.mobile-ui .library.anki { padding: 10px 10px 20px }
-body.mobile-ui .anki-hero { margin-bottom: 12px; padding: 14px }
-body.mobile-ui .deck-row { padding: 13px 12px; margin-bottom: 7px }

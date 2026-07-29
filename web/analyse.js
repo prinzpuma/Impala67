@@ -18,8 +18,10 @@ import { TELE } from "./telemetrie.js";
 //    Lern-Buttons ist ersatzlos entfernt.
 
 export const ANALYSE = (() => {
-	const reviews = () => (S.telemetry || []).filter((e) => e.kind === "review" && e.data && e.data.grade > 0);
-	const rate = (list) => (list.length ? list.filter((e) => e.data.grade > 1).length / list.length : 0);
+	// Auswahl der gültigen Bewertungen + Erfolgsquote kommen aus telemetrie.js: beides war
+	// hier nachgebaut, und nur dort sind per Undo zurückgenommene Bewertungen ausgeschlossen.
+	const reviews = TELE.reviewEvents;
+	const rate = TELE.passRate;
 	const pct = (x) => Math.round(x * 100) + " %";
 
 	// ---------- 1) Sitzungsverlauf × Erfolg (inkl. Timer × FSRS) ----------

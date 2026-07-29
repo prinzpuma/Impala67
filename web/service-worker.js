@@ -5,6 +5,10 @@
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
 const CACHE = "impala67-v118"; // 🎮 Controller-Eingaben zählen als Aktivität — kein „Lernst du noch?“ mehr mitten im Abfragen.
+// Geteilte PDFs liegen in einem EIGENEN Cache. Der Name steht hier, weil das
+// Aufräumen unten ihn kennen muss: er wurde bisher bei jeder Aktivierung mit
+// gelöscht — eine gerade geteilte Datei war nach einem Update verschwunden.
+const SHARE_CACHE = "impala67-pdf-share";
 
 const APP_FILES = [
 	"./",
@@ -12,7 +16,8 @@ const APP_FILES = [
 	"./styles.css",
 	"./manifest.json",
 	"./version.json",
-	// latest.json ist optional: updater.js fällt auf version.json zurück.
+	// latest.json bewusst NICHT precachen: sie gehört allein dem Tauri-Desktop-Updater;
+	// die PWA vergleicht ausschließlich gegen version.json (siehe updater.js).
 	// icon.svg wird direkt aus dem Netz geladen; ein Favicon darf den Offline-
 	// Cache niemals als Pflichtdatei blockieren.
 	"./icon.svg",
@@ -83,10 +88,13 @@ const CDN_FILES = [
 ];
 
 // Installation: App-Dateien verpflichtend, CDN-Dateien best effort vorab cachen.
+// "reload" umgeht den HTTP-Cache: sonst wandern beim Installieren genau die alten
+// Antworten in den Offline-Cache, gegen die der Fetch-Handler unten ankämpft (iPadOS).
 self.addEventListener("install", (e) => {
 	e.waitUntil(
 		caches.open(CACHE)
-			.then((c) => c.addAll(APP_FILES).then(() => Promise.allSettled(CDN_FILES.map((u) => c.add(u)))))
+			.then((c) => c.addAll(APP_FILES.map((u) => new Request(u, { cache: "reload" })))
+				.then(() => Promise.allSettled(CDN_FILES.map((u) => c.add(u)))))
 			.then(() => self.skipWaiting())
 	);
 });
@@ -95,34 +103,31 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
 	e.waitUntil(
 		caches.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE).map((k) => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
 
 // Web Share Target: Android/iPadOS sendet ein PDF als POST an ./share-target.
-// Service Worker legt es nur einmal in einem separaten Cache ab und leitet dann
-// zur normalen App-URL weiter. pdfpaste.js löscht den temporären Eintrag direkt
-// nach dem erfolgreichen Import.
-self.addEventListener("fetch", (e) => {
-	const url = new URL(e.request.url);
-	if (e.request.method !== "POST" || url.origin !== self.location.origin || !url.pathname.endsWith("/share-target")) return;
-	e.respondWith((async () => {
-		const data = await e.request.formData();
-		const file = data.get("pdf");
+// Service Worker legt es nur einmal im Share-Cache ab und leitet dann zur normalen
+// App-URL weiter. pdfpaste.js löscht den temporären Eintrag nach dem Import.
+// FIX: Scheiterte formData() (abgebrochene Freigabe, fremder Inhalt), wurde die
+// Antwort abgelehnt und das Gerät zeigte eine Browser-Fehlerseite statt der App.
+async function handleShare(req) {
+	try {
+		const file = (await req.formData()).get("pdf");
 		if (file && file.type === "application/pdf") {
-			const shareCache = await caches.open("impala67-pdf-share");
+			const shareCache = await caches.open(SHARE_CACHE);
 			await shareCache.put("/share-target-payload", new Response(file));
 		}
-		return Response.redirect(new URL("./index.html?share-target=1", self.location.href).href, 303);
-	})());
-});
+	} catch { /* ohne Nutzdaten trotzdem zurück in die App */ }
+	return Response.redirect(new URL("./index.html?share-target=1", self.location.href).href, 303);
+}
 
 // Nur GET-Anfragen an die eigene Domain oder die genutzten CDNs behandeln -
 // API-Aufrufe (OpenAI, Google Drive, ...) gehen unverändert ins Netz.
-function shouldHandle(req) {
+function shouldHandle(req, url) {
 	if (req.method !== "GET") return false;
-	const url = new URL(req.url);
 	// config.local.js ist gerätespezifisch & optional - niemals abfangen oder cachen.
 	if (url.origin === self.location.origin && url.pathname.endsWith("/config.local.js")) return false;
 	return url.origin === self.location.origin ||
@@ -133,18 +138,29 @@ function shouldHandle(req) {
 // Cache-Vergiftung verhindern: niemals HTML-Fallbacks unter Skript-/Asset-Pfaden
 // speichern (SPA-/404-Fallbacks liefern HTML mit Status 200 - einmal gecacht,
 // wirft z.B. ein .js-Pfad beim nächsten Start "SyntaxError: Unexpected token '<'").
-function isHtmlFallback(req, res) {
+// Gilt jetzt auch für die CDNs (Captive-Portal-/Fehlerseiten) und für .wasm.
+function isHtmlFallback(path, res) {
 	const ct = (res.headers.get("content-type") || "").toLowerCase();
-	const path = new URL(req.url).pathname;
-	return /\.(js|css|json|svg)$/.test(path) && ct.includes("text/html");
+	return /\.(js|css|json|svg|wasm)$/.test(path) && ct.includes("text/html");
 }
 
+// EIN Fetch-Handler für alles: vorher prüften zwei Listener JEDE Anfrage doppelt
+// und parsten die URL bis zu dreimal.
 self.addEventListener("fetch", (e) => {
-	if (!shouldHandle(e.request)) return;
-	const sameOrigin = new URL(e.request.url).origin === self.location.origin;
+	const req = e.request;
+	const url = new URL(req.url);
+	const sameOrigin = url.origin === self.location.origin;
+	if (req.method === "POST") {
+		if (sameOrigin && url.pathname.endsWith("/share-target")) e.respondWith(handleShare(req));
+		return;
+	}
+	if (!shouldHandle(req, url)) return;
+	// Cache-Schlüssel OHNE Query: "?share-target=1" & Co. trafen keinen Eintrag —
+	// offline blieb die App danach weiß. Ein Eintrag je Pfad statt je Query-Variante.
+	const key = sameOrigin ? url.pathname : req;
 	e.respondWith(
 		caches.open(CACHE).then(async (cache) => {
-			const cached = await cache.match(e.request);
+			const cached = await cache.match(key);
 			// App-Dateien: network-first - jeder normale Start lädt die aktuelle Version
 			// (kein Strg+Shift+R mehr nötig); offline dient der Cache als Fallback.
 			if (sameOrigin) {
@@ -152,9 +168,8 @@ self.addEventListener("fetch", (e) => {
 					// iPadOS kann auch hinter einem network-first Worker noch eine alte HTTP-
 					// Cache-Antwort liefern. App-Module, CSS und HTML müssen deshalb wirklich
 					// vom Netz kommen; der Cache bleibt ausschließlich Offline-Fallback.
-					const freshReq = new Request(e.request, { cache: "no-store" });
-					const res = await fetch(freshReq);
-					if (res && res.ok && !isHtmlFallback(e.request, res)) cache.put(e.request, res.clone());
+					const res = await fetch(new Request(req, { cache: "no-store" }));
+					if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
 					return res;
 				} catch {
 					return cached || Response.error();
@@ -165,8 +180,8 @@ self.addEventListener("fetch", (e) => {
 			// stale-while-revalidate lud jede Bibliothek bei JEDEM Start erneut übers
 			// Netz - Bandbreite/Akku ohne Nutzen. Fehlt die Datei, wird sie einmal geladen.
 			if (cached) return cached;
-			const res = await fetch(e.request);
-			if (res && res.ok) cache.put(e.request, res.clone());
+			const res = await fetch(req);
+			if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
 			return res;
 		})
 	);

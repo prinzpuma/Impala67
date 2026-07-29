@@ -13,7 +13,6 @@ import { MOBILE } from "./mobile.js";
 import { DRIVE } from "./drive.js";
 
 const render = (...args) => RENDER.render(...args);
-const wireEvents = (...args) => APP.wireEvents(...args);
 
 const WELCOME_MD = [
 	"# 👋 Willkommen bei Impala67!",
@@ -47,24 +46,19 @@ export async function seedIfEmpty() {
 // im Papierkorb liegen, werden beim Start endgültig gelöscht (wie in Notion).
 export async function purgeOldTrash() {
 	const cutoff = Date.now() - 30 * 864e5;
+	// DRY: dieselbe Alters-Prüfung stand 3× wörtlich da (Seiten, Stapel, Karten).
+	const isOld = (x) => !!(x && x.trashedAt && new Date(x.trashedAt).getTime() < cutoff);
 	for (const pg of STATE.trashedPages()) {
-		if (pg.trashedAt && new Date(pg.trashedAt).getTime() < cutoff) {
-			await STATE.dispatch("pageDelete", { id: pg.id });
-		}
+		if (isOld(pg)) await STATE.dispatch("pageDelete", { id: pg.id });
 	}
 	// FIX (Verbesserung): bisher wurden nur Seiten entsorgt — Papierkorb-Stapel und
 	// -Karten sammelten sich für immer an. Stapel-Teilbäume über ihre Wurzel löschen
 	// (deckDelete entfernt Unterstapel + Karten mit), danach übrige Einzelkarten.
 	for (const name of STATE.trashedDeckRoots()) {
-		const d = S.decks[name];
-		if (d && d.trashedAt && new Date(d.trashedAt).getTime() < cutoff) {
-			await STATE.dispatch("deckDelete", { name });
-		}
+		if (isOld(S.decks[name])) await STATE.dispatch("deckDelete", { name });
 	}
 	for (const c of STATE.orphanTrashedCards()) {
-		if (c.trashedAt && new Date(c.trashedAt).getTime() < cutoff) {
-			await STATE.dispatch("cardDelete", { id: c.id });
-		}
+		if (isOld(c)) await STATE.dispatch("cardDelete", { id: c.id });
 	}
 }
 
@@ -73,21 +67,30 @@ export async function purgeOldTrash() {
 // Event-Replay gibt es keine Blob-Löschung). Läuft nach dem Laden im Hintergrund.
 export async function purgeOrphanBlobs() {
 	try {
-		const pdfIds = new Set();
-		Object.values(S.pages).forEach((pg) => { if (pg.pdfId) pdfIds.add(pg.pdfId); });
+		// FIX (Erweiterung): vorher wurde NUR pg.pdfId als Referenz gewertet — die
+		// abgeleiteten "pdftext:"-Blobs (rag.js) und "cover:"-Bilder (app.js) gelöschter
+		// Seiten blieben deshalb dauerhaft liegen. Jetzt gelten ALLE Zeichenketten-Werte
+		// der Seiten als Referenzmenge (unabhängig vom Feldnamen, überlebt Umbenennungen).
+		const refs = new Set();
+		for (const pg of Object.values(S.pages)) {
+			for (const v of Object.values(pg)) if (typeof v === "string") refs.add(v);
+		}
+		// alive() kennt nur die selbst verwalteten Schlüsselformen; alles andere
+		// ("bgImage", künftige Präfixe) gilt bewusst als lebendig — nie blind löschen.
 		const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+		const alive = (key) => {
+			if (key.startsWith("heft:")) return !!S.pages[key.slice(5)];
+			if (key.startsWith("pdftext:")) return refs.has(key.slice(8));
+			if (key.startsWith("cover:")) return refs.has(key);
+			if (isUuid(key)) return refs.has(key); // UUID-Schlüssel = PDF-Blob
+			return true;
+		};
 		let removed = 0;
 		for (const k of await DB.allBlobKeys()) {
 			const key = String(k);
-			if (key === "bgImage") continue;
-			if (key.startsWith("heft:")) {
-				// Heft-Striche, deren Seite es nicht mehr gibt
-				if (!S.pages[key.slice(5)]) { await DB.delBlob(key); removed++; }
-			} else if (isUuid(key) && !pdfIds.has(key)) {
-				// UUID-Schlüssel = PDF-Blob; unbekannte andere Schlüssel bleiben unangetastet
-				await DB.delBlob(key);
-				removed++;
-			}
+			if (alive(key)) continue;
+			await DB.delBlob(key);
+			removed++;
 		}
 		if (removed) console.info("Blob-GC: " + removed + " verwaiste Blobs entfernt.");
 	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
@@ -126,7 +129,7 @@ export async function initApp() {
 	// Der synchronisierte Arbeitsbereich wird geladen, bevor die erste Ansicht
 	// erscheint. Ohne gültigen gespeicherten Tab bleibt die Startseite sichtbar.
 	await TABS.restoreSession();
-	wireEvents();
+	APP.wireEvents();
 	SETTINGS.applyBg();
 	render();
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.

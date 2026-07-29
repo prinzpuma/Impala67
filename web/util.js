@@ -81,7 +81,11 @@ export const U = {
 	// Attribute, die Module NACH dem Rendern selbst setzen (Hydrierung). Sie stehen nie
 	// im frisch erzeugten HTML — morph dürfte sie deshalb nicht als „entfernt“ behandeln,
 	// sonst liefe jede Hydrierung (Bild-Blob, KaTeX, Video) bei jedem Render erneut.
-	_morphKeepAttrs: new Set(["data-hydrated", "data-owned", "data-cover-hydrated", "data-mermaid-done", "src"]),
+	// „src“ fehlt hier absichtlich: Module setzen es nur an Knoten, die sie beim
+	// Hydrieren als solche markieren (Bild-Blobs, Cover) — genau die sind unten
+	// ausgenommen. Pauschales Bewahren machte jedes src UNLÖSCHBAR: ein <iframe>
+	// (#pdfFrame) behielt für immer die zuletzt gesetzte Datei.
+	_morphKeepAttrs: new Set(["data-hydrated", "data-owned", "data-cover-hydrated", "data-mermaid-done"]),
 	morph(el, html) {
 		if (!el) return false;
 		const tpl = document.createElement("template");
@@ -143,12 +147,17 @@ export const U = {
 		}
 		for (const a of [...oldNode.attributes]) {
 			if (newNode.hasAttribute(a.name) || U._morphKeepAttrs.has(a.name)) continue;
+			// Hydrierte Blob-URLs überleben, fremde src-Reste nicht.
+			if (a.name === "src" && (oldNode.dataset.hydrated || oldNode.dataset.coverHydrated)) continue;
 			oldNode.removeAttribute(a.name);
 			changed = true;
 		}
 		// Formularzustand nicht über Attribute zerstören (der Nutzer tippt evtl. gerade).
 		if (oldNode === document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(oldNode.tagName)) return changed;
-		if (oldNode.tagName === "INPUT" && oldNode.value !== newNode.value) { oldNode.value = newNode.value; changed = true; }
+		// INPUT *und* TEXTAREA: sobald ein Feld einmal eine „dirty value“ hat, gewinnt sie
+		// gegen den Textknoten. Der Seitentitel (#pageTitle) ist ein <textarea> und zeigte
+		// nach einer Umbenennung von außen (Sync, KI-Tool) weiter den alten Namen.
+		if (/^(INPUT|TEXTAREA)$/.test(oldNode.tagName) && oldNode.value !== newNode.value) { oldNode.value = newNode.value; changed = true; }
 		// contenteditable-Inhalte gehören dem Editor, solange der Cursor drin steht.
 		if (oldNode.isContentEditable && oldNode.contains(document.activeElement)) return changed;
 		if (U._morphChildren(oldNode, newNode)) changed = true;
@@ -240,10 +249,17 @@ export const U = {
 				if (done) return;
 				done = true;
 				document.removeEventListener("keydown", onKey, true);
+				delete o._close;
 				o.hidden = true;
 				o.innerHTML = "";
 				resolve(ok);
 			};
+			// VERTRAG mit dem Hintergrund-Klick in popovers.js: wer das #overlay belegt,
+			// hinterlegt hier seinen EINEN Schließweg. Vorher riss der Backdrop-Handler den
+			// Dialog aus dem DOM, ohne finish() zu erreichen (dieser Dialog hat kein
+			// #btnCloseOverlay) — das Promise wurde nie erfüllt und jedes `await U.confirm(…)`
+			// hing für immer: Löschen & Co. taten danach lautlos nichts mehr.
+			o._close = () => finish(false);
 			U.el("dlgConfirmOk").addEventListener("click", () => finish(true));
 			U.el("dlgConfirmCancel").addEventListener("click", () => finish(false));
 			document.addEventListener("keydown", onKey, true);

@@ -275,6 +275,10 @@ async function rateAndReviewCard(cardId, grade) {
 }
 
 // Anki-Tastatur (docs.ankiweb.net/studying.html): Space/Enter → Antwort,
+// Bewertet wird ausschließlich die in showStudyAnswer festgepinnte, sichtbare Karte.
+// FIX: Der frühere Fallback auf dueNow[0] in gradeStudyCard konnte eine ANDERE Karte
+// bewerten, wenn sich die Queue zwischen Aufdecken und Tastendruck ändert — genau der
+// Fehler, den das Festpinnen verhindern soll. Nicht wieder einbauen.
 // bei sichtbarer Antwort → Good(3); 1–4 → Again/Hard/Good/Easy
 const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 // Bug-Fix („kommt noch“, 22. Juli): Die sichtbare Karte wird beim Aufdecken in
@@ -296,7 +300,7 @@ function showStudyAnswer(cardId) {
 }
 async function gradeStudyCard(grade) {
 	if (!inStudy() || !S.reviewShowBack) return false;
-	const c = S.cards[S.reviewCardId] || STATE.studySnapshot(S.ankiDeck).dueNow[0];
+	const c = S.cards[S.reviewCardId];
 	if (!c) return false;
 	await rateAndReviewCard(c.id, Math.max(1, Math.min(4, Number(grade) || 3)));
 	S.reviewShowBack = false; // dispatch triggert den Render
@@ -370,16 +374,6 @@ const APPEARANCE_BTN = {
 function wireEvents() {
 	// dispatch() rendert bereits rAF-gebündelt → nach dispatch kein extra render();
 	// reine UI-Navigation ohne dispatch rendert sofort.
-	// DB-Tabellen: Zellwert als normales pageUpdate (Verlauf/Diff/Sync greifen)
-	document.addEventListener("change", async (e) => {
-		const cell = closestOf(e, ".db-cell");
-		if (!cell) return;
-		const row = S.pages[cell.dataset.dbrow];
-		if (!row) return;
-		const props = { ...(row.props || {}) };
-		props[cell.dataset.dbcol] = cell.value;
-		await STATE.dispatch("pageUpdate", { id: row.id, patch: { props } });
-	});
 	// „＋ Neue Zeile“ in der Datenbank-Ansicht — wird beim nächsten Sync als echte Notion-Zeile angelegt
 	document.addEventListener("click", async (e) => {
 		const btn = closestOf(e, "[data-dbnewrow]");
@@ -1080,14 +1074,15 @@ function wireEvents() {
 			const parentId = val.startsWith("pg:") ? val.slice(3) : null;
 			const wsId = val.startsWith("ws:") ? val.slice(3) : (S.pages[parentId] || {}).workspaceId;
 			await STATE.dispatch("pageMove", { id: moveId, parentId });
-			// Workspace-Zugehörigkeit für die ganze Unterstruktur mitziehen
-			const setWs = async (pid) => {
-				const p = S.pages[pid];
-				if (!p) return;
-				if (wsId && p.workspaceId !== wsId) await STATE.dispatch("pageUpdate", { id: pid, patch: { workspaceId: wsId } });
-				for (const c of Object.values(S.pages)) if (c.parentId === pid) await setWs(c.id);
-			};
-			await setWs(moveId);
+			// PERF: Workspace der ganzen Unterstruktur mitziehen, aber über den EINEN Index aus
+			// descendantsOf statt pro Ebene alle Seiten zu scannen (war O(n²) — Zwilling des
+			// oben in descendantsOf bereits behobenen Falls; Verschieben hakte in großen Bäumen).
+			if (wsId) {
+				for (const pid of descendantsOf(moveId)) {
+					const p = S.pages[pid];
+					if (p && p.workspaceId !== wsId) await STATE.dispatch("pageUpdate", { id: pid, patch: { workspaceId: wsId } });
+				}
+			}
 			S.movePageId = null;
 			closeOverlay();
 			return;
@@ -1549,6 +1544,18 @@ function wireEvents() {
 		}
 	});
 	document.addEventListener("change", async (e) => {
+		// DB-Tabellen: Zellwert als normales pageUpdate (Verlauf/Diff/Sync greifen).
+		// Zusammengelegt: es gab zwei change-Listener am document (Zwillinge, die mit der
+		// Zeit auseinanderlaufen) — jetzt EIN Einstiegspunkt für alle change-Ereignisse.
+		const cell = closestOf(e, ".db-cell");
+		if (cell) {
+			const row = S.pages[cell.dataset.dbrow];
+			if (!row) return;
+			const props = { ...(row.props || {}) };
+			props[cell.dataset.dbcol] = cell.value;
+			await STATE.dispatch("pageUpdate", { id: row.id, patch: { props } });
+			return;
+		}
 		if (e.target.id === "inpThemeFollowSystem") {
 			SETTINGS.handleSystemThemeToggle(!!e.target.checked);
 			return;
@@ -1608,12 +1615,10 @@ function wireEvents() {
 		if (y > r.height * 0.75) return "after";
 		return "into";
 	};
-	// mousedown auf Zeilen-Buttons: Drag der Eltern-Zeile unterbinden
-	document.addEventListener("mousedown", (e) => {
-		if (closestOf(e, ".row-add, [data-deckmenu], [data-pagemenu], .page-menu")) {
-			e.stopPropagation();
-		}
-	}, true);
+	// ENTFERNT (toter Rest aus der HTML5-DnD-Zeit): ein globaler mousedown-Blocker in der
+	// Capture-Phase. Stapel-Drag (dragstart) und Seiten-Drag (pointerdown) filtern diese
+	// Buttons längst selbst; der Blocker konnte nur noch andere Module um ihr mousedown
+	// bringen. Nicht wieder einbauen.
 
 	// Stapel (Decks): unverändertes HTML5 Drag & Drop
 	let deckDragId = null, deckDropZone = null;
@@ -1631,49 +1636,47 @@ function wireEvents() {
 		markDropZone(deckRow, deckDropZone);
 	});
 	document.addEventListener("dragend", () => { deckDragId = null; deckDropZone = null; clearDropMarks(); });
-	// Einsortieren VOR/NACH einem Stapel (Reihenfolge via deckReorder-Events, order in S.decks)
-	document.addEventListener("drop", async (e) => {
-		if (!deckDragId || deckDropZone === "into" || deckDropZone == null) return;
-		const deckRow = closestOf(e, "[data-deck]");
-		if (!deckRow) return;
-		const zone = deckDropZone;
-		e.preventDefault();
-		e.stopImmediatePropagation();
-		clearDropMarks();
-		const target = deckRow.dataset.deck;
-		const moved = deckDragId;
-		deckDragId = null; deckDropZone = null;
-		if (!target || target === moved || target.startsWith(moved + "::")) return;
-		// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
-		const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
-		if (parentOf(target) !== parentOf(moved)) return;
-		const sibs = RENDER_ANKI.ankiDecks().filter((n) => parentOf(n) === parentOf(target) && n !== moved);
-		const idx = sibs.indexOf(target);
-		if (idx === -1) return;
-		sibs.splice(zone === "before" ? idx : idx + 1, 0, moved);
-		// Reihenfolge komplett neu durchnummerieren — robust gegen fehlende order-Werte
-		for (let i = 0; i < sibs.length; i++) {
-			await STATE.dispatch("deckReorder", { name: sibs[i], order: (i + 1) * 1000 });
-		}
-	});
+	// EIN drop-Handler für Stapel: oberes/unteres Viertel = Reihenfolge (deckReorder),
+	// Mitte bzw. freie Baumfläche = Verschieben (deckMove).
+	// FIX: Vorher zwei drop-Listener, die sich per stopImmediatePropagation gegenseitig
+	// ausbremsten — die Registrierungsreihenfolge entschied über das Verhalten, und der
+	// Zustand (deckDragId/deckDropZone) wurde in beiden Zweigen unterschiedlich geräumt.
 	document.addEventListener("drop", async (e) => {
 		if (!deckDragId) return;
 		const deckRow = closestOf(e, "[data-deck]");
 		const inTree = closestOf(e, "#tree");
 		clearDropMarks();
-		if (!deckRow && !inTree) { deckDragId = null; return; }
+		if (!deckRow && !inTree) { deckDragId = null; deckDropZone = null; return; }
 		e.preventDefault();
+		const moved = deckDragId;
+		const zone = deckDropZone;
+		deckDragId = null; deckDropZone = null;
+		if (deckRow && (zone === "before" || zone === "after")) {
+			const target = deckRow.dataset.deck;
+			if (!target || target === moved || target.startsWith(moved + "::")) return;
+			// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
+			const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
+			if (parentOf(target) !== parentOf(moved)) return;
+			const sibs = RENDER_ANKI.ankiDecks().filter((n) => parentOf(n) === parentOf(target) && n !== moved);
+			const idx = sibs.indexOf(target);
+			if (idx === -1) return;
+			sibs.splice(zone === "before" ? idx : idx + 1, 0, moved);
+			// Reihenfolge komplett neu durchnummerieren — robust gegen fehlende order-Werte
+			for (let i = 0; i < sibs.length; i++) {
+				await STATE.dispatch("deckReorder", { name: sibs[i], order: (i + 1) * 1000 });
+			}
+			return;
+		}
 		const targetDeck = deckRow ? deckRow.dataset.deck : "";
 		// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
-		if (targetDeck !== deckDragId && targetDeck !== "Standard" && !targetDeck.startsWith(deckDragId + "::")) {
-			await STATE.dispatch("deckMove", { from: deckDragId, target: targetDeck });
-			if (S.ankiDeck && inDeck(S.ankiDeck, deckDragId)) {
-				const label = deckDragId.split("::").pop();
+		if (targetDeck !== moved && targetDeck !== "Standard" && !targetDeck.startsWith(moved + "::")) {
+			await STATE.dispatch("deckMove", { from: moved, target: targetDeck });
+			if (S.ankiDeck && inDeck(S.ankiDeck, moved)) {
+				const label = moved.split("::").pop();
 				const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
-				S.ankiDeck = newRoot + S.ankiDeck.slice(deckDragId.length);
+				S.ankiDeck = newRoot + S.ankiDeck.slice(moved.length);
 			}
 		}
-		deckDragId = null;
 	});
 
 	// Seiten (Pages): Pointer-Events statt HTML5-DnD — Bug-Fix „kommt noch“ (22. Juli):
@@ -1817,9 +1820,14 @@ function wireEvents() {
 	});
 
 	// ---------- Inline-Umbenennen (Seiten + Stapel) — Enter bestätigt, Esc/Blur bricht ab ----------
+	// FIX: commitRename lief zweimal — Enter bestätigte, der folgende Fokusverlust
+	// bestätigte erneut (doppeltes Neuzeichnen); nach Escape schrieb der Fokusverlust den
+	// verworfenen Text sogar noch fest. Der Umbenenn-Zustand ist jetzt die Sperre: ist er
+	// geräumt, war die Umbenennung schon erledigt oder abgebrochen.
 	async function commitRename(input) {
 		if (input.dataset.renamename) {
 			const id = input.dataset.renamename;
+			if (S.renamingPageId !== id) return;
 			const newTitle = input.value.trim();
 			const pg = S.pages[id];
 			S.renamingPageId = null;
@@ -1830,6 +1838,7 @@ function wireEvents() {
 			render();
 		} else if (input.dataset.deckrenamename) {
 			const from = input.dataset.deckrenamename;
+			if (S.renamingDeck !== from) return;
 			const newLabel = input.value.trim().replace(/::/g, ":");
 			const oldLabel = from.split("::").pop();
 			S.renamingDeck = null;
@@ -1857,8 +1866,18 @@ function wireEvents() {
 		if (ds.renamename || ds.deckrenamename) commitRename(e.target);
 	});
 	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
+	// PERF: Während die KI streamt, ändert sich #main hunderte Mal pro Antwort — der
+	// Observer suchte bei JEDER Änderung im DOM (und löste sich mit dem eingefügten Knopf
+	// gleich selbst wieder aus). Jetzt wird pro Frame höchstens einmal nachgerüstet.
 	const main = $("main");
-	if (main) new MutationObserver(mountFullChatDebugButton).observe(main, { childList: true, subtree: true });
+	if (main) {
+		let mountQueued = false;
+		new MutationObserver(() => {
+			if (mountQueued) return;
+			mountQueued = true;
+			requestAnimationFrame(() => { mountQueued = false; mountFullChatDebugButton(); });
+		}).observe(main, { childList: true, subtree: true });
+	}
 	mountFullChatDebugButton();
 
 	// ---------- ↔️ Breite der linken Spalte ziehen (Griff #sidebarResizer) ----------

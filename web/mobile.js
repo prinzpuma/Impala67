@@ -16,7 +16,7 @@ export const MOBILE = (() => {
 	// Handy-Schale, ☰-Verhalten und die CSS-Touch-Regeln garantiert derselben Meinung.
 	const mq = APP.PLATFORM.phoneQuery;
 	const body = document.body;
-	let started = false;
+	let started = false, wired = false;
 
 	// Minimalistische SVG-Icons
 	const IC = {
@@ -44,33 +44,46 @@ export const MOBILE = (() => {
 	// History-Eintrag. So schließt die native Zurück-Geste/-Taste das Sheet,
 	// statt die App zu verlassen. Eine einzige Quelle der Wahrheit (DOM-Zustand)
 	// treibt push/pop — kein manuelles Buchhalten an jeder Aktion (DRY).
-	let sheetPushed = false;
-	let studyPushed = false;
-	let poppingState = false;
+	// 🐛 FIX: history.back() entfernt IMMER den OBERSTEN Eintrag — zwei unabhängige
+	// Booleans (Sheet/Lernen) konnten deshalb den Eintrag der jeweils ANDEREN Ebene
+	// poppen: die Zurück-Geste landete im falschen Bildschirm oder verließ die App.
+	// Wurzel-Fix: EIN LIFO-Stapel, der den History-Einträgen 1:1 entspricht. Gewünschter
+	// Zustand → Differenz zum Stapel → genau eine Navigation. Neue Ebenen kommen mit
+	// einem Eintrag in LAYERS dazu, ohne dass hier etwas anzupassen ist.
+	const LAYERS = {
+		sheet: {
+			open: () => sheetIsOpen(),
+			close: () => { body.classList.remove("mnav-open", "mmore-open"); body.classList.add("panel-collapsed"); },
+		},
+		study: {
+			open: (studying) => studying,
+			close: () => document.querySelector('[data-ankitab="decks"]')?.click(),
+		},
+	};
+	const hstack = [];      // Reihenfolge = Reihenfolge der eigenen History-Einträge
+	let selfNav = false;    // aufräumende Navigation von uns, nicht vom Nutzer
+	let poppingState = false; // Zustand kam gerade aus popstate — nicht erneut buchen
 
 	const sheetIsOpen = () =>
 		body.classList.contains("mnav-open") || body.classList.contains("mmore-open") || !body.classList.contains("panel-collapsed");
 
 	function syncHistory(studying) {
-		if (poppingState) return; // Zustand kam bereits aus popstate — nicht erneut buchen
-		const open = sheetIsOpen();
-		if (open && !sheetPushed) { sheetPushed = true; history.pushState({ mSheet: 1 }, ""); }
-		else if (!open && sheetPushed) { sheetPushed = false; history.back(); }
-
-		if (studying && !studyPushed) { studyPushed = true; history.pushState({ mStudy: 1 }, ""); }
-		else if (!studying && studyPushed) { studyPushed = false; history.back(); }
+		if (poppingState) return;
+		const want = Object.keys(LAYERS).filter((k) => LAYERS[k].open(studying));
+		let keep = 0;
+		while (keep < hstack.length && hstack[keep] === want[keep]) keep++;
+		const drop = hstack.length - keep;
+		hstack.length = keep;
+		if (drop) { selfNav = true; history.go(-drop); }
+		for (const layer of want.slice(keep)) { hstack.push(layer); history.pushState({ mLayer: layer }, ""); }
 	}
 
 	window.addEventListener("popstate", () => {
+		if (selfNav) { selfNav = false; return; }
+		const layer = hstack.pop();
+		if (!layer) return;
 		poppingState = true;
-		if (sheetPushed) {
-			sheetPushed = false;
-			body.classList.remove("mnav-open", "mmore-open");
-			body.classList.add("panel-collapsed");
-		} else if (studyPushed) {
-			studyPushed = false;
-			document.querySelector('[data-ankitab="decks"]')?.click();
-		}
+		LAYERS[layer].close();
 		updateUI();
 		poppingState = false;
 	});
@@ -130,8 +143,17 @@ export const MOBILE = (() => {
 
 		document.getElementById("sidebar")?.prepend(libHead);
 		body.append(top, nav, moreSheet);
-		body.addEventListener("click", onClick);
-		initSwipe();
+		// Listener genau EINMAL pro Sitzung: mount() läuft bei jedem Wechsel zurück in die
+		// Handy-Breite erneut und hängte sonst jedes Mal ein weiteres Klick-/Wisch-Paar an
+		// (jeder Tipp wurde danach mehrfach verarbeitet). Beide Handler prüfen selbst, ob
+		// die Handy-UI überhaupt aktiv ist.
+		if (!wired) { wired = true; body.addEventListener("click", onClick); initSwipe(); }
+	}
+
+	// Gegenstück zu mount(): beim Verlassen der Handy-Breite verschwindet die Handy-Schale
+	// wirklich, statt unsichtbar im DOM zu bleiben und dort weiter mitgerendert zu werden.
+	function unmount() {
+		["mTop", "mNav", "mMoreSheet", "mLibHead"].forEach((id) => document.getElementById(id)?.remove());
 	}
 
 	// Wisch-zurück-Geste (zusätzlich zur nativen Android-Geste, hilft z.B. auf iOS):
@@ -151,7 +173,7 @@ export const MOBILE = (() => {
 			t0 = e.timeStamp;
 		}, { passive: true });
 		body.addEventListener("touchend", (e) => {
-			if (multi) return; // Zoom-/Zweifinger-Geste ist kein Zurück-Wisch
+			if (multi || !body.classList.contains("mobile-ui")) return; // Zoom-/Zweifinger-Geste ist kein Zurück-Wisch
 			const dx = e.changedTouches[0].clientX - x0;
 			const dy = e.changedTouches[0].clientY - y0;
 			const dt = e.timeStamp - t0;
@@ -165,6 +187,7 @@ export const MOBILE = (() => {
 	}
 
 	async function onClick(e) {
+		if (!body.classList.contains("mobile-ui")) return;
 		const act = e.target.closest("[data-m]")?.dataset.m;
 		const mact = e.target.closest("[data-maction]")?.dataset.maction;
 
@@ -257,10 +280,21 @@ export const MOBILE = (() => {
 		if (badge) { badge.hidden = !n; badge.textContent = n > 99 ? "99+" : String(n); }
 	}
 
+	// Alle Auslöser laufen über EINEN Taktgeber: der #main-Observer feuert bei jedem
+	// Tastendruck im Editor, und updateUI() togglet selbst Body-Klassen — was den
+	// Body-Observer erneut auslöste (Rückkopplung, spürbares Ruckeln beim Tippen).
+	// Höchstens ein Lauf pro Frame; updateUI bleibt idempotent, die Kette läuft aus.
+	let uiRaf = 0;
+	function scheduleUI() {
+		if (uiRaf) return;
+		uiRaf = requestAnimationFrame(() => { uiRaf = 0; updateUI(); });
+	}
+
 	function apply(on) {
 		body.classList.toggle("mobile-ui", on);
-		if (on) { mount(); updateUI(); }
-		else body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study");
+		if (on) { mount(); updateUI(); return; }
+		body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study");
+		unmount();
 	}
 
 	function init() {
@@ -280,11 +314,11 @@ export const MOBILE = (() => {
 			if (e.key === "Escape") { body.classList.remove("mnav-open", "mmore-open"); updateUI(); }
 		});
 
-		STATE.onAfterDispatch(() => requestAnimationFrame(updateUI));
-		new MutationObserver(updateUI).observe(body, { attributes: true, attributeFilter: ["class"] });
+		STATE.onAfterDispatch(scheduleUI);
+		new MutationObserver(scheduleUI).observe(body, { attributes: true, attributeFilter: ["class"] });
 		const main = document.getElementById("main");
-		if (main) new MutationObserver(updateUI).observe(main, { childList: true, subtree: true });
-		setInterval(updateUI, 60000);
+		if (main) new MutationObserver(scheduleUI).observe(main, { childList: true, subtree: true });
+		setInterval(scheduleUI, 60000);
 	}
 
 	return { init };
