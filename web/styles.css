@@ -42,7 +42,7 @@ body.density-compact :where(.library) { padding: 24px 30px }
 /* Toasts — immer zuoberst */
 /* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
 /* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
-:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --sidebar-w: 260px; --scroll-thumb: rgba(255,255,255,.20); --scroll-thumb-hover: rgba(255,255,255,.34); --scroll-track: transparent; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
+:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1a1b1e; --sidebar-bg: color-mix(in srgb, var(--panel-solid) 95%, #fff); --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --sidebar-w: 260px; --app-bg: #1a1b1e; --scroll-thumb: rgba(255,255,255,.16); --scroll-thumb-hover: rgba(255,255,255,.30); --scroll-track: transparent; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
 /* == Bewegungsprinzipien: ruhig, konsistent, performant == */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
@@ -61,12 +61,17 @@ button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active
 * { box-sizing: border-box; margin: 0; padding: 0 }
 /* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus… */
 html, body { height: 100% }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: var(--font-base, 16px); line-height: 1.5; color: var(--text); background: var(--bg0); overflow: hidden }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: var(--font-base, 16px); line-height: 1.5; color: var(--text); background: var(--app-bg); overflow: hidden }
 /* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
-#bg { position: fixed; inset: 0; z-index: 0; background: radial-gradient(1400px 900px at 50% -20%, var(--glow-1) 0%, var(--glow-2) 55%, var(--glow-3) 100%) }
+/* 🎨 (29. Juli) Kein Farbverlauf mehr: eine ruhige, gleichmäßige Fläche hinter den Panels.
+   Der Radial-Glow wirkte fleckig und ließ die Panels bei jeder Fenstergröße anders aussehen. */
+#bg { position: fixed; inset: 0; z-index: 0; background: var(--app-bg) }
 #app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: 12px; height: 100dvh; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
 /* Flache Panels, dezente Kanten, kein Glas-Look */
 #sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
+/* 🎨 (29. Juli) Zwei Töne wie in Notion: die linke Spalte einen Hauch heller als Mitte und
+   KI-Panel. Die Aufhellung wird aus --panel-solid berechnet, damit sie in jedem Theme passt. */
+#sidebar { background: var(--sidebar-bg) }
 /* == Sidebar == */
 #sidebar { display: flex; flex-direction: column; padding: 14px 10px; gap: 10px }
 #search { width: 100% }
@@ -131,6 +136,12 @@ button.danger { color: var(--danger) }
 .row-chevron { min-height: 0; width: 16px; height: 16px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-3xs); display: flex; align-items: center; justify-content: center; transition: transform .12s; flex-shrink: 0 }
 .row-chevron.open { transform: rotate(90deg) }
 .row-chevron.spacer { visibility: hidden }
+/* 🖱 (29. Juli) Aufklapp-Pfeile erscheinen erst beim Hover (wie in Notion) — der Baum wirkt ruhig,
+   der Platz bleibt aber reserviert, damit beim Hover nichts verrutscht. Aktive Zeile zeigt ihn immer. */
+@media (hover: hover) and (pointer: fine) {
+	.row .row-chevron:not(.spacer) { opacity: 0; transition: opacity var(--motion-fast) ease, transform .12s }
+	.row:hover .row-chevron, .row:focus-within .row-chevron, .row.active .row-chevron { opacity: 1 }
+}
 .row-chevron:hover { background: var(--surface-active) }
 /* Floating-Menüs: eine Surface für ⋯/Teilen/Anhang/Refine (wie m… */
 .row { position: relative }
@@ -554,12 +565,15 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 .file-chip button { min-height: 0; margin-left: auto; border: 1px solid rgba(128,128,128,.3); background: none; color: inherit; border-radius: var(--radius-md); padding: 4px 9px; cursor: pointer; font-size: var(--text-xs) }
 .drive-connected { padding: 10px 12px; border-radius: var(--radius-md); background: var(--success-soft); border: 1px solid var(--success-border); margin-bottom: 4px }
 /* Vollbild-Chat-Tab: gleiche Anordnung wie Notions (nicht-Vollbi… */
-.chat-full-wrap { display: flex; flex-direction: column; height: 100%; padding: 28px 40px 20px; overflow: hidden }
+/* 🎨 (29. Juli) Die Scrollleiste gehört an den RECHTEN Rand der Fläche, nicht mitten ins Bild:
+   der Verlauf scrollt jetzt über die volle Breite, die 760px-Lesespalte entsteht über Innenabstand. */
+.chat-full-wrap { display: flex; flex-direction: column; height: 100%; padding: 28px 0 20px; overflow: hidden }
+.chat-full-head, .chat-full-wrap > .chat-empty-hint { width: 100%; max-width: 760px; margin: 0 auto 6px; padding: 0 20px }
 .chat-full-wrap h1 { flex-shrink: 0; margin-bottom: 4px }
 .chat-full-wrap .chat-empty-hint { flex-shrink: 0 }
-.chat-log-full { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-self: center; width: 100%; max-width: 760px; padding: 8px 0 16px }
+.chat-log-full { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-self: stretch; width: 100%; max-width: none; padding: 8px max(20px, calc((100% - 760px) / 2)) 16px }
 /* DRY (Feinschliff v12): nur noch die Vollbild-Besonderheiten. Rahmen, Radius, Fläche und Fokus-Ring kommen aus dem kanonischen Composer-Block oben — beide Composer können nicht mehr auseinanderdriften. */
-.chat-form-full { align-self: center; position: relative; width: 100%; max-width: 760px; flex-shrink: 0 }
+.chat-form-full { align-self: center; position: relative; width: calc(100% - 40px); max-width: 760px; flex-shrink: 0 }
 .progress-bar { height: 8px; border-radius: var(--radius-xs); background: var(--surface-active); overflow: hidden; margin: 10px 0 }
 .progress-bar .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width .3s ease }
 .progress-bar.indeterminate .progress-fill { width: 30%; animation: progressSlide 1.1s ease-in-out infinite }
@@ -675,9 +689,9 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
    Wege nutzen jetzt dieselben Tokens: überall sichtbar, überall identisch. */
 /* 🎨 (29. Juli) Ruhige, schlanke Leiste wie in macOS/Notion: keine Spur, keine Kanten —
    nur ein voll gerundeter Daumen mit Luft drumherum. Gilt global (überall dieselben Tokens). */
-::-webkit-scrollbar { width: 12px; height: 12px; background: transparent }
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-track-piece { background: transparent; border: none }
-::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; min-height: 40px }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: content-box; min-height: 28px }
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
 ::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
 ::-webkit-scrollbar-corner { background: transparent }
@@ -2305,3 +2319,6 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 	.deck-row { padding: 10px 14px }
 	.kpi { padding: 10px }
 }
+
+/* Helles Theme: dort ist die Navigation umgekehrt eine Spur DUNKLER als die weiße Dokumentfläche. */
+body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
