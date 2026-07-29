@@ -1,9 +1,12 @@
 /* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeld… */
 /* Kompakt (density-compact): randlose Fläche, Panels bis Kante,… */
-body.density-compact { background: var(--panel-solid) }
+body.density-compact { --sidebar-w: 236px; background: var(--panel-solid) }
+/* 🎯 Kompakt: KEINE Trennlinie unter den Pillen (Home/Chat/Karten/Suche). Die Kante lag
+   direkt über dem Seitenbaum und wirkte wie ein Strich mitten im Nichts. */
+body.density-compact .topbar { border-bottom: none; padding-bottom: 2px }
 body.density-compact #bg { display: none }
-body.density-compact #app { width: 100%; min-width: 0; gap: 0; padding: 0; grid-template-columns: 236px minmax(0, 1fr) 320px; background: var(--panel-solid) }
-body.density-compact.panel-collapsed #app { grid-template-columns: 236px minmax(0, 1fr) }
+body.density-compact #app { width: 100%; min-width: 0; gap: 0; padding: 0; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 320px; background: var(--panel-solid) }
+body.density-compact.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
 body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0 }
 body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid) }
 body.density-compact .panel-head { border-bottom-color: var(--edge) }
@@ -39,7 +42,7 @@ body.density-compact :where(.library) { padding: 24px 30px }
 /* Toasts — immer zuoberst */
 /* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
 /* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
-:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --scroll-thumb: rgba(148,158,178,.45); --scroll-thumb-hover: rgba(148,158,178,.7); --scroll-track: rgba(255,255,255,.04); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
+:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #1b1c1f; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --sidebar-w: 260px; --scroll-thumb: rgba(255,255,255,.20); --scroll-thumb-hover: rgba(255,255,255,.34); --scroll-track: transparent; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
 /* == Bewegungsprinzipien: ruhig, konsistent, performant == */
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
@@ -61,7 +64,7 @@ html, body { height: 100% }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: var(--font-base, 16px); line-height: 1.5; color: var(--text); background: var(--bg0); overflow: hidden }
 /* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
 #bg { position: fixed; inset: 0; z-index: 0; background: radial-gradient(1400px 900px at 50% -20%, var(--glow-1) 0%, var(--glow-2) 55%, var(--glow-3) 100%) }
-#app { position: relative; z-index: 1; display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px; gap: 12px; height: 100dvh; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
+#app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: 12px; height: 100dvh; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
 /* Flache Panels, dezente Kanten, kein Glas-Look */
 #sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
 /* == Sidebar == */
@@ -81,6 +84,24 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .row-add { opacity: 0; min-height: 0; height: 22px; padding: 0 7px; border: none; background: transparent; color: var(--text2); font-size: var(--text-md); line-height: 1 }
 .row:hover .row-add, .row:focus-within .row-add { opacity: 1 }
 .row-add:hover { color: var(--accent); background: var(--surface-active) }
+/* 🖥 Maus/Desktop: Der Name nutzt die GANZE Zeilenbreite und steht voll ausgeschrieben da.
+   Erst beim Hover belegen ⋯ und + wirklich Platz — dann kürzt der Titel links davon mit „…“
+   (genau wie in Notion). Vorher reservierten die unsichtbaren Knöpfe den Platz dauerhaft,
+   deshalb waren Heft-/Seitennamen auch ohne Hover abgeschnitten. */
+@media (hover: hover) and (pointer: fine) {
+	.row .row-add { width: 0; min-width: 0; padding: 0; border: 0; overflow: hidden; flex: 0 0 auto }
+	.row:hover .row-add, .row:focus-within .row-add { width: auto; min-width: 22px; padding: 0 7px }
+}
+/* ↔️ Breite der linken Spalte ziehbar: Griff an der rechten Kante, Wert lebt in --sidebar-w
+   (app.js schreibt sie inline auf <body> und merkt sie lokal). Doppelklick = Standardbreite. */
+#sidebar { position: relative }
+#sidebarResizer { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; z-index: 6; cursor: col-resize; background: transparent; touch-action: none }
+#sidebarResizer:hover, body.sidebar-resizing #sidebarResizer { background: var(--accent-soft) }
+body.sidebar-resizing { cursor: col-resize; user-select: none }
+body.sidebar-collapsed #sidebarResizer { display: none }
+@media (max-width: 980px) {
+	#sidebarResizer { display: none }
+}
 .row:hover { background: var(--surface); color: var(--text) }
 .row-rename-input { flex: 1; min-width: 0; font: inherit; font-size: var(--text-base); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-xs); padding: 1px 6px; outline: none }
 .row.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border) }
@@ -274,6 +295,11 @@ button.danger { color: var(--danger) }
 .composer-actions-left #btnAttach, .composer-actions-left #btnAttachFull, .composer-actions-left .composer-tool { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: var(--radius-md) }
 /* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte… */
 #chatInput, .chat-form-full textarea { order: -1; flex: 1; width: 100%; min-height: 30px; max-height: 160px; overflow-y: auto; resize: none; border: none; outline: none; box-shadow: none; background: transparent; padding: 6px 0 }
+/* 🐛 Fix (28. Juli): doppelte Umrundung im Composer — die globale :focus-visible-Regel
+   (outline: 2px solid var(--accent)) traf das Textfeld zusätzlich zum :focus-within-Rahmen
+   des Formulars, weil .chat-form-full textarea gleiche Spezifität hat und früher steht.
+   Der Composer zeigt Fokus jetzt nur noch über die ÄUSSERE Umrundung (Regel oben). */
+#chatForm textarea:focus-visible, .chat-form-full textarea:focus-visible { outline: none }
 /* Untere Reihe behält die bestehende Reihenfolge: Anhang → Model… */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1 }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2 }
@@ -422,7 +448,7 @@ button.danger { color: var(--danger) }
 .cover-swatch:hover { outline: 2px solid var(--accent) }
 /* == KI-Panel einklappen / Vollbild == */
 body.panel-collapsed #panel { display: none }
-body.panel-collapsed #app { grid-template-columns: 260px minmax(0, 1fr) }
+body.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
 /* == Linke Sidebar + runder KI-Schnellzugriff == */
 /* #tabbar-Grundlayout steht bereits im Hauptbereich; hier nur di… */
 #tabbar .tabstrip { flex: 1; min-width: 0 }
@@ -647,10 +673,13 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
    (scrollbar-width/-color) schalten in Chromium die ::-webkit-Regeln ab — die waren dort toter
    Code mit anderen Farben, in älteren Safaris blieb nur die unsichtbare Overlay-Leiste. Beide
    Wege nutzen jetzt dieselben Tokens: überall sichtbar, überall identisch. */
-::-webkit-scrollbar { width: 10px; height: 10px }
-::-webkit-scrollbar-track { background: var(--scroll-track) }
-::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-sm); border: 2px solid transparent; background-clip: content-box }
+/* 🎨 (29. Juli) Ruhige, schlanke Leiste wie in macOS/Notion: keine Spur, keine Kanten —
+   nur ein voll gerundeter Daumen mit Luft drumherum. Gilt global (überall dieselben Tokens). */
+::-webkit-scrollbar { width: 12px; height: 12px; background: transparent }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-track-piece { background: transparent; border: none }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; min-height: 40px }
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
 ::-webkit-scrollbar-corner { background: transparent }
 @media (max-width: 980px) {
 	body { overflow: auto }

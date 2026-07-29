@@ -1861,6 +1861,52 @@ function wireEvents() {
 	if (main) new MutationObserver(mountFullChatDebugButton).observe(main, { childList: true, subtree: true });
 	mountFullChatDebugButton();
 
+	// ---------- ↔️ Breite der linken Spalte ziehen (Griff #sidebarResizer) ----------
+	// EINE Quelle der Wahrheit: die CSS-Variable --sidebar-w. Sie steht inline am <body>
+	// (gewinnt damit gegen die Kompakt-Regeln in styles.css), die Grid-Spalten lesen sie.
+	// Pointer-Events wie beim Seiten-Verschieben — ein Pfad für Maus, Touch und Tauri.
+	const SIDEBAR_W_KEY = "impala67.sidebarWidth";
+	const SIDEBAR_W_MIN = 180, SIDEBAR_W_MAX = 560;
+	const setSidebarWidth = (px, persist) => {
+		const w = Math.round(Math.min(SIDEBAR_W_MAX, Math.max(SIDEBAR_W_MIN, px)));
+		document.body.style.setProperty("--sidebar-w", w + "px");
+		if (persist) { try { localStorage.setItem(SIDEBAR_W_KEY, String(w)); } catch { /* ignore */ } }
+	};
+	try {
+		const savedW = Number(localStorage.getItem(SIDEBAR_W_KEY) || 0);
+		if (savedW) setSidebarWidth(savedW, false);
+	} catch { /* ignore */ }
+	let sidebarResize = null;
+	document.addEventListener("pointerdown", (e) => {
+		if (e.button !== undefined && e.button !== 0) return;
+		if (!closestOf(e, "#sidebarResizer")) return;
+		const bar = $("sidebar");
+		if (!bar) return;
+		e.preventDefault();
+		sidebarResize = { pointerId: e.pointerId, startX: e.clientX, startW: bar.getBoundingClientRect().width };
+		document.body.classList.add("sidebar-resizing");
+	});
+	document.addEventListener("pointermove", (e) => {
+		if (!sidebarResize || e.pointerId !== sidebarResize.pointerId) return;
+		e.preventDefault();
+		setSidebarWidth(sidebarResize.startW + (e.clientX - sidebarResize.startX), false);
+	}, { passive: false });
+	const endSidebarResize = (e) => {
+		if (!sidebarResize || (e && e.pointerId !== sidebarResize.pointerId)) return;
+		sidebarResize = null;
+		document.body.classList.remove("sidebar-resizing");
+		const bar = $("sidebar");
+		if (bar) setSidebarWidth(bar.getBoundingClientRect().width, true);
+	};
+	document.addEventListener("pointerup", endSidebarResize);
+	document.addEventListener("pointercancel", endSidebarResize);
+	// Doppelklick auf den Griff = zurück zur Standardbreite (CSS entscheidet wieder)
+	document.addEventListener("dblclick", (e) => {
+		if (!closestOf(e, "#sidebarResizer")) return;
+		document.body.style.removeProperty("--sidebar-w");
+		try { localStorage.removeItem(SIDEBAR_W_KEY); } catch { /* ignore */ }
+	});
+
 	// Tastenkombinationen (Shortcuts) registrieren
 	SHORTCUTS.wireShortcuts();
 	// Langen geklebten Text automatisch als .txt-Anhang behandeln statt im Feld auszuschreiben
