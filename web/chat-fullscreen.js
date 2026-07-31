@@ -23,12 +23,16 @@ import { VOICE } from "./voice.js";
 //  • Anhänge lassen sich einzeln entfernen — vorher leerte jeder Knopf alle drei.
 //  • Chat-Löschen läuft über CHATS.remove statt über eine gekürzte Liste.
 
-const R = RENDER;
+// WURZEL des Startabsturzes „Cannot access 'RENDER' before initialization“: render.js hängt in
+// einem Import-Ring (render → settings → app → render), und app.js lädt diese Datei. Sie wurde
+// dadurch ausgewertet, BEVOR render.js seine Exporte gesetzt hatte — ein Alias zur Auswertungs-
+// zeit knallt dann sofort. Direkte Zugriffe wirken erst beim Aufruf und sind damit unabhängig
+// von der Ladereihenfolge. Kein Alias hier wieder einführen.
 
 // ---------- Flächen & Zeichnen ----------
 const listOf = (isSide) => (isSide ? S.sideChat : S.chat);
-const paint = (isSide) => (isSide ? R.renderChat() : R.renderMainChatLog());
-const repaint = () => { R.renderChat(); if (S.view === "chat" || S.aiActiveChatType === "full") R.renderMainChatLog(); };
+const paint = (isSide) => (isSide ? RENDER.renderChat() : RENDER.renderMainChatLog());
+const repaint = () => { RENDER.renderChat(); if (S.view === "chat" || S.aiActiveChatType === "full") RENDER.renderMainChatLog(); };
 const saveChat = (isSide) => (isSide ? saveSideChat() : saveCurrentChat());
 
 // Nachricht per mid finden — egal in welcher Fläche sie liegt.
@@ -168,7 +172,7 @@ export function handleReasoningToggle(t) {
 export function handleDiffCardToggle(t) {
 	// Änderungen werden wie in Notion in einer eigenen Seiten-Vorschau geprüft.
 	const hit = find(t.dataset.difftoggle);
-	if (hit) R.openChangePreview(hit.msg);
+	if (hit) RENDER.openChangePreview(hit.msg);
 }
 
 export async function handleUndo(t) {
@@ -203,7 +207,7 @@ export function handleEditUserMessage(t) {
 		return;
 	}
 	if (isSide) S.sideChat = list.slice(0, idx); else S.chat = list.slice(0, idx);
-	R.render();
+	RENDER.render();
 	// Ziel-Composer nach dem CHAT wählen, nicht nach der Ansicht.
 	const inp = U.el(isSide ? "chatInput" : "mainChatInput");
 	if (inp) { inp.value = msg.content || ""; inp.focus(); }
@@ -246,11 +250,11 @@ export async function handleModelMenuToggle(t) {
 	S.modelMenuOpen = !wasOpen;
 	S.modelMenuSection = "root";
 	S.customModelProviderPick = S.settings.aiProviderId;
-	R.renderModelMenu();
+	RENDER.renderModelMenu();
 	if (!S.modelMenuOpen) return;
 	// Bei jedem Öffnen neu abfragen: LM Studio meldet nur die aktuell geladenen Modelle.
 	S.modelMenuLoading = true;
-	R.renderModelMenu();
+	RENDER.renderModelMenu();
 	try {
 		S.availableModels = await AI.listModels();
 	} catch (e) {
@@ -259,9 +263,9 @@ export async function handleModelMenuToggle(t) {
 		U.toast("Modelle konnten nicht geladen werden: " + (e?.message || e), "error");
 	}
 	S.modelMenuLoading = false;
-	R.renderModelMenu();
+	RENDER.renderModelMenu();
 	// Thinking-Stufen werden geprüft, nicht aus Modellnamen geraten.
-	AI.detectThinkingCapabilities().then(R.renderModelMenu, R.renderModelMenu);
+	AI.detectThinkingCapabilities().then(RENDER.renderModelMenu, RENDER.renderModelMenu);
 }
 
 // ---------- Chats löschen (einzeln und mehrere auf einmal) ----------
@@ -287,18 +291,18 @@ export function handleChatSelectToggle(t) {
 	if (!id) return;
 	const sel = selection();
 	if (sel.has(id)) sel.delete(id); else sel.add(id);
-	R.renderSidebar();
+	RENDER.renderSidebar();
 }
 
 export function handleChatSelectAll() {
 	const sel = selection();
 	for (const s of CHATS.load()) sel.add(s.id);
-	R.renderSidebar();
+	RENDER.renderSidebar();
 }
 
 export function handleChatSelectNone() {
 	selection().clear();
-	R.renderSidebar();
+	RENDER.renderSidebar();
 }
 
 export async function handleDeleteChat(t) {
@@ -312,7 +316,7 @@ export async function handleDeleteChat(t) {
 	if (!ok) return;
 	CHATS.remove(id);
 	forgetChat(id);
-	R.render();
+	RENDER.render();
 }
 
 export async function handleDeleteSelectedChats() {
@@ -329,14 +333,14 @@ export async function handleDeleteSelectedChats() {
 	ids.forEach(forgetChat);
 	selection().clear();
 	U.toast(ids.length + (ids.length === 1 ? " Chat gelöscht." : " Chats gelöscht."), "success");
-	R.render();
+	RENDER.render();
 }
 
 // ---------- Anhänge ----------
 const SLOTS = { image: "pendingImage", file: "pendingTextFile", pdf: "pendingPdf" };
 const ALL_SLOTS = Object.values(SLOTS);
 
-function paintChips() { R.renderPendingChip("side"); R.renderPendingChip("full"); }
+function paintChips() { RENDER.renderPendingChip("side"); RENDER.renderPendingChip("full"); }
 
 // Ohne bekannte Art wird alles geleert (alter Sammel-Knopf bleibt damit gültig).
 export function handleRemoveAttachment(kind) {
