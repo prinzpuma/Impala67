@@ -281,13 +281,23 @@ export const STATE = (() => {
 	function heftSyncMeta(pageId, t) {
 		const doc = heftDocOf(pageId);
 		doc.rev++;
-		S.heftMeta[pageId] = {
+		const meta = {
 			rev: doc.rev,
 			pages: doc.pages.length,
-			bytes: heftBytes(doc),
 			ocrText: doc.pages.map((pg) => pg.ocrText || "").filter(Boolean).join("\n"),
 			updated: t,
 		};
+		// PERF-WURZEL: Die Größenschätzung lief über ALLE Seiten, Striche und Punkte des Hefts —
+		// und zwar bei JEDEM einzelnen Strich. Der Aufwand pro Strich wuchs damit mit dem Heft
+		// mit: auf vollen Seiten spürbares Ruckeln beim Schreiben. Die Zahl ist reine Anzeige
+		// (Badges, Bibliothek) und wird jetzt erst berechnet, wenn sie wirklich gelesen wird —
+		// dann immer vom aktuellen Dokument, auch nach einer Verdichtung (heftSnap).
+		Object.defineProperty(meta, "bytes", {
+			get: () => heftBytes(heftDocOf(pageId)),
+			enumerable: true,
+			configurable: true,
+		});
+		S.heftMeta[pageId] = meta;
 		if (S.pages[pageId]) S.pages[pageId].updated = t;
 	}
 
@@ -337,7 +347,10 @@ export const STATE = (() => {
 		const p = ev.payload || {};
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
 		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
-		if (ev.type.startsWith("page")) _pageRev++;
+		// FIX: Heft-Events zählten nicht als Seitenänderung. Der Handschrift-Text (ocrText) steckt
+		// aber im Suchindex der Seite — nach dem Schreiben im Heft fand die Suche den neuen Text
+		// erst, wenn irgendwann zufällig ein anderes Seiten-Event vorbeikam.
+		if (ev.type.startsWith("page") || ev.type.startsWith("heft")) _pageRev++;
 		if (ev.type.startsWith("card") || ev.type.startsWith("deck") || ev.type === "settingsSet") _cardRev++;
 		switch (ev.type) {
 			case "pageCreate":
@@ -373,7 +386,7 @@ export const STATE = (() => {
 				const patch = p.patch || {};
 				if ("parentId" in patch || "order" in patch || "workspaceId" in patch || "trashed" in patch || "title" in patch)
 					bustChildIdx();
-				Object.assign(pg, p.patch);
+				Object.assign(pg, patch); // geprüfte Kopie von oben statt erneut p.patch (konnte undefined sein)
 				pg.updated = ev.t;
 				break;
 			}

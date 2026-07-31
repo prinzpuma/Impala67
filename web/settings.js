@@ -442,12 +442,22 @@ export function openSettings(section) {
 			"</div>" +
 			'<p class="hint" id="updateStatus">Prüfe Version…</p>';
 	}
+	// GLITCH-WURZEL: Fast jede Aktion (Akzentfarbe, Dichte, Schriftgröße, ↑↓ im Home-Editor,
+	// Quelle hinzufügen) baut den Dialog komplett neu auf — der Inhalt sprang dabei jedes Mal
+	// nach ganz oben, man musste nach jedem Klick zurückscrollen. Scrollstand desselben
+	// Bereichs über den Neuaufbau retten; bei einem Bereichswechsel bewusst oben starten.
+	const prevBody = o.querySelector('.settings-modal[data-sec="' + sec + '"] .settings-body');
+	const keepScroll = prevBody ? prevBody.scrollTop : 0;
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
 	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
 		'<div class="settings-body"><h3>' + U.esc(((SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
+	if (keepScroll) {
+		const nb = o.querySelector(".settings-body");
+		if (nb) nb.scrollTop = keepScroll;
+	}
 	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
 	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
 	// KI-Tab: Status + Inhalte des aktiven Unter-Tabs laden (lazy je Tab).
@@ -555,27 +565,38 @@ function finishDriveSync({ imported, conflicts, conflictDetails }) {
 	U.toast("Sync abgeschlossen — alles aktuell.", "success");
 }
 
-export async function handleDriveSyncSettings(t) {
-	// iPad/Safari: Ein abgelaufener Browser-Token kann beim stillen OAuth-Check
-	// kurz ein Google-Popup öffnen und sofort wieder schließen. Vor dem Sync daher
-	// ausschließlich den lokal bekannten Sitzungsstatus prüfen; abgelaufene
-	// Sitzungen führen gezielt zum sichtbaren „Mit Google anmelden“-Button.
-	if (!DRIVE.isConnected()) {
-		S.driveUserEmail = null;
-		try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
-		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
-		openSettings("sync");
-		return;
-	}
+// DRY: Sitzungsprüfung und Sync-Lauf standen wortgleich in beiden Sync-Knöpfen
+// (Einstellungen und Seitenleiste) — zwei Stellen, die auseinanderlaufen konnten.
+// iPad/Safari: Ein abgelaufener Browser-Token kann beim stillen OAuth-Check kurz ein
+// Google-Popup öffnen und sofort wieder schließen. Vor dem Sync daher ausschließlich den
+// lokal bekannten Sitzungsstatus prüfen; abgelaufene Sitzungen führen gezielt zum
+// sichtbaren „Mit Google anmelden“-Button.
+function requireDriveSession() {
+	if (DRIVE.isConnected()) return true;
+	S.driveUserEmail = null;
+	try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
+	U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
+	openSettings("sync");
+	return false;
+}
+
+// Der Seitenleisten-Knopf enthält ein SVG-Icon, der Einstellungen-Knopf nur Text —
+// innerHTML sichert die Beschriftung in beiden Fällen verlustfrei.
+async function runDriveSync(t, prefix) {
 	t.disabled = true;
-	const old = t.textContent;
+	const old = t.innerHTML;
 	try {
-		finishDriveSync(await DRIVE.sync((st) => { t.textContent = st; }));
+		finishDriveSync(await DRIVE.sync((st) => { t.textContent = prefix + st; }));
 	} catch (err) {
 		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}
 	t.disabled = false;
-	t.textContent = old;
+	t.innerHTML = old;
+}
+
+export async function handleDriveSyncSettings(t) {
+	if (!requireDriveSession()) return;
+	await runDriveSync(t, "");
 }
 
 // Automatische Syncs sollen nicht alle zwei Minuten Toasts erzeugen. Nur wenn
@@ -788,8 +809,12 @@ export async function refreshChatModels() {
 	const btn = U.el("btnRefreshModels");
 	if (!host) return;
 	if (btn) btn.disabled = true;
-	if (hint) hint.textContent = "Lade Modelle aller Quellen…";
-	host.innerHTML = '<div class="menu-note">Modelle werden geladen…</div>';
+	// GLITCH-WURZEL: Die bereits bekannte Liste wurde bei jedem Öffnen durch
+	// „Modelle werden geladen…“ ersetzt und blinkte so jedes Mal leer, obwohl der Cache steht.
+	// Jetzt sofort aus dem Cache zeichnen; der Ladezustand erscheint nur, wenn nichts da ist.
+	const cached = Array.isArray(S.availableModels) && S.availableModels.length;
+	if (cached) paintSettingsModels();
+	else host.innerHTML = '<div class="menu-note">Modelle werden geladen…</div>';
 	try {
 		const found = await AI.listModels();
 		S.availableModels = found;
@@ -801,7 +826,9 @@ export async function refreshChatModels() {
 		}
 	} catch (err) {
 		paintSettingsModels();
-		if (hint) hint.textContent = "Modelle konnten nicht geladen werden.";
+		// FIX: Der Hinweis startet versteckt — ohne hidden=false war diese Fehlermeldung
+		// unsichtbar, ein Ladefehler sah aus wie „einfach keine Modelle da“.
+		if (hint) { hint.hidden = false; hint.textContent = "Modelle konnten nicht geladen werden."; }
 	} finally {
 		if (btn) btn.disabled = false;
 	}
@@ -973,24 +1000,9 @@ export async function handleDriveSync(t) {
 	}
 	// Keinen stillen OAuth-Aufruf aus dem Sync-Button starten: iPadOS zeigt ihn
 	// oft kurz als Popup. Nur mit einem noch lokal gültigen Token synchronisieren;
-	// sonst wird die Anmeldung klar und ausschließlich durch den Login-Button
-	// ausgelöst.
-	if (!DRIVE.isConnected()) {
-		S.driveUserEmail = null;
-		try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
-		U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
-		openSettings("sync");
-		return;
-	}
-	t.disabled = true;
-	const old = t.innerHTML; // Button enthält jetzt ein SVG-Icon — textContent würde es zerstören
-	try {
-		finishDriveSync(await DRIVE.sync((st) => { t.textContent = "☁️ " + st; }));
-	} catch (err) {
-		U.toast("Sync fehlgeschlagen: " + err.message, "error");
-	}
-	t.disabled = false;
-	t.innerHTML = old;
+	// sonst wird die Anmeldung klar und ausschließlich durch den Login-Button ausgelöst.
+	if (!requireDriveSession()) return;
+	await runDriveSync(t, "☁️ ");
 }
 
 export async function handleBackupNow() {

@@ -568,6 +568,10 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
    der Verlauf scrollt jetzt über die volle Breite, die 760px-Lesespalte entsteht über Innenabstand. */
 .chat-full-wrap { display: flex; flex-direction: column; height: 100%; padding: 28px 0 20px; overflow: hidden }
 .chat-full-head, .chat-full-wrap > .chat-empty-hint { width: 100%; max-width: 760px; margin: 0 auto 6px; padding: 0 20px }
+/* 🐛 Fix: Schnellstart-Chips fehlten in der Lesespalten-Regel — sie liefen als einziges Element
+   ohne max-width/padding bis an die Kante des Wraps und wurden dort von dessen overflow:hidden
+   beschnitten (linker/rechter Chip angeschnitten, Reihe nicht bündig mit Titel und Hinweis). */
+.chat-full-wrap > .chat-suggests { width: 100%; max-width: 760px; margin: 0 auto 12px; padding: 0 20px }
 .chat-full-wrap h1 { flex-shrink: 0; margin-bottom: 4px }
 .chat-full-wrap .chat-empty-hint { flex-shrink: 0 }
 .chat-log-full { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-self: stretch; width: 100%; max-width: none; padding: 8px max(20px, calc((100% - 760px) / 2)) 16px }

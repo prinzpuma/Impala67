@@ -28,18 +28,31 @@ export const GRAPH = (() => {
 	function activePages() {
 		return Object.values(S.pages).filter((p) => p && !p.trashed && (p.title || "").trim());
 	}
-	// Ø-Abrufbarkeit der Karten einer Seite (0..1) oder null ohne bewertete Karten.
+	// Ø-Abrufbarkeit einer Kartenmenge (0..1) oder null ohne bewertete Karten.
 	// Verstrichene Zeit wird aus Fälligkeit + Stabilität genähert — reicht für die Heatmap.
-	function pageHeat(pageId) {
+	// DRY: Seiten- und Themen-Färbung rechneten diese Formel vorher doppelt.
+	function heatOf(cards) {
 		const now = Date.now();
 		let sum = 0, n = 0;
-		Object.values(S.cards).forEach((c) => {
-			if (!c || c.trashed || c.pageId !== pageId || !c.srs || c.srs.state === "new") return;
+		for (const c of cards || []) {
+			if (!c || c.trashed || !c.srs || c.srs.state === "new") continue;
 			const dueIn = (new Date(c.srs.due).getTime() - now) / 864e5; // Tage bis fällig (negativ = überfällig)
 			const stab = Math.max(0.1, c.srs.stability || 0.5);
 			try { sum += SRS.retrievability(Math.max(0, stab - dueIn), stab); n++; } catch (err) { /* egal */ }
-		});
+		}
 		return n ? sum / n : null;
+	}
+	// PERF-WURZEL: Die Seitenfärbung lief pro Seite EINMAL über ALLE Karten — der Aufwand war
+	// das Produkt aus Seiten- und Kartenzahl und blockierte bei jedem Öffnen des Graphen.
+	// Jetzt einmal nach Seite indexieren; jede Seite sieht nur noch ihre eigenen Karten.
+	function cardsByPage() {
+		const map = new Map();
+		for (const c of Object.values(S.cards)) {
+			if (!c || c.trashed || !c.pageId) continue;
+			const list = map.get(c.pageId);
+			if (list) list.push(c); else map.set(c.pageId, [c]);
+		}
+		return map;
 	}
 	function heatColor(r) {
 		if (r == null) return "#7c8188";
@@ -51,13 +64,14 @@ export const GRAPH = (() => {
 	}
 	function build() {
 		const pages = activePages();
+		const heatMap = cardsByPage();
 		byId = Object.create(null);
 		nodes = pages.map((p, i) => {
 			// Sonnenblumen-Startlayout: gleichmäßig verteilt, keine Startkollisionen
 			const golden = i * 2.399963;
 			const rad = 40 + 14 * Math.sqrt(i);
 			const n = {
-				id: p.id, title: p.title, heat: pageHeat(p.id), len: (p.content || "").length,
+				id: p.id, title: p.title, heat: heatOf(heatMap.get(p.id)), len: (p.content || "").length,
 				x: Math.cos(golden) * rad, y: Math.sin(golden) * rad, vx: 0, vy: 0, deg: 0,
 			};
 			byId[p.id] = n;
@@ -173,19 +187,8 @@ export const GRAPH = (() => {
 		s.add(a < b ? a + "|" + b : b + "|" + a);
 		try { localStorage.setItem(EDGE_HIDE_KEY, JSON.stringify([...s])); } catch (err) { /* egal */ }
 	}
-	// Ø-Abrufbarkeit einer Kartenmenge — gleiche Näherung wie pageHeat().
-	function topicHeat(cardIds) {
-		const now = Date.now();
-		let sum = 0, n = 0;
-		(cardIds || []).forEach((id) => {
-			const c = S.cards[id];
-			if (!c || c.trashed || !c.srs || c.srs.state === "new") return;
-			const dueIn = (new Date(c.srs.due).getTime() - now) / 864e5;
-			const stab = Math.max(0.1, c.srs.stability || 0.5);
-			try { sum += SRS.retrievability(Math.max(0, stab - dueIn), stab); n++; } catch (err) { /* egal */ }
-		});
-		return n ? sum / n : null;
-	}
+	// Ø-Abrufbarkeit einer Themen-Kartenmenge — dieselbe Formel wie für Seiten (siehe heatOf).
+	const topicHeat = (cardIds) => heatOf((cardIds || []).map((id) => S.cards[id]));
 	// Der 🧠-Knopf zeigt erst die Optionen (Quelle + Kosten-Hinweis) — Start ist explizit.
 	function runEntities() {
 		const o = kiOpts();

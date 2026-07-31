@@ -69,7 +69,8 @@ function render() {
 	renderMain();
 	renderTabs();
 	renderChat();
-	if (S.view === "chat") renderMainChatLog();
+	// renderMain() → renderFullChat() baut das Vollbild-Log bereits; der zweite Durchlauf
+	// pro Frame war reine Doppelarbeit.
 	renderPendingChip("side");
 	renderPendingChip("full");
 	renderStatusDot();
@@ -137,10 +138,16 @@ function aiStatusMeta() {
 // KI-Status-Pille nur im Chat (Side-Panel + Vollbild)
 function fillAiStatusChip(chip, meta) {
 	if (!chip) return;
+	chip.hidden = false;
+	// PERF: Der Status wechselt selten, die Pille wurde aber bei JEDEM Frame neu geschrieben.
+	// Das kostete nicht nur Arbeit, es setzte auch die Blink-Animation des Punktes ständig
+	// zurück — „KI wird geprüft“ wirkte dadurch eingefroren. Label und Titel hängen
+	// eindeutig an cls, deshalb genügt cls als Kennung.
+	if (chip._statusKey === meta.cls) return;
+	chip._statusKey = meta.cls;
 	chip.className = "ai-status-chip " + meta.cls;
 	chip.title = meta.title + " — Klick: erneut prüfen";
 	chip.innerHTML = `<span class="dot ${meta.cls}"></span><span class="ai-status-label">${esc(meta.label)}</span>`;
-	chip.hidden = false;
 }
 function renderStatusDot() {
 	const meta = aiStatusMeta();
@@ -153,7 +160,10 @@ function renderStatusDot() {
 		else fullChip.hidden = true;
 	}
 	const set = $("aiStatusSettings");
-	if (set) {
+	// dito im Einstellungs-Banner: der „Erneut prüfen“-Knopf wurde bei jedem Frame ersetzt —
+	// ein Klick konnte dabei zwischen Drücken und Loslassen verloren gehen.
+	if (set && set._statusKey !== meta.cls) {
+		set._statusKey = meta.cls;
 		set.className = "ai-status-banner " + meta.cls;
 		set.innerHTML = `<span class="dot ${meta.cls}"></span><span>${esc(meta.title)}</span><button type="button" id="btnRecheckAI" class="mini">Erneut prüfen</button>`;
 	}
@@ -171,7 +181,10 @@ function renderModelBar() {
 	const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="currentColor"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></svg>';
 	for (const id of ["btnModelChipFull", "btnModelMenu"]) {
 		const b = $(id);
-		if (b) { b.innerHTML = icon; b.title = "Modell: " + label; }
+		if (!b) continue;
+		// Das Icon ist konstant — es bei jedem Frame erneut zu parsen war reine Doppelarbeit.
+		if (!b._iconSet) { b.innerHTML = icon; b._iconSet = true; }
+		b.title = "Modell: " + label;
 	}
 	renderModelMenu();
 }
@@ -317,12 +330,32 @@ function renderSidebar() {
 	}
 }
 
-// Chat-Verlauf in der Sidebar (Volltextsuche läuft im Befehls-Menü, Strg+K)
+// Chat-Verlauf in der Sidebar (Volltextsuche läuft im Befehls-Menü, Strg+K).
+// Mehrfachauswahl: das Kästchen je Zeile wählt aus, die Kopfzeile löscht alles Ausgewählte
+// in EINEM Schritt. Die Auswahl liegt zur Laufzeit in S.chatSelection (chat-fullscreen.js).
 function chatListHtml() {
-	return '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>' +
-		CHATS.load().map((s) =>
-			`<div class="row${s.id === S.currentChatId ? " active" : ""}" data-key="chat:${s.id}" data-chat="${s.id}"><span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
-			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button><button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button></div>`).join("");
+	const list = CHATS.load();
+	const sel = S.chatSelection instanceof Set ? S.chatSelection : (S.chatSelection = new Set());
+	// Ausgewählte Chats, die es nicht mehr gibt (Sync, Löschen auf einem anderen Gerät),
+	// dürfen nicht als Karteileiche in der Auswahl hängen bleiben.
+	if (sel.size) {
+		const alive = new Set(list.map((s) => s.id));
+		for (const id of [...sel]) if (!alive.has(id)) sel.delete(id);
+	}
+	const head = sel.size
+		? `<div class="row chat-selbar"><span class="row-title">${sel.size} ausgewählt</span>` +
+			`<button class="row-add" data-chatselall="1" title="Alle Chats auswählen">Alle</button>` +
+			`<button class="row-add" data-chatselnone="1" title="Auswahl aufheben">✕</button>` +
+			`<button class="row-add danger" data-chatdelsel="1" title="Ausgewählte Chats löschen">${ICONS.trash}</button></div>`
+		: '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>';
+	return head + list.map((s) => {
+		const on = sel.has(s.id);
+		return `<div class="row${s.id === S.currentChatId ? " active" : ""}${on ? " selected" : ""}" data-key="chat:${s.id}" data-chat="${s.id}">` +
+			`<button class="row-add chat-sel${on ? " on" : ""}" data-chatsel="${s.id}" aria-pressed="${on ? "true" : "false"}" title="${on ? "Abwählen" : "Auswählen"}">${on ? "☑" : "☐"}</button>` +
+			`<span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
+			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button>` +
+			`<button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button></div>`;
+	}).join("");
 }
 
 function branchHtml(parentId, depth, wsId) {
@@ -1083,13 +1116,9 @@ function renderHistoryModal() {
 }
 
 // ---------- Chat: Nachrichten, Thinking (live + final), Edit-Karten, Datei-Chips ----------
-// historyList = der Chat, in dem die Nachricht steht (side ODER full) — sonst
-// greift die Bearbeiten-Sperre im Seitenpanel nie (früher nur S.chat geprüft)
-function userMsgHtml(m, historyList) {
-	// Bearbeiten gesperrt, solange darunter nicht rückgängig gemachte Edits stehen
-	const list = historyList || S.chat;
-	const idx = list.findIndex((x) => x.mid === m.mid);
-	const locked = idx !== -1 && list.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
+// locked = darunter stehen nicht rückgängig gemachte Edits. Wird EINMAL pro Durchlauf aus der
+// Liste bestimmt statt pro Blase — vorher findIndex + slice je Nachricht, also quadratisch.
+function userMsgHtml(m, locked) {
 	return '<div class="msg user">' +
 		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${locked ? ICONS.lock : ICONS.pen}</button>` +
 		(m.content ? esc(m.content) : "") +
@@ -1120,14 +1149,13 @@ const TOOL_LABELS = {
 };
 const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">${ICONS.gear} ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
 
-// Fertige Nachrichten getrennt vom Live-Entwurf — bleibt beim Streamen unangetastet
-function chatStaticHtml(list = []) {
-	return list.map((m) =>
-		m.role === "edit" ? editCardHtml(m)
+// Markup EINER fertigen Nachricht (der Live-Entwurf läuft getrennt)
+function msgHtml(m, locked) {
+	return m.role === "edit" ? editCardHtml(m)
 		: m.role === "question" ? questionCardHtml(m)
 		: m.role === "tool" ? toolChipHtml(m)
 		: m.role === "assistant" ? assistantMsgHtml(m)
-		: userMsgHtml(m, list)).join("");
+		: userMsgHtml(m, locked);
 }
 
 function chatLiveParts(historyList) {
@@ -1147,37 +1175,66 @@ function chatLiveParts(historyList) {
 	return { think, rest };
 }
 
-// FNV-Signatur statt innerHTML-Neuaufbau — erkennt auch In-Place-Änderungen
-// (Undo, aufgeklapptes Thinking, beantwortete Rückfragen). PERF: Felder direkt
-// in den Hash falten, kein JSON.stringify des ganzen Verlaufs (Bild-Data-URLs!)
-// PERF: Bilder liegen als Data-URL IM Verlauf (schnell mehrere MB Base64). Alles
-// zeichenweise zu hashen war damit die teuerste Schleife der App — und lief bei JEDEM
-// Render, zweimal (Panel + Vollbild). Lange Werte gehen deshalb nur über Länge, Anfang
-// und Ende ein: ein anderer Anhang ist immer ein anderer Wert, nie eine stille Änderung
-// in der Mitte.
-const SIG_MAX = 256;
-function chatHistorySignature(list) {
-	let hash = 2166136261;
-	const fold = (s) => { for (let i = 0; i < s.length; i++) { hash ^= s.charCodeAt(i); hash = Math.imul(hash, 16777619); } };
-	const add = (v) => {
-		const s = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-		if (s.length > SIG_MAX) { fold(String(s.length)); fold(s.slice(0, 64)); fold(s.slice(-64)); }
-		else fold(s);
-		hash ^= 30; // Feldtrenner
-		hash = Math.imul(hash, 16777619);
-	};
-	for (const m of list || []) for (const k in m) { add(k); add(m[k]); }
-	return hash >>> 0;
+// PERF-WURZEL: Der Verlauf wird nachrichtenweise abgeglichen. Vorher entschied EIN Hash über
+// den ganzen Verlauf, ob das komplette Protokoll neu gebaut wird — jede fertige Nachricht,
+// jedes Undo und jede beantwortete Rückfrage warf ALLE Blasen weg und ließ KaTeX/Highlighting
+// über den ganzen Chat erneut laufen. Der Hash selbst lief zudem bei JEDEM Streaming-Frame über
+// alle Felder aller Nachrichten (inkl. Bild-Data-URLs), zweimal (Panel + Vollbild).
+// Jetzt: je Blase ein kurzer Kennwert aus genau den Werten, die ihr Aussehen bestimmen —
+// konstanter Aufwand pro Nachricht, Neuaufbau nur dort, wo sich wirklich etwas geändert hat.
+// Lange Texte gehen über Länge + Anfang + Ende ein (Bild-Data-URLs nie ganz).
+const brief = (v) => { const s = v == null ? "" : String(v); return s.length > 128 ? s.length + s.slice(0, 64) + s.slice(-64) : s; };
+const midOf = (m, i) => String(m.mid ?? "i" + i);
+const rowKeyOf = (m, i, locked) => [
+	midOf(m, i), m.role, brief(m.content), brief(m.reasoning), brief(m.image), brief(m.summary),
+	m.undone ? 1 : 0, m.answered ? 1 : 0, m.answer || "", m.reasoningExpanded ? 1 : 0,
+	m.error ? 1 : 0, m.detail || "", m.name || "", m.pageTitle || "",
+	(m.textFile || m.pdfFile || {}).name || "", locked ? 1 : 0,
+	// FIX: Das „Anpassen“-Menü hängt an S.refineOpenMid, nicht an der Nachricht — es floss nirgends
+	// in den Vergleich ein. Der Klick blieb wirkungslos, bis zufällig etwas anderes neu baute.
+	S.refineOpenMid === m.mid ? 1 : 0,
+].join("");
+
+const enhance = (nodes) => nodes.forEach((n) => { if (n.nodeType === Node.ELEMENT_NODE) { U.renderMath(n); U.highlightCode(n); } });
+// Baut eine Blase und setzt sie vor `before` ein. Formel-/Code-Satz nur über diese Knoten.
+function buildRow(m, locked, before) {
+	const tpl = document.createElement("template");
+	tpl.innerHTML = msgHtml(m, locked);
+	const nodes = [...tpl.content.childNodes];
+	before.before(tpl.content);
+	enhance(nodes);
+	return nodes;
 }
 
-function enhanceChatStatic(log, staticEnd) {
-	for (let n = log.firstChild; n && n !== staticEnd; n = n.nextSibling)
-		if (n.nodeType === Node.ELEMENT_NODE) { U.renderMath(n); U.highlightCode(n); }
+// Gleicht die fertigen Nachrichten vor `end` an `list` an. Rückgabe: wurde etwas verändert?
+function syncChatStatic(log, list, end) {
+	const rows = log._chatRows || (log._chatRows = []);
+	// Ab dem letzten offenen Edit ist Bearbeiten gesperrt — einmal bestimmt statt pro Blase gesucht
+	let lastOpenEdit = -1;
+	for (let i = 0; i < list.length; i++) if (list[i].role === "edit" && !list[i].undone) lastOpenEdit = i;
+	let dirty = false, i = 0;
+	for (; i < rows.length && i < list.length; i++) {
+		const locked = i < lastOpenEdit;
+		const key = rowKeyOf(list[i], i, locked);
+		if (rows[i].key === key) continue;
+		// Andere Nachricht an dieser Stelle = Liste ab hier umgebaut: Rest verwerfen statt patchen
+		if (rows[i].mid !== midOf(list[i], i)) break;
+		const nodes = buildRow(list[i], locked, rows[i].nodes[0]);
+		rows[i].nodes.forEach((n) => n.remove());
+		rows[i] = { mid: midOf(list[i], i), key, nodes };
+		dirty = true;
+	}
+	for (let k = rows.length - 1; k >= i; k--) { rows[k].nodes.forEach((n) => n.remove()); rows.pop(); dirty = true; }
+	for (; i < list.length; i++) {
+		const locked = i < lastOpenEdit;
+		rows.push({ mid: midOf(list[i], i), key: rowKeyOf(list[i], i, locked), nodes: buildRow(list[i], locked, end) });
+		dirty = true;
+	}
+	return dirty;
 }
 
 function renderChatLog(log, historyList) {
-	const signature = chatHistorySignature(historyList);
-	// FIX (26. Juli): Scroll-Position VOR jeder DOM-Änderung merken. Beim Rebuild werden alle
+	// FIX (26. Juli): Scroll-Position VOR jeder DOM-Änderung merken. Beim Neuaufbau werden alle
 	// fertigen Nachrichten entfernt und neu eingesetzt — dabei schrumpft scrollHeight kurz auf
 	// (fast) 0 und der Browser klemmt scrollTop auf 0. Genau das war der Sprung nach oben,
 	// sobald man eine Rückfrage/Löschbestätigung beantwortet hat (answered → neue Signatur →
@@ -1197,19 +1254,11 @@ function renderChatLog(log, historyList) {
 		log.replaceChildren(staticEnd, live);
 		log._chatStaticEnd = staticEnd;
 		log._chatLive = live;
-		log._chatStaticSignature = null;
+		log._chatRows = [];
 	}
-	if (log._chatStaticSignature !== signature) {
-		while (log.firstChild !== staticEnd) log.removeChild(log.firstChild);
-		const tpl = document.createElement("template");
-		tpl.innerHTML = chatStaticHtml(historyList);
-		staticEnd.before(tpl.content);
-		log._chatStaticSignature = signature;
-		enhanceChatStatic(log, staticEnd);
-		// Nach dem Wiederaufbau zurück an die alte Stelle (nur wenn der Nutzer bewusst
-		// weiter oben gelesen hat — sonst übernimmt der Auto-Scroll unten).
-		if (!wasNearBottom) restoreScroll();
-	}
+	// Nur geänderte Blasen anfassen; die alte Lesestelle nur halten, wenn überhaupt etwas
+	// umgebaut wurde und der Nutzer bewusst weiter oben liest.
+	if (syncChatStatic(log, historyList || [], staticEnd) && !wasNearBottom) restoreScroll();
 	// FIX: Live-Bereich nicht mehr pro Streaming-Delta per innerHTML ersetzen —
 	// Klicks zwischen Mousedown/-up gingen verloren, die Think-Box ließ sich nie
 	// aufklappen. Think und Draft getrennt patchen, Toggle bleibt stabil im DOM
@@ -1260,18 +1309,33 @@ function questionCardHtml(m) {
 		opts.map((o, i) => `<button type="button" class="q-opt" data-answerq="${esc(m.mid)}" data-answeridx="${i}"><span class="q-opt-label">${esc(o)}</span></button>`).join("") + "</div></div>";
 }
 
+// Seitenkontext ist einfach ein weiterer Anhang-Chip: gleiches Markup, gleiche Klassen
+// und dasselbe ✕ wie Bild/PDF/Textdatei. „Entfernt“ hält nur, bis die Seite neu
+// geöffnet wird (tabs.js setzt S.sideContextOff zurück) — nichts wird gespeichert.
+// EIN Bauplan für beide Composer: ai.js schickt die geöffnete Seite seit dem 27. Juli in
+// JEDEM Chat mit, angezeigt wurde das aber nur im Seitenpanel — im Vollbild-Chat sah man
+// nie, dass Kontext mitgeht (Roadmap-Bug „Seitenkontext wird visuell nicht mitgeschickt“).
+function contextChipHtml() {
+	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
+	// Im Karteikarten-Bereich schickt ai.js bewusst KEINEN Seitenkontext — ein Chip wäre gelogen.
+	if (!pg || S.view === "anki" || S.sideContextOff === pg.id) return "";
+	// Gleiche Auflösung wie in ai.js: Heft direkt offen ODER via HEFT.activeId eingebettet.
+	// Sonst zeigte der Chip 📄 + Titel der Elternseite, obwohl eine Heft-Seite als Bild reist.
+	const heft = pg.kind === "heft" ? pg : (HEFT.activeId ? S.pages[HEFT.activeId] : null);
+	const isHeft = !!(heft && heft.kind === "heft");
+	const title = (isHeft ? heft.title : pg.title) || "Unbenannte Seite";
+	const meta = isHeft
+		? "Heft · Seite " + ((HEFT.activeIndex || 0) + 1) + " wird als Bild mitgesendet"
+		: "Seitenkontext · wird mitgesendet";
+	return `<span class="chip-ico">${isHeft ? "📓" : "📄"}</span><span class="chip-body"><b>${esc(title)}</b><small>${esc(meta)}</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`;
+}
+
 function renderSideContextChip() {
 	const chip = $("sideContextChip");
 	if (!chip) return;
-	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
-	// Seitenkontext ist einfach ein weiterer Anhang-Chip: gleiches Markup, gleiche Klassen
-	// und dasselbe ✕ wie Bild/PDF/Textdatei. „Entfernt“ hält nur, bis die Seite neu
-	// geöffnet wird (tabs.js setzt S.sideContextOff zurück) — nichts wird gespeichert.
-	const show = !!pg && S.sideContextOff !== pg.id;
-	chip.hidden = !show;
-	chip.innerHTML = show
-		? `<span class="chip-ico">📄</span><span class="chip-body"><b>${esc(pg.title || "Unbenannte Seite")}</b><small>Seitenkontext · wird mitgesendet</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`
-		: "";
+	const html = contextChipHtml();
+	chip.hidden = !html;
+	chip.innerHTML = html;
 }
 
 // Verlauf-Dropdown im Seitenchat — bewusst KEINE eigene Chat-Liste: dieselbe
@@ -1311,6 +1375,8 @@ function renderChat() {
 const CHATLOG_CACHE = new Map(); // chatId → <div class="chat-log-full">
 function cachedChatLog(chatId) {
 	let el = CHATLOG_CACHE.get(chatId);
+	// Treffer ans Ende rücken — sonst konnte der GERADE benutzte Chat als „ältester“ rausfliegen
+	if (el) { CHATLOG_CACHE.delete(chatId); CHATLOG_CACHE.set(chatId, el); }
 	if (!el) {
 		el = document.createElement("div");
 		el.className = "chat-log-full";
@@ -1492,9 +1558,20 @@ function renderPendingChip(type) {
 		else if (S.pendingTextFile) html = att("📄", S.pendingTextFile.name, S.pendingTextFile.size + " Zeichen · wird als Datei angehängt", 'id="btnRemoveTextFile"');
 		else if (S.pendingPdf) html = att("📄", S.pendingPdf.name, (S.pendingPdf.pages || "?") + " Seiten · wird als PDF-Kontext angehängt", 'id="btnRemovePdf"');
 	}
-	chip.hidden = !html;
-	chip.classList.toggle("attach-chip", !!html);
-	chip.innerHTML = html;
+	// Der Vollbild-Chat hat kein eigenes Kontext-Element (das 📄-Chip lebte nur im Panel) —
+	// er hängt hier mit dran. Zwei Chips gleichzeitig: jeder in seiner eigenen Hülle, damit
+	// die Anhang-Optik unverändert bleibt.
+	const ctx = type === "full" ? contextChipHtml() : "";
+	if (ctx && html) {
+		chip.hidden = false;
+		chip.classList.remove("attach-chip");
+		chip.innerHTML = `<div class="attach-chip">${ctx}</div><div class="attach-chip">${html}</div>`;
+		return;
+	}
+	const single = html || ctx;
+	chip.hidden = !single;
+	chip.classList.toggle("attach-chip", !!single);
+	chip.innerHTML = single;
 }
 
 // ---------- Modals ----------

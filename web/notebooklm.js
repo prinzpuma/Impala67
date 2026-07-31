@@ -187,23 +187,29 @@ export const NLM = (() => {
 		await req(store(db, "readwrite").put(rec));
 		return rec;
 	}
-	async function fileList() {
-		const db = await dbOpen();
-		const list = ((await req(store(db, "readonly").getAll())) || []).sort((a, b) => b.ts - a.ts);
-		// Alt-Datensätze (v2: nur {id,name,blob,ts}) beim ersten Lesen einmalig nachrüsten
-		for (const f of list) {
-			if (f.kind) continue;
+	// Alt-Datensätze (v2: nur {id,name,blob,ts}) im Speicher nachrüsten — EINE Stelle
+	// für Liste und Einzelzugriff (war vorher nur in fileList).
+	function withDefaults(f) {
+		if (!f.kind) {
 			f.kind = sniffKind(f.name, new Uint8Array(0), f.blob && f.blob.type);
 			f.mime = (f.blob && f.blob.type) || "";
 			f.size = (f.blob && f.blob.size) || 0;
 			f.sourcePageIds = f.sourcePageIds || [];
 			f.placedPageId = f.placedPageId || null;
-			await req(store(db, "readwrite").put(f)).catch(() => {});
 		}
-		return list;
+		return f;
 	}
+	// FIX: das Nachrüsten schrieb JEDEN Alt-Datensatz bei JEDEM Lesen komplett zurück
+	// (inkl. Blob) — reine Anzeigefelder rechtfertigen keinen Schreibvorgang.
+	async function fileList() {
+		const db = await dbOpen();
+		return ((await req(store(db, "readonly").getAll())) || []).sort((a, b) => b.ts - a.ts).map(withDefaults);
+	}
+	// FIX: holte EINEN Datensatz, indem es die ganze Mediathek samt aller Blobs las —
+	// Speicher-Spike bei jedem ▶/📌/⬇ und beim Klick auf einen #nlm:-Link.
 	async function fileGet(id) {
-		return (await fileList()).find((x) => x.id === id) || null;
+		const f = await req(store(await dbOpen(), "readonly").get(id));
+		return f ? withDefaults(f) : null;
 	}
 	async function fileUpdate(id, patch) {
 		const db = await dbOpen();
@@ -516,8 +522,12 @@ export const NLM = (() => {
 	}
 
 	// ---- Abspiel-/Ansichts-Overlay: Player nach kind (Audio, Video, Bild, PDF) ----
+	// FIX: jede Vorschau erzeugte eine Objekt-URL, die nie freigegeben wurde — Video/PDF
+	// blieben bis zum Neuladen vollständig im Speicher. Es lebt jetzt höchstens eine.
+	let lastUrl = null;
 	function play(f) {
-		const url = URL.createObjectURL(f.blob); // bleibt bis zum Neuladen gültig — ok für Einzelabspielen
+		if (lastUrl) URL.revokeObjectURL(lastUrl);
+		const url = (lastUrl = URL.createObjectURL(f.blob));
 		const o = U.el("overlay");
 		o.hidden = false;
 		let body;

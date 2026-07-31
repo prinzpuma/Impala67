@@ -7,396 +7,418 @@ import { U } from "./util.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
-import { TABS } from "./tabs.js";
 import { VOICE } from "./voice.js";
 
-const render = (...args) => RENDER.render(...args);
-const renderChat = (...args) => RENDER.renderChat(...args);
-const renderMainChatLog = (...args) => RENDER.renderMainChatLog(...args);
-const renderPendingChip = (...args) => RENDER.renderPendingChip(...args);
-const renderModelMenu = (...args) => RENDER.renderModelMenu(...args);
-const openPage = (...args) => TABS.openPage(...args);
+// chat-fullscreen.js — Steuerung für BEIDE Chat-Flächen (Seitenpanel + Chat-Tab).
+// Der Dateiname bleibt, weil main.js, app.js und der Service-Worker darauf zeigen.
+//
+// Aufräumrunde (31. Juli 2026):
+//  • EIN Nachschlagen statt "S.chat.find(...) || S.sideChat.find(...)" an fünf Stellen:
+//    find(mid) liefert Fläche, Liste, Index und Nachricht.
+//  • EIN Zeichenpfad: paint(isSide)/repaint() statt gemischter Prüfungen auf S.view,
+//    S.aiActiveChatType und zusätzlichem render() hinterher.
+//  • EIN Laufzustand: setBusy() setzt/räumt aiBusy, Draft, Status und Senden-Knopf.
+//  • refineMessage: Position wird gegen die AKTUELLE Liste geklemmt, die Nachricht bleibt
+//    vollständig erhalten (Änderungskarten, Undo-Daten, Anhänge), Abbruch ist kein Fehler.
+//  • Anhänge lassen sich einzeln entfernen — vorher leerte jeder Knopf alle drei.
+//  • Chat-Löschen läuft über CHATS.remove statt über eine gekürzte Liste.
 
-// Gemeinsame Speicherlogik (Sitzung finden/anlegen, Titel, "updated"-Fix) lebt jetzt in
-// CHATS.persist — geteilt mit ai.js/persistChat (Seitenpanel-Chat).
+const R = RENDER;
 
-export function saveCurrentChat() {
-	CHATS.persist(S.chat, "currentChatId");
-}
+// ---------- Flächen & Zeichnen ----------
+const listOf = (isSide) => (isSide ? S.sideChat : S.chat);
+const paint = (isSide) => (isSide ? R.renderChat() : R.renderMainChatLog());
+const repaint = () => { R.renderChat(); if (S.view === "chat" || S.aiActiveChatType === "full") R.renderMainChatLog(); };
+const saveChat = (isSide) => (isSide ? saveSideChat() : saveCurrentChat());
 
-// Der kleine Seitenchat wird nach jeder Antwort als eigener Eintrag gesichert und
-// erscheint dadurch automatisch links in der Chat-Liste.
-export function saveSideChat() {
-	CHATS.persist(S.sideChat, "sideChatId");
-}
-
-// Der frühere Vollbildmodus (body.chat-full / toggleChatFull) ist entfernt:
-// Der Seitenchat wird stattdessen als eigener Chat-Tab geöffnet (app.js, btnChatExpand).
-
-// Formuliert eine KI-Antwort länger, kürzer oder in gleicher Länge um (wie Gemini).
-// FIX: sucht jetzt sowohl in S.chat (Vollbild) als auch S.sideChat (Seitenpanel).
-// FIX: komplett überarbeitete UX — die alte Antwort verschwindet SOFORT aus der Liste
-// (nicht nur ausgegraut), und die neue Antwort wird über denselben S.aiDraft/S.aiBusy-
-// Mechanismus wie eine ganz normale neue Nachricht (sendChatMessage) eingeblendet —
-// sieht also exakt so aus, als würde gerade frisch geantwortet, inklusive dem bekannten
-// wachsenden Text-Bubble, statt eines separaten Patch-/Status-Zustands.
-export async function refineMessage(mid, mode) {
-	if (S.aiBusy) return;
-	const isSide = S.sideChat.some((x) => x.mid === mid);
-	const list = isSide ? S.sideChat : S.chat;
-	const idx = list.findIndex((x) => x.mid === mid);
-	if (idx === -1) return;
-	const msg = list[idx];
-	const history = list.slice(0, idx)
-		.filter((m) => m.role === "user" || m.role === "assistant")
-		.map((m) => ({ role: m.role, content: m.content || "" }));
-	history.push({ role: "assistant", content: msg.content });
-	const instruction = mode === "longer"
-		? "Bitte formuliere deine letzte Antwort ausführlicher und länger, mit mehr Details."
-		: mode === "shorter"
-		? "Bitte formuliere deine letzte Antwort kürzer und knapper, auf das Wesentliche reduziert."
-		: "Bitte formuliere deine letzte Antwort in etwa gleicher Länge neu — anderer Wortlaut, gleicher Inhalt und Umfang.";
-	// Alte Antwort sofort entfernen — sie verschwindet augenblicklich aus dem Log.
-	list.splice(idx, 1);
-	S.aiBusy = true;
-	S.aiActiveChatType = isSide ? "side" : "full";
-	S.aiStatus = "…denkt nach…";
-	S.aiDraft = "";
-	S.aiThinkingDraft = "";
-	if (isSide) renderChat(); else renderMainChatLog();
-	let renderQueued = false;
-	function scheduleRender() {
-		if (renderQueued) return;
-		renderQueued = true;
-		requestAnimationFrame(() => {
-			renderQueued = false;
-			if (isSide) renderChat(); else renderMainChatLog();
-		});
+// Nachricht per mid finden — egal in welcher Fläche sie liegt.
+function find(mid) {
+	if (!mid) return null;
+	for (const isSide of [false, true]) {
+		const list = listOf(isSide);
+		const idx = list.findIndex((x) => x.mid === mid);
+		if (idx !== -1) return { isSide, list, idx, msg: list[idx] };
 	}
-	let newContent = msg.content;
-	try {
-		newContent = await AI.refine(history, instruction, (text) => {
-			S.aiDraft = text;
-			scheduleRender();
-		});
-	} catch (err) {
-		U.toast("Anpassen fehlgeschlagen: " + err.message, "error");
-	}
-	S.aiBusy = false;
-	S.aiDraft = "";
-	S.aiThinkingDraft = "";
-	// Neue Antwort an derselben Stelle wieder einsetzen (gleiche mid, damit z.B. spätere
-	// Bearbeitungsprüfungen weiter konsistent bleiben).
-	list.splice(idx, 0, { mid, role: "assistant", content: newContent, reasoning: msg.reasoning || null, reasoningExpanded: false });
-	if (isSide) saveSideChat();
-	else saveCurrentChat();
-	render();
+	return null;
 }
 
-// Senden-Button ⇄ ⏹-Abbrechen spiegeln (app.js hält den Zustand beim Tippen via syncComposer)
+// Streaming-Renderings auf einen Frame zusammenfassen.
+let paintQueued = false;
+function schedulePaint(isSide) {
+	if (paintQueued) return;
+	paintQueued = true;
+	requestAnimationFrame(() => { paintQueued = false; paint(isSide); });
+}
+
+export function saveCurrentChat() { CHATS.persist(S.chat, "currentChatId"); }
+export function saveSideChat() { CHATS.persist(S.sideChat, "sideChatId"); }
+
+// Senden-Knopf ⇄ ⏹-Abbrechen spiegeln (app.js hält ihn beim Tippen über syncComposer aktuell)
 function updateSubmitButtons() {
-	for (const [id, full] of [["chatSubmit", false], ["mainChatSubmit", true]]) {
-		const btn = document.getElementById(id);
+	for (const isSide of [true, false]) {
+		const btn = U.el(isSide ? "chatSubmit" : "mainChatSubmit");
 		if (!btn) continue;
-		const busy = S.aiBusy && S.aiActiveChatType === (full ? "full" : "side");
-		const inp = document.getElementById(full ? "mainChatInput" : "chatInput");
-		btn.disabled = busy ? false : !(inp && inp.value.trim());
+		const busy = S.aiBusy && S.aiActiveChatType === (isSide ? "side" : "full");
+		const inp = U.el(isSide ? "chatInput" : "mainChatInput");
+		btn.disabled = busy ? false : !inp?.value.trim();
 		btn.textContent = busy ? "⏹" : "↑";
 		btn.title = busy ? "Antwort abbrechen" : "Senden";
 		btn.classList.toggle("busy", busy);
 	}
 }
 
-// ---------- Gemeinsame Sende-Logik für Seitenpanel UND Vollbild-Chat-Tab ----------
-export async function sendChatMessage(text, type) {
-	type = type || "side";
-	const hasAttachment = S.pendingAttachmentTarget === type && (S.pendingImage || S.pendingTextFile || S.pendingPdf);
-	const hadImage = S.pendingAttachmentTarget === type && !!S.pendingImage;
-	if ((!text && !hasAttachment) || S.aiBusy) return;
-	S.aiBusy = true;
-	S.aiActiveChatType = type;
-	S.aiStatus = "…denkt nach…";
+function setBusy(isSide, busy) {
+	S.aiBusy = busy;
 	S.aiDraft = "";
 	S.aiThinkingDraft = "";
-	S.thinkingLiveExpanded = false;
-	if (type === "side") renderChat();
-	else renderMainChatLog();
-	updateSubmitButtons(); // Senden-Button sofort als ⏹-Abbrechen zeigen
+	if (busy) {
+		S.aiActiveChatType = isSide ? "side" : "full";
+		S.aiStatus = "…denkt nach…";
+		S.thinkingLiveExpanded = false;
+	}
+	paint(isSide);
+	updateSubmitButtons();
+}
+
+// ---------- Antwort umformulieren ----------
+const REFINE_PROMPTS = {
+	longer: "Bitte formuliere deine letzte Antwort ausführlicher und länger, mit mehr Details.",
+	shorter: "Bitte formuliere deine letzte Antwort kürzer und knapper, auf das Wesentliche reduziert.",
+	same: "Bitte formuliere deine letzte Antwort in etwa gleicher Länge neu — anderer Wortlaut, gleicher Inhalt und Umfang.",
+};
+
+export async function refineMessage(mid, mode) {
+	if (S.aiBusy) return;
+	const hit = find(mid);
+	if (!hit || hit.msg.role !== "assistant") return;
+	const { isSide, list, idx, msg } = hit;
+	const history = list.slice(0, idx)
+		.filter((m) => m.role === "user" || m.role === "assistant")
+		.map((m) => ({ role: m.role, content: m.content || "" }));
+	history.push({ role: "assistant", content: msg.content || "" });
+
+	// Alte Antwort verschwindet sofort; die neue wächst wie eine ganz normale Antwort.
+	list.splice(idx, 1);
+	setBusy(isSide, true);
+
+	let content = msg.content;
 	try {
-		const fallback = S.pendingAttachmentTarget === type && S.pendingPdf ? "Analysiere das angehängte PDF."
-			: S.pendingAttachmentTarget === type && S.pendingTextFile ? "Fasse die angehängte Datei zusammen."
+		content = await AI.refine(history, REFINE_PROMPTS[mode] || REFINE_PROMPTS.same, (text) => {
+			S.aiDraft = text;
+			schedulePaint(isSide);
+		});
+	} catch (err) {
+		if (err?.name !== "AbortError") U.toast("Anpassen fehlgeschlagen: " + (err?.message || err), "error");
+	}
+	setBusy(isSide, false);
+	// Gegen die AKTUELLE Liste einsetzen: sie kann sich zwischenzeitlich geändert haben.
+	// Alle Felder der Originalnachricht bleiben erhalten (Karten, Undo, Anhänge, mid).
+	const target = listOf(isSide);
+	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoningExpanded: false });
+	saveChat(isSide);
+	repaint();
+}
+
+// ---------- Senden (Seitenpanel und Chat-Tab) ----------
+export async function sendChatMessage(text, type) {
+	const isSide = (type || "side") !== "full";
+	const kind = isSide ? "side" : "full";
+	const mine = S.pendingAttachmentTarget === kind;
+	const pdf = mine && !!S.pendingPdf, txt = mine && !!S.pendingTextFile, img = mine && !!S.pendingImage;
+	if ((!text && !pdf && !txt && !img) || S.aiBusy) return;
+
+	setBusy(isSide, true);
+	try {
+		const fallback = pdf ? "Analysiere das angehängte PDF."
+			: txt ? "Fasse die angehängte Datei zusammen."
 			: "Beschreibe das angehängte Bild.";
-		const answer = await AI.agent(text || fallback, type, (tool) => {
+		const answer = await AI.agent(text || fallback, kind, (tool) => {
 			S.aiStatus = "⚙ " + tool + "…";
-			if (type === "side") renderChat();
-			else renderMainChatLog();
+			schedulePaint(isSide);
 		});
 		// Nur Antworten auf eine Spracheingabe vorlesen — getippte Chats bleiben still.
 		if (VOICE.consumeReply()) VOICE.speak(answer);
 	} catch (err) {
-		// Ein fehlgeschlagener Voice-Turn darf nicht die nächste Text-Antwort vorlesen.
+		// Ein fehlgeschlagener Sprach-Zug darf nicht die nächste Text-Antwort vorlesen.
 		VOICE.consumeReply();
-		const targetList = type === "side" ? S.sideChat : S.chat;
-		if (err && err.name === "AbortError") {
-			// ⏹ Über den Senden-Button abgebrochen — Teilantwort behalten, kein Fehler-Ton.
-			targetList.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*" });
+		const target = listOf(isSide);
+		if (err?.name === "AbortError") {
+			// ⏹ über den Senden-Knopf: Teilantwort behalten, kein Fehler-Ton.
+			target.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*" });
 		} else {
-			// 👁 Hinweis (18. Juli, spät): Scheitert eine Anfrage MIT Bild, liegt es
-			// meist an einem nicht vision-fähigen Modell — das sagen wir klar dazu,
-			// ohne an der Modell-Auswahl selbst irgendetwas zu ändern.
-			const visionHint = hadImage ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das aktuell gewählte Modell scheint keine Bilder zu unterstützen (nicht vision-fähig). Wähle für Bild-Fragen ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
-			targetList.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + err.message + visionHint });
+			// Scheitert eine Anfrage MIT Bild, liegt es meist am nicht vision-fähigen Modell.
+			const hint = img ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
+			target.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + (err?.message || err) + hint });
 		}
 	}
-	S.aiBusy = false;
-	S.aiDraft = "";
-	S.aiThinkingDraft = "";
-	if (type === "side") saveSideChat();
-	else saveCurrentChat();
-	render();
-	updateSubmitButtons(); // ⏹ zurück zu ↑
+	setBusy(isSide, false);
+	saveChat(isSide);
+	repaint();
 }
 
-// Event-Delegation-Hilfen aus app.js:
+// ---------- Nachrichten-Aktionen (Event-Delegation aus app.js) ----------
 export function handleReasoningToggle(t) {
-	if (t.id === "btnThinkLive") {
-		S.thinkingLiveExpanded = !S.thinkingLiveExpanded;
-		// Beide Chat-Flächen: Side-Panel und Vollbild (vorher blieb der große Chat stecken).
-		renderChat();
-		if (S.view === "chat" || S.aiActiveChatType === "full") renderMainChatLog();
-		return;
-	}
-	const m = S.chat.find((x) => x.mid === t.dataset.reasoningtoggle) || S.sideChat.find((x) => x.mid === t.dataset.reasoningtoggle);
-	if (m) {
-		m.reasoningExpanded = !m.reasoningExpanded;
-		renderChat();
-		if (S.view === "chat") renderMainChatLog();
-	}
+	if (t.id === "btnThinkLive") { S.thinkingLiveExpanded = !S.thinkingLiveExpanded; repaint(); return; }
+	const hit = find(t.dataset.reasoningtoggle);
+	if (!hit) return;
+	hit.msg.reasoningExpanded = !hit.msg.reasoningExpanded;
+	repaint();
 }
 
 export function handleDiffCardToggle(t) {
-	const m = S.chat.find((x) => x.mid === t.dataset.difftoggle) || S.sideChat.find((x) => x.mid === t.dataset.difftoggle);
-	// Änderungen werden wie in Notion in einer eigenen Seiten-Vorschau geprüft,
-	// ohne die aktuell geöffnete Seite oder den Chat-Kontext zu verlassen.
-	if (m) RENDER.openChangePreview(m);
+	// Änderungen werden wie in Notion in einer eigenen Seiten-Vorschau geprüft.
+	const hit = find(t.dataset.difftoggle);
+	if (hit) R.openChangePreview(hit.msg);
 }
 
 export async function handleUndo(t) {
-	const m = S.chat.find((x) => x.mid === t.dataset.undo) || S.sideChat.find((x) => x.mid === t.dataset.undo);
-	if (m && !m.undone) {
-		if (m.created) {
-			await STATE.dispatch("pageDelete", { id: m.pageId });
-		} else {
-			await STATE.dispatch("pageUpdate", { id: m.pageId, patch: { title: m.before.title, content: m.before.content } });
-		}
-		m.undone = true;
-		if (S.sideChat.includes(m)) saveSideChat();
-		else saveCurrentChat();
-		renderChat();
-		if (S.view === "chat") renderMainChatLog();
+	const hit = find(t.dataset.undo);
+	if (!hit || hit.msg.undone) return;
+	const m = hit.msg;
+	try {
+		if (m.created) await STATE.dispatch("pageDelete", { id: m.pageId });
+		else await STATE.dispatch("pageUpdate", { id: m.pageId, patch: { title: m.before?.title, content: m.before?.content } });
+	} catch (e) {
+		// FIX: schlug das Zurücksetzen fehl, galt die Änderung trotzdem als rückgängig.
+		U.toast("Rückgängig machen fehlgeschlagen: " + (e?.message || e), "error");
+		return;
 	}
+	m.undone = true;
+	saveChat(hit.isSide);
+	repaint();
 }
 
 export function handleFileDownload(t) {
-	const m = S.chat.find((x) => x.mid === t.dataset.filedownload) || S.sideChat.find((x) => x.mid === t.dataset.filedownload);
-	if (m && m.textFile) U.downloadText(m.textFile.name, m.textFile.content);
-}
-
-export async function handleModelMenuToggle(t) {
-	const wasOpen = S.modelMenuOpen && S.modelMenuAnchor === (t.id === "btnModelChipFull" ? "full" : "panel");
-	POPOVERS.closeAll("model");
-	S.modelMenuAnchor = t.id === "btnModelChipFull" ? "full" : "panel";
-	S.modelMenuOpen = !wasOpen;
-	S.modelMenuSection = "root";
-	S.customModelProviderPick = S.settings.aiProviderId;
-	renderModelMenu();
-	// Bei jedem Öffnen neu abfragen: besonders LM Studio meldet hier nur die
-	// aktuell auf dem Server geladen(en) Modelle.
-	if (S.modelMenuOpen) {
-		S.modelMenuLoading = true;
-		renderModelMenu();
-		// FIX: schlug listModels() fehl (Server offline/Netzwerkfehler), blieb das Menü
-		// für immer im Lade-Zustand hängen — Fehler abfangen und Laden sauber beenden.
-		try {
-			S.availableModels = await AI.listModels();
-		} catch (e) {
-			S.availableModels = [];
-			U.toast("Modelle konnten nicht geladen werden: " + (e.message || e), "error");
-		}
-		S.modelMenuLoading = false;
-		renderModelMenu();
-		// Die Thinking-Stufen werden nicht aus einer Modellnamenliste geraten:
-		// Direkt nach dem Öffnen prüft die App das aktuell gewählte Modell und
-		// zeichnet das Menü nach Abschluss mit genau dessen Fähigkeiten neu.
-		AI.detectThinkingCapabilities().then(renderModelMenu, renderModelMenu);
-	}
-}
-
-export async function handleDeleteChat(t) {
-	const id = t.dataset.chatdel;
-	const s = CHATS.load().find((x) => x.id === id);
-	const title = (s && s.title) || "Chat";
-	const ok = await U.confirm('„' + title + '“ wirklich löschen? Das kann nicht rückgängig gemacht werden.', {
-		title: "Chat löschen", ok: "Löschen", danger: true,
-	});
-	if (!ok) return;
-	const list = CHATS.load().filter((x) => x.id !== id);
-	CHATS.save(list);
-	const tabId = "chat:" + id;
-	if (S.tabs.includes(tabId)) { S.tabs = S.tabs.filter((tid) => tid !== tabId); }
-	if (S.currentChatId === id) {
-		S.chat = []; S.currentChatId = null;
-		if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
-	}
-	// FIX: war der gelöschte Chat der Seitenpanel-Chat, hätte der nächste
-	// saveSideChat() ihn als neue Sitzung wiederbelebt — Verknüpfung lösen.
-	if (S.sideChatId === id) { S.sideChat = []; S.sideChatId = null; }
-	render();
+	const hit = find(t.dataset.filedownload);
+	if (hit?.msg.textFile) U.downloadText(hit.msg.textFile.name, hit.msg.textFile.content);
 }
 
 export function handleEditUserMessage(t) {
-	const isSide = S.sideChat.some((x) => x.mid === t.dataset.editmsg);
-	const targetChat = isSide ? S.sideChat : S.chat;
-	const idx = targetChat.findIndex((x) => x.mid === t.dataset.editmsg);
-	if (idx !== -1) {
-		const hasUnresolvedEdits = targetChat.slice(idx + 1).some((x) => x.role === "edit" && !x.undone);
-		if (hasUnresolvedEdits) {
-			U.toast("Diese Nachricht lässt sich erst bearbeiten, wenn die späteren Seitenänderungen rückgängig gemacht wurden — nutze „Rückgängig machen“ bei den Änderungs-Karten weiter unten.", "error");
-			return;
-		}
-		const old = targetChat[idx];
-		if (isSide) S.sideChat = S.sideChat.slice(0, idx);
-		else S.chat = S.chat.slice(0, idx);
-		render();
-		// FIX: Ziel-Composer nach dem CHAT wählen, nicht nach der Ansicht — eine
-		// Seitenpanel-Nachricht landete sonst im Eingabefeld des großen Chats.
-		const inp = isSide ? U.el("chatInput") : U.el("mainChatInput");
-		if (inp) { inp.value = old.content || ""; inp.focus(); }
+	if (S.aiBusy) { U.toast("Die KI antwortet gerade — bitte kurz warten.", "error"); return; }
+	const hit = find(t.dataset.editmsg);
+	if (!hit) return;
+	const { isSide, list, idx, msg } = hit;
+	if (list.slice(idx + 1).some((x) => x.role === "edit" && !x.undone)) {
+		U.toast("Diese Nachricht lässt sich erst bearbeiten, wenn die späteren Seitenänderungen rückgängig gemacht wurden — nutze „Rückgängig machen“ bei den Änderungs-Karten weiter unten.", "error");
+		return;
 	}
+	if (isSide) S.sideChat = list.slice(0, idx); else S.chat = list.slice(0, idx);
+	R.render();
+	// Ziel-Composer nach dem CHAT wählen, nicht nach der Ansicht.
+	const inp = U.el(isSide ? "chatInput" : "mainChatInput");
+	if (inp) { inp.value = msg.content || ""; inp.focus(); }
+	updateSubmitButtons();
 }
 
 export function handleAnswerQuestion(t) {
-	const mid = t.dataset.answerq;
-	if (!mid) return;
+	const hit = find(t.dataset.answerq);
+	if (!hit || hit.msg.answered) return;
 	const idx = Number(t.dataset.answeridx);
-	const isSide = S.sideChat.some((x) => x.mid === mid);
-	const list = isSide ? S.sideChat : S.chat;
-	const msg = list.find((x) => x.mid === mid);
-	if (!msg || msg.answered) return;
-	const options = Array.isArray(msg.options) ? msg.options : [];
+	const options = Array.isArray(hit.msg.options) ? hit.msg.options : [];
 	if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) return;
-	const answer = options[idx];
-	// Sofort UI fixieren — verhindert Doppelklicks und leere Wartezustände.
-	msg.answered = true;
-	msg.answer = answer;
-	if (isSide) renderChat();
-	else renderMainChatLog();
-	if (!AI.resolveChoice(mid, answer)) {
-		// Kein wartender Agent (z.B. nach Reload): Karte bleibt beantwortet, kein Hang.
+	// Sofort fixieren — verhindert Doppelklicks und leere Wartezustände.
+	hit.msg.answered = true;
+	hit.msg.answer = options[idx];
+	paint(hit.isSide);
+	if (!AI.resolveChoice(hit.msg.mid, options[idx])) {
 		U.toast("Antwort notiert — der vorherige KI-Lauf ist nicht mehr aktiv.", "error");
 	}
 }
 
 export function handleRefineToggle(t) {
 	S.refineOpenMid = S.refineOpenMid === t.dataset.refinetoggle ? null : t.dataset.refinetoggle;
-	renderChat();
-	if (S.view === "chat") renderMainChatLog();
+	repaint();
 }
 
 export async function handleRefineSelect(t) {
-	// FIX: Menü jetzt SOFORT schließen + rendern, bevor auf die KI-Antwort gewartet wird
-	// (vorher blieb es sichtbar, bis der erste Streaming-Chunk ankam).
+	// Menü SOFORT schließen, bevor auf die KI gewartet wird.
 	S.refineOpenMid = null;
-	renderChat();
-	if (S.view === "chat") renderMainChatLog();
+	repaint();
 	await refineMessage(t.dataset.refine, t.dataset.mode);
 }
 
-// FIX: Menü unsichtbar vermessen, dann je nach Platz ÜBER oder unter dem Button
-// positionieren (vorher: immer unterhalb + window.scrollY -> bei position:fixed
-// falsch berechnet, Menü landete oft außerhalb des sichtbaren Bereichs).
+// ---------- Modell-Menü ----------
+export async function handleModelMenuToggle(t) {
+	const anchor = t.id === "btnModelChipFull" ? "full" : "panel";
+	const wasOpen = S.modelMenuOpen && S.modelMenuAnchor === anchor;
+	POPOVERS.closeAll("model");
+	S.modelMenuAnchor = anchor;
+	S.modelMenuOpen = !wasOpen;
+	S.modelMenuSection = "root";
+	S.customModelProviderPick = S.settings.aiProviderId;
+	R.renderModelMenu();
+	if (!S.modelMenuOpen) return;
+	// Bei jedem Öffnen neu abfragen: LM Studio meldet nur die aktuell geladenen Modelle.
+	S.modelMenuLoading = true;
+	R.renderModelMenu();
+	try {
+		S.availableModels = await AI.listModels();
+	} catch (e) {
+		// Ohne diesen Fang blieb das Menü bei Serverfehlern für immer im Ladezustand.
+		S.availableModels = [];
+		U.toast("Modelle konnten nicht geladen werden: " + (e?.message || e), "error");
+	}
+	S.modelMenuLoading = false;
+	R.renderModelMenu();
+	// Thinking-Stufen werden geprüft, nicht aus Modellnamen geraten.
+	AI.detectThinkingCapabilities().then(R.renderModelMenu, R.renderModelMenu);
+}
+
+// ---------- Chats löschen (einzeln und mehrere auf einmal) ----------
+// Die Auswahl lebt nur zur Laufzeit in S.chatSelection und wird nie gespeichert.
+const selection = () => (S.chatSelection instanceof Set ? S.chatSelection : (S.chatSelection = new Set()));
+
+// Alle Spuren eines gelöschten Chats aus der Oberfläche nehmen.
+function forgetChat(id) {
+	const tabId = "chat:" + id;
+	S.tabs = S.tabs.filter((x) => x !== tabId);
+	if (S.activeTabId === tabId) { S.view = "home"; S.activeTabId = null; }
+	if (S.currentChatId === id) { S.chat = []; S.currentChatId = null; }
+	// War es der Seitenpanel-Chat, hätte der nächste saveSideChat() ihn wiederbelebt.
+	if (S.sideChatId === id) { S.sideChat = []; S.sideChatId = null; }
+	selection().delete(id);
+}
+
+// Einen Chat löschen, in dem gerade geantwortet wird, würde den laufenden Lauf ins Leere schreiben.
+const chatIsBusy = (ids) => S.aiBusy && ids.some((id) => id === S.currentChatId || id === S.sideChatId);
+
+export function handleChatSelectToggle(t) {
+	const id = t.dataset.chatsel;
+	if (!id) return;
+	const sel = selection();
+	if (sel.has(id)) sel.delete(id); else sel.add(id);
+	R.renderSidebar();
+}
+
+export function handleChatSelectAll() {
+	const sel = selection();
+	for (const s of CHATS.load()) sel.add(s.id);
+	R.renderSidebar();
+}
+
+export function handleChatSelectNone() {
+	selection().clear();
+	R.renderSidebar();
+}
+
+export async function handleDeleteChat(t) {
+	const id = t.dataset.chatdel;
+	if (!id) return;
+	if (chatIsBusy([id])) { U.toast("Die KI antwortet in diesem Chat noch — bitte kurz warten.", "error"); return; }
+	const title = CHATS.get(id)?.title || "Chat";
+	const ok = await U.confirm('„' + title + '“ wirklich löschen? Das kann nicht rückgängig gemacht werden.', {
+		title: "Chat löschen", ok: "Löschen", danger: true,
+	});
+	if (!ok) return;
+	CHATS.remove(id);
+	forgetChat(id);
+	R.render();
+}
+
+export async function handleDeleteSelectedChats() {
+	const ids = [...selection()];
+	if (!ids.length) return;
+	if (chatIsBusy(ids)) { U.toast("Die KI antwortet in einem der Chats noch — bitte kurz warten.", "error"); return; }
+	const ok = await U.confirm(ids.length === 1
+		? "Den ausgewählten Chat wirklich löschen? Das kann nicht rückgängig gemacht werden."
+		: ids.length + " Chats wirklich löschen? Das kann nicht rückgängig gemacht werden.", {
+		title: "Chats löschen", ok: "Löschen", danger: true,
+	});
+	if (!ok) return;
+	CHATS.removeMany(ids);
+	ids.forEach(forgetChat);
+	selection().clear();
+	U.toast(ids.length + (ids.length === 1 ? " Chat gelöscht." : " Chats gelöscht."), "success");
+	R.render();
+}
+
+// ---------- Anhänge ----------
+const SLOTS = { image: "pendingImage", file: "pendingTextFile", pdf: "pendingPdf" };
+const ALL_SLOTS = Object.values(SLOTS);
+
+function paintChips() { R.renderPendingChip("side"); R.renderPendingChip("full"); }
+
+// Ohne bekannte Art wird alles geleert (alter Sammel-Knopf bleibt damit gültig).
+export function handleRemoveAttachment(kind) {
+	const slots = SLOTS[kind] ? [SLOTS[kind]] : ALL_SLOTS;
+	for (const slot of slots) S[slot] = null;
+	if (!ALL_SLOTS.some((slot) => S[slot])) S.pendingAttachmentTarget = null;
+	paintChips();
+}
+export const handleRemoveImage = () => handleRemoveAttachment("image");
+export const handleRemoveTextFile = () => handleRemoveAttachment("file");
+export const handleRemovePdf = () => handleRemoveAttachment("pdf");
+
+// Es hängt immer genau EIN Anhang an der nächsten Nachricht — der Chip zeigt auch nur einen.
+function setAttachment(slot, value, target) {
+	for (const s of ALL_SLOTS) S[s] = null;
+	S[slot] = value;
+	S.pendingAttachmentTarget = target;
+	paintChips();
+}
+
+const targetOf = (id) => (id === "mainChatInput" || id === "btnAttachFull" ? "full" : "side");
+
+const readDataUrl = (file) => new Promise((res, rej) => {
+	const r = new FileReader();
+	r.onload = () => res(r.result);
+	r.onerror = () => rej(r.error || new Error("Datei konnte nicht gelesen werden."));
+	r.readAsDataURL(file);
+});
+
+// FIX: Menü unsichtbar vermessen und je nach Platz über/unter dem Knopf platzieren.
 export function handleAttachMenuToggle(t) {
 	const m = U.el("attachMenu");
 	if (!m) return;
-	S.attachTarget = t.id === "btnAttachFull" ? "full" : "side";
+	S.attachTarget = targetOf(t.id);
 	POPOVERS.toggleElement(m, t, { prefer: "above", gap: 4 });
 }
 
-export function handleRemoveAttachment() {
-	S.pendingImage = null;
-	S.pendingTextFile = null;
-	S.pendingPdf = null;
-	S.pendingAttachmentTarget = null;
-	renderPendingChip("side");
-	renderPendingChip("full");
-}
-
-export const handleRemoveImage = handleRemoveAttachment;
-export const handleRemoveTextFile = handleRemoveAttachment;
-export const handleRemovePdf = handleRemoveAttachment;
-
 export async function handleFilePdfChange(e) {
-	if (!e.target.files[0]) return;
-	const file = e.target.files[0];
+	const file = e.target.files?.[0];
 	e.target.value = "";
+	if (!file) return;
 	try {
-		// PDFs sind jetzt reine Chat-Anhänge: Text wird lokal extrahiert und erst mit
-		// der nächsten Nachricht an die KI übergeben. Es wird keine Seite angelegt,
-		// nichts automatisch sortiert und nichts im Chat-Verlauf gespeichert.
-		const buf = await U.readAsBuffer(file);
-		const out = await PDFS.extractText(buf);
-		S.pendingPdf = { name: file.name, content: out.text, size: file.size, pages: out.numPages };
-		S.pendingAttachmentTarget = S.attachTarget || "side";
-		renderPendingChip(S.pendingAttachmentTarget);
+		// PDFs sind reine Chat-Anhänge: Text wird lokal extrahiert und erst mit der
+		// nächsten Nachricht übergeben. Es entsteht keine Seite und kein Verlaufseintrag.
+		const out = await PDFS.extractText(await U.readAsBuffer(file));
+		setAttachment("pendingPdf", { name: file.name, content: out.text, size: file.size, pages: out.numPages }, S.attachTarget || "side");
 	} catch (err) {
-		U.toast("PDF konnte nicht gelesen werden: " + err.message, "error");
+		U.toast("PDF konnte nicht gelesen werden: " + (err?.message || err), "error");
 	}
 }
 
-export function handleFileImgChange(e) {
-	if (e.target.files[0]) {
-		const file = e.target.files[0];
-		e.target.value = "";
-		const r = new FileReader();
-		r.onload = () => {
-			S.pendingImage = r.result;
-			S.pendingAttachmentTarget = S.attachTarget || "side";
-			renderPendingChip(S.pendingAttachmentTarget);
-		};
-		r.readAsDataURL(file);
+export async function handleFileImgChange(e) {
+	const file = e.target.files?.[0];
+	e.target.value = "";
+	if (!file) return;
+	try {
+		setAttachment("pendingImage", await readDataUrl(file), S.attachTarget || "side");
+	} catch (err) {
+		U.toast("Bild konnte nicht gelesen werden: " + (err?.message || err), "error");
 	}
 }
 
 export function handlePaste(e) {
 	if (e.target.id !== "chatInput" && e.target.id !== "mainChatInput") return;
-	// 🖼️ FIX (18. Juli, spät): Bilder aus der Zwischenablage (Screenshot,
-	// kopiertes Foto) landen jetzt als Bild-Anhang im Chat — vorher funktionierte
-	// Einfügen nur für Text.
+	const target = targetOf(e.target.id);
 	const items = e.clipboardData ? [...e.clipboardData.items] : [];
+	// 🖼️ Bilder aus der Zwischenablage (Screenshot, kopiertes Foto) landen als Anhang.
 	const imgItem = items.find((it) => it.kind === "file" && it.type.startsWith("image/"));
 	if (imgItem) {
-		e.preventDefault();
 		const file = imgItem.getAsFile();
 		if (!file) return;
-		const r = new FileReader();
-		r.onload = () => {
-			S.pendingImage = r.result;
-			S.pendingTextFile = null;
-			S.pendingPdf = null;
-			S.pendingAttachmentTarget = e.target.id === "mainChatInput" ? "full" : "side";
-			renderPendingChip(S.pendingAttachmentTarget);
-		};
-		r.readAsDataURL(file);
+		e.preventDefault();
+		readDataUrl(file)
+			.then((data) => setAttachment("pendingImage", data, target))
+			.catch((err) => U.toast("Bild konnte nicht gelesen werden: " + (err?.message || err), "error"));
 		return;
 	}
-	// FIX (Audit): window.clipboardData war ein toter IE-Fallback — entfernt.
+	// Sehr lange Einfügungen werden zum Datei-Anhang statt den Composer zu fluten.
 	const text = e.clipboardData ? e.clipboardData.getData("text/plain") || "" : "";
-	const lines = text.split("\n").length;
-	if (text.length > 600 || lines > 15) {
+	if (text.length > 600 || text.split("\n").length > 15) {
 		e.preventDefault();
-		S.pendingTextFile = { name: "geklebter-text.txt", content: text, size: text.length };
-		S.pendingAttachmentTarget = e.target.id === "mainChatInput" ? "full" : "side";
-		renderPendingChip(S.pendingAttachmentTarget);
+		setAttachment("pendingTextFile", { name: "geklebter-text.txt", content: text, size: text.length }, target);
 	}
 }
 
@@ -405,12 +427,17 @@ export const CHAT_FULLSCREEN = {
 	saveSideChat,
 	refineMessage,
 	sendChatMessage,
+	updateSubmitButtons,
 	handleReasoningToggle,
 	handleDiffCardToggle,
 	handleUndo,
 	handleFileDownload,
 	handleModelMenuToggle,
 	handleDeleteChat,
+	handleDeleteSelectedChats,
+	handleChatSelectToggle,
+	handleChatSelectAll,
+	handleChatSelectNone,
 	handleEditUserMessage,
 	handleAnswerQuestion,
 	handleRefineToggle,

@@ -317,10 +317,11 @@ function startNewChat(opts = {}) {
 	// Lauf austauschen — die Antwort landete im falschen Chat.
 	if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 	saveCurrentChat();
+	// FIX: Vorher wurde hier sofort eine LEERE Sitzung ins Event-Log geschrieben und auf alle
+	// Geräte gesynct — jeder Klick auf „+ Neuer Chat“ hinterließ einen Geister-Chat in der
+	// Liste. Die Sitzung entsteht jetzt mit der ersten Nachricht; CHATS.persist übernimmt
+	// dabei genau diese vorgemerkte ID, damit der offene Tab weiter passt.
 	const newId = U.uid();
-	const list = CHATS.load();
-	list.unshift({ id: newId, title: "", created: U.now(), updated: U.now(), messages: [] });
-	CHATS.save(list);
 	S.chat = [];
 	S.currentChatId = newId;
 	openPage("chat:" + newId, opts.newTab ? { newTab: true } : undefined);
@@ -434,7 +435,7 @@ function wireEvents() {
 	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-sidechat],[data-newchat],[data-newpage]," +
 		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-undo],[data-difftoggle]," +
 		"[data-reasoningtoggle],[data-iconset],[data-coverset],[data-coverpick],[data-coverremove]," +
-		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-editmsg]," +
+		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-chatsel],[data-chatselall],[data-chatselnone],[data-chatdelsel],[data-editmsg]," +
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
 		"[data-libws],[data-libinto],[data-libroot]," +
 		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter],[data-ankizen]," +
@@ -804,9 +805,15 @@ function wireEvents() {
 			return;
 		}
 
+		// Chat-Mehrfachauswahl (Kästchen je Zeile + Kopfzeile der Chat-Liste)
+		if (t.dataset.chatsel) { CHAT_FULLSCREEN.handleChatSelectToggle(t); return; }
+		if (t.dataset.chatselall) { CHAT_FULLSCREEN.handleChatSelectAll(); return; }
+		if (t.dataset.chatselnone) { CHAT_FULLSCREEN.handleChatSelectNone(); return; }
+		if (t.dataset.chatdelsel) { await CHAT_FULLSCREEN.handleDeleteSelectedChats(); return; }
+
 		// KI-Chat aus der Liste löschen
 		if (t.dataset.chatdel) {
-			CHAT_FULLSCREEN.handleDeleteChat(t);
+			await CHAT_FULLSCREEN.handleDeleteChat(t);
 			return;
 		}
 

@@ -7,8 +7,12 @@ import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
+import { TABS } from "./tabs.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
+// Beschreibungs-Diät (31. Juli): Die Liste geht bei JEDER Anfrage und in JEDEM Agent-Schritt
+// vollständig mit. Erzähltext, Wiederholungen und Bestätigungs-Prosa (die App erzwingt die
+// Bestätigung ohnehin im Code) sind raus — nur noch, was das Modell zur Wahl des Werkzeugs braucht.
 export const TOOLS = (() => {
 	const t = (name, description, properties, required) => ({
 		type: "function",
@@ -21,7 +25,8 @@ export const TOOLS = (() => {
 
 	// 🃏 Karten-Design-Spezifikation (22. Juli): kompaktes Standardformat für alle neuen Karten,
 	// damit die Lern-Ansicht ruhig und einheitlich aussieht (weniger Markdown-Wildwuchs).
-	const CARD_RULES = " Standardformat: Vorderseite = genau EINE konkrete Frage (ideal 8–20 Wörter, keine Überschriften). Rückseite = zuerst die Kernantwort in 1–2 Zeilen, danach optional max. 4 kurze Stichpunkte. Keine Überschrift wie 'Antwort:' (zeigt die App selbst), keine Einleitungen, keine kopierten Skriptabsätze. LaTeX ($…$) gern für Formeln; Tabellen, Codeblöcke und Mermaid-Diagramme NUR, wenn sie für den Abruf wirklich nötig sind. Eine Karte = ein Fakt (Minimum Information Principle) — lieber mehrere kleine Karten als eine große.";
+	// Hängt an DREI Beschreibungen — jede Zeile zählt dreifach, daher knapp.
+	const CARD_RULES = " Format: Vorderseite = eine konkrete Frage (8–20 Wörter). Rückseite = Kernantwort in 1–2 Zeilen, optional max. 4 Stichpunkte; keine Überschrift ‚Antwort:', keine Skript-Absätze. LaTeX für Formeln. Eine Karte = ein Fakt.";
 
 	// ask_choice: Argumente säubern/validieren (vom Agent-Loop vor der UI genutzt).
 	// - leere/doppelte Optionen raus
@@ -52,15 +57,16 @@ export const TOOLS = (() => {
 	// Karte anhand des Vorderseiten-Texts finden (analog zu STATE.findPage) — exakter
 	// Treffer zuerst, sonst "beginnt mit", sonst "enthält". Optional auf einen Stapel
 	// (inkl. Unterstapel) eingegrenzt.
+	// EINE Teilbaum-Regel und EIN Textfilter statt je vier bzw. zwei Kopien (findCard,
+	// selectCards, cardsOfDeck, list_flashcards) — die Kopien drifteten sonst auseinander.
+	const inDeck = (c, deck) => { const d = c.deck || "Standard"; return d === deck || d.startsWith(deck + "::"); };
+	const textHit = (c, q) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q);
+
 	function findCard(front, deck) {
 		if (!front) return null;
 		const q = String(front).trim().toLowerCase();
 		if (!q) return null;
-		const pool = STATE.activeCards().filter((c) => {
-			if (!deck) return true;
-			const d = c.deck || "Standard";
-			return d === deck || d.startsWith(deck + "::");
-		});
+		const pool = deck ? STATE.activeCards().filter((c) => inDeck(c, deck)) : STATE.activeCards();
 		let starts = null, partial = null;
 		for (const c of pool) {
 			const t = (c.front || "").toLowerCase();
@@ -71,19 +77,34 @@ export const TOOLS = (() => {
 		return starts || partial;
 	}
 
-	// Stapelnamen case-insensitive auflösen (exakt, sonst "enthält") — analog zu findCard.
-	function resolveDeckName(name) {
-		if (!name) return null;
-		const q = String(name).trim().toLowerCase();
-		if (!q) return null;
-		const names = Object.keys(S.decks);
-		return names.find((n) => n.toLowerCase() === q) || names.find((n) => n.toLowerCase().includes(q)) || null;
+	// Stapelnamen case-insensitive auflösen. deckMatches() liefert ALLE Kandidaten
+	// (exakter Treffer schlägt Teiltreffer) und ignoriert Papierkorb-Stapel.
+	function deckMatches(name) {
+		const q = String(name || "").trim().toLowerCase();
+		if (!q) return [];
+		const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed);
+		const exact = names.find((n) => n.toLowerCase() === q);
+		return exact ? [exact] : names.filter((n) => n.toLowerCase().includes(q));
+	}
+	// TOT: resolveDeckName entfernt — kein Aufrufer (weder hier noch in ai.js/render/app);
+	// alles mit Folgen läuft über resolveDeckStrict, alles andere direkt über deckMatches.
+	// Für alles mit Folgen (löschen, umbenennen, verschieben, zurücksetzen) NIE raten:
+	// „Mathe“ traf bisher stillschweigend „Mathematik 2“. Bei mehreren Kandidaten
+	// bricht der Aufruf mit einer klaren Rückfrage ab.
+	function resolveDeckStrict(name) {
+		const hits = deckMatches(name);
+		if (!hits.length) return { error: "Stapel nicht gefunden: " + String(name || "").trim() };
+		if (hits.length > 1) return { error: "Mehrdeutiger Stapelname „" + String(name).trim() + "“ — gemeint ist einer von: " + hits.slice(0, 5).join(" | ") + ". Bitte mit ask_choice nachfragen und den vollständigen Namen verwenden." };
+		return { deck: hits[0] };
 	}
 
 	// Karten-Auswahl für die Verwaltungs-Tools (verschieben, pausieren, zurücksetzen):
 	// entweder konkrete Karten (front/fronts) oder ein Filter aus Stapel + Suchtext.
 	// Liefert { cards } oder { error } — nie eine stille Teilauswahl bei Tippfehlern.
-	function selectCards(a, max) {
+	// opts.allowAll: nur das Auflisten darf ohne Filter alles zeigen — alles mit Folgen
+	// (löschen, verschieben, pausieren, zurücksetzen) braucht weiter eine echte Auswahl.
+	function selectCards(a, opts) {
+		const { max = 200, allowAll = false } = opts || {};
 		const wanted = (Array.isArray(a.fronts) ? a.fronts : []).concat(a.front ? [a.front] : []).filter(Boolean);
 		const seen = new Set();
 		const out = [];
@@ -91,8 +112,9 @@ export const TOOLS = (() => {
 		const deckArg = a.deck || a.from_deck;
 		let deckName = null;
 		if (deckArg) {
-			deckName = resolveDeckName(deckArg);
-			if (!deckName) return { error: "Stapel nicht gefunden: " + deckArg };
+			const hit = resolveDeckStrict(deckArg);
+			if (hit.error) return hit;
+			deckName = hit.deck;
 		}
 		if (wanted.length) {
 			const missing = [];
@@ -102,20 +124,20 @@ export const TOOLS = (() => {
 			}
 			if (missing.length) return { error: "Karte(n) nicht gefunden: " + missing.join(" | ") };
 		} else {
-			if (!deckName && !a.query) return { error: "Auswahl fehlt — bitte front/fronts, deck bzw. from_deck und/oder query angeben." };
+			if (!deckName && !a.query && !allowAll) return { error: "Auswahl fehlt — bitte front/fronts, deck bzw. from_deck und/oder query angeben." };
 			let pool = STATE.activeCards();
-			if (deckName) pool = pool.filter((c) => {
-				const d = c.deck || "Standard";
-				return d === deckName || d.startsWith(deckName + "::");
-			});
+			if (deckName) pool = pool.filter((c) => inDeck(c, deckName));
 			if (a.query) {
 				const q = String(a.query).trim().toLowerCase();
-				if (q) pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
+				if (q) pool = pool.filter((c) => textHit(c, q));
 			}
 			pool.forEach(add);
 		}
-		const limit = Math.max(1, Math.min(max || 200, Number(a.limit) || (max || 200)));
-		return { cards: out.slice(0, limit), total: out.length, deck: deckName };
+		const limit = Math.max(1, Math.min(max, Number(a.limit) || max));
+		// Wird die Auswahl gekappt, MUSS das sichtbar sein — sonst meldet ein Massen-Werkzeug
+		// „fertig“, während der Rest unbemerkt liegen bleibt.
+		const cards = out.slice(0, limit);
+		return { cards, total: out.length, truncated: out.length > cards.length, limit, deck: deckName };
 	}
 
 	// Zielstapel sicherstellen: Eintrag anlegen bzw. aus dem Papierkorb zurückholen.
@@ -133,11 +155,46 @@ export const TOOLS = (() => {
 		return clean;
 	}
 
+	// Zielnamen freimachen: Ein Stapel gleichen Namens im PAPIERKORB blockierte bisher
+	// mit „gibt es bereits“ — oder schlimmer: Karten wären in einen gelöschten Stapel
+	// gewandert und aus der Ansicht verschwunden. Liefert eine Fehlermeldung oder "".
+	async function freeDeckSlot(name) {
+		const existing = S.decks[name];
+		if (!existing) return "";
+		if (!existing.trashed) return "Es gibt bereits einen Stapel „" + name + "“ — bitte anderen Namen wählen.";
+		await STATE.dispatch("deckRestore", { name });
+		return "";
+	}
+
 	// Karten eines Stapel-Teilbaums (aktiv, ohne Papierkorb).
-	const cardsOfDeck = (deck) => STATE.activeCards().filter((c) => {
-		const d = c.deck || "Standard";
-		return d === deck || d.startsWith(deck + "::");
-	});
+	const cardsOfDeck = (deck) => STATE.activeCards().filter((c) => inDeck(c, deck));
+
+	// Seiten-Teilbaum (inkl. Wurzel) in EINEM Durchlauf. Vorher liefen für dieselbe Frage zwei
+	// getrennte Rekursionen hier und eine dritte in ai.js — jede davon über ALLE Seiten je Ebene.
+	function subtreeIds(rootId) {
+		const kids = new Map();
+		for (const p of Object.values(S.pages)) {
+			if (p.trashed || !p.parentId) continue;
+			let arr = kids.get(p.parentId);
+			if (!arr) kids.set(p.parentId, (arr = []));
+			arr.push(p.id);
+		}
+		const ids = new Set([rootId]);
+		const walk = (id) => (kids.get(id) || []).forEach((cid) => { if (!ids.has(cid)) { ids.add(cid); walk(cid); } });
+		walk(rootId);
+		return ids;
+	}
+
+	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
+	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
+	function keywordHits(query) {
+		const all = STATE.searchNotes(query) || [];
+		return {
+			results: all.slice(0, 20).map((r) => ({ title: r.page.title, snippet: r.snippet })),
+			totalMatches: all.length,
+			...(all.length > 20 ? { note: "Nur die 20 besten Treffer — bei Bedarf genauer suchen." } : {}),
+		};
+	}
 
 	const defs = [
 		t("create_page", "Erstellt eine neue Notiz-Seite. Inhalt ist Markdown; zusätzlich verfügbar: {red}Text{/} bzw. {bg-yellow}Text{/} (Farben gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==hervorheben== und ':::columns … :::split … :::end' für Spalten.", {
@@ -149,12 +206,12 @@ export const TOOLS = (() => {
 			page_title: { type: "string" },
 			content: { type: "string" },
 		}, ["page_title", "content"]),
-		t("write_to_heft", "Schreibt SICHTBAREN Text in ein Handschrift-Heft: fügt eine Text-Box unter dem bisherigen Inhalt ein (bei Platzmangel automatisch neue Heftseite). Nur reiner Text mit Zeilenumbrüchen — kein Markdown/LaTeX (wird auf der Heftseite nicht gerendert). Für Hefte IMMER dieses Tool statt append_to_page.", {
+		t("write_to_heft", "Schreibt sichtbaren Text als Text-Box in ein Handschrift-Heft (nur reiner Text, kein Markdown/LaTeX). Für Hefte immer dieses Tool statt append_to_page.", {
 			page_title: { type: "string", description: "Titel des Hefts" },
 			text: { type: "string", description: "Reiner Text (\\n für Absätze)" },
 			heft_page: { type: "number", description: "Heftseite (1-basiert, optional — Standard: letzte Seite)" },
 		}, ["page_title", "text"]),
-		t("get_heft_page_image", "Holt eine Heftseite als BILD in den Chat, damit du Handschrift, Skizzen und Diagramme selbst ansehen kannst (Vision). Das Bild kommt direkt nach den Tool-Ergebnissen als eigene Nutzer-Nachricht bei dir an. Ohne page_title wird das gerade geöffnete Heft verwendet. Wenn du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das ehrlich statt zu raten.", {
+		t("get_heft_page_image", "Holt eine Heftseite als Bild (Vision); ohne page_title das gerade geöffnete Heft. Kannst du Bilder nicht sehen, sage es ehrlich statt zu raten.", {
 			page_title: { type: "string", description: "Titel des Hefts (optional — Standard: gerade geöffnetes Heft)" },
 			heft_page: { type: "number", description: "Heftseite (1-basiert, optional — Standard: gerade sichtbare Seite)" },
 		}, []),
@@ -166,26 +223,26 @@ export const TOOLS = (() => {
 			page_title: { type: "string" },
 			new_parent_title: { type: "string", description: "Leer lassen für oberste Ebene" },
 		}, ["page_title"]),
-		t("delete_page", "Verschiebt eine Seite (inkl. aller Unterseiten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Titeln zuerst ask_choice.", {
+		t("delete_page", "Verschiebt eine Seite samt Unterseiten in den Papierkorb (wiederherstellbar; die App erzwingt eine Bestätigung). Bei mehrdeutigem Titel zuerst ask_choice.", {
 			page_title: { type: "string", description: "Titel der zu löschenden Seite" },
 		}, ["page_title"]),
-		t("delete_flashcard", "Verschiebt EINE Karteikarte in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigem Text zuerst ask_choice.", {
+		t("delete_flashcard", "Verschiebt EINE Karte in den Papierkorb (wiederherstellbar; Bestätigung erzwingt die App). Für mehrere Karten delete_flashcards.", {
 			front: { type: "string", description: "Text bzw. Anfang der Vorderseite zur Identifikation der Karte" },
 			deck: { type: "string", description: "Stapel zur Eingrenzung, falls mehrere Karten ähnlichen Text haben (optional)" },
 		}, ["front"]),
 		// 26. Juli: Mehrere Karten auf einmal löschen — vorher musste die KI delete_flashcard
 		// für JEDE Karte einzeln aufrufen (je mit eigener Bestätigung) und war nach wenigen
 		// Karten am Schritt-Limit.
-		t("delete_flashcards", "Verschiebt MEHRERE Karteikarten auf einmal in den Papierkorb. Auswahl über fronts (konkrete Karten) und/oder deck + query — mindestens eine Angabe nötig. Wiederherstellbar. Im Chat erscheint zwingend EINE Bestätigung mit der genauen Anzahl. Zum Korrigieren oder Umsortieren von Karten NICHT löschen, sondern update_flashcard bzw. move_flashcards nutzen (Lernfortschritt).", {
+		t("delete_flashcards", "Verschiebt MEHRERE Karten in den Papierkorb; Auswahl über fronts und/oder deck + query (mind. eine Angabe). Zum Korrigieren oder Umsortieren stattdessen update_flashcard bzw. move_flashcards.", {
 			fronts: { type: "array", items: { type: "string" }, description: "Vorderseiten-Texte der zu löschenden Karten (optional)" },
 			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional)" },
 			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (optional)" },
 			limit: { type: "number", description: "Sicherheitsgrenze für Filter-Auswahlen (Standard/Max. 200)" },
 		}, []),
-		t("delete_deck", "Verschiebt einen Karteikarten-Stapel (inkl. Unterstapel und ALLER enthaltenen Karten) in den Papierkorb. Wiederherstellbar. Im Chat erscheint zwingend eine Bestätigung — erst nach Klick auf „Ja, löschen“ wird gelöscht. Nie raten: bei mehrdeutigen Namen zuerst ask_choice.", {
+		t("delete_deck", "Verschiebt einen Stapel samt Unterstapeln und Karten in den Papierkorb (wiederherstellbar; Bestätigung erzwingt die App).", {
 			deck: { type: "string", description: "Name des Stapels, Unterstapel per 'Eltern::Kind'" },
 		}, ["deck"]),
-		t("get_context", "Liefert den aktuellen App-Kontext: Datum/Uhrzeit, geöffnete Seite (inkl. Inhalt, gekürzt), die im Lernmodus gerade geöffnete Karteikarte (currentCard mit Vorder-/Rückseite und Aufdeck-Status), zuletzt bearbeitete Seiten, Karteikarten-Lernstatus und Seitenanzahl. Zuerst aufrufen, wenn Kontext über die App, die aktuell offene Karte oder das Lernen nötig ist.", {}, []),
+		t("get_context", "App-Kontext: geöffnete Seite (Inhalt gekürzt), aktuell sichtbare Lernkarte, zuletzt bearbeitete Seiten, Lernstand, Seitenanzahl.", {}, []),
 		t("read_page", "Liest den Inhalt einer Seite.", {
 			page_title: { type: "string" },
 		}, ["page_title"]),
@@ -217,7 +274,7 @@ export const TOOLS = (() => {
 			page_title: { type: "string", description: "Zugehörige Seite (optional)" },
 		}, ["text"]),
 		t("list_due_cards", "Listet aktuell fällige Karteikarten.", {}, []),
-		t("list_flashcards", "Listet vorhandene Karteikarten MIT Vorder- UND Rückseite auf (optional gefiltert nach Stapel und/oder Suchtext) — nützlich um Karten zu einem Thema durchzusehen, Duplikate zu erkennen oder bestehende Karten zu überarbeiten. Anders als list_due_cards NICHT auf fällige Karten beschränkt.", {
+		t("list_flashcards", "Listet Karten mit Vorder- UND Rückseite, optional gefiltert nach Stapel und/oder Suchtext (nicht auf fällige beschränkt).", {
 			deck: { type: "string", description: "Nur Karten aus diesem Stapel (inkl. Unterstapel), optional" },
 			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (Groß-/Kleinschreibung egal), optional" },
 			limit: { type: "number", description: "Max. Anzahl Karten (Standard 30, max. 100)" },
@@ -225,7 +282,7 @@ export const TOOLS = (() => {
 		// 🗂 Karten-Verwaltung (25. Juli): Die KI konnte Karten bisher nur anlegen, auflisten und
 		// löschen — verschieben, umbenennen, korrigieren, pausieren und zurücksetzen fehlten,
 		// obwohl das Event-Log (cardUpdate, deckRename, deckMove, deckCreate) das längst kann.
-		t("list_decks", "Listet alle Karteikarten-Stapel mit Kartenzahl (auch inkl. Unterstapel), pausierten Karten und dem heutigen Lernstand (neu/lernen/wiederholen). Vor dem Verschieben, Umbenennen oder Anlegen von Stapeln zuerst aufrufen, statt Namen zu raten.", {}, []),
+		t("list_decks", "Listet alle Stapel mit Kartenzahl, pausierten Karten und heutigem Lernstand. Vor Anlegen, Umbenennen oder Verschieben zuerst aufrufen.", {}, []),
 		t("create_deck", "Legt einen leeren Karteikarten-Stapel an. Unterstapel per 'Eltern::Kind'.", {
 			name: { type: "string", description: "Name des neuen Stapels" },
 		}, ["name"]),
@@ -237,35 +294,35 @@ export const TOOLS = (() => {
 			deck: { type: "string", description: "Zu verschiebender Stapel" },
 			new_parent: { type: "string", description: "Ziel-Elternstapel; leer lassen für oberste Ebene" },
 		}, ["deck"]),
-		t("move_flashcards", "Verschiebt Karteikarten in einen ANDEREN Stapel. Auswahl entweder über fronts (konkrete Karten) oder über from_deck und/oder query — mindestens eine Angabe nötig. Existiert der Zielstapel noch nicht, wird er angelegt. Der Lernfortschritt der Karten bleibt vollständig erhalten.", {
+		t("move_flashcards", "Verschiebt Karten in einen anderen Stapel (wird bei Bedarf angelegt); Auswahl über fronts oder from_deck und/oder query. Lernfortschritt bleibt erhalten.", {
 			to_deck: { type: "string", description: "Zielstapel, Unterstapel per 'Eltern::Kind'" },
 			fronts: { type: "array", items: { type: "string" }, description: "Vorderseiten-Texte der zu verschiebenden Karten (optional)" },
 			from_deck: { type: "string", description: "Alle Karten aus diesem Stapel inkl. Unterstapel (optional)" },
 			query: { type: "string", description: "Nur Karten, deren Vorder- oder Rückseite diesen Text enthält (optional)" },
 			limit: { type: "number", description: "Sicherheitsgrenze für Filter-Auswahlen (Standard/Max. 200)" },
 		}, ["to_deck"]),
-		t("update_flashcard", "Ändert EINE bestehende Karteikarte: Vorderseite, Rückseite und/oder Stapel. Zum Korrigieren von Fehlern oder Umformulieren — die Karte behält ihren Lernfortschritt (anders als Löschen + Neuanlegen)." + CARD_RULES, {
+		t("update_flashcard", "Ändert Vorderseite, Rückseite und/oder Stapel EINER Karte; der Lernfortschritt bleibt erhalten." + CARD_RULES, {
 			front: { type: "string", description: "Text bzw. Anfang der bisherigen Vorderseite zur Identifikation" },
 			deck: { type: "string", description: "Stapel zur Eingrenzung, falls mehrere Karten ähnlich beginnen (optional)" },
 			new_front: { type: "string", description: "Neue Vorderseite (optional)" },
 			new_back: { type: "string", description: "Neue Rückseite (optional)" },
 			new_deck: { type: "string", description: "Neuer Stapel (optional)" },
 		}, ["front"]),
-		t("suspend_flashcards", "Pausiert Karten (sie tauchen nicht mehr im Lernen auf) oder hebt die Pause wieder auf. Auswahl wie bei move_flashcards über fronts, deck und/oder query. Nützlich für Stoff, der gerade nicht dran ist, statt ihn zu löschen.", {
+		t("suspend_flashcards", "Pausiert Karten oder hebt die Pause auf; Auswahl über fronts, deck und/oder query.", {
 			suspended: { type: "boolean", description: "true = pausieren, false = Pause aufheben" },
 			fronts: { type: "array", items: { type: "string" }, description: "Konkrete Karten (optional)" },
 			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional)" },
 			query: { type: "string", description: "Textfilter über Vorder-/Rückseite (optional)" },
 			limit: { type: "number", description: "Sicherheitsgrenze (Standard/Max. 200)" },
 		}, ["suspended"]),
-		t("reset_card_progress", "Setzt den Lernfortschritt zurück: Die Karten gelten wieder als „neu“ (Intervall, Leichtigkeit und Leech-Markierung zurück auf Start, Pause aufgehoben). Für falsch gelernten Stoff, den man von vorn beginnen will. Im Chat erscheint zwingend eine Bestätigung. Das Wiederholungs-Protokoll (Statistik) bleibt erhalten.", {
+		t("reset_card_progress", "Setzt den Lernfortschritt zurück — Karten gelten wieder als neu (Bestätigung erzwingt die App). Die Statistik bleibt erhalten.", {
 			front: { type: "string", description: "Einzelne Karte über ihre Vorderseite (optional)" },
 			deck: { type: "string", description: "Alle Karten dieses Stapels inkl. Unterstapel (optional) — entweder front oder deck angeben" },
 		}, []),
-		t("send_to_notebooklm", "Bereitet Notiz-Seiten als Quelle für Gemini Notebook (ehemals NotebookLM) vor: kopiert ihre Inhalte in die Zwischenablage und öffnet Gemini Notebook — dort nur noch „Quelle hinzufügen → Kopierter Text“ wählen und einfügen. Nützlich, wenn Lernpodcasts oder Lernvideos zu Seiten erstellt werden sollen.", {
+		t("send_to_notebooklm", "Kopiert Seiteninhalte als Quelle für Gemini Notebook und öffnet es (für Lernpodcasts oder -videos).", {
 			page_titles: { type: "array", items: { type: "string" }, description: "Titel der Seiten (leer = aktuelle Seite)" },
 		}, []),
-		t("ask_choice", "Stellt EINE kurze Rückfrage mit 2–5 anklickbaren Optionen und wartet auf die Auswahl. NUR bei echter Mehrdeutigkeit (z.B. mehrere passende Seiten). Keine Ja/Nein-Floskeln, keine Meta-Fragen. Optionen müssen vollständig und sofort nutzbar sein (keine Platzhalter).",
+		t("ask_choice", "EINE kurze Rückfrage mit 2–5 anklickbaren Optionen, NUR bei echter Mehrdeutigkeit. Keine Ja/Nein- oder Meta-Fragen; Optionen vollständig und sofort nutzbar.",
 			{
 				question: { type: "string", description: "Eine kurze, konkrete Frage (1 Satz)" },
 				options: {
@@ -279,13 +336,13 @@ export const TOOLS = (() => {
 		// 🧮 Taschenrechner (18. Juli, spät v3): nutzt die eingebundene math.js-
 		// Bibliothek statt eines selbstgeschriebenen Parsers — dadurch Matrizen,
 		// komplexe Zahlen, Einheiten und symbolische Ableitungen quasi gratis.
-		t("calculate", "Rechnet einen mathematischen Ausdruck EXAKT aus (math.js-Syntax) — nutze dieses Tool für JEDE nicht-triviale Rechnung statt selbst im Kopf zu rechnen. Kann: Grundrechenarten/Potenzen/Wurzeln/Brüche, Trigonometrie & Logarithmus, komplexe Zahlen (2+3i), Einheiten-Umrechnung ('5 km/h to m/s'), Vektoren/Matrizen ('[[1,2],[3,4]] * [[5],[6]]', 'det([[1,2],[3,4]])', 'inv(...)', 'transpose(...)'), symbolische Ableitungen ('derivative(\"x^2*sin(x)\", \"x\")'). Bestimmte Integrale NICHT direkt in math.js-Syntax, sondern als eigene Sonderform: 'integrate(\"sin(x)\", \"x\", 0, pi)' (wird numerisch berechnet, liefert eine Dezimalzahl statt einer Formel).", {
+		t("calculate", "Rechnet exakt (math.js-Syntax) — für JEDE nicht-triviale Rechnung statt Kopfrechnen: Terme, Trigonometrie, komplexe Zahlen, Einheiten ('5 km/h to m/s'), Matrizen, 'derivative(\"x^2\",\"x\")'. Bestimmte Integrale nur als Sonderform 'integrate(\"sin(x)\",\"x\",0,pi)' (numerisch).", {
 			expression: { type: "string", description: "Ausdruck in math.js-Syntax, z.B. 'sqrt(2)+3^2', '[[1,2],[3,4]]*[[5],[6]]', 'derivative(\"x^2\",\"x\")' oder 'integrate(\"x^2\",\"x\",0,3)'" },
 		}, ["expression"]),
 		// 🔎 Chatverlauf-Rückwertssuche (18. Juli, spät v3): die KI kann gezielt in
 		// FRüHEREN Chats (auch außerhalb des aktuellen Kontextfensters) nach Stichworten
 		// oder Dateinamen suchen, statt bei langen Verläufen den Anfang zu "vergessen".
-		t("search_chat_history", "Durchsucht ALLE früheren Chat-Verläufe (auch andere Chats, nicht nur den aktuellen) nach einem Stichwort — auch in Namen/Inhalten angehängter Dateien (PDF/Text). Nützlich, wenn eine früher erwähnte Datei, Zahl oder Entscheidung nicht mehr im aktuellen Gesprächsfenster steht.", {
+		t("search_chat_history", "Durchsucht ALLE früheren Chats inkl. angehängter Dateien nach einem Stichwort — für alles außerhalb des aktuellen Gesprächsfensters.", {
 			query: { type: "string", description: "Suchbegriff (Stichwort, Dateiname o.ä.)" },
 			limit: { type: "number", description: "Max. Anzahl Treffer (Standard 15, max. 30)" },
 		}, ["query"]),
@@ -295,13 +352,20 @@ export const TOOLS = (() => {
 		a = a || {};
 		switch (name) {
 			case "create_page": {
+				const title = String(a.title || "").trim();
+				if (!title) return { error: "create_page: title fehlt." };
+				// Eine angegebene Elternseite MUSS es geben — vorher landete die Seite bei einem
+				// Tippfehler kommentarlos ganz oben, während move_page in derselben Lage meckert.
 				const parent = a.parent_title ? STATE.findPage(a.parent_title) : null;
+				if (a.parent_title && !parent) return { error: "Elternseite nicht gefunden: " + a.parent_title };
 				const id = U.uid();
 				await STATE.dispatch("pageCreate", {
-					id, title: a.title, parentId: parent ? parent.id : null, content: a.content || "",
+					id, title, parentId: parent ? parent.id : null, content: a.content || "",
 					workspaceId: S.currentWorkspaceId,
 				});
-				return { ok: true, title: a.title, parent: parent ? parent.title : null };
+				// id MITGEBEN: ai.js baut daraus die Änderungs-Karte. Ohne sie wurde die Seite nur
+				// über den Titel gesucht — bei Namensgleichheit die falsche (Diff/Rückgängig kaputt).
+				return { ok: true, id, title, parent: parent ? parent.title : null };
 			}
 			case "append_to_page": {
 				const pg = STATE.findPage(a.page_title);
@@ -348,26 +412,13 @@ export const TOOLS = (() => {
 				// erzwingt ai.js vor dem Aufruf von run() — hier nur die Aktion selbst.
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				// collectSubtree via aktiver Kinder-Zählung (pageTrash markiert den ganzen Baum)
-				const countKids = (id) => {
-					let n = 0;
-					for (const p of Object.values(S.pages)) {
-						if (!p.trashed && p.parentId === id) n += 1 + countKids(p.id);
-					}
-					return n;
-				};
-				const subtreeExtra = countKids(pg.id);
-				// Offene Tabs der Seite + Nachfahren schließen (wie app.js pagetrash)
-				const trashIds = new Set([pg.id]);
-				(function collect(pid) {
-					for (const p of Object.values(S.pages)) {
-						if (!p.trashed && p.parentId === pid && !trashIds.has(p.id)) {
-							trashIds.add(p.id);
-							collect(p.id);
-						}
-					}
-				})(pg.id);
-				S.tabs = (S.tabs || []).filter((tid) => !trashIds.has(tid));
+				// EIN Baum-Durchlauf für Zählung UND Tab-Schließen (pageTrash markiert den ganzen Baum).
+				const trashIds = subtreeIds(pg.id);
+				const subtreeExtra = trashIds.size - 1;
+				// Offene Tabs der Seite + Nachfahren REGULÄR schließen. Vorher wurden sie nur aus
+				// der Liste gestrichen: die Tab-Sitzung wurde nie gespeichert, es wurde nicht neu
+				// gezeichnet — nach dem nächsten Neuladen war der Tab der gelöschten Seite wieder da.
+				for (const tid of (S.tabs || []).filter((t) => trashIds.has(t))) await TABS.closeTab(tid);
 				if (S.currentPageId && trashIds.has(S.currentPageId)) {
 					S.currentPageId = null;
 					if (S.view === "page") S.view = "home";
@@ -391,7 +442,7 @@ export const TOOLS = (() => {
 			case "delete_flashcards": {
 				// Bestätigung erzwingt ai.js. ids = exakte Auswahl, die in der Bestätigung stand
 				// (eindeutig, auch wenn zwei Karten denselben Vorderseiten-Text haben).
-				let cards;
+				let cards, leftOver = 0;
 				if (Array.isArray(a.ids) && a.ids.length) {
 					cards = a.ids.map((id) => S.cards[id]).filter((c) => c && !c.trashed);
 					if (!cards.length) return { error: "Die vorgemerkten Karten gibt es nicht mehr." };
@@ -400,23 +451,23 @@ export const TOOLS = (() => {
 					if (sel.error) return sel;
 					if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
 					cards = sel.cards;
+					leftOver = sel.total - sel.cards.length;
 				}
 				for (const c of cards) await STATE.dispatch("cardTrash", { id: c.id });
 				return {
 					ok: true, trashed: cards.length,
 					decks: [...new Set(cards.map((c) => c.deck || "Standard"))],
 					examples: cards.slice(0, 5).map((c) => String(c.front || "").replace(/\s+/g, " ").slice(0, 60)),
+					// Ehrlich bleiben, wenn die Sicherheitsgrenze zugeschlagen hat.
+					...(leftOver > 0 ? { notDeleted: leftOver, hinweis: "Sicherheitsgrenze erreicht — " + leftOver + " weitere Treffer wurden NICHT gelöscht. Für den Rest erneut aufrufen." } : {}),
 					note: "Im Papierkorb — wiederherstellbar.",
 				};
 			}
 			case "delete_deck": {
-				const match = resolveDeckName(a.deck);
-				if (!match) return { error: "Stapel nicht gefunden: " + a.deck };
-				const n = Object.values(S.cards).filter((c) => {
-					if (c.trashed) return false;
-					const d = c.deck || "Standard";
-					return d === match || d.startsWith(match + "::");
-				}).length;
+				const hit = resolveDeckStrict(a.deck);
+				if (hit.error) return hit;
+				const match = hit.deck;
+				const n = cardsOfDeck(match).length; // gleiche Teilbaum-Regel wie überall sonst
 				await STATE.dispatch("deckTrash", { name: match });
 				return { ok: true, deck: match, trashed: true, cards: n, note: "Im Papierkorb — wiederherstellbar." };
 			}
@@ -475,32 +526,36 @@ export const TOOLS = (() => {
 				}
 				return { title: pg.title, content: (pg.content || "").slice(0, 12000), hasPdf: !!pg.pdfId };
 			}
-			case "list_pages":
-				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar
+			case "list_pages": {
+				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.
+				// FIX: gab ALLE Seiten zurück. ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen —
+				// beim Modell kam abgeschnittenes, unlesbares JSON an. Jetzt zuletzt bearbeitete
+				// zuerst, harte Obergrenze, ehrliche Gesamtzahl statt stiller Kappung.
+				const all = STATE.activePages().slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || "")));
+				// 100 Einträge lagen bereits über der 6000-Zeichen-Grenze in ai.js — die Liste kam beim
+				// Modell abgeschnitten an. 60 passen sicher hinein, der Rest läuft über die Suche.
 				return {
-					pages: STATE.activePages().map((pg) => ({
+					pages: all.slice(0, 60).map((pg) => ({
 						title: pg.title,
 						parent: pg.parentId ? (S.pages[pg.parentId] || {}).title || null : null,
 						hasPdf: !!pg.pdfId,
 					})),
+					total: all.length,
+					...(all.length > 60 ? { note: "Nur die 60 zuletzt bearbeiteten Seiten — für den Rest search_notes oder semantic_search nutzen." } : {}),
 				};
+			}
 			case "search_notes":
-				return {
-					results: STATE.searchNotes(a.query).map((r) => ({
-						title: r.page.title, snippet: r.snippet,
-					})),
-				};
+				return keywordHits(a.query);
 			case "semantic_search": {
 				const hits = await RAG.search(a.query);
-				if (hits === null) {
-					return {
-						info: "Kein Embedding-Modell konfiguriert — Stichwortsuche verwendet.",
-						results: STATE.searchNotes(a.query).map((r) => ({ title: r.page.title, snippet: r.snippet })),
-					};
-				}
+				// Gleiche gedeckelte Trefferform wie search_notes statt einer zweiten Kopie.
+				if (hits === null) return { info: "Kein Embedding-Modell konfiguriert — Stichwortsuche verwendet.", ...keywordHits(a.query) };
 				return { results: hits };
 			}
 			case "create_flashcard": {
+				// FIX: leere Vorder-/Rückseite legte eine unbrauchbare Karte an — create_flashcards
+				// filtert solche Einträge längst, hier fehlte dieselbe Prüfung.
+				if (!String(a.front || "").trim() || !String(a.back || "").trim()) return { error: "create_flashcard: front und back dürfen nicht leer sein." };
 				const pg = a.page_title
 					? STATE.findPage(a.page_title)
 					: (S.currentPageId ? S.pages[S.currentPageId] : null);
@@ -535,52 +590,67 @@ export const TOOLS = (() => {
 				if (!n) return { error: "Keine Cloze-Lücken gefunden — Lücken als " + CLOZE_HINT + " markieren." };
 				return { ok: true, cards: n, deck: a.deck || "Standard" };
 			}
-			case "list_due_cards":
+			case "list_due_cards": {
+				// Ohne Stapel und Gesamtzahl konnte das Modell nicht sagen, WO die Karten liegen,
+				// und hielt die gekappten 20 für alles.
+				const due = STATE.dueCards();
 				return {
-					due: STATE.dueCards().slice(0, 20).map((c) => ({ front: c.front, due: c.srs.due })),
+					due: due.slice(0, 20).map((c) => ({ front: c.front, deck: c.deck || "Standard", due: c.srs.due })),
+					totalDue: due.length,
 				};
+			}
 			case "list_flashcards": {
-				let pool = STATE.activeCards();
-				if (a.deck) {
-					const match = resolveDeckName(a.deck);
-					if (!match) return { error: "Stapel nicht gefunden: " + a.deck };
-					pool = pool.filter((c) => {
-						const d = c.deck || "Standard";
-						return d === match || d.startsWith(match + "::");
-					});
-				}
-				if (a.query) {
-					const q = String(a.query).trim().toLowerCase();
-					if (q) pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
-				}
-				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
+				// EINE Auswahl-Logik (selectCards) statt einer zweiten Kopie aus Stapel-Auflösung,
+				// Textfilter und Limit — die beiden Kopien drifteten sonst auseinander.
+				const sel = selectCards({ deck: a.deck, query: a.query, limit: Number(a.limit) || 30 }, { max: 100, allowAll: true });
+				if (sel.error) return sel;
 				return {
-					cards: pool.slice(0, limit).map((c) => ({
+					cards: sel.cards.map((c) => ({
 						front: c.front, back: c.back, deck: c.deck || "Standard",
 						state: (c.srs && c.srs.state) || "new", due: (c.srs && c.srs.due) || null, suspended: !!c.suspended,
 					})),
-					totalMatches: pool.length,
+					totalMatches: sel.total,
+					// Gekappte Liste ehrlich melden, sonst hält das Modell die Auswahl für vollständig.
+					...(sel.truncated ? { note: "Nur " + sel.cards.length + " von " + sel.total + " Treffern — mit deck/query eingrenzen oder limit erhöhen (max. 100)." } : {}),
 				};
 			}
 			case "list_decks": {
 				const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed).sort((x, y) => x.localeCompare(y));
-				const active = STATE.activeCards();
+				// EIN Durchlauf über die Karten statt drei Filterläufe JE Stapel; der Teilbaum
+				// ergibt sich direkt aus dem Namenspfad („Eltern::Kind“).
+				const direct = new Map(), tree = new Map(), paused = new Map();
+				const bump = (map, key) => map.set(key, (map.get(key) || 0) + 1);
+				for (const c of STATE.activeCards()) {
+					const d = c.deck || "Standard";
+					bump(direct, d);
+					const parts = d.split("::");
+					for (let i = 1; i <= parts.length; i++) {
+						const n = parts.slice(0, i).join("::");
+						bump(tree, n);
+						if (c.suspended) bump(paused, n);
+					}
+				}
+				// Der Tages-Lernstand ist pro Stapel eine eigene Berechnung — bei sehr vielen
+				// Stapeln war genau das der teuerste Aufruf im ganzen Werkzeugkasten.
+				const withToday = names.length <= 25;
 				return {
 					decks: names.map((n) => {
-						const tree = cardsOfDeck(n);
 						let today = null;
-						try {
-							const cnt = STATE.studySnapshot(n).counts;
-							today = { neu: cnt.neu, lernen: cnt.learn, wiederholen: cnt.review };
-						} catch { /* Lernstand optional */ }
+						if (withToday) {
+							try {
+								const cnt = STATE.studySnapshot(n).counts;
+								today = { neu: cnt.neu, lernen: cnt.learn, wiederholen: cnt.review };
+							} catch { /* Lernstand optional */ }
+						}
 						return {
 							name: n,
-							cards: active.filter((c) => (c.deck || "Standard") === n).length,
-							cardsInclSubdecks: tree.length,
-							suspended: tree.filter((c) => c.suspended).length,
+							cards: direct.get(n) || 0,
+							cardsInclSubdecks: tree.get(n) || 0,
+							suspended: paused.get(n) || 0,
 							today,
 						};
 					}),
+					...(withToday ? {} : { note: "Tages-Lernstand bei sehr vielen Stapeln ausgelassen — bei Bedarf get_context oder list_due_cards nutzen." }),
 				};
 			}
 			case "create_deck": {
@@ -591,30 +661,35 @@ export const TOOLS = (() => {
 				return { ok: true, deck, note: existed ? "Stapel gab es bereits — unverändert." : "Neu angelegt." };
 			}
 			case "rename_deck": {
-				const from = resolveDeckName(a.deck);
-				if (!from) return { error: "Stapel nicht gefunden: " + a.deck };
+				const src = resolveDeckStrict(a.deck);
+				if (src.error) return src;
+				const from = src.deck;
 				const to = String(a.new_name || "").trim().replace(/^:+|:+$/g, "").trim();
 				if (!to) return { error: "rename_deck: new_name fehlt." };
 				if (to === from) return { ok: true, deck: from, note: "Name unverändert." };
 				// Zyklus: der neue Pfad darf nicht innerhalb des Stapels selbst liegen.
 				if (to.startsWith(from + "::")) return { error: "Der neue Name liegt innerhalb des Stapels selbst — das ergäbe einen Zyklus." };
-				if (S.decks[to]) return { error: "Es gibt bereits einen Stapel „" + to + "“ — bitte anderen Namen wählen." };
+				const clash = await freeDeckSlot(to);
+				if (clash) return { error: clash };
 				const n = cardsOfDeck(from).length;
 				await STATE.dispatch("deckRename", { from, to });
 				return { ok: true, from, to, cards: n, note: "Unterstapel und Karten sind mitgewandert." };
 			}
 			case "move_deck": {
-				const from = resolveDeckName(a.deck);
-				if (!from) return { error: "Stapel nicht gefunden: " + a.deck };
+				const src = resolveDeckStrict(a.deck);
+				if (src.error) return src;
+				const from = src.deck;
 				let target = "";
 				if (String(a.new_parent || "").trim()) {
-					target = resolveDeckName(a.new_parent);
-					if (!target) return { error: "Ziel-Stapel nicht gefunden: " + a.new_parent };
+					const dst = resolveDeckStrict(a.new_parent);
+					if (dst.error) return { error: "Ziel-" + dst.error.charAt(0).toLowerCase() + dst.error.slice(1) };
+					target = dst.deck;
 					if (target === from || target.startsWith(from + "::")) return { error: "Ein Stapel kann nicht in sich selbst oder einen eigenen Unterstapel wandern." };
 				}
 				const to = (target ? target + "::" : "") + from.split("::").pop();
 				if (to === from) return { ok: true, deck: from, note: "Der Stapel liegt bereits dort." };
-				if (S.decks[to]) return { error: "Am Zielort gibt es bereits einen Stapel „" + to + "“." };
+				const clash = await freeDeckSlot(to);
+				if (clash) return { error: "Am Zielort: " + clash };
 				await STATE.dispatch("deckMove", { from, target });
 				return { ok: true, from, to };
 			}
@@ -676,9 +751,16 @@ export const TOOLS = (() => {
 				}
 				return { ok: true, reset: sel.cards.length, note: "Die Karten stehen wieder als „neu“ in der Warteschlange. Das Wiederholungs-Protokoll (Statistik/Heatmap) bleibt erhalten." };
 			}
-			case "send_to_notebooklm":
-				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook
-				return await NLM.sendPages(a.page_titles || []);
+			case "send_to_notebooklm": {
+				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook.
+				// Das passiert am Ende einer KI-Antwort, also OHNE direkten Klick — Browser
+				// verweigern das Kopieren dann gern. Dieser Fehler darf nicht still verschwinden.
+				try {
+					return (await NLM.sendPages(a.page_titles || [])) || { ok: true };
+				} catch (e) {
+					return { error: "Übergabe an Gemini Notebook fehlgeschlagen: " + String((e && e.message) || e) + ". Häufigste Ursache: Die Zwischenablage ist ohne direkten Klick gesperrt — Inhalte bitte manuell kopieren." };
+				}
+			}
 			case "ask_choice": {
 				// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und
 				// macht klar, dass ein direkter Aufruf nicht die interaktive Karte öffnet.
@@ -721,30 +803,40 @@ export const TOOLS = (() => {
 				const q = String(a.query || "").trim().toLowerCase();
 				if (!q) return { error: "search_chat_history: query fehlt." };
 				const limit = Math.max(1, Math.min(30, Number(a.limit) || 15));
+				// PERF-WURZEL: Vorher wurde je Nachricht ein Gesamttext aus Datei- UND PDF-Volltexten
+				// zusammengebaut und komplett kleingeschrieben — pro Suche viele Megabyte Kopien,
+				// währenddessen stand die Oberfläche. Zudem sammelte die Suche ALLE Treffer und
+				// sortierte sie, um dann 15 zu behalten (bei einem Häufigkeitswort zehntausende).
+				// Jetzt Teil für Teil prüfen, Treffer nur bis zum Deckel sammeln — CHATS.load() liefert
+				// die Sitzungen bereits absteigend nach Änderung, die Sortierung entfällt damit.
 				const hits = [];
+				let totalMatches = 0;
 				for (const session of CHATS.load()) {
 					for (const m of session.messages || []) {
 						if (m.role !== "user" && m.role !== "assistant") continue;
 						const parts = [];
 						if (typeof m.content === "string" && m.content) parts.push(m.content);
-						if (m.textFile) parts.push("[Datei: " + m.textFile.name + "]", String(m.textFile.content || ""));
-						if (m.pdfFile) parts.push("[PDF: " + m.pdfFile.name + "]", String(m.pdfFile.content || ""));
+						if (m.textFile) parts.push("[Datei: " + m.textFile.name + "]\n" + String(m.textFile.content || ""));
+						if (m.pdfFile) parts.push("[PDF: " + m.pdfFile.name + "]\n" + String(m.pdfFile.content || ""));
 						if (m.image) parts.push("[Bild-Anhang]");
-						const text = parts.join("\n");
-						const idx = text.toLowerCase().indexOf(q);
-						if (idx === -1) continue;
+						let idx = -1;
+						const text = parts.find((p) => (idx = p.toLowerCase().indexOf(q)) !== -1);
+						if (!text) continue;
+						totalMatches++;
+						if (hits.length >= limit) continue;
 						const from = Math.max(0, idx - 60), to = Math.min(text.length, idx + q.length + 60);
 						const snippet = (from > 0 ? "…" : "") + text.slice(from, to).replace(/\s+/g, " ").trim() + (to < text.length ? "…" : "");
-						hits.push({ chatTitle: session.title || "(ohne Titel)", updated: String(session.updated || "").slice(0, 16).replace("T", " "), role: m.role, snippet });
+						hits.push({ chatId: session.id, chatTitle: session.title || "(ohne Titel)", updated: String(session.updated || "").slice(0, 16).replace("T", " "), role: m.role, snippet });
 					}
 				}
-				hits.sort((x, y) => String(y.updated).localeCompare(String(x.updated)));
-				return { results: hits.slice(0, limit), totalMatches: hits.length };
+				return { results: hits, totalMatches };
 			}
 			default:
 				return { error: "Unbekanntes Tool: " + name };
 		}
 	}
 
-	return { defs, run, normalizeAskChoice, findCard, resolveDeckName, selectCards };
+	// cardsOfDeck/subtreeIds nach außen: ai.js baut damit seine Bestätigungstexte, statt
+	// dieselben Baum-Regeln ein zweites Mal zu formulieren (drifteten sonst auseinander).
+	return { defs, run, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds };
 })();

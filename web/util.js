@@ -85,7 +85,9 @@ export const U = {
 	// Hydrieren als solche markieren (Bild-Blobs, Cover) — genau die sind unten
 	// ausgenommen. Pauschales Bewahren machte jedes src UNLÖSCHBAR: ein <iframe>
 	// (#pdfFrame) behielt für immer die zuletzt gesetzte Datei.
-	_morphKeepAttrs: new Set(["data-hydrated", "data-owned", "data-cover-hydrated", "data-mermaid-done"]),
+	// „data-hl-len“ gehört dazu: highlightCode() merkt sich damit, welcher Codeblock schon
+	// eingefärbt ist — würde morph die Marke entfernen, liefe die Einfärbung wieder bei jedem Frame.
+	_morphKeepAttrs: new Set(["data-hydrated", "data-owned", "data-cover-hydrated", "data-mermaid-done", "data-hl-len"]),
 	morph(el, html) {
 		if (!el) return false;
 		const tpl = document.createElement("template");
@@ -352,7 +354,17 @@ export const U = {
 	_mdCache: new Map(),
 	md(text) {
 		const src = String(text ?? "");
-		if (U._mdCache.has(src)) return U._mdCache.get(src);
+		// PERF-WURZEL: Beim Streamen landet JEDER Zwischenstand einer Antwort als eigener
+		// Eintrag im Cache und verdrängte der Reihe nach die fertig gerenderten Verlaufsblasen —
+		// nach einer langen Antwort musste praktisch der ganze Verlauf neu geparst werden.
+		// Ein Treffer rutscht jetzt ans Ende: dauerhaft gelesene Blasen bleiben drin,
+		// Zwischenstände (einmal gelesen, nie wieder) fliegen zuerst raus.
+		if (U._mdCache.has(src)) {
+			const hit = U._mdCache.get(src);
+			U._mdCache.delete(src);
+			U._mdCache.set(src, hit);
+			return hit;
+		}
 		// 🧮 Formeln maskieren → Markdown parsen → Formeln 1:1 wieder einsetzen.
 		const masked = U._maskMath(src);
 		const raw = U._markHighlights(masked.text);
@@ -421,6 +433,16 @@ export const U = {
 		if (!window.hljs) return;
 		el.querySelectorAll("pre code").forEach((block) => {
 			if (block.classList.contains("language-mermaid")) return;
+			// PERF-WURZEL: Bisher wurde bei JEDEM Streaming-Frame JEDER Codeblock des gesamten
+			// Verlaufs neu eingefärbt — in langen Chats der teuerste Einzelposten. Die Textlänge
+			// dient als Marke: der wachsende letzte Block wird weiter aktualisiert, längst
+			// abgeschlossene Blöcke bleiben unangetastet.
+			const len = String((block.textContent || "").length);
+			if (block.dataset.hlLen === len) return;
+			block.dataset.hlLen = len;
+			// hljs verweigert ein zweites Einfärben, solange diese Marke steht — beim wachsenden
+			// Block wäre die Färbung sonst nach dem ersten Frame für immer eingefroren.
+			delete block.dataset.highlighted;
 			try { hljs.highlightElement(block); } catch { /* ignorieren */ }
 		});
 	},

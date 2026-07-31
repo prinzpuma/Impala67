@@ -14,6 +14,11 @@ export const RAG = (() => {
 
 	const enabled = () => !!S.settings.embedModel;
 
+	// FIX: Beim Entfernen aus dem Index wurde der Speicher-Cache NICHT verworfen — bis zu 30 s
+	// lieferte die Suche danach weiter Treffer aus geleerten Seiten (Papierkorb wird zwar
+	// gefiltert, eine geleerte Seite nicht). Eine Ausgangstür statt zwei halber.
+	const dropIndex = async (pageId) => { await DB.delVec(pageId); vecCache = null; };
+
 	// Chunking v2 (15. Juli): Überschriften beginnen neue Chunks (thematisch
 	// saubere Treffer) und benachbarte Chunks überlappen sich leicht — Antworten,
 	// die genau auf einer Chunk-Grenze liegen, gehen nicht mehr verloren.
@@ -38,7 +43,7 @@ export const RAG = (() => {
 		if (!enabled()) return;
 		const pg = S.pages[pageId];
 		// Gelöschte (Papierkorb-)Seiten aus dem Index entfernen statt sie zu indexieren
-		if (!pg || pg.trashed) { await DB.delVec(pageId); return; }
+		if (!pg || pg.trashed) { await dropIndex(pageId); return; }
 		let text = pg.title + "\n\n" + pg.content;
 		// PDF-Volltext mitindexieren: der bei der Aufnahme extrahierte Text liegt als
 		// eigener Blob ("pdftext:<id>") in IndexedDB; ältere PDFs werden einmalig nachextrahiert.
@@ -57,7 +62,7 @@ export const RAG = (() => {
 			} catch (e) { console.warn("PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
 		const chunks = chunk(text);
-		if (!chunks.length) { await DB.delVec(pageId); return; }
+		if (!chunks.length) { await dropIndex(pageId); return; }
 		const vecs = await AI.embed(chunks);
 		// Unvollständige Embedding-Antworten verwerfen statt einen halben Index zu
 		// speichern — queuePage fängt den Fehler und die Seite bleibt „stale“.

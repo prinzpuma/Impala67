@@ -7,22 +7,17 @@
 // Gemma sendet den Denkblock als <thought> (nicht <think>). Beide Formen
 // gehören ausschließlich in die Thinking-Box, nie in die sichtbare Antwort.
 export const THINK_TAGS = "think|thinking|thought|reasoning";
-// Typische "laut denken"-Einleitungen (Deutsch + Englisch).
-const THINK_LEADIN_RE = /^(the user|i should|i need|i will|i'll|i must|i think|i can|i am|i'm going|i'm|let me|let's|my instructions|as per|based on|since the|however,?|plan:|note:|first,|okay,?|ok,|alright,?|looking at|what could|we've|we have|if i\b|instead\b|this is\b|a smart\b|so i\b|wait,?|hmm|actually|perhaps|maybe|probably|for example|in this|in the|the previous|they (have|want|are|might)|their\b|to (test|check|see|verify|make|be|move|refine)|ich sollte|ich muss|ich werde|ich denke|ich kann|ich bin|der nutzer|die nutzerin|laut (meiner|den) anweisungen|zun[äa]chst|lass mich|okay,? der|gut,? der)\b/i;
-// Klarer Nutzer-Antwort-Start (meist Deutsch laut System-Prompt).
-const ANSWER_START_RE = /^(hallo\b|hi\b|hey\b|klar[,!.\s]|ja[,!.\s]|nein[,!.\s]|gut[,!.\s]|super\b|verstanden\b|alles klar|hier (ist|sind|die|der|das|meine|ein)\b|natürlich\b|gerne\b|okay[,!.\s]*(hier|ich|das|der|die)?|zusammengefasst\b|kurz gesagt|mein (konkreter )?vorschlag|konkret[:\s]|die antwort\b|fertig[:!.]|erledigt\b|ich habe\b|ich leg|ich erstell|ich lösch|ich verschieb|ich änder|seite „|karte „|stapel „|sure[,!.\s]|here('s| is)\b|of course\b)/i;
-function normalizeThinkPart(s) {
-	return String(s || "").trim().replace(/^\d+[.)]\s*/, "").replace(/^[-*•]\s*/, "");
-}
-function isMetaThinkPart(s) {
-	const t = normalizeThinkPart(s);
-	return !t || THINK_LEADIN_RE.test(t);
-}
-function isAnswerStartPart(s) {
-	const t = normalizeThinkPart(s);
-	if (!t || t.length < 3 || isMetaThinkPart(t)) return false;
-	return ANSWER_START_RE.test(t);
-}
+// EINE Regel statt zweier konkurrierender Wortlisten: Selbstgespräch redet über den Nutzer oder
+// über das eigene Vorgehen — alles andere ist Antwort. WARUM: "Denk-Einleitung" und "Antwort-Start"
+// standen als zwei lange Listen gegeneinander; gemeinsame Wörter (okay, gut) machten das Ergebnis
+// von der Prüfreihenfolge abhängig, und jeder unbekannte Antwortsatz galt vorsichtshalber als Denken.
+const META_RE = /\b(the user|they (want|have|are|might|asked)|der nutzer|die nutzerin|i (should|need|must|will|have to|can|could|think|wonder)\b|i'?(ll|m going)\b|let me|let's|ich (sollte|muss|werde|denke|prüfe|schaue|könnte)|lass mich|wait\b|hmm\b|actually\b|perhaps\b|maybe\b|instead\b|my instructions|laut (meiner|den) anweisungen)\b/i;
+// Füllwörter am Satzanfang ("Okay,", "Gut,", "Also,") sagen nichts über Denken vs. Antwort — genau
+// sie standen früher in BEIDEN Listen und ließen ganze Antworten in der Denk-Box verschwinden.
+const FILLER_RE = /^(okay|ok|gut|also|alright|so|nun|sure|well)[,!.\s]+/i;
+const stripNoise = (s) => String(s || "").trim().replace(/^\d+[.)]\s*/, "").replace(/^[-*•]\s*/, "").replace(FILLER_RE, "");
+const isMeta = (s) => { const t = stripNoise(s); return !t || META_RE.test(t); };
+const isAnswer = (s) => { const t = stripNoise(s); return t.length >= 3 && !META_RE.test(t); };
 // Sticky-Heuristik: sieht der ANFANG nach Denkprozess aus, bleibt ALLES
 // reasoning, bis ein klarer Antwort-Start erkannt wird. Nur für Modelle ohne
 // getrenntes Reasoning (z.B. Gemma).
@@ -34,22 +29,32 @@ export function stripLeakedReasoning(text) {
 	// Einheit und ließ den Denktext durch. Für die Erkennung werden nur diese
 	// Umbrüche normalisiert; die sichtbare Antwort bleibt ansonsten unverändert.
 	const source = String(text);
-	const analysis = source.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ");
+	// WARUM: nur normalisieren, wenn wirklich HTML-Umbrüche drinstehen — sonst ist analysis
+	// identisch mit dem Original und der Schnitt unten trifft exakt den echten Text.
+	const analysis = /<br\s*\/?>|&nbsp;/i.test(source)
+		? source.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ")
+		: source;
 	const parts = analysis.split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/).filter(Boolean);
-	if (!parts.length || !isMetaThinkPart(parts[0])) return { content: source, reasoning: "" };
+	if (!parts.length || !isMeta(parts[0])) return { content: source, reasoning: "" };
 
 	// Fail closed: Beginnt die Antwort eindeutig als internes Selbstgespräch,
 	// erscheint davon nie etwas im Chat. Erst ein klarer Antwortbeginn gibt
 	// sichtbaren Text frei. Das gilt auch während des Streamings.
 	let answerStart = -1;
 	for (let i = 1; i < parts.length; i++) {
-		if (isAnswerStartPart(parts[i])) { answerStart = i; break; }
+		if (isAnswer(parts[i])) { answerStart = i; break; }
 	}
 	if (answerStart === -1) return { content: "", reasoning: analysis.trim() };
-	return {
-		content: parts.slice(answerStart).join("\n").trim(),
-		reasoning: parts.slice(0, answerStart).join("\n").trim(),
-	};
+	// WARUM: Sätze wurden mit "\n" wieder zusammengeklebt — Leerzeilen, Aufzählungen und
+	// Codeblöcke der sichtbaren Antwort gingen dabei verloren. Jetzt nur die Schnittstelle im
+	// Originaltext suchen und dort trennen; die Formatierung bleibt unangetastet.
+	let cut = 0;
+	for (let i = 0; i < answerStart; i++) {
+		const at = analysis.indexOf(parts[i], cut);
+		if (at >= 0) cut = at + parts[i].length;
+	}
+	cut = Math.max(cut, analysis.indexOf(parts[answerStart], cut));
+	return { content: analysis.slice(cut).trim(), reasoning: analysis.slice(0, cut).trim() };
 }
 // Tags heraustrennen; ohne Tags optional die Heuristik anwenden.
 export function splitThink(raw, skipHeuristic) {
