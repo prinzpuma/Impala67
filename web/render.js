@@ -367,8 +367,8 @@ function rowHtml(pg, depth, wsId) {
 	const hasKids = STATE.childrenOf(pg.id, wsId || pg.workspaceId).length > 0;
 	const collapsed = COLLAPSE.isCollapsed(pg.id);
 	// Bug-Fix („kommt noch“, 22. Juli): kein draggable="true" mehr — HTML5-DnD wird in
-	// Tauri abgefangen und startet auf iPad nur per Long-Press. Das Verschieben läuft
-	// jetzt über Pointer-Events in app.js (ein Code-Pfad für Maus, Touch und Tauri).
+	// iPad startet HTML5-DnD nur per Long-Press. Das Verschieben läuft deshalb über
+	// Pointer-Events in app.js (ein Code-Pfad für Maus und Touch).
 	// data-key = stabile Identität der Zeile für U.morph: dieselbe Seite behält beim
 	// Neu-Rendern ihren DOM-Knoten, auch wenn sie im Baum die Position wechselt.
 	return `<div class="row${active}" data-key="pg:${pg.id}" data-page="${pg.id}" style="padding-left:${6 + depth * 16}px">` +
@@ -1324,9 +1324,16 @@ function contextChipHtml() {
 	const heft = pg.kind === "heft" ? pg : (HEFT.activeId ? S.pages[HEFT.activeId] : null);
 	const isHeft = !!(heft && heft.kind === "heft");
 	const title = (isHeft ? heft.title : pg.title) || "Unbenannte Seite";
+	// FIX: Der Chip behauptete immer „wird mitgesendet“, obwohl ai.js den Seitentext kappt.
+	// Bei langen Seiten wirkte es dadurch, als würde Kontext verschluckt. Jetzt steht dort,
+	// wie viel wirklich mitging (ai.js legt das nach jeder Anfrage in S.pageCtxInfo ab).
+	const info = S.pageCtxInfo && S.pageCtxInfo.id === pg.id ? S.pageCtxInfo : null;
+	const k = (n) => (n >= 1000 ? Math.round(n / 1000) + "k" : String(n));
 	const meta = isHeft
 		? "Heft · Seite " + ((HEFT.activeIndex || 0) + 1) + " wird als Bild mitgesendet"
-		: "Seitenkontext · wird mitgesendet";
+		: info && info.sent < info.total
+			? "Seitenkontext · Anfang mitgesendet (" + k(info.sent) + " von " + k(info.total) + " Zeichen) — Rest auf Nachfrage"
+			: "Seitenkontext · wird mitgesendet";
 	return `<span class="chip-ico">${isHeft ? "📓" : "📄"}</span><span class="chip-body"><b>${esc(title)}</b><small>${esc(meta)}</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`;
 }
 

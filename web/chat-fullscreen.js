@@ -210,7 +210,18 @@ export function handleEditUserMessage(t) {
 	RENDER.render();
 	// Ziel-Composer nach dem CHAT wählen, nicht nach der Ansicht.
 	const inp = U.el(isSide ? "chatInput" : "mainChatInput");
-	if (inp) { inp.value = msg.content || ""; inp.focus(); }
+	if (inp) {
+		inp.value = msg.content || "";
+		// FIX (Screenshot): Die Höhe des Eingabefelds wird nur beim Tippen nachgezogen. Beim
+		// Bearbeiten wurde der Text nur eingesetzt — das Feld blieb einzeilig, die erste Zeile
+		// war oben abgeschnitten und lag hinter dem Kontext-Chip. Das „input“-Ereignis lässt
+		// app.js Höhe, Senden-Knopf und Zustand genauso nachziehen wie bei echter Eingabe
+		// (Direktaufruf wäre ein Import-Ring zu app.js).
+		inp.dispatchEvent(new Event("input", { bubbles: true }));
+		inp.focus();
+		// Cursor ans Ende statt an den Anfang — sonst tippt man vor seinen eigenen Text.
+		inp.setSelectionRange(inp.value.length, inp.value.length);
+	}
 	updateSubmitButtons();
 }
 

@@ -5,10 +5,8 @@ import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
 import { HEFT } from "./heft.js";
 // drive.js — Google-Drive-Sync über appDataFolder. v4 (20.7.2026): KISS/DRY-Rewrite.
-// Login: Browser/PWA = GIS-Popup (Client-ID aus Einstellungen). Desktop/Tauri =
-// Loopback-Flow RFC 8252 (Google blockt OAuth in Webviews) mit separatem
-// "Desktop-App"-Client aus web/config.local.js; Google verlangt dessen
-// client_secret auch mit PKCE (bei installierten Apps offiziell nicht geheim).
+// Login: PWA per Google Identity Services. Die App verwendet ausschließlich den
+// für die veröffentlichte Web-Origin registrierten OAuth-Web-Client.
 // Fixes v4:
 // [F1] Heft-Blob-Validierung nur noch per SHA-256 statt Datei-id: Konflikt-Hefte
 //      liegen remote unter der ORIGINAL-Seiten-id — der alte id-Vergleich verwarf
@@ -114,12 +112,10 @@ export const DRIVE = (() => {
 		if (!id) { id = crypto.randomUUID?.() || Date.now() + Math.random().toString(16).slice(2); LS.setItem("impala67_drive_device_id", id); }
 		return id;
 	})();
-	// Desktop-OAuth: config.local.js (lazy — wird asynchron geladen, nie beim Import
-	// lesen), Fallback = Einstellungen → Sync. Quelle wird für Diagnosen gemerkt.
+	// Eine öffentliche Client-ID kann optional mit config.local.js ausgeliefert
+	// werden; alternativ wird sie in den Einstellungen pro Gerät hinterlegt.
 	const cfg = (k) => window.APP_CONFIG?.[k] || "";
-	const dcId = () => cfg("GOOGLE_DESKTOP_CLIENT_ID") || S.settings?.driveDesktopClientId || "";
-	const dcSecret = () => cfg("GOOGLE_DESKTOP_CLIENT_SECRET") || S.settings?.driveDesktopClientSecret || "";
-	const srcOf = (k, fallback) => cfg(k) ? "config.local.js" : fallback ? "Einstellungen (alter Fallback!)" : "keine Quelle";
+	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
 	let token = null;
 	let syncInFlight = null; // nie zwei Syncs parallel (Sidebar-Button + Einstellungen + Auto)
 	let flushMode = false; // pagehide: Uploads mit keepalive absetzen (überleben das Schließen)
@@ -131,53 +127,6 @@ export const DRIVE = (() => {
 		LS.removeItem("notion_" + k);
 	}
 
-	const base64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-	async function pkcePair() {
-		const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)).buffer);
-		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-		return { verifier, challenge: base64url(digest) };
-	}
-
-	// EINE Anmelde-URL für Desktop (Loopback) und Web (Weiterleitung) — bauten bisher beide je einzeln.
-	const authUrl = (clientId, redirectUri, challenge) =>
-		"https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
-			client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: SCOPE,
-			access_type: "offline", prompt: "consent", include_granted_scopes: "true",
-			code_challenge: challenge, code_challenge_method: "S256",
-		});
-
-	// clientId gesetzt = Browser/PWA-Weg (Web-Client, PKCE).
-	const tokenRequest = (params, clientId) => fetch("https://oauth2.googleapis.com/token", {
-		method: "POST",
-		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: new URLSearchParams(clientId
-			? { client_id: clientId, ...(webSecret() ? { client_secret: webSecret() } : {}), ...params }
-			: { client_id: dcId(), ...(dcSecret() ? { client_secret: dcSecret() } : {}), ...params }),
-	});
-
-	async function exchangeCode(code, verifier, redirectUri, clientId) {
-		const res = await tokenRequest({ code, redirect_uri: redirectUri, grant_type: "authorization_code", code_verifier: verifier }, clientId);
-		if (!res.ok) {
-			// Fehlertext maskieren (kann Token-Fragmente enthalten) + Quellen-Diagnose für invalid_client.
-			const safe = (await res.text()).slice(0, 200).replace(/[A-Za-z0-9_\-]{20,}/g, "[…]").replace(/GOCSPX-[A-Za-z0-9_\-]+/g, "[secret]");
-			const diag = "Client-ID-Quelle: " + srcOf("GOOGLE_DESKTOP_CLIENT_ID", S.settings?.driveDesktopClientId) + ", Secret-Quelle: " + srcOf("GOOGLE_DESKTOP_CLIENT_SECRET", S.settings?.driveDesktopClientSecret) + ", Secret-Länge: " + dcSecret().length;
-			throw new Error("Token-Tausch fehlgeschlagen: " + safe + " — [" + diag + "]");
-		}
-		return res.json();
-	}
-
-	// 4xx = Google hat den Erneuerungs-Schlüssel abgelehnt (widerrufen/abgelaufen) → er ist tot und
-	// wird verworfen; sonst gilt die App über isConnected() weiter als angemeldet, während JEDE stille
-	// Erneuerung scheitert — genau das Bild „abgelaufen, hilft nur Neustart + einmal anmelden klicken“.
-	// 5xx/Netzfehler sind vorübergehend und dürfen den Schlüssel NICHT löschen.
-	const refreshDesktopToken = async (rt, clientId) => {
-		const res = await tokenRequest({ refresh_token: rt, grant_type: "refresh_token" }, clientId);
-		if (res.ok) return res.json();
-		if (res.status < 500) LS.removeItem("impala67_drive_refresh_token");
-		return null;
-	};
-
 	function saveToken(data) {
 		// Tokens bewusst nur in localStorage (pro Gerät), nie ins Event-Log/Export.
 		token = data.access_token;
@@ -187,127 +136,15 @@ export const DRIVE = (() => {
 		scheduleRenew();
 	}
 
-	// EIN gemeinsamer Weg für Tauri UND PWA: gespeicherter Erneuerungs-Schlüssel zuerst.
-	// Vorher stand dieser Block doppelt (Desktop + Browser) — jetzt eine Stelle.
-	async function tokenFromRefresh(clientId) {
-		const rt = LS.getItem("impala67_drive_refresh_token");
-		if (!rt) return null;
-		const data = await refreshDesktopToken(rt, clientId);
-		return data?.access_token ? (saveToken(data), token) : null;
-	}
-
-	// Desktop (Tauri): System-Browser + lokaler Redirect-Server statt Popup.
-	// Der stille Erneuerungs-Versuch läuft vorher zentral in getToken().
-	async function getTokenDesktop(interactive) {
-		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
-		// Klare Meldungen statt Googles kryptischer invalid_request/client_secret-Fehler.
-		if (!dcId()) throw new Error("Google-Login nicht möglich: Die Desktop-Client-ID fehlt. Trage sie einmalig unter ⚙️ Einstellungen → Sync ein (OAuth-Client Typ „Desktop-App“ aus der Google Cloud Console) — oder befülle web/config.local.js und baue die App neu.");
-		if (!dcSecret()) throw new Error("Google-Login nicht möglich: Das Desktop-Client-Secret fehlt (Google verlangt es für Desktop-Clients auch mit PKCE). Trage es einmalig unter ⚙️ Einstellungen → Sync ein — es steht in der Google Cloud Console direkt beim Desktop-OAuth-Client (GOCSPX-…).");
-		const { verifier, challenge } = await pkcePair();
-		const port = await window.__TAURI__.core.invoke("start_oauth_server");
-		const redirectUri = "http://localhost:" + port;
-		const url = authUrl(dcId(), redirectUri, challenge);
-		const codePromise = new Promise((resolve, reject) => {
-			// Login-Abbruch im Browser: nach 2 min aufgeben + Redirect-Server aufräumen.
-			const timer = setTimeout(() => {
-				window.__TAURI__.core.invoke("cancel_oauth_server", { port }).catch(() => {});
-				reject(new Error("Google-Login abgebrochen: keine Antwort innerhalb von 2 Minuten. Bitte erneut versuchen."));
-			}, 120000);
-			window.__TAURI__.event.once("redirect_uri", (event) => {
-				clearTimeout(timer);
-				try {
-					const url = new URL(event.payload);
-					const err = url.searchParams.get("error"), code = url.searchParams.get("code");
-					if (err) return reject(new Error("Google-Login abgebrochen: " + err));
-					code ? resolve(code) : reject(new Error("Kein Code in der Antwort erhalten."));
-				} catch (e) { reject(e); }
-			});
-		});
-		await window.__TAURI__.shell.open(url);
-		const code = await codePromise;
-		window.__TAURI__.core.invoke("cancel_oauth_server", { port }).catch(() => {});
-		saveToken(await exchangeCode(code, verifier, redirectUri));
-		return token;
-	}
-
-	// Browser/PWA (26. Juli): Auth-Code-Flow mit PKCE per Weiterleitung im GLEICHEN
-	// Fenster. Bisher lief hier google.accounts.oauth2.initTokenClient — das liefert
-	// ausschliesslich einen Stundentoken und NIE einen Erneuerungs-Schlüssel. Nach einer
-	// Stunde galt die App deshalb als abgemeldet, und die „stille“ Erneuerung brauchte
-	// ein Popup, das Safari im installierten PWA-Modus blockiert.
-	const PKCE_KEY = "impala67_drive_pkce";
-	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
-	// Googles Token-Endpunkt verlangt für Clients vom Typ „Webanwendung“ AUCH mit PKCE ein
-	// client_secret. Fehlt es, kann der Code-Tausch gar nicht gelingen (invalid_client) — genau
-	// das Bild „anmelden, zurück zur App, wieder anmelden“. Ohne Secret wird deshalb unten der
-	// GIS-Weg genommen statt einer Weiterleitung, die immer im Anmeldebildschirm endet.
-	const webSecret = () => cfg("GOOGLE_WEB_CLIENT_SECRET") || S.settings?.driveWebClientSecret || "";
-	// Google prueft die Weiterleitungs-URI zeichengenau. "/Impala67/index.html" und
-	// "/Impala67/" sind fuer Google zwei verschiedene URIs - deshalb wird das
-	// "index.html" abgeschnitten, damit immer die Verzeichnis-Form benutzt wird
-	// (das ist die URI, die in der Google Cloud Console eingetragen sein muss).
-	const webRedirect = () => location.origin + location.pathname.replace(/index\.html?$/i, "");
-
-	async function startWebLogin() {
-		const clientId = webId();
-		if (!clientId) throw new Error("Keine Google Client-ID hinterlegt (einmalig in Einstellungen → Sync eintragen).");
-		const { verifier, challenge } = await pkcePair();
-		// Die Client-ID reist MIT: config.local.js wird lazy geladen, beim Auswerten der
-		// Rückkehr war webId() deshalb oft "" — der Tausch lief dann gegen den Desktop-Client.
-		LS.setItem(PKCE_KEY, JSON.stringify({ verifier, clientId, t: Date.now() }));
-		location.assign(authUrl(clientId, webRedirect(), challenge));
-		return new Promise(() => {}); // die Seite wird verlassen
-	}
-
-	// Nach der Rückkehr von Google: ERST tauschen, DANN aufräumen. Vorher wurden Code-Parameter
-	// und PKCE-Merker gelöscht, BEVOR getauscht wurde — schlug der Tausch fehl, war beides weg,
-	// der Fehler wurde verschluckt (leeres catch beim Aufrufer) und die App zeigte einfach wieder
-	// „Mit Google anmelden“. Auch ein error-Parameter (z. B. redirect_uri_mismatch) blieb still.
-	const clearLoginParams = () => {
-		const url = new URL(location.href);
-		["code", "scope", "authuser", "prompt", "state", "error"].forEach((k) => url.searchParams.delete(k));
-		try { history.replaceState(null, "", url.toString()); } catch (err) { /* egal */ }
-	};
-	async function finishWebLogin() {
-		if (window.__TAURI__ || typeof location === "undefined") return false;
-		const params = new URL(location.href).searchParams;
-		const err = params.get("error"), code = params.get("code");
-		if (err) { clearLoginParams(); LS.removeItem(PKCE_KEY); U.toast("Google-Anmeldung abgebrochen: " + err, "error"); return false; }
-		if (!code) return false;
-		let saved = null;
-		try { saved = JSON.parse(LS.getItem(PKCE_KEY) || "null"); } catch (e) { saved = null; }
-		if (!saved?.verifier) { clearLoginParams(); LS.removeItem(PKCE_KEY); U.toast("Google-Anmeldung unvollständig (Sitzungsmerker fehlt) — bitte erneut anmelden.", "error"); return false; }
-		try {
-			saveToken(await exchangeCode(code, saved.verifier, webRedirect(), saved.clientId || webId()));
-		} catch (e) {
-			clearLoginParams(); LS.removeItem(PKCE_KEY);
-			U.toast("Google-Anmeldung fehlgeschlagen: " + ((e && e.message) || e), "error");
-			throw e;
-		}
-		clearLoginParams();
-		LS.removeItem(PKCE_KEY);
-		try {
-			const info = await fetchUserInfo();
-			if (info && info.email) { S.driveUserEmail = info.email; LS.setItem("impala67_drive_email", info.email); }
-		} catch (err) { /* E-Mail ist Kosmetik */ }
-		return true;
-	}
-
 	async function getTokenBrowser(interactive) {
-		// PWA hielt nur eine Stunde: ohne Erneuerungs-Schlüssel wurde hier abgebrochen und die
-		// App galt als abgemeldet. GIS kann still (ohne Klick, ohne Popup) einen neuen
-		// Stundentoken holen, solange die Google-Zustimmung steht — damit bleibt man angemeldet.
+		// GIS kann still einen neuen Token holen, solange die Google-Zustimmung besteht.
 		if (window.google?.accounts && webId()) {
 			try { return await getTokenBrowserPopup(false); } catch { /* still nicht möglich */ }
 		}
 		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
-		// Ohne Web-Client-Secret kann der Code-Tausch nicht gelingen (siehe webSecret) — dann
-		// lieber der alte GIS-Weg (Stundentoken, funktioniert) als eine Endlos-Anmeldung.
-		if (!webSecret()) return getTokenBrowserPopup(interactive);
-		return startWebLogin();
+		return getTokenBrowserPopup(true);
 	}
 
-	// Alter Popup-Weg, nur noch als Notnagel (falls die Weiterleitung blockiert wird).
 	function getTokenBrowserPopup(interactive) {
 		return new Promise((resolve, reject) => {
 			if (!window.google?.accounts) return reject(new Error("Google-Script nicht geladen (Internet nötig)."));
@@ -327,12 +164,10 @@ export const DRIVE = (() => {
 		return t && exp && Date.now() < exp ? t : null;
 	};
 
-	// Stiller Erneuerungs-Versuch einmal zentral — stand vorher am Kopf beider Plattform-Pfade.
 	async function getToken(interactive) {
 		const saved = validSavedToken();
 		if (saved) return (token = saved);
-		const fromRefresh = await tokenFromRefresh(window.__TAURI__ ? "" : webId());
-		return fromRefresh || (window.__TAURI__ ? getTokenDesktop(interactive) : getTokenBrowser(interactive));
+		return getTokenBrowser(interactive);
 	}
 
 	async function fetchUserInfo() {
@@ -913,8 +748,5 @@ export const DRIVE = (() => {
 		return autoSync("start");
 	}
 
-	// Die Rückkehr von der Weiterleitung wird NICHT mehr beim Import ausgewertet: zu diesem
-	// Zeitpunkt gibt es weder S.settings noch config.local.js. boot.js ruft finishWebLogin()
-	// nach STATE.load() und vor dem ersten Sync auf — und kann Fehler auch anzeigen.
-	return { login, logout, sync, isConnected, startAutoSync, finishWebLogin };
+	return { login, logout, sync, isConnected, startAutoSync };
 })();

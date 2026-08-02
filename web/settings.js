@@ -390,17 +390,7 @@ export function openSettings(section) {
 			'<p class="hint">Löscht alle lokalen Seiten unwiderruflich. Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
 			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
 	} else if (sec === "sync") {
-		// AUFGERÄUMT: EIN klarer Zweig pro Zustand — Desktop-App (Tauri) und Browser/PWA
-		// nutzen ZWEI verschiedene Google-OAuth-Clients, das wird hier sichtbar getrennt:
-		// Desktop = Typ „Desktop-App“ (System-Browser-Login), Browser = Typ „Webanwendung“ (Popup).
-		const inTauri = !!window.__TAURI__;
-		const desktopId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || S.settings.driveDesktopClientId || "";
-		// Google verlangt für Desktop-Clients auch mit PKCE das client_secret (gilt bei
-		// installierten Apps laut Google nicht als geheim) — ohne kommt „client_secret is missing“.
-		const desktopSecret = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_SECRET) || S.settings.driveDesktopClientSecret || "";
-		const modeHint = '<p class="hint">' + (inTauri
-			? "Desktop-App: Anmeldung über den System-Browser (OAuth-Client Typ „Desktop-App“)."
-			: "Browser/PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).") + "</p>";
+		const modeHint = '<p class="hint">PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).</p>';
 		// FIX: Nach einem App-Neustart war S.driveUserEmail leer, obwohl Token/Refresh-Token
 		// lokal noch gültig waren — die Sektion zeigte fälschlich „Mit Google anmelden“ und
 		// sprang erst nach einem Klick auf „Verbunden als …“. Jetzt wird die beim Login
@@ -409,34 +399,22 @@ export function openSettings(section) {
 			S.driveUserEmail = localStorage.getItem("impala67_drive_email") || "Google-Konto";
 		}
 		if (S.driveUserEmail) {
-			// 1) Bereits verbunden — egal auf welchem Weg.
 			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
 				'<p class="hint">Sync läuft über deinen privaten Google-Drive-App-Speicher.</p>' +
 				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
-		} else if (inTauri && (!desktopId || !desktopSecret)) {
-			// 2) Desktop-App ohne vollständige Desktop-Zugangsdaten (config.local.js fehlte im Build).
-			body = modeHint + field("Google Desktop-Client-ID (OAuth-Client Typ „Desktop-App“)", "inpDriveDesktop", S.settings.driveDesktopClientId || desktopId) +
-				field("Google Desktop-Client-Secret (GOCSPX-…)", "inpDriveDesktopSecret", S.settings.driveDesktopClientSecret || "", "password") +
-				'<p class="hint">Beides steht in der Google Cloud Console beim OAuth-Client „Desktop-App“. Einmal speichern — danach reicht „Mit Google anmelden“. Alternativ <code>web/config.local.js</code> befüllen.</p>' +
-				saveActionsHtml;
-		} else if (!inTauri && !S.settings.driveClientId) {
-			// 3) Browser/PWA ohne Web-Client-ID.
+		} else if (!S.settings.driveClientId && !(window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID)) {
 			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
-				'<p class="hint">Einmalig: Google Cloud Console → Drive-API aktivieren, OAuth-Client „Webanwendung“ mit <code>' + location.origin + '</code> als Ursprung anlegen, Client-ID hier speichern.</p>' +
+				'<p class="hint">Einmalig: Google Cloud Console → Drive-API aktivieren, OAuth-Client „Webanwendung“ mit <code>' + location.origin + '</code> als autorisierten JavaScript-Ursprung anlegen, Client-ID hier speichern.</p>' +
 				saveActionsHtml;
 		} else {
-			// 4) Client-ID vorhanden — nur noch anmelden.
 			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
 				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
 		}
 	} else if (sec === "update") {
 		const ver = (typeof window.getAppVersion === "function" ? window.getAppVersion() : null)
 			|| window.APP_VERSION || "unbekannt";
-		const platform = window.__TAURI__ ? "Windows (Desktop)" : "PWA / Browser";
 		body = '<p class="hint">Lokal (läuft): <b id="updateLocalVer">v' + U.esc(String(ver).replace(/^v/i, "")) + '</b><br>' +
-			'Server / Remote: <b id="updateRemoteVer">wird geprüft…</b><br>Plattform: ' + platform + '</p>' +
-			// Einheitlich (Desktop + PWA): der Installieren-Knopf existiert auf beiden
-			// Plattformen und wird von handleCheckUpdate ein-/ausgeblendet und beschriftet.
+			'Server / Remote: <b id="updateRemoteVer">wird geprüft…</b><br>Plattform: PWA / Browser</p>' +
 			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button>' +
 			'<button id="btnApplyPwaUpdate" hidden>Update installieren</button>' +
 			"</div>" +
@@ -645,12 +623,11 @@ export async function handleCheckUpdate() {
 	const applyBtn = U.el("btnApplyPwaUpdate");
 	const localEl = U.el("updateLocalVer");
 	const remoteEl = U.el("updateRemoteVer");
-	const isTauri = !!window.__TAURI__;
 	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
 	// Einheitlich: Suchen zeigt nur an. Der Installieren-Knopf erscheint erst, wenn
 	// wirklich ein Update gefunden wurde (PWA: zusätzlich als Reload-Fallback).
 	if (applyBtn) {
-		applyBtn.hidden = isTauri;
+		applyBtn.hidden = true;
 		applyBtn.disabled = false;
 		applyBtn.textContent = "App neu laden";
 	}
@@ -671,10 +648,8 @@ export async function handleCheckUpdate() {
 				: "—";
 		}
 		if (r.hasUpdate) {
-			// FIX: Desktop installierte hier früher sofort selbst. Jetzt auf BEIDEN
-			// Plattformen zweistufig — installiert wird erst über den Knopf.
-			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „" + (isTauri ? "Update installieren" : "Update laden") + "“.";
-			if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = isTauri ? "Update installieren" : "Update laden"; }
+			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „Update laden“.";
+			if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = "Update laden"; }
 			U.toast("Update v" + r.latest + " verfügbar.", "success");
 		} else if (r.remoteOlder) {
 			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
@@ -689,9 +664,9 @@ export async function handleCheckUpdate() {
 		// FIX iPad: früher window.open(GitHub) → Safari. Nie mehr extern öffnen.
 		const msg = (e && e.message) ? e.message : String(e);
 		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + msg +
-			(isTauri ? "" : " — du kannst die App trotzdem neu laden.");
+			" — du kannst die App trotzdem neu laden.";
 		if (remoteEl) remoteEl.textContent = "nicht erreichbar";
-		if (applyBtn && !isTauri) {
+		if (applyBtn) {
 			applyBtn.hidden = false;
 			applyBtn.textContent = "App neu laden";
 		}
@@ -700,13 +675,10 @@ export async function handleCheckUpdate() {
 	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }
 }
 
-// Einheitlicher Installieren-Knopf (Desktop + PWA) — installAppUpdate aus updater.js
-// übernimmt die Plattform-Unterschiede (Tauri: Download + Neustart, PWA: SW + Reload).
 export async function handleApplyPwaUpdate() {
 	const status = U.el("updateStatus");
 	const applyBtn = U.el("btnApplyPwaUpdate");
-	const isTauri = !!window.__TAURI__;
-	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = isTauri ? "Installiert…" : "Lädt…"; }
+	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = "Lädt…"; }
 	if (status) status.textContent = "⬇️ Update wird geladen…";
 	try {
 		if (typeof window.installAppUpdate === "function") {
@@ -719,7 +691,7 @@ export async function handleApplyPwaUpdate() {
 	} catch (e) {
 		if (status) status.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
 		U.toast("Update fehlgeschlagen.", "error");
-		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = isTauri ? "Update installieren" : "Jetzt neu laden"; }
+		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Jetzt neu laden"; }
 	}
 }
 
@@ -947,8 +919,6 @@ export async function handleSaveSettings() {
 		patch.embedModel = (sep === -1 ? raw : raw.slice(sep + 2)).trim();
 	}
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
-	if (g("inpDriveDesktop")) patch.driveDesktopClientId = g("inpDriveDesktop").value.trim(); // FIX: Desktop-Client-ID-Fallback
-	if (g("inpDriveDesktopSecret")) patch.driveDesktopClientSecret = g("inpDriveDesktopSecret").value.trim(); // Google verlangt das Secret auch mit PKCE (Desktop-Client)
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 	if (g("inpAlwaysTools")) patch.alwaysSendTools = g("inpAlwaysTools").checked; // Tool-Angebot v3
 	await STATE.dispatch("settingsSet", patch);
@@ -987,12 +957,7 @@ export async function handleResetAll(t) {
 }
 
 export async function handleDriveSync(t) {
-	// FIX: je nach Plattform die RICHTIGE Client-ID prüfen (Desktop-App ≠ Web-Client) —
-	// vorher wurde in der Tauri-App fälschlich die Web-Client-ID verlangt.
-	const inTauri = !!window.__TAURI__;
-	const hasId = inTauri
-		? ((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_DESKTOP_CLIENT_ID) || S.settings.driveDesktopClientId)
-		: S.settings.driveClientId;
+	const hasId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId;
 	if (!hasId) {
 		U.toast("Für den Drive-Sync fehlt noch die Google Client-ID — einmalig unter ⚙️ Einstellungen → Sync einrichten.", "error");
 		openSettings("sync");

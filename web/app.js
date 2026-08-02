@@ -1687,9 +1687,9 @@ function wireEvents() {
 	});
 
 	// Seiten (Pages): Pointer-Events statt HTML5-DnD — Bug-Fix „kommt noch“ (22. Juli):
-	// HTML5-Drag&Drop wird im Tauri-Webview abgefangen, bevor es den DOM erreicht, und
-	// startet auf iPad nur per Long-Press (kollidiert mit dem Scrollen). Pointer-Events
-	// (pointerdown/-move/-up) laufen in Browser, Tauri UND auf Touch identisch — EIN
+	// HTML5-Drag&Drop startet auf iPad nur per Long-Press und kollidiert mit dem
+	// Scrollen. Pointer-Events (pointerdown/-move/-up) laufen in Maus- und Touch-
+	// Browsern identisch — ein
 	// Code-Pfad statt Plattform-Sonderfälle. Dieselbe Zielfindung (davor/danach/als Kind)
 	// und dieselben dispatch-Aufrufe wie vorher, nur die Eingabe-Ereignisse sind ersetzt.
 	async function movePageRelative(movedId, targetId, zone) {
@@ -1890,7 +1890,7 @@ function wireEvents() {
 	// ---------- ↔️ Breite der linken Spalte ziehen (Griff #sidebarResizer) ----------
 	// EINE Quelle der Wahrheit: die CSS-Variable --sidebar-w. Sie steht inline am <body>
 	// (gewinnt damit gegen die Kompakt-Regeln in styles.css), die Grid-Spalten lesen sie.
-	// Pointer-Events wie beim Seiten-Verschieben — ein Pfad für Maus, Touch und Tauri.
+	// Pointer-Events wie beim Seiten-Verschieben — ein Pfad für Maus und Touch.
 	const SIDEBAR_W_KEY = "impala67.sidebarWidth";
 	const SIDEBAR_W_MIN = 180, SIDEBAR_W_MAX = 560;
 	const setSidebarWidth = (px, persist) => {

@@ -229,37 +229,17 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <input type="file" id="fileBg" accept="image/*" hidden>
 <input type="file" id="fileImport" accept="application/json" hidden>
 
-<!-- config.local.js wird bewusst NICHT hier geladen: main.js importiert sie optional
-     und fehlertolerant (try { await import("./config.local.js") } catch {}).
-     FIX Start-Bug: Ein normales <script src="config.local.js"> wirft bei fehlender
-     Datei "SyntaxError: Unexpected token '<'", weil tauri.localhost eine
-     HTML-Fallback-Seite mit Status 200 liefert. drive.js liest window.APP_CONFIG
-     lazy (erst beim Login) — die asynchrone Ladung ist unkritisch. -->
+<!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
+     window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
 <script type="module" src="main.js?build=57"></script>
 <script>
-// PWA: Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
-// Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund von selbst.
-// FIX Start-Bug (Teil 2): In der Tauri-Desktop-App ist der Service-Worker sinnlos
-// (Dateien liegen lokal, Updates macht der Tauri-Updater) und gefährlich — er hatte
-// die HTML-Fallback-Antwort für die fehlende config.local.js dauerhaft gecacht,
-// die App startete dann nur noch nach Strg+Shift+R. Darum: nur im Browser/PWA
-// registrieren; in Tauri Alt-Registrierungen + Caches einmalig aufräumen.
+// Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
+// Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-	if (window.__TAURI__) {
-		navigator.serviceWorker.getRegistrations()
-			.then((regs) => regs.forEach((r) => r.unregister()))
-			.catch(() => {});
-		if (window.caches && caches.keys) {
-			caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
-		}
-	} else {
-		// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
-		// Der Build-Schlüssel erzwingt deshalb eine neue Worker-Prüfung, ohne dass der
-		// gesamte Offline-Cache bei jedem Start gelöscht werden muss.
-		navigator.serviceWorker.register("service-worker.js?build=62", { updateViaCache: "none" })
-			.then((reg) => reg.update().catch(() => {}))
-			.catch((e) => console.warn("Service-Worker:", e));
-	}
+	// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
+	navigator.serviceWorker.register("service-worker.js?build=63", { updateViaCache: "none" })
+		.then((reg) => reg.update().catch(() => {}))
+		.catch((e) => console.warn("Service-Worker:", e));
 }
 
 // Gemini-Notebook-Button (ehemals NotebookLM): Die Logik liegt gebündelt in

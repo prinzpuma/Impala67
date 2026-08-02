@@ -10,17 +10,12 @@ import { TABS } from "./tabs.js";
 // Einbettungs-Links in Seiten und gespeicherte Tab-Sitzungen laufen unverändert weiter.
 //
 // v4 = Neuschrieb nach KISS/DRY:
-// • Öffnen: IMMER eigenes Fenster (Tauri) bzw. Browser-Tab — openExternal(), EINE
-//   Stelle (vorher doppelt in extras.js + hier). Das native Einbetten im Haupt-
-//   fenster (nlm_webview + Positions-/Overlay-Observer, ~200 Zeilen) ist ersatzlos
-//   entfernt: es hing an Rust-Kommandos, die nie zuverlässig existierten, und war
-//   die Hauptquelle der Bugs (verdeckte Dialoge, hängen gebliebene Webviews).
+// • Öffnen: immer in einem Browser-Tab über openExternal(). Google blockiert die
+//   Einbettung; die App versucht deshalb keinen Webview- oder Iframe-Weg.
 // • Dateidownload geht jetzt WIRKLICH: Kein Browser darf Downloads einer fremden
 //   Website automatisch abfangen — darauf zu bauen war der alte Fehler. Der
 //   verlässliche Weg ist explizit: in Gemini Notebook normal herunterladen und im
-//   📓-Tab importieren (Knopf oder Drag & Drop) → Inbox → Einordnen. Der Tauri-
-//   Auto-Abgriff ("nlm-download"-Event) bleibt als Bonus — jetzt mit Warte-
-//   Wiederholung, falls window.__TAURI__ erst nach dem Modul-Start bereitsteht.
+//   📓-Tab importieren (Knopf oder Drag & Drop) → Inbox → Einordnen.
 // • Quellen: Seiten-Picker → Inhalte als EINE Quelle in die Zwischenablage
 //   (in Gemini Notebook: „Quelle hinzufügen → Kopierter Text" → Einfügen).
 // • Artefakte unverändert strukturiert: { id, name, blob, ts, kind, mime, size,
@@ -77,29 +72,10 @@ export const NLM = (() => {
 	].join("\n");
 	document.head.appendChild(style);
 
-	// ---- Öffnen: eigenes Tauri-Fenster (zweiter Klick fokussiert nur) oder Browser-Tab.
-	//      Google blockiert iframes (X-Frame-Options/CSP) — deshalb immer extern.
-	//      Tauri v2 braucht die Capability "core:webview:allow-create-webview-window";
-	//      fehlt sie, meldet das Fenster tauri://error und wir öffnen im System-Browser. ----
-	const T = () => window.__TAURI__ || null;
-	function openBrowserTab() {
-		const t = T();
-		if (t && t.shell && t.shell.open) t.shell.open(PRODUCT_URL);
-		else window.open(PRODUCT_URL, "_blank", "noopener,noreferrer");
-	}
-	async function openExternal() {
-		const t = T();
-		if (t && t.webviewWindow && t.webviewWindow.WebviewWindow) {
-			try {
-				const existing = await t.webviewWindow.WebviewWindow.getByLabel("notebooklm");
-				if (existing) { existing.setFocus().catch(() => {}); return; }
-				const win = new t.webviewWindow.WebviewWindow("notebooklm", { url: PRODUCT_URL, title: PRODUCT, width: 1280, height: 860 });
-				// Fehler meldet Tauri ASYNCHRON über tauri://error (nicht als Exception) → Fallback.
-				win.once("tauri://error", (e) => { console.warn(PRODUCT + "-Fenster fehlgeschlagen, öffne im Browser:", e); openBrowserTab(); });
-				return;
-			} catch (e) { console.warn(PRODUCT + "-Fenster fehlgeschlagen, öffne im Browser:", e); }
-		}
-		openBrowserTab();
+	// Google blockiert die Einbettung. Gemini Notebook öffnet deshalb immer in
+	// einem separaten Browser-Tab; fertige Dateien werden anschließend importiert.
+	function openExternal() {
+		window.open(PRODUCT_URL, "_blank", "noopener,noreferrer");
 	}
 
 	// ---- Artefakt-Arten: Anzeige-Icons/-Labels je kind --------------------------
@@ -374,37 +350,6 @@ export const NLM = (() => {
 			// "later": Datei bleibt in der Inbox (📓-Tab bzw. Bibliothek → 📥)
 		});
 	}
-
-	// ---- Bonus: Tauri-Auto-Abgriff. Rust meldet "nlm-download" (String-Pfad, alt,
-	//      oder Objekt { path, file_name, mime, size }); Datei lesen per nlm_read_file.
-	//      Fehlen die Kommandos, passiert nichts — der Import oben ist der verlässliche
-	//      Weg. NEU: Warte-Wiederholung, weil window.__TAURI__ je nach Plattform erst
-	//      NACH diesem Modul initialisiert ist (daran scheiterte der alte Listener still). ----
-	const invoke = (cmd, args) => {
-		const t = T();
-		return t && t.core && t.core.invoke ? t.core.invoke(cmd, args) : Promise.reject(new Error("kein Tauri"));
-	};
-	(function initAutoCapture(tries) {
-		const t = T();
-		if (!(t && t.event && t.event.listen)) {
-			if (tries < 20) setTimeout(() => initAutoCapture(tries + 1), 500);
-			return;
-		}
-		t.event.listen("nlm-download", async (m) => {
-			const pay = (m && m.payload) || "";
-			const structured = pay && typeof pay === "object";
-			const path = structured ? String(pay.path || "") : String(pay);
-			if (!path) return;
-			try {
-				const bytes = await invoke("nlm_read_file", { path });
-				const name = (structured && pay.file_name) || path.split(/[\\/]/).pop() || "gemini-notebook-datei";
-				const mime = (structured && pay.mime) || "";
-				const rec = await fileAdd(name, mime ? new Blob([bytes], { type: mime }) : new Blob([bytes]));
-				showInboxToast(rec);
-				refreshHubList();
-			} catch (e) { U.toast("Download-Übernahme fehlgeschlagen: " + (e.message || e), "error"); }
-		}).catch(() => {});
-	})(0);
 
 	// ---- Seiten hierarchisch sortieren (Eltern vor Kindern, mit Tiefe + Kind-Info) ----
 	function pageTree(pages) {

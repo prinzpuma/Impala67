@@ -2024,7 +2024,7 @@ export const EDITOR = (() => {
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
 			e.preventDefault();
 			const md = serializeList(blocks.slice(selRange.from, selRange.to + 1));
-			// In der Tauri/WebView-Umgebung ist navigator.clipboard zwar vorhanden,
+			// In einigen WebView-Umgebungen ist navigator.clipboard zwar vorhanden,
 			// writeText() wird aber teilweise trotzdem mit NotAllowedError abgelehnt.
 			// execCommand muss deshalb zuerst und synchron im Tastatur-Event laufen;
 			// nur falls das nicht geht, probieren wir die moderne Clipboard-API.

@@ -696,8 +696,16 @@ export const AI = (() => {
 				// 6000 Zeichen gingen bei JEDER Anfrage und in JEDEM Agent-Schritt erneut mit — bei langen
 				// Seiten der größte Posten überhaupt, und dieselbe Seite liefert get_context/read_page bei Bedarf.
 				const body = String(cur.content || "");
-				const cut = body.length > 2500;
-				lines.push("Inhalt der geöffneten Seite" + (cut ? " (Anfang — Rest per read_page)" : "") + ":\n" + (body.slice(0, 2500) || "(Leere Seite)"));
+				// WURZEL des Vorwurfs „Kontext wird nicht mitgeschickt“: 2500 Zeichen sind bei einer
+				// echten Lernseite ein Bruchteil — der Chip versprach „wird mitgesendet“, die KI sah
+				// aber nur den Anfang und konnte Fragen wie „ist das vollständig?“ nicht beantworten.
+				// Cloud-Modelle haben Platz dafür; nur lokale Modelle bleiben knapp bedient.
+				const ctxLimit = cfg().family === "local" ? 2500 : 12000;
+				const cut = body.length > ctxLimit;
+				// Was wirklich mitging, merken — der Chip im Composer soll nicht mehr behaupten,
+				// die ganze Seite sei dabei (siehe contextChipHtml in render.js).
+				S.pageCtxInfo = { id: cur.id, sent: Math.min(body.length, ctxLimit), total: body.length };
+				lines.push("Inhalt der geöffneten Seite" + (cut ? " (Anfang — Rest per read_page)" : "") + ":\n" + (body.slice(0, ctxLimit) || "(Leere Seite)"));
 			}
 		}
 		if (ragContext) lines.push("Automatisch gefundene, möglicherweise relevante Notiz-Auszüge:\n" + ragContext);

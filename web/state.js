@@ -219,8 +219,8 @@ export const STATE = (() => {
 	}
 
 	// ---- Zugangsdaten im persönlichen Drive-Sync ----------------------------
-	// Auf ausdrücklichen Wunsch gehören API-Keys, Notion-Token, CORS-Proxy und
-	// Desktop-OAuth-Konfiguration in den verschlüsselungslosen, aber privaten
+	// Auf ausdrücklichen Wunsch gehören API-Keys, Notion-Token und CORS-Proxy in den
+	// verschlüsselungslosen, aber privaten
 	// appDataFolder des eigenen Google-Kontos. Sie werden daher wie alle anderen
 	// settingsSet-Daten im Event-Log gespeichert und auf andere Geräte repliziert.
 	// Die alte localStorage-Ablage bleibt nur als einmalige Migrationsquelle.
@@ -232,7 +232,6 @@ export const STATE = (() => {
 		const patch = {};
 		if (sec.notionToken && !S.settings.notionToken) patch.notionToken = sec.notionToken;
 		if (sec.corsProxy && !S.settings.corsProxy) patch.corsProxy = sec.corsProxy;
-		if (sec.driveDesktopClientSecret && !S.settings.driveDesktopClientSecret) patch.driveDesktopClientSecret = sec.driveDesktopClientSecret;
 		const keys = sec.providerKeys || {};
 		let providersChanged = false;
 		const providers = (S.settings.aiProviders || []).map((pr) => {

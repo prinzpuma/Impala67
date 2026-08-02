@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v118"; // 🎮 Controller-Eingaben zählen als Aktivität — kein „Lernst du noch?“ mehr mitten im Abfragen.
+const CACHE = "impala67-v119"; // PWA-only: frischer Offline-Cache ohne Desktop-Artefakte.
 // Geteilte PDFs liegen in einem EIGENEN Cache. Der Name steht hier, weil das
 // Aufräumen unten ihn kennen muss: er wurde bisher bei jeder Aktivierung mit
 // gelöscht — eine gerade geteilte Datei war nach einem Update verschwunden.
@@ -16,8 +16,8 @@ const APP_FILES = [
 	"./styles.css",
 	"./manifest.json",
 	"./version.json",
-	// latest.json bewusst NICHT precachen: sie gehört allein dem Tauri-Desktop-Updater;
-	// die PWA vergleicht ausschließlich gegen version.json (siehe updater.js).
+	// version.json bleibt außerhalb des Pflichtcaches: updater.js lädt sie bewusst
+	// frisch, um den veröffentlichten Stand zu vergleichen.
 	// icon.svg wird direkt aus dem Netz geladen; ein Favicon darf den Offline-
 	// Cache niemals als Pflichtdatei blockieren.
 	"./icon.svg",
