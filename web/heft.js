@@ -764,6 +764,11 @@ export const HEFT = (() => {
 	}
 	function redrawPage(i) {
 		if (!doc || !doc.pages[i]) return;
+		redrawBasePage(i);
+		renderDetailTile(i);
+	}
+	function redrawBasePage(i) {
+		if (!doc || !doc.pages[i]) return;
 		const cv = canvases[i];
 		if (cv && cv.width >= 2 && cv.height >= 2) {
 			const x = cv.getContext('2d');
@@ -772,8 +777,6 @@ export const HEFT = (() => {
 			applyTransform(x);
 			renderPageTo(x, doc.pages[i], i);
 		}
-
-		renderDetailTile(i);
 	}
 
 	// --- Ansicht: EINE Wahrheit (26. Juli, Neubau) ---------------------------
@@ -793,7 +796,7 @@ export const HEFT = (() => {
 	// von 1.5 stammte aus der Zeit, als die Zeichenflaeche mit dem Zoom mitwuchs -
 	// auf einem 2x/3x-Bildschirm war dadurch jede Schrift dauerhaft weich.
 	const MAX_RENDER_DPR = 3, MAX_RENDER_PIXELS = 6_000_000, MAX_CANVAS_DIM = 4096;
-	let zoomSettleTimer = 0, scrollSettleTimer = 0;
+	let zoomSettleTimer = 0, scrollSettleTimer = 0, gesturePrefetchTimer = 0;
 	const gesture = {
 		pts: new Map(), pinch: null, last: null, maxCount: 0, moved: false, startedAt: 0, restore: null,
 		raf: 0, fling: 0, anim: null, vx: 0, vy: 0, lastT: 0,
@@ -809,6 +812,7 @@ export const HEFT = (() => {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
 		if (gesture.fling) cancelAnimationFrame(gesture.fling);
 		gesture.raf = gesture.fling = 0;
+		if (gesturePrefetchTimer) { clearTimeout(gesturePrefetchTimer); gesturePrefetchTimer = 0; }
 		if (gesture.anim) { gesture.anim(); gesture.anim = null; }
 	}
 	function navReset() {
@@ -847,9 +851,9 @@ export const HEFT = (() => {
 		pgs.style.transform = "translate(" + snap(-view.x * view.k) + "px, " + snap(-view.y * view.k) + "px) scale(" + view.k.toFixed(4) + ")";
 		if (!commit) {
 			pgs.style.willChange = "transform";
-			// Waehrend der Geste die Seiten selbst schon fuellen (billig: feste Groesse,
-			// passiert pro Seite genau einmal), nur die teuren Detail-Kacheln warten.
-			renderVisiblePages(true);
+			// Während der Geste nur die bereits gerasterte Fläche verschieben. Eine
+			// vollständige Seitenprüfung pro Frame blockierte Safari beim Scrollen.
+			scheduleGesturePrefetch();
 			scheduleZoomSettleRender();
 			return;
 		}
@@ -867,6 +871,32 @@ export const HEFT = (() => {
 	function schedulePaint() {
 		if (gesture.raf) return;
 		gesture.raf = requestAnimationFrame(() => { gesture.raf = 0; paintView(false); });
+	}
+	function renderVisibleBasePages() {
+		if (!doc) return;
+		const nativeDpr = Math.min(MAX_RENDER_DPR, (window.devicePixelRatio || 1) * 1.5);
+		const pageW = PAGE_W * fitScale, pageH = PAGE_H * fitScale;
+		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
+		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
+		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
+		for (const i of visiblePageIndices()) {
+			const cv = canvases[i];
+			if (!cv) continue;
+			cv.__heftDpr = safeDpr; cv.__heftScale = fitScale;
+			const w = Math.max(1, Math.round(pageW * safeDpr));
+			const h = Math.max(1, Math.round(pageH * safeDpr));
+			const needsRender = cv.width !== w || cv.height !== h;
+			if (cv.width !== w) cv.width = w;
+			if (cv.height !== h) cv.height = h;
+			if (needsRender) redrawBasePage(i);
+		}
+	}
+	function scheduleGesturePrefetch() {
+		if (gesturePrefetchTimer) return;
+		gesturePrefetchTimer = setTimeout(() => {
+			gesturePrefetchTimer = 0;
+			if (host && doc) renderVisibleBasePages();
+		}, 80);
 	}
 	// Punkt unter (clientX, clientY) festhalten: ein Schritt, keine Korrektur.
 	function zoomAt(nextK, clientX, clientY, commit) {
@@ -925,6 +955,15 @@ export const HEFT = (() => {
 	function tileTransform(x, t) {
 		const f = t.dpr * t.k;
 		x.setTransform(t.dpr * t.scale, 0, 0, t.dpr * t.scale, -t.x * f, -t.y * f);
+	}
+	// layerRectFor arbeitet in Layout-Pixeln: diese Werte bestimmen Position und
+	// Größe des CSS-Canvas. Striche und Bilder liegen dagegen in den festen
+	// Seiten-Pixeln (PAGE_W/PAGE_H). Culling muss deshalb zurück in Seiten-Pixel
+	// umgerechnet werden. Ohne diese Umrechnung verschwanden auf iPadOS je nach
+	// fitScale ganze Strichbereiche beim Zoom.
+	function pageRectForTile(r, f = fitScale) {
+		const scaleForPage = Math.max(0.0001, f || 1);
+		return { x: r.x / scaleForPage, y: r.y / scaleForPage, w: r.w / scaleForPage, h: r.h / scaleForPage };
 	}
 	function pageOrigin(i) {
 		const slot = pageSlots[i], base = canvases[i];
@@ -986,7 +1025,7 @@ export const HEFT = (() => {
 		x.clearRect(0, 0, tile.width, tile.height);
 		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
 		tileTransform(x, tile.__heftTile);
-		renderPageTo(x, doc.pages[i], i, r);
+		renderPageTo(x, doc.pages[i], i, pageRectForTile(r));
 		if (wet) {
 			placeLayer(wet, i, r, dpr);
 			const wx = wet.getContext("2d");
@@ -1088,7 +1127,7 @@ export const HEFT = (() => {
 			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
-			if (needsRender) redrawPage(i);
+			if (needsRender) redrawBasePage(i);
 		});
 
 		if (!skipTiles) renderDetailTiles(false);
@@ -3333,7 +3372,7 @@ export const HEFT = (() => {
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
 
-		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
+		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(zoomSettleTimer); zoomSettleTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
 		trayDrag = null; boundTray = null; // detached Knoten nicht festhalten
 		clearTimeout(writingOffT); writingOffT = 0; writing = false;
@@ -3392,7 +3431,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

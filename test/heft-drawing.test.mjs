@@ -153,6 +153,11 @@ test("Heft-Tests: Bounding-Box Culling für Detail-Kacheln", () => {
 	assert.ok(outsideStroke.bbox, "Außentrich besitzt bbox");
 });
 
+test("Heft-Tests: Detail-Kachel rechnet Layout-Pixel in Seiten-Pixel um", () => {
+	const rect = HEFT.pageRectForTile({ x: 100, y: 50, w: 200, h: 300 }, 0.5);
+	assert.deepEqual(rect, { x: 200, y: 100, w: 400, h: 600 });
+});
+
 test("Heft-Tests: Strichverschiebung aktualisiert s.bbox in O(1)", () => {
 	const mockStroke = {
 		id: "str_move",
