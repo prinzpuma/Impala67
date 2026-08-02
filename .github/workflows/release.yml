@@ -22,6 +22,8 @@ jobs:
       version: ${{ steps.next.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: PWA-Dateien prüfen
         run: |
@@ -40,6 +42,9 @@ jobs:
           set -euo pipefail
           CURRENT=$(node -p "require('./web/version.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          # version.json ist der zuletzt bekannte Stand; jede Veröffentlichung
+          # erhält daher mindestens die nächste Patch-Version.
+          PATCH=$((PATCH + 1))
           NEW="$MAJOR.$MINOR.$PATCH"
           while git ls-remote --exit-code --tags origin "refs/tags/v$NEW" >/dev/null 2>&1; do
             PATCH=$((PATCH + 1))
@@ -61,10 +66,37 @@ jobs:
       - name: PWA prüfen
         run: |
           find web -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node .github/scripts/check-version-sync.mjs "${{ needs.version.outputs.version }}"
           node .github/scripts/check-pwa-cache.mjs
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: web
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+
+  tag:
+    name: Veröffentlichtes Release dauerhaft markieren
+    needs: [version, deploy]
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Release-Tag setzen
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          TAG="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG existiert bereits; nichts zu tun."
+            exit 0
+          fi
+          git tag -a "$TAG" "$GITHUB_SHA" -m "PWA $TAG"
+          git push origin "$TAG"
