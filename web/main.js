@@ -37,70 +37,35 @@ import { ANALYSE } from "./analyse.js";
 import { CONTROLLER } from "./controller.js";
 import "./pdfpaste.js";
 
-// Übergangsweise alle Module an window binden,
-// damit alle bestehenden Zugriffe reibungslos funktionieren.
-window.U = U;
-window.DB = DB;
-window.SRS = SRS;
-window.S = S;
-window.STATE = STATE;
-window.TOOLS = TOOLS;
-window.AI = AI;
-window.RAG = RAG;
-window.DRIVE = DRIVE;
-window.PDFS = PDFS;
-window.EDITOR = EDITOR;
-window.EXTRAS = EXTRAS;
-window.COLLAPSE = COLLAPSE;
-window.CHATS = CHATS;
-window.MOBILE = MOBILE;
-window.NOTION_MIGRATOR = NOTION_MIGRATOR;
-window.SETTINGS = SETTINGS;
-window.LIBRARY = LIBRARY;
-window.TABS = TABS;
-window.openPage = TABS.openPage;
-window.openNewTab = TABS.openNewTab;
-window.closeTab = TABS.closeTab;
-window.SEARCH = SEARCH;
-window.SHORTCUTS = SHORTCUTS;
-window.CHAT_FULLSCREEN = CHAT_FULLSCREEN;
-window.BOOT = BOOT;
-window.POPOVERS = POPOVERS;
-window.HEFT = HEFT;
-window.VOICE = VOICE;
-window.LERNZEIT = LERNZEIT;
-window.SCHULNOTEN = SCHULNOTEN;
-window.EXP = EXP; // 🧪 Experimente — settings.js und ai.js greifen über window zu
-window.GRAPH = GRAPH; // 🕸 Wissensgraph — öffnet sich selbst über den Sidebar-Knopf #btnGraph
-window.ANALYSE = ANALYSE; // 📈 Lern-Analyse — render-anki.js hängt die Statistik-Sektion an
-window.CONTROLLER = CONTROLLER; // 🎮 Gamepad im Lernmodus — settings.js rendert den Abschnitt über window
-
-// RENDER-Funktionen an window binden
-window.render = RENDER.render;
-window.renderTopbar = RENDER.renderTopbar;
-window.renderModelMenu = RENDER.renderModelMenu;
-window.renderSidebar = RENDER.renderSidebar;
-window.renderMain = RENDER.renderMain;
-window.openSettings = SETTINGS.openSettings;
-window.openReview = RENDER.openReview;
-window.openCards = RENDER.openCards;
-
-// RENDER_ANKI-Funktionen an window binden
-window.RENDER_ANKI = RENDER_ANKI;
-window.ankiDecks = RENDER_ANKI.ankiDecks;
-window.ankiCardsOf = RENDER_ANKI.ankiCardsOf;
-window.ankiDueOf = RENDER_ANKI.ankiDueOf;
-window.deckTreeHtml = RENDER_ANKI.deckTreeHtml;
-window.deckMenuHtml = RENDER_ANKI.deckMenuHtml;
-window.renderAnki = RENDER_ANKI.renderAnki;
-window.openCardEditor = RENDER_ANKI.openCardEditor;
-window.readCardEditorDeck = RENDER_ANKI.readCardEditorDeck;
-
-// APP-Funktionen an window binden
-// FIX: seedIfEmpty/purgeOldTrash lagen nie in app.js, sondern in boot.js — die zwei
-// Bindings setzten window.* auf undefined. boot.js ruft beide selbst auf, kein anderer
-// Aufrufer im Projekt (geprüft): entfernt statt umgebogen.
-window.wireEvents = APP.wireEvents;
+// Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
+// Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.
+Object.assign(window, {
+	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, EXTRAS,
+	COLLAPSE, CHATS, MOBILE, NOTION_MIGRATOR, SETTINGS, LIBRARY, TABS, SEARCH,
+	SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE, LERNZEIT,
+	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER,
+	openPage: TABS.openPage,
+	openNewTab: TABS.openNewTab,
+	closeTab: TABS.closeTab,
+	render: RENDER.render,
+	renderTopbar: RENDER.renderTopbar,
+	renderModelMenu: RENDER.renderModelMenu,
+	renderSidebar: RENDER.renderSidebar,
+	renderMain: RENDER.renderMain,
+	openSettings: SETTINGS.openSettings,
+	openReview: RENDER.openReview,
+	openCards: RENDER.openCards,
+	RENDER_ANKI,
+	ankiDecks: RENDER_ANKI.ankiDecks,
+	ankiCardsOf: RENDER_ANKI.ankiCardsOf,
+	ankiDueOf: RENDER_ANKI.ankiDueOf,
+	deckTreeHtml: RENDER_ANKI.deckTreeHtml,
+	deckMenuHtml: RENDER_ANKI.deckMenuHtml,
+	renderAnki: RENDER_ANKI.renderAnki,
+	openCardEditor: RENDER_ANKI.openCardEditor,
+	readCardEditorDeck: RENDER_ANKI.readCardEditorDeck,
+	wireEvents: APP.wireEvents,
+});
 
 // config.local.js bewusst ZULETZT (stand vorher oben): statische Imports laufen
 // immer zuerst, das await verzögerte also nur die window-Bindings darunter —

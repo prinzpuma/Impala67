@@ -1,50 +1,9 @@
 "use strict";
 import { U } from "./util.js";
-// db.js — IndexedDB-Persistenz: append-only Event-Log + Blobs (PDF/Heft) + Vecs (RAG).
-// Sync = Log-Merge: Union per Event-id, Replay deterministisch nach Zeitstempel.
-// Rewrite (20. Juli 2026): KISS/DRY-Kompaktierung, öffentliche API unverändert. Fixes:
-// • allVecs/exportAll lesen Keys+Werte aus EINER Transaktion (vorher eine Transaktion je Key)
-// • importAll prüft Blob-Existenz über ein Key-Set statt getBlob() pro Blob
-// • reconstructPageFromEvents sortiert nach Zeit — lokale Liste ist seq-geordnet, nach einem
-//   Import überschrieben sonst ÄLTERE Patches den neueren Stand (gleiche Falle wie contentHeadsOf-Fix)
-// • deletesOf: jüngstes Event per t statt Array-Reihenfolge (dito)
-// Audit-Fixes (25. Juli 2026) — gefunden über das Zusammenspiel mit drive.js, nicht in dieser Datei allein:
-// • importAll: _remote-Events zählen nicht mehr als "lokale Änderung" → keine Geister-Konflikte
-// • Kompaktierungs-Untergrenze (COMPACT_FLOOR_KEY) → der Merge bringt verdichtete Events nicht zurück
-// • compactLocal setzt die seq-basierten Sync-Marken zurück → keine still unhochgeladenen Events mehr
-// Ausbau (25. Juli 2026, zweite Runde):
-// • merge3(): echter Drei-Wege-Abgleich gegen den letzten GEMEINSAMEN Stand — zwei
-//   Bearbeitungen derselben Seite an verschiedenen Stellen werden jetzt zusammengeführt,
-//   statt per LWW eine „⚠ Konflikt“-Kopie zu erzeugen. Nur echte Überlappung bleibt Konflikt.
-// • Hybride logische Uhr: importierte Zeitstempel heben die lokale Uhr an (U.observeTimes),
-//   Gleichstände werden deterministisch per Event-id gebrochen — vorher konnten bei exakt
-//   gleichem t BEIDE Geräte sich selbst als Verlierer sehen und je eine Kopie anlegen.
-// v8 (25. Juli 2026) — Hefte reisen als Events, nicht mehr als Blob:
-// • heftUpdated (Zeiger auf eine Drive-Binärdatei) ist ersetzt durch heftOps (Strich-Operationen)
-//   und heftSnap (Vollstand). Damit gibt es nur noch EINEN Transportweg: das Event-Log.
-// • Der komplette Heft-Konfliktzweig entfällt — Strich-Operationen zweier Geräte mischen sich
-//   von selbst (Union, idempotent), es gibt keinen Gewinner und keine Verlierer-Kopie mehr.
-// • heftHeadsOf entfällt ersatzlos (es gibt keine Blob-Hashes mehr, die abzugleichen wären).
-// • Kompaktierung: ein heftSnap macht alle älteren heftOps DESSELBEN Hefts überflüssig.
-// Nachtrag (25. Juli 2026): Bilder/Scans reisen als eigene, unveränderliche "heftBlob"-Events
-// (Inhalts-Hash → Bilddaten). Hefte referenzieren sie nur noch. Sie sind bewusst NICHT
-// droppable (ein lange offline gewesenes Gerät bräuchte sie sonst nie mehr bekommen können),
-// werden aber weggeworfen, sobald kein Heft sie mehr benutzt — siehe compactEvents unten.
-// Bewusst OHNE Rückwärtskompatibilität (Einzelnutzer-Absprache): Alt-Hefte werden beim ersten
-// Öffnen aus dem lokalen Blob in einen heftSnap migriert (heft.js), danach ist der Blob Geschichte.
-// Audit v9 (25. Juli 2026) — Befunde aus dem Zusammenspiel db.js × drive.js × sync-core.js:
-// [A1] heftOps fliegt nicht mehr pauschal unter der Kompaktierungs-Untergrenze durch. Das war echter
-//      Datenverlust: die Begründung, warum pageUpdate NICHT droppable ist ("ein lange offline
-//      gewesenes Gerät hat legitime alte Patches"), gilt für Striche wortgleich — nur ist ein
-//      verworfener Strich weg, während eine verworfene pageUpdate nur Platz kostet (Replay = LWW).
-// [A2] Selbst erzeugte Merge-/Konflikt-Events sind jetzt _derived und gelten nicht als "meine
-//      ungesyncten Änderungen" — sonst konfliktiert der Nachzügler-Sweep in drive.js gegen den
-//      eigenen Merge und legt Konfliktkopien ohne jede Nutzeraktion an.
-// [A3] merge3 verweigert leere Basis und Leerzeilen-Anker. Beides zusammen konnte zwei Fassungen
-//      still ineinander verweben und ok:true melden — schlimmer als jeder gemeldete Konflikt.
-// [A4] Kaputte Events werden aussortiert statt geworfen (EIN Event legte den Sync dauerhaft still),
-//      numerische Zeitstempel werden auf ISO normalisiert (drive.js akzeptierte sie, hier crashte es).
-// [A9] Konflikt-Titel/Eltern fallen auf das Log zurück, wenn der UI-Zustand veraltet ist (zweiter Tab).
+// IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
+// Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
+// zeitlich deterministisch; Heft-Striche und Bilder reisen vollständig im Event-Log.
+// Historische Reparaturen stehen im Git-Verlauf, die aktuellen Schutzregeln direkt bei der Logik.
 export const DB = (() => {
 	let db = null, openPromise = null; // openPromise memoisiert open() gegen Doppel-Open-Races
 

@@ -11,6 +11,9 @@ import { TABS } from "./tabs.js";
 import { CHATS } from "./chats.js";
 import { MOBILE } from "./mobile.js";
 import { DRIVE } from "./drive.js";
+import { LERNZEIT } from "./lernzeit.js";
+import { ANALYSE } from "./analyse.js";
+import { isBlobAlive } from "./sync-core.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -67,28 +70,10 @@ export async function purgeOldTrash() {
 // Event-Replay gibt es keine Blob-Löschung). Läuft nach dem Laden im Hintergrund.
 export async function purgeOrphanBlobs() {
 	try {
-		// FIX (Erweiterung): vorher wurde NUR pg.pdfId als Referenz gewertet — die
-		// abgeleiteten "pdftext:"-Blobs (rag.js) und "cover:"-Bilder (app.js) gelöschter
-		// Seiten blieben deshalb dauerhaft liegen. Jetzt gelten ALLE Zeichenketten-Werte
-		// der Seiten als Referenzmenge (unabhängig vom Feldnamen, überlebt Umbenennungen).
-		const refs = new Set();
-		for (const pg of Object.values(S.pages)) {
-			for (const v of Object.values(pg)) if (typeof v === "string") refs.add(v);
-		}
-		// alive() kennt nur die selbst verwalteten Schlüsselformen; alles andere
-		// ("bgImage", künftige Präfixe) gilt bewusst als lebendig — nie blind löschen.
-		const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-		const alive = (key) => {
-			if (key.startsWith("heft:")) return !!S.pages[key.slice(5)];
-			if (key.startsWith("pdftext:")) return refs.has(key.slice(8));
-			if (key.startsWith("cover:")) return refs.has(key);
-			if (isUuid(key)) return refs.has(key); // UUID-Schlüssel = PDF-Blob
-			return true;
-		};
 		let removed = 0;
 		for (const k of await DB.allBlobKeys()) {
 			const key = String(k);
-			if (alive(key)) continue;
+			if (isBlobAlive(key, S.pages)) continue;
 			await DB.delBlob(key);
 			removed++;
 		}
@@ -96,11 +81,15 @@ export async function purgeOrphanBlobs() {
 	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
 }
 
+
 // 📱 Boot-Feedback (18. Juli, spät v2): Phasen-Text im Boot-Splash aus index.html —
 // statt dunklem Nichts sieht man beim Start, WO er gerade steht (bzw. hängt).
 const bootMsg = (t) => { const m = document.getElementById("bootSplashMsg"); if (m) m.textContent = t; };
 
 export async function initApp() {
+	if (typeof performance !== "undefined" && performance.mark) {
+		performance.mark("impala67:boot-init");
+	}
 	// FIX (Start-Bug-Paket, 9. Juli): state.js ruft nach jedem dispatch() den Hook
 	// STATE.onChange auf — das alte implizite globale render() ist seit dem
 	// ES-Module-Refactor kein verlässlicher Auto-Render mehr. Einmalig verdrahten.
@@ -137,6 +126,25 @@ export async function initApp() {
 	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
+	if (typeof performance !== "undefined" && performance.mark) {
+		performance.mark("impala67:boot-ready");
+		try {
+			const navEntry = (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]) || null;
+			const readyMark = performance.getEntriesByName("impala67:boot-ready")[0];
+			const initMark = performance.getEntriesByName("impala67:boot-init")[0];
+			const now = readyMark ? readyMark.startTime : performance.now();
+			
+			// Misst die echte Gesamt-Wartezeit ab dem ersten Browser-Navigations-Request (Navigation Timing API)
+			const navStart = navEntry ? navEntry.startTime : 0;
+			const totalMs = Math.round((now - navStart) * 100) / 100;
+			const appMs = initMark ? Math.round((now - initMark.startTime) * 100) / 100 : totalMs;
+			
+			window.__IMPALA_PERF__ = window.__IMPALA_PERF__ || {};
+			window.__IMPALA_PERF__.totalBootMs = totalMs;
+			window.__IMPALA_PERF__.appInitMs = appMs;
+			console.info(`⚡ Impala67 Startzeit (lokal): Gesamt (inkl. Navigation/HTML) = ${totalMs} ms (App-Init = ${appMs} ms)`);
+		} catch (e) { /* ignore */ }
+	}
 	SETTINGS.checkAI();
 	// Nach erfolgreicher früherer Google-Anmeldung sofort Drive abgleichen.
 	// Ohne gespeicherte Sitzung bleibt der Lauf still und öffnet kein Login-Popup.
@@ -158,6 +166,8 @@ export async function initApp() {
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
 	setInterval(pingAiStatusIfVisible, 60000);
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
+	if (LERNZEIT && LERNZEIT.startInterval) LERNZEIT.startInterval();
+	if (ANALYSE && ANALYSE.initDwellTimer) ANALYSE.initDwellTimer();
 	RAG.reindexStale();
 	// PERF (Feinschliff v11): purgeOldTrash lief bisher VOR dem ersten Render und
 	// blockierte den Start mit awaited IndexedDB-Writes (jede alte Papierkorb-Seite
@@ -206,5 +216,6 @@ export const BOOT = {
 	seedIfEmpty,
 	purgeOldTrash,
 	purgeOrphanBlobs,
+	isBlobAlive,
 	initApp
 };

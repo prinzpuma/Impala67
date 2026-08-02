@@ -6,13 +6,30 @@ import { RAG } from "./rag.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
 export const PDFS = (() => {
-	if (window.pdfjsLib) {
-		pdfjsLib.GlobalWorkerOptions.workerSrc =
-			"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+	async function ensureLoaded() {
+		const mainUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+		const workerUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+		if (!window.pdfjsLib) {
+			await U.loadScript(mainUrl, "pdfjsLib");
+		}
+		if (!window.pdfjsLib) throw new Error("pdf.js konnte nicht geladen werden.");
+		pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+		if (typeof caches !== "undefined") {
+			try {
+				const c = await caches.open("impala67-optional-modules");
+				const match = await c.match(workerUrl);
+				if (!match) {
+					await c.add(workerUrl);
+				}
+			} catch (e) {
+				throw new Error("PDF-Worker konnte nicht für die Offline-Nutzung gespeichert werden: " + ((e && e.message) || e));
+			}
+		}
+		return true;
 	}
 
 	async function extractText(buf, maxPages = 40) {
-		if (!window.pdfjsLib) throw new Error("pdf.js nicht geladen (Internet nötig).");
+		await ensureLoaded();
 		const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
 		const n = Math.min(doc.numPages, maxPages);
 		const parts = [];
@@ -83,5 +100,5 @@ export const PDFS = (() => {
 		window.open(url, "_blank");
 	}
 
-	return { ingest, openViewer, urlFor, extractText };
+	return { ingest, openViewer, urlFor, extractText, ensureLoaded };
 })();

@@ -162,7 +162,7 @@ export const GRAPH = (() => {
 	// ---------- 🤖 KI-Ausbau (Phase 4): Entitäten · Synthese · Mapping ----------
 	const KI_KEY = "impala67GraphKI";
 	let lastSynth = null;
-	function kiCache() { try { return JSON.parse(localStorage.getItem(KI_KEY) || "null"); } catch (err) { return null; } }
+	const kiCache = () => U.storage.getJson(KI_KEY, null);
 	function panel(html) {
 		const el = overlay && overlay.querySelector(".graph-panel");
 		if (el) { el.innerHTML = html; el.style.display = html ? "" : "none"; }
@@ -177,15 +177,15 @@ export const GRAPH = (() => {
 	// Route A (bevorzugt): Embedding-Modell clustert (fast gratis), LLM benennt nur.
 	// Route B (Fallback): das LLM gruppiert direkt — ein einziger Call.
 	const KI_SRC_KEY = "impala67GraphKISrc";
-	function kiOpts() { try { return JSON.parse(localStorage.getItem(KI_SRC_KEY) || "{}"); } catch (err) { return {}; } }
+	const kiOpts = () => U.storage.getJson(KI_SRC_KEY, {});
 	// 🔗 Vom Nutzer gelöschte Verbindungen — als "a|b"-Schlüssel lokal gemerkt,
 	// build() filtert sie bei jedem Aufbau wieder heraus.
 	const EDGE_HIDE_KEY = "impala67GraphHiddenEdges";
-	function hiddenEdges() { try { return new Set(JSON.parse(localStorage.getItem(EDGE_HIDE_KEY) || "[]")); } catch (err) { return new Set(); } }
+	const hiddenEdges = () => new Set(U.storage.getJson(EDGE_HIDE_KEY, []));
 	function hideEdge(a, b) {
 		const s = hiddenEdges();
 		s.add(a < b ? a + "|" + b : b + "|" + a);
-		try { localStorage.setItem(EDGE_HIDE_KEY, JSON.stringify([...s])); } catch (err) { /* egal */ }
+		U.storage.setJson(EDGE_HIDE_KEY, [...s]);
 	}
 	// Ø-Abrufbarkeit einer Themen-Kartenmenge — dieselbe Formel wie für Seiten (siehe heatOf).
 	const topicHeat = (cardIds) => heatOf((cardIds || []).map((id) => S.cards[id]));
@@ -205,7 +205,7 @@ export const GRAPH = (() => {
 		const start = (full) => {
 			const cb = overlay.querySelector("[data-gtophefte]");
 			const cp = overlay.querySelector("[data-gtoppages]");
-			try { localStorage.setItem(KI_SRC_KEY, JSON.stringify({ hefte: !!(cb && cb.checked), showPages: !!(cp && cp.checked) })); } catch (err) { /* egal */ }
+			U.storage.setJson(KI_SRC_KEY, { hefte: !!(cb && cb.checked), showPages: !!(cp && cp.checked) });
 			runTopics(!!(cb && cb.checked), full);
 		};
 		const btn = overlay && overlay.querySelector("[data-gtopstart]");
@@ -214,7 +214,7 @@ export const GRAPH = (() => {
 		if (fbtn) fbtn.addEventListener("click", () => start(true));
 		const rst = overlay && overlay.querySelector("[data-gedgereset]");
 		if (rst) rst.addEventListener("click", () => {
-			try { localStorage.removeItem(EDGE_HIDE_KEY); } catch (err) { /* egal */ }
+			U.storage.remove(EDGE_HIDE_KEY);
 			build(); ticks = Math.min(ticks, 200);
 			const leg = overlay && overlay.querySelector(".graph-legend");
 			if (leg) leg.innerHTML = legendHtml();
@@ -230,7 +230,7 @@ export const GRAPH = (() => {
 			const deckOf = (c) => String(c.deck || "").trim() || "Allgemein";
 			const pages = useHefte ? activePages().filter((p) => (p.content || "").length > 80).slice(0, 25) : [];
 			let old = null;
-			if (!full) { try { old = JSON.parse(localStorage.getItem(KI_KEY) || "null"); } catch (err) { old = null; } }
+			if (!full) old = U.storage.getJson(KI_KEY, null);
 			const oldTopics = old && Array.isArray(old.topics) ? old.topics : [];
 			let topics = null;
 			// Embedding-Route: rechnet IMMER alle Karten frisch — Embeddings kosten fast nichts
@@ -238,7 +238,7 @@ export const GRAPH = (() => {
 			if (!topics) topics = await topicsViaLlm(cards, cardTxt, pages, deckOf, oldTopics, (msg) => panel(msg));
 			if (!topics || !topics.length) throw new Error("keine brauchbaren Themen erhalten");
 			topics.forEach((tp) => { if (!tp.fach) { const c0 = S.cards[(tp.cardIds || [])[0]]; tp.fach = (c0 && String(c0.deck || "").trim()) || "Allgemein"; } });
-			localStorage.setItem(KI_KEY, JSON.stringify({ t: Date.now(), model: S.settings.aiModel || "", topics }));
+			U.storage.setJson(KI_KEY, { t: Date.now(), model: S.settings.aiModel || "", topics });
 			build(); ticks = 0;
 			const leg = overlay && overlay.querySelector(".graph-legend");
 			if (leg) leg.innerHTML = legendHtml();

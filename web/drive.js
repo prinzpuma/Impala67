@@ -4,96 +4,10 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
 import { HEFT } from "./heft.js";
-// drive.js — Google-Drive-Sync über appDataFolder. v4 (20.7.2026): KISS/DRY-Rewrite.
-// Login: PWA per Google Identity Services. Die App verwendet ausschließlich den
-// für die veröffentlichte Web-Origin registrierten OAuth-Web-Client.
-// Fixes v4:
-// [F1] Heft-Blob-Validierung nur noch per SHA-256 statt Datei-id: Konflikt-Hefte
-//      liegen remote unter der ORIGINAL-Seiten-id — der alte id-Vergleich verwarf
-//      sie, deshalb blieben Konflikt-Kopien (v.a. auf Drittgeräten) oft leer.
-// [F2] Verlierer-Blob robust sichern: auch ohne meta.hash (Alt-Hefte), sonst
-//      Download per Hash aus Drive. conflictDetails melden loserSaved/loserPages/
-//      loserBytes — das Konflikt-Popup kann endlich zeigen, was gesichert wurde.
-// [F3] Kein Remote-Replay mitten in einer Eingabe: foreground/interval/start-
-//      Auto-Syncs warten, solange getippt wird — vorher konnte genau so eine
-//      offene Seite überschrieben werden. background/close flushen weiter sofort.
-// [F4] Upload-Wasserstand wird an DB.maxSeq() geklemmt: ein zu hoher Altwert
-//      (Log-Kompaktierung/Restore/DB-Reset) schaltete die Konflikt-Erkennung
-//      still ab — Remote überschrieb lokale Änderungen dann ohne Konfliktkopie.
-// [F5] Eigenes Delta wird nach dem Upload auch PERSISTENT als bekannt markiert
-//      (vorher nur in-memory → nächster Sync lud das eigene Paket erneut).
-// Perf v4: ein allBlobKeys-Read statt zwei; Blob-Upload gzippt die bereits
-// serialisierten Bytes direkt (vorher decode→parse→stringify→encode); tote
-// findFile()-Logik entfernt; Parallelität moderat erhöht (6 statt 4).
-// v5 (21.7.2026): Changes API statt Voll-Listing — listSyncFiles() pflegt einen
-// lokalen Datei-Index (localStorage, atomar MIT dem pageToken) und holt per
-// changes.list nur noch, was sich seit dem letzten Sync geändert hat. Fallback
-// auf Voll-Listing bei Erst-Sync oder ungültigem Token (Drive 404/410); eigene
-// Uploads/Deletes aktualisieren den Index sofort. Skaliert damit unabhängig
-// von der wachsenden Delta-/Blob-Dateizahl (Kompaktierung greift erst ab 50).
-// v6 (25.7.2026), Audit-Fixes:
-// [G1] Uhren-Drift per Minimum-RTT-Schätzer statt Einzelmessung — vorher wurde Netz-
-//      latenz als Drift gemessen (300 ms Mobilfunk = 300 ms Phantom-Drift) und floss
-//      über U.setClockOffset in die Event-Zeitstempel, also in JEDE LWW-Entscheidung.
-// [G2] known_blobs entfällt: boundedKnownIds kappte bei 2000 ids, wodurch ab ~2000
-//      Blob-Dateien jeder Sync die ältesten erneut VOLLSTÄNDIG herunterlud, nur um sie
-//      danach zu verwerfen. Die Entscheidung fällt jetzt über appProperties.blobId aus
-//      der ohnehin geladenen Dateiliste — vor dem Download.
-// [G3] Snapshot-Runde setzt knownDeltaIds in-memory UND persistiert gemeinsam zurück.
-// [G4] Pull-Phase: Snapshot + Delta-Shards laufen jetzt in EINEM importAll (vorher zwei)
-//      und werden parallel heruntergeladen. Spart pro Sync einen kompletten Lese-Durchlauf
-//      über den lokalen Event-Log — und schließt die Geister-Konflikt-Fehlerklasse
-//      strukturell: es gibt keinen zweiten Durchlauf mehr, der die Events des ersten für
-//      eigene ungesyncte Änderungen halten könnte.
-// v8 (25.7.2026) — Hefte sind keine Binärdateien mehr, sondern Events (heftOps/heftSnap).
-// Damit fällt in dieser Datei der komplette zweite Transportweg weg: kein heftHeads, kein
-// reconcileHeftBlobs, keine Heft-GC, kein Hash-Abgleich, kein Nachlauf-Timer. Hefte reisen
-// jetzt exakt denselben Weg wie Notizen — Delta hoch, Delta runter, fertig. Die gesamte
-// Fehlerklasse „Event ist da, Inhalt fehlt“ kann strukturell nicht mehr auftreten, weil es
-// kein Event mehr gibt, das auf etwas AUßERHALB des Logs zeigt.
-// Neu: nach dem Replay importierter Events feuert STATE.emitRemoteApplied — ein offenes Heft
-// zeichnet fremde Striche sofort nach, ohne Neustart und ohne Seitenwechsel.
-// Historie (v7/v7.1) entfernt: sie beschrieb ausschließlich Reparaturen an genau der Blob-
-// Mechanik, die es nicht mehr gibt.
-// v9 (25.7.2026), Audit über db.js × drive.js × sync-core.js — alles Befunde, die beim Lesen
-// EINER Datei unsichtbar sind:
-// [A2] Der Post-Upload-Sweep ist ein ZWEITER importAll-Aufruf und lief mit dem alten Wasserstand.
-//      [G4] hat die Geister-Konflikte damit nur für die Pull-Phase geschlossen: die im ersten
-//      Durchgang erzeugten merge3-/Konflikt-Events sind bewusst nicht _remote und lagen über
-//      uploadedSeq — der Sweep hielt sie für eigene Bearbeitungen und legte Konfliktkopien gegen
-//      den eigenen Merge an. Jetzt wird der Wasserstand vorher nachgezogen (+ _derived in db.js).
-// [A5] Auto-Sync hatte keine Obergrenze fürs Aufschieben: isEditing() prüfte nur den FOKUS, ein
-//      geparkter Cursor stoppte den Sync unbegrenzt. Jetzt Tipp-Erkennung + MAX_DEFER_MS.
-// [A6] Der pagehide-Flush lief über den vollen syncRaw (Lock, Listing, Downloads) und erreichte
-//      den keepalive-Upload praktisch nie. Jetzt eigener Kurzweg flushUpload() ohne Pull.
-// [A7] Nach jeder Snapshot-Runde wurde der Stempel gelöscht — das Gerät lud den Snapshot, den es
-//      gerade selbst hochgeladen hat, im Folgelauf komplett wieder herunter.
-// [A8] Der Uhren-Schätzer kannte kein Alter: ein einzelnes schnelles Sample von vor Stunden konnte
-//      den Offset festnageln, der über U.setClockOffset in JEDEN Zeitstempel fließt.
-// [A9] del() verschluckte Fehlschläge, während knownDeltaIds pauschal geleert wurde.
-// -- Archiv der Blob-Ära (v7, 25.7.2026), nur noch zur Einordnung:
-// [H1] Nachzügler-Deltas (Post-Upload-Sweep) brachten die heftUpdated-EVENTS mit, aber nie
-//      die zugehörigen Striche — der Blob-Abgleich war zu diesem Zeitpunkt längst gelaufen.
-//      Ergebnis: Sync meldet Erfolg, das Heft zeigt den alten Stand. Jetzt zweiter Durchgang.
-// [H2] Der Aufräumlauf löschte FREMDE Heft-Stände. syncRaw lädt erst den Blob und danach das
-//      Delta hoch; wer in genau diesem Fenster listet, sieht die neue Blob-Datei OHNE das
-//      zugehörige Event, hält sie für verwaist und löscht sie. Der vom Event referenzierte
-//      Hash war damit dauerhaft weg — die Zeichnung tauchte nirgends mehr auf, auch nach
-//      Neustart nicht. Jetzt: nur eigene/bekannte Hefte, Schonfrist, und Aufräumen erst NACH
-//      dem Delta-Upload.
-// [H3] Fehlende Blobs werden nicht mehr als „Synchronisiert“ verkauft, sondern gemeldet und
-//      mit wachsendem Abstand nachgeholt.
-// [H4] heftver:-Verlaufs-Snapshots (heft.js) wanderten entgegen ihrer Zusage nach Drive und
-//      auf alle anderen Geräte — sie sind ausdrücklich lokal gedacht.
-// v7.1 (25.7.2026), Nachwehen von [H2]:
-// [H5] Die v6-GC hat über Tage FREMDE Heft-Stände gelöscht. Die Köpfe im Event-Log zeigen
-//      seitdem auf Hashes, die es in Drive nicht mehr gibt — Dutzende gleichzeitig. [H3] hat
-//      das korrekt erkannt, aber falsch behandelt: alles hieß „wird noch geholt“, der Nachlauf
-//      lief endlos im Kreis („49 Heft-Stände werden nachgeholt“, minutenlang), und der Status
-//      blieb hängen. Ein Zeiger ins Leere löst sich aber NIE durch Warten auf.
-//      Jetzt drei getrennte Fälle: frisch (warten hilft) · verwaist mit lokaler Kopie (dieses
-//      Gerät hat die einzigen überlebenden Striche → es erklärt sie zum neuen Kopf und lädt sie
-//      hoch, der Zeiger heilt aus) · verwaist ohne Kopie (ehrlich melden, nicht im Kreis laufen).
+// Google-Drive-Sync im privaten appDataFolder.
+// Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
+// bekannte Daten, Dateien werden vor dem Download geprüft und parallele Tabs teilen ein Lock.
+// Historische Fehleranalysen und Migrationen stehen im Git-Verlauf.
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
 	const FILE_NAME = "impala67-sync.json", LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar

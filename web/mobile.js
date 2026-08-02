@@ -133,7 +133,6 @@ export const MOBILE = (() => {
 				["notebooklm", "🤖", "Gemini"],
 				["graph",      "🕸️", "Wissensgraph"],
 				["library",   "📖", "Bibliothek"],
-				["saved",     "🔖", "Gespeichert"],
 				["trash",     "🗑️", "Papierkorb"],
 				["settings",  "⚙️", "Einstellungen"],
 			].map(([a, ic, label]) =>
@@ -194,7 +193,7 @@ export const MOBILE = (() => {
 		// Mehr-Sheet Feature-Buttons
 		if (mact) {
 			body.classList.remove("mmore-open");
-			const map = { notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", saved: "#btnSaved", trash: "#btnTrash", settings: "#btnSettings" };
+			const map = { notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
 			document.querySelector(map[mact])?.click();
 			updateUI();
 			return;
@@ -317,7 +316,7 @@ export const MOBILE = (() => {
 		STATE.onAfterDispatch(scheduleUI);
 		new MutationObserver(scheduleUI).observe(body, { attributes: true, attributeFilter: ["class"] });
 		const main = document.getElementById("main");
-		if (main) new MutationObserver(scheduleUI).observe(main, { childList: true, subtree: true });
+		if (main) new MutationObserver(scheduleUI).observe(main, { childList: true });
 		setInterval(scheduleUI, 60000);
 	}
 

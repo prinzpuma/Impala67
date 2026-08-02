@@ -82,12 +82,22 @@ export const ANALYSE = (() => {
 		}
 		dwell = null;
 	}
-	setInterval(() => {
-		const pid = S.view === "page" ? S.currentPageId : null;
-		if (!pid || document.hidden) return;
-		if (!dwell || dwell.pageId !== pid) { flushDwell(); dwell = { pageId: pid, ms: 0, lost: 0 }; }
-		dwell.ms += 15000;
-	}, 15000);
+	let dwellTimer = 0;
+	function initDwellTimer() {
+		if (dwellTimer) return;
+		dwellTimer = setInterval(() => {
+			const pid = S.view === "page" ? S.currentPageId : null;
+			if (!pid || document.hidden) return;
+			if (!dwell || dwell.pageId !== pid) { flushDwell(); dwell = { pageId: pid, ms: 0, lost: 0 }; }
+			dwell.ms += 15000;
+		}, 15000);
+	}
+	function stopDwellTimer() {
+		if (dwellTimer) {
+			clearInterval(dwellTimer);
+			dwellTimer = 0;
+		}
+	}
 	document.addEventListener("visibilitychange", () => { if (document.hidden && dwell) dwell.lost++; });
 	window.addEventListener("pagehide", flushDwell);
 
@@ -202,5 +212,5 @@ export const ANALYSE = (() => {
 			"</div>";
 	}
 
-	return { statsHtml };
+	return { statsHtml, initDwellTimer, stopDwellTimer };
 })();

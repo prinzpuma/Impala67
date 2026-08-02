@@ -43,3 +43,24 @@ export async function decodeJson(bytes, encoding) {
 export function boundedKnownIds(ids, max = 2000) {
 	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
 }
+
+export function isBlobAlive(key, pages) {
+	const k = String(key || "");
+	if (!k) return false;
+	const pageStrings = [];
+	for (const pg of Object.values(pages || {})) {
+		if (!pg || typeof pg !== "object") continue;
+		for (const v of Object.values(pg)) {
+			if (typeof v === "string" && v) pageStrings.push(v);
+		}
+	}
+	const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+	const isRef = (target) => !!target && pageStrings.some((s) => s.includes(target));
+
+	if (k.startsWith("heft:")) return !!(pages && pages[k.slice(5)]);
+	if (k.startsWith("pdftext:")) return isRef(k.slice(8));
+	if (k.startsWith("cover:")) return isRef(k) || isRef(k.slice(6));
+	if (isUuid(k)) return isRef(k);
+	// Fail-safe: gerätespezifische oder unbekannte Schlüssel ("bgImage", "heftver:...") nie löschen
+	return true;
+}

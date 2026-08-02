@@ -4,6 +4,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
+import { PDFS } from "./pdfs.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -650,12 +651,44 @@ export const HEFT = (() => {
 		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
 		return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
 	}
+	function calcStrokeBBox(s) {
+		if (!s) return null;
+		if (s.bbox) return s.bbox;
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		if (Array.isArray(s.pts)) {
+			for (let i = 0; i < s.pts.length; i++) {
+				const p = s.pts[i];
+				if (p[0] < minX) minX = p[0];
+				if (p[0] > maxX) maxX = p[0];
+				if (p[1] < minY) minY = p[1];
+				if (p[1] > maxY) maxY = p[1];
+			}
+		}
+		if (s.shape) {
+			const a = s.shape;
+			if (a.x1 != null) {
+				minX = Math.min(minX, a.x1, a.x2); maxX = Math.max(maxX, a.x1, a.x2);
+				minY = Math.min(minY, a.y1, a.y2); maxY = Math.max(maxY, a.y1, a.y2);
+			} else if (a.cx != null) {
+				minX = Math.min(minX, a.cx - a.rx); maxX = Math.max(maxX, a.cx + a.rx);
+				minY = Math.min(minY, a.cy - a.ry); maxY = Math.max(maxY, a.cy + a.ry);
+			}
+		}
+		const margin = (s.size || 3) * 2 + 4;
+		s.bbox = isFinite(minX) ? { minX: minX - margin, minY: minY - margin, maxX: maxX + margin, maxY: maxY + margin } : null;
+		return s.bbox;
+	}
 	function translateStroke(s, dx, dy) {
 		if (Array.isArray(s.pts)) s.pts.forEach((p) => { p[0] += dx; p[1] += dy; });
 		const sh = s.shape;
-		if (!sh) return;
-		if (sh.x1 != null) { sh.x1 += dx; sh.y1 += dy; sh.x2 += dx; sh.y2 += dy; }
-		if (sh.cx != null) { sh.cx += dx; sh.cy += dy; }
+		if (sh) {
+			if (sh.x1 != null) { sh.x1 += dx; sh.y1 += dy; sh.x2 += dx; sh.y2 += dy; }
+			if (sh.cx != null) { sh.cx += dx; sh.cy += dy; }
+		}
+		if (s.bbox) {
+			s.bbox.minX += dx; s.bbox.maxX += dx;
+			s.bbox.minY += dy; s.bbox.maxY += dy;
+		}
 	}
 	function drawSelection(x, im) {
 		x.save();
@@ -675,13 +708,21 @@ export const HEFT = (() => {
 		x.stroke();
 		x.restore();
 	}
-	function renderPageTo(x, pg, pi) {
+	function renderPageTo(x, pg, pi, tileRect = null) {
 		paintPaper(x, PAGE_W, PAGE_H, pg.paper);
 		(pg.images || []).forEach((im) => {
 			const el = imgEl(im);
 			if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
-		pg.strokes.forEach((s) => drawStroke(x, s));
+		(pg.strokes || []).forEach((s) => {
+			if (tileRect) {
+				const b = s.bbox || calcStrokeBBox(s);
+				if (b && (b.maxX < tileRect.x || b.minX > tileRect.x + tileRect.w || b.maxY < tileRect.y || b.minY > tileRect.y + tileRect.h)) {
+					return;
+				}
+			}
+			drawStroke(x, s);
+		});
 		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
 		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
@@ -945,7 +986,7 @@ export const HEFT = (() => {
 		x.clearRect(0, 0, tile.width, tile.height);
 		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
 		tileTransform(x, tile.__heftTile);
-		renderPageTo(x, doc.pages[i], i);
+		renderPageTo(x, doc.pages[i], i, r);
 		if (wet) {
 			placeLayer(wet, i, r, dpr);
 			const wx = wet.getContext("2d");
@@ -976,10 +1017,21 @@ export const HEFT = (() => {
 
 	function liveInkCtx(i) {
 		const wet = wetCanvases[i];
-		if (wet && wet.__heftTile && wet.style.display !== "none") {
-			const x = wet.getContext("2d");
-			tileTransform(x, wet.__heftTile);
-			return x;
+		if (wet) {
+			let r = wet.__heftTile;
+			if (!r || wet.style.display === "none") {
+				r = layerRectFor(i);
+				if (r) {
+					const dpr = tileDpr(r);
+					placeLayer(wet, i, r, dpr);
+				}
+			}
+			if (wet.__heftTile && wet.style.display !== "none") {
+				const x = wet.getContext("2d");
+				x.setTransform(1, 0, 0, 1, 0, 0);
+				tileTransform(x, wet.__heftTile);
+				return x;
+			}
 		}
 
 		const x = canvases[i].getContext("2d");
@@ -1279,9 +1331,12 @@ export const HEFT = (() => {
 		return s.pts || [];
 	}
 	function strokeHitAt(s, x, y, r) {
+		const b = s.bbox || calcStrokeBBox(s);
+		const rr = r + (s.size || 2) / 2;
+		if (b && (x + rr < b.minX || x - rr > b.maxX || y + rr < b.minY || y - rr > b.maxY)) return false;
 		const pts = strokeOutline(s);
 		if (!pts.length) return false;
-		const rr = r + (s.size || 2) / 2, rr2 = rr * rr;
+		const rr2 = rr * rr;
 		if (pts.length === 1) { const dx = pts[0][0] - x, dy = pts[0][1] - y; return dx * dx + dy * dy <= rr2; }
 		for (let i = 1; i < pts.length; i++) if (segDist2(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= rr2) return true;
 		return false;
@@ -1616,6 +1671,7 @@ export const HEFT = (() => {
 			const stroke = drawing.snapped
 				? { id: U.uid(), tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
 				: { id: U.uid(), tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
+			calcStrokeBBox(stroke);
 			pg.strokes.push(stroke);
 			pushUndo({ kind: "add", stroke, pageIdx: pi });
 			scheduleSave();
@@ -2205,11 +2261,14 @@ export const HEFT = (() => {
 		});
 	}
 	async function importPdf(f, at) {
-		const lib = window.pdfjsLib;
-		if (!lib) {
-			if (U.toast) U.toast("PDF-Import braucht pdf.js — bitte einmal den PDF-Bereich öffnen", "error");
+		try {
+			await PDFS.ensureLoaded();
+		} catch (e) {
+			if (U.toast) U.toast("PDF-Engine konnte nicht geladen werden: " + ((e && e.message) || e), "error");
 			return at;
 		}
+		const lib = window.pdfjsLib;
+		if (!lib) return at;
 		const buf = await f.arrayBuffer();
 		const pdf = await lib.getDocument({ data: buf }).promise;
 		for (let i = 1; i <= pdf.numPages; i++) {
@@ -3333,7 +3392,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

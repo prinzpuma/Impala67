@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<script>if (typeof performance !== "undefined" && performance.mark) performance.mark("impala67:nav-start");</script>
 <!-- 🔐 CSP-Grundschutz (Umsetzungs-Runde 21. Juli): Skripte/Styles nur von der eigenen
      Origin und den zwei festen CDNs (+ Google-Login); object/base/form komplett dicht.
      'unsafe-inline' bleibt nötig (Boot-Splash-/Diagnose-Inline-Skripte unten, Laufzeit-
@@ -64,29 +65,12 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      Vektor-Icon (icon.svg) nicht. Er gehört hierher in den <head>. -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
-<!-- CDN-Bibliotheken: Markdown-Rendering + PDF-Textextraktion + Google Login + LaTeX (KaTeX) + Code-Highlighting -->
-<!-- CDN-Bibliotheken: crossorigin ist Voraussetzung für die SRI-Integritätsprüfung.
-     Die integrity-Attribute erzeugt/erneuert einmalig:  node tools/gen-sri.mjs
-     (lädt jede Bibliothek, berechnet den Hash, trägt ihn hier ein — siehe Projekt-Doku).
-     Der Browser verweigert danach manipulierte CDN-Antworten (Supply-Chain-Schutz). -->
+<!-- CDN-Bibliotheken: Leichtgewichtige Basis (Markdown-Rendering + DOM-Sanitizing + Google Login).
+     Schwere Zusatzmodule (Mermaid, Math.js, PDF.js, Tesseract, KaTeX, Highlight.js) werden
+     bedarfsgerecht bei Nutzung nachgeladen (siehe util.js, pdfs.js, handschrift.js, tools.js). -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" crossorigin="anonymous">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" crossorigin="anonymous"></script>
-<!-- Lokale OCR-Ausführung für Handschrift-/Textsuche in GoodNotes-Heften. Die Bilddaten verlassen den Browser nicht. -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" crossorigin="anonymous"></script>
-<!-- 🧮 Taschenrechner-Tool (18. Juli, spät v3): math.js liefert Grundrechenarten,
-     Brüche, komplexe Zahlen, Vektoren/Matrizen, Einheiten-Umrechnung und symbolische
-     Ableitungen — fertig, ohne einen eigenen Rechner/Parser schreiben zu müssen
-     (siehe tools.js, Tool "calculate"). Bestimmte Integrale löst tools.js selbst
-     numerisch (Simpson-Regel), das kann math.js nicht nativ. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js" crossorigin="anonymous"></script>
 </head>
 <body class="panel-collapsed">
 <div id="bg"></div>

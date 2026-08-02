@@ -25,8 +25,8 @@ const LS = {
 	vib: "impala67ControllerVib",
 	dead: "impala67ControllerDead",
 };
-const get = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : v; } catch { return fb; } };
-const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
+const get = (k, fb) => U.storage.get(k, fb);
+const put = (k, v) => U.storage.set(k, v);
 
 const enabled = () => get(LS.on, "off") === "on"; // Standard: aus
 const hudOn = () => get(LS.hud, "on") === "on";
@@ -63,8 +63,7 @@ const labelOf = (id) => (id == null ? "—" : (id[0] === "a" ? "Achse " + id.sli
 
 // Belegung = Standard + gespeicherte Abweichungen (null = bewusst frei gelassen).
 function map() {
-	let saved = {};
-	try { saved = JSON.parse(get(LS.map, "{}")) || {}; } catch { /* Standard */ }
+	const saved = U.storage.getJson(LS.map, {});
 	const out = {};
 	for (const a of ACTIONS) out[a.id] = saved[a.id] !== undefined ? saved[a.id] : a.def;
 	return out;
@@ -225,7 +224,7 @@ function learnBind(inputId) {
 	m[learn] = inputId;
 	const label = (BY_ID.get(learn) || {}).label || learn;
 	learn = null;
-	put(LS.map, JSON.stringify(m));
+	U.storage.setJson(LS.map, m);
 	hadPad = null;
 	U.toast(label + " → " + labelOf(inputId), "success");
 	reopen();
@@ -270,10 +269,10 @@ document.addEventListener("click", (e) => {
 	else if (t.dataset.padclear) {
 		const m = map();
 		m[t.dataset.padclear] = null;
-		put(LS.map, JSON.stringify(m));
+		U.storage.setJson(LS.map, m);
 		hadPad = null;
 	} else if (t.dataset.padlearncancel) learn = null;
-	else { localStorage.removeItem(LS.map); hadPad = null; U.toast("Standard-Belegung wiederhergestellt.", "success"); }
+	else { U.storage.remove(LS.map); hadPad = null; U.toast("Standard-Belegung wiederhergestellt.", "success"); }
 	reopen();
 }, true);
 

@@ -773,6 +773,13 @@ export const TOOLS = (() => {
 				};
 			}
 			case "calculate": {
+				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") {
+					try {
+						await U.loadScript("https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js", "math");
+					} catch {
+						return { error: "Mathe-Modul (math.js) konnte nicht geladen werden. Internetverbindung für den Erstabruf erforderlich." };
+					}
+				}
 				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") return { error: "Mathe-Modul (math.js) nicht geladen — evtl. noch offline/kein Netz beim ersten Start." };
 				const expr = String(a.expression || "").trim();
 				if (!expr) return { error: "calculate: expression fehlt." };

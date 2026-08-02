@@ -4,11 +4,11 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v119"; // PWA-only: frischer Offline-Cache ohne Desktop-Artefakte.
-// Geteilte PDFs liegen in einem EIGENEN Cache. Der Name steht hier, weil das
-// Aufräumen unten ihn kennen muss: er wurde bisher bei jeder Aktivierung mit
-// gelöscht — eine gerade geteilte Datei war nach einem Update verschwunden.
+const CACHE = "impala67-v123"; // PWA-only: bedarfsgerechtes Nachladen von Zusatzmodulen.
+// Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
+// Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
+const OPTIONAL_CACHE = "impala67-optional-modules";
 
 const APP_FILES = [
 	"./",
@@ -67,24 +67,12 @@ const APP_FILES = [
 	"./heft-scan.js",
 ];
 
-// CDN-Bibliotheken beim Installieren vorab cachen (best effort) - damit Markdown,
-// LaTeX, Highlighting, Mermaid und PDF auch offline funktionieren, ohne dass jede
-// Bibliothek vorher einmal benutzt worden sein muss.
+// Leichtgewichtige Basis-CDN-Bibliotheken beim Installieren vorab cachen.
+// Schwere Zusatzmodule (Mermaid, Math.js, PDF.js, Tesseract, KaTeX, Highlight.js)
+// werden erst bei der ersten Nutzung im UI/Workflow geladen und danach vom SW gecacht.
 const CDN_FILES = [
 	"https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js",
 	"https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js",
-	"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
-	"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
-	"https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css",
-	"https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js",
-	"https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js",
-	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css",
-	"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js",
-	"https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js",
-	"https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
-	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js",
-	"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
-	"https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js",
 ];
 
 // Installation: App-Dateien verpflichtend, CDN-Dateien best effort vorab cachen.
@@ -99,11 +87,11 @@ self.addEventListener("install", (e) => {
 	);
 });
 
-// Aktivierung: alte Cache-Versionen aufräumen und sofort übernehmen.
+// Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE) bewahren.
 self.addEventListener("activate", (e) => {
 	e.waitUntil(
 		caches.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE).map((k) => caches.delete(k))))
+			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE && k !== OPTIONAL_CACHE).map((k) => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
@@ -159,15 +147,11 @@ self.addEventListener("fetch", (e) => {
 	// offline blieb die App danach weiß. Ein Eintrag je Pfad statt je Query-Variante.
 	const key = sameOrigin ? url.pathname : req;
 	e.respondWith(
-		caches.open(CACHE).then(async (cache) => {
-			const cached = await cache.match(key);
-			// App-Dateien: network-first - jeder normale Start lädt die aktuelle Version
-			// (kein Strg+Shift+R mehr nötig); offline dient der Cache als Fallback.
+		(async () => {
 			if (sameOrigin) {
+				const cache = await caches.open(CACHE);
+				const cached = await cache.match(key);
 				try {
-					// iPadOS kann auch hinter einem network-first Worker noch eine alte HTTP-
-					// Cache-Antwort liefern. App-Module, CSS und HTML müssen deshalb wirklich
-					// vom Netz kommen; der Cache bleibt ausschließlich Offline-Fallback.
 					const res = await fetch(new Request(req, { cache: "no-store" }));
 					if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
 					return res;
@@ -175,14 +159,19 @@ self.addEventListener("fetch", (e) => {
 					return cached || Response.error();
 				}
 			}
-			// CDN-Bibliotheken: cache-first - die URLs sind versionsgepinnt und damit
-			// unveränderlich (tools/gen-sri.mjs erzwingt das Pinning). Das frühere
-			// stale-while-revalidate lud jede Bibliothek bei JEDEM Start erneut übers
-			// Netz - Bandbreite/Akku ohne Nutzen. Fehlt die Datei, wird sie einmal geladen.
+			// CDN-Bibliotheken & Zusatzmodule: versionsübergreifenden OPTIONAL_CACHE zuerst prüfen
+			const optCache = await caches.open(OPTIONAL_CACHE);
+			let cached = await optCache.match(key);
+			if (!cached) {
+				const mainCache = await caches.open(CACHE);
+				cached = await mainCache.match(key);
+			}
 			if (cached) return cached;
 			const res = await fetch(req);
-			if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
+			if (res && res.ok && !isHtmlFallback(url.pathname, res)) {
+				optCache.put(key, res.clone());
+			}
 			return res;
-		})
+		})()
 	);
 });

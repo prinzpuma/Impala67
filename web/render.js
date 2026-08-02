@@ -16,13 +16,10 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { TELE } from "./telemetrie.js";
 
-// v13: KISS/DRY-Refactor, funktionsgleich zu v12. Fixes: openReview crasht nicht
-// mehr bei leerer dueNow-Queue; toter Code entfernt (cap/note im Modell-Menü,
-// panelCollapsed in renderTabs). DRY: lsGet/lsSet, openOverlay, blobUrl, trashRow.
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
-const lsGet = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* egal */ } };
+const lsGet = (k, fb) => U.storage.getJson(k, fb);
+const lsSet = (k, v) => U.storage.setJson(k, v);
 function openOverlay(html) {
 	const o = $("overlay");
 	if (!o) return null;
@@ -292,6 +289,68 @@ function setHtmlIfChanged(el, html, key = "_lastHtml") {
 	return true;
 }
 
+const cssEsc = (s) => (typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&"));
+
+// Schnelle O(1)-Abstimmung für aktive Zeile im Seitenbaum/Chatverlauf — vermeidet
+// Voll-Rebuild und DOM-Morphing über den gesamten Bestand beim reinen Tabwechsel.
+function syncActiveSidebarRow(tree) {
+	if (!tree || !tree.firstElementChild) return false;
+	const currentMode = tree.dataset.sbmode || "";
+	const targetMode = S.sidebarMode === "chats" ? "chats" : (S.view === "anki" ? "anki" : "files");
+	if (currentMode !== targetMode) return false;
+
+	if (targetMode === "chats") {
+		const targetId = S.currentChatId;
+		const curActive = tree.querySelector(".row.active");
+		const targetRow = targetId ? tree.querySelector(`.row[data-chat="${cssEsc(targetId)}"]`) : null;
+		if (curActive === targetRow) return true;
+		if (targetId && !targetRow) return false; // Chat-Zeile in der Sidebar nicht gefunden -> Fallback auf Voll-Render
+		if (curActive) curActive.classList.remove("active");
+		if (targetRow) targetRow.classList.add("active");
+		return true;
+	}
+
+	if (targetMode === "files") {
+		const targetId = S.view === "page" ? S.currentPageId : null;
+		const curActive = tree.querySelector(".row.active");
+		const targetRow = targetId ? tree.querySelector(`.row[data-page="${cssEsc(targetId)}"]`) : null;
+		if (curActive === targetRow) return true;
+		if (targetId && !targetRow) return false; // Seite nicht in der Sidebar (neu/eingeklappt) -> Fallback auf Voll-Render
+		if (curActive) curActive.classList.remove("active");
+		if (targetRow) targetRow.classList.add("active");
+		return true;
+	}
+
+	return false;
+}
+
+// Schnelle O(1)-Abstimmung für aktiven Tab-Chip und Nav-Buttons.
+function syncActiveTabChip(bar) {
+	if (!bar || !bar.firstElementChild) return false;
+	const chips = [...bar.querySelectorAll(".tabchip[data-tabopen]")];
+	if (chips.length !== S.tabs.length) return false;
+	for (let i = 0; i < chips.length; i++) {
+		if (chips[i].dataset.tabopen !== S.tabs[i]) return false;
+	}
+
+	const isChat = String(S.activeTabId).startsWith("chat:");
+	const isNlm = S.activeTabId === "nlm:main";
+	const isAnki = S.activeTabId === "anki:main";
+	const activeViewMatches = (isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (isAnki && S.view === "anki") || (!isChat && !isNlm && !isAnki && S.view === "page");
+	const targetActiveId = activeViewMatches ? S.activeTabId : null;
+
+	chips.forEach((chip) => {
+		const shouldBeActive = targetActiveId != null && chip.dataset.tabopen === targetActiveId;
+		chip.classList.toggle("active", shouldBeActive);
+	});
+
+	const backBtn = $("btnNavBack");
+	if (backBtn) backBtn.disabled = !(S.navIndex > 0);
+	const fwdBtn = $("btnNavForward");
+	if (fwdBtn) fwdBtn.disabled = !(S.navIndex < S.navHistory.length - 1);
+	return true;
+}
+
 // "files" = Workspaces mit Seitenbaum, "chats" = Chat-Verlauf
 function renderSidebar() {
 	renderTopbar();
@@ -301,10 +360,25 @@ function renderSidebar() {
 	// Commit/Abbrechen leert die Flags VOR render() und läuft normal durch
 	const ae = document.activeElement;
 	if ((S.renamingPageId || S.renamingDeck) && ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)) return;
-	// Expliziter Chat-Modus hat Vorrang (sonst aus Anki heraus nie erreichbar)
-	if (S.sidebarMode === "chats") return void setHtmlIfChanged(tree, chatListHtml());
+
+	if (syncActiveSidebarRow(tree)) {
+		if (S.pageMenuOpenId) {
+			const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
+			const menu = tree.querySelector(".page-menu");
+			if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+		}
+		return;
+	}
+
+	const mode = S.sidebarMode === "chats" ? "chats" : (S.view === "anki" ? "anki" : "files");
+	if (S.sidebarMode === "chats") {
+		setHtmlIfChanged(tree, chatListHtml());
+		tree.dataset.sbmode = mode;
+		return;
+	}
 	if (S.view === "anki") {
 		setHtmlIfChanged(tree, deckTreeHtml());
+		tree.dataset.sbmode = mode;
 		// Offenes ⋯-Menü nach Rebuild fixed neu positionieren, sonst clippt #tree
 		if (S.deckMenuOpenName) {
 			const name = CSS.escape(S.deckMenuOpenName);
@@ -322,6 +396,7 @@ function renderSidebar() {
 		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 	}
 	setHtmlIfChanged(tree, html);
+	tree.dataset.sbmode = mode;
 	// dito: offenes Seiten-⋯-Menü nach JEDEM Rebuild neu positionieren
 	if (S.pageMenuOpenId) {
 		const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
@@ -395,6 +470,8 @@ function pageMenuHtml(pg) {
 function renderTabs() {
 	const bar = $("tabbar");
 	if (!bar) return;
+	if (syncActiveTabChip(bar)) return;
+
 	// Chat-Titel einmal laden (nicht pro Tab CHATS.load()) — PERF (Audit 21. Juli):
 	// und NUR, wenn überhaupt Chat-Tabs offen sind. Sonst parste jeder einzelne Render
 	// den kompletten Chat-Verlauf aus localStorage, obwohl kein Tab ihn braucht.
@@ -573,18 +650,13 @@ function markConflictResolved(conflictPageId) {
 const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
 const loadPendingConflicts = () => lsGet(CONFLICT_KEY, []);
 function savePendingConflicts(list) {
-	if (!list || !list.length) { localStorage.removeItem(CONFLICT_KEY); return; }
+	if (!list || !list.length) { U.storage.remove(CONFLICT_KEY); return; }
 	// Bug-1-Fix: localContent/remoteContent können die localStorage-Quota sprengen.
 	// Fallback: ohne Textfelder speichern — beim Öffnen des Dialogs werden sie aus
 	// S.pages rekonstruiert (solange die Sitzung läuft ist das verlustfrei).
-	try {
-		localStorage.setItem(CONFLICT_KEY, JSON.stringify(list));
-	} catch {
-		try {
-			const slim = list.map(({ localContent, remoteContent, loserContent, ...rest }) => rest);
-			localStorage.setItem(CONFLICT_KEY, JSON.stringify(slim));
-		} catch { /* egal */ }
-	}
+	if (U.storage.setJson(CONFLICT_KEY, list)) return;
+	const slim = list.map(({ localContent, remoteContent, loserContent, ...rest }) => rest);
+	U.storage.setJson(CONFLICT_KEY, slim);
 }
 function mergePendingConflicts(details) {
 	const map = new Map(loadPendingConflicts().map((c) => [c.conflictPageId || c.pageId, c]));

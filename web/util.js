@@ -3,6 +3,100 @@
 export const U = {
 	uid: () => crypto.randomUUID(),
 
+	// Dynamisches Nachladen von Skripten & Stylesheets für bedarfsgerechte Modulnutzung.
+	// Wichtig: Speichern im versionsübergreifenden Cache (impala67-optional-modules) wird
+	// abgewartet (await). Schlägt das Cachen fehl, schlägt das Laden fehl (strikte Offline-Garantie).
+	_pendingLoads: new Map(),
+	loadScript(src, testGlobal) {
+		if (testGlobal && typeof window !== "undefined" && window[testGlobal]) {
+			return Promise.resolve(true);
+		}
+		if (U._pendingLoads.has(src)) return U._pendingLoads.get(src);
+		const p = (async () => {
+			const existing = document.querySelector(`script[src="${src}"]`);
+			if (!existing) {
+				const s = document.createElement("script");
+				s.src = src;
+				s.crossOrigin = "anonymous";
+				document.head.appendChild(s);
+				await new Promise((resolve, reject) => {
+					s.onload = () => { s.dataset.loaded = "1"; resolve(); };
+					s.onerror = () => reject(new Error("Netzwerkfehler beim Laden von " + src));
+				});
+			} else if (existing.dataset.loaded !== "1" && !(testGlobal && window[testGlobal])) {
+				await new Promise((resolve, reject) => {
+					existing.addEventListener("load", () => resolve(), { once: true });
+					existing.addEventListener("error", (e) => reject(e), { once: true });
+				});
+			}
+			// Strikte Garantie: Speichern im versionsübergreifenden Offline-Cache MUSS erfolgreich sein
+			if (typeof caches !== "undefined") {
+				try {
+					const cache = await caches.open("impala67-optional-modules");
+					const match = await cache.match(src);
+					if (!match) {
+						await cache.add(src);
+					}
+				} catch (e) {
+					throw new Error("Modul " + src + " geladen, aber Offline-Speicherung fehlgeschlagen: " + ((e && e.message) || e));
+				}
+			}
+			return true;
+		})().catch((err) => {
+			U._pendingLoads.delete(src);
+			throw err;
+		});
+		U._pendingLoads.set(src, p);
+		return p;
+	},
+	loadStyle(href) {
+		if (document.querySelector(`link[href="${href}"]`)) return Promise.resolve(true);
+		return (async () => {
+			const l = document.createElement("link");
+			l.rel = "stylesheet";
+			l.href = href;
+			l.crossOrigin = "anonymous";
+			document.head.appendChild(l);
+			await new Promise((resolve, reject) => {
+				l.onload = () => resolve();
+				l.onerror = () => reject(new Error("Netzwerkfehler beim Laden von " + href));
+			});
+			if (typeof caches !== "undefined") {
+				try {
+					const cache = await caches.open("impala67-optional-modules");
+					const match = await cache.match(href);
+					if (!match) {
+						await cache.add(href);
+					}
+				} catch (e) {
+					throw new Error("Stylesheet " + href + " geladen, aber Offline-Speicherung fehlgeschlagen: " + ((e && e.message) || e));
+				}
+			}
+			return true;
+		})();
+	},
+
+	// Fehlertolerante Ablage für reine Geräte-Einstellungen.
+	storage: {
+		get(key, fallback = null) {
+			try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+		},
+		set(key, value) {
+			try { localStorage.setItem(key, String(value)); return true; } catch { return false; }
+		},
+		remove(key) {
+			try { localStorage.removeItem(key); return true; } catch { return false; }
+		},
+		getJson(key, fallback) {
+			const raw = U.storage.get(key);
+			if (raw == null) return fallback;
+			try { return JSON.parse(raw) ?? fallback; } catch { return fallback; }
+		},
+		setJson(key, value) {
+			try { return U.storage.set(key, JSON.stringify(value)); } catch { return false; }
+		},
+	},
+
 	// Zeitquelle aller Event-Zeitstempel — eine HYBRIDE LOGISCHE UHR (HLC).
 	// Der Log-Merge entscheidet Konflikte per Zeitstempel (LWW); eine falsch gehende
 	// Geräteuhr würde sonst systematisch und still „gewinnen“. Drei Schichten:
@@ -399,10 +493,35 @@ export const U = {
 		return U.esc(U._unmaskMath(raw, masked.stash, false));
 	},
 
+	hasMathDelimiters(el) {
+		if (!el) return false;
+		if (el.tagName === "CODE" || el.tagName === "PRE") return false;
+		const txt = el.textContent || "";
+		if (!txt.trim()) return false;
+		// Präzise Formel-Erkennung: $$...$$, \(...\), \[...\] oder $...$ (vermeidet $10, 10$ & Code-Fehlauslösungen)
+		const mathRegex = /\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|(?:\$[^$\s\n][^$]*?[^$\s\n]\$)/;
+		return mathRegex.test(txt);
+	},
+
 	// LaTeX live rendern: $...$ / $$...$$ / \(...\) / \[...\] in einem DOM-Element.
 	// throwOnError:false, damit unfertige Formeln während des Streamens nicht crashen.
-	renderMath(el) {
-		if (!el || !window.renderMathInElement) return;
+	async renderMath(el) {
+		if (!el) return;
+		if (!window.renderMathInElement) {
+			if (!U.hasMathDelimiters(el)) return;
+			try {
+				await U.loadStyle("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css");
+				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js", "katex");
+				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js", "renderMathInElement");
+			} catch (err) {
+				if (U.toast && !U._katexToastShown) {
+					U._katexToastShown = true;
+					U.toast("Formel-Engine (KaTeX) konnte nicht geladen werden.", "error");
+				}
+				return;
+			}
+		}
+		if (!window.renderMathInElement) return;
 		try {
 			renderMathInElement(el, {
 				delimiters: [
@@ -417,7 +536,7 @@ export const U = {
 	},
 
 	// Code-Blöcke einfärben (highlight.js per CDN) — Mermaid-Blöcke werden übersprungen
-	highlightCode(el) {
+	async highlightCode(el) {
 		if (!el) return;
 		U.renderMermaid(el);
 		// Kopier-Knopf an jedem Codeblock (idempotent; funktioniert auch ohne hljs)
@@ -430,6 +549,20 @@ export const U = {
 			btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 			pre.appendChild(btn);
 		});
+		const hasCode = !!el.querySelector("pre code:not(.language-mermaid)");
+		if (!hasCode) return;
+		if (!window.hljs) {
+			try {
+				await U.loadStyle("https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css");
+				await U.loadScript("https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js", "hljs");
+			} catch (err) {
+				if (U.toast && !U._hlToastShown) {
+					U._hlToastShown = true;
+					U.toast("Code-Highlighting (highlight.js) konnte nicht geladen werden.", "error");
+				}
+				return;
+			}
+		}
 		if (!window.hljs) return;
 		el.querySelectorAll("pre code").forEach((block) => {
 			if (block.classList.contains("language-mermaid")) return;
@@ -450,18 +583,47 @@ export const U = {
 	// Mermaid-Diagramme rendern: ```mermaid-Codeblöcke → SVG (dunkles Theme).
 	// Fehlertolerant: während des KI-Streamens unvollständige Diagramme bleiben
 	// als Codeblock stehen und werden erst gerendert, wenn die Syntax gültig ist.
-	renderMermaid(el) {
-		if (!el || !window.mermaid) return;
+	async renderMermaid(el) {
+		if (!el) return;
+		const blocks = el.querySelectorAll("pre code.language-mermaid");
+		if (!blocks.length) return;
+		if (!window.mermaid) {
+			blocks.forEach((b) => {
+				const pre = b.closest("pre");
+				if (pre && !pre.querySelector(".mermaid-status")) {
+					const status = document.createElement("div");
+					status.className = "mermaid-status";
+					status.style.cssText = "font-size:12px;opacity:0.7;padding:4px 0;";
+					status.textContent = "⏳ Diagramm-Engine wird geladen…";
+					pre.insertBefore(status, b);
+				}
+			});
+			try {
+				await U.loadScript("https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js", "mermaid");
+			} catch {
+				blocks.forEach((b) => {
+					const pre = b.closest("pre");
+					if (pre) {
+						const st = pre.querySelector(".mermaid-status");
+						if (st) st.textContent = "📶 Internetverbindung erforderlich, um Diagramm-Engine zum ersten Mal zu laden.";
+					}
+				});
+				return;
+			}
+		}
+		if (!window.mermaid) return;
 		if (!U._mermaidInit) {
 			U._mermaidInit = true;
 			try { mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict", fontFamily: "inherit" }); } catch { /* ignorieren */ }
 		}
-		el.querySelectorAll("pre code.language-mermaid").forEach(async (block) => {
+		blocks.forEach(async (block) => {
 			const pre = block.closest("pre");
 			if (!pre || pre.dataset.mermaidDone) return;
 			const src = block.textContent || "";
 			if (!src.trim()) return;
 			pre.dataset.mermaidDone = "1";
+			const st = pre.querySelector(".mermaid-status");
+			if (st) st.remove();
 			try {
 				const id = "mmd" + Math.random().toString(36).slice(2, 10);
 				if (!(await mermaid.parse(src, { suppressErrors: true }))) { delete pre.dataset.mermaidDone; return; }

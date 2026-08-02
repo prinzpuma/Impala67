@@ -1,6 +1,7 @@
 "use strict";
 import { S } from "./state.js";
 import { AI } from "./ai.js";
+import { U } from "./util.js";
 
 // handschrift.js — Handschrift-Erkennung v2 für GoodNotes-Hefte (heft.js).
 //
@@ -11,7 +12,7 @@ import { AI } from "./ai.js";
 //
 // Strategie:
 //   1) Vision-Modell der aktiven KI-Quelle (wenn multimodal) — beste Qualität.
-//   2) Fallback: lokales Tesseract (window.Tesseract aus index.html) mit
+//   2) Fallback: lokales Tesseract (window.Tesseract) mit
 //      Vorverarbeitung + Konfidenz-Filter — Bilddaten verlassen den Browser nicht.
 //   3) recognize() → null bei Fehlern: der Aufrufer behält den alten ocrText.
 export const HANDSCHRIFT = (() => {
@@ -25,7 +26,17 @@ export const HANDSCHRIFT = (() => {
 		return /gemini-2\.5|gpt-4\.1|gpt-4o/.test(model);
 	}
 	const tesseractReady = () => typeof window !== "undefined" && !!window.Tesseract;
-	const available = () => visionReady() || tesseractReady();
+	const available = () => true;
+
+	async function ensureTesseractLoaded() {
+		if (tesseractReady()) return true;
+		try {
+			await U.loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js", "Tesseract");
+			return tesseractReady();
+		} catch {
+			throw new Error("Tesseract-OCR konnte nicht geladen werden. 📶 Internetverbindung für den Erstabruf erforderlich.");
+		}
+	}
 
 	// Vorverarbeitung für Tesseract: Graustufen + weiche Schwelle. Papier und die
 	// hellblauen Linien werden weiß, Tinte schwarz — das hebt die Trefferquote
@@ -61,6 +72,7 @@ export const HANDSCHRIFT = (() => {
 	}
 
 	async function recognizeTesseract(canvas) {
+		await ensureTesseractLoaded();
 		const pre = preprocess(canvas);
 		const res = await window.Tesseract.recognize(pre, "deu+eng");
 		const data = (res && res.data) || {};
@@ -79,7 +91,7 @@ export const HANDSCHRIFT = (() => {
 			if (visionReady()) return await recognizeVision(canvas);
 		} catch (e) { console.warn("Handschrift: Vision-OCR fehlgeschlagen — Fallback auf Tesseract", e); }
 		try {
-			if (tesseractReady()) return await recognizeTesseract(canvas);
+			return await recognizeTesseract(canvas);
 		} catch (e) { console.warn("Handschrift: Tesseract fehlgeschlagen", e); }
 		return null;
 	}

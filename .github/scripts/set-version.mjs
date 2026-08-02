@@ -24,4 +24,13 @@ if (!/const BUILD_VERSION = "[^"]+"/.test(updater)) {
 updater = updater.replace(/const BUILD_VERSION = "[^"]+"/, `const BUILD_VERSION = "${version}"`);
 fs.writeFileSync(updaterPath, updater);
 
+const workerPath = "./web/service-worker.js";
+let worker = fs.readFileSync(workerPath, "utf8");
+if (!/const CACHE = "impala67-v[^"]+"/.test(worker)) {
+  console.error("CACHE fehlt in web/service-worker.js");
+  process.exit(1);
+}
+worker = worker.replace(/const CACHE = "impala67-v[^"]+"/, `const CACHE = "impala67-v${version}"`);
+fs.writeFileSync(workerPath, worker);
+
 console.log(`PWA-Version ${version} gesetzt.`);

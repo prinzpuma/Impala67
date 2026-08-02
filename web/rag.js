@@ -52,7 +52,7 @@ export const RAG = (() => {
 				let rec = await DB.getBlob("pdftext:" + pg.pdfId);
 				if (!rec) {
 					const pdf = await DB.getBlob(pg.pdfId);
-					if (pdf && window.pdfjsLib) {
+					if (pdf) {
 						const ex = await PDFS.extractText(pdf.buf.slice(0));
 						await DB.putBlob("pdftext:" + pg.pdfId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
 						rec = await DB.getBlob("pdftext:" + pg.pdfId);

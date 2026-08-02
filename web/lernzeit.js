@@ -412,6 +412,17 @@ export const LERNZEIT = (() => {
 	// <style id="lernzeitStyles"> war auf manchen Geräten nicht (mehr) aktiv —
 	// das Home-Widget erschien dann komplett ungestylt.
 
-	setInterval(tick, TICK_MS);
-	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke };
+	let tickTimer = 0;
+	function startInterval() {
+		if (tickTimer) return;
+		tickTimer = setInterval(tick, TICK_MS);
+	}
+	function stopInterval() {
+		if (tickTimer) {
+			clearInterval(tickTimer);
+			tickTimer = 0;
+		}
+	}
+
+	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke, startInterval, stopInterval };
 })();
