@@ -8,7 +8,7 @@ export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, notionId, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
 	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
-	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, sourceId, updated, deleted? }
+	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, subject, sourceId, updated, deleted? }
 	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
 	settings: {
 		aiProviders: [
@@ -444,6 +444,7 @@ export const STATE = (() => {
 					endedAt: p.endedAt || ev.t,
 					durationSeconds: Math.max(0, Math.round(Number(p.durationSeconds))),
 					category: p.category || "other",
+					subject: p.subject !== undefined ? (p.subject ? String(p.subject).trim().slice(0, 80) : null) : (current && current.subject) || null,
 					sourceId: p.sourceId || null,
 					updated,
 					deleted: false,

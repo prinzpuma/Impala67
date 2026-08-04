@@ -186,6 +186,39 @@ export const TELE = (() => {
 	};
 	const passRate = (list) => (list.length ? list.filter((e) => e.data.grade > 1).length / list.length : 0);
 	const pct = (x) => Math.round(x * 100);
+	const localDayKey = (value) => {
+		const d = new Date(value);
+		return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+	};
+
+	// Kompakte, markup-freie Auswertung für frei wählbare Zeiträume. So können
+	// Lernzeit und Karten-Erfolg im selben Dashboard erscheinen, ohne dass
+	// render.js dieselbe Telemetrie-Logik erneut implementiert.
+	function rangeStats(from, to) {
+		const start = new Date(from).getTime(), end = new Date(to).getTime();
+		const inRange = (value) => {
+			const t = new Date(value).getTime();
+			return Number.isFinite(t) && t >= start && t < end;
+		};
+		// S.reviews reicht weiter zurück als die später eingeführte Telemetrie und
+		// entfernt Undos bereits im Reducer. Denkzeit/Fokus kommen ergänzend aus
+		// den detailreicheren Telemetrie-Events.
+		const reviews = (S.reviews || []).filter((r) => r && r.grade > 0 && inRange(r.t));
+		const detailed = reviewEvents().filter((e) => inRange(e.t));
+		const timed = detailed.filter((e) => !e.data.typed && !e.data.distracted && Number.isFinite(e.data.thinkMs) && e.data.thinkMs > 400 && e.data.thinkMs < 120000);
+		const byDay = {};
+		for (const review of reviews) byDay[localDayKey(review.t)] = (byDay[localDayKey(review.t)] || 0) + 1;
+		const focusLosses = (S.telemetry || []).filter((e) => e && e.kind === "focusLoss" && inRange(e.t)).length;
+		const timerReviews = detailed.filter((e) => e.data.timer).length;
+		return {
+			reviews: reviews.length,
+			passRate: reviews.length ? reviews.filter((r) => r.grade > 1).length / reviews.length : null,
+			medianThinkMs: timed.length ? median(timed.map((e) => e.data.thinkMs)) : null,
+			byDay,
+			focusLosses,
+			timerReviews,
+		};
+	}
 
 	// Insights für die Home-Seite: nur Aussagen mit genug Daten, sonst Hinweis.
 	// PERF (Audit 21. Juli): Ergebnis cachen — die Home-Seite rendert bei jedem
@@ -315,5 +348,5 @@ export const TELE = (() => {
 		U.toast("Lerndaten exportiert.", "success");
 	}
 
-	return { log, mark, onReview, reviewEvents, passRate, thinkMedian, homeInsightsHtml, exportDump };
+	return { log, mark, onReview, reviewEvents, passRate, thinkMedian, rangeStats, homeInsightsHtml, exportDump };
 })();

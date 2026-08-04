@@ -4,12 +4,10 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { TELE } from "./telemetrie.js";
 
-// lernzeit.js — Lernzeit v3 (15. Juli 2026)
-// v3: Home-Widget komplett neu — ausklappbare Bereiche (Woche, Aktivität,
-// Protokoll) mit gemerktem Zustand, prominente Timer-Karte mit Pause/Fortsetzen
-// und Fortschrittsbalken, Wochenziel mit Zielbalken, Tages-Streak und
-// Telemetrie-Anbindung (telemetrie.js). Die Erfassungs-Engine (automatische
-// Segmente, Idle-Tier, Kategorie-Split) ist unverändert aus v2 übernommen.
+// lernzeit.js — Lernzeit v4 (4. August 2026)
+// v4: Home-Analyse mit Woche/Tag-Schalter, Fachdimension, Tagesverlauf und
+// Vergleichskennzahlen. Die Erfassungs-Engine (automatische Segmente, Idle-Tier,
+// Kategorie-Split) bleibt local-first und rückwärtskompatibel.
 
 export const LERNZEIT = (() => {
 	const IDLE_MS = 60000;
@@ -33,6 +31,9 @@ export const LERNZEIT = (() => {
 	let animal = null;
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
 	let timerPausedLeft = Number(localStorage.getItem(TIMER_PAUSE_KEY) || 0);
+	let weekOffset = 0;
+	let monthOffset = 0;
+	let analysisMode = "week";
 
 	function iso() { return new Date().toISOString(); }
 	function dayKey(value) {
@@ -48,22 +49,47 @@ export const LERNZEIT = (() => {
 	function activeSessions() {
 		return Object.values(S.learningSessions || {}).filter((item) => item && !item.deleted && item.durationSeconds > 0);
 	}
-	function categoryNow() {
-		if (S.aiBusy) return { category: "ai", sourceId: S.currentChatId || null };
-		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null };
+	function cleanSubject(value) {
+		return String(value || "").replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+	}
+	function pageSubject(page) {
+		if (!page) return "Allgemein";
+		if (page.subject) return cleanSubject(page.subject);
+		const tag = Array.isArray(page.tags) ? page.tags.find((item) => cleanSubject(item)) : "";
+		if (tag) return cleanSubject(tag);
+		let root = page, hops = 0;
+		while (root.parentId && S.pages[root.parentId] && hops++ < 100) root = S.pages[root.parentId];
+		const title = cleanSubject(root.title);
+		if (title && !/^(daily notes?|notizen?|willkommen|start)$/i.test(title)) return title;
+		const workspace = cleanSubject(S.workspaces[page.workspaceId || "default"]?.name);
+		return workspace && workspace.toLowerCase() !== "privat" ? workspace : "Notizen";
+	}
+	function subjectNow() {
 		const page = S.currentPageId && S.pages[S.currentPageId];
-		if (page && page.kind === "heft" && S.view === "page") return { category: "notebook", sourceId: page.id };
+		if (S.view === "anki" && S.ankiTab === "study") {
+			const deck = cleanSubject(S.ankiDeck || "").split("::")[0];
+			return deck || "Karteikarten";
+		}
+		if (page) return pageSubject(page);
+		if (S.aiBusy) return "KI / Allgemein";
+		return "Allgemein";
+	}
+	function categoryNow() {
+		if (S.aiBusy) return { category: "ai", sourceId: S.currentChatId || null, subject: subjectNow() };
+		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null, subject: subjectNow() };
+		const page = S.currentPageId && S.pages[S.currentPageId];
+		if (page && page.kind === "heft" && S.view === "page") return { category: "notebook", sourceId: page.id, subject: subjectNow() };
 		const active = document.activeElement;
 		if (page && active && (active.id === "pageTitle" || active.isContentEditable || (active.closest && active.closest(".block-editor")))) {
-			return { category: "notes", sourceId: page.id };
+			return { category: "notes", sourceId: page.id, subject: subjectNow() };
 		}
-		return { category: "other", sourceId: null };
+		return { category: "other", sourceId: null, subject: subjectNow() };
 	}
 
 	function openSegment() {
 		if (current) return;
 		const meta = categoryNow();
-		current = { id: U.uid(), startedAt: iso(), startedMs: Date.now(), category: meta.category, sourceId: meta.sourceId };
+		current = { id: U.uid(), startedAt: iso(), startedMs: Date.now(), category: meta.category, sourceId: meta.sourceId, subject: meta.subject };
 	}
 	async function closeSegment() {
 		if (!current) return;
@@ -78,13 +104,14 @@ export const LERNZEIT = (() => {
 			durationSeconds,
 			category: finished.category,
 			sourceId: finished.sourceId,
+			subject: finished.subject,
 			updated: iso(),
 		});
 	}
 	function maybeSplitSegment() {
 		if (!current) return;
 		const next = categoryNow();
-		if (next.category === current.category && next.sourceId === current.sourceId) return;
+		if (next.category === current.category && next.sourceId === current.sourceId && next.subject === current.subject) return;
 		closeSegment().then(openSegment);
 	}
 
@@ -220,7 +247,13 @@ export const LERNZEIT = (() => {
 	// damit auch LIVE nichts doppelt zählt, wenn das andere Gerät gerade synct.
 	function currentAsSession() {
 		if (!current) return null;
-		return { startedAt: current.startedAt, endedAt: iso(), durationSeconds: Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000)), category: current.category };
+		return { startedAt: current.startedAt, endedAt: iso(), durationSeconds: Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000)), category: current.category, subject: current.subject };
+	}
+	function sessionSubject(session) {
+		if (session.subject) return cleanSubject(session.subject);
+		if (session.category === "cards") return cleanSubject(String(session.sourceId || "").split("::")[0]) || "Karteikarten";
+		const page = session.sourceId && S.pages[session.sourceId];
+		return pageSubject(page);
 	}
 	function totalForDay(key) {
 		const list = activeSessions().filter((s) => dayKey(s.startedAt) === key);
@@ -228,33 +261,121 @@ export const LERNZEIT = (() => {
 		if (live) list.push(live);
 		return mergedSeconds(list);
 	}
-	function groupedToday() {
-		const byCategory = {};
-		const today = activeSessions().filter((s) => dayKey(s.startedAt) === dayKey());
+	function totalsByDay() {
+		const grouped = {};
+		const sessions = activeSessions();
 		const live = currentAsSession();
-		if (live) today.push(live);
-		for (const session of today) (byCategory[session.category] = byCategory[session.category] || []).push(session);
-		const result = { cards: 0, notebook: 0, notes: 0, ai: 0, other: 0 };
-		for (const key of Object.keys(byCategory)) result[key] = mergedSeconds(byCategory[key]);
-		return result;
+		if (live) sessions.push(live);
+		for (const session of sessions) (grouped[dayKey(session.startedAt)] ||= []).push(session);
+		const totals = {};
+		for (const [key, list] of Object.entries(grouped)) totals[key] = mergedSeconds(list);
+		return totals;
 	}
-	function sessionsToday() {
-		return activeSessions().filter((s) => dayKey(s.startedAt) === dayKey()).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+	function groupedSubjects(from, to) {
+		const start = from.getTime(), end = to.getTime(), groups = {};
+		const sessions = sessionsInRange(from, to);
+		const live = currentAsSession();
+		if (live && Date.now() >= start && Date.now() < end) sessions.push(live);
+		for (const session of sessions) (groups[sessionSubject(session)] ||= []).push(session);
+		return Object.entries(groups).map(([subject, list]) => ({ subject, seconds: mergedSeconds(list), sessions: list.length }))
+			.sort((a, b) => b.seconds - a.seconds);
 	}
-	function weekData() {
+	function sessionsInRange(from, to) {
+		const start = from.getTime(), end = to.getTime();
+		return activeSessions().filter((s) => {
+			const t = new Date(s.startedAt).getTime();
+			return Number.isFinite(t) && t >= start && t < end;
+		}).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+	}
+	function weekStart(offset = 0) {
+		const d = new Date();
+		d.setHours(0, 0, 0, 0);
+		d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7);
+		return d;
+	}
+	function weekData(offset = 0, totals = null) {
+		const start = weekStart(offset);
 		return Array.from({ length: 7 }, (_, index) => {
-			const d = new Date(); d.setDate(d.getDate() - (6 - index));
-			return { d, seconds: totalForDay(dayKey(d)) };
+			const d = new Date(start); d.setDate(d.getDate() + index);
+			return { d, seconds: totals ? (totals[dayKey(d)] || 0) : totalForDay(dayKey(d)) };
 		});
+	}
+	function weekRange(offset = 0) {
+		const from = weekStart(offset), to = new Date(from);
+		to.setDate(to.getDate() + 7);
+		return { from, to };
+	}
+	function monthStart(offset = 0) {
+		const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1); d.setMonth(d.getMonth() + offset);
+		return d;
+	}
+	function monthRange(offset = 0) {
+		const from = monthStart(offset), to = new Date(from); to.setMonth(to.getMonth() + 1);
+		return { from, to };
+	}
+	function monthDays(offset = 0, totals = null) {
+		const from = monthStart(offset), to = monthRange(offset).to, days = [];
+		for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+			const copy = new Date(d);
+			days.push({ d: copy, seconds: totals ? (totals[dayKey(copy)] || 0) : totalForDay(dayKey(copy)) });
+		}
+		return days;
+	}
+	function monthStats(offset = 0, totals = null) {
+		const { from, to } = monthRange(offset), days = monthDays(offset, totals);
+		const seconds = days.reduce((sum, item) => sum + item.seconds, 0);
+		const previous = monthDays(offset - 1, totals).reduce((sum, item) => sum + item.seconds, 0);
+		return {
+			from, to, days, seconds, previousSeconds: previous,
+			activeDays: days.filter((item) => item.seconds >= 300).length,
+			averageSeconds: days.filter((item) => item.seconds >= 300).length ? Math.round(seconds / days.filter((item) => item.seconds >= 300).length) : 0,
+			reviews: TELE.rangeStats(from, to),
+			previousReviews: TELE.rangeStats(monthRange(offset - 1).from, from),
+		};
+	}
+	function monthCalendar(days, reviews) {
+		const leading = (days[0].d.getDay() + 6) % 7;
+		const max = Math.max(1, ...days.map((item) => item.seconds));
+		const head = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((label) => '<span>' + label + '</span>').join("");
+		const cells = Array.from({ length: leading }, () => '<i class="lz-month-empty"></i>').join("") + days.map((item) => {
+			const level = item.seconds ? Math.max(1, Math.ceil(item.seconds / max * 4)) : 0;
+			const reviewCount = reviews.byDay[dayKey(item.d)] || 0;
+			return '<div class="lz-month-day lvl-' + level + (dayKey(item.d) === dayKey() ? ' today' : '') + '" title="' + dateLabel(item.d, { weekday: "long", day: "numeric", month: "long" }) + ' · ' + fmt(item.seconds) + (reviewCount ? ' · ' + reviewCount + ' Reviews' : '') + '"><b>' + item.d.getDate() + '</b><i style="height:' + (item.seconds ? Math.max(4, Math.round(item.seconds / max * 100)) : 2) + '%"></i><small>' + (reviewCount || '') + '</small></div>';
+		}).join("");
+		return '<div class="lz-month-calendar"><div class="lz-month-weekdays">' + head + '</div><div class="lz-month-grid">' + cells + '</div></div>';
+	}
+	function dateLabel(date, options) { return date.toLocaleDateString("de-DE", options); }
+	function rangeTitle(from, to, mode) {
+		if (mode === "month") return dateLabel(from, { month: "long", year: "numeric" });
+		const end = new Date(to); end.setDate(end.getDate() - 1);
+		return dateLabel(from, { day: "2-digit", month: "short" }) + " – " + dateLabel(end, { day: "2-digit", month: "short", year: "numeric" });
+	}
+	function weekStats(offset = 0, totals = null) {
+		const goal = weekGoalMinutes();
+		const days = weekData(offset, totals);
+		const seconds = days.reduce((sum, x) => sum + x.seconds, 0);
+		const previousSeconds = weekData(offset - 1, totals).reduce((sum, x) => sum + x.seconds, 0);
+		const activeDays = days.filter((x) => x.seconds >= 5 * 60).length;
+		const bestDay = days.reduce((best, item) => item.seconds > best.seconds ? item : best, days[0]);
+		const { from, to } = weekRange(offset);
+		return {
+			from, to, days, seconds, previousSeconds, activeDays, bestDay,
+			averageSeconds: activeDays ? Math.round(seconds / activeDays) : 0,
+			goalMinutes: goal,
+			goalPct: Math.round(seconds / 60 / goal * 100),
+			reviews: TELE.rangeStats(from, to),
+			previousReviews: TELE.rangeStats(weekRange(offset - 1).from, from),
+		};
 	}
 	// Streak: aufeinanderfolgende Tage mit ≥ 5 min Lernzeit. Ein noch „leerer“
 	// heutiger Tag bricht die Serie nicht — sie zählt dann ab gestern.
-	function streakDays() {
+	function streakDays(totals = null) {
 		const MIN = 5 * 60;
 		let streak = 0;
 		for (let i = 0; i < 365; i++) {
 			const d = new Date(); d.setDate(d.getDate() - i);
-			if (totalForDay(dayKey(d)) >= MIN) streak++;
+			const seconds = totals ? (totals[dayKey(d)] || 0) : totalForDay(dayKey(d));
+			if (seconds >= MIN) streak++;
 			else if (i === 0) continue;
 			else break;
 		}
@@ -270,18 +391,14 @@ export const LERNZEIT = (() => {
 		U.toast("🎯 Wochenziel: " + Math.round(next / 60 * 10) / 10 + " h", "success");
 	}
 	// Kennzahlen für die Home-Seite (render.js) — eine Quelle für alle Widgets.
-	function statsForHome() {
+	function statsForHome(totals = totalsByDay()) {
 		const goal = weekGoalMinutes();
-		const week = weekData();
+		const week = weekData(0, totals);
 		const weekSeconds = week.reduce((sum, x) => sum + x.seconds, 0);
 		return {
-			todaySeconds: totalForDay(dayKey()),
-			weekSeconds,
-			weekDays: week,
-			streakDays: streakDays(),
-			weekGoalMinutes: goal,
+			todaySeconds: totals[dayKey()] || 0,
+			streakDays: streakDays(totals),
 			goalPct: Math.round(weekSeconds / 60 / goal * 100),
-			categoriesToday: groupedToday(),
 		};
 	}
 
@@ -325,30 +442,56 @@ export const LERNZEIT = (() => {
 			'<input id="lzCustomMinutes" type="number" min="5" max="240" value="25" aria-label="Eigene Minuten"><button class="mini primary" data-lz-custom="1">Start</button></div></div>';
 	}
 	function homeWidgetHtml() {
-		const stats = statsForHome();
-		const max = Math.max(1, ...stats.weekDays.map((x) => x.seconds));
-		const bars = stats.weekDays.map(({ d, seconds }, index) =>
-			'<div class="lz-bar-col' + (index === 6 ? ' today' : '') + '" title="' + fmt(seconds) + '"><i style="height:' + Math.max(5, Math.round(seconds / max * 100)) + '%"></i><small>' + d.toLocaleDateString("de-DE", { weekday: "short" }) + '</small></div>').join("");
-		const goalPct = Math.min(100, stats.goalPct);
-		const weekBody = '<div class="lz-bars">' + bars + '</div>' +
-			'<div class="lz-goal"><span>🎯 Wochenziel: <b>' + fmt(stats.weekSeconds) + '</b> von ' + Math.round(stats.weekGoalMinutes / 60 * 10) / 10 + ' h (' + stats.goalPct + ' %)</span>' +
-			'<button class="mini" data-lz-goal="1" title="Ziel ändern: 2 h → 5 h → 8 h → 12 h">Ziel ändern</button></div>' +
-			'<div class="lz-progress lz-goal-bar"><i style="width:' + goalPct + '%"></i></div>';
-		const categories = stats.categoriesToday;
-		const catTotal = Math.max(1, Object.values(categories).reduce((a, b) => a + b, 0));
-		const catRows = Object.entries(categories).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([id, s]) =>
-			'<div class="lz-cat-row"><span>' + CATEGORIES[id].icon + ' ' + CATEGORIES[id].label + '</span><div class="lz-progress"><i style="width:' + Math.round(s / catTotal * 100) + '%"></i></div><small>' + fmt(s) + '</small></div>').join("") ||
-			'<p class="hint lz-empty">Aktivität erscheint automatisch beim Lernen — Karteikarten, Hefte, Notizen und KI werden getrennt gezählt.</p>';
-		const log = sessionsToday().slice(0, 8).map((s) => '<div class="lz-log-row"><span>' + CATEGORIES[s.category].icon + ' <b>' + CATEGORIES[s.category].label + '</b><small>' + new Date(s.startedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + ' · ' + fmt(s.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + s.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + s.id + '">🗑</button></span></div>').join("") || '<p class="hint lz-empty">Heute noch keine abgeschlossene Lerneinheit.</p>';
-		const logBody = '<div class="lz-log-head"><b>' + sessionsToday().length + ' Einheit(en) heute</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>';
-		return '<section class="lz-widget" id="lzWidget"><header class="section-head"><div><h2>⏱ Lernzeit</h2><span class="hint">' +
-			(current ? CATEGORIES[current.category].icon + ' läuft gerade: ' + CATEGORIES[current.category].label : (timerPaused() ? '⏸ Timer pausiert' : 'Bereit für deinen nächsten Lernblock')) + '</span></div>' +
-			'<div class="lz-head-right"><b class="lz-total" data-lz-today>' + fmt(stats.todaySeconds) + '</b><small>🔥 ' + stats.streakDays + (stats.streakDays === 1 ? ' Tag' : ' Tage') + ' Streak</small></div></header>' +
+		const mode = analysisMode;
+		const range = mode === "month" ? monthRange(monthOffset) : weekRange(weekOffset);
+		const totals = totalsByDay(), homeStats = statsForHome(totals);
+		const selected = mode === "month" ? monthStats(monthOffset, totals) : weekStats(weekOffset, totals);
+		const sessions = sessionsInRange(range.from, range.to);
+		const seconds = selected.seconds;
+		const previousSeconds = selected.previousSeconds;
+		const deltaPct = previousSeconds ? Math.round((seconds - previousSeconds) / previousSeconds * 100) : null;
+		const deltaText = deltaPct === null ? "Noch kein Vergleich" : (deltaPct >= 0 ? "+" : "") + deltaPct + " % zum vorherigen Zeitraum";
+		const reviews = selected.reviews;
+		const previousReviews = selected.previousReviews;
+		const reviewRate = reviews.passRate === null ? null : Math.round(reviews.passRate * 100);
+		const previousRate = previousReviews.passRate === null ? null : Math.round(previousReviews.passRate * 100);
+		const reviewDelta = reviewRate === null || previousRate === null ? "Noch kein Vergleich" : (reviewRate - previousRate >= 0 ? "+" : "") + (reviewRate - previousRate) + " Punkte zum vorherigen Zeitraum";
+		const subjects = groupedSubjects(range.from, range.to);
+		const maxSubject = Math.max(1, ...subjects.map((item) => item.seconds));
+		const subjectRows = subjects.slice(0, 12).map((item, index) => '<div class="lz-subject-row"><span class="lz-subject-rank">' + (index + 1) + '</span><div><b>' + U.esc(item.subject) + '</b><small>' + item.sessions + ' Einheit' + (item.sessions === 1 ? '' : 'en') + '</small></div><div class="lz-subject-track"><i style="width:' + Math.max(4, Math.round(item.seconds / maxSubject * 100)) + '%"></i></div><strong>' + fmt(item.seconds) + '</strong></div>').join("") || '<p class="hint lz-empty">Noch kein Fach in diesem Zeitraum erfasst.</p>';
+		const chart = mode === "month" ? monthCalendar(selected.days, reviews) : selected.days.map(({ d, seconds: daySeconds }) => {
+			const dayReviews = reviews.byDay[dayKey(d)] || 0, height = daySeconds ? Math.max(6, Math.round(daySeconds / Math.max(1, ...selected.days.map((x) => x.seconds)) * 100)) : 2;
+			return '<div class="lz-bar-col' + (dayKey(d) === dayKey() ? ' today' : '') + (daySeconds ? '' : ' empty') + '" title="' + fmt(daySeconds) + ' · ' + dayReviews + ' Reviews"><span>' + (daySeconds ? fmt(daySeconds) : '—') + '</span><i style="height:' + height + '%"></i><small>' + d.toLocaleDateString('de-DE', { weekday: 'short' }) + '<b>' + d.getDate() + '</b></small><em>' + (dayReviews ? dayReviews + ' Karten' : '&nbsp;') + '</em></div>';
+		}).join("");
+		const periodTitle = rangeTitle(range.from, range.to, mode);
+		const relative = mode === "month" ? (monthOffset === 0 ? "Dieser Monat" : monthOffset === -1 ? "Letzter Monat" : 'Vor ' + Math.abs(monthOffset) + ' Monaten') : (weekOffset === 0 ? "Diese Woche" : weekOffset === -1 ? "Letzte Woche" : 'Vor ' + Math.abs(weekOffset) + ' Wochen');
+		const activeDays = selected.activeDays;
+		const goalPct = mode === "month" ? Math.round(seconds / 60 / (weekGoalMinutes() * 4.345) * 100) : selected.goalPct;
+		const recommendations = [];
+		if (!seconds && !reviews.reviews) recommendations.push(["🌱", "Noch keine Lernzeit", "Starte einen Fokusblock oder füge eine Einheit hinzu. Der Zeitraum bleibt vollständig nachvollziehbar."]);
+		else {
+			if (deltaPct !== null) recommendations.push([deltaPct >= 0 ? "📈" : "↘", deltaPct >= 10 ? "Mehr Lernzeit" : deltaPct <= -20 ? "Weniger Lernzeit" : "Stabiler Umfang", deltaText + "."]);
+			if (mode === "week") recommendations.push([activeDays >= 4 ? "✅" : "🗓", activeDays + ' aktive' + (activeDays === 1 ? 'r' : '') + ' Lerntag' + (activeDays === 1 ? '' : 'e'), activeDays >= 4 ? 'Gute Verteilung über die Woche.' : 'Kürzere Einheiten an mehreren Tagen helfen beim Behalten.']);
+			else if (subjects.length > 1) recommendations.push(["🔀", subjects.length + " Fächer im Monat", "Deine Lernzeit verteilt sich auf mehrere Lernkontexte."]);
+			if (reviewRate !== null) recommendations.push([reviewRate >= 85 ? "🎯" : "🧠", reviewRate + " % Erfolgsquote", reviewRate >= 85 ? "Die Karten sitzen. Behalte diesen Rhythmus bei." : "Schwierige Karten in kleinere, klarere Schritte zerlegen."]);
+		}
+		const recHtml = recommendations.slice(0, 3).map(([icon, title, sub]) => '<div class="lz-recommendation"><span>' + icon + '</span><div><b>' + title + '</b><small>' + sub + '</small></div></div>').join("");
+		const log = sessions.slice(0, 12).map((session) => {
+			const meta = CATEGORIES[session.category] || CATEGORIES.other;
+			return '<div class="lz-log-row"><span>' + meta.icon + ' <b>' + U.esc(sessionSubject(session)) + '</b><small>' + meta.label + ' · ' + new Date(session.startedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + fmt(session.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + session.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + session.id + '">🗑</button></span></div>';
+		}).join("") || '<p class="hint lz-empty">Keine abgeschlossene Einheit in diesem Zeitraum.</p>';
+		const isCurrent = mode === "month" ? monthOffset === 0 : weekOffset === 0;
+		const navLabel = mode === "month" ? "Monate" : "Wochen";
+		return '<section class="lz-widget" id="lzWidget"><header class="lz-dashboard-head"><div><span class="lz-eyebrow">Lernanalyse</span><h2>' + relative + '</h2><p>' + periodTitle + '</p></div>' +
+			'<div class="lz-dashboard-actions"><div class="lz-view-switch" role="tablist" aria-label="Analysezeitraum"><button data-lz-mode="week" role="tab" aria-selected="' + (mode === 'week') + '" class="' + (mode === 'week' ? 'active' : '') + '">Woche</button><button data-lz-mode="month" role="tab" aria-selected="' + (mode === 'month') + '" class="' + (mode === 'month' ? 'active' : '') + '">Monat</button></div><div class="lz-week-nav"><button data-lz-period="-1" aria-label="Vorherige ' + navLabel + '">←</button><button data-lz-todayperiod="1"' + (isCurrent ? ' disabled' : '') + '>Heute</button><button data-lz-period="1" aria-label="Nächste ' + navLabel + '"' + (isCurrent ? ' disabled' : '') + '>→</button></div></div></header>' +
+			'<div class="lz-summary"><div class="lz-summary-main"><small>Gesamte Lernzeit</small><b>' + fmt(seconds) + '</b><span class="' + (deltaPct !== null && deltaPct < 0 ? 'down' : '') + '">' + deltaText + '</span><div class="lz-goal"><span>🎯 ' + Math.min(100, goalPct) + ' % vom ' + (mode === 'week' ? 'Wochenziel' : 'Monatsziel') + '</span><button class="mini" data-lz-goal="1">Ziel ändern</button></div><div class="lz-progress lz-goal-bar"><i style="width:' + Math.min(100, goalPct) + '%"></i></div></div>' +
+			'<div class="lz-kpi-grid"><div><small>Aktive Tage</small><b>' + activeDays + '<em>' + (mode === 'week' ? '/7' : '/' + selected.days.length) + '</em></b><span>mindestens 5 Minuten</span></div><div><small>Fächer</small><b>' + subjects.length + '</b><span>' + (subjects[0] ? U.esc(subjects[0].subject) + ' am stärksten' : 'Noch ohne Zuordnung') + '</span></div><div><small>Reviews</small><b>' + reviews.reviews + '</b><span>' + (reviewRate === null ? 'Noch keine Quote' : reviewRate + ' % richtig') + '</span></div><div><small>Streak</small><b>🔥 ' + homeStats.streakDays + '</b><span>' + (homeStats.streakDays === 1 ? 'Tag in Folge' : 'Tage in Folge') + '</span></div></div></div>' +
 			timerCardHtml() +
-			fold("week", "📊 Diese Woche", weekBody, true) +
-			fold("cats", "🧭 Aktivität heute", catRows, false) +
-			fold("log", "📝 Protokoll heute", logBody, false) +
-			'</section>';
+			'<div class="lz-panel lz-week-chart"><div class="lz-panel-head"><div><b>' + (mode === 'week' ? 'Lernrhythmus der Woche' : 'Lernkalender des Monats') + '</b><small>' + (mode === 'week' ? 'Lernzeit und Karten pro Tag' : 'Jeder Tag zeigt Intensität und Reviews') + '</small></div><span>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</span></div><div class="' + (mode === 'month' ? 'lz-month-wrap' : 'lz-bars') + '">' + chart + '</div></div>' +
+			'<div class="lz-analysis-grid"><div class="lz-panel lz-subjects"><div class="lz-panel-head"><div><b>Fächer & Lernkontexte</b><small>Automatisch aus Stapeln, Seiten und Workspaces</small></div><span>' + subjects.length + ' erkannt</span></div>' + subjectRows + '</div>' +
+			'<div class="lz-panel"><div class="lz-panel-head"><div><b>Kartenqualität</b><small>Leistung im gewählten Zeitraum</small></div></div><div class="lz-review-summary"><div><b>' + (reviewRate === null ? '—' : reviewRate + ' %') + '</b><small>Erfolgsquote</small></div><div><b>' + (reviews.medianThinkMs === null ? '—' : (reviews.medianThinkMs / 1000).toFixed(1) + ' s') + '</b><small>mittlere Denkzeit</small></div><div><b>' + reviews.focusLosses + '</b><small>Unterbrechungen</small></div></div><p>' + reviewDelta + (reviews.timerReviews ? ' · ' + reviews.timerReviews + ' Reviews mit Lerntimer' : '') + '</p></div></div>' +
+			'<div class="lz-panel lz-insights"><div class="lz-panel-head"><div><b>Deine nächsten Schritte</b><small>Aus Lernzeit, Fächern und Lernerfolg gemeinsam abgeleitet</small></div></div><div class="lz-recommendations">' + recHtml + '</div>' + fold("patterns", "🧠 Langzeitmuster aus allen Lerndaten", TELE.homeInsightsHtml(), false) + '</div>' +
+			fold("log", "📝 Einheiten in diesem Zeitraum", '<div class="lz-log-head"><b>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>', false) + '</section>';
 	}
 
 	function refreshLive() {
@@ -366,7 +509,7 @@ export const LERNZEIT = (() => {
 		const old = document.getElementById("lzWidget");
 		if (old) old.outerHTML = homeWidgetHtml();
 	}
-	async function saveManual(id, minutes, category, date) {
+	async function saveManual(id, minutes, category, date, subject) {
 		const old = id && S.learningSessions[id];
 		const durationSeconds = Math.max(60, Math.round(Number(minutes) * 60));
 		// Manuelle Korrekturen können bewusst einem beliebigen Kalendertag
@@ -376,6 +519,7 @@ export const LERNZEIT = (() => {
 		await STATE.dispatch("learningSessionUpsert", {
 			id: id || U.uid(), startedAt, endedAt, durationSeconds,
 			category: CATEGORIES[category] ? category : "other",
+			subject: cleanSubject(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNow()) || "Allgemein",
 			sourceId: old ? old.sourceId : null, updated: iso(),
 		});
 	}
@@ -384,26 +528,31 @@ export const LERNZEIT = (() => {
 		const overlay = document.getElementById("overlay");
 		if (!overlay) return;
 		const options = Object.entries(CATEGORIES).map(([key, value]) => '<option value="' + key + '"' + ((old ? old.category : "other") === key ? " selected" : "") + '>' + value.icon + ' ' + value.label + '</option>').join("");
+		const subject = old ? sessionSubject(old) : subjectNow();
 		overlay.hidden = false;
-		overlay.innerHTML = '<div class="modal lz-edit-modal"><button class="modal-x" data-lz-close="1">✕</button><h3>' + (old ? 'Lerneinheit bearbeiten' : 'Zeit hinzufügen') + '</h3><label>Tag<input id="lzEditDay" type="date" value="' + dayKey(old && old.startedAt) + '"></label><label>Minuten<input id="lzEditMinutes" type="number" min="1" max="1440" value="' + (old ? Math.round(old.durationSeconds / 60) : 25) + '"></label><label>Aktivität<select id="lzEditCategory">' + options + '</select></label><div class="modal-actions"><button data-lz-close="1">Abbrechen</button><button class="primary" data-lz-save="' + (id || '') + '">Speichern</button></div></div>';
+		overlay.innerHTML = '<div class="modal lz-edit-modal"><button class="modal-x" data-lz-close="1">✕</button><h3>' + (old ? 'Lerneinheit bearbeiten' : 'Zeit hinzufügen') + '</h3><label>Tag<input id="lzEditDay" type="date" value="' + dayKey(old && old.startedAt) + '"></label><label>Minuten<input id="lzEditMinutes" type="number" min="1" max="1440" value="' + (old ? Math.round(old.durationSeconds / 60) : 25) + '"></label><label>Fach<input id="lzEditSubject" maxlength="80" value="' + U.esc(subject) + '" placeholder="z. B. Mathematik"></label><label>Aktivität<select id="lzEditCategory">' + options + '</select></label><div class="modal-actions"><button data-lz-close="1">Abbrechen</button><button class="primary" data-lz-save="' + (id || '') + '">Speichern</button></div></div>';
 	}
 
 	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, () => { if (!animal) lastActivityAt = Date.now(); }, { passive: true }));
 	document.addEventListener("visibilitychange", () => { if (document.hidden) closeSegment(); else lastActivityAt = Date.now(); });
 	window.addEventListener("pagehide", () => { closeSegment(); });
 	document.addEventListener("click", async (event) => {
-		const target = event.target.closest && event.target.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close]");
+		const source = event && event.target;
+		const target = source && source.nodeType === 1 && source.closest ? source.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close],[data-lz-mode],[data-lz-period],[data-lz-todayperiod]") : null;
 		if (!target) return;
 		if (target.dataset.lzStart) startTimer(target.dataset.lzStart);
 		else if (target.dataset.lzCustom) startTimer((document.getElementById("lzCustomMinutes") || {}).value);
 		else if (target.dataset.lzPause) pauseTimer();
 		else if (target.dataset.lzResume) resumeTimer();
 		else if (target.dataset.lzGoal) cycleGoal();
+		else if (target.dataset.lzMode) { analysisMode = target.dataset.lzMode === "month" ? "month" : "week"; renderHomeWidget(); }
+		else if (target.dataset.lzPeriod) { const delta = Number(target.dataset.lzPeriod) || 0; if (analysisMode === "month") monthOffset = Math.min(0, monthOffset + delta); else weekOffset = Math.min(0, weekOffset + delta); renderHomeWidget(); }
+		else if (target.dataset.lzTodayperiod) { if (analysisMode === "month") monthOffset = 0; else weekOffset = 0; renderHomeWidget(); }
 		else if (target.dataset.lzStop) { await stopTimer(); }
 		else if (target.dataset.lzAdd !== undefined) editModal(null);
 		else if (target.dataset.lzEdit) editModal(target.dataset.lzEdit);
 		else if (target.dataset.lzDelete) { await STATE.dispatch("learningSessionDelete", { id: target.dataset.lzDelete, updated: iso() }); renderHomeWidget(); }
-		else if (target.dataset.lzSave !== undefined) { await saveManual(target.dataset.lzSave || null, (document.getElementById("lzEditMinutes") || {}).value, (document.getElementById("lzEditCategory") || {}).value, (document.getElementById("lzEditDay") || {}).value); const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } renderHomeWidget(); }
+		else if (target.dataset.lzSave !== undefined) { await saveManual(target.dataset.lzSave || null, (document.getElementById("lzEditMinutes") || {}).value, (document.getElementById("lzEditCategory") || {}).value, (document.getElementById("lzEditDay") || {}).value, (document.getElementById("lzEditSubject") || {}).value); const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } renderHomeWidget(); }
 		else if (target.dataset.lzClose !== undefined) { const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } }
 	});
 

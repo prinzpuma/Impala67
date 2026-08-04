@@ -14,7 +14,6 @@ import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
-import { TELE } from "./telemetrie.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -956,30 +955,19 @@ function renderHome(main) {
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 	const cardCount = ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length;
 	const lz = LERNZEIT.statsForHome();
-	// Erfolgsquote 30 Tage: echte Wiederholungen wie die Statistik-Retention.
-	// FIX: bei < 10 strengen Reviews auf alle bewerteten zurückfallen (gleiche
-	// breite Definition wie die Insights) statt widersprüchlich „—“ zu zeigen
-	// PERF: EIN Durchlauf über den (mit den Monaten sehr langen) Review-Log statt fünf
-	// Filter-Kopien pro Render. Gebraucht werden ohnehin nur Zähler, keine Listen:
-	// je Zeitfenster [Anzahl, davon richtig].
+	// 7-Tage-Trend für die persönlichen Hinweise. Ein Durchlauf über den langen
+	// Review-Log reicht; die ausführliche Wochenanalyse lebt zentral in lernzeit.js.
 	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
-	const cut30 = iso(30), cut14 = iso(14), cut7 = iso(7);
-	const win = { strict30: [0, 0], wide30: [0, 0], cur7: [0, 0], prev7: [0, 0] };
+	const cut14 = iso(14), cut7 = iso(7);
+	const win = { cur7: [0, 0], prev7: [0, 0] };
 	const bump = (w, ok) => { w[0]++; if (ok) w[1]++; };
 	for (const r of S.reviews || []) {
 		if (!(r.grade > 0)) continue;
 		const ok = r.grade > 1;
-		if (r.t >= cut30) {
-			bump(win.wide30, ok);
-			if (!r.first && !r.learning) bump(win.strict30, ok);
-		}
 		if (r.t >= cut7) bump(win.cur7, ok);
 		else if (r.t >= cut14) bump(win.prev7, ok);
 	}
 	const rate = (w) => w[1] / w[0];
-	// Strenge Definition, bei zu wenigen Daten die breite — sonst stand hier widersprüchlich „—“.
-	const pool = win.strict30[0] >= 10 ? win.strict30 : (win.wide30[0] >= 10 ? win.wide30 : null);
-	const retention30 = pool ? Math.round(rate(pool) * 100) : null;
 	const trend = win.cur7[0] >= 10 && win.prev7[0] >= 10 ? rate(win.cur7) - rate(win.prev7) : null;
 	// 🃏 fällige Karten je Wurzel-Stapel + ★-Seiten (Bereiche „Stapel“ / „Favoriten“)
 	const dueByDeck = {};
@@ -1034,25 +1022,16 @@ function renderHome(main) {
 		? '<div class="home-list">' + favPages.slice(0, 6).map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg, "★")), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
 		: '<div class="empty-state compact"><b>Noch keine Favoriten</b><p>Der ☆-Stern oben rechts auf einer Seite pinnt sie hierher.</p></div>';
 
-	// Kennzahlen: heute gelernt, Streak, fällige Karten, Erfolgsquote
-	const stats = '<div class="home-statgrid">' +
-		`<div class="home-stat accent"><b>${LERNZEIT.fmt(lz.todaySeconds)}</b><small>heute gelernt</small></div>` +
-		`<div class="home-stat"><b><span class="home-streak-flame">🔥</span>${lz.streakDays}</b><small>${lz.streakDays === 1 ? "Tag Streak" : "Tage Streak"}</small></div>` +
-		`<div class="home-stat${due ? " accent" : ""}"><b>${due}</b><small>Karten fällig</small></div>` +
-		`<div class="home-stat${retention30 !== null && retention30 >= 85 ? " good" : ""}"><b>${retention30 === null ? "—" : retention30 + " %"}</b><small>Erfolgsquote (30 Tage)</small></div></div>`;
-
 	// Bereichs-Bausteine — ids identisch mit SETTINGS.HOME_SECTIONS (Einstellungen → Home)
 	const SECTION_HTML = {
-		stats,
 		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
 		continue: '<section class="home-section home-section-continue">' + continueBlock + "</section>",
 		today: todayPills,
-		insights: homeFold("insights", '🧠 Lern-Insights <span class="fold-meta">aus deiner Telemetrie</span>', TELE.homeInsightsHtml(), true),
+		insights: LERNZEIT.homeWidgetHtml(),
 		decks: homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true),
 		favorites: homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true),
 		recent: homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true),
 		chats: recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "",
-		lernzeit: LERNZEIT.homeWidgetHtml(),
 	};
 	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
 	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.

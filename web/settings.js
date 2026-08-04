@@ -982,16 +982,14 @@ export async function handleBackupNow() {
 // exakt die Bereiche aus render.js → renderHome(); Sichtbarkeit UND Reihenfolge kommen aus
 // homeLayout(). Gespeichert als Gerätewahl (localStorage) wie Theme/Dichte — kein Drive-Sync.
 export const HOME_SECTIONS = [
-	{ id: "stats", label: "Kennzahlen", hint: "heute gelernt · Streak · fällig · Erfolgsquote" },
+	{ id: "insights", label: "Lernanalyse", hint: "Lernzeit · Wochenverlauf · Kartenqualität · Empfehlungen" },
 	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
 	{ id: "continue", label: "Weitermachen", hint: "zuletzt bearbeitete Seite" },
 	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten" },
-	{ id: "insights", label: "Lern-Insights", hint: "Telemetrie-Auswertung" },
 	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
 	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
 	{ id: "recent", label: "Zuletzt", hint: "zuletzt bearbeitete Seiten" },
 	{ id: "chats", label: "Chats", hint: "letzte KI-Unterhaltungen" },
-	{ id: "lernzeit", label: "Lernzeit", hint: "Wochenziel & Verlauf" },
 ];
 const HOME_LAYOUT_KEY = "impala67HomeLayout";
 
