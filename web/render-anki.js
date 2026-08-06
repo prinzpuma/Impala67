@@ -5,6 +5,7 @@ import { SRS } from "./srs.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
+import { TELE } from "./telemetrie.js";
 
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 const localDayKey = (...args) => RENDER.localDayKey(...args);
@@ -339,14 +340,14 @@ function ankiStatsHtml() {
 	const kpi = (label, value) => '<div class="kpi"><div class="kpi-num">' + value + '</div><div class="kpi-label">' + label + "</div></div>";
 	return '<div class="kpi-row">' +
 			kpi("Karten", cards.length) + kpi("Fällig", due) + kpi("Neu", neu) + kpi("Gelernt", learned) +
-			kpi("Wiederholungen", reviews.length) + kpi("Erfolgsquote", retention === null ? "—" : retention + "%") +
+			kpi("Wiederholungen", reviews.length) + kpi("Sofort richtig", retention === null ? "—" : retention + "%") +
 		"</div>" +
 		"<h3>Wiederholungen — letzte 30 Tage</h3>" +
 		'<div class="bar-chart">' + bars + "</div>" +
 		"<h3>Prognose — nächste 7 Tage</h3>" +
 		'<div class="bar-chart forecast">' + fc.map((x) => '<div class="bar-wrap" title="' + x.label + ": " + x.n + '"><div class="bar" style="height:' + Math.round(x.n / fcMax * 100) + '%"></div><div class="bar-label">' + x.label + "</div></div>").join("") + "</div>" +
 		"<h3>Aktivität — letzte 12 Monate</h3>" + heatmapHtml(reviews) +
-		"<h3>Echte Retention</h3>" + retentionTableHtml(reviews) +
+		"<h3>Retention nach Wiederholungsabstand</h3>" + retentionTableHtml(reviews) +
 		// 📈 Phase 3: Lern-Analyse aus analyse.js (Beobachtungen aus der Telemetrie)
 		(window.ANALYSE ? window.ANALYSE.statsHtml() : "");
 }
@@ -369,20 +370,17 @@ function heatmapHtml(reviews) {
 	return '<div class="heatmap">' + cells + "</div>";
 }
 
-// „Echte" Retention wie in Anki: Anteil bestandener Wiederholungen (Bewertung > 1),
-// ohne Erstbewertungen neuer Karten, je Zeitraum.
+// Langzeit-Retention: Anteil bestandener Wiederholungen, wenn die Karte nach
+// einem natürlichen Abstand erneut auftaucht. Ohne ausreichende Daten bleibt die
+// Aussage bewusst leer statt eine scheinpräzise Quote zu zeigen.
 function retentionTableHtml(reviews) {
-	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
-	const cut = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString(); };
-	const row = (label, list) => {
-		const pass = list.filter((r) => r.grade > 1).length;
-		return "<tr><td>" + label + "</td><td>" + list.length + "</td><td>" + (list.length ? Math.round(pass / list.length * 100) + " %" : "—") + "</td></tr>";
-	};
-	return '<table class="lib-table retention-table"><thead><tr><th>Zeitraum</th><th>Wiederholungen</th><th>Retention</th></tr></thead><tbody>' +
-		row("Letzte 7 Tage", graded.filter((r) => r.t >= cut(7))) +
-		row("Letzte 30 Tage", graded.filter((r) => r.t >= cut(30))) +
-		row("Letzte 365 Tage", graded.filter((r) => r.t >= cut(365))) +
-		row("Gesamt", graded) +
+	const stats = TELE.retentionStatsForReviews(reviews);
+	const row = (label, bucket) => "<tr><td>" + label + "</td><td>" + bucket.n + "</td><td>" + (bucket.rate === null ? "—" : Math.round(bucket.rate * 100) + " %") + "</td></tr>";
+	return '<table class="lib-table retention-table"><thead><tr><th>Abstand</th><th>Wiederholungen</th><th>Retention</th></tr></thead><tbody>' +
+		row("ca. 1 Tag", stats.day1) +
+		row("ca. 3 Tage", stats.day3) +
+		row("ca. 7 Tage", stats.day7) +
+		row("ca. 14 Tage", stats.day14) +
 		"</tbody></table>";
 }
 
@@ -459,10 +457,10 @@ function ankiStudyHtml() {
 			// Anki-Layout: Zähler „neu · lernen · wdh.“ direkt über den Buttons
 			'<div class="study-counts-row">' + countsHtml + "</div>" +
 			'<div class="grades">' +
-				'<button data-ankigrade="1" data-card="' + c.id + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1' + pad("g1") + '</span></button>' +
-				'<button data-ankigrade="2" data-card="' + c.id + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2' + pad("g2") + '</span></button>' +
-				'<button data-ankigrade="3" data-card="' + c.id + '">Gut<span class="grade-ivl">' + pv[3] + '</span><span class="grade-key">3 / ␣' + pad("g3") + '</span></button>' +
-				'<button data-ankigrade="4" data-card="' + c.id + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4' + pad("g4") + '</span></button>' +
+				'<button data-ankigrade="1" data-card="' + c.id + '" data-review-id="' + U.uid() + '">Nochmal<span class="grade-ivl">' + pv[1] + '</span><span class="grade-key">1' + pad("g1") + '</span></button>' +
+				'<button data-ankigrade="2" data-card="' + c.id + '" data-review-id="' + U.uid() + '">Schwer<span class="grade-ivl">' + pv[2] + '</span><span class="grade-key">2' + pad("g2") + '</span></button>' +
+				'<button data-ankigrade="3" data-card="' + c.id + '" data-review-id="' + U.uid() + '">Gut<span class="grade-ivl">' + pv[3] + '</span><span class="grade-key">3 / ␣' + pad("g3") + '</span></button>' +
+				'<button data-ankigrade="4" data-card="' + c.id + '" data-review-id="' + U.uid() + '">Einfach<span class="grade-ivl">' + pv[4] + '</span><span class="grade-key">4' + pad("g4") + '</span></button>' +
 			'</div>';
 	} else {
 		// Telemetrie (telemetrie.js): optionale Selbsteinschätzung VOR dem Aufdecken.

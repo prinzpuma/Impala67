@@ -2,8 +2,9 @@
 
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { FACH } from "./fach.js";
 
-// telemetrie.js — Lern-Telemetrie v3 (21. Juli 2026: Experimente messbar machen)
+// telemetrie.js — Lern-Telemetrie v4 (4. August 2026: Fach + verzögerte Retention)
 // Neu in v3 (DRY): TELE.mark(feature) — experimente.js markiert Nutzung pro Karte,
 // sie landet als exp-Array im review-Event; TELE.onReview(fn) liefert fertige
 // Review-Daten an Abonnenten (analyse.js) statt einer zweiten Zustandsmaschine.
@@ -89,7 +90,7 @@ export const TELE = (() => {
 	function startSession(deck) {
 		if (session) endSession("restart");
 		expUsed = new Set();
-		session = { startedAt: Date.now(), deck: deck || null, graded: 0,
+		session = { startedAt: Date.now(), deck: deck || null, graded: 0, lastReviewId: null,
 			frontShownAt: Date.now(), revealedAt: 0, confidence: null, cardHidden: false, hiddenCount: 0, typed: false };
 		log("studyStart", { deck: deck || null, due: STATE.dueCards ? STATE.dueCards().length : null, timer: timerActive() });
 	}
@@ -99,11 +100,22 @@ export const TELE = (() => {
 			durationMs: Date.now() - session.startedAt, distractions: session.hiddenCount, reason: reason || "leave" });
 		session = null;
 	}
-	function onGrade(cardId, grade) {
+	function previousReview(cardId, now) {
+		let previous = null;
+		for (const item of S.reviews || []) {
+			if (!item || item.cardId !== cardId || item.grade <= 0) continue;
+			const t = new Date(item.t).getTime();
+			if (Number.isFinite(t) && t < now && (!previous || t > new Date(previous.t).getTime())) previous = item;
+		}
+		return previous;
+	}
+	function onGrade(cardId, grade, renderedReviewId) {
 		if (!cardId) return;
 		const now = Date.now();
 		const card = S.cards[cardId] || {};
 		const srs = card.srs || {}; // Capture-Phase: srs ist hier noch der Stand VOR der Bewertung
+		const previous = previousReview(cardId, now);
+		const subject = FACH.card(card);
 		const base = session || { frontShownAt: now, revealedAt: 0, graded: 0, confidence: null, cardHidden: false, typed: false };
 		const revealed = base.revealedAt || now;
 		const d = new Date();
@@ -111,8 +123,12 @@ export const TELE = (() => {
 		// Getippt/diktiert (Feynman-Erklärfeld) → die Uhr maß Schreibarbeit, keine Denkpause.
 		const typed = !!base.typed || !!S.ankiFeyn || expUsed.has("feynman");
 		const data = {
-			cardId, deck: card.deck || "Standard", grade: Number(grade) || 0,
+			reviewId: renderedReviewId || U.uid(), cardId, subject: subject.name, subjectSource: subject.source,
+			deck: card.deck || "Standard", grade: Number(grade) || 0,
 			state: srs.state || null, reps: srs.reps || 0, lapses: srs.lapses || 0,
+			first: srs.state === "new", learning: srs.state === "learning" || srs.state === "relearning",
+			dueAt: srs.due || null, previousReviewAt: previous?.t || null,
+			intervalDays: previous ? Math.max(0, (now - new Date(previous.t).getTime()) / 864e5) : null,
 			thinkMs, // Denkzeit: Frage → „Antwort zeigen“
 			gradeMs: clamp(now - revealed), // Bewertungszeit: „Antwort zeigen“ → Note
 			pos: base.graded, // wievielte Karte der Sitzung (Ermüdungs-Analyse)
@@ -127,7 +143,7 @@ export const TELE = (() => {
 		log("review", data);
 		expUsed = new Set(); // Marker gelten pro Karte
 		reviewSubs.forEach((fn) => { try { fn(data); } catch (err) { /* Abonnenten sind nie kritisch */ } });
-		if (session) Object.assign(session, { graded: session.graded + 1, frontShownAt: now, revealedAt: 0, confidence: null, cardHidden: false, typed: false });
+		if (session) Object.assign(session, { graded: session.graded + 1, lastReviewId: data.reviewId, frontShownAt: now, revealedAt: 0, confidence: null, cardHidden: false, typed: false });
 	}
 
 	// Capture-Phase: läuft VOR den app.js-Handlern (und damit vor dem Re-Render und
@@ -140,8 +156,8 @@ export const TELE = (() => {
 			const row = t.closest(".confidence-row");
 			if (row) row.querySelectorAll("[data-confidence]").forEach((b) => b.classList.toggle("active", b === t));
 		},
-		"data-ankigrade": (v, t) => onGrade(t.getAttribute("data-card"), v),
-		"data-ankiundo": () => { if (session && session.graded > 0) session.graded--; log("reviewUndo", {}); },
+		"data-ankigrade": (v, t) => onGrade(t.getAttribute("data-card"), v, t.getAttribute("data-review-id")),
+		"data-ankiundo": () => { if (session && session.graded > 0) session.graded--; log("reviewUndo", { reviewId: session?.lastReviewId || null }); },
 		"data-ankitab": (v) => { if (session && v !== "study") endSession("nav"); },
 	};
 	// PERF (Audit 21. Juli): Selektor einmal bauen — dieser Capture-Listener läuft bei
@@ -180,7 +196,10 @@ export const TELE = (() => {
 		for (const e of S.telemetry || []) {
 			if (!e || !e.data) continue;
 			if (e.kind === "review" && e.data.grade > 0) out.push(e);
-			else if (e.kind === "reviewUndo") out.pop(); // Log ist chronologisch → letzte Bewertung
+			else if (e.kind === "reviewUndo") {
+				const index = e.data.reviewId ? out.findIndex((item) => item.data.reviewId === e.data.reviewId) : out.length - 1;
+				if (index >= 0) out.splice(index, 1);
+			} // Fallback für alte Undo-Ereignisse bleibt chronologisch
 		}
 		return out;
 	};
@@ -190,6 +209,47 @@ export const TELE = (() => {
 		const d = new Date(value);
 		return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 	};
+	function reviewSubject(review) {
+		if (review?.subject) return String(review.subject).trim().slice(0, 80) || "Allgemein";
+		return FACH.card(S.cards[review?.cardId])?.name || FACH.deck(review?.deck).name;
+	}
+	function reviewRows() {
+		const sorted = (S.reviews || []).filter((review) => review && review.grade > 0)
+			.slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
+		const previous = new Map();
+		return sorted.map((review) => {
+			const prev = previous.get(review.cardId);
+			const at = new Date(review.t).getTime();
+			const storedGap = Number(review.intervalDays);
+			const gapDays = Number.isFinite(storedGap) && storedGap >= 0
+				? storedGap
+				: (prev && Number.isFinite(at - prev.at) ? Math.max(0, (at - prev.at) / 864e5) : null);
+			previous.set(review.cardId, { at, t: review.t });
+			return { ...review, subject: reviewSubject(review), gapDays };
+		});
+	}
+	function retentionBucket(rows, targetDays) {
+		const min = targetDays === 1 ? 0.5 : targetDays * 0.6;
+		const max = targetDays === 1 ? 2 : targetDays * 1.6;
+		const eligible = rows.filter((row) => !row.first && !row.learning && Number.isFinite(row.gapDays) && row.gapDays >= min && row.gapDays <= max);
+		return { n: eligible.length, rate: eligible.length ? eligible.filter((row) => row.grade > 1).length / eligible.length : null };
+	}
+	function retentionStats(rows) {
+		return { day1: retentionBucket(rows, 1), day3: retentionBucket(rows, 3), day7: retentionBucket(rows, 7), day14: retentionBucket(rows, 14) };
+	}
+	function subjectStats(rows) {
+		const groups = {};
+		for (const row of rows) (groups[row.subject] ||= []).push(row);
+		return Object.entries(groups).map(([subject, list]) => ({
+			subject, reviews: list.length,
+			passRate: list.length ? list.filter((row) => row.grade > 1).length / list.length : null,
+			retention: retentionStats(list),
+		})).sort((a, b) => b.reviews - a.reviews);
+	}
+	function retentionStatsForReviews(reviews) {
+		const ids = new Set((reviews || []).map((review) => review && review.id).filter(Boolean));
+		return retentionStats(reviewRows().filter((review) => ids.has(review.id)));
+	}
 
 	// Kompakte, markup-freie Auswertung für frei wählbare Zeiträume. So können
 	// Lernzeit und Karten-Erfolg im selben Dashboard erscheinen, ohne dass
@@ -203,7 +263,8 @@ export const TELE = (() => {
 		// S.reviews reicht weiter zurück als die später eingeführte Telemetrie und
 		// entfernt Undos bereits im Reducer. Denkzeit/Fokus kommen ergänzend aus
 		// den detailreicheren Telemetrie-Events.
-		const reviews = (S.reviews || []).filter((r) => r && r.grade > 0 && inRange(r.t));
+		const rows = reviewRows();
+		const reviews = rows.filter((r) => inRange(r.t));
 		const detailed = reviewEvents().filter((e) => inRange(e.t));
 		const timed = detailed.filter((e) => !e.data.typed && !e.data.distracted && Number.isFinite(e.data.thinkMs) && e.data.thinkMs > 400 && e.data.thinkMs < 120000);
 		const byDay = {};
@@ -217,6 +278,8 @@ export const TELE = (() => {
 			byDay,
 			focusLosses,
 			timerReviews,
+			retention: retentionStats(reviews),
+			bySubject: subjectStats(reviews),
 		};
 	}
 
@@ -348,5 +411,5 @@ export const TELE = (() => {
 		U.toast("Lerndaten exportiert.", "success");
 	}
 
-	return { log, mark, onReview, reviewEvents, passRate, thinkMedian, rangeStats, homeInsightsHtml, exportDump };
+	return { log, mark, onReview, reviewEvents, passRate, thinkMedian, rangeStats, retentionStatsForReviews, homeInsightsHtml, exportDump };
 })();

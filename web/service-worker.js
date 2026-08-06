@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v127"; // Home-Lernanalyse: Wochen-/Monatsansicht, kompaktere Darstellung.
+const CACHE = "impala67-v128"; // Fachzuordnung + verzögerte Retention pro Fach.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -42,6 +42,7 @@ const APP_FILES = [
 	"./pdfpaste.js",
 	"./lernzeit.js",
 	"./telemetrie.js",
+	"./fach.js",
 	"./schulnoten.js",
 	"./experimente.js",
 	"./graph.js",

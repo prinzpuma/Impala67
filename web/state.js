@@ -8,7 +8,7 @@ export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, notionId, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
 	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
-	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, subject, sourceId, updated, deleted? }
+	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, subject, subjectSource, sourceId, updated, deleted? }
 	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
 	settings: {
 		aiProviders: [
@@ -445,6 +445,7 @@ export const STATE = (() => {
 					durationSeconds: Math.max(0, Math.round(Number(p.durationSeconds))),
 					category: p.category || "other",
 					subject: p.subject !== undefined ? (p.subject ? String(p.subject).trim().slice(0, 80) : null) : (current && current.subject) || null,
+					subjectSource: p.subjectSource !== undefined ? (p.subjectSource ? String(p.subjectSource).trim().slice(0, 24) : null) : (current && current.subjectSource) || null,
 					sourceId: p.sourceId || null,
 					updated,
 					deleted: false,
@@ -516,7 +517,11 @@ export const STATE = (() => {
 				// Deck und Art werden beim Ereignis eingefroren: spätere Deck-Moves dürfen
 				// historische Limits, Heatmap und Retention nicht rückwirkend umhängen.
 				S.reviews.push({ id: p.reviewId || ev.id, cardId: p.id, deck: p.deck || c.deck || "Standard", t: ev.t,
-					grade: p.grade || 0, first: wasNew, learning: wasLearning });
+					grade: p.grade || 0, first: wasNew, learning: wasLearning,
+					subject: p.subject ? String(p.subject).trim().slice(0, 80) : null,
+					subjectSource: p.subjectSource ? String(p.subjectSource).trim().slice(0, 24) : null,
+					dueAt: p.dueAt || null, previousReviewAt: p.previousReviewAt || null,
+					intervalDays: p.intervalDays !== null && p.intervalDays !== undefined && Number.isFinite(Number(p.intervalDays)) ? Number(p.intervalDays) : null });
 				break;
 			}
 			case "cardReviewUndo": {

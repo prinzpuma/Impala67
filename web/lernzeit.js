@@ -3,9 +3,10 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { TELE } from "./telemetrie.js";
+import { FACH } from "./fach.js";
 
-// lernzeit.js — Lernzeit v4 (4. August 2026)
-// v4: Home-Analyse mit Woche/Tag-Schalter, Fachdimension, Tagesverlauf und
+// lernzeit.js — Lernzeit v5 (4. August 2026)
+// v5: Home-Analyse mit Woche/Monat-Schalter, einer Fachdimension und
 // Vergleichskennzahlen. Die Erfassungs-Engine (automatische Segmente, Idle-Tier,
 // Kategorie-Split) bleibt local-first und rückwärtskompatibel.
 
@@ -49,47 +50,32 @@ export const LERNZEIT = (() => {
 	function activeSessions() {
 		return Object.values(S.learningSessions || {}).filter((item) => item && !item.deleted && item.durationSeconds > 0);
 	}
-	function cleanSubject(value) {
-		return String(value || "").replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-	}
-	function pageSubject(page) {
-		if (!page) return "Allgemein";
-		if (page.subject) return cleanSubject(page.subject);
-		const tag = Array.isArray(page.tags) ? page.tags.find((item) => cleanSubject(item)) : "";
-		if (tag) return cleanSubject(tag);
-		let root = page, hops = 0;
-		while (root.parentId && S.pages[root.parentId] && hops++ < 100) root = S.pages[root.parentId];
-		const title = cleanSubject(root.title);
-		if (title && !/^(daily notes?|notizen?|willkommen|start)$/i.test(title)) return title;
-		const workspace = cleanSubject(S.workspaces[page.workspaceId || "default"]?.name);
-		return workspace && workspace.toLowerCase() !== "privat" ? workspace : "Notizen";
-	}
-	function subjectNow() {
+	function subjectNowMeta() {
 		const page = S.currentPageId && S.pages[S.currentPageId];
 		if (S.view === "anki" && S.ankiTab === "study") {
-			const deck = cleanSubject(S.ankiDeck || "").split("::")[0];
-			return deck || "Karteikarten";
+			return FACH.context({ deck: S.ankiDeck, pageId: page?.id });
 		}
-		if (page) return pageSubject(page);
-		if (S.aiBusy) return "KI / Allgemein";
-		return "Allgemein";
+		if (page) return FACH.page(page);
+		if (S.aiBusy) return { name: "KI / Allgemein", source: "ai" };
+		return { name: "Allgemein", source: "fallback" };
 	}
 	function categoryNow() {
-		if (S.aiBusy) return { category: "ai", sourceId: S.currentChatId || null, subject: subjectNow() };
-		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null, subject: subjectNow() };
+		const subject = subjectNowMeta();
+		if (S.aiBusy) return { category: "ai", sourceId: S.currentChatId || null, subject: subject.name, subjectSource: subject.source };
+		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null, subject: subject.name, subjectSource: subject.source };
 		const page = S.currentPageId && S.pages[S.currentPageId];
-		if (page && page.kind === "heft" && S.view === "page") return { category: "notebook", sourceId: page.id, subject: subjectNow() };
+		if (page && page.kind === "heft" && S.view === "page") return { category: "notebook", sourceId: page.id, subject: subject.name, subjectSource: subject.source };
 		const active = document.activeElement;
 		if (page && active && (active.id === "pageTitle" || active.isContentEditable || (active.closest && active.closest(".block-editor")))) {
-			return { category: "notes", sourceId: page.id, subject: subjectNow() };
+			return { category: "notes", sourceId: page.id, subject: subject.name, subjectSource: subject.source };
 		}
-		return { category: "other", sourceId: null, subject: subjectNow() };
+		return { category: "other", sourceId: null, subject: subject.name, subjectSource: subject.source };
 	}
 
 	function openSegment() {
 		if (current) return;
 		const meta = categoryNow();
-		current = { id: U.uid(), startedAt: iso(), startedMs: Date.now(), category: meta.category, sourceId: meta.sourceId, subject: meta.subject };
+		current = { id: U.uid(), startedAt: iso(), startedMs: Date.now(), category: meta.category, sourceId: meta.sourceId, subject: meta.subject, subjectSource: meta.subjectSource };
 	}
 	async function closeSegment() {
 		if (!current) return;
@@ -105,6 +91,7 @@ export const LERNZEIT = (() => {
 			category: finished.category,
 			sourceId: finished.sourceId,
 			subject: finished.subject,
+			subjectSource: finished.subjectSource,
 			updated: iso(),
 		});
 	}
@@ -250,10 +237,10 @@ export const LERNZEIT = (() => {
 		return { startedAt: current.startedAt, endedAt: iso(), durationSeconds: Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000)), category: current.category, subject: current.subject };
 	}
 	function sessionSubject(session) {
-		if (session.subject) return cleanSubject(session.subject);
-		if (session.category === "cards") return cleanSubject(String(session.sourceId || "").split("::")[0]) || "Karteikarten";
+		if (session.subject) return FACH.clean(session.subject);
+		if (session.category === "cards") return FACH.deck(session.sourceId).name;
 		const page = session.sourceId && S.pages[session.sourceId];
-		return pageSubject(page);
+		return FACH.page(page).name;
 	}
 	function totalForDay(key) {
 		const list = activeSessions().filter((s) => dayKey(s.startedAt) === key);
@@ -456,9 +443,18 @@ export const LERNZEIT = (() => {
 		const reviewRate = reviews.passRate === null ? null : Math.round(reviews.passRate * 100);
 		const previousRate = previousReviews.passRate === null ? null : Math.round(previousReviews.passRate * 100);
 		const reviewDelta = reviewRate === null || previousRate === null ? "Noch kein Vergleich" : (reviewRate - previousRate >= 0 ? "+" : "") + (reviewRate - previousRate) + " Punkte zum vorherigen Zeitraum";
-		const subjects = groupedSubjects(range.from, range.to);
+		const subjectMap = new Map(groupedSubjects(range.from, range.to).map((item) => [item.subject, item]));
+		for (const item of reviews.bySubject || []) if (!subjectMap.has(item.subject)) subjectMap.set(item.subject, { subject: item.subject, seconds: 0, sessions: 0 });
+		const subjects = [...subjectMap.values()].sort((a, b) => b.seconds - a.seconds || a.subject.localeCompare(b.subject, "de"));
 		const maxSubject = Math.max(1, ...subjects.map((item) => item.seconds));
-		const subjectRows = subjects.slice(0, 12).map((item, index) => '<div class="lz-subject-row"><span class="lz-subject-rank">' + (index + 1) + '</span><div><b>' + U.esc(item.subject) + '</b><small>' + item.sessions + ' Einheit' + (item.sessions === 1 ? '' : 'en') + '</small></div><div class="lz-subject-track"><i style="width:' + Math.max(4, Math.round(item.seconds / maxSubject * 100)) + '%"></i></div><strong>' + fmt(item.seconds) + '</strong></div>').join("") || '<p class="hint lz-empty">Noch kein Fach in diesem Zeitraum erfasst.</p>';
+		const subjectRows = subjects.slice(0, 12).map((item, index) => {
+			const quality = (reviews.bySubject || []).find((entry) => entry.subject === item.subject);
+			const retention7 = quality?.retention?.day7;
+			const qualityText = retention7?.rate !== null && retention7?.rate !== undefined
+				? Math.round(retention7.rate * 100) + " % nach 7 Tagen"
+				: quality?.passRate !== null && quality?.passRate !== undefined ? Math.round(quality.passRate * 100) + " % sofort richtig" : "Noch keine Retention";
+			return '<div class="lz-subject-row"><span class="lz-subject-rank">' + (index + 1) + '</span><div><b>' + U.esc(item.subject) + '</b><small>' + (item.sessions ? item.sessions + ' Einheit' + (item.sessions === 1 ? '' : 'en') + ' · ' : '') + (quality?.reviews || 0) + ' Reviews · ' + qualityText + '</small></div><div class="lz-subject-track"><i style="width:' + (item.seconds ? Math.max(4, Math.round(item.seconds / maxSubject * 100)) : 4) + '%"></i></div><strong>' + fmt(item.seconds) + '</strong></div>';
+		}).join("") || '<p class="hint lz-empty">Noch kein Fach in diesem Zeitraum erfasst.</p>';
 		const chart = mode === "month" ? monthCalendar(selected.days, reviews) : selected.days.map(({ d, seconds: daySeconds }) => {
 			const dayReviews = reviews.byDay[dayKey(d)] || 0, height = daySeconds ? Math.max(6, Math.round(daySeconds / Math.max(1, ...selected.days.map((x) => x.seconds)) * 100)) : 2;
 			return '<div class="lz-bar-col' + (dayKey(d) === dayKey() ? ' today' : '') + (daySeconds ? '' : ' empty') + '" title="' + fmt(daySeconds) + ' · ' + dayReviews + ' Reviews"><span>' + (daySeconds ? fmt(daySeconds) : '—') + '</span><i style="height:' + height + '%"></i><small>' + d.toLocaleDateString('de-DE', { weekday: 'short' }) + '<b>' + d.getDate() + '</b></small><em>' + (dayReviews ? dayReviews + ' Karten' : '&nbsp;') + '</em></div>';
@@ -467,13 +463,16 @@ export const LERNZEIT = (() => {
 		const relative = mode === "month" ? (monthOffset === 0 ? "Dieser Monat" : monthOffset === -1 ? "Letzter Monat" : 'Vor ' + Math.abs(monthOffset) + ' Monaten') : (weekOffset === 0 ? "Diese Woche" : weekOffset === -1 ? "Letzte Woche" : 'Vor ' + Math.abs(weekOffset) + ' Wochen');
 		const activeDays = selected.activeDays;
 		const goalPct = mode === "month" ? Math.round(seconds / 60 / (weekGoalMinutes() * 4.345) * 100) : selected.goalPct;
+		const retention7 = reviews.retention?.day7;
+		const retentionText = retention7?.rate === null || retention7?.rate === undefined ? null : Math.round(retention7.rate * 100) + " % nach 7 Tagen";
 		const recommendations = [];
 		if (!seconds && !reviews.reviews) recommendations.push(["🌱", "Noch keine Lernzeit", "Starte einen Fokusblock oder füge eine Einheit hinzu. Der Zeitraum bleibt vollständig nachvollziehbar."]);
 		else {
 			if (deltaPct !== null) recommendations.push([deltaPct >= 0 ? "📈" : "↘", deltaPct >= 10 ? "Mehr Lernzeit" : deltaPct <= -20 ? "Weniger Lernzeit" : "Stabiler Umfang", deltaText + "."]);
 			if (mode === "week") recommendations.push([activeDays >= 4 ? "✅" : "🗓", activeDays + ' aktive' + (activeDays === 1 ? 'r' : '') + ' Lerntag' + (activeDays === 1 ? '' : 'e'), activeDays >= 4 ? 'Gute Verteilung über die Woche.' : 'Kürzere Einheiten an mehreren Tagen helfen beim Behalten.']);
 			else if (subjects.length > 1) recommendations.push(["🔀", subjects.length + " Fächer im Monat", "Deine Lernzeit verteilt sich auf mehrere Lernkontexte."]);
-			if (reviewRate !== null) recommendations.push([reviewRate >= 85 ? "🎯" : "🧠", reviewRate + " % Erfolgsquote", reviewRate >= 85 ? "Die Karten sitzen. Behalte diesen Rhythmus bei." : "Schwierige Karten in kleinere, klarere Schritte zerlegen."]);
+			if (retentionText) recommendations.push([retention7.rate >= 0.85 ? "🎯" : "🧠", retentionText, retention7.rate >= 0.85 ? "Langfristig sitzt der Stoff gut." : "Kürzere Abstände oder gezielte Wiederholungen können helfen."]);
+			else if (reviewRate !== null) recommendations.push([reviewRate >= 85 ? "🎯" : "🧠", reviewRate + " % sofort richtig", "Für eine belastbare Aussage braucht die App noch spätere Wiederholungen."]);
 		}
 		const recHtml = recommendations.slice(0, 3).map(([icon, title, sub]) => '<div class="lz-recommendation"><span>' + icon + '</span><div><b>' + title + '</b><small>' + sub + '</small></div></div>').join("");
 		const log = sessions.slice(0, 12).map((session) => {
@@ -489,7 +488,7 @@ export const LERNZEIT = (() => {
 			timerCardHtml() +
 			'<div class="lz-panel lz-week-chart"><div class="lz-panel-head"><div><b>' + (mode === 'week' ? 'Lernrhythmus der Woche' : 'Lernkalender des Monats') + '</b><small>' + (mode === 'week' ? 'Lernzeit und Karten pro Tag' : 'Jeder Tag zeigt Intensität und Reviews') + '</small></div><span>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</span></div><div class="' + (mode === 'month' ? 'lz-month-wrap' : 'lz-bars') + '">' + chart + '</div></div>' +
 			'<div class="lz-analysis-grid"><div class="lz-panel lz-subjects"><div class="lz-panel-head"><div><b>Fächer & Lernkontexte</b><small>Automatisch aus Stapeln, Seiten und Workspaces</small></div><span>' + subjects.length + ' erkannt</span></div>' + subjectRows + '</div>' +
-			'<div class="lz-panel"><div class="lz-panel-head"><div><b>Kartenqualität</b><small>Leistung im gewählten Zeitraum</small></div></div><div class="lz-review-summary"><div><b>' + (reviewRate === null ? '—' : reviewRate + ' %') + '</b><small>Erfolgsquote</small></div><div><b>' + (reviews.medianThinkMs === null ? '—' : (reviews.medianThinkMs / 1000).toFixed(1) + ' s') + '</b><small>mittlere Denkzeit</small></div><div><b>' + reviews.focusLosses + '</b><small>Unterbrechungen</small></div></div><p>' + reviewDelta + (reviews.timerReviews ? ' · ' + reviews.timerReviews + ' Reviews mit Lerntimer' : '') + '</p></div></div>' +
+			'<div class="lz-panel"><div class="lz-panel-head"><div><b>Kartenqualität</b><small>Leistung im gewählten Zeitraum</small></div></div><div class="lz-review-summary"><div><b>' + (retentionText || '—') + '</b><small>7-Tage-Retention</small></div><div><b>' + (reviewRate === null ? '—' : reviewRate + ' %') + '</b><small>sofort richtig</small></div><div><b>' + (reviews.medianThinkMs === null ? '—' : (reviews.medianThinkMs / 1000).toFixed(1) + ' s') + '</b><small>mittlere Denkzeit</small></div></div><p>' + (retentionText ? (retention7.n + ' Reviews im 7-Tage-Fenster') : reviewDelta) + (reviews.focusLosses ? ' · ' + reviews.focusLosses + ' Unterbrechungen' : '') + '</p></div></div>' +
 			'<div class="lz-panel lz-insights"><div class="lz-panel-head"><div><b>Deine nächsten Schritte</b><small>Aus Lernzeit, Fächern und Lernerfolg gemeinsam abgeleitet</small></div></div><div class="lz-recommendations">' + recHtml + '</div>' + fold("patterns", "🧠 Langzeitmuster aus allen Lerndaten", TELE.homeInsightsHtml(), false) + '</div>' +
 			fold("log", "📝 Einheiten in diesem Zeitraum", '<div class="lz-log-head"><b>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>', false) + '</section>';
 	}
@@ -519,7 +518,7 @@ export const LERNZEIT = (() => {
 		await STATE.dispatch("learningSessionUpsert", {
 			id: id || U.uid(), startedAt, endedAt, durationSeconds,
 			category: CATEGORIES[category] ? category : "other",
-			subject: cleanSubject(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNow()) || "Allgemein",
+			subject: FACH.clean(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNowMeta().name) || "Allgemein",
 			sourceId: old ? old.sourceId : null, updated: iso(),
 		});
 	}
@@ -528,7 +527,7 @@ export const LERNZEIT = (() => {
 		const overlay = document.getElementById("overlay");
 		if (!overlay) return;
 		const options = Object.entries(CATEGORIES).map(([key, value]) => '<option value="' + key + '"' + ((old ? old.category : "other") === key ? " selected" : "") + '>' + value.icon + ' ' + value.label + '</option>').join("");
-		const subject = old ? sessionSubject(old) : subjectNow();
+		const subject = old ? sessionSubject(old) : subjectNowMeta().name;
 		overlay.hidden = false;
 		overlay.innerHTML = '<div class="modal lz-edit-modal"><button class="modal-x" data-lz-close="1">✕</button><h3>' + (old ? 'Lerneinheit bearbeiten' : 'Zeit hinzufügen') + '</h3><label>Tag<input id="lzEditDay" type="date" value="' + dayKey(old && old.startedAt) + '"></label><label>Minuten<input id="lzEditMinutes" type="number" min="1" max="1440" value="' + (old ? Math.round(old.durationSeconds / 60) : 25) + '"></label><label>Fach<input id="lzEditSubject" maxlength="80" value="' + U.esc(subject) + '" placeholder="z. B. Mathematik"></label><label>Aktivität<select id="lzEditCategory">' + options + '</select></label><div class="modal-actions"><button data-lz-close="1">Abbrechen</button><button class="primary" data-lz-save="' + (id || '') + '">Speichern</button></div></div>';
 	}

@@ -19,6 +19,7 @@ import { VOICE } from "./voice.js";
 import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
+import { FACH } from "./fach.js";
 
 // Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
 // FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
@@ -258,7 +259,7 @@ async function openHistory(pageId) {
 // Payload (Tageslimits/Statistik). _ratingInFlight verhindert Doppel-Bewertung:
 // zwei schnelle Klicks/Tasten lasen sonst beide den alten Stand → kaputte Intervalle
 let _ratingInFlight = false;
-async function rateAndReviewCard(cardId, grade) {
+async function rateAndReviewCard(cardId, grade, renderedReviewId) {
 	if (_ratingInFlight) return null;
 	const card = S.cards[cardId];
 	if (!card) return null;
@@ -266,8 +267,17 @@ async function rateAndReviewCard(cardId, grade) {
 	try {
 		const wasNew = card.srs.state === "new";
 		const wasLearning = card.srs.state === "learning" || card.srs.state === "relearning";
+		const previous = (S.reviews || []).filter((item) => item && item.cardId === card.id && item.grade > 0)
+			.sort((a, b) => String(b.t).localeCompare(String(a.t)))[0] || null;
+		const subject = FACH.card(card);
+		const reviewId = renderedReviewId || U.uid();
+		const intervalDays = previous ? Math.max(0, (Date.now() - new Date(previous.t).getTime()) / 864e5) : null;
 		const srs = SRS.rate(card.srs, grade);
-		await STATE.dispatch("cardReview", { id: card.id, srs, grade, reviewId: U.uid(), deck: card.deck || "Standard", first: wasNew, learning: wasLearning });
+		await STATE.dispatch("cardReview", {
+			id: card.id, srs, grade, reviewId, deck: card.deck || "Standard", first: wasNew, learning: wasLearning,
+			subject: subject.name, subjectSource: subject.source, dueAt: card.srs.due || null,
+			previousReviewAt: previous?.t || null, intervalDays,
+		});
 		return card;
 	} finally {
 		_ratingInFlight = false;
@@ -894,7 +904,7 @@ function wireEvents() {
 		if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return; }
 		if (t.dataset.ankiwaitrefresh) { S.reviewShowBack = false; renderMain(); return; }
 		if (t.dataset.ankigrade) {
-			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade));
+			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade), t.dataset.reviewId);
 			S.reviewShowBack = false;
 			return;
 		}
