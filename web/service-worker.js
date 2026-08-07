@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v144"; // Modellvorschläge erscheinen sofort; Live-Liste aktualisiert im Hintergrund.
+const CACHE = "impala67-v145"; // Lernanalyse berücksichtigt alle vier Bewertungsstufen.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";

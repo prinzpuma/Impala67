@@ -186,29 +186,35 @@ export const ANALYSE = (() => {
 		if (t) cardFromPage(t.getAttribute("data-anacard"));
 	}, true);
 
-	// ---------- 6) Experimente × Erfolg (macht Phase 2 messbar) ----------
+	// ---------- 6) Experimente × Bewertung (macht Phase 2 messbar) ----------
 	// Reviews, bei denen ein Karten-Experiment benutzt wurde (exp-Array aus
-	// telemetrie.js v3), gegen die Basisquote. Mindestdatenmengen wie überall.
+	// telemetrie.js v3), gegen normale Reviews. Anders als die übrigen Erfolgsquoten
+	// zählt hier die vollständige 1–4-Bewertung: Nochmal, Schwer, Gut und Einfach
+	// beeinflussen den Mittelwert jeweils unterschiedlich.
 	const EXP_NAMES = { feynman: "🧑‍🏫 Feynman", scaffolding: "💡 Hinweise", variation: "🔀 Variation", mc: "🎯 Quiz" };
+	const gradeAverage = (list) => {
+		const grades = list.map((e) => Number(e.data.grade)).filter((g) => g >= 1 && g <= 4);
+		return grades.length ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length : 0;
+	};
 	function expHtml() {
 		const rs = reviews();
 		const base = rs.filter((e) => !Array.isArray(e.data.exp) || !e.data.exp.length);
 		const rows = Object.entries(EXP_NAMES)
-			.map(([key, label]) => { const list = rs.filter((e) => Array.isArray(e.data.exp) && e.data.exp.includes(key)); return { label, n: list.length, rate: rate(list) }; })
+			.map(([key, label]) => { const list = rs.filter((e) => Array.isArray(e.data.exp) && e.data.exp.includes(key)); return { label, n: list.length, average: gradeAverage(list) }; })
 			.filter((x) => x.n >= 15);
 		if (!rows.length || base.length < 30) return "";
-		return "<h4>Experimente × Erfolg</h4>" +
-			'<table class="lib-table"><thead><tr><th>Experiment</th><th>Reviews</th><th>richtig</th></tr></thead><tbody>' +
-			rows.map((x) => "<tr><td>" + x.label + "</td><td>" + x.n + "</td><td>" + pct(x.rate) + "</td></tr>").join("") +
-			"<tr><td>ohne Experimente</td><td>" + base.length + "</td><td>" + pct(rate(base)) + "</td></tr></tbody></table>" +
-			'<div class="ana-note">Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
+		return "<h4>Experimente × Bewertung</h4>" +
+			'<table class="lib-table"><thead><tr><th>Experiment</th><th>Reviews</th><th>Ø Bewertung</th></tr></thead><tbody>' +
+			rows.map((x) => "<tr><td>" + x.label + "</td><td>" + x.n + "</td><td>" + x.average.toFixed(2) + "</td></tr>").join("") +
+			"<tr><td>ohne Experimente</td><td>" + base.length + "</td><td>" + gradeAverage(base).toFixed(2) + "</td></tr></tbody></table>" +
+			'<div class="ana-note">Skala: 1 = Nochmal, 2 = Schwer, 3 = Gut, 4 = Einfach. Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
 	}
 
 	// ---------- Statistik-Tab (render-anki.js hängt das an) ----------
 	function statsHtml() {
 		const html = positionHtml() + chronoHtml() + expHtml() + problemHtml();
 		return '<div class="ana-block"><h3>📈 Lern-Analyse (Beobachtungen)</h3>' +
-			(html || '<div class="ana-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Erfolg und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
+			(html || '<div class="ana-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Bewertung und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
 			"</div>";
 	}
 
