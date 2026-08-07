@@ -521,13 +521,13 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 .chat-form-full #mainPendingChip { margin: 0 }
 .msg-img { display: block; max-width: min(280px, 100%); border-radius: var(--radius-md); margin-top: 6px }
 /* == Topbar-Tabs (Home / Chats / Bibliothek / Suche) == */
-/* flex-wrap: bei vielen Tabs (🃏/📅/🔍) bricht die Leiste um, st… */
-.topbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft) }
+/* Einzeilig halten: Ein Umbruch während des Pillenwechsels verschiebt sonst den Baum. */
+.topbar { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft) }
 /* Such-Taste immer am rechten Rand der Sidebar-Topbar (unabhängi… */
 .topbar #btnSearchToggle { margin-left: auto }
 .tab { display: flex; align-items: center; border: none; background: transparent; border-radius: var(--radius-pill); padding: 6px 9px; color: var(--text2); min-height: 32px; flex-shrink: 0; transition: background .18s ease, color .18s ease }
 .tab:hover { background: var(--surface-hover) }
-.tab.active { background: var(--surface-active); color: var(--text) }
+.tab.active { background: var(--surface-active); color: var(--text); min-width: 0; flex-shrink: 1 }
 /* 🐛 Fix (28. Juli, JS-frei): Auf Geräten mit Touch-Eingabe klebt :hover nach dem Tipp auf der
    zuletzt berührten Pille fest — dadurch sah die falsche Pille „ausgewählt“ aus. (any-pointer:
    coarse) greift auch am iPad mit Trackpad oder im Desktop-Modus und braucht kein Skript.
@@ -538,7 +538,7 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 	.tab:active { background: var(--surface-hover-strong) }
 }
 .tab svg { display: block }
-.tab .tab-label { font-weight: 600; font-size: var(--text-base); white-space: nowrap; overflow: hidden; max-width: 0; opacity: 0; margin-left: 0; transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease }
+.tab .tab-label { font-weight: 600; font-size: var(--text-base); white-space: nowrap; overflow: hidden; max-width: 0; opacity: 0; margin-left: 0; transition: opacity .16s ease }
 /* Nur die aktive Pille zeigt das Label — renderTopbar setzt gena… */
 .tab.active .tab-label { max-width: 110px; opacity: 1; margin-left: 6px }
 #search[hidden] { display: none }
