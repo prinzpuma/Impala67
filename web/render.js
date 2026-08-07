@@ -77,6 +77,22 @@ function render() {
 
 // PERF: mehrere dispatches pro Frame → EIN Render (rAF-gebündelt)
 let _renderRaf = 0;
+// Die Navigations-Schnellpfade dürfen nur bei einem reinen Ansichtswechsel laufen.
+// Zuvor genügte "aktive Zeile/Tab stimmt": dadurch blieben z.B. umbenannte Seiten,
+// ein-/ausgeklappte Zweige oder geänderte Kartenzähler im alten DOM stehen. Revisions-
+// zähler halten den O(1)-Pfad schnell, machen ihn aber bei echten Datenänderungen ungültig.
+let _sidebarRevision = 1;
+let _tabsRevision = 1;
+const SIDEBAR_EVENT_PREFIXES = ["page", "workspace", "deck", "card", "chat"];
+function invalidateNavigation(type, payload) {
+	if (type === "syncImport") { _sidebarRevision++; _tabsRevision++; return; }
+	if (type === "uiTreeSet" || SIDEBAR_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix))) {
+		_sidebarRevision++;
+	}
+	if (type === "uiTabsSet" || type.startsWith("page") || type.startsWith("chat")) {
+		_tabsRevision++;
+	}
+}
 function scheduleRender() {
 	if (_renderRaf) return;
 	_renderRaf = requestAnimationFrame(() => { _renderRaf = 0; render(); });
@@ -88,6 +104,7 @@ document.addEventListener("popovers:changed", scheduleRender);
 
 function onStateChange(type, ev) {
 	const p = ev?.payload || {};
+	invalidateNavigation(type, p);
 	// Reiner Content-Patch: Editor besitzt die Live-Ansicht.
 	if (type === "pageUpdate" && p.patch && Object.keys(p.patch).length === 1 && "content" in p.patch) {
 		// viaEditor = eigener Autosave: der Editor-DOM ist bereits aktuell, ein Render wäre
@@ -360,7 +377,10 @@ function renderSidebar() {
 	const ae = document.activeElement;
 	if ((S.renamingPageId || S.renamingDeck) && ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)) return;
 
-	if (syncActiveSidebarRow(tree)) {
+	const selectionKey = S.chatSelection instanceof Set ? [...S.chatSelection].sort().join(",") : "";
+	const sidebarKey = [_sidebarRevision, S.pageMenuOpenId || "", S.deckMenuOpenName || "",
+		S.renamingPageId || "", S.renamingDeck || "", selectionKey].join("|");
+	if (tree.dataset.renderKey === sidebarKey && syncActiveSidebarRow(tree)) {
 		if (S.pageMenuOpenId) {
 			const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
 			const menu = tree.querySelector(".page-menu");
@@ -373,11 +393,13 @@ function renderSidebar() {
 	if (S.sidebarMode === "chats") {
 		setHtmlIfChanged(tree, chatListHtml());
 		tree.dataset.sbmode = mode;
+		tree.dataset.renderKey = sidebarKey;
 		return;
 	}
 	if (S.view === "anki") {
 		setHtmlIfChanged(tree, deckTreeHtml());
 		tree.dataset.sbmode = mode;
+		tree.dataset.renderKey = sidebarKey;
 		// Offenes ⋯-Menü nach Rebuild fixed neu positionieren, sonst clippt #tree
 		if (S.deckMenuOpenName) {
 			const name = CSS.escape(S.deckMenuOpenName);
@@ -396,6 +418,7 @@ function renderSidebar() {
 	}
 	setHtmlIfChanged(tree, html);
 	tree.dataset.sbmode = mode;
+	tree.dataset.renderKey = sidebarKey;
 	// dito: offenes Seiten-⋯-Menü nach JEDEM Rebuild neu positionieren
 	if (S.pageMenuOpenId) {
 		const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
@@ -469,7 +492,7 @@ function pageMenuHtml(pg) {
 function renderTabs() {
 	const bar = $("tabbar");
 	if (!bar) return;
-	if (syncActiveTabChip(bar)) return;
+	if (bar.dataset.renderRevision === String(_tabsRevision) && syncActiveTabChip(bar)) return;
 
 	// Chat-Titel einmal laden (nicht pro Tab CHATS.load()) — PERF (Audit 21. Juli):
 	// und NUR, wenn überhaupt Chat-Tabs offen sind. Sonst parste jeder einzelne Render
@@ -499,6 +522,7 @@ function renderTabs() {
 	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
 	html += '<button class="tabchip tabchip-new" id="btnTabNew" data-tabnew="1" title="Neuen Tab öffnen">+</button></div>';
 	setHtmlIfChanged(bar, html);
+	bar.dataset.renderRevision = String(_tabsRevision);
 }
 
 function renderMain() {
@@ -507,14 +531,23 @@ function renderMain() {
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
 	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), daily: renderDaily, trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
-	if (views[S.view]) return void views[S.view](main);
+	if (views[S.view]) {
+		// Fremde Renderer verwalten #main selbst. Ihr DOM darf nie mit einem alten
+		// Seitenshell-Cache verwechselt werden, wenn man später zur Seite zurückkehrt.
+		main._lastPageShellHtml = null;
+		return void views[S.view](main);
+	}
 	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
-	if (S.view === "home" || !pg) return void renderHome(main);
+	if (S.view === "home" || !pg) {
+		main._lastPageShellHtml = null;
+		return void renderHome(main);
+	}
 
 	// Heft = Fokusmodus: nur die globale Tab-Leiste über der Papierfläche.
 	// FIX: dasselbe gemountete Heft NIE remounten — sonst verlieren Hintergrund-
 	// Renders Scroll/Zoom/Undo und die Ansicht springt auf eine andere Seite
 	if (pg.kind === "heft") {
+		main._lastPageShellHtml = null;
 		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
 		// data-owned: der Canvas gehört HEFT — U.morph fasst diesen Teilbaum nie an.
 		main.innerHTML = `<div id="heftStage" class="heft-stage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
@@ -528,7 +561,7 @@ function renderMain() {
 	// main.dataset.scrollPageId entfällt — .page-scroll wird gar nicht mehr ersetzt und
 	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
 	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
-	U.morph(main,
+	const pageShellHtml =
 		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
 		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
@@ -547,7 +580,11 @@ function renderMain() {
 		// U.morph lässt ihn unangetastet.
 		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>' +
 		// src="about:blank" verhindert Chromes "Unsafe attempt to load URL file://..."
-		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" data-key="pdfframe" data-owned="1" src="about:blank" title="PDF"></iframe>' : ""));
+		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" data-key="pdfframe" data-owned="1" src="about:blank" title="PDF"></iframe>' : "");
+	// Hintergrund-Updates erzeugen für die offene Seite meist exakt dasselbe Markup.
+	// Dann weder HTML erneut parsen noch den DOM-Baum durchlaufen; Editor, Fokus,
+	// Scroll und eingebettete Medien bleiben komplett unberührt.
+	setHtmlIfChanged(main, pageShellHtml, "_lastPageShellHtml");
 	hydrateCovers(main);
 	// Titelhöhe an den Inhalt koppeln. WICHTIG: Das <textarea> überlebt den Render jetzt —
 	// der Listener darf deshalb nur EINMAL pro Element hängen, sonst sammeln sich mit
@@ -555,20 +592,29 @@ function renderMain() {
 	const titleInput = $("pageTitle");
 	if (titleInput) {
 		const fitTitle = () => {
+			titleInput._fitValue = titleInput.value;
 			titleInput.style.height = "auto";
 			titleInput.style.height = Math.max(44, titleInput.scrollHeight) + "px";
 		};
-		fitTitle();
 		if (!titleInput._fitWired) {
 			titleInput._fitWired = true;
 			titleInput.addEventListener("input", fitTitle);
+			// Panel, Dichte, Split-View und Rotation ändern die verfügbare Breite. Ein
+			// ResizeObserver passt dann gezielt an, statt bei jedem Render Layout zu messen.
+			if (typeof ResizeObserver === "function") {
+				titleInput._fitObserver = new ResizeObserver(() => requestAnimationFrame(fitTitle));
+				titleInput._fitObserver.observe(titleInput);
+			}
 		}
+		if (titleInput._fitValue !== titleInput.value) fitTitle();
 	}
 	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
 	if (S.pdfOpen && pg.pdfId) PDFS.urlFor(pg.pdfId).then((u) => {
 		const f = $("pdfFrame");
-		if (f && u) f.src = u;
+		// Dieselbe src erneut zu setzen lädt ein iframe in Safari/Chromium wirklich neu.
+		// Hintergrund-Updates dürfen deshalb ein bereits sichtbares PDF nicht flackern lassen.
+		if (f && u && f.getAttribute("src") !== u) f.setAttribute("src", u);
 	});
 }
 

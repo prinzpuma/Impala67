@@ -55,7 +55,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=66">
+<link rel="stylesheet" href="styles.css?build=67">
 <link rel="stylesheet" href="mobile.css?build=8">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
@@ -68,18 +68,46 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <!-- CDN-Bibliotheken: Leichtgewichtige Basis (Markdown-Rendering + DOM-Sanitizing + Google Login).
      Schwere Zusatzmodule (Mermaid, Math.js, PDF.js, Tesseract, KaTeX, Highlight.js) werden
      bedarfsgerecht bei Nutzung nachgeladen (siehe util.js, pdfs.js, handschrift.js, tools.js). -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
+<!-- Beide Basismodule werden vor main.js benötigt, müssen aber den HTML-Parser nicht
+     blockieren. defer macht den Startbildschirm sofort aufbaubar und wahrt die Reihenfolge. -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" crossorigin="anonymous" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="panel-collapsed">
+<script>
+// Darstellung vor dem ersten sichtbaren Frame wiederherstellen. applyAppearance() bleibt
+// die Laufzeit-Quelle der Wahrheit; dieser kleine Vorlauf verhindert nur den hell/dunkel-,
+// Dichte- und Sidebar-Sprung während IndexedDB/Module noch starten.
+(function () {
+	try {
+		var followSystem = localStorage.getItem("impala67FollowSystemTheme") !== "0";
+		var theme = followSystem && window.matchMedia
+			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+			: (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark");
+		var density = localStorage.getItem("impala67Density") || "compact";
+		var motion = localStorage.getItem("impala67Motion") || "full";
+		var fontSize = localStorage.getItem("impala67FontSize") || "m";
+		document.body.classList.toggle("light", theme === "light");
+		document.body.classList.toggle("density-compact", density === "compact");
+		document.body.classList.toggle("reduce-motion", motion === "reduced");
+		document.body.classList.toggle("font-s", fontSize === "s");
+		document.body.classList.toggle("font-l", fontSize === "l");
+		document.body.classList.toggle("sidebar-collapsed", localStorage.getItem("impala67.sidebarCollapsed") === "1");
+		var sidebarWidth = Number(localStorage.getItem("impala67.sidebarWidth") || 0);
+		if (sidebarWidth) document.body.style.setProperty("--sidebar-w", Math.max(200, Math.min(420, sidebarWidth)) + "px");
+		var themeColor = document.querySelector('meta[name="theme-color"]');
+		if (themeColor) themeColor.content = theme === "light" ? "#f2efe9" : "#05070d";
+	} catch (_) { /* Private-/gesperrter Speicher: sichere CSS-Standards verwenden. */ }
+})();
+</script>
 <div id="bg"></div>
 <!-- 📱 Boot-Splash (18. Juli, spät v2): sofort sichtbares Start-Feedback statt dunklem
      Nichts am iPad. boot.js aktualisiert den Phasen-Text (#bootSplashMsg) und entfernt
      den Splash nach dem ersten Render; bei Start-Fehlern zeigt boot.js hier eine
      Meldung mit „Neu laden“-Knopf. Styles inline, damit sie ohne styles.css wirken. -->
-<div id="bootSplash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#111114;color:#ddd;font-family:system-ui,-apple-system,sans-serif">
-	<div style="width:34px;height:34px;border-radius:50%;border:3px solid #444;border-top-color:#9a8cff;animation:bootspin 0.9s linear infinite"></div>
+<div id="bootSplash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--panel-solid);color:var(--text);font-family:system-ui,-apple-system,sans-serif">
+	<div style="width:34px;height:34px;border-radius:50%;border:3px solid var(--edge);border-top-color:var(--accent);animation:bootspin 0.9s linear infinite"></div>
 	<div id="bootSplashMsg">Impala67 startet…</div>
 	<style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
 </div>
@@ -215,13 +243,13 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=57"></script>
+<script type="module" src="main.js?build=58"></script>
 <script>
 // Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 	// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
-	navigator.serviceWorker.register("service-worker.js?build=63", { updateViaCache: "none" })
+	navigator.serviceWorker.register("service-worker.js?build=65", { updateViaCache: "none" })
 		.then((reg) => reg.update().catch(() => {}))
 		.catch((e) => console.warn("Service-Worker:", e));
 }

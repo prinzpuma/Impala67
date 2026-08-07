@@ -484,7 +484,9 @@ body:not(.panel-collapsed) #btnAiFab, body:has(#heftStage) #btnAiFab, body:has(.
 @media (max-width: 768px) {
 	#btnAiFab { display: none }
 }
-@media (min-width: 769px) {
+/* 701px schließt die Lücke zwischen Phone-UI (bis 700px) und Tablet/Desktop.
+   Besonders das klassische iPad meldet im Hochformat exakt 768 CSS-Pixel. */
+@media (min-width: 701px) {
 	#btnSidebarToggle { display: inline-flex }
 	body.sidebar-collapsed #sidebar { display: none }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 340px }
@@ -1191,7 +1193,10 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 /* dvh statt vh: die mobile Browser-Adressleiste verdeckt sonst d… */
 #app { height: 100dvh }
 @media (max-width: 980px) {
-	#app { min-height: 100dvh; height: auto }
+	/* Ein auto-hohes Grid wuchs auf iPad-Hochformat mit dem Inhalt über den Viewport,
+	   während body nicht scrollen darf. Die inneren Ansichten besitzen bereits ihre
+	   eigenen Scrollcontainer; das App-Chrome bleibt daher stabil viewporthoch. */
+	#app { min-height: 0; height: 100dvh }
 }
 /* Block-Menü (Klick auf ⠿) und [[Seiten-Link-Menü nutzen den Sla… */
 /* KI-Menü der Auswahl-Toolbar (✦) */
@@ -1256,17 +1261,17 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 html, body { overscroll-behavior: none }
 button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { touch-action: manipulation }
 /* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (min-width: 701px) and (max-width: 1024px) {
 	#app { grid-template-columns: 220px minmax(0, 1fr) }
 	#panel { position: fixed; z-index: 25; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
 }
 /* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
-@media (pointer: coarse) and (min-width: 769px) {
+@media (pointer: coarse) and (min-width: 701px) {
 	body:has(.heft-stage) #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1) }
 	body:has(.heft-stage) #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1) }
 }
-@media (pointer: coarse) and (min-width: 769px) and (max-width: 1024px) {
+@media (pointer: coarse) and (min-width: 701px) and (max-width: 1024px) {
 	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald di… */
 	body.sidebar-collapsed:has(.heft-stage) #app { padding: 0; gap: 0 }
 	body.sidebar-collapsed:has(.heft-stage) #mainWrap { border-radius: 0; border-color: transparent }

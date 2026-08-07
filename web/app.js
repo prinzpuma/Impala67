@@ -221,10 +221,15 @@ function setAnkiZen(on) {
 	document.body.classList.toggle("anki-zen", S.ankiZen);
 }
 
+function resetStudyCard() {
+	S.reviewShowBack = false;
+	S.reviewCardId = null;
+}
+
 function openAnki(tab, deck) {
 	S.ankiTab = tab || "decks";
 	if (deck !== undefined) S.ankiDeck = deck;
-	S.reviewShowBack = false;
+	resetStudyCard();
 	blurActive();
 	openPage("anki:main");
 }
@@ -297,12 +302,12 @@ const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 // auf eine andere Karte bzw. Space/Enter bewertete die falsche Karte.
 function showStudyAnswer(cardId) {
 	if (!inStudy() || S.reviewShowBack) return false;
-	const due = STATE.studySnapshot(S.ankiDeck).dueNow;
-	// Die tatsächlich angezeigte Karte gewinnt; dueNow[0] ist nur der Fallback für die Leertaste.
-	// Vorher entschied dueNow[0] auch darüber, OB aufgedeckt wird — bei einer Queue-Änderung
-	// zwischen Render und Klick konnte so die falsche Karte festgepinnt werden.
-	const c = (cardId && due.find((x) => x.id === cardId)) || due[0];
-	if (!c) return false;
+	// Die beim Rendern festgepinnte Karte ist die einzige, die aufgedeckt werden darf.
+	// Sie muss nicht mehr im aktuellen Queue-Snapshot stehen: Genau dieser Snapshot
+	// kann sich geändert haben, während der Lernende die Frage beantwortet.
+	if (cardId && S.reviewCardId && cardId !== S.reviewCardId) return false;
+	const c = S.cards[cardId || S.reviewCardId];
+	if (!c || c.trashed || c.suspended) return false;
 	S.reviewCardId = c.id;
 	S.reviewShowBack = true;
 	renderMain();
@@ -313,7 +318,7 @@ async function gradeStudyCard(grade) {
 	const c = S.cards[S.reviewCardId];
 	if (!c) return false;
 	await rateAndReviewCard(c.id, Math.max(1, Math.min(4, Number(grade) || 3)));
-	S.reviewShowBack = false; // dispatch triggert den Render
+	resetStudyCard(); // dispatch triggert den Render
 	return true;
 }
 async function studySpaceOrEnter() {
@@ -887,7 +892,7 @@ function wireEvents() {
 		// ⛶ Vollbild (23. Juli): Body-Klasse blendet Seitenleiste + Tab-Leiste aus — rein per
 		// CSS auf die sichtbare Anki-Ansicht begrenzt (styles.css, :has), erneut klicken = zurück.
 		if (t.dataset.ankizen) { setAnkiZen(!S.ankiZen); return; }
-		if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; S.reviewShowBack = false; renderMain(); return; }
+		if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; resetStudyCard(); renderMain(); return; }
 		if (t.hasAttribute("data-ankistudy")) {
 			S.ankiDeck = t.dataset.ankistudy || null;
 			// Interleaved Practice: nur der „Gemischt lernen“-Button aktiviert den Misch-Modus
@@ -895,7 +900,7 @@ function wireEvents() {
 			// 🧑‍🏫 Feynman-Modus als eigene Lern-Option aus der Stapel-Übersicht
 			S.ankiFeyn = t.hasAttribute("data-ankifeyn");
 			S.ankiTab = "study";
-			S.reviewShowBack = false;
+			resetStudyCard();
 			// Home v4: der Stapel-Überblick startet das Lernen direkt von der Homeseite —
 			// dafür ggf. in die Anki-Ansicht wechseln (seit 23. Juli als eigener Tab anki:main).
 			if (S.view !== "anki") openPage("anki:main");
@@ -905,10 +910,10 @@ function wireEvents() {
 		// DRY: Klick auf „Antwort zeigen“ nutzt denselben Aufdeck-Pfad wie die
 		// Leertaste — inkl. Festpinnen der sichtbaren Karte (Bug-Fix, s. oben).
 		if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return; }
-		if (t.dataset.ankiwaitrefresh) { S.reviewShowBack = false; renderMain(); return; }
+		if (t.dataset.ankiwaitrefresh) { resetStudyCard(); renderMain(); return; }
 		if (t.dataset.ankigrade) {
 			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade), t.dataset.reviewId);
-			S.reviewShowBack = false;
+			resetStudyCard();
 			return;
 		}
 		if (t.dataset.ankimore) {
@@ -930,6 +935,7 @@ function wireEvents() {
 		}
 		if (t.dataset.ankisuspend) {
 			const c = S.cards[t.dataset.ankisuspend];
+			if (c && c.id === S.reviewCardId) resetStudyCard();
 			if (c) await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: !c.suspended } });
 			return;
 		}

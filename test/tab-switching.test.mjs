@@ -24,6 +24,7 @@ function setupRealDOM() {
 	define("HTMLElement", dom.window.HTMLElement);
 	define("CustomEvent", dom.window.CustomEvent);
 	define("MutationObserver", dom.window.MutationObserver);
+	define("getComputedStyle", dom.window.getComputedStyle.bind(dom.window));
 	define("requestAnimationFrame", (fn) => setTimeout(fn, 0));
 	define("cancelAnimationFrame", (id) => clearTimeout(id));
 
@@ -181,4 +182,57 @@ test("Echte DOM-Tests: Erhalt von Scrollposition & Popover-Menü-Positionierung"
 	// Menü muss weiterhin im DOM positioniert sein
 	const menuAfter = tree.querySelector(".page-menu");
 	assert.ok(menuAfter, "Offenes Seitenmenü überlebt gezielte Sidebar-Aktualisierung");
+});
+
+test("Echte DOM-Tests: Datenänderungen umgehen den reinen Navigations-Schnellpfad", () => {
+	S.pages = {
+		p1: { id: "p1", title: "Alter Titel", workspaceId: "default", created: now, updated: now },
+		p2: { id: "p2", title: "Kind", workspaceId: "default", parentId: "p1", created: now, updated: now },
+	};
+	S.workspaces = { default: { id: "default", name: "Workspace" } };
+	S.treeOpen = { p1: true };
+	S.tabs = ["p1"];
+	S.activeTabId = "p1";
+	S.currentPageId = "p1";
+	S.view = "page";
+	S.sidebarMode = "files";
+	S.pageMenuOpenId = null;
+	S.renamingPageId = null;
+	S.renamingDeck = null;
+	// childrenOf() ist absichtlich revisionsgecacht; ein echtes Seitenereignis setzt
+	// den Cache genauso zurück wie es in der laufenden App geschieht.
+	STATE.reduce({ type: "pageUpdate", payload: { id: "p1", patch: { title: "Alter Titel" } }, t: now });
+
+	RENDER.renderSidebar();
+	RENDER.renderTabs();
+	S.pages.p1.title = "Neuer Titel";
+	RENDER.onStateChange("pageUpdate", { payload: { id: "p1", patch: { title: "Neuer Titel" } } });
+	RENDER.renderSidebar();
+	RENDER.renderTabs();
+	assert.match(document.querySelector('[data-page="p1"] .row-title').textContent, /Neuer Titel/);
+	assert.match(document.querySelector('[data-tabopen="p1"] .tabchip-title').textContent, /Neuer Titel/);
+
+	S.treeOpen.p1 = false;
+	RENDER.onStateChange("uiTreeSet", { payload: { key: "p1", open: false } });
+	RENDER.renderSidebar();
+	assert.equal(document.querySelector('[data-page="p2"]'), null, "eingeklappter Zweig verschwindet sofort");
+});
+
+test("Echte DOM-Tests: Seitenshell-Cache bleibt beim Wechsel Home und zurück korrekt", () => {
+	S.pages = { p1: { id: "p1", title: "Cache-Seite", content: "Text", workspaceId: "default", created: now, updated: now } };
+	S.workspaces = { default: { id: "default", name: "Workspace" } };
+	S.currentPageId = "p1";
+	S.view = "page";
+	RENDER.renderMain();
+	assert.equal(document.getElementById("pageTitle")?.value, "Cache-Seite");
+
+	S.currentPageId = null;
+	S.view = "home";
+	RENDER.renderMain();
+	assert.ok(document.querySelector(".home"), "Home ersetzt die Seitenshell");
+
+	S.currentPageId = "p1";
+	S.view = "page";
+	RENDER.renderMain();
+	assert.equal(document.getElementById("pageTitle")?.value, "Cache-Seite", "Seite ersetzt Home trotz identischem Shell-Cache");
 });

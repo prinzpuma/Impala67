@@ -74,6 +74,7 @@ export const S = {
 	aiDraft: "",
 	aiOnline: null, // null = unbekannt, true/false = Ping-Ergebnis
 	reviewShowBack: false,
+	reviewCardId: null, // Karte bleibt von der Frage bis zur Bewertung fest angeheftet
 	notionToken: "",
 	notionPageId: "",
 	pendingTextFile: null, // { name, content, size } — langer geklebter Text, wird als .txt-Anhang statt Fließtext gesendet

@@ -1,10 +1,10 @@
 "use strict";
-// Service-Worker: App-Dateien network-first (immer aktuell, offline aus dem Cache),
+// Service-Worker: versionierte App-Dateien cache-first (atomar, sofort, offline),
 // CDN-Bibliotheken cache-first (URLs sind versionsgepinnt, Inhalt aendert sich nie).
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v130"; // TXT-Kartenimport + einklappbare Stapelübersicht.
+const CACHE = "impala67-v134"; // Cache-Start + stabile Navigation/PDF/iPad/Lernkarte.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -152,6 +152,12 @@ self.addEventListener("fetch", (e) => {
 			if (sameOrigin) {
 				const cache = await caches.open(CACHE);
 				const cached = await cache.match(key);
+				// Installierte PWA: App-Shell atomar aus dem versionierten Cache starten.
+				// Vorher warteten index.html + rund 40 ES-Module bei JEDEM Start erneut auf
+				// das Netz. Updates bleiben sicher: ein neuer Worker befüllt CACHE erst
+				// vollständig und aktiviert ihn danach. Explizite no-store-Abfragen
+				// (insbesondere updater.js -> version.json) bleiben netzaktuell.
+				if (cached && req.cache !== "no-store") return cached;
 				try {
 					const res = await fetch(new Request(req, { cache: "no-store" }));
 					if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());

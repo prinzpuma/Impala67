@@ -73,7 +73,7 @@ export const EXP = (() => {
 	// und Aufdecken/Prüfen ändern (Learning-Karten werden fällig) — der Feynman-
 	// Modus prüfte bzw. markierte sonst eine ANDERE Karte als die gezeigte.
 	function displayedCard() {
-		if (S.reviewShowBack && S.reviewCardId && S.cards[S.reviewCardId]) return S.cards[S.reviewCardId];
+		if (S.reviewCardId && S.cards[S.reviewCardId]) return S.cards[S.reviewCardId];
 		return currentCard();
 	}
 
@@ -131,11 +131,11 @@ export const EXP = (() => {
 		if (!t) return;
 		const d = t.dataset || {};
 		if (d.expfehler) { runFehlerDetektor(); return; }
-		if (d.expfeynstart) { openFeynman(); return; }
+		if (d.expfeynstart) { openFeynman(d.card); return; }
 		if (d.expfeynmic) { toggleMic(t); return; }
 		if (d.expfeyncheck) { checkFeynman(t); return; }
 		if (d.exphint) { nextHint(t); return; }
-		if (d.expmc) { openMc(); return; }
+		if (d.expmc) { openMc(t); return; }
 		if (d.expmcopt != null) { resolveMc(t); return; }
 		if (d.expvarorig != null) { showOriginalFront(t); return; }
 		if (d.ankigrade) {
@@ -146,7 +146,7 @@ export const EXP = (() => {
 			// Buttons. Capture läuft VOR app.js — die Karte ist noch die aktuelle.
 			if (on("elaboration")) {
 				const g = Number(d.ankigrade);
-				const card = currentCard();
+				const card = S.cards[d.card] || displayedCard();
 				if (g >= 3 && card && Math.random() < 0.25) setTimeout(() => askWhy(card), 350);
 			}
 		}
@@ -182,10 +182,10 @@ export const EXP = (() => {
 			// gewählt) rendert render-anki.js das Erklär-Feld bereits INLINE in die
 			// Karte (.feyn-inline) — dann keinen zusätzlichen Dialog-Knopf anbieten.
 			// Feynman ist regulär (24. Juli): kein experiments-Flag mehr — Knopf immer anbieten.
-			if (!S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1">🧑‍🏫 Erst erklären</button>');
+			if (!S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1" data-card="' + U.esc(card.id) + '">🧑‍🏫 Erst erklären</button>');
 			hydrateFeynInline(cardEl, card);
-			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1">💡 Hinweis</button>');
-			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1">🎯 Als Quiz</button>');
+			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1" data-card="' + U.esc(card.id) + '">💡 Hinweis</button>');
+			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1" data-card="' + U.esc(card.id) + '">🎯 Als Quiz</button>');
 			const actions = showBtn.closest(".modal-actions");
 			if (extras.length && actions) actions.insertAdjacentHTML("beforeend", extras.join(""));
 		} else if (cardEl.querySelector(".grades")) {
@@ -261,7 +261,7 @@ export const EXP = (() => {
 
 	// ---------- 💡 Gestufte Hinweise (erst NACH dem ersten Abrufversuch) ----------
 	async function nextHint(btn) {
-		const card = currentCard();
+		const card = S.cards[btn.dataset.card] || displayedCard();
 		if (!card) return;
 		if (hintLevel === 0 && Date.now() - shownAt < 4000) {
 			if (U.toast) U.toast("Erst selbst versuchen! Hinweise gibt es nach dem ersten Abrufversuch.");
@@ -306,8 +306,8 @@ export const EXP = (() => {
 
 	// ---------- 🎯 Distraktor-Quiz (Auflösung + Erklärung sofort = Pflicht) ----------
 	let mcState = null;
-	async function openMc() {
-		const card = currentCard();
+	async function openMc(btn) {
+		const card = S.cards[btn && btn.dataset.card] || displayedCard();
 		if (!card) return;
 		const bd = openModal("🎯 Distraktor-Quiz", '<div class="exp-wait">Quiz wird erstellt …</div>');
 		try {
@@ -390,8 +390,8 @@ export const EXP = (() => {
 		}
 		e.stopPropagation();
 	}, true);
-	function openFeynman() {
-		const card = currentCard();
+	function openFeynman(cardId) {
+		const card = S.cards[cardId] || displayedCard();
 		if (!card) return;
 		feynCard = card;
 		openModal("🧑‍🏫 Feynman-Modus",
@@ -435,7 +435,8 @@ export const EXP = (() => {
 				// über den Bewertungs-Buttons) — Karte automatisch aufdecken.
 				feynVerdict = { cardId: card.id, note, html: verdictHtml };
 				feynDraft = null;
-				const show = document.querySelector('.anki-study-mode [data-ankishowback]');
+				const show = [...document.querySelectorAll('.anki-study-mode [data-ankishowback]')]
+					.find((el) => el.dataset.card === card.id);
 				if (show) { show.click(); return; } // Re-Render — die Karte samt Button existiert danach neu
 				// Bug-Fix (23. Juli): Karte schon aufgedeckt (z. B. ␣ während „Prüfe …“) →
 				// Feedback direkt nachrüsten statt es still zu verwerfen.

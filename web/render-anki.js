@@ -395,6 +395,17 @@ function retentionTableHtml(reviews) {
 // Queue Learning→Review→New, Learn-Ahead 20 Min, Space=Antwort / bei Rückseite=Gut.
 function ankiStudyHtml() {
 	const snap = STATE.studySnapshot(S.ankiDeck);
+	// Eine einmal gezeigte Frage darf nicht mehr vom Queue-Kopf abhängen. Während
+	// sie offen ist, können Learning-Karten fällig werden oder fremde Events einen
+	// Render ausloesen. Ohne diese Bindung wechselte dann mitten im Nachdenken die
+	// Vorderseite; Aufdecken, KI-Hilfen und Bewertung bezogen sich teils auf andere Karten.
+	let c = S.reviewCardId && S.cards[S.reviewCardId];
+	if (c && (c.trashed || c.suspended)) c = null;
+	if (!c) {
+		S.reviewCardId = null;
+		c = snap.dueNow[0] || null;
+		if (c) S.reviewCardId = c.id;
+	}
 	const canUndo = typeof EXTRAS !== "undefined" && EXTRAS.canUndoReview();
 	const cnt = snap.counts;
 	// Anki-Deck-Übersicht: New | Learning | Review
@@ -414,7 +425,7 @@ function ankiStudyHtml() {
 		'<button class="mini" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button></div>';
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
-	if (snap.done) {
+	if (!c && snap.done) {
 		return head + '<div class="study-done study-card"><h2>Gratulation! 🎉</h2>' +
 			'<p class="hint">Du hast diesen Stapel für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
 			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
@@ -423,7 +434,7 @@ function ankiStudyHtml() {
 	// Anki: „Congratulations! You have finished this deck for now.“ — Learning-Karten
 	// kommen später am Tag zurück. Anki zeigt hier eine STATISCHE Meldung ohne
 	// Live-Countdown; man aktualisiert manuell (Button) oder kommt später zurück.
-	if (snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
+	if (!c && snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
 		return head +
 			'<div class="study-wait study-card">' +
 				'<h2>Geschafft! 🎉</h2>' +
@@ -436,11 +447,7 @@ function ankiStudyHtml() {
 				'</div></div>';
 	}
 
-	// Bug-Fix („kommt noch“, 22. Juli): Nach dem Aufdecken IMMER die festgepinnte
-	// Karte (S.reviewCardId, gesetzt in app.js beim Aufdecken) zeigen — die Queue
-	// kann sich zwischen Frage und Aufdecken ändern (Learning-Karten werden fällig),
-	// dann sprang die Rückseite auf eine ANDERE Karte als die gezeigte Frage.
-	const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || snap.dueNow[0];
+	// `c` ist bereits beim Anzeigen der Frage festgepinnt, nicht erst beim Aufdecken.
 	const pv = SRS.preview(c.srs);
 	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
 	// 🃏 Karten-Redesign v1 (22. Juli, Nacht): ruhige Kopfzeile statt langer Meta-Kette —
