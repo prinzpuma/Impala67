@@ -803,6 +803,13 @@ export const HEFT = (() => {
 		raf: 0, fling: 0, anim: null, vx: 0, vy: 0, lastT: 0,
 		lastTap: 0, tapX: 0, tapY: 0, lastTwoTap: 0,
 	};
+	let manualTouchScroll = null, manualTouchMoveBound = false;
+	function setManualTouchMove(on) {
+		if (!manualTouchScroll || manualTouchMoveBound === on) return;
+		manualTouchMoveBound = on;
+		if (on) manualTouchScroll.addEventListener("touchmove", onTouchMove, { passive: false });
+		else manualTouchScroll.removeEventListener("touchmove", onTouchMove);
+	}
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
 	const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -811,6 +818,19 @@ export const HEFT = (() => {
 	let geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] };
 	const viewport = () => geometry.viewport;
 	const contentSize = () => geometry.content;
+	const nativeScrollActive = () => {
+		const scroll = scrollEl();
+		return !!scroll && scroll.classList.contains("heft-native-scroll");
+	};
+	function setNativeScroll(on) {
+		const scroll = scrollEl();
+		if (!scroll || nativeScrollActive() === on) return;
+		scroll._heftSyncScroll = true;
+		if (!on) { scroll.scrollLeft = 0; scroll.scrollTop = 0; }
+		scroll.classList.toggle("heft-native-scroll", on);
+		applyTouchAction();
+		queueMicrotask(() => { if (scroll) scroll._heftSyncScroll = false; });
+	}
 	function refreshGeometry(vp) {
 		const scroll = scrollEl(), pgs = pagesEl();
 		if (!scroll || !pgs) { geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] }; return; }
@@ -862,9 +882,29 @@ export const HEFT = (() => {
 	// ein, der Browser skaliert danach nur noch ein altes Bild hoch - alles wirkte
 	// unscharf.
 	function paintView(commit) {
-		const pgs = pagesEl(); if (!pgs) return;
+		const pgs = pagesEl(), scroll = scrollEl(); if (!pgs || !scroll) return;
 		clampView(view);
 		scale = fitScale * view.k;
+		// Bei 100 % übernimmt der native Scroller. Auf iPadOS läuft dessen Bewegung
+		// im Compositor inklusive echtem Momentum und bleibt auch bei beschäftigtem
+		// JavaScript flüssig. Der eigene 2D-Transform bleibt nur für Zoom nötig.
+		if (Math.abs(view.k - 1) < 0.0001) {
+			view.k = 1; scale = fitScale;
+			setNativeScroll(true);
+			pgs.style.willChange = "auto";
+			pgs.style.transform = "none";
+			const vp = viewport(), c = contentSize();
+			const left = vp && c.w > vp.width ? Math.max(0, view.x) : 0;
+			const top = vp && c.h > vp.height ? Math.max(0, view.y) : 0;
+			if (Math.abs(scroll.scrollLeft - left) > 0.5 || Math.abs(scroll.scrollTop - top) > 0.5) {
+				scroll._heftSyncScroll = true;
+				scroll.scrollLeft = left; scroll.scrollTop = top;
+				queueMicrotask(() => { if (scroll) scroll._heftSyncScroll = false; });
+			}
+			if (commit) sharpen();
+			return;
+		}
+		setNativeScroll(false);
 		// Auf GANZE Geraetepixel einrasten. Eine gebrochene Verschiebung laesst den
 		// Browser den ganzen Layer neu abtasten (bilinear) - Striche, Schrift und
 		// importierte PDF-Seiten werden dadurch weich, obwohl die Aufloesung stimmt.
@@ -893,6 +933,17 @@ export const HEFT = (() => {
 	function schedulePaint() {
 		if (gesture.raf) return;
 		gesture.raf = requestAnimationFrame(() => { gesture.raf = 0; paintView(false); });
+	}
+	function onNativeScroll(e) {
+		const scroll = e.currentTarget;
+		if (!nativeScrollActive() || scroll._heftSyncScroll) return;
+		const vp = viewport(), c = contentSize();
+		if (!vp) return;
+		view.x = c.w <= vp.width ? (c.w - vp.width) / 2 : scroll.scrollLeft;
+		view.y = c.h <= vp.height ? (c.h - vp.height) / 2 : scroll.scrollTop;
+		gesture.moved = true;
+		scheduleGesturePrefetch();
+		scheduleZoomSettleRender();
 	}
 	function renderVisibleBasePages() {
 		if (!doc) return;
@@ -1197,11 +1248,13 @@ export const HEFT = (() => {
 		animateTo(bx - (clientX - vp.left) / k, by - (clientY - vp.top) / k, k, dur);
 	}
 
-	// Alle Gesten macht heft.js selbst, es gibt kein natives Scrollen mehr.
+	// Bei 100 % darf ein Finger im Stiftmodus nativ scrollen. Beim Zeichnen,
+	// Zoomen oder solange der Stift aufliegt bleibt die Fläche exklusiv bei uns.
 	function applyTouchAction() {
 		const scroll = scrollEl();
-		if (scroll) scroll.style.touchAction = "none";
-		canvases.forEach((cv) => { if (cv) cv.style.touchAction = "none"; });
+		const action = nativeScrollActive() && touchNavigates() ? "pan-x pan-y" : "none";
+		if (scroll) scroll.style.touchAction = action;
+		canvases.forEach((cv) => { if (cv) cv.style.touchAction = action; });
 	}
 
 	function onPenBoundary(e) {
@@ -1243,7 +1296,14 @@ export const HEFT = (() => {
 			gesture.restore = () => { view.x = before.x; view.y = before.y; view.k = before.k; paintView(true); };
 		}
 		if (fingers.length < 2 && !panWithOneFinger()) return;
+		// Ein Finger bei 100 % bleibt vollständig beim nativen iPad-Scroller.
+		// Erst Pinch oder eine gezoomte Ansicht braucht den manuellen Touch-Pfad.
+		if (fingers.length === 1 && nativeScrollActive()) {
+			gesture.last = null; gesture.lastT = performance.now();
+			return;
+		}
 		e.preventDefault(); stopAnim();
+		setManualTouchMove(true);
 		startGesture(fingers);
 	}
 	function onTouchMove(e) {
@@ -1329,12 +1389,15 @@ export const HEFT = (() => {
 			gesture.lastTap = now; gesture.tapX = t.clientX; gesture.tapY = t.clientY;
 			return;
 		}
+		if (nativeScrollActive()) { setManualTouchMove(false); scheduleZoomSettleRender(); return; }
+		setManualTouchMove(false);
 		if (gesture.moved && count === 1 && performance.now() - gesture.lastT < 90 && Math.hypot(gesture.vx, gesture.vy) > 0.25) startFling();
 		else paintView(true);
 	}
 	function onTouchCancel(e) {
 		gesture.moved = true;
 		if (endGesture(e)) return;
+		setManualTouchMove(false);
 		paintView(true);
 	}
 	let wheelCommitT = 0;
@@ -3286,13 +3349,12 @@ export const HEFT = (() => {
 	function bindScroll() {
 		const scroll = host.querySelector(".heft-scroll");
 		if (!scroll) return;
+		manualTouchScroll = scroll;
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
+		scroll.addEventListener("scroll", onNativeScroll, { passive: true });
 		scroll.addEventListener("touchstart", onTouchStart, { passive: false });
-		scroll.addEventListener("touchmove", onTouchMove, { passive: false });
 		scroll.addEventListener("touchend", onTouchEnd);
 		scroll.addEventListener("touchcancel", onTouchCancel);
-		scroll.style.touchAction = "none";
-		scroll.style.overflow = "hidden";
 	}
 
 	const addPageGhostHtml = () => '<button type="button" class="heft-addpage" data-headdend="1">＋ Neue Seite</button>';
@@ -3384,6 +3446,8 @@ export const HEFT = (() => {
 			if (discardPending) { clearTimeout(saveT); saveT = 0; }
 			else saveNow();
 		}
+		setManualTouchMove(false);
+		manualTouchScroll = null;
 		if (host) {
 			host.removeEventListener("click", onHostClick);
 			host.removeEventListener("pointerdown", onHostPointerDown);

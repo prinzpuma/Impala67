@@ -25,6 +25,7 @@ function setupRealDOM() {
 	define("CustomEvent", dom.window.CustomEvent);
 	define("MutationObserver", dom.window.MutationObserver);
 	define("Image", dom.window.Image);
+	define("getComputedStyle", dom.window.getComputedStyle.bind(dom.window));
 	define("requestAnimationFrame", (fn) => setTimeout(fn, 0));
 	define("cancelAnimationFrame", (id) => clearTimeout(id));
 
@@ -77,6 +78,19 @@ const { HEFT } = await import("../web/heft.js");
 
 // Mock DB.addEvent / STATE.dispatch so background timers don't throw DB.open errors in unit tests
 STATE.dispatch = async () => {};
+
+test("Heft-Tests: Startansicht nutzt natives Touch-Scrolling", async () => {
+	S.pages.nativeHeft = { id: "nativeHeft", title: "Natives Heft", kind: "heft" };
+	S.heftDocs.nativeHeft = { pages: [{ id: "nativePage", paper: "blank", strokes: [], images: [], texts: [] }] };
+	const stage = document.getElementById("heftStage");
+	await HEFT.mount(stage, "nativeHeft");
+	const scroll = stage.querySelector(".heft-scroll");
+	const canvas = stage.querySelector(".heft-canvas");
+	assert.ok(scroll.classList.contains("heft-native-scroll"), "100-%-Ansicht ist ein nativer Scroller");
+	assert.equal(scroll.style.touchAction, "pan-x pan-y");
+	assert.equal(canvas.style.touchAction, "pan-x pan-y", "Canvas blockiert natives iPad-Scrolling nicht");
+	HEFT.unmount(true);
+});
 
 test("Heft-Tests: Strich-Erstellung und automatische s.bbox Berechnungen", () => {
 	const mockPage = {

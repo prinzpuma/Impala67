@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v135"; // Google-Sitzung: ehrlicher Status + robuste Erneuerung.
+const CACHE = "impala67-v136"; // Natives Heft-Scrolling auf iPad + zentrierter Start.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
