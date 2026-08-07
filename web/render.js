@@ -251,7 +251,6 @@ function modelMenuInnerHtml() {
 				`<button class="menu-item${v === enabled ? " active" : ""}" data-thinkingenabled="${v ? "1" : "0"}"><span class="menu-item-label">${label}</span>${v === enabled ? '<span class="menu-check">✓</span>' : ""}</button>`).join("");
 	}
 	const head = back + '<div class="menu-label">Verfügbare Modelle</div>';
-	if (S.modelMenuLoading) return head + '<div class="menu-note">Modelle werden geladen…</div>';
 	const favSet = favModels();
 	const opt = (prId, value, active) => {
 		const favKey = prId + "::" + value, fav = favSet.has(favKey);
@@ -266,7 +265,22 @@ function modelMenuInnerHtml() {
 		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id));
 		if (rest.length) body += `<div class="menu-label">${esc(pr.name || pr.id)}</div>` + rows(rest);
 	}
-	return head + (body || '<div class="menu-note">Gerade ist kein Modell erreichbar oder geladen.</div>');
+	// Beim ersten Öffnen nicht auf einen ausgeschalteten lokalen Server warten:
+	// gespeicherte Auswahl und Presets sind sofort nutzbar, die Live-Liste folgt danach.
+	if (!body) {
+		const knownProviders = new Set(providers.map((p) => p.id));
+		const fallback = [];
+		const seen = new Set();
+		const add = (m) => {
+			const key = m.providerId + "::" + m.id;
+			if (m.id && knownProviders.has(m.providerId) && !seen.has(key)) { seen.add(key); fallback.push(m); }
+		};
+		add({ providerId: curPr, id: curModel });
+		for (const preset of AI.MODEL_PRESETS || []) add({ providerId: preset.provider, id: preset.value });
+		if (fallback.length) body = '<div class="menu-label">Gespeichert & Vorschläge</div>' + rows(fallback);
+	}
+	const loading = S.modelMenuLoading ? '<div class="menu-note model-refresh-note">Modelle werden aktualisiert…</div>' : "";
+	return head + loading + (body || '<div class="menu-note">Gerade ist kein Modell erreichbar oder geladen.</div>');
 }
 
 // EIN Inhalt für beide Dropdown-Container (kleines Panel + großes Chat-Fenster)

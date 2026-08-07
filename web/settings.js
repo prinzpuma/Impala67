@@ -775,7 +775,7 @@ export function paintSettingsModels() {
 }
 
 // Lädt Chat-Modelle ALLER Quellen und zeichnet die Liste (inkl. Favoriten).
-export async function refreshChatModels() {
+export async function refreshChatModels(force = false) {
 	const host = U.el("settingsModelList");
 	const hint = U.el("settingsModelHint");
 	const btn = U.el("btnRefreshModels");
@@ -788,7 +788,7 @@ export async function refreshChatModels() {
 	if (cached) paintSettingsModels();
 	else host.innerHTML = '<div class="menu-note">Modelle werden geladen…</div>';
 	try {
-		const found = await AI.listModels();
+		const found = await AI.listModels({ force });
 		S.availableModels = found;
 		paintSettingsModels();
 		if (hint) {
@@ -800,7 +800,7 @@ export async function refreshChatModels() {
 		paintSettingsModels();
 		// FIX: Der Hinweis startet versteckt — ohne hidden=false war diese Fehlermeldung
 		// unsichtbar, ein Ladefehler sah aus wie „einfach keine Modelle da“.
-		if (hint) { hint.hidden = false; hint.textContent = "Modelle konnten nicht geladen werden."; }
+		if (hint) { hint.hidden = false; hint.textContent = "Modelle konnten nicht geladen werden; die letzte Liste bleibt verfügbar."; }
 	} finally {
 		if (btn) btn.disabled = false;
 	}

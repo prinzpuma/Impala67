@@ -254,6 +254,7 @@ export async function handleRefineSelect(t) {
 }
 
 // ---------- Modell-Menü ----------
+let modelMenuLoadRun = 0;
 export async function handleModelMenuToggle(t) {
 	const anchor = t.id === "btnModelChipFull" ? "full" : "panel";
 	const wasOpen = S.modelMenuOpen && S.modelMenuAnchor === anchor;
@@ -264,16 +265,16 @@ export async function handleModelMenuToggle(t) {
 	S.customModelProviderPick = S.settings.aiProviderId;
 	RENDER.renderModelMenu();
 	if (!S.modelMenuOpen) return;
-	// Bei jedem Öffnen neu abfragen: LM Studio meldet nur die aktuell geladenen Modelle.
+	// Bekannte Modelle bleiben sichtbar; parallele Abfragen werden zentral gebündelt.
+	const run = ++modelMenuLoadRun;
 	S.modelMenuLoading = true;
 	RENDER.renderModelMenu();
 	try {
 		S.availableModels = await AI.listModels();
 	} catch (e) {
-		// Ohne diesen Fang blieb das Menü bei Serverfehlern für immer im Ladezustand.
-		S.availableModels = [];
-		U.toast("Modelle konnten nicht geladen werden: " + (e?.message || e), "error");
+		if (!S.availableModels.length) U.toast("Modelle konnten nicht geladen werden: " + (e?.message || e), "error");
 	}
+	if (run !== modelMenuLoadRun) return;
 	S.modelMenuLoading = false;
 	RENDER.renderModelMenu();
 	// Thinking-Stufen werden geprüft, nicht aus Modellnamen geraten.

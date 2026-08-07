@@ -18,7 +18,7 @@ export const AI = (() => {
 		{ value: "gpt-4.1-mini", label: "GPT-4.1 mini", provider: "openai" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
-	const LIMIT = { agentSteps: 12, debug: 40, modelsMs: 12000, images: 2, toolTotal: 24000, toolResult: 6000 };
+	const LIMIT = { agentSteps: 12, debug: 40, modelsMs: 5000, modelCacheMs: 30000, images: 2, toolTotal: 24000, toolResult: 6000 };
 	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content", "change"]);
 	const DROP_SCHEMA_KEYS = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema", "examples"]);
 	const TOOL_DROPPED = JSON.stringify({ gekuerzt: true, hinweis: "Älteres Ergebnis aus Platzgründen entfernt — bei Bedarf erneut abrufen." });
@@ -38,6 +38,8 @@ export const AI = (() => {
 	const activeControllers = new Set();
 	const pendingSleeps = new Set();
 	const debugLog = [];
+	const modelCache = new Map();
+	const modelRequests = new Map();
 	const splitThink = THINK.splitThink;
 	function sleep(ms) {
 		if (!ms) return Promise.resolve();
@@ -200,30 +202,51 @@ export const AI = (() => {
 	}
 	const fullToolDefs = () => typeof window.EXP?.extraToolDefs === "function" ? TOOLS.defs.concat(window.EXP.extraToolDefs()) : TOOLS.defs.slice();
 
-	async function modelIds(base, key) {
-		let res;
-		try {
-			res = await fetch(cleanBase(base) + "/models", { headers: auth(key), signal: AbortSignal.timeout(LIMIT.modelsMs) });
-		} catch (error) {
-			if (error?.name === "TimeoutError") throw new Error(`Zeitüberschreitung nach ${Math.round(LIMIT.modelsMs / 1000)} s — der Server hat nicht geantwortet.`);
-			throw error;
-		}
-		if (!res.ok) throw new AiHttpError(res.status, await res.text().catch(() => ""));
-		return ((await res.json()).data || []).map((m) => m?.id).filter(Boolean);
+	const modelSourceKey = (base, key) => cleanBase(base) + "\n" + String(key || "");
+	async function modelIds(base, key, { force = false } = {}) {
+		const sourceKey = modelSourceKey(base, key);
+		const cached = modelCache.get(sourceKey);
+		if (!force && cached && Date.now() - cached.at < LIMIT.modelCacheMs) return cached.ids.slice();
+		if (modelRequests.has(sourceKey)) return (await modelRequests.get(sourceKey)).slice();
+		const load = fetch(cleanBase(base) + "/models", { headers: auth(key), signal: AbortSignal.timeout(LIMIT.modelsMs) })
+			.then(async (res) => {
+				if (!res.ok) throw new AiHttpError(res.status, await res.text().catch(() => ""));
+				const ids = ((await res.json()).data || []).map((m) => m?.id).filter(Boolean);
+				modelCache.set(sourceKey, { at: Date.now(), ids });
+				return ids;
+			})
+			.catch((error) => {
+				if (error?.name === "TimeoutError") throw new Error(`Zeitüberschreitung nach ${Math.round(LIMIT.modelsMs / 1000)} s — der Server hat nicht geantwortet.`);
+				throw error;
+			})
+			.finally(() => modelRequests.delete(sourceKey));
+		modelRequests.set(sourceKey, load);
+		return (await load).slice();
 	}
 	async function ping() {
 		const { base, key } = cfg();
 		if (!base) return false;
-		try { await modelIds(base, key); return true; } catch { return false; }
+		try { await modelIds(base, key, { force: true }); return true; } catch { return false; }
 	}
-	async function listModels() {
-		return (await Promise.all(providers().filter((p) => p.base).map(async (p) => {
-			try { return (await modelIds(p.base, p.key)).map((id) => ({ id, providerId: p.id })); } catch { return []; }
-		}))).flat();
+	function modelProviders() {
+		return providers().filter((p) => {
+			const base = cleanBase(p.base).toLowerCase();
+			const officialCloud = /(?:api\.openai\.com|generativelanguage\.googleapis\.com)/.test(base);
+			return base && (p.key || !officialCloud);
+		});
+	}
+	async function listModels({ force = false } = {}) {
+		const sources = modelProviders();
+		if (!sources.length) return [];
+		const results = await Promise.allSettled(sources.map(async (p) =>
+			(await modelIds(p.base, p.key, { force })).map((id) => ({ id, providerId: p.id }))));
+		const found = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+		if (!found.length && results.every((result) => result.status === "rejected")) throw results[0].reason;
+		return found;
 	}
 	const isEmbeddingModel = (id) => /(?:^|[-_/.])(embed(?:ding)?|text-embedding|nomic-embed|bge|e5|gte|jina-embeddings?|voyage|mxbai-embed|snowflake-arctic-embed)(?:$|[-_/.])/i.test(String(id || ""));
 	async function listEmbeddingModels() {
-		return (await Promise.all(providers().filter((p) => p.base).map(async (p) => {
+		return (await Promise.all(modelProviders().map(async (p) => {
 			try {
 				return (await modelIds(p.base, p.key)).filter(isEmbeddingModel).sort((a, b) => String(a).localeCompare(String(b))).map((id) => ({ id, providerId: p.id, providerName: p.name || p.id }));
 			} catch { return []; }

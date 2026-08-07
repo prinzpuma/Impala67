@@ -1427,7 +1427,7 @@ function wireEvents() {
 				await SETTINGS.handleAddProvider();
 				break;
 			case "btnRefreshModels":
-				await SETTINGS.refreshChatModels();
+				await SETTINGS.refreshChatModels(true);
 				break;
 			case "btnApplyCustomModel":
 				await SETTINGS.handleApplyCustomModel();
