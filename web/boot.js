@@ -26,7 +26,7 @@ const WELCOME_MD = [
 	"- **Local First**: Deine Daten bleiben auf deinem Gerät; Export, Backups und Google-Drive-Sync halten sie verfügbar.",
 	"- **KI-Arbeitsraum**: Chatte mit deinen Inhalten, finde Wissen per RAG und lass Seiten, Zusammenfassungen oder Karteikarten erstellen.",
 	"- **PDF-Workflow**: PDFs teilen oder importieren, per KI einordnen und zusammen mit Notizen durchsuchen.",
-	"- **Lernen, das sich anpasst**: FSRS-Karteikarten, Clozes, Anki-/CSV-Import, Lernzeit und Notenübersicht.",
+	"- **Lernen, das sich anpasst**: FSRS-Karteikarten, Clozes, TXT-/Anki-Import, Lernzeit und Notenübersicht.",
 	"- **Handschrift & Scanner**: Schreibe und zeichne in Heften, scanne Blätter ein und mache Handschrift per OCR durchsuchbar.",
 	"- **Vernetztes Wissen**: Wissensgraph, NotebookLM-Anbindung und optionale KI-Lernmodi wie Feynman-Training.",
 	"- **Synchron arbeiten**: Mehrgeräte-Sync mit Konfliktlösung sowie optionaler Notion-Zwei-Wege-Sync.",

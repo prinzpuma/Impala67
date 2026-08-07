@@ -408,6 +408,16 @@ button.danger { color: var(--danger) }
 .modal label { font-size: var(--text-sm); color: var(--text2); display: block; margin-bottom: 4px }
 .modal input { width: 100% }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px }
+.anki-import-modal { width: min(600px, 92vw) }
+.anki-import-format { max-height: 220px; overflow: auto; padding: 10px; margin-top: 8px; white-space: pre-wrap; color: var(--text2); background: var(--surface); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); font-size: var(--text-xs) }
+.anki-import-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 10px; background: var(--surface); border-radius: var(--radius-md) }
+.anki-import-errors { display: grid; gap: 4px; padding: 10px; color: var(--danger); background: rgb(var(--danger-rgb) / .1); border-radius: var(--radius-md) }
+.anki-import-errors small { white-space: pre-line }
+.anki-import-sample { max-height: 220px; overflow: auto; padding-left: 22px }
+.anki-import-sample li { padding: 5px 0 }
+.anki-import-sample small { display: block; color: var(--text2) }
+.anki-import-modal label.check { display: flex; align-items: center; gap: 8px; color: var(--text) }
+.anki-import-modal label.check input { width: auto }
 /* == Drive-Sync-Konflikte: zwei ruhige, direkt vergleichbare Seit == */
 .conflict-head .conflict-icon { font-size: 24px }
 .conflict-reason b { color: var(--text) }
@@ -1616,6 +1626,8 @@ body:has(.anki-study-mode) #mainWrap, body:has(.anki-study-mode) #main { min-hei
 /* 🐛 Fix (29. Juli): transform fehlte hier, obwohl .deck-row:hover anhebt — diese Regel überschrieb die globale Übergangsliste, das Anheben sprang hart. */
 .deck-row:hover { border-color: var(--accent-border); background: var(--surface-hover); box-shadow: var(--elev-1), inset 0 1px 0 rgba(255,255,255,.05) }
 .deck-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--surface-hover); font-size: var(--text-md); color: var(--text2) }
+.deck-collapse { padding: 0; font-size: var(--text-base) }
+.deck-collapse:hover { background: var(--surface-active); color: var(--text) }
 .deck-info { display: flex; flex-direction: column; min-width: 0 }
 .deck-name { min-width: 0; font-size: var(--text-md); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .deck-meta { margin-top: 1px; color: var(--text2); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }

@@ -630,8 +630,11 @@ function wireEvents() {
 
 		// Ein-/Ausklappen — erst nach Persistenz zeichnen (kein Aufblitzen des Defaults)
 		if (t.dataset.collapse) {
-			await COLLAPSE.toggle(t.dataset.collapse);
-			if (S.view === "library") renderMain(); else renderSidebar();
+			const key = t.dataset.collapse;
+			await COLLAPSE.toggle(key);
+			if (S.view === "library") renderMain();
+			else if (S.view === "anki" && key.startsWith("deck:")) render();
+			else renderSidebar();
 			return;
 		}
 

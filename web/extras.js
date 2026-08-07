@@ -155,7 +155,41 @@ export const EXTRAS = (() => {
 		return n;
 	}
 
-	// ---- CSV-Export/-Import (front;back;deck, "-Quotes wie üblich) ----
+	// ---- Text-/CSV-Export und -Import ---------------------------------------
+	// TXT ist das menschen- und KI-freundliche Hauptformat. CSV/TSV bleibt als
+	// kompakter Austauschweg (auch für Anki-Text-Exporte) vollständig erhalten.
+	const TXT_HEADER = "# Impala67-Karteikarten v1";
+	const AI_CARD_PROMPT = `Erstelle eine UTF-8-Textdatei mit Karteikarten im Impala67-Format.
+Nutze für jede Themengruppe \"@stapel Eltern::Unterstapel\". Schreibe jede Karte als
+\"@frage\", danach die Frage, dann \"@antwort\" und danach die Antwort. Frage und
+Antwort dürfen mehrere Zeilen und Markdown enthalten. Trenne Karten mit \"---\".
+Gib ausschließlich den Inhalt der Textdatei aus.
+
+${TXT_HEADER}
+
+@stapel Biologie::Zellbiologie
+@frage
+Welche Aufgabe haben Mitochondrien?
+@antwort
+Sie erzeugen den Großteil des ATP durch Zellatmung.
+---`;
+	// Eine zusätzliche führende \ schützt Formatmarker; auch vorhandene \ werden
+	// verdoppelt, damit Export → Import den ursprünglichen Text exakt erhält.
+	const textEscape = (s) => String(s ?? "").replace(/^(?=\\|@(?:stapel|frage|antwort)\b|---\s*$)/gim, "\\");
+	function exportTxt() {
+		const byDeck = new Map();
+		for (const c of Object.values(S.cards).filter((x) => !x.trashed)) {
+			const deck = c.deck || "Standard";
+			if (!byDeck.has(deck)) byDeck.set(deck, []);
+			byDeck.get(deck).push(c);
+		}
+		const parts = [TXT_HEADER];
+		for (const [deck, cards] of byDeck) {
+			parts.push("", "@stapel " + deck);
+			for (const c of cards) parts.push("@frage", textEscape(c.front), "@antwort", textEscape(c.back), "---");
+		}
+		U.downloadText("impala67-karten.txt", parts.join("\n"));
+	}
 	const csvEscape = (s) => {
 		s = String(s ?? "");
 		return /[";\n\t]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -167,7 +201,10 @@ export const EXTRAS = (() => {
 		U.downloadText("impala67-karten.csv", csv);
 	}
 	function parseCsv(text) {
-		const sep = text.includes("\t") ? "\t" : (text.split("\n")[0] || "").includes(";") ? ";" : ",";
+		const separatorName = (text.match(/^#separator:(.+)$/mi) || [])[1]?.trim().toLowerCase();
+		const separators = { tab: "\t", comma: ",", semicolon: ";", colon: ":", pipe: "|", space: " " };
+		const contentLine = text.split(/\r?\n/).find((line) => line && !line.startsWith("#")) || "";
+		const sep = separators[separatorName] || (separatorName?.length === 1 ? separatorName : contentLine.includes("\t") ? "\t" : contentLine.includes(";") ? ";" : ",");
 		const rows = [];
 		let row = [], cur = "", inQ = false;
 		for (let i = 0; i < text.length; i++) {
@@ -188,14 +225,102 @@ export const EXTRAS = (() => {
 		if (row.some((x) => x !== "")) rows.push(row);
 		return rows;
 	}
-	async function importCsvFile(file) {
-		const text = await U.readAsText(file);
-		let n = 0;
-		for (const r of parseCsv(text)) {
-			if (!r[0] || (r[0].toLowerCase() === "front" && (r[1] || "").toLowerCase() === "back")) continue;
-			await STATE.dispatch("cardCreate", { id: U.uid(), front: r[0], back: r[1] || "", deck: (r[2] || S.ankiDeck || undefined) });
-			n++;
+	function parseTableCards(text) {
+		const rows = parseCsv(text);
+		const directives = text.split(/\r?\n/).filter((line) => line.startsWith("#"));
+		const deckDirective = directives.map((line) => line.match(/^#deck:(.+)$/i)).find(Boolean);
+		const defaultDeck = (deckDirective?.[1] || S.ankiDeck || "Standard").trim();
+		const columnOf = (name) => {
+			const hit = directives.map((line) => line.match(new RegExp("^#" + name + " column:(\\d+)$", "i"))).find(Boolean);
+			return hit ? Number(hit[1]) - 1 : -1;
+		};
+		const special = ["guid", "notetype", "deck", "tags"].map(columnOf).filter((i) => i >= 0);
+		const deckColumn = columnOf("deck");
+		const cards = [], errors = [];
+		for (const row of rows) {
+			if (!row.length || String(row[0]).startsWith("#")) continue;
+			const header = row.map((x) => String(x).trim().toLowerCase());
+			if (header[0] === "front" && header[1] === "back") continue;
+			const content = row.map((_, i) => i).filter((i) => !special.includes(i));
+			const front = String(row[content[0]] || "").trim();
+			const back = String(row[content[1]] || "").trim();
+			const deck = String(deckColumn >= 0 ? row[deckColumn] : (deckDirective ? defaultDeck : row[2]) || defaultDeck).trim() || "Standard";
+			if (front && back) cards.push({ front, back, deck });
+			else if (front) errors.push("Eine Karte hat keine Antwort: " + front.slice(0, 60));
 		}
+		return { cards, errors, format: directives.length ? "Anki-Text" : "CSV/TSV" };
+	}
+	function parseImpalaTxt(text) {
+		const cards = [], errors = [];
+		let deck = S.ankiDeck || "Standard", mode = "", value = [], draft = null, lineNo = 0;
+		const saveValue = () => {
+			if (!draft || !mode) return;
+			draft[mode] = value.join("\n").trim();
+			value = [];
+		};
+		const saveCard = () => {
+			saveValue();
+			if (!draft) return;
+			if (!draft.front || !draft.back || !draft.deck) errors.push("Zeile " + draft.line + ": Frage, Antwort oder gültiger Stapel fehlt.");
+			else cards.push({ front: draft.front, back: draft.back, deck: draft.deck });
+			draft = null; mode = ""; value = [];
+		};
+		for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+			lineNo++;
+			const line = raw.trim();
+			const deckMatch = line.match(/^@stapel\s+(.+)$/i);
+			if (deckMatch) {
+				saveCard();
+				const parts = deckMatch[1].split("::").map((part) => part.trim());
+				deck = parts.some((part) => !part) ? "" : parts.join("::");
+				if (!deck) errors.push("Zeile " + lineNo + ": Ungültiger Stapelpfad.");
+				continue;
+			}
+			if (/^@frage\s*$/i.test(line)) {
+				saveCard();
+				draft = { front: "", back: "", deck, line: lineNo }; mode = "front"; continue;
+			}
+			if (/^@antwort\s*$/i.test(line)) {
+				saveValue();
+				if (!draft) errors.push("Zeile " + lineNo + ": Antwort ohne Frage.");
+				else mode = "back";
+				continue;
+			}
+			if (/^---\s*$/.test(line)) { saveCard(); continue; }
+			if (draft && mode) value.push(raw.replace(/^\\(?=\\|@(?:stapel|frage|antwort)\b|---\s*$)/i, ""));
+		}
+		saveCard();
+		return { cards, errors, format: "Impala-TXT" };
+	}
+	function parseCardText(text) {
+		text = text.replace(/^\uFEFF/, "");
+		return /(^|\n)@(?:stapel|frage|antwort)\b/i.test(text) ? parseImpalaTxt(text) : parseTableCards(text);
+	}
+	async function importCards(cards, includeDuplicates) {
+		const existing = new Set(Object.values(S.cards).filter((c) => !c.trashed).map(cardKey));
+		let n = 0;
+		for (const card of cards) {
+			const key = cardKey(card);
+			if (!includeDuplicates && existing.has(key)) continue;
+			await STATE.dispatch("cardCreate", { id: U.uid(), ...card });
+			existing.add(key); n++;
+		}
+		return n;
+	}
+	const cardKey = (c) => [c.deck || "Standard", c.front, c.back].map((x) => String(x || "").trim()).join("\u001f");
+	function duplicateCount(cards) {
+		const seen = new Set(Object.values(S.cards).filter((c) => !c.trashed).map(cardKey));
+		let count = 0;
+		for (const card of cards) {
+			const key = cardKey(card);
+			if (seen.has(key)) count++;
+			seen.add(key);
+		}
+		return count;
+	}
+	async function importCsvFile(file) {
+		const parsed = parseCardText(await U.readAsText(file));
+		const n = await importCards(parsed.cards, false);
 		U.toast(n + " Karten importiert.", "success");
 	}
 
@@ -377,37 +502,73 @@ export const EXTRAS = (() => {
 		});
 	}
 
-	// ---- Import-/Export-Dialog (CSV + .apkg) ----
+	// ---- Import-/Export-Dialog (TXT, CSV/TSV + .apkg) ----
+	function showImportPreview(file, parsed) {
+		const o = U.el("overlay");
+		const decks = [...new Set(parsed.cards.map((c) => c.deck))];
+		const duplicates = duplicateCount(parsed.cards);
+		const sample = parsed.cards.slice(0, 5).map((c) =>
+			'<li><b>' + U.esc(c.front) + '</b><small>' + U.esc(c.deck) + '</small></li>').join("");
+		o.innerHTML = '<div class="modal anki-import-modal"><h3>Import prüfen</h3>' +
+			'<p class="hint">' + U.esc(file.name) + ' · ' + parsed.format + '</p>' +
+			'<div class="anki-import-summary"><b>' + parsed.cards.length + ' Karten</b><span>' + decks.length + ' Stapel</span><span>' + duplicates + ' Duplikate</span></div>' +
+			(parsed.errors.length ? '<div class="anki-import-errors"><b>' + parsed.errors.length + ' Problem(e)</b><small>' + U.esc(parsed.errors.slice(0, 4).join("\n")) + '</small></div>' : '') +
+			(sample ? '<ul class="anki-import-sample">' + sample + '</ul>' : '<p>Keine gültigen Karten gefunden.</p>') +
+			(duplicates ? '<label class="check"><input id="ankiImportDuplicates" type="checkbox"> Duplikate ebenfalls importieren</label>' : '') +
+			'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button><button id="btnConfirmCardImport" class="primary"' + (!parsed.cards.length ? ' disabled' : '') + '>Importieren</button></div></div>';
+		U.el("btnConfirmCardImport").addEventListener("click", async () => {
+			const button = U.el("btnConfirmCardImport");
+			button.disabled = true;
+			try {
+				const n = await importCards(parsed.cards, !!U.el("ankiImportDuplicates")?.checked);
+				o.hidden = true;
+				U.toast(n + " Karten in " + decks.length + " Stapel importiert.", "success");
+				if (typeof render === "function") render();
+			} catch (e) {
+				button.disabled = false;
+				U.toast("Import fehlgeschlagen: " + (e.message || e), "error");
+			}
+		});
+	}
+	async function pickCardImport(o) {
+		const inp = document.createElement("input");
+		inp.type = "file";
+		inp.accept = ".txt,.csv,.tsv,.apkg";
+		inp.addEventListener("change", async () => {
+			const file = inp.files[0];
+			if (!file) return;
+			try {
+				if (/\.apkg$/i.test(file.name)) {
+					o.hidden = true;
+					await importApkgFile(file);
+					if (typeof render === "function") render();
+				} else showImportPreview(file, parseCardText(await U.readAsText(file)));
+			} catch (e) { U.toast("Import fehlgeschlagen: " + (e.message || e), "error"); }
+		});
+		inp.click();
+	}
 	function openAnkiIo(mode) {
 		const o = U.el("overlay");
 		o.hidden = false;
 		if (mode === "export") {
 			o.innerHTML = '<div class="modal"><h3>⬆ Karten exportieren</h3>' +
 				'<p class="hint">.apkg lädt beim ersten Mal sql.js nach (einmalig Internet nötig, wird danach gecacht).</p>' +
-				'<div class="row-btns"><button id="btnExpCsv">CSV (front;back;deck)</button><button id="btnExpApkg">Anki-Paket (.apkg)</button></div>' +
+				'<div class="row-btns"><button id="btnExpTxt">Textdatei</button><button id="btnExpCsv">CSV</button><button id="btnExpApkg">Anki-Paket</button></div>' +
 				'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div></div>';
+			U.el("btnExpTxt").addEventListener("click", exportTxt);
 			U.el("btnExpCsv").addEventListener("click", exportCsv);
 			U.el("btnExpApkg").addEventListener("click", () => exportApkg().catch((e) => U.toast("Export fehlgeschlagen: " + (e.message || e), "error")));
 		} else {
-			o.innerHTML = '<div class="modal"><h3>⬇ Karten importieren</h3>' +
-				'<p class="hint">CSV (front;back;deck — Trennzeichen ; , oder Tab) oder Anki-Paket (.apkg, Text der Felder ohne Medien).</p>' +
-				'<div class="row-btns"><button id="btnPickImport">Datei wählen…</button></div>' +
+			o.innerHTML = '<div class="modal anki-import-modal"><h3>⬇ Karten importieren</h3>' +
+				'<p class="hint">Textdatei (empfohlen), CSV/TSV bzw. Anki-Text oder Anki-Paket (.apkg ohne Medien).</p>' +
+				'<div class="row-btns"><button id="btnPickImport" class="primary">Datei wählen…</button><button id="btnCopyCardPrompt">KI-Anweisung kopieren</button></div>' +
+				'<details><summary>TXT-Format anzeigen</summary><pre class="anki-import-format">' + U.esc(AI_CARD_PROMPT.split("\n\n").slice(1).join("\n\n")) + '</pre></details>' +
 				'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div></div>';
-			U.el("btnPickImport").addEventListener("click", () => {
-				const inp = document.createElement("input");
-				inp.type = "file";
-				inp.accept = ".csv,.tsv,.txt,.apkg";
-				inp.addEventListener("change", async () => {
-					const f = inp.files[0];
-					if (!f) return;
-					o.hidden = true;
-					try {
-						if (/\.apkg$/i.test(f.name)) await importApkgFile(f);
-						else await importCsvFile(f);
-						if (typeof render === "function") render();
-					} catch (e) { U.toast("Import fehlgeschlagen: " + (e.message || e), "error"); }
-				});
-				inp.click();
+			U.el("btnPickImport").addEventListener("click", () => pickCardImport(o));
+			U.el("btnCopyCardPrompt").addEventListener("click", () => {
+				(navigator.clipboard ? navigator.clipboard.writeText(AI_CARD_PROMPT) : Promise.reject()).then(
+					() => U.toast("KI-Anweisung kopiert.", "success"),
+					() => prompt("KI-Anweisung (mit Strg+C kopieren):", AI_CARD_PROMPT));
 			});
 		}
 	}
@@ -535,5 +696,5 @@ export const EXTRAS = (() => {
 		}
 	});
 
-	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd };
+	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportTxt, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd };
 })();

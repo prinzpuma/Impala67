@@ -161,8 +161,8 @@ function renderAnki(main) {
 		'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
 			'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
 			'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
-			'<button data-ankiimport="1">⬇ Import<small>CSV oder Anki-Paket (.apkg)</small></button>' +
-			'<button data-ankiexport="1">⬆ Export<small>CSV oder Anki-Paket (.apkg)</small></button>' +
+			'<button data-ankiimport="1">⬇ Import<small>TXT, CSV oder Anki-Paket</small></button>' +
+			'<button data-ankiexport="1">⬆ Export<small>TXT, CSV oder Anki-Paket</small></button>' +
 		"</div></details></div>";
 	if (tab === "browser") html += ankiBrowserHtml();
 	else if (tab === "stats") html += ankiStatsHtml();
@@ -186,9 +186,14 @@ function ankiDecksHtml() {
 	const all = ankiDecks();
 	const kidsOf = (parent) => all.filter((n) => (parent ? n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::") : !n.includes("::")));
 	const flat = [];
-	const walk = (parent, depth) => kidsOf(parent).forEach((n) => { flat.push({ name: n, depth }); walk(n, depth + 1); });
+	const walk = (parent, depth) => kidsOf(parent).forEach((n) => {
+		const hasKids = kidsOf(n).length > 0;
+		const collapsed = hasKids && COLLAPSE.isCollapsed("deck:" + n);
+		flat.push({ name: n, depth, hasKids, collapsed });
+		if (!collapsed) walk(n, depth + 1);
+	});
 	walk(null, 0);
-	const rows = flat.map(({ name: d, depth }) => {
+	const rows = flat.map(({ name: d, depth, hasKids, collapsed }) => {
 		const label = d.split("::").pop();
 		const cards = ankiCardsOf(d);
 		// Anki-Zähler aus dem Lern-Snapshot (Bug-Fix „kommt noch“, 23. Juli — wie Sidebar-Baum):
@@ -196,8 +201,10 @@ function ankiDecksHtml() {
 		const cnt = STATE.studySnapshot(d).counts;
 		const open = ankiStudyOpen(d);
 		const susp = cards.filter((c) => c.suspended).length;
-		return '<div class="deck-row" style="--deck-depth:' + depth + '">' +
-			'<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : "🃏") + "</span>" +
+		const icon = hasKids
+			? '<button class="deck-ico deck-collapse" data-collapse="deck:' + U.esc(d) + '" aria-expanded="' + (!collapsed) + '" title="Unterstapel ' + (collapsed ? "anzeigen" : "ausblenden") + '">' + (collapsed ? "▸" : "▾") + "</button>"
+			: '<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : "🃏") + "</span>";
+		return '<div class="deck-row" style="--deck-depth:' + depth + '">' + icon +
 			'<span class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
 			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
 			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
