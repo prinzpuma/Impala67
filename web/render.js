@@ -1242,6 +1242,7 @@ const fileChipHtml = (m) => `<div class="file-chip"><span>📄 ${esc(m.textFile.
 
 // Werkzeug-Karte je Tool-Aufruf („Hat … verwendet“)
 const TOOL_LABELS = {
+	inspect: "App-Daten gelesen", change: "Änderungen ausgeführt", view_heft_page: "Heftseite angesehen",
 	read_page: "Seite gelesen", search_notes: "Notizen durchsucht", semantic_search: "Semantische Suche",
 	create_page: "Seite erstellt", append_to_page: "Seite ergänzt", replace_page_content: "Seite überschrieben",
 	create_flashcard: "Karteikarte erstellt", create_cloze_card: "Cloze-Karten erstellt", move_page: "Seite verschoben",
@@ -1613,6 +1614,9 @@ function assistantMsgHtml(m) {
 }
 
 function editCardHtml(m) {
+	if (m.undo) return `<div class="edit-card${m.undone ? " undone" : ""}"><div class="edit-title">${esc(m.summary || "KI-Änderungen")}</div>` +
+		`<div class="edit-actions-row"><span class="edit-subtitle">${m.undone ? "Rückgängig gemacht" : "Atomar gespeichert"}</span>` +
+		`<button class="btn-undo-icon" data-undo="${m.mid}" ${m.undone ? "disabled" : ""} title="Gesamte KI-Aktion rückgängig machen">↺</button></div></div>`;
 	const title = m.pageTitle || "Unbenannt";
 	const label = m.created ? "Hat erstellt" : "Hat geändert";
 	const icon = m.after?.icon || S.pages[m.pageId]?.icon || "📄";

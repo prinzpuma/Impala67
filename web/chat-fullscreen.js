@@ -180,7 +180,8 @@ export async function handleUndo(t) {
 	if (!hit || hit.msg.undone) return;
 	const m = hit.msg;
 	try {
-		if (m.created) await STATE.dispatch("pageDelete", { id: m.pageId });
+		if (m.undo) await AI.undo(m.undo);
+		else if (m.created) await STATE.dispatch("pageDelete", { id: m.pageId });
 		else await STATE.dispatch("pageUpdate", { id: m.pageId, patch: { title: m.before?.title, content: m.before?.content } });
 	} catch (e) {
 		// FIX: schlug das Zurücksetzen fehl, galt die Änderung trotzdem als rückgängig.

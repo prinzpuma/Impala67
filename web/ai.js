@@ -19,7 +19,7 @@ export const AI = (() => {
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const LIMIT = { agentSteps: 12, debug: 40, modelsMs: 12000, images: 2, toolTotal: 24000, toolResult: 6000 };
-	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content"]);
+	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content", "change"]);
 	const DROP_SCHEMA_KEYS = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema", "examples"]);
 	const TOOL_DROPPED = JSON.stringify({ gekuerzt: true, hinweis: "Älteres Ergebnis aus Platzgründen entfernt — bei Bedarf erneut abrufen." });
 	const META_TOOL_DEF = {
@@ -501,11 +501,12 @@ export const AI = (() => {
 	}
 	function systemPrompt(toolsMode, ragContext, chatSummary, modelNote) {
 		const page = currentPage(), now = new Date();
-		const toolLine = toolsMode === true
+		let toolLine = toolsMode === true
 			? "Arbeite mehrschrittig: erst nachsehen (get_context, list_pages, list_decks, read_page, semantic_search), dann handeln. Namen nie raten oder erfinden — immer erst auflisten. Karten korrigieren/verschieben statt löschen und neu anlegen. Bei echter Mehrdeutigkeit ask_choice. Kündige Arbeit nicht an, sondern führe sie im selben Zug aus, und sage danach in einem Satz konkret, was passiert ist (Anzahl, Namen)."
 			: toolsMode === "meta"
 				? "Aktuell ist nur das Werkzeug request_tools verfügbar. Sobald die Anfrage Notizen, Karten, Hefte, Suche oder Aktionen im Workspace erfordern könnte, rufe ZUERST request_tools auf — danach stehen alle Werkzeuge in derselben Anfrage bereit. Sonst antworte direkt."
 				: "Für diese Anfrage sind keine Werkzeuge aktiv. Antworte direkt aus dem vorhandenen Kontext. Sprich NIE über Werkzeuge, fehlenden Daten-Zugriff oder „dieses Chat-Fenster“ und behaupte keine Suchen oder Änderungen. Wären Notiz-Inhalte nötig, bitte den Nutzer, die Frage konkret zu formulieren (z. B. „Durchsuche meine Notizen nach …“).";
+		if (toolsMode === true) toolLine = "Du bedienst die App direkt. Nutze inspect zum gezielten Nachsehen und change für ALLE Änderungen. Bündele unabhängige Lesevorgänge in einem inspect-Aufruf und alle zusammengehörigen Änderungen in EINEM change-Aufruf. change ist atomar und rückgängig machbar. Namen nie raten; bei echter Mehrdeutigkeit ask_choice. Führe Arbeit im selben Zug aus und melde danach knapp Anzahl und Namen.";
 		const lines = [
 			"Du bist der KI-Coach von Impala67, einer lokalen Notiz- und Lern-App. Antworte auf Deutsch, kompakt. Formeln als LaTeX ($...$ inline, $$...$$ als Block).",
 			`Heute: ${now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" })}, ${now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr.`,
@@ -624,6 +625,21 @@ export const AI = (() => {
 		return TOOLS.resolveDeckStrict(name);
 	}
 	const CONFIRM_SPECS = {
+		change: {
+			options: ["Ja, ausführen", "Abbrechen"],
+			resolve(args) {
+				const operations = Array.isArray(args?.operations) ? args.operations : [];
+				const risky = operations.filter((op) => /\.trash$|\.reset$/.test(String(op?.op || "")));
+				if (!risky.length) return { skip: true, runArgs: args };
+				const labels = risky.slice(0, 4).map((op) => op.title || op.deck || op.front || op.op).filter(Boolean);
+				return {
+					detail: `${operations.length} Änderungen`,
+					question: `${risky.length} löschende/zurücksetzende Operation(en) ausführen${labels.length ? ": " + labels.join(" · ") : ""}? Die gesamte KI-Aktion bleibt rückgängig machbar.`,
+					runArgs: args,
+					cancelled: cancelled({ operations: operations.length }, "Aktion"),
+				};
+			},
+		},
 		reset_card_progress: {
 			options: ["Ja, zurücksetzen", "Abbrechen"],
 			resolve(args) {
@@ -713,6 +729,8 @@ export const AI = (() => {
 		}
 	}
 	function toolDetail(name, args) {
+		if (name === "change") return `${Array.isArray(args.operations) ? args.operations.length : 0} Operation(en)`;
+		if (name === "inspect") return args.kind + (args.query ? " · " + args.query : "");
 		let detail = args.page_title || args.title || args.query || args.front
 			|| (Array.isArray(args.fronts) && args.fronts.length ? args.fronts.slice(0, 2).join(" · ") + (args.fronts.length > 2 ? ` +${args.fronts.length - 2}` : "") : "")
 			|| (args.to_deck ? "→ " + args.to_deck : "") || args.new_name || args.deck || args.from_deck || args.name || "";
@@ -726,6 +744,10 @@ export const AI = (() => {
 	}
 	function recordMutation(name, args, out, before, pendingEdits) {
 		if (!MUTATING_TOOLS.has(name) || !out || out.error) return;
+		if (name === "change" && out._undo) {
+			pendingEdits.push({ mid: U.uid(), role: "edit", summary: `${out.operations || 0} KI-Änderung(en)`, undo: out._undo, undone: false });
+			return;
+		}
 		let id = before.id, created = false;
 		if (name === "create_page") {
 			const page = out.id && S.pages[out.id] || STATE.findPage(args.title);
@@ -757,8 +779,9 @@ export const AI = (() => {
 		render();
 		const { overflow, recent } = splitHistory(conversation(target));
 		const history = historyMessages(recent);
-		const metaOnly = S.settings.alwaysSendTools === false && !runUnlocked;
-		let agentTools = metaOnly ? [META_TOOL_DEF] : fullToolDefs();
+		// Sechs kurze Schemas sind billiger als eine zusätzliche Freischalt-Rundreise.
+		const metaOnly = false;
+		let agentTools = fullToolDefs();
 		const [ragContext, chatSummary, contextImage] = await Promise.all([ragFor(userText), summaryFor(type, overflow), pageContextImage()]);
 		if (contextImage) history.push(contextImage);
 		const visionNote = history.some((m) => Array.isArray(m.content))
@@ -872,8 +895,9 @@ export const AI = (() => {
 					finishTool(call, name, "ungültige Argumente", { error: `Die Argumente von ${name} sind kein gültiges JSON (vermutlich abgeschnitten) — bitte den Aufruf mit vollständigen Argumenten wiederholen.` });
 					continue;
 				}
-				if (name === "get_heft_page_image") {
-					const result = await heftPageTool(args);
+				if (name === "view_heft_page" || name === "get_heft_page_image") {
+					const normalized = name === "view_heft_page" ? { page_title: args.title, heft_page: args.page } : args;
+					const result = await heftPageTool(normalized);
 					if (result.message) pendingImages.push(result.message);
 					finishTool(call, name, result.detail, result.out);
 					continue;
@@ -890,11 +914,19 @@ export const AI = (() => {
 				if (confirm) {
 					const spec = confirm.resolve(args);
 					if (spec.error) { finishTool(call, name, spec.error, { error: spec.error }); continue; }
+					if (spec.skip) {
+						let out;
+						try { out = await TOOLS.run(name, spec.runArgs); } catch (error) { out = { error: String(error) }; }
+						finishTool(call, name, toolDetail(name, args), out);
+						recordMutation(name, args, out, mutationBefore(name, args), pendingEdits);
+						continue;
+					}
 					const answer = await waitForAnswer(spec.question, confirm.options || ["Ja, löschen", "Abbrechen"], "Warte auf Bestätigung…");
 					let out;
 					if (!String(answer || "").toLowerCase().startsWith("ja")) out = spec.cancelled;
 					else { try { out = await TOOLS.run(name, spec.runArgs); } catch (error) { out = { error: String(error) }; } }
 					finishTool(call, name, out.cancelled ? null : spec.detail, out, true);
+					recordMutation(name, args, out, mutationBefore(name, args), pendingEdits);
 					continue;
 				}
 				if (name === "ask_choice") {
@@ -931,6 +963,7 @@ export const AI = (() => {
 	async function refine(historyMessages, instruction, onDelta) {
 		return (await chatOnce([{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }], null, onDelta)).content || "";
 	}
+	const undoAi = (changeSet) => TOOLS.undo(changeSet);
 
-	return { chatOnce, complete, agent, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

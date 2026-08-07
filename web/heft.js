@@ -456,7 +456,13 @@ export const HEFT = (() => {
 		const restored = normalizeDoc(JSON.parse(dec.decode(rec.buf)));
 		if (!restored) { if (U.toast) U.toast("Snapshot ist leer", "error"); return; }
 		// Wiederherstellen ist ein normales Event — es synchronisiert damit von allein.
-		await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: restored.pages } });
+		await restoreDoc(p, restored);
+		if (U.toast) U.toast("Heft-Stand wiederhergestellt");
+	}
+	// Gemeinsamer Wiederherstellungspfad für Verlauf und KI-Undo. Er aktualisiert nicht
+	// nur das Event-Log, sondern auch die laufenden Canvas-Referenzen des geöffneten Hefts.
+	async function restoreDoc(p, restored) {
+		await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: JSON.parse(JSON.stringify(restored?.pages || [])) } });
 		const d = S.heftDocs[p];
 		docs[p] = d;
 		published[p] = shadowOf(d);
@@ -464,7 +470,7 @@ export const HEFT = (() => {
 			doc = d; idx = Math.min(idx, d.pages.length - 1); sel = null; lassoSel = null; undoStack = []; redoStack = [];
 			rebuildScroll(); updateChrome();
 		}
-		if (U.toast) U.toast("Heft-Stand wiederhergestellt");
+		return { ok: true };
 	}
 	async function openVerlaufPop() {
 		if (!pop || !pid) return;
@@ -3477,7 +3483,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

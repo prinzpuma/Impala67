@@ -196,7 +196,7 @@ export const TOOLS = (() => {
 		};
 	}
 
-	const defs = [
+	const legacyDefs = false ? [
 		t("create_page", "Erstellt eine neue Notiz-Seite. Inhalt ist Markdown; zusätzlich verfügbar: {red}Text{/} bzw. {bg-yellow}Text{/} (Farben gray/red/orange/yellow/green/blue/purple/pink), '> [!blue] Hinweis' für farbige Callouts, ==hervorheben== und ':::columns … :::split … :::end' für Spalten.", {
 			title: { type: "string" },
 			parent_title: { type: "string", description: "Titel der Elternseite (optional)" },
@@ -346,11 +346,181 @@ export const TOOLS = (() => {
 			query: { type: "string", description: "Suchbegriff (Stichwort, Dateiname o.ä.)" },
 			limit: { type: "number", description: "Max. Anzahl Treffer (Standard 15, max. 30)" },
 		}, ["query"]),
+	] : null;
+
+	// Kleine, aufgabenorientierte Oberfläche für das Modell. Die historisch gewachsenen
+	// Einzel-Handler bleiben intern erhalten; dadurch bleiben Datenformat und Sync kompatibel,
+	// ohne bei jeder Anfrage dutzende Schemas an das Modell zu schicken.
+	const defs = [
+		t("inspect", "Liest App-Daten. Mehrere Seiten oder Karten in einem Aufruf abrufen.", {
+			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats"] },
+			titles: { type: "array", items: { type: "string" }, description: "Seitentitel für kind=page" },
+			query: { type: "string" }, deck: { type: "string" }, limit: { type: "number" },
+			semantic: { type: "boolean", description: "Semantische statt Stichwortsuche" },
+		}, ["kind"]),
+		t("change", "Führt mehrere Änderungen in einer atomaren, vollständig rückgängig machbaren Aktion aus. Reihenfolge der operations wird beachtet.", {
+			operations: { type: "array", items: { type: "object", properties: {
+				op: { type: "string", enum: ["page.create", "page.append", "page.replace", "page.rename", "page.move", "page.trash", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend", "card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"] },
+				title: { type: "string" }, parent: { type: "string" }, content: { type: "string" }, text: { type: "string" }, page: { type: "number" },
+				front: { type: "string" }, fronts: { type: "array", items: { type: "string" } }, back: { type: "string" }, new_front: { type: "string" }, new_back: { type: "string" },
+				cards: { type: "array", items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] } },
+				deck: { type: "string" }, to: { type: "string" }, query: { type: "string" }, suspended: { type: "boolean" }, limit: { type: "number" },
+			}, required: ["op"] }, minItems: 1 },
+		}, ["operations"]),
+		t("view_heft_page", "Lädt eine Handschrift-Heftseite als Bild für die visuelle Analyse.", {
+			title: { type: "string" }, page: { type: "number" },
+		}, []),
+		t("ask_choice", "Stellt nur bei echter Mehrdeutigkeit eine kurze anklickbare Rückfrage.", {
+			question: { type: "string" }, options: { type: "array", items: { type: "string" } },
+		}, ["question", "options"]),
+		t("calculate", "Berechnet einen math.js-Ausdruck exakt; integrate(\"f(x)\",\"x\",a,b) numerisch.", {
+			expression: { type: "string" },
+		}, ["expression"]),
+		t("send_to_notebooklm", "Übergibt Seiten als Quellen an Gemini Notebook.", {
+			page_titles: { type: "array", items: { type: "string" } },
+		}, []),
 	];
+
+	const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+	function managedSnapshot(operations) {
+		// Heft-Dokumente können zehntausende Stiftpunkte und Bilder enthalten. Nur das
+		// tatsächlich beschriebene Heft kopieren; Seiten/Karten/Stapel bleiben kompakt.
+		const heftDocs = {}, heftTargets = new Set();
+		for (const op of operations || []) {
+			if (op?.op !== "heft.append") continue;
+			const page = STATE.findPage(op.title);
+			if (!page) continue;
+			heftTargets.add(page.id);
+			if (S.heftDocs[page.id]) heftDocs[page.id] = clone(S.heftDocs[page.id]);
+		}
+		return { pages: clone(S.pages), cards: clone(S.cards), decks: clone(S.decks), heftDocs, heftTargets };
+	}
+	function changedRecords(before, after) {
+		const out = [];
+		for (const id of new Set([...Object.keys(before || {}), ...Object.keys(after || {})])) {
+			if (!same(before?.[id], after?.[id])) out.push({ id, before: clone(before?.[id] ?? null), after: clone(after?.[id] ?? null) });
+		}
+		return out;
+	}
+	function undoSet(before) {
+		const heftAfter = {};
+		for (const id of before.heftTargets) if (S.heftDocs[id]) heftAfter[id] = S.heftDocs[id];
+		return {
+			pages: changedRecords(before.pages, S.pages), cards: changedRecords(before.cards, S.cards),
+			decks: changedRecords(before.decks, S.decks), heftDocs: changedRecords(before.heftDocs, heftAfter),
+		};
+	}
+	function attachUndo(result, undo) {
+		Object.defineProperty(result, "_undo", { value: undo, enumerable: false });
+		return result;
+	}
+	async function undo(changeSet) {
+		if (!changeSet) throw new Error("Undo-Daten fehlen.");
+		for (const key of ["pages", "cards", "decks", "heftDocs"]) {
+			for (const x of changeSet[key] || []) {
+				if (!same(S[key]?.[x.id] ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
+			}
+		}
+		// Alte Stapel zuerst zurückbringen, damit Karten nie auf nicht vorhandene Ziele zeigen.
+		for (const x of changeSet.decks || []) if (x.before && !S.decks[x.id]) await STATE.dispatch("deckCreate", { name: x.id });
+		for (const x of changeSet.pages || []) {
+			if (!x.before) continue;
+			if (!S.pages[x.id]) await STATE.dispatch("pageCreate", clone(x.before));
+			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.updated;
+			await STATE.dispatch("pageUpdate", { id: x.id, patch });
+			await STATE.dispatch(x.before.trashed ? "pageTrash" : "pageRestore", { id: x.id });
+		}
+		for (const x of changeSet.cards || []) {
+			if (!x.before) continue;
+			if (!S.cards[x.id]) await STATE.dispatch("cardCreate", clone(x.before));
+			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.trashed; delete patch.trashedAt;
+			await STATE.dispatch("cardUpdate", { id: x.id, patch });
+			await STATE.dispatch(x.before.trashed ? "cardTrash" : "cardRestore", { id: x.id });
+		}
+		for (const x of changeSet.cards || []) if (!x.before && S.cards[x.id]) await STATE.dispatch("cardDelete", { id: x.id });
+		for (const x of changeSet.pages || []) if (!x.before && S.pages[x.id]) await STATE.dispatch("pageDelete", { id: x.id });
+		for (const x of changeSet.decks || []) if (!x.before && S.decks[x.id]) await STATE.dispatch("deckDelete", { name: x.id });
+		for (const x of changeSet.decks || []) {
+			if (!x.before) continue;
+			if (typeof x.before.order === "number") await STATE.dispatch("deckReorder", { name: x.id, order: x.before.order });
+			await STATE.dispatch(x.before.trashed ? "deckTrash" : "deckRestore", { name: x.id });
+		}
+		for (const x of changeSet.heftDocs || []) {
+			if (typeof HEFT.restoreDoc === "function") await HEFT.restoreDoc(x.id, { pages: clone(x.before?.pages || []) });
+			else await STATE.dispatch("heftSnap", { pageId: x.id, doc: { pages: clone(x.before?.pages || []) } });
+		}
+		return { ok: true };
+	}
+
+	const OP_TO_TOOL = {
+		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content }],
+		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content }],
+		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content }],
+		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
+		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent }],
+		"page.trash": (o) => ["delete_page", { page_title: o.title }],
+		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text, heft_page: o.page }],
+		"card.create": (o) => [o.cards ? "create_flashcards" : "create_flashcard", o.cards ? { cards: o.cards, deck: o.deck, page_title: o.title } : { front: o.front, back: o.back, deck: o.deck, page_title: o.title }],
+		"card.update": (o) => ["update_flashcard", { front: o.front, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
+		"card.move": (o) => ["move_flashcards", { fronts: o.fronts, from_deck: o.deck, query: o.query, to_deck: o.to, limit: o.limit }],
+		"card.trash": (o) => ["delete_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, limit: o.limit }],
+		"card.suspend": (o) => ["suspend_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, suspended: o.suspended, limit: o.limit }],
+		"card.reset": (o) => ["reset_card_progress", { front: o.front, deck: o.deck }],
+		"deck.create": (o) => ["create_deck", { name: o.deck || o.title }],
+		"deck.rename": (o) => ["rename_deck", { deck: o.deck, new_name: o.to }],
+		"deck.move": (o) => ["move_deck", { deck: o.deck, new_parent: o.to }],
+		"deck.trash": (o) => ["delete_deck", { deck: o.deck }],
+	};
 
 	async function run(name, a) {
 		a = a || {};
 		switch (name) {
+			case "inspect": {
+				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
+				switch (a.kind) {
+					case "context": return run("get_context", {});
+					case "pages": return run("list_pages", {});
+					case "page": {
+						const titles = Array.isArray(a.titles) ? a.titles.slice(0, 12) : [];
+						if (!titles.length) return { error: "inspect: titles fehlt für kind=page." };
+						const pages = [];
+						for (const title of titles) pages.push(await run("read_page", { page_title: title }));
+						return { pages };
+					}
+					case "decks": return run("list_decks", {});
+					case "cards": return run("list_flashcards", { deck: a.deck, query: a.query, limit });
+					case "due": return run("list_due_cards", {});
+					case "search": return run(a.semantic ? "semantic_search" : "search_notes", { query: a.query });
+					case "chats": return run("search_chat_history", { query: a.query, limit });
+					default: return { error: "inspect: unbekanntes kind." };
+				}
+			}
+			case "change": {
+				const operations = Array.isArray(a.operations) ? a.operations : [];
+				if (!operations.length) return { error: "change: operations fehlt." };
+				if (operations.length > 100) return { error: "change: maximal 100 Operationen pro Aktion." };
+				const before = managedSnapshot(operations), results = [];
+				for (let i = 0; i < operations.length; i++) {
+					const op = operations[i] || {}, make = OP_TO_TOOL[op.op];
+					if (!make) {
+						await undo(undoSet(before));
+						return { error: `change: unbekannte Operation an Position ${i + 1}: ${op.op || "(leer)"}. Nichts geändert.` };
+					}
+					const [tool, args] = make(op);
+					let result;
+					try { result = await run(tool, args); }
+					catch (error) { result = { error: String(error?.message || error) }; }
+					if (result?.error) {
+						await undo(undoSet(before));
+						return { error: `Operation ${i + 1} (${op.op}) fehlgeschlagen: ${result.error}. Alle vorherigen Änderungen wurden zurückgenommen.` };
+					}
+					results.push({ op: op.op, ...result });
+				}
+				const changes = undoSet(before);
+				const count = changes.pages.length + changes.cards.length + changes.decks.length + changes.heftDocs.length;
+				return attachUndo({ ok: true, operations: results.length, changedObjects: count, results }, changes);
+			}
 			case "create_page": {
 				const title = String(a.title || "").trim();
 				if (!title) return { error: "create_page: title fehlt." };
@@ -395,6 +565,13 @@ export const TOOLS = (() => {
 				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht ersetzt werden — write_to_heft fügt sichtbaren Text hinzu." };
 				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: a.content || "" } });
 				return { ok: true, title: pg.title };
+			}
+			case "rename_page": {
+				const pg = STATE.findPage(a.page_title), title = String(a.new_title || "").trim();
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (!title) return { error: "rename_page: new_title fehlt." };
+				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { title } });
+				return { ok: true, from: a.page_title, title };
 			}
 			case "move_page": {
 				const pg = STATE.findPage(a.page_title);
@@ -845,5 +1022,5 @@ export const TOOLS = (() => {
 
 	// cardsOfDeck/subtreeIds nach außen: ai.js baut damit seine Bestätigungstexte, statt
 	// dieselben Baum-Regeln ein zweites Mal zu formulieren (drifteten sonst auseinander).
-	return { defs, run, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds };
+	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds };
 })();
