@@ -720,13 +720,14 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 	body.heft-open #mainWrap { min-height: 0 }
 }
 /* == Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout == */
-/* Touch-Verhalten hängt am zentral ermittelten Plattformzustand statt an 768px.
-   Dadurch behalten iPads dieselben Zielgrößen beim Drehen und in Split View. */
-body.is-touch :is(.navbtn, .row-add, .tabchip-x, .tab) { min-height: 44px }
-body.is-touch :is(.navbtn, .tab) { min-width: 44px }
-body.is-touch :is(.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
-body.is-touch :is(.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row, .home-pill, .home-continue):active { opacity: 0.6 }
-body.is-touch :is(#tree, #chatLog, .tabstrip, .block-editor, .library, .home, #main) { -webkit-overflow-scrolling: touch }
+@media (max-width: 768px) {
+	/* Größere Tipp-Flächen nur auf kleinen Ansichten. Touch-Laptops behalten die kompakte UI. */
+	.navbtn, .row-add, .tabchip-x, .tab { min-height: 44px }
+	.navbtn, .tab { min-width: 44px }
+	.navbtn, .row-add, .tabchip-x, .tabchip, .tab, .row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
+	.navbtn:active, .row-add:active, .tabchip-x:active, .tabchip:active, .tab:active, .row:active, .home-pill:active, .home-continue:active { opacity: 0.6 }
+	#tree, #chatLog, .tabstrip, .block-editor, .library, .home, #main { -webkit-overflow-scrolling: touch }
+}
 /* == Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Au == */
 /* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokument… */
 .block-editor { position: relative; overflow: visible; padding: 8px 24px 28dvh; max-width: 760px; width: 100%; margin: 0 auto }
