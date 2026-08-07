@@ -237,6 +237,23 @@ test("Echte DOM-Tests: Seitenshell-Cache bleibt beim Wechsel Home und zurück ko
 	assert.equal(document.getElementById("pageTitle")?.value, "Cache-Seite", "Seite ersetzt Home trotz identischem Shell-Cache");
 });
 
+test("Echte DOM-Tests: Bühnenklassen folgen der Ansicht ohne DOM-Struktursuche", () => {
+	S.view = "anki";
+	S.ankiTab = "study";
+	S.currentPageId = null;
+	RENDER.renderMain();
+	assert.ok(document.body.classList.contains("anki-view-open"));
+	assert.ok(document.body.classList.contains("anki-study-open"));
+	assert.equal(document.body.classList.contains("heft-open"), false);
+
+	S.view = "home";
+	S.ankiTab = "decks";
+	RENDER.renderMain();
+	assert.equal(document.body.classList.contains("anki-view-open"), false);
+	assert.equal(document.body.classList.contains("anki-study-open"), false);
+	assert.equal(document.body.classList.contains("heft-open"), false);
+});
+
 test("Echte DOM-Tests: Chatwechsel erhält vollständige Ansicht und Eingabeentwurf", () => {
 	const messages1 = [{ mid: "m1", role: "user", content: "Erster Chat" }];
 	const messages2 = [{ mid: "m2", role: "user", content: "Zweiter Chat" }];

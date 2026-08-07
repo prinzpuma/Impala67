@@ -217,6 +217,13 @@ export const MOBILE = (() => {
 		}
 		if (act === "new") {
 			closeAll();
+			// In der Karteikartenansicht bedeutet „Neu“ auch auf dem Handy „Neue Karte“.
+			// Zuvor legte der feste Mobile-Kopf hier immer eine Notizseite an, während die
+			// eigentliche Karten-Kopfzeile komplett ausgeblendet war.
+			if (S.view === "anki" && S.ankiTab !== "study") {
+				document.querySelector("[data-ankinewcard]")?.click();
+				updateUI(); return;
+			}
 			await APP.newPageFlow(S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default", null);
 			updateUI(); return;
 		}

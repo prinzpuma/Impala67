@@ -528,6 +528,15 @@ function renderTabs() {
 function renderMain() {
 	const main = $("main");
 	if (!main) return;
+	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
+	// PERF/iPad: Bühnen-Zustände explizit am Body spiegeln. Die bisherigen
+	// body:has(...)-Selektoren mussten bei praktisch jeder DOM-Änderung den ganzen
+	// App-Baum neu prüfen (besonders teuer in Safari beim Tippen und Chat-Streaming).
+	// Klassen sind O(1), werden vor dem DOM-Abgleich gesetzt und verhindern außerdem
+	// einen kurzen Zwischenzustand beim Wechsel in Heft- oder Lernansichten.
+	document.body.classList.toggle("heft-open", S.view === "page" && pg?.kind === "heft");
+	document.body.classList.toggle("anki-view-open", S.view === "anki");
+	document.body.classList.toggle("anki-study-open", S.view === "anki" && S.ankiTab === "study");
 	// Vollbild-Chats vor einem Ansichtswechsel aus dem Dokument nehmen statt sie
 	// durch innerHTML zerstoeren zu lassen. So bleiben Log, Lesestelle und Entwurf.
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
@@ -540,7 +549,6 @@ function renderMain() {
 		main._lastPageShellHtml = null;
 		return void views[S.view](main);
 	}
-	const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 	if (S.view === "home" || !pg) {
 		main._lastPageShellHtml = null;
 		return void renderHome(main);
@@ -995,6 +1003,7 @@ function renderHome(main) {
 	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
 	const dueCards = STATE.dueCards();
 	const due = dueCards.length;
+	const homeStudy = STATE.studySnapshot(null).counts;
 	// Backup-Empfehlungen bewusst entfernt („kommt noch“, 22. Juli): kein Backup-Pill
 	// und kein Backup-Tipp mehr — Backups laufen weiter über Einstellungen → Backup.
 	const daily = pages.find((p) => p.daily === localDayKey(new Date()));
@@ -1035,7 +1044,7 @@ function renderHome(main) {
 	const pill = (cls, attr, title, ico, b, small) => `<button class="home-pill${cls}" ${attr} title="${title}"><span class="home-pill-ico">${ico}</span><span class="home-pill-body"><b>${b}</b><small>${small}</small></span></button>`;
 	const todayPills = '<div class="home-today">' +
 		pill("", 'data-homeaction="daily"', "Daily Note", "📅", "Daily", esc(dailyLine || (daily ? "Öffnen" : "Heute anlegen"))) +
-		pill(due ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", due + " fällig", due ? "Jetzt lernen" : "Alles erledigt") +
+		pill(homeStudy.total ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", "Karteikarten", homeStudy.neu + " neu · " + homeStudy.review + " fällig · " + homeStudy.learn + " lernen") +
 		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", "Eintragen & Schnitt ansehen") +
 		"</div>";
 

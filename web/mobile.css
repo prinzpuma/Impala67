@@ -330,7 +330,28 @@ body.mobile-ui .library.anki {
 	background: none;
 	padding: 10px 10px 20px;
 }
-body.mobile-ui .library.anki .lib-head { display: none }
+/* Die Handyansicht bietet dieselben Karteikarten-Bereiche und Verwaltungsaktionen
+   wie Desktop. Nur der doppelte Titel entfällt, weil er bereits in #mTop steht. */
+body.mobile-ui .library.anki .lib-head {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 12px;
+	padding: 0 0 10px;
+}
+body.mobile-ui .library.anki .lib-head h1 { display: none }
+body.mobile-ui .library.anki .mode-btns {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	width: 100%;
+	order: 0;
+}
+body.mobile-ui .library.anki .mode-btns button { min-height: 40px; padding-inline: 6px }
+body.mobile-ui .library.anki .lib-head > button { min-height: 40px; padding-inline: 10px }
+body.mobile-ui .library.anki .anki-new { min-width: 0 }
+body.mobile-ui .library.anki .anki-new summary { min-height: 40px; justify-content: center }
 
 /* Hero */
 body.mobile-ui .anki-hero {
@@ -358,7 +379,8 @@ body.mobile-ui .anki-sec h2 {
 	margin: 16px 0 8px;
 }
 body.mobile-ui .deck-row {
-	display: flex;
+	display: grid;
+	grid-template-columns: 34px minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 12px;
 	padding: 13px 12px;
@@ -371,9 +393,20 @@ body.mobile-ui .deck-ico { font-size: 22px; flex-shrink: 0 }
 body.mobile-ui .deck-info { flex: 1; min-width: 0 }
 body.mobile-ui .deck-name { font-weight: 700; font-size: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 body.mobile-ui .deck-meta { font-size: var(--text-xs); color: var(--text2); margin-top: 2px }
-body.mobile-ui .deck-counts,
-body.mobile-ui .deck-iconbtn,
-body.mobile-ui .deck-feyn { display: none }
+body.mobile-ui .deck-counts {
+	display: flex;
+	min-width: 72px;
+	align-items: flex-end;
+}
+body.mobile-ui .deck-counts .cnt-due { font-size: var(--text-sm) }
+body.mobile-ui .deck-counts small { font-size: 11px }
+body.mobile-ui .deck-iconbtn { display: none }
+body.mobile-ui .deck-actions {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
 body.mobile-ui .deck-study {
 	min-height: 40px;
 	padding: 0 16px;
@@ -382,7 +415,14 @@ body.mobile-ui .deck-study {
 	color: var(--accent);
 	font-weight: 700;
 	font-size: var(--text-base);
-	flex-shrink: 0;
+}
+body.mobile-ui .deck-feyn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 40px;
+	border-radius: var(--radius-lg);
+	font-weight: 700;
 }
 
 /* Lernmodus */
@@ -421,6 +461,16 @@ body.mobile-ui .study-counts-row { font-size: var(--text-xs); color: var(--text2
 body.mobile-ui .confidence-row,
 body.mobile-ui .study-reveal-controls .mini,
 body.mobile-ui .study-keys { display: none }
+/* Feynman bleibt mobil vollständig bedienbar: Diktat und bewusstes Überspringen
+   sind Lernaktionen, keine entbehrlichen Desktop-Hilfen. */
+body.mobile-ui .study-reveal-controls .feyn-inline .mini,
+body.mobile-ui .study-reveal-controls .modal-actions [data-ankishowback].mini { display: inline-flex }
+body.mobile-ui .feyn-inline-actions {
+	display: grid;
+	grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+	gap: 8px;
+}
+body.mobile-ui .feyn-inline-actions button { min-height: 44px; margin: 0 }
 /* 🐛 Fix (28. Juli): Die ⛶-Taste war auf dem Handy ausgeblendet — wer das Vollbild am
    Rechner/iPad aktiviert hatte, kam hier nie wieder heraus. Sie bleibt jetzt erreichbar. */
 body.mobile-ui .modal-actions [data-ankishowback] {
@@ -452,7 +502,7 @@ body.mobile-ui .study-footer {
 	justify-content: center;
 	padding-top: 6px;
 }
-body.mobile-ui [data-deckconf] { display: none }
+body.mobile-ui .study-footer [data-deckconf] { display: none }
 
 /* ============================================================
    FEYNMAN-MODUS — Light-Mode Fix
