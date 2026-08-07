@@ -2174,20 +2174,97 @@ h3, h4 { text-wrap: balance }
 .deck-feyn { white-space: nowrap }
 /* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
 .heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
-/* ---------- 🕸 Wissensgraph (graph.js) ---------- */
-.graph-overlay { position: fixed; inset: 0; z-index: var(--z-graph); background: var(--panel-solid); display: flex; flex-direction: column }
-.graph-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--edge-soft) }
-.graph-head h2 { margin: 0; font-size: 16px; flex: 1 }
-.graph-head input { width: min(220px, 40vw) }
-.graph-head button { min-width: 34px; min-height: 34px }
-.graph-legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: var(--text-xs); color: var(--text2); padding: 6px 14px }
-.graph-legend b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px }
-.graph-canvas-wrap { flex: 1; position: relative; overflow: hidden }
-.graph-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab }
-.graph-ki { font-size: var(--text-xs) }
-.graph-panel { padding: 8px 14px; font-size: var(--text-sm); border-bottom: 1px solid var(--edge-soft); display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
-.graph-panel small { display: block; width: 100%; color: var(--text2) }
-.graph-panel button { min-height: 30px }
+/* ---------- ✦ Wissensgraph v3: ruhiger Skill-Tree ---------- */
+.graph-overlay { position: fixed; inset: 0; z-index: var(--z-graph); display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: radial-gradient(circle at 50% -20%, rgb(var(--accent-rgb) / .09), transparent 38%), var(--panel-solid) }
+.graph-head { flex: 0 0 auto; min-height: 64px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 16px; padding: 8px 18px; border-bottom: 1px solid var(--edge-soft); background: rgb(25 25 25 / .88); backdrop-filter: blur(16px) }
+.graph-brand { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.graph-brand > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.graph-brand h1 { margin: 0; font-size: var(--text-md); line-height: 1.2 }
+.graph-brand small { color: var(--text2); font-size: var(--text-2xs) }
+.graph-modes { display: flex; padding: 3px; border-radius: var(--radius-md); background: var(--surface) }
+.graph-modes button { min-height: 32px; padding: 0 13px; border: 0; color: var(--text2); background: transparent; box-shadow: none }
+.graph-modes button.active { color: var(--text); background: var(--surface-hover-strong); box-shadow: var(--elev-1) }
+.graph-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px }
+.graph-actions > button { width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text2); font-size: 20px }
+.graph-actions > button:hover { color: var(--text); background: var(--surface-hover) }
+.graph-search { width: min(230px, 25vw); display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 10px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text2) }
+.graph-search:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft) }
+.graph-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none }
+.graph-status { flex: 0 0 auto; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 7px 16px; border-bottom: 1px solid var(--edge-soft); background: rgb(var(--accent-rgb) / .06); font-size: var(--text-sm) }
+.graph-status[hidden] { display: none }
+.graph-status span { color: var(--text2) }
+.graph-status.busy::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--accent-border); border-top-color: var(--accent); border-radius: 50%; animation: graph-spin .8s linear infinite }
+.graph-status button { min-height: 29px; padding: 0 10px }
+@keyframes graph-spin { to { transform: rotate(360deg) } }
+.graph-shell { min-height: 0; flex: 1; display: flex; position: relative }
+.graph-stage { min-width: 0; flex: 1; position: relative; overflow: auto; scrollbar-gutter: stable; scroll-behavior: smooth }
+.graph-lanes { position: relative; z-index: 2; min-width: max-content; min-height: 100%; display: flex; align-items: stretch; gap: 22px; padding: 42px 54px 70px }
+.graph-lane { width: 250px; min-height: 100%; display: flex; flex-direction: column; border: 1px solid var(--edge-soft); border-radius: var(--radius-xl); background: linear-gradient(180deg, var(--surface), transparent 45%); box-shadow: var(--elev-1) }
+.graph-lane > header { position: sticky; top: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: rgb(31 33 39 / .92); backdrop-filter: blur(12px); font-weight: 700 }
+.graph-lane > header small { color: var(--accent); font-size: var(--text-xs) }
+.graph-levels { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 46px; padding: 26px 18px 30px }
+.graph-level { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; position: relative }
+.graph-skill { position: relative; z-index: 3; width: 100%; min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--edge); border-radius: var(--radius-lg); text-align: left; color: var(--text); background: rgb(35 37 43 / .96); box-shadow: 0 8px 22px rgb(0 0 0 / .18); transition: transform var(--motion-base) var(--ease-out), border-color var(--motion-base), opacity var(--motion-fast) }
+.graph-skill:hover { transform: translateY(-2px); border-color: rgb(var(--accent-rgb) / .45) }
+.graph-skill.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 10px 26px rgb(0 0 0 / .28) }
+.graph-skill.dim { opacity: .18 }
+.graph-skill-ring { flex: 0 0 auto; width: 31px; height: 31px; border-radius: 50%; background: conic-gradient(var(--skill-color) var(--progress), var(--surface-active) 0); position: relative }
+.graph-skill-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #25272d }
+.graph-skill-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px }
+.graph-skill-copy b { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-sm) }
+.graph-skill-copy small { color: var(--text2); font-size: var(--text-2xs) }
+.graph-skill.state-discover { --skill-color: #7c8188 }
+.graph-skill.state-building { --skill-color: #d4ae55 }
+.graph-skill.state-fragile { --skill-color: var(--danger) }
+.graph-skill.state-mastered { --skill-color: var(--success) }
+.graph-next { position: absolute; right: 8px; top: -10px; padding: 2px 7px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--accent); font-size: var(--text-3xs); font-weight: 800; box-shadow: var(--elev-1) }
+.graph-lines { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none }
+.graph-lines path { fill: none; stroke-linecap: round }
+.graph-lines .prereq { stroke: rgb(150 160 175 / .26); stroke-width: 1.5 }
+.graph-lines .bridge { stroke: rgb(var(--accent-rgb) / .62); stroke-width: 2; stroke-dasharray: 5 7 }
+.graph-inspector { flex: 0 0 0; width: 0; overflow: hidden auto; border-left: 1px solid transparent; background: rgb(29 30 34 / .97); transition: width var(--motion-slow) var(--ease-out), flex-basis var(--motion-slow) var(--ease-out) }
+.graph-overlay.inspector-open .graph-inspector { flex-basis: 330px; width: 330px; padding: 18px; border-left-color: var(--edge-soft) }
+.graph-inspector h2 { margin: 12px 0 5px; font-size: var(--text-lg) }
+.graph-inspector h3 { margin: 22px 0 8px; color: var(--text2); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em }
+.graph-inspector p { margin: 0 0 16px; color: var(--text2); font-size: var(--text-sm); line-height: 1.5 }
+.graph-inspector-head { display: flex; align-items: center; justify-content: space-between; color: var(--accent); font-size: var(--text-xs); font-weight: 700 }
+.graph-inspector-head button { width: 30px; height: 30px; padding: 0; border: 0; background: transparent; font-size: 20px }
+.graph-inspector-empty { width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 30px 8px; color: var(--text2) }
+.graph-inspector-empty span { font-size: var(--text-sm); line-height: 1.45 }
+.graph-mastery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 18px 0 }
+.graph-mastery > div { min-width: 0; padding: 10px 7px; border-radius: var(--radius-md); background: var(--surface); text-align: center }
+.graph-mastery b, .graph-mastery span { display: block }
+.graph-mastery b { font-size: var(--text-md) }
+.graph-mastery span { margin-top: 2px; color: var(--text2); font-size: var(--text-3xs) }
+.graph-learn { width: 100%; min-height: 42px }
+.graph-relations { display: flex; flex-wrap: wrap; gap: 6px }
+.graph-relations button { min-height: 30px; padding: 4px 9px; font-size: var(--text-xs) }
+.graph-edit { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--edge-soft) }
+.graph-edit label { display: grid; gap: 5px; margin: 10px 0; color: var(--text2); font-size: var(--text-xs) }
+.graph-edit input, .graph-edit select { width: 100% }
+.graph-edit > button { width: 100%; margin-top: 4px }
+.graph-edit-links { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px }
+.graph-edit-links button { min-height: 44px; padding: 6px; font-size: var(--text-xs) }
+.graph-empty { width: min(440px, calc(100% - 40px)); margin: min(18vh, 150px) auto; text-align: center }
+.graph-empty > span { display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 18px; border-radius: 20px; color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border); font-size: 27px }
+.graph-empty h2 { margin: 0 0 8px; font-size: var(--text-lg) }
+.graph-empty p { color: var(--text2); line-height: 1.5 }
+.graph-empty button { margin-top: 10px }
+@media (max-width: 760px) {
+	.graph-head { grid-template-columns: 1fr auto; gap: 8px; padding: 7px 10px }
+	.graph-brand small, .graph-search { display: none }
+	.graph-modes { grid-row: 2; grid-column: 1 / -1; justify-self: center }
+	.graph-actions { grid-column: 2 }
+	.graph-shell { display: block }
+	.graph-lanes { gap: 12px; padding: 24px 18px 180px }
+	.graph-lane { width: min(82vw, 290px) }
+	.graph-overlay.inspector-open .graph-inspector { position: absolute; z-index: 8; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 48%; padding: 16px; border: 1px solid var(--edge); border-radius: var(--radius-xl); box-shadow: var(--elev-3) }
+	.graph-status { justify-content: flex-start; overflow-x: auto }
+}
+@media (prefers-reduced-motion: reduce) {
+	.graph-stage { scroll-behavior: auto }
+	.graph-skill, .graph-inspector { transition: none }
+}
 /* ---------- 📈 Lern-Analyse (analyse.js) ---------- */
 .ana-block { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--edge-soft) }
 .ana-note { font-size: var(--text-xs); color: var(--text2); margin: 6px 0 12px }
@@ -2220,9 +2297,6 @@ h3, h4 { text-wrap: balance }
 .model-fav { flex: 0 0 auto; width: 30px; border: none; background: transparent; color: var(--text2); font-size: var(--text-base); border-radius: var(--radius-sm); cursor: pointer }
 .model-fav:hover { background: var(--surface-hover); color: var(--warn) }
 .model-fav.on { color: var(--warn) }
-/* 🧠 Themen-Analyse-Optionen im Graph-Panel */
-.graph-panel label { font-size: var(--text-sm); color: var(--text) }
-.graph-panel small { display: block; margin-top: 4px; opacity: .75 }
 /* == ⚙️ Einstellungen v2 (21. Juli): ruhigere Navigation, klarere Abschnitte, weniger Text == */
 .set-item { font-size: var(--text-sm); font-weight: 600; border-radius: var(--radius-md) }
 .set-item.active { box-shadow: inset 0 0 0 1px var(--accent-border) }
