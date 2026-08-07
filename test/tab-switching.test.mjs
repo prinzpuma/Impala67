@@ -236,3 +236,30 @@ test("Echte DOM-Tests: Seitenshell-Cache bleibt beim Wechsel Home und zurück ko
 	RENDER.renderMain();
 	assert.equal(document.getElementById("pageTitle")?.value, "Cache-Seite", "Seite ersetzt Home trotz identischem Shell-Cache");
 });
+
+test("Echte DOM-Tests: Chatwechsel erhält vollständige Ansicht und Eingabeentwurf", () => {
+	const messages1 = [{ mid: "m1", role: "user", content: "Erster Chat" }];
+	const messages2 = [{ mid: "m2", role: "user", content: "Zweiter Chat" }];
+	S.chatSessions = {
+		c1: { id: "c1", title: "Chat 1", created: now, updated: now, messages: messages1 },
+		c2: { id: "c2", title: "Chat 2", created: now, updated: now, messages: messages2 },
+	};
+	S.view = "chat";
+	S.currentChatId = "c1";
+	S.chat = messages1;
+	RENDER.renderMain();
+	const firstWrap = document.querySelector(".chat-full-wrap");
+	const firstInput = document.getElementById("mainChatInput");
+	firstInput.value = "Ungesendeter Entwurf";
+
+	S.currentChatId = "c2";
+	S.chat = messages2;
+	RENDER.renderMain();
+	assert.notEqual(document.querySelector(".chat-full-wrap"), firstWrap);
+
+	S.currentChatId = "c1";
+	S.chat = messages1;
+	RENDER.renderMain();
+	assert.equal(document.querySelector(".chat-full-wrap"), firstWrap, "derselbe DOM-Baum wird wieder eingesetzt");
+	assert.equal(document.getElementById("mainChatInput").value, "Ungesendeter Entwurf", "Entwurf bleibt erhalten");
+});

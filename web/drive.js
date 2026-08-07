@@ -31,32 +31,28 @@ export const DRIVE = (() => {
 	const cfg = (k) => window.APP_CONFIG?.[k] || "";
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
 	let token = null;
+	let tokenRequestInFlight = null; // Timer + Sync teilen eine OAuth-Anfrage (nie zwei Popups)
 	let syncInFlight = null; // nie zwei Syncs parallel (Sidebar-Button + Einstellungen + Auto)
 	let flushMode = false; // pagehide: Uploads mit keepalive absetzen (überleben das Schließen)
 
 	// Einmalige Key-Migration (Projekt hieß früher "notion") — Sitzung bleibt erhalten.
-	for (const k of ["drive_token", "drive_token_expiry", "drive_refresh_token"]) {
+	for (const k of ["drive_token", "drive_token_expiry"]) {
 		const old = LS.getItem("notion_" + k);
 		if (old !== null && LS.getItem("impala67_" + k) === null) LS.setItem("impala67_" + k, old);
 		LS.removeItem("notion_" + k);
 	}
+	// Der GIS-Token-Client liefert keinen Refresh-Token. Altwerte aus dem früheren
+	// Desktop-OAuth-Weg dürfen deshalb keine scheinbar aktive Sitzung erzeugen.
+	LS.removeItem("notion_drive_refresh_token");
+	LS.removeItem("impala67_drive_refresh_token");
 
 	function saveToken(data) {
 		// Tokens bewusst nur in localStorage (pro Gerät), nie ins Event-Log/Export.
 		token = data.access_token;
 		LS.setItem("impala67_drive_token", token);
 		LS.setItem("impala67_drive_token_expiry", String(Date.now() + (Number(data.expires_in) || 3600) * 1000 - 60000));
-		if (data.refresh_token) LS.setItem("impala67_drive_refresh_token", data.refresh_token);
+		renewAttemptedExpiry = 0;
 		scheduleRenew();
-	}
-
-	async function getTokenBrowser(interactive) {
-		// GIS kann still einen neuen Token holen, solange die Google-Zustimmung besteht.
-		if (window.google?.accounts && webId()) {
-			try { return await getTokenBrowserPopup(false); } catch { /* still nicht möglich */ }
-		}
-		if (!interactive) throw new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden.");
-		return getTokenBrowserPopup(true);
 	}
 
 	function getTokenBrowserPopup(interactive) {
@@ -68,9 +64,30 @@ export const DRIVE = (() => {
 			if (!clientId) return reject(new Error("Keine Google Client-ID hinterlegt (einmalig in Einstellungen → Sync eintragen)."));
 			google.accounts.oauth2.initTokenClient({
 				client_id: clientId, scope: SCOPE,
-				callback: (resp) => resp.access_token ? (saveToken(resp), resolve(token)) : reject(new Error("Kein Zugriffstoken erhalten.")),
-			}).requestAccessToken({ prompt: interactive ? "consent" : "" }); // "" = stiller Login, falls Zustimmung schon erteilt
+				callback: (resp) => {
+					if (resp?.access_token) { saveToken(resp); resolve(token); return; }
+					reject(new Error(resp?.error_description || resp?.error || "Kein Zugriffstoken erhalten."));
+				},
+				// Ohne diesen Callback blieb die Anmeldung bei geschlossenem oder blockiertem
+				// Fenster für immer im Zustand „Verbinde…“ hängen.
+				error_callback: (err) => {
+					const msg = err?.type === "popup_closed" ? "Google-Anmeldung geschlossen."
+						: err?.type === "popup_failed_to_open" ? "Google-Anmeldefenster wurde blockiert."
+						: "Google-Anmeldung konnte nicht geöffnet werden.";
+					reject(new Error(msg));
+				},
+			}).requestAccessToken({ prompt: interactive ? "select_account" : "" });
 		});
+	}
+
+	function getTokenBrowser(interactive) {
+		if (tokenRequestInFlight) return tokenRequestInFlight;
+		if (!interactive && (!window.google?.accounts || !webId())) {
+			return Promise.reject(new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden."));
+		}
+		tokenRequestInFlight = getTokenBrowserPopup(interactive)
+			.finally(() => { tokenRequestInFlight = null; });
+		return tokenRequestInFlight;
 	}
 
 	const validSavedToken = () => {
@@ -92,7 +109,11 @@ export const DRIVE = (() => {
 	}
 
 	const login = async () => { await getToken(true); return fetchUserInfo(); }; // Ein-Klick: Token + E-Mail
-	const logout = () => { token = null; ["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k)); };
+	const logout = () => {
+		clearTimeout(renewTimer);
+		token = null;
+		["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k));
+	};
 
 	// Uhren-Drift-Erkennung: der Log-Merge entscheidet Konflikte per Zeitstempel (LWW) —
 	// eine falsch gehende Geräteuhr „gewinnt“ sonst systematisch und still. Der Date-Header
@@ -554,31 +575,59 @@ export const DRIVE = (() => {
 		return syncInFlight;
 	}
 
-	// Der Zugang läuft gar nicht mehr ab, solange die App offen ist: nach jedem Token und beim Start
-	// wird die stille Erneuerung 5 min vor Ablauf eingeplant. Bisher wurde NUR zu Beginn eines Syncs
-	// geprüft — lag der Ablauf zwischen zwei Syncs oder ruhte die App, war die Sitzung tot.
+	// Fünf Minuten vor Ablauf einen neuen Token anfordern. GIS kann dafür kurz ein
+	// Google-Fenster zeigen; das ist gewollt, weil ohne Backend kein Refresh-Token sicher
+	// gehalten werden kann und der automatische Sync Vorrang hat.
 	let renewTimer = 0;
+	let renewAttemptedExpiry = 0;
+	const runScheduledRenew = () => {
+		ensureFreshToken().catch((err) => console.warn("Google-Sitzung konnte nicht erneuert werden:", err));
+	};
 	function scheduleRenew() {
 		clearTimeout(renewTimer);
 		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
-		if (exp) renewTimer = setTimeout(ensureFreshToken, Math.max(1000, exp - 300000 - Date.now()));
+		if (exp) renewTimer = setTimeout(runScheduledRenew, Math.max(1000, exp - 300000 - Date.now()));
 	}
 
-	// Zugang VORBEUGEND erneuern: läuft er in unter 5 Minuten ab, wird er still über den
-	// Erneuerungs-Schlüssel getauscht. Bisher passierte das erst nach einem 401 mitten im
-	// Sync — im PWA endete das in einem blockierten Anmeldefenster.
+	// Wichtig: Bei nahendem Ablauf direkt GIS fragen. getToken() würde den noch wenige
+	// Minuten gültigen Alt-Token zurückgeben und damit nur so tun, als sei er erneuert worden.
 	async function ensureFreshToken() {
 		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
-		if (token && exp && Date.now() < exp - 300000) return token;
-		try { return await getToken(false); } catch (err) { return null; }
+		const saved = validSavedToken();
+		if (saved && exp && Date.now() < exp - 300000) return (token = saved);
+		// Wurde das Erneuerungsfenster geschlossen oder blockiert, nicht bei jedem
+		// 3-Minuten-Sync erneut nerven. Der Timer versucht es bei Ablauf genau einmal wieder.
+		if (saved && renewAttemptedExpiry === exp) return (token = saved);
+		renewAttemptedExpiry = exp;
+		try {
+			return await getTokenBrowser(false);
+		} catch (err) {
+			// Scheitert die vorzeitige Erneuerung, darf der Rest der noch gültigen
+			// Minute weiterarbeiten. Nach echtem Ablauf ist die Sitzung dagegen beendet.
+			const fallback = validSavedToken();
+			if (fallback) {
+				clearTimeout(renewTimer);
+				renewTimer = setTimeout(() => {
+					renewAttemptedExpiry = 0;
+					runScheduledRenew();
+				}, Math.max(1000, exp - Date.now()));
+				return (token = fallback);
+			}
+			token = null;
+			LS.removeItem("impala67_drive_token");
+			LS.removeItem("impala67_drive_token_expiry");
+			emitSyncStatus("error", "Anmeldung nötig", err?.message);
+			throw err;
+		}
 	}
 
-	// Kennt auch die in localStorage überdauernde Sitzung (nicht nur das In-Memory-Token).
-	const isConnected = () => !!(token || validSavedToken() || LS.getItem("impala67_drive_refresh_token"));
+	// Nur ein nachweislich gültiger Token bedeutet „verbunden“. Ein abgelaufener
+	// In-Memory-Token oder ein unbrauchbarer Refresh-Altwert darf die UI nicht täuschen.
+	const isConnected = () => !!validSavedToken();
 
 	// ---------- Automatischer Drive-Sync ----------
-	// Nur nach erfolgter Anmeldung (nie Login-Popups aus Timern). Änderungen werden
-	// gebündelt; zusätzlich Start/Rückkehr/Intervall-Pulls in sichtbaren Sitzungen.
+	// Nur nach erfolgter Anmeldung. Erneuerungs-Popups werden zentral gebündelt;
+	// Änderungen ebenfalls. Zusätzlich Start/Rückkehr/Intervall-Pulls in sichtbaren Sitzungen.
 	const AUTO_DELAY_MS = 3000, AUTO_INTERVAL_MS = 180000, LIVE_INTERVAL_MS = 20000;
 	// [A5] Obergrenze fürs Aufschieben. isEditing() sah bisher nur den FOKUS, nicht das Tippen — ein im
 	// Block geparkter Cursor (der Normalfall beim Lesen der eigenen Notizen) hielt die 5-s-Warteschleife

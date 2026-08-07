@@ -47,6 +47,7 @@ export const HEFT = (() => {
 	let detailCanvases = [];
 	let wetCanvases = [];
 	let pageSlots = [];
+	let detailVisible = new Set();
 
 	const savedTools = (() => { try { return JSON.parse(localStorage.getItem("impala67HeftTools") || "{}"); } catch (err) { return {}; } })();
 	let tool = "pen", color = savedTools.color || COLORS[0], size = savedTools.size || 3, onlyPen = savedTools.onlyPen !== false;
@@ -805,8 +806,29 @@ export const HEFT = (() => {
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
 	const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-	const viewport = () => { const s = scrollEl(); return s ? s.getBoundingClientRect() : null; };
-	const contentSize = () => { const p = pagesEl(); return p ? { w: p.offsetWidth, h: p.offsetHeight } : { w: 1, h: 1 }; };
+	// Geometrie aendert sich nur bei layout()/DOM-Neuaufbau. Die alten Getter
+	// erzwangen dagegen in jedem Scroll-Frame mehrere synchrone Layout-Messungen.
+	let geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] };
+	const viewport = () => geometry.viewport;
+	const contentSize = () => geometry.content;
+	function refreshGeometry(vp) {
+		const scroll = scrollEl(), pgs = pagesEl();
+		if (!scroll || !pgs) { geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] }; return; }
+		const rect = vp || scroll.getBoundingClientRect();
+		geometry = {
+			viewport: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+			content: { w: pgs.offsetWidth, h: pgs.offsetHeight },
+			pages: pageSlots.map((slot, i) => {
+				const base = canvases[i];
+				return slot && base ? {
+					top: slot.offsetTop, height: slot.offsetHeight,
+					x: slot.offsetLeft + base.offsetLeft, y: slot.offsetTop + base.offsetTop,
+					w: base.offsetWidth, h: base.offsetHeight,
+					baseLeft: base.offsetLeft, baseTop: base.offsetTop,
+				} : null;
+			}),
+		};
+	}
 
 	function stopAnim() {
 		if (gesture.raf) cancelAnimationFrame(gesture.raf);
@@ -923,10 +945,9 @@ export const HEFT = (() => {
 		const vp = viewport(); if (!vp) return [];
 		const vh = vp.height / view.k;
 		const top = view.y - pad, bot = view.y + vh + pad, out = [];
-		pageSlots.forEach((slot, i) => {
-			if (!slot) return;
-			const t = slot.offsetTop, b = t + slot.offsetHeight;
-			if (b >= top && t <= bot) out.push(i);
+		geometry.pages.forEach((page, i) => {
+			if (!page) return;
+			if (page.top + page.height >= top && page.top <= bot) out.push(i);
 		});
 		return out;
 	}
@@ -966,12 +987,7 @@ export const HEFT = (() => {
 		return { x: r.x / scaleForPage, y: r.y / scaleForPage, w: r.w / scaleForPage, h: r.h / scaleForPage };
 	}
 	function pageOrigin(i) {
-		const slot = pageSlots[i], base = canvases[i];
-		if (!slot || !base) return null;
-		return {
-			x: slot.offsetLeft + base.offsetLeft, y: slot.offsetTop + base.offsetTop,
-			w: base.offsetWidth, h: base.offsetHeight,
-		};
+		return geometry.pages[i] || null;
 	}
 	function layerRectFor(i, over = 64) {
 		const vp = viewport(), o = pageOrigin(i);
@@ -990,9 +1006,10 @@ export const HEFT = (() => {
 		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
 	function placeLayer(cv, i, r, dpr) {
-		const base = canvases[i], k = view.k;
-		cv.style.left = (base.offsetLeft + r.x) + "px";
-		cv.style.top = (base.offsetTop + r.y) + "px";
+		const page = geometry.pages[i], k = view.k;
+		if (!page) return;
+		cv.style.left = (page.baseLeft + r.x) + "px";
+		cv.style.top = (page.baseTop + r.y) + "px";
 		// iPad-Wurzel: .heft-pages traegt ein CSS scale(k). iOS/WebKit rastert einen
 		// zusammengesetzten Layer EINMAL und skaliert danach nur noch dieses alte Bild
 		// hoch - Chrome am PC rastert neu, deshalb war es nur am iPad weich. Die Kachel
@@ -1009,7 +1026,11 @@ export const HEFT = (() => {
 		cv.style.display = "block";
 	}
 	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
-	function hideDetailCanvases() { detailCanvases.forEach(hideLayer); wetCanvases.forEach(hideLayer); }
+	function hideDetailCanvases() {
+		detailCanvases.forEach(hideLayer);
+		wetCanvases.forEach(hideLayer);
+		detailVisible.clear();
+	}
 
 	function renderDetailTile(i) {
 		const tile = detailCanvases[i], wet = wetCanvases[i];
@@ -1047,11 +1068,16 @@ export const HEFT = (() => {
 
 	function renderDetailTiles(force = false) {
 		if (!doc) return;
-		canvases.forEach((_, i) => {
-			if (!layerRectFor(i)) { hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]); return; }
-			if (!force && tileCovers(i)) return;
+		const next = new Set(pageIndicesWithin(Math.max(4, 64 / view.k)));
+		for (const i of detailVisible) {
+			if (!next.has(i)) { hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]); }
+		}
+		for (const i of next) {
+			if (!layerRectFor(i)) { hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]); continue; }
+			if (!force && tileCovers(i)) continue;
 			renderDetailTile(i);
-		});
+		}
+		detailVisible = next;
 	}
 
 	function liveInkCtx(i) {
@@ -1159,6 +1185,9 @@ export const HEFT = (() => {
 		const f = fitScale / prev;
 		view.x = cx * f - (vp.width / view.k) / 2;
 		view.y = cy * f - (vp.height / view.k) / 2;
+		// Ein Layout-Read nach den Groessen-Aenderungen; Gesten arbeiten danach
+		// ausschliesslich mit stabilen Zahlen aus dem Cache.
+		refreshGeometry(vp);
 		paintView(true);
 	}
 	function animateZoom(target, clientX, clientY, dur = 280) {
@@ -3196,9 +3225,9 @@ export const HEFT = (() => {
 			const vp = viewport(); if (!vp) return;
 			const mid = view.y + (vp.height / view.k) / 2;
 			let best = 0, bestD = Infinity;
-			pageSlots.forEach((slot, i) => {
-				if (!slot) return;
-				const d2 = Math.abs(slot.offsetTop + slot.offsetHeight / 2 - mid);
+			geometry.pages.forEach((page, i) => {
+				if (!page) return;
+				const d2 = Math.abs(page.top + page.height / 2 - mid);
 				if (d2 < bestD) { bestD = d2; best = i; }
 			});
 			if (best !== idx) { idx = best; updateChrome(); }
@@ -3367,7 +3396,8 @@ export const HEFT = (() => {
 		if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
 		if (pid) dropThumbs(pid); // war eine wortgleiche Kopie von dropThumbs
 		Object.keys(imgCache).forEach((k) => { imgCache[k].src = ""; delete imgCache[k]; });
-		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = [];
+		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = []; detailVisible = new Set();
+		geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] };
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;

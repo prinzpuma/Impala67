@@ -528,6 +528,9 @@ function renderTabs() {
 function renderMain() {
 	const main = $("main");
 	if (!main) return;
+	// Vollbild-Chats vor einem Ansichtswechsel aus dem Dokument nehmen statt sie
+	// durch innerHTML zerstoeren zu lassen. So bleiben Log, Lesestelle und Entwurf.
+	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
 	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), daily: renderDaily, trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
@@ -1304,11 +1307,21 @@ function buildRow(m, locked, before) {
 }
 
 // Gleicht die fertigen Nachrichten vor `end` an `list` an. Rückgabe: wurde etwas verändert?
-function syncChatStatic(log, list, end) {
+function chatStaticPlan(log, list) {
 	const rows = log._chatRows || (log._chatRows = []);
 	// Ab dem letzten offenen Edit ist Bearbeiten gesperrt — einmal bestimmt statt pro Blase gesucht
 	let lastOpenEdit = -1;
 	for (let i = 0; i < list.length; i++) if (list[i].role === "edit" && !list[i].undone) lastOpenEdit = i;
+	if (rows.length !== list.length) return { dirty: true, lastOpenEdit };
+	for (let i = 0; i < list.length; i++) {
+		const locked = i < lastOpenEdit;
+		if (rows[i].mid !== midOf(list[i], i) || rows[i].key !== rowKeyOf(list[i], i, locked)) return { dirty: true, lastOpenEdit };
+	}
+	return { dirty: false, lastOpenEdit };
+}
+
+function syncChatStatic(log, list, end, lastOpenEdit) {
+	const rows = log._chatRows || (log._chatRows = []);
 	let dirty = false, i = 0;
 	for (; i < rows.length && i < list.length; i++) {
 		const locked = i < lastOpenEdit;
@@ -1338,8 +1351,7 @@ function renderChatLog(log, historyList) {
 	// Rebuild): der Chat stand plötzlich am Anfang und der Gedankengang schien verschwunden.
 	// Zentral gelöst in util.js: U.scrollAnchor merkt Position UND "stand am Ende"
 	// und zieht beides über die nächsten Frames nach (Bilder/LaTeX brauchen Frames).
-	const restoreScroll = U.scrollAnchor(log, { bottomPad: 160 });
-	const wasNearBottom = restoreScroll.atBottom;
+	historyList ||= [];
 	let staticEnd = log._chatStaticEnd, live = log._chatLive;
 	// Fertige Nachrichten bleiben direkte Kinder (CSS/Event-Delegation); nur der
 	// Live-Bereich bekommt einen unsichtbaren Container als Patch-Ziel
@@ -1353,9 +1365,6 @@ function renderChatLog(log, historyList) {
 		log._chatLive = live;
 		log._chatRows = [];
 	}
-	// Nur geänderte Blasen anfassen; die alte Lesestelle nur halten, wenn überhaupt etwas
-	// umgebaut wurde und der Nutzer bewusst weiter oben liest.
-	if (syncChatStatic(log, historyList || [], staticEnd) && !wasNearBottom) restoreScroll();
 	// FIX: Live-Bereich nicht mehr pro Streaming-Delta per innerHTML ersetzen —
 	// Klicks zwischen Mousedown/-up gingen verloren, die Think-Box ließ sich nie
 	// aufklappen. Think und Draft getrennt patchen, Toggle bleibt stabil im DOM
@@ -1372,7 +1381,19 @@ function renderChatLog(log, historyList) {
 		thinkHost._structure = null;
 		restHost._chatHtml = null;
 	}
+	const staticPlan = chatStaticPlan(log, historyList);
 	const thinkStructure = liveParts.think ? "think:" + (S.thinkingLiveExpanded ? "1" : "0") : "";
+	const currentThinkBody = thinkHost.querySelector(".think-body");
+	const nextThinkText = liveParts.think ? (S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2)) : "";
+	const liveDirty = thinkHost._structure !== thinkStructure
+		|| (!!liveParts.think && currentThinkBody?.textContent !== nextThinkText)
+		|| restHost._chatHtml !== liveParts.rest;
+	// Unveränderte Logs sind beim Tabwechsel der Normalfall. Dann keine
+	// Layout-Messung und kein Scroll-Nachziehen über mehrere Animationsframes.
+	if (!staticPlan.dirty && !liveDirty) return;
+	const restoreScroll = U.scrollAnchor(log, { bottomPad: 160 });
+	const wasNearBottom = restoreScroll.atBottom;
+	if (staticPlan.dirty && syncChatStatic(log, historyList, staticEnd, staticPlan.lastOpenEdit) && !wasNearBottom) restoreScroll();
 	if (thinkHost._structure !== thinkStructure) {
 		thinkHost.innerHTML = liveParts.think;
 		thinkHost._structure = thinkStructure;
@@ -1473,26 +1494,30 @@ function renderChat() {
 	if (log) renderChatLog(log, S.sideChat);
 }
 
-// PERF (Tab-Wechsel): Chat-Log-DOM je Chat wiederverwenden. Beim Wechsel zwischen
-// (langen) Chats wurden sonst ALLE Nachrichten inkl. KaTeX/Code-Highlighting neu
-// aufgebaut — renderChatLog patcht auf dem gecachten DOM nur noch Unterschiede.
-const CHATLOG_CACHE = new Map(); // chatId → <div class="chat-log-full">
-function cachedChatLog(chatId) {
-	let el = CHATLOG_CACHE.get(chatId);
-	// Treffer ans Ende rücken — sonst konnte der GERADE benutzte Chat als „ältester“ rausfliegen
-	if (el) { CHATLOG_CACHE.delete(chatId); CHATLOG_CACHE.set(chatId, el); }
-	if (!el) {
-		el = document.createElement("div");
-		el.className = "chat-log-full";
-		el.addEventListener("scroll", () => { el._keepScroll = el.scrollTop; }, { passive: true });
-		CHATLOG_CACHE.set(chatId, el);
-		for (const key of CHATLOG_CACHE.keys()) { // Cache klein halten (älteste zuerst raus)
-			if (CHATLOG_CACHE.size <= 6) break;
-			CHATLOG_CACHE.delete(key);
-		}
+// Ganze Chat-Ansicht statt nur des Logs behalten: Header, Composer, Entwurf und
+// Nachrichten sind eine Einheit. Maximal sechs geparkte DOM-Bäume begrenzen RAM.
+const CHATVIEW_CACHE = new Map(); // chatId → .chat-full-wrap
+function cacheChatView(wrap) {
+	if (!wrap) return;
+	const key = String(wrap.dataset.chatid || "");
+	CHATVIEW_CACHE.delete(key);
+	CHATVIEW_CACHE.set(key, wrap);
+	for (const oldKey of CHATVIEW_CACHE.keys()) {
+		if (CHATVIEW_CACHE.size <= 6) break;
+		CHATVIEW_CACHE.delete(oldKey);
 	}
-	el.id = "mainChatLog";
-	return el;
+}
+function parkFullChat(main, keepKey) {
+	const wrap = main.querySelector(":scope > .chat-full-wrap");
+	if (!wrap || wrap.dataset.chatid === keepKey) return;
+	wrap.remove();
+	cacheChatView(wrap);
+}
+function takeChatView(key) {
+	const wrap = CHATVIEW_CACHE.get(key);
+	if (!wrap) return null;
+	CHATVIEW_CACHE.delete(key);
+	return wrap;
 }
 
 // Vollbild-Chat im Hauptbereich — gleiche Bausteine wie das Seitenpanel.
@@ -1503,7 +1528,13 @@ function renderFullChat(main) {
 	const s = S.currentChatId ? CHATS.load().find((x) => x.id === S.currentChatId) : null;
 	const title = (s && s.title) || "Neuer Chat";
 	const empty = !S.chat.length;
-	const oldWrap = main.querySelector(".chat-full-wrap");
+	const chatKey = String(S.currentChatId || "");
+	parkFullChat(main, chatKey);
+	let oldWrap = main.querySelector(":scope > .chat-full-wrap");
+	if (!oldWrap) {
+		oldWrap = takeChatView(chatKey);
+		if (oldWrap) main.replaceChildren(oldWrap);
+	}
 	if (oldWrap && oldWrap.dataset.chatid === String(S.currentChatId || "")) {
 		const h1 = oldWrap.querySelector(".chat-full-head h1");
 		const wantTitle = "✦ " + title;
@@ -1535,18 +1566,6 @@ function renderFullChat(main) {
 					'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
 				'</div><button id="mainChatSubmit" type="submit" title="Senden" disabled>↑</button></div>' +
 				'<div id="modelMenuFull" class="model-menu" hidden></div></form></div>';
-	// Frisches Log-Element gegen das gecachte DOM dieses Chats tauschen
-	if (S.currentChatId) {
-		const fresh = $("mainChatLog");
-		const cached = cachedChatLog(String(S.currentChatId));
-		if (fresh && cached !== fresh) {
-			const keep = cached._keepScroll || 0;
-			fresh.replaceWith(cached);
-			cached.scrollTop = keep;
-			// gleiche Nachzieh-Logik wie im zentralen Anker: die Höhe steht erst später
-			if (keep) requestAnimationFrame(() => { if (cached.scrollTop !== keep) cached.scrollTop = keep; });
-		}
-	}
 	renderMainChatLog();
 	renderPendingChip("full");
 	renderStatusDot();
