@@ -106,9 +106,9 @@ window.addEventListener("pageshow", resetTransientUiLayers);
      Nichts am iPad. boot.js aktualisiert den Phasen-Text (#bootSplashMsg) und entfernt
      den Splash nach dem ersten Render; bei Start-Fehlern zeigt boot.js hier eine
      Meldung mit „Neu laden“-Knopf. Styles inline, damit sie ohne styles.css wirken. -->
-<div id="bootSplash" style="position:fixed;inset:0;width:100%;height:100dvh;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;box-sizing:border-box;text-align:center;background:var(--panel-solid);color:var(--text);font-family:system-ui,-apple-system,sans-serif">
-	<div style="width:34px;height:34px;border-radius:50%;border:3px solid var(--edge);border-top-color:var(--accent);animation:bootspin 0.9s linear infinite"></div>
-	<div id="bootSplashMsg" style="width:100%;text-align:center">Impala67 startet…</div>
+<div id="bootSplash" style="position:fixed;inset:0;width:100%;height:100dvh;z-index:9999;box-sizing:border-box;text-align:center;background:var(--panel-solid);color:var(--text);font-family:system-ui,-apple-system,sans-serif">
+	<div style="position:absolute;left:calc(50% - 17px);top:calc(50% - 56px);width:34px;height:34px;border-radius:50%;border:3px solid var(--edge);border-top-color:var(--accent);animation:bootspin 0.9s linear infinite"></div>
+	<div id="bootSplashMsg" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center">Impala67 startet…</div>
 	<style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
 </div>
 <script>

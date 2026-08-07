@@ -1399,9 +1399,6 @@ body.reduce-motion .heft-tray { animation: none }
 /* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. */
 /* Kein natives Scrollen mehr: die Ansicht ist EIN transform auf .heft-pages, das heft.js aus view = { x, y, k } setzt. Padding, Zentrierung und Groesse kommen ebenfalls aus JS, damit CSS und Rechnung nicht auseinanderlaufen koennen. */
 .heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: hidden; display: block; position: relative; padding: 0; touch-action: none; overscroll-behavior: contain; contain: layout paint }
-.heft-scroll.heft-native-scroll { overflow: auto; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none }
-.heft-scroll.heft-native-scroll::-webkit-scrollbar { display: none }
-.heft-scroll.heft-native-scroll .heft-pages { margin-inline: auto }
 .heft-pages { --heft-page-w: 1px; --heft-page-h: 1px; width: max-content; display: grid; grid-auto-flow: row; justify-items: center; align-content: start; gap: 24px; isolation: isolate; transform-origin: 0 0 }
 /* Kein Zentrieren über das Grid mehr: heft.js applyView setzt dafür symmetrisches
    Padding, das Teil des scrollbaren Inhalts ist. Nur so bleibt die Seitenposition beim

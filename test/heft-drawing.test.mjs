@@ -79,16 +79,33 @@ const { HEFT } = await import("../web/heft.js");
 // Mock DB.addEvent / STATE.dispatch so background timers don't throw DB.open errors in unit tests
 STATE.dispatch = async () => {};
 
-test("Heft-Tests: Startansicht nutzt natives Touch-Scrolling", async () => {
-	S.pages.nativeHeft = { id: "nativeHeft", title: "Natives Heft", kind: "heft" };
-	S.heftDocs.nativeHeft = { pages: [{ id: "nativePage", paper: "blank", strokes: [], images: [], texts: [] }] };
+const touchEvent = (type, touches, changedTouches = touches) => {
+	const event = new window.Event(type, { bubbles: true, cancelable: true });
+	Object.defineProperties(event, {
+		touches: { value: touches },
+		changedTouches: { value: changedTouches },
+	});
+	return event;
+};
+
+test("Heft-Tests: Pinch endet wieder im scharfen Renderzustand", async () => {
+	S.pages.zoomHeft = { id: "zoomHeft", title: "Zoom-Heft", kind: "heft" };
+	S.heftDocs.zoomHeft = { pages: [{ id: "zoomPage", paper: "blank", strokes: [], images: [], texts: [] }] };
 	const stage = document.getElementById("heftStage");
-	await HEFT.mount(stage, "nativeHeft");
+	await HEFT.mount(stage, "zoomHeft");
 	const scroll = stage.querySelector(".heft-scroll");
-	const canvas = stage.querySelector(".heft-canvas");
-	assert.ok(scroll.classList.contains("heft-native-scroll"), "100-%-Ansicht ist ein nativer Scroller");
-	assert.equal(scroll.style.touchAction, "pan-x pan-y");
-	assert.equal(canvas.style.touchAction, "pan-x pan-y", "Canvas blockiert natives iPad-Scrolling nicht");
+	const pages = stage.querySelector(".heft-pages");
+	const a = { identifier: 1, clientX: 100, clientY: 100 };
+	const b = { identifier: 2, clientX: 200, clientY: 100 };
+	scroll.dispatchEvent(touchEvent("touchstart", [a, b]));
+	const c = { identifier: 1, clientX: 50, clientY: 100 };
+	const d = { identifier: 2, clientX: 250, clientY: 100 };
+	scroll.dispatchEvent(touchEvent("touchmove", [c, d], [c, d]));
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	assert.equal(pages.style.willChange, "transform", "während Pinch bleibt die Fläche compositor-freundlich");
+	assert.match(pages.style.transform, /scale\(2\.0000\)/);
+	scroll.dispatchEvent(touchEvent("touchend", [], [c, d]));
+	assert.equal(pages.style.willChange, "auto", "Touch-Ende löst den scharfen Abschlussrender aus");
 	HEFT.unmount(true);
 });
 
