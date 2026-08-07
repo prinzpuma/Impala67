@@ -305,6 +305,31 @@ function setHtmlIfChanged(el, html, key = "_lastHtml") {
 	return true;
 }
 
+// Der linke Baum bleibt beim Wechsel zwischen Seiten, Chats und Karteikarten
+// derselbe Scroll-Container. Ohne getrennte Positionen übernimmt eine kurze
+// Liste die scrollTop-Position einer langen Liste (bzw. WebKit klemmt sie),
+// wodurch die Einträge beim Umschalten sichtbar springen.
+const sidebarScrollTops = new Map();
+function setSidebarTreeHtml(tree, html, mode, renderKey) {
+	const previousMode = tree.dataset.sbmode || "";
+	const modeChanged = !!previousMode && previousMode !== mode;
+	if (modeChanged) sidebarScrollTops.set(previousMode, tree.scrollTop);
+
+	setHtmlIfChanged(tree, html);
+	tree.dataset.sbmode = mode;
+	tree.dataset.renderKey = renderKey;
+	if (!modeChanged) return;
+
+	const targetTop = sidebarScrollTops.get(mode) || 0;
+	// Einmal sofort und einmal nach dem Layout setzen: besonders iPadOS kann
+	// scrollTop beim Austauschen einer deutlich kürzeren Liste nachträglich
+	// auf deren Maximum begrenzen.
+	tree.scrollTop = targetTop;
+	requestAnimationFrame(() => {
+		if (tree.dataset.sbmode === mode) tree.scrollTop = targetTop;
+	});
+}
+
 const cssEsc = (s) => (typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&"));
 
 // Schnelle O(1)-Abstimmung für aktive Zeile im Seitenbaum/Chatverlauf — vermeidet
@@ -391,15 +416,11 @@ function renderSidebar() {
 
 	const mode = S.sidebarMode === "chats" ? "chats" : (S.view === "anki" ? "anki" : "files");
 	if (S.sidebarMode === "chats") {
-		setHtmlIfChanged(tree, chatListHtml());
-		tree.dataset.sbmode = mode;
-		tree.dataset.renderKey = sidebarKey;
+		setSidebarTreeHtml(tree, chatListHtml(), mode, sidebarKey);
 		return;
 	}
 	if (S.view === "anki") {
-		setHtmlIfChanged(tree, deckTreeHtml());
-		tree.dataset.sbmode = mode;
-		tree.dataset.renderKey = sidebarKey;
+		setSidebarTreeHtml(tree, deckTreeHtml(), mode, sidebarKey);
 		// Offenes ⋯-Menü nach Rebuild fixed neu positionieren, sonst clippt #tree
 		if (S.deckMenuOpenName) {
 			const name = CSS.escape(S.deckMenuOpenName);
@@ -416,9 +437,7 @@ function renderSidebar() {
 		html += wsHeadHtml(ws);
 		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
 	}
-	setHtmlIfChanged(tree, html);
-	tree.dataset.sbmode = mode;
-	tree.dataset.renderKey = sidebarKey;
+	setSidebarTreeHtml(tree, html, mode, sidebarKey);
 	// dito: offenes Seiten-⋯-Menü nach JEDEM Rebuild neu positionieren
 	if (S.pageMenuOpenId) {
 		const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
