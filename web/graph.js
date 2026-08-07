@@ -11,7 +11,7 @@ import { U } from "./util.js";
 // resultierenden Skills. Fachliche Daten synchronisieren über settingsSet;
 // die großen, jederzeit erneuerbaren Vektoren bleiben lokal in IndexedDB.
 export const GRAPH = (() => {
-	const VERSION = 3;
+	const VERSION = 5;
 	const OLD_KEY = "impala67GraphKI";
 	const VECTOR_PREFIX = "graph-card:";
 	let overlay = null;
@@ -24,7 +24,7 @@ export const GRAPH = (() => {
 
 	const activeCards = () => Object.values(S.cards).filter((c) => c && !c.trashed && String(c.front || "").trim());
 	const graph = () => S.settings.knowledgeGraph && S.settings.knowledgeGraph.v === VERSION ? S.settings.knowledgeGraph : null;
-	const topDeck = (card) => (String(card.deck || "Allgemein").split("::")[0].trim() || "Allgemein");
+	const deckName = (card) => String(card.deck || "Allgemein").trim() || "Allgemein";
 	const cardText = (card) => (String(card.front || "") + " — " + String(card.back || "")).replace(/\s+/g, " ").trim().slice(0, 600);
 
 	function hash(text) {
@@ -33,7 +33,7 @@ export const GRAPH = (() => {
 		return (h >>> 0).toString(36);
 	}
 
-	const fingerprint = (cards = activeCards()) => hash(cards.map((c) => c.id + "|" + topDeck(c) + "|" + cardText(c)).sort().join("\n"));
+	const fingerprint = (cards = activeCards()) => hash(cards.map((c) => c.id + "|" + deckName(c) + "|" + cardText(c)).sort().join("\n"));
 	const isStale = (g = graph()) => !!g && (g.sourceFingerprint !== fingerprint() || g.model !== S.settings.embedModel);
 	const skillById = (g, id) => (g && g.skills || []).find((skill) => skill.id === id) || null;
 
@@ -46,6 +46,7 @@ export const GRAPH = (() => {
 	}
 
 	function mastery(skill) {
+		if (skill.gap) return { cards: 0, rated: 0, due: 0, value: 0, state: "gap" };
 		const cards = (skill.cardIds || []).map((id) => S.cards[id]).filter((c) => c && !c.trashed);
 		const rated = cards.map((card) => ({ card, r: retrievability(card) })).filter((x) => x.r != null);
 		const due = rated.filter((x) => new Date(x.card.srs.due).getTime() <= Date.now()).length;
@@ -56,8 +57,19 @@ export const GRAPH = (() => {
 		return { cards: cards.length, rated: rated.length, due, value, state };
 	}
 
-	const stateLabel = (m) => ({ discover: "Entdecken", building: "Im Aufbau", fragile: "Gefährdet", mastered: "Beherrscht" })[m.state];
+	const stateLabel = (m) => ({ gap: "Lernlücke", discover: "Noch nicht gelernt", building: "Im Aufbau", fragile: "Auffrischen", mastered: "Gelernt" })[m.state];
 	const subjectId = (name) => "sub:" + hash(String(name).toLowerCase());
+	const topicId = (subject, name) => "topic:" + hash(String(subject).toLowerCase() + "|" + String(name).toLowerCase());
+	function normalizeSubject(value) {
+		const raw = String(value || "").trim(), key = raw.toLowerCase();
+		return ({ mathe: "Mathematik", math: "Mathematik", mathematics: "Mathematik", bio: "Biologie", geschichte: "Geschichte", history: "Geschichte", info: "Informatik", computer_science: "Informatik" })[key] || raw;
+	}
+	function normalizeTopic(value, subject) {
+		const raw = String(value || "").trim(), key = raw.toLowerCase();
+		const aliases = { geo: "Geometrie", geometry: "Geometrie", geometrie: "Geometrie", stoch: "Stochastik", stochastik: "Stochastik", statistik: "Stochastik", probability: "Stochastik", wahrscheinlichkeitsrechnung: "Stochastik", wahrscheinlichkeitstheorie: "Stochastik", analysis: "Analysis", calculus: "Analysis", mathe: "Grundlagen", mathematik: "Grundlagen" };
+		return aliases[key] || (raw === subject ? "Grundlagen" : raw);
+	}
+	const normalizeNodeTitle = (value) => String(value || "").trim().replace(/^wie (man|du)\s+/i, "").replace(/\s+(anwenden|lernen|verstehen|erklären|berechnen|bestimmen|lösen|analysieren|kennen)$/i, "").trim();
 
 	function parseJson(raw) {
 		const hit = String(raw || "").match(/\{[\s\S]*\}/);
@@ -101,7 +113,57 @@ export const GRAPH = (() => {
 		return out;
 	}
 
-	function clusterInWorker(cards, vectors) {
+	function fallbackTaxonomy(deck) {
+		const leaf = deck.split("::").pop().trim() || "Grundlagen";
+		const value = deck.toLowerCase();
+		const rules = [
+			[/mathe|analysis|algebra|geometr|\bgeo\b|stochast|statistik|wahrscheinlich|trigonom|integral|differential/, "Mathematik"],
+			[/biolog|zell|genetik|ökolog|evolution|anatom/, "Biologie"],
+			[/physik|mechanik|elektr|optik|thermodynam/, "Physik"],
+			[/chemie|organik|anorganik|reaktion|atom/, "Chemie"],
+			[/geschicht|antike|mittelalter|neuzeit|krieg/, "Geschichte"],
+			[/informatik|programm|algorithm|datenbank|netzwerk/, "Informatik"],
+			[/deutsch|literatur|grammatik|sprache/, "Deutsch"],
+			[/englisch|english/, "Englisch"],
+		];
+		const subject = normalizeSubject((rules.find(([pattern]) => pattern.test(value)) || [null, deck.split("::")[0].trim() || "Allgemeines Wissen"])[1]);
+		return { deck, subject, topic: normalizeTopic(leaf, subject) || "Grundlagen" };
+	}
+
+	async function taxonomyFor(cards) {
+		const byDeck = new Map();
+		for (const card of cards) {
+			const deck = deckName(card);
+			if (!byDeck.has(deck)) byDeck.set(deck, []);
+			if (byDeck.get(deck).length < 3) byDeck.get(deck).push(String(card.front || "").replace(/\s+/g, " ").slice(0, 140));
+		}
+		const decks = [...byDeck.keys()];
+		setStatus("<b>Erkenne Fächer und Themen</b><span>Stapel sind nur Hinweise – die KI baut eine allgemeine Taxonomie.</span>", true);
+		try {
+			const input = decks.map((deck, index) => "D" + index + " [" + deck + "]:\n" + byDeck.get(deck).map((text) => "- " + text).join("\n")).join("\n\n");
+			const raw = await AI.complete(
+				"Ordne die folgenden Karteikarten-Stapel in eine allgemeine, fachlich sinnvolle Wissenshierarchie ein. " +
+				"Das Fach ist breit und standardisiert (z. B. Mathematik, Biologie, Geschichte). Das Thema ist ein Teilgebiet " +
+				"(z. B. Analysis, Geometrie, Stochastik). Stapelnamen sind nur Hinweise: nicht jeden Stapel zu einem eigenen Fach machen, " +
+				"Abkürzungen normalisieren und verwandte Stapel zusammenführen.\n\n" + input +
+				'\n\nAntworte nur als JSON: {"decks":[{"index":0,"subject":"Mathematik","topic":"Analysis"}]}',
+				"Du bist ein präziser Lern-Bibliothekar. Verwende kurze deutsche Standardbezeichnungen und antworte nur mit gültigem JSON."
+			);
+			const result = parseJson(raw), mapped = new Map();
+			for (const item of result.decks || []) {
+				const index = Number(item.index), deck = decks[index];
+				const subject = normalizeSubject(String(item.subject || "").trim().slice(0, 50));
+				const topic = normalizeTopic(String(item.topic || "").trim().slice(0, 60), subject);
+				if (deck && subject && topic) mapped.set(deck, { deck, subject, topic });
+			}
+			return new Map(decks.map((deck) => [deck, mapped.get(deck) || fallbackTaxonomy(deck)]));
+		} catch (error) {
+			console.warn("Graph-Taxonomie: KI-Antwort unbrauchbar, lokale Einordnung wird verwendet.", error);
+			return new Map(decks.map((deck) => [deck, fallbackTaxonomy(deck)]));
+		}
+	}
+
+	function clusterInWorker(cards, vectors, taxonomy) {
 		return new Promise((resolve, reject) => {
 			const worker = new Worker(new URL("./graph-worker.js", import.meta.url), { type: "module" });
 			const timer = setTimeout(() => { worker.terminate(); reject(new Error("Clustering dauerte zu lange.")); }, 120000);
@@ -111,21 +173,23 @@ export const GRAPH = (() => {
 				else resolve(event.data.groups || []);
 			};
 			worker.onerror = (event) => { clearTimeout(timer); worker.terminate(); reject(new Error(event.message || "Clustering fehlgeschlagen.")); };
-			const bySubject = new Map();
+			const groups = new Map();
 			for (const card of cards) {
-				const name = topDeck(card);
-				if (!bySubject.has(name)) bySubject.set(name, []);
-				bySubject.get(name).push({ id: card.id, vec: vectors.get(card.id) });
+				const tax = taxonomy.get(deckName(card)) || fallbackTaxonomy(deckName(card));
+				const key = tax.subject + "\u0000" + tax.topic;
+				if (!groups.has(key)) groups.set(key, { key, subject: tax.subject, topic: tax.topic, items: [] });
+				groups.get(key).items.push({ id: card.id, vec: vectors.get(card.id) });
 			}
-			worker.postMessage({ groups: [...bySubject].map(([subject, items]) => ({ subject, items })) });
+			worker.postMessage({ groups: [...groups.values()] });
 		});
 	}
 
-	function bestOldSkill(old, subject, ids, used) {
+	function bestOldSkill(old, subject, topic, ids, used) {
 		let best = null, score = 0;
 		const set = new Set(ids);
 		for (const skill of old && old.skills || []) {
-			if (used.has(skill.id) || (!skill.customSubject && skill.subjectId !== subjectId(subject))) continue;
+			const legacy = Number(old && old.v || 0) < VERSION;
+			if (used.has(skill.id) || (!legacy && !skill.customSubject && skill.subjectId !== subjectId(subject)) || (!legacy && !skill.customTopic && skill.topicId && skill.topicId !== topicId(subject, topic))) continue;
 			const overlap = (skill.cardIds || []).filter((id) => set.has(id)).length;
 			const union = new Set([...(skill.cardIds || []), ...ids]).size || 1;
 			if (overlap / union > score) { score = overlap / union; best = skill; }
@@ -135,40 +199,61 @@ export const GRAPH = (() => {
 
 	async function nameClusters(group, cardsById, old, used) {
 		const prepared = group.clusters.map((cluster, index) => {
-			const previous = bestOldSkill(old, group.subject, cluster.ids, used);
+			const previous = bestOldSkill(old, group.subject, group.topic, cluster.ids, used);
 			if (previous) used.add(previous.id);
 			return { cluster, index, previous };
 		});
 		const unnamed = prepared.filter((x) => !x.previous || !x.previous.customTitle);
-		let labels = {};
+		let labels = {}, gapSpecs = [];
 		if (unnamed.length) {
-			setStatus("<b>Strukturiere „" + U.esc(group.subject) + "“</b><span>Die KI benennt " + group.clusters.length + " Skills.</span>", true);
+			setStatus("<b>Strukturiere „" + U.esc(group.subject) + " › " + U.esc(group.topic) + "“</b><span>Die KI benennt " + group.clusters.length + " Unterthemen.</span>", true);
 			const body = unnamed.map((entry) => {
 				const examples = entry.cluster.ids.slice(0, 4).map((id) => "- " + cardText(cardsById.get(id)).slice(0, 180)).join("\n");
 				return "Cluster " + entry.index + ":\n" + examples;
 			}).join("\n\n");
 			const raw = await AI.complete(
-				"Benenne die folgenden Karten-Cluster aus dem Fach „" + group.subject + "“ als konkrete lernbare Skills. " +
-				"Ordne nur dann Voraussetzungen zu, wenn sie fachlich zwingend sind.\n\n" + body +
-				'\n\nAntworte nur als JSON: {"skills":[{"cluster":0,"title":"1-4 Wörter","description":"ein kurzer Satz","prerequisites":[1]}]}',
-				"Du strukturierst Lernstoff knapp, fachlich präzise und ohne erfundene Inhalte. Antworte nur mit gültigem JSON."
+				"Benenne die folgenden Karten-Cluster aus „" + group.subject + " › " + group.topic + "“ als fachliche Unterthemen. " +
+				"Bestimme für jeden Cluster außerdem das passende Teilgebiet innerhalb von „" + group.subject + "“; der bisherige Themenhinweis „" + group.topic + "“ darf korrigiert werden. " +
+				"Der Titel ist eine kurze deutsche Nominalbezeichnung ohne Lernverb, zum Beispiel „Kurvendiskussion“, „Integralrechnung“ oder „Binomialverteilung“ – niemals „… anwenden/lernen/verstehen“. " +
+				"Ordne nur zwingende Voraussetzungen zu. Nenne außerdem höchstens zwei fachlich sichere, direkt angrenzende Unterthemen, zu denen im Material offenbar noch keine Karten existieren; keine spekulativen Vollständigkeitslisten.\n\n" + body +
+				'\n\nAntworte nur als JSON: {"skills":[{"cluster":0,"topic":"Analysis","title":"Kurvendiskussion","description":"ein kurzer Satz","prerequisites":[1]}],"gaps":[{"topic":"Analysis","title":"Grenzwerte","description":"Warum dieses Unterthema hier fehlt","connectTo":[0]}]}',
+				"Du erstellst eine klare Themenlandkarte aus vorhandenem Lernstoff. Verwende kurze deutsche Fachbegriffe und antworte nur mit gültigem JSON."
 			);
-			for (const item of parseJson(raw).skills || []) labels[Number(item.cluster)] = item;
+			const parsed = parseJson(raw);
+			for (const item of parsed.skills || []) labels[Number(item.cluster)] = item;
+			gapSpecs = Array.isArray(parsed.gaps) ? parsed.gaps.slice(0, 2) : [];
 		}
-		const idAt = prepared.map((entry) => entry.previous && entry.previous.id || "skill:" + hash(group.subject + "|" + entry.cluster.ids.slice().sort().join("|")));
+		const idAt = prepared.map((entry) => entry.previous && entry.previous.id || "skill:" + hash(group.subject + "|" + group.topic + "|" + entry.cluster.ids.slice().sort().join("|")));
 		return prepared.map((entry) => {
 			const label = labels[entry.index] || {};
 			const previous = entry.previous;
-			const title = previous && previous.customTitle ? previous.title : String(label.title || previous && previous.title || "Thema " + (entry.index + 1)).slice(0, 60);
+			const oldTopic = previous && old && (old.topics || []).find((item) => item.id === previous.topicId);
+			const topicName = previous && previous.customTopic && oldTopic ? oldTopic.name : normalizeTopic(String(label.topic || group.topic || "Grundlagen").trim().slice(0, 60), group.subject);
+			let title = previous && previous.customTitle ? previous.title : normalizeNodeTitle(label.title || previous && previous.title || "").slice(0, 60);
+			if (!title || title.toLowerCase() === topicName.toLowerCase()) title = topicName + (entry.index ? " – Vertiefung" : " – Grundlagen");
+			const finalSubjectId = previous && previous.customSubject ? previous.subjectId : subjectId(group.subject);
 			return {
-				id: idAt[entry.index], subjectId: previous && previous.customSubject ? previous.subjectId : subjectId(group.subject), title,
+				id: idAt[entry.index],
+				subjectId: finalSubjectId,
+				topicId: previous && previous.customTopic ? previous.topicId : topicId(group.subject, topicName), topicName, title,
 				description: String(label.description || previous && previous.description || "").slice(0, 240),
 				cardIds: entry.cluster.ids, pageIds: [...new Set(entry.cluster.ids.map((id) => cardsById.get(id) && cardsById.get(id).pageId).filter(Boolean))],
 				prereqIds: [...new Set((label.prerequisites || []).map((i) => idAt[Number(i)]).filter((id) => id && id !== idAt[entry.index]).concat(previous && previous.manualPrereqIds || []))],
 				manualPrereqIds: (previous && previous.manualPrereqIds || []).slice(),
-				customTitle: !!(previous && previous.customTitle), customSubject: !!(previous && previous.customSubject), center: entry.cluster.center,
+				customTitle: !!(previous && previous.customTitle), customSubject: !!(previous && previous.customSubject), customTopic: !!(previous && previous.customTopic), center: entry.cluster.center,
 			};
-		});
+		}).concat(gapSpecs.map((gap) => {
+			const title = normalizeNodeTitle(gap.title).slice(0, 60);
+			if (!title) return null;
+			const gapTopic = normalizeTopic(String(gap.topic || group.topic || "Grundlagen").trim().slice(0, 60), group.subject);
+			return {
+				id: "gap:" + hash(group.subject + "|" + gapTopic + "|" + title.toLowerCase()),
+				subjectId: subjectId(group.subject), topicId: topicId(group.subject, gapTopic), topicName: gapTopic,
+				title, description: String(gap.description || "Für dieses angrenzende Unterthema wurden keine Karten gefunden.").slice(0, 240),
+				cardIds: [], pageIds: [], prereqIds: [], manualPrereqIds: [], relatedIds: (gap.connectTo || []).map((i) => idAt[Number(i)]).filter(Boolean),
+				gap: true, customTitle: false, customSubject: false, customTopic: false, center: null,
+			};
+		}).filter(Boolean));
 	}
 
 	function removeCycles(skills) {
@@ -194,13 +279,22 @@ export const GRAPH = (() => {
 	function bridgesFor(skills, old) {
 		const candidates = [];
 		for (let i = 0; i < skills.length; i++) for (let j = i + 1; j < skills.length; j++) {
-			if (skills[i].subjectId === skills[j].subjectId) continue;
+			if (!skills[i].center || !skills[j].center) continue;
 			const score = cosine(skills[i].center || [], skills[j].center || []);
 			if (score >= .62) candidates.push({ a: skills[i].id, b: skills[j].id, score });
 		}
 		candidates.sort((a, b) => b.score - a.score);
 		const manual = (old && old.bridges || []).filter((edge) => edge.manual && skillById({ skills }, edge.a) && skillById({ skills }, edge.b));
-		return manual.concat(candidates.slice(0, 18).map((edge) => ({ id: "bridge:" + hash([edge.a, edge.b].sort().join("|")), ...edge, manual: false })));
+		const gaps = skills.filter((skill) => skill.gap).flatMap((skill) => (skill.relatedIds || []).map((id) => ({ id: "bridge:" + hash([skill.id, id].sort().join("|")), a: skill.id, b: id, score: 1, gap: true, manual: false })));
+		const degree = new Map(), semantic = [];
+		for (const edge of candidates) {
+			if ((degree.get(edge.a) || 0) >= 3 || (degree.get(edge.b) || 0) >= 3) continue;
+			degree.set(edge.a, (degree.get(edge.a) || 0) + 1); degree.set(edge.b, (degree.get(edge.b) || 0) + 1);
+			semantic.push({ id: "bridge:" + hash([edge.a, edge.b].sort().join("|")), ...edge, manual: false });
+			if (semantic.length >= Math.min(36, skills.length * 2)) break;
+		}
+		const seen = new Set();
+		return manual.concat(gaps, semantic).filter((edge) => { const key = [edge.a, edge.b].sort().join("|"); if (seen.has(key)) return false; seen.add(key); return true; });
 	}
 
 	async function analyse() {
@@ -214,25 +308,29 @@ export const GRAPH = (() => {
 		analysing = true;
 		try {
 			const vectors = await vectorsFor(cards);
+			const taxonomy = await taxonomyFor(cards);
 			setStatus("<b>Ordne Wissen</b><span>Lokales Clustering läuft außerhalb der Oberfläche.</span>", true);
-			const groups = await clusterInWorker(cards, vectors);
-			const old = graph();
+			const groups = await clusterInWorker(cards, vectors, taxonomy);
+			const old = S.settings.knowledgeGraph || null;
 			const cardsById = new Map(cards.map((card) => [card.id, card]));
-			const used = new Set(), skills = [];
+			const used = new Set(); let skills = [];
 			for (const group of groups) skills.push(...await nameClusters(group, cardsById, old, used));
+			skills = [...new Map(skills.map((skill) => [skill.id, skill])).values()];
 			removeCycles(skills);
 			const bridges = bridgesFor(skills, old);
 			// Zentren sind nur ein Analyse-Zwischenergebnis. Sie zu synchronisieren würde
 			// den kleinen Graph-Snapshot um mehrere Megabyte aufblasen.
-			const storedSkills = skills.map(({ center, ...skill }) => skill);
+			const storedSkills = skills.map(({ center, topicName, ...skill }) => skill);
+			const subjects = [...new Map(groups.map((group) => [subjectId(group.subject), { id: subjectId(group.subject), name: group.subject }])).values()];
+			const topics = [...new Map(skills.map((skill) => [skill.topicId, { id: skill.topicId, subjectId: skill.subjectId, name: skill.topicName || "Grundlagen" }])).values()];
 			const next = {
 				v: VERSION, updated: U.now(), model: S.settings.embedModel, sourceFingerprint: fingerprint(cards),
-				subjects: groups.map((group) => ({ id: subjectId(group.subject), name: group.subject })),
+				subjects, topics,
 				skills: storedSkills, bridges,
 			};
 			await STATE.dispatch("settingsSet", { knowledgeGraph: next });
 			selectedId = null;
-			setStatus("<b>Skill-Tree aktualisiert</b><span>" + skills.length + " Skills aus " + cards.length + " Karten.</span>");
+			setStatus("<b>Themenlandkarte aktualisiert</b><span>" + skills.filter((skill) => !skill.gap).length + " gelernte Unterthemen · " + skills.filter((skill) => skill.gap).length + " mögliche Lücken · " + cards.length + " Karten.</span>");
 			render();
 		} catch (error) {
 			setStatus("<b>Analyse fehlgeschlagen</b><span>" + U.esc(String(error && error.message || error)) + "</span><button type=\"button\" data-graph-analyse>Erneut versuchen</button>");
@@ -255,9 +353,11 @@ export const GRAPH = (() => {
 
 	function nodeHtml(skill, g, recommended) {
 		const m = mastery(skill), selected = skill.id === selectedId;
-		const dim = query && !(skill.title + " " + skill.description).toLowerCase().includes(query.toLowerCase());
+		const subject = (g.subjects || []).find((item) => item.id === skill.subjectId);
+		const topic = (g.topics || []).find((item) => item.id === skill.topicId);
+		const dim = query && ![skill.title, skill.description, subject && subject.name, topic && topic.name].join(" ").toLowerCase().includes(query.toLowerCase());
 		return '<button type="button" class="graph-skill state-' + m.state + (selected ? " selected" : "") + (dim ? " dim" : "") + '" data-skill="' + U.esc(skill.id) + '" data-level="' + levelOf(skill, g) + '" style="--progress:' + Math.round(m.value * 100) + '%">' +
-			'<span class="graph-skill-ring"></span><span class="graph-skill-copy"><b>' + U.esc(skill.title) + '</b><small>' + stateLabel(m) + ' · ' + m.cards + ' Karten</small></span>' +
+			'<span class="graph-skill-ring"></span><span class="graph-skill-copy"><b>' + U.esc(skill.title) + '</b><small>' + stateLabel(m) + (skill.gap ? " · keine Karten" : " · " + m.cards + " Karten") + '</small></span>' +
 			(recommended && recommended.skill.id === skill.id ? '<span class="graph-next">Nächster Schritt</span>' : "") + '</button>';
 	}
 
@@ -265,32 +365,39 @@ export const GRAPH = (() => {
 		const rec = mode === "learn" ? recommendation(g) : null;
 		return (g.subjects || []).map((subject) => {
 			const skills = g.skills.filter((skill) => skill.subjectId === subject.id);
-			const levels = new Map();
-			for (const skill of skills) { const level = levelOf(skill, g); if (!levels.has(level)) levels.set(level, []); levels.get(level).push(skill); }
-			const rows = [...levels.entries()].sort((a, b) => b[0] - a[0]).map(([level, list]) => '<div class="graph-level" data-level="' + level + '">' + list.map((skill) => nodeHtml(skill, g, rec)).join("") + '</div>').join("");
+			const topicHtml = (g.topics || []).filter((topic) => topic.subjectId === subject.id).map((topic) => {
+				const topicSkills = skills.filter((skill) => skill.topicId === topic.id);
+				if (!topicSkills.length) return "";
+				const levels = new Map();
+				for (const skill of topicSkills) { const level = levelOf(skill, g); if (!levels.has(level)) levels.set(level, []); levels.get(level).push(skill); }
+				const rows = [...levels.entries()].sort((a, b) => b[0] - a[0]).map(([level, list]) => '<div class="graph-level" data-level="' + level + '">' + list.map((skill) => nodeHtml(skill, g, rec)).join("") + '</div>').join("");
+				const value = Math.round(topicSkills.reduce((sum, skill) => sum + mastery(skill).value, 0) / topicSkills.length * 100);
+				return '<section class="graph-topic"><header><b>' + U.esc(topic.name) + '</b><span>' + value + '%</span></header><div class="graph-levels">' + rows + '</div></section>';
+			}).join("");
 			const avg = skills.length ? Math.round(skills.reduce((sum, skill) => sum + mastery(skill).value, 0) / skills.length * 100) : 0;
-			return '<section class="graph-lane" data-subject="' + U.esc(subject.id) + '"><header><span>' + U.esc(subject.name) + '</span><small>' + avg + '%</small></header><div class="graph-levels">' + rows + '</div></section>';
+			return '<section class="graph-lane" data-subject="' + U.esc(subject.id) + '"><header><span>' + U.esc(subject.name) + '</span><small>' + avg + '%</small></header><div class="graph-topics">' + topicHtml + '</div></section>';
 		}).join("");
 	}
 
 	function inspectorHtml(g) {
 		const skill = skillById(g, selectedId);
-		if (!skill) return '<div class="graph-inspector-empty"><b>Wissen auswählen</b><span>Tippe auf einen Skill, um Lernstand, Quellen und Verbindungen zu sehen.</span></div>';
+		if (!skill) return '<div class="graph-inspector-empty"><b>Unterthema auswählen</b><span>Tippe auf einen Knoten, um Lernstand und fachliche Verbindungen zu sehen.</span></div>';
 		const m = mastery(skill);
 		const subject = g.subjects.find((item) => item.id === skill.subjectId);
+		const topic = (g.topics || []).find((item) => item.id === skill.topicId);
 		const prereqs = (skill.prereqIds || []).map((id) => skillById(g, id)).filter(Boolean);
 		const related = (g.bridges || []).filter((edge) => edge.a === skill.id || edge.b === skill.id).map((edge) => ({ edge, skill: skillById(g, edge.a === skill.id ? edge.b : edge.a) })).filter((x) => x.skill);
-		let html = '<div class="graph-inspector-head"><span>' + U.esc(subject && subject.name || "") + '</span><button type="button" data-graph-inspector-close aria-label="Details schließen">×</button></div>' +
-			'<h2>' + U.esc(skill.title) + '</h2><p>' + U.esc(skill.description || "Von der KI aus deinen Karten abgeleiteter Skill.") + '</p>' +
+		let html = '<div class="graph-inspector-head"><span>' + U.esc(subject && subject.name || "") + (topic ? " › " + U.esc(topic.name) : "") + '</span><button type="button" data-graph-inspector-close aria-label="Details schließen">×</button></div>' +
+			'<h2>' + U.esc(skill.title) + '</h2><p>' + U.esc(skill.description || "Aus deinen Karten abgeleitetes Unterthema.") + '</p>' +
 			'<div class="graph-mastery"><div><b>' + Math.round(m.value * 100) + '%</b><span>' + stateLabel(m) + '</span></div><div><b>' + m.due + '</b><span>jetzt fällig</span></div><div><b>' + m.rated + '/' + m.cards + '</b><span>bewertet</span></div></div>' +
-			'<button type="button" class="primary graph-learn" data-graph-learn="' + U.esc(skill.id) + '">In „' + U.esc(subject && subject.name || "Fach") + '“ lernen</button>';
+			(skill.gap ? '<div class="graph-gap-note">Noch keine Karte deckt dieses Unterthema ab.</div>' : '<button type="button" class="primary graph-learn" data-graph-learn="' + U.esc(skill.id) + '">Zugehörige Karten lernen</button>');
 		if (prereqs.length) html += '<h3>Voraussetzungen</h3><div class="graph-relations">' + prereqs.map((item) => '<button data-skill="' + U.esc(item.id) + '">' + U.esc(item.title) + '</button>').join("") + '</div>';
-		if (related.length) html += '<h3>Fächerübergreifend</h3><div class="graph-relations">' + related.map((item) => '<button data-skill="' + U.esc(item.skill.id) + '">' + U.esc(item.skill.title) + '</button>').join("") + '</div><button type="button" data-graph-synth="' + U.esc(skill.id) + '">Synthese-Frage erstellen</button>';
+		if (related.length) html += '<h3>Verwandte Unterthemen</h3><div class="graph-relations">' + related.map((item) => '<button data-skill="' + U.esc(item.skill.id) + '">' + U.esc(item.skill.title) + '</button>').join("") + '</div><button type="button" data-graph-synth="' + U.esc(skill.id) + '">Verbindung als Synthese-Frage</button>';
 		if (mode === "edit") {
 			html += '<div class="graph-edit"><h3>Bearbeiten</h3><label>Name<input data-graph-title value="' + U.esc(skill.title) + '"></label>' +
-				'<label>Fach<select data-graph-subject>' + g.subjects.map((item) => '<option value="' + U.esc(item.id) + '"' + (item.id === skill.subjectId ? " selected" : "") + '>' + U.esc(item.name) + '</option>').join("") + '</select></label>' +
+				'<label>Fach › Thema<select data-graph-topic>' + (g.topics || []).map((item) => { const owner = g.subjects.find((subject2) => subject2.id === item.subjectId); return '<option value="' + U.esc(item.id) + '"' + (item.id === skill.topicId ? " selected" : "") + '>' + U.esc((owner && owner.name || "") + " › " + item.name) + '</option>'; }).join("") + '</select></label>' +
 				'<button type="button" data-graph-save="' + U.esc(skill.id) + '">Änderungen speichern</button>' +
-				'<div class="graph-edit-links"><button type="button" data-graph-link="bridge">Fachbrücke hinzufügen</button><button type="button" data-graph-link="prereq">Als Voraussetzung verbinden</button></div></div>';
+				'<div class="graph-edit-links"><button type="button" data-graph-link="bridge">Unterthemen verbinden</button><button type="button" data-graph-link="prereq">Als Voraussetzung verbinden</button></div></div>';
 		}
 		return html;
 	}
@@ -301,7 +408,7 @@ export const GRAPH = (() => {
 		const stage = overlay.querySelector(".graph-stage");
 		const inspector = overlay.querySelector(".graph-inspector");
 		if (!g || !g.skills || !g.skills.length) {
-			stage.innerHTML = '<div class="graph-empty"><span>✦</span><h2>Baue deinen Skill-Tree</h2><p>Embeddings ordnen deine Karten; die KI benennt daraus klare, lernbare Fähigkeiten.</p><button type="button" class="primary" data-graph-analyse>Jetzt analysieren</button></div>';
+			stage.innerHTML = '<div class="graph-empty"><span>✦</span><h2>Baue deine Themenlandkarte</h2><p>Die KI ordnet deine Karten in Fächer, Teilgebiete und verknüpfte Unterthemen.</p><button type="button" class="primary" data-graph-analyse>Jetzt analysieren</button></div>';
 			inspector.innerHTML = "";
 			return;
 		}
@@ -326,7 +433,7 @@ export const GRAPH = (() => {
 		};
 		let html = "";
 		for (const skill of g.skills) for (const parent of skill.prereqIds || []) html += path(parent, skill.id, "prereq");
-		for (const edge of g.bridges || []) if (mode === "learn" || selectedId === edge.a || selectedId === edge.b) html += path(edge.a, edge.b, "bridge");
+		for (const edge of g.bridges || []) if (mode === "learn" || selectedId === edge.a || selectedId === edge.b) html += path(edge.a, edge.b, "bridge" + (edge.gap ? " gap" : ""));
 		svg.setAttribute("width", Math.max(stage.scrollWidth, stage.clientWidth));
 		svg.setAttribute("height", Math.max(stage.scrollHeight, stage.clientHeight));
 		svg.innerHTML = html;
@@ -336,9 +443,13 @@ export const GRAPH = (() => {
 		const g = structuredClone(graph()), skill = skillById(g, id);
 		if (!skill) return;
 		const title = String((overlay.querySelector("[data-graph-title]") || {}).value || "").trim();
-		const subject = String((overlay.querySelector("[data-graph-subject]") || {}).value || "");
+		const topicIdValue = String((overlay.querySelector("[data-graph-topic]") || {}).value || "");
 		if (title) { skill.title = title.slice(0, 60); skill.customTitle = true; }
-		if (g.subjects.some((item) => item.id === subject) && skill.subjectId !== subject) { skill.subjectId = subject; skill.customSubject = true; }
+		const topic = (g.topics || []).find((item) => item.id === topicIdValue);
+		if (topic && (skill.topicId !== topic.id || skill.subjectId !== topic.subjectId)) {
+			skill.topicId = topic.id; skill.subjectId = topic.subjectId;
+			skill.customTopic = true; skill.customSubject = true;
+		}
 		g.updated = U.now();
 		await STATE.dispatch("settingsSet", { knowledgeGraph: g });
 		render();
@@ -362,9 +473,15 @@ export const GRAPH = (() => {
 	}
 
 	function learnSkill(id) {
-		const g = graph(), skill = skillById(g, id), subject = skill && g.subjects.find((item) => item.id === skill.subjectId);
-		if (!skill || !subject) return;
-		S.ankiDeck = subject.name === "Standard" ? null : subject.name;
+		const g = graph(), skill = skillById(g, id);
+		if (!skill) return;
+		const counts = new Map();
+		for (const cardId of skill.cardIds || []) {
+			const card = S.cards[cardId]; if (!card || card.trashed) continue;
+			const deck = deckName(card); counts.set(deck, (counts.get(deck) || 0) + 1);
+		}
+		const deck = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+		S.ankiDeck = deck === "Standard" ? null : deck;
 		S.ankiTab = "study"; S.ankiMix = false; S.ankiFeyn = false;
 		close(); TABS.openPage("anki:main");
 	}
@@ -406,9 +523,9 @@ export const GRAPH = (() => {
 		close();
 		overlay = document.createElement("div");
 		overlay.className = "graph-overlay";
-		overlay.innerHTML = '<header class="graph-head"><div class="graph-brand"><span>✦</span><div><h1>Wissensgraph</h1><small>Dein Skill-Tree</small></div></div>' +
+		overlay.innerHTML = '<header class="graph-head"><div class="graph-brand"><span>✦</span><div><h1>Wissensgraph</h1><small>Deine Themenlandkarte</small></div></div>' +
 			'<nav class="graph-modes" aria-label="Graph-Modus"><button data-mode="explore" class="active">Erkunden</button><button data-mode="learn">Lernen</button><button data-mode="edit">Bearbeiten</button></nav>' +
-			'<div class="graph-actions"><label class="graph-search"><span>⌕</span><input type="search" placeholder="Skills suchen" autocomplete="off"></label><button type="button" data-graph-analyse title="Analyse aktualisieren">↻</button><button type="button" data-graph-close aria-label="Schließen">×</button></div></header>' +
+			'<div class="graph-actions"><label class="graph-search"><span>⌕</span><input type="search" placeholder="Unterthemen suchen" autocomplete="off"></label><button type="button" data-graph-analyse title="Analyse aktualisieren">↻</button><button type="button" data-graph-close aria-label="Schließen">×</button></div></header>' +
 			'<div class="graph-status" hidden></div><main class="graph-shell"><div class="graph-stage"></div><aside class="graph-inspector"></aside></main>';
 		document.body.appendChild(overlay);
 		overlay.addEventListener("click", onClick);
@@ -417,10 +534,10 @@ export const GRAPH = (() => {
 		resizeObserver = new ResizeObserver(() => requestAnimationFrame(drawLines));
 		resizeObserver.observe(overlay.querySelector(".graph-stage"));
 		const g = graph();
-		if (g && isStale(g)) setStatus('<b>Neue Lerninhalte erkannt</b><span>Der Skill-Tree kann kontrolliert aktualisiert werden.</span><button type="button" data-graph-analyse>Jetzt aktualisieren</button>');
+		if (g && isStale(g)) setStatus('<b>Neue Lerninhalte erkannt</b><span>Die Themenlandkarte kann kontrolliert aktualisiert werden.</span><button type="button" data-graph-analyse>Jetzt aktualisieren</button>');
 		else if (!g) {
 			const old = U.storage.getJson(OLD_KEY, null);
-			if (old && old.topics) setStatus("<b>Alter Wissensgraph erkannt</b><span>Die neue Analyse übernimmt deine Karten in den Skill-Tree.</span>");
+			if (old && old.topics) setStatus("<b>Alter Wissensgraph erkannt</b><span>Die neue Analyse ordnet deine Karten als verknüpfte Unterthemen.</span>");
 		}
 		render();
 	}

@@ -12,6 +12,7 @@ import { FACH } from "./fach.js";
 
 export const LERNZEIT = (() => {
 	const IDLE_MS = 60000;
+	const SESSION_GAP_MS = 15 * 60000;
 	const TICK_MS = 5000;
 	const TIMER_KEY = "impala67_lernzeit_timer_end";
 	const TIMER_MIN_KEY = "impala67_lernzeit_timer_minutes";
@@ -61,45 +62,77 @@ export const LERNZEIT = (() => {
 	}
 	function categoryNow() {
 		const subject = subjectNowMeta();
-		if (S.aiBusy) return { category: "ai", sourceId: S.currentChatId || null, subject: subject.name, subjectSource: subject.source };
+		// Lernzeit gibt es nur in echten Lernansichten. Verwaltungsansichten, Home,
+		// Einstellungen usw. dürfen weder Zeit sammeln noch die Idle-Frage zeigen.
+		if (S.view === "chat") return { category: "ai", sourceId: S.currentChatId || null, subject: subject.name, subjectSource: subject.source };
 		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null, subject: subject.name, subjectSource: subject.source };
 		const page = S.currentPageId && S.pages[S.currentPageId];
 		if (page && page.kind === "heft" && S.view === "page") return { category: "notebook", sourceId: page.id, subject: subject.name, subjectSource: subject.source };
-		const active = document.activeElement;
-		if (page && active && (active.id === "pageTitle" || active.isContentEditable || (active.closest && active.closest(".block-editor")))) {
-			return { category: "notes", sourceId: page.id, subject: subject.name, subjectSource: subject.source };
-		}
-		return { category: "other", sourceId: null, subject: subject.name, subjectSource: subject.source };
+		if (page && S.view === "page") return { category: "notes", sourceId: page.id, subject: subject.name, subjectSource: subject.source };
+		return null;
 	}
 
-	function openSegment() {
-		if (current) return;
-		const meta = categoryNow();
-		current = { id: U.uid(), startedAt: iso(), startedMs: Date.now(), category: meta.category, sourceId: meta.sourceId, subject: meta.subject, subjectSource: meta.subjectSource };
+	function sameContext(meta, session = current) {
+		return !!(meta && session && meta.category === session.category && meta.sourceId === session.sourceId && meta.subject === session.subject);
 	}
-	async function closeSegment() {
-		if (!current) return;
-		const finished = current;
-		current = null;
-		const durationSeconds = Math.round((Date.now() - finished.startedMs) / 1000);
-		if (durationSeconds < 5) return;
+	function segmentsDuration(segments) {
+		return Math.round((segments || []).reduce((total, segment) => {
+			const start = new Date(segment.startedAt).getTime();
+			const end = new Date(segment.endedAt).getTime();
+			return total + (Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0);
+		}, 0) / 1000);
+	}
+	function openSegment(meta = categoryNow()) {
+		if (!meta || document.hidden || animal) return;
+		const now = Date.now();
+		if (current?.activeStartedMs && sameContext(meta)) return;
+		if (current && !current.activeStartedMs && sameContext(meta) && now - current.pausedAt <= SESSION_GAP_MS) {
+			current.activeStartedMs = now;
+			current.activeStartedAt = iso();
+			current.pausedAt = 0;
+			return;
+		}
+		if (current) finishSession();
+		current = { id: U.uid(), startedAt: iso(), activeStartedAt: iso(), activeStartedMs: now, pausedAt: 0, segments: [], category: meta.category, sourceId: meta.sourceId, subject: meta.subject, subjectSource: meta.subjectSource };
+	}
+	async function persistCurrent() {
+		if (!current || !current.segments.length) return;
+		const durationSeconds = segmentsDuration(current.segments);
+		if (durationSeconds < 1) return;
+		const endedAt = current.segments[current.segments.length - 1].endedAt;
 		await STATE.dispatch("learningSessionUpsert", {
-			id: finished.id,
-			startedAt: finished.startedAt,
-			endedAt: iso(),
+			id: current.id,
+			startedAt: current.startedAt,
+			endedAt,
 			durationSeconds,
-			category: finished.category,
-			sourceId: finished.sourceId,
-			subject: finished.subject,
-			subjectSource: finished.subjectSource,
+			segments: current.segments,
+			category: current.category,
+			sourceId: current.sourceId,
+			subject: current.subject,
+			subjectSource: current.subjectSource,
 			updated: iso(),
 		});
 	}
-	function maybeSplitSegment() {
+	function pauseSegment() {
+		if (!current || !current.activeStartedMs) return Promise.resolve();
+		const endedAt = iso();
+		current.segments.push({ startedAt: current.activeStartedAt, endedAt });
+		current.activeStartedAt = null;
+		current.activeStartedMs = 0;
+		current.pausedAt = Date.now();
+		return persistCurrent();
+	}
+	function finishSession() {
+		if (!current) return Promise.resolve();
+		const finished = current;
+		const pending = pauseSegment();
+		if (current === finished) current = null;
+		return pending;
+	}
+	function maybeSplitSegment(meta = categoryNow()) {
 		if (!current) return;
-		const next = categoryNow();
-		if (next.category === current.category && next.sourceId === current.sourceId && next.subject === current.subject) return;
-		closeSegment().then(openSegment);
+		if (sameContext(meta)) return;
+		finishSession().then(() => openSegment(meta));
 	}
 
 	// Aktivität melden — EINE Stelle für alle Eingabewege. 🐛 Fix (27. Juli): Ein Gamepad
@@ -113,14 +146,14 @@ export const LERNZEIT = (() => {
 		if (!animal) return false;
 		animal.remove();
 		animal = null;
-		openSegment();
+		openSegment(categoryNow());
 		refreshLive();
 		return true;
 	}
 
 	function showAnimal() {
-		if (animal) return;
-		closeSegment();
+		if (animal || !categoryNow()) return;
+		pauseSegment();
 		animal = document.createElement("button");
 		animal.type = "button";
 		animal.id = "lzAnimal";
@@ -150,7 +183,7 @@ export const LERNZEIT = (() => {
 		localStorage.setItem(TIMER_MIN_KEY, String(min));
 		localStorage.removeItem(TIMER_PAUSE_KEY);
 		lastActivityAt = Date.now();
-		openSegment();
+		openSegment(categoryNow());
 		TELE.log("timerStart", { minutes: min });
 		renderHomeWidget();
 	}
@@ -160,6 +193,7 @@ export const LERNZEIT = (() => {
 		timerEndsAt = 0;
 		localStorage.removeItem(TIMER_KEY);
 		localStorage.setItem(TIMER_PAUSE_KEY, String(timerPausedLeft));
+		pauseSegment();
 		TELE.log("timerPause", { leftMs: timerPausedLeft });
 		renderHomeWidget();
 	}
@@ -170,7 +204,7 @@ export const LERNZEIT = (() => {
 		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
 		localStorage.removeItem(TIMER_PAUSE_KEY);
 		lastActivityAt = Date.now();
-		openSegment();
+		openSegment(categoryNow());
 		TELE.log("timerResume", {});
 		renderHomeWidget();
 	}
@@ -181,15 +215,13 @@ export const LERNZEIT = (() => {
 		timerPausedLeft = 0;
 		localStorage.removeItem(TIMER_KEY);
 		localStorage.removeItem(TIMER_PAUSE_KEY);
-		await closeSegment();
+		await finishSession();
 		renderHomeWidget();
 	}
 
 	function tick() {
-		if (document.hidden || animal) return;
-		if (Date.now() - lastActivityAt >= IDLE_MS) { showAnimal(); return; }
-		openSegment();
-		maybeSplitSegment();
+		const meta = categoryNow();
+		if (document.hidden) return;
 		if (timerEndsAt && Date.now() >= timerEndsAt) {
 			const minutes = timerTotalMin();
 			timerEndsAt = 0;
@@ -197,9 +229,20 @@ export const LERNZEIT = (() => {
 			localStorage.removeItem(TIMER_KEY);
 			localStorage.removeItem(TIMER_PAUSE_KEY);
 			TELE.log("timerDone", { minutes });
-			closeSegment();
+			pauseSegment();
 			openTimerDone(minutes);
 		}
+		if (!meta) {
+			if (animal) { animal.remove(); animal = null; }
+			if (current?.activeStartedMs) pauseSegment();
+			else if (current && Date.now() - current.pausedAt > SESSION_GAP_MS) finishSession();
+			refreshLive();
+			return;
+		}
+		if (animal) return;
+		if (Date.now() - lastActivityAt >= IDLE_MS) { showAnimal(); return; }
+		if (current && !sameContext(meta)) maybeSplitSegment(meta);
+		else openSegment(meta);
 		refreshLive();
 	}
 
@@ -210,11 +253,14 @@ export const LERNZEIT = (() => {
 	// durationSeconds stumpf addiert. Jetzt: Intervall-VEREINIGUNG — zeitlich
 	// überlappende Segmente zählen nur einmal (Wanduhr-Zeit statt Summe).
 	function mergedSeconds(sessions) {
-		const intervals = sessions.map((s) => {
+		const intervals = sessions.flatMap((s) => {
+			if (Array.isArray(s.segments) && s.segments.length) {
+				return s.segments.map((segment) => [new Date(segment.startedAt).getTime(), new Date(segment.endedAt).getTime()]);
+			}
 			const start = new Date(s.startedAt).getTime();
 			const end = s.endedAt ? new Date(s.endedAt).getTime() : start + (s.durationSeconds || 0) * 1000;
-			return [start, Math.max(start, end)];
-		}).filter(([start]) => Number.isFinite(start)).sort((a, b) => a[0] - b[0]);
+			return [[start, Math.max(start, end)]];
+		}).filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end >= start).sort((a, b) => a[0] - b[0]);
 		let total = 0;
 		let curStart = null;
 		let curEnd = null;
@@ -234,7 +280,15 @@ export const LERNZEIT = (() => {
 	// damit auch LIVE nichts doppelt zählt, wenn das andere Gerät gerade synct.
 	function currentAsSession() {
 		if (!current) return null;
-		return { startedAt: current.startedAt, endedAt: iso(), durationSeconds: Math.max(0, Math.floor((Date.now() - current.startedMs) / 1000)), category: current.category, subject: current.subject };
+		const segments = current.segments.slice();
+		if (current.activeStartedMs) segments.push({ startedAt: current.activeStartedAt, endedAt: iso() });
+		if (!segments.length) return null;
+		return { id: current.id, startedAt: current.startedAt, endedAt: segments[segments.length - 1].endedAt, durationSeconds: segmentsDuration(segments), segments, category: current.category, subject: current.subject };
+	}
+	function addLiveSession(sessions) {
+		const live = currentAsSession();
+		if (!live) return sessions;
+		return sessions.filter((session) => session.id !== live.id).concat(live);
 	}
 	function sessionSubject(session) {
 		if (session.subject) return FACH.clean(session.subject);
@@ -243,16 +297,12 @@ export const LERNZEIT = (() => {
 		return FACH.page(page).name;
 	}
 	function totalForDay(key) {
-		const list = activeSessions().filter((s) => dayKey(s.startedAt) === key);
-		const live = key === dayKey() ? currentAsSession() : null;
-		if (live) list.push(live);
+		const list = addLiveSession(activeSessions()).filter((s) => dayKey(s.startedAt) === key);
 		return mergedSeconds(list);
 	}
 	function totalsByDay() {
 		const grouped = {};
-		const sessions = activeSessions();
-		const live = currentAsSession();
-		if (live) sessions.push(live);
+		const sessions = addLiveSession(activeSessions());
 		for (const session of sessions) (grouped[dayKey(session.startedAt)] ||= []).push(session);
 		const totals = {};
 		for (const [key, list] of Object.entries(grouped)) totals[key] = mergedSeconds(list);
@@ -260,9 +310,9 @@ export const LERNZEIT = (() => {
 	}
 	function groupedSubjects(from, to) {
 		const start = from.getTime(), end = to.getTime(), groups = {};
-		const sessions = sessionsInRange(from, to);
+		let sessions = sessionsInRange(from, to);
 		const live = currentAsSession();
-		if (live && Date.now() >= start && Date.now() < end) sessions.push(live);
+		if (live && Date.now() >= start && Date.now() < end) sessions = sessions.filter((session) => session.id !== live.id).concat(live);
 		for (const session of sessions) (groups[sessionSubject(session)] ||= []).push(session);
 		return Object.entries(groups).map(([subject, list]) => ({ subject, seconds: mergedSeconds(list), sessions: list.length }))
 			.sort((a, b) => b.seconds - a.seconds);
@@ -533,8 +583,16 @@ export const LERNZEIT = (() => {
 	}
 
 	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, () => { if (!animal) lastActivityAt = Date.now(); }, { passive: true }));
-	document.addEventListener("visibilitychange", () => { if (document.hidden) closeSegment(); else lastActivityAt = Date.now(); });
-	window.addEventListener("pagehide", () => { closeSegment(); });
+	document.addEventListener("visibilitychange", () => {
+		if (document.hidden) {
+			if (animal) { animal.remove(); animal = null; }
+			pauseSegment();
+		} else {
+			lastActivityAt = Date.now();
+			openSegment(categoryNow());
+		}
+	});
+	window.addEventListener("pagehide", () => { finishSession(); });
 	document.addEventListener("click", async (event) => {
 		const source = event && event.target;
 		const target = source && source.nodeType === 1 && source.closest ? source.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close],[data-lz-mode],[data-lz-period],[data-lz-todayperiod]") : null;
@@ -571,6 +629,9 @@ export const LERNZEIT = (() => {
 			tickTimer = 0;
 		}
 	}
+	function contextChanged() {
+		tick();
+	}
 
-	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke, startInterval, stopInterval };
+	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke, contextChanged, startInterval, stopInterval };
 })();

@@ -444,6 +444,12 @@ export const STATE = (() => {
 					startedAt: p.startedAt || ev.t,
 					endedAt: p.endedAt || ev.t,
 					durationSeconds: Math.max(0, Math.round(Number(p.durationSeconds))),
+					// Neuere Einheiten können mehrere aktive Abschnitte enthalten. Die
+					// Lücken dazwischen gehören logisch zur Einheit, zählen aber nicht.
+					segments: Array.isArray(p.segments) ? p.segments.map((segment) => ({
+						startedAt: String(segment && segment.startedAt || ""),
+						endedAt: String(segment && segment.endedAt || ""),
+					})).filter((segment) => segment.startedAt && segment.endedAt) : [],
 					category: p.category || "other",
 					subject: p.subject !== undefined ? (p.subject ? String(p.subject).trim().slice(0, 80) : null) : (current && current.subject) || null,
 					subjectSource: p.subjectSource !== undefined ? (p.subjectSource ? String(p.subjectSource).trim().slice(0, 24) : null) : (current && current.subjectSource) || null,

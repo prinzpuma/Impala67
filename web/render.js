@@ -551,6 +551,9 @@ function renderMain() {
 	document.body.classList.toggle("heft-open", S.view === "page" && pg?.kind === "heft");
 	document.body.classList.toggle("anki-view-open", S.view === "anki");
 	document.body.classList.toggle("anki-study-open", S.view === "anki" && S.ankiTab === "study");
+	// Die Lernzeiterfassung reagiert sofort auf Ansichtswechsel. So verschwindet
+	// die Idle-Frage beim Verlassen eines Lernkontexts ohne den nächsten Tick abzuwarten.
+	if (LERNZEIT.contextChanged) LERNZEIT.contextChanged();
 	// Vollbild-Chats vor einem Ansichtswechsel aus dem Dokument nehmen statt sie
 	// durch innerHTML zerstoeren zu lassen. So bleiben Log, Lesestelle und Entwurf.
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);

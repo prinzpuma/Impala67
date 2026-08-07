@@ -2174,7 +2174,7 @@ h3, h4 { text-wrap: balance }
 .deck-feyn { white-space: nowrap }
 /* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
 .heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
-/* ---------- ✦ Wissensgraph v3: ruhiger Skill-Tree ---------- */
+/* ---------- ✦ Wissensgraph v4: Fach → Thema → Skill ---------- */
 .graph-overlay { position: fixed; inset: 0; z-index: var(--z-graph); display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: radial-gradient(circle at 50% -20%, rgb(var(--accent-rgb) / .09), transparent 38%), var(--panel-solid) }
 .graph-head { flex: 0 0 auto; min-height: 64px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 16px; padding: 8px 18px; border-bottom: 1px solid var(--edge-soft); background: rgb(25 25 25 / .88); backdrop-filter: blur(16px) }
 .graph-brand { display: flex; align-items: center; gap: 10px; min-width: 0 }
@@ -2202,7 +2202,12 @@ h3, h4 { text-wrap: balance }
 .graph-lane { width: 250px; min-height: 100%; display: flex; flex-direction: column; border: 1px solid var(--edge-soft); border-radius: var(--radius-xl); background: linear-gradient(180deg, var(--surface), transparent 45%); box-shadow: var(--elev-1) }
 .graph-lane > header { position: sticky; top: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: rgb(31 33 39 / .92); backdrop-filter: blur(12px); font-weight: 700 }
 .graph-lane > header small { color: var(--accent); font-size: var(--text-xs) }
-.graph-levels { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 46px; padding: 26px 18px 30px }
+.graph-topics { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 18px; padding: 18px 12px 22px }
+.graph-topic { position: relative; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: rgb(255 255 255 / .018) }
+.graph-topic > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border-bottom: 1px solid var(--edge-soft); color: var(--text2); font-size: var(--text-xs) }
+.graph-topic > header b { color: var(--text); font-size: var(--text-sm) }
+.graph-topic > header span { color: var(--accent); font-size: var(--text-2xs) }
+.graph-levels { display: flex; flex-direction: column; justify-content: flex-end; gap: 34px; padding: 24px 8px 12px }
 .graph-level { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; position: relative }
 .graph-skill { position: relative; z-index: 3; width: 100%; min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--edge); border-radius: var(--radius-lg); text-align: left; color: var(--text); background: rgb(35 37 43 / .96); box-shadow: 0 8px 22px rgb(0 0 0 / .18); transition: transform var(--motion-base) var(--ease-out), border-color var(--motion-base), opacity var(--motion-fast) }
 .graph-skill:hover { transform: translateY(-2px); border-color: rgb(var(--accent-rgb) / .45) }
@@ -2217,11 +2222,13 @@ h3, h4 { text-wrap: balance }
 .graph-skill.state-building { --skill-color: #d4ae55 }
 .graph-skill.state-fragile { --skill-color: var(--danger) }
 .graph-skill.state-mastered { --skill-color: var(--success) }
+.graph-skill.state-gap { --skill-color: #bd7ce8; border-style: dashed; background: rgb(154 109 215 / .08) }
 .graph-next { position: absolute; right: 8px; top: -10px; padding: 2px 7px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--accent); font-size: var(--text-3xs); font-weight: 800; box-shadow: var(--elev-1) }
 .graph-lines { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none }
 .graph-lines path { fill: none; stroke-linecap: round }
 .graph-lines .prereq { stroke: rgb(150 160 175 / .26); stroke-width: 1.5 }
 .graph-lines .bridge { stroke: rgb(var(--accent-rgb) / .62); stroke-width: 2; stroke-dasharray: 5 7 }
+.graph-lines .bridge.gap { stroke: rgb(189 124 232 / .72); stroke-dasharray: 3 6 }
 .graph-inspector { flex: 0 0 0; width: 0; overflow: hidden auto; border-left: 1px solid transparent; background: rgb(29 30 34 / .97); transition: width var(--motion-slow) var(--ease-out), flex-basis var(--motion-slow) var(--ease-out) }
 .graph-overlay.inspector-open .graph-inspector { flex-basis: 330px; width: 330px; padding: 18px; border-left-color: var(--edge-soft) }
 .graph-inspector h2 { margin: 12px 0 5px; font-size: var(--text-lg) }
@@ -2237,6 +2244,7 @@ h3, h4 { text-wrap: balance }
 .graph-mastery b { font-size: var(--text-md) }
 .graph-mastery span { margin-top: 2px; color: var(--text2); font-size: var(--text-3xs) }
 .graph-learn { width: 100%; min-height: 42px }
+.graph-gap-note { padding: 11px 12px; border: 1px dashed rgb(189 124 232 / .45); border-radius: var(--radius-md); color: #d8b2f2; background: rgb(154 109 215 / .08); font-size: var(--text-xs); line-height: 1.4 }
 .graph-relations { display: flex; flex-wrap: wrap; gap: 6px }
 .graph-relations button { min-height: 30px; padding: 4px 9px; font-size: var(--text-xs) }
 .graph-edit { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--edge-soft) }

@@ -56,7 +56,9 @@ function cluster(items) {
 self.onmessage = (event) => {
 	try {
 		const groups = (event.data.groups || []).map((group) => ({
+			key: group.key,
 			subject: group.subject,
+			topic: group.topic,
 			clusters: cluster(group.items || []),
 		}));
 		self.postMessage({ ok: true, groups });
