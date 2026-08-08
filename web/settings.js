@@ -391,17 +391,17 @@ export function openSettings(section) {
 			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
 	} else if (sec === "sync") {
 		const modeHint = '<p class="hint">PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).</p>';
-		// FIX: Nach einem App-Neustart war S.driveUserEmail leer, obwohl Token/Refresh-Token
-		// lokal noch gültig waren — die Sektion zeigte fälschlich „Mit Google anmelden“ und
-		// sprang erst nach einem Klick auf „Verbunden als …“. Jetzt wird die beim Login
-		// gemerkte E-Mail wiederhergestellt, solange die Drive-Sitzung noch gültig ist.
-		if (!S.driveUserEmail && DRIVE.isConnected && DRIVE.isConnected()) {
-			S.driveUserEmail = localStorage.getItem("impala67_drive_email") || "Google-Konto";
-		}
-		if (S.driveUserEmail) {
+		// Die gemerkte E-Mail bleibt auch nach Token-Ablauf sichtbar. So kann die UI
+		// „Sync pausiert“ anzeigen, statt eine widerrufene Freigabe vorzutäuschen.
+		if (!S.driveUserEmail) S.driveUserEmail = localStorage.getItem("impala67_drive_email") || null;
+		if (S.driveUserEmail && DRIVE.isConnected && DRIVE.isConnected()) {
 			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
 				'<p class="hint">Sync läuft über deinen privaten Google-Drive-App-Speicher.</p>' +
 				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
+		} else if (S.driveUserEmail && ((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId)) {
+			body = '<div class="drive-connected">⏸️ Sync pausiert für <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
+				'<p class="hint">Google verlangt nach Ablauf des Zugriffstokens einen bewussten Klick. Deine bisherige Freigabe bleibt dabei erhalten.</p>' +
+				'<div class="row-btns"><button id="btnDriveSyncSettings">Google-Verbindung erneuern &amp; synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
 		} else if (!S.settings.driveClientId && !(window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID)) {
 			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
 				'<p class="hint">Einmalig: Google Cloud Console → Drive-API aktivieren, OAuth-Client „Webanwendung“ mit <code>' + location.origin + '</code> als autorisierten JavaScript-Ursprung anlegen, Client-ID hier speichern.</p>' +
@@ -543,27 +543,18 @@ function finishDriveSync({ imported, conflicts, conflictDetails }) {
 	U.toast("Sync abgeschlossen — alles aktuell.", "success");
 }
 
-// DRY: Sitzungsprüfung und Sync-Lauf standen wortgleich in beiden Sync-Knöpfen
-// (Einstellungen und Seitenleiste) — zwei Stellen, die auseinanderlaufen konnten.
-// iPad/Safari: Ein abgelaufener Browser-Token kann beim stillen OAuth-Check kurz ein
-// Google-Popup öffnen und sofort wieder schließen. Vor dem Sync daher ausschließlich den
-// lokal bekannten Sitzungsstatus prüfen; abgelaufene Sitzungen führen gezielt zum
-// sichtbaren „Mit Google anmelden“-Button.
-function requireDriveSession() {
-	if (DRIVE.isConnected()) return true;
-	S.driveUserEmail = null;
-	try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
-	U.toast("Google-Sitzung abgelaufen. Bitte einmal erneut anmelden.", "error");
-	openSettings("sync");
-	return false;
-}
-
 // Der Seitenleisten-Knopf enthält ein SVG-Icon, der Einstellungen-Knopf nur Text —
 // innerHTML sichert die Beschriftung in beiden Fällen verlustfrei.
 async function runDriveSync(t, prefix) {
 	t.disabled = true;
 	const old = t.innerHTML;
 	try {
+		if (!DRIVE.isConnected()) {
+			t.textContent = prefix + "Google-Verbindung…";
+			const info = await DRIVE.renewFromUserGesture();
+			S.driveUserEmail = info?.email || S.driveUserEmail || localStorage.getItem("impala67_drive_email") || "Google-Konto";
+			localStorage.setItem("impala67_drive_email", S.driveUserEmail);
+		}
 		finishDriveSync(await DRIVE.sync((st) => { t.textContent = prefix + st; }));
 	} catch (err) {
 		U.toast("Sync fehlgeschlagen: " + err.message, "error");
@@ -573,7 +564,6 @@ async function runDriveSync(t, prefix) {
 }
 
 export async function handleDriveSyncSettings(t) {
-	if (!requireDriveSession()) return;
 	await runDriveSync(t, "");
 }
 
@@ -963,10 +953,8 @@ export async function handleDriveSync(t) {
 		openSettings("sync");
 		return;
 	}
-	// Keinen stillen OAuth-Aufruf aus dem Sync-Button starten: iPadOS zeigt ihn
-	// oft kurz als Popup. Nur mit einem noch lokal gültigen Token synchronisieren;
-	// sonst wird die Anmeldung klar und ausschließlich durch den Login-Button ausgelöst.
-	if (!requireDriveSession()) return;
+	// Dieser Klick ist die von Google geforderte Nutzeraktion: Ist das Token abgelaufen,
+	// wird es hier erneuert und derselbe Ablauf synchronisiert direkt weiter.
 	await runDriveSync(t, "☁️ ");
 }
 

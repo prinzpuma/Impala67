@@ -32,6 +32,7 @@ export const DRIVE = (() => {
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
 	let token = null;
 	let tokenRequestInFlight = null; // Timer + Sync teilen eine OAuth-Anfrage (nie zwei Popups)
+	let expiryNoticeTimer = 0;
 	let syncInFlight = null; // nie zwei Syncs parallel (Sidebar-Button + Einstellungen + Auto)
 	let flushMode = false; // pagehide: Uploads mit keepalive absetzen (überleben das Schließen)
 
@@ -51,8 +52,16 @@ export const DRIVE = (() => {
 		token = data.access_token;
 		LS.setItem("impala67_drive_token", token);
 		LS.setItem("impala67_drive_token_expiry", String(Date.now() + (Number(data.expires_in) || 3600) * 1000 - 60000));
-		renewAttemptedExpiry = 0;
-		scheduleRenew();
+		scheduleExpiryNotice();
+	}
+
+	function scheduleExpiryNotice() {
+		clearTimeout(expiryNoticeTimer);
+		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
+		if (!exp) return;
+		expiryNoticeTimer = setTimeout(() => {
+			if (!validSavedToken()) emitSyncStatus("error", "Anmeldung nötig", "Zum Erneuern einmal synchronisieren");
+		}, Math.max(1000, exp - Date.now()));
 	}
 
 	function getTokenBrowserPopup(interactive) {
@@ -65,7 +74,16 @@ export const DRIVE = (() => {
 			google.accounts.oauth2.initTokenClient({
 				client_id: clientId, scope: SCOPE,
 				callback: (resp) => {
-					if (resp?.access_token) { saveToken(resp); resolve(token); return; }
+					if (resp?.access_token) {
+						const hasScopes = google.accounts.oauth2.hasGrantedAllScopes?.(resp,
+							"https://www.googleapis.com/auth/drive.appdata",
+							"https://www.googleapis.com/auth/userinfo.email") ?? true;
+						if (!hasScopes) {
+							reject(new Error("Google-Drive-Zugriff wurde nicht vollständig freigegeben."));
+							return;
+						}
+						saveToken(resp); resolve(token); return;
+					}
 					reject(new Error(resp?.error_description || resp?.error || "Kein Zugriffstoken erhalten."));
 				},
 				// Ohne diesen Callback blieb die Anmeldung bei geschlossenem oder blockiertem
@@ -98,7 +116,10 @@ export const DRIVE = (() => {
 	async function getToken(interactive) {
 		const saved = validSavedToken();
 		if (saved) return (token = saved);
-		return getTokenBrowser(interactive);
+		// Hintergrund-Syncs dürfen niemals selbst ein Google-Fenster öffnen. Ein
+		// bewusster Sync-Klick erneuert die Sitzung über renewFromUserGesture().
+		if (!interactive) throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
+		return getTokenBrowser(true);
 	}
 
 	async function fetchUserInfo() {
@@ -109,8 +130,9 @@ export const DRIVE = (() => {
 	}
 
 	const login = async () => { await getToken(true); return fetchUserInfo(); }; // Ein-Klick: Token + E-Mail
+	const renewFromUserGesture = async () => { await getTokenBrowser(false); return fetchUserInfo(); };
 	const logout = () => {
-		clearTimeout(renewTimer);
+		clearTimeout(expiryNoticeTimer);
 		token = null;
 		["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k));
 	};
@@ -130,11 +152,7 @@ export const DRIVE = (() => {
 	// fair entschieden, statt dass die falsch gehende Uhr systematisch „gewinnt“.
 	// Unterhalb der Schwelle bleibt alles unangetastet (Netz-Latenz verrauscht kleine Werte).
 	const CLOCK_APPLY_MS = 15000;
-	// refreshed statt "attempt === 0": die stille Token-Erneuerung und der Backoff-Zähler sind
-	// zwei verschiedene Dinge, teilten sich aber einen Zähler. Nach einer einzigen 429-Wieder-
-	// holung war die Erneuerung für diesen Aufruf gesperrt — ein langer Sync starb also genau
-	// dann hart, wenn Drive drosselte UND das Token dabei ablief.
-	async function api(path, opts = {}, attempt = 0, refreshed = false) {
+	async function api(path, opts = {}, attempt = 0) {
 		const t0 = Date.now();
 		const res = await fetch("https://www.googleapis.com" + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
 		const t1 = Date.now();
@@ -149,19 +167,20 @@ export const DRIVE = (() => {
 			clockSkewMs = skewSamples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
 			U.setClockOffset(Math.abs(clockSkewMs) > CLOCK_APPLY_MS ? clockSkewMs : 0);
 		}
-		// Abgelaufenes/entzogenes Token mitten im Sync: EINMAL still erneuern und wieder-
-		// holen statt hart abzubrechen (ein langer Sync kann die Token-Laufzeit überdauern).
-		if (res.status === 401 && !refreshed) {
+		// Kein Popup aus einem Hintergrundlauf: Der nächste bewusste Sync-Klick
+		// erneuert ein abgelaufenes oder entzogenes Token und startet danach neu.
+		if (res.status === 401) {
 			token = null;
 			LS.removeItem("impala67_drive_token");
-			await getToken(false);
-			return api(path, opts, attempt, true);
+			LS.removeItem("impala67_drive_token_expiry");
+			emitSyncStatus("error", "Anmeldung nötig", "Google-Sitzung abgelaufen");
+			throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
 		}
 		// Rate-Limit/Serverfehler: kurzer exponentieller Backoff mit Jitter statt sofortigem
 		// Fehlschlag — Drive drosselt gelegentlich (429) und 5xx sind fast immer transient.
 		if ((res.status === 429 || res.status >= 500) && attempt < 3) {
 			await new Promise((r) => setTimeout(r, (500 << attempt) * (1 + Math.random())));
-			return api(path, opts, attempt + 1, refreshed);
+			return api(path, opts, attempt + 1);
 		}
 		if (!res.ok) throw new Error("Drive-Fehler " + res.status + ": " + (await res.text()).slice(0, 200));
 		return res;
@@ -570,55 +589,9 @@ export const DRIVE = (() => {
 		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
 		if (syncInFlight) return syncInFlight;
-		syncInFlight = withSyncLock(async () => { await ensureFreshToken(); return syncRaw(onStatus); })
+		syncInFlight = withSyncLock(() => syncRaw(onStatus))
 			.finally(() => { syncInFlight = null; });
 		return syncInFlight;
-	}
-
-	// Fünf Minuten vor Ablauf einen neuen Token anfordern. GIS kann dafür kurz ein
-	// Google-Fenster zeigen; das ist gewollt, weil ohne Backend kein Refresh-Token sicher
-	// gehalten werden kann und der automatische Sync Vorrang hat.
-	let renewTimer = 0;
-	let renewAttemptedExpiry = 0;
-	const runScheduledRenew = () => {
-		ensureFreshToken().catch((err) => console.warn("Google-Sitzung konnte nicht erneuert werden:", err));
-	};
-	function scheduleRenew() {
-		clearTimeout(renewTimer);
-		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
-		if (exp) renewTimer = setTimeout(runScheduledRenew, Math.max(1000, exp - 300000 - Date.now()));
-	}
-
-	// Wichtig: Bei nahendem Ablauf direkt GIS fragen. getToken() würde den noch wenige
-	// Minuten gültigen Alt-Token zurückgeben und damit nur so tun, als sei er erneuert worden.
-	async function ensureFreshToken() {
-		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
-		const saved = validSavedToken();
-		if (saved && exp && Date.now() < exp - 300000) return (token = saved);
-		// Wurde das Erneuerungsfenster geschlossen oder blockiert, nicht bei jedem
-		// 3-Minuten-Sync erneut nerven. Der Timer versucht es bei Ablauf genau einmal wieder.
-		if (saved && renewAttemptedExpiry === exp) return (token = saved);
-		renewAttemptedExpiry = exp;
-		try {
-			return await getTokenBrowser(false);
-		} catch (err) {
-			// Scheitert die vorzeitige Erneuerung, darf der Rest der noch gültigen
-			// Minute weiterarbeiten. Nach echtem Ablauf ist die Sitzung dagegen beendet.
-			const fallback = validSavedToken();
-			if (fallback) {
-				clearTimeout(renewTimer);
-				renewTimer = setTimeout(() => {
-					renewAttemptedExpiry = 0;
-					runScheduledRenew();
-				}, Math.max(1000, exp - Date.now()));
-				return (token = fallback);
-			}
-			token = null;
-			LS.removeItem("impala67_drive_token");
-			LS.removeItem("impala67_drive_token_expiry");
-			emitSyncStatus("error", "Anmeldung nötig", err?.message);
-			throw err;
-		}
 	}
 
 	// Nur ein nachweislich gültiger Token bedeutet „verbunden“. Ein abgelaufener
@@ -684,7 +657,10 @@ export const DRIVE = (() => {
 
 	function startAutoSync(onResult) {
 		if (typeof onResult === "function") autoResultHandler = onResult;
-		scheduleRenew(); // auch die aus dem letzten Start übernommene Sitzung wird überwacht
+		scheduleExpiryNotice();
+		if (!isConnected() && LS.getItem("impala67_drive_email")) {
+			emitSyncStatus("error", "Anmeldung nötig", "Zum Erneuern einmal synchronisieren");
+		}
 		if (autoStarted) return autoSync("start");
 		autoStarted = true;
 		// Reine UI-Events (Tab-Wechsel) stoßen keinen Sync an — sie wandern mit dem
@@ -711,5 +687,5 @@ export const DRIVE = (() => {
 		return autoSync("start");
 	}
 
-	return { login, logout, sync, isConnected, startAutoSync };
+	return { login, renewFromUserGesture, logout, sync, isConnected, startAutoSync };
 })();
