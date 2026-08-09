@@ -51,6 +51,9 @@ export const EDITOR = (() => {
 	// keydown-Handler erzeugen sonst doppelte Mutationen, ungleiches Löschtempo
 	// und eine History, die scheinbar zufällig Schritte überspringt.
 	const wiredHosts = new WeakSet();
+	// Doppelte Render-Versuche vermeiden, solange die gemeinsam geladene KaTeX-Engine
+	// noch unterwegs ist. WeakSet räumt entfernte Formel-Elemente automatisch auf.
+	const mathHydrating = new WeakSet();
 	const HISTORY_LIMIT = 200;
 	// Verlaufsspeicher bleibt beschränkt: pro Seite bis HISTORY_LIMIT Schritte, aber nur
 	// für die letzten HISTORY_PAGES besuchten Seiten. Vorher hielt die App jeden
@@ -275,19 +278,29 @@ export const EDITOR = (() => {
 		return { vor: t, nach: "" };
 	}
 
+	// Gemeinsamer Direkt-Renderer für Formelblöcke und Inline-Chips. Wichtig: Ein
+	// Element gilt erst nach erfolgreichem Laden UND Rendern als hydriert.
+	async function hydrateKatex(el, formula, displayMode) {
+		if (!el || el.dataset.hydrated || mathHydrating.has(el) || !formula) return;
+		mathHydrating.add(el);
+		try {
+			if (!(await U.ensureKatex())) return;
+			// Während des Ladens kann die Seite gewechselt oder die Formel ersetzt worden sein.
+			if (!el.isConnected || !host || !host.contains(el)) return;
+			katex.render(formula, el, { throwOnError: false, displayMode: !!displayMode });
+			el.dataset.hydrated = "1";
+			el.dataset.owned = "1";
+		} catch { /* Roh-LaTeX bleibt sichtbar; ein späterer Render darf erneut versuchen */ }
+		finally { mathHydrating.delete(el); }
+	}
+
 	// Formel-Chips nach dem Rendern mit KaTeX hübsch machen (data-md bleibt Quelle).
 	function hydrateInlineMath(root) {
 		(root || host).querySelectorAll(".blk-imath").forEach((el) => {
-			if (el.dataset.hydrated) return;
-			el.dataset.hydrated = "1";
-			// data-owned: ab hier steht KaTeX-DOM im Chip. U.morph würde es sonst beim
-			// nächsten Render gegen den rohen LaTeX-Text zurücktauschen. Eine GEÄNDERTE
-			// Formel hat ein anderes data-key und bekommt ohnehin ein frisches Element.
-			el.dataset.owned = "1";
 			// data-md enthält "$…$" — Delimiter entfernen und direkt mit KaTeX rendern
 			// (renderMathInElement findet im Chip-Text keine Delimiter mehr).
 			const f = String(el.dataset.md || "").replace(/^\$+|\$+$/g, "");
-			try { if (window.katex && f) katex.render(f, el, { throwOnError: false }); } catch { /* Quelltext bleibt sichtbar */ }
+			hydrateKatex(el, f, false);
 		});
 	}
 
@@ -1006,13 +1019,8 @@ export const EDITOR = (() => {
 		// data-key hängt an der Formel: unveränderte Formeln behalten ihr KaTeX-DOM,
 		// geänderte bekommen ein frisches Element und werden hier neu gerendert.
 		host.querySelectorAll(".blk-mathview").forEach((el) => {
-			if (el.dataset.hydrated) return;
 			const f = String(el.dataset.mathsrc || el.textContent || "");
-			el.dataset.hydrated = "1";
-			// data-owned wie beim Inline-Chip: das gerenderte KaTeX-DOM darf U.morph nicht
-			// gegen den Quelltext zurücktauschen.
-			el.dataset.owned = "1";
-			try { if (window.katex && f) katex.render(f, el, { throwOnError: false, displayMode: true }); } catch { /* Roh-LaTeX bleibt sichtbar */ }
+			hydrateKatex(el, f, true);
 		});
 		hydrateInlineMath(host);
 	}

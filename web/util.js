@@ -503,25 +503,40 @@ export const U = {
 		return mathRegex.test(txt);
 	},
 
+	// Eine race-sichere Ladequelle für alle KaTeX-Nutzer. Direkte Renderer
+	// brauchen katex.render(), Markdown-Bereiche zusätzlich renderMathInElement().
+	// Beides wird gemeinsam bereitgestellt, damit kein Bereich mehr vom zufälligen
+	// Ladezeitpunkt eines anderen abhängt.
+	_katexReady: null,
+	async ensureKatex() {
+		if (typeof window === "undefined") return false;
+		if (!U._katexReady) {
+			U._katexReady = (async () => {
+				await U.loadStyle("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css");
+				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js", "katex");
+				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js", "renderMathInElement");
+				return !!(window.katex && window.renderMathInElement);
+			})();
+		}
+		try {
+			return await U._katexReady;
+		} catch (err) {
+			// Nach einem vorübergehenden Netz-/Cachefehler darf ein späterer Render neu versuchen.
+			U._katexReady = null;
+			if (U.toast && !U._katexToastShown) {
+				U._katexToastShown = true;
+				U.toast("Formel-Engine (KaTeX) konnte nicht geladen werden.", "error");
+			}
+			return false;
+		}
+	},
+
 	// LaTeX live rendern: $...$ / $$...$$ / \(...\) / \[...\] in einem DOM-Element.
 	// throwOnError:false, damit unfertige Formeln während des Streamens nicht crashen.
 	async renderMath(el) {
 		if (!el) return;
-		if (!window.renderMathInElement) {
-			if (!U.hasMathDelimiters(el)) return;
-			try {
-				await U.loadStyle("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css");
-				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js", "katex");
-				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js", "renderMathInElement");
-			} catch (err) {
-				if (U.toast && !U._katexToastShown) {
-					U._katexToastShown = true;
-					U.toast("Formel-Engine (KaTeX) konnte nicht geladen werden.", "error");
-				}
-				return;
-			}
-		}
-		if (!window.renderMathInElement) return;
+		if (!U.hasMathDelimiters(el)) return;
+		if (!(await U.ensureKatex())) return;
 		try {
 			renderMathInElement(el, {
 				delimiters: [
