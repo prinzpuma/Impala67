@@ -1054,7 +1054,6 @@ function wireEvents() {
 			return;
 		}
 
-		if (t.dataset.settingsSection) { SETTINGS.openSettings(t.dataset.settingsSection); return; }
 		if (t.dataset.set) { SETTINGS.openSettings(t.dataset.set); return; }
 
 		// Neue Seite in einem Workspace (+ neben dem Workspace-Namen)

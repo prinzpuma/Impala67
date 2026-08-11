@@ -154,10 +154,9 @@ export function field(label, id, value, type) {
 // im Code (KI-Bereich sowie zwei Sync-Bereich-Zweige).
 const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
 
-// Die alte Einzelansicht bleibt als interner Renderer erhalten. Die sichtbare
-// Navigation darunter bündelt sie in sechs verständliche Bereiche, ohne die
-// dynamischen KI-/Controller-/Experimente-Module doppelt zu implementieren.
-const LEGACY_SETTINGS_SECTIONS = [
+// Jeder Bereich bleibt als eigener Settings-Tab sichtbar. Die dynamischen
+// KI-/Controller-/Experimente-Renderer werden dabei unverändert weiterverwendet.
+export const SETTINGS_SECTIONS = [
 	{ id: "ki", label: "KI" },
 	{ id: "home", label: "Home" },
 	{ id: "look", label: "Darstellung" },
@@ -169,40 +168,15 @@ const LEGACY_SETTINGS_SECTIONS = [
 	{ id: "experimente", label: "Experimente" },
 ];
 
-export const SETTINGS_SECTIONS = [
-	{ id: "start", label: "Start & Verhalten", sections: ["home"] },
-	{ id: "look", label: "Darstellung", sections: ["look"] },
-	{ id: "ki", label: "KI", sections: ["ki"] },
-	{ id: "sync", label: "Sync & Dienste", sections: ["sync", "notion"] },
-	{ id: "data", label: "Daten & Backup", sections: ["backup"] },
-	{ id: "app", label: "App & Erweitert", sections: ["update", "controller", "experimente"] },
-];
-
-const SETTINGS_SECTION_ALIASES = Object.freeze({
-	home: "start", backup: "data", notion: "sync", update: "app",
-	controller: "app", experimente: "app",
-});
-
-export function openSettings(section, subsection) {
-	const requested = section || S.settingsSection || "ki";
-	const groupId = SETTINGS_SECTION_ALIASES[requested] || requested;
-	const group = SETTINGS_SECTIONS.find((item) => item.id === groupId) || SETTINGS_SECTIONS[2];
-	const requestedSub = subsection || (!section ? S.settingsSubsection : (LEGACY_SETTINGS_SECTIONS.some((item) => item.id === requested) ? requested : group.sections[0]));
-	S.settingsSection = group.id;
-	S.settingsSubsection = group.sections.includes(requestedSub) ? requestedSub : group.sections[0];
-	const sec = S.settingsSubsection;
+export function openSettings(section) {
+	S.settingsSection = section || S.settingsSection || "ki";
+	const sec = S.settingsSection;
 	const o = U.el("overlay");
 	if (!o) return;
 	o.hidden = false;
 	const nav = SETTINGS_SECTIONS.map((s) =>
-		'<button type="button" class="set-item' + (s.id === group.id ? " active" : "") + '" data-set="' + s.id + '">' + U.esc(s.label) + "</button>"
+		'<button type="button" class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + U.esc(s.label) + "</button>"
 	).join("");
-	const subnav = group.sections.length > 1
-		? '<nav class="settings-subnav" aria-label="' + U.esc(group.label) + '">' + group.sections.map((id) => {
-			const label = (LEGACY_SETTINGS_SECTIONS.find((item) => item.id === id) || {}).label || id;
-			return '<button type="button" class="settings-subtab' + (id === sec ? " active" : "") + '" data-settings-section="' + id + '">' + U.esc(label) + "</button>";
-		}).join("") + "</nav>"
-		: "";
 	let body = "";
 	if (sec === "ki") {
 		const providers = S.settings.aiProviders || [];
@@ -460,15 +434,14 @@ export function openSettings(section, subsection) {
 	// Quelle hinzufügen) baut den Dialog komplett neu auf — der Inhalt sprang dabei jedes Mal
 	// nach ganz oben, man musste nach jedem Klick zurückscrollen. Scrollstand desselben
 	// Bereichs über den Neuaufbau retten; bei einem Bereichswechsel bewusst oben starten.
-	if (sec !== "ki") body = '<div class="settings-content settings-content-' + U.esc(sec) + '">' + body + '</div>';
-	const prevBody = o.querySelector('.settings-modal[data-sec="' + group.id + '"] .settings-body');
+	const prevBody = o.querySelector('.settings-modal[data-sec="' + sec + '"] .settings-body');
 	const keepScroll = prevBody ? prevBody.scrollTop : 0;
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
-	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(group.id) + '">' +
+	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>' + U.esc(group.label) + '</h3>' + subnav + body + "</div></div>";
+		'<div class="settings-body"><h3>' + U.esc(((SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
 	if (keepScroll) {
 		const nb = o.querySelector(".settings-body");
 		if (nb) nb.scrollTop = keepScroll;
