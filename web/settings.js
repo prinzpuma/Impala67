@@ -146,7 +146,7 @@ export function renderNotionJob() {
 
 // Formularfeld-Helper für Einstellungen.
 export function field(label, id, value, type) {
-	return "<div><label for=\"" + id + "\">" + U.esc(label) + "</label>" +
+	return "<div class=\"settings-field\"><label for=\"" + id + "\">" + U.esc(label) + "</label>" +
 		'<input id="' + id + '" type="' + (type || "text") + '" value="' + U.esc(value || "") + '"></div>';
 }
 
@@ -460,6 +460,7 @@ export function openSettings(section, subsection) {
 	// Quelle hinzufügen) baut den Dialog komplett neu auf — der Inhalt sprang dabei jedes Mal
 	// nach ganz oben, man musste nach jedem Klick zurückscrollen. Scrollstand desselben
 	// Bereichs über den Neuaufbau retten; bei einem Bereichswechsel bewusst oben starten.
+	if (sec !== "ki") body = '<div class="settings-content settings-content-' + U.esc(sec) + '">' + body + '</div>';
 	const prevBody = o.querySelector('.settings-modal[data-sec="' + group.id + '"] .settings-body');
 	const keepScroll = prevBody ? prevBody.scrollTop : 0;
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
