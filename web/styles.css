@@ -1560,6 +1560,8 @@ body.reduce-motion .heft-tray { animation: none }
 	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh) }
 	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge) }
 	.set-item { padding: 6px 10px }
+	.settings-card { padding: 10px; }
+	.settings-token-card { align-items: flex-start; }
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
 	.menu-item, .side-foot button { min-height: 44px }
 	.row { min-height: 44px }
@@ -2009,6 +2011,14 @@ button, .tabchip, .row, .deck-row { -webkit-touch-callout: none }
 .bar-label, .study-head, .row .hint, .ai-provider-count { font-variant-numeric: tabular-nums }
 h3, h4 { text-wrap: balance }
 .settings-body h4.danger-label { color: var(--danger) }
+.settings-intro { margin: -6px 0 2px; color: var(--text2); font-size: var(--text-xs); }
+.settings-card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.settings-card + .settings-card { margin-top: 2px; }
+.settings-card-title { margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-sm); }
+.settings-token-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
+.settings-token-card b { font-size: var(--text-sm); }
+.settings-token-card .hint { margin: 3px 0 0; }
+.settings-modal .settings-nav .set-item { width: 100%; border: 0; text-align: left; }
 @media (pointer: coarse) {
 	/* Apple-HIG: ≥44×44px Tippfläche für kleine Bedienelemente; inline sitzende Mini-Knöpfe mind. 40px */
 	.mini { height: 40px; min-width: 40px }

@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v152"; // KaTeX wird appweit race-sicher vor dem Formel-Rendern geladen.
+const CACHE = "impala67-v153"; // Settings-Preview: gruppierte Oberfläche und Token-Sync-Policy.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -53,6 +53,7 @@ const APP_FILES = [
 	"./render.js",
 	"./library.js",
 	"./settings.js",
+	"./settings-sync.js",
 	"./tabs.js",
 	"./search.js",
 	"./shortcuts.js",

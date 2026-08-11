@@ -10,6 +10,7 @@ import { DRIVE } from "./drive.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -153,8 +154,10 @@ export function field(label, id, value, type) {
 // im Code (KI-Bereich sowie zwei Sync-Bereich-Zweige).
 const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
 
-// Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
-export const SETTINGS_SECTIONS = [
+// Die alte Einzelansicht bleibt als interner Renderer erhalten. Die sichtbare
+// Navigation darunter bündelt sie in sechs verständliche Bereiche, ohne die
+// dynamischen KI-/Controller-/Experimente-Module doppelt zu implementieren.
+const LEGACY_SETTINGS_SECTIONS = [
 	{ id: "ki", label: "KI" },
 	{ id: "home", label: "Home" },
 	{ id: "look", label: "Darstellung" },
@@ -166,13 +169,27 @@ export const SETTINGS_SECTIONS = [
 	{ id: "experimente", label: "Experimente" },
 ];
 
-export function openSettings(section) {
+export const SETTINGS_SECTIONS = [
+	{ id: "start", label: "Start & Verhalten", sections: ["home"] },
+	{ id: "look", label: "Darstellung", sections: ["look"] },
+	{ id: "ki", label: "KI", sections: ["ki"] },
+	{ id: "sync", label: "Sync & Dienste", sections: ["sync", "notion"] },
+	{ id: "data", label: "Daten & Backup", sections: ["backup"] },
+	{ id: "app", label: "App & Erweitert", sections: ["update", "controller", "experimente"] },
+];
+
+const SETTINGS_SECTION_ALIASES = Object.freeze({
+	home: "start", backup: "data", notion: "sync", update: "app",
+	controller: "app", experimente: "app",
+});
+
+export function openSettingsLegacy(section) {
 	S.settingsSection = section || S.settingsSection || "ki";
 	const sec = S.settingsSection;
 	const o = U.el("overlay");
 	if (!o) return;
 	o.hidden = false;
-	const nav = SETTINGS_SECTIONS.map((s) =>
+	const nav = LEGACY_SETTINGS_SECTIONS.map((s) =>
 		'<div class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + s.label + "</div>"
 	).join("");
 	let body = "";
@@ -431,7 +448,7 @@ export function openSettings(section) {
 	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>' + U.esc(((SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
+		'<div class="settings-body"><h3>' + U.esc(((LEGACY_SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
 	if (keepScroll) {
 		const nb = o.querySelector(".settings-body");
 		if (nb) nb.scrollTop = keepScroll;
@@ -448,6 +465,84 @@ export function openSettings(section) {
 		// next tick: DOM muss erst im Overlay stehen
 		setTimeout(() => { handleCheckUpdate().catch(() => {}); }, 0);
 	}
+}
+
+function captureLegacySection(section) {
+	const overlay = U.el("overlay");
+	if (!overlay) return "";
+	const previousHtml = overlay.innerHTML;
+	const previousHidden = overlay.hidden;
+	const previousSection = S.settingsSection;
+	openSettingsLegacy(section);
+	const body = overlay.querySelector(".settings-body");
+	const html = body ? body.innerHTML.replace(/^<h3>[\s\S]*?<\/h3>/, "") : "";
+	overlay.innerHTML = previousHtml;
+	overlay.hidden = previousHidden;
+	S.settingsSection = previousSection;
+	return html;
+}
+
+function normalizeSettingsSection(section) {
+	const requested = section || S.settingsSection || "ki";
+	return SETTINGS_SECTION_ALIASES[requested] || requested;
+}
+
+// Neue gemeinsame Oberfläche: alle Funktionen kommen aus den bewährten
+// Bereichsrenderern, werden aber in einer einzigen, kompakten Navigation und
+// mit einheitlichen Karten dargestellt.
+export function openSettings(section) {
+	const groupId = normalizeSettingsSection(section);
+	const group = SETTINGS_SECTIONS.find((item) => item.id === groupId) || SETTINGS_SECTIONS[2];
+	S.settingsSection = group.id;
+	const overlay = U.el("overlay");
+	if (!overlay) return;
+	const nav = SETTINGS_SECTIONS.map((item) =>
+		'<button type="button" class="set-item' + (item.id === group.id ? " active" : "") + '" data-set="' + item.id + '">' + U.esc(item.label) + "</button>"
+	).join("");
+	const cards = group.sections.map((sectionId) => {
+		const legacy = LEGACY_SETTINGS_SECTIONS.find((item) => item.id === sectionId);
+		const html = captureLegacySection(sectionId);
+		const tokenCard = sectionId === "sync"
+			? '<section class="settings-token-card" aria-labelledby="syncSecretsLabel">' +
+				'<div><b id="syncSecretsLabel">Tokens über Drive synchronisieren</b>' +
+				'<p class="hint">' + (SETTINGS_SYNC.allowsSecrets(S.settings)
+					? "Aktiv: KI-Keys und Notion-Token werden auf deine eigenen Geräte übertragen."
+					: "Aus: Tokens bleiben auf diesem Gerät und werden nicht über Drive übertragen.") + '</p></div>' +
+				'<label class="theme-switch" title="Token-Synchronisierung umschalten"><input id="inpSyncSecrets" type="checkbox"' +
+					(SETTINGS_SYNC.allowsSecrets(S.settings) ? " checked" : "") + '><span aria-hidden="true"></span></label></section>'
+			: "";
+		return '<section class="settings-card" data-settings-card="' + sectionId + '">' +
+			(sectionId === group.sections[0] ? "" : '<h4 class="settings-card-title">' + U.esc(legacy?.label || sectionId) + "</h4>") + tokenCard + html + "</section>";
+	}).join("");
+	overlay.hidden = false;
+	overlay.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(group.id) + '">' +
+		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
+		'<div class="settings-nav">' + nav + "</div>" +
+		'<div class="settings-body"><h3>⚙ Einstellungen</h3>' +
+			'<p class="settings-intro">' + U.esc(group.label) + ' · zentral, lokal-first und gerätefreundlich</p>' + cards + "</div></div>";
+	if (group.id === "ki") {
+		renderStatusDot();
+		queueMicrotask(() => loadKiTabContent(S.settingsKiTab || "models"));
+	}
+	if (group.id === "sync") renderNotionJob();
+	if (group.id === "app") setTimeout(() => handleCheckUpdate().catch(() => {}), 0);
+}
+
+export async function handleSyncSecretsToggle(enabled) {
+	const wasEnabled = SETTINGS_SYNC.allowsSecrets(S.settings);
+	if (wasEnabled === enabled) return;
+	await STATE.dispatch("settingsSet", { syncSecrets: enabled });
+	if (enabled) {
+		// Durch den neuen Event-Zeitpunkt wird ein zuvor bewusst zurückgehaltener
+		// lokaler Token-Stand beim nächsten Sync zuverlässig angeboten.
+		await STATE.dispatch("settingsSet", SETTINGS_SYNC.secretSnapshot(S.settings));
+	} else {
+		// Drive bereinigt alte Delta-/Snapshot-Kopien beim nächsten erfolgreichen
+		// manuellen Sync; offline bleibt die lokale Einstellung sofort wirksam.
+		localStorage.setItem("impala67_drive_secret_scrub", "1");
+	}
+	U.toast(enabled ? "Token-Sync aktiviert." : "Token-Sync deaktiviert: Tokens bleiben lokal.", "success");
+	openSettings("sync");
 }
 
 // Einstellungen-Aktionen aus wireEvents:
@@ -1102,6 +1197,7 @@ export const SETTINGS = {
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
 	handleSaveSettings,
+	handleSyncSecretsToggle,
 	handleClearBg,
 	handleResetAll,
 	handleDriveSync,

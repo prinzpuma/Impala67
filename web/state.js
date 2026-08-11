@@ -2,6 +2,7 @@
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
 export const S = {
@@ -28,6 +29,9 @@ export const S = {
 		embedProviderId: "",
 		driveClientId: "100283147644-1ra4er2dc5r85k3mefd521hbm1ek3qpf.apps.googleusercontent.com",
 		customInstructions: "",
+		// Bestehende Installationen bleiben kompatibel: Tokens werden weiterhin
+		// synchronisiert, bis der Nutzer dies bewusst ausschaltet.
+		syncSecrets: true,
 		notionToken: "", // Notion-Integrationstoken für Import + Zwei-Wege-Sync
 		notionPageId: "", // Wurzelseite in Notion, unter der lokale neue Seiten entstehen
 		notionMap: {}, // lokale Seiten-ID → Notion-Seiten-ID (für lokal erstellte Seiten)
@@ -219,11 +223,10 @@ export const STATE = (() => {
 		return { ...DECK_DEFAULTS, ...(all["*"] || {}) };
 	}
 
-	// ---- Zugangsdaten im persönlichen Drive-Sync ----------------------------
-	// Auf ausdrücklichen Wunsch gehören API-Keys, Notion-Token und CORS-Proxy in den
-	// verschlüsselungslosen, aber privaten
-	// appDataFolder des eigenen Google-Kontos. Sie werden daher wie alle anderen
-	// settingsSet-Daten im Event-Log gespeichert und auf andere Geräte repliziert.
+	// ---- Zugangsdaten und optionaler persönlicher Drive-Sync -----------------
+	// API-Keys und Notion-Token bleiben für die Laufzeit lokal verfügbar. Ob ihre
+	// settingsSet-Events über den privaten, unverschlüsselten appDataFolder auf
+	// andere Geräte gelangen, steuert S.settings.syncSecrets.
 	// Die alte localStorage-Ablage bleibt nur als einmalige Migrationsquelle.
 	function loadLegacySecrets() {
 		try { return JSON.parse(localStorage.getItem("impala67.secrets") || localStorage.getItem("notion.secrets") || "{}"); } catch { return {}; }
@@ -783,7 +786,7 @@ export const STATE = (() => {
 				break;
 			}
 			case "settingsSet":
-				Object.assign(S.settings, p);
+				Object.assign(S.settings, SETTINGS_SYNC.mergePatch(S.settings, p));
 				break;
 		}
 	}

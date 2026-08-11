@@ -1586,6 +1586,10 @@ function wireEvents() {
 			SETTINGS.handleSystemThemeToggle(!!e.target.checked);
 			return;
 		}
+		if (e.target.id === "inpSyncSecrets") {
+			await SETTINGS.handleSyncSecretsToggle(!!e.target.checked);
+			return;
+		}
 		if (e.target.id === "pageTitle") {
 			const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 			if (pg && e.target.value.trim()) {

@@ -1,5 +1,6 @@
 "use strict";
 import { U } from "./util.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
 // zeitlich deterministisch; Heft-Striche und Bilder reisen vollständig im Event-Log.
@@ -302,28 +303,20 @@ export const DB = (() => {
 		});
 	}
 
-	// SECURITY: entfernt Klartext-Secrets aus settingsSet-Events. Der Drive-Sync nutzt das
-	// BEWUSST NICHT — API-Keys & Co. sollen übers Event-Log auf die eigenen Geräte replizieren
-	// (appDataFolder = privater App-Speicher im eigenen Konto, siehe state.js). Gedacht für
-	// Exporte, die das eigene Konto verlassen (z.B. geteilte Backups).
+	// SECURITY: Exporte entfernen Klartext-Secrets standardmäßig. Der Drive-Transport
+	// entscheidet zentral über SETTINGS_SYNC, ob Tokens bewusst mitreisen dürfen.
 	function redactSecretsFromEvent(ev) {
-		if (!ev || ev.type !== "settingsSet" || !ev.payload) return ev;
-		const p = { ...ev.payload };
-		let changed = false;
-		for (const k of ["notionToken", "driveDesktopClientSecret"]) if (p[k]) { p[k] = ""; changed = true; }
-		if (Array.isArray(p.aiProviders) && p.aiProviders.some((pr) => pr?.key)) {
-			p.aiProviders = p.aiProviders.map((pr) => (pr?.key ? { ...pr, key: "" } : pr));
-			changed = true;
-		}
-		return changed ? { ...ev, payload: p } : ev;
+		return SETTINGS_SYNC.sanitizeEvent(ev, false) || null;
+	}
+
+	function filterEventsForSync(events, includeSecrets = true) {
+		return SETTINGS_SYNC.sanitizeEvents(events, includeSecrets);
 	}
 
 	// includeBlobs=false: PERF für den Drive-Snapshot (Blobs würden sofort wieder verworfen).
 	// SECURITY (secure by default): Secrets werden standardmäßig entfernt — Exporte können
-	// das eigene Konto verlassen (geteilte Backups, Bug-Reports). NUR der Drive-Sync opts
-	// mit redactSecrets:false aus, weil er Keys bewusst über den privaten appDataFolder
-	// aufs eigene Konto repliziert (siehe state.js). Vorher war Redaction opt-in — ein
-	// vergessenes Flag exportierte Klartext-Keys.
+	// das eigene Konto verlassen (geteilte Backups, Bug-Reports). Der Drive-Sync setzt
+	// redactSecrets nur dann auf false, wenn der Nutzer die Token-Synchronisierung erlaubt.
 	// _remote ("kam per Drive herein") und _derived ("selbst erzeugter Merge") sind GERÄTE-lokale
 	// Marken: sie steuern hier den Upload-Filter und die Konflikt-Erkennung. Mitexportiert gelten
 	// die Events auf dem Zielgerät als „schon gesynct“ — ein per Backup eingespielter Stand würde
@@ -333,7 +326,7 @@ export const DB = (() => {
 
 	async function exportAll(opts = {}) {
 		let events = compactEvents(await allEvents()).map(stripLocalFlags);
-		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent);
+		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent).filter(Boolean);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
 			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
@@ -482,6 +475,9 @@ export const DB = (() => {
 		});
 		const malformed = normalized.filter((ev) => !ev).length;
 		if (malformed) console.warn("[importAll] " + malformed + " unbrauchbare Event(s) übersprungen (fehlende id/t/type).");
+		const transportEvents = opts.remote && opts.allowSecrets === false
+			? SETTINGS_SYNC.sanitizeEvents(normalized, false)
+			: normalized.filter(Boolean);
 		// [A1] heftOps stand global in DROPPABLE_TYPES — mit derselben Begründung, die weiter oben für
 		// pageUpdate ausdrücklich ABGELEHNT wird. Der Unterschied ist entscheidend: eine verworfene
 		// pageUpdate kostet nur Platz (Replay ist LWW über t), ein verworfener Strich ist WEG. Ein Gerät,
@@ -503,7 +499,7 @@ export const DB = (() => {
 			}
 			return DROPPABLE_TYPES.has(ev.type);
 		};
-		const fresh = normalized.filter((ev) => ev && !existing.has(ev.id) && !droppedByFloor(ev));
+		const fresh = transportEvents.filter((ev) => !existing.has(ev.id) && !droppedByFloor(ev));
 		// Nur echte Drive-Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
 		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
 		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
@@ -663,5 +659,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();
