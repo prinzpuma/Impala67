@@ -340,13 +340,14 @@ export const EDITOR = (() => {
 				continue;
 			}
 
-			// Formel-Block: $$…$$ darf einzeilig sein, aber auch direkt nach
-			// dem öffnenden Delimiter beginnen (z. B. $$\\begin{pmatrix} …).
-			const mathStart = line.trim().match(/^\$\$(.*)$/);
+			// Formel-Block: $$…$$ und \\[…\\] dürfen einzeilig sein, aber auch direkt
+			// nach dem öffnenden Delimiter beginnen (z. B. $$\\begin{pmatrix} …).
+			const mathStart = line.trim().match(/^(\$\$|\\\[)(.*)$/);
 			if (mathStart) {
 				const buf = [];
-				const first = mathStart[1];
-				const firstEnd = first.indexOf("$$");
+				const endToken = mathStart[1] === "$$" ? "$$" : "\\]";
+				const first = mathStart[2];
+				const firstEnd = first.indexOf(endToken);
 				if (firstEnd >= 0) {
 					buf.push(first.slice(0, firstEnd));
 					i++;
@@ -354,7 +355,7 @@ export const EDITOR = (() => {
 					buf.push(first);
 					i++;
 					while (i < lines.length) {
-						const end = lines[i].indexOf("$$");
+						const end = lines[i].indexOf(endToken);
 						if (end >= 0) {
 							buf.push(lines[i].slice(0, end));
 							i++;
@@ -501,7 +502,7 @@ export const EDITOR = (() => {
 			const buf = [line];
 			i++;
 			while (i < lines.length && lines[i].trim() &&
-				!/^(#{1,3}\s|>|\s*([-*]|\d+[.)])\s|\s*\||\s*---+\s*$|:::|<details\b|\$\$)/.test(lines[i]) &&
+				!/^(#{1,3}\s|>|\s*([-*]|\d+[.)])\s|\s*\||\s*---+\s*$|:::|<details\b|\$\$|\\\[)/.test(lines[i]) &&
 				!lines[i].startsWith(FENCE) && !COLOR_META_RE.test(lines[i].trim()) && !IMAGE_RE.test(lines[i])) {
 				buf.push(lines[i]); i++;
 			}
@@ -2339,7 +2340,7 @@ export const EDITOR = (() => {
 			const text = e.clipboardData.getData("text/plain") || "";
 			if (!text) return;
 			// Mehrzeiliger Markdown-Text in einen normalen Textblock → als Blöcke einfügen
-			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*]\s|\d+[.)]\s|>|\|)/m.test(text) && text.includes("\n")) {
+			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*]\s|\d+[.)]\s|>|\||\$\$|\\\[)/m.test(text) && text.includes("\n")) {
 				const c = findContext(field.dataset.btext);
 				if (c && !c.parent) {
 					const pasted = parse(text);
