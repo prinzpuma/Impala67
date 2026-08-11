@@ -202,13 +202,16 @@ export const EDITOR = (() => {
 	const tag = (name, inner, attrs) => LT + name + (attrs || "") + ">" + inner + LT + "/" + name + ">";
 
 	// Rendert den Inline-Markdown eines Textblocks als echten Rich-Text.
-	// Inline-Formeln ($…$) werden zu nicht-editierbaren Chips mit data-md —
+	// Inline-Formeln ($…$ und \\(…\\)) werden zu nicht-editierbaren Chips mit data-md —
 	// KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
 	function inlineHtml(text) {
 		return esc(text)
 			// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches
 			// KaTeX); bleibt sie gleich, bleibt der gerenderte Chip unangetastet stehen.
-			.replace(/\$([^$\n]+)\$/g, (_, f) => LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + esc(f) + '" data-md="$' + esc(f) + '$" title="Formel bearbeiten">' + esc(f) + LT + "/span>")
+			.replace(/\\\((.+?)\\\)|\$([^$\n]+)\$/g, (md, paren, dollar) => {
+				const f = paren == null ? dollar : paren;
+				return LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + f + '" data-md="' + md + '" title="Formel bearbeiten">' + f + LT + "/span>";
+			})
 			.replace(/\{(bg-)?(gray|red|orange|yellow|green|blue|purple|pink)\}([\s\S]*?)\{\/\}/g,
 				(_, bg, color, v) => tag("span", v, ' class="' + (bg ? "hl-" : "c-") + color + '"'))
 			.replace(/==([^=\n]+)==/g, (_, v) => tag("mark", v))
@@ -297,9 +300,10 @@ export const EDITOR = (() => {
 	// Formel-Chips nach dem Rendern mit KaTeX hübsch machen (data-md bleibt Quelle).
 	function hydrateInlineMath(root) {
 		(root || host).querySelectorAll(".blk-imath").forEach((el) => {
-			// data-md enthält "$…$" — Delimiter entfernen und direkt mit KaTeX rendern
+			// data-md enthält "$…$" oder "\\(…\\)" — Delimiter entfernen und direkt rendern
 			// (renderMathInElement findet im Chip-Text keine Delimiter mehr).
-			const f = String(el.dataset.md || "").replace(/^\$+|\$+$/g, "");
+			const md = String(el.dataset.md || "");
+			const f = md.startsWith("\\(") && md.endsWith("\\)") ? md.slice(2, -2) : md.replace(/^\$+|\$+$/g, "");
 			hydrateKatex(el, f, false);
 		});
 	}
@@ -1527,7 +1531,7 @@ export const EDITOR = (() => {
 		// Inline-Markdown sofort hübsch rendern, sobald ein Muster VOLLSTÄNDIG ist
 		// (z.B. zweiter Stern von **fett** getippt) — Feld neu rendern + Caret halten.
 		if (e && /[*\x60~=$)\/}]/.test(e.data || "") &&
-			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|\$[^$\n]+\$|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
+			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|\$[^$\n]+\$|\\\(.+?\\\)|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
 			// Der Caret muss in SICHTBAREN Zeichen gesetzt werden: nach dem Rendern sind die
 			// Markdown-Zeichen (** **, == ==, $…$) verschwunden. Mit dem rohen Markdown-Offset
 			// sprang der Caret um genau diese Zeichen zu weit nach rechts, sobald hinter der
