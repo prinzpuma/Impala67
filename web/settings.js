@@ -183,15 +183,26 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
 	controller: "app", experimente: "app",
 });
 
-export function openSettingsLegacy(section) {
-	S.settingsSection = section || S.settingsSection || "ki";
-	const sec = S.settingsSection;
+export function openSettings(section, subsection) {
+	const requested = section || S.settingsSection || "ki";
+	const groupId = SETTINGS_SECTION_ALIASES[requested] || requested;
+	const group = SETTINGS_SECTIONS.find((item) => item.id === groupId) || SETTINGS_SECTIONS[2];
+	const requestedSub = subsection || (!section ? S.settingsSubsection : (LEGACY_SETTINGS_SECTIONS.some((item) => item.id === requested) ? requested : group.sections[0]));
+	S.settingsSection = group.id;
+	S.settingsSubsection = group.sections.includes(requestedSub) ? requestedSub : group.sections[0];
+	const sec = S.settingsSubsection;
 	const o = U.el("overlay");
 	if (!o) return;
 	o.hidden = false;
-	const nav = LEGACY_SETTINGS_SECTIONS.map((s) =>
-		'<div class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + s.label + "</div>"
+	const nav = SETTINGS_SECTIONS.map((s) =>
+		'<button type="button" class="set-item' + (s.id === group.id ? " active" : "") + '" data-set="' + s.id + '">' + U.esc(s.label) + "</button>"
 	).join("");
+	const subnav = group.sections.length > 1
+		? '<nav class="settings-subnav" aria-label="' + U.esc(group.label) + '">' + group.sections.map((id) => {
+			const label = (LEGACY_SETTINGS_SECTIONS.find((item) => item.id === id) || {}).label || id;
+			return '<button type="button" class="settings-subtab' + (id === sec ? " active" : "") + '" data-settings-section="' + id + '">' + U.esc(label) + "</button>";
+		}).join("") + "</nav>"
+		: "";
 	let body = "";
 	if (sec === "ki") {
 		const providers = S.settings.aiProviders || [];
@@ -392,6 +403,7 @@ export function openSettingsLegacy(section) {
 			'<p class="hint">Experimente-Modul (experimente.js) nicht geladen.</p>';
 	} else if (sec === "backup") {
 		body = '<p class="hint">Backup als JSON-Datei (Event-Log + PDFs) — ein Import wird konfliktfrei zusammengeführt.</p>' +
+			'<p class="hint"><b>Preview:</b> Exportiere in der normalen App und importiere die Datei hier, wenn du deine Seiten und geöffneten Tabs zum Testen übernehmen möchtest. Tokens werden beim normalen Export nicht mitgenommen.</p>' +
 			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
 			// Lern-Telemetrie: Rohdaten-Export für eigene Auswertungen. Der Klick auf
 			// #btnTeleExport wird zentral in telemetrie.js behandelt (Capture-Listener) —
@@ -427,6 +439,13 @@ export function openSettingsLegacy(section) {
 			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
 				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
 		}
+		body = '<section class="settings-token-card" aria-labelledby="syncSecretsLabel">' +
+			'<div><b id="syncSecretsLabel">Tokens über Drive synchronisieren</b>' +
+			'<p class="hint">' + (SETTINGS_SYNC.allowsSecrets(S.settings)
+				? "Aktiv: KI-Keys und Notion-Token werden auf deine eigenen Geräte übertragen."
+				: "Aus: Tokens bleiben auf diesem Gerät und werden nicht über Drive übertragen.") + '</p></div>' +
+			'<label class="theme-switch" title="Token-Synchronisierung umschalten"><input id="inpSyncSecrets" type="checkbox"' +
+				(SETTINGS_SYNC.allowsSecrets(S.settings) ? " checked" : "") + '><span aria-hidden="true"></span></label></section>' + body;
 	} else if (sec === "update") {
 		const ver = (typeof window.getAppVersion === "function" ? window.getAppVersion() : null)
 			|| window.APP_VERSION || "unbekannt";
@@ -441,14 +460,14 @@ export function openSettingsLegacy(section) {
 	// Quelle hinzufügen) baut den Dialog komplett neu auf — der Inhalt sprang dabei jedes Mal
 	// nach ganz oben, man musste nach jedem Klick zurückscrollen. Scrollstand desselben
 	// Bereichs über den Neuaufbau retten; bei einem Bereichswechsel bewusst oben starten.
-	const prevBody = o.querySelector('.settings-modal[data-sec="' + sec + '"] .settings-body');
+	const prevBody = o.querySelector('.settings-modal[data-sec="' + group.id + '"] .settings-body');
 	const keepScroll = prevBody ? prevBody.scrollTop : 0;
 	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
 	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
-	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
+	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(group.id) + '">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>' + U.esc(((LEGACY_SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
+		'<div class="settings-body"><h3>' + U.esc(group.label) + '</h3>' + subnav + body + "</div></div>";
 	if (keepScroll) {
 		const nb = o.querySelector(".settings-body");
 		if (nb) nb.scrollTop = keepScroll;
@@ -465,67 +484,6 @@ export function openSettingsLegacy(section) {
 		// next tick: DOM muss erst im Overlay stehen
 		setTimeout(() => { handleCheckUpdate().catch(() => {}); }, 0);
 	}
-}
-
-function captureLegacySection(section) {
-	const overlay = U.el("overlay");
-	if (!overlay) return "";
-	const previousHtml = overlay.innerHTML;
-	const previousHidden = overlay.hidden;
-	const previousSection = S.settingsSection;
-	openSettingsLegacy(section);
-	const body = overlay.querySelector(".settings-body");
-	const html = body ? body.innerHTML.replace(/^<h3>[\s\S]*?<\/h3>/, "") : "";
-	overlay.innerHTML = previousHtml;
-	overlay.hidden = previousHidden;
-	S.settingsSection = previousSection;
-	return html;
-}
-
-function normalizeSettingsSection(section) {
-	const requested = section || S.settingsSection || "ki";
-	return SETTINGS_SECTION_ALIASES[requested] || requested;
-}
-
-// Neue gemeinsame Oberfläche: alle Funktionen kommen aus den bewährten
-// Bereichsrenderern, werden aber in einer einzigen, kompakten Navigation und
-// mit einheitlichen Karten dargestellt.
-export function openSettings(section) {
-	const groupId = normalizeSettingsSection(section);
-	const group = SETTINGS_SECTIONS.find((item) => item.id === groupId) || SETTINGS_SECTIONS[2];
-	S.settingsSection = group.id;
-	const overlay = U.el("overlay");
-	if (!overlay) return;
-	const nav = SETTINGS_SECTIONS.map((item) =>
-		'<button type="button" class="set-item' + (item.id === group.id ? " active" : "") + '" data-set="' + item.id + '">' + U.esc(item.label) + "</button>"
-	).join("");
-	const cards = group.sections.map((sectionId) => {
-		const legacy = LEGACY_SETTINGS_SECTIONS.find((item) => item.id === sectionId);
-		const html = captureLegacySection(sectionId);
-		const tokenCard = sectionId === "sync"
-			? '<section class="settings-token-card" aria-labelledby="syncSecretsLabel">' +
-				'<div><b id="syncSecretsLabel">Tokens über Drive synchronisieren</b>' +
-				'<p class="hint">' + (SETTINGS_SYNC.allowsSecrets(S.settings)
-					? "Aktiv: KI-Keys und Notion-Token werden auf deine eigenen Geräte übertragen."
-					: "Aus: Tokens bleiben auf diesem Gerät und werden nicht über Drive übertragen.") + '</p></div>' +
-				'<label class="theme-switch" title="Token-Synchronisierung umschalten"><input id="inpSyncSecrets" type="checkbox"' +
-					(SETTINGS_SYNC.allowsSecrets(S.settings) ? " checked" : "") + '><span aria-hidden="true"></span></label></section>'
-			: "";
-		return '<section class="settings-card" data-settings-card="' + sectionId + '">' +
-			(sectionId === group.sections[0] ? "" : '<h4 class="settings-card-title">' + U.esc(legacy?.label || sectionId) + "</h4>") + tokenCard + html + "</section>";
-	}).join("");
-	overlay.hidden = false;
-	overlay.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(group.id) + '">' +
-		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>⚙ Einstellungen</h3>' +
-			'<p class="settings-intro">' + U.esc(group.label) + ' · zentral, lokal-first und gerätefreundlich</p>' + cards + "</div></div>";
-	if (group.id === "ki") {
-		renderStatusDot();
-		queueMicrotask(() => loadKiTabContent(S.settingsKiTab || "models"));
-	}
-	if (group.id === "sync") renderNotionJob();
-	if (group.id === "app") setTimeout(() => handleCheckUpdate().catch(() => {}), 0);
 }
 
 export async function handleSyncSecretsToggle(enabled) {

@@ -36,7 +36,7 @@ const deadzone = () => Math.min(0.9, Math.max(0.2, Number(get(LS.dead, "0.5")) |
 const pads = () => (navigator.getGamepads ? Array.from(navigator.getGamepads()) : []).filter(Boolean);
 const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 const click = (sel) => { const el = document.querySelector(sel); if (el) el.click(); return !!el; };
-const reopen = () => { if (window.SETTINGS && (S.settingsSection === "controller" || S.settingsSection === "app")) window.SETTINGS.openSettings("app"); };
+const reopen = () => { if (window.SETTINGS && S.settingsSection === "app" && S.settingsSubsection === "controller") window.SETTINGS.openSettings("controller"); };
 
 // ---------- Aktionen: Label · Standardtaste (Standard-Mapping) · Ausführung ----------
 // grade-Aktionen brauchen keine eigene run(): sie klicken den passenden

@@ -555,7 +555,7 @@ body.is-phone #btnAiFab { display: none }
 .modal-x { position: absolute; top: 10px; right: 10px; z-index: 2; min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center }
 .modal-x:hover { background: var(--surface-active); color: var(--text) }
 .settings-nav { width: 180px; border-right: 1px solid var(--edge); padding: 16px 8px; display: flex; flex-direction: column; gap: 4px; background: var(--surface) }
-.set-item { padding: 8px 10px; border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-base); color: var(--text2) }
+.set-item { width: 100%; padding: 8px 10px; border: 0; border-radius: var(--radius-md); cursor: pointer; background: transparent; text-align: left; font: inherit; font-size: var(--text-base); color: var(--text2) }
 .set-item:hover { background: var(--edge-soft) }
 .set-item.active { background: var(--accent-soft); color: var(--accent) }
 .settings-body { flex: 1; min-width: 0; min-height: 0; padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto }
@@ -1560,7 +1560,6 @@ body.reduce-motion .heft-tray { animation: none }
 	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh) }
 	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge) }
 	.set-item { padding: 6px 10px }
-	.settings-card { padding: 10px; }
 	.settings-token-card { align-items: flex-start; }
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
 	.menu-item, .side-foot button { min-height: 44px }
@@ -2011,14 +2010,12 @@ button, .tabchip, .row, .deck-row { -webkit-touch-callout: none }
 .bar-label, .study-head, .row .hint, .ai-provider-count { font-variant-numeric: tabular-nums }
 h3, h4 { text-wrap: balance }
 .settings-body h4.danger-label { color: var(--danger) }
-.settings-intro { margin: -6px 0 2px; color: var(--text2); font-size: var(--text-xs); }
-.settings-card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle); }
-.settings-card + .settings-card { margin-top: 2px; }
-.settings-card-title { margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-sm); }
+.settings-subnav { display: flex; gap: 6px; margin: -4px 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); overflow-x: auto; }
+.settings-subtab { min-height: 30px; padding: 5px 10px; border: 1px solid var(--edge-soft); border-radius: var(--radius-pill); background: var(--surface-subtle); color: var(--text2); font-size: var(--text-xs); white-space: nowrap; }
+.settings-subtab.active { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
 .settings-token-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
 .settings-token-card b { font-size: var(--text-sm); }
 .settings-token-card .hint { margin: 3px 0 0; }
-.settings-modal .settings-nav .set-item { width: 100%; border: 0; text-align: left; }
 @media (pointer: coarse) {
 	/* Apple-HIG: ≥44×44px Tippfläche für kleine Bedienelemente; inline sitzende Mini-Knöpfe mind. 40px */
 	.mini { height: 40px; min-width: 40px }
