@@ -534,7 +534,6 @@ function wireEvents() {
 
 		// Darstellung: dieselben zentralen Optionen steuern alle Komponenten über CSS-Tokens.
 		if (t.dataset.accent) { SETTINGS.handleAppearanceSelect("accent", t.dataset.accent); return; }
-		if (t.dataset.dashtoggle) { SETTINGS.handleDashboardToggle(t.dataset.dashtoggle); return; }
 		if (t.dataset.dashmove) {
 			const [id, direction] = t.dataset.dashmove.split(":");
 			SETTINGS.handleDashboardMove(id, Number(direction));
@@ -755,7 +754,7 @@ function wireEvents() {
 
 		// KI-Einstellungen: horizontaler Unter-Tab (Modelle | Quellen | Mehr)
 		if (t.dataset.aitab) {
-			SETTINGS.switchKiTab(t.dataset.aitab);
+			await SETTINGS.switchKiTab(t.dataset.aitab);
 			return;
 		}
 
@@ -1054,7 +1053,7 @@ function wireEvents() {
 			return;
 		}
 
-		if (t.dataset.set) { SETTINGS.openSettings(t.dataset.set); return; }
+		if (t.dataset.set) { await SETTINGS.navigateSettings(t.dataset.set); return; }
 
 		// Neue Seite in einem Workspace (+ neben dem Workspace-Namen)
 		if (t.dataset.newpage) { await newPageFlow(t.dataset.newpage, null); return; }
@@ -1444,6 +1443,9 @@ function wireEvents() {
 			case "btnSaveSettings":
 				await SETTINGS.handleSaveSettings();
 				break;
+			case "btnDiscardSettings":
+				SETTINGS.discardSettingsDraft();
+				break;
 			case "btnModelMenu":
 			case "btnModelChipFull":
 				await CHAT_FULLSCREEN.handleModelMenuToggle(t);
@@ -1469,6 +1471,7 @@ function wireEvents() {
 			case "btnClearBg":
 				await SETTINGS.handleClearBg();
 				break;
+			case "btnCloseSettings": await SETTINGS.requestCloseSettings(); break;
 			case "btnCloseOverlay": closeOverlay(); break;
 			case "btnAnki": openAnki(); break;
 			case "btnReview":
@@ -1525,6 +1528,9 @@ function wireEvents() {
 			case "btnThemeLight":
 				SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");
 				break;
+			case "btnThemeSystem":
+				SETTINGS.handleSystemThemeToggle(true);
+				break;
 			case "btnImport": $("fileImport").click(); break;
 			case "btnOpenPdf":
 				S.topMenu = null; // sonst zeichnet render() das offene ⋯-Menü sofort wieder
@@ -1563,6 +1569,8 @@ function wireEvents() {
 			S.modelQuery = e.target.value;
 			SETTINGS.paintSettingsModels();
 		}
+		if (e.target.id === "settingsSearch") SETTINGS.updateSettingsSearch(e.target.value);
+		if (e.target.matches?.("[data-settings-explicit]")) SETTINGS.refreshSettingsDirtyState();
 		// Karten-Browser: live suchen (debounced), Fokus + Cursorposition erhalten
 		if (e.target.id === "ankiSearch") {
 			const pos = e.target.selectionStart;
@@ -1588,6 +1596,36 @@ function wireEvents() {
 		}
 		if (e.target.id === "inpSyncSecrets") {
 			await SETTINGS.handleSyncSecretsToggle(!!e.target.checked);
+			return;
+		}
+		if (e.target.dataset?.dashtoggle) {
+			SETTINGS.handleDashboardToggle(e.target.dataset.dashtoggle);
+			return;
+		}
+		if (e.target.id === "inpReduceMotion") {
+			SETTINGS.handleAppearanceSelect("motion", e.target.checked ? "reduced" : "full");
+			return;
+		}
+		if (e.target.id === "inpOverlearn") {
+			SETTINGS.handleAppearanceSelect("overlearn", e.target.checked ? "on" : "off");
+			return;
+		}
+		if (e.target.id === "inpConfidence") {
+			SETTINGS.handleAppearanceSelect("confidence", e.target.checked ? "on" : "off");
+			return;
+		}
+		if (e.target.id === "inpTelemetry") {
+			SETTINGS.handleAppearanceSelect("telemetry", e.target.checked ? "on" : "off");
+			return;
+		}
+		if (e.target.id === "inpAlwaysTools") {
+			await STATE.dispatch("settingsSet", { alwaysSendTools: !!e.target.checked });
+			return;
+		}
+		if (e.target.id === "inpEmbed") {
+			const [embedProviderId = "", ...modelParts] = e.target.value.split("::");
+			await STATE.dispatch("settingsSet", { embedProviderId, embedModel: modelParts.join("::") });
+			RAG.reindexStale();
 			return;
 		}
 		if (e.target.id === "pageTitle") {

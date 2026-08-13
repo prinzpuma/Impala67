@@ -1,5 +1,5 @@
 @echo off
-echo Starte die isolierte Settings-Preview auf Port 4177...
+echo Starte die isolierte Settings-Preview auf Port 4257...
 cd /d "%~dp0web"
-start "" http://127.0.0.1:4177/
-python -m http.server 4177
+start "" http://127.0.0.1:4257/
+node ..\scripts\preview-server.mjs . 4257

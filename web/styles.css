@@ -550,18 +550,9 @@ body.is-phone #btnAiFab { display: none }
 .home { padding: 28px 32px; overflow-y: auto }
 .home h1 { margin-bottom: 4px }
 .home h3 { margin: 22px 0 10px; color: var(--text2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.5px }
-.settings-modal { flex-direction: row; gap: 0; padding: 0; width: min(720px, 94vw); height: min(520px, 84dvh); max-height: 84dvh; overflow: hidden; position: relative; align-items: stretch }
 /* ✕ oben rechts (wie in Notion) statt Schließen-Button unten */
 .modal-x { position: absolute; top: 10px; right: 10px; z-index: 2; min-height: 0; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center }
 .modal-x:hover { background: var(--surface-active); color: var(--text) }
-.settings-nav { width: 180px; border-right: 1px solid var(--edge); padding: 16px 8px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); overflow-y: auto }
-.set-item { width: 100%; padding: 8px 10px; border: 0; border-radius: var(--radius-md); cursor: pointer; background: transparent; text-align: left; font: inherit; font-size: var(--text-base); color: var(--text2) }
-.set-item:hover { background: var(--edge-soft) }
-.set-item.active { background: var(--accent-soft); color: var(--accent) }
-.settings-body { flex: 1; min-width: 0; min-height: 0; padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto }
-.settings-field { display: grid; gap: 6px; min-width: 0; }
-.settings-field label { color: var(--text2); font-size: var(--text-sm); line-height: 1.35; }
-.settings-field input, .settings-field textarea, .settings-field select { width: 100%; box-sizing: border-box; }
 /* == Status, Split-Editor, PDF, Kartenmanager == */
 /* .dot / .ai-status-chip: siehe „KI-Status-Pille“ weiter oben —… */
 .mode-btns { display: flex; border: 1px solid var(--edge); border-radius: var(--radius-md); overflow: hidden }
@@ -829,13 +820,10 @@ h3.blk-h { font-size: 1.12em }
    wird hier eingetragen — dann stimmen Farbe und Hover automatisch überein. */
 .is-primary, button.primary, .card-editor .modal-actions .primary, #chatForm button[type="submit"], .chat-form-full button[type="submit"],
 .deck-study, .anki-new summary, .heft-corner.heft-chat, .blk-mathok,
-.settings-body #btnSaveSettings, .settings-body #btnDriveLogin,
 /* ♻️ Aufdeck-Knopf raus aus der Primär-Liste (29. Juli): identischer Selektor bei „Lern-Bühne" setzt Farbe/Gewicht ohnehin neu — war doppelt gepflegt. */
-.ai-settings .modal-actions button { background: var(--accent); color: var(--on-accent); font-weight: 650 }
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini) { background: var(--accent); color: var(--on-accent); font-weight: 650 }
 .is-primary:hover:not(:disabled), button.primary:hover:not(:disabled), #chatForm button[type="submit"]:hover:not(:disabled), .chat-form-full button[type="submit"]:hover:not(:disabled),
 .deck-study:hover:not(:disabled), .anki-new summary:hover, .heft-corner.heft-chat:hover, .blk-mathok:hover:not(:disabled),
-.settings-body #btnSaveSettings:hover:not(:disabled), .settings-body #btnDriveLogin:hover:not(:disabled),
-.ai-settings .modal-actions button:hover:not(:disabled),
 .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { filter: brightness(1.08) }
 /* == Anki-Bereich: Stapel, Browser, Statistik, Lernen == */
 /* ♻️ Nur noch, was hier wirklich gilt: max-width/gap kommen aus „Stapel-Übersicht v2". */
@@ -966,22 +954,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 @media (prefers-reduced-motion: reduce) {
 	*, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important }
 }
-/* Darstellungseinstellungen */
-.settings-body h4 { margin-top: 16px; margin-bottom: 8px; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .08em; color: var(--text2); font-weight: 600 }
-.accent-picker { display: flex; gap: 10px; padding: 4px 0 }
-.accent-swatch { width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: currentColor; color: var(--text2) }
-/* BUGFIX Farbwechsel: die vier Buttons hatten nie eine eigene Fü… */
-/* DRY (Feinschliff v11b): Füllung = currentColor — je Swatch nur noch EINE Farbangabe; der Auswahl-Ring (.active) nutzt dieselbe Quelle */
-.accent-swatch.accent-blue { color: #5e9fe8 }
-.accent-swatch.accent-violet { color: #a78bfa }
-.accent-swatch.accent-green { color: #72bc8f }
-.accent-swatch.accent-orange { color: #de9255 }
-.accent-swatch.active { box-shadow: 0 0 0 2px var(--menu-bg), 0 0 0 4px currentColor }
-.dashboard-settings { display: flex; flex-direction: column; gap: 6px }
-.dashboard-setting-row { display: grid; grid-template-columns: 32px 1fr 32px 32px; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint) }
-.dashboard-setting-row button { min-height: 28px; padding: 2px }
-.dashboard-setting-row .dash-visible { color: var(--success) }
-.dashboard-add { margin-top: 4px; background: transparent; border: 1px dashed var(--edge); color: var(--text2) }
 /* Persönliches Home — schlank, ohne Widget-Wand und ohne Deko-Kr… */
 /* 🧭 FIX 18.7 v2: Home scrollt volle Breite, Scrollbar am rechten Rand (vorher war 720px-Spalte selbst der Scroller) */
 /* 🏠 FIX 18.7 v3: Home erzwingt echte 1-Spalten-Anordnung; Kacheln/Heute-Pillen nie neben Hero/Bereichen */
@@ -1219,9 +1191,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 @media (max-width: 600px) {
 	#overlay { place-items: end center }
 	.modal { width: 100%; max-width: 100%; max-height: 88dvh; overflow-y: auto; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding-bottom: max(20px, env(safe-area-inset-bottom)) }
-	.settings-modal, .hist-modal { height: 92dvh; flex-direction: column; padding-bottom: 0 }
-	.settings-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--edge); padding: 10px 8px }
-	.set-item { white-space: nowrap; flex-shrink: 0 }
+	.hist-modal { height: 92dvh; flex-direction: column; padding-bottom: 0 }
 	.hist-list { width: 100%; max-height: 30dvh; border-right: none; border-bottom: 1px solid var(--edge) }
 	.grades { flex-wrap: wrap }
 	.grades button { min-height: 48px }
@@ -1560,10 +1530,6 @@ body.reduce-motion .heft-tray { animation: none }
 /* Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
 @media (max-width: 768px) {
 	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt Spalte links */
-	.settings-modal { flex-direction: column; width: min(520px, 94vw); height: min(640px, 90dvh) }
-	.settings-nav { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 12px 40px 8px 12px; border-right: none; border-bottom: 1px solid var(--edge) }
-	.set-item { width: auto; padding: 6px 10px }
-	.settings-token-card { align-items: flex-start; }
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
 	.menu-item, .side-foot button { min-height: 44px }
 	.row { min-height: 44px }
@@ -1855,8 +1821,7 @@ body.light #bg { background: radial-gradient(1200px 760px at 76% -12%, var(--glo
 body.light #sidebar { background: var(--surface-hover) }
 body.light #mainWrap { background: var(--panel-solid) }
 body.light #panel { background: var(--surface-subtle) }
-body.light .settings-nav, body.light .hist-list { background: var(--surface-hover) }
-body.light .settings-body { background: var(--panel-solid) }
+body.light .hist-list { background: var(--surface-hover) }
 /* Unterschiedliche, funktionale Flächen machen Orientierung leic… */
 body.light #tabbar { background: rgba(247, 244, 238, .72) }
 body.light .tabchip.active { background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge) }
@@ -1865,101 +1830,6 @@ body.light .row.active { box-shadow: inset 3px 0 0 var(--accent) }
 body.light .think-box { background: var(--surface-subtle); border-color: var(--edge-soft) }
 body.light .file-chip, body.light .edit-files-list { background: var(--bg0); border-color: var(--edge) }
 body.light .anki-deck-group td { background: var(--bubble) }
-/* Theme-Schalter: eigenständige, verständliche Karte statt Check… */
-.appearance-theme-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-faint) }
-.appearance-theme-card.is-auto { border-color: var(--accent-border); background: var(--accent-soft) }
-.appearance-theme-copy { display: flex; align-items: center; gap: 10px; min-width: 0 }
-.appearance-theme-copy > span:last-child { display: grid; gap: 2px }
-.appearance-theme-copy b { font-size: var(--text-base); line-height: 1.25 }
-.appearance-theme-copy small { color: var(--text2); font-size: var(--text-xs); line-height: 1.35 }
-.appearance-theme-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: var(--radius-lg); background: var(--menu-bg); border: 1px solid var(--edge-soft); color: var(--accent); font-size: var(--text-lg) }
-.theme-switch { position: relative; display: inline-flex !important; width: 44px; height: 26px; margin: 0 !important; flex: 0 0 44px; cursor: pointer }
-.theme-switch input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none }
-.theme-switch > span { width: 44px; height: 26px; border-radius: var(--radius-pill); background: var(--surface-active); border: 1px solid var(--edge); transition: background-color .16s ease, border-color .16s ease }
-.theme-switch > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--menu-bg); box-shadow: var(--elev-1); transition: transform .16s ease }
-.theme-switch input:checked + span { background: var(--accent); border-color: var(--accent) }
-.theme-switch input:checked + span::after { transform: translateX(18px) }
-.theme-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px }
-.appearance-manual-theme { margin-top: -4px }
-@media (max-width: 480px) {
-	.appearance-theme-card { align-items: flex-start }
-	.appearance-theme-copy { gap: 8px }
-}
-/* Heller Modus: warme, matte Papierwerkzeuge ohne schwere dunkle… */
-body.light .heft-chrome .heft-pill, body.light .heft-chrome .heft-tray, body.light .heft-chrome .heft-corner, body.light .heft-chrome .heft-corner.heft-chat { background: var(--panel-solid); color: var(--text); border-color: var(--edge-soft); box-shadow: var(--elev-1) }
-body.light .heft-chrome .heft-main { background: transparent; color: var(--text2) }
-body.light .heft-chrome .heft-main:hover, body.light .heft-chrome .heft-corner:hover, body.light .heft-chrome .heft-tray-drag:hover { background: var(--surface-hover); color: var(--text) }
-body.light .heft-chrome .heft-main.active, body.light .heft-chrome .heft-main.open { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
-body.light .heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-border) }
-body.light .heft-chrome .heft-pill > .heft-sep, body.light .heft-chrome .heft-tray .heft-sep { background: var(--edge-soft) }
-body.light .heft-chrome .heft-tray-drag { color: var(--text2) }
-/* == KI-Einstellungen — klare Verbindungen statt einer langen For == */
-.ai-settings-hero { display: flex; align-items: center; gap: 12px; padding: 2px 2px 0 }
-.ai-settings-hero-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); font-size: 21px }
-.ai-settings-hero span:last-child { display: grid; gap: 2px; min-width: 0 }
-.ai-settings-hero b { font-size: 16px; letter-spacing: -.01em }
-.ai-settings-hero small, .ai-connection-head p, .ai-provider-add span, .ai-presets p, .ai-settings-note { color: var(--text2); font-size: var(--text-xs); line-height: 1.45 }
-.ai-connection-card { border: 1px solid var(--edge); background: var(--surface-faint); padding: 10px; border-radius: var(--radius-lg) }
-.ai-connection-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px }
-.ai-connection-head h4, .ai-presets h4 { margin: 0; font-size: var(--text-base) }
-.ai-connection-head p, .ai-presets p { margin: 2px 0 0 }
-.ai-provider-count { flex: 0 0 auto; border-radius: var(--radius-pill); background: var(--surface); color: var(--text2); font-weight: 650; padding: 2px 7px; font-size: var(--text-2xs) }
-.ai-settings .provider-card { padding: 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle) }
-.ai-settings .provider-card:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 2px var(--accent-soft) }
-.ai-settings .provider-card-head { margin-bottom: 8px }
-.ai-settings .provider-card-head input { font-weight: 650 }
-.ai-provider-add { display: flex; align-items: center; gap: 10px; padding-top: 12px }
-.ai-provider-add button { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); font-weight: 650 }
-.ai-provider-add button:hover { background: var(--accent); color: var(--on-accent) }
-.ai-presets { display: flex; align-items: center; gap: 8px; padding: 0 }
-.ai-preset-grid button > span { align-self: center }
-.ai-preset-grid b { font-size: var(--text-sm); line-height: 1.2 }
-.ai-preset-grid button:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); transform: translateY(-1px) }
-.ai-settings-advanced { border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint) }
-.ai-settings-advanced summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; font-size: var(--text-sm); font-weight: 650 }
-.ai-settings-advanced summary::-webkit-details-marker { display: none }
-.ai-settings-advanced summary::after { content: "›"; order: 3; color: var(--text2); font-size: 18px; transition: transform var(--motion-fast) ease }
-.ai-settings-advanced[open] summary::after { transform: rotate(90deg) }
-.ai-settings-advanced summary small { margin-left: auto; color: var(--text2); font-size: var(--text-xs); font-weight: 400 }
-.ai-settings-advanced-body { display: grid; gap: 8px; padding: 0 12px 12px; border-top: 1px solid var(--edge-soft) }
-.ai-settings-advanced-body > div:first-child { margin-top: 12px }
-.ai-settings-note { margin: -2px 2px 0; display: none }
-.ai-settings .modal-actions { margin-top: 0; padding-top: 2px }
-.ai-settings .modal-actions button { background: var(--accent); color: var(--on-accent); font-weight: 650 }
-@media (max-width: 560px) {
-	.ai-provider-add { align-items: flex-start; flex-direction: column }
-	.ai-settings-advanced summary small { display: none }
-}
-/* KI-Einstellungen: Body füllt die Modal-Höhe; Pane scrollt; Speichern fix unten.
-   overflow:hidden nur hier — andere Settings-Tabs brauchen normalen Body-Scroll. */
-.settings-body:has(.ai-settings) { padding: 14px 16px 0; gap: 10px; overflow: hidden }
-.settings-body:has(.ai-settings) > h3 { flex: 0 0 auto; margin: 0 0 2px; font-size: var(--text-md); font-weight: 700 }
-.ai-settings-hero { display: none }
-.ai-connection-head { align-items: center; margin: 0 0 8px }
-.ai-connection-head h4 { font-size: var(--text-sm) }
-.ai-connection-head p { display: none }
-.ai-provider-add { justify-content: flex-start; flex-wrap: wrap; padding-top: 4px; gap: 6px }
-.ai-provider-add button { min-height: 30px; padding: 4px 10px; font-size: var(--text-xs) }
-.ai-presets > div:first-child { display: contents }
-.ai-presets h4, .ai-presets p { display: none }
-.ai-preset-grid { display: flex; flex: 1; gap: 6px }
-.ai-preset-grid button { min-height: 28px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-subtle); text-align: left; font-size: var(--text-2xs) }
-.ai-preset-grid button > span { display: inline; font-size: var(--text-sm) }
-.ai-preset-grid b { font-size: var(--text-2xs); font-weight: 600 }
-.ai-preset-grid small { display: none }
-.ai-settings-advanced { border-radius: var(--radius-md) }
-@media (max-width: 620px) {
-	.ai-presets { align-items: flex-start; flex-direction: column }
-	.ai-preset-grid { width: 100% }
-}
-/* Kompakte Auswahl: nur echte Embedding-Modelle der aktiven KI-Q… */
-.embedding-picker { display: grid; gap: 4px }
-.embedding-picker > label { font-size: var(--text-xs) !important; font-weight: 650 }
-.embedding-picker-row { display: flex; gap: 6px; align-items: center }
-.embedding-picker-row select { flex: 1; min-width: 0; height: 30px; padding: 4px 28px 4px 8px; border-radius: var(--radius-sm); font-size: var(--text-xs) }
-.embedding-picker-row button { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: var(--radius-sm); background: var(--surface); color: var(--text2); font-size: var(--text-md) }
-.embedding-picker-row button:hover { color: var(--accent); background: var(--accent-soft) }
-.embedding-picker .hint { min-height: 16px; font-size: var(--text-2xs); line-height: 1.35 }
 /* == Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips == */
 .home-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px }
 .home-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
@@ -1998,7 +1868,7 @@ img { -webkit-user-drag: none }
 .modal-actions button { min-height: 32px }
 #overlay:not([hidden]) { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px) }
 /* ♻️ Politur v13 (DRY): EIN kanonischer Aktiv-Zustand (accent-soft + Innenring) — ersetzt sechs identische Einzelregeln */
-.row-btns button.active, .appearance-choice button.active, .confidence-row .menu-chip.active, .heft-main.active, .heft-opt.active, .heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .settings-model-list .model-row .menu-item.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.row-btns button.active, .confidence-row .menu-chip.active, .heft-main.active, .heft-opt.active, .heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .settings-model-list .model-row .menu-item.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
 @media (pointer: coarse) {
 	/* Touch: Tastatur-Hinweise sind unlogisch; 16px-Inputs verhindern iOS-Auto-Zoom */
 	.grade-key, .study-keys { display: none }
@@ -2012,10 +1882,6 @@ button, .tabchip, .row, .deck-row { -webkit-touch-callout: none }
 /* kein iPad-Langdruck-Menue auf UI-Chrome */
 .bar-label, .study-head, .row .hint, .ai-provider-count { font-variant-numeric: tabular-nums }
 h3, h4 { text-wrap: balance }
-.settings-body h4.danger-label { color: var(--danger) }
-.settings-token-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
-.settings-token-card b { font-size: var(--text-sm); }
-.settings-token-card .hint { margin: 3px 0 0; }
 @media (pointer: coarse) {
 	/* Apple-HIG: ≥44×44px Tippfläche für kleine Bedienelemente; inline sitzende Mini-Knöpfe mind. 40px */
 	.mini { height: 40px; min-width: 40px }
@@ -2054,9 +1920,6 @@ h3, h4 { text-wrap: balance }
 	.heft-chrome .heft-main { width: 27px; height: 27px }
 }
 /* ================= 🧪 Experimente (experimente.js) ================= */
-.exp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); margin: 0 0 8px; cursor: pointer }
-.exp-row input[type="checkbox"] { margin-top: 3px; flex: 0 0 auto }
-.exp-row b { display: block; margin-bottom: 2px }
 .exp-modal-backdrop { position: fixed; inset: 0; z-index: var(--z-ai-sheet); background: var(--overlay-bg); display: flex; align-items: center; justify-content: center; padding: 18px }
 .exp-modal { background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); width: min(640px, 100%); max-height: 85dvh; overflow: auto; padding: 16px 18px }
 .exp-modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px }
@@ -2074,46 +1937,6 @@ h3, h4 { text-wrap: balance }
 .exp-wait { padding: 14px 0; color: var(--text2) }
 .exp-honesty { text-align: center; margin: 6px 0 }
 /* ---------- Einstellungen → KI: „Tools immer mitsenden“ (Tool-Angebot v3) ---------- */
-.ai-tools-toggle { margin: 8px 0 4px; display: flex; width: 100%; gap: 10px; align-items: flex-start; cursor: pointer }
-.ai-tools-toggle label { display: flex; width: 100%; gap: 10px; align-items: flex-start; cursor: pointer }
-/* Checkbox vom globalen Input-Styling (Padding/BG/Rahmen) ausnehmen — iPadOS/Safari */
-.ai-tools-toggle input[type="checkbox"] { -webkit-appearance: checkbox; appearance: auto; width: 18px; height: 18px; min-width: 18px; padding: 0; margin: 3px 0 0; background: initial; border: initial; border-radius: var(--radius-xs); accent-color: var(--accent) }
-/* Der Text darf innerhalb der schmalen Einstellungen-Spalte wirklich umbrechen. */
-.ai-tools-toggle label > span, .ai-tools-toggle > span { flex: 1 1 auto; min-width: 0 }
-.ai-tools-toggle b { display: block }
-.ai-tools-toggle small { display: block; color: var(--text2); margin-top: 2px; overflow-wrap: anywhere }
-@media (max-width: 620px) {
-	.ai-tools-toggle { margin-top: 10px }
-	.ai-tools-toggle label { gap: 8px }
-}
-/* ---------- KI-Settings v7: kompakt wie zuvor, wenig Text ---------- */
-.ai-settings { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1 1 auto; overflow: hidden }
-.ai-tabs { flex: 0 0 auto; display: flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-subtle); border: 1px solid var(--edge-soft) }
-.ai-tab { flex: 1; min-height: 28px; padding: 4px 8px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-xs); font-weight: 650; cursor: pointer }
-.ai-tab:hover { color: var(--text); background: var(--surface-hover) }
-.ai-tab.active { background: var(--panel-solid); color: var(--text); box-shadow: inset 0 0 0 1px var(--edge-soft) }
-.ai-tab-panes { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column }
-.ai-tab-pane { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 1px 10px; -webkit-overflow-scrolling: touch }
-.ai-tab-pane[hidden] { display: none !important }
-.ai-pane-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 6px }
-.ai-active-pill { display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% - 36px); min-height: 26px; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--text); font-size: var(--text-xs) }
-.ai-active-pill b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650 }
-.ai-active-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto }
-.ai-icon-btn { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: var(--radius-sm); border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text2); font-size: var(--text-sm); display: grid; place-items: center; flex: 0 0 28px }
-.ai-icon-btn:hover { color: var(--text); border-color: var(--edge); background: var(--surface-hover) }
-.ai-icon-btn.danger { color: var(--danger) }
-.ai-icon-btn.danger:hover { background: var(--danger-soft) }
-.ai-ghost-btn { min-height: 28px; padding: 3px 9px; border-radius: var(--radius-sm); border: 1px solid var(--edge-soft); background: transparent; color: var(--text); font-size: var(--text-xs); font-weight: 600 }
-.ai-ghost-btn:hover { background: var(--surface-hover); border-color: var(--edge) }
-.ai-chip-btn { min-height: 26px; padding: 2px 8px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text2); font-size: var(--text-2xs); font-weight: 600 }
-.ai-chip-btn:hover { color: var(--text); border-color: var(--accent-border); background: var(--accent-soft) }
-.ai-soft-meta { margin: 0; font-size: var(--text-2xs); color: var(--text2); line-height: 1.35 }
-.ai-soft-meta[hidden] { display: none !important }
-/* Modell-Suche — eine Zeile: Feld + Trefferzähler */
-.ai-model-search { flex: 0 0 auto; display: flex; align-items: center; gap: 8px }
-.ai-model-search input { flex: 1; min-width: 0; height: 30px; padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text); font-size: var(--text-xs) }
-.ai-model-search input:focus { outline: none; border-color: var(--accent-border); background: var(--panel-solid) }
-.ai-model-search .ai-soft-meta { flex: 0 0 auto; white-space: nowrap }
 /* Quellen-Titel bleiben beim Scrollen stehen — sonst weiß man in langen Listen nicht,
    zu welcher Quelle ein Modell gehört. */
 .settings-model-list .menu-label { position: sticky; top: -3px; z-index: 1; background: var(--surface-faint) }
@@ -2128,55 +1951,6 @@ h3, h4 { text-wrap: balance }
 .settings-model-list .model-row .menu-item.active .settings-model-src { color: var(--accent) }
 .settings-model-list .model-fav { width: 30px; min-height: 36px; border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--text2) }
 .settings-model-list .model-fav.on, .settings-model-list .model-fav:hover { color: var(--warn) }
-.settings-custom-model { flex: 0 0 auto; display: grid; grid-template-columns: 1fr minmax(100px, .7fr) 28px; gap: 6px; align-items: center }
-.settings-custom-model input, .settings-custom-model select { min-width: 0; height: 30px; font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm) }
-/* Quellen — kompakt */
-.ai-settings .provider-list { display: grid; gap: 6px }
-.ai-settings details.provider-card { display: block; padding: 0; overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint) }
-.ai-settings details.provider-card[open] { border-color: var(--edge); background: var(--surface-subtle) }
-.ai-settings .provider-card-summary { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: pointer; list-style: none; font-size: var(--text-xs); user-select: none }
-.ai-settings .provider-card-summary::-webkit-details-marker { display: none }
-.ai-settings .provider-card-summary::before { content: "›"; color: var(--text2); font-size: var(--text-xs); transition: transform .12s ease; flex: 0 0 auto }
-.ai-settings details.provider-card[open] > .provider-card-summary::before { transform: rotate(90deg) }
-.ai-settings .provider-card-title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.ai-settings .provider-summary-url { margin-left: auto; font-size: var(--text-2xs); color: var(--text2); max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.ai-settings .provider-active-badge { font-size: var(--text-3xs); font-weight: 650; padding: 1px 6px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border) }
-.ai-settings .provider-card-body { display: grid; gap: 6px; padding: 0 9px 9px }
-.ai-settings .provider-card-body input { width: 100%; height: 30px; font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm) }
-.ai-settings .provider-card-foot { display: flex; align-items: center; gap: 6px; margin-top: 1px }
-.ai-settings .provider-status { min-height: 0; margin: 0; font-size: var(--text-2xs); line-height: 1.35; color: var(--text2) }
-.ai-settings .provider-status:empty { display: none }
-.ai-settings .provider-status.ok { color: var(--success) }
-.ai-settings .provider-status.warn { color: var(--warn) }
-.ai-settings .provider-status.bad { color: var(--danger) }
-.ai-settings .ai-provider-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 2px 0 0 }
-/* Mehr-Tab — kompakt */
-.ai-more-stack { display: grid; gap: 8px; padding-bottom: 2px }
-.ai-toggle-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint) }
-.ai-toggle-card:hover { border-color: var(--edge); background: var(--surface-subtle) }
-.ai-toggle-copy b { font-size: var(--text-sm); font-weight: 650; color: var(--text) }
-.ai-field-card { display: grid; gap: 6px; padding: 9px 10px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--surface-faint) }
-.ai-field-card label, .ai-field-label-row label { font-size: var(--text-2xs); font-weight: 650; color: var(--text2); letter-spacing: .04em; text-transform: uppercase }
-.ai-field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px }
-.ai-select-block, .ai-field-card select, .ai-field-card textarea { width: 100%; border-radius: var(--radius-sm); font-size: var(--text-xs) }
-.ai-select-block, .ai-field-card select { height: 30px; padding: 4px 28px 4px 8px }
-.ai-field-card textarea { min-height: 72px; padding: 7px 9px; line-height: 1.45; resize: vertical }
-/* Fuß — kompakt wie früher */
-.ai-settings > .modal-actions,
-.ai-settings > .ai-settings-foot { flex: 0 0 auto; position: static !important; margin: 0 -16px 0 !important; padding: 8px 16px calc(10px + env(safe-area-inset-bottom, 0px)) !important; background: var(--menu-bg); border-top: 1px solid var(--edge-soft); justify-content: flex-end; bottom: auto !important }
-.ai-settings > .modal-actions button,
-.ai-settings > .ai-settings-foot button { min-height: 30px; padding: 4px 12px; border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 650 }
-.ai-settings .ai-tools-toggle { display: none }
-/* Status-Banner im KI-Tab wieder schlank */
-.ai-settings .ai-status-banner { flex: 0 0 auto; min-height: 28px; margin: 0; padding: 4px 8px; border-radius: var(--radius-sm); font-size: var(--text-xs) }
-.ai-settings .ai-status-banner #btnRecheckAI { min-height: 22px; padding: 1px 6px; font-size: var(--text-2xs) }
-@media (max-width: 560px) {
-	.settings-modal { width: min(100vw, 94vw); height: min(520px, 84dvh); max-height: 84dvh }
-	.settings-custom-model { grid-template-columns: 1fr 28px }
-	.settings-custom-model select { grid-column: 1 / -1; order: 3 }
-	.ai-settings .provider-summary-url { display: none }
-	.settings-model-list { min-height: 100px }
-}
 /* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
 .deck-feyn { white-space: nowrap }
 /* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
@@ -2313,13 +2087,174 @@ h3, h4 { text-wrap: balance }
 .model-fav:hover { background: var(--surface-hover); color: var(--warn) }
 .model-fav.on { color: var(--warn) }
 /* == ⚙️ Einstellungen v2 (21. Juli): ruhigere Navigation, klarere Abschnitte, weniger Text == */
-.set-item { font-size: var(--text-sm); font-weight: 600; border-radius: var(--radius-md) }
-.set-item.active { box-shadow: inset 0 0 0 1px var(--accent-border) }
-.settings-body:not(:has(.ai-settings)) > h3 { margin: 0 0 2px; padding-bottom: 10px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-md); font-weight: 700; letter-spacing: -.01em }
-.settings-body > h3 + h4 { margin-top: 0 }
-.settings-body .hint { font-size: var(--text-xs); line-height: 1.45 }
-.settings-body h4 + .hint { margin-top: -6px }
-.settings-body .row-btns button, .settings-body .appearance-choice button { min-height: 30px; font-size: var(--text-sm) }
+
+/* == Settings v2: eine ruhige, appweite Designsprache == */
+.settings-modal-v2 { position: relative; display: grid; grid-template-columns: 252px minmax(0, 1fr); width: min(980px, 94vw); height: min(720px, 90dvh); max-height: 90dvh; padding: 0; gap: 0; overflow: hidden; border-color: var(--edge-soft); border-radius: 20px; background: var(--panel-solid); box-shadow: var(--elev-3) }
+.settings-modal-v2 > .modal-x { top: 12px; right: 14px; z-index: 5; width: 32px; height: 32px; color: var(--text2); background: transparent }
+.settings-sidebar { min-width: 0; padding: 20px 12px; overflow-y: auto; border-right: 1px solid var(--edge-soft); background: color-mix(in srgb, var(--surface-subtle) 88%, transparent) }
+.settings-sidebar-title { padding: 0 10px 14px; font-size: var(--text-md); font-weight: 720; letter-spacing: -.02em }
+.settings-sidebar nav { display: grid; gap: 3px; margin-top: 12px }
+.settings-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 9px; border: 0; border-radius: 10px; background: transparent; color: var(--text2); font-size: var(--text-sm); font-weight: 600; text-align: left }
+.settings-nav-item:hover { background: var(--surface-hover); color: var(--text) }
+.settings-nav-item.active { color: var(--text); background: var(--panel-solid); box-shadow: 0 1px 2px rgba(0,0,0,.08), inset 0 0 0 1px var(--edge-soft) }
+.settings-nav-icon { display: grid; place-items: center; width: 25px; height: 25px; flex: 0 0 25px; border-radius: 7px; color: var(--text2); background: var(--surface) }
+.settings-nav-item.active .settings-nav-icon { color: var(--on-accent); background: var(--accent) }
+.settings-icon { width: 17px; height: 17px; display: block }
+.settings-modal-v2 .settings-search { position: relative; display: flex; align-items: center; gap: 7px; height: 34px; margin: 0; padding: 0 8px; border: 1px solid var(--edge-soft); border-radius: 9px; color: var(--text2); background: var(--input-bg) }
+.settings-search:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft) }
+.settings-search .settings-icon { width: 15px; height: 15px; flex: 0 0 15px }
+.settings-search input { min-width: 0; width: 100%; height: 30px; padding: 0; border: 0; outline: 0; background: transparent; font-size: var(--text-sm) }
+.settings-search kbd { padding: 1px 5px; border: 1px solid var(--edge-soft); border-radius: 5px; color: var(--text2); background: var(--surface); font: 500 var(--text-3xs)/1.5 inherit; white-space: nowrap }
+.settings-search-results { position: absolute; z-index: 4; width: 228px; max-height: 340px; margin-top: 6px; padding: 5px; overflow-y: auto; border: 1px solid var(--edge); border-radius: 12px; background: var(--menu-bg); box-shadow: var(--elev-3) }
+.settings-search-results[hidden] { display: none }
+.settings-search-results button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left }
+.settings-search-results button:hover { background: var(--surface-hover) }
+.settings-search-results button > span { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-search-results b { font-size: var(--text-sm) }
+.settings-search-results small { overflow: hidden; color: var(--text2); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap }
+.settings-search-results .settings-icon { width: 14px; color: var(--text2) }
+.settings-search-empty { padding: 14px 10px; color: var(--text2); font-size: var(--text-xs); text-align: center }
+.settings-main { min-width: 0; min-height: 0; padding: 38px clamp(24px, 4vw, 48px) 48px; overflow-y: auto; scroll-behavior: smooth; background: var(--panel-solid) }
+.settings-page-head { max-width: 680px; margin: 0 auto 28px }
+.settings-page-head h2 { margin: 0 0 5px; font-size: clamp(25px, 3vw, 32px); line-height: 1.12; letter-spacing: -.035em }
+.settings-page-head p { margin: 0; color: var(--text2); font-size: var(--text-sm); line-height: 1.5 }
+.settings-page-content { display: grid; max-width: 680px; margin: 0 auto; gap: 22px }
+.settings-group { display: grid; gap: 7px; scroll-margin: 80px }
+.settings-group > h3 { margin: 0 0 0 12px; color: var(--text2); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .065em; text-transform: uppercase }
+.settings-group-card { overflow: hidden; border: 1px solid var(--edge-soft); border-radius: 14px; background: var(--surface-faint); box-shadow: 0 1px 1px rgba(0,0,0,.03) }
+.settings-row { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 13px; scroll-margin: 90px }
+.settings-row + .settings-row, .settings-group-card > .settings-input-row + .settings-input-row, .settings-group-card > .settings-status + .settings-row, .settings-group-card > .settings-row + .settings-actions, .settings-map-row + .settings-map-row { border-top: 1px solid var(--edge-soft) }
+.settings-row-leading { display: grid; place-items: center; flex: 0 0 auto }
+.settings-row-copy { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-row-copy b, .settings-input-row b, .settings-status b, .settings-map-row b, .settings-range b { color: var(--text); font-size: var(--text-sm); font-weight: 650; line-height: 1.3 }
+.settings-row-copy small, .settings-input-row small, .settings-status small, .settings-map-row small, .settings-range small { color: var(--text2); font-size: var(--text-xs); line-height: 1.35 }
+.settings-row-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; flex: 0 1 auto }
+.settings-value { color: var(--text2); font-size: var(--text-xs); white-space: nowrap }
+.settings-link { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; padding: 3px 7px; border: 0; background: transparent; color: var(--accent); font-size: var(--text-xs); font-weight: 600 }
+.settings-link:hover { background: var(--accent-soft) }
+.settings-link .settings-icon { width: 13px; height: 13px }
+.settings-footnote { margin: 0 10px; color: var(--text2); font-size: var(--text-2xs); line-height: 1.45 }
+.settings-group.is-danger > h3 { color: var(--danger) }
+.settings-group.is-danger .settings-group-card { border-color: var(--danger-border); background: var(--danger-soft) }
+.settings-highlight { animation: settingsPulse 1.8s ease }
+@keyframes settingsPulse { 0%,100% { box-shadow: none } 18%,55% { box-shadow: 0 0 0 4px var(--accent-soft); border-radius: 12px } }
+.settings-modal-v2 .settings-switch { position: relative; display: inline-flex; width: 42px; height: 24px; margin: 0; flex: 0 0 42px; cursor: pointer }
+.settings-switch input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none }
+.settings-switch > span { width: 42px; height: 24px; border: 1px solid var(--edge); border-radius: var(--radius-pill); background: var(--surface-active); transition: background-color .16s ease, border-color .16s ease }
+.settings-switch > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--menu-bg); box-shadow: var(--elev-1); transition: transform .16s ease }
+.settings-switch input:checked + span { border-color: var(--accent); background: var(--accent) }
+.settings-switch input:checked + span::after { transform: translateX(18px) }
+.settings-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px }
+.settings-segmented { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface) }
+.settings-segmented button { min-height: 28px; padding: 3px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text2); font-size: var(--text-xs); font-weight: 600 }
+.settings-segmented button.active { color: var(--text); background: var(--panel-solid); box-shadow: 0 1px 2px rgba(0,0,0,.1) }
+.settings-row.is-stacked { align-items: flex-start; flex-direction: column }
+.settings-row.is-stacked .settings-row-control { width: 100%; justify-content: flex-start }
+.settings-accents { display: flex; flex-wrap: wrap; gap: 7px }
+.settings-accents button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 8px; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-subtle); color: var(--text2); font-size: var(--text-xs) }
+.settings-accents button.active { border-color: var(--accent-border); color: var(--text); background: var(--accent-soft) }
+.settings-accents button > span { width: 13px; height: 13px; border-radius: 50%; background: var(--swatch) }
+.settings-accents .accent-blue { --swatch: #5e9fe8 }.settings-accents .accent-violet { --swatch: #a78bfa }.settings-accents .accent-green { --swatch: #72bc8f }.settings-accents .accent-orange { --swatch: #de9255 }
+.settings-modal-v2 .settings-input-row, .settings-modal-v2 .settings-range { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(180px, 1.2fr); align-items: center; gap: 18px; min-height: 68px; margin: 0; padding: 10px 13px }
+.settings-input-row > span:first-child, .settings-range > span:first-child { display: grid; gap: 2px }
+.settings-input-row input, .settings-input-row textarea, .settings-input-row select, .settings-inline-fields input, .settings-inline-fields select, .settings-field-action select { width: 100%; min-width: 0; border-color: var(--edge-soft); border-radius: 8px; background: var(--input-bg); font-size: var(--text-sm) }
+.settings-input-row textarea { min-height: 86px; resize: vertical }
+.settings-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 10px 13px }
+.settings-actions button, .settings-status > button, .settings-map-row button, .settings-inline-fields button { min-height: 30px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text); font-size: var(--text-xs); font-weight: 600 }
+.settings-actions button:not(.secondary):not(.danger):not(.danger-text):first-child, .settings-inline-fields button { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent) }
+.settings-actions button.danger, .settings-group.is-danger button { border-color: var(--danger-border); color: var(--danger); background: var(--panel-solid) }
+.settings-actions button.danger-text, .danger-text { color: var(--danger) }
+.settings-actions button.icon-only, button.icon-only { width: 30px; padding: 0 }
+.settings-quick-actions { justify-content: flex-start }
+.settings-status { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px 13px }
+.settings-status > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-status-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--text2); box-shadow: 0 0 0 4px var(--surface) }
+.settings-status-dot.is-ok, .settings-status.is-ok > .settings-status-dot { background: var(--success); box-shadow: 0 0 0 4px var(--success-soft) }
+.settings-status-dot.is-warn, .settings-status.is-warn > .settings-status-dot { background: var(--warn); box-shadow: 0 0 0 4px rgb(var(--c-yellow) / .12) }
+.settings-status-dot.is-idle, .settings-status.is-idle > .settings-status-dot { background: var(--text2); opacity: .7 }
+.settings-privacy-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--accent); background: var(--accent-soft); font-size: var(--text-md) }
+.settings-disclosure { overflow: hidden; border: 1px solid var(--edge-soft); border-radius: 14px; background: var(--surface-faint) }
+.settings-disclosure > summary { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 10px 13px; cursor: pointer; list-style: none }
+.settings-disclosure > summary::-webkit-details-marker { display: none }
+.settings-disclosure > summary > span { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-disclosure > summary b { font-size: var(--text-sm) }
+.settings-disclosure > summary small { color: var(--text2); font-size: var(--text-xs) }
+.settings-disclosure > summary .settings-icon { color: var(--text2); transition: transform .16s ease }
+.settings-disclosure[open] > summary .settings-icon { transform: rotate(90deg) }
+.settings-disclosure-body { border-top: 1px solid var(--edge-soft) }
+.settings-inline-fields { display: grid; grid-template-columns: 1fr minmax(120px, .65fr) auto; gap: 8px; padding: 12px }
+.settings-subnav { display: flex; align-items: center; gap: 3px; width: fit-content; padding: 3px; border-radius: 10px; background: var(--surface) }
+.settings-subnav button { min-height: 30px; padding: 4px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--text2); font-size: var(--text-xs); font-weight: 650 }
+.settings-subnav button.active { color: var(--text); background: var(--panel-solid); box-shadow: var(--elev-1) }
+.settings-model-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--edge-soft) }
+.settings-model-search input { flex: 1; min-width: 0; border-radius: var(--radius-pill) }
+.settings-model-search span { color: var(--text2); font-size: var(--text-2xs); white-space: nowrap }
+.settings-modal-v2 .settings-model-list { min-height: 180px; max-height: 300px; margin: 0; border: 0; border-top: 1px solid var(--edge-soft); border-radius: 0; background: transparent }
+.settings-modal-v2 .provider-card-body { display: grid; gap: 0 }
+.settings-modal-v2 .provider-status { margin: 0 13px 10px; font-size: var(--text-xs) }
+.settings-field-action { display: flex; align-items: center; gap: 7px }
+.settings-field-action button { flex: 0 0 30px }
+.settings-savebar { position: sticky; z-index: 3; bottom: -32px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px -12px -32px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--edge); border-bottom: 0; border-radius: 13px 13px 0 0; background: color-mix(in srgb, var(--menu-bg) 94%, transparent); box-shadow: 0 -8px 24px rgba(0,0,0,.12); backdrop-filter: blur(16px) }
+.settings-savebar[hidden] { display: none }
+.settings-savebar > span { color: var(--text2); font-size: var(--text-xs) }
+.settings-savebar > div { display: flex; gap: 7px }
+.settings-savebar button { min-height: 32px; padding: 4px 11px; border-radius: 8px }
+.settings-savebar button.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent) }
+.settings-sort-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 44px auto; align-items: center; gap: 10px; min-height: 60px; padding: 8px 10px }
+.settings-sort-row + .settings-sort-row { border-top: 1px solid var(--edge-soft) }
+.settings-sort-row.is-disabled { opacity: .55 }
+.settings-sort-row.is-dragging { opacity: .35 }
+.settings-drag { color: var(--text2); cursor: grab; font-size: 18px }
+.settings-sort-actions { display: flex; gap: 3px }
+.settings-sort-actions button { width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--text2) }
+.settings-workspace-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
+.settings-map-row { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 8px 13px }
+.settings-map-row > span:first-child { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-map-row > span:last-child { display: flex; gap: 5px }
+.settings-learn-callout { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 13px; color: var(--accent); background: var(--accent-soft) }
+.settings-range { grid-template-columns: minmax(150px, .8fr) 1.2fr }
+.settings-range input { width: 100% }
+.settings-empty { padding: 18px; color: var(--text2); font-size: var(--text-sm); text-align: center }
+.settings-guard { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; padding: 18px; border-radius: inherit; background: rgba(0,0,0,.34); backdrop-filter: blur(5px) }
+.settings-guard-dialog { width: min(360px, 100%); padding: 20px; border: 1px solid var(--edge); border-radius: 16px; background: var(--menu-bg); box-shadow: var(--elev-3) }
+.settings-guard-dialog h3 { margin: 0 0 6px; font-size: var(--text-md) }
+.settings-guard-dialog p { margin: 0; color: var(--text2); font-size: var(--text-sm) }
+.settings-guard-dialog .settings-actions { padding: 18px 0 0 }
+.settings-guard-dialog .settings-actions .danger { border-color: var(--danger-border); color: var(--danger); background: var(--danger-soft) }
+
+@media (max-width: 760px) {
+	.settings-modal-v2 { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); width: min(620px, 100vw); height: min(920px, 94dvh); max-height: 94dvh; border-radius: 20px 20px 0 0 }
+	.settings-sidebar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; padding: 14px 48px 9px 12px; overflow: visible; border-right: 0; border-bottom: 1px solid var(--edge-soft) }
+	.settings-sidebar-title { display: none }
+	.settings-sidebar nav { display: flex; gap: 4px; margin: 0 -36px 0 0; padding: 0 0 2px; overflow-x: auto; scrollbar-width: none }
+	.settings-sidebar nav::-webkit-scrollbar { display: none }
+	.settings-nav-item { width: auto; min-height: 34px; padding: 5px 9px; flex: 0 0 auto; white-space: nowrap }
+	.settings-nav-icon { display: none }
+	.settings-search-results { left: 12px; right: 12px; width: auto; max-height: min(360px, 55dvh) }
+	.settings-search kbd { display: none }
+	.settings-main { padding: 28px 14px 40px }
+	.settings-page-head { margin-bottom: 22px; padding: 0 3px }
+	.settings-page-head h2 { font-size: 27px }
+	.settings-page-content { gap: 19px }
+	.settings-row { align-items: flex-start; min-height: 60px }
+	.settings-row-control { align-self: center }
+	.settings-modal-v2 .settings-input-row, .settings-modal-v2 .settings-range { grid-template-columns: 1fr; gap: 8px }
+	.settings-inline-fields { grid-template-columns: 1fr auto }
+	.settings-inline-fields select { grid-column: 1 / -1 }
+	.settings-sort-row { grid-template-columns: 20px minmax(0, 1fr) 42px }
+	.settings-sort-actions { display: none }
+	.settings-segmented { max-width: 100%; overflow-x: auto }
+	.settings-row:has(.settings-segmented), .settings-row:has(.settings-accents) { flex-direction: column }
+	.settings-row:has(.settings-segmented) .settings-row-control { width: 100%; justify-content: flex-start }
+	.settings-savebar { bottom: -24px; margin-bottom: -24px }
+}
+
+@media (pointer: coarse) {
+	.settings-nav-item, .settings-search { min-height: 44px }
+	.settings-row { min-height: 64px }
+	.settings-actions button, .settings-status > button, .settings-map-row button, .settings-inline-fields button { min-height: 40px }
+	.settings-sort-actions button { width: 40px; height: 40px }
+}
 
 /* == „kommt noch“-Runde (22. Juli): ✕ auf Home-Bereichen, ⏹-Abbrechen, 🗑 Stapel-Löschen == */
 .home-fold > summary .fold-hide { margin-left: auto; padding: 0 6px; opacity: 0; transition: opacity var(--motion-fast) var(--ease-out) }

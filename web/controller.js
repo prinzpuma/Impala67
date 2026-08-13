@@ -36,7 +36,7 @@ const deadzone = () => Math.min(0.9, Math.max(0.2, Number(get(LS.dead, "0.5")) |
 const pads = () => (navigator.getGamepads ? Array.from(navigator.getGamepads()) : []).filter(Boolean);
 const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 const click = (sel) => { const el = document.querySelector(sel); if (el) el.click(); return !!el; };
-const reopen = () => { if (window.SETTINGS && S.settingsSection === "controller") window.SETTINGS.openSettings("controller"); };
+const reopen = () => { if (window.SETTINGS && S.settingsSection === "devices") window.SETTINGS.openSettings("devices"); };
 
 // ---------- Aktionen: Label · Standardtaste (Standard-Mapping) · Ausführung ----------
 // grade-Aktionen brauchen keine eigene run(): sie klicken den passenden
@@ -235,29 +235,19 @@ function settingsHtml() {
 	const p = pads()[0];
 	const m = map();
 	const status = p
-		? "✅ " + U.esc(String(p.id).slice(0, 60)) + " · Belegung: " + (p.mapping === "standard" ? "standard" : "<b>unbekannt</b> — Tasten unten anlernen")
+		? U.esc(String(p.id).slice(0, 60)) + " · " + (p.mapping === "standard" ? "Standard-Belegung" : "Belegung anlernen")
 		: "Kein Pad gemeldet — einmal eine Taste am Controller drücken (Browser meldet Pads erst nach einem Tastendruck).";
 	const rows = ACTIONS.map((a) =>
-		"<tr><td>" + U.esc(a.label) + "</td><td><code>" + U.esc(labelOf(m[a.id])) + "</code></td>" +
-		'<td class="anki-rowbtns"><button data-padlearn="' + a.id + '" title="Taste am Controller drücken">🎮 Lernen</button>' +
-		'<button data-padclear="' + a.id + '" title="Belegung entfernen">✕</button></td></tr>').join("");
-	const toggle = (id, label, on) => '<div class="ai-toggle-card"><span class="ai-toggle-copy"><b>' + label + '</b></span>' +
-		'<label class="theme-switch"><input id="' + id + '" type="checkbox"' + (on ? " checked" : "") + '><span aria-hidden="true"></span></label></div>';
-	return '<p class="hint">Karteikarten vom Sofa aus: der Lernmodus lässt sich komplett mit einem Gamepad bedienen. Der Controller löst dieselben Schaltflächen aus wie Maus und Tastatur — es gibt keine zweite Lernlogik. Abgefragt wird nur bei verbundenem Pad im Lernmodus.</p>' +
-		toggle("inpController", "Controller-Steuerung", enabled()) +
-		toggle("inpPadHud", "Tastenhinweise in den Schaltflächen", hudOn()) +
-		toggle("inpPadVib", "Vibration als Rückmeldung", vibOn()) +
-		'<p class="hint">Status: ' + status + "</p>" +
-		(learn ? '<p class="hint">⏺ <b>Drücke jetzt die Taste für „' + U.esc((BY_ID.get(learn) || {}).label || "") + '“…</b> <button data-padlearncancel="1" class="mini">Abbrechen</button>' +
-			(p ? " Anlernen funktioniert auch, solange die Steuerung noch aus ist." : " — der Browser meldet noch kein Pad: drücke bitte zuerst eine beliebige Taste am Controller.") + "</p>" : "") +
-		"<h4>Belegung</h4>" +
-		'<table class="lib-table"><thead><tr><th>Aktion</th><th>Taste</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>" +
-		'<p class="hint">Bei verdeckter Rückseite decken die Bewertungstasten nur auf — blind bewerten ist nicht möglich.</p>' +
-		"<h4>Deadzone</h4>" +
-		'<p class="hint">Ab welchem Ausschlag Sticks und analoge Trigger als gedrückt gelten (aktuell ' + deadzone().toFixed(2) + ").</p>" +
-		'<input id="padDead" type="range" min="0.2" max="0.9" step="0.05" value="' + deadzone() + '">' +
-		'<div class="row-btns"><button data-padreset="1">↺ Standard-Belegung</button></div>' +
-		'<p class="hint">Pads ohne Standard-Belegung (z. B. Stadia-Controller im Bluetooth-Modus, generische HID-Pads ohne Windows-Treiber) funktionieren trotzdem: Tasten und Achsen werden roh gelesen, die Indizes lernst du oben einmal an.</p>';
+		'<div class="settings-map-row"><span><b>' + U.esc(a.label) + '</b><small>' + U.esc(labelOf(m[a.id])) + '</small></span><span><button type="button" data-padlearn="' + a.id + '">Anlernen</button><button type="button" data-padclear="' + a.id + '" class="icon-only" aria-label="Belegung entfernen">×</button></span></div>').join("");
+	const toggle = (id, label, description, on) => '<div class="settings-row"><span class="settings-row-copy"><b>' + label + '</b><small>' + description + '</small></span><span class="settings-row-control"><label class="settings-switch"><input id="' + id + '" type="checkbox"' + (on ? " checked" : "") + ' aria-label="' + label + '"><span aria-hidden="true"></span></label></span></div>';
+	const group = (title, id, content, note = "") => '<section class="settings-group" id="' + id + '" data-settings-anchor><h3>' + title + '</h3><div class="settings-group-card">' + content + '</div>' + (note ? '<p class="settings-footnote">' + note + '</p>' : "") + '</section>';
+	const statusRow = '<div class="settings-status is-' + (p ? "ok" : "idle") + '"><span class="settings-status-dot"></span><span><b>' + (p ? "Controller verbunden" : "Kein Controller verbunden") + '</b><small>' + status + '</small></span></div>' +
+		toggle("inpController", "Controller-Steuerung", "Bedient denselben Lernmodus wie Maus und Tastatur", enabled()) +
+		toggle("inpPadHud", "Tastenhinweise", "Zeigt die zugehörige Taste direkt an Aktionen", hudOn()) +
+		toggle("inpPadVib", "Vibration", "Kurze Rückmeldung nach einer Bewertung", vibOn());
+	const learning = learn ? '<div class="settings-learn-callout"><b>Drücke jetzt die Taste für „' + U.esc((BY_ID.get(learn) || {}).label || "") + '“</b><button type="button" data-padlearncancel="1">Abbrechen</button></div>' : "";
+	const advanced = '<details class="settings-disclosure"><summary><span><b>Erweitert</b><small>Deadzone und nicht standardisierte HID-Geräte</small></span><span aria-hidden="true">›</span></summary><div class="settings-disclosure-body" id="controller-advanced" data-settings-anchor><label class="settings-range"><span><b>Deadzone</b><small>Aktuell ' + deadzone().toFixed(2) + '</small></span><input id="padDead" type="range" min="0.2" max="0.9" step="0.05" value="' + deadzone() + '"></label><div class="settings-actions"><button type="button" data-padreset="1">Standard-Belegung</button></div><p class="settings-footnote">Generische Controller können Tasten und Achsen roh anlernen; technische HID-Indizes bleiben hier bewusst verborgen.</p></div></details>';
+	return group("Controller", "controller-status", statusRow, "Der Controller wird nur im Lernmodus abgefragt.") + group("Tastenbelegung", "controller-map", learning + rows, "Bewertungstasten decken eine verdeckte Antwort zuerst nur auf.") + advanced;
 }
 
 // Verdrahtung per Capture-Listener — genau wie experimente.js/telemetrie.js. settings.js
