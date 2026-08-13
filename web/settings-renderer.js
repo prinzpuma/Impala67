@@ -1,0 +1,185 @@
+"use strict";
+
+import { S } from "./state.js";
+import { U } from "./util.js";
+import { DRIVE } from "./drive.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
+import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
+import * as UI from "./settings-ui.js";
+
+const e = (value) => U.esc(String(value ?? ""));
+const button = (label, id, className = "") => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '">' + e(label) + "</button>";
+const linkButton = (label, section, anchor) => '<button type="button" class="settings-link" data-settings-go="' + e(section) + '"' + (anchor ? ' data-settings-anchor-target="' + e(anchor) + '"' : "") + '>' + e(label) + UI.icon("chevron") + "</button>";
+const switchControl = (id, label, checked) => '<label class="settings-switch"><input id="' + e(id) + '" type="checkbox"' + (checked ? " checked" : "") + ' aria-label="' + e(label) + '"><span aria-hidden="true"></span></label>';
+
+function renderOverview(vm) {
+	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
+	const driveConnected = !!(DRIVE.isConnected && DRIVE.isConnected());
+	const notionReady = !!(S.settings.notionToken || S.notionToken);
+	const lastBackup = localStorage.getItem("impala67LastBackup");
+	const version = vm.version;
+	const statusRows = [
+		UI.row({ title: "Künstliche Intelligenz", description: aiReady ? S.settings.aiModel : "Noch kein Modell gewählt", leading: '<span class="settings-status-dot is-' + (aiReady ? "ok" : "idle") + '"></span>', trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
+		UI.row({ title: "Google Drive", description: driveConnected ? "Verbunden als " + (S.driveUserEmail || "Google-Konto") : S.driveUserEmail ? "Verbindung pausiert" : "Nicht verbunden", leading: '<span class="settings-status-dot is-' + (driveConnected ? "ok" : S.driveUserEmail ? "warn" : "idle") + '"></span>', trailing: linkButton("Öffnen", "sync", "drive") }),
+		UI.row({ title: "Notion", description: notionReady ? (S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Bereit") : "Nicht eingerichtet", leading: '<span class="settings-status-dot is-' + (notionReady ? "ok" : "idle") + '"></span>', trailing: linkButton("Öffnen", "sync", "notion") }),
+		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt: " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: '<span class="settings-status-dot is-' + (lastBackup ? "ok" : "warn") + '"></span>', trailing: linkButton("Sichern", "data", "backup") }),
+		UI.row({ title: "Lokaler Speicher", description: "Wird berechnet …", leading: '<span class="settings-status-dot is-idle"></span>', trailing: '<span id="settingsStorageOverview" class="settings-value">—</span>' }),
+		UI.row({ title: "Impala67", description: "Installierbare Offline-App", leading: '<span class="settings-status-dot is-ok"></span>', trailing: '<span class="settings-value">v' + e(String(version).replace(/^v/i, "")) + "</span>" }),
+	].join("");
+	const quick = UI.actions([
+		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !S.driveUserEmail && !S.settings.driveClientId && !(window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) },
+		{ label: "Backup erstellen", id: "btnExport" },
+		{ label: "Updates prüfen", id: "btnCheckUpdate" },
+	], "settings-quick-actions");
+	return UI.page("Übersicht", "Alles Wichtige auf einen Blick – ohne technische Details.",
+		UI.group("Status", statusRows, { id: "overview-status" }) + UI.group("Schnellaktionen", quick));
+}
+
+function renderGeneral(vm) {
+	const rows = vm.homeLayout().map((entry, index, all) => {
+		const meta = vm.homeSections.find((item) => item.id === entry.id) || { label: entry.id, hint: "" };
+		return '<div class="settings-sort-row' + (entry.on ? "" : " is-disabled") + '" draggable="true" data-dashboard-row="' + e(entry.id) + '">' +
+			'<span class="settings-drag" aria-hidden="true">⠿</span><span class="settings-row-copy"><b>' + e(meta.label) + "</b><small>" + e(meta.hint) + "</small></span>" +
+			switchControl("dash-" + entry.id, meta.label, entry.on).replace("<input", '<input data-dashtoggle="' + e(entry.id) + '"') +
+			'<span class="settings-sort-actions"><button type="button" data-dashmove="' + e(entry.id) + ':-1"' + (index === 0 ? " disabled" : "") + ' aria-label="' + e(meta.label) + ' nach oben">↑</button><button type="button" data-dashmove="' + e(entry.id) + ':1"' + (index === all.length - 1 ? " disabled" : "") + ' aria-label="' + e(meta.label) + ' nach unten">↓</button></span></div>';
+	}).join("");
+	return UI.page("Allgemein", "Passe Startseite und grundlegendes App-Verhalten an.",
+		UI.group("Start", UI.field("Begrüßungsname", "inpHomeName", S.settings.homeUserName || "", { description: "Erscheint nur auf deiner Home-Seite", placeholder: "Optional" }), { id: "home-name" }) +
+		UI.group("Home-Bereiche", rows + UI.actions([{ label: "Standard wiederherstellen", data: 'data-dashadd="1"' }]), { id: "home-layout", footnote: "Änderungen gelten sofort auf diesem Gerät. Mit Ziehen oder den Pfeiltasten änderst du die Reihenfolge." }));
+}
+
+function renderAppearance(vm) {
+	const theme = vm.followSystemTheme ? "system" : vm.theme;
+	const accents = [["blue", "Blau"], ["violet", "Violett"], ["green", "Grün"], ["orange", "Orange"]];
+	const accentButtons = '<div class="settings-accents" role="group" aria-label="Akzentfarbe">' + accents.map(([value, label]) =>
+		'<button type="button" data-accent="' + value + '" class="accent-' + value + (vm.accent === value ? " active" : "") + '" aria-pressed="' + (vm.accent === value) + '"><span></span>' + label + "</button>").join("") + "</div>";
+	const design = UI.row({ id: "theme", title: "Erscheinungsbild", description: theme === "system" ? "Folgt automatisch deinem Gerät" : "Manuell festgelegt", trailing: UI.segmented("themeSegments", [
+		{ value: "system", label: "System", id: "btnThemeSystem" }, { value: "light", label: "Hell", id: "btnThemeLight" }, { value: "dark", label: "Dunkel", id: "btnThemeDark" },
+	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" });
+	const readable = UI.row({ id: "density", title: "Darstellungsdichte", description: "Bestimmt Abstände und Informationsdichte", trailing: UI.segmented("densitySegments", [
+		{ value: "compact", label: "Kompakt", id: "btnDensityCompact" }, { value: "comfortable", label: "Komfortabel", id: "btnDensityComfortable" },
+	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
+		{ value: "s", label: "Klein", id: "btnFontS" }, { value: "m", label: "Normal", id: "btnFontM" }, { value: "l", label: "Groß", id: "btnFontL" },
+	], vm.fontSize, "Schriftgröße") }) + UI.row({ id: "motion", title: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", trailing: switchControl("inpReduceMotion", "Bewegung reduzieren", vm.motion === "reduced") });
+	const background = UI.row({ id: "background", title: "Eigenes Hintergrundbild", description: "Bleibt lokal auf diesem Gerät", trailing: UI.actions([{ label: "Bild wählen", id: "btnPickBg" }, { label: "Entfernen", id: "btnClearBg", className: "secondary" }]) });
+	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + UI.group("Hintergrund", background));
+}
+
+function renderAiModels(vm) {
+	const providers = S.settings.aiProviders || [];
+	const activeId = S.settings.aiProviderId || providers[0]?.id || "";
+	const activeModel = S.settings.aiModel || "";
+	const activeName = providers.find((provider) => provider.id === activeId)?.name || activeId || "—";
+	return UI.group("Aktives Modell", UI.row({ title: activeModel || "Kein Modell gewählt", description: activeModel ? activeName : "Wähle ein verfügbares Chat-Modell", leading: '<span class="settings-status-dot is-' + (activeModel ? "ok" : "warn") + '"></span>', trailing: button("Neu laden", "btnRefreshModels", "secondary") }) +
+		'<div class="settings-model-search"><input id="inpModelSearch" type="search" placeholder="Modelle durchsuchen …" autocomplete="off" value="' + e(S.modelQuery || "") + '"><span id="aiModelCount"></span></div><div id="settingsModelList" class="settings-model-list"><div class="menu-note">Lädt …</div></div><p id="settingsModelHint" class="settings-footnote" hidden></p>', { id: "ai-models" }) +
+		UI.disclosure("Manuelle Modell-ID", "Nur wenn die Quelle das Modell nicht auflistet", '<div class="settings-inline-fields"><input id="inpCustomModel" type="text" placeholder="Modell-ID" value="' + e(activeModel) + '"><select id="inpCustomModelProv" aria-label="Quelle">' + providers.map((provider) => '<option value="' + e(provider.id) + '"' + (provider.id === activeId ? " selected" : "") + '>' + e(provider.name || provider.id) + "</option>").join("") + '</select>' + button("Übernehmen", "btnApplyCustomModel") + "</div>");
+}
+
+function renderAiSources() {
+	const providers = S.settings.aiProviders || [];
+	const activeId = S.settings.aiProviderId || providers[0]?.id || "";
+	const cards = providers.map((provider) => UI.disclosure(provider.name || provider.id, provider.id === activeId ? "Aktive Quelle" : String(provider.base || "").replace(/^https?:\/\//, ""),
+		'<div class="provider-card-body" data-provrow="' + e(provider.id) + '">' +
+		UI.field("Name", "prov-name-" + provider.id, provider.name, { explicit: true }).replace('id="prov-name-' + e(provider.id) + '"', 'id="prov-name-' + e(provider.id) + '" data-provname="' + e(provider.id) + '"') +
+		UI.field("Server-URL", "prov-base-" + provider.id, provider.base, { explicit: true, placeholder: "https://…/v1" }).replace('id="prov-base-' + e(provider.id) + '"', 'id="prov-base-' + e(provider.id) + '" data-provbase="' + e(provider.id) + '"') +
+		UI.field("API-Key", "prov-key-" + provider.id, provider.key, { explicit: true, type: "password", autocomplete: "off", placeholder: "Bleibt je nach Token-Sync lokal" }).replace('id="prov-key-' + e(provider.id) + '"', 'id="prov-key-' + e(provider.id) + '" data-provkey="' + e(provider.id) + '"') +
+		UI.actions([{ label: "Verbindung testen", data: 'data-provtest="' + e(provider.id) + '"' }, { label: "Entfernen", data: 'data-provdel="' + e(provider.id) + '"', className: "danger-text" }]) + '<p class="provider-status" data-provstatus="' + e(provider.id) + '"></p></div>', provider.id === activeId)).join("");
+	return UI.group("KI-Quellen", cards + UI.actions([{ label: "Quelle hinzufügen", id: "btnAddProvider" }, { label: "LM Studio", data: 'data-provpreset="local"', className: "secondary" }, { label: "Gemini", data: 'data-provpreset="google"', className: "secondary" }, { label: "OpenAI", data: 'data-provpreset="openai"', className: "secondary" }]), { id: "ai-sources", footnote: "Zugangsdaten werden erst mit Speichern übernommen." });
+}
+
+function renderLearning(vm) {
+	const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
+	const conf = localStorage.getItem("impala67Confidence");
+	const confidence = !!conf && conf !== "off";
+	const telemetry = localStorage.getItem("impala67Telemetry") !== "off";
+	const options = UI.row({ title: "Overlearning-Sperre", description: "Verhindert sofortiges Wiederholen frisch bewerteter Karten", trailing: switchControl("inpOverlearn", "Overlearning-Sperre", overlearn) }) +
+		UI.row({ title: "Selbsteinschätzung abfragen", description: confidence ? "Du bewertest deine Sicherheit bewusst" : "Die App schätzt Sicherheit aus der Antwortzeit", trailing: switchControl("inpConfidence", "Selbsteinschätzung abfragen", confidence) }) +
+		UI.row({ title: "Lokale Lernanalyse", description: "Erzeugt Home-Insights; verlässt dieses Gerät nicht", trailing: switchControl("inpTelemetry", "Lokale Lernanalyse", telemetry) });
+	const beta = window.EXP?.settingsHtml ? window.EXP.settingsHtml() : '<div class="settings-empty">Lernmodul nicht geladen.</div>';
+	return UI.group("Lernverhalten", options, { id: "learning-options" }) + UI.group("Beta-Lernfunktionen", beta, { id: "learning-beta", footnote: "Beta-Funktionen sind standardmäßig aus und lassen sich einzeln aktivieren." });
+}
+
+function renderAi(vm) {
+	const tab = S.settingsKiTab === "sources" || S.settingsKiTab === "learning" ? S.settingsKiTab : "models";
+	const tabs = '<nav class="settings-subnav" role="tablist" aria-label="KI und Lernen"><button type="button" data-aitab="models" class="' + (tab === "models" ? "active" : "") + '">Modelle</button><button type="button" data-aitab="sources" class="' + (tab === "sources" ? "active" : "") + '">Quellen</button><button type="button" data-aitab="learning" class="' + (tab === "learning" ? "active" : "") + '">Lernen</button></nav>';
+	let content = tab === "sources" ? renderAiSources() : tab === "learning" ? renderLearning(vm) : renderAiModels(vm);
+	if (tab !== "learning") {
+		const embed = (S.settings.embedProviderId || "") + (S.settings.embedModel ? "::" + S.settings.embedModel : "");
+		content += UI.disclosure("Erweitert", "Embedding, Werkzeuge und eigene Anweisungen", UI.row({ title: "Tools mitsenden", description: "Stellt der KI die App-Werkzeuge zur Verfügung", trailing: switchControl("inpAlwaysTools", "Tools mitsenden", S.settings.alwaysSendTools !== false) }) +
+			'<label class="settings-input-row" id="ai-embedding" data-settings-anchor><span><b>Embedding-Modell</b><small>Für semantische Suche</small></span><span class="settings-field-action"><select id="inpEmbed" data-currentembed="' + e(S.settings.embedModel || "") + '" data-currentprov="' + e(S.settings.embedProviderId || "") + '" disabled><option value="' + e(embed) + '">Lädt …</option></select>' + button("↻", "btnRefreshEmbedding", "icon-only") + '</span><small id="embeddingModelHint" class="settings-footnote" hidden></small></label>' +
+			UI.field("Eigene Anweisungen", "inpCustomInstructions", S.settings.customInstructions || "", { explicit: true, multiline: true, rows: 5, description: "Tonfall, Fach und dauerhafte Vorlieben", placeholder: "Optional" }).replace('class="settings-input-row"', 'class="settings-input-row" id="ai-instructions" data-settings-anchor'));
+	}
+	return UI.page("KI & Lernen", "Modelle, Zugänge und Lernhilfen – klar getrennt und schnell erreichbar.", tabs + '<div id="aiStatusSettings" class="ai-status-banner"></div>' + content + (tab === "sources" || tab === "models" ? UI.saveBar() : ""));
+}
+
+function driveContent() {
+	if (!S.driveUserEmail) S.driveUserEmail = localStorage.getItem("impala67_drive_email") || null;
+	const hasClient = !!((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId);
+	if (S.driveUserEmail && DRIVE.isConnected?.()) return UI.status("ok", "Verbunden", S.driveUserEmail, button("Jetzt synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
+	if (S.driveUserEmail && hasClient) return UI.status("warn", "Sync pausiert", S.driveUserEmail + " · bewusster Klick erforderlich", button("Erneuern & synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
+	if (hasClient) return UI.status("idle", "Nicht verbunden", "Google öffnet erst nach deinem Klick ein Anmeldefenster", button("Mit Google anmelden", "btnDriveLogin"));
+	return UI.status("warn", "Einrichtung erforderlich", "Hinterlege unter Erweitert eine Google Client-ID", "");
+}
+
+function renderSync() {
+	const notionReady = !!(S.settings.notionToken || S.notionToken);
+	const notion = UI.status(notionReady ? "ok" : "idle", notionReady ? "Bereit" : "Nicht eingerichtet", S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Token und optional eine Wurzelseite hinterlegen") +
+		UI.field("Integration-Token", "inpNotionToken", S.settings.notionToken || S.notionToken || "", { explicit: true, type: "password", autocomplete: "off", placeholder: "secret_…" }) +
+		UI.field("Wurzelseiten-ID", "inpNotionPage", S.settings.notionPageId || S.notionPageId || "", { explicit: true, placeholder: "Leer = alle freigegebenen Seiten" }) +
+		UI.actions([{ label: "Einmalig importieren", id: "btnMigrateNotion" }, { label: "Zwei-Wege-Sync", id: "btnNotionSync" }, { label: "Abbrechen", id: "btnNotionCancel", className: "danger-text", hidden: true }]) + '<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div><p class="settings-footnote" id="notionStatus"></p>';
+	const privacy = UI.row({ id: "token-sync", title: "Tokens über Drive synchronisieren", description: SETTINGS_SYNC.allowsSecrets(S.settings) ? "KI-Keys und Notion-Token werden an deine eigenen Geräte übertragen" : "Tokens bleiben ausschließlich auf diesem Gerät", leading: '<span class="settings-privacy-icon">⌾</span>', trailing: switchControl("inpSyncSecrets", "Tokens über Drive synchronisieren", SETTINGS_SYNC.allowsSecrets(S.settings)) });
+	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" }) + UI.field("CORS-Proxy", "inpCorsProxy", S.settings.corsProxy || "", { explicit: true, placeholder: "Leer = corsproxy.io" });
+	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", driveContent(), { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
+}
+
+function renderData(vm) {
+	const backup = UI.row({ title: "Vollständiges Backup", description: "Event-Log und Dateien als JSON", trailing: UI.actions([{ label: "Exportieren", id: "btnExport" }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
+	const exports = UI.row({ title: "Lerndaten", description: "Lokale Telemetrie als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
+	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
+	const update = UI.row({ title: "Installierte Version", description: "PWA / Browser", trailing: '<span id="updateLocalVer" class="settings-value">v' + e(String(vm.version).replace(/^v/i, "")) + "</span>" }) + UI.row({ title: "Verfügbare Version", description: "Wird nur auf Wunsch geprüft", trailing: '<span id="updateRemoteVer" class="settings-value">—</span>' }) + UI.actions([{ label: "Nach Updates suchen", id: "btnCheckUpdate" }, { label: "Update installieren", id: "btnApplyPwaUpdate", hidden: true }]) + '<p class="settings-footnote" id="updateStatus"></p>';
+	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") });
+	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup", footnote: "Importe werden konfliktfrei mit dem vorhandenen Event-Log zusammengeführt." }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
+}
+
+function renderDevices() {
+	const content = window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>';
+	return UI.page("Geräte & Bedienung", "Nutze Controller, ohne eine zweite Lernlogik oder komplizierte Einrichtung.", content);
+}
+
+export function renderSettingsPage(section, vm) {
+	if (section === "general") return renderGeneral(vm);
+	if (section === "appearance") return renderAppearance(vm);
+	if (section === "ai") return renderAi(vm);
+	if (section === "sync") return renderSync(vm);
+	if (section === "data") return renderData(vm);
+	if (section === "devices") return renderDevices(vm);
+	return renderOverview(vm);
+}
+
+export function renderSettingsShell(section, body, query = "") {
+	const nav = SETTINGS_SECTIONS.map((entry) => '<button type="button" class="settings-nav-item' + (entry.id === section ? " active" : "") + '" data-settings-go="' + entry.id + '" aria-current="' + (entry.id === section ? "page" : "false") + '"><span class="settings-nav-icon">' + UI.icon(entry.icon) + '</span><span>' + e(entry.label) + "</span></button>").join("");
+	return '<div class="modal settings-modal-v2" data-sec="' + e(section) + '"><button class="modal-x" id="btnCloseSettings" title="Einstellungen schließen" aria-label="Einstellungen schließen">×</button><aside class="settings-sidebar"><div class="settings-sidebar-title">Einstellungen</div><label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Suchen" value="' + e(query) + '" aria-label="Einstellungen durchsuchen"><kbd>⌘ K</kbd></label><div id="settingsSearchResults" class="settings-search-results" hidden></div><nav aria-label="Einstellungsbereiche">' + nav + '</nav></aside><main class="settings-main" tabindex="-1">' + body + "</main></div>";
+}
+
+export function renderSearchResults(query) {
+	const results = searchSettings(query);
+	if (!query.trim()) return "";
+	if (!results.length) return '<div class="settings-search-empty">Keine Einstellung gefunden</div>';
+	return results.map((item) => '<button type="button" data-settings-go="' + e(item.section) + '" data-settings-anchor-target="' + e(item.id) + '"><span><b>' + e(item.label) + "</b><small>" + e(item.sectionLabel) + " · " + e(item.description) + "</small></span>" + UI.icon("chevron") + "</button>").join("");
+}
+
+export async function hydrateStorageUsage() {
+	const targets = [document.getElementById("settingsStorageValue"), document.getElementById("settingsStorageOverview")].filter(Boolean);
+	if (!targets.length) return;
+	let text = "Nicht verfügbar";
+	try {
+		const estimate = await navigator.storage?.estimate?.();
+		if (estimate) {
+			const mb = (estimate.usage || 0) / 1048576;
+			const quota = (estimate.quota || 0) / 1073741824;
+			text = mb < 1 ? "< 1 MB" : mb.toFixed(mb < 10 ? 1 : 0) + " MB";
+			if (quota) text += " von " + quota.toFixed(1) + " GB";
+		}
+	} catch { /* Anzeige bleibt neutral */ }
+	targets.forEach((target) => { target.textContent = text; });
+}

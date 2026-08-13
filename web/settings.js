@@ -10,6 +10,9 @@ import { DRIVE } from "./drive.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
+import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
+import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage } from "./settings-renderer.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -143,311 +146,143 @@ export function renderNotionJob() {
 	if (btnSync) { btnSync.disabled = running; btnSync.textContent = running && job.kind === "sync" ? "Synchronisiere…" : "⇅ Zwei-Wege-Sync"; }
 }
 
-// Formularfeld-Helper für Einstellungen.
-export function field(label, id, value, type) {
-	return "<div><label for=\"" + id + "\">" + U.esc(label) + "</label>" +
-		'<input id="' + id + '" type="' + (type || "text") + '" value="' + U.esc(value || "") + '"></div>';
+// ---------- Settings-System: Schema, Shell und einheitlicher Entwurfszustand ----------
+let settingsDraftInitial = "[]";
+let settingsSearchQuery = "";
+
+function explicitSettingsValues() {
+	return Array.from(document.querySelectorAll("[data-settings-explicit]")).map((element, index) => ({
+		key: element.id || element.dataset.provname || element.dataset.provbase || element.dataset.provkey || String(index),
+		value: element.type === "checkbox" ? element.checked : element.value,
+	}));
 }
 
-// Gemeinsames "Speichern"-Aktionsleiste-Markup — stand vorher dreimal wortgleich
-// im Code (KI-Bereich sowie zwei Sync-Bereich-Zweige).
-const saveActionsHtml = '<div class="modal-actions"><button id="btnSaveSettings">Speichern</button></div>';
+export function hasUnsavedSettings() {
+	return valuesAreDirty(settingsDraftInitial, explicitSettingsValues());
+}
 
-// Einstellungen mit Unterpunkten (wie in Notion), feste Größe, Inhalt scrollt
-export const SETTINGS_SECTIONS = [
-	{ id: "ki", label: "KI" },
-	{ id: "home", label: "Home" },
-	{ id: "look", label: "Darstellung" },
-	{ id: "sync", label: "Sync" },
-	{ id: "notion", label: "Notion" },
-	{ id: "backup", label: "Backup" },
-	{ id: "update", label: "Update" },
-	{ id: "controller", label: "Controller" },
-	{ id: "experimente", label: "Experimente" },
-];
+export function refreshSettingsDirtyState() {
+	const dirty = hasUnsavedSettings();
+	const bar = document.querySelector("[data-settings-savebar]");
+	if (bar) bar.hidden = !dirty;
+	const modal = document.querySelector(".settings-modal-v2");
+	if (modal) modal.classList.toggle("is-dirty", dirty);
+	return dirty;
+}
 
-export function openSettings(section) {
-	S.settingsSection = section || S.settingsSection || "ki";
-	const sec = S.settingsSection;
-	const o = U.el("overlay");
-	if (!o) return;
-	o.hidden = false;
-	const nav = SETTINGS_SECTIONS.map((s) =>
-		'<div class="set-item' + (s.id === sec ? " active" : "") + '" data-set="' + s.id + '">' + s.label + "</div>"
-	).join("");
-	let body = "";
-	if (sec === "ki") {
-		const providers = S.settings.aiProviders || [];
-		const embedValue = S.settings.embedModel || "";
-		const embedProv = S.settings.embedProviderId || "";
-		const activeId = S.settings.aiProviderId || (providers[0] || {}).id || "";
-		const activeModel = S.settings.aiModel || "";
-		const activeName = ((providers.find((p) => p.id === activeId) || {}).name) || activeId || "—";
-		const currentLabel = activeModel ? (activeName + " · " + activeModel) : "Kein Modell gewählt";
-		// Horizontaler Unter-Tab merken (Modelle | Quellen | Mehr) — nur einer sichtbar.
-		const kiTab = S.settingsKiTab || "models";
-		const tabBtn = (id, label) =>
-			'<button type="button" class="ai-tab' + (kiTab === id ? " active" : "") + '" data-aitab="' + id + '">' + label + "</button>";
-		const pane = (id, html) =>
-			'<div class="ai-tab-pane" data-aitabpane="' + id + '"' + (kiTab === id ? "" : " hidden") + '>' + html + "</div>";
+async function allowDiscardSettings() {
+	if (!hasUnsavedSettings()) return true;
+	const modal = document.querySelector(".settings-modal-v2");
+	if (!modal) return false;
+	return new Promise((resolve) => {
+		const cancel = U.h("button", { type: "button" }, "Weiter bearbeiten");
+		const discard = U.h("button", { type: "button", class: "danger" }, "Verwerfen");
+		const guard = U.h("div", { class: "settings-guard", role: "presentation" },
+			U.h("div", { class: "settings-guard-dialog", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "settingsGuardTitle" },
+				U.h("h3", { id: "settingsGuardTitle" }, "Änderungen verwerfen?"),
+				U.h("p", null, "Du hast Änderungen noch nicht gespeichert."),
+				U.h("div", { class: "settings-actions" }, cancel, discard)));
+		const finish = (result) => { guard.remove(); resolve(result); };
+		cancel.addEventListener("click", () => finish(false));
+		discard.addEventListener("click", () => finish(true));
+		guard.addEventListener("click", (e) => { if (e.target === guard) finish(false); });
+		modal.appendChild(guard);
+		cancel.focus();
+	});
+}
 
-		// UI v6: wenig Text, große Flächen, klare Hierarchie — Erklärungen nur als title/placeholder.
-		const modelsPane =
-			'<div class="ai-pane-head">' +
-				'<div class="ai-active-pill" title="Aktives Chat-Modell"><span class="ai-active-dot" aria-hidden="true"></span><b id="aiCurrentModelLabel">' + U.esc(currentLabel) + '</b></div>' +
-				'<button type="button" id="btnRefreshModels" class="ai-icon-btn" title="Neu laden" aria-label="Modelle neu laden">↻</button>' +
-			'</div>' +
-			// Suchfeld: bei mehreren Quellen ist die Liste sonst eine Wand aus Modell-IDs.
-			'<div class="ai-model-search">' +
-				'<input id="inpModelSearch" type="search" placeholder="LLM suchen (Name oder Quelle)…" autocomplete="off" value="' + U.esc(S.modelQuery || "") + '">' +
-				'<span id="aiModelCount" class="ai-soft-meta"></span>' +
-			'</div>' +
-			'<div id="settingsModelList" class="settings-model-list"><div class="menu-note">Lädt…</div></div>' +
-			'<p id="settingsModelHint" class="ai-soft-meta" hidden></p>' +
-			'<div class="settings-custom-model" title="Modell manuell setzen">' +
-				'<input id="inpCustomModel" type="text" placeholder="Modell-ID…" value="' + U.esc(activeModel) + '" autocomplete="off">' +
-				'<select id="inpCustomModelProv" aria-label="Quelle">' + providers.map((pr) =>
-					'<option value="' + U.esc(pr.id) + '"' + (pr.id === activeId ? " selected" : "") + '>' + U.esc(pr.name || pr.id) + "</option>"
-				).join("") + '</select>' +
-				'<button type="button" id="btnApplyCustomModel" class="ai-icon-btn" title="Übernehmen" aria-label="Modell übernehmen">✓</button>' +
-			'</div>';
+function settingsViewModel() {
+	return {
+		version: (typeof window.getAppVersion === "function" ? window.getAppVersion() : null) || window.APP_VERSION || "unbekannt",
+		followSystemTheme: followsSystemTheme(),
+		theme: resolvedTheme(),
+		accent: localStorage.getItem("impala67Accent") || "blue",
+		density: localStorage.getItem("impala67Density") || "compact",
+		motion: localStorage.getItem("impala67Motion") || "full",
+		fontSize: localStorage.getItem("impala67FontSize") || "m",
+		homeLayout,
+		homeSections: HOME_SECTIONS,
+	};
+}
 
-		const sourcesPane =
-			'<div class="provider-list">' + providers.map((pr) =>
-				'<details class="provider-card" data-provrow="' + pr.id + '"' + (pr.id === activeId ? " open" : "") + '>' +
-					'<summary class="provider-card-summary">' +
-						'<span class="provider-card-title">' + U.esc(pr.name || pr.id) + '</span>' +
-						(pr.id === activeId ? '<span class="provider-active-badge">aktiv</span>' : "") +
-						'<span class="provider-summary-url">' + U.esc(String(pr.base || "").replace(/^https?:\/\//, "").slice(0, 28)) + '</span>' +
-					'</summary>' +
-					'<div class="provider-card-body">' +
-						'<input data-provname="' + pr.id + '" placeholder="Name" value="' + U.esc(pr.name) + '">' +
-						'<input data-provbase="' + pr.id + '" placeholder="http://localhost:1234/v1" value="' + U.esc(pr.base) + '">' +
-						'<input data-provkey="' + pr.id + '" type="password" autocomplete="off" placeholder="API-Key" value="' + U.esc(pr.key) + '">' +
-						'<div class="provider-card-foot">' +
-							'<button type="button" class="ai-ghost-btn" data-provtest="' + pr.id + '">Testen</button>' +
-							'<button type="button" data-provdel="' + pr.id + '" class="ai-icon-btn danger" title="Entfernen" aria-label="Quelle entfernen">🗑</button>' +
-						'</div>' +
-						'<p class="provider-status" data-provstatus="' + pr.id + '"></p>' +
-					'</div>' +
-				'</details>'
-			).join("") + "</div>" +
-			'<div class="ai-provider-add">' +
-				'<button type="button" id="btnAddProvider" class="ai-ghost-btn">+ Quelle</button>' +
-				'<button type="button" data-provpreset="local" class="ai-chip-btn">LM Studio</button>' +
-				'<button type="button" data-provpreset="google" class="ai-chip-btn">Gemini</button>' +
-				'<button type="button" data-provpreset="openai" class="ai-chip-btn">OpenAI</button>' +
-			'</div>';
+function focusSettingsAnchor(anchor) {
+	if (!anchor) return;
+	queueMicrotask(() => {
+		const target = document.getElementById(anchor);
+		if (!target) return;
+		target.scrollIntoView({ block: "center", behavior: "smooth" });
+		target.classList.add("settings-highlight");
+		setTimeout(() => target.classList.remove("settings-highlight"), 1800);
+	});
+}
 
-		const morePane =
-			'<div class="ai-more-stack">' +
-				// Tools mitsenden: nutzt die bewährte, fehlerfreie .theme-switch-Klasse
-				// der Darstellungseinstellungen — verhindert Klick-Flackern und doppeltes Toggeln.
-				'<div class="ai-toggle-card" title="Alle Werkzeuge bei jeder Anfrage mitsenden">' +
-					'<span class="ai-toggle-copy"><b>Tools mitsenden</b></span>' +
-					'<label class="theme-switch"><input id="inpAlwaysTools" type="checkbox"' + (S.settings.alwaysSendTools !== false ? " checked" : "") + '><span aria-hidden="true"></span></label>' +
-				'</div>' +
-				'<div class="ai-field-card">' +
-					'<div class="ai-field-label-row"><label for="inpEmbed">Embedding</label>' +
-					'<button type="button" id="btnRefreshEmbedding" class="ai-icon-btn" title="Neu laden" aria-label="Embeddings neu laden">↻</button></div>' +
-					// "quelleId::modell" — unabhängig vom Chat-Modell. [F4]
-					'<select id="inpEmbed" class="ai-select-block" data-currentembed="' + U.esc(embedValue) + '" data-currentprov="' + U.esc(embedProv) + '" disabled>' +
-						'<option value="' + U.esc(embedValue ? embedProv + "::" + embedValue : "") + '">' + U.esc(embedValue || "Lädt…") + '</option></select>' +
-					'<p id="embeddingModelHint" class="ai-soft-meta" hidden></p>' +
-				'</div>' +
-				'<div class="ai-field-card">' +
-					'<label for="inpCustomInstructions">Anweisungen</label>' +
-					'<textarea id="inpCustomInstructions" rows="5" placeholder="Tonfall, Fach, Vorlieben…">' + U.esc(S.settings.customInstructions) + '</textarea>' +
-				'</div>' +
-			'</div>';
-
-		// Speichern bewusst AUSSERHALB der scrollbaren Panes — sonst wird der Knopf
-		// unten abgeschnitten (overflow der Body/Pane-Kette).
-		body = '<section class="ai-settings">' +
-			'<div id="aiStatusSettings" class="ai-status-banner"></div>' +
-			'<nav class="ai-tabs" role="tablist" aria-label="KI-Bereiche">' +
-				tabBtn("models", "Modelle") +
-				tabBtn("sources", "Quellen") +
-				tabBtn("more", "Mehr") +
-			'</nav>' +
-			'<div class="ai-tab-panes">' +
-				pane("models", modelsPane) +
-				pane("sources", sourcesPane) +
-				pane("more", morePane) +
-			'</div>' +
-			'<div class="modal-actions ai-settings-foot"><button type="button" id="btnSaveSettings">Speichern</button></div>' +
-		'</section>';
-	} else if (sec === "home") {
-		// 🏠 Home-Editor v2 (21. Juli): ersetzt die alte „Home-Dashboard“-Liste, die mit
-		// der echten Homeseite nichts zu tun hatte. HOME_SECTIONS (unten) sind exakt die
-		// Bereiche, die render.js → renderHome() zeichnet — 👁/🚫 steuert die Sichtbarkeit,
-		// ↑↓ die Reihenfolge; alles wirkt sofort, ganz ohne Speichern-Knopf.
-		const rows = homeLayout().map((e, i, arr) => {
-			const meta = HOME_SECTIONS.find((s) => s.id === e.id) || { label: e.id, hint: "" };
-			return '<div class="dashboard-setting-row"' + (e.on ? "" : ' style="opacity:.45"') + '>' +
-				'<button data-dashtoggle="' + U.esc(e.id) + '" class="dash-visible" title="' + (e.on ? "Bereich ausblenden" : "Bereich wieder einblenden") + '">' + (e.on ? "👁" : "🚫") + '</button>' +
-				'<span><b>' + U.esc(meta.label) + '</b>' + (meta.hint ? ' <small class="hint">· ' + U.esc(meta.hint) + '</small>' : "") + '</span>' +
-				'<button data-dashmove="' + U.esc(e.id) + ':-1"' + (i === 0 ? " disabled" : "") + ' title="Nach oben">↑</button>' +
-				'<button data-dashmove="' + U.esc(e.id) + ':1"' + (i === arr.length - 1 ? " disabled" : "") + ' title="Nach unten">↓</button></div>';
-		}).join("");
-		body = '<p class="hint">Deine Homeseite, deine Regeln: Begrüßungsname setzen, Bereiche per 👁/🚫 ein- und ausblenden und per ↑↓ sortieren — jede Änderung wirkt sofort.</p>' +
-			field("Anzeigename für die Begrüßung (leer = ohne Name; speichert beim Verlassen des Felds)", "inpHomeName", S.settings.homeUserName || "") +
-			'<h4>Bereiche der Homeseite</h4>' +
-			'<div class="dashboard-settings">' + rows +
-			'<button data-dashadd="1" class="dashboard-add">↺ Standard-Layout wiederherstellen</button></div>' +
-			'<p class="hint">Immer sichtbar: Begrüßung mit Kennzahlen-Chips, Sync-Konflikt-Hinweis und „+ Neue Seite“ — alles andere bestimmst du hier.</p>';
-	} else if (sec === "notion") {
-		const last = S.settings.notionLastSync;
-		body = field("Integration Token (secret_…)", "inpNotionToken", S.settings.notionToken || S.notionToken, "password") +
-			field("Wurzelseiten-ID (leer = alle freigegebenen Seiten)", "inpNotionPage", S.settings.notionPageId || S.notionPageId) +
-			field("CORS-Proxy (optional; leer = corsproxy.io)", "inpCorsProxy", S.settings.corsProxy || "") +
-			'<p class="hint">Integration auf notion.so/my-integrations erstellen, Seiten dort per „Teilen“ freigeben. <b>⬇ Import</b> holt alles einmalig, <b>⇅ Zwei-Wege-Sync</b> gleicht danach in beide Richtungen ab.</p>' +
-			(last ? '<p class="hint">Letzter Sync: ' + U.fmtDate(last) + "</p>" : "") +
-			'<div class="modal-actions"><button id="btnMigrateNotion">⬇ Import</button><button id="btnNotionSync">⇅ Zwei-Wege-Sync</button><button id="btnNotionCancel" class="danger" hidden>⏹ Abbrechen</button></div>' +
-			'<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div>' +
-			'<p class="hint" id="notionStatus"></p>';
-	} else if (sec === "look") {
-		const followSystemTheme = followsSystemTheme();
-		const theme = resolvedTheme();
-		const systemThemeLabel = theme === "light" ? "Hell" : "Dunkel";
-		const accent = localStorage.getItem("impala67Accent") || "blue";
-		const density = localStorage.getItem("impala67Density") || "compact";
-		const motion = localStorage.getItem("impala67Motion") || "full";
-		const fontSize = localStorage.getItem("impala67FontSize") || "m";
-		const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
-		// Standard ist jetzt „automatisch“: telemetrie.js erkennt die Sicherheit an der
-		// Antwortzeit, die Chips erscheinen nur nach ausdrücklichem Einschalten.
-		const confPref = localStorage.getItem("impala67Confidence");
-		const confidence = !!confPref && confPref !== "off";
-		const telemetry = localStorage.getItem("impala67Telemetry") !== "off";
-		body = '<h4>Design</h4>' +
-			'<section class="appearance-theme-card' + (followSystemTheme ? " is-auto" : "") + '">' +
-				'<div class="appearance-theme-copy"><span class="appearance-theme-icon" aria-hidden="true">◐</span><span>' +
-					'<b>Mit Gerätemodus synchronisieren</b><small>' + (followSystemTheme ? "Aktuell „" + systemThemeLabel + "“ · passt sich automatisch an" : "Manuelle Auswahl verwenden") + '</small>' +
-				'</span></div>' +
-				'<label class="theme-switch" title="Geräte-Theme automatisch übernehmen"><input id="inpThemeFollowSystem" type="checkbox"' + (followSystemTheme ? " checked" : "") + '><span aria-hidden="true"></span></label>' +
-			'</section>' +
-			'<div class="row-btns appearance-choice appearance-manual-theme">' +
-			'<button id="btnThemeDark" class="' + (theme === "dark" ? "active" : "") + '"' + (followSystemTheme ? " disabled" : "") + '>◐ Dunkel</button>' +
-			'<button id="btnThemeLight" class="' + (theme === "light" ? "active" : "") + '"' + (followSystemTheme ? " disabled" : "") + '>☀ Hell</button></div>' +
-			'<h4>Akzentfarbe</h4><div class="accent-picker">' + ["blue", "violet", "green", "orange"].map((name) =>
-				'<button data-accent="' + name + '" class="accent-swatch accent-' + name + (accent === name ? " active" : "") + '" title="' + name + '"></button>').join("") + '</div>' +
-			'<h4>Darstellungsdichte</h4><div class="row-btns appearance-choice">' +
-			'<button id="btnDensityComfortable" class="' + (density === "comfortable" ? "active" : "") + '">Komfortabel</button>' +
-			'<button id="btnDensityCompact" class="' + (density === "compact" ? "active" : "") + '">Kompakt</button></div>' +
-			'<h4>Bewegung</h4><div class="row-btns appearance-choice">' +
-			'<button id="btnMotionFull" class="' + (motion === "full" ? "active" : "") + '">Sanft</button>' +
-			'<button id="btnMotionReduced" class="' + (motion === "reduced" ? "active" : "") + '">Reduziert</button></div>' +
-			'<h4>Schriftgröße</h4><div class="row-btns appearance-choice">' +
-			'<button id="btnFontS" class="' + (fontSize === "s" ? "active" : "") + '">Klein</button>' +
-			'<button id="btnFontM" class="' + (fontSize === "m" ? "active" : "") + '">Normal</button>' +
-			'<button id="btnFontL" class="' + (fontSize === "l" ? "active" : "") + '">Groß</button></div>' +
-			'<h4>Lernen</h4>' +
-			'<p class="hint">Overlearning-Sperre — frisch bewertete Karten bleiben kurz gesperrt.</p>' +
-			'<div class="row-btns appearance-choice">' +
-			'<button id="btnLockOn" class="' + (overlearn ? "active" : "") + '">Sperre an</button>' +
-			'<button id="btnLockOff" class="' + (!overlearn ? "active" : "") + '">Aus</button></div>' +
-			'<p class="hint">Selbsteinschätzung vor dem Aufdecken der Antwort — standardmäßig automatisch: die App liest an deiner Antwortzeit ab, wie sicher eine Karte saß. Nur einschalten, wenn du dich lieber selbst bewusst einschätzt.</p>' +
-			'<div class="row-btns appearance-choice">' +
-			'<button id="btnConfOn" class="' + (confidence ? "active" : "") + '">Abfrage an</button>' +
-			'<button id="btnConfOff" class="' + (!confidence ? "active" : "") + '">Automatisch</button></div>' +
-			'<p class="hint">Lern-Telemetrie (nur lokal) für die Home-Insights.</p>' +
-			'<div class="row-btns appearance-choice">' +
-			'<button id="btnTeleOn" class="' + (telemetry ? "active" : "") + '">Aufzeichnung an</button>' +
-			'<button id="btnTeleOff" class="' + (!telemetry ? "active" : "") + '">Aus</button></div>' +
-			'<h4>Home-Layout</h4>' +
-			'<p class="hint">Der Home-Editor ist umgezogen: Bereiche, Reihenfolge und Begrüßungsname findest du jetzt unter <b>Einstellungen → Home</b>.</p>' +
-			'<div class="row-btns"><button data-set="home">🏠 Home-Editor öffnen</button></div>' +
-			'<h4>Hintergrund</h4>' +
-			'<div class="row-btns"><button id="btnPickBg">Bild wählen</button><button id="btnClearBg">Entfernen</button></div>'; 
-	} else if (sec === "controller") {
-		// 🎮 Controller (27. Juli): Der Abschnitt kommt komplett aus controller.js —
-		// Schalter, Belegung, Anlern-Modus, Deadzone und HUD verdrahten sich dort selbst
-		// per Capture-Listener (gleiches Muster wie experimente.js/telemetrie.js).
-		body = (window.CONTROLLER && window.CONTROLLER.settingsHtml) ? window.CONTROLLER.settingsHtml() :
-			'<p class="hint">Controller-Modul (controller.js) nicht geladen.</p>';
-	} else if (sec === "experimente") {
-		// 🧪 Experimentelle Features (Phase 2 — KI-Lernmodi). Die Sektion wird
-		// komplett von experimente.js gerendert; die Schalter verdrahten sich dort
-		// selbst per Capture-Listener (gleiches Muster wie telemetrie.js) — hier
-		// ist bewusst KEINE Verdrahtung nötig. Standardmäßig ist alles AUS.
-		body = (window.EXP && window.EXP.settingsHtml) ? window.EXP.settingsHtml() :
-			'<p class="hint">Experimente-Modul (experimente.js) nicht geladen.</p>';
-	} else if (sec === "backup") {
-		body = '<p class="hint">Backup als JSON-Datei (Event-Log + PDFs) — ein Import wird konfliktfrei zusammengeführt.</p>' +
-			'<div class="row-btns"><button id="btnExport">Export</button><button id="btnImport">Import</button></div>' +
-			// Lern-Telemetrie: Rohdaten-Export für eigene Auswertungen. Der Klick auf
-			// #btnTeleExport wird zentral in telemetrie.js behandelt (Capture-Listener) —
-			// hier ist bewusst KEINE Verdrahtung nötig.
-			'<h4>Lerndaten (Telemetrie)</h4>' +
-			'<p class="hint">Alle Lern-Telemetriedaten als JSON für eigene Auswertungen.</p>' +
-			'<div class="row-btns"><button id="btnTeleExport">📊 Lerndaten exportieren</button></div>' +
-			'<h4>Workspace als Markdown-ZIP</h4>' +
-			'<p class="hint">Alle Seiten als .md-Dateien (Ordnerstruktur = Seitenbaum).</p>' +
-			'<div class="row-btns">' + Object.values(S.workspaces).map((ws) =>
-				'<button data-zipws="' + U.esc(ws.id) + '">🗜 ' + U.esc(ws.name) + "</button>").join("") + "</div>" +
-			'<h4 class="danger-label">⚠️ Gefahrenzone</h4>' +
-			'<p class="hint">Löscht alle lokalen Seiten unwiderruflich. Einstellungen, API-Keys und Karteikarten bleiben erhalten.</p>' +
-			'<div class="row-btns"><button id="btnResetAll" class="danger">Alle Seiten löschen</button></div>';
-	} else if (sec === "sync") {
-		const modeHint = '<p class="hint">PWA: Anmeldung per Google-Popup (OAuth-Client Typ „Webanwendung“).</p>';
-		// Die gemerkte E-Mail bleibt auch nach Token-Ablauf sichtbar. So kann die UI
-		// „Sync pausiert“ anzeigen, statt eine widerrufene Freigabe vorzutäuschen.
-		if (!S.driveUserEmail) S.driveUserEmail = localStorage.getItem("impala67_drive_email") || null;
-		if (S.driveUserEmail && DRIVE.isConnected && DRIVE.isConnected()) {
-			body = '<div class="drive-connected">✅ Verbunden als <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
-				'<p class="hint">Sync läuft über deinen privaten Google-Drive-App-Speicher.</p>' +
-				'<div class="row-btns"><button id="btnDriveSyncSettings">☁️ Jetzt synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
-		} else if (S.driveUserEmail && ((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId)) {
-			body = '<div class="drive-connected">⏸️ Sync pausiert für <b>' + U.esc(S.driveUserEmail) + "</b></div>" +
-				'<p class="hint">Google verlangt nach Ablauf des Zugriffstokens einen bewussten Klick. Deine bisherige Freigabe bleibt dabei erhalten.</p>' +
-				'<div class="row-btns"><button id="btnDriveSyncSettings">Google-Verbindung erneuern &amp; synchronisieren</button><button id="btnDriveLogout">Abmelden</button></div>';
-		} else if (!S.settings.driveClientId && !(window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID)) {
-			body = modeHint + field("Google Client-ID (einmalig einrichten)", "inpDrive", S.settings.driveClientId) +
-				'<p class="hint">Einmalig: Google Cloud Console → Drive-API aktivieren, OAuth-Client „Webanwendung“ mit <code>' + location.origin + '</code> als autorisierten JavaScript-Ursprung anlegen, Client-ID hier speichern.</p>' +
-				saveActionsHtml;
-		} else {
-			body = modeHint + '<p class="hint">Client-ID ist hinterlegt — ein Klick genügt.</p>' +
-				'<div class="modal-actions"><button id="btnDriveLogin">Mit Google anmelden</button></div>';
-		}
-	} else if (sec === "update") {
-		const ver = (typeof window.getAppVersion === "function" ? window.getAppVersion() : null)
-			|| window.APP_VERSION || "unbekannt";
-		body = '<p class="hint">Lokal (läuft): <b id="updateLocalVer">v' + U.esc(String(ver).replace(/^v/i, "")) + '</b><br>' +
-			'Server / Remote: <b id="updateRemoteVer">wird geprüft…</b><br>Plattform: PWA / Browser</p>' +
-			'<div class="row-btns"><button id="btnCheckUpdate">Nach Updates suchen</button>' +
-			'<button id="btnApplyPwaUpdate" hidden>Update installieren</button>' +
-			"</div>" +
-			'<p class="hint" id="updateStatus">Prüfe Version…</p>';
-	}
-	// GLITCH-WURZEL: Fast jede Aktion (Akzentfarbe, Dichte, Schriftgröße, ↑↓ im Home-Editor,
-	// Quelle hinzufügen) baut den Dialog komplett neu auf — der Inhalt sprang dabei jedes Mal
-	// nach ganz oben, man musste nach jedem Klick zurückscrollen. Scrollstand desselben
-	// Bereichs über den Neuaufbau retten; bei einem Bereichswechsel bewusst oben starten.
-	const prevBody = o.querySelector('.settings-modal[data-sec="' + sec + '"] .settings-body');
-	const keepScroll = prevBody ? prevBody.scrollTop : 0;
-	// Wie in Notion: kein "Schließen"-Button unten, sondern ein ✕ oben rechts.
-	// data-sec markiert den aktiven Bereich (CSS-Hooks, z. B. KI-Layout ohne Abschneiden).
-	o.innerHTML = '<div class="modal settings-modal" data-sec="' + U.esc(sec) + '">' +
-		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<div class="settings-nav">' + nav + "</div>" +
-		'<div class="settings-body"><h3>' + U.esc(((SETTINGS_SECTIONS.find((s) => s.id === sec) || {}).label) || "Einstellungen") + '</h3>' + body + "</div></div>";
-	if (keepScroll) {
-		const nb = o.querySelector(".settings-body");
-		if (nb) nb.scrollTop = keepScroll;
-	}
-	// Läuft gerade ein Notion-Import/-Sync (oder ist einer fertig), den Fortschritt
-	if (sec === "notion" && typeof renderNotionJob === "function") renderNotionJob();
-	// KI-Tab: Status + Inhalte des aktiven Unter-Tabs laden (lazy je Tab).
-	if (sec === "ki") {
+export function openSettings(section, anchor) {
+	const stored = localStorage.getItem(SETTINGS_LAST_SECTION_KEY);
+	const resolved = resolveSettingsSection(section || stored || "overview");
+	const legacyAnchor = { ki: "ai-models", home: "home-layout", look: "theme", notion: "notion", backup: "backup", update: "updates", controller: "controller-status", experimente: "learning-beta" }[section];
+	S.settingsSection = resolved;
+	localStorage.setItem(SETTINGS_LAST_SECTION_KEY, resolved);
+	const overlay = U.el("overlay");
+	if (!overlay) return;
+	const previous = overlay.querySelector('.settings-modal-v2[data-sec="' + resolved + '"] .settings-main');
+	const keepScroll = previous ? previous.scrollTop : 0;
+	overlay.hidden = false;
+	overlay.innerHTML = renderSettingsShell(resolved, renderSettingsPage(resolved, settingsViewModel()), settingsSearchQuery);
+	const main = overlay.querySelector(".settings-main");
+	if (keepScroll && main) main.scrollTop = keepScroll;
+	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
+	refreshSettingsDirtyState();
+	focusSettingsAnchor(anchor || legacyAnchor);
+	hydrateStorageUsage();
+	if (resolved === "sync") renderNotionJob();
+	if (resolved === "ai") {
 		renderStatusDot();
-		queueMicrotask(() => loadKiTabContent(S.settingsKiTab || "models"));
+		queueMicrotask(() => {
+			loadKiTabContent(S.settingsKiTab || "models");
+			if (U.el("inpEmbed")) refreshEmbeddingModels();
+		});
 	}
-	// Update-Tab: Remote-Version sofort prüfen (Lokal + Server sichtbar)
-	if (sec === "update") {
-		// next tick: DOM muss erst im Overlay stehen
-		setTimeout(() => { handleCheckUpdate().catch(() => {}); }, 0);
+}
+
+export async function navigateSettings(section, anchor) {
+	if (!(await allowDiscardSettings())) return false;
+	openSettings(section, anchor);
+	return true;
+}
+
+export async function requestCloseSettings() {
+	if (!(await allowDiscardSettings())) return false;
+	closeOverlay();
+	return true;
+}
+
+export function discardSettingsDraft() {
+	openSettings(S.settingsSection || "overview");
+}
+
+export function updateSettingsSearch(value) {
+	settingsSearchQuery = String(value || "");
+	const host = U.el("settingsSearchResults");
+	if (!host) return;
+	host.innerHTML = renderSearchResults(settingsSearchQuery);
+	host.hidden = !settingsSearchQuery.trim();
+}
+
+export async function handleSyncSecretsToggle(enabled) {
+	const wasEnabled = SETTINGS_SYNC.allowsSecrets(S.settings);
+	if (wasEnabled === enabled) return;
+	await STATE.dispatch("settingsSet", { syncSecrets: enabled });
+	if (enabled) {
+		// Durch den neuen Event-Zeitpunkt wird ein zuvor bewusst zurückgehaltener
+		// lokaler Token-Stand beim nächsten Sync zuverlässig angeboten.
+		await STATE.dispatch("settingsSet", SETTINGS_SYNC.secretSnapshot(S.settings));
+	} else {
+		// Drive bereinigt alte Delta-/Snapshot-Kopien beim nächsten erfolgreichen
+		// manuellen Sync; offline bleibt die lokale Einstellung sofort wirksam.
+		localStorage.setItem("impala67_drive_secret_scrub", "1");
 	}
+	U.toast(enabled ? "Token-Sync aktiviert." : "Token-Sync deaktiviert: Tokens bleiben lokal.", "success");
+	openSettings("sync");
 }
 
 // Einstellungen-Aktionen aus wireEvents:
@@ -464,6 +299,8 @@ export async function handleNotionSync(t) {
 	S.notionToken = tok;
 	S.notionPageId = pid;
 	await STATE.dispatch("settingsSet", { notionToken: tok, notionPageId: pid, corsProxy: prox });
+	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
+	refreshSettingsDirtyState();
 	S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
 	renderNotionJob();
 	const onStatus = (st, fraction) => {
@@ -687,22 +524,15 @@ export async function handleApplyPwaUpdate() {
 
 // Horizontaler KI-Unter-Tab wechseln — ohne Full-Rerender, damit ungespeicherte
 // Eingaben in den anderen Panes erhalten bleiben.
-export function switchKiTab(tab) {
-	const id = tab === "sources" || tab === "more" ? tab : "models";
-	S.settingsKiTab = id;
-	document.querySelectorAll(".ai-tabs [data-aitab]").forEach((b) => {
-		b.classList.toggle("active", b.dataset.aitab === id);
-	});
-	document.querySelectorAll("[data-aitabpane]").forEach((p) => {
-		p.hidden = p.dataset.aitabpane !== id;
-	});
-	loadKiTabContent(id);
+export async function switchKiTab(tab) {
+	if (!(await allowDiscardSettings())) return;
+	S.settingsKiTab = tab === "sources" || tab === "learning" ? tab : "models";
+	openSettings("ai");
 }
 
 // Inhalte lazy nachladen, sobald der jeweilige Unter-Tab sichtbar wird.
 function loadKiTabContent(tab) {
 	if (tab === "models") refreshChatModels();
-	else if (tab === "more") refreshEmbeddingModels();
 	// sources: kein Auto-Ping — Nutzer testet gezielt pro Karte
 }
 
@@ -909,10 +739,17 @@ export async function handleSaveSettings() {
 		patch.embedModel = (sep === -1 ? raw : raw.slice(sep + 2)).trim();
 	}
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
+	if (g("inpNotionToken")) patch.notionToken = g("inpNotionToken").value.trim();
+	if (g("inpNotionPage")) patch.notionPageId = g("inpNotionPage").value.trim();
+	if (g("inpCorsProxy")) patch.corsProxy = g("inpCorsProxy").value.trim();
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 	if (g("inpAlwaysTools")) patch.alwaysSendTools = g("inpAlwaysTools").checked; // Tool-Angebot v3
 	await STATE.dispatch("settingsSet", patch);
-	closeOverlay();
+	S.notionToken = patch.notionToken ?? S.notionToken;
+	S.notionPageId = patch.notionPageId ?? S.notionPageId;
+	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
+	refreshSettingsDirtyState();
+	U.toast("Einstellungen gespeichert.", "success");
 	checkAI();
 	RAG.reindexStale();
 	S.availableModels = [];
@@ -1014,6 +851,17 @@ export function handleDashboardMove(id, direction) {
 	openSettings("home");
 }
 
+export function handleDashboardReorder(fromId, toId) {
+	const list = homeLayout();
+	const from = list.findIndex((entry) => entry.id === fromId);
+	const to = list.findIndex((entry) => entry.id === toId);
+	if (from < 0 || to < 0 || from === to) return;
+	const [moved] = list.splice(from, 1);
+	list.splice(to, 0, moved);
+	saveHomeLayout(list);
+	openSettings("general", "home-layout");
+}
+
 export function handleDashboardAdd() {
 	localStorage.removeItem(HOME_LAYOUT_KEY);
 	U.toast("Home-Layout zurückgesetzt.", "success");
@@ -1027,12 +875,61 @@ document.addEventListener("change", (e) => {
 	STATE.dispatch("settingsSet", { homeUserName: e.target.value.trim() }).then(() => U.toast("Name gespeichert.", "success"));
 });
 
+document.addEventListener("keydown", (e) => {
+	if (!document.querySelector(".settings-modal-v2")) return;
+	const guard = document.querySelector(".settings-guard");
+	if (guard && e.key === "Escape") {
+		e.preventDefault();
+		guard.querySelector("button")?.click();
+		return;
+	}
+	if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+		e.preventDefault();
+		U.el("settingsSearch")?.focus();
+	} else if (e.key === "Escape" && !document.querySelector(".exp-modal-backdrop")) {
+		e.preventDefault();
+		requestCloseSettings();
+	}
+}, true);
+
+document.addEventListener("click", (e) => {
+	const target = e.target?.closest?.("[data-settings-go]");
+	if (!target) return;
+	e.preventDefault();
+	e.stopPropagation();
+	settingsSearchQuery = "";
+	navigateSettings(target.dataset.settingsGo, target.dataset.settingsAnchorTarget || "");
+}, true);
+
+let draggedHomeSection = "";
+document.addEventListener("dragstart", (e) => {
+	const row = e.target?.closest?.("[data-dashboard-row]");
+	if (!row) return;
+	draggedHomeSection = row.dataset.dashboardRow;
+	row.classList.add("is-dragging");
+	e.dataTransfer.effectAllowed = "move";
+}, true);
+document.addEventListener("dragover", (e) => {
+	if (draggedHomeSection && e.target?.closest?.("[data-dashboard-row]")) e.preventDefault();
+}, true);
+document.addEventListener("drop", (e) => {
+	const row = e.target?.closest?.("[data-dashboard-row]");
+	if (!row || !draggedHomeSection) return;
+	e.preventDefault();
+	handleDashboardReorder(draggedHomeSection, row.dataset.dashboardRow);
+	draggedHomeSection = "";
+}, true);
+document.addEventListener("dragend", () => {
+	document.querySelector(".settings-sort-row.is-dragging")?.classList.remove("is-dragging");
+	draggedHomeSection = "";
+}, true);
+
 export function handleAppearanceSelect(kind, value) {
 	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry" };
 	if (!keys[kind]) return;
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
-	openSettings("look");
+	openSettings(S.settingsSection === "ai" ? "ai" : "appearance");
 }
 
 export function handleSystemThemeToggle(enabled) {
@@ -1082,8 +979,13 @@ export const SETTINGS = {
 	applyBg,
 	renderNotionJob,
 	openSettings,
+	navigateSettings,
+	requestCloseSettings,
+	discardSettingsDraft,
+	updateSettingsSearch,
+	refreshSettingsDirtyState,
+	hasUnsavedSettings,
 	SETTINGS_SECTIONS,
-	field,
 	handleNotionSync,
 	handleNotionCancel,
 	handleDriveLogin,
@@ -1102,6 +1004,7 @@ export const SETTINGS = {
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
 	handleSaveSettings,
+	handleSyncSecretsToggle,
 	handleClearBg,
 	handleResetAll,
 	handleDriveSync,
@@ -1111,6 +1014,7 @@ export const SETTINGS = {
 	handleAppearanceSelect,
 	handleDashboardToggle,
 	handleDashboardMove,
+	handleDashboardReorder,
 	handleDashboardAdd,
 	homeLayout,
 	HOME_SECTIONS,

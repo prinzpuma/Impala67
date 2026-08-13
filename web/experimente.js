@@ -104,12 +104,11 @@ export const EXP = (() => {
 
 	// ---------- Einstellungs-Sektion (settings.js ruft settingsHtml auf) ----------
 	function settingsHtml() {
-		let h = '<p class="hint">Experimentelle KI-Lernmodi (Phase 2). Alles hier ist <b>standardmäßig aus</b>, wirkt sofort ohne Neustart und braucht eine konfigurierte KI (außer bereits gecachte Varianten/Hinweise).</p>';
+		let h = "";
 		FEATURES.forEach((f) => {
-			h += '<label class="exp-row"><input type="checkbox" data-expflag="' + f[0] + '"' + (on(f[0]) ? " checked" : "") + ">" +
-				"<span><b>" + U.esc(f[1]) + '</b><div class="hint">' + U.esc(f[2]) + "</div></span></label>";
+			h += '<div class="settings-row"><span class="settings-row-copy"><b>' + U.esc(f[1]) + '</b><small>' + U.esc(f[2]) + '</small></span><span class="settings-row-control"><label class="settings-switch"><input type="checkbox" data-expflag="' + f[0] + '"' + (on(f[0]) ? " checked" : "") + ' aria-label="' + U.esc(f[1]) + '"><span aria-hidden="true"></span></label></span></div>';
 		});
-		h += '<div class="row-btns"><button type="button" data-expfehler="1"' + (on("fehler") ? "" : " disabled") + '>🕵️ Fehler-Detektor jetzt starten</button></div>';
+		h += '<div class="settings-actions"><button type="button" data-expfehler="1"' + (on("fehler") ? "" : " disabled") + '>Fehler-Detektor jetzt starten</button></div>';
 		return h;
 	}
 

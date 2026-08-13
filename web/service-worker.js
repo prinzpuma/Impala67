@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v154"; // Der Block-Editor rendert auch \\(…\\) als Inline-KaTeX.
+const CACHE = "impala67-v163"; // Durchsuchbares, einheitliches Settings-System.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -53,6 +53,10 @@ const APP_FILES = [
 	"./render.js",
 	"./library.js",
 	"./settings.js",
+	"./settings-schema.js",
+	"./settings-ui.js",
+	"./settings-renderer.js",
+	"./settings-sync.js",
 	"./tabs.js",
 	"./search.js",
 	"./shortcuts.js",

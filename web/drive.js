@@ -4,6 +4,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
 import { HEFT } from "./heft.js";
+import { SETTINGS_SYNC } from "./settings-sync.js";
 // Google-Drive-Sync im privaten appDataFolder.
 // Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
 // bekannte Daten, Dateien werden vor dem Download geprüft und parallele Tabs teilen ein Lock.
@@ -358,7 +359,8 @@ export const DRIVE = (() => {
 	// mussten an zwei Stellen identisch bleiben. Solche Zwillinge laufen mit der Zeit auseinander,
 	// und beim Sync fällt das erst auf, wenn Geräte divergieren.
 	async function uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds) {
-		const events = pruneForUpload(await DB.eventsAfterSeq(uploadedSeq));
+		const events = pruneForUpload(DB.filterEventsForSync(
+			await DB.eventsAfterSeq(uploadedSeq), SETTINGS_SYNC.allowsSecrets(S.settings)));
 		if (events.length) {
 			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
 			const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz",
@@ -387,7 +389,12 @@ export const DRIVE = (() => {
 		// [F4] Wasserstand klemmen: ein Wert über maxSeq (Kompaktierung/Restore) würde die
 		// Konflikt-Erkennung deaktivieren — Remote überschriebe lokale Änderungen still.
 		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), await DB.maxSeq());
-		const importOpts = { unsyncedAfterSeq: uploadedSeq, pageInfo: (id) => S.pages[id], remote: true };
+		const importOpts = {
+			unsyncedAfterSeq: uploadedSeq,
+			pageInfo: (id) => S.pages[id],
+			remote: true,
+			allowSecrets: SETTINGS_SYNC.allowsSecrets(S.settings),
+		};
 		let imported = 0, uploaded = 0, conflicts = 0, merged = 0;
 		const conflictDetails = [], importedEvents = [], mergedDetails = [];
 		const importJson = async (json) => {
@@ -489,11 +496,24 @@ export const DRIVE = (() => {
 		// gar nicht existiert, kann auch nichts kaputt machen; Hefte werden stattdessen im Log selbst
 		// verdichtet (heftSnap ersetzt ältere heftOps, db.js/compactEvents).
 
-		// Nur Events seit dem letzten Upload als Delta senden. Bewusst KEINE Redaction:
-		// state.js repliziert API-Keys übers Event-Log (appDataFolder = privater App-
-		// Speicher im eigenen Konto); Redaction überschrieb Keys auf Zielgeräten mit "".
+		// Nur Events seit dem letzten Upload als Delta senden. SETTINGS_SYNC redigiert
+		// sensible Felder, wenn der Nutzer die Token-Synchronisierung ausgeschaltet hat.
+		const scrubSecrets = localStorage.getItem("impala67_drive_secret_scrub") === "1" && !SETTINGS_SYNC.allowsSecrets(S.settings);
+		if (scrubSecrets) {
+			setStatus("syncing", "Token-Kopien aus Drive entfernen…");
+			const scrubPacked = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: true })));
+			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
+			const createdScrubSnapshot = await uploadNamed(SNAPSHOT_NAME, scrubPacked.bytes, scrubPacked.encoding, oldSnapshot?.id, { protocol: "2", redacted: "1" });
+			const staleSecretFiles = files.filter((f) => f.name.startsWith(DELTA_PREFIX) || f.name === FILE_NAME || f.name === LEGACY_FILE_NAME);
+			await mapLimit(staleSecretFiles, 6, (f) => del(f.id));
+			const scrubMaxSeq = await DB.maxSeq();
+			LS.setItem("impala67_drive_uploaded_seq", String(scrubMaxSeq));
+			LS.setItem("impala67_drive_snapshot_stamp", createdScrubSnapshot.id + ":" + createdScrubSnapshot.modifiedTime);
+			LS.removeItem("impala67_drive_known_deltas");
+			LS.removeItem("impala67_drive_secret_scrub");
+		}
 		const localMaxSeq = await DB.maxSeq();
-		if (shouldUploadDelta(localMaxSeq, uploadedSeq)) {
+		if (!scrubSecrets && shouldUploadDelta(localMaxSeq, uploadedSeq)) {
 			setStatus("syncing", "Änderungen hochladen…");
 			uploaded = await uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds);
 		}
@@ -501,11 +521,13 @@ export const DRIVE = (() => {
 		// Viele Deltas gelegentlich zu einem Snapshot kompaktieren. Gelöscht wird nur die
 		// zu Sync-Beginn gelistete (bereits gemergte) Menge — parallele Shards bleiben.
 		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
-		if (listedDeltas.length >= 50) {
+		if (!scrubSecrets && listedDeltas.length >= 50) {
 			setStatus("syncing", "Sync-Stand optimieren…");
-			// redactSecrets:false — BEWUSST: API-Keys replizieren über den privaten
-			// appDataFolder aufs eigene Konto (exportAll redigiert sonst standardmäßig, db.js).
-			const packed = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: false })));
+			// Der Snapshot folgt derselben Token-Policy wie die Deltas.
+			const packed = await encodeJson(JSON.parse(await DB.exportAll({
+				includeBlobs: false,
+				redactSecrets: !SETTINGS_SYNC.allowsSecrets(S.settings),
+			})));
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			const createdSnap = await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
 			const deleted = await mapLimit(listedDeltas, 6, (f) => del(f.id));
