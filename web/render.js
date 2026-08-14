@@ -236,25 +236,28 @@ function modelMenuInnerHtml() {
 	const curModel = S.settings.aiModel || "";
 	const live = S.availableModels || [];
 	const section = S.modelMenuSection || "root";
-	const back = '<button class="model-submenu-back" data-modelmenuback="1">‹ Zurück</button>';
+	const back = '<button type="button" class="model-submenu-back" data-modelmenuback="1">‹ Zurück</button>';
 	const enabled = S.settings.thinkingEnabled !== false;
+	const capability = currentThinkingCapability();
+	const thinkingLabel = capability?.error ? "Nicht steuerbar" : enabled ? "Automatisch" : (capability?.offLabel || "Reduziert");
 	if (section === "root") {
 		// Thinking-Eintrag nie ausblenden — die Unterseite erklärt die Fähigkeit selbst
-		return `<button class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>${esc(currentModelLabel())} ›</small></button>` +
-			`<button class="model-submenu-row" data-modelsubmenu="thinking"><span>Thinking</span><small>${enabled ? "Ein" : "Aus"} ›</small></button>`;
+		return `<button type="button" class="model-submenu-row" data-modelsubmenu="models"><span>Modell</span><small>${esc(currentModelLabel())} ›</small></button>` +
+			`<button type="button" class="model-submenu-row" data-modelsubmenu="thinking"><span>Denkaufwand</span><small>${thinkingLabel} ›</small></button>`;
 	}
 	if (section === "thinking") {
-		const cap = currentThinkingCapability();
+		const cap = capability;
 		if (!cap || cap.state === "loading") return back + '<div class="menu-label">Thinking</div><div class="menu-note">API-Fähigkeiten werden geprüft…</div>';
-		return back + '<div class="menu-label">Thinking</div><div class="menu-note">' + esc(cap.error || "Das Modell verwendet bei Aktivierung seine dokumentierte Standardtiefe.") + "</div>" +
-			[[true, "Ein"], [false, "Aus"]].map(([v, label]) =>
-				`<button class="menu-item${v === enabled ? " active" : ""}" data-thinkingenabled="${v ? "1" : "0"}"><span class="menu-item-label">${label}</span>${v === enabled ? '<span class="menu-check">✓</span>' : ""}</button>`).join("");
+		if (cap.error) return back + '<div class="menu-label">Denkaufwand</div><div class="menu-note">' + esc(cap.error) + "</div>";
+		return back + '<div class="menu-label">Denkaufwand</div><div class="menu-note">Das Modell verwendet automatisch eine passende Tiefe; für schnellere Antworten lässt sie sich auf das dokumentierte Minimum begrenzen.</div>' +
+			[[true, "Automatisch"], [false, cap.offLabel || "Reduziert"]].map(([v, label]) =>
+				`<button type="button" class="menu-item${v === enabled ? " active" : ""}" data-thinkingenabled="${v ? "1" : "0"}"><span class="menu-item-label">${label}</span>${v === enabled ? '<span class="menu-check">✓</span>' : ""}</button>`).join("");
 	}
 	const head = back + '<div class="menu-label">Verfügbare Modelle</div>';
 	const favSet = favModels();
 	const opt = (prId, value, active) => {
 		const favKey = prId + "::" + value, fav = favSet.has(favKey);
-		return `<div class="model-row"><button class="menu-item${active ? " active" : ""}" data-modelset="${esc(prId)}::${esc(value)}"><span class="menu-item-label">${esc(value)}</span>${active ? '<span class="menu-check">✓</span>' : ""}</button>` +
+		return `<div class="model-row"><button type="button" class="menu-item${active ? " active" : ""}" data-modelset="${esc(prId)}::${esc(value)}"><span class="menu-item-label">${esc(value)}</span>${active ? '<span class="menu-check">✓</span>' : ""}</button>` +
 			`<button type="button" class="model-fav${fav ? " on" : ""}" data-modelfav="${esc(favKey)}" title="${fav ? "Favorit entfernen" : "Als Favorit ganz nach oben pinnen"}">${fav ? "★" : "☆"}</button></div>`;
 	};
 	const rows = (ms) => ms.map((m) => opt(m.providerId, m.id, m.providerId === curPr && m.id === curModel)).join("");

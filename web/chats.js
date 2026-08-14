@@ -50,8 +50,14 @@ const dropCache = () => { listCache = null; };
 // festzustellen, OB sich etwas geändert hat. Eine kurze Kennung je Nachricht reicht dafür und
 // erkennt weiterhin Anhängen, Bearbeiten, Rückgängig und beantwortete Rückfragen.
 const prints = new Map();
+const textHash = (value) => {
+	const text = String(value || "");
+	let hash = 2166136261;
+	for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+	return (hash >>> 0).toString(36);
+};
 const printOf = (list) => (list || []).length + ":" + (list || [])
-	.map((m) => [m.mid || "", m.role || "", (m.content || "").length, m.undone ? 1 : 0, m.answered ? 1 : 0, m.reasoning ? 1 : 0].join("~"))
+	.map((m) => [m.mid || "", m.role || "", textHash(m.content), m.undone ? 1 : 0, m.answered ? 1 : 0, m.reasoning ? 1 : 0].join("~"))
 	.join(",");
 
 // Fingerabdruck der zuletzt WEGGESCHRIEBENEN Liste.
