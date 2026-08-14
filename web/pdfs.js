@@ -1,8 +1,10 @@
 "use strict";
 import { U } from "./util.js";
 import { DB } from "./db.js";
-import { STATE } from "./state.js";
+import { S, STATE } from "./state.js";
 import { RAG } from "./rag.js";
+import { AI } from "./ai.js";
+import { TABS } from "./tabs.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
 export const PDFS = (() => {
@@ -83,10 +85,8 @@ export const PDFS = (() => {
 			workspaceId: S.currentWorkspaceId,
 		});
 		RAG.queuePage(id);
-		S.currentPageId = id;
-		S.view = "page";
 		S.editorMode = "preview";
-		render();
+		TABS.openPage(id);
 		return id;
 	}
 

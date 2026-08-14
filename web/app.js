@@ -983,7 +983,7 @@ function wireEvents() {
 		if (t.dataset.decknew || t.dataset.decksub) {
 			const parent = t.dataset.decksub || "";
 			openPromptDialog(parent ? 'Name des Unterstapels von „' + parent.split("::").pop() + '“' : "Name des neuen Stapels", async (name) => {
-				const full = (parent ? parent + "::" : "") + name.replace(/::/g, ":");
+				const full = (parent ? parent + "::" : "") + name;
 				await STATE.dispatch("deckCreate", { name: full });
 				S.ankiDeck = full;
 			});
@@ -1907,7 +1907,7 @@ function wireEvents() {
 		} else if (input.dataset.deckrenamename) {
 			const from = input.dataset.deckrenamename;
 			if (S.renamingDeck !== from) return;
-			const newLabel = input.value.trim().replace(/::/g, ":");
+			const newLabel = input.value.trim();
 			const oldLabel = from.split("::").pop();
 			S.renamingDeck = null;
 			if (newLabel && newLabel !== oldLabel) {

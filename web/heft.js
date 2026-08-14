@@ -2282,7 +2282,7 @@ export const HEFT = (() => {
 		const hasContent = (pg.strokes && pg.strokes.length) || (pg.images && pg.images.length) || (pg.texts && pg.texts.length);
 		if (hasContent && !confirm("Diese Heftseite wirklich löschen?")) return;
 		doc.pages.splice(i, 1);
-		sel = null; undoStack = []; redoStack = [];
+		sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		scheduleSave(); rebuildScroll(); go(Math.min(i, doc.pages.length - 1));
 	}
 

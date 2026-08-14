@@ -58,6 +58,7 @@ export function stripLeakedReasoning(text) {
 }
 // Tags heraustrennen; ohne Tags optional die Heuristik anwenden.
 export function splitThink(raw, skipHeuristic) {
+	raw = String(raw || "");
 	let reasoning = "";
 	let content = "";
 	const re = new RegExp("<(" + THINK_TAGS + ")>([\\s\\S]*?)<\\/\\1>", "g");

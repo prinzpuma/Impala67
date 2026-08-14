@@ -597,7 +597,13 @@ export const LERNZEIT = (() => {
 		const source = event && event.target;
 		const target = source && source.nodeType === 1 && source.closest ? source.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close],[data-lz-mode],[data-lz-period],[data-lz-todayperiod]") : null;
 		if (!target) return;
-		if (target.dataset.lzStart) startTimer(target.dataset.lzStart);
+		if (target.dataset.lzStart) {
+			startTimer(target.dataset.lzStart);
+			// Der Verlängern-Button sitzt im Abschluss-Overlay. Nach dem Neustart des
+			// Timers darf dieses die App nicht weiter blockieren.
+			const overlay = target.closest("#overlay");
+			if (overlay) { overlay.hidden = true; overlay.innerHTML = ""; }
+		}
 		else if (target.dataset.lzCustom) startTimer((document.getElementById("lzCustomMinutes") || {}).value);
 		else if (target.dataset.lzPause) pauseTimer();
 		else if (target.dataset.lzResume) resumeTimer();

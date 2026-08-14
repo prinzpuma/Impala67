@@ -70,3 +70,22 @@ test("stales Undo überschreibt keine neueren Änderungen", async () => {
 	await assert.rejects(() => TOOLS.undo(result._undo), /erneut geändert/);
 	assert.equal(S.pages[page.id].content, "v2");
 });
+
+test("eine einzelne Karte lässt sich über card.move verschieben", async () => {
+	reset();
+	await STATE.dispatch("cardCreate", { id: "eins", front: "Einzelfrage", back: "Antwort", deck: "Alt" });
+	const result = await TOOLS.run("change", { operations: [{ op: "card.move", front: "Einzelfrage", to: "Neu" }] });
+	assert.equal(result.ok, true);
+	assert.equal(S.cards.eins.deck, "Neu");
+});
+
+test("Integralgrenzen dürfen verschachtelte Kommas enthalten", async () => {
+	window.math = {
+		evaluate: (expr) => expr === "min(1,2)" ? 1 : expr === "max(2,3)" ? 3 : Number(expr),
+		compile: () => ({ evaluate: ({ x }) => x }),
+		format: (value) => String(value),
+	};
+	const result = await TOOLS.run("calculate", { expression: 'integrate("x","x",min(1,2),max(2,3))' });
+	assert.equal(result.ok, true);
+	assert.ok(Math.abs(Number(result.result) - 4) < 1e-9);
+});

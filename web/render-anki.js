@@ -564,7 +564,7 @@ function readCardEditorDeck() {
 	const neu = U.el("cardDeckNew");
 	let deck = sel ? String(sel.value || "").trim() : "";
 	if (deck === "__new__") {
-		const n = neu ? neu.value.trim().replace(/::/g, ":") : "";
+		const n = neu ? neu.value.trim() : "";
 		deck = n || S.ankiDeck || "Standard";
 	}
 	if (!deck) deck = S.ankiDeck || "Standard";

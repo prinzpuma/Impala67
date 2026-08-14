@@ -656,7 +656,9 @@ export const STATE = (() => {
 					S.decks[nn] = { name: nn, created: ev.t };
 				});
 				cardsInDeckTree(from).forEach((c) => {
-					const id = U.uid();
+					// Reducer-Ausgabe muss auf jedem Sync-Gerät identisch sein. Zufalls-IDs
+					// beim Replay desselben Events erzeugten sonst mehrere Kartenkopien.
+					const id = ev.id + ":copy:" + c.id;
 					S.cards[id] = { ...c, id, deck: to + (c.deck || "Standard").slice(from.length), srs: SRS.newCard(ev.t), created: ev.t, trashed: false };
 					delete S.cards[id].trashedAt;
 				});
@@ -671,7 +673,7 @@ export const STATE = (() => {
 				if (!p.id) break;
 				S.gnFolders[p.id] = {
 					id: p.id, title: p.title || "Neuer Ordner", parentId: p.parentId || null,
-					order: typeof p.order === "number" ? p.order : Date.now(),
+					order: typeof p.order === "number" ? p.order : (Date.parse(ev.t) || 0),
 					created: ev.t, updated: ev.t,
 				};
 				break;
@@ -952,7 +954,7 @@ export const STATE = (() => {
 		const q = String(title).toLowerCase();
 		let partial = null;
 		for (const pg of activePages()) {
-			const t = pg.title.toLowerCase();
+			const t = String(pg.title || "").toLowerCase();
 			if (t === q) return pg;
 			if (!partial && t.includes(q)) partial = pg;
 		}
@@ -1005,7 +1007,9 @@ export const STATE = (() => {
 		const revs = S.reviews || [];
 		for (let i = revs.length - 1; i >= 0; i--) {
 			const r = revs[i];
-			if (r.t < cut) break;
+			// Importierte Reviews werden beim Replay nicht zwingend chronologisch
+			// angehängt. Deshalb darf ein alter Eintrag den Scan nicht abbrechen.
+			if (r.t < cut) continue;
 			if (r.learning) continue;
 			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;

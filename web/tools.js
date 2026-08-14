@@ -382,6 +382,22 @@ export const TOOLS = (() => {
 	];
 
 	const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+	function splitTopLevelArgs(source) {
+		const args = []; let start = 0, depth = 0, quote = "", escaped = false;
+		for (let i = 0; i < source.length; i++) {
+			const ch = source[i];
+			if (quote) {
+				if (escaped) escaped = false;
+				else if (ch === "\\") escaped = true;
+				else if (ch === quote) quote = "";
+			} else if (ch === "\"" || ch === "'") quote = ch;
+			else if (ch === "(" || ch === "[" || ch === "{") depth++;
+			else if (ch === ")" || ch === "]" || ch === "}") depth--;
+			else if (ch === "," && depth === 0) { args.push(source.slice(start, i).trim()); start = i + 1; }
+		}
+		args.push(source.slice(start).trim());
+		return args;
+	}
 	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 	function managedSnapshot(operations) {
 		// Heft-Dokumente können zehntausende Stiftpunkte und Bilder enthalten. Nur das
@@ -463,7 +479,7 @@ export const TOOLS = (() => {
 		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text, heft_page: o.page }],
 		"card.create": (o) => [o.cards ? "create_flashcards" : "create_flashcard", o.cards ? { cards: o.cards, deck: o.deck, page_title: o.title } : { front: o.front, back: o.back, deck: o.deck, page_title: o.title }],
 		"card.update": (o) => ["update_flashcard", { front: o.front, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
-		"card.move": (o) => ["move_flashcards", { fronts: o.fronts, from_deck: o.deck, query: o.query, to_deck: o.to, limit: o.limit }],
+		"card.move": (o) => ["move_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), from_deck: o.deck, query: o.query, to_deck: o.to, limit: o.limit }],
 		"card.trash": (o) => ["delete_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, limit: o.limit }],
 		"card.suspend": (o) => ["suspend_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, suspended: o.suspended, limit: o.limit }],
 		"card.reset": (o) => ["reset_card_progress", { front: o.front, deck: o.deck }],
@@ -963,9 +979,10 @@ export const TOOLS = (() => {
 				try {
 					// Sonderform integrate("f(x)", "x", a, b) — math.js kann das nicht nativ,
 					// daher hier per Simpson-Regel selbst numerisch lösen.
-					const intMatch = expr.match(/^integrate\(\s*(['"])([\s\S]*?)\1\s*,\s*(['"])([\s\S]*?)\3\s*,\s*([\s\S]+?)\s*,\s*([\s\S]+?)\s*\)$/);
-					if (intMatch) {
-						const [, , fnExpr, , varName, loStr, hiStr] = intMatch;
+					const intBody = expr.match(/^integrate\(([\s\S]*)\)$/);
+					const intArgs = intBody ? splitTopLevelArgs(intBody[1]) : [];
+					if (intArgs.length === 4 && /^(['"])[\s\S]*\1$/.test(intArgs[0]) && /^(['"])[\s\S]*\1$/.test(intArgs[1])) {
+						const fnExpr = intArgs[0].slice(1, -1), varName = intArgs[1].slice(1, -1), loStr = intArgs[2], hiStr = intArgs[3];
 						const lo = Number(window.math.evaluate(loStr));
 						const hi = Number(window.math.evaluate(hiStr));
 						if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { error: "integrate: Grenzen konnten nicht ausgewertet werden." };

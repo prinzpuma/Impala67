@@ -24,7 +24,7 @@ export const GRAPH = (() => {
 
 	const activeCards = () => Object.values(S.cards).filter((c) => c && !c.trashed && String(c.front || "").trim());
 	const graph = () => S.settings.knowledgeGraph && S.settings.knowledgeGraph.v === VERSION ? S.settings.knowledgeGraph : null;
-	const deckName = (card) => String(card.deck || "Allgemein").trim() || "Allgemein";
+	const deckName = (card) => String(card.deck || "Standard").trim() || "Standard";
 	const cardText = (card) => (String(card.front || "") + " — " + String(card.back || "")).replace(/\s+/g, " ").trim().slice(0, 600);
 
 	function hash(text) {
@@ -483,6 +483,7 @@ export const GRAPH = (() => {
 		const deck = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 		S.ankiDeck = deck === "Standard" ? null : deck;
 		S.ankiTab = "study"; S.ankiMix = false; S.ankiFeyn = false;
+		S.reviewCardId = null; S.reviewShowBack = false;
 		close(); TABS.openPage("anki:main");
 	}
 

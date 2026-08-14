@@ -81,6 +81,23 @@ async function fetchJson(url) {
 	return response.json();
 }
 
+async function fetchWorkerVersion() {
+	const requestUrl = new URL("./service-worker.js", import.meta.url);
+	requestUrl.searchParams.set("t", String(Date.now()));
+	const response = await fetch(requestUrl, { cache: "no-store", credentials: "same-origin" });
+	if (!response.ok) throw new Error("HTTP " + response.status + " @ " + requestUrl.pathname);
+	const text = await response.text();
+	if (/^\s*</.test(text)) throw new Error("HTML statt Service Worker @ " + requestUrl.pathname);
+	const match = text.match(/const\s+CACHE\s*=\s*["']impala67-v([^"']+)["']/);
+	const latest = normVer(match && match[1]);
+	// Im lokalen Quellstand kann der Cache eine interne Nummer wie v171 tragen.
+	// Veröffentlichte Builds werden vom Release-Workflow auf vMAJOR.MINOR.PATCH gesetzt.
+	if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(latest)) {
+		throw new Error("keine Release-Version in service-worker.js");
+	}
+	return latest;
+}
+
 async function fetchDeployedVersion() {
 	const errors = [];
 	for (const [source, url] of [["version.json", "./version.json"], ["version.json(module)", new URL("./version.json", import.meta.url)]]) {
@@ -92,6 +109,11 @@ async function fetchDeployedVersion() {
 		} catch (error) {
 			errors.push(source + ": " + (error?.message || error));
 		}
+	}
+	try {
+		return { latest: await fetchWorkerVersion(), source: "service-worker.js" };
+	} catch (error) {
+		errors.push("service-worker.js: " + (error?.message || error));
 	}
 	throw new Error(errors.join(" · ") || "version.json nicht erreichbar");
 }
@@ -129,3 +151,5 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 };
 
 window.applyPwaUpdate = () => window.installAppUpdate();
+
+export { cmpSemver, fetchDeployedVersion };

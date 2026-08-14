@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v169"; // Heft-Zoom rendert scharfe Kacheln außerhalb der skalierten Seitenebene.
+const CACHE = "impala67-v171"; // Update-Check behält version.json als sicheren Offline-Fallback.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -15,8 +15,10 @@ const APP_FILES = [
 	"./index.html",
 	"./styles.css",
 	"./manifest.json",
-	// version.json bleibt außerhalb des Pflichtcaches: updater.js lädt sie bewusst
-	// frisch, um den veröffentlichten Stand zu vergleichen.
+	// Der Update-Check fragt version.json mit no-store an. Der Fetch-Handler nimmt
+	// daher online immer den Serverstand, kann bei Netz-/Pages-Fehlern aber auf
+	// diese gecachte Kopie zurückfallen, statt den ganzen Check abzubrechen.
+	"./version.json",
 	// icon.svg wird direkt aus dem Netz geladen; ein Favicon darf den Offline-
 	// Cache niemals als Pflichtdatei blockieren.
 	"./icon.svg",

@@ -424,7 +424,7 @@ export const EDITOR = (() => {
 			}
 
 			// Callout `> [!farbe]` (Kinder = eingerückte >-Zeilen, rekursiv)
-			const co = line.match(/^>\s*\[!([a-z]+)\]\s*(.*)$/);
+			const co = line.match(/^>\s*\[!([a-z]+)\]\s*(.*)$/i);
 			if (co) {
 				const buf = co[2] ? [co[2]] : [];
 				i++;
@@ -433,7 +433,7 @@ export const EDITOR = (() => {
 				}
 				const children = parse(buf.join("\n"));
 				if (!children.length) children.push(newBlock("p"));
-				out.push(applyColor({ id: uid(), type: "callout", color: co[1], children }));
+				out.push(applyColor({ id: uid(), type: "callout", color: co[1].toLowerCase(), children }));
 				continue;
 			}
 
@@ -2425,7 +2425,7 @@ export const EDITOR = (() => {
 				closeMenus();
 				if (b) {
 					STATE.dispatch("cardCreate", { id: uid(), front: plainTextOf(b), back: "", pageId });
-					U.toast("Lernkarte erstellt ��� Rückseite in Anki ergänzen");
+					U.toast("Lernkarte erstellt — Rückseite in Anki ergänzen");
 				}
 				return;
 			}

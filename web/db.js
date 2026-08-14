@@ -327,7 +327,7 @@ export const DB = (() => {
 		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent).filter(Boolean);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
-			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf) };
+			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf || rec.data) };
 		}
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
