@@ -1624,11 +1624,11 @@ function thinkBoxHtml(opts) {
 // Live: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar
 const thinkingLiveHtml = () => thinkBoxHtml({
 	text: S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2),
-	expanded: !!S.thinkingLiveExpanded, live: true, label: "Denkt nach…", toggleAttr: 'id="btnThinkLive"',
+	expanded: !!S.thinkingLiveExpanded, live: true, label: "Denk- und Arbeitsverlauf…", toggleAttr: 'id="btnThinkLive"',
 });
 
 function assistantMsgHtml(m) {
-	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
+	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Denk- und Arbeitsverlauf", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
 	const refine = S.refineOpenMid === m.mid
 		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">${ICONS.arrowUp} Länger</button><button data-refine="${m.mid}" data-mode="same">${ICONS.arrowSame} Gleich</button><button data-refine="${m.mid}" data-mode="shorter">${ICONS.arrowDown} Kürzer</button></div>`
 		: "";

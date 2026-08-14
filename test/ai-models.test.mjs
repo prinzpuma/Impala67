@@ -21,6 +21,15 @@ const response = (data, status = 200) => ({
 	text: async () => JSON.stringify(data),
 });
 
+const streamResponse = (...deltas) => {
+	const payload = deltas.map((delta) => `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`).join("") + "data: [DONE]\n\n";
+	const bytes = new TextEncoder().encode(payload);
+	return {
+		ok: true, status: 200, headers: { get: () => null },
+		body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }),
+	};
+};
+
 test("Offline-Vorschläge nennen die aktuellen stabilen Modellfamilien", () => {
 	const ids = AI.MODEL_PRESETS.map((model) => model.value);
 	assert.deepEqual(ids.slice(0, 2), ["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
@@ -82,6 +91,100 @@ test("Gemini 3 erhält keine veralteten Sampling-Regler und Minimal bedeutet wir
 	assert.equal(body.temperature, undefined);
 	assert.equal(body.reasoning_effort, "minimal");
 	assert.equal(body.extra_body.google.thinking_config.include_thoughts, true);
+});
+
+test("Gemini-Modellnamen mit API-Präfix behalten Thinking und sichtbare Gedanken", async () => {
+	S.settings.aiProviders = [{ id: "google", name: "Google", base: "https://generativelanguage.googleapis.com/v1beta/openai", key: "test" }];
+	S.settings.aiProviderId = "google";
+	S.settings.aiModel = "models/gemini-3.7-flash";
+	S.settings.thinkingEnabled = true;
+	S.thinkingCapabilities = Object.create(null);
+	let body;
+	globalThis.fetch = async (_url, init) => {
+		body = JSON.parse(init.body);
+		return response({ choices: [{ message: { role: "assistant", content: "Fertig", reasoning_content: "Kurze Prüfung" } }] });
+	};
+
+	const capability = await AI.detectThinkingCapabilities();
+	const message = await AI.chatOnce([{ role: "user", content: "Prüfe das." }]);
+
+	assert.deepEqual(capability.levels, ["minimal", "low", "medium", "high"]);
+	assert.equal(body.extra_body.google.thinking_config.include_thoughts, true);
+	assert.equal(message.reasoning, "Kurze Prüfung");
+});
+
+test("ein reiner Denkblock bleibt Gedankengang und wird nicht zur Antwort", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45674/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	globalThis.fetch = async () => response({ choices: [{ message: { role: "assistant", content: "<think>Ich prüfe noch.</think>" } }] });
+
+	const message = await AI.chatOnce([{ role: "user", content: "Prüfe das." }]);
+	assert.equal(message.content, "");
+	assert.equal(message.reasoning, "Ich prüfe noch.");
+});
+
+test("beim Anpassen einer Antwort wird der Denktext ebenfalls live weitergegeben", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45677/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	globalThis.fetch = async () => streamResponse({ reasoning_content: "Formulierung wird gestrafft.", content: "Neue Antwort" });
+	let thought = "";
+
+	const content = await AI.refine(
+		[{ role: "assistant", content: "Alte Antwort" }],
+		"Kürzer",
+		() => {},
+		(text) => { thought = text; },
+	);
+
+	assert.equal(content, "Neue Antwort");
+	assert.equal(thought, "Formulierung wird gestrafft.");
+});
+
+test("Werkzeugrunden zeigen auch ohne Anbieter-Gedanken einen verständlichen Arbeitsverlauf", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45675/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.embedModel = "";
+	S.currentPageId = null;
+	S.view = "home";
+	S.sideChat = [];
+	S.sideChatId = null;
+	S.pages = { a: { id: "a", title: "1 Einleitung", content: "" } };
+	STATE.dispatch = async () => {};
+	let call = 0;
+	globalThis.fetch = async () => ++call === 1
+		? streamResponse({ tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
+		: streamResponse({ content: "Die Seiten sind geprüft." });
+	const progress = [];
+
+	await AI.agent("Sortiere die Seiten nach Nummer.", "side", () => progress.push(S.aiThinkingDraft));
+
+	assert.ok(progress.some((text) => /Seiten/i.test(text) && /prüf/i.test(text)), progress.join("\n---\n"));
+	const answer = S.sideChat.findLast((message) => message.role === "assistant");
+	assert.match(answer.reasoning, /Seiten/i);
+	assert.match(answer.reasoning, /prüf/i);
+});
+
+test("ein Fehler nach einem Werkzeug bewahrt den sichtbaren Arbeitsverlauf", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45676/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.embedModel = "";
+	S.sideChat = [];
+	S.sideChatId = null;
+	S.pages = {};
+	STATE.dispatch = async () => {};
+	let call = 0;
+	globalThis.fetch = async () => ++call === 1
+		? streamResponse({ tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
+		: response({ error: "Ungültige Folgeanfrage" }, 400);
+
+	await assert.rejects(
+		() => AI.agent("Prüfe meine Seiten.", "side"),
+		(error) => /Seiten/i.test(error.reasoning || "") && /prüf/i.test(error.reasoning || ""),
+	);
 });
 
 test("OpenAI-Anfragen tragen eine anonyme stabile Installationskennung", async () => {

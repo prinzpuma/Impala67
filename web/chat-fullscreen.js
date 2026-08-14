@@ -105,12 +105,19 @@ export async function refineMessage(mid, mode) {
 	list.splice(idx, 1);
 	setBusy(isSide, true);
 
-	let content = msg.content;
+	let content = msg.content, reasoning = "Die gewünschte Anpassung wird geprüft und neu formuliert.", refined = false;
+	S.aiThinkingDraft = reasoning;
+	paint(isSide);
 	try {
 		content = await AI.refine(history, REFINE_PROMPTS[mode] || REFINE_PROMPTS.same, (text) => {
 			S.aiDraft = text;
 			schedulePaint(isSide);
+		}, (text) => {
+			reasoning = "Die gewünschte Anpassung wird geprüft und neu formuliert.\n\n" + text;
+			S.aiThinkingDraft = reasoning;
+			schedulePaint(isSide);
 		});
+		refined = true;
 	} catch (err) {
 		if (err?.name !== "AbortError") U.toast("Anpassen fehlgeschlagen: " + (err?.message || err), "error");
 	}
@@ -118,7 +125,7 @@ export async function refineMessage(mid, mode) {
 	// Gegen die AKTUELLE Liste einsetzen: sie kann sich zwischenzeitlich geändert haben.
 	// Alle Felder der Originalnachricht bleiben erhalten (Karten, Undo, Anhänge, mid).
 	const target = listOf(isSide);
-	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoningExpanded: false });
+	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoning: refined ? reasoning : msg.reasoning, reasoningExpanded: false });
 	saveChat(isSide);
 	repaint();
 }
@@ -148,11 +155,11 @@ export async function sendChatMessage(text, type) {
 		const target = listOf(isSide);
 		if (err?.name === "AbortError") {
 			// ⏹ über den Senden-Knopf: Teilantwort behalten, kein Fehler-Ton.
-			target.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*" });
+			target.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*", reasoning: err?.reasoning || null, reasoningExpanded: false });
 		} else {
 			// Scheitert eine Anfrage MIT Bild, liegt es meist am nicht vision-fähigen Modell.
 			const hint = img ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
-			target.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + (err?.message || err) + hint });
+			target.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + (err?.message || err) + hint, reasoning: err?.reasoning || null, reasoningExpanded: false });
 		}
 	}
 	setBusy(isSide, false);
