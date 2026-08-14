@@ -576,37 +576,15 @@ export const HEFT = (() => {
 			x.beginPath(); x.fillStyle = s.color;
 			x.arc(pts[0][0], pts[0][1], segW(s.size, pts[0][2]) / 2, 0, Math.PI * 2); x.fill();
 		} else {
-			// PERF: Wenn Linienbreite/Druck über den Strich gleichmäßig ist (Maus, Touch, Finger),
-			// spart ein einzelner Pfad zigtausende beginPath/stroke-Draw-Calls bei identischer Kurvengeometrie.
-			let hasVaryingPressure = false;
-			const baseP = pts[0][2];
+			let from = pts[0];
 			for (let i = 1; i < pts.length; i++) {
-				if (Math.abs((pts[i][2] == null ? 0.5 : pts[i][2]) - (baseP == null ? 0.5 : baseP)) > 0.08) {
-					hasVaryingPressure = true;
-					break;
-				}
-			}
-			if (!hasVaryingPressure) {
-				x.lineWidth = segW(s.size, baseP);
-				x.beginPath();
-				x.moveTo(pts[0][0], pts[0][1]);
-				for (let i = 1; i < pts.length; i++) {
-					const cur = pts[i];
-					const to = i < pts.length - 1 ? [(cur[0] + pts[i + 1][0]) / 2, (cur[1] + pts[i + 1][1]) / 2] : cur;
-					x.quadraticCurveTo(cur[0], cur[1], to[0], to[1]);
-				}
+				const cur = pts[i];
+				const to = i < pts.length - 1 ? [(cur[0] + pts[i + 1][0]) / 2, (cur[1] + pts[i + 1][1]) / 2] : cur;
+				x.beginPath(); x.lineWidth = segW(s.size, ((pts[i - 1][2] || 0.5) + (cur[2] || 0.5)) / 2);
+				x.moveTo(from[0], from[1]);
+				x.quadraticCurveTo(cur[0], cur[1], to[0], to[1]);
 				x.stroke();
-			} else {
-				let from = pts[0];
-				for (let i = 1; i < pts.length; i++) {
-					const cur = pts[i];
-					const to = i < pts.length - 1 ? [(cur[0] + pts[i + 1][0]) / 2, (cur[1] + pts[i + 1][1]) / 2] : cur;
-					x.beginPath(); x.lineWidth = segW(s.size, ((pts[i - 1][2] || 0.5) + (cur[2] || 0.5)) / 2);
-					x.moveTo(from[0], from[1]);
-					x.quadraticCurveTo(cur[0], cur[1], to[0], to[1]);
-					x.stroke();
-					from = to;
-				}
+				from = to;
 			}
 		}
 		x.restore();
