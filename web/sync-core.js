@@ -44,6 +44,20 @@ export function boundedKnownIds(ids, max = 2000) {
 	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
 }
 
+// Nur gerätespezifische UI-Zustände und bereits in einem neueren Heft-Snapshot
+// enthaltene Striche aus dem Transport entfernen. Nutzungsstatistiken bleiben erhalten.
+export function pruneEventsForUpload(events) {
+	const snapSeq = new Map();
+	for (const ev of events || []) {
+		if (ev.type === "heftSnap" && ev.payload?.pageId) snapSeq.set(ev.payload.pageId, Math.max(snapSeq.get(ev.payload.pageId) || 0, ev.seq || 0));
+	}
+	return (events || []).filter((ev) => {
+		if (ev.type === "uiTabsSet" || ev.type === "uiTreeSet") return false;
+		if (ev.type === "heftOps" && (snapSeq.get(ev.payload?.pageId) || 0) > (ev.seq || 0)) return false;
+		return true;
+	});
+}
+
 export function isBlobAlive(key, pages) {
 	const k = String(key || "");
 	if (!k) return false;

@@ -280,9 +280,9 @@ export const MOBILE = (() => {
 			else if (S.view === "anki") title.textContent = "Karten";
 			else title.textContent = "Impala";
 		}
-		const n = dueCount();
-		if (sub) { sub.textContent = n ? n + " fällig" : ""; sub.hidden = !n || active !== "learn"; }
 		const badge = document.getElementById("mDue");
+		const n = (badge || (sub && active === "learn")) ? dueCount() : 0;
+		if (sub) { sub.textContent = n ? n + " fällig" : ""; sub.hidden = !n || active !== "learn"; }
 		if (badge) { badge.hidden = !n; badge.textContent = n > 99 ? "99+" : String(n); }
 	}
 
@@ -292,6 +292,7 @@ export const MOBILE = (() => {
 	// Höchstens ein Lauf pro Frame; updateUI bleibt idempotent, die Kette läuft aus.
 	let uiRaf = 0;
 	function scheduleUI() {
+		if (!body.classList.contains("mobile-ui")) return;
 		if (uiRaf) return;
 		uiRaf = requestAnimationFrame(() => { uiRaf = 0; updateUI(); });
 	}

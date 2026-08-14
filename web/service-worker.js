@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v163"; // Durchsuchbares, einheitliches Settings-System.
+const CACHE = "impala67-v166"; // Performance-Optimierungen für Startup, State-Replay, Canvas-Rendering und Dashboard.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -15,7 +15,6 @@ const APP_FILES = [
 	"./index.html",
 	"./styles.css",
 	"./manifest.json",
-	"./version.json",
 	// version.json bleibt außerhalb des Pflichtcaches: updater.js lädt sie bewusst
 	// frisch, um den veröffentlichten Stand zu vergleichen.
 	// icon.svg wird direkt aus dem Netz geladen; ein Favicon darf den Offline-

@@ -284,10 +284,15 @@ export const STATE = (() => {
 	function heftSyncMeta(pageId, t) {
 		const doc = heftDocOf(pageId);
 		doc.rev++;
+		let ocrText = "";
+		for (let i = 0; i < doc.pages.length; i++) {
+			const txt = doc.pages[i].ocrText;
+			if (txt) ocrText = ocrText ? ocrText + "\n" + txt : txt;
+		}
 		const meta = {
 			rev: doc.rev,
 			pages: doc.pages.length,
-			ocrText: doc.pages.map((pg) => pg.ocrText || "").filter(Boolean).join("\n"),
+			ocrText,
 			updated: t,
 		};
 		// PERF-WURZEL: Die Größenschätzung lief über ALLE Seiten, Striche und Punkte des Hefts —
@@ -843,8 +848,8 @@ export const STATE = (() => {
 	// sortieren (vorher in beiden Funktionen fast identisch dupliziert).
 	async function loadSortedEvents() {
 		const evs = await DB.allEvents();
-		// Deterministisch: nach Zeitstempel, dann lokaler Sequenz
-		evs.sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
+		// Deterministisch: nach Zeitstempel (schneller ASCII-Vergleich), dann lokaler Sequenz
+		evs.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0));
 		return evs;
 	}
 
@@ -897,7 +902,7 @@ export const STATE = (() => {
 			}
 		}
 		for (const arr of m.values()) {
-			arr.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || a.created.localeCompare(b.created));
+			arr.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || (a.created < b.created ? -1 : a.created > b.created ? 1 : 0));
 		}
 		_childIdx = m;
 		return m;
@@ -909,7 +914,7 @@ export const STATE = (() => {
 
 	const trashedPages = () => Object.values(S.pages)
 		.filter((pg) => pg.trashed)
-		.sort((a, b) => (b.trashedAt || "").localeCompare(a.trashedAt || ""));
+		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 
 	// Alle NICHT im Papierkorb liegenden Seiten — zentrale Quelle für Home,
 	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb-Seiten nirgends durchsickern.
@@ -919,13 +924,13 @@ export const STATE = (() => {
 	const activeCards = () => Object.values(S.cards).filter((c) => !c.trashed);
 	const trashedCards = () => Object.values(S.cards)
 		.filter((c) => c.trashed)
-		.sort((a, b) => (b.trashedAt || "").localeCompare(a.trashedAt || ""));
+		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 	// Nur Wurzel eines gelöschten Stapel-Teilbaums (Unterstapel stecken drin).
 	const trashedDeckRoots = () => {
 		const names = Object.keys(S.decks).filter((n) => S.decks[n] && S.decks[n].trashed);
 		return names
 			.filter((n) => !names.some((p) => p !== n && n.startsWith(p + "::")))
-			.sort((a, b) => (S.decks[b].trashedAt || "").localeCompare(S.decks[a].trashedAt || ""));
+			.sort((a, b) => ((S.decks[b].trashedAt || "") < (S.decks[a].trashedAt || "") ? -1 : (S.decks[b].trashedAt || "") > (S.decks[a].trashedAt || "") ? 1 : 0));
 	};
 	// Einzelkarten im Papierkorb, die NICHT schon über einen gelöschten Stapel abgedeckt sind.
 	const orphanTrashedCards = () => trashedCards().filter((c) => {
@@ -955,20 +960,19 @@ export const STATE = (() => {
 	}
 
 	// PERF: Der Heuhaufen (Titel + Inhalt + Handschrift-Index, einmal kleingeschrieben)
-	// wird pro Seite EINMAL je Seitenrevision gebaut — vorher bei jedem Tastendruck für
-	// jede Seite neu, und Suchen ist der heißeste Pfad der App. Gleiche Invalidierung
-	// wie der Backlink-Cache (_pageRev), also automatisch korrekt beim Bearbeiten.
-	const _hayCache = { rev: -1, map: new Map() };
+	// wird granular pro Seite mit Versionsstempel gecacht — Bearbeiten einer Seite
+	// invalidiert nur diese eine Seite statt des gesamten Arbeitsbereichs.
+	const _hayMap = new Map();
 	function haystackOf(pg) {
-		if (_hayCache.rev !== _pageRev) { _hayCache.map.clear(); _hayCache.rev = _pageRev; }
-		let e = _hayCache.map.get(pg.id);
-		if (!e) {
+		let e = _hayMap.get(pg.id);
+		const heftOcr = (S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "";
+		if (!e || e.updated !== pg.updated || e.ocr !== heftOcr) {
 			// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
-			const raw = pg.title + "\n" + pg.content + "\n" + ((S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "");
+			const raw = pg.title + "\n" + pg.content + (heftOcr ? "\n" + heftOcr : "");
 			// contentLc: nur der Inhalt klein — genau das braucht backlinksOf, das es
 			// vorher pro Aufruf für ALLE Seiten neu erzeugt hat.
-			e = { raw, hay: raw.toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
-			_hayCache.map.set(pg.id, e);
+			e = { updated: pg.updated, ocr: heftOcr, raw, hay: raw.toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
+			_hayMap.set(pg.id, e);
 		}
 		return e;
 	}
@@ -995,11 +999,14 @@ export const STATE = (() => {
 	// Learning/Relearning-Schritte verbrauchen kein Limit (wie Anki).
 	function dailyUsageSince(dayStart) {
 		const usedNew = {}, usedRev = {};
-		// PERF: EIN Zeitstempel-String statt eines new Date(...) pro Protokoll-Eintrag.
-		// Beide Seiten sind ISO-UTC — der lexikografische Vergleich ist hier exakt.
+		// PERF: Rückwärts-Iteration mit Frühabbruch — S.reviews ist chronologisch sortiert.
+		// Bei zehntausenden Reviews werden nur die heutigen Einträge geprüft statt des gesamten Verlaufs.
 		const cut = dayStart.toISOString();
-		for (const r of S.reviews || []) {
-			if (r.t < cut || r.learning) continue;
+		const revs = S.reviews || [];
+		for (let i = revs.length - 1; i >= 0; i--) {
+			const r = revs[i];
+			if (r.t < cut) break;
+			if (r.learning) continue;
 			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
@@ -1082,7 +1089,7 @@ export const STATE = (() => {
 			const d = c.deck || "Standard";
 			return d === deck || d.startsWith(deck + "::");
 		};
-		const byDue = (a, b) => a.srs.due.localeCompare(b.srs.due);
+		const byDue = (a, b) => (a.srs.due < b.srs.due ? -1 : a.srs.due > b.srs.due ? 1 : 0);
 		const all = Object.values(S.cards).filter(inDeck);
 
 		// Intraday learning: due vor Tagesende und (typisch) Minuten-Schritte
@@ -1126,9 +1133,15 @@ export const STATE = (() => {
 		// Overlearning-Sperre: frisch bewertete Karten (< 10 Min) nicht vorzeitig per
 		// Learn-Ahead zeigen — sofortiges Nochmal-Drillen füttert nur das Kurzzeit-
 		// gedächtnis („Illusion of Competence“). Wirklich fällige Karten sperrt das nie.
+		// PERF: Rückwärts-Iteration mit Frühabbruch
 		const lockCutIso = new Date(t.getTime() - OVERLEARN_LOCK_MS).toISOString();
 		const freshRated = new Set();
-		for (const r of S.reviews || []) if (r.t > lockCutIso) freshRated.add(r.cardId);
+		const revs = S.reviews || [];
+		for (let i = revs.length - 1; i >= 0; i--) {
+			const r = revs[i];
+			if (r.t <= lockCutIso) break;
+			freshRated.add(r.cardId);
+		}
 		const lockOn = localStorage.getItem("impala67Overlearn") !== "off"; // Einstellung: Overlearning-Sperre
 		const aheadFree = lockOn ? learnAhead.filter((c) => !freshRated.has(c.id)) : learnAhead.slice();
 		const lockedAhead = learnAhead.length - aheadFree.length;

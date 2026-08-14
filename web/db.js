@@ -206,7 +206,7 @@ export const DB = (() => {
 	// heftOps steht mit auf der Liste, weil ein heftSnap denselben Zustand vollständig ersetzt —
 	// verdichtete Strich-Operationen dürfen nicht über fremde Deltas zurückkehren (sie wären zwar
 	// idempotent, würden aber den Log wieder aufblähen, den der Snapshot gerade zusammengefasst hat).
-	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "teleEvent", "heftOps"]);
+	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "heftOps"]);
 	const compactFloor = () => localStorage.getItem(COMPACT_FLOOR_KEY) || "";
 	// Exportiert, damit test/test-sync.mjs genau diese Regel prüfen kann — der Fehler,
 	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
@@ -216,7 +216,7 @@ export const DB = (() => {
 	// Hochgeladen werden sie trotzdem — eventsAfterSeq filtert nur _remote.
 	const isLocalOnly = (ev, unsyncedAfterSeq) => (ev.seq || 0) > unsyncedAfterSeq && !ev._remote && !ev._derived;
 	function compactEvents(events) {
-		const sorted = [...events].sort((a, b) => a.t.localeCompare(b.t) || (a.seq || 0) - (b.seq || 0));
+		const sorted = [...events].sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0));
 		const deletedAt = { page: {}, card: {} };
 		for (const ev of sorted) {
 			if (!ev.payload) continue;
@@ -224,7 +224,6 @@ export const DB = (() => {
 			if (ev.type === "cardDelete") deletedAt.card[ev.payload.id] = ev.t;
 		}
 		const covered = {}, contentKept = {}, keep = [];
-		const teleCutoff = new Date(Date.now() - TELE_KEEP_DAYS * 864e5).toISOString();
 		let uiTabsKept = false;
 		const uiTreeKeys = new Set();
 		const heftSnapped = new Set(); // pageIds, für die (rückwärts gelesen) schon ein heftSnap steht
@@ -232,7 +231,6 @@ export const DB = (() => {
 			const ev = sorted[i], p = ev.payload || {};
 			if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
 			else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
-			else if (ev.type === "teleEvent" && ev.t < teleCutoff) continue;
 			// Heft: der jüngste heftSnap je Seite beschreibt den ganzen Stand — alles Ältere
 			// desselben Hefts (Ops wie ältere Snapshots) ist damit redundant. Pro pageId, nicht global.
 			else if (ev.type === "heftSnap") { if (heftSnapped.has(p.pageId)) continue; heftSnapped.add(p.pageId); }
@@ -359,7 +357,7 @@ export const DB = (() => {
 		};
 		const relevant = events
 			.filter((ev) => ev.payload && (ev.payload.id === id || ev.payload.pageId === id))
-			.sort((a, b) => (a.t || "").localeCompare(b.t || "")); // FIX: Zeit- statt Seq-Reihenfolge
+			.sort((a, b) => ((a.t || "") < (b.t || "") ? -1 : (a.t || "") > (b.t || "") ? 1 : 0)); // FIX: Zeit- statt Seq-Reihenfolge
 		for (const ev of relevant) {
 			const p = ev.payload;
 			if (ev.type === "pageCreate") apply(p, false);

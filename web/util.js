@@ -377,15 +377,23 @@ export const U = {
 	// Übrig gebliebene {/} (z.B. bei Verschachtelung) werden am Ende entfernt.
 	// FIX (Audit): Inhalt innerhalb der Farb-Marker escapen, bevor er als HTML-Span landet
 	// (sonst XSS, falls marked/DOMPurify offline/fehlend sind). Klassennamen bleiben [a-z]+.
-	colorize: (s) => String(s ?? "")
-		.replace(/\{bg-([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="hl-' + c + '">' + U.esc(t) + '</span>')
-		.replace(/\{([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="c-' + c + '">' + U.esc(t) + '</span>')
-		.replace(/\{\/\}/g, ""),
+	colorize: (s) => {
+		const str = String(s ?? "");
+		if (!str || !str.includes("{")) return str;
+		return str
+			.replace(/\{bg-([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="hl-' + c + '">' + U.esc(t) + '</span>')
+			.replace(/\{([a-z]+)\}([\s\S]+?)\{\/\}/g, (_, c, t) => '<span class="c-' + c + '">' + U.esc(t) + '</span>')
+			.replace(/\{\/\}/g, "");
+	},
 
 	// Gemeinsamer Helfer für md()/mdInline(): ==markiert== → escapetes <mark>…</mark>,
 	// danach Farb-Syntax. Vorher in beiden Funktionen fast identisch kopiert.
 	_markHighlights(text) {
-		return U.colorize(String(text ?? "").replace(/==([^=\n]+)==/g, (_, t) => "<mark>" + U.esc(t) + "</mark>"));
+		const str = String(text ?? "");
+		if (!str) return "";
+		if (!str.includes("==") && !str.includes("{")) return str;
+		if (!str.includes("==")) return U.colorize(str);
+		return U.colorize(str.replace(/==([^=\n]+)==/g, (_, t) => "<mark>" + U.esc(t) + "</mark>"));
 	},
 
 	// 🧮 FIX (18. Juli, spät v2): LaTeX bulletproof. Formeln ($…$, $$…$$, \(…\),

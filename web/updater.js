@@ -35,6 +35,7 @@ function cmpSemver(a, b) {
 
 const normVer = (v) => String(v || "").replace(/^v/i, "").trim();
 let pendingUpdate = null;
+let preparingUpdate = null;
 
 function waitForActivation(reg) {
 	return new Promise((resolve) => {
@@ -49,10 +50,13 @@ function waitForActivation(reg) {
 async function refreshServiceWorker() {
 	if (!("serviceWorker" in navigator)) return;
 	try {
-		const registrations = await navigator.serviceWorker.getRegistrations();
-		await Promise.all(registrations.map((reg) => reg.update().catch(() => {})));
+		// Nur der Worker dieser App ist relevant. Fremde Registrierungen desselben
+		// Origins duerfen den Reload nicht bis zum Timeout verzoegern.
+		const reg = await navigator.serviceWorker.getRegistration(new URL("./", import.meta.url));
+		if (!reg) return;
+		await reg.update();
 		await Promise.race([
-			Promise.all(registrations.map(waitForActivation)),
+			waitForActivation(reg),
 			new Promise((resolve) => setTimeout(resolve, 4000)),
 		]);
 	} catch (error) {
@@ -100,6 +104,9 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	const { latest, source } = await fetchDeployedVersion();
 	const hasUpdate = cmpSemver(latest, current) > 0;
 	pendingUpdate = hasUpdate ? { version: latest } : null;
+	// Den neuen Worker bereits waehrend der Anzeige vorbereiten. Der bewusste
+	// Klick bleibt erhalten, muss aber meist nur noch neu laden.
+	preparingUpdate = hasUpdate ? refreshServiceWorker() : null;
 	return {
 		ok: true,
 		latest,
@@ -113,8 +120,9 @@ window.checkAppUpdate = async function checkAppUpdate() {
 window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
 	say(pendingUpdate ? "⬇️ Update wird geladen…" : "🔄 App wird neu geladen…");
-	await refreshServiceWorker();
+	await (preparingUpdate || refreshServiceWorker());
 	pendingUpdate = null;
+	preparingUpdate = null;
 	say("🔄 App wird neu geladen…");
 	reloadWithCacheBust();
 	return { reloaded: true };

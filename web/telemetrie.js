@@ -215,7 +215,7 @@ export const TELE = (() => {
 	}
 	function reviewRows() {
 		const sorted = (S.reviews || []).filter((review) => review && review.grade > 0)
-			.slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
+			.slice().sort((a, b) => (String(a.t) < String(b.t) ? -1 : (String(a.t) > String(b.t) ? 1 : 0)));
 		const previous = new Map();
 		return sorted.map((review) => {
 			const prev = previous.get(review.cardId);
@@ -256,10 +256,14 @@ export const TELE = (() => {
 	// render.js dieselbe Telemetrie-Logik erneut implementiert.
 	function rangeStats(from, to) {
 		const start = new Date(from).getTime(), end = new Date(to).getTime();
-		const inRange = (value) => {
-			const t = new Date(value).getTime();
-			return Number.isFinite(t) && t >= start && t < end;
-		};
+		const fromIso = Number.isFinite(start) ? new Date(start).toISOString() : "";
+		const toIso = Number.isFinite(end) ? new Date(end).toISOString() : "";
+		const inRange = fromIso && toIso
+			? (value) => value >= fromIso && value < toIso
+			: (value) => {
+				const t = new Date(value).getTime();
+				return Number.isFinite(t) && t >= start && t < end;
+			};
 		// S.reviews reicht weiter zurück als die später eingeführte Telemetrie und
 		// entfernt Undos bereits im Reducer. Denkzeit/Fokus kommen ergänzend aus
 		// den detailreicheren Telemetrie-Events.

@@ -168,13 +168,15 @@ export async function initApp() {
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	if (LERNZEIT && LERNZEIT.startInterval) LERNZEIT.startInterval();
 	if (ANALYSE && ANALYSE.initDwellTimer) ANALYSE.initDwellTimer();
-	RAG.reindexStale();
-	// PERF (Feinschliff v11): purgeOldTrash lief bisher VOR dem ersten Render und
-	// blockierte den Start mit awaited IndexedDB-Writes (jede alte Papierkorb-Seite
-	// = ein eigener dispatch). Jetzt im Hintergrund nach dem ersten Render.
-	purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
-	// Verwaiste Blobs im Hintergrund entsorgen (blockiert den Start nicht).
-	purgeOrphanBlobs();
+	const scheduleIdle = typeof window.requestIdleCallback === "function"
+		? (fn) => window.requestIdleCallback(fn, { timeout: 3000 })
+		: (fn) => setTimeout(fn, 600);
+	scheduleIdle(() => {
+		RAG.reindexStale();
+		// PERF: purgeOldTrash & purgeOrphanBlobs laufen im Leerlauf nach dem ersten Rendern
+		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
+		purgeOrphanBlobs();
+	});
 }
 
 function pingAiStatusIfVisible() {

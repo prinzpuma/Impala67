@@ -2,7 +2,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds } from "./sync-core.js";
+import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
 import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 // Google-Drive-Sync im privaten appDataFolder.
@@ -330,36 +330,17 @@ export const DRIVE = (() => {
 	const saveKnownIds = (k, set) => LS.setItem(k, JSON.stringify(boundedKnownIds([...set])));
 
 	// -- v8.1: Ballast gar nicht erst hochladen ------------------------------
-	// Drei Sorten Muell sind bisher durch die Leitung gewandert:
+	// Zwei Sorten Muell sind bisher durch die Leitung gewandert:
 	//  (a) reine Ansichts-Events (offene Tabs, aufgeklappte Baumzweige) - die
 	//      sind geraetespezifisch und auf dem anderen Geraet schlicht falsch.
-	//  (b) Telemetrie, die db.js lokal nach 90 Tagen sowieso wegwirft - sie
-	//      wurde hochgeladen, verteilt und sofort wieder verworfen.
-	//  (c) Heft-Striche, die im selben Paket schon von einem heftSnap
+	//  (b) Heft-Striche, die im selben Paket schon von einem heftSnap
 	//      ueberholt wurden - der Snapshot enthaelt sie bereits.
-	const UPLOAD_SKIP_TYPES = new Set(["uiTabsSet", "uiTreeSet"]);
-	const TELE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
-	const evTime = (ev) => (typeof ev.t === "number" ? ev.t : Date.parse(ev.t) || 0);
-	function pruneForUpload(events) {
-		const now = Date.now();
-		const snapSeq = new Map();
-		for (const ev of events) {
-			if (ev.type === "heftSnap" && ev.payload?.pageId) snapSeq.set(ev.payload.pageId, Math.max(snapSeq.get(ev.payload.pageId) || 0, ev.seq || 0));
-		}
-		return events.filter((ev) => {
-			if (UPLOAD_SKIP_TYPES.has(ev.type)) return false;
-			if (ev.type === "teleEvent" && now - evTime(ev) > TELE_MAX_AGE_MS) return false;
-			if (ev.type === "heftOps" && (snapSeq.get(ev.payload?.pageId) || 0) > (ev.seq || 0)) return false;
-			return true;
-		});
-	}
-
 	// EIN Weg, ein Änderungspaket hochzuladen — syncRaw und flushUpload teilen ihn. Vorher stand
 	// die Paketbildung zweimal da: Dateiname, appProperties, „gelesen“-Liste und Wasserstand
 	// mussten an zwei Stellen identisch bleiben. Solche Zwillinge laufen mit der Zeit auseinander,
 	// und beim Sync fällt das erst auf, wenn Geräte divergieren.
 	async function uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds) {
-		const events = pruneForUpload(DB.filterEventsForSync(
+		const events = pruneEventsForUpload(DB.filterEventsForSync(
 			await DB.eventsAfterSeq(uploadedSeq), SETTINGS_SYNC.allowsSecrets(S.settings)));
 		if (events.length) {
 			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
@@ -570,6 +551,10 @@ export const DRIVE = (() => {
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
 		await replayImported(importedEvents);
+		// Erst nach einem vollständig erfolgreichen Abgleich lokale, sicher überholte
+		// Zwischenstände entfernen. Nutzungsstatistiken bleiben dabei unbegrenzt erhalten.
+		// Schlägt nur diese Wartung fehl, bleibt der abgeschlossene Sync trotzdem gültig.
+		try { await DB.compactLocal(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
 		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.

@@ -1016,8 +1016,8 @@ function renderHome(main) {
 	const restoreScroll = U.scrollAnchor(() => main.querySelector(".home") || main);
 	const pages = STATE.activePages();
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
-	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => (b.updated || "").localeCompare(a.updated || "")).slice(0, 6);
-	const chats = CHATS.load().slice().sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
+	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => ((b.updated || "") < (a.updated || "") ? -1 : (b.updated || "") > (a.updated || "") ? 1 : 0)).slice(0, 6);
+	const chats = CHATS.load().slice().sort((a, b) => ((b.updated || b.created || "") < (a.updated || a.created || "") ? -1 : (b.updated || b.created || "") > (a.updated || a.created || "") ? 1 : 0));
 	const dueCards = STATE.dueCards();
 	const due = dueCards.length;
 	const homeStudy = STATE.studySnapshot(null).counts;
@@ -1029,18 +1029,22 @@ function renderHome(main) {
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 	const cardCount = ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length;
-	const lz = LERNZEIT.statsForHome();
-	// 7-Tage-Trend für die persönlichen Hinweise. Ein Durchlauf über den langen
-	// Review-Log reicht; die ausführliche Wochenanalyse lebt zentral in lernzeit.js.
+	const lzTotals = (LERNZEIT.totalsByDay && LERNZEIT.totalsByDay()) || null;
+	const lz = (LERNZEIT.statsForHome && (lzTotals ? LERNZEIT.statsForHome(lzTotals) : LERNZEIT.statsForHome())) || { goalPct: 0 };
+	// 7-Tage-Trend für die persönlichen Hinweise. Rückwärts-Durchlauf mit Frühabbruch
+	// über den Review-Log; die ausführliche Wochenanalyse lebt zentral in lernzeit.js.
 	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
 	const cut14 = iso(14), cut7 = iso(7);
 	const win = { cur7: [0, 0], prev7: [0, 0] };
 	const bump = (w, ok) => { w[0]++; if (ok) w[1]++; };
-	for (const r of S.reviews || []) {
+	const revs = S.reviews || [];
+	for (let i = revs.length - 1; i >= 0; i--) {
+		const r = revs[i];
+		if (r.t < cut14) break;
 		if (!(r.grade > 0)) continue;
 		const ok = r.grade > 1;
 		if (r.t >= cut7) bump(win.cur7, ok);
-		else if (r.t >= cut14) bump(win.prev7, ok);
+		else bump(win.prev7, ok);
 	}
 	const rate = (w) => w[1] / w[0];
 	const trend = win.cur7[0] >= 10 && win.prev7[0] >= 10 ? rate(win.cur7) - rate(win.prev7) : null;
@@ -1102,7 +1106,7 @@ function renderHome(main) {
 		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
 		continue: '<section class="home-section home-section-continue">' + continueBlock + "</section>",
 		today: todayPills,
-		insights: LERNZEIT.homeWidgetHtml(),
+		insights: LERNZEIT.homeWidgetHtml(lzTotals, lz),
 		decks: homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true),
 		favorites: homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true),
 		recent: homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true),
@@ -1785,7 +1789,7 @@ function openReview() {
 }
 
 function openCards() {
-	const cards = Object.values(S.cards).filter((c) => !c.trashed).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
+	const cards = Object.values(S.cards).filter((c) => !c.trashed).sort((a, b) => (a.srs.due < b.srs.due ? -1 : a.srs.due > b.srs.due ? 1 : 0));
 	const rows = cards.map((c) =>
 		`<div class="card-row"><textarea data-front="${c.id}" rows="2">${esc(c.front)}</textarea><textarea data-back="${c.id}" rows="2">${esc(c.back)}</textarea>` +
 		`<div class="card-meta"><span>fällig: ${U.fmtDate(c.srs.due)} · Wdh. ${c.srs.reps || 0}</span>` +

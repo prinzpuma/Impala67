@@ -478,10 +478,10 @@ export const LERNZEIT = (() => {
 			'<div class="lz-timer-actions"><button data-lz-start="15">15</button><button data-lz-start="25">25</button><button data-lz-start="45">45</button><button data-lz-start="60">60</button>' +
 			'<input id="lzCustomMinutes" type="number" min="5" max="240" value="25" aria-label="Eigene Minuten"><button class="mini primary" data-lz-custom="1">Start</button></div></div>';
 	}
-	function homeWidgetHtml() {
+	function homeWidgetHtml(totalsIn, homeStatsIn) {
 		const mode = analysisMode;
 		const range = mode === "month" ? monthRange(monthOffset) : weekRange(weekOffset);
-		const totals = totalsByDay(), homeStats = statsForHome(totals);
+		const totals = totalsIn || totalsByDay(), homeStats = homeStatsIn || statsForHome(totals);
 		const selected = mode === "month" ? monthStats(monthOffset, totals) : weekStats(weekOffset, totals);
 		const sessions = sessionsInRange(range.from, range.to);
 		const seconds = selected.seconds;
@@ -633,5 +633,5 @@ export const LERNZEIT = (() => {
 		tick();
 	}
 
-	return { homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke, contextChanged, startInterval, stopInterval };
+	return { totalsByDay, homeWidgetHtml, activeSessions, totalForDay, fmt, startTimer, statsForHome, poke, contextChanged, startInterval, stopInterval };
 })();

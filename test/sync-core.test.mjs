@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { boundedKnownIds, decodeJson, encodeJson, isBlobAlive, newestFile, shouldUploadDelta, unseenRemoteFiles } from "../web/sync-core.js";
+import { boundedKnownIds, decodeJson, encodeJson, isBlobAlive, newestFile, pruneEventsForUpload, shouldUploadDelta, unseenRemoteFiles } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
 import { U } from "../web/util.js";
 
@@ -48,6 +48,37 @@ test("Drei-Wege-Merge meldet echte Überlappung als Konflikt", () => {
 	assert.equal(result.ok, false);
 });
 
+test("Log-Kompaktierung bewahrt Nutzungsstatistiken und den aktuellen Fachstand", () => {
+	const at = (day) => `2025-01-${String(day).padStart(2, "0")}T12:00:00.000Z`;
+	const events = [
+		{ id: "page", t: at(1), type: "pageCreate", payload: { id: "p1", title: "Alt", content: "Ausgang" } },
+		{ id: "old-title", t: at(2), type: "pageUpdate", payload: { id: "p1", patch: { title: "Zwischenstand" } } },
+		{ id: "new-title", t: at(3), type: "pageUpdate", payload: { id: "p1", patch: { title: "Aktuell" } } },
+		{ id: "old-tabs", t: at(4), type: "uiTabsSet", payload: { tabs: ["alt"] } },
+		{ id: "new-tabs", t: at(5), type: "uiTabsSet", payload: { tabs: ["aktuell"] } },
+		{ id: "tele-old", t: "2020-01-01T12:00:00.000Z", type: "teleEvent", payload: { kind: "study", seconds: 60 } },
+	];
+	const compacted = DB.compactEvents(events);
+	const ids = compacted.map((event) => event.id);
+
+	assert.ok(ids.includes("tele-old"), "alte Nutzungsstatistiken dürfen nicht verfallen");
+	assert.ok(ids.includes("new-title"), "der aktuelle Seitenstand muss erhalten bleiben");
+	assert.ok(ids.includes("new-tabs"), "der aktuelle UI-Stand muss erhalten bleiben");
+	assert.ok(!ids.includes("old-title"), "vollständig überschriebene Zwischenstände dürfen entfallen");
+	assert.ok(!ids.includes("old-tabs"), "veraltete UI-Zwischenstände dürfen entfallen");
+	assert.equal(DB.DROPPABLE_TYPES.has("teleEvent"), false, "Statistiken dürfen auch beim späteren Import nicht als verfallen gelten");
+});
+
+test("Drive-Transport bewahrt alte Nutzungsstatistiken", () => {
+	const events = [
+		{ id: "tele-old", seq: 1, t: "2020-01-01T12:00:00.000Z", type: "teleEvent", payload: { kind: "study", seconds: 60 } },
+		{ id: "tabs", seq: 2, type: "uiTabsSet", payload: {} },
+		{ id: "stroke", seq: 3, type: "heftOps", payload: { pageId: "h1", ops: [] } },
+		{ id: "snapshot", seq: 4, type: "heftSnap", payload: { pageId: "h1", doc: { pages: [] } } },
+	];
+	assert.deepEqual(pruneEventsForUpload(events).map((event) => event.id), ["tele-old", "snapshot"]);
+});
+
 test("Geräteablage bleibt bei fehlendem localStorage fehlertolerant", () => {
 	assert.equal(U.storage.get("missing", "fallback"), "fallback");
 	assert.equal(U.storage.set("key", "value"), false);
@@ -87,4 +118,3 @@ test("Blob-GC erkennt Cover, PDF, eingebettete Bilder und Alt-Strukturen korrekt
 	// 6. Verwaiste UUID ohne Referenz
 	assert.equal(isBlobAlive(orphanUuid, pages), false);
 });
-

@@ -22,18 +22,21 @@ const CACHE_LIMIT = 200; // kürzt NUR den lokalen Cache — niemals das Event-L
 
 const stamp = (...vals) => String(vals.find(Boolean) || U.now());
 const atLeast = (a, b) => String(a || "") >= String(b || "");
-const sorted = (list) => [...list].sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+const sorted = (list) => [...list].sort((a, b) => (String(b.updated) < String(a.updated) ? -1 : (String(b.updated) > String(a.updated) ? 1 : 0)));
 
 // Fingerabdruck einer Sitzung. Zeitstempel + Titel + Anzahl genügen, weil persist()
 // "updated" bei jeder echten Inhaltsänderung hochzieht — vorher wurde für JEDEN Chat
 // bei JEDEM Speichern der komplette Verlauf zweimal nach JSON serialisiert.
 const sig = (s) => [s.updated, s.title, s.messages.length].join("|");
 
+let _localParsed = null;
 function readLocal() {
+	if (_localParsed) return _localParsed;
 	try {
 		const parsed = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || "[]");
-		return Array.isArray(parsed) ? parsed : [];
-	} catch { return []; }
+		_localParsed = Array.isArray(parsed) ? parsed : [];
+		return _localParsed;
+	} catch { _localParsed = []; return _localParsed; }
 }
 
 // Ein einziger Render ruft load() mehrfach (Sidebar, Tab-Leiste, Home, Verlauf-Menü).
@@ -64,7 +67,9 @@ function writeLocal(list) {
 	const print = listPrint(list);
 	if (print === writtenPrint) return;
 	try {
-		localStorage.setItem(KEY, JSON.stringify(list.slice(0, CACHE_LIMIT)));
+		const slice = list.slice(0, CACHE_LIMIT);
+		localStorage.setItem(KEY, JSON.stringify(slice));
+		_localParsed = slice;
 		writtenPrint = print;
 	} catch (e) { console.warn("Chat-Verlauf konnte nicht lokal gespeichert werden:", e); }
 }
