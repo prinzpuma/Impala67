@@ -880,6 +880,7 @@ export const HEFT = (() => {
 		const dprSnap = window.devicePixelRatio || 1;
 		const snap = (v) => Math.round(v * dprSnap) / dprSnap;
 		pgs.style.transform = "translate(" + snap(-view.x * view.k) + "px, " + snap(-view.y * view.k) + "px) scale(" + view.k.toFixed(4) + ")";
+		positionDetailLayers();
 		if (!commit) {
 			// Während der Geste nur die bereits gerasterte Fläche verschieben. Eine
 			// vollständige Seitenprüfung pro Frame blockierte Safari beim Scrollen.
@@ -896,7 +897,11 @@ export const HEFT = (() => {
 	function sharpen() {
 		const pgs = pagesEl(); if (!pgs) return;
 		pgs.style.willChange = "auto";
-		renderVisiblePages();
+		// Ein abgeschlossener Zoom oder ein Layoutwechsel (z. B. Seitenleiste)
+		// braucht immer eine Kachel fuer die EXAKT aktuelle Fit-/Zoomstufe.
+		// Eine nur geometrisch noch abdeckende alte Kachel darf hier nicht bleiben:
+		// WebKit skaliert sie sonst hoch und das Heft wirkt dauerhaft unscharf.
+		renderVisiblePages(false, true);
 		viewChanged();
 	}
 	function schedulePaint(zooming = false) {
@@ -1026,25 +1031,35 @@ export const HEFT = (() => {
 		if (x1 - x0 < 2 || y1 - y0 < 2) return null;
 		return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 	}
+	function positionDetailLayer(cv) {
+		const t = cv && cv.__heftTile, page = t && pageOrigin(t.pageIndex);
+		if (!t || !page || cv.style.display === "none") return;
+		const dprSnap = window.devicePixelRatio || 1;
+		const snap = (v) => Math.round(v * dprSnap) / dprSnap;
+		// Die Detailkachel ist absichtlich ein DIREKTES Kind der unskalierten
+		// .heft-scroll. So kann WebKit sie weder mit .heft-pages zusammenrasterisieren
+		// noch bei hohem Zoom ein altes Bild der Kachel hochskalieren.
+		cv.style.left = snap((page.x + t.x - view.x) * view.k) + "px";
+		cv.style.top = snap((page.y + t.y - view.y) * view.k) + "px";
+		cv.style.width = (t.w * view.k) + "px";
+		cv.style.height = (t.h * view.k) + "px";
+	}
+	function positionDetailLayers() {
+		detailCanvases.forEach(positionDetailLayer);
+		wetCanvases.forEach(positionDetailLayer);
+	}
 	function placeLayer(cv, i, r, dpr) {
 		const page = geometry.pages[i], k = view.k;
 		if (!page) return;
-		cv.style.left = (page.baseLeft + r.x) + "px";
-		cv.style.top = (page.baseTop + r.y) + "px";
-		// iPad-Wurzel: .heft-pages traegt ein CSS scale(k). iOS/WebKit rastert einen
-		// zusammengesetzten Layer EINMAL und skaliert danach nur noch dieses alte Bild
-		// hoch - Chrome am PC rastert neu, deshalb war es nur am iPad weich. Die Kachel
-		// bekommt ihre Groesse deshalb in BILDSCHIRM-Pixeln plus scale(1/k): ihr
-		// Gesamtmassstab ist 1, es gibt fuer WebKit nichts mehr hochzuskalieren.
 		cv.style.transformOrigin = "0 0";
-		cv.style.transform = k === 1 ? "none" : "scale(" + (1 / k).toFixed(6) + ")";
-		cv.style.width = (r.w * k) + "px"; cv.style.height = (r.h * k) + "px";
+		cv.style.transform = "none";
 		const pw = Math.max(1, Math.round(r.w * dpr * k)), ph = Math.max(1, Math.round(r.h * dpr * k));
 		if (cv.width !== pw) cv.width = pw;
 		if (cv.height !== ph) cv.height = ph;
 		cv.__heftDpr = dpr; cv.__heftScale = fitScale * k;
-		cv.__heftTile = { x: r.x, y: r.y, w: r.w, h: r.h, dpr, k, scale: fitScale * k };
+		cv.__heftTile = { pageIndex: i, x: r.x, y: r.y, w: r.w, h: r.h, dpr, k, scale: fitScale * k };
 		cv.style.display = "block";
+		positionDetailLayer(cv);
 	}
 	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
 	function hideDetailCanvases() {
@@ -1081,6 +1096,10 @@ export const HEFT = (() => {
 		// darf bleiben. Der alte Exakt-Vergleich verwarf sie bei der kleinsten Bewegung, dadurch
 		// wurde bei jedem Frame neu gerendert (bzw. während der Geste gar nicht).
 		if (!t || tile.style.display === "none" || t.k < view.k - 0.0001) return false;
+		// Beim Ein-/Ausklappen der Seitenleiste aendert sich fitScale, view.k aber
+		// nicht. Ohne diesen Vergleich galt die Kachel der alten Seitenbreite weiter
+		// als scharf und wurde vom Browser auf die neue Breite skaliert.
+		if (Math.abs(t.scale - fitScale * t.k) > 0.0001) return false;
 		const need = layerRectFor(i, 0);
 		if (!need) return false;
 		return t.x <= need.x + 0.5 && t.y <= need.y + 0.5 &&
@@ -1143,7 +1162,7 @@ export const HEFT = (() => {
 		}
 		clearLiveInk(i);
 	}
-	function renderVisiblePages(skipTiles = false) {
+	function renderVisiblePages(skipTiles = false, forceTiles = false) {
 		if (!doc) return;
 		const visible = new Set(visiblePageIndices());
 		// Weiter aussen liegende Seiten behalten ihr Bild noch (Speicher gegen Ruckeln):
@@ -1177,7 +1196,7 @@ export const HEFT = (() => {
 			if (needsRender) redrawBasePage(i);
 		});
 
-		if (!skipTiles) renderDetailTiles(false);
+		if (!skipTiles) renderDetailTiles(forceTiles);
 	}
 	function scheduleZoomSettleRender() {
 		clearTimeout(zoomSettleTimer);
@@ -3273,23 +3292,23 @@ export const HEFT = (() => {
 
 		canvases = host ? [...host.querySelectorAll(".heft-canvas")] : [];
 		pageSlots = canvases.map((cv) => cv.closest(".heft-page-slot"));
+		const scroll = scrollEl();
 
 		detailCanvases = pageSlots.map((slot) => {
-			if (!slot) return null;
-			if (getComputedStyle(slot).position === "static") slot.style.position = "relative";
+			if (!slot || !scroll) return null;
 			const d = document.createElement("canvas");
 			d.className = "heft-detail-canvas";
 			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "2", display: "none" });
-			slot.appendChild(d);
+			scroll.appendChild(d);
 			return d;
 		});
 
 		wetCanvases = pageSlots.map((slot) => {
-			if (!slot) return null;
+			if (!slot || !scroll) return null;
 			const d = document.createElement("canvas");
 			d.className = "heft-wet-canvas";
 			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "3", display: "none" });
-			slot.appendChild(d);
+			scroll.appendChild(d);
 			return d;
 		});
 		canvases.forEach((cv) => {

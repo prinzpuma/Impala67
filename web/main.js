@@ -26,7 +26,7 @@ import { SHORTCUTS } from "./shortcuts.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { BOOT } from "./boot.js";
 import { POPOVERS } from "./popovers.js";
-import { HEFT } from "./heft.js";
+import { HEFT } from "./heft.js?build=169";
 import { VOICE } from "./voice.js";
 import { MOBILE } from "./mobile.js";
 import { LERNZEIT } from "./lernzeit.js";
