@@ -316,7 +316,6 @@ export async function handleCreateWorkspace() {
 	const name = inp ? inp.value.trim() : "";
 	if (name) {
 		await STATE.dispatch("workspaceCreate", { id: U.uid(), name });
-		renderMain();
 	}
 }
 

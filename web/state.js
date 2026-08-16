@@ -192,15 +192,41 @@ export const STATE = (() => {
 			try { fn(types || []); } catch (e) { console.warn("remote-Hook:", e); }
 		}
 	};
+	const sortEvents = (events) => (Array.isArray(events) ? events.slice() : [])
+		.sort((a, b) => (String(a?.t || "") < String(b?.t || "") ? -1 : String(a?.t || "") > String(b?.t || "") ? 1 : 0) || (a?.seq || 0) - (b?.seq || 0));
+	// EIN Pfad fuer bereits persistierte Fremd-Events (Drive und BroadcastChannel):
+	// Uhr nachziehen, Zustand anwenden, UI invalidieren und Live-Module informieren.
+	function applyRemoteEvents(events) {
+		const list = sortEvents(events);
+		if (!list.length) return list;
+		for (const ev of list) {
+			U.observeTime(ev.t);
+			reduce(ev);
+		}
+		if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
+		emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+		return list;
+	}
+	// Eine Regel fuer Seiten-Zugehoerigkeit und Zyklus-Schutz. Bei bereits korrupten
+	// Alt-Daten lehnen Aufrufer den Vorgang nach dem Hops-Limit sicherheitshalber ab.
+	function pageInTree(pageId, rootId) {
+		let id = pageId, hops = 0;
+		while (id) {
+			if (id === rootId) return true;
+			if (++hops > 10000) return true;
+			id = (S.pages[id] || {}).parentId || null;
+		}
+		return false;
+	}
 
 	// ---- Stapel-Helfer: ein Stapel-Teilbaum ("Eltern::Kind") + seine Karten ----
-	// (dedupliziert die vorher vierfach kopierte Logik der deck*-Events)
-	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => n === from || n.startsWith(from + "::"));
+	// Eine fachliche Regel fuer Reducer, UI, Lernqueue und KI-Werkzeuge.
+	const deckInTree = (deck, root) => !!root && (deck === root || String(deck || "").startsWith(root + "::"));
+	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => deckInTree(n, from));
 	// includeTrashed: Rename/Move/Purge brauchen alle Karten; Lernen/UI nur aktive.
 	const cardsInDeckTree = (from, opts) => Object.values(S.cards).filter((c) => {
 		if (!(opts && opts.includeTrashed) && c.trashed) return false;
-		const d = c.deck || "Standard";
-		return d === from || d.startsWith(from + "::");
+		return deckInTree(c.deck || "Standard", from);
 	});
 	function renameDeckTree(from, to) {
 		deckSubtree(from).forEach((n) => {
@@ -407,15 +433,7 @@ export const STATE = (() => {
 				if (!pg) break;
 				// Zyklus-Schutz: eine Seite darf nie unter sich selbst oder einen eigenen
 				// Nachfahren wandern (führte zu Endlos-Rekursion, z.B. beim Papierkorb).
-				let anc = p.parentId, ok = true, hops = 0;
-				while (anc) {
-					if (anc === p.id) { ok = false; break; }
-					// Defensiv: bricht die Ahnen-Suche wegen eines Zyklus in Alt-Daten am
-					// Hops-Limit ab, den Move ABLEHNEN — vorher blieb ok = true und der
-					// Move wurde trotz nicht prüfbarer Hierarchie angewendet.
-					if (++hops > 10000) { ok = false; break; }
-					anc = (S.pages[anc] || {}).parentId || null;
-				}
+				const ok = !pageInTree(p.parentId, p.id);
 				if (ok) pg.parentId = p.parentId || null;
 				// Manuelle Sortierung per Drag & Drop: order wird beim Verschieben mitgesetzt
 				if (ok && typeof p.order === "number") pg.order = p.order;
@@ -423,6 +441,7 @@ export const STATE = (() => {
 			}
 			case "pageDelete":
 				bustChildIdx();
+				closePageTabs([p.id]);
 				Object.values(S.pages).forEach((pg) => {
 					if (pg.parentId === p.id) pg.parentId = null; // Kinder wandern auf Root
 				});
@@ -433,10 +452,12 @@ export const STATE = (() => {
 			case "pageTrash":
 				bustChildIdx();
 				// Wie in Notion: die ganze Unterseiten-Struktur wandert zusammen in den Papierkorb.
-				collectSubtree(p.id).forEach((id) => {
+				const trashedIds = collectSubtree(p.id);
+				trashedIds.forEach((id) => {
 					const pg = S.pages[id];
 					if (pg) { pg.trashed = true; pg.trashedAt = ev.t; }
 				});
+				closePageTabs(trashedIds);
 				break;
 			case "pageRestore":
 				bustChildIdx();
@@ -644,7 +665,7 @@ export const STATE = (() => {
 				// oder einen eigenen Unterstapel wandern (zerlegte vorher den Stapel-Baum).
 				if (!p.from) break;
 				const target = p.target || "";
-				if (target === p.from || target.startsWith(p.from + "::")) break;
+				if (deckInTree(target, p.from)) break;
 				const to = (target ? target + "::" : "") + p.from.split("::").pop();
 				if (to !== p.from) renameDeckTree(p.from, to);
 				break;
@@ -852,10 +873,7 @@ export const STATE = (() => {
 	// Gemeinsamer Helfer für load()/pageHistory(): Event-Log laden und deterministisch
 	// sortieren (vorher in beiden Funktionen fast identisch dupliziert).
 	async function loadSortedEvents() {
-		const evs = await DB.allEvents();
-		// Deterministisch: nach Zeitstempel (schneller ASCII-Vergleich), dann lokaler Sequenz
-		evs.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0));
-		return evs;
+		return sortEvents(await DB.allEvents());
 	}
 
 	async function load() {
@@ -886,6 +904,17 @@ export const STATE = (() => {
 			for (const kid of byParent.get(cur) || []) stack.push(kid.id);
 		}
 		return result;
+	}
+	const pageSubtreeIds = (id) => new Set(collectSubtree(id));
+	function closePageTabs(ids) {
+		const gone = ids instanceof Set ? ids : new Set(ids || []);
+		if (!gone.size) return;
+		S.tabs = (S.tabs || []).filter((id) => !gone.has(id));
+		if (gone.has(S.activeTabId)) S.activeTabId = null;
+		if (gone.has(S.currentPageId)) {
+			S.currentPageId = null;
+			if (S.view === "page") S.view = "home";
+		}
 	}
 
 	// Sidebar-Reihenfolge: explizit gesetzte order (per Drag & Drop) hat Vorrang,
@@ -934,7 +963,7 @@ export const STATE = (() => {
 	const trashedDeckRoots = () => {
 		const names = Object.keys(S.decks).filter((n) => S.decks[n] && S.decks[n].trashed);
 		return names
-			.filter((n) => !names.some((p) => p !== n && n.startsWith(p + "::")))
+			.filter((n) => !names.some((p) => p !== n && deckInTree(n, p)))
 			.sort((a, b) => ((S.decks[b].trashedAt || "") < (S.decks[a].trashedAt || "") ? -1 : (S.decks[b].trashedAt || "") > (S.decks[a].trashedAt || "") ? 1 : 0));
 	};
 	// Einzelkarten im Papierkorb, die NICHT schon über einen gelöschten Stapel abgedeckt sind.
@@ -1094,7 +1123,7 @@ export const STATE = (() => {
 			if (!c || c.trashed || c.suspended || !c.srs) return false;
 			if (!deck) return true;
 			const d = c.deck || "Standard";
-			return d === deck || d.startsWith(deck + "::");
+			return deckInTree(d, deck);
 		};
 		const byDue = (a, b) => (a.srs.due < b.srs.due ? -1 : a.srs.due > b.srs.due ? 1 : 0);
 		const all = Object.values(S.cards).filter(inDeck);
@@ -1255,5 +1284,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, onBeforeDispatch, onAfterDispatch, onRemoteApplied, emitRemoteApplied, load, migrateLegacySecretsToSync, childrenOf, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

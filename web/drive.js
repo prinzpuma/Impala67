@@ -313,16 +313,11 @@ export const DRIVE = (() => {
 	// auftauchen. Jetzt bekommt das offene Heft VOR dem Abspielen die Gelegenheit, seine eigenen
 	// noch nicht veröffentlichten Striche rauszuschreiben — der Diff bleibt damit ehrlich.
 	async function replayImported(events) {
-		const list = (events || []).slice().sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")));
-		if (!list.length) return;
-		if (list.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
+		if (!(events || []).length) return;
+		if (events.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
 			try { await HEFT.saveNow(); } catch (e) { console.warn("[sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", e); }
 		}
-		for (const ev of list) STATE.reduce(ev);
-		if (list.length && typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
-		// v8: Hefte kommen als heftOps/heftSnap herein. Ein offenes Heft hält seine Seiten im
-		// Speicher — ohne dieses Signal sähe man fremde Striche erst nach einem Neustart.
-		if (list.length) STATE.emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+		STATE.applyRemoteEvents(events);
 	}
 
 	// v8: heftHeads/legacyHeftIds/reconcileHeftBlobs sind ersatzlos entfallen — rund 100 Zeilen

@@ -1332,14 +1332,14 @@ body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-ri
 	to { opacity: 1; transform: none }
 }
 body.reduce-motion .heft-tray { animation: none }
-.heft-main, .heft-opt { min-height: 0; height: 36px; min-width: 38px; padding: 0 9px; border-radius: var(--radius-pill); background: transparent; color: rgba(255,255,255,.78); font-size: var(--text-md); display: inline-flex; align-items: center; justify-content: center; gap: 2px }
-.heft-main:hover, .heft-opt:hover { background: var(--surface-active); color: #fff }
-.heft-main.open { background: var(--surface-active); color: #fff }
+.heft-main, .heft-opt { min-height: 0; height: 36px; min-width: 38px; padding: 0 9px; border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-md); display: inline-flex; align-items: center; justify-content: center; gap: 2px }
+.heft-main:hover, .heft-opt:hover { background: var(--surface-active); color: var(--text) }
+.heft-main.open { background: var(--surface-active); color: var(--text) }
 .heft-chev { font-size: var(--text-3xs); opacity: .65; margin-left: 1px; line-height: 1 }
 .heft-main.open .heft-chev { opacity: 1; color: var(--accent) }
 .heft-sep { width: 1px; height: 16px; margin: 0 6px; flex-shrink: 0; background: var(--surface-active) }
-.heft-size { display: inline-flex !important; align-items: center; justify-content: center; min-width: 34px !important; height: 36px; padding: 0 8px !important; border-radius: var(--radius-pill); background: transparent; color: rgba(255,255,255,.75) }
-.heft-size:hover { background: var(--surface-active); color: #fff }
+.heft-size { display: inline-flex !important; align-items: center; justify-content: center; min-width: 34px !important; height: 36px; padding: 0 8px !important; border-radius: var(--radius-pill); background: transparent; color: var(--text2) }
+.heft-size:hover { background: var(--surface-active); color: var(--text) }
 .heft-size.active { background: var(--accent-soft); color: var(--accent) }
 .heft-size i { display: block; width: 18px; border-radius: var(--radius-pill); background: currentColor; opacity: .9 }
 .heft-size.active i { opacity: 1; background: var(--accent) }
@@ -1348,7 +1348,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
 /* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
 /* ♻️ Größe/Farbe/Rahmen kommen aus Taskbar v7; hier bleibt nur, was dort nicht gesetzt wird. */
-.heft-corner { font-weight: 700; white-space: nowrap; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 4px }
+.heft-corner { font-weight: 700; white-space: nowrap; color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 4px }
 /* 🐛 Fix (29. Juli): Hover und Aktiv-Zustand waren wirkungslos — „.heft-chrome .heft-corner" ist spezifischer und setzte Hintergrund/Rahmen zurück. Jetzt im selben Kontext notiert. */
 .heft-chrome .heft-corner:hover { background: var(--surface-hover-strong) }
 .heft-chrome .heft-corner.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border) }
@@ -1560,9 +1560,9 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-chrome .heft-pill > .heft-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--edge) }
 .heft-chrome .heft-chev { font-size: 7px; margin-left: -1px }
 /* NUR dieses Tray ist beweglich. Standard: direkt unter der fest… */
-.heft-chrome .heft-tray { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); z-index: 53; display: flex; align-items: center; gap: 0; padding: 2px 4px; max-width: min(94vw, 560px); background: var(--menu-bg); border: 1px solid rgba(255,255,255,.18); border-radius: var(--radius-md); box-shadow: var(--elev-1); backdrop-filter: none; touch-action: none }
+.heft-chrome .heft-tray { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); z-index: 53; display: flex; align-items: center; gap: 0; padding: 2px 4px; max-width: min(94vw, 560px); background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-md); box-shadow: var(--elev-1); backdrop-filter: none; touch-action: none }
 .heft-chrome .heft-tray.is-dragging { opacity: .92; cursor: grabbing }
-.heft-chrome .heft-tray-drag { width: 20px; min-width: 20px; height: 24px; min-height: 24px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: rgba(255,255,255,.48); font-size: var(--text-3xs); letter-spacing: -2px; cursor: grab; touch-action: none }
+.heft-chrome .heft-tray-drag { width: 20px; min-width: 20px; height: 24px; min-height: 24px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-3xs); letter-spacing: -2px; cursor: grab; touch-action: none }
 .heft-chrome .heft-tray-drag:hover { color: var(--text); background: var(--surface-active) }
 .heft-chrome .heft-tray-drag:active { cursor: grabbing }
 .heft-chrome .heft-tray .heft-opt, .heft-chrome .heft-tray .heft-size { width: 24px; min-width: 24px !important; height: 24px; min-height: 24px; padding: 0 !important; border-radius: var(--radius-sm); font-size: var(--text-xs) }
@@ -1571,8 +1571,8 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-chrome .heft-tray .heft-swatch { width: 16px; height: 16px; min-width: 16px !important; margin: 0 1px }
 .heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px }
 /* Eckaktionen bleiben klein, aber klar treffbar. */
-.heft-chrome .heft-corner { top: 10px; height: 28px; min-height: 28px; min-width: 28px; padding: 0 7px; border-radius: var(--radius-md); font-size: var(--text-xs); background: var(--menu-bg); border-color: rgba(255,255,255,.16); box-shadow: none }
-.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: var(--menu-bg); color: #fff }
+.heft-chrome .heft-corner { top: 10px; height: 28px; min-height: 28px; min-width: 28px; padding: 0 7px; border-radius: var(--radius-md); font-size: var(--text-xs); background: var(--menu-bg); border-color: var(--edge); box-shadow: none }
+.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: var(--menu-bg); color: var(--text) }
 .heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; font-size: 16px }
 .heft-chrome .heft-corner-l { left: 10px; top: 12px }
 .heft-chrome .heft-corner-r { right: 10px; top: 12px }

@@ -7,7 +7,6 @@ import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
-import { TABS } from "./tabs.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
 // Beschreibungs-Diät (31. Juli): Die Liste geht bei JEDER Anfrage und in JEDEM Agent-Schritt
@@ -59,7 +58,7 @@ export const TOOLS = (() => {
 	// (inkl. Unterstapel) eingegrenzt.
 	// EINE Teilbaum-Regel und EIN Textfilter statt je vier bzw. zwei Kopien (findCard,
 	// selectCards, cardsOfDeck, list_flashcards) — die Kopien drifteten sonst auseinander.
-	const inDeck = (c, deck) => { const d = c.deck || "Standard"; return d === deck || d.startsWith(deck + "::"); };
+	const inDeck = (c, deck) => STATE.deckInTree(c.deck || "Standard", deck);
 	const textHit = (c, q) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q);
 
 	function findCard(front, deck) {
@@ -168,22 +167,6 @@ export const TOOLS = (() => {
 
 	// Karten eines Stapel-Teilbaums (aktiv, ohne Papierkorb).
 	const cardsOfDeck = (deck) => STATE.activeCards().filter((c) => inDeck(c, deck));
-
-	// Seiten-Teilbaum (inkl. Wurzel) in EINEM Durchlauf. Vorher liefen für dieselbe Frage zwei
-	// getrennte Rekursionen hier und eine dritte in ai.js — jede davon über ALLE Seiten je Ebene.
-	function subtreeIds(rootId) {
-		const kids = new Map();
-		for (const p of Object.values(S.pages)) {
-			if (p.trashed || !p.parentId) continue;
-			let arr = kids.get(p.parentId);
-			if (!arr) kids.set(p.parentId, (arr = []));
-			arr.push(p.id);
-		}
-		const ids = new Set([rootId]);
-		const walk = (id) => (kids.get(id) || []).forEach((cid) => { if (!ids.has(cid)) { ids.add(cid); walk(cid); } });
-		walk(rootId);
-		return ids;
-	}
 
 	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
 	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
@@ -606,16 +589,8 @@ export const TOOLS = (() => {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
 				// EIN Baum-Durchlauf für Zählung UND Tab-Schließen (pageTrash markiert den ganzen Baum).
-				const trashIds = subtreeIds(pg.id);
+				const trashIds = STATE.pageSubtreeIds(pg.id);
 				const subtreeExtra = trashIds.size - 1;
-				// Offene Tabs der Seite + Nachfahren REGULÄR schließen. Vorher wurden sie nur aus
-				// der Liste gestrichen: die Tab-Sitzung wurde nie gespeichert, es wurde nicht neu
-				// gezeichnet — nach dem nächsten Neuladen war der Tab der gelöschten Seite wieder da.
-				for (const tid of (S.tabs || []).filter((t) => trashIds.has(t))) await TABS.closeTab(tid);
-				if (S.currentPageId && trashIds.has(S.currentPageId)) {
-					S.currentPageId = null;
-					if (S.view === "page") S.view = "home";
-				}
 				await STATE.dispatch("pageTrash", { id: pg.id });
 				return {
 					ok: true,
@@ -861,7 +836,7 @@ export const TOOLS = (() => {
 				if (!to) return { error: "rename_deck: new_name fehlt." };
 				if (to === from) return { ok: true, deck: from, note: "Name unverändert." };
 				// Zyklus: der neue Pfad darf nicht innerhalb des Stapels selbst liegen.
-				if (to.startsWith(from + "::")) return { error: "Der neue Name liegt innerhalb des Stapels selbst — das ergäbe einen Zyklus." };
+				if (STATE.deckInTree(to, from)) return { error: "Der neue Name liegt innerhalb des Stapels selbst — das ergäbe einen Zyklus." };
 				const clash = await freeDeckSlot(to);
 				if (clash) return { error: clash };
 				const n = cardsOfDeck(from).length;
@@ -877,7 +852,7 @@ export const TOOLS = (() => {
 					const dst = resolveDeckStrict(a.new_parent);
 					if (dst.error) return { error: "Ziel-" + dst.error.charAt(0).toLowerCase() + dst.error.slice(1) };
 					target = dst.deck;
-					if (target === from || target.startsWith(from + "::")) return { error: "Ein Stapel kann nicht in sich selbst oder einen eigenen Unterstapel wandern." };
+					if (STATE.deckInTree(target, from)) return { error: "Ein Stapel kann nicht in sich selbst oder einen eigenen Unterstapel wandern." };
 				}
 				const to = (target ? target + "::" : "") + from.split("::").pop();
 				if (to === from) return { ok: true, deck: from, note: "Der Stapel liegt bereits dort." };
@@ -1039,5 +1014,5 @@ export const TOOLS = (() => {
 
 	// cardsOfDeck/subtreeIds nach außen: ai.js baut damit seine Bestätigungstexte, statt
 	// dieselben Baum-Regeln ein zweites Mal zu formulieren (drifteten sonst auseinander).
-	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds };
+	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds: STATE.pageSubtreeIds };
 })();

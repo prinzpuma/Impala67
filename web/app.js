@@ -59,29 +59,6 @@ const dsOf = (e) => (e && e.target && e.target.dataset) || {};
 const blurActive = () => document.activeElement?.blur();
 const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
 const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); ti.select(); } };
-// deck gleich name oder Unterstapel davon?
-const inDeck = (deck, name) => deck === name || deck.startsWith(name + "::");
-// Alle Nachfahren einer Seite inkl. ihrer selbst (Verschieben-Dialog, Papierkorb)
-function descendantsOf(pageId) {
-	// PERF: EIN Durchlauf baut den Eltern→Kinder-Index, danach werden nur noch echte
-	// Kinder besucht — vorher scannte JEDE Rekursionsebene ALLE Seiten (O(n²) bei
-	// tiefen Bäumen; spürbares Haken bei Verschieben/Papierkorb in großen Workspaces).
-	const byParent = new Map();
-	for (const p of Object.values(S.pages)) {
-		const k = p.parentId || null;
-		let kids = byParent.get(k);
-		if (!kids) { kids = []; byParent.set(k, kids); }
-		kids.push(p.id);
-	}
-	const set = new Set([pageId]);
-	const stack = [pageId];
-	while (stack.length) {
-		for (const kid of byParent.get(stack.pop()) || []) {
-			if (!set.has(kid)) { set.add(kid); stack.push(kid); }
-		}
-	}
-	return set;
-}
 
 export function closeOverlay() {
 	const o = $("overlay");
@@ -143,7 +120,7 @@ function openMoveDialog(pageId) {
 	const o = $("overlay");
 	const pg = S.pages[pageId];
 	if (!o || !pg) return;
-	const bad = descendantsOf(pageId);
+	const bad = STATE.pageSubtreeIds(pageId);
 	let items = "";
 	for (const ws of Object.values(S.workspaces)) {
 		items += `<button class="menu-item" data-movetarget="ws:${esc(ws.id)}">📁 ${esc(ws.name)}</button>`;
@@ -161,13 +138,6 @@ function openMoveDialog(pageId) {
 	o.hidden = false;
 	S.movePageId = pageId;
 	$("dlgMoveCancel").addEventListener("click", () => closeOverlay());
-}
-
-function isDescendant(childId, ancestorId) {
-	for (let cur = S.pages[childId]; cur && cur.parentId; cur = S.pages[cur.parentId]) {
-		if (cur.parentId === ancestorId) return true;
-	}
-	return false;
 }
 
 // Seite samt Unterseiten duplizieren (parallel); "(Kopie)" nur am Wurzel-Titel
@@ -358,20 +328,12 @@ function syncComposer(input) {
 	if (!input) return;
 	const full = input.id === "mainChatInput";
 	const form = $(full ? "mainChatForm" : "chatForm");
-	const submit = $(full ? "mainChatSubmit" : "chatSubmit");
 	const max = full ? 260 : 210;
 	input.style.height = "auto";
 	input.style.height = Math.min(max, Math.max(30, input.scrollHeight)) + "px";
 	input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
 	if (form) form.classList.toggle("has-text", !!input.value.trim());
-	// ⏹ Während die KI antwortet, ist der Senden-Button ein Abbrechen-Button (immer aktiv)
-	const busy = S.aiBusy && S.aiActiveChatType === (full ? "full" : "side");
-	if (submit) {
-		submit.disabled = busy ? false : !input.value.trim();
-		submit.textContent = busy ? "⏹" : "↑";
-		submit.title = busy ? "Antwort abbrechen" : "Senden";
-		submit.classList.toggle("busy", busy);
-	}
+	CHAT_FULLSCREEN.updateSubmitButtons();
 }
 
 // Darstellungs-Buttons → handleAppearanceSelect(gruppe, wert) — statt 14 case-Zeilen
@@ -497,7 +459,7 @@ function wireEvents() {
 				(n ? " " + n + " Karte(n) (inkl. Unterstapel) wandern mit und sind wiederherstellbar." : "");
 			if (await U.confirm(msg, { title: "Stapel löschen", ok: "In Papierkorb", danger: true })) {
 				await STATE.dispatch("deckTrash", { name });
-				if (S.ankiDeck && inDeck(S.ankiDeck, name)) S.ankiDeck = null;
+				if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, name)) S.ankiDeck = null;
 				U.toast("Stapel im Papierkorb.", "success");
 			} else {
 				render();
@@ -1096,11 +1058,10 @@ function wireEvents() {
 			const parentId = val.startsWith("pg:") ? val.slice(3) : null;
 			const wsId = val.startsWith("ws:") ? val.slice(3) : (S.pages[parentId] || {}).workspaceId;
 			await STATE.dispatch("pageMove", { id: moveId, parentId });
-			// PERF: Workspace der ganzen Unterstruktur mitziehen, aber über den EINEN Index aus
-			// descendantsOf statt pro Ebene alle Seiten zu scannen (war O(n²) — Zwilling des
-			// oben in descendantsOf bereits behobenen Falls; Verschieben hakte in großen Bäumen).
+			// PERF: Workspace der ganzen Unterstruktur über den zentralen Seitenbaum-Index
+			// mitziehen, statt pro Ebene alle Seiten zu scannen (sonst O(n²)).
 			if (wsId) {
-				for (const pid of descendantsOf(moveId)) {
+				for (const pid of STATE.pageSubtreeIds(moveId)) {
 					const p = S.pages[pid];
 					if (p && p.workspaceId !== wsId) await STATE.dispatch("pageUpdate", { id: pid, patch: { workspaceId: wsId } });
 				}
@@ -1151,10 +1112,6 @@ function wireEvents() {
 			const id = t.dataset.pagetrash;
 			const pg = S.pages[id];
 			if (pg) {
-				// Tabs der Seite UND aller Unterseiten schließen (sonst Geister-Tabs)
-				const gone = descendantsOf(id);
-				S.tabs = S.tabs.filter((tid) => !gone.has(tid));
-				if (gone.has(S.currentPageId)) { S.currentPageId = null; S.view = "home"; }
 				await STATE.dispatch("pageTrash", { id });
 				U.toast("Seite im Papierkorb.", "success");
 			} else {
@@ -1217,7 +1174,7 @@ function wireEvents() {
 		}
 		if (t.dataset.deckpurge) {
 			const name = t.dataset.deckpurge;
-			const n = Object.values(S.cards).filter((c) => inDeck(c.deck || "Standard", name)).length;
+			const n = Object.values(S.cards).filter((c) => STATE.deckInTree(c.deck || "Standard", name)).length;
 			if (await U.confirm('Stapel „' + name + '“ endgültig löschen?' +
 				(n ? " " + n + " Karte(n) werden unwiderruflich entfernt." : "") +
 				" Das kann nicht rückgängig gemacht werden.", {
@@ -1720,7 +1677,7 @@ function wireEvents() {
 		deckDragId = null; deckDropZone = null;
 		if (deckRow && (zone === "before" || zone === "after")) {
 			const target = deckRow.dataset.deck;
-			if (!target || target === moved || target.startsWith(moved + "::")) return;
+			if (!target || STATE.deckInTree(target, moved)) return;
 			// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
 			const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
 			if (parentOf(target) !== parentOf(moved)) return;
@@ -1736,9 +1693,9 @@ function wireEvents() {
 		}
 		const targetDeck = deckRow ? deckRow.dataset.deck : "";
 		// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
-		if (targetDeck !== moved && targetDeck !== "Standard" && !targetDeck.startsWith(moved + "::")) {
+		if (targetDeck !== "Standard" && !STATE.deckInTree(targetDeck, moved)) {
 			await STATE.dispatch("deckMove", { from: moved, target: targetDeck });
-			if (S.ankiDeck && inDeck(S.ankiDeck, moved)) {
+			if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, moved)) {
 				const label = moved.split("::").pop();
 				const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
 				S.ankiDeck = newRoot + S.ankiDeck.slice(moved.length);
@@ -1754,7 +1711,7 @@ function wireEvents() {
 	// und dieselben dispatch-Aufrufe wie vorher, nur die Eingabe-Ereignisse sind ersetzt.
 	async function movePageRelative(movedId, targetId, zone) {
 		const target = S.pages[targetId], moved = S.pages[movedId];
-		if (!target || !moved || target.id === moved.id || isDescendant(target.id, moved.id)) return;
+		if (!target || !moved || STATE.pageInTree(target.id, moved.id)) return;
 		// Geschwister des Ziels in Anzeige-Reihenfolge; neue Position = Mittelwert der
 		// Sortierschlüssel der künftigen Nachbarn (STATE.sortKeyOf).
 		const sibs = STATE.childrenOf(target.parentId || null, target.workspaceId || "default").filter((p) => p.id !== moved.id);
@@ -1772,7 +1729,7 @@ function wireEvents() {
 		}
 	}
 	async function movePageInto(movedId, targetId) {
-		if (targetId && (targetId === movedId || isDescendant(targetId, movedId))) return;
+		if (targetId && STATE.pageInTree(targetId, movedId)) return;
 		await STATE.dispatch("pageMove", { id: movedId, parentId: targetId || null });
 	}
 
@@ -1915,7 +1872,7 @@ function wireEvents() {
 				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
 				const to = prefix + newLabel;
 				await STATE.dispatch("deckRename", { from, to });
-				if (S.ankiDeck && inDeck(S.ankiDeck, from)) S.ankiDeck = to + S.ankiDeck.slice(from.length);
+				if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, from)) S.ankiDeck = to + S.ankiDeck.slice(from.length);
 			}
 			render();
 		}

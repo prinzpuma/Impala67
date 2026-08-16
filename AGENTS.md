@@ -26,6 +26,8 @@
 
 - Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen.
 - prüfe ob die agents.md datei noch aktuell ist und mach eventuell verbesserungsvorschläge
+- arbeite tokeneffizient
+- verfolge codepfade im Kopf wie es ein echter entwickler machen würde
 
 ## Veröffentlichung
 

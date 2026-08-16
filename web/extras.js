@@ -72,7 +72,7 @@ export const EXTRAS = (() => {
 		bc.onmessage = (m) => {
 			const d = m.data || {};
 			if (d.from === TAB_ID) return;
-			if (d.kind === "event") { STATE.reduce(d.ev); if (typeof render === "function") render(); }
+			if (d.kind === "event") STATE.applyRemoteEvents([d.ev]);
 			if (d.kind === "hello") { bc.postMessage({ kind: "here", from: TAB_ID }); warnMultiTab(); }
 			if (d.kind === "here") warnMultiTab();
 		};

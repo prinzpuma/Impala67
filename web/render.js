@@ -1153,7 +1153,7 @@ function renderTrash(main) {
 	html += '<div class="trash-list">';
 	if (pages.length) html += head("Seiten") + pages.map((pg) => trashRow("page", pg.id, pageIconHtml(pg) + esc(pg.title), "gelöscht " + U.fmtDate(pg.trashedAt || pg.updated))).join("");
 	if (decks.length) html += head("Stapel") + decks.map((name) => {
-		const n = Object.values(S.cards).filter((c) => c.trashed && ((c.deck || "Standard") === name || (c.deck || "Standard").startsWith(name + "::"))).length;
+		const n = Object.values(S.cards).filter((c) => c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
 		return trashRow("deck", esc(name), "🃏 " + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
 	}).join("");
 	if (cards.length) html += head("Karten") + cards.map((c) => {

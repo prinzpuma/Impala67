@@ -64,8 +64,7 @@ function ankiCardsOf(deck) {
 	return Object.values(S.cards).filter((c) => {
 		if (!c || c.trashed) return false;
 		if (!deck) return true;
-		const d = c.deck || "Standard";
-		return d === deck || d.startsWith(deck + "::");
+		return STATE.deckInTree(c.deck || "Standard", deck);
 	});
 }
 
@@ -326,7 +325,7 @@ function ankiStatsHtml() {
 	const reviews = (S.reviews || []).filter((r) => {
 		if (!S.ankiDeck) return true;
 		const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
-		return d === S.ankiDeck || d.startsWith(S.ankiDeck + "::");
+		return STATE.deckInTree(d, S.ankiDeck);
 	});
 	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
 	const retention = graded.length ? Math.round(graded.filter((r) => r.grade > 1).length / graded.length * 100) : null;
