@@ -177,15 +177,16 @@ export const CHATS = {
 	},
 
 	// Gemeinsame Speicherlogik für Seitenpanel-Chat (ai.js) und Chat-Tab.
-	persist(messages, idKey) {
+	persist(messages, idKey, fixedId) {
 		if (!Array.isArray(messages) || !messages.length) return null;
 		const list = this.load();
-		let s = S[idKey] ? list.find((x) => x.id === S[idKey]) : null;
+		const wantedId = fixedId || S[idKey];
+		let s = wantedId ? list.find((x) => x.id === wantedId) : null;
 		if (!s) {
 			// Vorgemerkte ID behalten: „+ Neuer Chat“ legt bewusst KEINE leere Sitzung mehr an
 			// (das hinterließ Geister-Chats), der offene Tab heißt aber schon so.
-			s = { id: S[idKey] || U.uid(), title: "", created: U.now(), updated: U.now(), messages: [] };
-			S[idKey] = s.id;
+			s = { id: wantedId || U.uid(), title: "", created: U.now(), updated: U.now(), messages: [] };
+			if (!fixedId || !S[idKey]) S[idKey] = s.id;
 			list.unshift(s);
 		}
 		// FIX: s.messages IST ab dem zweiten Speichern dieselbe Liste wie messages — der Vergleich

@@ -45,13 +45,6 @@ export function openPage(pageId, opts) {
 	const isNlm = pageId === "nlm:main";
 	if (isChat) {
 		const chatId = pageId.slice(5);
-		// FIX: Ein Chatwechsel tauscht S.chat aus. Passiert das mitten in einer laufenden
-		// Antwort, schreibt der Lauf in ein abgehängtes Array — die Antwort war danach weg.
-		// Die Sidebar fragte das ab, der Klick auf einen Chat-TAB (und „Zurück“) nicht.
-		if (S.aiBusy && chatId !== S.currentChatId) {
-			U.toast("Die KI antwortet noch — bitte kurz warten.", "error");
-			return;
-		}
 		S.currentChatId = chatId;
 		const s = CHATS.load().find((x) => x.id === chatId);
 		S.chat = s ? s.messages || [] : [];
@@ -136,7 +129,7 @@ export async function closeTab(pageId) {
 		const chatId = pageId.slice(5);
 		const isActiveChat = S.currentChatId === chatId;
 		const messages = isActiveChat ? S.chat : ((CHATS.load().find((x) => x.id === chatId) || {}).messages || []);
-		const busy = isActiveChat && S.aiBusy;
+		const busy = S.aiBusy && S.aiActiveChatId === chatId;
 		const lastIsUser = messages.length && messages[messages.length - 1].role === "user";
 		if (busy || lastIsUser) {
 			const msg = busy

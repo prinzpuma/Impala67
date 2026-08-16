@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v173"; // Update-Check behält version.json als sicheren Offline-Fallback.
+const CACHE = "impala67-v176"; // Update-Check behält version.json als sicheren Offline-Fallback.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -38,6 +38,7 @@ const APP_FILES = [
 	"./handschrift.js",
 	"./rag.js",
 	"./drive.js",
+	"./drive-sync-policy.js",
 	"./sync-core.js",
 	"./pdfs.js",
 	"./pdfpaste.js",
@@ -71,6 +72,7 @@ const APP_FILES = [
 	"./extras.js",
 	"./notebooklm.js",
 	"./heft.js",
+	"./heft-pages-core.js",
 	"./heft-scan.js",
 ];
 
@@ -103,7 +105,9 @@ self.addEventListener("activate", (e) => {
 	);
 });
 
-// Web Share Target: Android/iPadOS sendet ein PDF als POST an ./share-target.
+// Web Share Target: unterstützte installierte PWAs (vor allem Android/ChromeOS)
+// senden ein PDF als POST. iPadOS registriert eine reine PWA derzeit nicht als
+// Share Target; dort führt die Dateiauswahl in denselben Import-Screen.
 // Service Worker legt es nur einmal im Share-Cache ab und leitet dann zur normalen
 // App-URL weiter. pdfpaste.js löscht den temporären Eintrag nach dem Import.
 // FIX: Scheiterte formData() (abgebrochene Freigabe, fremder Inhalt), wurde die
@@ -113,7 +117,10 @@ async function handleShare(req) {
 		const file = (await req.formData()).get("pdf");
 		if (file && file.type === "application/pdf") {
 			const shareCache = await caches.open(SHARE_CACHE);
-			await shareCache.put("/share-target-payload", new Response(file));
+			await shareCache.put("/share-target-payload", new Response(file, { headers: {
+				"content-type": "application/pdf",
+				"x-impala-file-name": encodeURIComponent(file.name || "shared.pdf"),
+			} }));
 		}
 	} catch { /* ohne Nutzdaten trotzdem zurück in die App */ }
 	return Response.redirect(new URL("./index.html?share-target=1", self.location.href).href, 303);

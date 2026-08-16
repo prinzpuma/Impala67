@@ -1299,6 +1299,8 @@ function chatLiveParts(historyList) {
 	// „Denkt nach“-Box verschwand dadurch mitten im Denken, obwohl die KI weiterlief.
 	const type = historyList === S.chat ? "full" : "side";
 	if ((S.aiActiveChatType || "side") !== type) return { think: "", rest: "" };
+	const id = type === "full" ? S.currentChatId : S.sideChatId;
+	if (S.aiActiveChatId !== id) return { think: "", rest: "" };
 	const activeList = historyList;
 	// Offene ask_choice-Karte IST der Wartezustand — keine zweite busy-Zeile
 	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);

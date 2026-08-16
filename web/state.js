@@ -28,6 +28,8 @@ export const S = {
 		// "" = automatisch (aktive Chat-Quelle als Fallback, siehe ai.js embedProvider()).
 		embedProviderId: "",
 		driveClientId: "100283147644-1ra4er2dc5r85k3mefd521hbm1ek3qpf.apps.googleusercontent.com",
+		driveAutoSyncMinutes: 30,
+		driveSyncAfterChange: false,
 		customInstructions: "",
 		// Bestehende Installationen bleiben kompatibel: Tokens werden weiterhin
 		// synchronisiert, bis der Nutzer dies bewusst ausschaltet.
@@ -55,6 +57,7 @@ export const S = {
 	sideChat: [], // Verlauf für das kleine KI-Seitenpanel
 	sideChatId: null, // eigene gespeicherte Chat-Sitzung des Seitenpanels
 	aiActiveChatType: "side", // "side" | "full"
+	aiActiveChatId: null, // laufende Antwort bleibt an ihre Sitzung gebunden, auch nach Navigation
 	highlightedPageId: null, // Für die Hervorhebung geänderter Blöcke
 	highlightedDiff: null, // Diff-Array für die Hervorhebung geänderter Blöcke
 	currentPageId: null,

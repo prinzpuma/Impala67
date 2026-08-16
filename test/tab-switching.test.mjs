@@ -280,3 +280,24 @@ test("Echte DOM-Tests: Chatwechsel erhält vollständige Ansicht und Eingabeentw
 	assert.equal(document.querySelector(".chat-full-wrap"), firstWrap, "derselbe DOM-Baum wird wieder eingesetzt");
 	assert.equal(document.getElementById("mainChatInput").value, "Ungesendeter Entwurf", "Entwurf bleibt erhalten");
 });
+
+test("Echte DOM-Tests: Ein laufender Chat blockiert keinen Wechsel zu einem anderen Chat", () => {
+	const messages1 = [{ mid: "m1", role: "user", content: "Laufende Frage" }];
+	const messages2 = [{ mid: "m2", role: "user", content: "Anderer Chat" }];
+	S.chatSessions = {
+		c1: { id: "c1", title: "Chat 1", created: now, updated: now, messages: messages1 },
+		c2: { id: "c2", title: "Chat 2", created: now, updated: now, messages: messages2 },
+	};
+	S.tabs = ["chat:c1", "chat:c2"];
+	S.activeTabId = "chat:c1";
+	S.currentChatId = "c1";
+	S.chat = messages1;
+	S.view = "chat";
+	S.aiBusy = true;
+
+	TABS.openPage("chat:c2");
+
+	assert.equal(S.currentChatId, "c2");
+	assert.equal(S.chat, messages2);
+	S.aiBusy = false;
+});

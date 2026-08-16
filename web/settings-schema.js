@@ -36,6 +36,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "learning-options", section: "ai", group: "Lernen", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und lokale Lernanalyse", keywords: "karten telemetrie sicherheit confidence" },
 	{ id: "learning-beta", section: "ai", group: "Lernen", label: "Beta-Lernfunktionen", description: "Optionale KI-gestützte Lernmodi", keywords: "experimente feynman fehler hinweise multiple choice" },
 	{ id: "drive", section: "sync", group: "Google Drive", label: "Drive-Synchronisierung", description: "Geräte über den privaten App-Speicher synchronisieren", keywords: "google login konto cloud verbinden" },
+	{ id: "drive-automation", section: "sync", group: "Google Drive", label: "Automatische Synchronisierung", description: "Intervall und Sync nach Änderungen festlegen", keywords: "automatisch intervall minuten häufigkeit jede änderung" },
 	{ id: "token-sync", section: "sync", group: "Datenschutz", label: "Tokens über Drive synchronisieren", description: "KI-Keys und Notion-Token lokal behalten", keywords: "secrets api schlüssel privat sicherheit" },
 	{ id: "notion", section: "sync", group: "Notion", label: "Notion", description: "Seiten importieren und in beide Richtungen synchronisieren", keywords: "integration secret page migration" },
 	{ id: "sync-advanced", section: "sync", group: "Erweitert", label: "Verbindungsdetails", description: "Google Client-ID und CORS-Proxy", keywords: "oauth client id proxy technisch" },

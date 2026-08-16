@@ -12,6 +12,7 @@ Object.defineProperty(globalThis, "matchMedia", { value: () => ({ matches: false
 
 const { S, STATE } = await import("../web/state.js");
 const { AI } = await import("../web/ai.js");
+const { CHATS } = await import("../web/chats.js");
 
 const response = (data, status = 200) => ({
 	ok: status >= 200 && status < 300,
@@ -185,6 +186,44 @@ test("ein Fehler nach einem Werkzeug bewahrt den sichtbaren Arbeitsverlauf", asy
 		() => AI.agent("Prüfe meine Seiten.", "side"),
 		(error) => /Seiten/i.test(error.reasoning || "") && /prüf/i.test(error.reasoning || ""),
 	);
+});
+
+test("eine Antwort bleibt nach einem Chatwechsel in ihrer gestarteten Sitzung", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45678/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.embedModel = "";
+	S.pages = {
+		"page-before": { id: "page-before", title: "Ausgangsseite", content: "Alter Kontext" },
+		"page-after": { id: "page-after", title: "Neue Seite", content: "Neuer Kontext" },
+	};
+	S.currentPageId = "page-before";
+	S.view = "page";
+	const first = [], second = [];
+	S.chatSessions = {
+		"background-first": { id: "background-first", title: "Erster Chat", created: "2026-08-14T00:00:00.000Z", updated: "2026-08-14T00:00:00.000Z", messages: first },
+		"background-second": { id: "background-second", title: "Zweiter Chat", created: "2026-08-14T00:00:00.000Z", updated: "2026-08-14T00:00:00.000Z", messages: second },
+	};
+	S.currentChatId = "background-first";
+	S.chat = first;
+	STATE.dispatch = async () => {};
+	let release;
+	const waiting = new Promise((resolve) => { release = resolve; });
+	let body;
+	globalThis.fetch = async (_url, init) => { body = JSON.parse(init.body); await waiting; return streamResponse({ content: "Antwort aus dem Hintergrund" }); };
+
+	const running = AI.agent("Laufe weiter", "full", null, { id: "background-first", target: first });
+	S.currentChatId = "background-second";
+	S.chat = second;
+	S.currentPageId = "page-after";
+	release();
+	await running;
+
+	assert.equal(first.findLast((message) => message.role === "assistant")?.content, "Antwort aus dem Hintergrund");
+	assert.equal(second.length, 0);
+	assert.equal(CHATS.get("background-first")?.messages, first);
+	assert.match(body.messages[1].content, /Ausgangsseite/);
+	assert.doesNotMatch(body.messages[1].content, /Neue Seite|Neuer Kontext/);
 });
 
 test("OpenAI-Anfragen tragen eine anonyme stabile Installationskennung", async () => {

@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 import { PDFS } from "./pdfs.js";
+import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -98,6 +99,7 @@ export const HEFT = (() => {
 	let insertPos = "after";
 	let pop = null;
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
+	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 	let scanUI = null;
 
 	const ocrQueueV2 = new Set();
@@ -1999,9 +2001,10 @@ export const HEFT = (() => {
 
 		const hr = host.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
 		pop.style.top = Math.round(ar.bottom - hr.top + 6) + "px";
-		let left = Math.round(ar.left - hr.left);
+		let left = kind === "pages" ? Math.round((hr.width - pop.offsetWidth) / 2) : Math.round(ar.left - hr.left);
 		if (left + pop.offsetWidth > hr.width - 8) left = Math.round(hr.width - pop.offsetWidth - 8);
 		pop.style.left = Math.max(8, left) + "px";
+		if (kind === "pages") wirePagesPop();
 		setTimeout(() => document.addEventListener("pointerdown", onDocPointerDown, true), 0);
 	}
 	function togglePop(kind, anchor) {
@@ -2013,20 +2016,19 @@ export const HEFT = (() => {
 	function pagesPopHtml() {
 		const picking = !!exportSel;
 		const n = picking ? exportSel.size : 0;
-		return '<div class="heft-pop-head">' + (picking ? 'Seiten für Export antippen' : 'Seiten') + '</div>' +
+		const deletable = canDeletePages(doc.pages.length, n);
+		return '<div class="heft-pages-manager-head"><div><b>Seiten</b><small>' + (picking ? n + ' ausgewählt · über Seiten wischen für Schnellauswahl' : 'Ziehen zum Sortieren · antippen zum Öffnen') + '</small></div>' +
+			(picking ? '<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button>' : '<button type="button" class="heft-pop-row compact" data-heexpstart="1">Auswählen</button>') + '</div>' +
 			'<div class="heft-pop-grid">' + doc.pages.map((_, i) =>
-				'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="button" tabindex="0" title="Seite ' + (i + 1) + '">' +
-					'<canvas width="92" height="130"></canvas>' +
+				'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="option" aria-selected="' + (picking && exportSel.has(i) ? 'true' : 'false') + '" tabindex="0" draggable="' + (!picking) + '" title="Seite ' + (i + 1) + '">' +
+					'<canvas width="132" height="187"></canvas>' +
 					'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
-					(!picking && doc.pages.length > 1 ? '<button type="button" class="heft-pop-del" data-hedelpage="' + i + '" title="Seite löschen">🗑</button>' : '') +
+					(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
 				'</div>').join('') + '</div>' +
-			'<div class="heft-pop-sep"></div>' +
-			(picking
-				? '<button type="button" class="heft-pop-row" data-heexppdf="1"' + (n ? '' : ' disabled') + '>📄 Als PDF exportieren (' + n + ')</button>' +
-					'<button type="button" class="heft-pop-row" data-heexpimg="1"' + (n ? '' : ' disabled') + '>🖼 Als Bild(er) exportieren (' + n + ')</button>' +
-					'<button type="button" class="heft-pop-row" data-heexpcancel="1">Abbrechen</button>'
-				: '<button type="button" class="heft-pop-row" data-heexpstart="1">⬆ Exportieren als PDF oder Bild…</button>' +
-					'<button type="button" class="heft-pop-row" data-heverlauf="1">🕘 Verlauf (letzte 24 h)…</button>');
+			'<div class="heft-pages-manager-actions">' + (picking
+				? '<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>🗑 Löschen (' + n + ')</button>' +
+					'<button type="button" data-heexpcancel="1">Fertig</button><button type="button" class="primary" data-heexportopen="1"' + (n ? '' : ' disabled') + '>Exportieren (' + n + ')</button>'
+				: '<button type="button" data-heverlauf="1">🕘 Verlauf</button><button type="button" class="primary" data-heimport="1">＋ PDF oder Bilder importieren</button>') + '</div>';
 	}
 
 	function paintPopThumbs() {
@@ -2036,6 +2038,63 @@ export const HEFT = (() => {
 		if (!pop || pop.dataset.kind !== "pages" || !doc) return;
 		pop.innerHTML = pagesPopHtml();
 		paintPopThumbs();
+		wirePagesPop();
+	}
+	function paintPageSelection(i, on) {
+		if (!exportSel || !pop) return;
+		on ? exportSel.add(i) : exportSel.delete(i);
+		const thumb = pop.querySelector('[data-hethumb="' + i + '"]');
+		if (thumb) {
+			thumb.classList.toggle("active", on);
+			thumb.setAttribute("aria-selected", on ? "true" : "false");
+			const label = thumb.querySelector(":scope > span"); if (label) label.textContent = (i + 1) + (on ? " ✓" : "");
+		}
+		const n = exportSel.size, total = doc.pages.length;
+		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = n + " ausgewählt · über Seiten wischen für Schnellauswahl";
+		const del = pop.querySelector("[data-hepagesdelete]"); if (del) { del.disabled = !canDeletePages(total, n); del.textContent = "🗑 Löschen (" + n + ")"; }
+		const exp = pop.querySelector("[data-heexportopen]"); if (exp) { exp.disabled = !n; exp.textContent = "Exportieren (" + n + ")"; }
+		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = n === total ? "Auswahl aufheben" : "Alle auswählen";
+	}
+	function movePageAt(from, to) {
+		if (!doc) return;
+		const currentId = page() && page().id;
+		if (!movePage(doc.pages, from, to)) return;
+		idx = Math.max(0, doc.pages.findIndex((pg) => pg.id === currentId));
+		sel = null; lassoSel = null; undoStack = []; redoStack = [];
+		scheduleSave(); rebuildScroll(); refreshPagesPop();
+	}
+	function wirePagesPop() {
+		if (!pop || pop.dataset.kind !== "pages") return;
+		const grid = pop.querySelector(".heft-pop-grid"); if (!grid) return;
+		if (exportSel) {
+			grid.classList.add("is-selecting");
+			grid.addEventListener("pointerdown", (e) => {
+				const thumb = e.target.closest("[data-hethumb]"); if (!thumb) return;
+				e.preventDefault(); const i = Number(thumb.dataset.hethumb);
+				pageSelectGesture = { id: e.pointerId, on: !exportSel.has(i), seen: new Set() };
+				try { grid.setPointerCapture(e.pointerId); } catch {  }
+				pageSelectGesture.seen.add(i); paintPageSelection(i, pageSelectGesture.on);
+			});
+			grid.addEventListener("pointermove", (e) => {
+				if (!pageSelectGesture || e.pointerId !== pageSelectGesture.id) return;
+				e.preventDefault(); const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-hethumb]");
+				if (hit && grid.contains(hit)) { const i = Number(hit.dataset.hethumb); if (!pageSelectGesture.seen.has(i)) { pageSelectGesture.seen.add(i); paintPageSelection(i, pageSelectGesture.on); } }
+				const r = grid.getBoundingClientRect(); if (e.clientY < r.top + 28) grid.scrollTop -= 18; else if (e.clientY > r.bottom - 28) grid.scrollTop += 18;
+			});
+			const end = (e) => { if (!pageSelectGesture || e.pointerId !== pageSelectGesture.id) return; pageSelectGesture = null; suppressPageClickUntil = Date.now() + 450; };
+			grid.addEventListener("pointerup", end); grid.addEventListener("pointercancel", end);
+			return;
+		}
+		grid.addEventListener("dragstart", (e) => { const t = e.target.closest("[data-hethumb]"); if (!t) return; pageDragFrom = Number(t.dataset.hethumb); t.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+		grid.addEventListener("dragover", (e) => { const t = e.target.closest("[data-hethumb]"); if (!t || pageDragFrom < 0) return; e.preventDefault(); grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); t.classList.add("drag-target"); });
+		grid.addEventListener("drop", (e) => { const t = e.target.closest("[data-hethumb]"); if (!t || pageDragFrom < 0) return; e.preventDefault(); const from = pageDragFrom, to = Number(t.dataset.hethumb); pageDragFrom = -1; suppressPageClickUntil = Date.now() + 450; movePageAt(from, to); });
+		grid.addEventListener("dragend", () => { pageDragFrom = -1; grid.querySelectorAll(".dragging,.drag-target").forEach((x) => x.classList.remove("dragging", "drag-target")); });
+		grid.querySelectorAll("[data-hepagedrag]").forEach((handle) => {
+			handle.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); pageDragFrom = Number(handle.dataset.hepagedrag); try { handle.setPointerCapture(e.pointerId); } catch {  } });
+			handle.addEventListener("pointermove", (e) => { if (pageDragFrom < 0) return; const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-hethumb]"); grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); if (hit && grid.contains(hit)) hit.classList.add("drag-target"); });
+		handle.addEventListener("pointerup", (e) => { if (pageDragFrom < 0) return; const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-hethumb]"); const from = pageDragFrom; pageDragFrom = -1; grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); suppressPageClickUntil = Date.now() + 450; if (hit && grid.contains(hit)) movePageAt(from, Number(hit.dataset.hethumb)); });
+		handle.addEventListener("pointercancel", () => { pageDragFrom = -1; grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); });
+		});
 	}
 	function imgPopHtml() {
 		return '<div class="heft-pop-head">Bilder</div>' +
@@ -2285,6 +2344,19 @@ export const HEFT = (() => {
 		sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		scheduleSave(); rebuildScroll(); go(Math.min(i, doc.pages.length - 1));
 	}
+	async function deleteSelectedPages() {
+		if (!doc || !exportSel || !canDeletePages(doc.pages.length, exportSel.size)) return;
+		const chosen = [...exportSel].sort((a, b) => b - a);
+		if (!confirm(chosen.length + (chosen.length === 1 ? " ausgewählte Seite" : " ausgewählte Seiten") + " wirklich löschen?")) return;
+		try { await writeSnapshot(pid, encodeDoc(doc), doc.pages.length); } catch (e) { console.warn("Heft: Sicherung vor Löschen fehlgeschlagen", e); }
+		const currentId = page() && page().id;
+		chosen.forEach((i) => doc.pages.splice(i, 1));
+		idx = doc.pages.findIndex((pg) => pg.id === currentId);
+		if (idx < 0) idx = Math.min(chosen[chosen.length - 1] || 0, doc.pages.length - 1);
+		exportSel = new Set(); sel = null; lassoSel = null; undoStack = []; redoStack = [];
+		scheduleSave(); rebuildScroll(); refreshPagesPop(); go(idx);
+		if (U.toast) U.toast(chosen.length + " Seite(n) gelöscht · über Verlauf wiederherstellbar", "success");
+	}
 
 	// EIN Datei-Dialog für Bilder, Import und Scanner (vorher 3x fast identisch)
 	function filePick({ accept = "image/*", multiple = false, capture = false } = {}, cb) {
@@ -2292,6 +2364,60 @@ export const HEFT = (() => {
 		if (capture) inp.setAttribute("capture", "environment"); // öffnet auf Tablets/Handys direkt die Kamera
 		inp.onchange = () => { const files = Array.from(inp.files || []); if (files.length) cb(multiple ? files : files[0]); };
 		inp.click();
+	}
+	const niceBytes = (bytes) => bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + " KB" : (bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " MB";
+	function transferOverlay(title, subtitle, body, actions) {
+		const o = U.el("overlay");
+		o.hidden = false;
+		o.innerHTML = '<section class="heft-transfer" role="dialog" aria-modal="true"><header><div><h2>' + U.esc(title) + '</h2><p>' + U.esc(subtitle) + '</p></div><button type="button" id="btnCloseOverlay" aria-label="Schließen">×</button></header><div class="heft-transfer-body">' + body + '</div><footer>' + actions + '</footer></section>';
+		return o;
+	}
+	function closeTransferOverlay() { const o = U.el("overlay"); if (o) o.hidden = true; }
+	async function importFilesIntoHeft(targetId, files, position, onStatus) {
+		const targetDoc = targetId === pid && doc ? doc : await load(targetId);
+		if (!targetDoc) throw new Error("Ziel-Heft konnte nicht geöffnet werden.");
+		const current = targetId === pid ? idx : Math.max(0, targetDoc.pages.length - 1);
+		let at = insertAt(position, current, targetDoc.pages.length);
+		for (const f of files) {
+			if (onStatus) onStatus("Importiere " + f.name + " …");
+			const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+			if (isPdf) at = await importPdf(f, at, targetDoc);
+			else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
+				const im = await fileToImageData(f, 1600);
+				targetDoc.pages.splice(at, 0, imagePage(im, "blank", false)); at++;
+			}
+		}
+		await persistDoc(targetId, targetDoc);
+		if (targetId === pid && doc === targetDoc) { rebuildScroll(); go(Math.max(0, at - 1)); }
+		return at;
+	}
+	function openImportDialog(files, initialHeftId = pid) {
+		files = Array.from(files || []).filter(Boolean);
+		if (!files.length) return;
+		const onlyPdfs = files.every((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+		const hefts = Object.values(S.pages).filter((pg) => pg && !pg.trashed && pg.kind === "heft");
+		const destinations = (onlyPdfs ? '<option value="notes">Als neue Notiz-Seite(n)</option>' : "") + hefts.map((pg) => '<option value="heft:' + U.esc(pg.id) + '"' + (pg.id === initialHeftId ? ' selected' : '') + '>' + U.esc(pg.title || "Heft") + '</option>').join("");
+		const rows = files.map((f) => '<div class="heft-transfer-file"><span>' + (f.type === "application/pdf" || /\.pdf$/i.test(f.name) ? "PDF" : "IMG") + '</span><div><b>' + U.esc(f.name) + '</b><small>' + niceBytes(f.size || 0) + '</small></div></div>').join("");
+		const body = '<div class="heft-transfer-files">' + rows + '</div><div class="heft-transfer-field"><label for="heftImportTarget">Ort</label><select id="heftImportTarget">' + destinations + '</select></div>' +
+			'<div class="heft-transfer-field" id="heftImportPositionWrap"><label for="heftImportPosition">Einfügen</label><select id="heftImportPosition"><option value="after">Nach der aktuellen Seite</option><option value="before">Vor der aktuellen Seite</option><option value="start">Am Anfang</option><option value="end">Am Ende</option></select></div>' +
+			'<p class="heft-transfer-hint">PDF-Seiten werden als unveränderliche Heftseiten eingefügt. Als Notiz entsteht pro PDF eine eigene Seite mit durchsuchbarem Inhalt.</p>';
+		const o = transferOverlay("In Impala67 importieren", files.length + (files.length === 1 ? " Datei" : " Dateien") + " ausgewählt", body, '<button type="button" data-hetransfercancel="1">Abbrechen</button><button type="button" class="primary" data-hetransferimport="1">Importieren</button>');
+		const target = o.querySelector("#heftImportTarget"), positionWrap = o.querySelector("#heftImportPositionWrap");
+		const syncTarget = () => { if (positionWrap) positionWrap.hidden = target.value === "notes"; };
+		target.addEventListener("change", syncTarget); syncTarget();
+		o.querySelector("[data-hetransfercancel]").addEventListener("click", closeTransferOverlay);
+		o.querySelector("[data-hetransferimport]").addEventListener("click", async (e) => {
+			const button = e.currentTarget, label = button.textContent; button.disabled = true; button.textContent = "Importiere …";
+			try {
+				if (target.value === "notes") {
+					for (const file of files) await PDFS.ingest(file, (message) => { button.textContent = message; });
+				} else {
+					const targetId = target.value.replace(/^heft:/, "");
+					await importFilesIntoHeft(targetId, files, o.querySelector("#heftImportPosition").value, (message) => { button.textContent = message; });
+				}
+				closeTransferOverlay(); if (U.toast) U.toast("Import abgeschlossen", "success");
+			} catch (error) { button.disabled = false; button.textContent = label; if (U.toast) U.toast("Import fehlgeschlagen: " + ((error && error.message) || error), "error"); }
+		});
 	}
 	const pickImage = (capture, cb) => filePick({ capture }, cb);
 	function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) {
@@ -2351,24 +2477,9 @@ export const HEFT = (() => {
 	}
 
 	function importFiles() {
-		filePick({ accept: "image/*,application/pdf", multiple: true }, async (files) => {
-			let at = insertIndex();
-			for (const f of files) {
-				try {
-					if (f.type === "application/pdf") at = await importPdf(f, at);
-					else if (f.type.startsWith("image/")) {
-						const im = await fileToImageData(f, 1600);
-						doc.pages.splice(at, 0, imagePage(im, "blank", false)); at++;
-					}
-				} catch (e) {
-					console.warn("Heft: Import fehlgeschlagen", f.name, e);
-					if (U.toast) U.toast("Import fehlgeschlagen: " + f.name, "error");
-				}
-			}
-			scheduleSave(); rebuildScroll(); go(Math.max(0, at - 1));
-		});
+		filePick({ accept: "image/*,application/pdf", multiple: true }, (files) => openImportDialog(files, pid));
 	}
-	async function importPdf(f, at) {
+	async function importPdf(f, at, targetDoc = doc) {
 		try {
 			await PDFS.ensureLoaded();
 		} catch (e) {
@@ -2387,7 +2498,7 @@ export const HEFT = (() => {
 			c.width = Math.round(vp.width); c.height = Math.round(vp.height);
 			await p.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
 
-			doc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
+			targetDoc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
 			at++;
 		}
 		return at;
@@ -3056,46 +3167,79 @@ export const HEFT = (() => {
 	// FIX unscharfe Exporte: vorher 1600px Breite (~190 dpi auf A4) — jetzt 300 dpi.
 	const EXPORT_W = 2480;
 	const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
-	async function exportPdf(pageId, indices) {
+	async function pdfBlob(pageId, indices, onStatus) {
 		const d = await loadDocFor(pageId);
-		if (!d) return;
+		if (!d) return null;
 		const idxs = exportIdxs(d, indices);
 		const shots = [];
-		for (const i of idxs) {
+		for (let n = 0; n < idxs.length; n++) {
+			const i = idxs[n]; if (onStatus) onStatus("Erzeuge Seite " + (n + 1) + " von " + idxs.length + " …");
 			const c = renderPageCanvas(d.pages[i], EXPORT_W);
 			shots.push({ dataUrl: c.toDataURL("image/jpeg", 0.95), w: c.width, h: c.height });
 			await nextFrame(); // 300-dpi-Seiten sind teuer — UI zwischen den Seiten atmen lassen
 		}
-		U.downloadBlob(exportName(pageId) + ".pdf", new Blob([buildPdf(shots)], { type: "application/pdf" }));
+		return new Blob([buildPdf(shots)], { type: "application/pdf" });
+	}
+	async function exportPdf(pageId, indices) {
+		const blob = await pdfBlob(pageId, indices);
+		if (!blob) return;
+		U.downloadBlob(exportName(pageId) + ".pdf", blob);
+		const d = await loadDocFor(pageId), idxs = d ? exportIdxs(d, indices) : [];
 		if (U.toast) U.toast("PDF mit " + idxs.length + " Seite(n) gespeichert");
 	}
-	async function exportImages(pageId, indices) {
+	async function imageFiles(pageId, indices, baseName, onStatus) {
 		const d = await loadDocFor(pageId);
-		if (!d) return;
+		if (!d) return [];
 		const idxs = exportIdxs(d, indices);
+		const files = [];
 		for (let n = 0; n < idxs.length; n++) {
 			const i = idxs[n];
+			if (onStatus) onStatus("Erzeuge Bild " + (n + 1) + " von " + idxs.length + " …");
 			const c = renderPageCanvas(d.pages[i], EXPORT_W);
-			U.downloadBlob(exportName(pageId) + "-seite-" + (i + 1) + ".png", new Blob([dataUrlBytes(c.toDataURL("image/png"))], { type: "image/png" }));
-			// FIX "Fehlermeldung nach dem Export": mehrere Downloads im selben Tick werden
-			// vom Browser geblockt — der zweite Aufruf warf, der catch meldete "Export
-			// fehlgeschlagen", obwohl die erste Datei längst gespeichert war. Jetzt gestaffelt.
-			if (n < idxs.length - 1) await new Promise((r) => setTimeout(r, 350));
+			files.push(new File([dataUrlBytes(c.toDataURL("image/png"))], baseName + "-seite-" + (i + 1) + ".png", { type: "image/png" }));
+			await nextFrame();
 		}
+		return files;
+	}
+	async function exportImages(pageId, indices) {
+		const files = await imageFiles(pageId, indices, exportName(pageId));
+		for (let n = 0; n < files.length; n++) { U.downloadBlob(files[n].name, files[n]); if (n < files.length - 1) await new Promise((r) => setTimeout(r, 350)); }
+		const idxs = files;
 		if (U.toast) U.toast(idxs.length + " Bild(er) gespeichert");
 	}
-	function exportSelected(kind) {
+	async function deliverExport(files) {
+		let canShare = false;
+		try { canShare = !!(navigator.share && navigator.canShare?.({ files })); } catch { /* Download-Fallback */ }
+		if (canShare) {
+			try { await navigator.share({ title: "Impala67 Heft", files }); return "shared"; }
+			catch (error) { if (error && error.name === "AbortError") return "cancelled"; }
+		}
+		for (let i = 0; i < files.length; i++) { U.downloadBlob(files[i].name, files[i]); if (i < files.length - 1) await new Promise((r) => setTimeout(r, 350)); }
+		return "saved";
+	}
+	function openExportDialog() {
 		if (!pid || !exportSel || !exportSel.size) return;
-		const idxs = [...exportSel].sort((a, b) => a - b);
+		const pageId = pid, indices = [...exportSel].sort((a, b) => a - b), defaultName = exportName(pageId);
 		closePop();
-		(kind === "pdf" ? exportPdf(pid, idxs) : exportImages(pid, idxs)).catch((e) => {
-			console.warn("Heft: Export fehlgeschlagen", e);
-			// Echte Ursache anzeigen statt pauschal "fehlgeschlagen" — sonst ist der
-			// nächste Bug-Report wieder nur "kommt immer eine fehlermeldung".
-			if (U.toast) U.toast("Export fehlgeschlagen: " + ((e && e.message) || e), "error");
+		const body = '<div class="heft-transfer-summary"><span>↗</span><div><small>Auswahl</small><b>' + indices.length + (indices.length === 1 ? ' Seite' : ' Seiten') + '</b><em>' + U.esc((S.pages[pageId] && S.pages[pageId].title) || "Heft") + '</em></div></div>' +
+			'<div class="heft-transfer-field"><label for="heftExportName">Dateiname</label><input id="heftExportName" value="' + U.esc(defaultName) + '"></div><h3>Format</h3><div class="heft-transfer-formats">' +
+			'<label><input type="radio" name="heftExportFormat" value="pdf" checked><span><b>PDF-Dokument</b><small>Alle ausgewählten Seiten in einer Datei</small></span><i>✓</i></label>' +
+			'<label><input type="radio" name="heftExportFormat" value="images"><span><b>Einzelne Bilder</b><small>Eine PNG-Datei pro ausgewählter Seite</small></span><i>✓</i></label></div>';
+		const o = transferOverlay("Heft exportieren", "Format prüfen und anschließend teilen", body, '<button type="button" data-hetransfercancel="1">Abbrechen</button><button type="button" class="primary" data-hetransferexport="1">Exportieren</button>');
+		o.querySelector("[data-hetransfercancel]").addEventListener("click", closeTransferOverlay);
+		o.querySelector("[data-hetransferexport]").addEventListener("click", async (e) => {
+			const button = e.currentTarget, label = button.textContent, format = o.querySelector('input[name="heftExportFormat"]:checked').value;
+			const name = (o.querySelector("#heftExportName").value || defaultName).replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || defaultName;
+			button.disabled = true; button.textContent = "Wird erstellt …";
+			try {
+				let files;
+				if (format === "pdf") { const blob = await pdfBlob(pageId, indices, (s) => { button.textContent = s; }); files = [new File([blob], name + ".pdf", { type: "application/pdf" })]; }
+				else files = await imageFiles(pageId, indices, name, (s) => { button.textContent = s; });
+				const result = await deliverExport(files); if (result !== "cancelled") { closeTransferOverlay(); if (U.toast) U.toast(result === "shared" ? "Export geteilt" : "Export gespeichert", "success"); }
+				else { button.disabled = false; button.textContent = label; }
+			} catch (error) { button.disabled = false; button.textContent = label; if (U.toast) U.toast("Export fehlgeschlagen: " + ((error && error.message) || error), "error"); }
 		});
 	}
-
 	const readyScanOuts = () => scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
 	function scanFinishPdf() {
 		try {
@@ -3133,10 +3277,11 @@ export const HEFT = (() => {
 		if (d.hepagesmenu) { togglePop("pages", b); return; }
 		if (d.heplusmenu) { togglePop("plus", b); return; }
 		if (d.heimgmenu) { togglePop("img", b); return; }
-		if (d.heexpstart) { exportSel = new Set(doc.pages.map((_, i) => i)); refreshPagesPop(); return; }
+		if (d.heexpstart) { exportSel = new Set(); refreshPagesPop(); return; }
+		if (d.heselectall) { const all = exportSel && exportSel.size === doc.pages.length; exportSel = new Set(all ? [] : doc.pages.map((_, i) => i)); refreshPagesPop(); return; }
 		if (d.heexpcancel) { exportSel = null; refreshPagesPop(); return; }
-		if (d.heexppdf) { exportSelected("pdf"); return; }
-		if (d.heexpimg) { exportSelected("img"); return; }
+		if (d.hepagesdelete) { deleteSelectedPages().catch((e2) => U.toast && U.toast("Seiten konnten nicht gelöscht werden: " + ((e2 && e2.message) || e2), "error")); return; }
+		if (d.heexportopen) { openExportDialog(); return; }
 		if (d.heverlauf) { openVerlaufPop(); return; }
 		if (d.hepagesback) { if (pop) { pop.dataset.kind = "pages"; pop.innerHTML = pagesPopHtml(); paintPopThumbs(); } return; }
 		if (d.heverrestore != null) {
@@ -3151,8 +3296,10 @@ export const HEFT = (() => {
 			return;
 		}
 		if (d.hedelpage != null) { e.stopPropagation(); deletePageAt(Number(d.hedelpage)); return; }
+		if (d.hepagedrag != null) return;
 		if (d.hethumb != null) {
 			const ti = Number(d.hethumb);
+			if (Date.now() < suppressPageClickUntil) return;
 			if (exportSel) { exportSel.has(ti) ? exportSel.delete(ti) : exportSel.add(ti); refreshPagesPop(); }
 			else go(ti);
 			return;
@@ -3501,7 +3648,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages,
+		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

@@ -33,7 +33,12 @@ import { VOICE } from "./voice.js";
 const listOf = (isSide) => (isSide ? S.sideChat : S.chat);
 const paint = (isSide) => (isSide ? RENDER.renderChat() : RENDER.renderMainChatLog());
 const repaint = () => { RENDER.renderChat(); if (S.view === "chat" || S.aiActiveChatType === "full") RENDER.renderMainChatLog(); };
-const saveChat = (isSide) => (isSide ? saveSideChat() : saveCurrentChat());
+const saveChat = (isSide, list, id) => list
+	? CHATS.persist(list, isSide ? "sideChatId" : "currentChatId", id)
+	: (isSide ? saveSideChat() : saveCurrentChat());
+const currentId = (isSide) => isSide ? S.sideChatId : S.currentChatId;
+const isActiveRun = (isSide, id = currentId(isSide)) => S.aiBusy
+	&& S.aiActiveChatType === (isSide ? "side" : "full") && S.aiActiveChatId === id;
 
 // Nachricht per mid finden — egal in welcher Fläche sie liegt.
 function find(mid) {
@@ -62,7 +67,7 @@ function updateSubmitButtons() {
 	for (const isSide of [true, false]) {
 		const btn = U.el(isSide ? "chatSubmit" : "mainChatSubmit");
 		if (!btn) continue;
-		const busy = S.aiBusy && S.aiActiveChatType === (isSide ? "side" : "full");
+		const busy = isActiveRun(isSide);
 		const inp = U.el(isSide ? "chatInput" : "mainChatInput");
 		btn.disabled = busy ? false : !inp?.value.trim();
 		btn.textContent = busy ? "⏹" : "↑";
@@ -71,12 +76,13 @@ function updateSubmitButtons() {
 	}
 }
 
-function setBusy(isSide, busy) {
+function setBusy(isSide, busy, id = currentId(isSide)) {
 	S.aiBusy = busy;
 	S.aiDraft = "";
 	S.aiThinkingDraft = "";
 	if (busy) {
 		S.aiActiveChatType = isSide ? "side" : "full";
+		S.aiActiveChatId = id;
 		S.aiStatus = "…denkt nach…";
 		S.thinkingLiveExpanded = false;
 	}
@@ -96,6 +102,7 @@ export async function refineMessage(mid, mode) {
 	const hit = find(mid);
 	if (!hit || hit.msg.role !== "assistant") return;
 	const { isSide, list, idx, msg } = hit;
+	const runId = currentId(isSide);
 	const history = list.slice(0, idx)
 		.filter((m) => m.role === "user" || m.role === "assistant")
 		.map((m) => ({ role: m.role, content: m.content || "" }));
@@ -103,7 +110,7 @@ export async function refineMessage(mid, mode) {
 
 	// Alte Antwort verschwindet sofort; die neue wächst wie eine ganz normale Antwort.
 	list.splice(idx, 1);
-	setBusy(isSide, true);
+	setBusy(isSide, true, runId);
 
 	let content = msg.content, reasoning = "Die gewünschte Anpassung wird geprüft und neu formuliert.", refined = false;
 	S.aiThinkingDraft = reasoning;
@@ -122,11 +129,11 @@ export async function refineMessage(mid, mode) {
 		if (err?.name !== "AbortError") U.toast("Anpassen fehlgeschlagen: " + (err?.message || err), "error");
 	}
 	setBusy(isSide, false);
-	// Gegen die AKTUELLE Liste einsetzen: sie kann sich zwischenzeitlich geändert haben.
+	// In dieselbe Sitzung einsetzen, auch wenn inzwischen ein anderer Chat sichtbar ist.
 	// Alle Felder der Originalnachricht bleiben erhalten (Karten, Undo, Anhänge, mid).
-	const target = listOf(isSide);
+	const target = list;
 	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoning: refined ? reasoning : msg.reasoning, reasoningExpanded: false });
-	saveChat(isSide);
+	saveChat(isSide, target, runId);
 	repaint();
 }
 
@@ -137,8 +144,11 @@ export async function sendChatMessage(text, type) {
 	const mine = S.pendingAttachmentTarget === kind;
 	const pdf = mine && !!S.pendingPdf, txt = mine && !!S.pendingTextFile, img = mine && !!S.pendingImage;
 	if ((!text && !pdf && !txt && !img) || S.aiBusy) return;
+	const idKey = isSide ? "sideChatId" : "currentChatId";
+	if (!S[idKey]) S[idKey] = U.uid();
+	const runId = S[idKey], target = listOf(isSide);
 
-	setBusy(isSide, true);
+	setBusy(isSide, true, runId);
 	try {
 		const fallback = pdf ? "Analysiere das angehängte PDF."
 			: txt ? "Fasse die angehängte Datei zusammen."
@@ -146,13 +156,12 @@ export async function sendChatMessage(text, type) {
 		const answer = await AI.agent(text || fallback, kind, (tool) => {
 			S.aiStatus = "⚙ " + tool + "…";
 			schedulePaint(isSide);
-		});
+		}, { id: runId, target });
 		// Nur Antworten auf eine Spracheingabe vorlesen — getippte Chats bleiben still.
 		if (VOICE.consumeReply()) VOICE.speak(answer);
 	} catch (err) {
 		// Ein fehlgeschlagener Sprach-Zug darf nicht die nächste Text-Antwort vorlesen.
 		VOICE.consumeReply();
-		const target = listOf(isSide);
 		if (err?.name === "AbortError") {
 			// ⏹ über den Senden-Knopf: Teilantwort behalten, kein Fehler-Ton.
 			target.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*", reasoning: err?.reasoning || null, reasoningExpanded: false });
@@ -163,7 +172,7 @@ export async function sendChatMessage(text, type) {
 		}
 	}
 	setBusy(isSide, false);
-	saveChat(isSide);
+	saveChat(isSide, target, runId);
 	repaint();
 }
 
@@ -304,7 +313,7 @@ function forgetChat(id) {
 }
 
 // Einen Chat löschen, in dem gerade geantwortet wird, würde den laufenden Lauf ins Leere schreiben.
-const chatIsBusy = (ids) => S.aiBusy && ids.some((id) => id === S.currentChatId || id === S.sideChatId);
+const chatIsBusy = (ids) => S.aiBusy && ids.includes(S.aiActiveChatId);
 
 export function handleChatSelectToggle(t) {
 	const id = t.dataset.chatsel;

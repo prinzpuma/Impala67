@@ -4,6 +4,7 @@ import { S } from "./state.js";
 import { U } from "./util.js";
 import { DRIVE } from "./drive.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import * as UI from "./settings-ui.js";
 
@@ -128,8 +129,12 @@ function renderSync() {
 		UI.field("Wurzelseiten-ID", "inpNotionPage", S.settings.notionPageId || S.notionPageId || "", { explicit: true, placeholder: "Leer = alle freigegebenen Seiten" }) +
 		UI.actions([{ label: "Einmalig importieren", id: "btnMigrateNotion" }, { label: "Zwei-Wege-Sync", id: "btnNotionSync" }, { label: "Abbrechen", id: "btnNotionCancel", className: "danger-text", hidden: true }]) + '<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div><p class="settings-footnote" id="notionStatus"></p>';
 	const privacy = UI.row({ id: "token-sync", title: "Tokens über Drive synchronisieren", description: SETTINGS_SYNC.allowsSecrets(S.settings) ? "KI-Keys und Notion-Token werden an deine eigenen Geräte übertragen" : "Tokens bleiben ausschließlich auf diesem Gerät", leading: '<span class="settings-privacy-icon">⌾</span>', trailing: switchControl("inpSyncSecrets", "Tokens über Drive synchronisieren", SETTINGS_SYNC.allowsSecrets(S.settings)) });
+	const syncMinutes = normalizeDriveSyncMinutes(S.settings);
+	const intervalOptions = DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value, label }) => '<option value="' + value + '"' + (value === syncMinutes ? " selected" : "") + '>' + e(label) + "</option>").join("");
+	const automation = UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
+		UI.row({ title: "Nach jeder Änderung synchronisieren", description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall", trailing: switchControl("inpDriveSyncAfterChange", "Nach jeder Änderung synchronisieren", driveSyncAfterChange(S.settings)) });
 	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" }) + UI.field("CORS-Proxy", "inpCorsProxy", S.settings.corsProxy || "", { explicit: true, placeholder: "Leer = corsproxy.io" });
-	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", driveContent(), { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
+	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", driveContent(), { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Standard: alle 30 Minuten. Start, Rückkehr zur App und das Schließen bleiben zusätzliche Sicherungspunkte." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
 }
 
 function renderData(vm) {

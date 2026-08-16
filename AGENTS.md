@@ -6,6 +6,8 @@
 - Die App ist local-first: fachliche Daten liegen in IndexedDB; Google Drive synchronisiert optional über `appDataFolder`.
 - Es gibt keinen Desktop-Wrapper und keine serverseitige Anwendung. Neue Funktionen müssen in aktuellen Browsern und als installierte PWA funktionieren.
 - Die App nutzt native ES-Module ohne Bundler. Bewahre diesen Ansatz, außer eine Aufgabe fordert ausdrücklich eine Baukette.
+- bugs sollen an ihrer wurzel gelöst warden. ich will nicht dass an verschiedenen stellen im code das gleiche behandelt wird
+- sauberen code schreiben, der state of the art code prinzipien verwendet, um das project nicht aufzublähen und es perfekt für ein vibecoding project zu machen
 
 ## Wichtige Bereiche
 
@@ -22,11 +24,8 @@
 
 ## Arbeitsweise
 
-- Vor Änderungen zunächst `git status --short` prüfen und vorhandene Nutzeränderungen bewahren.
-- Kleine, nachvollziehbare Änderungen bevorzugen; keine automatische Formatierung des gesamten Projekts.
-- Nach JavaScript-Änderungen alle Module mit `node --check` prüfen.
-- Für manuelle Prüfung die PWA über einen lokalen HTTP-Server aus `web/` starten, nicht per `file://`.
 - Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen.
+- prüfe ob die agents.md datei noch aktuell ist und mach eventuell verbesserungsvorschläge
 
 ## Veröffentlichung
 

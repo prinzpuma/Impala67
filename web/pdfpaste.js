@@ -1,24 +1,18 @@
 "use strict";
 
-import { PDFS } from "./pdfs.js";
+import { HEFT } from "./heft.js";
 import { U } from "./util.js";
 
-// PDFs aus Clipboard und Web Share Target werden in die bestehende PDF-Pipeline
-// übergeben. Die Datei selbst wird immer von PDFS.ingest() gespeichert.
+// PDFs aus Clipboard und Web Share Target öffnen zuerst die gemeinsame Zielwahl:
+// neue Notiz-Seite oder gewünschtes Heft samt Einfügeposition.
 export const PDFPASTE = (() => {
 	const SHARE_CACHE = "impala67-pdf-share";
 	const SHARE_PAYLOAD = "/share-target-payload";
 
 	async function ingest(file) {
 		if (!file || file.type !== "application/pdf") return false;
-		try {
-			U.toast("📄 PDF wird importiert…");
-			await PDFS.ingest(file, (message) => U.toast(message));
-			return true;
-		} catch (error) {
-			U.toast("PDF-Import fehlgeschlagen: " + (error.message || error), "error");
-			return false;
-		}
+		HEFT.openImportDialog([file], HEFT.activeId);
+		return true;
 	}
 
 	function initPaste() {
@@ -48,9 +42,13 @@ export const PDFPASTE = (() => {
 			const response = await cache.match(SHARE_PAYLOAD);
 			if (!response) return;
 			const blob = await response.blob();
+			let name = "shared.pdf";
+			try { name = decodeURIComponent(response.headers.get("x-impala-file-name") || name); } catch { /* Standardname */ }
 			await cache.delete(SHARE_PAYLOAD);
+			const url = new URL(location.href); url.searchParams.delete("share-target");
+			history.replaceState(history.state, "", url.pathname + url.search + url.hash);
 			if (!blob.size) return;
-			await ingest(new File([blob], "shared.pdf", { type: "application/pdf" }));
+			await ingest(new File([blob], name, { type: "application/pdf" }));
 		} catch (error) {
 			console.warn("Share-Target-PDF konnte nicht geöffnet werden:", error);
 			U.toast("Geteiltes PDF konnte nicht geöffnet werden.", "error");

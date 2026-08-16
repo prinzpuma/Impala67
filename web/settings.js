@@ -11,6 +11,7 @@ import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage } from "./settings-renderer.js";
 
@@ -285,6 +286,17 @@ export async function handleSyncSecretsToggle(enabled) {
 	openSettings("sync");
 }
 
+export async function handleDriveAutoSyncMinutes(value) {
+	const minutes = normalizeDriveSyncMinutes({ driveAutoSyncMinutes: value });
+	await STATE.dispatch("settingsSet", { driveAutoSyncMinutes: minutes });
+	U.toast("Automatischer Sync: alle " + (minutes === 60 ? "60 Minuten" : minutes + " Minuten") + ".", "success");
+}
+
+export async function handleDriveSyncAfterChange(enabled) {
+	await STATE.dispatch("settingsSet", { driveSyncAfterChange: enabled === true });
+	U.toast(enabled ? "Sync nach jeder Änderung aktiviert." : "Sync nach jeder Änderung deaktiviert.", "success");
+}
+
 // Einstellungen-Aktionen aus wireEvents:
 
 export async function handleNotionSync(t) {
@@ -424,8 +436,8 @@ function handleAutomaticDriveSync(result) {
 }
 
 // Wird einmal beim App-Start aufgerufen. Der erste Lauf zieht den aktuellen
-// Drive-Stand; danach sichern Debounce, Sichtbarkeitswechsel, Intervall und
-// pagehide die Änderungen automatisch.
+// Drive-Stand; danach sichern das gewählte Intervall, Sichtbarkeitswechsel und
+// pagehide automatisch. Der Änderungs-Debounce ist eine eigene Einstellung.
 export function startAutoDriveSync() {
 	return DRIVE.startAutoSync(handleAutomaticDriveSync);
 }
@@ -1005,6 +1017,8 @@ export const SETTINGS = {
 	handleApplyPwaUpdate,
 	handleSaveSettings,
 	handleSyncSecretsToggle,
+	handleDriveAutoSyncMinutes,
+	handleDriveSyncAfterChange,
 	handleClearBg,
 	handleResetAll,
 	handleDriveSync,

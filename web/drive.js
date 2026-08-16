@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
 import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
 // Google-Drive-Sync im privaten appDataFolder.
 // Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
 // bekannte Daten, Dateien werden vor dem Download geprüft und parallele Tabs teilen ein Lock.
@@ -568,7 +569,7 @@ export const DRIVE = (() => {
 	// der keepalive-Schranke von ~64 KB), bleibt der Wasserstand stehen und der nächste Start holt es
 	// nach — ein ehrlicher Fehlschlag statt eines Flushs, der nur auf dem Papier stattfindet.
 	async function flushUpload() {
-		if (!autoEnabled() || !isConnected()) return;
+		if (!isConnected()) return;
 		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch — zwei gleichzeitige
 		// Uploads erzeugen nur doppelte Pakete und schreiben beide am Wasserstand.
 		if (syncInFlight) return;
@@ -608,7 +609,7 @@ export const DRIVE = (() => {
 	// ---------- Automatischer Drive-Sync ----------
 	// Nur nach erfolgter Anmeldung. Erneuerungs-Popups werden zentral gebündelt;
 	// Änderungen ebenfalls. Zusätzlich Start/Rückkehr/Intervall-Pulls in sichtbaren Sitzungen.
-	const AUTO_DELAY_MS = 3000, AUTO_INTERVAL_MS = 180000, LIVE_INTERVAL_MS = 20000;
+	const AUTO_DELAY_MS = 3000;
 	// [A5] Obergrenze fürs Aufschieben. isEditing() sah bisher nur den FOKUS, nicht das Tippen — ein im
 	// Block geparkter Cursor (der Normalfall beim Lesen der eigenen Notizen) hielt die 5-s-Warteschleife
 	// beliebig lange am Laufen. Der Status stand dauerhaft auf "Speichert…", die Änderungen lagen
@@ -617,7 +618,6 @@ export const DRIVE = (() => {
 	let deferSince = 0, lastKeyAt = 0;
 	document.addEventListener("keydown", () => { lastKeyAt = Date.now(); }, true);
 	let autoTimer = 0, autoIntervalTimer = 0, autoStarted = false, autoResultHandler = null;
-	const autoEnabled = () => LS.getItem("impala67.driveAutoSync") !== "0";
 	const isEditing = () => {
 		const ae = document.activeElement;
 		// .heft-writing (heft.js): aktiver Stift-Strich — das Canvas ist nie activeElement.
@@ -629,7 +629,7 @@ export const DRIVE = (() => {
 	};
 
 	async function autoSync(reason, force) {
-		if (!autoEnabled() || !isConnected()) return null;
+		if (!isConnected()) return null;
 		if (navigator.onLine === false) { emitSyncStatus("waiting", "Offline · wartet"); return null; }
 		// [F3] Nie Remote-Events mitten in eine Eingabe spielen (überschrieb offene Seiten).
 		// background/close (force) flushen sofort — der Nutzer schaut dann nicht hin.
@@ -648,7 +648,7 @@ export const DRIVE = (() => {
 	}
 
 	function scheduleAutoSync(reason) {
-		if (!autoEnabled() || !isConnected()) return;
+		if (!isConnected()) return;
 		if (!deferSince) deferSince = Date.now(); // [A5] Beginn des Aufschiebens merken
 		clearTimeout(autoTimer);
 		emitSyncStatus("waiting", navigator.onLine === false ? "Offline · wartet" : "Speichert…");
@@ -673,7 +673,19 @@ export const DRIVE = (() => {
 		// Reine UI-Events (Tab-Wechsel) stoßen keinen Sync an — sie wandern mit dem
 		// nächsten inhaltlichen/manuellen/Intervall-Sync mit.
 		const UI_ONLY_EVENTS = new Set(["uiTabsSet"]);
-		STATE.onAfterDispatch((ev) => { if (!ev || !UI_ONLY_EVENTS.has(ev.type)) scheduleAutoSync("change"); });
+		const scheduleInterval = () => {
+			clearTimeout(autoIntervalTimer);
+			autoIntervalTimer = window.setTimeout(tick, driveSyncIntervalMs(S.settings));
+		};
+		STATE.onAfterDispatch((ev) => {
+			if (ev?.type === "settingsSet" && Object.hasOwn(ev.payload || {}, "driveAutoSyncMinutes")) scheduleInterval();
+			if (!driveSyncAfterChange(S.settings)) {
+				clearTimeout(autoTimer);
+				deferSince = 0;
+				return;
+			}
+			if (!ev || !UI_ONLY_EVENTS.has(ev.type)) scheduleAutoSync("change");
+		});
 		document.addEventListener("visibilitychange", () => document.hidden ? autoSync("background", true) : autoSync("foreground"));
 		// [A6] Best-Effort-Flush beim Schließen — jetzt über den Kurzweg. Vorher lief hier der VOLLE
 		// syncRaw: Web Lock (ohne ifAvailable, kann also warten), getToken, listSyncFiles, Snapshot-
@@ -682,15 +694,11 @@ export const DRIVE = (() => {
 		// Der versprochene Flush fand faktisch nicht statt. visibilitychange→hidden deckt den
 		// Regelfall ohnehin schon vollständig ab; das hier ist die letzte Rettung.
 		window.addEventListener("pagehide", () => { flushUpload().catch(() => {}); });
-		// Adaptiv: Ist gerade ein Heft offen, wird alle 20 s geschaut, sonst alle 3 min.
-		// So erscheinen fremde Striche fast live, ohne im Ruhezustand Traffic zu erzeugen.
-		const heftOpen = () => !!document.querySelector(".heft-chrome");
 		const tick = () => {
 			if (!document.hidden) autoSync("interval");
-			const next = !document.hidden && heftOpen() ? LIVE_INTERVAL_MS : AUTO_INTERVAL_MS;
-			autoIntervalTimer = window.setTimeout(tick, next);
+			scheduleInterval();
 		};
-		autoIntervalTimer = window.setTimeout(tick, LIVE_INTERVAL_MS);
+		scheduleInterval();
 		return autoSync("start");
 	}
 

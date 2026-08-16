@@ -328,9 +328,6 @@ async function studySpaceOrEnter() {
 
 // Einheitlicher Einstieg für neue Chats (Sidebar, Home, „+ Tab“-Menü)
 function startNewChat(opts = {}) {
-	// Während die KI streamt, würde ein neuer Chat S.chat unter dem laufenden
-	// Lauf austauschen — die Antwort landete im falschen Chat.
-	if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 	saveCurrentChat();
 	// FIX: Vorher wurde hier sofort eine LEERE Sitzung ins Event-Log geschrieben und auf alle
 	// Geräte gesynct — jeder Klick auf „+ Neuer Chat“ hinterließ einen Geister-Chat in der
@@ -1231,24 +1228,20 @@ function wireEvents() {
 			return;
 		}
 
-		// Chat-Verlauf: neuer Chat / Chat auswählen. Während die KI streamt, würde
-		// ein Wechsel S.chat unter dem laufenden Lauf austauschen — die Antwort
-		// landete im falschen Chat. Deshalb kurz blocken statt still korrumpieren.
+		// Chat-Verlauf: laufende Antworten bleiben an ihrer Sitzung gebunden.
 		if (t.dataset.newchat) { startNewChat(); return; }
 		// Verlauf im Seitenchat: alte Unterhaltung direkt im Panel weiterführen
 		// (kein Tab-Wechsel wie bei data-chat).
 		if (t.dataset.sidechat) {
-			if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 			CHAT_FULLSCREEN.saveSideChat();
 			const s = CHATS.load().find((x) => x.id === t.dataset.sidechat);
 			S.chatHistOpen = false;
-			S.sideChat = s ? s.messages.slice() : [];
+			S.sideChat = s ? s.messages : [];
 			S.sideChatId = s ? s.id : null;
 			render();
 			return;
 		}
 		if (t.dataset.chat) {
-			if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); return; }
 			saveCurrentChat();
 			openPage("chat:" + t.dataset.chat);
 			return;
@@ -1326,7 +1319,6 @@ function wireEvents() {
 				render();
 				break;
 			case "btnChatNew": // alte Unterhaltung ist gesichert, bleibt in der Chat-Liste
-				if (S.aiBusy && S.aiActiveChatType === "side") { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); break; }
 				CHAT_FULLSCREEN.saveSideChat();
 				S.sideChat = [];
 				S.sideChatId = null;
@@ -1335,7 +1327,6 @@ function wireEvents() {
 				break;
 			case "btnChatExpand": {
 				// Ersetzt den alten Vollbildmodus: Seitenchat als eigenen Tab öffnen.
-				if (S.aiBusy) { U.toast("Die KI antwortet noch — bitte kurz warten.", "error"); break; }
 				CHAT_FULLSCREEN.saveSideChat();
 				const sideId = S.sideChatId;
 				S.sideChat = [];
@@ -1596,6 +1587,14 @@ function wireEvents() {
 		}
 		if (e.target.id === "inpSyncSecrets") {
 			await SETTINGS.handleSyncSecretsToggle(!!e.target.checked);
+			return;
+		}
+		if (e.target.id === "inpDriveAutoSyncMinutes") {
+			await SETTINGS.handleDriveAutoSyncMinutes(e.target.value);
+			return;
+		}
+		if (e.target.id === "inpDriveSyncAfterChange") {
+			await SETTINGS.handleDriveSyncAfterChange(!!e.target.checked);
 			return;
 		}
 		if (e.target.dataset?.dashtoggle) {
@@ -1874,7 +1873,9 @@ function wireEvents() {
 		if (!def) return;
 		e.preventDefault();
 		// ⏹ Läuft gerade eine Antwort, bricht der Senden-Button sie ab statt zu senden
-		if (S.aiBusy) { AI.abortActive(); return; }
+		const full = def[1] === "full", id = full ? S.currentChatId : S.sideChatId;
+		if (S.aiBusy && S.aiActiveChatType === def[1] && S.aiActiveChatId === id) { AI.abortActive(); return; }
+		if (S.aiBusy) { U.toast("Eine KI-Antwort läuft bereits im Hintergrund.", "error"); return; }
 		const inp = $(def[0]);
 		const text = inp.value.trim();
 		inp.value = ""; syncComposer(inp);
