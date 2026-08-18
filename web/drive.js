@@ -6,6 +6,7 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
+import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
 // Google-Drive-Sync im privaten appDataFolder.
 // Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
 // bekannte Daten, Dateien werden vor dem Download geprüft und parallele Tabs teilen ein Lock.
@@ -34,9 +35,14 @@ export const DRIVE = (() => {
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
 	let token = null;
 	let tokenRequestInFlight = null; // Timer + Sync teilen eine OAuth-Anfrage (nie zwei Popups)
+	let authGeneration = 0; // Abmelden macht auch spaet eintreffende OAuth-Antworten wirkungslos.
 	let expiryNoticeTimer = 0;
 	let syncInFlight = null; // nie zwei Syncs parallel (Sidebar-Button + Einstellungen + Auto)
 	let flushMode = false; // pagehide: Uploads mit keepalive absetzen (überleben das Schließen)
+	let accountEmail = LS.getItem("impala67_drive_email") || "";
+	let sessionKnown = !!(LS.getItem("impala67_drive_token") || accountEmail);
+	let authState = DRIVE_AUTH_STATE.DISCONNECTED;
+	let syncUi = { state: "idle", label: "", detail: "" };
 
 	// Einmalige Key-Migration (Projekt hieß früher "notion") — Sitzung bleibt erhalten.
 	for (const k of ["drive_token", "drive_token_expiry"]) {
@@ -49,12 +55,79 @@ export const DRIVE = (() => {
 	LS.removeItem("notion_drive_refresh_token");
 	LS.removeItem("impala67_drive_refresh_token");
 
+	const validSavedToken = () => {
+		const t = LS.getItem("impala67_drive_token"), exp = Number(LS.getItem("impala67_drive_token_expiry"));
+		return t && exp && Date.now() < exp ? t : null;
+	};
+
+	function refreshAuthStateFromStorage() {
+		if (authState === DRIVE_AUTH_STATE.CONNECTING) return;
+		if (validSavedToken()) sessionKnown = true;
+		authState = driveAuthState({
+			tokenValid: !!validSavedToken(),
+			sessionKnown,
+		});
+	}
+	refreshAuthStateFromStorage();
+
+	function status() {
+		refreshAuthStateFromStorage();
+		const view = driveStatusView({
+			authState,
+			syncState: syncUi.state,
+			online: navigator.onLine !== false,
+			email: accountEmail,
+			label: syncUi.label,
+			detail: syncUi.detail,
+		});
+		return {
+			...view,
+			authState,
+			email: accountEmail || null,
+			connected: authState === DRIVE_AUTH_STATE.CONNECTED,
+			needsLogin: authState === DRIVE_AUTH_STATE.RENEWAL_REQUIRED,
+		};
+	}
+
+	function emitCurrentStatus() {
+		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: status() }));
+	}
+
+	function emitSyncStatus(state, label, detail) {
+		syncUi = { state, label: label || "", detail: detail || label || "" };
+		emitCurrentStatus();
+	}
+
+	function setAuthState(next, { resetSync = false } = {}) {
+		authState = next;
+		if (resetSync) syncUi = { state: "idle", label: "", detail: "" };
+		emitCurrentStatus();
+	}
+
+	function saveAccountEmail(email) {
+		accountEmail = String(email || "").trim();
+		if (accountEmail) LS.setItem("impala67_drive_email", accountEmail);
+		else LS.removeItem("impala67_drive_email");
+	}
+
+	function clearAccessToken(needsLogin) {
+		token = null;
+		LS.removeItem("impala67_drive_token");
+		LS.removeItem("impala67_drive_token_expiry");
+		sessionKnown = needsLogin;
+		setAuthState(needsLogin ? DRIVE_AUTH_STATE.RENEWAL_REQUIRED : DRIVE_AUTH_STATE.DISCONNECTED, { resetSync: true });
+	}
+
 	function saveToken(data) {
 		// Tokens bewusst nur in localStorage (pro Gerät), nie ins Event-Log/Export.
 		token = data.access_token;
+		sessionKnown = true;
 		LS.setItem("impala67_drive_token", token);
 		LS.setItem("impala67_drive_token_expiry", String(Date.now() + (Number(data.expires_in) || 3600) * 1000 - 60000));
+		authState = DRIVE_AUTH_STATE.CONNECTED;
+		syncUi = { state: "idle", label: "", detail: "" };
 		scheduleExpiryNotice();
+		emitCurrentStatus();
 	}
 
 	function scheduleExpiryNotice() {
@@ -62,13 +135,13 @@ export const DRIVE = (() => {
 		const exp = Number(LS.getItem("impala67_drive_token_expiry"));
 		if (!exp) return;
 		expiryNoticeTimer = setTimeout(() => {
-			if (!validSavedToken()) emitSyncStatus("error", "Anmeldung nötig", "Zum Erneuern einmal synchronisieren");
+			if (!validSavedToken()) setAuthState(DRIVE_AUTH_STATE.RENEWAL_REQUIRED, { resetSync: true });
 		}, Math.max(1000, exp - Date.now()));
 	}
 
-	function getTokenBrowserPopup(interactive) {
+	function getTokenBrowserPopup(interactive, generation) {
 		return new Promise((resolve, reject) => {
-			if (!window.google?.accounts) return reject(new Error("Google-Script nicht geladen (Internet nötig)."));
+			if (!window.google?.accounts) return reject(new Error("Google-Anmeldung lädt noch oder es besteht keine Internetverbindung. Bitte gleich erneut versuchen."));
 			// webId(): kennt auch config.local.js — vorher scheiterte der Notnagel-Weg, wenn die
 			// Client-ID nur im Build stand und nicht in den Einstellungen.
 			const clientId = webId();
@@ -76,6 +149,7 @@ export const DRIVE = (() => {
 			google.accounts.oauth2.initTokenClient({
 				client_id: clientId, scope: SCOPE,
 				callback: (resp) => {
+					if (!isCurrentDriveAuthRequest(generation, authGeneration)) return reject(new Error("Diese Anmeldung wurde bereits verworfen."));
 					if (resp?.access_token) {
 						const hasScopes = google.accounts.oauth2.hasGrantedAllScopes?.(resp,
 							"https://www.googleapis.com/auth/drive.appdata",
@@ -105,38 +179,86 @@ export const DRIVE = (() => {
 		if (!interactive && (!window.google?.accounts || !webId())) {
 			return Promise.reject(new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden."));
 		}
-		tokenRequestInFlight = getTokenBrowserPopup(interactive)
-			.finally(() => { tokenRequestInFlight = null; });
-		return tokenRequestInFlight;
+		const generation = ++authGeneration;
+		const tracked = getTokenBrowserPopup(interactive, generation)
+			.finally(() => { if (tokenRequestInFlight === tracked) tokenRequestInFlight = null; });
+		tokenRequestInFlight = tracked;
+		return tracked;
 	}
-
-	const validSavedToken = () => {
-		const t = LS.getItem("impala67_drive_token"), exp = Number(LS.getItem("impala67_drive_token_expiry"));
-		return t && exp && Date.now() < exp ? t : null;
-	};
 
 	async function getToken(interactive) {
 		const saved = validSavedToken();
 		if (saved) return (token = saved);
 		// Hintergrund-Syncs dürfen niemals selbst ein Google-Fenster öffnen. Ein
 		// bewusster Sync-Klick erneuert die Sitzung über renewFromUserGesture().
-		if (!interactive) throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
+		if (!interactive) {
+			setAuthState(DRIVE_AUTH_STATE.RENEWAL_REQUIRED, { resetSync: true });
+			throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
+		}
 		return getTokenBrowser(true);
 	}
 
-	async function fetchUserInfo() {
+	async function fetchUserInfo(generation) {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 8000);
 		try {
-			const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", { headers: { Authorization: "Bearer " + token } });
+			const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", { headers: { Authorization: "Bearer " + token }, signal: controller.signal });
+			if (res.status === 401) {
+				if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
+				clearAccessToken(true);
+				throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
+			}
 			return res.ok ? res.json() : null;
-		} catch { return null; }
+		} catch (error) {
+			if (error?.message?.includes("Google-Sitzung abgelaufen")) throw error;
+			return null; // E-Mail ist nur Anzeige; der bereits validierte Token bleibt nutzbar.
+		} finally {
+			clearTimeout(timeout);
+		}
 	}
 
-	const login = async () => { await getToken(true); return fetchUserInfo(); }; // Ein-Klick: Token + E-Mail
-	const renewFromUserGesture = async () => { await getTokenBrowser(false); return fetchUserInfo(); };
+	async function authorize() {
+		if (navigator.onLine === false) {
+			emitCurrentStatus();
+			throw new Error("Offline – die Google-Anmeldung benötigt eine Internetverbindung.");
+		}
+		const fallback = authState === DRIVE_AUTH_STATE.RENEWAL_REQUIRED ? DRIVE_AUTH_STATE.RENEWAL_REQUIRED : DRIVE_AUTH_STATE.DISCONNECTED;
+		setAuthState(DRIVE_AUTH_STATE.CONNECTING, { resetSync: true });
+		let generation = authGeneration;
+		try {
+			// Ein ausdrücklicher Login öffnet immer die Kontowahl; nur die Erneuerung
+			// derselben Sitzung verwendet Googles stilleren Wiederholungsweg.
+			const request = getTokenBrowser(true);
+			generation = authGeneration;
+			await request;
+			if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
+			const info = await fetchUserInfo(generation);
+			if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
+			if (info?.email) saveAccountEmail(info.email);
+			setAuthState(DRIVE_AUTH_STATE.CONNECTED, { resetSync: true });
+			return info || { email: accountEmail || null };
+		} catch (error) {
+			if (isCurrentDriveAuthRequest(generation, authGeneration) && authState === DRIVE_AUTH_STATE.CONNECTING) {
+				authState = fallback;
+				emitCurrentStatus();
+			}
+			throw error;
+		}
+	}
+
+	const login = () => authorize();
+	// Auch die Erneuerung kommt von einem bewussten Klick. Wenn Google keine stille
+	// Sitzung mehr kennt, darf deshalb direkt wieder eine Kontowahl erscheinen.
+	const renewFromUserGesture = () => authorize();
 	const logout = () => {
+		authGeneration++;
+		tokenRequestInFlight = null;
 		clearTimeout(expiryNoticeTimer);
 		token = null;
 		["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k));
+		saveAccountEmail("");
+		sessionKnown = false;
+		setAuthState(DRIVE_AUTH_STATE.DISCONNECTED, { resetSync: true });
 	};
 
 	// Uhren-Drift-Erkennung: der Log-Merge entscheidet Konflikte per Zeitstempel (LWW) —
@@ -172,10 +294,7 @@ export const DRIVE = (() => {
 		// Kein Popup aus einem Hintergrundlauf: Der nächste bewusste Sync-Klick
 		// erneuert ein abgelaufenes oder entzogenes Token und startet danach neu.
 		if (res.status === 401) {
-			token = null;
-			LS.removeItem("impala67_drive_token");
-			LS.removeItem("impala67_drive_token_expiry");
-			emitSyncStatus("error", "Anmeldung nötig", "Google-Sitzung abgelaufen");
+			clearAccessToken(true);
 			throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
 		}
 		// Rate-Limit/Serverfehler: kurzer exponentieller Backoff mit Jitter statt sofortigem
@@ -193,9 +312,6 @@ export const DRIVE = (() => {
 	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" })
 		.then(() => { indexRemove(fileId); return true; })
 		.catch(() => false);
-
-	const emitSyncStatus = (state, label, detail) =>
-		window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state, label, detail: detail || label } }));
 
 	// Begrenzte Parallelität — bündelt Netz-Rundreisen für Down-/Uploads/Deletes.
 	async function mapLimit(items, limit, fn) {
@@ -593,6 +709,13 @@ export const DRIVE = (() => {
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
 		if (syncInFlight) return syncInFlight;
 		syncInFlight = withSyncLock(() => syncRaw(onStatus))
+			.catch((error) => {
+				if (authState !== DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
+					emitSyncStatus(navigator.onLine === false ? "waiting" : "error",
+						navigator.onLine === false ? "Offline" : "Sync fehlgeschlagen", error?.message);
+				}
+				throw error;
+			})
 			.finally(() => { syncInFlight = null; });
 		return syncInFlight;
 	}
@@ -600,6 +723,14 @@ export const DRIVE = (() => {
 	// Nur ein nachweislich gültiger Token bedeutet „verbunden“. Ein abgelaufener
 	// In-Memory-Token oder ein unbrauchbarer Refresh-Altwert darf die UI nicht täuschen.
 	const isConnected = () => !!validSavedToken();
+	function refreshStatus() {
+		refreshAuthStateFromStorage();
+		if (navigator.onLine !== false && syncUi.state === "waiting" && syncUi.label.startsWith("Offline")) {
+			syncUi = { state: "idle", label: "", detail: "" };
+		}
+		emitCurrentStatus();
+		return status();
+	}
 
 	// ---------- Automatischer Drive-Sync ----------
 	// Nur nach erfolgter Anmeldung. Erneuerungs-Popups werden zentral gebündelt;
@@ -636,7 +767,6 @@ export const DRIVE = (() => {
 			return result;
 		} catch (e) {
 			// Automatik bleibt ruhig; der manuelle Button zeigt Fehler weiterhin an.
-			emitSyncStatus(navigator.onLine === false ? "waiting" : "error", navigator.onLine === false ? "Offline · wartet" : "Sync pausiert", e?.message);
 			console.warn("Automatischer Drive-Sync (" + reason + ") fehlgeschlagen:", e);
 			return null;
 		}
@@ -660,9 +790,7 @@ export const DRIVE = (() => {
 	function startAutoSync(onResult) {
 		if (typeof onResult === "function") autoResultHandler = onResult;
 		scheduleExpiryNotice();
-		if (!isConnected() && LS.getItem("impala67_drive_email")) {
-			emitSyncStatus("error", "Anmeldung nötig", "Zum Erneuern einmal synchronisieren");
-		}
+		refreshStatus();
 		if (autoStarted) return autoSync("start");
 		autoStarted = true;
 		// Reine UI-Events (Tab-Wechsel) stoßen keinen Sync an — sie wandern mit dem
@@ -697,5 +825,5 @@ export const DRIVE = (() => {
 		return autoSync("start");
 	}
 
-	return { login, renewFromUserGesture, logout, sync, isConnected, startAutoSync };
+	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync };
 })();

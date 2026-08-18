@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Impala67 — Mobile UI (Refined Prototype)</title>
+<!-- KaTeX Styles & Scripts für echte mathematische Formeln -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+
+<style>
+:root {
+	--bg0: #0d0f12;
+	--panel-solid: #191919;
+	--sidebar-bg: #1f1f1f;
+	--menu-bg: #222222;
+	--surface: rgba(255, 255, 255, 0.04);
+	--surface-hover: rgba(255, 255, 255, 0.07);
+	--surface-active: rgba(255, 255, 255, 0.11);
+	--edge: rgba(255, 255, 255, 0.12);
+	--edge-soft: rgba(255, 255, 255, 0.06);
+	--text: rgba(255, 255, 255, 0.92);
+	--text2: rgba(255, 255, 255, 0.60);
+	--text3: rgba(255, 255, 255, 0.35);
+	--accent-rgb: 111, 195, 255;
+	--accent: rgb(var(--accent-rgb));
+	--accent-soft: rgba(var(--accent-rgb), 0.12);
+	--danger: #e97366;
+	--danger-soft: rgba(233, 115, 102, 0.14);
+	--success: #72bc8f;
+	--success-soft: rgba(114, 188, 143, 0.14);
+	--warning: #e8c65a;
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-xl: 20px;
+	--radius-pill: 999px;
+	--m-top: 50px;
+	--m-bot: 64px;
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, -apple-system, sans-serif;
+	background: #08090c;
+	color: var(--text);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 100dvh;
+	overflow: hidden;
+}
+
+/* Smartphone Frame */
+#deviceFrame {
+	position: relative;
+	width: 100%;
+	max-width: 414px;
+	height: 100dvh;
+	max-height: 860px;
+	background: var(--panel-solid);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+@media (min-width: 500px) and (min-height: 700px) {
+	#deviceFrame {
+		border-radius: 40px;
+		border: 3px solid #28292e;
+	}
+}
+
+/* ===================================================
+   ELEGANTE TOP-BAR (Kontextabhängig & ruhig)
+   =================================================== */
+#mTop {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: var(--m-top);
+	z-index: 100;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 14px;
+	background: rgba(25, 25, 25, 0.85);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border-bottom: 1px solid var(--edge-soft);
+}
+
+.mTop-left {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.top-nav-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: transparent;
+	border: none;
+	color: var(--accent);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 4px 0;
+}
+.top-nav-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+#mTitle {
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mTop-right {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.icon-btn {
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	border: none;
+	color: var(--text2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+.icon-btn:active { background: var(--surface-active); color: var(--text); }
+.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+.pill-action-btn {
+	height: 28px;
+	padding: 0 10px;
+	border-radius: var(--radius-pill);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	color: var(--text);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	transition: background 0.15s;
+}
+.pill-action-btn:active { background: var(--surface-active); }
+
+/* Main Stage */
+#main {
+	flex: 1;
+	margin-top: var(--m-top);
+	margin-bottom: var(--m-bot);
+	overflow-y: auto;
+	overflow-x: hidden;
+	position: relative;
+	-webkit-overflow-scrolling: touch;
+}
+
+.screen {
+	display: none;
+	padding: 16px;
+	min-height: 100%;
+	animation: fadeIn 0.18s var(--ease-out);
+}
+.screen.active { display: block; }
+
+@keyframes fadeIn {
+	from { opacity: 0; transform: translateY(3px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===================================================
+   1. HOME SCREEN
+   =================================================== */
+.home-section-title {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text3);
+	font-weight: 700;
+	margin: 18px 0 8px;
+}
+
+.home-focus-card {
+	background: linear-gradient(145deg, rgba(111, 195, 255, 0.08), rgba(255, 255, 255, 0.02));
+	border: 1px solid rgba(111, 195, 255, 0.20);
+	border-radius: var(--radius-lg);
+	padding: 16px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	cursor: pointer;
+	margin-bottom: 16px;
+}
+.home-focus-left h3 { font-size: 16px; font-weight: 700; color: #fff; }
+.home-focus-left p { font-size: 12px; color: var(--accent); margin-top: 2px; }
+.home-focus-btn {
+	padding: 7px 13px;
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	color: #081018;
+	font-weight: 700;
+	font-size: 12px;
+	border: none;
+}
+
+.card-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	cursor: pointer;
+	margin-bottom: 6px;
+	transition: background 0.15s;
+}
+.card-row:active { background: var(--surface-active); }
+.card-row .icon { font-size: 18px; width: 22px; text-align: center; }
+.card-row .info { flex: 1; min-width: 0; }
+.card-row .info h4 { font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-row .info p { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+/* ===================================================
+   2. LERNEN / KARTEIKARTEN
+   =================================================== */
+.learn-overview-box {
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	border-radius: var(--radius-lg);
+	padding: 18px;
+	margin-bottom: 18px;
+	text-align: center;
+}
+.learn-overview-box .due-num { font-size: 34px; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+.learn-overview-box .due-text { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+.learn-btn-primary {
+	width: 100%;
+	padding: 12px;
+	background: var(--accent);
+	color: #081018;
+	font-size: 14px;
+	font-weight: 700;
+	border-radius: var(--radius-md);
+	border: none;
+	cursor: pointer;
+}
+
+.deck-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px;
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	cursor: pointer;
+	margin-bottom: 6px;
+}
+.deck-item:active { background: var(--surface-active); }
+.deck-item-left { display: flex; align-items: center; gap: 10px; }
+.deck-item-left .deck-ico { font-size: 18px; }
+.deck-item-left strong { font-size: 14px; font-weight: 600; }
+.deck-item-left small { font-size: 11px; color: var(--text3); display: block; }
+.deck-badge-pill {
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: 12px;
+	font-weight: 700;
+	padding: 3px 8px;
+	border-radius: var(--radius-pill);
+}
+
+/* Study Mode Overlay */
+#studyOverlay {
+	position: absolute;
+	inset: 0;
+	background: var(--panel-solid);
+	z-index: 120;
+	display: none;
+	flex-direction: column;
+	padding: 14px;
+}
+#studyOverlay.active { display: flex; }
+.study-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.study-deck-title { font-size: 13px; font-weight: 600; color: var(--text2); }
+
+.flashcard-stage {
+	flex: 1;
+	background: var(--surface);
+	border: 1px solid var(--edge);
+	border-radius: var(--radius-xl);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	padding: 24px 20px;
+	text-align: center;
+	cursor: pointer;
+	margin-bottom: 14px;
+	position: relative;
+}
+.fc-type { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-weight: 700; margin-bottom: 12px; }
+.fc-front { font-size: 18px; font-weight: 600; line-height: 1.45; }
+.fc-divider { width: 32px; height: 1px; background: var(--edge); margin: 18px auto; display: none; }
+.fc-back { font-size: 17px; color: var(--success); line-height: 1.45; display: none; }
+.flashcard-stage.revealed .fc-divider,
+.flashcard-stage.revealed .fc-back { display: block; }
+.fc-hint { position: absolute; bottom: 16px; font-size: 11px; color: var(--text3); }
+.flashcard-stage.revealed .fc-hint { display: none; }
+
+.grade-actions-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 6px;
+}
+.grade-tile {
+	padding: 10px 2px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--edge-soft);
+	background: var(--surface);
+	color: var(--text);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	cursor: pointer;
+	font-size: 11.5px;
+	font-weight: 700;
+}
+.grade-tile.g1 { color: var(--danger); background: var(--danger-soft); border-color: rgba(233,115,102,0.25); }
+.grade-tile.g2 { color: var(--warning); background: rgba(232,198,90,0.10); border-color: rgba(232,198,90,0.25); }
+.grade-tile.g3 { color: var(--success); background: var(--success-soft); border-color: rgba(114,188,143,0.25); }
+.grade-tile.g4 { color: var(--accent); background: var(--accent-soft); border-color: rgba(111,195,255,0.25); }
+.grade-tile small { font-size: 9px; opacity: 0.75; font-weight: normal; }
+
+/* ===================================================
+   3. ECHTER NOTIZ-EDITOR (mit KaTeX Formeln & Blöcken)
+   =================================================== */
+.page-view {
+	max-width: 600px;
+	margin: 0 auto;
+}
+.page-header-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.page-icon-btn { font-size: 26px; line-height: 1; }
+.page-title-input {
+	width: 100%;
+	font-size: 22px;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	background: transparent;
+	border: none;
+	color: var(--text);
+	outline: none;
+}
+.page-breadcrumb-sub {
+	font-size: 11.5px;
+	color: var(--text3);
+	margin-bottom: 20px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.block {
+	font-size: 14.5px;
+	line-height: 1.6;
+	margin-bottom: 12px;
+	outline: none;
+}
+.block.h2 {
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: #fff;
+	margin-top: 18px;
+	margin-bottom: 6px;
+}
+
+/* Echtes KaTeX Block Rendering */
+.math-block {
+	margin: 12px 0;
+	padding: 12px;
+	border-radius: var(--radius-md);
+	background: rgba(255, 255, 255, 0.02);
+	border: 1px solid var(--edge-soft);
+	display: flex;
+	justify-content: center;
+	overflow-x: auto;
+}
+.math-block .katex-display { margin: 0; }
+
+.todo-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin-bottom: 8px;
+	font-size: 14.5px;
+}
+.todo-check {
+	width: 17px;
+	height: 17px;
+	border-radius: 4px;
+	border: 1.5px solid var(--edge);
+	background: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	margin-top: 3px;
+	flex-shrink: 0;
+}
+.todo-check.checked {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+.todo-check.checked::after {
+	content: "✓";
+	color: #081018;
+	font-size: 12px;
+	font-weight: 900;
+}
+.todo-text.done { text-decoration: line-through; color: var(--text3); }
+
+/* Tastatur-Leiste */
+#mEditorBar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 12px;
+	background: var(--menu-bg);
+	border-top: 1px solid var(--edge-soft);
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.ed-tool-btn {
+	padding: 5px 9px;
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	color: var(--text);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.ed-tool-btn:active { background: var(--surface-active); }
+
+/* ===================================================
+   4. NOTIZEN SHEET (SLIDE-UP NAVIGATOR) — ROOT FIX
+   =================================================== */
+#notesSheet {
+	position: absolute;
+	inset: 0;
+	background: var(--sidebar-bg);
+	z-index: 200;
+	transform: translateY(100%);
+	transition: transform 0.26s var(--ease-out);
+	display: flex;
+	flex-direction: column;
+	border-radius: 20px 20px 0 0;
+	box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+	overflow: hidden;
+}
+#notesSheet.open { transform: translateY(0); }
+
+.sheet-handle-bar {
+	padding: 10px 0 2px;
+	display: flex;
+	justify-content: center;
+	cursor: pointer;
+}
+.sheet-handle {
+	width: 36px;
+	height: 4px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.2);
+}
+
+.sheet-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 16px 10px;
+	border-bottom: 1px solid var(--edge-soft);
+}
+.sheet-head strong { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+
+.sheet-search {
+	margin: 10px 14px 6px;
+	padding: 7px 10px;
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	border-radius: var(--radius-md);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.sheet-search svg { width: 15px; height: 15px; stroke: var(--text3); fill: none; stroke-width: 2; }
+.sheet-search input {
+	background: transparent;
+	border: none;
+	color: var(--text);
+	font-size: 13.5px;
+	width: 100%;
+	outline: none;
+}
+
+.sheet-tabs {
+	display: flex;
+	gap: 6px;
+	padding: 4px 14px 8px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.ws-pill {
+	padding: 5px 12px;
+	border-radius: var(--radius-pill);
+	background: var(--surface);
+	color: var(--text2);
+	font-size: 11.5px;
+	font-weight: 600;
+	border: 1px solid var(--edge-soft);
+	white-space: nowrap;
+	cursor: pointer;
+}
+.ws-pill.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+	border-color: rgba(111, 195, 255, 0.3);
+}
+
+.sheet-tree {
+	flex: 1;
+	overflow-y: auto;
+	padding: 4px 12px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.tree-group {
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text3);
+	font-weight: 700;
+	padding: 10px 8px 3px;
+}
+.tree-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 10px;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	color: var(--text);
+	transition: background 0.15s;
+}
+.tree-item:active { background: var(--surface-active); }
+.tree-item.active { background: var(--surface-hover); color: var(--accent); font-weight: 600; }
+.tree-item .t-ico { font-size: 16px; width: 20px; text-align: center; }
+.tree-item .t-text { flex: 1; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-item .t-star { color: #f5a623; font-size: 11px; }
+
+/* ===================================================
+   5. MEHR-SHEET
+   =================================================== */
+#moreSheet {
+	position: absolute;
+	inset: 0;
+	background: var(--sidebar-bg);
+	z-index: 200;
+	transform: translateY(100%);
+	transition: transform 0.26s var(--ease-out);
+	display: flex;
+	flex-direction: column;
+	border-radius: 20px 20px 0 0;
+	box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+}
+#moreSheet.open { transform: translateY(0); }
+
+.more-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 10px;
+	padding: 14px;
+}
+.more-tile {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	padding: 14px;
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	cursor: pointer;
+	transition: background 0.15s;
+}
+.more-tile:active { background: var(--surface-active); }
+.more-tile .m-icon { font-size: 22px; margin-bottom: 2px; }
+.more-tile strong { font-size: 14px; font-weight: 600; color: #fff; }
+.more-tile small { font-size: 11px; color: var(--text3); }
+
+.drive-box {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px;
+	border-radius: var(--radius-md);
+	background: rgba(114, 188, 143, 0.06);
+	border: 1px solid rgba(114, 188, 143, 0.20);
+}
+.drive-box-left { display: flex; align-items: center; gap: 8px; }
+.drive-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+/* ===================================================
+   BOTTOM NAVIGATION BAR (#mNav)
+   =================================================== */
+#mNav {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: var(--m-bot);
+	background: rgba(25, 25, 25, 0.90);
+	backdrop-filter: blur(24px);
+	-webkit-backdrop-filter: blur(24px);
+	border-top: 1px solid var(--edge-soft);
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	align-items: center;
+	padding: 0 2px;
+	z-index: 100;
+}
+
+.nav-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	background: transparent;
+	border: none;
+	color: var(--text2);
+	cursor: pointer;
+	padding: 5px 0;
+	position: relative;
+	transition: color 0.15s;
+}
+.nav-btn:active { transform: scale(0.94); }
+.nav-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+.nav-btn span { font-size: 10px; font-weight: 700; letter-spacing: 0.01em; }
+.nav-btn.active { color: var(--accent); }
+
+.nav-btn.home-btn svg {
+	background: var(--accent);
+	stroke: #081018;
+	fill: #081018;
+	padding: 2.5px;
+	border-radius: var(--radius-sm);
+	width: 24px;
+	height: 24px;
+}
+
+.nav-badge {
+	position: absolute;
+	top: 3px;
+	right: calc(50% - 16px);
+	background: var(--danger);
+	color: #fff;
+	font-size: 9px;
+	font-weight: 800;
+	padding: 1px 4.5px;
+	border-radius: var(--radius-pill);
+}
+
+/* Clean Info Pill */
+.mode-info-pill {
+	position: fixed;
+	bottom: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: rgba(15, 16, 20, 0.92);
+	border: 1px solid var(--edge);
+	padding: 5px 12px;
+	border-radius: var(--radius-pill);
+	font-size: 11px;
+	color: var(--text2);
+	pointer-events: none;
+	z-index: 999;
+	white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<div id="deviceFrame">
+
+	<!-- TOP BAR (Ruhig, keine deplatzierten Lern-Badges im Notizen-Modus!) -->
+	<header id="mTop">
+		<div class="mTop-left">
+			<button class="top-nav-btn" id="btnTopBack" style="display:none" onclick="goBackToNotes()">
+				<svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+				<span>Notizen</span>
+			</button>
+			<span id="mTitle">Impala</span>
+		</div>
+		<div class="mTop-right" id="mTopActions">
+			<button class="icon-btn" title="Suche" onclick="alert('Schnellsuche')">
+				<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+			</button>
+			<button class="pill-action-btn" id="btnTopAction" onclick="quickNew()">
+				<span>＋ Neu</span>
+			</button>
+		</div>
+	</header>
+
+	<!-- MAIN VIEWPORT -->
+	<main id="main">
+
+		<!-- 1. HOME SCREEN -->
+		<section class="screen active" id="screenHome">
+			<div style="margin: 4px 0 16px;">
+				<h2 style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">Übersicht</h2>
+			</div>
+
+			<div class="home-focus-card" onclick="switchTab('learn')">
+				<div class="home-focus-left">
+					<h3>12 Karten fällig</h3>
+					<p>Tägliche FSRS-Wiederholung</p>
+				</div>
+				<button class="home-focus-btn">Lernen ▶</button>
+			</div>
+
+			<div class="home-section-title">Zuletzt geöffnet</div>
+			<div class="card-row" onclick="openNote('Formelsammlung Physik', '⚛️', 'Physik')">
+				<span class="icon">⚛️</span>
+				<div class="info">
+					<h4>Formelsammlung Physik</h4>
+					<p>Vor 2 Stunden · Physik</p>
+				</div>
+			</div>
+			<div class="card-row" onclick="openNote('Algorithmen & Datenstrukturen', '💻', 'Informatik')">
+				<span class="icon">💻</span>
+				<div class="info">
+					<h4>Algorithmen & Datenstrukturen</h4>
+					<p>Gestern · Informatik</p>
+				</div>
+			</div>
+			<div class="card-row" onclick="openNote('Englisch Vokabeln C1', '🇬🇧', 'Sprachen')">
+				<span class="icon">🇬🇧</span>
+				<div class="info">
+					<h4>Englisch Vokabeln C1</h4>
+					<p>Vor 3 Tagen · Sprachen</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- 2. LERNEN SCREEN -->
+		<section class="screen" id="screenLearn">
+			<div class="learn-overview-box">
+				<div class="due-num">12</div>
+				<div class="due-text">Karten heute fällig</div>
+				<button class="learn-btn-primary" onclick="startStudy('Alle fälligen Karten')">▶ Alle fälligen Karten lernen</button>
+			</div>
+
+			<div class="home-section-title">Stapel Übersicht</div>
+			<div class="deck-item" onclick="startStudy('Physik Formeln')">
+				<div class="deck-item-left">
+					<span class="deck-ico">⚛️</span>
+					<div>
+						<strong>Physik Formeln</strong>
+						<small>4 neu · 2 lernen</small>
+					</div>
+				</div>
+				<span class="deck-badge-pill">6 fällig</span>
+			</div>
+			<div class="deck-item" onclick="startStudy('Informatik Glossar')">
+				<div class="deck-item-left">
+					<span class="deck-ico">💻</span>
+					<div>
+						<strong>Informatik Glossar</strong>
+						<small>2 neu · 1 lernen</small>
+					</div>
+				</div>
+				<span class="deck-badge-pill">4 fällig</span>
+			</div>
+			<div class="deck-item" onclick="startStudy('Englisch Vokabeln')">
+				<div class="deck-item-left">
+					<span class="deck-ico">🇬🇧</span>
+					<div>
+						<strong>Englisch Vokabeln</strong>
+						<small>0 neu · 2 lernen</small>
+					</div>
+				</div>
+				<span class="deck-badge-pill">2 fällig</span>
+			</div>
+		</section>
+
+		<!-- 3. ECHTER NOTIZ-EDITOR (MIT KATEX & BLÖCKEN) -->
+		<section class="screen page-view" id="screenEditor">
+			<div class="page-header-row">
+				<span class="page-icon-btn" id="edIcon">⚛️</span>
+				<input type="text" class="page-title-input" id="edTitle" value="Formelsammlung Physik">
+			</div>
+			<div class="page-breadcrumb-sub" id="edBreadcrumb">
+				<span>Universität</span> · <span>Physik</span> · <span>Semester 4</span>
+			</div>
+
+			<div class="block h2">1. Grundlegende Definitionen</div>
+			<div class="block" contenteditable="true">
+				Die kinetische Energie eines Körpers der Masse <em>m</em> und Geschwindigkeit <em>v</em> berechnet sich nach:
+			</div>
+
+			<!-- Formel gerendert mit echtem KaTeX -->
+			<div class="math-block" id="mathBlock1"></div>
+
+			<div class="block h2">2. Prüfungsvorbereitung</div>
+			<div class="todo-item" onclick="toggleTodo(this)">
+				<div class="todo-check checked"></div>
+				<span class="todo-text done">Kapitel 1–3 Definitionen wiederholen</span>
+			</div>
+			<div class="todo-item" onclick="toggleTodo(this)">
+				<div class="todo-check"></div>
+				<span class="todo-text">FSRS-Karteikarten durchgehen</span>
+			</div>
+			<div class="todo-item" onclick="toggleTodo(this)">
+				<div class="todo-check"></div>
+				<span class="todo-text">Altklausuren 2023 rechnen</span>
+			</div>
+		</section>
+
+		<!-- 4. KI-COACH SCREEN -->
+		<section class="screen" id="screenAI" style="height: 100%;">
+			<div style="display:flex; flex-direction:column; height:100%; justify-content:space-between;">
+				<div style="display:flex; flex-direction:column; gap:10px;">
+					<div style="background:var(--surface); border:1px solid var(--edge-soft); padding:12px 14px; border-radius:14px; font-size:13.5px; line-height:1.5;">
+						Hallo! Ich bin dein KI-Lerncoach. Frage mich zu deinen Vorlesungen oder lass uns Notizen zusammenfassen.
+					</div>
+					<div style="align-self:flex-end; background:var(--accent); color:#081018; font-weight:600; padding:10px 14px; border-radius:14px; font-size:13.5px;">
+						Erkläre mir kurz das Induktionsgesetz.
+					</div>
+					<div style="background:var(--surface); border:1px solid var(--edge-soft); padding:12px 14px; border-radius:14px; font-size:13.5px; line-height:1.5;" id="katexAiMsg">
+						Das <strong>Faradaysche Induktionsgesetz</strong> lautet:
+						<div class="math-block" id="mathAi"></div>
+					</div>
+				</div>
+				<div style="display:flex; gap:8px; padding:6px; background:var(--surface); border:1px solid var(--edge-soft); border-radius:var(--radius-pill); margin-top:12px;">
+					<input type="text" placeholder="Frag deinen Lerncoach..." style="flex:1; background:transparent; border:none; color:var(--text); padding-left:12px; outline:none; font-size:13.5px;">
+					<button style="width:30px; height:30px; border-radius:50%; background:var(--accent); color:#081018; border:none; font-weight:bold; cursor:pointer;">↑</button>
+				</div>
+			</div>
+		</section>
+
+	</main>
+
+	<!-- MOBILE EDITOR TOOLBAR (nur bei aktivem Editor) -->
+	<div id="mEditorBar" style="display:none">
+		<button class="ed-tool-btn" onclick="alert('H2 Überschrift')">H2</button>
+		<button class="ed-tool-btn" onclick="alert('Checkbox eingefügt')">☑ Todo</button>
+		<button class="ed-tool-btn" onclick="alert('Fett')"><b>B</b></button>
+		<button class="ed-tool-btn" onclick="alert('Kursiv')"><i>I</i></button>
+		<button class="ed-tool-btn" onclick="alert('Formel einfügen')">√x</button>
+		<button class="ed-tool-btn" onclick="alert('Dokumentenscan')">📷 Scan</button>
+	</div>
+
+	<!-- 4. NOTIZEN SHEET (SLIDE-UP NAVIGATOR) — ROOT FIX PROTOTYP -->
+	<div id="notesSheet">
+		<div class="sheet-handle-bar" onclick="toggleNotesSheet(false)">
+			<div class="sheet-handle"></div>
+		</div>
+		<div class="sheet-head">
+			<strong>Notizen</strong>
+			<button class="icon-btn" onclick="toggleNotesSheet(false)">
+				<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+			</button>
+		</div>
+
+		<div class="sheet-search">
+			<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+			<input type="text" placeholder="Notizen suchen...">
+		</div>
+
+		<div class="sheet-tabs">
+			<div class="ws-pill active">Alle Fächer</div>
+			<div class="ws-pill">🎓 Universität</div>
+			<div class="ws-pill">🏠 Privat</div>
+		</div>
+
+		<div class="sheet-tree">
+			<div class="tree-group">★ Favoriten</div>
+			<div class="tree-item" onclick="openNote('Formelsammlung Physik', '⚛️', 'Physik')">
+				<span class="t-ico">⚛️</span>
+				<span class="t-text">Formelsammlung Physik</span>
+				<span class="t-star">★</span>
+			</div>
+			<div class="tree-item" onclick="openNote('Englisch Vokabeln C1', '🇬🇧', 'Sprachen')">
+				<span class="t-ico">🇬🇧</span>
+				<span class="t-text">Englisch Vokabeln C1</span>
+				<span class="t-star">★</span>
+			</div>
+
+			<div class="tree-group">📁 Informatik</div>
+			<div class="tree-item" onclick="openNote('Algorithmen & Datenstrukturen', '💻', 'Informatik')">
+				<span class="t-ico">💻</span>
+				<span class="t-text">Algorithmen & Datenstrukturen</span>
+			</div>
+			<div class="tree-item" onclick="openNote('Datenbanksysteme SQL', '🗄️', 'Informatik')">
+				<span class="t-ico">🗄️</span>
+				<span class="t-text">Datenbanksysteme SQL</span>
+			</div>
+
+			<div class="tree-group">📁 Mathematik</div>
+			<div class="tree-item" onclick="openNote('Lineare Algebra Zusammenfassung', '📐', 'Mathematik')">
+				<span class="t-ico">📐</span>
+				<span class="t-text">Lineare Algebra Zusammenfassung</span>
+			</div>
+		</div>
+	</div>
+
+	<!-- 5. MEHR SHEET -->
+	<div id="moreSheet">
+		<div class="sheet-handle-bar" onclick="toggleMoreSheet(false)">
+			<div class="sheet-handle"></div>
+		</div>
+		<div class="sheet-head">
+			<strong>Mehr</strong>
+			<button class="icon-btn" onclick="toggleMoreSheet(false)">
+				<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+			</button>
+		</div>
+
+		<div class="more-grid">
+			<div class="drive-box">
+				<div class="drive-box-left">
+					<div class="drive-status-dot"></div>
+					<div>
+						<strong style="font-size: 13.5px;">Google Drive</strong>
+						<div style="font-size: 10.5px; color: var(--text3);">Synchronisiert</div>
+					</div>
+				</div>
+				<button class="pill-action-btn" onclick="alert('Drive synchronisiert!')">Sync</button>
+			</div>
+
+			<div class="more-tile" onclick="alert('Gemini Notebook')">
+				<span class="m-icon">🤖</span>
+				<strong>Gemini Notebook</strong>
+				<small>Quellen & Synthese</small>
+			</div>
+			<div class="more-tile" onclick="alert('Wissensgraph')">
+				<span class="m-icon">🕸️</span>
+				<strong>Wissensgraph</strong>
+				<small>Vernetzte Notizen</small>
+			</div>
+			<div class="more-tile" onclick="alert('Bibliothek')">
+				<span class="m-icon">📖</span>
+				<strong>Bibliothek</strong>
+				<small>PDFs & Dokumente</small>
+			</div>
+			<div class="more-tile" onclick="alert('Einstellungen')">
+				<span class="m-icon">⚙️</span>
+				<strong>Einstellungen</strong>
+				<small>Theme, KI, FSRS</small>
+			</div>
+		</div>
+	</div>
+
+	<!-- FLASHCARD STUDY OVERLAY -->
+	<div id="studyOverlay">
+		<div class="study-header">
+			<span class="study-deck-title" id="studyDeckTitle">Physik Formeln</span>
+			<button class="icon-btn" onclick="closeStudy()">
+				<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+			</button>
+		</div>
+
+		<div class="flashcard-stage" id="activeCard" onclick="revealCard()">
+			<div class="fc-type">Frage</div>
+			<div class="fc-front">Wie lautet die Formel für die kinetische Energie?</div>
+			<div class="fc-divider"></div>
+			<div class="fc-back" id="katexCardAnswer"></div>
+			<div class="fc-hint">Tippen zum Aufdecken</div>
+		</div>
+
+		<div class="grade-actions-grid">
+			<button class="grade-tile g1" onclick="gradeCard(1)">
+				<span>1 Nochmal</span>
+				<small>&lt;1m</small>
+			</button>
+			<button class="grade-tile g2" onclick="gradeCard(2)">
+				<span>2 Schwer</span>
+				<small>1d</small>
+			</button>
+			<button class="grade-tile g3" onclick="gradeCard(3)">
+				<span>3 Gut</span>
+				<small>3d</small>
+			</button>
+			<button class="grade-tile g4" onclick="gradeCard(4)">
+				<span>4 Einfach</span>
+				<small>7d</small>
+			</button>
+		</div>
+	</div>
+
+	<!-- BOTTOM NAVIGATION BAR (#mNav) -->
+	<nav id="mNav">
+		<button class="nav-btn" data-tab="learn" onclick="switchTab('learn')">
+			<svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="3"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+			<span>Lernen</span>
+			<span class="nav-badge">12</span>
+		</button>
+
+		<button class="nav-btn" data-tab="notes" onclick="switchTab('notes')">
+			<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+			<span>Notizen</span>
+		</button>
+
+		<button class="nav-btn home-btn active" data-tab="home" onclick="switchTab('home')">
+			<svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+			<span>Home</span>
+		</button>
+
+		<button class="nav-btn" data-tab="ai" onclick="switchTab('ai')">
+			<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+			<span>KI</span>
+		</button>
+
+		<button class="nav-btn" data-tab="more" onclick="switchTab('more')">
+			<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+			<span>Mehr</span>
+		</button>
+	</nav>
+
+</div>
+
+<div class="mode-info-pill">📱 Impala67 Mobile Testversion</div>
+
+<script>
+// KaTeX Formeln initial rendern
+function renderFormulas() {
+	if (window.katex) {
+		katex.render("E_{kin} = \\frac{1}{2} m v^2", document.getElementById("mathBlock1"), { displayMode: true });
+		katex.render("U_{ind} = -\\frac{d\\Phi}{dt}", document.getElementById("mathAi"), { displayMode: true });
+		katex.render("E_{kin} = \\frac{1}{2} m v^2", document.getElementById("katexCardAnswer"), { displayMode: true });
+	}
+}
+window.addEventListener("DOMContentLoaded", renderFormulas);
+setTimeout(renderFormulas, 200);
+
+let currentTab = 'home';
+
+function switchTab(tab) {
+	toggleMoreSheet(false);
+	
+	if (tab === 'notes') {
+		// Bug-Fix: Öffnet das Notizen-Sheet mit Notizen-Baum
+		toggleNotesSheet(true);
+		return;
+	}
+
+	toggleNotesSheet(false);
+	currentTab = tab;
+
+	document.querySelectorAll('.nav-btn').forEach(btn => {
+		btn.classList.toggle('active', btn.dataset.tab === tab);
+	});
+
+	document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+	document.getElementById('mEditorBar').style.display = 'none';
+	document.getElementById('btnTopBack').style.display = 'none';
+	document.getElementById('mTitle').style.display = 'block';
+
+	const title = document.getElementById('mTitle');
+	const topActions = document.getElementById('mTopActions');
+	topActions.style.display = 'flex';
+
+	if (tab === 'home') {
+		document.getElementById('screenHome').classList.add('active');
+		title.textContent = 'Impala';
+	} else if (tab === 'learn') {
+		document.getElementById('screenLearn').classList.add('active');
+		title.textContent = 'Lernen';
+	} else if (tab === 'ai') {
+		document.getElementById('screenAI').classList.add('active');
+		title.textContent = 'KI-Coach';
+	} else if (tab === 'more') {
+		toggleMoreSheet(true);
+	}
+}
+
+function toggleNotesSheet(open) {
+	document.getElementById('notesSheet').classList.toggle('open', open);
+}
+
+function toggleMoreSheet(open) {
+	document.getElementById('moreSheet').classList.toggle('open', open);
+}
+
+function openNote(title, icon, subject) {
+	toggleNotesSheet(false);
+	document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+	document.getElementById('screenEditor').classList.add('active');
+	
+	document.getElementById('edTitle').value = title;
+	document.getElementById('edIcon').textContent = icon || '📄';
+	document.getElementById('edBreadcrumb').innerHTML = `<span>Universität</span> · <span>${subject || 'Notizen'}</span> · <span>Semester 4</span>`;
+	
+	// Top-Bar für Editor: Ruhig, Titel verborgen (da im Dokument), sauberer Notizen-Zurück-Button
+	document.getElementById('mTitle').style.display = 'none';
+	document.getElementById('btnTopBack').style.display = 'inline-flex';
+	document.getElementById('mEditorBar').style.display = 'flex';
+
+	document.querySelectorAll('.nav-btn').forEach(btn => {
+		btn.classList.toggle('active', btn.dataset.tab === 'notes');
+	});
+}
+
+function goBackToNotes() {
+	toggleNotesSheet(true);
+}
+
+function toggleTodo(el) {
+	const chk = el.querySelector('.todo-check');
+	const txt = el.querySelector('.todo-text');
+	chk.classList.toggle('checked');
+	txt.classList.toggle('done');
+}
+
+function startStudy(deckName) {
+	const overlay = document.getElementById('studyOverlay');
+	document.getElementById('studyDeckTitle').textContent = deckName;
+	document.getElementById('activeCard').classList.remove('revealed');
+	overlay.classList.add('active');
+}
+
+function revealCard() {
+	document.getElementById('activeCard').classList.add('revealed');
+}
+
+function gradeCard(grade) {
+	document.getElementById('activeCard').classList.remove('revealed');
+	alert('Karte bewertet (' + grade + '). Nächste Karte geladen.');
+}
+
+function closeStudy() {
+	document.getElementById('studyOverlay').classList.remove('active');
+}
+
+function quickNew() {
+	openNote('Neue Notiz', '📝', 'Allgemein');
+}
+</script>
+</body>
+</html>

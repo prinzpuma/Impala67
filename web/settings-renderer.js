@@ -13,22 +13,33 @@ const button = (label, id, className = "") => '<button type="button"' + (id ? ' 
 const linkButton = (label, section, anchor) => '<button type="button" class="settings-link" data-settings-go="' + e(section) + '"' + (anchor ? ' data-settings-anchor-target="' + e(anchor) + '"' : "") + '>' + e(label) + UI.icon("chevron") + "</button>";
 const switchControl = (id, label, checked) => '<label class="settings-switch"><input id="' + e(id) + '" type="checkbox"' + (checked ? " checked" : "") + ' aria-label="' + e(label) + '"><span aria-hidden="true"></span></label>';
 
+const hasDriveClient = () => !!((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId);
+const driveSession = () => DRIVE.status?.() || { connected: !!DRIVE.isConnected?.(), needsLogin: false, email: null };
+
+function driveOverviewRow() {
+	const session = driveSession();
+	const description = session.connected
+		? (session.email ? "Verbunden als " + session.email : "Verbunden")
+		: session.needsLogin ? "Anmeldung abgelaufen" : "Nicht verbunden";
+	const tone = session.connected ? "ok" : session.needsLogin ? "warn" : "idle";
+	return UI.row({ id: "drive-overview-status", title: "Google Drive", description, leading: '<span class="settings-status-dot is-' + tone + '"></span>', trailing: linkButton("Öffnen", "sync", "drive") });
+}
+
 function renderOverview(vm) {
 	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
-	const driveConnected = !!(DRIVE.isConnected && DRIVE.isConnected());
 	const notionReady = !!(S.settings.notionToken || S.notionToken);
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const version = vm.version;
 	const statusRows = [
 		UI.row({ title: "Künstliche Intelligenz", description: aiReady ? S.settings.aiModel : "Noch kein Modell gewählt", leading: '<span class="settings-status-dot is-' + (aiReady ? "ok" : "idle") + '"></span>', trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
-		UI.row({ title: "Google Drive", description: driveConnected ? "Verbunden als " + (S.driveUserEmail || "Google-Konto") : S.driveUserEmail ? "Verbindung pausiert" : "Nicht verbunden", leading: '<span class="settings-status-dot is-' + (driveConnected ? "ok" : S.driveUserEmail ? "warn" : "idle") + '"></span>', trailing: linkButton("Öffnen", "sync", "drive") }),
+		driveOverviewRow(),
 		UI.row({ title: "Notion", description: notionReady ? (S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Bereit") : "Nicht eingerichtet", leading: '<span class="settings-status-dot is-' + (notionReady ? "ok" : "idle") + '"></span>', trailing: linkButton("Öffnen", "sync", "notion") }),
 		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt: " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: '<span class="settings-status-dot is-' + (lastBackup ? "ok" : "warn") + '"></span>', trailing: linkButton("Sichern", "data", "backup") }),
 		UI.row({ title: "Lokaler Speicher", description: "Wird berechnet …", leading: '<span class="settings-status-dot is-idle"></span>', trailing: '<span id="settingsStorageOverview" class="settings-value">—</span>' }),
 		UI.row({ title: "Impala67", description: "Installierbare Offline-App", leading: '<span class="settings-status-dot is-ok"></span>', trailing: '<span class="settings-value">v' + e(String(version).replace(/^v/i, "")) + "</span>" }),
 	].join("");
 	const quick = UI.actions([
-		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !S.driveUserEmail && !S.settings.driveClientId && !(window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) },
+		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !hasDriveClient() },
 		{ label: "Backup erstellen", id: "btnExport" },
 		{ label: "Updates prüfen", id: "btnCheckUpdate" },
 	], "settings-quick-actions");
@@ -114,11 +125,10 @@ function renderAi(vm) {
 }
 
 function driveContent() {
-	if (!S.driveUserEmail) S.driveUserEmail = localStorage.getItem("impala67_drive_email") || null;
-	const hasClient = !!((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId);
-	if (S.driveUserEmail && DRIVE.isConnected?.()) return UI.status("ok", "Verbunden", S.driveUserEmail, button("Jetzt synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
-	if (S.driveUserEmail && hasClient) return UI.status("warn", "Sync pausiert", S.driveUserEmail + " · bewusster Klick erforderlich", button("Erneuern & synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
-	if (hasClient) return UI.status("idle", "Nicht verbunden", "Google öffnet erst nach deinem Klick ein Anmeldefenster", button("Mit Google anmelden", "btnDriveLogin"));
+	const session = driveSession();
+	if (session.connected) return UI.status("ok", "Verbunden", session.email || "Google Drive", button("Jetzt synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
+	if (session.needsLogin && hasDriveClient()) return UI.status("warn", "Anmeldung abgelaufen", (session.email ? session.email + " · " : "") + "einmal synchronisieren, um sie zu erneuern", button("Erneuern & synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
+	if (hasDriveClient()) return UI.status("idle", "Nicht verbunden", "Google öffnet erst nach deinem Klick ein Anmeldefenster", button("Mit Google anmelden", "btnDriveLogin"));
 	return UI.status("warn", "Einrichtung erforderlich", "Hinterlege unter Erweitert eine Google Client-ID", "");
 }
 
@@ -134,7 +144,14 @@ function renderSync() {
 	const automation = UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
 		UI.row({ title: "Nach jeder Änderung synchronisieren", description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall", trailing: switchControl("inpDriveSyncAfterChange", "Nach jeder Änderung synchronisieren", driveSyncAfterChange(S.settings)) });
 	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" }) + UI.field("CORS-Proxy", "inpCorsProxy", S.settings.corsProxy || "", { explicit: true, placeholder: "Leer = corsproxy.io" });
-	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", driveContent(), { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Standard: alle 30 Minuten. Start, Rückkehr zur App und das Schließen bleiben zusätzliche Sicherungspunkte." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
+	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", '<div id="drive-connection-status">' + driveContent() + "</div>", { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Standard: alle 30 Minuten. Start, Rückkehr zur App und das Schließen bleiben zusätzliche Sicherungspunkte." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
+}
+
+export function refreshDriveStatusUi() {
+	const overview = document.getElementById("drive-overview-status");
+	if (overview) overview.outerHTML = driveOverviewRow();
+	const connection = document.getElementById("drive-connection-status");
+	if (connection) connection.innerHTML = driveContent();
 }
 
 function renderData(vm) {

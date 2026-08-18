@@ -13,7 +13,7 @@ import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
-import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage } from "./settings-renderer.js";
+import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi } from "./settings-renderer.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -352,11 +352,7 @@ export async function handleDriveLogin(t) {
 	const old = t.textContent;
 	t.textContent = "Verbinde…";
 	try {
-		const info = await DRIVE.login();
-		S.driveUserEmail = (info && info.email) ? info.email : "Google-Konto";
-		// E-Mail pro Gerät merken, damit die Sync-Sektion nach einem Neustart sofort
-		// „✅ Verbunden als …“ zeigt (nur Anzeige — Tokens verwaltet drive.js selbst).
-		try { localStorage.setItem("impala67_drive_email", S.driveUserEmail); } catch (err) { /* egal */ }
+		await DRIVE.login();
 		openSettings("sync");
 	} catch (err) {
 		U.toast("Anmeldung fehlgeschlagen: " + err.message, "error");
@@ -367,8 +363,6 @@ export async function handleDriveLogin(t) {
 
 export function handleDriveLogout() {
 	DRIVE.logout();
-	S.driveUserEmail = null;
-	try { localStorage.removeItem("impala67_drive_email"); } catch (err) { /* egal */ }
 	openSettings("sync");
 }
 
@@ -400,9 +394,7 @@ async function runDriveSync(t, prefix) {
 	try {
 		if (!DRIVE.isConnected()) {
 			t.textContent = prefix + "Google-Verbindung…";
-			const info = await DRIVE.renewFromUserGesture();
-			S.driveUserEmail = info?.email || S.driveUserEmail || localStorage.getItem("impala67_drive_email") || "Google-Konto";
-			localStorage.setItem("impala67_drive_email", S.driveUserEmail);
+			await DRIVE.renewFromUserGesture();
 		}
 		finishDriveSync(await DRIVE.sync((st) => { t.textContent = prefix + st; }));
 	} catch (err) {
@@ -996,6 +988,7 @@ export const SETTINGS = {
 	discardSettingsDraft,
 	updateSettingsSearch,
 	refreshSettingsDirtyState,
+	refreshDriveStatusUi,
 	hasUnsavedSettings,
 	SETTINGS_SECTIONS,
 	handleNotionSync,

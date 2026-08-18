@@ -157,9 +157,10 @@ export async function initApp() {
 		btn.classList.add("sync-" + (d.state || "idle"));
 		label.textContent = d.label || "Sync";
 		btn.title = d.detail || d.label || "Drive-Sync";
+		SETTINGS.refreshDriveStatusUi?.();
 	});
-	window.addEventListener("online", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Online · wartet" } })));
-	window.addEventListener("offline", () => window.dispatchEvent(new CustomEvent("impala67:sync-status", { detail: { state: "waiting", label: "Offline · wartet" } })));
+	window.addEventListener("online", () => DRIVE.refreshStatus());
+	window.addEventListener("offline", () => DRIVE.refreshStatus());
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);
