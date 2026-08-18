@@ -452,16 +452,56 @@ export const TOOLS = (() => {
 		return { ok: true };
 	}
 
+	const hasField = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key) && value[key] !== null && value[key] !== undefined;
+	const hasText = (value, ...keys) => keys.some((key) => hasField(value, key) && String(value[key]).trim());
+	function normalizeChangeOperation(raw) {
+		const op = raw && typeof raw === "object" ? { ...raw } : {};
+		const nestedCard = op.card && typeof op.card === "object" && !Array.isArray(op.card) ? op.card : null;
+		if (nestedCard) {
+			if (!hasField(op, "op") && hasField(nestedCard, "op")) op.op = nestedCard.op;
+			for (const key of ["front", "back", "new_front", "new_back", "deck", "to", "new_deck", "fronts", "query", "suspended", "limit"]) {
+				if (!hasField(op, key) && hasField(nestedCard, key)) op[key] = nestedCard[key];
+			}
+		}
+		return op;
+	}
+	function validateChangeOperation(op) {
+		const name = op?.op;
+		if (!name) return "op fehlt";
+		switch (name) {
+			case "page.create": return hasText(op, "title") ? "" : "title fehlt";
+			case "page.append":
+			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "title oder content fehlt";
+			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "title oder neuer Name fehlt";
+			case "page.move": return hasText(op, "title") ? "" : "title fehlt";
+			case "page.trash": return hasText(op, "title") ? "" : "title fehlt";
+			case "heft.append": return hasText(op, "title") && hasText(op, "text", "content") ? "" : "Hefttitel oder Text fehlt";
+			case "card.create": return Array.isArray(op.cards) ? (op.cards.length && op.cards.every((card) => hasText(card, "front") && hasField(card, "back") ? true : false) ? "" : "Karten brauchen front und back") : (hasText(op, "front") && hasField(op, "back") ? "" : "front oder back fehlt");
+			case "card.update": return hasText(op, "front", "query") && (hasField(op, "new_front") || hasField(op, "new_back") || hasField(op, "back") || hasField(op, "to")) ? "" : "Karte oder neue Werte fehlen";
+			case "card.move":
+				if (!hasText(op, "to")) return "Zielstapel fehlt";
+				return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
+			case "card.trash":
+			case "card.suspend": return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
+			case "card.reset": return hasText(op, "front") ? "" : "front fehlt";
+			case "deck.create": return hasText(op, "deck", "title") ? "" : "Stapelname fehlt";
+			case "deck.rename": return hasText(op, "deck") && hasText(op, "to") ? "" : "Stapel oder neuer Name fehlt";
+			case "deck.move": return hasText(op, "deck") && hasField(op, "to") ? "" : "Stapel oder Ziel fehlt";
+			case "deck.trash": return hasText(op, "deck") ? "" : "Stapel fehlt";
+			default: return "";
+		}
+	}
+
 	const OP_TO_TOOL = {
-		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content }],
-		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content }],
-		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content }],
+		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content ?? o.text ?? "" }],
+		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content ?? o.text }],
+		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text }],
 		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
 		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent }],
 		"page.trash": (o) => ["delete_page", { page_title: o.title }],
-		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text, heft_page: o.page }],
+		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text ?? o.content, heft_page: o.page }],
 		"card.create": (o) => [o.cards ? "create_flashcards" : "create_flashcard", o.cards ? { cards: o.cards, deck: o.deck, page_title: o.title } : { front: o.front, back: o.back, deck: o.deck, page_title: o.title }],
-		"card.update": (o) => ["update_flashcard", { front: o.front, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
+		"card.update": (o) => ["update_flashcard", { front: o.front || o.query, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
 		"card.move": (o) => ["move_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), from_deck: o.deck, query: o.query, to_deck: o.to, limit: o.limit }],
 		"card.trash": (o) => ["delete_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, limit: o.limit }],
 		"card.suspend": (o) => ["suspend_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, suspended: o.suspended, limit: o.limit }],
@@ -496,7 +536,7 @@ export const TOOLS = (() => {
 				}
 			}
 			case "change": {
-				const operations = Array.isArray(a.operations) ? a.operations : [];
+				const operations = Array.isArray(a.operations) ? a.operations.map(normalizeChangeOperation) : [];
 				if (!operations.length) return { error: "change: operations fehlt." };
 				if (operations.length > 100) return { error: "change: maximal 100 Operationen pro Aktion." };
 				const before = managedSnapshot(operations), results = [];
@@ -505,6 +545,11 @@ export const TOOLS = (() => {
 					if (!make) {
 						await undo(undoSet(before));
 						return { error: `change: unbekannte Operation an Position ${i + 1}: ${op.op || "(leer)"}. Nichts geändert.` };
+					}
+					const validation = validateChangeOperation(op);
+					if (validation) {
+						await undo(undoSet(before));
+						return { error: `Operation ${i + 1} (${op.op}) unvollständig: ${validation}. Nichts geändert.` };
 					}
 					const [tool, args] = make(op);
 					let result;
@@ -539,11 +584,13 @@ export const TOOLS = (() => {
 			case "append_to_page": {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				const content = String(a.content ?? "").trim();
+				if (!content) return { error: "append_to_page: content fehlt." };
 				// BUGFIX (15. Juli): Hefte rendern nur den Blob (Striche/Bilder/Texte) —
 				// Markdown in pg.content wäre unsichtbar. Deshalb auf sichtbare Text-Box umleiten.
-				if (pg.kind === "heft") return await run("write_to_heft", { page_title: a.page_title, text: a.content });
+				if (pg.kind === "heft") return await run("write_to_heft", { page_title: a.page_title, text: content });
 				await STATE.dispatch("pageUpdate", {
-					id: pg.id, patch: { content: (pg.content ? pg.content + "\n\n" : "") + a.content },
+					id: pg.id, patch: { content: (pg.content ? pg.content + "\n\n" : "") + content },
 				});
 				return { ok: true, title: pg.title };
 			}

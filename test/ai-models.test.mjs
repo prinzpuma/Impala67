@@ -114,6 +114,112 @@ test("Gemini-Modellnamen mit API-Präfix behalten Thinking und sichtbare Gedanke
 	assert.equal(message.reasoning, "Kurze Prüfung");
 });
 
+test("lokale Reasoning-Modelle können den Denkaufwand auf Aus stellen", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "LM Studio", base: "http://127.0.0.1:1234/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "google/gemma-4-12b-qat";
+	S.settings.thinkingEnabled = false;
+	S.thinkingCapabilities = Object.create(null);
+	let body;
+	globalThis.fetch = async (_url, init) => {
+		body = JSON.parse(init.body);
+		return response({ choices: [{ message: { role: "assistant", content: "OK" } }] });
+	};
+
+	await AI.chatOnce([{ role: "user", content: "Hallo" }]);
+	assert.equal(body.reasoning_effort, "none");
+});
+
+test("ein nicht unterstütztes Werkzeug-Schema fällt direkt auf eine Antwort ohne Werkzeuge zurück", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45679/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.thinkingEnabled = true;
+	const bodies = [];
+	globalThis.fetch = async (_url, init) => {
+		const body = JSON.parse(init.body);
+		bodies.push(body);
+		return body.tools
+			? response({ error: { message: "tool schema unsupported" } }, 400)
+			: response({ choices: [{ message: { role: "assistant", content: "OK" } }] });
+	};
+
+	const tool = { type: "function", function: { name: "inspect", description: "Liest Daten.", parameters: { type: "object", properties: {}, required: [] } } };
+	const message = await AI.chatOnce([{ role: "user", content: "Hallo" }], [tool]);
+	assert.equal(message.content, "OK");
+	assert.equal(bodies.length, 2);
+	assert.equal(bodies[1].tools, undefined);
+});
+
+test("ein SSE-Abbruch nach einem reinen Rollen-Chunk wird wiederholt", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45680/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	let calls = 0;
+	globalThis.fetch = async () => {
+		calls++;
+		if (calls === 1) {
+			const bytes = new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { role: "assistant" } }] })}\n\n`);
+			return { ok: true, status: 200, headers: { get: () => null }, body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.error(new TypeError("terminated")); } }) };
+		}
+		return streamResponse({ content: "OK" });
+	};
+
+	const message = await AI.chatOnce([{ role: "user", content: "Hallo" }], null, () => {});
+	assert.equal(message.content, "OK");
+	assert.equal(calls, 2);
+});
+
+test("die Einstellung für Werkzeuge schaltet zuerst nur den kleinen Freischalt-Schritt", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45681/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.alwaysSendTools = false;
+	S.settings.embedModel = "";
+	S.view = "home";
+	S.currentPageId = null;
+	S.sideChat = [];
+	S.sideChatId = "meta-tools-test";
+	S.pages = { p: { id: "p", title: "Eine Seite", content: "" } };
+	STATE.dispatch = async () => {};
+	let call = 0;
+	const bodies = [];
+	globalThis.fetch = async (_url, init) => {
+		bodies.push(JSON.parse(init.body));
+		call++;
+		if (call === 1) return streamResponse({ tool_calls: [{ index: 0, id: "call-tools", type: "function", function: { name: "request_tools", arguments: "{}" } }] });
+		if (call === 2) return streamResponse({ tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] });
+		return streamResponse({ content: "OK" });
+	};
+
+	await AI.agent("Welche Seiten gibt es?", "side");
+	assert.deepEqual(bodies[0].tools.map((tool) => tool.function.name), ["request_tools"]);
+	assert.ok(bodies[1].tools.some((tool) => tool.function.name === "inspect"));
+});
+
+test("große Textanhänge werden vor dem Senden begrenzt", async () => {
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45682/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "local-model";
+	S.settings.alwaysSendTools = true;
+	S.view = "home";
+	S.currentPageId = null;
+	S.sideChat = [];
+	S.sideChatId = "attachment-limit-test";
+	S.pendingAttachmentTarget = "side";
+	S.pendingTextFile = { name: "gross.txt", content: "x".repeat(50000), size: 50000 };
+	const bodies = [];
+	globalThis.fetch = async (_url, init) => {
+		bodies.push(JSON.parse(init.body));
+		return streamResponse({ content: "OK" });
+	};
+
+	await AI.agent("Fasse den Anhang kurz zusammen.", "side");
+	const serialized = JSON.stringify(bodies[0]);
+	assert.ok(serialized.length < 20000, `Anfrage ist noch ${serialized.length} Zeichen groß`);
+	assert.match(serialized, /Inhalt gekürzt/);
+});
+
 test("ein reiner Denkblock bleibt Gedankengang und wird nicht zur Antwort", async () => {
 	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45674/v1", key: "" }];
 	S.settings.aiProviderId = "local";

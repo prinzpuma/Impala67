@@ -62,6 +62,38 @@ test("Fehler rollen vorherige Operationen zurück", async () => {
 	assert.equal(Object.keys(S.pages).length, 0);
 });
 
+test("Seitenänderungen akzeptieren auch text als Schreibfeld und schreiben nie undefined", async () => {
+	reset();
+	await STATE.dispatch("pageCreate", { id: "p1", title: "Physik", parentId: null, content: "Start" });
+	const result = await TOOLS.run("change", { operations: [{ op: "page.append", title: "Physik", text: "Weiter" }] });
+	assert.equal(result.ok, true);
+	assert.equal(S.pages.p1.content, "Start\n\nWeiter");
+
+	const invalid = await TOOLS.run("change", { operations: [{ op: "page.append", title: "Physik" }] });
+	assert.match(invalid.error, /content fehlt/i);
+	assert.doesNotMatch(S.pages.p1.content, /undefined/);
+});
+
+test("Kartenänderungen akzeptieren Gemmas verschachtelte card-Schreibweise", async () => {
+	reset();
+	await STATE.dispatch("cardCreate", { id: "karte1", front: "Was ist Kraft?", back: "F = m · a", deck: "Standard" });
+	const result = await TOOLS.run("change", { operations: [{
+		card: { op: "card.update", front: "Was ist Kraft?", back: "F = m · a; Kraft ist Masse mal Beschleunigung." },
+	}] });
+	assert.equal(result.ok, true);
+	assert.equal(S.cards.karte1.back, "F = m · a; Kraft ist Masse mal Beschleunigung.");
+});
+
+test("Kartenänderungen dürfen die Auswahl über query angeben", async () => {
+	reset();
+	await STATE.dispatch("cardCreate", { id: "karte2", front: "Was ist Kraft?", back: "F = m · a", deck: "Standard" });
+	const result = await TOOLS.run("change", { operations: [{
+		op: "card.update", query: "Was ist Kraft?", new_back: "F = m · a; Masse mal Beschleunigung.",
+	}] });
+	assert.equal(result.ok, true);
+	assert.equal(S.cards.karte2.back, "F = m · a; Masse mal Beschleunigung.");
+});
+
 test("stales Undo überschreibt keine neueren Änderungen", async () => {
 	reset();
 	const result = await TOOLS.run("change", { operations: [{ op: "page.create", title: "Sicher", content: "v1" }] });

@@ -1,5 +1,13 @@
 "use strict";
 // util.js — kleine Helfer, keine Abhängigkeiten
+const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
+function withLoadTimeout(task, label) {
+	let timer = 0;
+	const timeout = new Promise((_, reject) => {
+		timer = setTimeout(() => reject(new Error(`Zusatzmodul konnte nicht innerhalb von ${Math.round(OPTIONAL_LOAD_TIMEOUT_MS / 1000)} Sekunden geladen werden: ${label}`)), OPTIONAL_LOAD_TIMEOUT_MS);
+	});
+	return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
+}
 export const U = {
 	uid: () => crypto.randomUUID(),
 
@@ -12,7 +20,7 @@ export const U = {
 			return Promise.resolve(true);
 		}
 		if (U._pendingLoads.has(src)) return U._pendingLoads.get(src);
-		const p = (async () => {
+		const p = withLoadTimeout((async () => {
 			const existing = document.querySelector(`script[src="${src}"]`);
 			if (!existing) {
 				const s = document.createElement("script");
@@ -42,7 +50,7 @@ export const U = {
 				}
 			}
 			return true;
-		})().catch((err) => {
+		})(), src).catch((err) => {
 			U._pendingLoads.delete(src);
 			throw err;
 		});
@@ -50,15 +58,18 @@ export const U = {
 		return p;
 	},
 	loadStyle(href) {
-		if (document.querySelector(`link[href="${href}"]`)) return Promise.resolve(true);
-		return (async () => {
-			const l = document.createElement("link");
-			l.rel = "stylesheet";
-			l.href = href;
-			l.crossOrigin = "anonymous";
-			document.head.appendChild(l);
+		const existing = document.querySelector(`link[href="${href}"]`);
+		if (existing?.dataset.loaded === "1") return Promise.resolve(true);
+		return withLoadTimeout((async () => {
+			const l = existing || document.createElement("link");
+			if (!existing) {
+				l.rel = "stylesheet";
+				l.href = href;
+				l.crossOrigin = "anonymous";
+				document.head.appendChild(l);
+			}
 			await new Promise((resolve, reject) => {
-				l.onload = () => resolve();
+				l.onload = () => { l.dataset.loaded = "1"; resolve(); };
 				l.onerror = () => reject(new Error("Netzwerkfehler beim Laden von " + href));
 			});
 			if (typeof caches !== "undefined") {
@@ -73,7 +84,7 @@ export const U = {
 				}
 			}
 			return true;
-		})();
+		})(), href);
 	},
 
 	// Fehlertolerante Ablage für reine Geräte-Einstellungen.
