@@ -266,7 +266,7 @@ export const MOBILE = (() => {
 		const moreOpen  = body.classList.contains("mmore-open");
 		const notesOpen = body.classList.contains("mnav-open");
 		const active = moreOpen ? "more" : notesOpen ? "notes" : panelOpen ? "ai" :
-			(S.view === "anki" || studying) ? "learn" : "home";
+			(S.view === "anki" || studying) ? "learn" : (S.view === "page" ? "notes" : "home");
 
 		document.querySelectorAll("#mNav [data-m]").forEach((b) => b.classList.toggle("on", b.dataset.m === active));
 
@@ -277,7 +277,8 @@ export const MOBILE = (() => {
 			else if (notesOpen) title.textContent = "Notizen";
 			else if (panelOpen) title.textContent = "KI";
 			else if (studying)  title.textContent = "Lernen";
-			else if (S.view === "anki") title.textContent = "Karten";
+			else if (S.view === "anki") title.textContent = "Lernen";
+			else if (S.view === "page") title.textContent = (S.pages[S.currentPageId] && S.pages[S.currentPageId].title) || "Notiz";
 			else title.textContent = "Impala";
 		}
 		const badge = document.getElementById("mDue");

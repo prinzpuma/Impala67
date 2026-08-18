@@ -329,7 +329,8 @@ const cssEsc = (s) => (typeof CSS !== "undefined" && typeof CSS.escape === "func
 function syncActiveSidebarRow(tree) {
 	if (!tree || !tree.firstElementChild) return false;
 	const currentMode = tree.dataset.sbmode || "";
-	const targetMode = S.sidebarMode === "chats" ? "chats" : (S.view === "anki" ? "anki" : "files");
+	const isPhone = document.body.classList.contains("mobile-ui");
+	const targetMode = !isPhone && S.sidebarMode === "chats" ? "chats" : (!isPhone && S.view === "anki" ? "anki" : "files");
 	if (currentMode !== targetMode) return false;
 
 	if (targetMode === "chats") {
@@ -406,14 +407,15 @@ function renderSidebar() {
 		return;
 	}
 
-	const mode = S.sidebarMode === "chats" ? "chats" : (S.view === "anki" ? "anki" : "files");
-	if (S.sidebarMode === "chats") {
+	const isPhone = document.body.classList.contains("mobile-ui");
+	const mode = !isPhone && S.sidebarMode === "chats" ? "chats" : (!isPhone && S.view === "anki" ? "anki" : "files");
+	if (!isPhone && S.sidebarMode === "chats") {
 		setHtmlIfChanged(tree, chatListHtml());
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;
 		return;
 	}
-	if (S.view === "anki") {
+	if (!isPhone && S.view === "anki") {
 		setHtmlIfChanged(tree, deckTreeHtml());
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;
