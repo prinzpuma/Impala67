@@ -1,5 +1,6 @@
 "use strict";
 import { APP } from "./app.js";
+import { MOBILE_VIEW } from "./mobile-view.js";
 import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
@@ -17,15 +18,6 @@ export const MOBILE = (() => {
 	const mq = APP.PLATFORM.phoneQuery;
 	const body = document.body;
 	let started = false, wired = false;
-
-	// Minimalistische SVG-Icons
-	const IC = {
-		learn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`,
-		notes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
-		home: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>`,
-		ai: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-		more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`,
-	};
 
 	const dueCount = () => {
 		try {
@@ -91,66 +83,19 @@ export const MOBILE = (() => {
 	function mount() {
 		if (document.getElementById("mNav")) return;
 
-		// Top-Bar mit SVG-Icons & Breadcrumb/Back-Button
-		const top = document.createElement("header");
-		top.id = "mTop";
-		top.innerHTML =
-			'<div class="mTop-left">' +
-				'<button type="button" class="top-back-btn" id="btnTopBack" data-m="back" style="display:none">' +
-					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
-					'<span>Notizen</span>' +
-				'</button>' +
-				'<span id="mTitle">Impala</span>' +
-				'<small id="mSub"></small>' +
-			'</div>' +
-			'<div class="mTop-right">' +
-				'<button type="button" class="icon-btn" data-m="search" title="Suche" aria-label="Suche">' +
-					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>' +
-				'</button>' +
-				'<button type="button" class="pill-action-btn" data-m="new"><span>＋ Neu</span></button>' +
-			'</div>';
-
-		// Bottom Nav — 5 Tabs mit Icons
-		const nav = document.createElement("nav");
-		nav.id = "mNav";
-		nav.innerHTML = [
-			["learn", "Lernen",  IC.learn, ""],
-			["notes", "Notizen", IC.notes, ""],
-			["home",  "Home",    IC.home,  "mHome"],
-			["ai",    "KI",      IC.ai,    ""],
-			["more",  "Mehr",    IC.more,  ""],
-		].map(([id, label, icon, cls]) =>
-			`<button type="button" data-m="${id}"${cls ? ` class="${cls}"` : ""}>` +
-			icon +
-			`<span>${label}</span>` +
-			(id === "learn" ? '<i id="mDue" hidden></i>' : "") +
-			"</button>"
-		).join("");
+		// Die Struktur kommt aus der ausgelagerten Preview-Ansicht; IDs und data-Attribute
+		// bleiben absichtlich dieselben, damit Navigation und App-Aktionen kanonisch bleiben.
+		const holder = document.createElement("div");
+		holder.innerHTML = MOBILE_VIEW.shellHtml();
+		const nodes = [...holder.children];
 
 		// Bibliothek-Kopf für Sidebar (Notizen-Browser)
 		const libHead = document.createElement("div");
 		libHead.id = "mLibHead";
 		libHead.innerHTML = '<strong>Notizen</strong><button type="button" data-m="close" aria-label="Schließen">✕</button>';
 
-		// Mehr-Sheet (separates Overlay — keine doppelten Nav-Tabs)
-		const moreSheet = document.createElement("div");
-		moreSheet.id = "mMoreSheet";
-		moreSheet.innerHTML =
-			'<div class="mSheet-head"><strong>Mehr</strong><button type="button" data-m="closemore">✕</button></div>' +
-			'<div class="mSheet-grid">' +
-			[
-				["notebooklm", "🤖", "Gemini"],
-				["graph",      "🕸️", "Wissensgraph"],
-				["library",   "📖", "Bibliothek"],
-				["trash",     "🗑️", "Papierkorb"],
-				["settings",  "⚙️", "Einstellungen"],
-			].map(([a, ic, label]) =>
-				`<button type="button" data-maction="${a}"><span class="mBtn-ic">${ic}</span><span>${label}</span></button>`
-			).join("") +
-			'</div>';
-
 		document.getElementById("sidebar")?.prepend(libHead);
-		body.append(top, nav, moreSheet);
+		if (nodes.length) body.append(...nodes);
 		// Listener genau EINMAL pro Sitzung: mount() läuft bei jedem Wechsel zurück in die
 		// Handy-Breite erneut und hängte sonst jedes Mal ein weiteres Klick-/Wisch-Paar an
 		// (jeder Tipp wurde danach mehrfach verarbeitet). Beide Handler prüfen selbst, ob
@@ -202,7 +147,7 @@ export const MOBILE = (() => {
 		// Mehr-Sheet Feature-Buttons
 		if (mact) {
 			body.classList.remove("mmore-open");
-			const map = { notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
+			const map = { drive: "#btnDriveSync", notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
 			document.querySelector(map[mact])?.click();
 			updateUI();
 			return;
@@ -322,6 +267,10 @@ export const MOBILE = (() => {
 
 	function apply(on) {
 		body.classList.toggle("mobile-ui", on);
+		// renderHome entscheidet anhand derselben Klasse, ob die Preview-Struktur oder
+		// der Desktop-Aufbau erzeugt wird. Das ist beim Boot und bei einem Resize nötig:
+		// der erste allgemeine Render läuft bewusst vor MOBILE.init().
+		RENDER.renderMain();
 		if (on) { mount(); updateUI(); return; }
 		body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study");
 		unmount();

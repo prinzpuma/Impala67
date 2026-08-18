@@ -170,21 +170,6 @@ body.mobile-ui #mNav button svg {
 body.mobile-ui #mNav button.on {
 	color: var(--accent);
 }
-/* Home-Button: größer, pill-förmig, farbiger Akzent */
-body.mobile-ui #mNav .mHome {
-	padding: 2px 4px 4px;
-}
-body.mobile-ui #mNav .mHome svg {
-	width: 27px;
-	height: 27px;
-	background: var(--accent);
-	color: var(--on-accent);
-	border-radius: var(--radius-lg);
-	padding: 3.5px;
-	box-sizing: border-box;
-}
-body.mobile-ui #mNav .mHome.on { color: var(--accent) }
-
 /* Fälligkeits-Badge */
 body.mobile-ui #mDue {
 	position: absolute;
@@ -314,65 +299,6 @@ body.mobile-ui .mSheet-head button {
 	font-size: 15px;
 	border: none;
 }
-body.mobile-ui .mSheet-grid {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 10px;
-}
-body.mobile-ui .mSheet-grid button {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 6px;
-	min-height: 86px;
-	border-radius: var(--radius-lg);
-	background: var(--surface);
-	border: 1px solid var(--edge-soft);
-	color: var(--text);
-	font-size: var(--text-xs);
-	font-weight: 700;
-	transition: background var(--motion-fast), transform .1s;
-}
-body.mobile-ui .mSheet-grid button:active { background: var(--surface-hover-strong); transform: scale(0.96); }
-body.mobile-ui .mBtn-ic {
-	font-size: 28px;
-	line-height: 1;
-}
-
-/* ============================================================
-   HOME SCREEN — Modern Mini-Cards & Hero Card
-   ============================================================ */
-body.mobile-ui .home-wrap {
-	padding: 12px 14px 24px;
-	max-width: 600px;
-	margin: 0 auto;
-}
-body.mobile-ui .home-today {
-	display: grid !important;
-	grid-template-columns: repeat(3, 1fr) !important;
-	gap: 8px !important;
-	margin: 12px 0 16px !important;
-}
-body.mobile-ui .home-pill {
-	display: flex !important;
-	flex: none !important;
-	width: 100% !important;
-	flex-direction: column !important;
-	align-items: center !important;
-	text-align: center !important;
-	gap: 4px !important;
-	padding: 10px 6px !important;
-	border-radius: var(--radius-md) !important;
-	background: var(--surface) !important;
-	border: 1px solid var(--edge-soft) !important;
-	transition: background 0.12s, transform 0.1s !important;
-}
-body.mobile-ui .home-pill:active { background: var(--surface-active) !important; transform: scale(0.97) !important; }
-body.mobile-ui .home-pill-ico { font-size: 18px !important; margin-bottom: 2px !important; }
-body.mobile-ui .home-pill-body b { font-size: 12px !important; font-weight: 750 !important; color: #fff !important; display: block !important; }
-body.mobile-ui .home-pill-body small { font-size: 10px !important; color: var(--text3) !important; display: block !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; max-width: 90px !important; }
-
 body.mobile-ui .home-continue {
 	background: linear-gradient(135deg, rgba(111, 195, 255, 0.10), rgba(255, 255, 255, 0.02));
 	border: 1px solid rgba(111, 195, 255, 0.22);
@@ -392,14 +318,6 @@ body.mobile-ui .home-continue .recent-copy b { font-size: 14.5px; font-weight: 7
 body.mobile-ui .home-continue .recent-copy small { font-size: 11.5px; color: var(--accent); }
 body.mobile-ui .home-continue .recent-arrow { color: var(--accent); font-size: 18px; font-weight: bold; }
 
-body.mobile-ui .home-sec h2 {
-	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--text3);
-	font-weight: 750;
-	margin: 18px 0 8px;
-}
 body.mobile-ui .home-list-row {
 	display: flex;
 	align-items: center;
@@ -691,3 +609,276 @@ body.mobile-ui.m-study #app { padding: env(safe-area-inset-top) 0 env(safe-area-
 body.mobile-ui.m-typing #app,
 body.mobile-ui.m-typing:not(.panel-collapsed) #panel { padding-bottom: env(safe-area-inset-bottom) }
 body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px }
+
+/* ============================================================
+   PREVIEW-DESIGN — produktive Mobile-Ansicht
+   Die Preview-Struktur lebt in mobile-view.js; diese Regeln sind die
+   gemeinsame Phone-Darstellung für echte App-Daten und echte Aktionen.
+   ============================================================ */
+body.mobile-ui #mNav .nav-btn {
+	min-height: 48px;
+}
+body.mobile-ui #mNav .nav-btn.home-btn {
+	padding: 2px 4px 4px;
+}
+body.mobile-ui #mNav .nav-btn.home-btn svg {
+	width: 27px;
+	height: 27px;
+	padding: 3.5px;
+	box-sizing: border-box;
+	background: var(--accent);
+	color: var(--on-accent);
+	border-radius: var(--radius-lg);
+}
+
+body.mobile-ui #main > .mobile-home-preview {
+	max-width: 414px;
+	margin: 0 auto;
+	padding: 16px 16px 24px;
+	animation: mobilePreviewFade .16s ease-out;
+}
+body.mobile-ui .mobile-home-preview .greet-wrap {
+	align-items: flex-start;
+	margin: 2px 0 16px;
+}
+body.mobile-ui .mobile-home-preview .greet-wrap h1 {
+	font-size: 24px;
+	font-weight: 800;
+	line-height: 1.12;
+	letter-spacing: -.03em;
+	margin: 0;
+}
+body.mobile-ui .mobile-home-preview .date-pill {
+	display: inline-block;
+	margin-top: 5px;
+	font-size: 11.5px;
+	color: var(--text3);
+	font-weight: 600;
+}
+body.mobile-ui .mobile-home-preview .home-customize {
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	color: var(--text3);
+	font-size: 14px;
+}
+body.mobile-ui .mobile-home-preview .stat-pills-row {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+	margin-bottom: 14px;
+}
+body.mobile-ui .mobile-home-preview .stat-mini-card {
+	min-width: 0;
+	padding: 10px 6px;
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+}
+body.mobile-ui .mobile-home-preview .stat-mini-card strong {
+	display: block;
+	font-size: 15px;
+	font-weight: 800;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+body.mobile-ui .mobile-home-preview .stat-mini-card small {
+	display: block;
+	margin-top: 3px;
+	font-size: 10px;
+	color: var(--text3);
+	font-weight: 600;
+	text-transform: uppercase;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-card {
+	width: 100%;
+	margin-bottom: 18px;
+	text-align: left;
+	background: linear-gradient(135deg, rgba(111, 195, 255, .10), rgba(255, 255, 255, .02));
+	border: 1px solid rgba(111, 195, 255, .22);
+	border-radius: var(--radius-lg);
+	padding: 16px 18px;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-card.is-empty {
+	cursor: default;
+	opacity: .82;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-left {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 2px;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-left strong {
+	font-size: 16px;
+	font-weight: 750;
+	color: var(--text);
+	letter-spacing: -.01em;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-left small {
+	font-size: 12px;
+	color: var(--accent);
+	font-weight: 500;
+}
+body.mobile-ui .mobile-home-preview .hero-focus-btn {
+	flex: 0 0 auto;
+	padding: 8px 14px;
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	color: var(--on-accent);
+	font-weight: 750;
+	font-size: 12.5px;
+}
+body.mobile-ui .mobile-home-preview .mobile-continue {
+	margin-bottom: 18px;
+}
+body.mobile-ui .mobile-home-preview .mobile-recent h2 {
+	margin: 18px 0 8px;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: .08em;
+	color: var(--text3);
+	font-weight: 750;
+}
+body.mobile-ui .mobile-home-preview .mobile-item-list {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+body.mobile-ui .mobile-home-preview .item-row {
+	width: 100%;
+	min-width: 0;
+	margin: 0;
+	padding: 12px 14px;
+	text-align: left;
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	border-radius: var(--radius-md);
+}
+body.mobile-ui .mobile-home-preview .item-row .ico {
+	flex: 0 0 24px;
+	font-size: 19px;
+}
+body.mobile-ui .mobile-home-preview .item-row .info {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 2px;
+}
+body.mobile-ui .mobile-home-preview .item-row .info strong {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+body.mobile-ui .mobile-home-preview .item-row .info small {
+	font-size: 11.5px;
+	color: var(--text3);
+}
+body.mobile-ui .mobile-home-preview .item-arrow {
+	flex: 0 0 auto;
+	color: var(--text3);
+	font-size: 20px;
+	line-height: 1;
+}
+body.mobile-ui .mobile-home-preview .mobile-home-extra {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 18px;
+}
+
+body.mobile-ui #mMoreSheet .drive-sync-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px;
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+}
+body.mobile-ui #mMoreSheet .drive-sync-left {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+body.mobile-ui #mMoreSheet .drive-sync-left > div {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 2px;
+}
+body.mobile-ui #mMoreSheet .drive-sync-left strong {
+	font-size: 14px;
+	font-weight: 700;
+}
+body.mobile-ui #mMoreSheet .drive-sync-left small {
+	font-size: 11px;
+	color: var(--text3);
+}
+body.mobile-ui #mMoreSheet .drive-dot {
+	width: 9px;
+	height: 9px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 0 0 4px var(--accent-soft);
+}
+body.mobile-ui #mMoreSheet .section-label {
+	margin: 2px 0 -6px;
+}
+body.mobile-ui #mMoreSheet .more-dashboard-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	overflow: auto;
+	padding-bottom: 8px;
+}
+body.mobile-ui #mMoreSheet .more-card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	min-height: 94px;
+	padding: 14px;
+	text-align: left;
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	border: 1px solid var(--edge-soft);
+	color: var(--text);
+	transition: background .12s, transform .1s;
+}
+body.mobile-ui #mMoreSheet .more-card:active {
+	background: var(--surface-active);
+	transform: scale(.97);
+}
+body.mobile-ui #mMoreSheet .more-card .m-ico {
+	margin-bottom: 9px;
+	font-size: 24px;
+	line-height: 1;
+}
+body.mobile-ui #mMoreSheet .more-card strong {
+	font-size: 13.5px;
+	font-weight: 700;
+}
+body.mobile-ui #mMoreSheet .more-card small {
+	margin-top: 3px;
+	font-size: 10.5px;
+	color: var(--text3);
+}
+
+@keyframes mobilePreviewFade {
+	from { opacity: .4; }
+	to { opacity: 1; }
+}

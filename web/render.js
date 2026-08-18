@@ -3,6 +3,7 @@ import { CHATS } from "./chats.js";
 import { COLLAPSE } from "./collapse.js";
 import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
+import { MOBILE_VIEW } from "./mobile-view.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
@@ -1119,15 +1120,43 @@ function renderHome(main) {
 	};
 	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
 	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
-	const sectionsHtml = SETTINGS.homeLayout().filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
-	const homeHtml = '<div class="home home-v2 home-slim" data-key="home">' +
+	const mobileLayout = SETTINGS.homeLayout();
+	const sectionsHtml = mobileLayout.filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
+	const mobileOn = new Set(mobileLayout.filter((e) => e.on).map((e) => e.id));
+	const mobileExtraHtml = mobileLayout
+		.filter((e) => e.on && !["today", "continue", "recent"].includes(e.id))
+		.map((e) => SECTION_HTML[e.id] || "")
+		.join("");
+	const mobileRecent = recent.slice(0, 3).map((pg) => ({
+		id: pg.id,
+		icon: pageIconLabel(pg),
+		title: pg.title,
+		meta: U.fmtDate(pg.updated),
+	}));
+	const mobileHomeHtml = document.body.classList.contains("mobile-ui")
+		? MOBILE_VIEW.homeHtml({
+			greeting,
+			homeName,
+			dateLine,
+			streakDays: lz.streakDays,
+			todayMinutes: Math.round((lz.todaySeconds || 0) / 60),
+			due,
+			showStats: mobileOn.has("today"),
+			showFocus: mobileOn.has("today"),
+			showRecent: mobileOn.has("recent"),
+			recent: mobileRecent,
+			continueHtml: mobileOn.has("continue") ? continueBlock : "",
+			extraHtml: mobileExtraHtml,
+		})
+		: "";
+	const homeHtml = mobileHomeHtml || ('<div class="home home-v2 home-slim" data-key="home">' +
 		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
 			`<span class="home-chip">📄 <b>${pages.length}</b> Seiten</span><span class="home-chip">🃏 <b>${cardCount}</b> Karten</span><span class="home-chip">✦ <b>${chats.length}</b> Chats</span>` +
 			`<span class="home-chip${lz.goalPct < 100 ? " warn" : ""}">🎯 Wochenziel <b>${lz.goalPct} %</b></span>` +
 		'</div></div><button class="home-customize" data-set="home" title="Homeseite anpassen (Bereiche & Begrüßung)">⚙</button></header>' +
 		conflictBanner +
 		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
-		sectionsHtml + "</div>";
+		sectionsHtml + "</div>");
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
 	// dadurch von allein erhalten (der zentrale Scroll-Anker unten greift nur noch,

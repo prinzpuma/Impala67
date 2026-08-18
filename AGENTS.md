@@ -6,12 +6,13 @@
 - Die App ist local-first: fachliche Daten liegen in IndexedDB; Google Drive synchronisiert optional über `appDataFolder`.
 - Es gibt keinen Desktop-Wrapper und keine serverseitige Anwendung. Neue Funktionen müssen in aktuellen Browsern und als installierte PWA funktionieren.
 - Die App nutzt native ES-Module ohne Bundler. Bewahre diesen Ansatz, außer eine Aufgabe fordert ausdrücklich eine Baukette.
-- bugs sollen an ihrer wurzel gelöst warden. ich will nicht dass an verschiedenen stellen im code das gleiche behandelt wird
+- Bugs sollen an der Wurzel gelöst werden. Ich will nicht, dass dieselbe Regel an verschiedenen Stellen im Code behandelt wird.
 - sauberen code schreiben, der state of the art code prinzipien verwendet, um das project nicht aufzublähen und es perfekt für ein vibecoding project zu machen
 
 ## Wichtige Bereiche
 
 - Einstieg und Start: `web/index.html`, `web/main.js`, `web/boot.js`
+- Mobile UI: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
 - Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`
 - Offline und Updates: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - Veröffentlichung: `.github/workflows/release.yml`

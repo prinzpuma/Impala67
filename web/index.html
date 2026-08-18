@@ -56,7 +56,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css?build=67">
-<link rel="stylesheet" href="mobile.css?build=11">
+<link rel="stylesheet" href="mobile.css?build=12">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#05070d">
@@ -243,13 +243,13 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=172"></script>
+<script type="module" src="main.js?build=173"></script>
 <script>
 // Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 	// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
-	navigator.serviceWorker.register("service-worker.js?build=69", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=70", { updateViaCache: "none" })
 		.then((reg) => reg.update().catch(() => {}))
 		.catch((e) => console.warn("Service-Worker:", e));
 }
