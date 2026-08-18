@@ -349,27 +349,29 @@ body.mobile-ui .home-wrap {
 	margin: 0 auto;
 }
 body.mobile-ui .home-today {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 8px;
-	margin: 12px 0 16px;
+	display: grid !important;
+	grid-template-columns: repeat(3, 1fr) !important;
+	gap: 8px !important;
+	margin: 12px 0 16px !important;
 }
 body.mobile-ui .home-pill {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	text-align: center;
-	gap: 4px;
-	padding: 10px 6px;
-	border-radius: var(--radius-md);
-	background: var(--surface);
-	border: 1px solid var(--edge-soft);
-	transition: background 0.12s, transform 0.1s;
+	display: flex !important;
+	flex: none !important;
+	width: 100% !important;
+	flex-direction: column !important;
+	align-items: center !important;
+	text-align: center !important;
+	gap: 4px !important;
+	padding: 10px 6px !important;
+	border-radius: var(--radius-md) !important;
+	background: var(--surface) !important;
+	border: 1px solid var(--edge-soft) !important;
+	transition: background 0.12s, transform 0.1s !important;
 }
-body.mobile-ui .home-pill:active { background: var(--surface-active); transform: scale(0.97); }
-body.mobile-ui .home-pill-ico { font-size: 18px; margin-bottom: 2px; }
-body.mobile-ui .home-pill-body b { font-size: 12px; font-weight: 750; color: #fff; display: block; }
-body.mobile-ui .home-pill-body small { font-size: 10px; color: var(--text3); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px; }
+body.mobile-ui .home-pill:active { background: var(--surface-active) !important; transform: scale(0.97) !important; }
+body.mobile-ui .home-pill-ico { font-size: 18px !important; margin-bottom: 2px !important; }
+body.mobile-ui .home-pill-body b { font-size: 12px !important; font-weight: 750 !important; color: #fff !important; display: block !important; }
+body.mobile-ui .home-pill-body small { font-size: 10px !important; color: var(--text3) !important; display: block !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; max-width: 90px !important; }
 
 body.mobile-ui .home-continue {
 	background: linear-gradient(135deg, rgba(111, 195, 255, 0.10), rgba(255, 255, 255, 0.02));
@@ -415,7 +417,7 @@ body.mobile-ui .home-list-row {
 body.mobile-ui .home-list-row:active { background: var(--surface-active); transform: scale(0.985); }
 body.mobile-ui .home-list-row .recent-icon { font-size: 18px; }
 body.mobile-ui .home-list-row b { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body.mobile-ui .home-list-row small { font-size: 11.5px; color: var(--text3); margin-right: 4px; }
+body.mobile-ui .home-list-row small { display: inline-block !important; font-size: 11.5px; color: var(--text3); margin-right: 4px; }
 body.mobile-ui .home-list-row i { color: var(--text3); font-style: normal; }
 
 /* ============================================================
