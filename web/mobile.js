@@ -91,14 +91,23 @@ export const MOBILE = (() => {
 	function mount() {
 		if (document.getElementById("mNav")) return;
 
-		// Top-Bar
+		// Top-Bar mit SVG-Icons & Breadcrumb/Back-Button
 		const top = document.createElement("header");
 		top.id = "mTop";
 		top.innerHTML =
-			'<div class="mTop-left"><span id="mTitle">Impala</span><small id="mSub"></small></div>' +
+			'<div class="mTop-left">' +
+				'<button type="button" class="top-back-btn" id="btnTopBack" data-m="back" style="display:none">' +
+					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
+					'<span>Notizen</span>' +
+				'</button>' +
+				'<span id="mTitle">Impala</span>' +
+				'<small id="mSub"></small>' +
+			'</div>' +
 			'<div class="mTop-right">' +
-				'<button type="button" data-m="search">Suche</button>' +
-				'<button type="button" class="mPrimary" data-m="new">Neu</button>' +
+				'<button type="button" class="icon-btn" data-m="search" title="Suche" aria-label="Suche">' +
+					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>' +
+				'</button>' +
+				'<button type="button" class="pill-action-btn" data-m="new"><span>＋ Neu</span></button>' +
 			'</div>';
 
 		// Bottom Nav — 5 Tabs mit Icons
@@ -206,6 +215,11 @@ export const MOBILE = (() => {
 			return;
 		}
 
+		if (act === "back") {
+			body.classList.remove("mmore-open");
+			body.classList.add("mnav-open");
+			updateUI(); return;
+		}
 		if (act === "close")     { body.classList.remove("mnav-open");  updateUI(); return; }
 		if (act === "closemore") { body.classList.remove("mmore-open"); updateUI(); return; }
 
@@ -270,16 +284,24 @@ export const MOBILE = (() => {
 
 		document.querySelectorAll("#mNav [data-m]").forEach((b) => b.classList.toggle("on", b.dataset.m === active));
 
+		const btnBack = document.getElementById("btnTopBack");
+		const isNoteOpen = S.view === "page" && !notesOpen && !moreOpen;
+		if (btnBack) btnBack.style.display = isNoteOpen ? "inline-flex" : "none";
+
 		const title = document.getElementById("mTitle");
 		const sub   = document.getElementById("mSub");
 		if (title) {
-			if (moreOpen)       title.textContent = "Mehr";
-			else if (notesOpen) title.textContent = "Notizen";
-			else if (panelOpen) title.textContent = "KI";
-			else if (studying)  title.textContent = "Lernen";
-			else if (S.view === "anki") title.textContent = "Lernen";
-			else if (S.view === "page") title.textContent = (S.pages[S.currentPageId] && S.pages[S.currentPageId].title) || "Notiz";
-			else title.textContent = "Impala";
+			if (isNoteOpen) {
+				title.style.display = "none";
+			} else {
+				title.style.display = "block";
+				if (moreOpen)       title.textContent = "Mehr";
+				else if (notesOpen) title.textContent = "Notizen";
+				else if (panelOpen) title.textContent = "KI";
+				else if (studying)  title.textContent = "Lernen";
+				else if (S.view === "anki") title.textContent = "Lernen";
+				else title.textContent = "Impala";
+			}
 		}
 		const badge = document.getElementById("mDue");
 		const n = (badge || (sub && active === "learn")) ? dueCount() : 0;
