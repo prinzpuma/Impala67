@@ -178,7 +178,7 @@ test("AI-Proxy nutzt den bestehenden Sync-Token und gibt den Groq-Key nicht an d
 		const responseBody = await response.text();
 		assert.deepEqual(JSON.parse(responseBody), { choices: [{ message: { role: "assistant", content: "Hallo" } }] });
 		assert.equal(upstreamRequest.url, "https://api.groq.com/openai/v1/chat/completions");
-		assert.equal(JSON.parse(upstreamRequest.init.body).model, "openai/gpt-oss-120b");
+		assert.equal(JSON.parse(upstreamRequest.init.body).model, "qwen/qwen3.6-27b");
 		assert.match(upstreamRequest.init.headers.Authorization, /^Bearer test-groq-secret$/);
 		assert.doesNotMatch(responseBody, /test-groq-secret/);
 	} finally {
@@ -203,7 +203,7 @@ test("AI-Proxy wechselt nur bei 429 zum nächsten Groq-Modell", async () => {
 			status: 429,
 			headers: { "Content-Type": "application/json" },
 		});
-		return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Qwen-Antwort" } }] }), {
+		return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "GPT-20B-Antwort" } }] }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
@@ -216,7 +216,7 @@ test("AI-Proxy wechselt nur bei 429 zum nächsten Groq-Modell", async () => {
 			body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
 		}), env, ctx);
 		assert.equal(response.status, 200);
-		assert.deepEqual(requestedModels, ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]);
+		assert.deepEqual(requestedModels, ["qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
@@ -233,7 +233,7 @@ test("AI-Proxy weist fehlende oder falsche Sync-Berechtigung ab", async () => {
 	assert.equal(response.status, 403);
 });
 
-test("AI-Proxy lehnt ungültige oder nicht unterstützte Nachrichten (Tools, Bilder, leere Nachrichten) sichtbar mit 400 ab", async () => {
+test("AI-Proxy unterstützt multimodale Bilder und Tool-Aufrufe für Qwen", async () => {
 	const { env, ctx } = createMockEnv();
 	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
 	const room = new SyncRoom(ctx, env);
@@ -241,29 +241,65 @@ test("AI-Proxy lehnt ungültige oder nicht unterstützte Nachrichten (Tools, Bil
 	await room.verifyAuthorization(authToken);
 	env.GROQ_API_KEY = "test-groq-secret";
 
-	// 1. Tool Call in Nachricht
-	const resTools = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
-		method: "POST",
-		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-		body: JSON.stringify({ messages: [{ role: "assistant", content: "Rufe Tool auf", tool_calls: [{ id: "1" }] }] }),
-	}), env, ctx);
-	assert.equal(resTools.status, 400);
-	assert.match((await resTools.json()).error, /Tool- und Funktionsaufrufe werden vom Cloudflare-AI-Dienst nicht unterstützt/);
+	const originalFetch = globalThis.fetch;
+	let capturedBody;
+	globalThis.fetch = async (_url, init) => {
+		capturedBody = JSON.parse(init.body);
+		return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Bild erkannt" } }] }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
 
-	// 2. Multimodales Bild
-	const resImage = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
-		method: "POST",
-		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-		body: JSON.stringify({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:..." } }] }] }),
-	}), env, ctx);
-	assert.equal(resImage.status, 400);
-	assert.match((await resImage.json()).error, /Bild- und Dateianhänge werden vom Cloudflare-AI-Dienst nicht unterstützt/);
+	try {
+		// 1. Multimodales Bild an Qwen
+		const resImage = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			body: JSON.stringify({
+				messages: [
+					{ role: "user", content: [{ type: "text", text: "Beschreibe dieses Bild" }, { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }] },
+				],
+			}),
+		}), env, ctx);
+		assert.equal(resImage.status, 200);
+		assert.equal(capturedBody.model, "qwen/qwen3.6-27b");
+		assert.equal(capturedBody.messages[0].content[1].type, "image_url");
 
-	// 3. Nicht unterstützte Rolle (z.B. developer oder custom)
+		// 2. Tool-Aufrufe und Tool-Ergebnisse
+		const resTools = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			body: JSON.stringify({
+				messages: [
+					{ role: "user", content: "Suche Notizen" },
+					{ role: "assistant", content: null, tool_calls: [{ id: "call_123", type: "function", function: { name: "search_notes", arguments: "{}" } }] },
+					{ role: "tool", tool_call_id: "call_123", content: '{"results":[]}' },
+				],
+				tools: [{ type: "function", function: { name: "search_notes", description: "Notizen durchsuchen" } }],
+			}),
+		}), env, ctx);
+		assert.equal(resTools.status, 200);
+		assert.equal(capturedBody.tools[0].function.name, "search_notes");
+		assert.equal(capturedBody.messages[1].tool_calls[0].id, "call_123");
+		assert.equal(capturedBody.messages[2].role, "tool");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("AI-Proxy lehnt ungültige Rollen und leere Nachrichten mit 400 ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	env.GROQ_API_KEY = "test-groq-secret";
+
 	const resRole = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 		method: "POST",
 		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-		body: JSON.stringify({ messages: [{ role: "developer", content: "System prompt" }] }),
+		body: JSON.stringify({ messages: [{ role: "invalid_role", content: "Hello" }] }),
 	}), env, ctx);
 	assert.equal(resRole.status, 400);
 	assert.match((await resRole.json()).error, /Nicht unterstützte Rolle/);
@@ -275,9 +311,9 @@ test("GET /api/models und /models listen die 3 Groq-AI-Modelle auf", async () =>
 	assert.equal(res.status, 200);
 	const data = await res.json();
 	assert.deepEqual(data.data.map((m) => m.id), [
+		"qwen/qwen3.6-27b",
 		"openai/gpt-oss-120b",
 		"openai/gpt-oss-20b",
-		"qwen/qwen3.6-27b",
 	]);
 });
 

@@ -419,7 +419,7 @@ test("Cloudflare-AI-Provider leitet Chat-Anfragen ohne Browser-Key an den Worker
 
 		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
 		S.settings.aiProviderId = "cloudflare";
-		S.settings.aiModel = "openai/gpt-oss-120b";
+		S.settings.aiModel = "qwen/qwen3.6-27b";
 
 		let calledUrl, calledBody, calledHeaders;
 		globalThis.fetch = async (url, init) => {
@@ -439,26 +439,29 @@ test("Cloudflare-AI-Provider leitet Chat-Anfragen ohne Browser-Key an den Worker
 	}
 });
 
-test("Cloudflare-AI-Provider lehnt Tools und Bilder ab und formatiert 429 Anbieter-Limits verständlich", async () => {
+test("Cloudflare-AI-Provider unterstützt Tools, Bilder und formatiert 429 Anbieter-Limits verständlich", async () => {
 	const { CLOUDFLARE_SYNC } = await import("../web/sync-cloudflare.js");
 	try {
 		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "ABCD-EFGH-IJKL-MNOP");
 
 		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
 		S.settings.aiProviderId = "cloudflare";
-		S.settings.aiModel = "openai/gpt-oss-120b";
+		S.settings.aiModel = "qwen/qwen3.6-27b";
 
-		// 1. Tools ablehnen
-		await assert.rejects(
-			async () => AI.chatOnce([{ role: "user", content: "Hallo" }], [{ type: "function", function: { name: "test_tool" } }]),
-			/Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe/
-		);
+		let lastBody;
+		globalThis.fetch = async (_url, init) => {
+			lastBody = JSON.parse(init.body);
+			return response({ choices: [{ message: { role: "assistant", content: "Erfolgreich" } }] });
+		};
 
-		// 2. Bilder ablehnen
-		await assert.rejects(
-			async () => AI.chatOnce([{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,..." } }] }]),
-			/Cloudflare AI unterstützt aktuell nur reine Textnachrichten/
-		);
+		// 1. Tools mitsenden
+		const toolDef = [{ type: "function", function: { name: "search_notes", description: "Suche" } }];
+		await AI.chatOnce([{ role: "user", content: "Hallo" }], toolDef);
+		assert.equal(lastBody.tools[0].function.name, "search_notes");
+
+		// 2. Bilder mitsenden
+		await AI.chatOnce([{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,123" } }] }]);
+		assert.equal(lastBody.messages[0].content[0].type, "image_url");
 
 		// 3. Verständliche Fehlermeldung beim Groq-Anbieterlimit
 		globalThis.fetch = async () => response({
@@ -469,7 +472,7 @@ test("Cloudflare-AI-Provider lehnt Tools und Bilder ab und formatiert 429 Anbiet
 		await assert.rejects(
 			async () => AI.chatOnce([{ role: "user", content: "Hallo" }]),
 			(err) => {
-				assert.match(err.message, /KI-Limit des Anbieters erreicht/);
+				assert.match(err.message, /KI-Limit des Anbieters erreicht|KI-Tageslimit erreicht/);
 				assert.match(err.message, /Groq-Free-Tier-Limit/);
 				return true;
 			}

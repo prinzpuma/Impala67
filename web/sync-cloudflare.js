@@ -638,7 +638,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	 * Führt eine autorisierte KI-Anfrage über den Cloudflare-Worker aus,
 	 * ohne Sync-Tokens oder Groq-Schlüssel im AI-Modul offenzulegen.
 	 */
-	async function aiRequest(messages, options = {}) {
+	async function aiRequest(payload, options = {}) {
 		const targetUrl = options.base || state.url || DEFAULT_WORKER_URL;
 		if (!targetUrl) {
 			throw new Error("Keine Cloudflare-Server-URL konfiguriert (Einstellungen → Sync & Dienste).");
@@ -650,13 +650,14 @@ export const CLOUDFLARE_SYNC = (() => {
 			throw new Error("Cloudflare Sync ist nicht mit einem gültigen Schlüssel eingerichtet. Bitte in Einstellungen → Sync & Dienste verbinden.");
 		}
 		const apiUrl = getApiUrl(targetUrl, "/api/ai");
+		const body = Array.isArray(payload) ? { messages: payload } : (payload || {});
 		return await fetch(apiUrl, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				...getAuthHeaders(),
 			},
-			body: JSON.stringify({ messages }),
+			body: JSON.stringify(body),
 			signal: options.signal,
 		});
 	}

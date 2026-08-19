@@ -21,12 +21,14 @@ const MAX_EVENTS_PER_REQUEST = 48;
 // serialisierte Metadaten; große Client-Events werden vor E2EE gzip-komprimiert.
 const MAX_D1_EVENT_DATA_CHARS = 1_900_000;
 const AI_MODELS = [
+	"qwen/qwen3.6-27b",
 	"openai/gpt-oss-120b",
 	"openai/gpt-oss-20b",
-	"qwen/qwen3.6-27b",
 ];
-const MAX_AI_MESSAGES = 40;
-const MAX_AI_MESSAGE_CHARS = 24_000;
+const VISION_MODELS = new Set(["qwen/qwen3.6-27b"]);
+const MAX_AI_MESSAGES = 60;
+const MAX_AI_MESSAGE_CHARS = 32_000;
+const MAX_AI_IMAGE_CHARS = 6_000_000; // ~4.5 MB Base64
 const MAX_AI_OUTPUT_TOKENS = 1_500;
 const enc = new TextEncoder();
 
@@ -77,32 +79,98 @@ function normalizeAiMessages(messages) {
 		return { error: `Ungültige AI-Nachrichten: Array mit 1 bis ${MAX_AI_MESSAGES} Nachrichten erwartet.` };
 	}
 	const normalized = [];
+	let hasImages = false;
+	let totalImages = 0;
+
 	for (const message of messages) {
 		if (!message || typeof message !== "object") {
 			return { error: "Ungültiges Nachrichtenformat." };
 		}
-		if (!["system", "user", "assistant"].includes(message.role)) {
-			return { error: `Nicht unterstützte Rolle „${message.role}“. Der Cloudflare-AI-Dienst unterstützt ausschließlich system, user und assistant.` };
+		const role = message.role;
+		if (!["system", "user", "assistant", "tool"].includes(role)) {
+			return { error: `Nicht unterstützte Rolle „${role}“. Erlaubt sind system, user, assistant und tool.` };
 		}
-		if (message.tool_calls || message.tool_call_id) {
-			return { error: "Tool- und Funktionsaufrufe werden vom Cloudflare-AI-Dienst nicht unterstützt." };
-		}
-		if (Array.isArray(message.content)) {
-			const hasImages = message.content.some((part) => part && (part.type === "image_url" || part.image_url));
-			if (hasImages) {
-				return { error: "Bild- und Dateianhänge werden vom Cloudflare-AI-Dienst nicht unterstützt." };
+
+		const entry = { role };
+
+		if (role === "tool") {
+			if (!message.tool_call_id || typeof message.tool_call_id !== "string") {
+				return { error: "Nachrichten mit der Rolle „tool“ müssen eine gültige tool_call_id enthalten." };
 			}
-			return { error: "Strukturierte Inhaltsteile werden nicht unterstützt; reiner Text erwartet." };
+			entry.tool_call_id = message.tool_call_id.slice(0, 128);
+			entry.content = typeof message.content === "string" ? message.content.slice(0, MAX_AI_MESSAGE_CHARS) : JSON.stringify(message.content || "");
+			normalized.push(entry);
+			continue;
 		}
-		if (typeof message.content !== "string" || !message.content.trim()) {
-			return { error: "Leere Textnachrichten sind nicht erlaubt." };
+
+		if (role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+			entry.tool_calls = message.tool_calls.slice(0, 10).map((tc, idx) => ({
+				id: String(tc?.id || `call_${idx}`).slice(0, 128),
+				type: "function",
+				function: {
+					name: String(tc?.function?.name || "").slice(0, 128),
+					arguments: String(tc?.function?.arguments || ""),
+				},
+			}));
 		}
-		if (message.content.length > MAX_AI_MESSAGE_CHARS) {
-			return { error: `Nachricht überschreitet das Maximum von ${MAX_AI_MESSAGE_CHARS} Zeichen.` };
+
+		if (Array.isArray(message.content)) {
+			const parts = [];
+			for (const part of message.content) {
+				if (!part || typeof part !== "object") continue;
+				if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+					parts.push({ type: "text", text: part.text.slice(0, MAX_AI_MESSAGE_CHARS) });
+				} else if (part.type === "image_url" && (part.image_url?.url || part.url)) {
+					const url = String(part.image_url?.url || part.url);
+					if (url.length > MAX_AI_IMAGE_CHARS) {
+						return { error: "Bild überschreitet die maximale Größe von ~4.5 MB." };
+					}
+					totalImages++;
+					if (totalImages > 5) {
+						return { error: "Maximal 5 Bilder pro Anfrage erlaubt." };
+					}
+					hasImages = true;
+					parts.push({ type: "image_url", image_url: { url } });
+				}
+			}
+			if (!parts.length && !entry.tool_calls) {
+				return { error: "Leere strukturierte Nachricht nicht erlaubt." };
+			}
+			entry.content = parts;
+		} else if (typeof message.content === "string") {
+			const text = message.content.trim();
+			if (!text && !entry.tool_calls) {
+				return { error: "Leere Textnachrichten sind nicht erlaubt." };
+			}
+			entry.content = text.slice(0, MAX_AI_MESSAGE_CHARS);
+		} else if (entry.tool_calls) {
+			entry.content = null;
+		} else {
+			return { error: "Ungültiger Inhalt der Nachricht." };
 		}
-		normalized.push({ role: message.role, content: message.content.trim() });
+
+		normalized.push(entry);
 	}
-	return { messages: normalized };
+
+	return { messages: normalized, hasImages };
+}
+
+function normalizeAiTools(tools) {
+	if (!tools || !Array.isArray(tools)) return undefined;
+	const valid = [];
+	for (const t of tools.slice(0, 30)) {
+		if (t?.type === "function" && t.function?.name) {
+			valid.push({
+				type: "function",
+				function: {
+					name: String(t.function.name).slice(0, 128),
+					description: t.function.description ? String(t.function.description).slice(0, 2048) : undefined,
+					parameters: t.function.parameters && typeof t.function.parameters === "object" ? t.function.parameters : {},
+				},
+			});
+		}
+	}
+	return valid.length ? valid : undefined;
 }
 
 async function handleAiRequest(request, env) {
@@ -119,26 +187,36 @@ async function handleAiRequest(request, env) {
 	if (validation.error) {
 		return jsonResponse({ error: validation.error }, 400);
 	}
-	const messages = validation.messages;
+
+	const tools = normalizeAiTools(body?.tools);
+	const toolChoice = body?.tool_choice;
+	const hasImages = validation.hasImages;
+	const candidateModels = hasImages
+		? AI_MODELS.filter((m) => VISION_MODELS.has(m))
+		: AI_MODELS;
 
 	let upstream = null;
 	let responseText = "";
-	for (const model of AI_MODELS) {
+	for (const model of candidateModels) {
+		const payload = {
+			model,
+			messages: validation.messages,
+			max_completion_tokens: MAX_AI_OUTPUT_TOKENS,
+			stream: false,
+		};
+		if (tools) payload.tools = tools;
+		if (toolChoice) payload.tool_choice = toolChoice;
+
 		upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${env.GROQ_API_KEY}`,
 			},
-			body: JSON.stringify({
-				model,
-				messages,
-				max_completion_tokens: MAX_AI_OUTPUT_TOKENS,
-				stream: false,
-			}),
+			body: JSON.stringify(payload),
 		});
 		responseText = await upstream.text();
-		if (upstream.status !== 429 || model === AI_MODELS.at(-1)) break;
+		if (upstream.status !== 429 || model === candidateModels.at(-1)) break;
 	}
 
 	return new Response(responseText, {

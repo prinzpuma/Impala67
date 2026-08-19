@@ -18,9 +18,9 @@ export const AI = (() => {
 		{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", provider: "openai" },
 		{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", provider: "openai" },
 		{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", provider: "openai" },
+		{ value: "qwen/qwen3.6-27b", label: "Cloudflare (Groq) – Qwen 3.6 27B (Vision)", provider: "cloudflare" },
 		{ value: "openai/gpt-oss-120b", label: "Cloudflare (Groq) – GPT OSS 120B", provider: "cloudflare" },
 		{ value: "openai/gpt-oss-20b", label: "Cloudflare (Groq) – GPT OSS 20B", provider: "cloudflare" },
-		{ value: "qwen/qwen3.6-27b", label: "Cloudflare (Groq) – Qwen 3.6 27B", provider: "cloudflare" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const LIMIT = {
@@ -246,26 +246,12 @@ export const AI = (() => {
 		let res;
 		try {
 			if (family === "cloudflare") {
-				if (body.tools?.length) {
-					throw new Error("Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe (Tools). Wähle ein anderes Modell oder deaktiviere Tools.");
-				}
-				const textMessages = [];
-				for (const m of body.messages || []) {
-					if (!m || !["system", "user", "assistant"].includes(m.role)) {
-						throw new Error(`Cloudflare AI unterstützt nur system, user und assistant (erhalten: „${m?.role || "unbekannt"}“).`);
-					}
-					if (Array.isArray(m.content) && m.content.some((p) => p && (p.type === "image_url" || p.image_url))) {
-						throw new Error("Cloudflare AI unterstützt aktuell nur reine Textnachrichten (keine Bild- oder Dateianhänge).");
-					}
-					const text = typeof m.content === "string" ? m.content.trim() : textFrom(m.content).trim();
-					if (text) {
-						textMessages.push({ role: m.role, content: text });
-					}
-				}
-				if (!textMessages.length) {
-					throw new Error("Keine Textnachrichten für die Cloudflare-AI-Anfrage vorhanden.");
-				}
-				res = await withTimeout(() => CLOUDFLARE_SYNC.aiRequest(textMessages, { base, signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
+				const payload = {
+					messages: body.messages,
+					tools: body.tools,
+					tool_choice: body.tool_choice,
+				};
+				res = await withTimeout(() => CLOUDFLARE_SYNC.aiRequest(payload, { base, signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
 			} else {
 				res = await withTimeout(() => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
 			}
@@ -613,15 +599,12 @@ export const AI = (() => {
 	}
 	async function doChat(messages, tools, onDelta, onReasoning, withExtras, markProduced, requestConfig) {
 		const c = requestConfig || cfg(), body = { model: c.model, messages };
-		if (c.family === "cloudflare" && tools?.length) {
-			throw new Error("Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe (Tools). Wähle ein anderes Modell oder deaktiviere Tools.");
-		}
 		// Gemini 3.x lehnt Sampling-Regler inzwischen ab; lokale und andere kompatible
 		// Server behalten den bisherigen Wert für rückwärtskompatibles Verhalten.
 		if (c.family !== "google" && c.family !== "openai" && c.family !== "cloudflare") body.temperature = 0.4;
 		if (/^https:\/\/api\.openai\.com(?:\/|$)/i.test(c.base)) body.safety_identifier = safetyIdentifier();
 		if (c.family !== "cloudflare") applyThinking(body, withExtras, c);
-		const requestTools = c.family !== "cloudflare" ? toolsForRequest(tools, c.family) : undefined;
+		const requestTools = toolsForRequest(tools, c.family);
 		if (requestTools) { body.tools = requestTools; body.tool_choice = "auto"; }
 		if (onDelta && c.family !== "cloudflare") body.stream = true;
 		const call = await request("/chat/completions", body, c);
