@@ -7,6 +7,7 @@ import { RENDER } from "./render.js";
 import { CHATS } from "./chats.js";
 import { THINK } from "./think-heuristik.js";
 import { RAG } from "./rag.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 export const AI = (() => {
 	const MODEL_PRESETS = [
@@ -17,6 +18,9 @@ export const AI = (() => {
 		{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", provider: "openai" },
 		{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", provider: "openai" },
 		{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", provider: "openai" },
+		{ value: "openai/gpt-oss-120b", label: "Cloudflare (Groq) – GPT OSS 120B", provider: "cloudflare" },
+		{ value: "openai/gpt-oss-20b", label: "Cloudflare (Groq) – GPT OSS 20B", provider: "cloudflare" },
+		{ value: "qwen/qwen3.6-27b", label: "Cloudflare (Groq) – Qwen 3.6 27B", provider: "cloudflare" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const LIMIT = {
@@ -97,7 +101,8 @@ export const AI = (() => {
 		if (familyCache.has(key)) return familyCache.get(key);
 		const tag = [provider?.id, provider?.name].filter(Boolean).join(" ").toLowerCase();
 		const base = String(provider?.base || "").toLowerCase();
-		const family = /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|\/|$)/.test(base) || /\b(local|lm[\s-]?studio|ollama|llama\.cpp|jan)\b/.test(tag) ? "local"
+		const family = provider?.id === "cloudflare" || /\b(cloudflare|workers\.dev)\b/.test(tag) || /workers\.dev|\/api\/ai\b/.test(base) ? "cloudflare"
+			: /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|\/|$)/.test(base) || /\b(local|lm[\s-]?studio|ollama|llama\.cpp|jan)\b/.test(tag) ? "local"
 			: /generativelanguage|googleapis|google/.test(base) || /\b(google|gemini|gemma)\b/.test(tag) ? "google"
 				: /api\.openai\.com/.test(base) || /\bopenai\b/.test(tag) ? "openai" : "other";
 		familyCache.set(key, family);
@@ -110,6 +115,9 @@ export const AI = (() => {
 	const capKey = (c = cfg()) => [c.providerId, c.base, c.model].join("::");
 	const capStore = () => S.thinkingCapabilities || (S.thinkingCapabilities = Object.create(null));
 	function declaredThinkingCapabilities(c) {
+		if (c.family === "cloudflare") {
+			return { levels: [], includeThoughts: false, source: "none" };
+		}
 		// Googles /models-Antworten dürfen IDs als "models/gemini-…" liefern. Das
 		// Präfix gehört zum Transportweg, nicht zum eigentlichen Modellnamen.
 		const model = String(c.model || "").replace(/^models\//i, "");
@@ -136,7 +144,18 @@ export const AI = (() => {
 
 	class AiHttpError extends Error {
 		constructor(status, text, retryAfterMs = 0) {
-			super(`KI-Fehler ${status}: ${String(text || "").slice(0, 300)}`);
+			let message = `KI-Fehler ${status}: ${String(text || "").slice(0, 300)}`;
+			try {
+				const json = JSON.parse(text);
+				if (json?.error && typeof json.error === "string") {
+					if (status === 429 && (json.error.includes("Tageslimit") || json.code === "rate_limit_exceeded")) {
+						message = `KI-Limit des Anbieters erreicht: ${json.error} Du kannst unter Einstellungen → KI einen eigenen API-Key oder LM Studio hinterlegen.`;
+					} else {
+						message = `KI-Fehler ${status}: ${json.error}`;
+					}
+				}
+			} catch {}
+			super(message);
 			this.status = status;
 			this.retryAfterMs = Number.isFinite(retryAfterMs) ? Math.min(Math.max(retryAfterMs, 0), 60000) : 0;
 		}
@@ -220,19 +239,42 @@ export const AI = (() => {
 		};
 	}
 	async function request(path, body, requestConfig = cfg()) {
-		const { base, key, providerId } = requestConfig;
-		if (!base) throw new Error("Kein KI-Server konfiguriert (Einstellungen → KI).");
+		const { base, key, providerId, family } = requestConfig;
+		if (!base && family !== "cloudflare") throw new Error("Kein KI-Server konfiguriert (Einstellungen → KI).");
 		const started = performance.now(), meta = requestMeta(path, body, providerId), op = trackedController();
 		debugEvent("HTTP-Anfrage", meta);
 		let res;
 		try {
-			res = await withTimeout(() => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
+			if (family === "cloudflare") {
+				if (body.tools?.length) {
+					throw new Error("Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe (Tools). Wähle ein anderes Modell oder deaktiviere Tools.");
+				}
+				const textMessages = [];
+				for (const m of body.messages || []) {
+					if (!m || !["system", "user", "assistant"].includes(m.role)) {
+						throw new Error(`Cloudflare AI unterstützt nur system, user und assistant (erhalten: „${m?.role || "unbekannt"}“).`);
+					}
+					if (Array.isArray(m.content) && m.content.some((p) => p && (p.type === "image_url" || p.image_url))) {
+						throw new Error("Cloudflare AI unterstützt aktuell nur reine Textnachrichten (keine Bild- oder Dateianhänge).");
+					}
+					const text = typeof m.content === "string" ? m.content.trim() : textFrom(m.content).trim();
+					if (text) {
+						textMessages.push({ role: m.role, content: text });
+					}
+				}
+				if (!textMessages.length) {
+					throw new Error("Keine Textnachrichten für die Cloudflare-AI-Anfrage vorhanden.");
+				}
+				res = await withTimeout(() => CLOUDFLARE_SYNC.aiRequest(textMessages, { base, signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
+			} else {
+				res = await withTimeout(() => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
+			}
 		} catch (error) {
 			op.done();
 			debugEvent(error?.name === "AiTimeoutError" ? "KI-Timeout" : "Netzwerkfehler", { ...meta, ms: Math.round(performance.now() - started), error: errorText(error) });
 			throw error;
 		}
-		const requestId = res.headers.get("x-request-id") || res.headers.get("x-goog-request-id") || null;
+		const requestId = res.headers?.get?.("x-request-id") || res.headers?.get?.("x-goog-request-id") || null;
 		const ms = Math.round(performance.now() - started);
 		if (!res.ok) {
 			let text = "";
@@ -286,8 +328,9 @@ export const AI = (() => {
 	function modelProviders() {
 		return providers().filter((p) => {
 			const base = cleanBase(p.base).toLowerCase();
+			const isCf = p.id === "cloudflare" || /workers\.dev/.test(base);
 			const officialCloud = /(?:api\.openai\.com|generativelanguage\.googleapis\.com)/.test(base);
-			return base && (p.key || !officialCloud);
+			return base && (p.key || isCf || !officialCloud);
 		});
 	}
 	async function listModels({ force = false } = {}) {
@@ -570,14 +613,17 @@ export const AI = (() => {
 	}
 	async function doChat(messages, tools, onDelta, onReasoning, withExtras, markProduced, requestConfig) {
 		const c = requestConfig || cfg(), body = { model: c.model, messages };
+		if (c.family === "cloudflare" && tools?.length) {
+			throw new Error("Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe (Tools). Wähle ein anderes Modell oder deaktiviere Tools.");
+		}
 		// Gemini 3.x lehnt Sampling-Regler inzwischen ab; lokale und andere kompatible
 		// Server behalten den bisherigen Wert für rückwärtskompatibles Verhalten.
-		if (c.family !== "google" && c.family !== "openai") body.temperature = 0.4;
+		if (c.family !== "google" && c.family !== "openai" && c.family !== "cloudflare") body.temperature = 0.4;
 		if (/^https:\/\/api\.openai\.com(?:\/|$)/i.test(c.base)) body.safety_identifier = safetyIdentifier();
-		applyThinking(body, withExtras, c);
-		const requestTools = toolsForRequest(tools, c.family);
+		if (c.family !== "cloudflare") applyThinking(body, withExtras, c);
+		const requestTools = c.family !== "cloudflare" ? toolsForRequest(tools, c.family) : undefined;
 		if (requestTools) { body.tools = requestTools; body.tool_choice = "auto"; }
-		if (onDelta) body.stream = true;
+		if (onDelta && c.family !== "cloudflare") body.stream = true;
 		const call = await request("/chat/completions", body, c);
 		try {
 			const contentType = call.res.headers?.get?.("content-type") || "";
@@ -625,6 +671,9 @@ export const AI = (() => {
 				return message;
 			} catch (error) {
 				if (error?.name === "AbortError") throw error;
+				if (error instanceof AiHttpError && error.status === 429) {
+					throw error;
+				}
 				const network = !(error instanceof AiHttpError) && (error instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(errorText(error)));
 				const serverRetry = error instanceof AiHttpError && (error.status >= 500 || error.status === 429);
 				if (produced || !(serverRetry || network || isCompatibilityError(error, extras, plannedTools, hasToolHistory))) throw error;

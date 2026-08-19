@@ -13,6 +13,7 @@ export const S = {
 	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
 	settings: {
 		aiProviders: [
+			{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://impala67-sync.joshuagayer1.workers.dev", key: "" },
 			{ id: "google", name: "Google Gemini", base: "https://generativelanguage.googleapis.com/v1beta/openai", key: "" },
 			{ id: "openai", name: "OpenAI", base: "https://api.openai.com/v1", key: "" },
 			{ id: "local", name: "Lokal (LM Studio)", base: "http://localhost:1234/v1", key: "" },

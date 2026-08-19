@@ -146,6 +146,141 @@ test("Worker-Fehler bleiben als lesbare JSON-Antwort mit CORS sichtbar", async (
 	assert.equal((await res.json()).code, "internal_error");
 });
 
+test("AI-Proxy nutzt den bestehenden Sync-Token und gibt den Groq-Key nicht an den Client", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	env.GROQ_API_KEY = "test-groq-secret";
+
+	const originalFetch = globalThis.fetch;
+	let upstreamRequest;
+	globalThis.fetch = async (url, init) => {
+		upstreamRequest = { url, init };
+		return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Hallo" } }] }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const response = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${authToken}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
+		}), env, ctx);
+
+		assert.equal(response.status, 200);
+		const responseBody = await response.text();
+		assert.deepEqual(JSON.parse(responseBody), { choices: [{ message: { role: "assistant", content: "Hallo" } }] });
+		assert.equal(upstreamRequest.url, "https://api.groq.com/openai/v1/chat/completions");
+		assert.equal(JSON.parse(upstreamRequest.init.body).model, "openai/gpt-oss-120b");
+		assert.match(upstreamRequest.init.headers.Authorization, /^Bearer test-groq-secret$/);
+		assert.doesNotMatch(responseBody, /test-groq-secret/);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("AI-Proxy wechselt nur bei 429 zum nächsten Groq-Modell", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	env.GROQ_API_KEY = "test-groq-secret";
+
+	const originalFetch = globalThis.fetch;
+	const requestedModels = [];
+	globalThis.fetch = async (_url, init) => {
+		const payload = JSON.parse(init.body);
+		requestedModels.push(payload.model);
+		if (requestedModels.length < 3) return new Response(JSON.stringify({ error: { code: "rate_limit_exceeded" } }), {
+			status: 429,
+			headers: { "Content-Type": "application/json" },
+		});
+		return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Qwen-Antwort" } }] }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const response = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
+		}), env, ctx);
+		assert.equal(response.status, 200);
+		assert.deepEqual(requestedModels, ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("AI-Proxy weist fehlende oder falsche Sync-Berechtigung ab", async () => {
+	const { env, ctx } = createMockEnv();
+	env.GROQ_API_KEY = "test-groq-secret";
+	const response = await worker.fetch(new Request("https://example.com/api/ai?user=1234567890123456", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
+	}), env, ctx);
+	assert.equal(response.status, 403);
+});
+
+test("AI-Proxy lehnt ungültige oder nicht unterstützte Nachrichten (Tools, Bilder, leere Nachrichten) sichtbar mit 400 ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	env.GROQ_API_KEY = "test-groq-secret";
+
+	// 1. Tool Call in Nachricht
+	const resTools = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "assistant", content: "Rufe Tool auf", tool_calls: [{ id: "1" }] }] }),
+	}), env, ctx);
+	assert.equal(resTools.status, 400);
+	assert.match((await resTools.json()).error, /Tool- und Funktionsaufrufe werden vom Cloudflare-AI-Dienst nicht unterstützt/);
+
+	// 2. Multimodales Bild
+	const resImage = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:..." } }] }] }),
+	}), env, ctx);
+	assert.equal(resImage.status, 400);
+	assert.match((await resImage.json()).error, /Bild- und Dateianhänge werden vom Cloudflare-AI-Dienst nicht unterstützt/);
+
+	// 3. Nicht unterstützte Rolle (z.B. developer oder custom)
+	const resRole = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "developer", content: "System prompt" }] }),
+	}), env, ctx);
+	assert.equal(resRole.status, 400);
+	assert.match((await resRole.json()).error, /Nicht unterstützte Rolle/);
+});
+
+test("GET /api/models und /models listen die 3 Groq-AI-Modelle auf", async () => {
+	const { env, ctx } = createMockEnv();
+	const res = await worker.fetch(new Request("https://example.com/models"), env, ctx);
+	assert.equal(res.status, 200);
+	const data = await res.json();
+	assert.deepEqual(data.data.map((m) => m.id), [
+		"openai/gpt-oss-120b",
+		"openai/gpt-oss-20b",
+		"qwen/qwen3.6-27b",
+	]);
+});
+
 test("Actor-Start lädt nicht mehr alle Event-IDs eines Kontos in den Arbeitsspeicher", async () => {
 	const { env, ctx, dbStore } = createMockEnv();
 	const room = new SyncRoom(ctx, env);

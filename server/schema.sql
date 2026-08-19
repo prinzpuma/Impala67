@@ -22,3 +22,5 @@ CREATE TABLE IF NOT EXISTS user_storage (
     total_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
+
+-- Serverseitiges Nutzerlimit für AI-Anfragen (Reset täglich um 00:00 UTC)

@@ -6,6 +6,7 @@ Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms
 - **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
 - **500 MB Quota pro Sync-Schlüssel:** Garantiert faire Nutzung und schützt deinen kostenlosen Cloudflare D1 Speicher.
 - **WebSockets & D1:** Sofortige Live-Übertragung bei geöffneter App + nahtloser Download verpasster Änderungen nach Offline-Phasen.
+- **Geschützter AI-Proxy:** `/api/ai` leitet Textanfragen mit dem serverseitigen `GROQ_API_KEY` an Groq weiter. Der Sync-Token muss gültig sein; der Groq-Key wird nie an die PWA ausgeliefert.
 
 ---
 
@@ -42,6 +43,17 @@ npx wrangler deploy
 ```
 Wrangler zeigt dir anschließend deine persönliche URL an, z. B.:
 `https://impala67-sync.<dein-account>.workers.dev`
+
+### 4. Groq-AI konfigurieren (optional)
+
+Im Cloudflare-Dashboard beim Worker unter **Settings → Variables and Secrets** ein Secret mit dem Namen `GROQ_API_KEY` anlegen. Die AI-Route verwendet aktuell diese Fallback-Reihenfolge und akzeptiert nur Textnachrichten:
+
+1. `openai/gpt-oss-120b`
+2. `openai/gpt-oss-20b`
+3. `qwen/qwen3.6-27b`
+
+Bei einem Groq-Rate-Limit (`429`) wird automatisch das nächste Modell versucht.
+Ein zusätzliches Impala67-Anfragenlimit wird derzeit nicht erzwungen; maßgeblich sind die aktuellen Groq-Free-Tier-Limits.
 
 ---
 

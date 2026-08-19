@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><body></body>", { url: "http://localhost/" });
-for (const key of ["window", "document", "Element", "Node", "HTMLElement", "MutationObserver", "navigator"]) {
+for (const key of ["window", "document", "Element", "Node", "HTMLElement", "MutationObserver", "navigator", "Event", "CustomEvent", "ErrorEvent"]) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
 }
 Object.defineProperty(globalThis, "localStorage", { value: dom.window.localStorage, configurable: true });
@@ -35,6 +35,9 @@ test("Offline-Vorschläge nennen die aktuellen stabilen Modellfamilien", () => {
 	const ids = AI.MODEL_PRESETS.map((model) => model.value);
 	assert.deepEqual(ids.slice(0, 2), ["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
 	assert.deepEqual(ids.slice(4, 7), ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]);
+	assert.ok(ids.includes("openai/gpt-oss-120b"));
+	assert.ok(ids.includes("openai/gpt-oss-20b"));
+	assert.ok(ids.includes("qwen/qwen3.6-27b"));
 	assert.ok(!ids.includes("gpt-4.1"));
 	assert.ok(!ids.includes("gemini-2.5-flash"));
 });
@@ -407,4 +410,71 @@ test("Notiztext bleibt Arbeitsunterlage und wird nicht zur versteckten Systemanw
 	const context = body.messages.find((message) => message.role === "user" && String(message.content).includes("<workspace_data>"));
 	assert.match(context.content, /VERSTECKTER BEFEHL/);
 	assert.match(context.content, /nicht vertrauenswürdig/);
+});
+
+test("Cloudflare-AI-Provider leitet Chat-Anfragen ohne Browser-Key an den Worker weiter", async () => {
+	const { CLOUDFLARE_SYNC } = await import("../web/sync-cloudflare.js");
+	try {
+		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "ABCD-EFGH-IJKL-MNOP");
+
+		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
+		S.settings.aiProviderId = "cloudflare";
+		S.settings.aiModel = "openai/gpt-oss-120b";
+
+		let calledUrl, calledBody, calledHeaders;
+		globalThis.fetch = async (url, init) => {
+			calledUrl = url;
+			calledBody = JSON.parse(init.body);
+			calledHeaders = init.headers;
+			return response({ choices: [{ message: { role: "assistant", content: "Antwort vom Cloudflare-Worker" } }] });
+		};
+
+		const result = await AI.chatOnce([{ role: "user", content: "Hallo Cloudflare" }]);
+		assert.equal(result.content, "Antwort vom Cloudflare-Worker");
+		assert.match(calledUrl, /^https:\/\/cf-test\.workers\.dev\/api\/ai\?user=/);
+		assert.ok(calledHeaders.Authorization?.startsWith("Bearer "));
+		assert.deepEqual(calledBody.messages, [{ role: "user", content: "Hallo Cloudflare" }]);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+	}
+});
+
+test("Cloudflare-AI-Provider lehnt Tools und Bilder ab und formatiert 429 Anbieter-Limits verständlich", async () => {
+	const { CLOUDFLARE_SYNC } = await import("../web/sync-cloudflare.js");
+	try {
+		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "ABCD-EFGH-IJKL-MNOP");
+
+		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
+		S.settings.aiProviderId = "cloudflare";
+		S.settings.aiModel = "openai/gpt-oss-120b";
+
+		// 1. Tools ablehnen
+		await assert.rejects(
+			async () => AI.chatOnce([{ role: "user", content: "Hallo" }], [{ type: "function", function: { name: "test_tool" } }]),
+			/Cloudflare AI unterstützt aktuell keine Werkzeug-Aufrufe/
+		);
+
+		// 2. Bilder ablehnen
+		await assert.rejects(
+			async () => AI.chatOnce([{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,..." } }] }]),
+			/Cloudflare AI unterstützt aktuell nur reine Textnachrichten/
+		);
+
+		// 3. Verständliche Fehlermeldung beim Groq-Anbieterlimit
+		globalThis.fetch = async () => response({
+			error: "Groq-Free-Tier-Limit erreicht.",
+			code: "rate_limit_exceeded",
+		}, 429);
+
+		await assert.rejects(
+			async () => AI.chatOnce([{ role: "user", content: "Hallo" }]),
+			(err) => {
+				assert.match(err.message, /KI-Limit des Anbieters erreicht/);
+				assert.match(err.message, /Groq-Free-Tier-Limit/);
+				return true;
+			}
+		);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+	}
 });

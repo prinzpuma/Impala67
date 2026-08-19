@@ -20,6 +20,14 @@ const MAX_EVENTS_PER_REQUEST = 48;
 // D1 erlaubt höchstens 2 MB pro String/Zeile. Reserve für weitere Spalten und
 // serialisierte Metadaten; große Client-Events werden vor E2EE gzip-komprimiert.
 const MAX_D1_EVENT_DATA_CHARS = 1_900_000;
+const AI_MODELS = [
+	"openai/gpt-oss-120b",
+	"openai/gpt-oss-20b",
+	"qwen/qwen3.6-27b",
+];
+const MAX_AI_MESSAGES = 40;
+const MAX_AI_MESSAGE_CHARS = 24_000;
+const MAX_AI_OUTPUT_TOKENS = 1_500;
 const enc = new TextEncoder();
 
 function corsHeaders() {
@@ -47,6 +55,99 @@ async function hashToken(token) {
 	const bytes = enc.encode("impala67_token_verifier:" + String(token || ""));
 	const digest = await crypto.subtle.digest("SHA-256", bytes);
 	return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getRequestUserId(request) {
+	const url = new URL(request.url);
+	return url.searchParams.get("user") || request.headers.get("X-User-Id") || "";
+}
+
+async function verifyHttpUser(request, env, userId) {
+	const rawAuthToken = extractAuthToken(request);
+	if (!env?.DB || !userId || userId.length < 16 || !rawAuthToken) return false;
+	const row = await env.DB.prepare(
+		"SELECT auth_token_hash FROM user_storage WHERE user_id = ?"
+	).bind(userId).first();
+	if (!row?.auth_token_hash) return false;
+	return row.auth_token_hash === await hashToken(rawAuthToken);
+}
+
+function normalizeAiMessages(messages) {
+	if (!Array.isArray(messages) || messages.length < 1 || messages.length > MAX_AI_MESSAGES) {
+		return { error: `Ungültige AI-Nachrichten: Array mit 1 bis ${MAX_AI_MESSAGES} Nachrichten erwartet.` };
+	}
+	const normalized = [];
+	for (const message of messages) {
+		if (!message || typeof message !== "object") {
+			return { error: "Ungültiges Nachrichtenformat." };
+		}
+		if (!["system", "user", "assistant"].includes(message.role)) {
+			return { error: `Nicht unterstützte Rolle „${message.role}“. Der Cloudflare-AI-Dienst unterstützt ausschließlich system, user und assistant.` };
+		}
+		if (message.tool_calls || message.tool_call_id) {
+			return { error: "Tool- und Funktionsaufrufe werden vom Cloudflare-AI-Dienst nicht unterstützt." };
+		}
+		if (Array.isArray(message.content)) {
+			const hasImages = message.content.some((part) => part && (part.type === "image_url" || part.image_url));
+			if (hasImages) {
+				return { error: "Bild- und Dateianhänge werden vom Cloudflare-AI-Dienst nicht unterstützt." };
+			}
+			return { error: "Strukturierte Inhaltsteile werden nicht unterstützt; reiner Text erwartet." };
+		}
+		if (typeof message.content !== "string" || !message.content.trim()) {
+			return { error: "Leere Textnachrichten sind nicht erlaubt." };
+		}
+		if (message.content.length > MAX_AI_MESSAGE_CHARS) {
+			return { error: `Nachricht überschreitet das Maximum von ${MAX_AI_MESSAGE_CHARS} Zeichen.` };
+		}
+		normalized.push({ role: message.role, content: message.content.trim() });
+	}
+	return { messages: normalized };
+}
+
+async function handleAiRequest(request, env) {
+	if (request.method !== "POST") return jsonResponse({ error: "Nur POST ist für AI-Anfragen erlaubt." }, 405);
+	if (!env?.GROQ_API_KEY) return jsonResponse({ error: "AI-Dienst ist auf dem Worker nicht konfiguriert (GROQ_API_KEY fehlt)." }, 503);
+
+	const userId = getRequestUserId(request);
+	if (!(await verifyHttpUser(request, env, userId))) {
+		return jsonResponse({ error: "Ungültiger Autorisierungs-Token für diesen Account." }, 403);
+	}
+
+	const body = await request.json().catch(() => null);
+	const validation = normalizeAiMessages(body?.messages);
+	if (validation.error) {
+		return jsonResponse({ error: validation.error }, 400);
+	}
+	const messages = validation.messages;
+
+	let upstream = null;
+	let responseText = "";
+	for (const model of AI_MODELS) {
+		upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${env.GROQ_API_KEY}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+				max_completion_tokens: MAX_AI_OUTPUT_TOKENS,
+				stream: false,
+			}),
+		});
+		responseText = await upstream.text();
+		if (upstream.status !== 429 || model === AI_MODELS.at(-1)) break;
+	}
+
+	return new Response(responseText, {
+		status: upstream?.status || 502,
+		headers: {
+			"Content-Type": upstream?.headers.get("Content-Type") || "application/json",
+			...corsHeaders(),
+		},
+	});
 }
 
 function extractAuthToken(request) {
@@ -533,7 +634,19 @@ async function handleRequest(request, env, ctx) {
 			});
 		}
 
-		const userId = url.searchParams.get("user") || request.headers.get("X-User-Id");
+		// Verfügbare AI-Modelle (OpenAI-kompatibel)
+		if (url.pathname === "/api/models" || url.pathname === "/models" || url.pathname === "/v1/models") {
+			return jsonResponse({
+				object: "list",
+				data: AI_MODELS.map((id) => ({ id, object: "model", owned_by: "groq" })),
+			});
+		}
+
+		if (url.pathname === "/api/ai") {
+			return await handleAiRequest(request, env);
+		}
+
+		const userId = getRequestUserId(request);
 		if (!userId || userId.length < 16) {
 			return jsonResponse({ error: "Fehlende oder ungültige User-ID (mindestens 16 Zeichen erforderlich)" }, 401);
 		}
