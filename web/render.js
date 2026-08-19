@@ -467,11 +467,13 @@ function chatListHtml() {
 		: '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>';
 	return head + list.map((s) => {
 		const on = sel.has(s.id);
-		return `<div class="row${s.id === S.currentChatId ? " active" : ""}${on ? " selected" : ""}" data-key="chat:${s.id}" data-chat="${s.id}">` +
-			`<button class="row-add chat-sel${on ? " on" : ""}" data-chatsel="${s.id}" aria-pressed="${on ? "true" : "false"}" title="${on ? "Abwählen" : "Auswählen"}">${on ? "☑" : "☐"}</button>` +
-			`<span class="row-title">${esc(s.title || "Chat")}</span><span class="hint">${U.fmtDate(s.updated || s.created)}</span>` +
+		return `<div class="row chat-row${s.id === S.currentChatId ? " active" : ""}${on ? " selected" : ""}" data-key="chat:${s.id}" data-chat="${s.id}">` +
+			(sel.size ? `<button class="row-add chat-sel${on ? " on" : ""}" data-chatsel="${s.id}" aria-pressed="${on ? "true" : "false"}" title="${on ? "Abwählen" : "Auswählen"}">${on ? "☑" : "☐"}</button>` : "") +
+			`<span class="row-title">${esc(s.title || "Chat")}</span><span class="hint chat-date">${U.fmtDate(s.updated || s.created)}</span>` +
+			`<div class="chat-row-actions">` +
 			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button>` +
-			`<button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button></div>`;
+			`<button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button>` +
+			`</div></div>`;
 	}).join("");
 }
 

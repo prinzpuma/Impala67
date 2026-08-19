@@ -67,11 +67,11 @@ export const SCHULNOTEN = (() => {
 	}
 
 	function gradeColor(value) {
-		if (value <= 1.5) return "#72bc8f";
-		if (value <= 2.5) return "#a3cf62";
-		if (value <= 3.5) return "#eac26b";
-		if (value <= 4.5) return "#de9255";
-		return "#e97366";
+		if (value <= 1.5) return "var(--success)";
+		if (value <= 2.5) return "color-mix(in srgb, var(--success) 70%, var(--accent))";
+		if (value <= 3.5) return "var(--warn, #eac26b)";
+		if (value <= 4.5) return "color-mix(in srgb, var(--danger) 60%, var(--warn, #eac26b))";
+		return "var(--danger)";
 	}
 
 	function render(container) {
@@ -145,12 +145,18 @@ export const SCHULNOTEN = (() => {
 	style.id = "schulnotenStyles";
 	style.textContent = [
 		".noten-wrap{width:min(980px,100%);margin:0 auto;padding:28px 24px;overflow:auto}",
-		".noten-form{display:grid;grid-template-columns:1.25fr .7fr .7fr 1fr 1.5fr auto;gap:8px;margin:14px 0 20px}",
+		".noten-form{display:grid;grid-template-columns:minmax(140px,1.4fr) minmax(80px,.7fr) minmax(80px,.7fr) minmax(130px,1.1fr) minmax(160px,1.8fr) auto;gap:8px;margin:14px 0 20px;align-items:center}",
+		".noten-form input{height:34px;box-sizing:border-box}",
+		".noten-form button{height:34px;min-height:34px;white-space:nowrap}",
 		".noten-subject{margin:14px 0;border:1px solid var(--edge-soft);border-radius:10px;overflow:hidden;background:var(--surface-subtle)}",
 		".noten-subject header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface)}",
-		".noten-subject header span{font-weight:750}.noten-table{border-collapse:collapse;width:100%;font-size:13px}",
+		".noten-subject header span{font-weight:750}",
+		".noten-table{border-collapse:collapse;width:100%;font-size:13px}",
 		".noten-table th,.noten-table td{padding:8px 12px;border-top:1px solid var(--edge-soft);text-align:left}",
-		".noten-table th{color:var(--text2);font-weight:600}.noten-table td:last-child{width:48px;text-align:right}.noten-empty{padding:18px 0}",
+		".noten-table th{color:var(--text2);font-weight:600}",
+		".noten-table td:last-child{width:48px;text-align:right}",
+		".noten-empty{padding:18px 0}",
+		"@media(max-width:980px){.noten-form{grid-template-columns:1fr 1fr;gap:10px}.noten-form input[name=comment]{grid-column:1/-1}.noten-form button{grid-column:1/-1;min-height:40px}}",
 		"@media(max-width:760px){.noten-wrap{padding:18px 16px}.noten-form{grid-template-columns:1fr 1fr}.noten-form input[name=comment]{grid-column:1/-1}.noten-form button{grid-column:1/-1;min-height:44px}.noten-table th:nth-child(3),.noten-table td:nth-child(3){display:none}}",
 	].join("");
 	if (!document.getElementById(style.id)) document.head.appendChild(style);

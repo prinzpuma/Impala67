@@ -10,7 +10,7 @@ body.density-compact.panel-collapsed #app { grid-template-columns: var(--sidebar
 body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0 }
 body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid) }
 body.density-compact .panel-head { border-bottom-color: var(--edge) }
-body.density-compact #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px }
+body.density-compact:not(.mobile-ui) #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px }
 body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px) }
 body.density-compact .row { padding-top: 4px; padding-bottom: 4px }
 body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px }
@@ -82,7 +82,7 @@ select { appearance: none; -webkit-appearance: none; cursor: pointer; color-sche
 body.light select { color-scheme: light; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(20,20,20,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>") }
 select option, select optgroup { background: var(--menu-bg); color: var(--text) }
 /* ✨ Design-Politur v13 (26. Juli): Fokus-Ring wie am Composer (3px accent-soft) — einheitliches Fokus-Feedback für ALLE Eingaben statt nur Rahmenfarbe. Editor-Blöcke (.blk-input) und Composer bleiben unverändert (eigene box-shadow-Regeln gewinnen). */
-input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
 #paletteInput:focus { box-shadow: none }
 #tree { flex: 1; overflow-y: auto }
 .row { display: flex; align-items: center; gap: 2px; padding: 7px 8px; border-radius: var(--radius-md); cursor: pointer; color: var(--text2) }
@@ -97,7 +97,9 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 @media (hover: hover) and (pointer: fine) {
 	.row .row-add { width: 0; min-width: 0; padding: 0; border: 0; overflow: hidden; flex: 0 0 auto }
 	.row:hover .row-add, .row:focus-within .row-add { width: auto; min-width: 22px; padding: 0 7px }
+	.chat-row:hover .chat-date, .chat-row:focus-within .chat-date { display: none }
 }
+.chat-row-actions { display: flex; align-items: center; gap: 2px }
 /* ↔️ Breite der linken Spalte ziehbar: Griff an der rechten Kante, Wert lebt in --sidebar-w
    (app.js schreibt sie inline auf <body> und merkt sie lokal). Doppelklick = Standardbreite. */
 #sidebar { position: relative }
@@ -866,6 +868,16 @@ h3.blk-h { font-size: 1.12em }
 .cal-num { font-size: var(--text-sm); font-weight: 600; color: var(--text2) }
 .cal-day.today .cal-num { color: var(--accent) }
 .cal-snippet { font-size: var(--text-xs); color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical }
+@media (max-width: 680px) {
+	.cal-grid { gap: 3px }
+	.cal-dow { text-align: center; padding: 0 }
+	.cal-day { min-height: 48px; padding: 4px 2px; border-radius: var(--radius-sm); align-items: center; justify-content: center; gap: 2px }
+	.cal-num { font-size: var(--text-xs); text-align: center }
+	.cal-snippet { display: none }
+	.cal-day.has-note::after { content: "•"; color: var(--accent); font-size: 14px; line-height: 1; text-align: center; display: block; margin-top: -2px }
+	.library.daily { padding: 16px 10px }
+	.library.daily .lib-head h1 { font-size: var(--text-lg) }
+}
 /* == Stapel-Baum in der Sidebar (Anki-Tab) == */
 /* UI-Fix v7 */
 .deck-badge { flex-shrink: 0; font-size: var(--text-2xs); min-width: 18px; text-align: center; border-radius: var(--radius-lg); padding: 1px 5px; margin-left: 2px; background: var(--success-soft); color: var(--success) }
@@ -934,7 +946,8 @@ h3.blk-h { font-size: 1.12em }
 }
 /* Einheitliche Interaktionszustände und bessere Tastaturbedienung */
 button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+button:focus-visible, [tabindex]:focus-visible, .row:focus-visible, .lib-card:focus-visible, .cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
 button:disabled { opacity: .38; cursor: not-allowed; transform: none }
 .modal, .page-menu, .model-menu, .palette-box { border-radius: var(--radius-lg) }
 input, textarea, select, .row, .menu-item { border-radius: var(--radius-md) }
@@ -1766,16 +1779,21 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 .blk-img img { max-width: 100%; border-radius: var(--radius-xs); display: block }
 .blk-img figcaption { font-size: var(--text-sm); color: var(--text2); padding-top: 6px }
 /* == --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile lei == */
-.blk-tablewrap { position: relative; width: 100%; padding: 6px 20px 20px 0 }
+.blk-tablewrap { position: relative; width: 100%; padding: 6px 26px 26px 0 }
 .blk-table { border-collapse: collapse; width: 100%; font-size: var(--text-base); table-layout: fixed }
 .blk-table th, .blk-table td { border: 1px solid var(--edge); padding: 0; vertical-align: top; min-width: 64px }
 .blk-table th { background: var(--surface); font-weight: 600; text-align: left }
 .blk-table .blk-cell { padding: 7px 9px; min-height: 33px; font-size: var(--text-base); line-height: 1.45 }
-.blk-tbtn { position: absolute; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--radius-xs); color: var(--text2); font-size: var(--text-base); line-height: 1; cursor: pointer; opacity: 0; transition: opacity .1s, background .1s; padding: 0; min-height: 0 }
-.blk-tablewrap:hover .blk-tbtn { opacity: 1 }
-.blk-tbtn:hover { background: var(--surface-active); color: var(--text) }
-.blk-tbtn-col { top: 6px; right: 0; width: 16px; height: calc(100% - 26px) }
-.blk-tbtn-row { bottom: 0; left: 0; height: 16px; width: calc(100% - 20px) }
+.blk-tbtn { position: absolute; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--edge-soft); border-radius: var(--radius-xs); color: var(--text2); font-size: var(--text-sm); line-height: 1; cursor: pointer; opacity: 0; transition: opacity .15s, background .12s, color .12s; padding: 0; min-height: 0 }
+.blk-tablewrap:hover .blk-tbtn, .blk-tablewrap:focus-within .blk-tbtn { opacity: .75 }
+.blk-tbtn:hover { opacity: 1; background: var(--accent); color: var(--on-accent); border-color: var(--accent) }
+.blk-tbtn-col { top: 6px; right: 2px; width: 22px; height: calc(100% - 32px) }
+.blk-tbtn-row { bottom: 2px; left: 0; height: 22px; width: calc(100% - 28px) }
+@media (pointer: coarse) {
+	.blk-tablewrap .blk-tbtn { opacity: .75 }
+	.blk-tbtn-col { width: 26px }
+	.blk-tbtn-row { height: 26px }
+}
 /* == --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren D == */
 .blk-callout { display: flex; gap: 10px; width: 100%; margin: 4px 0; padding: 16px 16px 16px 14px; border-radius: var(--radius-sm); border: 1px solid var(--surface-hover); background: var(--surface) }
 .blk-callout .blk-children { flex: 1; min-width: 0 }
@@ -1884,6 +1902,8 @@ body.light .row.active { box-shadow: inset 3px 0 0 var(--accent) }
 body.light .think-box { background: var(--surface-subtle); border-color: var(--edge-soft) }
 body.light .file-chip, body.light .edit-files-list { background: var(--bg0); border-color: var(--edge) }
 body.light .anki-deck-group td { background: var(--bubble) }
+body.light .graph-skill { background: var(--panel-solid); border-color: var(--edge-soft) }
+body.light .graph-lane { background: linear-gradient(180deg, var(--surface-subtle), transparent 45%) }
 /* == Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips == */
 .home-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px }
 .home-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
@@ -2011,7 +2031,7 @@ h3, h4 { text-wrap: balance }
 .heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
 /* ---------- ✦ Wissensgraph v4: Fach → Thema → Skill ---------- */
 .graph-overlay { position: fixed; inset: 0; z-index: var(--z-graph); display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: radial-gradient(circle at 50% -20%, rgb(var(--accent-rgb) / .09), transparent 38%), var(--panel-solid) }
-.graph-head { flex: 0 0 auto; min-height: 64px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 16px; padding: 8px 18px; border-bottom: 1px solid var(--edge-soft); background: rgb(25 25 25 / .88); backdrop-filter: blur(16px) }
+.graph-head { flex: 0 0 auto; min-height: 64px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 16px; padding: 8px 18px; border-bottom: 1px solid var(--edge-soft); background: color-mix(in srgb, var(--panel-solid) 88%, transparent); backdrop-filter: blur(16px) }
 .graph-brand { display: flex; align-items: center; gap: 10px; min-width: 0 }
 .graph-brand > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border) }
 .graph-brand h1 { margin: 0; font-size: var(--text-md); line-height: 1.2 }
@@ -2035,21 +2055,21 @@ h3, h4 { text-wrap: balance }
 .graph-stage { min-width: 0; flex: 1; position: relative; overflow: auto; scrollbar-gutter: stable; scroll-behavior: smooth }
 .graph-lanes { position: relative; z-index: 2; min-width: max-content; min-height: 100%; display: flex; align-items: stretch; gap: 22px; padding: 42px 54px 70px }
 .graph-lane { width: 250px; min-height: 100%; display: flex; flex-direction: column; border: 1px solid var(--edge-soft); border-radius: var(--radius-xl); background: linear-gradient(180deg, var(--surface), transparent 45%); box-shadow: var(--elev-1) }
-.graph-lane > header { position: sticky; top: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: rgb(31 33 39 / .92); backdrop-filter: blur(12px); font-weight: 700 }
+.graph-lane > header { position: sticky; top: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--menu-bg) 92%, transparent); backdrop-filter: blur(12px); font-weight: 700 }
 .graph-lane > header small { color: var(--accent); font-size: var(--text-xs) }
 .graph-topics { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 18px; padding: 18px 12px 22px }
-.graph-topic { position: relative; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: rgb(255 255 255 / .018) }
+.graph-topic { position: relative; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle) }
 .graph-topic > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border-bottom: 1px solid var(--edge-soft); color: var(--text2); font-size: var(--text-xs) }
 .graph-topic > header b { color: var(--text); font-size: var(--text-sm) }
 .graph-topic > header span { color: var(--accent); font-size: var(--text-2xs) }
 .graph-levels { display: flex; flex-direction: column; justify-content: flex-end; gap: 34px; padding: 24px 8px 12px }
 .graph-level { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; position: relative }
-.graph-skill { position: relative; z-index: 3; width: 100%; min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--edge); border-radius: var(--radius-lg); text-align: left; color: var(--text); background: rgb(35 37 43 / .96); box-shadow: 0 8px 22px rgb(0 0 0 / .18); transition: transform var(--motion-base) var(--ease-out), border-color var(--motion-base), opacity var(--motion-fast) }
+.graph-skill { position: relative; z-index: 3; width: 100%; min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--edge); border-radius: var(--radius-lg); text-align: left; color: var(--text); background: var(--surface); box-shadow: var(--elev-1); transition: transform var(--motion-base) var(--ease-out), border-color var(--motion-base), opacity var(--motion-fast) }
 .graph-skill:hover { transform: translateY(-2px); border-color: rgb(var(--accent-rgb) / .45) }
 .graph-skill.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 10px 26px rgb(0 0 0 / .28) }
 .graph-skill.dim { opacity: .18 }
 .graph-skill-ring { flex: 0 0 auto; width: 31px; height: 31px; border-radius: 50%; background: conic-gradient(var(--skill-color) var(--progress), var(--surface-active) 0); position: relative }
-.graph-skill-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #25272d }
+.graph-skill-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--menu-bg) }
 .graph-skill-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px }
 .graph-skill-copy b { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-sm) }
 .graph-skill-copy small { color: var(--text2); font-size: var(--text-2xs) }
@@ -2057,14 +2077,14 @@ h3, h4 { text-wrap: balance }
 .graph-skill.state-building { --skill-color: #d4ae55 }
 .graph-skill.state-fragile { --skill-color: var(--danger) }
 .graph-skill.state-mastered { --skill-color: var(--success) }
-.graph-skill.state-gap { --skill-color: #bd7ce8; border-style: dashed; background: rgb(154 109 215 / .08) }
+.graph-skill.state-gap { --skill-color: rgb(var(--c-purple)); border-style: dashed; background: rgb(var(--c-purple) / .08) }
 .graph-next { position: absolute; right: 8px; top: -10px; padding: 2px 7px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--accent); font-size: var(--text-3xs); font-weight: 800; box-shadow: var(--elev-1) }
 .graph-lines { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none }
 .graph-lines path { fill: none; stroke-linecap: round }
-.graph-lines .prereq { stroke: rgb(150 160 175 / .26); stroke-width: 1.5 }
+.graph-lines .prereq { stroke: var(--edge); stroke-width: 1.5 }
 .graph-lines .bridge { stroke: rgb(var(--accent-rgb) / .62); stroke-width: 2; stroke-dasharray: 5 7 }
-.graph-lines .bridge.gap { stroke: rgb(189 124 232 / .72); stroke-dasharray: 3 6 }
-.graph-inspector { flex: 0 0 0; width: 0; overflow: hidden auto; border-left: 1px solid transparent; background: rgb(29 30 34 / .97); transition: width var(--motion-slow) var(--ease-out), flex-basis var(--motion-slow) var(--ease-out) }
+.graph-lines .bridge.gap { stroke: rgb(var(--c-purple) / .72); stroke-dasharray: 3 6 }
+.graph-inspector { flex: 0 0 0; width: 0; overflow: hidden auto; border-left: 1px solid transparent; background: color-mix(in srgb, var(--menu-bg) 97%, transparent); transition: width var(--motion-slow) var(--ease-out), flex-basis var(--motion-slow) var(--ease-out) }
 .graph-overlay.inspector-open .graph-inspector { flex-basis: 330px; width: 330px; padding: 18px; border-left-color: var(--edge-soft) }
 .graph-inspector h2 { margin: 12px 0 5px; font-size: var(--text-lg) }
 .graph-inspector h3 { margin: 22px 0 8px; color: var(--text2); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em }
@@ -2079,7 +2099,7 @@ h3, h4 { text-wrap: balance }
 .graph-mastery b { font-size: var(--text-md) }
 .graph-mastery span { margin-top: 2px; color: var(--text2); font-size: var(--text-3xs) }
 .graph-learn { width: 100%; min-height: 42px }
-.graph-gap-note { padding: 11px 12px; border: 1px dashed rgb(189 124 232 / .45); border-radius: var(--radius-md); color: #d8b2f2; background: rgb(154 109 215 / .08); font-size: var(--text-xs); line-height: 1.4 }
+.graph-gap-note { padding: 11px 12px; border: 1px dashed rgb(var(--c-purple) / .45); border-radius: var(--radius-md); color: rgb(var(--c-purple)); background: rgb(var(--c-purple) / .08); font-size: var(--text-xs); line-height: 1.4 }
 .graph-relations { display: flex; flex-wrap: wrap; gap: 6px }
 .graph-relations button { min-height: 30px; padding: 4px 9px; font-size: var(--text-xs) }
 .graph-edit { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--edge-soft) }
