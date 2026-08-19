@@ -1,6 +1,6 @@
 {
   "name": "impala67-sync-server",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Impala67 E2EE Real-Time Sync Worker on Cloudflare",
   "main": "worker.js",
   "type": "module",

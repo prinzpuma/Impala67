@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { CLOUDFLARE_SYNC } from "../web/sync-cloudflare.js";
 import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES } from "../web/sync-crypto.js";
+import { DB } from "../web/db.js";
 
 test("CLOUDFLARE_SYNC hat initialen Status und Methoden", () => {
 	const status = CLOUDFLARE_SYNC.status();
@@ -39,7 +40,9 @@ test("formatStorageUsage schützt vor Überlauf", () => {
 test("Browser- oder Serverfehler werden nicht als erfolgreicher Sync verschluckt", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
+	const originalEventIds = DB.eventIds;
 	globalThis.WebSocket = undefined;
+	DB.eventIds = async () => [];
 	globalThis.fetch = async () => new Response(JSON.stringify({ error: "CORS-Konfiguration fehlt" }), {
 		status: 403,
 		headers: { "Content-Type": "application/json" },
@@ -53,5 +56,6 @@ test("Browser- oder Serverfehler werden nicht als erfolgreicher Sync verschluckt
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
+		DB.eventIds = originalEventIds;
 	}
 });

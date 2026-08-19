@@ -47,6 +47,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	let configureGeneration = 0;
 	let remoteApplyChain = Promise.resolve();
 	let syncPromise = null;
+	let localEventIds = null;
 	let initialized = false;
 
 	let state = {
@@ -149,9 +150,19 @@ export const CLOUDFLARE_SYNC = (() => {
 			credentials = await deriveSyncCredentials(cleanKey);
 			if (generation !== configureGeneration) return false;
 			// Cursor gehören zum jeweiligen Sync-Kanal. Ein alter globaler Cursor
-			// darf beim Schlüsselwechsel keine Ereignisse überspringen.
-			state.lastSyncedSeq = Number(LS.getItem(lastSyncedKey())) || 0;
-			state.lastUploadedLocalSeq = Number(LS.getItem(lastUploadedKey())) || 0;
+			// darf beim Schlüsselwechsel keine Ereignisse überspringen. Beim ersten
+			// Update auf kanalbezogene Cursor übernehmen wir den alten Wert jedoch
+			// für genau die bereits konfigurierte Verbindung.
+			const scopedSynced = LS.getItem(lastSyncedKey());
+			const scopedUploaded = LS.getItem(lastUploadedKey());
+			state.lastSyncedSeq = scopedSynced !== null
+				? Number(scopedSynced) || 0
+				: (connectionChanged ? 0 : state.lastSyncedSeq);
+			state.lastUploadedLocalSeq = scopedUploaded !== null
+				? Number(scopedUploaded) || 0
+				: (connectionChanged ? 0 : state.lastUploadedLocalSeq);
+			LS.setItem(lastSyncedKey(), String(state.lastSyncedSeq));
+			LS.setItem(lastUploadedKey(), String(state.lastUploadedLocalSeq));
 			connectWebSocket();
 			await catchUp();
 			return true;
@@ -302,12 +313,11 @@ export const CLOUDFLARE_SYNC = (() => {
 			const rawEvent = await decryptPayload(credentials.cryptoKey, encryptedEvent);
 			if (!rawEvent || !rawEvent.id || !rawEvent.type) return;
 
-			const localEvents = await DB.allEvents();
-			const exists = localEvents.some((e) => e.id === rawEvent.id);
-			if (exists) {
+			localEventIds ??= new Set(await DB.eventIds());
+			if (localEventIds.has(rawEvent.id)) {
 				if (encryptedEvent.seq > state.lastSyncedSeq) {
 					state.lastSyncedSeq = encryptedEvent.seq;
-					LS.setItem(LS_LAST_SEQ_KEY, String(encryptedEvent.seq));
+					LS.setItem(lastSyncedKey(), String(encryptedEvent.seq));
 				}
 				return;
 			}
@@ -319,11 +329,12 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 
 			await DB.addEvents([rawEvent]);
+			localEventIds.add(rawEvent.id);
 			STATE.applyRemoteEvents([rawEvent]);
 
 			if (encryptedEvent.seq > state.lastSyncedSeq) {
 				state.lastSyncedSeq = encryptedEvent.seq;
-				LS.setItem(LS_LAST_SEQ_KEY, String(encryptedEvent.seq));
+				LS.setItem(lastSyncedKey(), String(encryptedEvent.seq));
 			}
 		} catch (e) {
 			console.error("[cf-sync] Fehler beim Entschlüsseln/Anwenden des Remote-Events:", e);
@@ -338,16 +349,19 @@ export const CLOUDFLARE_SYNC = (() => {
 	const lastSyncedKey = () => (credentials?.userId ? `${LS_LAST_SEQ_KEY}_${credentials.userId}` : LS_LAST_SEQ_KEY);
 
 	/**
-	 * Holt verpasste Events seit `lastSyncedSeq` vom Server mit lückenloser Paginierung
+	 * Holt verpasste Events seit `lastSyncedSeq` vom Server in kleinen, iPad-tauglichen Seiten
 	 */
 	async function runCatchUp(forceAll = false) {
 		setStatus("syncing", "Synchronisiere…");
 
 		try {
+			// Nur IDs einlesen und über den gesamten Lauf wiederverwenden. Zuvor
+			// wurde pro Seite das komplette lokale Event-Log erneut in den RAM geladen.
+			localEventIds = new Set(await DB.eventIds());
 			let hasMore = true;
-			const PAGE_LIMIT = 500;
+			const PAGE_LIMIT = 100;
 
-			// Paginierungs-Schleife: Holt auch tausende verpasste Events in 500er-Batches lückenlos ab
+			// Paginierungs-Schleife: Holt auch tausende verpasste Events lückenlos ab.
 			while (hasMore) {
 				const since = state.lastSyncedSeq;
 				const apiUrl = getApiUrl(state.url, `/api/sync?since=${since}&limit=${PAGE_LIMIT}`);
@@ -370,14 +384,14 @@ export const CLOUDFLARE_SYNC = (() => {
 							const ev = await decryptPayload(credentials.cryptoKey, item);
 							if (ev && ev.id) decryptedEvents.push(ev);
 						} catch (err) {
-							console.warn("[cf-sync] Event konnte nicht entschlüsselt werden:", err);
+							// Cursor nicht über ein unlesbares Event hinwegschieben. Sonst wäre
+							// dieses Event auf dem Gerät dauerhaft verloren.
+							throw new Error(`Cloud-Event ${item.seq || "?"} konnte nicht entschlüsselt werden. Der Sync-Fortschritt wurde nicht verändert.`, { cause: err });
 						}
 					}
 
 					if (decryptedEvents.length) await enqueueRemoteApply(async () => {
-						const localEvents = await DB.allEvents();
-						const existingIds = new Set(localEvents.map((e) => e.id));
-						const fresh = decryptedEvents.filter((e) => !existingIds.has(e.id));
+						const fresh = decryptedEvents.filter((e) => !localEventIds.has(e.id));
 
 						if (fresh.length) {
 							if (fresh.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
@@ -386,6 +400,7 @@ export const CLOUDFLARE_SYNC = (() => {
 								}
 							}
 							await DB.addEvents(fresh);
+							for (const ev of fresh) localEventIds.add(ev.id);
 							STATE.applyRemoteEvents(fresh);
 						}
 					});
@@ -593,6 +608,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		initialized = true;
 
 		STATE.onAfterDispatch((ev) => {
+			if (ev?.id && localEventIds) localEventIds.add(ev.id);
 			if (credentials) {
 				void sendEventLive(ev);
 			}
@@ -621,7 +637,9 @@ export const CLOUDFLARE_SYNC = (() => {
 		configure,
 		disconnect,
 		catchUp: (forceAll = false) => catchUp(forceAll),
-		syncNow: () => catchUp(true),
+		// Ein manueller Sync ist ein Delta-Sync. Vollständige Wiederherstellung
+		// wird weiterhin automatisch nur für einen wirklich leeren Kanal genutzt.
+		syncNow: () => catchUp(false),
 		purgeCloudData,
 		generateSyncKey,
 		status: () => ({ ...state }),

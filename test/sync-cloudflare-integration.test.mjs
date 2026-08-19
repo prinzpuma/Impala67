@@ -15,10 +15,12 @@ function createMockEnv() {
 	const dbStore = {
 		events: [],
 		storage: new Map(),
+		queries: [],
 	};
 
 	const mockDb = {
 		prepare(query) {
+			dbStore.queries.push(query);
 			const createOp = (params = []) => ({
 				_query: query,
 				_params: params,
@@ -129,6 +131,26 @@ test("CORS erlaubt die vom Browser verwendeten Auth-Header explizit", async () =
 	assert.match(allowed, /Authorization/i);
 	assert.match(allowed, /X-User-Id/i);
 	assert.notEqual(allowed.trim(), "*");
+});
+
+test("Worker-Fehler bleiben als lesbare JSON-Antwort mit CORS sichtbar", async () => {
+	const env = {
+		SYNC_ROOM: {
+			idFromName: () => "room-id",
+			get: () => ({ fetch: async () => { throw new Error("D1 nicht erreichbar"); } }),
+		},
+	};
+	const res = await worker.fetch(new Request("https://example.com/api/sync?user=1234567890123456"), env, {});
+	assert.equal(res.status, 500);
+	assert.equal(res.headers.get("Access-Control-Allow-Origin"), "*");
+	assert.equal((await res.json()).code, "internal_error");
+});
+
+test("Actor-Start lädt nicht mehr alle Event-IDs eines Kontos in den Arbeitsspeicher", async () => {
+	const { env, ctx, dbStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	await room.ensureInitialized("1234567890123456");
+	assert.equal(dbStore.queries.some((query) => /^SELECT event_id FROM sync_events WHERE user_id = \?$/i.test(query.trim())), false);
 });
 
 test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignoriert", async () => {

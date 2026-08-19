@@ -14,6 +14,7 @@
 
 const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB pro Nutzer
 const MAX_TOTAL_SERVER_USERS = 8; // Maximal 8 Accounts (8 x 500 MB = 4.000 MB = 4 GB, 1 GB Puffer zum 5 GB Free Limit)
+const MAX_EVENTS_PER_REQUEST = 100;
 const enc = new TextEncoder();
 
 function corsHeaders() {
@@ -65,7 +66,6 @@ export class SyncRoom {
 		this.initialized = false;
 		this.maxSeq = 0;
 		this.totalBytes = 0;
-		this.knownEventIds = new Set();
 		this._queue = Promise.resolve();
 	}
 
@@ -102,12 +102,6 @@ export class SyncRoom {
 				}
 			}
 
-			const rows = await this.env.DB.prepare(
-				"SELECT event_id FROM sync_events WHERE user_id = ?"
-			).bind(userId).all();
-			for (const r of rows.results || []) {
-				this.knownEventIds.add(r.event_id);
-			}
 		}
 
 		this.initialized = true;
@@ -260,9 +254,8 @@ export class SyncRoom {
 		}
 
 		// 1. Filtern und Deduplizieren
-		const freshEvents = [];
+		const candidates = [];
 		const batchEventIds = new Set();
-		let incomingBytes = 0;
 
 		for (const ev of events) {
 			if (
@@ -274,7 +267,7 @@ export class SyncRoom {
 				return { ok: false, error: "Ungültiges verschlüsseltes Event-Paket.", status: 400, usage: this.totalBytes };
 			}
 			// Bereits bekanntes Event überspringen (Idempotenz)
-			if (this.knownEventIds.has(ev.id) || batchEventIds.has(ev.id)) continue;
+			if (batchEventIds.has(ev.id)) continue;
 			batchEventIds.add(ev.id);
 
 			// Quota-Werte niemals vom Client übernehmen: Base64 enthält vier
@@ -283,9 +276,24 @@ export class SyncRoom {
 			const cipherBytes = Math.max(0, Math.floor((ev.data.length * 3) / 4) - padding);
 			const ivBytes = Math.floor(ev.iv.length / 2);
 			const size = cipherBytes + ivBytes;
-			incomingBytes += size;
-			freshEvents.push({ ...ev, size });
+			candidates.push({ ...ev, size });
 		}
+
+		// Nur die IDs des aktuellen Pakets gegen D1 prüfen. Der frühere Ansatz
+		// lud bei jedem Actor-Start sämtliche IDs eines Kontos in den Worker-RAM.
+		const existingIds = new Set();
+		if (this.env?.DB && candidates.length) {
+			for (let i = 0; i < candidates.length; i += 80) {
+				const part = candidates.slice(i, i + 80);
+				const placeholders = part.map(() => "?").join(", ");
+				const rows = await this.env.DB.prepare(
+					`SELECT event_id FROM sync_events WHERE user_id = ? AND event_id IN (${placeholders})`
+				).bind(this.userId, ...part.map((ev) => ev.id)).all();
+				for (const row of rows.results || []) existingIds.add(row.event_id);
+			}
+		}
+		const freshEvents = candidates.filter((ev) => !existingIds.has(ev.id));
+		const incomingBytes = freshEvents.reduce((sum, ev) => sum + ev.size, 0);
 
 		// Falls alle Events bereits existieren -> Erfolgreicher No-Op (idempotent)
 		if (!freshEvents.length) {
@@ -343,8 +351,6 @@ export class SyncRoom {
 		// D1-Fehler darf der Actor keine Events als gespeichert markieren.
 		this.maxSeq = nextSeq;
 		this.totalBytes = nextTotalBytes;
-		for (const ev of freshEvents) this.knownEventIds.add(ev.id);
-
 		return {
 			ok: true,
 			savedEvents,
@@ -443,6 +449,9 @@ export class SyncRoom {
 			if (!body || !Array.isArray(body.events)) {
 				return jsonResponse({ error: "Ungültiger Request-Body (Array 'events' erwartet)" }, 400);
 			}
+			if (body.events.length > MAX_EVENTS_PER_REQUEST) {
+				return jsonResponse({ error: `Maximal ${MAX_EVENTS_PER_REQUEST} Events pro Upload erlaubt.` }, 413);
+			}
 
 			const res = await this.saveEvents(body.events);
 			if (!res.ok) {
@@ -467,7 +476,6 @@ export class SyncRoom {
 		if (url.pathname === "/api/reset" && request.method === "POST") {
 			this.maxSeq = 0;
 			this.totalBytes = 0;
-			this.knownEventIds.clear();
 
 			if (this.env?.DB) {
 				await this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId).run();
@@ -484,6 +492,16 @@ export class SyncRoom {
 
 export default {
 	async fetch(request, env, ctx) {
+		try {
+			return await handleRequest(request, env, ctx);
+		} catch (error) {
+			console.error(JSON.stringify({ scope: "worker_fetch", message: error?.message || String(error) }));
+			return jsonResponse({ error: "Interner Cloudflare-Sync-Fehler.", code: "internal_error" }, 500);
+		}
+	},
+};
+
+async function handleRequest(request, env, ctx) {
 		// Preflight CORS
 		if (request.method === "OPTIONS") {
 			return new Response(null, { status: 204, headers: corsHeaders() });
@@ -495,7 +513,7 @@ export default {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.2.1",
+				version: "2.2.2",
 				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 			});
@@ -510,11 +528,10 @@ export default {
 		if (env.SYNC_ROOM) {
 			const id = env.SYNC_ROOM.idFromName(userId);
 			const room = env.SYNC_ROOM.get(id);
-			return room.fetch(request);
+			return await room.fetch(request);
 		}
 
 		// Fallback
 		const room = new SyncRoom(ctx, env);
-		return room.fetch(request);
-	},
-};
+		return await room.fetch(request);
+}

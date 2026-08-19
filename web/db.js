@@ -103,6 +103,20 @@ export const DB = (() => {
 	}
 	const addEvent = (ev) => addEvents([ev]);
 	const allEvents = () => ro("events", (s) => s.getAll());
+	function eventIds() {
+		ensureOpen();
+		return new Promise((res, rej) => {
+			const ids = [];
+			const req = db.transaction("events").objectStore("events").openCursor();
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return res(ids);
+				if (cur.value?.id) ids.push(cur.value.id);
+				cur.continue();
+			};
+			req.onerror = () => rej(req.error);
+		});
+	}
 
 	// Cursor liest nur oberhalb des Sync-Wasserstands. _remote-Events (echte Drive-Downloads) sind
 	// kein lokales Echo und werden nicht erneut hochgeladen; Konfliktkopien syncen normal.
@@ -657,5 +671,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventIds, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();
