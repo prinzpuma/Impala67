@@ -1370,6 +1370,24 @@ function wireEvents() {
 			case "btnDriveSyncSettings":
 				await SETTINGS.handleDriveSyncSettings(t);
 				break;
+			case "btnCfConnect":
+				await SETTINGS.handleCfConnect(t);
+				break;
+			case "btnCfDisconnect":
+				SETTINGS.handleCfDisconnect();
+				break;
+			case "btnCfSyncNow":
+				await SETTINGS.handleCfSyncNow(t);
+				break;
+			case "btnCfGenKey":
+				SETTINGS.handleCfGenKey();
+				break;
+			case "btnCfCopyKey":
+				await SETTINGS.handleCfCopyKey();
+				break;
+			case "btnCfPurge":
+				await SETTINGS.handleCfPurge();
+				break;
 			case "btnAddProvider":
 				await SETTINGS.handleAddProvider();
 				break;

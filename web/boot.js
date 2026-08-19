@@ -14,6 +14,7 @@ import { DRIVE } from "./drive.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { ANALYSE } from "./analyse.js";
 import { isBlobAlive } from "./sync-core.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -159,8 +160,12 @@ export async function initApp() {
 		btn.title = d.detail || d.label || "Drive-Sync";
 		SETTINGS.refreshDriveStatusUi?.();
 	});
+	window.addEventListener("impala67:cloudflare-sync-status", () => {
+		SETTINGS.refreshCloudflareStatusUi?.();
+	});
 	window.addEventListener("online", () => DRIVE.refreshStatus());
 	window.addEventListener("offline", () => DRIVE.refreshStatus());
+	CLOUDFLARE_SYNC.init();
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);

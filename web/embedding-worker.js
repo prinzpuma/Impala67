@@ -61,7 +61,22 @@ async function loadTransformers() {
 	return { pipeline, env };
 }
 
+
+function isAppleTouchDevice() {
+	if (typeof navigator === "undefined") return false;
+	const ua = String(navigator.userAgent || "");
+	const platform = String(navigator.platform || "");
+	// iPadOS can report a desktop Mac user agent, and WorkerNavigator may not
+	// expose maxTouchPoints. Treating Mac-like Apple user agents conservatively
+	// also keeps Safari/WebKit on the safer WASM path.
+	return /iPad|iPhone|iPod|Macintosh/i.test(ua) || (platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1);
+}
+
 async function chooseDevice() {
+	if (isAppleTouchDevice()) {
+		console.info("Apple-Touch-Gerät erkannt, verwende speicherschonendes WASM statt WebGPU.");
+		return "wasm";
+	}
 	try {
 		if (typeof navigator !== "undefined" && navigator.gpu && typeof navigator.gpu.requestAdapter === "function") {
 			const adapter = await navigator.gpu.requestAdapter();
@@ -105,13 +120,14 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 				device,
 				progress_callback: (p) => onProgress?.(p),
 			};
+			if (device === "wasm") options.dtype = "q8";
 			try {
 				extractor = await pipeline("feature-extraction", modelId, options);
 			} catch (err) {
 				if (device !== "webgpu") throw err;
 				console.warn("WebGPU-Modellstart fehlgeschlagen, wechsle auf WASM:", err?.message || err);
 				usedDevice = "wasm";
-				extractor = await pipeline("feature-extraction", modelId, { ...options, device: "wasm" });
+				extractor = await pipeline("feature-extraction", modelId, { ...options, device: "wasm", dtype: "q8" });
 			}
 			currentModel = modelId;
 			currentDevice = usedDevice;

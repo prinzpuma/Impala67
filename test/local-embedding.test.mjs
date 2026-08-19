@@ -122,6 +122,38 @@ test("RAG indexes and searches with 256d vectors", async () => {
 	}
 });
 
+test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
+	S.settings.embedModel = "local:bekko-a8m";
+	S.settings.embedProviderId = "local";
+	S.pages = {
+		"large": {
+			id: "large",
+			title: "Großes Dokument",
+			content: Array.from({ length: 12 }, (_, i) => `Absatz ${i} ` + "x".repeat(760)).join("\n\n"),
+			updated: 200,
+		},
+	};
+
+	const batchSizes = [];
+	const origEmbed = AI.embed;
+	const origPutVec = DB.putVec;
+	try {
+		DB.putVec = async () => {};
+		AI.embed = async (texts) => {
+			batchSizes.push(texts.length);
+			return texts.map(() => new Array(256).fill(0));
+		};
+		await RAG.indexPage("large");
+
+		assert.ok(batchSizes.length > 1);
+		assert.ok(Math.max(...batchSizes) <= 4);
+		assert.equal(batchSizes.reduce((sum, size) => sum + size, 0), 12);
+	} finally {
+		AI.embed = origEmbed;
+		DB.putVec = origPutVec;
+	}
+});
+
 test("updateLocalEmbeddingManagerUi keeps cache and activation state separate", async () => {
 	const statusEl = document.getElementById("localEmbeddingStatus");
 	const actionsEl = document.getElementById("localEmbeddingActions");

@@ -8,6 +8,7 @@ export const DRIVE_SYNC_INTERVAL_OPTIONS = Object.freeze([
 	{ value: 30, label: "30 Minuten" },
 	{ value: 60, label: "1 Stunde" },
 	{ value: 180, label: "3 Stunden" },
+	{ value: 1440, label: "Täglich (Backup-Modus)" },
 ]);
 
 const ALLOWED_INTERVALS = new Set(DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value }) => value));

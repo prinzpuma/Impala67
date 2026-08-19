@@ -10,6 +10,8 @@ import { PDFS } from "./pdfs.js";
 export const RAG = (() => {
 	const queue = new Set();
 	let timer = null;
+	const EMBEDDING_BATCH_SIZE = 4;
+	const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 	const enabled = () => !!S.settings.embedModel;
 
@@ -62,7 +64,19 @@ export const RAG = (() => {
 		}
 		const chunks = chunk(text);
 		if (!chunks.length) { await dropIndex(pageId); return; }
-		const vecs = await AI.embed(chunks);
+		// iPad/WebKit darf nie einen kompletten PDF-Index als einen einzigen
+		// Inferenz-Batch erhalten. Das Modell verarbeitet die Batches nacheinander;
+		// dadurch bleibt der Spitzenverbrauch klein und die UI bekommt zwischen den
+		// Schritten wieder Kontrolle.
+		const vecs = [];
+		for (let at = 0; at < chunks.length; at += EMBEDDING_BATCH_SIZE) {
+			const batch = await AI.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE));
+			if (!Array.isArray(batch) || batch.length !== Math.min(EMBEDDING_BATCH_SIZE, chunks.length - at) || batch.some((v) => !v || !v.length)) {
+				throw new Error("Embedding unvollständig für Seite " + pageId);
+			}
+			vecs.push(...batch);
+			await yieldToBrowser();
+		}
 		// Unvollständige Embedding-Antworten verwerfen statt einen halben Index zu
 		// speichern — queuePage fängt den Fehler und die Seite bleibt „stale“.
 		if (!Array.isArray(vecs) || vecs.length !== chunks.length || vecs.some((v) => !v || !v.length)) {
@@ -104,6 +118,7 @@ export const RAG = (() => {
 					}
 					lastMsg = msg;
 				}
+				await yieldToBrowser();
 			}
 			if (failN === 1) console.warn("RAG-Index fehlgeschlagen:", lastErr);
 			else if (failN > 1) console.warn("RAG-Index: " + failN + " Seite(n) fehlgeschlagen — " + lastMsg);

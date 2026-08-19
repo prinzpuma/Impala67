@@ -17,9 +17,10 @@ test("automatic Drive sync defaults to 30 minutes and not after every change", (
 });
 
 test("automatic Drive sync accepts menu intervals and an explicit change toggle", () => {
-	assert.deepEqual(DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value }) => value), [5, 15, 30, 60, 180]);
+	assert.deepEqual(DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value }) => value), [5, 15, 30, 60, 180, 1440]);
 	assert.equal(normalizeDriveSyncMinutes({ driveAutoSyncMinutes: 5 }), 5);
 	assert.equal(normalizeDriveSyncMinutes({ driveAutoSyncMinutes: "60" }), 60);
+	assert.equal(normalizeDriveSyncMinutes({ driveAutoSyncMinutes: "1440" }), 1440);
 	assert.equal(driveSyncAfterChange({ driveSyncAfterChange: true }), true);
 });
 

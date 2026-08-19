@@ -7,7 +7,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "general", label: "Allgemein", icon: "sliders", description: "Startseite und grundlegendes Verhalten" },
 	{ id: "appearance", label: "Darstellung", icon: "appearance", description: "Theme, Akzent, Dichte und Hintergrund" },
 	{ id: "ai", label: "KI & Lernen", icon: "sparkles", description: "Modelle, Quellen und Lernfunktionen" },
-	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Google Drive, Notion und lokale Tokens" },
+	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Cloudflare, Google Drive, Notion und lokale Tokens" },
 	{ id: "data", label: "Daten & App", icon: "archive", description: "Backups, Exporte, Speicher und Updates" },
 	{ id: "devices", label: "Geräte & Bedienung", icon: "gamepad", description: "Controller, Tastenbelegung und Eingabegeräte" },
 ];
@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = [
 export const SETTINGS_ALIASES = Object.freeze({
 	ki: "ai", home: "general", look: "appearance", notion: "sync",
 	backup: "data", update: "data", controller: "devices", experimente: "ai",
+	cloudflare: "sync",
 });
 
 // Das Schema ist zugleich Informationsarchitektur und Suchindex. Renderer lesen
@@ -35,6 +36,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "ai-instructions", section: "ai", group: "Erweitert", label: "Eigene Anweisungen", description: "Tonfall und dauerhafte Vorgaben", keywords: "prompt system text" },
 	{ id: "learning-options", section: "ai", group: "Lernen", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und lokale Lernanalyse", keywords: "karten telemetrie sicherheit confidence" },
 	{ id: "learning-beta", section: "ai", group: "Lernen", label: "Beta-Lernfunktionen", description: "Optionale KI-gestützte Lernmodi", keywords: "experimente feynman fehler hinweise multiple choice" },
+	{ id: "cf-sync", section: "sync", group: "Cloudflare Echtzeit-Sync", label: "Cloudflare Live-Sync", description: "Echtzeit-Synchronisierung über WebSockets mit 200 MB Cloud-Speicher", keywords: "cloudflare echtzeit sync websocket live server speicher quota e2ee" },
 	{ id: "drive", section: "sync", group: "Google Drive", label: "Drive-Synchronisierung", description: "Geräte über den privaten App-Speicher synchronisieren", keywords: "google login konto cloud verbinden" },
 	{ id: "drive-automation", section: "sync", group: "Google Drive", label: "Automatische Synchronisierung", description: "Intervall und Sync nach Änderungen festlegen", keywords: "automatisch intervall minuten häufigkeit jede änderung" },
 	{ id: "token-sync", section: "sync", group: "Datenschutz", label: "Tokens über Drive synchronisieren", description: "KI-Keys und Notion-Token lokal behalten", keywords: "secrets api schlüssel privat sicherheit" },

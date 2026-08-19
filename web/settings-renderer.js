@@ -152,6 +152,24 @@ function driveContent() {
 	return UI.status("warn", "Einrichtung erforderlich", "Hinterlege unter Erweitert eine Google Client-ID", "");
 }
 
+function cloudflareContent() {
+	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected", label: "Nicht eingerichtet", detail: "Cloudflare Sync konfigurieren", url: "", syncKey: "", usage: { formatted: "0 MB / 200 MB (0 %)" } };
+	const statusType = cf.status === "connected" ? "ok" : cf.status === "syncing" || cf.status === "connecting" ? "warn" : cf.status === "error" ? "error" : "idle";
+	return UI.status(statusType, cf.label || "Nicht verbunden", cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung",
+		button("Jetzt synchronisieren", "btnCfSyncNow") +
+		(cf.status === "connected" || cf.status === "connecting" ? button("Trennen", "btnCfDisconnect", "secondary") : "")
+	) +
+	UI.field("Cloudflare Worker URL", "inpCfUrl", cf.url || "", { explicit: true, placeholder: "https://impala67-sync.<account>.workers.dev" }) +
+	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
+	UI.actions([
+		{ label: "Verbinden & Synchronisieren", id: "btnCfConnect" },
+		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary" },
+		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary" },
+	]) +
+	UI.row({ title: "Cloud-Speicher (200 MB Limit)", description: "Verwendeter Speicherplatz auf deinem Cloudflare D1 Server", trailing: '<span id="cfStorageValue" class="settings-value">' + e(cf.usage?.formatted || "0 MB / 200 MB (0 %)") + '</span>' }) +
+	UI.row({ title: "Cloud-Daten löschen", description: "Löscht den synchronisierten Datenstand auf dem Cloudflare-Server", trailing: button("Cloud-Stand leeren", "btnCfPurge", "danger") });
+}
+
 function renderSync() {
 	const notionReady = !!(S.settings.notionToken || S.notionToken);
 	const notion = UI.status(notionReady ? "ok" : "idle", notionReady ? "Bereit" : "Nicht eingerichtet", S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Token und optional eine Wurzelseite hinterlegen") +
@@ -164,7 +182,14 @@ function renderSync() {
 	const automation = UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
 		UI.row({ title: "Nach jeder Änderung synchronisieren", description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall", trailing: switchControl("inpDriveSyncAfterChange", "Nach jeder Änderung synchronisieren", driveSyncAfterChange(S.settings)) });
 	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" }) + UI.field("CORS-Proxy", "inpCorsProxy", S.settings.corsProxy || "", { explicit: true, placeholder: "Leer = corsproxy.io" });
-	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.", UI.group("Google Drive", '<div id="drive-connection-status">' + driveContent() + "</div>", { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) + UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Standard: alle 30 Minuten. Start, Rückkehr zur App und das Schließen bleiben zusätzliche Sicherungspunkte." }) + UI.group("Datenschutz", privacy) + UI.group("Notion", notion, { id: "notion" }) + UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") + UI.saveBar());
+	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.",
+		UI.group("Cloudflare Echtzeit-Sync", '<div id="cf-connection-status">' + cloudflareContent() + "</div>", { id: "cf-sync", footnote: "100 % Ende-zu-Ende verschlüsselt (AES-GCM 256-Bit). Der Server sieht niemals Klartext-Notizen." }) +
+		UI.group("Google Drive (Backup & Langzeitspeicher)", '<div id="drive-connection-status">' + driveContent() + "</div>", { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) +
+		UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus." }) +
+		UI.group("Datenschutz", privacy) +
+		UI.group("Notion", notion, { id: "notion" }) +
+		UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") +
+		UI.saveBar());
 }
 
 export function refreshDriveStatusUi() {
@@ -172,6 +197,11 @@ export function refreshDriveStatusUi() {
 	if (overview) overview.outerHTML = driveOverviewRow();
 	const connection = document.getElementById("drive-connection-status");
 	if (connection) connection.innerHTML = driveContent();
+}
+
+export function refreshCloudflareStatusUi() {
+	const connection = document.getElementById("cf-connection-status");
+	if (connection) connection.innerHTML = cloudflareContent();
 }
 
 function renderData(vm) {

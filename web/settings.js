@@ -13,7 +13,8 @@ import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
-import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi } from "./settings-renderer.js";
+import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -345,6 +346,107 @@ export function handleNotionCancel() {
 	NOTION_MIGRATOR.cancel();
 	if (S.notionJob) { S.notionJob.cancelling = true; S.notionJob.status = "Wird abgebrochen…"; }
 	renderNotionJob();
+}
+
+export async function handleCfConnect(t) {
+	const urlEl = document.getElementById("inpCfUrl");
+	const keyEl = document.getElementById("inpCfKey");
+	const url = urlEl ? urlEl.value.trim() : "";
+	const syncKey = keyEl ? keyEl.value.trim() : "";
+
+	if (!url) {
+		U.toast("Bitte gib eine Cloudflare Worker URL ein.", "warn");
+		return;
+	}
+	if (!syncKey) {
+		U.toast("Bitte gib einen Sync-Schlüssel ein oder generiere einen neuen.", "warn");
+		return;
+	}
+
+	if (t) {
+		t.disabled = true;
+		t.textContent = "Verbinde…";
+	}
+
+	const success = await CLOUDFLARE_SYNC.configure(url, syncKey);
+	if (t) {
+		t.disabled = false;
+		t.textContent = "Verbinden & Synchronisieren";
+	}
+
+	if (success) {
+		U.toast("Cloudflare Echtzeit-Sync erfolgreich verbunden!", "success");
+	} else {
+		U.toast("Verbindung fehlgeschlagen. Prüfe URL und Konfiguration.", "error");
+	}
+	refreshCloudflareStatusUi();
+}
+
+export function handleCfDisconnect() {
+	CLOUDFLARE_SYNC.disconnect();
+	U.toast("Cloudflare-Sync getrennt.", "neutral");
+	refreshCloudflareStatusUi();
+}
+
+export async function handleCfSyncNow(t) {
+	if (t) {
+		t.disabled = true;
+		t.textContent = "Synchronisiere…";
+	}
+	try {
+		await CLOUDFLARE_SYNC.syncNow();
+		U.toast("Cloudflare-Sync abgeschlossen.", "success");
+	} catch (e) {
+		U.toast("Sync-Fehler: " + (e.message || e), "error");
+	} finally {
+		if (t) {
+			t.disabled = false;
+			t.textContent = "Jetzt synchronisieren";
+		}
+		refreshCloudflareStatusUi();
+	}
+}
+
+export function handleCfGenKey() {
+	const keyEl = document.getElementById("inpCfKey");
+	const newKey = CLOUDFLARE_SYNC.generateSyncKey();
+	if (keyEl) {
+		keyEl.value = newKey;
+		keyEl.type = "text";
+		setTimeout(() => { if (keyEl) keyEl.type = "password"; }, 5000);
+	}
+	U.toast("Neuer Sync-Schlüssel generiert. Kopiere ihn auf deine anderen Geräte!", "success");
+}
+
+export async function handleCfCopyKey() {
+	const keyEl = document.getElementById("inpCfKey");
+	const key = keyEl ? keyEl.value.trim() : (CLOUDFLARE_SYNC.status().syncKey || "");
+	if (!key) {
+		U.toast("Kein Schlüssel zum Kopieren vorhanden.", "warn");
+		return;
+	}
+	try {
+		await navigator.clipboard.writeText(key);
+		U.toast("Sync-Schlüssel in die Zwischenablage kopiert.", "success");
+	} catch {
+		U.toast("Kopieren nicht möglich. Bitte manuell markieren.", "warn");
+	}
+}
+
+export async function handleCfPurge() {
+	const ok = await U.confirm(
+		"Möchtest du wirklich alle synchronisierten Daten auf dem Cloudflare-Server löschen?\n\nDeine lokalen Daten auf diesem Gerät bleiben vollständig erhalten.",
+		{ title: "Cloud-Daten löschen", ok: "Cloud leeren", danger: true }
+	);
+	if (!ok) return;
+
+	const success = await CLOUDFLARE_SYNC.purgeCloudData();
+	if (success) {
+		U.toast("Cloud-Daten wurden erfolgreich gelöscht.", "success");
+	} else {
+		U.toast("Löschen fehlgeschlagen.", "error");
+	}
+	refreshCloudflareStatusUi();
 }
 
 export async function handleDriveLogin(t) {
@@ -1074,10 +1176,7 @@ export const SETTINGS = {
 	updateSettingsSearch,
 	refreshSettingsDirtyState,
 	refreshDriveStatusUi,
-	hasUnsavedSettings,
-	SETTINGS_SECTIONS,
-	handleNotionSync,
-	handleNotionCancel,
+	refreshCloudflareStatusUi,
 	hasUnsavedSettings,
 	SETTINGS_SECTIONS,
 	handleNotionSync,
@@ -1086,6 +1185,12 @@ export const SETTINGS = {
 	handleDriveLogout,
 	handleDriveSyncSettings,
 	startAutoDriveSync,
+	handleCfConnect,
+	handleCfDisconnect,
+	handleCfSyncNow,
+	handleCfGenKey,
+	handleCfCopyKey,
+	handleCfPurge,
 	handleAddProvider,
 	refreshEmbeddingModels,
 	refreshChatModels,

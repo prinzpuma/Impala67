@@ -1,0 +1,25 @@
+name = "impala67-sync"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Cloudflare D1 Datenbank Bindung
+# Erstellen mit: npx wrangler d1 create impala67-db
+# Danach die database_id hier eintragen.
+[[d1_databases]]
+binding = "DB"
+database_name = "impala67-db"
+database_id = "YOUR_D1_DATABASE_ID_HERE"
+
+# Cloudflare Durable Objects
+# Bietet einen global eindeutigen Actor pro Nutzer:
+# - Garantiert zuverlässige WebSockets über alle weltweiten Cloudflare-Standorte hinweg
+# - Verhindert Race Conditions bei Sequenznummern
+# - Atomare Deduplizierung von Events
+[durable_objects]
+bindings = [
+  { name = "SYNC_ROOM", class_name = "SyncRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SyncRoom"]

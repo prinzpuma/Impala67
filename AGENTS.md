@@ -13,7 +13,7 @@
 
 - Einstieg und Start: `web/index.html`, `web/main.js`, `web/boot.js`
 - Mobile UI: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
-- Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`
+- Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `server/`
 - Offline und Updates: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - Veröffentlichung: `.github/workflows/release.yml`
 
