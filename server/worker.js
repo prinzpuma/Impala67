@@ -585,11 +585,10 @@ export class SyncRoom {
 			}
 		}
 
-		// R2-Payloads parallel schreiben (mit Rollback bei Schreibfehlern)
+		// R2-Payloads parallel schreiben (mit atomarem Rollback nach Abschluss aller Schreibversuche)
 		if (r2Writes.length > 0) {
-			try {
-				await Promise.all(r2Writes);
-			} catch (r2Err) {
+			const results = await Promise.allSettled(r2Writes);
+			if (results.some((r) => r.status === "rejected")) {
 				if (this.env?.BUCKET && r2KeysWritten.length > 0) {
 					try {
 						await this.env.BUCKET.delete(r2KeysWritten);
