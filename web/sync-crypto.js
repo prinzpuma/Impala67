@@ -4,7 +4,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 const COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
 
-export const MAX_USER_STORAGE_BYTES = 1024 * 1024 * 1024; // 1.000 MB (1 GB) Quota pro Nutzer
+export const MAX_USER_STORAGE_BYTES = 1000 * 1024 * 1024; // 1.000 MB (1 GB) Quota pro Nutzer
 
 export function bytesToBase64(bytes) {
 	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

@@ -12,8 +12,8 @@
  * - Quota-Schutz: 1.000 MB (1 GB) pro Nutzer, 10 GB Gesamtkapazität
  */
 
-const MAX_USER_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GB (1.000 MB) pro Nutzer
-const MAX_TOTAL_SERVER_STORAGE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB Gesamt-Server-Limit (Cloudflare R2 Free Tier)
+const MAX_USER_STORAGE_BYTES = 1000 * 1024 * 1024; // 1.000 MB (1 GB) pro Nutzer
+const MAX_TOTAL_SERVER_STORAGE_BYTES = 10_000 * 1024 * 1024; // 10.000 MB (10 GB) Gesamt-Server-Limit (Cloudflare R2 Free Tier)
 const MAX_TOTAL_SERVER_USERS = 25; // Maximal 25 Accounts
 // D1 Free: höchstens 50 Queries pro Worker-Aufruf.
 const MAX_EVENTS_PER_REQUEST = 48;
@@ -31,6 +31,26 @@ const MAX_AI_MESSAGE_CHARS = 32_000;
 const MAX_AI_IMAGE_CHARS = 6_000_000; // ~4.5 MB Base64
 const MAX_AI_OUTPUT_TOKENS = 1_500;
 const enc = new TextEncoder();
+
+function base64ToBytes(base64) {
+	const binary = atob(String(base64 || ""));
+	const len = binary.length;
+	const bytes = new Uint8Array(len);
+	for (let i = 0; i < len; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
+}
+
+function bytesToBase64(bytes) {
+	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+	const CHUNK_SIZE = 0x8000;
+	let binary = "";
+	for (let i = 0; i < arr.length; i += CHUNK_SIZE) {
+		binary += String.fromCharCode.apply(null, arr.subarray(i, i + CHUNK_SIZE));
+	}
+	return btoa(binary);
+}
 
 function corsHeaders() {
 	return {
@@ -451,10 +471,10 @@ export class SyncRoom {
 			) {
 				return { ok: false, error: "Ungültiges verschlüsseltes Event-Paket.", status: 400, usage: this.totalBytes };
 			}
-			if (ev.data.length > MAX_D1_EVENT_DATA_CHARS) {
+			if (ev.data.length > MAX_EVENT_DATA_CHARS) {
 				return {
 					ok: false,
-					error: "Ein einzelnes Sync-Element ist selbst nach Komprimierung zu groß für Cloudflare D1.",
+					error: "Ein einzelnes Sync-Element ist selbst nach Komprimierung zu groß.",
 					status: 413,
 					usage: this.totalBytes,
 				};
@@ -524,6 +544,7 @@ export class SyncRoom {
 
 		let nextSeq = this.maxSeq;
 		const r2Writes = [];
+		const r2KeysWritten = [];
 
 		for (const ev of freshEvents) {
 			nextSeq++;
@@ -539,8 +560,17 @@ export class SyncRoom {
 			savedEvents.push(saved);
 
 			if (r2Key && this.env?.BUCKET) {
-				r2Writes.push(this.env.BUCKET.put(r2Key, ev.data, {
-					customMetadata: { userId: this.userId, eventId: ev.id, iv: ev.iv }
+				const isGz = typeof ev?.data === "string" && ev.data.startsWith("gz:");
+				const rawB64 = isGz ? ev.data.slice(3) : ev.data;
+				const binaryBytes = base64ToBytes(rawB64);
+				r2KeysWritten.push(r2Key);
+				r2Writes.push(this.env.BUCKET.put(r2Key, binaryBytes, {
+					customMetadata: {
+						userId: this.userId,
+						eventId: ev.id,
+						iv: ev.iv,
+						gz: isGz ? "1" : "0",
+					},
 				}));
 			}
 
@@ -567,7 +597,22 @@ export class SyncRoom {
 					"INSERT INTO user_storage (user_id, auth_token_hash, total_bytes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET total_bytes = ?, updated_at = ?"
 				).bind(this.userId, this.authTokenHash, nextTotalBytes, now, nextTotalBytes, now)
 			);
-			await this.env.DB.batch(stmts);
+			try {
+				await this.env.DB.batch(stmts);
+			} catch (dbErr) {
+				// Rollback der geschriebenen R2-Objekte bei Datenbankfehler
+				if (this.env?.BUCKET && r2KeysWritten.length > 0) {
+					try {
+						await this.env.BUCKET.delete(r2KeysWritten);
+					} catch {}
+				}
+				return {
+					ok: false,
+					error: "Datenbank-Schreibfehler beim Persistieren der Events.",
+					status: 500,
+					usage: this.totalBytes,
+				};
+			}
 		}
 
 		// Erst nach erfolgreichem Persistieren in-memory fortschreiben. Bei einem
@@ -660,7 +705,17 @@ export class SyncRoom {
 					if (row.r2_key && this.env?.BUCKET) {
 						try {
 							const obj = await this.env.BUCKET.get(row.r2_key);
-							if (obj) payload = await obj.text();
+							if (obj) {
+								const isGz = obj.customMetadata?.gz === "1";
+								const buf = await obj.arrayBuffer();
+								const bytes = new Uint8Array(buf);
+								const isOldText = obj.customMetadata?.gz === undefined && bytes.length > 0 && bytes[0] === 0x67 /* 'g' */ && bytes[1] === 0x7a /* 'z' */;
+								if (isOldText) {
+									payload = new TextDecoder().decode(bytes);
+								} else {
+									payload = (isGz ? "gz:" : "") + bytesToBase64(bytes);
+								}
+							}
 						} catch (err) {
 							console.error("[SyncRoom] R2 Read-Fehler für", row.r2_key, err);
 						}

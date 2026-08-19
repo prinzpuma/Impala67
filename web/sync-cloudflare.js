@@ -58,7 +58,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		syncKey: LS.getItem(LS_KEY_KEY) || "",
 		lastSyncedSeq: Number(LS.getItem(LS_LAST_SEQ_KEY)) || 0,
 		lastUploadedLocalSeq: Number(LS.getItem(LS_LAST_UPLOADED_LOCAL_SEQ)) || 0,
-		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 1024 MB (0 %)" },
+		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 1000 MB (0 %)" },
 		lastError: null,
 	};
 

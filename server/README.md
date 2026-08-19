@@ -19,8 +19,8 @@ Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms
 npx wrangler login
 ```
 
-### 2. D1 Datenbank erstellen
-Erstelle deine kostenlose D1-Datenbank:
+### 2. D1 Datenbank erstellen (oder bestehende aktualisieren)
+*Für neue Installationen:*
 ```bash
 npx wrangler d1 create impala67-db
 ```
@@ -29,6 +29,11 @@ Kopiere die ausgegebene `database_id` in die Datei `server/wrangler.toml`.
 Führe danach das Datenbankschema aus:
 ```bash
 npx wrangler d1 execute impala67-db --remote --file=./schema.sql
+```
+
+*Für bestehende Installationen (Migration auf R2-Hybrid):*
+```bash
+npx wrangler d1 execute impala67-db --remote --file=./migrations/0001_add_r2_key.sql
 ```
 
 ### 3. R2 Speicher-Bucket erstellen
@@ -44,7 +49,7 @@ npx wrangler deploy
 Wrangler zeigt dir anschließend deine persönliche URL an, z. B.:
 `https://impala67-sync.<dein-account>.workers.dev`
 
-### 4. Groq-AI konfigurieren (optional)
+### 5. Groq-AI konfigurieren (optional)
 
 Im Cloudflare-Dashboard beim Worker unter **Settings → Variables and Secrets** ein Secret mit dem Namen `GROQ_API_KEY` anlegen. Die AI-Route verwendet aktuell diese Fallback-Reihenfolge und akzeptiert nur Textnachrichten:
 

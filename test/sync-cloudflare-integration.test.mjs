@@ -29,7 +29,19 @@ function createMockEnv() {
 			if (!item) return null;
 			return {
 				key,
-				async text() { return String(item.data); },
+				async text() {
+					if (typeof item.data === "string") return item.data;
+					return new TextDecoder().decode(item.data);
+				},
+				async arrayBuffer() {
+					if (item.data instanceof Uint8Array) {
+						return item.data.buffer.slice(item.data.byteOffset, item.data.byteOffset + item.data.byteLength);
+					}
+					if (typeof item.data === "string") {
+						return new TextEncoder().encode(item.data).buffer;
+					}
+					return item.data;
+				},
 				customMetadata: item.customMetadata,
 			};
 		},
@@ -514,7 +526,7 @@ test("Quota-Enforcement: Pakete über 1.000 MB werden mit 413 abgewiesen", async
 	assert.ok(res.error.includes("1.000 MB"));
 });
 
-test("D1 + R2 Hybrid-Speicherung: Payloads liegen in R2 und D1 enthält nur schlanke Pointer", async () => {
+test("D1 + R2 Hybrid-Speicherung: Payloads liegen als echte Binärdaten in R2 und D1 enthält nur schlanke Pointer", async () => {
 	const { env, ctx, dbStore, bucketStore } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	const key = generateSyncKey();
@@ -522,34 +534,50 @@ test("D1 + R2 Hybrid-Speicherung: Payloads liegen in R2 und D1 enthält nur schl
 	room.userId = userId;
 	await room.verifyAuthorization(authToken);
 
+	// 1. Normales Event speichern
 	const encrypted = await encryptPayload(cryptoKey, { id: "hybrid-1", content: "geheime notiz" });
 	const res = await room.saveEvents([{ id: "hybrid-1", ...encrypted }]);
 
 	assert.equal(res.ok, true);
-	// 1. R2 enthält den Payload-String
+	// R2 enthält echte Binärdaten (Uint8Array), kein aufgeblähtes Base64
 	const r2Key = `users/${userId}/events/hybrid-1.bin`;
 	assert.ok(bucketStore.has(r2Key));
-	assert.equal(bucketStore.get(r2Key).data, encrypted.data);
+	const storedItem = bucketStore.get(r2Key);
+	assert.ok(storedItem.data instanceof Uint8Array);
+	assert.equal(storedItem.data.byteLength, encrypted.size - 12);
+	assert.equal(storedItem.customMetadata.gz, "0");
 
-	// 2. D1 speichert die Metadaten mit r2_key und leeres data ('')
+	// D1 speichert Metadaten mit r2_key und leeres data ('')
 	const d1Event = dbStore.events.find((e) => e.event_id === "hybrid-1");
 	assert.ok(d1Event);
 	assert.equal(d1Event.r2_key, r2Key);
 	assert.equal(d1Event.data, "");
 
-	// 3. GET /api/sync lädt den Payload transparent aus R2 zurück
+	// 2. Gzip-komprimiertes Event speichern
+	const largeDoc = { id: "hybrid-2", content: "x".repeat(70000) };
+	const encLarge = await encryptPayload(cryptoKey, largeDoc);
+	assert.ok(encLarge.data.startsWith("gz:"));
+	const resLarge = await room.saveEvents([{ id: "hybrid-2", ...encLarge }]);
+	assert.equal(resLarge.ok, true);
+	const r2Key2 = `users/${userId}/events/hybrid-2.bin`;
+	assert.equal(bucketStore.get(r2Key2).customMetadata.gz, "1");
+
+	// 3. GET /api/sync lädt beide Payloads transparent aus R2 zurück
 	const syncReq = new Request(`https://example.com/api/sync?user=${userId}&since=0`, {
 		headers: { Authorization: `Bearer ${authToken}` },
 	});
 	const syncRes = await room.fetch(syncReq);
 	assert.equal(syncRes.status, 200);
 	const syncData = await syncRes.json();
-	assert.equal(syncData.events.length, 1);
+	assert.equal(syncData.events.length, 2);
 	assert.equal(syncData.events[0].data, encrypted.data);
+	assert.equal(syncData.events[1].data, encLarge.data);
 
 	// 4. Entschlüsselung funktioniert transparent
-	const decrypted = await decryptPayload(cryptoKey, syncData.events[0]);
-	assert.equal(decrypted.content, "geheime notiz");
+	const dec1 = await decryptPayload(cryptoKey, syncData.events[0]);
+	assert.equal(dec1.content, "geheime notiz");
+	const dec2 = await decryptPayload(cryptoKey, syncData.events[1]);
+	assert.equal(dec2.content, largeDoc.content);
 
 	// 5. POST /api/reset leert D1 und R2
 	const resetReq = new Request(`https://example.com/api/reset?user=${userId}`, {
@@ -559,7 +587,31 @@ test("D1 + R2 Hybrid-Speicherung: Payloads liegen in R2 und D1 enthält nur schl
 	const resetRes = await room.fetch(resetReq);
 	assert.equal(resetRes.status, 200);
 	assert.equal(bucketStore.has(r2Key), false);
+	assert.equal(bucketStore.has(r2Key2), false);
 	assert.equal(dbStore.events.length, 0);
+});
+
+test("R2-Rollback: Bei einem D1-Datenbankfehler werden neu angelegte R2-Objekte bereinigt", async () => {
+	const { env, ctx, bucketStore } = createMockEnv();
+	// Simuliere DB-Batch-Absturz
+	env.DB.batch = async () => {
+		throw new Error("D1 Disk IO Error");
+	};
+
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const encrypted = await encryptPayload(cryptoKey, { id: "fail-1", content: "wird gerollbackt" });
+	const res = await room.saveEvents([{ id: "fail-1", ...encrypted }]);
+
+	assert.equal(res.ok, false);
+	assert.equal(room.maxSeq, 0);
+	// R2-Objekt darf nach dem Rollback nicht verwaist existieren
+	const r2Key = `users/${userId}/events/fail-1.bin`;
+	assert.equal(bucketStore.has(r2Key), false);
 });
 
 test("Persistierte Speichernutzung enthält den gerade gespeicherten Upload", async () => {

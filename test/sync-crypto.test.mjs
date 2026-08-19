@@ -79,18 +79,18 @@ test("decryptPayload mit falschem Schlüssel schlägt fehl", async () => {
 	});
 });
 
-test("formatStorageUsage berechnet MB und Prozent korrekt für 1.024 MB Limit", () => {
+test("formatStorageUsage berechnet MB und Prozent korrekt für 1.000 MB Limit", () => {
 	const usage1 = formatStorageUsage(0);
 	assert.equal(usage1.mbUsed, 0);
-	assert.equal(usage1.mbLimit, 1024);
+	assert.equal(usage1.mbLimit, 1000);
 	assert.equal(usage1.percent, 0);
 
-	const usage2 = formatStorageUsage(512 * 1024 * 1024); // 512 MB
-	assert.equal(usage2.mbUsed, 512);
+	const usage2 = formatStorageUsage(500 * 1024 * 1024); // 500 MB
+	assert.equal(usage2.mbUsed, 500);
 	assert.equal(usage2.percent, 50);
 
-	const usage3 = formatStorageUsage(1024 * 1024 * 1024); // 1024 MB
-	assert.equal(usage3.mbUsed, 1024);
+	const usage3 = formatStorageUsage(1000 * 1024 * 1024); // 1000 MB
+	assert.equal(usage3.mbUsed, 1000);
 	assert.equal(usage3.percent, 100);
 });
 
