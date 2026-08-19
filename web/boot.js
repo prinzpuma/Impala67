@@ -172,20 +172,22 @@ export async function initApp() {
 
 	// 📱 Automatisches Koppeln via QR-Code oder Kopplungs-Link (#cf-pair=...)
 	if (typeof location !== "undefined" && location.hash && location.hash.startsWith("#cf-pair=")) {
-		try {
-			const payload = location.hash.slice(9);
-			const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
-			if (decoded.url && decoded.key) {
-				await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
-				await CLOUDFLARE_SYNC.configure(decoded.url, decoded.key);
-				U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
-				if (typeof history !== "undefined" && history.replaceState) {
-					history.replaceState(null, "", location.pathname + location.search);
+		(async () => {
+			try {
+				const payload = location.hash.slice(9);
+				const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+				if (decoded.url && decoded.key) {
+					await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
+					CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
+					U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
+					if (typeof history !== "undefined" && history.replaceState) {
+						history.replaceState(null, "", location.pathname + location.search);
+					}
 				}
+			} catch (err) {
+				console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
 			}
-		} catch (err) {
-			console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
-		}
+		})();
 	} else if (S.settings.cfUrl && S.settings.cfSyncKey && !CLOUDFLARE_SYNC.status().url) {
 		CLOUDFLARE_SYNC.configure(S.settings.cfUrl, S.settings.cfSyncKey).catch(() => {});
 	}

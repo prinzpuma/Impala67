@@ -80,7 +80,9 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function getApiUrl(httpUrl, endpoint) {
 		const clean = String(httpUrl || "").trim().replace(/\/+$/, "");
-		return `${clean}${endpoint}`;
+		if (!credentials?.userId) return `${clean}${endpoint}`;
+		const sep = endpoint.includes("?") ? "&" : "?";
+		return `${clean}${endpoint}${sep}user=${encodeURIComponent(credentials.userId)}`;
 	}
 
 	function getAuthHeaders() {

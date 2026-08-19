@@ -19,8 +19,9 @@ const enc = new TextEncoder();
 function corsHeaders() {
 	return {
 		"Access-Control-Allow-Origin": "*",
-		"Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
-		"Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id, X-Auth-Token",
+		"Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE, PUT",
+		"Access-Control-Allow-Headers": "*",
+		"Access-Control-Max-Age": "86400",
 	};
 }
 
