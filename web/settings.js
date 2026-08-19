@@ -447,7 +447,7 @@ export async function handleCfSyncNow(t) {
 		await CLOUDFLARE_SYNC.syncNow();
 		U.toast("Cloudflare-Sync abgeschlossen.", "success");
 	} catch (e) {
-		U.toast("Sync-Fehler: " + (e.message || e), "error");
+		U.toast("Sync-Fehler: " + ((e && e.message) ? e.message : String(e || "Unbekannter Fehler")), "error");
 	} finally {
 		if (t) {
 			t.disabled = false;

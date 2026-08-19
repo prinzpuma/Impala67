@@ -35,3 +35,23 @@ test("formatStorageUsage schützt vor Überlauf", () => {
 	assert.equal(overUsage.percent, 100);
 	assert.equal(overUsage.mbUsed, 550);
 });
+
+test("Browser- oder Serverfehler werden nicht als erfolgreicher Sync verschluckt", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	globalThis.WebSocket = undefined;
+	globalThis.fetch = async () => new Response(JSON.stringify({ error: "CORS-Konfiguration fehlt" }), {
+		status: 403,
+		headers: { "Content-Type": "application/json" },
+	});
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example", generateSyncKey());
+		assert.equal(success, false);
+		assert.match(CLOUDFLARE_SYNC.status().detail, /CORS-Konfiguration fehlt/);
+		await assert.rejects(() => CLOUDFLARE_SYNC.syncNow(), /CORS-Konfiguration fehlt/);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+	}
+});

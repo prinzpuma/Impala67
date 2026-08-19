@@ -19,8 +19,10 @@ const enc = new TextEncoder();
 function corsHeaders() {
 	return {
 		"Access-Control-Allow-Origin": "*",
-		"Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE, PUT",
-		"Access-Control-Allow-Headers": "*",
+		"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+		// Authorization muss bei CORS explizit erlaubt werden. Der Platzhalter
+		// deckt diesen Header in Browsern nicht zuverlässig ab.
+		"Access-Control-Allow-Headers": "Authorization, Content-Type, X-User-Id, X-Auth-Token",
 		"Access-Control-Max-Age": "86400",
 	};
 }
@@ -82,17 +84,19 @@ export class SyncRoom {
 
 		// 2. Initialzustand aus D1 Datenbank laden
 		if (this.env?.DB && userId) {
-			const maxSeqRow = await this.env.DB.prepare(
-				"SELECT COALESCE(MAX(seq), 0) as max_seq FROM sync_events WHERE user_id = ?"
+			const eventStateRow = await this.env.DB.prepare(
+				"SELECT COALESCE(MAX(seq), 0) as max_seq, COALESCE(SUM(size), 0) as total_bytes FROM sync_events WHERE user_id = ?"
 			).bind(userId).first();
-			this.maxSeq = maxSeqRow ? Number(maxSeqRow.max_seq) : 0;
+			this.maxSeq = eventStateRow ? Number(eventStateRow.max_seq) : 0;
+			// SUM(size) repariert auch alte, vor diesem Fix zu niedrig
+			// gespeicherte user_storage-Zähler ohne Datenmigration.
+			this.totalBytes = eventStateRow ? Number(eventStateRow.total_bytes) || 0 : 0;
 
 			const usageRow = await this.env.DB.prepare(
 				"SELECT auth_token_hash, total_bytes FROM user_storage WHERE user_id = ?"
 			).bind(userId).first();
 
 			if (usageRow) {
-				this.totalBytes = Number(usageRow.total_bytes) || 0;
 				if (usageRow.auth_token_hash && !this.authTokenHash) {
 					this.authTokenHash = usageRow.auth_token_hash;
 				}
@@ -199,6 +203,11 @@ export class SyncRoom {
 			}
 
 			// Ping / Pong
+			if (!isAuth) {
+				ws.send(JSON.stringify({ type: "unauthorized", error: "WebSocket nicht autorisiert" }));
+				return;
+			}
+
 			if (msg.type === "ping") {
 				ws.send(JSON.stringify({ type: "pong", t: Date.now() }));
 				return;
@@ -206,11 +215,6 @@ export class SyncRoom {
 
 			// Events nur verarbeiten, wenn Socket autorisiert ist
 			if (msg.type === "event" && msg.event) {
-				if (!isAuth && this.authTokenHash) {
-					ws.send(JSON.stringify({ type: "unauthorized", error: "WebSocket nicht autorisiert" }));
-					return;
-				}
-
 				const res = await this.saveEvents([msg.event]);
 				if (res.ok) {
 					if (res.savedEvents.length > 0) {
@@ -261,12 +265,24 @@ export class SyncRoom {
 		let incomingBytes = 0;
 
 		for (const ev of events) {
-			if (!ev || !ev.id || !ev.iv || !ev.data) continue;
+			if (
+				!ev || typeof ev.id !== "string" || !ev.id || ev.id.length > 200 ||
+				typeof ev.iv !== "string" || !/^[0-9a-f]{24}$/i.test(ev.iv) ||
+				typeof ev.data !== "string" || !ev.data || ev.data.length % 4 !== 0 ||
+				!/^[A-Za-z0-9+/]+={0,2}$/.test(ev.data)
+			) {
+				return { ok: false, error: "Ungültiges verschlüsseltes Event-Paket.", status: 400, usage: this.totalBytes };
+			}
 			// Bereits bekanntes Event überspringen (Idempotenz)
 			if (this.knownEventIds.has(ev.id) || batchEventIds.has(ev.id)) continue;
 			batchEventIds.add(ev.id);
 
-			const size = Number(ev.size) || (ev.data.length + ev.iv.length);
+			// Quota-Werte niemals vom Client übernehmen: Base64 enthält vier
+			// Zeichen je drei Chiffrat-Bytes, die IV liegt als Hex vor.
+			const padding = ev.data.endsWith("==") ? 2 : (ev.data.endsWith("=") ? 1 : 0);
+			const cipherBytes = Math.max(0, Math.floor((ev.data.length * 3) / 4) - padding);
+			const ivBytes = Math.floor(ev.iv.length / 2);
+			const size = cipherBytes + ivBytes;
 			incomingBytes += size;
 			freshEvents.push({ ...ev, size });
 		}
@@ -313,11 +329,12 @@ export class SyncRoom {
 			}
 		}
 
+		const nextTotalBytes = this.totalBytes + incomingBytes;
 		if (this.env?.DB) {
 			stmts.push(
 				this.env.DB.prepare(
 					"INSERT INTO user_storage (user_id, auth_token_hash, total_bytes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET total_bytes = ?, updated_at = ?"
-				).bind(this.userId, this.authTokenHash, this.totalBytes, now, this.totalBytes, now)
+				).bind(this.userId, this.authTokenHash, nextTotalBytes, now, nextTotalBytes, now)
 			);
 			await this.env.DB.batch(stmts);
 		}
@@ -325,7 +342,7 @@ export class SyncRoom {
 		// Erst nach erfolgreichem Persistieren in-memory fortschreiben. Bei einem
 		// D1-Fehler darf der Actor keine Events als gespeichert markieren.
 		this.maxSeq = nextSeq;
-		this.totalBytes += incomingBytes;
+		this.totalBytes = nextTotalBytes;
 		for (const ev of freshEvents) this.knownEventIds.add(ev.id);
 
 		return {
@@ -478,7 +495,7 @@ export default {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.2.0",
+				version: "2.2.1",
 				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 			});

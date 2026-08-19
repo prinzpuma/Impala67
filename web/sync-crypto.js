@@ -62,6 +62,9 @@ export function generateSyncKey() {
 export async function deriveSyncCredentials(syncKey) {
 	const cleanKey = String(syncKey || "").trim();
 	if (!cleanKey) throw new Error("Sync-Schlüssel darf nicht leer sein.");
+	if (typeof crypto === "undefined" || !crypto.subtle) {
+		throw new Error("Web Crypto API (crypto.subtle) ist in dieser Umgebung nicht verfügbar. Bitte nutze HTTPS.");
+	}
 
 	// Öffentliche User-ID: SHA-256 Hash mit Salz
 	const userId = await sha256Hex(`impala67_user_partition:${cleanKey}`);

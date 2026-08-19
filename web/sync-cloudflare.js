@@ -46,7 +46,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	let socketAuthenticated = false;
 	let configureGeneration = 0;
 	let remoteApplyChain = Promise.resolve();
-	let syncInFlight = false;
+	let syncPromise = null;
 	let initialized = false;
 
 	let state = {
@@ -96,6 +96,26 @@ export const CLOUDFLARE_SYNC = (() => {
 		};
 	}
 
+	async function responseError(response, fallback) {
+		let serverMessage = "";
+		try {
+			const data = await response.json();
+			serverMessage = typeof data?.error === "string" ? data.error.trim() : "";
+		} catch {}
+		return new Error(serverMessage || `${fallback} (Status ${response.status})`);
+	}
+
+	function readableSyncError(error) {
+		const message = (error && error.message) ? error.message : String(error || "Sync-Fehler aufgetreten");
+		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+			return new Error("Das Gerät ist offline. Der lokale Stand bleibt erhalten und wird später synchronisiert.");
+		}
+		if (/failed to fetch|load failed|networkerror|network request failed/i.test(message)) {
+			return new Error("Der Cloudflare-Server ist nicht erreichbar. Prüfe Worker-URL, Veröffentlichung und CORS-Konfiguration.");
+		}
+		return error instanceof Error ? error : new Error(message);
+	}
+
 	/**
 	 * Richtet Zugangsdaten ein und startet den Sync
 	 */
@@ -136,7 +156,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			await catchUp();
 			return true;
 		} catch (e) {
-			state.lastError = e.message || String(e);
+			state.lastError = (e && e.message) ? e.message : String(e || "Einrichtungsfehler aufgetreten");
 			setStatus("error", "Einrichtungsfehler", state.lastError);
 			return false;
 		}
@@ -190,9 +210,9 @@ export const CLOUDFLARE_SYNC = (() => {
 						return;
 					}
 					if (msg.type === "unauthorized") {
+						disconnect();
 						state.lastError = msg.error || "Nicht autorisiert";
 						setStatus("error", "Nicht autorisiert", "Sync-Schlüssel stimmt nicht mit dem Server überein.");
-						disconnect();
 						return;
 					}
 					if (msg.type === "pong") return;
@@ -202,7 +222,7 @@ export const CLOUDFLARE_SYNC = (() => {
 					if (msg.type === "ack") {
 						if (msg.seq > state.lastSyncedSeq) {
 							state.lastSyncedSeq = msg.seq;
-							LS.setItem(LS_LAST_SEQ_KEY, String(msg.seq));
+							LS.setItem(lastSyncedKey(), String(msg.seq));
 						}
 						if (msg.usage !== undefined) {
 							state.usage = formatStorageUsage(msg.usage);
@@ -320,9 +340,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	/**
 	 * Holt verpasste Events seit `lastSyncedSeq` vom Server mit lückenloser Paginierung
 	 */
-	async function catchUp(forceAll = false) {
-		if (!state.url || !credentials || syncInFlight) return;
-		syncInFlight = true;
+	async function runCatchUp(forceAll = false) {
 		setStatus("syncing", "Synchronisiere…");
 
 		try {
@@ -339,7 +357,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				});
 
 				if (!response.ok) {
-					throw new Error(`Server antwortete mit Status ${response.status}`);
+					throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
 				}
 
 				const data = await response.json();
@@ -392,11 +410,26 @@ export const CLOUDFLARE_SYNC = (() => {
 			await pushUnsyncedLocalEvents(forceAll);
 
 			setStatus("connected", "Live verbunden", "Aktueller Stand synchronisiert");
+			state.lastError = null;
+			return true;
 		} catch (e) {
-			state.lastError = e.message || String(e);
+			const error = readableSyncError(e);
+			state.lastError = error.message;
 			setStatus("error", "Sync-Fehler", state.lastError);
+			throw error;
+		}
+	}
+
+	async function catchUp(forceAll = false) {
+		if (!state.url || !credentials) {
+			throw new Error("Cloudflare-Sync ist nicht eingerichtet.");
+		}
+		if (syncPromise) return syncPromise;
+		syncPromise = runCatchUp(forceAll);
+		try {
+			return await syncPromise;
 		} finally {
-			syncInFlight = false;
+			syncPromise = null;
 		}
 	}
 
@@ -465,8 +498,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				const errData = await response.json().catch(() => ({}));
 				throw new Error(errData.error || "500 MB Speicherlimit auf Cloudflare erreicht.");
 			} else {
-				const errData = await response.json().catch(() => ({}));
-				throw new Error(errData.error || `Upload fehlgeschlagen (Status ${response.status})`);
+				throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
 			}
 
 			const current = Math.min(total, i + CHUNK_SIZE);
@@ -561,8 +593,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		initialized = true;
 
 		STATE.onAfterDispatch((ev) => {
-			if (credentials && socket && socket.readyState === WebSocket.OPEN) {
-				sendEventLive(ev);
+			if (credentials) {
+				void sendEventLive(ev);
 			}
 		});
 
@@ -574,7 +606,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			window.addEventListener("visibilitychange", () => {
 				if (!document.hidden && state.url && credentials) {
 					if (!socket || socket.readyState !== WebSocket.OPEN) connectWebSocket();
-					else catchUp();
+					else catchUp().catch((e) => console.warn("[cf-sync] Sichtbarkeits-Sync fehlgeschlagen:", e));
 				}
 			});
 		}

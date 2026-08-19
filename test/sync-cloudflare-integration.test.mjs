@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SyncRoom } from "../server/worker.js";
+import worker, { SyncRoom } from "../server/worker.js";
 import {
 	deriveSyncCredentials,
 	encryptPayload,
@@ -33,7 +33,8 @@ function createMockEnv() {
 						const [userId] = params;
 						const userEvents = dbStore.events.filter((e) => e.user_id === userId);
 						const max = userEvents.reduce((m, e) => Math.max(m, e.seq), 0);
-						return { max_seq: max };
+						const totalBytes = userEvents.reduce((sum, e) => sum + (Number(e.size) || 0), 0);
+						return { max_seq: max, total_bytes: totalBytes };
 					}
 					if (query.includes("user_storage")) {
 						const [userId] = params;
@@ -113,6 +114,22 @@ function createMockEnv() {
 
 	return { env: { DB: mockDb }, ctx, dbStore };
 }
+
+test("CORS erlaubt die vom Browser verwendeten Auth-Header explizit", async () => {
+	const res = await worker.fetch(new Request("https://example.com/api/sync", {
+		method: "OPTIONS",
+		headers: {
+			Origin: "https://prinzpuma.github.io",
+			"Access-Control-Request-Method": "GET",
+			"Access-Control-Request-Headers": "authorization,x-user-id",
+		},
+	}), {}, {});
+	assert.equal(res.status, 204);
+	const allowed = res.headers.get("Access-Control-Allow-Headers") || "";
+	assert.match(allowed, /Authorization/i);
+	assert.match(allowed, /X-User-Id/i);
+	assert.notEqual(allowed.trim(), "*");
+});
 
 test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignoriert", async () => {
 	const { env, ctx } = createMockEnv();
@@ -200,17 +217,34 @@ test("Quota-Enforcement: Pakete über 500 MB werden mit 413 abgewiesen", async (
 	room.userId = userId;
 	await room.verifyAuthorization(authToken);
 
+	await room.ensureInitialized(userId);
+	room.totalBytes = MAX_USER_STORAGE_BYTES - 10;
 	const oversizedEvent = {
 		id: "huge-1",
 		iv: "00112233445566778899aabb",
-		data: "dummy",
-		size: 501 * 1024 * 1024,
+		data: "dGVzdA==",
+		size: 1,
 	};
 
 	const res = await room.saveEvents([oversizedEvent]);
 	assert.equal(res.ok, false);
 	assert.equal(res.status, 413);
 	assert.ok(res.error.includes("500 MB"));
+});
+
+test("Persistierte Speichernutzung enthält den gerade gespeicherten Upload", async () => {
+	const { env, ctx, dbStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const encrypted = await encryptPayload(cryptoKey, { id: "usage-1", type: "test" });
+	const res = await room.saveEvents([{ id: "usage-1", ...encrypted }]);
+	assert.equal(res.ok, true);
+	assert.equal(dbStore.storage.get(userId).bytes, res.usage);
+	assert.ok(res.usage > 0);
 });
 
 test("Kryptografische Autorisierung: Falscher Auth-Token wird mit 403 abgewiesen", async () => {
