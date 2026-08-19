@@ -2,13 +2,14 @@
 
 // web/embedding-worker.js — Web Worker für lokale Inferenz mit Transformers.js v3.
 // Führt die Bekko-a8m-Inferenz komplett abseits des UI-Threads aus.
-// Unterstützt WebGPU mit automatischem WASM-CPU-Fallback, Matryoshka-Kürzung (z.B. 256d)
+// Nutzt WebGPU, wenn ein Adapter verfügbar ist, sonst WASM-CPU; Matryoshka-Kürzung (z.B. 256d)
 // und L2-Normalisierung. Auto-Unload nach 60 s Inaktivität (0 MB RAM im Leerlauf).
 
 let pipeline = null;
 let env = null;
 let extractor = null;
 let currentModel = null;
+let currentDevice = null;
 let currentDim = 256;
 let idleTimer = null;
 let isInitializing = false;
@@ -31,6 +32,7 @@ function unloadModel() {
 		extractor = null;
 	}
 	currentModel = null;
+	currentDevice = null;
 	try {
 		self.postMessage({ type: "unloaded" });
 	} catch {}
@@ -59,6 +61,32 @@ async function loadTransformers() {
 	return { pipeline, env };
 }
 
+async function chooseDevice() {
+	try {
+		if (typeof navigator !== "undefined" && navigator.gpu && typeof navigator.gpu.requestAdapter === "function") {
+			const adapter = await navigator.gpu.requestAdapter();
+			if (adapter) return "webgpu";
+		}
+	} catch (e) {
+		console.info("WebGPU nicht verfügbar, verwende WASM:", e?.message || e);
+	}
+	return "wasm";
+}
+
+function postProgress(modelId, p) {
+	try {
+		self.postMessage({
+			type: "progress",
+			model: modelId,
+			status: p.status,
+			file: p.file,
+			progress: p.progress,
+			loaded: p.loaded,
+			total: p.total,
+		});
+	} catch {}
+}
+
 async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim = 256, onProgress = null) {
 	if (extractor && currentModel === modelId) {
 		currentDim = dim;
@@ -71,25 +99,22 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 	initPromise = (async () => {
 		try {
 			await loadTransformers();
+			const device = await chooseDevice();
+			let usedDevice = device;
 			const options = {
-				device: "webgpu", // Transformers.js fällt automatisch auf WASM zurück, wenn WebGPU nicht verfügbar ist
-				progress_callback: (p) => {
-					if (onProgress) onProgress(p);
-					try {
-						self.postMessage({
-							type: "progress",
-							model: modelId,
-							status: p.status,
-							file: p.file,
-							progress: p.progress,
-							loaded: p.loaded,
-							total: p.total,
-						});
-					} catch {}
-				},
+				device,
+				progress_callback: (p) => onProgress?.(p),
 			};
-			extractor = await pipeline("feature-extraction", modelId, options);
+			try {
+				extractor = await pipeline("feature-extraction", modelId, options);
+			} catch (err) {
+				if (device !== "webgpu") throw err;
+				console.warn("WebGPU-Modellstart fehlgeschlagen, wechsle auf WASM:", err?.message || err);
+				usedDevice = "wasm";
+				extractor = await pipeline("feature-extraction", modelId, { ...options, device: "wasm" });
+			}
 			currentModel = modelId;
+			currentDevice = usedDevice;
 			currentDim = dim;
 			resetIdleTimer();
 			return extractor;
@@ -162,6 +187,7 @@ self.addEventListener("message", async (e) => {
 				model,
 				cached,
 				loadedInRam: !!extractor && currentModel === model,
+				device: currentModel === model ? currentDevice : null,
 				id: msg.id,
 			});
 			break;
@@ -171,10 +197,11 @@ self.addEventListener("message", async (e) => {
 			const model = msg.model || "hotchpotch/bekko-embedding-v1-a8m";
 			const dim = msg.dim || 256;
 			try {
-				await initExtractor(model, dim);
+				await initExtractor(model, dim, (p) => postProgress(model, p));
 				self.postMessage({
 					type: "download-complete",
 					model,
+					device: currentDevice,
 					id: msg.id,
 				});
 			} catch (err) {
@@ -194,7 +221,7 @@ self.addEventListener("message", async (e) => {
 				return;
 			}
 			try {
-				const ext = await initExtractor(model, dim);
+				const ext = await initExtractor(model, dim, (p) => postProgress(model, p));
 				resetIdleTimer();
 
 				// Feature-Extraction mit mean pooling

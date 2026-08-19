@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
-const dom = new JSDOM("<!doctype html><body><div id='localEmbeddingManager' hidden><span id='localEmbeddingBadge'></span><div id='localEmbeddingMsg'></div><button id='btnDownloadLocalEmbedding'></button><button id='btnDeleteLocalEmbedding'></button></div><select id='inpEmbed'></select></body>", { url: "http://localhost/" });
+const dom = new JSDOM("<!doctype html><body><div id='ai-embedding'><input type='hidden' id='inpEmbed' value=''><div id='localEmbeddingStatus' class='settings-status is-idle'><span class='settings-status-dot'></span><span class='settings-row-copy'><b>Semantische Suche (Bekko a8m)</b><small id='localEmbeddingMsg'></small><div class='progress-bar' id='localEmbeddingProgress' hidden><div class='progress-fill'></div></div></span><span id='localEmbeddingActions'><button type='button' id='btnDownloadLocalEmbedding'>Herunterladen</button></span></div></div></body>", { url: "http://localhost/" });
 for (const key of ["window", "document", "Element", "Node", "HTMLElement", "MutationObserver", "navigator"]) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
 }
@@ -14,7 +14,7 @@ const { S, STATE } = await import("../web/state.js");
 const { AI } = await import("../web/ai.js");
 const { RAG } = await import("../web/rag.js");
 const { DB } = await import("../web/db.js");
-const { refreshEmbeddingModels, updateLocalEmbeddingManagerUi } = await import("../web/settings.js");
+const { updateLocalEmbeddingManagerUi } = await import("../web/settings.js");
 
 test("LOCAL_EMBEDDING_MODELS contains Bekko a8m as recommended model", () => {
 	assert.ok(Array.isArray(AI.LOCAL_EMBEDDING_MODELS));
@@ -77,26 +77,6 @@ test("embedding model settings expose only the tested Bekko model", async () => 
 	assert.deepEqual(models.map((m) => [m.providerId, m.id]), [["local", "local:bekko-a8m"]]);
 });
 
-test("refreshEmbeddingModels does not re-add an unsupported saved model", async () => {
-	const select = document.getElementById("inpEmbed");
-	const hint = document.createElement("small");
-	hint.id = "embeddingModelHint";
-	document.body.append(hint);
-	select.dataset.currentembed = "text-embedding-3-small";
-	select.dataset.currentprov = "openai";
-
-	await refreshEmbeddingModels();
-	assert.deepEqual(Array.from(select.options).map((o) => o.value), ["", "local::local:bekko-a8m"]);
-	assert.equal(select.value, "");
-	assert.match(hint.textContent, /nicht mehr angeboten/);
-
-	select.dataset.currentembed = "local:bekko-a8m";
-	select.dataset.currentprov = "local";
-	await refreshEmbeddingModels();
-	assert.equal(select.value, "local::local:bekko-a8m");
-	hint.remove();
-});
-
 test("RAG indexes and searches with 256d vectors", async () => {
 	S.settings.embedModel = "local:bekko-a8m";
 	S.settings.embedProviderId = "local";
@@ -142,20 +122,40 @@ test("RAG indexes and searches with 256d vectors", async () => {
 	}
 });
 
-test("updateLocalEmbeddingManagerUi responds to local vs remote model selection", async () => {
-	const select = document.getElementById("inpEmbed");
-	const manager = document.getElementById("localEmbeddingManager");
-	select.innerHTML = '<option value="openai::text-embedding-3-small">OpenAI</option><option value="local::local:bekko-a8m">Bekko</option>';
+test("updateLocalEmbeddingManagerUi keeps cache and activation state separate", async () => {
+	const statusEl = document.getElementById("localEmbeddingStatus");
+	const actionsEl = document.getElementById("localEmbeddingActions");
+	const inpEmbed = document.getElementById("inpEmbed");
 
-	// When non-local is selected
-	select.value = "openai::text-embedding-3-small";
-	await updateLocalEmbeddingManagerUi();
-	assert.equal(manager.hidden, true);
+	const origStatus = AI.getLocalEmbeddingStatus;
+	try {
+		// Mock cached = false (Not downloaded)
+		AI.getLocalEmbeddingStatus = async () => ({ id: "local:bekko-a8m", name: "Bekko a8m", sizeMb: 124, cached: false });
+		await updateLocalEmbeddingManagerUi();
 
-	// When local is selected
-	select.value = "local::local:bekko-a8m";
-	await updateLocalEmbeddingManagerUi();
-	assert.equal(manager.hidden, false);
-	const badge = document.getElementById("localEmbeddingBadge");
-	assert.ok(badge.textContent.length > 0);
+		assert.ok(statusEl.className.includes("is-idle"));
+		assert.ok(actionsEl.querySelector("#btnDownloadLocalEmbedding"));
+		assert.equal(actionsEl.querySelector("#btnDeleteLocalEmbedding"), null);
+		assert.equal(inpEmbed.value, "");
+
+		// Mock cached = true (Downloaded)
+		AI.getLocalEmbeddingStatus = async () => ({ id: "local:bekko-a8m", name: "Bekko a8m", sizeMb: 124, cached: true });
+		await updateLocalEmbeddingManagerUi();
+
+		assert.ok(statusEl.className.includes("is-idle"));
+		assert.ok(actionsEl.querySelector("#btnEnableLocalEmbedding"));
+		assert.equal(actionsEl.querySelector("#btnDeleteLocalEmbedding"), null);
+		assert.equal(inpEmbed.value, "");
+
+		// Cached and explicitly activated
+		inpEmbed.value = "local::local:bekko-a8m";
+		await updateLocalEmbeddingManagerUi();
+
+		assert.ok(statusEl.className.includes("is-ok"));
+		assert.ok(actionsEl.querySelector("#btnDeleteLocalEmbedding"));
+		assert.equal(actionsEl.querySelector("#btnDownloadLocalEmbedding"), null);
+		assert.equal(inpEmbed.value, "local::local:bekko-a8m");
+	} finally {
+		AI.getLocalEmbeddingStatus = origStatus;
+	}
 });

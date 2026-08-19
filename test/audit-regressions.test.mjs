@@ -10,6 +10,7 @@ Object.defineProperty(globalThis, "localStorage", { value: dom.window.localStora
 Object.defineProperty(globalThis, "matchMedia", { value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }), configurable: true });
 
 const { S, STATE } = await import("../web/state.js");
+const { DB } = await import("../web/db.js");
 const { SRS } = await import("../web/srs.js");
 const { splitThink } = await import("../web/think-heuristik.js");
 
@@ -42,6 +43,21 @@ test("Seiten-Lifecycle entfernt betroffene Tabs zentral", () => {
 	assert.equal(S.activeTabId, null);
 	assert.equal(S.currentPageId, null);
 	assert.equal(S.view, "home");
+});
+
+test("endgültiges Seitenlöschen entfernt auch den lokalen RAG-Vektor", () => {
+	reset();
+	S.pages = { gone: { id: "gone", parentId: null } };
+	const originalDelVec = DB.delVec;
+	const deleted = [];
+	DB.delVec = async (id) => { deleted.push(id); };
+	try {
+		STATE.reduce({ id: "delete-page", t: "2026-01-02T00:00:00.000Z", type: "pageDelete", payload: { id: "gone" } });
+		assert.deepEqual(deleted, ["gone"]);
+		assert.equal(S.pages.gone, undefined);
+	} finally {
+		DB.delVec = originalDelVec;
+	}
 });
 
 test("Fremd-Events informieren UI und Live-Module über denselben Pfad", () => {

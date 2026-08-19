@@ -116,19 +116,29 @@ function renderAi(vm) {
 	const tabs = '<nav class="settings-subnav" role="tablist" aria-label="KI und Lernen"><button type="button" data-aitab="models" class="' + (tab === "models" ? "active" : "") + '">Modelle</button><button type="button" data-aitab="sources" class="' + (tab === "sources" ? "active" : "") + '">Quellen</button><button type="button" data-aitab="learning" class="' + (tab === "learning" ? "active" : "") + '">Lernen</button></nav>';
 	let content = tab === "sources" ? renderAiSources() : tab === "learning" ? renderLearning(vm) : renderAiModels(vm);
 	if (tab !== "learning") {
-		const embed = (S.settings.embedProviderId || "") + (S.settings.embedModel ? "::" + S.settings.embedModel : "");
-		const isLocal = S.settings.embedProviderId === "local" || (S.settings.embedModel && S.settings.embedModel.startsWith("local:"));
-		content += UI.disclosure("Erweitert", "Embedding, Werkzeuge und eigene Anweisungen", UI.row({ title: "Tools mitsenden", description: "Stellt der KI die App-Werkzeuge zur Verfügung", trailing: switchControl("inpAlwaysTools", "Tools mitsenden", S.settings.alwaysSendTools !== false) }) +
-			'<label class="settings-input-row" id="ai-embedding" data-settings-anchor><span><b>Embedding-Modell</b><small>Lokales Bekko-Modell für semantische Suche</small></span><span class="settings-field-action"><select id="inpEmbed" data-currentembed="' + e(S.settings.embedModel || "") + '" data-currentprov="' + e(S.settings.embedProviderId || "") + '" disabled><option value="' + e(embed) + '">Lädt …</option></select>' + button("↻", "btnRefreshEmbedding", "icon-only") + '</span><small id="embeddingModelHint" class="settings-footnote" hidden></small></label>' +
-			'<div id="localEmbeddingManager" class="settings-footnote" style="margin-top: 4px; padding: 10px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);"' + (isLocal ? "" : " hidden") + '>' +
-				'<div id="localEmbeddingStatus" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;"><b>Lokaler Modell-Status</b><span id="localEmbeddingBadge" class="settings-value">Prüfe…</span></div>' +
-				'<div class="progress-bar" id="localEmbeddingProgress" hidden style="margin-bottom: 8px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: 0%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div></div>' +
-				'<div id="localEmbeddingMsg" style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;"></div>' +
-				'<div class="settings-actions" id="localEmbeddingActions">' +
-					button("📥 Modell herunterladen", "btnDownloadLocalEmbedding", "primary") +
-					button("🗑️ Löschen", "btnDeleteLocalEmbedding", "secondary danger-text") +
-				'</div>' +
+		const isConfigured = S.settings.embedProviderId === "local" && S.settings.embedModel === "local:bekko-a8m";
+		const embedStatus = '<div id="ai-embedding" data-settings-anchor>' +
+			'<input type="hidden" id="inpEmbed" value="' + (isConfigured ? "local::local:bekko-a8m" : "") + '">' +
+			'<div id="localEmbeddingStatus" class="settings-status ' + (isConfigured ? "is-ok" : "is-idle") + '">' +
+				'<span class="settings-status-dot"></span>' +
+				'<span class="settings-row-copy">' +
+					'<b>Semantische Suche (Bekko a8m)</b>' +
+					'<small id="localEmbeddingMsg">' +
+						(isConfigured ? "Aktiviert · prüfe den lokalen Modell-Cache…" : "Einmaliger Download (~124 MB); danach offline im Browser nutzbar") +
+					'</small>' +
+					'<div class="progress-bar" id="localEmbeddingProgress" hidden style="margin-top: 6px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: 0%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div></div>' +
+				'</span>' +
+				'<span id="localEmbeddingActions">' +
+					(isConfigured
+						? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
+						: button("📥 Herunterladen (~124 MB)", "btnDownloadLocalEmbedding", "primary")) +
+				'</span>' +
 			'</div>' +
+		'</div>';
+
+		content += UI.disclosure("Erweitert", "Embedding, Werkzeuge und eigene Anweisungen",
+			UI.row({ title: "Tools mitsenden", description: "Stellt der KI die App-Werkzeuge zur Verfügung", trailing: switchControl("inpAlwaysTools", "Tools mitsenden", S.settings.alwaysSendTools !== false) }) +
+			embedStatus +
 			UI.field("Eigene Anweisungen", "inpCustomInstructions", S.settings.customInstructions || "", { explicit: true, multiline: true, rows: 5, description: "Tonfall, Fach und dauerhafte Vorlieben", placeholder: "Optional" }).replace('class="settings-input-row"', 'class="settings-input-row" id="ai-instructions" data-settings-anchor'));
 	}
 	return UI.page("KI & Lernen", "Modelle, Zugänge und Lernhilfen – klar getrennt und schnell erreichbar.", tabs + '<div id="aiStatusSettings" class="ai-status-banner"></div>' + content + (tab === "sources" || tab === "models" ? UI.saveBar() : ""));

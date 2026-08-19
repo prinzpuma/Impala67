@@ -380,6 +380,19 @@ export const STATE = (() => {
 		}
 	}
 
+	// Vektoren liegen bewusst außerhalb des Event-Logs, müssen beim endgültigen
+	// Seitenlöschen aber genauso aus dem lokalen Derived-Store verschwinden.
+	function deletePageVector(pageId) {
+		if (!pageId) return;
+		try {
+			const pending = DB.delVec(pageId);
+			if (pending && typeof pending.catch === "function") pending.catch((err) => console.warn("Seitenvektor konnte nicht gelöscht werden:", err));
+		} catch (err) {
+			// Direkte Reducer-Replays in Tests können vor DB.open() stattfinden.
+			if (!String(err?.message || err).includes("DB.open")) console.warn("Seitenvektor konnte nicht gelöscht werden:", err);
+		}
+	}
+
 	function reduce(ev) {
 		const p = ev.payload || {};
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
@@ -442,6 +455,7 @@ export const STATE = (() => {
 			case "pageDelete":
 				bustChildIdx();
 				closePageTabs([p.id]);
+				deletePageVector(p.id);
 				Object.values(S.pages).forEach((pg) => {
 					if (pg.parentId === p.id) pg.parentId = null; // Kinder wandern auf Root
 				});

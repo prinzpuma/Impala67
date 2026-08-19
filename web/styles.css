@@ -2219,7 +2219,7 @@ h3, h4 { text-wrap: balance }
 .settings-input-row input, .settings-input-row textarea, .settings-input-row select, .settings-inline-fields input, .settings-inline-fields select, .settings-field-action select { width: 100%; min-width: 0; border-color: var(--edge-soft); border-radius: 8px; background: var(--input-bg); font-size: var(--text-sm) }
 .settings-input-row textarea { min-height: 86px; resize: vertical }
 .settings-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 10px 13px }
-.settings-actions button, .settings-status > button, .settings-map-row button, .settings-inline-fields button { min-height: 30px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text); font-size: var(--text-xs); font-weight: 600 }
+.settings-actions button, .settings-status > button, .settings-status > #localEmbeddingActions button, .settings-map-row button, .settings-inline-fields button { min-height: 30px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--edge-soft); background: var(--surface-subtle); color: var(--text); font-size: var(--text-xs); font-weight: 600 }
 .settings-actions button:not(.secondary):not(.danger):not(.danger-text):first-child, .settings-inline-fields button { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent) }
 .settings-actions button.danger, .settings-group.is-danger button { border-color: var(--danger-border); color: var(--danger); background: var(--panel-solid) }
 .settings-actions button.danger-text, .danger-text { color: var(--danger) }
@@ -2227,6 +2227,7 @@ h3, h4 { text-wrap: balance }
 .settings-quick-actions { justify-content: flex-start }
 .settings-status { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px 13px }
 .settings-status > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; flex: 1 }
+.settings-status > #localEmbeddingActions { display: flex; flex: 0 0 auto }
 .settings-status-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--text2); box-shadow: 0 0 0 4px var(--surface) }
 .settings-status-dot.is-ok, .settings-status.is-ok > .settings-status-dot { background: var(--success); box-shadow: 0 0 0 4px var(--success-soft) }
 .settings-status-dot.is-warn, .settings-status.is-warn > .settings-status-dot { background: var(--warn); box-shadow: 0 0 0 4px rgb(var(--c-yellow) / .12) }
@@ -2311,7 +2312,7 @@ h3, h4 { text-wrap: balance }
 @media (pointer: coarse) {
 	.settings-nav-item, .settings-search { min-height: 44px }
 	.settings-row { min-height: 64px }
-	.settings-actions button, .settings-status > button, .settings-map-row button, .settings-inline-fields button { min-height: 40px }
+	.settings-actions button, .settings-status > button, .settings-status > #localEmbeddingActions button, .settings-map-row button, .settings-inline-fields button { min-height: 40px }
 	.settings-sort-actions button { width: 40px; height: 40px }
 }
 

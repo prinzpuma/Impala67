@@ -676,107 +676,86 @@ export function testAllProviders() {
 }
 
 // Das Produkt bietet bewusst nur das geprüfte lokale Bekko-Modell an.
-// Option-Werte bleiben als "quelleId::modell" kodiert, damit die bestehende
-// Einstellungsspeicherung und die spätere Erweiterbarkeit unverändert bleiben.
+// Lokales Embedding-Modell (Bekko a8m): Status aktualisieren und UI synchronisieren.
 export async function refreshEmbeddingModels() {
-	const select = U.el("inpEmbed");
-	const hint = U.el("embeddingModelHint");
-	if (!select) return;
-	const current = select.dataset.currentembed || "";
-	const currentProv = select.dataset.currentprov || "";
-	select.disabled = true;
-	if (hint) hint.textContent = "Prüfe lokales Embedding-Modell…";
-	try {
-		const found = await AI.listEmbeddingModels();
-		const exact = found.find((m) => m.id === current && (!currentProv || m.providerId === currentProv));
-		const options = found.map((m) =>
-			'<option value="' + U.esc(m.providerId + "::" + m.id) + '">' + U.esc(m.label || m.id) + " — " + U.esc(m.providerName) + "</option>");
-		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>' + options.join("");
-		select.value = exact ? exact.providerId + "::" + exact.id : "";
-		// FIX: kein U.esc() mehr in textContent — das zeigte HTML-Entities als Klartext.
-		if (hint) {
-			if (current && !exact) {
-				hint.hidden = false;
-				hint.textContent = "Das bisherige Embedding-Modell wird nicht mehr angeboten. Wähle Bekko, um die semantische Suche lokal fortzuführen.";
-			} else if (found.length) { hint.hidden = true; hint.textContent = ""; }
-			else { hint.hidden = false; hint.textContent = "Kein Embedding-Modell gefunden."; }
-		}
-	} catch (err) {
-		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>';
-		select.value = "";
-		if (hint) { hint.hidden = false; hint.textContent = "Das lokale Embedding-Modell konnte nicht geladen werden."; }
-	} finally {
-		select.disabled = false;
-		await updateLocalEmbeddingManagerUi();
-	}
+	await updateLocalEmbeddingManagerUi();
 }
 
 export async function updateLocalEmbeddingManagerUi() {
-	const select = U.el("inpEmbed");
-	const manager = U.el("localEmbeddingManager");
-	if (!select || !manager) return;
-	const val = select.value || "";
-	const isLocal = val.startsWith("local::") || val.startsWith("local:");
-	manager.hidden = !isLocal;
-	if (!isLocal) return;
+	const statusEl = U.el("localEmbeddingStatus");
+	if (!statusEl) return;
+	const msgEl = U.el("localEmbeddingMsg");
+	const actionsEl = U.el("localEmbeddingActions");
+	const progress = U.el("localEmbeddingProgress");
+	const inpEmbed = U.el("inpEmbed");
+	const modelId = "local:bekko-a8m";
+	const configured = inpEmbed?.value === "local::" + modelId;
 
-	const sep = val.indexOf("::");
-	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
-	const badge = U.el("localEmbeddingBadge");
-	const msg = U.el("localEmbeddingMsg");
-	const btnDownload = U.el("btnDownloadLocalEmbedding");
-	const btnDelete = U.el("btnDeleteLocalEmbedding");
-
-	if (badge) badge.textContent = "Prüfe Status…";
 	try {
 		const status = await AI.getLocalEmbeddingStatus(modelId);
 		if (status.cached) {
-			if (badge) badge.innerHTML = '<span style="color: #22c55e;">●</span> Bereit (100% Offline)';
-			if (msg) msg.textContent = `${status.name} (~${status.sizeMb} MB) ist vollständig heruntergeladen und offline einsatzbereit.`;
-			if (btnDownload) btnDownload.hidden = true;
-			if (btnDelete) btnDelete.hidden = false;
+			statusEl.className = "settings-status " + (configured ? "is-ok" : "is-idle");
+			if (msgEl) msgEl.textContent = configured
+				? "Bereit für Offline-Suche · 124 MB im Browser-Cache (kann entfernt werden) · wird im Leerlauf aus dem RAM entladen"
+				: "Im Browser-Cache vorhanden, aber noch nicht aktiviert · der Cache kann entfernt werden";
+			if (actionsEl) actionsEl.innerHTML = configured
+				? '<button type="button" id="btnDeleteLocalEmbedding" class="secondary danger-text">Modell löschen</button>'
+				: '<button type="button" id="btnEnableLocalEmbedding" class="primary">Für Suche aktivieren</button>';
+			if (progress) progress.hidden = true;
 		} else {
-			if (badge) badge.innerHTML = '<span style="color: #f59e0b;">●</span> Nicht heruntergeladen';
-			if (msg) msg.textContent = `${status.name} (~${status.sizeMb} MB). Klicke auf Herunterladen, um das Modell einmalig für die Offline-Suche im Browser zu speichern.`;
-			if (btnDownload) {
-				btnDownload.hidden = false;
-				btnDownload.textContent = `📥 ${status.name.split(" ")[0]} herunterladen (~${status.sizeMb} MB)`;
-			}
-			if (btnDelete) btnDelete.hidden = true;
+			statusEl.className = "settings-status " + (configured ? "is-warn" : "is-idle");
+			if (msgEl) msgEl.textContent = configured
+				? `Download erforderlich (~${status.sizeMb || 124} MB); danach offline im Browser nutzbar · der Cache kann entfernt werden`
+				: `Einmaliger Download (~${status.sizeMb || 124} MB); danach offline im Browser nutzbar · der Cache kann entfernt werden`;
+			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">📥 Herunterladen (~${status.sizeMb || 124} MB)</button>`;
+			if (progress) progress.hidden = true;
 		}
 	} catch (err) {
-		if (badge) badge.textContent = "Status unbekannt";
-		if (msg) msg.textContent = "Status konnte nicht ermittelt werden: " + (err.message || err);
+		statusEl.className = "settings-status is-warn";
+		if (msgEl) msgEl.textContent = "Status konnte nicht ermittelt werden: " + (err.message || err);
+	}
+}
+
+export async function handleEnableLocalEmbedding() {
+	const inpEmbed = U.el("inpEmbed");
+	try {
+		await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: "local:bekko-a8m" });
+		if (inpEmbed) inpEmbed.value = "local::local:bekko-a8m";
+		U.toast("Semantische Suche aktiviert.", "success");
+		await updateLocalEmbeddingManagerUi();
+		RAG.reindexStale();
+	} catch (err) {
+		U.toast("Aktivieren fehlgeschlagen: " + (err.message || err), "error");
 	}
 }
 
 let isDownloadingLocalEmbedding = false;
 export async function handleDownloadLocalEmbedding() {
 	if (isDownloadingLocalEmbedding) return;
-	const select = U.el("inpEmbed");
-	const val = select?.value || "";
-	const sep = val.indexOf("::");
-	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
-	const btnDownload = U.el("btnDownloadLocalEmbedding");
+	const statusEl = U.el("localEmbeddingStatus");
+	const actionsEl = U.el("localEmbeddingActions");
 	const progress = U.el("localEmbeddingProgress");
 	const fill = progress?.querySelector(".progress-fill");
-	const msg = U.el("localEmbeddingMsg");
-	const badge = U.el("localEmbeddingBadge");
+	const msgEl = U.el("localEmbeddingMsg");
+	const inpEmbed = U.el("inpEmbed");
+	const modelId = "local:bekko-a8m";
 
 	isDownloadingLocalEmbedding = true;
-	if (btnDownload) btnDownload.disabled = true;
+	if (statusEl) statusEl.className = "settings-status is-warn";
+	if (actionsEl) actionsEl.innerHTML = '<button type="button" id="btnDownloadLocalEmbedding" class="secondary" disabled>Lädt…</button>';
 	if (progress) progress.hidden = false;
 	if (fill) fill.style.width = "0%";
-	if (badge) badge.textContent = "Lädt herunter…";
-	if (msg) msg.textContent = "Lade Modell-Dateien herunter… Bitte warten.";
+	if (msgEl) msgEl.textContent = "Lade Modell-Dateien herunter… Bitte warten.";
 
 	const unsub = AI.onEmbeddingProgress((p) => {
-		if (fill && p.progress !== undefined) {
+		if (p.progress !== undefined) {
 			const pct = Math.min(100, Math.max(0, Math.round(p.progress)));
-			fill.style.width = pct + "%";
-			if (msg) {
+			if (fill) fill.style.width = pct + "%";
+			const btn = actionsEl?.querySelector("button");
+			if (btn) btn.textContent = `Lädt… ${pct}%`;
+			if (msgEl) {
 				const fileInfo = p.file ? ` (${p.file})` : "";
-				msg.textContent = `Lade Modell herunter: ${pct}%${fileInfo}`;
+				msgEl.textContent = `Lade Modell: ${pct}%${fileInfo}`;
 			}
 		}
 	});
@@ -786,31 +765,29 @@ export async function handleDownloadLocalEmbedding() {
 		unsub();
 		if (fill) fill.style.width = "100%";
 		U.toast("Lokales Modell erfolgreich heruntergeladen!", "success");
+		await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: modelId });
+		if (inpEmbed) inpEmbed.value = "local::" + modelId;
 		await updateLocalEmbeddingManagerUi();
-		// Automatisch Einstellungen anpassen & speichern falls noch nicht aktiv
-		if (S.settings.embedModel !== modelId) {
-			await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: modelId });
-			RAG.reindexStale();
-		}
+		RAG.reindexStale();
 	} catch (err) {
 		unsub();
 		U.toast("Fehler beim Herunterladen: " + (err.message || err), "error");
-		if (msg) msg.textContent = "Fehler: " + (err.message || err);
-		if (badge) badge.textContent = "Fehler";
+		if (msgEl) msgEl.textContent = "Fehler: " + (err.message || err);
+		if (statusEl) statusEl.className = "settings-status is-warn";
+		if (actionsEl) actionsEl.innerHTML = '<button type="button" id="btnDownloadLocalEmbedding" class="primary">Erneut versuchen</button>';
 	} finally {
 		isDownloadingLocalEmbedding = false;
-		if (btnDownload) btnDownload.disabled = false;
 		if (progress) progress.hidden = true;
 	}
 }
 
 export async function handleDeleteLocalEmbedding() {
-	const select = U.el("inpEmbed");
-	const val = select?.value || "";
-	const sep = val.indexOf("::");
-	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
+	const modelId = "local:bekko-a8m";
+	const inpEmbed = U.el("inpEmbed");
 	try {
 		await AI.deleteLocalEmbedding(modelId);
+		await STATE.dispatch("settingsSet", { embedProviderId: "", embedModel: "" });
+		if (inpEmbed) inpEmbed.value = "";
 		U.toast("Lokales Modell aus dem Cache gelöscht.", "success");
 		await updateLocalEmbeddingManagerUi();
 	} catch (err) {
@@ -1140,6 +1117,7 @@ export const SETTINGS = {
 	handleFileBgChange,
 	handleImportChange,
 	updateLocalEmbeddingManagerUi,
+	handleEnableLocalEmbedding,
 	handleDownloadLocalEmbedding,
 	handleDeleteLocalEmbedding
 };
