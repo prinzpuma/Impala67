@@ -2,6 +2,7 @@
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
 
 export const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB Quota pro Nutzer
 
@@ -104,6 +105,17 @@ export async function deriveSyncCredentials(syncKey) {
 export async function encryptPayload(cryptoKey, dataObj) {
 	if (!cryptoKey) throw new Error("Kein Verschlüsselungsschlüssel vorhanden.");
 	const rawBytes = enc.encode(JSON.stringify(dataObj));
+	let payloadBytes = rawBytes;
+	let encoding = "";
+	if (rawBytes.byteLength >= COMPRESSION_THRESHOLD_BYTES && typeof CompressionStream === "function") {
+		const compressed = new Uint8Array(await new Response(
+			new Blob([rawBytes]).stream().pipeThrough(new CompressionStream("gzip"))
+		).arrayBuffer());
+		if (compressed.byteLength < rawBytes.byteLength) {
+			payloadBytes = compressed;
+			encoding = "gz:";
+		}
+	}
 	
 	// 12-Byte IV für AES-GCM
 	const iv = new Uint8Array(12);
@@ -112,11 +124,11 @@ export async function encryptPayload(cryptoKey, dataObj) {
 	const ciphertextBuffer = await crypto.subtle.encrypt(
 		{ name: "AES-GCM", iv },
 		cryptoKey,
-		rawBytes
+		payloadBytes
 	);
 
 	const cipherBytes = new Uint8Array(ciphertextBuffer);
-	const dataBase64 = bytesToBase64(cipherBytes);
+	const dataBase64 = encoding + bytesToBase64(cipherBytes);
 	const ivHex = bytesToHex(iv);
 	const size = cipherBytes.byteLength + iv.byteLength;
 
@@ -137,7 +149,8 @@ export async function decryptPayload(cryptoKey, encryptedObj) {
 	}
 
 	const iv = hexToBytes(encryptedObj.iv);
-	const cipherBytes = base64ToBytes(encryptedObj.data);
+	const isGzip = String(encryptedObj.data).startsWith("gz:");
+	const cipherBytes = base64ToBytes(isGzip ? encryptedObj.data.slice(3) : encryptedObj.data);
 
 	const decryptedBuffer = await crypto.subtle.decrypt(
 		{ name: "AES-GCM", iv },
@@ -145,7 +158,16 @@ export async function decryptPayload(cryptoKey, encryptedObj) {
 		cipherBytes
 	);
 
-	const jsonStr = dec.decode(decryptedBuffer);
+	let plainBytes = new Uint8Array(decryptedBuffer);
+	if (isGzip) {
+		if (typeof DecompressionStream !== "function") {
+			throw new Error("Gzip-komprimierte Cloud-Daten werden auf diesem Gerät nicht unterstützt.");
+		}
+		plainBytes = new Uint8Array(await new Response(
+			new Blob([plainBytes]).stream().pipeThrough(new DecompressionStream("gzip"))
+		).arrayBuffer());
+	}
+	const jsonStr = dec.decode(plainBytes);
 	return JSON.parse(jsonStr);
 }
 

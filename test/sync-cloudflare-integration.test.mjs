@@ -178,6 +178,29 @@ test("HTTP-Uploads bleiben unter dem D1-Free-Limit von 50 Queries", async () => 
 	assert.match((await response.json()).error, /Maximal 48 Events/);
 });
 
+test("Worker akzeptiert gzip-markierte E2EE-Pakete und weist zu große D1-Zeilen lesbar ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	room.userId = "1234567890123456";
+
+	const compressed = await room.saveEvents([{
+		id: "compressed",
+		iv: "000000000000000000000000",
+		data: "gz:AAAA",
+	}]);
+	assert.equal(compressed.ok, true);
+	assert.equal(compressed.savedEvents.length, 1);
+
+	const oversized = await room.saveEvents([{
+		id: "oversized",
+		iv: "000000000000000000000000",
+		data: "A".repeat(1_900_004),
+	}]);
+	assert.equal(oversized.ok, false);
+	assert.equal(oversized.status, 413);
+	assert.match(oversized.error, /zu groß/);
+});
+
 test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignoriert", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);

@@ -53,6 +53,20 @@ test("encryptPayload und decryptPayload führen vollständigen E2EE-Zyklus durch
 	assert.deepEqual(decrypted, originalEvent);
 });
 
+test("große Sync-Events werden vor E2EE komprimiert und verlustfrei gelesen", async () => {
+	const { cryptoKey } = await deriveSyncCredentials("impala-large-event-test");
+	const originalEvent = {
+		id: "large-event",
+		type: "heftSnap",
+		payload: { pageId: "h1", doc: { strokes: Array.from({ length: 20000 }, (_, index) => ({ x: index % 500, y: index % 300 })) } },
+	};
+
+	const encrypted = await encryptPayload(cryptoKey, originalEvent);
+	assert.ok(encrypted.data.startsWith("gz:"));
+	assert.ok(encrypted.data.length < JSON.stringify(originalEvent).length / 2);
+	assert.deepEqual(await decryptPayload(cryptoKey, encrypted), originalEvent);
+});
+
 test("decryptPayload mit falschem Schlüssel schlägt fehl", async () => {
 	const creds1 = await deriveSyncCredentials("impala-key-1");
 	const creds2 = await deriveSyncCredentials("impala-key-2");

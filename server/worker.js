@@ -17,6 +17,9 @@ const MAX_TOTAL_SERVER_USERS = 8; // Maximal 8 Accounts (8 x 500 MB = 4.000 MB =
 // D1 Free: höchstens 50 Queries pro Worker-Aufruf. Ein Upload benötigt zusätzlich
 // eine Deduplizierungsabfrage und eine Quota-Fortschreibung (48 + 2 = 50).
 const MAX_EVENTS_PER_REQUEST = 48;
+// D1 erlaubt höchstens 2 MB pro String/Zeile. Reserve für weitere Spalten und
+// serialisierte Metadaten; große Client-Events werden vor E2EE gzip-komprimiert.
+const MAX_D1_EVENT_DATA_CHARS = 1_900_000;
 const enc = new TextEncoder();
 
 function corsHeaders() {
@@ -260,13 +263,22 @@ export class SyncRoom {
 		const batchEventIds = new Set();
 
 		for (const ev of events) {
+			const encodedData = typeof ev?.data === "string" && ev.data.startsWith("gz:") ? ev.data.slice(3) : ev?.data;
 			if (
 				!ev || typeof ev.id !== "string" || !ev.id || ev.id.length > 200 ||
 				typeof ev.iv !== "string" || !/^[0-9a-f]{24}$/i.test(ev.iv) ||
-				typeof ev.data !== "string" || !ev.data || ev.data.length % 4 !== 0 ||
-				!/^[A-Za-z0-9+/]+={0,2}$/.test(ev.data)
+				typeof encodedData !== "string" || !encodedData || encodedData.length % 4 !== 0 ||
+				!/^[A-Za-z0-9+/]+={0,2}$/.test(encodedData)
 			) {
 				return { ok: false, error: "Ungültiges verschlüsseltes Event-Paket.", status: 400, usage: this.totalBytes };
+			}
+			if (ev.data.length > MAX_D1_EVENT_DATA_CHARS) {
+				return {
+					ok: false,
+					error: "Ein einzelnes Sync-Element ist selbst nach Komprimierung zu groß für Cloudflare D1.",
+					status: 413,
+					usage: this.totalBytes,
+				};
 			}
 			// Bereits bekanntes Event überspringen (Idempotenz)
 			if (batchEventIds.has(ev.id)) continue;
@@ -274,8 +286,8 @@ export class SyncRoom {
 
 			// Quota-Werte niemals vom Client übernehmen: Base64 enthält vier
 			// Zeichen je drei Chiffrat-Bytes, die IV liegt als Hex vor.
-			const padding = ev.data.endsWith("==") ? 2 : (ev.data.endsWith("=") ? 1 : 0);
-			const cipherBytes = Math.max(0, Math.floor((ev.data.length * 3) / 4) - padding);
+			const padding = encodedData.endsWith("==") ? 2 : (encodedData.endsWith("=") ? 1 : 0);
+			const cipherBytes = Math.max(0, Math.floor((encodedData.length * 3) / 4) - padding);
 			const ivBytes = Math.floor(ev.iv.length / 2);
 			const size = cipherBytes + ivBytes;
 			candidates.push({ ...ev, size });
@@ -515,7 +527,7 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.2.3",
+				version: "2.2.4",
 				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 			});
