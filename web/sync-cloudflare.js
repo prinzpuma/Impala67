@@ -475,8 +475,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 
 		const apiUrl = getApiUrl(state.url, "/api/events");
-		// Speichereffizient in 50er-Chunks: Nie die gesamte Sammlung auf einmal im RAM halten!
-		const CHUNK_SIZE = 50;
+		// D1 Free erlaubt maximal 50 Queries pro Worker-Aufruf. Der Server braucht
+		// neben den Inserts noch Deduplizierung und Quota-Fortschreibung; 40 lässt
+		// dafür bewusst Reserve und hält große verschlüsselte Requests klein.
+		const CHUNK_SIZE = 40;
 		for (let i = 0; i < total; i += CHUNK_SIZE) {
 			const chunk = transportEvents.slice(i, i + CHUNK_SIZE);
 			const encryptedBatch = [];

@@ -153,6 +153,31 @@ test("Actor-Start lädt nicht mehr alle Event-IDs eines Kontos in den Arbeitsspe
 	assert.equal(dbStore.queries.some((query) => /^SELECT event_id FROM sync_events WHERE user_id = \?$/i.test(query.trim())), false);
 });
 
+test("HTTP-Uploads bleiben unter dem D1-Free-Limit von 50 Queries", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const events = Array.from({ length: 49 }, (_, index) => ({
+		id: `limit-${index}`,
+		iv: "000000000000000000000000",
+		data: "AAAA",
+	}));
+	const response = await room.fetch(new Request(`https://example.com/api/events?user=${userId}`, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${authToken}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ events }),
+	}));
+
+	assert.equal(response.status, 413);
+	assert.match((await response.json()).error, /Maximal 48 Events/);
+});
+
 test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignoriert", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);

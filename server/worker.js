@@ -14,7 +14,9 @@
 
 const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB pro Nutzer
 const MAX_TOTAL_SERVER_USERS = 8; // Maximal 8 Accounts (8 x 500 MB = 4.000 MB = 4 GB, 1 GB Puffer zum 5 GB Free Limit)
-const MAX_EVENTS_PER_REQUEST = 100;
+// D1 Free: höchstens 50 Queries pro Worker-Aufruf. Ein Upload benötigt zusätzlich
+// eine Deduplizierungsabfrage und eine Quota-Fortschreibung (48 + 2 = 50).
+const MAX_EVENTS_PER_REQUEST = 48;
 const enc = new TextEncoder();
 
 function corsHeaders() {
@@ -513,7 +515,7 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.2.2",
+				version: "2.2.3",
 				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 			});
