@@ -262,8 +262,13 @@ function moveSel(delta) {
 	if (!items.length || !list) return;
 	selIdx = Math.max(0, Math.min(items.length - 1, selIdx + delta));
 	const nodes = list.querySelectorAll(".palette-item");
-	nodes.forEach((n) => n.classList.toggle("selected", Number(n.dataset.palidx) === selIdx));
-	if (nodes[selIdx]) nodes[selIdx].scrollIntoView({ block: "nearest" });
+	let selEl = null;
+	nodes.forEach((n) => {
+		const isSel = Number(n.dataset.palidx) === selIdx;
+		n.classList.toggle("selected", isSel);
+		if (isSel) selEl = n;
+	});
+	if (selEl) selEl.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function runItem(it) {

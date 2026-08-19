@@ -25,9 +25,10 @@ export const EXTRAS = (() => {
 	// ---- Zusätzliche Styles (Heatmap, Leech, Fußbereich, Mobile-Panel, Multi-Tab) ----
 	const style = document.createElement("style");
 	style.textContent = [
-		".heatmap{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:2px;overflow-x:auto;padding:6px 0 14px;max-width:820px}",
-		".heat-cell{width:10px;height:10px;border-radius:2px;background:rgba(128,128,128,.15)}",
-		".heat-cell.l1{background:#1e4429}.heat-cell.l2{background:#2e6b39}.heat-cell.l3{background:#46a05c}.heat-cell.l4{background:#6ee07f}",
+		".heatmap-wrap{width:100%;max-width:100%;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}",
+		".heatmap{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:2px;min-width:max-content;padding:2px 0 6px}",
+		".heat-cell{width:10px;height:10px;border-radius:2px;background:var(--surface-hover-strong, rgba(128,128,128,.15))}",
+		".heat-cell.l1{background:color-mix(in srgb, var(--success) 30%, transparent)}.heat-cell.l2{background:color-mix(in srgb, var(--success) 55%, transparent)}.heat-cell.l3{background:color-mix(in srgb, var(--success) 80%, transparent)}.heat-cell.l4{background:var(--success)}",
 		".leech-badge{color:#e5534b;font-weight:600}",
 		".retention-table{max-width:520px}",
 		".page-footer{max-width:820px;margin:26px auto 60px;padding-top:10px;border-top:1px solid rgba(128,128,128,.25)}",

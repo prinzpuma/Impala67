@@ -22,7 +22,7 @@ import {
  * - Kryptografischer Zugriffsnachweis (Auth-Token) gegen unbefugten Zugriff
  * - Robuste Paginierung: Lädt verpasste Events in 500er-Batches lückenlos nach
  * - Delta-Upload-Tracking: Verhindert Mehrfach-Uploads bereits gesendeter Events
- * - Quota-Überwachung (500 MB Limit)
+ * - Quota-Überwachung (1.000 MB Limit)
  */
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -58,7 +58,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		syncKey: LS.getItem(LS_KEY_KEY) || "",
 		lastSyncedSeq: Number(LS.getItem(LS_LAST_SEQ_KEY)) || 0,
 		lastUploadedLocalSeq: Number(LS.getItem(LS_LAST_UPLOADED_LOCAL_SEQ)) || 0,
-		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 500 MB (0 %)" },
+		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 1024 MB (0 %)" },
 		lastError: null,
 	};
 

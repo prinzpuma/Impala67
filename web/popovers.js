@@ -20,11 +20,17 @@ export function position(anchor, menu, opts = {}) {
 	const height = menu.offsetHeight || 0;
 	let left = opts.align === "end" ? r.right - width : r.left;
 	left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-	let top = opts.prefer === "above" ? r.top - height - gap : r.bottom + gap;
-	if (top + height > window.innerHeight - 8) top = r.top - height - gap;
-	if (top < 8) top = Math.min(window.innerHeight - height - 8, r.bottom + gap);
+	const spaceBelow = window.innerHeight - r.bottom - gap;
+	const spaceAbove = r.top - gap;
+	let top;
+	if (opts.prefer === "above") {
+		top = (spaceAbove >= height || spaceAbove > spaceBelow) ? r.top - height - gap : r.bottom + gap;
+	} else {
+		top = (spaceBelow >= height || spaceBelow >= spaceAbove) ? r.bottom + gap : r.top - height - gap;
+	}
+	top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
 	menu.style.left = Math.round(left) + "px";
-	menu.style.top = Math.round(Math.max(8, top)) + "px";
+	menu.style.top = Math.round(top) + "px";
 	menu.style.right = "auto";
 	menu.style.bottom = "auto";
 	menu.style.visibility = "visible";

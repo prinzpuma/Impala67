@@ -2,13 +2,19 @@ name = "impala67-sync"
 main = "worker.js"
 compatibility_date = "2026-08-19"
 
-# Cloudflare D1 Datenbank Bindung
+# Cloudflare D1 Datenbank Bindung (Indizes & Metadaten)
 # Erstellen mit: npx wrangler d1 create impala67-db
 # Danach die database_id hier eintragen.
 [[d1_databases]]
 binding = "DB"
 database_name = "impala67-db"
 database_id = "caadf9b6-e3f6-4140-a823-098362185910"
+
+# Cloudflare R2 Objektspeicher Bindung (10 GB kostenlos für Payloads)
+# Erstellen mit: npx wrangler r2 bucket create impala67-sync
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "impala67-sync"
 
 # Cloudflare Durable Objects
 # Bietet einen global eindeutigen Actor pro Nutzer:

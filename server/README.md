@@ -2,15 +2,16 @@
 
 Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms)** zwischen all deinen Geräten bei **0 € monatlichen Kosten** auf Cloudflare.
 
-## Sicherheits- & Quota-Eigenschaften
+## Sicherheits- & Speicher-Eigenschaften
 - **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
-- **500 MB Quota pro Sync-Schlüssel:** Garantiert faire Nutzung und schützt deinen kostenlosen Cloudflare D1 Speicher.
-- **WebSockets & D1:** Sofortige Live-Übertragung bei geöffneter App + nahtloser Download verpasster Änderungen nach Offline-Phasen.
+- **D1 + R2 Hybrid-Architektur:** Cloudflare D1 verwaltet blitzschnelle Indizes und Deduplizierung; Cloudflare R2 speichert die verschlüsselten Datenpakete (10 GB kostenloser Speicherplatz ohne 500-MB-Datenbankgrenze).
+- **1.000 MB (1 GB) Quota pro Sync-Schlüssel:** Großzügiger Speicherplatz für Notizen, Bilder und Notizheft-Zeichnungen.
+- **WebSockets (Durable Objects):** Sofortige Live-Übertragung bei geöffneter App (< 30 ms) + nahtloser Download verpasster Änderungen nach Offline-Phasen.
 - **Geschützter AI-Proxy:** `/api/ai` leitet Textanfragen mit dem serverseitigen `GROQ_API_KEY` an Groq weiter. Der Sync-Token muss gültig sein; der Groq-Key wird nie an die PWA ausgeliefert.
 
 ---
 
-## 🚀 3-Schritte Einrichtung (Dauert ca. 2 Minuten)
+## 🚀 4-Schritte Einrichtung (Dauert ca. 2 Minuten)
 
 ### 1. Bei Cloudflare einloggen
 Öffne ein Terminal in diesem Ordner (`server/`) und logge dich einmalig ein:
@@ -23,21 +24,20 @@ Erstelle deine kostenlose D1-Datenbank:
 ```bash
 npx wrangler d1 create impala67-db
 ```
-Wrangler gibt dir eine Zeile wie diese aus:
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "impala67-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-Kopiere diese `database_id` in die Datei `server/wrangler.toml`.
+Kopiere die ausgegebene `database_id` in die Datei `server/wrangler.toml`.
 
 Führe danach das Datenbankschema aus:
 ```bash
 npx wrangler d1 execute impala67-db --remote --file=./schema.sql
 ```
 
-### 3. Worker veröffentlichen
+### 3. R2 Speicher-Bucket erstellen
+Erstelle deinen kostenlosen 10-GB R2 Bucket:
+```bash
+npx wrangler r2 bucket create impala67-sync
+```
+
+### 4. Worker veröffentlichen
 ```bash
 npx wrangler deploy
 ```

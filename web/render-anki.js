@@ -168,7 +168,7 @@ function renderAnki(main) {
 	else if (tab === "study") html += ankiStudyHtml();
 	else html += ankiDecksHtml();
 	html += "</div>";
-	main.innerHTML = html;
+	U.morph(main, html);
 	U.renderMath(main);
 	U.highlightCode(main);
 	hydrateImages(main);
@@ -373,7 +373,7 @@ function heatmapHtml(reviews) {
 		const lvl = n === 0 ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 30 ? 3 : 4;
 		cells += '<div class="heat-cell l' + lvl + '" title="' + k + ": " + n + ' Wiederholungen"></div>';
 	}
-	return '<div class="heatmap">' + cells + "</div>";
+	return '<div class="heatmap-wrap"><div class="heatmap">' + cells + "</div></div>";
 }
 
 // Langzeit-Retention: Anteil bestandener Wiederholungen, wenn die Karte nach

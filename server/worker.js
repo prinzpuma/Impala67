@@ -7,19 +7,19 @@
  * - WebSocket Hibernation + Attachment: Stellt userId & Auth-Status nach Schlafzustand zuverlässig wieder her
  * - In-Band WebSocket Handshake: Kein Token in der URL-Query (geschützt vor Log-Leaks & Referer-Leaks)
  * - Gehashte Token-Verifikation: Server speichert ausschließlich SHA-256 Hashes der Tokens (Zero-Knowledge)
- * - D1 Datenbank: Langzeit-SQL-Persistenz
+ * - D1 + R2 Hybrid-Speicherung: D1 für Indizes/Metadaten, R2 für Chiffrate (10 GB Free Tier)
  * - E2EE: Server speichert ausschließlich Chiffrate { iv, data }
- * - Quota-Schutz: Striktes 500 MB Limit pro Nutzer
+ * - Quota-Schutz: 1.000 MB (1 GB) pro Nutzer, 10 GB Gesamtkapazität
  */
 
-const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB pro Nutzer
-const MAX_TOTAL_SERVER_USERS = 8; // Maximal 8 Accounts (8 x 500 MB = 4.000 MB = 4 GB, 1 GB Puffer zum 5 GB Free Limit)
-// D1 Free: höchstens 50 Queries pro Worker-Aufruf. Ein Upload benötigt zusätzlich
-// eine Deduplizierungsabfrage und eine Quota-Fortschreibung (48 + 2 = 50).
+const MAX_USER_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GB (1.000 MB) pro Nutzer
+const MAX_TOTAL_SERVER_STORAGE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB Gesamt-Server-Limit (Cloudflare R2 Free Tier)
+const MAX_TOTAL_SERVER_USERS = 25; // Maximal 25 Accounts
+// D1 Free: höchstens 50 Queries pro Worker-Aufruf.
 const MAX_EVENTS_PER_REQUEST = 48;
-// D1 erlaubt höchstens 2 MB pro String/Zeile. Reserve für weitere Spalten und
-// serialisierte Metadaten; große Client-Events werden vor E2EE gzip-komprimiert.
+// D1/Worker Limit: Maximale Chiffrat-Zeichenlänge pro Event (1.9 MB vor Base64)
 const MAX_D1_EVENT_DATA_CHARS = 1_900_000;
+const MAX_EVENT_DATA_CHARS = MAX_D1_EVENT_DATA_CHARS;
 const AI_MODELS = [
 	"qwen/qwen3.6-27b",
 	"openai/gpt-oss-120b",
@@ -493,24 +493,41 @@ export class SyncRoom {
 			return { ok: true, savedEvents: [], maxSeq: this.maxSeq, usage: this.totalBytes };
 		}
 
-		// 2. Quota Check (500 MB)
+		// 2. Quota Check (1.000 MB pro Account & 10 GB Server-Gesamtlimit)
 		if (this.totalBytes + incomingBytes > MAX_USER_STORAGE_BYTES) {
 			return {
 				ok: false,
-				error: "Quota überschritten: Das Limit von 500 MB für diesen Account wurde erreicht.",
+				error: "Quota überschritten: Das Limit von 1.000 MB für diesen Account wurde erreicht.",
 				status: 413,
 				usage: this.totalBytes,
 			};
 		}
 
-		// 3. Sequenznummern atomar vergeben
+		if (this.env?.DB) {
+			const serverStorageStmt = this.env.DB.prepare("SELECT COALESCE(SUM(total_bytes), 0) as server_bytes FROM user_storage");
+			const serverStorageRow = typeof serverStorageStmt.first === "function" ? await serverStorageStmt.first() : (serverStorageStmt.bind ? await serverStorageStmt.bind().first() : null);
+			const serverBytes = serverStorageRow ? Number(serverStorageRow.server_bytes) || 0 : 0;
+			if (serverBytes + incomingBytes > MAX_TOTAL_SERVER_STORAGE_BYTES) {
+				return {
+					ok: false,
+					error: "Server-Kapazität erreicht: Das Cloudflare-Gesamtspeicherlimit von 10 GB wurde erreicht.",
+					status: 413,
+					usage: this.totalBytes,
+				};
+			}
+		}
+
+		// 3. Sequenznummern atomar vergeben & Daten in R2 + D1 speichern
 		const savedEvents = [];
 		const now = new Date().toISOString();
 		const stmts = [];
 
 		let nextSeq = this.maxSeq;
+		const r2Writes = [];
+
 		for (const ev of freshEvents) {
 			nextSeq++;
+			const r2Key = this.env?.BUCKET ? `users/${this.userId}/events/${ev.id}.bin` : null;
 			const saved = {
 				id: ev.id,
 				seq: nextSeq,
@@ -521,13 +538,26 @@ export class SyncRoom {
 			};
 			savedEvents.push(saved);
 
+			if (r2Key && this.env?.BUCKET) {
+				r2Writes.push(this.env.BUCKET.put(r2Key, ev.data, {
+					customMetadata: { userId: this.userId, eventId: ev.id, iv: ev.iv }
+				}));
+			}
+
 			if (this.env?.DB) {
+				// Wenn in R2 gespeichert, bleibt data in D1 leer (''), um die D1-Grenze nie zu erreichen
+				const inlineData = r2Key ? "" : ev.data;
 				stmts.push(
 					this.env.DB.prepare(
-						"INSERT OR IGNORE INTO sync_events (user_id, seq, event_id, iv, data, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-					).bind(this.userId, saved.seq, saved.id, saved.iv, saved.data, saved.size, now)
+						"INSERT OR IGNORE INTO sync_events (user_id, seq, event_id, iv, r2_key, data, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+					).bind(this.userId, saved.seq, saved.id, saved.iv, r2Key, inlineData, saved.size, now)
 				);
 			}
+		}
+
+		// R2-Payloads parallel schreiben
+		if (r2Writes.length > 0) {
+			await Promise.all(r2Writes);
 		}
 
 		const nextTotalBytes = this.totalBytes + incomingBytes;
@@ -541,7 +571,7 @@ export class SyncRoom {
 		}
 
 		// Erst nach erfolgreichem Persistieren in-memory fortschreiben. Bei einem
-		// D1-Fehler darf der Actor keine Events als gespeichert markieren.
+		// D1- oder R2-Fehler darf der Actor keine Events als gespeichert markieren.
 		this.maxSeq = nextSeq;
 		this.totalBytes = nextTotalBytes;
 		return {
@@ -621,9 +651,29 @@ export class SyncRoom {
 			let events = [];
 			if (this.env?.DB) {
 				const rows = await this.env.DB.prepare(
-					"SELECT seq, event_id as id, iv, data, size, created_at FROM sync_events WHERE user_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?"
+					"SELECT seq, event_id as id, iv, r2_key, data, size, created_at FROM sync_events WHERE user_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?"
 				).bind(userId, since, limit).all();
-				events = rows.results || [];
+				const rawEvents = rows.results || [];
+
+				events = await Promise.all(rawEvents.map(async (row) => {
+					let payload = row.data || "";
+					if (row.r2_key && this.env?.BUCKET) {
+						try {
+							const obj = await this.env.BUCKET.get(row.r2_key);
+							if (obj) payload = await obj.text();
+						} catch (err) {
+							console.error("[SyncRoom] R2 Read-Fehler für", row.r2_key, err);
+						}
+					}
+					return {
+						seq: row.seq,
+						id: row.id,
+						iv: row.iv,
+						data: payload,
+						size: row.size,
+						created_at: row.created_at,
+					};
+				}));
 			}
 
 			return jsonResponse({
@@ -675,6 +725,24 @@ export class SyncRoom {
 				await this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId).run();
 			}
 
+			if (this.env?.BUCKET) {
+				try {
+					let truncated = true;
+					let cursor = undefined;
+					while (truncated) {
+						const list = await this.env.BUCKET.list({ prefix: `users/${userId}/`, cursor });
+						if (list?.objects && list.objects.length > 0) {
+							const keys = list.objects.map((o) => o.key);
+							await this.env.BUCKET.delete(keys);
+						}
+						truncated = !!list?.truncated;
+						cursor = list?.cursor;
+					}
+				} catch (err) {
+					console.error("[SyncRoom] R2 Reset-Fehler für User", userId, err);
+				}
+			}
+
 			this.broadcast({ type: "reset" });
 			return jsonResponse({ ok: true, message: "Cloud-Daten gelöscht" });
 		}
@@ -706,9 +774,10 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.2.4",
-				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup"],
+				version: "2.3.0",
+				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_hybrid"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
+				serverCapacityBytes: MAX_TOTAL_SERVER_STORAGE_BYTES,
 			});
 		}
 

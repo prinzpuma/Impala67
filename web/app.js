@@ -524,12 +524,23 @@ function wireEvents() {
 			return;
 		}
 		// Codeblock kopieren (Knopf wird in U.highlightCode eingefügt)
-		if (t.dataset.codecopy) {
-			const pre = t.closest("pre");
+		const copyBtn = t.dataset.codecopy ? t : t.closest("[data-codecopy]");
+		if (copyBtn) {
+			const pre = copyBtn.closest("pre");
 			const code = pre && pre.querySelector("code");
-			if (code) navigator.clipboard.writeText(code.innerText.replace(/\s*$/, "\n")).then(
-				() => U.toast("Code kopiert.", "success"),
-				() => U.toast("Zwischenablage blockiert.", "error"));
+			if (code) {
+				const text = code.innerText.replace(/\s*$/, "\n");
+				navigator.clipboard.writeText(text).then(() => {
+					copyBtn.classList.add("copied");
+					const prevHtml = copyBtn.innerHTML;
+					copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:block;margin:auto"><polyline points="20 6 9 17 4 12"/></svg>';
+					setTimeout(() => {
+						copyBtn.classList.remove("copied");
+						copyBtn.innerHTML = prevHtml;
+					}, 1600);
+					U.toast("Code kopiert.", "success");
+				}, () => U.toast("Zwischenablage blockiert.", "error"));
+			}
 			return;
 		}
 		// KI-Antwort in die Zwischenablage kopieren
@@ -1148,6 +1159,12 @@ function wireEvents() {
 			for (const name of deckRoots) await STATE.dispatch("deckDelete", { name });
 			for (const id of cardIds) await STATE.dispatch("cardDelete", { id });
 			U.toast("Papierkorb geleert.", "success");
+			return;
+		}
+
+		if (t.dataset.trashfilter) {
+			S.trashFilter = t.dataset.trashfilter;
+			renderMain();
 			return;
 		}
 

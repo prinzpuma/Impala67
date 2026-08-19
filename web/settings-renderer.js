@@ -179,7 +179,7 @@ function cloudflareContent() {
 		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary" },
 		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary" },
 	]) +
-	UI.row({ title: "Cloud-Speicher (" + (cf.usage?.mbLimit || 500) + " MB Limit)", description: "Verwendeter Speicherplatz auf deinem Cloudflare D1 Server", trailing: '<span id="cfStorageValue" class="settings-value">' + e(cf.usage?.formatted || ("0.0 MB / " + (cf.usage?.mbLimit || 500) + " MB (0 %)")) + '</span>' }) +
+	UI.row({ title: "Cloud-Speicher (" + (cf.usage?.mbLimit || 1024) + " MB Limit)", description: "Verwendeter Speicherplatz auf deinem Cloudflare Sync-Server", trailing: '<span id="cfStorageValue" class="settings-value">' + e(cf.usage?.formatted || ("0.0 MB / " + (cf.usage?.mbLimit || 1024) + " MB (0 %)")) + '</span>' }) +
 	UI.row({ title: "Cloud-Daten löschen", description: "Löscht den synchronisierten Datenstand auf dem Cloudflare-Server", trailing: button("Cloud-Stand leeren", "btnCfPurge", "danger") });
 }
 

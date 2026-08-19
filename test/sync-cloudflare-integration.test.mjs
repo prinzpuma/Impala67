@@ -10,12 +10,43 @@ import {
 	MAX_USER_STORAGE_BYTES,
 } from "../web/sync-crypto.js";
 
-// Mock-Umgebung für Cloudflare D1 & WebSockets im Node-Test
+// Mock-Umgebung für Cloudflare D1 & R2 & WebSockets im Node-Test
 function createMockEnv() {
 	const dbStore = {
 		events: [],
 		storage: new Map(),
 		queries: [],
+	};
+	const bucketStore = new Map();
+
+	const mockBucket = {
+		async put(key, data, options = {}) {
+			bucketStore.set(key, { data, customMetadata: options.customMetadata || {} });
+			return { key };
+		},
+		async get(key) {
+			const item = bucketStore.get(key);
+			if (!item) return null;
+			return {
+				key,
+				async text() { return String(item.data); },
+				customMetadata: item.customMetadata,
+			};
+		},
+		async delete(keys) {
+			const arr = Array.isArray(keys) ? keys : [keys];
+			for (const k of arr) bucketStore.delete(k);
+		},
+		async list(options = {}) {
+			const prefix = options.prefix || "";
+			const objects = [];
+			for (const [k] of bucketStore.entries()) {
+				if (k.startsWith(prefix)) {
+					objects.push({ key: k });
+				}
+			}
+			return { objects, truncated: false };
+		},
 	};
 
 	const mockDb = {
@@ -30,6 +61,11 @@ function createMockEnv() {
 				async first() {
 					if (query.includes("COUNT(*)")) {
 						return { cnt: dbStore.storage.size };
+					}
+					if (query.includes("SUM(total_bytes)") || query.includes("server_bytes")) {
+						let sum = 0;
+						for (const val of dbStore.storage.values()) sum += (val.bytes || 0);
+						return { server_bytes: sum };
 					}
 					if (query.includes("MAX(seq)")) {
 						const [userId] = params;
@@ -83,8 +119,13 @@ function createMockEnv() {
 				const q = stmt._query || "";
 				const p = stmt._params || [];
 				if (q.includes("INSERT OR IGNORE INTO sync_events") || q.includes("INSERT INTO sync_events")) {
-					const [userId, seq, event_id, iv, data, size, created_at] = p;
-					dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, data, size, created_at });
+					if (p.length === 8) {
+						const [userId, seq, event_id, iv, r2_key, data, size, created_at] = p;
+						dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key, data, size, created_at });
+					} else {
+						const [userId, seq, event_id, iv, data, size, created_at] = p;
+						dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key: null, data, size, created_at });
+					}
 				}
 				if (q.includes("user_storage")) {
 					const [userId, token, bytes] = p;
@@ -114,7 +155,7 @@ function createMockEnv() {
 		},
 	};
 
-	return { env: { DB: mockDb }, ctx, dbStore };
+	return { env: { DB: mockDb, BUCKET: mockBucket }, ctx, dbStore, bucketStore };
 }
 
 test("CORS erlaubt die vom Browser verwendeten Auth-Header explizit", async () => {
@@ -450,7 +491,7 @@ test("Strikte Sequenzierung: Parallele Uploads erhalten eindeutige aufsteigende 
 	assert.ok(Math.max(resA.maxSeq, resB.maxSeq) === 2);
 });
 
-test("Quota-Enforcement: Pakete über 500 MB werden mit 413 abgewiesen", async () => {
+test("Quota-Enforcement: Pakete über 1.000 MB werden mit 413 abgewiesen", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	const key = generateSyncKey();
@@ -470,7 +511,55 @@ test("Quota-Enforcement: Pakete über 500 MB werden mit 413 abgewiesen", async (
 	const res = await room.saveEvents([oversizedEvent]);
 	assert.equal(res.ok, false);
 	assert.equal(res.status, 413);
-	assert.ok(res.error.includes("500 MB"));
+	assert.ok(res.error.includes("1.000 MB"));
+});
+
+test("D1 + R2 Hybrid-Speicherung: Payloads liegen in R2 und D1 enthält nur schlanke Pointer", async () => {
+	const { env, ctx, dbStore, bucketStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const encrypted = await encryptPayload(cryptoKey, { id: "hybrid-1", content: "geheime notiz" });
+	const res = await room.saveEvents([{ id: "hybrid-1", ...encrypted }]);
+
+	assert.equal(res.ok, true);
+	// 1. R2 enthält den Payload-String
+	const r2Key = `users/${userId}/events/hybrid-1.bin`;
+	assert.ok(bucketStore.has(r2Key));
+	assert.equal(bucketStore.get(r2Key).data, encrypted.data);
+
+	// 2. D1 speichert die Metadaten mit r2_key und leeres data ('')
+	const d1Event = dbStore.events.find((e) => e.event_id === "hybrid-1");
+	assert.ok(d1Event);
+	assert.equal(d1Event.r2_key, r2Key);
+	assert.equal(d1Event.data, "");
+
+	// 3. GET /api/sync lädt den Payload transparent aus R2 zurück
+	const syncReq = new Request(`https://example.com/api/sync?user=${userId}&since=0`, {
+		headers: { Authorization: `Bearer ${authToken}` },
+	});
+	const syncRes = await room.fetch(syncReq);
+	assert.equal(syncRes.status, 200);
+	const syncData = await syncRes.json();
+	assert.equal(syncData.events.length, 1);
+	assert.equal(syncData.events[0].data, encrypted.data);
+
+	// 4. Entschlüsselung funktioniert transparent
+	const decrypted = await decryptPayload(cryptoKey, syncData.events[0]);
+	assert.equal(decrypted.content, "geheime notiz");
+
+	// 5. POST /api/reset leert D1 und R2
+	const resetReq = new Request(`https://example.com/api/reset?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}` },
+	});
+	const resetRes = await room.fetch(resetReq);
+	assert.equal(resetRes.status, 200);
+	assert.equal(bucketStore.has(r2Key), false);
+	assert.equal(dbStore.events.length, 0);
 });
 
 test("Persistierte Speichernutzung enthält den gerade gespeicherten Upload", async () => {

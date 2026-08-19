@@ -713,9 +713,20 @@ function ancestorsOf(pg) {
 
 function breadcrumbHtml(pg) {
 	const ws = S.workspaces[pg.workspaceId] || { name: "Privat" };
-	return `<div class="breadcrumb"><span class="crumb" data-crumbws="1">${esc(ws.name)}</span>` +
-		ancestorsOf(pg).map((a) => `<span class="crumb-sep">/</span><span class="crumb" data-page="${a.id}">${esc(a.title)}</span>`).join("") +
-		`<span class="crumb-sep">/</span><span class="crumb current">${esc(pg.title)}</span></div>`;
+	const anc = ancestorsOf(pg);
+	let crumbs = [];
+	if (anc.length > 2) {
+		crumbs = [
+			`<span class="crumb" data-page="${anc[0].id}">${esc(anc[0].title)}</span>`,
+			`<span class="crumb-sep">/</span><span class="crumb-ellipsis" title="${anc.slice(1, -1).map((a) => esc(a.title)).join(' / ')}">…</span>`,
+			`<span class="crumb-sep">/</span><span class="crumb" data-page="${anc[anc.length - 1].id}">${esc(anc[anc.length - 1].title)}</span>`
+		];
+	} else {
+		crumbs = anc.map((a, i) => `${i > 0 ? '<span class="crumb-sep">/</span>' : ''}<span class="crumb" data-page="${a.id}">${esc(a.title)}</span>`);
+	}
+	return `<nav class="breadcrumb" aria-label="Breadcrumb"><span class="crumb" data-crumbws="1">${esc(ws.name)}</span>` +
+		(crumbs.length ? '<span class="crumb-sep">/</span>' + crumbs.join("") : "") +
+		`<span class="crumb-sep">/</span><span class="crumb current">${esc(pg.title || "Unbenannt")}</span></nav>`;
 }
 
 // ---- Sync-Konflikte: Pending-Liste + Lösungs-Popup mit Diff -----
@@ -1174,25 +1185,41 @@ const trashRow = (kind, id, title, hint) =>
 	`<div class="trash-row"><span class="row-title">${title}</span><span class="hint">${hint}</span>` +
 	`<button data-${kind}restore="${id}">↩ Wiederherstellen</button><button data-${kind}purge="${id}" class="danger">🗑 Endgültig löschen</button></div>`;
 function renderTrash(main) {
+	const filter = S.trashFilter || "all";
 	const pages = STATE.trashedPages();
 	const decks = (STATE.trashedDeckRoots && STATE.trashedDeckRoots()) || [];
 	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
-	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div><button class="danger" data-trashclear="1">Papierkorb leeren</button></div>';
-	if (!pages.length && !decks.length && !cards.length) {
+	const total = pages.length + decks.length + cards.length;
+	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div>' +
+		(total ? '<button class="danger" data-trashclear="1">Papierkorb leeren</button>' : "") + '</div>';
+	if (!total) {
 		U.morph(main, html + '<p class="hint">Der Papierkorb ist leer.</p></div>');
 		return;
 	}
+	const filterChips = '<div class="menu-chips" style="margin-bottom:12px">' +
+		`<button class="menu-chip${filter === "all" ? " active" : ""}" data-trashfilter="all">Alle (${total})</button>` +
+		(pages.length ? `<button class="menu-chip${filter === "pages" ? " active" : ""}" data-trashfilter="pages">Seiten (${pages.length})</button>` : "") +
+		(decks.length ? `<button class="menu-chip${filter === "decks" ? " active" : ""}" data-trashfilter="decks">Stapel (${decks.length})</button>` : "") +
+		(cards.length ? `<button class="menu-chip${filter === "cards" ? " active" : ""}" data-trashfilter="cards">Karten (${cards.length})</button>` : "") +
+		'</div>';
+	html += filterChips;
 	const head = (label) => `<div class="ws-head"><span class="ws-name">${label}</span></div>`;
 	html += '<div class="trash-list">';
-	if (pages.length) html += head("Seiten") + pages.map((pg) => trashRow("page", pg.id, pageIconHtml(pg) + esc(pg.title), "gelöscht " + U.fmtDate(pg.trashedAt || pg.updated))).join("");
-	if (decks.length) html += head("Stapel") + decks.map((name) => {
-		const n = Object.values(S.cards).filter((c) => c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
-		return trashRow("deck", esc(name), "🃏 " + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
-	}).join("");
-	if (cards.length) html += head("Karten") + cards.map((c) => {
-		const front = (c.front || "").replace(/\s+/g, " ").trim();
-		return trashRow("card", c.id, "🃏 " + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
-	}).join("");
+	if ((filter === "all" || filter === "pages") && pages.length) {
+		html += head("Seiten") + pages.map((pg) => trashRow("page", pg.id, pageIconHtml(pg) + esc(pg.title), "gelöscht " + U.fmtDate(pg.trashedAt || pg.updated))).join("");
+	}
+	if ((filter === "all" || filter === "decks") && decks.length) {
+		html += head("Stapel") + decks.map((name) => {
+			const n = Object.values(S.cards).filter((c) => c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
+			return trashRow("deck", esc(name), "🃏 " + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
+		}).join("");
+	}
+	if ((filter === "all" || filter === "cards") && cards.length) {
+		html += head("Karten") + cards.map((c) => {
+			const front = (c.front || "").replace(/\s+/g, " ").trim();
+			return trashRow("card", c.id, "🃏 " + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
+		}).join("");
+	}
 	// U.morph statt innerHTML (Regel aus util.js): Scrollstand und Hover bleiben erhalten,
 	// wenn eine Zeile wiederhergestellt oder endgültig gelöscht wird.
 	U.morph(main, html + "</div></div>");

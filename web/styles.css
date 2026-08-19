@@ -176,11 +176,12 @@ button.danger { color: var(--danger) }
 .page-chrome { flex: 0 0 auto; padding: 7px 14px; min-height: 38px }
 .page-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px }
 .page-meta { width: min(760px, 100%); margin: 0 auto; padding: 4px 24px 6px; flex-shrink: 0 }
-.breadcrumb { font-size: var(--text-sm); color: var(--text2); padding: 3px 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center }
-.crumb { cursor: pointer }
+.breadcrumb { font-size: var(--text-sm); color: var(--text2); padding: 3px 0; display: flex; flex-wrap: nowrap; gap: 4px; align-items: center; overflow-x: auto; scrollbar-width: none; white-space: nowrap }
+.breadcrumb::-webkit-scrollbar { display: none }
+.crumb { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; cursor: pointer }
 .crumb:hover { color: var(--text); text-decoration: underline }
-.crumb.current { color: var(--text); cursor: default; text-decoration: none; font-weight: 600 }
-.crumb-sep { opacity: .4 }
+.crumb.current { max-width: 220px; color: var(--text); cursor: default; text-decoration: none; font-weight: 600; flex-shrink: 0 }
+.crumb-sep, .crumb-ellipsis { opacity: .4; flex-shrink: 0 }
 .page-cover { height: 180px; border-radius: var(--radius-lg); margin: 8px 0 0; position: relative }
 .cover-btns { position: absolute; bottom: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity .15s }
 .page-cover:hover .cover-btns, .page-cover:focus-within .cover-btns { opacity: 1 }
@@ -1564,7 +1565,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-chrome .heft-main { width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: var(--radius-md); background: transparent; font-size: var(--text-md); color: var(--text2) }
 .heft-chrome .heft-main:hover { background: var(--surface-hover-strong); color: var(--text) }
 /* Laser ist bewusst rot markiert — er hinterlässt keine permanen… */
-.heft-chrome .heft-main.heft-laser.active { background: rgba(224,72,62,.26); color: #ffd0ca; box-shadow: inset 0 0 0 1px rgba(224,72,62,.4) }
+.heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-border) }
 .heft-chrome .heft-pill > .heft-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--edge) }
 .heft-chrome .heft-chev { font-size: 7px; margin-left: -1px }
 /* NUR dieses Tray ist beweglich. Standard: direkt unter der fest… */
@@ -1963,9 +1964,11 @@ h3, h4 { text-wrap: balance }
 	.composer-tool, #chatForm #btnAttach, .chat-form-full #btnAttachFull { width: 38px; height: 38px }
 	.msg-tool-btn { min-height: 38px }
 }
-/* == Feinschliff v10: KI-Chat == */
-.code-copy { position: absolute; top: 6px; right: 6px; min-height: 0; width: 26px; height: 26px; padding: 0; font-size: var(--text-xs); line-height: 1; background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius-sm); opacity: 0; display: grid; place-items: center }
-.md pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
+pre { position: relative }
+.code-copy { position: absolute; top: 6px; right: 6px; min-height: 0; width: 28px; height: 28px; padding: 0; font-size: var(--text-xs); line-height: 1; background: color-mix(in srgb, var(--menu-bg) 80%, transparent); color: var(--text2); border: 1px solid var(--edge); border-radius: var(--radius-sm); opacity: 0; display: grid; place-items: center; cursor: pointer; transition: opacity .15s, background .12s, color .12s; z-index: 2 }
+.code-copy:hover { background: var(--surface-hover-strong); color: var(--text) }
+.code-copy.copied { background: var(--success-soft); color: var(--success); border-color: var(--success-border); opacity: 1 }
+pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .chat-suggests { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; flex-shrink: 0 }
 .chat-suggests button { font-size: var(--text-sm); padding: 7px 12px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--edge); color: var(--text2) }
 .chat-suggests button:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft) }
@@ -2269,7 +2272,7 @@ h3, h4 { text-wrap: balance }
 .settings-modal-v2 .provider-status { margin: 0 13px 10px; font-size: var(--text-xs) }
 .settings-field-action { display: flex; align-items: center; gap: 7px }
 .settings-field-action button { flex: 0 0 30px }
-.settings-savebar { position: sticky; z-index: 3; bottom: -32px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px -12px -32px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--edge); border-bottom: 0; border-radius: 13px 13px 0 0; background: color-mix(in srgb, var(--menu-bg) 94%, transparent); box-shadow: 0 -8px 24px rgba(0,0,0,.12); backdrop-filter: blur(16px) }
+.settings-savebar { position: sticky; z-index: 10; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px -12px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--edge); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--menu-bg) 95%, transparent); box-shadow: var(--elev-3); backdrop-filter: blur(16px) }
 .settings-savebar[hidden] { display: none }
 .settings-savebar > span { color: var(--text2); font-size: var(--text-xs) }
 .settings-savebar > div { display: flex; gap: 7px }
@@ -2321,7 +2324,7 @@ h3, h4 { text-wrap: balance }
 	.settings-segmented { max-width: 100%; overflow-x: auto }
 	.settings-row:has(.settings-segmented), .settings-row:has(.settings-accents) { flex-direction: column }
 	.settings-row:has(.settings-segmented) .settings-row-control { width: 100%; justify-content: flex-start }
-	.settings-savebar { bottom: -24px; margin-bottom: -24px }
+	.settings-savebar { bottom: 0; margin: 12px 0 0 }
 }
 
 @media (pointer: coarse) {
