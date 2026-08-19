@@ -299,16 +299,146 @@ export const AI = (() => {
 		if (!found.length && results.every((result) => result.status === "rejected")) throw results[0].reason;
 		return found;
 	}
+	const LOCAL_EMBEDDING_MODELS = [
+		{
+			id: "local:bekko-a8m",
+			hfId: "hotchpotch/bekko-embedding-v1-a8m",
+			name: "Bekko a8m (Lokal im Browser, 256d)",
+			dim: 256,
+			sizeMb: 124,
+			context: 8192,
+			providerId: "local",
+			providerName: "Lokal (Offline)",
+			recommended: true,
+		},
+		{
+			id: "local:granite-97m",
+			hfId: "onnx-community/granite-embedding-97m-multilingual-r2-ONNX",
+			name: "Granite 97M R2 (Lokal im Browser, 384d)",
+			dim: 384,
+			sizeMb: 123,
+			context: 32768,
+			providerId: "local",
+			providerName: "Lokal (Offline)",
+			recommended: false,
+		},
+		{
+			id: "local:minilm",
+			hfId: "Xenova/all-MiniLM-L6-v2",
+			name: "all-MiniLM-L6-v2 (Lokal, Englisch, 384d)",
+			dim: 384,
+			sizeMb: 23,
+			context: 512,
+			providerId: "local",
+			providerName: "Lokal (Offline)",
+			recommended: false,
+		},
+	];
+
+	let embeddingWorker = null;
+	let embeddingWorkerReqId = 0;
+	const embeddingWorkerPending = new Map();
+	const embeddingWorkerListeners = new Set();
+
+	function getEmbeddingWorker() {
+		if (!embeddingWorker && typeof Worker !== "undefined") {
+			try {
+				embeddingWorker = new Worker("./embedding-worker.js", { type: "module" });
+				embeddingWorker.addEventListener("message", (e) => {
+					const msg = e.data;
+					if (!msg) return;
+					if (msg.type === "progress") {
+						for (const l of embeddingWorkerListeners) {
+							try { l(msg); } catch {}
+						}
+					}
+					if (msg.id && embeddingWorkerPending.has(msg.id)) {
+						const { resolve, reject } = embeddingWorkerPending.get(msg.id);
+						embeddingWorkerPending.delete(msg.id);
+						if (msg.type === "error") reject(new Error(msg.error || "Worker-Fehler"));
+						else resolve(msg);
+					}
+				});
+				embeddingWorker.addEventListener("error", (err) => {
+					console.warn("Embedding Worker Error:", err);
+					for (const [id, { reject }] of embeddingWorkerPending) {
+						reject(new Error(err?.message || "Embedding Worker Fehler"));
+					}
+					embeddingWorkerPending.clear();
+				});
+			} catch (e) {
+				console.warn("Konnte Embedding Worker nicht starten:", e);
+			}
+		}
+		return embeddingWorker;
+	}
+
+	function postEmbeddingWorkerMessage(type, payload = {}) {
+		const worker = getEmbeddingWorker();
+		if (!worker) return Promise.reject(new Error("Web Worker werden in diesem Browser nicht unterstützt."));
+		const id = "emb_" + (++embeddingWorkerReqId) + "_" + Date.now();
+		return new Promise((resolve, reject) => {
+			embeddingWorkerPending.set(id, { resolve, reject });
+			worker.postMessage({ type, id, ...payload });
+		});
+	}
+
+	function onEmbeddingProgress(listener) {
+		embeddingWorkerListeners.add(listener);
+		return () => embeddingWorkerListeners.delete(listener);
+	}
+
+	async function getLocalEmbeddingStatus(modelId = "local:bekko-a8m") {
+		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
+		try {
+			const res = await postEmbeddingWorkerMessage("status", { model: def.hfId });
+			return { ...def, cached: !!res.cached, loadedInRam: !!res.loadedInRam };
+		} catch (err) {
+			return { ...def, cached: false, loadedInRam: false, error: err?.message };
+		}
+	}
+
+	async function downloadLocalEmbedding(modelId = "local:bekko-a8m") {
+		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
+		return await postEmbeddingWorkerMessage("download", { model: def.hfId, dim: def.dim });
+	}
+
+	async function deleteLocalEmbedding(modelId = "local:bekko-a8m") {
+		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
+		return await postEmbeddingWorkerMessage("delete", { model: def.hfId });
+	}
+
 	const isEmbeddingModel = (id) => /(?:^|[-_/.])(embed(?:ding)?|text-embedding|nomic-embed|bge|e5|gte|jina-embeddings?|voyage|mxbai-embed|snowflake-arctic-embed)(?:$|[-_/.])/i.test(String(id || ""));
 	async function listEmbeddingModels() {
-		return (await Promise.all(modelProviders().map(async (p) => {
+		const local = LOCAL_EMBEDDING_MODELS.map((m) => ({
+			id: m.id,
+			providerId: m.providerId,
+			providerName: m.providerName,
+			label: m.name,
+		}));
+		const remote = (await Promise.all(modelProviders().map(async (p) => {
 			try {
 				return (await modelIds(p.base, p.key)).filter(isEmbeddingModel).sort((a, b) => String(a).localeCompare(String(b))).map((id) => ({ id, providerId: p.id, providerName: p.name || p.id }));
 			} catch { return []; }
 		}))).flat();
+		return [...local, ...remote];
 	}
 	async function embed(texts) {
 		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
+		const isLocal = S.settings.embedProviderId === "local" || S.settings.embedModel.startsWith("local:");
+		if (isLocal) {
+			const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === S.settings.embedModel) || LOCAL_EMBEDDING_MODELS[0];
+			const started = performance.now();
+			try {
+				const res = await postEmbeddingWorkerMessage("embed", { texts, model: def.hfId, dim: def.dim });
+				if (!res || !Array.isArray(res.vectors)) throw new Error("Lokales Embedding lieferte keine Vektoren.");
+				if (res.vectors.length !== texts.length) throw new Error(`Lokales Embedding unvollständig (${res.vectors.length}/${texts.length}).`);
+				return res.vectors;
+			} catch (err) {
+				debugEvent("Lokaler-Embedding-Fehler", { model: S.settings.embedModel, error: errorText(err), ms: Math.round(performance.now() - started) });
+				throw err;
+			}
+		}
 		const provider = embedProvider();
 		if (!provider?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
 		const started = performance.now(), op = trackedController();
@@ -1141,5 +1271,5 @@ export const AI = (() => {
 	}
 	const undoAi = (changeSet) => TOOLS.undo(changeSet);
 
-	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

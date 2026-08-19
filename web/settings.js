@@ -692,7 +692,7 @@ export async function refreshEmbeddingModels() {
 		// Gespeichertes Modell exakt (Quelle+Modell) oder wenigstens per Modellnamen wiederfinden
 		const exact = found.find((m) => m.id === current && (!currentProv || m.providerId === currentProv));
 		const options = found.map((m) =>
-			'<option value="' + U.esc(m.providerId + "::" + m.id) + '">' + U.esc(m.id) + " — " + U.esc(m.providerName) + "</option>");
+			'<option value="' + U.esc(m.providerId + "::" + m.id) + '">' + U.esc(m.label || m.id) + " — " + U.esc(m.providerName) + "</option>");
 		if (current && !exact) options.push('<option value="' + U.esc(currentValue) + '">' + U.esc(current) + " (gespeichert — Quelle gerade nicht erreichbar?)</option>");
 		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>' + options.join("");
 		select.value = exact ? exact.providerId + "::" + exact.id : currentValue;
@@ -707,6 +707,114 @@ export async function refreshEmbeddingModels() {
 		if (hint) { hint.hidden = false; hint.textContent = "Konnte nicht geladen werden."; }
 	} finally {
 		select.disabled = false;
+		await updateLocalEmbeddingManagerUi();
+	}
+}
+
+export async function updateLocalEmbeddingManagerUi() {
+	const select = U.el("inpEmbed");
+	const manager = U.el("localEmbeddingManager");
+	if (!select || !manager) return;
+	const val = select.value || "";
+	const isLocal = val.startsWith("local::") || val.startsWith("local:");
+	manager.hidden = !isLocal;
+	if (!isLocal) return;
+
+	const sep = val.indexOf("::");
+	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
+	const badge = U.el("localEmbeddingBadge");
+	const msg = U.el("localEmbeddingMsg");
+	const btnDownload = U.el("btnDownloadLocalEmbedding");
+	const btnDelete = U.el("btnDeleteLocalEmbedding");
+
+	if (badge) badge.textContent = "Prüfe Status…";
+	try {
+		const status = await AI.getLocalEmbeddingStatus(modelId);
+		if (status.cached) {
+			if (badge) badge.innerHTML = '<span style="color: #22c55e;">●</span> Bereit (100% Offline)';
+			if (msg) msg.textContent = `${status.name} (~${status.sizeMb} MB) ist vollständig heruntergeladen und offline einsatzbereit.`;
+			if (btnDownload) btnDownload.hidden = true;
+			if (btnDelete) btnDelete.hidden = false;
+		} else {
+			if (badge) badge.innerHTML = '<span style="color: #f59e0b;">●</span> Nicht heruntergeladen';
+			if (msg) msg.textContent = `${status.name} (~${status.sizeMb} MB). Klicke auf Herunterladen, um das Modell einmalig für die Offline-Suche im Browser zu speichern.`;
+			if (btnDownload) {
+				btnDownload.hidden = false;
+				btnDownload.textContent = `📥 ${status.name.split(" ")[0]} herunterladen (~${status.sizeMb} MB)`;
+			}
+			if (btnDelete) btnDelete.hidden = true;
+		}
+	} catch (err) {
+		if (badge) badge.textContent = "Status unbekannt";
+		if (msg) msg.textContent = "Status konnte nicht ermittelt werden: " + (err.message || err);
+	}
+}
+
+let isDownloadingLocalEmbedding = false;
+export async function handleDownloadLocalEmbedding() {
+	if (isDownloadingLocalEmbedding) return;
+	const select = U.el("inpEmbed");
+	const val = select?.value || "";
+	const sep = val.indexOf("::");
+	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
+	const btnDownload = U.el("btnDownloadLocalEmbedding");
+	const progress = U.el("localEmbeddingProgress");
+	const fill = progress?.querySelector(".progress-fill");
+	const msg = U.el("localEmbeddingMsg");
+	const badge = U.el("localEmbeddingBadge");
+
+	isDownloadingLocalEmbedding = true;
+	if (btnDownload) btnDownload.disabled = true;
+	if (progress) progress.hidden = false;
+	if (fill) fill.style.width = "0%";
+	if (badge) badge.textContent = "Lädt herunter…";
+	if (msg) msg.textContent = "Lade Modell-Dateien herunter… Bitte warten.";
+
+	const unsub = AI.onEmbeddingProgress((p) => {
+		if (fill && p.progress !== undefined) {
+			const pct = Math.min(100, Math.max(0, Math.round(p.progress)));
+			fill.style.width = pct + "%";
+			if (msg) {
+				const fileInfo = p.file ? ` (${p.file})` : "";
+				msg.textContent = `Lade Modell herunter: ${pct}%${fileInfo}`;
+			}
+		}
+	});
+
+	try {
+		await AI.downloadLocalEmbedding(modelId);
+		unsub();
+		if (fill) fill.style.width = "100%";
+		U.toast("Lokales Modell erfolgreich heruntergeladen!", "success");
+		await updateLocalEmbeddingManagerUi();
+		// Automatisch Einstellungen anpassen & speichern falls noch nicht aktiv
+		if (S.settings.embedModel !== modelId) {
+			await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: modelId });
+			RAG.reindexStale();
+		}
+	} catch (err) {
+		unsub();
+		U.toast("Fehler beim Herunterladen: " + (err.message || err), "error");
+		if (msg) msg.textContent = "Fehler: " + (err.message || err);
+		if (badge) badge.textContent = "Fehler";
+	} finally {
+		isDownloadingLocalEmbedding = false;
+		if (btnDownload) btnDownload.disabled = false;
+		if (progress) progress.hidden = true;
+	}
+}
+
+export async function handleDeleteLocalEmbedding() {
+	const select = U.el("inpEmbed");
+	const val = select?.value || "";
+	const sep = val.indexOf("::");
+	const modelId = (sep === -1 ? val : val.slice(sep + 2)).trim() || "local:bekko-a8m";
+	try {
+		await AI.deleteLocalEmbedding(modelId);
+		U.toast("Lokales Modell aus dem Cache gelöscht.", "success");
+		await updateLocalEmbeddingManagerUi();
+	} catch (err) {
+		U.toast("Fehler beim Löschen: " + (err.message || err), "error");
 	}
 }
 
@@ -993,6 +1101,10 @@ export const SETTINGS = {
 	SETTINGS_SECTIONS,
 	handleNotionSync,
 	handleNotionCancel,
+	hasUnsavedSettings,
+	SETTINGS_SECTIONS,
+	handleNotionSync,
+	handleNotionCancel,
 	handleDriveLogin,
 	handleDriveLogout,
 	handleDriveSyncSettings,
@@ -1026,5 +1138,14 @@ export const SETTINGS = {
 	homeLayout,
 	HOME_SECTIONS,
 	handleFileBgChange,
-	handleImportChange
+	handleImportChange,
+	updateLocalEmbeddingManagerUi,
+	handleDownloadLocalEmbedding,
+	handleDeleteLocalEmbedding
 };
+
+document.addEventListener("change", (e) => {
+	if (e.target && e.target.id === "inpEmbed") {
+		updateLocalEmbeddingManagerUi();
+	}
+});

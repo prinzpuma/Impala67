@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v185"; // Update-Check behält version.json als sicheren Offline-Fallback.
+const CACHE = "impala67-v186"; // Update-Check behält version.json als sicheren Offline-Fallback.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -38,6 +38,7 @@ const APP_FILES = [
 	"./think-heuristik.js",
 	"./handschrift.js",
 	"./rag.js",
+	"./embedding-worker.js",
 	"./drive.js",
 	"./drive-status.js",
 	"./drive-sync-policy.js",
@@ -98,11 +99,11 @@ self.addEventListener("install", (e) => {
 	);
 });
 
-// Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE) bewahren.
+// Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE, transformers-cache) bewahren.
 self.addEventListener("activate", (e) => {
 	e.waitUntil(
 		caches.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE && k !== OPTIONAL_CACHE).map((k) => caches.delete(k))))
+			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE && k !== OPTIONAL_CACHE && !k.includes("transformers") && !k.includes("impala67-models")).map((k) => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
@@ -110,7 +111,6 @@ self.addEventListener("activate", (e) => {
 // Web Share Target: unterstützte installierte PWAs (vor allem Android/ChromeOS)
 // senden ein PDF als POST. iPadOS registriert eine reine PWA derzeit nicht als
 // Share Target; dort führt die Dateiauswahl in denselben Import-Screen.
-// Service Worker legt es nur einmal im Share-Cache ab und leitet dann zur normalen
 // App-URL weiter. pdfpaste.js löscht den temporären Eintrag nach dem Import.
 // FIX: Scheiterte formData() (abgebrochene Freigabe, fremder Inhalt), wurde die
 // Antwort abgelehnt und das Gerät zeigte eine Browser-Fehlerseite statt der App.

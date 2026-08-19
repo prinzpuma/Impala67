@@ -1382,6 +1382,12 @@ function wireEvents() {
 			case "btnRefreshEmbedding":
 				await SETTINGS.refreshEmbeddingModels();
 				break;
+			case "btnDownloadLocalEmbedding":
+				await SETTINGS.handleDownloadLocalEmbedding();
+				break;
+			case "btnDeleteLocalEmbedding":
+				await SETTINGS.handleDeleteLocalEmbedding();
+				break;
 			case "btnCheckUpdate":
 				await SETTINGS.handleCheckUpdate();
 				break;

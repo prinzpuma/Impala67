@@ -1,5 +1,6 @@
 import { JSDOM } from "jsdom";
-const { PNG } = await import("pngjs");
+let PNG = null;
+try { PNG = (await import("pngjs")).PNG; } catch {}
 
 const dom = new JSDOM("<!doctype html><body></body>", { url: "http://localhost/" });
 for (const key of ["window", "document", "Element", "Node", "HTMLElement", "MutationObserver", "navigator"]) {
@@ -74,6 +75,7 @@ await run("search-tail", "Suche in meinen Notizen nach der exakten Suchmarke TAI
 });
 
 function solidPng(color) {
+	if (!PNG) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 	const png = new PNG({ width: 320, height: 220 });
 	for (let i = 0; i < png.data.length; i += 4) {
 		png.data[i] = color[0]; png.data[i + 1] = color[1]; png.data[i + 2] = color[2]; png.data[i + 3] = 255;
