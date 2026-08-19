@@ -153,9 +153,12 @@ function driveContent() {
 }
 
 function cloudflareContent() {
-	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected", label: "Nicht eingerichtet", detail: "Cloudflare Sync konfigurieren", url: "", syncKey: "", usage: { formatted: "0 MB / 200 MB (0 %)" } };
+	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected", label: "Nicht eingerichtet", detail: "Cloudflare Sync konfigurieren", url: "", syncKey: "", usage: { formatted: "0.0 MB / 500 MB (0 %)" } };
 	const statusType = cf.status === "connected" ? "ok" : cf.status === "syncing" || cf.status === "connecting" ? "warn" : cf.status === "error" ? "error" : "idle";
-	return UI.status(statusType, cf.label || "Nicht verbunden", cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung",
+	const progressHtml = (cf.status === "syncing" && cf.progress && cf.progress.total > 0)
+		? '<div class="progress-bar" style="margin-top: 8px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: ' + cf.progress.percent + '%; height: 100%; background: var(--accent, #6366f1); transition: width 0.2s ease;"></div></div>'
+		: "";
+	return UI.status(statusType, cf.label || "Nicht verbunden", (cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung") + progressHtml,
 		button("Jetzt synchronisieren", "btnCfSyncNow") +
 		(cf.status === "connected" || cf.status === "connecting" ? button("Trennen", "btnCfDisconnect", "secondary") : "")
 	) +

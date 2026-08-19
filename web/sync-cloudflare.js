@@ -361,7 +361,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	/**
 	 * Sendet lokale Events, die seit dem letzten Upload entstanden sind (Delta-Upload)
-	 * Bei leerem Server (lastSyncedSeq = 0) oder forceAll = true werden ALLE lokalen Notizen hochgeladen.
+	 * Bei leerem Server (lastSyncedSeq = 0) oder forceAll = true werden die Notizen kompakt & speicherschonend hochgeladen.
 	 */
 	async function pushUnsyncedLocalEvents(forceAll = false) {
 		if (!state.url || !credentials) return;
@@ -370,42 +370,45 @@ export const CLOUDFLARE_SYNC = (() => {
 		const lastUploadedSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 
 		const isInitialPush = forceAll || state.lastSyncedSeq === 0 || lastUploadedSeq === 0;
-		const unsentEvents = isInitialPush ? localEvents : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
-		if (!unsentEvents.length) return;
+		// Bei Initial-Push: Vorm Kompaktieren bereinigen, damit nicht tausende alte Tastenanschläge den RAM sprengen
+		const sourceEvents = isInitialPush ? DB.compactEvents(localEvents) : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
+		if (!sourceEvents.length) return;
 
 		const transportEvents = pruneEventsForUpload(DB.filterEventsForSync(
-			SETTINGS_SYNC.sanitizeEvents(unsentEvents, SETTINGS_SYNC.allowsSecrets(S.settings))
+			SETTINGS_SYNC.sanitizeEvents(sourceEvents, SETTINGS_SYNC.allowsSecrets(S.settings))
 		));
 
-		if (!transportEvents.length) {
+		const total = transportEvents.length;
+		if (!total) {
 			LS.setItem(lastUploadedKey(), String(localMaxSeq));
 			state.lastUploadedLocalSeq = localMaxSeq;
 			return;
 		}
 
-		// Verschlüsseln
-		const encryptedList = [];
-		for (const ev of transportEvents) {
-			const enc = await encryptPayload(credentials.cryptoKey, ev);
-			encryptedList.push({
-				id: ev.id,
-				iv: enc.iv,
-				data: enc.data,
-				size: enc.size,
-			});
-		}
-
 		const apiUrl = getApiUrl(state.url, "/api/events");
-		const BATCH_SIZE = 200;
-		for (let i = 0; i < encryptedList.length; i += BATCH_SIZE) {
-			const batch = encryptedList.slice(i, i + BATCH_SIZE);
+		// Speichereffizient in 50er-Chunks: Nie die gesamte Sammlung auf einmal im RAM halten!
+		const CHUNK_SIZE = 50;
+		for (let i = 0; i < total; i += CHUNK_SIZE) {
+			const chunk = transportEvents.slice(i, i + CHUNK_SIZE);
+			const encryptedBatch = [];
+
+			for (const ev of chunk) {
+				const enc = await encryptPayload(credentials.cryptoKey, ev);
+				encryptedBatch.push({
+					id: ev.id,
+					iv: enc.iv,
+					data: enc.data,
+					size: enc.size,
+				});
+			}
+
 			const response = await fetch(apiUrl, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 					...getAuthHeaders(),
 				},
-				body: JSON.stringify({ events: batch }),
+				body: JSON.stringify({ events: encryptedBatch }),
 			});
 
 			if (response.ok) {
@@ -424,10 +427,19 @@ export const CLOUDFLARE_SYNC = (() => {
 				const errData = await response.json().catch(() => ({}));
 				throw new Error(errData.error || `Upload fehlgeschlagen (Status ${response.status})`);
 			}
+
+			const current = Math.min(total, i + CHUNK_SIZE);
+			const percent = Math.round((current / total) * 100);
+			state.progress = { current, total, percent };
+			setStatus("syncing", "Synchronisiere…", `Übertrage ${current} von ${total} Elementen (${percent} %)`);
+
+			// Garbage Collector und UI kurz atmen lassen (verhindert OOM / UI-Freeze)
+			await new Promise((r) => setTimeout(r, 15));
 		}
 
 		LS.setItem(lastUploadedKey(), String(localMaxSeq));
 		state.lastUploadedLocalSeq = localMaxSeq;
+		state.progress = null;
 		emitStatus();
 	}
 
