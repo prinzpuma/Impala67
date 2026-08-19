@@ -107,7 +107,7 @@ function actionItems() {
 			SETTINGS.applyTheme();
 		} },
 		{ type: "action", icon: "🗑", label: "Papierkorb öffnen", run: click("btnTrash") },
-		{ type: "action", icon: "☁", label: "Drive-Sync starten", run: click("btnDriveSync") },
+		{ type: "action", icon: "☁", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
 		{ type: "action", icon: "⚙", label: "Einstellungen öffnen", run: click("btnSettings") }
 	];
 }

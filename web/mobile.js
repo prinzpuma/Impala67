@@ -147,7 +147,7 @@ export const MOBILE = (() => {
 		// Mehr-Sheet Feature-Buttons
 		if (mact) {
 			body.classList.remove("mmore-open");
-			const map = { drive: "#btnDriveSync", notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
+			const map = { drive: "#btnSettings", notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
 			document.querySelector(map[mact])?.click();
 			updateUI();
 			return;

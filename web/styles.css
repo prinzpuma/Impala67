@@ -121,11 +121,6 @@ button:hover { background: var(--surface-active) }
 button.danger { color: var(--danger) }
 #btnReview.attention { color: var(--accent) }
 /* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. */
-#btnDriveSync.sync-syncing { color: var(--accent) }
-#btnDriveSync.sync-syncing svg { animation: softPulse 1.2s ease-in-out infinite }
-#btnDriveSync.sync-ok { color: var(--success) }
-#btnDriveSync.sync-waiting { color: var(--text2) }
-#btnDriveSync.sync-error { color: var(--danger) }
 /* Feinschliff v11 (23. Juli, Nacht): EIN gemeinsamer Puls für alle „arbeitet gerade“-Anzeigen
    (Sync-Wolke, KI-Status-Punkt, Thinking-Icon) — gleicher Rhythmus statt 3 fast identischer
    Keyframes; der Reduce-Motion-Sonderfall entfällt, das globale Reduce-Motion greift ohnehin. */

@@ -149,15 +149,10 @@ export async function initApp() {
 	SETTINGS.checkAI();
 	// Nach erfolgreicher früherer Google-Anmeldung sofort Drive abgleichen.
 	// Ohne gespeicherte Sitzung bleibt der Lauf still und öffnet kein Login-Popup.
-	// Kleine, unaufdringliche Zustandsanzeige am vorhandenen Sync-Knopf.
+	// Drive-Status bleibt intern und in den Einstellungen verfügbar; eine dauerhafte
+	// Anzeige in der unteren Navigation ist bewusst entfernt.
 	window.addEventListener("impala67:sync-status", (e) => {
 		const d = (e && e.detail) || {};
-		const btn = U.el("btnDriveSync"), label = U.el("driveSyncLabel");
-		if (!btn || !label) return;
-		btn.classList.remove("sync-idle", "sync-syncing", "sync-ok", "sync-waiting", "sync-error");
-		btn.classList.add("sync-" + (d.state || "idle"));
-		label.textContent = d.label || "Sync";
-		btn.title = d.detail || d.label || "Drive-Sync";
 		SETTINGS.refreshDriveStatusUi?.();
 		// Wenn über Google Drive neue Cloudflare-Zugangsdaten eintreffen: Automatisch verbinden!
 		if (S.settings.cfUrl && S.settings.cfSyncKey && (!CLOUDFLARE_SYNC.status().url || !CLOUDFLARE_SYNC.status().syncKey)) {

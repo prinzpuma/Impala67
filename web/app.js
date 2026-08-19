@@ -1481,9 +1481,6 @@ function wireEvents() {
 				}
 				break;
 			}
-			case "btnDriveSync":
-				await SETTINGS.handleDriveSync(t);
-				break;
 			case "btnDailyHome":
 				await openDailyNote(localDayKey(new Date()));
 				break;
