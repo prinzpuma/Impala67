@@ -85,11 +85,11 @@ test("formatStorageUsage berechnet MB und Prozent korrekt für 1.000 MB Limit", 
 	assert.equal(usage1.mbLimit, 1000);
 	assert.equal(usage1.percent, 0);
 
-	const usage2 = formatStorageUsage(500 * 1024 * 1024); // 500 MB
+	const usage2 = formatStorageUsage(500_000_000); // 500 MB
 	assert.equal(usage2.mbUsed, 500);
 	assert.equal(usage2.percent, 50);
 
-	const usage3 = formatStorageUsage(1000 * 1024 * 1024); // 1000 MB
+	const usage3 = formatStorageUsage(1_000_000_000); // 1000 MB
 	assert.equal(usage3.mbUsed, 1000);
 	assert.equal(usage3.percent, 100);
 });

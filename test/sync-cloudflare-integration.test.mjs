@@ -614,6 +614,34 @@ test("R2-Rollback: Bei einem D1-Datenbankfehler werden neu angelegte R2-Objekte 
 	assert.equal(bucketStore.has(r2Key), false);
 });
 
+test("R2-Rollback: Bei einem R2-Schreibfehler wird der Upload abgebrochen und aufgeräumt", async () => {
+	const { env, ctx, bucketStore } = createMockEnv();
+	let callCount = 0;
+	// Simuliere Fehlschlag beim zweiten Event
+	const origPut = env.BUCKET.put;
+	env.BUCKET.put = async (key, data, options) => {
+		callCount++;
+		if (callCount === 2) throw new Error("R2 Storage Network Timeout");
+		return origPut.call(env.BUCKET, key, data, options);
+	};
+
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const ev1 = await encryptPayload(cryptoKey, { id: "part-1", content: "eins" });
+	const ev2 = await encryptPayload(cryptoKey, { id: "part-2", content: "zwei" });
+	const res = await room.saveEvents([{ id: "part-1", ...ev1 }, { id: "part-2", ...ev2 }]);
+
+	assert.equal(res.ok, false);
+	assert.equal(res.status, 500);
+	assert.equal(room.maxSeq, 0);
+	// Keine verwaisten R2-Dateien
+	assert.equal(bucketStore.size, 0);
+});
+
 test("Persistierte Speichernutzung enthält den gerade gespeicherten Upload", async () => {
 	const { env, ctx, dbStore } = createMockEnv();
 	const room = new SyncRoom(ctx, env);

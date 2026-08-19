@@ -12,9 +12,9 @@
  * - Quota-Schutz: 1.000 MB (1 GB) pro Nutzer, 10 GB Gesamtkapazität
  */
 
-const MAX_USER_STORAGE_BYTES = 1000 * 1024 * 1024; // 1.000 MB (1 GB) pro Nutzer
-const MAX_TOTAL_SERVER_STORAGE_BYTES = 10_000 * 1024 * 1024; // 10.000 MB (10 GB) Gesamt-Server-Limit (Cloudflare R2 Free Tier)
-const MAX_TOTAL_SERVER_USERS = 25; // Maximal 25 Accounts
+const MAX_USER_STORAGE_BYTES = 1_000_000_000; // 1 GB (1.000 MB dezimal) pro Nutzer
+const MAX_TOTAL_SERVER_STORAGE_BYTES = 10_000_000_000; // 10 GB (10.000 MB dezimal) Gesamt-Server-Limit (Cloudflare R2 Free Tier: 10 GB-month)
+const MAX_TOTAL_SERVER_USERS = 10; // Maximal 10 Accounts (10 x 1 GB = 10 GB Gesamtkapazität)
 // D1 Free: höchstens 50 Queries pro Worker-Aufruf.
 const MAX_EVENTS_PER_REQUEST = 48;
 // D1/Worker Limit: Maximale Chiffrat-Zeichenlänge pro Event (1.9 MB vor Base64)
@@ -328,7 +328,7 @@ export class SyncRoom {
 				const countRow = typeof countStmt.first === "function" ? await countStmt.first() : (countStmt.bind ? await countStmt.bind().first() : null);
 				const currentUsers = countRow ? Number(countRow.cnt) : 0;
 				if (currentUsers >= MAX_TOTAL_SERVER_USERS) {
-					return false; // Server-Kapazität von 25 Nutzern erreicht
+					return false; // Server-Kapazität von 10 Accounts erreicht
 				}
 			}
 			this.authTokenHash = providedHash;
@@ -585,9 +585,23 @@ export class SyncRoom {
 			}
 		}
 
-		// R2-Payloads parallel schreiben
+		// R2-Payloads parallel schreiben (mit Rollback bei Schreibfehlern)
 		if (r2Writes.length > 0) {
-			await Promise.all(r2Writes);
+			try {
+				await Promise.all(r2Writes);
+			} catch (r2Err) {
+				if (this.env?.BUCKET && r2KeysWritten.length > 0) {
+					try {
+						await this.env.BUCKET.delete(r2KeysWritten);
+					} catch {}
+				}
+				return {
+					ok: false,
+					error: "Speicherfehler beim Schreiben in den Cloudflare R2 Bucket.",
+					status: 500,
+					usage: this.totalBytes,
+				};
+			}
 		}
 
 		const nextTotalBytes = this.totalBytes + incomingBytes;
@@ -708,13 +722,7 @@ export class SyncRoom {
 							if (obj) {
 								const isGz = obj.customMetadata?.gz === "1";
 								const buf = await obj.arrayBuffer();
-								const bytes = new Uint8Array(buf);
-								const isOldText = obj.customMetadata?.gz === undefined && bytes.length > 0 && bytes[0] === 0x67 /* 'g' */ && bytes[1] === 0x7a /* 'z' */;
-								if (isOldText) {
-									payload = new TextDecoder().decode(bytes);
-								} else {
-									payload = (isGz ? "gz:" : "") + bytesToBase64(bytes);
-								}
+								payload = (isGz ? "gz:" : "") + bytesToBase64(new Uint8Array(buf));
 							}
 						} catch (err) {
 							console.error("[SyncRoom] R2 Read-Fehler für", row.r2_key, err);

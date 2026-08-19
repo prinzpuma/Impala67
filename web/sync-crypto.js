@@ -4,7 +4,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 const COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
 
-export const MAX_USER_STORAGE_BYTES = 1000 * 1024 * 1024; // 1.000 MB (1 GB) Quota pro Nutzer
+export const MAX_USER_STORAGE_BYTES = 1_000_000_000; // 1 GB (1.000 MB dezimal) Quota pro Nutzer
 
 export function bytesToBase64(bytes) {
 	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -177,8 +177,8 @@ export async function decryptPayload(cryptoKey, encryptedObj) {
 export function formatStorageUsage(bytes, limit = MAX_USER_STORAGE_BYTES) {
 	const b = Math.max(0, Number(bytes) || 0);
 	const lim = Math.max(1, Number(limit) || MAX_USER_STORAGE_BYTES);
-	const mbUsed = (b / (1024 * 1024)).toFixed(1);
-	const mbLimit = (lim / (1024 * 1024)).toFixed(0);
+	const mbUsed = (b / 1_000_000).toFixed(1);
+	const mbLimit = Math.round(lim / 1_000_000);
 	const percent = Math.min(100, Math.round((b / lim) * 100));
 	return {
 		bytes: b,
