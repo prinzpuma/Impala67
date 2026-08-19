@@ -3,7 +3,7 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-export const MAX_USER_STORAGE_BYTES = 200 * 1024 * 1024; // 200 MB Quota
+export const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB Quota pro Nutzer
 
 export function bytesToBase64(bytes) {
 	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

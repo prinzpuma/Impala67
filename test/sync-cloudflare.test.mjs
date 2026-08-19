@@ -27,11 +27,11 @@ test("CLOUDFLARE_SYNC Trennen setzt Zustand zurück", () => {
 });
 
 test("formatStorageUsage schützt vor Überlauf", () => {
-	const usage = formatStorageUsage(200 * 1024 * 1024, MAX_USER_STORAGE_BYTES);
+	const usage = formatStorageUsage(500 * 1024 * 1024, MAX_USER_STORAGE_BYTES);
 	assert.equal(usage.percent, 100);
-	assert.equal(usage.mbUsed, 200);
+	assert.equal(usage.mbUsed, 500);
 
-	const overUsage = formatStorageUsage(250 * 1024 * 1024, MAX_USER_STORAGE_BYTES);
+	const overUsage = formatStorageUsage(550 * 1024 * 1024, MAX_USER_STORAGE_BYTES);
 	assert.equal(overUsage.percent, 100);
-	assert.equal(overUsage.mbUsed, 250);
+	assert.equal(overUsage.mbUsed, 550);
 });

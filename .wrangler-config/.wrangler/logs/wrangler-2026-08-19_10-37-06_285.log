@@ -1,0 +1,12 @@
+
+--- 2026-08-19T10:37:06.607Z debug
+🪵  Writing logs to "C:\Users\joshu\Documents\Notion\.wrangler-config\.wrangler\logs\wrangler-2026-08-19_10-37-06_285.log"
+---
+
+--- 2026-08-19T10:37:06.607Z debug
+.env file not found at "C:\Users\joshu\Documents\Notion\.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-08-19T10:37:06.609Z debug
+.env file not found at "C:\Users\joshu\Documents\Notion\.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---

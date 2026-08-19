@@ -1,0 +1,22 @@
+
+--- 2026-08-19T10:37:15.046Z debug
+🪵  Writing logs to "C:\Users\joshu\Documents\Notion\.wrangler-config\.wrangler\logs\wrangler-2026-08-19_10-37-14_740.log"
+---
+
+--- 2026-08-19T10:37:15.046Z debug
+.env file not found at "C:\Users\joshu\Documents\Notion\server\.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-08-19T10:37:15.047Z debug
+.env file not found at "C:\Users\joshu\Documents\Notion\server\.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-08-19T10:37:15.059Z log
+
+ ⛅️ wrangler 4.124.0
+────────────────────
+---
+
+--- 2026-08-19T10:37:15.107Z debug
+Metrics dispatcher: Posting data {"deviceId":"e5020547-21ab-4803-8f23-c54f54bb783f","event":"wrangler command started","timestamp":1787135835107,"properties":{"amplitude_session_id":1787135835066,"amplitude_event_id":0,"wranglerVersion":"4.124.0","wranglerMajorVersion":4,"wranglerMinorVersion":124,"wranglerPatchVersion":0,"osPlatform":"Windows","osVersion":"Windows 11 Pro","nodeVersion":24,"isFirstUsage":false,"configFileType":"toml","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":false,"hasAssets":false,"agent":"codex","argsUsed":["config","dryRun"],"argsCombination":"config, dryRun","sanitizedCommand":"deploy","sanitizedArgs":{"dryRun":true},"currentAgentSkillsInstalled":false}}
+---

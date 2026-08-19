@@ -12,7 +12,8 @@
  * - Quota-Schutz: Striktes 200 MB Limit pro Nutzer
  */
 
-const MAX_USER_STORAGE_BYTES = 200 * 1024 * 1024; // 200 MB
+const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB pro Nutzer
+const MAX_TOTAL_SERVER_USERS = 8; // Maximal 8 Accounts (8 x 500 MB = 4.000 MB = 4 GB, 1 GB Puffer zum 5 GB Free Limit)
 const enc = new TextEncoder();
 
 function corsHeaders() {
@@ -115,8 +116,16 @@ export class SyncRoom {
 
 		const providedHash = await hashToken(rawAuthToken);
 
-		// Erster Aufruf: Gehashten Token registrieren (Zero-Knowledge)
+		// Erster Aufruf: Prüfen ob Nutzerlimit erreicht ist, bevor neuer Account angelegt wird
 		if (!this.authTokenHash) {
+			if (this.env?.DB) {
+				const countStmt = this.env.DB.prepare("SELECT COUNT(*) as cnt FROM user_storage");
+				const countRow = typeof countStmt.first === "function" ? await countStmt.first() : (countStmt.bind ? await countStmt.bind().first() : null);
+				const currentUsers = countRow ? Number(countRow.cnt) : 0;
+				if (currentUsers >= MAX_TOTAL_SERVER_USERS) {
+					return false; // Server-Kapazität von 25 Nutzern erreicht
+				}
+			}
 			this.authTokenHash = providedHash;
 			if (this.ctx?.storage) {
 				await this.ctx.storage.put("authTokenHash", providedHash);
@@ -262,11 +271,11 @@ export class SyncRoom {
 			return { ok: true, savedEvents: [], maxSeq: this.maxSeq, usage: this.totalBytes };
 		}
 
-		// 2. Quota Check (200 MB)
+		// 2. Quota Check (500 MB)
 		if (this.totalBytes + incomingBytes > MAX_USER_STORAGE_BYTES) {
 			return {
 				ok: false,
-				error: "Quota überschritten: Das Limit von 200 MB für diesen Account wurde erreicht.",
+				error: "Quota überschritten: Das Limit von 500 MB für diesen Account wurde erreicht.",
 				status: 413,
 				usage: this.totalBytes,
 			};

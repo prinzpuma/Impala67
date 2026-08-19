@@ -1,0 +1,16 @@
+{
+  "name": "impala67",
+  "version": "2.2.0",
+  "private": true,
+  "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "deploy": "wrangler deploy --config server/wrangler.toml",
+    "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0",
+    "wrangler": "^4.124.0"
+  }
+}

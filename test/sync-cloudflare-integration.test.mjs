@@ -19,58 +19,61 @@ function createMockEnv() {
 
 	const mockDb = {
 		prepare(query) {
-			return {
-				bind(...params) {
-					return {
-						_query: query,
-						_params: params,
-						async first() {
-							if (query.includes("MAX(seq)")) {
-								const [userId] = params;
-								const userEvents = dbStore.events.filter((e) => e.user_id === userId);
-								const max = userEvents.reduce((m, e) => Math.max(m, e.seq), 0);
-								return { max_seq: max };
-							}
-							if (query.includes("user_storage")) {
-								const [userId] = params;
-								const record = dbStore.storage.get(userId);
-								return record ? { total_bytes: record.bytes, auth_token_hash: record.token } : null;
-							}
-							return null;
-						},
-						async all() {
-							if (query.includes("sync_events WHERE user_id = ? AND seq > ?")) {
-								const [userId, since, limit] = params;
-								const userEvents = dbStore.events
-									.filter((e) => e.user_id === userId && e.seq > since)
-									.sort((a, b) => a.seq - b.seq)
-									.slice(0, limit);
-								return { results: userEvents };
-							}
-							if (query.includes("SELECT event_id FROM sync_events")) {
-								const [userId] = params;
-								return { results: dbStore.events.filter((e) => e.user_id === userId).map((e) => ({ event_id: e.id })) };
-							}
-							return { results: [] };
-						},
-						async run() {
-							if (query.includes("DELETE FROM sync_events")) {
-								const [userId] = params;
-								dbStore.events = dbStore.events.filter((e) => e.user_id !== userId);
-							}
-							if (query.includes("DELETE FROM user_storage")) {
-								const [userId] = params;
-								dbStore.storage.delete(userId);
-							}
-							if (query.includes("INSERT INTO user_storage")) {
-								const [userId, token, bytes] = params;
-								dbStore.storage.set(userId, { bytes, token });
-							}
-							return { success: true };
-						},
-					};
+			const createOp = (params = []) => ({
+				_query: query,
+				_params: params,
+				bind(...newParams) {
+					return createOp(newParams);
 				},
-			};
+				async first() {
+					if (query.includes("COUNT(*)")) {
+						return { cnt: dbStore.storage.size };
+					}
+					if (query.includes("MAX(seq)")) {
+						const [userId] = params;
+						const userEvents = dbStore.events.filter((e) => e.user_id === userId);
+						const max = userEvents.reduce((m, e) => Math.max(m, e.seq), 0);
+						return { max_seq: max };
+					}
+					if (query.includes("user_storage")) {
+						const [userId] = params;
+						const record = dbStore.storage.get(userId);
+						return record ? { total_bytes: record.bytes, auth_token_hash: record.token } : null;
+					}
+					return null;
+				},
+				async all() {
+					if (query.includes("sync_events WHERE user_id = ? AND seq > ?")) {
+						const [userId, since, limit] = params;
+						const userEvents = dbStore.events
+							.filter((e) => e.user_id === userId && e.seq > since)
+							.sort((a, b) => a.seq - b.seq)
+							.slice(0, limit);
+						return { results: userEvents };
+					}
+					if (query.includes("SELECT event_id FROM sync_events")) {
+						const [userId] = params;
+						return { results: dbStore.events.filter((e) => e.user_id === userId).map((e) => ({ event_id: e.id })) };
+					}
+					return { results: [] };
+				},
+				async run() {
+					if (query.includes("DELETE FROM sync_events")) {
+						const [userId] = params;
+						dbStore.events = dbStore.events.filter((e) => e.user_id !== userId);
+					}
+					if (query.includes("DELETE FROM user_storage")) {
+						const [userId] = params;
+						dbStore.storage.delete(userId);
+					}
+					if (query.includes("INSERT INTO user_storage")) {
+						const [userId, token, bytes] = params;
+						dbStore.storage.set(userId, { bytes, token });
+					}
+					return { success: true };
+				},
+			});
+			return createOp([]);
 		},
 		async batch(stmts) {
 			for (const stmt of stmts) {
@@ -170,7 +173,7 @@ test("Strikte Sequenzierung: Parallele Uploads erhalten eindeutige aufsteigende 
 	assert.ok(Math.max(resA.maxSeq, resB.maxSeq) === 2);
 });
 
-test("Quota-Enforcement: Pakete über 200 MB werden mit 413 abgewiesen", async () => {
+test("Quota-Enforcement: Pakete über 500 MB werden mit 413 abgewiesen", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	const key = generateSyncKey();
@@ -182,13 +185,13 @@ test("Quota-Enforcement: Pakete über 200 MB werden mit 413 abgewiesen", async (
 		id: "huge-1",
 		iv: "00112233445566778899aabb",
 		data: "dummy",
-		size: 201 * 1024 * 1024,
+		size: 501 * 1024 * 1024,
 	};
 
 	const res = await room.saveEvents([oversizedEvent]);
 	assert.equal(res.ok, false);
 	assert.equal(res.status, 413);
-	assert.ok(res.error.includes("200 MB"));
+	assert.ok(res.error.includes("500 MB"));
 });
 
 test("Kryptografische Autorisierung: Falscher Auth-Token wird mit 403 abgewiesen", async () => {

@@ -24,6 +24,8 @@ import {
  * - Delta-Upload-Tracking: Verhindert Mehrfach-Uploads bereits gesendeter Events
  * - Quota-Überwachung (200 MB Limit)
  */
+export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
+
 export const CLOUDFLARE_SYNC = (() => {
 	const LS = typeof localStorage !== "undefined" ? localStorage : {
 		getItem: () => null,
@@ -48,11 +50,11 @@ export const CLOUDFLARE_SYNC = (() => {
 		status: "disconnected", // "disconnected" | "connecting" | "connected" | "syncing" | "error"
 		label: "Nicht eingerichtet",
 		detail: "Verbinde einen Cloudflare-Sync-Server",
-		url: LS.getItem(LS_URL_KEY) || "",
+		url: LS.getItem(LS_URL_KEY) || DEFAULT_WORKER_URL,
 		syncKey: LS.getItem(LS_KEY_KEY) || "",
 		lastSyncedSeq: Number(LS.getItem(LS_LAST_SEQ_KEY)) || 0,
 		lastUploadedLocalSeq: Number(LS.getItem(LS_LAST_UPLOADED_LOCAL_SEQ)) || 0,
-		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0 MB / 200 MB (0 %)" },
+		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 500 MB (0 %)" },
 		lastError: null,
 	};
 
@@ -272,10 +274,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 	}
 
+	const lastUploadedKey = () => (credentials?.userId ? `${LS_LAST_UPLOADED_LOCAL_SEQ}_${credentials.userId}` : LS_LAST_UPLOADED_LOCAL_SEQ);
+	const lastSyncedKey = () => (credentials?.userId ? `${LS_LAST_SEQ_KEY}_${credentials.userId}` : LS_LAST_SEQ_KEY);
+
 	/**
 	 * Holt verpasste Events seit `lastSyncedSeq` vom Server mit lückenloser Paginierung
 	 */
-	async function catchUp() {
+	async function catchUp(forceAll = false) {
 		if (!state.url || !credentials || syncInFlight) return;
 		syncInFlight = true;
 		setStatus("syncing", "Synchronisiere…");
@@ -331,7 +336,7 @@ export const CLOUDFLARE_SYNC = (() => {
 					const lastSeqInBatch = remoteEvents[remoteEvents.length - 1].seq;
 					if (lastSeqInBatch > state.lastSyncedSeq) {
 						state.lastSyncedSeq = lastSeqInBatch;
-						LS.setItem(LS_LAST_SEQ_KEY, String(lastSeqInBatch));
+						LS.setItem(lastSyncedKey(), String(lastSeqInBatch));
 					}
 				}
 
@@ -342,8 +347,8 @@ export const CLOUDFLARE_SYNC = (() => {
 				hasMore = Boolean(data.hasMore && remoteEvents.length > 0);
 			}
 
-			// Auch lokale ungesyncte Änderungen hochladen
-			await pushUnsyncedLocalEvents();
+			// Auch lokale ungesyncte Änderungen hochladen (bei leerem Server oder forceAll: ALLE)
+			await pushUnsyncedLocalEvents(forceAll);
 
 			setStatus("connected", "Live verbunden", "Aktueller Stand synchronisiert");
 		} catch (e) {
@@ -356,15 +361,16 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	/**
 	 * Sendet lokale Events, die seit dem letzten Upload entstanden sind (Delta-Upload)
+	 * Bei leerem Server (lastSyncedSeq = 0) oder forceAll = true werden ALLE lokalen Notizen hochgeladen.
 	 */
-	async function pushUnsyncedLocalEvents() {
+	async function pushUnsyncedLocalEvents(forceAll = false) {
 		if (!state.url || !credentials) return;
 		const localEvents = await DB.allEvents();
 		const localMaxSeq = await DB.maxSeq();
-		const lastUploadedSeq = Number(LS.getItem(LS_LAST_UPLOADED_LOCAL_SEQ)) || 0;
+		const lastUploadedSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 
-		// Nur Events filtern, die lokal neu entstanden sind
-		const unsentEvents = localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
+		const isInitialPush = forceAll || state.lastSyncedSeq === 0 || lastUploadedSeq === 0;
+		const unsentEvents = isInitialPush ? localEvents : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
 		if (!unsentEvents.length) return;
 
 		const transportEvents = pruneEventsForUpload(DB.filterEventsForSync(
@@ -372,7 +378,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		));
 
 		if (!transportEvents.length) {
-			LS.setItem(LS_LAST_UPLOADED_LOCAL_SEQ, String(localMaxSeq));
+			LS.setItem(lastUploadedKey(), String(localMaxSeq));
 			state.lastUploadedLocalSeq = localMaxSeq;
 			return;
 		}
@@ -390,30 +396,39 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 
 		const apiUrl = getApiUrl(state.url, "/api/events");
-		const response = await fetch(apiUrl, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...getAuthHeaders(),
-			},
-			body: JSON.stringify({ events: encryptedList }),
-		});
+		const BATCH_SIZE = 200;
+		for (let i = 0; i < encryptedList.length; i += BATCH_SIZE) {
+			const batch = encryptedList.slice(i, i + BATCH_SIZE);
+			const response = await fetch(apiUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({ events: batch }),
+			});
 
-		if (response.ok) {
-			const resData = await response.json();
-			if (resData.maxSeq > state.lastSyncedSeq) {
-				state.lastSyncedSeq = resData.maxSeq;
-				LS.setItem(LS_LAST_SEQ_KEY, String(resData.maxSeq));
+			if (response.ok) {
+				const resData = await response.json();
+				if (resData.maxSeq > state.lastSyncedSeq) {
+					state.lastSyncedSeq = resData.maxSeq;
+					LS.setItem(lastSyncedKey(), String(resData.maxSeq));
+				}
+				if (resData.usage !== undefined) {
+					state.usage = formatStorageUsage(resData.usage, resData.limit);
+				}
+			} else if (response.status === 413) {
+				const errData = await response.json().catch(() => ({}));
+				throw new Error(errData.error || "500 MB Speicherlimit auf Cloudflare erreicht.");
+			} else {
+				const errData = await response.json().catch(() => ({}));
+				throw new Error(errData.error || `Upload fehlgeschlagen (Status ${response.status})`);
 			}
-			if (resData.usage !== undefined) {
-				state.usage = formatStorageUsage(resData.usage, resData.limit);
-			}
-			LS.setItem(LS_LAST_UPLOADED_LOCAL_SEQ, String(localMaxSeq));
-			state.lastUploadedLocalSeq = localMaxSeq;
-		} else if (response.status === 413) {
-			const errData = await response.json().catch(() => ({}));
-			throw new Error(errData.error || "200 MB Speicherlimit auf Cloudflare erreicht.");
 		}
+
+		LS.setItem(lastUploadedKey(), String(localMaxSeq));
+		state.lastUploadedLocalSeq = localMaxSeq;
+		emitStatus();
 	}
 
 	/**
@@ -520,8 +535,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		init,
 		configure,
 		disconnect,
-		catchUp,
-		syncNow: catchUp,
+		catchUp: (forceAll = false) => catchUp(forceAll),
+		syncNow: () => catchUp(true),
 		purgeCloudData,
 		generateSyncKey,
 		status: () => ({ ...state }),
