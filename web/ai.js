@@ -311,28 +311,6 @@ export const AI = (() => {
 			providerName: "Lokal (Offline)",
 			recommended: true,
 		},
-		{
-			id: "local:granite-97m",
-			hfId: "onnx-community/granite-embedding-97m-multilingual-r2-ONNX",
-			name: "Granite 97M R2 (Lokal im Browser, 384d)",
-			dim: 384,
-			sizeMb: 123,
-			context: 32768,
-			providerId: "local",
-			providerName: "Lokal (Offline)",
-			recommended: false,
-		},
-		{
-			id: "local:minilm",
-			hfId: "Xenova/all-MiniLM-L6-v2",
-			name: "all-MiniLM-L6-v2 (Lokal, Englisch, 384d)",
-			dim: 384,
-			sizeMb: 23,
-			context: 512,
-			providerId: "local",
-			providerName: "Lokal (Offline)",
-			recommended: false,
-		},
 	];
 
 	let embeddingWorker = null;
@@ -408,20 +386,13 @@ export const AI = (() => {
 		return await postEmbeddingWorkerMessage("delete", { model: def.hfId });
 	}
 
-	const isEmbeddingModel = (id) => /(?:^|[-_/.])(embed(?:ding)?|text-embedding|nomic-embed|bge|e5|gte|jina-embeddings?|voyage|mxbai-embed|snowflake-arctic-embed)(?:$|[-_/.])/i.test(String(id || ""));
 	async function listEmbeddingModels() {
-		const local = LOCAL_EMBEDDING_MODELS.map((m) => ({
+		return LOCAL_EMBEDDING_MODELS.map((m) => ({
 			id: m.id,
 			providerId: m.providerId,
 			providerName: m.providerName,
 			label: m.name,
 		}));
-		const remote = (await Promise.all(modelProviders().map(async (p) => {
-			try {
-				return (await modelIds(p.base, p.key)).filter(isEmbeddingModel).sort((a, b) => String(a).localeCompare(String(b))).map((id) => ({ id, providerId: p.id, providerName: p.name || p.id }));
-			} catch { return []; }
-		}))).flat();
-		return [...local, ...remote];
 	}
 	async function embed(texts) {
 		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");

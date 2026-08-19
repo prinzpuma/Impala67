@@ -1,7 +1,7 @@
 "use strict";
 
 // web/embedding-worker.js — Web Worker für lokale Inferenz mit Transformers.js v3.
-// Führt Inferenz (Bekko a8m, Granite 97M, etc.) komplett abseits des UI-Threads aus.
+// Führt die Bekko-a8m-Inferenz komplett abseits des UI-Threads aus.
 // Unterstützt WebGPU mit automatischem WASM-CPU-Fallback, Matryoshka-Kürzung (z.B. 256d)
 // und L2-Normalisierung. Auto-Unload nach 60 s Inaktivität (0 MB RAM im Leerlauf).
 

@@ -14,11 +14,11 @@ const { S, STATE } = await import("../web/state.js");
 const { AI } = await import("../web/ai.js");
 const { RAG } = await import("../web/rag.js");
 const { DB } = await import("../web/db.js");
-const { updateLocalEmbeddingManagerUi } = await import("../web/settings.js");
+const { refreshEmbeddingModels, updateLocalEmbeddingManagerUi } = await import("../web/settings.js");
 
 test("LOCAL_EMBEDDING_MODELS contains Bekko a8m as recommended model", () => {
 	assert.ok(Array.isArray(AI.LOCAL_EMBEDDING_MODELS));
-	assert.ok(AI.LOCAL_EMBEDDING_MODELS.length >= 2);
+	assert.equal(AI.LOCAL_EMBEDDING_MODELS.length, 1);
 	const bekko = AI.LOCAL_EMBEDDING_MODELS.find((m) => m.id === "local:bekko-a8m");
 	assert.ok(bekko, "Bekko a8m must be defined");
 	assert.equal(bekko.dim, 256);
@@ -72,10 +72,29 @@ test("Matryoshka slicing and cosine similarity works seamlessly with 256d vector
 	assert.ok(cosSim > 0.8 && cosSim <= 1.0);
 });
 
-test("listEmbeddingModels includes local models alongside provider models", async () => {
-	S.settings.aiProviders = [];
+test("embedding model settings expose only the tested Bekko model", async () => {
 	const models = await AI.listEmbeddingModels();
-	assert.ok(models.some((m) => m.id === "local:bekko-a8m" && m.providerId === "local"));
+	assert.deepEqual(models.map((m) => [m.providerId, m.id]), [["local", "local:bekko-a8m"]]);
+});
+
+test("refreshEmbeddingModels does not re-add an unsupported saved model", async () => {
+	const select = document.getElementById("inpEmbed");
+	const hint = document.createElement("small");
+	hint.id = "embeddingModelHint";
+	document.body.append(hint);
+	select.dataset.currentembed = "text-embedding-3-small";
+	select.dataset.currentprov = "openai";
+
+	await refreshEmbeddingModels();
+	assert.deepEqual(Array.from(select.options).map((o) => o.value), ["", "local::local:bekko-a8m"]);
+	assert.equal(select.value, "");
+	assert.match(hint.textContent, /nicht mehr angeboten/);
+
+	select.dataset.currentembed = "local:bekko-a8m";
+	select.dataset.currentprov = "local";
+	await refreshEmbeddingModels();
+	assert.equal(select.value, "local::local:bekko-a8m");
+	hint.remove();
 });
 
 test("RAG indexes and searches with 256d vectors", async () => {

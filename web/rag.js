@@ -6,8 +6,7 @@ import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
-// Benötigt ein Embedding-Modell in ⚙️ (Gemini: gemini-embedding-001,
-// OpenAI: text-embedding-3-small, oder ein LM-Studio-Embedding-Modell).
+// Benötigt das lokale Bekko-Embedding-Modell aus ⚙️ → KI.
 export const RAG = (() => {
 	const queue = new Set();
 	let timer = null;

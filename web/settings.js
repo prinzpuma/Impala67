@@ -675,36 +675,36 @@ export function testAllProviders() {
 	return Promise.all(Array.from(document.querySelectorAll("[data-provrow]")).map((row) => testProviderRow(row.dataset.provrow)));
 }
 
-// Lädt verfügbare Embedding-Modelle ALLER Quellen (nicht nur der aktiven Chat-Quelle).
-// Option-Werte sind als "quelleId::modell" kodiert — beim Speichern wird daraus
-// embedProviderId + embedModel, damit Embeddings quellen-unabhängig laufen. [F4]
+// Das Produkt bietet bewusst nur das geprüfte lokale Bekko-Modell an.
+// Option-Werte bleiben als "quelleId::modell" kodiert, damit die bestehende
+// Einstellungsspeicherung und die spätere Erweiterbarkeit unverändert bleiben.
 export async function refreshEmbeddingModels() {
 	const select = U.el("inpEmbed");
 	const hint = U.el("embeddingModelHint");
 	if (!select) return;
 	const current = select.dataset.currentembed || "";
 	const currentProv = select.dataset.currentprov || "";
-	const currentValue = current ? currentProv + "::" + current : "";
 	select.disabled = true;
-	if (hint) hint.textContent = "Lade Embedding-Modelle aller Quellen…";
+	if (hint) hint.textContent = "Prüfe lokales Embedding-Modell…";
 	try {
 		const found = await AI.listEmbeddingModels();
-		// Gespeichertes Modell exakt (Quelle+Modell) oder wenigstens per Modellnamen wiederfinden
 		const exact = found.find((m) => m.id === current && (!currentProv || m.providerId === currentProv));
 		const options = found.map((m) =>
 			'<option value="' + U.esc(m.providerId + "::" + m.id) + '">' + U.esc(m.label || m.id) + " — " + U.esc(m.providerName) + "</option>");
-		if (current && !exact) options.push('<option value="' + U.esc(currentValue) + '">' + U.esc(current) + " (gespeichert — Quelle gerade nicht erreichbar?)</option>");
 		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>' + options.join("");
-		select.value = exact ? exact.providerId + "::" + exact.id : currentValue;
+		select.value = exact ? exact.providerId + "::" + exact.id : "";
 		// FIX: kein U.esc() mehr in textContent — das zeigte HTML-Entities als Klartext.
 		if (hint) {
-			if (found.length) { hint.hidden = true; hint.textContent = ""; }
+			if (current && !exact) {
+				hint.hidden = false;
+				hint.textContent = "Das bisherige Embedding-Modell wird nicht mehr angeboten. Wähle Bekko, um die semantische Suche lokal fortzuführen.";
+			} else if (found.length) { hint.hidden = true; hint.textContent = ""; }
 			else { hint.hidden = false; hint.textContent = "Kein Embedding-Modell gefunden."; }
 		}
 	} catch (err) {
-		select.innerHTML = '<option value="' + U.esc(currentValue) + '">' + U.esc(current || "—") + "</option>";
-		select.value = currentValue;
-		if (hint) { hint.hidden = false; hint.textContent = "Konnte nicht geladen werden."; }
+		select.innerHTML = '<option value="">Kein Embedding-Modell (semantische Suche aus)</option>';
+		select.value = "";
+		if (hint) { hint.hidden = false; hint.textContent = "Das lokale Embedding-Modell konnte nicht geladen werden."; }
 	} finally {
 		select.disabled = false;
 		await updateLocalEmbeddingManagerUi();
