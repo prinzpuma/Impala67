@@ -192,7 +192,10 @@ export async function initApp() {
 		CLOUDFLARE_SYNC.configure(S.settings.cfUrl, S.settings.cfSyncKey).catch(() => {});
 	}
 
-	CLOUDFLARE_SYNC.init();
+	// Der optionale Cloudflare-Kanal darf den lokalen App-Start niemals blockieren.
+	// Ein kaputtes/unerreichbares Backend bleibt ein Sync-Fehler, kein Boot-Fehler.
+	try { CLOUDFLARE_SYNC.init(); }
+	catch (e) { console.warn("[boot] Cloudflare-Sync beim Start übersprungen:", e); }
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
 	setTimeout(showPendingConflictsIfAny, 450);

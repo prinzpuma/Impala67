@@ -151,6 +151,25 @@ test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignorier
 	assert.equal(res3.usage, res2.usage); // Speicher wächst nicht!
 });
 
+test("Deduplizierung: Doppelte Event-IDs im selben Paket werden nur einmal gespeichert", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const encrypted = await encryptPayload(cryptoKey, { id: "same-batch", type: "test" });
+	const res = await room.saveEvents([
+		{ id: "same-batch", ...encrypted },
+		{ id: "same-batch", ...encrypted },
+	]);
+
+	assert.equal(res.ok, true);
+	assert.equal(res.savedEvents.length, 1);
+	assert.equal(res.maxSeq, 1);
+});
+
 test("Strikte Sequenzierung: Parallele Uploads erhalten eindeutige aufsteigende Sequenzen", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
@@ -217,6 +236,16 @@ test("Kryptografische Autorisierung: Falscher Auth-Token wird mit 403 abgewiesen
 	assert.equal(invalidRes.status, 403);
 	const errData = await invalidRes.json();
 	assert.ok(errData.error.includes("Autorisierungs-Token"));
+});
+
+test("Kryptografische Autorisierung: Ein neuer Kanal akzeptiert keinen leeren Token", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const { userId } = await deriveSyncCredentials(generateSyncKey());
+	const req = new Request(`https://example.com/api/quota?user=${userId}`);
+
+	const res = await room.fetch(req);
+	assert.equal(res.status, 403);
 });
 
 test("WebSocket Hibernation: State wird nach Aufwecken via Attachment nahtlos wiederhergestellt", async () => {

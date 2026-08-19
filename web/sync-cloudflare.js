@@ -22,7 +22,7 @@ import {
  * - Kryptografischer Zugriffsnachweis (Auth-Token) gegen unbefugten Zugriff
  * - Robuste Paginierung: Lädt verpasste Events in 500er-Batches lückenlos nach
  * - Delta-Upload-Tracking: Verhindert Mehrfach-Uploads bereits gesendeter Events
- * - Quota-Überwachung (200 MB Limit)
+ * - Quota-Überwachung (500 MB Limit)
  */
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -43,6 +43,9 @@ export const CLOUDFLARE_SYNC = (() => {
 	let reconnectTimer = null;
 	let reconnectAttempts = 0;
 	let credentials = null; // { userId, authToken, cryptoKey }
+	let socketAuthenticated = false;
+	let configureGeneration = 0;
+	let remoteApplyChain = Promise.resolve();
 	let syncInFlight = false;
 	let initialized = false;
 
@@ -99,6 +102,12 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, "");
 		const cleanKey = String(syncKey || "").trim();
+		const generation = ++configureGeneration;
+		const connectionChanged = state.url !== cleanUrl || state.syncKey !== cleanKey;
+		if (connectionChanged) {
+			closeSocket();
+			credentials = null;
+		}
 
 		if (cleanUrl) LS.setItem(LS_URL_KEY, cleanUrl);
 		else LS.removeItem(LS_URL_KEY);
@@ -118,6 +127,11 @@ export const CLOUDFLARE_SYNC = (() => {
 		try {
 			setStatus("connecting", "Verbindung wird aufgebaut…");
 			credentials = await deriveSyncCredentials(cleanKey);
+			if (generation !== configureGeneration) return false;
+			// Cursor gehören zum jeweiligen Sync-Kanal. Ein alter globaler Cursor
+			// darf beim Schlüsselwechsel keine Ereignisse überspringen.
+			state.lastSyncedSeq = Number(LS.getItem(lastSyncedKey())) || 0;
+			state.lastUploadedLocalSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 			connectWebSocket();
 			await catchUp();
 			return true;
@@ -131,6 +145,17 @@ export const CLOUDFLARE_SYNC = (() => {
 	/**
 	 * Baut die WebSocket-Verbindung mit In-Band Auth auf
 	 */
+	function closeSocket() {
+		clearTimeout(reconnectTimer);
+		clearInterval(pingTimer);
+		socketAuthenticated = false;
+		const oldSocket = socket;
+		socket = null;
+		if (oldSocket) {
+			try { oldSocket.close(); } catch {}
+		}
+	}
+
 	function connectWebSocket() {
 		if (typeof WebSocket === "undefined" || !state.url || !credentials) return;
 		if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
@@ -143,17 +168,22 @@ export const CLOUDFLARE_SYNC = (() => {
 		try {
 			const wsUrl = getWsUrl(state.url, credentials.userId);
 			socket = new WebSocket(wsUrl);
+			const currentSocket = socket;
+			socketAuthenticated = false;
 
 			socket.addEventListener("open", () => {
+				if (socket !== currentSocket) return;
 				reconnectAttempts = 0;
 				// In-Band Auth: Token wird geschützt über den WebSocket-Kanal übertragen, nicht in der URL!
 				socket.send(JSON.stringify({ type: "auth", token: credentials.authToken }));
 			});
 
 			socket.addEventListener("message", async (event) => {
+				if (socket !== currentSocket) return;
 				try {
 					const msg = JSON.parse(event.data);
 					if (msg.type === "authenticated") {
+						socketAuthenticated = true;
 						setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
 						startHeartbeat();
 						catchUp().catch((e) => console.warn("[cf-sync] Catch-up nach Reconnect fehlgeschlagen:", e));
@@ -190,7 +220,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			});
 
 			socket.addEventListener("close", () => {
+				if (socket !== currentSocket) return;
 				clearInterval(pingTimer);
+				socketAuthenticated = false;
 				socket = null;
 				if (state.url && credentials) {
 					scheduleReconnect();
@@ -211,7 +243,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	function startHeartbeat() {
 		clearInterval(pingTimer);
 		pingTimer = setInterval(() => {
-			if (socket && socket.readyState === WebSocket.OPEN) {
+			if (socketAuthenticated && socket && socket.readyState === WebSocket.OPEN) {
 				socket.send(JSON.stringify({ type: "ping" }));
 			}
 		}, 30000);
@@ -228,20 +260,22 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	function disconnect() {
-		clearTimeout(reconnectTimer);
-		clearInterval(pingTimer);
+		configureGeneration++;
+		closeSocket();
 		credentials = null;
-		if (socket) {
-			try { socket.close(); } catch {}
-			socket = null;
-		}
 		setStatus("disconnected", "Getrennt");
 	}
 
 	/**
 	 * Verarbeitet ein einzelnes eingetroffenes Remote-Event
 	 */
-	async function handleIncomingRemoteEvent(encryptedEvent) {
+	function enqueueRemoteApply(task) {
+		const run = remoteApplyChain.then(task, task);
+		remoteApplyChain = run.catch(() => {});
+		return run;
+	}
+
+	async function applyIncomingRemoteEvent(encryptedEvent) {
 		if (!credentials || !encryptedEvent) return;
 
 		try {
@@ -274,6 +308,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		} catch (e) {
 			console.error("[cf-sync] Fehler beim Entschlüsseln/Anwenden des Remote-Events:", e);
 		}
+	}
+
+	function handleIncomingRemoteEvent(encryptedEvent) {
+		return enqueueRemoteApply(() => applyIncomingRemoteEvent(encryptedEvent));
 	}
 
 	const lastUploadedKey = () => (credentials?.userId ? `${LS_LAST_UPLOADED_LOCAL_SEQ}_${credentials.userId}` : LS_LAST_UPLOADED_LOCAL_SEQ);
@@ -318,7 +356,7 @@ export const CLOUDFLARE_SYNC = (() => {
 						}
 					}
 
-					if (decryptedEvents.length) {
+					if (decryptedEvents.length) await enqueueRemoteApply(async () => {
 						const localEvents = await DB.allEvents();
 						const existingIds = new Set(localEvents.map((e) => e.id));
 						const fresh = decryptedEvents.filter((e) => !existingIds.has(e.id));
@@ -332,7 +370,7 @@ export const CLOUDFLARE_SYNC = (() => {
 							await DB.addEvents(fresh);
 							STATE.applyRemoteEvents(fresh);
 						}
-					}
+					});
 
 					// Letzte Sequenznummer der geladenen Seite sichern
 					const lastSeqInBatch = remoteEvents[remoteEvents.length - 1].seq;
@@ -348,6 +386,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 				hasMore = Boolean(data.hasMore && remoteEvents.length > 0);
 			}
+			await remoteApplyChain;
 
 			// Auch lokale ungesyncte Änderungen hochladen (bei leerem Server oder forceAll: ALLE)
 			await pushUnsyncedLocalEvents(forceAll);
@@ -461,7 +500,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				size: encrypted.size,
 			};
 
-			if (socket && socket.readyState === WebSocket.OPEN) {
+			if (socketAuthenticated && socket && socket.readyState === WebSocket.OPEN) {
 				socket.send(JSON.stringify({ type: "event", event: packet }));
 			} else if (state.url) {
 				const apiUrl = getApiUrl(state.url, "/api/events");

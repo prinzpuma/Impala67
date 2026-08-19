@@ -16,7 +16,8 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 globalThis.localStorage = dom.window.localStorage;
 globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.HTMLElement = dom.window.HTMLElement;
-globalThis.performance = dom.window.performance;
+globalThis.MutationObserver = dom.window.MutationObserver;
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame || ((fn) => setTimeout(fn, 0));
 globalThis.matchMedia = dom.window.matchMedia || (() => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
 
 // IndexedDB mock
@@ -25,22 +26,39 @@ globalThis.indexedDB = {
 		const req = { onsuccess: null, onerror: null, onupgradeneeded: null };
 		setTimeout(() => {
 			req.result = {
+				objectStoreNames: { contains: () => true },
 				createObjectStore: () => ({ createIndex: () => {} }),
-				transaction: () => ({
-					objectStore: () => ({
-						getAll: () => {
-							const r = { onsuccess: null };
-							setTimeout(() => { if (r.onsuccess) r.onsuccess({ target: { result: [] } }); }, 0);
-							return r;
-						},
-						openCursor: () => {
-							const r = { onsuccess: null };
-							setTimeout(() => { if (r.onsuccess) r.onsuccess({ target: { result: null } }); }, 0);
-							return r;
-						},
-						add: () => {}
-					})
-				})
+				transaction: () => {
+					const tx = {
+						oncomplete: null,
+						onerror: null,
+						onabort: null,
+						objectStore: () => ({
+							get: () => ({ onsuccess: null, onerror: null }),
+							getAllKeys: () => ({ onsuccess: null, onerror: null }),
+							put: () => {},
+							delete: () => {},
+							getAll: () => {
+								const r = { onsuccess: null };
+								setTimeout(() => { if (r.onsuccess) r.onsuccess({ target: { result: [] } }); }, 0);
+								return r;
+							},
+							count: () => {
+								const r = { onsuccess: null };
+								setTimeout(() => { if (r.onsuccess) r.onsuccess({ target: { result: 0 } }); }, 0);
+								return r;
+							},
+							openCursor: () => {
+								const r = { onsuccess: null };
+								setTimeout(() => { if (r.onsuccess) r.onsuccess({ target: { result: null } }); }, 0);
+								return r;
+							},
+							add: () => {}
+						})
+					};
+					setTimeout(() => tx.oncomplete?.(), 0);
+					return tx;
+				},
 			};
 			if (req.onsuccess) req.onsuccess({ target: req });
 		}, 0);

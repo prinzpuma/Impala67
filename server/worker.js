@@ -9,7 +9,7 @@
  * - Gehashte Token-Verifikation: Server speichert ausschließlich SHA-256 Hashes der Tokens (Zero-Knowledge)
  * - D1 Datenbank: Langzeit-SQL-Persistenz
  * - E2EE: Server speichert ausschließlich Chiffrate { iv, data }
- * - Quota-Schutz: Striktes 200 MB Limit pro Nutzer
+ * - Quota-Schutz: Striktes 500 MB Limit pro Nutzer
  */
 
 const MAX_USER_STORAGE_BYTES = 500 * 1024 * 1024; // 500 MB pro Nutzer
@@ -111,8 +111,10 @@ export class SyncRoom {
 
 	async verifyAuthorization(rawAuthToken) {
 		if (!rawAuthToken) {
-			if (this.authTokenHash) return false;
-			return true;
+			// Auch bei einem noch nie verwendeten Kanal ist ein Token nötig.
+			// Sonst könnte jemand, der nur die öffentliche userId kennt, den
+			// Kanal vor dem eigentlichen Gerät für sich reservieren.
+			return false;
 		}
 
 		const providedHash = await hashToken(rawAuthToken);
@@ -255,12 +257,14 @@ export class SyncRoom {
 
 		// 1. Filtern und Deduplizieren
 		const freshEvents = [];
+		const batchEventIds = new Set();
 		let incomingBytes = 0;
 
 		for (const ev of events) {
 			if (!ev || !ev.id || !ev.iv || !ev.data) continue;
 			// Bereits bekanntes Event überspringen (Idempotenz)
-			if (this.knownEventIds.has(ev.id)) continue;
+			if (this.knownEventIds.has(ev.id) || batchEventIds.has(ev.id)) continue;
+			batchEventIds.add(ev.id);
 
 			const size = Number(ev.size) || (ev.data.length + ev.iv.length);
 			incomingBytes += size;
@@ -287,18 +291,18 @@ export class SyncRoom {
 		const now = new Date().toISOString();
 		const stmts = [];
 
+		let nextSeq = this.maxSeq;
 		for (const ev of freshEvents) {
-			this.maxSeq++;
+			nextSeq++;
 			const saved = {
 				id: ev.id,
-				seq: this.maxSeq,
+				seq: nextSeq,
 				iv: ev.iv,
 				data: ev.data,
 				size: ev.size,
 				created_at: now,
 			};
 			savedEvents.push(saved);
-			this.knownEventIds.add(ev.id);
 
 			if (this.env?.DB) {
 				stmts.push(
@@ -309,8 +313,6 @@ export class SyncRoom {
 			}
 		}
 
-		this.totalBytes += incomingBytes;
-
 		if (this.env?.DB) {
 			stmts.push(
 				this.env.DB.prepare(
@@ -319,6 +321,12 @@ export class SyncRoom {
 			);
 			await this.env.DB.batch(stmts);
 		}
+
+		// Erst nach erfolgreichem Persistieren in-memory fortschreiben. Bei einem
+		// D1-Fehler darf der Actor keine Events als gespeichert markieren.
+		this.maxSeq = nextSeq;
+		this.totalBytes += incomingBytes;
+		for (const ev of freshEvents) this.knownEventIds.add(ev.id);
 
 		return {
 			ok: true,

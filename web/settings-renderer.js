@@ -156,12 +156,21 @@ function cloudflareContent() {
 	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected", label: "Nicht eingerichtet", detail: "Cloudflare Sync konfigurieren", url: "", syncKey: "", usage: { formatted: "0.0 MB / 500 MB (0 %)" } };
 	const statusType = cf.status === "connected" ? "ok" : cf.status === "syncing" || cf.status === "connecting" ? "warn" : cf.status === "error" ? "error" : "idle";
 	const progressHtml = (cf.status === "syncing" && cf.progress && cf.progress.total > 0)
-		? '<div class="progress-bar" style="margin-top: 8px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: ' + cf.progress.percent + '%; height: 100%; background: var(--accent, #6366f1); transition: width 0.2s ease;"></div></div>'
+		? '<div style="margin: 8px 0 12px 0; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">' +
+			'<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; color:var(--text-muted, #888); font-weight:500;">' +
+				'<span>Übertrage Notizen…</span>' +
+				'<span>' + cf.progress.current + ' / ' + cf.progress.total + ' (' + cf.progress.percent + ' %)</span>' +
+			'</div>' +
+			'<div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">' +
+				'<div style="width: ' + cf.progress.percent + '%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div>' +
+			'</div>' +
+		'</div>'
 		: "";
-	return UI.status(statusType, cf.label || "Nicht verbunden", (cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung") + progressHtml,
+	return UI.status(statusType, cf.label || "Nicht verbunden", cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung",
 		button("Jetzt synchronisieren", "btnCfSyncNow") +
 		(cf.status === "connected" || cf.status === "connecting" ? button("Trennen", "btnCfDisconnect", "secondary") : "")
 	) +
+	progressHtml +
 	UI.field("Cloudflare Worker URL", "inpCfUrl", cf.url || "", { explicit: true, placeholder: "https://impala67-sync.<account>.workers.dev" }) +
 	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
 	UI.actions([

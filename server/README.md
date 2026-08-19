@@ -4,7 +4,7 @@ Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms
 
 ## Sicherheits- & Quota-Eigenschaften
 - **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
-- **200 MB Quota pro Sync-Schlüssel:** Garantiert faire Nutzung und schützt deinen kostenlosen Cloudflare D1 Speicher.
+- **500 MB Quota pro Sync-Schlüssel:** Garantiert faire Nutzung und schützt deinen kostenlosen Cloudflare D1 Speicher.
 - **WebSockets & D1:** Sofortige Live-Übertragung bei geöffneter App + nahtloser Download verpasster Änderungen nach Offline-Phasen.
 
 ---
