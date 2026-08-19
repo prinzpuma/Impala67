@@ -163,6 +163,7 @@ function cloudflareContent() {
 	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
 	UI.actions([
 		{ label: "Verbinden & Synchronisieren", id: "btnCfConnect" },
+		{ label: "📱 Gerät koppeln (QR-Code)", id: "btnCfPairing", className: "secondary" },
 		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary" },
 		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary" },
 	]) +

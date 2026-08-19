@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v189"; // Update-Check behält version.json als sicheren Offline-Fallback.
+const CACHE = "impala67-v190"; // Update-Check behält version.json als sicheren Offline-Fallback.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -45,6 +45,7 @@ const APP_FILES = [
 	"./sync-core.js",
 	"./sync-crypto.js",
 	"./sync-cloudflare.js",
+	"./qrcode.js",
 	"./pdfs.js",
 	"./pdfpaste.js",
 	"./lernzeit.js",

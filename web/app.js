@@ -1374,7 +1374,10 @@ function wireEvents() {
 				await SETTINGS.handleCfConnect(t);
 				break;
 			case "btnCfDisconnect":
-				SETTINGS.handleCfDisconnect();
+				await SETTINGS.handleCfDisconnect();
+				break;
+			case "btnCfPairing":
+				SETTINGS.handleCfPairing();
 				break;
 			case "btnCfSyncNow":
 				await SETTINGS.handleCfSyncNow(t);

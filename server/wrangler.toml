@@ -8,7 +8,7 @@ compatibility_date = "2024-09-23"
 [[d1_databases]]
 binding = "DB"
 database_name = "impala67-db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_id = "caadf9b6-e3f6-4140-a823-098362185910"
 
 # Cloudflare Durable Objects
 # Bietet einen global eindeutigen Actor pro Nutzer:
@@ -22,4 +22,4 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SyncRoom"]
+new_sqlite_classes = ["SyncRoom"]

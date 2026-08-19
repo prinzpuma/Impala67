@@ -15,6 +15,7 @@ import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { generateQrSvg } from "./qrcode.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -375,6 +376,7 @@ export async function handleCfConnect(t) {
 	}
 
 	if (success) {
+		await STATE.dispatch("settingsSet", { cfUrl: url, cfSyncKey: syncKey });
 		U.toast("Cloudflare Echtzeit-Sync erfolgreich verbunden!", "success");
 	} else {
 		U.toast("Verbindung fehlgeschlagen. Prüfe URL und Konfiguration.", "error");
@@ -382,10 +384,58 @@ export async function handleCfConnect(t) {
 	refreshCloudflareStatusUi();
 }
 
-export function handleCfDisconnect() {
+export async function handleCfDisconnect() {
 	CLOUDFLARE_SYNC.disconnect();
+	await STATE.dispatch("settingsSet", { cfUrl: "", cfSyncKey: "" });
 	U.toast("Cloudflare-Sync getrennt.", "neutral");
 	refreshCloudflareStatusUi();
+}
+
+export function handleCfPairing() {
+	const cf = CLOUDFLARE_SYNC.status();
+	const url = cf.url || document.getElementById("inpCfUrl")?.value.trim();
+	const key = cf.syncKey || document.getElementById("inpCfKey")?.value.trim();
+
+	if (!url || !key) {
+		U.toast("Bitte zuerst eine Worker-URL und einen Sync-Schlüssel eintragen.", "warn");
+		return;
+	}
+
+	const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ url, key }))));
+	const baseAppUrl = location.origin + location.pathname;
+	const pairingLink = `${baseAppUrl}#cf-pair=${payload}`;
+	const qrSvg = generateQrSvg(pairingLink, 220);
+
+	const modalHtml = `
+		<div class="exp-modal-backdrop" id="cfPairModal" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;padding:16px;">
+			<div class="card" style="max-width:440px;width:100%;background:var(--bg-card, #1e1e2e);color:var(--text, #fff);padding:24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,0.6);text-align:center;">
+				<h3 style="margin-top:0;margin-bottom:8px;">📱 Gerät automatisch koppeln</h3>
+				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit deinem Smartphone/Tablet oder nutze den Kopplungs-Link. Die App öffnet sich und übernimmt URL & Schlüssel sofort.</p>
+				<div style="margin:16px auto;display:flex;justify-content:center;">${qrSvg}</div>
+				<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px;">
+					<button type="button" id="btnCopyPairLink" class="btn" style="width:100%;">🔗 Kopplungs-Link kopieren</button>
+					<button type="button" id="btnClosePairModal" class="btn secondary" style="width:100%;">Schließen</button>
+				</div>
+			</div>
+		</div>
+	`;
+
+	document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+	document.getElementById("btnCopyPairLink")?.addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(pairingLink);
+			U.toast("Kopplungs-Link kopiert! Sende ihn an dein Smartphone (z. B. via Notizen/Mail).", "success");
+		} catch {
+			U.toast("Kopieren nicht möglich. Bitte manuell teilen.", "warn");
+		}
+	});
+
+	const closeModal = () => document.getElementById("cfPairModal")?.remove();
+	document.getElementById("btnClosePairModal")?.addEventListener("click", closeModal);
+	document.getElementById("cfPairModal")?.addEventListener("click", (e) => {
+		if (e.target.id === "cfPairModal") closeModal();
+	});
 }
 
 export async function handleCfSyncNow(t) {
@@ -1187,6 +1237,7 @@ export const SETTINGS = {
 	startAutoDriveSync,
 	handleCfConnect,
 	handleCfDisconnect,
+	handleCfPairing,
 	handleCfSyncNow,
 	handleCfGenKey,
 	handleCfCopyKey,

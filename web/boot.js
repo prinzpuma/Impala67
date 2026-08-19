@@ -159,12 +159,37 @@ export async function initApp() {
 		label.textContent = d.label || "Sync";
 		btn.title = d.detail || d.label || "Drive-Sync";
 		SETTINGS.refreshDriveStatusUi?.();
+		// Wenn über Google Drive neue Cloudflare-Zugangsdaten eintreffen: Automatisch verbinden!
+		if (S.settings.cfUrl && S.settings.cfSyncKey && (!CLOUDFLARE_SYNC.status().url || !CLOUDFLARE_SYNC.status().syncKey)) {
+			CLOUDFLARE_SYNC.configure(S.settings.cfUrl, S.settings.cfSyncKey).catch(() => {});
+		}
 	});
 	window.addEventListener("impala67:cloudflare-sync-status", () => {
 		SETTINGS.refreshCloudflareStatusUi?.();
 	});
 	window.addEventListener("online", () => DRIVE.refreshStatus());
 	window.addEventListener("offline", () => DRIVE.refreshStatus());
+
+	// 📱 Automatisches Koppeln via QR-Code oder Kopplungs-Link (#cf-pair=...)
+	if (typeof location !== "undefined" && location.hash && location.hash.startsWith("#cf-pair=")) {
+		try {
+			const payload = location.hash.slice(9);
+			const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+			if (decoded.url && decoded.key) {
+				await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
+				await CLOUDFLARE_SYNC.configure(decoded.url, decoded.key);
+				U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
+				if (typeof history !== "undefined" && history.replaceState) {
+					history.replaceState(null, "", location.pathname + location.search);
+				}
+			}
+		} catch (err) {
+			console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
+		}
+	} else if (S.settings.cfUrl && S.settings.cfSyncKey && !CLOUDFLARE_SYNC.status().url) {
+		CLOUDFLARE_SYNC.configure(S.settings.cfUrl, S.settings.cfSyncKey).catch(() => {});
+	}
+
 	CLOUDFLARE_SYNC.init();
 	await SETTINGS.startAutoDriveSync();
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
