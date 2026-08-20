@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { boundedKnownIds, cloudEventEnvelope, decodeJson, encodeJson, isBlobAlive, newestFile, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload, shouldUploadDelta, unseenRemoteFiles } from "../web/sync-core.js";
+import { boundedKnownIds, chunkCloudEvents, cloudEventEnvelope, cloudEventsEnvelope, decodeJson, encodeJson, isBlobAlive, newestFile, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload, shouldUploadDelta, shouldUploadToSync, unseenRemoteFiles } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
 import { U } from "../web/util.js";
 
@@ -81,18 +81,36 @@ test("Drive-Transport bewahrt alte Nutzungsstatistiken", () => {
 
 test("Cloud-Wireformat entfernt lokale Sequenzen und verhindert Remote-Echos", () => {
 	const local = { id: "local", seq: 501, type: "pageUpdate", _derived: true, payload: { id: "p1" } };
-	const remote = { id: "remote", seq: 501, type: "pageUpdate", _remote: true, payload: { id: "p2" } };
-	assert.deepEqual(prepareCloudEvents([local, remote]), [{ id: "local", type: "pageUpdate", payload: { id: "p1" } }]);
-	assert.deepEqual(prepareCloudEvents([remote], { includeRemote: true }), [{ id: "remote", type: "pageUpdate", payload: { id: "p2" } }]);
+	const fromCloudflare = { id: "cloud", seq: 502, type: "pageUpdate", _remote: true, _remoteSource: "cloudflare", payload: { id: "p2" } };
+	const fromDrive = { id: "drive", seq: 503, type: "pageUpdate", _remote: true, _remoteSource: "drive", payload: { id: "p3" } };
+	assert.deepEqual(prepareCloudEvents([local, fromCloudflare, fromDrive]), [
+		{ id: "local", type: "pageUpdate", payload: { id: "p1" } },
+		{ id: "drive", type: "pageUpdate", payload: { id: "p3" } },
+	]);
+	assert.deepEqual(prepareCloudEvents([fromCloudflare], { includeRemote: true }), [{ id: "cloud", type: "pageUpdate", payload: { id: "p2" } }]);
+	assert.equal(shouldUploadToSync(fromCloudflare, "drive"), true);
+	assert.equal(shouldUploadToSync(fromDrive, "drive"), false);
 	assert.equal(local.seq, 501, "Quelldaten bleiben unverändert");
 });
 
-test("Cloud-Empfang akzeptiert nur Protokoll v2 ohne lokale Metadaten", () => {
+test("Cloud-Empfang akzeptiert v2-Einzel- und Batchpakete ohne lokale Metadaten", () => {
 	assert.deepEqual(prepareIncomingCloudEvents([cloudEventEnvelope({ id: "remote", type: "pageCreate" })]), [
-		{ id: "remote", type: "pageCreate", _remote: true },
+		{ id: "remote", type: "pageCreate", _remote: true, _remoteSource: "cloudflare" },
 	]);
+	assert.deepEqual(prepareIncomingCloudEvents([cloudEventsEnvelope([
+		{ id: "batch-1", type: "pageCreate" },
+		{ id: "batch-2", type: "pageUpdate" },
+	])]).map((event) => event.id), ["batch-1", "batch-2"]);
 	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v2/);
 	assert.throws(() => prepareIncomingCloudEvents([cloudEventEnvelope({ id: "bad", seq: 501, type: "pageCreate" })]), /lokale Metadaten/);
+	assert.throws(() => prepareIncomingCloudEvents([cloudEventsEnvelope([{ id: "bad", _remoteSource: "drive", type: "pageCreate" }])]), /lokale Metadaten/);
+});
+
+test("Cloud-Erstsync bündelt viele kleine Events und lässt große Einzelereignisse intakt", () => {
+	const events = Array.from({ length: 1201 }, (_, index) => ({ id: `e-${index}`, type: "pageUpdate", payload: { text: "x" } }));
+	const chunks = chunkCloudEvents(events);
+	assert.deepEqual(chunks.map((chunk) => chunk.length), [500, 500, 201]);
+	assert.deepEqual(chunkCloudEvents([{ id: "large", payload: { text: "x".repeat(100) } }], { maxJsonChars: 10 }).map((chunk) => chunk.length), [1]);
 });
 
 test("Geräteablage bleibt bei fehlendem localStorage fehlertolerant", () => {

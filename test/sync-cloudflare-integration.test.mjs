@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import worker, { SyncRoom } from "../server/worker.js";
-import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "../web/sync-core.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, cloudEventsEnvelope, prepareIncomingCloudEvents } from "../web/sync-core.js";
 import {
 	deriveSyncCredentials,
 	encryptPayload,
@@ -138,11 +138,16 @@ function createMockEnv() {
 			for (const stmt of stmts) {
 				const q = stmt._query || "";
 				const p = stmt._params || [];
-				if (q.includes("INSERT OR IGNORE INTO sync_events") || q.includes("INSERT INTO sync_events")) {
+				if (q.includes("DELETE FROM sync_events")) {
+					const [userId] = p;
+					dbStore.events = dbStore.events.filter((event) => event.user_id !== userId);
+				} else if (q.includes("DELETE FROM user_storage")) {
+					const [userId] = p;
+					dbStore.storage.delete(userId);
+				} else if (q.includes("INSERT OR IGNORE INTO sync_events") || q.includes("INSERT INTO sync_events")) {
 					const [userId, seq, event_id, iv, r2_key, size, created_at] = p;
 					dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key, size, created_at });
-				}
-				if (q.includes("user_storage")) {
+				} else if (q.includes("user_storage")) {
 					const [userId, token, bytes] = p;
 					dbStore.storage.set(userId, { bytes, token });
 				}
@@ -731,6 +736,27 @@ test("R2-Rollback: Bei einem R2-Schreibfehler wird der Upload abgebrochen und au
 	assert.equal(bucketStore.size, 0);
 });
 
+test("Cloud-Reset meldet einen R2-Löschfehler und behält die D1-Zeiger für einen erneuten Versuch", async () => {
+	const { env, ctx, dbStore, bucketStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(generateSyncKey());
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	const encrypted = await encryptPayload(cryptoKey, { id: "keep-on-reset-error", content: "x" });
+	assert.equal((await room.saveEvents([{ id: "keep-on-reset-error", ...encrypted }])).ok, true);
+
+	env.BUCKET.delete = async () => { throw new Error("R2 unavailable"); };
+	const response = await room.fetch(new Request(`https://example.com/api/reset?user=${userId}`, {
+		method: "POST",
+		headers: syncHeaders(authToken),
+	}));
+
+	assert.equal(response.status, 500);
+	assert.equal(dbStore.events.length, 1);
+	assert.equal(bucketStore.size, 1);
+	assert.equal(room.maxSeq, 1);
+});
+
 test("Persistierte Speichernutzung enthält den gerade gespeicherten Upload", async () => {
 	const { env, ctx, dbStore } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
@@ -886,6 +912,28 @@ test("E2EE Multi-Device Flow: Client A verschlüsselt -> Server speichert -> Cli
 	await assert.rejects(async () => {
 		await decryptPayload(clientWrong.cryptoKey, receivedPayload);
 	});
+});
+
+test("E2EE-Batch transportiert 500 fachliche Events als ein R2-Paket", async () => {
+	const { env, ctx, bucketStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const client = await deriveSyncCredentials(KEY_A);
+	room.userId = client.userId;
+	await room.verifyAuthorization(client.authToken);
+
+	const events = Array.from({ length: 500 }, (_, index) => ({
+		id: `bundled-${index}`,
+		type: "pageUpdate",
+		payload: { id: "page-1", text: `Stand ${index}` },
+	}));
+	const encrypted = await encryptPayload(client.cryptoKey, cloudEventsEnvelope(events));
+	const saveRes = await room.saveEvents([{ id: "batch-500", ...encrypted }]);
+
+	assert.equal(saveRes.ok, true);
+	assert.equal(saveRes.savedEvents.length, 1);
+	assert.equal(bucketStore.size, 1);
+	const decrypted = await decryptPayload(client.cryptoKey, saveRes.savedEvents[0]);
+	assert.deepEqual(prepareIncomingCloudEvents([decrypted]).map((event) => event.id), events.map((event) => event.id));
 });
 
 test("Paginierung: 600 Events werden in 200er-Batches lückenlos und in exakter Reihenfolge abgerufen", async () => {

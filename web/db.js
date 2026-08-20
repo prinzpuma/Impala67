@@ -1,6 +1,7 @@
 "use strict";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { shouldUploadToSync } from "./sync-core.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
 // zeitlich deterministisch; Heft-Striche und Bilder reisen vollständig im Event-Log.
@@ -118,8 +119,8 @@ export const DB = (() => {
 		});
 	}
 
-	// Cursor liest nur oberhalb des Sync-Wasserstands. _remote-Events (echte Drive-Downloads) sind
-	// kein lokales Echo und werden nicht erneut hochgeladen; Konfliktkopien syncen normal.
+	// Cursor liest nur oberhalb des Sync-Wasserstands. Nur echte Drive-Downloads
+	// werden nicht zurück zu Drive gespiegelt; Cloudflare-Events dürfen ins Backup.
 	function eventsAfterSeq(seq) {
 		ensureOpen();
 		return new Promise((res, rej) => {
@@ -128,7 +129,7 @@ export const DB = (() => {
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
-				if (!cur.value._remote) out.push(cur.value);
+				if (shouldUploadToSync(cur.value, "drive")) out.push(cur.value);
 				cur.continue();
 			};
 			req.onerror = () => rej(req.error);
@@ -334,7 +335,7 @@ export const DB = (() => {
 	// die Events auf dem Zielgerät als „schon gesynct“ — ein per Backup eingespielter Stand würde
 	// dort NIE hochgeladen (stiller Verlust Richtung aller anderen Geräte). seq fällt gleich mit:
 	// die Nummer gilt nur lokal und wird beim Import ohnehin neu vergeben.
-	const stripLocalFlags = ({ _remote, _derived, seq, ...ev }) => ev;
+	const stripLocalFlags = ({ _remote, _remoteSource, _derived, seq, ...ev }) => ev;
 
 	async function exportAll(opts = {}) {
 		let events = compactEvents(await allEvents()).map(stripLocalFlags);
@@ -623,7 +624,13 @@ export const DB = (() => {
 				// ursprünglichen Seiten-id im Log und sind damit weiterhin vollständig vorhanden.
 			}
 		}
-		fresh.forEach((ev) => { delete ev.seq; if (remoteIds.has(ev.id)) ev._remote = true; }); // neue lokale Seq
+		fresh.forEach((ev) => {
+			delete ev.seq;
+			if (remoteIds.has(ev.id)) {
+				ev._remote = true;
+				ev._remoteSource = "drive";
+			}
+		}); // neue lokale Seq
 		if (fresh.length) await addEvents(fresh);
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
 		const have = new Set(await allBlobKeys());

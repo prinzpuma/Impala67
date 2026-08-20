@@ -25,7 +25,9 @@
 - Bei Änderungen an IndexedDB, Event-Log oder Drive-Sync Rückwärtskompatibilität standardmäßig wahren; ein absichtlicher Format-Cut braucht eine ausdrückliche Nutzerfreigabe und eine klare Protokollversion.
 - Cloudflare-Sync startet mit Protokoll v2 aus dem aktuellen lokalen Stand; 64-Bit-Schlüssel, globale Alt-Cursor und D1-Inline-Payloads werden nicht unterstützt.
 - Cloudflare-Wire-Events enthalten niemals lokale `seq`-/Replay-Metadaten; eingehende Events erhalten immer einen neuen lokalen IndexedDB-Schlüssel.
+- Fremd-Events tragen ihre lokale Herkunft in `_remoteSource` (`drive` oder `cloudflare`); jeder Transport unterdrückt nur sein eigenes Echo, damit Drive als vollständiges Backup funktionieren kann.
 - Große Sync-Payloads sowohl nach Eventanzahl als auch nach Bytes begrenzen; D1-Grenzen nicht ungeprüft auf R2-Payloads übertragen.
+- Cloudflare-Erststände werden vor E2EE in begrenzte Eventpakete gebündelt; fachliche Einzelereignisse nicht unnötig als einzelne R2-Objekte speichern.
 
 ## Arbeitsweise
 

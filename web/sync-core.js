@@ -6,6 +6,10 @@ const dec = new TextDecoder();
 export const CLOUD_SYNC_PROTOCOL = 2;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
 
+export function shouldUploadToSync(event, target) {
+	return event?._remoteSource !== target;
+}
+
 export function shouldUploadDelta(localMaxSeq, uploadedSeq) {
 	return Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
 }
@@ -51,28 +55,65 @@ export function boundedKnownIds(ids, max = 2000) {
 // Metadaten. Auf dem Wire würden sie auf einem zweiten Gerät dessen autoIncrement-
 // Schlüssel kollidieren lassen oder bereits empfangene Events erneut hochladen.
 export function prepareCloudEvents(events, { includeRemote = false } = {}) {
-	return (events || []).filter((ev) => includeRemote || !ev?._remote).map((ev) => {
-		const { seq, _remote, _derived, ...wireEvent } = ev || {};
+	return (events || []).filter((ev) => includeRemote || shouldUploadToSync(ev, "cloudflare")).map((ev) => {
+		const { seq, _remote, _remoteSource, _derived, ...wireEvent } = ev || {};
 		return wireEvent;
 	});
 }
 
-// Protokoll v2 akzeptiert ausschließlich sein versioniertes Envelope und weist
-// lokale IndexedDB-Metadaten hart zurück. Alte Cloudbestände werden nicht migriert.
+function prepareIncomingCloudEvent(event) {
+	if (!event || typeof event !== "object" || Array.isArray(event)) {
+		throw new Error("Cloud-Event ist ungültig.");
+	}
+	if (Object.hasOwn(event, "seq") || Object.hasOwn(event, "_remote") || Object.hasOwn(event, "_remoteSource") || Object.hasOwn(event, "_derived")) {
+		throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
+	}
+	return { ...event, _remote: true, _remoteSource: "cloudflare" };
+}
+
+// Protokoll v2 akzeptiert ausschließlich versionierte Einzel- oder Batch-Envelopes
+// und weist lokale IndexedDB-Metadaten hart zurück.
 export function prepareIncomingCloudEvents(events) {
-	return (events || []).map((ev) => {
-		if (!ev || ev.v !== CLOUD_SYNC_PROTOCOL || !ev.event || typeof ev.event !== "object") {
+	return (events || []).flatMap((envelope) => {
+		if (!envelope || envelope.v !== CLOUD_SYNC_PROTOCOL) {
 			throw new Error(`Cloud-Event verwendet nicht Sync-Protokoll v${CLOUD_SYNC_PROTOCOL}.`);
 		}
-		if (Object.hasOwn(ev.event, "seq") || Object.hasOwn(ev.event, "_remote") || Object.hasOwn(ev.event, "_derived")) {
-			throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
+		if (Array.isArray(envelope.events)) {
+			if (!envelope.events.length) throw new Error("Cloud-Event-Batch ist leer.");
+			return envelope.events.map(prepareIncomingCloudEvent);
 		}
-		return { ...ev.event, _remote: true };
+		if (!envelope.event || typeof envelope.event !== "object") {
+			throw new Error(`Cloud-Event verwendet nicht Sync-Protokoll v${CLOUD_SYNC_PROTOCOL}.`);
+		}
+		return [prepareIncomingCloudEvent(envelope.event)];
 	});
 }
 
 export function cloudEventEnvelope(event) {
 	return { v: CLOUD_SYNC_PROTOCOL, event };
+}
+
+export function cloudEventsEnvelope(events) {
+	if (!Array.isArray(events) || !events.length) throw new Error("Cloud-Event-Batch ist leer.");
+	return { v: CLOUD_SYNC_PROTOCOL, events };
+}
+
+export function chunkCloudEvents(events, { maxEvents = 500, maxJsonChars = 1_500_000 } = {}) {
+	const chunks = [];
+	let chunk = [];
+	let chars = 0;
+	for (const event of events || []) {
+		const eventChars = JSON.stringify(event).length + 1;
+		if (chunk.length && (chunk.length >= maxEvents || chars + eventChars > maxJsonChars)) {
+			chunks.push(chunk);
+			chunk = [];
+			chars = 0;
+		}
+		chunk.push(event);
+		chars += eventChars;
+	}
+	if (chunk.length) chunks.push(chunk);
+	return chunks;
 }
 
 export function encryptedPacketChars(packet) {

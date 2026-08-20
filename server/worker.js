@@ -612,12 +612,17 @@ export class SyncRoom {
 			);
 		}
 
-		// Payloads nacheinander dekodieren und schreiben. So liegen bei Bild-Batches
-		// nie sämtliche Binärkopien gleichzeitig im 128-MB-Worker-Isolate.
+		// Kleine Pakete begrenzt parallel schreiben; das beseitigt beim Erstabgleich
+		// die R2-Latenz pro Objekt. Maximal sechs gleichzeitige Dekodierungen halten
+		// auch gemischte Medien-Batches deutlich unter dem Isolate-Speicherlimit.
 		try {
-			for (const write of r2Writes) {
-				await this.env.BUCKET.put(write.key, base64ToBytes(write.rawB64), { customMetadata: write.metadata });
-				r2KeysWritten.push(write.key);
+			for (let i = 0; i < r2Writes.length; i += 6) {
+				const group = r2Writes.slice(i, i + 6);
+				const results = await Promise.allSettled(group.map(async (write) => {
+					await this.env.BUCKET.put(write.key, base64ToBytes(write.rawB64), { customMetadata: write.metadata });
+					r2KeysWritten.push(write.key);
+				}));
+				if (results.some((result) => result.status === "rejected")) throw new Error("R2 write failed");
 			}
 		} catch {
 			if (r2KeysWritten.length > 0) {
@@ -805,27 +810,24 @@ export class SyncRoom {
 
 		// 5. POST /api/reset
 		if (url.pathname === "/api/reset" && request.method === "POST") {
-			this.maxSeq = 0;
-			this.totalBytes = 0;
-
-			await this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId).run();
-			await this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId).run();
-
 			try {
-				let truncated = true;
-				let cursor = undefined;
-				while (truncated) {
-					const list = await this.env.BUCKET.list({ prefix: `users/${userId}/`, cursor });
-					if (list?.objects && list.objects.length > 0) {
-						const keys = list.objects.map((o) => o.key);
-						await this.env.BUCKET.delete(keys);
-					}
-					truncated = !!list?.truncated;
-					cursor = list?.cursor;
+				while (true) {
+					const list = await this.env.BUCKET.list({ prefix: `users/${userId}/`, limit: 1000 });
+					const keys = (list?.objects || []).map((object) => object.key);
+					if (!keys.length) break;
+					await this.env.BUCKET.delete(keys);
 				}
 			} catch (err) {
 				console.error("[SyncRoom] R2 Reset-Fehler für User", userId, err);
+				return jsonResponse({ error: "Cloud-Daten konnten nicht vollständig aus R2 gelöscht werden." }, 500);
 			}
+
+			await this.env.DB.batch([
+				this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId),
+				this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId),
+			]);
+			this.maxSeq = 0;
+			this.totalBytes = 0;
 
 			this.broadcast({ type: "reset" });
 			return jsonResponse({ ok: true, message: "Cloud-Daten gelöscht" });
@@ -858,7 +860,7 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "3.0.0",
+				version: "3.1.0",
 				protocol: CLOUD_SYNC_PROTOCOL,
 				features: ["protocol_v2", "durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_required"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,

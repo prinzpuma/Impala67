@@ -4,7 +4,7 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
-import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, cloudEventEnvelope, encryptedPacketChars, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload } from "./sync-core.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, chunkCloudEvents, cloudEventEnvelope, cloudEventsEnvelope, encryptedPacketChars, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload } from "./sync-core.js";
 import {
 	deriveSyncCredentials,
 	encryptPayload,
@@ -12,6 +12,7 @@ import {
 	formatStorageUsage,
 	generateSyncKey,
 	MAX_USER_STORAGE_BYTES,
+	sha256Hex,
 } from "./sync-crypto.js";
 
 /**
@@ -337,27 +338,24 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!credentials || !encryptedEvent) return;
 
 		try {
-			const [rawEvent] = prepareIncomingCloudEvents([await decryptPayload(credentials.cryptoKey, encryptedEvent)]);
-			if (!rawEvent || !rawEvent.id || !rawEvent.type) return;
+			const rawEvents = prepareIncomingCloudEvents([await decryptPayload(credentials.cryptoKey, encryptedEvent)])
+				.filter((event) => event?.id && event?.type);
+			if (!rawEvents.length) return;
 
 			localEventIds ??= new Set(await DB.eventIds());
-			if (localEventIds.has(rawEvent.id)) {
-				if (encryptedEvent.seq > state.lastSyncedSeq) {
-					state.lastSyncedSeq = encryptedEvent.seq;
-					LS.setItem(lastSyncedKey(), String(encryptedEvent.seq));
-				}
-				return;
-			}
+			const fresh = rawEvents.filter((event) => !localEventIds.has(event.id));
 
-			if (rawEvent.type === "heftOps" || rawEvent.type === "heftSnap") {
+			if (fresh.some((event) => event.type === "heftOps" || event.type === "heftSnap")) {
 				if (typeof window !== "undefined" && window.HEFT && typeof window.HEFT.saveNow === "function") {
 					try { await window.HEFT.saveNow(); } catch (e) { console.warn("[cf-sync] Heft-Flush vor Remote-Event fehlgeschlagen:", e); }
 				}
 			}
 
-			await DB.addEvents([rawEvent]);
-			localEventIds.add(rawEvent.id);
-			STATE.applyRemoteEvents([rawEvent]);
+			if (fresh.length) {
+				await DB.addEvents(fresh);
+				for (const event of fresh) localEventIds.add(event.id);
+				STATE.applyRemoteEvents(fresh);
+			}
 
 			if (encryptedEvent.seq > state.lastSyncedSeq) {
 				state.lastSyncedSeq = encryptedEvent.seq;
@@ -408,9 +406,9 @@ export const CLOUDFLARE_SYNC = (() => {
 					const decryptedEvents = [];
 					for (const item of remoteEvents) {
 						try {
-							const ev = await decryptPayload(credentials.cryptoKey, item);
-							const [prepared] = prepareIncomingCloudEvents([ev]);
-							if (prepared?.id) decryptedEvents.push(prepared);
+							const envelope = await decryptPayload(credentials.cryptoKey, item);
+							const prepared = prepareIncomingCloudEvents([envelope]);
+							decryptedEvents.push(...prepared.filter((event) => event?.id && event?.type));
 						} catch (err) {
 							// Cursor nicht über ein unlesbares Event hinwegschieben. Sonst wäre
 							// dieses Event auf dem Gerät dauerhaft verloren.
@@ -505,16 +503,18 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 
 		const apiUrl = getApiUrl(state.url, "/api/events");
-		// D1 Free erlaubt maximal 50 Queries pro Worker-Aufruf. Der Server braucht
-		// neben den Inserts noch Deduplizierung und Quota-Fortschreibung; 40 lässt
-		// dafür bewusst Reserve und hält große verschlüsselte Requests klein.
+		// Fachliche Events werden vor E2EE gebündelt. Dadurch benötigt ein Erstabgleich
+		// nicht mehr ein R2-Objekt und eine Server-Sequenz pro Tastenanschlag/Event.
+		// Große Medien bleiben durch die JSON-Grenze automatisch Einzelpakete.
 		const MAX_BATCH_EVENTS = 40;
 		const MAX_BATCH_CHARS = 8_000_000;
 		let encryptedBatch = [];
 		let batchChars = 0;
+		let batchElementCount = 0;
 		let uploaded = 0;
 		const uploadBatch = async () => {
 			if (!encryptedBatch.length) return;
+			const uploadedElements = batchElementCount;
 			const response = await fetch(apiUrl, {
 				method: "POST",
 				headers: {
@@ -538,22 +538,23 @@ export const CLOUDFLARE_SYNC = (() => {
 				throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
 			}
 
-			uploaded += encryptedBatch.length;
+			uploaded += uploadedElements;
 			const percent = Math.round((uploaded / total) * 100);
 			state.progress = { current: uploaded, total, percent };
 			setStatus("syncing", "Synchronisiere…", `Übertrage ${uploaded} von ${total} Elementen (${percent} %)`);
 			encryptedBatch = [];
 			batchChars = 0;
-			await new Promise((r) => setTimeout(r, 15));
+			batchElementCount = 0;
 		};
 
-		for (const ev of transportEvents) {
-			const enc = await encryptPayload(credentials.cryptoKey, cloudEventEnvelope(ev));
+		for (const events of chunkCloudEvents(transportEvents)) {
+			const batchId = `batch-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
+			const enc = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
 			const packet = {
-					id: ev.id,
-					iv: enc.iv,
-					data: enc.data,
-					size: enc.size,
+				id: batchId,
+				iv: enc.iv,
+				data: enc.data,
+				size: enc.size,
 			};
 			const packetChars = encryptedPacketChars(packet);
 			if (encryptedBatch.length && (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars + packetChars > MAX_BATCH_CHARS)) {
@@ -561,6 +562,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 			encryptedBatch.push(packet);
 			batchChars += packetChars;
+			batchElementCount += events.length;
 			if (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars >= MAX_BATCH_CHARS) await uploadBatch();
 		}
 		await uploadBatch();
