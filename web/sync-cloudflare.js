@@ -400,6 +400,10 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 
 				const data = await response.json();
+				if (typeof data.maxSeq === "number" && (since > data.maxSeq || (data.maxSeq === 0 && (state.lastSyncedSeq > 0 || state.lastUploadedLocalSeq > 0)))) {
+					resetSyncCursors();
+					return runCatchUp(true);
+				}
 				const remoteEvents = data.events || [];
 
 				if (remoteEvents.length) {
@@ -486,7 +490,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const localMaxSeq = localEvents.reduce((max, ev) => Math.max(max, Number(ev?.seq) || 0), 0);
 		const lastUploadedSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 
-		const isInitialPush = forceAll || state.lastSyncedSeq === 0 || lastUploadedSeq === 0;
+		const isInitialPush = Boolean(forceAll || state.lastSyncedSeq === 0);
 		// Bei Initial-Push: Vorm Kompaktieren bereinigen, damit nicht tausende alte Tastenanschläge den RAM sprengen
 		const sourceEvents = isInitialPush ? DB.compactEvents(localEvents) : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
 		if (!sourceEvents.length) return;
@@ -503,9 +507,6 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 
 		const apiUrl = getApiUrl(state.url, "/api/events");
-		// Fachliche Events werden vor E2EE gebündelt. Dadurch benötigt ein Erstabgleich
-		// nicht mehr ein R2-Objekt und eine Server-Sequenz pro Tastenanschlag/Event.
-		// Große Medien bleiben durch die JSON-Grenze automatisch Einzelpakete.
 		const MAX_BATCH_EVENTS = 40;
 		const MAX_BATCH_CHARS = 8_000_000;
 		let encryptedBatch = [];
@@ -547,25 +548,48 @@ export const CLOUDFLARE_SYNC = (() => {
 			batchElementCount = 0;
 		};
 
-		for (const events of chunkCloudEvents(transportEvents)) {
-			const batchId = `batch-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
-			const enc = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
-			const packet = {
-				id: batchId,
-				iv: enc.iv,
-				data: enc.data,
-				size: enc.size,
-			};
-			const packetChars = encryptedPacketChars(packet);
-			if (encryptedBatch.length && (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars + packetChars > MAX_BATCH_CHARS)) {
-				await uploadBatch();
+		if (isInitialPush) {
+			// Initial-Push / Force-Full-Push: Bündelt viele kleine fachliche Events in begrenzte E2EE-Batches
+			for (const events of chunkCloudEvents(transportEvents)) {
+				const batchId = `batch-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
+				const enc = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
+				const packet = {
+					id: batchId,
+					iv: enc.iv,
+					data: enc.data,
+					size: enc.size,
+				};
+				const packetChars = encryptedPacketChars(packet);
+				if (encryptedBatch.length && (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars + packetChars > MAX_BATCH_CHARS)) {
+					await uploadBatch();
+				}
+				encryptedBatch.push(packet);
+				batchChars += packetChars;
+				batchElementCount += events.length;
+				if (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars >= MAX_BATCH_CHARS) await uploadBatch();
 			}
-			encryptedBatch.push(packet);
-			batchChars += packetChars;
-			batchElementCount += events.length;
-			if (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars >= MAX_BATCH_CHARS) await uploadBatch();
+			await uploadBatch();
+		} else {
+			// Normaler Delta-Upload: Verwendet die originale event.id für atomare Deduplizierung
+			for (const event of transportEvents) {
+				const enc = await encryptPayload(credentials.cryptoKey, cloudEventEnvelope(event));
+				const packet = {
+					id: event.id,
+					iv: enc.iv,
+					data: enc.data,
+					size: enc.size,
+				};
+				const packetChars = encryptedPacketChars(packet);
+				if (encryptedBatch.length && (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars + packetChars > MAX_BATCH_CHARS)) {
+					await uploadBatch();
+				}
+				encryptedBatch.push(packet);
+				batchChars += packetChars;
+				batchElementCount += 1;
+				if (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars >= MAX_BATCH_CHARS) await uploadBatch();
+			}
+			await uploadBatch();
 		}
-		await uploadBatch();
 
 		LS.setItem(lastUploadedKey(), String(localMaxSeq));
 		state.lastUploadedLocalSeq = localMaxSeq;

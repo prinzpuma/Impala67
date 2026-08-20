@@ -166,6 +166,12 @@ function createMockEnv() {
 			async put(key, val) {
 				ctx.storageData.set(key, val);
 			},
+			async delete(key) {
+				ctx.storageData.delete(key);
+			},
+			async deleteAll() {
+				ctx.storageData.clear();
+			},
 		},
 		getWebSockets() {
 			return Array.from(this.sockets);
@@ -199,11 +205,26 @@ test("HTTP-Sync lehnt alte Protokollstände ausdrücklich ab", async () => {
 	const { env, ctx } = createMockEnv();
 	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
 	const room = new SyncRoom(ctx, env);
-	const response = await room.fetch(new Request(`https://example.com/api/quota?user=${userId}`, {
+
+	// 1. Fehlender Protokoll-Header -> 426
+	const responseMissing = await room.fetch(new Request(`https://example.com/api/quota?user=${userId}`, {
 		headers: { Authorization: `Bearer ${authToken}` },
 	}));
-	assert.equal(response.status, 426);
-	assert.match((await response.json()).error, /Protokoll v2/);
+	assert.equal(responseMissing.status, 426);
+	assert.match((await responseMissing.json()).error, /Protokoll v3/);
+
+	// 2. Altes Protokoll v2 -> 426
+	const responseV2 = await room.fetch(new Request(`https://example.com/api/quota?user=${userId}`, {
+		headers: { Authorization: `Bearer ${authToken}`, [CLOUD_SYNC_PROTOCOL_HEADER]: "2" },
+	}));
+	assert.equal(responseV2.status, 426);
+	assert.match((await responseV2.json()).error, /Protokoll v3/);
+
+	// 3. Aktuelles Protokoll v3 -> 200
+	const responseV3 = await room.fetch(new Request(`https://example.com/api/quota?user=${userId}`, {
+		headers: { Authorization: `Bearer ${authToken}`, [CLOUD_SYNC_PROTOCOL_HEADER]: "3" },
+	}));
+	assert.equal(responseV3.status, 200);
 });
 
 test("Worker-Fehler bleiben als lesbare JSON-Antwort mit CORS sichtbar", async () => {
@@ -874,9 +895,18 @@ test("WebSocket lehnt einen alten Handshake vor der Autorisierung ab", async () 
 	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
 	room.userId = userId;
 	const messages = [];
-	const ws = { send: (msg) => messages.push(JSON.parse(msg)), close() {}, deserializeAttachment: () => ({ userId, authenticated: false }) };
-	await room.webSocketMessage(ws, JSON.stringify({ type: "auth", protocol: 1, token: authToken }));
+	let closedCode = null;
+	const ws = {
+		send: (msg) => messages.push(JSON.parse(msg)),
+		close(code) { closedCode = code; },
+		deserializeAttachment: () => ({ userId, authenticated: false }),
+	};
+
+	// 1. Altes Protokoll v2 wird abgewiesen
+	await room.webSocketMessage(ws, JSON.stringify({ type: "auth", protocol: 2, token: authToken }));
 	assert.equal(messages[0].type, "unsupported_protocol");
+	assert.match(messages[0].error, /Protokoll v3/);
+	assert.equal(closedCode, 4406);
 	assert.equal(room.authTokenHash, null);
 });
 
@@ -991,4 +1021,123 @@ test("Paginierung: 600 Events werden in 200er-Batches lückenlos und in exakter 
 		assert.equal(fetchedEvents[i].seq, i + 1);
 		assert.equal(fetchedEvents[i].id, `bulk-${i + 1}`);
 	}
+});
+
+test("Live-WebSocket gefolgt von normalem Delta-Sync erzeugt kein doppeltes R2-Objekt (Deduplizierung)", async () => {
+	const { env, ctx, bucketStore, dbStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	// 1. Event live per WebSocket senden
+	const liveEventPayload = { id: "live-event-1", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p1", title: "Live Page" } };
+	const encLive = await encryptPayload(cryptoKey, { v: CLOUD_SYNC_PROTOCOL, event: liveEventPayload });
+	const livePacket = { id: "live-event-1", ...encLive };
+
+	const wsMessages = [];
+	const mockWs = {
+		send: (msg) => wsMessages.push(JSON.parse(msg)),
+		close() {},
+		deserializeAttachment: () => ({ userId, authenticated: true, protocol: CLOUD_SYNC_PROTOCOL }),
+	};
+
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "event", event: livePacket }));
+
+	assert.equal(wsMessages.length, 1);
+	assert.equal(wsMessages[0].type, "ack");
+	assert.equal(wsMessages[0].eventId, "live-event-1");
+	assert.equal(wsMessages[0].seq, 1);
+
+	// R2 speichert genau das eine Objekt unter der originalen Event-ID
+	const r2Key = `users/${userId}/events/live-event-1.bin`;
+	assert.ok(bucketStore.has(r2Key));
+	assert.equal(bucketStore.size, 1);
+	assert.equal(dbStore.events.length, 1);
+
+	// 2. Später läuft ein normaler Delta-Sync (HTTP POST /api/events) mit derselben originalen Event-ID
+	const deltaReq = new Request(`https://example.com/api/events?user=${userId}`, {
+		method: "POST",
+		headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
+		body: JSON.stringify({ events: [livePacket] }),
+	});
+
+	const deltaRes = await room.fetch(deltaReq);
+	assert.equal(deltaRes.status, 200);
+	const deltaData = await deltaRes.json();
+	assert.equal(deltaData.ok, true);
+	assert.equal(deltaData.savedCount, 0); // Bereits vorhanden -> dedupliziert!
+
+	// Server/R2 speichert dieses Event NICHT ein zweites Mal!
+	assert.equal(bucketStore.size, 1);
+	assert.equal(dbStore.events.length, 1);
+	assert.ok(bucketStore.has(r2Key));
+	for (const k of bucketStore.keys()) {
+		assert.equal(k.includes("batch-"), false);
+	}
+});
+
+test("Initial-Push bündelt viele kleine Events mit batch-ID, während Delta-Push originale Event-IDs verwendet", async () => {
+	const { env, ctx, bucketStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	// Initial-Push: 5 kleine fachliche Events gebündelt
+	const initialEvents = Array.from({ length: 5 }, (_, i) => ({
+		id: `init-${i}`,
+		type: "pageCreate",
+		payload: { id: `p${i}` },
+	}));
+	const batchEnvelope = { v: CLOUD_SYNC_PROTOCOL, events: initialEvents };
+	const encBatch = await encryptPayload(cryptoKey, batchEnvelope);
+	const batchPacket = { id: "batch-abc123", ...encBatch };
+
+	const initRes = await room.saveEvents([batchPacket]);
+	assert.equal(initRes.ok, true);
+	assert.equal(initRes.savedEvents.length, 1);
+	assert.ok(bucketStore.has(`users/${userId}/events/batch-abc123.bin`));
+
+	// Delta-Push: Neues Einzel-Event mit originaler Event-ID
+	const deltaEvent = { id: "delta-1", type: "pageUpdate", payload: { id: "p1", patch: { title: "Neu" } } };
+	const encDelta = await encryptPayload(cryptoKey, { v: CLOUD_SYNC_PROTOCOL, event: deltaEvent });
+	const deltaPacket = { id: "delta-1", ...encDelta };
+
+	const deltaRes = await room.saveEvents([deltaPacket]);
+	assert.equal(deltaRes.ok, true);
+	assert.equal(deltaRes.savedEvents.length, 1);
+	assert.ok(bucketStore.has(`users/${userId}/events/delta-1.bin`));
+});
+
+test("Reset leert D1, user_storage, R2 und den Durable Object Zustand vollständig", async () => {
+	const { env, ctx, dbStore, bucketStore } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const key = generateSyncKey();
+	const { userId, authToken, cryptoKey } = await deriveSyncCredentials(key);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+
+	const enc = await encryptPayload(cryptoKey, { id: "reset-target", type: "note" });
+	await room.saveEvents([{ id: "reset-target", ...enc }]);
+	assert.equal(bucketStore.size, 1);
+	assert.equal(dbStore.events.length, 1);
+	assert.equal(dbStore.storage.size, 1);
+
+	const resetReq = new Request(`https://example.com/api/reset?user=${userId}`, {
+		method: "POST",
+		headers: syncHeaders(authToken),
+	});
+	const resetRes = await room.fetch(resetReq);
+	assert.equal(resetRes.status, 200);
+
+	assert.equal(bucketStore.size, 0);
+	assert.equal(dbStore.events.length, 0);
+	assert.equal(dbStore.storage.size, 0);
+	assert.equal(room.maxSeq, 0);
+	assert.equal(room.totalBytes, 0);
+	assert.equal(room.authTokenHash, null);
+	assert.equal(ctx.storageData.size, 0);
 });

@@ -93,7 +93,7 @@ test("Cloud-Wireformat entfernt lokale Sequenzen und verhindert Remote-Echos", (
 	assert.equal(local.seq, 501, "Quelldaten bleiben unverändert");
 });
 
-test("Cloud-Empfang akzeptiert v2-Einzel- und Batchpakete ohne lokale Metadaten", () => {
+test("Cloud-Empfang akzeptiert v3-Einzel- und Batchpakete ohne lokale Metadaten", () => {
 	assert.deepEqual(prepareIncomingCloudEvents([cloudEventEnvelope({ id: "remote", type: "pageCreate" })]), [
 		{ id: "remote", type: "pageCreate", _remote: true, _remoteSource: "cloudflare" },
 	]);
@@ -101,7 +101,8 @@ test("Cloud-Empfang akzeptiert v2-Einzel- und Batchpakete ohne lokale Metadaten"
 		{ id: "batch-1", type: "pageCreate" },
 		{ id: "batch-2", type: "pageUpdate" },
 	])]).map((event) => event.id), ["batch-1", "batch-2"]);
-	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v2/);
+	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v3/);
+	assert.throws(() => prepareIncomingCloudEvents([{ v: 2, event: { id: "v2-old", type: "pageCreate" } }]), /Protokoll v3/);
 	assert.throws(() => prepareIncomingCloudEvents([cloudEventEnvelope({ id: "bad", seq: 501, type: "pageCreate" })]), /lokale Metadaten/);
 	assert.throws(() => prepareIncomingCloudEvents([cloudEventsEnvelope([{ id: "bad", _remoteSource: "drive", type: "pageCreate" }])]), /lokale Metadaten/);
 });

@@ -1,10 +1,11 @@
 # Impala67 – Cloudflare Real-Time Sync Server
 
-Dieser serverlose Worker stellt das aktuelle **Sync-Protokoll v2** bereit. Ältere Schlüssel, Cursor und D1-Inline-Payloads werden bewusst nicht übernommen; ein neuer 128-Bit-Schlüssel beginnt mit dem aktuellen lokalen Stand.
+Dieser serverlose Worker stellt das aktuelle **Sync-Protokoll v3** bereit. Ältere Cloud-Daten, Alt-Cursor und v2-Clients werden bewusst nicht unterstützt; Clients starten nach einem Reset mit ihrem aktuellen lokalen Stand.
 
 ## Sicherheits- & Speicher-Eigenschaften
 - **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
 - **D1 + R2 Hybrid-Architektur:** Cloudflare D1 verwaltet blitzschnelle Indizes und Deduplizierung; Cloudflare R2 speichert die verschlüsselten Datenpakete (10 GB kostenloser Speicherplatz ohne 500-MB-Datenbankgrenze).
+- **Atomare Deduplizierung (v3):** Delta-Uploads übertragen Events mit ihrer originalen Event-ID. Bereits per WebSocket live gesendete Events werden auf dem Server dedupliziert und erzeugen keine doppelten R2-Objekte. Initial-Push bündelt viele kleine Events weiterhin speichereffizient.
 - **1.000 MB (1 GB) Quota pro Sync-Schlüssel:** Großzügiger Speicherplatz für Notizen, Bilder und Notizheft-Zeichnungen.
 - **WebSockets (Durable Objects):** Sofortige Live-Übertragung bei geöffneter App (< 30 ms) + nahtloser Download verpasster Änderungen nach Offline-Phasen.
 - **Geschützter AI-Proxy:** `/api/ai` leitet Textanfragen mit dem serverseitigen `GROQ_API_KEY` an Groq weiter. Der Sync-Token muss gültig sein; der Groq-Key wird nie an die PWA ausgeliefert.
@@ -57,10 +58,34 @@ Ein zusätzliches Impala67-Anfragenlimit wird derzeit nicht erzwungen; maßgebli
 
 ---
 
+## 🧹 Einmaliger vollständiger Cloud-Reset (Format-Cut auf v3)
+
+Um bestehende Cloud-Sync-Daten der alten Protokollgeneration vollständig zu leeren:
+
+1. **D1-Tabellen leeren:**
+   ```bash
+   npm run db:reset
+   ```
+   *(Führt `wrangler d1 execute impala67-db --remote --command="DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;"` aus).*
+
+2. **R2-Bucket leeren:**
+   Im Cloudflare-Dashboard den Bucket `impala67-sync` leeren (bzw. neu anlegen):
+   ```bash
+   npx wrangler r2 bucket delete impala67-sync
+   npx wrangler r2 bucket create impala67-sync
+   ```
+
+3. **Worker neu deployen:**
+   ```bash
+   npx wrangler deploy
+   ```
+
+---
+
 ## 📱 In Impala67 eintragen
 1. Öffne Impala67 -> ⚙️ **Einstellungen** -> **Sync & Dienste**.
 2. Unter **Cloudflare Echtzeit-Sync**:
    - Trage deine Worker-URL ein (`https://impala67-sync.<dein-account>.workers.dev`).
-   - Klicke auf **Schlüssel generieren**. Protokoll v2 akzeptiert ausschließlich neue 128-Bit-Schlüssel.
+   - Klicke auf **Schlüssel generieren** (128-Bit-Schlüssel).
    - Klicke auf **Verbinden & Synchronisieren**.
 3. Gib denselben Sync-Schlüssel und dieselbe URL auf deinen anderen Geräten ein -> **Fertig!**

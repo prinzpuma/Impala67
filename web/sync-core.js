@@ -3,7 +3,7 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-export const CLOUD_SYNC_PROTOCOL = 2;
+export const CLOUD_SYNC_PROTOCOL = 3;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
 
 export function shouldUploadToSync(event, target) {
@@ -71,7 +71,7 @@ function prepareIncomingCloudEvent(event) {
 	return { ...event, _remote: true, _remoteSource: "cloudflare" };
 }
 
-// Protokoll v2 akzeptiert ausschließlich versionierte Einzel- oder Batch-Envelopes
+// Protokoll v3 akzeptiert ausschließlich versionierte Einzel- oder Batch-Envelopes
 // und weist lokale IndexedDB-Metadaten hart zurück.
 export function prepareIncomingCloudEvents(events) {
 	return (events || []).flatMap((envelope) => {

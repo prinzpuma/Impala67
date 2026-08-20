@@ -826,6 +826,10 @@ export class SyncRoom {
 				this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId),
 				this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId),
 			]);
+			if (this.ctx?.storage) {
+				try { await this.ctx.storage.deleteAll(); } catch {}
+			}
+			this.authTokenHash = null;
 			this.maxSeq = 0;
 			this.totalBytes = 0;
 
@@ -860,9 +864,9 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "3.1.0",
+				version: "3.2.0",
 				protocol: CLOUD_SYNC_PROTOCOL,
-				features: ["protocol_v2", "durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_required"],
+				features: ["protocol_v3", "durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_required"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 				serverCapacityBytes: MAX_TOTAL_SERVER_STORAGE_BYTES,
 			});

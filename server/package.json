@@ -1,13 +1,14 @@
 {
   "name": "impala67-sync-server",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Impala67 E2EE Real-Time Sync Worker on Cloudflare",
   "main": "worker.js",
   "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
     "dry-run": "wrangler deploy --dry-run",
-    "db:init": "wrangler d1 execute impala67-db --remote --file=./schema.sql"
+    "db:init": "wrangler d1 execute impala67-db --remote --file=./schema.sql",
+    "db:reset": "wrangler d1 execute impala67-db --remote --command=\"DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;\""
   },
   "devDependencies": {
     "wrangler": "^4.124.0"
