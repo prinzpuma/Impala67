@@ -2,192 +2,132 @@
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-const COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
-const SYNC_KEY_PATTERN = /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/i;
+const JSON_GZIP_AT = 64 * 1024;
+const SYNC_KEY_RE = /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/i;
 
-export const MAX_USER_STORAGE_BYTES = 1_000_000_000; // 1 GB (1.000 MB dezimal) Quota pro Nutzer
+export const MAX_USER_STORAGE_BYTES = 1_000_000_000;
 
-export function bytesToBase64(bytes) {
-	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-	const CHUNK_SIZE = 0x8000;
-	let binary = "";
-	for (let i = 0; i < arr.length; i += CHUNK_SIZE) {
-		binary += String.fromCharCode.apply(null, arr.subarray(i, i + CHUNK_SIZE));
-	}
-	return btoa(binary);
+export function bytesToBase64(value) {
+	const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+	let out = "";
+	for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+	return btoa(out);
 }
 
-export function base64ToBytes(base64) {
-	const binary = atob(String(base64 || ""));
-	const len = binary.length;
-	const bytes = new Uint8Array(len);
-	for (let i = 0; i < len; i++) {
-		bytes[i] = binary.charCodeAt(i);
-	}
-	return bytes;
+export function base64ToBytes(value) {
+	const s = atob(String(value || ""));
+	const out = new Uint8Array(s.length);
+	for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+	return out;
 }
 
-export function hexToBytes(hex) {
-	const clean = String(hex || "").trim();
-	if (!clean || clean.length % 2 !== 0) return new Uint8Array(0);
-	const matches = clean.match(/.{1,2}/g);
-	return matches ? new Uint8Array(matches.map((b) => parseInt(b, 16))) : new Uint8Array(0);
+export function bytesToHex(value) {
+	return [...(value instanceof Uint8Array ? value : new Uint8Array(value))]
+		.map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function bytesToHex(bytes) {
-	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-	return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+export function hexToBytes(value) {
+	const hex = String(value || "").trim();
+	if (!hex || hex.length % 2) return new Uint8Array();
+	return new Uint8Array(hex.match(/../g).map((part) => parseInt(part, 16)));
 }
 
-export async function sha256Hex(str) {
-	const bytes = enc.encode(String(str || ""));
-	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	return bytesToHex(new Uint8Array(digest));
+export async function sha256Hex(value) {
+	const digest = await crypto.subtle.digest("SHA-256", enc.encode(String(value ?? "")));
+	return bytesToHex(digest);
 }
 
-/**
- * Generiert einen sicheren, lesbaren 128-Bit-Sync-Schlüssel.
- */
 export function generateSyncKey() {
-	const randomBytes = new Uint8Array(16);
-	crypto.getRandomValues(randomBytes);
-	const hex = bytesToHex(randomBytes);
-	return `impala-${hex.match(/.{4}/g).join("-")}`;
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	return `impala-${bytesToHex(bytes).match(/.{4}/g).join("-")}`;
 }
 
-/**
- * Leitet aus dem Sync-Schlüssel deterministisch ab:
- * 1. userId (öffentlicher Bezeichner für den Cloudflare-Kanal / D1 Partition)
- * 2. cryptoKey (geheimer AES-GCM 256-Bit Schlüssel, bleibt ausschließlich im Browser)
- */
 export async function deriveSyncCredentials(syncKey) {
-	const cleanKey = String(syncKey || "").trim();
-	if (!SYNC_KEY_PATTERN.test(cleanKey)) {
-		throw new Error("Ungültiger Sync-Schlüssel. Bitte einen neuen 128-Bit-Schlüssel erzeugen.");
-	}
-	if (typeof crypto === "undefined" || !crypto.subtle) {
-		throw new Error("Web Crypto API (crypto.subtle) ist in dieser Umgebung nicht verfügbar. Bitte nutze HTTPS.");
-	}
+	const clean = String(syncKey || "").trim();
+	if (!SYNC_KEY_RE.test(clean)) throw new Error("Ungültiger Sync-Schlüssel. Bitte einen neuen 128-Bit-Schlüssel erzeugen.");
+	if (!globalThis.crypto?.subtle) throw new Error("Web Crypto API ist nicht verfügbar. Bitte HTTPS verwenden.");
 
-	// Öffentliche User-ID: SHA-256 Hash mit Salz
-	const userId = await sha256Hex(`impala67_user_partition:${cleanKey}`);
-
-	// Autorisierungs-Token: Beweist dem Server Schreib- und Löschberechtigung
-	const authToken = await sha256Hex(`impala67_auth_token:${cleanKey}`);
-
-	// Geheimer AES-GCM Schlüssel via PBKDF2
-	const saltDigest = await crypto.subtle.digest("SHA-256", enc.encode(`impala67_e2ee_salt:${cleanKey}`));
-	const baseKey = await crypto.subtle.importKey(
-		"raw",
-		enc.encode(cleanKey),
-		{ name: "PBKDF2" },
-		false,
-		["deriveKey"]
-	);
-
+	const [userId, authToken, salt] = await Promise.all([
+		sha256Hex(`impala67_user_partition:${clean}`),
+		sha256Hex(`impala67_auth_token:${clean}`),
+		crypto.subtle.digest("SHA-256", enc.encode(`impala67_e2ee_salt:${clean}`)),
+	]);
+	const base = await crypto.subtle.importKey("raw", enc.encode(clean), "PBKDF2", false, ["deriveKey"]);
 	const cryptoKey = await crypto.subtle.deriveKey(
-		{
-			name: "PBKDF2",
-			salt: new Uint8Array(saltDigest),
-			iterations: 100000,
-			hash: "SHA-256",
-		},
-		baseKey,
-		{ name: "AES-GCM", length: 256 },
-		false,
-		["encrypt", "decrypt"]
+		{ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+		base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
 	);
-
 	return { userId, authToken, cryptoKey };
 }
 
-/**
- * Verschlüsselt ein beliebiges JS-Objekt mit AES-GCM
- */
-export async function encryptPayload(cryptoKey, dataObj) {
-	if (!cryptoKey) throw new Error("Kein Verschlüsselungsschlüssel vorhanden.");
-	const rawBytes = enc.encode(JSON.stringify(dataObj));
-	let payloadBytes = rawBytes;
-	let encoding = "";
-	if (rawBytes.byteLength >= COMPRESSION_THRESHOLD_BYTES && typeof CompressionStream === "function") {
-		const compressed = new Uint8Array(await new Response(
-			new Blob([rawBytes]).stream().pipeThrough(new CompressionStream("gzip"))
-		).arrayBuffer());
-		if (compressed.byteLength < rawBytes.byteLength) {
-			payloadBytes = compressed;
-			encoding = "gz:";
-		}
-	}
-	
-	// 12-Byte IV für AES-GCM
-	const iv = new Uint8Array(12);
-	crypto.getRandomValues(iv);
-
-	const ciphertextBuffer = await crypto.subtle.encrypt(
-		{ name: "AES-GCM", iv },
-		cryptoKey,
-		payloadBytes
-	);
-
-	const cipherBytes = new Uint8Array(ciphertextBuffer);
-	const dataBase64 = encoding + bytesToBase64(cipherBytes);
-	const ivHex = bytesToHex(iv);
-	const size = cipherBytes.byteLength + iv.byteLength;
-
-	return {
-		iv: ivHex,
-		data: dataBase64,
-		size,
-	};
+async function gzip(bytes) {
+	if (typeof CompressionStream !== "function") return null;
+	return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
 }
 
-/**
- * Entschlüsselt ein verschlüsseltes Paket { iv, data }
- */
-export async function decryptPayload(cryptoKey, encryptedObj) {
-	if (!cryptoKey) throw new Error("Kein Verschlüsselungsschlüssel vorhanden.");
-	if (!encryptedObj || !encryptedObj.iv || !encryptedObj.data) {
-		throw new Error("Ungültiges Verschlüsselungspaket.");
-	}
-
-	const iv = hexToBytes(encryptedObj.iv);
-	const isGzip = String(encryptedObj.data).startsWith("gz:");
-	const cipherBytes = base64ToBytes(isGzip ? encryptedObj.data.slice(3) : encryptedObj.data);
-
-	const decryptedBuffer = await crypto.subtle.decrypt(
-		{ name: "AES-GCM", iv },
-		cryptoKey,
-		cipherBytes
-	);
-
-	let plainBytes = new Uint8Array(decryptedBuffer);
-	if (isGzip) {
-		if (typeof DecompressionStream !== "function") {
-			throw new Error("Gzip-komprimierte Cloud-Daten werden auf diesem Gerät nicht unterstützt.");
-		}
-		plainBytes = new Uint8Array(await new Response(
-			new Blob([plainBytes]).stream().pipeThrough(new DecompressionStream("gzip"))
-		).arrayBuffer());
-	}
-	const jsonStr = dec.decode(plainBytes);
-	return JSON.parse(jsonStr);
+async function gunzip(bytes) {
+	if (typeof DecompressionStream !== "function") throw new Error("Gzip wird auf diesem Gerät nicht unterstützt.");
+	return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
 }
 
-/**
- * Hilfsfunktion zur formatierten Darstellung von Byte-Größen
- */
+async function encryptBytes(cryptoKey, bytes) {
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, bytes));
+	return { iv: bytesToHex(iv), bytes: ciphertext, size: ciphertext.byteLength + iv.byteLength };
+}
+
+async function decryptBytes(cryptoKey, ivHex, bytes) {
+	return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: hexToBytes(ivHex) }, cryptoKey, bytes));
+}
+
+export async function encryptPayload(cryptoKey, value) {
+	if (!cryptoKey) throw new Error("Kein Verschlüsselungsschlüssel vorhanden.");
+	const raw = enc.encode(JSON.stringify(value));
+	let bytes = raw, prefix = "";
+	if (raw.byteLength >= JSON_GZIP_AT) {
+		const packed = await gzip(raw);
+		if (packed && packed.byteLength < raw.byteLength) { bytes = packed; prefix = "gz:"; }
+	}
+	const encrypted = await encryptBytes(cryptoKey, bytes);
+	return { iv: encrypted.iv, data: prefix + bytesToBase64(encrypted.bytes), size: encrypted.size };
+}
+
+export async function decryptPayload(cryptoKey, packet) {
+	if (!cryptoKey || !packet?.iv || !packet?.data) throw new Error("Ungültiges Verschlüsselungspaket.");
+	const gz = String(packet.data).startsWith("gz:");
+	let plain = await decryptBytes(cryptoKey, packet.iv, base64ToBytes(gz ? packet.data.slice(3) : packet.data));
+	if (gz) plain = await gunzip(plain);
+	return JSON.parse(dec.decode(plain));
+}
+
+// Binärblobs werden ohne Base64/JSON-Overhead verschlüsselt.
+// Layout vor AES-GCM: uint32 headerLength | JSON({id,meta}) | raw bytes.
+export async function encryptBlobRecord(cryptoKey, id, record) {
+	const raw = record?.buf || record?.data;
+	if (!raw) throw new Error(`Blob ${id} enthält keine Daten.`);
+	const body = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+	const header = enc.encode(JSON.stringify({ id, meta: record?.meta || {} }));
+	const packed = new Uint8Array(4 + header.length + body.length);
+	new DataView(packed.buffer).setUint32(0, header.length, false);
+	packed.set(header, 4); packed.set(body, 4 + header.length);
+	return encryptBytes(cryptoKey, packed);
+}
+
+export async function decryptBlobRecord(cryptoKey, iv, ciphertext) {
+	const packed = await decryptBytes(cryptoKey, iv, ciphertext instanceof Uint8Array ? ciphertext : new Uint8Array(ciphertext));
+	if (packed.byteLength < 4) throw new Error("Ungültiger Blob-Datensatz.");
+	const headerLen = new DataView(packed.buffer, packed.byteOffset, packed.byteLength).getUint32(0, false);
+	if (headerLen < 2 || headerLen > packed.byteLength - 4) throw new Error("Ungültiger Blob-Header.");
+	const header = JSON.parse(dec.decode(packed.subarray(4, 4 + headerLen)));
+	if (!header?.id) throw new Error("Blob-ID fehlt.");
+	const bytes = packed.slice(4 + headerLen);
+	return { id: header.id, meta: header.meta || {}, buf: bytes.buffer };
+}
+
 export function formatStorageUsage(bytes, limit = MAX_USER_STORAGE_BYTES) {
-	const b = Math.max(0, Number(bytes) || 0);
-	const lim = Math.max(1, Number(limit) || MAX_USER_STORAGE_BYTES);
-	const mbUsed = (b / 1_000_000).toFixed(1);
-	const mbLimit = Math.round(lim / 1_000_000);
-	const percent = Math.min(100, Math.round((b / lim) * 100));
-	return {
-		bytes: b,
-		limit: lim,
-		mbUsed: Number(mbUsed),
-		mbLimit: Number(mbLimit),
-		percent,
-		formatted: `${mbUsed} MB / ${mbLimit} MB (${percent} %)`,
-	};
+	const used = Math.max(0, Number(bytes) || 0), cap = Math.max(1, Number(limit) || MAX_USER_STORAGE_BYTES);
+	const mbUsed = Number((used / 1_000_000).toFixed(1)), mbLimit = Math.round(cap / 1_000_000);
+	const percent = Math.min(100, Math.round((used / cap) * 100));
+	return { bytes: used, limit: cap, mbUsed, mbLimit, percent, formatted: `${mbUsed.toFixed(1)} MB / ${mbLimit} MB (${percent} %)` };
 }
