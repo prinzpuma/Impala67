@@ -234,7 +234,9 @@ test("Worker-Fehler bleiben als lesbare JSON-Antwort mit CORS sichtbar", async (
 			get: () => ({ fetch: async () => { throw new Error("D1 nicht erreichbar"); } }),
 		},
 	};
-	const res = await worker.fetch(new Request("https://example.com/api/sync?user=1234567890123456"), env, {});
+	const res = await worker.fetch(new Request("https://example.com/api/sync?user=1234567890123456", {
+		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL) },
+	}), env, {});
 	assert.equal(res.status, 500);
 	assert.equal(res.headers.get("Access-Control-Allow-Origin"), "*");
 	assert.equal((await res.json()).code, "internal_error");
@@ -262,7 +264,7 @@ test("AI-Proxy nutzt den bestehenden Sync-Token und gibt den Groq-Key nicht an d
 		const response = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${authToken}`,
+				...syncHeaders(authToken),
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
@@ -306,7 +308,7 @@ test("AI-Proxy wechselt nur bei 429 zum nächsten Groq-Modell", async () => {
 	try {
 		const response = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 			body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
 		}), env, ctx);
 		assert.equal(response.status, 200);
@@ -321,10 +323,57 @@ test("AI-Proxy weist fehlende oder falsche Sync-Berechtigung ab", async () => {
 	env.GROQ_API_KEY = "test-groq-secret";
 	const response = await worker.fetch(new Request("https://example.com/api/ai?user=1234567890123456", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { ...syncHeaders("bad-token"), "Content-Type": "application/json" },
 		body: JSON.stringify({ messages: [{ role: "user", content: "Sag hallo" }] }),
 	}), env, ctx);
 	assert.equal(response.status, 403);
+});
+
+test("AI-Proxy, Notion-Proxy und Models verlangen Protokoll v3 und weisen v2 mit 426 ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	env.GROQ_API_KEY = "test-groq-secret";
+
+	// 1. /api/ai ohne / mit v2 Protokoll -> 426
+	const resAiNoProto = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+	}), env, ctx);
+	assert.equal(resAiNoProto.status, 426);
+	assert.match((await resAiNoProto.json()).error, /Protokoll v3/);
+
+	const resAiV2 = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, [CLOUD_SYNC_PROTOCOL_HEADER]: "2", "Content-Type": "application/json" },
+		body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+	}), env, ctx);
+	assert.equal(resAiV2.status, 426);
+	assert.match((await resAiV2.json()).error, /Protokoll v3/);
+
+	// 2. /api/notion mit v2 Protokoll -> 426
+	const resNotionV2 = await worker.fetch(new Request(`https://example.com/api/notion?user=${userId}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${authToken}`, [CLOUD_SYNC_PROTOCOL_HEADER]: "2", "Content-Type": "application/json" },
+		body: JSON.stringify({ token: "x", path: "/search" }),
+	}), env, ctx);
+	assert.equal(resNotionV2.status, 426);
+	assert.match((await resNotionV2.json()).error, /Protokoll v3/);
+
+	// 3. /api/models mit v2 Protokoll -> 426; mit v3 -> 200
+	const resModelsV2 = await worker.fetch(new Request("https://example.com/api/models", {
+		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: "2" },
+	}), env, ctx);
+	assert.equal(resModelsV2.status, 426);
+	assert.match((await resModelsV2.json()).error, /Protokoll v3/);
+
+	const resModelsV3 = await worker.fetch(new Request("https://example.com/api/models", {
+		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: "3" },
+	}), env, ctx);
+	assert.equal(resModelsV3.status, 200);
 });
 
 test("Notion-Proxy ist Sync-authentifiziert und leitet Tokens nur an api.notion.com weiter", async () => {
@@ -342,7 +391,7 @@ test("Notion-Proxy ist Sync-authentifiziert und leitet Tokens nur an api.notion.
 	try {
 		const response = await worker.fetch(new Request(`https://example.com/api/notion?user=${userId}`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 			body: JSON.stringify({ token: "secret-notion-token", path: "/search", method: "POST", body: { query: "Mathe" } }),
 		}), env, ctx);
 		assert.equal(response.status, 200);
@@ -355,13 +404,13 @@ test("Notion-Proxy ist Sync-authentifiziert und leitet Tokens nur an api.notion.
 test("Notion-Proxy blockiert fremde Ziele und fehlende Sync-Berechtigung", async () => {
 	const { env, ctx } = createMockEnv();
 	const unauthorized = await worker.fetch(new Request("https://example.com/api/notion?user=1234567890123456", {
-		method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "x", path: "/search" }),
+		method: "POST", headers: { ...syncHeaders("bad-token"), "Content-Type": "application/json" }, body: JSON.stringify({ token: "x", path: "/search" }),
 	}), env, ctx);
 	assert.equal(unauthorized.status, 403);
 	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
 	const room = new SyncRoom(ctx, env); room.userId = userId; await room.verifyAuthorization(authToken);
 	const blocked = await worker.fetch(new Request(`https://example.com/api/notion?user=${userId}`, {
-		method: "POST", headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		method: "POST", headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 		body: JSON.stringify({ token: "secret", path: "//evil.example/steal" }),
 	}), env, ctx);
 	assert.equal(blocked.status, 400);
@@ -389,7 +438,7 @@ test("AI-Proxy unterstützt multimodale Bilder und Tool-Aufrufe für Qwen", asyn
 		// 1. Multimodales Bild an Qwen
 		const resImage = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 			body: JSON.stringify({
 				messages: [
 					{ role: "user", content: [{ type: "text", text: "Beschreibe dieses Bild" }, { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }] },
@@ -403,7 +452,7 @@ test("AI-Proxy unterstützt multimodale Bilder und Tool-Aufrufe für Qwen", asyn
 		// 2. Tool-Aufrufe und Tool-Ergebnisse
 		const resTools = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 			body: JSON.stringify({
 				messages: [
 					{ role: "user", content: "Suche Notizen" },
@@ -432,7 +481,7 @@ test("AI-Proxy lehnt ungültige Rollen und leere Nachrichten mit 400 ab", async 
 
 	const resRole = await worker.fetch(new Request(`https://example.com/api/ai?user=${userId}`, {
 		method: "POST",
-		headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		headers: { ...syncHeaders(authToken), "Content-Type": "application/json" },
 		body: JSON.stringify({ messages: [{ role: "invalid_role", content: "Hello" }] }),
 	}), env, ctx);
 	assert.equal(resRole.status, 400);
@@ -441,7 +490,9 @@ test("AI-Proxy lehnt ungültige Rollen und leere Nachrichten mit 400 ab", async 
 
 test("GET /api/models und /models listen die 3 Groq-AI-Modelle auf", async () => {
 	const { env, ctx } = createMockEnv();
-	const res = await worker.fetch(new Request("https://example.com/models"), env, ctx);
+	const res = await worker.fetch(new Request("https://example.com/models", {
+		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL) },
+	}), env, ctx);
 	assert.equal(res.status, 200);
 	const data = await res.json();
 	assert.deepEqual(data.data.map((m) => m.id), [
@@ -1112,7 +1163,7 @@ test("Initial-Push bündelt viele kleine Events mit batch-ID, während Delta-Pus
 	assert.ok(bucketStore.has(`users/${userId}/events/delta-1.bin`));
 });
 
-test("Reset leert D1, user_storage, R2 und den Durable Object Zustand vollständig", async () => {
+test("Reset leert D1, user_storage, R2 und schließt WebSockets unauthentifiziert ab", async () => {
 	const { env, ctx, dbStore, bucketStore } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	const key = generateSyncKey();
@@ -1120,12 +1171,27 @@ test("Reset leert D1, user_storage, R2 und den Durable Object Zustand vollständ
 	room.userId = userId;
 	await room.verifyAuthorization(authToken);
 
-	const enc = await encryptPayload(cryptoKey, { id: "reset-target", type: "note" });
-	await room.saveEvents([{ id: "reset-target", ...enc }]);
+	// 1. WebSocket verbinden und autorisieren
+	let attachment = null;
+	let closedCode = null;
+	const wsMessages = [];
+	const mockWs = {
+		serializeAttachment(val) { attachment = val; },
+		deserializeAttachment() { return attachment; },
+		send(msg) { wsMessages.push(JSON.parse(msg)); },
+		close(code) { closedCode = code; },
+	};
+	ctx.sockets.add(mockWs);
+
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: authToken }));
+	assert.equal(attachment.authenticated, true);
+
+	const encBefore = await encryptPayload(cryptoKey, { id: "before-reset", type: "note" });
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "event", event: { id: "before-reset", ...encBefore } }));
 	assert.equal(bucketStore.size, 1);
 	assert.equal(dbStore.events.length, 1);
-	assert.equal(dbStore.storage.size, 1);
 
+	// 2. Reset ausführen
 	const resetReq = new Request(`https://example.com/api/reset?user=${userId}`, {
 		method: "POST",
 		headers: syncHeaders(authToken),
@@ -1133,6 +1199,7 @@ test("Reset leert D1, user_storage, R2 und den Durable Object Zustand vollständ
 	const resetRes = await room.fetch(resetReq);
 	assert.equal(resetRes.status, 200);
 
+	// Daten & In-Memory State sind vollständig geleert
 	assert.equal(bucketStore.size, 0);
 	assert.equal(dbStore.events.length, 0);
 	assert.equal(dbStore.storage.size, 0);
@@ -1140,4 +1207,24 @@ test("Reset leert D1, user_storage, R2 und den Durable Object Zustand vollständ
 	assert.equal(room.totalBytes, 0);
 	assert.equal(room.authTokenHash, null);
 	assert.equal(ctx.storageData.size, 0);
+
+	// WebSocket hat reset-Broadcast erhalten und wurde geschlossen
+	assert.ok(wsMessages.some((m) => m.type === "reset"));
+	assert.equal(closedCode, 1000);
+	assert.equal(attachment.authenticated, false);
+
+	// 3. Alter Socket darf NICHT ohne erneuten Auth-Handshake weiter Events speichern
+	const encAfter = await encryptPayload(cryptoKey, { id: "after-reset-unauth", type: "note" });
+	wsMessages.length = 0;
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "event", event: { id: "after-reset-unauth", ...encAfter } }));
+	assert.equal(wsMessages[0].type, "unauthorized");
+	assert.equal(bucketStore.size, 0);
+	assert.equal(dbStore.events.length, 0);
+
+	// 4. Nach neuem Auth-Handshake funktioniert der Sync wieder
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: authToken }));
+	assert.equal(attachment.authenticated, true);
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "event", event: { id: "after-reset-auth", ...encAfter } }));
+	assert.equal(bucketStore.size, 1);
+	assert.equal(dbStore.events.length, 1);
 });

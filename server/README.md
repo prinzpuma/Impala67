@@ -60,25 +60,25 @@ Ein zusätzliches Impala67-Anfragenlimit wird derzeit nicht erzwungen; maßgebli
 
 ## 🧹 Einmaliger vollständiger Cloud-Reset (Format-Cut auf v3)
 
-Um bestehende Cloud-Sync-Daten der alten Protokollgeneration vollständig zu leeren:
+Um bestehende Cloud-Sync-Daten der alten Protokollgeneration vollständig zu leeren, halte exakt diese Reihenfolge ein:
 
-1. **D1-Tabellen leeren:**
+1. **Zuerst Worker v3 veröffentlichen:**
    ```bash
-   npm run db:reset
+   npx wrangler deploy
    ```
-   *(Führt `wrangler d1 execute impala67-db --remote --command="DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;"` aus).*
+   *(Stellt sicher, dass alte v2-Clients sofort abgewiesen werden und während des Resets keine neuen Daten schreiben können).*
 
-2. **R2-Bucket leeren:**
-   Im Cloudflare-Dashboard den Bucket `impala67-sync` leeren (bzw. neu anlegen):
+2. **Danach R2-Bucket leeren / neu anlegen:**
    ```bash
    npx wrangler r2 bucket delete impala67-sync
    npx wrangler r2 bucket create impala67-sync
    ```
 
-3. **Worker neu deployen:**
+3. **D1-Tabellen ganz zum Schluss leeren:**
    ```bash
-   npx wrangler deploy
+   npm run db:reset
    ```
+   *(Führt `wrangler d1 execute impala67-db --remote --command="DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;"` aus. Dadurch behält D1 nach dem R2-Löschen keine toten Zeiger zurück).*
 
 ---
 

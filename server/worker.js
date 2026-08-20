@@ -834,6 +834,13 @@ export class SyncRoom {
 			this.totalBytes = 0;
 
 			this.broadcast({ type: "reset" });
+			const sockets = this.ctx?.getWebSockets ? this.ctx.getWebSockets() : [];
+			for (const ws of sockets) {
+				if (typeof ws.serializeAttachment === "function") {
+					try { ws.serializeAttachment({ userId: this.userId, authenticated: false }); } catch {}
+				}
+				try { ws.close(1000, "Reset"); } catch {}
+			}
 			return jsonResponse({ ok: true, message: "Cloud-Daten gelöscht" });
 		}
 
@@ -860,7 +867,7 @@ async function handleRequest(request, env, ctx) {
 
 		const url = new URL(request.url);
 
-		// Health Check
+		// Health Check (öffentlich)
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
@@ -870,6 +877,12 @@ async function handleRequest(request, env, ctx) {
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 				serverCapacityBytes: MAX_TOTAL_SERVER_STORAGE_BYTES,
 			});
+		}
+
+		// Protokoll v3 für alle weiteren Endpunkte erzwingen (ausgenommen /ws Upgrade, wo Auth in-band verhandelt wird)
+		if (url.pathname !== "/ws") {
+			const versionError = protocolError(request);
+			if (versionError) return versionError;
 		}
 
 		// Verfügbare AI-Modelle (OpenAI-kompatibel)
