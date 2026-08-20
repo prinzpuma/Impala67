@@ -180,7 +180,10 @@ export const CLOUDFLARE_SYNC = (() => {
 			allowSecrets: SETTINGS_SYNC.allowsSecrets(S.settings),
 		});
 		const imported = result.importedEvents || [];
-		if (imported.length) STATE.applyRemoteEvents(imported);
+		if (imported.length) {
+			STATE.applyRemoteEvents(imported);
+			ignoredBlobKeys.clear();
+		}
 	}
 
 	async function pull() {
@@ -355,6 +358,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function scheduleSync() {
 		if (!credentials) return;
+		ignoredBlobKeys.clear();
 		clearTimeout(localTimer);
 		localTimer = setTimeout(() => requestSync().catch(() => {}), LOCAL_SYNC_DELAY);
 	}
@@ -428,6 +432,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
 		closeSocket(); credentials = null;
+		blobHashCache.clear(); ignoredBlobKeys.clear();
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
 		cleanKey ? LS.setItem(LS_KEY, cleanKey) : LS.removeItem(LS_KEY);
@@ -452,6 +457,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function disconnect() {
 		configureGeneration++; clearTimeout(localTimer); closeSocket(); credentials = null;
+		blobHashCache.clear(); ignoredBlobKeys.clear();
 		setStatus("disconnected", "Getrennt");
 	}
 
@@ -460,6 +466,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const response = await fetch(api("/api/reset"), { method: "POST", headers: authHeaders() });
 		if (!response.ok) throw await responseError(response, "Cloud-Daten konnten nicht gelöscht werden");
 		const data = await response.json();
+		blobHashCache.clear(); ignoredBlobKeys.clear();
 		clearCursors(Number(data.generation) || state.generation + 1);
 		return true;
 	}
