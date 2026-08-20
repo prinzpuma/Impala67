@@ -74,6 +74,7 @@ function setupRealDOM() {
 setupRealDOM();
 
 const { S, STATE } = await import("../web/state.js");
+const { DB } = await import("../web/db.js");
 const { HEFT } = await import("../web/heft.js");
 
 // Mock DB.addEvent / STATE.dispatch so background timers don't throw DB.open errors in unit tests
@@ -109,6 +110,37 @@ test("Heft-Tests: Pinch endet wieder im scharfen Renderzustand", async () => {
 	scroll.dispatchEvent(touchEvent("touchend", [], [c, d]));
 	assert.equal(pages.style.willChange, "auto", "Touch-Ende löst den scharfen Abschlussrender aus");
 	HEFT.unmount(true);
+});
+
+test("Heft wiederholt einen fehlgeschlagenen Persistenzversuch", async () => {
+	S.pages.persistHeft = { id: "persistHeft", title: "Persistenz", kind: "heft" };
+	S.heftDocs.persistHeft = { pages: [{ id: "persistPage", paper: "blank", strokes: [], images: [], texts: [], ocrText: "" }] };
+	const stage = document.getElementById("heftStage");
+	await HEFT.mount(stage, "persistHeft");
+	S.heftDocs.persistHeft.pages[0].ocrText = "muss gespeichert werden";
+	let attempts = 0;
+	const oldWarn = console.warn, oldAllBlobKeys = DB.allBlobKeys, oldPutBlob = DB.putBlob, oldDelBlob = DB.delBlob;
+	console.warn = () => {};
+	DB.allBlobKeys = async () => [];
+	DB.putBlob = async () => {};
+	DB.delBlob = async () => {};
+	STATE.dispatch = async (type) => {
+		if (type !== "heftOps") return;
+		attempts++;
+		if (attempts === 1) throw new Error("simulierter IndexedDB-Fehler");
+	};
+	try {
+		await HEFT.saveNow();
+		await HEFT.saveNow();
+		assert.equal(attempts, 2, "der RAM-Stand darf erst nach erfolgreichem Schreiben als veröffentlicht gelten");
+	} finally {
+		HEFT.unmount(true);
+		STATE.dispatch = async () => {};
+		console.warn = oldWarn;
+		DB.allBlobKeys = oldAllBlobKeys;
+		DB.putBlob = oldPutBlob;
+		DB.delBlob = oldDelBlob;
+	}
 });
 
 test("Heft-Tests: Strich-Erstellung und automatische s.bbox Berechnungen", () => {

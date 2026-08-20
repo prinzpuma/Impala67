@@ -14,24 +14,35 @@
 <script>
 // Diagnose-Overlay (temporär) — vereinheitlicht: EINE Helfer-Funktion für
 // window.onerror UND window.onunhandledrejection (vorher 2× identischer Code).
-function showErrorOverlay(title, html, stack) {
+function showErrorOverlay(title, details, stack) {
 	const div = document.createElement("div");
 	div.style.cssText = "position:fixed;inset:0;background:rgba(255,0,0,0.95);color:#fff;" +
 		"z-index:999999;padding:20px;font-family:monospace;font-size:16px;overflow:auto;";
-	div.innerHTML = "<h1>" + title + "</h1>" + html + "<pre>" + (stack || "") + "</pre>";
+	const heading = document.createElement("h1");
+	heading.textContent = title;
+	div.appendChild(heading);
+	Object.entries(details || {}).forEach(function (entry) {
+		const p = document.createElement("p");
+		const strong = document.createElement("strong");
+		strong.textContent = entry[0] + ": ";
+		p.appendChild(strong);
+		p.appendChild(document.createTextNode(String(entry[1] == null ? "" : entry[1])));
+		div.appendChild(p);
+	});
+	const pre = document.createElement("pre");
+	pre.textContent = stack || "";
+	div.appendChild(pre);
 	document.documentElement.appendChild(div);
 }
 window.onerror = function (message, source, lineno, colno, error) {
-	showErrorOverlay("Frontend Error Caught",
-		"<p><strong>Message:</strong> " + message + "</p>" +
-		"<p><strong>Source:</strong> " + source + "</p>" +
-		"<p><strong>Line:</strong> " + lineno + " <strong>Col:</strong> " + colno + "</p>",
+	showErrorOverlay("Frontend Error Caught", {
+		Message: message, Source: source, Position: lineno + ":" + colno,
+	},
 		error && error.stack);
 	return false;
 };
 window.onunhandledrejection = function (event) {
-	showErrorOverlay("Unhandled Promise Rejection",
-		"<p><strong>Reason:</strong> " + event.reason + "</p>",
+	showErrorOverlay("Unhandled Promise Rejection", { Reason: event.reason },
 		event.reason && event.reason.stack);
 };
 </script>

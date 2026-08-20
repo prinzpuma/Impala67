@@ -40,7 +40,7 @@ export const S = {
 		notionMap: {}, // lokale Seiten-ID → Notion-Seiten-ID (für lokal erstellte Seiten)
 		notionMeta: {}, // Sync-Gedächtnis je Notion-Seite: { r: Remote-Stand, l: lokaler Stand } beim letzten Abgleich — verhindert Ping-Pong-Übertragungen
 		notionLastSync: "", // Zeitstempel des letzten Zwei-Wege-Syncs
-		corsProxy: "", // eigener CORS-Proxy für den Notion-Sync (leer = öffentlicher corsproxy.io)
+		corsProxy: "", // optionaler eigener Notion-Proxy (leer = authentifizierter Impala67-Worker)
 		deckConf: {}, // Stapel-Optionen: Tageslimits + Leech-Verhalten je Stapel ("*" = Standardwerte)
 	},
 	// „Standard“ ist der Default-Name für Karten ohne Stapel — löschbar wie jeder andere Stapel

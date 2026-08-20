@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import worker, { SyncRoom } from "../server/worker.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "../web/sync-core.js";
 import {
 	deriveSyncCredentials,
 	encryptPayload,
@@ -9,6 +10,13 @@ import {
 	generateSyncKey,
 	MAX_USER_STORAGE_BYTES,
 } from "../web/sync-crypto.js";
+
+const KEY_A = "impala-0001-0002-0003-0004-0005-0006-0007-0008";
+const KEY_B = "impala-1001-1002-1003-1004-1005-1006-1007-1008";
+const syncHeaders = (authToken) => ({
+	Authorization: `Bearer ${authToken}`,
+	[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
+});
 
 // Mock-Umgebung für Cloudflare D1 & R2 & WebSockets im Node-Test
 function createMockEnv() {
@@ -131,13 +139,8 @@ function createMockEnv() {
 				const q = stmt._query || "";
 				const p = stmt._params || [];
 				if (q.includes("INSERT OR IGNORE INTO sync_events") || q.includes("INSERT INTO sync_events")) {
-					if (p.length === 8) {
-						const [userId, seq, event_id, iv, r2_key, data, size, created_at] = p;
-						dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key, data, size, created_at });
-					} else {
-						const [userId, seq, event_id, iv, data, size, created_at] = p;
-						dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key: null, data, size, created_at });
-					}
+					const [userId, seq, event_id, iv, r2_key, size, created_at] = p;
+					dbStore.events.push({ user_id: userId, seq, event_id, id: event_id, iv, r2_key, size, created_at });
 				}
 				if (q.includes("user_storage")) {
 					const [userId, token, bytes] = p;
@@ -183,7 +186,19 @@ test("CORS erlaubt die vom Browser verwendeten Auth-Header explizit", async () =
 	const allowed = res.headers.get("Access-Control-Allow-Headers") || "";
 	assert.match(allowed, /Authorization/i);
 	assert.match(allowed, /X-User-Id/i);
+	assert.match(allowed, new RegExp(CLOUD_SYNC_PROTOCOL_HEADER, "i"));
 	assert.notEqual(allowed.trim(), "*");
+});
+
+test("HTTP-Sync lehnt alte Protokollstände ausdrücklich ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	const response = await room.fetch(new Request(`https://example.com/api/quota?user=${userId}`, {
+		headers: { Authorization: `Bearer ${authToken}` },
+	}));
+	assert.equal(response.status, 426);
+	assert.match((await response.json()).error, /Protokoll v2/);
 });
 
 test("Worker-Fehler bleiben als lesbare JSON-Antwort mit CORS sichtbar", async () => {
@@ -286,6 +301,46 @@ test("AI-Proxy weist fehlende oder falsche Sync-Berechtigung ab", async () => {
 	assert.equal(response.status, 403);
 });
 
+test("Notion-Proxy ist Sync-authentifiziert und leitet Tokens nur an api.notion.com weiter", async () => {
+	const { env, ctx } = createMockEnv();
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env);
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	const originalFetch = globalThis.fetch;
+	let upstreamRequest;
+	globalThis.fetch = async (url, init) => {
+		upstreamRequest = { url, init };
+		return new Response(JSON.stringify({ object: "list", results: [] }), { headers: { "Content-Type": "application/json" } });
+	};
+	try {
+		const response = await worker.fetch(new Request(`https://example.com/api/notion?user=${userId}`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ token: "secret-notion-token", path: "/search", method: "POST", body: { query: "Mathe" } }),
+		}), env, ctx);
+		assert.equal(response.status, 200);
+		assert.equal(upstreamRequest.url, "https://api.notion.com/v1/search");
+		assert.equal(upstreamRequest.init.headers.Authorization, "Bearer secret-notion-token");
+		assert.doesNotMatch(await response.text(), /secret-notion-token/);
+	} finally { globalThis.fetch = originalFetch; }
+});
+
+test("Notion-Proxy blockiert fremde Ziele und fehlende Sync-Berechtigung", async () => {
+	const { env, ctx } = createMockEnv();
+	const unauthorized = await worker.fetch(new Request("https://example.com/api/notion?user=1234567890123456", {
+		method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "x", path: "/search" }),
+	}), env, ctx);
+	assert.equal(unauthorized.status, 403);
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	const room = new SyncRoom(ctx, env); room.userId = userId; await room.verifyAuthorization(authToken);
+	const blocked = await worker.fetch(new Request(`https://example.com/api/notion?user=${userId}`, {
+		method: "POST", headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+		body: JSON.stringify({ token: "secret", path: "//evil.example/steal" }),
+	}), env, ctx);
+	assert.equal(blocked.status, 400);
+});
+
 test("AI-Proxy unterstützt multimodale Bilder und Tool-Aufrufe für Qwen", async () => {
 	const { env, ctx } = createMockEnv();
 	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
@@ -384,7 +439,7 @@ test("HTTP-Uploads bleiben unter dem D1-Free-Limit von 50 Queries", async () => 
 	room.userId = userId;
 	await room.verifyAuthorization(authToken);
 
-	const events = Array.from({ length: 49 }, (_, index) => ({
+	const events = Array.from({ length: 41 }, (_, index) => ({
 		id: `limit-${index}`,
 		iv: "000000000000000000000000",
 		data: "AAAA",
@@ -392,17 +447,17 @@ test("HTTP-Uploads bleiben unter dem D1-Free-Limit von 50 Queries", async () => 
 	const response = await room.fetch(new Request(`https://example.com/api/events?user=${userId}`, {
 		method: "POST",
 		headers: {
-			Authorization: `Bearer ${authToken}`,
+			...syncHeaders(authToken),
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify({ events }),
 	}));
 
 	assert.equal(response.status, 413);
-	assert.match((await response.json()).error, /Maximal 48 Events/);
+	assert.match((await response.json()).error, /Maximal 40 Events/);
 });
 
-test("Worker akzeptiert gzip-markierte E2EE-Pakete und weist zu große D1-Zeilen lesbar ab", async () => {
+test("Worker akzeptiert große R2-Pakete und verlangt die aktuelle D1-R2-Architektur", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	room.userId = "1234567890123456";
@@ -415,14 +470,48 @@ test("Worker akzeptiert gzip-markierte E2EE-Pakete und weist zu große D1-Zeilen
 	assert.equal(compressed.ok, true);
 	assert.equal(compressed.savedEvents.length, 1);
 
-	const oversized = await room.saveEvents([{
-		id: "oversized",
+	const largeR2 = await room.saveEvents([{
+		id: "large-r2",
 		iv: "000000000000000000000000",
 		data: "A".repeat(1_900_004),
 	}]);
+	assert.equal(largeR2.ok, true);
+
+	const noR2 = createMockEnv();
+	delete noR2.env.BUCKET;
+	const d1Room = new SyncRoom(noR2.ctx, noR2.env);
+	d1Room.userId = "1234567890123456";
+	const oversized = await d1Room.saveEvents([{ id: "oversized", iv: "000000000000000000000000", data: "A".repeat(1_900_004) }]);
 	assert.equal(oversized.ok, false);
-	assert.equal(oversized.status, 413);
-	assert.match(oversized.error, /zu groß/);
+	assert.equal(oversized.status, 503);
+	assert.match(oversized.error, /D1 und R2/);
+});
+
+test("Cloud-Download paginiert große R2-Events zusätzlich nach Bytes", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	room.userId = userId;
+	await room.verifyAuthorization(authToken);
+	const data = "A".repeat(4_100_000);
+	const saved = await room.saveEvents([
+		{ id: "large-page-1", iv: "000000000000000000000000", data },
+		{ id: "large-page-2", iv: "111111111111111111111111", data },
+	]);
+	assert.equal(saved.ok, true);
+
+	const firstResponse = await room.fetch(new Request(`https://example.com/api/sync?user=${userId}&since=0&limit=100`, {
+		headers: syncHeaders(authToken),
+	}));
+	const first = await firstResponse.json();
+	assert.equal(first.events.length, 1);
+	assert.equal(first.hasMore, true);
+
+	const secondResponse = await room.fetch(new Request(`https://example.com/api/sync?user=${userId}&since=${first.events[0].seq}&limit=100`, {
+		headers: syncHeaders(authToken),
+	}));
+	const second = await secondResponse.json();
+	assert.deepEqual(second.events.map((event) => event.id), ["large-page-2"]);
 });
 
 test("Deduplizierung: Bereits gespeicherte Events werden auf dem Server ignoriert", async () => {
@@ -547,11 +636,11 @@ test("D1 + R2 Hybrid-Speicherung: Payloads liegen als echte Binärdaten in R2 un
 	assert.equal(storedItem.data.byteLength, encrypted.size - 12);
 	assert.equal(storedItem.customMetadata.gz, "0");
 
-	// D1 speichert Metadaten mit r2_key und leeres data ('')
+	// D1 speichert ausschließlich Metadaten und den R2-Zeiger.
 	const d1Event = dbStore.events.find((e) => e.event_id === "hybrid-1");
 	assert.ok(d1Event);
 	assert.equal(d1Event.r2_key, r2Key);
-	assert.equal(d1Event.data, "");
+	assert.equal(Object.hasOwn(d1Event, "data"), false);
 
 	// 2. Gzip-komprimiertes Event speichern
 	const largeDoc = { id: "hybrid-2", content: "x".repeat(70000) };
@@ -564,7 +653,7 @@ test("D1 + R2 Hybrid-Speicherung: Payloads liegen als echte Binärdaten in R2 un
 
 	// 3. GET /api/sync lädt beide Payloads transparent aus R2 zurück
 	const syncReq = new Request(`https://example.com/api/sync?user=${userId}&since=0`, {
-		headers: { Authorization: `Bearer ${authToken}` },
+		headers: syncHeaders(authToken),
 	});
 	const syncRes = await room.fetch(syncReq);
 	assert.equal(syncRes.status, 200);
@@ -582,7 +671,7 @@ test("D1 + R2 Hybrid-Speicherung: Payloads liegen als echte Binärdaten in R2 un
 	// 5. POST /api/reset leert D1 und R2
 	const resetReq = new Request(`https://example.com/api/reset?user=${userId}`, {
 		method: "POST",
-		headers: { Authorization: `Bearer ${authToken}` },
+		headers: syncHeaders(authToken),
 	});
 	const resetRes = await room.fetch(resetReq);
 	assert.equal(resetRes.status, 200);
@@ -661,20 +750,19 @@ test("Kryptografische Autorisierung: Falscher Auth-Token wird mit 403 abgewiesen
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 
-	const syncKey = "impala-mein-geheimer-sync-schluessel-1234";
-	const { userId, authToken } = await deriveSyncCredentials(syncKey);
-	const { authToken: wrongToken } = await deriveSyncCredentials("impala-falscher-schluessel-9999");
+	const { userId, authToken } = await deriveSyncCredentials(KEY_A);
+	const { authToken: wrongToken } = await deriveSyncCredentials(KEY_B);
 
 	// 1. Initialer Request mit echtem Auth-Token -> Erfolgreich
 	const validReq = new Request(`https://example.com/api/quota?user=${userId}`, {
-		headers: { Authorization: `Bearer ${authToken}` },
+		headers: syncHeaders(authToken),
 	});
 	const validRes = await room.fetch(validReq);
 	assert.equal(validRes.status, 200);
 
 	// 2. Request mit gefälschtem/falschem Auth-Token -> 403 Forbidden!
 	const invalidReq = new Request(`https://example.com/api/quota?user=${userId}`, {
-		headers: { Authorization: `Bearer ${wrongToken}` },
+		headers: syncHeaders(wrongToken),
 	});
 	const invalidRes = await room.fetch(invalidReq);
 	assert.equal(invalidRes.status, 403);
@@ -686,7 +774,7 @@ test("Kryptografische Autorisierung: Ein neuer Kanal akzeptiert keinen leeren To
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 	const { userId } = await deriveSyncCredentials(generateSyncKey());
-	const req = new Request(`https://example.com/api/quota?user=${userId}`);
+	const req = new Request(`https://example.com/api/quota?user=${userId}`, { headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL) } });
 
 	const res = await room.fetch(req);
 	assert.equal(res.status, 403);
@@ -728,9 +816,11 @@ test("WebSocket Hibernation: State wird nach Aufwecken via Attachment nahtlos wi
 	assert.equal(attachment.authenticated, false);
 
 	// In-Band Auth Handshake senden
-	await room.webSocketMessage(mockWs, JSON.stringify({ type: "auth", token: authToken }));
+	await room.webSocketMessage(mockWs, JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: authToken }));
 	assert.equal(attachment.authenticated, true);
+	assert.equal(attachment.protocol, CLOUD_SYNC_PROTOCOL);
 	assert.equal(mockWs.messages[0].type, "authenticated");
+	assert.equal(mockWs.messages[0].protocol, CLOUD_SYNC_PROTOCOL);
 
 	// 2. Simulierter Schlafzustand (Hibernation): Room-Instanz wird aus dem RAM entladen!
 	room = new SyncRoom(ctx, env); // Komplett neue Instanz ohne RAM-Zustand!
@@ -752,14 +842,25 @@ test("WebSocket Hibernation: State wird nach Aufwecken via Attachment nahtlos wi
 	assert.equal(mockWs.messages[1].eventId, "hib-1");
 });
 
+test("WebSocket lehnt einen alten Handshake vor der Autorisierung ab", async () => {
+	const { env, ctx } = createMockEnv();
+	const room = new SyncRoom(ctx, env);
+	const { userId, authToken } = await deriveSyncCredentials(generateSyncKey());
+	room.userId = userId;
+	const messages = [];
+	const ws = { send: (msg) => messages.push(JSON.parse(msg)), close() {}, deserializeAttachment: () => ({ userId, authenticated: false }) };
+	await room.webSocketMessage(ws, JSON.stringify({ type: "auth", protocol: 1, token: authToken }));
+	assert.equal(messages[0].type, "unsupported_protocol");
+	assert.equal(room.authTokenHash, null);
+});
+
 test("E2EE Multi-Device Flow: Client A verschlüsselt -> Server speichert -> Client B entschlüsselt", async () => {
 	const { env, ctx } = createMockEnv();
 	const room = new SyncRoom(ctx, env);
 
-	const syncKey = "impala-mein-geheimer-sync-schluessel-1234";
-	const clientA = await deriveSyncCredentials(syncKey);
-	const clientB = await deriveSyncCredentials(syncKey);
-	const clientWrong = await deriveSyncCredentials("impala-falscher-schluessel-9999");
+	const clientA = await deriveSyncCredentials(KEY_A);
+	const clientB = await deriveSyncCredentials(KEY_A);
+	const clientWrong = await deriveSyncCredentials(KEY_B);
 
 	room.userId = clientA.userId;
 	await room.verifyAuthorization(clientA.authToken);
@@ -818,7 +919,7 @@ test("Paginierung: 600 Events werden in 200er-Batches lückenlos und in exakter 
 		const req = new Request(`https://example.com/api/sync?since=${currentSeq}&limit=${PAGE_SIZE}`, {
 			headers: {
 				"X-User-Id": userId,
-				Authorization: `Bearer ${authToken}`,
+				...syncHeaders(authToken),
 			},
 		});
 		const res = await room.fetch(req);

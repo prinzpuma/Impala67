@@ -147,6 +147,25 @@ test("Hybrid-RAG hebt exakte Fachbegriffe trotz schwacher Semantik an", async ()
 	} finally { DB.allVecs = oldAll; EMBEDDINGS.embed = oldEmbed; }
 });
 
+test("RAG behandelt kurze exakte Begriffe als Token statt als Zufalls-Substring", async () => {
+	S.settings.embedModel = "local:short-token-test";
+	S.pages = {
+		exact: { id: "exact", title: "AI", content: "Künstliche Intelligenz", updated: 1 },
+		substring: { id: "substring", title: "Training", content: "Trainingsplan", updated: 1 },
+	};
+	const oldAll = DB.allVecs, oldEmbed = EMBEDDINGS.embed;
+	DB.allVecs = async () => ({
+		exact: { model: "local:short-token-test", chunks: [{ text: "AI als Fachbegriff", vec: [0, 1], norm: 1 }] },
+		substring: { model: "local:short-token-test", chunks: [{ text: "Training und Trainingsplan", vec: [0.65, Math.sqrt(1 - 0.65 ** 2)], norm: 1 }] },
+	});
+	EMBEDDINGS.embed = async () => [[1, 0]];
+	try {
+		const hits = await RAG.search("AI", 2);
+		assert.equal(hits[0].title, "AI");
+		assert.ok(hits[1].score < 0.7, "Training darf keinen Exact-Floor durch den Teilstring ai erhalten");
+	} finally { DB.allVecs = oldAll; EMBEDDINGS.embed = oldEmbed; }
+});
+
 test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 	S.settings.embedModel = "local:bekko-a8m";
 	S.settings.embedProviderId = "local";

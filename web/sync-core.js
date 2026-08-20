@@ -3,6 +3,9 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
+export const CLOUD_SYNC_PROTOCOL = 2;
+export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
+
 export function shouldUploadDelta(localMaxSeq, uploadedSeq) {
 	return Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
 }
@@ -42,6 +45,38 @@ export async function decodeJson(bytes, encoding) {
 
 export function boundedKnownIds(ids, max = 2000) {
 	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
+}
+
+// IndexedDB-Sequenzen und Replay-Markierungen sind ausschließlich lokale
+// Metadaten. Auf dem Wire würden sie auf einem zweiten Gerät dessen autoIncrement-
+// Schlüssel kollidieren lassen oder bereits empfangene Events erneut hochladen.
+export function prepareCloudEvents(events, { includeRemote = false } = {}) {
+	return (events || []).filter((ev) => includeRemote || !ev?._remote).map((ev) => {
+		const { seq, _remote, _derived, ...wireEvent } = ev || {};
+		return wireEvent;
+	});
+}
+
+// Protokoll v2 akzeptiert ausschließlich sein versioniertes Envelope und weist
+// lokale IndexedDB-Metadaten hart zurück. Alte Cloudbestände werden nicht migriert.
+export function prepareIncomingCloudEvents(events) {
+	return (events || []).map((ev) => {
+		if (!ev || ev.v !== CLOUD_SYNC_PROTOCOL || !ev.event || typeof ev.event !== "object") {
+			throw new Error(`Cloud-Event verwendet nicht Sync-Protokoll v${CLOUD_SYNC_PROTOCOL}.`);
+		}
+		if (Object.hasOwn(ev.event, "seq") || Object.hasOwn(ev.event, "_remote") || Object.hasOwn(ev.event, "_derived")) {
+			throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
+		}
+		return { ...ev.event, _remote: true };
+	});
+}
+
+export function cloudEventEnvelope(event) {
+	return { v: CLOUD_SYNC_PROTOCOL, event };
+}
+
+export function encryptedPacketChars(packet) {
+	return String(packet?.id || "").length + String(packet?.iv || "").length + String(packet?.data || "").length + 64;
 }
 
 // Nur gerätespezifische UI-Zustände und bereits in einem neueren Heft-Snapshot

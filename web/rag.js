@@ -13,6 +13,11 @@ export const RAG = (() => {
 	const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 	const enabled = () => !!S.settings.embedModel;
+	const exactLexicalMatch = (query, searchable) => {
+		if (!query) return false;
+		if (query.length >= 4) return searchable.includes(query);
+		return termsOf(searchable).includes(query);
+	};
 
 	// FIX: Beim Entfernen aus dem Index wurde der Speicher-Cache NICHT verworfen — bis zu 30 s
 	// lieferte die Suche danach weiter Treffer aus geleerten Seiten (Papierkorb wird zwar
@@ -237,7 +242,7 @@ export const RAG = (() => {
 			const title = String(doc.title || "").trim().toLocaleLowerCase("de-DE");
 			const searchable = (doc.title + "\n" + doc.text).toLocaleLowerCase("de-DE");
 			const exactFloor = exactQuery && title === exactQuery ? 0.8
-				: exactQuery.length >= 2 && searchable.includes(exactQuery) ? 0.7 : 0;
+				: exactLexicalMatch(exactQuery, searchable) ? 0.7 : 0;
 			// Semantik bleibt die Basis; lexikalische Evidenz kann schwache semantische
 			// Treffer anheben. Ein wirklich woertlicher Fachbegriff, Variablenname oder
 			// Formelausschnitt darf jedoch nicht hinter bloss aehnlicher Semantik landen.

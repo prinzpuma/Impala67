@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS sync_events (
     seq INTEGER NOT NULL,
     event_id TEXT NOT NULL,
     iv TEXT NOT NULL,
-    r2_key TEXT,
-    data TEXT,
+    r2_key TEXT NOT NULL,
     size INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (user_id, seq)
@@ -20,7 +19,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_events_user_event_unique ON sync_even
 
 CREATE TABLE IF NOT EXISTS user_storage (
     user_id TEXT PRIMARY KEY,
-    auth_token_hash TEXT,
+    auth_token_hash TEXT NOT NULL,
     total_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );

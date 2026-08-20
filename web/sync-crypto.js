@@ -3,6 +3,7 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
+const SYNC_KEY_PATTERN = /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/i;
 
 export const MAX_USER_STORAGE_BYTES = 1_000_000_000; // 1 GB (1.000 MB dezimal) Quota pro Nutzer
 
@@ -46,7 +47,6 @@ export async function sha256Hex(str) {
 
 /**
  * Generiert einen sicheren, lesbaren 128-Bit-Sync-Schlüssel.
- * Bestehende 64-Bit-Schlüssel bleiben in deriveSyncCredentials kompatibel.
  */
 export function generateSyncKey() {
 	const randomBytes = new Uint8Array(16);
@@ -62,7 +62,9 @@ export function generateSyncKey() {
  */
 export async function deriveSyncCredentials(syncKey) {
 	const cleanKey = String(syncKey || "").trim();
-	if (!cleanKey) throw new Error("Sync-Schlüssel darf nicht leer sein.");
+	if (!SYNC_KEY_PATTERN.test(cleanKey)) {
+		throw new Error("Ungültiger Sync-Schlüssel. Bitte einen neuen 128-Bit-Schlüssel erzeugen.");
+	}
 	if (typeof crypto === "undefined" || !crypto.subtle) {
 		throw new Error("Web Crypto API (crypto.subtle) ist in dieser Umgebung nicht verfügbar. Bitte nutze HTTPS.");
 	}

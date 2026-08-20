@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><body></body>", { url: "http://localhost/" });
@@ -99,4 +100,11 @@ test("Seiten ohne Titel machen die Seitensuche nicht unbrauchbar", () => {
 
 test("leere KI-Nachrichten sind für die Thinking-Aufteilung gültig", () => {
 	assert.deepEqual(splitThink(null), { content: "", reasoning: "" });
+});
+
+test("globales Fehleroverlay setzt fremde Fehlertexte nur als Text", async () => {
+	const html = await readFile(new URL("../web/index.html", import.meta.url), "utf8");
+	const overlay = html.slice(html.indexOf("function showErrorOverlay"), html.indexOf("window.onerror ="));
+	assert.doesNotMatch(overlay, /innerHTML/);
+	assert.match(overlay, /textContent/);
 });

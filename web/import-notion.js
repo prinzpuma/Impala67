@@ -3,6 +3,7 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 export const NOTION_MIGRATOR = (() => {
 	// Abbrechen-Unterstützung: cancel() setzt das Flag, checkCancelled() wirft an
@@ -28,18 +29,14 @@ export const NOTION_MIGRATOR = (() => {
 		if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
 		lastReqStart = Date.now();
 
-		const url = (S.settings.corsProxy || "https://corsproxy.io/?") + encodeURIComponent("https://api.notion.com/v1" + path);
-
 		for (let attempt = 0; attempt < 5; attempt++) {
-			const res = await fetch(url, {
-				method: (opts && opts.method) || "GET",
-				headers: {
-					"Authorization": "Bearer " + token,
-					"Notion-Version": "2022-06-28",
-					"Content-Type": "application/json",
-				},
+			const method = (opts && opts.method) || "GET";
+			const customProxy = String(S.settings.corsProxy || "").trim();
+			const res = customProxy ? await fetch(customProxy + encodeURIComponent("https://api.notion.com/v1" + path), {
+				method,
+				headers: { "Authorization": "Bearer " + token, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
 				body: opts && opts.body ? JSON.stringify(opts.body) : undefined,
-			});
+			}) : await CLOUDFLARE_SYNC.notionRequest(token, path, { method, body: opts && opts.body });
 
 			if (res.status === 429) {
 				const retryAfter = Number(res.headers.get("Retry-After")) || 2;

@@ -4,7 +4,7 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
-import { pruneEventsForUpload } from "./sync-core.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, cloudEventEnvelope, encryptedPacketChars, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload } from "./sync-core.js";
 import {
 	deriveSyncCredentials,
 	encryptPayload,
@@ -31,15 +31,16 @@ const LS_KEY_KEY = "impala67_cf_sync_key";
 const LS_LAST_SEQ_KEY = "impala67_cf_last_seq";
 const LS_LAST_UPLOADED_LOCAL_SEQ = "impala67_cf_last_uploaded_local_seq";
 
-export function syncCursorStorageKeys(userId = "") {
-	const suffix = userId ? `_${userId}` : "";
+export function syncCursorStorageKeys(userId) {
+	const channel = String(userId || "").trim();
+	if (!channel) throw new Error("Sync-Cursor benötigen eine User-ID.");
 	return {
-		lastSynced: `${LS_LAST_SEQ_KEY}${suffix}`,
-		lastUploaded: `${LS_LAST_UPLOADED_LOCAL_SEQ}${suffix}`,
+		lastSynced: `${LS_LAST_SEQ_KEY}_${channel}`,
+		lastUploaded: `${LS_LAST_UPLOADED_LOCAL_SEQ}_${channel}`,
 	};
 }
 
-export function resetSyncCursorStorage(storage, userId = "") {
+export function resetSyncCursorStorage(storage, userId) {
 	const keys = syncCursorStorageKeys(userId);
 	storage.setItem(keys.lastSynced, "0");
 	storage.setItem(keys.lastUploaded, "0");
@@ -70,8 +71,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		detail: "Verbinde einen Cloudflare-Sync-Server",
 		url: LS.getItem(LS_URL_KEY) || DEFAULT_WORKER_URL,
 		syncKey: LS.getItem(LS_KEY_KEY) || "",
-		lastSyncedSeq: Number(LS.getItem(LS_LAST_SEQ_KEY)) || 0,
-		lastUploadedLocalSeq: Number(LS.getItem(LS_LAST_UPLOADED_LOCAL_SEQ)) || 0,
+		lastSyncedSeq: 0,
+		lastUploadedLocalSeq: 0,
 		usage: { bytes: 0, limit: MAX_USER_STORAGE_BYTES, percent: 0, formatted: "0.0 MB / 1000 MB (0 %)" },
 		lastError: null,
 	};
@@ -92,7 +93,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	function resetSyncCursors() {
 		state.lastSyncedSeq = 0;
 		state.lastUploadedLocalSeq = 0;
-		resetSyncCursorStorage(LS, credentials?.userId);
+		if (credentials?.userId) resetSyncCursorStorage(LS, credentials.userId);
 		state.usage = formatStorageUsage(0);
 		emitStatus();
 	}
@@ -116,6 +117,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		return {
 			"X-User-Id": credentials.userId,
 			"Authorization": `Bearer ${credentials.authToken}`,
+			[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
 		};
 	}
 
@@ -171,18 +173,8 @@ export const CLOUDFLARE_SYNC = (() => {
 			setStatus("connecting", "Verbindung wird aufgebaut…");
 			credentials = await deriveSyncCredentials(cleanKey);
 			if (generation !== configureGeneration) return false;
-			// Cursor gehören zum jeweiligen Sync-Kanal. Ein alter globaler Cursor
-			// darf beim Schlüsselwechsel keine Ereignisse überspringen. Beim ersten
-			// Update auf kanalbezogene Cursor übernehmen wir den alten Wert jedoch
-			// für genau die bereits konfigurierte Verbindung.
-			const scopedSynced = LS.getItem(lastSyncedKey());
-			const scopedUploaded = LS.getItem(lastUploadedKey());
-			state.lastSyncedSeq = scopedSynced !== null
-				? Number(scopedSynced) || 0
-				: (connectionChanged ? 0 : state.lastSyncedSeq);
-			state.lastUploadedLocalSeq = scopedUploaded !== null
-				? Number(scopedUploaded) || 0
-				: (connectionChanged ? 0 : state.lastUploadedLocalSeq);
+			state.lastSyncedSeq = Number(LS.getItem(lastSyncedKey())) || 0;
+			state.lastUploadedLocalSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 			LS.setItem(lastSyncedKey(), String(state.lastSyncedSeq));
 			LS.setItem(lastUploadedKey(), String(state.lastUploadedLocalSeq));
 			connectWebSocket();
@@ -228,7 +220,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				if (socket !== currentSocket) return;
 				reconnectAttempts = 0;
 				// In-Band Auth: Token wird geschützt über den WebSocket-Kanal übertragen, nicht in der URL!
-				socket.send(JSON.stringify({ type: "auth", token: credentials.authToken }));
+				socket.send(JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: credentials.authToken }));
 			});
 
 			socket.addEventListener("message", async (event) => {
@@ -236,6 +228,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				try {
 					const msg = JSON.parse(event.data);
 					if (msg.type === "authenticated") {
+						if (msg.protocol !== CLOUD_SYNC_PROTOCOL) throw new Error("Cloudflare-Worker verwendet ein anderes Sync-Protokoll.");
 						socketAuthenticated = true;
 						setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
 						startHeartbeat();
@@ -246,6 +239,12 @@ export const CLOUDFLARE_SYNC = (() => {
 						disconnect();
 						state.lastError = msg.error || "Nicht autorisiert";
 						setStatus("error", "Nicht autorisiert", "Sync-Schlüssel stimmt nicht mit dem Server überein.");
+						return;
+					}
+					if (msg.type === "unsupported_protocol") {
+						disconnect();
+						state.lastError = msg.error || `Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.`;
+						setStatus("error", "Update erforderlich", state.lastError);
 						return;
 					}
 					if (msg.type === "pong") return;
@@ -338,7 +337,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!credentials || !encryptedEvent) return;
 
 		try {
-			const rawEvent = await decryptPayload(credentials.cryptoKey, encryptedEvent);
+			const [rawEvent] = prepareIncomingCloudEvents([await decryptPayload(credentials.cryptoKey, encryptedEvent)]);
 			if (!rawEvent || !rawEvent.id || !rawEvent.type) return;
 
 			localEventIds ??= new Set(await DB.eventIds());
@@ -410,7 +409,8 @@ export const CLOUDFLARE_SYNC = (() => {
 					for (const item of remoteEvents) {
 						try {
 							const ev = await decryptPayload(credentials.cryptoKey, item);
-							if (ev && ev.id) decryptedEvents.push(ev);
+							const [prepared] = prepareIncomingCloudEvents([ev]);
+							if (prepared?.id) decryptedEvents.push(prepared);
 						} catch (err) {
 							// Cursor nicht über ein unlesbares Event hinwegschieben. Sonst wäre
 							// dieses Event auf dem Gerät dauerhaft verloren.
@@ -483,7 +483,9 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function pushUnsyncedLocalEvents(forceAll = false) {
 		if (!state.url || !credentials) return;
 		const localEvents = await DB.allEvents();
-		const localMaxSeq = await DB.maxSeq();
+		// Cursor exakt an den gelesenen Snapshot binden. Ein Event, das zwischen
+		// allEvents() und einem zweiten DB-Read entsteht, darf nicht übersprungen werden.
+		const localMaxSeq = localEvents.reduce((max, ev) => Math.max(max, Number(ev?.seq) || 0), 0);
 		const lastUploadedSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 
 		const isInitialPush = forceAll || state.lastSyncedSeq === 0 || lastUploadedSeq === 0;
@@ -491,9 +493,9 @@ export const CLOUDFLARE_SYNC = (() => {
 		const sourceEvents = isInitialPush ? DB.compactEvents(localEvents) : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
 		if (!sourceEvents.length) return;
 
-		const transportEvents = pruneEventsForUpload(DB.filterEventsForSync(
+		const transportEvents = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
 			SETTINGS_SYNC.sanitizeEvents(sourceEvents, SETTINGS_SYNC.allowsSecrets(S.settings))
-		));
+		)), { includeRemote: isInitialPush });
 
 		const total = transportEvents.length;
 		if (!total) {
@@ -506,21 +508,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		// D1 Free erlaubt maximal 50 Queries pro Worker-Aufruf. Der Server braucht
 		// neben den Inserts noch Deduplizierung und Quota-Fortschreibung; 40 lässt
 		// dafür bewusst Reserve und hält große verschlüsselte Requests klein.
-		const CHUNK_SIZE = 40;
-		for (let i = 0; i < total; i += CHUNK_SIZE) {
-			const chunk = transportEvents.slice(i, i + CHUNK_SIZE);
-			const encryptedBatch = [];
-
-			for (const ev of chunk) {
-				const enc = await encryptPayload(credentials.cryptoKey, ev);
-				encryptedBatch.push({
-					id: ev.id,
-					iv: enc.iv,
-					data: enc.data,
-					size: enc.size,
-				});
-			}
-
+		const MAX_BATCH_EVENTS = 40;
+		const MAX_BATCH_CHARS = 8_000_000;
+		let encryptedBatch = [];
+		let batchChars = 0;
+		let uploaded = 0;
+		const uploadBatch = async () => {
+			if (!encryptedBatch.length) return;
 			const response = await fetch(apiUrl, {
 				method: "POST",
 				headers: {
@@ -536,24 +530,40 @@ export const CLOUDFLARE_SYNC = (() => {
 					state.lastSyncedSeq = resData.maxSeq;
 					LS.setItem(lastSyncedKey(), String(resData.maxSeq));
 				}
-				if (resData.usage !== undefined) {
-					state.usage = formatStorageUsage(resData.usage, resData.limit);
-				}
+				if (resData.usage !== undefined) state.usage = formatStorageUsage(resData.usage, resData.limit);
 			} else if (response.status === 413) {
 				const errData = await response.json().catch(() => ({}));
-				throw new Error(errData.error || "500 MB Speicherlimit auf Cloudflare erreicht.");
+				throw new Error(errData.error || "Cloudflare-Speicherlimit erreicht.");
 			} else {
 				throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
 			}
 
-			const current = Math.min(total, i + CHUNK_SIZE);
-			const percent = Math.round((current / total) * 100);
-			state.progress = { current, total, percent };
-			setStatus("syncing", "Synchronisiere…", `Übertrage ${current} von ${total} Elementen (${percent} %)`);
-
-			// Garbage Collector und UI kurz atmen lassen (verhindert OOM / UI-Freeze)
+			uploaded += encryptedBatch.length;
+			const percent = Math.round((uploaded / total) * 100);
+			state.progress = { current: uploaded, total, percent };
+			setStatus("syncing", "Synchronisiere…", `Übertrage ${uploaded} von ${total} Elementen (${percent} %)`);
+			encryptedBatch = [];
+			batchChars = 0;
 			await new Promise((r) => setTimeout(r, 15));
+		};
+
+		for (const ev of transportEvents) {
+			const enc = await encryptPayload(credentials.cryptoKey, cloudEventEnvelope(ev));
+			const packet = {
+					id: ev.id,
+					iv: enc.iv,
+					data: enc.data,
+					size: enc.size,
+			};
+			const packetChars = encryptedPacketChars(packet);
+			if (encryptedBatch.length && (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars + packetChars > MAX_BATCH_CHARS)) {
+				await uploadBatch();
+			}
+			encryptedBatch.push(packet);
+			batchChars += packetChars;
+			if (encryptedBatch.length >= MAX_BATCH_EVENTS || batchChars >= MAX_BATCH_CHARS) await uploadBatch();
 		}
+		await uploadBatch();
 
 		LS.setItem(lastUploadedKey(), String(localMaxSeq));
 		state.lastUploadedLocalSeq = localMaxSeq;
@@ -567,9 +577,11 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function sendEventLive(ev) {
 		if (!credentials || !ev || !ev.id) return;
 		if (ev.type === "uiTabsSet" || ev.type === "uiTreeSet") return;
+		const [wireEvent] = prepareCloudEvents([ev]);
+		if (!wireEvent) return;
 
 		try {
-			const encrypted = await encryptPayload(credentials.cryptoKey, ev);
+			const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventEnvelope(wireEvent));
 			const packet = {
 				id: ev.id,
 				iv: encrypted.iv,
@@ -688,6 +700,22 @@ export const CLOUDFLARE_SYNC = (() => {
 		});
 	}
 
+	async function notionRequest(token, path, options = {}) {
+		const targetUrl = options.base || state.url || DEFAULT_WORKER_URL;
+		if (!credentials && state.syncKey) {
+			try { credentials = await deriveSyncCredentials(state.syncKey); } catch {}
+		}
+		if (!targetUrl || !credentials?.authToken || !credentials?.userId) {
+			throw new Error("Der sichere Notion-Proxy benötigt eine eingerichtete Cloudflare-Synchronisierung.");
+		}
+		return fetch(getApiUrl(targetUrl, "/api/notion"), {
+			method: "POST",
+			headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+			body: JSON.stringify({ token, path, method: options.method || "GET", body: options.body }),
+			signal: options.signal,
+		});
+	}
+
 	return {
 		init,
 		configure,
@@ -700,6 +728,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		generateSyncKey,
 		status: () => ({ ...state }),
 		aiRequest,
+		notionRequest,
 		isConfigured: () => !!(state.url && (credentials?.authToken || state.syncKey)),
 	};
 })();

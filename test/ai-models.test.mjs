@@ -415,7 +415,7 @@ test("Notiztext bleibt Arbeitsunterlage und wird nicht zur versteckten Systemanw
 test("Cloudflare-AI-Provider leitet Chat-Anfragen ohne Browser-Key an den Worker weiter", async () => {
 	const { CLOUDFLARE_SYNC } = await import("../web/sync-cloudflare.js");
 	try {
-		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "ABCD-EFGH-IJKL-MNOP");
+		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "impala-0123-4567-89ab-cdef-0123-4567-89ab-cdef");
 
 		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
 		S.settings.aiProviderId = "cloudflare";
@@ -442,7 +442,7 @@ test("Cloudflare-AI-Provider leitet Chat-Anfragen ohne Browser-Key an den Worker
 test("Cloudflare-AI-Provider unterstützt Tools, Bilder und formatiert 429 Anbieter-Limits verständlich", async () => {
 	const { CLOUDFLARE_SYNC } = await import("../web/sync-cloudflare.js");
 	try {
-		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "ABCD-EFGH-IJKL-MNOP");
+		await CLOUDFLARE_SYNC.configure("https://cf-test.workers.dev", "impala-0123-4567-89ab-cdef-0123-4567-89ab-cdef");
 
 		S.settings.aiProviders = [{ id: "cloudflare", name: "Cloudflare (Groq)", base: "https://cf-test.workers.dev", key: "" }];
 		S.settings.aiProviderId = "cloudflare";

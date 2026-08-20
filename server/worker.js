@@ -12,14 +12,15 @@
  * - Quota-Schutz: 1.000 MB (1 GB) pro Nutzer, 10 GB Gesamtkapazität
  */
 
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "../web/sync-core.js";
+
 const MAX_USER_STORAGE_BYTES = 1_000_000_000; // 1 GB (1.000 MB dezimal) pro Nutzer
 const MAX_TOTAL_SERVER_STORAGE_BYTES = 10_000_000_000; // 10 GB (10.000 MB dezimal) Gesamt-Server-Limit (Cloudflare R2 Free Tier: 10 GB-month)
 const MAX_TOTAL_SERVER_USERS = 10; // Maximal 10 Accounts (10 x 1 GB = 10 GB Gesamtkapazität)
 // D1 Free: höchstens 50 Queries pro Worker-Aufruf.
-const MAX_EVENTS_PER_REQUEST = 48;
-// D1/Worker Limit: Maximale Chiffrat-Zeichenlänge pro Event (1.9 MB vor Base64)
-const MAX_D1_EVENT_DATA_CHARS = 1_900_000;
-const MAX_EVENT_DATA_CHARS = MAX_D1_EVENT_DATA_CHARS;
+const MAX_EVENTS_PER_REQUEST = 40;
+const MAX_R2_EVENT_DATA_CHARS = 12_000_000;
+const MAX_SYNC_RESPONSE_DATA_CHARS = 8_000_000;
 const AI_MODELS = [
 	"qwen/qwen3.6-27b",
 	"openai/gpt-oss-120b",
@@ -58,7 +59,7 @@ function corsHeaders() {
 		"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 		// Authorization muss bei CORS explizit erlaubt werden. Der Platzhalter
 		// deckt diesen Header in Browsern nicht zuverlässig ab.
-		"Access-Control-Allow-Headers": "Authorization, Content-Type, X-User-Id, X-Auth-Token",
+		"Access-Control-Allow-Headers": `Authorization, Content-Type, X-User-Id, ${CLOUD_SYNC_PROTOCOL_HEADER}`,
 		"Access-Control-Max-Age": "86400",
 	};
 }
@@ -92,6 +93,12 @@ async function verifyHttpUser(request, env, userId) {
 	).bind(userId).first();
 	if (!row?.auth_token_hash) return false;
 	return row.auth_token_hash === await hashToken(rawAuthToken);
+}
+
+function protocolError(request) {
+	return request.headers.get(CLOUD_SYNC_PROTOCOL_HEADER) === String(CLOUD_SYNC_PROTOCOL)
+		? null
+		: jsonResponse({ error: `Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich. Bitte Impala67 aktualisieren.` }, 426);
 }
 
 function normalizeAiMessages(messages) {
@@ -248,13 +255,44 @@ async function handleAiRequest(request, env) {
 	});
 }
 
+async function handleNotionRequest(request, env) {
+	if (request.method !== "POST") return jsonResponse({ error: "Nur POST ist für Notion-Anfragen erlaubt." }, 405);
+	const userId = getRequestUserId(request);
+	if (!(await verifyHttpUser(request, env, userId))) {
+		return jsonResponse({ error: "Ungültiger Autorisierungs-Token für diesen Account." }, 403);
+	}
+
+	const requestBody = await request.json().catch(() => null);
+	const token = typeof requestBody?.token === "string" ? requestBody.token.trim() : "";
+	const path = typeof requestBody?.path === "string" ? requestBody.path : "";
+	const method = String(requestBody?.method || "GET").toUpperCase();
+	const allowedPath = /^\/(?:search|pages|blocks|databases)(?:\/|\?|$)/.test(path) && !path.startsWith("//") && !path.includes("\\");
+	if (!token || token.length > 4096 || !allowedPath || !["GET", "POST", "PATCH", "DELETE"].includes(method)) {
+		return jsonResponse({ error: "Ungültige Notion-Anfrage." }, 400);
+	}
+
+	const upstream = await fetch("https://api.notion.com/v1" + path, {
+		method,
+		headers: {
+			Authorization: `Bearer ${token}`,
+			"Notion-Version": "2022-06-28",
+			"Content-Type": "application/json",
+		},
+		body: method === "GET" || method === "DELETE" || requestBody.body === undefined
+			? undefined
+			: JSON.stringify(requestBody.body),
+	});
+	const headers = { "Content-Type": upstream.headers.get("Content-Type") || "application/json", ...corsHeaders() };
+	const retryAfter = upstream.headers.get("Retry-After");
+	if (retryAfter) headers["Retry-After"] = retryAfter;
+	return new Response(upstream.body, { status: upstream.status, headers });
+}
+
 function extractAuthToken(request) {
 	const authHeader = request.headers.get("Authorization") || "";
 	if (authHeader.startsWith("Bearer ")) {
 		return authHeader.slice(7).trim();
 	}
-	const customHeader = request.headers.get("X-Auth-Token");
-	if (customHeader) return customHeader.trim();
 	return "";
 }
 
@@ -283,29 +321,21 @@ export class SyncRoom {
 			if (!savedUserId && userId) {
 				await this.ctx.storage.put("userId", userId);
 			}
-			this.authTokenHash = await this.ctx.storage.get("authTokenHash");
+			this.authTokenHash = (await this.ctx.storage.get("authTokenHash")) || null;
 		}
 
 		// 2. Initialzustand aus D1 Datenbank laden
-		if (this.env?.DB && userId) {
-			const eventStateRow = await this.env.DB.prepare(
-				"SELECT COALESCE(MAX(seq), 0) as max_seq, COALESCE(SUM(size), 0) as total_bytes FROM sync_events WHERE user_id = ?"
-			).bind(userId).first();
-			this.maxSeq = eventStateRow ? Number(eventStateRow.max_seq) : 0;
-			// SUM(size) repariert auch alte, vor diesem Fix zu niedrig
-			// gespeicherte user_storage-Zähler ohne Datenmigration.
-			this.totalBytes = eventStateRow ? Number(eventStateRow.total_bytes) || 0 : 0;
+		const eventStateRow = await this.env.DB.prepare(
+			"SELECT COALESCE(MAX(seq), 0) as max_seq, COALESCE(SUM(size), 0) as total_bytes FROM sync_events WHERE user_id = ?"
+		).bind(userId).first();
+		this.maxSeq = eventStateRow ? Number(eventStateRow.max_seq) : 0;
+		this.totalBytes = eventStateRow ? Number(eventStateRow.total_bytes) || 0 : 0;
 
-			const usageRow = await this.env.DB.prepare(
-				"SELECT auth_token_hash, total_bytes FROM user_storage WHERE user_id = ?"
-			).bind(userId).first();
-
-			if (usageRow) {
-				if (usageRow.auth_token_hash && !this.authTokenHash) {
-					this.authTokenHash = usageRow.auth_token_hash;
-				}
-			}
-
+		const usageRow = await this.env.DB.prepare(
+			"SELECT auth_token_hash, total_bytes FROM user_storage WHERE user_id = ?"
+		).bind(userId).first();
+		if (usageRow?.auth_token_hash && !this.authTokenHash) {
+			this.authTokenHash = usageRow.auth_token_hash;
 		}
 
 		this.initialized = true;
@@ -323,19 +353,16 @@ export class SyncRoom {
 
 		// Erster Aufruf: Prüfen ob Nutzerlimit erreicht ist, bevor neuer Account angelegt wird
 		if (!this.authTokenHash) {
-			if (this.env?.DB) {
-				const countStmt = this.env.DB.prepare("SELECT COUNT(*) as cnt FROM user_storage");
-				const countRow = typeof countStmt.first === "function" ? await countStmt.first() : (countStmt.bind ? await countStmt.bind().first() : null);
-				const currentUsers = countRow ? Number(countRow.cnt) : 0;
-				if (currentUsers >= MAX_TOTAL_SERVER_USERS) {
-					return false; // Server-Kapazität von 10 Accounts erreicht
-				}
+			const countRow = await this.env.DB.prepare("SELECT COUNT(*) as cnt FROM user_storage").first();
+			const currentUsers = countRow ? Number(countRow.cnt) : 0;
+			if (currentUsers >= MAX_TOTAL_SERVER_USERS) {
+				return false; // Server-Kapazität von 10 Accounts erreicht
 			}
 			this.authTokenHash = providedHash;
 			if (this.ctx?.storage) {
 				await this.ctx.storage.put("authTokenHash", providedHash);
 			}
-			if (this.env?.DB && this.userId) {
+			if (this.userId) {
 				const now = new Date().toISOString();
 				await this.env.DB.prepare(
 					"INSERT INTO user_storage (user_id, auth_token_hash, total_bytes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET auth_token_hash = ?"
@@ -372,7 +399,7 @@ export class SyncRoom {
 				const att = ws.deserializeAttachment();
 				if (att) {
 					if (att.userId) userId = att.userId;
-					if (att.authenticated) isAuth = true;
+					if (att.authenticated && att.protocol === CLOUD_SYNC_PROTOCOL) isAuth = true;
 				}
 			}
 			if (!userId && this.ctx?.storage) {
@@ -387,12 +414,17 @@ export class SyncRoom {
 
 			// In-Band Auth Handshake (Kein Token in der URL-Query!)
 			if (msg.type === "auth") {
+				if (msg.protocol !== CLOUD_SYNC_PROTOCOL) {
+					ws.send(JSON.stringify({ type: "unsupported_protocol", error: `Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.` }));
+					try { ws.close(4406, "Unsupported protocol"); } catch {}
+					return;
+				}
 				const ok = await this.verifyAuthorization(msg.token);
 				if (ok) {
 					if (typeof ws.serializeAttachment === "function") {
-						ws.serializeAttachment({ userId: this.userId, authenticated: true });
+						ws.serializeAttachment({ userId: this.userId, authenticated: true, protocol: CLOUD_SYNC_PROTOCOL });
 					}
-					ws.send(JSON.stringify({ type: "authenticated" }));
+					ws.send(JSON.stringify({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL }));
 				} else {
 					ws.send(JSON.stringify({ type: "unauthorized", error: "Ungültiger Autorisierungs-Token" }));
 					try { ws.close(4401, "Unauthorized"); } catch {}
@@ -452,6 +484,9 @@ export class SyncRoom {
 	}
 
 	async _saveEventsAtomic(events) {
+		if (!this.env?.DB || !this.env?.BUCKET) {
+			return { ok: false, error: "Cloud-Sync benötigt D1 und R2.", status: 503, usage: this.totalBytes };
+		}
 		await this.ensureInitialized(this.userId);
 		if (!events || !events.length) {
 			return { ok: true, savedEvents: [], maxSeq: this.maxSeq, usage: this.totalBytes };
@@ -471,7 +506,7 @@ export class SyncRoom {
 			) {
 				return { ok: false, error: "Ungültiges verschlüsseltes Event-Paket.", status: 400, usage: this.totalBytes };
 			}
-			if (ev.data.length > MAX_EVENT_DATA_CHARS) {
+			if (ev.data.length > MAX_R2_EVENT_DATA_CHARS) {
 				return {
 					ok: false,
 					error: "Ein einzelnes Sync-Element ist selbst nach Komprimierung zu groß.",
@@ -495,7 +530,7 @@ export class SyncRoom {
 		// Nur die IDs des aktuellen Pakets gegen D1 prüfen. Der frühere Ansatz
 		// lud bei jedem Actor-Start sämtliche IDs eines Kontos in den Worker-RAM.
 		const existingIds = new Set();
-		if (this.env?.DB && candidates.length) {
+		if (candidates.length) {
 			for (let i = 0; i < candidates.length; i += 80) {
 				const part = candidates.slice(i, i + 80);
 				const placeholders = part.map(() => "?").join(", ");
@@ -523,18 +558,16 @@ export class SyncRoom {
 			};
 		}
 
-		if (this.env?.DB) {
-			const serverStorageStmt = this.env.DB.prepare("SELECT COALESCE(SUM(total_bytes), 0) as server_bytes FROM user_storage");
-			const serverStorageRow = typeof serverStorageStmt.first === "function" ? await serverStorageStmt.first() : (serverStorageStmt.bind ? await serverStorageStmt.bind().first() : null);
-			const serverBytes = serverStorageRow ? Number(serverStorageRow.server_bytes) || 0 : 0;
-			if (serverBytes + incomingBytes > MAX_TOTAL_SERVER_STORAGE_BYTES) {
-				return {
-					ok: false,
-					error: "Server-Kapazität erreicht: Das Cloudflare-Gesamtspeicherlimit von 10 GB wurde erreicht.",
-					status: 413,
-					usage: this.totalBytes,
-				};
-			}
+		const serverStorageStmt = this.env.DB.prepare("SELECT COALESCE(SUM(total_bytes), 0) as server_bytes FROM user_storage");
+		const serverStorageRow = await serverStorageStmt.first();
+		const serverBytes = serverStorageRow ? Number(serverStorageRow.server_bytes) || 0 : 0;
+		if (serverBytes + incomingBytes > MAX_TOTAL_SERVER_STORAGE_BYTES) {
+			return {
+				ok: false,
+				error: "Server-Kapazität erreicht: Das Cloudflare-Gesamtspeicherlimit von 10 GB wurde erreicht.",
+				status: 413,
+				usage: this.totalBytes,
+			};
 		}
 
 		// 3. Sequenznummern atomar vergeben & Daten in R2 + D1 speichern
@@ -548,7 +581,7 @@ export class SyncRoom {
 
 		for (const ev of freshEvents) {
 			nextSeq++;
-			const r2Key = this.env?.BUCKET ? `users/${this.userId}/events/${ev.id}.bin` : null;
+			const r2Key = `users/${this.userId}/events/${ev.id}.bin`;
 			const saved = {
 				id: ev.id,
 				seq: nextSeq,
@@ -559,73 +592,64 @@ export class SyncRoom {
 			};
 			savedEvents.push(saved);
 
-			if (r2Key && this.env?.BUCKET) {
-				const isGz = typeof ev?.data === "string" && ev.data.startsWith("gz:");
-				const rawB64 = isGz ? ev.data.slice(3) : ev.data;
-				const binaryBytes = base64ToBytes(rawB64);
-				r2KeysWritten.push(r2Key);
-				r2Writes.push(this.env.BUCKET.put(r2Key, binaryBytes, {
-					customMetadata: {
-						userId: this.userId,
-						eventId: ev.id,
-						iv: ev.iv,
-						gz: isGz ? "1" : "0",
-					},
-				}));
-			}
+			const isGz = ev.data.startsWith("gz:");
+			const rawB64 = isGz ? ev.data.slice(3) : ev.data;
+			r2Writes.push({
+				key: r2Key,
+				rawB64,
+				metadata: {
+					userId: this.userId,
+					eventId: ev.id,
+					iv: ev.iv,
+					gz: isGz ? "1" : "0",
+				},
+			});
 
-			if (this.env?.DB) {
-				// Wenn in R2 gespeichert, bleibt data in D1 leer (''), um die D1-Grenze nie zu erreichen
-				const inlineData = r2Key ? "" : ev.data;
-				stmts.push(
-					this.env.DB.prepare(
-						"INSERT OR IGNORE INTO sync_events (user_id, seq, event_id, iv, r2_key, data, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-					).bind(this.userId, saved.seq, saved.id, saved.iv, r2Key, inlineData, saved.size, now)
-				);
-			}
+			stmts.push(
+				this.env.DB.prepare(
+					"INSERT OR IGNORE INTO sync_events (user_id, seq, event_id, iv, r2_key, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+				).bind(this.userId, saved.seq, saved.id, saved.iv, r2Key, saved.size, now)
+			);
 		}
 
-		// R2-Payloads parallel schreiben (mit atomarem Rollback nach Abschluss aller Schreibversuche)
-		if (r2Writes.length > 0) {
-			const results = await Promise.allSettled(r2Writes);
-			if (results.some((r) => r.status === "rejected")) {
-				if (this.env?.BUCKET && r2KeysWritten.length > 0) {
-					try {
-						await this.env.BUCKET.delete(r2KeysWritten);
-					} catch {}
-				}
-				return {
-					ok: false,
-					error: "Speicherfehler beim Schreiben in den Cloudflare R2 Bucket.",
-					status: 500,
-					usage: this.totalBytes,
-				};
+		// Payloads nacheinander dekodieren und schreiben. So liegen bei Bild-Batches
+		// nie sämtliche Binärkopien gleichzeitig im 128-MB-Worker-Isolate.
+		try {
+			for (const write of r2Writes) {
+				await this.env.BUCKET.put(write.key, base64ToBytes(write.rawB64), { customMetadata: write.metadata });
+				r2KeysWritten.push(write.key);
 			}
+		} catch {
+			if (r2KeysWritten.length > 0) {
+				try { await this.env.BUCKET.delete(r2KeysWritten); } catch {}
+			}
+			return {
+				ok: false,
+				error: "Speicherfehler beim Schreiben in den Cloudflare R2 Bucket.",
+				status: 500,
+				usage: this.totalBytes,
+			};
 		}
 
 		const nextTotalBytes = this.totalBytes + incomingBytes;
-		if (this.env?.DB) {
-			stmts.push(
-				this.env.DB.prepare(
-					"INSERT INTO user_storage (user_id, auth_token_hash, total_bytes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET total_bytes = ?, updated_at = ?"
-				).bind(this.userId, this.authTokenHash, nextTotalBytes, now, nextTotalBytes, now)
-			);
-			try {
-				await this.env.DB.batch(stmts);
-			} catch (dbErr) {
-				// Rollback der geschriebenen R2-Objekte bei Datenbankfehler
-				if (this.env?.BUCKET && r2KeysWritten.length > 0) {
-					try {
-						await this.env.BUCKET.delete(r2KeysWritten);
-					} catch {}
-				}
-				return {
-					ok: false,
-					error: "Datenbank-Schreibfehler beim Persistieren der Events.",
-					status: 500,
-					usage: this.totalBytes,
-				};
+		stmts.push(
+			this.env.DB.prepare(
+				"INSERT INTO user_storage (user_id, auth_token_hash, total_bytes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET total_bytes = ?, updated_at = ?"
+			).bind(this.userId, this.authTokenHash, nextTotalBytes, now, nextTotalBytes, now)
+		);
+		try {
+			await this.env.DB.batch(stmts);
+		} catch (dbErr) {
+			// Rollback der geschriebenen R2-Objekte bei Datenbankfehler
+			if (r2KeysWritten.length > 0) {
+				try { await this.env.BUCKET.delete(r2KeysWritten); } catch {}
 			}
+			return {
+				ok: false,
+				error: "Datenbank-Schreibfehler beim Persistieren der Events.",
+				status: 500,
+				usage: this.totalBytes,
+			};
 		}
 
 		// Erst nach erfolgreichem Persistieren in-memory fortschreiben. Bei einem
@@ -642,15 +666,15 @@ export class SyncRoom {
 
 	async fetch(request) {
 		const url = new URL(request.url);
+		if (!this.env?.DB || !this.env?.BUCKET) return jsonResponse({ error: "Cloud-Sync benötigt D1 und R2." }, 503);
 		const userId = url.searchParams.get("user") || request.headers.get("X-User-Id");
 		if (!userId || userId.length < 16) {
 			return jsonResponse({ error: "Fehlende oder ungültige User-ID" }, 401);
 		}
 
-		await this.ensureInitialized(userId);
-
 		// 1. WebSocket Verbindungsaufbau (In-Band Auth)
 		if (url.pathname === "/ws") {
+			await this.ensureInitialized(userId);
 			const upgradeHeader = request.headers.get("Upgrade");
 			if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
 				return new Response("Expected Upgrade: websocket", { status: 426 });
@@ -682,6 +706,10 @@ export class SyncRoom {
 			});
 		}
 
+		const versionError = protocolError(request);
+		if (versionError) return versionError;
+		await this.ensureInitialized(userId);
+
 		// Bei HTTP-Endpunkten: Autorisierung über Header prüfen
 		const authToken = extractAuthToken(request);
 		const isAuthorized = await this.verifyAuthorization(authToken);
@@ -706,43 +734,41 @@ export class SyncRoom {
 			const since = Math.max(0, parseInt(url.searchParams.get("since") || "0", 10));
 			const limit = Math.min(1000, Math.max(1, parseInt(url.searchParams.get("limit") || "500", 10)));
 
-			let events = [];
-			if (this.env?.DB) {
-				const rows = await this.env.DB.prepare(
-					"SELECT seq, event_id as id, iv, r2_key, data, size, created_at FROM sync_events WHERE user_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?"
-				).bind(userId, since, limit).all();
-				const rawEvents = rows.results || [];
+			const events = [];
+			let stoppedBySize = false;
+			const rows = await this.env.DB.prepare(
+				"SELECT seq, event_id as id, iv, r2_key, size, created_at FROM sync_events WHERE user_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?"
+			).bind(userId, since, limit).all();
+			const rawEvents = rows.results || [];
+			let responseChars = 0;
 
-				events = await Promise.all(rawEvents.map(async (row) => {
-					let payload = row.data || "";
-					if (row.r2_key && this.env?.BUCKET) {
-						try {
-							const obj = await this.env.BUCKET.get(row.r2_key);
-							if (obj) {
-								const isGz = obj.customMetadata?.gz === "1";
-								const buf = await obj.arrayBuffer();
-								payload = (isGz ? "gz:" : "") + bytesToBase64(new Uint8Array(buf));
-							}
-						} catch (err) {
-							console.error("[SyncRoom] R2 Read-Fehler für", row.r2_key, err);
-						}
-					}
-					return {
-						seq: row.seq,
-						id: row.id,
-						iv: row.iv,
-						data: payload,
-						size: row.size,
-						created_at: row.created_at,
-					};
-				}));
+			for (const row of rawEvents) {
+				const estimatedChars = Math.ceil((Number(row.size) || 0) * 4 / 3) + 128;
+				if (events.length && responseChars + estimatedChars > MAX_SYNC_RESPONSE_DATA_CHARS) {
+					stoppedBySize = true;
+					break;
+				}
+				const obj = await this.env.BUCKET.get(row.r2_key);
+				if (!obj) return jsonResponse({ error: "Verschlüsseltes R2-Event fehlt." }, 502);
+				const isGz = obj.customMetadata?.gz === "1";
+				const buf = await obj.arrayBuffer();
+				const payload = (isGz ? "gz:" : "") + bytesToBase64(new Uint8Array(buf));
+				events.push({
+					seq: row.seq,
+					id: row.id,
+					iv: row.iv,
+					data: payload,
+					size: row.size,
+					created_at: row.created_at,
+				});
+				responseChars += payload.length + 128;
 			}
 
 			return jsonResponse({
 				events,
 				since,
 				maxSeq: this.maxSeq,
-				hasMore: events.length === limit,
+				hasMore: Boolean(stoppedBySize || events.length === limit),
 				usage: this.totalBytes,
 				limit: MAX_USER_STORAGE_BYTES,
 			});
@@ -782,27 +808,23 @@ export class SyncRoom {
 			this.maxSeq = 0;
 			this.totalBytes = 0;
 
-			if (this.env?.DB) {
-				await this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId).run();
-				await this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId).run();
-			}
+			await this.env.DB.prepare("DELETE FROM sync_events WHERE user_id = ?").bind(userId).run();
+			await this.env.DB.prepare("DELETE FROM user_storage WHERE user_id = ?").bind(userId).run();
 
-			if (this.env?.BUCKET) {
-				try {
-					let truncated = true;
-					let cursor = undefined;
-					while (truncated) {
-						const list = await this.env.BUCKET.list({ prefix: `users/${userId}/`, cursor });
-						if (list?.objects && list.objects.length > 0) {
-							const keys = list.objects.map((o) => o.key);
-							await this.env.BUCKET.delete(keys);
-						}
-						truncated = !!list?.truncated;
-						cursor = list?.cursor;
+			try {
+				let truncated = true;
+				let cursor = undefined;
+				while (truncated) {
+					const list = await this.env.BUCKET.list({ prefix: `users/${userId}/`, cursor });
+					if (list?.objects && list.objects.length > 0) {
+						const keys = list.objects.map((o) => o.key);
+						await this.env.BUCKET.delete(keys);
 					}
-				} catch (err) {
-					console.error("[SyncRoom] R2 Reset-Fehler für User", userId, err);
+					truncated = !!list?.truncated;
+					cursor = list?.cursor;
 				}
+			} catch (err) {
+				console.error("[SyncRoom] R2 Reset-Fehler für User", userId, err);
 			}
 
 			this.broadcast({ type: "reset" });
@@ -836,8 +858,9 @@ async function handleRequest(request, env, ctx) {
 		if (url.pathname === "/api/health" || url.pathname === "/") {
 			return jsonResponse({
 				app: "Impala67 Real-Time Sync Server",
-				version: "2.3.0",
-				features: ["durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_hybrid"],
+				version: "3.0.0",
+				protocol: CLOUD_SYNC_PROTOCOL,
+				features: ["protocol_v2", "durable_objects", "websocket_hibernation", "in_band_auth", "hashed_token_verifier", "attachment_state", "e2ee", "atomic_dedup", "d1_r2_required"],
 				quotaLimitBytes: MAX_USER_STORAGE_BYTES,
 				serverCapacityBytes: MAX_TOTAL_SERVER_STORAGE_BYTES,
 			});
@@ -855,19 +878,17 @@ async function handleRequest(request, env, ctx) {
 			return await handleAiRequest(request, env);
 		}
 
+		if (url.pathname === "/api/notion") {
+			return await handleNotionRequest(request, env);
+		}
+
 		const userId = getRequestUserId(request);
 		if (!userId || userId.length < 16) {
 			return jsonResponse({ error: "Fehlende oder ungültige User-ID (mindestens 16 Zeichen erforderlich)" }, 401);
 		}
 
-		// An den globalen User-Durable-Object Actor weiterleiten
-		if (env.SYNC_ROOM) {
-			const id = env.SYNC_ROOM.idFromName(userId);
-			const room = env.SYNC_ROOM.get(id);
-			return await room.fetch(request);
-		}
-
-		// Fallback
-		const room = new SyncRoom(ctx, env);
+		if (!env.SYNC_ROOM) return jsonResponse({ error: "Cloud-Sync benötigt das SYNC_ROOM Durable Object." }, 503);
+		const id = env.SYNC_ROOM.idFromName(userId);
+		const room = env.SYNC_ROOM.get(id);
 		return await room.fetch(request);
 }

@@ -13,6 +13,9 @@ import {
 	MAX_USER_STORAGE_BYTES,
 } from "../web/sync-crypto.js";
 
+const KEY_A = "impala-0001-0002-0003-0004-0005-0006-0007-0008";
+const KEY_B = "impala-1001-1002-1003-1004-1005-1006-1007-1008";
+
 test("generateSyncKey erzeugt einen strukturierten 128-Bit-Schlüssel", () => {
 	const key1 = generateSyncKey();
 	const key2 = generateSyncKey();
@@ -22,7 +25,7 @@ test("generateSyncKey erzeugt einen strukturierten 128-Bit-Schlüssel", () => {
 });
 
 test("deriveSyncCredentials leitet deterministische User-ID und CryptoKey ab", async () => {
-	const key = "impala-test-1234-5678-9abc";
+	const key = KEY_A;
 	const creds1 = await deriveSyncCredentials(key);
 	const creds2 = await deriveSyncCredentials(key);
 
@@ -32,16 +35,13 @@ test("deriveSyncCredentials leitet deterministische User-ID und CryptoKey ab", a
 	assert.ok(creds1.cryptoKey);
 });
 
-test("bestehende 64-Bit-Sync-Schlüssel bleiben kompatibel", async () => {
-	const legacyKey = "impala-a7f9-2c3e-8b1d-9f4a";
-	const first = await deriveSyncCredentials(legacyKey);
-	const second = await deriveSyncCredentials(legacyKey);
-	assert.equal(first.userId, second.userId);
-	assert.ok(first.cryptoKey);
+test("alte oder frei formatierte Sync-Schlüssel werden abgelehnt", async () => {
+	await assert.rejects(() => deriveSyncCredentials("impala-a7f9-2c3e-8b1d-9f4a"), /128-Bit/);
+	await assert.rejects(() => deriveSyncCredentials("impala-secret-key-42"), /128-Bit/);
 });
 
 test("encryptPayload und decryptPayload führen vollständigen E2EE-Zyklus durch", async () => {
-	const key = "impala-secret-key-42";
+	const key = KEY_A;
 	const { cryptoKey } = await deriveSyncCredentials(key);
 
 	const originalEvent = {
@@ -62,7 +62,7 @@ test("encryptPayload und decryptPayload führen vollständigen E2EE-Zyklus durch
 });
 
 test("große Sync-Events werden vor E2EE komprimiert und verlustfrei gelesen", async () => {
-	const { cryptoKey } = await deriveSyncCredentials("impala-large-event-test");
+	const { cryptoKey } = await deriveSyncCredentials(KEY_A);
 	const originalEvent = {
 		id: "large-event",
 		type: "heftSnap",
@@ -76,8 +76,8 @@ test("große Sync-Events werden vor E2EE komprimiert und verlustfrei gelesen", a
 });
 
 test("decryptPayload mit falschem Schlüssel schlägt fehl", async () => {
-	const creds1 = await deriveSyncCredentials("impala-key-1");
-	const creds2 = await deriveSyncCredentials("impala-key-2");
+	const creds1 = await deriveSyncCredentials(KEY_A);
+	const creds2 = await deriveSyncCredentials(KEY_B);
 
 	const event = { id: "ev-1", type: "test", payload: "secret" };
 	const encrypted = await encryptPayload(creds1.cryptoKey, event);

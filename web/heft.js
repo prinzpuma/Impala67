@@ -239,15 +239,35 @@ export const HEFT = (() => {
 		}
 		return "b" + str.length.toString(36) + "-" + a.toString(36) + b.toString(36);
 	}
+	const pendingBlobData = new Map();
+	const blobWrites = new Map();
+	function ensureBlobPersisted(hash, dataUrl) {
+		if (blobWrites.has(hash)) return blobWrites.get(hash);
+		const write = STATE.dispatch("heftBlob", { hash, data: dataUrl }).then(() => {
+			pendingBlobData.delete(hash);
+		}).finally(() => {
+			if (blobWrites.get(hash) === write) blobWrites.delete(hash);
+		});
+		blobWrites.set(hash, write);
+		return write;
+	}
 	function blobRef(dataUrl) {
 		const hash = hashData(dataUrl);
 		if (!S.heftBlobs[hash]) {
 			// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
 			// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
 			S.heftBlobs[hash] = dataUrl;
-			STATE.dispatch("heftBlob", { hash, data: dataUrl }).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
+			pendingBlobData.set(hash, dataUrl);
+			void ensureBlobPersisted(hash, dataUrl).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
 		}
 		return hash;
+	}
+	async function persistReferencedBlobs(saveDoc) {
+		const refs = new Set((saveDoc?.pages || []).flatMap((pg) => (pg.images || []).map((im) => im.ref).filter(Boolean)));
+		for (const ref of refs) {
+			const data = pendingBlobData.get(ref);
+			if (data) await ensureBlobPersisted(ref, data);
+		}
 	}
 	// Bildquelle auflösen: neue Bilder tragen ref, Alt-Bestände noch src.
 	const imgSrc = (im) => (im && im.ref ? (S.heftBlobs[im.ref] || "") : (im && im.src) || "");
@@ -384,9 +404,11 @@ export const HEFT = (() => {
 	async function persistDoc(savePid, saveDoc) {
 		const ops = diffDoc(published[savePid], saveDoc);
 		if (!ops.length) return;
-		published[savePid] = shadowOf(saveDoc);
+		const nextPublished = shadowOf(saveDoc);
+		await persistReferencedBlobs(saveDoc);
 		dropThumbs(savePid);
 		await STATE.dispatch("heftOps", { pageId: savePid, ops });
+		published[savePid] = nextPublished;
 		opsSince[savePid] = (opsSince[savePid] || 0) + ops.length;
 		await maybeCompact(savePid, saveDoc);
 		await maybeSnapshot(savePid, saveDoc);

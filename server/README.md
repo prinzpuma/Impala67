@@ -1,6 +1,6 @@
 # Impala67 – Cloudflare Real-Time Sync Server
 
-Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms)** zwischen all deinen Geräten bei **0 € monatlichen Kosten** auf Cloudflare.
+Dieser serverlose Worker stellt das aktuelle **Sync-Protokoll v2** bereit. Ältere Schlüssel, Cursor und D1-Inline-Payloads werden bewusst nicht übernommen; ein neuer 128-Bit-Schlüssel beginnt mit dem aktuellen lokalen Stand.
 
 ## Sicherheits- & Speicher-Eigenschaften
 - **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
@@ -8,10 +8,11 @@ Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms
 - **1.000 MB (1 GB) Quota pro Sync-Schlüssel:** Großzügiger Speicherplatz für Notizen, Bilder und Notizheft-Zeichnungen.
 - **WebSockets (Durable Objects):** Sofortige Live-Übertragung bei geöffneter App (< 30 ms) + nahtloser Download verpasster Änderungen nach Offline-Phasen.
 - **Geschützter AI-Proxy:** `/api/ai` leitet Textanfragen mit dem serverseitigen `GROQ_API_KEY` an Groq weiter. Der Sync-Token muss gültig sein; der Groq-Key wird nie an die PWA ausgeliefert.
+- **Geschützter Notion-Proxy:** `/api/notion` leitet ausschließlich erlaubte Notion-API-Pfade weiter. Er verwendet die bestehende Sync-Autorisierung, damit der Notion-Token nicht mehr über einen öffentlichen CORS-Dienst läuft.
 
 ---
 
-## 🚀 4-Schritte Einrichtung (Dauert ca. 2 Minuten)
+## 🚀 5-Schritte Einrichtung (Dauert ca. 2 Minuten)
 
 ### 1. Bei Cloudflare einloggen
 Öffne ein Terminal in diesem Ordner (`server/`) und logge dich einmalig ein:
@@ -19,8 +20,7 @@ Dieser Serverlose Worker ermöglicht den **blitzschnellen Echtzeit-Sync (< 50 ms
 npx wrangler login
 ```
 
-### 2. D1 Datenbank erstellen (oder bestehende aktualisieren)
-*Für neue Installationen:*
+### 2. D1 Datenbank erstellen
 ```bash
 npx wrangler d1 create impala67-db
 ```
@@ -29,11 +29,6 @@ Kopiere die ausgegebene `database_id` in die Datei `server/wrangler.toml`.
 Führe danach das Datenbankschema aus:
 ```bash
 npx wrangler d1 execute impala67-db --remote --file=./schema.sql
-```
-
-*Für bestehende Installationen (Migration auf R2-Hybrid):*
-```bash
-npx wrangler d1 execute impala67-db --remote --file=./migrations/0001_add_r2_key.sql
 ```
 
 ### 3. R2 Speicher-Bucket erstellen
@@ -66,6 +61,6 @@ Ein zusätzliches Impala67-Anfragenlimit wird derzeit nicht erzwungen; maßgebli
 1. Öffne Impala67 -> ⚙️ **Einstellungen** -> **Sync & Dienste**.
 2. Unter **Cloudflare Echtzeit-Sync**:
    - Trage deine Worker-URL ein (`https://impala67-sync.<dein-account>.workers.dev`).
-   - Klicke auf **Schlüssel generieren** (oder trage deinen bestehenden Schlüssel ein).
+   - Klicke auf **Schlüssel generieren**. Protokoll v2 akzeptiert ausschließlich neue 128-Bit-Schlüssel.
    - Klicke auf **Verbinden & Synchronisieren**.
 3. Gib denselben Sync-Schlüssel und dieselbe URL auf deinen anderen Geräten ein -> **Fertig!**

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { boundedKnownIds, decodeJson, encodeJson, isBlobAlive, newestFile, pruneEventsForUpload, shouldUploadDelta, unseenRemoteFiles } from "../web/sync-core.js";
+import { boundedKnownIds, cloudEventEnvelope, decodeJson, encodeJson, isBlobAlive, newestFile, prepareCloudEvents, prepareIncomingCloudEvents, pruneEventsForUpload, shouldUploadDelta, unseenRemoteFiles } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
 import { U } from "../web/util.js";
 
@@ -77,6 +77,22 @@ test("Drive-Transport bewahrt alte Nutzungsstatistiken", () => {
 		{ id: "snapshot", seq: 4, type: "heftSnap", payload: { pageId: "h1", doc: { pages: [] } } },
 	];
 	assert.deepEqual(pruneEventsForUpload(events).map((event) => event.id), ["tele-old", "snapshot"]);
+});
+
+test("Cloud-Wireformat entfernt lokale Sequenzen und verhindert Remote-Echos", () => {
+	const local = { id: "local", seq: 501, type: "pageUpdate", _derived: true, payload: { id: "p1" } };
+	const remote = { id: "remote", seq: 501, type: "pageUpdate", _remote: true, payload: { id: "p2" } };
+	assert.deepEqual(prepareCloudEvents([local, remote]), [{ id: "local", type: "pageUpdate", payload: { id: "p1" } }]);
+	assert.deepEqual(prepareCloudEvents([remote], { includeRemote: true }), [{ id: "remote", type: "pageUpdate", payload: { id: "p2" } }]);
+	assert.equal(local.seq, 501, "Quelldaten bleiben unverändert");
+});
+
+test("Cloud-Empfang akzeptiert nur Protokoll v2 ohne lokale Metadaten", () => {
+	assert.deepEqual(prepareIncomingCloudEvents([cloudEventEnvelope({ id: "remote", type: "pageCreate" })]), [
+		{ id: "remote", type: "pageCreate", _remote: true },
+	]);
+	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v2/);
+	assert.throws(() => prepareIncomingCloudEvents([cloudEventEnvelope({ id: "bad", seq: 501, type: "pageCreate" })]), /lokale Metadaten/);
 });
 
 test("Geräteablage bleibt bei fehlendem localStorage fehlertolerant", () => {

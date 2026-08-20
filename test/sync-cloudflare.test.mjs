@@ -38,6 +38,7 @@ test("Cloud-Purge setzt genau die benutzerspezifischen Sync-Cursor zurück", () 
 	assert.equal(values.get(keys.lastUploaded), "0");
 	assert.equal(values.get("impala67_cf_last_seq_user-b"), "71");
 	assert.equal(values.get("impala67_cf_last_seq"), "11");
+	assert.throws(() => syncCursorStorageKeys(), /User-ID/);
 });
 
 test("CLOUDFLARE_SYNC Trennen setzt Zustand zurück", () => {
