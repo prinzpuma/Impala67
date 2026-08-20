@@ -8,7 +8,7 @@
     "deploy": "wrangler deploy",
     "dry-run": "wrangler deploy --dry-run",
     "db:init": "wrangler d1 execute impala67-db --remote --file=./schema.sql",
-    "db:reset": "wrangler d1 execute impala67-db --remote --command=\"DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;\""
+    "db:reset": "wrangler d1 execute impala67-db --remote --command=\"DELETE FROM sync_events; DELETE FROM user_storage;\""
   },
   "devDependencies": {
     "wrangler": "^4.124.0"

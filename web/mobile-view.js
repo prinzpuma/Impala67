@@ -26,8 +26,9 @@ const MORE_ACTIONS = [
 	["notebooklm", "🤖", "Gemini Notebook", "Quellen & Synthese"],
 	["graph", "🕸️", "Wissensgraph", "Vernetzte Notizen"],
 	["library", "📖", "Bibliothek", "PDFs & Dokumente"],
+	["lernzeit", "⏱️", "Lernanalyse", "Zeiten & Statistiken"],
 	["trash", "🗑️", "Papierkorb", "Gelöschte Inhalte"],
-	["settings", "⚙️", "Einstellungen", "Theme, KI, FSRS"],
+	["settings", "⚙️", "Einstellungen", "Sync, Theme, KI"],
 ];
 
 function shellHtml() {
@@ -57,10 +58,10 @@ function shellHtml() {
 		'<div id="mMoreSheet" aria-label="Mehr">' +
 			'<div class="mSheet-head"><strong>Mehr</strong><button type="button" data-m="closemore" aria-label="Mehr schließen">✕</button></div>' +
 			'<div class="drive-sync-card">' +
-				'<div class="drive-sync-left"><span class="drive-dot" aria-hidden="true"></span><div><strong>Google Drive</strong><small>Lokale Daten bleiben verfügbar</small></div></div>' +
-				'<button type="button" class="pill-action-btn" data-maction="drive">Sync</button>' +
+				'<div class="drive-sync-left"><span class="drive-dot" aria-hidden="true"></span><div><strong>Synchronisation</strong><small>E2EE Cloudflare & Google Drive</small></div></div>' +
+				'<button type="button" class="pill-action-btn" data-maction="settings" data-settings-go="sync">Sync</button>' +
 			'</div>' +
-			'<div class="section-label">Werkzeuge & Einstellungen</div>' +
+			'<div class="section-label">Werkzeuge & Bereiche</div>' +
 			'<div class="more-dashboard-grid">' +
 				MORE_ACTIONS.map(([id, icon, label, hint]) =>
 					`<button type="button" class="more-card" data-maction="${id}"><span class="m-ico">${icon}</span><strong>${label}</strong><small>${hint}</small></button>`
@@ -101,22 +102,25 @@ function homeHtml({
 	const focus = due
 		? `<button type="button" class="hero-focus-card" data-homeaction="cards"><span class="hero-focus-left"><strong>${esc(due)} ${dueLabel}</strong><small>Tägliche FSRS-Wiederholung bereit</small></span><span class="hero-focus-btn">Lernen&nbsp;▶</span></button>`
 		: '<div class="hero-focus-card is-empty"><span class="hero-focus-left"><strong>Alles gelernt für heute 🎉</strong><small>Keine fälligen Karten offen</small></span></div>';
-	const recentHtml = recent.length
-		? recent.map(recentRow).join("")
-		: '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Lege deine erste Notiz an oder öffne die Bibliothek.</p></div>';
+
+	// Deduplizierung: Wenn continueHtml eine Notiz anzeigt, diese aus den letzten Notizen filtern
+	const filteredRecent = continueHtml && recent.length > 1 ? recent.slice(1) : (continueHtml ? [] : recent);
+	const recentHtml = filteredRecent.length
+		? filteredRecent.map(recentRow).join("")
+		: (continueHtml ? "" : '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Lege deine erste Notiz an oder öffne die Bibliothek.</p></div>');
 
 	return '<div class="home mobile-home-preview" data-key="home">' +
 		`<header class="greet-wrap"><div><h1>${esc(title)}</h1><span class="date-pill">${esc(dateLine || "")}</span></div><button type="button" class="home-customize" data-set="home" title="Homeseite anpassen">⚙</button></header>` +
 		(showStats
 			? '<div class="stat-pills-row">' +
-				statCard("🔥", `${streakDays} ${streakDays === 1 ? "Tag" : "Tage"}`, "Lern-Streak") +
-				statCard("⏱️", `${todayMinutes} Min`, "Heute gelernt") +
-				statCard("🃏", String(due), "Karten offen") +
+				statCard("🔥", `${streakDays} ${streakDays === 1 ? "Tag" : "Tage"}`, "Streak") +
+				statCard("⏱️", `${todayMinutes} Min`, "Lernzeit") +
+				statCard("🃏", String(due), "Fällig") +
 			'</div>'
 			: "") +
 		(showFocus ? focus : "") +
 		(continueHtml ? `<section class="mobile-continue">${continueHtml}</section>` : "") +
-		(showRecent ? `<section class="mobile-recent"><h2>Zuletzt geöffnet</h2><div class="mobile-item-list">${recentHtml}</div></section>` : "") +
+		(showRecent && recentHtml ? `<section class="mobile-recent"><h2>Zuletzt geöffnet</h2><div class="mobile-item-list">${recentHtml}</div></section>` : "") +
 		(extraHtml ? `<div class="mobile-home-extra">${extraHtml}</div>` : "") +
 		'</div>';
 }

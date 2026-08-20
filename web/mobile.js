@@ -26,30 +26,36 @@ export const MOBILE = (() => {
 		} catch { return 0; }
 	};
 
+	const closeModals = () => {
+		const o = document.getElementById("overlay");
+		if (o && !o.hidden) { o.hidden = true; o.innerHTML = ""; }
+		const pal = document.getElementById("palette");
+		if (pal && !pal.hidden) { pal.hidden = true; pal.innerHTML = ""; delete pal.dataset.mode; }
+	};
+
 	const closeAll = () => {
 		body.classList.remove("mnav-open", "mmore-open");
 		body.classList.add("panel-collapsed");
+		closeModals();
 	};
 
 	// ---- Android/Browser-Zurück ----
-	// Jedes offene Sheet (Notizen/Mehr/KI) oder der Lernmodus bekommt einen
-	// History-Eintrag. So schließt die native Zurück-Geste/-Taste das Sheet,
-	// statt die App zu verlassen. Eine einzige Quelle der Wahrheit (DOM-Zustand)
-	// treibt push/pop — kein manuelles Buchhalten an jeder Aktion (DRY).
-	// 🐛 FIX: history.back() entfernt IMMER den OBERSTEN Eintrag — zwei unabhängige
-	// Booleans (Sheet/Lernen) konnten deshalb den Eintrag der jeweils ANDEREN Ebene
-	// poppen: die Zurück-Geste landete im falschen Bildschirm oder verließ die App.
-	// Wurzel-Fix: EIN LIFO-Stapel, der den History-Einträgen 1:1 entspricht. Gewünschter
-	// Zustand → Differenz zum Stapel → genau eine Navigation. Neue Ebenen kommen mit
-	// einem Eintrag in LAYERS dazu, ohne dass hier etwas anzupassen ist.
 	const LAYERS = {
+		modal: {
+			open: () => {
+				const o = document.getElementById("overlay");
+				const pal = document.getElementById("palette");
+				return (!!o && !o.hidden && !!o.children.length) || (!!pal && !pal.hidden);
+			},
+			close: () => closeModals(),
+		},
 		sheet: {
 			open: () => sheetIsOpen(),
 			close: () => { body.classList.remove("mnav-open", "mmore-open"); body.classList.add("panel-collapsed"); },
 		},
 		study: {
 			open: (studying) => studying,
-			close: () => document.querySelector('[data-ankitab="decks"]')?.click(),
+			close: () => document.querySelector('[data-ankitab="decks"], [data-ankiexit]')?.click(),
 		},
 	};
 	const hstack = [];      // Reihenfolge = Reihenfolge der eigenen History-Einträge
@@ -110,13 +116,6 @@ export const MOBILE = (() => {
 	}
 
 	// Wisch-zurück-Geste (zusätzlich zur nativen Android-Geste, hilft z.B. auf iOS):
-	// ändert nur Klassen — syncHistory() in updateUI() hält den History-Stack konsistent.
-	// 🐛 Fix (25. Juli): Die Geste war viel zu empfindlich — 60px Weg und eine sehr
-	// großzügige Diagonal-Toleranz (|dy| < 0,7·|dx|) reichten, egal wo auf dem Schirm
-	// und egal wie langsam. Beim Lernen führte deshalb schon ein leichtes Wischen über
-	// die Karte zurück zur Stapelliste — die Karteikarte „verschwand“ mitten im Lernen.
-	// Jetzt: mindestens 120px, klar waagerecht (|dy| ≤ 60px UND dx > 2,5·|dy|), zügig
-	// (< 600ms), nur Einfinger-Gesten — und im Lernmodus gar kein Wisch-Ausstieg mehr.
 	function initSwipe() {
 		let x0 = 0, y0 = 0, t0 = 0, multi = false;
 		body.addEventListener("touchstart", (e) => {
@@ -141,13 +140,31 @@ export const MOBILE = (() => {
 
 	async function onClick(e) {
 		if (!body.classList.contains("mobile-ui")) return;
-		const act = e.target.closest("[data-m]")?.dataset.m;
-		const mact = e.target.closest("[data-maction]")?.dataset.maction;
+		const actBtn = e.target.closest("[data-m]");
+		const act = actBtn?.dataset.m;
+		const mactBtn = e.target.closest("[data-maction]");
+		const mact = mactBtn?.dataset.maction;
 
 		// Mehr-Sheet Feature-Buttons
 		if (mact) {
 			body.classList.remove("mmore-open");
-			const map = { drive: "#btnSettings", notebooklm: "#btnNotebookLM", graph: "#btnGraph", library: "#btnLibrary", trash: "#btnTrash", settings: "#btnSettings" };
+			closeModals();
+			const sec = mactBtn.dataset.settingsGo;
+			if (mact === "settings" && sec) {
+				const { SETTINGS } = await import("./settings.js");
+				SETTINGS.openSettings(sec);
+				updateUI();
+				return;
+			}
+			const map = {
+				drive: "#btnSettings",
+				notebooklm: "#btnNotebookLM",
+				graph: "#btnGraph",
+				library: "#btnLibrary",
+				lernzeit: "#btnLernzeit",
+				trash: "#btnTrash",
+				settings: "#btnSettings"
+			};
 			document.querySelector(map[mact])?.click();
 			updateUI();
 			return;
@@ -177,8 +194,6 @@ export const MOBILE = (() => {
 		if (act === "new") {
 			closeAll();
 			// In der Karteikartenansicht bedeutet „Neu“ auch auf dem Handy „Neue Karte“.
-			// Zuvor legte der feste Mobile-Kopf hier immer eine Notizseite an, während die
-			// eigentliche Karten-Kopfzeile komplett ausgeblendet war.
 			if (S.view === "anki" && S.ankiTab !== "study") {
 				document.querySelector("[data-ankinewcard]")?.click();
 				updateUI(); return;
@@ -192,12 +207,14 @@ export const MOBILE = (() => {
 		if (act === "notes") {
 			body.classList.remove("mmore-open");
 			body.classList.add("panel-collapsed");
+			closeModals();
 			body.classList.toggle("mnav-open");
 			updateUI(); return;
 		}
 		if (act === "more") {
 			body.classList.remove("mnav-open");
 			body.classList.add("panel-collapsed");
+			closeModals();
 			body.classList.toggle("mmore-open");
 			updateUI(); return;
 		}

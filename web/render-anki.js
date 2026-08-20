@@ -454,6 +454,7 @@ function ankiStudyHtml() {
 	let html = head + '<div class="study-card">' +
 		'<div class="study-meta-bar" title="' + (c.srs.reps || 0) + " Wiederholungen · " + (c.srs.lapses || 0) + " Fehler · " +
 			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage Intervall" : "Lernschritt") + '">' +
+			'<button type="button" class="study-exit-btn" data-ankitab="decks" data-ankiexit="1" aria-label="Lernen beenden">← Stapel</button>' +
 			'<span class="study-meta-deck">' + U.esc(c.deck || "Standard") + "</span>" +
 			(c.leech ? '<span class="leech-badge" title="Leech">🐛 Leech</span>' : "") +
 			'<span class="study-meta-state">' + stLabel + "</span>" +

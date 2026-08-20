@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "jsdom": "^26.0.0",
+    "jsqr": "^1.4.0",
     "puppeteer-core": "^25.8.0",
     "wrangler": "^4.124.0"
   }

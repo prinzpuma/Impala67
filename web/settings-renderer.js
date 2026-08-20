@@ -231,17 +231,81 @@ function renderDevices() {
 	return UI.page("Geräte & Bedienung", "Nutze Controller, ohne eine zweite Lernlogik oder komplizierte Einrichtung.", content);
 }
 
+function renderMobileOverview(vm) {
+	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
+	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected" };
+	const cfReady = cf.status === "connected";
+	const drive = driveSession();
+	const syncText = cfReady ? "Cloudflare Live-Sync aktiv" : (drive.connected ? "Google Drive verbunden" : "Nicht eingerichtet");
+	const syncBadge = cfReady ? "Live" : (drive.connected ? "Drive" : "");
+	const version = vm.version;
+
+	const sections = [
+		{ id: "sync", title: "Synchronisation & Cloud", desc: syncText, icon: "sync", badge: syncBadge },
+		{ id: "appearance", title: "Erscheinungsbild", desc: (vm.followSystemTheme ? "System" : vm.theme === "light" ? "Hell" : "Dunkel") + " · " + (vm.accent || "Blau"), icon: "appearance" },
+		{ id: "ai", title: "Künstliche Intelligenz", desc: aiReady ? S.settings.aiModel : "Kein Modell gewählt", icon: "sparkles", badge: aiReady ? "Bereit" : "Einrichten" },
+		{ id: "general", title: "Startseite & Bereiche", desc: "Home-Bereiche anpassen", icon: "sliders" },
+		{ id: "data", title: "Speicher & Backup", desc: "Lokaler Speicher, Export & Updates", icon: "archive" },
+	];
+
+	const sectionRows = sections.map((sec) =>
+		'<button type="button" class="settings-mobile-row" data-settings-go="' + e(sec.id) + '">' +
+			'<span class="settings-nav-icon">' + UI.icon(sec.icon) + '</span>' +
+			'<span class="settings-row-copy"><b>' + e(sec.title) + '</b><small>' + e(sec.desc) + '</small></span>' +
+			(sec.badge ? '<span class="settings-pill-badge">' + e(sec.badge) + '</span>' : '') +
+			UI.icon("chevron") +
+		'</button>'
+	).join("");
+
+	const quick = UI.actions([
+		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !hasDriveClient() && !cfReady },
+		{ label: "Backup erstellen", id: "btnExport" },
+		{ label: "Updates prüfen", id: "btnCheckUpdate" },
+	], "settings-quick-actions");
+
+	const appInfo = '<div class="settings-mobile-footer">' +
+		'<span>Impala67 v' + e(String(version).replace(/^v/i, "")) + ' · Offline-PWA</span>' +
+	'</div>';
+
+	return '<div class="settings-mobile-hub">' +
+		'<div class="settings-group-card mobile-nav-card">' + sectionRows + '</div>' +
+		UI.group("Schnellaktionen", quick) +
+		appInfo +
+	'</div>';
+}
+
 export function renderSettingsPage(section, vm) {
+	const isMobile = document.body.classList.contains("mobile-ui");
+	if (isMobile && (!section || section === "overview")) return renderMobileOverview(vm);
 	if (section === "general") return renderGeneral(vm);
 	if (section === "appearance") return renderAppearance(vm);
 	if (section === "ai") return renderAi(vm);
-	if (section === "sync") return renderSync(vm);
+	if (section === "sync") return renderSync();
 	if (section === "data") return renderData(vm);
-	if (section === "devices") return renderDevices(vm);
+	if (section === "devices") return renderDevices();
 	return renderOverview(vm);
 }
 
 export function renderSettingsShell(section, body, query = "") {
+	const isMobile = document.body.classList.contains("mobile-ui");
+	if (isMobile) {
+		const isOverview = !section || section === "overview";
+		const secMeta = SETTINGS_SECTIONS.find(s => s.id === section) || { label: "Einstellungen" };
+		const head = isOverview
+			? '<header class="settings-mobile-head"><h1>Einstellungen</h1><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button></header>'
+			: '<header class="settings-mobile-head"><button type="button" class="settings-mobile-back" data-settings-go="overview">‹ Zurück</button><h2>' + e(secMeta.label) + '</h2><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button></header>';
+
+		const searchBar = isOverview
+			? '<label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Einstellungen suchen…" value="' + e(query) + '" aria-label="Einstellungen durchsuchen"></label><div id="settingsSearchResults" class="settings-search-results" hidden></div>'
+			: '';
+
+		return '<div class="modal settings-modal-v2 is-mobile" data-sec="' + e(section) + '">' +
+			head +
+			'<main class="settings-main" tabindex="-1">' +
+			searchBar +
+			body +
+			'</main></div>';
+	}
 	const nav = SETTINGS_SECTIONS.map((entry) => '<button type="button" class="settings-nav-item' + (entry.id === section ? " active" : "") + '" data-settings-go="' + entry.id + '" aria-current="' + (entry.id === section ? "page" : "false") + '"><span class="settings-nav-icon">' + UI.icon(entry.icon) + '</span><span>' + e(entry.label) + "</span></button>").join("");
 	return '<div class="modal settings-modal-v2" data-sec="' + e(section) + '"><button class="modal-x" id="btnCloseSettings" title="Einstellungen schließen" aria-label="Einstellungen schließen">×</button><aside class="settings-sidebar"><div class="settings-sidebar-title">Einstellungen</div><label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Suchen" value="' + e(query) + '" aria-label="Einstellungen durchsuchen"><kbd>⌘ K</kbd></label><div id="settingsSearchResults" class="settings-search-results" hidden></div><nav aria-label="Einstellungsbereiche">' + nav + '</nav></aside><main class="settings-main" tabindex="-1">' + body + "</main></div>";
 }

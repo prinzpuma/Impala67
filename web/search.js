@@ -50,7 +50,10 @@ function openPaletteUi(mode, placeholder) {
 	el.hidden = false;
 	el.dataset.mode = paletteMode;
 	el.innerHTML = '<div class="palette-box' + (paletteMode === "newTab" ? " palette-newtab" : "") + '">' +
-		'<input id="paletteInput" placeholder="' + U.esc(placeholder || "Suchen oder Befehl eingeben…") + '" autocomplete="off">' +
+		'<div class="palette-input-wrap">' +
+			'<input id="paletteInput" placeholder="' + U.esc(placeholder || "Suchen oder Befehl eingeben…") + '" autocomplete="off">' +
+			'<button type="button" class="palette-close-btn" data-palclose="1" aria-label="Schließen">✕</button>' +
+		'</div>' +
 		'<div id="paletteList" class="palette-list"></div>' +
 		(paletteMode === "newTab"
 			? '<div class="palette-foot"><span><kbd>↵</kbd> Öffnen</span><span><kbd>Esc</kbd> Schließen</span></div>'
@@ -289,7 +292,7 @@ function runItem(it) {
 // Jetzt reicht jedes Tastatur-Ziel INNERHALB des Befehls-Menüs.
 function wirePalette(el) {
 	el.addEventListener("click", (e) => {
-		if (e.target === el) { closePalette(); return; } // Klick auf den Hintergrund schließt
+		if (e.target === el || e.target.closest("[data-palclose]")) { closePalette(); return; }
 		const btn = e.target.closest("[data-palidx]");
 		if (btn) runItem(items[Number(btn.dataset.palidx)]);
 	});

@@ -166,25 +166,38 @@ export async function initApp() {
 	window.addEventListener("offline", () => DRIVE.refreshStatus());
 
 	// 📱 Automatisches Koppeln via QR-Code oder Kopplungs-Link (#cf-pair=...)
-	if (typeof location !== "undefined" && location.hash && location.hash.startsWith("#cf-pair=")) {
-		(async () => {
-			try {
-				const payload = location.hash.slice(9);
-				const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
-				if (decoded.url && decoded.key) {
-					await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
-					CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
-					U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
-					if (typeof history !== "undefined" && history.replaceState) {
-						history.replaceState(null, "", location.pathname + location.search);
-					}
+	async function applyPairingHash(hash) {
+		if (!hash || !hash.startsWith("#cf-pair=")) return false;
+		try {
+			const payload = hash.slice(9);
+			const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+			if (decoded.url && decoded.key) {
+				await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
+				CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
+				U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
+				if (typeof history !== "undefined" && history.replaceState) {
+					history.replaceState(null, "", location.pathname + location.search);
 				}
-			} catch (err) {
-				console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
+				return true;
 			}
-		})();
+		} catch (err) {
+			console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
+		}
+		return false;
+	}
+
+	if (typeof location !== "undefined" && location.hash && location.hash.startsWith("#cf-pair=")) {
+		applyPairingHash(location.hash);
 	} else if (S.settings.cfUrl && S.settings.cfSyncKey && !CLOUDFLARE_SYNC.status().url) {
 		CLOUDFLARE_SYNC.configure(S.settings.cfUrl, S.settings.cfSyncKey).catch(() => {});
+	}
+
+	if (typeof window !== "undefined") {
+		window.addEventListener("hashchange", () => {
+			if (location.hash && location.hash.startsWith("#cf-pair=")) {
+				applyPairingHash(location.hash);
+			}
+		});
 	}
 
 	// Der optionale Cloudflare-Kanal darf den lokalen App-Start niemals blockieren.
