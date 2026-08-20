@@ -9,6 +9,7 @@ import { THINK } from "./think-heuristik.js";
 import { RAG } from "./rag.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "./sync-core.js";
 
 export const AI = (() => {
 	const MODEL_PRESETS = [
@@ -286,13 +287,29 @@ export const AI = (() => {
 	}
 	const fullToolDefs = () => typeof window.EXP?.extraToolDefs === "function" ? TOOLS.defs.concat(window.EXP.extraToolDefs()) : TOOLS.defs.slice();
 
+	function isCloudflareBase(base) {
+		const clean = cleanBase(base).toLowerCase();
+		if (!clean) return false;
+		if (/workers\.dev|\/api\/ai\b/.test(clean)) return true;
+		const syncUrl = cleanBase(CLOUDFLARE_SYNC.status?.()?.url).toLowerCase();
+		if (syncUrl && clean === syncUrl) return true;
+		return providers().some((p) => {
+			const pBase = cleanBase(p.base).toLowerCase();
+			return pBase === clean && providerFamily(p) === "cloudflare";
+		});
+	}
+
 	const modelSourceKey = (base, key) => cleanBase(base) + "\n" + String(key || "");
 	async function modelIds(base, key, { force = false } = {}) {
 		const sourceKey = modelSourceKey(base, key);
 		const cached = modelCache.get(sourceKey);
 		if (!force && cached && Date.now() - cached.at < LIMIT.modelCacheMs) return cached.ids.slice();
 		if (modelRequests.has(sourceKey)) return (await modelRequests.get(sourceKey)).slice();
-		const load = fetch(cleanBase(base) + "/models", { headers: auth(key), signal: AbortSignal.timeout(LIMIT.modelsMs) })
+		const headers = {
+			...auth(key),
+			...(isCloudflareBase(base) ? { [CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL) } : {}),
+		};
+		const load = fetch(cleanBase(base) + "/models", { headers, signal: AbortSignal.timeout(LIMIT.modelsMs) })
 			.then(async (res) => {
 				if (!res.ok) throw new AiHttpError(res.status, await res.text().catch(() => ""));
 				const ids = ((await res.json()).data || []).map((m) => m?.id).filter(Boolean);
@@ -472,7 +489,7 @@ export const AI = (() => {
 		if (!provider || !String(provider.base || "").trim()) return { ok: false, error: "Keine Server-URL eingetragen." };
 		const base = cleanBase(String(provider.base).trim()), started = performance.now(), elapsed = () => Math.round(performance.now() - started);
 		try {
-			const ids = await modelIds(base, provider.key);
+			const ids = await modelIds(base, provider.key, { force: true });
 			return { ok: true, models: ids.length, ms: elapsed() };
 		} catch (error) {
 			if (error instanceof AiHttpError) {
