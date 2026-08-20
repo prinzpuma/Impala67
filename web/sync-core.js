@@ -108,8 +108,40 @@ export function heftBaselineOps(doc) {
 	return ops;
 }
 
-// Nur gerätespezifischen UI-Zustand aus dem Transport entfernen.
-// Fachliche Events – insbesondere heftOps – werden NIE anhand eines Snapshots verworfen.
+export function heftDiffOps(current, target) {
+	const before = Array.isArray(current?.pages) ? current.pages : [];
+	const after = Array.isArray(target?.pages) ? target.pages : [];
+	const oldPages = new Map(before.map((page) => [page.id, page]));
+	const newIds = new Set(after.map((page) => page.id));
+	const ops = [];
+	for (const page of before) if (page?.id && !newIds.has(page.id)) ops.push({ t: "pg-", p: page.id });
+	after.forEach((page, at) => { if (page?.id && !oldPages.has(page.id)) ops.push({ t: "pg+", at, page: { id: page.id, paper: page.paper || "lined" } }); });
+	const beforeOrder = before.filter((p) => newIds.has(p.id)).map((p) => p.id);
+	const afterOrder = after.map((p) => p.id);
+	if (beforeOrder.join("\n") !== afterOrder.join("\n")) ops.push({ t: "pgo", order: afterOrder });
+	const diffList = (pageId, kind, oldList, newList) => {
+		const old = new Map((oldList || []).filter((x) => x?.id).map((x) => [x.id, x]));
+		const next = new Map((newList || []).filter((x) => x?.id).map((x) => [x.id, x]));
+		const removed = [...old.keys()].filter((id) => !next.has(id));
+		if (removed.length) ops.push({ t: kind + "-", p: pageId, ids: removed });
+		for (const [id, value] of next) {
+			const previous = old.get(id);
+			if (!previous) ops.push({ t: kind + "+", p: pageId, o: value });
+			else if (JSON.stringify(previous) !== JSON.stringify(value)) ops.push({ t: kind + "=", p: pageId, o: value });
+		}
+	};
+	for (const page of after) {
+		if (!page?.id) continue;
+		const old = oldPages.get(page.id);
+		if (old && (old.paper || "lined") !== (page.paper || "lined")) ops.push({ t: "pgp", p: page.id, paper: page.paper || "lined" });
+		if ((old?.ocrText || "") !== (page.ocrText || "")) ops.push({ t: "ocr", p: page.id, text: page.ocrText || "" });
+		diffList(page.id, "s", old?.strokes, page.strokes);
+		diffList(page.id, "i", old?.images, page.images);
+		diffList(page.id, "x", old?.texts, page.texts);
+	}
+	return ops;
+}
+
 export function pruneEventsForUpload(events) {
 	return (events || []).filter((event) => event?.type !== "uiTabsSet" && event?.type !== "uiTreeSet");
 }
