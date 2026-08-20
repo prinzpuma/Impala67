@@ -47,7 +47,7 @@ function createMemoryIndexedDB() {
 				let dbRec = databases.get(name);
 				const oldVersion = dbRec ? dbRec.version : 0;
 				if (!dbRec) {
-					dbRec = { name, version, stores: new Map(), autoIncs: new Map() };
+					dbRec = { name, version, stores: new Map(), autoIncs: new Map(), txQueue: Promise.resolve() };
 					databases.set(name, dbRec);
 				}
 				const isUpgrade = version > oldVersion;
@@ -65,20 +65,34 @@ function createMemoryIndexedDB() {
 					},
 					transaction(storeNames, mode = "readonly") {
 						let aborted = false;
+						let txCompleteResolve;
+						const txCompletePromise = new Promise((res) => { txCompleteResolve = res; });
+						const prevQueue = dbRec.txQueue;
+						let myTurnResolve;
+						const myTurnPromise = new Promise((res) => { myTurnResolve = res; });
+						dbRec.txQueue = prevQueue.then(() => myTurnPromise).then(() => txCompletePromise);
+						prevQueue.then(() => { myTurnResolve(); });
+
 						const tx = {
 							mode, error: null, oncomplete: null, onerror: null, onabort: null,
-							abort() { aborted = true; tx.error = new Error("Transaction aborted"); setTimeout(() => tx.onabort?.({ target: tx }), 0); },
+							abort() {
+								aborted = true;
+								tx.error = new Error("Transaction aborted");
+								setTimeout(() => { tx.onabort?.({ target: tx }); txCompleteResolve(); }, 0);
+							},
 							objectStore(sName) {
 								const storeMap = dbRec.stores.get(sName);
 								const meta = dbRec.autoIncs.get(sName) || { keyPath: null, autoInc: false, nextKey: 1 };
 								if (!storeMap) throw new Error(`Object store not found: ${sName}`);
 								function makeReq(fn) {
 									const r = { onsuccess: null, onerror: null, result: null, error: null };
-									setTimeout(() => {
-										if (aborted) return;
-										try { r.result = fn(); r.onsuccess?.({ target: r }); }
-										catch (err) { r.error = err; r.onerror?.({ target: r }); }
-									}, 0);
+									myTurnPromise.then(() => {
+										setTimeout(() => {
+											if (aborted) return;
+											try { r.result = fn(); r.onsuccess?.({ target: r }); }
+											catch (err) { r.error = err; r.onerror?.({ target: r }); }
+										}, 0);
+									});
 									return r;
 								}
 								return {
@@ -110,29 +124,38 @@ function createMemoryIndexedDB() {
 									delete(k) { return makeReq(() => { storeMap.delete(k); return undefined; }); },
 									openCursor(range, dir = "next") {
 										const r = { onsuccess: null, onerror: null, result: null };
-										setTimeout(() => {
-											if (aborted) return;
-											let entries = [...storeMap.entries()];
-											if (range && range.lower !== undefined) {
-												entries = entries.filter(([k]) => (range.lowerOpen ? k > range.lower : k >= range.lower));
-											}
-											if (dir === "prev") entries.reverse();
-											let idx = 0;
-											function step() {
-												if (idx < entries.length) {
-													const [curKey, curVal] = entries[idx];
-													r.result = { key: curKey, value: JSON.parse(JSON.stringify(curVal)), continue() { idx++; setTimeout(step, 0); } };
-												} else { r.result = null; }
-												r.onsuccess?.({ target: r });
-											}
-											step();
-										}, 0);
+										myTurnPromise.then(() => {
+											setTimeout(() => {
+												if (aborted) return;
+												let entries = [...storeMap.entries()];
+												if (range && range.lower !== undefined) {
+													entries = entries.filter(([k]) => (range.lowerOpen ? k > range.lower : k >= range.lower));
+												}
+												if (dir === "prev") entries.reverse();
+												let idx = 0;
+												function step() {
+													if (idx < entries.length) {
+														const [curKey, curVal] = entries[idx];
+														r.result = { key: curKey, value: JSON.parse(JSON.stringify(curVal)), continue() { idx++; setTimeout(step, 0); } };
+													} else { r.result = null; }
+													r.onsuccess?.({ target: r });
+												}
+												step();
+											}, 0);
+										});
 										return r;
 									},
 								};
 							},
 						};
-						setTimeout(() => { if (!aborted) tx.oncomplete?.({ target: tx }); }, 20);
+						myTurnPromise.then(() => {
+							setTimeout(() => {
+								if (!aborted) {
+									tx.oncomplete?.({ target: tx });
+									txCompleteResolve();
+								}
+							}, 20);
+						});
 						return tx;
 					},
 					close() {},
@@ -819,10 +842,11 @@ test("Kompaktierung: echtes DB.compactLocal bewahrt parallelen neuen Event und d
 	await DB.addEvent({ id: "p1-u2", t: "2026-08-20T01:02:00Z", type: "pageUpdate", payload: { id: "p1", patch: { title: "Note 1 - Rev 3" } } }); // seq 3
 	await DB.addEvent({ id: "p2-c", t: "2026-08-20T01:03:00Z", type: "pageCreate", payload: { id: "p2", title: "Note 2" } }); // seq 4
 
-	// Paralleler / gleichzeitiger neuer Event
-	await DB.addEvent({ id: "p3-c", t: "2026-08-20T01:04:00Z", type: "pageCreate", payload: { id: "p3", title: "Note 3" } }); // seq 5
+	// Wirklich gleichzeitig gestartet: Kompaktierung und paralleler Schreibvorgang
+	const compactPromise = DB.compactLocal(1);
+	const writePromise = DB.addEvent({ id: "p3-c", t: "2026-08-20T01:04:00Z", type: "pageCreate", payload: { id: "p3", title: "Note 3" } });
 
-	const dropped = await DB.compactLocal(1);
+	const [dropped] = await Promise.all([compactPromise, writePromise]);
 	assert.equal(dropped, 1, "Genau das redundante Update muss verworfen werden");
 
 	const evs = await DB.allEvents();

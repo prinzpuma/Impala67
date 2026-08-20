@@ -668,3 +668,203 @@ test("Regression (echter CLOUDFLARE_SYNC): Retry nach verlorenem HTTP-Response v
 		DB.importAll = originalImportAll;
 	}
 });
+
+test("Regression (echter CLOUDFLARE_SYNC): Lückenloser Prefix-Schutz — seq1 UNIQUE-A, seq2 EXISTING-B, Server hat EXISTING-B -> UNIQUE-A wird hochgeladen", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	const originalAddEvents = DB.addEvents;
+	const originalImportAll = DB.importAll;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// Server enthält nur EXISTING-B (seq 1 auf dem Server)
+	const eventB = { id: "existing-b", t: "2026-08-20T10:01:00Z", type: "pageCreate", payload: { id: "pb", title: "Note B" } };
+	const encB = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([eventB]));
+	const packetB = { seq: 1, id: "p-b", iv: encB.iv, data: encB.data, size: encB.size, created_at: new Date().toISOString() };
+
+	// Lokaler Client hat seq1 = UNIQUE-A, seq2 = EXISTING-B
+	const localEvents = [
+		{ seq: 1, id: "unique-a", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "pa", title: "Note A" } },
+		{ seq: 2, id: "existing-b", t: "2026-08-20T10:01:00Z", type: "pageCreate", payload: { id: "pb", title: "Note B" } },
+	];
+
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [...localEvents];
+	DB.addEvents = async () => {};
+	DB.importAll = async () => ({ importedEvents: [] });
+
+	const keys = syncCursorStorageKeys(creds.userId);
+	localStorage.setItem(keys.lastSynced, "0");
+	localStorage.setItem(keys.lastUploaded, "0");
+	localStorage.setItem(keys.generation, "1");
+
+	const serverPackets = [packetB];
+	let serverSeqCounter = 1;
+	const uploadedPackets = [];
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			const returnPackets = serverPackets.filter((p) => p.seq > since);
+			return new Response(JSON.stringify({ events: returnPackets, maxSeq: serverSeqCounter, hasMore: false, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			const body = JSON.parse(init.body || "{}");
+			for (const p of body.events || []) {
+				uploadedPackets.push(p);
+				if (!serverPackets.some((sp) => sp.id === p.id)) {
+					serverPackets.push({ ...p, seq: ++serverSeqCounter });
+				}
+			}
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: serverSeqCounter, usage: 1000, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(success, true);
+
+		// Prüfe, was hochgeladen wurde:
+		assert.ok(uploadedPackets.length >= 1, "Client muss ein Upload-Paket gesendet haben");
+		let foundUniqueA = false;
+		for (const p of uploadedPackets) {
+			const decrypted = await decryptPayload(creds.cryptoKey, p);
+			const unpacked = prepareIncomingCloudEvents([decrypted]);
+			if (unpacked.some((e) => e.id === "unique-a")) foundUniqueA = true;
+		}
+		assert.equal(foundUniqueA, true, "UNIQUE-A muss hochgeladen worden sein");
+
+		// Upload-Cursor muss nach erfolgreichem Upload auf 2 stehen
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 2);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+		DB.addEvents = originalAddEvents;
+		DB.importAll = originalImportAll;
+	}
+});
+
+test("Regression (echter CLOUDFLARE_SYNC): Lückenloser Prefix-Schutz — seq1 EXISTING-A, seq2 UNIQUE-B, seq3 EXISTING-C -> Cursor springt nicht auf 3, UNIQUE-B wird hochgeladen", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	const originalAddEvents = DB.addEvents;
+	const originalImportAll = DB.importAll;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// Server enthält EXISTING-A (seq 1) und EXISTING-C (seq 2)
+	const eventA = { id: "existing-a", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "pa", title: "Note A" } };
+	const encA = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([eventA]));
+	const packetA = { seq: 1, id: "p-a", iv: encA.iv, data: encA.data, size: encA.size, created_at: new Date().toISOString() };
+
+	const eventC = { id: "existing-c", t: "2026-08-20T10:02:00Z", type: "pageCreate", payload: { id: "pc", title: "Note C" } };
+	const encC = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([eventC]));
+	const packetC = { seq: 2, id: "p-c", iv: encC.iv, data: encC.data, size: encC.size, created_at: new Date().toISOString() };
+
+	// Lokaler Client hat seq1 = EXISTING-A, seq2 = UNIQUE-B, seq3 = EXISTING-C
+	const localEvents = [
+		{ seq: 1, id: "existing-a", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "pa", title: "Note A" } },
+		{ seq: 2, id: "unique-b", t: "2026-08-20T10:01:00Z", type: "pageCreate", payload: { id: "pb", title: "Note B" } },
+		{ seq: 3, id: "existing-c", t: "2026-08-20T10:02:00Z", type: "pageCreate", payload: { id: "pc", title: "Note C" } },
+	];
+
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [...localEvents];
+	DB.addEvents = async () => {};
+	DB.importAll = async () => ({ importedEvents: [] });
+
+	const keys = syncCursorStorageKeys(creds.userId);
+	localStorage.setItem(keys.lastSynced, "0");
+	localStorage.setItem(keys.lastUploaded, "0");
+	localStorage.setItem(keys.generation, "1");
+
+	const serverPackets = [packetA, packetC];
+	let serverSeqCounter = 2;
+	const uploadedPackets = [];
+	let cursorAfterPullBeforePush = null;
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			const returnPackets = serverPackets.filter((p) => p.seq > since);
+			return new Response(JSON.stringify({ events: returnPackets, maxSeq: serverSeqCounter, hasMore: false, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			// Nach dem ersten Pull und vor dem Post: Cursor darf höchstens bis seq1 vorgerückt sein
+			cursorAfterPullBeforePush = CLOUDFLARE_SYNC.status().lastUploadedLocalSeq;
+			const body = JSON.parse(init.body || "{}");
+			for (const p of body.events || []) {
+				uploadedPackets.push(p);
+				if (!serverPackets.some((sp) => sp.id === p.id)) {
+					serverPackets.push({ ...p, seq: ++serverSeqCounter });
+				}
+			}
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: serverSeqCounter, usage: 1000, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(success, true);
+
+		// Vor dem Push darf der Upload-Cursor wegen UNIQUE-B nicht auf seq 3 gesprungen sein
+		assert.equal(cursorAfterPullBeforePush, 1, "Cursor durfte vor dem Push nur bis seq 1 vorrücken, nicht bis seq 3");
+
+		// UNIQUE-B muss hochgeladen worden sein
+		let foundUniqueB = false;
+		for (const p of uploadedPackets) {
+			const decrypted = await decryptPayload(creds.cryptoKey, p);
+			const unpacked = prepareIncomingCloudEvents([decrypted]);
+			if (unpacked.some((e) => e.id === "unique-b")) foundUniqueB = true;
+		}
+		assert.equal(foundUniqueB, true, "UNIQUE-B muss hochgeladen worden sein");
+
+		// Nach erfolgreichem Push muss der Upload-Cursor auf 3 stehen
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 3);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+		DB.addEvents = originalAddEvents;
+		DB.importAll = originalImportAll;
+	}
+});

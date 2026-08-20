@@ -136,20 +136,42 @@ export const CLOUDFLARE_SYNC = (() => {
 		return error instanceof Error ? error : new Error(message);
 	}
 
+	function isUploadableToCloudflare(ev) {
+		if (!ev || typeof ev !== "object") return false;
+		const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
+			SETTINGS_SYNC.sanitizeEvents([ev], SETTINGS_SYNC.allowsSecrets(S.settings))
+		)), { includeRemote: false });
+		return wire.length > 0;
+	}
+
 	async function importRemote(events) {
 		if (!events.length) return;
 		const local = await DB.allEvents();
-		const localMap = new Map(local.map((e) => [e.id, e]));
-		let maxLocalSeq = state.lastUploadedLocalSeq;
-		for (const ev of events) {
-			const existing = localMap.get(ev?.id);
-			if (existing && !existing._remote && Number(existing.seq || 0) > maxLocalSeq) {
-				maxLocalSeq = Number(existing.seq);
+		const sortedLocal = (Array.isArray(local) ? local : []).slice().sort((a, b) => (Number(a?.seq) || 0) - (Number(b?.seq) || 0));
+		const serverEventIds = new Set(events.map((e) => e?.id).filter(Boolean));
+		let confirmedCursor = state.lastUploadedLocalSeq;
+
+		for (const ev of sortedLocal) {
+			const seq = Number(ev?.seq) || 0;
+			if (seq <= confirmedCursor) continue;
+			if (!isUploadableToCloudflare(ev)) {
+				// Nicht für Cloudflare uploadpflichtig (z. B. Fremd-Event oder lokales UI-Event)
+				confirmedCursor = seq;
+				continue;
+			}
+			if (serverEventIds.has(ev.id)) {
+				// Uploadpflichtiges lokales Event ist vom Server bestätigt
+				confirmedCursor = seq;
+			} else {
+				// Erstes unbestätigtes uploadpflichtiges Event -> STOP (niemals vorspulen)
+				break;
 			}
 		}
-		if (maxLocalSeq > state.lastUploadedLocalSeq) {
-			saveSend(maxLocalSeq);
+
+		if (confirmedCursor > state.lastUploadedLocalSeq) {
+			saveSend(confirmedCursor);
 		}
+
 		const result = await DB.importAll(JSON.stringify({ app: "impala67", events }), {
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
