@@ -110,6 +110,12 @@ export async function initApp() {
 	} catch { /* ignore */ }
 	bootMsg("Arbeitsbereich laden…");
 	await STATE.load();
+	// Einmalige v4-Heft-Migration: muss abgeschlossen sein, bevor der Nutzer das Heft bearbeiten kann bzw. bevor die App interaktiv wird.
+	try {
+		await CLOUDFLARE_SYNC.migrateLocalV4?.();
+	} catch (e) {
+		console.warn("[boot] v4-Heft-Migration fehlgeschlagen:", e);
+	}
 	// Einmalig: bereits lokal gespeicherte API-/Notion-Zugangsdaten in den
 	// synchronisierten Event-Log übernehmen, bevor der Start-Sync nach Drive läuft.
 	await STATE.migrateLegacySecretsToSync();

@@ -29,6 +29,126 @@ import {
 } from "../web/sync-crypto.js";
 import { DB } from "../web/db.js";
 
+const storageMap = new Map();
+globalThis.localStorage = {
+	getItem: (k) => (storageMap.has(k) ? storageMap.get(k) : null),
+	setItem: (k, v) => { storageMap.set(k, String(v)); },
+	removeItem: (k) => { storageMap.delete(k); },
+	clear: () => { storageMap.clear(); },
+};
+globalThis.IDBKeyRange = { lowerBound: (lower, open = false) => ({ lower, lowerOpen: open }) };
+
+function createMemoryIndexedDB() {
+	const databases = new Map();
+	return {
+		open(name, version = 1) {
+			const req = { onsuccess: null, onerror: null, onupgradeneeded: null, result: null, error: null };
+			setTimeout(() => {
+				let dbRec = databases.get(name);
+				const oldVersion = dbRec ? dbRec.version : 0;
+				if (!dbRec) {
+					dbRec = { name, version, stores: new Map(), autoIncs: new Map() };
+					databases.set(name, dbRec);
+				}
+				const isUpgrade = version > oldVersion;
+				const dbObj = {
+					name, version,
+					get objectStoreNames() {
+						return { contains: (s) => dbRec.stores.has(s), [Symbol.iterator]: function* () { yield* dbRec.stores.keys(); } };
+					},
+					createObjectStore(storeName, opts = {}) {
+						if (!dbRec.stores.has(storeName)) {
+							dbRec.stores.set(storeName, new Map());
+							dbRec.autoIncs.set(storeName, { keyPath: opts.keyPath || null, autoInc: !!opts.autoIncrement, nextKey: 1 });
+						}
+						return { createIndex() {} };
+					},
+					transaction(storeNames, mode = "readonly") {
+						let aborted = false;
+						const tx = {
+							mode, error: null, oncomplete: null, onerror: null, onabort: null,
+							abort() { aborted = true; tx.error = new Error("Transaction aborted"); setTimeout(() => tx.onabort?.({ target: tx }), 0); },
+							objectStore(sName) {
+								const storeMap = dbRec.stores.get(sName);
+								const meta = dbRec.autoIncs.get(sName) || { keyPath: null, autoInc: false, nextKey: 1 };
+								if (!storeMap) throw new Error(`Object store not found: ${sName}`);
+								function makeReq(fn) {
+									const r = { onsuccess: null, onerror: null, result: null, error: null };
+									setTimeout(() => {
+										if (aborted) return;
+										try { r.result = fn(); r.onsuccess?.({ target: r }); }
+										catch (err) { r.error = err; r.onerror?.({ target: r }); }
+									}, 0);
+									return r;
+								}
+								return {
+									get(k) { return makeReq(() => { const v = storeMap.get(k); return v !== undefined ? JSON.parse(JSON.stringify(v)) : undefined; }); },
+									getAll() { return makeReq(() => [...storeMap.values()].map((v) => JSON.parse(JSON.stringify(v)))); },
+									getAllKeys() { return makeReq(() => [...storeMap.keys()]); },
+									count() { return makeReq(() => storeMap.size); },
+									put(v, k) { return makeReq(() => {
+										let key = k;
+										if (meta.keyPath && v && typeof v === "object") {
+											key = v[meta.keyPath];
+											if (key === undefined && meta.autoInc) { key = meta.nextKey++; v[meta.keyPath] = key; }
+										}
+										if (key === undefined && meta.autoInc) { key = meta.nextKey++; }
+										storeMap.set(key, JSON.parse(JSON.stringify(v)));
+										return key;
+									}); },
+									add(v, k) { return makeReq(() => {
+										let key = k;
+										if (meta.keyPath && v && typeof v === "object") {
+											key = v[meta.keyPath];
+											if (key === undefined && meta.autoInc) { key = meta.nextKey++; v[meta.keyPath] = key; }
+										}
+										if (key === undefined && meta.autoInc) { key = meta.nextKey++; }
+										if (storeMap.has(key)) throw new Error("Key already exists: " + key);
+										storeMap.set(key, JSON.parse(JSON.stringify(v)));
+										return key;
+									}); },
+									delete(k) { return makeReq(() => { storeMap.delete(k); return undefined; }); },
+									openCursor(range, dir = "next") {
+										const r = { onsuccess: null, onerror: null, result: null };
+										setTimeout(() => {
+											if (aborted) return;
+											let entries = [...storeMap.entries()];
+											if (range && range.lower !== undefined) {
+												entries = entries.filter(([k]) => (range.lowerOpen ? k > range.lower : k >= range.lower));
+											}
+											if (dir === "prev") entries.reverse();
+											let idx = 0;
+											function step() {
+												if (idx < entries.length) {
+													const [curKey, curVal] = entries[idx];
+													r.result = { key: curKey, value: JSON.parse(JSON.stringify(curVal)), continue() { idx++; setTimeout(step, 0); } };
+												} else { r.result = null; }
+												r.onsuccess?.({ target: r });
+											}
+											step();
+										}, 0);
+										return r;
+									},
+								};
+							},
+						};
+						setTimeout(() => { if (!aborted) tx.oncomplete?.({ target: tx }); }, 20);
+						return tx;
+					},
+					close() {},
+				};
+				req.result = dbObj;
+				if (isUpgrade && req.onupgradeneeded) {
+					req.transaction = dbObj.transaction([...dbRec.stores.keys()], "versionchange");
+					req.onupgradeneeded({ target: req });
+				}
+				setTimeout(() => req.onsuccess?.({ target: req }), 5);
+			}, 0);
+			return req;
+		}
+	};
+}
+
 // Helper Memory Stores
 class SimR2 {
 	constructor() { this.map = new Map(); }
@@ -690,6 +810,32 @@ test("Kompaktierung: Drop-only behält Sequenznummern und verwirft keine neuen p
 	}
 });
 
+test("Kompaktierung: echtes DB.compactLocal bewahrt parallelen neuen Event und dessen Sequenznummer", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	await DB.open();
+
+	await DB.addEvent({ id: "p1-c", t: "2026-08-20T01:00:00Z", type: "pageCreate", payload: { id: "p1", title: "Note 1" } }); // seq 1
+	await DB.addEvent({ id: "p1-u1", t: "2026-08-20T01:01:00Z", type: "pageUpdate", payload: { id: "p1", patch: { title: "Note 1 - Rev 2" } } }); // seq 2
+	await DB.addEvent({ id: "p1-u2", t: "2026-08-20T01:02:00Z", type: "pageUpdate", payload: { id: "p1", patch: { title: "Note 1 - Rev 3" } } }); // seq 3
+	await DB.addEvent({ id: "p2-c", t: "2026-08-20T01:03:00Z", type: "pageCreate", payload: { id: "p2", title: "Note 2" } }); // seq 4
+
+	// Paralleler / gleichzeitiger neuer Event
+	await DB.addEvent({ id: "p3-c", t: "2026-08-20T01:04:00Z", type: "pageCreate", payload: { id: "p3", title: "Note 3" } }); // seq 5
+
+	const dropped = await DB.compactLocal(1);
+	assert.equal(dropped, 1, "Genau das redundante Update muss verworfen werden");
+
+	const evs = await DB.allEvents();
+	assert.equal(evs.length, 4);
+
+	// Sequenznummern bleiben unverändert
+	assert.equal(evs.find((e) => e.id === "p1-c").seq, 1);
+	assert.equal(evs.find((e) => e.id === "p1-u1"), undefined);
+	assert.equal(evs.find((e) => e.id === "p1-u2").seq, 3);
+	assert.equal(evs.find((e) => e.id === "p2-c").seq, 4);
+	assert.equal(evs.find((e) => e.id === "p3-c").seq, 5, "Der neue Event muss mit seiner ursprünglichen Sequenz erhalten bleiben");
+});
+
 // -----------------------------------------------------------------------------
 // 22. LANGZEIT- & STRESSTEST (10.000 Events & 1.000 Wechsel)
 // -----------------------------------------------------------------------------
@@ -746,31 +892,36 @@ test("Langzeit- und Stresstest: 10.000 Events über 3 Geräte konvergieren ohne 
 });
 
 // -----------------------------------------------------------------------------
-// 23. NOTEBOOK V4 MIGRATION FAILURE INJECTION
+// 23. NOTEBOOK V4 MIGRATION RACE & REAL INDEXEDDB TEST
 // -----------------------------------------------------------------------------
-test("Notebook v4 Migration: Fehler-Injektion während replaceHeftHistory bewahrt bestehende Historie", async () => {
-	const initialHistory = [
-		{ seq: 1, id: "h1-snap", t: "2026-08-20T01:00:00Z", type: "heftSnap", payload: { pageId: "h1", doc: { pages: [{ id: "p1" }] } } },
-		{ seq: 2, id: "h1-op1", t: "2026-08-20T01:01:00Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s+", p: "p1", o: { id: "s1" } }] } },
+test("Notebook v4 Migration: Race-Bedingung mit neuem heftOps-Write während replaceHeftHistory bewahrt neuen Event", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	await DB.open();
+
+	// 1. Initialer Zustand: altes Snapshot-Event und alte heftOps
+	await DB.addEvent({ seq: 1, id: "h1-snap", t: "2026-08-20T01:00:00Z", type: "heftSnap", payload: { pageId: "h1", doc: { pages: [{ id: "p1" }] } } });
+	await DB.addEvent({ seq: 2, id: "h1-op1", t: "2026-08-20T01:01:00Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s+", p: "p1", o: { id: "s1" } }] } });
+
+	// 2. Migration ermittelt den aktuellen Sequenzstand (upToSeq = 2) und berechnet Baseline
+	const upToSeq = await DB.maxSeq();
+	assert.equal(upToSeq, 2);
+
+	const baselines = [
+		{ id: "v4-heft-h1-baseline", t: "2026-08-20T01:01:30Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s+", p: "p1", o: { id: "s1" } }] } },
 	];
 
-	// Simulierter Store
-	let store = [...initialHistory];
-	const failingTx = async () => {
-		const backup = [...store];
-		try {
-			// Simuliere Löschen
-			store = store.filter((e) => e.payload?.pageId !== "h1");
-			// Fehler vor dem Einsetzen
-			throw new Error("Transaktionsabbruch / Disk Full");
-		} catch (err) {
-			store = backup; // Rollback
-			throw err;
-		}
-	};
+	// 3. Race: Während/nach der Baseline-Berechnung, bevor replaceHeftHistory fertig ist, wird ein NEUER heftOps-Event geschrieben
+	await DB.addEvent({ id: "h1-new-stroke-3", t: "2026-08-20T01:02:00Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s+", p: "p1", o: { id: "s-new-3" } }] } });
 
-	await assert.rejects(failingTx, /Transaktionsabbruch/);
-	assert.deepEqual(store, initialHistory, "Bestehende Historie muss nach Fehler unverändert sein");
+	// 4. replaceHeftHistory läuft mit upToSeq
+	await DB.replaceHeftHistory(baselines, upToSeq);
+
+	// 5. Prüfe: Der neue Event seq 3 darf NICHT gelöscht worden sein!
+	const eventsAfter = await DB.allEvents();
+	assert.ok(eventsAfter.some((e) => e.id === "h1-new-stroke-3"), "Der während der Migration neu geschriebene Event muss erhalten bleiben");
+	assert.ok(eventsAfter.some((e) => e.id === "v4-heft-h1-baseline"), "Baseline-Event muss eingefügt worden sein");
+	assert.equal(eventsAfter.some((e) => e.id === "h1-snap"), false, "Altes heftSnap muss gelöscht sein");
+	assert.equal(eventsAfter.some((e) => e.id === "h1-op1"), false, "Altes heftOps vor upToSeq muss gelöscht sein");
 });
 
 // -----------------------------------------------------------------------------

@@ -302,7 +302,8 @@ export const DB = (() => {
 
 	// Einmalige v4-Migration: alten Heft-Transportzustand atomar durch je EIN
 	// vollständiges heftOps-Baseline-Event ersetzen. Keine Zwischenphase ohne Heftdaten.
-	async function replaceHeftHistory(baselines = []) {
+	// upToSeq schützt vor Race Conditions: neuere Events als upToSeq werden nicht gelöscht.
+	async function replaceHeftHistory(baselines = [], upToSeq = 0) {
 		ensureOpen();
 		const list = Array.isArray(baselines) ? baselines : [];
 		list.forEach(validateEvent);
@@ -310,7 +311,11 @@ export const DB = (() => {
 			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
 			const req = store.getAll();
 			req.onsuccess = () => {
-				for (const ev of req.result || []) if (ev.type === "heftOps" || ev.type === "heftSnap") store.delete(ev.seq);
+				for (const ev of req.result || []) {
+					if ((ev.type === "heftOps" || ev.type === "heftSnap") && (!upToSeq || (ev.seq && ev.seq <= upToSeq))) {
+						store.delete(ev.seq);
+					}
+				}
 				for (const event of list) { const { seq, ...clean } = event; store.add(clean); }
 			};
 			req.onerror = () => { try { tx.abort(); } catch {} };

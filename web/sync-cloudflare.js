@@ -43,7 +43,11 @@ const LOCAL_SYNC_DELAY = 80;
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
 
 const fallbackStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-const LS = typeof localStorage !== "undefined" ? localStorage : fallbackStorage;
+const LS = {
+	getItem: (k) => (typeof localStorage !== "undefined" ? localStorage : fallbackStorage).getItem(k),
+	setItem: (k, v) => (typeof localStorage !== "undefined" ? localStorage : fallbackStorage).setItem(k, v),
+	removeItem: (k) => (typeof localStorage !== "undefined" ? localStorage : fallbackStorage).removeItem(k),
+};
 
 export function syncCursorStorageKeys(userId) {
 	const id = String(userId || "").trim();
@@ -134,6 +138,18 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function importRemote(events) {
 		if (!events.length) return;
+		const local = await DB.allEvents();
+		const localMap = new Map(local.map((e) => [e.id, e]));
+		let maxLocalSeq = state.lastUploadedLocalSeq;
+		for (const ev of events) {
+			const existing = localMap.get(ev?.id);
+			if (existing && !existing._remote && Number(existing.seq || 0) > maxLocalSeq) {
+				maxLocalSeq = Number(existing.seq);
+			}
+		}
+		if (maxLocalSeq > state.lastUploadedLocalSeq) {
+			saveSend(maxLocalSeq);
+		}
 		const result = await DB.importAll(JSON.stringify({ app: "impala67", events }), {
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
@@ -324,6 +340,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function migrateLocalV4() {
 		if (LS.getItem(LS_LOCAL_V4) === "1") return;
 		if (typeof DB.replaceHeftHistory !== "function") throw new Error("Lokale v4-Migration fehlt in db.js.");
+		const upToSeq = await DB.maxSeq();
 		const baselines = [];
 		for (const [pageId, doc] of Object.entries(S.heftDocs || {})) {
 			const ops = heftBaselineOps(doc);
@@ -331,7 +348,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			const hash = await sha256Hex(JSON.stringify(doc?.pages || []));
 			baselines.push({ id: `v4-heft-${pageId}-${hash.slice(0, 24)}`, t: U.now(), type: "heftOps", payload: { pageId, ops } });
 		}
-		await DB.replaceHeftHistory(baselines);
+		await DB.replaceHeftHistory(baselines, upToSeq);
 		LS.removeItem("impala67_compact_floor");
 		LS.setItem(LS_LOCAL_V4, "1");
 	}
@@ -464,5 +481,6 @@ export const CLOUDFLARE_SYNC = (() => {
 		init, configure, disconnect, catchUp: requestSync, syncNow: () => requestSync(false), purgeCloudData,
 		generateSyncKey, status: () => ({ ...state }), aiRequest, notionRequest,
 		isConfigured: () => !!(state.url && (credentials || state.syncKey)),
+		migrateLocalV4,
 	};
 })();

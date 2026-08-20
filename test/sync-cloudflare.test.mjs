@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+const storageMap = new Map();
+globalThis.localStorage = {
+	getItem: (k) => (storageMap.has(k) ? storageMap.get(k) : null),
+	setItem: (k, v) => { storageMap.set(k, String(v)); },
+	removeItem: (k) => { storageMap.delete(k); },
+	clear: () => { storageMap.clear(); },
+};
+
 import { CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
 import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES, deriveSyncCredentials, decryptPayload, encryptPayload } from "../web/sync-crypto.js";
 import { CLOUD_SYNC_PROTOCOL, prepareIncomingCloudEvents, cloudEventsEnvelope } from "../web/sync-core.js";
@@ -445,5 +453,218 @@ test("Regression: WebSocket changed-Signal stößt erneuten Pull an", async () =
 		globalThis.WebSocket = originalWebSocket;
 		DB.allBlobKeys = originalAllBlobKeys;
 		DB.allEvents = originalAllEvents;
+	}
+});
+
+test("Regression (echter CLOUDFLARE_SYNC): Cursor-Race — Server seq 10 bekannt, B erzeugt seq 11, A sendet seq 12; nach POST ist lastSyncedSeq 10, nach Pull 12", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	const originalAddEvents = DB.addEvents;
+	const originalImportAll = DB.importAll;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// Serverzustand:
+	// Event 11 von Gerät B
+	const eventB = { id: "p-from-B-11", t: "2026-08-20T02:00:00Z", type: "pageCreate", payload: { id: "pb", title: "Note from B" } };
+	const encB = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([eventB]));
+	const packetB = { seq: 11, id: "p-b-11", iv: encB.iv, data: encB.data, size: encB.size, created_at: new Date().toISOString() };
+
+	// Lokaler Zustand von Gerät A:
+	// A kennt 10 Events (seq 1..10) und hat 1 neues lokales Event (seq 11 lokal)
+	const localEventsA = [];
+	for (let i = 1; i <= 10; i++) {
+		localEventsA.push({ seq: i, id: `local-init-${i}`, t: `2026-08-20T01:00:${String(i).padStart(2, "0")}Z`, type: "pageCreate", payload: { id: `p-init-${i}`, title: `Init ${i}` } });
+	}
+	const newLocalEventA = { seq: 11, id: "p-from-A-12", t: "2026-08-20T02:01:00Z", type: "pageCreate", payload: { id: "pa", title: "Note from A" } };
+	localEventsA.push(newLocalEventA);
+
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [...localEventsA];
+	DB.addEvents = async () => {};
+	const importedIntoA = [];
+	DB.importAll = async (json) => {
+		const parsed = JSON.parse(json);
+		importedIntoA.push(...(parsed.events || []));
+		return { importedEvents: parsed.events || [] };
+	};
+
+	let serverSeqCounter = 10;
+	const serverPackets = [];
+
+	// Storage von A: kennt bisher Server seq 10 und hat lokale seq 10 hochgeladen
+	const keys = syncCursorStorageKeys(creds.userId);
+	localStorage.setItem(keys.lastSynced, "10");
+	localStorage.setItem(keys.lastUploaded, "10");
+	localStorage.setItem(keys.generation, "1");
+
+	let postDone = false;
+	let seqAfterPost = null;
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			const returnPackets = serverPackets.filter((p) => p.seq > since);
+			return new Response(JSON.stringify({ events: returnPackets, maxSeq: serverSeqCounter, hasMore: false, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			// Vor/während A's Upload erzeugt B seq 11 auf dem Server
+			if (!serverPackets.some((p) => p.id === "p-b-11")) {
+				serverPackets.push(packetB); // seq 11
+				serverSeqCounter = 11;
+			}
+			const body = JSON.parse(init.body || "{}");
+			for (const p of body.events || []) {
+				serverPackets.push({ ...p, seq: ++serverSeqCounter }); // seq 12
+			}
+			postDone = true;
+			// Prüfe den Cursor direkt nach dem POST: A hat bisher nur bis seq 10 synchronisiert
+			seqAfterPost = CLOUDFLARE_SYNC.status().lastSyncedSeq;
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: serverSeqCounter, usage: 1000, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(success, true);
+		assert.equal(postDone, true, "POST muss ausgeführt worden sein");
+		assert.equal(seqAfterPost, 10, "Nach dem POST muss lastSyncedSeq noch 10 sein");
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 12, "Nach dem abschließenden Pull muss lastSyncedSeq 12 sein");
+		assert.ok(importedIntoA.some((e) => e.id === "p-from-B-11"), "Event B (seq 11) muss importiert sein");
+		assert.ok(importedIntoA.some((e) => e.id === "p-from-A-12"), "Event A (seq 12) muss importiert sein");
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+		DB.addEvents = originalAddEvents;
+		DB.importAll = originalImportAll;
+	}
+});
+
+test("Regression (echter CLOUDFLARE_SYNC): Retry nach verlorenem HTTP-Response verhindert Duplikate und Quota-Verschwendung (P1)", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	const originalAddEvents = DB.addEvents;
+	const originalImportAll = DB.importAll;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// Client hat zunächst zwei lokale Events E1, E2
+	const localEvents = [
+		{ seq: 1, id: "local-e1", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p1", title: "Note 1" } },
+		{ seq: 2, id: "local-e2", t: "2026-08-20T10:01:00Z", type: "pageUpdate", payload: { id: "p1", patch: { title: "Note 1 - Rev 2" } } },
+	];
+
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [...localEvents];
+	DB.addEvents = async () => {};
+	DB.importAll = async (json) => {
+		const parsed = JSON.parse(json);
+		return { importedEvents: parsed.events || [] };
+	};
+
+	let serverPackets = [];
+	let serverSeqCounter = 0;
+	let serverTotalBytes = 0;
+	let shouldFailPostResponse = true;
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			const returnPackets = serverPackets.filter((p) => p.seq > since);
+			return new Response(JSON.stringify({ events: returnPackets, maxSeq: serverSeqCounter, hasMore: false, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			const body = JSON.parse(init.body || "{}");
+			for (const p of body.events || []) {
+				// Prüfe auf Duplikate
+				if (!serverPackets.some((sp) => sp.id === p.id)) {
+					const size = (p.data || "").length;
+					serverPackets.push({ ...p, seq: ++serverSeqCounter, size });
+					serverTotalBytes += size;
+				}
+			}
+			if (shouldFailPostResponse) {
+				shouldFailPostResponse = false;
+				// Antwort geht verloren (Netzwerkabbruch)
+				throw new TypeError("Failed to fetch (Netzwerkabbruch nach Speicherung)");
+			}
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: serverSeqCounter, usage: serverTotalBytes, generation: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		// 1. Erster Sync-Versuch: schlägt fehl, da HTTP-Antwort verloren geht
+		const firstTry = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(firstTry, false);
+		assert.equal(serverPackets.length, 1, "Server hat Paket 1 bereits gespeichert");
+		const bytesAfterFirstPush = serverTotalBytes;
+
+		// 2. Client erhält vor Retry ein neues lokales Event E3
+		const eventE3 = { seq: 3, id: "local-e3", t: "2026-08-20T10:02:00Z", type: "pageCreate", payload: { id: "p2", title: "Note 2" } };
+		localEvents.push(eventE3);
+
+		// 3. Retry
+		const retrySuccess = await CLOUDFLARE_SYNC.syncNow();
+		assert.equal(retrySuccess, true);
+
+		// Prüfe:
+		// - Server muss genau 2 Pakete haben (Paket 1 mit E1+E2, Paket 2 mit E3)
+		assert.equal(serverPackets.length, 2, "Server darf genau 2 Pakete haben");
+
+		// Paket 2 entschlüsseln und prüfen, dass NUR E3 enthalten ist (kein redundantes Paket mit E1+E2+E3)
+		const decryptedP2 = await decryptPayload(creds.cryptoKey, serverPackets[1]);
+		const eventsInP2 = prepareIncomingCloudEvents([decryptedP2]);
+		assert.equal(eventsInP2.length, 1, "Paket 2 darf nur das neue Event E3 enthalten");
+		assert.equal(eventsInP2[0].id, "local-e3");
+
+		// Quota-Prüfung: serverTotalBytes darf nicht doppelt für E1 und E2 belastet werden
+		assert.ok(serverTotalBytes < bytesAfterFirstPush * 2, "Quota darf nicht durch doppelte Speicherung verschwendet werden");
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 3);
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 2);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+		DB.addEvents = originalAddEvents;
+		DB.importAll = originalImportAll;
 	}
 });
