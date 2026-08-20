@@ -1,4 +1,4 @@
-import test, { describe, it, before, after } from "node:test";
+import test, { describe, it, before, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
@@ -45,7 +45,11 @@ const STATIC_PORT = 5188;
 const WORKER_PORT = 8787;
 const STATIC_URL = `http://127.0.0.1:${STATIC_PORT}/`;
 const WORKER_URL = `http://127.0.0.1:${WORKER_PORT}`;
-const TEST_SYNC_KEY = "impala-8762-1f3c-23fa-6e9e-f798-5408-0fa6-ed03";
+function generateTestSyncKey() {
+	const hex = () => Math.floor(0x10000 + Math.random() * 0x10000).toString(16).slice(1);
+	return `impala-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}`;
+}
+const TEST_SYNC_KEY = generateTestSyncKey();
 
 let staticServer = null;
 let wranglerProcess = null;
@@ -73,9 +77,13 @@ function attachMonitoring(page, label) {
 		const txt = msg.text();
 		const type = msg.type();
 		if (type === "error") {
-			if (!txt.includes("Failed to load resource") && !txt.includes("net::ERR_FAILED") && !txt.includes("interception")) {
-				consoleErrors[label].push(txt);
+			const loc = msg.location();
+			const url = loc?.url || "";
+			if (url.includes("localhost:1234") || url.includes("config.local.js") || txt.includes("localhost:1234") || txt.includes("config.local.js")) {
+				return;
 			}
+			const entry = url ? `${txt} (${url})` : txt;
+			consoleErrors[label].push(entry);
 		}
 	});
 	page.on("pageerror", (err) => {
@@ -83,11 +91,32 @@ function attachMonitoring(page, label) {
 	});
 }
 
+async function goOffline(page) {
+	await page.setOfflineMode(true);
+	await page.evaluate(() => {
+		window.dispatchEvent(new Event("offline"));
+	});
+	await page.waitForFunction(() => !navigator.onLine);
+}
+
+async function goOnline(page) {
+	await page.setOfflineMode(false);
+	await page.evaluate(() => {
+		window.dispatchEvent(new Event("online"));
+	});
+	await page.waitForFunction(() => navigator.onLine);
+}
+
 function startStaticServer() {
 	return new Promise((resolve, reject) => {
 		const webDir = path.join(process.cwd(), "web");
 		staticServer = http.createServer((req, res) => {
 			const urlPath = req.url.split("?")[0];
+			if (urlPath === "/config.local.js") {
+				res.writeHead(200, { "Content-Type": "application/javascript" });
+				res.end("// local config\n");
+				return;
+			}
 			let filePath = path.join(webDir, urlPath === "/" ? "index.html" : urlPath.replace(/^\//, ""));
 			if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
 				filePath = path.join(filePath, "index.html");
@@ -113,6 +142,7 @@ function startStaticServer() {
 
 async function startWrangler() {
 	killLingering();
+	try { fs.rmSync(path.join(process.cwd(), ".wrangler", "state"), { recursive: true, force: true }); } catch {}
 	wranglerProcess = spawn("npx", [
 		"wrangler", "dev", "server/worker.js",
 		"--config", "server/wrangler.toml",
@@ -120,14 +150,18 @@ async function startWrangler() {
 		"--ip", "127.0.0.1",
 	], { shell: true });
 
-	for (let i = 0; i < 40; i++) {
+	let startupLogs = "";
+	wranglerProcess.stdout?.on("data", (d) => { startupLogs += d.toString(); });
+	wranglerProcess.stderr?.on("data", (d) => { startupLogs += d.toString(); });
+
+	for (let i = 0; i < 60; i++) {
 		try {
 			const res = await fetch(`${WORKER_URL}/api/health`);
 			if (res.ok) return;
 		} catch {}
 		await new Promise((r) => setTimeout(r, 250));
 	}
-	throw new Error("Wrangler dev server failed to start on port " + WORKER_PORT);
+	throw new Error("Wrangler dev server failed to start on port " + WORKER_PORT + "\nLogs: " + startupLogs);
 }
 
 async function waitReady(page) {
@@ -142,6 +176,9 @@ async function waitReady(page) {
 
 async function setupPageInContext(ctx, label) {
 	const page = await ctx.newPage();
+	await page.evaluateOnNewDocument(() => {
+		window.__DISABLE_BROADCAST__ = true;
+	});
 	attachMonitoring(page, label);
 	await page.goto(STATIC_URL, { waitUntil: "domcontentloaded" });
 	await waitReady(page);
@@ -149,6 +186,11 @@ async function setupPageInContext(ctx, label) {
 }
 
 describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () => {
+	afterEach(async () => {
+		try { if (pageA && !pageA.isClosed()) await pageA.setOfflineMode(false); } catch {}
+		try { if (pageB && !pageB.isClosed()) await pageB.setOfflineMode(false); } catch {}
+		try { if (pageC && !pageC.isClosed()) await pageC.setOfflineMode(false); } catch {}
+	});
 	before(async () => {
 		const browserExe = CHROME_PATHS.find((p) => p && fs.existsSync(p));
 		if (!browserExe) throw new Error("Chrome or Edge binary not found on this system.");
@@ -272,6 +314,10 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 	});
 
 	it("C. Offline-Konflikt ohne echten Feldkonflikt: A & B offline Notizen erstellen -> Sync konvergiert", async () => {
+		// A and B actually go offline
+		await goOffline(pageA);
+		await goOffline(pageB);
+
 		// Device A creates note offline
 		await pageA.evaluate(async () => {
 			await window.STATE.dispatch("pageCreate", {
@@ -291,6 +337,19 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 				workspaceId: "default",
 			});
 		});
+
+		// Wait 150ms to ensure scheduled timer fires while offline
+		await new Promise((r) => setTimeout(r, 150));
+
+		// Check before going online that no device knows the other's offline note
+		const preHasBOnA = await pageA.evaluate(() => !!window.S.pages["note-offline-c-b"]);
+		const preHasAOnB = await pageB.evaluate(() => !!window.S.pages["note-offline-c-a"]);
+		assert.equal(preHasBOnA, false, "Device A must not know B note while offline");
+		assert.equal(preHasAOnB, false, "Device B must not know A note while offline");
+
+		// Both back online
+		await goOnline(pageA);
+		await goOnline(pageB);
 
 		// Both sync
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
@@ -452,6 +511,10 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		}, HEFT_ID);
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 
+		// A and B actually go offline
+		await goOffline(pageA);
+		await goOffline(pageB);
+
 		// Device A offline adds 10 strokes
 		await pageA.evaluate(async (id) => {
 			const ops = [];
@@ -470,7 +533,19 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 			await window.STATE.dispatch("heftOps", { pageId: id, ops });
 		}, HEFT_ID);
 
+		// Wait 150ms to ensure scheduled timer fires while offline
+		await new Promise((r) => setTimeout(r, 150));
+
+		// Check before going online: A has 10 strokes, B has 10 strokes
+		const preStrokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const preStrokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		assert.equal(preStrokesA, 10);
+		assert.equal(preStrokesB, 10);
+
 		// Both online & sync
+		await goOnline(pageA);
+		await goOnline(pageB);
+
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
@@ -480,6 +555,17 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 
 		assert.equal(strokesA, 20);
 		assert.equal(strokesB, 20);
+
+		// Reload both and re-verify persistence
+		await pageA.reload({ waitUntil: "domcontentloaded" });
+		await waitReady(pageA);
+		await pageB.reload({ waitUntil: "domcontentloaded" });
+		await waitReady(pageB);
+
+		const reloadedStrokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const reloadedStrokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		assert.equal(reloadedStrokesA, 20);
+		assert.equal(reloadedStrokesB, 20);
 	});
 
 	it("G. Datei / Bild: A hängt Bild an -> B empfängt Bild byte-genau -> Nach Reload vorhanden", async () => {
@@ -608,9 +694,10 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		});
 		assert.equal(syncFailed, true);
 
-		// Remove interception
+		// Remove interception and filter out only the expected abort error from this test
 		pageA.off("request", interceptHandler);
 		await pageA.setRequestInterception(false);
+		consoleErrors.A = consoleErrors.A.filter((msg) => !(msg.includes("/api/events") && (msg.includes("ERR_FAILED") || msg.includes("Failed to load resource"))));
 
 		// A creates second event
 		await pageA.evaluate(async (id2) => {
@@ -677,6 +764,7 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 
 		pageA.off("request", pullHandler);
 		await pageA.setRequestInterception(false);
+		consoleErrors.A = consoleErrors.A.filter((msg) => !(msg.includes("/api/sync") && (msg.includes("ERR_FAILED") || msg.includes("Failed to load resource"))));
 
 		// Now sync cleanly
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
@@ -715,7 +803,7 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		assert.equal(postRestartOnB, "Post Restart");
 	});
 
-	it("L. Service-Worker Update / Cache: SW aktiv, Cache = impala67-v221, sync-crypto.js enthält 16-KB-Kompression", async () => {
+	it("L. Service-Worker Update / Cache: SW aktiv, Cache = impala67-v222, sync-crypto.js enthält 16-KB-Kompression", async () => {
 		const swStatus = await pageA.evaluate(async () => {
 			const reg = await navigator.serviceWorker?.getRegistration();
 			const cacheNames = await caches.keys();
@@ -734,21 +822,21 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 				hasSW: !!navigator.serviceWorker,
 				isActive: reg?.active?.state === "activated",
 				cacheNames,
-				hasV221: cacheNames.includes("impala67-v221"),
+				hasV222: cacheNames.includes("impala67-v222"),
 				hasLegacyV219: cacheNames.includes("impala67-v219"),
 				has16KBCompression: cryptoCode.includes("16 * 1024") || cryptoCode.includes("16384"),
 			};
 		});
 
 		assert.equal(swStatus.hasSW, true, "Service Worker should be available");
-		assert.equal(swStatus.hasV221, true, "Cache impala67-v221 should exist");
+		assert.equal(swStatus.hasV222, true, "Cache impala67-v222 should exist");
 		assert.equal(swStatus.hasLegacyV219, false, "No legacy v219 cache should be present");
 		assert.equal(swStatus.has16KBCompression, true, "sync-crypto.js in cache must contain 16 KB compression threshold");
 	});
 
 	it("M. Offline-PWA: Offline schalten -> Reload -> App lädt & speichert -> Online -> Sync", async () => {
 		// Set offline mode
-		await pageA.setOfflineMode(true);
+		await goOffline(pageA);
 
 		// Reload offline
 		await pageA.reload({ waitUntil: "domcontentloaded" });
@@ -769,7 +857,7 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		});
 
 		// Go online
-		await pageA.setOfflineMode(false);
+		await goOnline(pageA);
 		await pageA.reload({ waitUntil: "domcontentloaded" });
 		await waitReady(pageA);
 
@@ -822,7 +910,12 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		// Sync C once to get current baseline
 		await pageC.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 
-		// Device A creates 10 notes offline (before sync)
+		// All 3 devices actually go offline
+		await goOffline(pageA);
+		await goOffline(pageB);
+		await goOffline(pageC);
+
+		// Device A creates 10 notes offline
 		await pageA.evaluate(async () => {
 			for (let i = 1; i <= 10; i++) {
 				await window.STATE.dispatch("pageCreate", { id: `dev-a-note-${i}`, title: `Device A Note ${i}`, content: `A ${i}`, workspaceId: "default" });
@@ -843,12 +936,37 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 			}
 		});
 
-		// Sync A, B, C in sequence
+		// Wait 150ms to ensure scheduled timers fire while offline
+		await new Promise((r) => setTimeout(r, 150));
+
+		// Check before going online that no other device knows them
+		for (let i = 1; i <= 10; i++) {
+			const hasBOnA = await pageA.evaluate((id) => !!window.S.pages[id], `dev-b-note-${i}`);
+			const hasCOnA = await pageA.evaluate((id) => !!window.S.pages[id], `dev-c-note-${i}`);
+			const hasAOnB = await pageB.evaluate((id) => !!window.S.pages[id], `dev-a-note-${i}`);
+			const hasCOnB = await pageB.evaluate((id) => !!window.S.pages[id], `dev-c-note-${i}`);
+			const hasAOnC = await pageC.evaluate((id) => !!window.S.pages[id], `dev-a-note-${i}`);
+			const hasBOnC = await pageC.evaluate((id) => !!window.S.pages[id], `dev-b-note-${i}`);
+
+			assert.equal(hasBOnA, false, "Device A must not know B notes while offline");
+			assert.equal(hasCOnA, false, "Device A must not know C notes while offline");
+			assert.equal(hasAOnB, false, "Device B must not know A notes while offline");
+			assert.equal(hasCOnB, false, "Device B must not know C notes while offline");
+			assert.equal(hasAOnC, false, "Device C must not know A notes while offline");
+			assert.equal(hasBOnC, false, "Device C must not know B notes while offline");
+		}
+
+		// Turn online and sync one by one
+		await goOnline(pageA);
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
+
+		await goOnline(pageB);
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
+
+		await goOnline(pageC);
 		await pageC.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 
-		// Settle sync rounds
+		// Settle remaining sync rounds
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 		await pageC.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
@@ -895,5 +1013,15 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		assert.equal(metricsA.lastSyncedSeq, metricsB.lastSyncedSeq);
 		assert.equal(metricsB.lastSyncedSeq, metricsC.lastSyncedSeq);
 		assert.ok(metricsA.lastSyncedSeq > 0, "lastSyncedSeq must be greater than 0");
+	});
+
+	it("P. Abschlussprüfung: Keine unerwarteten Browser-Konsolenfehler oder unbehandelten Rejections", () => {
+		assert.deepEqual(consoleErrors.A, [], "Device A should have no console errors");
+		assert.deepEqual(consoleErrors.B, [], "Device B should have no console errors");
+		if (ctxC) assert.deepEqual(consoleErrors.C, [], "Device C should have no console errors");
+
+		assert.deepEqual(unhandledRejections.A, [], "Device A should have no unhandled rejections");
+		assert.deepEqual(unhandledRejections.B, [], "Device B should have no unhandled rejections");
+		if (ctxC) assert.deepEqual(unhandledRejections.C, [], "Device C should have no unhandled rejections");
 	});
 });

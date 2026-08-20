@@ -109,10 +109,10 @@ export async function initApp() {
 		}
 	} catch { /* ignore */ }
 	bootMsg("Arbeitsbereich laden…");
-	await STATE.load();
+	const snapshotInfo = await STATE.load();
 	// Einmalige v4-Heft-Migration: muss abgeschlossen sein, bevor der Nutzer das Heft bearbeiten kann bzw. bevor die App interaktiv wird.
 	try {
-		await CLOUDFLARE_SYNC.migrateLocalV4?.();
+		await CLOUDFLARE_SYNC.migrateLocalV4?.(snapshotInfo);
 	} catch (e) {
 		console.warn("[boot] v4-Heft-Migration fehlgeschlagen:", e);
 	}

@@ -885,6 +885,11 @@ export const STATE = (() => {
 		return run;
 	}
 
+	let _loadedSeq = 0;
+	let _loadedTime = "";
+	const getLoadedSeq = () => _loadedSeq;
+	const getLoadedTime = () => _loadedTime;
+
 	// Gemeinsamer Helfer für load()/pageHistory(): Event-Log laden und deterministisch
 	// sortieren (vorher in beiden Funktionen fast identisch dupliziert).
 	async function loadSortedEvents() {
@@ -893,12 +898,15 @@ export const STATE = (() => {
 
 	async function load() {
 		const evs = await loadSortedEvents();
+		_loadedSeq = evs.reduce((m, ev) => Math.max(m, Number(ev?.seq || 0)), 0);
+		_loadedTime = evs.length ? evs[evs.length - 1].t : "";
 		// Hybride logische Uhr (siehe util.js): nach einem Neustart steht _lastNowMs auf 0.
 		// Ohne diesen Anstoß könnte die erste Bearbeitung nach dem Start einen Zeitstempel
 		// bekommen, der VOR einem bereits importierten fremden Stand liegt — und im Replay
 		// damit ausgerechnet gegen den Stand verlieren, den sie ablösen soll.
 		if (evs.length) U.observeTime(evs[evs.length - 1].t);
 		evs.forEach(reduce);
+		return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: evs.length };
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze
@@ -1299,5 +1307,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

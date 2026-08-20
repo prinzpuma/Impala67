@@ -28,6 +28,8 @@ import {
 	sha256Hex,
 } from "../web/sync-crypto.js";
 import { DB } from "../web/db.js";
+import { S, STATE } from "../web/state.js";
+import { CLOUDFLARE_SYNC } from "../web/sync-cloudflare.js";
 
 const storageMap = new Map();
 globalThis.localStorage = {
@@ -41,6 +43,14 @@ globalThis.IDBKeyRange = { lowerBound: (lower, open = false) => ({ lower, lowerO
 function createMemoryIndexedDB() {
 	const databases = new Map();
 	return {
+		deleteDatabase(name) {
+			const req = { onsuccess: null, onerror: null };
+			setTimeout(() => {
+				databases.delete(name);
+				req.onsuccess?.({ target: req });
+			}, 0);
+			return req;
+		},
 		open(name, version = 1) {
 			const req = { onsuccess: null, onerror: null, onupgradeneeded: null, result: null, error: null };
 			setTimeout(() => {
@@ -73,6 +83,21 @@ function createMemoryIndexedDB() {
 						dbRec.txQueue = prevQueue.then(() => myTurnPromise).then(() => txCompletePromise);
 						prevQueue.then(() => { myTurnResolve(); });
 
+						let pendingReqCount = 0;
+						let completed = false;
+						function scheduleCommitCheck() {
+							if (completed || aborted) return;
+							if (pendingReqCount === 0) {
+								completed = true;
+								setTimeout(() => {
+									if (!aborted) {
+										tx.oncomplete?.({ target: tx });
+										txCompleteResolve();
+									}
+								}, 0);
+							}
+						}
+
 						const tx = {
 							mode, error: null, oncomplete: null, onerror: null, onabort: null,
 							abort() {
@@ -85,19 +110,28 @@ function createMemoryIndexedDB() {
 								const meta = dbRec.autoIncs.get(sName) || { keyPath: null, autoInc: false, nextKey: 1 };
 								if (!storeMap) throw new Error(`Object store not found: ${sName}`);
 								function makeReq(fn) {
+									pendingReqCount++;
 									const r = { onsuccess: null, onerror: null, result: null, error: null };
 									myTurnPromise.then(() => {
 										setTimeout(() => {
 											if (aborted) return;
-											try { r.result = fn(); r.onsuccess?.({ target: r }); }
-											catch (err) { r.error = err; r.onerror?.({ target: r }); }
+											try {
+												r.result = fn();
+												r.onsuccess?.({ target: r });
+											} catch (err) {
+												r.error = err;
+												r.onerror?.({ target: r });
+											} finally {
+												pendingReqCount--;
+												scheduleCommitCheck();
+											}
 										}, 0);
 									});
 									return r;
 								}
 								return {
-									get(k) { return makeReq(() => { const v = storeMap.get(k); return v !== undefined ? JSON.parse(JSON.stringify(v)) : undefined; }); },
-									getAll() { return makeReq(() => [...storeMap.values()].map((v) => JSON.parse(JSON.stringify(v)))); },
+									get(k) { return makeReq(() => { const v = storeMap.get(k); return v !== undefined ? structuredClone(v) : undefined; }); },
+									getAll() { return makeReq(() => [...storeMap.values()].map((v) => structuredClone(v))); },
 									getAllKeys() { return makeReq(() => [...storeMap.keys()]); },
 									count() { return makeReq(() => storeMap.size); },
 									put(v, k) { return makeReq(() => {
@@ -107,7 +141,8 @@ function createMemoryIndexedDB() {
 											if (key === undefined && meta.autoInc) { key = meta.nextKey++; v[meta.keyPath] = key; }
 										}
 										if (key === undefined && meta.autoInc) { key = meta.nextKey++; }
-										storeMap.set(key, JSON.parse(JSON.stringify(v)));
+										if (typeof key === "number" && meta.autoInc) meta.nextKey = Math.max(meta.nextKey, key + 1);
+										storeMap.set(key, structuredClone(v));
 										return key;
 									}); },
 									add(v, k) { return makeReq(() => {
@@ -117,13 +152,15 @@ function createMemoryIndexedDB() {
 											if (key === undefined && meta.autoInc) { key = meta.nextKey++; v[meta.keyPath] = key; }
 										}
 										if (key === undefined && meta.autoInc) { key = meta.nextKey++; }
+										if (typeof key === "number" && meta.autoInc) meta.nextKey = Math.max(meta.nextKey, key + 1);
 										if (storeMap.has(key)) throw new Error("Key already exists: " + key);
-										storeMap.set(key, JSON.parse(JSON.stringify(v)));
+										storeMap.set(key, structuredClone(v));
 										return key;
 									}); },
 									delete(k) { return makeReq(() => { storeMap.delete(k); return undefined; }); },
 									openCursor(range, dir = "next") {
 										const r = { onsuccess: null, onerror: null, result: null };
+										pendingReqCount++;
 										myTurnPromise.then(() => {
 											setTimeout(() => {
 												if (aborted) return;
@@ -136,9 +173,24 @@ function createMemoryIndexedDB() {
 												function step() {
 													if (idx < entries.length) {
 														const [curKey, curVal] = entries[idx];
-														r.result = { key: curKey, value: JSON.parse(JSON.stringify(curVal)), continue() { idx++; setTimeout(step, 0); } };
-													} else { r.result = null; }
-													r.onsuccess?.({ target: r });
+														r.result = {
+															key: curKey,
+															value: structuredClone(curVal),
+															continue() {
+																idx++;
+																pendingReqCount++;
+																setTimeout(step, 0);
+															}
+														};
+													} else {
+														r.result = null;
+													}
+													try {
+														r.onsuccess?.({ target: r });
+													} finally {
+														pendingReqCount--;
+														scheduleCommitCheck();
+													}
 												}
 												step();
 											}, 0);
@@ -149,12 +201,7 @@ function createMemoryIndexedDB() {
 							},
 						};
 						myTurnPromise.then(() => {
-							setTimeout(() => {
-								if (!aborted) {
-									tx.oncomplete?.({ target: tx });
-									txCompleteResolve();
-								}
-							}, 20);
+							setTimeout(scheduleCommitCheck, 0);
 						});
 						return tx;
 					},
@@ -170,6 +217,40 @@ function createMemoryIndexedDB() {
 			return req;
 		}
 	};
+}
+
+class MockWebSocket {
+	static instances = [];
+	constructor(url) {
+		this.url = url;
+		this.readyState = 1;
+		this.listeners = {};
+		MockWebSocket.instances.push(this);
+		this.sent = [];
+		queueMicrotask(() => {
+			this.emit("open");
+		});
+	}
+	addEventListener(type, cb) {
+		this.listeners[type] = this.listeners[type] || [];
+		this.listeners[type].push(cb);
+	}
+	removeEventListener(type, cb) {
+		if (this.listeners[type]) {
+			this.listeners[type] = this.listeners[type].filter((fn) => fn !== cb);
+		}
+	}
+	send(data) {
+		this.sent.push(data);
+	}
+	close() {
+		this.readyState = 3;
+		this.emit("close");
+	}
+	emit(type, event = {}) {
+		const list = (this.listeners[type] || []).slice();
+		for (const fn of list) fn(event);
+	}
 }
 
 // Helper Memory Stores
@@ -981,3 +1062,186 @@ test("App-Neustart: Vollständige Rekonstruktion aus serialisierter Ablage", asy
 	assert.equal(reloadedClient.lastSyncedSeq, persistedCursor);
 });
 
+// -----------------------------------------------------------------------------
+// 25. CROSS-TAB-MIGRATION REGRESSIONSTESTS (A, B, C)
+// -----------------------------------------------------------------------------
+test("Cross-Tab-Race A: Tab A lädt Snapshot, Tab B schreibt danach s+, Migration A -> s+ muss erhalten bleiben", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {};
+
+	// 1. Initialer DB-Zustand: Heft h1 mit Strich s1
+	await DB.addEvent({ seq: 1, id: "h1-create", t: "2026-08-20T01:00:00.000Z", type: "pageCreate", payload: { id: "h1", kind: "heft", title: "Heft A" } });
+	await DB.addEvent({ seq: 2, id: "h1-s1", t: "2026-08-20T01:01:00.000Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "pg+", page: { id: "p1", paper: "lined" } }, { t: "s+", p: "p1", o: { id: "s1", color: "#000", pts: [10, 10] } }] } });
+
+	// 2. Tab A lädt Snapshot
+	const snapshotA = await STATE.load();
+	assert.equal(snapshotA.maxSeq, 2);
+	assert.ok(S.heftDocs.h1?.pages?.[0]?.strokes?.some((s) => s.id === "s1"));
+
+	// 3. Tab B schreibt danach s+ (seq 3, neuer Zeitstempel)
+	await DB.addEvent({ seq: 3, id: "h1-s2", t: "2026-08-20T01:02:00.000Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s+", p: "p1", o: { id: "s2", color: "#f00", pts: [20, 20] } }] } });
+
+	// 4. Tab A führt Migration mit seinem Snapshot aus
+	await CLOUDFLARE_SYNC.migrateLocalV4(snapshotA);
+
+	// 5. Reload der App: Zustand aus DB neu aufbauen
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {};
+	await STATE.load();
+
+	const strokes = S.heftDocs.h1?.pages?.[0]?.strokes || [];
+	assert.equal(strokes.length, 2, "Beide Striche s1 und s2 müssen nach Reload vorhanden sein");
+	assert.ok(strokes.some((s) => s.id === "s1"), "Strich s1 aus Baseline muss erhalten bleiben");
+	assert.ok(strokes.some((s) => s.id === "s2"), "Strich s2 aus Tab B muss erhalten bleiben");
+});
+
+test("Cross-Tab-Race B: Tab A lädt Snapshot, Tab B schreibt danach s-, Migration A -> Gelöschter Strich darf nach Reload NICHT wieder auferstehen", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {};
+
+	// 1. Initialer DB-Zustand: Heft h1 mit Strich s1
+	await DB.addEvent({ seq: 1, id: "h1-create", t: "2026-08-20T01:00:00.000Z", type: "pageCreate", payload: { id: "h1", kind: "heft", title: "Heft B" } });
+	await DB.addEvent({ seq: 2, id: "h1-s1", t: "2026-08-20T01:01:00.000Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "pg+", page: { id: "p1", paper: "lined" } }, { t: "s+", p: "p1", o: { id: "s1", color: "#000", pts: [10, 10] } }] } });
+
+	// 2. Tab A lädt Snapshot (enthält s1)
+	const snapshotA = await STATE.load();
+	assert.equal(snapshotA.maxSeq, 2);
+	assert.ok(S.heftDocs.h1?.pages?.[0]?.strokes?.some((s) => s.id === "s1"));
+
+	// 3. Tab B schreibt danach s- (Löschung von s1 bei seq 3)
+	await DB.addEvent({ seq: 3, id: "h1-del-s1", t: "2026-08-20T01:02:00.000Z", type: "heftOps", payload: { pageId: "h1", ops: [{ t: "s-", p: "p1", ids: ["s1"] }] } });
+
+	// 4. Tab A führt Migration mit seinem Snapshot aus
+	await CLOUDFLARE_SYNC.migrateLocalV4(snapshotA);
+
+	// 5. Reload der App: Replay aus DB
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {};
+	await STATE.load();
+
+	const strokes = S.heftDocs.h1?.pages?.[0]?.strokes || [];
+	assert.equal(strokes.length, 0, "Strich s1 darf nach Reload NICHT durch die Baseline wieder auferstehen");
+	assert.equal(strokes.some((s) => s.id === "s1"), false, "Gelöschter Strich muss gelöscht bleiben");
+});
+
+test("Cross-Tab-Race C: Tab A lädt Snapshot, Tab B schreibt zwischen STATE.load und Cutoff-Ermittlung -> Kein Event darf gelöscht werden", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {};
+
+	// 1. Initialer DB-Zustand: 10 Events
+	for (let i = 1; i <= 10; i++) {
+		await DB.addEvent({ seq: i, id: `init-ev-${i}`, t: `2026-08-20T01:0${i % 10}:00.000Z`, type: "pageCreate", payload: { id: `p-${i}`, title: `Note ${i}` } });
+	}
+
+	// 2. Tab A lädt Snapshot bei seq 10
+	const snapshotA = await STATE.load();
+	assert.equal(snapshotA.maxSeq, 10);
+
+	// 3. Tab B schreibt neue Events (seq 11, 12, 13)
+	await DB.addEvent({ seq: 11, id: "tab-b-ev-11", t: "2026-08-20T01:11:00.000Z", type: "pageCreate", payload: { id: "p-11", title: "Note 11" } });
+	await DB.addEvent({ seq: 12, id: "tab-b-heft-12", t: "2026-08-20T01:12:00.000Z", type: "heftOps", payload: { pageId: "p-11", ops: [{ t: "s+", p: "p1", o: { id: "s-tab-b-12" } }] } });
+	await DB.addEvent({ seq: 13, id: "tab-b-ev-13", t: "2026-08-20T01:13:00.000Z", type: "pageUpdate", payload: { id: "p-11", patch: { title: "Note 11 patch" } } });
+
+	// 4. Tab A führt Migration aus (Cutoff = snapshotA.maxSeq = 10)
+	await CLOUDFLARE_SYNC.migrateLocalV4(snapshotA);
+
+	// 5. Prüfe: Keines der neuen Events von Tab B darf gelöscht worden sein!
+	const all = await DB.allEvents();
+	assert.ok(all.some((e) => e.id === "tab-b-ev-11"), "Event 11 muss erhalten bleiben");
+	assert.ok(all.some((e) => e.id === "tab-b-heft-12"), "Heft-Event 12 von Tab B darf nicht gelöscht werden");
+	assert.ok(all.some((e) => e.id === "tab-b-ev-13"), "Event 13 muss erhalten bleiben");
+});
+
+// -----------------------------------------------------------------------------
+// 26. IGNOREDBLOBKEYS INVALIDIERUNG ENGER MACHEN
+// -----------------------------------------------------------------------------
+test("Blob-GC Regression: unreferenzierter Remote-Blob wird ignoriert und bei non-page Dispatch nicht erneut geladen, erst bei echter Page-Referenz", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+	S.pages = {}; S.heftDocs = {}; S.heftMeta = {}; S.settings = {};
+
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// Server besitzt einen gültig verschlüsselten, aber lokal nicht referenzierten Blob
+	const BLOB_ID = "img:unreferenced-blob-test-1";
+	const BLOB_DATA = new Uint8Array([1, 2, 3, 4, 5]);
+	const encBlob = await encryptBlobRecord(creds.cryptoKey, BLOB_ID, { buf: BLOB_DATA.buffer, meta: { mime: "image/png" } });
+	const blobKey = await sha256Hex(`impala67_blob:${BLOB_ID}`);
+
+	let blobGetCount = 0;
+	let serverEvents = [];
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			return new Response(JSON.stringify({ events: serverEvents, maxSeq: serverEvents.length, hasMore: false, generation: 1 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/blobs")) {
+			return new Response(JSON.stringify({ keys: [blobKey], cursor: "" }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes(`/api/blob/${blobKey}`) && (!init.method || init.method === "GET")) {
+			blobGetCount++;
+			return new Response(encBlob.bytes, {
+				status: 200,
+				headers: { "Content-Type": "application/octet-stream", "X-Impala-IV": encBlob.iv },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			return new Response(JSON.stringify({ ok: true, savedCount: 0, maxSeq: serverEvents.length, usage: 100, generation: 1 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+	};
+
+	try {
+		const configured = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(configured, true);
+
+		// 1. Erster Sync lädt und entschlüsselt den Blob, ignoriert ihn da nicht in S.pages referenziert
+		await CLOUDFLARE_SYNC.syncNow();
+		assert.equal(blobGetCount, 1, "Erster Sync muss den unreferenzierten Blob einmal anfragen");
+		const localBlob1 = await DB.getBlob(BLOB_ID);
+		assert.equal(localBlob1, undefined, "Unreferenzierter Blob darf nicht in DB gespeichert werden");
+
+		// 2. Normale lokale Änderung OHNE neue Blob-Referenz (z. B. chatUpsert)
+		await STATE.dispatch("chatUpsert", { id: "c1", messages: [{ role: "user", text: "Hallo" }] });
+
+		// 3. Zweiter Sync darf denselben Blob NICHT erneut GETten
+		await CLOUDFLARE_SYNC.syncNow();
+		assert.equal(blobGetCount, 1, "Zweiter Sync nach chatUpsert darf den ignorierten Blob NICHT erneut GETten");
+
+		// 4. Danach lokale Änderung, die genau diesen Blob referenziert (pageCreate mit ![img](...))
+		await STATE.dispatch("pageCreate", { id: "note-ref-blob", title: "Note with Blob", content: `Hier ist das Bild: ![Bild](${BLOB_ID})` });
+
+		// 5. Nächster Sync muss ihn herunterladen und speichern
+		await CLOUDFLARE_SYNC.syncNow();
+		assert.equal(blobGetCount, 2, "Dritter Sync nach pageCreate muss den Blob erneut abrufen");
+		const localBlobFinal = await DB.getBlob(BLOB_ID);
+		assert.ok(localBlobFinal, "Blob muss nach Referenzierung in DB gespeichert sein");
+		assert.deepEqual(new Uint8Array(localBlobFinal.buf), BLOB_DATA);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+	}
+});

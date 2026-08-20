@@ -187,6 +187,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function pull() {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		while (true) {
 			const since = state.lastSyncedSeq;
 			const response = await fetch(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
@@ -226,6 +227,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function postPackets(packets) {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		for (let i = 0; i < packets.length;) {
 			const batch = [];
 			let chars = 0;
@@ -246,6 +248,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function push(forceAll = false) {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		const local = await DB.allEvents();
 		const maxSeq = local.reduce((max, event) => Math.max(max, Number(event?.seq) || 0), 0);
 		let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
@@ -279,6 +282,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	};
 
 	async function listRemoteBlobs() {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return new Set();
 		const keys = [];
 		let cursor = "";
 		do {
@@ -293,6 +297,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function syncBlobs() {
 		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && isBlobAlive(id, S.pages));
 		const localByKey = new Map();
 		await mapLimit(localIds, 6, async (id) => localByKey.set(await blobOpaqueKey(id), id));
@@ -326,6 +331,9 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function runPass(forceAll) {
+		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+			throw readable(new Error("Das Gerät ist offline."));
+		}
 		setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
 		await pull();
 		setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
@@ -340,6 +348,9 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function requestSync(forceAll = false) {
 		if (!state.url || !credentials) return Promise.reject(new Error("Cloudflare-Sync ist nicht eingerichtet."));
+		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+			return Promise.reject(readable(new Error("Das Gerät ist offline.")));
+		}
 		syncAgain = true; forceAgain ||= forceAll;
 		if (syncPromise) return syncPromise;
 		syncPromise = (async () => {
@@ -356,23 +367,31 @@ export const CLOUDFLARE_SYNC = (() => {
 		return syncPromise;
 	}
 
-	function scheduleSync() {
+	function scheduleSync(event = null) {
 		if (!credentials) return;
-		ignoredBlobKeys.clear();
+		if (!event || (typeof event.type === "string" && event.type.startsWith("page"))) {
+			ignoredBlobKeys.clear();
+		}
+		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+			closeSocket();
+			return;
+		}
 		clearTimeout(localTimer);
 		localTimer = setTimeout(() => requestSync().catch(() => {}), LOCAL_SYNC_DELAY);
 	}
 
-	async function migrateLocalV4() {
+	async function migrateLocalV4(snapshotInfo = null) {
 		if (LS.getItem(LS_LOCAL_V4) === "1") return;
 		if (typeof DB.replaceHeftHistory !== "function") throw new Error("Lokale v4-Migration fehlt in db.js.");
-		const upToSeq = await DB.maxSeq();
+		const upToSeq = snapshotInfo?.maxSeq ?? snapshotInfo?.seq ?? (typeof STATE.loadedSeq === "function" ? STATE.loadedSeq() : 0);
+		const defaultTime = snapshotInfo?.maxTime || snapshotInfo?.time || (typeof STATE.loadedTime === "function" ? STATE.loadedTime() : "") || U.now();
 		const baselines = [];
 		for (const [pageId, doc] of Object.entries(S.heftDocs || {})) {
 			const ops = heftBaselineOps(doc);
 			if (!ops.length) continue;
 			const hash = await sha256Hex(JSON.stringify(doc?.pages || []));
-			baselines.push({ id: `v4-heft-${pageId}-${hash.slice(0, 24)}`, t: U.now(), type: "heftOps", payload: { pageId, ops } });
+			const t = S.heftMeta?.[pageId]?.updated || defaultTime;
+			baselines.push({ id: `v4-heft-${pageId}-${hash.slice(0, 24)}`, t, type: "heftOps", payload: { pageId, ops } });
 		}
 		await DB.replaceHeftHistory(baselines, upToSeq);
 		LS.removeItem("impala67_compact_floor");
@@ -388,12 +407,14 @@ export const CLOUDFLARE_SYNC = (() => {
 	function scheduleReconnect() {
 		clearTimeout(reconnectTimer);
 		if (!state.url || !credentials) return;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 		const delay = Math.min(30000, 1000 * 1.6 ** ++reconnectAttempts);
 		reconnectTimer = setTimeout(connectWebSocket, delay);
 	}
 
 	function connectWebSocket() {
 		if (typeof WebSocket === "undefined" || !credentials || !state.url) return;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 		if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return;
 		clearTimeout(reconnectTimer); clearInterval(pingTimer);
 		const base = state.url.replace(/\/+$/, "");
@@ -471,11 +492,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		return true;
 	}
 
+	STATE.onAfterDispatch((ev) => scheduleSync(ev));
+
 	function init() {
 		if (initialized) return;
 		initialized = true;
-		STATE.onAfterDispatch(() => scheduleSync());
 		if (typeof window !== "undefined") {
+			window.addEventListener("offline", () => { closeSocket(); clearTimeout(localTimer); clearTimeout(reconnectTimer); });
 			window.addEventListener("online", () => { connectWebSocket(); requestSync().catch(() => {}); });
 			window.addEventListener("visibilitychange", () => { if (!document.hidden && credentials) { connectWebSocket(); requestSync().catch(() => {}); } });
 		}

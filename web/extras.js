@@ -59,7 +59,7 @@ export const EXTRAS = (() => {
 
 	// ---- Multi-Tab: Events live zwischen Tabs abgleichen + einmalige Warnung ----
 	const TAB_ID = U.uid();
-	const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("impala67") : null;
+	const bc = (typeof window !== "undefined" && !window.__DISABLE_BROADCAST__ && "BroadcastChannel" in window) ? new BroadcastChannel("impala67") : null;
 	let warned = false;
 	function warnMultiTab() {
 		if (warned) return;

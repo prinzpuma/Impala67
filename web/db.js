@@ -307,12 +307,13 @@ export const DB = (() => {
 		ensureOpen();
 		const list = Array.isArray(baselines) ? baselines : [];
 		list.forEach(validateEvent);
+		const cutoff = Number(upToSeq || 0);
 		return new Promise((resolve, reject) => {
 			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
 			const req = store.getAll();
 			req.onsuccess = () => {
 				for (const ev of req.result || []) {
-					if ((ev.type === "heftOps" || ev.type === "heftSnap") && (!upToSeq || (ev.seq && ev.seq <= upToSeq))) {
+					if ((ev.type === "heftOps" || ev.type === "heftSnap") && cutoff > 0 && ev.seq && ev.seq <= cutoff) {
 						store.delete(ev.seq);
 					}
 				}
