@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { CLOUDFLARE_SYNC } from "../web/sync-cloudflare.js";
+import { CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
 import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES } from "../web/sync-crypto.js";
 import { DB } from "../web/db.js";
 
@@ -17,8 +17,27 @@ test("CLOUDFLARE_SYNC hat initialen Status und Methoden", () => {
 
 test("CLOUDFLARE_SYNC generiert sicheren Sync-Schlüssel", () => {
 	const key = CLOUDFLARE_SYNC.generateSyncKey();
-	assert.ok(key.startsWith("impala-"));
-	assert.equal(key.split("-").length, 5);
+	assert.match(key, /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/);
+});
+
+test("Cloud-Purge setzt genau die benutzerspezifischen Sync-Cursor zurück", () => {
+	const values = new Map([
+		["impala67_cf_last_seq", "11"],
+		["impala67_cf_last_uploaded_local_seq", "12"],
+		["impala67_cf_last_seq_user-a", "91"],
+		["impala67_cf_last_uploaded_local_seq_user-a", "92"],
+		["impala67_cf_last_seq_user-b", "71"],
+		["impala67_cf_last_uploaded_local_seq_user-b", "72"],
+	]);
+	const storage = {
+		setItem: (key, value) => values.set(key, value),
+	};
+	resetSyncCursorStorage(storage, "user-a");
+	const keys = syncCursorStorageKeys("user-a");
+	assert.equal(values.get(keys.lastSynced), "0");
+	assert.equal(values.get(keys.lastUploaded), "0");
+	assert.equal(values.get("impala67_cf_last_seq_user-b"), "71");
+	assert.equal(values.get("impala67_cf_last_seq"), "11");
 });
 
 test("CLOUDFLARE_SYNC Trennen setzt Zustand zurück", () => {

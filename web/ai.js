@@ -7,6 +7,7 @@ import { RENDER } from "./render.js";
 import { CHATS } from "./chats.js";
 import { THINK } from "./think-heuristik.js";
 import { RAG } from "./rag.js";
+import { EMBEDDINGS } from "./embedding.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 export const AI = (() => {
@@ -1273,6 +1274,17 @@ export const AI = (() => {
 		return (await chatOnce([{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }], null, onDelta, onReasoning)).content || "";
 	}
 	const undoAi = (changeSet) => TOOLS.undo(changeSet);
+
+	// Ein Adapter ist die einzige Verbindung zum Embedding-Pfad. rag.js nutzt
+	// diese neutrale Schnittstelle statt ai.js zurueck zu importieren.
+	EMBEDDINGS.setAdapter({
+		embed,
+		listModels: listEmbeddingModels,
+		getLocalStatus: getLocalEmbeddingStatus,
+		downloadLocal: downloadLocalEmbedding,
+		deleteLocal: deleteLocalEmbedding,
+		onProgress: onEmbeddingProgress,
+	});
 
 	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
 })();

@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v209"; // Export-Medien, Hybrid-RAG und Lasso-Resize.
+const CACHE = "impala67-v210"; // Sync-Sicherheit, zyklusfreie Embeddings und SRI.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -35,6 +35,7 @@ const APP_FILES = [
 	"./state.js",
 	"./tools.js",
 	"./ai.js",
+	"./embedding.js",
 	"./think-heuristik.js",
 	"./handschrift.js",
 	"./rag.js",

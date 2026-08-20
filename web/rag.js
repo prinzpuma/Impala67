@@ -2,8 +2,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { AI } from "./ai.js";
-import { PDFS } from "./pdfs.js";
+import { EMBEDDINGS } from "./embedding.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
 // Benötigt das lokale Bekko-Embedding-Modell aus ⚙️ → KI.
@@ -54,6 +53,9 @@ export const RAG = (() => {
 				if (!rec) {
 					const pdf = await DB.getBlob(pg.pdfId);
 					if (pdf) {
+						// Nur fuer die einmalige Alt-PDF-Migration laden. Ein statischer
+						// Import wuerde rag.js -> pdfs.js -> ai.js -> rag.js erzeugen.
+						const { PDFS } = await import("./pdfs.js");
 						const ex = await PDFS.extractText(pdf.buf.slice(0));
 						await DB.putBlob("pdftext:" + pg.pdfId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
 						rec = await DB.getBlob("pdftext:" + pg.pdfId);
@@ -70,7 +72,7 @@ export const RAG = (() => {
 		// Schritten wieder Kontrolle.
 		const vecs = [];
 		for (let at = 0; at < chunks.length; at += EMBEDDING_BATCH_SIZE) {
-			const batch = await AI.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE));
+			const batch = await EMBEDDINGS.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE));
 			if (!Array.isArray(batch) || batch.length !== Math.min(EMBEDDING_BATCH_SIZE, chunks.length - at) || batch.some((v) => !v || !v.length)) {
 				throw new Error("Embedding unvollständig für Seite " + pageId);
 			}
@@ -88,7 +90,12 @@ export const RAG = (() => {
 		await DB.putVec(pageId, {
 			updated: pg.updated,
 			model: S.settings.embedModel,
-			chunks: chunks.map((text, i) => ({ text, vec: vecs[i], norm: norm(vecs[i]) })),
+			// Neue Vektoren kompakt speichern. Alte Array-Einträge bleiben lesbar und
+			// werden beim naechsten normalen Reindex automatisch ersetzt.
+			chunks: chunks.map((text, i) => {
+				const vec = vecs[i] instanceof Float32Array ? vecs[i] : Float32Array.from(vecs[i]);
+				return { text, vec, norm: norm(vec) };
+			}),
 		});
 		vecCache = null; // Suche lädt beim nächsten Mal frisch
 	}
@@ -200,7 +207,7 @@ export const RAG = (() => {
 		// andere Quelle darf keine gecachten Query-Vektoren der alten Quelle wiederverwenden.
 		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedProviderId || "") + "::" + (S.settings.embedModel || "");
 		if (queryCache.has(key)) return queryCache.get(key);
-		const [qv] = await AI.embed([query]);
+		const [qv] = await EMBEDDINGS.embed([query]);
 		queryCache.set(key, qv);
 		if (queryCache.size > 20) queryCache.delete(queryCache.keys().next().value);
 		return qv;
@@ -223,12 +230,18 @@ export const RAG = (() => {
 		}
 		const lexical = lexicalScores(query, docs);
 		const maxLexical = Math.max(0, ...lexical.values());
+		const exactQuery = String(query || "").trim().toLocaleLowerCase("de-DE");
 		const hits = docs.map((doc) => {
 			const semantic = Math.max(0, doc.semantic || 0);
 			const lex = maxLexical ? (lexical.get(doc) || 0) / maxLexical : 0;
+			const title = String(doc.title || "").trim().toLocaleLowerCase("de-DE");
+			const searchable = (doc.title + "\n" + doc.text).toLocaleLowerCase("de-DE");
+			const exactFloor = exactQuery && title === exactQuery ? 0.8
+				: exactQuery.length >= 2 && searchable.includes(exactQuery) ? 0.7 : 0;
 			// Semantik bleibt die Basis; lexikalische Evidenz kann schwache semantische
-			// Treffer anheben, einen bereits perfekten Treffer aber nicht verschlechtern.
-			const score = semantic + (1 - semantic) * 0.45 * lex;
+			// Treffer anheben. Ein wirklich woertlicher Fachbegriff, Variablenname oder
+			// Formelausschnitt darf jedoch nicht hinter bloss aehnlicher Semantik landen.
+			const score = Math.max(semantic + (1 - semantic) * 0.45 * lex, exactFloor);
 			return { pageId: doc.pageId, title: doc.title, snippet: doc.text.slice(0, 400), score, semanticScore: doc.semantic, lexicalScore: lex };
 		});
 		hits.sort((a, b) => b.score - a.score);

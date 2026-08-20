@@ -13,12 +13,12 @@ import {
 	MAX_USER_STORAGE_BYTES,
 } from "../web/sync-crypto.js";
 
-test("generateSyncKey erzeugt 16-stelligen strukturierten Schlüssel", () => {
+test("generateSyncKey erzeugt einen strukturierten 128-Bit-Schlüssel", () => {
 	const key1 = generateSyncKey();
 	const key2 = generateSyncKey();
-	assert.ok(key1.startsWith("impala-"));
+	assert.match(key1, /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/);
 	assert.notEqual(key1, key2);
-	assert.equal(key1.split("-").length, 5);
+	assert.equal(key1.replace(/^impala-/, "").replaceAll("-", "").length, 32);
 });
 
 test("deriveSyncCredentials leitet deterministische User-ID und CryptoKey ab", async () => {
@@ -30,6 +30,14 @@ test("deriveSyncCredentials leitet deterministische User-ID und CryptoKey ab", a
 	assert.equal(typeof creds1.userId, "string");
 	assert.equal(creds1.userId.length, 64); // SHA-256 Hex
 	assert.ok(creds1.cryptoKey);
+});
+
+test("bestehende 64-Bit-Sync-Schlüssel bleiben kompatibel", async () => {
+	const legacyKey = "impala-a7f9-2c3e-8b1d-9f4a";
+	const first = await deriveSyncCredentials(legacyKey);
+	const second = await deriveSyncCredentials(legacyKey);
+	assert.equal(first.userId, second.userId);
+	assert.ok(first.cryptoKey);
 });
 
 test("encryptPayload und decryptPayload führen vollständigen E2EE-Zyklus durch", async () => {

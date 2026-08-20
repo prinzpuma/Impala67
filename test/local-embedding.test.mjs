@@ -12,6 +12,7 @@ Object.defineProperty(globalThis, "matchMedia", { value: () => ({ matches: false
 
 const { S, STATE } = await import("../web/state.js");
 const { AI } = await import("../web/ai.js");
+const { EMBEDDINGS } = await import("../web/embedding.js");
 const { RAG } = await import("../web/rag.js");
 const { DB } = await import("../web/db.js");
 const { updateLocalEmbeddingManagerUi } = await import("../web/settings.js");
@@ -89,9 +90,9 @@ test("RAG indexes and searches with 256d vectors", async () => {
 	DB.putVec = async (id, data) => { storedVecs.set(id, data); };
 	DB.allVecs = async () => Object.fromEntries(storedVecs);
 
-	// Mock AI.embed for testing
-	const origEmbed = AI.embed;
-	AI.embed = async (texts) => {
+	// RAG nutzt die zyklusfreie Embedding-Schnittstelle direkt.
+	const origEmbed = EMBEDDINGS.embed;
+	EMBEDDINGS.embed = async (texts) => {
 		return texts.map((t) => {
 			const vec = new Array(256).fill(0);
 			if (t.includes("Photosynthese") || t.includes("Lichtreaktion") || t.includes("Pflanzen")) {
@@ -110,6 +111,7 @@ test("RAG indexes and searches with 256d vectors", async () => {
 		assert.equal(storedVecs.size, 2);
 		const p1Data = storedVecs.get("p1");
 		assert.equal(p1Data.model, "local:bekko-a8m");
+		assert.ok(p1Data.chunks[0].vec instanceof Float32Array);
 		assert.equal(p1Data.chunks[0].vec.length, 256);
 
 		// Search for photosynthese
@@ -118,7 +120,7 @@ test("RAG indexes and searches with 256d vectors", async () => {
 		assert.equal(hits[0].title, "Photosynthese");
 		assert.equal(hits[0].score, 1);
 	} finally {
-		AI.embed = origEmbed;
+		EMBEDDINGS.embed = origEmbed;
 	}
 });
 
@@ -129,18 +131,20 @@ test("Hybrid-RAG hebt exakte Fachbegriffe trotz schwacher Semantik an", async ()
 		exact: { id: "exact", title: "ATP-Synthase", content: "Protonengradient", updated: 1 },
 		semantic: { id: "semantic", title: "Zellatmung", content: "Energiegewinnung im Mitochondrium", updated: 1 },
 	};
-	const oldAll = DB.allVecs, oldEmbed = AI.embed;
+	const oldAll = DB.allVecs, oldEmbed = EMBEDDINGS.embed;
 	DB.allVecs = async () => ({
 		exact: { model: "local:hybrid-test", chunks: [{ text: "ATP-Synthase und Protonengradient", vec: [0, 1], norm: 1 }] },
-		semantic: { model: "local:hybrid-test", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.2, Math.sqrt(0.96)], norm: 1 }] },
+		semantic: { model: "local:hybrid-test", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.6, 0.8], norm: 1 }] },
 	});
-	AI.embed = async () => [[1, 0]];
+	EMBEDDINGS.embed = async () => [[1, 0]];
 	try {
 		const hits = await RAG.search("ATP-Synthase", 2);
 		assert.equal(hits[0].title, "ATP-Synthase");
 		assert.equal(hits[0].lexicalScore, 1);
+		assert.equal(hits[0].semanticScore, 0);
+		assert.equal(hits[1].semanticScore, 0.6);
 		assert.ok(hits[0].score > hits[1].score);
-	} finally { DB.allVecs = oldAll; AI.embed = oldEmbed; }
+	} finally { DB.allVecs = oldAll; EMBEDDINGS.embed = oldEmbed; }
 });
 
 test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
@@ -156,11 +160,11 @@ test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 	};
 
 	const batchSizes = [];
-	const origEmbed = AI.embed;
+	const origEmbed = EMBEDDINGS.embed;
 	const origPutVec = DB.putVec;
 	try {
 		DB.putVec = async () => {};
-		AI.embed = async (texts) => {
+		EMBEDDINGS.embed = async (texts) => {
 			batchSizes.push(texts.length);
 			return texts.map(() => new Array(256).fill(0));
 		};
@@ -170,7 +174,7 @@ test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 		assert.ok(Math.max(...batchSizes) <= 4);
 		assert.equal(batchSizes.reduce((sum, size) => sum + size, 0), 12);
 	} finally {
-		AI.embed = origEmbed;
+		EMBEDDINGS.embed = origEmbed;
 		DB.putVec = origPutVec;
 	}
 });

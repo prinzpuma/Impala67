@@ -45,14 +45,14 @@ export async function sha256Hex(str) {
 }
 
 /**
- * Generiert einen sicheren, lesbaren 16-stelligen Sync-Schlüssel
- * z. B. "impala-a7f9-2c3e-8b1d-9f4a"
+ * Generiert einen sicheren, lesbaren 128-Bit-Sync-Schlüssel.
+ * Bestehende 64-Bit-Schlüssel bleiben in deriveSyncCredentials kompatibel.
  */
 export function generateSyncKey() {
-	const randomBytes = new Uint8Array(8);
+	const randomBytes = new Uint8Array(16);
 	crypto.getRandomValues(randomBytes);
 	const hex = bytesToHex(randomBytes);
-	return `impala-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`;
+	return `impala-${hex.match(/.{4}/g).join("-")}`;
 }
 
 /**

@@ -26,17 +26,31 @@ import {
  */
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
+const LS_URL_KEY = "impala67_cf_server_url";
+const LS_KEY_KEY = "impala67_cf_sync_key";
+const LS_LAST_SEQ_KEY = "impala67_cf_last_seq";
+const LS_LAST_UPLOADED_LOCAL_SEQ = "impala67_cf_last_uploaded_local_seq";
+
+export function syncCursorStorageKeys(userId = "") {
+	const suffix = userId ? `_${userId}` : "";
+	return {
+		lastSynced: `${LS_LAST_SEQ_KEY}${suffix}`,
+		lastUploaded: `${LS_LAST_UPLOADED_LOCAL_SEQ}${suffix}`,
+	};
+}
+
+export function resetSyncCursorStorage(storage, userId = "") {
+	const keys = syncCursorStorageKeys(userId);
+	storage.setItem(keys.lastSynced, "0");
+	storage.setItem(keys.lastUploaded, "0");
+}
+
 export const CLOUDFLARE_SYNC = (() => {
 	const LS = typeof localStorage !== "undefined" ? localStorage : {
 		getItem: () => null,
 		setItem: () => {},
 		removeItem: () => {},
 	};
-
-	const LS_URL_KEY = "impala67_cf_server_url";
-	const LS_KEY_KEY = "impala67_cf_sync_key";
-	const LS_LAST_SEQ_KEY = "impala67_cf_last_seq";
-	const LS_LAST_UPLOADED_LOCAL_SEQ = "impala67_cf_last_uploaded_local_seq";
 
 	let socket = null;
 	let pingTimer = null;
@@ -72,6 +86,14 @@ export const CLOUDFLARE_SYNC = (() => {
 		state.status = status;
 		state.label = label;
 		state.detail = detail || label;
+		emitStatus();
+	}
+
+	function resetSyncCursors() {
+		state.lastSyncedSeq = 0;
+		state.lastUploadedLocalSeq = 0;
+		resetSyncCursorStorage(LS, credentials?.userId);
+		state.usage = formatStorageUsage(0);
 		emitStatus();
 	}
 
@@ -227,6 +249,12 @@ export const CLOUDFLARE_SYNC = (() => {
 						return;
 					}
 					if (msg.type === "pong") return;
+					if (msg.type === "reset") {
+						// Auch weitere verbundene Geraete muessen den vom Server
+						// zurueckgesetzten Kanalstand kennen.
+						resetSyncCursors();
+						return;
+					}
 					if (msg.type === "event" && msg.event) {
 						await handleIncomingRemoteEvent(msg.event);
 					}
@@ -345,8 +373,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		return enqueueRemoteApply(() => applyIncomingRemoteEvent(encryptedEvent));
 	}
 
-	const lastUploadedKey = () => (credentials?.userId ? `${LS_LAST_UPLOADED_LOCAL_SEQ}_${credentials.userId}` : LS_LAST_UPLOADED_LOCAL_SEQ);
-	const lastSyncedKey = () => (credentials?.userId ? `${LS_LAST_SEQ_KEY}_${credentials.userId}` : LS_LAST_SEQ_KEY);
+	const lastUploadedKey = () => syncCursorStorageKeys(credentials?.userId).lastUploaded;
+	const lastSyncedKey = () => syncCursorStorageKeys(credentials?.userId).lastSynced;
 
 	/**
 	 * Holt verpasste Events seit `lastSyncedSeq` vom Server in kleinen, iPad-tauglichen Seiten
@@ -587,12 +615,10 @@ export const CLOUDFLARE_SYNC = (() => {
 				headers: getAuthHeaders(),
 			});
 			if (response.ok) {
-				state.lastSyncedSeq = 0;
-				state.lastUploadedLocalSeq = 0;
-				LS.setItem(LS_LAST_SEQ_KEY, "0");
-				LS.setItem(LS_LAST_UPLOADED_LOCAL_SEQ, "0");
-				state.usage = formatStorageUsage(0);
-				emitStatus();
+				// Der Serverkanal und seine benutzerspezifischen Cursor muessen atomar
+				// denselben leeren Stand beschreiben. Sonst ueberspringt ein Reload den
+				// erneuten Upload der weiterhin lokal vorhandenen Events.
+				resetSyncCursors();
 				return true;
 			}
 			return false;
