@@ -446,8 +446,8 @@ export const TOOLS = (() => {
 			await STATE.dispatch(x.before.trashed ? "deckTrash" : "deckRestore", { name: x.id });
 		}
 		for (const x of changeSet.heftDocs || []) {
-			if (typeof HEFT.restoreDoc === "function") await HEFT.restoreDoc(x.id, { pages: clone(x.before?.pages || []) });
-			else await STATE.dispatch("heftSnap", { pageId: x.id, doc: { pages: clone(x.before?.pages || []) } });
+			if (typeof HEFT.restoreDoc !== "function") throw new Error("Heft-Wiederherstellung ist nicht verfügbar.");
+			await HEFT.restoreDoc(x.id, { pages: clone(x.before?.pages || []) });
 		}
 		return { ok: true };
 	}

@@ -218,10 +218,7 @@ export const DB = (() => {
 	// pageUpdate-Patches, die weiterhin ankommen müssen. Für pageUpdate ist Wieder-
 	// auferstehung nur ein Platz-, kein Korrektheitsproblem (Replay ist LWW über t).
 	const COMPACT_FLOOR_KEY = "impala67_compact_floor";
-	// heftOps steht mit auf der Liste, weil ein heftSnap denselben Zustand vollständig ersetzt —
-	// verdichtete Strich-Operationen dürfen nicht über fremde Deltas zurückkehren (sie wären zwar
-	// idempotent, würden aber den Log wieder aufblähen, den der Snapshot gerade zusammengefasst hat).
-	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet", "heftOps"]);
+	const DROPPABLE_TYPES = new Set(["uiTabsSet", "uiTreeSet"]);
 	const compactFloor = () => localStorage.getItem(COMPACT_FLOOR_KEY) || "";
 	// Exportiert, damit test/test-sync.mjs genau diese Regel prüfen kann — der Fehler,
 	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
@@ -241,15 +238,10 @@ export const DB = (() => {
 		const covered = {}, contentKept = {}, keep = [];
 		let uiTabsKept = false;
 		const uiTreeKeys = new Set();
-		const heftSnapped = new Set(); // pageIds, für die (rückwärts gelesen) schon ein heftSnap steht
 		for (let i = sorted.length - 1; i >= 0; i--) { // rückwärts: neueste zuerst
 			const ev = sorted[i], p = ev.payload || {};
 			if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
 			else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
-			// Heft: der jüngste heftSnap je Seite beschreibt den ganzen Stand — alles Ältere
-			// desselben Hefts (Ops wie ältere Snapshots) ist damit redundant. Pro pageId, nicht global.
-			else if (ev.type === "heftSnap") { if (heftSnapped.has(p.pageId)) continue; heftSnapped.add(p.pageId); }
-			else if (ev.type === "heftOps" && heftSnapped.has(p.pageId)) continue;
 			if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
 			if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
 			const [bucket, patch] =
@@ -285,37 +277,46 @@ export const DB = (() => {
 		return keep.filter((ev) => ev.type !== "heftBlob" || usedRefs.has(ev.payload && ev.payload.hash));
 	}
 
-	// Nur nach erfolgreichem Sync aufrufen: Seq-Nummern werden neu vergeben, der Sync-Wasserstand
-	// (impala67_drive_synced_seq) muss danach neu gesetzt werden. Unter minDrop lohnt das Neuschreiben nicht.
 	async function compactLocal(minDrop = 200) {
-		const evs = await allEvents();
-		const compacted = compactEvents(evs);
-		const dropped = evs.length - compacted.length;
-		if (dropped < minDrop) return 0;
-		await rw("events", (s) => { s.clear(); compacted.forEach(({ seq, ...ev }) => s.add(ev)); });
-		// Untergrenze setzen, damit fremde Deltas die verworfenen Events nicht zurückbringen.
-		localStorage.setItem(COMPACT_FLOOR_KEY, compacted.length ? compacted[0].t : U.now());
-		// Der seq-Raum ist komplett neu vergeben — jede seq-basierte Sync-Marke ist damit
-		// bedeutungslos. 0 = beim nächsten Sync alles erneut anbieten; importAll bzw. der Cloud-Sync
-		// ist per Event-id / Deduplizierung idempotent, es entstehen also keine Duplikate.
-		// Auch die Cloudflare-Upload-Cursor müssen auf 0 gesetzt werden, da sonst neue Events
-		// wegen eines alten, zu hohen Upload-Cursors übersprungen würden (stiller Datenverlust).
-		localStorage.setItem("impala67_drive_uploaded_seq", "0");
-		localStorage.removeItem("impala67_drive_synced_seq");
-		try {
-			if (typeof localStorage !== "undefined") {
-				for (let i = 0; i < localStorage.length; i++) {
-					const k = localStorage.key(i);
-					if (k && (k === "impala67_cf_last_uploaded_local_seq" || k.startsWith("impala67_cf_last_uploaded_local_seq_"))) {
-						localStorage.setItem(k, "0");
-					}
-				}
-			}
-		} catch {}
-		if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-			window.dispatchEvent(new CustomEvent("impala67:db-compacted"));
-		}
-		return dropped;
+		ensureOpen();
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
+			const req = store.getAll();
+			let dropped = 0, floor = "";
+			req.onsuccess = () => {
+				const evs = req.result || [], compacted = compactEvents(evs);
+				dropped = evs.length - compacted.length;
+				if (dropped < minDrop) return;
+				const keep = new Set(compacted.map((ev) => ev.seq));
+				for (const ev of evs) if (!keep.has(ev.seq)) store.delete(ev.seq);
+				floor = compacted.length ? compacted[0].t : U.now();
+			};
+			req.onerror = () => { try { tx.abort(); } catch {} };
+			tx.oncomplete = () => {
+				if (dropped >= minDrop) localStorage.setItem(COMPACT_FLOOR_KEY, floor);
+				resolve(dropped >= minDrop ? dropped : 0);
+			};
+			tx.onerror = tx.onabort = () => reject(tx.error || req.error);
+		});
+	}
+
+	// Einmalige v4-Migration: alten Heft-Transportzustand atomar durch je EIN
+	// vollständiges heftOps-Baseline-Event ersetzen. Keine Zwischenphase ohne Heftdaten.
+	async function replaceHeftHistory(baselines = []) {
+		ensureOpen();
+		const list = Array.isArray(baselines) ? baselines : [];
+		list.forEach(validateEvent);
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
+			const req = store.getAll();
+			req.onsuccess = () => {
+				for (const ev of req.result || []) if (ev.type === "heftOps" || ev.type === "heftSnap") store.delete(ev.seq);
+				for (const event of list) { const { seq, ...clean } = event; store.add(clean); }
+			};
+			req.onerror = () => { try { tx.abort(); } catch {} };
+			tx.oncomplete = () => resolve(list.length);
+			tx.onerror = tx.onabort = () => reject(tx.error || req.error);
+		});
 	}
 
 	// Höchste lokale Sequenznummer — Basis des Sync-Wasserstands.
@@ -503,29 +504,11 @@ export const DB = (() => {
 		const transportEvents = opts.remote && opts.allowSecrets === false
 			? SETTINGS_SYNC.sanitizeEvents(normalized, false)
 			: normalized.filter(Boolean);
-		// [A1] heftOps stand global in DROPPABLE_TYPES — mit derselben Begründung, die weiter oben für
-		// pageUpdate ausdrücklich ABGELEHNT wird. Der Unterschied ist entscheidend: eine verworfene
-		// pageUpdate kostet nur Platz (Replay ist LWW über t), ein verworfener Strich ist WEG. Ein Gerät,
-		// das lange offline gezeichnet hat, verlor seine Handschrift beim ersten Sync still — und weil
-		// dieses Gerät danach einen heftSnap schreibt, spiegelte sich der Verlust zurück.
-		// Jetzt gilt die Untergrenze für Hefte PRO SEITE und nur dann, wenn ein lokal vorhandener
-		// heftSnap den betroffenen Stand nachweislich abdeckt.
-		const heftSnapFloor = new Map(); // pageId -> t des jüngsten lokalen heftSnap
-		for (const ev of local) {
-			if (ev.type !== "heftSnap" || !ev.payload?.pageId) continue;
-			const cur = heftSnapFloor.get(ev.payload.pageId);
-			if (!cur || ev.t > cur) heftSnapFloor.set(ev.payload.pageId, ev.t);
-		}
-		const droppedByFloor = (ev) => {
-			if (!floor || ev.t >= floor) return false;
-			if (ev.type === "heftOps") {
-				const snapT = heftSnapFloor.get(ev.payload?.pageId);
-				return !!snapT && ev.t < snapT; // nur, wenn ein Snapshot diesen Stand wirklich enthält
-			}
-			return DROPPABLE_TYPES.has(ev.type);
-		};
+		// Nur wirklich wegwerfbare gerätespezifische UI-Events unterhalb der
+		// Kompaktierungsgrenze blockieren. Fachliche Heft-Operationen sind immer zulässig.
+		const droppedByFloor = (ev) => !!floor && ev.t < floor && DROPPABLE_TYPES.has(ev.type);
 		const fresh = transportEvents.filter((ev) => !existing.has(ev.id) && !droppedByFloor(ev));
-		// Nur echte Drive-Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
+		// Nur echte Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
 		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
 		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
 		// Hybride logische Uhr (siehe util.js): die eigene Uhr auf jeden gesehenen fremden
@@ -640,7 +623,7 @@ export const DB = (() => {
 			delete ev.seq;
 			if (remoteIds.has(ev.id)) {
 				ev._remote = true;
-				ev._remoteSource = "drive";
+				ev._remoteSource = opts.remoteSource || "drive";
 			}
 		}); // neue lokale Seq
 		if (fresh.length) await addEvents(fresh);
@@ -690,5 +673,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventIds, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventIds, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

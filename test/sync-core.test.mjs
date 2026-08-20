@@ -69,14 +69,14 @@ test("Log-Kompaktierung bewahrt Nutzungsstatistiken und den aktuellen Fachstand"
 	assert.equal(DB.DROPPABLE_TYPES.has("teleEvent"), false, "Statistiken dürfen auch beim späteren Import nicht als verfallen gelten");
 });
 
-test("Drive-Transport bewahrt alte Nutzungsstatistiken", () => {
+test("Drive-Transport bewahrt alte Nutzungsstatistiken und verwirft keine fachlichen Heft-Operationen", () => {
 	const events = [
 		{ id: "tele-old", seq: 1, t: "2020-01-01T12:00:00.000Z", type: "teleEvent", payload: { kind: "study", seconds: 60 } },
 		{ id: "tabs", seq: 2, type: "uiTabsSet", payload: {} },
 		{ id: "stroke", seq: 3, type: "heftOps", payload: { pageId: "h1", ops: [] } },
 		{ id: "snapshot", seq: 4, type: "heftSnap", payload: { pageId: "h1", doc: { pages: [] } } },
 	];
-	assert.deepEqual(pruneEventsForUpload(events).map((event) => event.id), ["tele-old", "snapshot"]);
+	assert.deepEqual(pruneEventsForUpload(events).map((event) => event.id), ["tele-old", "stroke", "snapshot"]);
 });
 
 test("Cloud-Wireformat entfernt lokale Sequenzen und verhindert Remote-Echos", () => {
@@ -93,7 +93,7 @@ test("Cloud-Wireformat entfernt lokale Sequenzen und verhindert Remote-Echos", (
 	assert.equal(local.seq, 501, "Quelldaten bleiben unverändert");
 });
 
-test("Cloud-Empfang akzeptiert v3-Einzel- und Batchpakete ohne lokale Metadaten", () => {
+test("Cloud-Empfang akzeptiert v4-Einzel- und Batchpakete ohne lokale Metadaten", () => {
 	assert.deepEqual(prepareIncomingCloudEvents([cloudEventEnvelope({ id: "remote", type: "pageCreate" })]), [
 		{ id: "remote", type: "pageCreate", _remote: true, _remoteSource: "cloudflare" },
 	]);
@@ -101,8 +101,8 @@ test("Cloud-Empfang akzeptiert v3-Einzel- und Batchpakete ohne lokale Metadaten"
 		{ id: "batch-1", type: "pageCreate" },
 		{ id: "batch-2", type: "pageUpdate" },
 	])]).map((event) => event.id), ["batch-1", "batch-2"]);
-	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v3/);
-	assert.throws(() => prepareIncomingCloudEvents([{ v: 2, event: { id: "v2-old", type: "pageCreate" } }]), /Protokoll v3/);
+	assert.throws(() => prepareIncomingCloudEvents([{ id: "legacy", type: "pageCreate" }]), /Protokoll v4/);
+	assert.throws(() => prepareIncomingCloudEvents([{ v: 3, event: { id: "v3-old", type: "pageCreate" } }]), /Protokoll v4/);
 	assert.throws(() => prepareIncomingCloudEvents([cloudEventEnvelope({ id: "bad", seq: 501, type: "pageCreate" })]), /lokale Metadaten/);
 	assert.throws(() => prepareIncomingCloudEvents([cloudEventsEnvelope([{ id: "bad", _remoteSource: "drive", type: "pageCreate" }])]), /lokale Metadaten/);
 });
@@ -110,7 +110,8 @@ test("Cloud-Empfang akzeptiert v3-Einzel- und Batchpakete ohne lokale Metadaten"
 test("Cloud-Erstsync bündelt viele kleine Events und lässt große Einzelereignisse intakt", () => {
 	const events = Array.from({ length: 1201 }, (_, index) => ({ id: `e-${index}`, type: "pageUpdate", payload: { text: "x" } }));
 	const chunks = chunkCloudEvents(events);
-	assert.deepEqual(chunks.map((chunk) => chunk.length), [500, 500, 201]);
+	assert.deepEqual(chunks.map((chunk) => chunk.length), [250, 250, 250, 250, 201]);
+	assert.deepEqual(chunkCloudEvents(events, { maxEvents: 500 }).map((chunk) => chunk.length), [500, 500, 201]);
 	assert.deepEqual(chunkCloudEvents([{ id: "large", payload: { text: "x".repeat(100) } }], { maxJsonChars: 10 }).map((chunk) => chunk.length), [1]);
 });
 

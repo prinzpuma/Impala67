@@ -482,7 +482,7 @@ test("Cloudflare-AI-Provider unterstützt Tools, Bilder und formatiert 429 Anbie
 	}
 });
 
-test("Cloudflare-Model-Requests senden X-Impala-Sync-Protocol: 3, andere Provider nicht", async () => {
+test("Cloudflare-Model-Requests senden X-Impala-Sync-Protocol: 4, andere Provider nicht", async () => {
 	const calls = [];
 	globalThis.fetch = async (url, init) => {
 		calls.push({ url, headers: init?.headers || {} });
@@ -506,7 +506,7 @@ test("Cloudflare-Model-Requests senden X-Impala-Sync-Protocol: 3, andere Provide
 	const localCall = calls.find((c) => c.url.includes("127.0.0.1"));
 
 	assert.ok(cfCall, "Cloudflare-Aufruf vorhanden");
-	assert.equal(cfCall.headers["X-Impala-Sync-Protocol"], "3");
+	assert.equal(cfCall.headers["X-Impala-Sync-Protocol"], "4");
 	assert.equal(cfCall.headers.Authorization, "Bearer cf-token");
 
 	assert.ok(openAiCall, "OpenAI-Aufruf vorhanden");
@@ -520,13 +520,13 @@ test("Cloudflare-Model-Requests senden X-Impala-Sync-Protocol: 3, andere Provide
 	calls.length = 0;
 	const pingOk = await AI.ping();
 	assert.equal(pingOk, true);
-	assert.equal(calls[0].headers["X-Impala-Sync-Protocol"], "3");
+	assert.equal(calls[0].headers["X-Impala-Sync-Protocol"], "4");
 
 	// 3. pingProvider() für Cloudflare
 	calls.length = 0;
 	const cfPing = await AI.pingProvider(cfProvider);
 	assert.equal(cfPing.ok, true);
-	assert.equal(calls[0].headers["X-Impala-Sync-Protocol"], "3");
+	assert.equal(calls[0].headers["X-Impala-Sync-Protocol"], "4");
 
 	// 4. pingProvider() für OpenAI
 	calls.length = 0;
@@ -535,28 +535,28 @@ test("Cloudflare-Model-Requests senden X-Impala-Sync-Protocol: 3, andere Provide
 	assert.equal(calls[0].headers["X-Impala-Sync-Protocol"], undefined);
 });
 
-test("Cloudflare-Server /models: mit Protokoll v3 -> 200; ohne v3 -> 426", async () => {
+test("Cloudflare-Server /models: mit Protokoll v4 -> 200; ohne v4 -> 426", async () => {
 	const worker = (await import("../server/worker.js")).default;
 	const { CLOUD_SYNC_PROTOCOL_HEADER } = await import("../web/sync-core.js");
 
 	// Ohne Header -> 426
 	const resMissing = await worker.fetch(new Request("https://example.com/models"), {}, {});
 	assert.equal(resMissing.status, 426);
-	assert.match((await resMissing.json()).error, /Protokoll v3/);
+	assert.match((await resMissing.json()).error, /Protokoll v4/);
 
-	// Mit altem v2 Header -> 426
-	const resV2 = await worker.fetch(new Request("https://example.com/models", {
-		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: "2" },
-	}), {}, {});
-	assert.equal(resV2.status, 426);
-	assert.match((await resV2.json()).error, /Protokoll v3/);
-
-	// Mit v3 Header -> 200
+	// Mit altem v3 Header -> 426
 	const resV3 = await worker.fetch(new Request("https://example.com/models", {
 		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: "3" },
 	}), {}, {});
-	assert.equal(resV3.status, 200);
-	const data = await resV3.json();
+	assert.equal(resV3.status, 426);
+	assert.match((await resV3.json()).error, /Protokoll v4/);
+
+	// Mit v4 Header -> 200
+	const resV4 = await worker.fetch(new Request("https://example.com/models", {
+		headers: { [CLOUD_SYNC_PROTOCOL_HEADER]: "4" },
+	}), {}, {});
+	assert.equal(resV4.status, 200);
+	const data = await resV4.json();
 	assert.deepEqual(data.data.map((m) => m.id), [
 		"qwen/qwen3.6-27b",
 		"openai/gpt-oss-120b",

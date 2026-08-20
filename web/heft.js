@@ -155,9 +155,6 @@ export const HEFT = (() => {
 	// mit eingebetteten Bildern teuer — zum Erkennen von "neu / geändert / weg"
 	// reicht die Signatur völlig.
 	const published = {};
-	const opsSince = {};   // veröffentlichte Operationen seit der letzten Verdichtung
-	const lastSnap = {};   // Zeitpunkt der letzten Verdichtung je Heft
-	const SNAP_MIN_OPS = 300, SNAP_MIN_GAP = 5 * 60 * 1000;
 
 	function sig(o) {
 		if (Array.isArray(o.pts)) {
@@ -342,7 +339,7 @@ export const HEFT = (() => {
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
-			if (legacy) await STATE.dispatch("heftSnap", { pageId: p, doc: legacy });
+			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDoc(null, legacy) });
 			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
 			d = S.heftDocs[p];
 			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
@@ -409,24 +406,9 @@ export const HEFT = (() => {
 		dropThumbs(savePid);
 		await STATE.dispatch("heftOps", { pageId: savePid, ops });
 		published[savePid] = nextPublished;
-		opsSince[savePid] = (opsSince[savePid] || 0) + ops.length;
-		await maybeCompact(savePid, saveDoc);
 		await maybeSnapshot(savePid, saveDoc);
 	}
 
-	// Verdichtung: nach vielen Operationen einmal den Gesamtstand als heftSnap
-	// schreiben. db.js darf alle älteren heftOps desselben Hefts dann wegwerfen —
-	// so wächst das Log nicht mit jedem Strich für immer weiter.
-	async function maybeCompact(p, d) {
-		if ((opsSince[p] || 0) < SNAP_MIN_OPS) return;
-		if (Date.now() - (lastSnap[p] || 0) < SNAP_MIN_GAP) return;
-		opsSince[p] = 0;
-		lastSnap[p] = Date.now();
-		try {
-			await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: d.pages } });
-			published[p] = shadowOf(S.heftDocs[p] || d);
-		} catch (e) { console.warn("Heft: Verdichtung fehlgeschlagen", e); }
-	}
 	async function saveNow() {
 		clearTimeout(saveT);
 		if (!pid || !doc) return;
@@ -486,7 +468,10 @@ export const HEFT = (() => {
 	// Gemeinsamer Wiederherstellungspfad für Verlauf und KI-Undo. Er aktualisiert nicht
 	// nur das Event-Log, sondern auch die laufenden Canvas-Referenzen des geöffneten Hefts.
 	async function restoreDoc(p, restored) {
-		await STATE.dispatch("heftSnap", { pageId: p, doc: { pages: JSON.parse(JSON.stringify(restored?.pages || [])) } });
+		const target = { v: 2, rev: 0, pages: JSON.parse(JSON.stringify(restored?.pages || [])) };
+		const current = S.heftDocs[p] || { v: 2, rev: 0, pages: [] };
+		const ops = diffDoc(shadowOf(current), target);
+		if (ops.length) await STATE.dispatch("heftOps", { pageId: p, ops });
 		const d = S.heftDocs[p];
 		docs[p] = d;
 		published[p] = shadowOf(d);

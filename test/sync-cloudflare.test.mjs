@@ -27,16 +27,18 @@ test("Cloud-Purge setzt genau die benutzerspezifischen Sync-Cursor zurück", () 
 		["impala67_cf_last_uploaded_local_seq", "12"],
 		["impala67_cf_last_seq_user-a", "91"],
 		["impala67_cf_last_uploaded_local_seq_user-a", "92"],
+		["impala67_cf_generation_user-a", "1"],
 		["impala67_cf_last_seq_user-b", "71"],
 		["impala67_cf_last_uploaded_local_seq_user-b", "72"],
 	]);
 	const storage = {
 		setItem: (key, value) => values.set(key, value),
 	};
-	resetSyncCursorStorage(storage, "user-a");
+	resetSyncCursorStorage(storage, "user-a", 2);
 	const keys = syncCursorStorageKeys("user-a");
 	assert.equal(values.get(keys.lastSynced), "0");
 	assert.equal(values.get(keys.lastUploaded), "0");
+	assert.equal(values.get(keys.generation), "2");
 	assert.equal(values.get("impala67_cf_last_seq_user-b"), "71");
 	assert.equal(values.get("impala67_cf_last_seq"), "11");
 	assert.throws(() => syncCursorStorageKeys(), /User-ID/);
@@ -61,9 +63,12 @@ test("formatStorageUsage schützt vor Überlauf", () => {
 test("Browser- oder Serverfehler werden nicht als erfolgreicher Sync verschluckt", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+
 	globalThis.WebSocket = undefined;
-	DB.eventIds = async () => [];
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [];
 	globalThis.fetch = async () => new Response(JSON.stringify({ error: "CORS-Konfiguration fehlt" }), {
 		status: 403,
 		headers: { "Content-Type": "application/json" },
@@ -77,7 +82,8 @@ test("Browser- oder Serverfehler werden nicht als erfolgreicher Sync verschluckt
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
 	}
 });
 
@@ -121,20 +127,14 @@ class MockWebSocket {
 test("Regression: configure führt zuerst vollständigen HTTP-Sync durch und baut WebSocket erst danach auf", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
 	const originalAllEvents = DB.allEvents;
 
 	const callLog = [];
 	MockWebSocket.instances = [];
 	globalThis.WebSocket = MockWebSocket;
 
-	// Simuliere asynchrones DB-Lesen während catchUp
-	DB.eventIds = async () => {
-		callLog.push({ step: "db_eventIds_start" });
-		await new Promise((r) => setTimeout(r, 10));
-		callLog.push({ step: "db_eventIds_end" });
-		return [];
-	};
+	DB.allBlobKeys = async () => [];
 	DB.allEvents = async () => [];
 
 	globalThis.fetch = async (url, init = {}) => {
@@ -144,7 +144,7 @@ test("Regression: configure führt zuerst vollständigen HTTP-Sync durch und bau
 			headers: { ...init.headers },
 			wsCreatedSoFar: MockWebSocket.instances.length,
 		});
-		return new Response(JSON.stringify({ events: [], maxSeq: 0, hasMore: false }), {
+		return new Response(JSON.stringify({ events: [], maxSeq: 0, hasMore: false, generation: 1 }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
@@ -160,12 +160,12 @@ test("Regression: configure führt zuerst vollständigen HTTP-Sync durch und bau
 		assert.ok(fetchCall, "HTTP-Sync-Aufruf muss stattgefunden haben");
 		assert.equal(fetchCall.wsCreatedSoFar, 0, "WebSocket darf während des initialen HTTP-Syncs noch NICHT aufgebaut sein");
 
-		// 2. HTTP-Sync erhält immer userId + Auth-Header + Protocol v3
+		// 2. HTTP-Sync erhält immer userId + Auth-Header + Protocol v4
 		assert.match(fetchCall.url, /\/api\/sync\?since=0&limit=100&user=[a-f0-9]{16,}/);
 		assert.ok(fetchCall.headers["X-User-Id"], "X-User-Id muss vorhanden sein");
 		assert.ok(fetchCall.headers["X-User-Id"].length >= 16, "X-User-Id muss mindestens 16 Zeichen lang sein");
 		assert.match(fetchCall.headers["Authorization"], /^Bearer [a-f0-9]{16,}$/);
-		assert.equal(fetchCall.headers["X-Impala-Sync-Protocol"], "3", "Protokoll v3 muss mitgesendet werden");
+		assert.equal(fetchCall.headers["X-Impala-Sync-Protocol"], "4", "Protokoll v4 muss mitgesendet werden");
 
 		// 3. WebSocket wird erst nach erfolgreichem HTTP-Sync aufgebaut
 		assert.equal(MockWebSocket.instances.length, 1);
@@ -174,7 +174,7 @@ test("Regression: configure führt zuerst vollständigen HTTP-Sync durch und bau
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
 		DB.allEvents = originalAllEvents;
 	}
 });
@@ -182,11 +182,13 @@ test("Regression: configure führt zuerst vollständigen HTTP-Sync durch und bau
 test("Regression: bei HTTP-Sync-Fehler (z. B. Auth/Protokoll) wird WebSocket gar nicht aufgebaut und Fehler bleibt aussagekräftig", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
 
 	MockWebSocket.instances = [];
 	globalThis.WebSocket = MockWebSocket;
-	DB.eventIds = async () => [];
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [];
 
 	globalThis.fetch = async () => new Response(JSON.stringify({ error: "Sync-Schlüssel stimmt nicht mit dem Server überein." }), {
 		status: 403,
@@ -204,22 +206,23 @@ test("Regression: bei HTTP-Sync-Fehler (z. B. Auth/Protokoll) wird WebSocket gar
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
 	}
 });
 
 test("Regression: WebSocket-Fehler entzieht nicht global die Credentials und erzeugt keinen sekundären 'Fehlende User-ID'-Fehler", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
 	const originalAllEvents = DB.allEvents;
 
 	MockWebSocket.instances = [];
 	globalThis.WebSocket = MockWebSocket;
-	DB.eventIds = async () => [];
+	DB.allBlobKeys = async () => [];
 	DB.allEvents = async () => [];
 
-	globalThis.fetch = async () => new Response(JSON.stringify({ events: [], maxSeq: 0, hasMore: false }), {
+	globalThis.fetch = async () => new Response(JSON.stringify({ events: [], maxSeq: 0, hasMore: false, generation: 1 }), {
 		status: 200,
 		headers: { "Content-Type": "application/json" },
 	});
@@ -256,13 +259,13 @@ test("Regression: WebSocket-Fehler entzieht nicht global die Credentials und erz
 		assert.match(capturedSyncRequest.url, /user=[a-f0-9]{16,}/);
 		assert.ok(capturedSyncRequest.headers["X-User-Id"]);
 		assert.ok(capturedSyncRequest.headers["Authorization"]);
-		assert.equal(capturedSyncRequest.headers["X-Impala-Sync-Protocol"], "3");
+		assert.equal(capturedSyncRequest.headers["X-Impala-Sync-Protocol"], "4");
 		assert.doesNotMatch(CLOUDFLARE_SYNC.status().detail, /Fehlende oder ungültige User-ID/);
 	} finally {
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
 		DB.allEvents = originalAllEvents;
 	}
 });
@@ -270,7 +273,7 @@ test("Regression: WebSocket-Fehler entzieht nicht global die Credentials und erz
 test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie führt kompakten Initial-Push durch und erhält lokale Extra-Notiz", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
 	const originalAllEvents = DB.allEvents;
 	const originalAddEvents = DB.addEvents;
 
@@ -283,7 +286,7 @@ test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie f�
 	// 1. Server hat bereits einen Stand (Seq 1)
 	const serverEvent = { id: "server-note-1", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p-server", title: "Server Note" } };
 	const encServer = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([serverEvent]));
-	const serverBatchPacket = { seq: 1, id: "batch-server-1", iv: encServer.iv, data: encServer.data, size: encServer.size, created_at: new Date().toISOString() };
+	const serverBatchPacket = { seq: 1, id: "p-server-1", iv: encServer.iv, data: encServer.data, size: encServer.size, created_at: new Date().toISOString() };
 
 	// 2. Lokale DB des Handys: 200 Drive-Events + 1 lokale Extra-Notiz
 	const localEvents = [];
@@ -306,15 +309,19 @@ test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie f�
 	};
 	localEvents.push(localUniqueNote);
 
-	DB.eventIds = async () => localEvents.map((e) => e.id);
+	const originalImportAll = DB.importAll;
+	DB.allBlobKeys = async () => [];
 	DB.allEvents = async () => [...localEvents];
 	DB.addEvents = async () => {};
+	DB.importAll = async () => ({ importedEvents: [] });
 
 	const postedBatches = [];
 	globalThis.fetch = async (url, init = {}) => {
 		const urlStr = String(url);
 		if (urlStr.includes("/api/sync")) {
-			return new Response(JSON.stringify({ events: [serverBatchPacket], maxSeq: 1, hasMore: false }), {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			const events = since >= 1 ? [] : [serverBatchPacket];
+			return new Response(JSON.stringify({ events, maxSeq: 1, hasMore: false, generation: 1 }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" },
 			});
@@ -322,12 +329,12 @@ test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie f�
 		if (urlStr.includes("/api/events") && init.method === "POST") {
 			const body = JSON.parse(init.body || "{}");
 			postedBatches.push(body);
-			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: 2, usage: 5000 }), {
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: 2, usage: 5000, generation: 1 }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" },
 			});
 		}
-		return new Response(JSON.stringify({ ok: true }), {
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
@@ -341,10 +348,10 @@ test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie f�
 		assert.equal(postedBatches.length, 1, "Muss genau 1 gebündelten Initial-Push-Request senden statt Hunderte Einzel-Requests");
 		const uploadedEvents = postedBatches[0].events || [];
 
-		// Prüfen, dass der Upload gebündelte batch-IDs verwendet und KEINE 201 Einzeldateien
+		// Prüfen, dass der Upload deterministische Paket-IDs verwendet
 		assert.ok(uploadedEvents.length <= 2, "Kompaktierte Events müssen in wenigen Batches gebündelt sein");
 		for (const packet of uploadedEvents) {
-			assert.match(packet.id, /^batch-/, "Muss batch-ID für gebündelten Initial-Push verwenden");
+			assert.match(packet.id, /^p-/, "Muss p-ID für v4-Push verwenden");
 		}
 
 		// Prüfen, dass die lokale Extra-Notiz im gebündelten Chiffrat enthalten ist
@@ -360,194 +367,63 @@ test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie f�
 
 		// Upload-Cursor muss auf localMaxSeq (201) gesetzt sein
 		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 201);
-		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 2);
+		// lastSyncedSeq darf nur Server-Sequenzen widerspiegeln (1 vom Server)
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 1);
 	} finally {
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
 		DB.allEvents = originalAllEvents;
 		DB.addEvents = originalAddEvents;
+		DB.importAll = originalImportAll;
 	}
 });
 
-test("Regression: DB.compactLocal setzt Cloudflare-Upload-Cursor auf 0 zurück und signalisiert Event", async () => {
-	const originalStorage = globalThis.localStorage;
-	const originalIndexedDB = globalThis.indexedDB;
-	const originalAllEvents = DB.allEvents;
-
-	const map = new Map();
-	globalThis.localStorage = {
-		getItem: (k) => (map.has(k) ? map.get(k) : null),
-		setItem: (k, v) => map.set(String(k), String(v)),
-		removeItem: (k) => map.delete(k),
-		clear: () => map.clear(),
-		key: (i) => Array.from(map.keys())[i] || null,
-		get length() { return map.size; },
-	};
-
-	globalThis.indexedDB = {
-		open: () => {
-			const req = { onsuccess: null, onerror: null };
-			setTimeout(() => {
-				req.result = {
-					objectStoreNames: { contains: () => true },
-					createObjectStore: () => ({ createIndex: () => {} }),
-					transaction: () => {
-						const tx = {
-							oncomplete: null,
-							objectStore: () => ({
-								count: () => {
-									const r = { onsuccess: null, onerror: null, result: 1 };
-									setTimeout(() => r.onsuccess?.(), 0);
-									return r;
-								},
-								getAll: () => {
-									const r = { onsuccess: null, onerror: null, result: events };
-									setTimeout(() => r.onsuccess?.(), 0);
-									return r;
-								},
-								clear: () => {},
-								add: () => {},
-							}),
-						};
-						setTimeout(() => tx.oncomplete?.(), 0);
-						return tx;
-					},
-					close: () => {},
-				};
-				req.onsuccess?.();
-			}, 0);
-			return req;
-		},
-	};
-
-	const userStorageKey = "impala67_cf_last_uploaded_local_seq_user-test123";
-	const globalStorageKey = "impala67_cf_last_uploaded_local_seq";
-	globalThis.localStorage.setItem(userStorageKey, "12000");
-	globalThis.localStorage.setItem(globalStorageKey, "12000");
-
-	// Events für DB.compactLocal bereitstellen
+test("Regression: DB.compactEvents ist drop-only und verändert keine Sequenznummern", () => {
+	// Erstelle 250 redundante Events
 	const events = [];
-	for (let i = 1; i <= 300; i++) {
+	for (let i = 1; i <= 250; i++) {
 		events.push({
-			id: `ev-${i}`,
-			t: `2026-08-20T10:00:${String(i % 60).padStart(2, "0")}Z`,
+			seq: i,
+			id: `redundant-${i}`,
+			t: `2026-08-20T12:00:${String(i % 60).padStart(2, "0")}.${String(i).padStart(3, "0")}Z`,
 			type: "pageUpdate",
-			payload: { id: "p1", patch: { content: `Stand ${i}` } },
+			payload: { id: "p1", patch: { title: `Titel ${i}` } },
 		});
 	}
-	DB.allEvents = async () => [...events];
 
-	try {
-		await DB.open();
-		const dropped = await DB.compactLocal(10);
-		assert.ok(dropped > 0, "Muss Events verdichtet haben");
-		assert.equal(globalThis.localStorage.getItem(userStorageKey), "0", "Benutzerspezifischer Upload-Cursor muss auf 0 gesetzt sein");
-		assert.equal(globalThis.localStorage.getItem(globalStorageKey), "0", "Globaler Upload-Cursor muss auf 0 gesetzt sein");
-	} finally {
-		DB.allEvents = originalAllEvents;
-		globalThis.localStorage = originalStorage;
-		globalThis.indexedDB = originalIndexedDB;
+	const compacted = DB.compactEvents(events);
+	assert.ok(compacted.length < 20, "Muss überflüssige Titel-Updates verdichten");
+	// Sequenzen der verbleibenden Events müssen exakt ihren ursprünglichen seq entsprechen
+	for (const ev of compacted) {
+		const original = events.find((e) => e.id === ev.id);
+		assert.equal(ev.seq, original.seq, "Sequenznummern dürfen sich nicht ändern");
 	}
 });
 
-test("Regression: WebSocket-Entschlüsselungsfehler setzt Status auf error und lässt lastSyncedSeq unverändert", async () => {
+test("Regression: WebSocket changed-Signal stößt erneuten Pull an", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
+	const originalAllBlobKeys = DB.allBlobKeys;
 	const originalAllEvents = DB.allEvents;
 
 	MockWebSocket.instances = [];
 	globalThis.WebSocket = MockWebSocket;
-	DB.eventIds = async () => [];
+	DB.allBlobKeys = async () => [];
 	DB.allEvents = async () => [];
 
-	const key = generateSyncKey();
-	const creds = await deriveSyncCredentials(key);
-	const validEv = { id: "valid-10", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p1" } };
-	const encValid = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([validEv]));
-	const validPacket = { seq: 10, id: "batch-10", iv: encValid.iv, data: encValid.data, size: encValid.size };
-
-	globalThis.fetch = async (url, init = {}) => {
-		const urlStr = String(url);
-		if (urlStr.includes("/api/sync")) {
-			return new Response(JSON.stringify({ events: [validPacket], maxSeq: 10, hasMore: false }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			});
-		}
-		if (urlStr.includes("/api/events") && init.method === "POST") {
-			return new Response(JSON.stringify({ ok: true, maxSeq: 10, savedCount: 1 }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			});
-		}
-		return new Response(JSON.stringify({ ok: true }), {
-			status: 200,
-			headers: { "Content-Type": "application/json" },
-		});
-	};
-
-	try {
-		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
-		assert.equal(success, true);
-		assert.equal(MockWebSocket.instances.length, 1);
-		const ws = MockWebSocket.instances[0];
-
-		// Authentifizieren
-		ws.receiveMessage({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL });
-		await new Promise((r) => setTimeout(r, 60)); // Warten bis initialer CatchUp nach Auth abgeschlossen ist
-		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 10);
-
-		// Fehlerhaftes/nicht entschlüsselbares Event empfangen (z. B. ungültiges Chiffrat)
-		ws.receiveMessage({
-			type: "event",
-			event: {
-				seq: 11,
-				id: "broken-event",
-				iv: "000000000000000000000000",
-				data: "AAAA", // Ungültiges Chiffrat
-			},
-		});
-
-		// Event-Verarbeitung abwarten
-		await new Promise((r) => setTimeout(r, 80));
-
-		// Status muss error sein und lastSyncedSeq darf NICHT auf 11 gesprungen sein
-		assert.equal(CLOUDFLARE_SYNC.status().status, "error");
-		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 10, "lastSyncedSeq darf nach Entschlüsselungsfehler nicht vorgeschoben werden");
-	} finally {
-		CLOUDFLARE_SYNC.disconnect();
-		globalThis.fetch = originalFetch;
-		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
-		DB.allEvents = originalAllEvents;
-	}
-});
-
-test("Regression: WebSocket-ACK mit Sequenzlücke stößt catchUp an", async () => {
-	const originalFetch = globalThis.fetch;
-	const originalWebSocket = globalThis.WebSocket;
-	const originalEventIds = DB.eventIds;
-	const originalAllEvents = DB.allEvents;
-
-	MockWebSocket.instances = [];
-	globalThis.WebSocket = MockWebSocket;
-	DB.eventIds = async () => [];
-	DB.allEvents = async () => [];
-
-	let catchUpCalls = 0;
+	let pullCount = 0;
 	globalThis.fetch = async (url) => {
 		const urlStr = String(url);
 		if (urlStr.includes("/api/sync")) {
-			catchUpCalls++;
-			return new Response(JSON.stringify({ events: [], maxSeq: 15, hasMore: false }), {
+			pullCount++;
+			return new Response(JSON.stringify({ events: [], maxSeq: 0, hasMore: false, generation: 1 }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" },
 			});
 		}
-		return new Response(JSON.stringify({ ok: true }), {
+		return new Response(JSON.stringify({ keys: [], cursor: "" }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
@@ -556,28 +432,18 @@ test("Regression: WebSocket-ACK mit Sequenzlücke stößt catchUp an", async () 
 	try {
 		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", generateSyncKey());
 		assert.equal(success, true);
-		assert.equal(MockWebSocket.instances.length, 1);
+		const initialPulls = pullCount;
+		assert.ok(initialPulls >= 1);
+
 		const ws = MockWebSocket.instances[0];
-
-		// Bei Authentifizierung wird initialer Catchup ausgeführt
-		ws.receiveMessage({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL });
+		ws.receiveMessage({ type: "changed", maxSeq: 10 });
 		await new Promise((r) => setTimeout(r, 50));
-		const catchUpsAfterAuth = catchUpCalls;
-
-		// ACK empfangen mit seq = 15 (bei aktuellem lastSyncedSeq = 0) -> Sequenzlücke
-		ws.receiveMessage({
-			type: "ack",
-			eventId: "some-event",
-			seq: 15,
-		});
-
-		await new Promise((r) => setTimeout(r, 60));
-		assert.ok(catchUpCalls > catchUpsAfterAuth, "Muss catchUp() aufrufen, wenn ACK eine Sequenzlücke aufweist");
+		assert.ok(pullCount > initialPulls, "WebSocket 'changed' muss weiteren Pull ausgelöst haben");
 	} finally {
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
 		globalThis.WebSocket = originalWebSocket;
-		DB.eventIds = originalEventIds;
+		DB.allBlobKeys = originalAllBlobKeys;
 		DB.allEvents = originalAllEvents;
 	}
 });

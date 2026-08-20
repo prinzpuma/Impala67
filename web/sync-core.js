@@ -162,7 +162,8 @@ export function isBlobAlive(key, pages) {
 	const ref = (target) => !!target && strings.some((value) => value.includes(target));
 	if (k.startsWith("heft:")) return !!pages?.[k.slice(5)];
 	if (k.startsWith("pdftext:")) return ref(k.slice(8));
-	if (k.startsWith("img:") || k.startsWith("file:") || k.startsWith("cover:")) return ref(k);
+	if (k.startsWith("cover:")) return ref(k) || ref(k.slice(6));
+	if (k.startsWith("img:") || k.startsWith("file:")) return ref(k);
 	if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return ref(k);
-	return false;
+	return true; // Fail-Safe: gerätespezifische oder nicht-synchronisierte Spezialschlüssel ("bgImage", "heftver:...") nie löschen
 }
