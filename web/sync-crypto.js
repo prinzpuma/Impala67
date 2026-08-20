@@ -2,7 +2,7 @@
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-const JSON_GZIP_AT = 64 * 1024;
+const JSON_GZIP_AT = 16 * 1024;
 const SYNC_KEY_RE = /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/i;
 
 export const MAX_USER_STORAGE_BYTES = 1_000_000_000;

@@ -102,6 +102,43 @@ test("formatStorageUsage berechnet MB und Prozent korrekt für 1.000 MB Limit", 
 	assert.equal(usage3.percent, 100);
 });
 
+test("komprimierbares 30-50 KB Event-Paket wird sinnvoll gzip-komprimiert (ab 16 KB)", async () => {
+	const { cryptoKey } = await deriveSyncCredentials(KEY_A);
+	// Generiere ein typisches ~35 KB Event-Paket
+	const events = Array.from({ length: 150 }, (_, i) => ({
+		id: `event-${i}`,
+		type: "pageUpdate",
+		payload: { id: `page-${i % 20}`, title: `Titel der Notiz ${i}`, content: `Textinhalt für Notiz ${i} mit Aufzählungen und Formatierungen.` },
+	}));
+	const rawLen = JSON.stringify(events).length;
+	assert.ok(rawLen >= 20 * 1024 && rawLen <= 60 * 1024, `Größe muss zwischen 20 KB und 60 KB liegen (ist: ${rawLen})`);
+
+	const encrypted = await encryptPayload(cryptoKey, events);
+	assert.ok(encrypted.data.startsWith("gz:"), "Muss das gz: Präfix tragen");
+	assert.ok(encrypted.data.length < rawLen / 2, "Komprimierte Größe muss deutlich kleiner sein als Original");
+
+	const decrypted = await decryptPayload(cryptoKey, encrypted);
+	assert.deepEqual(decrypted, events);
+});
+
+test("Payloads unter 16 KB verbleiben unkomprimiert und werden verlustfrei entschlüsselt", async () => {
+	const { cryptoKey } = await deriveSyncCredentials(KEY_A);
+	// 5 KB strukturierte Daten (unter der 16 KB Schwelle)
+	const smallEvent = {
+		id: "ev-small",
+		type: "pageCreate",
+		payload: { title: "Kurze Notiz", text: "Dies ist ein kleiner Textblock.".repeat(40) },
+	};
+	const rawLen = JSON.stringify(smallEvent).length;
+	assert.ok(rawLen < 16 * 1024, `Größe muss unter 16 KB liegen (ist: ${rawLen})`);
+
+	const encrypted = await encryptPayload(cryptoKey, smallEvent);
+	assert.equal(encrypted.data.startsWith("gz:"), false, "Payload unter 16 KB darf kein gz: Präfix erhalten");
+
+	const decrypted = await decryptPayload(cryptoKey, encrypted);
+	assert.deepEqual(decrypted, smallEvent);
+});
+
 test("Base64 und Hex Helfer arbeiten verlustfrei", () => {
 	const bytes = new Uint8Array([0, 15, 255, 128, 42, 7]);
 	const b64 = bytesToBase64(bytes);
