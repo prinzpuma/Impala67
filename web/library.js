@@ -8,6 +8,8 @@ import { APP } from "./app.js";
 import { NLM } from "./notebooklm.js";
 import { TABS } from "./tabs.js";
 import { COLLAPSE } from "./collapse.js";
+import { HEFT } from "./heft.js";
+import { EXPORT_MEDIA } from "./export-media.js";
 
 const renderMain = (...args) => RENDER.renderMain(...args);
 const render = (...args) => RENDER.render(...args);
@@ -256,21 +258,65 @@ function renderNotionTree(main) {
 	main.innerHTML = html + "</div>";
 }
 
-export function exportWorkspaceZip(wsId) {
+export async function exportWorkspaceZip(wsId) {
 	const ws = S.workspaces[wsId];
-	const safe = (s) => String(s || "Ohne Titel").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Seite";
+	const safe = (s) => EXPORT_MEDIA.safeExportName(s || "Ohne Titel", "Seite").slice(0, 80);
 	const files = [];
 	const used = new Set();
-	const walk = (parentId, path) => {
-		STATE.childrenOf(parentId, wsId).forEach((pg) => {
+	const assets = new Map();
+	const usedAssetNames = new Set();
+	const uniqueAssetName = (raw) => {
+		const dot = raw.lastIndexOf("."), stem = dot > 0 ? raw.slice(0, dot) : raw, ext = dot > 0 ? raw.slice(dot) : "";
+		let name = raw, n = 2;
+		while (usedAssetNames.has(name.toLowerCase())) name = stem + " (" + (n++) + ")" + ext;
+		usedAssetNames.add(name.toLowerCase());
+		return name;
+	};
+	const addBlobAsset = async (id, preferredName) => {
+		if (!id) return null;
+		if (assets.has(id)) return assets.get(id);
+		const asset = await EXPORT_MEDIA.loadExportAsset(id, preferredName);
+		if (!asset) { assets.set(id, null); return null; }
+		asset.name = uniqueAssetName(asset.name);
+		files.push({ name: "_assets/" + asset.name, text: asset.data });
+		assets.set(id, asset);
+		return asset;
+	};
+	const relativeAsset = (depth, asset) => asset ? "../".repeat(depth) + "_assets/" + encodeURI(asset.name) : null;
+	const walk = async (parentId, path, depth) => {
+		for (const pg of STATE.childrenOf(parentId, wsId)) {
 			let base = path + safe(pg.title), n = 2;
 			while (used.has(base)) base = path + safe(pg.title) + " (" + (n++) + ")";
 			used.add(base);
-			files.push({ name: base + ".md", text: "# " + pg.title + "\n\n" + (pg.content || "") });
-			walk(pg.id, base + "/");
-		});
+			const hrefs = new Map();
+			for (const ref of EXPORT_MEDIA.mediaReferences(pg.content)) {
+				const asset = await addBlobAsset(ref.id, ref.name);
+				if (asset) hrefs.set(ref.id, relativeAsset(depth, asset));
+			}
+			let content = EXPORT_MEDIA.rewriteMediaReferences(pg.content || "", hrefs);
+			const additions = [];
+			if (pg.coverImg) {
+				const cover = await addBlobAsset(pg.coverImg, safe(pg.title) + " Cover");
+				if (cover) additions.push("![Cover](" + relativeAsset(depth, cover) + ")");
+			}
+			if (pg.pdfId) {
+				const pdf = await addBlobAsset(pg.pdfId, safe(pg.title) + ".pdf");
+				if (pdf) additions.push("[Original-PDF](" + relativeAsset(depth, pdf) + ")");
+			}
+			if (pg.kind === "heft") {
+				const blob = await HEFT.pdfBlob(pg.id);
+				if (blob) {
+					const name = uniqueAssetName(safe(pg.title) + ".pdf");
+					files.push({ name: "_assets/" + name, text: new Uint8Array(await blob.arrayBuffer()) });
+					additions.push("[Heft als PDF](" + "../".repeat(depth) + "_assets/" + encodeURI(name) + ")");
+				}
+			}
+			if (additions.length) content = additions.join("\n\n") + (content ? "\n\n" + content : "");
+			files.push({ name: base + ".md", text: "# " + pg.title + "\n\n" + content });
+			await walk(pg.id, base + "/", depth + 1);
+		}
 	};
-	walk(null, "");
+	await walk(null, "", 0);
 	if (!files.length) { alert("Dieser Ordner hat keine Seiten."); return; }
 	U.downloadBlob(safe(ws ? ws.name : "Ordner") + ".zip", U.zip(files));
 }

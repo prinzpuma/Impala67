@@ -122,6 +122,27 @@ test("RAG indexes and searches with 256d vectors", async () => {
 	}
 });
 
+test("Hybrid-RAG hebt exakte Fachbegriffe trotz schwacher Semantik an", async () => {
+	S.settings.embedModel = "local:hybrid-test";
+	S.settings.embedProviderId = "local";
+	S.pages = {
+		exact: { id: "exact", title: "ATP-Synthase", content: "Protonengradient", updated: 1 },
+		semantic: { id: "semantic", title: "Zellatmung", content: "Energiegewinnung im Mitochondrium", updated: 1 },
+	};
+	const oldAll = DB.allVecs, oldEmbed = AI.embed;
+	DB.allVecs = async () => ({
+		exact: { model: "local:hybrid-test", chunks: [{ text: "ATP-Synthase und Protonengradient", vec: [0, 1], norm: 1 }] },
+		semantic: { model: "local:hybrid-test", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.2, Math.sqrt(0.96)], norm: 1 }] },
+	});
+	AI.embed = async () => [[1, 0]];
+	try {
+		const hits = await RAG.search("ATP-Synthase", 2);
+		assert.equal(hits[0].title, "ATP-Synthase");
+		assert.equal(hits[0].lexicalScore, 1);
+		assert.ok(hits[0].score > hits[1].score);
+	} finally { DB.allVecs = oldAll; AI.embed = oldEmbed; }
+});
+
 test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 	S.settings.embedModel = "local:bekko-a8m";
 	S.settings.embedProviderId = "local";

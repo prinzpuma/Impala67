@@ -651,7 +651,8 @@ export const HEFT = (() => {
 		const bb = lassoBBox(strokes || []);
 		if (!bb) return;
 		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
-		x.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18); x.restore();
+		x.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18);
+		x.setLineDash([]); x.fillStyle = "#2f6fed"; x.beginPath(); x.arc(bb.maxX + 9, bb.maxY + 9, 8, 0, Math.PI * 2); x.fill(); x.restore();
 	}
 
 	function lassoBBox(strokes) {
@@ -697,6 +698,31 @@ export const HEFT = (() => {
 			s.bbox.minX += dx; s.bbox.maxX += dx;
 			s.bbox.minY += dy; s.bbox.maxY += dy;
 		}
+	}
+	function strokeGeometry(s) {
+		return { pts: (s.pts || []).map((p) => p.slice()), shape: s.shape ? { ...s.shape } : null, size: s.size || 3 };
+	}
+	function applyStrokeGeometry(s, geometry) {
+		s.pts = (geometry.pts || []).map((p) => p.slice());
+		s.shape = geometry.shape ? { ...geometry.shape } : null;
+		if (!s.shape) delete s.shape;
+		s.size = geometry.size;
+		s.bbox = null; calcStrokeBBox(s);
+	}
+	function scaleStrokeFrom(s, geometry, anchorX, anchorY, factor) {
+		const scalePoint = (p) => [anchorX + (p[0] - anchorX) * factor, anchorY + (p[1] - anchorY) * factor, ...p.slice(2)];
+		s.pts = (geometry.pts || []).map(scalePoint);
+		const sh = geometry.shape ? { ...geometry.shape } : null;
+		if (sh?.x1 != null) {
+			sh.x1 = anchorX + (sh.x1 - anchorX) * factor; sh.x2 = anchorX + (sh.x2 - anchorX) * factor;
+			sh.y1 = anchorY + (sh.y1 - anchorY) * factor; sh.y2 = anchorY + (sh.y2 - anchorY) * factor;
+		} else if (sh?.cx != null) {
+			sh.cx = anchorX + (sh.cx - anchorX) * factor; sh.cy = anchorY + (sh.cy - anchorY) * factor;
+			sh.rx *= factor; sh.ry *= factor;
+		}
+		if (sh) s.shape = sh; else delete s.shape;
+		s.size = Math.max(0.5, geometry.size * factor);
+		s.bbox = null; calcStrokeBBox(s);
 	}
 	function drawSelection(x, im) {
 		x.save();
@@ -1400,6 +1426,7 @@ export const HEFT = (() => {
 	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
 	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
 	const touchNavigates = () => onlyPen && !penRecently();
+	const lassoTouchAction = (pointerType, currentTool, onLasso) => pointerType === "touch" && currentTool === "lasso" ? (onLasso ? "interact" : "dismiss") : "none";
 	const near = (p, x, y, r) => { const dx = p[0] - x, dy = p[1] - y; return dx * dx + dy * dy <= r * r; };
 	function pointInPolygon(p, poly) {
 		let hit = false;
@@ -1508,22 +1535,40 @@ export const HEFT = (() => {
 		// neue, das hier löst die alte auf — sonst blieb sie sichtbar hängen).
 		// nicht 'sel' benennen: verdeckte die Heft-Auswahl im ganzen Block
 		if (e.pointerType !== "mouse") { const domSel = window.getSelection?.(); if (domSel && !domSel.isCollapsed) domSel.removeAllRanges(); }
-		if (rejected(e) || !doc) return;
+		if (!doc) return;
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
 		const pi = slot ? Number(slot.dataset.hepage) : idx;
 		const pg = doc.pages[pi];
 		if (!pg) return;
+		const p = pos(e, cv);
+		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? lassoBBox(lassoSel.strokes) : null;
+		const onLasso = !!activeLassoBox && p[0] >= activeLassoBox.minX - 18 && p[0] <= activeLassoBox.maxX + 22 && p[1] >= activeLassoBox.minY - 18 && p[1] <= activeLassoBox.maxY + 22;
+		// Ein Fingertipp außerhalb beendet Auswahl UND Lasso-Modus. Der Nur-Stift-
+		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
+		const touchLasso = lassoTouchAction(e.pointerType, tool, onLasso);
+		if (touchLasso === "dismiss") {
+			const oldPage = lassoSel?.pageIdx;
+			lassoSel = null; tool = "pen"; expanded = true;
+			if (oldPage != null) redrawPage(oldPage);
+			updateChrome();
+			return;
+		}
+		if (rejected(e) && touchLasso !== "interact") return;
 		idx = pi;
 		e.preventDefault();
 		try { cv.setPointerCapture(e.pointerId); } catch {  }
 
 		const x = liveInkCtx(pi);
-		const p = pos(e, cv);
 		if (tool === "lasso") {
 
 			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
 				const bb = lassoBBox(lassoSel.strokes);
+				if (bb && near(p, bb.maxX + 9, bb.maxY + 9, 22)) {
+					const w = Math.max(1, bb.maxX - bb.minX), h = Math.max(1, bb.maxY - bb.minY);
+					drawing = { lassoResize: true, strokes: lassoSel.strokes, originals: lassoSel.strokes.map(strokeGeometry), cv, pageIdx: pi, anchor: [bb.minX, bb.minY], base: [w, h], factor: 1 };
+					return;
+				}
 				if (bb && p[0] >= bb.minX - 12 && p[0] <= bb.maxX + 12 && p[1] >= bb.minY - 12 && p[1] <= bb.maxY + 12) {
 					drawing = { lassoMove: true, strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
 					return;
@@ -1681,6 +1726,16 @@ export const HEFT = (() => {
 			}
 			return;
 		}
+		if (drawing.lassoResize) {
+			const p = pos(e, drawing.cv), [ax, ay] = drawing.anchor, [w, h] = drawing.base;
+			const projected = ((p[0] - ax) * w + (p[1] - ay) * h) / (w * w + h * h);
+			const maxFactor = Math.max(0.15, Math.min(6, (PAGE_W - ax) / w, (PAGE_H - ay) / h));
+			const factor = Math.max(0.15, Math.min(maxFactor, projected));
+			drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, drawing.originals[i], ax, ay, factor));
+			drawing.factor = factor;
+			redrawNextFrame(drawing.pageIdx);
+			return;
+		}
 		if (drawing.snapped) {
 
 			const pSnap = pos(e, drawing.cv);
@@ -1753,6 +1808,13 @@ export const HEFT = (() => {
 			}
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
+		if (drawing.lassoResize) {
+			if (Math.abs(drawing.factor - 1) > 0.001) {
+				pushUndo({ kind: "lassoResize", strokes: drawing.strokes, prev: drawing.originals, pageIdx: pi });
+				scheduleSave(); renderThumb(pi); scheduleHandwritingIndexV2(pi);
+			}
+			drawing = null; redrawPage(pi); updateChrome(); return;
+		}
 		if (drawing.laser) {
 			const laserPage = pi;
 			const timer = setTimeout(() => { laserTimers.delete(timer); redrawPage(laserPage); }, 900);
@@ -1800,6 +1862,11 @@ export const HEFT = (() => {
 		const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
 		const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
 		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
+		else if (a.kind === "lassoResize") {
+			const current = a.strokes.map(strokeGeometry);
+			a.strokes.forEach((stroke, i) => applyStrokeGeometry(stroke, a.prev[i]));
+			a.prev = current;
+		}
 		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
 		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
 		else {
@@ -2255,7 +2322,7 @@ export const HEFT = (() => {
 		if (!lassoSel || !lassoSel.strokes.length) { if (bar) bar.remove(); return; }
 		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
 		const n = lassoSel.strokes.length;
-		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt</span>" +
+		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
 			'<button type="button" data-helassodup="1">⧉ Duplizieren</button>' +
 			'<button type="button" data-helassodel="1">🗑 Löschen</button>' +
 			'<button type="button" data-helassoclear="1">Aufheben</button>';
@@ -3648,7 +3715,7 @@ export const HEFT = (() => {
 	}
 
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, exportPdf, exportImages, openImportDialog,
+		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 	};

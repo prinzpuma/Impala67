@@ -6,6 +6,7 @@ import { SETTINGS } from "./settings.js";
 import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
+import { EXPORT_MEDIA } from "./export-media.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -578,7 +579,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	// Hefte: echte PDF-Datei direkt aus den Heftseiten (heft.js) — kein Druckfenster.
 	// Notiz-Seiten: Druckfenster mit gerendertem Markdown; schließt sich nach dem
 	// Drucken selbst und hat sichtbare Knöpfe (vorher hing man dort ohne Ausweg fest).
-	function exportPagePdf(pageId) {
+	async function exportPagePdf(pageId) {
 		const pg = S.pages[pageId];
 		if (!pg) return;
 		if (pg.kind === "heft") {
@@ -587,15 +588,27 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		}
 		const w = window.open("", "_blank");
 		if (!w) { U.toast("Popup blockiert — bitte für diese Seite erlauben.", "error"); return; }
+		w.document.write('<!DOCTYPE html><html><body style="font:15px system-ui;padding:32px">PDF wird vorbereitet …</body></html>');
+		w.document.close();
+		try {
+			const printable = document.createElement("div");
+			printable.innerHTML = U.md(await EXPORT_MEDIA.inlineLocalImages(pg.content || ""));
+			if (U.hasMathDelimiters(printable) && !(await U.ensureKatex())) throw new Error("KaTeX konnte nicht geladen werden.");
+			await U.renderMath(printable);
+		w.document.open();
 		w.document.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + U.esc(pg.title) + "</title>" +
 			'<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">' +
 			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}" +
 			".pdf-bar{position:fixed;top:10px;right:10px;display:flex;gap:8px}.pdf-bar button{font:13px -apple-system,'Segoe UI',sans-serif;padding:7px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}@media print{.pdf-bar{display:none}}</style>" +
 			"</head><body><div class=\"pdf-bar\"><button onclick=\"window.print()\">🖨 Drucken / PDF</button><button onclick=\"window.close()\">✕ Schließen</button></div>" +
-			"<h1>" + U.esc((pg.icon ? pg.icon + " " : "") + pg.title) + "</h1>" + U.md(pg.content || "") + "</body></html>");
+			"<h1>" + U.esc((pg.icon ? pg.icon + " " : "") + pg.title) + "</h1>" + printable.innerHTML + "</body></html>");
 		w.document.close();
 		w.onafterprint = () => { try { w.close(); } catch (e) { /* egal */ } };
-		setTimeout(() => { try { w.focus(); w.print(); } catch (e) { console.warn(e); } }, 600);
+		setTimeout(() => { try { w.focus(); w.print(); } catch (e) { console.warn(e); } }, 800);
+		} catch (error) {
+			try { w.close(); } catch { /* egal */ }
+			U.toast("PDF konnte nicht vorbereitet werden: " + (error?.message || error), "error");
+		}
 	}
 
 	// ---- Cloze-Hilfen für den Karten-Editor (render.js openCardEditor) ----
@@ -680,7 +693,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		if ((el = q("[data-deckconf]"))) { openDeckConf(el.dataset.deckconf === "*" ? "" : el.dataset.deckconf); return; }
 		if (q("[data-ankiexport]")) { openAnkiIo("export"); return; }
 		if (q("[data-ankiimport]")) { openAnkiIo("import"); return; }
-		if ((el = q("[data-exportpdf]"))) { S.topMenu = null; exportPagePdf(el.dataset.exportpdf); render(); return; }
+		if ((el = q("[data-exportpdf]"))) { S.topMenu = null; await exportPagePdf(el.dataset.exportpdf); render(); return; }
 		if ((el = q("[data-cardsfromhl]"))) { S.topMenu = null; await cardsFromHighlights(el.dataset.cardsfromhl); if (typeof render === "function") render(); return; }
 		if (q("[data-clozewrap]")) { clozeWrapSelection(); return; }
 		if (q("[data-clozesave]")) { await clozeSaveFromEditor(); return; }

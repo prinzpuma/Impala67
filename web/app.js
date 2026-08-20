@@ -971,7 +971,11 @@ function wireEvents() {
 		}
 
 		// Workspace als Markdown-ZIP exportieren (Einstellungen → Backup)
-		if (t.dataset.zipws) { LIBRARY.exportWorkspaceZip(t.dataset.zipws); return; }
+		if (t.dataset.zipws) {
+			try { await LIBRARY.exportWorkspaceZip(t.dataset.zipws); }
+			catch (error) { U.toast("Workspace-Export fehlgeschlagen: " + (error?.message || error), "error"); }
+			return;
+		}
 
 		// ⋯-Menü: Seite als Vorlage markieren / Markierung entfernen
 		if (t.dataset.pagetemplate) {

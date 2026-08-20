@@ -215,6 +215,26 @@ test("Heft-Tests: Strichverschiebung aktualisiert s.bbox in O(1)", () => {
 	assert.equal(mockStroke.bbox.maxY, 140);
 });
 
+test("Heft-Tests: Lasso skaliert Freihand und Formen proportional", () => {
+	const stroke = {
+		id: "scale", tool: "shape", color: "#000", size: 2,
+		pts: [[10, 10, 0.5], [30, 20, 0.5]],
+		shape: { type: "rect", x1: 10, y1: 10, x2: 30, y2: 20 },
+	};
+	const original = HEFT.strokeGeometry(stroke);
+	HEFT.scaleStrokeFrom(stroke, original, 10, 10, 2);
+	assert.deepEqual(stroke.pts, [[10, 10, 0.5], [50, 30, 0.5]]);
+	assert.deepEqual(stroke.shape, { type: "rect", x1: 10, y1: 10, x2: 50, y2: 30 });
+	assert.equal(stroke.size, 4);
+	assert.ok(stroke.bbox.maxX >= 50);
+});
+
+test("Heft-Tests: Fingertipp außerhalb beendet den Lasso-Modus", () => {
+	assert.equal(HEFT.lassoTouchAction("touch", "lasso", false), "dismiss");
+	assert.equal(HEFT.lassoTouchAction("touch", "lasso", true), "interact");
+	assert.equal(HEFT.lassoTouchAction("pen", "lasso", false), "none");
+});
+
 test("Heft-Tests: Rendern hoher Strichzahlen (1.000 bis 10.000 Striche) ohne Fehler", () => {
 	const strokes = [];
 	for (let i = 0; i < 1000; i++) {

@@ -144,6 +144,35 @@ export const RAG = (() => {
 
 	const norm = (v) => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * v[i]; return Math.sqrt(s) || 1; };
 	const dot = (a, b) => { let s = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) s += a[i] * b[i]; return s; };
+	const STOP_WORDS = new Set(["aber", "alle", "auch", "aus", "bei", "das", "dem", "den", "der", "des", "die", "ein", "eine", "einer", "eines", "für", "hat", "ich", "ist", "mit", "nach", "oder", "sich", "sind", "und", "von", "was", "wie", "wird", "zu", "the", "and", "for", "from", "that", "this", "with"]);
+	const termsOf = (value) => (String(value || "").toLocaleLowerCase("de-DE").match(/[\p{L}\p{N}_-]{2,}/gu) || []).filter((term) => !STOP_WORDS.has(term));
+	// Kleines BM25 direkt auf den bereits vorhandenen RAG-Chunks. Keine zweite
+	// Suchdatenbank: Embeddings und Fachwort-Treffer verwenden denselben Indexstand.
+	function lexicalScores(query, docs) {
+		const terms = [...new Set(termsOf(query))];
+		const scores = new Map();
+		if (!terms.length || !docs.length) return scores;
+		const tokenDocs = docs.map((doc) => ({ doc, tokens: termsOf(doc.title + "\n" + doc.text) }));
+		const avgLen = tokenDocs.reduce((sum, row) => sum + row.tokens.length, 0) / tokenDocs.length || 1;
+		const df = new Map(terms.map((term) => [term, tokenDocs.filter((row) => row.tokens.includes(term)).length]));
+		const phrase = String(query || "").trim().toLocaleLowerCase("de-DE");
+		for (const row of tokenDocs) {
+			const counts = new Map();
+			row.tokens.forEach((term) => counts.set(term, (counts.get(term) || 0) + 1));
+			let score = 0;
+			for (const term of terms) {
+				const tf = counts.get(term) || 0;
+				if (!tf) continue;
+				const idf = Math.log(1 + (tokenDocs.length - (df.get(term) || 0) + 0.5) / ((df.get(term) || 0) + 0.5));
+				const den = tf + 1.2 * (0.25 + 0.75 * row.tokens.length / avgLen);
+				score += idf * tf * 2.2 / den;
+				if (String(row.doc.title || "").toLocaleLowerCase("de-DE").includes(term)) score += idf * 0.8;
+			}
+			if (phrase.length >= 3 && (row.doc.title + "\n" + row.doc.text).toLocaleLowerCase("de-DE").includes(phrase)) score += 2;
+			if (score) scores.set(row.doc, score);
+		}
+		return scores;
+	}
 
 	// Suche v2 (15. Juli):
 	// - Vektoren werden im Speicher gecacht (IndexedDB-Volllast nur noch alle 30 s
@@ -155,12 +184,14 @@ export const RAG = (() => {
 	//   eine einzige lange Seite alle Plätze belegt.
 	// - Chunks mit fremder Embedding-Dimension (Modellwechsel) werden übersprungen
 	//   statt falsche Scores zu liefern; reindexStale() ersetzt sie ohnehin.
-	let vecCache = null, vecCacheAt = 0;
+	let vecCache = null, vecCacheAt = 0, vecCacheModel = "";
 	const queryCache = new Map();
 	async function allVecsCached() {
-		if (!vecCache || Date.now() - vecCacheAt > 30000) {
+		const model = String(S.settings.embedModel || "");
+		if (!vecCache || vecCacheModel !== model || Date.now() - vecCacheAt > 30000) {
 			vecCache = await DB.allVecs();
 			vecCacheAt = Date.now();
+			vecCacheModel = model;
 		}
 		return vecCache;
 	}
@@ -179,7 +210,7 @@ export const RAG = (() => {
 		const qv = await queryVec(query);
 		const qn = norm(qv);
 		const vecs = await allVecsCached();
-		const hits = [];
+		const docs = [];
 		for (const [pageId, rec] of Object.entries(vecs)) {
 			const pg = S.pages[pageId];
 			if (!pg || pg.trashed) continue; // Papierkorb-Seiten nicht in Suchergebnissen
@@ -187,16 +218,26 @@ export const RAG = (() => {
 			for (const c of rec.chunks) {
 				if (!c.vec || c.vec.length !== qv.length) continue; // anderes Embedding-Modell
 				const score = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));
-				hits.push({ pageId, title: pg.title, snippet: c.text.slice(0, 400), score });
+				docs.push({ pageId, title: pg.title, text: c.text, semantic: score });
 			}
 		}
+		const lexical = lexicalScores(query, docs);
+		const maxLexical = Math.max(0, ...lexical.values());
+		const hits = docs.map((doc) => {
+			const semantic = Math.max(0, doc.semantic || 0);
+			const lex = maxLexical ? (lexical.get(doc) || 0) / maxLexical : 0;
+			// Semantik bleibt die Basis; lexikalische Evidenz kann schwache semantische
+			// Treffer anheben, einen bereits perfekten Treffer aber nicht verschlechtern.
+			const score = semantic + (1 - semantic) * 0.45 * lex;
+			return { pageId: doc.pageId, title: doc.title, snippet: doc.text.slice(0, 400), score, semanticScore: doc.semantic, lexicalScore: lex };
+		});
 		hits.sort((a, b) => b.score - a.score);
 		const perPage = Object.create(null);
 		const out = [];
 		for (const h of hits) {
 			if ((perPage[h.pageId] || 0) >= 2) continue;
 			perPage[h.pageId] = (perPage[h.pageId] || 0) + 1;
-			out.push({ title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000 });
+			out.push({ title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000, semanticScore: Math.round(h.semanticScore * 1000) / 1000, lexicalScore: Math.round(h.lexicalScore * 1000) / 1000 });
 			if (out.length >= k) break;
 		}
 		return out;
