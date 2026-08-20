@@ -260,9 +260,14 @@ export const CLOUDFLARE_SYNC = (() => {
 						await handleIncomingRemoteEvent(msg.event);
 					}
 					if (msg.type === "ack") {
-						if (msg.seq > state.lastSyncedSeq) {
-							state.lastSyncedSeq = msg.seq;
-							LS.setItem(lastSyncedKey(), String(msg.seq));
+						if (typeof msg.seq === "number") {
+							if (msg.seq === state.lastSyncedSeq + 1 && !msg.alreadyExisted) {
+								state.lastSyncedSeq = msg.seq;
+								LS.setItem(lastSyncedKey(), String(msg.seq));
+							} else if (msg.seq > state.lastSyncedSeq) {
+								// Sequenzlücke: Fremde Events liegen dazwischen -> lückenlos per catchUp nachholen
+								catchUp().catch((e) => console.warn("[cf-sync] Catch-up nach ACK-Lücke fehlgeschlagen:", e));
+							}
 						}
 						if (msg.usage !== undefined) {
 							state.usage = formatStorageUsage(msg.usage);
@@ -363,12 +368,23 @@ export const CLOUDFLARE_SYNC = (() => {
 				LS.setItem(lastSyncedKey(), String(encryptedEvent.seq));
 			}
 		} catch (e) {
+			const error = readableSyncError(e);
+			state.lastError = `Remote-Event ${encryptedEvent?.seq || "?"} fehlgeschlagen: ${error.message}`;
+			setStatus("error", "Sync-Fehler", state.lastError);
 			console.error("[cf-sync] Fehler beim Entschlüsseln/Anwenden des Remote-Events:", e);
+			throw error;
 		}
 	}
 
 	function handleIncomingRemoteEvent(encryptedEvent) {
 		return enqueueRemoteApply(() => applyIncomingRemoteEvent(encryptedEvent));
+	}
+
+	if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+		window.addEventListener("impala67:db-compacted", () => {
+			state.lastUploadedLocalSeq = 0;
+			localEventIds = null;
+		});
 	}
 
 	const lastUploadedKey = () => syncCursorStorageKeys(credentials?.userId).lastUploaded;
@@ -481,7 +497,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	/**
 	 * Sendet lokale Events, die seit dem letzten Upload entstanden sind (Delta-Upload)
-	 * Bei leerem Server (lastSyncedSeq = 0) oder forceAll = true werden die Notizen kompakt & speicherschonend hochgeladen.
+	 * Beim ersten Upload eines Geräts (lastUploadedSeq = 0) oder forceAll = true werden die Notizen kompakt & speicherschonend in Batches hochgeladen.
 	 */
 	async function pushUnsyncedLocalEvents(forceAll = false) {
 		if (!state.url || !credentials) return;
@@ -491,7 +507,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const localMaxSeq = localEvents.reduce((max, ev) => Math.max(max, Number(ev?.seq) || 0), 0);
 		const lastUploadedSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 
-		const isInitialPush = Boolean(forceAll || state.lastSyncedSeq === 0);
+		const isInitialPush = Boolean(forceAll || lastUploadedSeq === 0);
 		// Bei Initial-Push: Vorm Kompaktieren bereinigen, damit nicht tausende alte Tastenanschläge den RAM sprengen
 		const sourceEvents = isInitialPush ? DB.compactEvents(localEvents) : localEvents.filter((e) => (e.seq || 0) > lastUploadedSeq);
 		if (!sourceEvents.length) return;

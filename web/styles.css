@@ -49,8 +49,23 @@ body.density-compact :where(.library) { padding: 24px 30px }
 /* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
 button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
 button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active { transform: scale(.98) }
-/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN tr… */
+/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform, damit Text und Einrückung ruhig bleiben */
 .row:active, .deck-row:active { background: var(--surface-active) }
+
+/* Touchscreens (iPad, Tablets, Touch-Monitore): Kein Skalierungs-Zucken bei Berührung */
+@media (hover: none), (pointer: coarse) {
+	button:not(:disabled):active,
+	.tabchip:active,
+	.lib-card:active,
+	.cal-day:active,
+	.deck-row:active,
+	.navbtn:active,
+	.row:active,
+	.home-pill:active,
+	.home-continue:active {
+		transform: none !important;
+	}
+}
 /* Flächen heben sich beim Öffnen und beim Hover nur über Transfo… */
 .lib-card:hover, .deck-row:hover { transform: translateY(-2px) }
 /* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einble… */
@@ -2463,7 +2478,7 @@ body.anki-zen.anki-view-open.density-compact.panel-collapsed #app { grid-templat
 }
 /* Touch kennt kein echtes Hover: angetippte Karten blieben sonst angehoben stehen. */
 @media (hover: none) {
-	.lib-card:hover, .deck-row:hover { transform: none }
+	.lib-card:hover, .deck-row:hover, .heft-swatch:hover, .blk-calloutdot:hover, .blk-cdot:hover { transform: none }
 }
 /* 🐛 Doppeltipp-Fix, JS-frei: (any-pointer: coarse) greift auch am iPad mit Trackpad oder im
    Desktop-Modus. Der erste Tipp setzte dort nur den Hover-Zustand (Zeile hob sich an,
@@ -2472,7 +2487,7 @@ body.anki-zen.anki-view-open.density-compact.panel-collapsed #app { grid-templat
 	/* ⚠️ Volle Selektoren statt :where(): :where hat NULL Gewicht — damit verloren diese
 	   Regeln gegen die Basis-Hover-Regeln und der Doppeltipp-Bug kam zurück (28. Juli). */
 	.lib-card:hover, .deck-row:hover, .kpi:hover, .grades [data-ankigrade]:hover, .study-reveal-controls [data-ankishowback]:hover { transform: none }
-	.lib-card:active, .deck-row:active { transform: scale(.995); background: var(--surface-hover) }
+	.lib-card:active, .deck-row:active { transform: none; background: var(--surface-hover) }
 	.deck-actions .deck-iconbtn { opacity: 1 }
 }
 

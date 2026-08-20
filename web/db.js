@@ -296,13 +296,25 @@ export const DB = (() => {
 		// Untergrenze setzen, damit fremde Deltas die verworfenen Events nicht zurückbringen.
 		localStorage.setItem(COMPACT_FLOOR_KEY, compacted.length ? compacted[0].t : U.now());
 		// Der seq-Raum ist komplett neu vergeben — jede seq-basierte Sync-Marke ist damit
-		// bedeutungslos. 0 = beim nächsten Sync alles erneut anbieten; importAll ist per
-		// Event-id idempotent, es entstehen also keine Duplikate.
-		// Vorher stand hier nur ein Kommentar: drive.js [F4] klemmte den zu hohen Wasserstand
-		// auf den GESCHRUMPFTEN maxSeq — darunter lagen dann nie hochgeladene Events, die
-		// eventsAfterSeq dauerhaft übersprang (stiller Verlust Richtung anderer Geräte).
+		// bedeutungslos. 0 = beim nächsten Sync alles erneut anbieten; importAll bzw. der Cloud-Sync
+		// ist per Event-id / Deduplizierung idempotent, es entstehen also keine Duplikate.
+		// Auch die Cloudflare-Upload-Cursor müssen auf 0 gesetzt werden, da sonst neue Events
+		// wegen eines alten, zu hohen Upload-Cursors übersprungen würden (stiller Datenverlust).
 		localStorage.setItem("impala67_drive_uploaded_seq", "0");
 		localStorage.removeItem("impala67_drive_synced_seq");
+		try {
+			if (typeof localStorage !== "undefined") {
+				for (let i = 0; i < localStorage.length; i++) {
+					const k = localStorage.key(i);
+					if (k && (k === "impala67_cf_last_uploaded_local_seq" || k.startsWith("impala67_cf_last_uploaded_local_seq_"))) {
+						localStorage.setItem(k, "0");
+					}
+				}
+			}
+		} catch {}
+		if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+			window.dispatchEvent(new CustomEvent("impala67:db-compacted"));
+		}
 		return dropped;
 	}
 

@@ -111,9 +111,9 @@ body.mobile-ui #mTop .icon-btn {
 	justify-content: center;
 	cursor: pointer;
 	padding: 0;
-	transition: background 0.12s, color 0.12s, transform 0.1s;
+	transition: background 0.08s, color 0.08s;
 }
-body.mobile-ui #mTop .icon-btn:active { background: var(--surface-active); color: var(--text); transform: scale(0.94); }
+body.mobile-ui #mTop .icon-btn:active { background: var(--surface-active); color: var(--text); }
 body.mobile-ui #mTop .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
 
 body.mobile-ui #mTop .pill-action-btn {
@@ -129,9 +129,9 @@ body.mobile-ui #mTop .pill-action-btn {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	transition: background 0.12s, transform 0.1s;
+	transition: opacity 0.08s;
 }
-body.mobile-ui #mTop .pill-action-btn:active { opacity: 0.9; transform: scale(0.95); }
+body.mobile-ui #mTop .pill-action-btn:active { opacity: 0.8; }
 
 /* ============================================================
    BOTTOM NAV — Icons + Labels, Home in der Mitte prominent
@@ -149,7 +149,6 @@ body.mobile-ui #mNav {
 	backdrop-filter: blur(24px);
 	-webkit-backdrop-filter: blur(24px);
 	border-top: 1px solid var(--edge-soft);
-	transition: transform .18s var(--ease-out);
 }
 body.mobile-ui #mNav button {
 	position: relative;
@@ -166,9 +165,9 @@ body.mobile-ui #mNav button {
 	font-size: var(--text-3xs);
 	font-weight: 700;
 	line-height: 1.2;
-	transition: color .12s, transform .1s;
+	transition: color .08s;
 }
-body.mobile-ui #mNav button:active { transform: scale(0.92); }
+body.mobile-ui #mNav button:active { opacity: 0.7; }
 body.mobile-ui #mNav button svg {
 	width: 21px;
 	height: 21px;
@@ -235,12 +234,12 @@ body.mobile-ui #sidebar {
 	box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
 	transform: translateY(104%);
 	visibility: hidden;
-	transition: transform .24s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear .24s;
+	transition: transform .14s ease-out, visibility 0s linear .14s;
 }
 body.mobile-ui.mnav-open #sidebar {
 	transform: none;
 	visibility: visible;
-	transition: transform .24s cubic-bezier(0.16, 1, 0.3, 1);
+	transition: transform .14s ease-out;
 }
 body.mobile-ui #sidebar::before { display: none }
 /* Desktop-Topbar-Tabs (Home/Chat/Karten/Suche) raus — Navigation läuft über die Bottom-Bar */
@@ -255,9 +254,9 @@ body.mobile-ui #tree .row {
 	min-height: 44px;
 	padding: 10px 12px;
 	border-radius: var(--radius-md);
-	transition: background .12s, transform .1s;
+	transition: background .08s;
 }
-body.mobile-ui #tree .row:active { transform: scale(0.985); }
+body.mobile-ui #tree .row:active { background: var(--surface-active); }
 /* Heft-Umschalter (workspace/heft pills) bleibt sichtbar */
 body.mobile-ui #sidebar .side-foot { display: none } /* im Mehr-Sheet */
 
@@ -279,12 +278,12 @@ body.mobile-ui #mMoreSheet {
 	box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
 	transform: translateY(104%);
 	visibility: hidden;
-	transition: transform .24s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear .24s;
+	transition: transform .14s ease-out, visibility 0s linear .14s;
 }
 body.mobile-ui.mmore-open #mMoreSheet {
 	transform: none;
 	visibility: visible;
-	transition: transform .24s cubic-bezier(0.16, 1, 0.3, 1);
+	transition: transform .14s ease-out;
 }
 body.mobile-ui .mSheet-head {
 	display: flex;
@@ -316,9 +315,9 @@ body.mobile-ui .home-continue {
 	gap: 12px;
 	margin-bottom: 16px;
 	cursor: pointer;
-	transition: background 0.12s, transform 0.1s;
+	transition: background 0.08s;
 }
-body.mobile-ui .home-continue:active { background: rgba(111, 195, 255, 0.16); transform: scale(0.985); }
+body.mobile-ui .home-continue:active { background: rgba(111, 195, 255, 0.16); }
 body.mobile-ui .home-continue .recent-icon { font-size: 24px; }
 body.mobile-ui .home-continue .recent-copy { flex: 1; min-width: 0; }
 body.mobile-ui .home-continue .recent-copy b { font-size: 14.5px; font-weight: 750; color: var(--text); display: block; }
@@ -335,11 +334,11 @@ body.mobile-ui .home-list-row {
 	border: 1px solid var(--edge-soft);
 	margin-bottom: 7px;
 	cursor: pointer;
-	transition: background 0.12s, transform 0.1s;
+	transition: background 0.08s;
 	width: 100%;
 	text-align: left;
 }
-body.mobile-ui .home-list-row:active { background: var(--surface-active); transform: scale(0.985); }
+body.mobile-ui .home-list-row:active { background: var(--surface-active); }
 body.mobile-ui .home-list-row .recent-icon { font-size: 18px; }
 body.mobile-ui .home-list-row b { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.mobile-ui .home-list-row small { display: inline-block !important; font-size: 11.5px; color: var(--text2); margin-right: 4px; }
@@ -554,10 +553,10 @@ body.mobile-ui .grades [data-ankigrade] {
 	border-radius: var(--radius-lg);
 	font-size: 15px;
 	font-weight: 700;
-	transition: transform .1s, background .12s;
+	transition: background .08s;
 }
 body.mobile-ui .grades [data-ankigrade]:active {
-	transform: scale(0.96);
+	background: var(--surface-active);
 }
 body.mobile-ui .grades .grade-key { display: none }
 body.mobile-ui .grades .grade-ivl { font-size: var(--text-2xs); color: var(--text2) }
@@ -604,7 +603,6 @@ body.mobile-ui.m-study #mNav,
 body.mobile-ui.m-typing #mNav { transform: translateY(110%) }
 
 @media (prefers-reduced-motion: reduce) {
-	/* #mNav fehlte hier — Fußleiste animierte trotz Systemeinstellung. */
 	body.mobile-ui #sidebar,
 	body.mobile-ui #mMoreSheet,
 	body.mobile-ui #mNav { transition: none }
@@ -642,7 +640,6 @@ body.mobile-ui #main > .mobile-home-preview {
 	max-width: 414px;
 	margin: 0 auto;
 	padding: 16px 16px 24px;
-	animation: mobilePreviewFade .16s ease-out;
 }
 body.mobile-ui .mobile-home-preview .greet-wrap {
 	display: flex;
@@ -728,11 +725,10 @@ body.mobile-ui .mobile-home-preview .hero-focus-card {
 	border-radius: var(--radius-lg);
 	padding: 16px 18px;
 	cursor: pointer;
-	transition: background .12s, transform .1s;
+	transition: background .08s;
 }
 body.mobile-ui .mobile-home-preview .hero-focus-card:active {
 	background: rgba(111, 195, 255, .16);
-	transform: scale(.985);
 }
 body.mobile-ui .mobile-home-preview .hero-focus-card.is-empty {
 	cursor: default;
@@ -794,11 +790,10 @@ body.mobile-ui .mobile-home-preview .item-row {
 	border: 1px solid var(--edge-soft);
 	border-radius: var(--radius-md);
 	cursor: pointer;
-	transition: background .12s, transform .1s;
+	transition: background .08s;
 }
 body.mobile-ui .mobile-home-preview .item-row:active {
 	background: var(--surface-active);
-	transform: scale(.985);
 }
 body.mobile-ui .mobile-home-preview .item-row .ico {
 	flex: 0 0 24px;
@@ -897,11 +892,10 @@ body.mobile-ui #mMoreSheet .more-card {
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
 	color: var(--text);
-	transition: background .12s, transform .1s;
+	transition: background .08s;
 }
 body.mobile-ui #mMoreSheet .more-card:active {
 	background: var(--surface-active);
-	transform: scale(.97);
 }
 body.mobile-ui #mMoreSheet .more-card .m-ico {
 	margin-bottom: 9px;
@@ -1165,7 +1159,11 @@ body.mobile-ui .settings-mobile-footer {
 	font-size: 11.5px;
 }
 
-@keyframes mobilePreviewFade {
-	from { opacity: .4; }
-	to { opacity: 1; }
+/* Modal- & Menü-Animationen auf Mobile abschalten (verhindert Skalierungs- & Positions-Sprünge) */
+body.mobile-ui #overlay:not([hidden]) .modal,
+body.mobile-ui .page-menu,
+body.mobile-ui .attach-menu:not([hidden]),
+body.mobile-ui .model-menu:not([hidden]),
+body.mobile-ui .modal {
+	animation: none !important;
 }

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
-import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES } from "../web/sync-crypto.js";
+import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES, deriveSyncCredentials, decryptPayload, encryptPayload } from "../web/sync-crypto.js";
+import { CLOUD_SYNC_PROTOCOL, prepareIncomingCloudEvents, cloudEventsEnvelope } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
 
 test("CLOUDFLARE_SYNC hat initialen Status und Methoden", () => {
@@ -257,6 +258,321 @@ test("Regression: WebSocket-Fehler entzieht nicht global die Credentials und erz
 		assert.ok(capturedSyncRequest.headers["Authorization"]);
 		assert.equal(capturedSyncRequest.headers["X-Impala-Sync-Protocol"], "3");
 		assert.doesNotMatch(CLOUDFLARE_SYNC.status().detail, /Fehlende oder ungültige User-ID/);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.eventIds = originalEventIds;
+		DB.allEvents = originalAllEvents;
+	}
+});
+
+test("Regression: Neues Gerät mit bestehendem Serverstand und Drive-Historie führt kompakten Initial-Push durch und erhält lokale Extra-Notiz", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalEventIds = DB.eventIds;
+	const originalAllEvents = DB.allEvents;
+	const originalAddEvents = DB.addEvents;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+
+	// 1. Server hat bereits einen Stand (Seq 1)
+	const serverEvent = { id: "server-note-1", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p-server", title: "Server Note" } };
+	const encServer = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([serverEvent]));
+	const serverBatchPacket = { seq: 1, id: "batch-server-1", iv: encServer.iv, data: encServer.data, size: encServer.size, created_at: new Date().toISOString() };
+
+	// 2. Lokale DB des Handys: 200 Drive-Events + 1 lokale Extra-Notiz
+	const localEvents = [];
+	for (let i = 1; i <= 200; i++) {
+		localEvents.push({
+			seq: i,
+			id: `drive-event-${i}`,
+			t: `2026-08-19T10:00:${String(i % 60).padStart(2, "0")}Z`,
+			type: "pageCreate",
+			payload: { id: `p-drive-${i}`, title: `Drive Notiz ${i}` },
+			_remoteSource: "drive",
+		});
+	}
+	const localUniqueNote = {
+		seq: 201,
+		id: "local-unique-note-1",
+		t: "2026-08-20T18:00:00Z",
+		type: "pageCreate",
+		payload: { id: "p-local-unique", title: "Nur auf Handy erstellt" },
+	};
+	localEvents.push(localUniqueNote);
+
+	DB.eventIds = async () => localEvents.map((e) => e.id);
+	DB.allEvents = async () => [...localEvents];
+	DB.addEvents = async () => {};
+
+	const postedBatches = [];
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			return new Response(JSON.stringify({ events: [serverBatchPacket], maxSeq: 1, hasMore: false }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			const body = JSON.parse(init.body || "{}");
+			postedBatches.push(body);
+			return new Response(JSON.stringify({ ok: true, savedCount: (body.events || []).length, maxSeq: 2, usage: 5000 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(success, true);
+
+		// Prüfen, dass der Upload stattfand
+		assert.equal(postedBatches.length, 1, "Muss genau 1 gebündelten Initial-Push-Request senden statt Hunderte Einzel-Requests");
+		const uploadedEvents = postedBatches[0].events || [];
+
+		// Prüfen, dass der Upload gebündelte batch-IDs verwendet und KEINE 201 Einzeldateien
+		assert.ok(uploadedEvents.length <= 2, "Kompaktierte Events müssen in wenigen Batches gebündelt sein");
+		for (const packet of uploadedEvents) {
+			assert.match(packet.id, /^batch-/, "Muss batch-ID für gebündelten Initial-Push verwenden");
+		}
+
+		// Prüfen, dass die lokale Extra-Notiz im gebündelten Chiffrat enthalten ist
+		let foundUniqueNote = false;
+		for (const packet of uploadedEvents) {
+			const decryptedEnvelope = await decryptPayload(creds.cryptoKey, packet);
+			const unpacked = prepareIncomingCloudEvents([decryptedEnvelope]);
+			if (unpacked.some((e) => e.id === "local-unique-note-1")) {
+				foundUniqueNote = true;
+			}
+		}
+		assert.equal(foundUniqueNote, true, "Lokale Extra-Notiz muss im gebündelten Initial-Push enthalten sein");
+
+		// Upload-Cursor muss auf localMaxSeq (201) gesetzt sein
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 201);
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 2);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.eventIds = originalEventIds;
+		DB.allEvents = originalAllEvents;
+		DB.addEvents = originalAddEvents;
+	}
+});
+
+test("Regression: DB.compactLocal setzt Cloudflare-Upload-Cursor auf 0 zurück und signalisiert Event", async () => {
+	const originalStorage = globalThis.localStorage;
+	const originalIndexedDB = globalThis.indexedDB;
+	const originalAllEvents = DB.allEvents;
+
+	const map = new Map();
+	globalThis.localStorage = {
+		getItem: (k) => (map.has(k) ? map.get(k) : null),
+		setItem: (k, v) => map.set(String(k), String(v)),
+		removeItem: (k) => map.delete(k),
+		clear: () => map.clear(),
+		key: (i) => Array.from(map.keys())[i] || null,
+		get length() { return map.size; },
+	};
+
+	globalThis.indexedDB = {
+		open: () => {
+			const req = { onsuccess: null, onerror: null };
+			setTimeout(() => {
+				req.result = {
+					objectStoreNames: { contains: () => true },
+					createObjectStore: () => ({ createIndex: () => {} }),
+					transaction: () => {
+						const tx = {
+							oncomplete: null,
+							objectStore: () => ({
+								count: () => {
+									const r = { onsuccess: null, onerror: null, result: 1 };
+									setTimeout(() => r.onsuccess?.(), 0);
+									return r;
+								},
+								getAll: () => {
+									const r = { onsuccess: null, onerror: null, result: events };
+									setTimeout(() => r.onsuccess?.(), 0);
+									return r;
+								},
+								clear: () => {},
+								add: () => {},
+							}),
+						};
+						setTimeout(() => tx.oncomplete?.(), 0);
+						return tx;
+					},
+					close: () => {},
+				};
+				req.onsuccess?.();
+			}, 0);
+			return req;
+		},
+	};
+
+	const userStorageKey = "impala67_cf_last_uploaded_local_seq_user-test123";
+	const globalStorageKey = "impala67_cf_last_uploaded_local_seq";
+	globalThis.localStorage.setItem(userStorageKey, "12000");
+	globalThis.localStorage.setItem(globalStorageKey, "12000");
+
+	// Events für DB.compactLocal bereitstellen
+	const events = [];
+	for (let i = 1; i <= 300; i++) {
+		events.push({
+			id: `ev-${i}`,
+			t: `2026-08-20T10:00:${String(i % 60).padStart(2, "0")}Z`,
+			type: "pageUpdate",
+			payload: { id: "p1", patch: { content: `Stand ${i}` } },
+		});
+	}
+	DB.allEvents = async () => [...events];
+
+	try {
+		await DB.open();
+		const dropped = await DB.compactLocal(10);
+		assert.ok(dropped > 0, "Muss Events verdichtet haben");
+		assert.equal(globalThis.localStorage.getItem(userStorageKey), "0", "Benutzerspezifischer Upload-Cursor muss auf 0 gesetzt sein");
+		assert.equal(globalThis.localStorage.getItem(globalStorageKey), "0", "Globaler Upload-Cursor muss auf 0 gesetzt sein");
+	} finally {
+		DB.allEvents = originalAllEvents;
+		globalThis.localStorage = originalStorage;
+		globalThis.indexedDB = originalIndexedDB;
+	}
+});
+
+test("Regression: WebSocket-Entschlüsselungsfehler setzt Status auf error und lässt lastSyncedSeq unverändert", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalEventIds = DB.eventIds;
+	const originalAllEvents = DB.allEvents;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+	DB.eventIds = async () => [];
+	DB.allEvents = async () => [];
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+	const validEv = { id: "valid-10", t: "2026-08-20T10:00:00Z", type: "pageCreate", payload: { id: "p1" } };
+	const encValid = await encryptPayload(creds.cryptoKey, cloudEventsEnvelope([validEv]));
+	const validPacket = { seq: 10, id: "batch-10", iv: encValid.iv, data: encValid.data, size: encValid.size };
+
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			return new Response(JSON.stringify({ events: [validPacket], maxSeq: 10, hasMore: false }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			return new Response(JSON.stringify({ ok: true, maxSeq: 10, savedCount: 1 }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", key);
+		assert.equal(success, true);
+		assert.equal(MockWebSocket.instances.length, 1);
+		const ws = MockWebSocket.instances[0];
+
+		// Authentifizieren
+		ws.receiveMessage({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL });
+		await new Promise((r) => setTimeout(r, 60)); // Warten bis initialer CatchUp nach Auth abgeschlossen ist
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 10);
+
+		// Fehlerhaftes/nicht entschlüsselbares Event empfangen (z. B. ungültiges Chiffrat)
+		ws.receiveMessage({
+			type: "event",
+			event: {
+				seq: 11,
+				id: "broken-event",
+				iv: "000000000000000000000000",
+				data: "AAAA", // Ungültiges Chiffrat
+			},
+		});
+
+		// Event-Verarbeitung abwarten
+		await new Promise((r) => setTimeout(r, 80));
+
+		// Status muss error sein und lastSyncedSeq darf NICHT auf 11 gesprungen sein
+		assert.equal(CLOUDFLARE_SYNC.status().status, "error");
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 10, "lastSyncedSeq darf nach Entschlüsselungsfehler nicht vorgeschoben werden");
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.eventIds = originalEventIds;
+		DB.allEvents = originalAllEvents;
+	}
+});
+
+test("Regression: WebSocket-ACK mit Sequenzlücke stößt catchUp an", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalEventIds = DB.eventIds;
+	const originalAllEvents = DB.allEvents;
+
+	MockWebSocket.instances = [];
+	globalThis.WebSocket = MockWebSocket;
+	DB.eventIds = async () => [];
+	DB.allEvents = async () => [];
+
+	let catchUpCalls = 0;
+	globalThis.fetch = async (url) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			catchUpCalls++;
+			return new Response(JSON.stringify({ events: [], maxSeq: 15, hasMore: false }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		const success = await CLOUDFLARE_SYNC.configure("https://sync.example.com", generateSyncKey());
+		assert.equal(success, true);
+		assert.equal(MockWebSocket.instances.length, 1);
+		const ws = MockWebSocket.instances[0];
+
+		// Bei Authentifizierung wird initialer Catchup ausgeführt
+		ws.receiveMessage({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL });
+		await new Promise((r) => setTimeout(r, 50));
+		const catchUpsAfterAuth = catchUpCalls;
+
+		// ACK empfangen mit seq = 15 (bei aktuellem lastSyncedSeq = 0) -> Sequenzlücke
+		ws.receiveMessage({
+			type: "ack",
+			eventId: "some-event",
+			seq: 15,
+		});
+
+		await new Promise((r) => setTimeout(r, 60));
+		assert.ok(catchUpCalls > catchUpsAfterAuth, "Muss catchUp() aufrufen, wenn ACK eine Sequenzlücke aufweist");
 	} finally {
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
