@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:e2e": "node --test test/sync-v4-browser.e2e.mjs",
+    "test:all": "node --test test/*.test.mjs test/sync-v4-browser.e2e.mjs",
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
   },

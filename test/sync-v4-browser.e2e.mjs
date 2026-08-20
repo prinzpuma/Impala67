@@ -1,18 +1,29 @@
 import test, { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
 
 const CHROME_PATHS = [
+	process.env.CHROME_BIN,
+	process.env.PUPPETEER_EXECUTABLE_PATH,
 	"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
 	"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-	"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
 	"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+	"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
 	process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe") : null,
 	process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Microsoft\\Edge\\Application\\msedge.exe") : null,
+	process.env.PROGRAMFILES ? path.join(process.env.PROGRAMFILES, "Google\\Chrome\\Application\\chrome.exe") : null,
+	process.env["PROGRAMFILES(X86)"] ? path.join(process.env["PROGRAMFILES(X86)"], "Google\\Chrome\\Application\\chrome.exe") : null,
+	process.env.PROGRAMFILES ? path.join(process.env.PROGRAMFILES, "Microsoft\\Edge\\Application\\msedge.exe") : null,
+	process.env["PROGRAMFILES(X86)"] ? path.join(process.env["PROGRAMFILES(X86)"], "Microsoft\\Edge\\Application\\msedge.exe") : null,
+	"/usr/bin/google-chrome",
+	"/usr/bin/chromium-browser",
+	"/usr/bin/chromium",
+	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ];
 
 const MIME_MAP = {
@@ -126,7 +137,7 @@ async function waitReady(page) {
 		const st = window.CLOUDFLARE_SYNC.status();
 		if (!hasKey) return true;
 		return st.status === "connected" || st.label === "Synchronisiert";
-	}, { timeout: 10000 });
+	}, { timeout: 15000 });
 }
 
 async function setupPageInContext(ctx, label) {
