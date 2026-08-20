@@ -3,30 +3,25 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-export const CLOUD_SYNC_PROTOCOL = 3;
+export const CLOUD_SYNC_PROTOCOL = 4;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
 
-export function shouldUploadToSync(event, target) {
-	return event?._remoteSource !== target;
-}
-
-export function shouldUploadDelta(localMaxSeq, uploadedSeq) {
-	return Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
-}
+export const shouldUploadToSync = (event, target) => event?._remoteSource !== target;
+export const shouldUploadDelta = (localMaxSeq, uploadedSeq) => Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
 
 export function unseenRemoteFiles(files, knownIds) {
 	const known = knownIds instanceof Set ? knownIds : new Set(knownIds || []);
-	return (files || []).filter((f) => f && f.id && !known.has(f.id));
+	return (files || []).filter((file) => file?.id && !known.has(file.id));
 }
 
 export function newestFile(files, names) {
-	const allow = new Set(names || []);
-	return (files || []).filter((f) => allow.has(f.name))
+	const allowed = new Set(names || []);
+	return (files || []).filter((file) => allowed.has(file.name))
 		.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")))[0] || null;
 }
 
 export async function sha256Hex(value) {
-	const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+	const bytes = value instanceof Uint8Array ? value : enc.encode(String(value ?? ""));
 	const digest = await crypto.subtle.digest("SHA-256", bytes);
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -51,106 +46,91 @@ export function boundedKnownIds(ids, max = 2000) {
 	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
 }
 
-// IndexedDB-Sequenzen und Replay-Markierungen sind ausschließlich lokale
-// Metadaten. Auf dem Wire würden sie auf einem zweiten Gerät dessen autoIncrement-
-// Schlüssel kollidieren lassen oder bereits empfangene Events erneut hochladen.
 export function prepareCloudEvents(events, { includeRemote = false } = {}) {
-	return (events || []).filter((ev) => includeRemote || shouldUploadToSync(ev, "cloudflare")).map((ev) => {
-		const { seq, _remote, _remoteSource, _derived, ...wireEvent } = ev || {};
-		return wireEvent;
-	});
+	return (events || [])
+		.filter((event) => includeRemote || shouldUploadToSync(event, "cloudflare"))
+		.map((event) => {
+			const { seq, _remote, _remoteSource, _derived, ...wire } = event || {};
+			return wire;
+		});
 }
 
 function prepareIncomingCloudEvent(event) {
-	if (!event || typeof event !== "object" || Array.isArray(event)) {
-		throw new Error("Cloud-Event ist ungültig.");
-	}
-	if (Object.hasOwn(event, "seq") || Object.hasOwn(event, "_remote") || Object.hasOwn(event, "_remoteSource") || Object.hasOwn(event, "_derived")) {
-		throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
+	if (!event || typeof event !== "object" || Array.isArray(event)) throw new Error("Cloud-Event ist ungültig.");
+	for (const key of ["seq", "_remote", "_remoteSource", "_derived"]) {
+		if (Object.hasOwn(event, key)) throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
 	}
 	return { ...event, _remote: true, _remoteSource: "cloudflare" };
 }
 
-// Protokoll v3 akzeptiert ausschließlich versionierte Einzel- oder Batch-Envelopes
-// und weist lokale IndexedDB-Metadaten hart zurück.
-export function prepareIncomingCloudEvents(events) {
-	return (events || []).flatMap((envelope) => {
-		if (!envelope || envelope.v !== CLOUD_SYNC_PROTOCOL) {
-			throw new Error(`Cloud-Event verwendet nicht Sync-Protokoll v${CLOUD_SYNC_PROTOCOL}.`);
-		}
-		if (Array.isArray(envelope.events)) {
-			if (!envelope.events.length) throw new Error("Cloud-Event-Batch ist leer.");
-			return envelope.events.map(prepareIncomingCloudEvent);
-		}
-		if (!envelope.event || typeof envelope.event !== "object") {
-			throw new Error(`Cloud-Event verwendet nicht Sync-Protokoll v${CLOUD_SYNC_PROTOCOL}.`);
-		}
-		return [prepareIncomingCloudEvent(envelope.event)];
+export function prepareIncomingCloudEvents(envelopes) {
+	return (envelopes || []).flatMap((envelope) => {
+		if (!envelope || envelope.v !== CLOUD_SYNC_PROTOCOL) throw new Error(`Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.`);
+		const events = Array.isArray(envelope.events) ? envelope.events : envelope.event ? [envelope.event] : [];
+		if (!events.length) throw new Error("Cloud-Event-Paket ist leer.");
+		return events.map(prepareIncomingCloudEvent);
 	});
 }
 
-export function cloudEventEnvelope(event) {
-	return { v: CLOUD_SYNC_PROTOCOL, event };
-}
-
+export const cloudEventEnvelope = (event) => ({ v: CLOUD_SYNC_PROTOCOL, event });
 export function cloudEventsEnvelope(events) {
-	if (!Array.isArray(events) || !events.length) throw new Error("Cloud-Event-Batch ist leer.");
+	if (!Array.isArray(events) || !events.length) throw new Error("Cloud-Event-Paket ist leer.");
 	return { v: CLOUD_SYNC_PROTOCOL, events };
 }
 
-export function chunkCloudEvents(events, { maxEvents = 500, maxJsonChars = 1_500_000 } = {}) {
-	const chunks = [];
-	let chunk = [];
-	let chars = 0;
+export function chunkCloudEvents(events, { maxEvents = 250, maxJsonChars = 1_000_000 } = {}) {
+	const out = [];
+	let chunk = [], chars = 0;
 	for (const event of events || []) {
-		const eventChars = JSON.stringify(event).length + 1;
-		if (chunk.length && (chunk.length >= maxEvents || chars + eventChars > maxJsonChars)) {
-			chunks.push(chunk);
-			chunk = [];
-			chars = 0;
+		const n = JSON.stringify(event).length + 1;
+		if (chunk.length && (chunk.length >= maxEvents || chars + n > maxJsonChars)) {
+			out.push(chunk); chunk = []; chars = 0;
 		}
-		chunk.push(event);
-		chars += eventChars;
+		chunk.push(event); chars += n;
 	}
-	if (chunk.length) chunks.push(chunk);
-	return chunks;
+	if (chunk.length) out.push(chunk);
+	return out;
 }
 
-export function encryptedPacketChars(packet) {
-	return String(packet?.id || "").length + String(packet?.iv || "").length + String(packet?.data || "").length + 64;
+export const encryptedPacketChars = (packet) =>
+	String(packet?.id || "").length + String(packet?.iv || "").length + String(packet?.data || "").length + 64;
+
+export function heftBaselineOps(doc) {
+	const pages = Array.isArray(doc?.pages) ? doc.pages : [];
+	const ops = pages.map((page, at) => ({ t: "pg+", at, page: { id: page.id, paper: page.paper || "lined" } }));
+	if (pages.length) ops.push({ t: "pgo", order: pages.map((page) => page.id) });
+	for (const page of pages) {
+		if (page.ocrText) ops.push({ t: "ocr", p: page.id, text: page.ocrText });
+		for (const stroke of page.strokes || []) ops.push({ t: "s+", p: page.id, o: stroke });
+		for (const image of page.images || []) ops.push({ t: "i+", p: page.id, o: image });
+		for (const text of page.texts || []) ops.push({ t: "x+", p: page.id, o: text });
+	}
+	return ops;
 }
 
-// Nur gerätespezifische UI-Zustände und bereits in einem neueren Heft-Snapshot
-// enthaltene Striche aus dem Transport entfernen. Nutzungsstatistiken bleiben erhalten.
+// Nur gerätespezifischen UI-Zustand aus dem Transport entfernen.
+// Fachliche Events – insbesondere heftOps – werden NIE anhand eines Snapshots verworfen.
 export function pruneEventsForUpload(events) {
-	const snapSeq = new Map();
-	for (const ev of events || []) {
-		if (ev.type === "heftSnap" && ev.payload?.pageId) snapSeq.set(ev.payload.pageId, Math.max(snapSeq.get(ev.payload.pageId) || 0, ev.seq || 0));
-	}
-	return (events || []).filter((ev) => {
-		if (ev.type === "uiTabsSet" || ev.type === "uiTreeSet") return false;
-		if (ev.type === "heftOps" && (snapSeq.get(ev.payload?.pageId) || 0) > (ev.seq || 0)) return false;
-		return true;
-	});
+	return (events || []).filter((event) => event?.type !== "uiTabsSet" && event?.type !== "uiTreeSet");
+}
+
+export function isSyncBlobId(id) {
+	const key = String(id || "");
+	return /^(?:img:|file:|cover:|pdftext:)/.test(key) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
 }
 
 export function isBlobAlive(key, pages) {
 	const k = String(key || "");
 	if (!k) return false;
-	const pageStrings = [];
-	for (const pg of Object.values(pages || {})) {
-		if (!pg || typeof pg !== "object") continue;
-		for (const v of Object.values(pg)) {
-			if (typeof v === "string" && v) pageStrings.push(v);
-		}
+	const strings = [];
+	for (const page of Object.values(pages || {})) {
+		if (!page || typeof page !== "object") continue;
+		for (const value of Object.values(page)) if (typeof value === "string" && value) strings.push(value);
 	}
-	const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-	const isRef = (target) => !!target && pageStrings.some((s) => s.includes(target));
-
-	if (k.startsWith("heft:")) return !!(pages && pages[k.slice(5)]);
-	if (k.startsWith("pdftext:")) return isRef(k.slice(8));
-	if (k.startsWith("cover:")) return isRef(k) || isRef(k.slice(6));
-	if (isUuid(k)) return isRef(k);
-	// Fail-safe: gerätespezifische oder unbekannte Schlüssel ("bgImage", "heftver:...") nie löschen
-	return true;
+	const ref = (target) => !!target && strings.some((value) => value.includes(target));
+	if (k.startsWith("heft:")) return !!pages?.[k.slice(5)];
+	if (k.startsWith("pdftext:")) return ref(k.slice(8));
+	if (k.startsWith("img:") || k.startsWith("file:") || k.startsWith("cover:")) return ref(k);
+	if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return ref(k);
+	return false;
 }
