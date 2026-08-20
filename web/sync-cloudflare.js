@@ -178,8 +178,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			state.lastUploadedLocalSeq = Number(LS.getItem(lastUploadedKey())) || 0;
 			LS.setItem(lastSyncedKey(), String(state.lastSyncedSeq));
 			LS.setItem(lastUploadedKey(), String(state.lastUploadedLocalSeq));
-			connectWebSocket();
 			await catchUp();
+			if (generation !== configureGeneration) return false;
+			connectWebSocket();
 			return true;
 		} catch (e) {
 			state.lastError = (e && e.message) ? e.message : String(e || "Einrichtungsfehler aufgetreten");
@@ -237,13 +238,13 @@ export const CLOUDFLARE_SYNC = (() => {
 						return;
 					}
 					if (msg.type === "unauthorized") {
-						disconnect();
+						closeSocket();
 						state.lastError = msg.error || "Nicht autorisiert";
 						setStatus("error", "Nicht autorisiert", "Sync-Schlüssel stimmt nicht mit dem Server überein.");
 						return;
 					}
 					if (msg.type === "unsupported_protocol") {
-						disconnect();
+						closeSocket();
 						state.lastError = msg.error || `Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.`;
 						setStatus("error", "Update erforderlich", state.lastError);
 						return;
