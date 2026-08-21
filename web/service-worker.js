@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v222"; // Cloudflare Sync v4 Hardening & Full Invariants.
+const CACHE = "impala67-v222"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -46,6 +46,7 @@ const APP_FILES = [
 	"./sync-core.js",
 	"./sync-crypto.js",
 	"./sync-cloudflare.js",
+	"./sync-maintenance.js",
 	"./qrcode.js",
 	"./pdfs.js",
 	"./pdfpaste.js",
@@ -93,15 +94,19 @@ const CDN_FILES = [
 ];
 
 // Installation: App-Dateien verpflichtend, CDN-Dateien best effort vorab cachen.
-// "reload" umgeht den HTTP-Cache: sonst wandern beim Installieren genau die alten
-// Antworten in den Offline-Cache, gegen die der Fetch-Handler unten ankämpft (iPadOS).
+// Der neue Worker bleibt danach bewusst in "waiting", solange noch die alte App
+// läuft. Erst updater.js sendet nach dem ausdrücklichen Update-Klick SKIP_WAITING.
+// Dadurch bedient niemals ein neues Cache-Bundle eine noch laufende alte UI.
 self.addEventListener("install", (e) => {
 	e.waitUntil(
 		caches.open(CACHE)
 			.then((c) => c.addAll(APP_FILES.map((u) => new Request(u, { cache: "reload" })))
 				.then(() => Promise.allSettled(CDN_FILES.map((u) => c.add(u)))))
-			.then(() => self.skipWaiting())
 	);
+});
+
+self.addEventListener("message", (e) => {
+	if (e.data?.type === "SKIP_WAITING") e.waitUntil(self.skipWaiting());
 });
 
 // Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE, transformers-cache) bewahren.
