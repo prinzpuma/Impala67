@@ -26,6 +26,8 @@ export async function sha256Hex(value) {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+export const jsonByteLength = (value) => enc.encode(JSON.stringify(value)).byteLength;
+
 export async function encodeJson(value) {
 	const raw = enc.encode(JSON.stringify(value));
 	if (typeof CompressionStream !== "function") return { bytes: raw, encoding: "identity" };
@@ -78,22 +80,26 @@ export function cloudEventsEnvelope(events) {
 	return { v: CLOUD_SYNC_PROTOCOL, events };
 }
 
-export function chunkCloudEvents(events, { maxEvents = 250, maxJsonChars = 1_000_000 } = {}) {
+export function chunkCloudEvents(events, { maxEvents = 250, maxJsonBytes, maxJsonChars = 1_000_000 } = {}) {
+	// maxJsonChars bleibt als rückwärtskompatibler Optionsname erhalten; gemessen
+	// wird seit v4.1 ausschließlich die tatsächliche UTF-8-Größe.
+	const byteLimit = Math.max(1, Number(maxJsonBytes ?? maxJsonChars) || 1_000_000);
 	const out = [];
-	let chunk = [], chars = 0;
+	let chunk = [], bytes = 0;
 	for (const event of events || []) {
-		const n = JSON.stringify(event).length + 1;
-		if (chunk.length && (chunk.length >= maxEvents || chars + n > maxJsonChars)) {
-			out.push(chunk); chunk = []; chars = 0;
+		const n = jsonByteLength(event) + 1;
+		if (chunk.length && (chunk.length >= maxEvents || bytes + n > byteLimit)) {
+			out.push(chunk); chunk = []; bytes = 0;
 		}
-		chunk.push(event); chars += n;
+		chunk.push(event); bytes += n;
 	}
 	if (chunk.length) out.push(chunk);
 	return out;
 }
 
-export const encryptedPacketChars = (packet) =>
-	String(packet?.id || "").length + String(packet?.iv || "").length + String(packet?.data || "").length + 64;
+// Öffentliche Bezeichnung aus v4 beibehalten; der Wert ist jetzt tatsächlich
+// eine UTF-8-Byte-Schätzung des JSON-Pakets statt bloßer JS-Zeichenanzahl.
+export const encryptedPacketChars = (packet) => jsonByteLength(packet) + 1;
 
 export function heftBaselineOps(doc) {
 	const pages = Array.isArray(doc?.pages) ? doc.pages : [];
