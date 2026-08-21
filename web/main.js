@@ -36,6 +36,7 @@ import { GRAPH } from "./graph.js";
 import { ANALYSE } from "./analyse.js";
 import { CONTROLLER } from "./controller.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { SYNC_MAINTENANCE } from "./sync-maintenance.js";
 import "./pdfpaste.js";
 
 // Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
@@ -44,7 +45,7 @@ Object.assign(window, {
 	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, EXTRAS,
 	COLLAPSE, CHATS, MOBILE, NOTION_MIGRATOR, SETTINGS, LIBRARY, TABS, SEARCH,
 	SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE, LERNZEIT,
-	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC,
+	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC, SYNC_MAINTENANCE,
 	openPage: TABS.openPage,
 	openNewTab: TABS.openNewTab,
 	closeTab: TABS.closeTab,
