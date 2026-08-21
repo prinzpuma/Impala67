@@ -13,7 +13,7 @@
 
 - Einstieg und Start: `web/index.html`, `web/main.js`, `web/boot.js`
 - Mobile UI: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
-- Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `server/`
+- Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/sync-maintenance.js`, `server/`
 - KI und RAG: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - Offline und Updates: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - Veröffentlichung: `.github/workflows/release.yml`
@@ -23,15 +23,16 @@
 - Niemals API-Schlüssel, OAuth-Secrets, Tokens oder `web/config.local.js` committen.
 - Eine statische PWA darf nur öffentliche Client-IDs enthalten. Zugangsdaten von KI-Anbietern bleiben nutzerlokal.
 - Bei Änderungen an IndexedDB, Event-Log oder Drive-Sync Rückwärtskompatibilität standardmäßig wahren; ein absichtlicher Format-Cut braucht eine ausdrückliche Nutzerfreigabe und eine klare Protokollversion.
-- Cloudflare-Sync startet mit Protokoll v3 aus dem aktuellen lokalen Stand; 64-Bit-Schlüssel, globale Alt-Cursor und D1-Inline-Payloads werden nicht unterstützt.
+- Cloudflare-Sync verwendet Protokoll v4. D1 speichert nur Index-/Quota-Metadaten; verschlüsselte Eventpakete und Blobs liegen in R2. D1-Inline-Payloads und globale Alt-Cursor werden nicht unterstützt.
 - Cloudflare-Wire-Events enthalten niemals lokale `seq`-/Replay-Metadaten; eingehende Events erhalten immer einen neuen lokalen IndexedDB-Schlüssel.
 - Fremd-Events tragen ihre lokale Herkunft in `_remoteSource` (`drive` oder `cloudflare`); jeder Transport unterdrückt nur sein eigenes Echo, damit Drive als vollständiges Backup funktionieren kann.
-- Große Sync-Payloads sowohl nach Eventanzahl als auch nach Bytes begrenzen; D1-Grenzen nicht ungeprüft auf R2-Payloads übertragen.
+- Große Sync-Payloads sowohl nach Eventanzahl als auch nach tatsächlichen UTF-8-Bytes begrenzen; Zeichenanzahl ist kein Byte-Limit.
 - Cloudflare-Erststände werden vor E2EE in begrenzte Eventpakete gebündelt; fachliche Einzelereignisse nicht unnötig als einzelne R2-Objekte speichern.
+- Cloud-Compaction erfolgt clientseitig als Generation-Cut: erst vollständig synchronisieren, dann `/api/reset`, danach aus dem lokalen Zustand nur den kompaktierten Eventstand und noch referenzierte Blobs neu hochladen. So bleiben E2EE und Offline-Geräte kompatibel.
 
 ## Arbeitsweise
 
-- Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen.
+- Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen. Veröffentlichte Builds erhalten ihre Release-Version im Workflow.
 - Prüfe, ob diese `AGENTS.md` noch zum aktuellen Projektstand passt, und nenne bei Abweichungen konkrete Verbesserungsvorschläge.
 - Arbeite tokeneffizient und verfolge betroffene Codepfade bis zu Persistenz, Sync, Cache und sichtbarer Oberfläche.
 - Führe für ausgelieferte PWA-Änderungen Syntaxprüfung, passende Tests, den PWA-Cache-Check und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
@@ -39,4 +40,4 @@
 ## Veröffentlichung
 
 - Ein Push nach `main` veröffentlicht ausschließlich die PWA über GitHub Pages.
-- Der CI-Workflow setzt `web/version.json` und `web/updater.js` für den Release. Lokale Versionen nur bewusst ändern.
+- Der CI-Workflow setzt `web/version.json`, `web/updater.js` und den Service-Worker-Cache für den Release. Lokale Versionen nur bewusst ändern.
