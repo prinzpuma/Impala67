@@ -34,34 +34,53 @@ function cmpSemver(a, b) {
 }
 
 const normVer = (v) => String(v || "").replace(/^v/i, "").trim();
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let pendingUpdate = null;
 let preparingUpdate = null;
 
-function waitForActivation(reg) {
+function waitForWaiting(reg) {
 	return new Promise((resolve) => {
-		const worker = reg.installing || reg.waiting;
-		if (!worker || worker.state === "activated" || worker.state === "redundant") return resolve();
-		worker.addEventListener("statechange", () => {
-			if (worker.state === "activated" || worker.state === "redundant") resolve();
-		});
+		if (reg?.waiting) return resolve(reg.waiting);
+		const worker = reg?.installing;
+		if (!worker) return resolve(null);
+		const onState = () => {
+			if (worker.state === "installed") { worker.removeEventListener("statechange", onState); resolve(reg.waiting || worker); }
+			else if (worker.state === "activated" || worker.state === "redundant") { worker.removeEventListener("statechange", onState); resolve(null); }
+		};
+		worker.addEventListener("statechange", onState);
+		onState();
 	});
 }
 
 async function refreshServiceWorker() {
-	if (!("serviceWorker" in navigator)) return;
+	if (!("serviceWorker" in navigator)) return null;
 	try {
-		// Nur der Worker dieser App ist relevant. Fremde Registrierungen desselben
-		// Origins duerfen den Reload nicht bis zum Timeout verzoegern.
+		// Nur der Worker dieser App ist relevant. Das Update darf bereits geladen
+		// werden, bleibt aber "waiting" und übernimmt die laufende App noch nicht.
 		const reg = await navigator.serviceWorker.getRegistration(new URL("./", import.meta.url));
-		if (!reg) return;
+		if (!reg) return null;
 		await reg.update();
-		await Promise.race([
-			waitForActivation(reg),
-			new Promise((resolve) => setTimeout(resolve, 4000)),
-		]);
+		await Promise.race([waitForWaiting(reg), delay(10000)]);
+		return reg;
 	} catch (error) {
 		console.warn("PWA-Update vorbereiten:", error);
+		return null;
 	}
+}
+
+async function activateWaitingWorker(reg) {
+	const waiting = reg?.waiting;
+	if (!waiting) return false;
+	const before = navigator.serviceWorker.controller;
+	let onChange;
+	const changed = new Promise((resolve) => {
+		onChange = () => resolve(true);
+		navigator.serviceWorker.addEventListener("controllerchange", onChange, { once: true });
+	});
+	waiting.postMessage({ type: "SKIP_WAITING" });
+	await Promise.race([changed, delay(4000)]);
+	if (onChange) navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+	return navigator.serviceWorker.controller !== before;
 }
 
 function reloadWithCacheBust() {
@@ -126,8 +145,8 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	const { latest, source } = await fetchDeployedVersion();
 	const hasUpdate = cmpSemver(latest, current) > 0;
 	pendingUpdate = hasUpdate ? { version: latest } : null;
-	// Den neuen Worker bereits waehrend der Anzeige vorbereiten. Der bewusste
-	// Klick bleibt erhalten, muss aber meist nur noch neu laden.
+	// Das neue Bundle bereits laden, aber NICHT aktivieren. Erst der bewusste
+	// Klick sendet SKIP_WAITING; so kann keine alte UI neue Lazy-Module erhalten.
 	preparingUpdate = hasUpdate ? refreshServiceWorker() : null;
 	return {
 		ok: true,
@@ -142,7 +161,11 @@ window.checkAppUpdate = async function checkAppUpdate() {
 window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
 	say(pendingUpdate ? "⬇️ Update wird geladen…" : "🔄 App wird neu geladen…");
-	await (preparingUpdate || refreshServiceWorker());
+	const reg = await (preparingUpdate || refreshServiceWorker());
+	if (reg?.waiting) {
+		say("⚙️ Update wird aktiviert…");
+		await activateWaitingWorker(reg);
+	}
 	pendingUpdate = null;
 	preparingUpdate = null;
 	say("🔄 App wird neu geladen…");
@@ -152,4 +175,4 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 
 window.applyPwaUpdate = () => window.installAppUpdate();
 
-export { cmpSemver, fetchDeployedVersion };
+export { cmpSemver, fetchDeployedVersion, refreshServiceWorker };
