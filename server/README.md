@@ -1,91 +1,87 @@
 # Impala67 – Cloudflare Real-Time Sync Server
 
-Dieser serverlose Worker stellt das aktuelle **Sync-Protokoll v3** bereit. Ältere Cloud-Daten, Alt-Cursor und v2-Clients werden bewusst nicht unterstützt; Clients starten nach einem Reset mit ihrem aktuellen lokalen Stand.
+Dieser Worker stellt das aktuelle **Sync-Protokoll v4** bereit. Ältere Protokollgenerationen werden bewusst nicht weitergeführt; ein Generation-Reset lässt Clients anschließend aus ihrem aktuellen lokalen Stand wieder konvergieren.
 
 ## Sicherheits- & Speicher-Eigenschaften
-- **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Alle Events werden im Browser mit AES-GCM (256-Bit) verschlüsselt. Der Server speichert nur unlesbaren Zeichensalat.
-- **D1 + R2 Hybrid-Architektur:** Cloudflare D1 verwaltet blitzschnelle Indizes und Deduplizierung; Cloudflare R2 speichert die verschlüsselten Datenpakete (10 GB kostenloser Speicherplatz ohne 500-MB-Datenbankgrenze).
-- **Atomare Deduplizierung (v3):** Delta-Uploads übertragen Events mit ihrer originalen Event-ID. Bereits per WebSocket live gesendete Events werden auf dem Server dedupliziert und erzeugen keine doppelten R2-Objekte. Initial-Push bündelt viele kleine Events weiterhin speichereffizient.
-- **1.000 MB (1 GB) Quota pro Sync-Schlüssel:** Großzügiger Speicherplatz für Notizen, Bilder und Notizheft-Zeichnungen.
-- **WebSockets (Durable Objects):** Sofortige Live-Übertragung bei geöffneter App (< 30 ms) + nahtloser Download verpasster Änderungen nach Offline-Phasen.
-- **Geschützter AI-Proxy:** `/api/ai` leitet Textanfragen mit dem serverseitigen `GROQ_API_KEY` an Groq weiter. Der Sync-Token muss gültig sein; der Groq-Key wird nie an die PWA ausgeliefert.
-- **Geschützter Notion-Proxy:** `/api/notion` leitet ausschließlich erlaubte Notion-API-Pfade weiter. Er verwendet die bestehende Sync-Autorisierung, damit der Notion-Token nicht mehr über einen öffentlichen CORS-Dienst läuft.
+- **100 % Ende-zu-Ende-Verschlüsselung (E2EE):** Eventpakete und Binärblobs werden im Browser mit AES-GCM verschlüsselt. Der Server verarbeitet nur Ciphertext und Metadaten.
+- **D1 + R2 Hybrid-Architektur:** D1 speichert ausschließlich Index-, Deduplizierungs- und Quota-Metadaten; verschlüsselte Eventpakete und Blobs liegen in R2.
+- **Geordnete v4-Eventfolge:** D1 vergibt pro Nutzer eine serverseitige `seq`; Clients prüfen beim Pull auf lückenlose Reihenfolge. Lokale IndexedDB-`seq`-Werte werden nie über das Wire-Format übertragen.
+- **Atomare Deduplizierung:** Eventpakete haben deterministische IDs. Bereits vorhandene Pakete werden nicht erneut gespeichert.
+- **Generation-Reset:** `/api/reset` leert Eventpakete und Blobs, erhöht die Generation und zwingt alle Clients zu einem sauberen Cursor-Neustart. Die PWA nutzt das auch für sichere Cloud-Compaction.
+- **1.000 MB Quota pro Sync-Schlüssel:** Eventpakete und Blobs zählen gemeinsam gegen das Limit.
+- **WebSockets via Durable Objects:** WebSockets dienen zur Invalidierung/Benachrichtigung; die eigentliche geordnete Übertragung läuft über HTTP-Pull/-Push.
+- **Geschützter AI-Proxy:** `/api/ai` verwendet den serverseitigen `GROQ_API_KEY`; der Schlüssel wird nie an die PWA ausgeliefert.
+- **Geschützter Notion-Proxy:** `/api/notion` akzeptiert nur erlaubte Notion-API-Pfade und verwendet die bestehende Sync-Autorisierung.
 
 ---
 
-## 🚀 5-Schritte Einrichtung (Dauert ca. 2 Minuten)
+## Einrichtung
 
 ### 1. Bei Cloudflare einloggen
-Öffne ein Terminal in diesem Ordner (`server/`) und logge dich einmalig ein:
 ```bash
 npx wrangler login
 ```
 
-### 2. D1 Datenbank erstellen
+### 2. D1-Datenbank erstellen und Schema anwenden
 ```bash
 npx wrangler d1 create impala67-db
-```
-Kopiere die ausgegebene `database_id` in die Datei `server/wrangler.toml`.
-
-Führe danach das Datenbankschema aus:
-```bash
 npx wrangler d1 execute impala67-db --remote --file=./schema.sql
 ```
 
-### 3. R2 Speicher-Bucket erstellen
-Erstelle deinen kostenlosen 10-GB R2 Bucket:
+Die ausgegebene `database_id` gehört in `server/wrangler.toml`.
+
+### 3. R2-Bucket erstellen
 ```bash
 npx wrangler r2 bucket create impala67-sync
 ```
 
 ### 4. Worker veröffentlichen
+Aus dem Repository-Root:
+```bash
+npm run deploy
+```
+
+Oder direkt aus `server/`:
 ```bash
 npx wrangler deploy
 ```
-Wrangler zeigt dir anschließend deine persönliche URL an, z. B.:
-`https://impala67-sync.<dein-account>.workers.dev`
 
 ### 5. Groq-AI konfigurieren (optional)
+Im Cloudflare-Dashboard beim Worker ein Secret `GROQ_API_KEY` anlegen.
 
-Im Cloudflare-Dashboard beim Worker unter **Settings → Variables and Secrets** ein Secret mit dem Namen `GROQ_API_KEY` anlegen. Die AI-Route verwendet aktuell diese Fallback-Reihenfolge und akzeptiert nur Textnachrichten:
+Aktuelle Fallback-Reihenfolge:
+1. `qwen/qwen3.6-27b`
+2. `openai/gpt-oss-120b`
+3. `openai/gpt-oss-20b`
 
-1. `openai/gpt-oss-120b`
-2. `openai/gpt-oss-20b`
-3. `qwen/qwen3.6-27b`
-
-Bei einem Groq-Rate-Limit (`429`) wird automatisch das nächste Modell versucht.
-Ein zusätzliches Impala67-Anfragenlimit wird derzeit nicht erzwungen; maßgeblich sind die aktuellen Groq-Free-Tier-Limits.
-
----
-
-## 🧹 Einmaliger vollständiger Cloud-Reset (Format-Cut auf v3)
-
-Um bestehende Cloud-Sync-Daten der alten Protokollgeneration vollständig zu leeren, halte exakt diese Reihenfolge ein:
-
-1. **Zuerst Worker v3 veröffentlichen:**
-   ```bash
-   npx wrangler deploy
-   ```
-   *(Stellt sicher, dass alte v2-Clients sofort abgewiesen werden und während des Resets keine neuen Daten schreiben können).*
-
-2. **Danach R2-Bucket leeren / neu anlegen:**
-   ```bash
-   npx wrangler r2 bucket delete impala67-sync
-   npx wrangler r2 bucket create impala67-sync
-   ```
-
-3. **D1-Tabellen ganz zum Schluss leeren:**
-   ```bash
-   npm run db:reset
-   ```
-   *(Führt `wrangler d1 execute impala67-db --remote --command="DELETE FROM sync_events; DELETE FROM user_storage; VACUUM;"` aus. Dadurch behält D1 nach dem R2-Löschen keine toten Zeiger zurück).*
+Bildnachrichten werden nur an dafür freigegebene Vision-Modelle geschickt; aktuell ist das `qwen/qwen3.6-27b`. Bei einem Rate-Limit (`429`) wird, soweit möglich, das nächste Modell versucht.
 
 ---
 
-## 📱 In Impala67 eintragen
-1. Öffne Impala67 -> ⚙️ **Einstellungen** -> **Sync & Dienste**.
-2. Unter **Cloudflare Echtzeit-Sync**:
-   - Trage deine Worker-URL ein (`https://impala67-sync.<dein-account>.workers.dev`).
-   - Klicke auf **Schlüssel generieren** (128-Bit-Schlüssel).
-   - Klicke auf **Verbinden & Synchronisieren**.
-3. Gib denselben Sync-Schlüssel und dieselbe URL auf deinen anderen Geräten ein -> **Fertig!**
+## Cloud-Reset und Compaction
+
+`POST /api/reset` löscht für den authentifizierten Sync-Schlüssel alle Cloud-Eventpakete und Blobs und erhöht die Generation. Lokale Daten werden dadurch nicht gelöscht.
+
+Die PWA kann daraus eine **Compaction** bauen:
+1. vollständig pullen/pushen,
+2. Generation-Reset ausführen,
+3. den lokal kompaktierten Eventstand neu hochladen,
+4. nur noch tatsächlich referenzierte Blobs erneut hochladen.
+
+Damit können alte Eventpakete und verwaiste R2-Blobs entfernt werden, ohne dass der Server E2EE-Inhalte verstehen muss.
+
+Für einen administrativen Komplettreset aller Accounts:
+```bash
+npm run db:reset
+```
+
+R2 muss bei einem globalen manuellen Reset separat geleert werden; `db:reset` löscht nur die D1-Metadaten.
+
+---
+
+## In Impala67 eintragen
+1. Impala67 → **Einstellungen → Sync & Dienste** öffnen.
+2. Worker-URL eintragen.
+3. Einen 128-Bit-Sync-Schlüssel generieren oder bestehenden Schlüssel übernehmen.
+4. **Verbinden & Synchronisieren** wählen.
+5. Auf weiteren Geräten dieselbe Worker-URL und denselben Schlüssel verwenden.
