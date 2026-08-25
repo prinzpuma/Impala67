@@ -120,17 +120,21 @@ export const DB = (() => {
 		});
 	}
 
-	// Cursor liest nur oberhalb des Sync-Wasserstands. Nur echte Drive-Downloads
-	// werden nicht zurück zu Drive gespiegelt; Cloudflare-Events dürfen ins Backup.
-	function eventsAfterSeq(seq) {
+	// Cursor liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
+	// Transport unterdrückt ausschließlich sein eigenes Echo; Cloudflare-Events
+	// dürfen deshalb weiterhin ins Drive-Backup und umgekehrt.
+	function eventsAfterSeq(seq, target = "drive", upToSeq = Infinity) {
 		ensureOpen();
+		const lower = Number(seq || 0), upper = Number(upToSeq);
+		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
 		return new Promise((res, rej) => {
 			const out = [];
-			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(Number(seq || 0), true));
+			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(lower, true));
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
-				if (shouldUploadToSync(cur.value, "drive")) out.push(cur.value);
+				if (Number.isFinite(upper) && Number(cur.key) > upper) return res(out);
+				if (shouldUploadToSync(cur.value, target)) out.push(cur.value);
 				cur.continue();
 			};
 			req.onerror = () => rej(req.error);

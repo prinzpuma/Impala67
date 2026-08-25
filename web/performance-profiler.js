@@ -6,7 +6,10 @@ const LEGACY_DATA_KEY = "impala67PerformanceTrace";
 const MAX_RECORDS = 180;
 const LAG_INTERVAL_MS = 250;
 const LAG_THRESHOLD_MS = 120;
-const STALL_FLUSH_MS = 150;
+// Event-Timing-Einträge derselben Interaktion treffen teils deutlich später als
+// der zugehörige Long-Task ein. Das längere, weiterhin kleine Fenster verhindert
+// getrennte Doppelvorfälle wie im ersten v2-Praxis-Trace.
+const STALL_FLUSH_MS = 500;
 const STALL_MERGE_GAP_MS = 8;
 const NOISY_INPUT_EVENTS = new Set([
 	"pointerover", "pointerout", "pointerenter", "pointerleave",

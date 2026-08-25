@@ -82,6 +82,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	let reconnectAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
 	const blobHashCache = new Map(), ignoredBlobKeys = new Set();
+	const pendingUploadedEventIds = new Set();
 	let blobInventoryDirty = true;
 
 	let state = {
@@ -110,6 +111,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	const saveGeneration = (generation) => { state.generation = Number(generation) || 0; LS.setItem(keys().generation, String(state.generation)); };
 
 	function clearCursors(generation = state.generation) {
+		pendingUploadedEventIds.clear();
 		saveRecv(0); saveSend(0); saveGeneration(generation);
 	}
 
@@ -162,9 +164,14 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function importRemote(events) {
 		if (!events.length) return;
+		// Der bestätigende Pull liefert das gerade hochgeladene Paket als Server-Echo
+		// zurück. Diese Events liegen bereits lokal vor. Ohne diesen schnellen Pfad
+		// wurde für wenige eigene Events der komplette IndexedDB-Log deserialisiert.
+		const candidates = events.filter((event) => !pendingUploadedEventIds.delete(event?.id));
+		if (!candidates.length) return;
 		const local = await DB.allEvents();
 		const sortedLocal = (Array.isArray(local) ? local : []).slice().sort((a, b) => (Number(a?.seq) || 0) - (Number(b?.seq) || 0));
-		const serverEventIds = new Set(events.map((e) => e?.id).filter(Boolean));
+		const serverEventIds = new Set(candidates.map((e) => e?.id).filter(Boolean));
 		let confirmedCursor = state.lastUploadedLocalSeq;
 
 		for (const ev of sortedLocal) {
@@ -190,7 +197,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 		// Nach E2EE liegen die Daten bereits als Objekte vor. Der JSON-Roundtrip hier
 		// blockierte den Main Thread bei gebündelten Sync-Paketen unnötig.
-		const result = await DB.importAll({ app: "impala67", events }, {
+		const result = await DB.importAll({ app: "impala67", events: candidates }, {
 			localEvents: local,
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
@@ -288,18 +295,20 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function push(forceAll = false) {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		const local = await PERF_PROFILER.run("cloudflare.db-read", () => DB.allEvents(), {}, 10);
+		const maxSeq = await PERF_PROFILER.run("cloudflare.db-max-seq", () => DB.maxSeq(), {}, 10);
+		let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
+		if (forceAll || uploaded > maxSeq) uploaded = 0;
+		const local = maxSeq <= uploaded ? [] : await PERF_PROFILER.run(uploaded ? "cloudflare.db-read-delta" : "cloudflare.db-read-full", () => (
+			uploaded ? DB.eventsAfterSeq(uploaded, "cloudflare", maxSeq) : DB.allEvents()
+		), { afterSeq: uploaded, upToSeq: maxSeq }, 10);
 		const prepared = PERF_PROFILER.measure("cloudflare.prepare-upload", () => {
-			const maxSeq = local.reduce((max, event) => Math.max(max, Number(event?.seq) || 0), 0);
-			let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
-			if (forceAll || uploaded > maxSeq) uploaded = 0;
-			const source = uploaded ? local.filter((event) => Number(event?.seq || 0) > uploaded) : DB.compactEvents(local);
+			const source = uploaded ? local : DB.compactEvents(local);
 			const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
 				SETTINGS_SYNC.sanitizeEvents(source, SETTINGS_SYNC.allowsSecrets(S.settings))
 			)), { includeRemote: !uploaded });
-			return { maxSeq, wire };
+			return wire;
 		}, { localEvents: local.length, forceAll: !!forceAll }, 10);
-		const { maxSeq, wire } = prepared;
+		const wire = prepared;
 		if (!wire.length) { saveSend(maxSeq); return false; }
 
 		const chunks = chunkCloudEvents(wire);
@@ -320,6 +329,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			throw error;
 		}
 		await postPackets(packets);
+		for (const event of wire) if (event?.id) pendingUploadedEventIds.add(event.id);
 		saveSend(maxSeq);
 		state.progress = null;
 		return true;
@@ -399,7 +409,10 @@ export const CLOUDFLARE_SYNC = (() => {
 			const uploaded = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
 			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
 			// spart das eine vollstaendige serielle Netz-Rundreise.
-			if (uploaded) await PERF_PROFILER.run("cloudflare.confirm-pull", () => pull(), {}, 20);
+			if (uploaded) {
+				await PERF_PROFILER.run("cloudflare.confirm-pull", () => pull(), {}, 20);
+				pendingUploadedEventIds.clear();
+			}
 			state.progress = null; state.lastError = null;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 			finishProfile({ received, uploaded });
@@ -523,7 +536,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
-		closeSocket(); credentials = null;
+		closeSocket(); credentials = null; pendingUploadedEventIds.clear();
 		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
@@ -549,7 +562,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function disconnect() {
 		configureGeneration++; clearTimeout(localTimer); closeSocket(); credentials = null;
-		blobHashCache.clear(); ignoredBlobKeys.clear();
+		blobHashCache.clear(); ignoredBlobKeys.clear(); pendingUploadedEventIds.clear();
 		setStatus("disconnected", "Getrennt");
 	}
 

@@ -11,8 +11,16 @@ globalThis.localStorage = {
 
 import { CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
 import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES, deriveSyncCredentials, decryptPayload, encryptPayload } from "../web/sync-crypto.js";
-import { CLOUD_SYNC_PROTOCOL, prepareIncomingCloudEvents, cloudEventsEnvelope } from "../web/sync-core.js";
+import { CLOUD_SYNC_PROTOCOL, prepareIncomingCloudEvents, cloudEventsEnvelope, shouldUploadToSync } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
+
+// Die Sync-Tests ersetzen den lokalen Event-Store bewusst durch Arrays. Die beiden
+// cursorbasierten DB-Helfer spiegeln darauf denselben Vertrag wie IndexedDB.
+DB.maxSeq = async () => (await DB.allEvents()).reduce((max, event) => Math.max(max, Number(event?.seq) || 0), 0);
+DB.eventsAfterSeq = async (seq, target = "drive", upToSeq = Infinity) => (await DB.allEvents())
+	.filter((event) => Number(event?.seq || 0) > Number(seq || 0)
+		&& Number(event?.seq || 0) <= Number(upToSeq)
+		&& shouldUploadToSync(event, target));
 
 test("CLOUDFLARE_SYNC hat initialen Status und Methoden", () => {
 	const status = CLOUDFLARE_SYNC.status();
@@ -456,6 +464,73 @@ test("Regression: WebSocket changed-Signal stößt erneuten Pull an", async () =
 	}
 });
 
+test("Performance: Delta-Push und eigenes Bestätigungs-Echo laden nicht den vollständigen Event-Log", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	const originalMaxSeq = DB.maxSeq;
+	const originalEventsAfterSeq = DB.eventsAfterSeq;
+	const originalImportAll = DB.importAll;
+	globalThis.WebSocket = undefined;
+
+	const key = generateSyncKey();
+	const creds = await deriveSyncCredentials(key);
+	const localEvent = { seq: 2, id: "delta-local-2", t: "2026-08-25T20:00:00Z", type: "pageUpdate", payload: { id: "p1", patch: { title: "Delta" } } };
+	const cursorKeys = syncCursorStorageKeys(creds.userId);
+	localStorage.setItem(cursorKeys.lastSynced, "0");
+	localStorage.setItem(cursorKeys.lastUploaded, "1");
+	localStorage.setItem(cursorKeys.generation, "1");
+
+	let fullReads = 0, deltaReads = 0, imports = 0;
+	DB.allBlobKeys = async () => [];
+	DB.maxSeq = async () => 2;
+	DB.eventsAfterSeq = async (after, target, upTo) => {
+		deltaReads++;
+		assert.deepEqual({ after, target, upTo }, { after: 1, target: "cloudflare", upTo: 2 });
+		return [localEvent];
+	};
+	DB.allEvents = async () => { fullReads++; throw new Error("Vollständiger Event-Read ist im Delta-Pfad verboten"); };
+	DB.importAll = async () => { imports++; return { importedEvents: [] }; };
+
+	let serverPackets = [];
+	globalThis.fetch = async (url, init = {}) => {
+		const urlStr = String(url);
+		if (urlStr.includes("/api/sync")) {
+			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
+			return new Response(JSON.stringify({ events: serverPackets.filter((packet) => packet.seq > since), maxSeq: serverPackets.length, hasMore: false, generation: 1 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (urlStr.includes("/api/events") && init.method === "POST") {
+			const body = JSON.parse(init.body || "{}");
+			serverPackets = (body.events || []).map((packet, index) => ({ ...packet, seq: index + 1 }));
+			return new Response(JSON.stringify({ ok: true, savedCount: serverPackets.length, maxSeq: serverPackets.length, usage: 100 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, keys: [], cursor: "" }), { status: 200, headers: { "Content-Type": "application/json" } });
+	};
+
+	try {
+		assert.equal(await CLOUDFLARE_SYNC.configure("https://sync.example.com", key), true);
+		assert.equal(deltaReads, 1);
+		assert.equal(fullReads, 0);
+		assert.equal(imports, 0, "Das eigene Server-Echo darf den Importpfad nicht betreten");
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 2);
+		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 1);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+		DB.maxSeq = originalMaxSeq;
+		DB.eventsAfterSeq = originalEventsAfterSeq;
+		DB.importAll = originalImportAll;
+	}
+});
+
 test("Regression (echter CLOUDFLARE_SYNC): Cursor-Race — Server seq 10 bekannt, B erzeugt seq 11, A sendet seq 12; nach POST ist lastSyncedSeq 10, nach Pull 12", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
@@ -548,7 +623,8 @@ test("Regression (echter CLOUDFLARE_SYNC): Cursor-Race — Server seq 10 bekannt
 		assert.equal(seqAfterPost, 10, "Nach dem POST muss lastSyncedSeq noch 10 sein");
 		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 12, "Nach dem abschließenden Pull muss lastSyncedSeq 12 sein");
 		assert.ok(importedIntoA.some((e) => e.id === "p-from-B-11"), "Event B (seq 11) muss importiert sein");
-		assert.ok(importedIntoA.some((e) => e.id === "p-from-A-12"), "Event A (seq 12) muss importiert sein");
+		assert.equal(importedIntoA.some((e) => e.id === "p-from-A-12"), false,
+			"Das bereits lokale Event A darf beim bestätigenden Pull nicht erneut importiert werden");
 	} finally {
 		CLOUDFLARE_SYNC.disconnect();
 		globalThis.fetch = originalFetch;
