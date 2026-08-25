@@ -3,7 +3,8 @@
 // web/embedding-worker.js — Web Worker für lokale Inferenz mit Transformers.js v3.
 // Führt die Bekko-a8m-Inferenz komplett abseits des UI-Threads aus.
 // Nutzt WebGPU, wenn ein Adapter verfügbar ist, sonst WASM-CPU; Matryoshka-Kürzung (z.B. 256d)
-// und L2-Normalisierung. Auto-Unload nach 60 s Inaktivität (0 MB RAM im Leerlauf).
+// und L2-Normalisierung. Geraeteabhaengiges Auto-Unload begrenzt den RAM, ohne
+// bei jeder kurzen Arbeitspause die teure Pipeline erneut aufzubauen.
 
 let pipeline = null;
 let env = null;
@@ -15,13 +16,17 @@ let idleTimer = null;
 let isInitializing = false;
 let initPromise = null;
 
-const IDLE_TIMEOUT_MS = 60000; // 60s bis zum Entladen aus dem RAM
+const idleTimeoutMs = () => {
+	const memory = Number(typeof navigator !== "undefined" && navigator.deviceMemory) || 0;
+	if (isAppleTouchDevice() || (memory && memory <= 4)) return 3 * 60000;
+	return 10 * 60000;
+};
 
 function resetIdleTimer() {
 	if (idleTimer) clearTimeout(idleTimer);
 	idleTimer = setTimeout(() => {
 		unloadModel();
-	}, IDLE_TIMEOUT_MS);
+	}, idleTimeoutMs());
 }
 
 function unloadModel() {
@@ -186,6 +191,41 @@ async function deleteModelCache(modelId = "hotchpotch/bekko-embedding-v1-a8m") {
 	}
 }
 
+const foregroundEmbeds = [], backgroundEmbeds = [];
+let processingEmbeds = false;
+
+async function runEmbed(msg) {
+	const { texts, model = "hotchpotch/bekko-embedding-v1-a8m", dim = 256, id } = msg;
+	if (!Array.isArray(texts)) {
+		self.postMessage({ type: "error", id, error: "texts muss ein Array sein." });
+		return;
+	}
+	try {
+		const ext = await initExtractor(model, dim, (p) => postProgress(model, p));
+		resetIdleTimer();
+		const output = await ext(texts, { pooling: "mean", normalize: false });
+		const rawVectors = typeof output.tolist === "function" ? output.tolist() : Array.from(output);
+		const vectors = rawVectors.map((v) => {
+			const arr = Array.isArray(v) ? v : Array.from(v);
+			const sliced = dim && dim < arr.length ? arr.slice(0, dim) : arr;
+			return normalizeVec(sliced);
+		});
+		self.postMessage({ type: "embed-result", id, vectors });
+	} catch (err) {
+		self.postMessage({ type: "error", id, error: String(err?.message || err) });
+	}
+}
+
+async function processEmbedQueue() {
+	if (processingEmbeds) return;
+	processingEmbeds = true;
+	try {
+		while (foregroundEmbeds.length || backgroundEmbeds.length) {
+			await runEmbed(foregroundEmbeds.shift() || backgroundEmbeds.shift());
+		}
+	} finally { processingEmbeds = false; }
+}
+
 self.addEventListener("message", async (e) => {
 	const msg = e.data;
 	if (!msg || !msg.type) return;
@@ -231,38 +271,8 @@ self.addEventListener("message", async (e) => {
 		}
 
 		case "embed": {
-			const { texts, model = "hotchpotch/bekko-embedding-v1-a8m", dim = 256, id } = msg;
-			if (!Array.isArray(texts)) {
-				self.postMessage({ type: "error", id, error: "texts muss ein Array sein." });
-				return;
-			}
-			try {
-				const ext = await initExtractor(model, dim, (p) => postProgress(model, p));
-				resetIdleTimer();
-
-				// Feature-Extraction mit mean pooling
-				const output = await ext(texts, { pooling: "mean", normalize: false });
-				const rawVectors = typeof output.tolist === "function" ? output.tolist() : Array.from(output);
-
-				// Matryoshka-Kürzung (z.B. auf 256 Dimensionen) und anschließende L2-Normalisierung
-				const vectors = rawVectors.map((v) => {
-					const arr = Array.isArray(v) ? v : Array.from(v);
-					const sliced = dim && dim < arr.length ? arr.slice(0, dim) : arr;
-					return normalizeVec(sliced);
-				});
-
-				self.postMessage({
-					type: "embed-result",
-					id,
-					vectors,
-				});
-			} catch (err) {
-				self.postMessage({
-					type: "error",
-					id,
-					error: String(err?.message || err),
-				});
-			}
+			(msg.priority === "background" ? backgroundEmbeds : foregroundEmbeds).push(msg);
+			processEmbedQueue();
 			break;
 		}
 

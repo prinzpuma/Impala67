@@ -489,7 +489,10 @@ export const DB = (() => {
 		const data = JSON.parse(json);
 		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei."); // Alt-Exporte bleiben importierbar
 		const incoming = Array.isArray(data.events) ? data.events : []; // kaputte Exporte nicht crashen lassen
-		const local = await allEvents();
+		// Sync-Transporte, die den Log fuer ihre Cursor-Pruefung ohnehin schon gelesen
+		// haben, duerfen denselben konsistenten Snapshot weiterreichen. Das vermeidet
+		// einen zweiten kompletten IndexedDB-Read pro Importseite.
+		const local = Array.isArray(opts.localEvents) ? opts.localEvents : await allEvents();
 		const existing = new Set(local.map((e) => e.id));
 		const floor = compactFloor();
 		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,

@@ -40,6 +40,8 @@ const PAGE_LIMIT = 100;
 const MAX_HTTP_PACKETS = 20;
 const MAX_HTTP_CHARS = 6_000_000;
 const LOCAL_SYNC_DELAY = 80;
+const SYNC_FETCH_TIMEOUT_MS = 45000;
+const BLOB_FETCH_TIMEOUT_MS = 120000;
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
 
 const fallbackStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -78,6 +80,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	let reconnectAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
 	const blobHashCache = new Map(), ignoredBlobKeys = new Set();
+	let blobInventoryDirty = true;
 
 	let state = {
 		status: "disconnected",
@@ -112,6 +115,17 @@ export const CLOUDFLARE_SYNC = (() => {
 		const base = String(baseUrl || "").trim().replace(/\/+$/, "");
 		const sep = endpoint.includes("?") ? "&" : "?";
 		return credentials ? `${base}${endpoint}${sep}user=${encodeURIComponent(credentials.userId)}` : `${base}${endpoint}`;
+	}
+
+	async function fetchTimed(url, init = {}, timeoutMs = SYNC_FETCH_TIMEOUT_MS) {
+		if (typeof AbortController === "undefined") return fetch(url, init);
+		const controller = new AbortController(), upstream = init.signal;
+		const abort = () => controller.abort(upstream?.reason);
+		if (upstream?.aborted) abort();
+		else upstream?.addEventListener?.("abort", abort, { once: true });
+		const timer = setTimeout(() => controller.abort(new Error("Zeitüberschreitung beim Cloudflare-Sync.")), timeoutMs);
+		try { return await fetch(url, { ...init, signal: controller.signal }); }
+		finally { clearTimeout(timer); upstream?.removeEventListener?.("abort", abort); }
 	}
 
 	function authHeaders(extra = {}) {
@@ -173,6 +187,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 
 		const result = await DB.importAll(JSON.stringify({ app: "impala67", events }), {
+			localEvents: local,
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
 			remote: true,
@@ -188,9 +203,10 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function pull() {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
+		let received = 0;
 		while (true) {
 			const since = state.lastSyncedSeq;
-			const response = await fetch(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
+			const response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
 			if (!response.ok) throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
 			const data = await response.json();
 			const serverGeneration = Number(data.generation) || 1;
@@ -220,10 +236,12 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 
 			await importRemote(incoming);
+			received += incoming.length;
 			saveRecv(packets.at(-1).seq);
 			if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
 			if (!data.hasMore) break;
 		}
+		return received;
 	}
 
 	async function postPackets(packets) {
@@ -236,7 +254,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				if (batch.length && chars + n > MAX_HTTP_CHARS) break;
 				batch.push(packet); chars += n; i++;
 			}
-			const response = await fetch(api("/api/events"), {
+			const response = await fetchTimed(api("/api/events"), {
 				method: "POST",
 				headers: authHeaders({ "Content-Type": "application/json" }),
 				body: JSON.stringify({ events: batch }),
@@ -258,7 +276,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
 			SETTINGS_SYNC.sanitizeEvents(source, SETTINGS_SYNC.allowsSecrets(S.settings))
 		)), { includeRemote: !uploaded });
-		if (!wire.length) { saveSend(maxSeq); return; }
+		if (!wire.length) { saveSend(maxSeq); return false; }
 
 		const chunks = chunkCloudEvents(wire);
 		const packets = [];
@@ -273,6 +291,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		await postPackets(packets);
 		saveSend(maxSeq);
 		state.progress = null;
+		return true;
 	}
 
 	const blobOpaqueKey = async (id) => {
@@ -286,7 +305,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const keys = [];
 		let cursor = "";
 		do {
-			const response = await fetch(api(`/api/blobs${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`), { headers: authHeaders() });
+			const response = await fetchTimed(api(`/api/blobs${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`), { headers: authHeaders() });
 			if (!response.ok) throw await responseError(response, "Blob-Liste konnte nicht geladen werden");
 			const data = await response.json();
 			keys.push(...(data.keys || []));
@@ -296,8 +315,8 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function syncBlobs() {
-		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return false;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
 		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && isBlobAlive(id, S.pages));
 		const localByKey = new Map();
 		await mapLimit(localIds, 6, async (id) => localByKey.set(await blobOpaqueKey(id), id));
@@ -308,11 +327,11 @@ export const CLOUDFLARE_SYNC = (() => {
 			const record = await DB.getBlob(id);
 			if (!record) return;
 			const encrypted = await encryptBlobRecord(credentials.cryptoKey, id, record);
-			const response = await fetch(api(`/api/blob/${key}`), {
+			const response = await fetchTimed(api(`/api/blob/${key}`), {
 				method: "PUT",
 				headers: authHeaders({ "Content-Type": "application/octet-stream", "X-Impala-IV": encrypted.iv }),
 				body: encrypted.bytes,
-			});
+			}, BLOB_FETCH_TIMEOUT_MS);
 			if (!response.ok) throw await responseError(response, `Blob ${id} konnte nicht hochgeladen werden`);
 			const usage = Number(response.headers.get("X-Impala-Usage"));
 			if (Number.isFinite(usage)) state.usage = formatStorageUsage(usage);
@@ -320,7 +339,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 		const download = [...remote].filter((key) => !localByKey.has(key) && !ignoredBlobKeys.has(key));
 		await mapLimit(download, 3, async (key) => {
-			const response = await fetch(api(`/api/blob/${key}`), { headers: authHeaders() });
+			const response = await fetchTimed(api(`/api/blob/${key}`), { headers: authHeaders() }, BLOB_FETCH_TIMEOUT_MS);
 			if (!response.ok) throw await responseError(response, "Blob konnte nicht geladen werden");
 			const iv = response.headers.get("X-Impala-IV");
 			const record = await decryptBlobRecord(credentials.cryptoKey, iv, new Uint8Array(await response.arrayBuffer()));
@@ -328,6 +347,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			if (!isSyncBlobId(record.id) || !isBlobAlive(record.id, S.pages)) { ignoredBlobKeys.add(key); return; }
 			await DB.putBlob(record.id, record.buf, record.meta);
 		});
+		return upload.length > 0 || download.length > 0;
 	}
 
 	async function runPass(forceAll) {
@@ -335,12 +355,17 @@ export const CLOUDFLARE_SYNC = (() => {
 			throw readable(new Error("Das Gerät ist offline."));
 		}
 		setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
-		await pull();
-		setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
-		await syncBlobs();
+		const received = await pull();
+		if (blobInventoryDirty || received > 0) {
+			setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
+			await syncBlobs();
+			blobInventoryDirty = false;
+		}
 		setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
-		await push(forceAll);
-		await pull();
+		const uploaded = await push(forceAll);
+		// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
+		// spart das eine vollstaendige serielle Netz-Rundreise.
+		if (uploaded) await pull();
 		state.progress = null; state.lastError = null;
 		setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 		return true;
@@ -371,6 +396,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!credentials) return;
 		if (!event || (typeof event.type === "string" && event.type.startsWith("page"))) {
 			ignoredBlobKeys.clear();
+			blobInventoryDirty = true;
 		}
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
 			closeSocket();
@@ -438,7 +464,13 @@ export const CLOUDFLARE_SYNC = (() => {
 					setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
 					pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); }, 30000);
 					requestSync().catch(() => {});
-				} else if (msg.type === "changed") requestSync().catch(() => {});
+				} else if (msg.type === "changed") {
+					// Ein unveraenderter Server-Cursor bedeutet: Nur das Blob-Inventar hat
+					// sich geaendert. Bei neuen Eventpaketen entscheidet pull() nach dem
+					// Entschluesseln, dass der Blob-Abgleich mitlaufen muss.
+					if (Number(msg.maxSeq || 0) <= state.lastSyncedSeq) blobInventoryDirty = true;
+					requestSync().catch(() => {});
+				}
 				else if (msg.type === "reset") { clearCursors(Number(msg.generation) || 1); requestSync(true).catch(() => {}); }
 				else if (msg.type === "unauthorized" || msg.type === "unsupported_protocol") {
 					state.lastError = msg.error || "Nicht autorisiert"; setStatus("error", "Nicht autorisiert", state.lastError); closeSocket();
@@ -453,7 +485,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
 		closeSocket(); credentials = null;
-		blobHashCache.clear(); ignoredBlobKeys.clear();
+		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
 		cleanKey ? LS.setItem(LS_KEY, cleanKey) : LS.removeItem(LS_KEY);
@@ -484,10 +516,10 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function purgeCloudData() {
 		if (!credentials) return false;
-		const response = await fetch(api("/api/reset"), { method: "POST", headers: authHeaders() });
+		const response = await fetchTimed(api("/api/reset"), { method: "POST", headers: authHeaders() });
 		if (!response.ok) throw await responseError(response, "Cloud-Daten konnten nicht gelöscht werden");
 		const data = await response.json();
-		blobHashCache.clear(); ignoredBlobKeys.clear();
+		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
 		clearCursors(Number(data.generation) || state.generation + 1);
 		return true;
 	}

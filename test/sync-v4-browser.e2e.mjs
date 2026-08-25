@@ -4,7 +4,7 @@ import http from "node:http";
 import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
 
 const CHROME_PATHS = [
@@ -45,6 +45,7 @@ const STATIC_PORT = 5188;
 const WORKER_PORT = 8787;
 const STATIC_URL = `http://127.0.0.1:${STATIC_PORT}/`;
 const WORKER_URL = `http://127.0.0.1:${WORKER_PORT}`;
+const WRANGLER_JS = path.join(process.cwd(), "node_modules", "wrangler", "bin", "wrangler.js");
 function generateTestSyncKey() {
 	const hex = () => Math.floor(0x10000 + Math.random() * 0x10000).toString(16).slice(1);
 	return `impala-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}`;
@@ -66,10 +67,17 @@ let pageC = null;
 const consoleErrors = { A: [], B: [], C: [] };
 const unhandledRejections = { A: [], B: [], C: [] };
 
-function killLingering() {
+function stopWrangler() {
+	if (!wranglerProcess || wranglerProcess.exitCode !== null) return;
 	try {
-		execSync("Stop-Process -Name workerd -Force -ErrorAction SilentlyContinue", { shell: "powershell", stdio: "ignore" });
-	} catch {}
+		if (process.platform === "win32") {
+			execFileSync("taskkill", ["/pid", String(wranglerProcess.pid), "/T", "/F"], { stdio: "ignore" });
+		} else {
+			process.kill(-wranglerProcess.pid, "SIGTERM");
+		}
+	} catch {
+		try { wranglerProcess.kill("SIGTERM"); } catch {}
+	}
 }
 
 function attachMonitoring(page, label) {
@@ -141,14 +149,19 @@ function startStaticServer() {
 }
 
 async function startWrangler() {
-	killLingering();
 	try { fs.rmSync(path.join(process.cwd(), ".wrangler", "state"), { recursive: true, force: true }); } catch {}
-	wranglerProcess = spawn("npx", [
-		"wrangler", "dev", "server/worker.js",
+	execFileSync(process.execPath, [
+		WRANGLER_JS, "d1", "execute", "impala67-db",
+		"--local",
+		"--config", "server/wrangler.toml",
+		"--file", "server/schema.sql",
+	], { stdio: "pipe" });
+	wranglerProcess = spawn(process.execPath, [
+		WRANGLER_JS, "dev", "server/worker.js",
 		"--config", "server/wrangler.toml",
 		"--port", String(WORKER_PORT),
 		"--ip", "127.0.0.1",
-	], { shell: true });
+	], { detached: process.platform !== "win32" });
 
 	let startupLogs = "";
 	wranglerProcess.stdout?.on("data", (d) => { startupLogs += d.toString(); });
@@ -219,10 +232,7 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 
 	after(async () => {
 		try { if (browser) await browser.close(); } catch {}
-		if (wranglerProcess) {
-			try { execSync(`taskkill /pid ${wranglerProcess.pid} /T /F`, { stdio: "ignore" }); } catch {}
-		}
-		killLingering();
+		stopWrangler();
 		try { if (staticServer) staticServer.close(); } catch {}
 	});
 
@@ -803,7 +813,7 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		assert.equal(postRestartOnB, "Post Restart");
 	});
 
-	it("L. Service-Worker Update / Cache: SW aktiv, Cache = impala67-v222, sync-crypto.js enthält 16-KB-Kompression", async () => {
+	it("L. Service-Worker Update / Cache: SW aktiv, Cache = impala67-v223, sync-crypto.js enthält 16-KB-Kompression", async () => {
 		const swStatus = await pageA.evaluate(async () => {
 			const reg = await navigator.serviceWorker?.getRegistration();
 			const cacheNames = await caches.keys();
@@ -822,14 +832,14 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 				hasSW: !!navigator.serviceWorker,
 				isActive: reg?.active?.state === "activated",
 				cacheNames,
-				hasV222: cacheNames.includes("impala67-v222"),
+				hasV223: cacheNames.includes("impala67-v223"),
 				hasLegacyV219: cacheNames.includes("impala67-v219"),
 				has16KBCompression: cryptoCode.includes("16 * 1024") || cryptoCode.includes("16384"),
 			};
 		});
 
 		assert.equal(swStatus.hasSW, true, "Service Worker should be available");
-		assert.equal(swStatus.hasV222, true, "Cache impala67-v222 should exist");
+		assert.equal(swStatus.hasV223, true, "Cache impala67-v223 should exist");
 		assert.equal(swStatus.hasLegacyV219, false, "No legacy v219 cache should be present");
 		assert.equal(swStatus.has16KBCompression, true, "sync-crypto.js in cache must contain 16 KB compression threshold");
 	});

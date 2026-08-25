@@ -8,6 +8,8 @@ test("neuer Service Worker übernimmt eine laufende alte App nicht automatisch",
 	assert.doesNotMatch(install, /\.then\(\(\) => self\.skipWaiting\(\)\)/);
 	assert.match(sw, /e\.data\?\.type === "SKIP_WAITING"/);
 	assert.match(sw, /sync-maintenance\.js/);
+	assert.match(sw, /rag-worker\.js/);
+	assert.match(sw, /rag-ranking\.js/);
 });
 
 test("Updater aktiviert waiting Worker erst beim bewussten Installationspfad", async () => {

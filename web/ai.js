@@ -441,22 +441,9 @@ export const AI = (() => {
 			label: m.name,
 		}));
 	}
-	async function embed(texts) {
-		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
-		const isLocal = S.settings.embedProviderId === "local" || S.settings.embedModel.startsWith("local:");
-		if (isLocal) {
-			const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === S.settings.embedModel) || LOCAL_EMBEDDING_MODELS[0];
-			const started = performance.now();
-			try {
-				const res = await postEmbeddingWorkerMessage("embed", { texts, model: def.hfId, dim: def.dim });
-				if (!res || !Array.isArray(res.vectors)) throw new Error("Lokales Embedding lieferte keine Vektoren.");
-				if (res.vectors.length !== texts.length) throw new Error(`Lokales Embedding unvollständig (${res.vectors.length}/${texts.length}).`);
-				return res.vectors;
-			} catch (err) {
-				debugEvent("Lokaler-Embedding-Fehler", { model: S.settings.embedModel, error: errorText(err), ms: Math.round(performance.now() - started) });
-				throw err;
-			}
-		}
+	const remoteEmbedForeground = [], remoteEmbedBackground = [];
+	let processingRemoteEmbeds = false;
+	async function runRemoteEmbed(texts) {
 		const provider = embedProvider();
 		if (!provider?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
 		const started = performance.now(), op = trackedController();
@@ -484,6 +471,41 @@ export const AI = (() => {
 			if (vectors.length !== texts.length || vectors.some((v) => !Array.isArray(v) || !v.length)) throw new Error(`Embedding-Quelle lieferte unvollstaendige Vektoren (${vectors.length}/${texts.length}).`);
 			return vectors;
 		} finally { op.done(); }
+	}
+	async function processRemoteEmbedQueue() {
+		if (processingRemoteEmbeds) return;
+		processingRemoteEmbeds = true;
+		try {
+			while (remoteEmbedForeground.length || remoteEmbedBackground.length) {
+				const job = remoteEmbedForeground.shift() || remoteEmbedBackground.shift();
+				try { job.resolve(await runRemoteEmbed(job.texts)); }
+				catch (error) { job.reject(error); }
+			}
+		} finally { processingRemoteEmbeds = false; }
+	}
+	function queueRemoteEmbed(texts, priority) {
+		return new Promise((resolve, reject) => {
+			(priority === "background" ? remoteEmbedBackground : remoteEmbedForeground).push({ texts, resolve, reject });
+			processRemoteEmbedQueue();
+		});
+	}
+	async function embed(texts, options = {}) {
+		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
+		const isLocal = S.settings.embedProviderId === "local" || S.settings.embedModel.startsWith("local:");
+		if (isLocal) {
+			const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === S.settings.embedModel) || LOCAL_EMBEDDING_MODELS[0];
+			const started = performance.now();
+			try {
+				const res = await postEmbeddingWorkerMessage("embed", { texts, model: def.hfId, dim: def.dim, priority: options.priority || "foreground" });
+				if (!res || !Array.isArray(res.vectors)) throw new Error("Lokales Embedding lieferte keine Vektoren.");
+				if (res.vectors.length !== texts.length) throw new Error(`Lokales Embedding unvollständig (${res.vectors.length}/${texts.length}).`);
+				return res.vectors;
+			} catch (err) {
+				debugEvent("Lokaler-Embedding-Fehler", { model: S.settings.embedModel, error: errorText(err), ms: Math.round(performance.now() - started) });
+				throw err;
+			}
+		}
+		return queueRemoteEmbed(texts, options.priority || "foreground");
 	}
 	async function pingProvider(provider) {
 		if (!provider || !String(provider.base || "").trim()) return { ok: false, error: "Keine Server-URL eingetragen." };

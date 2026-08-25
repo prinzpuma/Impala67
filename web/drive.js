@@ -22,6 +22,8 @@ export const DRIVE = (() => {
 	// über ALLE Blob-Schlüssel. Pro Heft und Tag landeten so bis zu 20 Vollkopien in Drive,
 	// die jedes andere Gerät auch noch herunterlud und speicherte.
 	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:");
+	const COMPACT_CHECK_STEP = 200;
+	const COMPACT_CHECK_SEQ_KEY = "impala67_drive_compact_checked_seq";
 	const LS = localStorage;
 	const lsJson = (k, fb) => { try { return JSON.parse(LS.getItem(k) ?? "null") ?? fb; } catch { return fb; } };
 	const DEVICE_ID = (() => {
@@ -663,11 +665,18 @@ export const DRIVE = (() => {
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
 		await replayImported(importedEvents);
-		// Erst nach einem vollständig erfolgreichen Abgleich lokale, sicher überholte
-		// Zwischenstände entfernen. Nutzungsstatistiken bleiben dabei unbegrenzt erhalten.
-		// Schlägt nur diese Wartung fehl, bleibt der abgeschlossene Sync trotzdem gültig.
-		try { await DB.compactLocal(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
-		LS.setItem("impala67_drive_synced_seq", String(await DB.maxSeq()));
+		// Die Kompaktierung liest und sortiert den gesamten Log. Deshalb nur pruefen,
+		// wenn seit der letzten Analyse mindestens so viele neue Events hinzugekommen
+		// sind, wie compactLocal ueberhaupt als Mindestgewinn verlangt.
+		const finalMaxSeq = await DB.maxSeq();
+		const compactCheckedSeq = Math.min(Number(LS.getItem(COMPACT_CHECK_SEQ_KEY) || 0), finalMaxSeq);
+		if (finalMaxSeq - compactCheckedSeq >= COMPACT_CHECK_STEP) {
+			try {
+				await DB.compactLocal(COMPACT_CHECK_STEP);
+				LS.setItem(COMPACT_CHECK_SEQ_KEY, String(finalMaxSeq));
+			} catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
+		}
+		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
 		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.
 		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");

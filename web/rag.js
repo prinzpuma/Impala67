@@ -3,6 +3,7 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { EMBEDDINGS } from "./embedding.js";
+import { rankRag } from "./rag-ranking.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
 // Benötigt das lokale Bekko-Embedding-Modell aus ⚙️ → KI.
@@ -14,16 +15,34 @@ export const RAG = (() => {
 
 	const enabled = () => !!S.settings.embedModel;
 	const embeddingProviderId = () => String(S.settings.embedProviderId || "");
-	const exactLexicalMatch = (query, searchable) => {
-		if (!query) return false;
-		if (query.length >= 4) return searchable.includes(query);
-		return termsOf(searchable).includes(query);
-	};
+	let rankingWorker = null, rankingReqId = 0;
+	const rankingPending = new Map();
+	function getRankingWorker() {
+		if (!rankingWorker && typeof Worker !== "undefined") {
+			try {
+				rankingWorker = new Worker("./rag-worker.js", { type: "module" });
+				rankingWorker.addEventListener("message", (event) => {
+					const msg = event.data || {}, pending = rankingPending.get(msg.id);
+					if (!pending) return;
+					rankingPending.delete(msg.id);
+					msg.type === "error" ? pending.reject(new Error(msg.error || "RAG-Worker-Fehler")) : pending.resolve(msg.hits || []);
+				});
+				rankingWorker.addEventListener("error", (error) => {
+					for (const pending of rankingPending.values()) pending.reject(new Error(error?.message || "RAG-Worker-Fehler"));
+					rankingPending.clear();
+					try { rankingWorker?.terminate(); } catch {}
+					rankingWorker = null;
+				});
+			} catch { rankingWorker = null; }
+		}
+		return rankingWorker;
+	}
+	const invalidateRankingIndex = () => { vecCache = null; try { rankingWorker?.postMessage({ type: "invalidate" }); } catch {} };
 
 	// FIX: Beim Entfernen aus dem Index wurde der Speicher-Cache NICHT verworfen — bis zu 30 s
 	// lieferte die Suche danach weiter Treffer aus geleerten Seiten (Papierkorb wird zwar
 	// gefiltert, eine geleerte Seite nicht). Eine Ausgangstür statt zwei halber.
-	const dropIndex = async (pageId) => { await DB.delVec(pageId); vecCache = null; };
+	const dropIndex = async (pageId) => { await DB.delVec(pageId); invalidateRankingIndex(); };
 
 	// Chunking v2 (15. Juli): Überschriften beginnen neue Chunks (thematisch
 	// saubere Treffer) und benachbarte Chunks überlappen sich leicht — Antworten,
@@ -78,7 +97,7 @@ export const RAG = (() => {
 		// Schritten wieder Kontrolle.
 		const vecs = [];
 		for (let at = 0; at < chunks.length; at += EMBEDDING_BATCH_SIZE) {
-			const batch = await EMBEDDINGS.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE));
+			const batch = await EMBEDDINGS.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE), { priority: "background" });
 			if (!Array.isArray(batch) || batch.length !== Math.min(EMBEDDING_BATCH_SIZE, chunks.length - at) || batch.some((v) => !v || !v.length)) {
 				throw new Error("Embedding unvollständig für Seite " + pageId);
 			}
@@ -104,7 +123,7 @@ export const RAG = (() => {
 				return { text, vec, norm: norm(vec) };
 			}),
 		});
-		vecCache = null; // Suche lädt beim nächsten Mal frisch
+		invalidateRankingIndex(); // Suche lädt beim nächsten Mal frisch
 	}
 
 	// Debounced-Warteschlange — wird nach Edits/Ingest aus app.js & pdfs.js befüllt.
@@ -157,36 +176,6 @@ export const RAG = (() => {
 	}
 
 	const norm = (v) => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * v[i]; return Math.sqrt(s) || 1; };
-	const dot = (a, b) => { let s = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) s += a[i] * b[i]; return s; };
-	const STOP_WORDS = new Set(["aber", "alle", "auch", "aus", "bei", "das", "dem", "den", "der", "des", "die", "ein", "eine", "einer", "eines", "für", "hat", "ich", "ist", "mit", "nach", "oder", "sich", "sind", "und", "von", "was", "wie", "wird", "zu", "the", "and", "for", "from", "that", "this", "with"]);
-	const termsOf = (value) => (String(value || "").toLocaleLowerCase("de-DE").match(/[\p{L}\p{N}_-]{2,}/gu) || []).filter((term) => !STOP_WORDS.has(term));
-	// Kleines BM25 direkt auf den bereits vorhandenen RAG-Chunks. Keine zweite
-	// Suchdatenbank: Embeddings und Fachwort-Treffer verwenden denselben Indexstand.
-	function lexicalScores(query, docs) {
-		const terms = [...new Set(termsOf(query))];
-		const scores = new Map();
-		if (!terms.length || !docs.length) return scores;
-		const tokenDocs = docs.map((doc) => ({ doc, tokens: termsOf(doc.title + "\n" + doc.text) }));
-		const avgLen = tokenDocs.reduce((sum, row) => sum + row.tokens.length, 0) / tokenDocs.length || 1;
-		const df = new Map(terms.map((term) => [term, tokenDocs.filter((row) => row.tokens.includes(term)).length]));
-		const phrase = String(query || "").trim().toLocaleLowerCase("de-DE");
-		for (const row of tokenDocs) {
-			const counts = new Map();
-			row.tokens.forEach((term) => counts.set(term, (counts.get(term) || 0) + 1));
-			let score = 0;
-			for (const term of terms) {
-				const tf = counts.get(term) || 0;
-				if (!tf) continue;
-				const idf = Math.log(1 + (tokenDocs.length - (df.get(term) || 0) + 0.5) / ((df.get(term) || 0) + 0.5));
-				const den = tf + 1.2 * (0.25 + 0.75 * row.tokens.length / avgLen);
-				score += idf * tf * 2.2 / den;
-				if (String(row.doc.title || "").toLocaleLowerCase("de-DE").includes(term)) score += idf * 0.8;
-			}
-			if (phrase.length >= 3 && (row.doc.title + "\n" + row.doc.text).toLocaleLowerCase("de-DE").includes(phrase)) score += 2;
-			if (score) scores.set(row.doc, score);
-		}
-		return scores;
-	}
 
 	// Suche v2 (15. Juli):
 	// - Vektoren werden im Speicher gecacht (IndexedDB-Volllast nur noch alle 30 s
@@ -214,7 +203,7 @@ export const RAG = (() => {
 		// andere Quelle darf keine gecachten Query-Vektoren der alten Quelle wiederverwenden.
 		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedProviderId || "") + "::" + (S.settings.embedModel || "");
 		if (queryCache.has(key)) return queryCache.get(key);
-		const [qv] = await EMBEDDINGS.embed([query]);
+		const [qv] = await EMBEDDINGS.embed([query], { priority: "foreground" });
 		queryCache.set(key, qv);
 		if (queryCache.size > 20) queryCache.delete(queryCache.keys().next().value);
 		return qv;
@@ -222,45 +211,26 @@ export const RAG = (() => {
 	async function search(query, k = 6) {
 		if (!enabled()) return null; // Aufrufer fällt auf Stichwortsuche zurück
 		const qv = await queryVec(query);
-		const qn = norm(qv);
-		const vecs = await allVecsCached();
-		const docs = [];
-		for (const [pageId, rec] of Object.entries(vecs)) {
-			const pg = S.pages[pageId];
-			if (!pg || pg.trashed) continue; // Papierkorb-Seiten nicht in Suchergebnissen
-			if (rec.model !== S.settings.embedModel || rec.providerId !== embeddingProviderId()) continue; // alter Index nach Quellen- oder Modellwechsel — reindexStale() baut ihn neu
-			for (const c of rec.chunks) {
-				if (!c.vec || c.vec.length !== qv.length) continue; // anderes Embedding-Modell
-				const score = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));
-				docs.push({ pageId, title: pg.title, text: c.text, semantic: score });
-			}
+		const model = S.settings.embedModel, providerId = embeddingProviderId();
+		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed }]));
+		const worker = getRankingWorker();
+		if (worker) {
+			const id = "rank_" + (++rankingReqId) + "_" + Date.now();
+			try {
+				return await new Promise((resolve, reject) => {
+					const timer = setTimeout(() => {
+						rankingPending.delete(id);
+						reject(new Error("RAG-Worker antwortet nicht."));
+					}, 8000);
+					rankingPending.set(id, {
+						resolve: (value) => { clearTimeout(timer); resolve(value); },
+						reject: (error) => { clearTimeout(timer); reject(error); },
+					});
+					worker.postMessage({ type: "search", id, identity: providerId + "::" + model, query, qv, pages, model, providerId, k });
+				});
+			} catch (error) { console.warn("RAG-Worker nicht verfügbar, verwende Hauptthread:", error); }
 		}
-		const lexical = lexicalScores(query, docs);
-		const maxLexical = Math.max(0, ...lexical.values());
-		const exactQuery = String(query || "").trim().toLocaleLowerCase("de-DE");
-		const hits = docs.map((doc) => {
-			const semantic = Math.max(0, doc.semantic || 0);
-			const lex = maxLexical ? (lexical.get(doc) || 0) / maxLexical : 0;
-			const title = String(doc.title || "").trim().toLocaleLowerCase("de-DE");
-			const searchable = (doc.title + "\n" + doc.text).toLocaleLowerCase("de-DE");
-			const exactFloor = exactQuery && title === exactQuery ? 0.8
-				: exactLexicalMatch(exactQuery, searchable) ? 0.7 : 0;
-			// Semantik bleibt die Basis; lexikalische Evidenz kann schwache semantische
-			// Treffer anheben. Ein wirklich woertlicher Fachbegriff, Variablenname oder
-			// Formelausschnitt darf jedoch nicht hinter bloss aehnlicher Semantik landen.
-			const score = Math.max(semantic + (1 - semantic) * 0.45 * lex, exactFloor);
-			return { pageId: doc.pageId, title: doc.title, snippet: doc.text.slice(0, 400), score, semanticScore: doc.semantic, lexicalScore: lex };
-		});
-		hits.sort((a, b) => b.score - a.score);
-		const perPage = Object.create(null);
-		const out = [];
-		for (const h of hits) {
-			if ((perPage[h.pageId] || 0) >= 2) continue;
-			perPage[h.pageId] = (perPage[h.pageId] || 0) + 1;
-			out.push({ title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000, semanticScore: Math.round(h.semanticScore * 1000) / 1000, lexicalScore: Math.round(h.lexicalScore * 1000) / 1000 });
-			if (out.length >= k) break;
-		}
-		return out;
+		return rankRag({ query, qv, vecs: await allVecsCached(), pages, model, providerId, k });
 	}
 
 	return { queuePage, reindexStale, search, indexPage, enabled };

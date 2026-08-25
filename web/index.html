@@ -256,7 +256,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 // Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 	// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
-		navigator.serviceWorker.register("service-worker.js?build=71", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=72", { updateViaCache: "none" })
 		.then((reg) => reg.update().catch(() => {}))
 		.catch((e) => console.warn("Service-Worker:", e));
 }

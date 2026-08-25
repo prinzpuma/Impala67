@@ -137,9 +137,11 @@ test("Hybrid-RAG hebt exakte Fachbegriffe trotz schwacher Semantik an", async ()
 		exact: { model: "local:hybrid-test", providerId: "local", chunks: [{ text: "ATP-Synthase und Protonengradient", vec: [0, 1], norm: 1 }] },
 		semantic: { model: "local:hybrid-test", providerId: "local", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.6, 0.8], norm: 1 }] },
 	});
-	EMBEDDINGS.embed = async () => [[1, 0]];
+	let searchPriority = "";
+	EMBEDDINGS.embed = async (_texts, options) => { searchPriority = options?.priority; return [[1, 0]]; };
 	try {
 		const hits = await RAG.search("ATP-Synthase", 2);
+		assert.equal(searchPriority, "foreground");
 		assert.equal(hits[0].title, "ATP-Synthase");
 		assert.equal(hits[0].lexicalScore, 1);
 		assert.equal(hits[0].semanticScore, 0);
@@ -180,12 +182,14 @@ test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 	};
 
 	const batchSizes = [];
+	const priorities = [];
 	const origEmbed = EMBEDDINGS.embed;
 	const origPutVec = DB.putVec;
 	try {
 		DB.putVec = async () => {};
-		EMBEDDINGS.embed = async (texts) => {
+		EMBEDDINGS.embed = async (texts, options) => {
 			batchSizes.push(texts.length);
+			priorities.push(options?.priority);
 			return texts.map(() => new Array(256).fill(0));
 		};
 		await RAG.indexPage("large");
@@ -193,6 +197,7 @@ test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 		assert.ok(batchSizes.length > 1);
 		assert.ok(Math.max(...batchSizes) <= 4);
 		assert.equal(batchSizes.reduce((sum, size) => sum + size, 0), 12);
+		assert.ok(priorities.every((priority) => priority === "background"));
 	} finally {
 		EMBEDDINGS.embed = origEmbed;
 		DB.putVec = origPutVec;
