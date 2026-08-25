@@ -44,6 +44,7 @@ const LOCAL_SYNC_DELAY = 80;
 const SYNC_FETCH_TIMEOUT_MS = 45000;
 const BLOB_FETCH_TIMEOUT_MS = 120000;
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
+const UTF8_ENCODER = new TextEncoder();
 
 const fallbackStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 const LS = {
@@ -231,14 +232,20 @@ export const CLOUDFLARE_SYNC = (() => {
 
 			let expected = since + 1;
 			const incoming = [];
-			for (const packet of packets) {
-				if (packet.seq !== expected) throw new Error(`Server-Sequenzlücke: erwartet ${expected}, erhalten ${packet.seq}.`);
-				const envelope = await decryptPayload(credentials.cryptoKey, packet);
-				incoming.push(...prepareIncomingCloudEvents([envelope]));
-				expected++;
+			const finishDecode = PERF_PROFILER.start("cloudflare.decrypt-import", { packets: packets.length }, 15);
+			try {
+				for (const packet of packets) {
+					if (packet.seq !== expected) throw new Error(`Server-Sequenzlücke: erwartet ${expected}, erhalten ${packet.seq}.`);
+					const envelope = await decryptPayload(credentials.cryptoKey, packet);
+					incoming.push(...prepareIncomingCloudEvents([envelope]));
+					expected++;
+				}
+				await importRemote(incoming);
+				finishDecode({ events: incoming.length });
+			} catch (error) {
+				finishDecode({ events: incoming.length, failed: true, errorName: error?.name || "Error" });
+				throw error;
 			}
-
-			await importRemote(incoming);
 			received += incoming.length;
 			saveRecv(packets.at(-1).seq);
 			if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
@@ -249,47 +256,68 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function postPackets(packets) {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		for (let i = 0; i < packets.length;) {
-			const batch = [];
-			let chars = 0;
-			while (i < packets.length && batch.length < MAX_HTTP_PACKETS) {
-				const packet = packets[i], n = encryptedPacketChars(packet);
-				if (batch.length && chars + n > MAX_HTTP_CHARS) break;
-				batch.push(packet); chars += n; i++;
+		const finishProfile = PERF_PROFILER.start("cloudflare.upload", { packets: packets.length }, 20);
+		let requests = 0, utf8Bytes = 0;
+		try {
+			for (let i = 0; i < packets.length;) {
+				const batch = [];
+				let chars = 0;
+				while (i < packets.length && batch.length < MAX_HTTP_PACKETS) {
+					const packet = packets[i], n = encryptedPacketChars(packet);
+					if (batch.length && chars + n > MAX_HTTP_CHARS) break;
+					batch.push(packet); chars += n; i++;
+				}
+				const body = JSON.stringify({ events: batch });
+				requests++;
+				utf8Bytes += UTF8_ENCODER.encode(body).byteLength;
+				const response = await fetchTimed(api("/api/events"), {
+					method: "POST",
+					headers: authHeaders({ "Content-Type": "application/json" }),
+					body,
+				});
+				if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
+				const data = await response.json();
+				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
 			}
-			const response = await fetchTimed(api("/api/events"), {
-				method: "POST",
-				headers: authHeaders({ "Content-Type": "application/json" }),
-				body: JSON.stringify({ events: batch }),
-			});
-			if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
-			const data = await response.json();
-			if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
+			finishProfile({ requests, utf8Bytes });
+		} catch (error) {
+			finishProfile({ requests, utf8Bytes, failed: true, errorName: error?.name || "Error" });
+			throw error;
 		}
 	}
 
 	async function push(forceAll = false) {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		const local = await DB.allEvents();
-		const maxSeq = local.reduce((max, event) => Math.max(max, Number(event?.seq) || 0), 0);
-		let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
-		if (forceAll || uploaded > maxSeq) uploaded = 0;
-
-		const source = uploaded ? local.filter((event) => Number(event?.seq || 0) > uploaded) : DB.compactEvents(local);
-		const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
-			SETTINGS_SYNC.sanitizeEvents(source, SETTINGS_SYNC.allowsSecrets(S.settings))
-		)), { includeRemote: !uploaded });
+		const local = await PERF_PROFILER.run("cloudflare.db-read", () => DB.allEvents(), {}, 10);
+		const prepared = PERF_PROFILER.measure("cloudflare.prepare-upload", () => {
+			const maxSeq = local.reduce((max, event) => Math.max(max, Number(event?.seq) || 0), 0);
+			let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
+			if (forceAll || uploaded > maxSeq) uploaded = 0;
+			const source = uploaded ? local.filter((event) => Number(event?.seq || 0) > uploaded) : DB.compactEvents(local);
+			const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
+				SETTINGS_SYNC.sanitizeEvents(source, SETTINGS_SYNC.allowsSecrets(S.settings))
+			)), { includeRemote: !uploaded });
+			return { maxSeq, wire };
+		}, { localEvents: local.length, forceAll: !!forceAll }, 10);
+		const { maxSeq, wire } = prepared;
 		if (!wire.length) { saveSend(maxSeq); return false; }
 
 		const chunks = chunkCloudEvents(wire);
 		const packets = [];
-		for (let i = 0; i < chunks.length; i++) {
-			const events = chunks[i];
-			const id = `p-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
-			const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
-			packets.push({ id, ...encrypted });
-			state.progress = { current: i + 1, total: chunks.length, percent: Math.round(((i + 1) / chunks.length) * 100) };
-			emit();
+		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { events: wire.length, chunks: chunks.length }, 10);
+		try {
+			for (let i = 0; i < chunks.length; i++) {
+				const events = chunks[i];
+				const id = `p-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
+				const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
+				packets.push({ id, ...encrypted });
+				state.progress = { current: i + 1, total: chunks.length, percent: Math.round(((i + 1) / chunks.length) * 100) };
+				emit();
+			}
+			finishEncrypt({ packets: packets.length });
+		} catch (error) {
+			finishEncrypt({ packets: packets.length, failed: true, errorName: error?.name || "Error" });
+			throw error;
 		}
 		await postPackets(packets);
 		saveSend(maxSeq);
@@ -361,17 +389,17 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 		try {
 			setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
-			const received = await pull();
+			const received = await PERF_PROFILER.run("cloudflare.pull", () => pull(), {}, 20);
 			if (blobInventoryDirty || received > 0) {
 				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
-				await syncBlobs();
+				await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20);
 				blobInventoryDirty = false;
 			}
 			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
-			const uploaded = await push(forceAll);
+			const uploaded = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
 			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
 			// spart das eine vollstaendige serielle Netz-Rundreise.
-			if (uploaded) await pull();
+			if (uploaded) await PERF_PROFILER.run("cloudflare.confirm-pull", () => pull(), {}, 20);
 			state.progress = null; state.lastError = null;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 			finishProfile({ received, uploaded });

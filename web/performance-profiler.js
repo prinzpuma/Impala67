@@ -1,10 +1,17 @@
 "use strict";
 
 const ENABLE_KEY = "impala67PerformanceProfiler";
-const DATA_KEY = "impala67PerformanceTrace";
+const DATA_KEY = "impala67PerformanceTraceV2";
+const LEGACY_DATA_KEY = "impala67PerformanceTrace";
 const MAX_RECORDS = 180;
 const LAG_INTERVAL_MS = 250;
 const LAG_THRESHOLD_MS = 120;
+const STALL_FLUSH_MS = 150;
+const STALL_MERGE_GAP_MS = 8;
+const NOISY_INPUT_EVENTS = new Set([
+	"pointerover", "pointerout", "pointerenter", "pointerleave",
+	"mouseover", "mouseout", "mouseenter", "mouseleave",
+]);
 
 let records = [];
 let active = new Map();
@@ -17,6 +24,9 @@ let pagehideInstalled = false;
 let contextProvider = null;
 let lastAction = null;
 let nextOperationId = 1;
+let lastContext = null;
+let pendingStalls = [];
+let stallTimer = 0;
 
 const storage = () => typeof localStorage !== "undefined" ? localStorage : null;
 const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
@@ -41,6 +51,7 @@ function load() {
 	try {
 		const saved = JSON.parse(storage()?.getItem(DATA_KEY) || "[]");
 		records = Array.isArray(saved) ? saved.slice(-MAX_RECORDS) : [];
+		storage()?.removeItem(LEGACY_DATA_KEY);
 	} catch { records = []; }
 }
 
@@ -70,11 +81,101 @@ function currentContext() {
 	};
 }
 
-function record(kind, durationMs, meta = {}) {
+function compactContext(context) {
+	const stable = { ...context };
+	delete stable.lastAction;
+	delete stable.active;
+	const delta = {};
+	for (const [key, value] of Object.entries(stable)) {
+		if (!lastContext || lastContext[key] !== value) delta[key] = value;
+	}
+	if (context.lastAction && JSON.stringify(context.lastAction) !== JSON.stringify(lastContext?.lastAction)) {
+		delta.lastAction = context.lastAction;
+	}
+	// Laufende Operationen sind zeitabhängig und deshalb keine stabilen Kontextfelder.
+	// Nur bei echten Hängern mitspeichern; leere und unveränderte Zustände blähen den Trace auf.
+	if (context.active?.length) delta.active = context.active;
+	lastContext = { ...stable, lastAction: context.lastAction };
+	return delta;
+}
+
+function recordAt(kind, durationMs, meta = {}, at = wallTime()) {
 	if (!isEnabled()) return;
-	records.push({ at: wallTime(), kind, durationMs: round(durationMs), ...safeMeta(meta), context: currentContext() });
+	const context = compactContext(currentContext());
+	const entry = { at, kind, durationMs: round(durationMs), ...safeMeta(meta) };
+	if (Object.keys(context).length) entry.context = context;
+	records.push(entry);
 	if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
 	persistSoon();
+}
+
+function record(kind, durationMs, meta = {}) { recordAt(kind, durationMs, meta); }
+
+function performanceWallTime(startMs) {
+	const origin = typeof performance !== "undefined" && Number.isFinite(performance.timeOrigin)
+		? performance.timeOrigin
+		: Date.now() - now();
+	return new Date(origin + startMs).toISOString();
+}
+
+function mergeStall(target, source) {
+	target.startMs = Math.min(target.startMs, source.startMs);
+	target.endMs = Math.max(target.endMs, source.endMs);
+	for (const name of source.sources) target.sources.add(name);
+	for (const name of source.eventNames) target.eventNames.add(name);
+	for (const id of source.interactionIds) target.interactionIds.add(id);
+	target.eventCount += source.eventCount;
+	for (const key of ["longTaskMs", "eventLoopLagMs", "inputDurationMs"]) {
+		target[key] = Math.max(target[key] || 0, source[key] || 0);
+	}
+	if ((source.inputDurationMs || 0) >= (target.inputDurationMs || 0) && source.inputName) target.inputName = source.inputName;
+}
+
+function flushStalls() {
+	clearTimeout(stallTimer);
+	stallTimer = 0;
+	const stalls = pendingStalls.sort((a, b) => a.startMs - b.startMs);
+	pendingStalls = [];
+	for (const stall of stalls) {
+		const meta = {
+			startMs: round(stall.startMs),
+			sources: [...stall.sources].sort().join("+"),
+			longTaskMs: stall.longTaskMs || undefined,
+			eventLoopLagMs: stall.eventLoopLagMs || undefined,
+			inputDurationMs: stall.inputDurationMs || undefined,
+			inputName: stall.inputName || undefined,
+			eventCount: stall.eventCount || undefined,
+			interactionCount: stall.interactionIds.size || undefined,
+			events: stall.eventNames.size ? [...stall.eventNames].sort().join(",").slice(0, 120) : undefined,
+		};
+		recordAt("main-thread-stall", stall.endMs - stall.startMs, meta, performanceWallTime(stall.startMs));
+	}
+}
+
+function queueStall(source, startMs, durationMs, meta = {}) {
+	if (!isEnabled() || !Number.isFinite(startMs) || !Number.isFinite(durationMs)) return;
+	const incoming = {
+		startMs,
+		endMs: startMs + durationMs,
+		sources: new Set([source]),
+		eventNames: new Set(meta.eventName ? [meta.eventName] : []),
+		interactionIds: new Set(meta.interactionId ? [meta.interactionId] : []),
+		eventCount: meta.eventName ? 1 : 0,
+		longTaskMs: source === "long-task" ? durationMs : 0,
+		eventLoopLagMs: source === "event-loop-lag" ? durationMs : 0,
+		inputDurationMs: source === "slow-input" ? durationMs : 0,
+		inputName: source === "slow-input" ? meta.eventName : "",
+	};
+	const overlaps = pendingStalls.filter((stall) => incoming.startMs <= stall.endMs + STALL_MERGE_GAP_MS && incoming.endMs >= stall.startMs - STALL_MERGE_GAP_MS);
+	if (overlaps.length) {
+		const target = overlaps[0];
+		mergeStall(target, incoming);
+		for (const extra of overlaps.slice(1)) {
+			mergeStall(target, extra);
+			pendingStalls.splice(pendingStalls.indexOf(extra), 1);
+		}
+	} else pendingStalls.push(incoming);
+	if (!stallTimer) stallTimer = setTimeout(flushStalls, STALL_FLUSH_MS);
 }
 
 function start(name, meta = {}, minMs = 25) {
@@ -116,13 +217,16 @@ function watchLongTasks() {
 			const observer = new PerformanceObserver((list) => {
 				for (const entry of list.getEntries()) {
 					if (type === "event" && entry.duration < 80) continue;
-					record(type === "longtask" ? "long-task" : "slow-input", entry.duration, {
-						name: entry.name || type,
-						startMs: round(entry.startTime),
+					if (type === "event" && NOISY_INPUT_EVENTS.has(entry.name)) continue;
+					queueStall(type === "longtask" ? "long-task" : "slow-input", entry.startTime, entry.duration, {
+						eventName: type === "event" ? entry.name || type : "",
+						interactionId: Number(entry.interactionId) || 0,
 					});
 				}
 			});
-			observer.observe(type === "event" ? { type, buffered: true, durationThreshold: 40 } : { type, buffered: true });
+			// Keine historischen Einträge: Beim nachträglichen Aktivieren gehören sie nicht
+			// zur Diagnose und ihr Callback-Zeitpunkt ergab bisher eine falsche Zeitleiste.
+			observer.observe(type === "event" ? { type, durationThreshold: 40 } : { type });
 			observers.push(observer);
 		} catch { /* Browser unterstützt den Entry-Typ nur teilweise. */ }
 	}
@@ -134,7 +238,7 @@ function watchEventLoop() {
 		if (!isEnabled()) return;
 		const current = now();
 		const lag = current - expected;
-		if (lag >= LAG_THRESHOLD_MS && (typeof document === "undefined" || !document.hidden)) record("event-loop-lag", lag);
+		if (lag >= LAG_THRESHOLD_MS && (typeof document === "undefined" || !document.hidden)) queueStall("event-loop-lag", expected, lag);
 		expected = current + LAG_INTERVAL_MS;
 		lagTimer = setTimeout(tick, LAG_INTERVAL_MS);
 	};
@@ -156,6 +260,7 @@ function init() {
 	if (initialized || !isEnabled()) return;
 	initialized = true;
 	load();
+	lastContext = null; // Jeder Profiler-Start beginnt mit einem vollständigen Kontext-Snapshot.
 	watchLongTasks();
 	watchEventLoop();
 	watchActions();
@@ -170,19 +275,25 @@ function stop() {
 	for (const observer of observers) observer.disconnect();
 	observers = [];
 	clearTimeout(lagTimer);
+	clearTimeout(stallTimer);
 	lagTimer = 0;
+	stallTimer = 0;
+	pendingStalls = [];
 	active.clear();
 	initialized = false;
 }
 
 function setEnabled(enabled) {
+	// Ausstehende gebündelte Hänger noch unter aktiviertem Zustand sichern.
+	if (!enabled) flush();
 	try { storage()?.setItem(ENABLE_KEY, enabled ? "1" : "0"); } catch { /* ignore */ }
 	if (enabled) init();
-	else { flush(); stop(); }
+	else stop();
 	return isEnabled();
 }
 
 function flush() {
+	flushStalls();
 	clearTimeout(persistTimer);
 	persistTimer = 0;
 	try { storage()?.setItem(DATA_KEY, JSON.stringify(records.slice(-MAX_RECORDS))); } catch { /* ignore */ }
@@ -190,7 +301,12 @@ function flush() {
 
 function clear() {
 	records = [];
+	pendingStalls = [];
+	clearTimeout(stallTimer);
+	stallTimer = 0;
+	lastContext = null;
 	try { storage()?.removeItem(DATA_KEY); } catch { /* ignore */ }
+	try { storage()?.removeItem(LEGACY_DATA_KEY); } catch { /* ignore */ }
 }
 
 function report() {
@@ -201,6 +317,8 @@ function report() {
 	} : null;
 	return JSON.stringify({
 		app: "Impala67 performance trace",
+		formatVersion: 2,
+		contextEncoding: "delta",
 		exportedAt: wallTime(),
 		version: typeof window !== "undefined" ? (window.APP_VERSION || "unknown") : "unknown",
 		environment: {
@@ -214,7 +332,7 @@ function report() {
 }
 
 function setContextProvider(provider) { contextProvider = typeof provider === "function" ? provider : null; }
-function status() { return { enabled: isEnabled(), records: records.length, active: active.size }; }
+function status() { return { enabled: isEnabled(), records: records.length + pendingStalls.length, active: active.size }; }
 
 load();
 export const PERF_PROFILER = { init, setEnabled, isEnabled, start, run, measure, record, report, clear, flush, status, setContextProvider };
