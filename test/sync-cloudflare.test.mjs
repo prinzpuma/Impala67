@@ -490,7 +490,7 @@ test("Regression (echter CLOUDFLARE_SYNC): Cursor-Race — Server seq 10 bekannt
 	DB.addEvents = async () => {};
 	const importedIntoA = [];
 	DB.importAll = async (json) => {
-		const parsed = JSON.parse(json);
+		const parsed = typeof json === "string" ? JSON.parse(json) : json;
 		importedIntoA.push(...(parsed.events || []));
 		return { importedEvents: parsed.events || [] };
 	};
@@ -584,7 +584,7 @@ test("Regression (echter CLOUDFLARE_SYNC): Retry nach verlorenem HTTP-Response v
 	DB.allEvents = async () => [...localEvents];
 	DB.addEvents = async () => {};
 	DB.importAll = async (json) => {
-		const parsed = JSON.parse(json);
+		const parsed = typeof json === "string" ? JSON.parse(json) : json;
 		return { importedEvents: parsed.events || [] };
 	};
 

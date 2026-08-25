@@ -6,6 +6,7 @@ import { DRIVE } from "./drive.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import * as UI from "./settings-ui.js";
 
 const e = (value) => U.esc(String(value ?? ""));
@@ -222,8 +223,12 @@ function renderData(vm) {
 	const exports = UI.row({ title: "Lerndaten", description: "Lokale Telemetrie als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
 	const update = UI.row({ title: "Installierte Version", description: "PWA / Browser", trailing: '<span id="updateLocalVer" class="settings-value">v' + e(String(vm.version).replace(/^v/i, "")) + "</span>" }) + UI.row({ title: "Verfügbare Version", description: "Wird nur auf Wunsch geprüft", trailing: '<span id="updateRemoteVer" class="settings-value">—</span>' }) + UI.actions([{ label: "Nach Updates suchen", id: "btnCheckUpdate" }, { label: "Update installieren", id: "btnApplyPwaUpdate", hidden: true }]) + '<p class="settings-footnote" id="updateStatus"></p>';
+	const perf = PERF_PROFILER.status();
+	const diagnostics = UI.row({ title: "Performance-Profiler", description: perf.enabled ? (perf.records + " lokale Messpunkte gesammelt") : "Protokolliert Hänger, langsame Eingaben, Render- und Sync-Phasen", trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
+		UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy", disabled: !perf.records }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary", disabled: !perf.records }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary", disabled: !perf.records }]) +
+		'<p class="settings-footnote">Bleibt vollständig auf diesem Gerät. Erfasst Zeitpunkte, Dauer, Ansichts- und Mengendaten – niemals Notizinhalte, Eingaben oder Zugangsdaten.</p>';
 	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") });
-	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup", footnote: "Importe werden konfliktfrei mit dem vorhandenen Event-Log zusammengeführt." }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
+	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup", footnote: "Importe werden konfliktfrei mit dem vorhandenen Event-Log zusammengeführt." }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
 }
 
 function renderDevices() {

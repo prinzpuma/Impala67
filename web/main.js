@@ -37,6 +37,8 @@ import { ANALYSE } from "./analyse.js";
 import { CONTROLLER } from "./controller.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { SYNC_MAINTENANCE } from "./sync-maintenance.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
+import "./performance-profiler-settings.js";
 import "./pdfpaste.js";
 
 // Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
@@ -46,6 +48,7 @@ Object.assign(window, {
 	COLLAPSE, CHATS, MOBILE, NOTION_MIGRATOR, SETTINGS, LIBRARY, TABS, SEARCH,
 	SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE, LERNZEIT,
 	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC, SYNC_MAINTENANCE,
+	PERF_PROFILER,
 	openPage: TABS.openPage,
 	openNewTab: TABS.openNewTab,
 	closeTab: TABS.closeTab,
@@ -68,6 +71,14 @@ Object.assign(window, {
 	readCardEditorDeck: RENDER_ANKI.readCardEditorDeck,
 	wireEvents: APP.wireEvents,
 });
+
+PERF_PROFILER.setContextProvider(() => ({
+	view: S.view,
+	pages: Object.keys(S.pages || {}).length,
+	cards: Object.keys(S.cards || {}).length,
+	eventsLoaded: STATE.loadedSeq?.() || 0,
+}));
+PERF_PROFILER.init();
 
 // config.local.js bewusst ZULETZT (stand vorher oben): statische Imports laufen
 // immer zuerst, das await verzögerte also nur die window-Bindings darunter —

@@ -68,6 +68,7 @@ let pageC = null;
 
 const consoleErrors = { A: [], B: [], C: [] };
 const unhandledRejections = { A: [], B: [], C: [] };
+const expectedOfflineUntil = new WeakMap();
 
 function stopWrangler() {
 	if (!wranglerProcess || wranglerProcess.exitCode !== null) return;
@@ -89,6 +90,10 @@ function attachMonitoring(page, label) {
 		if (type === "error") {
 			const loc = msg.location();
 			const url = loc?.url || "";
+			// Der Offline-PWA-Test trennt Chromium absichtlich vom Netz. Ein bereits
+			// gestarteter Loopback-Sync darf dann genau diese Ressourcenmeldung erzeugen;
+			// außerhalb des eng begrenzten Offline-Fensters bleibt sie ein echter Fehler.
+			if (txt.includes("ERR_INTERNET_DISCONNECTED") && Date.now() <= (expectedOfflineUntil.get(page) || 0)) return;
 			if (url.includes("localhost:1234") || url.includes("config.local.js") || txt.includes("localhost:1234") || txt.includes("config.local.js")) {
 				return;
 			}
@@ -102,6 +107,7 @@ function attachMonitoring(page, label) {
 }
 
 async function goOffline(page) {
+	expectedOfflineUntil.set(page, Number.POSITIVE_INFINITY);
 	await page.setOfflineMode(true);
 	await page.evaluate(() => {
 		window.dispatchEvent(new Event("offline"));
@@ -115,6 +121,7 @@ async function goOnline(page) {
 		window.dispatchEvent(new Event("online"));
 	});
 	await page.waitForFunction(() => navigator.onLine);
+	expectedOfflineUntil.set(page, Date.now() + 1000);
 }
 
 function startStaticServer() {

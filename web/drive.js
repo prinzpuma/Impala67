@@ -6,6 +6,7 @@ import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJso
 import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
 // Google-Drive-Sync im privaten appDataFolder.
 // Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
@@ -717,8 +718,14 @@ export const DRIVE = (() => {
 		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
 		if (syncInFlight) return syncInFlight;
+		const finishProfile = PERF_PROFILER.start("drive.sync", {}, 40);
 		syncInFlight = withSyncLock(() => syncRaw(onStatus))
+			.then((result) => {
+				finishProfile({ imported: result?.imported || 0, uploaded: result?.uploaded || 0 });
+				return result;
+			})
 			.catch((error) => {
+				finishProfile({ failed: true, errorName: error?.name || "Error" });
 				if (authState !== DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
 					emitSyncStatus(navigator.onLine === false ? "waiting" : "error",
 						navigator.onLine === false ? "Offline" : "Sync fehlgeschlagen", error?.message);

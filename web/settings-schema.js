@@ -45,6 +45,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "backup", section: "data", group: "Backup", label: "Backup & Wiederherstellung", description: "Event-Log und Dateien exportieren oder importieren", keywords: "json sichern wiederherstellen" },
 	{ id: "data-export", section: "data", group: "Exporte", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
 	{ id: "storage", section: "data", group: "App", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
+	{ id: "performance-profiler", section: "data", group: "Diagnose", label: "Performance-Profiler", description: "Sporadische Hänger und langsame Sync-, Render- oder Eingabephasen lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln" },
 	{ id: "updates", section: "data", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
 	{ id: "danger-zone", section: "data", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
 	{ id: "controller-status", section: "devices", group: "Controller", label: "Controller-Steuerung", description: "Gamepad verbinden, Hinweise und Vibration", keywords: "gamepad pad xbox playstation stadia" },

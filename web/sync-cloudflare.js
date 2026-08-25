@@ -4,6 +4,7 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import {
 	CLOUD_SYNC_PROTOCOL,
 	CLOUD_SYNC_PROTOCOL_HEADER,
@@ -186,7 +187,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			saveSend(confirmedCursor);
 		}
 
-		const result = await DB.importAll(JSON.stringify({ app: "impala67", events }), {
+		// Nach E2EE liegen die Daten bereits als Objekte vor. Der JSON-Roundtrip hier
+		// blockierte den Main Thread bei gebündelten Sync-Paketen unnötig.
+		const result = await DB.importAll({ app: "impala67", events }, {
 			localEvents: local,
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
@@ -351,24 +354,32 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function runPass(forceAll) {
+		const finishProfile = PERF_PROFILER.start("cloudflare.sync", { forceAll: !!forceAll }, 40);
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+			finishProfile({ failed: true, offline: true });
 			throw readable(new Error("Das Gerät ist offline."));
 		}
-		setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
-		const received = await pull();
-		if (blobInventoryDirty || received > 0) {
-			setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
-			await syncBlobs();
-			blobInventoryDirty = false;
+		try {
+			setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
+			const received = await pull();
+			if (blobInventoryDirty || received > 0) {
+				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
+				await syncBlobs();
+				blobInventoryDirty = false;
+			}
+			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
+			const uploaded = await push(forceAll);
+			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
+			// spart das eine vollstaendige serielle Netz-Rundreise.
+			if (uploaded) await pull();
+			state.progress = null; state.lastError = null;
+			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
+			finishProfile({ received, uploaded });
+			return true;
+		} catch (error) {
+			finishProfile({ failed: true, errorName: error?.name || "Error" });
+			throw error;
 		}
-		setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
-		const uploaded = await push(forceAll);
-		// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
-		// spart das eine vollstaendige serielle Netz-Rundreise.
-		if (uploaded) await pull();
-		state.progress = null; state.lastError = null;
-		setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
-		return true;
 	}
 
 	function requestSync(forceAll = false) {

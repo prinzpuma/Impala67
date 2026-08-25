@@ -2,6 +2,7 @@
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { shouldUploadToSync } from "./sync-core.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
 // zeitlich deterministisch; Heft-Striche und Bilder reisen vollständig im Event-Log.
@@ -486,7 +487,9 @@ export const DB = (() => {
 	// Rückgabe: { added, conflicts, conflictDetails, importedEvents }.
 	async function importAll(json, opts = {}) {
 		ensureOpen();
-		const data = JSON.parse(json);
+		const finishProfile = PERF_PROFILER.start("db.import", { remote: !!opts.remote }, 20);
+		const data = typeof json === "string" ? JSON.parse(json) : json;
+		if (!data || typeof data !== "object") throw new Error("Keine Impala67-Exportdatei.");
 		if (data.app !== "impala67" && data.app !== "notion") throw new Error("Keine Impala67-Exportdatei."); // Alt-Exporte bleiben importierbar
 		const incoming = Array.isArray(data.events) ? data.events : []; // kaputte Exporte nicht crashen lassen
 		// Sync-Transporte, die den Log fuer ihre Cursor-Pruefung ohnehin schon gelesen
@@ -642,7 +645,11 @@ export const DB = (() => {
 		const missing = Object.entries(blobs).filter(([k]) => !have.has(k));
 		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
-		return { added: fresh.length, malformed, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents: fresh.map((ev) => JSON.parse(JSON.stringify(ev))) };
+		// structuredClone vermeidet den teuren JSON-Text-Roundtrip. Die tiefe Kopie
+		// bleibt nötig: Live-Module dürfen den unveränderlichen Import nicht mitmutieren.
+		const importedEvents = fresh.map((ev) => typeof structuredClone === "function" ? structuredClone(ev) : JSON.parse(JSON.stringify(ev)));
+		finishProfile({ added: fresh.length, incoming: incoming.length });
+		return { added: fresh.length, malformed, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents };
 	}
 
 	async function resetDatabase() {

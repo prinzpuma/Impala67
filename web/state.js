@@ -3,6 +3,7 @@ import { U } from "./util.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
 export const S = {
@@ -200,12 +201,14 @@ export const STATE = (() => {
 	function applyRemoteEvents(events) {
 		const list = sortEvents(events);
 		if (!list.length) return list;
-		for (const ev of list) {
-			U.observeTime(ev.t);
-			reduce(ev);
-		}
-		if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
-		emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+		PERF_PROFILER.measure("state.remote-replay", () => {
+			for (const ev of list) {
+				U.observeTime(ev.t);
+				reduce(ev);
+			}
+			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
+			emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+		}, { count: list.length }, 16);
 		return list;
 	}
 	// Eine Regel fuer Seiten-Zugehoerigkeit und Zyklus-Schutz. Bei bereits korrupten
@@ -897,6 +900,7 @@ export const STATE = (() => {
 	}
 
 	async function load() {
+		const finishProfile = PERF_PROFILER.start("state.load", {}, 20);
 		const evs = await loadSortedEvents();
 		_loadedSeq = evs.reduce((m, ev) => Math.max(m, Number(ev?.seq || 0)), 0);
 		_loadedTime = evs.length ? evs[evs.length - 1].t : "";
@@ -906,6 +910,7 @@ export const STATE = (() => {
 		// damit ausgerechnet gegen den Stand verlieren, den sie ablösen soll.
 		if (evs.length) U.observeTime(evs[evs.length - 1].t);
 		evs.forEach(reduce);
+		finishProfile({ count: evs.length });
 		return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: evs.length };
 	}
 

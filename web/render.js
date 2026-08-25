@@ -15,6 +15,7 @@ import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -60,6 +61,7 @@ const pageIconHtml = (pg, fb) => { const i = pageIconLabel(pg, fb); return i ? e
 
 // render.js — UI-Aufbau im Notion-Stil: Sidebar, Tabs, Seitenkopf, Chat.
 function render() {
+	const finishProfile = PERF_PROFILER.start("ui.render", { view: S.view }, 20);
 	// Expliziter render() storniert einen ausstehenden rAF-Render (sonst Doppel-Aufbau)
 	if (_renderRaf) { cancelAnimationFrame(_renderRaf); _renderRaf = 0; }
 	renderSidebar();
@@ -74,6 +76,7 @@ function render() {
 	renderModelBar();
 	const due = $("dueCount");
 	if (due) due.textContent = STATE.dueCards().length;
+	finishProfile();
 }
 
 // PERF: mehrere dispatches pro Frame → EIN Render (rAF-gebündelt)
