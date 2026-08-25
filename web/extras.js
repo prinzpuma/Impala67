@@ -7,6 +7,7 @@ import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
+import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -330,14 +331,8 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	let sqlPromise = null;
 	function loadSql() {
 		if (!sqlPromise) {
-			sqlPromise = new Promise((res, rej) => {
-				const s2 = document.createElement("script");
-				s2.src = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js";
-				s2.crossOrigin = "anonymous";
-				s2.onload = () => res(initSqlJs({ locateFile: (f) => "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/" + f }));
-				s2.onerror = () => rej(new Error("sql.js konnte nicht geladen werden (Internet nötig)."));
-				document.head.appendChild(s2);
-			});
+			sqlPromise = U.loadScript(OPTIONAL_MODULE_URLS.sql, "initSqlJs")
+				.then(() => initSqlJs({ locateFile: () => OPTIONAL_MODULE_URLS.sqlWasm }));
 		}
 		return sqlPromise;
 	}
@@ -597,7 +592,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			await U.renderMath(printable);
 		w.document.open();
 		w.document.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + U.esc(pg.title) + "</title>" +
-			'<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">' +
+			'<link rel="stylesheet" href="' + OPTIONAL_MODULE_URLS.katexCss + '">' +
 			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}" +
 			".pdf-bar{position:fixed;top:10px;right:10px;display:flex;gap:8px}.pdf-bar button{font:13px -apple-system,'Segoe UI',sans-serif;padding:7px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}@media print{.pdf-bar{display:none}}</style>" +
 			"</head><body><div class=\"pdf-bar\"><button onclick=\"window.print()\">🖨 Drucken / PDF</button><button onclick=\"window.close()\">✕ Schließen</button></div>" +

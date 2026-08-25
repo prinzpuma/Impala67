@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v229"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v230"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -30,6 +30,7 @@ const APP_FILES = [
 	"./chats.js",
 	"./import-notion.js",
 	"./util.js",
+	"./optional-modules.js",
 	"./db.js",
 	"./srs.js",
 	"./state.js",
@@ -93,8 +94,9 @@ const APP_FILES = [
 ];
 
 // Leichtgewichtige Basis-CDN-Bibliotheken beim Installieren vorab cachen.
-// Schwere Zusatzmodule (Mermaid, Math.js, PDF.js, Tesseract, KaTeX, Highlight.js)
-// werden erst bei der ersten Nutzung im UI/Workflow geladen und danach vom SW gecacht.
+// Fest versionierte Zusatzmodule werden nach dem App-Start im Leerlauf in den
+// OPTIONAL_CACHE geladen, aber weiterhin erst bei ihrer Nutzung ausgefuehrt.
+// Nutzerabhaengige OCR-/Transformers-Dateien bleiben echtes On-Demand-Material.
 const CDN_FILES = [
 	"https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js",
 	"https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js",

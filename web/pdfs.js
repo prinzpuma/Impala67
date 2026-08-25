@@ -5,12 +5,13 @@ import { S, STATE } from "./state.js";
 import { RAG } from "./rag.js";
 import { AI } from "./ai.js";
 import { TABS } from "./tabs.js";
+import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
 export const PDFS = (() => {
 	async function ensureLoaded() {
-		const mainUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-		const workerUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+		const mainUrl = OPTIONAL_MODULE_URLS.pdf;
+		const workerUrl = OPTIONAL_MODULE_URLS.pdfWorker;
 		if (!window.pdfjsLib) {
 			await U.loadScript(mainUrl, "pdfjsLib");
 		}

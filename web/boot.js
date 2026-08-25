@@ -15,6 +15,7 @@ import { LERNZEIT } from "./lernzeit.js";
 import { ANALYSE } from "./analyse.js";
 import { isBlobAlive } from "./sync-core.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -227,6 +228,9 @@ export async function initApp() {
 		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
 		purgeOrphanBlobs();
 	});
+	// Zusatzbibliotheken nur im Hintergrund in Cache Storage ablegen. Der Start
+	// wartet nicht darauf und keine Bibliothek wird dabei ausgefuehrt.
+	scheduleOptionalModulePrefetch();
 }
 
 function pingAiStatusIfVisible() {

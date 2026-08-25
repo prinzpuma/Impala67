@@ -7,6 +7,7 @@ import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
+import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
 // Beschreibungs-Diät (31. Juli): Die Liste geht bei JEDER Anfrage und in JEDEM Agent-Schritt
@@ -990,7 +991,7 @@ export const TOOLS = (() => {
 			case "calculate": {
 				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") {
 					try {
-						await U.loadScript("https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js", "math");
+						await U.loadScript(OPTIONAL_MODULE_URLS.math, "math");
 					} catch {
 						return { error: "Mathe-Modul (math.js) konnte nicht geladen werden. Internetverbindung für den Erstabruf erforderlich." };
 					}

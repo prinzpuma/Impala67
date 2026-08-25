@@ -1,5 +1,6 @@
 "use strict";
-// util.js — kleine Helfer, keine Abhängigkeiten
+import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+// util.js — kleine Helfer
 const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
 function withLoadTimeout(task, label) {
 	let timer = 0;
@@ -531,9 +532,9 @@ export const U = {
 		if (typeof window === "undefined") return false;
 		if (!U._katexReady) {
 			U._katexReady = (async () => {
-				await U.loadStyle("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css");
-				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js", "katex");
-				await U.loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js", "renderMathInElement");
+				await U.loadStyle(OPTIONAL_MODULE_URLS.katexCss);
+				await U.loadScript(OPTIONAL_MODULE_URLS.katex, "katex");
+				await U.loadScript(OPTIONAL_MODULE_URLS.katexAutoRender, "renderMathInElement");
 				return !!(window.katex && window.renderMathInElement);
 			})();
 		}
@@ -587,8 +588,8 @@ export const U = {
 		if (!hasCode) return;
 		if (!window.hljs) {
 			try {
-				await U.loadStyle("https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css");
-				await U.loadScript("https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js", "hljs");
+				await U.loadStyle(OPTIONAL_MODULE_URLS.highlightCss);
+				await U.loadScript(OPTIONAL_MODULE_URLS.highlight, "hljs");
 			} catch (err) {
 				if (U.toast && !U._hlToastShown) {
 					U._hlToastShown = true;
@@ -633,7 +634,7 @@ export const U = {
 				}
 			});
 			try {
-				await U.loadScript("https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js", "mermaid");
+				await U.loadScript(OPTIONAL_MODULE_URLS.mermaid, "mermaid");
 			} catch {
 				blocks.forEach((b) => {
 					const pre = b.closest("pre");
