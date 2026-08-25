@@ -6,6 +6,8 @@ import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
+import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
+import { hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -156,62 +158,6 @@ export const HEFT = (() => {
 	// reicht die Signatur völlig.
 	const published = {};
 
-	function sig(o) {
-		if (Array.isArray(o.pts)) {
-			const a = o.pts[0] || [], b = o.pts[o.pts.length - 1] || [];
-			return o.pts.length + "|" + a[0] + "," + a[1] + "|" + b[0] + "," + b[1] + "|" + o.color + "|" + o.size + "|" + (o.shape ? JSON.stringify(o.shape) : "");
-		}
-		// Bild: die Pixel liegen als eigener Blob daneben und ändern sich nie — nur der Rahmen.
-		if (o.ref || o.src) return o.x + "," + o.y + "," + o.w + "," + o.h + "|" + (o.ref || o.src.length);
-		return JSON.stringify(o);
-	}
-	const sigMap = (list) => new Map((list || []).map((o) => [o.id, sig(o)]));
-	const shadowOf = (d) => ({
-		pages: (d.pages || []).map((pg) => ({
-			id: pg.id, paper: pg.paper, ocrText: pg.ocrText || "",
-			s: sigMap(pg.strokes), i: sigMap(pg.images), x: sigMap(pg.texts),
-		})),
-	});
-
-	function diffList(ops, pgId, kind, oldMap, arr) {
-		const gone = new Set(oldMap ? oldMap.keys() : []);
-		for (const o of arr || []) {
-			if (!o || !o.id) continue;
-			const was = oldMap ? oldMap.get(o.id) : undefined;
-			if (was === undefined) ops.push({ t: kind + "+", p: pgId, o });
-			else { gone.delete(o.id); if (was !== sig(o)) ops.push({ t: kind + "=", p: pgId, o }); }
-		}
-		if (gone.size) ops.push({ t: kind + "-", p: pgId, ids: [...gone] });
-	}
-
-	function diffDoc(prev, next) {
-		const ops = [];
-		const old = (prev && prev.pages) || [];
-		const oldById = new Map(old.map((pg) => [pg.id, pg]));
-		const nextIds = next.pages.map((pg) => pg.id);
-		const nextSet = new Set(nextIds);
-		for (const pg of old) if (!nextSet.has(pg.id)) ops.push({ t: "pg-", p: pg.id });
-		let added = false;
-		next.pages.forEach((pg, i) => {
-			if (oldById.has(pg.id)) return;
-			ops.push({ t: "pg+", at: i, page: { id: pg.id, paper: pg.paper } });
-			added = true;
-		});
-		// Reihenfolge nur mitschicken, wenn sie sich wirklich geändert hat.
-		const keptBefore = old.filter((pg) => nextSet.has(pg.id)).map((pg) => pg.id).join(",");
-		const keptAfter = nextIds.filter((id) => oldById.has(id)).join(",");
-		if (added || keptBefore !== keptAfter) ops.push({ t: "pgo", order: nextIds });
-		for (const pg of next.pages) {
-			const was = oldById.get(pg.id);
-			if (was && was.paper !== pg.paper) ops.push({ t: "pgp", p: pg.id, paper: pg.paper });
-			if ((was ? was.ocrText : "") !== (pg.ocrText || "")) ops.push({ t: "ocr", p: pg.id, text: pg.ocrText || "" });
-			diffList(ops, pg.id, "s", was && was.s, pg.strokes);
-			diffList(ops, pg.id, "i", was && was.i, pg.images);
-			diffList(ops, pg.id, "x", was && was.x, pg.texts);
-		}
-		return ops;
-	}
-
 	// ---- Bilder, Scans und PDF-Seiten als eigene, unveränderliche Blob-Events ----
 	// Ein Foto oder Scan ist schnell 1–3 MB groß. Bisher steckte die komplette dataURL
 	// IM Bild-Objekt des Hefts. Folge: jedes Verschieben und jedes Skalieren schickte das
@@ -224,18 +170,6 @@ export const HEFT = (() => {
 	// sich nur noch den Inhalts-Hash ({ id, ref, x, y, w, h }, ca. 80 Byte). Verschieben
 	// kostet damit ein paar Byte statt ein paar Megabyte, und zwei Geräte, die dasselbe
 	// Bild einfügen, teilen sich automatisch einen Eintrag (gleicher Inhalt = gleicher Hash).
-	function hashData(str) {
-		// Zwei unabhängige 32-Bit-Hashes (FNV-1a + djb2) plus Länge. Bewusst kein SHA-256:
-		// das wäre asynchron und müsste in jeden Aufrufpfad hinein. Kollisionen sind bei
-		// 64 Bit + Länge praktisch ausgeschlossen, und der Inhalt ist ohnehin unveränderlich.
-		let a = 0x811c9dc5, b = 5381;
-		for (let i = 0; i < str.length; i++) {
-			const c = str.charCodeAt(i);
-			a = Math.imul(a ^ c, 0x01000193) >>> 0;
-			b = ((b * 33) ^ c) >>> 0;
-		}
-		return "b" + str.length.toString(36) + "-" + a.toString(36) + b.toString(36);
-	}
 	const pendingBlobData = new Map();
 	const blobWrites = new Map();
 	function ensureBlobPersisted(hash, dataUrl) {
@@ -249,7 +183,7 @@ export const HEFT = (() => {
 		return write;
 	}
 	function blobRef(dataUrl) {
-		const hash = hashData(dataUrl);
+		const hash = blobId(dataUrl);
 		if (!S.heftBlobs[hash]) {
 			// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
 			// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
@@ -339,7 +273,7 @@ export const HEFT = (() => {
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
-			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDoc(null, legacy) });
+			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy) });
 			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
 			d = S.heftDocs[p];
 			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
@@ -347,7 +281,7 @@ export const HEFT = (() => {
 		}
 		try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
 		docs[p] = d;
-		if (!published[p]) published[p] = shadowOf(d);
+		if (!published[p]) published[p] = documentShadow(d);
 		return d;
 	}
 
@@ -365,7 +299,7 @@ export const HEFT = (() => {
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
 			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
-			if (d) { published[key] = shadowOf(d); docs[key] = d; }
+			if (d) { published[key] = documentShadow(d); docs[key] = d; }
 			else delete published[key];
 		}
 		if (!pid || !host) return;
@@ -399,9 +333,9 @@ export const HEFT = (() => {
 	// Speichern = Unterschied ermitteln und als Operationsliste ins Log schicken.
 	// Kein Blob, kein Hash, keine Datei — der Sync trägt das Event wie jedes andere.
 	async function persistDoc(savePid, saveDoc) {
-		const ops = diffDoc(published[savePid], saveDoc);
+		const ops = diffDocument(published[savePid], saveDoc);
 		if (!ops.length) return;
-		const nextPublished = shadowOf(saveDoc);
+		const nextPublished = documentShadow(saveDoc);
 		await persistReferencedBlobs(saveDoc);
 		dropThumbs(savePid);
 		await STATE.dispatch("heftOps", { pageId: savePid, ops });
@@ -470,11 +404,11 @@ export const HEFT = (() => {
 	async function restoreDoc(p, restored) {
 		const target = { v: 2, rev: 0, pages: JSON.parse(JSON.stringify(restored?.pages || [])) };
 		const current = S.heftDocs[p] || { v: 2, rev: 0, pages: [] };
-		const ops = diffDoc(shadowOf(current), target);
+		const ops = diffDocument(documentShadow(current), target);
 		if (ops.length) await STATE.dispatch("heftOps", { pageId: p, ops });
 		const d = S.heftDocs[p];
 		docs[p] = d;
-		published[p] = shadowOf(d);
+		published[p] = documentShadow(d);
 		if (pid === p) {
 			doc = d; idx = Math.min(idx, d.pages.length - 1); sel = null; lassoSel = null; undoStack = []; redoStack = [];
 			rebuildScroll(); updateChrome();
@@ -627,13 +561,6 @@ export const HEFT = (() => {
 		x.restore();
 	}
 
-	const hitBox = (arr, p) => {
-		for (let i = arr.length - 1; i >= 0; i--) {
-			const o = arr[i];
-			if (p[0] >= o.x && p[0] <= o.x + o.w && p[1] >= o.y && p[1] <= o.y + (o.h || 60)) return o;
-		}
-		return null;
-	};
 	const hitText = (pg, p) => hitBox(textsOf(pg), p);
 
 	function imgEl(im) {
@@ -655,82 +582,13 @@ export const HEFT = (() => {
 		return c;
 	}
 	function drawLassoSelection(x, strokes) {
-		const bb = lassoBBox(strokes || []);
+		const bb = lassoBounds(strokes || []);
 		if (!bb) return;
 		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
 		x.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18);
 		x.setLineDash([]); x.fillStyle = "#2f6fed"; x.beginPath(); x.arc(bb.maxX + 9, bb.maxY + 9, 8, 0, Math.PI * 2); x.fill(); x.restore();
 	}
 
-	function lassoBBox(strokes) {
-		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-		strokes.forEach((s) => strokeOutline(s).forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); }));
-		return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-	}
-	function calcStrokeBBox(s) {
-		if (!s) return null;
-		if (s.bbox) return s.bbox;
-		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-		if (Array.isArray(s.pts)) {
-			for (let i = 0; i < s.pts.length; i++) {
-				const p = s.pts[i];
-				if (p[0] < minX) minX = p[0];
-				if (p[0] > maxX) maxX = p[0];
-				if (p[1] < minY) minY = p[1];
-				if (p[1] > maxY) maxY = p[1];
-			}
-		}
-		if (s.shape) {
-			const a = s.shape;
-			if (a.x1 != null) {
-				minX = Math.min(minX, a.x1, a.x2); maxX = Math.max(maxX, a.x1, a.x2);
-				minY = Math.min(minY, a.y1, a.y2); maxY = Math.max(maxY, a.y1, a.y2);
-			} else if (a.cx != null) {
-				minX = Math.min(minX, a.cx - a.rx); maxX = Math.max(maxX, a.cx + a.rx);
-				minY = Math.min(minY, a.cy - a.ry); maxY = Math.max(maxY, a.cy + a.ry);
-			}
-		}
-		const margin = (s.size || 3) * 2 + 4;
-		s.bbox = isFinite(minX) ? { minX: minX - margin, minY: minY - margin, maxX: maxX + margin, maxY: maxY + margin } : null;
-		return s.bbox;
-	}
-	function translateStroke(s, dx, dy) {
-		if (Array.isArray(s.pts)) s.pts.forEach((p) => { p[0] += dx; p[1] += dy; });
-		const sh = s.shape;
-		if (sh) {
-			if (sh.x1 != null) { sh.x1 += dx; sh.y1 += dy; sh.x2 += dx; sh.y2 += dy; }
-			if (sh.cx != null) { sh.cx += dx; sh.cy += dy; }
-		}
-		if (s.bbox) {
-			s.bbox.minX += dx; s.bbox.maxX += dx;
-			s.bbox.minY += dy; s.bbox.maxY += dy;
-		}
-	}
-	function strokeGeometry(s) {
-		return { pts: (s.pts || []).map((p) => p.slice()), shape: s.shape ? { ...s.shape } : null, size: s.size || 3 };
-	}
-	function applyStrokeGeometry(s, geometry) {
-		s.pts = (geometry.pts || []).map((p) => p.slice());
-		s.shape = geometry.shape ? { ...geometry.shape } : null;
-		if (!s.shape) delete s.shape;
-		s.size = geometry.size;
-		s.bbox = null; calcStrokeBBox(s);
-	}
-	function scaleStrokeFrom(s, geometry, anchorX, anchorY, factor) {
-		const scalePoint = (p) => [anchorX + (p[0] - anchorX) * factor, anchorY + (p[1] - anchorY) * factor, ...p.slice(2)];
-		s.pts = (geometry.pts || []).map(scalePoint);
-		const sh = geometry.shape ? { ...geometry.shape } : null;
-		if (sh?.x1 != null) {
-			sh.x1 = anchorX + (sh.x1 - anchorX) * factor; sh.x2 = anchorX + (sh.x2 - anchorX) * factor;
-			sh.y1 = anchorY + (sh.y1 - anchorY) * factor; sh.y2 = anchorY + (sh.y2 - anchorY) * factor;
-		} else if (sh?.cx != null) {
-			sh.cx = anchorX + (sh.cx - anchorX) * factor; sh.cy = anchorY + (sh.cy - anchorY) * factor;
-			sh.rx *= factor; sh.ry *= factor;
-		}
-		if (sh) s.shape = sh; else delete s.shape;
-		s.size = Math.max(0.5, geometry.size * factor);
-		s.bbox = null; calcStrokeBBox(s);
-	}
 	function drawSelection(x, im) {
 		x.save();
 		x.strokeStyle = "#2f6fed"; x.lineWidth = 1.5; x.setLineDash([6, 4]);
@@ -757,7 +615,7 @@ export const HEFT = (() => {
 		});
 		(pg.strokes || []).forEach((s) => {
 			if (tileRect) {
-				const b = s.bbox || calcStrokeBBox(s);
+				const b = s.bbox || strokeBounds(s);
 				if (b && (b.maxX < tileRect.x || b.minX > tileRect.x + tileRect.w || b.maxY < tileRect.y || b.minY > tileRect.y + tileRect.h)) {
 					return;
 				}
@@ -1434,57 +1292,7 @@ export const HEFT = (() => {
 	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
 	const touchNavigates = () => onlyPen && !penRecently();
 	const lassoTouchAction = (pointerType, currentTool, onLasso) => pointerType === "touch" && currentTool === "lasso" ? (onLasso ? "interact" : "dismiss") : "none";
-	const near = (p, x, y, r) => { const dx = p[0] - x, dy = p[1] - y; return dx * dx + dy * dy <= r * r; };
-	function pointInPolygon(p, poly) {
-		let hit = false;
-		for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-			const a = poly[i], b = poly[j];
-			if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / ((b[1] - a[1]) || .0001) + a[0]) hit = !hit;
-		}
-		return hit;
-	}
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
-
-	const segDist2 = (px, py, ax, ay, bx, by) => {
-		const dx = bx - ax, dy = by - ay;
-		const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / ((dx * dx + dy * dy) || 1)));
-		const qx = ax + t * dx, qy = ay + t * dy;
-		return (px - qx) * (px - qx) + (py - qy) * (py - qy);
-	};
-	function strokeOutline(s) {
-		const sh = s.shape;
-		const pts = [];
-		if (sh && sh.type === "line") {
-			for (let i = 0; i <= 16; i++) pts.push([sh.x1 + (sh.x2 - sh.x1) * i / 16, sh.y1 + (sh.y2 - sh.y1) * i / 16]);
-			return pts;
-		}
-		if (sh && sh.type === "rect") {
-			const cs = [[sh.x1, sh.y1], [sh.x2, sh.y1], [sh.x2, sh.y2], [sh.x1, sh.y2], [sh.x1, sh.y1]];
-			for (let k = 0; k < 4; k++) for (let i = 0; i < 8; i++) {
-				const t = i / 8;
-				pts.push([cs[k][0] + (cs[k + 1][0] - cs[k][0]) * t, cs[k][1] + (cs[k + 1][1] - cs[k][1]) * t]);
-			}
-			pts.push([sh.x1, sh.y1]);
-			return pts;
-		}
-		if (sh && (sh.type === "ellipse" || sh.type === "circle")) {
-			const rx = sh.rx != null ? sh.rx : sh.r, ry = sh.ry != null ? sh.ry : sh.r;
-			for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2; pts.push([sh.cx + Math.cos(a) * rx, sh.cy + Math.sin(a) * ry]); }
-			return pts;
-		}
-		return s.pts || [];
-	}
-	function strokeHitAt(s, x, y, r) {
-		const b = s.bbox || calcStrokeBBox(s);
-		const rr = r + (s.size || 2) / 2;
-		if (b && (x + rr < b.minX || x - rr > b.maxX || y + rr < b.minY || y - rr > b.maxY)) return false;
-		const pts = strokeOutline(s);
-		if (!pts.length) return false;
-		const rr2 = rr * rr;
-		if (pts.length === 1) { const dx = pts[0][0] - x, dy = pts[0][1] - y; return dx * dx + dy * dy <= rr2; }
-		for (let i = 1; i < pts.length; i++) if (segDist2(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= rr2) return true;
-		return false;
-	}
 	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
 	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
 	// Radierer-Feedback ("wo wirkt er?"): ein Ring in echter Radierer-Größe als DOM-Element
@@ -1549,7 +1357,7 @@ export const HEFT = (() => {
 		const pg = doc.pages[pi];
 		if (!pg) return;
 		const p = pos(e, cv);
-		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? lassoBBox(lassoSel.strokes) : null;
+		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? lassoBounds(lassoSel.strokes) : null;
 		const onLasso = !!activeLassoBox && p[0] >= activeLassoBox.minX - 18 && p[0] <= activeLassoBox.maxX + 22 && p[1] >= activeLassoBox.minY - 18 && p[1] <= activeLassoBox.maxY + 22;
 		// Ein Fingertipp außerhalb beendet Auswahl UND Lasso-Modus. Der Nur-Stift-
 		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
@@ -1570,8 +1378,8 @@ export const HEFT = (() => {
 		if (tool === "lasso") {
 
 			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
-				const bb = lassoBBox(lassoSel.strokes);
-				if (bb && near(p, bb.maxX + 9, bb.maxY + 9, 22)) {
+				const bb = lassoBounds(lassoSel.strokes);
+				if (bb && nearPoint(p, bb.maxX + 9, bb.maxY + 9, 22)) {
 					const w = Math.max(1, bb.maxX - bb.minX), h = Math.max(1, bb.maxY - bb.minY);
 					drawing = { lassoResize: true, strokes: lassoSel.strokes, originals: lassoSel.strokes.map(strokeGeometry), cv, pageIdx: pi, anchor: [bb.minX, bb.minY], base: [w, h], factor: 1 };
 					return;
@@ -1593,7 +1401,7 @@ export const HEFT = (() => {
 		if (tool === "select") {
 
 			const st = sel && sel.pageIdx === pi && sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
-			if (st && near(p, st.x + st.w, st.y, 16)) {
+			if (st && nearPoint(p, st.x + st.w, st.y, 16)) {
 
 				pg.texts = textsOf(pg).filter((t2) => t2 !== st);
 				pushUndo({ kind: "txtDel", txt: st, pageIdx: pi });
@@ -1601,7 +1409,7 @@ export const HEFT = (() => {
 				refresh(pi);
 				return;
 			}
-			if (st && near(p, st.x + st.w, st.y + (st.h || 60), 16)) {
+			if (st && nearPoint(p, st.x + st.w, st.y + (st.h || 60), 16)) {
 
 				drawing = { imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
 				return;
@@ -1622,7 +1430,7 @@ export const HEFT = (() => {
 			}
 
 			const im = sel && sel.pageIdx === pi ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
-			if (im && near(p, im.x + im.w, im.y, 16)) {
+			if (im && nearPoint(p, im.x + im.w, im.y, 16)) {
 
 				pg.images = imagesOf(pg).filter((i2) => i2 !== im);
 				pushUndo({ kind: "imgDel", img: im, pageIdx: pi });
@@ -1630,7 +1438,7 @@ export const HEFT = (() => {
 				refresh(pi);
 				return;
 			}
-			if (im && near(p, im.x + im.w, im.y + im.h, 16)) {
+			if (im && nearPoint(p, im.x + im.w, im.y + im.h, 16)) {
 
 				drawing = { imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
 				return;
@@ -1850,7 +1658,7 @@ export const HEFT = (() => {
 			const stroke = drawing.snapped
 				? { id: U.uid(), tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
 				: { id: U.uid(), tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
-			calcStrokeBBox(stroke);
+			strokeBounds(stroke);
 			pg.strokes.push(stroke);
 			pushUndo({ kind: "add", stroke, pageIdx: pi });
 			scheduleSave();
@@ -3707,9 +3515,13 @@ export const HEFT = (() => {
 			el.dataset.heftdone = "1";
 			try {
 				const url = await thumbnail(id, 0, 320);
-				if (url) el.innerHTML = '<img class="heft-embed-img" src="' + url + '" alt="Heft-Vorschau">' +
+				el.innerHTML = (url ? '<img class="heft-embed-img" src="' + url + '" alt="Heft-Vorschau">' : "") +
 					'<span class="heft-embed-label">📓 ' + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " · " + pagesOf(id) + " Seite(n)</span>";
-			} catch (e) { console.warn("Heft: Embed-Vorschau fehlgeschlagen", e); }
+			} catch (e) {
+				delete el.dataset.heftdone;
+				el.innerHTML = '<span class="heft-embed-label">📓 ' + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " öffnen</span>";
+				console.warn("Heft: Embed-Vorschau fehlgeschlagen", e);
+			}
 		}
 	}
 

@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v223"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v225"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -83,6 +83,8 @@ const APP_FILES = [
 	"./extras.js",
 	"./notebooklm.js",
 	"./heft.js",
+	"./heft-document-core.js",
+	"./heft-geometry.js",
 	"./heft-pages-core.js",
 	"./heft-scan.js",
 ];
@@ -109,6 +111,9 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("message", (e) => {
 	if (e.data?.type === "SKIP_WAITING") e.waitUntil(self.skipWaiting());
+	if (e.data?.type === "GET_VERSION" && e.ports?.[0]) {
+		e.ports[0].postMessage({ type: "VERSION", version: CACHE.replace(/^impala67-v/, "") });
+	}
 });
 
 // Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE, transformers-cache) bewahren.

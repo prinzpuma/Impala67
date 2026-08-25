@@ -674,6 +674,19 @@ export const EDITOR = (() => {
 		}
 	}
 
+	// Slash-Befehle ändern nicht nur die Blockstruktur, sondern auch den Text im
+	// gerade fokussierten contenteditable. U.morph bewahrt diesen DOM absichtlich,
+	// damit normales Tippen nie überschrieben wird. Befehle müssen den sichtbaren
+	// Feldinhalt deshalb ausdrücklich mit ihrer Modelländerung synchronisieren.
+	function paintTextField(bid, text, offset, refocus = true) {
+		const field = fieldOf(bid, "text");
+		if (!field) return false;
+		field.innerHTML = inlineHtml(text);
+		hydrateInlineMath(field);
+		if (refocus) setCaret(field, offset);
+		return true;
+	}
+
 	// ---------- Undo/Redo: seitenweite Snapshots + Caret-Restore ----------
 	// Wie Notion: App-eigene History, NIE die Browser-History (execCommand).
 	function snapshotJson() { return JSON.stringify(blocks); }
@@ -873,7 +886,7 @@ export const EDITOR = (() => {
 				break;
 			case "heft":
 				// data-owned: den Inhalt füllt HEFT.hydrateEmbeds — U.morph fasst ihn nie an.
-				inner = '<div class="blk-heft" data-key="heft:' + esc(b.heftId || "") + '" data-owned="1" data-heft="' + esc(b.heftId || "") + '"></div>';
+				inner = '<button type="button" class="blk-heft" data-key="heft:' + esc(b.heftId || "") + '" data-owned="1" data-heftembed="' + esc(b.heftId || "") + '" data-page="' + esc(b.heftId || "") + '" contenteditable="false" aria-label="Heft öffnen"></button>';
 				break;
 			case "table": {
 				const rows = (b.rows || []).map((row, ri) =>
@@ -931,7 +944,17 @@ export const EDITOR = (() => {
 	function childPagesHtml() {
 		const pg = S.pages[pageId];
 		if (!pg) return "";
-		const kinder = STATE.childrenOf(pageId, pg.workspaceId);
+		// Eingebettete Hefte sind bereits als große, klickbare Vorschau Teil der Seite.
+		// Dieselbe Unterseite darunter ein zweites Mal als Textzeile zu zeigen, erzeugt
+		// zwei konkurrierende Navigationselemente für dasselbe Dokument.
+		const embedded = new Set();
+		const collect = (list) => (list || []).forEach((block) => {
+			if (block.type === "heft" && block.heftId) embedded.add(block.heftId);
+			if (block.children) collect(block.children);
+			if (block.columns) block.columns.forEach(collect);
+		});
+		collect(blocks);
+		const kinder = STATE.childrenOf(pageId, pg.workspaceId).filter((child) => !embedded.has(child.id));
 		if (!kinder.length) return "";
 		return '<div class="child-pages" contenteditable="false">' + kinder.map((k) => {
 			const ic = k.icon || (k.pdfId ? "📄" : k.kind === "heft" ? "📓" : "📝");
@@ -1137,19 +1160,36 @@ export const EDITOR = (() => {
 		document.querySelectorAll(".blk-menu, .blk-mathpop").forEach((el) => el.remove());
 		slash = null; linkMenu = null; blockMenuId = null; mathEdit = null;
 	}
+	function positionMenu(menu, anchorEl) {
+		let r = anchorEl.getBoundingClientRect();
+		const selection = window.getSelection();
+		if (selection?.rangeCount && selection.anchorNode && anchorEl.contains(selection.anchorNode)) {
+			const caretRange = selection.getRangeAt(0).cloneRange();
+			caretRange.collapse(true);
+			const caretRect = caretRange.getBoundingClientRect();
+			if (caretRect && (caretRect.width || caretRect.height)) r = caretRect;
+		}
+		const mw = menu.offsetWidth || 280, mh = menu.offsetHeight || 200;
+		let x = r.left;
+		let side = menu.dataset.side;
+		if (!side) side = r.bottom + 4 + mh <= innerHeight - 8 ? "below" : "above";
+		let y = side === "below" ? r.bottom + 4 : Math.max(8, r.top - mh - 4);
+		if (side === "below" && y + mh > innerHeight - 8 && r.top - mh - 4 >= 8) {
+			side = "above";
+			y = r.top - mh - 4;
+		}
+		if (x + mw > innerWidth - 8) x = Math.max(8, innerWidth - mw - 8);
+		menu.dataset.side = side;
+		menu.style.left = Math.max(8, x) + "px";
+		menu.style.top = y + "px";
+	}
 	function openMenu(anchorEl, html, cls) {
 		closeMenus();
 		const menu = document.createElement("div");
 		menu.className = "blk-menu " + (cls || "");
 		menu.innerHTML = html;
 		document.body.appendChild(menu);
-		const r = anchorEl.getBoundingClientRect();
-		const mw = menu.offsetWidth || 280, mh = menu.offsetHeight || 200;
-		let x = r.left, y = r.bottom + 4;
-		if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
-		if (x + mw > innerWidth - 8) x = Math.max(8, innerWidth - mw - 8);
-		menu.style.left = x + "px";
-		menu.style.top = y + "px";
+		positionMenu(menu, anchorEl);
 		return menu;
 	}
 
@@ -1187,40 +1227,53 @@ export const EDITOR = (() => {
 			'<div class="blk-mi' + (k === keepIndex ? " active" : "") + '" data-slashpick="' + s.k + '">' +
 			'<span class="blk-mi-ic">' + s.icon + '</span><span>' + esc(s.label) +
 			'<small>' + esc(s.hint) + "</small></span></div>").join("");
-		openMenu(field, html, "blk-slashmenu");
+		const existing = slash?.bid === bid ? document.querySelector(".blk-slashmenu") : null;
+		if (existing) {
+			existing.innerHTML = html;
+			positionMenu(existing, field);
+		} else {
+			openMenu(field, html, "blk-slashmenu");
+		}
 		slash = { items, index: keepIndex, bid, query: q };
 	}
 
 	// Führt eine Slash-Auswahl aus: "/befehl" aus dem Text entfernen, Block wandeln.
-	function applySlash(kind) {
+	async function applySlash(kind) {
 		if (!slash) return;
 		const bid = slash.bid;
 		closeMenus();
-		const c = findContext(bid);
+		let c = findContext(bid);
 		if (!c) return;
 		const text = String(c.block.text || "").replace(/\/[^/]*$/, "");
 		if (kind === "link") {
 			mutate(() => { c.block.text = text + "[["; }, { soft: true });
-			focusBlock(bid, text.length + 2);
+			paintTextField(bid, text + "[[", text.length + 2);
 			openLinkMenu(bid, "");
 			return;
 		}
 		if (kind === "image" || kind === "file") {
 			mutate(() => { c.block.text = text; }, { soft: true });
+			paintTextField(bid, text, text.length, false);
 			pickFile(bid, kind === "image" ? "image/*" : "");
 			return;
 		}
 		if (kind === "heft") {
+			const heftPageId = uid();
+			// Erst die Zielseite dauerhaft anlegen. So kann weder die Vorschau vor der
+			// Seite hydriert werden noch bei einem fehlgeschlagenen Dispatch ein verwaister
+			// :::heft-Verweis im Dokument landen.
+			await STATE.dispatch("pageCreate", {
+				id: heftPageId, title: "Heft", parentId: pageId,
+				workspaceId: S.pages[pageId] && S.pages[pageId].workspaceId, icon: "📓", kind: "heft",
+			});
+			c = findContext(bid);
+			if (!c) return;
 			mutate(() => {
-				const heftPageId = uid();
-				STATE.dispatch("pageCreate", {
-					id: heftPageId, title: "Heft", parentId: pageId,
-					workspaceId: S.pages[pageId] && S.pages[pageId].workspaceId, icon: "📓", kind: "heft",
-				});
 				const nb = { id: uid(), type: "heft", heftId: heftPageId };
 				c.block.text = text;
 				c.list.splice(c.index + 1, 0, nb);
 			});
+			paintTextField(bid, text, text.length, false);
 			return;
 		}
 		mutate(() => {
@@ -1247,9 +1300,12 @@ export const EDITOR = (() => {
 			} else {
 				turnInto(c.block, kind);
 				c.block.text = text;
-				focusBlock(bid, text.length);
 			}
 		});
+		// Falls der ursprüngliche Textblock erhalten blieb, muss sein geschützter
+		// contenteditable-DOM denselben Stand wie das Modell erhalten. Bei ersetzten
+		// Strukturblöcken existiert das Feld nicht mehr und der Aufruf ist wirkungslos.
+		paintTextField(bid, text, text.length);
 	}
 
 	// ---------- [[ Seiten-Link-Menü ----------
@@ -1607,7 +1663,10 @@ export const EDITOR = (() => {
 				document.querySelectorAll(".blk-menu .blk-mi").forEach((el, k) => el.classList.toggle("active", k === menu.index));
 				return;
 			}
-			if (slash && slash.items[slash.index]) applySlash(slash.items[slash.index].k);
+			if (slash && slash.items[slash.index]) void applySlash(slash.items[slash.index].k).catch((error) => {
+				console.warn("Slash-Befehl fehlgeschlagen", error);
+				U.toast("Befehl konnte nicht ausgeführt werden", "error");
+			});
 			else if (linkMenu && linkMenu.items[linkMenu.index]) applyLink(linkMenu.items[linkMenu.index].id);
 			return;
 		}
@@ -2378,7 +2437,13 @@ export const EDITOR = (() => {
 			const t = e.target;
 
 			const sp = t.closest && t.closest("[data-slashpick]");
-			if (sp) { applySlash(sp.dataset.slashpick); return; }
+			if (sp) {
+				void applySlash(sp.dataset.slashpick).catch((error) => {
+					console.warn("Slash-Befehl fehlgeschlagen", error);
+					U.toast("Befehl konnte nicht ausgeführt werden", "error");
+				});
+				return;
+			}
 			const lp = t.closest && t.closest("[data-linkpick]");
 			if (lp) { applyLink(lp.dataset.linkpick); return; }
 

@@ -97,7 +97,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
 			: (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark");
 		var density = localStorage.getItem("impala67Density") || "compact";
-		var motion = localStorage.getItem("impala67Motion") || "full";
+		var motion = localStorage.getItem("impala67Motion") || "reduced";
 		var fontSize = localStorage.getItem("impala67FontSize") || "m";
 		document.body.classList.toggle("light", theme === "light");
 		document.body.classList.toggle("density-compact", density === "compact");

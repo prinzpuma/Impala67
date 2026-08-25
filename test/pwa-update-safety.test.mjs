@@ -15,7 +15,14 @@ test("neuer Service Worker übernimmt eine laufende alte App nicht automatisch",
 test("Updater aktiviert waiting Worker erst beim bewussten Installationspfad", async () => {
 	const updater = await readFile(new URL("../web/updater.js", import.meta.url), "utf8");
 	assert.match(updater, /waiting\.postMessage\(\{ type: "SKIP_WAITING" \}\)/);
-	assert.match(updater, /controllerchange/);
+	assert.match(updater, /waitForActiveVersion\(expectedVersion\)/);
+	assert.match(updater, /waitingVersion !== normVer\(expectedVersion\)/);
 	const check = updater.slice(updater.indexOf("window.checkAppUpdate"), updater.indexOf("window.installAppUpdate"));
 	assert.doesNotMatch(check, /postMessage\(\{ type: "SKIP_WAITING" \}\)/);
+});
+
+test("Service Worker bestätigt seine Cache-Version vor dem Reload", async () => {
+	const sw = await readFile(new URL("../web/service-worker.js", import.meta.url), "utf8");
+	assert.match(sw, /e\.data\?\.type === "GET_VERSION"/);
+	assert.match(sw, /version: CACHE\.replace/);
 });

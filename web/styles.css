@@ -1848,7 +1848,10 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 /* == --- Verschachtelte Blöcke (Callout/Toggle/Spalten) --- == */
 .blk-children .blk .blk-body { padding: 1px 0 }
 /* == --- Heft-Einbettung --- == */
-.blk-heft { width: 100%; min-height: 40px; border-radius: var(--radius-sm); background: var(--surface-subtle) }
+.blk-heft { width: 100%; min-height: 72px; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text); text-align: left; cursor: pointer }
+.blk-heft:hover { border-color: var(--accent-border); background: var(--surface-hover) }
+.heft-embed-img { display: block; width: 100%; max-height: 300px; object-fit: cover; object-position: top center; background: var(--panel-solid) }
+.heft-embed-label { display: block; padding: 9px 11px; color: var(--text2); font-size: var(--text-sm); font-weight: 600 }
 /* == --- Blockauswahl (Esc / Handle / Strg+A Stufe 2) --- == */
 .blk.selected { background: color-mix(in srgb, var(--accent) 22%, transparent) }
 .blk.selected .blk-body { border-radius: var(--radius-xs) }

@@ -46,6 +46,8 @@ const WORKER_PORT = 8787;
 const STATIC_URL = `http://127.0.0.1:${STATIC_PORT}/`;
 const WORKER_URL = `http://127.0.0.1:${WORKER_PORT}`;
 const WRANGLER_JS = path.join(process.cwd(), "node_modules", "wrangler", "bin", "wrangler.js");
+const SERVICE_WORKER_SOURCE = fs.readFileSync(path.join(process.cwd(), "web", "service-worker.js"), "utf8");
+const EXPECTED_CACHE = SERVICE_WORKER_SOURCE.match(/const\s+CACHE\s*=\s*["']([^"']+)["']/)?.[1] || "";
 function generateTestSyncKey() {
 	const hex = () => Math.floor(0x10000 + Math.random() * 0x10000).toString(16).slice(1);
 	return `impala-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}-${hex()}`;
@@ -813,8 +815,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		assert.equal(postRestartOnB, "Post Restart");
 	});
 
-	it("L. Service-Worker Update / Cache: SW aktiv, Cache = impala67-v223, sync-crypto.js enthält 16-KB-Kompression", async () => {
-		const swStatus = await pageA.evaluate(async () => {
+	it("L. Service-Worker Update / Cache: aktueller SW-Cache ist aktiv und enthält sync-crypto.js", async () => {
+		const swStatus = await pageA.evaluate(async (expectedCache) => {
 			const reg = await navigator.serviceWorker?.getRegistration();
 			const cacheNames = await caches.keys();
 			const cacheName = cacheNames.find((n) => n.startsWith("impala67-v"));
@@ -832,14 +834,14 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 				hasSW: !!navigator.serviceWorker,
 				isActive: reg?.active?.state === "activated",
 				cacheNames,
-				hasV223: cacheNames.includes("impala67-v223"),
+				hasExpectedCache: cacheNames.includes(expectedCache),
 				hasLegacyV219: cacheNames.includes("impala67-v219"),
 				has16KBCompression: cryptoCode.includes("16 * 1024") || cryptoCode.includes("16384"),
 			};
-		});
+		}, EXPECTED_CACHE);
 
 		assert.equal(swStatus.hasSW, true, "Service Worker should be available");
-		assert.equal(swStatus.hasV223, true, "Cache impala67-v223 should exist");
+		assert.equal(swStatus.hasExpectedCache, true, `Cache ${EXPECTED_CACHE} should exist`);
 		assert.equal(swStatus.hasLegacyV219, false, "No legacy v219 cache should be present");
 		assert.equal(swStatus.has16KBCompression, true, "sync-crypto.js in cache must contain 16 KB compression threshold");
 	});

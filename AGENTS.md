@@ -8,6 +8,7 @@
 - Die App nutzt native ES-Module ohne Bundler. Bewahre diesen Ansatz, außer eine Aufgabe fordert ausdrücklich eine Baukette.
 - Bugs sollen an der Wurzel gelöst werden. Ich will nicht, dass dieselbe Regel an verschiedenen Stellen im Code behandelt wird.
 - Schreibe kompakten, gut testbaren Code nach aktuellen Web-Standards. Bevorzuge DRY/KISS/YAGNI und vermeide parallele Implementierungen derselben Fachregel.
+- Lasse große UI-Orchestratoren nicht weiter anwachsen: Extrahiere verhaltensneutrale, fachlich geschlossene Regeln bevorzugt in kleine ES-Module mit direkten Tests; öffentliche Modul-APIs und Persistenzformate bleiben dabei stabil.
 
 ## Wichtige Bereiche
 

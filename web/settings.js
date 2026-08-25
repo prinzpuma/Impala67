@@ -79,7 +79,7 @@ export function applyAppearance() {
 	installSystemThemeListener();
 	const theme = resolvedTheme();
 	const density = localStorage.getItem("impala67Density") || "compact";
-	const motion = localStorage.getItem("impala67Motion") || "full";
+	const motion = localStorage.getItem("impala67Motion") || "reduced";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
 	document.body.classList.toggle("light", theme === "light");
@@ -201,7 +201,7 @@ function settingsViewModel() {
 		theme: resolvedTheme(),
 		accent: localStorage.getItem("impala67Accent") || "blue",
 		density: localStorage.getItem("impala67Density") || "compact",
-		motion: localStorage.getItem("impala67Motion") || "full",
+		motion: localStorage.getItem("impala67Motion") || "reduced",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		homeLayout,
 		homeSections: HOME_SECTIONS,
@@ -633,6 +633,12 @@ export async function handleCheckUpdate() {
 		if (r.hasUpdate) {
 			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „Update laden“.";
 			if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = "Update laden"; }
+			else if (btn) {
+				// Auf der Übersicht gibt es bewusst nur eine Schnellaktion: Derselbe Knopf,
+				// der geprüft hat, wird nach einem Treffer zum Installationsknopf.
+				btn.id = "btnApplyPwaUpdate";
+				btn.textContent = "Update v" + r.latest + " installieren";
+			}
 			U.toast("Update v" + r.latest + " verfügbar.", "success");
 		} else if (r.remoteOlder) {
 			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
@@ -652,10 +658,16 @@ export async function handleCheckUpdate() {
 		if (applyBtn) {
 			applyBtn.hidden = false;
 			applyBtn.textContent = "App neu laden";
+		} else if (btn) {
+			btn.id = "btnApplyPwaUpdate";
+			btn.textContent = "App neu laden";
 		}
 		U.toast("Update-Check fehlgeschlagen.", "error");
 	}
-	if (btn) { btn.disabled = false; btn.textContent = "Nach Updates suchen"; }
+	if (btn) {
+		btn.disabled = false;
+		if (btn.id === "btnCheckUpdate") btn.textContent = "Nach Updates suchen";
+	}
 }
 
 export async function handleApplyPwaUpdate() {

@@ -68,19 +68,42 @@ async function refreshServiceWorker() {
 	}
 }
 
-async function activateWaitingWorker(reg) {
+async function workerVersion(worker, timeoutMs = 2500) {
+	if (!worker || typeof MessageChannel === "undefined") return "";
+	return new Promise((resolve) => {
+		const channel = new MessageChannel();
+		const timer = setTimeout(() => { channel.port1.close(); resolve(""); }, timeoutMs);
+		channel.port1.onmessage = (event) => {
+			clearTimeout(timer);
+			channel.port1.close();
+			resolve(normVer(event.data?.version));
+		};
+		try { worker.postMessage({ type: "GET_VERSION" }, [channel.port2]); }
+		catch { clearTimeout(timer); channel.port1.close(); resolve(""); }
+	});
+}
+
+async function waitForActiveVersion(expected, timeoutMs = 15000) {
+	const end = Date.now() + timeoutMs;
+	do {
+		const version = await workerVersion(navigator.serviceWorker?.controller);
+		if (version === normVer(expected)) return true;
+		await delay(100);
+	} while (Date.now() < end);
+	return false;
+}
+
+async function activateWaitingWorker(reg, expectedVersion) {
 	const waiting = reg?.waiting;
 	if (!waiting) return false;
-	const before = navigator.serviceWorker.controller;
-	let onChange;
-	const changed = new Promise((resolve) => {
-		onChange = () => resolve(true);
-		navigator.serviceWorker.addEventListener("controllerchange", onChange, { once: true });
-	});
+	const waitingVersion = await workerVersion(waiting);
+	if (expectedVersion && waitingVersion !== normVer(expectedVersion)) {
+		throw new Error("Geladener Service Worker hat Version " + (waitingVersion || "unbekannt") + " statt " + expectedVersion + ".");
+	}
 	waiting.postMessage({ type: "SKIP_WAITING" });
-	await Promise.race([changed, delay(4000)]);
-	if (onChange) navigator.serviceWorker.removeEventListener("controllerchange", onChange);
-	return navigator.serviceWorker.controller !== before;
+	if (expectedVersion) return waitForActiveVersion(expectedVersion);
+	await delay(500);
+	return navigator.serviceWorker.controller === reg.active;
 }
 
 function reloadWithCacheBust() {
@@ -159,20 +182,31 @@ window.checkAppUpdate = async function checkAppUpdate() {
 };
 
 window.installAppUpdate = async function installAppUpdate(onStatus) {
+	const expectedVersion = pendingUpdate?.version || "";
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
-	say(pendingUpdate ? "⬇️ Update wird geladen…" : "🔄 App wird neu geladen…");
+	say(expectedVersion ? "⬇️ Update wird vollständig geladen…" : "🔄 App wird neu geladen…");
 	const reg = await (preparingUpdate || refreshServiceWorker());
+	if (expectedVersion && !reg) throw new Error("Das Update konnte nicht vollständig geladen werden.");
 	if (reg?.waiting) {
 		say("⚙️ Update wird aktiviert…");
-		await activateWaitingWorker(reg);
+		const activated = await activateWaitingWorker(reg, expectedVersion);
+		if (expectedVersion && !activated) throw new Error("Die neue App-Version wurde nicht aktiv. Bitte erneut versuchen.");
+	} else if (expectedVersion) {
+		// Ein anderer Tab kann den Worker zwischen Prüfung und Klick bereits aktiviert
+		// haben. Nur wenn der aktuell kontrollierende Worker exakt die erwartete Version
+		// bestätigt, darf die Seite neu geladen werden.
+		say("🔎 Aktive Version wird bestätigt…");
+		if (!(await waitForActiveVersion(expectedVersion, 3000))) {
+			throw new Error("Die neue App-Version ist noch nicht aktiv. Bitte erneut versuchen.");
+		}
 	}
 	pendingUpdate = null;
 	preparingUpdate = null;
-	say("🔄 App wird neu geladen…");
+	say(expectedVersion ? "✅ Update aktiv · App wird neu geladen…" : "🔄 App wird neu geladen…");
 	reloadWithCacheBust();
 	return { reloaded: true };
 };
 
 window.applyPwaUpdate = () => window.installAppUpdate();
 
-export { cmpSemver, fetchDeployedVersion, refreshServiceWorker };
+export { cmpSemver, fetchDeployedVersion, refreshServiceWorker, workerVersion, waitForActiveVersion };
