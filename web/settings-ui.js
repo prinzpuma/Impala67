@@ -59,7 +59,7 @@ export function field(label, id, value, options = {}) {
 }
 
 export function actions(buttons, className = "") {
-	return '<div class="settings-actions ' + e(className) + '">' + buttons.map((button) => '<button type="button"' + (button.id ? ' id="' + e(button.id) + '"' : "") + (button.data ? " " + button.data : "") + ' class="' + e(button.className || "") + '"' + (button.hidden ? " hidden" : "") + (button.disabled ? " disabled" : "") + ">" + e(button.label) + "</button>").join("") + "</div>";
+	return '<div class="settings-actions ' + e(className) + '">' + buttons.map((button) => '<button type="button"' + (button.id ? ' id="' + e(button.id) + '"' : "") + (button.data ? " " + button.data : "") + ' class="' + e(button.className || "") + '"' + (button.hidden ? " hidden" : "") + (button.disabled ? " disabled" : "") + (button.live ? ' aria-live="polite"' : "") + ">" + e(button.label) + "</button>").join("") + "</div>";
 }
 
 export function status(tone, title, description, action = "") {

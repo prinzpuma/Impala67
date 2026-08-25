@@ -14,6 +14,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
+import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
 
@@ -108,10 +109,12 @@ export async function applyBg() {
 		// Start) ein neuer Object-URL fürs selbe Bild, der nie freigegeben wurde.
 		const url = await DB.blobUrl("bgImage", "image/jpeg");
 		if (url) {
+			document.body.classList.add("has-custom-background");
 			bg.style.backgroundImage = "linear-gradient(rgba(6,8,12,0.84), rgba(6,8,12,0.93)), url('" + url + "')";
 			bg.style.backgroundSize = "cover";
 			bg.style.backgroundPosition = "center";
 		} else {
+			document.body.classList.remove("has-custom-background");
 			bg.style.backgroundImage = "";
 			bg.style.backgroundSize = "";
 			bg.style.backgroundPosition = "";
@@ -213,6 +216,7 @@ function focusSettingsAnchor(anchor) {
 	queueMicrotask(() => {
 		const target = document.getElementById(anchor);
 		if (!target) return;
+		target.closest("details")?.setAttribute("open", "");
 		target.scrollIntoView({ block: "center", behavior: "smooth" });
 		target.classList.add("settings-highlight");
 		setTimeout(() => target.classList.remove("settings-highlight"), 1800);
@@ -352,8 +356,8 @@ export function handleNotionCancel() {
 export async function handleCfConnect(t) {
 	const urlEl = document.getElementById("inpCfUrl");
 	const keyEl = document.getElementById("inpCfKey");
-	const url = urlEl ? urlEl.value.trim() : "";
-	const syncKey = keyEl ? keyEl.value.trim() : "";
+	const url = urlEl ? urlEl.value.trim() : String(S.settings.cfUrl || "").trim();
+	const syncKey = keyEl ? keyEl.value.trim() : String(S.settings.cfSyncKey || "").trim();
 
 	if (!url) {
 		U.toast("Bitte gib eine Cloudflare Worker URL ein.", "warn");
@@ -382,6 +386,27 @@ export async function handleCfConnect(t) {
 		U.toast("Verbindung fehlgeschlagen. Prüfe URL und Konfiguration.", "error");
 	}
 	refreshCloudflareStatusUi();
+}
+
+export async function handleCfPrimaryAction(t) {
+	const cf = CLOUDFLARE_SYNC.status();
+	if (cf.status === "connected") {
+		await handleCfSyncNow(t);
+		return;
+	}
+	const url = document.getElementById("inpCfUrl")?.value.trim() || cf.url || S.settings.cfUrl;
+	const key = document.getElementById("inpCfKey")?.value.trim() || cf.syncKey || S.settings.cfSyncKey;
+	if (!url || !key) {
+		const missing = document.getElementById(url ? "inpCfKey" : "inpCfUrl");
+		if (missing) {
+			missing.focus();
+			U.toast(url ? "Bitte Sync-Schlüssel eintragen oder generieren." : "Bitte Cloudflare Worker URL eintragen.", "warn");
+			return;
+		}
+		openSettings("sync", "cf-sync");
+		return;
+	}
+	await handleCfConnect(t);
 }
 
 export async function handleCfDisconnect() {
@@ -465,6 +490,12 @@ export function handleCfGenKey() {
 		keyEl.type = "text";
 		setTimeout(() => { if (keyEl) keyEl.type = "password"; }, 5000);
 	}
+	const generate = document.getElementById("btnCfGenKey");
+	const copy = document.getElementById("btnCfCopyKey");
+	const pairing = document.getElementById("btnCfPairing");
+	if (generate) generate.hidden = true;
+	if (copy) copy.hidden = false;
+	if (pairing) pairing.hidden = !document.getElementById("inpCfUrl")?.value.trim();
 	U.toast("Neuer Sync-Schlüssel generiert. Kopiere ihn auf deine anderen Geräte!", "success");
 }
 
@@ -554,9 +585,19 @@ async function runDriveSync(t, prefix) {
 	}
 	t.disabled = false;
 	t.innerHTML = old;
+	refreshDriveStatusUi();
 }
 
 export async function handleDriveSyncSettings(t) {
+	await runDriveSync(t, "");
+}
+
+export async function handleDrivePrimaryAction(t) {
+	const hasId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId;
+	if (!hasId) {
+		openSettings("sync", "sync-advanced");
+		return;
+	}
 	await runDriveSync(t, "");
 }
 
@@ -600,20 +641,25 @@ export async function handleAddProvider() {
 	openSettings("ki");
 }
 
-export async function handleCheckUpdate() {
+function paintUpdateAction(button, mode, version = "") {
+	if (!button) return;
+	const state = updateActionState(mode, version);
+	button.dataset.updateAction = state.mode;
+	button.textContent = state.label;
+	button.disabled = !!state.disabled;
+}
+
+export async function handleUpdateAction(button) {
+	const mode = button?.dataset.updateAction || "check";
+	if (mode === "install" || mode === "reload") return handleApplyPwaUpdate(button);
+	return handleCheckUpdate(button);
+}
+
+export async function handleCheckUpdate(button = U.el("btnPwaUpdateAction")) {
 	const status = U.el("updateStatus");
-	const btn = U.el("btnCheckUpdate");
-	const applyBtn = U.el("btnApplyPwaUpdate");
 	const localEl = U.el("updateLocalVer");
 	const remoteEl = U.el("updateRemoteVer");
-	if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
-	// Einheitlich: Suchen zeigt nur an. Der Installieren-Knopf erscheint erst, wenn
-	// wirklich ein Update gefunden wurde (PWA: zusätzlich als Reload-Fallback).
-	if (applyBtn) {
-		applyBtn.hidden = true;
-		applyBtn.disabled = false;
-		applyBtn.textContent = "App neu laden";
-	}
+	paintUpdateAction(button, "checking");
 	if (status) status.textContent = "Prüfe…";
 	// Lokal = laufendes Bundle (nie Remote darüber schreiben)
 	const running = (typeof window.getAppVersion === "function" && window.getAppVersion())
@@ -632,22 +678,18 @@ export async function handleCheckUpdate() {
 		}
 		if (r.hasUpdate) {
 			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „Update laden“.";
-			if (applyBtn) { applyBtn.hidden = false; applyBtn.textContent = "Update laden"; }
-			else if (btn) {
-				// Auf der Übersicht gibt es bewusst nur eine Schnellaktion: Derselbe Knopf,
-				// der geprüft hat, wird nach einem Treffer zum Installationsknopf.
-				btn.id = "btnApplyPwaUpdate";
-				btn.textContent = "Update v" + r.latest + " installieren";
-			}
+			paintUpdateAction(button, "install", r.latest);
 			U.toast("Update v" + r.latest + " verfügbar.", "success");
 		} else if (r.remoteOlder) {
 			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
 				" (Server älter — version.json beim Deploy mitbumpen).";
 			U.toast("Lokal neuer als Server-Stand.", "success");
+			paintUpdateAction(button, "check");
 		} else {
 			if (status) status.textContent = "✅ Aktuell: v" + (r.current || "?") +
 				(r.latest ? " · Server v" + r.latest : "") + ".";
 			U.toast("Kein Update nötig.", "success");
+			paintUpdateAction(button, "check");
 		}
 	} catch (e) {
 		// FIX iPad: früher window.open(GitHub) → Safari. Nie mehr extern öffnen.
@@ -655,25 +697,14 @@ export async function handleCheckUpdate() {
 		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + msg +
 			" — du kannst die App trotzdem neu laden.";
 		if (remoteEl) remoteEl.textContent = "nicht erreichbar";
-		if (applyBtn) {
-			applyBtn.hidden = false;
-			applyBtn.textContent = "App neu laden";
-		} else if (btn) {
-			btn.id = "btnApplyPwaUpdate";
-			btn.textContent = "App neu laden";
-		}
+		paintUpdateAction(button, "reload");
 		U.toast("Update-Check fehlgeschlagen.", "error");
-	}
-	if (btn) {
-		btn.disabled = false;
-		if (btn.id === "btnCheckUpdate") btn.textContent = "Nach Updates suchen";
 	}
 }
 
-export async function handleApplyPwaUpdate() {
+export async function handleApplyPwaUpdate(button = U.el("btnPwaUpdateAction")) {
 	const status = U.el("updateStatus");
-	const applyBtn = U.el("btnApplyPwaUpdate");
-	if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = "Lädt…"; }
+	paintUpdateAction(button, "installing");
 	if (status) status.textContent = "⬇️ Update wird geladen…";
 	try {
 		if (typeof window.installAppUpdate === "function") {
@@ -686,7 +717,7 @@ export async function handleApplyPwaUpdate() {
 	} catch (e) {
 		if (status) status.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
 		U.toast("Update fehlgeschlagen.", "error");
-		if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Jetzt neu laden"; }
+		paintUpdateAction(button, "reload");
 	}
 }
 
@@ -1014,7 +1045,8 @@ export async function handleSaveSettings() {
 
 export async function handleClearBg() {
 	await DB.putBlob("bgImage", new ArrayBuffer(0), {});
-	applyBg();
+	await applyBg();
+	openSettings("appearance", "background");
 }
 
 export async function handleResetAll(t) {
@@ -1048,9 +1080,23 @@ export async function handleDriveSync(t) {
 	await runDriveSync(t, "☁️ ");
 }
 
-export async function handleBackupNow() {
-	U.download("impala67-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
-	localStorage.setItem("impala67LastBackup", new Date().toISOString());
+export async function handleBackupNow(button) {
+	const old = button?.textContent || "";
+	if (button) {
+		const busy = backupActionState({ busy: true });
+		button.textContent = busy.label;
+		button.disabled = true;
+	}
+	try {
+		U.download("impala67-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
+		localStorage.setItem("impala67LastBackup", new Date().toISOString());
+		if (button) button.textContent = backupActionState({ hasBackup: true }).label;
+	} catch (error) {
+		if (button) button.textContent = old;
+		throw error;
+	} finally {
+		if (button) button.disabled = false;
+	}
 	if (S.view === "home") render();
 }
 
@@ -1207,7 +1253,8 @@ export async function handleFileBgChange(e) {
 		e.target.value = "";
 		const buf = await U.readAsBuffer(file);
 		await DB.putBlob("bgImage", buf, { name: file.name, type: file.type });
-		applyBg();
+		await applyBg();
+		if (document.querySelector(".settings-modal-v2")) openSettings("appearance", "background");
 	}
 }
 
@@ -1246,8 +1293,10 @@ export const SETTINGS = {
 	handleDriveLogin,
 	handleDriveLogout,
 	handleDriveSyncSettings,
+	handleDrivePrimaryAction,
 	startAutoDriveSync,
 	handleCfConnect,
+	handleCfPrimaryAction,
 	handleCfDisconnect,
 	handleCfPairing,
 	handleCfSyncNow,
@@ -1265,6 +1314,7 @@ export const SETTINGS = {
 	handleProviderTest,
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
+	handleUpdateAction,
 	handleSaveSettings,
 	handleSyncSecretsToggle,
 	handleDriveAutoSyncMinutes,

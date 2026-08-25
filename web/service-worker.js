@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v228"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v229"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -68,6 +68,7 @@ const APP_FILES = [
 	"./settings.js",
 	"./settings-schema.js",
 	"./settings-ui.js",
+	"./settings-action-state.js",
 	"./settings-renderer.js",
 	"./settings-sync.js",
 	"./performance-profiler.js",

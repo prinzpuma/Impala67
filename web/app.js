@@ -1391,6 +1391,9 @@ function wireEvents() {
 			case "btnDriveSyncSettings":
 				await SETTINGS.handleDriveSyncSettings(t);
 				break;
+			case "btnDrivePrimaryAction":
+				await SETTINGS.handleDrivePrimaryAction(t);
+				break;
 			case "btnCfConnect":
 				await SETTINGS.handleCfConnect(t);
 				break;
@@ -1402,6 +1405,9 @@ function wireEvents() {
 				break;
 			case "btnCfSyncNow":
 				await SETTINGS.handleCfSyncNow(t);
+				break;
+			case "btnCfPrimaryAction":
+				await SETTINGS.handleCfPrimaryAction(t);
 				break;
 			case "btnCfGenKey":
 				SETTINGS.handleCfGenKey();
@@ -1433,11 +1439,8 @@ function wireEvents() {
 			case "btnDeleteLocalEmbedding":
 				await SETTINGS.handleDeleteLocalEmbedding();
 				break;
-			case "btnCheckUpdate":
-				await SETTINGS.handleCheckUpdate();
-				break;
-			case "btnApplyPwaUpdate":
-				await SETTINGS.handleApplyPwaUpdate();
+			case "btnPwaUpdateAction":
+				await SETTINGS.handleUpdateAction(t);
 				break;
 			case "btnSaveSettings":
 				await SETTINGS.handleSaveSettings();
@@ -1507,7 +1510,7 @@ function wireEvents() {
 				break;
 			case "btnBackupNow":
 			case "btnExport":
-				await SETTINGS.handleBackupNow();
+				await SETTINGS.handleBackupNow(t);
 				break;
 			case "btnSidebarToggle": {
 				// Mobile: Navigator-Sheet öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).

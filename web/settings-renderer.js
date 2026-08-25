@@ -7,6 +7,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 
 const e = (value) => U.esc(String(value ?? ""));
@@ -16,6 +17,28 @@ const switchControl = (id, label, checked) => '<label class="settings-switch"><i
 
 const hasDriveClient = () => !!((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId);
 const driveSession = () => DRIVE.status?.() || { connected: !!DRIVE.isConnected?.(), needsLogin: false, email: null };
+const cloudflareSession = () => typeof window !== "undefined" && window.CLOUDFLARE_SYNC
+	? window.CLOUDFLARE_SYNC.status()
+	: { status: "disconnected", url: S.settings.cfUrl || "", syncKey: S.settings.cfSyncKey || "" };
+const hasCloudflareConfig = (cf = cloudflareSession()) => !!((cf.url || S.settings.cfUrl) && (cf.syncKey || S.settings.cfSyncKey));
+
+function overviewSyncActions() {
+	const drive = driveActionState({ hasClient: hasDriveClient(), ...driveSession() });
+	const cfSession = cloudflareSession();
+	const cf = cloudflareActionState({ status: cfSession.status, configured: hasCloudflareConfig(cfSession) });
+	return [
+		{ label: drive.label, id: "btnDrivePrimaryAction", disabled: drive.disabled, data: 'data-settings-sync-action="' + drive.action + '"' },
+		{ label: cf.label, id: "btnCfPrimaryAction", disabled: cf.disabled, data: 'data-settings-sync-action="' + cf.action + '"' },
+	];
+}
+
+function refreshActionButton(id, state) {
+	const target = document.getElementById(id);
+	if (!target) return;
+	target.textContent = state.label;
+	target.disabled = !!state.disabled;
+	target.dataset.settingsSyncAction = state.action;
+}
 
 function driveOverviewRow() {
 	const session = driveSession();
@@ -39,10 +62,12 @@ function renderOverview(vm) {
 		UI.row({ title: "Lokaler Speicher", description: "Wird berechnet …", leading: '<span class="settings-status-dot is-idle"></span>', trailing: '<span id="settingsStorageOverview" class="settings-value">—</span>' }),
 		UI.row({ title: "Impala67", description: "Installierbare Offline-App", leading: '<span class="settings-status-dot is-ok"></span>', trailing: '<span class="settings-value">v' + e(String(version).replace(/^v/i, "")) + "</span>" }),
 	].join("");
+	const backupAction = backupActionState({ hasBackup: !!lastBackup });
+	const updateAction = updateActionState();
 	const quick = UI.actions([
-		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !hasDriveClient() },
-		{ label: "Backup erstellen", id: "btnExport" },
-		{ label: "Updates prüfen", id: "btnCheckUpdate" },
+		...overviewSyncActions(),
+		{ label: backupAction.label, id: "btnExport", live: true },
+		{ label: updateAction.label, id: "btnPwaUpdateAction", data: 'data-update-action="' + updateAction.mode + '"', live: true },
 	], "settings-quick-actions");
 	return UI.page("Übersicht", "Alles Wichtige auf einen Blick – ohne technische Details.",
 		UI.group("Status", statusRows, { id: "overview-status" }) + UI.group("Schnellaktionen", quick));
@@ -74,7 +99,8 @@ function renderAppearance(vm) {
 	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
 		{ value: "s", label: "Klein", id: "btnFontS" }, { value: "m", label: "Normal", id: "btnFontM" }, { value: "l", label: "Groß", id: "btnFontL" },
 	], vm.fontSize, "Schriftgröße") }) + UI.row({ id: "motion", title: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", trailing: switchControl("inpReduceMotion", "Bewegung reduzieren", vm.motion === "reduced") });
-	const background = UI.row({ id: "background", title: "Eigenes Hintergrundbild", description: "Bleibt lokal auf diesem Gerät", trailing: UI.actions([{ label: "Bild wählen", id: "btnPickBg" }, { label: "Entfernen", id: "btnClearBg", className: "secondary" }]) });
+	const hasBackground = document.body.classList.contains("has-custom-background");
+	const background = UI.row({ id: "background", title: "Eigenes Hintergrundbild", description: hasBackground ? "Eigenes Bild aktiv · bleibt lokal auf diesem Gerät" : "Bleibt lokal auf diesem Gerät", trailing: UI.actions([{ label: hasBackground ? "Bild ändern" : "Bild auswählen", id: "btnPickBg" }, { label: "Entfernen", id: "btnClearBg", className: "secondary", hidden: !hasBackground }]) });
 	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + UI.group("Hintergrund", background));
 }
 
@@ -147,14 +173,17 @@ function renderAi(vm) {
 
 function driveContent() {
 	const session = driveSession();
-	if (session.connected) return UI.status("ok", "Verbunden", session.email || "Google Drive", button("Jetzt synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
-	if (session.needsLogin && hasDriveClient()) return UI.status("warn", "Anmeldung abgelaufen", (session.email ? session.email + " · " : "") + "einmal synchronisieren, um sie zu erneuern", button("Erneuern & synchronisieren", "btnDriveSyncSettings") + button("Abmelden", "btnDriveLogout", "secondary"));
-	if (hasDriveClient()) return UI.status("idle", "Nicht verbunden", "Google öffnet erst nach deinem Klick ein Anmeldefenster", button("Mit Google anmelden", "btnDriveLogin"));
-	return UI.status("warn", "Einrichtung erforderlich", "Hinterlege unter Erweitert eine Google Client-ID", "");
+	const action = driveActionState({ hasClient: hasDriveClient(), ...session });
+	const tone = session.connected ? "ok" : session.needsLogin || !hasDriveClient() ? "warn" : "idle";
+	const title = session.connected ? "Verbunden" : session.needsLogin ? "Anmeldung abgelaufen" : hasDriveClient() ? "Nicht verbunden" : "Einrichtung erforderlich";
+	const description = session.connected ? (session.email || "Google Drive") : session.needsLogin ? ((session.email ? session.email + " · " : "") + "Anmeldung beim nächsten Sync erneuern") : hasDriveClient() ? "Google öffnet erst nach deinem Klick ein Anmeldefenster" : "Hinterlege unter Erweitert eine Google Client-ID";
+	return UI.status(tone, title, description,
+		button(action.label, "btnDrivePrimaryAction") + (session.connected || session.needsLogin ? button("Abmelden", "btnDriveLogout", "secondary") : ""));
 }
 
 function cloudflareContent() {
-	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected", label: "Nicht eingerichtet", detail: "Cloudflare Sync konfigurieren", url: "", syncKey: "", usage: { formatted: "0.0 MB / 500 MB (0 %)" } };
+	const cf = cloudflareSession();
+	const primary = cloudflareActionState({ status: cf.status, configured: hasCloudflareConfig(cf) });
 	const statusType = cf.status === "connected" ? "ok" : cf.status === "syncing" || cf.status === "connecting" ? "warn" : cf.status === "error" ? "error" : "idle";
 	const progressHtml = (cf.status === "syncing" && cf.progress && cf.progress.total > 0)
 		? '<div style="margin: 8px 0 12px 0; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">' +
@@ -168,20 +197,19 @@ function cloudflareContent() {
 		'</div>'
 		: "";
 	return UI.status(statusType, cf.label || "Nicht verbunden", cf.detail || "Echtzeit-Synchronisierung über WebSockets mit Ende-zu-Ende-Verschlüsselung",
-		button("Jetzt synchronisieren", "btnCfSyncNow") +
+		'<button type="button" id="btnCfPrimaryAction"' + (primary.disabled ? " disabled" : "") + ' aria-live="polite">' + e(primary.label) + "</button>" +
 		(cf.status === "connected" || cf.status === "connecting" ? button("Trennen", "btnCfDisconnect", "secondary") : "")
 	) +
 	progressHtml +
 	UI.field("Cloudflare Worker URL", "inpCfUrl", cf.url || "", { explicit: true, placeholder: "https://impala67-sync.<account>.workers.dev" }) +
 	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
 	UI.actions([
-		{ label: "Verbinden & Synchronisieren", id: "btnCfConnect" },
-		{ label: "📱 Gerät koppeln (QR-Code)", id: "btnCfPairing", className: "secondary" },
-		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary" },
-		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary" },
+		{ label: "📱 Gerät koppeln (QR-Code)", id: "btnCfPairing", className: "secondary", hidden: !hasCloudflareConfig(cf) },
+		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary", hidden: !!(cf.syncKey || S.settings.cfSyncKey) },
+		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary", hidden: !(cf.syncKey || S.settings.cfSyncKey) },
 	]) +
 	UI.row({ title: "Cloud-Speicher (" + (cf.usage?.mbLimit || 1000) + " MB Limit)", description: "Verwendeter Speicherplatz auf deinem Cloudflare Sync-Server", trailing: '<span id="cfStorageValue" class="settings-value">' + e(cf.usage?.formatted || ("0.0 MB / " + (cf.usage?.mbLimit || 1000) + " MB (0 %)")) + '</span>' }) +
-	UI.row({ title: "Cloud-Daten löschen", description: "Löscht den synchronisierten Datenstand auf dem Cloudflare-Server", trailing: button("Cloud-Stand leeren", "btnCfPurge", "danger") });
+	(hasCloudflareConfig(cf) ? UI.row({ title: "Cloud-Daten löschen", description: "Löscht den synchronisierten Datenstand auf dem Cloudflare-Server", trailing: button("Cloud-Stand leeren", "btnCfPurge", "danger") }) : "");
 }
 
 function renderSync() {
@@ -211,21 +239,26 @@ export function refreshDriveStatusUi() {
 	if (overview) overview.outerHTML = driveOverviewRow();
 	const connection = document.getElementById("drive-connection-status");
 	if (connection) connection.innerHTML = driveContent();
+	refreshActionButton("btnDrivePrimaryAction", driveActionState({ hasClient: hasDriveClient(), ...driveSession() }));
 }
 
 export function refreshCloudflareStatusUi() {
 	const connection = document.getElementById("cf-connection-status");
 	if (connection) connection.innerHTML = cloudflareContent();
+	const cf = cloudflareSession();
+	refreshActionButton("btnCfPrimaryAction", cloudflareActionState({ status: cf.status, configured: hasCloudflareConfig(cf) }));
 }
 
 function renderData(vm) {
-	const backup = UI.row({ title: "Vollständiges Backup", description: "Event-Log und Dateien als JSON", trailing: UI.actions([{ label: "Exportieren", id: "btnExport" }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
+	const backupAction = backupActionState({ hasBackup: !!localStorage.getItem("impala67LastBackup") });
+	const backup = UI.row({ title: "Vollständiges Backup", description: "Event-Log und Dateien als JSON", trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
 	const exports = UI.row({ title: "Lerndaten", description: "Lokale Telemetrie als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
-	const update = UI.row({ title: "Installierte Version", description: "PWA / Browser", trailing: '<span id="updateLocalVer" class="settings-value">v' + e(String(vm.version).replace(/^v/i, "")) + "</span>" }) + UI.row({ title: "Verfügbare Version", description: "Wird nur auf Wunsch geprüft", trailing: '<span id="updateRemoteVer" class="settings-value">—</span>' }) + UI.actions([{ label: "Nach Updates suchen", id: "btnCheckUpdate" }, { label: "Update installieren", id: "btnApplyPwaUpdate", hidden: true }]) + '<p class="settings-footnote" id="updateStatus"></p>';
+	const updateAction = updateActionState();
+	const update = UI.row({ title: "Installierte Version", description: "PWA / Browser", trailing: '<span id="updateLocalVer" class="settings-value">v' + e(String(vm.version).replace(/^v/i, "")) + "</span>" }) + UI.row({ title: "Verfügbare Version", description: "Wird nur auf Wunsch geprüft", trailing: '<span id="updateRemoteVer" class="settings-value">—</span>' }) + UI.actions([{ label: updateAction.label, id: "btnPwaUpdateAction", data: 'data-update-action="' + updateAction.mode + '"', live: true }]) + '<p class="settings-footnote" id="updateStatus" aria-live="polite"></p>';
 	const perf = PERF_PROFILER.status();
 	const diagnostics = UI.row({ title: "Performance-Profiler", description: perf.enabled ? (perf.records + " lokale Messpunkte gesammelt") : "Protokolliert Hänger, langsame Eingaben, Render- und Sync-Phasen", trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
-		UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy", disabled: !perf.records }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary", disabled: !perf.records }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary", disabled: !perf.records }]) +
+		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "") +
 		'<p class="settings-footnote">Bleibt vollständig auf diesem Gerät. Erfasst Zeitpunkte, Dauer, Ansichts- und Mengendaten – niemals Notizinhalte, Eingaben oder Zugangsdaten.</p>';
 	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") });
 	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup", footnote: "Importe werden konfliktfrei mit dem vorhandenen Event-Log zusammengeführt." }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
@@ -238,7 +271,7 @@ function renderDevices() {
 
 function renderMobileOverview(vm) {
 	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
-	const cf = typeof window !== "undefined" && window.CLOUDFLARE_SYNC ? window.CLOUDFLARE_SYNC.status() : { status: "disconnected" };
+	const cf = cloudflareSession();
 	const cfReady = cf.status === "connected";
 	const drive = driveSession();
 	const syncText = cfReady ? "Cloudflare Live-Sync aktiv" : (drive.connected ? "Google Drive verbunden" : "Nicht eingerichtet");
@@ -262,10 +295,12 @@ function renderMobileOverview(vm) {
 		'</button>'
 	).join("");
 
+	const backupAction = backupActionState({ hasBackup: !!localStorage.getItem("impala67LastBackup") });
+	const updateAction = updateActionState();
 	const quick = UI.actions([
-		{ label: "Jetzt synchronisieren", id: "btnDriveSyncSettings", disabled: !hasDriveClient() && !cfReady },
-		{ label: "Backup erstellen", id: "btnExport" },
-		{ label: "Updates prüfen", id: "btnCheckUpdate" },
+		...overviewSyncActions(),
+		{ label: backupAction.label, id: "btnExport", live: true },
+		{ label: updateAction.label, id: "btnPwaUpdateAction", data: 'data-update-action="' + updateAction.mode + '"', live: true },
 	], "settings-quick-actions");
 
 	const appInfo = '<div class="settings-mobile-footer">' +
