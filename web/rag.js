@@ -13,6 +13,7 @@ export const RAG = (() => {
 	const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 	const enabled = () => !!S.settings.embedModel;
+	const embeddingProviderId = () => String(S.settings.embedProviderId || "");
 	const exactLexicalMatch = (query, searchable) => {
 		if (!query) return false;
 		if (query.length >= 4) return searchable.includes(query);
@@ -95,6 +96,7 @@ export const RAG = (() => {
 		await DB.putVec(pageId, {
 			updated: pg.updated,
 			model: S.settings.embedModel,
+			providerId: embeddingProviderId(),
 			// Neue Vektoren kompakt speichern. Alte Array-Einträge bleiben lesbar und
 			// werden beim naechsten normalen Reindex automatisch ersetzt.
 			chunks: chunks.map((text, i) => {
@@ -147,10 +149,10 @@ export const RAG = (() => {
 	async function reindexStale() {
 		if (!enabled()) return;
 		const vecs = await DB.allVecs();
-		const model = S.settings.embedModel;
+		const model = S.settings.embedModel, providerId = embeddingProviderId();
 		for (const pg of STATE.activePages()) {
 			const v = vecs[pg.id];
-			if (!v || v.updated !== pg.updated || v.model !== model) queuePage(pg.id);
+			if (!v || v.updated !== pg.updated || v.model !== model || v.providerId !== providerId) queuePage(pg.id);
 		}
 	}
 
@@ -196,14 +198,14 @@ export const RAG = (() => {
 	//   eine einzige lange Seite alle Plätze belegt.
 	// - Chunks mit fremder Embedding-Dimension (Modellwechsel) werden übersprungen
 	//   statt falsche Scores zu liefern; reindexStale() ersetzt sie ohnehin.
-	let vecCache = null, vecCacheAt = 0, vecCacheModel = "";
+	let vecCache = null, vecCacheAt = 0, vecCacheIdentity = "";
 	const queryCache = new Map();
 	async function allVecsCached() {
-		const model = String(S.settings.embedModel || "");
-		if (!vecCache || vecCacheModel !== model || Date.now() - vecCacheAt > 30000) {
+		const identity = embeddingProviderId() + "::" + String(S.settings.embedModel || "");
+		if (!vecCache || vecCacheIdentity !== identity || Date.now() - vecCacheAt > 30000) {
 			vecCache = await DB.allVecs();
 			vecCacheAt = Date.now();
-			vecCacheModel = model;
+			vecCacheIdentity = identity;
 		}
 		return vecCache;
 	}
@@ -226,7 +228,7 @@ export const RAG = (() => {
 		for (const [pageId, rec] of Object.entries(vecs)) {
 			const pg = S.pages[pageId];
 			if (!pg || pg.trashed) continue; // Papierkorb-Seiten nicht in Suchergebnissen
-			if (rec.model && rec.model !== S.settings.embedModel) continue; // alter Index nach Modellwechsel — reindexStale() baut ihn neu
+			if (rec.model !== S.settings.embedModel || rec.providerId !== embeddingProviderId()) continue; // alter Index nach Quellen- oder Modellwechsel — reindexStale() baut ihn neu
 			for (const c of rec.chunks) {
 				if (!c.vec || c.vec.length !== qv.length) continue; // anderes Embedding-Modell
 				const score = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));

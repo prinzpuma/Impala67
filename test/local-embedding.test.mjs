@@ -111,6 +111,7 @@ test("RAG indexes and searches with 256d vectors", async () => {
 		assert.equal(storedVecs.size, 2);
 		const p1Data = storedVecs.get("p1");
 		assert.equal(p1Data.model, "local:bekko-a8m");
+		assert.equal(p1Data.providerId, "local");
 		assert.ok(p1Data.chunks[0].vec instanceof Float32Array);
 		assert.equal(p1Data.chunks[0].vec.length, 256);
 
@@ -133,8 +134,8 @@ test("Hybrid-RAG hebt exakte Fachbegriffe trotz schwacher Semantik an", async ()
 	};
 	const oldAll = DB.allVecs, oldEmbed = EMBEDDINGS.embed;
 	DB.allVecs = async () => ({
-		exact: { model: "local:hybrid-test", chunks: [{ text: "ATP-Synthase und Protonengradient", vec: [0, 1], norm: 1 }] },
-		semantic: { model: "local:hybrid-test", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.6, 0.8], norm: 1 }] },
+		exact: { model: "local:hybrid-test", providerId: "local", chunks: [{ text: "ATP-Synthase und Protonengradient", vec: [0, 1], norm: 1 }] },
+		semantic: { model: "local:hybrid-test", providerId: "local", chunks: [{ text: "Energiegewinnung im Mitochondrium", vec: [0.6, 0.8], norm: 1 }] },
 	});
 	EMBEDDINGS.embed = async () => [[1, 0]];
 	try {
@@ -155,8 +156,8 @@ test("RAG behandelt kurze exakte Begriffe als Token statt als Zufalls-Substring"
 	};
 	const oldAll = DB.allVecs, oldEmbed = EMBEDDINGS.embed;
 	DB.allVecs = async () => ({
-		exact: { model: "local:short-token-test", chunks: [{ text: "AI als Fachbegriff", vec: [0, 1], norm: 1 }] },
-		substring: { model: "local:short-token-test", chunks: [{ text: "Training und Trainingsplan", vec: [0.65, Math.sqrt(1 - 0.65 ** 2)], norm: 1 }] },
+		exact: { model: "local:short-token-test", providerId: "local", chunks: [{ text: "AI als Fachbegriff", vec: [0, 1], norm: 1 }] },
+		substring: { model: "local:short-token-test", providerId: "local", chunks: [{ text: "Training und Trainingsplan", vec: [0.65, Math.sqrt(1 - 0.65 ** 2)], norm: 1 }] },
 	});
 	EMBEDDINGS.embed = async () => [[1, 0]];
 	try {

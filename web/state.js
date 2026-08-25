@@ -32,9 +32,9 @@ export const S = {
 		driveAutoSyncMinutes: 30,
 		driveSyncAfterChange: false,
 		customInstructions: "",
-		// Bestehende Installationen bleiben kompatibel: Tokens werden weiterhin
-		// synchronisiert, bis der Nutzer dies bewusst ausschaltet.
-		syncSecrets: true,
+		// Neuinstallationen behalten Zugangsdaten lokal. Ältere Event-Stände ohne
+		// diese Einstellung bleiben in settings-sync.js bewusst kompatibel.
+		syncSecrets: false,
 		notionToken: "", // Notion-Integrationstoken für Import + Zwei-Wege-Sync
 		notionPageId: "", // Wurzelseite in Notion, unter der lokale neue Seiten entstehen
 		notionMap: {}, // lokale Seiten-ID → Notion-Seiten-ID (für lokal erstellte Seiten)

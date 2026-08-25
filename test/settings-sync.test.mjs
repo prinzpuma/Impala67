@@ -4,7 +4,7 @@ import { SETTINGS_SYNC } from "../web/settings-sync.js";
 
 const provider = (key = "secret") => ({ id: "openai", name: "OpenAI", base: "https://api.openai.com/v1", key });
 
-test("missing syncSecrets keeps the existing compatible default", () => {
+test("missing syncSecrets remains compatible while new defaults opt out", () => {
 	assert.equal(SETTINGS_SYNC.allowsSecrets({}), true);
 	assert.equal(SETTINGS_SYNC.allowsSecrets({ syncSecrets: true }), true);
 	assert.equal(SETTINGS_SYNC.allowsSecrets({ syncSecrets: false }), false);

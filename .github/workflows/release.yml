@@ -25,6 +25,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Unit-Tests ausführen
+        run: npm test
+
       - name: PWA-Dateien prüfen
         run: |
           set -euo pipefail
