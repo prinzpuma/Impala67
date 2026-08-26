@@ -181,7 +181,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	const textEscape = (s) => String(s ?? "").replace(/^(?=\\|@(?:stapel|frage|antwort)\b|---\s*$)/gim, "\\");
 	function exportTxt() {
 		const byDeck = new Map();
-		for (const c of Object.values(S.cards).filter((x) => !x.trashed)) {
+		for (const c of STATE.activeCards()) {
 			const deck = c.deck || "Standard";
 			if (!byDeck.has(deck)) byDeck.set(deck, []);
 			byDeck.get(deck).push(c);
@@ -199,7 +199,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	};
 	function exportCsv() {
 		// FIX: Papierkorb-Karten (Soft-Delete, 11. Juli) wanderten mit in den Export.
-		const cards = Object.values(S.cards).filter((c) => !c.trashed);
+		const cards = STATE.activeCards();
 		const csv = "front;back;deck\n" + cards.map((c) => [c.front, c.back, c.deck || "Standard"].map(csvEscape).join(";")).join("\n");
 		U.downloadText("impala67-karten.csv", csv);
 	}
@@ -363,7 +363,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		const decks = { "1": { ...baseDeck, id: 1, name: "Default" } };
 		const deckIds = {};
 		// FIX: Papierkorb-Karten/-Stapel (Soft-Delete, 11. Juli) nicht mit exportieren.
-		const activeCards = Object.values(S.cards).filter((c) => !c.trashed);
+		const activeCards = STATE.activeCards();
 		[...new Set(activeCards.map((c) => c.deck || "Standard"))].forEach((name, i) => {
 			const id = 1000 + i;
 			deckIds[name] = id;

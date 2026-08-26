@@ -413,9 +413,9 @@ function wireEvents() {
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
 		"[data-libws],[data-libinto],[data-libroot]," +
 		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter],[data-ankizen]," +
-		"[data-ankisuspend],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
+		"[data-ankisuspend],[data-ankiarchive],[data-ankiunarchive],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
-		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
+		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
 		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
 		"[data-pagetemplate],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
@@ -435,11 +435,11 @@ function wireEvents() {
 			renderSidebar(); // positioniert offenes Menü in render.js
 			return;
 		}
-		const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate]");
+		const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive]");
 		if (deckAction) {
 			e.preventDefault();
 			e.stopPropagation();
-			const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate;
+			const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate || deckAction.dataset.deckarchive;
 			S.deckMenuOpenName = null;
 			renderSidebar();
 			if (deckAction.hasAttribute("data-deckrename")) {
@@ -451,6 +451,13 @@ function wireEvents() {
 			}
 			if (deckAction.hasAttribute("data-deckduplicate")) {
 				await STATE.dispatch("deckDuplicate", { name });
+				return;
+			}
+			if (deckAction.hasAttribute("data-deckarchive")) {
+				await STATE.dispatch("deckArchive", { name });
+				if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, name)) S.ankiDeck = null;
+				resetStudyCard();
+				U.toast("Stapel archiviert.", "success");
 				return;
 			}
 			// data-deckdel
@@ -906,6 +913,22 @@ function wireEvents() {
 			const c = S.cards[t.dataset.ankisuspend];
 			if (c && c.id === S.reviewCardId) resetStudyCard();
 			if (c) await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: !c.suspended } });
+			return;
+		}
+		if (t.dataset.ankiarchive) {
+			if (t.dataset.ankiarchive === S.reviewCardId) resetStudyCard();
+			await STATE.dispatch("cardArchive", { id: t.dataset.ankiarchive });
+			U.toast("Karte archiviert.", "success");
+			return;
+		}
+		if (t.dataset.ankiunarchive) {
+			await STATE.dispatch("cardUnarchive", { id: t.dataset.ankiunarchive });
+			U.toast("Karte wiederhergestellt.", "success");
+			return;
+		}
+		if (t.dataset.deckunarchive) {
+			await STATE.dispatch("deckUnarchive", { name: t.dataset.deckunarchive });
+			U.toast("Stapel wiederhergestellt.", "success");
 			return;
 		}
 		if (t.dataset.ankidel) {

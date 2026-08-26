@@ -28,12 +28,12 @@ function ankiDecks() {
 	Object.keys(S.decks || {}).forEach((n) => {
 		if (!n) return;
 		const d = S.decks[n];
-		if (d && d.trashed) return;
+		if ((d && d.trashed) || STATE.isDeckArchived(n)) return;
 		set.add(n);
 	});
 	// Auch Karten mit leerem/fehlendem deck-Feld zählen zu „Standard“ (ohne Papierkorb-Karten)
 	Object.values(S.cards).forEach((c) => {
-		if (!c || c.trashed) return;
+		if (!c || c.trashed || STATE.isCardArchived(c)) return;
 		const d = (c.deck || "Standard").trim();
 		if (d) set.add(d);
 	});
@@ -62,7 +62,7 @@ function ankiDecks() {
 // Papierkorb-Karten sind ausgeblendet (Soft-Delete).
 function ankiCardsOf(deck) {
 	return Object.values(S.cards).filter((c) => {
-		if (!c || c.trashed) return false;
+		if (!c || c.trashed || STATE.isCardArchived(c)) return false;
 		if (!deck) return true;
 		return STATE.deckInTree(c.deck || "Standard", deck);
 	});
@@ -136,6 +136,7 @@ function deckMenuHtml(name) {
 	return '<div class="page-menu" data-deckmenu-panel="' + U.esc(name) + '">' +
 		'<button type="button" class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
 		'<button type="button" class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
+		'<button type="button" class="menu-item" data-deckarchive="' + U.esc(name) + '">🗄 Archivieren</button>' +
 		'<button type="button" class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
 		"</div>";
 }
@@ -153,7 +154,7 @@ function renderAnki(main) {
 	// „＋ Neu“-Menü (Karte / Stapel / Import / Export) statt vier gleichrangiger Buttons.
 	// <details> klappt nativ ohne eigenes JS auf; app.js schließt bei Außenklick/Menü-Aktion.
 	if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
-		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + "</div>" +
+		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + tbtn("archive", "Archiv") + "</div>" +
 		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
 		// ⛶ Vollbild (23. Juli): Seitenleiste + Tab-Leiste ausblenden (erneut klicken = zurück)
 		'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button>' +
@@ -165,6 +166,7 @@ function renderAnki(main) {
 		"</div></details></div>";
 	if (tab === "browser") html += ankiBrowserHtml();
 	else if (tab === "stats") html += ankiStatsHtml();
+	else if (tab === "archive") html += ankiArchiveHtml();
 	else if (tab === "study") html += ankiStudyHtml();
 	else html += ankiDecksHtml();
 	html += "</div>";
@@ -214,6 +216,7 @@ function ankiDecksHtml() {
 			'<span class="deck-actions">' +
 				'<button class="deck-iconbtn" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">🔍</button>' +
 				'<button class="deck-iconbtn" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
+				'<button class="deck-iconbtn" data-deckarchive="' + U.esc(d) + '" title="Stapel archivieren">🗄</button>' +
 				// 🗑 Direkt-Löschen — nutzt weiterhin den bestehenden [data-deckdel]-Handler
 				// in app.js (Nachfrage + Soft-Delete via deckTrash).
 				'<button class="deck-iconbtn danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">🗑</button>' +
@@ -304,11 +307,29 @@ function ankiBrowserHtml() {
 				'<td class="anki-rowbtns">' +
 					'<button data-ankiedit="' + c.id + '" title="Bearbeiten">✎</button>' +
 					'<button data-ankisuspend="' + c.id + '" title="' + (c.suspended ? "Fortsetzen" : "Aussetzen") + '">' + (c.suspended ? "▶" : "⏸") + "</button>" +
+					'<button data-ankiarchive="' + c.id + '" title="Archivieren">🗄</button>' +
 					'<button data-ankidel="' + c.id + '" class="danger" title="Löschen">🗑</button>' +
 				"</td></tr>"
 		).join("") + "</tbody></table></div>" +
 		(cards.length > shown.length ? '<div class="row-btns" style="margin-top:8px"><button data-ankimore="1">↓ ' + (cards.length - shown.length) + " weitere Karten anzeigen</button></div>" : "") +
 		(!cards.length ? '<div class="empty small">Keine Karten' + (q ? " für diese Suche" : "") + "</div>" : "");
+}
+
+// Archivierte Stapel tragen ihre Karten nur abgeleitet mit. Deshalb zeigt das
+// Archiv explizite Stapel-Wurzeln und daneben nur eigenständig archivierte Karten.
+function ankiArchiveHtml() {
+	const deckRows = STATE.archivedDeckRoots().map((name) => {
+		const count = Object.values(S.cards).filter((c) => c && !c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
+		return '<div class="deck-row"><span class="deck-ico" aria-hidden="true">🗄</span>' +
+			'<span class="deck-info"><span class="deck-name">' + U.esc(name) + '</span><span class="deck-meta">' + count + (count === 1 ? " Karte" : " Karten") + ' inklusive Unterstapel</span></span>' +
+			'<span class="deck-actions"><button data-deckunarchive="' + U.esc(name) + '">Wiederherstellen</button></span></div>';
+	}).join("");
+	const cardRows = STATE.orphanArchivedCards().map((card) => '<div class="deck-row"><span class="deck-ico" aria-hidden="true">🃏</span>' +
+		'<span class="deck-info"><span class="deck-name">' + U.esc(String(card.front || "Ohne Vorderseite").slice(0, 100)) + '</span><span class="deck-meta">' + U.esc(card.deck || "Standard") + '</span></span>' +
+		'<span class="deck-actions"><button data-ankiunarchive="' + U.esc(card.id) + '">Wiederherstellen</button></span></div>').join("");
+	return '<section class="anki-sec"><h2>Archiv</h2><p class="hint">Archivierte Karten bleiben erhalten, erscheinen aber nicht beim Lernen, in der aktiven Kartensuche oder im Wissensgraphen.</p></section>' +
+		'<div class="anki-sec"><h3>Stapel</h3></div><div class="deck-list">' + (deckRows || '<div class="empty small">Keine archivierten Stapel</div>') + '</div>' +
+		'<div class="anki-sec"><h3>Einzelne Karten</h3></div><div class="deck-list">' + (cardRows || '<div class="empty small">Keine einzeln archivierten Karten</div>') + '</div>';
 }
 
 // Statistik-Dashboard: Kennzahlen, 30-Tage-Diagramm, 7-Tage-Prognose.
@@ -537,11 +558,11 @@ function editorDecks() {
 		if (d) set.add(d);
 	};
 	Object.keys(S.decks || {}).forEach((n) => {
-		if (S.decks[n] && S.decks[n].trashed) return;
+		if ((S.decks[n] && S.decks[n].trashed) || STATE.isDeckArchived(n)) return;
 		add(n);
 	});
 	Object.values(S.cards).forEach((c) => {
-		if (!c || c.trashed) return;
+		if (!c || c.trashed || STATE.isCardArchived(c)) return;
 		add(c.deck || "Standard");
 	});
 	add(S.ankiDeck);

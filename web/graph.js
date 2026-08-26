@@ -22,8 +22,36 @@ export const GRAPH = (() => {
 	let resizeObserver = null;
 	let analysing = false;
 
-	const activeCards = () => Object.values(S.cards).filter((c) => c && !c.trashed && String(c.front || "").trim());
+	const activeCards = () => STATE.activeCards().filter((c) => c && String(c.front || "").trim());
 	const graph = () => S.settings.knowledgeGraph && S.settings.knowledgeGraph.v === VERSION ? S.settings.knowledgeGraph : null;
+	// Der gespeicherte Graph behält seine Zuordnungen, damit Wiederherstellen ohne
+	// Neuanalyse funktioniert. Für die Anzeige werden archivierte Karten und dadurch
+	// leere Skills/Verbindungen nur als Projektion ausgeblendet.
+	function visibleGraph() {
+		const stored = graph();
+		if (!stored) return null;
+		const skills = (stored.skills || []).map((skill) => ({
+			...skill,
+			cardIds: (skill.cardIds || []).filter((id) => {
+				const card = S.cards[id];
+				return card && !card.trashed && !STATE.isCardArchived(card);
+			}),
+		})).filter((skill) => skill.gap || skill.cardIds.length);
+		const skillIds = new Set(skills.map((skill) => skill.id));
+		const normalizedSkills = skills.map((skill) => ({
+			...skill,
+			prereqIds: (skill.prereqIds || []).filter((id) => skillIds.has(id)),
+		}));
+		const topicIds = new Set(normalizedSkills.map((skill) => skill.topicId));
+		const subjectIds = new Set(normalizedSkills.map((skill) => skill.subjectId));
+		return {
+			...stored,
+			skills: normalizedSkills,
+			topics: (stored.topics || []).filter((topic) => topicIds.has(topic.id)),
+			subjects: (stored.subjects || []).filter((subject) => subjectIds.has(subject.id)),
+			bridges: (stored.bridges || []).filter((edge) => skillIds.has(edge.a) && skillIds.has(edge.b)),
+		};
+	}
 	const deckName = (card) => String(card.deck || "Standard").trim() || "Standard";
 	const cardText = (card) => (String(card.front || "") + " — " + String(card.back || "")).replace(/\s+/g, " ").trim().slice(0, 600);
 
@@ -47,7 +75,7 @@ export const GRAPH = (() => {
 
 	function mastery(skill) {
 		if (skill.gap) return { cards: 0, rated: 0, due: 0, value: 0, state: "gap" };
-		const cards = (skill.cardIds || []).map((id) => S.cards[id]).filter((c) => c && !c.trashed);
+		const cards = (skill.cardIds || []).map((id) => S.cards[id]).filter((c) => c && !c.trashed && !STATE.isCardArchived(c));
 		const rated = cards.map((card) => ({ card, r: retrievability(card) })).filter((x) => x.r != null);
 		const due = rated.filter((x) => new Date(x.card.srs.due).getTime() <= Date.now()).length;
 		const value = rated.length ? rated.reduce((sum, x) => sum + x.r, 0) / rated.length : 0;
@@ -404,7 +432,7 @@ export const GRAPH = (() => {
 
 	function render() {
 		if (!overlay) return;
-		const g = graph();
+		const g = visibleGraph();
 		const stage = overlay.querySelector(".graph-stage");
 		const inspector = overlay.querySelector(".graph-inspector");
 		if (!g || !g.skills || !g.skills.length) {
@@ -419,7 +447,7 @@ export const GRAPH = (() => {
 	}
 
 	function drawLines() {
-		const g = graph(), stage = overlay && overlay.querySelector(".graph-stage"), svg = stage && stage.querySelector(".graph-lines");
+		const g = visibleGraph(), stage = overlay && overlay.querySelector(".graph-stage"), svg = stage && stage.querySelector(".graph-lines");
 		if (!g || !svg) return;
 		const base = stage.getBoundingClientRect();
 		const node = (id) => stage.querySelector('[data-skill="' + CSS.escape(id) + '"]');
@@ -473,11 +501,11 @@ export const GRAPH = (() => {
 	}
 
 	function learnSkill(id) {
-		const g = graph(), skill = skillById(g, id);
+		const g = visibleGraph(), skill = skillById(g, id);
 		if (!skill) return;
 		const counts = new Map();
 		for (const cardId of skill.cardIds || []) {
-			const card = S.cards[cardId]; if (!card || card.trashed) continue;
+			const card = S.cards[cardId]; if (!card || card.trashed || STATE.isCardArchived(card)) continue;
 			const deck = deckName(card); counts.set(deck, (counts.get(deck) || 0) + 1);
 		}
 		const deck = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
@@ -488,7 +516,7 @@ export const GRAPH = (() => {
 	}
 
 	async function synthesize(id) {
-		const g = graph(), skill = skillById(g, id);
+		const g = visibleGraph(), skill = skillById(g, id);
 		const edge = (g.bridges || []).find((item) => item.a === id || item.b === id);
 		const other = edge && skillById(g, edge.a === id ? edge.b : edge.a);
 		if (!skill || !other) return;

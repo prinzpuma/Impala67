@@ -1103,7 +1103,7 @@ function renderHome(main) {
 
 	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
 	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
-	const leeches = Object.values(S.cards).filter((c) => !c.trashed && !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
+	const leeches = STATE.activeCards().filter((c) => !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
 	const tips = [];
 	if (lz.todaySeconds === 0 && lz.streakDays > 0 && hour >= 15) tips.push(['data-homeaction="cards"', "🔥", `${lz.streakDays}-Tage-Streak in Gefahr`, "Heute noch nichts gelernt — schon 5 Minuten zählen."]);
 	if (due > 0) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
@@ -1857,7 +1857,7 @@ function openReview() {
 }
 
 function openCards() {
-	const cards = Object.values(S.cards).filter((c) => !c.trashed).sort((a, b) => (a.srs.due < b.srs.due ? -1 : a.srs.due > b.srs.due ? 1 : 0));
+	const cards = STATE.activeCards().sort((a, b) => (a.srs.due < b.srs.due ? -1 : a.srs.due > b.srs.due ? 1 : 0));
 	const rows = cards.map((c) =>
 		`<div class="card-row"><textarea data-front="${c.id}" rows="2">${esc(c.front)}</textarea><textarea data-back="${c.id}" rows="2">${esc(c.back)}</textarea>` +
 		`<div class="card-meta"><span>fällig: ${U.fmtDate(c.srs.due)} · Wdh. ${c.srs.reps || 0}</span>` +

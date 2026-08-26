@@ -82,7 +82,7 @@ export const TOOLS = (() => {
 	function deckMatches(name) {
 		const q = String(name || "").trim().toLowerCase();
 		if (!q) return [];
-		const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed);
+		const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed && !STATE.isDeckArchived(n));
 		const exact = names.find((n) => n.toLowerCase() === q);
 		return exact ? [exact] : names.filter((n) => n.toLowerCase().includes(q));
 	}
@@ -831,7 +831,7 @@ export const TOOLS = (() => {
 				};
 			}
 			case "list_decks": {
-				const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed).sort((x, y) => x.localeCompare(y));
+				const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed && !STATE.isDeckArchived(n)).sort((x, y) => x.localeCompare(y));
 				// EIN Durchlauf über die Karten statt drei Filterläufe JE Stapel; der Teilbaum
 				// ergibt sich direkt aus dem Namenspfad („Eltern::Kind“).
 				const direct = new Map(), tree = new Map(), paused = new Map();

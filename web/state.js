@@ -109,7 +109,7 @@ export const S = {
 	histIndex: 0, // aktuell ausgewählte Version im Verlauf
 	histPageId: null, // Seite, deren Verlauf gerade offen ist
 	pendingNewPage: null, // { wsId, parentId } während der Vorlagen-Auswahl
-	ankiTab: "decks", // Karteikarten-Bereich: "decks" | "browser" | "stats" | "study"
+	ankiTab: "decks", // Karteikarten-Bereich: "decks" | "browser" | "stats" | "archive" | "study"
 	ankiDeck: null, // aktuell gewählter Stapel (null = alle)
 	ankiSort: "due", // Browser-Sortierung: "front" | "deck" | "state" | "due" | "interval" | "reps" | "lapses" | "created"
 	ankiSortDir: 1, // 1 = aufsteigend, -1 = absteigend
@@ -227,9 +227,21 @@ export const STATE = (() => {
 	// Eine fachliche Regel fuer Reducer, UI, Lernqueue und KI-Werkzeuge.
 	const deckInTree = (deck, root) => !!root && (deck === root || String(deck || "").startsWith(root + "::"));
 	const deckSubtree = (from) => Object.keys(S.decks).filter((n) => deckInTree(n, from));
+	// Archivierung wird vererbt statt auf jede Karte kopiert: Ein archivierter
+	// Elternstapel blendet seinen ganzen Teilbaum aus, eigene Karten-/Kind-Flags
+	// bleiben beim Wiederherstellen des Elterns unverändert erhalten.
+	const isDeckArchived = (name) => {
+		let path = String(name || "Standard").trim() || "Standard";
+		while (path) {
+			if (S.decks[path] && S.decks[path].archived) return true;
+			path = path.includes("::") ? path.slice(0, path.lastIndexOf("::")) : "";
+		}
+		return false;
+	};
+	const isCardArchived = (card) => !!card && (!!card.archived || isDeckArchived(card.deck || "Standard"));
 	// includeTrashed: Rename/Move/Purge brauchen alle Karten; Lernen/UI nur aktive.
 	const cardsInDeckTree = (from, opts) => Object.values(S.cards).filter((c) => {
-		if (!(opts && opts.includeTrashed) && c.trashed) return false;
+		if (!(opts && opts.includeTrashed) && (c.trashed || isCardArchived(c))) return false;
 		return deckInTree(c.deck || "Standard", from);
 	});
 	function renameDeckTree(from, to) {
@@ -600,6 +612,20 @@ export const STATE = (() => {
 				if (c) Object.assign(c, p.patch);
 				break;
 			}
+			case "cardArchive": {
+				const c = S.cards[p.id];
+				if (!c || c.trashed) break;
+				c.archived = true;
+				c.archivedAt = ev.t;
+				break;
+			}
+			case "cardUnarchive": {
+				const c = S.cards[p.id];
+				if (!c) break;
+				c.archived = false;
+				delete c.archivedAt;
+				break;
+			}
 			case "cardTrash": {
 				// Soft-Delete wie bei Seiten: Karte bleibt im Log, landet im Papierkorb.
 				const c = S.cards[p.id];
@@ -642,6 +668,18 @@ export const STATE = (() => {
 				if (!p.name || typeof p.order !== "number") break;
 				if (!S.decks[p.name]) S.decks[p.name] = { name: p.name, created: ev.t };
 				S.decks[p.name].order = p.order;
+				break;
+			case "deckArchive":
+				if (!p.name) break;
+				if (!S.decks[p.name]) S.decks[p.name] = { name: p.name, created: ev.t };
+				if (S.decks[p.name].trashed) break;
+				S.decks[p.name].archived = true;
+				S.decks[p.name].archivedAt = ev.t;
+				break;
+			case "deckUnarchive":
+				if (!p.name || !S.decks[p.name]) break;
+				S.decks[p.name].archived = false;
+				delete S.decks[p.name].archivedAt;
 				break;
 			case "deckTrash":
 				// Soft-Delete: Stapel + Karten des Teilbaums → Papierkorb (wiederherstellbar).
@@ -693,7 +731,7 @@ export const STATE = (() => {
 				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
 				const to = prefix + from.split("::").pop() + " (Kopie)";
 				deckSubtree(from).forEach((n) => {
-					if (S.decks[n] && S.decks[n].trashed) return; // Papierkorb-Stapel nicht duplizieren
+					if ((S.decks[n] && S.decks[n].trashed) || isDeckArchived(n)) return;
 					const nn = to + n.slice(from.length);
 					S.decks[nn] = { name: nn, created: ev.t };
 				});
@@ -982,8 +1020,19 @@ export const STATE = (() => {
 	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb-Seiten nirgends durchsickern.
 	const activePages = () => Object.values(S.pages).filter((pg) => !pg.trashed);
 
-	// Karteikarten: Soft-Delete analog zu Seiten (trashed / trashedAt).
-	const activeCards = () => Object.values(S.cards).filter((c) => !c.trashed);
+	// Aktive Karten sind weder gelöscht noch selbst/über ihren Stapel archiviert.
+	// Diese eine Quelle nutzen Lernen, KI-Werkzeuge, Suche und Wissensgraph.
+	const activeCards = () => Object.values(S.cards).filter((c) => !c.trashed && !isCardArchived(c));
+	const archivedCards = () => Object.values(S.cards)
+		.filter((c) => !c.trashed && c.archived)
+		.sort((a, b) => ((b.archivedAt || "") < (a.archivedAt || "") ? -1 : (b.archivedAt || "") > (a.archivedAt || "") ? 1 : 0));
+	const archivedDeckRoots = () => {
+		const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed && S.decks[n].archived);
+		return names
+			.filter((n) => !names.some((p) => p !== n && deckInTree(n, p)))
+			.sort((a, b) => ((S.decks[b].archivedAt || "") < (S.decks[a].archivedAt || "") ? -1 : (S.decks[b].archivedAt || "") > (S.decks[a].archivedAt || "") ? 1 : 0));
+	};
+	const orphanArchivedCards = () => archivedCards().filter((c) => !isDeckArchived(c.deck || "Standard"));
 	const trashedCards = () => Object.values(S.cards)
 		.filter((c) => c.trashed)
 		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
@@ -1148,7 +1197,7 @@ export const STATE = (() => {
 		// direkt vergleichen — vorher entstand pro Karte und pro Filterdurchlauf ein new Date().
 		const tIso = t.toISOString(), eodIso = eod.toISOString(), aheadIso = aheadUntil.toISOString();
 		const inDeck = (c) => {
-			if (!c || c.trashed || c.suspended || !c.srs) return false;
+			if (!c || c.trashed || isCardArchived(c) || c.suspended || !c.srs) return false;
 			if (!deck) return true;
 			const d = c.deck || "Standard";
 			return deckInTree(d, deck);
@@ -1312,5 +1361,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, sortKeyOf, trashedPages, activePages, activeCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();
