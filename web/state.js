@@ -4,6 +4,14 @@ import { DB } from "./db.js";
 import { SRS } from "./srs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { cooperativeGate } from "./cooperative.js";
+import {
+	STATE_CHECKPOINT_KEYS,
+	checkpointStateOf,
+	eventLogInfoOf,
+	isUsableStateCheckpoint,
+	makeStateCheckpoint,
+} from "./state-checkpoint.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
 export const S = {
@@ -133,6 +141,11 @@ export const S = {
 	heftBlobs: {}, // hash → dataURL (unveränderlich; identische Bilder teilen sich einen Eintrag)
 };
 
+const cloneStateValue = (value) => typeof structuredClone === "function"
+	? structuredClone(value)
+	: JSON.parse(JSON.stringify(value));
+const INITIAL_PERSISTED_STATE = cloneStateValue(checkpointStateOf(S));
+
 export const STATE = (() => {
 	// PERF (10. Juli): Parent→Kinder-Index für childrenOf (Sidebar-Baum war O(n²)).
 	// Vor reduce deklariert, damit Invalidierung im Hot Path greift.
@@ -142,6 +155,10 @@ export const STATE = (() => {
 	// ensureChildIdx (nur aktive, sortiert) und ein zweites Mal in collectSubtree, das
 	// den Index bei JEDEM Aufruf komplett neu baute (Trash/Restore ganzer Bäume).
 	let _parentIdx = null;
+	let _stateRevision = 0;
+	let _loading = false;
+	let _queuedRemoteEvents = [];
+	let _checkpointCandidate = null;
 	function bustChildIdx() { _childIdx = null; _parentIdx = null; }
 	function ensureParentIdx() {
 		if (_parentIdx) return _parentIdx;
@@ -198,18 +215,42 @@ export const STATE = (() => {
 		.sort((a, b) => (String(a?.t || "") < String(b?.t || "") ? -1 : String(a?.t || "") > String(b?.t || "") ? 1 : 0) || (a?.seq || 0) - (b?.seq || 0));
 	// EIN Pfad fuer bereits persistierte Fremd-Events (Drive und BroadcastChannel):
 	// Uhr nachziehen, Zustand anwenden, UI invalidieren und Live-Module informieren.
+	function afterRemoteEvents(list) {
+		if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
+		emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+	}
 	function applyRemoteEvents(events) {
 		const list = sortEvents(events);
 		if (!list.length) return list;
+		if (_loading) { _queuedRemoteEvents.push(...list); return list; }
 		PERF_PROFILER.measure("state.remote-replay", () => {
 			for (const ev of list) {
 				U.observeTime(ev.t);
 				reduce(ev);
 			}
-			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
-			emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+			afterRemoteEvents(list);
 		}, { count: list.length }, 16);
 		return list;
+	}
+	async function applyRemoteEventsCooperative(events) {
+		const list = sortEvents(events);
+		if (!list.length) return list;
+		if (_loading) { _queuedRemoteEvents.push(...list); return list; }
+		const finishProfile = PERF_PROFILER.start("state.remote-replay", { count: list.length, cooperative: true }, 16);
+		const yieldIfNeeded = cooperativeGate();
+		try {
+			for (const ev of list) {
+				U.observeTime(ev.t);
+				reduce(ev);
+				await yieldIfNeeded();
+			}
+			afterRemoteEvents(list);
+			finishProfile();
+			return list;
+		} catch (error) {
+			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+			throw error;
+		}
 	}
 	// Eine Regel fuer Seiten-Zugehoerigkeit und Zyklus-Schutz. Bei bereits korrupten
 	// Alt-Daten lehnen Aufrufer den Vorgang nach dem Hops-Limit sicherheitshalber ab.
@@ -410,6 +451,7 @@ export const STATE = (() => {
 	}
 
 	function reduce(ev) {
+		_stateRevision++;
 		const p = ev.payload || {};
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
 		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
@@ -931,6 +973,48 @@ export const STATE = (() => {
 	const getLoadedSeq = () => _loadedSeq;
 	const getLoadedTime = () => _loadedTime;
 
+	function resetDerivedState() {
+		bustChildIdx();
+		_pageRev++; _cardRev++;
+		_backlinkCache.rev = -1; _backlinkCache.map = new Map();
+		_snapCache.rev = -1; _snapCache.t = 0; _snapCache.map = new Map();
+	}
+
+	function rebuildHeftMeta() {
+		S.heftMeta = {};
+		for (const [pageId, doc] of Object.entries(S.heftDocs || {})) {
+			let ocrText = "";
+			for (const page of doc?.pages || []) if (page?.ocrText) ocrText += (ocrText ? "\n" : "") + page.ocrText;
+			const meta = {
+				rev: Number(doc?.rev) || 0,
+				pages: Array.isArray(doc?.pages) ? doc.pages.length : 0,
+				ocrText,
+				updated: S.pages?.[pageId]?.updated || "",
+			};
+			Object.defineProperty(meta, "bytes", {
+				get: () => heftBytes(heftDocOf(pageId)), enumerable: true, configurable: true,
+			});
+			S.heftMeta[pageId] = meta;
+		}
+	}
+
+	function restorePersistedState(saved = INITIAL_PERSISTED_STATE) {
+		for (const key of STATE_CHECKPOINT_KEYS) {
+			const value = Object.prototype.hasOwnProperty.call(saved || {}, key) ? saved[key] : INITIAL_PERSISTED_STATE[key];
+			S[key] = cloneStateValue(value);
+		}
+		rebuildHeftMeta();
+		resetDerivedState();
+	}
+
+	async function replayCooperatively(events) {
+		const yieldIfNeeded = cooperativeGate();
+		for (const event of events) {
+			reduce(event);
+			await yieldIfNeeded();
+		}
+	}
+
 	// Gemeinsamer Helfer für load()/pageHistory(): Event-Log laden und deterministisch
 	// sortieren (vorher in beiden Funktionen fast identisch dupliziert).
 	async function loadSortedEvents() {
@@ -939,17 +1023,86 @@ export const STATE = (() => {
 
 	async function load() {
 		const finishProfile = PERF_PROFILER.start("state.load", {}, 20);
-		const evs = await loadSortedEvents();
-		_loadedSeq = evs.reduce((m, ev) => Math.max(m, Number(ev?.seq || 0)), 0);
-		_loadedTime = evs.length ? evs[evs.length - 1].t : "";
-		// Hybride logische Uhr (siehe util.js): nach einem Neustart steht _lastNowMs auf 0.
-		// Ohne diesen Anstoß könnte die erste Bearbeitung nach dem Start einen Zeitstempel
-		// bekommen, der VOR einem bereits importierten fremden Stand liegt — und im Replay
-		// damit ausgerechnet gegen den Stand verlieren, den sie ablösen soll.
-		if (evs.length) U.observeTime(evs[evs.length - 1].t);
-		evs.forEach(reduce);
-		finishProfile({ count: evs.length });
-		return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: evs.length };
+		_loading = true; _queuedRemoteEvents = []; _checkpointCandidate = null;
+		let checkpointUsed = false, replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
+		try {
+			let checkpoint = null, tail = [], boundary = null;
+			try {
+				info = await DB.eventLogInfo();
+				checkpoint = await DB.getStateCheckpoint();
+				if (checkpoint) {
+					[boundary, tail] = await Promise.all([
+						checkpoint.maxSeq ? DB.eventAtSeq(checkpoint.maxSeq) : Promise.resolve(null),
+						DB.eventsAfterSeqAll(checkpoint.maxSeq, info.maxSeq),
+					]);
+					checkpointUsed = isUsableStateCheckpoint(checkpoint, info, boundary, tail);
+				}
+			} catch (error) {
+				console.warn("[state] Start-Checkpoint wird neu aufgebaut:", error);
+				checkpointUsed = false;
+			}
+
+			if (checkpointUsed) {
+				restorePersistedState(checkpoint.state);
+				const sortedTail = sortEvents(tail);
+				if (checkpoint.maxTime) U.observeTime(checkpoint.maxTime);
+				await replayCooperatively(sortedTail);
+				replayed = sortedTail.length;
+				replayIds = new Set(sortedTail.map((event) => event?.id).filter(Boolean));
+				_loadedTime = sortedTail.length ? sortedTail.at(-1).t : checkpoint.maxTime || "";
+			} else {
+				const events = await loadSortedEvents();
+				info = eventLogInfoOf(events);
+				restorePersistedState();
+				_loadedTime = events.length ? events.at(-1).t : "";
+				if (_loadedTime) U.observeTime(_loadedTime);
+				await replayCooperatively(events);
+				replayed = events.length;
+				replayIds = new Set(events.map((event) => event?.id).filter(Boolean));
+				if (checkpoint) DB.clearStateCheckpoint().catch(() => {});
+			}
+
+			_loadedSeq = info.maxSeq;
+			_loading = false;
+			const queued = sortEvents(_queuedRemoteEvents.filter((event) => !event?.id || !replayIds.has(event.id)));
+			_queuedRemoteEvents = [];
+			if (queued.length) await applyRemoteEventsCooperative(queued);
+			else _checkpointCandidate = { info: { ...info }, maxTime: _loadedTime, revision: _stateRevision };
+
+			finishProfile({ count: info.count, replayed, checkpointUsed });
+			return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: info.count, replayed, checkpointUsed };
+		} catch (error) {
+			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+			throw error;
+		} finally {
+			_loading = false;
+		}
+	}
+
+	async function persistCheckpoint() {
+		const candidate = _checkpointCandidate;
+		if (!candidate || candidate.revision !== _stateRevision) return false;
+		const finishProfile = PERF_PROFILER.start("state.checkpoint-save", { count: candidate.info.count }, 20);
+		try {
+			const current = await DB.eventLogInfo();
+			if (current.count !== candidate.info.count || current.maxSeq !== candidate.info.maxSeq || current.lastEventId !== candidate.info.lastEventId) {
+				finishProfile({ stale: true });
+				return false;
+			}
+			await DB.putStateCheckpoint(makeStateCheckpoint(S, current, candidate.maxTime));
+			finishProfile();
+			return true;
+		} catch (error) {
+			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+			console.warn("[state] Start-Checkpoint konnte nicht gespeichert werden:", error);
+			return false;
+		}
+	}
+
+	function scheduleCheckpoint() {
+		const run = () => { persistCheckpoint().catch((error) => console.warn("[state] Start-Checkpoint fehlgeschlagen:", error)); };
+		if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 3000 });
+		else setTimeout(run, 600);
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze
@@ -1361,5 +1514,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

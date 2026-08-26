@@ -9,7 +9,7 @@ globalThis.localStorage = {
 	clear: () => { storageMap.clear(); },
 };
 
-import { CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
+import { acknowledgedUploadCursor, CLOUDFLARE_SYNC, resetSyncCursorStorage, syncCursorStorageKeys } from "../web/sync-cloudflare.js";
 import { generateSyncKey, formatStorageUsage, MAX_USER_STORAGE_BYTES, deriveSyncCredentials, decryptPayload, encryptPayload } from "../web/sync-crypto.js";
 import { CLOUD_SYNC_PROTOCOL, prepareIncomingCloudEvents, cloudEventsEnvelope, shouldUploadToSync } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
@@ -58,6 +58,13 @@ test("Cloud-Purge setzt genau die benutzerspezifischen Sync-Cursor zurück", () 
 	assert.equal(values.get("impala67_cf_last_seq_user-b"), "71");
 	assert.equal(values.get("impala67_cf_last_seq"), "11");
 	assert.throws(() => syncCursorStorageKeys(), /User-ID/);
+});
+
+test("Upload-Ack setzt den Empfangs-Cursor nur bei exakt zusammenhängender Bestätigung", () => {
+	assert.equal(acknowledgedUploadCursor({ generation: 1, ack: { fromSeq: 7, toSeq: 9, savedCount: 2 } }, 1, 7), 9);
+	assert.equal(acknowledgedUploadCursor({ generation: 1, ack: { fromSeq: 8, toSeq: 9, savedCount: 1 } }, 1, 7), null, "fremder Zwischen-Upload darf nicht übersprungen werden");
+	assert.equal(acknowledgedUploadCursor({ generation: 2, ack: { fromSeq: 7, toSeq: 9, savedCount: 2 } }, 1, 7), null, "Generation muss übereinstimmen");
+	assert.equal(acknowledgedUploadCursor({ generation: 1, maxSeq: 9, savedCount: 2 }, 1, 7), null, "alte Serverantwort bleibt beim Kontroll-Pull");
 });
 
 test("CLOUDFLARE_SYNC Trennen setzt Zustand zurück", () => {
@@ -464,7 +471,7 @@ test("Regression: WebSocket changed-Signal stößt erneuten Pull an", async () =
 	}
 });
 
-test("Performance: Delta-Push und eigenes Bestätigungs-Echo laden nicht den vollständigen Event-Log", async () => {
+test("Performance: Lückenloses Upload-Ack spart den Bestätigungs-Pull und den vollständigen Event-Log", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
 	const originalAllBlobKeys = DB.allBlobKeys;
@@ -493,10 +500,11 @@ test("Performance: Delta-Push und eigenes Bestätigungs-Echo laden nicht den vol
 	DB.allEvents = async () => { fullReads++; throw new Error("Vollständiger Event-Read ist im Delta-Pfad verboten"); };
 	DB.importAll = async () => { imports++; return { importedEvents: [] }; };
 
-	let serverPackets = [];
+	let serverPackets = [], pullCalls = 0;
 	globalThis.fetch = async (url, init = {}) => {
 		const urlStr = String(url);
 		if (urlStr.includes("/api/sync")) {
+			pullCalls++;
 			const since = Number(new URL(urlStr).searchParams.get("since")) || 0;
 			return new Response(JSON.stringify({ events: serverPackets.filter((packet) => packet.seq > since), maxSeq: serverPackets.length, hasMore: false, generation: 1 }), {
 				status: 200, headers: { "Content-Type": "application/json" },
@@ -505,7 +513,7 @@ test("Performance: Delta-Push und eigenes Bestätigungs-Echo laden nicht den vol
 		if (urlStr.includes("/api/events") && init.method === "POST") {
 			const body = JSON.parse(init.body || "{}");
 			serverPackets = (body.events || []).map((packet, index) => ({ ...packet, seq: index + 1 }));
-			return new Response(JSON.stringify({ ok: true, savedCount: serverPackets.length, maxSeq: serverPackets.length, usage: 100 }), {
+			return new Response(JSON.stringify({ ok: true, savedCount: serverPackets.length, ack: { fromSeq: 0, toSeq: serverPackets.length, savedCount: serverPackets.length }, maxSeq: serverPackets.length, usage: 100, generation: 1 }), {
 				status: 200, headers: { "Content-Type": "application/json" },
 			});
 		}
@@ -517,6 +525,7 @@ test("Performance: Delta-Push und eigenes Bestätigungs-Echo laden nicht den vol
 		assert.equal(deltaReads, 1);
 		assert.equal(fullReads, 0);
 		assert.equal(imports, 0, "Das eigene Server-Echo darf den Importpfad nicht betreten");
+		assert.equal(pullCalls, 1, "Das sichere Ack muss die zweite Netz-Rundreise ersetzen");
 		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 2);
 		assert.equal(CLOUDFLARE_SYNC.status().lastSyncedSeq, 1);
 	} finally {

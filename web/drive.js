@@ -436,7 +436,7 @@ export const DRIVE = (() => {
 		if (events.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
 			try { await HEFT.saveNow(); } catch (e) { console.warn("[sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", e); }
 		}
-		STATE.applyRemoteEvents(events);
+		await STATE.applyRemoteEventsCooperative(events);
 	}
 
 	// v8: heftHeads/legacyHeftIds/reconcileHeftBlobs sind ersatzlos entfallen — rund 100 Zeilen

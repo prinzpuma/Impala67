@@ -86,6 +86,9 @@ test("event writes are ordered, idempotent and readable", async () => {
 	assert.deepEqual(a.saved.map((e) => e.seq), [1]);
 	assert.deepEqual(b.saved.map((e) => e.seq), [2]);
 	assert.equal(duplicate.saved.length, 0);
+	assert.deepEqual({ fromSeq: a.fromSeq, toSeq: a.toSeq }, { fromSeq: 0, toSeq: 1 });
+	assert.deepEqual({ fromSeq: b.fromSeq, toSeq: b.toSeq }, { fromSeq: 1, toSeq: 2 });
+	assert.deepEqual({ fromSeq: duplicate.fromSeq, toSeq: duplicate.toSeq }, { fromSeq: 2, toSeq: 2 });
 	const page = await room.readEvents(0, 10);
 	assert.deepEqual(page.events.map((e) => e.seq), [1, 2]);
 	assert.equal(DB.events.length, 2);

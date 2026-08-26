@@ -5,6 +5,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { cooperativeGate } from "./cooperative.js";
 import {
 	CLOUD_SYNC_PROTOCOL,
 	CLOUD_SYNC_PROTOCOL_HEADER,
@@ -64,6 +65,19 @@ export function resetSyncCursorStorage(storage, userId, generation = 0) {
 	storage.setItem(keys.lastSynced, "0");
 	storage.setItem(keys.lastUploaded, "0");
 	storage.setItem(keys.generation, String(Number(generation) || 0));
+}
+
+// Nur eine lückenlose, zur lokalen Ausgangsposition passende Server-Bestätigung
+// darf den Empfangs-Cursor vorsetzen. Alte Server oder konkurrierende Uploads
+// liefern null; dann bleibt der bisherige bestätigende Pull aktiv.
+export function acknowledgedUploadCursor(data, expectedGeneration, currentSeq) {
+	const ack = data?.ack;
+	const generation = Number(data?.generation);
+	const fromSeq = Number(ack?.fromSeq), toSeq = Number(ack?.toSeq), savedCount = Number(ack?.savedCount);
+	if (!ack || !Number.isSafeInteger(generation) || generation !== Number(expectedGeneration)) return null;
+	if (![fromSeq, toSeq, savedCount].every(Number.isSafeInteger)) return null;
+	if (fromSeq !== Number(currentSeq) || toSeq < fromSeq || savedCount !== toSeq - fromSeq) return null;
+	return toSeq;
 }
 
 async function mapLimit(items, limit, fn) {
@@ -213,7 +227,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		});
 		const imported = result.importedEvents || [];
 		if (imported.length) {
-			STATE.applyRemoteEvents(imported);
+			await STATE.applyRemoteEventsCooperative(imported);
 			ignoredBlobKeys.clear();
 		}
 	}
@@ -223,9 +237,18 @@ export const CLOUDFLARE_SYNC = (() => {
 		let received = 0, progressStart = state.lastSyncedSeq;
 		while (true) {
 			const since = state.lastSyncedSeq;
-			const response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
-			if (!response.ok) throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
-			const data = await response.json();
+			const finishRequest = PERF_PROFILER.start("cloudflare.pull-request", { since }, 500);
+			let response, data;
+			try {
+				response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
+				if (!response.ok) throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
+				data = await response.json();
+				const responsePackets = Array.isArray(data.events) ? data.events : [];
+				finishRequest({ status: response.status, packets: responsePackets.length, encryptedChars: responsePackets.reduce((sum, packet) => sum + encryptedPacketChars(packet), 0) });
+			} catch (error) {
+				finishRequest({ failed: true, status: Number(error?.status) || response?.status || 0, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+				throw error;
+			}
 			const serverGeneration = Number(data.generation) || 1;
 
 			if (state.generation !== serverGeneration) {
@@ -247,20 +270,22 @@ export const CLOUDFLARE_SYNC = (() => {
 
 			let expected = since + 1;
 			const incoming = [];
-			const finishDecode = PERF_PROFILER.start("cloudflare.decrypt-import", { packets: packets.length }, 15);
+			const finishDecrypt = PERF_PROFILER.start("cloudflare.decrypt", { packets: packets.length }, 15);
+			const yieldDecrypt = cooperativeGate();
 			try {
 				for (const packet of packets) {
 					if (packet.seq !== expected) throw new Error(`Server-Sequenzlücke: erwartet ${expected}, erhalten ${packet.seq}.`);
 					const envelope = await decryptPayload(credentials.cryptoKey, packet);
 					incoming.push(...prepareIncomingCloudEvents([envelope]));
 					expected++;
+					await yieldDecrypt();
 				}
-				await importRemote(incoming);
-				finishDecode({ events: incoming.length });
+				finishDecrypt({ events: incoming.length });
 			} catch (error) {
-				finishDecode({ events: incoming.length, failed: true, errorName: error?.name || "Error" });
+				finishDecrypt({ events: incoming.length, failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
 				throw error;
 			}
+			await PERF_PROFILER.run("cloudflare.import", () => importRemote(incoming), { events: incoming.length }, 15);
 			received += incoming.length;
 			saveRecv(packets.at(-1).seq);
 			if (maxSeq > progressStart) setProgress("Empfange Notizen…", state.lastSyncedSeq - progressStart, maxSeq - progressStart);
@@ -286,26 +311,38 @@ export const CLOUDFLARE_SYNC = (() => {
 			batches.push({ body, bytes: transferBodyBytes(body) });
 		}
 		const totalBytes = batches.reduce((sum, batch) => sum + batch.bytes, 0);
-		let requests = 0, utf8Bytes = 0, completedBytes = 0;
+		let requests = 0, utf8Bytes = 0, completedBytes = 0, cursorAcknowledged = true;
 		setProgress("Übertrage Notizen…", 0, totalBytes);
 		try {
 			for (const batch of batches) {
 				requests++;
 				utf8Bytes += batch.bytes;
-				const response = await fetchTimed(api("/api/events"), {
-					method: "POST",
-					headers: authHeaders({ "Content-Type": "application/json" }),
-					body: batch.body,
-				}, SYNC_FETCH_TIMEOUT_MS, ({ direction, loaded }) => {
-					if (direction === "upload") setProgress("Übertrage Notizen…", completedBytes + Math.min(batch.bytes, loaded), totalBytes);
-				});
-				if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
-				const data = await response.json();
+				const finishRequest = PERF_PROFILER.start("cloudflare.upload-request", { request: requests, utf8Bytes: batch.bytes }, 500);
+				let response, data;
+				try {
+					response = await fetchTimed(api("/api/events"), {
+						method: "POST",
+						headers: authHeaders({ "Content-Type": "application/json" }),
+						body: batch.body,
+					}, SYNC_FETCH_TIMEOUT_MS, ({ direction, loaded }) => {
+						if (direction === "upload") setProgress("Übertrage Notizen…", completedBytes + Math.min(batch.bytes, loaded), totalBytes);
+					});
+					if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
+					data = await response.json();
+					finishRequest({ status: response.status, savedCount: Number(data.savedCount) || 0 });
+				} catch (error) {
+					finishRequest({ failed: true, status: Number(error?.status) || response?.status || 0, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+					throw error;
+				}
+				const acknowledged = acknowledgedUploadCursor(data, state.generation, state.lastSyncedSeq);
+				if (acknowledged === null) cursorAcknowledged = false;
+				else if (cursorAcknowledged) saveRecv(acknowledged);
 				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
 				completedBytes += batch.bytes;
 				setProgress("Übertrage Notizen…", completedBytes, totalBytes);
 			}
-			finishProfile({ requests, utf8Bytes });
+			finishProfile({ requests, utf8Bytes, cursorAcknowledged });
+			return cursorAcknowledged;
 		} catch (error) {
 			finishProfile({ requests, utf8Bytes, failed: true, errorName: error?.name || "Error" });
 			throw error;
@@ -328,11 +365,12 @@ export const CLOUDFLARE_SYNC = (() => {
 			return wire;
 		}, { localEvents: local.length, forceAll: !!forceAll }, 10);
 		const wire = prepared;
-		if (!wire.length) { saveSend(maxSeq); return false; }
+		if (!wire.length) { saveSend(maxSeq); return { uploaded: false, confirmed: true }; }
 
 		const chunks = chunkCloudEvents(wire);
 		const packets = [];
 		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { events: wire.length, chunks: chunks.length }, 10);
+		const yieldEncrypt = cooperativeGate();
 		try {
 			setProgress("Bereite Notizen vor…", 0, chunks.length);
 			for (let i = 0; i < chunks.length; i++) {
@@ -341,17 +379,18 @@ export const CLOUDFLARE_SYNC = (() => {
 				const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
 				packets.push({ id, ...encrypted });
 				setProgress("Bereite Notizen vor…", i + 1, chunks.length);
+				await yieldEncrypt();
 			}
 			finishEncrypt({ packets: packets.length });
 		} catch (error) {
 			finishEncrypt({ packets: packets.length, failed: true, errorName: error?.name || "Error" });
 			throw error;
 		}
-		await postPackets(packets);
+		const confirmed = await postPackets(packets);
 		for (const event of wire) if (event?.id) pendingUploadedEventIds.add(event.id);
 		saveSend(maxSeq);
 		state.progress = null;
-		return true;
+		return { uploaded: true, confirmed };
 	}
 
 	const blobOpaqueKey = async (id) => {
@@ -450,17 +489,20 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
-			const uploaded = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
+			const pushed = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
+			const uploaded = !!pushed.uploaded;
 			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
-			// spart das eine vollstaendige serielle Netz-Rundreise.
-			if (uploaded) {
+			// spart das eine vollstaendige serielle Netz-Rundreise. Ein beweisbar
+			// lückenloses Server-Ack spart sie nun auch nach einem Upload; alte Server
+			// und konkurrierende Schreiber bleiben automatisch beim sicheren Pull.
+			if (uploaded && !pushed.confirmed) {
 				await PERF_PROFILER.run("cloudflare.confirm-pull", () => pull(), {}, 20);
-				pendingUploadedEventIds.clear();
 			}
+			if (uploaded) pendingUploadedEventIds.clear();
 			state.progress = null; state.lastError = null;
 			clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
-			finishProfile({ received, uploaded });
+			finishProfile({ received, uploaded, uploadAcknowledged: uploaded && !!pushed.confirmed });
 			return true;
 		} catch (error) {
 			finishProfile({ failed: true, errorName: error?.name || "Error" });

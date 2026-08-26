@@ -276,11 +276,12 @@ export class SyncRoom {
 
 	savePackets(packets) {
 		return this.queue(async () => {
+			const fromSeq = this.maxSeq;
 			if (!Array.isArray(packets)) return { ok: false, status: 400, error: "Event-Pakete müssen als Array gesendet werden." };
 			if (packets.length > MAX_PACKETS) return { ok: false, status: 413, error: `Maximal ${MAX_PACKETS} Pakete erlaubt.` };
 			const unique = [...new Map(packets.map((p) => [p?.id, p])).values()];
 			if (unique.some((p) => !this.validatePacket(p))) return { ok: false, status: 400, error: "Ungültiges verschlüsseltes Event-Paket." };
-			if (!unique.length) return { ok: true, saved: [], usage: this.totalBytes };
+			if (!unique.length) return { ok: true, saved: [], usage: this.totalBytes, fromSeq, toSeq: this.maxSeq };
 
 			const placeholders = unique.map(() => "?").join(",");
 			const existingRows = await this.env.DB.prepare(`SELECT event_id FROM sync_events WHERE user_id=? AND event_id IN (${placeholders})`)
@@ -289,7 +290,7 @@ export class SyncRoom {
 			const fresh = unique.filter((p) => !existing.has(p.id)).map((p) => ({ ...p, size: packetSize(p) }));
 			const incoming = fresh.reduce((sum, p) => sum + p.size, 0);
 			if (this.totalBytes + incoming > MAX_USER_BYTES) return { ok: false, status: 413, error: "Quota überschritten.", usage: this.totalBytes };
-			if (!fresh.length) return { ok: true, saved: [], usage: this.totalBytes };
+			if (!fresh.length) return { ok: true, saved: [], usage: this.totalBytes, fromSeq, toSeq: this.maxSeq };
 
 			const now = new Date().toISOString(), saved = [], r2 = [], statements = [];
 			let nextSeq = this.maxSeq;
@@ -314,7 +315,7 @@ export class SyncRoom {
 				return { ok: false, status: 500, error: "Cloud-Speicher konnte nicht atomar geschrieben werden.", usage: this.totalBytes };
 			}
 			this.broadcast({ type: "changed", maxSeq: this.maxSeq });
-			return { ok: true, saved, usage: this.totalBytes };
+			return { ok: true, saved, usage: this.totalBytes, fromSeq, toSeq: this.maxSeq };
 		});
 	}
 
@@ -422,7 +423,7 @@ export class SyncRoom {
 		}
 		if (url.pathname === "/api/events" && request.method === "POST") {
 			const body = await request.json().catch(() => null), result = await this.savePackets(body?.events);
-			return result.ok ? json({ ok: true, savedCount: result.saved.length, usage: result.usage, limit: MAX_USER_BYTES, generation: this.generation })
+			return result.ok ? json({ ok: true, savedCount: result.saved.length, ack: { fromSeq: result.fromSeq, toSeq: result.toSeq, savedCount: result.saved.length }, usage: result.usage, limit: MAX_USER_BYTES, generation: this.generation })
 				: json({ error: result.error, usage: result.usage, limit: MAX_USER_BYTES }, result.status || 400);
 		}
 		if (url.pathname === "/api/blobs" && request.method === "GET") return json(await this.listBlobs(url.searchParams.get("cursor") || ""));
@@ -441,8 +442,8 @@ async function handleRequest(request, env) {
 	if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 	const url = new URL(request.url);
 	if (url.pathname === "/" || url.pathname === "/api/health") return json({
-		app: "Impala67 Sync Server", version: "4.0.0", protocol: CLOUD_SYNC_PROTOCOL,
-		features: ["e2ee", "ordered_http_sync", "ws_invalidation", "immutable_blobs", "generation_reset", "atomic_dedup"],
+		app: "Impala67 Sync Server", version: "4.1.0", protocol: CLOUD_SYNC_PROTOCOL,
+		features: ["e2ee", "ordered_http_sync", "ws_invalidation", "immutable_blobs", "generation_reset", "atomic_dedup", "contiguous_upload_ack"],
 		quotaLimitBytes: MAX_USER_BYTES,
 	});
 	if (url.pathname !== "/ws") { const error = protocolError(request); if (error) return error; }

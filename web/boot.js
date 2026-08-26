@@ -134,6 +134,9 @@ export async function initApp() {
 	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
+	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint
+	// schreiben. requestIdleCallback hält diese Optimierung aus dem kritischen Pfad.
+	STATE.scheduleCheckpoint();
 	if (typeof performance !== "undefined" && performance.mark) {
 		performance.mark("impala67:boot-ready");
 		try {

@@ -114,6 +114,16 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime()) {
 
 function record(kind, durationMs, meta = {}) { recordAt(kind, durationMs, meta); }
 
+function errorMeta(error) {
+	const status = Number(error?.status);
+	return {
+		failed: true,
+		errorName: error?.name || "Error",
+		errorMessage: error?.message || String(error || "Fehler"),
+		...(Number.isFinite(status) && status > 0 ? { status } : {}),
+	};
+}
+
 function performanceWallTime(startMs) {
 	const origin = typeof performance !== "undefined" && Number.isFinite(performance.timeOrigin)
 		? performance.timeOrigin
@@ -200,14 +210,14 @@ function start(name, meta = {}, minMs = 25) {
 async function run(name, fn, meta = {}, minMs = 25) {
 	const finish = start(name, meta, minMs);
 	try { return await fn(); }
-	catch (error) { finish({ failed: true, errorName: error?.name || "Error" }); throw error; }
+	catch (error) { finish(errorMeta(error)); throw error; }
 	finally { finish(); }
 }
 
 function measure(name, fn, meta = {}, minMs = 16) {
 	const finish = start(name, meta, minMs);
 	try { return fn(); }
-	catch (error) { finish({ failed: true, errorName: error?.name || "Error" }); throw error; }
+	catch (error) { finish(errorMeta(error)); throw error; }
 	finally { finish(); }
 }
 

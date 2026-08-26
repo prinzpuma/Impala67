@@ -186,6 +186,7 @@ test("Worker Health Endpoint liefert v4-Metadaten", async () => {
 	assert.equal(data.protocol, 4);
 	assert.equal(data.app, "Impala67 Sync Server");
 	assert.ok(data.features.includes("ordered_http_sync"));
+	assert.ok(data.features.includes("contiguous_upload_ack"));
 });
 
 test("Worker lehnt alte Sync-Protokolle mit 426 ab", async () => {
@@ -211,6 +212,7 @@ test("Deduplizierung: Bereits gespeicherte Events werden ignoriert", async () =>
 	const res1 = await room.savePackets([packet1, packet2]);
 	assert.equal(res1.ok, true);
 	assert.equal(res1.saved.length, 2);
+	assert.deepEqual({ fromSeq: res1.fromSeq, toSeq: res1.toSeq }, { fromSeq: 0, toSeq: 2 });
 	assert.equal(room.maxSeq, 2);
 
 	// 2. Erneuter Upload von p-1, p-2 und neuem p-3
@@ -219,12 +221,14 @@ test("Deduplizierung: Bereits gespeicherte Events werden ignoriert", async () =>
 	assert.equal(res2.ok, true);
 	assert.equal(res2.saved.length, 1);
 	assert.equal(res2.saved[0].id, "p-3");
+	assert.deepEqual({ fromSeq: res2.fromSeq, toSeq: res2.toSeq }, { fromSeq: 2, toSeq: 3 });
 	assert.equal(room.maxSeq, 3);
 
 	// 3. No-Op Upload
 	const res3 = await room.savePackets([packet1, packet2]);
 	assert.equal(res3.ok, true);
 	assert.equal(res3.saved.length, 0);
+	assert.deepEqual({ fromSeq: res3.fromSeq, toSeq: res3.toSeq }, { fromSeq: 3, toSeq: 3 });
 	assert.equal(room.maxSeq, 3);
 });
 

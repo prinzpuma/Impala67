@@ -105,6 +105,24 @@ export const DB = (() => {
 	}
 	const addEvent = (ev) => addEvents([ev]);
 	const allEvents = () => ro("events", (s) => s.getAll());
+	const eventAtSeq = (seq) => ro("events", (s) => s.get(Number(seq) || 0));
+	function eventLogInfo() {
+		ensureOpen();
+		return new Promise((resolve, reject) => {
+			const store = db.transaction("events").objectStore("events");
+			const countReq = store.count(), lastReq = store.openCursor(null, "prev");
+			let count, last, failed = false;
+			const doneInfo = () => {
+				if (failed || count === undefined || last === undefined) return;
+				resolve({ count, maxSeq: last ? Number(last.key) || 0 : 0, lastEventId: String(last?.value?.id || "") });
+			};
+			const fail = (request) => { if (!failed) { failed = true; reject(request.error); } };
+			countReq.onsuccess = () => { count = Number(countReq.result) || 0; doneInfo(); };
+			lastReq.onsuccess = () => { last = lastReq.result || null; doneInfo(); };
+			countReq.onerror = () => fail(countReq);
+			lastReq.onerror = () => fail(lastReq);
+		});
+	}
 	function eventIds() {
 		ensureOpen();
 		return new Promise((res, rej) => {
@@ -140,10 +158,32 @@ export const DB = (() => {
 			req.onerror = () => rej(req.error);
 		});
 	}
+	function eventsAfterSeqAll(seq, upToSeq = Infinity) {
+		ensureOpen();
+		const lower = Number(seq || 0), upper = Number(upToSeq);
+		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
+		return new Promise((res, rej) => {
+			const out = [];
+			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(lower, true));
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return res(out);
+				if (Number.isFinite(upper) && Number(cur.key) > upper) return res(out);
+				out.push(cur.value); cur.continue();
+			};
+			req.onerror = () => rej(req.error);
+		});
+	}
 
 	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
 	const getBlob = (id) => ro("blobs", (s) => s.get(id));
 	const allBlobKeys = () => ro("blobs", (s) => s.getAllKeys());
+	// Abgeleiteter Start-Checkpoint: lokal, versioniert und jederzeit aus dem Event-Log
+	// neu erzeugbar. Der reservierte Blob-Schlüssel erfüllt bewusst kein Sync-ID-Muster.
+	const STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v1__";
+	const getStateCheckpoint = () => ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
+	const putStateCheckpoint = (checkpoint) => rw("blobs", (s) => s.put(checkpoint, STATE_CHECKPOINT_KEY));
+	const clearStateCheckpoint = () => rw("blobs", (s) => s.delete(STATE_CHECKPOINT_KEY));
 
 	// ---- Object-URLs: EIN Cache für die ganze App ---------------------------
 	// Vorher hatte fast jede Datei ihre eigene Lösung: render.js (COVER_URLS/IMG_URLS),
@@ -366,7 +406,10 @@ export const DB = (() => {
 		if (opts.redactSecrets !== false) events = events.map(redactSecretsFromEvent).filter(Boolean);
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
-			for (const [k, rec] of await dump("blobs")) blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf || rec.data) };
+			for (const [k, rec] of await dump("blobs")) {
+				if (k === STATE_CHECKPOINT_KEY) continue;
+				blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf || rec.data) };
+			}
 		}
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
@@ -646,7 +689,7 @@ export const DB = (() => {
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
 		const have = new Set(await allBlobKeys());
 		// PERF: fehlende Blobs in EINER Transaktion statt einer je Blob (Erst-Import mit vielen PDFs/Heften).
-		const missing = Object.entries(blobs).filter(([k]) => !have.has(k));
+		const missing = Object.entries(blobs).filter(([k]) => k !== STATE_CHECKPOINT_KEY && !have.has(k));
 		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
 		// structuredClone vermeidet den teuren JSON-Text-Roundtrip. Die tiefe Kopie
@@ -693,5 +736,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventIds, eventsAfterSeq, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

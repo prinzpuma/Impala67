@@ -1159,6 +1159,33 @@ test("Cross-Tab-Race C: Tab A lädt Snapshot, Tab B schreibt zwischen STATE.load
 	assert.ok(all.some((e) => e.id === "tab-b-ev-13"), "Event 13 muss erhalten bleiben");
 });
 
+test("Start-Checkpoint spielt nur den neuen Tail und fällt bei älterem Import auf Voll-Replay zurück", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+
+	await DB.addEvent({ seq: 1, id: "checkpoint-base", t: "2026-08-20T10:00:00.000Z", type: "pageCreate", payload: { id: "cp-base", title: "Basis" } });
+	const first = await STATE.load();
+	assert.equal(first.checkpointUsed, false);
+	assert.equal(await STATE.persistCheckpoint(), true);
+
+	await DB.addEvent({ seq: 2, id: "checkpoint-tail", t: "2026-08-20T10:01:00.000Z", type: "pageCreate", payload: { id: "cp-tail", title: "Tail" } });
+	S.pages = {};
+	const warm = await STATE.load();
+	assert.equal(warm.checkpointUsed, true);
+	assert.equal(warm.replayed, 1);
+	assert.equal(S.pages["cp-base"].title, "Basis");
+	assert.equal(S.pages["cp-tail"].title, "Tail");
+
+	await DB.addEvent({ seq: 3, id: "checkpoint-older-import", t: "2026-08-19T09:00:00.000Z", type: "pageCreate", payload: { id: "cp-old", title: "Älterer Import" } });
+	S.pages = {};
+	const fallback = await STATE.load();
+	assert.equal(fallback.checkpointUsed, false);
+	assert.equal(fallback.replayed, 3);
+	assert.equal(S.pages["cp-old"].title, "Älterer Import");
+});
+
 // -----------------------------------------------------------------------------
 // 26. IGNOREDBLOBKEYS INVALIDIERUNG ENGER MACHEN
 // -----------------------------------------------------------------------------
