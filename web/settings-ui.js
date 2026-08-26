@@ -31,10 +31,11 @@ export function group(title, content, options = {}) {
 	return '<section class="settings-group' + danger + '"' + id + '><h3>' + e(title) + '</h3><div class="settings-group-card">' + content + "</div>" + (options.footnote ? '<p class="settings-footnote">' + e(options.footnote) + "</p>" : "") + "</section>";
 }
 
-export function row({ id, title, description = "", leading = "", trailing = "", className = "", tag = "div" }) {
+export function row({ id, title, description = "", descriptionId = "", descriptionLive = false, leading = "", trailing = "", className = "", tag = "div" }) {
+	const descriptionAttrs = (descriptionId ? ' id="' + e(descriptionId) + '"' : "") + (descriptionLive ? ' aria-live="polite"' : "");
 	return "<" + tag + (id ? ' id="' + e(id) + '" data-settings-anchor' : "") + ' class="settings-row ' + e(className) + '">' +
 		(leading ? '<span class="settings-row-leading">' + leading + "</span>" : "") +
-		'<span class="settings-row-copy"><b>' + e(title) + "</b>" + (description ? "<small>" + e(description) + "</small>" : "") + "</span>" +
+		'<span class="settings-row-copy"><b>' + e(title) + "</b>" + (description ? "<small" + descriptionAttrs + ">" + e(description) + "</small>" : "") + "</span>" +
 		(trailing ? '<span class="settings-row-control">' + trailing + "</span>" : "") + "</" + tag + ">";
 }
 

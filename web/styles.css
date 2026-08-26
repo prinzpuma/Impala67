@@ -2261,6 +2261,12 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-actions button.danger-text, .danger-text { color: var(--danger) }
 .settings-actions button.icon-only, button.icon-only { width: 30px; padding: 0 }
 .settings-quick-actions { justify-content: flex-start }
+.settings-update-row { min-height: 68px }
+.settings-update-row .settings-row-control { gap: 14px }
+.settings-update-row .settings-row-control > button { min-height: 34px; padding: 5px 12px; white-space: nowrap; border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); font-weight: 650 }
+.settings-version-values { display: flex; align-items: center; gap: 12px; color: var(--text2); font-size: var(--text-2xs); white-space: nowrap }
+.settings-version-values span { display: grid; gap: 1px }
+.settings-version-values b { color: var(--text); font-size: var(--text-xs); font-weight: 650 }
 .settings-status { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px 13px }
 .settings-status > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; flex: 1 }
 .settings-status > #localEmbeddingActions { display: flex; flex: 0 0 auto }
@@ -2342,6 +2348,13 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 	.settings-segmented { max-width: 100%; overflow-x: auto }
 	.settings-row:has(.settings-segmented), .settings-row:has(.settings-accents) { flex-direction: column }
 	.settings-row:has(.settings-segmented) .settings-row-control { width: 100%; justify-content: flex-start }
+	.settings-row:has(.settings-row-control .settings-actions) { align-items: stretch; flex-direction: column; gap: 8px }
+	.settings-row:has(.settings-row-control .settings-actions) .settings-row-control { width: 100%; justify-content: flex-end }
+	.settings-row-control > .settings-actions { padding: 0 }
+	.settings-update-row { align-items: stretch; flex-direction: column }
+	.settings-update-row .settings-row-control { width: 100%; justify-content: space-between; flex-wrap: wrap }
+	.settings-update-row .settings-version-values { flex: 1 1 100% }
+	.settings-update-row .settings-row-control > button { margin-left: auto }
 	.settings-savebar { bottom: 0; margin: 12px 0 0 }
 }
 

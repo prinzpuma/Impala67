@@ -365,6 +365,26 @@ export async function handleDeleteSelectedChats() {
 	RENDER.render();
 }
 
+export async function handleDeleteAllChats() {
+	saveCurrentChat();
+	const ids = CHATS.load().map((chat) => chat.id);
+	if (!ids.length) return 0;
+	if (chatIsBusy(ids)) {
+		U.toast("Die KI antwortet noch in einem Chat — bitte kurz warten.", "error");
+		return 0;
+	}
+	const ok = await U.confirm(ids.length + (ids.length === 1 ? " Chat" : " Chats") + " wirklich löschen? Die Löschung wird auch mit deinen anderen Geräten synchronisiert und kann nicht rückgängig gemacht werden.", {
+		title: "Alle Chats löschen", ok: "Alle löschen", danger: true,
+	});
+	if (!ok) return 0;
+	CHATS.removeMany(ids);
+	ids.forEach(forgetChat);
+	selection().clear();
+	U.toast(ids.length + (ids.length === 1 ? " Chat gelöscht." : " Chats gelöscht."), "success");
+	RENDER.render();
+	return ids.length;
+}
+
 // ---------- Anhänge ----------
 const SLOTS = { image: "pendingImage", file: "pendingTextFile", pdf: "pendingPdf" };
 const ALL_SLOTS = Object.values(SLOTS);
@@ -468,6 +488,7 @@ export const CHAT_FULLSCREEN = {
 	handleModelMenuToggle,
 	handleDeleteChat,
 	handleDeleteSelectedChats,
+	handleDeleteAllChats,
 	handleChatSelectToggle,
 	handleChatSelectAll,
 	handleChatSelectNone,

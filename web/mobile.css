@@ -1077,6 +1077,30 @@ body.mobile-ui .settings-modal-v2.is-mobile .settings-main {
 	-webkit-overflow-scrolling: touch;
 	padding: 16px 14px calc(var(--m-bot) + 24px);
 }
+body.mobile-ui .settings-update-row {
+	align-items: stretch;
+	flex-direction: column;
+	gap: 10px;
+}
+body.mobile-ui .settings-update-row .settings-row-control {
+	width: 100%;
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+body.mobile-ui .settings-update-row .settings-version-values { flex: 1 1 100%; }
+body.mobile-ui .settings-update-row .settings-row-control > button { margin-left: auto; }
+body.mobile-ui .settings-row:has(.settings-row-control .settings-actions) {
+	align-items: stretch;
+	flex-direction: column;
+	gap: 8px;
+}
+body.mobile-ui .settings-row:has(.settings-row-control .settings-actions) .settings-row-control {
+	width: 100%;
+	justify-content: flex-end;
+}
+body.mobile-ui .settings-row-control > .settings-actions {
+	padding: 0;
+}
 body.mobile-ui .settings-mobile-row {
 	display: flex;
 	align-items: center;

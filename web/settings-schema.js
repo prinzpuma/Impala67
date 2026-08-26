@@ -48,6 +48,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "performance-profiler", section: "data", group: "Diagnose", label: "Performance-Profiler", description: "Sporadische Hänger und langsame Sync-, Render- oder Eingabephasen lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln" },
 	{ id: "updates", section: "data", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
 	{ id: "danger-zone", section: "data", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
+	{ id: "danger-chats", section: "data", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
 	{ id: "controller-status", section: "devices", group: "Controller", label: "Controller-Steuerung", description: "Gamepad verbinden, Hinweise und Vibration", keywords: "gamepad pad xbox playstation stadia" },
 	{ id: "controller-map", section: "devices", group: "Belegung", label: "Tastenbelegung", description: "Aktionen an Controller-Tasten binden", keywords: "mapping anlernen taste button" },
 	{ id: "controller-advanced", section: "devices", group: "Erweitert", label: "Deadzone & HID", description: "Rohe Achsen und nicht standardisierte Controller", keywords: "hid achse trigger deadzone technisch" },

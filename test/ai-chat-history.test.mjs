@@ -32,3 +32,27 @@ test("eine gleich lange Umformulierung wird als neue Chatfassung gesichert", asy
 	assert.equal(writes[1].messages[0].content, "BBBB");
 	assert.notEqual(writes[1].updated, writes[0].updated);
 });
+
+test("mehrere Chats werden vollständig über einzelne synchronisierte Tombstones gelöscht", async () => {
+	CHATS.save([]);
+	await Promise.resolve();
+	const deleted = [];
+	const now = new Date().toISOString();
+	S.chatSessions = {
+		"bulk-1": { id: "bulk-1", title: "Eins", messages: [], created: now, updated: now },
+		"bulk-2": { id: "bulk-2", title: "Zwei", messages: [], created: now, updated: now },
+	};
+	STATE.dispatch = async (type, payload) => {
+		if (type !== "chatDelete") return;
+		deleted.push(structuredClone(payload));
+		S.chatSessions[payload.id] = { ...S.chatSessions[payload.id], deleted: true, deletedAt: payload.deletedAt };
+	};
+
+	assert.deepEqual(CHATS.load().map((chat) => chat.id).sort(), ["bulk-1", "bulk-2"]);
+	assert.equal(CHATS.removeMany(["bulk-1", "bulk-2"]), 2);
+	await Promise.resolve();
+
+	assert.deepEqual(deleted.map((entry) => entry.id).sort(), ["bulk-1", "bulk-2"]);
+	assert.equal(new Set(deleted.map((entry) => entry.deletedAt)).size, 1, "ein gemeinsamer Löschzeitpunkt");
+	assert.deepEqual(CHATS.load(), []);
+});

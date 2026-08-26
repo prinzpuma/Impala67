@@ -3,6 +3,7 @@
 import { S } from "./state.js";
 import { U } from "./util.js";
 import { DRIVE } from "./drive.js";
+import { CHATS } from "./chats.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
@@ -11,7 +12,7 @@ import { backupActionState, cloudflareActionState, driveActionState, updateActio
 import * as UI from "./settings-ui.js";
 
 const e = (value) => U.esc(String(value ?? ""));
-const button = (label, id, className = "") => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '">' + e(label) + "</button>";
+const button = (label, id, className = "", disabled = false) => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + e(label) + "</button>";
 const linkButton = (label, section, anchor) => '<button type="button" class="settings-link" data-settings-go="' + e(section) + '"' + (anchor ? ' data-settings-anchor-target="' + e(anchor) + '"' : "") + '>' + e(label) + UI.icon("chevron") + "</button>";
 const switchControl = (id, label, checked) => '<label class="settings-switch"><input id="' + e(id) + '" type="checkbox"' + (checked ? " checked" : "") + ' aria-label="' + e(label) + '"><span aria-hidden="true"></span></label>';
 
@@ -250,18 +251,24 @@ export function refreshCloudflareStatusUi() {
 }
 
 function renderData(vm) {
-	const backupAction = backupActionState({ hasBackup: !!localStorage.getItem("impala67LastBackup") });
-	const backup = UI.row({ title: "Vollständiges Backup", description: "Event-Log und Dateien als JSON", trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
+	const lastBackup = localStorage.getItem("impala67LastBackup");
+	const backupAction = backupActionState({ hasBackup: !!lastBackup });
+	const backupDescription = (lastBackup ? "Zuletzt " + U.fmtDate(lastBackup) + " · " : "") + "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt";
+	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
 	const exports = UI.row({ title: "Lerndaten", description: "Lokale Telemetrie als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
 	const updateAction = updateActionState();
-	const update = UI.row({ title: "Installierte Version", description: "PWA / Browser", trailing: '<span id="updateLocalVer" class="settings-value">v' + e(String(vm.version).replace(/^v/i, "")) + "</span>" }) + UI.row({ title: "Verfügbare Version", description: "Wird nur auf Wunsch geprüft", trailing: '<span id="updateRemoteVer" class="settings-value">—</span>' }) + UI.actions([{ label: updateAction.label, id: "btnPwaUpdateAction", data: 'data-update-action="' + updateAction.mode + '"', live: true }]) + '<p class="settings-footnote" id="updateStatus" aria-live="polite"></p>';
+	const updateValues = '<span class="settings-version-values"><span>Installiert <b id="updateLocalVer">v' + e(String(vm.version).replace(/^v/i, "")) + '</b></span><span>Verfügbar <b id="updateRemoteVer">—</b></span></span>';
+	const updateButton = '<button type="button" id="btnPwaUpdateAction" data-update-action="' + e(updateAction.mode) + '" aria-live="polite">' + e(updateAction.label) + "</button>";
+	const update = UI.row({ title: "App-Version", description: "Updates werden nur auf Wunsch geprüft", descriptionId: "updateStatus", descriptionLive: true, trailing: updateValues + updateButton, className: "settings-update-row" });
 	const perf = PERF_PROFILER.status();
-	const diagnostics = UI.row({ title: "Performance-Profiler", description: perf.enabled ? (perf.records + " lokale Messpunkte gesammelt") : "Protokolliert Hänger, langsame Eingaben, Render- und Sync-Phasen", trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
-		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "") +
-		'<p class="settings-footnote">Bleibt vollständig auf diesem Gerät. Erfasst Zeitpunkte, Dauer, Ansichts- und Mengendaten – niemals Notizinhalte, Eingaben oder Zugangsdaten.</p>';
-	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") });
-	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup", footnote: "Importe werden konfliktfrei mit dem vorhandenen Event-Log zusammengeführt." }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
+	const perfDescription = (perf.enabled ? perf.records + " Messpunkte · " : "") + "Erfasst lokal Zeitpunkte, Dauer, Ansicht und Mengen bei Hängern in Eingabe, Rendern und Sync – nie Inhalte oder Zugangsdaten";
+	const diagnostics = UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
+		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "");
+	const chats = CHATS.load();
+	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys, Chats und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") }) +
+		UI.row({ id: "danger-chats", title: "Alle Chats löschen", description: chats.length ? chats.length + (chats.length === 1 ? " Chat" : " Chats") + " · wird per Sync auch auf deinen anderen Geräten gelöscht" : "Keine gespeicherten Chats vorhanden", trailing: button("Chats löschen", "btnResetChats", "danger", !chats.length) });
+	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup" }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
 }
 
 function renderDevices() {
