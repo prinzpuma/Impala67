@@ -188,8 +188,8 @@ function cloudflareContent() {
 	const progressHtml = (cf.status === "syncing" && cf.progress && cf.progress.total > 0)
 		? '<div style="margin: 8px 0 12px 0; padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">' +
 			'<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; color:var(--text-muted, #888); font-weight:500;">' +
-				'<span>Übertrage Notizen…</span>' +
-				'<span>' + cf.progress.current + ' / ' + cf.progress.total + ' (' + cf.progress.percent + ' %)</span>' +
+				'<span>' + e(cf.progress.label || "Synchronisiere…") + '</span>' +
+				'<span>' + cf.progress.percent + ' %</span>' +
 			'</div>' +
 			'<div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">' +
 				'<div style="width: ' + cf.progress.percent + '%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div>' +

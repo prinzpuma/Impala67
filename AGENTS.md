@@ -3,6 +3,7 @@
 ## Produkt und Architektur
 
 - Impala67 ist eine statische, installierbare PWA. `web/` ist zugleich der veröffentlichte App-Ordner.
+- Projekt ist darauf ausgelegt für mich kostenlos zu sein.
 - Die App ist local-first: fachliche Daten liegen in IndexedDB; Google Drive synchronisiert optional über `appDataFolder`, der Cloudflare Worker optional über E2EE-Events.
 - Das Frontend bleibt eine statische PWA ohne Desktop-Wrapper. `server/` enthält die optionale Cloudflare-Komponente mit Worker, Durable Objects, D1 und R2. Neue Frontend-Funktionen müssen in aktuellen Browsern und als installierte PWA funktionieren.
 - Die App nutzt native ES-Module ohne Bundler. Bewahre diesen Ansatz, außer eine Aufgabe fordert ausdrücklich eine Baukette.

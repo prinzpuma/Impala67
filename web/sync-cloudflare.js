@@ -29,6 +29,7 @@ import {
 	generateSyncKey,
 	sha256Hex,
 } from "./sync-crypto.js";
+import { isRetryableSyncError, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes } from "./sync-transfer.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -44,7 +45,6 @@ const LOCAL_SYNC_DELAY = 80;
 const SYNC_FETCH_TIMEOUT_MS = 45000;
 const BLOB_FETCH_TIMEOUT_MS = 120000;
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
-const UTF8_ENCODER = new TextEncoder();
 
 const fallbackStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 const LS = {
@@ -78,8 +78,8 @@ async function mapLimit(items, limit, fn) {
 }
 
 export const CLOUDFLARE_SYNC = (() => {
-	let socket = null, reconnectTimer = 0, pingTimer = 0, localTimer = 0;
-	let reconnectAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
+	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
+	let reconnectAttempts = 0, retryAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
 	const blobHashCache = new Map(), ignoredBlobKeys = new Set();
 	const pendingUploadedEventIds = new Set();
@@ -105,6 +105,18 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 	};
 	const setStatus = (status, label, detail = label) => { Object.assign(state, { status, label, detail }); emit(); };
+	const setProgress = (label, current, total) => {
+		const previous = state.progress;
+		const safeTotal = Math.max(0, Number(total) || 0);
+		const safeCurrent = Math.min(safeTotal, Math.max(0, Number(current) || 0));
+		state.progress = safeTotal > 0 ? {
+			label,
+			current: safeCurrent,
+			total: safeTotal,
+			percent: Math.round((safeCurrent / safeTotal) * 100),
+		} : null;
+		if (previous?.label !== state.progress?.label || previous?.percent !== state.progress?.percent || previous?.total !== state.progress?.total) emit();
+	};
 	const keys = () => syncCursorStorageKeys(credentials?.userId);
 	const saveRecv = (seq) => { state.lastSyncedSeq = Number(seq) || 0; LS.setItem(keys().lastSynced, String(state.lastSyncedSeq)); };
 	const saveSend = (seq) => { state.lastUploadedLocalSeq = Number(seq) || 0; LS.setItem(keys().lastUploaded, String(state.lastUploadedLocalSeq)); };
@@ -121,16 +133,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		return credentials ? `${base}${endpoint}${sep}user=${encodeURIComponent(credentials.userId)}` : `${base}${endpoint}`;
 	}
 
-	async function fetchTimed(url, init = {}, timeoutMs = SYNC_FETCH_TIMEOUT_MS) {
-		if (typeof AbortController === "undefined") return fetch(url, init);
-		const controller = new AbortController(), upstream = init.signal;
-		const abort = () => controller.abort(upstream?.reason);
-		if (upstream?.aborted) abort();
-		else upstream?.addEventListener?.("abort", abort, { once: true });
-		const timer = setTimeout(() => controller.abort(new Error("Zeitüberschreitung beim Cloudflare-Sync.")), timeoutMs);
-		try { return await fetch(url, { ...init, signal: controller.signal }); }
-		finally { clearTimeout(timer); upstream?.removeEventListener?.("abort", abort); }
-	}
+	const fetchTimed = (url, init = {}, stallTimeoutMs = SYNC_FETCH_TIMEOUT_MS, onProgress) =>
+		requestWithStallTimeout(url, init, { stallTimeoutMs, onProgress });
 
 	function authHeaders(extra = {}) {
 		return credentials ? {
@@ -144,7 +148,9 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function responseError(response, fallback) {
 		let message = "";
 		try { message = String((await response.json())?.error || "").trim(); } catch {}
-		return new Error(message || `${fallback} (Status ${response.status})`);
+		const error = new Error(message || `${fallback} (Status ${response.status})`);
+		error.status = Number(response.status) || 0;
+		return error;
 	}
 
 	function readable(error) {
@@ -214,7 +220,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function pull() {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		let received = 0;
+		let received = 0, progressStart = state.lastSyncedSeq;
 		while (true) {
 			const since = state.lastSyncedSeq;
 			const response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
@@ -232,6 +238,8 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 
 			const packets = data.events || [];
+			const maxSeq = Math.max(since, Number(data.maxSeq) || 0);
+			if (maxSeq > progressStart) setProgress("Empfange Notizen…", since - progressStart, maxSeq - progressStart);
 			if (!packets.length) {
 				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
 				break;
@@ -255,6 +263,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			}
 			received += incoming.length;
 			saveRecv(packets.at(-1).seq);
+			if (maxSeq > progressStart) setProgress("Empfange Notizen…", state.lastSyncedSeq - progressStart, maxSeq - progressStart);
 			if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
 			if (!data.hasMore) break;
 		}
@@ -264,27 +273,37 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function postPackets(packets) {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		const finishProfile = PERF_PROFILER.start("cloudflare.upload", { packets: packets.length }, 20);
-		let requests = 0, utf8Bytes = 0;
+		const batches = [];
+		for (let i = 0; i < packets.length;) {
+			const batch = [];
+			let chars = 0;
+			while (i < packets.length && batch.length < MAX_HTTP_PACKETS) {
+				const packet = packets[i], n = encryptedPacketChars(packet);
+				if (batch.length && chars + n > MAX_HTTP_CHARS) break;
+				batch.push(packet); chars += n; i++;
+			}
+			const body = JSON.stringify({ events: batch });
+			batches.push({ body, bytes: transferBodyBytes(body) });
+		}
+		const totalBytes = batches.reduce((sum, batch) => sum + batch.bytes, 0);
+		let requests = 0, utf8Bytes = 0, completedBytes = 0;
+		setProgress("Übertrage Notizen…", 0, totalBytes);
 		try {
-			for (let i = 0; i < packets.length;) {
-				const batch = [];
-				let chars = 0;
-				while (i < packets.length && batch.length < MAX_HTTP_PACKETS) {
-					const packet = packets[i], n = encryptedPacketChars(packet);
-					if (batch.length && chars + n > MAX_HTTP_CHARS) break;
-					batch.push(packet); chars += n; i++;
-				}
-				const body = JSON.stringify({ events: batch });
+			for (const batch of batches) {
 				requests++;
-				utf8Bytes += UTF8_ENCODER.encode(body).byteLength;
+				utf8Bytes += batch.bytes;
 				const response = await fetchTimed(api("/api/events"), {
 					method: "POST",
 					headers: authHeaders({ "Content-Type": "application/json" }),
-					body,
+					body: batch.body,
+				}, SYNC_FETCH_TIMEOUT_MS, ({ direction, loaded }) => {
+					if (direction === "upload") setProgress("Übertrage Notizen…", completedBytes + Math.min(batch.bytes, loaded), totalBytes);
 				});
 				if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
 				const data = await response.json();
 				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
+				completedBytes += batch.bytes;
+				setProgress("Übertrage Notizen…", completedBytes, totalBytes);
 			}
 			finishProfile({ requests, utf8Bytes });
 		} catch (error) {
@@ -315,13 +334,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		const packets = [];
 		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { events: wire.length, chunks: chunks.length }, 10);
 		try {
+			setProgress("Bereite Notizen vor…", 0, chunks.length);
 			for (let i = 0; i < chunks.length; i++) {
 				const events = chunks[i];
 				const id = `p-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
 				const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
 				packets.push({ id, ...encrypted });
-				state.progress = { current: i + 1, total: chunks.length, percent: Math.round(((i + 1) / chunks.length) * 100) };
-				emit();
+				setProgress("Bereite Notizen vor…", i + 1, chunks.length);
 			}
 			finishEncrypt({ packets: packets.length });
 		} catch (error) {
@@ -364,29 +383,51 @@ export const CLOUDFLARE_SYNC = (() => {
 		const remote = await listRemoteBlobs();
 
 		const upload = [...localByKey].filter(([key]) => !remote.has(key));
-		await mapLimit(upload, 3, async ([key, id]) => {
+		const uploadProgress = new Array(upload.length).fill(0);
+		const updateFileProgress = (label, values) => setProgress(label, values.reduce((sum, value) => sum + value, 0), values.length);
+		if (upload.length) updateFileProgress("Übertrage Dateien…", uploadProgress);
+		await mapLimit(upload, 3, async ([key, id], index) => {
 			const record = await DB.getBlob(id);
-			if (!record) return;
+			if (!record) { uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress); return; }
 			const encrypted = await encryptBlobRecord(credentials.cryptoKey, id, record);
 			const response = await fetchTimed(api(`/api/blob/${key}`), {
 				method: "PUT",
 				headers: authHeaders({ "Content-Type": "application/octet-stream", "X-Impala-IV": encrypted.iv }),
 				body: encrypted.bytes,
-			}, BLOB_FETCH_TIMEOUT_MS);
+			}, BLOB_FETCH_TIMEOUT_MS, ({ direction, loaded, total }) => {
+				if (direction !== "upload") return;
+				uploadProgress[index] = Math.min(0.99, loaded / Math.max(1, total || encrypted.bytes.byteLength));
+				updateFileProgress("Übertrage Dateien…", uploadProgress);
+			});
 			if (!response.ok) throw await responseError(response, `Blob ${id} konnte nicht hochgeladen werden`);
 			const usage = Number(response.headers.get("X-Impala-Usage"));
 			if (Number.isFinite(usage)) state.usage = formatStorageUsage(usage);
+			uploadProgress[index] = 1;
+			updateFileProgress("Übertrage Dateien…", uploadProgress);
 		});
 
 		const download = [...remote].filter((key) => !localByKey.has(key) && !ignoredBlobKeys.has(key));
-		await mapLimit(download, 3, async (key) => {
-			const response = await fetchTimed(api(`/api/blob/${key}`), { headers: authHeaders() }, BLOB_FETCH_TIMEOUT_MS);
+		const downloadProgress = new Array(download.length).fill(0);
+		if (download.length) updateFileProgress("Empfange Dateien…", downloadProgress);
+		await mapLimit(download, 3, async (key, index) => {
+			const response = await fetchTimed(api(`/api/blob/${key}`), { headers: authHeaders() }, BLOB_FETCH_TIMEOUT_MS, ({ direction, loaded, total, lengthComputable }) => {
+				if (direction !== "download" || !lengthComputable) return;
+				downloadProgress[index] = Math.min(0.99, loaded / Math.max(1, total));
+				updateFileProgress("Empfange Dateien…", downloadProgress);
+			});
 			if (!response.ok) throw await responseError(response, "Blob konnte nicht geladen werden");
 			const iv = response.headers.get("X-Impala-IV");
 			const record = await decryptBlobRecord(credentials.cryptoKey, iv, new Uint8Array(await response.arrayBuffer()));
 			if (await blobOpaqueKey(record.id) !== key) throw new Error("Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.");
-			if (!isSyncBlobId(record.id) || !isBlobAlive(record.id, S.pages)) { ignoredBlobKeys.add(key); return; }
+			if (!isSyncBlobId(record.id) || !isBlobAlive(record.id, S.pages)) {
+				ignoredBlobKeys.add(key);
+				downloadProgress[index] = 1;
+				updateFileProgress("Empfange Dateien…", downloadProgress);
+				return;
+			}
 			await DB.putBlob(record.id, record.buf, record.meta);
+			downloadProgress[index] = 1;
+			updateFileProgress("Empfange Dateien…", downloadProgress);
 		});
 		return upload.length > 0 || download.length > 0;
 	}
@@ -398,13 +439,16 @@ export const CLOUDFLARE_SYNC = (() => {
 			throw readable(new Error("Das Gerät ist offline."));
 		}
 		try {
+			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
 			const received = await PERF_PROFILER.run("cloudflare.pull", () => pull(), {}, 20);
 			if (blobInventoryDirty || received > 0) {
+				state.progress = null;
 				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
 				await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20);
 				blobInventoryDirty = false;
 			}
+			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
 			const uploaded = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
 			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
@@ -414,6 +458,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				pendingUploadedEventIds.clear();
 			}
 			state.progress = null; state.lastError = null;
+			clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 			finishProfile({ received, uploaded });
 			return true;
@@ -423,11 +468,25 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 	}
 
+	function scheduleHttpRetry(error) {
+		if (!isRetryableSyncError(error) || !state.url || !credentials) return false;
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+		clearTimeout(retryTimer);
+		const delay = syncRetryDelayMs(retryAttempts++);
+		setStatus("syncing", "Verbindung unterbrochen", `Sync wird in ${Math.max(1, Math.ceil(delay / 1000))} s fortgesetzt.`);
+		retryTimer = setTimeout(() => {
+			retryTimer = 0;
+			requestSync().then(() => connectWebSocket()).catch(() => {});
+		}, delay);
+		return true;
+	}
+
 	function requestSync(forceAll = false) {
 		if (!state.url || !credentials) return Promise.reject(new Error("Cloudflare-Sync ist nicht eingerichtet."));
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
 			return Promise.reject(readable(new Error("Das Gerät ist offline.")));
 		}
+		clearTimeout(retryTimer); retryTimer = 0;
 		syncAgain = true; forceAgain ||= forceAll;
 		if (syncPromise) return syncPromise;
 		syncPromise = (async () => {
@@ -438,7 +497,9 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 				return true;
 			} catch (error) {
-				const e = readable(error); state.lastError = e.message; setStatus("error", "Sync-Fehler", e.message); throw e;
+				const e = readable(error); state.lastError = e.message;
+				if (!scheduleHttpRetry(e)) setStatus("error", "Sync-Fehler", e.message);
+				throw e;
 			} finally { syncPromise = null; }
 		})();
 		return syncPromise;
@@ -536,6 +597,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
+		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 		closeSocket(); credentials = null; pendingUploadedEventIds.clear();
 		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
 		state.url = cleanUrl; state.syncKey = cleanKey;
@@ -561,7 +623,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	function disconnect() {
-		configureGeneration++; clearTimeout(localTimer); closeSocket(); credentials = null;
+		configureGeneration++; clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0; closeSocket(); credentials = null;
 		blobHashCache.clear(); ignoredBlobKeys.clear(); pendingUploadedEventIds.clear();
 		setStatus("disconnected", "Getrennt");
 	}
@@ -583,7 +645,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		initialized = true;
 		if (typeof window !== "undefined") {
 			window.addEventListener("offline", () => { closeSocket(); clearTimeout(localTimer); clearTimeout(reconnectTimer); });
-			window.addEventListener("online", () => { connectWebSocket(); requestSync().catch(() => {}); });
+			window.addEventListener("online", () => { clearTimeout(retryTimer); retryTimer = 0; connectWebSocket(); requestSync().catch(() => {}); });
 			window.addEventListener("visibilitychange", () => { if (!document.hidden && credentials) { connectWebSocket(); requestSync().catch(() => {}); } });
 		}
 		void (async () => {

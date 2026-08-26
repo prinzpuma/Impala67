@@ -745,6 +745,59 @@ test("Regression (echter CLOUDFLARE_SYNC): Retry nach verlorenem HTTP-Response v
 	}
 });
 
+test("Netzwerkabbruch wird automatisch fortgesetzt, ohne manuellen Sync-Klick", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+	const originalSetTimeout = globalThis.setTimeout;
+	const originalAllBlobKeys = DB.allBlobKeys;
+	const originalAllEvents = DB.allEvents;
+	globalThis.WebSocket = undefined;
+	globalThis.setTimeout = (fn, delay, ...args) => originalSetTimeout(fn, delay === 1000 ? 0 : delay, ...args);
+	DB.allBlobKeys = async () => [];
+	DB.allEvents = async () => [{
+		seq: 1,
+		id: "automatic-retry-event",
+		t: "2026-08-26T12:00:00Z",
+		type: "pageCreate",
+		payload: { id: "retry-page", title: "Wird fortgesetzt" },
+	}];
+
+	let postAttempts = 0;
+	globalThis.fetch = async (url, init = {}) => {
+		const value = String(url);
+		if (value.includes("/api/sync")) {
+			return new Response(JSON.stringify({ events: [], maxSeq: postAttempts > 1 ? 1 : 0, hasMore: false, generation: 1 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (value.includes("/api/events") && init.method === "POST") {
+			postAttempts++;
+			if (postAttempts === 1) throw new TypeError("Failed to fetch");
+			return new Response(JSON.stringify({ ok: true, savedCount: 1, usage: 100, generation: 1 }), {
+				status: 200, headers: { "Content-Type": "application/json" },
+			});
+		}
+		return new Response(JSON.stringify({ keys: [], cursor: "" }), {
+			status: 200, headers: { "Content-Type": "application/json" },
+		});
+	};
+
+	try {
+		assert.equal(await CLOUDFLARE_SYNC.configure("https://sync.example.com", generateSyncKey()), false);
+		await new Promise((resolve) => originalSetTimeout(resolve, 50));
+		assert.equal(postAttempts, 2);
+		assert.equal(CLOUDFLARE_SYNC.status().status, "connected");
+		assert.equal(CLOUDFLARE_SYNC.status().lastUploadedLocalSeq, 1);
+	} finally {
+		CLOUDFLARE_SYNC.disconnect();
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		globalThis.setTimeout = originalSetTimeout;
+		DB.allBlobKeys = originalAllBlobKeys;
+		DB.allEvents = originalAllEvents;
+	}
+});
+
 test("Regression (echter CLOUDFLARE_SYNC): Lückenloser Prefix-Schutz — seq1 UNIQUE-A, seq2 EXISTING-B, Server hat EXISTING-B -> UNIQUE-A wird hochgeladen", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
