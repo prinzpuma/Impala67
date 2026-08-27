@@ -8,6 +8,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 
@@ -102,7 +103,10 @@ function renderAppearance(vm) {
 	], vm.fontSize, "Schriftgröße") }) + UI.row({ id: "motion", title: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", trailing: switchControl("inpReduceMotion", "Bewegung reduzieren", vm.motion === "reduced") });
 	const hasBackground = document.body.classList.contains("has-custom-background");
 	const background = UI.row({ id: "background", title: "Eigenes Hintergrundbild", description: hasBackground ? "Eigenes Bild aktiv · bleibt lokal auf diesem Gerät" : "Bleibt lokal auf diesem Gerät", trailing: UI.actions([{ label: hasBackground ? "Bild ändern" : "Bild auswählen", id: "btnPickBg" }, { label: "Entfernen", id: "btnClearBg", className: "secondary", hidden: !hasBackground }]) });
-	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + UI.group("Hintergrund", background));
+	const androidFullscreen = vm.androidFullscreenAvailable
+		? UI.group("Bildschirm", UI.row({ id: "android-fullscreen", title: "Android-Vollbild", description: "Blendet die Android-Status- und Navigationsleiste aus. Nach einem Neustart wird Vollbild beim ersten Tippen wieder aktiviert.", trailing: switchControl("inpAndroidFullscreen", "Android-Vollbild", vm.androidFullscreenEnabled) }))
+		: "";
+	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + androidFullscreen + UI.group("Hintergrund", background));
 }
 
 function renderAiModels(vm) {
@@ -358,7 +362,7 @@ export function renderSettingsShell(section, body, query = "") {
 }
 
 export function renderSearchResults(query) {
-	const results = searchSettings(query);
+	const results = searchSettings(query, 8, { android: ANDROID_FULLSCREEN.available() });
 	if (!query.trim()) return "";
 	if (!results.length) return '<div class="settings-search-empty">Keine Einstellung gefunden</div>';
 	return results.map((item) => '<button type="button" data-settings-go="' + e(item.section) + '" data-settings-anchor-target="' + e(item.id) + '"><span><b>' + e(item.label) + "</b><small>" + e(item.sectionLabel) + " · " + e(item.description) + "</small></span>" + UI.icon("chevron") + "</button>").join("");

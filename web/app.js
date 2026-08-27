@@ -1639,6 +1639,10 @@ function wireEvents() {
 			SETTINGS.handleAppearanceSelect("motion", e.target.checked ? "reduced" : "full");
 			return;
 		}
+		if (e.target.id === "inpAndroidFullscreen") {
+			await SETTINGS.handleAndroidFullscreenToggle(!!e.target.checked);
+			return;
+		}
 		if (e.target.id === "inpOverlearn") {
 			SETTINGS.handleAppearanceSelect("overlearn", e.target.checked ? "on" : "off");
 			return;

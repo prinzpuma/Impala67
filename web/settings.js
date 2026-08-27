@@ -17,6 +17,7 @@ import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateSt
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
+import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -206,6 +207,8 @@ function settingsViewModel() {
 		density: localStorage.getItem("impala67Density") || "compact",
 		motion: localStorage.getItem("impala67Motion") || "reduced",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
+		androidFullscreenAvailable: ANDROID_FULLSCREEN.available(),
+		androidFullscreenEnabled: ANDROID_FULLSCREEN.enabled(),
 		homeLayout,
 		homeSections: HOME_SECTIONS,
 	};
@@ -1229,6 +1232,12 @@ export function handleAppearanceSelect(kind, value) {
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
 	openSettings(S.settingsSection === "ai" ? "ai" : "appearance");
+}
+
+export async function handleAndroidFullscreenToggle(enabled) {
+	const changed = await ANDROID_FULLSCREEN.setEnabled(enabled);
+	if (!changed) U.toast("Android-Vollbild konnte nicht aktiviert werden.", "error");
+	openSettings("appearance", "android-fullscreen");
 }
 
 export function handleSystemThemeToggle(enabled) {

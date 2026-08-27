@@ -10,6 +10,7 @@ test("neuer Service Worker übernimmt eine laufende alte App nicht automatisch",
 	assert.match(sw, /sync-maintenance\.js/);
 	assert.match(sw, /rag-worker\.js/);
 	assert.match(sw, /rag-ranking\.js/);
+	assert.match(sw, /android-fullscreen\.js/);
 });
 
 test("Updater aktiviert waiting Worker erst beim bewussten Installationspfad", async () => {

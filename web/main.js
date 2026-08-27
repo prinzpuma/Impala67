@@ -40,6 +40,7 @@ import { SYNC_MAINTENANCE } from "./sync-maintenance.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import "./performance-profiler-settings.js";
 import "./pdfpaste.js";
+import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
 
 // Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
 // Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.
@@ -79,6 +80,7 @@ PERF_PROFILER.setContextProvider(() => ({
 	eventsLoaded: STATE.loadedSeq?.() || 0,
 }));
 PERF_PROFILER.init();
+ANDROID_FULLSCREEN.init();
 
 // config.local.js bewusst ZULETZT (stand vorher oben): statische Imports laufen
 // immer zuerst, das await verzögerte also nur die window-Bindings darunter —

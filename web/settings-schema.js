@@ -29,6 +29,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "density", section: "appearance", group: "Lesbarkeit", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
 	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung", description: "Animationen reduzieren", keywords: "animation motion barrierefreiheit" },
+	{ id: "android-fullscreen", section: "appearance", group: "Bildschirm", label: "Android-Vollbild", description: "Status- und Navigationsleiste ausblenden", keywords: "android vollbild fullscreen navigationsleiste systemleiste", platform: "android" },
 	{ id: "background", section: "appearance", group: "Hintergrund", label: "Eigenes Hintergrundbild", description: "Bild auswählen oder entfernen", keywords: "foto wallpaper bild" },
 	{ id: "ai-models", section: "ai", group: "Modelle", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
 	{ id: "ai-sources", section: "ai", group: "Quellen", label: "KI-Quellen", description: "OpenAI, Gemini, LM Studio und eigene Endpunkte", keywords: "api key schlüssel token url endpoint anbieter" },
@@ -63,10 +64,10 @@ export function resolveSettingsSection(section) {
 	return SETTINGS_SECTIONS.some((entry) => entry.id === resolved) ? resolved : "overview";
 }
 
-export function searchSettings(query, limit = 8) {
+export function searchSettings(query, limit = 8, context = {}) {
 	const terms = normalize(query).split(" ").filter(Boolean);
 	if (!terms.length) return [];
-	return SETTINGS_ITEMS.map((item) => {
+	return SETTINGS_ITEMS.filter((item) => !item.platform || context[item.platform]).map((item) => {
 		const section = SETTINGS_SECTIONS.find((entry) => entry.id === item.section);
 		const title = normalize(item.label);
 		const haystack = normalize([item.label, item.description, item.group, item.keywords, section?.label].join(" "));
