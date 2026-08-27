@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import {
 	ANDROID_FULLSCREEN_KEY,
@@ -70,4 +71,10 @@ test("saved fullscreen is restored on the first ordinary click", async () => {
 	await documentRef.listeners.get("click")({ target: { closest: () => null } });
 	assert.equal(documentRef.fullscreenElement, documentRef.documentElement);
 	assert.equal(documentRef.listeners.has("click"), false);
+});
+
+test("settings public API exposes the fullscreen toggle used by app.js", async () => {
+	const source = await readFile(new URL("../web/settings.js", import.meta.url), "utf8");
+	const publicApi = source.slice(source.indexOf("export const SETTINGS ="));
+	assert.match(publicApi, /\bhandleAndroidFullscreenToggle\b/);
 });

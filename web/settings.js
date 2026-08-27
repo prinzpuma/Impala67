@@ -1335,6 +1335,7 @@ export const SETTINGS = {
 	handleThemeSelect,
 	handleSystemThemeToggle,
 	handleAppearanceSelect,
+	handleAndroidFullscreenToggle,
 	handleDashboardToggle,
 	handleDashboardMove,
 	handleDashboardReorder,
