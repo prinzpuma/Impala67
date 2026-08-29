@@ -1753,13 +1753,13 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 }
 /* == WYSIWYG-Editor (editor.js) — Notion-Look, 13. Juli 2026 Alle == */
 /* == --- Editierbare Felder --- == */
-.blk-text { flex: 1; min-width: 0; min-height: 1.5em; padding: 3px 2px; outline: none; border: none; white-space: pre-wrap; word-break: break-word; line-height: 1.5; font-size: 16px; color: var(--text); caret-color: var(--text) }
+.blk-text { position: relative; flex: 1; min-width: 0; min-height: 1.5em; padding: 3px 2px; outline: none; border: none; white-space: pre-wrap; word-break: break-word; line-height: 1.5; font-size: 16px; color: var(--text); caret-color: var(--text) }
 .blk-text a { color: var(--text); text-decoration: underline; text-decoration-color: rgba(255,255,255,0.35); text-underline-offset: 2px }
 .blk-text a:hover { text-decoration-color: currentColor }
 .blk-text u { text-decoration: underline; text-underline-offset: 2px }
 .blk-text code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; color: rgb(var(--c-red)); background: var(--surface-hover); border-radius: var(--radius-xs); padding: 0.2em 0.4em }
 /* Platzhalter: Überschriften/Listen immer wenn leer, Absätze nur… */
-.blk-text:empty::before { content: attr(data-placeholder); color: color-mix(in srgb, var(--text2) 45%, transparent); pointer-events: none; float: left; height: 0 }
+.blk-text:empty::before { content: attr(data-placeholder); color: color-mix(in srgb, var(--text2) 45%, transparent); pointer-events: none; position: absolute; left: 2px; top: 3px }
 .blk [data-btype] .blk-text:empty::before { content: "" }
 .blk .blk-text:empty:focus::before, .blk[data-btype="h1"] .blk-text:empty::before, .blk[data-btype="h2"] .blk-text:empty::before, .blk[data-btype="h3"] .blk-text:empty::before, .blk[data-btype="toggle"] .blk-text:empty::before { content: attr(data-placeholder) }
 /* == --- Überschriften --- == */
