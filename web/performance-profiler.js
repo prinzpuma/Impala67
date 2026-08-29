@@ -11,6 +11,7 @@ const LAG_THRESHOLD_MS = 120;
 // getrennte Doppelvorfälle wie im ersten v2-Praxis-Trace.
 const STALL_FLUSH_MS = 500;
 const STALL_MERGE_GAP_MS = 8;
+const OPERATION_HISTORY_MS = 10000;
 const NOISY_INPUT_EVENTS = new Set([
 	"pointerover", "pointerout", "pointerenter", "pointerleave",
 	"mouseover", "mouseout", "mouseenter", "mouseleave",
@@ -30,6 +31,7 @@ let nextOperationId = 1;
 let lastContext = null;
 let pendingStalls = [];
 let stallTimer = 0;
+let recentOperations = [];
 
 const storage = () => typeof localStorage !== "undefined" ? localStorage : null;
 const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
@@ -84,10 +86,28 @@ function currentContext() {
 	};
 }
 
+function operationsDuring(startMs, endMs) {
+	const current = now();
+	recentOperations = recentOperations.filter((entry) => current - entry.ended <= OPERATION_HISTORY_MS);
+	const candidates = [
+		...recentOperations,
+		...[...active.entries()].map(([id, entry]) => ({ id, ...entry, ended: current })),
+	];
+	return candidates
+		.filter((entry) => entry.started < endMs && entry.ended > startMs)
+		.sort((a, b) => a.started - b.started)
+		.slice(-8)
+		.map((entry) => ({
+			name: entry.name,
+			overlapMs: round(Math.max(0, Math.min(endMs, entry.ended) - Math.max(startMs, entry.started))),
+		}));
+}
+
 function compactContext(context) {
 	const stable = { ...context };
 	delete stable.lastAction;
 	delete stable.active;
+	delete stable.operations;
 	const delta = {};
 	for (const [key, value] of Object.entries(stable)) {
 		if (!lastContext || lastContext[key] !== value) delta[key] = value;
@@ -98,13 +118,14 @@ function compactContext(context) {
 	// Laufende Operationen sind zeitabhängig und deshalb keine stabilen Kontextfelder.
 	// Nur bei echten Hängern mitspeichern; leere und unveränderte Zustände blähen den Trace auf.
 	if (context.active?.length) delta.active = context.active;
+	if (context.operations?.length) delta.operations = context.operations;
 	lastContext = { ...stable, lastAction: context.lastAction };
 	return delta;
 }
 
-function recordAt(kind, durationMs, meta = {}, at = wallTime()) {
+function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride = null) {
 	if (!isEnabled()) return;
-	const context = compactContext(currentContext());
+	const context = compactContext(contextOverride || currentContext());
 	const entry = { at, kind, durationMs: round(durationMs), ...safeMeta(meta) };
 	if (Object.keys(context).length) entry.context = context;
 	records.push(entry);
@@ -142,6 +163,7 @@ function mergeStall(target, source) {
 		target[key] = Math.max(target[key] || 0, source[key] || 0);
 	}
 	if ((source.inputDurationMs || 0) >= (target.inputDurationMs || 0) && source.inputName) target.inputName = source.inputName;
+	if (!target.context && source.context) target.context = source.context;
 }
 
 function flushStalls() {
@@ -161,7 +183,10 @@ function flushStalls() {
 			interactionCount: stall.interactionIds.size || undefined,
 			events: stall.eventNames.size ? [...stall.eventNames].sort().join(",").slice(0, 120) : undefined,
 		};
-		recordAt("main-thread-stall", stall.endMs - stall.startMs, meta, performanceWallTime(stall.startMs));
+		const context = { ...(stall.context || currentContext()) };
+		delete context.active;
+		context.operations = operationsDuring(stall.startMs, stall.endMs);
+		recordAt("main-thread-stall", stall.endMs - stall.startMs, meta, performanceWallTime(stall.startMs), context);
 	}
 }
 
@@ -178,6 +203,7 @@ function queueStall(source, startMs, durationMs, meta = {}) {
 		eventLoopLagMs: source === "event-loop-lag" ? durationMs : 0,
 		inputDurationMs: source === "slow-input" ? durationMs : 0,
 		inputName: source === "slow-input" ? meta.eventName : "",
+		context: currentContext(),
 	};
 	const overlaps = pendingStalls.filter((stall) => incoming.startMs <= stall.endMs + STALL_MERGE_GAP_MS && incoming.endMs >= stall.startMs - STALL_MERGE_GAP_MS);
 	if (overlaps.length) {
@@ -200,8 +226,14 @@ function start(name, meta = {}, minMs = 25) {
 	return (extra = {}) => {
 		if (finished) return 0;
 		finished = true;
+		const ended = now();
+		const entry = active.get(id);
 		active.delete(id);
-		const duration = now() - started;
+		if (entry) {
+			recentOperations.push({ id, ...entry, ended });
+			if (recentOperations.length > 64) recentOperations.splice(0, recentOperations.length - 64);
+		}
+		const duration = ended - started;
 		if (duration >= minMs) record("operation", duration, { name, ...safeMeta(meta), ...safeMeta(extra) });
 		return duration;
 	};
@@ -293,6 +325,7 @@ function stop() {
 	stallTimer = 0;
 	pendingStalls = [];
 	active.clear();
+	recentOperations = [];
 	initialized = false;
 }
 
@@ -314,6 +347,7 @@ function flush() {
 
 function clear() {
 	records = [];
+	recentOperations = [];
 	pendingStalls = [];
 	clearTimeout(stallTimer);
 	stallTimer = 0;

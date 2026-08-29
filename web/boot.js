@@ -16,6 +16,7 @@ import { ANALYSE } from "./analyse.js";
 import { isBlobAlive } from "./sync-core.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -135,7 +136,7 @@ export async function initApp() {
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
 	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint
-	// schreiben. requestIdleCallback hält diese Optimierung aus dem kritischen Pfad.
+	// einplanen. Der Scheduler wartet zusätzlich fünf Sekunden ohne Nutzereingabe.
 	STATE.scheduleCheckpoint();
 	if (typeof performance !== "undefined" && performance.mark) {
 		performance.mark("impala67:boot-ready");
@@ -153,6 +154,7 @@ export async function initApp() {
 			window.__IMPALA_PERF__ = window.__IMPALA_PERF__ || {};
 			window.__IMPALA_PERF__.totalBootMs = totalMs;
 			window.__IMPALA_PERF__.appInitMs = appMs;
+			PERF_PROFILER.record("boot-ready", totalMs, { appInitMs: appMs });
 			console.info(`⚡ Impala67 Startzeit (lokal): Gesamt (inkl. Navigation/HTML) = ${totalMs} ms (App-Init = ${appMs} ms)`);
 		} catch (e) { /* ignore */ }
 	}

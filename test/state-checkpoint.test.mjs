@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
 	STATE_CHECKPOINT_KEYS,
+	checkpointStateStats,
 	eventLogInfoOf,
 	isUsableStateCheckpoint,
 	makeStateCheckpoint,
@@ -19,4 +20,22 @@ test("Checkpoint akzeptiert nur einen lückenlosen, zeitlich nachfolgenden Event
 	assert.equal(isUsableStateCheckpoint(checkpoint, { count: 2, maxSeq: 2, lastEventId: "b" }, { ...base[0], id: "falsch" }, tail), false);
 	assert.equal(isUsableStateCheckpoint(checkpoint, { count: 2, maxSeq: 2, lastEventId: "b" }, base[0], [{ ...tail[0], t: "2026-08-25T10:00:00.000Z" }]), false,
 		"ältere Fremd-Events erzwingen den deterministischen Voll-Replay");
+});
+
+test("Checkpoint-Statistik misst große Heftdaten ohne Serialisierung", () => {
+	const value = state();
+	value.pages = { a: {}, b: {} };
+	value.cards = { c: {} };
+	value.chatSessions = { chat: {} };
+	value.heftDocs = { h: { pages: [{}, {}] } };
+	value.heftBlobs = { x: "abc", y: "12345" };
+	assert.deepEqual(checkpointStateStats(value), {
+		pageCount: 2,
+		cardCount: 1,
+		chatSessionCount: 1,
+		heftDocCount: 1,
+		heftPageCount: 2,
+		heftBlobCount: 2,
+		heftBlobChars: 8,
+	});
 });

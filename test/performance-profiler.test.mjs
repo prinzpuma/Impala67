@@ -63,6 +63,20 @@ test("Profiler bündelt überlappende Browser-Signale und verwirft Hover-Rausche
 	PERF_PROFILER.setEnabled(false);
 });
 
+test("Profiler ordnet Hänger den zeitlich überlappenden Operationen zu", () => {
+	PERF_PROFILER.setEnabled(true);
+	PERF_PROFILER.clear();
+	const tasks = performanceObservers.slice(-2).find((observer) => observer.type === "longtask");
+	const finish = PERF_PROFILER.start("state.load", {}, 0);
+	const started = performance.now();
+	tasks.emit([{ name: "self", startTime: started, duration: 120 }]);
+	finish();
+	const report = JSON.parse(PERF_PROFILER.report());
+	const stall = report.records.find((item) => item.kind === "main-thread-stall");
+	assert.deepEqual(stall.context.operations.map((entry) => entry.name), ["state.load"]);
+	PERF_PROFILER.setEnabled(false);
+});
+
 test("Profiler speichert unveränderten Kontext nur einmal", () => {
 	PERF_PROFILER.setEnabled(true);
 	PERF_PROFILER.clear();

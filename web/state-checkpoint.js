@@ -23,6 +23,22 @@ export function checkpointStateOf(state) {
 	return Object.fromEntries(STATE_CHECKPOINT_KEYS.map((key) => [key, state[key]]));
 }
 
+// Günstige Größenindikatoren für Praxis-Traces. Exakte JSON-Serialisierung würde
+// genau den zusätzlichen Main-Thread-Hänger erzeugen, den der Profiler untersucht.
+export function checkpointStateStats(state) {
+	const heftDocs = Object.values(state?.heftDocs || {});
+	const heftBlobs = Object.values(state?.heftBlobs || {});
+	return {
+		pageCount: Object.keys(state?.pages || {}).length,
+		cardCount: Object.keys(state?.cards || {}).length,
+		chatSessionCount: Object.keys(state?.chatSessions || {}).length,
+		heftDocCount: heftDocs.length,
+		heftPageCount: heftDocs.reduce((sum, doc) => sum + (Array.isArray(doc?.pages) ? doc.pages.length : 0), 0),
+		heftBlobCount: heftBlobs.length,
+		heftBlobChars: heftBlobs.reduce((sum, value) => sum + (typeof value === "string" ? value.length : 0), 0),
+	};
+}
+
 export function makeStateCheckpoint(state, info, maxTime) {
 	return {
 		format: STATE_CHECKPOINT_FORMAT,

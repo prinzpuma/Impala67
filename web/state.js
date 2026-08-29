@@ -5,9 +5,11 @@ import { SRS } from "./srs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { cooperativeGate } from "./cooperative.js";
+import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import {
 	STATE_CHECKPOINT_KEYS,
 	checkpointStateOf,
+	checkpointStateStats,
 	eventLogInfoOf,
 	isUsableStateCheckpoint,
 	makeStateCheckpoint,
@@ -158,7 +160,7 @@ export const STATE = (() => {
 	let _stateRevision = 0;
 	let _loading = false;
 	let _queuedRemoteEvents = [];
-	let _checkpointCandidate = null;
+	let _checkpointInfo = null;
 	function bustChildIdx() { _childIdx = null; _parentIdx = null; }
 	function ensureParentIdx() {
 		if (_parentIdx) return _parentIdx;
@@ -452,6 +454,8 @@ export const STATE = (() => {
 
 	function reduce(ev) {
 		_stateRevision++;
+		const eventTime = String(ev?.t || "");
+		if (eventTime > _loadedTime) _loadedTime = eventTime;
 		const p = ev.payload || {};
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
 		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
@@ -997,10 +1001,13 @@ export const STATE = (() => {
 		}
 	}
 
-	function restorePersistedState(saved = INITIAL_PERSISTED_STATE) {
+	function restorePersistedState(saved = INITIAL_PERSISTED_STATE, cloneValues = true) {
 		for (const key of STATE_CHECKPOINT_KEYS) {
 			const value = Object.prototype.hasOwnProperty.call(saved || {}, key) ? saved[key] : INITIAL_PERSISTED_STATE[key];
-			S[key] = cloneStateValue(value);
+			// IndexedDB hat einen gelesenen Checkpoint bereits per Structured Clone vom
+			// gespeicherten Objekt getrennt. Ein zweiter vollständiger Deep Clone hier
+			// verdoppelte Start-CPU und kurzzeitig den Speicherbedarf ohne Schutzgewinn.
+			S[key] = cloneValues ? cloneStateValue(value) : value;
 		}
 		rebuildHeftMeta();
 		resetDerivedState();
@@ -1022,18 +1029,20 @@ export const STATE = (() => {
 
 	async function load() {
 		const finishProfile = PERF_PROFILER.start("state.load", {}, 20);
-		_loading = true; _queuedRemoteEvents = []; _checkpointCandidate = null;
+		_loading = true; _queuedRemoteEvents = []; _checkpointInfo = null; _loadedTime = "";
 		let checkpointUsed = false, replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
 		try {
 			let checkpoint = null, tail = [], boundary = null;
 			try {
-				info = await DB.eventLogInfo();
-				checkpoint = await DB.getStateCheckpoint();
+				[info, checkpoint] = await Promise.all([
+					PERF_PROFILER.run("state.event-info", () => DB.eventLogInfo(), {}, 5),
+					PERF_PROFILER.run("state.checkpoint-read", () => DB.getStateCheckpoint(), {}, 5),
+				]);
 				if (checkpoint) {
-					[boundary, tail] = await Promise.all([
+					[boundary, tail] = await PERF_PROFILER.run("state.checkpoint-tail", () => Promise.all([
 						checkpoint.maxSeq ? DB.eventAtSeq(checkpoint.maxSeq) : Promise.resolve(null),
 						DB.eventsAfterSeqAll(checkpoint.maxSeq, info.maxSeq),
-					]);
+					]), { fromSeq: checkpoint.maxSeq, toSeq: info.maxSeq }, 5);
 					checkpointUsed = isUsableStateCheckpoint(checkpoint, info, boundary, tail);
 				}
 			} catch (error) {
@@ -1042,20 +1051,29 @@ export const STATE = (() => {
 			}
 
 			if (checkpointUsed) {
-				restorePersistedState(checkpoint.state);
+				const checkpointStats = checkpointStateStats(checkpoint.state);
+				PERF_PROFILER.measure("state.checkpoint-restore", () => restorePersistedState(checkpoint.state, false), {
+					keys: STATE_CHECKPOINT_KEYS.length,
+					...checkpointStats,
+				}, 5);
 				const sortedTail = sortEvents(tail);
 				if (checkpoint.maxTime) U.observeTime(checkpoint.maxTime);
-				await replayCooperatively(sortedTail);
+				await PERF_PROFILER.run("state.checkpoint-replay", () => replayCooperatively(sortedTail), { count: sortedTail.length }, 5);
 				replayed = sortedTail.length;
 				replayIds = new Set(sortedTail.map((event) => event?.id).filter(Boolean));
 				_loadedTime = sortedTail.length ? sortedTail.at(-1).t : checkpoint.maxTime || "";
+				_checkpointInfo = {
+					maxSeq: Math.max(0, Number(checkpoint.maxSeq) || 0),
+					eventCount: Math.max(0, Number(checkpoint.eventCount) || 0),
+					lastEventId: String(checkpoint.lastEventId || ""),
+				};
 			} else {
-				const events = await loadSortedEvents();
+				const events = await PERF_PROFILER.run("state.full-event-read", () => loadSortedEvents(), {}, 5);
 				info = eventLogInfoOf(events);
-				restorePersistedState();
+				PERF_PROFILER.measure("state.initial-reset", () => restorePersistedState(), { keys: STATE_CHECKPOINT_KEYS.length }, 5);
 				_loadedTime = events.length ? events.at(-1).t : "";
 				if (_loadedTime) U.observeTime(_loadedTime);
-				await replayCooperatively(events);
+				await PERF_PROFILER.run("state.full-replay", () => replayCooperatively(events), { count: events.length }, 5);
 				replayed = events.length;
 				replayIds = new Set(events.map((event) => event?.id).filter(Boolean));
 				if (checkpoint) DB.clearStateCheckpoint().catch(() => {});
@@ -1066,7 +1084,6 @@ export const STATE = (() => {
 			const queued = sortEvents(_queuedRemoteEvents.filter((event) => !event?.id || !replayIds.has(event.id)));
 			_queuedRemoteEvents = [];
 			if (queued.length) await applyRemoteEventsCooperative(queued);
-			else _checkpointCandidate = { info: { ...info }, maxTime: _loadedTime, revision: _stateRevision };
 
 			finishProfile({ count: info.count, replayed, checkpointUsed });
 			return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: info.count, replayed, checkpointUsed };
@@ -1079,17 +1096,26 @@ export const STATE = (() => {
 	}
 
 	async function persistCheckpoint() {
-		const candidate = _checkpointCandidate;
-		if (!candidate || candidate.revision !== _stateRevision) return false;
-		const finishProfile = PERF_PROFILER.start("state.checkpoint-save", { count: candidate.info.count }, 20);
+		const revision = _stateRevision;
+		const finishProfile = PERF_PROFILER.start("state.checkpoint-save", {}, 20);
 		try {
-			const current = await DB.eventLogInfo();
-			if (current.count !== candidate.info.count || current.maxSeq !== candidate.info.maxSeq || current.lastEventId !== candidate.info.lastEventId) {
+			const current = await PERF_PROFILER.run("state.checkpoint-save-info", () => DB.eventLogInfo(), {}, 5);
+			if (revision !== _stateRevision) {
 				finishProfile({ stale: true });
 				return false;
 			}
-			await DB.putStateCheckpoint(makeStateCheckpoint(S, current, candidate.maxTime));
-			finishProfile();
+			if (_checkpointInfo && _checkpointInfo.maxSeq === current.maxSeq && _checkpointInfo.eventCount === current.count && _checkpointInfo.lastEventId === current.lastEventId) {
+				finishProfile({ count: current.count, unchanged: true });
+				return true;
+			}
+			const checkpointStats = checkpointStateStats(S);
+			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(makeStateCheckpoint(S, current, _loadedTime)), {
+				count: current.count,
+				keys: STATE_CHECKPOINT_KEYS.length,
+				...checkpointStats,
+			}, 5);
+			_checkpointInfo = { maxSeq: current.maxSeq, eventCount: current.count, lastEventId: current.lastEventId };
+			finishProfile({ count: current.count });
 			return true;
 		} catch (error) {
 			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
@@ -1098,10 +1124,11 @@ export const STATE = (() => {
 		}
 	}
 
+	const checkpointScheduler = createCheckpointScheduler(() => persistCheckpoint(), {
+		onError: (error) => console.warn("[state] Start-Checkpoint fehlgeschlagen:", error),
+	});
 	function scheduleCheckpoint() {
-		const run = () => { persistCheckpoint().catch((error) => console.warn("[state] Start-Checkpoint fehlgeschlagen:", error)); };
-		if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 3000 });
-		else setTimeout(run, 600);
+		checkpointScheduler.schedule();
 	}
 
 	// Sammelt eine Seite und alle ihre Nachfahren (für Papierkorb: die ganze

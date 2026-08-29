@@ -1216,11 +1216,23 @@ test("Start-Checkpoint spielt nur den neuen Tail und fällt bei älterem Import 
 
 	await DB.addEvent({ seq: 2, id: "checkpoint-tail", t: "2026-08-20T10:01:00.000Z", type: "pageCreate", payload: { id: "cp-tail", title: "Tail" } });
 	S.pages = {};
+	const originalGetCheckpoint = DB.getStateCheckpoint;
+	let loadedCheckpoint = null;
+	DB.getStateCheckpoint = async () => (loadedCheckpoint = await originalGetCheckpoint());
 	const warm = await STATE.load();
+	DB.getStateCheckpoint = originalGetCheckpoint;
 	assert.equal(warm.checkpointUsed, true);
 	assert.equal(warm.replayed, 1);
+	assert.equal(S.pages, loadedCheckpoint.state.pages, "IndexedDB-Checkpoint darf nicht ein zweites Mal vollständig geklont werden");
 	assert.equal(S.pages["cp-base"].title, "Basis");
 	assert.equal(S.pages["cp-tail"].title, "Tail");
+	const originalPutCheckpoint = DB.putStateCheckpoint;
+	let checkpointWrites = 0;
+	DB.putStateCheckpoint = async (...args) => { checkpointWrites++; return originalPutCheckpoint(...args); };
+	assert.equal(await STATE.persistCheckpoint(), true);
+	assert.equal(await STATE.persistCheckpoint(), true);
+	DB.putStateCheckpoint = originalPutCheckpoint;
+	assert.equal(checkpointWrites, 1, "Unveränderter Checkpoint darf nicht bei jedem Start neu geschrieben werden");
 
 	await DB.addEvent({ seq: 3, id: "checkpoint-older-import", t: "2026-08-19T09:00:00.000Z", type: "pageCreate", payload: { id: "cp-old", title: "Älterer Import" } });
 	S.pages = {};
