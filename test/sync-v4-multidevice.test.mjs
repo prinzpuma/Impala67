@@ -35,7 +35,7 @@ class D1 {
 		return { bind: (...args) => q(args), first: () => q().first(), all: () => q().all(), run: () => q().run() };
 	}
 	async run(sql, a) {
-		if (/INSERT INTO user_storage/i.test(sql)) { this.accounts.set(a[0], { auth_token_hash:a[1], total_bytes:a[2], updated_at:a[3] }); return {}; }
+		if (/INSERT INTO user_storage/i.test(sql)) { this.accounts.set(a[0], { auth_token_hash:a[1], total_bytes:a[2], updated_at:a[3] }); return { meta: { rows_written: 1, changes: 1 } }; }
 		if (/UPDATE user_storage SET total_bytes=0/i.test(sql)) { const r=this.accounts.get(a[1]); if(r) r.total_bytes=0; return {}; }
 		if (/UPDATE user_storage SET total_bytes/i.test(sql)) { const r=this.accounts.get(a[2]); if(r) r.total_bytes=a[0]; return {}; }
 		if (/INSERT INTO sync_events/i.test(sql)) { this.events.push({ user_id:a[0],seq:a[1],event_id:a[2],iv:a[3],r2_key:a[4],size:a[5],created_at:a[6] }); return {}; }

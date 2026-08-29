@@ -125,7 +125,7 @@ function createMockEnv() {
 					if (query.includes("INSERT INTO user_storage")) {
 						const [userId, authHash, totalBytes, updatedAt] = params;
 						dbStore.accounts.set(userId, { auth_token_hash: authHash, total_bytes: totalBytes, updated_at: updatedAt });
-						return {};
+						return { meta: { rows_written: 1, changes: 1 } };
 					}
 					if (query.includes("UPDATE user_storage SET total_bytes=0")) {
 						const [updatedAt, userId] = params;
