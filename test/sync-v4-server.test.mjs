@@ -124,6 +124,86 @@ test("reset preserves channel authorization but clears data and advances generat
 	assert.equal(room.generation, 2);
 });
 
+test("existing tokens use the Workers timing-safe comparison", async () => {
+	const subtle = globalThis.crypto.subtle;
+	const original = Object.getOwnPropertyDescriptor(subtle, "timingSafeEqual");
+	let comparisons = 0;
+	Object.defineProperty(subtle, "timingSafeEqual", {
+		configurable: true,
+		value(left, right) {
+			comparisons++;
+			const a = new Uint8Array(left.buffer || left, left.byteOffset || 0, left.byteLength);
+			const b = new Uint8Array(right.buffer || right, right.byteOffset || 0, right.byteLength);
+			if (a.byteLength !== b.byteLength) return false;
+			let difference = 0;
+			for (let i = 0; i < a.byteLength; i++) difference |= a[i] ^ b[i];
+			return difference === 0;
+		},
+	});
+	try {
+		const { room } = makeRoom();
+		await room.init("user-1234567890123456");
+		assert.equal(await room.authorize("secret-token"), true);
+		assert.equal(await room.authorize("wrong-token"), false);
+		assert.equal(await room.authorize("secret-token"), true);
+		assert.equal(comparisons, 2);
+	} finally {
+		if (original) Object.defineProperty(subtle, "timingSafeEqual", original);
+		else delete subtle.timingSafeEqual;
+	}
+});
+
+test("blob downloads stream the R2 body without buffering the whole object", async () => {
+	const { room, BUCKET } = makeRoom();
+	const bytes = new Uint8Array([1, 2, 3, 4]);
+	BUCKET.get = async () => ({
+		customMetadata: { iv: "00112233445566778899aabb" },
+		body: new Blob([bytes]).stream(),
+		arrayBuffer: async () => { throw new Error("R2 object must not be buffered"); },
+	});
+	const response = await room.getBlob("a".repeat(64));
+	assert.equal(response.status, 200);
+	assert.equal(response.headers.get("X-Impala-IV"), "00112233445566778899aabb");
+	assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
+});
+
+test("blob uploads stream the request body after checking its declared size", async () => {
+	const { room, BUCKET } = makeRoom();
+	await room.init("user-1234567890123456");
+	assert.equal(await room.authorize("secret-token"), true);
+	const bytes = new Uint8Array([5, 6, 7, 8]), key = "b".repeat(64);
+	const request = new Request("https://example.com/upload", {
+		method: "PUT",
+		headers: { "Content-Length": String(bytes.byteLength), "X-Impala-IV": "00112233445566778899aabb" },
+		body: bytes,
+	});
+	request.arrayBuffer = async () => { throw new Error("request body must not be buffered"); };
+	let streamed = false;
+	BUCKET.put = async (storedKey, body, options) => {
+		streamed = body === request.body;
+		const stored = new Uint8Array(await new Response(body).arrayBuffer());
+		BUCKET.map.set(storedKey, { bytes: stored, customMetadata: options.customMetadata });
+	};
+	const response = await room.putBlob(key, request);
+	assert.equal(response.status, 201);
+	assert.equal(streamed, true);
+	assert.deepEqual(BUCKET.map.get(`users/${room.userId}/blobs/${key}`).bytes, bytes);
+});
+
+test("malformed WebSocket messages are rejected without escaping the handler", async () => {
+	const { room } = makeRoom();
+	await room.init("user-1234567890123456");
+	const sent = [], closed = [];
+	const ws = {
+		deserializeAttachment: () => ({ userId: room.userId, authenticated: true, protocol: 4 }),
+		send: (message) => sent.push(JSON.parse(message)),
+		close: (code, reason) => closed.push([code, reason]),
+	};
+	await assert.doesNotReject(() => room.webSocketMessage(ws, "{not-json"));
+	assert.deepEqual(sent, [{ type: "invalid_message", error: "Ungültige WebSocket-Nachricht" }]);
+	assert.deepEqual(closed, [[4400, "Invalid message"]]);
+});
+
 test("legacy missing D1 account is repaired without allowing channel takeover", async () => {
 	const { room, DB, BUCKET, storage } = makeRoom();
 	await room.init("user-1234567890123456");

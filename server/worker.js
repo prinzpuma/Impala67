@@ -53,6 +53,16 @@ async function tokenHash(token) {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function tokenHashesEqual(left, right) {
+	if (!/^[0-9a-f]{64}$/i.test(left || "") || !/^[0-9a-f]{64}$/i.test(right || "")) return false;
+	const decode = (value) => Uint8Array.from(value.match(/../g), (pair) => Number.parseInt(pair, 16));
+	const a = decode(left), b = decode(right);
+	if (typeof crypto.subtle.timingSafeEqual === "function") return crypto.subtle.timingSafeEqual(a, b);
+	let difference = 0;
+	for (let i = 0; i < a.byteLength; i++) difference |= a[i] ^ b[i];
+	return difference === 0;
+}
+
 function protocolError(request) {
 	return request.headers.get(CLOUD_SYNC_PROTOCOL_HEADER) === String(CLOUD_SYNC_PROTOCOL)
 		? null
@@ -83,7 +93,7 @@ async function verifyExistingUser(request, env) {
 	const userId = userIdOf(request), token = authTokenOf(request);
 	if (!userId || userId.length < 16 || !token) return false;
 	const row = await env.DB.prepare("SELECT auth_token_hash FROM user_storage WHERE user_id = ?").bind(userId).first();
-	return !!row?.auth_token_hash && row.auth_token_hash === await tokenHash(token);
+	return !!row?.auth_token_hash && tokenHashesEqual(row.auth_token_hash, await tokenHash(token));
 }
 
 function normalizeAiMessages(messages) {
@@ -216,7 +226,7 @@ export class SyncRoom {
 		const hash = await tokenHash(rawToken);
 		return this.queue(async () => {
 			if (this.authHash) {
-				if (this.authHash !== hash) return false;
+				if (!tokenHashesEqual(this.authHash, hash)) return false;
 				if (!this.accountExists && !(await this.persistUsage())) return false;
 			} else {
 				this.authHash = hash;
@@ -258,7 +268,13 @@ export class SyncRoom {
 		let attachment = ws.deserializeAttachment?.() || {};
 		let userId = attachment.userId || this.userId || await this.ctx?.storage?.get("userId");
 		if (userId) await this.init(userId);
-		const msg = JSON.parse(raw);
+		let msg = null;
+		try { if (typeof raw === "string") msg = JSON.parse(raw); } catch {}
+		if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+			try { ws.send(JSON.stringify({ type: "invalid_message", error: "Ungültige WebSocket-Nachricht" })); } catch {}
+			try { ws.close(4400, "Invalid message"); } catch {}
+			return;
+		}
 		if (msg.type === "auth") {
 			if (msg.protocol !== CLOUD_SYNC_PROTOCOL) {
 				ws.send(JSON.stringify({ type: "unsupported_protocol", error: `Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.` }));
@@ -360,7 +376,9 @@ export class SyncRoom {
 	async getBlob(key) {
 		const object = await this.env.BUCKET.get(`users/${this.userId}/blobs/${key}`);
 		if (!object) return new Response(null, { status: 404, headers: corsHeaders() });
-		return new Response(await object.arrayBuffer(), { headers: { "Content-Type": "application/octet-stream", "X-Impala-IV": object.customMetadata?.iv || "", "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() } });
+		const headers = { "Content-Type": "application/octet-stream", "X-Impala-IV": object.customMetadata?.iv || "", "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() };
+		if (Number.isSafeInteger(object.size) && object.size >= 0) headers["Content-Length"] = String(object.size);
+		return new Response(object.body, { headers });
 	}
 
 	putBlob(key, request) {
@@ -369,11 +387,12 @@ export class SyncRoom {
 			if (!/^[0-9a-f]{24}$/i.test(iv) || !/^[0-9a-f]{64}$/i.test(key)) return json({ error: "Ungültiger Blob-Schlüssel oder IV." }, 400);
 			const r2Key = `users/${this.userId}/blobs/${key}`;
 			if (await this.env.BUCKET.head(r2Key)) return new Response(null, { status: 204, headers: { "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() } });
-			const bytes = new Uint8Array(await request.arrayBuffer());
-			const size = bytes.byteLength + 12;
-			if (!bytes.length || bytes.length > MAX_BLOB_BYTES) return json({ error: "Blob ist leer oder zu groß." }, 413);
+			const lengthHeader = request.headers.get("Content-Length") || "";
+			const bodyBytes = /^\d+$/.test(lengthHeader) ? Number(lengthHeader) : NaN;
+			if (!Number.isSafeInteger(bodyBytes) || bodyBytes < 1 || bodyBytes > MAX_BLOB_BYTES || !request.body) return json({ error: "Blob ist leer, zu groß oder hat keine gültige Längenangabe." }, 413);
+			const size = bodyBytes + 12;
 			if (this.totalBytes + size > MAX_USER_BYTES) return json({ error: "Quota überschritten." }, 413);
-			await this.env.BUCKET.put(r2Key, bytes, { customMetadata: { iv } });
+			await this.env.BUCKET.put(r2Key, request.body, { customMetadata: { iv } });
 			try {
 				this.totalBytes += size;
 				if (!(await this.persistUsage())) throw new Error("User quota record could not be persisted");

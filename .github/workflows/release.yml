@@ -33,9 +33,6 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Unit-Tests ausführen
-        run: npm test
-
       - name: PWA-Dateien prüfen
         run: |
           set -euo pipefail
@@ -44,8 +41,7 @@ jobs:
             exit 1
           fi
           node -e 'JSON.parse(require("fs").readFileSync("web/version.json", "utf8")); console.log("Gültiges web/version.json")'
-          find web -type f -name '*.js' -print0 | xargs -0 -n1 node --check
-          node .github/scripts/check-pwa-cache.mjs
+          npm run verify
 
       - name: Nächste freie Version bestimmen
         id: next

@@ -29,6 +29,8 @@ const pointer = (type, target, fields) => {
 	target.dispatchEvent(event);
 };
 
+APP.wireEvents();
+
 test("Seiten-Drag in einen anderen Workspace zieht den ganzen Teilbaum mit", async () => {
 	S.pages = {
 		moved: { id: "moved", title: "Verschieben", parentId: null, workspaceId: "a", created: "2026-01-01T00:00:00.000Z" },
@@ -44,7 +46,6 @@ test("Seiten-Drag in einen anderen Workspace zieht den ganzen Teilbaum mit", asy
 		STATE.reduce({ type, payload, t: "2026-01-01T00:00:04.000Z" });
 	};
 	try {
-		APP.wireEvents();
 		const moved = document.querySelector('[data-page="moved"]');
 		const target = document.querySelector('[data-page="target"]');
 		target.getBoundingClientRect = () => ({ top: 0, height: 100 });
@@ -58,6 +59,32 @@ test("Seiten-Drag in einen anderen Workspace zieht den ganzen Teilbaum mit", asy
 		assert.equal(S.pages.moved.parentId, "target");
 		assert.equal(S.pages.moved.workspaceId, "b");
 		assert.equal(S.pages.child.workspaceId, "b");
+	} finally {
+		STATE.dispatch = originalDispatch;
+	}
+});
+
+test("Verschieben-Dialog übernimmt den Default-Workspace für den ganzen Teilbaum", async () => {
+	S.pages = {
+		moved: { id: "moved", title: "Verschieben", parentId: null, workspaceId: "other" },
+		child: { id: "child", title: "Kind", parentId: "moved", workspaceId: "other" },
+		target: { id: "target", title: "Legacy-Ziel", parentId: null },
+	};
+	S.movePageId = "moved";
+	const originalDispatch = STATE.dispatch;
+	STATE.dispatch = async (type, payload) => {
+		STATE.reduce({ type, payload, t: "2026-01-01T00:00:05.000Z" });
+	};
+	try {
+		const overlay = document.getElementById("overlay");
+		overlay.hidden = false;
+		overlay.innerHTML = '<button data-movetarget="pg:target">Verschieben</button>';
+		overlay.querySelector("button").click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		assert.equal(S.pages.moved.parentId, "target");
+		assert.equal(S.pages.moved.workspaceId, "default");
+		assert.equal(S.pages.child.workspaceId, "default");
 	} finally {
 		STATE.dispatch = originalDispatch;
 	}

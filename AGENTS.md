@@ -37,7 +37,8 @@
 - Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen. Veröffentlichte Builds erhalten ihre Release-Version im Workflow.
 - Prüfe, ob diese `AGENTS.md` noch zum aktuellen Projektstand passt, und nenne bei Abweichungen konkrete Verbesserungsvorschläge.
 - Arbeite tokeneffizient und verfolge betroffene Codepfade bis zu Persistenz, Sync, Cache und sichtbarer Oberfläche.
-- Führe für ausgelieferte PWA-Änderungen Syntaxprüfung, passende Tests, den PWA-Cache-Check und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
+- `npm run verify` ist der schnelle lokale Standard für Unit-Tests, Syntaxprüfung von Frontend und Worker sowie den PWA-Cache-Check.
+- Führe für ausgelieferte PWA-Änderungen zusätzlich passende Browser-/Offline-Szenarien und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
 
 ## Veröffentlichung
 

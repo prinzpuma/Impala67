@@ -34,6 +34,17 @@ test("Seiten- und Stapel-Teilbäume haben je eine zentrale Regel", () => {
 	assert.equal(STATE.deckInTree("Mathematik", "Mathe"), false);
 });
 
+test("Kinder einer Legacy-Seite werden unabhängig vom aktuell geöffneten Workspace gefunden", () => {
+	reset();
+	S.currentWorkspaceId = "other";
+	S.pages = {
+		legacy: { id: "legacy", parentId: null },
+		child: { id: "child", parentId: "legacy" },
+	};
+	STATE.reduce({ type: "pageUpdate", payload: { id: "legacy", patch: { title: "Legacy" } }, t: "2026-01-01T00:00:00.000Z" });
+	assert.deepEqual(STATE.childrenOf("legacy").map((page) => page.id), ["child"]);
+});
+
 test("Seiten-Lifecycle entfernt betroffene Tabs zentral", () => {
 	reset();
 	S.pages = { root: { id: "root", parentId: null }, child: { id: "child", parentId: "root" }, keep: { id: "keep", parentId: null } };

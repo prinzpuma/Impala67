@@ -1104,7 +1104,7 @@ function wireEvents() {
 			const moveId = S.movePageId;
 			const val = t.dataset.movetarget;
 			const parentId = val.startsWith("pg:") ? val.slice(3) : null;
-			const wsId = val.startsWith("ws:") ? val.slice(3) : (S.pages[parentId] || {}).workspaceId;
+			const wsId = val.startsWith("ws:") ? val.slice(3) : ((S.pages[parentId] || {}).workspaceId || "default");
 			await STATE.dispatch("pageMove", { id: moveId, parentId });
 			await movePageSubtreeToWorkspace(moveId, wsId);
 			S.movePageId = null;

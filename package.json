@@ -8,6 +8,9 @@
     "test": "node --test test/*.test.mjs",
     "test:e2e": "node --test test/sync-v4-browser.e2e.mjs",
     "test:all": "node --test test/*.test.mjs test/sync-v4-browser.e2e.mjs",
+    "check:syntax": "find web server -type f -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check:pwa": "node .github/scripts/check-pwa-cache.mjs",
+    "verify": "npm test && npm run check:syntax && npm run check:pwa",
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
   },

@@ -1187,7 +1187,8 @@ export const STATE = (() => {
 		return m;
 	}
 	const childrenOf = (id, wsId) => {
-		const k = (wsId || S.currentWorkspaceId || "default") + "\0" + (id || "");
+		const parentWorkspaceId = id && S.pages[id] ? (S.pages[id].workspaceId || "default") : null;
+		const k = (wsId || parentWorkspaceId || S.currentWorkspaceId || "default") + "\0" + (id || "");
 		return (ensureChildIdx().get(k) || []).slice();
 	};
 
