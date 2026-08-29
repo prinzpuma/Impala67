@@ -5,7 +5,17 @@ globalThis.window = {};
 globalThis.location = { href: "https://example.test/Impala67/" };
 Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true });
 
-const { fetchDeployedVersion, workerVersion } = await import("../web/updater.js?test=worker-fallback");
+const { cmpSemver, fetchDeployedVersion, workerVersion } = await import("../web/updater.js?test=worker-fallback");
+
+test("cmpSemver vergleicht semantische Versionsnummern korrekt", () => {
+	assert.equal(cmpSemver("0.3.0", "0.3.1") < 0, true);
+	assert.equal(cmpSemver("0.3.1", "0.3.0") > 0, true);
+	assert.equal(cmpSemver("0.3.0", "0.3.0"), 0);
+	assert.equal(cmpSemver("v0.3.1", "0.3.0") > 0, true);
+	assert.equal(cmpSemver("0.3.0-beta.1", "0.3.0") < 0, true);
+	assert.equal(cmpSemver("0.3.0", "0.3.0-beta.1") > 0, true);
+	assert.equal(cmpSemver("1.0.0", "0.9.9") > 0, true);
+});
 
 test("Update-Check nutzt den Service-Worker, wenn version.json ausfällt", async () => {
 	const requested = [];
@@ -35,3 +45,30 @@ test("Updater liest die tatsächlich geladene Version direkt vom Service Worker"
 	};
 	assert.equal(await workerVersion(worker), "0.3.42");
 });
+
+test("installAppUpdate sendet SKIP_WAITING und lädt sicher neu, selbst wenn der Worker träge antwortet", async () => {
+	let skipWaitingSent = false;
+	let reloadedUrl = null;
+	globalThis.location = {
+		href: "https://example.test/Impala67/",
+		replace(url) { reloadedUrl = url; }
+	};
+	globalThis.navigator.serviceWorker = {
+		controller: null,
+		async getRegistration() {
+			return {
+				waiting: {
+					postMessage(msg) {
+						if (msg.type === "SKIP_WAITING") skipWaitingSent = true;
+					}
+				}
+			};
+		}
+	};
+
+	const res = await globalThis.window.installAppUpdate();
+	assert.equal(skipWaitingSent, true);
+	assert.equal(res.reloaded, true);
+	assert.match(reloadedUrl, /\?_v=\d+/);
+});
+

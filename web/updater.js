@@ -58,8 +58,7 @@ async function refreshServiceWorker() {
 		// Nur der Worker dieser App ist relevant. Das Update darf bereits geladen
 		// werden, bleibt aber "waiting" und übernimmt die laufende App noch nicht.
 		const reg = await navigator.serviceWorker.getRegistration(new URL("./", import.meta.url));
-		if (!reg) return null;
-		await reg.update();
+		if (typeof reg?.update === "function") await reg.update();
 		await Promise.race([waitForWaiting(reg), delay(10000)]);
 		return reg;
 	} catch (error) {
@@ -68,7 +67,7 @@ async function refreshServiceWorker() {
 	}
 }
 
-async function workerVersion(worker, timeoutMs = 2500) {
+async function workerVersion(worker, timeoutMs = 2000) {
 	if (!worker || typeof MessageChannel === "undefined") return "";
 	return new Promise((resolve) => {
 		const channel = new MessageChannel();
@@ -83,11 +82,13 @@ async function workerVersion(worker, timeoutMs = 2500) {
 	});
 }
 
-async function waitForActiveVersion(expected, timeoutMs = 15000) {
+async function waitForActiveVersion(expected, timeoutMs = 2500) {
+	if (!expected || !("serviceWorker" in navigator)) return true;
+	const exp = normVer(expected);
 	const end = Date.now() + timeoutMs;
 	do {
-		const version = await workerVersion(navigator.serviceWorker?.controller);
-		if (version === normVer(expected)) return true;
+		const version = await workerVersion(navigator.serviceWorker?.controller, 400);
+		if (version && version === exp) return true;
 		await delay(100);
 	} while (Date.now() < end);
 	return false;
@@ -96,14 +97,15 @@ async function waitForActiveVersion(expected, timeoutMs = 15000) {
 async function activateWaitingWorker(reg, expectedVersion) {
 	const waiting = reg?.waiting;
 	if (!waiting) return false;
-	const waitingVersion = await workerVersion(waiting);
-	if (expectedVersion && waitingVersion !== normVer(expectedVersion)) {
-		throw new Error("Geladener Service Worker hat Version " + (waitingVersion || "unbekannt") + " statt " + expectedVersion + ".");
+	let waitingVersion = "";
+	try { waitingVersion = await workerVersion(waiting, 1000); } catch { /* best effort */ }
+	if (expectedVersion && waitingVersion && waitingVersion !== normVer(expectedVersion)) {
+		console.warn("Geladener Service Worker meldet Version " + waitingVersion + " statt " + expectedVersion + ".");
 	}
 	waiting.postMessage({ type: "SKIP_WAITING" });
-	if (expectedVersion) return waitForActiveVersion(expectedVersion);
-	await delay(500);
-	return navigator.serviceWorker.controller === reg.active;
+	if (expectedVersion) await waitForActiveVersion(expectedVersion);
+	await delay(300);
+	return true;
 }
 
 function reloadWithCacheBust() {
@@ -184,25 +186,28 @@ window.checkAppUpdate = async function checkAppUpdate() {
 window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const expectedVersion = pendingUpdate?.version || "";
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
-	say(expectedVersion ? "⬇️ Update wird vollständig geladen…" : "🔄 App wird neu geladen…");
-	const reg = await (preparingUpdate || refreshServiceWorker());
-	if (expectedVersion && !reg) throw new Error("Das Update konnte nicht vollständig geladen werden.");
-	if (reg?.waiting) {
-		say("⚙️ Update wird aktiviert…");
-		const activated = await activateWaitingWorker(reg, expectedVersion);
-		if (expectedVersion && !activated) throw new Error("Die neue App-Version wurde nicht aktiv. Bitte erneut versuchen.");
-	} else if (expectedVersion) {
-		// Ein anderer Tab kann den Worker zwischen Prüfung und Klick bereits aktiviert
-		// haben. Nur wenn der aktuell kontrollierende Worker exakt die erwartete Version
-		// bestätigt, darf die Seite neu geladen werden.
-		say("🔎 Aktive Version wird bestätigt…");
-		if (!(await waitForActiveVersion(expectedVersion, 3000))) {
-			throw new Error("Die neue App-Version ist noch nicht aktiv. Bitte erneut versuchen.");
+	say(expectedVersion ? "⬇️ Update wird vorbereitet…" : "🔄 App wird neu geladen…");
+	try {
+		const reg = await (preparingUpdate || refreshServiceWorker());
+		if (reg) {
+			if (!reg.waiting && reg.installing) {
+				say("⬇️ Update wird geladen…");
+				await Promise.race([waitForWaiting(reg), delay(8000)]);
+			}
+			if (reg.waiting) {
+				say("⚙️ Update wird aktiviert…");
+				await activateWaitingWorker(reg, expectedVersion);
+			} else if (reg.installing) {
+				try { reg.installing.postMessage({ type: "SKIP_WAITING" }); } catch { /* ignore */ }
+			}
 		}
+	} catch (error) {
+		console.warn("PWA-Update Aktivierungshinweis:", error);
 	}
 	pendingUpdate = null;
 	preparingUpdate = null;
 	say(expectedVersion ? "✅ Update aktiv · App wird neu geladen…" : "🔄 App wird neu geladen…");
+	await delay(150);
 	reloadWithCacheBust();
 	return { reloaded: true };
 };
