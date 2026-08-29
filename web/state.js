@@ -7,10 +7,13 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { cooperativeGate } from "./cooperative.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import {
+	STATE_CHECKPOINT_CORE_KEYS,
+	STATE_CHECKPOINT_FORMAT,
 	STATE_CHECKPOINT_KEYS,
 	checkpointStateOf,
 	checkpointStateStats,
 	eventLogInfoOf,
+	heftBlobSizesOf,
 	isUsableStateCheckpoint,
 	makeStateCheckpoint,
 } from "./state-checkpoint.js";
@@ -161,6 +164,13 @@ export const STATE = (() => {
 	let _loading = false;
 	let _queuedRemoteEvents = [];
 	let _checkpointInfo = null;
+	let _checkpointBlobSizes = {};
+	let _checkpointDirtyBlobHashes = new Set();
+	let _checkpointPayloadLoaded = true;
+	let _checkpointPayloadPromise = null;
+	let _checkpointPayloadGeneration = 0;
+	let _checkpointBaseSeq = 0;
+	let _appliedPostLoadEventIds = new Set();
 	function bustChildIdx() { _childIdx = null; _parentIdx = null; }
 	function ensureParentIdx() {
 		if (_parentIdx) return _parentIdx;
@@ -229,6 +239,7 @@ export const STATE = (() => {
 			for (const ev of list) {
 				U.observeTime(ev.t);
 				reduce(ev);
+				if (ev?.id) _appliedPostLoadEventIds.add(ev.id);
 			}
 			afterRemoteEvents(list);
 		}, { count: list.length }, 16);
@@ -244,6 +255,7 @@ export const STATE = (() => {
 			for (const ev of list) {
 				U.observeTime(ev.t);
 				reduce(ev);
+				if (ev?.id) _appliedPostLoadEventIds.add(ev.id);
 				await yieldIfNeeded();
 			}
 			afterRemoteEvents(list);
@@ -363,7 +375,7 @@ export const STATE = (() => {
 		let n = 0;
 		for (const pg of doc.pages) {
 			for (const s of pg.strokes) n += 40 + (s.pts ? s.pts.length * 14 : 60);
-			for (const im of pg.images) n += (im.ref ? (S.heftBlobs[im.ref] || "").length : (im.src ? im.src.length : 0)) + 60;
+			for (const im of pg.images) n += (im.ref ? ((S.heftBlobs[im.ref] || "").length || _checkpointBlobSizes[im.ref] || 0) : (im.src ? im.src.length : 0)) + 60;
 			for (const tx of pg.texts) n += (tx.text ? tx.text.length : 0) + 60;
 		}
 		return n;
@@ -866,7 +878,10 @@ export const STATE = (() => {
 				// Unveränderliche Bilddaten, adressiert über ihren Inhalts-Hash. Kommt derselbe
 				// Hash zweimal an (zwei Geräte fügen dasselbe Bild ein), gewinnt einfach der
 				// erste — der Inhalt ist per Definition identisch. Kein Konflikt möglich.
-				if (!p.hash || !p.data || S.heftBlobs[p.hash]) break;
+				if (!p.hash || !p.data) break;
+				_checkpointBlobSizes[p.hash] = p.data.length;
+				_checkpointDirtyBlobHashes.add(p.hash);
+				if (S.heftBlobs[p.hash]) break;
 				S.heftBlobs[p.hash] = p.data;
 				break;
 			case "chatUpsert": {
@@ -949,6 +964,7 @@ export const STATE = (() => {
 			throw e;
 		}
 		reduce(ev);
+		if (ev.id) _appliedPostLoadEventIds.add(ev.id);
 		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
 		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
 		for (const fn of _dispatchHooks.after) {
@@ -1030,6 +1046,9 @@ export const STATE = (() => {
 	async function load() {
 		const finishProfile = PERF_PROFILER.start("state.load", {}, 20);
 		_loading = true; _queuedRemoteEvents = []; _checkpointInfo = null; _loadedTime = "";
+		_checkpointBlobSizes = {}; _checkpointDirtyBlobHashes = new Set();
+		_checkpointPayloadLoaded = true; _checkpointPayloadPromise = null; _checkpointPayloadGeneration++;
+		_checkpointBaseSeq = 0; _appliedPostLoadEventIds = new Set();
 		let checkpointUsed = false, replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
 		try {
 			let checkpoint = null, tail = [], boundary = null;
@@ -1051,11 +1070,16 @@ export const STATE = (() => {
 			}
 
 			if (checkpointUsed) {
-				const checkpointStats = checkpointStateStats(checkpoint.state);
+				const partitioned = checkpoint.format === STATE_CHECKPOINT_FORMAT;
+				_checkpointBlobSizes = partitioned ? { ...checkpoint.heftBlobSizes } : heftBlobSizesOf(checkpoint.state);
+				_checkpointPayloadLoaded = !partitioned || Object.keys(_checkpointBlobSizes).length === 0;
+				const checkpointStats = checkpointStateStats(checkpoint.state, _checkpointBlobSizes);
 				PERF_PROFILER.measure("state.checkpoint-restore", () => restorePersistedState(checkpoint.state, false), {
-					keys: STATE_CHECKPOINT_KEYS.length,
+					keys: partitioned ? STATE_CHECKPOINT_CORE_KEYS.length : STATE_CHECKPOINT_KEYS.length,
+					partitioned,
 					...checkpointStats,
 				}, 5);
+				if (!partitioned) _checkpointDirtyBlobHashes = new Set(Object.keys(_checkpointBlobSizes));
 				const sortedTail = sortEvents(tail);
 				if (checkpoint.maxTime) U.observeTime(checkpoint.maxTime);
 				await PERF_PROFILER.run("state.checkpoint-replay", () => replayCooperatively(sortedTail), { count: sortedTail.length }, 5);
@@ -1063,6 +1087,7 @@ export const STATE = (() => {
 				replayIds = new Set(sortedTail.map((event) => event?.id).filter(Boolean));
 				_loadedTime = sortedTail.length ? sortedTail.at(-1).t : checkpoint.maxTime || "";
 				_checkpointInfo = {
+					format: checkpoint.format,
 					maxSeq: Math.max(0, Number(checkpoint.maxSeq) || 0),
 					eventCount: Math.max(0, Number(checkpoint.eventCount) || 0),
 					lastEventId: String(checkpoint.lastEventId || ""),
@@ -1074,12 +1099,14 @@ export const STATE = (() => {
 				_loadedTime = events.length ? events.at(-1).t : "";
 				if (_loadedTime) U.observeTime(_loadedTime);
 				await PERF_PROFILER.run("state.full-replay", () => replayCooperatively(events), { count: events.length }, 5);
+				_checkpointPayloadLoaded = true;
 				replayed = events.length;
 				replayIds = new Set(events.map((event) => event?.id).filter(Boolean));
 				if (checkpoint) DB.clearStateCheckpoint().catch(() => {});
 			}
 
 			_loadedSeq = info.maxSeq;
+			_checkpointBaseSeq = info.maxSeq;
 			_loading = false;
 			const queued = sortEvents(_queuedRemoteEvents.filter((event) => !event?.id || !replayIds.has(event.id)));
 			_queuedRemoteEvents = [];
@@ -1095,6 +1122,41 @@ export const STATE = (() => {
 		}
 	}
 
+	async function hydrateHeftBlobs() {
+		if (_checkpointPayloadLoaded) return true;
+		if (_checkpointPayloadPromise) return _checkpointPayloadPromise;
+		const generation = _checkpointPayloadGeneration;
+		const hashes = Object.keys(_checkpointBlobSizes);
+		_checkpointPayloadPromise = (async () => {
+			let blobs;
+			try {
+				blobs = await PERF_PROFILER.run("state.checkpoint-heft-read", () => DB.getStateCheckpointPayload(hashes), {
+					count: hashes.length,
+					chars: Object.values(_checkpointBlobSizes).reduce((sum, value) => sum + (Number(value) || 0), 0),
+				}, 5);
+			} catch (error) {
+				// Der Checkpoint ist nur ein abgeleiteter Cache: bei einem unvollständigen
+				// Payload rekonstruiert das unveränderte Event-Log die Bilder verlustfrei.
+				console.warn("[state] Heft-Checkpoint-Payload wird aus dem Event-Log repariert:", error);
+				const recovered = {};
+				for (const event of await DB.allEvents()) {
+					const payload = event?.payload || {};
+					if (event?.type === "heftBlob" && payload.hash && typeof payload.data === "string") recovered[payload.hash] ||= payload.data;
+				}
+				const missing = hashes.filter((hash) => typeof recovered[hash] !== "string");
+				if (missing.length) throw new Error("Heft-Bilddaten fehlen auch im Event-Log: " + missing.join(", "));
+				blobs = Object.fromEntries(hashes.map((hash) => [hash, recovered[hash]]));
+				hashes.forEach((hash) => _checkpointDirtyBlobHashes.add(hash));
+			}
+			if (generation !== _checkpointPayloadGeneration) return false;
+			S.heftBlobs = { ...blobs, ...S.heftBlobs };
+			_checkpointPayloadLoaded = true;
+			return true;
+		})();
+		try { return await _checkpointPayloadPromise; }
+		finally { if (generation === _checkpointPayloadGeneration) _checkpointPayloadPromise = null; }
+	}
+
 	async function persistCheckpoint() {
 		const revision = _stateRevision;
 		const finishProfile = PERF_PROFILER.start("state.checkpoint-save", {}, 20);
@@ -1104,17 +1166,38 @@ export const STATE = (() => {
 				finishProfile({ stale: true });
 				return false;
 			}
-			if (_checkpointInfo && _checkpointInfo.maxSeq === current.maxSeq && _checkpointInfo.eventCount === current.count && _checkpointInfo.lastEventId === current.lastEventId) {
+			const postLoadEvents = current.maxSeq > _checkpointBaseSeq
+				? await PERF_PROFILER.run("state.checkpoint-save-tail", () => DB.eventsAfterSeqAll(_checkpointBaseSeq, current.maxSeq), {
+					fromSeq: _checkpointBaseSeq,
+					toSeq: current.maxSeq,
+				}, 5)
+				: [];
+			const unapplied = postLoadEvents.filter((event) => event?.id && !_appliedPostLoadEventIds.has(event.id));
+			if (unapplied.length) {
+				finishProfile({ stale: true, unapplied: unapplied.length });
+				return false;
+			}
+			if (_checkpointInfo?.format === STATE_CHECKPOINT_FORMAT && _checkpointInfo.maxSeq === current.maxSeq && _checkpointInfo.eventCount === current.count && _checkpointInfo.lastEventId === current.lastEventId) {
 				finishProfile({ count: current.count, unchanged: true });
 				return true;
 			}
-			const checkpointStats = checkpointStateStats(S);
-			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(makeStateCheckpoint(S, current, _loadedTime)), {
+			const checkpointStats = checkpointStateStats(S, _checkpointBlobSizes);
+			const dirtyHashes = [..._checkpointDirtyBlobHashes];
+			const dirtyBlobs = Object.fromEntries(dirtyHashes
+				.map((hash) => [hash, S.heftBlobs[hash]])
+				.filter(([, data]) => typeof data === "string"));
+			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes);
+			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(checkpoint, dirtyBlobs), {
 				count: current.count,
-				keys: STATE_CHECKPOINT_KEYS.length,
+				keys: STATE_CHECKPOINT_CORE_KEYS.length,
+				dirtyHeftBlobCount: Object.keys(dirtyBlobs).length,
 				...checkpointStats,
 			}, 5);
-			_checkpointInfo = { maxSeq: current.maxSeq, eventCount: current.count, lastEventId: current.lastEventId };
+			dirtyHashes.forEach((hash) => _checkpointDirtyBlobHashes.delete(hash));
+			_checkpointInfo = { format: STATE_CHECKPOINT_FORMAT, maxSeq: current.maxSeq, eventCount: current.count, lastEventId: current.lastEventId };
+			_checkpointBaseSeq = current.maxSeq;
+			_loadedSeq = current.maxSeq;
+			_appliedPostLoadEventIds.clear();
 			finishProfile({ count: current.count });
 			return true;
 		} catch (error) {
@@ -1541,5 +1624,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

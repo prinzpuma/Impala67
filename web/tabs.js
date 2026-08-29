@@ -210,7 +210,13 @@ export async function restoreSession() {
 		S.activeTabId = active;
 		await saveSessionNow();
 	}
-	if (active) openPage(active, { skipHistory: true, restoreSession: true });
+	if (active) {
+		// Bei einem wiederhergestellten Heft bleibt der bisherige Vertrag erhalten:
+		// der erste sichtbare Frame enthält schon alle Bilder. Andere Startansichten
+		// zahlen die großen Payload-Kosten dagegen überhaupt nicht mehr.
+		if (S.pages[active]?.kind === "heft") await STATE.hydrateHeftBlobs();
+		openPage(active, { skipHistory: true, restoreSession: true });
+	}
 }
 
 // Beim Gerätewechsel/Schließen nicht auf den Debounce warten.

@@ -270,6 +270,10 @@ export const HEFT = (() => {
 	// fügt der Reducer die Striche direkt in die Arrays ein, auf denen hier gezeichnet
 	// wird. Der alte Cache-Invalidierungs-Tanz über meta.rev entfällt ersatzlos.
 	async function load(p) {
+		// Der Start-Checkpoint hält große Bilddaten absichtlich außerhalb des sofort
+		// geladenen Kernzustands. Alle produktiven Heft-Einstiege laufen durch load(),
+		// daher genügt hier eine zentrale Schranke für Öffnen, Vorschau, KI und Export.
+		await STATE.hydrateHeftBlobs();
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
@@ -3412,6 +3416,7 @@ export const HEFT = (() => {
 		host = container;
 		pid = pageId;
 		if (getComputedStyle(host).position === "static") host.style.position = "relative";
+		host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
 		doc = await load(pageId);
 		if (pid !== pageId) return;
 		idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";

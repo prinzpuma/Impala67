@@ -180,10 +180,42 @@ export const DB = (() => {
 	const allBlobKeys = () => ro("blobs", (s) => s.getAllKeys());
 	// Abgeleiteter Start-Checkpoint: lokal, versioniert und jederzeit aus dem Event-Log
 	// neu erzeugbar. Der reservierte Blob-Schlüssel erfüllt bewusst kein Sync-ID-Muster.
-	const STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v1__";
-	const getStateCheckpoint = () => ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
-	const putStateCheckpoint = (checkpoint) => rw("blobs", (s) => s.put(checkpoint, STATE_CHECKPOINT_KEY));
-	const clearStateCheckpoint = () => rw("blobs", (s) => s.delete(STATE_CHECKPOINT_KEY));
+	const LEGACY_STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v1__";
+	const STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v2__";
+	const STATE_CHECKPOINT_BLOB_PREFIX = "__impala67_state_checkpoint_v2_blob__:";
+	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY || String(key).startsWith(STATE_CHECKPOINT_BLOB_PREFIX);
+	async function getStateCheckpoint() {
+		const current = await ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
+		return current || ro("blobs", (s) => s.get(LEGACY_STATE_CHECKPOINT_KEY));
+	}
+	function getStateCheckpointPayload(hashes) {
+		ensureOpen();
+		const ids = [...new Set((hashes || []).filter(Boolean))];
+		if (!ids.length) return Promise.resolve({});
+		const store = db.transaction("blobs").objectStore("blobs");
+		return Promise.all(ids.map(async (hash) => {
+			const rec = await val(store.get(STATE_CHECKPOINT_BLOB_PREFIX + hash));
+			if (!rec || typeof rec.data !== "string") throw new Error("Checkpoint-Bilddaten fehlen: " + hash);
+			return [hash, rec.data];
+		})).then((entries) => Object.fromEntries(entries));
+	}
+	// Kernzustand und neue, inhaltsadressierte Heft-Bilder werden gemeinsam committed.
+	// Bereits gespeicherte Hashes sind unveränderlich und werden deshalb nicht erneut
+	// geklont oder geschrieben. Das beseitigt den großen Checkpoint-Write im Normalfall.
+	function putStateCheckpoint(checkpoint, heftBlobs) {
+		const entries = Object.entries(heftBlobs || {}).filter(([hash, data]) => hash && typeof data === "string");
+		return rw("blobs", (s) => {
+			entries.forEach(([hash, data]) => s.put({ data }, STATE_CHECKPOINT_BLOB_PREFIX + hash));
+			s.put(checkpoint, STATE_CHECKPOINT_KEY);
+			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
+		});
+	}
+	function clearStateCheckpoint() {
+		return rw("blobs", (s) => {
+			const req = s.getAllKeys();
+			req.onsuccess = () => req.result.forEach((key) => { if (isStateCheckpointKey(key)) s.delete(key); });
+		});
+	}
 
 	// ---- Object-URLs: EIN Cache für die ganze App ---------------------------
 	// Vorher hatte fast jede Datei ihre eigene Lösung: render.js (COVER_URLS/IMG_URLS),
@@ -407,7 +439,7 @@ export const DB = (() => {
 		const blobs = {};
 		if (opts.includeBlobs !== false) {
 			for (const [k, rec] of await dump("blobs")) {
-				if (k === STATE_CHECKPOINT_KEY) continue;
+				if (isStateCheckpointKey(k)) continue;
 				blobs[k] = { meta: rec.meta, b64: U.bufToB64(rec.buf || rec.data) };
 			}
 		}
@@ -701,7 +733,7 @@ export const DB = (() => {
 		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
 		const have = new Set(await allBlobKeys());
 		// PERF: fehlende Blobs in EINER Transaktion statt einer je Blob (Erst-Import mit vielen PDFs/Heften).
-		const missing = Object.entries(blobs).filter(([k]) => k !== STATE_CHECKPOINT_KEY && !have.has(k));
+		const missing = Object.entries(blobs).filter(([k]) => !isStateCheckpointKey(k) && !have.has(k));
 		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
 		// structuredClone vermeidet den teuren JSON-Text-Roundtrip. Die tiefe Kopie
@@ -748,5 +780,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

@@ -32,13 +32,14 @@
 - Cloudflare-Erststände werden vor E2EE in begrenzte Eventpakete gebündelt; fachliche Einzelereignisse nicht unnötig als einzelne R2-Objekte speichern.
 - Cloud-Compaction erfolgt clientseitig als Generation-Cut: erst vollständig synchronisieren, dann `/api/reset`, danach aus dem lokalen Zustand nur den kompaktierten Eventstand und noch referenzierte Blobs neu hochladen. So bleiben E2EE und Offline-Geräte kompatibel.
 
-## Arbeitsweise
+## Kommunikation und Arbeitsweise
 
-- Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen. Veröffentlichte Builds erhalten ihre Release-Version im Workflow.
-- Prüfe, ob diese `AGENTS.md` noch zum aktuellen Projektstand passt, und nenne bei Abweichungen konkrete Verbesserungsvorschläge.
-- Arbeite tokeneffizient und verfolge betroffene Codepfade bis zu Persistenz, Sync, Cache und sichtbarer Oberfläche.
-- `npm run verify` ist der schnelle lokale Standard für Unit-Tests, Syntaxprüfung von Frontend und Worker sowie den PWA-Cache-Check.
-- Führe für ausgelieferte PWA-Änderungen zusätzlich passende Browser-/Offline-Szenarien und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
+- **Antworten für den Nutzer**: Keine technischen Code-Erklärungen, Programmiersprachen-Details oder Code-Wiederholungen im Chat. Erkläre stattdessen in einfacher Sprache, was geändert wurde und welche konkreten Auswirkungen das für den Nutzer hat (Funktion, Verhalten, Bedienung).
+- **Kontext & Tokens sparen**: Große Dateien (>300 Zeilen wie `heft.js`, `editor.js`, `state.js`) niemals komplett lesen, sondern gezielt per Suchfunktion (`grep`) und Zeilenausschnitten inspizieren. Keine langen Statusmonologe vor Toolaufrufen.
+- **Gezielt testen**: Vor `npm run verify` zuerst betroffene Einzeltests ausführen und Terminal-Logs kurz halten.
+- **Offline & Cache**: Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen. Veröffentlichte Builds erhalten ihre Release-Version im Workflow.
+- **Qualitätssicherung**: Führe für ausgelieferte PWA-Änderungen zusätzlich passende Browser-/Offline-Szenarien und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
+- Prüfe regelmäßig, ob diese `AGENTS.md` noch zum aktuellen Projektstand passt.
 
 ## Veröffentlichung
 

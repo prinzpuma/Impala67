@@ -1210,35 +1210,57 @@ test("Start-Checkpoint spielt nur den neuen Tail und fällt bei älterem Import 
 	await DB.open();
 
 	await DB.addEvent({ seq: 1, id: "checkpoint-base", t: "2026-08-20T10:00:00.000Z", type: "pageCreate", payload: { id: "cp-base", title: "Basis" } });
+	await DB.addEvent({ seq: 2, id: "checkpoint-image", t: "2026-08-20T10:00:30.000Z", type: "heftBlob", payload: { hash: "img-hash", data: "data:image/png;base64,AAAA" } });
 	const first = await STATE.load();
 	assert.equal(first.checkpointUsed, false);
 	assert.equal(await STATE.persistCheckpoint(), true);
+	const persisted = await DB.getStateCheckpoint();
+	assert.equal(persisted.format, 2);
+	assert.equal(Object.hasOwn(persisted.state, "heftBlobs"), false, "große Heft-Bilder gehören nicht in den Kern-Checkpoint");
+	assert.equal(persisted.heftBlobSizes["img-hash"], 26);
 
-	await DB.addEvent({ seq: 2, id: "checkpoint-tail", t: "2026-08-20T10:01:00.000Z", type: "pageCreate", payload: { id: "cp-tail", title: "Tail" } });
+	await DB.addEvent({ seq: 3, id: "checkpoint-tail", t: "2026-08-20T10:01:00.000Z", type: "pageCreate", payload: { id: "cp-tail", title: "Tail" } });
+	assert.equal(await STATE.persistCheckpoint(), false, "ein noch nicht angewendetes Event aus einem anderen Tab darf keinen veralteten Checkpoint erzeugen");
+	assert.equal((await DB.getStateCheckpoint()).maxSeq, 2);
 	S.pages = {};
+	S.heftBlobs = {};
 	const originalGetCheckpoint = DB.getStateCheckpoint;
+	const originalGetPayload = DB.getStateCheckpointPayload;
 	let loadedCheckpoint = null;
+	let payloadReads = 0;
 	DB.getStateCheckpoint = async () => (loadedCheckpoint = await originalGetCheckpoint());
+	DB.getStateCheckpointPayload = async (...args) => { payloadReads++; return originalGetPayload(...args); };
 	const warm = await STATE.load();
 	DB.getStateCheckpoint = originalGetCheckpoint;
 	assert.equal(warm.checkpointUsed, true);
 	assert.equal(warm.replayed, 1);
+	assert.equal(payloadReads, 0, "der App-Start darf den großen Heft-Payload nicht laden");
+	assert.deepEqual(S.heftBlobs, {});
 	assert.equal(S.pages, loadedCheckpoint.state.pages, "IndexedDB-Checkpoint darf nicht ein zweites Mal vollständig geklont werden");
 	assert.equal(S.pages["cp-base"].title, "Basis");
 	assert.equal(S.pages["cp-tail"].title, "Tail");
+	assert.equal(await STATE.hydrateHeftBlobs(), true);
+	assert.equal(payloadReads, 1);
+	assert.equal(S.heftBlobs["img-hash"], "data:image/png;base64,AAAA");
+	DB.getStateCheckpointPayload = originalGetPayload;
 	const originalPutCheckpoint = DB.putStateCheckpoint;
-	let checkpointWrites = 0;
-	DB.putStateCheckpoint = async (...args) => { checkpointWrites++; return originalPutCheckpoint(...args); };
+	let checkpointWrites = 0, payloadWrites = 0;
+	DB.putStateCheckpoint = async (...args) => {
+		checkpointWrites++;
+		payloadWrites += Object.keys(args[1] || {}).length;
+		return originalPutCheckpoint(...args);
+	};
 	assert.equal(await STATE.persistCheckpoint(), true);
 	assert.equal(await STATE.persistCheckpoint(), true);
 	DB.putStateCheckpoint = originalPutCheckpoint;
 	assert.equal(checkpointWrites, 1, "Unveränderter Checkpoint darf nicht bei jedem Start neu geschrieben werden");
+	assert.equal(payloadWrites, 0, "unveränderte Heft-Bilder dürfen beim Kern-Checkpoint nicht erneut geschrieben werden");
 
-	await DB.addEvent({ seq: 3, id: "checkpoint-older-import", t: "2026-08-19T09:00:00.000Z", type: "pageCreate", payload: { id: "cp-old", title: "Älterer Import" } });
+	await DB.addEvent({ seq: 4, id: "checkpoint-older-import", t: "2026-08-19T09:00:00.000Z", type: "pageCreate", payload: { id: "cp-old", title: "Älterer Import" } });
 	S.pages = {};
 	const fallback = await STATE.load();
 	assert.equal(fallback.checkpointUsed, false);
-	assert.equal(fallback.replayed, 3);
+	assert.equal(fallback.replayed, 4);
 	assert.equal(S.pages["cp-old"].title, "Älterer Import");
 });
 

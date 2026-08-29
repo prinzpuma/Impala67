@@ -4,6 +4,7 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { TELE } from "./telemetrie.js";
 import { FACH } from "./fach.js";
+import { idlePromptContextKind } from "./lernzeit-context.js";
 
 // lernzeit.js — Lernzeit v5 (4. August 2026)
 // v5: Home-Analyse mit Woche/Monat-Schalter, einer Fachdimension und
@@ -60,10 +61,15 @@ export const LERNZEIT = (() => {
 		if (S.aiBusy) return { name: "KI / Allgemein", source: "ai" };
 		return { name: "Allgemein", source: "fallback" };
 	}
+	function settingsAreOpen() {
+		const overlay = document.getElementById("overlay");
+		return !!(overlay && !overlay.hidden && overlay.querySelector(".settings-modal-v2"));
+	}
 	function categoryNow() {
 		const subject = subjectNowMeta();
-		// Lernzeit gibt es nur in echten Lernansichten. Verwaltungsansichten, Home,
-		// Einstellungen usw. dürfen weder Zeit sammeln noch die Idle-Frage zeigen.
+		// Einstellungen über einer Lernansicht dürfen weder Lernzeit sammeln noch
+		// die Idle-Frage zeigen; S.view selbst bleibt beim Öffnen unverändert.
+		if (settingsAreOpen()) return null;
 		if (S.view === "chat") return { category: "ai", sourceId: S.currentChatId || null, subject: subject.name, subjectSource: subject.source };
 		if (S.view === "anki" && S.ankiTab === "study") return { category: "cards", sourceId: S.ankiDeck || null, subject: subject.name, subjectSource: subject.source };
 		const page = S.currentPageId && S.pages[S.currentPageId];
@@ -152,7 +158,7 @@ export const LERNZEIT = (() => {
 	}
 
 	function showAnimal() {
-		if (animal || !categoryNow()) return;
+		if (animal || !categoryNow() || !idlePromptContextKind(S, settingsAreOpen())) return;
 		pauseSegment();
 		animal = document.createElement("button");
 		animal.type = "button";
@@ -238,6 +244,13 @@ export const LERNZEIT = (() => {
 			else if (current && Date.now() - current.pausedAt > SESSION_GAP_MS) finishSession();
 			refreshLive();
 			return;
+		}
+		// Beim Wechsel aus Heft/Chat/Kartenlernen darf ein bereits sichtbares Tier
+		// nicht in eine normale Notiz oder Verwaltungsansicht mitwandern.
+		if (animal && !idlePromptContextKind(S, settingsAreOpen())) {
+			animal.remove();
+			animal = null;
+			lastActivityAt = Date.now();
 		}
 		if (animal) return;
 		if (Date.now() - lastActivityAt >= IDLE_MS) { showAnimal(); return; }
@@ -583,6 +596,12 @@ export const LERNZEIT = (() => {
 	}
 
 	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, () => { if (!animal) lastActivityAt = Date.now(); }, { passive: true }));
+	// Das Settings-Overlay ändert S.view nicht. Auf seine DOM-Änderung reagieren wir
+	// deshalb sofort, statt erst bis zum nächsten Fünf-Sekunden-Tick zu warten.
+	const overlay = document.getElementById("overlay");
+	if (overlay && typeof MutationObserver !== "undefined") {
+		new MutationObserver(() => tick()).observe(overlay, { childList: true, attributes: true, attributeFilter: ["hidden"] });
+	}
 	document.addEventListener("visibilitychange", () => {
 		if (document.hidden) {
 			if (animal) { animal.remove(); animal = null; }

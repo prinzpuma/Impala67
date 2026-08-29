@@ -1338,6 +1338,7 @@ body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-ri
 /* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen P… */
 /* Taskbar v6: freistehende Floating-Pill über dem Papier — kein… */
 .heft-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative }
+.heft-loading { flex: 1; display: grid; place-items: center; color: var(--text2); font-size: var(--text-sm); font-weight: 650 }
 /* Chrome-Overlay: pointer-events nur auf den Pills, Papier bleib… */
 .heft-chrome { position: absolute; inset: 0; z-index: 50; pointer-events: none }
 .heft-chrome > * { pointer-events: auto }
