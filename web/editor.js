@@ -208,16 +208,20 @@ export const EDITOR = (() => {
 		return esc(text)
 			// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches
 			// KaTeX); bleibt sie gleich, bleibt der gerenderte Chip unangetastet stehen.
-			.replace(/\\\((.+?)\\\)|\$([^$\n]+)\$/g, (md, paren, dollar) => {
+			// Formeln matchen nur echte Delimiter; maskierte \$ bleiben reiner Text.
+			.replace(/\\\((.+?)\\\)|(?<!\\)\$([^$\n]+?)(?<!\\)\$/g, (md, paren, dollar) => {
 				const f = paren == null ? dollar : paren;
 				return LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + f + '" data-md="' + md + '" title="Formel bearbeiten">' + f + LT + "/span>";
 			})
+			.replace(/\\(\$)/g, "$1")
 			.replace(/\{(bg-)?(gray|red|orange|yellow|green|blue|purple|pink)\}([\s\S]*?)\{\/\}/g,
 				(_, bg, color, v) => tag("span", v, ' class="' + (bg ? "hl-" : "c-") + color + '"'))
 			.replace(/==([^=\n]+)==/g, (_, v) => tag("mark", v))
 			.replace(/\x60([^\x60]+)\x60/g, (_, v) => tag("code", v))
+			.replace(/\*\*\*([^*]+)\*\*\*/g, (_, v) => tag("strong", tag("em", v)))
 			.replace(/\*\*([^*]+)\*\*/g, (_, v) => tag("strong", v))
 			.replace(/~~([^~]+)~~/g, (_, v) => tag("s", v))
+			.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/gi, (_, v) => tag("u", v))
 			.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, pre, v) => pre + tag("em", v))
 			.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => tag("a", label, ' href="' + href + '"'))
 			.replace(/\n/g, LT + "br>");
@@ -236,6 +240,7 @@ export const EDITOR = (() => {
 		if (t === "strong" || t === "b") return "**" + inner + "**";
 		if (t === "em" || t === "i") return "*" + inner + "*";
 		if (t === "s" || t === "del" || t === "strike") return "~~" + inner + "~~";
+		if (t === "u" || t === "ins") return "<u>" + inner + "</u>";
 		if (t === "code") return "\x60" + inner + "\x60";
 		if (t === "mark") return "==" + inner + "==";
 		if (t === "a") return "[" + inner + "](" + (node.getAttribute("href") || "") + ")";
@@ -296,15 +301,19 @@ export const EDITOR = (() => {
 		} catch { /* Roh-LaTeX bleibt sichtbar; ein späterer Render darf erneut versuchen */ }
 		finally { mathHydrating.delete(el); }
 	}
+	function inlineMathParts(markdown) {
+		const md = String(markdown || "");
+		if (md.startsWith("\\(") && md.endsWith("\\)")) return { formula: md.slice(2, -2), open: "\\(", close: "\\)" };
+		if (md.startsWith("$") && md.endsWith("$")) return { formula: md.slice(1, -1), open: "$", close: "$" };
+		return { formula: md, open: "$", close: "$" };
+	}
 
 	// Formel-Chips nach dem Rendern mit KaTeX hübsch machen (data-md bleibt Quelle).
 	function hydrateInlineMath(root) {
 		(root || host).querySelectorAll(".blk-imath").forEach((el) => {
 			// data-md enthält "$…$" oder "\\(…\\)" — Delimiter entfernen und direkt rendern
 			// (renderMathInElement findet im Chip-Text keine Delimiter mehr).
-			const md = String(el.dataset.md || "");
-			const f = md.startsWith("\\(") && md.endsWith("\\)") ? md.slice(2, -2) : md.replace(/^\$+|\$+$/g, "");
-			hydrateKatex(el, f, false);
+			hydrateKatex(el, inlineMathParts(el.dataset.md).formula, false);
 		});
 	}
 
@@ -402,21 +411,30 @@ export const EDITOR = (() => {
 				continue;
 			}
 
-			// Toggle <details>
+			// Toggle <details> (mit Verschachtelungstiefe depth)
 			if (/^<details\b/i.test(line.trim())) {
 				const open = /\bopen\b/i.test(line);
 				const buf = [];
 				let summary = "";
+				let depth = 1;
 				// <summary> darf auch direkt in der <details>-Zeile stehen (Altbestand/Import)
 				const sm0 = line.match(/<summary>([\s\S]*?)<\/summary>/i);
 				if (sm0) summary = sm0[1];
 				i++;
-				while (i < lines.length && !/^<\/details>/i.test(lines[i].trim())) {
-					const sm = lines[i].match(/^\s*<summary>([\s\S]*?)<\/summary>/i);
-					if (sm) { summary = sm[1]; i++; continue; }
-					buf.push(lines[i]); i++;
+				while (i < lines.length && depth > 0) {
+					const l = lines[i];
+					const trimmed = l.trim();
+					if (/^<details\b/i.test(trimmed)) depth++;
+					if (/^<\/details>/i.test(trimmed)) {
+						depth--;
+						if (depth === 0) { i++; break; }
+					}
+					if (depth === 1) {
+						const sm = l.match(/^\s*<summary>([\s\S]*?)<\/summary>/i);
+						if (sm) { summary = sm[1]; i++; continue; }
+					}
+					buf.push(l); i++;
 				}
-				i++;
 				const children = parse(buf.join("\n"));
 				if (!children.length) children.push(newBlock("p"));
 				out.push(applyColor({ id: uid(), type: "toggle", summary, open, children }));
@@ -487,14 +505,14 @@ export const EDITOR = (() => {
 			}
 
 			// Listen (Einrückung = 2 Leerzeichen oder 1 Tab pro Ebene)
-			const li = line.match(/^(\s*)([-*]|\d+[.)])\s+(.*)$/);
+			const li = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
 			if (li) {
 				const indent = Math.floor(li[1].replace(/\t/g, "  ").length / 2);
 				const rest = li[3];
 				const todo = rest.match(/^\[( |x|X)\]\s?(.*)$/);
-				if (todo && /^[-*]$/.test(li[2])) {
+				if (todo && /^[-*+]$/.test(li[2])) {
 					out.push(applyColor({ id: uid(), type: "todo", checked: todo[1].toLowerCase() === "x", indent, text: todo[2] }));
-				} else if (/^[-*]$/.test(li[2])) {
+				} else if (/^[-*+]$/.test(li[2])) {
 					out.push(applyColor({ id: uid(), type: "bullet", indent, text: rest }));
 				} else {
 					out.push(applyColor({ id: uid(), type: "number", indent, text: rest }));
@@ -506,7 +524,7 @@ export const EDITOR = (() => {
 			const buf = [line];
 			i++;
 			while (i < lines.length && lines[i].trim() &&
-				!/^(#{1,3}\s|>|\s*([-*]|\d+[.)])\s|\s*\||\s*---+\s*$|:::|<details\b|\$\$|\\\[)/.test(lines[i]) &&
+				!/^(#{1,3}\s|>|\s*([-*+]|\d+[.)])\s|\s*\||\s*---+\s*$|:::|<details\b|<\/details\b|\$\$|\\\[)/.test(lines[i]) &&
 				!lines[i].startsWith(FENCE) && !COLOR_META_RE.test(lines[i].trim()) && !IMAGE_RE.test(lines[i])) {
 				buf.push(lines[i]); i++;
 			}
@@ -596,7 +614,13 @@ export const EDITOR = (() => {
 		if (!sel) return;
 		if (offset == null) offset = Infinity;
 		let remaining = offset, gesetzt = false;
-		const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+		const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, {
+			acceptNode: (n) => {
+				const p = n.parentElement;
+				if (p && p.closest && p.closest('[contenteditable="false"]')) return NodeFilter.FILTER_REJECT;
+				return NodeFilter.FILTER_ACCEPT;
+			},
+		});
 		let node = null, last = null;
 		while ((node = walker.nextNode())) {
 			last = node;
@@ -1294,7 +1318,8 @@ export const EDITOR = (() => {
 					else if (kind === "toggle") focusBlock(nb.id, null, "summary");
 					else if (kind === "code") focusBlock(nb.id, 0, "code");
 					else if (kind === "math") openMathPop(nb.id);
-					else if (nb.children) focusBlock(nb.children[0].id, 0);
+					else if (nb.columns && nb.columns[0] && nb.columns[0][0]) focusBlock(nb.columns[0][0].id, 0);
+					else if (nb.children && nb.children[0]) focusBlock(nb.children[0].id, 0);
 					else if (kind !== "divider") focusBlock(nb.id, 0);
 				}, 0);
 			} else {
@@ -1333,11 +1358,12 @@ export const EDITOR = (() => {
 		const c = findContext(bid);
 		const page = S.pages[pid];
 		if (!c || !page) return;
+		const link = "[" + (page.title || "Ohne Titel") + "](#" + pid + ")";
+		const newText = String(c.block.text || "").replace(/\[\[[^\]]*$/, link);
 		mutate(() => {
-			const link = "[" + (page.title || "Ohne Titel") + "](#" + pid + ")";
-			c.block.text = String(c.block.text || "").replace(/\[\[[^\]]*$/, link);
-			focusBlock(bid, null);
+			c.block.text = newText;
 		});
+		paintTextField(bid, newText, newText.length);
 	}
 
 	// ---------- ⋮⋮-Blockmenü (Umwandeln, Farbe, Duplizieren, Löschen …) ----------
@@ -1376,9 +1402,8 @@ export const EDITOR = (() => {
 		closeMenus();
 		const anchor = spanEl || host.querySelector('[data-bmath="' + bid + '"]');
 		if (!anchor) return;
-		const src = spanEl
-			? String(spanEl.dataset.md || "").replace(/^\$|\$$/g, "")
-			: String((findBlock(bid) || {}).text || "");
+		const inline = spanEl ? inlineMathParts(spanEl.dataset.md) : null;
+		const src = inline ? inline.formula : String((findBlock(bid) || {}).text || "");
 		const pop = document.createElement("div");
 		pop.className = "blk-mathpop";
 		pop.innerHTML = '<textarea class="blk-mathinput" rows="2" placeholder="E = mc^2">' + esc(src) + "</textarea>" +
@@ -1387,7 +1412,7 @@ export const EDITOR = (() => {
 		const r = anchor.getBoundingClientRect();
 		pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + "px";
 		pop.style.top = (r.bottom + 6) + "px";
-		mathEdit = { bid, spanEl: spanEl || null };
+		mathEdit = { bid, spanEl: spanEl || null, delimiters: inline ? [inline.open, inline.close] : null };
 		const ta = pop.querySelector("textarea");
 		ta.focus();
 		ta.select();
@@ -1397,13 +1422,13 @@ export const EDITOR = (() => {
 		const pop = document.querySelector(".blk-mathpop");
 		if (!pop || !mathEdit) { closeMenus(); return; }
 		const value = pop.querySelector("textarea").value.trim();
-		const { bid, spanEl } = mathEdit;
+		const { bid, spanEl, delimiters } = mathEdit;
 		closeMenus();
 		if (spanEl) {
 			// Inline-Formel: data-md des Chips im Modelltext ersetzen
 			const field = spanEl.closest("[data-btext],[data-bcell],[data-bsummary]");
 			if (!field) return;
-			if (value) spanEl.dataset.md = "$" + value + "$";
+			if (value) spanEl.dataset.md = (delimiters?.[0] || "$") + value + (delimiters?.[1] || "$");
 			else spanEl.remove();
 			syncFieldToModel(field);
 			mutate(() => {}, { soft: true });
@@ -1456,25 +1481,25 @@ export const EDITOR = (() => {
 		const keepText = plainTextOf(b);
 		if (kind === "callout") {
 			const child = { id: uid(), type: "p", text: TEXTY[b.type] ? String(b.text || "") : keepText };
-			delete b.text; delete b.indent; delete b.checked;
+			delete b.text; delete b.indent; delete b.checked; delete b.summary; delete b.open; delete b.rows; delete b.columns;
 			b.type = "callout"; b.color = b.color || "blue"; b.children = [child];
 			return;
 		}
 		if (kind === "toggle") {
-			b.summary = TEXTY[b.type] ? String(b.text || "") : keepText;
-			delete b.text; delete b.indent; delete b.checked;
+			b.summary = TEXTY[b.type] ? String(b.text || "") : "";
+			delete b.text; delete b.indent; delete b.checked; delete b.color; delete b.rows; delete b.columns;
 			b.type = "toggle"; b.open = true; b.children = b.children || [newBlock("p")];
 			return;
 		}
 		if (kind === "code") {
 			b.text = keepText; b.language = b.language || "javascript";
-			delete b.children; delete b.indent; delete b.checked; delete b.summary;
+			delete b.children; delete b.indent; delete b.checked; delete b.summary; delete b.open; delete b.color; delete b.rows; delete b.columns;
 			b.type = "code";
 			return;
 		}
 		// Zieltyp ist ein Textblock
 		b.text = TEXTY[b.type] || b.type === "code" ? String(b.text || "") : keepText;
-		delete b.children; delete b.columns; delete b.rows; delete b.summary; delete b.open; delete b.language;
+		delete b.children; delete b.columns; delete b.rows; delete b.summary; delete b.open; delete b.language; delete b.color;
 		if (kind === "todo") b.checked = !!b.checked; else delete b.checked;
 		if (!LISTY[kind]) delete b.indent;
 		b.type = kind;
@@ -1510,7 +1535,7 @@ export const EDITOR = (() => {
 	// Greifen nur am Zeilen-/Blockanfang direkt nach einem Leerzeichen-Tastendruck.
 	const TRANSFORMS = [
 		[/^#\s$/, "h1"], [/^##\s$/, "h2"], [/^###\s$/, "h3"],
-		[/^[-*]\s$/, "bullet"], [/^1[.)]\s$/, "number"],
+		[/^[-*+]\s$/, "bullet"], [/^1[.)]\s$/, "number"],
 		[/^\[\]\s$/, "todo"], [/^\[ \]\s$/, "todo"],
 		[/^>\s$/, "quote"],
 	];
@@ -1522,12 +1547,12 @@ export const EDITOR = (() => {
 		const c = findContext(bid);
 		if (!c || !TEXTY[c.block.type]) return false;
 		const text = String(c.block.text || "");
-		const caret = caretInfo();
-		const upto = caret ? text.slice(0, caret.offset) : text;
+		const split = splitFieldAtCaret(field, text);
+		const upto = split.vor;
 
 		// Slash-Menü öffnen/aktualisieren
-		const sm = upto.match(/\/([a-zäöü0-9]*)$/i);
-		if (sm && (upto.length === sm[0].length || /\s\/[a-zäöü0-9]*$/i.test(upto))) {
+		const sm = upto.match(/\/([a-zäöüß0-9]*)$/i);
+		if (sm && (upto.length === sm[0].length || /\s\/[a-zäöüß0-9]*$/i.test(upto))) {
 			openSlash(bid, sm[1]);
 			return false;
 		} else if (slash) closeMenus();
@@ -1551,7 +1576,7 @@ export const EDITOR = (() => {
 				if (re.test(upto)) {
 					mutate(() => {
 						turnInto(c.block, kind);
-						c.block.text = text.slice(upto.length);
+						c.block.text = split.nach;
 					});
 					focusBlock(bid, 0);
 					return true;
@@ -1586,15 +1611,15 @@ export const EDITOR = (() => {
 		}
 		// Inline-Markdown sofort hübsch rendern, sobald ein Muster VOLLSTÄNDIG ist
 		// (z.B. zweiter Stern von **fett** getippt) — Feld neu rendern + Caret halten.
-		if (e && /[*\x60~=$)\/}]/.test(e.data || "") &&
-			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|\$[^$\n]+\$|\\\(.+?\\\)|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
+		if (e && /[*\x60~=$)\/}>]/.test(e.data || "") &&
+			/(\*\*[^*]+\*\*|(^|[^*])\*[^*\n]+\*|\x60[^\x60]+\x60|~~[^~]+~~|==[^=\n]+==|<u>[\s\S]*?<\/u>|\$[^$\n]+\$|\\\(.+?\\\)|\[[^\]]+\]\([^)\s]+\)|\{(bg-)?[a-z]+\}[\s\S]*?\{\/\})/.test(upto)) {
 			// Der Caret muss in SICHTBAREN Zeichen gesetzt werden: nach dem Rendern sind die
 			// Markdown-Zeichen (** **, == ==, $…$) verschwunden. Mit dem rohen Markdown-Offset
 			// sprang der Caret um genau diese Zeichen zu weit nach rechts, sobald hinter der
 			// Fundstelle noch Text stand. splitFieldAtCaret liefert das Markdown VOR dem Caret
 			// exakt über DOM-Ranges — dessen Sichtlänge ist die gesuchte Position.
 			const probe = document.createElement("div");
-			probe.innerHTML = inlineHtml(splitFieldAtCaret(field, text).vor);
+			probe.innerHTML = inlineHtml(split.vor);
 			const off = probe.textContent.length;
 			field.innerHTML = inlineHtml(text);
 			hydrateInlineMath(field);
@@ -1716,6 +1741,7 @@ export const EDITOR = (() => {
 		// --- Inline-Format-Shortcuts ---
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); wrapSelection("**", "**"); return; }
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "i") { e.preventDefault(); wrapSelection("*", "*"); return; }
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "u") { e.preventDefault(); wrapSelection("<u>", "</u>"); return; }
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "e") { e.preventDefault(); wrapSelection("\x60", "\x60"); return; }
 		if (mod && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); wrapSelection("~~", "~~"); return; }
 		if (mod && e.shiftKey && e.key.toLowerCase() === "h") { e.preventDefault(); colorWrap(lastColor); return; }
@@ -1764,17 +1790,59 @@ export const EDITOR = (() => {
 		// --- Codeblock: Tab = 2 Spaces, Enter = Zeilenumbruch, Escape via Pfeil unten am Ende ---
 		if (field.dataset.bcode) { if (handleCodeKeys(e, field)) return; }
 
-		// --- Toggle-Summary: Enter springt in den Toggle-Inhalt ---
-		if (field.dataset.bsummary && e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			const b = findBlock(field.dataset.bsummary);
-			if (!b) return;
-			mutate(() => {
-				b.open = true;
-				if (!b.children || !b.children.length) b.children = [newBlock("p")];
-			});
-			focusBlock(b.children[0].id, 0);
-			return;
+		// --- Toggle-Summary: Enter / Backspace / Navigation ---
+		if (field.dataset.bsummary) {
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				const b = findBlock(field.dataset.bsummary);
+				if (!b) return;
+				mutate(() => {
+					b.open = true;
+					if (!b.children || !b.children.length) b.children = [newBlock("p")];
+				});
+				focusBlock(b.children[0].id, 0);
+				return;
+			}
+			if (e.key === "Backspace") {
+				const b = findBlock(field.dataset.bsummary);
+				const caret = caretInfo();
+				if (b && caret && caret.offset === 0 && !String(b.summary || "").length) {
+					e.preventDefault();
+					const c = findContext(b.id);
+					if (c) {
+						mutate(() => {
+							if (!b.children || b.children.length === 0 || (b.children.length === 1 && !String(b.children[0].text || "").trim())) {
+								turnInto(b, "p");
+							} else {
+								c.list.splice(c.index, 1, ...b.children);
+							}
+						});
+						focusBlock(b.id, 0);
+						return;
+					}
+				}
+			}
+			if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+				const b = findBlock(field.dataset.bsummary);
+				const caret = caretInfo();
+				const text = String(b && b.summary || "");
+				const d = e.key === "ArrowUp" ? -1 : 1;
+				const edge = d < 0 ? caret && caret.offset === 0 : caret && caret.offset >= text.length;
+				if (edge) {
+					const c = findContext(field.dataset.bsummary);
+					if (d > 0 && b && b.open && b.children && b.children.length) {
+						e.preventDefault();
+						focusNeighbor(b.children[0], 1);
+						return;
+					}
+					const neighbor = c && c.list[c.index + d];
+					if (neighbor) {
+						e.preventDefault();
+						focusNeighbor(neighbor, d);
+						return;
+					}
+				}
+			}
 		}
 
 		if (!c || !field.dataset.btext) return;
@@ -1805,12 +1873,11 @@ export const EDITOR = (() => {
 				return;
 			}
 			let neuId = null;
+			const teile = splitFieldAtCaret(field, text);
+			const before = teile.vor, after = teile.nach;
+			field.innerHTML = inlineHtml(before);
+			hydrateInlineMath(field);
 			mutate(() => {
-				// Split in SICHTBAREN Koordinaten: beide Caret-Hälften werden einzeln
-				// zurück nach Markdown übersetzt. text.slice(off) mischte Sicht- und
-				// Markdown-Offsets und riss formatierte Zeilen an der falschen Stelle.
-				const teile = splitFieldAtCaret(field, text);
-				const before = teile.vor, after = teile.nach;
 				b.text = before;
 				// Listen setzen sich fort; Überschriften/Zitate erzeugen Text darunter
 				const nb = LISTY[b.type]
@@ -1844,17 +1911,29 @@ export const EDITOR = (() => {
 
 		if (e.key === "Backspace" && atStart) {
 			e.preventDefault();
-			// Stufe 1: Sonderformat verliert zuerst sein Format (→ Text) …
-			if (b.type !== "p") {
-				mutate(() => {
-					if (LISTY[b.type] && (b.indent || 0) > 0) b.indent--; // Liste rückt erst aus
-					else turnInto(b, "p");
-				});
+			const prev = c.list[c.index - 1];
+			// Stufe 1: Listen mit Text verschmelzen direkt mit dem Vorgänger (wie Notion);
+			// leere Listen rücken aus bzw. werden zu Text. Überschriften werden zu Text.
+			if (LISTY[b.type]) {
+				if ((b.indent || 0) > 0) {
+					mutate(() => { b.indent--; }, { soft: true });
+					render();
+					focusBlock(b.id, 0);
+					return;
+				}
+				if (!text.trim() || !prev || !TEXTY[prev.type]) {
+					if (b.type !== "p") {
+						mutate(() => { turnInto(b, "p"); });
+						focusBlock(b.id, 0);
+						return;
+					}
+				}
+			} else if (b.type !== "p") {
+				mutate(() => { turnInto(b, "p"); });
 				focusBlock(b.id, 0);
 				return;
 			}
 			// Stufe 2: mit dem Vorgänger verschmelzen
-			const prev = c.list[c.index - 1];
 			if (!prev) {
 				// Anfang einer Kind-Liste (Callout/Toggle/Spalte): Block vor den Elternblock ziehen
 				if (c.parent) {
@@ -1921,7 +2000,7 @@ export const EDITOR = (() => {
 					c.list.splice(c.index + 1, 1);
 				});
 				focusBlock(b.id, off);
-			} else if (next.type === "divider") {
+			} else {
 				if (selectTopOf(next)) field.blur();
 			}
 			return;
@@ -1931,7 +2010,7 @@ export const EDITOR = (() => {
 		if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
 			const d = e.key === "ArrowUp" ? -1 : 1;
 			const edge = d < 0 ? off === 0 : atEnd;
-			if (!edge || /\n/.test(text)) return; // mehrzeilig: Browser navigiert selbst
+			if (!edge) return;
 			const neighbor = c.list[c.index + d];
 			if (neighbor) {
 				e.preventDefault();
@@ -2123,6 +2202,26 @@ export const EDITOR = (() => {
 			}
 			return true;
 		}
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+			e.preventDefault();
+			const md = serializeList(blocks.slice(selRange.from, selRange.to + 1));
+			const ta = document.createElement("textarea");
+			ta.value = md;
+			ta.setAttribute("readonly", "");
+			ta.style.position = "fixed";
+			ta.style.left = "-9999px";
+			ta.style.top = "0";
+			document.body.appendChild(ta);
+			ta.select();
+			let copied = false;
+			try { copied = document.execCommand("copy"); } catch { /* Fallback */ }
+			ta.remove();
+			if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(md);
+			}
+			mutateDeleteSelection("Delete");
+			return true;
+		}
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
 			e.preventDefault();
 			const { from, to } = selRange;
@@ -2220,13 +2319,16 @@ export const EDITOR = (() => {
 			const tRow = t.closest && t.closest("[data-btablerow]");
 			if (tRow) {
 				const b = findBlock(tRow.dataset.btablerow);
-				if (b) mutate(() => { b.rows.push(b.rows[0].map(() => "")); });
+				if (b && b.rows) {
+					const colCount = (b.rows[0] && b.rows[0].length) || 2;
+					mutate(() => { b.rows.push(Array(colCount).fill("")); });
+				}
 				return;
 			}
 			const tCol = t.closest && t.closest("[data-btablecol]");
 			if (tCol) {
 				const b = findBlock(tCol.dataset.btablecol);
-				if (b) mutate(() => { b.rows.forEach((r) => r.push("")); });
+				if (b && b.rows) mutate(() => { b.rows.forEach((r) => r.push("")); });
 				return;
 			}
 			const coDot = t.closest && t.closest("[data-bcalloutcolor]");
@@ -2343,7 +2445,8 @@ export const EDITOR = (() => {
 			e.dataTransfer.setData("text/plain", dragBid);
 		});
 		host.addEventListener("dragover", (e) => {
-			if (!dragBid) return;
+			const isFileDrag = e.dataTransfer && e.dataTransfer.types && (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("public.file-url"));
+			if (!dragBid && !isFileDrag) return;
 			e.preventDefault();
 			clearDropMarks();
 			const over = e.target.closest && e.target.closest("[data-blk]");
@@ -2403,9 +2506,9 @@ export const EDITOR = (() => {
 			const text = e.clipboardData.getData("text/plain") || "";
 			if (!text) return;
 			// Mehrzeiliger Markdown-Text in einen normalen Textblock → als Blöcke einfügen
-			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*]\s|\d+[.)]\s|>|\||\$\$|\\\[)/m.test(text) && text.includes("\n")) {
+			if (field.dataset.btext && /\n\s*\n|^(#{1,3}\s|[-*+]\s|\d+[.)]\s|>|\||\$\$|\\\[)/m.test(text) && text.includes("\n")) {
 				const c = findContext(field.dataset.btext);
-				if (c && !c.parent) {
+				if (c) {
 					const pasted = parse(text);
 					mutate(() => {
 						c.list.splice(c.index + 1, 0, ...pasted);

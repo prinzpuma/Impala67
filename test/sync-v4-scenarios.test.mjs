@@ -941,6 +941,50 @@ test("Kompaktierung: echtes DB.compactLocal bewahrt parallelen neuen Event und d
 	assert.equal(evs.find((e) => e.id === "p3-c").seq, 5, "Der neue Event muss mit seiner ursprünglichen Sequenz erhalten bleiben");
 });
 
+test("Drive-Import speichert eine Event-ID aus überlappendem Snapshot und Delta nur einmal", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+
+	const duplicate = {
+		id: "snapshot-delta-overlap",
+		t: "2026-08-20T01:05:00.000Z",
+		type: "teleEvent",
+		payload: { kind: "study", seconds: 60 },
+	};
+	const result = await DB.importAll({ app: "impala67", events: [duplicate, structuredClone(duplicate)] }, {
+		remote: true,
+		remoteSource: "drive",
+	});
+
+	assert.equal(result.added, 1, "Snapshot-/Delta-Überlappungen sind per Event-ID idempotent");
+	assert.equal((await DB.allEvents()).filter((event) => event.id === duplicate.id).length, 1);
+});
+
+test("Dispatch trennt verschachtelte Laufzeitdaten vom veränderlichen Aufrufer-Payload", async () => {
+	globalThis.indexedDB = createMemoryIndexedDB();
+	globalThis.localStorage.clear();
+	await DB.resetDatabase();
+	await DB.open();
+	S.pages = {};
+
+	const payload = {
+		id: "immutable-dispatch-page",
+		title: "Unveränderlich",
+		tags: ["ursprünglich"],
+		props: { status: "offen" },
+	};
+	const event = await STATE.dispatch("pageCreate", payload);
+	payload.tags.push("nachträglich");
+	payload.props.status = "geändert";
+
+	const persisted = (await DB.allEvents()).find((entry) => entry.id === event.id);
+	assert.deepEqual(persisted.payload.tags, ["ursprünglich"], "IndexedDB hat bereits eine strukturierte Kopie gespeichert");
+	assert.deepEqual(S.pages[payload.id].tags, persisted.payload.tags, "Laufzeit-State darf nicht ohne Event vom Aufrufer mutiert werden");
+	assert.deepEqual(S.pages[payload.id].props, persisted.payload.props);
+});
+
 // -----------------------------------------------------------------------------
 // 22. LANGZEIT- & STRESSTEST (10.000 Events & 1.000 Wechsel)
 // -----------------------------------------------------------------------------

@@ -15,6 +15,11 @@ export const RAG = (() => {
 
 	const enabled = () => !!S.settings.embedModel;
 	const embeddingProviderId = () => String(S.settings.embedProviderId || "");
+	const embeddingIdentity = () => ({
+		model: String(S.settings.embedModel || ""),
+		providerId: embeddingProviderId(),
+	});
+	const sameEmbeddingIdentity = (left, right) => left.model === right.model && left.providerId === right.providerId;
 	let rankingWorker = null, rankingReqId = 0;
 	const rankingPending = new Map();
 	function getRankingWorker() {
@@ -66,9 +71,20 @@ export const RAG = (() => {
 
 	async function indexPage(pageId) {
 		if (!enabled()) return;
+		const identity = embeddingIdentity();
 		const pg = S.pages[pageId];
 		// Gelöschte (Papierkorb-)Seiten aus dem Index entfernen statt sie zu indexieren
 		if (!pg || pg.trashed) { await dropIndex(pageId); return; }
+		const pageUpdated = pg.updated;
+		const assertCurrent = () => {
+			if (!sameEmbeddingIdentity(identity, embeddingIdentity())) {
+				throw new Error("Embedding-Konfiguration wurde während der Indexierung geändert.");
+			}
+			const current = S.pages[pageId];
+			if (!current || current.trashed || current.updated !== pageUpdated) {
+				throw new Error("Seite wurde während der Indexierung geändert.");
+			}
+		};
 		let text = pg.title + "\n\n" + pg.content;
 		// PDF-Volltext mitindexieren: der bei der Aufnahme extrahierte Text liegt als
 		// eigener Blob ("pdftext:<id>") in IndexedDB; ältere PDFs werden einmalig nachextrahiert.
@@ -97,7 +113,9 @@ export const RAG = (() => {
 		// Schritten wieder Kontrolle.
 		const vecs = [];
 		for (let at = 0; at < chunks.length; at += EMBEDDING_BATCH_SIZE) {
+			assertCurrent();
 			const batch = await EMBEDDINGS.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE), { priority: "background" });
+			assertCurrent();
 			if (!Array.isArray(batch) || batch.length !== Math.min(EMBEDDING_BATCH_SIZE, chunks.length - at) || batch.some((v) => !v || !v.length)) {
 				throw new Error("Embedding unvollständig für Seite " + pageId);
 			}
@@ -109,13 +127,14 @@ export const RAG = (() => {
 		if (!Array.isArray(vecs) || vecs.length !== chunks.length || vecs.some((v) => !v || !v.length)) {
 			throw new Error("Embedding unvollständig für Seite " + pageId);
 		}
+		assertCurrent();
 		// Normen einmalig beim Indexieren vorberechnen — die Suche spart sich damit
 		// pro Chunk eine komplette Betrags-Berechnung (spürbar bei vielen Seiten).
 		// model wird mitgespeichert: reindexStale() erkennt daran einen Modellwechsel.
 		await DB.putVec(pageId, {
-			updated: pg.updated,
-			model: S.settings.embedModel,
-			providerId: embeddingProviderId(),
+			updated: pageUpdated,
+			model: identity.model,
+			providerId: identity.providerId,
 			// Neue Vektoren kompakt speichern. Alte Array-Einträge bleiben lesbar und
 			// werden beim naechsten normalen Reindex automatisch ersetzt.
 			chunks: chunks.map((text, i) => {

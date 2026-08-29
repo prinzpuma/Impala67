@@ -637,7 +637,7 @@ export const NOTION_MIGRATOR = (() => {
 		return NOTION_LANGS.has(l) ? l : LANG_ALIAS[l] || "plain text";
 	};
 
-	const LIST_RE = /^(\s*)(- \[( |x)\] |- |\d+\. )(.*)$/;
+	const LIST_RE = /^(\s*)(- \[( |x)\] |[-*+] |\d+\. )(.*)$/;
 	function listRun(lines, start, blocks) {
 		let i = start;
 		const stack = [{ children: blocks, depth: -1 }];
@@ -647,7 +647,7 @@ export const NOTION_MIGRATOR = (() => {
 			const depth = Math.floor(m[1].replace(/\t/g, "  ").length / 2);
 			const blk = m[2].startsWith("- [")
 				? { type: "to_do", to_do: { checked: m[3] === "x", rich_text: mdRichText(m[4]) } }
-				: m[2] === "- "
+				: /^[-*+]\s$/.test(m[2])
 					? { type: "bulleted_list_item", bulleted_list_item: { rich_text: mdRichText(m[4]) } }
 					: { type: "numbered_list_item", numbered_list_item: { rich_text: mdRichText(m[4]) } };
 			while (stack.length > 1 && depth <= stack[stack.length - 1].depth) stack.pop();

@@ -9,6 +9,17 @@ const MAX_SYNC_CHARS = 8_000_000;
 const MAX_BLOB_BYTES = 100_000_000;
 const enc = new TextEncoder();
 
+const UPSERT_USER_SQL = `
+	INSERT INTO user_storage (user_id,auth_token_hash,total_bytes,updated_at)
+	SELECT ?,?,?,?
+	WHERE EXISTS (SELECT 1 FROM user_storage WHERE user_id = ?)
+		OR (SELECT COUNT(*) FROM user_storage) < ?
+	ON CONFLICT(user_id) DO UPDATE SET
+		auth_token_hash=excluded.auth_token_hash,
+		total_bytes=excluded.total_bytes,
+		updated_at=excluded.updated_at
+`;
+
 const AI_MODELS = ["qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const VISION_MODELS = new Set([AI_MODELS[0]]);
 const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000, MAX_AI_OUTPUT_TOKENS = 1_500;
@@ -203,33 +214,37 @@ export class SyncRoom {
 	async authorize(rawToken) {
 		if (!rawToken) return false;
 		const hash = await tokenHash(rawToken);
-		if (this.authHash) {
-			if (this.authHash !== hash) return false;
-			if (!this.accountExists) await this.persistUsage();
-		} else {
-			const count = await this.env.DB.prepare("SELECT COUNT(*) cnt FROM user_storage").first();
-			if (Number(count?.cnt) >= MAX_USERS) return false;
-			this.authHash = hash;
-			if (this.ctx?.storage) {
-				await this.ctx.storage.put("authTokenHash", hash);
-				await this.ctx.storage.put("generation", this.generation);
+		return this.queue(async () => {
+			if (this.authHash) {
+				if (this.authHash !== hash) return false;
+				if (!this.accountExists && !(await this.persistUsage())) return false;
+			} else {
+				this.authHash = hash;
+				if (!(await this.persistUsage())) {
+					this.authHash = null;
+					return false;
+				}
+				if (this.ctx?.storage) {
+					await this.ctx.storage.put("authTokenHash", hash);
+					await this.ctx.storage.put("generation", this.generation);
+				}
 			}
-			await this.persistUsage();
-		}
-		if (this.protocolVersion !== CLOUD_SYNC_PROTOCOL) {
-			if (this.maxSeq || this.totalBytes) await this.clearSyncData(true);
-			this.protocolVersion = CLOUD_SYNC_PROTOCOL;
-			if (this.ctx?.storage) await this.ctx.storage.put("protocolVersion", CLOUD_SYNC_PROTOCOL);
-		}
-		return true;
+			if (this.protocolVersion !== CLOUD_SYNC_PROTOCOL) {
+				if (this.maxSeq || this.totalBytes) await this.clearSyncData(true);
+				this.protocolVersion = CLOUD_SYNC_PROTOCOL;
+				if (this.ctx?.storage) await this.ctx.storage.put("protocolVersion", CLOUD_SYNC_PROTOCOL);
+			}
+			return true;
+		});
 	}
 
 	async persistUsage() {
 		const now = new Date().toISOString();
-		await this.env.DB.prepare(
-			"INSERT INTO user_storage (user_id,auth_token_hash,total_bytes,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET auth_token_hash=?,total_bytes=?,updated_at=?"
-		).bind(this.userId, this.authHash, this.totalBytes, now, this.authHash, this.totalBytes, now).run();
+		const result = await this.env.DB.prepare(UPSERT_USER_SQL)
+			.bind(this.userId, this.authHash, this.totalBytes, now, this.userId, MAX_USERS).run();
+		if (Number(result?.meta?.rows_written ?? result?.meta?.changes ?? 0) < 1) return false;
 		this.accountExists = true;
+		return true;
 	}
 
 	broadcast(message, except = null) {
@@ -360,7 +375,8 @@ export class SyncRoom {
 			if (this.totalBytes + size > MAX_USER_BYTES) return json({ error: "Quota überschritten." }, 413);
 			await this.env.BUCKET.put(r2Key, bytes, { customMetadata: { iv } });
 			try {
-				this.totalBytes += size; await this.persistUsage();
+				this.totalBytes += size;
+				if (!(await this.persistUsage())) throw new Error("User quota record could not be persisted");
 			} catch (error) {
 				this.totalBytes -= size; try { await this.env.BUCKET.delete(r2Key); } catch {} throw error;
 			}

@@ -921,11 +921,10 @@ export const STATE = (() => {
 	}
 
 	async function dispatchOne(type, payload) {
-		// Eigene Kopie: das Payload landet im append-only Log und darf sich nicht mehr
-		// ändern, wenn der Aufrufer sein Objekt danach weiterbenutzt. (Die früheren
-		// Haken stripSecrets/applySecrets waren seit dem Umzug der Zugangsdaten ins
-		// Event-Log reine No-Ops — irreführend und ersatzlos entfallen.)
-		if (type === "settingsSet") payload = { ...payload };
+		// Das append-only Event und der daraus abgeleitete Laufzeit-State dürfen keine
+		// Referenzen auf veränderliche Aufruferobjekte behalten. IndexedDB klont zwar
+		// beim Schreiben, reduce() arbeitet danach aber mit diesem Event weiter.
+		if (payload && typeof payload === "object") payload = cloneStateValue(payload);
 		for (const fn of _dispatchHooks.before) {
 			try { fn(type, payload); } catch (e) { console.warn("dispatch-Hook (before):", e); }
 		}

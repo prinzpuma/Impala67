@@ -1236,7 +1236,7 @@ export function handleAppearanceSelect(kind, value) {
 
 export async function handleAndroidFullscreenToggle(enabled) {
 	const changed = await ANDROID_FULLSCREEN.setEnabled(enabled);
-	if (!changed) U.toast("Android-Vollbild konnte nicht aktiviert werden.", "error");
+	if (!changed) U.toast("Android-Vollbild konnte nicht " + (enabled ? "aktiviert" : "deaktiviert") + " werden.", "error");
 	openSettings("appearance", "android-fullscreen");
 }
 
@@ -1355,3 +1355,11 @@ document.addEventListener("change", (e) => {
 		updateLocalEmbeddingManagerUi();
 	}
 });
+
+// Escape/Zurück kann Vollbild außerhalb des Einstellungs-Schalters beenden. Das
+// Fullscreen-Modul aktualisiert zuerst die Gerätewahl; danach gleichen wir nur die
+// eventuell gerade sichtbare Projektion des Schalters ab.
+document.addEventListener("fullscreenchange", () => queueMicrotask(() => {
+	const input = document.getElementById("inpAndroidFullscreen");
+	if (input) input.checked = ANDROID_FULLSCREEN.enabled();
+}));

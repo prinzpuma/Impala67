@@ -78,6 +78,52 @@ test("embedding model settings expose only the tested Bekko model", async () => 
 	assert.deepEqual(models.map((m) => [m.providerId, m.id]), [["local", "local:bekko-a8m"]]);
 });
 
+test("queued remote embeddings keep the provider and model selected when enqueued", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalProviders = S.settings.aiProviders;
+	const originalProviderId = S.settings.embedProviderId;
+	const originalModel = S.settings.embedModel;
+	const requests = [];
+	let releaseFirst;
+	const firstResponse = new Promise((resolve) => { releaseFirst = resolve; });
+	S.settings.aiProviders = [
+		{ id: "provider-a", base: "https://a.example/v1", key: "key-a" },
+		{ id: "provider-b", base: "https://b.example/v1", key: "key-b" },
+	];
+	S.settings.embedProviderId = "provider-a";
+	S.settings.embedModel = "model-a";
+	globalThis.fetch = async (url, options) => {
+		requests.push({ url: String(url), body: JSON.parse(options.body) });
+		if (requests.length === 1) await firstResponse;
+		return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), {
+			status: 200,
+			headers: { "content-type": "application/json" },
+		});
+	};
+
+	try {
+		const first = AI.embed(["eins"], { priority: "background" });
+		while (!requests.length) await new Promise((resolve) => setTimeout(resolve, 0));
+		const second = AI.embed(["zwei"], { priority: "background" });
+		S.settings.embedProviderId = "provider-b";
+		S.settings.embedModel = "model-b";
+		releaseFirst();
+		await Promise.all([first, second]);
+
+		assert.deepEqual(requests.map((request) => request.url), [
+			"https://a.example/v1/embeddings",
+			"https://a.example/v1/embeddings",
+		]);
+		assert.deepEqual(requests.map((request) => request.body.model), ["model-a", "model-a"]);
+	} finally {
+		globalThis.fetch = originalFetch;
+		S.settings.aiProviders = originalProviders;
+		S.settings.embedProviderId = originalProviderId;
+		S.settings.embedModel = originalModel;
+		releaseFirst();
+	}
+});
+
 test("RAG indexes and searches with 256d vectors", async () => {
 	S.settings.embedModel = "local:bekko-a8m";
 	S.settings.embedProviderId = "local";
@@ -201,6 +247,69 @@ test("RAG begrenzt lokale Embedding-Batches für große Seiten", async () => {
 	} finally {
 		EMBEDDINGS.embed = origEmbed;
 		DB.putVec = origPutVec;
+	}
+});
+
+test("RAG speichert keine Vektoren unter einem während der Indexierung gewechselten Modell", async () => {
+	const originalModel = S.settings.embedModel;
+	const originalProviderId = S.settings.embedProviderId;
+	const originalPages = S.pages;
+	const originalEmbed = EMBEDDINGS.embed;
+	const originalPutVec = DB.putVec;
+	let stored = null;
+	S.settings.embedModel = "model-before";
+	S.settings.embedProviderId = "provider-before";
+	S.pages = {
+		page: { id: "page", title: "Modellwechsel", content: "Ein kurzer Inhalt", updated: 1 },
+	};
+	EMBEDDINGS.embed = async (texts) => {
+		S.settings.embedModel = "model-after";
+		S.settings.embedProviderId = "provider-after";
+		return texts.map(() => [1, 0]);
+	};
+	DB.putVec = async (_id, value) => { stored = value; };
+
+	try {
+		await assert.rejects(() => RAG.indexPage("page"), /Embedding-Konfiguration.*geändert/);
+		assert.equal(stored, null);
+	} finally {
+		S.settings.embedModel = originalModel;
+		S.settings.embedProviderId = originalProviderId;
+		S.pages = originalPages;
+		EMBEDDINGS.embed = originalEmbed;
+		DB.putVec = originalPutVec;
+	}
+});
+
+test("RAG markiert veralteten Inhalt nicht als aktuellen Seitenindex", async () => {
+	const originalModel = S.settings.embedModel;
+	const originalProviderId = S.settings.embedProviderId;
+	const originalPages = S.pages;
+	const originalEmbed = EMBEDDINGS.embed;
+	const originalPutVec = DB.putVec;
+	let stored = null;
+	S.settings.embedModel = "stable-model";
+	S.settings.embedProviderId = "stable-provider";
+	S.pages = {
+		page: { id: "page", title: "Alt", content: "Alter Inhalt", updated: "before" },
+	};
+	EMBEDDINGS.embed = async (texts) => {
+		S.pages.page.title = "Neu";
+		S.pages.page.content = "Neuer Inhalt";
+		S.pages.page.updated = "after";
+		return texts.map(() => [1, 0]);
+	};
+	DB.putVec = async (_id, value) => { stored = value; };
+
+	try {
+		await assert.rejects(() => RAG.indexPage("page"), /Seite wurde während der Indexierung geändert/);
+		assert.equal(stored, null);
+	} finally {
+		S.settings.embedModel = originalModel;
+		S.settings.embedProviderId = originalProviderId;
+		S.pages = originalPages;
+		EMBEDDINGS.embed = originalEmbed;
+		DB.putVec = originalPutVec;
 	}
 });
 

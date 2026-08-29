@@ -543,7 +543,7 @@ export const DB = (() => {
 		// haben, duerfen denselben konsistenten Snapshot weiterreichen. Das vermeidet
 		// einen zweiten kompletten IndexedDB-Read pro Importseite.
 		const local = Array.isArray(opts.localEvents) ? opts.localEvents : await allEvents();
-		const existing = new Set(local.map((e) => e.id));
+		const seenIds = new Set(local.map((e) => e.id));
 		const floor = compactFloor();
 		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,
 		// validateEvent verlangt aber auch t und type und WIRFT — damit flog die komplette
@@ -554,9 +554,17 @@ export const DB = (() => {
 		// gerufen. Zahlen werden deshalb hier EINMAL auf ISO-Strings gezogen statt verworfen.
 		const normalized = incoming.map((ev) => {
 			if (!ev || typeof ev !== "object") return null;
-			const t = typeof ev.t === "number" ? new Date(ev.t).toISOString() : ev.t;
+			let t = ev.t;
+			if (typeof t === "number") {
+				const date = new Date(t);
+				if (!Number.isFinite(t) || Number.isNaN(date.getTime())) return null;
+				t = date.toISOString();
+			}
 			if (!ev.id || typeof ev.type !== "string" || typeof t !== "string" || !t) return null;
-			return t === ev.t ? ev : { ...ev, t };
+			// Import-Metadaten (seq/_remoteSource) werden weiter unten angepasst. Immer
+			// auf einer eigenen Hülle arbeiten, damit der entschlüsselte bzw. geladene
+			// Transport-Payload unverändert und für Diagnose/Wiederholung nutzbar bleibt.
+			return { ...ev, t };
 		});
 		const malformed = normalized.filter((ev) => !ev).length;
 		if (malformed) console.warn("[importAll] " + malformed + " unbrauchbare Event(s) übersprungen (fehlende id/t/type).");
@@ -566,7 +574,11 @@ export const DB = (() => {
 		// Nur wirklich wegwerfbare gerätespezifische UI-Events unterhalb der
 		// Kompaktierungsgrenze blockieren. Fachliche Heft-Operationen sind immer zulässig.
 		const droppedByFloor = (ev) => !!floor && ev.t < floor && DROPPABLE_TYPES.has(ev.type);
-		const fresh = transportEvents.filter((ev) => !existing.has(ev.id) && !droppedByFloor(ev));
+		const fresh = transportEvents.filter((ev) => {
+			if (seenIds.has(ev.id) || droppedByFloor(ev)) return false;
+			seenIds.add(ev.id);
+			return true;
+		});
 		// Nur echte Downloads als _remote markieren — ein manueller Backup-Import ist eine lokale
 		// Nutzeraktion und muss normal hochgeladen werden. (Set VOR den Konfliktkopien bilden: die syncen normal.)
 		const remoteIds = opts.remote ? new Set(fresh.map((ev) => ev.id)) : new Set();
@@ -609,7 +621,7 @@ export const DB = (() => {
 				// abgeleitet und seitenunabhängig sortiert: beide Geräte erzeugen dieselbe id, der
 				// Merge ist damit idempotent und läuft nach dem Rück-Sync nicht doppelt.
 				const mergeId = "merge3-" + (mine.id < remote.id ? mine.id + "-" + remote.id : remote.id + "-" + mine.id);
-				if (existing.has(mergeId)) continue; // schon zusammengeführt — kein Konflikt mehr
+				if (seenIds.has(mergeId)) continue; // schon zusammengeführt — kein Konflikt mehr
 				const m3 = merge3(reconstructPageFromEvents(commonEvents, id).content, mine.payload.patch.content, remote.payload.patch.content);
 				if (m3.ok) {
 					mergedDetails.push({ pageId: id, title: info(id).title || "Seite", localTime: mine.t, remoteTime: remote.t });
@@ -621,7 +633,7 @@ export const DB = (() => {
 				// BEIDE Geräte denselben Verlierer wählen (sonst legt jede Seite eine Kopie an).
 				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
 				const loser = remoteWins ? mine : remote;
-				if (existing.has("conflict-" + loser.id)) continue;
+				if (seenIds.has("conflict-" + loser.id)) continue;
 				const pi = info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
 				conflictDetails.push({
 					pageId: id, title,
@@ -660,7 +672,7 @@ export const DB = (() => {
 				...Object.keys(remoteDel).filter((id) => localLife[id]).map((id) => ({ id, del: remoteDel[id], moved: localLife[id], loserSource: "local" })),
 			];
 			for (const { id, del, moved, loserSource } of pairs) {
-				if (existing.has("lifeconflict-" + moved.id)) continue;
+				if (seenIds.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
 				const pg = reconstructPageFromEvents([...local, ...fresh], id); // Seite ist lokal ggf. schon weg
 				conflictDetails.push({

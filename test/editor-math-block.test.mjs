@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><body></body>", { url: "http://localhost/" });
-for (const key of ["window", "document", "Element", "Node", "NodeFilter", "HTMLElement", "MutationObserver", "navigator"]) {
+for (const key of ["window", "document", "Element", "Node", "NodeFilter", "HTMLElement", "MutationObserver", "navigator", "innerWidth", "innerHeight"]) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
 }
 Object.defineProperty(globalThis, "localStorage", { value: dom.window.localStorage, configurable: true });
@@ -103,4 +103,17 @@ test("echtes Paste-Event rendert \\(…\\) zusammen mit $$…$$", async () => {
 		rendered.filter((item) => !item.display).map((item) => item.formula),
 		["[f]^B_A", "v_i", "B=", "f(v_i)"],
 	);
+});
+
+test("Bearbeiten einer \\(…\\)-Inline-Formel entfernt und bewahrt ihre Delimiter", () => {
+	document.body.innerHTML = '<div id="paren-editor"></div>';
+	S.pages = { paren: { id: "paren", title: "Inline-Formel", content: "Inline \\(x^2 + 1\\)" } };
+	U.ensureKatex = async () => false;
+	EDITOR.mount(document.getElementById("paren-editor"), "paren");
+
+	document.querySelector("#paren-editor .blk-imath").click();
+	const input = document.querySelector(".blk-mathinput");
+	assert.equal(input.value, "x^2 + 1", "im Eingabefeld stehen nur die Formelinhalte");
+	document.querySelector(".blk-mathok").click();
+	assert.equal(EDITOR.serialize(), "Inline \\(x^2 + 1\\)", "Bestätigen ohne Änderung schreibt den Inhalt nicht um");
 });

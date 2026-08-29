@@ -19,13 +19,24 @@ class MemoryR2 {
 
 class MemoryD1 {
 	constructor() { this.events = []; this.accounts = new Map(); }
+	holdCountReads(expected, timeoutMs = 100) {
+		let reads = 0, release;
+		const gate = new Promise((resolve) => { release = resolve; });
+		let timer = null;
+		this.beforeCount = async () => {
+			reads++;
+			if (!timer) timer = setTimeout(release, timeoutMs);
+			if (reads >= expected) { clearTimeout(timer); release(); }
+			await gate;
+		};
+	}
 	prepare(sql) {
 		const db = this;
 		const bound = (args = []) => ({
 			async first() {
 				if (/MAX\(seq\)/i.test(sql)) return { max_seq: Math.max(0, ...db.events.filter((e) => e.user_id === args[0]).map((e) => e.seq)) };
 				if (/SELECT auth_token_hash,total_bytes/i.test(sql)) return db.accounts.get(args[0]) || null;
-				if (/COUNT\(\*\)/i.test(sql)) return { cnt: db.accounts.size };
+				if (/COUNT\(\*\)/i.test(sql)) { await db.beforeCount?.(); return { cnt: db.accounts.size }; }
 				throw new Error(`Unhandled first SQL: ${sql}`);
 			},
 			async all() {
@@ -44,8 +55,10 @@ class MemoryD1 {
 	}
 	async run(sql, args) {
 		if (/INSERT INTO user_storage/i.test(sql)) {
-			const [user, hash, bytes, updated] = args;
-			this.accounts.set(user, { auth_token_hash: hash, total_bytes: bytes, updated_at: updated }); return {};
+			const [user, hash, bytes, updated, existingUser, maxUsers] = args;
+			if (!this.accounts.has(existingUser) && this.accounts.size >= maxUsers) return { meta: { changes: 0, rows_written: 0 } };
+			this.accounts.set(user, { auth_token_hash: hash, total_bytes: bytes, updated_at: updated });
+			return { meta: { changes: 1, rows_written: 1 } };
 		}
 		if (/UPDATE user_storage SET total_bytes=0/i.test(sql)) {
 			const [updated, user] = args, rec = this.accounts.get(user); if (rec) Object.assign(rec, { total_bytes: 0, updated_at: updated }); return {};
@@ -123,6 +136,32 @@ test("legacy missing D1 account is repaired without allowing channel takeover", 
 	assert.equal(await repaired.authorize("wrong-token"), false);
 	assert.equal(await repaired.authorize("secret-token"), true);
 	assert.equal(DB.accounts.has(room.userId), true);
+});
+
+test("concurrent first authorization accepts exactly one token", async () => {
+	const { room, DB } = makeRoom();
+	await room.init("user-1234567890123456");
+	DB.holdCountReads(2);
+	const authorized = await Promise.all([
+		room.authorize("first-secret-token"),
+		room.authorize("second-secret-token"),
+	]);
+	assert.equal(authorized.filter(Boolean).length, 1);
+	assert.equal(await room.authorize("first-secret-token"), authorized[0]);
+	assert.equal(await room.authorize("second-secret-token"), authorized[1]);
+});
+
+test("concurrent account creation cannot exceed the global user limit", async () => {
+	const DB = new MemoryD1(), BUCKET = new MemoryR2();
+	const rooms = Array.from({ length: 11 }, (_, index) => new SyncRoom({
+		storage: new MemoryStorage(),
+		getWebSockets: () => [],
+	}, { DB, BUCKET }));
+	await Promise.all(rooms.map((room, index) => room.init(`user-${String(index).padStart(16, "0")}`)));
+	DB.holdCountReads(rooms.length);
+	const authorized = await Promise.all(rooms.map((room, index) => room.authorize(`secret-${index}`)));
+	assert.equal(authorized.filter(Boolean).length, 10);
+	assert.equal(DB.accounts.size, 10);
 });
 
 test("first v4 authorization discards legacy cloud data exactly once", async () => {

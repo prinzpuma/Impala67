@@ -443,18 +443,18 @@ export const AI = (() => {
 	}
 	const remoteEmbedForeground = [], remoteEmbedBackground = [];
 	let processingRemoteEmbeds = false;
-	async function runRemoteEmbed(texts) {
-		const provider = embedProvider();
+	async function runRemoteEmbed(job) {
+		const { texts, provider, model } = job;
 		if (!provider?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
 		const started = performance.now(), op = trackedController();
 		let res;
 		try {
 			res = await withTimeout(() => fetch(cleanBase(provider.base) + "/embeddings", {
 				method: "POST", headers: { "Content-Type": "application/json", ...auth(provider.key) },
-				body: JSON.stringify({ model: S.settings.embedModel, input: texts }), signal: op.controller.signal,
+				body: JSON.stringify({ model, input: texts }), signal: op.controller.signal,
 			}), op, LIMIT.embedMs, "die Embedding-Antwort");
 		} catch (error) {
-			debugEvent("Embedding-Netzwerkfehler", { provider: provider.id, model: S.settings.embedModel, error: errorText(error) });
+			debugEvent("Embedding-Netzwerkfehler", { provider: provider.id, model, error: errorText(error) });
 			throw error;
 		} finally {
 			if (!res) op.done();
@@ -462,7 +462,7 @@ export const AI = (() => {
 		try {
 			if (!res.ok) {
 				const text = await withTimeout(() => res.text().catch(() => ""), op, LIMIT.embedMs, "die Embedding-Fehlerantwort");
-				debugEvent("Embedding-Fehler", { provider: provider.id, model: S.settings.embedModel, status: res.status, ms: Math.round(performance.now() - started), response: text.slice(0, 400) });
+				debugEvent("Embedding-Fehler", { provider: provider.id, model, status: res.status, ms: Math.round(performance.now() - started), response: text.slice(0, 400) });
 				throw new AiHttpError(res.status, text);
 			}
 			const data = (await withTimeout(() => res.json(), op, LIMIT.embedMs, "die Embedding-Antwort"))?.data;
@@ -478,22 +478,30 @@ export const AI = (() => {
 		try {
 			while (remoteEmbedForeground.length || remoteEmbedBackground.length) {
 				const job = remoteEmbedForeground.shift() || remoteEmbedBackground.shift();
-				try { job.resolve(await runRemoteEmbed(job.texts)); }
+				try { job.resolve(await runRemoteEmbed(job)); }
 				catch (error) { job.reject(error); }
 			}
 		} finally { processingRemoteEmbeds = false; }
 	}
-	function queueRemoteEmbed(texts, priority) {
+	function queueRemoteEmbed(texts, priority, provider, model) {
 		return new Promise((resolve, reject) => {
-			(priority === "background" ? remoteEmbedBackground : remoteEmbedForeground).push({ texts, resolve, reject });
+			(priority === "background" ? remoteEmbedBackground : remoteEmbedForeground).push({
+				texts: texts.slice(),
+				provider: { id: provider.id, base: provider.base, key: provider.key || "" },
+				model,
+				resolve,
+				reject,
+			});
 			processRemoteEmbedQueue();
 		});
 	}
 	async function embed(texts, options = {}) {
-		if (!S.settings.embedModel) throw new Error("Kein Embedding-Modell konfiguriert.");
-		const isLocal = S.settings.embedProviderId === "local" || S.settings.embedModel.startsWith("local:");
+		if (!Array.isArray(texts)) throw new TypeError("Embedding-Texte müssen als Array übergeben werden.");
+		const model = String(S.settings.embedModel || "");
+		if (!model) throw new Error("Kein Embedding-Modell konfiguriert.");
+		const isLocal = S.settings.embedProviderId === "local" || model.startsWith("local:");
 		if (isLocal) {
-			const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === S.settings.embedModel) || LOCAL_EMBEDDING_MODELS[0];
+			const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === model) || LOCAL_EMBEDDING_MODELS[0];
 			const started = performance.now();
 			try {
 				const res = await postEmbeddingWorkerMessage("embed", { texts, model: def.hfId, dim: def.dim, priority: options.priority || "foreground" });
@@ -505,7 +513,9 @@ export const AI = (() => {
 				throw err;
 			}
 		}
-		return queueRemoteEmbed(texts, options.priority || "foreground");
+		const provider = embedProvider();
+		if (!provider?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
+		return queueRemoteEmbed(texts, options.priority || "foreground", provider, model);
 	}
 	async function pingProvider(provider) {
 		if (!provider || !String(provider.base || "").trim()) return { ok: false, error: "Keine Server-URL eingetragen." };

@@ -25,8 +25,12 @@ function fakeDocument() {
 	const documentRef = {
 		fullscreenEnabled: true,
 		fullscreenElement: null,
+		fullscreenOptions: null,
 		documentElement: {
-			async requestFullscreen() { documentRef.fullscreenElement = documentRef.documentElement; },
+			async requestFullscreen(options) {
+				documentRef.fullscreenOptions = options;
+				documentRef.fullscreenElement = documentRef.documentElement;
+			},
 		},
 		async exitFullscreen() { documentRef.fullscreenElement = null; },
 		addEventListener(type, fn) { listeners.set(type, fn); },
@@ -57,6 +61,7 @@ test("toggle enters, persists and exits Android fullscreen", async () => {
 	const storage = memoryStorage();
 	assert.equal(await setAndroidFullscreenEnabled(true, { documentRef, navigatorRef: androidNavigator, storage }), true);
 	assert.equal(documentRef.fullscreenElement, documentRef.documentElement);
+	assert.deepEqual(documentRef.fullscreenOptions, { navigationUI: "hide" });
 	assert.equal(isAndroidFullscreenEnabled(storage), true);
 	assert.equal(await setAndroidFullscreenEnabled(false, { documentRef, navigatorRef: androidNavigator, storage }), true);
 	assert.equal(documentRef.fullscreenElement, null);
@@ -71,6 +76,44 @@ test("saved fullscreen is restored on the first ordinary click", async () => {
 	await documentRef.listeners.get("click")({ target: { closest: () => null } });
 	assert.equal(documentRef.fullscreenElement, documentRef.documentElement);
 	assert.equal(documentRef.listeners.has("click"), false);
+});
+
+test("manual fullscreen exit clears the saved preference", async () => {
+	const documentRef = fakeDocument();
+	const storage = memoryStorage({ [ANDROID_FULLSCREEN_KEY]: "1" });
+	initAndroidFullscreen({ documentRef, navigatorRef: androidNavigator, storage });
+	await documentRef.listeners.get("click")({ target: { closest: () => null } });
+	documentRef.fullscreenElement = null;
+	documentRef.listeners.get("fullscreenchange")();
+	assert.equal(isAndroidFullscreenEnabled(storage), false);
+});
+
+test("startup listener also tracks fullscreen enabled later in the session", async () => {
+	const documentRef = fakeDocument();
+	const storage = memoryStorage();
+	initAndroidFullscreen({ documentRef, navigatorRef: androidNavigator, storage });
+	assert.equal(await setAndroidFullscreenEnabled(true, { documentRef, navigatorRef: androidNavigator, storage }), true);
+	documentRef.fullscreenElement = null;
+	documentRef.listeners.get("fullscreenchange")();
+	assert.equal(isAndroidFullscreenEnabled(storage), false);
+});
+
+test("failed fullscreen exit keeps the switch in sync with the active mode", async () => {
+	const documentRef = fakeDocument();
+	const storage = memoryStorage({ [ANDROID_FULLSCREEN_KEY]: "1" });
+	documentRef.fullscreenElement = documentRef.documentElement;
+	documentRef.exitFullscreen = async () => { throw new Error("blocked"); };
+	assert.equal(await setAndroidFullscreenEnabled(false, { documentRef, navigatorRef: androidNavigator, storage }), false);
+	assert.equal(isAndroidFullscreenEnabled(storage), true);
+});
+
+test("missing fullscreen exit API cannot leave a false off state", async () => {
+	const documentRef = fakeDocument();
+	const storage = memoryStorage({ [ANDROID_FULLSCREEN_KEY]: "1" });
+	documentRef.fullscreenElement = documentRef.documentElement;
+	delete documentRef.exitFullscreen;
+	assert.equal(await setAndroidFullscreenEnabled(false, { documentRef, navigatorRef: androidNavigator, storage }), false);
+	assert.equal(isAndroidFullscreenEnabled(storage), true);
 });
 
 test("settings public API exposes the fullscreen toggle used by app.js", async () => {

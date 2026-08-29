@@ -140,6 +140,16 @@ function openMoveDialog(pageId) {
 	$("dlgMoveCancel").addEventListener("click", () => closeOverlay());
 }
 
+async function movePageSubtreeToWorkspace(pageId, workspaceId) {
+	if (!pageId || !workspaceId) return;
+	for (const id of STATE.pageSubtreeIds(pageId)) {
+		const page = S.pages[id];
+		if (page && (page.workspaceId || "default") !== workspaceId) {
+			await STATE.dispatch("pageUpdate", { id, patch: { workspaceId } });
+		}
+	}
+}
+
 // Seite samt Unterseiten duplizieren (parallel); "(Kopie)" nur am Wurzel-Titel
 async function duplicatePage(pageId, newParentId, newWsId) {
 	const pg = S.pages[pageId];
@@ -1096,14 +1106,7 @@ function wireEvents() {
 			const parentId = val.startsWith("pg:") ? val.slice(3) : null;
 			const wsId = val.startsWith("ws:") ? val.slice(3) : (S.pages[parentId] || {}).workspaceId;
 			await STATE.dispatch("pageMove", { id: moveId, parentId });
-			// PERF: Workspace der ganzen Unterstruktur über den zentralen Seitenbaum-Index
-			// mitziehen, statt pro Ebene alle Seiten zu scannen (sonst O(n²)).
-			if (wsId) {
-				for (const pid of STATE.pageSubtreeIds(moveId)) {
-					const p = S.pages[pid];
-					if (p && p.workspaceId !== wsId) await STATE.dispatch("pageUpdate", { id: pid, patch: { workspaceId: wsId } });
-				}
-			}
+			await movePageSubtreeToWorkspace(moveId, wsId);
 			S.movePageId = null;
 			closeOverlay();
 			return;
@@ -1804,14 +1807,14 @@ function wireEvents() {
 		const kNext = next ? STATE.sortKeyOf(next) : null;
 		const order = kPrev != null && kNext != null ? (kPrev + kNext) / 2 : kPrev != null ? kPrev + 60000 : kNext != null ? kNext - 60000 : Date.now();
 		await STATE.dispatch("pageMove", { id: moved.id, parentId: target.parentId || null, order });
-		// Workspace angleichen, falls über Workspace-Grenzen einsortiert wurde
-		if ((moved.workspaceId || "default") !== (target.workspaceId || "default")) {
-			await STATE.dispatch("pageUpdate", { id: moved.id, patch: { workspaceId: target.workspaceId || "default" } });
-		}
+		await movePageSubtreeToWorkspace(moved.id, target.workspaceId || "default");
 	}
 	async function movePageInto(movedId, targetId) {
-		if (targetId && STATE.pageInTree(targetId, movedId)) return;
+		const moved = S.pages[movedId];
+		const target = targetId ? S.pages[targetId] : null;
+		if (!moved || (targetId && (!target || STATE.pageInTree(targetId, movedId)))) return;
 		await STATE.dispatch("pageMove", { id: movedId, parentId: targetId || null });
+		await movePageSubtreeToWorkspace(movedId, target ? (target.workspaceId || "default") : (moved.workspaceId || "default"));
 	}
 
 	const PAGE_DRAG_THRESHOLD = 6; // px, bevor aus einem Tipp ein Drag wird (KISS: eine Schwelle für Maus+Touch)
