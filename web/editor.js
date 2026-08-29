@@ -446,7 +446,7 @@ export const EDITOR = (() => {
 			if (co) {
 				const buf = co[2] ? [co[2]] : [];
 				i++;
-				while (i < lines.length && /^>/.test(lines[i])) {
+				while (i < lines.length && /^>/.test(lines[i]) && !/^>\s*\[!([a-z]+)\]/i.test(lines[i])) {
 					buf.push(lines[i].replace(/^>\s?/, "")); i++;
 				}
 				const children = parse(buf.join("\n"));
@@ -458,7 +458,9 @@ export const EDITOR = (() => {
 			// Zitat (mehrzeilig)
 			if (/^>\s?/.test(line)) {
 				const buf = [];
-				while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ""));
+				while (i < lines.length && /^>\s?/.test(lines[i]) && !/^>\s*\[!([a-z]+)\]/i.test(lines[i])) {
+					buf.push(lines[i++].replace(/^>\s?/, ""));
+				}
 				out.push(applyColor({ id: uid(), type: "quote", text: buf.join("\n") }));
 				continue;
 			}
@@ -2217,7 +2219,7 @@ export const EDITOR = (() => {
 			try { copied = document.execCommand("copy"); } catch { /* Fallback */ }
 			ta.remove();
 			if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
-				navigator.clipboard.writeText(md);
+				navigator.clipboard.writeText(md).catch(() => {});
 			}
 			mutateDeleteSelection("Delete");
 			return true;
@@ -2584,7 +2586,14 @@ export const EDITOR = (() => {
 			if (cp) {
 				const b = findBlock(cp.dataset.bcopy);
 				closeMenus();
-				if (b) { navigator.clipboard.writeText(serializeBlock(b)); U.toast("Als Markdown kopiert"); }
+				if (b) {
+					if (navigator.clipboard && navigator.clipboard.writeText) {
+						navigator.clipboard.writeText(serializeBlock(b)).then(
+							() => U.toast("Als Markdown kopiert"),
+							() => U.toast("Kopieren fehlgeschlagen", "error")
+						);
+					}
+				}
 				return;
 			}
 			const fl = t.closest && t.closest("[data-bflash]");
