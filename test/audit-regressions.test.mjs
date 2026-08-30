@@ -119,3 +119,12 @@ test("globales Fehleroverlay setzt fremde Fehlertexte nur als Text", async () =>
 	assert.doesNotMatch(overlay, /innerHTML/);
 	assert.match(overlay, /textContent/);
 });
+
+test("Editor-Tabellen behalten auf schmalen Ansichten ihre Breite und scrollen horizontal", async () => {
+	const css = await readFile(new URL("../web/styles.css", import.meta.url), "utf8");
+	const tableWrap = css.match(/\.blk-tablewrap\s*\{([^}]*)\}/)?.[1] || "";
+	const table = css.match(/\.blk-table\s*\{([^}]*)\}/)?.[1] || "";
+	assert.match(tableWrap, /overflow-x:\s*auto/);
+	assert.match(table, /width:\s*max-content/);
+	assert.match(table, /min-width:\s*100%/);
+});

@@ -1,0 +1,238 @@
+{
+  "timestamp": "2026-08-30T00:14:48.357Z",
+  "totalTests": 34,
+  "passed": 25,
+  "failed": 9,
+  "durationMs": 32117,
+  "consoleErrors": [
+    {
+      "text": "Loading media from  'https://example.com/recording.mp3' violates the following Content Security Policy directive: \"default-src 'self'\". Note that 'media-src' was not explicitly set, so 'default-src' is used as a fallback. The action has been blocked.",
+      "url": "http://127.0.0.1:35269/",
+      "location": {
+        "url": "http://127.0.0.1:35269/"
+      }
+    },
+    {
+      "text": "Loading media from  'https://example.com/lecture.mp4' violates the following Content Security Policy directive: \"default-src 'self'\". Note that 'media-src' was not explicitly set, so 'default-src' is used as a fallback. The action has been blocked.",
+      "url": "http://127.0.0.1:35269/",
+      "location": {
+        "url": "http://127.0.0.1:35269/"
+      }
+    },
+    {
+      "text": "Framing 'https://example.com/' violates the following Content Security Policy directive: \"frame-src https://accounts.google.com\". The request has been blocked.\n",
+      "url": "http://127.0.0.1:35269/editor.js",
+      "location": {
+        "url": "http://127.0.0.1:35269/editor.js",
+        "lineNumber": 1115
+      }
+    }
+  ],
+  "pageErrors": [],
+  "suites": {
+    "01_formatting_blocks": [
+      {
+        "name": "Heading Markdown Triggers (# , ## , ### )",
+        "passed": false,
+        "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'Normal paragraph text### ## # '\n- 'Normal paragraph text'\n                        ^\n",
+        "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'Normal paragraph text### ## # '\n- 'Normal paragraph text'\n                        ^\n\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:40:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:10:4)\n    at async Object.runFormattingBlocksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:17:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 883
+      },
+      {
+        "name": "Quote Trigger (> ) and Divider Trigger (---)",
+        "passed": true,
+        "durationMs": 565
+      },
+      {
+        "name": "Live Inline Markdown Delimiters (**bold**, *italic*, <u>underline</u>, ~~strike~~, `code`)",
+        "passed": false,
+        "error": "Strong tag rendered",
+        "stack": "AssertionError [ERR_ASSERTION]: Strong tag rendered\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:74:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:10:4)\n    at async Object.runFormattingBlocksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:66:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 969
+      },
+      {
+        "name": "Selection Formatting Shortcuts (Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+E, Ctrl+Shift+S)",
+        "passed": false,
+        "error": "Ctrl+B toggled bold off",
+        "stack": "AssertionError [ERR_ASSERTION]: Ctrl+B toggled bold off\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:117:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:10:4)\n    at async Object.runFormattingBlocksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:86:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 688
+      },
+      {
+        "name": "TurnInto Shortcuts (Ctrl+Shift+0..8) and Duplication (Ctrl+D)",
+        "passed": false,
+        "error": "Expected values to be strictly equal:\n\n'p' !== 'h1'\n",
+        "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'p' !== 'h1'\n\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:148:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:10:4)\n    at async Object.runFormattingBlocksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/01_formatting_blocks.mjs:133:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 497
+      }
+    ],
+    "02_lists_indentation": [
+      {
+        "name": "Bullet List Triggers (- , * , + )",
+        "passed": false,
+        "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ '* Item star'\n- 'Item star'\n",
+        "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ '* Item star'\n- 'Item star'\n\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:33:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:10:4)\n    at async Object.runListsIndentationTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:17:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 550
+      },
+      {
+        "name": "Numbered List Trigger (1. ) and Sequential Numbering",
+        "passed": true,
+        "durationMs": 574
+      },
+      {
+        "name": "Todo List Trigger ([] ) and Checkbox Toggle",
+        "passed": true,
+        "durationMs": 832
+      },
+      {
+        "name": "List Indentation via Tab and Outdentation via Shift+Tab",
+        "passed": false,
+        "error": "Second item has greater indent padding",
+        "stack": "AssertionError [ERR_ASSERTION]: Second item has greater indent padding\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:114:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:10:4)\n    at async Object.runListsIndentationTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/02_lists_indentation.mjs:95:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 485
+      },
+      {
+        "name": "Empty List Item + Enter Converts to Paragraph",
+        "passed": true,
+        "durationMs": 441
+      }
+    ],
+    "03_slash_commands_links": [
+      {
+        "name": "Slash Menu Opening, Filtering, Keyboard Navigation and Esc",
+        "passed": true,
+        "durationMs": 408
+      },
+      {
+        "name": "Slash Command: /table Inserts 2x2 Grid and Focuses First Cell",
+        "passed": true,
+        "durationMs": 554
+      },
+      {
+        "name": "Slash Command: /columns Creates 2 Columns Layout",
+        "passed": true,
+        "durationMs": 558
+      },
+      {
+        "name": "Slash Command: /callout and /toggle",
+        "passed": false,
+        "error": "No element found for selector: .blk-slashmenu [data-slashpick=\"toggle\"]",
+        "stack": "Error: No element found for selector: .blk-slashmenu [data-slashpick=\"toggle\"]\n    at assert (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/node_modules/.pnpm/puppeteer-core@25.8.0/node_modules/puppeteer-core/lib/puppeteer/util/assert.js:15:15)\n    at CdpFrame.click (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/node_modules/.pnpm/puppeteer-core@25.8.0/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:753:17)\n    at async file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:98:3\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:10:4)\n    at async Object.runSlashCommandsLinksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:82:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 789
+      },
+      {
+        "name": "Page Linking [[ Integration and Navigation",
+        "passed": false,
+        "error": "Navigated to linked target page on click\n+ actual - expected\n\n+ undefined\n- 'target_sg2qr3'\n",
+        "stack": "AssertionError [ERR_ASSERTION]: Navigated to linked target page on click\n+ actual - expected\n\n+ undefined\n- 'target_sg2qr3'\n\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:146:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:10:4)\n    at async Object.runSlashCommandsLinksTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/03_slash_commands_links.mjs:109:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 1246
+      }
+    ],
+    "04_math_katex": [
+      {
+        "name": "Display Math Block ($$...$$ and \\[...\\]) Hydration",
+        "passed": true,
+        "durationMs": 643
+      },
+      {
+        "name": "Inline Math Chips ($formula$ and \\(formula\\)) and Escaped Dollars",
+        "passed": true,
+        "durationMs": 543
+      },
+      {
+        "name": "Live Math Popover Editing and Committing",
+        "passed": true,
+        "durationMs": 1017
+      },
+      {
+        "name": "Broken / Invalid LaTeX Syntax Fault Isolation",
+        "passed": true,
+        "durationMs": 528
+      }
+    ],
+    "05_tables": [
+      {
+        "name": "Table GFM Parsing and Rendering",
+        "passed": true,
+        "durationMs": 424
+      },
+      {
+        "name": "Add Row and Column Buttons",
+        "passed": true,
+        "durationMs": 788
+      },
+      {
+        "name": "Table Navigation with Tab, Enter, and Auto-growth",
+        "passed": true,
+        "durationMs": 751
+      },
+      {
+        "name": "Backspace Safety in Cell (0,0) Prevents Accidental Table Deletion",
+        "passed": true,
+        "durationMs": 534
+      }
+    ],
+    "06_media_files": [
+      {
+        "name": "Image Block Parsing and DOM Rendering",
+        "passed": true,
+        "durationMs": 428
+      },
+      {
+        "name": "File / Media Block Detection (Audio, Video, PDF, Generic)",
+        "passed": true,
+        "durationMs": 642
+      },
+      {
+        "name": "Dragover Event with Files Prevents Default to Allow Drop",
+        "passed": true,
+        "durationMs": 127
+      }
+    ],
+    "07_undo_redo_persistence": [
+      {
+        "name": "Undo / Redo with Keyboard (Ctrl+Z / Ctrl+Y)",
+        "passed": false,
+        "error": "Undo removed 2nd block\n\n2 !== 1\n",
+        "stack": "AssertionError [ERR_ASSERTION]: Undo removed 2nd block\n\n2 !== 1\n\n    at file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/07_undo_redo_persistence.mjs:39:10\n    at async testCase (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/07_undo_redo_persistence.mjs:10:4)\n    at async Object.runUndoRedoPersistenceTests [as fn] (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/tests/07_undo_redo_persistence.mjs:17:2)\n    at async main (file:///home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_editor_m1/runner.mjs:35:16)",
+        "durationMs": 2278
+      },
+      {
+        "name": "Autosave Debounce Persists to STATE",
+        "passed": true,
+        "durationMs": 936
+      },
+      {
+        "name": "Page Switching Flushes Pending Save and History without Cross-Bleed",
+        "passed": true,
+        "durationMs": 1133
+      }
+    ],
+    "08_stress_fuzzing_security": [
+      {
+        "name": "Stress: Rapid Sequential Typing (1,000+ keystrokes)",
+        "passed": true,
+        "durationMs": 7530
+      },
+      {
+        "name": "Stress: Large Document Pasting (10,000+ words across 100+ paragraphs, tables, math)",
+        "passed": true,
+        "durationMs": 1238
+      },
+      {
+        "name": "Fuzzing: Unicode, Emojis, RTL Scripts, Zero-Width Characters",
+        "passed": true,
+        "durationMs": 654
+      },
+      {
+        "name": "Security: HTML / XSS Injection Attempts in Content",
+        "passed": true,
+        "durationMs": 730
+      },
+      {
+        "name": "Stress: Boundary Backspace / Delete Spamming Across Nested Blocks",
+        "passed": true,
+        "durationMs": 1034
+      }
+    ]
+  }
+}

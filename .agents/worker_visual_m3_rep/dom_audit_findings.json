@@ -1,0 +1,7230 @@
+[
+  {
+    "stage": "rich-doc",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "rich-doc",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "rich-doc",
+    "viewport": "tablet",
+    "theme": "light",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "rich-doc",
+    "viewport": "tablet",
+    "theme": "dark",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "rich-doc",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-codelang",
+        "text": "javascript",
+        "width": 62.7,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "rich-doc",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "INPUT",
+        "className": "",
+        "text": "",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-codelang",
+        "text": "javascript",
+        "width": 62.7,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "math-blocks",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [
+      {
+        "type": "math-block",
+        "index": 0,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 88.5625,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 1,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 89.671875,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 2,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 67.0625,
+          "height": 17,
+          "left": 1029.1875,
+          "right": 1096.25
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 3,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 82.28125,
+          "height": 17,
+          "left": 1255.46875,
+          "right": 1337.75
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 4,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 92.84375,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      }
+    ],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "math-blocks",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [
+      {
+        "type": "math-block",
+        "index": 0,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 88.5625,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 1,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 89.671875,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 2,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 67.0625,
+          "height": 17,
+          "left": 1029.1875,
+          "right": 1096.25
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 3,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 82.28125,
+          "height": 17,
+          "left": 1255.46875,
+          "right": 1337.75
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 4,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 92.84375,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      }
+    ],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "math-popover",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [
+      {
+        "type": "math-block",
+        "index": 0,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 88.5625,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 1,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 89.671875,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 2,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 67.0625,
+          "height": 17,
+          "left": 1029.1875,
+          "right": 1096.25
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 3,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 82.28125,
+          "height": 17,
+          "left": 1255.46875,
+          "right": 1337.75
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 4,
+        "color": "rgba(255, 255, 255, 0.92)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 92.84375,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      }
+    ],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "math-popover",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [
+      {
+        "type": "math-block",
+        "index": 0,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 88.5625,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 1,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 89.671875,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 2,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 67.0625,
+          "height": 17,
+          "left": 1029.1875,
+          "right": 1096.25
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "inline-math",
+        "index": 3,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 82.28125,
+          "height": 17,
+          "left": 1255.46875,
+          "right": 1337.75
+        },
+        "scrollWidth": 0,
+        "clientWidth": 0,
+        "isClipped": false,
+        "overflowsScreen": false
+      },
+      {
+        "type": "math-block",
+        "index": 4,
+        "color": "rgb(41, 41, 38)",
+        "bgColor": "rgba(0, 0, 0, 0)",
+        "rect": {
+          "width": 666,
+          "height": 92.84375,
+          "left": 768,
+          "right": 1434
+        },
+        "scrollWidth": 666,
+        "clientWidth": 666,
+        "isClipped": false,
+        "overflowsScreen": false
+      }
+    ],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "table-doc",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "table-doc",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "table-doc",
+    "viewport": "tablet",
+    "theme": "light",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "table-doc",
+    "viewport": "tablet",
+    "theme": "dark",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "callouts-doc",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-blue",
+        "index": 0,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(82, 156, 202, 0.15)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 4.84,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-green",
+        "index": 1,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(77, 171, 154, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.28,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-yellow",
+        "index": 2,
+        "rect": {
+          "width": 666,
+          "height": 114.390625,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 220, 73, 0.12)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 10.83,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 3,
+        "rect": {
+          "width": 666,
+          "height": 90.390625,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.49,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-purple",
+        "index": 4,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(154, 109, 215, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 3.85,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-gray",
+        "index": 5,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(155, 155, 155, 0.13)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.25,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-purple has contrast ratio of 3.85:1 (< 4.5:1 required by WCAG AA) with text rgb(41, 41, 38) on rgba(154, 109, 215, 0.14)"
+      }
+    ]
+  },
+  {
+    "stage": "callouts-doc",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-blue",
+        "index": 0,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(82, 156, 202, 0.15)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 3.01,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-green",
+        "index": 1,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(77, 171, 154, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.76,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-yellow",
+        "index": 2,
+        "rect": {
+          "width": 666,
+          "height": 114.390625,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 220, 73, 0.12)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 1.35,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 3,
+        "rect": {
+          "width": 666,
+          "height": 90.390625,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.66,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-purple",
+        "index": 4,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(154, 109, 215, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 3.79,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-gray",
+        "index": 5,
+        "rect": {
+          "width": 666,
+          "height": 90,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(155, 155, 155, 0.13)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.78,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-blue has contrast ratio of 3.01:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(82, 156, 202, 0.15)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-green has contrast ratio of 2.76:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(77, 171, 154, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-yellow has contrast ratio of 1.35:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 220, 73, 0.12)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-red has contrast ratio of 2.66:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 115, 105, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-purple has contrast ratio of 3.79:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(154, 109, 215, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-gray has contrast ratio of 2.78:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(155, 155, 155, 0.13)"
+      }
+    ]
+  },
+  {
+    "stage": "callouts-doc",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-blue",
+        "index": 0,
+        "rect": {
+          "width": 338,
+          "height": 138,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(82, 156, 202, 0.15)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 4.84,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-green",
+        "index": 1,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(77, 171, 154, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.28,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-yellow",
+        "index": 2,
+        "rect": {
+          "width": 338,
+          "height": 163.171875,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 220, 73, 0.12)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 10.83,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 3,
+        "rect": {
+          "width": 338,
+          "height": 114.390625,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.49,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-purple",
+        "index": 4,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(154, 109, 215, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 3.85,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-gray",
+        "index": 5,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(155, 155, 155, 0.13)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.25,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-purple has contrast ratio of 3.85:1 (< 4.5:1 required by WCAG AA) with text rgb(41, 41, 38) on rgba(154, 109, 215, 0.14)"
+      }
+    ]
+  },
+  {
+    "stage": "callouts-doc",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-blue",
+        "index": 0,
+        "rect": {
+          "width": 338,
+          "height": 138,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(82, 156, 202, 0.15)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 3.01,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-green",
+        "index": 1,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(77, 171, 154, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.76,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-yellow",
+        "index": 2,
+        "rect": {
+          "width": 338,
+          "height": 163.171875,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 220, 73, 0.12)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 1.35,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 3,
+        "rect": {
+          "width": 338,
+          "height": 114.390625,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.66,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-purple",
+        "index": 4,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(154, 109, 215, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 3.79,
+        "overflowsScreen": false
+      },
+      {
+        "className": "blk-callout blk-callout-gray",
+        "index": 5,
+        "rect": {
+          "width": 338,
+          "height": 114,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(155, 155, 155, 0.13)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.78,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-blue has contrast ratio of 3.01:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(82, 156, 202, 0.15)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-green has contrast ratio of 2.76:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(77, 171, 154, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-yellow has contrast ratio of 1.35:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 220, 73, 0.12)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-red has contrast ratio of 2.66:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 115, 105, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-purple has contrast ratio of 3.79:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(154, 109, 215, 0.14)"
+      },
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-gray has contrast ratio of 2.78:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(155, 155, 155, 0.13)"
+      }
+    ]
+  },
+  {
+    "stage": "toggles-doc",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [
+      {
+        "index": 0,
+        "arrowColor": "rgb(41, 41, 38)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgb(41, 41, 38)"
+      },
+      {
+        "index": 1,
+        "arrowColor": "rgb(41, 41, 38)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgb(41, 41, 38)"
+      },
+      {
+        "index": 2,
+        "arrowColor": "rgb(41, 41, 38)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgb(41, 41, 38)"
+      },
+      {
+        "index": 3,
+        "arrowColor": "rgb(41, 41, 38)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgb(41, 41, 38)"
+      }
+    ],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "toggles-doc",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [
+      {
+        "index": 0,
+        "arrowColor": "rgba(255, 255, 255, 0.92)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgba(255, 255, 255, 0.92)"
+      },
+      {
+        "index": 1,
+        "arrowColor": "rgba(255, 255, 255, 0.92)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgba(255, 255, 255, 0.92)"
+      },
+      {
+        "index": 2,
+        "arrowColor": "rgba(255, 255, 255, 0.92)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgba(255, 255, 255, 0.92)"
+      },
+      {
+        "index": 3,
+        "arrowColor": "rgba(255, 255, 255, 0.92)",
+        "arrowWidth": 24,
+        "arrowHeight": 24,
+        "summaryColor": "rgba(255, 255, 255, 0.92)"
+      }
+    ],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "columns-doc",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [
+      {
+        "index": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "columns": [
+          {
+            "width": 317,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          },
+          {
+            "width": 317,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          }
+        ]
+      }
+    ],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "columns-doc",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [
+      {
+        "index": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "columns": [
+          {
+            "width": 317,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          },
+          {
+            "width": 317,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          }
+        ]
+      }
+    ],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "columns-doc",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [
+      {
+        "index": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "columns": [
+          {
+            "width": 338,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          },
+          {
+            "width": 338,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          }
+        ]
+      }
+    ],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "columns-doc",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [
+      {
+        "index": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "columns": [
+          {
+            "width": 338,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          },
+          {
+            "width": 338,
+            "flex": "1 1 0%",
+            "minWidth": "0px"
+          }
+        ]
+      }
+    ],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "slash-menu",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "slash-menu",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "page-linker",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "page-linker",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "block-menu",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "block-menu",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "tablet",
+    "theme": "light",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 487,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 773,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 492,
+          "right": 524,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 524,
+          "right": 556,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 558,
+          "right": 559,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 561,
+          "right": 593,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 593,
+          "right": 625,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 627,
+          "right": 628,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 630,
+          "right": 662,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 664,
+          "right": 665,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 667,
+          "right": 699,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 699,
+          "right": 731,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 733,
+          "right": 734,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 736,
+          "right": 768,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "tablet",
+    "theme": "dark",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 487,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 773,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 492,
+          "right": 524,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 524,
+          "right": 556,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 558,
+          "right": 559,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 561,
+          "right": 593,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 593,
+          "right": 625,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 627,
+          "right": 628,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 630,
+          "right": 662,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 664,
+          "right": 665,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 667,
+          "right": 699,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 699,
+          "right": 731,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 733,
+          "right": 734,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 736,
+          "right": 768,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-corner-l",
+        "text": "Seiten",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main active",
+        "text": "▾",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Radierer",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Lasso — Striche ausw",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-laser",
+        "text": "Laserpointer — nicht",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Bilder einfügen oder",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Rückgängig",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Wiederholen",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-min-btn",
+        "text": "Leiste einklappen — ",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-chat",
+        "text": "KI-Chat",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-plus",
+        "text": "Seite hinzufügen",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": {
+      "rect": {
+        "left": 68,
+        "top": 60,
+        "width": 254,
+        "height": 38,
+        "right": 322,
+        "bottom": 98
+      },
+      "pillWidth": 254,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 28,
+          "height": 28,
+          "left": 73,
+          "right": 101,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 28,
+          "height": 28,
+          "left": 101,
+          "right": 129,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 131,
+          "right": 132,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 28,
+          "height": 28,
+          "left": 134,
+          "right": 162,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 28,
+          "height": 28,
+          "left": 162,
+          "right": 190,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 192,
+          "right": 193,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 28,
+          "height": 28,
+          "left": 195,
+          "right": 223,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 225,
+          "right": 226,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 28,
+          "height": 28,
+          "left": 228,
+          "right": 256,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 28,
+          "height": 28,
+          "left": 256,
+          "right": 284,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 286,
+          "right": 287,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 28,
+          "height": 28,
+          "left": 289,
+          "right": 317,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-canvas",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-corner-l",
+        "text": "Seiten",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main active",
+        "text": "▾",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Radierer",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Lasso — Striche ausw",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-laser",
+        "text": "Laserpointer — nicht",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Bilder einfügen oder",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Rückgängig",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Wiederholen",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-min-btn",
+        "text": "Leiste einklappen — ",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-chat",
+        "text": "KI-Chat",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-plus",
+        "text": "Seite hinzufügen",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": {
+      "rect": {
+        "left": 68,
+        "top": 60,
+        "width": 254,
+        "height": 38,
+        "right": 322,
+        "bottom": 98
+      },
+      "pillWidth": 254,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 28,
+          "height": 28,
+          "left": 73,
+          "right": 101,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 28,
+          "height": 28,
+          "left": 101,
+          "right": 129,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 131,
+          "right": 132,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 28,
+          "height": 28,
+          "left": 134,
+          "right": 162,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 28,
+          "height": 28,
+          "left": 162,
+          "right": 190,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 192,
+          "right": 193,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 28,
+          "height": 28,
+          "left": 195,
+          "right": 223,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 225,
+          "right": 226,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 28,
+          "height": 28,
+          "left": 228,
+          "right": 256,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 28,
+          "height": 28,
+          "left": 256,
+          "right": 284,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 286,
+          "right": 287,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 28,
+          "height": 28,
+          "left": 289,
+          "right": 317,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "tablet",
+    "theme": "light",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 487,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 773,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 492,
+          "right": 524,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 524,
+          "right": 556,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 558,
+          "right": 559,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 561,
+          "right": 593,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 593,
+          "right": 625,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 627,
+          "right": 628,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 630,
+          "right": 662,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 664,
+          "right": 665,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 667,
+          "right": 699,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 699,
+          "right": 731,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 733,
+          "right": 734,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 736,
+          "right": 768,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "tablet",
+    "theme": "dark",
+    "windowInnerWidth": 1024,
+    "windowInnerHeight": 768,
+    "bodyScrollWidth": 1024,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 487,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 773,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 492,
+          "right": 524,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 524,
+          "right": 556,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 558,
+          "right": 559,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 561,
+          "right": 593,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 593,
+          "right": 625,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 627,
+          "right": 628,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 630,
+          "right": 662,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 664,
+          "right": 665,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 667,
+          "right": 699,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 699,
+          "right": 731,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 733,
+          "right": 734,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 736,
+          "right": 768,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-corner-l",
+        "text": "Seiten",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main active",
+        "text": "▾",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Radierer",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Lasso — Striche ausw",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-laser",
+        "text": "Laserpointer — nicht",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Bilder einfügen oder",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Rückgängig",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Wiederholen",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-min-btn",
+        "text": "Leiste einklappen — ",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-chat",
+        "text": "KI-Chat",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-plus",
+        "text": "Seite hinzufügen",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": {
+      "rect": {
+        "left": 68,
+        "top": 60,
+        "width": 254,
+        "height": 38,
+        "right": 322,
+        "bottom": 98
+      },
+      "pillWidth": 254,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 28,
+          "height": 28,
+          "left": 73,
+          "right": 101,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 28,
+          "height": 28,
+          "left": 101,
+          "right": 129,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 131,
+          "right": 132,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 28,
+          "height": 28,
+          "left": 134,
+          "right": 162,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 28,
+          "height": 28,
+          "left": 162,
+          "right": 190,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 192,
+          "right": 193,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 28,
+          "height": 28,
+          "left": 195,
+          "right": 223,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 225,
+          "right": 226,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 28,
+          "height": 28,
+          "left": 228,
+          "right": 256,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 28,
+          "height": 28,
+          "left": 256,
+          "right": 284,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 286,
+          "right": 287,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 28,
+          "height": 28,
+          "left": 289,
+          "right": 317,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-tray",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-corner-l",
+        "text": "Seiten",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main active",
+        "text": "▾",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Radierer",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Lasso — Striche ausw",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-laser",
+        "text": "Laserpointer — nicht",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Bilder einfügen oder",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Rückgängig",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main",
+        "text": "Wiederholen",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-main heft-min-btn",
+        "text": "Leiste einklappen — ",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-chat",
+        "text": "KI-Chat",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "heft-corner heft-plus",
+        "text": "Seite hinzufügen",
+        "width": 33,
+        "height": 28
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": {
+      "rect": {
+        "left": 68,
+        "top": 60,
+        "width": 254,
+        "height": 38,
+        "right": 322,
+        "bottom": 98
+      },
+      "pillWidth": 254,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 28,
+          "height": 28,
+          "left": 73,
+          "right": 101,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 28,
+          "height": 28,
+          "left": 101,
+          "right": 129,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 131,
+          "right": 132,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 28,
+          "height": 28,
+          "left": 134,
+          "right": 162,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 28,
+          "height": 28,
+          "left": 162,
+          "right": 190,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 192,
+          "right": 193,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 28,
+          "height": 28,
+          "left": 195,
+          "right": 223,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 225,
+          "right": 226,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 28,
+          "height": 28,
+          "left": 228,
+          "right": 256,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 28,
+          "height": 28,
+          "left": 256,
+          "right": 284,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 286,
+          "right": 287,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 28,
+          "height": 28,
+          "left": 289,
+          "right": 317,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-pages-drawer",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-pages-drawer",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-lasso",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-lasso",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-pdf",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-pdf",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-table",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-table",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 666,
+        "tableWidth": 640,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 666,
+        "clientWidth": 666
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-table",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 338,
+        "tableWidth": 312,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 338,
+        "clientWidth": 338
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-tbtn blk-tbtn-col",
+        "text": "+",
+        "width": 26,
+        "height": 2902.6
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-tbtn blk-tbtn-row",
+        "text": "+",
+        "width": 310,
+        "height": 26
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-table",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [
+      {
+        "index": 0,
+        "containerWidth": 338,
+        "tableWidth": 312,
+        "overflowX": "visible",
+        "tableLayout": "fixed",
+        "isOverflowingContainer": false,
+        "isBleedingOffscreen": false,
+        "scrollWidth": 338,
+        "clientWidth": 338
+      }
+    ],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-tbtn blk-tbtn-col",
+        "text": "+",
+        "width": 26,
+        "height": 2902.6
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-tbtn blk-tbtn-row",
+        "text": "+",
+        "width": 310,
+        "height": 26
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-text",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 0,
+        "rect": {
+          "width": 666,
+          "height": 138,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.49,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-text",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 0,
+        "rect": {
+          "width": 666,
+          "height": 138,
+          "left": 768,
+          "right": 1434
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.66,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-red has contrast ratio of 2.66:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 115, 105, 0.14)"
+      }
+    ]
+  },
+  {
+    "stage": "stress-text",
+    "viewport": "mobile",
+    "theme": "light",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 0,
+        "rect": {
+          "width": 338,
+          "height": 234,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgb(233, 229, 221)",
+        "textColor": "rgb(41, 41, 38)",
+        "contrastRatio": 5.49,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-codelang",
+        "text": "text",
+        "width": 31.3,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "stress-text",
+    "viewport": "mobile",
+    "theme": "dark",
+    "windowInnerWidth": 390,
+    "windowInnerHeight": 844,
+    "bodyScrollWidth": 390,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [
+      {
+        "className": "blk-callout blk-callout-red",
+        "index": 0,
+        "rect": {
+          "width": 338,
+          "height": 234,
+          "left": 30,
+          "right": 368
+        },
+        "bgColor": "rgba(255, 115, 105, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.06)",
+        "textColor": "rgba(255, 255, 255, 0.92)",
+        "contrastRatio": 2.66,
+        "overflowsScreen": false
+      }
+    ],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 36,
+        "height": 36
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-chevron ws-chevron open",
+        "text": "Ein-/Ausklappen",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Weitere Optionen",
+        "width": 26.5,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "row-add",
+        "text": "Unterseite anlegen",
+        "width": 22.8,
+        "height": 44
+      },
+      {
+        "tag": "BUTTON",
+        "className": "addcover-btn",
+        "text": "+ Cover",
+        "width": 62.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-calloutdot",
+        "text": "Farbe",
+        "width": 18,
+        "height": 18
+      },
+      {
+        "tag": "BUTTON",
+        "className": "blk-codelang",
+        "text": "text",
+        "width": 31.3,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "top-back-btn",
+        "text": "Notizen",
+        "width": 75.4,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "icon-btn",
+        "text": "Suche",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "＋ Neu",
+        "width": 67.2,
+        "height": 32
+      },
+      {
+        "tag": "BUTTON",
+        "className": "",
+        "text": "",
+        "width": 34,
+        "height": 34
+      },
+      {
+        "tag": "BUTTON",
+        "className": "pill-action-btn",
+        "text": "",
+        "width": 51.1,
+        "height": 33
+      }
+    ],
+    "heftToolbar": null,
+    "heftTray": null,
+    "issues": [
+      {
+        "type": "CALLOUT_CONTRAST_LOW",
+        "detail": "Callout blk-callout blk-callout-red has contrast ratio of 2.66:1 (< 4.5:1 required by WCAG AA) with text rgba(255, 255, 255, 0.92) on rgba(255, 115, 105, 0.14)"
+      }
+    ]
+  },
+  {
+    "stage": "heft-dense",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-dense",
+    "viewport": "desktop",
+    "theme": "dark",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-zoomed-in",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  },
+  {
+    "stage": "heft-zoomed-out",
+    "viewport": "desktop",
+    "theme": "light",
+    "windowInnerWidth": 1920,
+    "windowInnerHeight": 1080,
+    "bodyScrollWidth": 1920,
+    "docOverflows": false,
+    "tables": [],
+    "callouts": [],
+    "toggles": [],
+    "mathBlocks": [],
+    "columns": [],
+    "touchTargets": [],
+    "heftToolbar": {
+      "rect": {
+        "left": 935,
+        "top": 52.5,
+        "width": 286,
+        "height": 42,
+        "right": 1221,
+        "bottom": 94.5
+      },
+      "pillWidth": 286,
+      "overflowsScreen": false,
+      "pillChildren": [
+        {
+          "text": "▾",
+          "width": 32,
+          "height": 32,
+          "left": 940,
+          "right": 972,
+          "visible": true
+        },
+        {
+          "text": "Radierer",
+          "width": 32,
+          "height": 32,
+          "left": 972,
+          "right": 1004,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1006,
+          "right": 1007,
+          "visible": true
+        },
+        {
+          "text": "Lasso — Striche auswählen",
+          "width": 32,
+          "height": 32,
+          "left": 1009,
+          "right": 1041,
+          "visible": true
+        },
+        {
+          "text": "Laserpointer — nicht speichern",
+          "width": 32,
+          "height": 32,
+          "left": 1041,
+          "right": 1073,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1075,
+          "right": 1076,
+          "visible": true
+        },
+        {
+          "text": "Bilder einfügen oder bearbeiten",
+          "width": 32,
+          "height": 32,
+          "left": 1078,
+          "right": 1110,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1112,
+          "right": 1113,
+          "visible": true
+        },
+        {
+          "text": "Rückgängig",
+          "width": 32,
+          "height": 32,
+          "left": 1115,
+          "right": 1147,
+          "visible": true
+        },
+        {
+          "text": "Wiederholen",
+          "width": 32,
+          "height": 32,
+          "left": 1147,
+          "right": 1179,
+          "visible": true
+        },
+        {
+          "text": "",
+          "width": 1,
+          "height": 16,
+          "left": 1181,
+          "right": 1182,
+          "visible": true
+        },
+        {
+          "text": "Leiste einklappen — mehr Platz zum Schreiben",
+          "width": 32,
+          "height": 32,
+          "left": 1184,
+          "right": 1216,
+          "visible": true
+        }
+      ]
+    },
+    "heftTray": null,
+    "issues": []
+  }
+]

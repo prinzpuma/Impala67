@@ -1801,8 +1801,10 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 .blk-img img { max-width: 100%; border-radius: var(--radius-xs); display: block }
 .blk-img figcaption { font-size: var(--text-sm); color: var(--text2); padding-top: 6px }
 /* == --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile lei == */
-.blk-tablewrap { position: relative; width: 100%; padding: 6px 26px 26px 0 }
-.blk-table { border-collapse: collapse; width: 100%; font-size: var(--text-base); table-layout: fixed }
+.blk-tablewrap { position: relative; width: 100%; padding: 6px 26px 26px 0; overflow-x: auto; overflow-y: hidden }
+/* Viele Spalten behalten ihre Mindestbreite und werden auf schmalen Ansichten
+   horizontal gescrollt, statt durch das feste Layout auf Zeichenbreite zu schrumpfen. */
+.blk-table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: var(--text-base); table-layout: fixed }
 .blk-table th, .blk-table td { border: 1px solid var(--edge); padding: 0; vertical-align: top; min-width: 64px }
 .blk-table th { background: var(--surface); font-weight: 600; text-align: left }
 .blk-table .blk-cell { padding: 7px 9px; min-height: 33px; font-size: var(--text-base); line-height: 1.45 }

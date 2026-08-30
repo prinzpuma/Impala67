@@ -7,7 +7,7 @@ import { SCANCORE } from "./heft-scan.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
-import { hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
+import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -513,7 +513,9 @@ export const HEFT = (() => {
 			const a = s.shape;
 			if (a.type === "line") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.stroke(); }
 			else if (a.type === "ellipse") { x.beginPath(); x.ellipse(a.cx, a.cy, Math.abs(a.rx), Math.abs(a.ry), 0, 0, Math.PI * 2); x.stroke(); }
-			else { x.strokeRect(Math.min(a.x1, a.x2), Math.min(a.y1, a.y2), Math.abs(a.x2 - a.x1), Math.abs(a.y2 - a.y1)); }
+			else if (a.type === "triangle") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.lineTo(a.x3, a.y3); x.lineTo(a.x1, a.y1); x.stroke(); }
+			else if (a.type === "arrow") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.lineTo(a.h1x, a.h1y); x.moveTo(a.x2, a.y2); x.lineTo(a.h2x, a.h2y); x.stroke(); }
+			else if (a.type === "rect") { x.strokeRect(Math.min(a.x1, a.x2), Math.min(a.y1, a.y2), Math.abs(a.x2 - a.x1), Math.abs(a.y2 - a.y1)); }
 		} else if (s.tool === "marker") {
 			x.globalAlpha = 0.32; x.lineWidth = s.size * 3;
 			x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
@@ -1493,32 +1495,7 @@ export const HEFT = (() => {
 	}
 
 	function fitShape(pts) {
-		const a = pts[0], b = pts[pts.length - 1];
-		const w = b[0] - a[0], h = b[1] - a[1], len = Math.hypot(w, h);
-		let pathLen = 0;
-		for (let i = 1; i < pts.length; i++) pathLen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-		if (pathLen < 30) return null;
-		let maxDev = 0;
-		for (const p of pts) maxDev = Math.max(maxDev, Math.abs(h * (p[0] - a[0]) - w * (p[1] - a[1])) / Math.max(1, len));
-		const closed = pts.length > 10 && Math.hypot(b[0] - a[0], b[1] - a[1]) < Math.max(18, pathLen * 0.2);
-		if (closed) {
-			let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-			pts.forEach((p) => { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]); });
-			const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = (maxX - minX) / 2, ry = (maxY - minY) / 2;
-			if (rx < 10 || ry < 10) return null;
-			let errRect = 0, errEllipse = 0;
-			pts.forEach((p) => {
-				const dxRect = Math.min(Math.abs(p[0] - minX), Math.abs(p[0] - maxX));
-				const dyRect = Math.min(Math.abs(p[1] - minY), Math.abs(p[1] - maxY));
-				errRect += Math.min(dxRect, dyRect);
-				const nx = rx ? (p[0] - cx) / rx : 0, ny = ry ? (p[1] - cy) / ry : 0;
-				errEllipse += Math.abs(Math.hypot(nx, ny) - 1) * Math.max(rx, ry);
-			});
-			if (errRect < errEllipse * 0.85) return { type: "rect", x1: minX, y1: minY, x2: maxX, y2: maxY };
-			return { type: "ellipse", cx, cy, rx, ry };
-		}
-		if (maxDev < Math.max(10, len * 0.1)) return { type: "line", x1: a[0], y1: a[1], x2: b[0], y2: b[1] };
-		return null;
+		return fitStrokeShape(pts);
 	}
 	function onMove(e) {
 		if (!drawing || rejected(e)) return;

@@ -1,0 +1,379 @@
+{
+  "suites": {
+    "drawingTools": {
+      "name": "Drawing Tools",
+      "tests": [
+        {
+          "name": "1.0 Global HEFT single-instance integrity check",
+          "passed": false,
+          "details": {
+            "globalHeftActiveId": null,
+            "realHeftActiveId": "d935ef1e-19ad-4167-84be-9afbd4526616",
+            "isSameInstance": false
+          }
+        },
+        {
+          "name": "1.1 Pen Freehand Drawing & Pressure Modulation",
+          "passed": true,
+          "details": {
+            "strokeCount": 1,
+            "tool": "pen",
+            "ptsCount": 16,
+            "color": "#1c1c1e",
+            "size": 3,
+            "bbox": {
+              "minX": 139.7,
+              "minY": 66.5,
+              "maxX": 580.8,
+              "maxY": 234.4
+            }
+          }
+        },
+        {
+          "name": "1.2 Color Swatch (#2f6fed) and Size (5.5) application",
+          "passed": false,
+          "details": {
+            "color": "#1c1c1e",
+            "size": 3
+          }
+        },
+        {
+          "name": "1.3 Marker (Highlighter) tool persistence & layering",
+          "passed": false,
+          "details": {
+            "s1_tool": "pen",
+            "s2_tool": "pen"
+          }
+        },
+        {
+          "name": "1.4 Laser Pointer transient behavior (not persisted)",
+          "passed": true,
+          "details": {
+            "strokeCountBefore": 4,
+            "strokeCountAfter": 4,
+            "persisted": false
+          }
+        },
+        {
+          "name": "1.5 Eraser Tool",
+          "passed": false,
+          "error": "Cannot read properties of null (reading 'hidden')"
+        },
+        {
+          "name": "1.6 Snap-to-Shape: Line, Rectangle, Ellipse",
+          "passed": false,
+          "details": {
+            "lineSnapped": false,
+            "rectSnapped": false,
+            "ellipseSnapped": false,
+            "triangleSnapped": false,
+            "arrowSnapped": false,
+            "last5": [
+              {
+                "tool": "pen"
+              },
+              {
+                "tool": "pen"
+              },
+              {
+                "tool": "pen"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "selectionLasso": {
+      "name": "Selection & Lasso Tool",
+      "tests": [
+        {
+          "name": "2.1 Lasso Polygon selection & action toolbar appearance",
+          "passed": true,
+          "details": {
+            "lassoBarFound": true,
+            "hasDupBtn": true,
+            "hasDelBtn": true,
+            "targetStrokeId": "106820b0-5896-4ff9-a470-3f67663f7e9d"
+          }
+        },
+        {
+          "name": "2.2 Lasso Translation (Moving selected strokes)",
+          "passed": true,
+          "details": {
+            "bboxBefore": {
+              "minX": 139.7,
+              "minY": 66.5,
+              "maxX": 580.8,
+              "maxY": 234.4
+            },
+            "bboxAfter": {
+              "minX": 189.7,
+              "minY": 116.5,
+              "maxX": 630.8,
+              "maxY": 284.4
+            },
+            "moved": true
+          }
+        },
+        {
+          "name": "2.3 Lasso Duplicate strokes",
+          "passed": true,
+          "details": {
+            "countBefore": 3,
+            "countAfter": 4,
+            "duplicated": true
+          }
+        },
+        {
+          "name": "2.4 Lasso Delete strokes and Undo restoration",
+          "passed": true,
+          "details": {
+            "countBefore": 4,
+            "countDeleted": 3,
+            "countUndone": 4,
+            "deleted": true,
+            "undone": true
+          }
+        },
+        {
+          "name": "2.5 Rich Text Box Insertion & layout coordinates",
+          "passed": false,
+          "details": {
+            "hasText": false,
+            "text": null,
+            "x": null,
+            "y": null,
+            "w": null
+          }
+        }
+      ]
+    },
+    "viewport": {
+      "name": "Viewport & Navigation",
+      "tests": [
+        {
+          "name": "3.1 Double Tap Zoom interaction & CSS transform update",
+          "passed": false,
+          "details": {
+            "transformBefore": "translate(317px, 0px) scale(1)",
+            "transformAfter": "translate(317px, 0px) scale(1)",
+            "zoomed": false
+          }
+        },
+        {
+          "name": "3.2 Extreme Zoom Clamping [ZOOM_MIN=0.4, ZOOM_MAX=6.0]",
+          "passed": true,
+          "details": {
+            "scaleMin": 0.4,
+            "scaleMax": 6,
+            "minClamped": true,
+            "maxClamped": true
+          }
+        },
+        {
+          "name": "3.3 Detail Tile Canvas High-DPI budget compliance",
+          "passed": true,
+          "details": {
+            "hasDetailCanvas": true,
+            "width": 3283,
+            "height": 1828,
+            "totalPixels": 6001324,
+            "maxCanvasDim": 4096,
+            "maxPixels": 6000000
+          }
+        }
+      ]
+    },
+    "pageManagement": {
+      "name": "Page Management",
+      "tests": [
+        {
+          "name": "4.1 Multi-Page Template Creation (lined, grid, dots, blank)",
+          "passed": true,
+          "details": {
+            "pageCount": 4,
+            "papers": [
+              "lined",
+              "grid",
+              "dots",
+              "blank"
+            ]
+          }
+        },
+        {
+          "name": "4.2 Page Navigation via Thumbnails & page number sync",
+          "passed": true,
+          "details": {
+            "activeIndex": 3,
+            "pageNoLabel": "4/4"
+          }
+        },
+        {
+          "name": "4.3 Reordering",
+          "passed": false,
+          "error": "Cannot read properties of null (reading 'dispatchEvent')"
+        },
+        {
+          "name": "4.4 Page Deletion safety guard (protects last remaining page)",
+          "passed": true,
+          "details": {
+            "canDeleteAllPages": false,
+            "canDelete3Pages": true
+          }
+        }
+      ]
+    },
+    "stressPerformance": {
+      "name": "Stress & Performance",
+      "tests": [
+        {
+          "name": "5.1 Rapid ingestion of 1,000 continuous ink strokes",
+          "passed": false,
+          "details": {
+            "strokesCreated": 1000,
+            "strokesInDoc": 0,
+            "durationMs": 509,
+            "strokesPerSec": 1967,
+            "heapDeltaMB": -5.9
+          }
+        },
+        {
+          "name": "5.2 Mass Creation of 200 Hybrid Geometric & Text Elements",
+          "passed": true,
+          "details": {
+            "textNodesAdded": 100,
+            "shapesAdded": 100,
+            "durationMs": 7,
+            "heapDeltaMB": 0
+          }
+        },
+        {
+          "name": "5.3 Offscreen Page Memory Culling (Collapsing distant pages)",
+          "passed": false,
+          "details": {
+            "totalPages": 4,
+            "collapsedPagesCount": 1
+          }
+        }
+      ]
+    },
+    "importExport": {
+      "name": "Import & Export",
+      "tests": [
+        {
+          "name": "6.1 300 DPI PDF Generation (%PDF-1.4 stream valid)",
+          "passed": true,
+          "details": {
+            "generated": true,
+            "sizeBytes": 2452674,
+            "type": "application/pdf",
+            "isPdfHeader": true
+          }
+        },
+        {
+          "name": "6.2 High-DPI PNG Page Export rendering",
+          "passed": true,
+          "details": {
+            "isPngDataUrl": true,
+            "length": 912902
+          }
+        },
+        {
+          "name": "6.3 Background PDF Page Ingestion & Geometry Mapping",
+          "passed": true,
+          "details": {
+            "countBefore": 14,
+            "countAfter": 15,
+            "hasBgImage": true
+          }
+        }
+      ]
+    }
+  },
+  "metrics": {
+    "strokeIngestion": {
+      "strokesCreated": 1000,
+      "strokesInDoc": 0,
+      "durationMs": 509,
+      "strokesPerSec": 1967,
+      "heapDeltaMB": -5.9
+    },
+    "massObjectCreation": {
+      "textNodesAdded": 100,
+      "shapesAdded": 100,
+      "durationMs": 7,
+      "heapDeltaMB": 0
+    },
+    "pageCulling": {
+      "totalPages": 4,
+      "collapsedPagesCount": 1
+    },
+    "pdfExport": {
+      "generated": true,
+      "sizeBytes": 2452674,
+      "type": "application/pdf",
+      "isPdfHeader": true
+    }
+  },
+  "bugs": [
+    {
+      "title": "Dual Module Instance Hazard: web/main.js imports heft.js?build=169 instead of ./heft.js",
+      "severity": "Critical",
+      "symptoms": "window.HEFT is an orphaned, unmounted instance where window.HEFT.activeId is permanently null, while render.js and other modules interact with the canonical ./heft.js instance.",
+      "reproduction": "1. Open any Heft notebook in Impala67.\n2. In console, check window.HEFT.activeId -> returns null.\n3. In console, check (await import('./heft.js')).HEFT.activeId -> returns active notebook ID.\n4. Root cause: web/main.js:29 imports './heft.js?build=169' while all other 8 modules import './heft.js'.",
+      "affected": "web/main.js:29"
+    },
+    {
+      "title": "Snap-to-Shape Engine lacks recognition for Triangles and Arrows",
+      "severity": "Low",
+      "symptoms": "Drawing a triangle or arrow and holding stationary (>550ms) either misclassifies it as a rectangle/ellipse/line or fails to snap, leaving raw hand-drawn bezier points.",
+      "reproduction": "1. Select Pen.\n2. Draw a 3-sided triangle or line with arrowhead in one continuous stroke.\n3. Hold pointer stationary at the end for >550ms.\n4. Observe that fitShape in web/heft.js:1495-1522 only classifies into 'line', 'rect', and 'ellipse'.",
+      "affected": "web/heft.js:1495-1522 (fitShape) and web/heft.js:511-516 (drawStroke)"
+    },
+    {
+      "title": "Detail Canvas Pixel Budget Exceeded by Subpixel Rounding",
+      "severity": "Low",
+      "symptoms": "Detail canvas width * height can slightly exceed MAX_RENDER_PIXELS (6,000,000) due to Math.round() applied separately to width and height in placeLayer.",
+      "reproduction": "1. Zoom in on Heft canvas on a high-DPI display (e.g. DPR >= 2).\n2. Inspect .heft-detail-canvas width and height.\n3. Observed width=3283, height=1828 -> 6,001,324 pixels (> 6,000,000).",
+      "affected": "web/heft.js:897 (tileDpr) and web/heft.js:953 (placeLayer)"
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "heft_01_drawing_tools",
+      "filename": "heft_01_drawing_tools.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_01_drawing_tools.png",
+      "title": "Heft Drawing Tools, Colors & Snapped Shapes"
+    },
+    {
+      "name": "heft_02_selection_lasso",
+      "filename": "heft_02_selection_lasso.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_02_selection_lasso.png",
+      "title": "Heft Lasso Selection, Toolbar & Text Elements"
+    },
+    {
+      "name": "heft_03_viewport_zoom",
+      "filename": "heft_03_viewport_zoom.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_03_viewport_zoom.png",
+      "title": "Heft High-DPI Viewport Zoom & Detail Layer"
+    },
+    {
+      "name": "heft_04_page_manager",
+      "filename": "heft_04_page_manager.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_04_page_manager.png",
+      "title": "Heft Multi-Page Manager Popover & Grid"
+    },
+    {
+      "name": "heft_05_stress_dense_strokes",
+      "filename": "heft_05_stress_dense_strokes.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_05_stress_dense_strokes.png",
+      "title": "Heft Under 1,000+ Dense Strokes & Mass Objects"
+    },
+    {
+      "name": "heft_06_import_export",
+      "filename": "heft_06_import_export.png",
+      "fullPath": "/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/.agents/worker_heft_m2/screenshots/heft_06_import_export.png",
+      "title": "Heft PDF and Image Import/Export Capabilities"
+    }
+  ]
+}

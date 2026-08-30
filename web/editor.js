@@ -206,6 +206,14 @@ export const EDITOR = (() => {
 	// KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
 	function inlineHtml(text) {
 		return esc(text)
+			// Ausgeschriebene Wiki-Links bleiben als [[Titel]] gespeichert, werden im
+			// Editor aber wie die vom Link-Menü erzeugte Markdown-Variante anklickbar.
+			// Nur ein exakter, aktiver Seitentitel wird verlinkt; unbekannte Titel
+			// bleiben normaler Text und können weiter bearbeitet werden.
+			.replace(/\[\[([^\]\n]+)\]\]/g, (md, label) => {
+				const page = Object.values(S.pages || {}).find((p) => p && !p.trashed && esc(p.title || "Ohne Titel") === label);
+				return page ? tag("a", label, ' href="#' + esc(page.id) + '" data-md="' + md + '"') : md;
+			})
 			// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches
 			// KaTeX); bleibt sie gleich, bleibt der gerenderte Chip unangetastet stehen.
 			// Formeln matchen nur echte Delimiter; maskierte \$ bleiben reiner Text.
@@ -757,6 +765,12 @@ export const EDITOR = (() => {
 		// Alte Blockauswahl verwerfen — ihre Indizes zeigen nach dem Undo ins Leere
 		selRange = null;
 		selAnchor = null;
+		// Der DOM-Abgleich schützt das gerade fokussierte contenteditable beim Tippen
+		// absichtlich vor Überschreiben. Beim Undo/Redo ist aber der wiederhergestellte
+		// Snapshot führend; ohne Fokusverlust blieb deshalb der alte Text sichtbar und
+		// das erste Strg+Z wirkte nach Enter + Tippen scheinbar wirkungslos.
+		const active = document.activeElement;
+		if (active && host.contains(active) && typeof active.blur === "function") active.blur();
 		render({ anchorId: entry.focus && entry.focus.bid });
 		if (entry.focus) focusBlock(entry.focus.bid, entry.focus.offset, entry.focus.kind, entry.focus.cell);
 		// Scroll NACH dem Fokus wiederherstellen, sonst zieht keepCaretVisible/focus
@@ -1576,11 +1590,19 @@ export const EDITOR = (() => {
 		if (e && e.data === " " && c.block.type === "p") {
 			for (const [re, kind] of TRANSFORMS) {
 				if (re.test(upto)) {
+					// `upto` ist hier exakt das Kürzel am Blockanfang. Den Rest aus dem
+					// bereits synchronisierten Modell ableiten: Chromium kann die zweite
+					// DOM-Range am contenteditable-Rand noch vor dem Kürzel verankern und
+					// würde es über `split.nach` sonst ein zweites Mal übernehmen.
+					const remaining = text.slice(upto.length);
 					mutate(() => {
 						turnInto(c.block, kind);
-						c.block.text = split.nach;
+						c.block.text = remaining;
 					});
-					focusBlock(bid, 0);
+					// Der DOM-Abgleich schützt das fokussierte contenteditable absichtlich.
+					// Nach der Kürzel-Umwandlung muss dessen alter Marker deshalb explizit
+					// durch den bereinigten Modelltext ersetzt werden, bevor weitergetippt wird.
+					paintTextField(bid, remaining, 0);
 					return true;
 				}
 			}
@@ -1648,7 +1670,16 @@ export const EDITOR = (() => {
 		const domStartOff = vorR.toString().length;
 		const domMidLen = midR.toString().length;
 		let next;
-		if (pre.endsWith(before) && post.startsWith(after)) {
+		// Bei einer Auswahl des ganzen gerenderten Elements liegen die Markdown-
+		// Marker in `mid` statt außerhalb in `pre`/`post`. Kursiv braucht eine
+		// Sonderregel, damit **Fett** durch Strg+I nicht versehentlich entfettet wird.
+		const midIsWrapped = mid.startsWith(before) && mid.endsWith(after) &&
+			mid.length >= before.length + after.length &&
+			(before !== "*" || (mid.startsWith("***") && mid.endsWith("***")) ||
+				(!mid.startsWith("**") && !mid.endsWith("**")));
+		if (midIsWrapped) {
+			next = pre + mid.slice(before.length, mid.length - after.length) + post;
+		} else if (pre.endsWith(before) && post.startsWith(after)) {
 			next = pre.slice(0, -before.length) + mid + post.slice(after.length);
 		} else {
 			next = pre + before + mid + after + post;
@@ -1765,12 +1796,16 @@ export const EDITOR = (() => {
 		}
 
 		// --- Strg+Shift+0-8: Blocktyp wechseln (wie Notion: 0=Text, 1-3=H, 4=Todo, 5=Bullet, 6=Nummer, 7=Toggle, 8=Code) ---
-		if (mod && e.shiftKey && /^[0-8]$/.test(e.key) && c) {
+		// Mit Shift ist e.key auf Standardlayouts ein Satzzeichen (!, ", §, …).
+		// e.code bezeichnet dagegen stabil die tatsächlich gedrückte Zifferntaste.
+		const digitMatch = String(e.code || "").match(/^(?:Digit|Numpad)([0-8])$/);
+		const blockShortcut = digitMatch ? digitMatch[1] : (/^[0-8]$/.test(e.key) ? e.key : null);
+		if (mod && e.shiftKey && blockShortcut != null && c) {
 			e.preventDefault();
 			const map = { 0: "p", 1: "h1", 2: "h2", 3: "h3", 4: "todo", 5: "bullet", 6: "number", 7: "toggle", 8: "code" };
 			const off = caret.offset;
-			mutate(() => { turnInto(c.block, map[e.key]); });
-			focusBlock(bid, off, map[e.key] === "toggle" ? "summary" : map[e.key] === "code" ? "code" : "text");
+			mutate(() => { turnInto(c.block, map[blockShortcut]); });
+			focusBlock(bid, off, map[blockShortcut] === "toggle" ? "summary" : map[blockShortcut] === "code" ? "code" : "text");
 			return;
 		}
 
@@ -2374,18 +2409,14 @@ export const EDITOR = (() => {
 				return;
 			}
 
-			// FIX: contenteditable folgt Klicks auf <a> NIE von selbst — verlinkte Dateien
-			// und URLs wirkten deshalb „tot“. Interne #seiten-Links navigieren in der App,
-			// alles andere öffnet extern in einem neuen Tab.
+			// contenteditable folgt externen Links nicht selbst. Interne #seiten-Links
+			// lässt der Editor dagegen bis zum zentralen App-Handler weiterlaufen; so
+			// entsteht kein fachlich falsches, persistiertes "navigate"-Ereignis.
 			const a = t.closest && t.closest("a[href]");
 			if (a && host.contains(a)) {
-				e.preventDefault();
 				const href = a.getAttribute("href") || "";
-				if (href.startsWith("#")) {
-					const pid = href.slice(1);
-					if (S.pages[pid]) STATE.dispatch("navigate", { pageId: pid });
-					return;
-				}
+				if (href.startsWith("#")) return;
+				e.preventDefault();
 				window.open(href, "_blank", "noopener");
 				return;
 			}
