@@ -123,16 +123,19 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 			let usedDevice = device;
 			const options = {
 				device,
+				// Bekko veröffentlicht die browseroptimierte Datei als onnx/model.onnx.
+				// Transformers.js wählt genau diese Datei mit dtype "fp32"; die Datei
+				// selbst enthält bereits die kompakte int8-Embedding-Tabelle.
+				dtype: "fp32",
 				progress_callback: (p) => onProgress?.(p),
 			};
-			if (device === "wasm") options.dtype = "q8";
 			try {
 				extractor = await pipeline("feature-extraction", modelId, options);
 			} catch (err) {
 				if (device !== "webgpu") throw err;
 				console.warn("WebGPU-Modellstart fehlgeschlagen, wechsle auf WASM:", err?.message || err);
 				usedDevice = "wasm";
-				extractor = await pipeline("feature-extraction", modelId, { ...options, device: "wasm", dtype: "q8" });
+				extractor = await pipeline("feature-extraction", modelId, { ...options, device: "wasm" });
 			}
 			currentModel = modelId;
 			currentDevice = usedDevice;
@@ -148,21 +151,46 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 	return initPromise;
 }
 
-async function isModelCached(modelId = "hotchpotch/bekko-embedding-v1-a8m") {
+function belongsToModel(url, modelId) {
+	const raw = String(url || "");
+	let decoded = raw;
+	try { decoded = decodeURIComponent(raw); } catch {}
+	return decoded.includes(modelId) || raw.includes(modelId.replace(/\//g, "%2F"));
+}
+
+const REQUIRED_MODEL_FILES = ["/config.json", "/tokenizer.json", "/tokenizer_config.json", "/onnx/model.onnx"];
+
+function cachedModelFile(url) {
+	let path;
 	try {
-		if (typeof caches === "undefined") return false;
+		path = decodeURIComponent(new URL(url).pathname);
+	} catch {
+		path = String(url || "").split(/[?#]/, 1)[0];
+	}
+	return REQUIRED_MODEL_FILES.find((file) => path.endsWith(file)) || null;
+}
+
+async function modelCacheStatus(modelId = "hotchpotch/bekko-embedding-v1-a8m") {
+	try {
+		if (typeof caches === "undefined") return { cached: false, partial: false };
 		const cacheNames = await caches.keys();
+		const missing = new Set(REQUIRED_MODEL_FILES);
+		let partial = false;
 		for (const name of cacheNames) {
 			if (name.includes("transformers") || name.includes("impala67")) {
 				const cache = await caches.open(name);
 				const requests = await cache.keys();
-				const hasModel = requests.some((r) => r.url.includes(modelId.replace(/\//g, "%2F")) || r.url.includes(modelId));
-				if (hasModel) return true;
+				for (const request of requests) {
+					if (!belongsToModel(request.url, modelId)) continue;
+					partial = true;
+					const file = cachedModelFile(request.url);
+					if (file) missing.delete(file);
+				}
 			}
 		}
-		return false;
+		return { cached: missing.size === 0, partial: partial && missing.size > 0 };
 	} catch {
-		return false;
+		return { cached: false, partial: false };
 	}
 }
 
@@ -177,7 +205,7 @@ async function deleteModelCache(modelId = "hotchpotch/bekko-embedding-v1-a8m") {
 				const cache = await caches.open(name);
 				const requests = await cache.keys();
 				for (const r of requests) {
-					if (r.url.includes(modelId.replace(/\//g, "%2F")) || r.url.includes(modelId)) {
+					if (belongsToModel(r.url, modelId)) {
 						await cache.delete(r);
 						deletedCount++;
 					}
@@ -237,11 +265,12 @@ self.addEventListener("message", async (e) => {
 
 		case "status": {
 			const model = msg.model || "hotchpotch/bekko-embedding-v1-a8m";
-			const cached = await isModelCached(model);
+			const cacheStatus = await modelCacheStatus(model);
 			self.postMessage({
 				type: "status-result",
 				model,
-				cached,
+				cached: cacheStatus.cached,
+				partial: cacheStatus.partial,
 				loadedInRam: !!extractor && currentModel === model,
 				device: currentModel === model ? currentDevice : null,
 				id: msg.id,

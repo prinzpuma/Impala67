@@ -352,7 +352,7 @@ export const AI = (() => {
 			hfId: "hotchpotch/bekko-embedding-v1-a8m",
 			name: "Bekko a8m (Lokal im Browser, 256d)",
 			dim: 256,
-			sizeMb: 124,
+			sizeMb: 165,
 			context: 8192,
 			providerId: "local",
 			providerName: "Lokal (Offline)",
@@ -417,9 +417,9 @@ export const AI = (() => {
 		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
 		try {
 			const res = await postEmbeddingWorkerMessage("status", { model: def.hfId });
-			return { ...def, cached: !!res.cached, loadedInRam: !!res.loadedInRam };
+			return { ...def, cached: !!res.cached, partial: !!res.partial, loadedInRam: !!res.loadedInRam };
 		} catch (err) {
-			return { ...def, cached: false, loadedInRam: false, error: err?.message };
+			return { ...def, cached: false, partial: false, loadedInRam: false, error: err?.message };
 		}
 	}
 

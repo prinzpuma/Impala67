@@ -156,14 +156,14 @@ function renderAi(vm) {
 				'<span class="settings-row-copy">' +
 					'<b>Semantische Suche (Bekko a8m)</b>' +
 					'<small id="localEmbeddingMsg">' +
-						(isConfigured ? "Aktiviert · prüfe den lokalen Modell-Cache…" : "Einmaliger Download (~124 MB); danach offline im Browser nutzbar") +
+						(isConfigured ? "Aktiviert · prüfe den lokalen Modell-Cache…" : "Einmaliger Download (ca. 165 MB); danach offline im Browser nutzbar") +
 					'</small>' +
 					'<div class="progress-bar" id="localEmbeddingProgress" hidden style="margin-top: 6px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: 0%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div></div>' +
 				'</span>' +
 				'<span id="localEmbeddingActions">' +
 					(isConfigured
 						? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
-						: button("📥 Herunterladen (~124 MB)", "btnDownloadLocalEmbedding", "primary")) +
+						: button("📥 Herunterladen (ca. 165 MB)", "btnDownloadLocalEmbedding", "primary")) +
 				'</span>' +
 			'</div>' +
 		'</div>';

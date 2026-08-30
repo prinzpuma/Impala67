@@ -935,18 +935,20 @@ export async function updateLocalEmbeddingManagerUi() {
 		if (status.cached) {
 			statusEl.className = "settings-status " + (configured ? "is-ok" : "is-idle");
 			if (msgEl) msgEl.textContent = configured
-				? "Bereit für Offline-Suche · 124 MB im Browser-Cache (kann entfernt werden) · wird im Leerlauf aus dem RAM entladen"
+				? `Bereit für Offline-Suche · ca. ${status.sizeMb || 165} MB im Browser-Cache (kann entfernt werden) · wird im Leerlauf aus dem RAM entladen`
 				: "Im Browser-Cache vorhanden, aber noch nicht aktiviert · der Cache kann entfernt werden";
 			if (actionsEl) actionsEl.innerHTML = configured
 				? '<button type="button" id="btnDeleteLocalEmbedding" class="secondary danger-text">Modell löschen</button>'
 				: '<button type="button" id="btnEnableLocalEmbedding" class="primary">Für Suche aktivieren</button>';
 			if (progress) progress.hidden = true;
 		} else {
-			statusEl.className = "settings-status " + (configured ? "is-warn" : "is-idle");
-			if (msgEl) msgEl.textContent = configured
-				? `Download erforderlich (~${status.sizeMb || 124} MB); danach offline im Browser nutzbar · der Cache kann entfernt werden`
-				: `Einmaliger Download (~${status.sizeMb || 124} MB); danach offline im Browser nutzbar · der Cache kann entfernt werden`;
-			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">📥 Herunterladen (~${status.sizeMb || 124} MB)</button>`;
+			statusEl.className = "settings-status " + (configured || status.partial ? "is-warn" : "is-idle");
+			if (msgEl) msgEl.textContent = status.partial
+				? "Der vorige Download war unvollständig · vorhandene Teile werden beim Fortsetzen wiederverwendet"
+				: configured
+					? `Download erforderlich (ca. ${status.sizeMb || 165} MB); danach ist die Offline-Suche wieder verfügbar`
+					: `Einmaliger Download (ca. ${status.sizeMb || 165} MB); danach offline im Browser nutzbar`;
+			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">${status.partial ? "📥 Download fortsetzen" : `📥 Herunterladen (ca. ${status.sizeMb || 165} MB)`}</button>`;
 			if (progress) progress.hidden = true;
 		}
 	} catch (err) {
