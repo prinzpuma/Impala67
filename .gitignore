@@ -1,4 +1,5 @@
 node_modules/
+.agents/
 web/config.local.js
 web/.env
 .wrangler/
