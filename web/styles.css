@@ -2192,9 +2192,9 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 /* == ⚙️ Einstellungen v2 (21. Juli): ruhigere Navigation, klarere Abschnitte, weniger Text == */
 
 /* == Settings v2: eine ruhige, appweite Designsprache == */
-.settings-modal-v2 { position: relative; display: grid; grid-template-columns: 252px minmax(0, 1fr); width: min(980px, 94vw); height: min(720px, 90dvh); max-height: 90dvh; padding: 0; gap: 0; overflow: hidden; border-color: var(--edge-soft); border-radius: 20px; background: var(--panel-solid); box-shadow: var(--elev-3) }
+.settings-modal-v2 { position: relative; display: grid; grid-template-columns: 252px minmax(0, 1fr); width: min(980px, 94vw); height: min(720px, 90dvh); max-height: 90dvh; padding: 0; gap: 0; overflow: hidden; border-color: var(--edge-soft); border-radius: 20px; background: var(--panel-solid); box-shadow: var(--elev-3); -webkit-transform: translateZ(0); transform: translateZ(0); }
 .settings-modal-v2 > .modal-x { top: 12px; right: 14px; z-index: 5; width: 32px; height: 32px; color: var(--text2); background: transparent }
-.settings-sidebar { min-width: 0; padding: 20px 12px; overflow-y: auto; border-right: 1px solid var(--edge-soft); background: color-mix(in srgb, var(--surface-subtle) 88%, transparent) }
+.settings-sidebar { min-width: 0; padding: 20px 12px; overflow-y: auto; -webkit-overflow-scrolling: touch; border-right: 1px solid var(--edge-soft); background: color-mix(in srgb, var(--surface-subtle) 88%, transparent) }
 .settings-sidebar-title { padding: 0 10px 14px; font-size: var(--text-md); font-weight: 720; letter-spacing: -.02em }
 .settings-sidebar nav { display: grid; gap: 3px; margin-top: 12px }
 .settings-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 9px; border: 0; border-radius: 10px; background: transparent; color: var(--text2); font-size: var(--text-sm); font-weight: 600; text-align: left }
@@ -2217,7 +2217,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-search-results small { overflow: hidden; color: var(--text2); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap }
 .settings-search-results .settings-icon { width: 14px; color: var(--text2) }
 .settings-search-empty { padding: 14px 10px; color: var(--text2); font-size: var(--text-xs); text-align: center }
-.settings-main { min-width: 0; min-height: 0; padding: 38px clamp(24px, 4vw, 48px) 48px; overflow-y: auto; scroll-behavior: smooth; background: var(--panel-solid) }
+.settings-main { min-width: 0; min-height: 0; padding: 38px clamp(24px, 4vw, 48px) 48px; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--panel-solid) }
 .settings-page-head { max-width: 680px; margin: 0 auto 28px }
 .settings-page-head h2 { margin: 0 0 5px; font-size: clamp(25px, 3vw, 32px); line-height: 1.12; letter-spacing: -.035em }
 .settings-page-head p { margin: 0; color: var(--text2); font-size: var(--text-sm); line-height: 1.5 }

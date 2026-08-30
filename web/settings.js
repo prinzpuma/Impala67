@@ -18,6 +18,7 @@ import { backupActionState, updateActionState } from "./settings-action-state.js
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
 import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
+import * as UI from "./settings-ui.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -230,16 +231,56 @@ export function openSettings(section, anchor) {
 	const stored = localStorage.getItem(SETTINGS_LAST_SECTION_KEY);
 	const resolved = resolveSettingsSection(section || stored || "overview");
 	const legacyAnchor = { ki: "ai-models", home: "home-layout", look: "theme", notion: "notion", backup: "backup", update: "updates", controller: "controller-status", experimente: "learning-beta" }[section];
+	const previousSec = S.settingsSection;
 	S.settingsSection = resolved;
 	localStorage.setItem(SETTINGS_LAST_SECTION_KEY, resolved);
 	const overlay = U.el("overlay");
 	if (!overlay) return;
-	const previous = overlay.querySelector('.settings-modal-v2[data-sec="' + resolved + '"] .settings-main');
-	const keepScroll = previous ? previous.scrollTop : 0;
-	overlay.hidden = false;
-	overlay.innerHTML = renderSettingsShell(resolved, renderSettingsPage(resolved, settingsViewModel()), settingsSearchQuery);
-	const main = overlay.querySelector(".settings-main");
-	if (keepScroll && main) main.scrollTop = keepScroll;
+	const isMobile = document.body.classList.contains("mobile-ui");
+	const existingModal = !overlay.hidden ? overlay.querySelector(".settings-modal-v2") : null;
+	const isExistingMobile = existingModal ? existingModal.classList.contains("is-mobile") : false;
+
+	if (existingModal && isExistingMobile === isMobile) {
+		const previousMain = existingModal.querySelector(".settings-main");
+		const keepScroll = previousMain ? previousMain.scrollTop : 0;
+		existingModal.setAttribute("data-sec", resolved);
+
+		if (isMobile) {
+			const isOverview = !resolved || resolved === "overview";
+			const secMeta = SETTINGS_SECTIONS.find(s => s.id === resolved) || { label: "Einstellungen" };
+			const head = existingModal.querySelector(".settings-mobile-head");
+			if (head) {
+				head.innerHTML = isOverview
+					? '<h1>Einstellungen</h1><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button>'
+					: '<button type="button" class="settings-mobile-back" data-settings-go="overview">‹ Zurück</button><h2>' + U.esc(secMeta.label) + '</h2><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button>';
+			}
+			const main = existingModal.querySelector(".settings-main");
+			if (main) {
+				const searchBar = isOverview
+					? '<label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Einstellungen suchen…" value="' + U.esc(settingsSearchQuery) + '" aria-label="Einstellungen durchsuchen"></label><div id="settingsSearchResults" class="settings-search-results" hidden></div>'
+					: '';
+				main.innerHTML = searchBar + renderSettingsPage(resolved, settingsViewModel());
+				if (keepScroll && previousSec === resolved) main.scrollTop = keepScroll;
+				else if (!anchor && !legacyAnchor) main.scrollTop = 0;
+			}
+		} else {
+			existingModal.querySelectorAll(".settings-nav-item").forEach((btn) => {
+				const active = btn.dataset.settingsGo === resolved;
+				btn.classList.toggle("active", active);
+				btn.setAttribute("aria-current", active ? "page" : "false");
+			});
+			const main = existingModal.querySelector(".settings-main");
+			if (main) {
+				main.innerHTML = renderSettingsPage(resolved, settingsViewModel());
+				if (keepScroll && previousSec === resolved) main.scrollTop = keepScroll;
+				else if (!anchor && !legacyAnchor) main.scrollTop = 0;
+			}
+		}
+	} else {
+		overlay.hidden = false;
+		overlay.innerHTML = renderSettingsShell(resolved, renderSettingsPage(resolved, settingsViewModel()), settingsSearchQuery);
+	}
+
 	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
 	refreshSettingsDirtyState();
 	focusSettingsAnchor(anchor || legacyAnchor);

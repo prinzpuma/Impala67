@@ -24,8 +24,12 @@ const lsSet = (k, v) => U.storage.setJson(k, v);
 function openOverlay(html) {
 	const o = $("overlay");
 	if (!o) return null;
-	o.hidden = false;
-	o.innerHTML = html;
+	if (o.hidden) {
+		o.hidden = false;
+		o.innerHTML = html;
+	} else {
+		U.morph(o, html);
+	}
 	return o;
 }
 

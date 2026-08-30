@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 function setupRealDOM() {
-	const dom = new JSDOM(`<!DOCTYPE html><html><head></head><body><div id="tabbar"></div><div id="tree"></div><div id="main"></div></body></html>`, {
+	const dom = new JSDOM(`<!DOCTYPE html><html><head></head><body><div id="tabbar"></div><div id="tree"></div><div id="main"></div><div id="overlay" hidden></div></body></html>`, {
 		url: "http://localhost/",
 		referrer: "http://localhost/",
 		contentType: "text/html",
@@ -44,6 +44,7 @@ const { S, STATE } = await import("../web/state.js");
 const { RENDER } = await import("../web/render.js");
 const { TABS } = await import("../web/tabs.js");
 const { CHATS } = await import("../web/chats.js");
+const { SETTINGS } = await import("../web/settings.js");
 
 // Mock DB.addEvent / STATE.dispatch
 STATE.dispatch = async () => {};
@@ -300,4 +301,36 @@ test("Echte DOM-Tests: Ein laufender Chat blockiert keinen Wechsel zu einem ande
 	assert.equal(S.currentChatId, "c2");
 	assert.equal(S.chat, messages2);
 	S.aiBusy = false;
+});
+
+test("Echte DOM-Tests: Einstellungsfenster wird beim Tab-/Sektionswechsel nicht neu aufgebaut", async () => {
+	SETTINGS.openSettings("general");
+	const overlay = document.getElementById("overlay");
+	assert.equal(overlay.hidden, false, "Overlay ist geöffnet");
+	const modalBefore = overlay.querySelector(".settings-modal-v2");
+	assert.ok(modalBefore, "Settings-Modal existiert");
+	assert.equal(modalBefore.dataset.sec, "general");
+
+	// Wechsel zu "ai"
+	await SETTINGS.navigateSettings("ai");
+	const modalAfterSec = overlay.querySelector(".settings-modal-v2");
+	assert.equal(modalBefore, modalAfterSec, "Derselbe Modal-DOM-Knoten bleibt erhalten (kein Zerstoeren/Neubau)");
+	assert.equal(modalAfterSec.dataset.sec, "ai");
+	assert.ok(modalAfterSec.querySelector(".settings-nav-item[data-settings-go='ai']").classList.contains("active"));
+
+	// Unter-Tab-Wechsel in KI: Quellen
+	await SETTINGS.switchKiTab("sources");
+	const modalAfterSources = overlay.querySelector(".settings-modal-v2");
+	assert.equal(modalBefore, modalAfterSources, "Modal bleibt auch beim KI-Unter-Tab-Wechsel erhalten");
+	assert.equal(S.settingsKiTab, "sources");
+	const activeSubTab = modalAfterSources.querySelector("[data-aitab='sources']");
+	assert.ok(activeSubTab && activeSubTab.classList.contains("active"), "Quellen-Tab ist aktiv");
+
+	// Unter-Tab-Wechsel in KI: Lernen
+	await SETTINGS.switchKiTab("learning");
+	const modalAfterLearning = overlay.querySelector(".settings-modal-v2");
+	assert.equal(modalBefore, modalAfterLearning, "Modal bleibt auch beim Wechsel auf Lernen erhalten");
+	assert.equal(S.settingsKiTab, "learning");
+	const activeLearningTab = modalAfterLearning.querySelector("[data-aitab='learning']");
+	assert.ok(activeLearningTab && activeLearningTab.classList.contains("active"), "Lernen-Tab ist aktiv");
 });
