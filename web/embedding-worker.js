@@ -93,6 +93,52 @@ async function chooseDevice() {
 	return "wasm";
 }
 
+const DOWNLOAD_FILE_BYTES = new Map([
+	["onnx/model.onnx", 130000000],
+	["tokenizer.json", 34400000],
+	["tokenizer_config.json", 46600],
+	["config.json", 1210],
+]);
+let downloadProgress = null;
+
+function resetDownloadProgress(modelId) {
+	downloadProgress = {
+		modelId,
+		maxPercent: 0,
+		files: new Map(Array.from(DOWNLOAD_FILE_BYTES, ([file, total]) => [file, { loaded: 0, total }])),
+	};
+}
+
+function downloadFileKey(file) {
+	const value = String(file || "");
+	return Array.from(DOWNLOAD_FILE_BYTES.keys()).find((key) => value.endsWith(key)) || value;
+}
+
+function overallDownloadPercent(modelId, p) {
+	if (!downloadProgress || downloadProgress.modelId !== modelId) return Number(p.progress) || 0;
+	const key = downloadFileKey(p.file);
+	if (key) {
+		const fallbackTotal = DOWNLOAD_FILE_BYTES.get(key) || 0;
+		const previous = downloadProgress.files.get(key) || { loaded: 0, total: fallbackTotal };
+		const total = Number(p.total) > 0 ? Number(p.total) : previous.total || fallbackTotal;
+		let loaded = Number(p.loaded);
+		if (!Number.isFinite(loaded) && Number.isFinite(Number(p.progress)) && total) loaded = total * Number(p.progress) / 100;
+		if (p.status === "done" && total) loaded = total;
+		downloadProgress.files.set(key, {
+			loaded: Math.max(previous.loaded || 0, Number.isFinite(loaded) ? loaded : 0),
+			total,
+		});
+	}
+	let loaded = 0, total = 0;
+	for (const file of downloadProgress.files.values()) {
+		loaded += Math.min(file.loaded || 0, file.total || 0);
+		total += file.total || 0;
+	}
+	const percent = total ? loaded / total * 100 : 0;
+	downloadProgress.maxPercent = Math.max(downloadProgress.maxPercent, Math.min(99, percent));
+	return downloadProgress.maxPercent;
+}
+
 function postProgress(modelId, p) {
 	try {
 		self.postMessage({
@@ -100,7 +146,8 @@ function postProgress(modelId, p) {
 			model: modelId,
 			status: p.status,
 			file: p.file,
-			progress: p.progress,
+			progress: overallDownloadPercent(modelId, p),
+			fileProgress: p.progress,
 			loaded: p.loaded,
 			total: p.total,
 		});
@@ -282,6 +329,7 @@ self.addEventListener("message", async (e) => {
 			const model = msg.model || "hotchpotch/bekko-embedding-v1-a8m";
 			const dim = msg.dim || 256;
 			try {
+				resetDownloadProgress(model);
 				await initExtractor(model, dim, (p) => postProgress(model, p));
 				self.postMessage({
 					type: "download-complete",

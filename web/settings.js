@@ -996,7 +996,7 @@ export async function handleDownloadLocalEmbedding() {
 			if (btn) btn.textContent = `Lädt… ${pct}%`;
 			if (msgEl) {
 				const fileInfo = p.file ? ` (${p.file})` : "";
-				msgEl.textContent = `Lade Modell: ${pct}%${fileInfo}`;
+				msgEl.textContent = `Gesamtfortschritt: ${pct}%${fileInfo}`;
 			}
 		}
 	});
