@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Impala67 — Startseite Test (Apple + Claude Atelier)</title>
+<link rel="stylesheet" href="styles.css?build=67">
+<link rel="stylesheet" href="mobile.css?build=13">
+<link rel="stylesheet" href="test-home.css">
+<!-- Bindet die echten Benutzerdaten aus IndexedDB ein -->
+<script src="test-data.js"></script>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: var(--app-bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 12px;
+    height: 100dvh;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+  #sidebar {
+    display: flex !important;
+    flex-direction: column;
+    padding: 14px 10px;
+    gap: 10px;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--edge-soft);
+    border-radius: var(--radius-lg);
+    min-height: 0;
+    overflow: hidden;
+  }
+  #mainWrap {
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-solid);
+    border: 1px solid var(--edge-soft);
+    border-radius: var(--radius-lg);
+    min-height: 0;
+    overflow: hidden;
+  }
+  #tabbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--edge-soft);
+    flex-shrink: 0;
+    background: var(--panel-solid);
+  }
+  #main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px 60px;
+  }
+  .test-nav-floating {
+    position: sticky;
+    top: -16px;
+    z-index: 50;
+    margin: -6px auto 18px;
+    padding: 5px 8px;
+    background: color-mix(in srgb, var(--panel-solid) 85%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+    max-width: 900px;
+  }
+  .test-nav-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .test-nav-btn {
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .test-nav-btn:hover {
+    color: var(--text);
+  }
+  .test-nav-btn.active {
+    background: var(--surface-hover-strong);
+    color: var(--text);
+    font-weight: 650;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .test-nav-btn.is-star {
+    color: var(--nh-terracotta);
+  }
+  .test-nav-btn.is-star.active {
+    background: var(--nh-terracotta-soft);
+    color: var(--nh-terracotta);
+    border: 1px solid var(--nh-terracotta-border);
+  }
+  .test-nav-btn.is-original {
+    color: #e8a87c;
+  }
+  .test-nav-btn.is-original.active {
+    background: rgba(232, 168, 124, 0.15);
+    color: #e8a87c;
+  }
+  .theme-toggle-mini {
+    border: 1px solid var(--edge-soft);
+    background: var(--surface-subtle);
+    color: var(--text2);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s ease;
+  }
+  .theme-toggle-mini:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+  .real-data-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    background: rgba(48, 209, 88, 0.1);
+    color: #30d158;
+    border: 1px solid rgba(48, 209, 88, 0.25);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body class="density-compact">
+
+<div id="bg"></div>
+
+<div id="app">
+  <!-- Linke Seitenleiste: Dynamisch mit echten Benutzerseiten befüllt -->
+  <aside id="sidebar">
+    <div class="topbar">
+      <button id="btnHome" class="tab active" title="Home">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        <span class="tab-label">Home</span>
+      </button>
+      <button id="btnChatTab" class="tab" title="Chats">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.3 0-2.6-.3-3.7-.8L3 21l1.8-5.8A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        <span class="tab-label">Chat</span>
+      </button>
+      <button id="btnAnki" class="tab" title="Karteikarten">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="8" width="13" height="13" rx="2"/><path d="M8.5 4.5 19 2l2 10.5"/></svg>
+        <span class="tab-label">Karten</span>
+      </button>
+      <button id="btnSearchToggle" class="tab" title="Suchen">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>
+      </button>
+    </div>
+
+    <nav id="tree" style="flex:1; overflow-y:auto; padding-top:4px;">
+      <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text2); padding:6px 8px 4px;">Arbeitsbereich</div>
+      <div id="treeItems">
+        <div class="row active">
+          <span class="row-title">🏠 Home</span>
+        </div>
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <button id="btnNotebookLM">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+        <span>Gemini Notebook</span>
+      </button>
+      <button id="btnGraph">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.4 7 15.6 7.7M7 8.4l1.3 7.1M16.3 10.2l-5.6 6"/></svg>
+        <span>Wissensgraph</span>
+      </button>
+      <button id="btnLibrary">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"/><path d="M4 14h4l2 2h4l2-2h4"/></svg>
+        <span>Bibliothek</span>
+      </button>
+      <button id="btnSettings">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        <span>Einstellungen</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Hauptansicht -->
+  <div id="mainWrap">
+    <div id="tabbar">
+      <button class="navbtn">☰</button>
+      <button class="navbtn" disabled>‹</button>
+      <button class="navbtn" disabled>›</button>
+      <div class="tabstrip">
+        <div class="tabchip active">
+          <span class="tabchip-title">🏠 Home</span>
+        </div>
+      </div>
+    </div>
+
+    <main id="main">
+      <!-- Schwebende Umschalt-Leiste für den direkten A/B-Vergleich -->
+      <div class="test-nav-floating">
+        <div class="test-nav-group">
+          <button type="button" class="test-nav-btn is-star active" id="btn-atelier" onclick="setMode('atelier')">★ Atelier (Apple + Claude)</button>
+          <button type="button" class="test-nav-btn" id="btn-apple" onclick="setMode('apple')">Apple Native</button>
+          <button type="button" class="test-nav-btn" id="btn-claude" onclick="setMode('claude')">Claude Minimal</button>
+          <button type="button" class="test-nav-btn is-original" id="btn-original" onclick="setMode('original')">Ist-Zustand (Alte Version)</button>
+        </div>
+        
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="real-data-badge" id="realDataBadge" title="Echte Daten aus deiner Impala67-Datenbank aktiv">
+            ● <span id="realDataCount">153 Seiten</span>
+          </span>
+          <button type="button" class="theme-toggle-mini" onclick="document.getElementById('backupFileInput').click()" title="JSON Backup laden">📂 Backup</button>
+          <input type="file" id="backupFileInput" accept=".json" style="display:none" onchange="handleBackupUpload(this)">
+          <button type="button" class="theme-toggle-mini" onclick="toggleTheme()" id="themeBtn">Hell / Dunkel</button>
+        </div>
+      </div>
+
+      <!-- Container für die Startseite -->
+      <div id="homeStage" class="nh-ambient-glow"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // =========================================================================
+  // DATENMODELL: Live IndexedDB mit automatischem Fallback auf test-data.js
+  // =========================================================================
+  window.UDATA = window.REAL_USER_DATA || {
+    userName: "Joshua",
+    pages: [],
+    cards: [],
+    dueCards: [],
+    realTodos: [],
+    lz: { streakDays: 0, todaySeconds: 0, goalPct: 0 }
+  };
+  var UDATA = window.UDATA;
+
+  let activeMode = 'atelier';
+  let currentCardIndex = 0;
+  let flashcardAnswerVisible = false;
+  let activeStudyTab = 'fsrs';
+
+  // Focus Timer State
+  let timerSeconds = 25 * 60;
+  let timerTotal = 25 * 60;
+  let timerInterval = null;
+  let isTimerRunning = false;
+
+  // Ambient Audio State
+  let audioCtx = null;
+  let noiseNode = null;
+  let isAmbientPlaying = false;
+
+  // Composer Mode State
+  let composerMode = 'coach';
+
+  // Helfer: Datumsformatierung
+  function fmtDate(iso) {
+    if (!iso) return "Vor kurzem";
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diffHours = (now - d) / 36e5;
+      if (diffHours < 1) return "vor " + Math.max(1, Math.round((now - d) / 6e4)) + " Min";
+      if (diffHours < 24) return "vor " + Math.round(diffHours) + " Std";
+      if (diffHours < 48) return "Gestern";
+      return d.toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+    } catch { return "Kürzlich"; }
+  }
+
+  // =========================================================================
+  // 1. ATELIER (Apple + Claude Hybrid) — Befüllt mit deinen echten Daten
+  // =========================================================================
+  function renderAtelierHome() {
+    const pages = UDATA.pages || [];
+    const dueCards = (UDATA.dueCards && UDATA.dueCards.length) ? UDATA.dueCards : (UDATA.cards || []);
+    const lz = UDATA.lz || { streakDays: 0, todaySeconds: 0, goalPct: 0 };
+    const currentCard = dueCards[currentCardIndex % Math.max(1, dueCards.length)] || {
+      deck: "Allgemein",
+      front: "Keine fälligen Karten",
+      back: "Alle Karten gelernt!"
+    };
+
+    // Die echte zuletzt geöffnete oder bearbeitete Notiz
+    const topDoc = pages[0] || {
+      title: "Neue Notiz beginnen",
+      updated: new Date().toISOString(),
+      kind: "notion",
+      snippet: "Hier kannst du deine nächste Vorlesung, Zusammenfassung oder dein GoodNotes-Heft anlegen..."
+    };
+
+    // Die echten Todos aus deinen Notizen
+    const realTodos = (UDATA.realTodos && UDATA.realTodos.length) ? UDATA.realTodos.slice(0, 4) : [
+      { text: "Elektrotechnik Klausur Nachbereitung", pageTitle: "Elektrotechnik", done: true },
+      { text: "Mathematische Grundlagen wiederholen", pageTitle: "Vorlesung 1", done: false },
+      { text: "App Lese-/Schreibrate anpassen", pageTitle: "Projektideen", done: false },
+      { text: "Karteikarten archivieren", pageTitle: "Todo in der App", done: false }
+    ];
+
+    const hour = new Date().getHours();
+    const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
+
+    return `
+      <div class="new-home-root">
+        
+        <!-- Hero mit Claude-Serif-Typografie & Apple-Pill-Complications -->
+        <header class="nh-hero">
+          <div class="nh-eyebrow-row">
+            <span class="nh-eyebrow">Freitag, 4. September 2026 · ${greeting}</span>
+            <span style="font-size:11px;color:var(--nh-text-tertiary)">${pages.length} Notizen synchronisiert</span>
+          </div>
+          <h1 class="nh-hero-title">${greeting}, ${UDATA.userName || "Joshua"}. <em>Bereit für Fokus?</em></h1>
+          
+          <div class="nh-briefing-pills">
+            <div class="nh-briefing-pill active-streak" title="Tage in Folge aktiv gelernt">
+              <span>🔥</span>
+              <span><b>${lz.streakDays || 0} Tage</b> Lernserie</span>
+              <span style="opacity:0.4">·</span>
+              <span style="font-size:11px">${Math.round((lz.todaySeconds || 0)/60)} Min heute gelernt</span>
+            </div>
+            <div class="nh-briefing-pill due-alert" title="Fällige Karten im FSRS-Algorithmus">
+              <span>🃏</span>
+              <span id="pillDueCount"><b>${dueCards.length}</b> Karten bereit</span>
+              <span style="opacity:0.4">·</span>
+              <span style="font-size:11px">${currentCard.deck || "Grundlagen"}</span>
+            </div>
+            <div class="nh-briefing-pill" title="Wochenziel Fortschritt">
+              <span>🎯</span>
+              <span>Wochenziel <b>${lz.goalPct || 0} %</b></span>
+              <span style="opacity:0.4">·</span>
+              <span style="font-size:11px">Fokuszeit tracken</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- FEATURE 1: CLAUDE ATELIER OMNI-COMPOSER & PROMPT STUDIO -->
+        <div class="nh-composer-card">
+          <div class="nh-composer-modes">
+            <button type="button" class="nh-mode-chip ${composerMode==='coach'?'active':''}" onclick="setComposerMode('coach')">✦ KI-Coach & Tutor</button>
+            <button type="button" class="nh-mode-chip ${composerMode==='note'?'active':''}" onclick="setComposerMode('note')">📝 Schnellnotiz</button>
+            <button type="button" class="nh-mode-chip ${composerMode==='flashcard'?'active':''}" onclick="setComposerMode('flashcard')">⚡ Karteikarte erstellen</button>
+            <button type="button" class="nh-mode-chip ${composerMode==='task'?'active':''}" onclick="setComposerMode('task')">🎯 Neuer Tagesfokus</button>
+          </div>
+
+          <div class="nh-composer-input-wrap">
+            <textarea id="composerInput" class="nh-composer-textarea" rows="2" 
+              placeholder="${getComposerPlaceholder()}"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComposer();}"></textarea>
+            <button type="button" class="nh-composer-submit" onclick="submitComposer()" title="Senden (Enter)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <!-- Vorschläge abgestimmt auf deine echten Fächer -->
+          <div class="nh-composer-footer">
+            <div class="nh-context-badge">
+              <span class="dot"></span>
+              <span>${pages.length} Notizen im Wissensspeicher aktiv</span>
+            </div>
+            <div class="nh-quick-prompts">
+              <span class="nh-prompt-pill" onclick="fillPrompt('Erkläre mir den Zusammenhang von Energie und Leistung aus Elektrotechnik')">Energie vs. Leistung (E-Technik)</span>
+              <span class="nh-prompt-pill" onclick="fillPrompt('Fasse die Seite Elektrotechnik Klausur kurz zusammen')">Zusammenfassung E-Technik</span>
+              <span class="nh-prompt-pill" onclick="fillPrompt('Erstelle 3 Prüfungsfragen zu meinen Notizen')">3 Prüfungsfragen generieren</span>
+            </div>
+          </div>
+
+          <!-- Dynamischer Claude Antwort-Bereich -->
+          <div id="claudeResponseArea" style="display:none"></div>
+        </div>
+
+        <!-- 2-SPALTEN WORKSPACE DECK -->
+        <div class="nh-deck-grid">
+          
+          <!-- LINKE SPALTE: DEINE ECHTE LETZTE NOTIZ (Weitermachen) -->
+          <div class="nh-card-manuscript" onclick="alert('Öffnet deine echte Notiz: ${topDoc.title.replace(/'/g, '')}')">
+            <div>
+              <div class="nh-card-header">
+                <span class="nh-subject-badge">
+                  <span class="dot"></span>
+                  ${topDoc.kind === 'heft' ? '📓 GoodNotes-Heft' : '📄 Notiz'} · Weitermachen
+                </span>
+                <span class="nh-time-tag">${fmtDate(topDoc.updated)} aktualisiert</span>
+              </div>
+              <h2 class="nh-manuscript-title">${topDoc.title}</h2>
+              <p class="nh-manuscript-excerpt">
+                ${topDoc.snippet || (topDoc.kind === 'heft' ? '📓 Handschriftliches GoodNotes-Heft: Apple Pencil Skizzen, Formeln und Zeichnungen. Klicke hier, um das Zeichenheft im Vollbild aufzuschlagen...' : 'Hier kannst du deine nächste Vorlesung oder Zusammenfassung weiterbearbeiten...')}
+              </p>
+              
+              <!-- Inline Scratchpad (Speichert direkt lokal) -->
+              <div class="nh-inline-scratchpad" onclick="event.stopPropagation()">
+                <span style="font-size:12px;opacity:0.6">✍️</span>
+                <input type="text" id="scratchInput" class="nh-scratchpad-input" 
+                  placeholder="Schneller Gedanke zu dieser Notiz notieren (Enter)..." 
+                  onkeydown="if(event.key==='Enter')saveScratchNote(this)">
+              </div>
+            </div>
+
+            <div class="nh-card-footer">
+              <span>Zuletzt bearbeitet · ${fmtDate(topDoc.updated)}</span>
+              <button type="button" class="nh-continue-btn">Im Editor öffnen →</button>
+            </div>
+          </div>
+
+          <!-- RECHTE SPALTE: APPLE INTERAKTIVE WIDGET-STACK -->
+          <div class="nh-right-stack">
+            
+            <!-- FEATURE 2 & 3: APPLE SEGMENTED STUDY HUB (FSRS + FOCUS TIMER) -->
+            <div class="nh-card-fsrs-interactive" id="studyHubWidget">
+              <div class="nh-fsrs-header">
+                <div class="nh-study-tabs">
+                  <button type="button" class="nh-study-tab active is-fsrs" id="tabFsrs" onclick="switchStudyTab('fsrs')">🃏 FSRS (${dueCards.length})</button>
+                  <button type="button" class="nh-study-tab" id="tabTimer" onclick="switchStudyTab('timer')">⏱ Fokus-Timer</button>
+                </div>
+                <span class="nh-fsrs-counter" id="fsrsCounter">${dueCards.length} fällig · ${currentCard.deck}</span>
+              </div>
+
+              <!-- Ansicht 1: Deine echten Karteikarten -->
+              <div id="studyViewFsrs">
+                <div class="nh-flashcard-box" id="flashcardBox">
+                  <div class="nh-flashcard-q">${currentCard.front || "Keine Karten fällig"}</div>
+                  
+                  ${!flashcardAnswerVisible ? `
+                    <button type="button" class="nh-flashcard-reveal-btn" onclick="revealFlashcardAnswer()">Antwort aufdecken ▾</button>
+                  ` : `
+                    <div class="nh-flashcard-answer-box">
+                      <div>${currentCard.back || "—"}</div>
+                    </div>
+                  `}
+                </div>
+
+                ${flashcardAnswerVisible ? `
+                  <div class="nh-fsrs-rating-grid">
+                    <button type="button" class="nh-rate-btn again" onclick="rateCard(1)">
+                      <span>Nochmal</span><small>&lt; 1 min</small>
+                    </button>
+                    <button type="button" class="nh-rate-btn hard" onclick="rateCard(2)">
+                      <span>Schwer</span><small>1.4 d</small>
+                    </button>
+                    <button type="button" class="nh-rate-btn good" onclick="rateCard(3)">
+                      <span>Gut</span><small>3.8 d</small>
+                    </button>
+                    <button type="button" class="nh-rate-btn easy" onclick="rateCard(4)">
+                      <span>Einfach</span><small>9.0 d</small>
+                    </button>
+                  </div>
+                ` : `
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--nh-text-tertiary)">
+                    <span>FSRS-Algorithmus v5 aktiv</span>
+                    <a href="javascript:void(0)" style="color:var(--nh-terracotta);text-decoration:none;font-weight:600" onclick="alert('Öffnet den vollen Karteikarten-Bereich')">Alle im Vollbild ›</a>
+                  </div>
+                `}
+              </div>
+
+              <!-- Ansicht 2: Pomodoro Focus Timer & Ambient Rain -->
+              <div id="studyViewTimer" style="display:none;flex-direction:column;gap:12px;padding:4px 0">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+                  <div class="nh-timer-left">
+                    <div class="nh-timer-ring-wrap">
+                      <svg class="nh-timer-ring-svg" viewBox="0 0 54 54">
+                        <circle class="nh-timer-ring-bg" cx="27" cy="27" r="22"/>
+                        <circle class="nh-timer-ring-bar" id="timerRingBar" cx="27" cy="27" r="22"/>
+                      </svg>
+                      <div class="nh-timer-icon-center" id="timerCenterIcon">⏱</div>
+                    </div>
+                    <div class="nh-timer-info">
+                      <div class="nh-timer-clock" id="timerDisplay">${formatTimerTime(timerSeconds)}</div>
+                      <div class="nh-timer-label">Pomodoro Fokusblock</div>
+                    </div>
+                  </div>
+
+                  <div class="nh-timer-actions">
+                    <button type="button" class="nh-timer-btn ${isTimerRunning?'active':''}" id="timerToggleBtn" onclick="toggleTimer()">
+                      ${isTimerRunning ? 'Pause' : 'Start'}
+                    </button>
+                    <button type="button" class="nh-ambient-btn ${isAmbientPlaying?'playing':''}" id="ambientBtn" onclick="toggleAmbientSound()" title="Sanftes Regen-Rauschen ein/ausschalten">
+                      ${isAmbientPlaying ? '🌧 Pause' : '🌧 Regen'}
+                    </button>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--nh-border);font-size:11px;color:var(--nh-text-tertiary)">
+                  <span>Presets:</span>
+                  <div style="display:flex;gap:5px">
+                    <span class="nh-prompt-pill" onclick="setTimerDuration(15)">15m Sprint</span>
+                    <span class="nh-prompt-pill" onclick="setTimerDuration(25)">25m Pomodoro</span>
+                    <span class="nh-prompt-pill" onclick="setTimerDuration(45)">45m Deep Work</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- FEATURE 4: TACTILE DAILY CHECKLIST (Deine echten Aufgaben) -->
+            <div class="nh-card-checklist">
+              <div class="nh-checklist-header">
+                <span class="nh-checklist-title">Heutiger Fokus</span>
+                <span class="nh-checklist-progress-text" id="taskProgressText">1 von 4 erledigt</span>
+              </div>
+              <div class="nh-checklist-bar">
+                <div class="nh-checklist-bar-fill" id="taskBarFill" style="width: 25%"></div>
+              </div>
+              <div class="nh-checklist-items" id="taskItems">
+                ${realTodos.map((t, idx) => `
+                  <div class="nh-task-row ${t.done ? 'done' : ''}">
+                    <input type="checkbox" class="nh-task-checkbox" ${t.done ? 'checked' : ''} onchange="updateTasks()">
+                    <span class="nh-task-label">${t.text}</span>
+                    <span class="nh-task-tag">${t.pageTitle}</span>
+                  </div>
+                `).join('')}
+              </div>
+              <input type="text" id="newTaskInput" class="nh-task-add-input" 
+                placeholder="+ Neue Aufgabe hinzufügen (Enter drücken)..." 
+                onkeydown="if(event.key==='Enter')addNewTask(this)">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- FEATURE 5: AUF DEINEM SCHREIBTISCH (Deine echten Dokumente) -->
+        <section class="nh-desk-section">
+          <div class="nh-desk-head">
+            <span class="nh-desk-title">Auf deinem Schreibtisch</span>
+            <div class="nh-desk-filters">
+              <button type="button" class="nh-filter-btn active" onclick="filterDesk('all', this)">Alle (${pages.length})</button>
+              <button type="button" class="nh-filter-btn" onclick="filterDesk('heft', this)">GoodNotes Hefte</button>
+              <button type="button" class="nh-filter-btn" onclick="filterDesk('notion', this)">Notizen</button>
+            </div>
+          </div>
+
+          <div class="nh-desk-grid" id="deskGrid">
+            ${(pages.length > 1 ? pages.slice(1, 4) : pages.slice(0, 3)).map(p => `
+              <div class="nh-desk-card" onclick="alert('Öffnet Notiz: ${p.title.replace(/'/g, '')}')">
+                <div>
+                  <div class="nh-desk-card-top">
+                    <span class="nh-desk-card-type">${p.kind === 'heft' ? '📓 GoodNotes-Heft' : '📄 Notiz'}</span>
+                    <span>${fmtDate(p.updated)}</span>
+                  </div>
+                  <div class="nh-desk-card-title">${p.title}</div>
+                  <div class="nh-desk-card-snippet">
+                    ${p.snippet || (p.kind === 'heft' ? 'Handschriftliches GoodNotes-Heft mit Stiftskizzen...' : 'Kein Textauszug vorhanden...')}
+                  </div>
+                </div>
+                <div class="nh-desk-card-foot">
+                  <span>${p.kind === 'heft' ? 'Stift & Skizzen' : 'Markdown Notiz'}</span>
+                  <span style="color:var(--nh-terracotta);font-weight:600">Öffnen ›</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 2. APPLE NATIVE (Mit deinen echten Daten)
+  // =========================================================================
+  function renderAppleHome() {
+    const pages = UDATA.pages || [];
+    const topDoc = pages[0] || { title: "Keine Seite vorhanden", snippet: "" };
+    const dueCount = (UDATA.dueCards || []).length;
+    return `
+      <div class="new-home-root">
+        <header class="nh-hero">
+          <div class="nh-eyebrow">Freitag, 4. September</div>
+          <h1 class="nh-hero-title" style="font-family:var(--nh-font-sans);font-weight:700">Guten Abend, ${UDATA.userName || "Joshua"}</h1>
+          <div class="nh-briefing-pills">
+            <span class="nh-briefing-pill active-streak">🔥 ${UDATA.lz?.streakDays || 0} Tage Fokus</span>
+            <span class="nh-briefing-pill due-alert">${dueCount} Karten fällig</span>
+          </div>
+        </header>
+
+        <div class="nh-card-manuscript" onclick="alert('Öffnet ${topDoc.title}')">
+          <div class="nh-card-header">
+            <span class="nh-subject-badge">Weitermachen</span>
+            <span class="nh-time-tag">${fmtDate(topDoc.updated)}</span>
+          </div>
+          <h2 class="nh-manuscript-title" style="font-family:var(--nh-font-sans);font-weight:650">${topDoc.title}</h2>
+          <p class="nh-manuscript-excerpt">${topDoc.snippet || "Kein Textauszug..."}</p>
+          <div class="nh-card-footer">
+            <span>${topDoc.kind === 'heft' ? '📓 GoodNotes-Heft' : '📄 Notiz'}</span>
+            <span style="color:var(--nh-blue);font-weight:600">Öffnen →</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0">
+          <button type="button" class="nh-desk-card" onclick="alert('Neue Notiz')" style="min-height:70px;align-items:center;justify-content:center;text-align:center"><b>＋ Neue Notiz</b></button>
+          <button type="button" class="nh-desk-card" onclick="alert('Karten lernen')" style="min-height:70px;align-items:center;justify-content:center;text-align:center"><b>⚡ ${dueCount} Karten</b></button>
+          <button type="button" class="nh-desk-card" onclick="alert('Daily Note')" style="min-height:70px;align-items:center;justify-content:center;text-align:center"><b>📅 Daily</b></button>
+          <button type="button" class="nh-desk-card" onclick="alert('Befehlspalette')" style="min-height:70px;align-items:center;justify-content:center;text-align:center"><b>⌘K Befehle</b></button>
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 3. CLAUDE MINIMAL (Mit deinen echten Daten)
+  // =========================================================================
+  function renderClaudeHome() {
+    return `
+      <div class="new-home-root" style="max-width:680px">
+        <div style="text-align:center;margin:30px auto 30px;">
+          <h1 class="nh-hero-title" style="font-size:36px;margin-bottom:8px">Guten Abend, ${UDATA.userName || "Joshua"}.</h1>
+          <p style="font-size:14px;color:var(--nh-text-secondary);margin-bottom:24px">Worüber möchtest du heute nachdenken oder schreiben?</p>
+          <div class="nh-composer-card">
+            <textarea class="nh-composer-textarea" placeholder="Einen Gedanken festhalten, Notiz suchen oder Frage an den Coach..." rows="3"></textarea>
+            <div class="nh-composer-footer">
+              <div class="nh-quick-prompts">
+                <span class="nh-prompt-pill">+ In Daily Note</span>
+                <span class="nh-prompt-pill">+ Als Karteikarte</span>
+              </div>
+              <button type="button" class="nh-composer-submit">↵</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 4. ECHTER 1:1 IST-ZUSTAND (Originaler Dashboard-Code)
+  // =========================================================================
+  function renderOriginalHome() {
+    const pages = UDATA.pages || [];
+    const dueCount = (UDATA.dueCards || []).length;
+    const lz = UDATA.lz || { streakDays: 0, todaySeconds: 0, goalPct: 0 };
+    return `
+      <div class="home home-v2 home-slim" data-key="home">
+        <header class="home-hero">
+          <div>
+            <h1>Guten Abend, ${UDATA.userName || "Joshua"} 👋</h1>
+            <p class="home-meta">Freitag, 4. September</p>
+            <div class="home-hero-meta">
+              <span class="home-chip">📄 <b>${pages.length}</b> Seiten</span>
+              <span class="home-chip">🃏 <b>${(UDATA.cards || []).length}</b> Karten</span>
+              <span class="home-chip">✦ <b>8</b> Chats</span>
+              <span class="home-chip warn">🎯 Wochenziel <b>${lz.goalPct || 0} %</b></span>
+            </div>
+          </div>
+          <button class="home-customize" title="Homeseite anpassen">⚙</button>
+        </header>
+
+        <div class="quick-actions">
+          <button>+ Neue Seite</button>
+        </div>
+
+        <section class="lz-widget" id="lzWidget">
+          <header class="lz-dashboard-head">
+            <div>
+              <span class="lz-eyebrow">Lernanalyse</span>
+              <h2>Diese Woche</h2>
+              <p>31. Aug. – 6. Sept. 2026</p>
+            </div>
+            <div class="lz-dashboard-actions">
+              <div class="lz-view-switch"><button class="active">Woche</button><button>Monat</button></div>
+              <div class="lz-week-nav"><button>←</button><button disabled>Heute</button><button disabled>→</button></div>
+            </div>
+          </header>
+
+          <div class="lz-summary">
+            <div class="lz-summary-main">
+              <small>Gesamte Lernzeit</small>
+              <b>${Math.floor((lz.todaySeconds || 0)/3600)}h ${Math.round(((lz.todaySeconds || 0)%3600)/60)}m</b>
+              <span>Aktiver Zeitraum</span>
+              <div class="lz-goal"><span>🎯 ${lz.goalPct || 0} % vom Wochenziel</span><button class="mini">Ziel ändern</button></div>
+              <div class="lz-progress lz-goal-bar"><i style="width: ${lz.goalPct || 0}%"></i></div>
+            </div>
+            <div class="lz-kpi-grid">
+              <div><small>Aktive Tage</small><b>${lz.activeDays || 1}<em>/7</em></b><span>mindestens 5 Minuten</span></div>
+              <div><small>Fächer</small><b>2</b><span>Elektrotechnik aktiv</span></div>
+              <div><small>Reviews</small><b>${lz.reviewsCount || 4}</b><span>88 % richtig</span></div>
+              <div><small>Streak</small><b>🔥 ${lz.streakDays || 0}</b><span>Tage in Folge</span></div>
+            </div>
+          </div>
+
+          <div class="home-today" style="display:flex;gap:8px;margin:14px 0;">
+            <button class="home-pill" style="flex:1;padding:10px;display:flex;gap:8px;align-items:center;background:transparent;border:1px solid var(--edge-soft);border-radius:12px;color:inherit"><span style="font-size:18px">📅</span><div style="text-align:left"><b>Daily</b><br><small style="color:var(--text2);font-size:11px">Heute öffnen</small></div></button>
+            <button class="home-pill attention" style="flex:1;padding:10px;display:flex;gap:8px;align-items:center;background:var(--accent-soft);border:1px solid var(--accent-border);border-radius:12px;color:inherit"><span style="font-size:18px">🃏</span><div style="text-align:left"><b>Karteikarten</b><br><small style="color:var(--text2);font-size:11px">${dueCount} fällig</small></div></button>
+            <button class="home-pill" style="flex:1;padding:10px;display:flex;gap:8px;align-items:center;background:transparent;border:1px solid var(--edge-soft);border-radius:12px;color:inherit"><span style="font-size:18px">🎓</span><div style="text-align:left"><b>Noten</b><br><small style="color:var(--text2);font-size:11px">Schnitt berechnen</small></div></button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // INTERAKTIVE EVENT-HANDLER & LOGIK
+  // =========================================================================
+
+  function populateSidebarTree() {
+    const container = document.getElementById('treeItems');
+    if (!container || !UDATA.pages) return;
+    
+    let html = '<div class="row active"><span class="row-title">🏠 Home</span></div>';
+    const recent = UDATA.pages.slice(0, 8);
+    for (const p of recent) {
+      const icon = p.kind === 'heft' ? '📓' : '📄';
+      html += `
+        <div class="row" onclick="alert('Öffnet Seite: ${p.title.replace(/'/g, '')}')">
+          <span class="row-title">${icon} ${p.title}</span>
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+
+    const countEl = document.getElementById('realDataCount');
+    if (countEl) countEl.textContent = `${UDATA.pages.length} Notizen`;
+  }
+
+  function setMode(m) {
+    activeMode = m;
+    ['atelier', 'apple', 'claude', 'original'].forEach(id => {
+      const btn = document.getElementById('btn-' + id);
+      if (btn) btn.classList.toggle('active', id === m);
+    });
+
+    const stage = document.getElementById('homeStage');
+    if (m === 'atelier') stage.innerHTML = renderAtelierHome();
+    else if (m === 'apple') stage.innerHTML = renderAppleHome();
+    else if (m === 'claude') stage.innerHTML = renderClaudeHome();
+    else if (m === 'original') stage.innerHTML = renderOriginalHome();
+  }
+
+  function toggleTheme() {
+    document.body.classList.toggle('light');
+  }
+
+  // COMPOSER LOGIK
+  function getComposerPlaceholder() {
+    if (composerMode === 'coach') return 'Frage zu deinen Notizen stellen, Claude um Erklärung bitten oder Klausurthemen vertiefen...';
+    if (composerMode === 'note') return 'Schnellen Gedanken oder Erkenntnis für die heutige Daily Note erfassen...';
+    if (composerMode === 'flashcard') return 'Vorderseite & Rückseite eingeben, z.B. „Was ist die elektrische Leistung? : P = U * I“...';
+    if (composerMode === 'task') return 'Neues Tagesziel oder Aufgabe für heute eingeben...';
+    return '';
+  }
+
+  function setComposerMode(mode) {
+    composerMode = mode;
+    const input = document.getElementById('composerInput');
+    if (input) input.placeholder = getComposerPlaceholder();
+    document.querySelectorAll('.nh-mode-chip').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  function fillPrompt(text) {
+    const input = document.getElementById('composerInput');
+    if (input) {
+      input.value = text;
+      input.focus();
+      submitComposer();
+    }
+  }
+
+  function submitComposer() {
+    const input = document.getElementById('composerInput');
+    const text = input ? input.value.trim() : '';
+    if (!text) return;
+
+    if (composerMode === 'coach') {
+      const area = document.getElementById('claudeResponseArea');
+      area.style.display = 'block';
+      area.innerHTML = `
+        <div class="nh-claude-response-stream">
+          <div class="nh-response-meta">
+            <span>✦ Claude KI-Tutor · Wissenskontext [${UDATA.pages.length} Notizen durchsucht]</span>
+            <span style="color:var(--nh-text-tertiary);cursor:pointer" onclick="this.closest('.nh-claude-response-stream').remove()">✕ Schließen</span>
+          </div>
+          <div class="nh-response-body">
+            <b>Zusammenfassung für "${text}":</b><br>
+            Basierend auf deinen Notizen zu <b>Elektrotechnik Klausur</b>:<br>
+            Die elektrische Energie <code>W</code> beschreibt die verrichtete Arbeit: <code>W = P * t = Q * U</code> (Einheit: Joule oder Wattsekunde). Die elektrische Leistung <code>P</code> ist die pro Zeiteinheit umgesetzte Energie: <code>P = U * I</code> (Einheit: Watt).
+            <div style="margin-top:8px;padding:8px 12px;background:var(--nh-card-bg);border-radius:8px;border-left:3px solid var(--nh-terracotta)">
+              💡 <b>Wichtig für deine Klausur:</b> Achte bei der Berechnung von Lastwiderständen darauf, ob nach der Momentanleistung oder der über Zeit <code>t</code> integrierten Energie gefragt ist.
+            </div>
+          </div>
+          <div class="nh-response-actions">
+            <button type="button" class="nh-btn-primary" onclick="alert('In Notiz übernommen!')">✓ In Notiz übernehmen</button>
+            <button type="button" class="nh-btn-subtle" onclick="alert('Karteikarte erstellt!')">⚡ Als Karteikarte anlegen</button>
+            <button type="button" class="nh-btn-subtle" onclick="alert('Wechselt in den Vollbild-Chat')">Im Chat vertiefen →</button>
+          </div>
+        </div>
+      `;
+      input.value = '';
+    } else if (composerMode === 'note') {
+      alert('Schnellnotiz erfasst: "' + text + '"');
+      input.value = '';
+    } else if (composerMode === 'flashcard') {
+      alert('Karteikarte angelegt: "' + text + '"');
+      input.value = '';
+    } else if (composerMode === 'task') {
+      appendTaskDirectly(text);
+      input.value = '';
+    }
+  }
+
+  function appendTaskDirectly(text) {
+    const items = document.getElementById('taskItems');
+    if (!items) return;
+    const row = document.createElement('div');
+    row.className = 'nh-task-row';
+    row.innerHTML = `
+      <input type="checkbox" class="nh-task-checkbox" onchange="updateTasks()">
+      <span class="nh-task-label">${text}</span>
+      <span class="nh-task-tag">Neu</span>
+    `;
+    items.appendChild(row);
+    updateTasks();
+  }
+
+  // STUDY HUB TAB SWITCHER
+  function switchStudyTab(tab) {
+    activeStudyTab = tab;
+    const isFsrs = tab === 'fsrs';
+    const tabF = document.getElementById('tabFsrs');
+    const tabT = document.getElementById('tabTimer');
+    const viewF = document.getElementById('studyViewFsrs');
+    const viewT = document.getElementById('studyViewTimer');
+    if (tabF) tabF.classList.toggle('active', isFsrs);
+    if (tabT) tabT.classList.toggle('active', !isFsrs);
+    if (viewF) viewF.style.display = isFsrs ? 'block' : 'none';
+    if (viewT) viewT.style.display = !isFsrs ? 'flex' : 'none';
+  }
+
+  // FLASHCARD LOGIK
+  function revealFlashcardAnswer() {
+    flashcardAnswerVisible = true;
+    updateFsrsWidget();
+  }
+
+  function rateCard(grade) {
+    const dueCards = (UDATA.dueCards && UDATA.dueCards.length) ? UDATA.dueCards : (UDATA.cards || []);
+    if (dueCards.length > 0) {
+      dueCards.splice(currentCardIndex % dueCards.length, 1);
+    }
+    flashcardAnswerVisible = false;
+    
+    const pill = document.getElementById('pillDueCount');
+    if (pill) pill.innerHTML = `<b>${dueCards.length}</b> Karten bereit`;
+
+    updateFsrsWidget();
+  }
+
+  function updateFsrsWidget() {
+    const dueCards = (UDATA.dueCards && UDATA.dueCards.length) ? UDATA.dueCards : (UDATA.cards || []);
+    const box = document.getElementById('flashcardBox');
+    const counter = document.getElementById('fsrsCounter');
+    if (!box) return;
+
+    if (dueCards.length === 0) {
+      box.innerHTML = `
+        <div style="text-align:center;padding:12px 0">
+          <div style="font-size:24px;margin-bottom:6px">🎉</div>
+          <div style="font-size:14px;font-weight:600;color:var(--nh-green)">Alle Karten für heute wiederholt!</div>
+          <div style="font-size:12px;color:var(--nh-text-secondary);margin-top:4px">Dein FSRS-Gedächtnisstand ist für heute perfekt aufgefrischt.</div>
+        </div>
+      `;
+      if (counter) counter.textContent = '0 fällig · Großartig!';
+      const container = document.getElementById('studyHubWidget');
+      const ratingGrid = container?.querySelector('.nh-fsrs-rating-grid');
+      if (ratingGrid) ratingGrid.remove();
+      return;
+    }
+
+    const card = dueCards[currentCardIndex % dueCards.length];
+    if (counter) counter.textContent = `${dueCards.length} fällig · ${card.deck || 'Grundlagen'}`;
+    
+    box.innerHTML = `
+      <div class="nh-flashcard-q">${card.front}</div>
+      ${!flashcardAnswerVisible ? `
+        <button type="button" class="nh-flashcard-reveal-btn" onclick="revealFlashcardAnswer()">Antwort aufdecken ▾</button>
+      ` : `
+        <div class="nh-flashcard-answer-box">
+          <div>${card.back}</div>
+        </div>
+      `}
+    `;
+
+    const container = document.getElementById('studyHubWidget');
+    let ratingGrid = container.querySelector('.nh-fsrs-rating-grid');
+    if (flashcardAnswerVisible) {
+      if (!ratingGrid) {
+        ratingGrid = document.createElement('div');
+        ratingGrid.className = 'nh-fsrs-rating-grid';
+        ratingGrid.innerHTML = `
+          <button type="button" class="nh-rate-btn again" onclick="rateCard(1)"><span>Nochmal</span><small>&lt; 1 min</small></button>
+          <button type="button" class="nh-rate-btn hard" onclick="rateCard(2)"><span>Schwer</span><small>1.4 d</small></button>
+          <button type="button" class="nh-rate-btn good" onclick="rateCard(3)"><span>Gut</span><small>3.8 d</small></button>
+          <button type="button" class="nh-rate-btn easy" onclick="rateCard(4)"><span>Einfach</span><small>9.0 d</small></button>
+        `;
+        document.getElementById('studyViewFsrs').appendChild(ratingGrid);
+      }
+    } else {
+      if (ratingGrid) ratingGrid.remove();
+    }
+  }
+
+  // TIMER LOGIK
+  function formatTimerTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  function setTimerDuration(min) {
+    timerSeconds = min * 60;
+    timerTotal = min * 60;
+    const disp = document.getElementById('timerDisplay');
+    if (disp) disp.textContent = formatTimerTime(timerSeconds);
+    const bar = document.getElementById('timerRingBar');
+    if (bar) bar.style.strokeDashoffset = '0';
+  }
+
+  function toggleTimer() {
+    isTimerRunning = !isTimerRunning;
+    const btn = document.getElementById('timerToggleBtn');
+    const icon = document.getElementById('timerCenterIcon');
+    if (btn) {
+      btn.textContent = isTimerRunning ? 'Pause' : 'Start';
+      btn.classList.toggle('active', isTimerRunning);
+    }
+    if (icon) icon.textContent = isTimerRunning ? '⏳' : '⏱';
+
+    if (isTimerRunning) {
+      timerInterval = setInterval(() => {
+        if (timerSeconds > 0) {
+          timerSeconds--;
+          const disp = document.getElementById('timerDisplay');
+          if (disp) disp.textContent = formatTimerTime(timerSeconds);
+          const bar = document.getElementById('timerRingBar');
+          if (bar) {
+            const progress = (timerTotal - timerSeconds) / timerTotal;
+            bar.style.strokeDashoffset = (138 * (1 - progress)).toString();
+          }
+        } else {
+          clearInterval(timerInterval);
+          isTimerRunning = false;
+          alert('🎉 Fokusblock abgeschlossen!');
+        }
+      }, 1000);
+    } else {
+      clearInterval(timerInterval);
+    }
+  }
+
+  // AMBIENT SOUND GENERATOR (Web Audio)
+  function toggleAmbientSound() {
+    const btn = document.getElementById('ambientBtn');
+    if (!isAmbientPlaying) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          output[i] = (b0 + b1 + b2) * 0.04;
+        }
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 850;
+        noiseNode.connect(filter);
+        filter.connect(audioCtx.destination);
+        noiseNode.start(0);
+        isAmbientPlaying = true;
+        if (btn) {
+          btn.textContent = '🌧 Pause';
+          btn.classList.add('playing');
+        }
+      } catch(e) {
+        alert('Web Audio blockiert.');
+      }
+    } else {
+      if (noiseNode) {
+        noiseNode.stop();
+        noiseNode.disconnect();
+        noiseNode = null;
+      }
+      isAmbientPlaying = false;
+      if (btn) {
+        btn.textContent = '🌧 Regen';
+        btn.classList.remove('playing');
+      }
+    }
+  }
+
+  // CHECKLIST LOGIK
+  function updateTasks() {
+    const total = document.querySelectorAll('#taskItems .nh-task-checkbox').length;
+    const checked = document.querySelectorAll('#taskItems .nh-task-checkbox:checked').length;
+    document.querySelectorAll('#taskItems .nh-task-row').forEach(row => {
+      const cb = row.querySelector('.nh-task-checkbox');
+      row.classList.toggle('done', cb && cb.checked);
+    });
+    const text = document.getElementById('taskProgressText');
+    const fill = document.getElementById('taskBarFill');
+    if (text) text.textContent = `${checked} von ${total} erledigt`;
+    if (fill) fill.style.width = total ? `${Math.round((checked / total) * 100)}%` : '0%';
+  }
+
+  function addNewTask(input) {
+    const text = input.value.trim();
+    if (!text) return;
+    appendTaskDirectly(text);
+    input.value = '';
+  }
+
+  function filterDesk(type, btn) {
+    document.querySelectorAll('.nh-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const grid = document.getElementById('deskGrid');
+    if (!grid) return;
+    const pages = UDATA.pages || [];
+    let filtered = pages;
+    if (type === 'heft') filtered = pages.filter(p => p.kind === 'heft');
+    else if (type === 'notion') filtered = pages.filter(p => p.kind !== 'heft');
+    
+    grid.innerHTML = filtered.slice(0, 3).map(p => `
+      <div class="nh-desk-card" onclick="alert('Öffnet Notiz: ${p.title.replace(/'/g, '')}')">
+        <div>
+          <div class="nh-desk-card-top">
+            <span class="nh-desk-card-type">${p.kind === 'heft' ? '📓 GoodNotes-Heft' : '📄 Notiz'}</span>
+            <span>${fmtDate(p.updated)}</span>
+          </div>
+          <div class="nh-desk-card-title">${p.title}</div>
+          <div class="nh-desk-card-snippet">${p.snippet || 'Kein Textauszug vorhanden...'}</div>
+        </div>
+        <div class="nh-desk-card-foot">
+          <span>${p.kind === 'heft' ? 'Stift & Skizzen' : 'Markdown Notiz'}</span>
+          <span style="color:var(--nh-terracotta);font-weight:600">Öffnen ›</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function saveScratchNote(input) {
+    const text = input.value.trim();
+    if (!text) return;
+    localStorage.setItem('impala67.scratchNote', text);
+    alert('Gedanke gespeichert: "' + text + '"');
+    input.value = '';
+  }
+
+  // BACKUP JSON IMPORT (Falls der Nutzer eine .json Backup-Datei laden möchte)
+  function handleBackupUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target.result);
+        if (json.pages) {
+          UDATA.pages = Object.values(json.pages);
+          if (json.cards) UDATA.cards = Object.values(json.cards);
+          populateSidebarTree();
+          setMode(activeMode);
+          alert('Backup erfolgreich geladen: ' + UDATA.pages.length + ' Seiten importiert!');
+        }
+      } catch (err) {
+        alert('Fehler beim Lesen der Backup-Datei: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // VERSUCH: Live IndexedDB direkt im Browser öffnen
+  async function tryConnectLiveIndexedDB() {
+    try {
+      const req = indexedDB.open('impala67');
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        if (db.objectStoreNames.contains('events')) {
+          console.log('[test-home] Live IndexedDB verbunden');
+        }
+      };
+    } catch { /* ignore */ }
+  }
+
+  // Initialisierung
+  tryConnectLiveIndexedDB();
+  populateSidebarTree();
+  setMode('atelier');
+</script>
+
+</body>
+</html>

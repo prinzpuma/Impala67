@@ -14,7 +14,7 @@ const renderTabs = (...args) => RENDER.renderTabs(...args);
 // und dürfen deshalb genauso wie Seiten als Tab gespeichert und wiederhergestellt werden.
 const syncableTabs = () => S.tabs.filter((id) => {
 	if (typeof id !== "string") return false;
-	if (id.startsWith("chat:")) return CHATS.load().some((chat) => chat.id === id.slice(5));
+	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5)));
 	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 }).slice(-12);
 let saveTimer = 0;
@@ -28,6 +28,29 @@ function saveSessionNow() {
 	clearTimeout(saveTimer);
 	saveTimer = 0;
 	return STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId });
+}
+
+function activateTab(pageId, { newTab = false } = {}) {
+	const existingIdx = S.tabs.indexOf(pageId);
+	const activeIdx = S.activeTabId != null ? S.tabs.indexOf(S.activeTabId) : -1;
+
+	if (existingIdx !== -1 && !newTab) {
+		// Bereits offen → dorthin wechseln (nicht nochmal anlegen)
+		S.activeTabId = pageId;
+	} else if (newTab || activeIdx === -1 || !S.tabs.length) {
+		// Explizit neuer Tab, oder noch gar keiner
+		if (existingIdx === -1) {
+			S.tabs.push(pageId);
+			if (S.tabs.length > 12) S.tabs.shift();
+		}
+		S.activeTabId = pageId;
+	} else {
+		// Notion-Default: Inhalt des aktiven Tabs ersetzen
+		S.tabs[activeIdx] = pageId;
+		// Dubletten entfernen, die durch Ersetzen entstanden sein könnten
+		S.tabs = S.tabs.filter((id, i) => id !== pageId || i === activeIdx);
+		S.activeTabId = pageId;
+	}
 }
 
 // ---------- Zentrale Navigation: Notion-artig ----------
@@ -46,7 +69,7 @@ export function openPage(pageId, opts) {
 	if (isChat) {
 		const chatId = pageId.slice(5);
 		S.currentChatId = chatId;
-		const s = CHATS.load().find((x) => x.id === chatId);
+		const s = CHATS.get(chatId);
 		S.chat = s ? s.messages || [] : [];
 		S.view = "chat";
 		S.sidebarMode = "chats"; // eine Topbar-Pille: Chat
@@ -71,30 +94,7 @@ export function openPage(pageId, opts) {
 		S.sidebarMode = "files"; // eine Topbar-Pille: Home
 	}
 
-	const existingIdx = S.tabs.indexOf(pageId);
-	const activeIdx = S.activeTabId != null ? S.tabs.indexOf(S.activeTabId) : -1;
-
-	if (existingIdx !== -1 && !opts.newTab) {
-		// Bereits offen → dorthin wechseln (nicht nochmal anlegen)
-		S.activeTabId = pageId;
-	} else if (opts.newTab || activeIdx === -1 || !S.tabs.length) {
-		// Explizit neuer Tab, oder noch gar keiner
-		if (existingIdx !== -1) {
-			S.activeTabId = pageId;
-		} else {
-			S.tabs.push(pageId);
-			if (S.tabs.length > 12) S.tabs.shift();
-			S.activeTabId = pageId;
-		}
-	} else {
-		// Notion-Default: Inhalt des aktiven Tabs ersetzen
-		S.tabs[activeIdx] = pageId;
-		S.activeTabId = pageId;
-		// Dubletten entfernen, die durch Ersetzen entstanden sein könnten
-		S.tabs = S.tabs.filter((id, i) => id !== pageId || i === activeIdx);
-		// activeIdx kann nach filter verrutscht sein
-		S.activeTabId = pageId;
-	}
+	activateTab(pageId, opts);
 
 	if (!opts.skipHistory) {
 		S.navHistory = S.navHistory.slice(0, S.navIndex + 1);
@@ -128,7 +128,7 @@ export async function closeTab(pageId) {
 	if (pageId.startsWith("chat:")) {
 		const chatId = pageId.slice(5);
 		const isActiveChat = S.currentChatId === chatId;
-		const messages = isActiveChat ? S.chat : ((CHATS.load().find((x) => x.id === chatId) || {}).messages || []);
+		const messages = isActiveChat ? S.chat : (CHATS.get(chatId)?.messages || []);
 		const busy = S.aiBusy && S.aiActiveChatId === chatId;
 		const lastIsUser = messages.length && messages[messages.length - 1].role === "user";
 		if (busy || lastIsUser) {

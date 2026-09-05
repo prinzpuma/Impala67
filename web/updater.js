@@ -114,11 +114,16 @@ function reloadWithCacheBust() {
 	location.replace(url.toString());
 }
 
-async function fetchJson(url) {
-	const requestUrl = new URL(url, location.href);
+async function fetchFresh(url, base) {
+	const requestUrl = new URL(url, base);
 	requestUrl.searchParams.set("t", String(Date.now()));
 	const response = await fetch(requestUrl, { cache: "no-store", credentials: "same-origin" });
 	if (!response.ok) throw new Error("HTTP " + response.status + " @ " + requestUrl.pathname);
+	return { response, requestUrl };
+}
+
+async function fetchJson(url) {
+	const { response, requestUrl } = await fetchFresh(url, location.href);
 	if ((response.headers.get("content-type") || "").toLowerCase().includes("text/html")) {
 		throw new Error("HTML statt JSON @ " + requestUrl.pathname);
 	}
@@ -126,10 +131,7 @@ async function fetchJson(url) {
 }
 
 async function fetchWorkerVersion() {
-	const requestUrl = new URL("./service-worker.js", import.meta.url);
-	requestUrl.searchParams.set("t", String(Date.now()));
-	const response = await fetch(requestUrl, { cache: "no-store", credentials: "same-origin" });
-	if (!response.ok) throw new Error("HTTP " + response.status + " @ " + requestUrl.pathname);
+	const { response, requestUrl } = await fetchFresh("./service-worker.js", import.meta.url);
 	const text = await response.text();
 	if (/^\s*</.test(text)) throw new Error("HTML statt Service Worker @ " + requestUrl.pathname);
 	const match = text.match(/const\s+CACHE\s*=\s*["']impala67-v([^"']+)["']/);

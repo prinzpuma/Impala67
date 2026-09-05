@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v248"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v252"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -14,6 +14,12 @@ const APP_FILES = [
 	"./",
 	"./index.html",
 	"./styles.css",
+	"./css/variables.css",
+	"./css/base.css",
+	"./css/layout.css",
+	"./css/components.css",
+	"./css/editor.css",
+	"./css/heft.css",
 	"./manifest.json",
 	// Der Update-Check fragt version.json mit no-store an. Der Fetch-Handler nimmt
 	// daher online immer den Serverstand, kann bei Netz-/Pages-Fehlern aber auf
@@ -36,6 +42,8 @@ const APP_FILES = [
 	"./cooperative.js",
 	"./checkpoint-scheduler.js",
 	"./srs.js",
+	"./types.js",
+	"./event-bus.js",
 	"./state.js",
 	"./state-checkpoint.js",
 	"./tools.js",
@@ -69,6 +77,7 @@ const APP_FILES = [
 	"./analyse.js",
 	"./controller.js",
 	"./editor.js",
+	"./editor-markdown.js",
 	"./render.js",
 	"./library.js",
 	"./export-media.js",
@@ -97,6 +106,8 @@ const APP_FILES = [
 	"./heft-geometry.js",
 	"./heft-pages-core.js",
 	"./heft-scan.js",
+	"./heft-tools.js",
+	"./heft-export.js",
 ];
 
 // Leichtgewichtige Basis-CDN-Bibliotheken beim Installieren vorab cachen.

@@ -77,6 +77,8 @@ body.mobile-ui #mSub {
 	width: fit-content;
 }
 body.mobile-ui #mTop .top-back-btn {
+	position: relative;
+	min-height: 44px;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -86,7 +88,7 @@ body.mobile-ui #mTop .top-back-btn {
 	font-size: 14.5px;
 	font-weight: 650;
 	cursor: pointer;
-	padding: 4px 0;
+	padding: 4px 8px 4px 0;
 	transition: opacity 0.12s;
 }
 body.mobile-ui #mTop .top-back-btn:active { opacity: 0.7; }
@@ -100,6 +102,7 @@ body.mobile-ui #mTop .mTop-right {
 }
 
 body.mobile-ui #mTop .icon-btn {
+	position: relative;
 	width: 34px;
 	height: 34px;
 	border-radius: 50%;
@@ -112,6 +115,11 @@ body.mobile-ui #mTop .icon-btn {
 	cursor: pointer;
 	padding: 0;
 	transition: background 0.08s, color 0.08s;
+}
+body.mobile-ui #mTop .icon-btn::after {
+	content: "";
+	position: absolute;
+	inset: -5px; /* Erweitert die Trefferfläche auf 44x44px (Apple HIG & WCAG) */
 }
 body.mobile-ui #mTop .icon-btn:active { background: var(--surface-active); color: var(--text); }
 body.mobile-ui #mTop .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
@@ -158,6 +166,7 @@ body.mobile-ui #mNav button {
 	justify-content: flex-start;
 	gap: 2px;
 	min-width: 0;
+	min-height: 44px;
 	padding: 4px 2px 2px;
 	border-radius: var(--radius-lg);
 	background: transparent;

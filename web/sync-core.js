@@ -5,6 +5,7 @@ const dec = new TextDecoder();
 
 export const CLOUD_SYNC_PROTOCOL = 4;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
+export const LOCAL_EVENT_METADATA_KEYS = Object.freeze(["seq", "_remote", "_remoteSource", "_derived"]);
 
 export const shouldUploadToSync = (event, target) => event?._remoteSource !== target;
 export const shouldUploadDelta = (localMaxSeq, uploadedSeq) => Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
@@ -52,14 +53,15 @@ export function prepareCloudEvents(events, { includeRemote = false } = {}) {
 	return (events || [])
 		.filter((event) => includeRemote || shouldUploadToSync(event, "cloudflare"))
 		.map((event) => {
-			const { seq, _remote, _remoteSource, _derived, ...wire } = event || {};
+			const wire = { ...(event || {}) };
+			for (const key of LOCAL_EVENT_METADATA_KEYS) delete wire[key];
 			return wire;
 		});
 }
 
 function prepareIncomingCloudEvent(event) {
 	if (!event || typeof event !== "object" || Array.isArray(event)) throw new Error("Cloud-Event ist ungültig.");
-	for (const key of ["seq", "_remote", "_remoteSource", "_derived"]) {
+	for (const key of LOCAL_EVENT_METADATA_KEYS) {
 		if (Object.hasOwn(event, key)) throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
 	}
 	return { ...event, _remote: true, _remoteSource: "cloudflare" };

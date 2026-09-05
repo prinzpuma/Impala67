@@ -1,0 +1,81 @@
+/* base.css — Impala67: CSS-Reset, Body-/HTML-Grundstile, Typografie, Keyframes & Scrollbars */
+
+* { box-sizing: border-box; margin: 0; padding: 0 }
+/* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus… */
+html, body { height: 100% }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: var(--font-base, 16px); line-height: 1.5; color: var(--text); background: var(--app-bg); overflow: hidden }
+/* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
+/* 🎨 (29. Juli) Kein Farbverlauf mehr: eine ruhige, gleichmäßige Fläche hinter den Panels.
+   Der Radial-Glow wirkte fleckig und ließ die Panels bei jeder Fenstergröße anders aussehen. */
+#bg { position: fixed; inset: 0; z-index: 0; background: var(--app-bg) }
+
+/* == Bewegungsprinzipien: ruhig, konsistent, performant == */
+/* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
+button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
+button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active { transform: scale(.98) }
+/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform, damit Text und Einrückung ruhig bleiben */
+.row:active, .deck-row:active { background: var(--surface-active) }
+
+/* Touchscreens (iPad, Tablets, Touch-Monitore): Kein Skalierungs-Zucken bei Berührung */
+@media (hover: none), (pointer: coarse) {
+	button:not(:disabled):active,
+	.tabchip:active,
+	.lib-card:active,
+	.cal-day:active,
+	.deck-row:active,
+	.navbtn:active,
+	.row:active,
+	.home-pill:active,
+	.home-continue:active {
+		transform: none !important;
+	}
+}
+/* Flächen heben sich beim Öffnen und beim Hover nur über Transfo… */
+.lib-card:hover, .deck-row:hover { transform: translateY(-2px) }
+/* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einble… */
+@keyframes uiEnter {
+	from { opacity: 0; transform: translateY(6px) scale(.985) }
+}
+#overlay:not([hidden]) .modal, .page-menu, .attach-menu:not([hidden]), .model-menu:not([hidden]) { animation: uiEnter var(--motion-base) var(--ease-out) both }
+/* Der aktive Arbeitsbereich reagiert beim Ein-/Ausblenden der Na… */
+#sidebar, #mainWrap, #panel { transition: background-color var(--motion-base) ease, border-color var(--motion-base) ease, opacity var(--motion-base) ease }
+
+/* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. */
+/* Feinschliff v11 (23. Juli, Nacht): EIN gemeinsamer Puls für alle „arbeitet gerade“-Anzeigen
+   (Sync-Wolke, KI-Status-Punkt, Thinking-Icon) — gleicher Rhythmus statt 3 fast identischer
+   Keyframes; der Reduce-Motion-Sonderfall entfällt, das globale Reduce-Motion greift ohnehin. */
+@keyframes softPulse {
+	50% { opacity: .4 }
+}
+.empty { color: var(--text2); padding: 16px; text-align: center }
+
+/* == Scrollbars & Responsive == */
+/* 🐛 Fix (27. Juli): EINE globale Scrollleiste. Die von :root geerbten Standard-Eigenschaften
+   (scrollbar-width/-color) schalten in Chromium die ::-webkit-Regeln ab — die waren dort toter
+   Code mit anderen Farben, in älteren Safaris blieb nur die unsichtbare Overlay-Leiste. Beide
+   Wege nutzen jetzt dieselben Tokens: überall sichtbar, überall identisch. */
+/* 🎨 (29. Juli) Ruhige, schlanke Leiste wie in macOS/Notion: keine Spur, keine Kanten —
+   nur ein voll gerundeter Daumen mit Luft drumherum. Gilt global (überall dieselben Tokens). */
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-track-piece { background: transparent; border: none }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: content-box; min-height: 28px }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
+::-webkit-scrollbar-corner { background: transparent }
+
+/* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Z… */
+html, body { overscroll-behavior: none }
+button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { touch-action: manipulation }
+
+/* == ✨ Feinschliff v12 (25. Juli): Typografie-Details, keine neue Struktur == */
+/* Zahlen springen beim Hochzählen nicht mehr in der Breite (Timer, Fällig-Zähler, Statistik). */
+.kpi-num, .lz-total, .lz-bar-col small, .deck-badge, .study-counts-row, .lib-tab-n, .palette-foot kbd { font-variant-numeric: tabular-nums }
+/* Überschriften brechen ausgewogen statt mit einem einzelnen Restwort in der letzten Zeile. */
+h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-wrap: balance }
+/* Fließtext vermeidet einzeln stehende Schlusszeilen — eine Regel, wirkt in Editor, Chat und Karten. */
+.md, .blk-body, .card-face { text-wrap: pretty }
+
+
+button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
+
+body.reduce-motion * { animation: none !important; transition: none !important }

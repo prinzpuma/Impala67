@@ -22,6 +22,7 @@ const CACHE_LIMIT = 200; // kürzt NUR den lokalen Cache — niemals das Event-L
 
 const stamp = (...vals) => String(vals.find(Boolean) || U.now());
 const atLeast = (a, b) => String(a || "") >= String(b || "");
+const isTombstoneActive = (cur, updated) => Boolean(cur?.deleted && atLeast(cur.deletedAt, updated));
 const sorted = (list) => [...list].sort((a, b) => (String(b.updated) < String(a.updated) ? -1 : (String(b.updated) > String(a.updated) ? 1 : 0)));
 
 // Fingerabdruck einer Sitzung. Zeitstempel + Titel + Anzahl genügen, weil persist()
@@ -145,7 +146,7 @@ export const CHATS = {
 		for (const s of sessions) {
 			const cur = S.chatSessions?.[s.id];
 			// Gelöschte Sitzung nur wiederbeleben, wenn die Kopie NEUER als der Löschzeitpunkt ist.
-			if (cur?.deleted && atLeast(cur.deletedAt, s.updated)) continue;
+			if (isTombstoneActive(cur, s.updated)) continue;
 			if (!cur || cur.deleted || sig(normalize(cur)) !== sig(s)) queueSync("chatUpsert", s);
 		}
 		return sessions;
@@ -171,7 +172,7 @@ export const CHATS = {
 		for (const s of readLocal().map(normalize).filter(Boolean)) {
 			const cur = S.chatSessions?.[s.id];
 			// FIX: ein Tombstone hat Vorrang — vorher hob der Start gelöschte Chats zurück ins Log.
-			if (cur?.deleted && atLeast(cur.deletedAt, s.updated)) continue;
+			if (isTombstoneActive(cur, s.updated)) continue;
 			if (!cur || String(s.updated) > String(cur.updated || "")) await STATE.dispatch("chatUpsert", s);
 		}
 	},

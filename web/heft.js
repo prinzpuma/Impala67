@@ -8,6 +8,8 @@ import { PDFS } from "./pdfs.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
+import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
+import { EXPORT_W, exportName, exportIdxs, buildPdf, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -35,9 +37,6 @@ export const HEFT = (() => {
 	const PAGE_W = 1000, PAGE_H = 1414;
 	const KEY = (p) => "heft:" + p;
 	const INK_LEGACY = (p) => "impala67.ink." + p;
-	const COLORS = ["#1c1c1e", "#2f6fed", "#e0483e", "#1f9d55", "#f5b800", "#8b7cc8"];
-	const SIZES = [["F", 1.6], ["M", 3], ["B", 5.5]];
-	const PAPERS = [["lined", "☰", "Liniert"], ["grid", "▦", "Kariert"], ["dots", "⣿", "Punkte"], ["blank", "▢", "Blanko"]];
 
 	const docs = {};
 	const thumbs = {};
@@ -52,12 +51,12 @@ export const HEFT = (() => {
 	let pageSlots = [];
 	let detailVisible = new Set();
 
-	const savedTools = (() => { try { return JSON.parse(localStorage.getItem("impala67HeftTools") || "{}"); } catch (err) { return {}; } })();
-	let tool = "pen", color = savedTools.color || COLORS[0], size = savedTools.size || 3, onlyPen = savedTools.onlyPen !== false;
-	let eraserSize = savedTools.eraserSize || 16;
+	const savedTools = loadToolPrefs();
+	let tool = "pen", color = savedTools.color, size = savedTools.size, onlyPen = savedTools.onlyPen;
+	let eraserSize = savedTools.eraserSize;
 	let inlineEd = null;
 	let lastEmptyTap = null;
-	function saveToolPrefs() { try { localStorage.setItem("impala67HeftTools", JSON.stringify({ color, size, onlyPen, eraserSize })); } catch (err) {  } }
+	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize }); }
 	const activePenPointers = new Set();
 	let lastPenUpAt = 0;
 	const PEN_GRACE_MS = 400;
@@ -709,7 +708,7 @@ export const HEFT = (() => {
 	};
 	const scrollEl = () => (host ? host.querySelector(".heft-scroll") : null);
 	const pagesEl = () => (host ? host.querySelector(".heft-pages") : null);
-	const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+	const clamp = (v, lo, hi) => U.clamp(v, lo, hi);
 	// Geometrie aendert sich nur bei layout()/DOM-Neuaufbau. Die alten Getter
 	// erzwangen dagegen in jedem Scroll-Frame mehrere synchrone Layout-Messungen.
 	let geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] };
@@ -2969,53 +2968,7 @@ export const HEFT = (() => {
 		renderShots();
 	}
 
-	function buildPdf(shots) {
-		const tenc = new TextEncoder();
-		const parts = [];
-		const offsets = [];
-		let len = 0;
-		const push = (u8) => { parts.push(u8); len += u8.length; };
-		const pushStr = (s) => push(tenc.encode(s));
-		const A4W = "595.28", A4H = "841.89";
-		pushStr("%PDF-1.4\n");
-		const n = shots.length;
-		const pageObj = (i) => 3 + i * 3, imgObj = (i) => 4 + i * 3, cntObj = (i) => 5 + i * 3;
-		const obj = (num, body) => { offsets[num] = len; pushStr(num + " 0 obj\n" + body + "\nendobj\n"); };
-		obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
-		obj(2, "<< /Type /Pages /Kids [" + shots.map((_, i) => pageObj(i) + " 0 R").join(" ") + "] /Count " + n + " >>");
-		shots.forEach((sh, i) => {
-			const k = Math.min(595.28 / sh.w, 841.89 / sh.h);
-			const w = sh.w * k, h = sh.h * k, ox = (595.28 - w) / 2, oy = (841.89 - h) / 2;
-			obj(pageObj(i), "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + A4W + " " + A4H + "] " +
-				"/Resources << /XObject << /Im" + i + " " + imgObj(i) + " 0 R >> >> /Contents " + cntObj(i) + " 0 R >>");
-			const jpg = dataUrlBytes(sh.dataUrl);
-			offsets[imgObj(i)] = len;
-			pushStr(imgObj(i) + " 0 obj\n<< /Type /XObject /Subtype /Image /Width " + sh.w + " /Height " + sh.h +
-				" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpg.length + " >>\nstream\n");
-			push(jpg);
-			pushStr("\nendstream\nendobj\n");
-			const cs = "q " + w.toFixed(2) + " 0 0 " + h.toFixed(2) + " " + ox.toFixed(2) + " " + oy.toFixed(2) + " cm /Im" + i + " Do Q";
-			obj(cntObj(i), "<< /Length " + cs.length + " >>\nstream\n" + cs + "\nendstream");
-		});
-		const xrefAt = len;
-		const count = 3 + n * 3;
-		let xref = "xref\n0 " + count + "\n0000000000 65535 f \n";
-		for (let i = 1; i < count; i++) xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
-		pushStr(xref + "trailer\n<< /Size " + count + " /Root 1 0 R >>\nstartxref\n" + xrefAt + "\n%%EOF");
-		const out = new Uint8Array(len);
-		let o = 0;
-		parts.forEach((p) => { out.set(p, o); o += p.length; });
-		return out;
-	}
-	function dataUrlBytes(du) {
-		const bin = atob(du.slice(du.indexOf(",") + 1));
-		const u = new Uint8Array(bin.length);
-		for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-		return u;
-	}
-
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
-	// DRY: nutzt renderPageCanvas fürs Zeichnen und buildPdf aus dem Scanner.
 	async function loadDocFor(pageId) {
 		const d = pageId === pid && doc ? doc : await load(pageId);
 		if (!d) return null;
@@ -3025,82 +2978,33 @@ export const HEFT = (() => {
 		await Promise.all(jobs);
 		return d;
 	}
-	const exportName = (pageId) => (String((S.pages[pageId] && S.pages[pageId].title) || "Heft").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Heft");
-	const exportIdxs = (d, indices) => (indices && indices.length ? indices : d.pages.map((_, i) => i));
-	// FIX unscharfe Exporte: vorher 1600px Breite (~190 dpi auf A4) — jetzt 300 dpi.
-	const EXPORT_W = 2480;
-	const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 	async function pdfBlob(pageId, indices, onStatus) {
-		const d = await loadDocFor(pageId);
-		if (!d) return null;
-		const idxs = exportIdxs(d, indices);
-		const shots = [];
-		for (let n = 0; n < idxs.length; n++) {
-			const i = idxs[n]; if (onStatus) onStatus("Erzeuge Seite " + (n + 1) + " von " + idxs.length + " …");
-			const c = renderPageCanvas(d.pages[i], EXPORT_W);
-			shots.push({ dataUrl: c.toDataURL("image/jpeg", 0.95), w: c.width, h: c.height });
-			await nextFrame(); // 300-dpi-Seiten sind teuer — UI zwischen den Seiten atmen lassen
-		}
-		return new Blob([buildPdf(shots)], { type: "application/pdf" });
+		return exportPdfBlob(pageId, indices, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
 	}
 	async function exportPdf(pageId, indices) {
-		const blob = await pdfBlob(pageId, indices);
-		if (!blob) return;
-		U.downloadBlob(exportName(pageId) + ".pdf", blob);
-		const d = await loadDocFor(pageId), idxs = d ? exportIdxs(d, indices) : [];
-		if (U.toast) U.toast("PDF mit " + idxs.length + " Seite(n) gespeichert");
+		return runExportPdf(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
 	}
 	async function imageFiles(pageId, indices, baseName, onStatus) {
-		const d = await loadDocFor(pageId);
-		if (!d) return [];
-		const idxs = exportIdxs(d, indices);
-		const files = [];
-		for (let n = 0; n < idxs.length; n++) {
-			const i = idxs[n];
-			if (onStatus) onStatus("Erzeuge Bild " + (n + 1) + " von " + idxs.length + " …");
-			const c = renderPageCanvas(d.pages[i], EXPORT_W);
-			files.push(new File([dataUrlBytes(c.toDataURL("image/png"))], baseName + "-seite-" + (i + 1) + ".png", { type: "image/png" }));
-			await nextFrame();
-		}
-		return files;
+		return exportImageFiles(pageId, indices, baseName, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
 	}
 	async function exportImages(pageId, indices) {
-		const files = await imageFiles(pageId, indices, exportName(pageId));
-		for (let n = 0; n < files.length; n++) { U.downloadBlob(files[n].name, files[n]); if (n < files.length - 1) await new Promise((r) => setTimeout(r, 350)); }
-		const idxs = files;
-		if (U.toast) U.toast(idxs.length + " Bild(er) gespeichert");
-	}
-	async function deliverExport(files) {
-		let canShare = false;
-		try { canShare = !!(navigator.share && navigator.canShare?.({ files })); } catch { /* Download-Fallback */ }
-		if (canShare) {
-			try { await navigator.share({ title: "Impala67 Heft", files }); return "shared"; }
-			catch (error) { if (error && error.name === "AbortError") return "cancelled"; }
-		}
-		for (let i = 0; i < files.length; i++) { U.downloadBlob(files[i].name, files[i]); if (i < files.length - 1) await new Promise((r) => setTimeout(r, 350)); }
-		return "saved";
+		return runExportImages(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
 	}
 	function openExportDialog() {
 		if (!pid || !exportSel || !exportSel.size) return;
-		const pageId = pid, indices = [...exportSel].sort((a, b) => a - b), defaultName = exportName(pageId);
+		const pageId = pid, indices = [...exportSel].sort((a, b) => a - b);
 		closePop();
-		const body = '<div class="heft-transfer-summary"><span>↗</span><div><small>Auswahl</small><b>' + indices.length + (indices.length === 1 ? ' Seite' : ' Seiten') + '</b><em>' + U.esc((S.pages[pageId] && S.pages[pageId].title) || "Heft") + '</em></div></div>' +
-			'<div class="heft-transfer-field"><label for="heftExportName">Dateiname</label><input id="heftExportName" value="' + U.esc(defaultName) + '"></div><h3>Format</h3><div class="heft-transfer-formats">' +
-			'<label><input type="radio" name="heftExportFormat" value="pdf" checked><span><b>PDF-Dokument</b><small>Alle ausgewählten Seiten in einer Datei</small></span><i>✓</i></label>' +
-			'<label><input type="radio" name="heftExportFormat" value="images"><span><b>Einzelne Bilder</b><small>Eine PNG-Datei pro ausgewählter Seite</small></span><i>✓</i></label></div>';
-		const o = transferOverlay("Heft exportieren", "Format prüfen und anschließend teilen", body, '<button type="button" data-hetransfercancel="1">Abbrechen</button><button type="button" class="primary" data-hetransferexport="1">Exportieren</button>');
-		o.querySelector("[data-hetransfercancel]").addEventListener("click", closeTransferOverlay);
-		o.querySelector("[data-hetransferexport]").addEventListener("click", async (e) => {
-			const button = e.currentTarget, label = button.textContent, format = o.querySelector('input[name="heftExportFormat"]:checked').value;
-			const name = (o.querySelector("#heftExportName").value || defaultName).replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || defaultName;
-			button.disabled = true; button.textContent = "Wird erstellt …";
-			try {
-				let files;
-				if (format === "pdf") { const blob = await pdfBlob(pageId, indices, (s) => { button.textContent = s; }); files = [new File([blob], name + ".pdf", { type: "application/pdf" })]; }
-				else files = await imageFiles(pageId, indices, name, (s) => { button.textContent = s; });
-				const result = await deliverExport(files); if (result !== "cancelled") { closeTransferOverlay(); if (U.toast) U.toast(result === "shared" ? "Export geteilt" : "Export gespeichert", "success"); }
-				else { button.disabled = false; button.textContent = label; }
-			} catch (error) { button.disabled = false; button.textContent = label; if (U.toast) U.toast("Export fehlgeschlagen: " + ((error && error.message) || error), "error"); }
+		return renderExportDialog({
+			pageId,
+			indices,
+			defaultName: exportName(pageId),
+			title: (S.pages[pageId] && S.pages[pageId].title) || "Heft",
+			createPdfBlob: (pId, idxs, onStatus) => pdfBlob(pId, idxs, onStatus),
+			createImageFiles: (pId, idxs, name, onStatus) => imageFiles(pId, idxs, name, onStatus),
+			deliver: deliverExport,
+			transferOverlay,
+			closeTransferOverlay,
+			toast: U.toast,
 		});
 	}
 	const readyScanOuts = () => scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);

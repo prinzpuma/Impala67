@@ -9,6 +9,29 @@ function withLoadTimeout(task, label) {
 	});
 	return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
 }
+
+async function cacheOptionalAsset(url, label) {
+	if (typeof caches === "undefined") return;
+	try {
+		const cache = await caches.open("impala67-optional-modules");
+		const match = await cache.match(url);
+		if (!match) {
+			await cache.add(url);
+		}
+	} catch (e) {
+		throw new Error(label + " " + url + " geladen, aber Offline-Speicherung fehlgeschlagen: " + ((e && e.message) || e));
+	}
+}
+
+function readWith(file, method) {
+	return new Promise((resolve, reject) => {
+		const r = new FileReader();
+		r.onload = () => resolve(r.result);
+		r.onerror = () => reject(r.error);
+		r[method](file);
+	});
+}
+
 export const U = {
 	uid: () => crypto.randomUUID(),
 
@@ -39,17 +62,7 @@ export const U = {
 				});
 			}
 			// Strikte Garantie: Speichern im versionsübergreifenden Offline-Cache MUSS erfolgreich sein
-			if (typeof caches !== "undefined") {
-				try {
-					const cache = await caches.open("impala67-optional-modules");
-					const match = await cache.match(src);
-					if (!match) {
-						await cache.add(src);
-					}
-				} catch (e) {
-					throw new Error("Modul " + src + " geladen, aber Offline-Speicherung fehlgeschlagen: " + ((e && e.message) || e));
-				}
-			}
+			await cacheOptionalAsset(src, "Modul");
 			return true;
 		})(), src).catch((err) => {
 			U._pendingLoads.delete(src);
@@ -73,17 +86,7 @@ export const U = {
 				l.onload = () => { l.dataset.loaded = "1"; resolve(); };
 				l.onerror = () => reject(new Error("Netzwerkfehler beim Laden von " + href));
 			});
-			if (typeof caches !== "undefined") {
-				try {
-					const cache = await caches.open("impala67-optional-modules");
-					const match = await cache.match(href);
-					if (!match) {
-						await cache.add(href);
-					}
-				} catch (e) {
-					throw new Error("Stylesheet " + href + " geladen, aber Offline-Speicherung fehlgeschlagen: " + ((e && e.message) || e));
-				}
-			}
+			await cacheOptionalAsset(href, "Stylesheet");
 			return true;
 		})(), href);
 	},
@@ -279,6 +282,8 @@ export const U = {
 		let timer;
 		return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 	},
+
+	clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
 
 	el: (id) => document.getElementById(id),
 
@@ -774,18 +779,8 @@ export const U = {
 
 	// FileReader-Helfer (Promise statt Callback). Lehnen jetzt mit r.error statt dem
 	// rohen ProgressEvent ab — konsistent mit den anderen Promise-Helfern hier.
-	readAsText: (f) => new Promise((resolve, reject) => {
-		const r = new FileReader();
-		r.onload = () => resolve(r.result);
-		r.onerror = () => reject(r.error);
-		r.readAsText(f);
-	}),
-	readAsBuffer: (f) => new Promise((resolve, reject) => {
-		const r = new FileReader();
-		r.onload = () => resolve(r.result);
-		r.onerror = () => reject(r.error);
-		r.readAsArrayBuffer(f);
-	}),
+	readAsText: (f) => readWith(f, "readAsText"),
+	readAsBuffer: (f) => readWith(f, "readAsArrayBuffer"),
 
 	// Bild-Dateiauswahl-Dialog (Cover-Upload kam vorher zweimal fast wortgleich vor:
 	// app.js fürs Editor-Cover, library.js fürs Bibliotheks-Cover). Liefert die
@@ -800,11 +795,10 @@ export const U = {
 
 	// ArrayBuffer ⇄ Base64 (für Export/Import der PDFs)
 	bufToB64(buf) {
-		const bytes = new Uint8Array(buf);
+		const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
 		let bin = "";
-		const CHUNK = 0x8000;
-		for (let i = 0; i < bytes.length; i += CHUNK) {
-			bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+		for (let i = 0; i < bytes.length; i += 0x8000) {
+			bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
 		}
 		return btoa(bin);
 	},

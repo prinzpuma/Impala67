@@ -1,104 +1,16 @@
-/* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeld… */
-/* Kompakt (density-compact): randlose Fläche, Panels bis Kante,… */
-body.density-compact { --sidebar-w: 236px; background: var(--panel-solid) }
-/* 🎯 Kompakt: KEINE Trennlinie unter den Pillen (Home/Chat/Karten/Suche). Die Kante lag
-   direkt über dem Seitenbaum und wirkte wie ein Strich mitten im Nichts. */
-body.density-compact .topbar { border-bottom: none; padding-bottom: 2px }
-body.density-compact #bg { display: none }
-body.density-compact #app { width: 100%; min-width: 0; gap: 0; padding: 0; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 320px; background: var(--panel-solid) }
-body.density-compact.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
-body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0 }
-body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid) }
-body.density-compact .panel-head { border-bottom-color: var(--edge) }
-body.density-compact:not(.mobile-ui) #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px }
-body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px) }
-body.density-compact .row { padding-top: 4px; padding-bottom: 4px }
-body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px }
-body.density-compact .home { padding: 24px 28px }
-body.density-compact :where(.library) { padding: 24px 30px }
+@import url("./css/variables.css");
+@import url("./css/base.css");
+@import url("./css/layout.css");
+@import url("./css/components.css");
+@import url("./css/editor.css");
+@import url("./css/heft.css");
 /* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne u… */
 @media (pointer: coarse) {
 	#tree .row, .deck-tree-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
 }
-/* Kernfarben */
-/* UI-Fix v7 (Kontrast): 0.60 → 0.68 — kleiner Meta-Text (11–12px… */
-/* Neutrale Flächen — alle Komponenten greifen auf dieselbe Skala… */
-/* Einheitliches Motion-System: nur kurze, funktionale Übergänge. */
-/* Karten-Pille nutzt dieselbe Label-Regel wie Home/Chat (nur .ac… */
-/* == Design-System v2 — zentrale Skalen statt komponentenweiser E == */
-/* UI-Fix v7: dokumentierte Z-Index-Skala statt magischer Einzelw… */
-/* Modell-/Kontext-Menüs */
-/* Slash-/Block-/Mathe-Popover im Editor */
-/* runder KI-Knopf unten rechts */
-/* mobile Dock-Pille */
-/* Abdunkler hinter dem Navigator-Sheet */
-/* Sidebar als Bottom-Sheet */
-/* KI-Panel als Vollbild-Sheet */
-/* Anhang-Menü (über dem KI-Sheet) */
-/* Dialoge */
-/* Strg+K */
-/* Dokument-Scanner */
-/* Scanner-Zuschnitt */
-/* Toasts — immer zuoberst */
-/* == Feinschliff v8: Plattform-Konsistenz & Vereinheitlichung == */
-/* == Feinschliff v9: Details, native Controls, Touch-Ziele == */
-:root { --bg0: #05070d; --bg1: #0a1120; --panel-solid: #191919; --sidebar-bg: #202020; --menu-bg: #1f2127; --bubble: #2c2e33; --text: rgba(255, 255, 255, 0.92); --text2: rgba(255, 255, 255, 0.68); --accent-rgb: 111 195 255; --danger-rgb: 233 115 102; --success-rgb: 114 188 143; --accent: rgb(var(--accent-rgb)); --accent-soft: rgb(var(--accent-rgb) / .12); --accent-border: rgb(var(--accent-rgb) / .35); --danger: rgb(var(--danger-rgb)); --danger-soft: rgb(var(--danger-rgb) / .14); --danger-border: rgb(var(--danger-rgb) / .5); --success: rgb(var(--success-rgb)); --success-soft: rgb(var(--success-rgb) / .15); --success-border: rgb(var(--success-rgb) / .45); --surface-faint: rgba(255, 255, 255, 0.02); --surface-subtle: rgba(255, 255, 255, 0.03); --surface: rgba(255, 255, 255, 0.04); --surface-hover: rgba(255, 255, 255, 0.06); --surface-hover-strong: rgba(255, 255, 255, 0.09); --surface-active: rgba(255, 255, 255, 0.10); --edge-soft: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.14); --input-bg: rgba(0, 0, 0, 0.25); --overlay-bg: rgba(0, 0, 0, 0.45); --elev-1: 0 1px 3px rgba(0,0,0,.35); --elev-2: 0 10px 28px rgba(0,0,0,.45); --elev-3: 0 20px 56px rgba(0,0,0,.55); --drop-1: 0 8px 18px rgba(0,0,0,.30); --drop-2: 0 14px 24px rgba(0,0,0,.40); --glow-1: #12151b; --glow-2: #0b0d11; --glow-3: #08090c; --warn: #e8c65a; --on-accent: #081018; --radius-xs: 4px; --radius-pill: 999px; --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.22, 1, .36, 1); --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms; --sidebar-w: 260px; --app-bg: #191919; --scroll-thumb: rgba(255,255,255,.16); --scroll-thumb-hover: rgba(255,255,255,.30); --scroll-track: transparent; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 20px; --text-xl: 30px; --content-width: 920px; --z-menu: 40; --z-editor-pop: 400; --z-fab: 1100; --z-dock: 1210; --z-scrim: 1240; --z-mobile-sheet: 1250; --z-graph: 1280; --z-ai-sheet: 1300; --z-attach: 1350; --z-overlay: 1400; --z-palette: 1500; --z-scan: 1600; --z-scan-edit: 1700; --z-toast: 2000; --c-gray: 155 155 155; --c-red: 255 115 105; --c-orange: 255 163 68; --c-yellow: 255 220 73; --c-green: 77 171 154; --c-blue: 82 156 202; --c-purple: 154 109 215; --c-pink: 226 85 161; color-scheme: dark; accent-color: var(--accent) }
-/* Popover und Dialoge nutzen denselben neutralen Ton wie die App-Navigation. */
-:root { --menu-bg: #202020 }
-/* == Bewegungsprinzipien: ruhig, konsistent, performant == */
-/* Kleine direkte Interaktionen erhalten eine einheitliche Rückme… */
-button, .row, .tab, .tabchip, .navbtn, .lib-card, .cal-day, .deck-row, .page-menu button, .menu-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
-button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active { transform: scale(.98) }
-/* WICHTIG: Baum- und Stapelzeilen bekommen beim Antippen KEIN transform, damit Text und Einrückung ruhig bleiben */
-.row:active, .deck-row:active { background: var(--surface-active) }
-
-/* Touchscreens (iPad, Tablets, Touch-Monitore): Kein Skalierungs-Zucken bei Berührung */
-@media (hover: none), (pointer: coarse) {
-	button:not(:disabled):active,
-	.tabchip:active,
-	.lib-card:active,
-	.cal-day:active,
-	.deck-row:active,
-	.navbtn:active,
-	.row:active,
-	.home-pill:active,
-	.home-continue:active {
-		transform: none !important;
-	}
-}
-/* Flächen heben sich beim Öffnen und beim Hover nur über Transfo… */
-.lib-card:hover, .deck-row:hover { transform: translateY(-2px) }
-/* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einble… */
-@keyframes uiEnter {
-	from { opacity: 0; transform: translateY(6px) scale(.985) }
-}
-#overlay:not([hidden]) .modal, .page-menu, .attach-menu:not([hidden]), .model-menu:not([hidden]) { animation: uiEnter var(--motion-base) var(--ease-out) both }
-/* Der aktive Arbeitsbereich reagiert beim Ein-/Ausblenden der Na… */
-#sidebar, #mainWrap, #panel { transition: background-color var(--motion-base) ease, border-color var(--motion-base) ease, opacity var(--motion-base) ease }
-* { box-sizing: border-box; margin: 0; padding: 0 }
-/* iPadOS zeichnet die Flaeche ausserhalb/hinter der App-Box aus… */
-html, body { height: 100% }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: var(--font-base, 16px); line-height: 1.5; color: var(--text); background: var(--app-bg); overflow: hidden }
-/* Hintergrund: ruhig und flach — nur eine dezente Aufhellung oben */
-/* 🎨 (29. Juli) Kein Farbverlauf mehr: eine ruhige, gleichmäßige Fläche hinter den Panels.
-   Der Radial-Glow wirkte fleckig und ließ die Panels bei jeder Fenstergröße anders aussehen. */
-#bg { position: fixed; inset: 0; z-index: 0; background: var(--app-bg) }
-#app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: 12px; height: 100dvh; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
-/* Flache Panels, dezente Kanten, kein Glas-Look */
-#sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
-/* 🎨 (29. Juli) Zwei feste Töne aus der Vorlage: Navigation #202020, Mitte + KI-Panel #191919. */
-#sidebar { background: var(--sidebar-bg) }
 /* == Sidebar == */
 #sidebar { display: flex; flex-direction: column; padding: 14px 10px; gap: 10px }
 #search { width: 100% }
-input, textarea, select { background: var(--input-bg); color: var(--text); border: 1px solid var(--edge); border-radius: var(--radius-md); padding: 8px 10px; font: inherit; outline: none }
-/* Native Selects: dunkles OS-Popup + eigener Chevron statt hässl… */
-select { appearance: none; -webkit-appearance: none; cursor: pointer; color-scheme: dark; padding-right: 30px; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(255,255,255,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px 8px }
-body.light select { color-scheme: light; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(20,20,20,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>") }
-select option, select optgroup { background: var(--menu-bg); color: var(--text) }
-/* ✨ Design-Politur v13 (26. Juli): Fokus-Ring wie am Composer (3px accent-soft) — einheitliches Fokus-Feedback für ALLE Eingaben statt nur Rahmenfarbe. Editor-Blöcke (.blk-input) und Composer bleiben unverändert (eigene box-shadow-Regeln gewinnen). */
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
-#paletteInput:focus { box-shadow: none }
 #tree { flex: 1; overflow-y: auto }
 .row { display: flex; align-items: center; gap: 2px; padding: 7px 8px; border-radius: var(--radius-md); cursor: pointer; color: var(--text2) }
 .row-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px }
@@ -133,18 +45,7 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 .side-foot button:hover { background: var(--edge-soft); color: var(--text) }
 .row-btns { display: flex; gap: 8px }
 .row-btns button { flex: 1 }
-button { background: var(--edge-soft); color: var(--text); border: none; border-radius: var(--radius-sm); padding: 6px 10px; font: inherit; font-size: var(--text-base); cursor: pointer; min-height: 32px }
-button:hover { background: var(--surface-active) }
-button.danger { color: var(--danger) }
 #btnReview.attention { color: var(--accent) }
-/* Drive-Status: ruhig, direkt am vorhandenen Sync-Knopf. */
-/* Feinschliff v11 (23. Juli, Nacht): EIN gemeinsamer Puls für alle „arbeitet gerade“-Anzeigen
-   (Sync-Wolke, KI-Status-Punkt, Thinking-Icon) — gleicher Rhythmus statt 3 fast identischer
-   Keyframes; der Reduce-Motion-Sonderfall entfällt, das globale Reduce-Motion greift ohnehin. */
-@keyframes softPulse {
-	50% { opacity: .4 }
-}
-.empty { color: var(--text2); padding: 16px; text-align: center }
 /* Ein-/Ausklapp-Pfeile (Workspaces und Seiten mit Unterseiten) */
 .row-chevron { min-height: 0; width: 16px; height: 16px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-3xs); display: flex; align-items: center; justify-content: center; transition: transform .12s; flex-shrink: 0 }
 .row-chevron.open { transform: rotate(90deg) }
@@ -158,12 +59,6 @@ button.danger { color: var(--danger) }
 .row-chevron:hover { background: var(--surface-active) }
 /* Floating-Menüs: eine Surface für ⋯/Teilen/Anhang/Refine (wie m… */
 .row { position: relative }
-.page-menu, .attach-menu, .refine-menu { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 180px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--elev-2) }
-.page-menu { position: absolute; top: 100%; right: 6px; z-index: 9; margin-top: 2px }
-.page-menu button, .attach-menu button, .refine-menu button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: var(--text-sm); padding: 8px 10px; border: none; border-radius: var(--radius-sm); min-height: 34px }
-.page-menu button:hover, .attach-menu button:hover, .refine-menu button:hover { background: var(--surface-hover-strong); color: var(--text) }
-.page-menu button.danger { color: var(--danger) }
-.page-menu button.danger:hover { background: var(--danger-soft); color: var(--danger) }
 /* Papierkorb: Liste gelöschter Seiten mit Wiederherstellen/Endgü… */
 .trash-list { display: flex; flex-direction: column; gap: 4px; margin-top: 12px }
 .trash-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid var(--edge-soft) }
@@ -275,16 +170,10 @@ button.danger { color: var(--danger) }
 .menu-label { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 8px 8px 3px }
 /* UI-Fix v7: min. 11px */
 .menu-note { font-size: var(--text-sm); color: var(--text2); padding: 8px }
-.menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: var(--text-sm); padding: 8px 10px; border-radius: var(--radius-sm) }
-.menu-item:hover { background: var(--surface-hover); color: var(--text) }
 .menu-item.active { background: var(--accent-soft); color: var(--text) }
 .menu-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .menu-check { color: var(--accent); flex-shrink: 0; font-size: var(--text-xs) }
 .menu-sep { height: 1px; background: var(--surface-hover); margin: 6px 4px }
-.menu-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px }
-.menu-chip { min-height: 0; padding: 4px 9px; font-size: var(--text-xs); border-radius: var(--radius-lg); background: var(--surface); color: var(--text2) }
-.menu-chip:hover { background: var(--surface-active); color: var(--text) }
-.menu-chip.active { background: var(--accent-soft); color: var(--accent) }
 /* Modell-Menü: zwei schlanke Notion-artige Untermenüs statt eine… */
 .model-submenu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 8px; text-align: left; background: transparent; color: var(--text); font-size: var(--text-sm) }
 .model-submenu-row:hover { background: var(--surface-hover) }
@@ -413,16 +302,6 @@ button.danger { color: var(--danger) }
 .md table { border-collapse: collapse }
 .md th, .md td { border: 1px solid var(--edge); padding: 4px 10px }
 .md img { max-width: 100%; border-radius: var(--radius-md); display: block; margin: 6px 0 }
-/* == Overlay / Modal == */
-/* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-… */
-#overlay { position: fixed; inset: 0; z-index: var(--z-overlay); background: var(--overlay-bg); display: grid; place-items: center }
-/* Versteckte Ebenen dürfen niemals Klicks abfangen — wichtig bei… */
-#overlay[hidden], #palette[hidden], .attach-menu[hidden], .model-menu[hidden] { display: none !important; pointer-events: none !important }
-.modal { width: min(520px, 92vw); padding: 24px; display: flex; flex-direction: column; gap: 12px; background: var(--menu-bg); box-shadow: var(--elev-3) }
-.modal h3 { margin-bottom: 4px }
-.modal label { font-size: var(--text-sm); color: var(--text2); display: block; margin-bottom: 4px }
-.modal input { width: 100% }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px }
 .anki-import-modal { width: min(600px, 92vw) }
 .anki-import-format { max-height: 220px; overflow: auto; padding: 10px; margin-top: 8px; white-space: pre-wrap; color: var(--text2); background: var(--surface); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); font-size: var(--text-xs) }
 .anki-import-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 10px; background: var(--surface); border-radius: var(--radius-md) }
@@ -481,9 +360,6 @@ button.danger { color: var(--danger) }
 .cover-grid { display: flex; gap: 8px }
 .cover-swatch { width: 52px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--edge); padding: 0 }
 .cover-swatch:hover { outline: 2px solid var(--accent) }
-/* == KI-Panel einklappen / Vollbild == */
-body.panel-collapsed #panel { display: none }
-body.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
 /* == Linke Sidebar + runder KI-Schnellzugriff == */
 /* #tabbar-Grundlayout steht bereits im Hauptbereich; hier nur di… */
 #tabbar .tabstrip { flex: 1; min-width: 0 }
@@ -705,29 +581,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .chat-empty-hint { margin: -4px 0 10px }
 .empty.small { padding: 4px 10px; font-size: var(--text-sm); text-align: left }
 .row .hint { font-size: var(--text-2xs); flex-shrink: 0 }
-/* == Scrollbars & Responsive == */
-/* 🐛 Fix (27. Juli): EINE globale Scrollleiste. Die von :root geerbten Standard-Eigenschaften
-   (scrollbar-width/-color) schalten in Chromium die ::-webkit-Regeln ab — die waren dort toter
-   Code mit anderen Farben, in älteren Safaris blieb nur die unsichtbare Overlay-Leiste. Beide
-   Wege nutzen jetzt dieselben Tokens: überall sichtbar, überall identisch. */
-/* 🎨 (29. Juli) Ruhige, schlanke Leiste wie in macOS/Notion: keine Spur, keine Kanten —
-   nur ein voll gerundeter Daumen mit Luft drumherum. Gilt global (überall dieselben Tokens). */
-::-webkit-scrollbar { width: 8px; height: 8px; background: transparent }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-track-piece { background: transparent; border: none }
-::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: content-box; min-height: 28px }
-::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
-::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
-::-webkit-scrollbar-corner { background: transparent }
-@media (max-width: 980px) {
-	body { overflow: auto }
-	#app { grid-template-columns: 1fr; height: auto; min-height: 100dvh }
-	#mainWrap { min-height: 60dvh }
-	#panel { min-height: 40dvh }
-	/* Ein Heft ist eine eigene Vollbild-Bühne. */
-	body.heft-open { overflow: hidden }
-	body.heft-open #app { height: 100dvh; min-height: 0 }
-	body.heft-open #mainWrap { min-height: 0 }
-}
 /* == Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout == */
 @media (max-width: 768px) {
 	/* Größere Tipp-Flächen nur auf kleinen Ansichten. Touch-Laptops behalten die kompakte UI. */
@@ -737,75 +590,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 	.navbtn:active, .row-add:active, .tabchip-x:active, .tabchip:active, .tab:active, .row:active, .home-pill:active, .home-continue:active { opacity: 0.6 }
 	#tree, #chatLog, .tabstrip, .block-editor, .library, .home, #main { -webkit-overflow-scrolling: touch }
 }
-/* == Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Au == */
-/* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokument… */
-.block-editor { position: relative; overflow: visible; padding: 8px 24px 28dvh; max-width: 760px; width: 100%; margin: 0 auto }
-.blk { display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-sm); position: relative }
-.blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 4px; opacity: 0; transition: opacity .1s }
-.blk:hover .blk-gutter, .blk:focus-within .blk-gutter { opacity: 1 }
-.blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs) }
-.blk-plus:hover, .blk-handle:hover { background: var(--surface-active); color: var(--text) }
-.blk-handle { cursor: grab; font-size: var(--text-xs) }
-.blk-body { flex: 1; min-width: 0; min-height: 1.7em; padding: 2px 0 }
-.blk.drop-before { box-shadow: 0 -2px 0 var(--accent) }
-.blk.drop-after { box-shadow: 0 2px 0 var(--accent) }
-.blk-tail { min-height: 25dvh; cursor: text }
-.blk-input { width: 100%; resize: none; border: 1px solid transparent; background: transparent; border-radius: var(--radius-xs); padding: 1px 2px; line-height: 1.6; overflow: hidden; display: block; color: var(--text); font-family: inherit; font-size: 16px }
-.blk-input:hover { background: var(--surface-faint) }
-.blk-input:focus { background: var(--surface-subtle); border-color: transparent; box-shadow: none }
-/* Rich-Text-Blöcke sind dauerhaft editierbar und sehen im Fokus… */
-.blk-rich-edit { min-width: 0; min-height: 1.6em; outline: none; caret-color: var(--accent) }
-.blk-rich-edit:focus { outline: none; box-shadow: none }
-.blk-rich-edit:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-border); border-radius: var(--radius-xs) }
-.blk-rich-edit > .md { pointer-events: none }
-.blk-rich-edit > .md * { pointer-events: none }
-.blk-input-h1 { font-size: 1.7em; font-weight: 700; letter-spacing: -.025em; line-height: 1.3 }
-.blk-input-h2 { font-size: 1.35em; font-weight: 700; letter-spacing: -.018em; line-height: 1.3 }
-.blk-input-h3 { font-size: 1.12em; font-weight: 650 }
-.blk-input-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-base); background: var(--surface-subtle); padding: 8px 10px }
-@media (max-width: 600px) {
-	.page-chrome { padding: 6px 10px }
-	.page-meta, .block-editor { padding-left: 16px; padding-right: 16px }
-}
-.blk-h { margin: 0.35em 0 0.1em; line-height: 1.3 }
-h1.blk-h { font-size: 1.7em }
-h2.blk-h { font-size: 1.35em }
-h3.blk-h { font-size: 1.12em }
-/* == --- Trennlinie --- == */
-.blk-hr { width: 100%; border: none; border-top: 1px solid var(--edge); margin: 13px 0 }
-/* == --- Listen (Bullet / Nummer / To-do) --- == */
-.blk-li { gap: 8px; display: flex; align-items: flex-start; width: 100% }
-.blk-marker { min-width: 18px; text-align: right; width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; min-height: 1.5em; padding-top: 3px; color: var(--text); font-size: 16px; user-select: none }
-.blk-litext { flex: 1; min-width: 0 }
-.blk-litext.done { color: var(--text2); text-decoration: line-through }
-.blk-check { margin-top: 5px; accent-color: var(--accent); cursor: pointer }
-.blk-p p { margin: 0 }
-.blk .md > :first-child { margin-top: 0 }
-.blk .md > :last-child { margin-bottom: 0 }
-.blk-cols { display: flex; gap: 18px }
-.blk-col { flex: 1; min-width: 0 }
-@media (max-width: 720px) {
-	.blk-cols { flex-direction: column }
-}
-/* Slash-Menü und schwebende Auswahl-Toolbar */
-/* Textfarben ({red}…{/}) und Hintergrundfarben ({bg-red}…{/}) —… */
-.c-gray { color: rgb(var(--c-gray)) }
-.c-red { color: rgb(var(--c-red)) }
-.c-orange { color: rgb(var(--c-orange)) }
-.c-yellow { color: rgb(var(--c-yellow)) }
-.c-green { color: rgb(var(--c-green)) }
-.c-blue { color: rgb(var(--c-blue)) }
-.c-purple { color: rgb(var(--c-purple)) }
-.c-pink { color: rgb(var(--c-pink)) }
-.hl-gray { background: rgb(var(--c-gray) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-red { background: rgb(var(--c-red) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-orange { background: rgb(var(--c-orange) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-yellow { background: rgb(var(--c-yellow) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-green { background: rgb(var(--c-green) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-blue { background: rgb(var(--c-blue) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-purple { background: rgb(var(--c-purple) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-.hl-pink { background: rgb(var(--c-pink) / .28); border-radius: var(--radius-xs); padding: 0 2px }
-/* Farbige Callouts (> [!blue] …) */
 /* == Mehrquellen-KI-Einstellungen & Modell-Dropdown-Erweiterung == */
 .provider-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px }
 .provider-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-faint) }
@@ -814,7 +598,6 @@ h3.blk-h { font-size: 1.12em }
 .provider-card-head input { flex: 1; font-weight: 600 }
 .icon-danger { min-height: 0; width: 32px; height: 32px; padding: 0; flex-shrink: 0; background: transparent; color: var(--danger); border-radius: var(--radius-sm) }
 .icon-danger:hover { background: var(--danger-soft) }
-/* == Alles auswählen (Strg+A): eine zusammenhängende Blockmarkier == */
 /* == Karten-Editor (Modal): klar, mit echtem Stapel-Select == */
 .card-editor { display: flex; flex-direction: column; gap: 10px }
 .card-editor h3 { margin: 0 0 2px }
@@ -906,19 +689,10 @@ h3.blk-h { font-size: 1.12em }
 /* == Backup-Erinnerung (Home) == */
 /* == Tag-Chips + Vorlagen-Galerie (Bibliothek) == */
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 }
-.tag-chip { padding: 2px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge); background: transparent; color: var(--text2); font-size: var(--text-xs) }
-.tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent) }
 /* == Eingabe-/Verschieben-Dialoge == */
 .modal-sm { max-width: 420px }
 .move-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 8px 0 }
 /* == Helles Theme (Gerätewahl in den Einstellungen) == */
-/* == Toasts (In-App-Meldungen statt alert()) — siehe U.toast in u == */
-#toasts { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-toast); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none }
-.toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: var(--radius-lg); font-size: var(--text-base); background: var(--menu-bg); color: var(--text); border: 1px solid var(--edge); box-shadow: var(--elev-2); animation: uiEnter var(--motion-base) var(--ease-out) both; pointer-events: auto }
-.toast.success { border-color: var(--success-border) }
-.toast.error { border-color: var(--danger-border) }
-.toast.hide { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s }
-/* DRY (Feinschliff v11): Toasts nutzen dieselbe uiEnter-Einblendung wie Menüs/Dialoge — eigenes toastIn-Keyframe entfernt */
 /* == Feinschliff: einheitliche dezente Übergänge + kleine Spieler == */
 /* DRY: Button-Übergänge + :active-Scale sind kanonisch oben im Bewegungssystem (Design-System v2) definiert */
 .side-foot button svg, .tab svg { flex-shrink: 0 }
@@ -1251,31 +1025,6 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 	.conflict-banner { flex-direction: column; align-items: stretch }
 	.conflict-diff { max-height: 42dvh }
 }
-/* == iPad & Touch v4 — Tablet-Layout (769–1024px), Safe-Areas, To == */
-/* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Z… */
-html, body { overscroll-behavior: none }
-button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { touch-action: manipulation }
-/* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
-@media (min-width: 701px) and (max-width: 1024px) {
-	#app { grid-template-columns: 220px minmax(0, 1fr) }
-	#panel { position: fixed; z-index: 25; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
-	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
-}
-/* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
-@media (pointer: coarse) and (min-width: 701px) {
-	body.heft-open #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1) }
-	body.heft-open #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1) }
-}
-@media (pointer: coarse) and (min-width: 701px) and (max-width: 1024px) {
-	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald di… */
-	body.heft-open.sidebar-collapsed #app { padding: 0; gap: 0 }
-	body.heft-open.sidebar-collapsed #mainWrap { border-radius: 0; border-color: transparent }
-}
-@media (pointer: coarse) and (min-width: 1025px) {
-	/* Große Tablets (iPad quer): das KI-Panel ist eine echte Grid-Sp… */
-	body.heft-open.sidebar-collapsed.panel-collapsed #app { padding: 0; gap: 0 }
-	body.heft-open.sidebar-collapsed.panel-collapsed #mainWrap { border-radius: 0; border-color: transparent }
-}
 .study-divider { border: none; border-top: 1px solid var(--edge); margin: 0 12px }
 .study-head { text-align: center; color: var(--text2); font-size: var(--text-sm) }
 .study-head button { margin-left: 10px }
@@ -1317,241 +1066,6 @@ body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-ri
 /* Stapel-Liste: „Standard (ohne Stapel)“-Zeile dezenter */
 .deck-name .hint { font-weight: 400; font-size: var(--text-xs) }
 /* .lib-ink-badge sitzt bei den Documents-Regal-Styles weiter oben */
-/* == Hybrid v6 (11. Juli 2026) — GoodNotes-Hefte: Anlege-Dialog, == */
-/* Anlege-Dialog: zwei gleichwertige Typ-Karten (Notion-Seite / G… */
-.newpage-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px }
-.newpage-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; min-height: 0; text-align: left; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg) }
-.newpage-card:hover { background: var(--surface-hover); border-color: var(--accent-border) }
-.newpage-card b { font-size: var(--text-base) }
-.newpage-card small { font-size: var(--text-xs); color: var(--text2) }
-.newpage-visual { display: flex; width: 100%; height: 64px; margin-bottom: 10px; border-radius: var(--radius-md); border: 1px solid var(--edge-soft); overflow: hidden }
-.newpage-visual.is-notion { flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface-faint) }
-.newpage-visual.is-notion i { display: block; height: 6px; border-radius: var(--radius-xs); background: var(--surface-active) }
-.newpage-visual.is-notion i:first-child { width: 55%; height: 8px }
-.newpage-visual.is-notion i:nth-child(2) { width: 90% }
-.newpage-visual.is-notion i:last-child { width: 72% }
-.newpage-visual.is-heft { background: linear-gradient(120deg, #2b5876, #4e4376) }
-.newpage-visual.is-heft span { width: 9px; height: 100%; background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 45%, rgba(0,0,0,.22)) }
-@media (max-width: 480px) {
-	.newpage-cards { grid-template-columns: 1fr }
-}
-/* Heft-Vollansicht: schlanker Kopf + Bühne, die den restlichen P… */
-/* Taskbar v6: freistehende Floating-Pill über dem Papier — kein… */
-.heft-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative }
-.heft-loading { flex: 1; display: grid; place-items: center; color: var(--text2); font-size: var(--text-sm); font-weight: 650 }
-/* Chrome-Overlay: pointer-events nur auf den Pills, Papier bleib… */
-.heft-chrome { position: absolute; inset: 0; z-index: 50; pointer-events: none }
-.heft-chrome > * { pointer-events: auto }
-/* Freistehende, verschiebbare Werkzeug-Gruppe — default zentrier… */
-/* ♻️ Tot (29. Juli): jede Angabe wurde von „.heft-chrome .heft-float" (Taskbar v7, teils !important) überschrieben. */
-.heft-float.is-dragging { opacity: .95; cursor: grabbing; z-index: 55 }
-/* Drag-Griff IN der Pill (erster Slot) — ganze Gruppe inkl. Opti… */
-/* Haupt-Pill (kompakt) — schwebend, kein Banner */
-/* 🐛 Fix (29. Juli): Optik regelt Taskbar v7. Hier blieb nur -webkit-backdrop-filter: blur(10px) wirksam — v7 setzt nur die unpräfixierte Form auf none, Safari/iPad blieb also unscharf. */
-/* Options-Pill darunter — hängt an der Float-Gruppe, bewegt sich… */
-/* 🐛 Nur noch, was Taskbar v7 nicht setzt. blur() raus: das -webkit-Pendant blieb auf Safari/iPad aktiv, obwohl v7 keinen Blur will. */
-.heft-tray { overflow-x: auto; scrollbar-width: none; animation: heftTrayIn .16s ease }
-.heft-tray::-webkit-scrollbar { display: none }
-@keyframes heftTrayIn {
-	from { opacity: 0; transform: translateY(-6px) scale(.98) }
-	to { opacity: 1; transform: none }
-}
-body.reduce-motion .heft-tray { animation: none }
-.heft-main, .heft-opt { min-height: 0; height: 36px; min-width: 38px; padding: 0 9px; border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-md); display: inline-flex; align-items: center; justify-content: center; gap: 2px }
-.heft-main:hover, .heft-opt:hover { background: var(--surface-active); color: var(--text) }
-.heft-main.open { background: var(--surface-active); color: var(--text) }
-.heft-chev { font-size: var(--text-3xs); opacity: .65; margin-left: 1px; line-height: 1 }
-.heft-main.open .heft-chev { opacity: 1; color: var(--accent) }
-.heft-sep { width: 1px; height: 16px; margin: 0 6px; flex-shrink: 0; background: var(--surface-active) }
-.heft-size { display: inline-flex !important; align-items: center; justify-content: center; min-width: 34px !important; height: 36px; padding: 0 8px !important; border-radius: var(--radius-pill); background: transparent; color: var(--text2) }
-.heft-size:hover { background: var(--surface-active); color: var(--text) }
-.heft-size.active { background: var(--accent-soft); color: var(--accent) }
-.heft-size i { display: block; width: 18px; border-radius: var(--radius-pill); background: currentColor; opacity: .9 }
-.heft-size.active i { opacity: 1; background: var(--accent) }
-.heft-swatch { width: 22px; height: 22px; min-width: 22px !important; min-height: 0 !important; padding: 0 !important; border-radius: 50% !important; border: 2px solid rgba(255,255,255,.18); background: var(--sw, #1c1c1e) }
-.heft-swatch:hover { transform: scale(1.08) }
-.heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
-/* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
-/* ♻️ Größe/Farbe/Rahmen kommen aus Taskbar v7; hier bleibt nur, was dort nicht gesetzt wird. */
-.heft-corner { font-weight: 700; white-space: nowrap; color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 4px }
-/* 🐛 Fix (29. Juli): Hover und Aktiv-Zustand waren wirkungslos — „.heft-chrome .heft-corner" ist spezifischer und setzte Hintergrund/Rahmen zurück. Jetzt im selben Kontext notiert. */
-.heft-chrome .heft-corner:hover { background: var(--surface-hover-strong) }
-.heft-chrome .heft-corner.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border) }
-.heft-corner-l { position: absolute; left: 12px; top: 12px; z-index: 51 }
-.heft-corner-r { position: absolute; right: 12px; top: 12px; z-index: 51; display: flex; gap: 6px }
-.heft-corner.heft-chat { background: var(--accent); color: var(--on-accent); border-color: transparent; min-width: 36px; padding: 0 12px }
-.heft-corner.heft-plus { min-width: 36px; padding: 0 12px; font-size: 17px }
-.heft-pageno-inline { font-weight: 650; font-size: var(--text-2xs); opacity: .75; margin-left: 5px }
-/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layo… */
-/* ♻️ Duplikat entfernt (29. Juli): .heft-scroll galt zweimal — kanonisch unten bei „Papier-Bühne v4" (overflow/touch-action/contain). Leerer Legacy-Alias-Kommentar ohne Regeln ebenfalls weg. */
-@media (max-width: 720px) {
-	.heft-float { top: 8px }
-	.heft-corner-l, .heft-corner-r { top: 8px }
-	.heft-corner-l { left: 8px }
-	.heft-corner-r { right: 8px }
-	.heft-main, .heft-opt, .heft-size, .heft-corner { min-width: 34px; height: 34px; padding: 0 7px }
-	.heft-pageno-inline { display: none }
-}
-/* Papier-Bühne v4: unabhängige 2D-Arbeitsfläche. */
-/* Kein natives Scrollen mehr: die Ansicht ist EIN transform auf .heft-pages, das heft.js aus view = { x, y, k } setzt. Padding, Zentrierung und Groesse kommen ebenfalls aus JS, damit CSS und Rechnung nicht auseinanderlaufen koennen. */
-.heft-scroll { flex: 1; min-height: 0; width: 100%; overflow: hidden; display: block; position: relative; padding: 0; touch-action: none; overscroll-behavior: contain; contain: layout paint }
-.heft-pages { --heft-page-w: 1px; --heft-page-h: 1px; width: max-content; display: grid; grid-auto-flow: row; justify-items: center; align-content: start; gap: 24px; isolation: isolate; transform-origin: 0 0 }
-/* Kein Zentrieren über das Grid mehr: heft.js applyView setzt dafür symmetrisches
-   Padding, das Teil des scrollbaren Inhalts ist. Nur so bleibt die Seitenposition beim
-   Zoomen stetig und per scrollLeft/scrollTop steuerbar (26. Juli). */
-
-.heft-page-slot { position: relative; box-sizing: content-box; width: var(--heft-page-w); height: var(--heft-page-h) }
-/* Handballen (27. Juli): Beim Aufliegen der Hand markierte der Browser Seitenzahl oder
-   ganze Seiteninhalte, die blaue Markierung blieb dann stehen. Im Heft wird nichts
-   markiert — Texteingaben (Notizfeld, Umbenennen) bleiben ausgenommen. */
-.heft-scroll, .heft-chrome, .heft-page-label { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
-.heft-scroll input, .heft-scroll textarea, .heft-scroll [contenteditable="true"],
-.heft-chrome input, .heft-chrome textarea, .heft-chrome [contenteditable="true"] { -webkit-user-select: text; user-select: text }
-/* Keine Browser-Geste auf dem Canvas: heft.js trennt Stift, 2D-P… */
-/* FIX Zoom-Glide: will-change:width,height entfernt — kollidierte mit der transform-Animation (flipGlide in heft.js) auf .heft-pages und liess den Pinch-/Doppeltipp-Zoom auf Touch-Geräten (Safari/iPadOS) springen statt gleiten. Das nötige will-change:transform setzt heft.js bereits selbst dynamisch auf .heft-pages waehrend der Animation. */
-.heft-page-slot .heft-canvas { display: block; width: var(--heft-page-w); height: var(--heft-page-h); touch-action: none; user-select: none; -webkit-user-select: none; border-radius: var(--radius-xs); background: #fdfdf8; box-shadow: 0 1px 0 rgba(255,255,255,.06), var(--elev-3) }
-.heft-page-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: var(--text-2xs); color: var(--text2); white-space: nowrap; pointer-events: none }
-/* Toolbar-Popups (Seiten / Bilder / ＋) — schweben über der Papie… */
-.heft-pop { position: absolute; z-index: 60; min-width: 230px; max-width: min(400px, calc(100% - 16px)); max-height: min(540px, 72dvh); overflow-y: auto; padding: 10px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--elev-3) }
-.heft-pop-head { font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text2); padding: 4px 4px 6px }
-.heft-pop-sub { font-size: var(--text-xs); color: var(--text2); padding: 0 4px 8px; line-height: 1.4 }
-.heft-pop-sep { height: 1px; background: var(--edge-soft); margin: 8px 0 }
-.heft-pop-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text); font-size: var(--text-base); padding: 9px 10px; border-radius: var(--radius-md) }
-.heft-pop-row:hover { background: var(--surface-hover-strong) }
-/* Seitenmanager: große Goodnotes-artige Übersicht mit Auswahl und Sortierung. */
-.heft-pop-pages { width: min(760px, calc(100vw - 32px)); max-width: min(760px, calc(100% - 16px)); max-height: min(760px, 84dvh); padding: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-radius: 20px }
-.heft-pages-manager-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 18px 14px; border-bottom: 1px solid var(--edge-soft) }
-.heft-pages-manager-head > div { min-width: 0; display: grid; gap: 3px }
-.heft-pages-manager-head b { font-size: var(--text-lg); letter-spacing: -.02em }
-.heft-pages-manager-head small { color: var(--text2); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.heft-pop-row.compact { width: auto; flex: 0 0 auto; padding: 7px 11px; background: var(--surface-hover); color: var(--accent); font-weight: 650 }
-.heft-pop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); align-content: start; gap: 14px; min-height: 250px; max-height: min(540px, 62dvh); overflow-y: auto; padding: 18px; overscroll-behavior: contain }
-.heft-pop-grid.is-selecting { touch-action: none; user-select: none; -webkit-user-select: none }
-.heft-pop-thumb { position: relative; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); overflow: hidden; background: #fdfdf8; cursor: pointer }
-.heft-pop-thumb canvas { width: 100%; display: block }
-.heft-pop-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
-.heft-pop-thumb.dragging { opacity: .45 }
-.heft-pop-thumb.drag-target { box-shadow: 0 0 0 3px var(--accent); transform: translateY(-2px) }
-.heft-pop-thumb > span { position: absolute; left: 4px; bottom: 3px; font-size: var(--text-3xs); font-weight: 700; color: #333; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: var(--radius-sm); pointer-events: none }
-.heft-page-drag { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 9px; background: rgba(20,20,20,.68); color: #fff; font-size: 18px; cursor: grab; touch-action: none }
-.heft-page-drag:active { cursor: grabbing }
-.heft-page-check { position: absolute; top: 7px; right: 7px; display: none; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 14px; font-style: normal; font-weight: 800 }
-.heft-pop-thumb.active .heft-page-check { display: grid }
-.heft-pages-manager-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 13px 18px calc(13px + env(safe-area-inset-bottom)); border-top: 1px solid var(--edge-soft); background: var(--menu-bg) }
-.heft-pages-manager-actions button { min-width: 110px }
-/* Mittiger Import-/Export-Schritt nach der Seitenwahl. */
-.heft-transfer { width: min(640px, 94vw); max-height: min(820px, 92dvh); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--edge); border-radius: 22px; background: var(--panel-solid); box-shadow: var(--elev-3); animation: heftTransferIn .2s var(--ease-out) }
-@keyframes heftTransferIn { from { opacity: 0; transform: translateY(14px) scale(.985) } }
-.heft-transfer > header { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--edge-soft); text-align: center }
-.heft-transfer > header h2 { margin: 0; font-size: 21px; letter-spacing: -.02em }
-.heft-transfer > header p { margin: 3px 0 0; color: var(--text2); font-size: var(--text-xs) }
-.heft-transfer > header button { display: grid; place-items: center; width: 36px; height: 36px; min-height: 0; padding: 0; border-radius: 50%; background: var(--surface-hover); color: var(--text); font-size: 24px }
-.heft-transfer-body { min-height: 0; overflow-y: auto; padding: 24px 28px }
-.heft-transfer > footer { display: flex; justify-content: flex-end; gap: 9px; padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--edge-soft); background: var(--menu-bg) }
-.heft-transfer > footer button { min-width: 130px }
-.heft-transfer-files { display: grid; gap: 8px; margin-bottom: 20px }
-.heft-transfer-file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint) }
-.heft-transfer-file > span { display: grid; place-items: center; width: 42px; height: 50px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 800 }
-.heft-transfer-file > div { min-width: 0; display: grid; gap: 3px }
-.heft-transfer-file b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.heft-transfer-file small { color: var(--text2) }
-.heft-transfer-field { display: grid; gap: 6px; margin-top: 14px }
-.heft-transfer-field label, .heft-transfer-body > h3 { color: var(--text2); font-size: var(--text-xs); font-weight: 650 }
-.heft-transfer-field select, .heft-transfer-field input { width: 100%; min-height: 42px }
-.heft-transfer-hint { margin: 16px 0 0; color: var(--text2); font-size: var(--text-xs); line-height: 1.45 }
-.heft-transfer-summary { display: flex; align-items: center; gap: 13px; padding: 15px; border-radius: var(--radius-lg); background: var(--surface-faint) }
-.heft-transfer-summary > span { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: var(--accent-soft); color: var(--accent); font-size: 24px }
-.heft-transfer-summary > div { display: grid; gap: 2px }
-.heft-transfer-summary small { color: var(--text2); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase }
-.heft-transfer-summary em { color: var(--text2); font-size: var(--text-xs); font-style: normal }
-.heft-transfer-body > h3 { margin: 22px 0 9px }
-.heft-transfer-formats { display: grid; gap: 9px }
-.heft-transfer-formats label { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-faint); cursor: pointer }
-.heft-transfer-formats label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft) }
-.heft-transfer-formats input { position: absolute; opacity: 0 }
-.heft-transfer-formats span { display: grid; gap: 3px }
-.heft-transfer-formats small { color: var(--text2) }
-.heft-transfer-formats i { margin-left: auto; visibility: hidden; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 12px; font-style: normal }
-.heft-transfer-formats label:has(input:checked) i { visibility: visible }
-@media (max-width: 600px) {
-	.heft-pop-pages { width: calc(100% - 12px); max-width: calc(100% - 12px); max-height: calc(100dvh - 92px); border-radius: 18px }
-	.heft-pages-manager-head { padding: 13px 14px 11px }
-	.heft-pages-manager-head small { max-width: 210px }
-	.heft-pop-grid { grid-template-columns: repeat(3, minmax(84px, 1fr)); gap: 9px; padding: 12px; min-height: 220px }
-	.heft-pages-manager-actions { display: grid; grid-template-columns: repeat(3, 1fr); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) }
-	.heft-pages-manager-actions button { min-width: 0; padding-inline: 7px }
-	#overlay:has(.heft-transfer) { align-items: end }
-	.heft-transfer { width: 100%; max-height: calc(100dvh - env(safe-area-inset-top)); border-width: 1px 0 0; border-radius: 22px 22px 0 0 }
-	.heft-transfer > header { padding: 14px }
-	.heft-transfer-body { padding: 19px 16px }
-	.heft-transfer > footer { display: grid; grid-template-columns: 1fr 1.35fr; padding: 11px 14px calc(11px + env(safe-area-inset-bottom)) }
-	.heft-transfer > footer button { min-width: 0 }
-}
-/* ＋-Menü wie GoodNotes „Seite hinzufügen“: Segmente + Vorlagen-K… */
-.heft-pop-plus { width: 330px }
-.heft-seg-row { display: flex; gap: 4px; padding: 4px; margin: 0 0 10px; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-pill) }
-.heft-seg { flex: 1; min-height: 30px; padding: 4px 6px; font-size: var(--text-xs); font-weight: 650; border-radius: var(--radius-pill); background: transparent; color: var(--text2); white-space: nowrap }
-.heft-seg.active { background: var(--panel-solid); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
-.heft-tpl-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px }
-.heft-tpl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; min-height: 0; background: transparent; border: 1px solid transparent; border-radius: var(--radius-lg); color: var(--text2); font-size: var(--text-2xs); text-align: center; line-height: 1.25 }
-.heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text) }
-.heft-tpl small { font-size: var(--text-3xs); opacity: .7 }
-.heft-tpl-paper { display: block; width: 40px; height: 56px; border-radius: var(--radius-xs); background: #fdfdf8; border: 1px solid var(--edge) }
-/* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser,… */
-.heft-scan { position: fixed; inset: 0; z-index: var(--z-scan); display: flex; flex-direction: column; background: rgba(3,5,10,.97); color: #fff }
-.heft-scan-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; flex-shrink: 0 }
-.heft-scan-top button { min-height: 0; width: 32px; height: 32px; padding: 0; border-radius: var(--radius-md); background: var(--surface-active); color: #fff; font-size: var(--text-base) }
-.heft-scan-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden }
-.heft-scan-stage video { max-width: 100%; max-height: 100% }
-/* Scanner v4: Live-Dokumentrahmen + Qualitätsmeldung vor der Auf… */
-.heft-scan-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; transition: filter .16s ease }
-.heft-scan-guide polygon { fill: rgba(245,185,70,.08); stroke: var(--warn); stroke-width: 1.3; vector-effect: non-scaling-stroke; stroke-linejoin: round; transition: fill .16s ease, stroke .16s ease }
-.heft-scan-guide.ready polygon { fill: rgba(90,210,142,.12); stroke: #61d68e }
-.heft-scan-guide.warn polygon { fill: rgba(245,185,70,.08); stroke: var(--warn) }
-.heft-scan-quality { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); padding: 6px 12px; border-radius: var(--radius-pill); background: rgba(3,5,10,.68); border: 1px solid rgba(255,255,255,.16); color: rgba(255,255,255,.92); font-size: var(--text-xs); font-weight: 650; white-space: nowrap; pointer-events: none }
-.heft-scan-actions [data-hescanautocap] { background: var(--surface-active); color: #fff }
-.heft-scan-actions [data-hescanautocap].active { background: #61d68e; color: #082014 }
-.heft-scan-nocam { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px; text-align: center; color: rgba(255,255,255,.7) }
-.heft-scan-shots { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; flex-shrink: 0 }
-.heft-scan-shots img { height: 72px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,.25) }
-/* Scanner v2: klickbare Scan-Kacheln (öffnen die Nachbearbeitung… */
-.heft-scan-shot { position: relative; flex-shrink: 0; min-height: 0; padding: 0; border-radius: var(--radius-md); overflow: hidden; border: 1px solid rgba(255,255,255,.25); background: transparent }
-.heft-scan-shot img { border: none; border-radius: 0 }
-.heft-scan-shot span { position: absolute; left: 4px; bottom: 4px; font-size: var(--text-3xs); font-weight: 700; color: #fff; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: var(--radius-sm); pointer-events: none }
-.heft-scan-shot small { position: absolute; right: 4px; bottom: 4px; padding: 0 5px; border-radius: var(--radius-sm); background: rgba(183,124,42,.88); color: #fff; font-size: var(--text-3xs); font-weight: 700; pointer-events: none }
-.heft-scan-shot:hover { border-color: var(--accent) }
-.heft-scan-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 86%; text-align: center; font-size: var(--text-xs); color: rgba(255,255,255,.75); background: rgba(0,0,0,.45); padding: 5px 12px; border-radius: var(--radius-pill); pointer-events: none }
-.heft-scan-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)) }
-.heft-scan-shutter { width: 62px; height: 62px; min-height: 62px; padding: 0; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,.35) }
-.heft-scan-shutter:hover { background: #eee }
-.heft-scan-shutter:disabled { opacity: .3 }
-.heft-scan-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end }
-.heft-scan-actions button, .heft-scan-nocam button { background: var(--accent); color: var(--on-accent); font-weight: 650; border-radius: var(--radius-lg) }
-.heft-scan-actions button:disabled { background: var(--surface-active); color: rgba(255,255,255,.5) }
-/* Busy-Overlay während Erkennung/Entzerrung/Filter — sonst wirkt… */
-.heft-scan-busy { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(3,5,10,.55); pointer-events: all }
-.heft-scan-busy[hidden] { display: none !important }
-.heft-scan-busy span { padding: 10px 16px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 650; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18) }
-/* Scanner v2: Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter… */
-/* Vollständig deckend und viewport-gebunden: die Bearbeitung dar… */
-.heft-scan-edit { position: fixed; inset: 0; z-index: var(--z-scan-edit); display: flex; flex-direction: column; background: #03050a }
-.heft-scan-editstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 10px }
-.heft-scan-editstage canvas { touch-action: none; border-radius: var(--radius-sm); box-shadow: var(--elev-3); cursor: crosshair }
-.heft-scan-modes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 8px 16px 0; flex-shrink: 0 }
-.heft-scan-modes button { min-height: 32px; padding: 4px 14px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 650; background: var(--surface-hover-strong); color: rgba(255,255,255,.75) }
-.heft-scan-modes button.active { background: var(--accent); color: var(--on-accent) }
-.heft-scan-editbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; flex-shrink: 0; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)) }
-.heft-scan-editbar button { background: var(--surface-active); color: #fff; border-radius: var(--radius-lg) }
-.heft-scan-editbar .heft-scan-apply { background: var(--accent); color: var(--on-accent); font-weight: 650 }
-.heft-scan-editbar [data-hescancorners] { border: 1px solid rgb(var(--accent-rgb) / .45); color: #bce6ff }
-.heft-scan-editbar [data-hescancompare] { color: var(--warn) }
-@media (pointer: coarse) {
-	.heft-scan-modes button { min-height: 40px }
-	.heft-scan-editbar button { min-height: 44px }
-}
-/* Eingebettetes Heft in Notion-Seiten (:::heft <id>) — unterbric… */
-.heft-embed { display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 12px 14px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-subtle) }
-.heft-embed:hover { border-color: var(--accent-border) }
 /* Bibliothek: Notion-Seiten als flaches Dokumentblatt — nur Heft… */
 .lib-docsheet { display: flex; flex-direction: column; gap: 6px; height: 196px; padding: 14px 12px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--panel-solid); box-shadow: var(--elev-2); transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease }
 .lib-card:hover .lib-docsheet { transform: translateY(-3px); box-shadow: var(--elev-2); border-color: var(--edge) }
@@ -1564,51 +1078,6 @@ body.reduce-motion .heft-tray { animation: none }
 .lib-docsheet-lines i:last-child { width: 58% }
 @media (max-width: 600px) {
 	.lib-docsheet { height: 168px }
-}
-/* Touch: Heft-Werkzeuge groß genug für Finger/Pencil; Popup-Ziel… */
-@media (pointer: coarse) {
-	.heft-main, .heft-opt, .heft-size, .heft-corner { height: 40px; min-width: 40px }
-	.heft-swatch { width: 26px; height: 26px; min-width: 26px !important }
-	.heft-pop-del { opacity: 1 }
-	.heft-seg { min-height: 36px }
-	.heft-pop-row { min-height: 44px }
-}
-/* == Taskbar v7 — feste Hauptleiste, separat verschiebbares Optio == */
-/* Hauptleiste bleibt an exakt dieser Stelle. Kein Drag, kein Lay… */
-.heft-chrome .heft-float { position: absolute !important; left: 50% !important; top: 10px !important; transform: translateX(-50%) !important; display: block; z-index: 52; max-width: calc(100% - 132px); pointer-events: auto }
-/* GoodNotes-Werkzeugleiste: klar gruppiert, ruhig und fingerfreu… */
-.heft-chrome .heft-pill { display: flex; align-items: center; gap: 0; padding: 4px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: none; backdrop-filter: none }
-.heft-chrome .heft-main { width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: var(--radius-md); background: transparent; font-size: var(--text-md); color: var(--text2) }
-.heft-chrome .heft-main:hover { background: var(--surface-hover-strong); color: var(--text) }
-/* Laser ist bewusst rot markiert — er hinterlässt keine permanen… */
-.heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-border) }
-.heft-chrome .heft-pill > .heft-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--edge) }
-.heft-chrome .heft-chev { font-size: 7px; margin-left: -1px }
-/* NUR dieses Tray ist beweglich. Standard: direkt unter der fest… */
-.heft-chrome .heft-tray { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); z-index: 53; display: flex; align-items: center; gap: 0; padding: 2px 4px; max-width: min(94vw, 560px); background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-md); box-shadow: var(--elev-1); backdrop-filter: none; touch-action: none }
-.heft-chrome .heft-tray.is-dragging { opacity: .92; cursor: grabbing }
-.heft-chrome .heft-tray-drag { width: 20px; min-width: 20px; height: 24px; min-height: 24px; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text2); font-size: var(--text-3xs); letter-spacing: -2px; cursor: grab; touch-action: none }
-.heft-chrome .heft-tray-drag:hover { color: var(--text); background: var(--surface-active) }
-.heft-chrome .heft-tray-drag:active { cursor: grabbing }
-.heft-chrome .heft-tray .heft-opt, .heft-chrome .heft-tray .heft-size { width: 24px; min-width: 24px !important; height: 24px; min-height: 24px; padding: 0 !important; border-radius: var(--radius-sm); font-size: var(--text-xs) }
-.heft-chrome .heft-tray .heft-opt.active, .heft-chrome .heft-tray .heft-size.active { background: var(--accent); color: var(--on-accent); box-shadow: none }
-.heft-chrome .heft-tray .heft-size i { width: 15px }
-.heft-chrome .heft-tray .heft-swatch { width: 16px; height: 16px; min-width: 16px !important; margin: 0 1px }
-.heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px }
-/* Eckaktionen bleiben klein, aber klar treffbar. */
-.heft-chrome .heft-corner { top: 10px; height: 28px; min-height: 28px; min-width: 28px; padding: 0 7px; border-radius: var(--radius-md); font-size: var(--text-xs); background: var(--menu-bg); border-color: var(--edge); box-shadow: none }
-.heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: var(--menu-bg); color: var(--text) }
-.heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; font-size: 16px }
-.heft-chrome .heft-corner-l { left: 10px; top: 12px }
-.heft-chrome .heft-corner-r { right: 10px; top: 12px }
-@media (max-width: 720px) {
-	.heft-chrome .heft-float { top: 8px !important; max-width: calc(100% - 108px) }
-	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: var(--text-base) }
-	.heft-chrome .heft-tray { top: 44px; max-width: calc(100% - 16px) }
-	.heft-chrome .heft-corner { top: 8px }
-	.heft-chrome .heft-corner-l, .heft-chrome .heft-corner-r { top: 8px }
-	.heft-chrome .heft-corner-l { left: 8px }
-	.heft-chrome .heft-corner-r { right: 8px }
 }
 /* == Mobile UI v4 (23. Juli 2026) — eigene App-Schale in mobile.js + mobile.css == */
 /* Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
@@ -1752,157 +1221,6 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 @media (pointer: coarse) {
 	.deck-actions button, .anki-toolbar .menu-chip { min-height: 40px }
 }
-/* == WYSIWYG-Editor (editor.js) — Notion-Look, 13. Juli 2026 Alle == */
-/* == --- Editierbare Felder --- == */
-.blk-text { position: relative; flex: 1; min-width: 0; min-height: 1.5em; padding: 3px 2px; outline: none; border: none; white-space: pre-wrap; word-break: break-word; line-height: 1.5; font-size: 16px; color: var(--text); caret-color: var(--text) }
-.blk-text a { color: var(--text); text-decoration: underline; text-decoration-color: rgba(255,255,255,0.35); text-underline-offset: 2px }
-.blk-text a:hover { text-decoration-color: currentColor }
-.blk-text u { text-decoration: underline; text-underline-offset: 2px }
-.blk-text code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; color: rgb(var(--c-red)); background: var(--surface-hover); border-radius: var(--radius-xs); padding: 0.2em 0.4em }
-/* Platzhalter: Überschriften/Listen immer wenn leer, Absätze nur bei Fokus */
-.blk-text:empty::before { content: ""; color: color-mix(in srgb, var(--text2) 45%, transparent); pointer-events: none; position: absolute; left: 2px; top: 3px }
-.blk-text:empty:focus::before, .blk-h1:empty::before, .blk-h2:empty::before, .blk-h3:empty::before, [data-bsummary]:empty::before, .blk[data-btype="todo"] .blk-text:empty::before, .blk[data-btype="bullet"] .blk-text:empty::before, .blk[data-btype="number"] .blk-text:empty::before, .blk-quote .blk-text:empty::before { content: attr(data-placeholder) }
-/* == --- Überschriften --- == */
-.blk[data-btype="h1"] { margin-top: 22px }
-.blk[data-btype="h2"] { margin-top: 16px }
-.blk[data-btype="h3"] { margin-top: 10px }
-.blk:first-child[data-btype^="h"] { margin-top: 0 }
-.blk[data-btype="h1"] .blk-gutter { padding-top: 8px }
-.blk[data-btype="h2"] .blk-gutter { padding-top: 6px }
-.blk-h1 { font-size: 1.875em; font-weight: 700; line-height: 1.3; margin: 0 }
-.blk-h2 { font-size: 1.5em; font-weight: 600; line-height: 1.3; margin: 0 }
-.blk-h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin: 0 }
-.blk-num { font-size: var(--text-md); padding-right: 2px; justify-content: flex-end; font-variant-numeric: tabular-nums }
-.blk-marker input[type="checkbox"] { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); cursor: pointer }
-.blk-done { text-decoration: line-through; color: var(--text2) }
-/* == --- Zitat --- == */
-.blk-quote { margin: 0; width: 100%; border-left: 3px solid var(--text); padding: 2px 0 2px 14px; font-size: 16px }
-/* == --- Codeblock --- == */
-.blk-codewrap { position: relative; width: 100%; margin: 4px 0; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm) }
-.blk-code { margin: 0; padding: 34px 16px 30px 32px; overflow-x: auto; background: transparent; border: none }
-.blk-code .blk-text, .blk-code code.blk-text { display: block; padding: 0; background: transparent; color: var(--text); font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; line-height: 1.6; white-space: pre-wrap; tab-size: 2; border-radius: 0 }
-.blk-codelang { position: absolute; top: 6px; left: 8px; z-index: 1; background: transparent; border: none; color: var(--text2); font-size: var(--text-xs); padding: 2px 6px; border-radius: var(--radius-xs); cursor: pointer; opacity: 0; transition: opacity .1s }
-.blk-codewrap:hover .blk-codelang, .blk-codewrap:focus-within .blk-codelang { opacity: 1 }
-.blk-codelang:hover { background: var(--surface-hover); color: var(--text) }
-/* == --- Gleichungen (Block + Inline-Chip) --- == */
-.blk-math { width: 100%; padding: 10px 8px; text-align: center; cursor: pointer; border-radius: var(--radius-xs); outline: none; overflow-x: auto }
-.blk-math:hover, .blk-math:focus { background: var(--surface-subtle) }
-.blk-mathview { font-size: 1.15em }
-.blk-mathempty { color: var(--text2); font-size: var(--text-base) }
-.blk-imath { cursor: pointer; border-radius: var(--radius-xs); padding: 0 1px }
-.blk-imath:hover { background: var(--accent-soft) }
-.blk-mathpop { position: fixed; z-index: var(--z-editor-pop); width: 380px; max-width: 92vw; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: 8px }
-.blk-mathinput { width: 100%; resize: vertical; background: var(--input-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); color: var(--text); font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: var(--text-sm); padding: 8px; outline: none }
-.blk-mathinput:focus { border-color: var(--accent-border) }
-.blk-mathfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--text2) }
-.blk-mathok { background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-sm); padding: 5px 12px; font-size: var(--text-sm); cursor: pointer }
-/* == --- Bild --- == */
-.blk-img { margin: 4px 0; width: 100% }
-.blk-img img { max-width: 100%; border-radius: var(--radius-xs); display: block }
-.blk-img figcaption { font-size: var(--text-sm); color: var(--text2); padding-top: 6px }
-/* == --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile lei == */
-.blk-tablewrap { position: relative; width: 100%; padding: 6px 26px 26px 0; overflow-x: auto; overflow-y: hidden }
-/* Viele Spalten behalten ihre Mindestbreite und werden auf schmalen Ansichten
-   horizontal gescrollt, statt durch das feste Layout auf Zeichenbreite zu schrumpfen. */
-.blk-table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: var(--text-base); table-layout: fixed }
-.blk-table th, .blk-table td { border: 1px solid var(--edge); padding: 0; vertical-align: top; min-width: 64px }
-.blk-table th { background: var(--surface); font-weight: 600; text-align: left }
-.blk-table .blk-cell { padding: 7px 9px; min-height: 33px; font-size: var(--text-base); line-height: 1.45 }
-.blk-tbtn { position: absolute; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--edge-soft); border-radius: var(--radius-xs); color: var(--text2); font-size: var(--text-sm); line-height: 1; cursor: pointer; opacity: 0; transition: opacity .15s, background .12s, color .12s; padding: 0; min-height: 0 }
-.blk-tablewrap:hover .blk-tbtn, .blk-tablewrap:focus-within .blk-tbtn { opacity: .75 }
-.blk-tbtn:hover { opacity: 1; background: var(--accent); color: var(--on-accent); border-color: var(--accent) }
-.blk-tbtn-col { top: 6px; right: 2px; width: 22px; height: calc(100% - 32px) }
-.blk-tbtn-row { bottom: 2px; left: 0; height: 22px; width: calc(100% - 28px) }
-@media (pointer: coarse) {
-	.blk-tablewrap .blk-tbtn { opacity: .75 }
-	.blk-tbtn-col { width: 26px }
-	.blk-tbtn-row { height: 26px }
-}
-/* == --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren D == */
-.blk-callout { display: flex; gap: 10px; width: 100%; margin: 4px 0; padding: 16px 16px 16px 14px; border-radius: var(--radius-sm); border: 1px solid var(--surface-hover); background: var(--surface) }
-.blk-callout .blk-children { flex: 1; min-width: 0 }
-.blk-callout .blk { border-radius: var(--radius-xs) }
-.blk-calloutdot { width: 18px; height: 18px; flex-shrink: 0; margin-top: 3px; border: none; border-radius: 50%; cursor: pointer; padding: 0; min-height: 0; background: var(--text2) }
-.blk-calloutdot:hover { transform: scale(1.15) }
-/* Farbvarianten — Hintergründe wie Notion-Dark */
-.blk-callout-gray { background: rgba(155,155,155,0.13) }
-.blk-callout-red { background: rgba(255,115,105,0.14) }
-.blk-callout-orange { background: rgba(255,163,68,0.14) }
-.blk-callout-yellow { background: rgba(255,220,73,0.12) }
-.blk-callout-green { background: rgba(77,171,154,0.14) }
-.blk-callout-blue { background: rgba(82,156,202,0.15) }
-.blk-callout-purple { background: rgba(154,109,215,0.14) }
-.blk-callout-pink { background: rgba(226,85,161,0.13) }
-.blk-callout-gray .blk-calloutdot { background: rgb(var(--c-gray)) }
-.blk-callout-red .blk-calloutdot { background: rgb(var(--c-red)) }
-.blk-callout-orange .blk-calloutdot { background: rgb(var(--c-orange)) }
-.blk-callout-yellow .blk-calloutdot { background: rgb(var(--c-yellow)) }
-.blk-callout-green .blk-calloutdot { background: rgb(var(--c-green)) }
-.blk-callout-blue .blk-calloutdot { background: rgb(var(--c-blue)) }
-.blk-callout-purple .blk-calloutdot { background: rgb(var(--c-purple)) }
-.blk-callout-pink .blk-calloutdot { background: rgb(var(--c-pink)) }
-/* == --- Toggle --- == */
-.blk-toggle { width: 100% }
-.blk-togglehead { display: flex; align-items: flex-start }
-.blk-togglearrow { width: 24px; height: 24px; flex-shrink: 0; margin-top: 1px; background: transparent; border: none; border-radius: var(--radius-xs); color: var(--text); font-size: var(--text-xs); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; min-height: 0; transition: background .1s }
-.blk-togglearrow:hover { background: var(--surface-active) }
-.blk-togglebody { padding-left: 24px }
-/* == --- Spalten --- == */
-.blk-columns { display: flex; gap: 32px; width: 100% }
-.blk-column { flex: 1; min-width: 0 }
-@media (max-width: 640px) {
-	.blk-columns { flex-direction: column; gap: 0 }
-}
-/* == --- Verschachtelte Blöcke (Callout/Toggle/Spalten) --- == */
-.blk-children .blk .blk-body { padding: 1px 0 }
-/* == --- Heft-Einbettung --- == */
-.blk-heft { width: 100%; min-height: 72px; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text); text-align: left; cursor: pointer }
-.blk-heft:hover { border-color: var(--accent-border); background: var(--surface-hover) }
-.heft-embed-img { display: block; width: 100%; max-height: 300px; object-fit: cover; object-position: top center; background: var(--panel-solid) }
-.heft-embed-label { display: block; padding: 9px 11px; color: var(--text2); font-size: var(--text-sm); font-weight: 600 }
-/* == --- Blockauswahl (Esc / Handle / Strg+A Stufe 2) --- == */
-.blk.selected { background: color-mix(in srgb, var(--accent) 22%, transparent) }
-.blk.selected .blk-body { border-radius: var(--radius-xs) }
-/* == --- Drag-&-Drop-Ziellinien --- == */
-.blk.drop-above { box-shadow: 0 -2px 0 var(--accent) }
-.blk.drop-below { box-shadow: 0 2px 0 var(--accent) }
-/* == --- Menüs: Slash / Link / Block --- == */
-.blk-menu { position: fixed; z-index: var(--z-editor-pop); min-width: 260px; max-width: 330px; max-height: 340px; overflow-y: auto; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: 6px }
-.blk-msec { font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text2); padding: 8px 10px 3px }
-.blk-mi { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); color: var(--text); user-select: none }
-.blk-mi:hover, .blk-mi.active { background: var(--surface-hover-strong) }
-.blk-mi small { margin-left: auto; color: var(--text2); font-size: var(--text-xs) }
-.blk-mi.danger { color: var(--danger) }
-.blk-mi.disabled { color: var(--text2); cursor: default }
-.blk-mi.disabled:hover { background: transparent }
-.blk-mi-ic { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-xs); font-size: var(--text-sm) }
-/* == --- Farbreihen im Blockmenü --- == */
-.blk-colorrow { display: flex; gap: 6px; padding: 4px 10px 6px; flex-wrap: wrap }
-.blk-cdot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; padding: 0; min-height: 0; border: 1px solid var(--edge); background: var(--surface); color: var(--text2); font-size: var(--text-2xs); display: flex; align-items: center; justify-content: center }
-.blk-cdot:hover { transform: scale(1.15) }
-.blk-cdot.c-gray { background: rgb(var(--c-gray)) }
-.blk-cdot.c-red { background: rgb(var(--c-red)) }
-.blk-cdot.c-orange { background: rgb(var(--c-orange)) }
-.blk-cdot.c-yellow { background: rgb(var(--c-yellow)) }
-.blk-cdot.c-green { background: rgb(var(--c-green)) }
-.blk-cdot.c-blue { background: rgb(var(--c-blue)) }
-.blk-cdot.c-purple { background: rgb(var(--c-purple)) }
-.blk-cdot.c-pink { background: rgb(var(--c-pink)) }
-.blk-cdot.hl-gray { background: rgb(var(--c-gray) / .4) }
-.blk-cdot.hl-red { background: rgb(var(--c-red) / .4) }
-.blk-cdot.hl-orange { background: rgb(var(--c-orange) / .4) }
-.blk-cdot.hl-yellow { background: rgb(var(--c-yellow) / .4) }
-.blk-cdot.hl-green { background: rgb(var(--c-green) / .4) }
-.blk-cdot.hl-blue { background: rgb(var(--c-blue) / .4) }
-.blk-cdot.hl-purple { background: rgb(var(--c-purple) / .4) }
-.blk-cdot.hl-pink { background: rgb(var(--c-pink) / .4) }
-/* == --- KaTeX im Editor: Farbe erbt vom Text --- == */
-.block-editor .katex { color: var(--text); font-size: 1.06em }
-/* == Unterseiten-Verweise am Seitenende (wie Notion-Seitenzeilen) == */
-.child-pages { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 4px }
-.child-page-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer }
-.child-page-row:hover { background: var(--surface-hover) }
-.child-page-row .cp-icon { flex: none; width: 20px; text-align: center }
 .child-page-row .cp-img { width: 18px; height: 18px; object-fit: cover; border-radius: var(--radius-xs); vertical-align: -3px }
 .child-page-row .cp-title { font-weight: 600; border-bottom: 1px solid var(--edge) }
 /* == Compact mode + Light theme polish — 14. Juli 2026 == */
@@ -2007,21 +1325,6 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .study-counts-row { text-align: center; font-size: var(--text-sm); color: var(--text2); margin: 10px 0 2px }
 /* Duplikat entfernt (28. Juli): Die Fußleiste steht kanonisch weiter oben bei .study-footer —
    diese zweite, abweichende Regel überschrieb dort still die Abstände. */
-/* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */
-/* 🐛 Fix (26. Juli, "Toolbar wird schlagartig transparent"): Der Rückzug bleibt, ist aber
-   weich und nicht mehr fast unsichtbar (.12 → .3). Die eigentliche Ursache des Flackerns
-   liegt in heft.js: EIN Flag + applyWriting() statt zweier DOM-Griffe, dazu verzögertes
-   Zurückkommen — vorher überschrieb jeder Render mitten im Strich die className. */
-.heft-chrome { transition: opacity .22s ease }
-.heft-chrome.heft-writing { opacity: .3; pointer-events: none }
-/* 🐛 Fix (29. Juli): width/height 30px standen gegen min-width/min-height 32px aus Taskbar v7 — gerendert wurden ohnehin 32px, die 30 waren nur Widerspruch. */
-.heft-chrome .heft-main { position: relative }
-.heft-chrome .heft-color-dot { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 3px; border-radius: 2px; pointer-events: none }
-.heft-pill-min .heft-main { width: 38px }
-.heft-min-btn { opacity: .8 }
-@media (max-width: 720px) {
-	.heft-chrome .heft-main { width: 27px; height: 27px }
-}
 /* ================= 🧪 Experimente (experimente.js) ================= */
 .exp-modal-backdrop { position: fixed; inset: 0; z-index: var(--z-ai-sheet); background: var(--overlay-bg); display: flex; align-items: center; justify-content: center; padding: 18px }
 .exp-modal { background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); width: min(640px, 100%); max-height: 85dvh; overflow: auto; padding: 16px 18px }
@@ -2056,8 +1359,6 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-model-list .model-fav.on, .settings-model-list .model-fav:hover { color: var(--warn) }
 /* ---------- Stapel-Übersicht: 🧑‍🏫 Feynman-Start je Stapel ---------- */
 .deck-feyn { white-space: nowrap }
-/* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
-.heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
 /* ---------- ✦ Wissensgraph v4: Fach → Thema → Skill ---------- */
 .graph-overlay { position: fixed; inset: 0; z-index: var(--z-graph); display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: radial-gradient(circle at 50% -20%, rgb(var(--accent-rgb) / .09), transparent 38%), var(--panel-solid) }
 .graph-head { flex: 0 0 auto; min-height: 64px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 16px; padding: 8px 18px; border-bottom: 1px solid var(--edge-soft); background: color-mix(in srgb, var(--panel-solid) 88%, transparent); backdrop-filter: blur(16px) }
@@ -2167,21 +1468,6 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .ana-problem { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border-radius: var(--radius-md); padding: 8px 10px }
 .ana-problem small { display: block; color: var(--text2) }
 .ana-problem button { min-height: 32px; white-space: nowrap }
-/* ---------- 🪢 Lasso-Aktionsleiste (heft.js) — iPad hat keine Entf-Taste ---------- */
-.heft-lasso-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 78px; z-index: 60; display: flex; gap: 8px; align-items: center; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); padding: 6px 10px; font-size: var(--text-sm); box-shadow: var(--elev-2) }
-.heft-lasso-bar span { color: var(--text2); padding: 0 2px }
-.heft-lasso-bar button { min-height: 34px; white-space: nowrap }
-/* == ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18.7) == */
-/* ♻️ .heft-page-slot { position: relative } hier entfernt — steht identisch schon in der Bühnen-Geometrie oben. */
-.heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px }
-/* Geist-Knopf bleibt im Layout (die Scroll-Geometrie für atEnd() darf sich nicht ändern),
-   ist aber unsichtbar, bis man die letzte Seite nach oben zieht (heft.js/bindPullToAdd). */
-.heft-addpage { display: block; margin: 12px auto 30px; min-height: 44px; padding: 0 24px; border: 1.5px dashed var(--edge); border-radius: var(--radius-lg); background: transparent; color: var(--text2); font-size: var(--text-base); opacity: 0; transform: translateY(6px); transition: opacity .15s ease, transform .15s ease; pointer-events: none }
-.heft-addpage.pulling { opacity: 1; transform: none; pointer-events: auto }
-.heft-addpage.armed { border-color: var(--accent); color: var(--accent) }
-/* Radierer: Ring zeigt Ort UND Größe der Wirkung (heft.js/showEraserRing) */
-.heft-eraser-ring { position: absolute; z-index: 5; transform: translate(-50%, -50%); border: 1.5px solid rgba(150,150,150,.9); border-radius: 50%; background: rgba(150,150,150,.15); pointer-events: none }
-.heft-eraser-ring[hidden] { display: none }
 .card-face.tappable { cursor: pointer }
 /* ★ Modell-Favoriten im Modell-Dropdown (18. Juli) */
 .model-row { display: flex; align-items: stretch; gap: 2px }
@@ -2533,21 +1819,6 @@ body.density-compact .anki-study-mode { padding: clamp(8px, 1.6vw, 18px) clamp(1
 body.density-compact .anki-study-mode .study-card { --stage-top: 8px; --stage-pad: clamp(14px, 1.8vw, 28px) }
 body.density-compact .library.anki { padding: 18px 24px 88px }
 
-/* == ✨ Feinschliff v12 (25. Juli): Typografie-Details, keine neue Struktur == */
-/* Zahlen springen beim Hochzählen nicht mehr in der Breite (Timer, Fällig-Zähler, Statistik). */
-.kpi-num, .lz-total, .lz-bar-col small, .deck-badge, .study-counts-row, .lib-tab-n, .palette-foot kbd { font-variant-numeric: tabular-nums }
-/* Überschriften brechen ausgewogen statt mit einem einzelnen Restwort in der letzten Zeile. */
-h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-wrap: balance }
-/* Fließtext vermeidet einzeln stehende Schlusszeilen — eine Regel, wirkt in Editor, Chat und Karten. */
-.md, .blk-body, .card-face { text-wrap: pretty }
-
-/* == ✨ Design-Politur v13 (26. Juli): Tiefe & Detail — keine neue Struktur == */
-/* Schwebende Flächen (Menüs, Dialoge, Palette, Toasts) bekommen eine hauchdünne Lichtkante
-   oben — spürbar mehr Tiefe im Dunkel-Look, im hellen Theme praktisch unsichtbar.
-   Ergänzt die bestehenden --elev-Schatten, ersetzt sie nicht. */
-.page-menu, .attach-menu, .refine-menu, .model-menu { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
-.modal, .palette-box { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255,255,255,.05) }
-.toast { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
 
 /* Maus ab Desktop-Breite: dichter als Touch — der Zeiger trifft auch kleinere Ziele.
    Der gewonnene Platz geht an den Karteninhalt. */

@@ -1,5 +1,6 @@
 "use strict";
 import { U } from "./util.js";
+import { BUS } from "./event-bus.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
@@ -19,6 +20,7 @@ import {
 } from "./state-checkpoint.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
+export { BUS } from "./event-bus.js";
 export const S = {
 	pages: {},   // id → { id, title, parentId, content, pdfId, tags, icon, cover, notionId, created, updated }
 	cards: {},   // id → { id, front, back, pageId, srs, created }
@@ -937,6 +939,45 @@ export const STATE = (() => {
 				Object.assign(S.settings, SETTINGS_SYNC.mergePatch(S.settings, p));
 				break;
 		}
+		if (!_loading) {
+			emitDomainEvents(ev);
+		}
+	}
+
+	function emitDomainEvents(ev) {
+		const type = ev?.type;
+		const p = ev?.payload || {};
+
+		switch (type) {
+			case "pageCreate":
+				BUS.emit("state:page-created", { id: p.id, page: S.pages[p.id], event: ev });
+				break;
+			case "pageUpdate":
+			case "pageMove":
+			case "pageRestore":
+				BUS.emit("state:page-updated", { id: p.id, patch: p.patch, page: S.pages[p.id], event: ev });
+				break;
+			case "pageTrash":
+				BUS.emit("state:page-updated", { id: p.id, trashed: true, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-deleted", { id: p.id, trashed: true, event: ev });
+				break;
+			case "pageDelete":
+				BUS.emit("state:page-deleted", { id: p.id, hard: true, event: ev });
+				break;
+			case "heftOps":
+			case "heftSnap":
+			case "heftUpdated":
+				BUS.emit("state:heft-changed", { pageId: p.pageId, doc: S.heftDocs[p.pageId], event: ev });
+				break;
+			case "heftBlob":
+				BUS.emit("state:heft-changed", { hash: p.hash, event: ev });
+				break;
+			default:
+				if (type && (type.startsWith("card") || type.startsWith("deck"))) {
+					BUS.emit("state:cards-updated", { type, payload: p, cardId: p.id, deck: p.deck || p.name, event: ev });
+				}
+				break;
+		}
 	}
 
 	async function dispatchOne(type, payload) {
@@ -970,6 +1011,7 @@ export const STATE = (() => {
 		for (const fn of _dispatchHooks.after) {
 			try { fn(ev); } catch (e) { console.warn("dispatch-Hook (after):", e); }
 		}
+		BUS.emit("state:event-dispatched", ev);
 		return ev;
 	}
 
@@ -1624,5 +1666,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

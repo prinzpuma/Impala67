@@ -1,0 +1,64 @@
+/* components.css — Impala67: Buttons, Inputs, Selects, Overlays/Modals, Menüs, Toasts & Chips */
+
+button { background: var(--edge-soft); color: var(--text); border: none; border-radius: var(--radius-sm); padding: 6px 10px; font: inherit; font-size: var(--text-base); cursor: pointer; min-height: 32px }
+button:hover { background: var(--surface-active) }
+button.danger { color: var(--danger) }
+
+input, textarea, select { background: var(--input-bg); color: var(--text); border: 1px solid var(--edge); border-radius: var(--radius-md); padding: 8px 10px; font: inherit; outline: none }
+/* Native Selects: dunkles OS-Popup + eigener Chevron statt hässl… */
+select { appearance: none; -webkit-appearance: none; cursor: pointer; color-scheme: dark; padding-right: 30px; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(255,255,255,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px 8px }
+body.light select { color-scheme: light; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(20,20,20,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>") }
+select option, select optgroup { background: var(--menu-bg); color: var(--text) }
+/* ✨ Design-Politur v13 (26. Juli): Fokus-Ring wie am Composer (3px accent-soft) — einheitliches Fokus-Feedback für ALLE Eingaben statt nur Rahmenfarbe. Editor-Blöcke (.blk-input) und Composer bleiben unverändert (eigene box-shadow-Regeln gewinnen). */
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
+#paletteInput:focus { box-shadow: none }
+
+.page-menu, .attach-menu, .refine-menu { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 180px; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--elev-2) }
+.page-menu { position: absolute; top: 100%; right: 6px; z-index: 9; margin-top: 2px }
+.page-menu button, .attach-menu button, .refine-menu button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: var(--text-sm); padding: 8px 10px; border: none; border-radius: var(--radius-sm); min-height: 34px }
+.page-menu button:hover, .attach-menu button:hover, .refine-menu button:hover { background: var(--surface-hover-strong); color: var(--text) }
+.page-menu button.danger { color: var(--danger) }
+.page-menu button.danger:hover { background: var(--danger-soft); color: var(--danger) }
+
+.menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text2); font-size: var(--text-sm); padding: 8px 10px; border-radius: var(--radius-sm) }
+.menu-item:hover { background: var(--surface-hover); color: var(--text) }
+
+.menu-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px }
+.menu-chip { min-height: 0; padding: 4px 9px; font-size: var(--text-xs); border-radius: var(--radius-lg); background: var(--surface); color: var(--text2) }
+.menu-chip:hover { background: var(--surface-active); color: var(--text) }
+.menu-chip.active { background: var(--accent-soft); color: var(--accent) }
+
+/* == Overlay / Modal == */
+/* z-index bewusst über dem mobilen KI-Sheet (1300) und der Dock-… */
+#overlay { position: fixed; inset: 0; z-index: var(--z-overlay); background: var(--overlay-bg); display: grid; place-items: center }
+/* Versteckte Ebenen dürfen niemals Klicks abfangen — wichtig bei… */
+#overlay[hidden], #palette[hidden], .attach-menu[hidden], .model-menu[hidden] { display: none !important; pointer-events: none !important }
+.modal { width: min(520px, 92vw); padding: 24px; display: flex; flex-direction: column; gap: 12px; background: var(--menu-bg); box-shadow: var(--elev-3) }
+.modal h3 { margin-bottom: 4px }
+.modal label { font-size: var(--text-sm); color: var(--text2); display: block; margin-bottom: 4px }
+.modal input { width: 100% }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px }
+
+.tag-chip { padding: 2px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge); background: transparent; color: var(--text2); font-size: var(--text-xs) }
+.tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent) }
+
+/* == Eingabe-/Verschieben-Dialoge == */
+.modal-sm { max-width: 420px }
+.move-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 8px 0 }
+
+/* == Toasts (In-App-Meldungen statt alert()) — siehe U.toast in u == */
+#toasts { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-toast); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none }
+.toast { max-width: min(480px, 90vw); padding: 10px 16px; border-radius: var(--radius-lg); font-size: var(--text-base); background: var(--menu-bg); color: var(--text); border: 1px solid var(--edge); box-shadow: var(--elev-2); animation: uiEnter var(--motion-base) var(--ease-out) both; pointer-events: auto }
+.toast.success { border-color: var(--success-border) }
+.toast.error { border-color: var(--danger-border) }
+.toast.hide { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s }
+/* DRY (Feinschliff v11): Toasts nutzen dieselbe uiEnter-Einblendung wie Menüs/Dialoge — eigenes toastIn-Keyframe entfernt */
+
+.page-menu, .attach-menu, .refine-menu, .model-menu { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
+.modal, .palette-box { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255,255,255,.05) }
+.toast { box-shadow: var(--elev-2), inset 0 1px 0 rgba(255,255,255,.05) }
+
+@media (max-width: 600px) {
+	#overlay { place-items: end center }
+	.modal { width: 100%; max-width: 100%; max-height: 88dvh; overflow-y: auto; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding-bottom: max(20px, env(safe-area-inset-bottom)) }
+}

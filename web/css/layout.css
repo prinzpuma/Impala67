@@ -1,0 +1,63 @@
+/* layout.css — Impala67: App-Grid, density-compact, Safe-Areas & Responsive */
+
+#app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: 12px; height: 100dvh; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) }
+/* Flache Panels, dezente Kanten, kein Glas-Look */
+#sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
+/* 🎨 (29. Juli) Zwei feste Töne aus der Vorlage: Navigation #202020, Mitte + KI-Panel #191919. */
+#sidebar { background: var(--sidebar-bg) }
+
+/* styles.css — Impala67: cleanes, flaches Notion-artiges Dunkeld… */
+/* Kompakt (density-compact): randlose Fläche, Panels bis Kante,… */
+body.density-compact { --sidebar-w: 236px; background: var(--panel-solid) }
+/* 🎯 Kompakt: KEINE Trennlinie unter den Pillen (Home/Chat/Karten/Suche). Die Kante lag
+   direkt über dem Seitenbaum und wirkte wie ein Strich mitten im Nichts. */
+body.density-compact .topbar { border-bottom: none; padding-bottom: 2px }
+body.density-compact #bg { display: none }
+body.density-compact #app { width: 100%; min-width: 0; gap: 0; padding: 0; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 320px; background: var(--panel-solid) }
+body.density-compact.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
+body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0 }
+body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid) }
+body.density-compact .panel-head { border-bottom-color: var(--edge) }
+body.density-compact:not(.mobile-ui) #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px }
+body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px) }
+body.density-compact .row { padding-top: 4px; padding-bottom: 4px }
+body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px }
+body.density-compact .home { padding: 24px 28px }
+body.density-compact :where(.library) { padding: 24px 30px }
+
+/* == KI-Panel einklappen / Vollbild == */
+body.panel-collapsed #panel { display: none }
+body.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) }
+
+@media (max-width: 980px) {
+	body { overflow: auto }
+	#app { grid-template-columns: 1fr; height: auto; min-height: 100dvh }
+	#mainWrap { min-height: 60dvh }
+	#panel { min-height: 40dvh }
+	/* Ein Heft ist eine eigene Vollbild-Bühne. */
+	body.heft-open { overflow: hidden }
+	body.heft-open #app { height: 100dvh; min-height: 0 }
+	body.heft-open #mainWrap { min-height: 0 }
+}
+
+/* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
+@media (min-width: 701px) and (max-width: 1024px) {
+	#app { grid-template-columns: 220px minmax(0, 1fr) }
+	#panel { position: fixed; z-index: 25; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
+	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
+}
+/* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
+@media (pointer: coarse) and (min-width: 701px) {
+	body.heft-open #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1) }
+	body.heft-open #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1) }
+}
+@media (pointer: coarse) and (min-width: 701px) and (max-width: 1024px) {
+	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald di… */
+	body.heft-open.sidebar-collapsed #app { padding: 0; gap: 0 }
+	body.heft-open.sidebar-collapsed #mainWrap { border-radius: 0; border-color: transparent }
+}
+@media (pointer: coarse) and (min-width: 1025px) {
+	/* Große Tablets (iPad quer): das KI-Panel ist eine echte Grid-Sp… */
+	body.heft-open.sidebar-collapsed.panel-collapsed #app { padding: 0; gap: 0 }
+	body.heft-open.sidebar-collapsed.panel-collapsed #mainWrap { border-radius: 0; border-color: transparent }
+}

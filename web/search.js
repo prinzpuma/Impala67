@@ -151,16 +151,7 @@ function pagePathLabel(pg) {
 	if (!pg) return "";
 	const memo = pathCache.get(pg.id);
 	if (memo !== undefined) return memo;
-	const parts = [];
-	let cur = pg;
-	const guard = new Set();
-	while (cur && cur.parentId && !guard.has(cur.parentId)) {
-		guard.add(cur.parentId);
-		const p = S.pages[cur.parentId];
-		if (!p || p.trashed) break;
-		parts.unshift(p.title || "");
-		cur = p;
-	}
+	const parts = RENDER.ancestorsOf(pg).map((p) => p.title || "");
 	const ws = S.workspaces[pg.workspaceId] || S.workspaces.default;
 	if (ws && ws.name) parts.unshift(ws.name);
 	const out = parts.filter(Boolean).join(" › ");

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<script>if (typeof performance !== "undefined" && performance.mark) performance.mark("impala67:nav-start");</script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src * data: blob:; worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<script>
+function showErrorOverlay(title, details, stack) {
+	const div = document.createElement("div");
+	div.style.cssText = "position:fixed;inset:0;background:rgba(255,0,0,0.95);color:#fff;z-index:999999;padding:20px;font-family:monospace;font-size:16px;overflow:auto;";
+	const heading = document.createElement("h1");
+	heading.textContent = title;
+	div.appendChild(heading);
+	Object.entries(details || {}).forEach(function (entry) {
+		const p = document.createElement("p");
+		const strong = document.createElement("strong");
+		strong.textContent = entry[0] + ": ";
+		p.appendChild(strong);
+		p.appendChild(document.createTextNode(String(entry[1] == null ? "" : entry[1])));
+		div.appendChild(p);
+	});
+	const pre = document.createElement("pre");
+	pre.textContent = stack || "";
+	div.appendChild(pre);
+	document.documentElement.appendChild(div);
+}
+window.onerror = function (message, source, lineno, colno, error) {
+	showErrorOverlay("Frontend Error Caught", { Message: message, Source: source, Position: lineno + ":" + colno }, error && error.stack);
+	return false;
+};
+window.onunhandledrejection = function (event) {
+	showErrorOverlay("Unhandled Promise Rejection", { Reason: event.reason }, event.reason && event.reason.stack);
+};
+function resetTransientUiLayers() {
+	document.body.classList.remove("mnav-open");
+	["overlay", "palette", "attachMenu", "modelMenu"].forEach((id) => {
+		const el = document.getElementById(id);
+		if (el) el.hidden = true;
+	});
+}
+window.addEventListener("pageshow", resetTransientUiLayers);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Impala67 — Startseite Test (Apple/Claude UI)</title>
+<link rel="stylesheet" href="styles.css?build=67">
+<link rel="stylesheet" href="mobile.css?build=13">
+<link rel="stylesheet" href="test-home.css">
+<meta name="theme-color" content="#05070d">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" crossorigin="anonymous" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous" defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="panel-collapsed">
+<script>
+(function () {
+	try {
+		var followSystem = localStorage.getItem("impala67FollowSystemTheme") !== "0";
+		var theme = followSystem && window.matchMedia
+			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+			: (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark");
+		var density = localStorage.getItem("impala67Density") || "compact";
+		var motion = localStorage.getItem("impala67Motion") || "reduced";
+		var fontSize = localStorage.getItem("impala67FontSize") || "m";
+		document.body.classList.toggle("light", theme === "light");
+		document.body.classList.toggle("density-compact", density === "compact");
+		document.body.classList.toggle("reduce-motion", motion === "reduced");
+		document.body.classList.toggle("font-s", fontSize === "s");
+		document.body.classList.toggle("font-l", fontSize === "l");
+		document.body.classList.toggle("sidebar-collapsed", localStorage.getItem("impala67.sidebarCollapsed") === "1");
+		var sidebarWidth = Number(localStorage.getItem("impala67.sidebarWidth") || 0);
+		if (sidebarWidth) document.body.style.setProperty("--sidebar-w", Math.max(200, Math.min(420, sidebarWidth)) + "px");
+		var themeColor = document.querySelector('meta[name="theme-color"]');
+		if (themeColor) themeColor.content = theme === "light" ? "#f2efe9" : "#05070d";
+	} catch (_) {}
+})();
+</script>
+<div id="bg"></div>
+<div id="bootSplash" style="position:fixed;inset:0;width:100%;height:100dvh;z-index:9999;box-sizing:border-box;text-align:center;background:var(--panel-solid);color:var(--text);font-family:system-ui,-apple-system,sans-serif">
+	<div style="position:absolute;left:calc(50% - 17px);top:calc(50% - 56px);width:34px;height:34px;border-radius:50%;border:3px solid var(--edge);border-top-color:var(--accent);animation:bootspin 0.9s linear infinite"></div>
+	<div id="bootSplashMsg" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center">Impala67 Test-Startseite lädt…</div>
+	<style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
+</div>
+
+<div id="app">
+	<aside id="sidebar">
+		<div class="topbar">
+			<button id="btnHome" class="tab active" title="Home">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+				<span class="tab-label">Home</span>
+			</button>
+			<button id="btnChatTab" class="tab" title="Chats">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.3 0-2.6-.3-3.7-.8L3 21l1.8-5.8A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+				<span class="tab-label">Chat</span>
+			</button>
+			<button id="btnAnki" class="tab" title="Karteikarten">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="13" height="13" rx="2"/><path d="M8.5 4.5 19 2l2 10.5"/></svg>
+				<span class="tab-label">Karten</span>
+			</button>
+			<button id="btnDaily" class="tab" title="Daily Notes" hidden>
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/></svg>
+			</button>
+			<button id="btnSearchToggle" class="tab" title="Suchen">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>
+			</button>
+		</div>
+		<nav id="tree"></nav>
+		<div class="side-foot">
+			<button id="btnNotebookLM" title="Gemini Notebook">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+				<span>Gemini Notebook</span>
+			</button>
+			<button id="btnGraph" title="Wissensgraph">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.4 7 15.6 7.7M7 8.4l1.3 7.1M16.3 10.2l-5.6 6"/></svg>
+				<span>Wissensgraph</span>
+			</button>
+			<button id="btnLibrary" title="Bibliothek">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 14h4l2 2h4l2-2h4"/></svg>
+				<span>Bibliothek</span>
+			</button>
+			<button id="btnTrash">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+				<span>Papierkorb</span>
+			</button>
+			<button id="btnSettings">
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+				<span>Einstellungen</span>
+			</button>
+		</div>
+		<div id="sidebarResizer" role="separator" aria-label="Breite der Seitenleiste ändern"></div>
+	</aside>
+
+	<div id="mainWrap">
+		<div id="tabbar"></div>
+		<main id="main"></main>
+	</div>
+
+	<aside id="panel">
+		<div class="panel-head">
+			<div class="panel-head-left">
+				<button type="button" class="ai-status-chip" id="aiStatusChip" title="KI-Status" data-aistatus="1"></button>
+				<span class="panel-title">KI-Coach</span>
+			</div>
+			<span class="panel-head-right">
+				<button id="btnChatHist" title="Verlauf"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></button>
+				<button id="btnChatNew" title="Neuer Chat">＋</button>
+				<button id="btnChatExpand" title="Chat erweitern"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5"/><path d="m19 5-8 8"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg></button>
+				<button id="btnTogglePanel" title="Schließen">✕</button>
+			</span>
+		</div>
+		<div id="chatLog"></div>
+		<div id="chatHistMenu" class="model-menu" hidden></div>
+		<form id="chatForm">
+			<div id="sideContextChip" hidden></div>
+			<div id="pendingChip" hidden></div>
+			<div class="composer-body">
+				<textarea id="chatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea>
+			</div>
+			<div class="composer-actions">
+				<div class="composer-actions-left">
+					<button type="button" id="btnAttach" title="Anhängen">+</button>
+					<button type="button" id="btnModelMenu" class="composer-tool" title="Modell wählen">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="#1b1c1f"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="#1b1c1f"/></svg>
+					</button>
+				</div>
+				<button type="button" id="btnVoice" class="composer-tool" title="Spracheingabe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg></button>
+				<button id="chatSubmit" type="submit" title="Senden" disabled>↑</button>
+			</div>
+			<div id="modelMenu" class="model-menu" hidden></div>
+		</form>
+	</aside>
+</div>
+
+<button type="button" id="btnAiFab" aria-label="KI öffnen" title="KI öffnen">
+	<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></svg>
+</button>
+
+<div id="attachMenu" class="attach-menu" hidden>
+	<button id="attachFile"><span class="attach-menu-icon">⌇</span><span>Fotos und Dateien hinzufügen</span></button>
+	<button id="attachHeft" hidden><span class="attach-menu-icon">📓</span><span>Aktuelle Heft-Seite als Bild anhängen</span></button>
+	<button id="attachMention"><span class="attach-menu-icon">@</span><span>Seiten oder Personen erwähnen…</span></button>
+</div>
+
+<div id="overlay" hidden></div>
+<input type="file" id="fileAttachment" accept="application/pdf,image/*" hidden>
+<input type="file" id="filePdf" accept="application/pdf" hidden>
+<input type="file" id="fileImg" accept="image/*" hidden>
+<input type="file" id="fileBg" accept="image/*" hidden>
+<input type="file" id="fileImport" accept="application/json" hidden>
+
+<!-- Test-Main: Bindet das neue Apple-/Claude-Startseiten-Design in die ECHTE Impala67-App ein -->
+<script type="module" src="test-main.js"></script>
+</body>
+</html>

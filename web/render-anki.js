@@ -22,30 +22,35 @@ const pad = (id) => (window.CONTROLLER ? window.CONTROLLER.badge(id) : "");
 // ---------- Anki-Bereich (🃏-Tab): Stapel / Browser / Statistik / Lernen ----------
 // „Standard“ ist der Default-Name für Karten ohne expliziten Stapel — erscheint wie
 // jeder andere Stapel in Baum/Liste und ist löschbar (Karten im Teilbaum werden mitgelöscht).
-function ankiDecks() {
+function collectActiveDeckSet(extraName = null) {
 	const set = new Set();
-	// Nur aktive (nicht im Papierkorb) Stapel
+	const add = (n) => {
+		const d = String(n || "").trim();
+		if (d) set.add(d);
+	};
 	Object.keys(S.decks || {}).forEach((n) => {
 		if (!n) return;
 		const d = S.decks[n];
 		if ((d && d.trashed) || STATE.isDeckArchived(n)) return;
-		set.add(n);
+		add(n);
 	});
-	// Auch Karten mit leerem/fehlendem deck-Feld zählen zu „Standard“ (ohne Papierkorb-Karten)
 	Object.values(S.cards).forEach((c) => {
 		if (!c || c.trashed || STATE.isCardArchived(c)) return;
-		const d = (c.deck || "Standard").trim();
-		if (d) set.add(d);
+		add(c.deck || "Standard");
 	});
-	// Elternstapel ergänzen: "Mathe::Analysis" erzeugt automatisch auch "Mathe"
+	if (extraName) add(extraName);
 	[...set].forEach((n) => {
 		const parts = n.split("::");
 		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
 	});
+	return set;
+}
+
+function ankiDecks() {
 	// „Standard“ oben, dann manuelle Drag&Drop-Reihenfolge (order aus deckReorder),
 	// Rest weiterhin alphabetisch (de) — Stapel ohne order sortieren hinter denen mit.
 	const orderOf = (n) => (S.decks[n] && typeof S.decks[n].order === "number" ? S.decks[n].order : null);
-	return [...set].sort((a, b) => {
+	return [...collectActiveDeckSet()].sort((a, b) => {
 		if (a === "Standard") return -1;
 		if (b === "Standard") return 1;
 		const oa = orderOf(a), ob = orderOf(b);
@@ -552,26 +557,7 @@ function studyFooterHtml(c) {
 // Stapel-Liste für den Editor: alle bekannten Stapel inkl. „Standard“ (falls vorhanden).
 // Fallback „Standard“, wenn noch gar kein Stapel existiert (neue Karte anlegen).
 function editorDecks() {
-	const set = new Set();
-	const add = (n) => {
-		const d = String(n || "").trim();
-		if (d) set.add(d);
-	};
-	Object.keys(S.decks || {}).forEach((n) => {
-		if ((S.decks[n] && S.decks[n].trashed) || STATE.isDeckArchived(n)) return;
-		add(n);
-	});
-	Object.values(S.cards).forEach((c) => {
-		if (!c || c.trashed || STATE.isCardArchived(c)) return;
-		add(c.deck || "Standard");
-	});
-	add(S.ankiDeck);
-	// Elternstapel aus Hierarchie mit aufnehmen
-	[...set].forEach((n) => {
-		const parts = n.split("::");
-		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
-	});
-	const list = [...set].sort((a, b) => {
+	const list = [...collectActiveDeckSet(S.ankiDeck)].sort((a, b) => {
 		if (a === "Standard") return -1;
 		if (b === "Standard") return 1;
 		return a.localeCompare(b, "de");

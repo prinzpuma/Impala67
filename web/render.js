@@ -393,6 +393,13 @@ function syncActiveTabChip(bar) {
 	return true;
 }
 
+function repositionSidebarPageMenu(tree) {
+	if (!S.pageMenuOpenId) return;
+	const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
+	const menu = tree.querySelector(".page-menu");
+	if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+}
+
 // "files" = Workspaces mit Seitenbaum, "chats" = Chat-Verlauf
 function renderSidebar() {
 	renderTopbar();
@@ -407,11 +414,7 @@ function renderSidebar() {
 	const sidebarKey = [_sidebarRevision, S.pageMenuOpenId || "", S.deckMenuOpenName || "",
 		S.renamingPageId || "", S.renamingDeck || "", selectionKey].join("|");
 	if (tree.dataset.renderKey === sidebarKey && syncActiveSidebarRow(tree)) {
-		if (S.pageMenuOpenId) {
-			const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
-			const menu = tree.querySelector(".page-menu");
-			if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
-		}
+		repositionSidebarPageMenu(tree);
 		return;
 	}
 
@@ -447,11 +450,7 @@ function renderSidebar() {
 	tree.dataset.sbmode = mode;
 	tree.dataset.renderKey = sidebarKey;
 	// dito: offenes Seiten-⋯-Menü nach JEDEM Rebuild neu positionieren
-	if (S.pageMenuOpenId) {
-		const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
-		const menu = tree.querySelector(".page-menu");
-		if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
-	}
+	repositionSidebarPageMenu(tree);
 }
 
 // Chat-Verlauf in der Sidebar (Volltextsuche läuft im Befehls-Menü, Strg+K).
@@ -714,7 +713,13 @@ function dbTableHtml(pg) {
 // Breadcrumb: Workspace › Eltern › aktuelle Seite
 function ancestorsOf(pg) {
 	const chain = [];
-	for (let cur = S.pages[pg.parentId]; cur; cur = S.pages[cur.parentId]) chain.unshift(cur);
+	const guard = new Set();
+	let cur = pg?.parentId ? S.pages[pg.parentId] : null;
+	while (cur && !cur.trashed && !guard.has(cur.id)) {
+		guard.add(cur.id);
+		chain.unshift(cur);
+		cur = cur.parentId ? S.pages[cur.parentId] : null;
+	}
 	return chain;
 }
 

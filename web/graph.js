@@ -450,12 +450,19 @@ export const GRAPH = (() => {
 		const g = visibleGraph(), stage = overlay && overlay.querySelector(".graph-stage"), svg = stage && stage.querySelector(".graph-lines");
 		if (!g || !svg) return;
 		const base = stage.getBoundingClientRect();
-		const node = (id) => stage.querySelector('[data-skill="' + CSS.escape(id) + '"]');
+		const scrollLeft = stage.scrollLeft, scrollTop = stage.scrollTop;
+		const nodeCache = new Map();
+		const getRect = (id) => {
+			if (nodeCache.has(id)) return nodeCache.get(id);
+			const el = stage.querySelector('[data-skill="' + CSS.escape(id) + '"]');
+			const rect = el ? el.getBoundingClientRect() : null;
+			nodeCache.set(id, rect);
+			return rect;
+		};
 		const path = (a, b, cls) => {
-			const ae = node(a), be = node(b); if (!ae || !be) return "";
-			const ar = ae.getBoundingClientRect(), br = be.getBoundingClientRect();
-			const x1 = ar.left + ar.width / 2 - base.left + stage.scrollLeft, y1 = ar.top + ar.height / 2 - base.top + stage.scrollTop;
-			const x2 = br.left + br.width / 2 - base.left + stage.scrollLeft, y2 = br.top + br.height / 2 - base.top + stage.scrollTop;
+			const ar = getRect(a), br = getRect(b); if (!ar || !br) return "";
+			const x1 = ar.left + ar.width / 2 - base.left + scrollLeft, y1 = ar.top + ar.height / 2 - base.top + scrollTop;
+			const x2 = br.left + br.width / 2 - base.left + scrollLeft, y2 = br.top + br.height / 2 - base.top + scrollTop;
 			const mid = (y1 + y2) / 2;
 			return '<path class="' + cls + '" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + mid + ',' + x2 + ' ' + mid + ',' + x2 + ' ' + y2 + '"></path>';
 		};

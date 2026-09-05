@@ -4,11 +4,12 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 const JSON_GZIP_AT = 16 * 1024;
 const SYNC_KEY_RE = /^impala-(?:[0-9a-f]{4}-){7}[0-9a-f]{4}$/i;
+const toUint8 = (v) => (v instanceof Uint8Array ? v : new Uint8Array(v));
 
 export const MAX_USER_STORAGE_BYTES = 1_000_000_000;
 
 export function bytesToBase64(value) {
-	const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+	const bytes = toUint8(value);
 	let out = "";
 	for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
 	return btoa(out);
@@ -22,8 +23,7 @@ export function base64ToBytes(value) {
 }
 
 export function bytesToHex(value) {
-	return [...(value instanceof Uint8Array ? value : new Uint8Array(value))]
-		.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+	return [...toUint8(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export function hexToBytes(value) {
@@ -61,14 +61,19 @@ export async function deriveSyncCredentials(syncKey) {
 	return { userId, authToken, cryptoKey };
 }
 
+async function transformBytes(bytes, transformer) {
+	const stream = new Blob([bytes]).stream().pipeThrough(transformer);
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 async function gzip(bytes) {
 	if (typeof CompressionStream !== "function") return null;
-	return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+	return transformBytes(bytes, new CompressionStream("gzip"));
 }
 
 async function gunzip(bytes) {
 	if (typeof DecompressionStream !== "function") throw new Error("Gzip wird auf diesem Gerät nicht unterstützt.");
-	return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+	return transformBytes(bytes, new DecompressionStream("gzip"));
 }
 
 async function encryptBytes(cryptoKey, bytes) {
@@ -106,7 +111,7 @@ export async function decryptPayload(cryptoKey, packet) {
 export async function encryptBlobRecord(cryptoKey, id, record) {
 	const raw = record?.buf || record?.data;
 	if (!raw) throw new Error(`Blob ${id} enthält keine Daten.`);
-	const body = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+	const body = toUint8(raw);
 	const header = enc.encode(JSON.stringify({ id, meta: record?.meta || {} }));
 	const packed = new Uint8Array(4 + header.length + body.length);
 	new DataView(packed.buffer).setUint32(0, header.length, false);
@@ -115,7 +120,7 @@ export async function encryptBlobRecord(cryptoKey, id, record) {
 }
 
 export async function decryptBlobRecord(cryptoKey, iv, ciphertext) {
-	const packed = await decryptBytes(cryptoKey, iv, ciphertext instanceof Uint8Array ? ciphertext : new Uint8Array(ciphertext));
+	const packed = await decryptBytes(cryptoKey, iv, toUint8(ciphertext));
 	if (packed.byteLength < 4) throw new Error("Ungültiger Blob-Datensatz.");
 	const headerLen = new DataView(packed.buffer, packed.byteOffset, packed.byteLength).getUint32(0, false);
 	if (headerLen < 2 || headerLen > packed.byteLength - 4) throw new Error("Ungültiger Blob-Header.");

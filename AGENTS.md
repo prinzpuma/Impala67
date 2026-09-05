@@ -1,47 +1,50 @@
 # Impala67 – Arbeitsregeln
 
-## Produkt und Architektur
+## 1. Produkt und Plattformen
 
-- Impala67 ist eine statische, installierbare PWA. `web/` ist zugleich der veröffentlichte App-Ordner.
-- Projekt ist darauf ausgelegt für mich kostenlos zu sein.
-- Die App ist local-first: fachliche Daten liegen in IndexedDB; Google Drive synchronisiert optional über `appDataFolder`, der Cloudflare Worker optional über E2EE-Events.
-- Das Frontend bleibt eine statische PWA ohne Desktop-Wrapper. `server/` enthält die optionale Cloudflare-Komponente mit Worker, Durable Objects, D1 und R2. Neue Frontend-Funktionen müssen in aktuellen Browsern und als installierte PWA funktionieren.
-- Die App nutzt native ES-Module ohne Bundler. Bewahre diesen Ansatz, außer eine Aufgabe fordert ausdrücklich eine Baukette.
-- Bugs sollen an der Wurzel gelöst werden. Ich will nicht, dass dieselbe Regel an verschiedenen Stellen im Code behandelt wird.
-- Schreibe kompakten, gut testbaren Code nach aktuellen Web-Standards. Bevorzuge DRY/KISS/YAGNI und vermeide parallele Implementierungen derselben Fachregel.
-- Lasse große UI-Orchestratoren nicht weiter anwachsen: Extrahiere verhaltensneutrale, fachlich geschlossene Regeln bevorzugt in kleine ES-Module mit direkten Tests; öffentliche Modul-APIs und Persistenzformate bleiben dabei stabil.
+- **Plattformunabhängige PWA**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First). Sie läuft nahtlos auf allen Plattformen:
+  - **iPad / Tablet**: Für handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht).
+  - **Laptop / PC (Linux, Windows, macOS)**: Für strukturiertes Tippen mit Tastatur (Markdown-Editor).
+  - **Smartphone**: Für schnelles Lesen und mobile Kurznotizen.
+- **Kostenlos & unabhängig**: Das Projekt ist darauf ausgelegt, dauerhaft ohne laufende Serverkosten für mich betrieben zu werden (Cloudflare Free Tier, GitHub Pages).
+- **Direkt ohne Bundler**: Die App nutzt native ES-Module und Standard-CSS. Alles läuft direkt im Browser ohne vorgeschalteten Build- oder Kompilierungsschritt.
+- **Plattformübergreifende Entwicklung**: Alle Entwickler-Tools, npm-Skripte und Tests müssen gleichermaßen unter Windows, Linux und macOS funktionieren.
 
-## Wichtige Bereiche
+## 2. Daten und Synchronisation
 
-- Einstieg und Start: `web/index.html`, `web/main.js`, `web/boot.js`
-- Mobile UI: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
-- Persistenz und Sync: `web/db.js`, `web/state.js`, `web/drive.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/sync-maintenance.js`, `server/`
-- KI und RAG: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
-- Offline und Updates: `web/service-worker.js`, `web/updater.js`, `web/version.json`
-- Veröffentlichung: `.github/workflows/release.yml`
+- **Local-First**: Alle Notizen und Daten liegen primär lokal im Browser (IndexedDB). Die App funktioniert immer offline.
+- **Cloudflare Live-Sync (E2EE)**: Schneller, Ende-zu-Ende-verschlüsselter Live-Sync zwischen Geräten über Cloudflare.
+- **Google Drive Backup**: Dient als optionales, unabhängiges Notfall-Backup.
+- **Protokoll-Details ausgelagert**: Spezifische technische Regeln für das Protokoll v4 (R2-Speicher, D1-Index, clientseitige Kompaktierung) liegen gebündelt im Skill `cloudflare-sync-v4`, um diese Datei übersichtlich zu halten.
 
-## Sicherheitsregeln
+## 3. Wichtige Bereiche
 
-- Niemals API-Schlüssel, OAuth-Secrets, Tokens oder `web/config.local.js` committen.
-- Eine statische PWA darf nur öffentliche Client-IDs enthalten. Zugangsdaten von KI-Anbietern bleiben nutzerlokal.
-- Bei Änderungen an IndexedDB, Event-Log oder Drive-Sync Rückwärtskompatibilität standardmäßig wahren; ein absichtlicher Format-Cut braucht eine ausdrückliche Nutzerfreigabe und eine klare Protokollversion.
-- Cloudflare-Sync verwendet Protokoll v4. D1 speichert nur Index-/Quota-Metadaten; verschlüsselte Eventpakete und Blobs liegen in R2. D1-Inline-Payloads und globale Alt-Cursor werden nicht unterstützt.
-- Cloudflare-Wire-Events enthalten niemals lokale `seq`-/Replay-Metadaten; eingehende Events erhalten immer einen neuen lokalen IndexedDB-Schlüssel.
-- Fremd-Events tragen ihre lokale Herkunft in `_remoteSource` (`drive` oder `cloudflare`); jeder Transport unterdrückt nur sein eigenes Echo, damit Drive als vollständiges Backup funktionieren kann.
-- Große Sync-Payloads sowohl nach Eventanzahl als auch nach tatsächlichen UTF-8-Bytes begrenzen; Zeichenanzahl ist kein Byte-Limit.
-- Cloudflare-Erststände werden vor E2EE in begrenzte Eventpakete gebündelt; fachliche Einzelereignisse nicht unnötig als einzelne R2-Objekte speichern.
-- Cloud-Compaction erfolgt clientseitig als Generation-Cut: erst vollständig synchronisieren, dann `/api/reset`, danach aus dem lokalen Zustand nur den kompaktierten Eventstand und noch referenzierte Blobs neu hochladen. So bleiben E2EE und Offline-Geräte kompatibel.
+- **Einstieg & Shell**: `web/index.html`, `web/main.js`, `web/boot.js`, `web/app.js`
+- **Editor & Notizen**: `web/editor.js`, `web/render.js`
+- **Handschrift & Zeichnen (Heft)**: `web/heft.js`
+- **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
+- **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/drive.js`, `server/`
+- **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
+- **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
+- **Veröffentlichung**: `.github/workflows/release.yml`
 
-## Kommunikation und Arbeitsweise
+## 4. Code-Qualität und Sicherheit
 
-- **Antworten für den Nutzer**: Keine technischen Code-Erklärungen, Programmiersprachen-Details oder Code-Wiederholungen im Chat. Erkläre stattdessen in einfacher Sprache, was geändert wurde und welche konkreten Auswirkungen das für den Nutzer hat (Funktion, Verhalten, Bedienung).
-- **Kontext & Tokens sparen**: Große Dateien (>300 Zeilen wie `heft.js`, `editor.js`, `state.js`) niemals komplett lesen, sondern gezielt per Suchfunktion (`grep`) und Zeilenausschnitten inspizieren. Keine langen Statusmonologe vor Toolaufrufen.
-- **Gezielt testen**: Vor `npm run verify` zuerst betroffene Einzeltests ausführen und Terminal-Logs kurz halten.
-- **Offline & Cache**: Beim Ändern gecachter App-Dateien die Service-Worker-Version erhöhen und Offline-Start sowie Reload prüfen. Veröffentlichte Builds erhalten ihre Release-Version im Workflow.
-- **Qualitätssicherung**: Führe für ausgelieferte PWA-Änderungen zusätzlich passende Browser-/Offline-Szenarien und `git diff --check` aus. Trenne lokale Prüfungen klar von echtem Provider-, Deployment- und iPad-Nachweis.
-- Prüfe regelmäßig, ob diese `AGENTS.md` noch zum aktuellen Projektstand passt.
+- **Bugs an der Wurzel lösen**: Keine doppelten Regeln oder parallelen Sonderfälle (DRY / KISS / YAGNI).
+- **Dateigrößen im Zaum halten**: Große Module (`heft.js`, `editor.js`, `state.js`) nicht endlos aufblähen. Neue, in sich geschlossene Logik bevorzugt in kleine, gut testbare Hilfsmodule auslagern.
+- **Sicherheit & Geheimnisse**: Niemals API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben rein nutzerlokal im Browser.
+- **Rückwärtskompatibilität**: Lokale Daten in IndexedDB dürfen durch Updates niemals verloren gehen oder ungefragt inkompatibel werden.
+- **Offline-Cache**: Werden gecachte App-Dateien geändert, muss die Cache-Version im Service-Worker angepasst werden.
 
-## Veröffentlichung
+## 5. Kommunikation und Arbeitsweise
 
-- Ein Push nach `main` veröffentlicht ausschließlich die PWA über GitHub Pages.
-- Der CI-Workflow setzt `web/version.json`, `web/updater.js` und den Service-Worker-Cache für den Release. Lokale Versionen nur bewusst ändern.
+- **Verständliche Antworten**: Erkläre Änderungen in einfacher, alltagstauglicher Sprache. Beschreibe immer konkret, was sich für die Bedienung, das Verhalten oder den Nutzen der App ändert.
+- **Hintergründe auf den Punkt**: Erkläre bei wichtigen Entscheidungen kurz und verständlich die Gründe ("Warum wurde dieser Weg gewählt?"), ohne dich in Code-Monologen zu verlieren.
+- **Keine Code-Wiederholungen im Chat**: Vermeide es, lange Codeblöcke im Chattext zu duplizieren.
+- **Kontext sparen**: Große Dateien (>300 Zeilen) nicht ungezielt komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten.
+- **Gezielt testen**: Vor Änderungen zuerst die betroffenen Einzeltests ausführen. Vollständige Checks (`npm run verify`) kurz halten.
+
+## 6. Veröffentlichung
+
+- Ein Push auf den `main`-Branch veröffentlicht die PWA automatisch über GitHub Pages.
+- Versionsnummern und Cache-Strings für Releases werden im CI-Workflow gesetzt.
