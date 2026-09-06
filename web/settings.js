@@ -86,10 +86,9 @@ export function applyAppearance() {
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
 	document.body.classList.toggle("light", theme === "light");
-	// Browser-Chrome und iPadOS-PWA-Safe-Area erhalten dieselbe Grundfläche wie
-	// die App. Der Meta-Tag wird bei jedem Theme-Wechsel aktualisiert.
-	const themeColor = document.querySelector('meta[name="theme-color"]');
-	if (themeColor) themeColor.content = theme === "light" ? "#f2efe9" : "#05070d";
+	document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+		m.content = theme === "light" ? "#f2efe9" : "#05070d";
+	});
 	document.body.classList.toggle("density-compact", density === "compact");
 	document.body.classList.toggle("reduce-motion", motion === "reduced");
 	const fontSize = localStorage.getItem("impala67FontSize") || "m";
