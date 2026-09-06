@@ -282,19 +282,6 @@ body.reduce-motion .heft-tray { animation: none }
 	.heft-chrome .heft-corner-r { right: 8px }
 }
 
-body.is-ios .heft-chrome .heft-float {
-	top: max(32px, calc(10px + env(safe-area-inset-top, 0px))) !important;
-}
-body.is-ios .heft-chrome .heft-corner {
-	top: max(32px, calc(10px + env(safe-area-inset-top, 0px)));
-}
-body.is-ios .heft-chrome .heft-corner-l, body.is-ios .heft-chrome .heft-corner-r {
-	top: max(32px, calc(10px + env(safe-area-inset-top, 0px)));
-}
-body.is-ios .heft-chrome .heft-tray {
-	top: max(72px, calc(50px + env(safe-area-inset-top, 0px)));
-}
-
 /* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */
 /* 🐛 Fix (26. Juli, "Toolbar wird schlagartig transparent"): Der Rückzug bleibt, ist aber
    weich und nicht mehr fast unsichtbar (.12 → .3). Die eigentliche Ursache des Flackerns

@@ -20,32 +20,6 @@ body.density-compact #panel { border-left: 1px solid var(--edge); background: va
 body.density-compact .panel-head { border-bottom-color: var(--edge) }
 body.density-compact:not(.mobile-ui) #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)); gap: 6px }
 body.density-compact:not(.mobile-ui) #tabbar { padding-top: max(6px, calc(6px + env(safe-area-inset-top, 0px))) }
-
-/* iPad & Touch-Tablets: Im Standalone-PWA-Modus und unter iPadOS überlagert die System-Statusleiste
-   (und der iPadOS-Multitasking-Griff) die obersten ~24–28px des Displays. Ein solider oberer Puffer
-   garantiert, dass Navigation, Tabs und Panel-Head vollständig unterhalb der Statusleistenzone liegen
-   und die iPadOS-Liquid-Glass-Unschärfe nur auf eine einheitliche, ununterbrochene Hintergrundfläche trifft. */
-body.is-ios.density-compact:not(.mobile-ui) #sidebar {
-	padding-top: max(34px, calc(10px + env(safe-area-inset-top, 0px)));
-}
-body.is-ios.density-compact:not(.mobile-ui) #tabbar {
-	padding-top: max(30px, calc(6px + env(safe-area-inset-top, 0px)));
-}
-body.is-ios.density-compact:not(.mobile-ui) #panel .panel-head {
-	padding-top: max(30px, calc(6px + env(safe-area-inset-top, 0px)));
-}
-
-@media (display-mode: standalone) and (pointer: coarse) {
-	body.density-compact:not(.mobile-ui) #sidebar {
-		padding-top: max(34px, calc(10px + env(safe-area-inset-top, 0px)));
-	}
-	body.density-compact:not(.mobile-ui) #tabbar {
-		padding-top: max(30px, calc(6px + env(safe-area-inset-top, 0px)));
-	}
-	body.density-compact:not(.mobile-ui) #panel .panel-head {
-		padding-top: max(30px, calc(6px + env(safe-area-inset-top, 0px)));
-	}
-}
 body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px) }
 body.density-compact .row { padding-top: 4px; padding-bottom: 4px }
 body.density-compact .side-foot button { min-height: 29px; padding-top: 4px; padding-bottom: 4px }
