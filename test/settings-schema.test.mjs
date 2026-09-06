@@ -43,3 +43,9 @@ test("dirty state compares stable field snapshots", () => {
 	assert.equal(valuesAreDirty(initial, fields), false);
 	assert.equal(valuesAreDirty(initial, [{ ...fields[0], value: "changed" }, fields[1]]), true);
 });
+
+test("impala67BreakReminder is present under Lernen and searchable", () => {
+	const results = searchSettings("Pausen-Erinnerung");
+	assert.ok(results.some((r) => r.id === "impala67BreakReminder" && r.section === "ai" && r.group === "Lernen"));
+});
+

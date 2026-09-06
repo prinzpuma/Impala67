@@ -502,7 +502,7 @@ export const STATE = (() => {
 					// Eigene GoodNotes-Ablage, getrennt von parentId/order des Notion-Baums.
 					gnFolderId: p.gnFolderId || null,
 					gnOrder: typeof p.gnOrder === "number" ? p.gnOrder : null,
-					created: ev.t, updated: ev.t,
+					created: p.created || ev.t || new Date().toISOString(), updated: ev.t,
 				};
 				break;
 			case "pageUpdate": {
@@ -984,11 +984,17 @@ export const STATE = (() => {
 		// Das append-only Event und der daraus abgeleitete Laufzeit-State dürfen keine
 		// Referenzen auf veränderliche Aufruferobjekte behalten. IndexedDB klont zwar
 		// beim Schreiben, reduce() arbeitet danach aber mit diesem Event weiter.
-		if (payload && typeof payload === "object") payload = cloneStateValue(payload);
+		const now = U.now();
+		if (payload && typeof payload === "object") {
+			payload = cloneStateValue(payload);
+			if (type === "pageCreate" && !payload.created) {
+				payload.created = now;
+			}
+		}
 		for (const fn of _dispatchHooks.before) {
 			try { fn(type, payload); } catch (e) { console.warn("dispatch-Hook (before):", e); }
 		}
-		const ev = { id: U.uid(), t: U.now(), type, payload };
+		const ev = { id: U.uid(), t: now, type, payload };
 		// Erst persistieren, dann anwenden — sonst zeigt die UI bei einem
 		// Speicherfehler (z.B. Quota voll) Änderungen, die nie gespeichert wurden.
 		try {
@@ -1066,6 +1072,11 @@ export const STATE = (() => {
 			// gespeicherten Objekt getrennt. Ein zweiter vollständiger Deep Clone hier
 			// verdoppelte Start-CPU und kurzzeitig den Speicherbedarf ohne Schutzgewinn.
 			S[key] = cloneValues ? cloneStateValue(value) : value;
+		}
+		if (S.pages && typeof S.pages === "object") {
+			for (const pg of Object.values(S.pages)) {
+				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+			}
 		}
 		rebuildHeftMeta();
 		resetDerivedState();
@@ -1153,6 +1164,9 @@ export const STATE = (() => {
 			const queued = sortEvents(_queuedRemoteEvents.filter((event) => !event?.id || !replayIds.has(event.id)));
 			_queuedRemoteEvents = [];
 			if (queued.length) await applyRemoteEventsCooperative(queued);
+			for (const pg of Object.values(S.pages || {})) {
+				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+			}
 
 			finishProfile({ count: info.count, replayed, checkpointUsed });
 			return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: info.count, replayed, checkpointUsed };
@@ -1289,7 +1303,8 @@ export const STATE = (() => {
 
 	// Sidebar-Reihenfolge: explizit gesetzte order (per Drag & Drop) hat Vorrang,
 	// sonst Erstellzeit — so bleiben Alt-Daten stabil sortiert wie bisher.
-	const sortKeyOf = (pg) => (typeof pg.order === "number" ? pg.order : (Date.parse(pg.created) || 0));
+	const pageCreatedAt = (pg) => pg?.created || pg?.updated || "";
+	const sortKeyOf = (pg) => (typeof pg?.order === "number" ? pg.order : (Date.parse(pageCreatedAt(pg)) || 0));
 	// PERF (10. Juli): childrenOf war O(n) pro Aufruf → Sidebar-Baum O(n²).
 	// Parent→Kinder-Index (_childIdx / bustChildIdx am IIFE-Kopf).
 	// Sichtbarer Baum = Papierkorb-Filter + Sortierung ÜBER dem gemeinsamen Eltern-Index.
@@ -1298,6 +1313,7 @@ export const STATE = (() => {
 		const m = new Map();
 		for (const [parentId, kids] of ensureParentIdx()) {
 			for (const pg of kids) {
+				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
 				if (pg.trashed) continue;
 				const k = (pg.workspaceId || "default") + "\0" + parentId;
 				let arr = m.get(k);
@@ -1306,7 +1322,13 @@ export const STATE = (() => {
 			}
 		}
 		for (const arr of m.values()) {
-			arr.sort((a, b) => sortKeyOf(a) - sortKeyOf(b) || (a.created < b.created ? -1 : a.created > b.created ? 1 : 0));
+			arr.sort((a, b) => {
+				const sortDiff = sortKeyOf(a) - sortKeyOf(b);
+				if (sortDiff) return sortDiff;
+				const aCreated = pageCreatedAt(a);
+				const bCreated = pageCreatedAt(b);
+				return aCreated < bCreated ? -1 : aCreated > bCreated ? 1 : 0;
+			});
 		}
 		_childIdx = m;
 		return m;
@@ -1318,12 +1340,18 @@ export const STATE = (() => {
 	};
 
 	const trashedPages = () => Object.values(S.pages)
-		.filter((pg) => pg.trashed)
+		.filter((pg) => {
+			if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+			return pg.trashed;
+		})
 		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 
 	// Alle NICHT im Papierkorb liegenden Seiten — zentrale Quelle für Home,
 	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb-Seiten nirgends durchsickern.
-	const activePages = () => Object.values(S.pages).filter((pg) => !pg.trashed);
+	const activePages = () => Object.values(S.pages).filter((pg) => {
+		if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+		return !pg.trashed;
+	});
 
 	// Aktive Karten sind weder gelöscht noch selbst/über ihren Stapel archiviert.
 	// Diese eine Quelle nutzen Lernen, KI-Werkzeuge, Suche und Wissensgraph.
@@ -1666,5 +1694,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

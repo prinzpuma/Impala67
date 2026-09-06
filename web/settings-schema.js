@@ -15,7 +15,22 @@ export const SETTINGS_SECTIONS = [
 export const SETTINGS_ALIASES = Object.freeze({
 	ki: "ai", home: "general", look: "appearance", notion: "sync",
 	backup: "data", update: "data", controller: "devices", experimente: "ai",
-	cloudflare: "sync",
+	cloudflare: "sync", pause: "ai", lernzeit: "ai",
+});
+
+export const BREAK_REMINDER_KEY = "impala67BreakReminder";
+
+export const BREAK_REMINDER_SETTING = Object.freeze({
+	id: "impala67BreakReminder",
+	key: "impala67BreakReminder",
+	type: "boolean",
+	default: true,
+	label: "Pausen-Erinnerung (40 min)",
+	hint: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause",
+	description: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause",
+	section: "ai",
+	group: "Lernen",
+	keywords: "pause pausen-erinnerung karten lernzeit timer 40 min break reminder",
 });
 
 // Das Schema ist zugleich Informationsarchitektur und Suchindex. Renderer lesen
@@ -36,6 +51,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "ai-embedding", section: "ai", group: "Erweitert", label: "Embedding-Modell", description: "Modell für semantische Suche", keywords: "rag vektor suche" },
 	{ id: "ai-instructions", section: "ai", group: "Erweitert", label: "Eigene Anweisungen", description: "Tonfall und dauerhafte Vorgaben", keywords: "prompt system text" },
 	{ id: "learning-options", section: "ai", group: "Lernen", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und lokale Lernanalyse", keywords: "karten telemetrie sicherheit confidence" },
+	{ id: "impala67BreakReminder", key: "impala67BreakReminder", section: "ai", group: "Lernen", label: "Pausen-Erinnerung (40 min)", description: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause", hint: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause", type: "boolean", default: true, keywords: "pause pausen-erinnerung karten lernzeit timer 40 min break reminder" },
 	{ id: "learning-beta", section: "ai", group: "Lernen", label: "Beta-Lernfunktionen", description: "Optionale KI-gestützte Lernmodi", keywords: "experimente feynman fehler hinweise multiple choice" },
 	{ id: "cf-sync", section: "sync", group: "Cloudflare Echtzeit-Sync", label: "Cloudflare Live-Sync", description: "Echtzeit-Synchronisierung über WebSockets mit 500 MB Cloud-Speicher", keywords: "cloudflare echtzeit sync websocket live server speicher quota e2ee" },
 	{ id: "drive", section: "sync", group: "Google Drive", label: "Drive-Synchronisierung", description: "Geräte über den privaten App-Speicher synchronisieren", keywords: "google login konto cloud verbinden" },

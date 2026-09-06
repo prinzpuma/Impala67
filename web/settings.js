@@ -12,7 +12,7 @@ import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
-import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty } from "./settings-schema.js";
+import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty, BREAK_REMINDER_KEY } from "./settings-schema.js";
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
@@ -101,6 +101,29 @@ export function applyAppearance() {
 }
 
 export function applyTheme() { applyAppearance(); }
+
+export { BREAK_REMINDER_KEY };
+
+export function getBreakReminder() {
+	const val = localStorage.getItem(BREAK_REMINDER_KEY);
+	if (val === null || val === undefined || val === "") return true;
+	return val !== "off" && val !== "false" && val !== "0";
+}
+
+export function setBreakReminder(enabled) {
+	const on = typeof enabled === "boolean" ? enabled : enabled !== "off" && enabled !== "false" && enabled !== "0";
+	localStorage.setItem(BREAK_REMINDER_KEY, on ? "on" : "off");
+	return on;
+}
+
+export const isBreakReminderEnabled = getBreakReminder;
+
+export function handleBreakReminderToggle(enabled) {
+	const on = typeof enabled === "boolean" ? enabled : !getBreakReminder();
+	setBreakReminder(on);
+	if (document.querySelector(".settings-modal-v2")) openSettings("ai");
+	return on;
+}
 
 // Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
 export async function applyBg() {
@@ -210,6 +233,7 @@ function settingsViewModel() {
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		androidFullscreenAvailable: ANDROID_FULLSCREEN.available(),
 		androidFullscreenEnabled: ANDROID_FULLSCREEN.enabled(),
+		breakReminder: getBreakReminder(),
 		homeLayout,
 		homeSections: HOME_SECTIONS,
 	};
@@ -1154,24 +1178,31 @@ export async function handleBackupNow(button) {
 export const HOME_SECTIONS = [
 	{ id: "insights", label: "Lernanalyse", hint: "Lernzeit · Wochenverlauf · Kartenqualität · Empfehlungen" },
 	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
-	{ id: "continue", label: "Weitermachen", hint: "zuletzt bearbeitete Seite" },
+	{ id: "recent", label: "Zuletzt & Weitermachen", hint: "zuletzt bearbeitete Notizen und schneller Wiedereinstieg" },
 	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten" },
 	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
 	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
-	{ id: "recent", label: "Zuletzt", hint: "zuletzt bearbeitete Seiten" },
-	{ id: "chats", label: "Chats", hint: "letzte KI-Unterhaltungen" },
 ];
 const HOME_LAYOUT_KEY = "impala67HomeLayout";
 
 // Liefert IMMER alle Bereiche: gespeicherte zuerst (in gespeicherter Reihenfolge),
 // neue/unbekannte Bereiche hängen sichtbar hinten an — robust gegen App-Updates.
+// Altdaten-Migration: ignoriert 'chats', ordnet 'continue' dem neuen 'recent' zu.
 export function homeLayout() {
 	let saved = [];
 	try { saved = JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY)) || []; } catch { /* Standard */ }
 	const known = new Map(HOME_SECTIONS.map((s) => [s.id, s]));
 	const out = [];
-	for (const e of Array.isArray(saved) ? saved : []) {
-		if (e && known.has(e.id)) { out.push({ id: e.id, on: e.on !== false }); known.delete(e.id); }
+	const savedList = Array.isArray(saved) ? saved : [];
+	const hasActiveRecentOrContinue = savedList.some((e) => (e?.id === "recent" || e?.id === "continue") && e.on !== false);
+	for (const e of savedList) {
+		if (!e || !e.id || e.id === "chats") continue;
+		const id = e.id === "continue" ? "recent" : e.id;
+		if (known.has(id)) {
+			const on = id === "recent" ? hasActiveRecentOrContinue : e.on !== false;
+			out.push({ id, on });
+			known.delete(id);
+		}
 	}
 	for (const s of known.values()) out.push({ id: s.id, on: true });
 	return out;
@@ -1270,7 +1301,7 @@ document.addEventListener("dragend", () => {
 }, true);
 
 export function handleAppearanceSelect(kind, value) {
-	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry" };
+	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry", breakReminder: BREAK_REMINDER_KEY, impala67BreakReminder: BREAK_REMINDER_KEY };
 	if (!keys[kind]) return;
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
@@ -1390,7 +1421,12 @@ export const SETTINGS = {
 	updateLocalEmbeddingManagerUi,
 	handleEnableLocalEmbedding,
 	handleDownloadLocalEmbedding,
-	handleDeleteLocalEmbedding
+	handleDeleteLocalEmbedding,
+	BREAK_REMINDER_KEY,
+	getBreakReminder,
+	setBreakReminder,
+	isBreakReminderEnabled,
+	handleBreakReminderToggle,
 };
 
 document.addEventListener("change", (e) => {

@@ -72,8 +72,8 @@ function shellHtml() {
 	return top + nav + more;
 }
 
-function statCard(icon, value, label) {
-	return `<div class="stat-mini-card"><strong>${esc(icon)} ${esc(value)}</strong><small>${esc(label)}</small></div>`;
+function statCard(icon, value, label, attr = "") {
+	return `<div class="stat-mini-card"${attr ? " " + attr : ""}><strong>${esc(icon)} ${esc(value)}</strong><small>${esc(label)}</small></div>`;
 }
 
 function recentRow(item) {
@@ -90,6 +90,7 @@ function homeHtml({
 	streakDays = 0,
 	todayMinutes = 0,
 	due = 0,
+	goalPct = 0,
 	showStats = true,
 	showFocus = true,
 	showRecent = true,
@@ -104,7 +105,7 @@ function homeHtml({
 		: '<div class="hero-focus-card is-empty"><span class="hero-focus-left"><strong>Alles gelernt für heute 🎉</strong><small>Keine fälligen Karten offen</small></span></div>';
 
 	// Deduplizierung: Wenn continueHtml eine Notiz anzeigt, diese aus den letzten Notizen filtern
-	const filteredRecent = continueHtml && recent.length > 1 ? recent.slice(1) : (continueHtml ? [] : recent);
+	const filteredRecent = continueHtml && recent.length > 1 ? recent.slice(1, 5) : (continueHtml ? [] : recent.slice(0, 5));
 	const recentHtml = filteredRecent.length
 		? filteredRecent.map(recentRow).join("")
 		: (continueHtml ? "" : '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Lege deine erste Notiz an oder öffne die Bibliothek.</p></div>');
@@ -115,12 +116,18 @@ function homeHtml({
 			? '<div class="stat-pills-row">' +
 				statCard("🔥", `${streakDays} ${streakDays === 1 ? "Tag" : "Tage"}`, "Streak") +
 				statCard("⏱️", `${todayMinutes} Min`, "Lernzeit") +
+				statCard("🎯", `${goalPct} %`, "Wochenziel", 'data-lz-goal="1" style="cursor:pointer"') +
 				statCard("🃏", String(due), "Fällig") +
 			'</div>'
 			: "") +
 		(showFocus ? focus : "") +
-		(continueHtml ? `<section class="mobile-continue">${continueHtml}</section>` : "") +
-		(showRecent && recentHtml ? `<section class="mobile-recent"><h2>Zuletzt geöffnet</h2><div class="mobile-item-list">${recentHtml}</div></section>` : "") +
+		(showRecent && (continueHtml || recentHtml)
+			? '<section class="mobile-recent"><h2>Zuletzt & Weitermachen</h2>' +
+				(continueHtml ? `<div class="mobile-continue">${continueHtml}</div>` : "") +
+				(recentHtml ? `<div class="mobile-item-list">${recentHtml}</div>` : "") +
+				'<div class="fold-foot" style="margin-top:10px;display:flex;justify-content:flex-end"><button type="button" class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>' +
+			  '</section>'
+			: "") +
 		(extraHtml ? `<div class="mobile-home-extra">${extraHtml}</div>` : "") +
 		'</div>';
 }

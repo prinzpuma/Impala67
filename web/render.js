@@ -1040,6 +1040,11 @@ document.addEventListener("toggle", (e) => {
 	if (!el || !el.matches || !el.matches("details[data-fold]")) return;
 	lsSet(HOME_FOLD_KEY, { ...homeFolds(), [el.getAttribute("data-fold")]: el.open });
 }, true);
+if (typeof window !== "undefined") {
+	window.addEventListener("lz:goal-changed", () => {
+		if (S.view === "home") renderMain();
+	});
+}
 function renderHome(main) {
 	// Scroll-Anker: jedes Re-Render (Fold, Pins, Sync…) hüpfte sonst nach oben.
 	// Zentral in util.js (U.scrollAnchor) — bewusst als Funktion übergeben, weil
@@ -1048,18 +1053,15 @@ function renderHome(main) {
 	const pages = STATE.activePages();
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
 	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => ((b.updated || "") < (a.updated || "") ? -1 : (b.updated || "") > (a.updated || "") ? 1 : 0)).slice(0, 6);
-	const chats = CHATS.load().slice().sort((a, b) => ((b.updated || b.created || "") < (a.updated || a.created || "") ? -1 : (b.updated || b.created || "") > (a.updated || a.created || "") ? 1 : 0));
 	const dueCards = STATE.dueCards();
 	const due = dueCards.length;
 	const homeStudy = STATE.studySnapshot(null).counts;
 	// Backup-Empfehlungen bewusst entfernt („kommt noch“, 22. Juli): kein Backup-Pill
 	// und kein Backup-Tipp mehr — Backups laufen weiter über Einstellungen → Backup.
 	const daily = pages.find((p) => p.daily === localDayKey(new Date()));
-	const dailyLine = daily ? ((daily.content || "").split("\n").find((l) => l.trim()) || "").replace(/^#+\s*/, "").slice(0, 48) : "";
 	const hour = new Date().getHours();
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
-	const cardCount = ((STATE.activeCards && STATE.activeCards()) || Object.values(S.cards).filter((c) => !c.trashed)).length;
 	const lzTotals = (LERNZEIT.totalsByDay && LERNZEIT.totalsByDay()) || null;
 	const lz = (LERNZEIT.statsForHome && (lzTotals ? LERNZEIT.statsForHome(lzTotals) : LERNZEIT.statsForHome())) || { goalPct: 0 };
 	// 7-Tage-Trend für die persönlichen Hinweise. Rückwärts-Durchlauf mit Frühabbruch
@@ -1094,10 +1096,14 @@ function renderHome(main) {
 
 	// Kompakte „Heute“-Leiste statt großer Widget-Kacheln
 	const pill = (cls, attr, title, ico, b, small) => `<button class="home-pill${cls}" ${attr} title="${title}"><span class="home-pill-ico">${ico}</span><span class="home-pill-body"><b>${b}</b><small>${small}</small></span></button>`;
+	const grades = (SCHULNOTEN.allGrades && SCHULNOTEN.allGrades()) || [];
+	const notenAvg = SCHULNOTEN.average ? SCHULNOTEN.average(grades) : null;
+	const notenSub = notenAvg ? `Ø ${notenAvg} · Eintragen` : "Schnitt & Eintragen";
+	const goalClass = lz.goalPct >= 100 ? " done" : "";
 	const todayPills = '<div class="home-today">' +
-		pill("", 'data-homeaction="daily"', "Daily Note", "📅", "Daily", esc(dailyLine || (daily ? "Öffnen" : "Heute anlegen"))) +
 		pill(homeStudy.total ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", "Karteikarten", homeStudy.neu + " neu · " + homeStudy.review + " fällig · " + homeStudy.learn + " lernen") +
-		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", "Eintragen & Schnitt ansehen") +
+		pill(goalClass, 'data-lz-goal="1"', "Wochenziel anpassen", "🎯", esc(`Wochenziel ${lz.goalPct} %`), esc(lz.goalPct >= 100 ? "Ziel erreicht 🎉 · Ändern" : "Klick zum Ändern")) +
+		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", esc(notenSub)) +
 		"</div>";
 
 	const continueBlock = recent[0]
@@ -1105,19 +1111,31 @@ function renderHome(main) {
 		: '<button class="home-continue muted" data-homeaction="newpage"><span class="recent-icon">✦</span><span class="recent-copy"><small>Start</small><b>Erste Seite anlegen</b><small>Workspace ist noch leer</small></span><span class="recent-arrow">›</span></button>';
 
 	const listRow = (attr, ico, b, small) => `<button class="home-list-row" ${attr}><span class="recent-icon sm">${ico}</span><b>${b}</b><small>${small}</small><i>›</i></button>`;
-	const recentPages = recent.length
-		? '<div class="home-list">' + recent.map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg)), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
-		: '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p><button data-homeaction="newpage">Neue Seite</button></div>';
-	const recentChats = chats.slice(0, 3).map((c) => listRow(`data-chat="${c.id}"`, "✦", esc(c.title || "Chat"), U.fmtDate(c.updated || c.created))).join("");
+	const subRecent = recent.slice(1, 5);
+	const subRecentList = subRecent.length
+		? '<div class="home-list home-subrecent">' + subRecent.map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg)), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
+		: (!recent[0] ? '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p><button data-homeaction="newpage">Neue Seite</button></div>' : "");
+	const recentBody = '<div class="home-recent-wrap">' +
+		continueBlock +
+		subRecentList +
+		'<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>' +
+		'</div>';
 
 	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
 	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
 	const leeches = STATE.activeCards().filter((c) => !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
 	const tips = [];
+	if (lz.smartInsights && lz.smartInsights.length) {
+		for (const si of lz.smartInsights) {
+			if (si.id === "forgettingAlarm" || si.id === "duePeak" || si.id === "procrastinationShield") {
+				tips.push([si.action || 'data-homeaction="cards"', si.icon, si.title, si.desc]);
+			}
+		}
+	}
 	if (lz.todaySeconds === 0 && lz.streakDays > 0 && hour >= 15) tips.push(['data-homeaction="cards"', "🔥", `${lz.streakDays}-Tage-Streak in Gefahr`, "Heute noch nichts gelernt — schon 5 Minuten zählen."]);
-	if (due > 0) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
+	if (due > 0 && !tips.some((t) => t[2].includes("fällig") || t[2].includes("Lernspitze"))) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
 	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(rate(win.cur7) * 100)} % diese Woche (davor ${Math.round(rate(win.prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
-	if (leeches >= 3) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
+	if (leeches >= 3 && !tips.some((t) => t[2].includes("Vergessenskurven"))) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
 	if (!daily && hour >= 17) tips.push(['data-homeaction="daily"', "📅", "Noch keine Daily Note", "Ein kurzer Tagesrückblick festigt das Gelernte."]);
 	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(rate(win.cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
 	if (!tips.length) tips.push(['data-homeaction="library"', "✅", "Alles im grünen Bereich", "Nichts Dringendes — guter Moment zum Vertiefen oder Aufräumen."]);
@@ -1135,13 +1153,11 @@ function renderHome(main) {
 	// Bereichs-Bausteine — ids identisch mit SETTINGS.HOME_SECTIONS (Einstellungen → Home)
 	const SECTION_HTML = {
 		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
-		continue: '<section class="home-section home-section-continue">' + continueBlock + "</section>",
 		today: todayPills,
 		insights: LERNZEIT.homeWidgetHtml(lzTotals, lz),
-		decks: homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true),
-		favorites: homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true),
-		recent: homeFold("recent", `📄 Zuletzt <span class="fold-meta">${pages.length} Seiten</span>`, recentPages + '<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>', true),
-		chats: recentChats ? homeFold("chats", `✦ Chats <span class="fold-meta">${chats.length}</span>`, '<div class="home-list">' + recentChats + '</div><div class="fold-foot"><button class="mini" data-homeaction="chats">Alle Chats ›</button></div>', false) : "",
+		decks: due > 0 ? homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true) : "",
+		favorites: favPages.length > 0 ? homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true) : "",
+		recent: homeFold("recent", `📄 Zuletzt & Weitermachen <span class="fold-meta">${pages.length} Seiten</span>`, recentBody, true),
 	};
 	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
 	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
@@ -1149,10 +1165,10 @@ function renderHome(main) {
 	const sectionsHtml = mobileLayout.filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
 	const mobileOn = new Set(mobileLayout.filter((e) => e.on).map((e) => e.id));
 	const mobileExtraHtml = mobileLayout
-		.filter((e) => e.on && !["today", "continue", "recent"].includes(e.id))
+		.filter((e) => e.on && !["today", "recent"].includes(e.id))
 		.map((e) => SECTION_HTML[e.id] || "")
 		.join("");
-	const mobileRecent = recent.slice(0, 3).map((pg) => ({
+	const mobileRecent = recent.slice(0, 5).map((pg) => ({
 		id: pg.id,
 		icon: pageIconLabel(pg),
 		title: pg.title,
@@ -1166,19 +1182,17 @@ function renderHome(main) {
 			streakDays: lz.streakDays,
 			todayMinutes: Math.round((lz.todaySeconds || 0) / 60),
 			due,
+			goalPct: lz.goalPct,
 			showStats: mobileOn.has("today"),
 			showFocus: mobileOn.has("today"),
 			showRecent: mobileOn.has("recent"),
 			recent: mobileRecent,
-			continueHtml: mobileOn.has("continue") ? continueBlock : "",
+			continueHtml: mobileOn.has("recent") ? continueBlock : "",
 			extraHtml: mobileExtraHtml,
 		})
 		: "";
 	const homeHtml = mobileHomeHtml || ('<div class="home home-v2 home-slim" data-key="home">' +
-		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p><div class="home-hero-meta">` +
-			`<span class="home-chip">📄 <b>${pages.length}</b> Seiten</span><span class="home-chip">🃏 <b>${cardCount}</b> Karten</span><span class="home-chip">✦ <b>${chats.length}</b> Chats</span>` +
-			`<span class="home-chip${lz.goalPct < 100 ? " warn" : ""}">🎯 Wochenziel <b>${lz.goalPct} %</b></span>` +
-		'</div></div><button class="home-customize" data-set="home" title="Homeseite anpassen (Bereiche & Begrüßung)">⚙</button></header>' +
+		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p></div><button class="home-customize" data-set="home" title="Homeseite anpassen (Bereiche & Begrüßung)">⚙</button></header>` +
 		conflictBanner +
 		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
 		sectionsHtml + "</div>");

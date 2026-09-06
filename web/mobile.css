@@ -689,13 +689,13 @@ body.mobile-ui .mobile-home-preview .home-customize:active {
 }
 body.mobile-ui .mobile-home-preview .stat-pills-row {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 8px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
 	margin-bottom: 14px;
 }
 body.mobile-ui .mobile-home-preview .stat-mini-card {
 	min-width: 0;
-	padding: 10px 6px;
+	padding: 10px 4px;
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -703,7 +703,7 @@ body.mobile-ui .mobile-home-preview .stat-mini-card {
 }
 body.mobile-ui .mobile-home-preview .stat-mini-card strong {
 	display: block;
-	font-size: 15px;
+	font-size: 13.5px;
 	font-weight: 800;
 	color: var(--text);
 	white-space: nowrap;
