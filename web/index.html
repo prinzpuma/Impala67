@@ -59,7 +59,7 @@ function resetTransientUiLayers() {
 }
 window.addEventListener("pageshow", resetTransientUiLayers);
 </script>
-<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <!-- PWA-Meta: theme-color kommt aus settings.js (hell/dunkel). -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -71,7 +71,6 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#05070d">
 <!-- Bug-Fix („kommt noch“, 22. Juli, „neues icon“): Der Favicon-Link stand ungültig
      unten im <body> — manche Browser ignorierten ihn dort und zeigten das neue
      Vektor-Icon (icon.svg) nicht. Er gehört hierher in den <head>. -->
@@ -93,6 +92,11 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 // Dichte- und Sidebar-Sprung während IndexedDB/Module noch starten.
 (function () {
 	try {
+		var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+			(navigator.platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1);
+		var isStandalone = !!(window.navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
+		if (isIOS) document.body.classList.add("is-ios");
+		if (isStandalone) document.body.classList.add("is-standalone");
 		var followSystem = localStorage.getItem("impala67FollowSystemTheme") !== "0";
 		var theme = followSystem && window.matchMedia
 			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")

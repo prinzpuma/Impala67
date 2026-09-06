@@ -67,7 +67,7 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 /* == Hauptbereich == */
 #mainWrap { display: flex; flex-direction: column; overflow: hidden }
 #main { flex: 1; display: flex; flex-direction: column; overflow: hidden }
-#tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto }
+#tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto; background: var(--panel-solid) }
 .navbtn { min-height: 26px; padding: 2px 8px; background: transparent; color: var(--text2); font-size: 16px }
 .navbtn:disabled { opacity: .3; cursor: default }
 .navbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
@@ -1262,8 +1262,8 @@ body.light #sidebar { background: var(--surface-hover) }
 body.light #mainWrap { background: var(--panel-solid) }
 body.light #panel { background: var(--surface-subtle) }
 body.light .hist-list { background: var(--surface-hover) }
-/* Unterschiedliche, funktionale Flächen machen Orientierung leic… */
-body.light #tabbar { background: rgba(247, 244, 238, .72) }
+/* Unterschiedliche, funktionale Flächen machen Orientierung leicht. */
+body.light #tabbar { background: var(--surface-subtle) }
 body.light .tabchip.active { background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge) }
 body.light .tabchip-x:hover, body.light button:hover { background: var(--surface-hover) }
 body.light .row.active { box-shadow: inset 3px 0 0 var(--accent) }

@@ -186,9 +186,13 @@ const PLATFORM = {
 	phoneQuery: MQ_PHONE,
 	isPhone: () => MQ_PHONE.matches,
 	isTouch: () => MQ_TOUCH.matches || navigator.maxTouchPoints > 1,
+	isIOS: () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1),
+	isStandalone: () => !!(window.navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)),
 	sync() {
 		document.body.classList.toggle("is-touch", PLATFORM.isTouch());
 		document.body.classList.toggle("is-phone", PLATFORM.isPhone());
+		document.body.classList.toggle("is-ios", PLATFORM.isIOS());
+		document.body.classList.toggle("is-standalone", PLATFORM.isStandalone());
 	},
 };
 for (const q of [MQ_PHONE, MQ_TOUCH]) q.addEventListener("change", PLATFORM.sync);
