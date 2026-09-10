@@ -48,3 +48,13 @@
 
 - Ein Push auf den `main`-Branch veröffentlicht die PWA automatisch über GitHub Pages.
 - Versionsnummern und Cache-Strings für Releases werden im CI-Workflow gesetzt.
+
+## 7. KI- & Entwickler-Integration (MCP Live-Bridge)
+
+- **Direkte App-Verbindung (`mcp/` & `web/mcp-bridge.js`)**: Der MCP-Server verbindet KI-Assistenten (wie Antigravity) über einen lokalen WebSocket (`ws://127.0.0.1:8765`) direkt mit der im Browser laufenden App (`http://localhost:8000`).
+- **Live-Tools**:
+  - **Inhalte verwalten**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`.
+  - **Diagnose & Performance**: `impala_get_diagnostics` (aktive Seite, Tabs, Speicher, Sync-Status, Console-Errors) und `impala_get_performance_trace` (Profiler-Trace, Long-Tasks).
+  - **Live-Testing & UI-Interaktion**: `impala_eval` (beliebigen JS-Code im Browser-Kontext ausführen) und `impala_run_ui_action` (Seiten öffnen, Tabs schließen, Suche öffnen, Sync anstoßen).
+- **Entwickler-Workflow**: Der Agent kann neue Features, Fehlerbehebungen und UI-Zustände direkt im echten Browser-Tab prüfen, Messwerte auslesen und ohne manuelle Testschritte des Nutzers verifizieren.
+

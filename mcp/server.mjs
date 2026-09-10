@@ -160,6 +160,52 @@ const TOOLS = [
 			required: ["front", "back"],
 		},
 	},
+	{
+		name: "impala_get_diagnostics",
+		description: "Liefert umfassende App-Diagnosedaten: aktive Seite, geöffnete Tabs, Anzahl Notizen/Karten, Performance-Status, JS-Heap-Speicher, Cloudflare/Drive-Sync-Status und letzte Laufzeitfehler.",
+		inputSchema: {
+			type: "object",
+			properties: {},
+		},
+	},
+	{
+		name: "impala_get_performance_trace",
+		description: "Liest den detaillierten Performance-Profiler-Trace der App aus (Long-Tasks, Stalls, Lags). Kann den Profiler auch aktivieren/deaktivieren oder das Protokoll leeren.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				enable: { type: "boolean", description: "Profiler aktivieren (true) oder deaktivieren (false)" },
+				clear: { type: "boolean", description: "Bestehende Trace-Einträge nach dem Lesen leeren (Standard: false)" },
+			},
+		},
+	},
+	{
+		name: "impala_eval",
+		description: "Führt JavaScript-Code direkt im Kontext des geöffneten Browser-Fensters aus und liefert das Ergebnis zurück. Ideal zum Testen von UI-Zuständen, DOM-Elementen oder Auslösen von Aktionen.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				code: { type: "string", description: "Ausführbarer JavaScript-Code (kann async/await nutzen; Zugriff auf S, STATE, RENDER, TABS, PERF_PROFILER)" },
+			},
+			required: ["code"],
+		},
+	},
+	{
+		name: "impala_run_ui_action",
+		description: "Führt vordefinierte UI-Aktionen im geöffneten Browser aus (z.B. Seite öffnen, Tab schließen, Suche öffnen, Sync anstoßen, Sidebar umschalten).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				action: {
+					type: "string",
+					enum: ["open_page", "close_active_tab", "search_ui", "trigger_sync", "toggle_sidebar"],
+					description: "Die auszuführende UI-Aktion",
+				},
+				target: { type: "string", description: "Ziel für die Aktion (z.B. Seiten-ID oder Titel bei open_page)" },
+			},
+			required: ["action"],
+		},
+	},
 ];
 
 /**

@@ -4,12 +4,40 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
 import { TABS } from "./tabs.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { DRIVE } from "./drive.js";
+import { SEARCH } from "./search.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
 export function initMcpBridge() {
 	if (typeof window === "undefined") return;
 
 	const WS_URL = "ws://127.0.0.1:8765";
+	const recentErrors = [];
+	const MAX_ERRORS = 20;
+
+	// Fehler-Puffer für Diagnose-Auswertung
+	window.addEventListener("error", (ev) => {
+		recentErrors.push({
+			type: "error",
+			message: String(ev.message || ev.error?.message || ev),
+			source: ev.filename,
+			lineno: ev.lineno,
+			timestamp: new Date().toISOString(),
+		});
+		if (recentErrors.length > MAX_ERRORS) recentErrors.shift();
+	});
+
+	window.addEventListener("unhandledrejection", (ev) => {
+		recentErrors.push({
+			type: "unhandledrejection",
+			message: String(ev.reason?.message || ev.reason),
+			timestamp: new Date().toISOString(),
+		});
+		if (recentErrors.length > MAX_ERRORS) recentErrors.shift();
+	});
+
 	let ws = null;
 	let reconnectTimer = null;
 
@@ -156,6 +184,116 @@ export function initMcpBridge() {
 							cards = cards.filter((c) => (c.deck || "").toLowerCase() === deckLower);
 						}
 						result = { count: cards.length, cards };
+						break;
+					}
+					case "impala_get_diagnostics": {
+						const memory = typeof performance !== "undefined" && performance.memory ? {
+							usedJsHeapMb: Math.round((performance.memory.usedJSHeapSize / 1048576) * 10) / 10,
+							limitJsHeapMb: Math.round((performance.memory.jsHeapSizeLimit / 1048576) * 10) / 10,
+						} : null;
+
+						const activePage = S.currentPageId ? S.pages[S.currentPageId] : null;
+
+						result = {
+							app: {
+								activePageId: S.currentPageId || null,
+								activePageTitle: activePage?.title || null,
+								openTabs: (S.tabs || []).map((t) => ({ id: t.pageId, title: S.pages[t.pageId]?.title || "Unbekannt" })),
+								totalPages: Object.keys(S.pages || {}).length,
+								activePages: Object.values(S.pages || {}).filter((p) => !p.trashed).length,
+								totalCards: Object.keys(S.cards || {}).length,
+								totalHeftDocs: Object.keys(S.heftDocs || {}).length,
+								sidebarCollapsed: !!S.sidebarCollapsed,
+							},
+							performance: {
+								profilerStatus: PERF_PROFILER ? PERF_PROFILER.status() : null,
+								memory,
+							},
+							sync: {
+								cloudflare: CLOUDFLARE_SYNC ? CLOUDFLARE_SYNC.status() : null,
+								drive: DRIVE ? DRIVE.status() : null,
+							},
+							recentErrors: recentErrors.slice(-10),
+						};
+						break;
+					}
+					case "impala_get_performance_trace": {
+						if (!PERF_PROFILER) {
+							result = { error: "PERF_PROFILER nicht verfügbar." };
+							break;
+						}
+						if (args.enable !== undefined) {
+							PERF_PROFILER.setEnabled(!!args.enable);
+						}
+						const rawReport = PERF_PROFILER.report();
+						if (args.clear) {
+							PERF_PROFILER.clear();
+						}
+						try {
+							result = JSON.parse(rawReport);
+						} catch {
+							result = { raw: rawReport };
+						}
+						break;
+					}
+					case "impala_eval": {
+						if (!args.code) {
+							result = { error: "Kein JavaScript-Code übergeben." };
+							break;
+						}
+						try {
+							// Sichere Ausführung im Window-Kontext
+							const fn = new Function("S", "STATE", "TOOLS", "RENDER", "TABS", "PERF_PROFILER", "CLOUDFLARE_SYNC", "DRIVE", "SEARCH", `return (async () => { ${args.code} })();`);
+							const evalOutput = await fn(S, STATE, null, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH);
+							result = { ok: true, output: evalOutput !== undefined ? evalOutput : "void" };
+						} catch (evalErr) {
+							result = { ok: false, error: evalErr.message, stack: evalErr.stack };
+						}
+						break;
+					}
+					case "impala_run_ui_action": {
+						const action = args.action;
+						switch (action) {
+							case "open_page": {
+								if (!args.target) { result = { error: "target fehlt" }; break; }
+								const pageId = S.pages[args.target] ? args.target : Object.keys(S.pages).find((id) => (S.pages[id]?.title || "").toLowerCase() === args.target.toLowerCase());
+								if (!pageId) { result = { error: "Seite nicht gefunden" }; break; }
+								TABS.openPage(pageId);
+								result = { ok: true, opened: pageId, title: S.pages[pageId]?.title };
+								break;
+							}
+							case "close_active_tab": {
+								if (S.currentPageId) TABS.closeTab(S.currentPageId);
+								result = { ok: true };
+								break;
+							}
+							case "search_ui": {
+								if (SEARCH && SEARCH.open) {
+									SEARCH.open();
+									result = { ok: true, searchOpened: true };
+								} else {
+									result = { error: "Suche nicht verfügbar" };
+								}
+								break;
+							}
+							case "trigger_sync": {
+								if (CLOUDFLARE_SYNC && CLOUDFLARE_SYNC.syncNow) {
+									const syncRes = await CLOUDFLARE_SYNC.syncNow();
+									result = { ok: true, sync: syncRes };
+								} else {
+									result = { error: "Cloudflare Sync nicht initialisiert" };
+								}
+								break;
+							}
+							case "toggle_sidebar": {
+								S.sidebarCollapsed = !S.sidebarCollapsed;
+								RENDER.render();
+								result = { ok: true, sidebarCollapsed: S.sidebarCollapsed };
+								break;
+							}
+							default:
+								result = { error: `Unbekannte UI-Aktion: ${action}` };
+						}
 						break;
 					}
 					default:
