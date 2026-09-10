@@ -63,6 +63,11 @@ export function initMcpBridge() {
 				switch (tool) {
 					case "impala_list_pages": {
 						let pool = Object.values(S.pages || {}).filter((p) => !p.trashed);
+						if (args.archived === true) {
+							pool = pool.filter((p) => p.archived);
+						} else if (!args.includeArchived) {
+							pool = pool.filter((p) => !p.archived);
+						}
 						if (args.kind && args.kind !== "all") {
 							pool = pool.filter((p) => (p.kind === "heft" ? "heft" : "notion") === args.kind);
 						}
@@ -87,6 +92,7 @@ export function initMcpBridge() {
 							kind: p.kind || "notion",
 							subject: p.subject || null,
 							parentId: p.parentId || null,
+							archived: !!p.archived,
 							updated: p.updated,
 							created: p.created,
 						}));
@@ -125,6 +131,7 @@ export function initMcpBridge() {
 								title: page.title || "Ohne Titel",
 								kind: page.kind || "notion",
 								subject: page.subject || null,
+								archived: !!page.archived,
 								content,
 								...(heftPages ? { heftPages, note: "Handschrift-Heft: content enthält extrahierten Text & OCR." } : {}),
 								created: page.created,
@@ -178,9 +185,18 @@ export function initMcpBridge() {
 							if (args.append_content) patch.content = (page.content || "") + "\n" + String(args.append_content);
 							if (args.subject !== undefined) patch.subject = args.subject ? String(args.subject).trim() : null;
 
-							await STATE.dispatch("pageUpdate", { id: page.id, patch });
+							if (Object.keys(patch).length > 0) {
+								await STATE.dispatch("pageUpdate", { id: page.id, patch });
+							}
+							if (args.archived !== undefined) {
+								if (args.archived && !page.archived) {
+									await STATE.dispatch("pageArchive", { id: page.id });
+								} else if (!args.archived && page.archived) {
+									await STATE.dispatch("pageUnarchive", { id: page.id });
+								}
+							}
 							RENDER.render();
-							result = { ok: true, id: page.id, title: page.title };
+							result = { ok: true, id: page.id, title: page.title, archived: !!page.archived };
 						}
 						break;
 					}
@@ -190,6 +206,8 @@ export function initMcpBridge() {
 						if (q) {
 							for (const p of Object.values(S.pages || {})) {
 								if (p.trashed) continue;
+								if (args.archived === true && !p.archived) continue;
+								if (args.archived === false && p.archived) continue;
 								const title = p.title || "";
 								let content = p.content || "";
 								if (p.kind === "heft" && S.heftDocs && S.heftDocs[p.id]) {
@@ -222,6 +240,7 @@ export function initMcpBridge() {
 										title,
 										kind: p.kind || "notion",
 										subject: p.subject || null,
+										archived: !!p.archived,
 										snippet,
 									});
 								}

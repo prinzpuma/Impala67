@@ -47,7 +47,7 @@ export function rankRag({ query, qv, vecs, pages, model, providerId, k = 6 }) {
 		for (const c of rec.chunks || []) {
 			if (!c.vec || c.vec.length !== qv.length) continue;
 			const semantic = dot(qv, c.vec) / (qn * (c.norm || norm(c.vec)));
-			docs.push({ pageId, title: pg.title, text: c.text, semantic });
+			docs.push({ pageId, title: pg.title, text: c.text, semantic, archived: !!pg.archived });
 		}
 	}
 	const lexical = lexicalScores(query, docs);
@@ -60,14 +60,14 @@ export function rankRag({ query, qv, vecs, pages, model, providerId, k = 6 }) {
 		const searchable = (doc.title + "\n" + doc.text).toLocaleLowerCase("de-DE");
 		const exactFloor = exactQuery && title === exactQuery ? 0.8 : exactLexicalMatch(exactQuery, searchable) ? 0.7 : 0;
 		const score = Math.max(semantic + (1 - semantic) * 0.45 * lex, exactFloor);
-		return { title: doc.title, snippet: doc.text.slice(0, 400), score, semanticScore: doc.semantic, lexicalScore: lex, pageId: doc.pageId };
+		return { title: doc.title, snippet: doc.text.slice(0, 400), score, semanticScore: doc.semantic, lexicalScore: lex, pageId: doc.pageId, archived: doc.archived };
 	});
 	hits.sort((a, b) => b.score - a.score);
 	const perPage = Object.create(null), out = [];
 	for (const h of hits) {
 		if ((perPage[h.pageId] || 0) >= 2) continue;
 		perPage[h.pageId] = (perPage[h.pageId] || 0) + 1;
-		out.push({ title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000, semanticScore: Math.round(h.semanticScore * 1000) / 1000, lexicalScore: Math.round(h.lexicalScore * 1000) / 1000 });
+		out.push({ pageId: h.pageId, title: h.title, snippet: h.snippet, score: Math.round(h.score * 1000) / 1000, semanticScore: Math.round(h.semanticScore * 1000) / 1000, lexicalScore: Math.round(h.lexicalScore * 1000) / 1000, archived: !!h.archived });
 		if (out.length >= k) break;
 	}
 	return out;

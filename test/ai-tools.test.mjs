@@ -121,3 +121,112 @@ test("Integralgrenzen dürfen verschachtelte Kommas enthalten", async () => {
 	assert.equal(result.ok, true);
 	assert.ok(Math.abs(Number(result.result) - 4) < 1e-9);
 });
+
+test("page.patch ersetzt gezielt Textabschnitte und unterstützt Undo", async () => {
+	reset();
+	await STATE.dispatch("pageCreate", { id: "p_patch", title: "Patch-Test", parentId: null, content: "Zeile 1\nZu ersetzender Text\nZeile 3" });
+	const result = await TOOLS.run("change", { operations: [
+		{ op: "page.patch", title: "Patch-Test", search: "Zu ersetzender Text", replace: "Neuer Inhalt" },
+	] });
+	assert.equal(result.ok, true);
+	assert.equal(S.pages.p_patch.content, "Zeile 1\nNeuer Inhalt\nZeile 3");
+	assert.ok(result._undo);
+
+	await TOOLS.undo(result._undo);
+	assert.equal(S.pages.p_patch.content, "Zeile 1\nZu ersetzender Text\nZeile 3");
+});
+
+test("page.patch schlägt fehl wenn Suchtext fehlt oder mehrdeutig ist", async () => {
+	reset();
+	await STATE.dispatch("pageCreate", { id: "p_dup", title: "Mehrdeutig", parentId: null, content: "Echo Test Echo" });
+
+	// Nicht gefunden
+	const notFound = await TOOLS.run("change", { operations: [
+		{ op: "page.patch", title: "Mehrdeutig", search: "NichtDa", replace: "X" },
+	] });
+	assert.match(notFound.error, /Suchtext wurde in der Seite nicht gefunden/);
+	assert.equal(S.pages.p_dup.content, "Echo Test Echo");
+
+	// Mehrdeutig
+	const ambiguous = await TOOLS.run("change", { operations: [
+		{ op: "page.patch", title: "Mehrdeutig", search: "Echo", replace: "X" },
+	] });
+	assert.match(ambiguous.error, /mehrfach in der Seite vor/);
+	assert.equal(S.pages.p_dup.content, "Echo Test Echo");
+});
+
+test("change validiert alle Operationen vorab und meldet gesammelte Fehler ohne Änderungen", async () => {
+	reset();
+	await STATE.dispatch("pageCreate", { id: "p_safe", title: "Unberührt", parentId: null, content: "Bleibt unverändert" });
+
+	const result = await TOOLS.run("change", { operations: [
+		{ op: "page.append", content: "Ohne Titel" },
+		{ op: "unbekannt.op", title: "X" },
+		{ op: "page.patch", title: "Unberührt" }, // search und replace fehlen
+	] });
+
+	assert.match(result.error, /change: Validierungsfehler in 3 Operation\(en\)/);
+	assert.match(result.error, /Operation 1 \(page\.append\): title oder content fehlt/);
+	assert.match(result.error, /Operation 2: unbekannte Operation „unbekannt\.op“/);
+	assert.match(result.error, /Operation 3 \(page\.patch\): title, search oder replace fehlt/);
+	assert.match(result.error, /Keine Änderungen ausgeführt/);
+	assert.equal(S.pages.p_safe.content, "Bleibt unverändert");
+});
+
+test("KI kann Seiten über inspect und change archivieren, auflisten und wiederherstellen", async () => {
+	reset();
+	await STATE.dispatch("pageCreate", { id: "p1", title: "Mathe", content: "Analysis", parentId: null });
+	await STATE.dispatch("pageCreate", { id: "p2", title: "Latein", content: "Vokabeln", parentId: null });
+
+	// Vorher: inspect("archived") ist leer
+	const beforeInspect = await TOOLS.run("inspect", { kind: "archived" });
+	assert.equal(beforeInspect.archived.length, 0);
+
+	// Archivieren über change
+	const archiveRes = await TOOLS.run("change", { operations: [
+		{ op: "page.archive", title: "Mathe" },
+	] });
+	assert.equal(archiveRes.ok, true);
+	assert.equal(S.pages.p1.archived, true);
+	assert.equal(S.pages.p2.archived, undefined);
+
+	// Jetzt findet inspect("archived") die archivierte Notiz
+	const afterInspect = await TOOLS.run("inspect", { kind: "archived" });
+	assert.equal(afterInspect.archived.length, 1);
+	assert.equal(afterInspect.archived[0].title, "Mathe");
+
+	// Wiederherstellen über change
+	const unarchiveRes = await TOOLS.run("change", { operations: [
+		{ op: "page.unarchive", title: "Mathe" },
+	] });
+	assert.equal(unarchiveRes.ok, true);
+	assert.equal(S.pages.p1.archived, false);
+
+	// Wiederherstellen lässt sich rückgängig machen
+	await TOOLS.undo(unarchiveRes._undo);
+	assert.equal(S.pages.p1.archived, true);
+
+	// Heft archivieren
+	await STATE.dispatch("pageCreate", { id: "h1", title: "Skizzenheft", content: "", parentId: null, kind: "heft" });
+	const heftArchiveRes = await TOOLS.run("change", { operations: [
+		{ op: "page.archive", title: "Skizzenheft" },
+	] });
+	assert.equal(heftArchiveRes.ok, true);
+	assert.equal(S.pages.h1.archived, true);
+
+	const inspectHeft = await TOOLS.run("inspect", { kind: "archived" });
+	const heftEntry = inspectHeft.archived.find((x) => x.title === "Skizzenheft");
+	assert.ok(heftEntry);
+	assert.equal(heftEntry.kind, "heft");
+
+	// KI-Suche durchsucht automatisch auch archivierte Inhalte
+	const searchRes = await TOOLS.run("inspect", { kind: "search", query: "Analysis" });
+	assert.ok(searchRes.results.some((r) => r.title === "Mathe" && r.archived === true));
+
+	// KI kann archivierte Seite direkt per inspect("page") lesen
+	const readRes = await TOOLS.run("inspect", { kind: "page", titles: ["Mathe"] });
+	assert.equal(readRes.pages[0].title, "Mathe");
+	assert.equal(readRes.pages[0].archived, true);
+	assert.equal(readRes.pages[0].content, "Analysis");
+});
+

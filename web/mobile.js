@@ -156,6 +156,15 @@ export const MOBILE = (() => {
 				updateUI();
 				return;
 			}
+			if (mact === "archive") {
+				const { S } = await import("./state.js");
+				const { RENDER } = await import("./render.js");
+				S.view = "library";
+				S.libMode = "archive";
+				RENDER.render();
+				updateUI();
+				return;
+			}
 			const map = {
 				drive: "#btnSettings",
 				notebooklm: "#btnNotebookLM",

@@ -556,6 +556,37 @@ export const STATE = (() => {
 					if (pg) { pg.trashed = false; delete pg.trashedAt; }
 				});
 				break;
+			case "pageArchive": {
+				bustChildIdx();
+				const subtreeIds = collectSubtree(p.id);
+				subtreeIds.forEach((id) => {
+					const pg = S.pages[id];
+					if (pg && !pg.trashed) {
+						pg.archived = true;
+						pg.archivedAt = ev.t;
+						if (id === p.id) pg.archivedRoot = true;
+					}
+				});
+				closePageTabs(subtreeIds);
+				break;
+			}
+			case "pageUnarchive": {
+				const subtreeIds = collectSubtree(p.id);
+				subtreeIds.forEach((id) => {
+					const pg = S.pages[id];
+					if (pg) {
+						pg.archived = false;
+						delete pg.archivedAt;
+						delete pg.archivedRoot;
+					}
+				});
+				const rootPg = S.pages[p.id];
+				if (rootPg && rootPg.parentId && (S.pages[rootPg.parentId]?.archived || S.pages[rootPg.parentId]?.trashed)) {
+					rootPg.parentId = null;
+				}
+				bustChildIdx();
+				break;
+			}
 			case "learningSessionUpsert": {
 				if (!p.id || !Number.isFinite(Number(p.durationSeconds))) break;
 				const current = S.learningSessions[p.id];
@@ -961,6 +992,12 @@ export const STATE = (() => {
 				BUS.emit("state:page-updated", { id: p.id, trashed: true, page: S.pages[p.id], event: ev });
 				BUS.emit("state:page-deleted", { id: p.id, trashed: true, event: ev });
 				break;
+			case "pageArchive":
+				BUS.emit("state:page-updated", { id: p.id, archived: true, page: S.pages[p.id], event: ev });
+				break;
+			case "pageUnarchive":
+				BUS.emit("state:page-updated", { id: p.id, archived: false, page: S.pages[p.id], event: ev });
+				break;
 			case "pageDelete":
 				BUS.emit("state:page-deleted", { id: p.id, hard: true, event: ev });
 				break;
@@ -1314,7 +1351,7 @@ export const STATE = (() => {
 		for (const [parentId, kids] of ensureParentIdx()) {
 			for (const pg of kids) {
 				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-				if (pg.trashed) continue;
+				if (pg.trashed || pg.archived) continue;
 				const k = (pg.workspaceId || "default") + "\0" + parentId;
 				let arr = m.get(k);
 				if (!arr) { arr = []; m.set(k, arr); }
@@ -1346,11 +1383,34 @@ export const STATE = (() => {
 		})
 		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 
-	// Alle NICHT im Papierkorb liegenden Seiten — zentrale Quelle für Home,
-	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb-Seiten nirgends durchsickern.
+	// Alle NICHT im Papierkorb liegenden und NICHT archivierten Seiten — zentrale Quelle für Home,
+	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb- & Archiv-Seiten nirgends durchsickern.
 	const activePages = () => Object.values(S.pages).filter((pg) => {
 		if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-		return !pg.trashed;
+		return !pg.trashed && !pg.archived;
+	});
+
+	const isPageArchived = (pgOrId) => {
+		let pg = typeof pgOrId === "object" ? pgOrId : S.pages[pgOrId];
+		const visited = new Set();
+		while (pg) {
+			if (visited.has(pg.id)) break;
+			visited.add(pg.id);
+			if (pg.archived) return true;
+			pg = pg.parentId ? S.pages[pg.parentId] : null;
+		}
+		return false;
+	};
+
+	const archivedPages = () => Object.values(S.pages)
+		.filter((pg) => {
+			if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+			return !pg.trashed && pg.archived;
+		})
+		.sort((a, b) => ((b.archivedAt || "") < (a.archivedAt || "") ? -1 : (b.archivedAt || "") > (a.archivedAt || "") ? 1 : 0));
+
+	const archivedPageRoots = () => archivedPages().filter((pg) => {
+		return pg.archivedRoot || !pg.parentId || !S.pages[pg.parentId] || !S.pages[pg.parentId].archived;
 	});
 
 	// Aktive Karten sind weder gelöscht noch selbst/über ihren Stapel archiviert.
@@ -1391,7 +1451,7 @@ export const STATE = (() => {
 
 	// PERF: EIN Durchlauf statt zweier separater .find()-Durchläufe (Exakt- und
 	// Teilstring-Treffer), inklusive nur je einmal berechnetem toLowerCase() pro Seite.
-	function findPage(title) {
+	function findPage(title, options = {}) {
 		if (!title) return null;
 		const q = String(title).toLowerCase();
 		let partial = null;
@@ -1399,6 +1459,15 @@ export const STATE = (() => {
 			const t = String(pg.title || "").toLowerCase();
 			if (t === q) return pg;
 			if (!partial && t.includes(q)) partial = pg;
+		}
+		if (partial) return partial;
+		if (options.includeArchived !== false) {
+			for (const pg of Object.values(S.pages)) {
+				if (pg.trashed || !pg.archived) continue;
+				const t = String(pg.title || "").toLowerCase();
+				if (t === q) return pg;
+				if (!partial && t.includes(q)) partial = pg;
+			}
 		}
 		return partial;
 	}
@@ -1421,10 +1490,13 @@ export const STATE = (() => {
 		return e;
 	}
 
-	function searchNotes(query) {
+	function searchNotes(query, options = {}) {
 		const q = String(query).toLowerCase();
 		if (!q) return [];
-		return activePages().map((pg) => {
+		const pool = options.includeArchived
+			? Object.values(S.pages).filter((pg) => !pg.trashed)
+			: activePages();
+		return pool.map((pg) => {
 			const { raw, hay, title } = haystackOf(pg);
 			const idx = hay.indexOf(q);
 			if (idx < 0) return null;
@@ -1694,5 +1766,5 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
 })();

@@ -183,11 +183,14 @@ function openLibCoverPicker(pageId) {
 		'<div class="row-btns"><button type="button" id="btnLibCoverUpload">🖼 Eigenes Bild wählen</button></div>' +
 		'<div class="modal-actions">' +
 		'<button type="button" data-libcoverset="">Cover entfernen</button>' +
+		(pg.archived
+			? '<button type="button" data-pageunarchive="' + pg.id + '">↩ Aus Archiv holen</button>'
+			: '<button type="button" data-libheftarchive="' + pg.id + '">🗄 Archivieren</button>') +
 		'<button type="button" class="danger" data-libhefttrash="' + pg.id + '">In Papierkorb</button>' +
 		'<button type="button" id="btnCloseOverlay">Schließen</button></div></div>'; 
 }
 
-// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 📥 Gemini Notebook ----------
+// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 🗄 Archiv · 📥 Gemini Notebook ----------
 // Dasselbe Heft existiert nur EINMAL (eine Seiten-ID) — die Ansichten sind nur
 // verschiedene Zuordnungen: Notion = Seitenbaum (Hefte als normale Unterseiten),
 // GoodNotes = flaches Regal mit Ordnern (= Workspaces), Gemini Notebook = Artefakt-
@@ -195,12 +198,13 @@ function openLibCoverPicker(pageId) {
 function libModeTabsHtml() {
 	const mode = S.libMode || "notion";
 	const b = (m, label) => '<button class="lib-mode' + (mode === m ? " active" : "") + '" data-libmode="' + m + '">' + label + "</button>";
-	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("nlm", "📥 Gemini Notebook") + "</div>";
+	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("archive", "🗄 Archiv") + b("nlm", "📥 Gemini Notebook") + "</div>";
 }
 
 export function renderLibrary(main) {
 	const mode = S.libMode || "notion";
 	if (mode === "hefte") { renderHefteShelf(main); return; }
+	if (mode === "archive") { renderArchiveLibrary(main); return; }
 	if (mode === "nlm") { renderNlmLibrary(main); return; }
 	// Notion bleibt ein kompakter Baum: Eltern, Unterseiten und ihre gespeicherte
 	// Reihenfolge werden nicht in eine nach Datum sortierte Tabelle aufgelöst.
@@ -449,6 +453,91 @@ export function renderNlmLibrary(main) {
 	});
 }
 
+// ---------- Archiv-Ansicht: archivierte Hefte & Seiten ----------
+export function renderArchiveLibrary(main) {
+	const q = (S.libFilter || "").trim().toLowerCase();
+	const typeFilter = S.libArchiveType || "all";
+	const roots = (STATE.archivedPageRoots && STATE.archivedPageRoots()) || [];
+	const filtered = roots.filter((pg) => {
+		if (!q) return true;
+		return (pg.title || "").toLowerCase().includes(q)
+			|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q));
+	});
+
+	const hefte = filtered.filter((p) => p.kind === "heft");
+	const pages = filtered.filter((p) => p.kind !== "heft");
+	const allHefteCount = roots.filter((p) => p.kind === "heft").length;
+	const allPagesCount = roots.filter((p) => p.kind !== "heft").length;
+
+	const filterTabs = [
+		["all", "Alle", roots.length],
+		["hefte", "📓 Hefte", allHefteCount],
+		["pages", "📝 Seiten", allPagesCount],
+	];
+
+	let html = '<div class="library lib-docs lib-archive"><div class="lib-head">' +
+		'<div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div>" +
+		'<div class="lib-head-tools"><input id="libFilter" placeholder="Archiv durchsuchen…" autocomplete="off" value="' + U.esc(S.libFilter || "") + '"></div></div>';
+
+	html += '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
+		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
+
+	if (!roots.length) {
+		html += '<div class="empty small" style="margin-top:32px">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
+		main.innerHTML = html + "</div>";
+		return;
+	}
+
+	if (!filtered.length) {
+		html += '<div class="empty small" style="margin-top:32px">Keine Treffer für diese Suche im Archiv.</div>';
+		main.innerHTML = html + "</div>";
+		return;
+	}
+
+	// Hefte-Abschnitt
+	if ((typeFilter === "all" || typeFilter === "hefte") && hefte.length) {
+		html += '<div class="ws-head" style="margin-top:16px"><span class="ws-name">📓 Hefte (' + hefte.length + ')</span></div>';
+		html += '<div class="lib-grid gn-grid" style="margin-bottom:24px">';
+		hefte.forEach((pg) => {
+			const heftPages = (S.heftMeta && S.heftMeta[pg.id] && S.heftMeta[pg.id].pages) || 1;
+			const meta = heftPages + " Seite" + (heftPages === 1 ? "" : "n") + " · archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
+			html += '<div class="lib-card gn-card" data-page="' + pg.id + '">' +
+				'<div class="lib-card-visual">' + libCoverHtml(pg) +
+				'<button class="lib-cover-btn" data-libcover="' + pg.id + '" title="Heftoptionen" aria-label="Heftoptionen">•••</button>' +
+				'</div>' +
+				'<div class="lib-card-title">' + U.esc(pg.title || "Ohne Titel") + '</div>' +
+				'<div class="lib-card-date">' + meta + '</div>' +
+				'<div class="archive-card-actions">' +
+				'<button type="button" class="mini archive-btn" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
+				'<button type="button" class="mini danger archive-btn" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button>' +
+				'</div></div>';
+		});
+		html += '</div>';
+	}
+
+	// Seiten-Abschnitt
+	if ((typeFilter === "all" || typeFilter === "pages") && pages.length) {
+		html += '<div class="ws-head" style="margin-top:16px"><span class="ws-name">📝 Seiten (' + pages.length + ')</span></div>';
+		html += '<div class="archive-list">';
+		pages.forEach((pg) => {
+			const subCount = Object.values(S.pages).filter((c) => c && c.parentId === pg.id && !c.trashed).length;
+			const meta = (subCount ? subCount + " Unterseite" + (subCount === 1 ? "" : "n") + " · " : "") + "archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
+			html += '<div class="archive-row" data-page="' + pg.id + '">' +
+				'<span class="row-icon">' + U.esc(RENDER.pageIconLabel(pg)) + '</span>' +
+				'<span class="row-title">' + U.esc(pg.title || "Ohne Titel") + '</span>' +
+				'<span class="hint">' + meta + '</span>' +
+				'<div class="archive-row-actions">' +
+				'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
+				'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button>' +
+				'</div></div>';
+		});
+		html += '</div>';
+	}
+
+	main.innerHTML = html + "</div>";
+	hydrateCovers(main);
+}
+
 // Ansichts-Umschalter + NotebookLM-Mediathek: eigene Delegation + Styles
 // (kein Eingriff in app.js nötig — gleiche Technik wie extras.js/notebooklm.js).
 const libStyle = document.createElement("style");
@@ -500,6 +589,16 @@ libStyle.textContent = [
 	".gn-card .lib-into{display:none}",
 	".gn-folder.gn-drop-target .lib-folder-visual,.gn-card.gn-drop-target .lib-notebook{filter:drop-shadow(0 0 0 2px var(--accent)) drop-shadow(0 10px 22px rgba(76,141,255,.35))}",
 	".gn-folder.gn-dragging,.gn-card.gn-dragging{opacity:.35}",
+	".archive-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}",
+	".archive-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--edge-soft);border-radius:var(--radius-md);background:var(--surface-subtle);cursor:pointer}",
+	".archive-row:hover{border-color:var(--accent-border);background:var(--surface-hover)}",
+	".archive-row .row-icon{font-size:16px;flex:none}",
+	".archive-row .row-title{flex:1;min-width:0;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+	".archive-row .hint{font-size:12px;color:var(--text2);flex:none}",
+	".archive-row-actions,.archive-card-actions{display:flex;gap:4px;flex:none;align-items:center}",
+	".archive-card-actions{margin-top:6px;width:100%}",
+	".archive-card-actions button{flex:1;min-height:26px;font-size:11px}",
+	".archive-card-actions button.danger{flex:0 0 26px}",
 	"@media(max-width:640px){.gn-toolbar{align-items:flex-start;flex-direction:column}.gn-toolbar-actions{width:100%}.gn-toolbar-actions #libFilter{flex:1;min-width:0}.gn-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:22px 16px}}",
 ].join("\n");
 document.head.appendChild(libStyle);
@@ -555,6 +654,21 @@ document.addEventListener("click", async (e) => {
 		e.preventDefault();
 		e.stopPropagation();
 		openLibCoverPicker(el.dataset.libcover);
+		return;
+	}
+	if ((el = hit("[data-libheftarchive]"))) {
+		const pg = S.pages[el.dataset.libheftarchive];
+		if (!pg) return;
+		await STATE.dispatch("pageArchive", { id: pg.id });
+		U.toast("Heft archiviert.", "success");
+		S.libCoverPageId = null;
+		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		renderMain();
+		return;
+	}
+	if ((el = hit("[data-libarchivefilter]"))) {
+		S.libArchiveType = el.dataset.libarchivefilter;
+		renderMain();
 		return;
 	}
 	if ((el = hit("[data-libhefttrash]"))) {

@@ -56,3 +56,26 @@ test("mehrere Chats werden vollständig über einzelne synchronisierte Tombstone
 	assert.equal(new Set(deleted.map((entry) => entry.deletedAt)).size, 1, "ein gemeinsamer Löschzeitpunkt");
 	assert.deepEqual(CHATS.load(), []);
 });
+
+test("eine Änderung am Gedankengang (role: thought) wird als neue Chatfassung gesichert", async () => {
+	const writes = [];
+	S.chatSessions = {};
+	S.currentChatId = "chat-thought-change";
+	STATE.dispatch = async (type, payload) => {
+		if (type === "chatUpsert") {
+			writes.push(structuredClone(payload));
+			S.chatSessions[payload.id] = structuredClone(payload);
+		}
+	};
+
+	const messages = [{ mid: "t-1", role: "thought", reasoning: "Erst denke ich das" }];
+	CHATS.persist(messages, "currentChatId");
+	await new Promise((resolve) => setTimeout(resolve, 2));
+	messages[0].reasoning = "Jetzt denke ich etwas anderes";
+	CHATS.persist(messages, "currentChatId");
+	await Promise.resolve();
+
+	assert.equal(writes.length, 2);
+	assert.equal(writes[1].messages[0].reasoning, "Jetzt denke ich etwas anderes");
+	assert.notEqual(writes[1].updated, writes[0].updated);
+});

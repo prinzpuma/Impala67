@@ -27,6 +27,7 @@ const MORE_ACTIONS = [
 	["graph", "🕸️", "Wissensgraph", "Vernetzte Notizen"],
 	["library", "📖", "Bibliothek", "PDFs & Dokumente"],
 	["lernzeit", "⏱️", "Lernanalyse", "Zeiten & Statistiken"],
+	["archive", "🗄️", "Archiv", "Archivierte Notizen & Hefte"],
 	["trash", "🗑️", "Papierkorb", "Gelöschte Inhalte"],
 	["settings", "⚙️", "Einstellungen", "Sync, Theme, KI"],
 ];

@@ -694,7 +694,7 @@ export const DB = (() => {
 
 			// (3) Endgültig-gelöscht vs. verschoben/geändert: Löschen gewinnt beim Merge immer — der andere
 			// Stand ginge sonst still verloren und wird als Kopie gerettet.
-			const LIFE = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore"]);
+			const LIFE = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore", "pageArchive", "pageUnarchive"]);
 			const deletesOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageDelete" && ev.payload ? ev.payload.id : null), extra);
 			const lifecycleOf = (evs, extra) => headsOf(evs, (ev) => (LIFE.has(ev.type) && ev.payload ? ev.payload.id : null), extra);
 			const localDel = deletesOf(local, localOnly), remoteDel = deletesOf(fresh);
@@ -768,7 +768,7 @@ export const DB = (() => {
 		// uiTreeSet/uiTabsSet den Reset und referenzierten Seiten, die es nicht mehr gibt.
 		// Hinweis bleibt: bereits gesyncte Events können per Drive-Merge zurückkehren —
 		// der Seiten-Reset ist ein LOKALER Neuanfang, kein Drive-Reset.
-		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore",
+		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore", "pageArchive", "pageUnarchive",
 			"heftOps", "heftSnap", "heftBlob", "heftUpdated", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
 		const evStore = t.objectStore("events");
 		const evReq = evStore.getAll();

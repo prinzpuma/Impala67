@@ -31,7 +31,7 @@ export const AI = (() => {
 		images: 2, toolTotal: 24000, toolResult: 6000,
 		attachmentSingle: 12000, attachmentTotal: 24000,
 	};
-	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content", "change"]);
+	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content", "patch_page", "archive_page", "unarchive_page", "change"]);
 	const DROP_SCHEMA_KEYS = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema", "examples"]);
 	const TOOL_DROPPED = JSON.stringify({ gekuerzt: true, hinweis: "Älteres Ergebnis aus Platzgründen entfernt — bei Bedarf erneut abrufen." });
 	const META_TOOL_DEF = {
@@ -873,8 +873,21 @@ export const AI = (() => {
 			view === "anki" ? snapshot.anki : page ? `Geöffnete Seite: "${page.title}"` : "Keine Seite geöffnet.",
 		];
 		if (snapshot.includePage) {
-			if (heft) lines.push(`Handschrift-Heft „${heft.page.title}“ ist geöffnet (Seite ${heft.idx + 1}). Der Inhalt wird als Bild übergeben — falls kein Vision-Modell aktiv ist, steht kein visueller Inhalt zur Verfügung.`);
-			else {
+			if (heft) {
+				const pg = S.heftDocs?.[heft.id]?.pages?.[heft.idx];
+				const parts = [];
+				if (Array.isArray(pg?.texts)) {
+					for (const t of pg.texts) if (t?.text) parts.push(String(t.text).trim());
+				}
+				const typedText = parts.filter(Boolean).join("\n");
+				let heftLine = `Handschrift-Heft „${heft.page.title}“ ist geöffnet (Seite ${heft.idx + 1}).`;
+				if (typedText) {
+					heftLine += `\nGetippte Text-Boxen auf dieser Seite:\n${typedText}\n(Der handschriftliche/visuelle Inhalt wird als Bild übergeben.)`;
+				} else {
+					heftLine += " Der Inhalt wird als Bild übergeben — falls kein Vision-Modell aktiv ist, steht kein visueller Inhalt zur Verfügung.";
+				}
+				lines.push(heftLine);
+			} else {
 				const body = String(page.content || ""), max = requestConfig.family === "local" ? 2500 : 12000, cut = body.length > max;
 				S.pageCtxInfo = { id: page.id, sent: Math.min(body.length, max), total: body.length };
 				lines.push(`Inhalt der geöffneten Seite${cut ? " (Anfang — Rest per read_page)" : ""}:\n${body.slice(0, max) || "(Leere Seite)"}`);
@@ -941,8 +954,19 @@ export const AI = (() => {
 	}
 	async function ragFor(text) {
 		try {
-			if (!RAG.enabled() || String(text || "").trim().length < 8) return "";
-			return ((await RAG.search(text, 4)) || []).filter((h) => (h.score == null || h.score >= 0.3) && h.snippet).map((h) => `• [${h.title}] ${h.snippet}`).join("\n");
+			const clean = String(text || "").trim();
+			if (!RAG.enabled() || clean.length < 12 || !/\s/.test(clean)) return "";
+			const active = currentPage();
+			const activeId = active?.id;
+			const activeTitle = active?.title;
+			const hits = (await RAG.search(clean, 4)) || [];
+			return hits
+				.filter((h) => {
+					if (active && (h.pageId === activeId || h.title === activeTitle)) return false;
+					return (h.score == null || h.score >= 0.45) && h.snippet;
+				})
+				.map((h) => `• [${h.title}${h.archived ? " (archiviert)" : ""}] ${h.snippet}`)
+				.join("\n");
 		} catch (error) {
 			if (error?.name === "AbortError") throw error;
 			debugEvent("Auto-RAG übersprungen", { error: errorText(error).slice(0, 200) });
@@ -1082,9 +1106,21 @@ export const AI = (() => {
 			else throw new Error("Es ist gerade kein Heft geöffnet — bitte page_title angeben.");
 			const index = args.heft_page ? Math.max(0, Math.floor(args.heft_page) - 1) : HEFT.activeId === id ? HEFT.activeIndex || 0 : 0;
 			pageNo = index + 1;
+			const heftDoc = S.heftDocs?.[id];
+			const pg = heftDoc?.pages?.[index];
+			const parts = [];
+			if (Array.isArray(pg?.texts)) {
+				for (const t of pg.texts) if (t?.text) parts.push(String(t.text).trim());
+			}
+			const text = parts.filter(Boolean).join("\n");
+			const out = {
+				ok: true,
+				hinweis: `Heftseite ${pageNo} folgt direkt nach den Tool-Ergebnissen als Bild-Nachricht. Falls du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das kurz und ehrlich.`,
+			};
+			if (text) out.typedText = text;
 			return {
 				detail: `${args.page_title || "aktuelles Heft"} · Seite ${pageNo}`,
-				out: { ok: true, hinweis: `Heftseite ${pageNo} folgt direkt nach den Tool-Ergebnissen als Bild-Nachricht. Falls du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das kurz und ehrlich.` },
+				out,
 				message: { role: "user", content: [
 					{ type: "text", text: `[Automatisch angehängt: Heftseite ${pageNo} als Bild${args.page_title ? ` aus „${args.page_title}“` : ""}]` },
 					{ type: "image_url", image_url: { url: await HEFT.pageAsDataUrl(id, index) } },
@@ -1102,32 +1138,6 @@ export const AI = (() => {
 			|| (args.to_deck ? "→ " + args.to_deck : "") || args.new_name || args.deck || args.from_deck || args.name || "";
 		if (name === "semantic_search") detail += (detail ? " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
 		return detail;
-	}
-	function toolProgress(name, args) {
-		args ||= {};
-		if (name === "inspect") {
-			if (args.kind === "pages") return "Die Seitenübersicht wird geprüft.";
-			if (args.kind === "page") {
-				const titles = Array.isArray(args.titles) ? args.titles.filter(Boolean) : [];
-				return titles.length ? `${titles.length} Seite${titles.length === 1 ? "" : "n"} werden gezielt gelesen: ${titles.slice(0, 3).join(", ")}${titles.length > 3 ? " …" : ""}.` : "Die benötigten Seiten werden gelesen.";
-			}
-			if (args.kind === "search") return args.query ? `Die Notizen werden nach „${String(args.query).slice(0, 80)}“ durchsucht.` : "Die Notizen werden durchsucht.";
-			if (args.kind === "cards") return args.deck ? `Die Karten im Stapel „${String(args.deck).slice(0, 80)}“ werden geprüft.` : "Die passenden Karteikarten werden geprüft.";
-			if (args.kind === "decks") return "Die Stapelübersicht wird geprüft.";
-			if (args.kind === "due") return "Die fälligen Karteikarten werden geprüft.";
-			if (args.kind === "chats") return "Frühere Chats werden nach passenden Angaben durchsucht.";
-			return "Der aktuelle App-Kontext wird geprüft.";
-		}
-		if (name === "change") {
-			const count = Array.isArray(args.operations) ? args.operations.length : 0;
-			return count ? `${count} zusammengehörige Änderung${count === 1 ? " wird" : "en werden"} ausgeführt.` : "Die angeforderten Änderungen werden ausgeführt.";
-		}
-		if (name === "ask_choice") return "Für die offene Mehrdeutigkeit wird eine kurze Auswahl vorbereitet.";
-		if (name === "calculate") return "Die Rechnung wird überprüft.";
-		if (name === "view_heft_page" || name === "get_heft_page_image") return "Die benötigte Heftseite wird angesehen.";
-		if (name === "request_tools") return "Der benötigte Zugriff auf die App-Daten wird vorbereitet.";
-		const detail = toolDetail(name, args);
-		return detail ? `Der nächste Arbeitsschritt wird ausgeführt: ${detail}.` : "Der nächste Arbeitsschritt wird ausgeführt.";
 	}
 	function mutationBefore(name, args) {
 		if (!MUTATING_TOOLS.has(name) || name === "create_page") return { id: null, value: { title: "", content: "" } };
@@ -1203,19 +1213,9 @@ export const AI = (() => {
 			lastPersist = Date.now();
 			try { CHATS.persist(target, type === "side" ? "sideChatId" : "currentChatId", runId); } catch (error) { console.warn("Chat speichern:", error); }
 		};
-		let runReasoning = "", nudged = false;
-		const addReasoning = (text) => {
-			text = String(text || "").trim();
-			if (text && !runReasoning.endsWith(text)) runReasoning += (runReasoning ? "\n\n" : "") + text;
-		};
-		const showReasoning = (full = false) => {
-			S.aiThinkingDraft = runReasoning;
-			full ? render() : scheduleRender();
-		};
-		addReasoning("Die Anfrage wird geprüft und der nächste sinnvolle Schritt festgelegt.");
-		showReasoning(true);
+		let nudged = false;
 		const fail = (error) => {
-			if (error && typeof error === "object") error.reasoning = String(S.aiThinkingDraft || runReasoning || "").trim();
+			if (error && typeof error === "object") error.reasoning = String(S.aiThinkingDraft || "").trim();
 			S.aiThinkingDraft = "";
 			flushEdits();
 			persist(true);
@@ -1229,7 +1229,7 @@ export const AI = (() => {
 			}
 			S.aiStatus = status;
 			S.aiDraft = "";
-			S.aiThinkingDraft = runReasoning;
+			S.aiThinkingDraft = "";
 			const answer = await new Promise((resolve) => {
 				pendingChoices[mid] = resolve;
 				target.push({ mid, role: "question", question, options, answered: false });
@@ -1263,25 +1263,32 @@ export const AI = (() => {
 
 		for (let step = 0; step < LIMIT.agentSteps; step++) {
 			S.aiDraft = "";
-			S.aiThinkingDraft = runReasoning;
+			S.aiThinkingDraft = "";
 			pruneRunHistory(messages);
 			let message;
 			try {
 				message = await chatOnce(messages, agentTools,
 					(text) => { S.aiDraft = text; scheduleRender(); },
-					(text) => { S.aiThinkingDraft = runReasoning ? runReasoning + "\n\n" + text : text; scheduleRender(); }, current);
+					(text) => { S.aiThinkingDraft = text; scheduleRender(); }, current);
 			} catch (error) { fail(error); }
-			addReasoning(message.reasoning);
 			messages.push(toApiMessage(message, isGoogle));
-			if (message.tool_calls?.length && String(message.content || "").trim()) target.push({ mid: U.uid(), role: "assistant", content: String(message.content).trim(), model, reasoningExpanded: false });
+			if (message.tool_calls?.length) {
+				if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
+				if (String(message.content || "").trim()) target.push({ mid: U.uid(), role: "assistant", content: String(message.content).trim(), model, reasoningExpanded: false });
+				S.aiThinkingDraft = "";
+				scheduleRender();
+			}
 			if (!message.tool_calls?.length) {
 				if (!String(message.content || "").trim() && !nudged) {
 					nudged = true;
+					if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
+					S.aiDraft = ""; S.aiThinkingDraft = "";
 					messages.push({ role: "user", content: "Deine Antwort war leer. Sage in ein bis zwei Sätzen konkret, was du getan oder herausgefunden hast — ohne weiteren Werkzeug-Aufruf." });
 					continue;
 				}
-				const final = { mid: U.uid(), role: "assistant", content: message.content || "", model, reasoning: runReasoning || null, reasoningExpanded: false };
-				S.aiDraft = S.aiThinkingDraft = "";
+				if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
+				const final = { mid: U.uid(), role: "assistant", content: message.content || "", model, reasoning: null, reasoningExpanded: false };
+				S.aiDraft = ""; S.aiThinkingDraft = "";
 				target.push(final);
 				flushEdits();
 				persist(true);
@@ -1295,13 +1302,9 @@ export const AI = (() => {
 				let args = {};
 				if (raw) { try { args = JSON.parse(raw); } catch { args = null; } }
 				if (!args || typeof args !== "object" || Array.isArray(args)) {
-					addReasoning(`Der Werkzeugaufruf „${name}“ war unvollständig und muss korrigiert werden.`);
-					showReasoning();
 					finishTool(call, name, "ungültige Argumente", { error: `Die Argumente von ${name} sind kein gültiges JSON (vermutlich abgeschnitten) — bitte den Aufruf mit vollständigen Argumenten wiederholen.` });
 					continue;
 				}
-				addReasoning(toolProgress(name, args));
-				showReasoning();
 				onStep?.(name);
 				if (name === "view_heft_page" || name === "get_heft_page_image") {
 					const normalized = name === "view_heft_page" ? { page_title: args.title, heft_page: args.page } : args;
@@ -1352,9 +1355,9 @@ export const AI = (() => {
 			}
 			if (pendingImages.length) messages.push(...pendingImages);
 		}
-		S.aiDraft = S.aiThinkingDraft = "";
+		S.aiDraft = ""; S.aiThinkingDraft = "";
 		const text = "(Abgebrochen: zu viele Tool-Schritte.)";
-		target.push({ mid: U.uid(), role: "assistant", content: text, reasoning: runReasoning || null, reasoningExpanded: false });
+		target.push({ mid: U.uid(), role: "assistant", content: text, reasoning: null, reasoningExpanded: false });
 		flushEdits();
 		persist(true);
 		return text;

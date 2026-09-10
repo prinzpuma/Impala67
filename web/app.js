@@ -430,7 +430,7 @@ function wireEvents() {
 		"[data-ankisuspend],[data-ankiarchive],[data-ankiunarchive],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
-		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
+		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
 		"[data-pagetemplate],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
@@ -1150,6 +1150,32 @@ function wireEvents() {
 			const newId = await duplicatePage(t.dataset.pageduplicate);
 			if (newId) openPage(newId);
 			else render();
+			return;
+		}
+		if (t.dataset.pagearchive) {
+			S.pageMenuOpenId = null;
+			S.topMenu = null;
+			const id = t.dataset.pagearchive;
+			const pg = S.pages[id];
+			if (pg) {
+				await STATE.dispatch("pageArchive", { id });
+				const isHeft = pg.kind === "heft";
+				U.toast((isHeft ? "Heft" : "Seite") + " archiviert.", "success");
+			} else {
+				render();
+			}
+			return;
+		}
+		if (t.dataset.pageunarchive) {
+			const id = t.dataset.pageunarchive;
+			const pg = S.pages[id];
+			if (pg) {
+				await STATE.dispatch("pageUnarchive", { id });
+				const isHeft = pg.kind === "heft";
+				U.toast((isHeft ? "Heft" : "Seite") + " wiederhergestellt.", "success");
+			} else {
+				render();
+			}
 			return;
 		}
 		if (t.dataset.pagetrash) {

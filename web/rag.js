@@ -188,7 +188,8 @@ export const RAG = (() => {
 		if (!enabled()) return;
 		const vecs = await DB.allVecs();
 		const model = S.settings.embedModel, providerId = embeddingProviderId();
-		for (const pg of STATE.activePages()) {
+		for (const pg of Object.values(S.pages)) {
+			if (pg.trashed) continue;
 			const v = vecs[pg.id];
 			if (!v || v.updated !== pg.updated || v.model !== model || v.providerId !== providerId) queuePage(pg.id);
 		}
@@ -231,7 +232,7 @@ export const RAG = (() => {
 		if (!enabled()) return null; // Aufrufer fällt auf Stichwortsuche zurück
 		const qv = await queryVec(query);
 		const model = S.settings.embedModel, providerId = embeddingProviderId();
-		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed }]));
+		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed, archived: !!pg.archived }]));
 		const worker = getRankingWorker();
 		if (worker) {
 			const id = "rank_" + (++rankingReqId) + "_" + Date.now();

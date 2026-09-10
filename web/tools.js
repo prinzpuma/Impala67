@@ -172,9 +172,13 @@ export const TOOLS = (() => {
 	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
 	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
 	function keywordHits(query) {
-		const all = STATE.searchNotes(query) || [];
+		const all = STATE.searchNotes(query, { includeArchived: true }) || [];
 		return {
-			results: all.slice(0, 20).map((r) => ({ title: r.page.title, snippet: r.snippet })),
+			results: all.slice(0, 20).map((r) => ({
+				title: r.page.title,
+				snippet: r.snippet,
+				...(r.page.archived ? { archived: true } : {}),
+			})),
 			totalMatches: all.length,
 			...(all.length > 20 ? { note: "Nur die 20 besten Treffer — bei Bedarf genauer suchen." } : {}),
 		};
@@ -185,15 +189,15 @@ export const TOOLS = (() => {
 	// ohne bei jeder Anfrage dutzende Schemas an das Modell zu schicken.
 	const defs = [
 		t("inspect", "Liest App-Daten. Mehrere Seiten oder Karten in einem Aufruf abrufen.", {
-			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats"] },
+			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats", "archived"] },
 			titles: { type: "array", items: { type: "string" }, description: "Seitentitel für kind=page" },
 			query: { type: "string" }, deck: { type: "string" }, limit: { type: "number" },
 			semantic: { type: "boolean", description: "Semantische statt Stichwortsuche" },
 		}, ["kind"]),
 		t("change", "Führt mehrere Änderungen in einer atomaren, vollständig rückgängig machbaren Aktion aus. Reihenfolge der operations wird beachtet.", {
 			operations: { type: "array", items: { type: "object", properties: {
-				op: { type: "string", enum: ["page.create", "page.append", "page.replace", "page.rename", "page.move", "page.trash", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend", "card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"] },
-				title: { type: "string" }, parent: { type: "string" }, content: { type: "string" }, text: { type: "string" }, page: { type: "number" },
+				op: { type: "string", enum: ["page.create", "page.append", "page.replace", "page.patch", "page.rename", "page.move", "page.trash", "page.archive", "page.unarchive", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend", "card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"] },
+				title: { type: "string" }, parent: { type: "string" }, content: { type: "string" }, text: { type: "string" }, search: { type: "string" }, replace: { type: "string" }, page: { type: "number" },
 				front: { type: "string" }, fronts: { type: "array", items: { type: "string" } }, back: { type: "string" }, new_front: { type: "string" }, new_back: { type: "string" },
 				cards: { type: "array", items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] } },
 				deck: { type: "string" }, to: { type: "string" }, query: { type: "string" }, suspended: { type: "boolean" }, limit: { type: "number" },
@@ -278,6 +282,9 @@ export const TOOLS = (() => {
 			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.updated;
 			await STATE.dispatch("pageUpdate", { id: x.id, patch });
 			await STATE.dispatch(x.before.trashed ? "pageTrash" : "pageRestore", { id: x.id });
+			if (x.before.archived !== x.after?.archived) {
+				await STATE.dispatch(x.before.archived ? "pageArchive" : "pageUnarchive", { id: x.id });
+			}
 		}
 		for (const x of changeSet.cards || []) {
 			if (!x.before) continue;
@@ -321,9 +328,12 @@ export const TOOLS = (() => {
 			case "page.create": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.append":
 			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "title oder content fehlt";
+			case "page.patch": return hasText(op, "title") && hasText(op, "search") && (hasField(op, "replace") || hasField(op, "content")) ? "" : "title, search oder replace fehlt";
 			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "title oder neuer Name fehlt";
 			case "page.move": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.trash": return hasText(op, "title") ? "" : "title fehlt";
+			case "page.archive":
+			case "page.unarchive": return hasText(op, "title") ? "" : "title fehlt";
 			case "heft.append": return hasText(op, "title") && hasText(op, "text", "content") ? "" : "Hefttitel oder Text fehlt";
 			case "card.create": return Array.isArray(op.cards) ? (op.cards.length && op.cards.every((card) => hasText(card, "front") && hasField(card, "back") ? true : false) ? "" : "Karten brauchen front und back") : (hasText(op, "front") && hasField(op, "back") ? "" : "front oder back fehlt");
 			case "card.update": return hasText(op, "front", "query") && (hasField(op, "new_front") || hasField(op, "new_back") || hasField(op, "back") || hasField(op, "to")) ? "" : "Karte oder neue Werte fehlen";
@@ -345,9 +355,12 @@ export const TOOLS = (() => {
 		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content ?? o.text ?? "" }],
 		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content ?? o.text }],
 		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text }],
+		"page.patch": (o) => ["patch_page", { page_title: o.title, search: o.search, replace: o.replace ?? o.content }],
 		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
 		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent }],
 		"page.trash": (o) => ["delete_page", { page_title: o.title }],
+		"page.archive": (o) => ["archive_page", { page_title: o.title }],
+		"page.unarchive": (o) => ["unarchive_page", { page_title: o.title }],
 		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text ?? o.content, heft_page: o.page }],
 		"card.create": (o) => [o.cards ? "create_flashcards" : "create_flashcard", o.cards ? { cards: o.cards, deck: o.deck, page_title: o.title } : { front: o.front, back: o.back, deck: o.deck, page_title: o.title }],
 		"card.update": (o) => ["update_flashcard", { front: o.front || o.query, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
@@ -381,6 +394,17 @@ export const TOOLS = (() => {
 					case "due": return run("list_due_cards", {});
 					case "search": return run(a.semantic ? "semantic_search" : "search_notes", { query: a.query });
 					case "chats": return run("search_chat_history", { query: a.query, limit });
+					case "archived": {
+						const roots = (STATE.archivedPageRoots && STATE.archivedPageRoots()) || [];
+						return {
+							archived: roots.map((p) => ({
+								title: p.title,
+								kind: p.kind === "heft" ? "heft" : "page",
+								archivedAt: p.archivedAt || p.updated,
+							})),
+							total: roots.length,
+						};
+					}
 					default: return { error: "inspect: unbekanntes kind." };
 				}
 			}
@@ -388,18 +412,24 @@ export const TOOLS = (() => {
 				const operations = Array.isArray(a.operations) ? a.operations.map(normalizeChangeOperation) : [];
 				if (!operations.length) return { error: "change: operations fehlt." };
 				if (operations.length > 100) return { error: "change: maximal 100 Operationen pro Aktion." };
+				const validationErrors = [];
+				for (let i = 0; i < operations.length; i++) {
+					const op = operations[i] || {};
+					if (!OP_TO_TOOL[op.op]) {
+						validationErrors.push(`Operation ${i + 1}: unbekannte Operation „${op.op || "(leer)"}“`);
+					} else {
+						const validation = validateChangeOperation(op);
+						if (validation) {
+							validationErrors.push(`Operation ${i + 1} (${op.op}): ${validation}`);
+						}
+					}
+				}
+				if (validationErrors.length) {
+					return { error: `change: Validierungsfehler in ${validationErrors.length} Operation(en):\n${validationErrors.join("\n")}\nKeine Änderungen ausgeführt.` };
+				}
 				const before = managedSnapshot(operations), results = [];
 				for (let i = 0; i < operations.length; i++) {
 					const op = operations[i] || {}, make = OP_TO_TOOL[op.op];
-					if (!make) {
-						await undo(undoSet(before));
-						return { error: `change: unbekannte Operation an Position ${i + 1}: ${op.op || "(leer)"}. Nichts geändert.` };
-					}
-					const validation = validateChangeOperation(op);
-					if (validation) {
-						await undo(undoSet(before));
-						return { error: `Operation ${i + 1} (${op.op}) unvollständig: ${validation}. Nichts geändert.` };
-					}
 					const [tool, args] = make(op);
 					let result;
 					try { result = await run(tool, args); }
@@ -461,6 +491,22 @@ export const TOOLS = (() => {
 				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: a.content || "" } });
 				return { ok: true, title: pg.title };
 			}
+			case "patch_page": {
+				const pg = STATE.findPage(a.page_title);
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu." };
+				const search = a.search != null ? String(a.search) : "";
+				if (!search) return { error: "patch_page: search fehlt." };
+				const content = String(pg.content || "");
+				const firstIdx = content.indexOf(search);
+				if (firstIdx === -1) return { error: `Suchtext wurde in der Seite nicht gefunden: ${search}` };
+				const secondIdx = content.indexOf(search, firstIdx + search.length);
+				if (secondIdx !== -1) return { error: `Suchtext kommt mehrfach in der Seite vor (${search}). Bitte Suchtext eindeutiger angeben.` };
+				const replace = String(a.replace ?? a.content ?? "");
+				const newContent = content.slice(0, firstIdx) + replace + content.slice(firstIdx + search.length);
+				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: newContent } });
+				return { ok: true, title: pg.title };
+			}
 			case "rename_page": {
 				const pg = STATE.findPage(a.page_title), title = String(a.new_title || "").trim();
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
@@ -494,6 +540,37 @@ export const TOOLS = (() => {
 					trashed: true,
 					subpages: subtreeExtra,
 					note: "Im Papierkorb — wiederherstellbar. Endgültiges Löschen nur manuell im Papierkorb.",
+				};
+			}
+			case "archive_page": {
+				const pg = STATE.findPage(a.page_title);
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				const subtree = STATE.pageSubtreeIds(pg.id);
+				await STATE.dispatch("pageArchive", { id: pg.id });
+				return {
+					ok: true,
+					title: pg.title,
+					archived: true,
+					kind: pg.kind === "heft" ? "heft" : "page",
+					subpages: subtree.size - 1,
+					note: "Archiviert — in der Bibliothek (Archiv-Reiter) wiederherstellbar.",
+				};
+			}
+			case "unarchive_page": {
+				let pg = STATE.findPage(a.page_title);
+				if (!pg) {
+					const all = Object.values(S.pages).filter((p) => p && !p.trashed && p.archived);
+					pg = all.find((p) => (p.title || "").toLowerCase() === String(a.page_title || "").toLowerCase().trim())
+						|| all.find((p) => (p.title || "").toLowerCase().includes(String(a.page_title || "").toLowerCase().trim()));
+				}
+				if (!pg) return { error: "Archivierte Seite nicht gefunden: " + a.page_title };
+				await STATE.dispatch("pageUnarchive", { id: pg.id });
+				return {
+					ok: true,
+					title: pg.title,
+					archived: false,
+					kind: pg.kind === "heft" ? "heft" : "page",
+					note: "Aus dem Archiv wiederhergestellt.",
 				};
 			}
 			case "delete_flashcard": {
@@ -586,9 +663,21 @@ export const TOOLS = (() => {
 				if (pg.kind === "heft") {
 					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
 					const meta = (S.heftMeta && S.heftMeta[pg.id]) || {};
-					return { title: pg.title, heft: true, pages: meta.pages || 1, content: String(meta.ocrText || "").slice(0, 12000), note: "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft." };
+					return {
+						title: pg.title,
+						heft: true,
+						archived: !!pg.archived,
+						pages: meta.pages || 1,
+						content: String(meta.ocrText || "").slice(0, 12000),
+						note: "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft.",
+					};
 				}
-				return { title: pg.title, content: (pg.content || "").slice(0, 12000), hasPdf: !!pg.pdfId };
+				return {
+					title: pg.title,
+					archived: !!pg.archived,
+					content: (pg.content || "").slice(0, 12000),
+					hasPdf: !!pg.pdfId,
+				};
 			}
 			case "list_pages": {
 				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.

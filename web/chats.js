@@ -58,7 +58,7 @@ const textHash = (value) => {
 	return (hash >>> 0).toString(36);
 };
 const printOf = (list) => (list || []).length + ":" + (list || [])
-	.map((m) => [m.mid || "", m.role || "", textHash(m.content), m.undone ? 1 : 0, m.answered ? 1 : 0, m.reasoning ? 1 : 0].join("~"))
+	.map((m) => [m.mid || "", m.role || "", textHash(m.content || m.reasoning), m.undone ? 1 : 0, m.answered ? 1 : 0, m.reasoning ? 1 : 0].join("~"))
 	.join(",");
 
 // Fingerabdruck der zuletzt WEGGESCHRIEBENEN Liste.

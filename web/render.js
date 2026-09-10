@@ -516,7 +516,9 @@ function rowHtml(pg, depth, wsId) {
 // Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
 const menuBtn = (attr, id, label, cls = "") => `<button class="menu-item${cls}" data-${attr}="${id}">${label}</button>`;
 const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, "📋 Duplizieren") + menuBtn("pagetemplate", pg.id, "📑 " + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
-const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, "📦 Verschieben nach…") + menuBtn("pagetrash", pg.id, "🗑 Löschen", " danger");
+const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, "📦 Verschieben nach…") +
+	(pg.archived ? menuBtn("pageunarchive", pg.id, "↩ Aus Archiv holen") : menuBtn("pagearchive", pg.id, "🗄 Archivieren")) +
+	menuBtn("pagetrash", pg.id, "🗑 Löschen", " danger");
 function pageMenuHtml(pg) {
 	return '<div class="page-menu">' + menuBtn("pagerename", pg.id, "✎ Umbenennen") + dupTplItems(pg) +
 		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + moveTrashItems(pg) + "</div>";
@@ -598,7 +600,8 @@ function renderMain() {
 		main._lastPageShellHtml = null;
 		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
 		// data-owned: der Canvas gehört HEFT — U.morph fasst diesen Teilbaum nie an.
-		main.innerHTML = `<div id="heftStage" class="heft-stage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
+		main.innerHTML = (pg.archived ? `<div class="archived-banner heft-archived-banner"><span>🗄️ Dieses Heft ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") +
+			`<div id="heftStage" class="heft-stage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
 		const stage = $("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
 		return;
@@ -610,7 +613,8 @@ function renderMain() {
 	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
 	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
 	const pageShellHtml =
-		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div></div>" +
+		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
+		(pg.archived ? `<div class="archived-banner"><span>🗄️ Diese Seite ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") + "</div>" +
 		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
 				? `<div class="page-cover ${pg.coverImg ? "has-img" : "cover-" + pg.cover}" data-key="cover:${esc(pg.coverImg || pg.cover || "")}"${pg.coverImg ? ` data-coverimg="${esc(pg.coverImg)}"` : ""}><div class="cover-btns"><button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button></div></div>`
@@ -1380,6 +1384,7 @@ function msgHtml(m, locked) {
 	return m.role === "edit" ? editCardHtml(m)
 		: m.role === "question" ? questionCardHtml(m)
 		: m.role === "tool" ? toolChipHtml(m)
+		: m.role === "thought" ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` })
 		: m.role === "assistant" ? assistantMsgHtml(m)
 		: userMsgHtml(m, locked);
 }
@@ -1718,11 +1723,11 @@ function thinkBoxHtml(opts) {
 // Live: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar
 const thinkingLiveHtml = () => thinkBoxHtml({
 	text: S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2),
-	expanded: !!S.thinkingLiveExpanded, live: true, label: "Denk- und Arbeitsverlauf…", toggleAttr: 'id="btnThinkLive"',
+	expanded: !!S.thinkingLiveExpanded, live: true, label: "Gedankengang…", toggleAttr: 'id="btnThinkLive"',
 });
 
 function assistantMsgHtml(m) {
-	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Denk- und Arbeitsverlauf", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
+	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
 	const refine = S.refineOpenMid === m.mid
 		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">${ICONS.arrowUp} Länger</button><button data-refine="${m.mid}" data-mode="same">${ICONS.arrowSame} Gleich</button><button data-refine="${m.mid}" data-mode="shorter">${ICONS.arrowDown} Kürzer</button></div>`
 		: "";

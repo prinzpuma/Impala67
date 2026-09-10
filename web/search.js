@@ -109,6 +109,11 @@ function actionItems() {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");
 			SETTINGS.applyTheme();
 		} },
+		{ type: "action", icon: "🗄", label: "Archiv in Bibliothek öffnen", run: () => {
+			S.view = "library";
+			S.libMode = "archive";
+			RENDER.render();
+		} },
 		{ type: "action", icon: "🗑", label: "Papierkorb öffnen", run: click("btnTrash") },
 		{ type: "action", icon: "☁", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
 		{ type: "action", icon: "⚙", label: "Einstellungen öffnen", run: click("btnSettings") }

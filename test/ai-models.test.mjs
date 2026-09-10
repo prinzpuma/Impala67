@@ -252,7 +252,7 @@ test("beim Anpassen einer Antwort wird der Denktext ebenfalls live weitergegeben
 	assert.equal(thought, "Formulierung wird gestrafft.");
 });
 
-test("Werkzeugrunden zeigen auch ohne Anbieter-Gedanken einen verständlichen Arbeitsverlauf", async () => {
+test("Werkzeugrunden zeigen chronologische Gedankengänge und Werkzeuge im Verlauf", async () => {
 	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45675/v1", key: "" }];
 	S.settings.aiProviderId = "local";
 	S.settings.aiModel = "local-model";
@@ -265,19 +265,25 @@ test("Werkzeugrunden zeigen auch ohne Anbieter-Gedanken einen verständlichen Ar
 	STATE.dispatch = async () => {};
 	let call = 0;
 	globalThis.fetch = async () => ++call === 1
-		? streamResponse({ tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
+		? streamResponse({ reasoning_content: "Ich prüfe die Seiten.", tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
 		: streamResponse({ content: "Die Seiten sind geprüft." });
 	const progress = [];
 
-	await AI.agent("Sortiere die Seiten nach Nummer.", "side", () => progress.push(S.aiThinkingDraft));
+	await AI.agent("Sortiere die Seiten nach Nummer.", "side", (tool) => progress.push(tool));
 
-	assert.ok(progress.some((text) => /Seiten/i.test(text) && /prüf/i.test(text)), progress.join("\n---\n"));
+	assert.ok(progress.includes("inspect"));
+	const thought = S.sideChat.find((message) => message.role === "thought");
+	assert.ok(thought, "Gedankengang ist als separate Nachricht vorhanden");
+	assert.match(thought.reasoning, /Seiten/i);
+	const toolChip = S.sideChat.find((message) => message.role === "tool");
+	assert.ok(toolChip, "Werkzeug-Chip ist vorhanden");
+	assert.equal(toolChip.name, "inspect");
 	const answer = S.sideChat.findLast((message) => message.role === "assistant");
-	assert.match(answer.reasoning, /Seiten/i);
-	assert.match(answer.reasoning, /prüf/i);
+	assert.equal(answer.content, "Die Seiten sind geprüft.");
+	assert.equal(answer.reasoning, null);
 });
 
-test("ein Fehler nach einem Werkzeug bewahrt den sichtbaren Arbeitsverlauf", async () => {
+test("ein Fehler nach einem Werkzeug bewahrt den bisherigen Chat-Verlauf", async () => {
 	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://127.0.0.1:45676/v1", key: "" }];
 	S.settings.aiProviderId = "local";
 	S.settings.aiModel = "local-model";
@@ -288,13 +294,15 @@ test("ein Fehler nach einem Werkzeug bewahrt den sichtbaren Arbeitsverlauf", asy
 	STATE.dispatch = async () => {};
 	let call = 0;
 	globalThis.fetch = async () => ++call === 1
-		? streamResponse({ tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
+		? streamResponse({ reasoning_content: "Ich prüfe die Seiten.", tool_calls: [{ index: 0, id: "call-pages", type: "function", function: { name: "inspect", arguments: '{"kind":"pages"}' } }] })
 		: response({ error: "Ungültige Folgeanfrage" }, 400);
 
 	await assert.rejects(
 		() => AI.agent("Prüfe meine Seiten.", "side"),
-		(error) => /Seiten/i.test(error.reasoning || "") && /prüf/i.test(error.reasoning || ""),
+		(error) => error.message.includes("400"),
 	);
+	assert.ok(S.sideChat.some((message) => message.role === "thought"), "Gedankengang vor Fehler bleibt erhalten");
+	assert.ok(S.sideChat.some((message) => message.role === "tool"), "Tool-Aufruf vor Fehler bleibt erhalten");
 });
 
 test("eine Antwort bleibt nach einem Chatwechsel in ihrer gestarteten Sitzung", async () => {
