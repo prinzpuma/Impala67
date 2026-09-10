@@ -164,3 +164,49 @@ test("searchNotes durchsucht mit includeArchived auch archivierte Seiten", () =>
 	assert.equal(withArch[0].page.id, "arch1");
 });
 
+test("Checkpoint-Wiederherstellung wendet nachträglich pageArchive-Events an", async () => {
+	const { DB } = await import("../web/db.js");
+	reset();
+	// Simuliere: Checkpoint hat active1 noch ohne archived
+	const originalAllEvents = DB.allEvents;
+	const originalEventLogInfo = DB.eventLogInfo;
+	const originalGetStateCheckpoint = DB.getStateCheckpoint;
+	const originalEventAtSeq = DB.eventAtSeq;
+	const originalEventsAfterSeqAll = DB.eventsAfterSeqAll;
+
+	try {
+		DB.allEvents = async () => [
+			{ seq: 1, id: "ev-create", t: "2026-09-01T10:00:00.000Z", type: "pageCreate", payload: { id: "active1", title: "Aktive Notiz 1" } },
+			{ seq: 2, id: "ev-arch", t: "2026-09-01T10:05:00.000Z", type: "pageArchive", payload: { id: "active1" } },
+		];
+		DB.eventLogInfo = async () => ({ count: 2, maxSeq: 2, lastEventId: "ev-arch" });
+		DB.eventAtSeq = async () => ({ seq: 2, id: "ev-arch", t: "2026-09-01T10:05:00.000Z" });
+		DB.eventsAfterSeqAll = async () => [];
+		DB.getStateCheckpoint = async () => ({
+			format: 2,
+			maxSeq: 2,
+			eventCount: 2,
+			lastEventId: "ev-arch",
+			maxTime: "2026-09-01T10:05:00.000Z",
+			heftBlobSizes: {},
+			state: {
+				pages: { active1: page("active1", "Aktive Notiz 1", { archived: false }) },
+				cards: {}, grades: {}, learningSessions: {}, chatSessions: {}, settings: {},
+				decks: {}, workspaces: {}, gnFolders: {}, treeOpen: {}, tabs: [], activeTabId: null,
+				reviews: [], telemetry: {}, heftDocs: {},
+			},
+		});
+
+		await STATE.load();
+		// active1 muss nach dem Checkpoint-Laden durch die Archiv-Reconciliation archived: true sein!
+		assert.equal(S.pages.active1.archived, true);
+	} finally {
+		DB.allEvents = originalAllEvents;
+		DB.eventLogInfo = originalEventLogInfo;
+		DB.getStateCheckpoint = originalGetStateCheckpoint;
+		DB.eventAtSeq = originalEventAtSeq;
+		DB.eventsAfterSeqAll = originalEventsAfterSeqAll;
+	}
+});
+
+

@@ -1182,6 +1182,19 @@ export const STATE = (() => {
 					eventCount: Math.max(0, Number(checkpoint.eventCount) || 0),
 					lastEventId: String(checkpoint.lastEventId || ""),
 				};
+				// Falls ein älterer Checkpoint geladen wurde, der pageArchive/pageUnarchive
+				// noch nicht angewendet hatte: wende alle Archiv-Events geordnet an.
+				try {
+					const all = await DB.allEvents();
+					const archiveEvents = all.filter((event) => event?.type === "pageArchive" || event?.type === "pageUnarchive");
+					if (archiveEvents.length > 0) {
+						for (const event of sortEvents(archiveEvents)) {
+							reduce(event);
+						}
+					}
+				} catch (err) {
+					console.warn("Archiv-Abgleich nach Checkpoint:", err);
+				}
 			} else {
 				const events = await PERF_PROFILER.run("state.full-event-read", () => loadSortedEvents(), {}, 5);
 				info = eventLogInfoOf(events);
@@ -1383,13 +1396,6 @@ export const STATE = (() => {
 		})
 		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 
-	// Alle NICHT im Papierkorb liegenden und NICHT archivierten Seiten — zentrale Quelle für Home,
-	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb- & Archiv-Seiten nirgends durchsickern.
-	const activePages = () => Object.values(S.pages).filter((pg) => {
-		if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-		return !pg.trashed && !pg.archived;
-	});
-
 	const isPageArchived = (pgOrId) => {
 		let pg = typeof pgOrId === "object" ? pgOrId : S.pages[pgOrId];
 		const visited = new Set();
@@ -1402,10 +1408,17 @@ export const STATE = (() => {
 		return false;
 	};
 
+	// Alle NICHT im Papierkorb liegenden und NICHT archivierten Seiten — zentrale Quelle für Home,
+	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb- & Archiv-Seiten nirgends durchsickern.
+	const activePages = () => Object.values(S.pages).filter((pg) => {
+		if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+		return !pg.trashed && !isPageArchived(pg);
+	});
+
 	const archivedPages = () => Object.values(S.pages)
 		.filter((pg) => {
 			if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-			return !pg.trashed && pg.archived;
+			return !pg.trashed && isPageArchived(pg);
 		})
 		.sort((a, b) => ((b.archivedAt || "") < (a.archivedAt || "") ? -1 : (b.archivedAt || "") > (a.archivedAt || "") ? 1 : 0));
 
