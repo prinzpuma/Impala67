@@ -266,8 +266,26 @@ function renderData(vm) {
 	const updateButton = '<button type="button" id="btnPwaUpdateAction" data-update-action="' + e(updateAction.mode) + '" aria-live="polite">' + e(updateAction.label) + "</button>";
 	const update = UI.row({ title: "App-Version", description: "Updates werden nur auf Wunsch geprüft", descriptionId: "updateStatus", descriptionLive: true, trailing: updateValues + updateButton, className: "settings-update-row" });
 	const perf = PERF_PROFILER.status();
-	const perfDescription = (perf.enabled ? perf.records + " Messpunkte · " : "") + "Erfasst lokal Zeitpunkte, Dauer, Ansicht und Mengen bei Hängern in Eingabe, Rendern und Sync – nie Inhalte oder Zugangsdaten";
+	const isAnomalies = perf.mode !== "all";
+	const countPrefix = perf.enabled
+		? (perf.records + (isAnomalies ? (perf.records === 1 ? " Auffälligkeit · " : " Auffälligkeiten · ") : (perf.records === 1 ? " Messpunkt · " : " Messpunkte · ")))
+		: "";
+	const perfDescription = countPrefix + "Erfasst lokal Zeitpunkte, Dauer, Ansicht und Mengen bei Hängern in Eingabe, Rendern und Sync – nie Inhalte oder Zugangsdaten";
+	const modeSelect = '<select id="inpPerformanceProfilerMode" aria-label="Profiler-Modus">' +
+		'<option value="anomalies"' + (isAnomalies ? ' selected' : '') + '>Nur Auffälligkeiten (aggregiert)</option>' +
+		'<option value="all"' + (!isAnomalies ? ' selected' : '') + '>Vollständiger Detail-Trace</option>' +
+		'</select>';
+	const modeRow = perf.enabled
+		? UI.row({
+			title: "Protokoll-Modus",
+			description: isAnomalies
+				? "Filtert Routine-Messungen und bündelt gleiche Hänger mit Zähler"
+				: "Erfasst jeden Messpunkt einzeln bis zum Limit (180 Einträge)",
+			trailing: modeSelect,
+		})
+		: "";
 	const diagnostics = UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
+		modeRow +
 		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "");
 	const chats = CHATS.load();
 	const cardCount = Object.keys(S.cards || {}).length;

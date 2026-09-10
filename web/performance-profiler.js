@@ -1,6 +1,9 @@
 "use strict";
 
 const ENABLE_KEY = "impala67PerformanceProfiler";
+const MODE_KEY = "impala67PerformanceProfilerMode";
+const MODE_ANOMALIES = "anomalies";
+const MODE_ALL = "all";
 const DATA_KEY = "impala67PerformanceTraceV2";
 const LEGACY_DATA_KEY = "impala67PerformanceTrace";
 const MAX_RECORDS = 180;
@@ -42,6 +45,21 @@ function isEnabled() {
 	try { return storage()?.getItem(ENABLE_KEY) === "1"; } catch { return false; }
 }
 
+function getMode() {
+	try {
+		const saved = storage()?.getItem(MODE_KEY);
+		return saved === MODE_ALL ? MODE_ALL : MODE_ANOMALIES;
+	} catch {
+		return MODE_ANOMALIES;
+	}
+}
+
+function setMode(mode) {
+	const normalized = mode === MODE_ALL ? MODE_ALL : MODE_ANOMALIES;
+	try { storage()?.setItem(MODE_KEY, normalized); } catch { /* ignore */ }
+	return normalized;
+}
+
 function safeMeta(meta) {
 	if (!meta || typeof meta !== "object") return {};
 	const out = {};
@@ -70,6 +88,7 @@ function persistSoon() {
 		if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 1500 });
 		else write();
 	}, 3000);
+	if (typeof persistTimer?.unref === "function") persistTimer.unref();
 }
 
 function currentContext() {
@@ -123,10 +142,101 @@ function compactContext(context) {
 	return delta;
 }
 
+function isAnomaly(kind, durationMs, meta = {}) {
+	if (kind === "main-thread-stall") return true;
+	if (meta?.failed) return true;
+	if (kind === "operation") {
+		const threshold = Math.max(Number(meta?.minMs) || 25, 50);
+		return durationMs >= threshold;
+	}
+	if (kind === "boot-ready") return durationMs >= 500;
+	if (kind === "profiler-start") return false;
+	return durationMs >= 50;
+}
+
+function anomalySignature(kind, meta = {}, context = null) {
+	if (kind === "main-thread-stall") {
+		const op = context?.operations?.[0]?.name || "";
+		return "stall:" + (meta.sources || "") + ":" + (meta.inputName || meta.events || "") + ":" + op;
+	}
+	if (kind === "operation") {
+		return "operation:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
+	}
+	return kind + ":" + (meta.name || "") + ":" + (meta.failed ? "failed" : "ok");
+}
+
 function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride = null) {
 	if (!isEnabled()) return;
+	const mode = getMode();
+	if (mode === MODE_ANOMALIES && !isAnomaly(kind, durationMs, meta)) return;
+
 	const context = compactContext(contextOverride || currentContext());
-	const entry = { at, kind, durationMs: round(durationMs), ...safeMeta(meta) };
+	const dur = round(durationMs);
+
+	if (mode === MODE_ANOMALIES) {
+		const sig = anomalySignature(kind, meta, contextOverride || context);
+		const existingIndex = records.findIndex((r) => r.sig === sig);
+		if (existingIndex >= 0) {
+			const existing = records[existingIndex];
+			const count = (existing.count || 1) + 1;
+			const prevTotal = existing.totalDurationMs ?? (existing.durationMs * (existing.count || 1));
+			const totalDurationMs = round(prevTotal + dur);
+			const minDurationMs = round(Math.min(existing.minDurationMs ?? existing.durationMs, dur));
+			const maxDurationMs = round(Math.max(existing.maxDurationMs ?? existing.durationMs, dur));
+			const avgDurationMs = round(totalDurationMs / count);
+
+			existing.count = count;
+			existing.firstAt = existing.firstAt || existing.at;
+			existing.lastAt = at;
+			existing.at = at;
+			existing.durationMs = maxDurationMs;
+			existing.minDurationMs = minDurationMs;
+			existing.maxDurationMs = maxDurationMs;
+			existing.avgDurationMs = avgDurationMs;
+			existing.totalDurationMs = totalDurationMs;
+
+			if (meta.eventCount) existing.eventCount = (existing.eventCount || 0) + meta.eventCount;
+			if (meta.longTaskMs) existing.longTaskMs = Math.max(existing.longTaskMs || 0, round(meta.longTaskMs));
+			if (meta.eventLoopLagMs) existing.eventLoopLagMs = Math.max(existing.eventLoopLagMs || 0, round(meta.eventLoopLagMs));
+			if (meta.inputDurationMs) existing.inputDurationMs = Math.max(existing.inputDurationMs || 0, round(meta.inputDurationMs));
+
+			if (dur >= maxDurationMs && Object.keys(context).length) {
+				existing.context = context;
+			}
+
+			records.splice(existingIndex, 1);
+			records.push(existing);
+			persistSoon();
+			return;
+		}
+
+		const initialCount = Number.isInteger(meta.count) && meta.count > 0 ? meta.count : 1;
+		const cleanMeta = safeMeta(meta);
+		delete cleanMeta.minMs;
+		const entry = {
+			at,
+			kind,
+			durationMs: dur,
+			count: initialCount,
+			firstAt: at,
+			lastAt: at,
+			minDurationMs: dur,
+			maxDurationMs: dur,
+			avgDurationMs: dur,
+			totalDurationMs: dur,
+			sig,
+			...cleanMeta,
+		};
+		if (Object.keys(context).length) entry.context = context;
+		records.push(entry);
+		if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
+		persistSoon();
+		return;
+	}
+
+	const cleanMeta = safeMeta(meta);
+	delete cleanMeta.minMs;
+	const entry = { at, kind, durationMs: dur, ...cleanMeta };
 	if (Object.keys(context).length) entry.context = context;
 	records.push(entry);
 	if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
@@ -214,7 +324,10 @@ function queueStall(source, startMs, durationMs, meta = {}) {
 			pendingStalls.splice(pendingStalls.indexOf(extra), 1);
 		}
 	} else pendingStalls.push(incoming);
-	if (!stallTimer) stallTimer = setTimeout(flushStalls, STALL_FLUSH_MS);
+	if (!stallTimer) {
+		stallTimer = setTimeout(flushStalls, STALL_FLUSH_MS);
+		if (typeof stallTimer?.unref === "function") stallTimer.unref();
+	}
 }
 
 function start(name, meta = {}, minMs = 25) {
@@ -234,7 +347,9 @@ function start(name, meta = {}, minMs = 25) {
 			if (recentOperations.length > 64) recentOperations.splice(0, recentOperations.length - 64);
 		}
 		const duration = ended - started;
-		if (duration >= minMs) record("operation", duration, { name, ...safeMeta(meta), ...safeMeta(extra) });
+		if (duration >= minMs || extra.failed || meta.failed) {
+			record("operation", duration, { name, minMs, ...safeMeta(meta), ...safeMeta(extra) });
+		}
 		return duration;
 	};
 }
@@ -286,8 +401,10 @@ function watchEventLoop() {
 		if (lag >= LAG_THRESHOLD_MS && (typeof document === "undefined" || !document.hidden)) queueStall("event-loop-lag", expected, lag);
 		expected = current + LAG_INTERVAL_MS;
 		lagTimer = setTimeout(tick, LAG_INTERVAL_MS);
+		if (typeof lagTimer?.unref === "function") lagTimer.unref();
 	};
 	lagTimer = setTimeout(tick, LAG_INTERVAL_MS);
+	if (typeof lagTimer?.unref === "function") lagTimer.unref();
 }
 
 function watchActions() {
@@ -365,6 +482,7 @@ function report() {
 	return JSON.stringify({
 		app: "Impala67 performance trace",
 		formatVersion: 2,
+		mode: getMode(),
 		contextEncoding: "delta",
 		exportedAt: wallTime(),
 		version: typeof window !== "undefined" ? (window.APP_VERSION || "unknown") : "unknown",
@@ -379,7 +497,24 @@ function report() {
 }
 
 function setContextProvider(provider) { contextProvider = typeof provider === "function" ? provider : null; }
-function status() { return { enabled: isEnabled(), records: records.length + pendingStalls.length, active: active.size }; }
+function status() { return { enabled: isEnabled(), mode: getMode(), records: records.length + pendingStalls.length, active: active.size }; }
 
 load();
-export const PERF_PROFILER = { init, setEnabled, isEnabled, start, run, measure, record, report, clear, flush, status, setContextProvider };
+export const PERF_PROFILER = {
+	init,
+	setEnabled,
+	isEnabled,
+	getMode,
+	setMode,
+	start,
+	run,
+	measure,
+	record,
+	report,
+	clear,
+	flush,
+	status,
+	setContextProvider,
+	MODE_ANOMALIES,
+	MODE_ALL,
+};

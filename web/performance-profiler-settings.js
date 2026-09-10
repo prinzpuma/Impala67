@@ -27,8 +27,16 @@ document.addEventListener("click", (event) => {
 }, true);
 
 document.addEventListener("change", (event) => {
-	if (event.target?.id !== "inpPerformanceProfiler") return;
-	PERF_PROFILER.setEnabled(event.target.checked);
-	U.toast(event.target.checked ? "Performance-Profiler aktiviert." : "Performance-Profiler deaktiviert.", "success");
-	reopen();
+	if (event.target?.id === "inpPerformanceProfiler") {
+		PERF_PROFILER.setEnabled(event.target.checked);
+		U.toast(event.target.checked ? "Performance-Profiler aktiviert." : "Performance-Profiler deaktiviert.", "success");
+		reopen();
+		return;
+	}
+	if (event.target?.id === "inpPerformanceProfilerMode") {
+		const newMode = PERF_PROFILER.setMode(event.target.value);
+		U.toast(newMode === "all" ? "Modus: Vollständiger Detail-Trace." : "Modus: Nur Auffälligkeiten (aggregiert).", "info");
+		reopen();
+		return;
+	}
 }, true);

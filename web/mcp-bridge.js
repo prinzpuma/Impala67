@@ -357,6 +357,9 @@ export function initMcpBridge() {
 						if (args.enable !== undefined) {
 							PERF_PROFILER.setEnabled(!!args.enable);
 						}
+						if (args.mode !== undefined) {
+							PERF_PROFILER.setMode(args.mode);
+						}
 						const rawReport = PERF_PROFILER.report();
 						if (args.clear) {
 							PERF_PROFILER.clear();
