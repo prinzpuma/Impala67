@@ -1,0 +1,305 @@
+#!/usr/bin/env node
+// mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
+import { createInterface } from "node:readline";
+import { createStore } from "./store.mjs";
+import { createSyncClient } from "./sync-client.mjs";
+
+const SERVER_NAME = "impala67-mcp";
+const SERVER_VERSION = "1.0.0";
+const PROTOCOL_VERSION = "2024-11-05";
+
+// Tool-Definitionen nach MCP Spezifikation
+const TOOLS = [
+	{
+		name: "impala_list_pages",
+		description: "Listet vorhandene Notizen in Impala67 auf (ID, Titel, Art: Notion vs Heft, Fach, Aktualisierungszeitpunkt).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Optionaler Suchbegriff zum Filtern nach Titel oder Inhalt" },
+				kind: { type: "string", enum: ["all", "notion", "heft"], description: "Filter nach Notiz-Art: Notion-Seite oder GoodNotes-Handschriftheft" },
+				subject: { type: "string", description: "Filter nach Schulfach (z.B. Mathematik, Biologie, Deutsch)" },
+				limit: { type: "number", description: "Maximale Anzahl der Treffer (Standard: 50)" },
+			},
+		},
+	},
+	{
+		name: "impala_get_page",
+		description: "Liest den Titel und den Markdown-/Text-Inhalt einer Notiz aus. Bei Handschrift-Heften wird der extrahierte Text/OCR sicher geliefert, ohne Vektorstriche zu beschädigen.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string", description: "ID der Notiz" },
+				title: { type: "string", description: "Titel der Notiz (falls ID nicht bekannt)" },
+			},
+		},
+	},
+	{
+		name: "impala_create_page",
+		description: "Erstellt eine neue Notiz in Impala67 (Titel, Markdown-Inhalt, optional Fach und Ordner/Elternseite).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				title: { type: "string", description: "Titel der neuen Notiz" },
+				content: { type: "string", description: "Markdown-Inhalt der Notiz" },
+				subject: { type: "string", description: "Fach bzw. Kategorie (z.B. Informatik, Physik)" },
+				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz" },
+				kind: { type: "string", enum: ["notion", "heft"], description: "Art der Notiz: notion (Standard) oder heft" },
+			},
+			required: ["title"],
+		},
+	},
+	{
+		name: "impala_update_page",
+		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt oder Fach).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string", description: "ID der Notiz" },
+				title: { type: "string", description: "Titel der Notiz" },
+				new_title: { type: "string", description: "Neuer Titel der Notiz" },
+				content: { type: "string", description: "Ersetzt den gesamten Textinhalt (nur bei Notion-Seiten)" },
+				append_content: { type: "string", description: "Hängt neuen Text an (auch bei Heften sicher als Textbox möglich)" },
+				subject: { type: "string", description: "Neues Fach der Notiz" },
+			},
+		},
+	},
+	{
+		name: "impala_search",
+		description: "Durchsucht Notizen (Titel, Fließtext, OCR) und Karteikarten nach Stichworten.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Suchbegriff oder Frage" },
+				limit: { type: "number", description: "Maximale Anzahl an Treffern (Standard: 20)" },
+			},
+			required: ["query"],
+		},
+	},
+	{
+		name: "impala_list_flashcards",
+		description: "Listet Karteikarten auf (optional gefiltert nach Stapel oder Stichwort).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				deck: { type: "string", description: "Name des Stapels (z.B. Standard, Mathe)" },
+				query: { type: "string", description: "Suchbegriff in Vorder- oder Rückseite" },
+				limit: { type: "number", description: "Maximale Anzahl an Karten (Standard: 50)" },
+			},
+		},
+	},
+	{
+		name: "impala_create_flashcard",
+		description: "Erstellt eine neue Karteikarte mit Frage (Vorderseite) und Antwort (Rückseite).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				front: { type: "string", description: "Vorderseite / Frage" },
+				back: { type: "string", description: "Rückseite / Antwort" },
+				deck: { type: "string", description: "Ziel-Stapel (Standard: Standard)" },
+				page_title: { type: "string", description: "Zugehörige Notiz-Seite" },
+			},
+			required: ["front", "back"],
+		},
+	},
+];
+
+/**
+ * Startet den MCP-Server.
+ */
+export async function startServer(opts = {}) {
+	const storagePath = opts.storagePath || process.env.IMPALA67_STORAGE_FILE || undefined;
+	const store = createStore({ ...(opts.storeOptions || {}), ...(storagePath ? { storagePath } : {}) });
+	const syncClient = await createSyncClient(opts.syncOptions);
+
+	// Wenn Sync konfiguriert ist, beim Start im Hintergrund synchronisieren
+	if (syncClient.isConfigured()) {
+		try {
+			const since = store.getState().meta.lastSyncedSeq || 0;
+			const pullRes = await syncClient.pull(since);
+			if (pullRes.events?.length) {
+				store.applyRemoteEvents(pullRes.events, pullRes.maxSeq, pullRes.generation);
+			}
+		} catch (err) {
+			console.error("[impala-mcp] Hintergrund-Sync Pull Fehler:", err.message);
+		}
+	}
+
+	function sendResponse(id, result) {
+		const message = {
+			jsonrpc: "2.0",
+			id,
+			result,
+		};
+		process.stdout.write(JSON.stringify(message) + "\n");
+	}
+
+	function sendError(id, code, message, data) {
+		const msg = {
+			jsonrpc: "2.0",
+			id,
+			error: { code, message, ...(data ? { data } : {}) },
+		};
+		process.stdout.write(JSON.stringify(msg) + "\n");
+	}
+
+	async function pushEventsIfSync(events) {
+		if (!syncClient.isConfigured() || !events || !events.length) return;
+		try {
+			const res = await syncClient.push(events);
+			if (res.ok && res.ack?.toSeq) {
+				store.getState().meta.lastUploadedSeq = res.ack.toSeq;
+				store.saveToDisk();
+			}
+		} catch (err) {
+			console.error("[impala-mcp] Sync Push fehlgeschlagen (offline gespeichert):", err.message);
+		}
+	}
+
+	async function handleToolCall(name, args = {}) {
+		switch (name) {
+			case "impala_list_pages": {
+				return store.listPages(args);
+			}
+			case "impala_get_page": {
+				return store.getPage(args);
+			}
+			case "impala_create_page": {
+				const res = store.createPage(args);
+				if (res.createdEvent) {
+					await pushEventsIfSync([res.createdEvent]);
+					delete res.createdEvent;
+				}
+				return res;
+			}
+			case "impala_update_page": {
+				const res = store.updatePage(args);
+				if (res.updatedEvents?.length) {
+					await pushEventsIfSync(res.updatedEvents);
+					delete res.updatedEvents;
+				}
+				return res;
+			}
+			case "impala_search": {
+				return store.search(args);
+			}
+			case "impala_list_flashcards": {
+				return store.listFlashcards(args);
+			}
+			case "impala_create_flashcard": {
+				const res = store.createFlashcard(args);
+				if (res.createdEvent) {
+					await pushEventsIfSync([res.createdEvent]);
+					delete res.createdEvent;
+				}
+				return res;
+			}
+			default:
+				return { error: `Unbekanntes Werkzeug: ${name}` };
+		}
+	}
+
+	async function handleMessage(message) {
+		if (!message || typeof message !== "object") return;
+		const { id, method, params } = message;
+
+		switch (method) {
+			case "initialize": {
+				sendResponse(id, {
+					protocolVersion: PROTOCOL_VERSION,
+					capabilities: {
+						tools: {},
+					},
+					serverInfo: {
+						name: SERVER_NAME,
+						version: SERVER_VERSION,
+					},
+				});
+				break;
+			}
+			case "notifications/initialized": {
+				// MCP Lifecycle-Bestätigung (Notification ohne Antwort)
+				break;
+			}
+			case "ping": {
+				sendResponse(id, {});
+				break;
+			}
+			case "tools/list": {
+				sendResponse(id, {
+					tools: TOOLS,
+				});
+				break;
+			}
+			case "tools/call": {
+				const toolName = params?.name;
+				const toolArgs = params?.arguments || {};
+
+				try {
+					const result = await handleToolCall(toolName, toolArgs);
+					const isError = !!result?.error;
+					const textContent = isError ? `Fehler: ${result.error}` : JSON.stringify(result, null, 2);
+
+					sendResponse(id, {
+						content: [
+							{
+								type: "text",
+								text: textContent,
+							},
+						],
+						isError,
+					});
+				} catch (err) {
+					sendResponse(id, {
+						content: [
+							{
+								type: "text",
+								text: `Interner Werkzeug-Fehler: ${err.message}`,
+							},
+						],
+						isError: true,
+					});
+				}
+				break;
+			}
+			default: {
+				if (id !== undefined) {
+					sendError(id, -32601, `Methode nicht gefunden: ${method}`);
+				}
+				break;
+			}
+		}
+	}
+
+	const rl = createInterface({
+		input: process.stdin,
+		output: process.stdout,
+		terminal: false,
+	});
+
+	rl.on("line", (line) => {
+		const clean = line.trim();
+		if (!clean) return;
+
+		try {
+			const parsed = JSON.parse(clean);
+			handleMessage(parsed);
+		} catch (err) {
+			sendError(null, -32700, `JSON-RPC Parse Error: ${err.message}`);
+		}
+	});
+
+	rl.on("close", () => {
+		process.exit(0);
+	});
+
+	console.error(`[impala-mcp] Server läuft (Version ${SERVER_VERSION}, E2EE-Sync: ${syncClient.isConfigured() ? "Aktiv" : "Offline-Fallback"}).`);
+}
+
+// Direkte Ausführung im CLI-Modus
+if (process.argv[1] && (process.argv[1].endsWith("server.mjs") || process.argv[1].endsWith("server.js"))) {
+	startServer().catch((err) => {
+		console.error("[impala-mcp] Fataler Fehler beim Serverstart:", err);
+		process.exit(1);
+	});
+}
