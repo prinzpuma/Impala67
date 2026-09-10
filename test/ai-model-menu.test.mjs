@@ -46,3 +46,14 @@ test("jeder Klick im Modellmenü bleibt eine Auswahl und sendet keine Nachricht"
 		}
 	}
 });
+
+test("removeProviderFavorites removes only favorites of the deleted provider", () => {
+	RENDER.toggleFavModel("openai::gpt-5.6-sol");
+	RENDER.toggleFavModel("google::gemini-3.7-flash");
+	assert.ok(RENDER.favModels().has("openai::gpt-5.6-sol"));
+	assert.ok(RENDER.favModels().has("google::gemini-3.7-flash"));
+
+	RENDER.removeProviderFavorites("openai");
+	assert.equal(RENDER.favModels().has("openai::gpt-5.6-sol"), false);
+	assert.equal(RENDER.favModels().has("google::gemini-3.7-flash"), true);
+});

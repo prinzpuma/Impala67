@@ -30,9 +30,10 @@ export const SETTINGS_SYNC = (() => {
 		if (Array.isArray(next.aiProviders)) {
 			const oldById = new Map((current?.aiProviders || []).map((provider) => [provider.id, provider]));
 			next.aiProviders = next.aiProviders.map((provider) => {
-				if (hasOwn(provider, "key")) return provider;
+				const hasNewKey = typeof provider?.key === "string" && provider.key.trim().length > 0;
+				if (hasNewKey) return provider;
 				const old = oldById.get(provider.id);
-				return old && hasOwn(old, "key") ? { ...provider, key: old.key } : provider;
+				return old && typeof old.key === "string" && old.key.trim().length > 0 ? { ...provider, key: old.key } : provider;
 			});
 		}
 		return next;

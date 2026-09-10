@@ -38,6 +38,7 @@
 
 ## 5. Kommunikation und Arbeitsweise
 
+- **Knapp & prägnant**: Antworten immer so kurz und direkt wie möglich halten. Auf den Punkt kommen, keine ausschweifenden Erklärungen oder langen Einleitungen.
 - **Verständliche Antworten**: Erkläre Änderungen in einfacher, alltagstauglicher Sprache. Beschreibe immer konkret, was sich für die Bedienung, das Verhalten oder den Nutzen der App ändert.
 - **Hintergründe auf den Punkt**: Erkläre bei wichtigen Entscheidungen kurz und verständlich die Gründe ("Warum wurde dieser Weg gewählt?"), ohne dich in Code-Monologen zu verlieren.
 - **Keine Code-Wiederholungen im Chat**: Vermeide es, lange Codeblöcke im Chattext zu duplizieren.

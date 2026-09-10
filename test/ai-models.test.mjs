@@ -563,3 +563,33 @@ test("Cloudflare-Server /models: mit Protokoll v4 -> 200; ohne v4 -> 426", async
 		"openai/gpt-oss-20b",
 	]);
 });
+
+test("doChat führt aufeinanderfolgende User-Nachrichten zusammen und bereinigt leere Turns", async () => {
+	let sentBody = null;
+	globalThis.fetch = async (url, init) => {
+		if (url.includes("/chat/completions")) {
+			sentBody = JSON.parse(init.body);
+			return response({ choices: [{ message: { role: "assistant", content: "OK" } }] });
+		}
+		return response({ data: [] });
+	};
+
+	S.settings.aiProviders = [{ id: "local", name: "Lokal", base: "http://localhost:1234/v1", key: "" }];
+	S.settings.aiProviderId = "local";
+	S.settings.aiModel = "qwen3.8-27b";
+
+	const incoming = [
+		{ role: "system", content: "System prompt" },
+		{ role: "user", content: "Workspace context text" },
+		{ role: "user", content: "User question" },
+		{ role: "assistant", content: "" },
+	];
+
+	await AI.chatOnce(incoming);
+
+	assert.ok(sentBody);
+	assert.equal(sentBody.messages.length, 2);
+	assert.equal(sentBody.messages[0].role, "system");
+	assert.equal(sentBody.messages[1].role, "user");
+	assert.equal(sentBody.messages[1].content, "Workspace context text\n\nUser question");
+});

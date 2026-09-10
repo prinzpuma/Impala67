@@ -782,6 +782,7 @@ function wireEvents() {
 			}
 			// FIX: dito für die Embedding-Quelle — zurück auf „automatisch".
 			if (S.settings.embedProviderId === t.dataset.provdel) patch.embedProviderId = "";
+			RENDER.removeProviderFavorites(t.dataset.provdel);
 			await STATE.dispatch("settingsSet", patch);
 			S.settingsKiTab = "sources";
 			SETTINGS.openSettings("ki");

@@ -62,17 +62,35 @@ export function initMcpBridge() {
 
 				switch (tool) {
 					case "impala_list_pages": {
-						const pages = Object.values(S.pages || {})
-							.filter((p) => !p.trashed)
-							.map((p) => ({
-								id: p.id,
-								title: p.title || "Ohne Titel",
-								kind: p.kind || "notion",
-								subject: p.subject || null,
-								updated: p.updated,
-								created: p.created,
-							}));
-						result = { count: pages.length, pages };
+						let pool = Object.values(S.pages || {}).filter((p) => !p.trashed);
+						if (args.kind && args.kind !== "all") {
+							pool = pool.filter((p) => (p.kind === "heft" ? "heft" : "notion") === args.kind);
+						}
+						if (args.subject) {
+							const sQuery = String(args.subject).trim().toLowerCase();
+							pool = pool.filter((p) => String(p.subject || "").toLowerCase() === sQuery);
+						}
+						if (args.query) {
+							const q = String(args.query).trim().toLowerCase();
+							pool = pool.filter((p) => {
+								const title = (p.title || "").toLowerCase();
+								const content = (p.content || "").toLowerCase();
+								const subj = String(p.subject || "").toLowerCase();
+								return title.includes(q) || content.includes(q) || subj.includes(q);
+							});
+						}
+						pool.sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+						const count = Math.max(1, Math.min(200, Number(args.limit) || 50));
+						const pages = pool.slice(0, count).map((p) => ({
+							id: p.id,
+							title: p.title || "Ohne Titel",
+							kind: p.kind || "notion",
+							subject: p.subject || null,
+							parentId: p.parentId || null,
+							updated: p.updated,
+							created: p.created,
+						}));
+						result = { total: pool.length, count: pages.length, pages };
 						break;
 					}
 					case "impala_get_page": {
@@ -85,12 +103,30 @@ export function initMcpBridge() {
 						if (!page) {
 							result = { error: `Notiz nicht gefunden: ${args.id || args.title}` };
 						} else {
+							let content = page.content || "";
+							let heftPages = null;
+							if (page.kind === "heft" && S.heftDocs && S.heftDocs[page.id]) {
+								const doc = S.heftDocs[page.id];
+								heftPages = doc.pages?.length || 1;
+								const parts = [];
+								for (let i = 0; i < (doc.pages || []).length; i++) {
+									const pg = doc.pages[i];
+									const pageParts = [];
+									if (pg.ocrText) pageParts.push(String(pg.ocrText).trim());
+									if (Array.isArray(pg.texts)) {
+										for (const t of pg.texts) if (t.text) pageParts.push(String(t.text).trim());
+									}
+									if (pageParts.length) parts.push(`--- Seite ${i + 1} ---\n${pageParts.join("\n")}`);
+								}
+								if (parts.length) content = parts.join("\n\n");
+							}
 							result = {
 								id: page.id,
 								title: page.title || "Ohne Titel",
 								kind: page.kind || "notion",
 								subject: page.subject || null,
-								content: page.content || "",
+								content,
+								...(heftPages ? { heftPages, note: "Handschrift-Heft: content enthält extrahierten Text & OCR." } : {}),
 								created: page.created,
 								updated: page.updated,
 								tags: page.tags || [],
@@ -104,6 +140,12 @@ export function initMcpBridge() {
 						const content = String(args.content || "");
 						const subject = args.subject ? String(args.subject).trim() : null;
 						const kind = args.kind === "heft" ? "heft" : "notion";
+						let parentId = args.parentId || null;
+						if (!parentId && args.parent_title) {
+							const pt = String(args.parent_title).trim().toLowerCase();
+							const parent = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === pt);
+							if (parent) parentId = parent.id;
+						}
 
 						await STATE.dispatch("pageCreate", {
 							id,
@@ -111,12 +153,13 @@ export function initMcpBridge() {
 							content,
 							subject,
 							kind,
+							parentId,
 							workspaceId: "default",
 						});
 						RENDER.render();
 						if (TABS && TABS.openPage) TABS.openPage(id);
 
-						result = { ok: true, id, title, kind, subject };
+						result = { ok: true, id, title, kind, subject, parentId };
 						break;
 					}
 					case "impala_update_page": {
@@ -147,18 +190,60 @@ export function initMcpBridge() {
 						if (q) {
 							for (const p of Object.values(S.pages || {})) {
 								if (p.trashed) continue;
-								if ((p.title || "").toLowerCase().includes(q) || (p.content || "").toLowerCase().includes(q)) {
+								const title = p.title || "";
+								let content = p.content || "";
+								if (p.kind === "heft" && S.heftDocs && S.heftDocs[p.id]) {
+									const doc = S.heftDocs[p.id];
+									const parts = [];
+									for (const pg of doc.pages || []) {
+										if (pg.ocrText) parts.push(pg.ocrText);
+										if (Array.isArray(pg.texts)) for (const t of pg.texts) if (t.text) parts.push(t.text);
+									}
+									if (parts.length) content = parts.join(" ");
+								}
+								const subj = String(p.subject || "");
+								const titleMatch = title.toLowerCase().includes(q);
+								const contentMatch = content.toLowerCase().includes(q);
+								const subjMatch = subj.toLowerCase().includes(q);
+
+								if (titleMatch || contentMatch || subjMatch) {
+									let snippet = "";
+									if (contentMatch) {
+										const idx = content.toLowerCase().indexOf(q);
+										const start = Math.max(0, idx - 40);
+										const end = Math.min(content.length, idx + q.length + 60);
+										snippet = (start > 0 ? "…" : "") + content.slice(start, end).replace(/\s+/g, " ") + (end < content.length ? "…" : "");
+									} else {
+										snippet = content.slice(0, 100).replace(/\s+/g, " ");
+									}
 									results.push({
 										type: "page",
 										id: p.id,
-										title: p.title,
-										kind: p.kind,
-										subject: p.subject,
+										title,
+										kind: p.kind || "notion",
+										subject: p.subject || null,
+										snippet,
+									});
+								}
+							}
+							for (const c of Object.values(S.cards || {})) {
+								if (c.trashed) continue;
+								const front = c.front || "";
+								const back = c.back || "";
+								if (front.toLowerCase().includes(q) || back.toLowerCase().includes(q)) {
+									results.push({
+										type: "flashcard",
+										id: c.id,
+										deck: c.deck || "Standard",
+										front,
+										back,
+										snippet: `${front} → ${back}`,
 									});
 								}
 							}
 						}
-						result = { query: args.query, totalMatches: results.length, results };
+						const max = Math.max(1, Math.min(100, Number(args.limit) || 20));
+						result = { query: args.query, totalMatches: results.length, results: results.slice(0, max) };
 						break;
 					}
 					case "impala_create_flashcard": {
@@ -166,24 +251,46 @@ export function initMcpBridge() {
 						const front = String(args.front || "").trim();
 						const back = String(args.back || "").trim();
 						const deck = String(args.deck || "Standard").trim();
+						let pageId = null;
+						if (args.page_title) {
+							const pt = String(args.page_title).trim().toLowerCase();
+							const page = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === pt);
+							if (page) pageId = page.id;
+						}
 
 						await STATE.dispatch("cardCreate", {
 							id,
 							front,
 							back,
 							deck,
+							...(pageId ? { pageId } : {}),
 						});
 						RENDER.render();
-						result = { ok: true, id, front, back, deck };
+						result = { ok: true, id, front, back, deck, pageId };
 						break;
 					}
 					case "impala_list_flashcards": {
-						let cards = Object.values(S.cards || {}).filter((c) => !c.trashed);
+						let pool = Object.values(S.cards || {}).filter((c) => !c.trashed);
 						if (args.deck) {
 							const deckLower = String(args.deck).trim().toLowerCase();
-							cards = cards.filter((c) => (c.deck || "").toLowerCase() === deckLower);
+							pool = pool.filter((c) => {
+								const d = (c.deck || "Standard").toLowerCase();
+								return d === deckLower || d.startsWith(deckLower + "::") || d.includes(deckLower);
+							});
 						}
-						result = { count: cards.length, cards };
+						if (args.query) {
+							const q = String(args.query).trim().toLowerCase();
+							pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
+						}
+						const max = Math.max(1, Math.min(200, Number(args.limit) || 50));
+						const cards = pool.slice(0, max).map((c) => ({
+							id: c.id,
+							front: c.front,
+							back: c.back,
+							deck: c.deck || "Standard",
+							created: c.created || null,
+						}));
+						result = { total: pool.length, count: cards.length, cards };
 						break;
 					}
 					case "impala_get_diagnostics": {
@@ -198,7 +305,13 @@ export function initMcpBridge() {
 							app: {
 								activePageId: S.currentPageId || null,
 								activePageTitle: activePage?.title || null,
-								openTabs: (S.tabs || []).map((t) => ({ id: t.pageId, title: S.pages[t.pageId]?.title || "Unbekannt" })),
+								openTabs: (S.tabs || []).map((tabId) => {
+									if (typeof tabId !== "string") return { id: null, title: "Unbekannt" };
+									if (tabId.startsWith("chat:")) return { id: tabId, title: "KI-Chat" };
+									if (tabId === "anki:main") return { id: tabId, title: "Karteikarten" };
+									if (tabId === "nlm:main") return { id: tabId, title: "NotebookLM" };
+									return { id: tabId, title: S.pages[tabId]?.title || "Ohne Titel" };
+								}),
 								totalPages: Object.keys(S.pages || {}).length,
 								activePages: Object.values(S.pages || {}).filter((p) => !p.trashed).length,
 								totalCards: Object.keys(S.cards || {}).length,

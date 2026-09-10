@@ -226,6 +226,12 @@ function toggleFavModel(key) {
 	s.has(key) ? s.delete(key) : s.add(key);
 	lsSet(MODEL_FAV_KEY, [...s]);
 }
+function removeProviderFavorites(providerId) {
+	if (!providerId) return;
+	const prefix = providerId + "::";
+	const remaining = [...favModels()].filter((k) => !k.startsWith(prefix));
+	lsSet(MODEL_FAV_KEY, remaining);
+}
 // Capture: Stern darf nicht gleichzeitig das Modell umschalten
 document.addEventListener("click", (e) => {
 	const b = e.target && e.target.closest && e.target.closest("[data-modelfav]");
@@ -1898,7 +1904,7 @@ export const RENDER = {
 	hydrateImages, hydrateCovers, localDayKey, modal, ancestorsOf,
 	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
 	pageIconLabel, pageIconHtml,
-	favModels, toggleFavModel, // Modell-Favoriten (Chat + Einstellungen → KI)
+	favModels, toggleFavModel, removeProviderFavorites, // Modell-Favoriten (Chat + Einstellungen → KI)
 	openSettings: (...a) => SETTINGS.openSettings(...a),
 	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
 	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),

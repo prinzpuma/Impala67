@@ -305,6 +305,11 @@ export async function startServer(opts = {}) {
 				}
 				return res;
 			}
+			case "impala_get_diagnostics":
+			case "impala_get_performance_trace":
+			case "impala_eval":
+			case "impala_run_ui_action":
+				return { error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).` };
 			default:
 				return { error: `Unbekanntes Werkzeug: ${name}` };
 		}

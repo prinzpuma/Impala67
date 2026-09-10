@@ -647,8 +647,57 @@ export const AI = (() => {
 		message._debugRawContent = raw;
 		return message;
 	}
+	function toContentParts(content) {
+		if (typeof content === "string") return content ? [{ type: "text", text: content }] : [];
+		if (Array.isArray(content)) return content.slice();
+		if (content && typeof content === "object") return [content];
+		return [];
+	}
+	function mergeMessageContent(c1, c2) {
+		if (typeof c1 === "string" && typeof c2 === "string") {
+			return (c1 ? c1 + "\n\n" : "") + c2;
+		}
+		const p1 = toContentParts(c1);
+		const p2 = toContentParts(c2);
+		return [...p1, ...p2];
+	}
+	function hasMessageContent(content) {
+		if (typeof content === "string") return content.trim().length > 0;
+		if (Array.isArray(content)) return content.length > 0;
+		return Boolean(content);
+	}
+	function normalizeMessagesForApi(messages) {
+		if (!Array.isArray(messages) || !messages.length) return [];
+		const out = [];
+		for (const raw of messages) {
+			if (!raw || typeof raw !== "object") continue;
+			const m = { ...raw };
+			const hasContent = hasMessageContent(m.content);
+			const hasTools = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
+			const isToolResult = m.role === "tool";
+			if (!hasContent && !hasTools && !isToolResult) continue;
+
+			const prev = out[out.length - 1];
+			// Aufeinanderfolgende User- oder System-Nachrichten zusammenführen (LM Studio & lokale Chat-Templates)
+			if (prev && prev.role === m.role && (m.role === "user" || m.role === "system")) {
+				prev.content = mergeMessageContent(prev.content, m.content);
+				continue;
+			}
+			// Aufeinanderfolgende Assistant-Nachrichten ohne Tool-Calls ebenfalls zusammenführen
+			if (prev && prev.role === "assistant" && m.role === "assistant" && !prev.tool_calls?.length && !m.tool_calls?.length) {
+				prev.content = mergeMessageContent(prev.content, m.content);
+				continue;
+			}
+			out.push(m);
+		}
+		if (!out.length) {
+			const first = messages[0];
+			out.push({ role: first?.role || "user", content: typeof first?.content === "string" ? first.content : "Hallo" });
+		}
+		return out;
+	}
 	async function doChat(messages, tools, onDelta, onReasoning, withExtras, markProduced, requestConfig) {
-		const c = requestConfig || cfg(), body = { model: c.model, messages };
+		const c = requestConfig || cfg(), body = { model: c.model, messages: normalizeMessagesForApi(messages) };
 		// Gemini 3.x lehnt Sampling-Regler inzwischen ab; lokale und andere kompatible
 		// Server behalten den bisherigen Wert für rückwärtskompatibles Verhalten.
 		if (c.family !== "google" && c.family !== "openai" && c.family !== "cloudflare") body.temperature = 0.4;

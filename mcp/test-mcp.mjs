@@ -280,6 +280,11 @@ test("MCP-Server: Eingabe-Validierungen und Fehlerfälle", async () => {
 		const failCard2 = await client.callTool("impala_create_flashcard", { front: "Frage", back: "" });
 		assert.equal(failCard2.isError, true);
 		assert.match(failCard2.content, /front und back dürfen nicht leer sein/);
+
+		// 4. Live-only Werkzeuge liefern klare Fehlermeldung wenn Browser offline
+		const liveOnly = await client.callTool("impala_get_diagnostics", {});
+		assert.equal(liveOnly.isError, true);
+		assert.match(liveOnly.content, /nur im Live-Betrieb verfügbar/);
 	} finally {
 		await client.close();
 	}

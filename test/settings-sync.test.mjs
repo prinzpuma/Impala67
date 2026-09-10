@@ -32,6 +32,12 @@ test("redacted provider patches preserve local keys on remote import", () => {
 	assert.equal(SETTINGS_SYNC.mergePatch(current, incoming).aiProviders[0].key, "local-secret");
 });
 
+test("empty key in provider patch does not overwrite existing stored key", () => {
+	const current = { aiProviders: [provider("existing-secret")] };
+	const incoming = { aiProviders: [{ id: "openai", name: "OpenAI", base: "https://api.openai.com/v1", key: "" }] };
+	assert.equal(SETTINGS_SYNC.mergePatch(current, incoming).aiProviders[0].key, "existing-secret");
+});
+
 test("enabling token sync can create a complete local secret snapshot", () => {
 	const snapshot = SETTINGS_SYNC.secretSnapshot({ notionToken: "notion-secret", aiProviders: [provider()] });
 	assert.equal(snapshot.notionToken, "notion-secret");

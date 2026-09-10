@@ -840,11 +840,16 @@ export function paintSettingsModels() {
 		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id) && hit(m));
 		if (rest.length) body += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>" + rest.map(row).join("");
 	}
-	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten
+	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten (nur für vorhandene Quellen)
+	const knownProviders = new Set(providers.map((p) => p.id));
 	const seen = new Set(live.map((m) => m.providerId + "::" + m.id));
 	const orphans = [];
-	favSet.forEach((k) => { if (!seen.has(k)) orphans.push(k); });
-	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel)) orphans.push(curPr + "::" + curModel);
+	favSet.forEach((k) => {
+		const sep = k.indexOf("::");
+		const pId = sep === -1 ? curPr : k.slice(0, sep);
+		if (!seen.has(k) && knownProviders.has(pId)) orphans.push(k);
+	});
+	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel) && knownProviders.has(curPr)) orphans.push(curPr + "::" + curModel);
 	const orphanRows = orphans.map((k) => {
 		const sep = k.indexOf("::");
 		return { providerId: sep === -1 ? curPr : k.slice(0, sep), id: sep === -1 ? k : k.slice(sep + 2) };
