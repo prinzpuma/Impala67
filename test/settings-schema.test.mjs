@@ -49,3 +49,8 @@ test("impala67BreakReminder is present under Lernen and searchable", () => {
 	assert.ok(results.some((r) => r.id === "impala67BreakReminder" && r.section === "ai" && r.group === "Lernen"));
 });
 
+test("danger-cards is present under Gefahrenzone and searchable", () => {
+	const results = searchSettings("Karteikarten löschen");
+	assert.ok(results.some((r) => r.id === "danger-cards" && r.section === "data" && r.group === "Gefahrenzone"));
+});
+

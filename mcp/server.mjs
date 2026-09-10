@@ -1,8 +1,66 @@
 #!/usr/bin/env node
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
 import { createInterface } from "node:readline";
+import { WebSocketServer } from "ws";
 import { createStore } from "./store.mjs";
 import { createSyncClient } from "./sync-client.mjs";
+
+let liveBrowserWs = null;
+const pendingBrowserCalls = new Map();
+let browserCallSeq = 1;
+
+try {
+	const wss = new WebSocketServer({ port: 8765 });
+	wss.on("connection", (ws) => {
+		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
+		liveBrowserWs = ws;
+
+		ws.on("message", (raw) => {
+			try {
+				const data = JSON.parse(raw);
+				if (data && data.callId && pendingBrowserCalls.has(data.callId)) {
+					const { resolve } = pendingBrowserCalls.get(data.callId);
+					pendingBrowserCalls.delete(data.callId);
+					resolve(data.result);
+				}
+			} catch (e) {
+				console.error("[impala-mcp] Fehler bei Browser-Nachricht:", e.message);
+			}
+		});
+
+		ws.on("close", () => {
+			console.error("[impala-mcp] Browser-App getrennt.");
+			if (liveBrowserWs === ws) liveBrowserWs = null;
+		});
+
+		ws.on("error", (err) => {
+			console.error("[impala-mcp] WebSocket-Fehler:", err.message);
+		});
+	});
+	wss.on("error", (err) => {
+		console.error("[impala-mcp] WSS Port 8765:", err.message);
+	});
+} catch (e) {
+	console.error("[impala-mcp] Konnte WSS nicht starten:", e.message);
+}
+
+function callLiveBrowser(tool, args) {
+	if (!liveBrowserWs || liveBrowserWs.readyState !== 1) return null;
+	const callId = browserCallSeq++;
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => {
+			pendingBrowserCalls.delete(callId);
+			resolve({ error: "Timeout bei Antwort der Browser-App" });
+		}, 8000);
+		pendingBrowserCalls.set(callId, {
+			resolve: (res) => {
+				clearTimeout(timer);
+				resolve(res);
+			},
+		});
+		liveBrowserWs.send(JSON.stringify({ callId, tool, args }));
+	});
+}
 
 const SERVER_NAME = "impala67-mcp";
 const SERVER_VERSION = "1.0.0";
@@ -157,6 +215,13 @@ export async function startServer(opts = {}) {
 	}
 
 	async function handleToolCall(name, args = {}) {
+		// 1. Wenn die App im Browser geöffnet ist: IMMER direkt live in der App ausführen!
+		const liveResult = await callLiveBrowser(name, args);
+		if (liveResult !== null) {
+			return liveResult;
+		}
+
+		// 2. Fallback: Wenn kein Browser geöffnet ist, lokalen Offline-Store nutzen
 		switch (name) {
 			case "impala_list_pages": {
 				return store.listPages(args);

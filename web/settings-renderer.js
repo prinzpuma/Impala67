@@ -270,8 +270,14 @@ function renderData(vm) {
 	const diagnostics = UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
 		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "");
 	const chats = CHATS.load();
+	const cardCount = Object.keys(S.cards || {}).length;
+	const deckCount = Object.keys(S.decks || {}).length;
+	const cardsDescription = cardCount
+		? cardCount + (cardCount === 1 ? " Karteikarte" : " Karteikarten") + " · wird per Sync auch auf deinen anderen Geräten gelöscht"
+		: (deckCount ? deckCount + (deckCount === 1 ? " Stapel" : " Stapel") + " · wird per Sync auch auf deinen anderen Geräten gelöscht" : "Keine Karteikarten vorhanden");
 	const danger = UI.row({ title: "Alle lokalen Seiten löschen", description: "Einstellungen, API-Keys, Chats und Karteikarten bleiben erhalten", trailing: button("Seiten löschen", "btnResetAll", "danger") }) +
-		UI.row({ id: "danger-chats", title: "Alle Chats löschen", description: chats.length ? chats.length + (chats.length === 1 ? " Chat" : " Chats") + " · wird per Sync auch auf deinen anderen Geräten gelöscht" : "Keine gespeicherten Chats vorhanden", trailing: button("Chats löschen", "btnResetChats", "danger", !chats.length) });
+		UI.row({ id: "danger-chats", title: "Alle Chats löschen", description: chats.length ? chats.length + (chats.length === 1 ? " Chat" : " Chats") + " · wird per Sync auch auf deinen anderen Geräten gelöscht" : "Keine gespeicherten Chats vorhanden", trailing: button("Chats löschen", "btnResetChats", "danger", !chats.length) }) +
+		UI.row({ id: "danger-cards", title: "Alle Karteikarten löschen", description: cardsDescription, trailing: button("Karten löschen", "btnResetCards", "danger", !cardCount && !deckCount) });
 	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup" }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
 }
 

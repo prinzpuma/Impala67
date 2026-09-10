@@ -17,6 +17,7 @@ import { isBlobAlive } from "./sync-core.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { initMcpBridge } from "./mcp-bridge.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -224,6 +225,7 @@ export async function initApp() {
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	if (LERNZEIT && LERNZEIT.startInterval) LERNZEIT.startInterval();
 	if (ANALYSE && ANALYSE.initDwellTimer) ANALYSE.initDwellTimer();
+	initMcpBridge();
 	const scheduleIdle = typeof window.requestIdleCallback === "function"
 		? (fn) => window.requestIdleCallback(fn, { timeout: 3000 })
 		: (fn) => setTimeout(fn, 600);

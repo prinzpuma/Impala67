@@ -1137,6 +1137,53 @@ export async function handleResetAll(t) {
 	}
 }
 
+export async function handleDeleteAllCards(t) {
+	const cardIds = Object.keys(S.cards || {});
+	const deckNames = Object.keys(S.decks || {});
+	const count = cardIds.length;
+	if (!count && !deckNames.length) {
+		U.toast("Keine Karteikarten vorhanden.", "info");
+		return false;
+	}
+	const msg = count
+		? "Möchtest du wirklich alle " + count + (count === 1 ? " Karteikarte" : " Karteikarten") + " unwiderruflich löschen?\n\nAlle Karten, Stapel und Lernfortschritte werden gelöscht. Die Löschung wird auch mit deinen anderen Geräten synchronisiert."
+		: "Möchtest du wirklich alle Stapel unwiderruflich löschen? Die Löschung wird auch mit deinen anderen Geräten synchronisiert.";
+	const ok = await U.confirm(msg, {
+		title: "Alle Karteikarten löschen",
+		ok: "Alle löschen",
+		danger: true,
+	});
+	if (!ok) return false;
+
+	if (t) {
+		t.disabled = true;
+		t.textContent = "Lösche Karten…";
+	}
+	try {
+		const deckRoots = deckNames.filter((name) => !name.includes("::"));
+		for (const name of deckRoots) {
+			await STATE.dispatch("deckDelete", { name });
+		}
+		for (const id of cardIds) {
+			await STATE.dispatch("cardDelete", { id });
+		}
+		if (S.ankiDeck) S.ankiDeck = null;
+		S.reviewShowBack = false;
+		S.reviewCardId = null;
+
+		U.toast(count ? count + (count === 1 ? " Karteikarte gelöscht." : " Karteikarten gelöscht.") : "Stapel gelöscht.", "success");
+		render();
+		return true;
+	} catch (err) {
+		U.toast("Fehler beim Löschen der Karteikarten: " + err.message, "error");
+		if (t) {
+			t.disabled = false;
+			t.textContent = "Karten löschen";
+		}
+		return false;
+	}
+}
+
 export async function handleDriveSync(t) {
 	const hasId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId;
 	if (!hasId) {

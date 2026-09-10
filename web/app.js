@@ -1506,6 +1506,9 @@ function wireEvents() {
 			case "btnResetChats":
 				if (await CHAT_FULLSCREEN.handleDeleteAllChats()) SETTINGS.openSettings("data", "danger-zone");
 				break;
+			case "btnResetCards":
+				if (await SETTINGS.handleDeleteAllCards(t)) SETTINGS.openSettings("data", "danger-zone");
+				break;
 			case "btnCloseSettings": await SETTINGS.requestCloseSettings(); break;
 			case "btnCloseOverlay": closeOverlay(); break;
 			case "btnAnki": openAnki(); break;
