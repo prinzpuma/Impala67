@@ -626,6 +626,7 @@ function renderMain() {
 			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
 			`<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
+			(pg.pdfId ? `<div class="pdf-banner" style="margin:10px 0 16px"><button class="mini" id="btnOpenPdf" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--accent);color:var(--on-accent);border:none;">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button></div>` : "") +
 		"</div>" +
 		(pg.db ? dbTableHtml(pg) : "") +
 		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
@@ -673,6 +674,7 @@ function renderMain() {
 // Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
 	return '<div class="topbar-actions">' +
+		(pg.pdfId ? `<button class="topbar-btn${S.pdfOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${S.pdfOpen ? "PDF schließen" : "PDF anzeigen"}">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` : "") +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
 		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>${S.topMenu === "more" ? moreMenuHtml(pg) : ""}</span></div>`;
