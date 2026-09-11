@@ -626,17 +626,12 @@ function renderMain() {
 			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
 			`<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
-			(pg.pdfId ? `<div class="pdf-banner" style="margin:10px 0 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">` +
-				`<button class="mini" id="btnOpenPdf" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--accent);color:var(--on-accent);border:none;">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` +
-				`<button class="mini" id="btnOpenPdfTab" data-pdfid="${pg.pdfId}" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--bg-btn, var(--bg-card));color:var(--text);border:1px solid var(--edge);">↗ In neuem Tab öffnen</button>` +
-				`<button class="mini" id="btnDownloadPdf" data-pdfid="${pg.pdfId}" data-pdftitle="${esc(pg.title)}" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--bg-btn, var(--bg-card));color:var(--text);border:1px solid var(--edge);">⬇ Herunterladen</button>` +
-			`</div>` : "") +
 		"</div>" +
+		(pg.pdfId ? pdfEmbedBlockHtml(pg) : "") +
 		(pg.db ? dbTableHtml(pg) : "") +
 		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
 		// U.morph lässt ihn unangetastet.
-		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>' +
-		(S.pdfOpen && pg.pdfId ? '<div id="pdfViewer" class="pdf-viewer" data-key="pdfviewer" data-owned="1"></div>' : "");
+		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>';
 	// Hintergrund-Updates erzeugen für die offene Seite meist exakt dasselbe Markup.
 	// Dann weder HTML erneut parsen noch den DOM-Baum durchlaufen; Editor, Fokus,
 	// Scroll und eingebettete Medien bleiben komplett unberührt.
@@ -666,7 +661,7 @@ function renderMain() {
 	}
 	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
-	if (S.pdfOpen && pg.pdfId) {
+	if (S.pdfOpen !== false && pg.pdfId) {
 		const v = $("pdfViewer");
 		if (v && v._mountedPdfId !== pg.pdfId) {
 			v._mountedPdfId = pg.pdfId;
@@ -675,10 +670,33 @@ function renderMain() {
 	}
 }
 
+function pdfEmbedBlockHtml(pg) {
+	if (S.pdfOpen !== false) {
+		return '<div class="pdf-embed-wrap" data-key="pdfwrap">' +
+			'<div id="pdfViewer" class="pdf-viewer embedded" data-key="pdfviewer" data-owned="1"></div>' +
+		'</div>';
+	}
+	return '<div class="pdf-embed-wrap" data-key="pdfwrap">' +
+		'<div class="pdf-collapsed-card">' +
+			'<div class="pdf-collapsed-info">' +
+				'<span class="pdf-collapsed-icon">📄</span>' +
+				'<span class="pdf-collapsed-name">' + esc(pg.title || "PDF-Dokument") + '</span>' +
+			'</div>' +
+			'<div class="pdf-collapsed-actions">' +
+				'<button type="button" class="mini btn-primary" id="btnOpenPdf">📄 PDF einblenden</button>' +
+				'<button type="button" class="mini" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ Im Tab öffnen</button>' +
+				'<button type="button" class="mini" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ Download</button>' +
+			'</div>' +
+		'</div>' +
+	'</div>';
+}
+
 // Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
+	const isPdf = Boolean(pg.pdfId);
+	const isOpen = S.pdfOpen !== false;
 	return '<div class="topbar-actions">' +
-		(pg.pdfId ? `<button class="topbar-btn${S.pdfOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${S.pdfOpen ? "PDF ausblenden" : "PDF anzeigen"}">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` +
+		(isPdf ? `<button class="topbar-btn${isOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${isOpen ? "PDF einklappen" : "PDF einblenden"}">📄 PDF ${isOpen ? "einklappen" : "einblenden"}</button>` +
 			`<button class="topbar-btn" id="btnOpenPdfTab" data-pdfid="${pg.pdfId}" title="In neuem Browser-Tab öffnen">↗ PDF Tab</button>` : "") +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
 		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
@@ -698,7 +716,7 @@ function moreMenuHtml(pg) {
 		'<div class="menu-sep"></div>' +
 		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
 		(pg.pdfId ?
-			'<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen ? "📄 PDF ausblenden" : "📄 PDF anzeigen") + "</button>" +
+			'<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen !== false ? "📄 PDF einklappen" : "📄 PDF einblenden") + "</button>" +
 			'<button class="menu-item" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ PDF im neuen Tab öffnen</button>' +
 			'<button class="menu-item" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ PDF herunterladen</button>'
 		: "") +

@@ -92,7 +92,7 @@ export const S = {
 	navIndex: -1,
 	aiThinkingDraft: "", // aktuell gestreamter Denkprozess (Reasoning-Modelle)
 	thinkingLiveExpanded: false,
-	pdfOpen: false,
+	pdfOpen: true,
 	aiBusy: false,
 	aiStatus: "",
 	aiDraft: "",

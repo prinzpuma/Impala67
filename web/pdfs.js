@@ -144,30 +144,38 @@ export const PDFS = (() => {
 			if (sessionId !== currentViewerSession) return;
 
 			let curPage = 1;
-			let curScale = 1.25;
 			const totalPages = doc.numPages;
+			const docTitle = opts.title || (rec.meta && rec.meta.name) || "PDF-Dokument";
+
+			try {
+				const savedH = localStorage.getItem("impala_pdf_height");
+				if (savedH) container.style.height = savedH;
+			} catch {}
 
 			container.innerHTML =
 				'<div class="pdf-toolbar">' +
 					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="mini pdf-prev-btn" title="Vorherige Seite (Pfeiltaste links)">◀</button>' +
+						'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
+						'<button type="button" class="mini pdf-prev-btn" title="Vorherige Seite (Pfeil links)">◀</button>' +
 						'<span class="pdf-page-indicator">Seite <span class="pdf-cur-page">1</span> / ' + totalPages + '</span>' +
-						'<button type="button" class="mini pdf-next-btn" title="Nächste Seite (Pfeiltaste rechts)">▶</button>' +
+						'<button type="button" class="mini pdf-next-btn" title="Nächste Seite (Pfeil rechts)">▶</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
 						'<button type="button" class="mini pdf-zoom-out" title="Verkleinern">🔍 −</button>' +
-						'<span class="pdf-zoom-label" style="min-width:42px;text-align:center;">125%</span>' +
+						'<span class="pdf-zoom-label" style="min-width:38px;text-align:center;">100%</span>' +
 						'<button type="button" class="mini pdf-zoom-in" title="Vergrößern">🔍 +</button>' +
 						'<button type="button" class="mini pdf-fit-btn" title="An Breite anpassen">Breite</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="mini pdf-open-tab-btn btn-primary" title="In neuem Browser-Tab öffnen (Vollbild & Chrome-PDF-Werkzeuge)">↗ In neuem Tab</button>' +
-						'<button type="button" class="mini pdf-download-btn" title="PDF-Datei herunterladen">⬇ Download</button>' +
+						'<button type="button" class="mini pdf-open-tab-btn" title="In neuem Browser-Tab öffnen (Vollbild & Drucken)">↗ Tab</button>' +
+						'<button type="button" class="mini pdf-download-btn" title="PDF-Datei herunterladen">⬇</button>' +
+						'<button type="button" class="mini pdf-collapse-btn" id="btnOpenPdf" title="PDF einklappen">▲</button>' +
 					'</div>' +
 				'</div>' +
 				'<div class="pdf-body" tabindex="0" role="region" aria-label="PDF Anzeige">' +
 					'<canvas class="pdf-canvas"></canvas>' +
-				'</div>';
+				'</div>' +
+				'<div class="pdf-resizer" title="Unten ziehen für gewünschte Höhe"></div>';
 
 			const body = container.querySelector(".pdf-body");
 			const canvas = container.querySelector(".pdf-canvas");
@@ -180,6 +188,17 @@ export const PDFS = (() => {
 			const fitBtn = container.querySelector(".pdf-fit-btn");
 			const openTabBtn = container.querySelector(".pdf-open-tab-btn");
 			const downloadBtn = container.querySelector(".pdf-download-btn");
+			const resizer = container.querySelector(".pdf-resizer");
+
+			let curScale = 1.0;
+			try {
+				const firstPage = await doc.getPage(1);
+				const baseVp = firstPage.getViewport({ scale: 1.0 });
+				const availW = Math.max(200, (body.clientWidth || 720) - 48);
+				curScale = Math.max(0.6, Math.min(2.0, availW / baseVp.width));
+			} catch {
+				curScale = 1.15;
+			}
 
 			let rendering = false;
 			let pendingPage = null;
@@ -231,18 +250,18 @@ export const PDFS = (() => {
 			if (nextBtn) nextBtn.onclick = () => renderCurrentPage(curPage + 1);
 
 			if (zoomInBtn) zoomInBtn.onclick = () => {
-				curScale = Math.min(3.0, curScale + 0.25);
+				curScale = Math.min(3.0, curScale + 0.2);
 				renderCurrentPage(curPage);
 			};
 			if (zoomOutBtn) zoomOutBtn.onclick = () => {
-				curScale = Math.max(0.5, curScale - 0.25);
+				curScale = Math.max(0.4, curScale - 0.2);
 				renderCurrentPage(curPage);
 			};
 			if (fitBtn) fitBtn.onclick = async () => {
 				try {
 					const page = await doc.getPage(curPage);
 					const baseVp = page.getViewport({ scale: 1.0 });
-					const availW = Math.max(200, (body.clientWidth || 600) - 48);
+					const availW = Math.max(200, (body.clientWidth || 720) - 48);
 					curScale = Math.max(0.5, Math.min(3.0, availW / baseVp.width));
 					renderCurrentPage(curPage);
 				} catch {}
@@ -250,6 +269,28 @@ export const PDFS = (() => {
 
 			if (openTabBtn) openTabBtn.onclick = () => openViewer(pdfId);
 			if (downloadBtn) downloadBtn.onclick = () => download(pdfId, opts.title || (rec.meta && rec.meta.name));
+
+			if (resizer) {
+				let startY = 0;
+				let startH = 0;
+				const onMouseMove = (e) => {
+					const delta = e.clientY - startY;
+					const newH = Math.max(340, Math.min(1400, startH + delta));
+					container.style.height = newH + "px";
+				};
+				const onMouseUp = () => {
+					window.removeEventListener("mousemove", onMouseMove);
+					window.removeEventListener("mouseup", onMouseUp);
+					try { localStorage.setItem("impala_pdf_height", container.style.height); } catch {}
+				};
+				resizer.addEventListener("mousedown", (e) => {
+					e.preventDefault();
+					startY = e.clientY;
+					startH = container.offsetHeight;
+					window.addEventListener("mousemove", onMouseMove);
+					window.addEventListener("mouseup", onMouseUp);
+				});
+			}
 
 			if (body) {
 				body.addEventListener("keydown", (e) => {
