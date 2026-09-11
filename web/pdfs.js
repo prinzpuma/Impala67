@@ -143,7 +143,6 @@ export const PDFS = (() => {
 			const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
 			if (sessionId !== currentViewerSession) return;
 
-			let curPage = 1;
 			const totalPages = doc.numPages;
 			const docTitle = opts.title || (rec.meta && rec.meta.name) || "PDF-Dokument";
 
@@ -156,9 +155,7 @@ export const PDFS = (() => {
 				'<div class="pdf-toolbar">' +
 					'<div class="pdf-toolbar-group">' +
 						'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
-						'<button type="button" class="mini pdf-prev-btn" title="Vorherige Seite (Pfeil links)">◀</button>' +
-						'<span class="pdf-page-indicator">Seite <span class="pdf-cur-page">1</span> / ' + totalPages + '</span>' +
-						'<button type="button" class="mini pdf-next-btn" title="Nächste Seite (Pfeil rechts)">▶</button>' +
+						'<span class="pdf-page-count">(' + totalPages + ' ' + (totalPages === 1 ? "Seite" : "Seiten") + ')</span>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
 						'<button type="button" class="mini pdf-zoom-out" title="Verkleinern">🔍 −</button>' +
@@ -167,21 +164,17 @@ export const PDFS = (() => {
 						'<button type="button" class="mini pdf-fit-btn" title="An Breite anpassen">Breite</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="mini pdf-open-tab-btn" title="In neuem Browser-Tab öffnen (Vollbild & Drucken)">↗ Tab</button>' +
-						'<button type="button" class="mini pdf-download-btn" title="PDF-Datei herunterladen">⬇</button>' +
-						'<button type="button" class="mini pdf-collapse-btn" id="btnOpenPdf" title="PDF einklappen">▲</button>' +
+						'<button type="button" class="mini pdf-open-tab-btn" title="In neuem Browser-Tab öffnen (Drucken & Browser-Werkzeuge)">↗ In neuem Tab</button>' +
+						'<button type="button" class="mini pdf-download-btn" title="PDF herunterladen">⬇ Download</button>' +
 					'</div>' +
 				'</div>' +
 				'<div class="pdf-body" tabindex="0" role="region" aria-label="PDF Anzeige">' +
-					'<canvas class="pdf-canvas"></canvas>' +
+					'<div class="pdf-pages-stack"></div>' +
 				'</div>' +
 				'<div class="pdf-resizer" title="Unten ziehen für gewünschte Höhe"></div>';
 
 			const body = container.querySelector(".pdf-body");
-			const canvas = container.querySelector(".pdf-canvas");
-			const prevBtn = container.querySelector(".pdf-prev-btn");
-			const nextBtn = container.querySelector(".pdf-next-btn");
-			const curPageEl = container.querySelector(".pdf-cur-page");
+			const stack = container.querySelector(".pdf-pages-stack");
 			const zoomInBtn = container.querySelector(".pdf-zoom-in");
 			const zoomOutBtn = container.querySelector(".pdf-zoom-out");
 			const zoomLabel = container.querySelector(".pdf-zoom-label");
@@ -190,81 +183,90 @@ export const PDFS = (() => {
 			const downloadBtn = container.querySelector(".pdf-download-btn");
 			const resizer = container.querySelector(".pdf-resizer");
 
-			let curScale = 1.0;
-			try {
-				const firstPage = await doc.getPage(1);
-				const baseVp = firstPage.getViewport({ scale: 1.0 });
-				const availW = Math.max(200, (body.clientWidth || 720) - 48);
-				curScale = Math.max(0.6, Math.min(2.0, availW / baseVp.width));
-			} catch {
-				curScale = 1.15;
-			}
+			const firstPage = await doc.getPage(1);
+			const baseVp = firstPage.getViewport({ scale: 1.0 });
+			const availW = Math.max(200, (body.clientWidth || 760) - 48);
+			let curScale = Math.max(0.6, Math.min(2.0, availW / baseVp.width));
 
-			let rendering = false;
-			let pendingPage = null;
+			const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
 
-			async function renderCurrentPage(pageNum) {
-				if (pageNum < 1) pageNum = 1;
-				if (pageNum > totalPages) pageNum = totalPages;
-				curPage = pageNum;
+			function renderStack() {
+				stack.innerHTML = "";
+				const renderedMap = new Map();
+				if (zoomLabel) zoomLabel.textContent = Math.round(curScale * 100) + "%";
 
-				if (rendering) {
-					pendingPage = pageNum;
-					return;
+				const observer = new IntersectionObserver((entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) {
+							const pageNum = Number(entry.target.dataset.page);
+							if (pageNum && !renderedMap.has(pageNum)) {
+								renderedMap.set(pageNum, true);
+								renderPage(pageNum, entry.target);
+							}
+						}
+					}
+				}, { root: body, rootMargin: "400px" });
+
+				for (let i = 1; i <= totalPages; i++) {
+					const sheet = document.createElement("div");
+					sheet.className = "pdf-page-sheet";
+					sheet.dataset.page = String(i);
+					const w = Math.floor(baseVp.width * curScale);
+					const h = Math.floor(baseVp.height * curScale);
+					sheet.style.width = w + "px";
+					sheet.style.minHeight = h + "px";
+
+					const canvas = document.createElement("canvas");
+					canvas.className = "pdf-page-canvas";
+					canvas.width = Math.floor(w * dpr);
+					canvas.height = Math.floor(h * dpr);
+					canvas.style.width = w + "px";
+					canvas.style.height = h + "px";
+					sheet.appendChild(canvas);
+
+					const badge = document.createElement("div");
+					badge.className = "pdf-page-badge";
+					badge.textContent = `${i} / ${totalPages}`;
+					sheet.appendChild(badge);
+
+					stack.appendChild(sheet);
+					observer.observe(sheet);
 				}
-				rendering = true;
 
-				try {
-					const page = await doc.getPage(curPage);
-					if (sessionId !== currentViewerSession) return;
-					const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-					const viewport = page.getViewport({ scale: curScale });
-
-					canvas.width = Math.floor(viewport.width * dpr);
-					canvas.height = Math.floor(viewport.height * dpr);
-					canvas.style.width = Math.floor(viewport.width) + "px";
-					canvas.style.height = Math.floor(viewport.height) + "px";
-
-					const ctx = canvas.getContext("2d");
-					ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-					await page.render({ canvasContext: ctx, viewport }).promise;
-
-					if (curPageEl) curPageEl.textContent = String(curPage);
-					if (prevBtn) prevBtn.disabled = curPage <= 1;
-					if (nextBtn) nextBtn.disabled = curPage >= totalPages;
-					if (zoomLabel) zoomLabel.textContent = Math.round(curScale * 100) + "%";
-				} catch (renderErr) {
-					console.warn("PDF.js Seitenrender-Fehler:", renderErr);
-				} finally {
-					rendering = false;
-					if (pendingPage !== null && pendingPage !== curPage) {
-						const next = pendingPage;
-						pendingPage = null;
-						renderCurrentPage(next);
+				async function renderPage(pageNum, sheetEl) {
+					try {
+						const page = await doc.getPage(pageNum);
+						if (sessionId !== currentViewerSession) return;
+						const vp = page.getViewport({ scale: curScale });
+						const canvas = sheetEl.querySelector("canvas");
+						if (!canvas) return;
+						canvas.width = Math.floor(vp.width * dpr);
+						canvas.height = Math.floor(vp.height * dpr);
+						canvas.style.width = Math.floor(vp.width) + "px";
+						canvas.style.height = Math.floor(vp.height) + "px";
+						const ctx = canvas.getContext("2d");
+						ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+						await page.render({ canvasContext: ctx, viewport: vp }).promise;
+					} catch (err) {
+						console.warn("PDF Seite", pageNum, "Renderfehler:", err);
 					}
 				}
 			}
 
-			if (prevBtn) prevBtn.onclick = () => renderCurrentPage(curPage - 1);
-			if (nextBtn) nextBtn.onclick = () => renderCurrentPage(curPage + 1);
+			renderStack();
 
 			if (zoomInBtn) zoomInBtn.onclick = () => {
-				curScale = Math.min(3.0, curScale + 0.2);
-				renderCurrentPage(curPage);
+				curScale = Math.min(2.5, curScale + 0.2);
+				renderStack();
 			};
 			if (zoomOutBtn) zoomOutBtn.onclick = () => {
 				curScale = Math.max(0.4, curScale - 0.2);
-				renderCurrentPage(curPage);
+				renderStack();
 			};
-			if (fitBtn) fitBtn.onclick = async () => {
-				try {
-					const page = await doc.getPage(curPage);
-					const baseVp = page.getViewport({ scale: 1.0 });
-					const availW = Math.max(200, (body.clientWidth || 720) - 48);
-					curScale = Math.max(0.5, Math.min(3.0, availW / baseVp.width));
-					renderCurrentPage(curPage);
-				} catch {}
+			if (fitBtn) fitBtn.onclick = () => {
+				const w = Math.max(200, (body.clientWidth || 760) - 48);
+				curScale = Math.max(0.5, Math.min(2.2, w / baseVp.width));
+				renderStack();
 			};
 
 			if (openTabBtn) openTabBtn.onclick = () => openViewer(pdfId);
@@ -275,7 +277,7 @@ export const PDFS = (() => {
 				let startH = 0;
 				const onMouseMove = (e) => {
 					const delta = e.clientY - startY;
-					const newH = Math.max(340, Math.min(1400, startH + delta));
+					const newH = Math.max(360, Math.min(1400, startH + delta));
 					container.style.height = newH + "px";
 				};
 				const onMouseUp = () => {
@@ -291,20 +293,6 @@ export const PDFS = (() => {
 					window.addEventListener("mouseup", onMouseUp);
 				});
 			}
-
-			if (body) {
-				body.addEventListener("keydown", (e) => {
-					if (e.key === "ArrowLeft" || e.key === "PageUp") {
-						e.preventDefault();
-						renderCurrentPage(curPage - 1);
-					} else if (e.key === "ArrowRight" || e.key === "PageDown") {
-						e.preventDefault();
-						renderCurrentPage(curPage + 1);
-					}
-				});
-			}
-
-			await renderCurrentPage(1);
 		} catch (err) {
 			console.error("PDF Viewer Initialisierungsfehler:", err);
 			const url = await urlFor(pdfId);

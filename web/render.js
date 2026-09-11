@@ -661,7 +661,7 @@ function renderMain() {
 	}
 	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
-	if (S.pdfOpen !== false && pg.pdfId) {
+	if (pg.pdfId) {
 		const v = $("pdfViewer");
 		if (v && v._mountedPdfId !== pg.pdfId) {
 			v._mountedPdfId = pg.pdfId;
@@ -671,33 +671,14 @@ function renderMain() {
 }
 
 function pdfEmbedBlockHtml(pg) {
-	if (S.pdfOpen !== false) {
-		return '<div class="pdf-embed-wrap" data-key="pdfwrap">' +
-			'<div id="pdfViewer" class="pdf-viewer embedded" data-key="pdfviewer" data-owned="1"></div>' +
-		'</div>';
-	}
 	return '<div class="pdf-embed-wrap" data-key="pdfwrap">' +
-		'<div class="pdf-collapsed-card">' +
-			'<div class="pdf-collapsed-info">' +
-				'<span class="pdf-collapsed-icon">📄</span>' +
-				'<span class="pdf-collapsed-name">' + esc(pg.title || "PDF-Dokument") + '</span>' +
-			'</div>' +
-			'<div class="pdf-collapsed-actions">' +
-				'<button type="button" class="mini btn-primary" id="btnOpenPdf">📄 PDF einblenden</button>' +
-				'<button type="button" class="mini" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ Im Tab öffnen</button>' +
-				'<button type="button" class="mini" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ Download</button>' +
-			'</div>' +
-		'</div>' +
+		'<div id="pdfViewer" class="pdf-viewer embedded" data-key="pdfviewer" data-owned="1"></div>' +
 	'</div>';
 }
 
 // Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
-	const isPdf = Boolean(pg.pdfId);
-	const isOpen = S.pdfOpen !== false;
 	return '<div class="topbar-actions">' +
-		(isPdf ? `<button class="topbar-btn${isOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${isOpen ? "PDF einklappen" : "PDF einblenden"}">📄 PDF ${isOpen ? "einklappen" : "einblenden"}</button>` +
-			`<button class="topbar-btn" id="btnOpenPdfTab" data-pdfid="${pg.pdfId}" title="In neuem Browser-Tab öffnen">↗ PDF Tab</button>` : "") +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
 		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>${S.topMenu === "more" ? moreMenuHtml(pg) : ""}</span></div>`;
@@ -716,7 +697,6 @@ function moreMenuHtml(pg) {
 		'<div class="menu-sep"></div>' +
 		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
 		(pg.pdfId ?
-			'<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen !== false ? "📄 PDF einklappen" : "📄 PDF einblenden") + "</button>" +
 			'<button class="menu-item" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ PDF im neuen Tab öffnen</button>' +
 			'<button class="menu-item" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ PDF herunterladen</button>'
 		: "") +
