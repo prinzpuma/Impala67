@@ -146,42 +146,68 @@ export const PDFS = (() => {
 			const totalPages = doc.numPages;
 			const docTitle = opts.title || (rec.meta && rec.meta.name) || "PDF-Dokument";
 
+			let isCollapsed = false;
 			try {
+				isCollapsed = localStorage.getItem("impala_pdf_collapsed_" + pdfId) === "1";
 				const savedH = localStorage.getItem("impala_pdf_height");
 				if (savedH) container.style.height = savedH;
+				else container.style.height = "640px";
 			} catch {}
+
+			if (isCollapsed) container.classList.add("collapsed");
 
 			container.innerHTML =
 				'<div class="pdf-toolbar">' +
 					'<div class="pdf-toolbar-group">' +
-						'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
-						'<span class="pdf-page-count">(' + totalPages + ' ' + (totalPages === 1 ? "Seite" : "Seiten") + ')</span>' +
+						'<button type="button" class="pdf-toggle-btn" title="' + (isCollapsed ? "PDF aufklappen" : "PDF einklappen") + '">' +
+							'<span class="pdf-toggle-icon">▼</span>' +
+							'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
+							'<span class="pdf-page-count">(' + totalPages + ' ' + (totalPages === 1 ? "Seite" : "Seiten") + ')</span>' +
+						'</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="mini pdf-zoom-out" title="Verkleinern">🔍 −</button>' +
-						'<span class="pdf-zoom-label" style="min-width:38px;text-align:center;">100%</span>' +
-						'<button type="button" class="mini pdf-zoom-in" title="Vergrößern">🔍 +</button>' +
-						'<button type="button" class="mini pdf-fit-btn" title="An Breite anpassen">Breite</button>' +
-					'</div>' +
-					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="mini pdf-open-tab-btn" title="In neuem Browser-Tab öffnen (Drucken & Browser-Werkzeuge)">↗ In neuem Tab</button>' +
-						'<button type="button" class="mini pdf-download-btn" title="PDF herunterladen">⬇ Download</button>' +
+						'<button type="button" class="pdf-action-btn pdf-zoom-out" title="Verkleinern">🔍−</button>' +
+						'<span class="pdf-zoom-label" style="min-width:32px;text-align:center;font-size:11px;color:var(--text2);">100%</span>' +
+						'<button type="button" class="pdf-action-btn pdf-zoom-in" title="Vergrößern">🔍+</button>' +
+						'<button type="button" class="pdf-action-btn pdf-fit-btn" title="An Breite anpassen">Breite</button>' +
+						'<button type="button" class="pdf-action-btn pdf-fullscreen-btn" title="Vollbild umschalten">⛶ Vollbild</button>' +
+						'<button type="button" class="pdf-action-btn pdf-download-btn" title="PDF herunterladen">⬇</button>' +
 					'</div>' +
 				'</div>' +
 				'<div class="pdf-body" tabindex="0" role="region" aria-label="PDF Anzeige">' +
 					'<div class="pdf-pages-stack"></div>' +
 				'</div>' +
-				'<div class="pdf-resizer" title="Unten ziehen für gewünschte Höhe"></div>';
+				'<div class="pdf-resizer" title="Unten ziehen um Höhe anzupassen">' +
+					'<div class="pdf-resizer-pill"></div>' +
+				'</div>';
 
+			const toggleBtn = container.querySelector(".pdf-toggle-btn");
 			const body = container.querySelector(".pdf-body");
 			const stack = container.querySelector(".pdf-pages-stack");
 			const zoomInBtn = container.querySelector(".pdf-zoom-in");
 			const zoomOutBtn = container.querySelector(".pdf-zoom-out");
 			const zoomLabel = container.querySelector(".pdf-zoom-label");
 			const fitBtn = container.querySelector(".pdf-fit-btn");
-			const openTabBtn = container.querySelector(".pdf-open-tab-btn");
+			const fullscreenBtn = container.querySelector(".pdf-fullscreen-btn");
 			const downloadBtn = container.querySelector(".pdf-download-btn");
 			const resizer = container.querySelector(".pdf-resizer");
+
+			if (toggleBtn) {
+				toggleBtn.onclick = () => {
+					isCollapsed = !isCollapsed;
+					container.classList.toggle("collapsed", isCollapsed);
+					toggleBtn.title = isCollapsed ? "PDF aufklappen" : "PDF einklappen";
+					try {
+						localStorage.setItem("impala_pdf_collapsed_" + pdfId, isCollapsed ? "1" : "0");
+					} catch {}
+					if (!isCollapsed) {
+						// Bei Aufklappen sicherstellen, dass Maße und Stack passen
+						requestAnimationFrame(() => {
+							if (!stack.children.length) renderStack();
+						});
+					}
+				};
+			}
 
 			const firstPage = await doc.getPage(1);
 			const baseVp = firstPage.getViewport({ scale: 1.0 });
@@ -269,7 +295,32 @@ export const PDFS = (() => {
 				renderStack();
 			};
 
-			if (openTabBtn) openTabBtn.onclick = () => openViewer(pdfId);
+			function toggleFullscreen() {
+				const isFull = container.classList.toggle("is-fullscreen");
+				if (fullscreenBtn) {
+					fullscreenBtn.textContent = isFull ? "✕ Verlassen" : "⛶ Vollbild";
+					fullscreenBtn.title = isFull ? "Vollbild beenden (Esc)" : "Vollbild umschalten";
+				}
+				if (isFull && isCollapsed) {
+					isCollapsed = false;
+					container.classList.remove("collapsed");
+				}
+				requestAnimationFrame(() => {
+					const w = Math.max(200, (body.clientWidth || window.innerWidth) - 64);
+					curScale = Math.max(0.6, Math.min(2.5, w / baseVp.width));
+					renderStack();
+				});
+			}
+
+			if (fullscreenBtn) fullscreenBtn.onclick = toggleFullscreen;
+
+			const onKeyDown = (e) => {
+				if (e.key === "Escape" && container.classList.contains("is-fullscreen")) {
+					toggleFullscreen();
+				}
+			};
+			window.addEventListener("keydown", onKeyDown);
+
 			if (downloadBtn) downloadBtn.onclick = () => download(pdfId, opts.title || (rec.meta && rec.meta.name));
 
 			if (resizer) {
@@ -277,12 +328,23 @@ export const PDFS = (() => {
 				let startH = 0;
 				const onMouseMove = (e) => {
 					const delta = e.clientY - startY;
-					const newH = Math.max(360, Math.min(1400, startH + delta));
+					const newH = Math.max(240, Math.min(1400, startH + delta));
 					container.style.height = newH + "px";
 				};
 				const onMouseUp = () => {
 					window.removeEventListener("mousemove", onMouseMove);
 					window.removeEventListener("mouseup", onMouseUp);
+					try { localStorage.setItem("impala_pdf_height", container.style.height); } catch {}
+				};
+				const onTouchMove = (e) => {
+					if (!e.touches || !e.touches[0]) return;
+					const delta = e.touches[0].clientY - startY;
+					const newH = Math.max(240, Math.min(1400, startH + delta));
+					container.style.height = newH + "px";
+				};
+				const onTouchEnd = () => {
+					window.removeEventListener("touchmove", onTouchMove);
+					window.removeEventListener("touchend", onTouchEnd);
 					try { localStorage.setItem("impala_pdf_height", container.style.height); } catch {}
 				};
 				resizer.addEventListener("mousedown", (e) => {
@@ -292,6 +354,13 @@ export const PDFS = (() => {
 					window.addEventListener("mousemove", onMouseMove);
 					window.addEventListener("mouseup", onMouseUp);
 				});
+				resizer.addEventListener("touchstart", (e) => {
+					if (!e.touches || !e.touches[0]) return;
+					startY = e.touches[0].clientY;
+					startH = container.offsetHeight;
+					window.addEventListener("touchmove", onTouchMove, { passive: true });
+					window.addEventListener("touchend", onTouchEnd);
+				}, { passive: true });
 			}
 		} catch (err) {
 			console.error("PDF Viewer Initialisierungsfehler:", err);
