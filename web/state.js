@@ -231,7 +231,7 @@ export const STATE = (() => {
 	// Uhr nachziehen, Zustand anwenden, UI invalidieren und Live-Module informieren.
 	function afterRemoteEvents(list) {
 		if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
-		emitRemoteApplied(new Set(list.map((ev) => ev.type)));
+		emitRemoteApplied(new Set(list.map((ev) => ev?.type).filter((t) => typeof t === "string")));
 	}
 	function applyRemoteEvents(events) {
 		const list = sortEvents(events);
@@ -467,6 +467,10 @@ export const STATE = (() => {
 	}
 
 	function reduce(ev) {
+		if (!ev || typeof ev.type !== "string") {
+			console.warn("[state] Ungültiges Event im Reducer übersprungen:", ev);
+			return;
+		}
 		_stateRevision++;
 		const eventTime = String(ev?.t || "");
 		if (eventTime > _loadedTime) _loadedTime = eventTime;
@@ -1018,6 +1022,10 @@ export const STATE = (() => {
 	}
 
 	async function dispatchOne(type, payload) {
+		if (typeof type !== "string" || !type) {
+			console.error("[dispatch] Ungültiger Event-Typ:", type);
+			throw new Error("dispatch erwartet einen Event-Typen als String, erhalten: " + typeof type);
+		}
 		// Das append-only Event und der daraus abgeleitete Laufzeit-State dürfen keine
 		// Referenzen auf veränderliche Aufruferobjekte behalten. IndexedDB klont zwar
 		// beim Schreiben, reduce() arbeitet danach aber mit diesem Event weiter.

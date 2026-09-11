@@ -240,6 +240,34 @@ test("Backspace am Anfang eines nicht-leeren Todo-Blocks verschmilzt sauber mit 
 	assert.equal(remaining[0].textContent, "ErstesZweites");
 });
 
+test("Backspace am Anfang des ERSTEN Blocks tut bewusst nichts (kein Umbau, kein Duplikat)", () => {
+	document.body.innerHTML = "<div id='editor-first-bs'></div>";
+	S.pages = { firstbs: { id: "firstbs", title: "First-Test", content: "- [ ] Erstes\n- [ ] Zweites" } };
+	EDITOR.mount(document.getElementById("editor-first-bs"), "firstbs");
+
+	const fields = document.querySelectorAll("#editor-first-bs [data-btext]");
+	assert.equal(fields.length, 2);
+
+	// Cursor am Anfang von Block 1 ("Erstes", kein Vorgänger)
+	fields[0].focus();
+	const range = document.createRange();
+	range.selectNodeContents(fields[0]);
+	range.collapse(true); // atStart
+	const sel = window.getSelection();
+	sel.removeAllRanges();
+	sel.addRange(range);
+
+	const ev = new window.KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+	fields[0].dispatchEvent(ev);
+
+	assert.ok(ev.defaultPrevented, "Backspace wird geschluckt, kein Browser-Eingriff");
+	const after = document.querySelectorAll("#editor-first-bs [data-btext]");
+	assert.equal(after.length, 2, "Kein Block darf dupliziert oder entfernt werden");
+	assert.equal(after[0].textContent, "Erstes", "Text bleibt unverändert");
+	assert.equal(document.querySelectorAll("#editor-first-bs input[data-btodo]").length, 2, "Beide Checkboxen bleiben erhalten");
+	assert.equal(document.querySelectorAll("#editor-first-bs .blk")[0].dataset.btype, "todo", "Kein heimlicher Typwechsel");
+});
+
 test("Backspace am Anfang einer leeren Toggle-Summary wandelt den Block in einen Absatz um", () => {
 	document.body.innerHTML = "<div id='editor-toggle-bs'></div>";
 	S.pages = { togglbs: { id: "togglbs", title: "Toggle-BS", content: "<details open>\n<summary></summary>\n\n\n</details>" } };

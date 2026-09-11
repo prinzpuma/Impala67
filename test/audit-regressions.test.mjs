@@ -131,3 +131,31 @@ test("Editor-Tabellen behalten auf schmalen Ansichten ihre Breite und scrollen h
 	assert.match(table, /width:\s*max-content/);
 	assert.match(table, /min-width:\s*100%/);
 });
+
+test("STATE.reduce ignoriert fehlerhafte Events ohne String-Typ ohne Fehler (ev.type.startsWith Schutz)", () => {
+	reset();
+	const badEvents = [
+		null,
+		undefined,
+		{},
+		{ id: "1" },
+		{ id: "2", type: 123 },
+		{ id: "3", type: {} },
+		{ id: "4", type: true },
+		{ id: "5", type: null },
+		{ id: "6", type: undefined },
+		{ id: "7", type: [] },
+	];
+	for (const ev of badEvents) {
+		assert.doesNotThrow(() => STATE.reduce(ev));
+	}
+});
+
+test("DB.addEvent und STATE.dispatch verlangen explizit einen Event-Typen als String", async () => {
+	await assert.rejects(async () => DB.addEvent({ id: "x", t: "2026-01-01T00:00:00Z", type: 123 }));
+	await assert.rejects(async () => DB.addEvent({ id: "x", t: "2026-01-01T00:00:00Z", type: {} }));
+	await assert.rejects(async () => DB.addEvent({ id: "x", t: "2026-01-01T00:00:00Z" }));
+	await assert.rejects(async () => STATE.dispatch(123, {}));
+	await assert.rejects(async () => STATE.dispatch({ type: "test" }));
+});
+

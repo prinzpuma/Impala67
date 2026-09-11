@@ -13,7 +13,7 @@ export const DB = (() => {
 	const ensureOpen = () => { if (!db) throw new Error("DB.open() muss zuerst aufgerufen werden."); };
 	const validateEvent = (ev) => {
 		if (!ev || typeof ev !== "object") throw new Error("Event muss ein Objekt sein.");
-		if (!ev.id || !ev.t || !ev.type) throw new Error("Event benötigt id, t und type.");
+		if (!ev.id || !ev.t || typeof ev.type !== "string" || !ev.type) throw new Error("Event benötigt id, t und type als String.");
 	};
 
 	const done = (t) => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = t.onabort = () => rej(t.error); });

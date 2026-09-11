@@ -58,4 +58,5 @@
   - **Diagnose & Performance**: `impala_get_diagnostics` (aktive Seite, Tabs, Speicher, Sync-Status, Console-Errors) und `impala_get_performance_trace` (Profiler-Trace, Long-Tasks).
   - **Live-Testing & UI-Interaktion**: `impala_eval` (beliebigen JS-Code im Browser-Kontext ausführen) und `impala_run_ui_action` (Seiten öffnen, Tabs schließen, Suche öffnen, Sync anstoßen).
 - **Entwickler-Workflow**: Der Agent kann neue Features, Fehlerbehebungen und UI-Zustände direkt im echten Browser-Tab prüfen, Messwerte auslesen und ohne manuelle Testschritte des Nutzers verifizieren.
+- **NotebookLM CLI-Integration (`notebooklm-py`)**: Auf dem Desktop-PC steht die offizielle CLI bereit (`notebooklm`). Der Agent kann Notizen via `impala67`-MCP auslesen, per CLI an Google NotebookLM übergeben (`notebooklm source add`), Studio-Artefakte wie Audio-Podcasts, Quizzes oder Flashcards generieren (`notebooklm generate`/`download`) und fertige Karteikarten oder Zusammenfassungen lautlos per `impala_create_flashcard` / `impala_update_page` direkt in Impala67 zurückschreiben.
 

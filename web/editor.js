@@ -1680,6 +1680,11 @@ export const EDITOR = (() => {
 		if (e.key === "Backspace" && atStart) {
 			e.preventDefault();
 			const prev = c.list[c.index - 1];
+			// Erster Block der obersten Liste: bewusst nichts tun (wie Notion).
+			// Der frühere Umbau (Liste/Überschrift → Text) erzeugte hier korrupte
+			// Duplikate mit hängender Checkbox und Caret-Sprung nach unten.
+			// Verschachtelte Listen (c.parent) behalten ihr Verhalten unten.
+			if (!prev && !c.parent) return;
 			// Stufe 1: Listen mit Text verschmelzen direkt mit dem Vorgänger (wie Notion);
 			// leere Listen rücken aus bzw. werden zu Text. Überschriften werden zu Text.
 			if (LISTY[b.type]) {
