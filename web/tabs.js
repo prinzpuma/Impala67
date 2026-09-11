@@ -202,6 +202,9 @@ export function navForward() {
 
 // Wird nach STATE.load() aufgerufen. Ungültige/gelöschte Seiten und Chats werden
 // ignoriert; die letzte gültige aktive Ansicht ist anschließend direkt geöffnet.
+// Start-Performance: Heft-Bilder (12 MB+) werden NICHT mehr vor dem ersten Frame
+// geladen. HEFT.mount zeigt „Heft laden…" und lädt per hydrateHeftBlobs() nach,
+// sobald der Splash weg ist — sonst hängt der Ladekreis im Boot.
 export async function restoreSession() {
 	const tabs = syncableTabs();
 	const active = tabs.includes(S.activeTabId) ? S.activeTabId : (tabs[tabs.length - 1] || null);
@@ -211,10 +214,6 @@ export async function restoreSession() {
 		await saveSessionNow();
 	}
 	if (active) {
-		// Bei einem wiederhergestellten Heft bleibt der bisherige Vertrag erhalten:
-		// der erste sichtbare Frame enthält schon alle Bilder. Andere Startansichten
-		// zahlen die großen Payload-Kosten dagegen überhaupt nicht mehr.
-		if (S.pages[active]?.kind === "heft") await STATE.hydrateHeftBlobs();
 		openPage(active, { skipHistory: true, restoreSession: true });
 	}
 }

@@ -178,11 +178,20 @@ export async function sendChatMessage(text, type) {
 
 // ---------- Nachrichten-Aktionen (Event-Delegation aus app.js) ----------
 export function handleReasoningToggle(t) {
-	if (t.id === "btnThinkLive") { S.thinkingLiveExpanded = !S.thinkingLiveExpanded; repaint(); return; }
+	// Nur die eigene Fläche neu malen (rAF-gebündelt): Der alte Doppel-Repaint
+	// (Side + Full) blockierte Klicks bis ~280ms, obwohl nur eine Fläche sichtbar ist.
+	if (t.id === "btnThinkLive") {
+		S.thinkingLiveExpanded = !S.thinkingLiveExpanded;
+		// Knopf steckt in beiden Flächen: Nur die eigene neu malen. Ohne bestimmbare
+		// Fläche lieber voll neu malen als einen toten Toggle zu zeigen.
+		if (t.closest) schedulePaint(!!t.closest("#panel"));
+		else repaint();
+		return;
+	}
 	const hit = find(t.dataset.reasoningtoggle);
 	if (!hit) return;
 	hit.msg.reasoningExpanded = !hit.msg.reasoningExpanded;
-	repaint();
+	schedulePaint(hit.isSide);
 }
 
 export function handleDiffCardToggle(t) {

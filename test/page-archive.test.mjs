@@ -173,6 +173,8 @@ test("Checkpoint-Wiederherstellung wendet nachträglich pageArchive-Events an", 
 	const originalGetStateCheckpoint = DB.getStateCheckpoint;
 	const originalEventAtSeq = DB.eventAtSeq;
 	const originalEventsAfterSeqAll = DB.eventsAfterSeqAll;
+	const originalClearStateCheckpoint = DB.clearStateCheckpoint;
+	DB.clearStateCheckpoint = async () => {};
 
 	try {
 		DB.allEvents = async () => [
@@ -206,6 +208,7 @@ test("Checkpoint-Wiederherstellung wendet nachträglich pageArchive-Events an", 
 		DB.getStateCheckpoint = originalGetStateCheckpoint;
 		DB.eventAtSeq = originalEventAtSeq;
 		DB.eventsAfterSeqAll = originalEventsAfterSeqAll;
+		if (originalClearStateCheckpoint) DB.clearStateCheckpoint = originalClearStateCheckpoint;
 	}
 });
 

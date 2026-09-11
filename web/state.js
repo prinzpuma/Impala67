@@ -1190,19 +1190,22 @@ export const STATE = (() => {
 					eventCount: Math.max(0, Number(checkpoint.eventCount) || 0),
 					lastEventId: String(checkpoint.lastEventId || ""),
 				};
-				// Falls ein älterer Checkpoint geladen wurde, der pageArchive/pageUnarchive
-				// noch nicht angewendet hatte: wende alle Archiv-Events geordnet an.
-				try {
-					const all = await DB.allEvents();
-					const archiveEvents = all.filter((event) => event?.type === "pageArchive" || event?.type === "pageUnarchive");
-					if (archiveEvents.length > 0) {
-						for (const event of sortEvents(archiveEvents)) {
-							reduce(event);
+				// Nur bei älteren Checkpoints, die noch ohne Archiv-Status abgespeichert wurden,
+				// führen wir den einmaligen Abgleich durch. Alle regulären Checkpoints überspringen das.
+				if (!checkpoint.reconciledArchive) {
+					try {
+						const all = await DB.allEvents();
+						const archiveEvents = all.filter((event) => event?.type === "pageArchive" || event?.type === "pageUnarchive");
+						if (archiveEvents.length > 0) {
+							for (const event of sortEvents(archiveEvents)) {
+								reduce(event);
+							}
 						}
+					} catch (err) {
+						console.warn("Archiv-Abgleich nach Checkpoint:", err);
 					}
-				} catch (err) {
-					console.warn("Archiv-Abgleich nach Checkpoint:", err);
 				}
+
 			} else {
 				const events = await PERF_PROFILER.run("state.full-event-read", () => loadSortedEvents(), {}, 5);
 				info = eventLogInfoOf(events);
@@ -1322,6 +1325,10 @@ export const STATE = (() => {
 	}
 
 	const checkpointScheduler = createCheckpointScheduler(() => persistCheckpoint(), {
+		// Tippen-First: Erst nach 10s echter Ruhe (kein pointerdown/keydown/input)
+		// plus Idle speichern. Der Checkpoint ist nur Cache — das Event-Log ist die
+		// Wahrheit — also lieber später speichern als beim Tippen ruckeln.
+		quietMs: 10000,
 		onError: (error) => console.warn("[state] Start-Checkpoint fehlgeschlagen:", error),
 	});
 	function scheduleCheckpoint() {

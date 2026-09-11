@@ -8,12 +8,14 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { DRIVE } from "./drive.js";
 import { SEARCH } from "./search.js";
+import { DB } from "./db.js";
+import { STORAGE_TOOLS } from "./storage-tools.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
 export function initMcpBridge() {
 	if (typeof window === "undefined") return;
 
-	const WS_URL = "ws://127.0.0.1:8765";
+	const WS_URL = (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
 	const recentErrors = [];
 	const MAX_ERRORS = 20;
 
@@ -40,6 +42,39 @@ export function initMcpBridge() {
 
 	let ws = null;
 	let reconnectTimer = null;
+	let reconnectAttempts = 0;
+	let bridgeConnectedAt = null;
+	let bridgeCallsCount = 0;
+	let bridgeLastCallDurationMs = null;
+
+	function safeSerialize(val) {
+		if (val === undefined) return "void";
+		if (val === null || typeof val === "number" || typeof val === "boolean" || typeof val === "string") return val;
+		if (typeof val === "function") return `[Function: ${val.name || "anonymous"}]`;
+		if (typeof Element !== "undefined" && val instanceof Element) {
+			return `<${val.tagName.toLowerCase()}${val.id ? ' id="' + val.id + '"' : ""}${val.className ? ' class="' + val.className + '"' : ""}>`;
+		}
+		try {
+			JSON.stringify(val);
+			return val;
+		} catch {
+			try {
+				const seen = new WeakSet();
+				return JSON.parse(JSON.stringify(val, (key, value) => {
+					if (typeof value === "object" && value !== null) {
+						if (seen.has(value)) return "[Circular]";
+						seen.add(value);
+						if (typeof Element !== "undefined" && value instanceof Element) {
+							return `<${value.tagName.toLowerCase()}${value.id ? ' id="' + value.id + '"' : ""}>`;
+						}
+					}
+					return value;
+				}));
+			} catch {
+				return String(val);
+			}
+		}
+	}
 
 	function connect() {
 		try {
@@ -50,17 +85,26 @@ export function initMcpBridge() {
 		}
 
 		ws.onopen = () => {
+			reconnectAttempts = 0;
+			bridgeConnectedAt = new Date().toISOString();
 			console.info("[MCP-Bridge] ⚡ Verbunden mit Antigravity MCP-Server");
 		};
 
 		ws.onmessage = async (event) => {
+			let currentCallId = null;
+			const callStart = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
 			try {
 				const msg = JSON.parse(event.data);
 				if (!msg || !msg.callId || !msg.tool) return;
 				const { callId, tool, args } = msg;
+				currentCallId = callId;
 				let result = null;
 
 				switch (tool) {
+					case "ping": {
+						result = { pong: true, time: Date.now() };
+						break;
+					}
 					case "impala_list_pages": {
 						let pool = Object.values(S.pages || {}).filter((p) => !p.trashed);
 						if (args.archived === true) {
@@ -321,6 +365,15 @@ export function initMcpBridge() {
 						const activePage = S.currentPageId ? S.pages[S.currentPageId] : null;
 
 						result = {
+							bridge: {
+								status: "connected",
+								connectedAt: bridgeConnectedAt,
+								uptimeSeconds: bridgeConnectedAt ? Math.round((Date.now() - new Date(bridgeConnectedAt).getTime()) / 1000) : 0,
+								totalCallsProcessed: bridgeCallsCount,
+								lastCallDurationMs: bridgeLastCallDurationMs,
+								wsUrl: WS_URL,
+								tabVisible: typeof document !== "undefined" ? !document.hidden : true,
+							},
 							app: {
 								activePageId: S.currentPageId || null,
 								activePageTitle: activePage?.title || null,
@@ -380,7 +433,7 @@ export function initMcpBridge() {
 							// Sichere Ausführung im Window-Kontext
 							const fn = new Function("S", "STATE", "TOOLS", "RENDER", "TABS", "PERF_PROFILER", "CLOUDFLARE_SYNC", "DRIVE", "SEARCH", `return (async () => { ${args.code} })();`);
 							const evalOutput = await fn(S, STATE, null, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH);
-							result = { ok: true, output: evalOutput !== undefined ? evalOutput : "void" };
+							result = { ok: true, output: safeSerialize(evalOutput) };
 						} catch (evalErr) {
 							result = { ok: false, error: evalErr.message, stack: evalErr.stack };
 						}
@@ -413,8 +466,19 @@ export function initMcpBridge() {
 							}
 							case "trigger_sync": {
 								if (CLOUDFLARE_SYNC && CLOUDFLARE_SYNC.syncNow) {
-									const syncRes = await CLOUDFLARE_SYNC.syncNow();
-									result = { ok: true, sync: syncRes };
+									if (args.await === false || args.wait === false) {
+										CLOUDFLARE_SYNC.syncNow().catch((err) => {
+											console.warn("[MCP-Bridge] Hintergrund-Sync Fehler:", err);
+										});
+										result = { ok: true, started: true, mode: "background", status: CLOUDFLARE_SYNC.status() };
+									} else {
+										try {
+											const syncRes = await CLOUDFLARE_SYNC.syncNow();
+											result = { ok: true, sync: syncRes, status: CLOUDFLARE_SYNC.status() };
+										} catch (syncErr) {
+											result = { ok: false, error: syncErr?.message || String(syncErr), status: CLOUDFLARE_SYNC.status() };
+										}
+									}
 								} else {
 									result = { error: "Cloudflare Sync nicht initialisiert" };
 								}
@@ -431,26 +495,91 @@ export function initMcpBridge() {
 						}
 						break;
 					}
+					case "impala_storage_report": {
+						const usage = CLOUDFLARE_SYNC ? CLOUDFLARE_SYNC.status()?.usage || null : null;
+						const rep = STORAGE_TOOLS.storageReport(S.pages, usage);
+						const limit = Math.max(1, Math.min(50, Number(args.limit) || 15));
+						rep.top = rep.top.slice(0, limit).map((r) => ({
+							...r,
+							parent: (r.parentId && S.pages[r.parentId]?.title) || null,
+						}));
+						result = rep;
+						break;
+					}
+					case "impala_storage_cleanup": {
+						const all = STORAGE_TOOLS.collectPdfPages(S.pages);
+						let sel = all.filter((r) => r.kb >= (Number(args.minKb) || 0));
+						if (Array.isArray(args.ids) && args.ids.length) {
+							const want = new Set(args.ids.map(String));
+							sel = sel.filter((r) => want.has(r.id));
+						} else if (Number(args.top) > 0) {
+							sel = sel.slice(0, Math.min(50, Number(args.top)));
+						}
+						const plan = sel.filter((r) => r.pdfId).map((r) => ({ id: r.id, title: r.title, kb: r.kb, pdfId: r.pdfId }));
+						const skipped = sel.length - plan.length;
+						const freedKb = plan.reduce((s, r) => s + (r.kb || 0), 0);
+						if (args.dryRun !== false) {
+							result = { dryRun: true, count: plan.length, skippedWithoutBlob: skipped, freedMB: Math.round(freedKb / 1024), plan: plan.slice(0, 25) };
+							break;
+						}
+						let detached = 0;
+						for (const item of plan) {
+							const page = S.pages[item.id];
+							const d = STORAGE_TOOLS.buildDetachPatch(page);
+							if (!d) continue;
+							await STATE.dispatch("pageUpdate", { id: item.id, patch: d.patch });
+							try { await DB.delBlob(d.pdfId); } catch {}
+							detached++;
+						}
+						RENDER.render();
+						result = {
+							dryRun: false, detached, skippedWithoutBlob: skipped, freedMB: Math.round(freedKb / 1024),
+							hint: "Lokal freigegeben. Cloud-Quota (R2, immutable Blobs) wird erst nach Generation-Reset frei: Einstellungen → Cloudflare → Kompaktieren.",
+						};
+						break;
+					}
 					default:
 						result = { error: `Unbekanntes Werkzeug: ${tool}` };
 				}
 
-				ws.send(JSON.stringify({ callId, result }));
+				bridgeCallsCount++;
+				const duration = (typeof performance !== "undefined" && performance.now) ? performance.now() - callStart : Date.now() - callStart;
+				bridgeLastCallDurationMs = Math.round(duration * 10) / 10;
+
+				if (ws && ws.readyState === 1) {
+					ws.send(JSON.stringify({ callId, result }));
+				}
 			} catch (err) {
-				ws.send(JSON.stringify({ callId: msg?.callId, result: { error: err.message } }));
+				if (currentCallId && ws && ws.readyState === 1) {
+					ws.send(JSON.stringify({ callId: currentCallId, result: { error: err.message } }));
+				}
 			}
 		};
 
 		ws.onclose = () => scheduleReconnect();
-		ws.onerror = () => ws.close();
+		ws.onerror = () => {
+			try { ws.close(); } catch {}
+		};
 	}
 
 	function scheduleReconnect() {
-		if (reconnectTimer) return;
-		reconnectTimer = setTimeout(() => {
-			reconnectTimer = null;
-			connect();
-		}, 3000);
+		reconnectAttempts++;
+		const delay = 1000;
+		clearTimeout(reconnectTimer);
+		reconnectTimer = setTimeout(connect, delay);
+	}
+
+	if (typeof document !== "undefined") {
+		window.addEventListener("focus", () => {
+			if (!ws || ws.readyState > 1) connect();
+		});
+		document.addEventListener("visibilitychange", () => {
+			if (!document.hidden && (!ws || ws.readyState > 1)) {
+				clearTimeout(reconnectTimer);
+				reconnectTimer = null;
+				connect();
+			}
+		});
 	}
 
 	connect();

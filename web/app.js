@@ -20,6 +20,7 @@ import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
 import { FACH } from "./fach.js";
+import { PDFS } from "./pdfs.js";
 
 // Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
 // FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
@@ -1600,6 +1601,19 @@ function wireEvents() {
 				blurActive();
 				render();
 				break;
+			case "btnOpenPdfTab": {
+				S.topMenu = null;
+				const pid = t.dataset.pdfid || S.pages[S.currentPageId]?.pdfId;
+				if (pid) PDFS.openViewer(pid);
+				break;
+			}
+			case "btnDownloadPdf": {
+				S.topMenu = null;
+				const pid = t.dataset.pdfid || S.pages[S.currentPageId]?.pdfId;
+				const title = t.dataset.pdftitle || S.pages[S.currentPageId]?.title;
+				if (pid) PDFS.download(pid, title);
+				break;
+			}
 			case "btnResetAll":
 				await SETTINGS.handleResetAll(t);
 				break;

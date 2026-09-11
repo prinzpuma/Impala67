@@ -194,17 +194,23 @@ export const CLOUDFLARE_SYNC = (() => {
 		const serverEventIds = new Set(candidates.map((e) => e?.id).filter(Boolean));
 		let confirmedCursor = state.lastUploadedLocalSeq;
 
+		// Start-Performance/Tippen: Der Prefix-Scan läuft über den vollen lokalen Log
+		// (16k Events). Ohne Yield blockiert er den Main-Thread am Stück und Tippen
+		// hängt während des Syncs. Das Gate gibt nur ab, wenn die 12ms-Scheibe voll ist.
+		const yieldCursor = cooperativeGate();
 		for (const ev of sortedLocal) {
 			const seq = Number(ev?.seq) || 0;
-			if (seq <= confirmedCursor) continue;
+			if (seq <= confirmedCursor) { await yieldCursor(); continue; }
 			if (!isUploadableToCloudflare(ev)) {
 				// Nicht für Cloudflare uploadpflichtig (z. B. Fremd-Event oder lokales UI-Event)
 				confirmedCursor = seq;
+				await yieldCursor();
 				continue;
 			}
 			if (serverEventIds.has(ev.id)) {
 				// Uploadpflichtiges lokales Event ist vom Server bestätigt
 				confirmedCursor = seq;
+				await yieldCursor();
 			} else {
 				// Erstes unbestätigtes uploadpflichtiges Event -> STOP (niemals vorspulen)
 				break;

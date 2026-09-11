@@ -5,20 +5,30 @@ import { WebSocketServer } from "ws";
 import { createStore } from "./store.mjs";
 import { createSyncClient } from "./sync-client.mjs";
 
-let liveBrowserWs = null;
+const connectedSockets = new Set();
+let activeBrowserWs = null;
 const pendingBrowserCalls = new Map();
 let browserCallSeq = 1;
+const serverStats = {
+	startTime: Date.now(),
+	totalCalls: 0,
+	lastDurationMs: null,
+	lastTool: null,
+};
 
+const wsPort = Number(process.env.IMPALA_WS_PORT || 8765);
 try {
-	const wss = new WebSocketServer({ port: 8765 });
+	const wss = new WebSocketServer({ port: wsPort });
 	wss.on("connection", (ws) => {
 		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
-		liveBrowserWs = ws;
+		connectedSockets.add(ws);
+		activeBrowserWs = ws;
 
 		ws.on("message", (raw) => {
 			try {
 				const data = JSON.parse(raw);
 				if (data && data.callId && pendingBrowserCalls.has(data.callId)) {
+					activeBrowserWs = ws;
 					const { resolve } = pendingBrowserCalls.get(data.callId);
 					pendingBrowserCalls.delete(data.callId);
 					resolve(data.result);
@@ -29,8 +39,11 @@ try {
 		});
 
 		ws.on("close", () => {
-			console.error("[impala-mcp] Browser-App getrennt.");
-			if (liveBrowserWs === ws) liveBrowserWs = null;
+			connectedSockets.delete(ws);
+			if (activeBrowserWs === ws) {
+				activeBrowserWs = connectedSockets.size > 0 ? connectedSockets.values().next().value : null;
+			}
+			console.error(`[impala-mcp] Browser-App getrennt (${connectedSockets.size} verbleibend).`);
 		});
 
 		ws.on("error", (err) => {
@@ -44,21 +57,79 @@ try {
 	console.error("[impala-mcp] Konnte WSS nicht starten:", e.message);
 }
 
-function callLiveBrowser(tool, args) {
-	if (!liveBrowserWs || liveBrowserWs.readyState !== 1) return null;
+function getActiveBrowserWs() {
+	if (activeBrowserWs && activeBrowserWs.readyState === 1) return activeBrowserWs;
+	for (const ws of connectedSockets) {
+		if (ws.readyState === 1) {
+			activeBrowserWs = ws;
+			return ws;
+		}
+	}
+	return null;
+}
+
+function getToolTimeoutMs(tool, args = {}) {
+	if (args.timeoutMs && Number(args.timeoutMs) > 0) return Number(args.timeoutMs);
+	if (process.env.IMPALA_MCP_TIMEOUT_MS && Number(process.env.IMPALA_MCP_TIMEOUT_MS) > 0) {
+		return Number(process.env.IMPALA_MCP_TIMEOUT_MS);
+	}
+	// Langlaufende Aktionen benötigen großzügigere Timeouts (Netzwerk-Sync, komplexe Eval-Skripte)
+	if (tool === "impala_run_ui_action" && args.action === "trigger_sync") {
+		// Bei fire-and-forget (await: false) reicht ein kurzer Timeout
+		return args.await === false || args.wait === false ? 5000 : 45000;
+	}
+	if (tool === "impala_eval") return 30000;
+	if (tool === "impala_get_performance_trace") return 15000;
+	return 10000; // Standard für reguläre UI- und Lese-Aufrufe
+}
+
+async function callLiveBrowser(tool, args = {}) {
+	let ws = getActiveBrowserWs();
+	if (!ws) {
+		// Warte bis zu 3,5 Sekunden, falls die Browser-App gerade im Reconnect-Zyklus ist
+		const waitStart = Date.now();
+		while (!ws && Date.now() - waitStart < 3500) {
+			await new Promise((r) => setTimeout(r, 200));
+			ws = getActiveBrowserWs();
+		}
+		if (!ws) return null;
+	}
+
 	const callId = browserCallSeq++;
+	const timeoutMs = getToolTimeoutMs(tool, args);
+	const startTime = Date.now();
+
 	return new Promise((resolve) => {
 		const timer = setTimeout(() => {
 			pendingBrowserCalls.delete(callId);
-			resolve({ error: "Timeout bei Antwort der Browser-App" });
-		}, 8000);
+			const durationMs = Date.now() - startTime;
+			resolve({
+				error: `Timeout nach ${durationMs}ms bei '${tool}' in Browser-App. Die App hat nicht rechtzeitig geantwortet (mögliche Ursachen: Hintergrund-Tab drosselt JavaScript, langsame Netzwerk-Synchronisation oder blockierender Vorgang).`,
+				timeout: true,
+				durationMs,
+			});
+		}, timeoutMs);
+
 		pendingBrowserCalls.set(callId, {
+			tool,
+			startTime,
 			resolve: (res) => {
 				clearTimeout(timer);
+				const durationMs = Date.now() - startTime;
+				serverStats.totalCalls++;
+				serverStats.lastDurationMs = durationMs;
+				serverStats.lastTool = tool;
 				resolve(res);
 			},
 		});
-		liveBrowserWs.send(JSON.stringify({ callId, tool, args }));
+
+		try {
+			ws.send(JSON.stringify({ callId, tool, args, sentAt: startTime }));
+		} catch (sendErr) {
+			clearTimeout(timer);
+			pendingBrowserCalls.delete(callId);
+			resolve({ error: `WebSocket-Sendefehler: ${sendErr.message}` });
+		}
 	});
 }
 
@@ -185,7 +256,8 @@ const TOOLS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				code: { type: "string", description: "Ausführbarer JavaScript-Code (kann async/await nutzen; Zugriff auf S, STATE, RENDER, TABS, PERF_PROFILER)" },
+				code: { type: "string", description: "Ausführbarer JavaScript-Code (kann async/await nutzen; Zugriff auf S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH)" },
+				timeoutMs: { type: "number", description: "Optionales individuelles Timeout in Millisekunden (Standard: 30000)" },
 			},
 			required: ["code"],
 		},
@@ -202,8 +274,33 @@ const TOOLS = [
 					description: "Die auszuführende UI-Aktion",
 				},
 				target: { type: "string", description: "Ziel für die Aktion (z.B. Seiten-ID oder Titel bei open_page)" },
+				await: { type: "boolean", description: "Bei trigger_sync: Auf Abschluss des Sync-Vorgangs warten (Standard: true). Bei false wird der Sync sofort im Hintergrund angestoßen." },
+				timeoutMs: { type: "number", description: "Optionales individuelles Timeout in Millisekunden für diese Aktion." },
 			},
 			required: ["action"],
+		},
+	},
+	{
+		name: "impala_storage_report",
+		description: "Zeigt die größten PDF-Speicherfresser (Anzahl, Gesamt-MB, Top-Liste) plus Cloudflare-Quota. Rein lesend, lädt keine PDF-Binärdaten.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				limit: { type: "number", description: "Max. Einträge in der Top-Liste (Standard: 15)" },
+			},
+		},
+	},
+	{
+		name: "impala_storage_cleanup",
+		description: "Lagert PDF-Binärdaten aus (Zusammenfassung & Volltext bleiben, pdfId wird gelöst, lokaler Blob gelöscht). Cloud-Quota wird erst nach Generation-Reset (compactCloudData) frei. Standard ist dryRun=true (nur Vorschau).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				ids: { type: "array", items: { type: "string" }, description: "Seiten-IDs zum Auslagern (alternativ: top N)" },
+				top: { type: "number", description: "Die N größten PDFs auslagern (z.B. 3)" },
+				minKb: { type: "number", description: "Nur PDFs ab dieser Größe (KB) berücksichtigen" },
+				dryRun: { type: "boolean", description: " true = nur Vorschau, false = wirklich auslagern (Standard: true)" },
+			},
 		},
 	},
 ];
@@ -264,6 +361,16 @@ export async function startServer(opts = {}) {
 		// 1. Wenn die App im Browser geöffnet ist: IMMER direkt live in der App ausführen!
 		const liveResult = await callLiveBrowser(name, args);
 		if (liveResult !== null) {
+			if (name === "impala_get_diagnostics" && liveResult && typeof liveResult === "object" && !liveResult.error) {
+				liveResult.mcpServer = {
+					name: SERVER_NAME,
+					version: SERVER_VERSION,
+					connectedClients: connectedSockets.size,
+					lastLatencyMs: serverStats.lastDurationMs,
+					totalCallsProcessed: serverStats.totalCalls,
+					uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
+				};
+			}
 			return liveResult;
 		}
 
@@ -305,10 +412,50 @@ export async function startServer(opts = {}) {
 				}
 				return res;
 			}
-			case "impala_get_diagnostics":
+			case "impala_get_diagnostics": {
+				return {
+					error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).`,
+					mcpServer: {
+						name: SERVER_NAME,
+						version: SERVER_VERSION,
+						connectedClients: 0,
+						totalCallsProcessed: serverStats.totalCalls,
+						uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
+					},
+					store: {
+						totalPages: Object.keys(store.getState().pages || {}).length,
+						totalCards: Object.keys(store.getState().cards || {}).length,
+						lastSyncedSeq: store.getState().meta?.lastSyncedSeq || 0,
+					},
+					sync: {
+						configured: syncClient.isConfigured(),
+					},
+				};
+			}
+			case "impala_storage_report": {
+				const pages = store.getState().pages || {};
+				const rows = [];
+				for (const p of Object.values(pages)) {
+					if (p.trashed) continue;
+					const isPdf = (p.title || "").startsWith("📄") || (p.content || "").includes(".pdf");
+					if (!isPdf) continue;
+					const m = String(p.content || "").match(/·\s*([\d.,]+)\s*(KB|MB)/i);
+					let kb = 0;
+					if (m) {
+						const num = parseFloat(m[1].replace(",", "."));
+						if (Number.isFinite(num)) kb = Math.round(/MB/i.test(m[2]) ? num * 1024 : num);
+					}
+					rows.push({ id: p.id, title: (p.title || "").slice(0, 70), kb });
+				}
+				rows.sort((a, b) => b.kb - a.kb);
+				const totalKb = rows.reduce((s, r) => s + r.kb, 0);
+				const limit = Math.max(1, Math.min(50, Number(args.limit) || 15));
+				return { count: rows.length, totalMB: Math.round(totalKb / 1024), top: rows.slice(0, limit), offline: true };
+			}
 			case "impala_get_performance_trace":
 			case "impala_eval":
 			case "impala_run_ui_action":
+			case "impala_storage_cleanup":
 				return { error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).` };
 			default:
 				return { error: `Unbekanntes Werkzeug: ${name}` };

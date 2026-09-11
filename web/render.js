@@ -626,14 +626,17 @@ function renderMain() {
 			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
 			`<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
-			(pg.pdfId ? `<div class="pdf-banner" style="margin:10px 0 16px"><button class="mini" id="btnOpenPdf" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--accent);color:var(--on-accent);border:none;">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button></div>` : "") +
+			(pg.pdfId ? `<div class="pdf-banner" style="margin:10px 0 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">` +
+				`<button class="mini" id="btnOpenPdf" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--accent);color:var(--on-accent);border:none;">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` +
+				`<button class="mini" id="btnOpenPdfTab" data-pdfid="${pg.pdfId}" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--bg-btn, var(--bg-card));color:var(--text);border:1px solid var(--edge);">↗ In neuem Tab öffnen</button>` +
+				`<button class="mini" id="btnDownloadPdf" data-pdfid="${pg.pdfId}" data-pdftitle="${esc(pg.title)}" style="font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;background:var(--bg-btn, var(--bg-card));color:var(--text);border:1px solid var(--edge);">⬇ Herunterladen</button>` +
+			`</div>` : "") +
 		"</div>" +
 		(pg.db ? dbTableHtml(pg) : "") +
 		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
 		// U.morph lässt ihn unangetastet.
 		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>' +
-		// src="about:blank" verhindert Chromes "Unsafe attempt to load URL file://..."
-		(S.pdfOpen && pg.pdfId ? '<iframe id="pdfFrame" class="pdf-frame" data-key="pdfframe" data-owned="1" src="about:blank" title="PDF"></iframe>' : "");
+		(S.pdfOpen && pg.pdfId ? '<div id="pdfViewer" class="pdf-viewer" data-key="pdfviewer" data-owned="1"></div>' : "");
 	// Hintergrund-Updates erzeugen für die offene Seite meist exakt dasselbe Markup.
 	// Dann weder HTML erneut parsen noch den DOM-Baum durchlaufen; Editor, Fokus,
 	// Scroll und eingebettete Medien bleiben komplett unberührt.
@@ -663,18 +666,20 @@ function renderMain() {
 	}
 	const beHost = $("blockEditor");
 	if (beHost) EDITOR.mount(beHost, pg.id);
-	if (S.pdfOpen && pg.pdfId) PDFS.urlFor(pg.pdfId).then((u) => {
-		const f = $("pdfFrame");
-		// Dieselbe src erneut zu setzen lädt ein iframe in Safari/Chromium wirklich neu.
-		// Hintergrund-Updates dürfen deshalb ein bereits sichtbares PDF nicht flackern lassen.
-		if (f && u && f.getAttribute("src") !== u) f.setAttribute("src", u);
-	});
+	if (S.pdfOpen && pg.pdfId) {
+		const v = $("pdfViewer");
+		if (v && v._mountedPdfId !== pg.pdfId) {
+			v._mountedPdfId = pg.pdfId;
+			PDFS.mountViewer(v, pg.pdfId, { title: pg.title });
+		}
+	}
 }
 
 // Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
 	return '<div class="topbar-actions">' +
-		(pg.pdfId ? `<button class="topbar-btn${S.pdfOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${S.pdfOpen ? "PDF schließen" : "PDF anzeigen"}">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` : "") +
+		(pg.pdfId ? `<button class="topbar-btn${S.pdfOpen ? " fav-active" : ""}" id="btnOpenPdf" title="${S.pdfOpen ? "PDF ausblenden" : "PDF anzeigen"}">📄 PDF ${S.pdfOpen ? "schließen" : "anzeigen"}</button>` +
+			`<button class="topbar-btn" id="btnOpenPdfTab" data-pdfid="${pg.pdfId}" title="In neuem Browser-Tab öffnen">↗ PDF Tab</button>` : "") +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
 		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>${S.topMenu === "more" ? moreMenuHtml(pg) : ""}</span></div>`;
@@ -692,7 +697,11 @@ function moreMenuHtml(pg) {
 		'<button class="menu-item" data-editredo="1">↪ Wiederholen <span class="menu-hint">Strg+Y</span></button>' +
 		'<div class="menu-sep"></div>' +
 		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
-		(pg.pdfId ? '<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen ? "📄 PDF schließen" : "📄 PDF anzeigen") + "</button>" : "") +
+		(pg.pdfId ?
+			'<button class="menu-item" id="btnOpenPdf">' + (S.pdfOpen ? "📄 PDF ausblenden" : "📄 PDF anzeigen") + "</button>" +
+			'<button class="menu-item" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ PDF im neuen Tab öffnen</button>' +
+			'<button class="menu-item" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ PDF herunterladen</button>'
+		: "") +
 		'<button class="menu-item" data-iconpick="1">😀 Icon ändern</button>' +
 		'<button class="menu-item" data-coverpick="1">🖼 Cover ändern</button>' +
 		(marks ? menuBtn("cardsfromhl", pg.id, `🃏 Karten aus Markierungen (${marks})`) : "") +

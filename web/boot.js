@@ -89,18 +89,22 @@ export async function purgeOrphanBlobs() {
 // 📱 Boot-Feedback (18. Juli, spät v2): Phasen-Text im Boot-Splash aus index.html —
 // statt dunklem Nichts sieht man beim Start, WO er gerade steht (bzw. hängt).
 const bootMsg = (t) => { const m = document.getElementById("bootSplashMsg"); if (m) m.textContent = t; };
+// Start-Performance: Nach jedem BootMsg kurz an den Browser abgeben, damit der
+// CSS-Ladekreis (bootspin) wirklich ein Frame malen kann. Ohne Yield blockieren
+// STATE.load + erster Render den Main-Thread am Stück und der Kreis hängt.
+const yieldForPaint = () => new Promise((res) => {
+	try {
+		if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(res, 0));
+		else setTimeout(res, 0);
+	} catch { setTimeout(res, 0); }
+});
 
 export async function initApp() {
 	if (typeof performance !== "undefined" && performance.mark) {
 		performance.mark("impala67:boot-init");
 	}
-	// FIX (Start-Bug-Paket, 9. Juli): state.js ruft nach jedem dispatch() den Hook
-	// STATE.onChange auf — das alte implizite globale render() ist seit dem
-	// ES-Module-Refactor kein verlässlicher Auto-Render mehr. Einmalig verdrahten.
-	// PERF (10. Juli): selektiver Hook statt blindem Full-Render (Content-Autosave
-	// überspringt Sidebar/Tabs/Chat; sonst rAF-coalesced) — siehe RENDER.onStateChange.
-	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);
 	bootMsg("Datenbank öffnen…");
+	await yieldForPaint();
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
 	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -112,7 +116,10 @@ export async function initApp() {
 		}
 	} catch { /* ignore */ }
 	bootMsg("Arbeitsbereich laden…");
+	await yieldForPaint();
 	const snapshotInfo = await STATE.load();
+	await yieldForPaint();
+	bootMsg("Start vorbereiten…");
 	// Einmalige v4-Heft-Migration: muss abgeschlossen sein, bevor der Nutzer das Heft bearbeiten kann bzw. bevor die App interaktiv wird.
 	try {
 		await CLOUDFLARE_SYNC.migrateLocalV4?.(snapshotInfo);
@@ -130,12 +137,25 @@ export async function initApp() {
 	await TABS.restoreSession();
 	APP.wireEvents();
 	SETTINGS.applyBg();
+	// FIX (Start-Performance): Hook erst nach Abschluss aller Start-Migrationen
+	// aktivieren, damit Dispatches beim Boot keine verfrühten Renders hinter dem Splash auslösen.
+	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);
+	bootMsg("Ansicht aufbauen…");
+	await yieldForPaint();
 	render();
-	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
-	MOBILE.init();
-	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash entfernen.
+	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash SOFORT entfernen,
+	// bevor schwere Nacharbeiten (Mobile-Init, Heft-Bilder) den Kreis einfrieren.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
+	// Heft-Bilder (12 MB+) erst nach dem ersten Frame nachladen. HEFT.mount zeigt
+	// bis dahin „Heft laden…“. Kein Warten hier — sonst hängt der Start wieder.
+	try {
+		if (S.pages?.[S.currentPageId]?.kind === "heft") {
+			STATE.hydrateHeftBlobs().then(() => render()).catch(() => {});
+		}
+	} catch { /* Heft-Payload bleibt lazy */ }
+	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
+	MOBILE.init();
 	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint
 	// einplanen. Der Scheduler wartet zusätzlich fünf Sekunden ohne Nutzereingabe.
 	STATE.scheduleCheckpoint();

@@ -63,6 +63,7 @@ export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes) {
 		lastEventId: String(info?.lastEventId || ""),
 		maxTime: String(maxTime || ""),
 		heftBlobSizes: heftBlobSizesOf(state, knownBlobSizes),
+		reconciledArchive: true,
 		state: checkpointCoreStateOf(state),
 	};
 }

@@ -78,4 +78,4 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 
 button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
 
-body.reduce-motion * { animation: none !important; transition: none !important }
+body.reduce-motion *:not(.boot-spinner):not(#bootSplash *) { animation: none !important; transition: none !important }
