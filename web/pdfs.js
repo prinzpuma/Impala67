@@ -79,7 +79,6 @@ export const PDFS = (() => {
 
 		const id = U.uid();
 		const content =
-			"> 📄 **" + file.name + "** · " + numPages + " Seiten · Tags: " + (tags.join(", ") || "—") + "\n\n" +
 			"## Zusammenfassung\n\n" + summary + "\n";
 		await STATE.dispatch("pageCreate", {
 			id, title, parentId: parent ? parent.id : null, content, pdfId, tags,
@@ -160,24 +159,38 @@ export const PDFS = (() => {
 				'<div class="pdf-toolbar">' +
 					'<div class="pdf-toolbar-group">' +
 						'<button type="button" class="pdf-toggle-btn" title="' + (isCollapsed ? "PDF aufklappen" : "PDF einklappen") + '">' +
-							'<span class="pdf-toggle-icon">▼</span>' +
+							'<svg class="pdf-toggle-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
 							'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
 							'<span class="pdf-page-count">(' + totalPages + ' ' + (totalPages === 1 ? "Seite" : "Seiten") + ')</span>' +
 						'</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
-						'<button type="button" class="pdf-action-btn pdf-zoom-out" title="Verkleinern">🔍−</button>' +
-						'<span class="pdf-zoom-label" style="min-width:32px;text-align:center;font-size:11px;color:var(--text2);">100%</span>' +
-						'<button type="button" class="pdf-action-btn pdf-zoom-in" title="Vergrößern">🔍+</button>' +
-						'<button type="button" class="pdf-action-btn pdf-fit-btn" title="An Breite anpassen">Breite</button>' +
-						'<button type="button" class="pdf-action-btn pdf-fullscreen-btn" title="Vollbild umschalten">⛶ Vollbild</button>' +
-						'<button type="button" class="pdf-action-btn pdf-download-btn" title="PDF herunterladen">⬇</button>' +
+						'<div class="pdf-zoom-pill">' +
+							'<button type="button" class="pdf-zoom-btn pdf-zoom-out" title="Verkleinern" aria-label="Verkleinern">' +
+								'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+							'</button>' +
+							'<button type="button" class="pdf-zoom-val pdf-zoom-label" title="Auf 100% zurücksetzen">100%</button>' +
+							'<button type="button" class="pdf-zoom-btn pdf-zoom-in" title="Vergrößern" aria-label="Vergrößern">' +
+								'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+							'</button>' +
+						'</div>' +
+						'<button type="button" class="pdf-action-btn pdf-fit-btn" title="An Breite anpassen">' +
+							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
+							'<span>Breite</span>' +
+						'</button>' +
+						'<button type="button" class="pdf-action-btn pdf-fullscreen-btn" title="Vollbild umschalten">' +
+							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>' +
+							'<span>Vollbild</span>' +
+						'</button>' +
+						'<button type="button" class="pdf-action-btn icon-only pdf-download-btn" title="PDF herunterladen" aria-label="PDF herunterladen">' +
+							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
+						'</button>' +
 					'</div>' +
 				'</div>' +
 				'<div class="pdf-body" tabindex="0" role="region" aria-label="PDF Anzeige">' +
 					'<div class="pdf-pages-stack"></div>' +
 				'</div>' +
-				'<div class="pdf-resizer" title="Unten ziehen um Höhe anzupassen">' +
+				'<div class="pdf-resizer" title="Unten ziehen um Höhe anzupassen (Doppelklick = Standardhöhe)">' +
 					'<div class="pdf-resizer-pill"></div>' +
 				'</div>';
 
@@ -295,10 +308,19 @@ export const PDFS = (() => {
 				renderStack();
 			};
 
+			if (zoomLabel) {
+				zoomLabel.onclick = () => {
+					curScale = 1.0;
+					renderStack();
+				};
+			}
+
 			function toggleFullscreen() {
 				const isFull = container.classList.toggle("is-fullscreen");
 				if (fullscreenBtn) {
-					fullscreenBtn.textContent = isFull ? "✕ Verlassen" : "⛶ Vollbild";
+					fullscreenBtn.innerHTML = isFull
+						? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>Schließen</span>'
+						: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg><span>Vollbild</span>';
 					fullscreenBtn.title = isFull ? "Vollbild beenden (Esc)" : "Vollbild umschalten";
 				}
 				if (isFull && isCollapsed) {
@@ -324,6 +346,10 @@ export const PDFS = (() => {
 			if (downloadBtn) downloadBtn.onclick = () => download(pdfId, opts.title || (rec.meta && rec.meta.name));
 
 			if (resizer) {
+				resizer.ondblclick = () => {
+					container.style.height = "640px";
+					try { localStorage.setItem("impala_pdf_height", "640px"); } catch {}
+				};
 				let startY = 0;
 				let startH = 0;
 				const onMouseMove = (e) => {

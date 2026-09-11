@@ -737,6 +737,21 @@ export const EDITOR = (() => {
 		}).join("") + "</div>";
 	}
 
+	function isPdfDuplicateBlock(b, pg) {
+		if (!pg || !pg.pdfId) return false;
+		if (b.type === "file") {
+			const s = String(b.src || "");
+			if (s === pg.pdfId || s === "file:" + pg.pdfId || s.includes(pg.pdfId)) return true;
+			if (b.name && pg.title && pg.title.toLowerCase().includes(b.name.replace(/\.pdf$/i, "").toLowerCase())) return true;
+		}
+		if (b.type === "quote") {
+			const txt = String(b.text || "").trim();
+			if (/^📄\s*(\*\*.*?\*\*|[^\n]+?\.pdf)\s*·/i.test(txt)) return true;
+			if (txt.startsWith("📄") && txt.includes("·") && (/\.pdf\b/i.test(txt) || /Seiten\b/i.test(txt) || /\b(KB|MB)\b/i.test(txt))) return true;
+		}
+		return false;
+	}
+
 	function render(opts) {
 		if (!host) return;
 		if (!blocks.length) { blocks.push(newBlock("p")); bustCtxIdx(); }
@@ -749,7 +764,9 @@ export const EDITOR = (() => {
 		// zurück auf Anfang, und die Scrollposition musste hinterher mühsam nachgerechnet
 		// werden. U.morph fasst jetzt nur die Blöcke an, die sich wirklich geändert haben
 		// (data-key = Block-ID) — alles andere bleibt physisch dasselbe DOM-Element.
-		U.morph(host, blocks.map((b) => blockHtml(b)).join("") +
+		const pg = S.pages[pageId];
+		const displayBlocks = blocks.filter((b) => !isPdfDuplicateBlock(b, pg));
+		U.morph(host, displayBlocks.map((b) => blockHtml(b)).join("") +
 			childPagesHtml() +
 			'<div class="blk-tail" data-key="tail" data-btail="1"></div>');
 		renderBoundary = null;
@@ -2472,6 +2489,13 @@ export const EDITOR = (() => {
 			if (pageChanged) { clearSelection(); closeMenus(); touchHistoryPage(pid); }
 			pageId = pid;
 			blocks = parse(pg.content || "");
+			if (pg.pdfId) {
+				const filtered = blocks.filter((b) => !isPdfDuplicateBlock(b, pg));
+				if (filtered.length !== blocks.length) {
+					blocks = filtered;
+					if (!blocks.length) blocks.push(newBlock("p"));
+				}
+			}
 			bustCtxIdx(); // frisch geparste Blockobjekte
 			lastSaved = pg.content || "";
 			histState = snapshotJson();

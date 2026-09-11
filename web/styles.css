@@ -459,16 +459,23 @@ body.is-phone #btnAiFab { display: none }
 .pdf-viewer.embedded, .pdf-viewer { display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; position: relative; transition: height .15s ease }
 .pdf-viewer.collapsed { height: auto !important; border: 1px solid var(--edge-soft) }
 .pdf-viewer.is-fullscreen { position: fixed !important; inset: 0 !important; z-index: 99999 !important; width: 100vw !important; height: 100vh !important; max-height: none !important; border-radius: 0 !important; border: none !important; margin: 0 !important }
-.pdf-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--surface-subtle); border-bottom: 1px solid var(--edge-soft); font-size: var(--text-xs); color: var(--text); flex-wrap: nowrap; gap: 8px; user-select: none; flex-shrink: 0 }
+.pdf-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--surface-subtle); border-bottom: 1px solid var(--edge-soft); font-size: var(--text-xs); color: var(--text); flex-wrap: nowrap; gap: 8px; user-select: none; flex-shrink: 0; min-height: 36px; box-sizing: border-box }
 .pdf-viewer.collapsed .pdf-toolbar { border-bottom: none }
 .pdf-toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0 }
-.pdf-toggle-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 4px 8px; border-radius: var(--radius-sm); color: var(--text); font-weight: 600; font-size: var(--text-xs); cursor: pointer; min-height: 28px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: background .12s }
+.pdf-toggle-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 3px 6px; border-radius: var(--radius-sm); color: var(--text); font-weight: 600; font-size: 12px; cursor: pointer; min-height: 26px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: background .12s }
 .pdf-toggle-btn:hover { background: var(--surface-hover) }
-.pdf-toggle-icon { font-size: 10px; opacity: .7; transition: transform .15s ease }
+.pdf-toggle-icon { flex-shrink: 0; opacity: .7; transition: transform .15s ease }
 .pdf-viewer.collapsed .pdf-toggle-icon { transform: rotate(-90deg) }
 .pdf-page-count { color: var(--text2); font-size: 11px; opacity: .8; font-weight: 400; flex-shrink: 0 }
-.pdf-toolbar button.pdf-action-btn { min-height: 26px; padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--edge); background: var(--bg-btn, var(--bg-card)); color: var(--text); cursor: pointer; font-size: var(--text-xs); transition: background .12s, border-color .12s; display: inline-flex; align-items: center; gap: 4px }
-.pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--edge-active) }
+.pdf-zoom-pill { display: inline-flex; align-items: center; background: var(--surface-hover); border: 1px solid var(--edge-soft); border-radius: var(--radius-pill); padding: 1px; gap: 1px; height: 24px; box-sizing: border-box }
+.pdf-zoom-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 20px; border: none; background: transparent; color: var(--text); border-radius: var(--radius-pill); cursor: pointer; padding: 0; transition: background .12s, color .12s }
+.pdf-zoom-btn:hover:not(:disabled) { background: var(--surface-active); color: var(--accent) }
+.pdf-zoom-btn:disabled { opacity: .35; cursor: not-allowed }
+.pdf-zoom-val { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text2); min-width: 36px; text-align: center; border: none; background: transparent; padding: 0 4px; cursor: pointer; border-radius: 4px; line-height: 20px; transition: color .12s, background .12s }
+.pdf-zoom-val:hover { color: var(--text); background: var(--surface-active) }
+.pdf-toolbar button.pdf-action-btn { min-height: 24px; height: 24px; padding: 0 8px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-hover); color: var(--text2); cursor: pointer; font-size: 11px; font-weight: 500; transition: background .12s, border-color .12s, color .12s; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box }
+.pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--surface-active); border-color: var(--edge); color: var(--text) }
+.pdf-toolbar button.pdf-action-btn.icon-only { width: 24px; padding: 0; justify-content: center }
 .pdf-toolbar button.pdf-action-btn:disabled { opacity: .45; cursor: not-allowed }
 .pdf-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 14px; background: var(--bg-body, #18191b); min-height: 0; outline: none }
 .pdf-viewer.collapsed .pdf-body { display: none }
@@ -477,11 +484,12 @@ body.light .pdf-body { background: #eaebed }
 .pdf-page-sheet { position: relative; box-shadow: 0 4px 18px rgba(0,0,0,0.32); border-radius: 4px; background: #fff; display: flex; justify-content: center; align-items: center; overflow: hidden }
 .pdf-page-canvas { display: block; max-width: 100%; border-radius: 4px }
 .pdf-page-badge { position: absolute; bottom: 8px; right: 10px; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; pointer-events: none; user-select: none }
-.pdf-resizer { height: 12px; background: var(--surface-subtle); border-top: 1px solid var(--edge-soft); cursor: row-resize; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s; user-select: none }
+.pdf-resizer { height: 9px; background: var(--surface-subtle); border-top: 1px solid var(--edge-soft); cursor: row-resize; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s; user-select: none }
 .pdf-viewer.collapsed .pdf-resizer { display: none }
 .pdf-viewer.is-fullscreen .pdf-resizer { display: none }
-.pdf-resizer-pill { width: 32px; height: 4px; border-radius: 2px; background: var(--edge); transition: width .15s, background .15s }
-.pdf-resizer:hover .pdf-resizer-pill { width: 48px; background: var(--accent) }
+.pdf-resizer-pill { width: 28px; height: 3px; border-radius: 2px; background: var(--edge); transition: width .15s, background .15s }
+.pdf-resizer:hover { background: var(--surface-hover) }
+.pdf-resizer:hover .pdf-resizer-pill { width: 44px; background: var(--accent) }
 .pdf-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text2); gap: 10px; font-size: var(--text-sm) }
 .row.drop-target { box-shadow: inset 0 0 0 1px var(--accent) }
 .cards-list { max-height: 55dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px }
