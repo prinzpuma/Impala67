@@ -59,18 +59,21 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-corner { font-weight: 700; white-space: nowrap; color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 4px }
 /* 🐛 Fix (29. Juli): Hover und Aktiv-Zustand waren wirkungslos — „.heft-chrome .heft-corner" ist spezifischer und setzte Hintergrund/Rahmen zurück. Jetzt im selben Kontext notiert. */
 .heft-chrome .heft-corner:hover { background: var(--surface-hover-strong) }
-.heft-chrome .heft-corner.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border) }
-.heft-corner-l { position: absolute; left: 12px; top: 12px; z-index: 51 }
+.heft-chrome .heft-corner.active { background: var(--accent-soft); color: var(--accent); border: none; box-shadow: none }
+.heft-corner-l-group { position: absolute; left: 12px; top: 12px; z-index: 51; display: flex; align-items: center; gap: 4px }
+body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-sb-toggle,
+body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-back,
+body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: none !important }
+.heft-corner-l { position: static; z-index: 51 }
 .heft-corner-r { position: absolute; right: 12px; top: 12px; z-index: 51; display: flex; gap: 6px }
 .heft-corner.heft-chat { background: var(--accent); color: var(--on-accent); border-color: transparent; min-width: 36px; padding: 0 12px }
 .heft-corner.heft-plus { min-width: 36px; padding: 0 12px; font-size: 17px }
 .heft-pageno-inline { font-weight: 650; font-size: var(--text-2xs); opacity: .75; margin-left: 5px }
-/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layo… */
-/* ♻️ Duplikat entfernt (29. Juli): .heft-scroll galt zweimal — kanonisch unten bei „Papier-Bühne v4" (overflow/touch-action/contain). Leerer Legacy-Alias-Kommentar ohne Regeln ebenfalls weg. */
+/* Scroll füllt die ganze Stage — Tools fliegen drüber, kein Layoutsprung */
 @media (max-width: 720px) {
 	.heft-float { top: 8px }
-	.heft-corner-l, .heft-corner-r { top: 8px }
-	.heft-corner-l { left: 8px }
+	.heft-corner-l-group, .heft-corner-r { top: 8px }
+	.heft-corner-l-group { left: 8px }
 	.heft-corner-r { right: 8px }
 	.heft-main, .heft-opt, .heft-size, .heft-corner { min-width: 34px; height: 34px; padding: 0 7px }
 	.heft-pageno-inline { display: none }
@@ -174,7 +177,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-pop-plus { width: 330px }
 .heft-seg-row { display: flex; gap: 4px; padding: 4px; margin: 0 0 10px; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-pill) }
 .heft-seg { flex: 1; min-height: 30px; padding: 4px 6px; font-size: var(--text-xs); font-weight: 650; border-radius: var(--radius-pill); background: transparent; color: var(--text2); white-space: nowrap }
-.heft-seg.active { background: var(--panel-solid); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.heft-seg.active { background: var(--accent-soft); color: var(--accent); border: none; box-shadow: none }
 .heft-tpl-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px }
 .heft-tpl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; min-height: 0; background: transparent; border: 1px solid transparent; border-radius: var(--radius-lg); color: var(--text2); font-size: var(--text-2xs); text-align: center; line-height: 1.25 }
 .heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text) }
@@ -252,7 +255,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-chrome .heft-main { width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: var(--radius-md); background: transparent; font-size: var(--text-md); color: var(--text2) }
 .heft-chrome .heft-main:hover { background: var(--surface-hover-strong); color: var(--text) }
 /* Laser ist bewusst rot markiert — er hinterlässt keine permanen… */
-.heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-border) }
+.heft-chrome .heft-main.heft-laser.active { background: var(--danger-soft); color: var(--danger); border: none; box-shadow: none }
 .heft-chrome .heft-pill > .heft-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--edge) }
 .heft-chrome .heft-chev { font-size: 7px; margin-left: -1px }
 /* NUR dieses Tray ist beweglich. Standard: direkt unter der fest… */
@@ -270,16 +273,108 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-chrome .heft-corner { top: 10px; height: 28px; min-height: 28px; min-width: 28px; padding: 0 7px; border-radius: var(--radius-md); font-size: var(--text-xs); background: var(--menu-bg); border-color: var(--edge); box-shadow: none }
 .heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: var(--menu-bg); color: var(--text) }
 .heft-chrome .heft-corner.heft-plus { min-width: 28px; padding: 0 7px; font-size: 16px }
-.heft-chrome .heft-corner-l { left: 10px; top: 12px }
+.heft-chrome .heft-corner-l-group { left: 10px; top: 12px }
 .heft-chrome .heft-corner-r { right: 10px; top: 12px }
 @media (max-width: 720px) {
 	.heft-chrome .heft-float { top: 8px !important; max-width: calc(100% - 108px) }
 	.heft-chrome .heft-main { width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: var(--text-base) }
 	.heft-chrome .heft-tray { top: 44px; max-width: calc(100% - 16px) }
 	.heft-chrome .heft-corner { top: 8px }
-	.heft-chrome .heft-corner-l, .heft-chrome .heft-corner-r { top: 8px }
-	.heft-chrome .heft-corner-l { left: 8px }
+	.heft-chrome .heft-corner-l-group, .heft-chrome .heft-corner-r { top: 8px }
+	.heft-chrome .heft-corner-l-group { left: 8px }
 	.heft-chrome .heft-corner-r { right: 8px }
+}
+
+/* == Heft Toolbar im vertikalen Modus (Tabs in der Seitenleiste) == */
+/* Feste, saubere Leiste an der Oberkante des Hefts; im horizontalen Modus bleibt alles frei schwebend */
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 42px;
+	background: var(--panel-solid);
+	border-bottom: 1px solid var(--edge-soft);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 10px;
+	pointer-events: auto;
+	z-index: 50;
+	box-sizing: border-box;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min).heft-writing {
+	opacity: 1;
+	pointer-events: auto;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner-l-group {
+	position: static !important;
+	left: auto !important;
+	top: auto !important;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-sb-toggle,
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-nav-back,
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-nav-forward {
+	display: inline-flex !important;
+}
+.heft-chrome .heft-corner:disabled {
+	opacity: .3;
+	cursor: default;
+	pointer-events: none;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-float {
+	position: static !important;
+	left: auto !important;
+	top: auto !important;
+	transform: none !important;
+	max-width: none !important;
+	display: flex;
+	align-items: center;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-pill {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 0;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner-r {
+	position: static !important;
+	right: auto !important;
+	top: auto !important;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner {
+	position: static !important;
+	top: auto !important;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text2);
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner:hover {
+	background: var(--surface-hover);
+	color: var(--text);
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+	border: none;
+	box-shadow: none;
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-corner.heft-chat {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+body.tabs-in-sidebar .heft-chrome:not(.heft-chrome-min) .heft-tray {
+	top: 46px;
+}
+body.tabs-in-sidebar .heft-scroll {
+	margin-top: 42px;
 }
 
 /* ========= Heft-Toolbar: kompakt + Rückzug beim Schreiben (17. Juli) ========= */

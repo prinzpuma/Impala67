@@ -39,7 +39,7 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 }
 .row:hover { background: var(--surface); color: var(--text) }
 .row-rename-input { flex: 1; min-width: 0; font: inherit; font-size: var(--text-base); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-xs); padding: 1px 6px; outline: none }
-.row.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border) }
+.row.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
 .side-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--edge-soft) }
 .side-foot button { display: flex; align-items: center; gap: 8px; background: transparent; text-align: left; color: var(--text2) }
 .side-foot button:hover { background: var(--edge-soft); color: var(--text) }
@@ -77,16 +77,33 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 .navbtn:disabled { opacity: .3; cursor: default }
 .navbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
 .tabstrip { display: flex; gap: 2px; overflow-x: auto }
-/* UI-Fix v7: Tabs flexibel statt starr 170px — wenige Tabs dürfe… */
-.tabchip { display: flex; align-items: center; gap: 6px; padding: 5px 4px 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); color: var(--text2); white-space: nowrap; flex: 0 1 170px; min-width: 96px; max-width: 170px }
+/* UI-Fix v7: Tabs flexibel statt starr 170px — wenige Tabs dürfen wachsen */
+.tabchip { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); color: var(--text2); white-space: nowrap; flex: 0 1 170px; min-width: 96px; max-width: 170px; border: none; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
 .tabchip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .tabchip:hover { background: var(--edge-soft) }
-.tabchip.active { background: var(--surface-active); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent) }
-.tabchip-x { min-height: 0; padding: 0 4px; background: transparent; color: var(--text2); font-size: var(--text-2xs) }
-.tabchip-x:hover { color: var(--text); background: var(--surface-active) }
+.tabchip.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
+.tabchip-x { min-height: 0; padding: 0 4px; background: transparent; color: var(--text2); font-size: var(--text-2xs); border-radius: var(--radius-xs) }
+.tabchip-x:hover { color: var(--text); background: var(--surface-hover-strong) }
 /* Neuer-Tab-„+“: kleiner quadratischer Knopf hinter letztem Tab (Browser-Standard) */
 .tabchip-new { flex: 0 0 auto; width: 28px; min-width: 28px; max-width: 28px; min-height: 26px; justify-content: center; padding: 0; font-size: 17px; line-height: 1; color: var(--text2); background: transparent; border: none; border-radius: var(--radius-sm) }
 .tabchip-new:hover { background: var(--edge-soft); color: var(--text) }
+
+/* Vertikale Tabs in der Seitenleiste — 1:1 identisch mit Seitenbaum-Design */
+.sidebar-tabs { margin: 2px 0 8px; display: flex; flex-direction: column; gap: 1px }
+.sidebar-tab-row .sidebar-tab-x { font-size: var(--text-2xs); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-xs); cursor: pointer }
+.sidebar-tab-row .sidebar-tab-x:hover { color: var(--text); background: var(--surface-hover-strong) }
+
+/* Offene Tabs: ＋-Button im Header */
+.sidebar-tab-head-add { width: 22px; height: 22px; min-height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--radius-xs); color: var(--text2); font-size: 14px; line-height: 1; cursor: pointer; opacity: 0.85; transition: opacity var(--motion-fast), background var(--motion-fast), color var(--motion-fast) }
+.sidebar-tab-head-add:hover { opacity: 1; background: var(--surface-hover-strong); color: var(--text) }
+
+/* Topbar-Verhalten bei vertikalen Tabs */
+.topbar-sb-toggle { display: none; margin-right: 2px }
+.topbar-nav-btn:disabled { opacity: .3; cursor: default; pointer-events: none }
+body.tabs-in-sidebar #tabbar .tabstrip { display: none }
+body.tabs-in-sidebar.page-open #tabbar,
+body.tabs-in-sidebar.heft-open #tabbar { display: none }
+body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 /* Seiten-Chrome und Dokumentfläche sind bewusst getrennt: Pfad/A… */
 .page-chrome { flex: 0 0 auto; padding: 7px 14px; min-height: 38px }
 .page-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px }
@@ -558,7 +575,7 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .lib-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding: 4px; width: fit-content; max-width: 100%; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-pill) }
 .lib-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 12px; border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-sm); font-weight: 600 }
 .lib-tab:hover { color: var(--text); background: var(--surface-hover) }
-.lib-tab.active { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 0 var(--edge-soft) }
+.lib-tab.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
 .lib-tab-n { font-size: var(--text-2xs); font-weight: 600; color: var(--text2); opacity: .85 }
 .lib-tab.active .lib-tab-n { color: var(--accent) }
 .lib-tags { margin: 0 0 14px }
@@ -1313,9 +1330,9 @@ body.light #panel { background: var(--surface-subtle) }
 body.light .hist-list { background: var(--surface-hover) }
 /* Unterschiedliche, funktionale Flächen machen Orientierung leicht. */
 body.light #tabbar { background: var(--surface-subtle) }
-body.light .tabchip.active { background: var(--panel-solid); box-shadow: 0 1px 0 var(--edge) }
+body.light .tabchip.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
 body.light .tabchip-x:hover, body.light button:hover { background: var(--surface-hover) }
-body.light .row.active { box-shadow: inset 3px 0 0 var(--accent) }
+body.light .row.active { box-shadow: none }
 body.light .think-box { background: var(--surface-subtle); border-color: var(--edge-soft) }
 body.light .file-chip, body.light .edit-files-list { background: var(--bg0); border-color: var(--edge) }
 body.light .anki-deck-group td { background: var(--bubble) }
@@ -1358,8 +1375,8 @@ img { -webkit-user-drag: none }
 .hint { line-height: 1.5 }
 .modal-actions button { min-height: 32px }
 #overlay:not([hidden]) { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px) }
-/* ♻️ Politur v13 (DRY): EIN kanonischer Aktiv-Zustand (accent-soft + Innenring) — ersetzt sechs identische Einzelregeln */
-.row-btns button.active, .confidence-row .menu-chip.active, .heft-main.active, .heft-opt.active, .heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .settings-model-list .model-row .menu-item.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border) }
+/* ♻️ Politur v13 (DRY): EIN kanonischer Aktiv-Zustand (accent-soft, rahmenlos) — ersetzt sechs identische Einzelregeln */
+.row-btns button.active, .confidence-row .menu-chip.active, .heft-main.active, .heft-opt.active, .heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .settings-model-list .model-row .menu-item.active { background: var(--accent-soft); color: var(--accent); border: none; box-shadow: none }
 @media (pointer: coarse) {
 	/* Touch: Tastatur-Hinweise sind unlogisch; 16px-Inputs verhindern iOS-Auto-Zoom */
 	.grade-key, .study-keys { display: none }
@@ -1557,7 +1574,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-sidebar nav { display: grid; gap: 3px; margin-top: 12px }
 .settings-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 9px; border: 0; border-radius: 10px; background: transparent; color: var(--text2); font-size: var(--text-sm); font-weight: 600; text-align: left }
 .settings-nav-item:hover { background: var(--surface-hover); color: var(--text) }
-.settings-nav-item.active { color: var(--text); background: var(--panel-solid); box-shadow: 0 1px 2px rgba(0,0,0,.08), inset 0 0 0 1px var(--edge-soft) }
+.settings-nav-item.active { color: var(--text); background: var(--accent-soft); border: none; box-shadow: none }
 .settings-nav-icon { display: grid; place-items: center; width: 25px; height: 25px; flex: 0 0 25px; border-radius: 7px; color: var(--text2); background: var(--surface) }
 .settings-nav-item.active .settings-nav-icon { color: var(--on-accent); background: var(--accent) }
 .settings-icon { width: 17px; height: 17px; display: block }
@@ -1608,12 +1625,12 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px }
 .settings-segmented { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface) }
 .settings-segmented button { min-height: 28px; padding: 3px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text2); font-size: var(--text-xs); font-weight: 600 }
-.settings-segmented button.active { color: var(--text); background: var(--panel-solid); box-shadow: 0 1px 2px rgba(0,0,0,.1) }
+.settings-segmented button.active { color: var(--text); background: var(--accent-soft); border: none; box-shadow: none }
 .settings-row.is-stacked { align-items: flex-start; flex-direction: column }
 .settings-row.is-stacked .settings-row-control { width: 100%; justify-content: flex-start }
 .settings-accents { display: flex; flex-wrap: wrap; gap: 7px }
 .settings-accents button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 8px; border: 1px solid var(--edge-soft); border-radius: 8px; background: var(--surface-subtle); color: var(--text2); font-size: var(--text-xs) }
-.settings-accents button.active { border-color: var(--accent-border); color: var(--text); background: var(--accent-soft) }
+.settings-accents button.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); box-shadow: none }
 .settings-accents button > span { width: 13px; height: 13px; border-radius: 50%; background: var(--swatch) }
 .settings-accents .accent-blue { --swatch: #5e9fe8 }.settings-accents .accent-violet { --swatch: #a78bfa }.settings-accents .accent-green { --swatch: #72bc8f }.settings-accents .accent-orange { --swatch: #de9255 }
 .settings-modal-v2 .settings-input-row, .settings-modal-v2 .settings-range { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(180px, 1.2fr); align-items: center; gap: 18px; min-height: 68px; margin: 0; padding: 10px 13px }
@@ -1653,7 +1670,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-inline-fields { display: grid; grid-template-columns: 1fr minmax(120px, .65fr) auto; gap: 8px; padding: 12px }
 .settings-subnav { display: flex; align-items: center; gap: 3px; width: fit-content; padding: 3px; border-radius: 10px; background: var(--surface) }
 .settings-subnav button { min-height: 30px; padding: 4px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--text2); font-size: var(--text-xs); font-weight: 650 }
-.settings-subnav button.active { color: var(--text); background: var(--panel-solid); box-shadow: var(--elev-1) }
+.settings-subnav button.active { color: var(--text); background: var(--accent-soft); border: none; box-shadow: none }
 .settings-model-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--edge-soft) }
 .settings-model-search input { flex: 1; min-width: 0; border-radius: var(--radius-pill) }
 .settings-model-search span { color: var(--text2); font-size: var(--text-2xs); white-space: nowrap }

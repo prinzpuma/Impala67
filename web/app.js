@@ -354,6 +354,7 @@ function syncComposer(input) {
 // Darstellungs-Buttons → handleAppearanceSelect(gruppe, wert) — statt 14 case-Zeilen
 const APPEARANCE_BTN = {
 	btnDensityComfortable: ["density", "comfortable"], btnDensityCompact: ["density", "compact"],
+	btnTabsTop: ["tabspos", "top"], btnTabsSidebar: ["tabspos", "sidebar"],
 	btnMotionFull: ["motion", "full"], btnMotionReduced: ["motion", "reduced"],
 	btnFontS: ["fontsize", "s"], btnFontM: ["fontsize", "m"], btnFontL: ["fontsize", "l"],
 	btnLockOn: ["overlearn", "on"], btnLockOff: ["overlearn", "off"],
@@ -419,10 +420,27 @@ function wireEvents() {
 		CHAT_FULLSCREEN.handleReasoningToggle(t);
 	});
 
+	// Mittelklick (auxclick mit e.button === 1): Seite in neuem Tab öffnen bzw. Tab schließen
+	document.addEventListener("auxclick", (e) => {
+		if (e.button !== 1) return;
+		const row = closestOf(e, "[data-page]");
+		if (row && row.dataset.page) {
+			e.preventDefault();
+			openPage(row.dataset.page, { newTab: true });
+			return;
+		}
+		const tab = closestOf(e, "[data-tabopen]");
+		if (tab && tab.dataset.tabopen) {
+			e.preventDefault();
+			closeTab(tab.dataset.tabopen);
+			return;
+		}
+	});
+
 	// Klicks (Delegation) — alle interaktiven Elemente sind explizit gelistet,
 	// damit sie unabhängig vom Tag (button/span) zuverlässig ausgelöst werden.
 	const CLICKABLE = "[data-page],[data-grade],[data-set],[data-chat],[data-sidechat],[data-newchat],[data-newpage]," +
-		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-undo],[data-difftoggle]," +
+		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-tabnew],[data-undo],[data-difftoggle]," +
 		"[data-reasoningtoggle],[data-iconset],[data-coverset],[data-coverpick],[data-coverremove]," +
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-chatsel],[data-chatselall],[data-chatselnone],[data-chatdelsel],[data-editmsg]," +
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
@@ -431,7 +449,7 @@ function wireEvents() {
 		"[data-ankisuspend],[data-ankiarchive],[data-ankiunarchive],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
-		"[data-pagemenu],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
+		"[data-pagemenu],[data-pageopennew],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
 		"[data-pagetemplate],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
@@ -1136,6 +1154,12 @@ function wireEvents() {
 			}, oldTag);
 			return;
 		}
+		if (t.dataset.pageopennew) {
+			const id = t.dataset.pageopennew;
+			S.pageMenuOpenId = null;
+			openPage(id, { newTab: true });
+			return;
+		}
 		if (t.dataset.pagerename) {
 			const id = t.dataset.pagerename;
 			S.pageMenuOpenId = null;
@@ -1310,7 +1334,11 @@ function wireEvents() {
 		}
 
 		// Seite öffnen (Sidebar, Home-Karte, Bibliothek oder Breadcrumb-Vorfahre)
-		if (t.dataset.page) { openPage(t.dataset.page); return; }
+		if (t.dataset.page) {
+			const newTab = !!(e.ctrlKey || e.metaKey);
+			openPage(t.dataset.page, { newTab });
+			return;
+		}
 
 		// Karten-Bewertung im Review
 		if (t.dataset.grade) {
@@ -1372,8 +1400,10 @@ function wireEvents() {
 				else startNewChat({ newTab: true });
 				break;
 			}
-			case "btnNavBack": navBack(); break;
-			case "btnNavForward": navForward(); break;
+			case "btnNavBack":
+			case "btnPageNavBack": navBack(); break;
+			case "btnNavForward":
+			case "btnPageNavForward": navForward(); break;
 			case "btnSearchToggle":
 				SEARCH.handleSearchToggle();
 				break;
@@ -1576,7 +1606,9 @@ function wireEvents() {
 			case "btnExport":
 				await SETTINGS.handleBackupNow(t);
 				break;
-			case "btnSidebarToggle": {
+			case "btnSidebarToggle":
+			case "btnPageSidebarToggle":
+			case "btnHeftSidebarToggle": {
 				// Mobile: Navigator-Sheet öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
 				const mobile = PLATFORM.isPhone(); // dieselbe Definition wie mobile.js und das CSS
 				if (mobile) {

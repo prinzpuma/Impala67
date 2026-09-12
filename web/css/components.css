@@ -40,7 +40,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px }
 
 .tag-chip { padding: 2px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge); background: transparent; color: var(--text2); font-size: var(--text-xs) }
-.tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent) }
+.tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: transparent }
 
 /* == Eingabe-/Verschieben-Dialoge == */
 .modal-sm { max-width: 420px }

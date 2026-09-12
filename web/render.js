@@ -392,10 +392,15 @@ function syncActiveTabChip(bar) {
 		chip.classList.toggle("active", shouldBeActive);
 	});
 
-	const backBtn = $("btnNavBack");
-	if (backBtn) backBtn.disabled = !(S.navIndex > 0);
-	const fwdBtn = $("btnNavForward");
-	if (fwdBtn) fwdBtn.disabled = !(S.navIndex < S.navHistory.length - 1);
+	const backBtn = $("btnNavBack"), pageBackBtn = $("btnPageNavBack");
+	const canBack = S.navIndex > 0;
+	if (backBtn) backBtn.disabled = !canBack;
+	if (pageBackBtn) pageBackBtn.disabled = !canBack;
+
+	const fwdBtn = $("btnNavForward"), pageFwdBtn = $("btnPageNavForward");
+	const canFwd = S.navIndex < S.navHistory.length - 1;
+	if (fwdBtn) fwdBtn.disabled = !canFwd;
+	if (pageFwdBtn) pageFwdBtn.disabled = !canFwd;
 	return true;
 }
 
@@ -404,6 +409,56 @@ function repositionSidebarPageMenu(tree) {
 	const anchor = tree.querySelector(`[data-pagemenu="${S.pageMenuOpenId}"]`);
 	const menu = tree.querySelector(".page-menu");
 	if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+}
+
+function sidebarTabsHtml() {
+	if (!document.body.classList.contains("tabs-in-sidebar")) return "";
+	if (!Array.isArray(S.tabs) || !S.tabs.length) return "";
+
+	const chatById = new Map();
+	if (S.tabs.some((id) => id.startsWith("chat:"))) {
+		try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
+	}
+
+	let html = '<div class="ws-head ws-tabs-head">' +
+		'<span class="ws-name">Offene Tabs</span>' +
+		'<button type="button" class="sidebar-tab-head-add" data-tabnew="1" title="Neuen Tab öffnen" aria-label="Neuen Tab öffnen">＋</button>' +
+		'</div><div class="sidebar-tabs">';
+
+	html += S.tabs.map((id) => {
+		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
+		let icon = "📄", title = "Unbenannt";
+		if (isChat) {
+			icon = "✦ ";
+			title = chatById.get(id.slice(5))?.title || "Chat";
+		} else if (isNlm) {
+			icon = "📓 ";
+			title = "Gemini Notebook";
+		} else if (isAnki) {
+			icon = "🃏 ";
+			title = "Karteikarten";
+		} else {
+			const pg = S.pages[id];
+			if (!pg) return "";
+			icon = pageIconHtml(pg, "");
+			title = pg.title || "Unbenannt";
+		}
+		const active = id === S.activeTabId && (
+			(isChat && S.view === "chat") ||
+			(isNlm && S.view === "notebooklm") ||
+			(isAnki && S.view === "anki") ||
+			(!isChat && !isNlm && !isAnki && S.view === "page")
+		) ? " active" : "";
+
+		return `<div class="row sidebar-tab-row${active}" data-tabopen="${id}" data-key="sbtab:${id}" title="${esc(title)}">` +
+			'<span class="row-chevron spacer"></span>' +
+			`<span class="row-title">${icon}${esc(title)}</span>` +
+			`<button type="button" class="row-add sidebar-tab-x" data-tabclose="${id}" title="Tab schließen">✕</button>` +
+			`</div>`;
+	}).join("");
+
+	html += '</div>';
+	return html;
 }
 
 // "files" = Workspaces mit Seitenbaum, "chats" = Chat-Verlauf
@@ -417,8 +472,9 @@ function renderSidebar() {
 	if ((S.renamingPageId || S.renamingDeck) && ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)) return;
 
 	const selectionKey = S.chatSelection instanceof Set ? [...S.chatSelection].sort().join(",") : "";
+	const tabsKey = document.body.classList.contains("tabs-in-sidebar") ? ("tabs:" + S.tabs.join(",") + ":" + S.activeTabId) : "";
 	const sidebarKey = [_sidebarRevision, S.pageMenuOpenId || "", S.deckMenuOpenName || "",
-		S.renamingPageId || "", S.renamingDeck || "", selectionKey].join("|");
+		S.renamingPageId || "", S.renamingDeck || "", selectionKey, tabsKey].join("|");
 	if (tree.dataset.renderKey === sidebarKey && syncActiveSidebarRow(tree)) {
 		repositionSidebarPageMenu(tree);
 		return;
@@ -447,7 +503,7 @@ function renderSidebar() {
 	}
 	// ★ Favoriten immer oben, dann Workspaces mit Seitenbaum
 	const favs = STATE.activePages().filter((p) => p.favorite);
-	let html = favs.length ? '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' + favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("") : "";
+	let html = sidebarTabsHtml() + (favs.length ? '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' + favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("") : "");
 	for (const ws of Object.values(S.workspaces)) {
 		html += wsHeadHtml(ws);
 		if (!COLLAPSE.isCollapsed("ws:" + ws.id)) html += branchHtml(null, 0, ws.id) || '<div class="empty small">Keine Seiten</div>';
@@ -520,7 +576,9 @@ const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, "📦 Verschieben nach
 	(pg.archived ? menuBtn("pageunarchive", pg.id, "↩ Aus Archiv holen") : menuBtn("pagearchive", pg.id, "🗄 Archivieren")) +
 	menuBtn("pagetrash", pg.id, "🗑 Löschen", " danger");
 function pageMenuHtml(pg) {
-	return '<div class="page-menu">' + menuBtn("pagerename", pg.id, "✎ Umbenennen") + dupTplItems(pg) +
+	return '<div class="page-menu">' +
+		menuBtn("pageopennew", pg.id, "↗ In neuem Tab öffnen") +
+		menuBtn("pagerename", pg.id, "✎ Umbenennen") + dupTplItems(pg) +
 		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + moveTrashItems(pg) + "</div>";
 }
 
@@ -571,6 +629,7 @@ function renderMain() {
 	// Klassen sind O(1), werden vor dem DOM-Abgleich gesetzt und verhindern außerdem
 	// einen kurzen Zwischenzustand beim Wechsel in Heft- oder Lernansichten.
 	document.body.classList.toggle("heft-open", S.view === "page" && pg?.kind === "heft");
+	document.body.classList.toggle("page-open", S.view === "page" && pg?.kind !== "heft");
 	document.body.classList.toggle("anki-view-open", S.view === "anki");
 	document.body.classList.toggle("anki-study-open", S.view === "anki" && S.ankiTab === "study");
 	// Die Lernzeiterfassung reagiert sofort auf Ansichtswechsel. So verschwindet
@@ -613,7 +672,11 @@ function renderMain() {
 	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
 	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
 	const pageShellHtml =
-		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' + breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
+		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' +
+		'<button class="navbtn topbar-sb-toggle" id="btnPageSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
+		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavBack" data-navback="1" ${S.navIndex > 0 ? "" : "disabled"} title="Zurück">‹</button>` +
+		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavForward" data-navforward="1" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +
+		breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
 		(pg.archived ? `<div class="archived-banner"><span>🗄️ Diese Seite ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") + "</div>" +
 		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover

@@ -41,6 +41,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "home-layout", section: "general", group: "Home", label: "Home-Bereiche", description: "Bereiche einblenden, ausblenden und sortieren", keywords: "dashboard reihenfolge widgets kacheln" },
 	{ id: "theme", section: "appearance", group: "Design", label: "Erscheinungsbild", description: "System, Hell oder Dunkel", keywords: "theme modus mode dark light gerätemodus" },
 	{ id: "accent", section: "appearance", group: "Design", label: "Akzentfarbe", description: "Farbe für aktive Elemente", keywords: "blau violett grün orange farbe" },
+	{ id: "tabs-position", section: "appearance", group: "Design", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "density", section: "appearance", group: "Lesbarkeit", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
 	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung", description: "Animationen reduzieren", keywords: "animation motion barrierefreiheit" },

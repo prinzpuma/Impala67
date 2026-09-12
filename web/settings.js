@@ -43,10 +43,10 @@ export async function checkAI() {
 // Zentrale Darstellungsoptionen. Alles wird als Gerätewahl in localStorage gespeichert,
 // damit Theme, Akzent, Dichte und Bewegung nicht durch den Drive-Sync überschrieben werden.
 const ACCENT_THEMES = {
-	blue:   { solid: "#5e9fe8", soft: "rgba(94,159,232,.12)", border: "rgba(94,159,232,.36)" },
-	violet: { solid: "#a78bfa", soft: "rgba(167,139,250,.12)", border: "rgba(167,139,250,.36)" },
-	green:  { solid: "#72bc8f", soft: "rgba(114,188,143,.12)", border: "rgba(114,188,143,.36)" },
-	orange: { solid: "#de9255", soft: "rgba(222,146,85,.12)", border: "rgba(222,146,85,.36)" },
+	blue:   { solid: "#6b8cae", soft: "rgba(107,140,174,.14)", border: "rgba(107,140,174,.25)" },
+	violet: { solid: "#8f82a9", soft: "rgba(143,130,169,.14)", border: "rgba(143,130,169,.25)" },
+	green:  { solid: "#6e8c75", soft: "rgba(110,140,117,.14)", border: "rgba(110,140,117,.25)" },
+	orange: { solid: "#b07f59", soft: "rgba(176,127,89,.14)", border: "rgba(176,127,89,.25)" },
 };
 
 // Standard: Theme automatisch vom Betriebssystem übernehmen. Nur ein explizites
@@ -91,6 +91,8 @@ export function applyAppearance() {
 	});
 	document.body.classList.toggle("density-compact", density === "compact");
 	document.body.classList.toggle("reduce-motion", motion === "reduced");
+	const tabsPos = localStorage.getItem("impala67TabsPosition") || "top";
+	document.body.classList.toggle("tabs-in-sidebar", tabsPos === "sidebar");
 	const fontSize = localStorage.getItem("impala67FontSize") || "m";
 	document.body.classList.toggle("font-s", fontSize === "s");
 	document.body.classList.toggle("font-l", fontSize === "l");
@@ -230,6 +232,7 @@ function settingsViewModel() {
 		density: localStorage.getItem("impala67Density") || "compact",
 		motion: localStorage.getItem("impala67Motion") || "reduced",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
+		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
 		androidFullscreenAvailable: ANDROID_FULLSCREEN.available(),
 		androidFullscreenEnabled: ANDROID_FULLSCREEN.enabled(),
 		breakReminder: getBreakReminder(),
@@ -1352,10 +1355,11 @@ document.addEventListener("dragend", () => {
 }, true);
 
 export function handleAppearanceSelect(kind, value) {
-	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry", breakReminder: BREAK_REMINDER_KEY, impala67BreakReminder: BREAK_REMINDER_KEY };
+	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", tabspos: "impala67TabsPosition", tabsposition: "impala67TabsPosition", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry", breakReminder: BREAK_REMINDER_KEY, impala67BreakReminder: BREAK_REMINDER_KEY };
 	if (!keys[kind]) return;
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
+	render();
 	openSettings(S.settingsSection === "ai" ? "ai" : "appearance");
 }
 

@@ -95,7 +95,10 @@ function renderAppearance(vm) {
 		'<button type="button" data-accent="' + value + '" class="accent-' + value + (vm.accent === value ? " active" : "") + '" aria-pressed="' + (vm.accent === value) + '"><span></span>' + label + "</button>").join("") + "</div>";
 	const design = UI.row({ id: "theme", title: "Erscheinungsbild", description: theme === "system" ? "Folgt automatisch deinem Gerät" : "Manuell festgelegt", trailing: UI.segmented("themeSegments", [
 		{ value: "system", label: "System", id: "btnThemeSystem" }, { value: "light", label: "Hell", id: "btnThemeLight" }, { value: "dark", label: "Dunkel", id: "btnThemeDark" },
-	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" });
+	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" }) +
+	UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
+		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },
+	], vm.tabsPosition || "top", "Tab-Anordnung") });
 	const readable = UI.row({ id: "density", title: "Darstellungsdichte", description: "Bestimmt Abstände und Informationsdichte", trailing: UI.segmented("densitySegments", [
 		{ value: "compact", label: "Kompakt", id: "btnDensityCompact" }, { value: "comfortable", label: "Komfortabel", id: "btnDensityComfortable" },
 	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [

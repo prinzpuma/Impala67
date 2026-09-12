@@ -1770,9 +1770,14 @@ export const HEFT = (() => {
 		}
 
 		return '<div class="heft-chrome" aria-hidden="false">' +
-			'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
-				'" data-hepagesmenu="1" title="Seiten">' + svgPages +
-				'<span class="heft-pageno-inline"></span></button>' +
+			'<div class="heft-corner-l-group">' +
+				'<button type="button" class="heft-corner heft-sb-toggle" data-hesidebar="1" title="Seitenleiste ein-/ausklappen">☰</button>' +
+				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (window.S && window.S.navIndex > 0 ? '' : ' disabled') + ' title="Zurück">‹</button>' +
+				'<button type="button" class="heft-corner heft-nav-forward" data-henavforward="1"' + (window.S && window.S.navIndex < (window.S.navHistory ? window.S.navHistory.length - 1 : 0) ? '' : ' disabled') + ' title="Vor">›</button>' +
+				'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
+					'" data-hepagesmenu="1" title="Seiten">' + svgPages +
+					'<span class="heft-pageno-inline"></span></button>' +
+			'</div>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
 					'<button type="button" data-hewrite="1" class="heft-main' + (writeOn ? " active" : "") +
@@ -3037,6 +3042,17 @@ export const HEFT = (() => {
 		const b = e.target.closest("button, .heft-pop-thumb");
 		if (!b || !doc) return;
 		const d = b.dataset;
+		if (d.hesidebar) {
+			const mobile = window.PLATFORM ? window.PLATFORM.isPhone() : false;
+			if (mobile) document.body.classList.toggle("mnav-open");
+			else {
+				const on = document.body.classList.toggle("sidebar-collapsed");
+				try { localStorage.setItem("impala67.sidebarCollapsed", on ? "1" : "0"); } catch { }
+			}
+			return;
+		}
+		if (d.henavback) { (window.TABS?.navBack || window.navBack)?.(); return; }
+		if (d.henavforward) { (window.TABS?.navForward || window.navForward)?.(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
 		if (d.helassodel) { deleteLassoSelection(); return; }
 		if (d.helassoclear) { const lpi = lassoSel && lassoSel.pageIdx; lassoSel = null; if (lpi != null) redrawPage(lpi); updateChrome(); return; }
