@@ -5,6 +5,7 @@ import { DB } from "./db.js";
 import { RAG } from "./rag.js";
 import { HEFT } from "./heft.js";
 import { AI } from "./ai.js";
+import { PDFS } from "./pdfs.js";
 import {
 	parse as parseMarkdown,
 	serialize as serializeMarkdown,
@@ -842,12 +843,12 @@ export const EDITOR = (() => {
 	}
 
 	// Medien-Ansicht eines Dateiblocks: der MIME-Typ entscheidet, nicht der Blocktyp.
-	function fileViewHtml(url, mime, name, bid) {
+	function fileViewHtml(url, mime, name, bid, src) {
 		const cap = name ? "<figcaption>" + esc(name) + "</figcaption>" : "";
 		if (mime.startsWith("video/")) return '<video class="blk-media" src="' + esc(url) + '" controls preload="metadata" playsinline></video>' + cap;
 		if (mime.startsWith("audio/")) return '<div class="blk-file-row"><span class="blk-file-ic">🎧</span><span class="blk-file-name">' + esc(name || "Audio") + '</span></div><audio class="blk-media" src="' + esc(url) + '" controls preload="metadata"></audio>';
 		if (mime.startsWith("image/")) return '<img class="blk-media" src="' + esc(url) + '" alt="' + esc(name) + '" draggable="false">' + cap;
-		if (mime === "application/pdf") return '<iframe class="blk-media blk-pdfframe" src="' + esc(url) + '" title="' + esc(name || "PDF") + '"></iframe>' + cap;
+		if (mime === "application/pdf") return '<div class="pdf-viewer embedded" data-key="pdf:' + esc(src || bid) + '" data-owned="1"></div>';
 		// Unbekanntes Format: Zeile mit Download-Knopf (Delegation über data-fdl in wire()).
 		return '<div class="blk-file-row"><span class="blk-file-ic">📎</span><span class="blk-file-name">' + esc(name || "Datei") + '</span><button type="button" class="blk-file-dl" data-fdl="' + bid + '">⬇ Herunterladen</button></div>';
 	}
@@ -863,19 +864,29 @@ export const EDITOR = (() => {
 		const b = findBlock(bid) || {};
 		const name = b.name || "";
 		let url = src, mime = mimeFromName(name) || mimeFromName(src);
-		if (src.startsWith("file:")) {
+		let isPdf = mime === "application/pdf" || (name && /\.pdf$/i.test(name)) || (src && /\.pdf$/i.test(src));
+		if (src.startsWith("file:") || (!src.includes("/") && !src.startsWith("http"))) {
 			try {
 				const rec = await DB.getBlob(src);
 				if (!rec) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
 				mime = (rec.meta && rec.meta.type) || mime;
-				// EIN Object-URL je Datei (DB.blobUrl) — vorher entstand pro Render ein neuer,
-				// der nie freigegeben wurde.
-				const u = await DB.blobUrl(src, mime);
-				if (!u) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
-				url = u;
+				if (mime === "application/pdf" || (rec.meta && /\.pdf$/i.test(rec.meta.name))) isPdf = true;
+				// Bei PDF lädt PDFS.mountViewer die Daten direkt per DB.getBlob — keine Blob-URL nötig
+				if (!isPdf) {
+					const u = await DB.blobUrl(src, mime);
+					if (!u) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
+					url = u;
+				}
 			} catch { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei konnte nicht geladen werden</span></div>'; return; }
 		}
-		fig.innerHTML = fileViewHtml(url, mime || "", name, bid);
+		if (isPdf) mime = "application/pdf";
+		fig.innerHTML = fileViewHtml(url, mime || "", name, bid, src);
+		if (mime === "application/pdf") {
+			const viewer = fig.querySelector(".pdf-viewer");
+			if (viewer) {
+				PDFS.mountViewer(viewer, src, { title: name });
+			}
+		}
 	}
 
 	// Highlight eines Codeblocks neu aufbauen (nur bei Fokusverlust — nie beim
@@ -999,7 +1010,8 @@ export const EDITOR = (() => {
 		{ k: "columns", icon: "▫▫", label: "2 Spalten", hint: "Nebeneinander" },
 		{ k: "divider", icon: "—", label: "Trennlinie", hint: "---" },
 		{ k: "image", icon: "🏞", label: "Bild", hint: "Hochladen" },
-		{ k: "file", icon: "📎", label: "Datei / Medien", hint: "Video, Audio, PDF …" },
+		{ k: "pdf", icon: "📄", label: "PDF", hint: "PDF einbetten" },
+		{ k: "file", icon: "📎", label: "Datei / Medien", hint: "Video, Audio, Sonstige" },
 		{ k: "heft", icon: "📓", label: "Heft", hint: "Handschrift-Einbettung" },
 		{ k: "link", icon: "🔗", label: "Seite verlinken", hint: "[[" },
 	];
@@ -1039,10 +1051,10 @@ export const EDITOR = (() => {
 			openLinkMenu(bid, "");
 			return;
 		}
-		if (kind === "image" || kind === "file") {
+		if (kind === "image" || kind === "file" || kind === "pdf") {
 			mutate(() => { c.block.text = text; }, { soft: true });
 			paintTextField(bid, text, text.length, false);
-			pickFile(bid, kind === "image" ? "image/*" : "");
+			pickFile(bid, kind === "image" ? "image/*" : (kind === "pdf" ? "application/pdf,.pdf" : ""));
 			return;
 		}
 		if (kind === "heft") {
@@ -1222,9 +1234,19 @@ export const EDITOR = (() => {
 	// Bildblöcke, alles andere (Video, Audio, PDF, beliebige Dateien) ein Dateiblock.
 	async function insertFileBlock(file, afterBid) {
 		const isImg = (file.type || mimeFromName(file.name)).startsWith("image/");
+		const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+		const mime = file.type || (isPdf ? "application/pdf" : mimeFromName(file.name));
 		const buf = await U.readAsBuffer(file);
 		const blobId = (isImg ? "img:" : "file:") + uid();
-		await DB.putBlob(blobId, buf, { type: file.type || mimeFromName(file.name), name: file.name });
+		await DB.putBlob(blobId, buf, { type: mime, name: file.name });
+		if (isPdf) {
+			try {
+				const { text } = await PDFS.extractText(buf.slice(0));
+				if (text) await DB.putBlob("pdftext:" + blobId, new TextEncoder().encode(text).buffer, { name: file.name + ".txt", type: "text/plain" });
+			} catch (e) {
+				console.warn("PDF-Textextraktion fehlgeschlagen:", e);
+			}
+		}
 		mutate(() => {
 			const nb = isImg
 				? { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }
@@ -2450,7 +2472,7 @@ export const EDITOR = (() => {
 		styleInjected = true;
 		const st = document.createElement("style");
 		st.textContent = [
-			".blk-file{margin:6px 0;max-width:100%}",
+			".blk-file{margin:3px 0;max-width:100%}",
 			".blk-media{display:block;max-width:100%;border-radius:8px}",
 			"video.blk-media{width:100%;max-height:480px;background:#000}",
 			"audio.blk-media{width:100%;margin-top:6px}",

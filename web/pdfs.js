@@ -120,16 +120,14 @@ export const PDFS = (() => {
 		setTimeout(() => URL.revokeObjectURL(u), 2000);
 	}
 
-	let currentViewerSession = 0;
-
 	async function mountViewer(container, pdfId, opts = {}) {
 		if (!container || !pdfId) return;
-		const sessionId = ++currentViewerSession;
+		const sessionId = (container._pdfSessionId = (container._pdfSessionId || 0) + 1);
 		container.innerHTML = '<div class="pdf-loading"><span>📄 PDF wird geladen…</span></div>';
 
 		try {
 			const rec = await DB.getBlob(pdfId);
-			if (sessionId !== currentViewerSession) return;
+			if (sessionId !== container._pdfSessionId) return;
 			const buf = rec && (rec.buf || rec.data);
 			if (!buf || !buf.byteLength) {
 				container.innerHTML = '<div class="pdf-loading" style="color:var(--danger,#e53935);"><span>PDF-Datei konnte nicht geladen werden.</span></div>';
@@ -137,10 +135,10 @@ export const PDFS = (() => {
 			}
 
 			await ensureLoaded();
-			if (sessionId !== currentViewerSession) return;
+			if (sessionId !== container._pdfSessionId) return;
 
 			const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-			if (sessionId !== currentViewerSession) return;
+			if (sessionId !== container._pdfSessionId) return;
 
 			const totalPages = doc.numPages;
 			const docTitle = opts.title || (rec.meta && rec.meta.name) || "PDF-Dokument";
@@ -148,9 +146,9 @@ export const PDFS = (() => {
 			let isCollapsed = false;
 			try {
 				isCollapsed = localStorage.getItem("impala_pdf_collapsed_" + pdfId) === "1";
-				const savedH = localStorage.getItem("impala_pdf_height");
+				const savedH = localStorage.getItem("impala_pdf_height_" + pdfId) || localStorage.getItem("impala_pdf_height");
 				if (savedH) container.style.height = savedH;
-				else container.style.height = "640px";
+				else container.style.height = opts.height || "560px";
 			} catch {}
 
 			if (isCollapsed) container.classList.add("collapsed");
@@ -182,6 +180,9 @@ export const PDFS = (() => {
 							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>' +
 							'<span>Vollbild</span>' +
 						'</button>' +
+						'<button type="button" class="pdf-action-btn icon-only pdf-open-btn" title="In neuem Tab öffnen" aria-label="In neuem Tab öffnen">' +
+							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
+						'</button>' +
 						'<button type="button" class="pdf-action-btn icon-only pdf-download-btn" title="PDF herunterladen" aria-label="PDF herunterladen">' +
 							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
 						'</button>' +
@@ -202,8 +203,11 @@ export const PDFS = (() => {
 			const zoomLabel = container.querySelector(".pdf-zoom-label");
 			const fitBtn = container.querySelector(".pdf-fit-btn");
 			const fullscreenBtn = container.querySelector(".pdf-fullscreen-btn");
+			const openBtn = container.querySelector(".pdf-open-btn");
 			const downloadBtn = container.querySelector(".pdf-download-btn");
 			const resizer = container.querySelector(".pdf-resizer");
+
+			if (openBtn) openBtn.onclick = () => openViewer(pdfId);
 
 			if (toggleBtn) {
 				toggleBtn.onclick = () => {
@@ -275,7 +279,7 @@ export const PDFS = (() => {
 				async function renderPage(pageNum, sheetEl) {
 					try {
 						const page = await doc.getPage(pageNum);
-						if (sessionId !== currentViewerSession) return;
+						if (sessionId !== container._pdfSessionId) return;
 						const vp = page.getViewport({ scale: curScale });
 						const canvas = sheetEl.querySelector("canvas");
 						if (!canvas) return;
@@ -347,8 +351,11 @@ export const PDFS = (() => {
 
 			if (resizer) {
 				resizer.ondblclick = () => {
-					container.style.height = "640px";
-					try { localStorage.setItem("impala_pdf_height", "640px"); } catch {}
+					container.style.height = opts.height || "560px";
+					try {
+						localStorage.setItem("impala_pdf_height_" + pdfId, container.style.height);
+						localStorage.setItem("impala_pdf_height", container.style.height);
+					} catch {}
 				};
 				let startY = 0;
 				let startH = 0;
@@ -360,7 +367,10 @@ export const PDFS = (() => {
 				const onMouseUp = () => {
 					window.removeEventListener("mousemove", onMouseMove);
 					window.removeEventListener("mouseup", onMouseUp);
-					try { localStorage.setItem("impala_pdf_height", container.style.height); } catch {}
+					try {
+						localStorage.setItem("impala_pdf_height_" + pdfId, container.style.height);
+						localStorage.setItem("impala_pdf_height", container.style.height);
+					} catch {}
 				};
 				const onTouchMove = (e) => {
 					if (!e.touches || !e.touches[0]) return;
@@ -371,7 +381,10 @@ export const PDFS = (() => {
 				const onTouchEnd = () => {
 					window.removeEventListener("touchmove", onTouchMove);
 					window.removeEventListener("touchend", onTouchEnd);
-					try { localStorage.setItem("impala_pdf_height", container.style.height); } catch {}
+					try {
+						localStorage.setItem("impala_pdf_height_" + pdfId, container.style.height);
+						localStorage.setItem("impala_pdf_height", container.style.height);
+					} catch {}
 				};
 				resizer.addEventListener("mousedown", (e) => {
 					e.preventDefault();
@@ -390,17 +403,14 @@ export const PDFS = (() => {
 			}
 		} catch (err) {
 			console.error("PDF Viewer Initialisierungsfehler:", err);
-			const url = await urlFor(pdfId);
 			container.innerHTML =
 				'<div class="pdf-toolbar">' +
-					'<span style="font-weight:500;">📄 PDF Vorschau</span>' +
-					'<button type="button" class="mini pdf-open-tab-btn btn-primary">↗ In neuem Tab öffnen</button>' +
+					'<span class="pdf-doc-title">📄 ' + U.esc(opts.title || "PDF-Dokument") + '</span>' +
+					'<button type="button" class="pdf-action-btn pdf-open-tab-btn">↗ Im neuen Tab öffnen</button>' +
 				'</div>' +
-				'<div class="pdf-body" style="padding:20px;text-align:center;">' +
-					'<object data="' + (url || "") + '" type="application/pdf" style="width:100%;height:100%;min-height:220px;">' +
-						'<p style="color:var(--text);margin-bottom:12px;">Der interne Browser-Viewer kann dieses PDF nicht direkt einbetten.</p>' +
-						'<button type="button" class="mini pdf-fallback-open btn-primary" style="padding:8px 16px;cursor:pointer;">↗ In neuem Tab öffnen</button>' +
-					'</object>' +
+				'<div class="pdf-body" style="padding:24px;text-align:center;">' +
+					'<p style="color:var(--text);margin-bottom:12px;">Der interne Viewer konnte das PDF nicht direkt darstellen.</p>' +
+					'<button type="button" class="mini pdf-fallback-open btn-primary" style="padding:8px 16px;cursor:pointer;">↗ Im neuen Tab öffnen</button>' +
 				'</div>';
 			const fBtn = container.querySelector(".pdf-fallback-open");
 			if (fBtn) fBtn.onclick = () => openViewer(pdfId);

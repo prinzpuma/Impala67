@@ -456,26 +456,34 @@ body.is-phone #btnAiFab { display: none }
 .editor-wrap { display: flex; width: 100%; min-height: 0; justify-content: center }
 .pdf-frame { height: 45%; min-height: 220px; border: none; border-top: 1px solid var(--edge); background: #fff }
 .pdf-embed-wrap { width: min(860px, calc(100% - 32px)); margin: 12px auto 20px; flex-shrink: 0; box-sizing: border-box }
-.pdf-viewer.embedded, .pdf-viewer { display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; position: relative; transition: height .15s ease }
-.pdf-viewer.collapsed { height: auto !important; border: 1px solid var(--edge-soft) }
-.pdf-viewer.is-fullscreen { position: fixed !important; inset: 0 !important; z-index: 99999 !important; width: 100vw !important; height: 100vh !important; max-height: none !important; border-radius: 0 !important; border: none !important; margin: 0 !important }
-.pdf-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--surface-subtle); border-bottom: 1px solid var(--edge-soft); font-size: var(--text-xs); color: var(--text); flex-wrap: nowrap; gap: 8px; user-select: none; flex-shrink: 0; min-height: 36px; box-sizing: border-box }
-.pdf-viewer.collapsed .pdf-toolbar { border-bottom: none }
+.pdf-viewer.embedded, .pdf-viewer { display: flex; flex-direction: column; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; position: relative; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease }
+.pdf-viewer.collapsed { height: auto !important; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); box-shadow: none }
+.pdf-viewer.collapsed:hover { background: var(--surface-hover); border-color: var(--edge) }
+.pdf-viewer.is-fullscreen { position: fixed !important; inset: 0 !important; z-index: 99999 !important; width: 100vw !important; height: 100vh !important; max-height: none !important; border-radius: 0 !important; border: none !important; margin: 0 !important; box-shadow: none !important }
+.pdf-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; background: var(--surface-subtle); border-bottom: 1px solid var(--edge-soft); font-size: var(--text-xs); color: var(--text); flex-wrap: nowrap; gap: 8px; user-select: none; flex-shrink: 0; min-height: 34px; box-sizing: border-box; transition: background .12s ease }
+.pdf-viewer.collapsed .pdf-toolbar { background: transparent; border-bottom: none; min-height: 34px; padding: 4px 8px }
 .pdf-toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0 }
-.pdf-toggle-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 3px 6px; border-radius: var(--radius-sm); color: var(--text); font-weight: 600; font-size: 12px; cursor: pointer; min-height: 26px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: background .12s }
-.pdf-toggle-btn:hover { background: var(--surface-hover) }
+.pdf-toggle-btn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 3px 6px; border-radius: var(--radius-xs); color: var(--text); font-weight: 500; font-size: 13px; cursor: pointer; min-height: 26px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: background .12s, color .12s }
+.pdf-toggle-btn:hover { background: var(--surface-active) }
 .pdf-toggle-icon { flex-shrink: 0; opacity: .7; transition: transform .15s ease }
 .pdf-viewer.collapsed .pdf-toggle-icon { transform: rotate(-90deg) }
-.pdf-page-count { color: var(--text2); font-size: 11px; opacity: .8; font-weight: 400; flex-shrink: 0 }
-.pdf-zoom-pill { display: inline-flex; align-items: center; background: var(--surface-hover); border: 1px solid var(--edge-soft); border-radius: var(--radius-pill); padding: 1px; gap: 1px; height: 24px; box-sizing: border-box }
-.pdf-zoom-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 20px; border: none; background: transparent; color: var(--text); border-radius: var(--radius-pill); cursor: pointer; padding: 0; transition: background .12s, color .12s }
-.pdf-zoom-btn:hover:not(:disabled) { background: var(--surface-active); color: var(--accent) }
+.pdf-doc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.pdf-page-count { color: var(--text2); font-size: 11.5px; opacity: .75; font-weight: 400; flex-shrink: 0; margin-left: 2px }
+.pdf-viewer.collapsed .pdf-zoom-pill,
+.pdf-viewer.collapsed .pdf-fit-btn,
+.pdf-viewer.collapsed .pdf-fullscreen-btn { display: none !important }
+.pdf-zoom-pill { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); padding: 1px; gap: 1px; height: 24px; box-sizing: border-box }
+.pdf-zoom-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: var(--text2); border-radius: var(--radius-xs); cursor: pointer; padding: 0; transition: background .12s, color .12s }
+.pdf-zoom-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
 .pdf-zoom-btn:disabled { opacity: .35; cursor: not-allowed }
-.pdf-zoom-val { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text2); min-width: 36px; text-align: center; border: none; background: transparent; padding: 0 4px; cursor: pointer; border-radius: 4px; line-height: 20px; transition: color .12s, background .12s }
-.pdf-zoom-val:hover { color: var(--text); background: var(--surface-active) }
-.pdf-toolbar button.pdf-action-btn { min-height: 24px; height: 24px; padding: 0 8px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-hover); color: var(--text2); cursor: pointer; font-size: 11px; font-weight: 500; transition: background .12s, border-color .12s, color .12s; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box }
-.pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--surface-active); border-color: var(--edge); color: var(--text) }
-.pdf-toolbar button.pdf-action-btn.icon-only { width: 24px; padding: 0; justify-content: center }
+.pdf-zoom-val { font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text2); min-width: 34px; text-align: center; border: none; background: transparent; padding: 0 3px; cursor: pointer; border-radius: 3px; line-height: 20px; transition: color .12s, background .12s }
+.pdf-zoom-val:hover { color: var(--text); background: var(--surface-hover) }
+.pdf-toolbar button.pdf-action-btn { min-height: 24px; height: 24px; padding: 0 7px; border-radius: var(--radius-xs); border: 1px solid var(--edge-soft); background: var(--surface); color: var(--text2); cursor: pointer; font-size: 11.5px; font-weight: 500; transition: background .12s, border-color .12s, color .12s; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box }
+.pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--edge); color: var(--text) }
+.pdf-toolbar button.pdf-action-btn.icon-only { width: 24px; padding: 0; justify-content: center; border: none; background: transparent }
+.pdf-toolbar button.pdf-action-btn.icon-only:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
+.pdf-viewer.collapsed .pdf-toolbar button.pdf-action-btn.icon-only { border: none; background: transparent }
+.pdf-viewer.collapsed .pdf-toolbar button.pdf-action-btn.icon-only:hover:not(:disabled) { background: var(--surface-active) }
 .pdf-toolbar button.pdf-action-btn:disabled { opacity: .45; cursor: not-allowed }
 .pdf-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 14px; background: var(--bg-body, #18191b); min-height: 0; outline: none }
 .pdf-viewer.collapsed .pdf-body { display: none }

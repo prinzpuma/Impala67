@@ -4,7 +4,7 @@
 /* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokument… */
 .block-editor { position: relative; overflow: visible; padding: 8px 24px 28dvh; max-width: 760px; width: 100%; margin: 0 auto }
 .blk { display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-sm); position: relative }
-.blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 4px; opacity: 0; transition: opacity .1s }
+.blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 6px; opacity: 0; transition: opacity .1s }
 .blk:hover .blk-gutter, .blk:focus-within .blk-gutter { opacity: 1 }
 .blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs) }
 .blk-plus:hover, .blk-handle:hover { background: var(--surface-active); color: var(--text) }
@@ -85,8 +85,18 @@ h3.blk-h { font-size: 1.12em }
 .blk[data-btype="h2"] { margin-top: 16px }
 .blk[data-btype="h3"] { margin-top: 10px }
 .blk:first-child[data-btype^="h"] { margin-top: 0 }
-.blk[data-btype="h1"] .blk-gutter { padding-top: 8px }
-.blk[data-btype="h2"] .blk-gutter { padding-top: 6px }
+.blk[data-btype="h1"] .blk-gutter { padding-top: 14px }
+.blk[data-btype="h2"] .blk-gutter { padding-top: 10px }
+.blk[data-btype="h3"] .blk-gutter { padding-top: 7px }
+.blk[data-btype="quote"] .blk-gutter { padding-top: 5px }
+.blk[data-btype="divider"] .blk-gutter { padding-top: 4px }
+.blk[data-btype="file"] .blk-gutter { padding-top: 12px }
+.blk[data-btype="callout"] .blk-gutter { padding-top: 24px }
+.blk[data-btype="code"] .blk-gutter { padding-top: 10px }
+.blk[data-btype="math"] .blk-gutter { padding-top: 16px }
+.blk[data-btype="table"] .blk-gutter { padding-top: 15px }
+.blk[data-btype="image"] .blk-gutter { padding-top: 10px }
+.blk[data-btype="heft"] .blk-gutter { padding-top: 10px }
 .blk-h1 { font-size: 1.875em; font-weight: 700; line-height: 1.3; margin: 0 }
 .blk-h2 { font-size: 1.5em; font-weight: 600; line-height: 1.3; margin: 0 }
 .blk-h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin: 0 }
@@ -173,6 +183,8 @@ h3.blk-h { font-size: 1.12em }
 }
 /* == --- Verschachtelte Blöcke (Callout/Toggle/Spalten) --- == */
 .blk-children .blk .blk-body { padding: 1px 0 }
+/* == --- Datei- & PDF-Einbettung --- == */
+.blk-file { margin: 3px 0; max-width: 100% }
 /* == --- Heft-Einbettung --- == */
 .blk-heft { width: 100%; min-height: 72px; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text); text-align: left; cursor: pointer }
 .blk-heft:hover { border-color: var(--accent-border); background: var(--surface-hover) }

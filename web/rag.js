@@ -105,6 +105,27 @@ export const RAG = (() => {
 				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 60000);
 			} catch (e) { console.warn("PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
+		// Auch im Editor eingebettete PDFs volltext-indexieren
+		const fileMatches = pg.content ? [...pg.content.matchAll(/:::file\s+(\S+)/g)] : [];
+		for (const m of fileMatches) {
+			const fId = m[1];
+			if (fId === pg.pdfId) continue;
+			try {
+				let rec = await DB.getBlob("pdftext:" + fId);
+				if (!rec) {
+					const pdf = await DB.getBlob(fId);
+					if (pdf && ((pdf.meta && pdf.meta.type === "application/pdf") || (pdf.meta && /\.pdf$/i.test(pdf.meta.name)))) {
+						const { PDFS } = await import("./pdfs.js");
+						const ex = await PDFS.extractText(pdf.buf.slice(0));
+						if (ex && ex.text) {
+							await DB.putBlob("pdftext:" + fId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
+							rec = await DB.getBlob("pdftext:" + fId);
+						}
+					}
+				}
+				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 40000);
+			} catch (e) { console.warn("Inline-PDF-Volltext für RAG fehlgeschlagen:", e); }
+		}
 		const chunks = chunk(text);
 		if (!chunks.length) { await dropIndex(pageId); return; }
 		// iPad/WebKit darf nie einen kompletten PDF-Index als einen einzigen
