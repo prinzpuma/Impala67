@@ -112,7 +112,20 @@ jobs:
         run: npx cap sync android
       - name: Debug APK bauen
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee gradle-build.log || {
+            echo "==================== GRADLE ERROR LOG ===================="
+            tail -n 120 gradle-build.log
+            exit 1
+          }
+      - name: Gradle Build Log hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: android/gradle-build.log
+          if-no-files-found: ignore
       - name: APK für Release vorbereiten
         run: cp android/app/build/outputs/apk/debug/app-debug.apk Impala67.apk
       - name: APK als Artefakt bereitstellen
