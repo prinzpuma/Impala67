@@ -5,7 +5,7 @@ import { DB } from "./db.js";
 import { SRS } from "./srs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { cooperativeGate } from "./cooperative.js";
+import { cooperativeGate, yieldToMain } from "./cooperative.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import {
 	STATE_CHECKPOINT_CORE_KEYS,
@@ -1239,23 +1239,61 @@ export const STATE = (() => {
 		}
 	}
 
-	async function hydrateHeftBlobs() {
-		if (_checkpointPayloadLoaded) return true;
-		if (_checkpointPayloadPromise) return _checkpointPayloadPromise;
-		const generation = _checkpointPayloadGeneration;
-		const hashes = Object.keys(_checkpointBlobSizes);
-		_checkpointPayloadPromise = (async () => {
-			let blobs = {};
-			try {
-				blobs = await PERF_PROFILER.run("state.checkpoint-heft-read", () => DB.getStateCheckpointPayload(hashes), {
-					count: hashes.length,
-					chars: Object.values(_checkpointBlobSizes).reduce((sum, value) => sum + (Number(value) || 0), 0),
-				}, 5);
-			} catch (error) {
-				console.warn("[state] Fehler beim Lesen der Heft-Checkpoint-Blobs:", error);
-				blobs = {};
+	let _idleHydrateTimer = 0;
+	function scheduleBackgroundHydrate() {
+		if (_checkpointPayloadLoaded || _idleHydrateTimer) return;
+		const execute = () => {
+			_idleHydrateTimer = 0;
+			if (!_checkpointPayloadLoaded) hydrateHeftBlobs().catch(() => {});
+		};
+		if (typeof requestIdleCallback === "function") {
+			_idleHydrateTimer = requestIdleCallback(execute, { timeout: 3000 });
+		} else {
+			_idleHydrateTimer = setTimeout(execute, 1000);
+		}
+	}
+
+	async function hydrateHeftBlobs(targetHashes = null) {
+		const allHashes = Object.keys(_checkpointBlobSizes);
+		if (!allHashes.length) {
+			_checkpointPayloadLoaded = true;
+			return true;
+		}
+		if (_checkpointPayloadLoaded && !targetHashes) return true;
+
+		const requested = targetHashes
+			? [...new Set(targetHashes)].filter((h) => h && typeof _checkpointBlobSizes[h] !== "undefined")
+			: allHashes;
+		const needed = requested.filter((h) => typeof S.heftBlobs[h] !== "string");
+
+		if (!needed.length) {
+			if (!targetHashes || allHashes.every((h) => typeof S.heftBlobs[h] === "string")) {
+				_checkpointPayloadLoaded = true;
 			}
-			const missing = hashes.filter((hash) => typeof blobs[hash] !== "string");
+			return true;
+		}
+
+		if (!targetHashes && _checkpointPayloadPromise) return _checkpointPayloadPromise;
+		const generation = _checkpointPayloadGeneration;
+
+		const performHydration = async () => {
+			let blobs = {};
+			const BATCH_SIZE = 4;
+			for (let i = 0; i < needed.length; i += BATCH_SIZE) {
+				if (i > 0) await yieldToMain();
+				const batch = needed.slice(i, i + BATCH_SIZE);
+				const batchSizes = batch.reduce((sum, value) => sum + (Number(_checkpointBlobSizes[value]) || 0), 0);
+				try {
+					const chunk = await PERF_PROFILER.run("state.checkpoint-heft-read", () => DB.getStateCheckpointPayload(batch), {
+						count: batch.length,
+						chars: batchSizes,
+					}, 5);
+					Object.assign(blobs, chunk);
+				} catch (error) {
+					console.warn("[state] Fehler beim Lesen der Heft-Checkpoint-Blobs:", error);
+				}
+			}
+			const missing = needed.filter((hash) => typeof blobs[hash] !== "string");
 			if (missing.length) {
 				console.warn("[state] Heft-Checkpoint-Payload unvollständig (" + missing.length + " fehlend), prüfe Event-Log:", missing);
 				const missingSet = new Set(missing);
@@ -1280,11 +1318,20 @@ export const STATE = (() => {
 			}
 			if (generation !== _checkpointPayloadGeneration) return false;
 			S.heftBlobs = { ...blobs, ...S.heftBlobs };
-			_checkpointPayloadLoaded = true;
+			if (!targetHashes || allHashes.every((h) => typeof S.heftBlobs[h] === "string")) {
+				_checkpointPayloadLoaded = true;
+			} else {
+				scheduleBackgroundHydrate();
+			}
 			return true;
-		})();
-		try { return await _checkpointPayloadPromise; }
-		finally { if (generation === _checkpointPayloadGeneration) _checkpointPayloadPromise = null; }
+		};
+
+		if (!targetHashes) {
+			_checkpointPayloadPromise = performHydration();
+			try { return await _checkpointPayloadPromise; }
+			finally { if (generation === _checkpointPayloadGeneration) _checkpointPayloadPromise = null; }
+		}
+		return performHydration();
 	}
 
 	async function persistCheckpoint() {

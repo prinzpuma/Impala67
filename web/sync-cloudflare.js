@@ -5,7 +5,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { cooperativeGate } from "./cooperative.js";
+import { cooperativeGate, yieldToMain } from "./cooperative.js";
 import {
 	CLOUD_SYNC_PROTOCOL,
 	CLOUD_SYNC_PROTOCOL_HEADER,
@@ -593,7 +593,11 @@ export const CLOUDFLARE_SYNC = (() => {
 				scheduleSync(event);
 				return;
 			}
-			requestSync().catch(() => {});
+			if (typeof requestIdleCallback === "function") {
+				requestIdleCallback(() => requestSync().catch(() => {}), { timeout: 1000 });
+			} else {
+				requestSync().catch(() => {});
+			}
 		}, delay);
 	}
 

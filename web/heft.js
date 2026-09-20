@@ -269,10 +269,17 @@ export const HEFT = (() => {
 	// fügt der Reducer die Striche direkt in die Arrays ein, auf denen hier gezeichnet
 	// wird. Der alte Cache-Invalidierungs-Tanz über meta.rev entfällt ersatzlos.
 	async function load(p) {
-		// Der Start-Checkpoint hält große Bilddaten absichtlich außerhalb des sofort
-		// geladenen Kernzustands. Alle produktiven Heft-Einstiege laufen durch load(),
-		// daher genügt hier eine zentrale Schranke für Öffnen, Vorschau, KI und Export.
-		await STATE.hydrateHeftBlobs();
+		const docHashes = [];
+		const docPages = S.heftDocs?.[p]?.pages;
+		if (Array.isArray(docPages)) {
+			for (const pg of docPages) {
+				if (Array.isArray(pg?.images)) {
+					for (const im of pg.images) if (im?.ref) docHashes.push(im.ref);
+				}
+			}
+		}
+		if (docHashes.length) await STATE.hydrateHeftBlobs(docHashes);
+		else await STATE.hydrateHeftBlobs();
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
@@ -3266,8 +3273,8 @@ export const HEFT = (() => {
 		scroll.addEventListener("wheel", onWheelZoom, { passive: false });
 		scroll.addEventListener("touchstart", onTouchStart, { passive: false });
 		scroll.addEventListener("touchmove", onTouchMove, { passive: false });
-		scroll.addEventListener("touchend", onTouchEnd);
-		scroll.addEventListener("touchcancel", onTouchCancel);
+		scroll.addEventListener("touchend", onTouchEnd, { passive: true });
+		scroll.addEventListener("touchcancel", onTouchCancel, { passive: true });
 		scroll.style.touchAction = "none";
 		scroll.style.overflow = "hidden";
 	}

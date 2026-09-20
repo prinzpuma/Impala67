@@ -151,7 +151,16 @@ export async function initApp() {
 	// bis dahin „Heft laden…“. Kein Warten hier — sonst hängt der Start wieder.
 	try {
 		if (S.pages?.[S.currentPageId]?.kind === "heft") {
-			STATE.hydrateHeftBlobs().then(() => render()).catch(() => {});
+			const docHashes = [];
+			const docPages = S.heftDocs?.[S.currentPageId]?.pages;
+			if (Array.isArray(docPages)) {
+				for (const pg of docPages) {
+					if (Array.isArray(pg?.images)) {
+						for (const im of pg.images) if (im?.ref) docHashes.push(im.ref);
+					}
+				}
+			}
+			STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null).then(() => render()).catch(() => {});
 		}
 	} catch { /* Heft-Payload bleibt lazy */ }
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
