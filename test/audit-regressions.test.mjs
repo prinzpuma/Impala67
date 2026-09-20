@@ -113,11 +113,13 @@ test("leere KI-Nachrichten sind für die Thinking-Aufteilung gültig", () => {
 	assert.deepEqual(splitThink(null), { content: "", reasoning: "" });
 });
 
-test("globales Fehleroverlay setzt fremde Fehlertexte nur als Text", async () => {
+test("globaler Fehlerhandler setzt fremde Fehlertexte nie per innerHTML ins DOM", async () => {
 	const html = await readFile(new URL("../web/index.html", import.meta.url), "utf8");
-	const overlay = html.slice(html.indexOf("function showErrorOverlay"), html.indexOf("window.onerror ="));
-	assert.doesNotMatch(overlay, /innerHTML/);
-	assert.match(overlay, /textContent/);
+	// Den Skriptblock finden, der recordAppError definiert (nicht das erste Mini-Script).
+	const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+	const errorScript = scripts.find(s => s.includes("recordAppError"));
+	assert.ok(errorScript, "Fehlerhandler-Skriptblock gefunden");
+	assert.doesNotMatch(errorScript, /innerHTML/);
 });
 
 test("Editor-Tabellen behalten auf schmalen Ansichten ihre Breite und scrollen horizontal", async () => {
