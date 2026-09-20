@@ -1177,6 +1177,10 @@ export const HEFT = (() => {
 		gesture.vx = gesture.vy = 0;
 	}
 	function onTouchStart(e) {
+		// Stift aktiv → Touch-Gesten komplett ignorieren (Zoom, Pan, Undo).
+		// Greift plattformuebergreifend (Android hat kein touchType, aber
+		// pointerdown mit pointerType=pen feuert VOR touchstart).
+		if (penRecently()) return;
 		const fingers = fingersOf(e.touches);
 		if (!fingers.length) return;
 		for (const t of fingersOf(e.changedTouches)) gesture.pts.set(t.identifier, { x: t.clientX, y: t.clientY });
@@ -1252,6 +1256,10 @@ export const HEFT = (() => {
 	}
 	function onTouchEnd(e) {
 		if (endGesture(e)) return;
+		// Stift-Touches duerfen keine Finger-Gesten (Zoom, Undo, Fling) ausloesen.
+		if (penRecently()) return;
+		const ended = fingersOf(e.changedTouches);
+		if (!ended.length) return;
 		const quick = Date.now() - gesture.startedAt < 300 && !gesture.moved;
 		const count = gesture.maxCount; gesture.maxCount = 0;
 		if (quick && count === 2) {
@@ -1263,8 +1271,8 @@ export const HEFT = (() => {
 			return;
 		}
 		if (quick && count >= 3) { redo(); return; }
-		if (quick && count === 1 && e.changedTouches.length) {
-			const t = e.changedTouches[0], now = Date.now();
+		if (quick && count === 1 && ended.length) {
+			const t = ended[0], now = Date.now();
 			if (now - gesture.lastTap < 330 && Math.hypot(t.clientX - gesture.tapX, t.clientY - gesture.tapY) < 64) {
 
 				gesture.lastTap = 0;

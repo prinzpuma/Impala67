@@ -5,17 +5,11 @@ import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { TELE } from "./telemetrie.js";
 
-// analyse.js — 📈 Lern-Analyse (Phase 3 aus „kommt noch", 17. Juli 2026)
-// Wertet die seit Phase 0 gesammelte Telemetrie (telemetrie.js) aus und zeigt
-// die Ergebnisse unten im Statistik-Tab. Grundsätze:
-// 1. Alles sind BEOBACHTUNGEN, keine Regeln — Confounder (Tageszeit, Fach,
-//    Kartenschwierigkeit) stecken ungefiltert mit drin, darum vorsichtige Sprache.
-// 2. Mindestdatenmengen: ohne genug Reviews erscheint ein ehrlicher Hinweis statt Statistik-Theater.
-// 3. Keine Eingriffe in srs.js/app.js — render-anki.js hängt nur
-//    window.ANALYSE.statsHtml() an die Statistik.
-// 4. DRY (Refactor 21. Juli 2026): Review-Daten kommen fertig aus telemetrie.js
-//    (TELE.onReview) — die frühere zweite Zustandsmaschine über dieselben
-//    Lern-Buttons ist ersatzlos entfernt.
+// analyse.js — 📈 Lern-Analyse
+// Wertet die gesammelte Telemetrie (telemetrie.js) aus und zeigt die Ergebnisse im Statistik-Tab.
+// 1. Beobachtungen mit Vorsicht interpretieren (Confounder wie Tageszeit/Fach nicht normiert).
+// 2. Ehrliche Mindestdatenmengen verlangen, bevor Trends dargestellt werden.
+// 3. Review-Daten stammen zentral aus telemetrie.js (TELE.reviewEvents).
 
 export const ANALYSE = (() => {
 	// Auswahl der gültigen Bewertungen + Erfolgsquote kommen aus telemetrie.js: beides war

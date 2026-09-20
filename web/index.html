@@ -3,47 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <script>if (typeof performance !== "undefined" && performance.mark) performance.mark("impala67:nav-start");</script>
-<!-- 🔐 CSP-Grundschutz (Umsetzungs-Runde 21. Juli): Skripte/Styles nur von der eigenen
-     Origin und den zwei festen CDNs (+ Google-Login); object/base/form komplett dicht.
-     'unsafe-inline' bleibt nötig (Boot-Splash-/Diagnose-Inline-Skripte unten, Laufzeit-
-     Styles) — der eigentliche Supply-Chain-Schutz kommt aus Host-Allowlist + SRI
-     (integrity-Attribute erzeugt: node tools/gen-sri.mjs). connect-src bleibt offen,
-     weil KI-Provider, LM Studio (beliebige LAN-IPs/Ports) und CORS-Proxy frei
-     konfigurierbar sind. -->
+<!-- 🔐 CSP-Grundschutz: Lokale App + gepinnte CDNs. connect-src bleibt offen für frei konfigurierbare KI-Endpunkte. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src * data: blob:; worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <script>
-// Diagnose-Overlay (temporär) — vereinheitlicht: EINE Helfer-Funktion für
-// window.onerror UND window.onunhandledrejection (vorher 2× identischer Code).
-function showErrorOverlay(title, details, stack) {
-	const div = document.createElement("div");
-	div.style.cssText = "position:fixed;inset:0;background:rgba(255,0,0,0.95);color:#fff;" +
-		"z-index:999999;padding:20px;font-family:monospace;font-size:16px;overflow:auto;";
-	const heading = document.createElement("h1");
-	heading.textContent = title;
-	div.appendChild(heading);
-	Object.entries(details || {}).forEach(function (entry) {
-		const p = document.createElement("p");
-		const strong = document.createElement("strong");
-		strong.textContent = entry[0] + ": ";
-		p.appendChild(strong);
-		p.appendChild(document.createTextNode(String(entry[1] == null ? "" : entry[1])));
-		div.appendChild(p);
-	});
-	const pre = document.createElement("pre");
-	pre.textContent = stack || "";
-	div.appendChild(pre);
-	document.documentElement.appendChild(div);
-}
+// Unerwartete Fehler in Konsole und Performance-Protokoll (Einstellungen -> Diagnose) erfassen
+window.recordAppError = function (title, details, stack) {
+	console.error("[Impala67]", title, details, stack || "");
+	const entry = {
+		failed: true,
+		errorName: title,
+		errorMessage: String(details?.Message || details?.Reason || details || "Fehler").slice(0, 120),
+		source: details?.Source ? String(details.Source).slice(0, 120) : undefined,
+		position: details?.Position,
+		stack: stack ? String(stack).slice(0, 120) : undefined,
+	};
+	if (window.PERF_PROFILER && typeof window.PERF_PROFILER.record === "function") {
+		window.PERF_PROFILER.record("uncaught-error", 0, entry);
+	} else {
+		window.__earlyErrors = window.__earlyErrors || [];
+		window.__earlyErrors.push(entry);
+	}
+};
 window.onerror = function (message, source, lineno, colno, error) {
-	showErrorOverlay("Frontend Error Caught", {
+	window.recordAppError("Uncaught Error", {
 		Message: message, Source: source, Position: lineno + ":" + colno,
-	},
-		error && error.stack);
+	}, error && error.stack);
 	return false;
 };
 window.onunhandledrejection = function (event) {
-	showErrorOverlay("Unhandled Promise Rejection", { Reason: event.reason },
-		event.reason && event.reason.stack);
+	window.recordAppError("Unhandled Promise Rejection", {
+		Reason: event.reason,
+	}, event.reason && event.reason.stack);
 };
 </script>
 <script>
@@ -71,9 +61,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)">
-<!-- Bug-Fix („kommt noch“, 22. Juli, „neues icon“): Der Favicon-Link stand ungültig
-     unten im <body> — manche Browser ignorierten ihn dort und zeigten das neue
-     Vektor-Icon (icon.svg) nicht. Er gehört hierher in den <head>. -->
+<!-- Favicon & Touch-Icon -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
 <!-- CDN-Bibliotheken: Leichtgewichtige Basis (Markdown-Rendering + DOM-Sanitizing + Google Login).

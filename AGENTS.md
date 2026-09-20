@@ -44,6 +44,7 @@
 - **Keine Code-Wiederholungen im Chat**: Vermeide es, lange Codeblöcke im Chattext zu duplizieren.
 - **Kontext sparen**: Große Dateien (>300 Zeilen) nicht ungezielt komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten.
 - **Gezielt testen**: Vor Änderungen zuerst die betroffenen Einzeltests ausführen. Vollständige Checks (`npm run verify`) kurz halten.
+- **Keine ungefragten Tests**: Erstelle niemals ungefragt neue Testdateien (`test/*.test.mjs`). Neue Testdateien dürfen nur angelegt werden, wenn der Nutzer dies ausdrücklich verlangt. Verifiziere Änderungen stattdessen über bestehende Tests, gezielte Checks oder die MCP-Live-Bridge.
 
 ## 6. Veröffentlichung
 

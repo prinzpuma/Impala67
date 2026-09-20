@@ -143,7 +143,7 @@ function compactContext(context) {
 }
 
 function isAnomaly(kind, durationMs, meta = {}) {
-	if (kind === "main-thread-stall") return true;
+	if (kind === "main-thread-stall" || kind === "uncaught-error") return true;
 	if (meta?.failed) return true;
 	if (kind === "operation") {
 		const threshold = Math.max(Number(meta?.minMs) || 25, 50);
@@ -499,7 +499,17 @@ function report() {
 function setContextProvider(provider) { contextProvider = typeof provider === "function" ? provider : null; }
 function status() { return { enabled: isEnabled(), mode: getMode(), records: records.length + pendingStalls.length, active: active.size }; }
 
+function drainEarlyErrors() {
+	if (typeof window !== "undefined" && Array.isArray(window.__earlyErrors)) {
+		const early = window.__earlyErrors.splice(0);
+		for (const err of early) {
+			record("uncaught-error", 0, err);
+		}
+	}
+}
+
 load();
+drainEarlyErrors();
 export const PERF_PROFILER = {
 	init,
 	setEnabled,
