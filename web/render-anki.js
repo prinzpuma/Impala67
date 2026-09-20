@@ -625,7 +625,17 @@ function openCardEditor(cardId) {
 		sel.addEventListener("change", () => {
 			const isNew = sel.value === "__new__";
 			neu.hidden = !isNew;
-			if (isNew) { neu.focus(); neu.select(); }
+			if (isNew) {
+				neu.focus();
+				if (!window.PLATFORM?.isTouch?.()) {
+					neu.select();
+				} else {
+					try {
+						const len = neu.value.length;
+						neu.setSelectionRange(len, len);
+					} catch { /* ignore */ }
+				}
+			}
 		});
 	}
 	const front = U.el("cardFront");

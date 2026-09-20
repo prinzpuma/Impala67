@@ -58,7 +58,7 @@ export const HEFT = (() => {
 	let lastEmptyTap = null;
 	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize }); }
 	const activePenPointers = new Set();
-	let lastPenUpAt = 0;
+	let lastPenUpAt = 0, lastStrokeAt = 0;
 	const PEN_GRACE_MS = 400;
 	let expanded = false;
 	let trayPos = null;
@@ -1583,6 +1583,7 @@ export const HEFT = (() => {
 			}
 		}
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+		lastStrokeAt = Date.now();
 		setWriting(false);
 		hideEraserRing();
 		if (!drawing) return;
@@ -2028,8 +2029,14 @@ export const HEFT = (() => {
 			if (ev.key === "Escape") { ev.preventDefault(); closeTextEditor(false); }
 			else if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); closeTextEditor(true); }
 		});
-		ta.addEventListener("blur", () => closeTextEditor(true));
-		setTimeout(() => ta.focus(), 40);
+		const openedAt = Date.now();
+		ta.addEventListener("blur", () => {
+			// Touch-Schutz: Viewport-Resize beim Hochfahren der Bildschirmtastatur (iPad/Android)
+			// löst kurzfristig ein blur-Event aus; erst nach Initialisierungsphase schließen.
+			if (Date.now() - openedAt < 350) return;
+			closeTextEditor(true);
+		});
+		ta.focus();
 	}
 	function closeTextEditor(commit) {
 		if (!inlineEd) return;
@@ -3439,5 +3446,7 @@ export const HEFT = (() => {
 		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
+		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),
+		lastStrokeTime: () => lastStrokeAt,
 	};
 })();

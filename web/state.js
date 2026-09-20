@@ -1245,25 +1245,38 @@ export const STATE = (() => {
 		const generation = _checkpointPayloadGeneration;
 		const hashes = Object.keys(_checkpointBlobSizes);
 		_checkpointPayloadPromise = (async () => {
-			let blobs;
+			let blobs = {};
 			try {
 				blobs = await PERF_PROFILER.run("state.checkpoint-heft-read", () => DB.getStateCheckpointPayload(hashes), {
 					count: hashes.length,
 					chars: Object.values(_checkpointBlobSizes).reduce((sum, value) => sum + (Number(value) || 0), 0),
 				}, 5);
 			} catch (error) {
-				// Der Checkpoint ist nur ein abgeleiteter Cache: bei einem unvollständigen
-				// Payload rekonstruiert das unveränderte Event-Log die Bilder verlustfrei.
-				console.warn("[state] Heft-Checkpoint-Payload wird aus dem Event-Log repariert:", error);
+				console.warn("[state] Fehler beim Lesen der Heft-Checkpoint-Blobs:", error);
+				blobs = {};
+			}
+			const missing = hashes.filter((hash) => typeof blobs[hash] !== "string");
+			if (missing.length) {
+				console.warn("[state] Heft-Checkpoint-Payload unvollständig (" + missing.length + " fehlend), prüfe Event-Log:", missing);
+				const missingSet = new Set(missing);
 				const recovered = {};
 				for (const event of await DB.allEvents()) {
 					const payload = event?.payload || {};
-					if (event?.type === "heftBlob" && payload.hash && typeof payload.data === "string") recovered[payload.hash] ||= payload.data;
+					if (event?.type === "heftBlob" && payload.hash && missingSet.has(payload.hash) && typeof payload.data === "string") {
+						recovered[payload.hash] = payload.data;
+						missingSet.delete(payload.hash);
+						if (!missingSet.size) break;
+					}
 				}
-				const missing = hashes.filter((hash) => typeof recovered[hash] !== "string");
-				if (missing.length) throw new Error("Heft-Bilddaten fehlen auch im Event-Log: " + missing.join(", "));
-				blobs = Object.fromEntries(hashes.map((hash) => [hash, recovered[hash]]));
-				hashes.forEach((hash) => _checkpointDirtyBlobHashes.add(hash));
+				for (const hash of missing) {
+					if (typeof recovered[hash] === "string") {
+						blobs[hash] = recovered[hash];
+						_checkpointDirtyBlobHashes.add(hash);
+					} else {
+						delete _checkpointBlobSizes[hash];
+						delete blobs[hash];
+					}
+				}
 			}
 			if (generation !== _checkpointPayloadGeneration) return false;
 			S.heftBlobs = { ...blobs, ...S.heftBlobs };

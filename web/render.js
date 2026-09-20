@@ -124,7 +124,7 @@ function onStateChange(type, ev) {
 		return;
 	}
 	// Heft: Canvas ist die Live-Ansicht — nur die Bibliothek auffrischen, falls offen
-	if (type === "heftUpdated") {
+	if (type.startsWith("heft")) {
 		if (S.view === "library") renderMain();
 		return;
 	}
@@ -469,7 +469,8 @@ function renderSidebar() {
 	// FIX: Hintergrund-Render darf laufendes Umbenennen (Fokus + Text) nicht zerstören;
 	// Commit/Abbrechen leert die Flags VOR render() und läuft normal durch
 	const ae = document.activeElement;
-	if ((S.renamingPageId || S.renamingDeck) && ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)) return;
+	const renameInp = tree.querySelector("[data-renamename], [data-deckrenamename]");
+	if ((S.renamingPageId || S.renamingDeck) && (renameInp || (ae && ae.dataset && (ae.dataset.renamename || ae.dataset.deckrenamename)))) return;
 
 	const selectionKey = S.chatSelection instanceof Set ? [...S.chatSelection].sort().join(",") : "";
 	const tabsKey = document.body.classList.contains("tabs-in-sidebar") ? ("tabs:" + S.tabs.join(",") + ":" + S.activeTabId) : "";

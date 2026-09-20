@@ -134,7 +134,8 @@ document.addEventListener("pointerdown", (e) => {
 // auf eine Zeile öffnet direkt deren ⋯-Menü — überall dort, wo die Zeile schon
 // einen Menü-Knopf besitzt (Seiten- und Stapelzeilen in Sidebar & Listen).
 function rowMenuButton(target) {
-	const row = target && target.closest ? target.closest(".row,.tree-row,.home-list-row,.lib-card,.deck-row") : null;
+	if (!target || !target.closest || target.closest("input, textarea, [contenteditable='true']")) return null;
+	const row = target.closest(".row,.tree-row,.home-list-row,.lib-card,.deck-row");
 	return row ? row.querySelector("[data-pagemenu],[data-deckmenu]") : null;
 }
 function openRowMenu(btn) {

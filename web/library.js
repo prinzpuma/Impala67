@@ -146,7 +146,8 @@ function openShelfFolderDialog() {
 		'<h3>Neuer Ordner</h3><p class="hint">Der Ordner erscheint nur in Dokumente, nie im Notion-Baum.</p>' +
 		'<input id="libFolderName" placeholder="Ordnername" autocomplete="off">' +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button><button class="primary" data-libcreatefolder="1">Erstellen</button></div></div>';
-	setTimeout(() => { const inp = U.el("libFolderName"); if (inp) inp.focus(); }, 0);
+	const inp = U.el("libFolderName");
+	if (inp) inp.focus();
 }
 
 function openShelfHeftDialog() {
@@ -161,7 +162,18 @@ function openShelfHeftDialog() {
 		'<h3>Neues Heft</h3><input id="libHeftName" value="Neues Heft" aria-label="Heftname" autocomplete="off">' +
 		'<label class="lib-create-label">Cover</label><div class="cover-grid lib-create-covers">' + swatches + '</div>' +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button><button class="primary" data-libcreateheft="1">Heft erstellen</button></div></div>';
-	setTimeout(() => { const inp = U.el("libHeftName"); if (inp) inp.select(); }, 0);
+	const inp = U.el("libHeftName");
+	if (inp) {
+		inp.focus();
+		if (!window.PLATFORM?.isTouch?.()) {
+			inp.select();
+		} else {
+			try {
+				const len = inp.value.length;
+				inp.setSelectionRange(len, len);
+			} catch { /* ignore */ }
+		}
+	}
 }
 
 // Cover-Picker für bestehende Hefte aus dem GoodNotes-Regal.

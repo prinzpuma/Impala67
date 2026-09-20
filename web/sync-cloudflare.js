@@ -182,6 +182,19 @@ export const CLOUDFLARE_SYNC = (() => {
 		return wire.length > 0;
 	}
 
+	async function getUnconfirmedLocalEvents(afterSeq) {
+		if (typeof DB.eventsAfterSeqAll === "function") {
+			try {
+				const delta = await DB.eventsAfterSeqAll(afterSeq);
+				if (Array.isArray(delta)) return delta;
+			} catch {
+				// Fallback für Umgebungen/Tests, in denen die DB nicht geöffnet oder nur allEvents gemockt ist
+			}
+		}
+		const all = await DB.allEvents();
+		return (Array.isArray(all) ? all : []).filter((e) => (Number(e?.seq) || 0) > Number(afterSeq || 0));
+	}
+
 	async function importRemote(events) {
 		if (!events.length) return;
 		// Der bestätigende Pull liefert das gerade hochgeladene Paket als Server-Echo
@@ -189,16 +202,14 @@ export const CLOUDFLARE_SYNC = (() => {
 		// wurde für wenige eigene Events der komplette IndexedDB-Log deserialisiert.
 		const candidates = events.filter((event) => !pendingUploadedEventIds.delete(event?.id));
 		if (!candidates.length) return;
-		const local = await DB.allEvents();
-		const sortedLocal = (Array.isArray(local) ? local : []).slice().sort((a, b) => (Number(a?.seq) || 0) - (Number(b?.seq) || 0));
+		const unconfirmedLocal = await getUnconfirmedLocalEvents(state.lastUploadedLocalSeq);
 		const serverEventIds = new Set(candidates.map((e) => e?.id).filter(Boolean));
 		let confirmedCursor = state.lastUploadedLocalSeq;
 
-		// Start-Performance/Tippen: Der Prefix-Scan läuft über den vollen lokalen Log
-		// (16k Events). Ohne Yield blockiert er den Main-Thread am Stück und Tippen
-		// hängt während des Syncs. Das Gate gibt nur ab, wenn die 12ms-Scheibe voll ist.
+		// Start-Performance/Tippen: Der Prefix-Scan läuft nur noch über das unbestätigte
+		// lokale Delta statt über den vollen 16k-Log. Das Gate gibt ab, wenn 12ms voll sind.
 		const yieldCursor = cooperativeGate();
-		for (const ev of sortedLocal) {
+		for (const ev of unconfirmedLocal) {
 			const seq = Number(ev?.seq) || 0;
 			if (seq <= confirmedCursor) { await yieldCursor(); continue; }
 			if (!isUploadableToCloudflare(ev)) {
@@ -224,7 +235,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		// Nach E2EE liegen die Daten bereits als Objekte vor. Der JSON-Roundtrip hier
 		// blockierte den Main Thread bei gebündelten Sync-Paketen unnötig.
 		const result = await DB.importAll({ app: "impala67", events: candidates }, {
-			localEvents: local,
+			localEvents: unconfirmedLocal,
 			unsyncedAfterSeq: state.lastUploadedLocalSeq,
 			pageInfo: (id) => S.pages[id],
 			remote: true,
@@ -529,10 +540,19 @@ export const CLOUDFLARE_SYNC = (() => {
 		return true;
 	}
 
+	const HEFT_SYNC_QUIET_MS = 3500;
+	function isWritingActive() {
+		return typeof window !== "undefined" && typeof window.HEFT?.isWriting === "function" && window.HEFT.isWriting();
+	}
+
 	function requestSync(forceAll = false) {
 		if (!state.url || !credentials) return Promise.reject(new Error("Cloudflare-Sync ist nicht eingerichtet."));
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
 			return Promise.reject(readable(new Error("Das Gerät ist offline.")));
+		}
+		if (!forceAll && isWritingActive()) {
+			scheduleSync();
+			return Promise.resolve(false);
 		}
 		clearTimeout(retryTimer); retryTimer = 0;
 		syncAgain = true; forceAgain ||= forceAll;
@@ -564,7 +584,17 @@ export const CLOUDFLARE_SYNC = (() => {
 			return;
 		}
 		clearTimeout(localTimer);
-		localTimer = setTimeout(() => requestSync().catch(() => {}), LOCAL_SYNC_DELAY);
+		const writing = isWritingActive();
+		const delay = writing || (event?.type && String(event.type).startsWith("heft"))
+			? HEFT_SYNC_QUIET_MS
+			: LOCAL_SYNC_DELAY;
+		localTimer = setTimeout(() => {
+			if (isWritingActive()) {
+				scheduleSync(event);
+				return;
+			}
+			requestSync().catch(() => {});
+		}, delay);
 	}
 
 	async function migrateLocalV4(snapshotInfo = null) {

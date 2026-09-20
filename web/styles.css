@@ -38,7 +38,7 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 	#sidebarResizer { display: none }
 }
 .row:hover { background: var(--surface); color: var(--text) }
-.row-rename-input { flex: 1; min-width: 0; font: inherit; font-size: var(--text-base); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-xs); padding: 1px 6px; outline: none }
+.row-rename-input { flex: 1; min-width: 0; font: inherit; font-size: var(--text-base); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-xs); padding: 1px 6px; outline: none; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default }
 .row.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
 .side-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--edge-soft) }
 .side-foot button { display: flex; align-items: center; gap: 8px; background: transparent; text-align: left; color: var(--text2) }

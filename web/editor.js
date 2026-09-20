@@ -1191,7 +1191,14 @@ export const EDITOR = (() => {
 		mathEdit = { bid, spanEl: spanEl || null, delimiters: inline ? [inline.open, inline.close] : null };
 		const ta = pop.querySelector("textarea");
 		ta.focus();
-		ta.select();
+		if (!window.PLATFORM?.isTouch?.()) {
+			ta.select();
+		} else {
+			try {
+				const len = ta.value.length;
+				ta.setSelectionRange(len, len);
+			} catch { /* ignore */ }
+		}
 	}
 
 	function commitMathPop() {

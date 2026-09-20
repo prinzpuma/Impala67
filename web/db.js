@@ -95,13 +95,22 @@ export const DB = (() => {
 		return openPromise;
 	}
 
+	let _knownEventIds = null;
+	async function ensureKnownEventIds() {
+		if (_knownEventIds) return _knownEventIds;
+		_knownEventIds = new Set(await eventIds());
+		return _knownEventIds;
+	}
+
 	// Viele Events in EINER Transaktion — beim Import/Sync um Größenordnungen schneller.
 	async function addEvents(evs) {
 		ensureOpen();
 		const list = Array.isArray(evs) ? evs : [evs];
 		if (!list.length) return;
 		list.forEach(validateEvent);
-		return rw("events", (s) => list.forEach((ev) => s.add(ev)));
+		const result = await rw("events", (s) => list.forEach((ev) => s.add(ev)));
+		if (_knownEventIds) list.forEach((ev) => { if (ev?.id) _knownEventIds.add(ev.id); });
+		return result;
 	}
 	const addEvent = (ev) => addEvents([ev]);
 	const allEvents = () => ro("events", (s) => s.getAll());
@@ -195,8 +204,7 @@ export const DB = (() => {
 		const store = db.transaction("blobs").objectStore("blobs");
 		return Promise.all(ids.map(async (hash) => {
 			const rec = await val(store.get(STATE_CHECKPOINT_BLOB_PREFIX + hash));
-			if (!rec || typeof rec.data !== "string") throw new Error("Checkpoint-Bilddaten fehlen: " + hash);
-			return [hash, rec.data];
+			return [hash, (rec && typeof rec.data === "string") ? rec.data : null];
 		})).then((entries) => Object.fromEntries(entries));
 	}
 	// Kernzustand und neue, inhaltsadressierte Heft-Bilder werden gemeinsam committed.

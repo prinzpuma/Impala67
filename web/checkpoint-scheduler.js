@@ -3,7 +3,7 @@
 const DEFAULT_QUIET_MS = 5000;
 const DEFAULT_IDLE_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_ATTEMPTS = 3;
-const ACTIVITY_EVENTS = ["pointerdown", "keydown", "input"];
+const ACTIVITY_EVENTS = ["pointerdown", "pointerup", "pointermove", "touchstart", "touchend", "keydown", "input"];
 
 // Ein großer IndexedDB-put() klont seinen Wert synchron. requestIdleCallback allein
 // verhindert deshalb keinen Hänger direkt nach dem Start: Es entscheidet nur, wann
@@ -38,7 +38,13 @@ export function createCheckpointScheduler(run, options = {}) {
 		clearPending();
 		unwatch();
 	};
+	const isWritingActive = () => typeof window !== "undefined" && typeof window.HEFT?.isWriting === "function" && window.HEFT.isWriting();
 	const execute = async () => {
+		if (isWritingActive()) {
+			idle = 0;
+			schedule();
+			return;
+		}
 		idle = 0;
 		attempts++;
 		try {

@@ -402,7 +402,7 @@ body.tabs-in-sidebar .heft-scroll {
 .heft-lasso-bar button { min-height: 34px; white-space: nowrap }
 /* == ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18.7) == */
 /* ♻️ .heft-page-slot { position: relative } hier entfernt — steht identisch schon in der Bühnen-Geometrie oben. */
-.heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px }
+.heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default }
 /* Geist-Knopf bleibt im Layout (die Scroll-Geometrie für atEnd() darf sich nicht ändern),
    ist aber unsichtbar, bis man die letzte Seite nach oben zieht (heft.js/bindPullToAdd). */
 .heft-addpage { display: block; margin: 12px auto 30px; min-height: 44px; padding: 0 24px; border: 1.5px dashed var(--edge); border-radius: var(--radius-lg); background: transparent; color: var(--text2); font-size: var(--text-base); opacity: 0; transform: translateY(6px); transition: opacity .15s ease, transform .15s ease; pointer-events: none }

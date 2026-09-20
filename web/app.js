@@ -59,7 +59,16 @@ const closestOf = (e, sel) => { const t = e && e.target; return t && t.nodeType 
 const dsOf = (e) => (e && e.target && e.target.dataset) || {};
 const blurActive = () => document.activeElement?.blur();
 const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
-const focusPageTitle = () => { const ti = $("pageTitle"); if (ti) { ti.focus(); ti.select(); } };
+const focusPageTitle = () => {
+	const ti = $("pageTitle");
+	if (ti) {
+		ti.focus();
+		if (!PLATFORM.isTouch()) ti.select();
+		else {
+			try { const len = ti.value.length; ti.setSelectionRange(len, len); } catch { /* ignore */ }
+		}
+	}
+};
 
 export function closeOverlay() {
 	const o = $("overlay");
@@ -113,7 +122,14 @@ function openPromptDialog(title, onSubmit, initial) {
 	$("dlgPromptCancel").addEventListener("click", () => closeOverlay());
 	inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
 	inp.focus();
-	inp.select();
+	if (!PLATFORM.isTouch()) {
+		inp.select();
+	} else {
+		try {
+			const len = inp.value.length;
+			inp.setSelectionRange(len, len);
+		} catch { /* ignore */ }
+	}
 }
 
 // „Verschieben nach…“: Ziel = Workspace-Wurzel oder Seite (ohne eigene Nachfahren)
@@ -198,6 +214,7 @@ const PLATFORM = {
 };
 for (const q of [MQ_PHONE, MQ_TOUCH]) q.addEventListener("change", PLATFORM.sync);
 PLATFORM.sync();
+window.PLATFORM = PLATFORM;
 
 // ⛶ Karteikarten-Vollbild als Zustand statt als loser Body-Klasse — so weiß jede Ansicht,
 // dass es an ist, und es lässt sich überall wieder verlassen (⛶-Taste, auch auf dem Handy).
@@ -479,7 +496,7 @@ function wireEvents() {
 				S.renamingDeck = name;
 				renderSidebar();
 				const inp = document.querySelector('[data-deckrenamename="' + CSS.escape(name) + '"]');
-				if (inp) { inp.focus(); inp.select(); }
+				if (inp) focusRenameInput(inp);
 				return;
 			}
 			if (deckAction.hasAttribute("data-deckduplicate")) {
@@ -1161,12 +1178,14 @@ function wireEvents() {
 			return;
 		}
 		if (t.dataset.pagerename) {
+			e.preventDefault();
+			e.stopPropagation();
 			const id = t.dataset.pagerename;
 			S.pageMenuOpenId = null;
 			S.renamingPageId = id;
 			renderSidebar();
 			const inp = document.querySelector('[data-renamename="' + CSS.escape(id) + '"]');
-			if (inp) { inp.focus(); inp.select(); }
+			if (inp) focusRenameInput(inp);
 			return;
 		}
 		if (t.dataset.pageduplicate) {
@@ -2014,6 +2033,22 @@ function wireEvents() {
 	// bestätigte erneut (doppeltes Neuzeichnen); nach Escape schrieb der Fokusverlust den
 	// verworfenen Text sogar noch fest. Der Umbenenn-Zustand ist jetzt die Sperre: ist er
 	// geräumt, war die Umbenennung schon erledigt oder abgebrochen.
+	let renameStartedAt = 0;
+	function focusRenameInput(inp) {
+		if (!inp) return;
+		renameStartedAt = Date.now();
+		inp.focus();
+		if (!PLATFORM.isTouch()) {
+			inp.select();
+		} else {
+			// Touch (iPad/Android): kein synchrones select() — löst in mobilen Browsern
+			// einen Fokus-/Auswahl-Konflikt aus, der die Bildschirmtastatur sofort schließt.
+			try {
+				const len = inp.value.length;
+				inp.setSelectionRange(len, len);
+			} catch { /* ignore */ }
+		}
+	}
 	async function commitRename(input) {
 		if (input.dataset.renamename) {
 			const id = input.dataset.renamename;
@@ -2051,9 +2086,25 @@ function wireEvents() {
 			render();
 		}
 	});
+	document.addEventListener("focusin", (e) => {
+		const ds = dsOf(e);
+		if (!ds.renamename && !ds.deckrenamename) return;
+		renameStartedAt = Date.now();
+	});
 	document.addEventListener("focusout", (e) => {
 		const ds = dsOf(e);
-		if (ds.renamename || ds.deckrenamename) commitRename(e.target);
+		if (!ds.renamename && !ds.deckrenamename) return;
+		const target = e.target;
+		if (Date.now() - renameStartedAt < 350) {
+			// Schutz gegen initialen Blur-Zyklus / Viewport-Resize beim Öffnen der Bildschirmtastatur
+			requestAnimationFrame(() => {
+				if ((S.renamingPageId || S.renamingDeck) && document.activeElement !== target) {
+					try { target.focus(); } catch { /* ignore */ }
+				}
+			});
+			return;
+		}
+		commitRename(target);
 	});
 	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
 	// PERF: Während die KI streamt, ändert sich #main hunderte Mal pro Antwort — der
