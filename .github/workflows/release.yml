@@ -104,7 +104,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'tools platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'tools platform-tools platforms;android-36 build-tools;36.0.0'
       - name: Make gradlew executable
         working-directory: android
         run: chmod +x gradlew

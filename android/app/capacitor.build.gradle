@@ -9,13 +9,13 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
-    implementation project(':capacitor-community-speech-recognition')
     implementation project(':capacitor-mlkit-document-scanner')
     implementation project(':capacitor-app')
     implementation project(':capacitor-filesystem')
     implementation project(':capacitor-haptics')
     implementation project(':capacitor-local-notifications')
-    implementation project(':send-intent')
+    implementation project(':capgo-capacitor-speech-recognition')
+    implementation project(':mindlib-capacitor-send-intent')
 
 }
 

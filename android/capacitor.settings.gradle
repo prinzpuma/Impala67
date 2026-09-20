@@ -2,9 +2,6 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
-include ':capacitor-community-speech-recognition'
-project(':capacitor-community-speech-recognition').projectDir = new File('../node_modules/@capacitor-community/speech-recognition/android')
-
 include ':capacitor-mlkit-document-scanner'
 project(':capacitor-mlkit-document-scanner').projectDir = new File('../node_modules/@capacitor-mlkit/document-scanner/android')
 
@@ -20,5 +17,8 @@ project(':capacitor-haptics').projectDir = new File('../node_modules/@capacitor/
 include ':capacitor-local-notifications'
 project(':capacitor-local-notifications').projectDir = new File('../node_modules/@capacitor/local-notifications/android')
 
-include ':send-intent'
-project(':send-intent').projectDir = new File('../node_modules/send-intent/android')
+include ':capgo-capacitor-speech-recognition'
+project(':capgo-capacitor-speech-recognition').projectDir = new File('../node_modules/@capgo/capacitor-speech-recognition/android')
+
+include ':mindlib-capacitor-send-intent'
+project(':mindlib-capacitor-send-intent').projectDir = new File('../node_modules/@mindlib-capacitor/send-intent/android')
