@@ -18,6 +18,7 @@ const OPERATION_HISTORY_MS = 10000;
 const NOISY_INPUT_EVENTS = new Set([
 	"pointerover", "pointerout", "pointerenter", "pointerleave",
 	"mouseover", "mouseout", "mouseenter", "mouseleave",
+	"contextmenu",
 ]);
 
 let records = [];
@@ -156,8 +157,11 @@ function isAnomaly(kind, durationMs, meta = {}) {
 
 function anomalySignature(kind, meta = {}, context = null) {
 	if (kind === "main-thread-stall") {
+		const input = meta.inputName || (meta.events ? meta.events.split(",")[0] : "");
 		const op = context?.operations?.[0]?.name || "";
-		return "stall:" + (meta.sources || "") + ":" + (meta.inputName || meta.events || "") + ":" + op;
+		if (input) return "stall:input:" + input + (op ? ":" + op : "");
+		if (op) return "stall:op:" + op;
+		return "stall:task";
 	}
 	if (kind === "operation") {
 		return "operation:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
@@ -196,9 +200,23 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 			existing.totalDurationMs = totalDurationMs;
 
 			if (meta.eventCount) existing.eventCount = (existing.eventCount || 0) + meta.eventCount;
+			if (meta.interactionCount) existing.interactionCount = (existing.interactionCount || 0) + meta.interactionCount;
 			if (meta.longTaskMs) existing.longTaskMs = Math.max(existing.longTaskMs || 0, round(meta.longTaskMs));
 			if (meta.eventLoopLagMs) existing.eventLoopLagMs = Math.max(existing.eventLoopLagMs || 0, round(meta.eventLoopLagMs));
 			if (meta.inputDurationMs) existing.inputDurationMs = Math.max(existing.inputDurationMs || 0, round(meta.inputDurationMs));
+			if (meta.inputName && !existing.inputName) existing.inputName = meta.inputName;
+			if (meta.sources && existing.sources) {
+				const mergedSources = new Set([...existing.sources.split("+"), ...meta.sources.split("+")].filter(Boolean));
+				existing.sources = [...mergedSources].sort().join("+");
+			} else if (meta.sources) {
+				existing.sources = meta.sources;
+			}
+			if (meta.events && existing.events) {
+				const mergedEvents = new Set([...existing.events.split(","), ...meta.events.split(",")].filter(Boolean));
+				existing.events = [...mergedEvents].sort().join(",").slice(0, 120);
+			} else if (meta.events) {
+				existing.events = meta.events;
+			}
 
 			if (dur >= maxDurationMs && Object.keys(context).length) {
 				existing.context = context;
@@ -210,9 +228,17 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 			return;
 		}
 
-		const initialCount = Number.isInteger(meta.count) && meta.count > 0 ? meta.count : 1;
 		const cleanMeta = safeMeta(meta);
 		delete cleanMeta.minMs;
+		if (kind === "operation" || kind === "main-thread-stall") {
+			if ("count" in cleanMeta) {
+				cleanMeta.itemCount = cleanMeta.count;
+				delete cleanMeta.count;
+			}
+		}
+		const initialCount = (kind !== "operation" && kind !== "main-thread-stall" && Number.isInteger(meta.count) && meta.count > 0)
+			? meta.count
+			: 1;
 		const entry = {
 			at,
 			kind,
@@ -392,13 +418,25 @@ function watchLongTasks() {
 	}
 }
 
+let visibilityInstalled = false;
+
 function watchEventLoop() {
 	let expected = now() + LAG_INTERVAL_MS;
+	if (!visibilityInstalled && typeof document !== "undefined") {
+		visibilityInstalled = true;
+		document.addEventListener("visibilitychange", () => {
+			expected = now() + LAG_INTERVAL_MS;
+		});
+	}
 	const tick = () => {
 		if (!isEnabled()) return;
 		const current = now();
 		const lag = current - expected;
-		if (lag >= LAG_THRESHOLD_MS && (typeof document === "undefined" || !document.hidden)) queueStall("event-loop-lag", expected, lag);
+		// Lags ab 5 Sekunden entstehen auf Mobilgeräten fast ausschließlich durch Standby/Tab-Sleep;
+		// sie sind keine echten UI-Hänger und verfälschen sonst die Hänger-Dauern massiv.
+		if (lag >= LAG_THRESHOLD_MS && lag < 5000 && (typeof document === "undefined" || !document.hidden)) {
+			queueStall("event-loop-lag", expected, lag);
+		}
 		expected = current + LAG_INTERVAL_MS;
 		lagTimer = setTimeout(tick, LAG_INTERVAL_MS);
 		if (typeof lagTimer?.unref === "function") lagTimer.unref();

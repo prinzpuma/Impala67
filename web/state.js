@@ -244,14 +244,14 @@ export const STATE = (() => {
 				if (ev?.id) _appliedPostLoadEventIds.add(ev.id);
 			}
 			afterRemoteEvents(list);
-		}, { count: list.length }, 16);
+		}, { eventCount: list.length }, 16);
 		return list;
 	}
 	async function applyRemoteEventsCooperative(events) {
 		const list = sortEvents(events);
 		if (!list.length) return list;
 		if (_loading) { _queuedRemoteEvents.push(...list); return list; }
-		const finishProfile = PERF_PROFILER.start("state.remote-replay", { count: list.length, cooperative: true }, 16);
+		const finishProfile = PERF_PROFILER.start("state.remote-replay", { eventCount: list.length, cooperative: true }, 16);
 		const yieldIfNeeded = cooperativeGate();
 		try {
 			for (const ev of list) {
@@ -1180,7 +1180,7 @@ export const STATE = (() => {
 				if (!partitioned) _checkpointDirtyBlobHashes = new Set(Object.keys(_checkpointBlobSizes));
 				const sortedTail = sortEvents(tail);
 				if (checkpoint.maxTime) U.observeTime(checkpoint.maxTime);
-				await PERF_PROFILER.run("state.checkpoint-replay", () => replayCooperatively(sortedTail), { count: sortedTail.length }, 5);
+				await PERF_PROFILER.run("state.checkpoint-replay", () => replayCooperatively(sortedTail), { eventCount: sortedTail.length }, 5);
 				replayed = sortedTail.length;
 				replayIds = new Set(sortedTail.map((event) => event?.id).filter(Boolean));
 				_loadedTime = sortedTail.length ? sortedTail.at(-1).t : checkpoint.maxTime || "";
@@ -1212,7 +1212,7 @@ export const STATE = (() => {
 				PERF_PROFILER.measure("state.initial-reset", () => restorePersistedState(), { keys: STATE_CHECKPOINT_KEYS.length }, 5);
 				_loadedTime = events.length ? events.at(-1).t : "";
 				if (_loadedTime) U.observeTime(_loadedTime);
-				await PERF_PROFILER.run("state.full-replay", () => replayCooperatively(events), { count: events.length }, 5);
+				await PERF_PROFILER.run("state.full-replay", () => replayCooperatively(events), { eventCount: events.length }, 5);
 				_checkpointPayloadLoaded = true;
 				replayed = events.length;
 				replayIds = new Set(events.map((event) => event?.id).filter(Boolean));
@@ -1365,7 +1365,7 @@ export const STATE = (() => {
 				.filter(([, data]) => typeof data === "string"));
 			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes);
 			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(checkpoint, dirtyBlobs), {
-				count: current.count,
+				eventCount: current.count,
 				keys: STATE_CHECKPOINT_CORE_KEYS.length,
 				dirtyHeftBlobCount: Object.keys(dirtyBlobs).length,
 				...checkpointStats,
@@ -1375,7 +1375,7 @@ export const STATE = (() => {
 			_checkpointBaseSeq = current.maxSeq;
 			_loadedSeq = current.maxSeq;
 			_appliedPostLoadEventIds.clear();
-			finishProfile({ count: current.count });
+			finishProfile({ eventCount: current.count });
 			return true;
 		} catch (error) {
 			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
