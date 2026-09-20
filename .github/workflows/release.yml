@@ -102,12 +102,15 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x gradlew
       - name: Capacitor Sync
         run: npx cap sync android
       - name: Debug APK bauen
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
       - name: APK für Release vorbereiten
         run: cp android/app/build/outputs/apk/debug/app-debug.apk Impala67.apk
       - name: APK als Artefakt bereitstellen
