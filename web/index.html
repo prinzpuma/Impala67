@@ -57,6 +57,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <title>Impala67 — Notizen · PDFs · KI</title>
 <link rel="stylesheet" href="styles.css?build=68">
 <link rel="stylesheet" href="mobile.css?build=13">
+<link rel="stylesheet" href="beta-ui.css?build=1">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
@@ -93,6 +94,8 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 		var motion = localStorage.getItem("impala67Motion") || "reduced";
 		var fontSize = localStorage.getItem("impala67FontSize") || "m";
 		var tabsPos = localStorage.getItem("impala67TabsPosition") || "top";
+		var betaUi = localStorage.getItem("impala67BetaUi") === "1";
+		document.body.classList.toggle("beta-ui", betaUi);
 		document.body.classList.toggle("light", theme === "light");
 		document.body.classList.toggle("density-compact", density === "compact");
 		document.body.classList.toggle("reduce-motion", motion === "reduced");

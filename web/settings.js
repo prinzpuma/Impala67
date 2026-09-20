@@ -17,7 +17,7 @@ import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateSt
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
-import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
+import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
@@ -85,6 +85,8 @@ export function applyAppearance() {
 	const motion = localStorage.getItem("impala67Motion") || "reduced";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
+	const betaUi = localStorage.getItem("impala67BetaUi") === "1";
+	document.body.classList.toggle("beta-ui", betaUi);
 	document.body.classList.toggle("light", theme === "light");
 	document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
 		m.content = theme === "light" ? "#f2efe9" : "#05070d";
@@ -233,8 +235,9 @@ function settingsViewModel() {
 		motion: localStorage.getItem("impala67Motion") || "reduced",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
-		androidFullscreenAvailable: ANDROID_FULLSCREEN.available(),
-		androidFullscreenEnabled: ANDROID_FULLSCREEN.enabled(),
+		betaUi: localStorage.getItem("impala67BetaUi") === "1",
+		nativeFilesystemAvailable: PLATFORM_NATIVE.isNative,
+		nativeFilesystemEnabled: localStorage.getItem("impala67NativeFsBackup") !== "0",
 		breakReminder: getBreakReminder(),
 		homeLayout,
 		homeSections: HOME_SECTIONS,
@@ -1212,7 +1215,19 @@ export async function handleBackupNow(button) {
 		button.disabled = true;
 	}
 	try {
-		U.download("impala67-export-" + new Date().toISOString().slice(0, 10) + ".json", await DB.exportAll());
+		const filename = "impala67-export-" + new Date().toISOString().slice(0, 10) + ".json";
+		const json = await DB.exportAll();
+		const useNative = PLATFORM_NATIVE.isNative && localStorage.getItem("impala67NativeFsBackup") !== "0";
+		if (useNative) {
+			const res = await PLATFORM_NATIVE.filesystem.exportBackup(filename, json);
+			if (res.success) {
+				U.toast("Backup in Gerätespeicher gesichert (" + res.uri + ")", "success");
+			} else {
+				U.download(filename, json);
+			}
+		} else {
+			U.download(filename, json);
+		}
 		localStorage.setItem("impala67LastBackup", new Date().toISOString());
 		if (button) button.textContent = backupActionState({ hasBackup: true }).label;
 	} catch (error) {
@@ -1355,7 +1370,7 @@ document.addEventListener("dragend", () => {
 }, true);
 
 export function handleAppearanceSelect(kind, value) {
-	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", tabspos: "impala67TabsPosition", tabsposition: "impala67TabsPosition", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry", breakReminder: BREAK_REMINDER_KEY, impala67BreakReminder: BREAK_REMINDER_KEY };
+	const keys = { accent: "impala67Accent", density: "impala67Density", motion: "impala67Motion", fontsize: "impala67FontSize", tabspos: "impala67TabsPosition", tabsposition: "impala67TabsPosition", overlearn: "impala67Overlearn", confidence: "impala67Confidence", telemetry: "impala67Telemetry", breakReminder: BREAK_REMINDER_KEY, impala67BreakReminder: BREAK_REMINDER_KEY, betaUi: "impala67BetaUi" };
 	if (!keys[kind]) return;
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
@@ -1363,11 +1378,7 @@ export function handleAppearanceSelect(kind, value) {
 	openSettings(S.settingsSection === "ai" ? "ai" : "appearance");
 }
 
-export async function handleAndroidFullscreenToggle(enabled) {
-	const changed = await ANDROID_FULLSCREEN.setEnabled(enabled);
-	if (!changed) U.toast("Android-Vollbild konnte nicht " + (enabled ? "aktiviert" : "deaktiviert") + " werden.", "error");
-	openSettings("appearance", "android-fullscreen");
-}
+
 
 export function handleSystemThemeToggle(enabled) {
 	// Beim Ausschalten den gerade sichtbaren Modus als manuelle Auswahl behalten.
@@ -1464,7 +1475,6 @@ export const SETTINGS = {
 	handleThemeSelect,
 	handleSystemThemeToggle,
 	handleAppearanceSelect,
-	handleAndroidFullscreenToggle,
 	handleDashboardToggle,
 	handleDashboardMove,
 	handleDashboardReorder,
@@ -1489,11 +1499,3 @@ document.addEventListener("change", (e) => {
 		updateLocalEmbeddingManagerUi();
 	}
 });
-
-// Escape/Zurück kann Vollbild außerhalb des Einstellungs-Schalters beenden. Das
-// Fullscreen-Modul aktualisiert zuerst die Gerätewahl; danach gleichen wir nur die
-// eventuell gerade sichtbare Projektion des Schalters ab.
-document.addEventListener("fullscreenchange", () => queueMicrotask(() => {
-	const input = document.getElementById("inpAndroidFullscreen");
-	if (input) input.checked = ANDROID_FULLSCREEN.enabled();
-}));

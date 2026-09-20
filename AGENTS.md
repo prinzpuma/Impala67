@@ -27,6 +27,7 @@
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - **Veröffentlichung**: `.github/workflows/release.yml`
+- **Backlog & Offene Punkte**: `TODO.md`
 
 ## 4. Code-Qualität und Sicherheit
 

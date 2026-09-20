@@ -9,3 +9,12 @@ test/verify-home*
 mcp/.storage.json
 mcp/.config.json
 mcp/*.log
+
+# Android / Capacitor
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/local.properties

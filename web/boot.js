@@ -136,6 +136,7 @@ export async function initApp() {
 	// erscheint. Ohne gültigen gespeicherten Tab bleibt die Startseite sichtbar.
 	await TABS.restoreSession();
 	APP.wireEvents();
+	APP.checkIncomingShare?.();
 	SETTINGS.applyBg();
 	// FIX (Start-Performance): Hook erst nach Abschluss aller Start-Migrationen
 	// aktivieren, damit Dispatches beim Boot keine verfrühten Renders hinter dem Splash auslösen.

@@ -8,7 +8,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { ANDROID_FULLSCREEN } from "./android-fullscreen.js";
+import { PLATFORM_NATIVE } from "./platform-native.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 
@@ -98,7 +98,8 @@ function renderAppearance(vm) {
 	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" }) +
 	UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
 		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },
-	], vm.tabsPosition || "top", "Tab-Anordnung") });
+	], vm.tabsPosition || "top", "Tab-Anordnung") }) +
+	UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
 	const readable = UI.row({ id: "density", title: "Darstellungsdichte", description: "Bestimmt Abstände und Informationsdichte", trailing: UI.segmented("densitySegments", [
 		{ value: "compact", label: "Kompakt", id: "btnDensityCompact" }, { value: "comfortable", label: "Komfortabel", id: "btnDensityComfortable" },
 	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
@@ -106,10 +107,7 @@ function renderAppearance(vm) {
 	], vm.fontSize, "Schriftgröße") }) + UI.row({ id: "motion", title: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", trailing: switchControl("inpReduceMotion", "Bewegung reduzieren", vm.motion === "reduced") });
 	const hasBackground = document.body.classList.contains("has-custom-background");
 	const background = UI.row({ id: "background", title: "Eigenes Hintergrundbild", description: hasBackground ? "Eigenes Bild aktiv · bleibt lokal auf diesem Gerät" : "Bleibt lokal auf diesem Gerät", trailing: UI.actions([{ label: hasBackground ? "Bild ändern" : "Bild auswählen", id: "btnPickBg" }, { label: "Entfernen", id: "btnClearBg", className: "secondary", hidden: !hasBackground }]) });
-	const androidFullscreen = vm.androidFullscreenAvailable
-		? UI.group("Bildschirm", UI.row({ id: "android-fullscreen", title: "Android-Vollbild", description: "Blendet die Android-Status- und Navigationsleiste aus. Nach einem Neustart wird Vollbild beim ersten Tippen wieder aktiviert.", trailing: switchControl("inpAndroidFullscreen", "Android-Vollbild", vm.androidFullscreenEnabled) }))
-		: "";
-	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + androidFullscreen + UI.group("Hintergrund", background));
+	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.", UI.group("Design", design) + UI.group("Lesbarkeit", readable) + UI.group("Hintergrund", background));
 }
 
 function renderAiModels(vm) {
@@ -261,7 +259,15 @@ function renderData(vm) {
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const backupAction = backupActionState({ hasBackup: !!lastBackup });
 	const backupDescription = (lastBackup ? "Zuletzt " + U.fmtDate(lastBackup) + " · " : "") + "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt";
-	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
+	const nativeFsRow = vm.nativeFilesystemAvailable
+		? UI.row({
+			id: "native-fs-backup",
+			title: "In Gerätespeicher sichern",
+			description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen",
+			trailing: switchControl("inpNativeFsBackup", "In Gerätespeicher sichern", vm.nativeFilesystemEnabled),
+		})
+		: "";
+	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) }) + nativeFsRow;
 	const exports = UI.row({ title: "Lerndaten", description: "Lokale Telemetrie als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
 	const updateAction = updateActionState();
@@ -389,7 +395,7 @@ export function renderSettingsShell(section, body, query = "") {
 }
 
 export function renderSearchResults(query) {
-	const results = searchSettings(query, 8, { android: ANDROID_FULLSCREEN.available() });
+	const results = searchSettings(query, 8, { native: PLATFORM_NATIVE.isNative });
 	if (!query.trim()) return "";
 	if (!results.length) return '<div class="settings-search-empty">Keine Einstellung gefunden</div>';
 	return results.map((item) => '<button type="button" data-settings-go="' + e(item.section) + '" data-settings-anchor-target="' + e(item.id) + '"><span><b>' + e(item.label) + "</b><small>" + e(item.sectionLabel) + " · " + e(item.description) + "</small></span>" + UI.icon("chevron") + "</button>").join("");

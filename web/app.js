@@ -21,6 +21,7 @@ import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
 import { FACH } from "./fach.js";
 import { PDFS } from "./pdfs.js";
+import { PLATFORM_NATIVE } from "./platform-native.js";
 
 // Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
 // FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
@@ -210,11 +211,67 @@ const PLATFORM = {
 		document.body.classList.toggle("is-phone", PLATFORM.isPhone());
 		document.body.classList.toggle("is-ios", PLATFORM.isIOS());
 		document.body.classList.toggle("is-standalone", PLATFORM.isStandalone());
+		document.body.classList.toggle("is-native", PLATFORM_NATIVE.isNative);
 	},
 };
 for (const q of [MQ_PHONE, MQ_TOUCH]) q.addEventListener("change", PLATFORM.sync);
 PLATFORM.sync();
+PLATFORM.native = PLATFORM_NATIVE;
 window.PLATFORM = PLATFORM;
+
+async function checkIncomingShare() {
+	if (!PLATFORM_NATIVE.sendIntent.isAvailable) return;
+	try {
+		const shared = await PLATFORM_NATIVE.sendIntent.checkIncoming();
+		if (!shared) return;
+		if (shared.text || shared.title) {
+			const title = shared.title || "Geteilte Notiz";
+			const content = shared.text || "";
+			const id = U.uid();
+			await STATE.dispatch("pageCreate", { id, title, content, parentId: null });
+			openPage(id);
+			U.toast("Geteilt mit Impala67: " + title, "success");
+		}
+	} catch (err) {
+		console.warn("[app] Geteilte Daten konnten nicht verarbeitet werden:", err);
+	}
+}
+
+PLATFORM_NATIVE.lifecycle.init({
+	onStateChange: (isActive) => {
+		if (isActive) {
+			checkIncomingShare();
+		} else {
+			document.activeElement?.blur?.();
+			try {
+				const snap = STATE.studySnapshot?.(null);
+				const due = (snap?.counts?.neu || 0) + (snap?.counts?.learn || 0) + (snap?.counts?.review || 0);
+				if (due > 0) PLATFORM_NATIVE.notifications.scheduleSRSReview(due);
+			} catch { /* ignore */ }
+		}
+	},
+	onBackButton: () => {
+		const overlay = document.getElementById("overlay");
+		if (overlay && !overlay.hidden) {
+			closeOverlay();
+			return;
+		}
+		const palette = document.getElementById("palette");
+		if (palette && !palette.hidden) {
+			palette.hidden = true;
+			return;
+		}
+		if (document.body.classList.contains("mnav-open") || document.body.classList.contains("mmore-open")) {
+			document.body.classList.remove("mnav-open", "mmore-open");
+			return;
+		}
+		if (typeof S !== "undefined" && S.navIndex > 0) {
+			TABS.navBack();
+			return;
+		}
+		try { window.Capacitor?.Plugins?.App?.minimizeApp?.(); } catch { /* ignore */ }
+	},
+});
 
 // ⛶ Karteikarten-Vollbild als Zustand statt als loser Body-Klasse — so weiß jede Ansicht,
 // dass es an ist, und es lässt sich überall wieder verlassen (⛶-Taste, auch auf dem Handy).
@@ -948,6 +1005,7 @@ function wireEvents() {
 		if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return; }
 		if (t.dataset.ankiwaitrefresh) { resetStudyCard(); renderMain(); return; }
 		if (t.dataset.ankigrade) {
+			PLATFORM_NATIVE.haptics.light();
 			await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade), t.dataset.reviewId);
 			resetStudyCard();
 			return;
@@ -1759,12 +1817,16 @@ function wireEvents() {
 			SETTINGS.handleDashboardToggle(e.target.dataset.dashtoggle);
 			return;
 		}
+		if (e.target.id === "inpBetaUi") {
+			SETTINGS.handleAppearanceSelect("betaUi", e.target.checked ? "1" : "0");
+			return;
+		}
 		if (e.target.id === "inpReduceMotion") {
 			SETTINGS.handleAppearanceSelect("motion", e.target.checked ? "reduced" : "full");
 			return;
 		}
-		if (e.target.id === "inpAndroidFullscreen") {
-			await SETTINGS.handleAndroidFullscreenToggle(!!e.target.checked);
+		if (e.target.id === "inpNativeFsBackup") {
+			localStorage.setItem("impala67NativeFsBackup", e.target.checked ? "1" : "0");
 			return;
 		}
 		if (e.target.id === "inpOverlearn") {
@@ -2219,5 +2281,6 @@ export const APP = {
 	rateAndReviewCard,
 	showStudyAnswer,
 	gradeStudyCard,
-	studySpaceOrEnter
+	studySpaceOrEnter,
+	checkIncomingShare,
 };

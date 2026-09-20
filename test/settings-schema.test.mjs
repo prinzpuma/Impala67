@@ -33,8 +33,8 @@ test("search understands labels, descriptions and synonyms", () => {
 	assert.equal(searchSettings("gamepad")[0].section, "devices");
 	assert.equal(searchSettings("notion token")[0].section, "sync");
 	assert.deepEqual(searchSettings(""), []);
-	assert.deepEqual(searchSettings("Android Vollbild"), []);
-	assert.equal(searchSettings("Android Vollbild", 8, { android: true })[0].id, "android-fullscreen");
+	assert.deepEqual(searchSettings("Gerätespeicher sichern"), []);
+	assert.equal(searchSettings("Gerätespeicher sichern", 8, { native: true })[0].id, "native-fs-backup");
 });
 
 test("dirty state compares stable field snapshots", () => {

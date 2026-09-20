@@ -1,0 +1,16 @@
+{
+  "appId": "org.impala67.app",
+  "appName": "Impala67",
+  "webDir": "web",
+  "bundledWebRuntime": false,
+  "android": {
+    "backgroundColor": "#121316",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon",
+      "iconColor": "#3b82f6"
+    }
+  }
+}

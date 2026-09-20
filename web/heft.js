@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 import { PDFS } from "./pdfs.js";
+import { PLATFORM_NATIVE } from "./platform-native.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
@@ -2397,6 +2398,30 @@ export const HEFT = (() => {
 
 	async function openScanner() {
 		if (scanUI) return;
+
+		if (PLATFORM_NATIVE.scanner.isAvailable) {
+			try {
+				const images = await PLATFORM_NATIVE.scanner.scan({ pageLimit: 20 });
+				if (images && images.length) {
+					for (const imgUri of images) {
+						const src = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
+							? window.Capacitor.convertFileSrc(imgUri)
+							: imgUri;
+						const im = await loadImg(src);
+						const page = imagePage({ src: im.src, w: im.naturalWidth || 1200, h: im.naturalHeight || 1600 }, "blank", true);
+						doc.pages.splice(doc.activePageIndex + 1, 0, page);
+						doc.activePageIndex++;
+					}
+					saveSoon();
+					render();
+					return;
+				}
+				if (images) return; // Nutzer hat den Scanner bewusst abgebrochen
+			} catch (err) {
+				console.warn("[heft] Native scanner error, falling back to web scanner:", err);
+			}
+		}
+
 		const wrap = document.createElement("div");
 		wrap.className = "heft-scan";
 		wrap.innerHTML =

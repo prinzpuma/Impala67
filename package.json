@@ -15,9 +15,19 @@
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
   },
   "devDependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
+    "@capacitor-mlkit/document-scanner": "^8.2.1",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
     "jsdom": "^26.0.0",
     "jsqr": "^1.4.0",
     "puppeteer-core": "^25.8.0",
+    "send-intent": "^7.0.0",
     "wrangler": "^4.124.0"
   }
 }

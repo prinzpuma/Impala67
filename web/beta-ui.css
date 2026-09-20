@@ -1,0 +1,97 @@
+/* ==========================================================================
+   Impala67 – Beta-Design (Experimentelle UI)
+   Diese Datei wird nur aktiv, wenn in den Einstellungen „Beta-Design“
+   eingeschaltet ist (Klasse: body.beta-ui).
+   Alle Regeln hier überschreiben oder erweitern styles.css / mobile.css,
+   ohne die stabile Standardansicht zu verändern.
+   ========================================================================== */
+
+/* 1. Design-Tokens & Grundstimmung für Beta-UI */
+body.beta-ui {
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+}
+
+/* 2. Glassmorphism & verfeinerte Flächen */
+body.beta-ui #sidebar {
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	background: rgba(28, 28, 32, 0.75);
+	border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.beta-ui.light #sidebar {
+	background: rgba(248, 249, 252, 0.82);
+	border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* 3. Moderne Tabs & Topbar */
+body.beta-ui #tabbar {
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	background: rgba(22, 22, 26, 0.65);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+	padding: 4px 8px;
+	gap: 6px;
+}
+
+body.beta-ui.light #tabbar {
+	background: rgba(244, 245, 248, 0.75);
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.beta-ui .tab {
+	border-radius: 10px;
+	transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body.beta-ui .tab.active {
+	background: rgba(255, 255, 255, 0.09);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+body.beta-ui.light .tab.active {
+	background: #ffffff;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* 4. Weichere Zeilen & Listenelemente in der Navigation */
+body.beta-ui .row {
+	border-radius: 10px;
+	margin-bottom: 2px;
+	transition: background 0.15s ease, transform 0.12s ease;
+}
+
+body.beta-ui .row:hover {
+	transform: translateX(2px);
+}
+
+/* 5. Verfeinerte Einstellungs-Karten & Modals */
+body.beta-ui .settings-group-card,
+body.beta-ui .settings-sort-row {
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.beta-ui.light .settings-group-card,
+body.beta-ui.light .settings-sort-row {
+	border: 1px solid rgba(0, 0, 0, 0.07);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+/* 6. Dezenter Beta-Indikator in den Einstellungen */
+body.beta-ui #beta-ui .settings-row-title::after {
+	content: "AKTIV";
+	display: inline-block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	padding: 2px 6px;
+	margin-left: 8px;
+	border-radius: 6px;
+	background: var(--accent-soft);
+	color: var(--accent);
+	vertical-align: middle;
+}
