@@ -54,4 +54,8 @@ test("Touch-Schutz: Dialoge und Editoren rufen select() nicht ungeschützt auf T
 
 	// heft openTextEditor blur grace period
 	assert.match(heftJs, /Date\.now\(\)\s*-\s*openedAt\s*<\s*350/);
+
+	// pagerename & deckrename use openPromptDialog on touch devices
+	assert.match(appJs, /if\s*\(PLATFORM\.isTouch\(\)\)\s*\{[\s\S]*openPromptDialog\(isHeft \? "Heft umbenennen" : "Seite umbenennen"/);
+	assert.match(appJs, /if\s*\(PLATFORM\.isTouch\(\)\)\s*\{[\s\S]*openPromptDialog\("Stapel umbenennen"/);
 });

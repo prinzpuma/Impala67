@@ -109,68 +109,59 @@ async function runTests() {
 		console.log("   -> Fokus erhalten:", promptCheck.isFocused, "| Text nicht blockierend selektiert (Länge 0):", promptCheck.selLen === 0 ? "✔" : "✘");
 		if (promptCheck.selLen !== 0) throw new Error("select() wurde trotz Touch aufgerufen!");
 
-		// 3. Test: Inline-Umbenennen in der Sidebar
-		console.log("3. Teste Inline-Umbenennen in der Sidebar...");
-		const renameCheck = await page.evaluate(async () => {
-			// Erstelle eine Testseite im STATE
-			const pid = "test-rename-page-" + Date.now();
+		// 3. Test: Heft umbenennen auf Touchgeräten (Echter Benutzer-Tap-Ablauf)
+		console.log("3. Teste Heft umbenennen auf Touch-Geräten (Menü -> Umbenennen-Dialog)...");
+		const pid = "test-heft-rename-" + Date.now();
+		await page.evaluate(async (id) => {
 			await window.STATE.dispatch("pageCreate", {
-				id: pid,
-				title: "Vorheriger Name",
+				id,
+				title: "Mein Vorlesungsheft",
 				workspaceId: window.S.currentWorkspaceId || "default",
-				type: "note",
+				kind: "heft",
 				createdAt: Date.now(),
 				updatedAt: Date.now(),
 			});
-
-			// Aktiviere Umbenennen
-			window.S.renamingPageId = pid;
 			window.renderSidebar();
+		}, pid);
 
-			const inp = document.querySelector(".row-rename-input");
-			if (!inp) return { found: false };
+		// Tippe auf ⋯-Menü
+		const menuBtn = await page.waitForSelector(`[data-pagemenu="${pid}"]`);
+		await menuBtn.tap();
+		await new Promise((r) => setTimeout(r, 100));
 
-			// Klick/Fokus wie in app.js
-			inp.focus();
-			if (!window.PLATFORM.isTouch()) {
-				inp.select();
-			} else {
-				const len = inp.value.length;
-				inp.setSelectionRange(len, len);
-			}
+		// Tippe auf „✎ Umbenennen“
+		const renameBtn = await page.waitForSelector(`[data-pagerename="${pid}"]`);
+		await renameBtn.tap();
+		await new Promise((r) => setTimeout(r, 100));
 
-			// Simuliere kurzfristiges blur/focusout durch Viewport-Resize der Tastatur (< 350ms)
-			const initialFocus = document.activeElement === inp;
-
-			// Jetzt simulieren wir einen focusout innerhalb 200ms
-			const foEvent = new FocusEvent("focusout", { bubbles: true });
-			inp.dispatchEvent(foEvent);
-
-			// Prüfe ob Input noch existiert und State noch renamingPageId hat
-			const stillRenaming = window.S.renamingPageId === pid;
-			const stillInDom = !!document.querySelector(".row-rename-input");
-
-			return { found: true, pid, initialFocus, stillRenaming, stillInDom };
-		});
-		console.log("   -> Rename-Input gefunden:", renameCheck.found);
-		console.log("   -> Fokus erhalten:", renameCheck.initialFocus);
-		console.log("   -> Tastatur-Slide-In (Viewport-Resize < 350ms) schließt Feld NICHT ab:", renameCheck.stillRenaming && renameCheck.stillInDom ? "✔" : "✘");
-		if (!renameCheck.stillRenaming || !renameCheck.stillInDom) throw new Error("Sidebar-Rename brach bei Tastatur-Animation ab!");
-
-		// Simuliere Tastatureingabe und Enter
-		const commitCheck = await page.evaluate(async (pid) => {
-			const inp = document.querySelector(".row-rename-input");
-			inp.value = "Neuer Titel via Tastatur";
-			inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-			await new Promise((r) => setTimeout(r, 60));
+		// Prüfe ob der Dialog geöffnet und das Feld fokussiert ist
+		const dialogCheck = await page.evaluate(() => {
+			const o = document.getElementById("overlay");
+			const h3 = o?.querySelector("h3")?.textContent;
+			const inp = document.getElementById("dlgPromptInput");
 			return {
-				savedTitle: window.S.pages[pid]?.title,
-				renameFinished: !window.S.renamingPageId,
+				open: !o?.hidden,
+				dialogTitle: h3,
+				value: inp?.value,
+				focused: document.activeElement === inp,
 			};
-		}, renameCheck.pid);
-		console.log("   -> Neuer Name per Enter gespeichert:", commitCheck.savedTitle === "Neuer Titel via Tastatur" ? "✔" : "✘", `("${commitCheck.savedTitle}")`);
-		if (commitCheck.savedTitle !== "Neuer Titel via Tastatur" || !commitCheck.renameFinished) {
-			throw new Error("Umbenennen per Enter schlug fehl!");
+		});
+		console.log("   -> Dialog geöffnet:", dialogCheck.open, `(Titel: "${dialogCheck.dialogTitle}")`);
+		console.log("   -> Eingabefeld fokussiert und Tastatur aktiv:", dialogCheck.focused ? "✔" : "✘");
+		if (!dialogCheck.open || !dialogCheck.focused || dialogCheck.dialogTitle !== "Heft umbenennen") {
+			throw new Error("Umbenennen-Dialog auf Touchgerät schlug fehl!");
+		}
+
+		// Tippe neuen Namen ein und bestätige
+		await page.type("#dlgPromptInput", " (2026)");
+		const okBtn = await page.$("#dlgPromptOk");
+		await okBtn.tap();
+		await new Promise((r) => setTimeout(r, 100));
+
+		const finalTitle = await page.evaluate((id) => window.S.pages[id]?.title, pid);
+		console.log("   -> Neuer Heft-Name gespeichert:", finalTitle === "Mein Vorlesungsheft (2026)" ? "✔" : "✘", `("${finalTitle}")`);
+		if (finalTitle !== "Mein Vorlesungsheft (2026)") {
+			throw new Error("Neuer Heft-Name wurde nicht korrekt übernommen!");
 		}
 
 		// 4. Test: Anki Neuer Stapel Input

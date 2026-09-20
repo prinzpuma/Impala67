@@ -493,6 +493,15 @@ function wireEvents() {
 			S.deckMenuOpenName = null;
 			renderSidebar();
 			if (deckAction.hasAttribute("data-deckrename")) {
+				if (PLATFORM.isTouch()) {
+					openPromptDialog("Stapel umbenennen", async (newName) => {
+						const trimmed = newName.trim();
+						if (trimmed && trimmed !== name) {
+							await STATE.dispatch("deckRename", { oldName: name, newName: trimmed });
+						}
+					}, name);
+					return;
+				}
 				S.renamingDeck = name;
 				renderSidebar();
 				const inp = document.querySelector('[data-deckrenamename="' + CSS.escape(name) + '"]');
@@ -1182,6 +1191,19 @@ function wireEvents() {
 			e.stopPropagation();
 			const id = t.dataset.pagerename;
 			S.pageMenuOpenId = null;
+			const pg = S.pages[id];
+			if (!pg) { renderSidebar(); return; }
+			if (PLATFORM.isTouch()) {
+				renderSidebar();
+				const isHeft = pg.kind === "heft";
+				openPromptDialog(isHeft ? "Heft umbenennen" : "Seite umbenennen", async (newName) => {
+					const title = newName.trim();
+					if (title && title !== pg.title) {
+						await STATE.dispatch("pageUpdate", { id, patch: { title } });
+					}
+				}, pg.title);
+				return;
+			}
 			S.renamingPageId = id;
 			renderSidebar();
 			const inp = document.querySelector('[data-renamename="' + CSS.escape(id) + '"]');
@@ -2033,21 +2055,10 @@ function wireEvents() {
 	// bestätigte erneut (doppeltes Neuzeichnen); nach Escape schrieb der Fokusverlust den
 	// verworfenen Text sogar noch fest. Der Umbenenn-Zustand ist jetzt die Sperre: ist er
 	// geräumt, war die Umbenennung schon erledigt oder abgebrochen.
-	let renameStartedAt = 0;
 	function focusRenameInput(inp) {
 		if (!inp) return;
-		renameStartedAt = Date.now();
 		inp.focus();
-		if (!PLATFORM.isTouch()) {
-			inp.select();
-		} else {
-			// Touch (iPad/Android): kein synchrones select() — löst in mobilen Browsern
-			// einen Fokus-/Auswahl-Konflikt aus, der die Bildschirmtastatur sofort schließt.
-			try {
-				const len = inp.value.length;
-				inp.setSelectionRange(len, len);
-			} catch { /* ignore */ }
-		}
+		inp.select();
 	}
 	async function commitRename(input) {
 		if (input.dataset.renamename) {
@@ -2086,25 +2097,10 @@ function wireEvents() {
 			render();
 		}
 	});
-	document.addEventListener("focusin", (e) => {
-		const ds = dsOf(e);
-		if (!ds.renamename && !ds.deckrenamename) return;
-		renameStartedAt = Date.now();
-	});
 	document.addEventListener("focusout", (e) => {
 		const ds = dsOf(e);
 		if (!ds.renamename && !ds.deckrenamename) return;
-		const target = e.target;
-		if (Date.now() - renameStartedAt < 350) {
-			// Schutz gegen initialen Blur-Zyklus / Viewport-Resize beim Öffnen der Bildschirmtastatur
-			requestAnimationFrame(() => {
-				if ((S.renamingPageId || S.renamingDeck) && document.activeElement !== target) {
-					try { target.focus(); } catch { /* ignore */ }
-				}
-			});
-			return;
-		}
-		commitRename(target);
+		commitRename(e.target);
 	});
 	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
 	// PERF: Während die KI streamt, ändert sich #main hunderte Mal pro Antwort — der
