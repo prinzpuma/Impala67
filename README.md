@@ -2,9 +2,11 @@
 
 Impala67 ist eine installierbare, local-first Progressive Web App für Notizen, PDFs, Handschrift, Karteikarten und KI-gestütztes Lernen. Die App läuft statisch im Browser und benötigt keinen Desktop-Wrapper oder eigenen Anwendungsserver.
 
-## Impala67 öffnen
+## App öffnen & herunterladen
 
-[Zur App](https://prinzpuma.github.io/Impala67/)
+- 🌐 **Web-App / PWA (Browser, PC, Mac, iPad, Android):** [Impala67 öffnen](https://prinzpuma.github.io/Impala67/)
+- 📱 **Android App (APK):** [Impala67.apk herunterladen (Direktlink)](https://github.com/prinzpuma/Impala67/releases/latest/download/Impala67.apk)
+- 📦 **Alle Releases & Versionshistorie:** [GitHub Releases](https://github.com/prinzpuma/Impala67/releases)
 
 ## Funktionen
 

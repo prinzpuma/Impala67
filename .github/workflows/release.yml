@@ -82,10 +82,45 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
-  tag:
-    name: Veröffentlichtes Release dauerhaft markieren
-    needs: [version, deploy]
-    if: ${{ needs.deploy.result == 'success' }}
+  build-apk:
+    name: Android APK bauen
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Abhängigkeiten installieren
+        run: npm ci
+      - name: Versionsdateien setzen
+        run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Capacitor Sync
+        run: npx cap sync android
+      - name: Debug APK bauen
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+      - name: APK für Release vorbereiten
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Impala67.apk
+      - name: APK als Artefakt bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: impala67-apk
+          path: Impala67.apk
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release & APK veröffentlichen
+    needs: [version, deploy, build-apk]
+    if: ${{ always() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -93,17 +128,38 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Release-Tag setzen
+      - name: APK Artefakt herunterladen
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: impala67-apk
+          path: apk-dist
+      - name: Release erstellen und APK anhängen
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           TAG="v$VERSION"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG existiert bereits; nichts zu tun."
+            echo "Tag $TAG existiert bereits; Release-Erstellung wird übersprungen."
             exit 0
           fi
-          git tag -a "$TAG" "$GITHUB_SHA" -m "PWA $TAG"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "Impala67 $TAG"
           git push origin "$TAG"
+
+          if [ -f apk-dist/Impala67.apk ]; then
+            echo "Erstelle GitHub Release mit Impala67.apk..."
+            gh release create "$TAG" apk-dist/Impala67.apk \
+              --title "Impala67 $TAG" \
+              --notes "Release $TAG – PWA und native Android APK." \
+              --latest
+          else
+            echo "Erstelle GitHub Release ohne APK..."
+            gh release create "$TAG" \
+              --title "Impala67 $TAG" \
+              --notes "Release $TAG – PWA." \
+              --latest
+          fi
