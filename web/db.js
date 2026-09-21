@@ -147,20 +147,32 @@ export const DB = (() => {
 		});
 	}
 
-	// Cursor liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
+	// Cursor/Batch liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
 	// Transport unterdrückt ausschließlich sein eigenes Echo; Cloudflare-Events
 	// dürfen deshalb weiterhin ins Drive-Backup und umgekehrt.
 	function eventsAfterSeq(seq, target = "drive", upToSeq = Infinity) {
 		ensureOpen();
 		const lower = Number(seq || 0), upper = Number(upToSeq);
 		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
+		const range = Number.isFinite(upper)
+			? IDBKeyRange.bound(lower, upper, true, false)
+			: IDBKeyRange.lowerBound(lower, true);
 		return new Promise((res, rej) => {
+			const store = db.transaction("events").objectStore("events");
+			if (typeof store.getAll === "function") {
+				const req = store.getAll(range);
+				req.onsuccess = () => {
+					const all = req.result || [];
+					res(all.filter((ev) => shouldUploadToSync(ev, target)));
+				};
+				req.onerror = () => rej(req.error);
+				return;
+			}
 			const out = [];
-			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(lower, true));
+			const req = store.openCursor(range);
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
-				if (Number.isFinite(upper) && Number(cur.key) > upper) return res(out);
 				if (shouldUploadToSync(cur.value, target)) out.push(cur.value);
 				cur.continue();
 			};
@@ -171,13 +183,22 @@ export const DB = (() => {
 		ensureOpen();
 		const lower = Number(seq || 0), upper = Number(upToSeq);
 		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
+		const range = Number.isFinite(upper)
+			? IDBKeyRange.bound(lower, upper, true, false)
+			: IDBKeyRange.lowerBound(lower, true);
 		return new Promise((res, rej) => {
+			const store = db.transaction("events").objectStore("events");
+			if (typeof store.getAll === "function") {
+				const req = store.getAll(range);
+				req.onsuccess = () => res(req.result || []);
+				req.onerror = () => rej(req.error);
+				return;
+			}
 			const out = [];
-			const req = db.transaction("events").objectStore("events").openCursor(IDBKeyRange.lowerBound(lower, true));
+			const req = store.openCursor(range);
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
-				if (Number.isFinite(upper) && Number(cur.key) > upper) return res(out);
 				out.push(cur.value); cur.continue();
 			};
 			req.onerror = () => rej(req.error);
@@ -213,7 +234,16 @@ export const DB = (() => {
 	function putStateCheckpoint(checkpoint, heftBlobs) {
 		const entries = Object.entries(heftBlobs || {}).filter(([hash, data]) => hash && typeof data === "string");
 		return rw("blobs", (s) => {
-			entries.forEach(([hash, data]) => s.put({ data }, STATE_CHECKPOINT_BLOB_PREFIX + hash));
+			if (entries.length) {
+				const checkReq = s.getAllKeys();
+				checkReq.onsuccess = () => {
+					const existingKeys = new Set(checkReq.result || []);
+					entries.forEach(([hash, data]) => {
+						const key = STATE_CHECKPOINT_BLOB_PREFIX + hash;
+						if (!existingKeys.has(key)) s.put({ data }, key);
+					});
+				};
+			}
 			s.put(checkpoint, STATE_CHECKPOINT_KEY);
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
 		});
