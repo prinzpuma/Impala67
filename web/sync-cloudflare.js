@@ -565,7 +565,12 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 				return true;
 			} catch (error) {
-				const e = readable(error); state.lastError = e.message;
+				const e = readable(error);
+				PERF_PROFILER.error("cloudflare.sync-error", e, {
+					phase: "requestSync",
+					retryable: isRetryableSyncError(e),
+				});
+				state.lastError = e.message;
 				if (!scheduleHttpRetry(e)) setStatus("error", "Sync-Fehler", e.message);
 				throw e;
 			} finally { syncPromise = null; }
@@ -670,7 +675,10 @@ export const CLOUDFLARE_SYNC = (() => {
 				else if (msg.type === "unauthorized" || msg.type === "unsupported_protocol") {
 					state.lastError = msg.error || "Nicht autorisiert"; setStatus("error", "Nicht autorisiert", state.lastError); closeSocket();
 				}
-			} catch (error) { console.error("[cf-sync] WebSocket-Nachricht ungültig:", error); }
+			} catch (error) {
+				PERF_PROFILER.error("cloudflare.websocket-error", error, { phase: "message" });
+				console.error("[cf-sync] WebSocket-Nachricht ungültig:", error);
+			}
 		});
 		ws.addEventListener("close", () => { if (socket !== ws) return; socket = null; socketAuthenticated = false; clearInterval(pingTimer); scheduleReconnect(); });
 		ws.addEventListener("error", () => {});
@@ -732,7 +740,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		}
 		void (async () => {
 			try { await migrateLocalV4(); }
-			catch (error) { state.lastError = error?.message || String(error); setStatus("error", "Migration fehlgeschlagen", state.lastError); return; }
+			catch (error) {
+				PERF_PROFILER.error("cloudflare.migration-error", error, { phase: "init" });
+				state.lastError = error?.message || String(error); setStatus("error", "Migration fehlgeschlagen", state.lastError); return;
+			}
 			if (state.url && state.syncKey) configure(state.url, state.syncKey).catch(() => {});
 		})();
 	}
