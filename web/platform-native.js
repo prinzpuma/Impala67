@@ -164,15 +164,33 @@ export const PLATFORM_NATIVE = {
 			let stateSub = null;
 
 			if (typeof onBackButton === "function") {
-				app.addListener("backButton", (evt) => {
-					onBackButton(evt);
-				}).then((handle) => { backSub = handle; }).catch(() => {});
+				try {
+					const res = app.addListener("backButton", (evt) => {
+						onBackButton(evt);
+					});
+					if (res && typeof res.then === "function") {
+						res.then((handle) => { backSub = handle; }).catch(() => {});
+					} else {
+						backSub = res;
+					}
+				} catch (err) {
+					console.warn("[platform-native] backButton listener error:", err);
+				}
 			}
 
 			if (typeof onStateChange === "function") {
-				app.addListener("appStateChange", (state) => {
-					onStateChange(Boolean(state?.isActive));
-				}).then((handle) => { stateSub = handle; }).catch(() => {});
+				try {
+					const res = app.addListener("appStateChange", (state) => {
+						onStateChange(Boolean(state?.isActive));
+					});
+					if (res && typeof res.then === "function") {
+						res.then((handle) => { stateSub = handle; }).catch(() => {});
+					} else {
+						stateSub = res;
+					}
+				} catch (err) {
+					console.warn("[platform-native] appStateChange listener error:", err);
+				}
 			}
 
 			return () => {
