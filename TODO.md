@@ -19,6 +19,11 @@
 
 ## 2. Nächste Schritte & Optimierungen
 
+- [ ] **ML Kit OCR → native Digital-Ink-Handschrifterkennung optimieren**:
+  - Die aktuelle ML-Kit-TextRecognition-Pipeline funktioniert bereits, wandelt Handschrift aber erst über Canvas → JPEG → temporäre Datei → Bild-OCR um.
+  - Prüfen, ob Stroke-Daten direkt über ML Kit Digital Ink verarbeitet werden können, um Bildkonvertierung, temporäre Dateien und unnötige OCR-Overhead zu vermeiden.
+  - Ziel: schnellere/offline Handschrifterkennung und bessere Grundlage für Heft-RAG/KI-Funktionen wie „Erstelle einen Lernzettel aus diesem Heft“.
+
 - [ ] **Stift-Latenz im Heft (`desynchronized: true`)**:
   - Prüfen, ob der 2D-Canvas-Context in `web/heft.js` mit `{ desynchronized: true }` initialisiert werden kann (reduziert Stiftlatenz auf Android/Chromium).
 - [ ] **Android Home-Screen Widget**:
