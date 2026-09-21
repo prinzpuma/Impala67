@@ -256,14 +256,18 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
 <script type="module" src="main.js?build=174"></script>
-<script>
-// Service-Worker nur über http(s) registrieren — file:// unterstützt das nicht.
-// Der Worker cached alle App-Dateien und aktualisiert sie im Hintergrund.
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-	// iPadOS hält Worker-Skripte mitunter länger im HTTP-Cache als die App-Dateien.
+// Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
+// da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
+if ("serviceWorker" in navigator) {
+	if (window.Capacitor?.isNativePlatform?.()) {
+		navigator.serviceWorker.getRegistrations().then((regs) => {
+			for (const r of regs) r.unregister();
+		}).catch(() => {});
+	} else if (location.protocol.startsWith("http")) {
 		navigator.serviceWorker.register("service-worker.js?build=73", { updateViaCache: "none" })
-		.then((reg) => reg.update().catch(() => {}))
-		.catch((e) => console.warn("Service-Worker:", e));
+			.then((reg) => reg.update().catch(() => {}))
+			.catch((e) => console.warn("Service-Worker:", e));
+	}
 }
 
 // Gemini-Notebook-Button (ehemals NotebookLM): Die Logik liegt gebündelt in

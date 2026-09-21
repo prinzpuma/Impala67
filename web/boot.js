@@ -148,6 +148,7 @@ export async function initApp() {
 	// bevor schwere Nacharbeiten (Mobile-Init, Heft-Bilder) den Kreis einfrieren.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
+	window.Capacitor?.Plugins?.SplashScreen?.hide?.();
 	// Heft-Bilder (12 MB+) erst nach dem ersten Frame nachladen. HEFT.mount zeigt
 	// bis dahin „Heft laden…“. Kein Warten hier — sonst hängt der Start wieder.
 	try {

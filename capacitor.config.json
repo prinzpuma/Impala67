@@ -8,6 +8,14 @@
     "allowMixedContent": false
   },
   "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 300,
+      "backgroundColor": "#121316",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    },
     "LocalNotifications": {
       "smallIcon": "ic_stat_icon",
       "iconColor": "#3b82f6"
