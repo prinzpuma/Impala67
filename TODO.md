@@ -25,8 +25,8 @@
   - Nachteile der aktuellen Lösung: zusätzlicher Canvas/JPEG/I/O-Schritt, Verlust von Stroke-Kontext und potenziell schlechtere Erkennung bei individueller Handschrift; für größere Hefte weniger effizient inkrementell nutzbar.
   - Ziel: schnellere/offline Handschrifterkennung und bessere Grundlage für Heft-RAG/KI-Funktionen wie „Erstelle einen Lernzettel aus diesem Heft“.
 
-- [ ] **Stift-Latenz im Heft (`desynchronized: true`)**:
-  - Prüfen, ob der 2D-Canvas-Context in `web/heft.js` mit `{ desynchronized: true }` initialisiert werden kann (reduziert Stiftlatenz auf Android/Chromium).
+- [x] **Stift-Latenz im Heft (`desynchronized: true`)**:
+  - Der 2D-Canvas-Context der Live-Ink-Ebene (`wetCanvases`) in `web/heft.js` wird mit `{ desynchronized: true }` initialisiert (reduziert Stiftlatenz auf Android/Chromium durch Umgehung der Compositor-Queue).
 - [ ] **Android Home-Screen Widget**:
   - Optionales Widget für den Startbildschirm mit offenen Karteikarten.
 - [ ] **Google Drive Login in Android-APK verifizieren**:

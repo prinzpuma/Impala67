@@ -6,6 +6,7 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
 import { TELE } from "./telemetrie.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
 const localDayKey = (...args) => RENDER.localDayKey(...args);
@@ -94,45 +95,47 @@ function ankiStudyOpen(deck) {
 // „Standard“ erscheint wie jeder andere Stapel (inkl. ⋯ → Löschen); „Alle Stapel“
 // bleibt überflüssig (Lernen über die Stapel-Übersicht).
 function deckTreeHtml() {
-	const all = ankiDecks();
-	const kidsOf = (parent) => all.filter((n) => {
-		if (parent) return n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::");
-		return !n.includes("::");
-	});
-	const rowFor = (name, depth) => {
-		const label = name.split("::").pop();
-		const kids = kidsOf(name);
-		const key = "deck:" + name;
-		const collapsed = COLLAPSE.isCollapsed(key);
-		// Bug-Fix („kommt noch“, 23. Juli): Badges aus dem Lern-Snapshot statt roher Zählung —
-		// „fällig“ = Wiederholungen + jetzt fällige Lernschritte (mit Tageslimit),
-		// „neu“ = neue Karten innerhalb des Tageslimits (wie Anki). Vorher zählte „fällig“
-		// die komplette Queue (inkl. neuer Karten) und „neu“ ALLE neuen Karten ohne Limit.
-		const cnt = STATE.studySnapshot(name).counts;
-		const due = cnt.review + cnt.learnNow;
-		const neu = cnt.neu;
-		const chevron = kids.length
-			? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
-			: '<span class="row-chevron spacer"></span>';
-		const menuOpen = S.deckMenuOpenName === name;
-		const renaming = S.renamingDeck === name;
-		let html = '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
-			chevron +
-			(renaming
-				? '<input class="row-rename-input" data-deckrenamename="' + U.esc(name) + '" value="' + U.esc(label) + '" autocomplete="off">'
-				: '<span class="row-title">🃏 ' + U.esc(label) + "</span>") +
-			(due ? '<span class="deck-badge due" title="fällig">' + due + "</span>" : "") +
-			(neu ? '<span class="deck-badge" title="neu">' + neu + "</span>" : "") +
-			'<button type="button" class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
-			'<button type="button" class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
-			(menuOpen ? deckMenuHtml(name) : "") +
-			"</div>";
-		if (kids.length && !collapsed) html += kids.map((k) => rowFor(k, depth + 1)).join("");
-		return html;
-	};
-	return '<div class="ws-head"><span class="ws-name">Stapel</span>' +
-		'<button class="mini" data-decknew="1" title="Neuer Stapel">+</button></div>' +
-		(all.length ? kidsOf(null).map((n) => rowFor(n, 0)).join("") : '<div class="empty small">Noch keine Stapel — mit + einen anlegen</div>');
+	return PERF_PROFILER.measure("anki.deck-tree", () => {
+		const all = ankiDecks();
+		const kidsOf = (parent) => all.filter((n) => {
+			if (parent) return n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::");
+			return !n.includes("::");
+		});
+		const rowFor = (name, depth) => {
+			const label = name.split("::").pop();
+			const kids = kidsOf(name);
+			const key = "deck:" + name;
+			const collapsed = COLLAPSE.isCollapsed(key);
+			// Bug-Fix („kommt noch“, 23. Juli): Badges aus dem Lern-Snapshot statt roher Zählung —
+			// „fällig“ = Wiederholungen + jetzt fällige Lernschritte (mit Tageslimit),
+			// „neu“ = neue Karten innerhalb des Tageslimits (wie Anki). Vorher zählte „fällig“
+			// die komplette Queue (inkl. neuer Karten) und „neu“ ALLE neuen Karten ohne Limit.
+			const cnt = STATE.studySnapshot(name).counts;
+			const due = cnt.review + cnt.learnNow;
+			const neu = cnt.neu;
+			const chevron = kids.length
+				? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
+				: '<span class="row-chevron spacer"></span>';
+			const menuOpen = S.deckMenuOpenName === name;
+			const renaming = S.renamingDeck === name;
+			let html = '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
+				chevron +
+				(renaming
+					? '<input class="row-rename-input" data-deckrenamename="' + U.esc(name) + '" value="' + U.esc(label) + '" autocomplete="off">'
+					: '<span class="row-title">🃏 ' + U.esc(label) + "</span>") +
+				(due ? '<span class="deck-badge due" title="fällig">' + due + "</span>" : "") +
+				(neu ? '<span class="deck-badge" title="neu">' + neu + "</span>" : "") +
+				'<button type="button" class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
+				'<button type="button" class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
+				(menuOpen ? deckMenuHtml(name) : "") +
+				"</div>";
+			if (kids.length && !collapsed) html += kids.map((k) => rowFor(k, depth + 1)).join("");
+			return html;
+		};
+		return '<div class="ws-head"><span class="ws-name">Stapel</span>' +
+			'<button class="mini" data-decknew="1" title="Neuer Stapel">+</button></div>' +
+			(all.length ? kidsOf(null).map((n) => rowFor(n, 0)).join("") : '<div class="empty small">Noch keine Stapel — mit + einen anlegen</div>');
+	}, {}, 15);
 }
 
 // Notion-artiges ⋯-Menü je Stapel (wie pageMenuHtml bei Seiten): Umbenennen, Duplizieren, Löschen.

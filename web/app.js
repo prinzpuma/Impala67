@@ -1919,6 +1919,10 @@ function wireEvents() {
 			if (e.target.checked) PLATFORM_NATIVE.haptics.light();
 			return;
 		}
+		if (e.target.id === "inpNativeScanner") {
+			localStorage.setItem("impala67NativeScanner", e.target.checked ? "1" : "0");
+			return;
+		}
 		if (e.target.id === "inpOverlearn") {
 			SETTINGS.handleAppearanceSelect("overlearn", e.target.checked ? "on" : "off");
 			return;

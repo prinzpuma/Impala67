@@ -318,7 +318,16 @@ function renderDevices(vm) {
 			trailing: switchControl("inpNativeHaptics", "Haptisches Feedback", vm.nativeHapticsEnabled),
 		})
 		: "";
-	const content = (nativeHapticsRow ? UI.group("Haptik & Vibration", nativeHapticsRow, { id: "native-haptics-group" }) : "") +
+	const nativeScannerRow = vm?.nativeScannerAvailable
+		? UI.row({
+			id: "native-scanner",
+			title: "Google ML Dokumenten-Scanner",
+			description: "Google Play Scanner-Engine. Bei Hängern, Auslöse-Problemen oder Custom-ROMs deaktivieren, um den integrierten Impala-Kamerascanner zu nutzen",
+			trailing: switchControl("inpNativeScanner", "Google ML Dokumenten-Scanner", vm.nativeScannerEnabled),
+		})
+		: "";
+	const nativeFeatures = nativeHapticsRow + nativeScannerRow;
+	const content = (nativeFeatures ? UI.group("Native Funktionen", nativeFeatures, { id: "native-features-group" }) : "") +
 		(window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>');
 	return UI.page("Geräte & Bedienung", "Nutze Controller und passe Eingaben an dein Gerät an.", content);
 }

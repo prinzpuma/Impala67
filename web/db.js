@@ -16,8 +16,22 @@ export const DB = (() => {
 		if (!ev.id || !ev.t || typeof ev.type !== "string" || !ev.type) throw new Error("Event benötigt id, t und type als String.");
 	};
 
-	const done = (t) => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = t.onabort = () => rej(t.error); });
-	const val = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+	const done = (t) => new Promise((res, rej) => {
+		t.oncomplete = () => res();
+		t.onerror = t.onabort = () => {
+			const err = t.error;
+			if (err) PERF_PROFILER.error("db.transaction-error", err, { mode: t.mode });
+			rej(err);
+		};
+	});
+	const val = (r) => new Promise((res, rej) => {
+		r.onsuccess = () => res(r.result);
+		r.onerror = () => {
+			const err = r.error;
+			if (err) PERF_PROFILER.error("db.request-error", err);
+			rej(err);
+		};
+	});
 	// Generische Store-Zugriffe — ersetzen 8 fast identische Funktionsrümpfe.
 	const rw = (name, fn) => { ensureOpen(); const t = db.transaction(name, "readwrite"); fn(t.objectStore(name)); return done(t); };
 	const ro = (name, fn) => { ensureOpen(); return val(fn(db.transaction(name).objectStore(name))); };
@@ -90,8 +104,18 @@ export const DB = (() => {
 	}
 
 	function open() {
-		openPromise ??= (async () => { db = await openWithRetry(); await migrateLegacy(); })()
-			.catch((e) => { openPromise = null; throw e; }); // Fehlschlag → nächster Aufruf versucht neu
+		openPromise ??= (async () => {
+			const finish = PERF_PROFILER.start("db.open", {}, 50);
+			try {
+				db = await openWithRetry();
+				await migrateLegacy();
+			} catch (e) {
+				PERF_PROFILER.error("db.open-error", e);
+				throw e;
+			} finally {
+				finish();
+			}
+		})().catch((e) => { openPromise = null; throw e; }); // Fehlschlag → nächster Aufruf versucht neu
 		return openPromise;
 	}
 

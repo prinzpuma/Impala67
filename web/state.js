@@ -1579,18 +1579,20 @@ export const STATE = (() => {
 	}
 
 	function searchNotes(query, options = {}) {
-		const q = String(query).toLowerCase();
-		if (!q) return [];
-		const pool = options.includeArchived
-			? Object.values(S.pages).filter((pg) => !pg.trashed)
-			: activePages();
-		return pool.map((pg) => {
-			const { raw, hay, title } = haystackOf(pg);
-			const idx = hay.indexOf(q);
-			if (idx < 0) return null;
-			const score = (title.includes(q) ? 10 : 0) + hay.split(q).length - 1;
-			return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
-		}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
+		return PERF_PROFILER.measure("search.notes", () => {
+			const q = String(query).toLowerCase();
+			if (!q) return [];
+			const pool = options.includeArchived
+				? Object.values(S.pages).filter((pg) => !pg.trashed)
+				: activePages();
+			return pool.map((pg) => {
+				const { raw, hay, title } = haystackOf(pg);
+				const idx = hay.indexOf(q);
+				if (idx < 0) return null;
+				const score = (title.includes(q) ? 10 : 0) + hay.split(q).length - 1;
+				return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
+			}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
+		}, { query: String(query).slice(0, 40) }, 15);
 	}
 
 	// Tageslimits (wie Anki): heute bereits gelernte neue Karten bzw. Wiederholungen
@@ -1676,7 +1678,7 @@ export const STATE = (() => {
 		}
 		let snap = _snapCache.map.get(key);
 		if (!snap) {
-			snap = computeStudySnapshot(deck);
+			snap = PERF_PROFILER.measure("anki.study-snapshot", () => computeStudySnapshot(deck), { deck: String(deck || "all") }, 15);
 			_snapCache.map.set(key, snap);
 		}
 		return snap;

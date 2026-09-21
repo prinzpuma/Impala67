@@ -144,18 +144,44 @@ function compactContext(context) {
 }
 
 function isAnomaly(kind, durationMs, meta = {}) {
-	if (kind === "main-thread-stall" || kind === "uncaught-error") return true;
-	if (meta?.failed) return true;
+	if (kind === "uncaught-error" || kind === "unhandled-rejection" || kind.includes("error") || meta?.failed) {
+		return true;
+	}
+	if (kind === "main-thread-stall") {
+		return durationMs >= 100;
+	}
+	if (kind === "boot-ready") {
+		return durationMs >= 1500;
+	}
+	if (kind === "profiler-start") {
+		return false;
+	}
 	if (kind === "operation") {
-		const threshold = Math.max(Number(meta?.minMs) || 25, 50);
+		if (meta?.anomalyThresholdMs && Number.isFinite(meta.anomalyThresholdMs)) {
+			return durationMs >= meta.anomalyThresholdMs;
+		}
+		const name = String(meta?.name || "");
+		// Schwere asynchrone Hintergrund- oder Transfer-Operationen
+		if (/^(cloudflare|drive|heft\.export|embedding|rag\.index|state\.load|state\.full-replay)/.test(name)) {
+			return durationMs >= 1200;
+		}
+		// Interaktive UI-Aktionen (Zeichnen, Rendern, Editor, Suche, SRS-Berechnung)
+		if (/^(heft\.|editor\.|ui\.|search\.|anki\.)/.test(name)) {
+			return durationMs >= 120;
+		}
+		const threshold = Math.max(Number(meta?.minMs || 25) * 4, 200);
 		return durationMs >= threshold;
 	}
-	if (kind === "boot-ready") return durationMs >= 500;
-	if (kind === "profiler-start") return false;
-	return durationMs >= 50;
+	return durationMs >= 150;
 }
 
 function anomalySignature(kind, meta = {}, context = null) {
+	if (kind === "uncaught-error" || kind === "unhandled-rejection" || kind.includes("error") || meta?.failed) {
+		const errName = meta.errorName || meta.name || "";
+		const rawMsg = meta.errorMessage || "";
+		const cleanMsg = String(rawMsg).replace(/[\r\n:;]+/g, " ").trim().slice(0, 45);
+		return "error:" + kind + (errName ? ":" + errName : "") + (cleanMsg ? ":" + cleanMsg : "");
+	}
 	if (kind === "main-thread-stall") {
 		const input = meta.inputName || (typeof meta.events === "string" ? meta.events.split(",")[0] : "");
 		const op = context?.operations?.[0]?.name || "";
@@ -164,9 +190,9 @@ function anomalySignature(kind, meta = {}, context = null) {
 		return "stall:task";
 	}
 	if (kind === "operation") {
-		return "operation:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
+		return "op:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
 	}
-	return kind + ":" + (meta.name || "") + ":" + (meta.failed ? "failed" : "ok");
+	return kind + ":" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
 }
 
 function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride = null) {
@@ -297,8 +323,19 @@ function errorMeta(error) {
 }
 
 function error(kind, errorValue, meta = {}) {
-	const errorObject = errorValue instanceof Error ? errorValue : new Error(String(errorValue || "Fehler"));
-	record(String(kind || "error"), 0, { ...errorMeta(errorObject), ...safeMeta(meta) });
+	let errObj = errorValue;
+	if (errorValue?.target?.error) {
+		errObj = errorValue.target.error;
+	} else if (!(errorValue instanceof Error)) {
+		if (errorValue && typeof errorValue === "object") {
+			errObj = new Error(errorValue.message || errorValue.errorMessage || "Fehler");
+			errObj.name = errorValue.name || errorValue.errorName || "Error";
+			if (errorValue.stack) errObj.stack = errorValue.stack;
+		} else {
+			errObj = new Error(String(errorValue || "Fehler"));
+		}
+	}
+	record(String(kind || "error"), 0, { ...errorMeta(errObj), ...safeMeta(meta) });
 }
 
 function performanceWallTime(startMs) {
@@ -566,7 +603,15 @@ function report() {
 }
 
 function setContextProvider(provider) { contextProvider = typeof provider === "function" ? provider : null; }
-function status() { return { enabled: isEnabled(), mode: getMode(), records: records.length + pendingStalls.length, active: active.size }; }
+function status() {
+	const isAnom = getMode() === MODE_ANOMALIES;
+	return {
+		enabled: isEnabled(),
+		mode: getMode(),
+		records: isAnom ? records.length : (records.length + pendingStalls.length),
+		active: active.size,
+	};
+}
 
 function drainEarlyErrors() {
 	if (typeof window !== "undefined" && Array.isArray(window.__earlyErrors)) {

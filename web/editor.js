@@ -6,6 +6,7 @@ import { RAG } from "./rag.js";
 import { HEFT } from "./heft.js";
 import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import {
 	parse as parseMarkdown,
 	serialize as serializeMarkdown,
@@ -322,9 +323,9 @@ export const EDITOR = (() => {
 	}
 
 	// ---------- Markdown-Parsing und Serialisierung (editor-markdown.js) ----------
-	const parse = (md, customUid) => parseMarkdown(md, customUid || uid);
+	const parse = (md, customUid) => PERF_PROFILER.measure("editor.parse", () => parseMarkdown(md, customUid || uid), { length: (md || "").length }, 15);
 	const serializeList = (list) => serializeMarkdown(list);
-	const serialize = (customBlocks) => serializeMarkdown(customBlocks !== undefined ? customBlocks : blocks);
+	const serialize = (customBlocks) => PERF_PROFILER.measure("editor.serialize", () => serializeMarkdown(customBlocks !== undefined ? customBlocks : blocks), { blocks: (customBlocks || blocks)?.length }, 15);
 
 	// ---------- Fokus / Caret ----------
 	function caretInfo() {
@@ -755,6 +756,7 @@ export const EDITOR = (() => {
 
 	function render(opts) {
 		if (!host) return;
+		const finish = PERF_PROFILER.start("editor.render", { blocks: blocks?.length }, 16);
 		if (!blocks.length) { blocks.push(newBlock("p")); bustCtxIdx(); }
 		const o = opts || {};
 		renderBoundary = o.boundary || null;
@@ -774,6 +776,7 @@ export const EDITOR = (() => {
 		renumber();
 		hydrate();
 		applySelectionClasses();
+		finish();
 	}
 
 	// Nummerierte Listen: fortlaufende Zähler je Ebene (wie Notion).
@@ -2498,41 +2501,46 @@ export const EDITOR = (() => {
 	function mount(el, pid) {
 		const pg = S.pages[pid];
 		if (!el || !pg) return;
-		const pageChanged = pid !== pageId;
-		// Offene Rückstände VOR dem Seitenwechsel abschließen — noch mit den alten Blöcken:
-		// der Autosave (450 ms) hätte danach die neue Seite gesehen und die letzten
-		// Änderungen der alten stillschweigend verworfen, und der offene Verlaufsschritt
-		// (700 ms) wäre im Stapel der NEUEN Seite gelandet — ein Strg+Z dort hätte fremden
-		// Inhalt hergestellt.
-		if (pageChanged && pageId) {
-			if (saveTimer) save(true);
-			commitHistory();
-		}
-		// Externe Änderung = pg.content weicht von dem ab, was der Editor selbst geschrieben
-		// hat. Vorher wurde dafür bei JEDEM Render die komplette Seite neu serialisiert.
-		const externallyChanged = !pageChanged && (pg.content || "") !== lastSaved && !histPending;
-		host = el;
-		host.classList.add("block-editor");
-		injectStyles();
-		if (pageChanged || externallyChanged || !blocks.length) {
-			if (pageChanged) { clearSelection(); closeMenus(); touchHistoryPage(pid); }
-			pageId = pid;
-			blocks = parse(pg.content || "");
-			if (pg.pdfId) {
-				const filtered = blocks.filter((b) => !isPdfDuplicateBlock(b, pg));
-				if (filtered.length !== blocks.length) {
-					blocks = filtered;
-					if (!blocks.length) blocks.push(newBlock("p"));
-				}
+		const finish = PERF_PROFILER.start("editor.mount", { pid }, 20);
+		try {
+			const pageChanged = pid !== pageId;
+			// Offene Rückstände VOR dem Seitenwechsel abschließen — noch mit den alten Blöcken:
+			// der Autosave (450 ms) hätte danach die neue Seite gesehen und die letzten
+			// Änderungen der alten stillschweigend verworfen, und der offene Verlaufsschritt
+			// (700 ms) wäre im Stapel der NEUEN Seite gelandet — ein Strg+Z dort hätte fremden
+			// Inhalt hergestellt.
+			if (pageChanged && pageId) {
+				if (saveTimer) save(true);
+				commitHistory();
 			}
-			bustCtxIdx(); // frisch geparste Blockobjekte
-			lastSaved = pg.content || "";
-			histState = snapshotJson();
-			histPending = false;
+			// Externe Änderung = pg.content weicht von dem ab, was der Editor selbst geschrieben
+			// hat. Vorher wurde dafür bei JEDEM Render die komplette Seite neu serialisiert.
+			const externallyChanged = !pageChanged && (pg.content || "") !== lastSaved && !histPending;
+			host = el;
+			host.classList.add("block-editor");
+			injectStyles();
+			if (pageChanged || externallyChanged || !blocks.length) {
+				if (pageChanged) { clearSelection(); closeMenus(); touchHistoryPage(pid); }
+				pageId = pid;
+				blocks = parse(pg.content || "");
+				if (pg.pdfId) {
+					const filtered = blocks.filter((b) => !isPdfDuplicateBlock(b, pg));
+					if (filtered.length !== blocks.length) {
+						blocks = filtered;
+						if (!blocks.length) blocks.push(newBlock("p"));
+					}
+				}
+				bustCtxIdx(); // frisch geparste Blockobjekte
+				lastSaved = pg.content || "";
+				histState = snapshotJson();
+				histPending = false;
+			}
+			render();
+			wire();
+			wireGlobal();
+		} finally {
+			finish();
 		}
-		render();
-		wire();
-		wireGlobal();
 	}
 
 	return { mount, parse, serialize, undoRedo, undo: () => undoRedo(false), redo: () => undoRedo(true) };

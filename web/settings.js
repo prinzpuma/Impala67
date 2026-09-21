@@ -239,6 +239,8 @@ function settingsViewModel() {
 		betaUi: localStorage.getItem("impala67BetaUi") === "1",
 		isNative: PLATFORM_NATIVE.isNative,
 		nativeHapticsEnabled: localStorage.getItem("impala67NativeHaptics") !== "0",
+		nativeScannerAvailable: PLATFORM_NATIVE.scanner.isAvailable,
+		nativeScannerEnabled: PLATFORM_NATIVE.scanner.isEnabled(),
 		nativeFilesystemAvailable: PLATFORM_NATIVE.isNative,
 		nativeFilesystemEnabled: localStorage.getItem("impala67NativeFsBackup") !== "0",
 		breakReminder: getBreakReminder(),

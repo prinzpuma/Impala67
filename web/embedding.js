@@ -10,6 +10,8 @@ function requireAdapter() {
 	return adapter;
 }
 
+import { PERF_PROFILER } from "./performance-profiler.js";
+
 export const EMBEDDINGS = {
 	setAdapter(next) {
 		if (!next || typeof next.embed !== "function") {
@@ -17,7 +19,7 @@ export const EMBEDDINGS = {
 		}
 		adapter = next;
 	},
-	embed: (...args) => requireAdapter().embed(...args),
+	embed: (texts, ...args) => PERF_PROFILER.run("embedding.embed", () => requireAdapter().embed(texts, ...args), { count: texts?.length }, 100),
 	listModels: (...args) => requireAdapter().listModels(...args),
 	getLocalStatus: (...args) => requireAdapter().getLocalStatus(...args),
 	downloadLocal: (...args) => requireAdapter().downloadLocal(...args),

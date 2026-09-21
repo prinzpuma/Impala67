@@ -238,10 +238,40 @@ export const PLATFORM_NATIVE = {
 		get isAvailable() {
 			return Boolean(getPlugin("DocumentScanner"));
 		},
+		isEnabled() {
+			return this.isAvailable && (typeof localStorage === "undefined" || localStorage.getItem("impala67NativeScanner") !== "0");
+		},
+		async isModuleAvailable() {
+			const ds = getPlugin("DocumentScanner");
+			if (!ds?.isGoogleDocumentScannerModuleAvailable) return true;
+			try {
+				const res = await ds.isGoogleDocumentScannerModuleAvailable();
+				return Boolean(res?.available);
+			} catch {
+				return true;
+			}
+		},
+		async installModule() {
+			const ds = getPlugin("DocumentScanner");
+			if (!ds?.installGoogleDocumentScannerModule) return false;
+			try {
+				await ds.installGoogleDocumentScannerModule();
+				return true;
+			} catch (err) {
+				console.warn("[platform-native] ML Kit Modul-Installation fehlgeschlagen:", err);
+				return false;
+			}
+		},
 		async scan({ pageLimit = 25 } = {}) {
 			const ds = getPlugin("DocumentScanner");
 			if (!ds) return { success: false, images: [], canceled: false };
 			try {
+				if (ds.isGoogleDocumentScannerModuleAvailable) {
+					const mod = await ds.isGoogleDocumentScannerModuleAvailable().catch(() => ({ available: true }));
+					if (mod && mod.available === false && ds.installGoogleDocumentScannerModule) {
+						ds.installGoogleDocumentScannerModule().catch(() => {});
+					}
+				}
 				const res = await ds.scanDocument({
 					pageLimit,
 					scannerMode: "FULL",

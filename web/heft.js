@@ -12,6 +12,7 @@ import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { EXPORT_W, exportName, exportIdxs, buildPdf, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -993,7 +994,7 @@ export const HEFT = (() => {
 		renderPageTo(x, doc.pages[i], i, pageRectForTile(r));
 		if (wet) {
 			placeLayer(wet, i, r, dpr);
-			const wx = wet.getContext("2d");
+			const wx = wet.getContext("2d", { desynchronized: true });
 			wx.setTransform(1, 0, 0, 1, 0, 0);
 			wx.clearRect(0, 0, wet.width, wet.height);
 		}
@@ -1016,6 +1017,7 @@ export const HEFT = (() => {
 
 	function renderDetailTiles(force = false) {
 		if (!doc) return;
+		const finish = PERF_PROFILER.start("heft.render-tiles", { force }, 16);
 		const next = new Set(pageIndicesWithin(Math.max(4, 64 / view.k)));
 		for (const i of detailVisible) {
 			if (!next.has(i)) { hideLayer(detailCanvases[i]); hideLayer(wetCanvases[i]); }
@@ -1026,6 +1028,7 @@ export const HEFT = (() => {
 			renderDetailTile(i);
 		}
 		detailVisible = next;
+		finish();
 	}
 
 	function liveInkCtx(i) {
@@ -1040,7 +1043,7 @@ export const HEFT = (() => {
 				}
 			}
 			if (wet.__heftTile && wet.style.display !== "none") {
-				const x = wet.getContext("2d");
+				const x = wet.getContext("2d", { desynchronized: true });
 				x.setTransform(1, 0, 0, 1, 0, 0);
 				tileTransform(x, wet.__heftTile);
 				return x;
@@ -1054,7 +1057,7 @@ export const HEFT = (() => {
 	function clearLiveInk(i) {
 		const wet = wetCanvases[i];
 		if (!wet || !wet.__heftTile || wet.style.display === "none") return false;
-		const x = wet.getContext("2d");
+		const x = wet.getContext("2d", { desynchronized: true });
 		x.setTransform(1, 0, 0, 1, 0, 0);
 		x.clearRect(0, 0, wet.width, wet.height);
 		tileTransform(x, wet.__heftTile);
@@ -1062,6 +1065,7 @@ export const HEFT = (() => {
 	}
 
 	function commitStrokeRender(i, stroke) {
+		const finish = PERF_PROFILER.start("heft.stroke", { points: stroke?.points?.length }, 8);
 		const cv = canvases[i];
 		if (cv && cv.width > 1) { const x = cv.getContext("2d"); applyTransform(x); drawStroke(x, stroke); }
 		const tile = detailCanvases[i];
@@ -1069,6 +1073,7 @@ export const HEFT = (() => {
 			const x = tile.getContext("2d"); tileTransform(x, tile.__heftTile); drawStroke(x, stroke);
 		}
 		clearLiveInk(i);
+		finish();
 	}
 	function renderVisiblePages(skipTiles = false, forceTiles = false) {
 		if (!doc) return;
@@ -1671,45 +1676,47 @@ export const HEFT = (() => {
 	}
 
 	function applyHistory(fromStack, toStack, isRedo) {
-		const a = fromStack.pop(); if (!a || !doc) return;
-		// Seite über ID auflösen (Index driftet); Seite weg = Eintrag tot, nicht raten.
-		const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
-		const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
-		if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
-		else if (a.kind === "lassoResize") {
-			const current = a.strokes.map(strokeGeometry);
-			a.strokes.forEach((stroke, i) => applyStrokeGeometry(stroke, a.prev[i]));
-			a.prev = current;
-		}
-		else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
-		else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
-		else {
-
-			const spec = {
-				add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false],
-				lassoDel: ["strokes", a.strokes, false],
-				lassoDup: ["strokes", a.strokes, true],
-				imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
-				txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],
-			}[a.kind];
-			if (!spec) return;
-			const [key, items, addsOnRedo] = spec;
-			// Abgleich über IDs statt Objekt-Identität: nach Sync-Import/Snapshot ist das
-			// Dokument ein NEUES Objekt mit gleichen IDs -> includes() traf nie (Undo wirkungslos)
-			// und push() legte Dubletten an.
-			const arr = pg[key] || (pg[key] = []);
-			const ids = new Set(items.map((o) => o.id));
-			if (isRedo === addsOnRedo) {
-				const have = new Set(arr.map((o) => o.id));
-				items.forEach((o) => { if (!have.has(o.id)) arr.push(o); });
-			} else {
-				pg[key] = arr.filter((o) => !ids.has(o.id));
-				if (sel && (ids.has(sel.imgId) || ids.has(sel.txtId))) sel = null;
-				if (lassoSel && lassoSel.strokes.some((s) => ids.has(s.id))) lassoSel = null;
+		PERF_PROFILER.measure("heft.undo-redo", () => {
+			const a = fromStack.pop(); if (!a || !doc) return;
+			// Seite über ID auflösen (Index driftet); Seite weg = Eintrag tot, nicht raten.
+			const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
+			const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
+			if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
+			else if (a.kind === "lassoResize") {
+				const current = a.strokes.map(strokeGeometry);
+				a.strokes.forEach((stroke, i) => applyStrokeGeometry(stroke, a.prev[i]));
+				a.prev = current;
 			}
-		}
-		toStack.push(a);
-		refresh(pi);
+			else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
+			else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
+			else {
+
+				const spec = {
+					add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false],
+					lassoDel: ["strokes", a.strokes, false],
+					lassoDup: ["strokes", a.strokes, true],
+					imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
+					txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],
+				}[a.kind];
+				if (!spec) return;
+				const [key, items, addsOnRedo] = spec;
+				// Abgleich über IDs statt Objekt-Identität: nach Sync-Import/Snapshot ist das
+				// Dokument ein NEUES Objekt mit gleichen IDs -> includes() traf nie (Undo wirkungslos)
+				// und push() legte Dubletten an.
+				const arr = pg[key] || (pg[key] = []);
+				const ids = new Set(items.map((o) => o.id));
+				if (isRedo === addsOnRedo) {
+					const have = new Set(arr.map((o) => o.id));
+					items.forEach((o) => { if (!have.has(o.id)) arr.push(o); });
+				} else {
+					pg[key] = arr.filter((o) => !ids.has(o.id));
+					if (sel && (ids.has(sel.imgId) || ids.has(sel.txtId))) sel = null;
+					if (lassoSel && lassoSel.strokes.some((s) => ids.has(s.id))) lassoSel = null;
+				}
+			}
+			toStack.push(a);
+			refresh(pi);
+		}, { isRedo }, 16);
 	}
 	function undo() { applyHistory(undoStack, redoStack, false); }
 	function redo() { applyHistory(redoStack, undoStack, true); }
@@ -2401,7 +2408,7 @@ export const HEFT = (() => {
 	async function openScanner() {
 		if (scanUI) return;
 
-		if (PLATFORM_NATIVE.scanner.isAvailable) {
+		if (PLATFORM_NATIVE.scanner.isEnabled()) {
 			try {
 				const res = await PLATFORM_NATIVE.scanner.scan({ pageLimit: 25 });
 				if (res?.images?.length) {
@@ -2416,12 +2423,19 @@ export const HEFT = (() => {
 					}
 					saveSoon();
 					render();
+					return;
+				}
+				if (res?.canceled) {
+					return;
+				}
+				if (res?.error) {
+					U.toast?.("Google-Scanner nicht verfügbar – nutze internen Scanner.", "info");
 				}
 			} catch (err) {
-				console.warn("[heft] Native scanner error:", err);
+				console.warn("[heft] Native scanner error, falling back to internal scanner:", err);
+				U.toast?.("Google-Scanner fehlgeschlagen – nutze internen Scanner.", "info");
 			}
-			// In der nativen App bleibt der Web-Kamera-Scanner vollständig deaktiviert.
-			return;
+			// Fallback: Bei Fehlern oder fehlendem ML Kit startet automatisch der interne Kamera-Scanner.
 		}
 
 		const wrap = document.createElement("div");
@@ -3033,13 +3047,13 @@ export const HEFT = (() => {
 		return d;
 	}
 	async function pdfBlob(pageId, indices, onStatus) {
-		return exportPdfBlob(pageId, indices, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
+		return PERF_PROFILER.run("heft.export-pdf", () => exportPdfBlob(pageId, indices, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas }), { pages: indices?.length }, 100);
 	}
 	async function exportPdf(pageId, indices) {
 		return runExportPdf(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
 	}
 	async function imageFiles(pageId, indices, baseName, onStatus) {
-		return exportImageFiles(pageId, indices, baseName, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
+		return PERF_PROFILER.run("heft.export-images", () => exportImageFiles(pageId, indices, baseName, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas }), { pages: indices?.length }, 100);
 	}
 	async function exportImages(pageId, indices) {
 		return runExportImages(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
@@ -3288,6 +3302,7 @@ export const HEFT = (() => {
 			d.className = "heft-wet-canvas";
 			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "3", display: "none" });
 			scroll.appendChild(d);
+			try { d.getContext("2d", { desynchronized: true }); } catch { /* ignore */ }
 			return d;
 		});
 		canvases.forEach((cv) => {
@@ -3358,40 +3373,45 @@ export const HEFT = (() => {
 		layout();
 	}
 	async function mount(container, pageId) {
-		unmount();
-		host = container;
-		pid = pageId;
-		if (getComputedStyle(host).position === "static") host.style.position = "relative";
-		host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
-		doc = await load(pageId);
-		if (pid !== pageId) return;
-		idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
-		view.x = 0; view.y = 0; view.k = 1; navReset();
-		expanded = false;
+		const finish = PERF_PROFILER.start("heft.mount", { pageId }, 30);
+		try {
+			unmount();
+			host = container;
+			pid = pageId;
+			if (getComputedStyle(host).position === "static") host.style.position = "relative";
+			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
+			doc = await load(pageId);
+			if (pid !== pageId) return;
+			idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
+			view.x = 0; view.y = 0; view.k = 1; navReset();
+			expanded = false;
 
-		trayPos = null; trayDrag = null;
-		host.innerHTML = viewHtml();
-		bindPullToAdd();
-		host.addEventListener("click", onHostClick);
-		host.addEventListener("pointerdown", onHostPointerDown);
-		host.addEventListener("pointerup", onHostPointerUp);
-		host.addEventListener("pointercancel", onHostPointerUp);
-		document.addEventListener("keydown", onKey);
-		resizeFn = () => layout();
-		window.addEventListener("resize", resizeFn);
+			trayPos = null; trayDrag = null;
+			host.innerHTML = viewHtml();
+			bindPullToAdd();
+			host.addEventListener("click", onHostClick);
+			host.addEventListener("pointerdown", onHostPointerDown);
+			host.addEventListener("pointerup", onHostPointerUp);
+			host.addEventListener("pointercancel", onHostPointerUp);
+			document.addEventListener("keydown", onKey);
+			resizeFn = () => layout();
+			window.addEventListener("resize", resizeFn);
 
-		if (window.ResizeObserver) {
-			resizeObserver = new ResizeObserver(() => layout());
-			resizeObserver.observe(host);
+			if (window.ResizeObserver) {
+				resizeObserver = new ResizeObserver(() => layout());
+				resizeObserver.observe(host);
+			}
+			bindCanvas();
+			bindScroll();
+			bindTrayDrag();
+			layout();
+
+			scheduleHandwritingIndexV2(idx);
+			purgeOrphanLegacyInk();
+			pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
+		} finally {
+			finish();
 		}
-		bindCanvas();
-		bindScroll();
-		bindTrayDrag();
-		layout();
-
-		scheduleHandwritingIndexV2(idx);
-		purgeOrphanLegacyInk();
-		pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
 	}
 	function unmount(discardPending = false) {
 		closePop();

@@ -4,6 +4,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { rankRag } from "./rag-ranking.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
 // Benötigt das lokale Bekko-Embedding-Modell aus ⚙️ → KI.
@@ -71,6 +72,10 @@ export const RAG = (() => {
 
 	async function indexPage(pageId) {
 		if (!enabled()) return;
+		return PERF_PROFILER.run("rag.index-page", () => performIndexPage(pageId), { pageId }, 40);
+	}
+
+	async function performIndexPage(pageId) {
 		const identity = embeddingIdentity();
 		const pg = S.pages[pageId];
 		// Gelöschte (Papierkorb-)Seiten aus dem Index entfernen statt sie zu indexieren
@@ -279,6 +284,10 @@ export const RAG = (() => {
 	}
 	async function search(query, k = 6) {
 		if (!enabled()) return null; // Aufrufer fällt auf Stichwortsuche zurück
+		return PERF_PROFILER.run("rag.search", () => performSearch(query, k), { query: String(query).slice(0, 40) }, 40);
+	}
+
+	async function performSearch(query, k = 6) {
 		const qv = await queryVec(query);
 		const model = S.settings.embedModel, providerId = embeddingProviderId();
 		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed, archived: !!pg.archived }]));
