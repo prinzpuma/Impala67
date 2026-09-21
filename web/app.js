@@ -2348,10 +2348,6 @@ function wireEvents() {
 			if (kbOpen && !open) setTimeout(resetViewportScroll, 60);
 			kbOpen = open;
 		});
-		// Fokusverlust NUR bei offener Tastatur nachziehen — nie mehr global.
-		document.addEventListener("focusout", () => {
-			if (kbOpen) setTimeout(resetViewportScroll, 100);
-		});
 	}
 }
 

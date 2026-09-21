@@ -305,13 +305,16 @@ function wirePalette(el) {
 		}
 	});
 	// WARUM: jeder Tastendruck lief sofort durch Volltextsuche + kompletten Listenaufbau
-	// -> Tippen ruckelte bei vielen Seiten. Kurz sammeln, dann einmal rendern.
+	// -> Tippen ruckelte bei vielen Seiten. 120ms sammeln und per rAF rendern.
 	el.addEventListener("input", (e) => {
 		if (e.target.id !== "paletteInput") return;
 		selIdx = 0;
 		const val = e.target.value;
 		if (renderTimer) clearTimeout(renderTimer);
-		renderTimer = setTimeout(() => { renderTimer = 0; renderList(val); }, 70);
+		renderTimer = setTimeout(() => {
+			renderTimer = 0;
+			requestAnimationFrame(() => renderList(val));
+		}, 120);
 	});
 	el.addEventListener("keydown", (e) => {
 		if (!el.contains(e.target)) return;

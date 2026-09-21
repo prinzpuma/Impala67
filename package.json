@@ -1,6 +1,6 @@
 {
   "name": "impala67",
-  "version": "2.2.6",
+  "version": "2.2.8",
   "private": true,
   "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
   "type": "module",

@@ -4,7 +4,8 @@ button { background: var(--edge-soft); color: var(--text); border: none; border-
 button:hover { background: var(--surface-active) }
 button.danger { color: var(--danger) }
 
-input, textarea, select { background: var(--input-bg); color: var(--text); border: 1px solid var(--edge); border-radius: var(--radius-md); padding: 8px 10px; font: inherit; outline: none }
+input, textarea, select { background: var(--input-bg); color: var(--text); border: 1px solid var(--edge); border-radius: var(--radius-md); padding: 8px 10px; font: inherit; outline: none; scroll-margin-bottom: 32px; scroll-margin-top: 16px }
+.blk, .blk-row, [contenteditable=true] { scroll-margin-bottom: 32px; scroll-margin-top: 16px }
 /* Native Selects: dunkles OS-Popup + eigener Chevron statt hässl… */
 select { appearance: none; -webkit-appearance: none; cursor: pointer; color-scheme: dark; padding-right: 30px; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(255,255,255,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px 8px }
 body.light select { color-scheme: light; background-image: url("data:image/svg+xml; utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='rgba(20,20,20,0.55)' d='M1 1.5 6 6.5 11 1.5'/></svg>") }
