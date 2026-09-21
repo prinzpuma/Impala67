@@ -277,8 +277,14 @@ function errorMeta(error) {
 		failed: true,
 		errorName: error?.name || "Error",
 		errorMessage: error?.message || String(error || "Fehler"),
+		errorStack: error?.stack ? String(error.stack).slice(0, 800) : undefined,
 		...(Number.isFinite(status) && status > 0 ? { status } : {}),
 	};
+}
+
+function error(kind, errorValue, meta = {}) {
+	const errorObject = errorValue instanceof Error ? errorValue : new Error(String(errorValue || "Fehler"));
+	record(String(kind || "error"), 0, { ...errorMeta(errorObject), ...safeMeta(meta) });
 }
 
 function performanceWallTime(startMs) {
@@ -464,6 +470,13 @@ function init() {
 	watchLongTasks();
 	watchEventLoop();
 	watchActions();
+	if (typeof window !== "undefined" && !window.__IMPALA_PERF_ERROR_HOOKS__) {
+		window.__IMPALA_PERF_ERROR_HOOKS__ = true;
+		window.addEventListener("error", (event) => error("uncaught-error", event.error || event.message || "Uncaught Error", {
+			source: event.filename, position: event.lineno ? `${event.lineno}:${event.colno || 0}` : undefined,
+		}));
+		window.addEventListener("unhandledrejection", (event) => error("unhandled-rejection", event.reason || "Unhandled Promise Rejection"));
+	}
 	record("profiler-start", 0);
 	if (!pagehideInstalled && typeof window !== "undefined") {
 		pagehideInstalled = true;
@@ -558,6 +571,7 @@ export const PERF_PROFILER = {
 	run,
 	measure,
 	record,
+	error,
 	report,
 	clear,
 	flush,
