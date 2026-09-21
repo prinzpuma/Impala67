@@ -157,7 +157,7 @@ function isAnomaly(kind, durationMs, meta = {}) {
 
 function anomalySignature(kind, meta = {}, context = null) {
 	if (kind === "main-thread-stall") {
-		const input = meta.inputName || (meta.events ? meta.events.split(",")[0] : "");
+		const input = meta.inputName || (typeof meta.events === "string" ? meta.events.split(",")[0] : "");
 		const op = context?.operations?.[0]?.name || "";
 		if (input) return "stall:input:" + input + (op ? ":" + op : "");
 		if (op) return "stall:op:" + op;
@@ -171,102 +171,116 @@ function anomalySignature(kind, meta = {}, context = null) {
 
 function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride = null) {
 	if (!isEnabled()) return;
-	const mode = getMode();
-	if (mode === MODE_ANOMALIES && !isAnomaly(kind, durationMs, meta)) return;
+	try {
+		const mode = getMode();
+		if (mode === MODE_ANOMALIES && !isAnomaly(kind, durationMs, meta)) return;
 
-	const context = compactContext(contextOverride || currentContext());
-	const dur = round(durationMs);
+		const context = compactContext(contextOverride || currentContext());
+		const dur = round(durationMs);
 
-	if (mode === MODE_ANOMALIES) {
-		const sig = anomalySignature(kind, meta, contextOverride || context);
-		const existingIndex = records.findIndex((r) => r.sig === sig);
-		if (existingIndex >= 0) {
-			const existing = records[existingIndex];
-			const count = (existing.count || 1) + 1;
-			const prevTotal = existing.totalDurationMs ?? (existing.durationMs * (existing.count || 1));
-			const totalDurationMs = round(prevTotal + dur);
-			const minDurationMs = round(Math.min(existing.minDurationMs ?? existing.durationMs, dur));
-			const maxDurationMs = round(Math.max(existing.maxDurationMs ?? existing.durationMs, dur));
-			const avgDurationMs = round(totalDurationMs / count);
+		if (mode === MODE_ANOMALIES) {
+			const sig = anomalySignature(kind, meta, contextOverride || context);
+			const existingIndex = records.findIndex((r) => r.sig === sig);
+			if (existingIndex >= 0) {
+				const existing = records[existingIndex];
+				const count = (existing.count || 1) + 1;
+				const prevTotal = existing.totalDurationMs ?? (existing.durationMs * (existing.count || 1));
+				const totalDurationMs = round(prevTotal + dur);
+				const minDurationMs = round(Math.min(existing.minDurationMs ?? existing.durationMs, dur));
+				const maxDurationMs = round(Math.max(existing.maxDurationMs ?? existing.durationMs, dur));
+				const avgDurationMs = round(totalDurationMs / count);
 
-			existing.count = count;
-			existing.firstAt = existing.firstAt || existing.at;
-			existing.lastAt = at;
-			existing.at = at;
-			existing.durationMs = maxDurationMs;
-			existing.minDurationMs = minDurationMs;
-			existing.maxDurationMs = maxDurationMs;
-			existing.avgDurationMs = avgDurationMs;
-			existing.totalDurationMs = totalDurationMs;
+				existing.count = count;
+				existing.firstAt = existing.firstAt || existing.at;
+				existing.lastAt = at;
+				existing.at = at;
+				existing.durationMs = maxDurationMs;
+				existing.minDurationMs = minDurationMs;
+				existing.maxDurationMs = maxDurationMs;
+				existing.avgDurationMs = avgDurationMs;
+				existing.totalDurationMs = totalDurationMs;
 
-			if (meta.eventCount) existing.eventCount = (existing.eventCount || 0) + meta.eventCount;
-			if (meta.interactionCount) existing.interactionCount = (existing.interactionCount || 0) + meta.interactionCount;
-			if (meta.longTaskMs) existing.longTaskMs = Math.max(existing.longTaskMs || 0, round(meta.longTaskMs));
-			if (meta.eventLoopLagMs) existing.eventLoopLagMs = Math.max(existing.eventLoopLagMs || 0, round(meta.eventLoopLagMs));
-			if (meta.inputDurationMs) existing.inputDurationMs = Math.max(existing.inputDurationMs || 0, round(meta.inputDurationMs));
-			if (meta.inputName && !existing.inputName) existing.inputName = meta.inputName;
-			if (meta.sources && existing.sources) {
-				const mergedSources = new Set([...existing.sources.split("+"), ...meta.sources.split("+")].filter(Boolean));
-				existing.sources = [...mergedSources].sort().join("+");
-			} else if (meta.sources) {
-				existing.sources = meta.sources;
+				if (meta.eventCount) existing.eventCount = (existing.eventCount || 0) + meta.eventCount;
+				if (meta.interactionCount) existing.interactionCount = (existing.interactionCount || 0) + meta.interactionCount;
+				if (meta.longTaskMs) existing.longTaskMs = Math.max(existing.longTaskMs || 0, round(meta.longTaskMs));
+				if (meta.eventLoopLagMs) existing.eventLoopLagMs = Math.max(existing.eventLoopLagMs || 0, round(meta.eventLoopLagMs));
+				if (meta.inputDurationMs) existing.inputDurationMs = Math.max(existing.inputDurationMs || 0, round(meta.inputDurationMs));
+				if (meta.inputName && !existing.inputName) existing.inputName = meta.inputName;
+				if (meta.sources && existing.sources) {
+					if (typeof existing.sources === "string" && typeof meta.sources === "string") {
+						const mergedSources = new Set([...existing.sources.split("+"), ...meta.sources.split("+")].filter(Boolean));
+						existing.sources = [...mergedSources].sort().join("+");
+					} else {
+						existing.sources = String(meta.sources);
+					}
+				} else if (meta.sources) {
+					existing.sources = meta.sources;
+				}
+				if (meta.events && existing.events) {
+					if (typeof existing.events === "string" && typeof meta.events === "string") {
+						const mergedEvents = new Set([...existing.events.split(","), ...meta.events.split(",")].filter(Boolean));
+						existing.events = [...mergedEvents].sort().join(",").slice(0, 120);
+					} else if (typeof meta.events === "number" && typeof existing.events === "number") {
+						existing.events = Math.max(existing.events, meta.events);
+					} else {
+						existing.events = meta.events;
+					}
+				} else if (meta.events) {
+					existing.events = meta.events;
+				}
+
+				if (dur >= maxDurationMs && Object.keys(context).length) {
+					existing.context = context;
+				}
+
+				records.splice(existingIndex, 1);
+				records.push(existing);
+				persistSoon();
+				return;
 			}
-			if (meta.events && existing.events) {
-				const mergedEvents = new Set([...existing.events.split(","), ...meta.events.split(",")].filter(Boolean));
-				existing.events = [...mergedEvents].sort().join(",").slice(0, 120);
-			} else if (meta.events) {
-				existing.events = meta.events;
-			}
 
-			if (dur >= maxDurationMs && Object.keys(context).length) {
-				existing.context = context;
+			const cleanMeta = safeMeta(meta);
+			delete cleanMeta.minMs;
+			if (kind === "operation" || kind === "main-thread-stall") {
+				if ("count" in cleanMeta) {
+					cleanMeta.itemCount = cleanMeta.count;
+					delete cleanMeta.count;
+				}
 			}
-
-			records.splice(existingIndex, 1);
-			records.push(existing);
+			const initialCount = (kind !== "operation" && kind !== "main-thread-stall" && Number.isInteger(meta.count) && meta.count > 0)
+				? meta.count
+				: 1;
+			const entry = {
+				at,
+				kind,
+				durationMs: dur,
+				count: initialCount,
+				firstAt: at,
+				lastAt: at,
+				minDurationMs: dur,
+				maxDurationMs: dur,
+				avgDurationMs: dur,
+				totalDurationMs: dur,
+				sig,
+				...cleanMeta,
+			};
+			if (Object.keys(context).length) entry.context = context;
+			records.push(entry);
+			if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
 			persistSoon();
 			return;
 		}
 
 		const cleanMeta = safeMeta(meta);
 		delete cleanMeta.minMs;
-		if (kind === "operation" || kind === "main-thread-stall") {
-			if ("count" in cleanMeta) {
-				cleanMeta.itemCount = cleanMeta.count;
-				delete cleanMeta.count;
-			}
-		}
-		const initialCount = (kind !== "operation" && kind !== "main-thread-stall" && Number.isInteger(meta.count) && meta.count > 0)
-			? meta.count
-			: 1;
-		const entry = {
-			at,
-			kind,
-			durationMs: dur,
-			count: initialCount,
-			firstAt: at,
-			lastAt: at,
-			minDurationMs: dur,
-			maxDurationMs: dur,
-			avgDurationMs: dur,
-			totalDurationMs: dur,
-			sig,
-			...cleanMeta,
-		};
+		const entry = { at, kind, durationMs: dur, ...cleanMeta };
 		if (Object.keys(context).length) entry.context = context;
 		records.push(entry);
 		if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
 		persistSoon();
-		return;
+	} catch (err) {
+		console.warn("[profiler] record failed:", err);
 	}
-
-	const cleanMeta = safeMeta(meta);
-	delete cleanMeta.minMs;
-	const entry = { at, kind, durationMs: dur, ...cleanMeta };
-	if (Object.keys(context).length) entry.context = context;
-	records.push(entry);
-	if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
-	persistSoon();
 }
 
 function record(kind, durationMs, meta = {}) { recordAt(kind, durationMs, meta); }
@@ -379,8 +393,12 @@ function start(name, meta = {}, minMs = 25) {
 			if (recentOperations.length > 64) recentOperations.splice(0, recentOperations.length - 64);
 		}
 		const duration = ended - started;
-		if (duration >= minMs || extra.failed || meta.failed) {
-			record("operation", duration, { name, minMs, ...safeMeta(meta), ...safeMeta(extra) });
+		try {
+			if (duration >= minMs || extra.failed || meta.failed) {
+				record("operation", duration, { name, minMs, ...safeMeta(meta), ...safeMeta(extra) });
+			}
+		} catch (err) {
+			console.warn("[profiler] finish failed:", err);
 		}
 		return duration;
 	};

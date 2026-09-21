@@ -297,12 +297,12 @@ export const CLOUDFLARE_SYNC = (() => {
 					expected++;
 					await yieldDecrypt();
 				}
-				finishDecrypt({ events: incoming.length });
+				finishDecrypt({ eventCount: incoming.length });
 			} catch (error) {
-				finishDecrypt({ events: incoming.length, failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+				finishDecrypt({ eventCount: incoming.length, failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
 				throw error;
 			}
-			await PERF_PROFILER.run("cloudflare.import", () => importRemote(incoming), { events: incoming.length }, 15);
+			await PERF_PROFILER.run("cloudflare.import", () => importRemote(incoming), { eventCount: incoming.length }, 15);
 			received += incoming.length;
 			saveRecv(packets.at(-1).seq);
 			if (maxSeq > progressStart) setProgress("Empfange Notizen…", state.lastSyncedSeq - progressStart, maxSeq - progressStart);
@@ -386,7 +386,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 		const chunks = chunkCloudEvents(wire);
 		const packets = [];
-		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { events: wire.length, chunks: chunks.length }, 10);
+		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { eventCount: wire.length, chunks: chunks.length }, 10);
 		const yieldEncrypt = cooperativeGate();
 		try {
 			setProgress("Bereite Notizen vor…", 0, chunks.length);

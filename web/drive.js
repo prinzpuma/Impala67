@@ -725,7 +725,8 @@ export const DRIVE = (() => {
 				return result;
 			})
 			.catch((error) => {
-				finishProfile({ failed: true, errorName: error?.name || "Error" });
+				finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+				PERF_PROFILER.error("drive.sync-error", error, { phase: "sync" });
 				if (authState !== DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
 					emitSyncStatus(navigator.onLine === false ? "waiting" : "error",
 						navigator.onLine === false ? "Offline" : "Sync fehlgeschlagen", error?.message);
