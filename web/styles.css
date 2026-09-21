@@ -1888,6 +1888,7 @@ body.anki-zen.anki-view-open.density-compact.panel-collapsed #app { grid-templat
 	.lib-card:hover, .deck-row:hover, .kpi:hover, .grades [data-ankigrade]:hover, .study-reveal-controls [data-ankishowback]:hover { transform: none }
 	.lib-card:active, .deck-row:active { transform: none; background: var(--surface-hover) }
 	.deck-actions .deck-iconbtn { opacity: 1 }
+	.row-add { opacity: 1 }
 }
 
 /* == 📐 Dichte ab Tablet-Breite ==

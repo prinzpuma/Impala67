@@ -47,6 +47,12 @@ function shellHtml() {
 				'<button type="button" class="icon-btn" data-m="search" title="Suche" aria-label="Suche">' +
 					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>' +
 				'</button>' +
+				'<span class="topbar-wrap" id="mTopWrap" style="display:none">' +
+					'<button type="button" class="icon-btn" id="btnTopPageMenu" data-morepagemenu="1" title="Weitere Optionen" aria-label="Weitere Optionen">' +
+						'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/></svg>' +
+					'</button>' +
+					'<div id="mTopMenu" hidden></div>' +
+				'</span>' +
 				'<button type="button" class="pill-action-btn" data-m="new"><span>＋ Neu</span></button>' +
 			'</div>' +
 		'</header>';

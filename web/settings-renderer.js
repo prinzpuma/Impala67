@@ -93,22 +93,13 @@ function renderAppearance(vm) {
 	const accents = [["blue", "Blau"], ["violet", "Violett"], ["green", "Grün"], ["orange", "Orange"]];
 	const accentButtons = '<div class="settings-accents" role="group" aria-label="Akzentfarbe">' + accents.map(([value, label]) =>
 		'<button type="button" data-accent="' + value + '" class="accent-' + value + (vm.accent === value ? " active" : "") + '" aria-pressed="' + (vm.accent === value) + '"><span></span>' + label + "</button>").join("") + "</div>";
-	const nativeFullscreenRow = vm.isNative
-		? UI.row({
-			id: "native-fullscreen",
-			title: "Immersiver Vollbildmodus",
-			description: "Status- und Navigationsleiste ausblenden (Wischen vom Rand blendet Leisten temporär ein)",
-			trailing: switchControl("inpNativeFullscreen", "Immersiver Vollbildmodus", vm.nativeFullscreenEnabled),
-		})
-		: "";
 	const design = UI.row({ id: "theme", title: "Erscheinungsbild", description: theme === "system" ? "Folgt automatisch deinem Gerät" : "Manuell festgelegt", trailing: UI.segmented("themeSegments", [
 		{ value: "system", label: "System", id: "btnThemeSystem" }, { value: "light", label: "Hell", id: "btnThemeLight" }, { value: "dark", label: "Dunkel", id: "btnThemeDark" },
 	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" }) +
 	UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
 		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },
 	], vm.tabsPosition || "top", "Tab-Anordnung") }) +
-	UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) }) +
-	nativeFullscreenRow;
+	UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
 	const readable = UI.row({ id: "density", title: "Darstellungsdichte", description: "Bestimmt Abstände und Informationsdichte", trailing: UI.segmented("densitySegments", [
 		{ value: "compact", label: "Kompakt", id: "btnDensityCompact" }, { value: "comfortable", label: "Komfortabel", id: "btnDensityComfortable" },
 	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
@@ -219,6 +210,7 @@ function cloudflareContent() {
 	UI.field("Cloudflare Worker URL", "inpCfUrl", cf.url || "", { explicit: true, placeholder: "https://impala67-sync.<account>.workers.dev" }) +
 	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
 	UI.actions([
+		{ label: "📷 QR-Code scannen", id: "btnCfScanPairing", className: "secondary" },
 		{ label: "📱 Gerät koppeln (QR-Code)", id: "btnCfPairing", className: "secondary", hidden: !hasCloudflareConfig(cf) },
 		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary", hidden: !!(cf.syncKey || S.settings.cfSyncKey) },
 		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary", hidden: !(cf.syncKey || S.settings.cfSyncKey) },

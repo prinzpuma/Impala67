@@ -1,5 +1,6 @@
 package org.impala67.app;
 
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
@@ -10,7 +11,6 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    private boolean immersiveEnabled = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,30 +23,34 @@ public class MainActivity extends BridgeActivity {
             getWindow().setAttributes(lp);
         }
 
-        applyWindowInsets();
+        // Edge-to-Edge: Status- und Navigationsleiste transparent
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
+
+        applySystemBars();
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
-            applyWindowInsets();
+            applySystemBars();
         }
     }
 
-    public void setImmersiveEnabled(boolean enabled) {
-        this.immersiveEnabled = enabled;
-        applyWindowInsets();
-    }
-
-    private void applyWindowInsets() {
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+    private void applySystemBars() {
         WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
-        if (immersiveEnabled) {
-            controller.hide(WindowInsetsCompat.Type.systemBars());
-            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-        } else {
-            controller.show(WindowInsetsCompat.Type.systemBars());
-        }
+        controller.show(WindowInsetsCompat.Type.systemBars());
+
+        int nightMode = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        boolean isNight = nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        // In dunkler Ansicht helle Icons, in heller Ansicht dunkle Icons
+        controller.setAppearanceLightStatusBars(!isNight);
     }
 }

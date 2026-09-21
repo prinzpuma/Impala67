@@ -622,6 +622,7 @@ function wireEvents() {
 			S.modelMenuOpen = false;
 			S.deckMenuOpenName = open ? name : null;
 			renderSidebar(); // positioniert offenes Menü in render.js
+			if (S.view === "anki") renderMain();
 			return;
 		}
 		const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive]");
@@ -631,6 +632,7 @@ function wireEvents() {
 			const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate || deckAction.dataset.deckarchive;
 			S.deckMenuOpenName = null;
 			renderSidebar();
+			if (S.view === "anki") renderMain();
 			if (deckAction.hasAttribute("data-deckrename")) {
 				if (PLATFORM.isTouch()) {
 					openPromptDialog("Stapel umbenennen", async (newName) => {
@@ -1672,6 +1674,9 @@ function wireEvents() {
 			case "btnCfPairing":
 				SETTINGS.handleCfPairing();
 				break;
+			case "btnCfScanPairing":
+				await SETTINGS.handleCfScanPairing();
+				break;
 			case "btnCfSyncNow":
 				await SETTINGS.handleCfSyncNow(t);
 				break;
@@ -1909,18 +1914,6 @@ function wireEvents() {
 		}
 		if (e.target.id === "inpNativeFsBackup") {
 			localStorage.setItem("impala67NativeFsBackup", e.target.checked ? "1" : "0");
-			return;
-		}
-		if (e.target.id === "inpNativeFullscreen") {
-			const enabled = e.target.checked;
-			localStorage.setItem("impala67NativeFullscreen", enabled ? "1" : "0");
-			try {
-				if (enabled) {
-					window.Capacitor?.Plugins?.StatusBar?.hide?.();
-				} else {
-					window.Capacitor?.Plugins?.StatusBar?.show?.();
-				}
-			} catch { /* ignore */ }
 			return;
 		}
 		if (e.target.id === "inpNativeHaptics") {

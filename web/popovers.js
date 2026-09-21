@@ -11,6 +11,7 @@ import { U } from "./util.js";
 // Positioniert `menu` (fixed) relativ zu `anchor`, bleibt innerhalb des Viewports.
 export function position(anchor, menu, opts = {}) {
 	if (!anchor || !menu) return;
+	const isMobile = document.body.classList.contains("mobile-ui");
 	const gap = opts.gap == null ? 4 : opts.gap;
 	const r = anchor.getBoundingClientRect();
 	menu.style.position = "fixed";
@@ -20,15 +21,17 @@ export function position(anchor, menu, opts = {}) {
 	const height = menu.offsetHeight || 0;
 	let left = opts.align === "end" ? r.right - width : r.left;
 	left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-	const spaceBelow = window.innerHeight - r.bottom - gap;
-	const spaceAbove = r.top - gap;
+	const safeTop = isMobile ? 56 : 8;
+	const safeBottom = isMobile ? 74 : 8;
+	const spaceBelow = window.innerHeight - safeBottom - r.bottom - gap;
+	const spaceAbove = r.top - safeTop - gap;
 	let top;
 	if (opts.prefer === "above") {
 		top = (spaceAbove >= height || spaceAbove > spaceBelow) ? r.top - height - gap : r.bottom + gap;
 	} else {
 		top = (spaceBelow >= height || spaceBelow >= spaceAbove) ? r.bottom + gap : r.top - height - gap;
 	}
-	top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
+	top = Math.max(safeTop, Math.min(top, window.innerHeight - safeBottom - height));
 	menu.style.left = Math.round(left) + "px";
 	menu.style.top = Math.round(top) + "px";
 	menu.style.right = "auto";
@@ -98,7 +101,7 @@ export function closeOutside(target) {
 		: target.closest("[data-deckmenu],[data-deckmenu-panel],[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive]") ? "deck"
 		: target.closest("[data-pagemenu]") ? "page"
 		: target.closest(".page-menu:not(.top-menu)") ? (S.deckMenuOpenName ? "deck" : "page")
-		: target.closest(".top-menu,[data-sharemenu],[data-morepagemenu]") ? "top"
+		: target.closest(".top-menu,[data-sharemenu],[data-morepagemenu],#mTopMenu,#btnTopPageMenu") ? "top"
 		: ""
 		: "";
 	return closeAll(keep);

@@ -17,6 +17,7 @@ import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateSt
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
+import { openQrScanner } from "./qr-scanner.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 
@@ -237,7 +238,6 @@ function settingsViewModel() {
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
 		betaUi: localStorage.getItem("impala67BetaUi") === "1",
 		isNative: PLATFORM_NATIVE.isNative,
-		nativeFullscreenEnabled: localStorage.getItem("impala67NativeFullscreen") !== "0",
 		nativeHapticsEnabled: localStorage.getItem("impala67NativeHaptics") !== "0",
 		nativeFilesystemAvailable: PLATFORM_NATIVE.isNative,
 		nativeFilesystemEnabled: localStorage.getItem("impala67NativeFsBackup") !== "0",
@@ -511,7 +511,7 @@ export function handleCfPairing() {
 		<div class="exp-modal-backdrop" id="cfPairModal" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;padding:16px;">
 			<div class="card" style="max-width:440px;width:100%;background:var(--bg-card, #1e1e2e);color:var(--text, #fff);padding:24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,0.6);text-align:center;">
 				<h3 style="margin-top:0;margin-bottom:8px;">📱 Gerät automatisch koppeln</h3>
-				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit deinem Smartphone/Tablet oder nutze den Kopplungs-Link. Die App öffnet sich und übernimmt URL & Schlüssel sofort.</p>
+				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit der Impala67-App auf deinem Smartphone/Tablet (unter <em>Einstellungen → Sync → 📷 QR-Code scannen</em>).</p>
 				<div style="margin:16px auto;display:flex;justify-content:center;">${qrSvg}</div>
 				<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px;">
 					<button type="button" id="btnCopyPairLink" class="btn" style="width:100%;">🔗 Kopplungs-Link kopieren</button>
@@ -536,6 +536,29 @@ export function handleCfPairing() {
 	document.getElementById("btnClosePairModal")?.addEventListener("click", closeModal);
 	document.getElementById("cfPairModal")?.addEventListener("click", (e) => {
 		if (e.target.id === "cfPairModal") closeModal();
+	});
+}
+
+export async function handleCfScanPairing() {
+	await openQrScanner(async (data) => {
+		if (!data?.url || !data?.key) {
+			U.toast("Ungültige Verbindungsdaten im QR-Code.", "error");
+			return;
+		}
+		const urlEl = document.getElementById("inpCfUrl");
+		const keyEl = document.getElementById("inpCfKey");
+		if (urlEl) urlEl.value = data.url;
+		if (keyEl) keyEl.value = data.key;
+
+		U.toast("Kopplungscode erkannt. Verbinde…", "neutral");
+		const success = await CLOUDFLARE_SYNC.configure(data.url, data.key);
+		if (success) {
+			await STATE.dispatch("settingsSet", { cfUrl: data.url, cfSyncKey: data.key });
+			U.toast("📱 Cloudflare-Sync erfolgreich gekoppelt!", "success");
+		} else {
+			U.toast("Verbindung fehlgeschlagen. Bitte URL und Schlüssel prüfen.", "error");
+		}
+		refreshCloudflareStatusUi();
 	});
 }
 
@@ -1451,6 +1474,7 @@ export const SETTINGS = {
 	handleCfPrimaryAction,
 	handleCfDisconnect,
 	handleCfPairing,
+	handleCfScanPairing,
 	handleCfSyncNow,
 	handleCfGenKey,
 	handleCfCopyKey,

@@ -732,6 +732,20 @@ function renderMain() {
 			PDFS.mountViewer(v, pg.pdfId, { title: pg.title });
 		}
 	}
+	if (document.body.classList.contains("mobile-ui")) {
+		const mTopWrap = document.getElementById("mTopWrap");
+		const mTopMenu = document.getElementById("mTopMenu");
+		if (mTopWrap) mTopWrap.style.display = (S.view === "page" && pg) ? "inline-flex" : "none";
+		if (mTopMenu) {
+			if (S.view === "page" && pg && S.topMenu) {
+				mTopMenu.hidden = false;
+				mTopMenu.innerHTML = S.topMenu === "share" ? shareMenuHtml(pg) : moreMenuHtml(pg);
+			} else {
+				mTopMenu.hidden = true;
+				mTopMenu.innerHTML = "";
+			}
+		}
+	}
 }
 
 function pdfEmbedBlockHtml(pg) {
@@ -758,6 +772,11 @@ function moreMenuHtml(pg) {
 	return '<div class="page-menu top-menu">' +
 		'<button class="menu-item" data-editundo="1">↩ Rückgängig <span class="menu-hint">Strg+Z</span></button>' +
 		'<button class="menu-item" data-editredo="1">↪ Wiederholen <span class="menu-hint">Strg+Y</span></button>' +
+		'<div class="menu-sep"></div>' +
+		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") +
+		menuBtn("exportpdf", pg.id, "🖨 Als PDF exportieren / drucken") +
+		menuBtn("exportmd", pg.id, "⬇ Als Markdown (.md) speichern") +
+		menuBtn("copylink", pg.id, "🔗 Internen Link kopieren") +
 		'<div class="menu-sep"></div>' +
 		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
 		(pg.pdfId ?
@@ -1983,6 +2002,7 @@ export const RENDER = {
 	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
 	pageIconLabel, pageIconHtml,
 	favModels, toggleFavModel, removeProviderFavorites, // Modell-Favoriten (Chat + Einstellungen → KI)
+	moreMenuHtml, shareMenuHtml,
 	openSettings: (...a) => SETTINGS.openSettings(...a),
 	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
 	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),

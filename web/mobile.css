@@ -123,6 +123,7 @@ body.mobile-ui #mTop .icon-btn::after {
 }
 body.mobile-ui #mTop .icon-btn:active { background: var(--surface-active); color: var(--text); }
 body.mobile-ui #mTop .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+body.mobile-ui #mTop #btnTopPageMenu svg circle { fill: currentColor; stroke: none; }
 
 body.mobile-ui #mTop .pill-action-btn {
 	height: 32px;
@@ -261,11 +262,31 @@ body.mobile-ui #tree {
 }
 body.mobile-ui #tree .row {
 	min-height: 44px;
-	padding: 10px 12px;
+	padding: 8px 10px;
 	border-radius: var(--radius-md);
 	transition: background .08s;
 }
 body.mobile-ui #tree .row:active { background: var(--surface-active); }
+body.mobile-ui #tree .row .row-add {
+	opacity: 1 !important;
+	width: 36px;
+	min-width: 36px;
+	height: 36px;
+	min-height: 36px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 16px;
+	border-radius: var(--radius-sm);
+	padding: 0;
+	flex: 0 0 36px;
+	color: var(--text2);
+	cursor: pointer;
+}
+body.mobile-ui #tree .row .row-add:active {
+	background: var(--surface-active);
+	color: var(--text);
+}
 /* Heft-Umschalter (workspace/heft pills) bleibt sichtbar */
 body.mobile-ui #sidebar .side-foot { display: none } /* im Mehr-Sheet */
 
@@ -469,6 +490,18 @@ body.mobile-ui .deck-counts {
 body.mobile-ui .deck-counts .cnt-due { font-size: var(--text-sm) }
 body.mobile-ui .deck-counts small { font-size: 11px }
 body.mobile-ui .deck-iconbtn { display: none }
+body.mobile-ui .deck-more-btn {
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	min-height: 40px;
+	font-size: 18px;
+	opacity: 1;
+	border-radius: var(--radius-md);
+	grid-column: 1 / -1;
+}
 body.mobile-ui .deck-actions {
 	grid-column: 1 / -1;
 	display: grid;
@@ -1199,4 +1232,29 @@ body.mobile-ui .attach-menu:not([hidden]),
 body.mobile-ui .model-menu:not([hidden]),
 body.mobile-ui .modal {
 	animation: none !important;
+}
+
+/* ⋯-Menü in der mobilen Topbar: öffnet als Dropdown unter dem Button */
+body.mobile-ui #mTopMenu:not([hidden]) .page-menu {
+	position: fixed;
+	right: 12px;
+	top: calc(var(--m-top) + 4px);
+	left: auto;
+	z-index: 1370;
+	max-height: calc(100dvh - var(--m-top) - var(--m-bot) - 16px);
+	overflow-y: auto;
+}
+
+/* Seiten-⋯ in der Sidebar: z-index über dem Sheet */
+body.mobile-ui .page-menu:not(.top-menu) {
+	z-index: 1355;
+}
+
+/* Stapel-⋯-Menü in der Hauptansicht: z-index über dem Inhalt */
+body.mobile-ui .deck-row > .page-menu {
+	position: absolute;
+	right: 0;
+	top: 100%;
+	z-index: 50;
+	margin-top: 4px;
 }

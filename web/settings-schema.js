@@ -43,7 +43,6 @@ export const SETTINGS_ITEMS = [
 	{ id: "accent", section: "appearance", group: "Design", label: "Akzentfarbe", description: "Farbe für aktive Elemente", keywords: "blau violett grün orange farbe" },
 	{ id: "tabs-position", section: "appearance", group: "Design", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "beta-ui", section: "appearance", group: "Design", label: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", keywords: "beta ui design modern experimentell oberfläche layout" },
-	{ id: "native-fullscreen", section: "appearance", group: "Android & Display", label: "Immersiver Vollbildmodus", description: "Status- und Navigationsleiste ausblenden für maximalen Zeichen- und Schreibplatz", keywords: "vollbild fullscreen immersive statusleiste notch punchhole android", platform: "native" },
 	{ id: "density", section: "appearance", group: "Lesbarkeit", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
 	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung", description: "Animationen reduzieren", keywords: "animation motion barrierefreiheit" },

@@ -228,7 +228,10 @@ function ankiDecksHtml() {
 				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (open ? "" : "disabled") + ">Lernen</button>" +
 				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, beim Start wählbar)
 				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (open ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
-			"</span></div>";
+				'<button type="button" class="deck-iconbtn deck-more-btn" data-deckmenu="' + U.esc(d) + '" title="Weitere Optionen">⋯</button>' +
+			"</span>" +
+			(S.deckMenuOpenName === d ? deckMenuHtml(d) : "") +
+			"</div>";
 	}).join("");
 	// 🃏 Übersicht-Redesign v2 (23. Juli): Hero „Heute“ mit EINEM klaren Einstieg statt der
 	// alten Fußleiste — dieselben Aktionen (Alle lernen / Feynman / Gemischt) und dieselben

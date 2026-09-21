@@ -23,5 +23,13 @@
   - Prüfen, ob der 2D-Canvas-Context in `web/heft.js` mit `{ desynchronized: true }` initialisiert werden kann (reduziert Stiftlatenz auf Android/Chromium).
 - [ ] **Android Home-Screen Widget**:
   - Optionales Widget für den Startbildschirm mit offenen Karteikarten.
-- [ ] **Android Vollbild**:
-  - Wird wie besprochen erst am Ende separat gelöst.
+- [ ] **Google Drive Login in Android-APK verifizieren**:
+  - Prüfen und Testen des OAuth2-Ablaufs in der nativen Capacitor-Umgebung (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
+- [ ] **Projekt-Entschlackung & Neustrukturierung (KISS & DRY)**:
+  - **Code-Verständnis & Übersicht neu erarbeiten**: Die gesamte Architektur und Zusammenhänge schrittweise selbst wieder durchdringen, da die Übersicht verloren gegangen ist.
+  - **Code-Dokumentation komplett neu aufbauen**: Modul-Zusammenspiel, Datenflüsse (State, DB, Cloudflare, Drive) und Kernkomponenten von Grund auf klar, verständlich und aktuell dokumentieren.
+  - **Redundanzen abbauen**: Doppelte Helfer, parallele Sonderfälle und überflüssige Abstraktionen bereinigen.
+  - **Monolithen aufbrechen & aufräumen**: Große Dateien (`heft.js`, `editor.js`, `render.js`, `state.js`, `settings.js`) auf Altlasten, ungenutzten Code und tote Pfade untersuchen.
+  - **Architektur vereinfachen**: Klare Modulverantwortlichkeiten schärfen und unnötige Komplexität konsequent entfernen, um den Arbeitsregeln wieder voll zu entsprechen.
+- [x] **Android Transparente Statusleiste**:
+  - Statusleiste permanent transparent eingeblendet (Edge-to-Edge); immersiver Vollbild-Schalter restlos entfernt.

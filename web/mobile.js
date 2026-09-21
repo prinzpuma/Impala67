@@ -181,8 +181,12 @@ export const MOBILE = (() => {
 
 		if (!act) {
 			// Overlay beim Tippen auf Tree-Einträge schließen
-			if (body.classList.contains("mnav-open") && e.target.closest("#tree .row, [data-ankistudy], [data-deckopen]"))
+			if (body.classList.contains("mnav-open") && e.target.closest("#tree .row, [data-ankistudy], [data-deckopen]")) {
+				// WICHTIG: Nicht schließen, wenn auf einen Aktions-Knopf (⋯ Menü, ＋ Unterseite, ▸ Einklappen)
+				// oder in ein geöffnetes Menü geklickt wurde!
+				if (e.target.closest("[data-pagemenu],[data-deckmenu],[data-collapse],[data-addchild],[data-decksub],.page-menu,.row-add,.row-chevron")) return;
 				body.classList.remove("mnav-open");
+			}
 			return;
 		}
 
@@ -259,6 +263,20 @@ export const MOBILE = (() => {
 		const isNoteOpen = S.view === "page" && !notesOpen && !moreOpen;
 		if (btnBack) btnBack.style.display = isNoteOpen ? "inline-flex" : "none";
 
+		const mTopWrap = document.getElementById("mTopWrap");
+		if (mTopWrap) mTopWrap.style.display = (isNoteOpen && S.pages[S.currentPageId]) ? "inline-flex" : "none";
+		const mTopMenu = document.getElementById("mTopMenu");
+		if (mTopMenu) {
+			const pg = S.pages[S.currentPageId];
+			if (isNoteOpen && pg && S.topMenu) {
+				mTopMenu.hidden = false;
+				mTopMenu.innerHTML = (S.topMenu === "share" && RENDER.shareMenuHtml) ? RENDER.shareMenuHtml(pg) : (RENDER.moreMenuHtml ? RENDER.moreMenuHtml(pg) : "");
+			} else {
+				mTopMenu.hidden = true;
+				mTopMenu.innerHTML = "";
+			}
+		}
+
 		const title = document.getElementById("mTitle");
 		const sub   = document.getElementById("mSub");
 		if (title) {
@@ -320,11 +338,12 @@ export const MOBILE = (() => {
 		});
 
 		STATE.onAfterDispatch(scheduleUI);
+		document.addEventListener("popovers:changed", scheduleUI);
 		new MutationObserver(scheduleUI).observe(body, { attributes: true, attributeFilter: ["class"] });
 		const main = document.getElementById("main");
 		if (main) new MutationObserver(scheduleUI).observe(main, { childList: true });
 		setInterval(scheduleUI, 60000);
 	}
 
-	return { init };
+	return { init, updateUI: scheduleUI };
 })();
