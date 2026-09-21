@@ -12,10 +12,10 @@ window.recordAppError = function (title, details, stack) {
 	const entry = {
 		failed: true,
 		errorName: title,
-		errorMessage: String(details?.Message || details?.Reason || details || "Fehler").slice(0, 120),
+		errorMessage: String(details?.Message || details?.Reason || details || "Fehler").slice(0, 160),
 		source: details?.Source ? String(details.Source).slice(0, 120) : undefined,
 		position: details?.Position,
-		stack: stack ? String(stack).slice(0, 120) : undefined,
+		stack: stack ? String(stack).slice(0, 160) : undefined,
 	};
 	if (window.PERF_PROFILER && typeof window.PERF_PROFILER.record === "function") {
 		window.PERF_PROFILER.record("uncaught-error", 0, entry);
@@ -23,6 +23,14 @@ window.recordAppError = function (title, details, stack) {
 		window.__earlyErrors = window.__earlyErrors || [];
 		window.__earlyErrors.push(entry);
 	}
+	try {
+		const s = document.getElementById("bootSplashMsg");
+		if (s) {
+			const src = entry.source ? (" in " + String(entry.source).split("/").pop()) : "";
+			const pos = entry.position ? (":" + entry.position) : "";
+			s.textContent = "⚠️ " + entry.errorName + ": " + entry.errorMessage + (src ? " (" + src + pos + ")" : "");
+		}
+	} catch (_) {}
 };
 window.onerror = function (message, source, lineno, colno, error) {
 	window.recordAppError("Uncaught Error", {
@@ -48,6 +56,11 @@ function resetTransientUiLayers() {
 	});
 }
 window.addEventListener("pageshow", resetTransientUiLayers);
+if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
+	navigator.serviceWorker.getRegistrations().then((regs) => {
+		for (const r of regs) r.unregister();
+	}).catch(() => {});
+}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <!-- PWA-Meta: theme-color kommt aus settings.js (hell/dunkel). -->
@@ -256,6 +269,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
 <script type="module" src="main.js?build=174"></script>
+<script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
 if ("serviceWorker" in navigator) {
@@ -269,10 +283,6 @@ if ("serviceWorker" in navigator) {
 			.catch((e) => console.warn("Service-Worker:", e));
 	}
 }
-
-// Gemini-Notebook-Button (ehemals NotebookLM): Die Logik liegt gebündelt in
-// notebooklm.js (NLM.openDialog/openExternal). Das Inline-Script hier bleibt
-// bewusst auf die PWA-/Service-Worker-Registrierung oben beschränkt.
 </script>
 </body>
 </html>

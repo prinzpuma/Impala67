@@ -93,10 +93,19 @@ const bootMsg = (t) => { const m = document.getElementById("bootSplashMsg"); if 
 // CSS-Ladekreis (bootspin) wirklich ein Frame malen kann. Ohne Yield blockieren
 // STATE.load + erster Render den Main-Thread am Stück und der Kreis hängt.
 const yieldForPaint = () => new Promise((res) => {
+	let done = false;
+	const finish = () => { if (!done) { done = true; res(); } };
+	const timer = setTimeout(finish, 50);
 	try {
-		if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(res, 0));
-		else setTimeout(res, 0);
-	} catch { setTimeout(res, 0); }
+		if (typeof requestAnimationFrame === "function") {
+			requestAnimationFrame(() => {
+				clearTimeout(timer);
+				finish();
+			});
+		} else {
+			finish();
+		}
+	} catch { finish(); }
 });
 
 export async function initApp() {

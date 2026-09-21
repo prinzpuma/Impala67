@@ -268,9 +268,10 @@ export const PLATFORM_NATIVE = {
 			const si = getPlugin("SendIntent");
 			if (!si) return null;
 			try {
-				const res = await si.checkSendIntentReceived();
+				const checkPromise = si.checkSendIntentReceived();
+				const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), 800));
+				const res = await Promise.race([checkPromise, timeoutPromise]);
 				if (!res || (!res.url && !res.title && !res.description)) return null;
-				await si.finish();
 				return {
 					type: res.type || "text",
 					url: res.url || null,

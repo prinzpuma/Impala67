@@ -788,5 +788,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

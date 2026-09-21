@@ -221,6 +221,7 @@ window.PLATFORM = PLATFORM;
 
 async function checkIncomingShare() {
 	if (!PLATFORM_NATIVE.sendIntent.isAvailable) return;
+	if (typeof DB === "undefined" || !DB.isOpen?.()) return;
 	try {
 		const shared = await PLATFORM_NATIVE.sendIntent.checkIncoming();
 		if (!shared) return;
@@ -237,41 +238,46 @@ async function checkIncomingShare() {
 	}
 }
 
-PLATFORM_NATIVE.lifecycle.init({
-	onStateChange: (isActive) => {
-		if (isActive) {
-			checkIncomingShare();
-		} else {
-			document.activeElement?.blur?.();
-			try {
-				const snap = STATE.studySnapshot?.(null);
-				const due = (snap?.counts?.neu || 0) + (snap?.counts?.learn || 0) + (snap?.counts?.review || 0);
-				if (due > 0) PLATFORM_NATIVE.notifications.scheduleSRSReview(due);
-			} catch { /* ignore */ }
-		}
-	},
-	onBackButton: () => {
-		const overlay = document.getElementById("overlay");
-		if (overlay && !overlay.hidden) {
-			closeOverlay();
-			return;
-		}
-		const palette = document.getElementById("palette");
-		if (palette && !palette.hidden) {
-			palette.hidden = true;
-			return;
-		}
-		if (document.body.classList.contains("mnav-open") || document.body.classList.contains("mmore-open")) {
-			document.body.classList.remove("mnav-open", "mmore-open");
-			return;
-		}
-		if (typeof S !== "undefined" && S.navIndex > 0) {
-			TABS.navBack();
-			return;
-		}
-		try { window.Capacitor?.Plugins?.App?.minimizeApp?.(); } catch { /* ignore */ }
-	},
-});
+let lifecycleInited = false;
+function initPlatformLifecycle() {
+	if (lifecycleInited) return;
+	lifecycleInited = true;
+	PLATFORM_NATIVE.lifecycle.init({
+		onStateChange: (isActive) => {
+			if (isActive) {
+				checkIncomingShare();
+			} else {
+				document.activeElement?.blur?.();
+				try {
+					const snap = STATE.studySnapshot?.(null);
+					const due = (snap?.counts?.neu || 0) + (snap?.counts?.learn || 0) + (snap?.counts?.review || 0);
+					if (due > 0) PLATFORM_NATIVE.notifications.scheduleSRSReview(due);
+				} catch { /* ignore */ }
+			}
+		},
+		onBackButton: () => {
+			const overlay = document.getElementById("overlay");
+			if (overlay && !overlay.hidden) {
+				closeOverlay();
+				return;
+			}
+			const palette = document.getElementById("palette");
+			if (palette && !palette.hidden) {
+				palette.hidden = true;
+				return;
+			}
+			if (document.body.classList.contains("mnav-open") || document.body.classList.contains("mmore-open")) {
+				document.body.classList.remove("mnav-open", "mmore-open");
+				return;
+			}
+			if (typeof S !== "undefined" && S.navIndex > 0) {
+				TABS.navBack();
+				return;
+			}
+			try { window.Capacitor?.Plugins?.App?.minimizeApp?.(); } catch { /* ignore */ }
+		},
+	});
+}
 
 // ⛶ Karteikarten-Vollbild als Zustand statt als loser Body-Klasse — so weiß jede Ansicht,
 // dass es an ist, und es lässt sich überall wieder verlassen (⛶-Taste, auch auf dem Handy).
@@ -437,6 +443,7 @@ const APPEARANCE_BTN = {
 };
 
 function wireEvents() {
+	initPlatformLifecycle();
 	// dispatch() rendert bereits rAF-gebündelt → nach dispatch kein extra render();
 	// reine UI-Navigation ohne dispatch rendert sofort.
 	// „＋ Neue Zeile“ in der Datenbank-Ansicht — wird beim nächsten Sync als echte Notion-Zeile angelegt
