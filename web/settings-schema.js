@@ -43,6 +43,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "accent", section: "appearance", group: "Design", label: "Akzentfarbe", description: "Farbe für aktive Elemente", keywords: "blau violett grün orange farbe" },
 	{ id: "tabs-position", section: "appearance", group: "Design", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "beta-ui", section: "appearance", group: "Design", label: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", keywords: "beta ui design modern experimentell oberfläche layout" },
+	{ id: "native-fullscreen", section: "appearance", group: "Android & Display", label: "Immersiver Vollbildmodus", description: "Status- und Navigationsleiste ausblenden für maximalen Zeichen- und Schreibplatz", keywords: "vollbild fullscreen immersive statusleiste notch punchhole android", platform: "native" },
 	{ id: "density", section: "appearance", group: "Lesbarkeit", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
 	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung", description: "Animationen reduzieren", keywords: "animation motion barrierefreiheit" },
@@ -70,6 +71,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "danger-chats", section: "data", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
 	{ id: "danger-cards", section: "data", group: "Gefahrenzone", label: "Alle Karteikarten löschen", description: "Alle Karteikarten, Stapel und Lernfortschritte entfernen", keywords: "karteikarten anki karten stapel deck löschen zurücksetzen" },
 	{ id: "controller-status", section: "devices", group: "Controller", label: "Controller-Steuerung", description: "Gamepad verbinden, Hinweise und Vibration", keywords: "gamepad pad xbox playstation stadia" },
+	{ id: "native-haptics", section: "devices", group: "Haptik", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
 	{ id: "controller-map", section: "devices", group: "Belegung", label: "Tastenbelegung", description: "Aktionen an Controller-Tasten binden", keywords: "mapping anlernen taste button" },
 	{ id: "controller-advanced", section: "devices", group: "Erweitert", label: "Deadzone & HID", description: "Rohe Achsen und nicht standardisierte Controller", keywords: "hid achse trigger deadzone technisch" },
 ];

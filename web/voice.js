@@ -62,11 +62,23 @@ function start(type) {
 	if (PLATFORM_NATIVE.speech.isAvailable) {
 		listening = true;
 		updateButton();
+		const full = (type || "side") === "full";
+		const input = document.getElementById(full ? "mainChatInput" : "chatInput");
+		const baseValue = input ? input.value : "";
 		PLATFORM_NATIVE.speech.startListening({
 			lang: "de-DE",
-			onResult: (text) => {
-				handleResult(text);
-				stopListening();
+			onPartial: (partialText) => {
+				if (input && partialText) {
+					input.value = baseValue ? `${baseValue.trim()} ${partialText}` : partialText;
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+				}
+			},
+			onResult: (finalText) => {
+				clearRecognition();
+				const resultText = (finalText && finalText.trim()) || (input ? input.value.trim() : "");
+				if (resultText) {
+					handleResult(resultText);
+				}
 			},
 			onError: (err) => {
 				clearRecognition();

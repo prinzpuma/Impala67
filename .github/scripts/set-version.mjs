@@ -33,4 +33,15 @@ if (!/const CACHE = "impala67-v[^"]+"/.test(worker)) {
 worker = worker.replace(/const CACHE = "impala67-v[^"]+"/, `const CACHE = "impala67-v${version}"`);
 fs.writeFileSync(workerPath, worker);
 
+const gradlePath = "./android/app/build.gradle";
+if (fs.existsSync(gradlePath)) {
+  let gradle = fs.readFileSync(gradlePath, "utf8");
+  const [major, minor, patch] = version.split(".").map(Number);
+  const versionCode = major * 100000 + minor * 1000 + patch;
+  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
+  gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
+  fs.writeFileSync(gradlePath, gradle);
+  console.log(`Android build.gradle gesetzt: versionCode ${versionCode}, versionName "${version}".`);
+}
+
 console.log(`PWA-Version ${version} gesetzt.`);

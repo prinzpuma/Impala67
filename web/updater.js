@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "0.3.0";
+const BUILD_VERSION = "2.2.0";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -145,6 +145,18 @@ async function fetchWorkerVersion() {
 }
 
 async function fetchDeployedVersion() {
+	if (window.Capacitor?.isNativePlatform?.()) {
+		try {
+			const res = await fetch("https://raw.githubusercontent.com/prinzpuma/Impala67/main/web/version.json?t=" + Date.now());
+			if (res.ok) {
+				const data = await res.json();
+				const latest = normVer(data?.version);
+				if (latest) return { latest, source: "GitHub Releases" };
+			}
+		} catch {
+			/* Fallback zu lokalen Dateien */
+		}
+	}
 	const errors = [];
 	for (const [source, url] of [["version.json", "./version.json"], ["version.json(module)", new URL("./version.json", import.meta.url)]]) {
 		try {
@@ -174,7 +186,7 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	pendingUpdate = hasUpdate ? { version: latest } : null;
 	// Das neue Bundle bereits laden, aber NICHT aktivieren. Erst der bewusste
 	// Klick sendet SKIP_WAITING; so kann keine alte UI neue Lazy-Module erhalten.
-	preparingUpdate = hasUpdate ? refreshServiceWorker() : null;
+	preparingUpdate = (hasUpdate && !window.Capacitor?.isNativePlatform?.()) ? refreshServiceWorker() : null;
 	return {
 		ok: true,
 		latest,
@@ -188,6 +200,15 @@ window.checkAppUpdate = async function checkAppUpdate() {
 window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const expectedVersion = pendingUpdate?.version || "";
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
+
+	if (window.Capacitor?.isNativePlatform?.()) {
+		say("⬇️ APK-Download wird im Browser geöffnet…");
+		const apkUrl = "https://github.com/prinzpuma/Impala67/releases/latest/download/Impala67.apk";
+		window.open(apkUrl, "_system");
+		pendingUpdate = null;
+		return { reloaded: false, nativeDownload: true };
+	}
+
 	say(expectedVersion ? "⬇️ Update wird vorbereitet…" : "🔄 App wird neu geladen…");
 	try {
 		const reg = await (preparingUpdate || refreshServiceWorker());

@@ -93,13 +93,22 @@ function renderAppearance(vm) {
 	const accents = [["blue", "Blau"], ["violet", "Violett"], ["green", "Grün"], ["orange", "Orange"]];
 	const accentButtons = '<div class="settings-accents" role="group" aria-label="Akzentfarbe">' + accents.map(([value, label]) =>
 		'<button type="button" data-accent="' + value + '" class="accent-' + value + (vm.accent === value ? " active" : "") + '" aria-pressed="' + (vm.accent === value) + '"><span></span>' + label + "</button>").join("") + "</div>";
+	const nativeFullscreenRow = vm.isNative
+		? UI.row({
+			id: "native-fullscreen",
+			title: "Immersiver Vollbildmodus",
+			description: "Status- und Navigationsleiste ausblenden (Wischen vom Rand blendet Leisten temporär ein)",
+			trailing: switchControl("inpNativeFullscreen", "Immersiver Vollbildmodus", vm.nativeFullscreenEnabled),
+		})
+		: "";
 	const design = UI.row({ id: "theme", title: "Erscheinungsbild", description: theme === "system" ? "Folgt automatisch deinem Gerät" : "Manuell festgelegt", trailing: UI.segmented("themeSegments", [
 		{ value: "system", label: "System", id: "btnThemeSystem" }, { value: "light", label: "Hell", id: "btnThemeLight" }, { value: "dark", label: "Dunkel", id: "btnThemeDark" },
 	], theme, "Erscheinungsbild") }) + UI.row({ id: "accent", title: "Akzentfarbe", description: "Für Auswahl, Fokus und wichtige Aktionen", trailing: accentButtons, className: "is-stacked" }) +
 	UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
 		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },
 	], vm.tabsPosition || "top", "Tab-Anordnung") }) +
-	UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
+	UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) }) +
+	nativeFullscreenRow;
 	const readable = UI.row({ id: "density", title: "Darstellungsdichte", description: "Bestimmt Abstände und Informationsdichte", trailing: UI.segmented("densitySegments", [
 		{ value: "compact", label: "Kompakt", id: "btnDensityCompact" }, { value: "comfortable", label: "Komfortabel", id: "btnDensityComfortable" },
 	], vm.density, "Darstellungsdichte") }) + UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
@@ -308,9 +317,18 @@ function renderData(vm) {
 	return UI.page("Daten & App", "Sichere deine Daten, kontrolliere Speicher und halte die App aktuell.", UI.group("Backup & Wiederherstellung", backup, { id: "backup" }) + UI.group("Weitere Exporte", exports, { id: "data-export" }) + UI.group("Lokaler Speicher", storage, { id: "storage" }) + UI.group("Performance-Diagnose", diagnostics, { id: "performance-profiler" }) + UI.group("App-Updates", update, { id: "updates" }) + UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }));
 }
 
-function renderDevices() {
-	const content = window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>';
-	return UI.page("Geräte & Bedienung", "Nutze Controller, ohne eine zweite Lernlogik oder komplizierte Einrichtung.", content);
+function renderDevices(vm) {
+	const nativeHapticsRow = vm?.isNative
+		? UI.row({
+			id: "native-haptics",
+			title: "Haptisches Feedback",
+			description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen",
+			trailing: switchControl("inpNativeHaptics", "Haptisches Feedback", vm.nativeHapticsEnabled),
+		})
+		: "";
+	const content = (nativeHapticsRow ? UI.group("Haptik & Vibration", nativeHapticsRow, { id: "native-haptics-group" }) : "") +
+		(window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>');
+	return UI.page("Geräte & Bedienung", "Nutze Controller und passe Eingaben an dein Gerät an.", content);
 }
 
 function renderMobileOverview(vm) {
@@ -366,7 +384,7 @@ export function renderSettingsPage(section, vm) {
 	if (section === "ai") return renderAi(vm);
 	if (section === "sync") return renderSync();
 	if (section === "data") return renderData(vm);
-	if (section === "devices") return renderDevices();
+	if (section === "devices") return renderDevices(vm);
 	return renderOverview(vm);
 }
 

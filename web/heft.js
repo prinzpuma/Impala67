@@ -2401,9 +2401,9 @@ export const HEFT = (() => {
 
 		if (PLATFORM_NATIVE.scanner.isAvailable) {
 			try {
-				const images = await PLATFORM_NATIVE.scanner.scan({ pageLimit: 20 });
-				if (images && images.length) {
-					for (const imgUri of images) {
+				const res = await PLATFORM_NATIVE.scanner.scan({ pageLimit: 25 });
+				if (res?.images?.length) {
+					for (const imgUri of res.images) {
 						const src = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
 							? window.Capacitor.convertFileSrc(imgUri)
 							: imgUri;
@@ -2414,12 +2414,12 @@ export const HEFT = (() => {
 					}
 					saveSoon();
 					render();
-					return;
 				}
-				if (images) return; // Nutzer hat den Scanner bewusst abgebrochen
 			} catch (err) {
-				console.warn("[heft] Native scanner error, falling back to web scanner:", err);
+				console.warn("[heft] Native scanner error:", err);
 			}
+			// In der nativen App bleibt der Web-Kamera-Scanner vollständig deaktiviert.
+			return;
 		}
 
 		const wrap = document.createElement("div");

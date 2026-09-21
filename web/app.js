@@ -225,11 +225,72 @@ async function checkIncomingShare() {
 	try {
 		const shared = await PLATFORM_NATIVE.sendIntent.checkIncoming();
 		if (!shared) return;
-		if (shared.text || shared.title) {
-			const title = shared.title || "Geteilte Notiz";
-			const content = shared.text || "";
+
+		const type = String(shared.type || "").toLowerCase();
+		const items = [shared.url, ...(shared.additionalItems || [])].filter(Boolean);
+
+		// 1. PDF-Dateien geteilt
+		const isPdf = type.includes("pdf") || items.some((uri) => String(uri).toLowerCase().endsWith(".pdf"));
+		if (isPdf && items.length > 0 && typeof PDFS !== "undefined" && typeof PDFS.ingest === "function") {
+			try {
+				const uri = items[0];
+				const fileSrc = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
+					? window.Capacitor.convertFileSrc(uri)
+					: uri;
+				const resp = await fetch(fileSrc);
+				const blob = await resp.blob();
+				const file = new File([blob], shared.title || "Geteiltes Dokument.pdf", { type: "application/pdf" });
+				await PDFS.ingest(file, (msg) => U.toast(msg, "info"));
+				U.toast("PDF erfolgreich geteilt & importiert!", "success");
+				return;
+			} catch (pdfErr) {
+				console.warn("[app] Geteiltes PDF konnte nicht importiert werden:", pdfErr);
+			}
+		}
+
+		// 2. Bilder geteilt
+		const isImage = type.includes("image") || items.some((uri) => /\.(png|jpe?g|webp|gif)$/i.test(String(uri)));
+		if (isImage && items.length > 0) {
+			try {
+				const id = U.uid();
+				const title = shared.title || "Geteiltes Bild";
+				let mdContent = "";
+				for (const uri of items) {
+					const fileSrc = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
+						? window.Capacitor.convertFileSrc(uri)
+						: uri;
+					const resp = await fetch(fileSrc);
+					const blob = await resp.blob();
+					const blobId = U.uid();
+					await DB.putBlob(blobId, await U.readAsBuffer(blob), { name: "image.png", size: blob.size, type: blob.type || "image/png" });
+					mdContent += `![${title}](blob:${blobId})\n\n`;
+				}
+				if (shared.text && shared.text !== title) {
+					mdContent += shared.text + "\n\n";
+				}
+				await STATE.dispatch("pageCreate", { id, title, content: mdContent, parentId: null });
+				openPage(id);
+				U.toast("Bild(er) mit Impala67 geteilt", "success");
+				return;
+			} catch (imgErr) {
+				console.warn("[app] Geteilte Bilder konnten nicht importiert werden:", imgErr);
+			}
+		}
+
+		// 3. Text oder Link geteilt
+		let text = shared.text || "";
+		const url = shared.url || "";
+		if (url && !text.includes(url)) {
+			text = text ? `${text}\n\n${url}` : url;
+		}
+		if (text || shared.title) {
+			let title = shared.title;
+			if (!title && url) {
+				try { title = new URL(url).hostname; } catch { title = "Geteilter Link"; }
+			}
+			title = title || "Geteilte Notiz";
 			const id = U.uid();
-			await STATE.dispatch("pageCreate", { id, title, content, parentId: null });
+			await STATE.dispatch("pageCreate", { id, title, content: text, parentId: null });
 			openPage(id);
 			U.toast("Geteilt mit Impala67: " + title, "success");
 		}
@@ -242,6 +303,15 @@ let lifecycleInited = false;
 function initPlatformLifecycle() {
 	if (lifecycleInited) return;
 	lifecycleInited = true;
+
+	PLATFORM_NATIVE.notifications.onActionPerformed?.(() => {
+		try {
+			if (typeof openAnki === "function") openAnki();
+		} catch (err) {
+			console.warn("[app] Fehler beim Öffnen des Lernmodus aus Benachrichtigung:", err);
+		}
+	});
+
 	PLATFORM_NATIVE.lifecycle.init({
 		onStateChange: (isActive) => {
 			if (isActive) {
@@ -256,6 +326,11 @@ function initPlatformLifecycle() {
 			}
 		},
 		onBackButton: () => {
+			const scanClose = document.querySelector(".heft-scan [data-hescanclose]");
+			if (scanClose) {
+				scanClose.click();
+				return;
+			}
 			const overlay = document.getElementById("overlay");
 			if (overlay && !overlay.hidden) {
 				closeOverlay();
@@ -1834,6 +1909,23 @@ function wireEvents() {
 		}
 		if (e.target.id === "inpNativeFsBackup") {
 			localStorage.setItem("impala67NativeFsBackup", e.target.checked ? "1" : "0");
+			return;
+		}
+		if (e.target.id === "inpNativeFullscreen") {
+			const enabled = e.target.checked;
+			localStorage.setItem("impala67NativeFullscreen", enabled ? "1" : "0");
+			try {
+				if (enabled) {
+					window.Capacitor?.Plugins?.StatusBar?.hide?.();
+				} else {
+					window.Capacitor?.Plugins?.StatusBar?.show?.();
+				}
+			} catch { /* ignore */ }
+			return;
+		}
+		if (e.target.id === "inpNativeHaptics") {
+			localStorage.setItem("impala67NativeHaptics", e.target.checked ? "1" : "0");
+			if (e.target.checked) PLATFORM_NATIVE.haptics.light();
 			return;
 		}
 		if (e.target.id === "inpOverlearn") {

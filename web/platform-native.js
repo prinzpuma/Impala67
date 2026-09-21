@@ -18,7 +18,12 @@ export const PLATFORM_NATIVE = {
 
 	// ---- Taktiles Haptik-Feedback ----
 	haptics: {
+		isEnabled() {
+			return typeof localStorage === "undefined" || localStorage.getItem("impala67NativeHaptics") !== "0";
+		},
+
 		async selection() {
+			if (!this.isEnabled()) return false;
 			const h = getPlugin("Haptics");
 			if (h?.selectionChanged) {
 				try { await h.selectionChanged(); return true; } catch { /* ignore */ }
@@ -30,6 +35,7 @@ export const PLATFORM_NATIVE = {
 		},
 
 		async light() {
+			if (!this.isEnabled()) return false;
 			const h = getPlugin("Haptics");
 			if (h?.impact) {
 				try { await h.impact({ style: "LIGHT" }); return true; } catch { /* ignore */ }
@@ -41,6 +47,7 @@ export const PLATFORM_NATIVE = {
 		},
 
 		async medium() {
+			if (!this.isEnabled()) return false;
 			const h = getPlugin("Haptics");
 			if (h?.impact) {
 				try { await h.impact({ style: "MEDIUM" }); return true; } catch { /* ignore */ }
@@ -52,6 +59,7 @@ export const PLATFORM_NATIVE = {
 		},
 
 		async error() {
+			if (!this.isEnabled()) return false;
 			const h = getPlugin("Haptics");
 			if (h?.notification) {
 				try { await h.notification({ type: "ERROR" }); return true; } catch { /* ignore */ }
@@ -124,6 +132,27 @@ export const PLATFORM_NATIVE = {
 				console.warn("[platform-native] Benachrichtigung konnte nicht geplant werden:", err);
 				return false;
 			}
+		},
+
+		onActionPerformed(callback) {
+			const n = getPlugin("LocalNotifications");
+			if (!n || typeof callback !== "function") return () => {};
+			let handle = null;
+			try {
+				const res = n.addListener("localNotificationActionPerformed", (action) => {
+					callback(action);
+				});
+				if (res && typeof res.then === "function") {
+					res.then((h) => { handle = h; }).catch(() => {});
+				} else {
+					handle = res;
+				}
+			} catch (err) {
+				console.warn("[platform-native] localNotificationActionPerformed listener error:", err);
+			}
+			return () => {
+				try { handle?.remove?.(); } catch { /* ignore */ }
+			};
 		},
 	},
 
@@ -205,15 +234,36 @@ export const PLATFORM_NATIVE = {
 		get isAvailable() {
 			return Boolean(getPlugin("DocumentScanner"));
 		},
-		async scan({ pageLimit = 15 } = {}) {
+		async scan({ pageLimit = 25 } = {}) {
 			const ds = getPlugin("DocumentScanner");
-			if (!ds) return null;
+			if (!ds) return { success: false, images: [], canceled: false };
 			try {
-				const res = await ds.scanDocument({ pageLimit });
-				return res?.scannedImages || [];
+				const res = await ds.scanDocument({
+					pageLimit,
+					scannerMode: "FULL",
+					galleryImportAllowed: true,
+					resultFormats: "JPEG_PDF",
+				});
+				const images = res?.scannedImages || [];
+				return {
+					success: true,
+					images,
+					pdf: res?.pdf || null,
+					canceled: false,
+				};
 			} catch (err) {
-				console.warn("[platform-native] ML Kit Scanner abgebrochen oder fehlgeschlagen:", err);
-				return null;
+				const msg = String(err?.message || err || "").toLowerCase();
+				const isCancel = msg.includes("cancel") || msg.includes("aborted") || msg.includes("user_canceled");
+				if (!isCancel) {
+					console.warn("[platform-native] ML Kit Scanner Fehler:", err);
+				}
+				return {
+					success: false,
+					images: [],
+					pdf: null,
+					canceled: isCancel,
+					error: isCancel ? null : (err?.message || "Scanner-Fehler"),
+				};
 			}
 		},
 	},
@@ -223,6 +273,8 @@ export const PLATFORM_NATIVE = {
 		get isAvailable() {
 			return Boolean(getPlugin("SpeechRecognition"));
 		},
+		_activeListening: false,
+		_lastTranscript: "",
 		async hasPermission() {
 			const sr = getPlugin("SpeechRecognition");
 			if (!sr) return false;
@@ -239,7 +291,7 @@ export const PLATFORM_NATIVE = {
 				return Boolean(res?.speechRecognition === "granted");
 			} catch { return false; }
 		},
-		async startListening({ lang = "de-DE", onResult, onError } = {}) {
+		async startListening({ lang = "de-DE", onPartial, onResult, onError } = {}) {
 			const sr = getPlugin("SpeechRecognition");
 			if (!sr) return false;
 			try {
@@ -248,11 +300,27 @@ export const PLATFORM_NATIVE = {
 					const req = await this.requestPermission();
 					if (!req) { onError?.("Mikrofon-Berechtigung verweigert"); return false; }
 				}
+				this._activeListening = true;
+				this._lastTranscript = "";
 				sr.removeAllListeners?.();
+
 				sr.addListener("partialResults", (data) => {
 					const text = data?.matches?.[0] || "";
-					if (text) onResult?.(text, false);
+					if (text) {
+						this._lastTranscript = text;
+						onPartial?.(text);
+					}
 				});
+
+				sr.addListener("listeningState", (state) => {
+					if (state?.status === "stopped" || state?.state === "stopped") {
+						if (this._activeListening) {
+							this._activeListening = false;
+							onResult?.(this._lastTranscript);
+						}
+					}
+				});
+
 				await sr.start({
 					language: lang,
 					maxResults: 1,
@@ -262,6 +330,7 @@ export const PLATFORM_NATIVE = {
 				});
 				return true;
 			} catch (err) {
+				this._activeListening = false;
 				onError?.(err?.message || "Spracherkennung fehlgeschlagen");
 				return false;
 			}
@@ -269,6 +338,7 @@ export const PLATFORM_NATIVE = {
 		async stopListening() {
 			const sr = getPlugin("SpeechRecognition");
 			if (!sr) return false;
+			this._activeListening = false;
 			try {
 				await sr.stop();
 				sr.removeAllListeners?.();
@@ -287,9 +357,16 @@ export const PLATFORM_NATIVE = {
 			if (!si) return null;
 			try {
 				const checkPromise = si.checkSendIntentReceived();
-				const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), 800));
+				const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), 3500));
 				const res = await Promise.race([checkPromise, timeoutPromise]);
-				if (!res || (!res.url && !res.title && !res.description)) return null;
+				if (!res) return null;
+
+				const hasContent = res.url || res.title || res.description || (Array.isArray(res.additionalItems) && res.additionalItems.length > 0);
+				if (!hasContent) return null;
+
+				// Intent nach erfolgreicher Übergabe leeren
+				try { si.finish?.(); } catch { /* ignore */ }
+
 				return {
 					type: res.type || "text",
 					url: res.url || null,
@@ -301,5 +378,9 @@ export const PLATFORM_NATIVE = {
 				return null;
 			}
 		},
+		finish() {
+			try { getPlugin("SendIntent")?.finish?.(); } catch { /* ignore */ }
+		},
 	},
 };
+
