@@ -1,0 +1,8 @@
+# Lokale Android-Signierungskonfiguration (optional)
+# Kopiere diese Datei nach 'key.properties' (wird von Git ignoriert)
+# und trage deine echten Keystore-Pfade und Passwörter ein.
+
+storeFile=release.keystore
+storePassword=dein_keystore_passwort
+keyAlias=dein_schluessel_alias
+keyPassword=dein_schluessel_passwort

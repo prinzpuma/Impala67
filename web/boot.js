@@ -18,6 +18,7 @@ import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { initMcpBridge } from "./mcp-bridge.js";
+import { HEFT_INDEXER } from "./heft-indexer.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -274,6 +275,7 @@ export async function initApp() {
 		// PERF: purgeOldTrash & purgeOrphanBlobs laufen im Leerlauf nach dem ersten Rendern
 		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
 		purgeOrphanBlobs();
+		try { HEFT_INDEXER.startBackgroundScan(); } catch (e) { console.warn("Heft-Indexer Start übersprungen:", e); }
 	});
 	// Zusatzbibliotheken nur im Hintergrund in Cache Storage ablegen. Der Start
 	// wartet nicht darauf und keine Bibliothek wird dabei ausgefuehrt.

@@ -879,12 +879,15 @@ export const AI = (() => {
 				if (Array.isArray(pg?.texts)) {
 					for (const t of pg.texts) if (t?.text) parts.push(String(t.text).trim());
 				}
-				const typedText = parts.filter(Boolean).join("\n");
+				if (pg?.ocrText && String(pg.ocrText).trim()) {
+					parts.push(`Handschrift-Transkript:\n${String(pg.ocrText).trim()}`);
+				}
+				const textContent = parts.filter(Boolean).join("\n\n");
 				let heftLine = `Handschrift-Heft „${heft.page.title}“ ist geöffnet (Seite ${heft.idx + 1}).`;
-				if (typedText) {
-					heftLine += `\nGetippte Text-Boxen auf dieser Seite:\n${typedText}\n(Der handschriftliche/visuelle Inhalt wird als Bild übergeben.)`;
+				if (textContent) {
+					heftLine += `\nInhalt dieser Seite:\n${textContent}\n(Visuelle Zeichnungen/Skizzen werden zusätzlich als Bild übergeben.)`;
 				} else {
-					heftLine += " Der Inhalt wird als Bild übergeben — falls kein Vision-Modell aktiv ist, steht kein visueller Inhalt zur Verfügung.";
+					heftLine += " Der visuelle Inhalt wird als Bild übergeben.";
 				}
 				lines.push(heftLine);
 			} else {
@@ -1112,12 +1115,15 @@ export const AI = (() => {
 			if (Array.isArray(pg?.texts)) {
 				for (const t of pg.texts) if (t?.text) parts.push(String(t.text).trim());
 			}
-			const text = parts.filter(Boolean).join("\n");
+			if (pg?.ocrText && String(pg.ocrText).trim()) {
+				parts.push(`[Erkannter Handschrift-Text]:\n${String(pg.ocrText).trim()}`);
+			}
+			const text = parts.filter(Boolean).join("\n\n");
 			const out = {
 				ok: true,
 				hinweis: `Heftseite ${pageNo} folgt direkt nach den Tool-Ergebnissen als Bild-Nachricht. Falls du Bilder technisch nicht sehen kannst (kein Vision-Modell), sage das kurz und ehrlich.`,
 			};
-			if (text) out.typedText = text;
+			if (text) out.content = text;
 			return {
 				detail: `${args.page_title || "aktuelles Heft"} · Seite ${pageNo}`,
 				out,

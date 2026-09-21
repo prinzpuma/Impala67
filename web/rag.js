@@ -126,6 +126,34 @@ export const RAG = (() => {
 				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 40000);
 			} catch (e) { console.warn("Inline-PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
+		// Auch Handschrift-Hefte (getippte Textfelder und ML-Kit Handschrift-OCR) indexieren
+		const hdoc = (S.heftDocs && S.heftDocs[pageId]) || null;
+		if (hdoc && Array.isArray(hdoc.pages) && hdoc.pages.length > 0) {
+			const pageBlocks = [];
+			for (let i = 0; i < hdoc.pages.length; i++) {
+				const hp = hdoc.pages[i];
+				const parts = [];
+				if (Array.isArray(hp.texts)) {
+					for (const t of hp.texts) {
+						if (t?.text && String(t.text).trim()) parts.push(String(t.text).trim());
+					}
+				}
+				if (hp.ocrText && String(hp.ocrText).trim()) {
+					parts.push(String(hp.ocrText).trim());
+				}
+				if (parts.length) {
+					pageBlocks.push(`### Seite ${i + 1}\n` + parts.join("\n"));
+				}
+			}
+			if (pageBlocks.length) {
+				text += "\n\n## Handschrift-Notizen\n" + pageBlocks.join("\n\n");
+			}
+		} else if (S.heftMeta && S.heftMeta[pageId] && S.heftMeta[pageId].ocrText) {
+			const metaText = String(S.heftMeta[pageId].ocrText).trim();
+			if (metaText) {
+				text += "\n\n## Handschrift-Notizen\n" + metaText;
+			}
+		}
 		const chunks = chunk(text);
 		if (!chunks.length) { await dropIndex(pageId); return; }
 		// iPad/WebKit darf nie einen kompletten PDF-Index als einen einzigen

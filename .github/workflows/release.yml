@@ -1,25 +1,41 @@
-name: PWA veröffentlichen
+name: Release & Android APK veröffentlichen
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release-Typ'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - manual
+      manual_version:
+        description: 'Manuelle Versionsnummer (z. B. 2.3.0, nur bei Typ manual)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pwa-release
+  group: app-release
   cancel-in-progress: false
 
 jobs:
   version:
-    name: Prüfen und Version bestimmen
+    name: Release-Version bestimmen
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.next.outputs.version }}
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -33,83 +49,118 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: PWA-Dateien prüfen
+      - name: Tests und Syntax prüfen
         run: |
           set -euo pipefail
           if grep -RIn --exclude-dir=.git -E '^(<<<<<<< |>>>>>>> )' .; then
             echo "::error::Ungelöste Git-Konfliktmarker gefunden."
             exit 1
           fi
-          node -e 'JSON.parse(require("fs").readFileSync("web/version.json", "utf8")); console.log("Gültiges web/version.json")'
           npm run verify
 
-      - name: Nächste freie Version bestimmen
-        id: next
+      - name: Version berechnen und Tag vorbereiten
+        id: ver
         run: |
           set -euo pipefail
-          CURRENT=$(node -p "require('./web/version.json').version")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          # version.json ist der zuletzt bekannte Stand; jede Veröffentlichung
-          # erhält daher mindestens die nächste Patch-Version.
-          PATCH=$((PATCH + 1))
-          NEW="$MAJOR.$MINOR.$PATCH"
-          while git ls-remote --exit-code --tags origin "refs/tags/v$NEW" >/dev/null 2>&1; do
-            PATCH=$((PATCH + 1))
-            NEW="$MAJOR.$MINOR.$PATCH"
-          done
-          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-  deploy:
-    name: PWA auf GitHub Pages veröffentlichen
-    needs: version
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v5
-      - name: Versionsdateien setzen
-        run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
-      - name: PWA prüfen
-        run: |
-          find web -type f -name '*.js' -print0 | xargs -0 -n1 node --check
-          node .github/scripts/check-version-sync.mjs "${{ needs.version.outputs.version }}"
-          node .github/scripts/check-pwa-cache.mjs
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: web
-      - id: deployment
-        uses: actions/deploy-pages@v5
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            TYPE="${{ github.event.inputs.release_type }}"
+            if [ "$TYPE" = "manual" ]; then
+              VERSION="${{ github.event.inputs.manual_version }}"
+              if [ -z "$VERSION" ]; then
+                echo "::error::Manuelle Version darf nicht leer sein."
+                exit 1
+              fi
+            else
+              CURRENT=$(node -p "require('./web/version.json').version")
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+              if [ "$TYPE" = "major" ]; then
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+              elif [ "$TYPE" = "minor" ]; then
+                MINOR=$((MINOR + 1))
+                PATCH=0
+              else
+                PATCH=$((PATCH + 1))
+              fi
+              VERSION="$MAJOR.$MINOR.$PATCH"
+              while git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; do
+                PATCH=$((PATCH + 1))
+                VERSION="$MAJOR.$MINOR.$PATCH"
+              done
+            fi
+            TAG="v$VERSION"
+            if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              git tag -a "$TAG" "$GITHUB_SHA" -m "Impala67 $TAG"
+              git push origin "$TAG"
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   build-apk:
-    name: Android APK bauen
+    name: Native Android Release APK bauen
     needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
+
       - name: Abhängigkeiten installieren
         run: npm ci
-      - name: Versionsdateien setzen
+
+      - name: Versionsdateien synchronisieren
         run: node .github/scripts/set-version.mjs "${{ needs.version.outputs.version }}"
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'tools platform-tools platforms;android-36 build-tools;36.0.0'
-      - name: Make gradlew executable
+
+      - name: Gradle Wrapper ausführbar machen
         working-directory: android
         run: chmod +x gradlew
+
+      - name: Release-Keystore vorbereiten (GitHub Secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Release-Keystore aus Secret decodieren..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+            echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          else
+            echo "Hinweis: Kein ANDROID_KEYSTORE_BASE64 Secret hinterlegt. APK wird mit Debug-Signatur als installierbarer Fallback gebaut."
+          fi
+
       - name: Capacitor Sync
         run: npx cap sync android
+
       - name: Release APK bauen
         working-directory: android
         run: |
@@ -119,6 +170,7 @@ jobs:
             tail -n 120 gradle-build.log
             exit 1
           }
+
       - name: Gradle Build Log hochladen
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,58 +178,46 @@ jobs:
           name: gradle-build-log
           path: android/gradle-build.log
           if-no-files-found: ignore
-      - name: APK für Release vorbereiten
+
+      - name: APK bereitstellen
         run: cp android/app/build/outputs/apk/release/app-release.apk Impala67.apk
-      - name: APK als Artefakt bereitstellen
+
+      - name: APK als Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
           name: impala67-apk
           path: Impala67.apk
           if-no-files-found: error
 
-  release:
-    name: GitHub Release & APK veröffentlichen
-    needs: [version, deploy, build-apk]
-    if: ${{ always() && needs.deploy.result == 'success' }}
+  publish:
+    name: GitHub Release veröffentlichen
+    needs: [version, build-apk]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+
       - name: APK Artefakt herunterladen
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: impala67-apk
           path: apk-dist
-      - name: Release erstellen und APK anhängen
+
+      - name: Release erstellen oder aktualisieren
         env:
+          TAG: ${{ needs.version.outputs.tag }}
           VERSION: ${{ needs.version.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          TAG="v$VERSION"
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG existiert bereits; Release-Erstellung wird übersprungen."
-            exit 0
-          fi
-          git tag -a "$TAG" "$GITHUB_SHA" -m "Impala67 $TAG"
-          git push origin "$TAG"
-
-          if [ -f apk-dist/Impala67.apk ]; then
-            echo "Erstelle GitHub Release mit Impala67.apk..."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG existiert bereits – lade Impala67.apk hoch..."
+            gh release upload "$TAG" apk-dist/Impala67.apk --clobber
+          else
+            echo "Erstelle GitHub Release $TAG mit Impala67.apk..."
             gh release create "$TAG" apk-dist/Impala67.apk \
               --title "Impala67 $TAG" \
-              --notes "Release $TAG – PWA und native Android APK." \
-              --latest
-          else
-            echo "Erstelle GitHub Release ohne APK..."
-            gh release create "$TAG" \
-              --title "Impala67 $TAG" \
-              --notes "Release $TAG – PWA." \
+              --notes "Offizielles Release $TAG – PWA und native Android APK." \
               --latest
           fi

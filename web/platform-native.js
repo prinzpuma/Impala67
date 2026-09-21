@@ -382,5 +382,53 @@ export const PLATFORM_NATIVE = {
 			try { getPlugin("SendIntent")?.finish?.(); } catch { /* ignore */ }
 		},
 	},
+
+	// ---- Google ML Kit On-Device Text- & Handschrifterkennung ----
+	ocr: {
+		get isAvailable() {
+			return Boolean(getPlugin("TextRecognition"));
+		},
+
+		async recognizeCanvas(canvas) {
+			const tr = getPlugin("TextRecognition");
+			const fs = getPlugin("Filesystem");
+			if (!tr || !canvas) return null;
+
+			const fileName = `ocr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+			let tempUri = null;
+			try {
+				const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+				const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+
+				if (fs?.writeFile) {
+					const writeRes = await fs.writeFile({
+						path: `temp/${fileName}`,
+						data: base64,
+						directory: "CACHE",
+						recursive: true,
+					});
+					tempUri = writeRes?.uri || `temp/${fileName}`;
+				}
+
+				if (!tempUri) return null;
+
+				const res = await tr.processImage({ path: tempUri });
+				return typeof res?.text === "string" ? res.text.trim() : "";
+			} catch (err) {
+				console.warn("[platform-native] ML Kit OCR fehlgeschlagen:", err);
+				return null;
+			} finally {
+				if (tempUri && fs?.deleteFile) {
+					try {
+						await fs.deleteFile({
+							path: `temp/${fileName}`,
+							directory: "CACHE",
+						});
+					} catch { /* ignore cleanup error */ }
+				}
+			}
+		},
+	},
 };
+
 

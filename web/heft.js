@@ -6,6 +6,7 @@ import { HANDSCHRIFT } from "./handschrift.js";
 import { SCANCORE } from "./heft-scan.js";
 import { PDFS } from "./pdfs.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
+import { RAG } from "./rag.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
@@ -139,6 +140,7 @@ export const HEFT = (() => {
 				if (String(text).trim() !== String(pg.ocrText || "").trim()) {
 					pg.ocrText = String(text).trim();
 					scheduleSave();
+					try { RAG.queuePage(jobPid); } catch {}
 				}
 			}
 		} catch (e) { console.warn("Heft: Handschrift-Erkennung v2 fehlgeschlagen", e); }
@@ -3482,8 +3484,16 @@ export const HEFT = (() => {
 		return renderPageCanvas(pg, w).toDataURL("image/png");
 	}
 
+	async function pageCanvas(pageId, pageIdx, w = 1100) {
+		if (!pageId) return null;
+		const d = pageId === pid && doc ? doc : await load(pageId);
+		const pg = d && d.pages && d.pages[pageIdx || 0];
+		if (!pg) return null;
+		return renderPageCanvas(pg, w, pageIdx || 0);
+	}
+
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
+		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, pageCanvas, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),

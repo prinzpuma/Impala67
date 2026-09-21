@@ -1,0 +1,62 @@
+name: PWA auf GitHub Pages bereitstellen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pwa-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy:
+    name: PWA prüfen und auf GitHub Pages bereitstellen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: PWA-Dateien und Syntax prüfen
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=.git -E '^(<<<<<<< |>>>>>>> )' .; then
+            echo "::error::Ungelöste Git-Konfliktmarker gefunden."
+            exit 1
+          fi
+          npm run verify
+
+      - name: PWA-Versionsdateien synchronisieren
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          node .github/scripts/set-version.mjs "$VERSION"
+          node .github/scripts/check-version-sync.mjs "$VERSION"
+          node .github/scripts/check-pwa-cache.mjs
+
+      - name: GitHub Pages konfigurieren
+        uses: actions/configure-pages@v6
+
+      - name: Web-Artefakt für Pages bereitstellen
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: web
+
+      - name: Auf GitHub Pages ausrollen
+        id: deployment
+        uses: actions/deploy-pages@v5

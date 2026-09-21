@@ -18,3 +18,10 @@ android/.idea/
 android/*.iml
 android/app/*.iml
 android/local.properties
+android/key.properties
+*.keystore
+*.jks
+*.p12
+*.key
+Impala67.apk
+

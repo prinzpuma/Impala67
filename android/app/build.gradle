@@ -18,21 +18,42 @@ android {
     }
     signingConfigs {
         release {
-            keyAlias 'impala67'
-            keyPassword 'impala67'
-            storeFile file('release.keystore')
-            storePassword 'impala67'
-        }
-        debug {
-            keyAlias 'impala67'
-            keyPassword 'impala67'
-            storeFile file('release.keystore')
-            storePassword 'impala67'
+            def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+            def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            def keyAliasVal = System.getenv("ANDROID_KEY_ALIAS")
+            def keyPasswordVal = System.getenv("ANDROID_KEY_PASSWORD")
+
+            def keyPropsFile = rootProject.file('key.properties')
+            if (!keyPropsFile.exists()) {
+                keyPropsFile = file('key.properties')
+            }
+            if (keyPropsFile.exists()) {
+                def props = new Properties()
+                props.load(new FileInputStream(keyPropsFile))
+                keystorePath = keystorePath ?: props.getProperty('storeFile')
+                keystorePassword = keystorePassword ?: props.getProperty('storePassword')
+                keyAliasVal = keyAliasVal ?: props.getProperty('keyAlias')
+                keyPasswordVal = keyPasswordVal ?: props.getProperty('keyPassword')
+            }
+
+            if (keystorePath) {
+                def kFile = file(keystorePath)
+                if (kFile.exists()) {
+                    storeFile kFile
+                    storePassword keystorePassword ?: ""
+                    keyAlias keyAliasVal ?: ""
+                    keyPassword keyPasswordVal ?: ""
+                }
+            }
         }
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
