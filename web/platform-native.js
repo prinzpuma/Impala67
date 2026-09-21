@@ -156,18 +156,18 @@ export const PLATFORM_NATIVE = {
 		},
 	},
 
-	// ---- Lokales Dateisystem (Backup in Android Dokumente-Ordner) ----
+	// ---- Lokales Dateisystem (Export & Backup in Android Dokumente-Ordner) ----
 	filesystem: {
-		async exportBackup(filename, contentString) {
+		async exportFile(filename, contentString, { directory = "DOCUMENTS" } = {}) {
 			const fs = getPlugin("Filesystem");
 			if (!fs) return { native: false, success: false };
 
 			try {
-				// Speichert in Documents/Impala67/
+				// Speichert standardmäßig in Documents/Impala67/
 				const res = await fs.writeFile({
 					path: `Impala67/${filename}`,
 					data: contentString,
-					directory: "DOCUMENTS",
+					directory,
 					encoding: "utf8",
 					recursive: true,
 				});
@@ -180,6 +180,10 @@ export const PLATFORM_NATIVE = {
 				console.error("[platform-native] Dateisystem-Export fehlgeschlagen:", err);
 				return { native: true, success: false, error: err?.message };
 			}
+		},
+
+		async exportBackup(filename, contentString) {
+			return this.exportFile(filename, contentString);
 		},
 	},
 

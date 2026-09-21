@@ -40,7 +40,7 @@ export function isPaletteOpen() {
 	return !!el && !el.hidden;
 }
 
-function openPaletteUi(mode, placeholder) {
+function openPaletteUi(mode, placeholder, opts = {}) {
 	// WARUM: Fokus vor dem Oeffnen merken. Ohne das haengt der Fokus nach Esc am body
 	// und Weitertippen im Editor ist weg.
 	if (!isPaletteOpen()) lastFocus = document.activeElement;
@@ -61,20 +61,26 @@ function openPaletteUi(mode, placeholder) {
 		"</div>";
 	selIdx = 0;
 	renderList("");
+	const isTouch = !!window.PLATFORM?.isTouch?.();
+	const shouldFocus = opts.focus !== undefined ? !!opts.focus : !isTouch;
 	const inp = U.el("paletteInput");
-	if (inp) inp.focus();
+	if (shouldFocus && inp) inp.focus();
 }
 
-export function openPalette() {
-	openPaletteUi("command", "Suchen oder Befehl eingeben…");
+export function openPalette(opts) {
+	openPaletteUi("command", "Suchen oder Befehl eingeben…", opts);
 }
 
 // Notion-artiges Menü beim „+“ in der Tab-Leiste: suchen & in neuem Tab öffnen
-export function openNewTabMenu() {
-	openPaletteUi("newTab", "In neuem Tab öffnen…");
+export function openNewTabMenu(opts) {
+	openPaletteUi("newTab", "In neuem Tab öffnen…", opts);
 }
 
 export function closePalette() {
+	// Virtuelle Tastatur schließen und Viewport vor dem DOM-Entfernen sauber entspannen
+	if (document.activeElement && typeof document.activeElement.blur === "function") {
+		document.activeElement.blur();
+	}
 	const el = U.el("palette");
 	if (el) { el.hidden = true; el.innerHTML = ""; delete el.dataset.mode; }
 	paletteMode = "command";
@@ -83,13 +89,15 @@ export function closePalette() {
 	chatCache = null;
 	const back = lastFocus;
 	lastFocus = null;
-	if (back && back.isConnected && typeof back.focus === "function") back.focus();
+	// Auf Touchgeräten Fokus nicht ungefragt zurückgeben, da sonst die Tastatur erneut aufpoppt
+	const isTouch = !!window.PLATFORM?.isTouch?.();
+	if (!isTouch && back && back.isConnected && typeof back.focus === "function") back.focus();
 }
 
 // Der 🔍-Button in der Sidebar-Topbar öffnet/schließt ebenfalls das Befehls-Menü.
-export function handleSearchToggle() {
+export function handleSearchToggle(opts) {
 	if (isPaletteOpen()) closePalette();
-	else openPalette();
+	else openPalette(opts);
 }
 
 function actionItems() {
@@ -288,9 +296,13 @@ function runItem(it) {
 // Jetzt reicht jedes Tastatur-Ziel INNERHALB des Befehls-Menüs.
 function wirePalette(el) {
 	el.addEventListener("click", (e) => {
-		if (e.target === el || e.target.closest("[data-palclose]")) { closePalette(); return; }
+		if (e.target.closest("[data-palclose]")) { closePalette(); return; }
 		const btn = e.target.closest("[data-palidx]");
-		if (btn) runItem(items[Number(btn.dataset.palidx)]);
+		if (btn) { runItem(items[Number(btn.dataset.palidx)]); return; }
+		// Klick/Tap auf Hintergrund, leeren Listenbereich oder Box schließt das Menü
+		if (e.target === el || e.target.id === "paletteList" || e.target.classList.contains("palette-box") || e.target.classList.contains("empty")) {
+			closePalette();
+		}
 	});
 	// WARUM: jeder Tastendruck lief sofort durch Volltextsuche + kompletten Listenaufbau
 	// -> Tippen ruckelte bei vielen Seiten. Kurz sammeln, dann einmal rendern.
@@ -303,6 +315,12 @@ function wirePalette(el) {
 	});
 	el.addEventListener("keydown", (e) => {
 		if (!el.contains(e.target)) return;
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+			e.preventDefault();
+			e.stopPropagation();
+			closePalette();
+			return;
+		}
 		const inputVal = (U.el("paletteInput") || {}).value || "";
 		// WARUM: Debounce kann noch offen sein -> vor Navigation/Enter erst aktuell rendern,
 		// sonst oeffnet Enter einen Treffer zur alten Eingabe.

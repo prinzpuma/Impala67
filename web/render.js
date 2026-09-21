@@ -1794,8 +1794,6 @@ function renderFullChat(main) {
 	renderMainChatLog();
 	renderPendingChip("full");
 	renderStatusDot();
-	const inp = $("mainChatInput");
-	if (empty && inp) inp.focus();
 }
 
 function renderMainChatLog() {

@@ -61,13 +61,11 @@ const dsOf = (e) => (e && e.target && e.target.dataset) || {};
 const blurActive = () => document.activeElement?.blur();
 const closeTopMenu = () => { if (S.topMenu) { S.topMenu = null; renderMain(); } };
 const focusPageTitle = () => {
+	if (PLATFORM.isTouch()) return;
 	const ti = $("pageTitle");
 	if (ti) {
 		ti.focus();
-		if (!PLATFORM.isTouch()) ti.select();
-		else {
-			try { const len = ti.value.length; ti.setSelectionRange(len, len); } catch { /* ignore */ }
-		}
+		ti.select();
 	}
 };
 

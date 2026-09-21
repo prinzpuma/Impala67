@@ -2,10 +2,11 @@
 
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
+import { PLATFORM_NATIVE } from "./platform-native.js";
 
 const reopen = () => window.openSettings?.("data", "performance-profiler");
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
 	const button = event.target?.closest?.("#btnPerfCopy, #btnPerfExport, #btnPerfClear");
 	if (!button) return;
 	event.preventDefault();
@@ -18,7 +19,17 @@ document.addEventListener("click", (event) => {
 	}
 	const report = PERF_PROFILER.report();
 	if (button.id === "btnPerfExport") {
-		U.download("impala67-performance-" + new Date().toISOString().slice(0, 10) + ".json", report);
+		const filename = "impala67-performance-" + new Date().toISOString().slice(0, 10) + ".json";
+		if (PLATFORM_NATIVE.isNative) {
+			const res = await PLATFORM_NATIVE.filesystem.exportFile(filename, report);
+			if (res.success) {
+				U.toast("Performance-Diagnose im Gerätespeicher gesichert (" + res.uri + ")", "success");
+			} else {
+				U.toast("Export fehlgeschlagen: " + (res.error || "Unbekannter Fehler"), "error");
+			}
+		} else {
+			U.download(filename, report);
+		}
 		return;
 	}
 	navigator.clipboard.writeText(report)

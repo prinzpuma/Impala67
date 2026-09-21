@@ -81,10 +81,10 @@ export function wireShortcuts() {
 			return;
 		}
 
-		// Strg/Cmd+K öffnet wie in Notion das Befehls-Menü (Suche + Aktionen)
+		// Strg/Cmd+K öffnet/schließt wie in Notion das Befehls-Menü (Suche + Aktionen)
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
 			e.preventDefault();
-			if (!SEARCH.isPaletteOpen()) SEARCH.openPalette();
+			SEARCH.handleSearchToggle({ focus: true });
 			return;
 		}
 

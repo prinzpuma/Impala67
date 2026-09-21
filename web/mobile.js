@@ -201,7 +201,6 @@ export const MOBILE = (() => {
 		if (act === "search") {
 			closeAll();
 			document.getElementById("btnSearchToggle")?.click();
-			setTimeout(() => document.getElementById("search")?.focus(), 40);
 			updateUI(); return;
 		}
 		if (act === "new") {
@@ -242,7 +241,6 @@ export const MOBILE = (() => {
 	function openAI() {
 		body.classList.remove("panel-collapsed");
 		RENDER.renderTabs();
-		setTimeout(() => document.getElementById("chatInput")?.focus(), 30);
 	}
 
 	function updateUI() {
