@@ -31,6 +31,14 @@
   - Optionales Widget für den Startbildschirm mit offenen Karteikarten.
 - [ ] **Google Drive Login in Android-APK verifizieren**:
   - Prüfen und Testen des OAuth2-Ablaufs in der nativen Capacitor-Umgebung (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
+
+- [ ] **UI-Designsystem vereinheitlichen**:
+  - **Typografie auf eine feste Skala zurückführen**: Die vorhandenen Textgrößen-Tokens konsequent als visuelle Hierarchie verwenden und nahe beieinanderliegende Hardcode-Schriftgrößen auf wenige definierte Stufen mappen.
+  - **Spacing-Skala einführen und anwenden**: Eine kleine, konsistente Abstands-Skala (z. B. 4/6/8/12/16/20/24/32 px) in `web/css/variables.css` definieren und wiederkehrende Padding-/Margin-/Gap-Werte schrittweise darauf umstellen. Sonderwerte und exakte Geometrie nicht zwanghaft ersetzen.
+  - **Farbpalette konsolidieren**: Das bereits vorhandene Token-System in `web/css/variables.css` als zentrale Quelle stärken und nur semantisch passende freie Farben migrieren. Sonderfarben, z. B. für Cover-Designs oder Scanner/Illustrationen, bewusst separat lassen.
+  - **Icon-Sprache vereinheitlichen**: Emoji als UI-Icons schrittweise durch eine konsistente, plattformunabhängige Icon-Sprache ersetzen bzw. ihre Verwendung auf bewusst geeignete Inhalte beschränken; bestehende SVG-/Icon-Lösungen als Referenz verwenden.
+  - **Reihenfolge bei der Umsetzung**: zuerst Typografie und Spacing, danach Farbkonsolidierung und Icons. Kein komplettes Redesign nur wegen dieser Bereinigung.
+
 - [ ] **Projekt-Entschlackung & Neustrukturierung (KISS & DRY)**:
   - **Code-Verständnis & Übersicht neu erarbeiten**: Die gesamte Architektur und Zusammenhänge schrittweise selbst wieder durchdringen, da die Übersicht verloren gegangen ist.
   - **Code-Dokumentation komplett neu aufbauen**: Modul-Zusammenspiel, Datenflüsse (State, DB, Cloudflare, Drive) und Kernkomponenten von Grund auf klar, verständlich und aktuell dokumentieren.
