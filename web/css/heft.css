@@ -121,7 +121,7 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-pop-thumb > span { position: absolute; left: 4px; bottom: 3px; font-size: var(--text-3xs); font-weight: 700; color: #333; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: var(--radius-sm); pointer-events: none }
 .heft-page-drag { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 9px; background: rgba(20,20,20,.68); color: #fff; font-size: 18px; cursor: grab; touch-action: none }
 .heft-page-drag:active { cursor: grabbing }
-.heft-page-check { position: absolute; top: 7px; right: 7px; display: none; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 14px; font-style: normal; font-weight: 800 }
+.heft-page-check { position: absolute; top: 7px; right: 7px; display: none; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: var(--text-base); font-style: normal; font-weight: 800 }
 .heft-pop-thumb.active .heft-page-check { display: grid }
 .heft-pages-manager-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 13px 18px calc(13px + env(safe-area-inset-bottom)); border-top: 1px solid var(--edge-soft); background: var(--menu-bg) }
 .heft-pages-manager-actions button { min-width: 110px }
@@ -137,7 +137,7 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-transfer > footer button { min-width: 130px }
 .heft-transfer-files { display: grid; gap: 8px; margin-bottom: 20px }
 .heft-transfer-file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint) }
-.heft-transfer-file > span { display: grid; place-items: center; width: 42px; height: 50px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 800 }
+.heft-transfer-file > span { display: grid; place-items: center; width: 42px; height: 50px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: var(--text-3xs); font-weight: 800 }
 .heft-transfer-file > div { min-width: 0; display: grid; gap: 3px }
 .heft-transfer-file b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .heft-transfer-file small { color: var(--text2) }
