@@ -14,6 +14,21 @@ import { STORAGE_TOOLS } from "./storage-tools.js";
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
 export function initMcpBridge() {
 	if (typeof window === "undefined") return;
+	const enableFlag = window.__IMPALA_ENABLE_MCP_BRIDGE === true;
+	const queryFlag = (() => {
+		try {
+			const q = new URLSearchParams(window.location?.search || "");
+			return q.get("mcpBridge") === "1";
+		} catch {
+			return false;
+		}
+	})();
+	const localDevDefault = (() => {
+		const host = String(window.location?.hostname || "");
+		const port = String(window.location?.port || "");
+		return (host === "localhost" || host === "127.0.0.1") && port === "8000";
+	})();
+	if (!enableFlag && !queryFlag && !localDevDefault) return;
 
 	const WS_URL = (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
 	const recentErrors = [];
