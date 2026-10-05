@@ -59,23 +59,9 @@ if ! git commit -m "$MESSAGE"; then
 fi
 
 echo
-echo "Erstelle Release-Tag v$NEW_VERSION..."
-if ! git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"; then
-  echo "FEHLER: Tag konnte nicht erstellt werden."
-  pause_before_exit
-  exit 1
-fi
-
-echo
-echo "Lade den Commit und Tag nach GitHub hoch ..."
+echo "Lade den Commit nach GitHub hoch ..."
 if ! git push origin main; then
   echo "FEHLER: Push auf main fehlgeschlagen."
-  pause_before_exit
-  exit 1
-fi
-
-if ! git push origin "v$NEW_VERSION"; then
-  echo "FEHLER: Push des Tags fehlgeschlagen."
   pause_before_exit
   exit 1
 fi
@@ -84,6 +70,7 @@ echo
 echo "========================================"
 echo "Erfolgreich!"
 echo "Version v$NEW_VERSION wurde veröffentlicht."
-echo "GitHub Actions baut jetzt PWA und APK."
+echo "GitHub Pages aktualisiert jetzt die PWA."
+echo "(APK-Build bleibt unberührt und kann bei Bedarf in GitHub Actions ausgelöst werden.)"
 echo "========================================"
 pause_before_exit
