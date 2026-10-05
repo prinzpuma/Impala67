@@ -47,7 +47,7 @@ button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active
 @keyframes softPulse {
 	50% { opacity: .4 }
 }
-.empty { color: var(--text2); padding: 16px; text-align: center }
+.empty { color: var(--text2); padding: var(--space-4); text-align: center }
 
 /* == Scrollbars & Responsive == */
 /* 🐛 Fix (27. Juli): EINE globale Scrollleiste. Die von :root geerbten Standard-Eigenschaften
