@@ -30,10 +30,18 @@ if [[ "$BRANCH" != "main" ]]; then
 fi
 
 echo
-echo "Aktuelle Änderungen:"
-git status --short
+echo "Version automatisch erhöhen..."
+if ! node .github/scripts/bump-version.mjs; then
+  echo "FEHLER: Versionserhöhung fehlgeschlagen."
+  pause_before_exit
+  exit 1
+fi
+
+NEW_VERSION="$(node -p "require('./package.json').version")"
+echo "Neue Version: v$NEW_VERSION"
+
 echo
-echo "Alle angezeigten Änderungen werden veröffentlicht."
+echo "Alle Änderungen vormerken..."
 git add -A
 if [[ $? -ne 0 ]]; then
   echo "FEHLER: Dateien konnten nicht vorgemerkt werden."
@@ -41,13 +49,7 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
-if git diff --cached --quiet; then
-  echo "Keine neuen Änderungen vorhanden."
-  pause_before_exit
-  exit 0
-fi
-
-MESSAGE="${1:-PWA release}"
+MESSAGE="${1:-release: v$NEW_VERSION}"
 echo
 echo "Commit: $MESSAGE"
 if ! git commit -m "$MESSAGE"; then
@@ -57,13 +59,31 @@ if ! git commit -m "$MESSAGE"; then
 fi
 
 echo
-echo "Lade den Commit nach GitHub hoch ..."
-if ! git push origin main; then
-  echo "FEHLER: Push fehlgeschlagen."
+echo "Erstelle Release-Tag v$NEW_VERSION..."
+if ! git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"; then
+  echo "FEHLER: Tag konnte nicht erstellt werden."
   pause_before_exit
   exit 1
 fi
 
 echo
-echo "Fertig. GitHub Actions veröffentlicht jetzt die PWA."
+echo "Lade den Commit und Tag nach GitHub hoch ..."
+if ! git push origin main; then
+  echo "FEHLER: Push auf main fehlgeschlagen."
+  pause_before_exit
+  exit 1
+fi
+
+if ! git push origin "v$NEW_VERSION"; then
+  echo "FEHLER: Push des Tags fehlgeschlagen."
+  pause_before_exit
+  exit 1
+fi
+
+echo
+echo "========================================"
+echo "Erfolgreich!"
+echo "Version v$NEW_VERSION wurde veröffentlicht."
+echo "GitHub Actions baut jetzt PWA und APK."
+echo "========================================"
 pause_before_exit
