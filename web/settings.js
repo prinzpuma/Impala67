@@ -1249,8 +1249,8 @@ export async function handleBackupNow(button) {
 		if (useNative) {
 			const res = await PLATFORM_NATIVE.filesystem.exportBackup(filename, json);
 			if (res.success) {
-				U.toast("Backup in Gerätespeicher gesichert (" + res.uri + ")", "success");
-			} else {
+				U.toast(res.shared ? "Backup bereitgestellt." : ("Backup in Gerätespeicher gesichert (" + res.uri + ")"), "success");
+			} else if (!res.aborted) {
 				U.download(filename, json);
 			}
 		} else {

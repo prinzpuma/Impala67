@@ -994,7 +994,7 @@ export const HEFT = (() => {
 		renderPageTo(x, doc.pages[i], i, pageRectForTile(r));
 		if (wet) {
 			placeLayer(wet, i, r, dpr);
-			const wx = wet.getContext("2d", { desynchronized: true });
+			const wx = wet.getContext("2d");
 			wx.setTransform(1, 0, 0, 1, 0, 0);
 			wx.clearRect(0, 0, wet.width, wet.height);
 		}
@@ -1043,7 +1043,7 @@ export const HEFT = (() => {
 				}
 			}
 			if (wet.__heftTile && wet.style.display !== "none") {
-				const x = wet.getContext("2d", { desynchronized: true });
+				const x = wet.getContext("2d");
 				x.setTransform(1, 0, 0, 1, 0, 0);
 				tileTransform(x, wet.__heftTile);
 				return x;
@@ -1057,7 +1057,7 @@ export const HEFT = (() => {
 	function clearLiveInk(i) {
 		const wet = wetCanvases[i];
 		if (!wet || !wet.__heftTile || wet.style.display === "none") return false;
-		const x = wet.getContext("2d", { desynchronized: true });
+		const x = wet.getContext("2d");
 		x.setTransform(1, 0, 0, 1, 0, 0);
 		x.clearRect(0, 0, wet.width, wet.height);
 		tileTransform(x, wet.__heftTile);
@@ -2395,7 +2395,10 @@ export const HEFT = (() => {
 			const vp = p.getViewport({ scale: 3 });
 			const c = document.createElement("canvas");
 			c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-			await p.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+			const cx = c.getContext("2d");
+			cx.fillStyle = "#fff";
+			cx.fillRect(0, 0, c.width, c.height);
+			await p.render({ canvasContext: cx, viewport: vp }).promise;
 
 			targetDoc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
 			at++;
@@ -3302,7 +3305,6 @@ export const HEFT = (() => {
 			d.className = "heft-wet-canvas";
 			Object.assign(d.style, { position: "absolute", pointerEvents: "none", zIndex: "3", display: "none" });
 			scroll.appendChild(d);
-			try { d.getContext("2d", { desynchronized: true }); } catch { /* ignore */ }
 			return d;
 		});
 		canvases.forEach((cv) => {

@@ -23,9 +23,16 @@ document.addEventListener("click", async (event) => {
 		if (PLATFORM_NATIVE.isNative) {
 			const res = await PLATFORM_NATIVE.filesystem.exportFile(filename, report);
 			if (res.success) {
-				U.toast("Performance-Diagnose im Gerätespeicher gesichert (" + res.uri + ")", "success");
+				U.toast(res.shared ? "Performance-Diagnose bereitgestellt." : ("Performance-Diagnose im Gerätespeicher gesichert (" + res.uri + ")"), "success");
+			} else if (res.aborted) {
+				// Nutzer hat das Teilen abgebrochen
 			} else {
-				U.toast("Export fehlgeschlagen: " + (res.error || "Unbekannter Fehler"), "error");
+				try {
+					await navigator.clipboard.writeText(report);
+					U.toast("Diagnose konnte nicht als Datei gesichert werden – in Zwischenablage kopiert.", "info");
+				} catch {
+					U.toast("Export fehlgeschlagen: " + (res.error || "Unbekannter Fehler"), "error");
+				}
 			}
 		} else {
 			U.download(filename, report);

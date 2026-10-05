@@ -20,9 +20,10 @@ export const AI = (() => {
 		{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", provider: "openai" },
 		{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", provider: "openai" },
 		{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", provider: "openai" },
-		{ value: "qwen/qwen3.6-27b", label: "Cloudflare (Groq) – Qwen 3.6 27B (Vision)", provider: "cloudflare" },
+		{ value: "qwen/qwen3.8-27b", label: "Cloudflare (Groq) – Qwen 3.8 27B (Vision)", provider: "cloudflare" },
 		{ value: "openai/gpt-oss-120b", label: "Cloudflare (Groq) – GPT OSS 120B", provider: "cloudflare" },
 		{ value: "openai/gpt-oss-20b", label: "Cloudflare (Groq) – GPT OSS 20B", provider: "cloudflare" },
+		{ value: "llama-3.3-70b-versatile", label: "Cloudflare (Groq) – Llama 3.3 70B", provider: "cloudflare" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const LIMIT = {
@@ -112,7 +113,9 @@ export const AI = (() => {
 	}
 	function cfg() {
 		const provider = activeProvider();
-		return { base: cleanBase(provider?.base), key: provider?.key || "", model: S.settings.aiModel || "", providerId: provider?.id || "", family: providerFamily(provider), thinkingEnabled: S.settings.thinkingEnabled !== false };
+		let model = S.settings.aiModel || "";
+		if (model === "qwen/qwen3.6-27b") model = "qwen/qwen3.8-27b";
+		return { base: cleanBase(provider?.base), key: provider?.key || "", model, providerId: provider?.id || "", family: providerFamily(provider), thinkingEnabled: S.settings.thinkingEnabled !== false };
 	}
 	const capKey = (c = cfg()) => [c.providerId, c.base, c.model].join("::");
 	const capStore = () => S.thinkingCapabilities || (S.thinkingCapabilities = Object.create(null));
@@ -249,6 +252,7 @@ export const AI = (() => {
 		try {
 			if (family === "cloudflare") {
 				const payload = {
+					model: body.model || cfg().model,
 					messages: body.messages,
 					tools: body.tools,
 					tool_choice: body.tool_choice,

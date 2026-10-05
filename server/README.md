@@ -50,11 +50,12 @@ npx wrangler deploy
 Im Cloudflare-Dashboard beim Worker ein Secret `GROQ_API_KEY` anlegen.
 
 Aktuelle Fallback-Reihenfolge:
-1. `qwen/qwen3.6-27b`
+1. `qwen/qwen3.8-27b`
 2. `openai/gpt-oss-120b`
 3. `openai/gpt-oss-20b`
+4. `llama-3.3-70b-versatile`
 
-Bildnachrichten werden nur an dafür freigegebene Vision-Modelle geschickt; aktuell ist das `qwen/qwen3.6-27b`. Bei einem Rate-Limit (`429`) wird, soweit möglich, das nächste Modell versucht.
+Bildnachrichten werden nur an dafür freigegebene Vision-Modelle geschickt; aktuell ist das `qwen/qwen3.8-27b`. Bei einem Rate-Limit (`429`) oder Modellfehler (`404`/`400`) wird automatisch das nächste Modell versucht.
 
 ---
 

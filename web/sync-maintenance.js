@@ -24,21 +24,27 @@ function writeLastCompaction(value, storage = storageOrNull()) {
 	try { storage?.setItem(LS_LAST_COMPACT, String(value)); } catch { /* gesperrter Speicher */ }
 }
 
-export function shouldCompactCloud(status, lastCompactedAt = 0, now = Date.now()) {
+export function shouldCompactCloud(status, lastCompactedAt = 0, now = Date.now(), bypassCooldown = false) {
 	const percent = Number(status?.usage?.percent);
-	return status?.status === "connected" && Number.isFinite(percent) &&
-		percent >= CLOUD_COMPACT_THRESHOLD_PERCENT &&
-		Math.max(0, Number(now) || 0) - Math.max(0, Number(lastCompactedAt) || 0) >= CLOUD_COMPACT_COOLDOWN_MS;
+	if (status?.status !== "connected") return false;
+	if (bypassCooldown) return true;
+	const isQuotaExceeded = Number.isFinite(percent) && percent >= 100;
+	const cooldownPassed = Math.max(0, Number(now) || 0) - Math.max(0, Number(lastCompactedAt) || 0) >= CLOUD_COMPACT_COOLDOWN_MS;
+	return Number.isFinite(percent) && percent >= CLOUD_COMPACT_THRESHOLD_PERCENT && (cooldownPassed || isQuotaExceeded);
 }
 
-export async function compactCloudData(sync = CLOUDFLARE_SYNC, { storage = storageOrNull(), now = Date.now() } = {}) {
+export async function compactCloudData(sync = CLOUDFLARE_SYNC, { storage = storageOrNull(), now = Date.now(), bypassCooldown = false } = {}) {
 	if (compactPromise) return compactPromise;
 	compactPromise = (async () => {
 		if (!sync?.isConfigured?.()) throw new Error("Cloudflare-Sync ist nicht eingerichtet.");
 
 		// Erst vollständig konvergieren. Danach ist der lokale Zustand die sichere
 		// Quelle für den neuen kompaktierten Generation-Stand.
-		await sync.syncNow();
+		try {
+			await sync.syncNow();
+		} catch (e) {
+			if (!bypassCooldown && Number(e?.status) !== 413) throw e;
+		}
 		const before = Number(sync.status?.()?.usage?.bytes) || 0;
 
 		// Der bestehende v4-Generation-Reset entfernt alte Eventpakete UND Blobs.

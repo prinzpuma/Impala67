@@ -278,7 +278,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=73", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=74", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

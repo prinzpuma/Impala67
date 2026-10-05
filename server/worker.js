@@ -20,15 +20,15 @@ const UPSERT_USER_SQL = `
 		updated_at=excluded.updated_at
 `;
 
-const AI_MODELS = ["qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+const AI_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"];
 const VISION_MODELS = new Set([AI_MODELS[0]]);
-const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000, MAX_AI_OUTPUT_TOKENS = 1_500;
+const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000;
 
 function corsHeaders() {
 	return {
 		"Access-Control-Allow-Origin": "*",
-		"Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-		"Access-Control-Allow-Headers": `Authorization, Content-Type, X-User-Id, X-Impala-IV, ${CLOUD_SYNC_PROTOCOL_HEADER}`,
+		"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+		"Access-Control-Allow-Headers": `Authorization, Content-Type, X-User-Id, X-Impala-IV, X-Impala-Client-Id, ${CLOUD_SYNC_PROTOCOL_HEADER}`,
 		"Access-Control-Expose-Headers": "X-Impala-IV, X-Impala-Usage",
 		"Access-Control-Max-Age": "86400",
 	};
@@ -46,6 +46,10 @@ function userIdOf(request) {
 function authTokenOf(request) {
 	const value = request.headers.get("Authorization") || "";
 	return value.startsWith("Bearer ") ? value.slice(7).trim() : "";
+}
+
+function clientIdOf(request) {
+	return String(request.headers.get("X-Impala-Client-Id") || "").slice(0, 64);
 }
 
 async function tokenHash(token) {
@@ -155,17 +159,27 @@ async function handleAi(request, env) {
 	if (!(await verifyExistingUser(request, env))) return json({ error: "Ungültiger Autorisierungs-Token für diesen Account." }, 403);
 	const body = await request.json().catch(() => null), normalized = normalizeAiMessages(body?.messages);
 	if (normalized.error) return json({ error: normalized.error }, 400);
-	const tools = normalizeAiTools(body?.tools), models = normalized.hasImages ? AI_MODELS.filter((m) => VISION_MODELS.has(m)) : AI_MODELS;
+	const tools = normalizeAiTools(body?.tools);
+	let requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
+	if (requestedModel === "qwen/qwen3.6-27b") requestedModel = "qwen/qwen3.8-27b";
+	let models = normalized.hasImages ? AI_MODELS.filter((m) => VISION_MODELS.has(m)) : AI_MODELS;
+	if (requestedModel && models.includes(requestedModel)) {
+		models = [requestedModel, ...models.filter((m) => m !== requestedModel)];
+	}
 	let upstream, text = "";
 	for (const model of models) {
-		const payload = { model, messages: normalized.messages, max_completion_tokens: MAX_AI_OUTPUT_TOKENS, stream: false };
+		const payload = { model, messages: normalized.messages, stream: false };
 		if (tools) payload.tools = tools;
 		if (body?.tool_choice) payload.tool_choice = body.tool_choice;
+		if (Number.isInteger(body?.max_completion_tokens) && body.max_completion_tokens > 0) {
+			payload.max_completion_tokens = body.max_completion_tokens;
+		}
 		upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 			method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
 		});
 		text = await upstream.text();
-		if (upstream.status !== 429 || model === models.at(-1)) break;
+		const canRetry = (upstream.status === 429 || upstream.status === 404 || upstream.status === 400 || upstream.status === 410) && model !== models.at(-1);
+		if (!canRetry) break;
 	}
 	return new Response(text, { status: upstream?.status || 502, headers: { "Content-Type": upstream?.headers.get("Content-Type") || "application/json", ...corsHeaders() } });
 }
@@ -174,7 +188,7 @@ async function handleNotion(request, env) {
 	if (request.method !== "POST") return json({ error: "Nur POST erlaubt." }, 405);
 	if (!(await verifyExistingUser(request, env))) return json({ error: "Ungültiger Autorisierungs-Token für diesen Account." }, 403);
 	const body = await request.json().catch(() => null), token = String(body?.token || "").trim(), path = String(body?.path || ""), method = String(body?.method || "GET").toUpperCase();
-	const allowed = /^\/(?:search|pages|blocks|databases)(?:\/|\?|$)/.test(path) && !path.startsWith("//") && !path.includes("\\");
+	const allowed = /^\/(?:search|pages|blocks|databases)(?:\/|\?|$)/.test(path) && !path.startsWith("//") && !path.includes("\\") && !path.includes("..");
 	if (!token || token.length > 4096 || !allowed || !["GET", "POST", "PATCH", "DELETE"].includes(method)) return json({ error: "Ungültige Notion-Anfrage." }, 400);
 	const upstream = await fetch("https://api.notion.com/v1" + path, {
 		method,
@@ -224,6 +238,9 @@ export class SyncRoom {
 	async authorize(rawToken) {
 		if (!rawToken) return false;
 		const hash = await tokenHash(rawToken);
+		if (this.authHash && this.accountExists && this.protocolVersion === CLOUD_SYNC_PROTOCOL) {
+			return tokenHashesEqual(this.authHash, hash);
+		}
 		return this.queue(async () => {
 			if (this.authHash) {
 				if (!tokenHashesEqual(this.authHash, hash)) return false;
@@ -257,10 +274,15 @@ export class SyncRoom {
 		return true;
 	}
 
-	broadcast(message, except = null) {
+	broadcast(message, exceptClientId = null) {
 		const payload = JSON.stringify(message);
-		for (const ws of this.ctx?.getWebSockets?.() || []) if (ws !== except) {
-			try { ws.send(payload); } catch { try { ws.close(); } catch {} }
+		for (const ws of this.ctx?.getWebSockets?.() || []) {
+			try {
+				const attachment = ws.deserializeAttachment?.();
+				if (attachment && !attachment.authenticated) continue;
+				if (exceptClientId && attachment?.clientId && attachment.clientId === exceptClientId) continue;
+				ws.send(payload);
+			} catch { try { ws.close(); } catch {} }
 		}
 	}
 
@@ -284,7 +306,8 @@ export class SyncRoom {
 				ws.send(JSON.stringify({ type: "unauthorized", error: "Ungültiger Autorisierungs-Token" }));
 				try { ws.close(4401, "Unauthorized"); } catch {} return;
 			}
-			attachment = { userId: this.userId, authenticated: true, protocol: CLOUD_SYNC_PROTOCOL };
+			const clientId = typeof msg.clientId === "string" ? msg.clientId.slice(0, 64) : "";
+			attachment = { userId: this.userId, authenticated: true, protocol: CLOUD_SYNC_PROTOCOL, clientId };
 			ws.serializeAttachment?.(attachment);
 			ws.send(JSON.stringify({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL, generation: this.generation }));
 			return;
@@ -305,7 +328,7 @@ export class SyncRoom {
 			/^[A-Za-z0-9+/]+={0,2}$/.test(raw) && String(packet.data).length <= MAX_PACKET_CHARS;
 	}
 
-	savePackets(packets) {
+	savePackets(packets, clientId = null) {
 		return this.queue(async () => {
 			const fromSeq = this.maxSeq;
 			if (!Array.isArray(packets)) return { ok: false, status: 400, error: "Event-Pakete müssen als Array gesendet werden." };
@@ -345,7 +368,7 @@ export class SyncRoom {
 				if (written.length) try { await this.env.BUCKET.delete(written); } catch {}
 				return { ok: false, status: 500, error: "Cloud-Speicher konnte nicht atomar geschrieben werden.", usage: this.totalBytes };
 			}
-			this.broadcast({ type: "changed", maxSeq: this.maxSeq });
+			this.broadcast({ type: "changed", maxSeq: this.maxSeq, senderClientId: clientId }, clientId);
 			return { ok: true, saved, usage: this.totalBytes, fromSeq, toSeq: this.maxSeq };
 		});
 	}
@@ -354,17 +377,32 @@ export class SyncRoom {
 		const rows = await this.env.DB.prepare(
 			"SELECT seq,event_id id,iv,r2_key,size,created_at FROM sync_events WHERE user_id=? AND seq>? ORDER BY seq ASC LIMIT ?"
 		).bind(this.userId, since, limit).all();
-		const events = []; let chars = 0, stopped = false;
-		for (const row of rows.results || []) {
+		const results = rows.results || [];
+		const toFetch = [];
+		let chars = 0, stopped = false;
+		for (const row of results) {
 			const estimate = Math.ceil((Number(row.size) || 0) * 4 / 3) + 128;
-			if (events.length && chars + estimate > MAX_SYNC_CHARS) { stopped = true; break; }
-			const object = await this.env.BUCKET.get(row.r2_key);
-			if (!object) throw new Error(`R2-Paket fehlt: ${row.id}`);
-			const bytes = new Uint8Array(await object.arrayBuffer()), gz = object.customMetadata?.gz === "1";
-			events.push({ seq: row.seq, id: row.id, iv: row.iv, data: (gz ? "gz:" : "") + bytesToBase64(bytes), size: row.size, created_at: row.created_at });
+			if (toFetch.length && chars + estimate > MAX_SYNC_CHARS) { stopped = true; break; }
+			toFetch.push(row);
 			chars += estimate;
 		}
-		return { events, stopped };
+		const events = new Array(toFetch.length);
+		const BATCH_SIZE = 8;
+		for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+			const chunk = toFetch.slice(i, i + BATCH_SIZE);
+			await Promise.all(chunk.map(async (row, idx) => {
+				const object = await this.env.BUCKET.get(row.r2_key);
+				if (!object) {
+					const error = new Error(`R2-Paket fehlt: ${row.id}`);
+					error.code = "packet_missing";
+					error.status = 410;
+					throw error;
+				}
+				const bytes = new Uint8Array(await object.arrayBuffer()), gz = object.customMetadata?.gz === "1";
+				events[i + idx] = { seq: row.seq, id: row.id, iv: row.iv, data: (gz ? "gz:" : "") + bytesToBase64(bytes), size: row.size, created_at: row.created_at };
+			}));
+		}
+		return { events, stopped: stopped || toFetch.length < results.length };
 	}
 
 	async listBlobs(cursor) {
@@ -382,6 +420,7 @@ export class SyncRoom {
 	}
 
 	putBlob(key, request) {
+		const clientId = clientIdOf(request);
 		return this.queue(async () => {
 			const iv = request.headers.get("X-Impala-IV") || "";
 			if (!/^[0-9a-f]{24}$/i.test(iv) || !/^[0-9a-f]{64}$/i.test(key)) return json({ error: "Ungültiger Blob-Schlüssel oder IV." }, 400);
@@ -399,12 +438,35 @@ export class SyncRoom {
 			} catch (error) {
 				this.totalBytes -= size; try { await this.env.BUCKET.delete(r2Key); } catch {} throw error;
 			}
-			this.broadcast({ type: "changed", maxSeq: this.maxSeq });
+			this.broadcast({ type: "changed", maxSeq: this.maxSeq, blob: true, senderClientId: clientId }, clientId);
 			return new Response(null, { status: 201, headers: { "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() } });
 		});
 	}
 
+	deleteBlob(key, request) {
+		const clientId = clientIdOf(request);
+		return this.queue(async () => {
+			if (!/^[0-9a-f]{64}$/i.test(key)) return json({ error: "Ungültiger Blob-Schlüssel." }, 400);
+			const r2Key = `users/${this.userId}/blobs/${key}`;
+			const object = await this.env.BUCKET.head(r2Key);
+			if (!object) return new Response(null, { status: 204, headers: { "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() } });
+			const size = (Number.isSafeInteger(object.size) ? object.size : 0) + 12;
+			await this.env.BUCKET.delete(r2Key);
+			this.totalBytes = Math.max(0, this.totalBytes - size);
+			await this.persistUsage().catch(() => {});
+			this.broadcast({ type: "changed", maxSeq: this.maxSeq, blob: true, senderClientId: clientId }, clientId);
+			return new Response(null, { status: 200, headers: { "X-Impala-Usage": String(this.totalBytes), ...corsHeaders() } });
+		});
+	}
+
 	async clearSyncData(bumpGeneration = false) {
+		if (bumpGeneration) this.generation++;
+		this.maxSeq = 0; this.totalBytes = 0;
+		if (this.ctx?.storage) await this.ctx.storage.put("generation", this.generation);
+		await this.env.DB.batch([
+			this.env.DB.prepare("DELETE FROM sync_events WHERE user_id=?").bind(this.userId),
+			this.env.DB.prepare("UPDATE user_storage SET total_bytes=0,updated_at=? WHERE user_id=?").bind(new Date().toISOString(), this.userId),
+		]);
 		const prefix = `users/${this.userId}/`;
 		while (true) {
 			const list = await this.env.BUCKET.list({ prefix, limit: 1000 });
@@ -412,13 +474,6 @@ export class SyncRoom {
 			if (!keys.length) break;
 			await this.env.BUCKET.delete(keys);
 		}
-		this.maxSeq = 0; this.totalBytes = 0;
-		if (bumpGeneration) this.generation++;
-		await this.env.DB.batch([
-			this.env.DB.prepare("DELETE FROM sync_events WHERE user_id=?").bind(this.userId),
-			this.env.DB.prepare("UPDATE user_storage SET total_bytes=0,updated_at=? WHERE user_id=?").bind(new Date().toISOString(), this.userId),
-		]);
-		if (this.ctx?.storage) await this.ctx.storage.put("generation", this.generation);
 	}
 
 	reset() {
@@ -440,8 +495,22 @@ export class SyncRoom {
 			let client = {}, server = {};
 			if (typeof WebSocketPair !== "undefined") { const pair = new WebSocketPair(), values = Object.values(pair); [client, server] = values; }
 			else if (request._mockServer) server = request._mockServer;
-			if (this.ctx?.acceptWebSocket) { this.ctx.acceptWebSocket(server); server.serializeAttachment?.({ userId, authenticated: false }); }
-			else if (server?.accept) { server.accept(); server.addEventListener("message", (event) => this.webSocketMessage(server, event.data)); }
+			if (this.ctx?.acceptWebSocket) {
+				if (typeof WebSocketRequestResponsePair !== "undefined" && typeof this.ctx?.setWebSocketAutoResponse === "function") {
+					this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
+				}
+				this.ctx.acceptWebSocket(server);
+				server.serializeAttachment?.({ userId, authenticated: false });
+				setTimeout(() => {
+					try {
+						const att = server.deserializeAttachment?.();
+						if (att && !att.authenticated) server.close(4401, "Auth timeout");
+					} catch {}
+				}, 10000);
+			} else if (server?.accept) {
+				server.accept();
+				server.addEventListener("message", (event) => this.webSocketMessage(server, event.data));
+			}
 			return new Response(null, { status: typeof WebSocketPair !== "undefined" ? 101 : 200, webSocket: client });
 		}
 
@@ -453,11 +522,19 @@ export class SyncRoom {
 		if (url.pathname === "/api/sync" && request.method === "GET") {
 			const since = Math.max(0, Number.parseInt(url.searchParams.get("since") || "0", 10));
 			const limit = Math.min(1000, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "100", 10)));
-			const { events, stopped } = await this.readEvents(since, limit);
-			return json({ events, maxSeq: this.maxSeq, hasMore: stopped || events.length === limit, usage: this.totalBytes, limit: MAX_USER_BYTES, generation: this.generation });
+			try {
+				const { events, stopped } = await this.readEvents(since, limit);
+				return json({ events, maxSeq: this.maxSeq, hasMore: stopped || events.length === limit, usage: this.totalBytes, limit: MAX_USER_BYTES, generation: this.generation });
+			} catch (error) {
+				if (error.code === "packet_missing" || error.status === 410) {
+					return json({ error: error.message, code: "packet_missing", generation: this.generation }, 410);
+				}
+				throw error;
+			}
 		}
 		if (url.pathname === "/api/events" && request.method === "POST") {
-			const body = await request.json().catch(() => null), result = await this.savePackets(body?.events);
+			const body = await request.json().catch(() => null);
+			const result = await this.savePackets(body?.events, clientIdOf(request));
 			return result.ok ? json({ ok: true, savedCount: result.saved.length, ack: { fromSeq: result.fromSeq, toSeq: result.toSeq, savedCount: result.saved.length }, usage: result.usage, limit: MAX_USER_BYTES, generation: this.generation })
 				: json({ error: result.error, usage: result.usage, limit: MAX_USER_BYTES }, result.status || 400);
 		}
@@ -467,6 +544,7 @@ export class SyncRoom {
 			if (!/^[0-9a-f]{64}$/i.test(key)) return json({ error: "Ungültiger Blob-Schlüssel." }, 400);
 			if (request.method === "GET") return this.getBlob(key);
 			if (request.method === "PUT") return this.putBlob(key, request);
+			if (request.method === "DELETE") return this.deleteBlob(key, request);
 		}
 		if (url.pathname === "/api/reset" && request.method === "POST") return this.reset();
 		return json({ error: "Endpunkt nicht gefunden." }, 404);

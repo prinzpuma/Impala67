@@ -158,28 +158,71 @@ export const PLATFORM_NATIVE = {
 
 	// ---- Lokales Dateisystem (Export & Backup in Android Dokumente-Ordner) ----
 	filesystem: {
-		async exportFile(filename, contentString, { directory = "DOCUMENTS" } = {}) {
+		async exportFile(filename, contentString, { directory = "DOCUMENTS", mimeType = "application/json" } = {}) {
 			const fs = getPlugin("Filesystem");
-			if (!fs) return { native: false, success: false };
+			if (fs) {
+				try {
+					try {
+						await fs.mkdir({
+							path: "Impala67",
+							directory,
+							recursive: true,
+						});
+					} catch { /* Ordner existiert eventuell bereits */ }
 
-			try {
-				// Speichert standardmäßig in Documents/Impala67/
-				const res = await fs.writeFile({
-					path: `Impala67/${filename}`,
-					data: contentString,
-					directory,
-					encoding: "utf8",
-					recursive: true,
-				});
-				return {
-					native: true,
-					success: true,
-					uri: res?.uri || `Documents/Impala67/${filename}`,
-				};
-			} catch (err) {
-				console.error("[platform-native] Dateisystem-Export fehlgeschlagen:", err);
-				return { native: true, success: false, error: err?.message };
+					const res = await fs.writeFile({
+						path: `Impala67/${filename}`,
+						data: contentString,
+						directory,
+						encoding: "utf8",
+						recursive: true,
+					});
+					return {
+						native: true,
+						success: true,
+						uri: res?.uri || `Documents/Impala67/${filename}`,
+					};
+				} catch (err) {
+					console.warn("[platform-native] Dateisystem-Export fehlgeschlagen, prüfe Teilen-Fallback:", err);
+				}
 			}
+
+			// Fallback 1: Web Share API mit Datei (Android Share Sheet: "In Dateien speichern", Drive, Mail etc.)
+			if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+				try {
+					if (typeof File !== "undefined") {
+						const file = new File([contentString], filename, { type: mimeType });
+						if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+							await navigator.share({
+								title: filename,
+								files: [file],
+							});
+							return { native: true, success: true, shared: true, uri: "Teilen-Dialog" };
+						}
+					}
+				} catch (shareErr) {
+					if (shareErr?.name === "AbortError") {
+						return { native: true, success: false, aborted: true };
+					}
+					console.warn("[platform-native] Web Share (Datei) fehlgeschlagen:", shareErr);
+				}
+
+				// Fallback 2: Web Share API als Text (falls File-Sharing im WebView nicht unterstützt wird)
+				try {
+					await navigator.share({
+						title: filename,
+						text: contentString,
+					});
+					return { native: true, success: true, shared: true, uri: "Teilen-Dialog (Text)" };
+				} catch (shareErr) {
+					if (shareErr?.name === "AbortError") {
+						return { native: true, success: false, aborted: true };
+					}
+					console.warn("[platform-native] Web Share (Text) fehlgeschlagen:", shareErr);
+				}
+			}
+
+			return { native: Boolean(fs), success: false, error: "Weder Gerätespeicher noch Teilen verfügbar" };
 		},
 
 		async exportBackup(filename, contentString) {

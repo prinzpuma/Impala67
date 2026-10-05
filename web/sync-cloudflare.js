@@ -46,6 +46,9 @@ const LOCAL_SYNC_DELAY = 80;
 const SYNC_FETCH_TIMEOUT_MS = 45000;
 const BLOB_FETCH_TIMEOUT_MS = 120000;
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
+const CLIENT_ID = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+	? crypto.randomUUID()
+	: "c-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 const fallbackStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 const LS = {
@@ -154,6 +157,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		return credentials ? {
 			Authorization: `Bearer ${credentials.authToken}`,
 			"X-User-Id": credentials.userId,
+			"X-Impala-Client-Id": CLIENT_ID,
 			[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
 			...extra,
 		} : extra;
@@ -258,7 +262,15 @@ export const CLOUDFLARE_SYNC = (() => {
 			let response, data;
 			try {
 				response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
-				if (!response.ok) throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
+				if (!response.ok) {
+					if (response.status === 410) {
+						finishRequest({ failed: true, status: 410, errorName: "PacketMissing" });
+						console.warn("[cf-sync] Cloud-Historie unvollständig oder beschädigt. Führe automatische Reparatur aus...");
+						await purgeCloudData();
+						return pull();
+					}
+					throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
+				}
 				data = await response.json();
 				const responsePackets = Array.isArray(data.events) ? data.events : [];
 				finishRequest({ status: response.status, packets: responsePackets.length, encryptedChars: responsePackets.reduce((sum, packet) => sum + encryptedPacketChars(packet), 0) });
@@ -475,7 +487,8 @@ export const CLOUDFLARE_SYNC = (() => {
 			const iv = response.headers.get("X-Impala-IV");
 			const record = await decryptBlobRecord(credentials.cryptoKey, iv, new Uint8Array(await response.arrayBuffer()));
 			if (await blobOpaqueKey(record.id) !== key) throw new Error("Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.");
-			if (!isSyncBlobId(record.id) || !isBlobAlive(record.id, S.pages)) {
+			const alive = isBlobAlive(record.id, S.pages);
+			if (!isSyncBlobId(record.id) || !alive) {
 				ignoredBlobKeys.add(key);
 				downloadProgress[index] = 1;
 				updateFileProgress("Empfange Dateien…", downloadProgress);
@@ -570,6 +583,16 @@ export const CLOUDFLARE_SYNC = (() => {
 					phase: "requestSync",
 					retryable: isRetryableSyncError(e),
 				});
+				if (Number(error?.status) === 413 || /quota/i.test(error?.message || "")) {
+					console.warn("[cf-sync] Quota überschritten. Führe sofortige Cloud-Kompaktierung durch...");
+					try {
+						const { compactCloudData } = await import("./sync-maintenance.js");
+						await compactCloudData(CLOUDFLARE_SYNC, { bypassCooldown: true });
+						return true;
+					} catch (compactErr) {
+						console.error("[cf-sync] Auto-Kompaktierung nach Quota-Überschreitung fehlgeschlagen:", compactErr);
+					}
+				}
 				state.lastError = e.message;
 				if (!scheduleHttpRetry(e)) setStatus("error", "Sync-Fehler", e.message);
 				throw e;
@@ -578,9 +601,25 @@ export const CLOUDFLARE_SYNC = (() => {
 		return syncPromise;
 	}
 
+	function eventHasBlobRef(ev) {
+		if (!ev || typeof ev !== "object") return true;
+		const type = String(ev.type || "");
+		if (type.startsWith("heft") || type.startsWith("flashcard") || type.startsWith("tag") || type.startsWith("folder") || type.startsWith("deck") || type.startsWith("ui")) {
+			return false;
+		}
+		const payload = ev.payload;
+		if (!payload) return false;
+		if (payload.coverImg || payload.changes?.coverImg) return true;
+		const content = payload.content || payload.changes?.content;
+		if (typeof content === "string" && (content.includes("img:") || content.includes("file:") || content.includes("cover:"))) {
+			return true;
+		}
+		return false;
+	}
+
 	function scheduleSync(event = null) {
 		if (!credentials) return;
-		if (!event || (typeof event.type === "string" && event.type.startsWith("page"))) {
+		if (!event || eventHasBlobRef(event)) {
 			ignoredBlobKeys.clear();
 			blobInventoryDirty = true;
 		}
@@ -634,7 +673,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		clearTimeout(reconnectTimer);
 		if (!state.url || !credentials) return;
 		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-		const delay = Math.min(30000, 1000 * 1.6 ** ++reconnectAttempts);
+		const jitter = 0.8 + Math.random() * 0.4;
+		const delay = Math.min(30000, Math.round(1000 * 1.6 ** ++reconnectAttempts * jitter));
 		reconnectTimer = setTimeout(connectWebSocket, delay);
 	}
 
@@ -651,7 +691,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		ws.addEventListener("open", () => {
 			if (socket !== ws) return;
 			reconnectAttempts = 0;
-			ws.send(JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: credentials.authToken }));
+			ws.send(JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: credentials.authToken, clientId: CLIENT_ID }));
 		});
 		ws.addEventListener("message", (event) => {
 			if (socket !== ws) return;
@@ -665,10 +705,9 @@ export const CLOUDFLARE_SYNC = (() => {
 					pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); }, 30000);
 					requestSync().catch(() => {});
 				} else if (msg.type === "changed") {
-					// Ein unveraenderter Server-Cursor bedeutet: Nur das Blob-Inventar hat
-					// sich geaendert. Bei neuen Eventpaketen entscheidet pull() nach dem
-					// Entschluesseln, dass der Blob-Abgleich mitlaufen muss.
-					if (Number(msg.maxSeq || 0) <= state.lastSyncedSeq) blobInventoryDirty = true;
+					if (msg.senderClientId && msg.senderClientId === CLIENT_ID) return;
+					if (msg.blob) blobInventoryDirty = true;
+					else if (Number(msg.maxSeq || 0) <= state.lastSyncedSeq) blobInventoryDirty = true;
 					requestSync().catch(() => {});
 				}
 				else if (msg.type === "reset") { clearCursors(Number(msg.generation) || 1); requestSync(true).catch(() => {}); }
