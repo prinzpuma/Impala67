@@ -29,7 +29,7 @@ function corsHeaders() {
 		"Access-Control-Allow-Origin": "*",
 		"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 		"Access-Control-Allow-Headers": `Authorization, Content-Type, X-User-Id, X-Impala-IV, X-Impala-Client-Id, ${CLOUD_SYNC_PROTOCOL_HEADER}`,
-		"Access-Control-Expose-Headers": "X-Impala-IV, X-Impala-Usage",
+		"Access-Control-Expose-Headers": "X-Impala-IV, X-Impala-Usage, Retry-After",
 		"Access-Control-Max-Age": "86400",
 	};
 }
@@ -181,7 +181,9 @@ async function handleAi(request, env) {
 		const canRetry = (upstream.status === 429 || upstream.status === 404 || upstream.status === 400 || upstream.status === 410) && model !== models.at(-1);
 		if (!canRetry) break;
 	}
-	return new Response(text, { status: upstream?.status || 502, headers: { "Content-Type": upstream?.headers.get("Content-Type") || "application/json", ...corsHeaders() } });
+	const headers = { "Content-Type": upstream?.headers.get("Content-Type") || "application/json", ...corsHeaders() };
+	if (upstream?.headers?.get("Retry-After")) headers["Retry-After"] = upstream.headers.get("Retry-After");
+	return new Response(text, { status: upstream?.status || 502, headers });
 }
 
 async function handleNotion(request, env) {

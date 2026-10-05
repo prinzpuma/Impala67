@@ -153,11 +153,11 @@ export const CLOUDFLARE_SYNC = (() => {
 	const fetchTimed = (url, init = {}, stallTimeoutMs = SYNC_FETCH_TIMEOUT_MS, onProgress) =>
 		requestWithStallTimeout(url, init, { stallTimeoutMs, onProgress });
 
-	function authHeaders(extra = {}) {
+	function authHeaders(extra = {}, includeClientId = true) {
 		return credentials ? {
 			Authorization: `Bearer ${credentials.authToken}`,
 			"X-User-Id": credentials.userId,
-			"X-Impala-Client-Id": CLIENT_ID,
+			...(includeClientId ? { "X-Impala-Client-Id": CLIENT_ID } : {}),
 			[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
 			...extra,
 		} : extra;
@@ -792,7 +792,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!credentials && state.syncKey) credentials = await deriveSyncCredentials(state.syncKey);
 		if (!target || !credentials) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
 		return fetch(api("/api/ai", target), {
-			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false),
 			body: JSON.stringify(Array.isArray(payload) ? { messages: payload } : payload || {}), signal: options.signal,
 		});
 	}
@@ -802,7 +802,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!credentials && state.syncKey) credentials = await deriveSyncCredentials(state.syncKey);
 		if (!target || !credentials) throw new Error("Der sichere Notion-Proxy benötigt eine eingerichtete Cloudflare-Synchronisierung.");
 		return fetch(api("/api/notion", target), {
-			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false),
 			body: JSON.stringify({ token, path, method: options.method || "GET", body: options.body }), signal: options.signal,
 		});
 	}

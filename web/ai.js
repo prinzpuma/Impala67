@@ -160,6 +160,10 @@ export const AI = (() => {
 					}
 				}
 			} catch {}
+			if (!retryAfterMs && status === 429 && typeof text === "string") {
+				const match = text.match(/try again in (\d+(?:\.\d+)?)\s*s/i);
+				if (match) retryAfterMs = Math.ceil(parseFloat(match[1]) * 1000);
+			}
 			super(message);
 			this.status = status;
 			this.retryAfterMs = Number.isFinite(retryAfterMs) ? Math.min(Math.max(retryAfterMs, 0), 60000) : 0;
@@ -757,7 +761,9 @@ export const AI = (() => {
 				return message;
 			} catch (error) {
 				if (error?.name === "AbortError") throw error;
-				if (error instanceof AiHttpError && error.status === 429) {
+				const isRateLimit = error instanceof AiHttpError && error.status === 429;
+				if (isRateLimit && error.retryAfterMs > 35000) {
+					// Längere Sperren (z. B. Tageslimit) direkt an den Nutzer melden
 					throw error;
 				}
 				const network = !(error instanceof AiHttpError) && (error instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(errorText(error)));
@@ -776,6 +782,7 @@ export const AI = (() => {
 
 	function pruneRunHistory(messages) {
 		let images = 0, toolChars = 0;
+		const hasToolTurns = messages.some((m) => m?.role === "tool");
 		for (let i = messages.length - 1; i >= 0; i--) {
 			const message = messages[i];
 			if (message.role === "tool" && typeof message.content === "string") {
@@ -783,8 +790,12 @@ export const AI = (() => {
 				toolChars += message.content.length;
 				continue;
 			}
-			if (!Array.isArray(message.content) || !message.content.some((part) => part?.type === "image_url") || ++images <= LIMIT.images) continue;
-			message.content = message.content.filter((part) => part?.type !== "image_url").concat({ type: "text", text: "[Bild aus Platzgründen entfernt — bei Bedarf mit get_heft_page_image erneut anfordern]" });
+			if (!Array.isArray(message.content) || !message.content.some((part) => part?.type === "image_url")) continue;
+			// Sobald Werkzeuge ausgeführt wurden, hat das Modell das Bild bereits ausgewertet.
+			// Wir ersetzen Base64-Bilder durch einen Textplatzhalter, um das ITPM-Limit im Folgeschritt einzuhalten.
+			if (hasToolTurns || ++images > LIMIT.images) {
+				message.content = message.content.filter((part) => part?.type !== "image_url").concat({ type: "text", text: "[Bild aus Platzgründen entfernt — bei Bedarf mit get_heft_page_image erneut anfordern]" });
+			}
 		}
 	}
 	function toApiMessage(message, isGoogle) {
