@@ -1,6 +1,6 @@
 {
   "name": "impala67",
-  "version": "2.2.9",
+  "version": "2.2.10",
   "private": true,
   "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
   "type": "module",
@@ -10,7 +10,8 @@
     "test:all": "node --test test/*.test.mjs test/sync-v4-browser.e2e.mjs",
     "check:syntax": "node test/check-syntax.mjs",
     "check:pwa": "node .github/scripts/check-pwa-cache.mjs",
-    "verify": "npm test && npm run check:syntax && npm run check:pwa",
+    "check:version": "node .github/scripts/check-version-sync.mjs",
+    "verify": "npm test && npm run check:syntax && npm run check:pwa && npm run check:version",
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
   },

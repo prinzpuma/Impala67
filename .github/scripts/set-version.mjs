@@ -9,6 +9,13 @@ if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
   process.exit(1);
 }
 
+const pkgPath = "./package.json";
+if (fs.existsSync(pkgPath)) {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  pkg.version = version;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+}
+
 const versionPath = "./web/version.json";
 const metadata = JSON.parse(fs.readFileSync(versionPath, "utf8"));
 metadata.version = version;

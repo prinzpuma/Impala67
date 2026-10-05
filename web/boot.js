@@ -19,6 +19,7 @@ import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { initMcpBridge } from "./mcp-bridge.js";
 import { HEFT_INDEXER } from "./heft-indexer.js";
+import { startUpdateWatcher } from "./updater.js";
 
 const render = (...args) => RENDER.render(...args);
 
@@ -267,6 +268,7 @@ export async function initApp() {
 	if (LERNZEIT && LERNZEIT.startInterval) LERNZEIT.startInterval();
 	if (ANALYSE && ANALYSE.initDwellTimer) ANALYSE.initDwellTimer();
 	initMcpBridge();
+	startUpdateWatcher();
 	const scheduleIdle = typeof window.requestIdleCallback === "function"
 		? (fn) => window.requestIdleCallback(fn, { timeout: 3000 })
 		: (fn) => setTimeout(fn, 600);

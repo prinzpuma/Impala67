@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.8";
+const BUILD_VERSION = "2.2.10";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -82,16 +82,21 @@ async function workerVersion(worker, timeoutMs = 2000) {
 	});
 }
 
-async function waitForActiveVersion(expected, timeoutMs = 2500) {
-	if (!expected || !("serviceWorker" in navigator)) return true;
-	const exp = normVer(expected);
-	const end = Date.now() + timeoutMs;
-	do {
-		const version = await workerVersion(navigator.serviceWorker?.controller, 400);
-		if (version && version === exp) return true;
-		await delay(100);
-	} while (Date.now() < end);
-	return false;
+function waitForControllerChange(timeoutMs = 4000) {
+	if (!("serviceWorker" in navigator)) return Promise.resolve(true);
+	return new Promise((resolve) => {
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			navigator.serviceWorker.removeEventListener("controllerchange", onController);
+			clearTimeout(timer);
+			resolve(true);
+		};
+		const onController = () => finish();
+		const timer = setTimeout(finish, timeoutMs);
+		navigator.serviceWorker.addEventListener("controllerchange", onController);
+	});
 }
 
 async function activateWaitingWorker(reg, expectedVersion) {
@@ -102,9 +107,9 @@ async function activateWaitingWorker(reg, expectedVersion) {
 	if (expectedVersion && waitingVersion && waitingVersion !== normVer(expectedVersion)) {
 		console.warn("Geladener Service Worker meldet Version " + waitingVersion + " statt " + expectedVersion + ".");
 	}
+	const changed = waitForControllerChange(4000);
 	waiting.postMessage({ type: "SKIP_WAITING" });
-	if (expectedVersion) await waitForActiveVersion(expectedVersion);
-	await delay(300);
+	await changed;
 	return true;
 }
 
@@ -147,33 +152,30 @@ async function fetchWorkerVersion() {
 async function fetchDeployedVersion() {
 	if (window.Capacitor?.isNativePlatform?.()) {
 		try {
-			const res = await fetch("https://raw.githubusercontent.com/prinzpuma/Impala67/main/web/version.json?t=" + Date.now());
+			const res = await fetch("https://api.github.com/repos/prinzpuma/Impala67/releases/latest", {
+				headers: { Accept: "application/vnd.github.v3+json" }
+			});
 			if (res.ok) {
 				const data = await res.json();
-				const latest = normVer(data?.version);
-				if (latest) return { latest, source: "GitHub Releases" };
+				const latest = normVer(data?.tag_name || data?.name);
+				if (latest) return { latest, source: "GitHub Release" };
 			}
 		} catch {
-			/* Fallback zu lokalen Dateien */
-		}
-	}
-	const errors = [];
-	for (const [source, url] of [["version.json", "./version.json"], ["version.json(module)", new URL("./version.json", import.meta.url)]]) {
-		try {
-			const data = await fetchJson(url);
-			const latest = normVer(data.version);
-			if (latest) return { latest, source };
-			throw new Error("leere Version");
-		} catch (error) {
-			errors.push(source + ": " + (error?.message || error));
+			/* Fallback zur ausgelieferten Datei */
 		}
 	}
 	try {
-		return { latest: await fetchWorkerVersion(), source: "service-worker.js" };
+		const data = await fetchJson("./version.json");
+		const latest = normVer(data.version);
+		if (latest) return { latest, source: "version.json" };
 	} catch (error) {
-		errors.push("service-worker.js: " + (error?.message || error));
+		try {
+			return { latest: await fetchWorkerVersion(), source: "service-worker.js" };
+		} catch (workerError) {
+			throw new Error("Version nicht erreichbar (" + (error?.message || error) + " / " + (workerError?.message || workerError) + ")");
+		}
 	}
-	throw new Error(errors.join(" · ") || "version.json nicht erreichbar");
+	throw new Error("leere Version in version.json");
 }
 
 window.getAppVersion = () => normVer(window.APP_VERSION || BUILD_VERSION);
@@ -237,4 +239,79 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 
 window.applyPwaUpdate = () => window.installAppUpdate();
 
-export { cmpSemver, fetchDeployedVersion, refreshServiceWorker, workerVersion, waitForActiveVersion };
+let watcherStarted = false;
+let updateBannerEl = null;
+
+function showUpdateNotification(latest) {
+	if (updateBannerEl || document.getElementById("updateNotificationBanner")) return;
+	const wrap = document.createElement("div");
+	wrap.id = "updateNotificationBanner";
+	wrap.className = "toast success";
+	wrap.style.cssText = "display:flex;align-items:center;gap:10px;cursor:default;";
+
+	const msg = document.createElement("span");
+	msg.textContent = `🚀 Update v${latest} verfügbar`;
+
+	const btn = document.createElement("button");
+	btn.textContent = "Aktualisieren";
+	btn.style.cssText = "font:inherit;font-size:12px;padding:3px 10px;border-radius:6px;border:none;background:var(--accent,#4f8cff);color:#fff;cursor:pointer;";
+	btn.addEventListener("click", () => {
+		btn.disabled = true;
+		btn.textContent = "Lade…";
+		window.installAppUpdate((st) => { msg.textContent = st; }).catch(() => {
+			btn.disabled = false;
+			btn.textContent = "Wiederholen";
+		});
+	});
+
+	const closeBtn = document.createElement("button");
+	closeBtn.textContent = "✕";
+	closeBtn.style.cssText = "background:transparent;border:none;color:inherit;opacity:0.7;font-size:12px;cursor:pointer;padding:0 2px;";
+	closeBtn.addEventListener("click", () => {
+		wrap.classList.add("hide");
+		setTimeout(() => wrap.remove(), 350);
+		updateBannerEl = null;
+	});
+
+	wrap.append(msg, btn, closeBtn);
+	let toasts = document.getElementById("toasts");
+	if (!toasts) {
+		toasts = document.createElement("div");
+		toasts.id = "toasts";
+		document.body.appendChild(toasts);
+	}
+	toasts.appendChild(wrap);
+	updateBannerEl = wrap;
+}
+
+export function startUpdateWatcher() {
+	if (watcherStarted || typeof window === "undefined") return;
+	watcherStarted = true;
+
+	const runCheck = async () => {
+		if (typeof navigator !== "undefined" && !navigator.onLine) return;
+		try {
+			const res = await window.checkAppUpdate();
+			if (res?.hasUpdate) {
+				window.dispatchEvent(new CustomEvent("impala:update-available", { detail: res }));
+				showUpdateNotification(res.latest);
+			}
+		} catch (e) {
+			// Leise im Hintergrund scheitern
+			console.debug("Update-Watcher Hintergrundprüfung:", e);
+		}
+	};
+
+	// 1. Initialer Check nach wenigen Sekunden Leerlauf
+	setTimeout(runCheck, 6000);
+
+	// 2. Bei Rückkehr in den Tab
+	document.addEventListener("visibilitychange", () => {
+		if (!document.hidden) runCheck();
+	});
+
+	// 3. Periodisch alle 30 Minuten
+	setInterval(runCheck, 30 * 60 * 1000);
+}
+
+export { cmpSemver, fetchDeployedVersion, refreshServiceWorker, workerVersion, waitForControllerChange };
