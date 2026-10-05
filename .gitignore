@@ -23,5 +23,7 @@ android/key.properties
 *.jks
 *.p12
 *.key
+!android/app/release.keystore
 Impala67.apk
+
 

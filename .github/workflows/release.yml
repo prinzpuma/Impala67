@@ -140,7 +140,7 @@ jobs:
         working-directory: android
         run: chmod +x gradlew
 
-      - name: Release-Keystore vorbereiten (GitHub Secrets)
+      - name: Release-Keystore vorbereiten
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -154,8 +154,14 @@ jobs:
             echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
             echo "ANDROID_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          elif [ -f "android/app/release.keystore" ]; then
+            echo "Verwende persistenten Projekt-Keystore für konsistente Signatur..."
+            echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=impala67release" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=impala67" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=impala67release" >> "$GITHUB_ENV"
           else
-            echo "Hinweis: Kein ANDROID_KEYSTORE_BASE64 Secret hinterlegt. APK wird mit Debug-Signatur als installierbarer Fallback gebaut."
+            echo "Hinweis: Kein Release-Keystore hinterlegt. APK wird mit Debug-Signatur als installierbarer Fallback gebaut."
           fi
 
       - name: Capacitor Sync

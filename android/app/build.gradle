@@ -36,6 +36,13 @@ android {
                 keyPasswordVal = keyPasswordVal ?: props.getProperty('keyPassword')
             }
 
+            if (!keystorePath && file('release.keystore').exists()) {
+                keystorePath = 'release.keystore'
+                keystorePassword = keystorePassword ?: 'impala67release'
+                keyAliasVal = keyAliasVal ?: 'impala67'
+                keyPasswordVal = keyPasswordVal ?: 'impala67release'
+            }
+
             if (keystorePath) {
                 def kFile = file(keystorePath)
                 if (kFile.exists()) {
