@@ -193,7 +193,9 @@ function renderStatusDot() {
 function currentModelLabel() {
 	const cur = S.settings.aiModel || "";
 	const pr = (S.settings.aiProviders || []).find((p) => p.id === S.settings.aiProviderId);
-	return cur ? (pr ? pr.name + " · " : "") + cur : "Kein Modell";
+	if (!cur) return "Kein Modell";
+	if (cur === "impala-ai") return pr?.name || "Impala AI";
+	return (pr ? pr.name + " · " : "") + cur;
 }
 
 // Beide Auslöser (kleines Panel + großer Chat) bekommen dasselbe Icon/Label
@@ -271,7 +273,8 @@ function modelMenuInnerHtml() {
 	const favSet = favModels();
 	const opt = (prId, value, active) => {
 		const favKey = prId + "::" + value, fav = favSet.has(favKey);
-		return `<div class="model-row"><button type="button" class="menu-item${active ? " active" : ""}" data-modelset="${esc(prId)}::${esc(value)}"><span class="menu-item-label">${esc(value)}</span>${active ? '<span class="menu-check">✓</span>' : ""}</button>` +
+		const label = value === "impala-ai" ? "Impala AI" : value;
+		return `<div class="model-row"><button type="button" class="menu-item${active ? " active" : ""}" data-modelset="${esc(prId)}::${esc(value)}"><span class="menu-item-label">${esc(label)}</span>${active ? '<span class="menu-check">✓</span>' : ""}</button>` +
 			`<button type="button" class="model-fav${fav ? " on" : ""}" data-modelfav="${esc(favKey)}" title="${fav ? "Favorit entfernen" : "Als Favorit ganz nach oben pinnen"}">${fav ? "★" : "☆"}</button></div>`;
 	};
 	const rows = (ms) => ms.map((m) => opt(m.providerId, m.id, m.providerId === curPr && m.id === curModel)).join("");

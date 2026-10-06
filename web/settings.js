@@ -859,9 +859,10 @@ export function paintSettingsModels() {
 		const favKey = m.providerId + "::" + m.id;
 		const fav = favSet.has(favKey);
 		const active = m.providerId === curPr && m.id === curModel;
+		const displayName = m.id === "impala-ai" ? "Impala AI" : m.id;
 		return '<div class="model-row">' +
 			'<button type="button" class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(m.providerId) + "::" + U.esc(m.id) + '">' +
-				'<span class="menu-item-label">' + U.esc(m.id) + "</span>" +
+				'<span class="menu-item-label">' + U.esc(displayName) + "</span>" +
 				'<small class="settings-model-src">' + U.esc(nameOf(m.providerId)) + "</small>" +
 				(active ? '<span class="menu-check">✓</span>' : "") +
 			"</button>" +

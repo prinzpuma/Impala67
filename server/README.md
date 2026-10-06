@@ -46,16 +46,15 @@ Oder direkt aus `server/`:
 npx wrangler deploy
 ```
 
-### 5. Groq-AI konfigurieren (optional)
+### 5. Impala AI (Groq) konfigurieren (optional)
 Im Cloudflare-Dashboard beim Worker ein Secret `GROQ_API_KEY` anlegen.
 
-Aktuelle Fallback-Reihenfolge:
-1. `qwen/qwen3.8-27b`
-2. `openai/gpt-oss-120b`
-3. `openai/gpt-oss-20b`
-4. `llama-3.3-70b-versatile`
-
-Bildnachrichten werden nur an dafür freigegebene Vision-Modelle geschickt; aktuell ist das `qwen/qwen3.8-27b`. Bei einem Rate-Limit (`429`) oder Modellfehler (`404`/`400`) wird automatisch das nächste Modell versucht.
+Die App spricht den Worker gebündelt unter dem Modellnamen `impala-ai` (Impala AI) an. Der Worker übernimmt das automatische Routing:
+- Bildnachrichten (`Vision`) werden automatisch an `qwen/qwen3.8-27b` geleitet.
+- Bei Rate-Limits (`429`) oder Modellfehlern (`404`/`400`) greift die automatische Fallback-Kette:
+  1. `qwen/qwen3.8-27b`
+  2. `openai/gpt-oss-120b`
+  3. `openai/gpt-oss-20b`
 
 ---
 

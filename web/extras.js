@@ -669,7 +669,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		// anlegen — ältere gespeicherte Einstellungen überschreiben sonst die Default-Liste aus state.js.
 		if ((el = q("[data-provpreset]"))) {
 			const PRESETS = {
-				cloudflare: { id: "cloudflare", name: "Cloudflare (Groq)", base: "https://impala67-sync.joshuagayer1.workers.dev" },
+				cloudflare: { id: "cloudflare", name: "Impala AI", base: "https://impala67-sync.joshuagayer1.workers.dev" },
 				local: { id: "local", name: "Lokal (LM Studio)", base: "http://localhost:1234/v1" },
 				google: { id: "google", name: "Google Gemini", base: "https://generativelanguage.googleapis.com/v1beta/openai" },
 				openai: { id: "openai", name: "OpenAI", base: "https://api.openai.com/v1" },

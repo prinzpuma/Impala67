@@ -20,7 +20,7 @@ const UPSERT_USER_SQL = `
 		updated_at=excluded.updated_at
 `;
 
-const AI_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"];
+const AI_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const VISION_MODELS = new Set([AI_MODELS[0]]);
 const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000;
 
@@ -161,9 +161,9 @@ async function handleAi(request, env) {
 	if (normalized.error) return json({ error: normalized.error }, 400);
 	const tools = normalizeAiTools(body?.tools);
 	let requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-	if (requestedModel === "qwen/qwen3.6-27b") requestedModel = "qwen/qwen3.8-27b";
+	if (requestedModel === "qwen/qwen3.6-27b" || requestedModel === "llama-3.3-70b-versatile") requestedModel = "qwen/qwen3.8-27b";
 	let models = normalized.hasImages ? AI_MODELS.filter((m) => VISION_MODELS.has(m)) : AI_MODELS;
-	if (requestedModel && models.includes(requestedModel)) {
+	if (requestedModel && requestedModel !== "impala-ai" && requestedModel !== "cloudflare-auto" && models.includes(requestedModel)) {
 		models = [requestedModel, ...models.filter((m) => m !== requestedModel)];
 	}
 	let upstream, text = "";
@@ -562,7 +562,7 @@ async function handleRequest(request, env) {
 		quotaLimitBytes: MAX_USER_BYTES,
 	});
 	if (url.pathname !== "/ws") { const error = protocolError(request); if (error) return error; }
-	if (["/api/models", "/models", "/v1/models"].includes(url.pathname)) return json({ object: "list", data: AI_MODELS.map((id) => ({ id, object: "model", owned_by: "groq" })) });
+	if (["/api/models", "/models", "/v1/models"].includes(url.pathname)) return json({ object: "list", data: [{ id: "impala-ai", object: "model", owned_by: "impala67" }] });
 	if (url.pathname === "/api/ai") return handleAi(request, env);
 	if (url.pathname === "/api/notion") return handleNotion(request, env);
 	const userId = userIdOf(request);

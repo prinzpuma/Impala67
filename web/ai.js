@@ -20,10 +20,7 @@ export const AI = (() => {
 		{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol", provider: "openai" },
 		{ value: "gpt-5.6-terra", label: "GPT-5.6 Terra", provider: "openai" },
 		{ value: "gpt-5.6-luna", label: "GPT-5.6 Luna", provider: "openai" },
-		{ value: "qwen/qwen3.8-27b", label: "Cloudflare (Groq) – Qwen 3.8 27B (Vision)", provider: "cloudflare" },
-		{ value: "openai/gpt-oss-120b", label: "Cloudflare (Groq) – GPT OSS 120B", provider: "cloudflare" },
-		{ value: "openai/gpt-oss-20b", label: "Cloudflare (Groq) – GPT OSS 20B", provider: "cloudflare" },
-		{ value: "llama-3.3-70b-versatile", label: "Cloudflare (Groq) – Llama 3.3 70B", provider: "cloudflare" },
+		{ value: "impala-ai", label: "Impala AI", provider: "cloudflare" },
 		{ value: "local-model", label: "Lokales Modell", provider: "local" },
 	];
 	const LIMIT = {
@@ -104,7 +101,7 @@ export const AI = (() => {
 		if (familyCache.has(key)) return familyCache.get(key);
 		const tag = [provider?.id, provider?.name].filter(Boolean).join(" ").toLowerCase();
 		const base = String(provider?.base || "").toLowerCase();
-		const family = provider?.id === "cloudflare" || /\b(cloudflare|workers\.dev)\b/.test(tag) || /workers\.dev|\/api\/ai\b/.test(base) ? "cloudflare"
+		const family = provider?.id === "cloudflare" || /\b(cloudflare|workers\.dev|impala\s*ai)\b/.test(tag) || /workers\.dev|\/api\/ai\b/.test(base) ? "cloudflare"
 			: /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|\/|$)/.test(base) || /\b(local|lm[\s-]?studio|ollama|llama\.cpp|jan)\b/.test(tag) ? "local"
 			: /generativelanguage|googleapis|google/.test(base) || /\b(google|gemini|gemma)\b/.test(tag) ? "google"
 				: /api\.openai\.com/.test(base) || /\bopenai\b/.test(tag) ? "openai" : "other";
@@ -113,9 +110,14 @@ export const AI = (() => {
 	}
 	function cfg() {
 		const provider = activeProvider();
+		const family = providerFamily(provider);
 		let model = S.settings.aiModel || "";
-		if (model === "qwen/qwen3.6-27b") model = "qwen/qwen3.8-27b";
-		return { base: cleanBase(provider?.base), key: provider?.key || "", model, providerId: provider?.id || "", family: providerFamily(provider), thinkingEnabled: S.settings.thinkingEnabled !== false };
+		if (family === "cloudflare") {
+			if (!model || model === "qwen/qwen3.6-27b" || model === "qwen/qwen3.8-27b" || model === "llama-3.3-70b-versatile" || model.startsWith("openai/gpt-oss") || model === "cloudflare-auto") {
+				model = "impala-ai";
+			}
+		}
+		return { base: cleanBase(provider?.base), key: provider?.key || "", model, providerId: provider?.id || "", family, thinkingEnabled: S.settings.thinkingEnabled !== false };
 	}
 	const capKey = (c = cfg()) => [c.providerId, c.base, c.model].join("::");
 	const capStore = () => S.thinkingCapabilities || (S.thinkingCapabilities = Object.create(null));
