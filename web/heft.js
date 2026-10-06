@@ -133,9 +133,13 @@ export const HEFT = (() => {
 				const pg = jobDoc.pages[pi];
 				if (!pg || !(pg.strokes && pg.strokes.length)) continue;
 
-				const cv = renderPageCanvas(pg, 1100);
 				ocrLastRun.set(key, Date.now());
-				const text = await HANDSCHRIFT.recognize(cv);
+				let text = null;
+				try {
+					text = await HANDSCHRIFT.recognizeStrokes(pg.strokes);
+				} catch (err) {
+					console.warn("Heft: Vektor-Handschrifterkennung fehlgeschlagen", err);
+				}
 
 				if (pid !== jobPid || doc !== jobDoc || text == null) continue;
 				if (String(text).trim() !== String(pg.ocrText || "").trim()) {
@@ -2155,9 +2159,43 @@ export const HEFT = (() => {
 		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
 		const n = lassoSel.strokes.length;
 		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
+			'<button type="button" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">📝 In Text</button>' +
+			'<button type="button" data-helassotrain="1" title="Als Trainingsbeispiel für die Handschrift speichern">🎓 Trainieren</button>' +
 			'<button type="button" data-helassodup="1">⧉ Duplizieren</button>' +
 			'<button type="button" data-helassodel="1">🗑 Löschen</button>' +
 			'<button type="button" data-helassoclear="1">Aufheben</button>';
+	}
+
+	async function recognizeLassoSelection() {
+		if (!lassoSel || !lassoSel.strokes.length) return;
+		try {
+			U.toast("Handschrift wird erkannt…");
+			const text = await HANDSCHRIFT.recognizeStrokes(lassoSel.strokes);
+			if (text && text.trim()) {
+				try { await navigator.clipboard.writeText(text.trim()); } catch {}
+				U.toast("Erkannt & kopiert: „" + text.trim() + "“");
+			} else {
+				U.toast("Kein Text erkannt.");
+			}
+		} catch (e) {
+			U.toast("Erkennung fehlgeschlagen: " + (e?.message || e));
+		}
+	}
+
+	async function trainLassoSelection() {
+		if (!lassoSel || !lassoSel.strokes.length) return;
+		let guess = "";
+		try {
+			guess = await HANDSCHRIFT.recognizeStrokes(lassoSel.strokes) || "";
+		} catch {}
+		const label = window.prompt("Welcher Text steht in dieser Auswahl?", guess);
+		if (label != null && label.trim()) {
+			const saved = HANDSCHRIFT.saveTrainingSample(lassoSel.strokes, label.trim());
+			if (saved) {
+				const count = HANDSCHRIFT.getTrainingSamples().length;
+				U.toast("Gespeichert! (" + count + " Trainingsbeispiele gesammelt 🎓)");
+			}
+		}
 	}
 	function duplicateLassoSelection() {
 		if (!lassoSel || !doc) return;
@@ -3119,6 +3157,8 @@ export const HEFT = (() => {
 		}
 		if (d.henavback) { (window.TABS?.navBack || window.navBack)?.(); return; }
 		if (d.henavforward) { (window.TABS?.navForward || window.navForward)?.(); return; }
+		if (d.helassotext) { recognizeLassoSelection(); return; }
+		if (d.helassotrain) { trainLassoSelection(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
 		if (d.helassodel) { deleteLassoSelection(); return; }
 		if (d.helassoclear) { const lpi = lassoSel && lassoSel.pageIdx; lassoSel = null; if (lpi != null) redrawPage(lpi); updateChrome(); return; }

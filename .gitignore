@@ -25,5 +25,7 @@ android/key.properties
 *.key
 !android/app/release.keystore
 Impala67.apk
-
-
+# Handwriting ML
+handwriting/.venv/
+handwriting/data/
+handwriting/checkpoints/

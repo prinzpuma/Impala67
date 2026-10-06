@@ -1711,6 +1711,12 @@ function wireEvents() {
 			case "btnDeleteLocalEmbedding":
 				await SETTINGS.handleDeleteLocalEmbedding();
 				break;
+			case "btnExportHandwritingSamples":
+				SETTINGS.handleExportHandwritingSamples();
+				break;
+			case "btnClearHandwritingSamples":
+				SETTINGS.handleClearHandwritingSamples();
+				break;
 			case "btnPwaUpdateAction":
 				await SETTINGS.handleUpdateAction(t);
 				break;

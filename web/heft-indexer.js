@@ -51,10 +51,15 @@ export const HEFT_INDEXER = (() => {
 
 		const job = unindexed[0];
 		try {
-			const cv = await HEFT.pageCanvas(job.pageId, job.pageIdx, 1100);
-			if (cv) {
-				const text = await HANDSCHRIFT.recognize(cv);
-				if (text != null && String(text).trim()) {
+			let text = null;
+			if (Array.isArray(job.page.strokes) && job.page.strokes.length > 0) {
+				try {
+					text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes);
+				} catch (err) {
+					console.info("[heft-indexer] Stricherkennung Fehler:", err);
+				}
+			}
+			if (text != null && String(text).trim()) {
 					const recognized = String(text).trim();
 					job.page.ocrText = recognized;
 					await STATE.dispatch("heftOps", {
@@ -70,7 +75,6 @@ export const HEFT_INDEXER = (() => {
 						ops: [{ t: "ocr", p: job.page.id, text: " " }],
 					});
 				}
-			}
 		} catch (err) {
 			console.warn("[heft-indexer] Seite konnte nicht analysiert werden:", err);
 		}

@@ -2,82 +2,136 @@
 import { U } from "./util.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 
-// handschrift.js — Handschrift- und Text-Erkennung für GoodNotes-Hefte (heft.js).
+// handschrift.js — Handschrift- und Strich-Erkennung für Impala67 (heft.js).
 //
-// Strategie:
-//   1) Native Android App: Google ML Kit (On-Device Text Recognition, 0 ms Cloud-Latenz,
-//      100 % offline, 0 API-Token-Kosten).
-//   2) Web/Desktop-Fallback: Lokales Tesseract (window.Tesseract) mit Vorverarbeitung.
-//   3) Kein LLM für Hintergrund-OCR: Das spart massiv Tokens und Akku. Das LLM greift
-//      auf den erkannten Text über das RAG-System zu und liest Bilder nur bei expliziter
-//      Frage nach Skizzen/Diagrammen.
+// Pipeline:
+//   1) Vektor-Handschrift (Primär): On-Device WebAssembly via ONNX Runtime Web
+//      (handwriting-worker.js) — 100 % offline, < 2 ms Inferenz, erkennt Strichsequenzen,
+//      Mathe-Formeln und Brüche direkt aus Vektordaten.
+//   2) Native Android App (Fallback für reine Bitmaps/Fotos): Google ML Kit
+//      (On-Device Text Recognition via platform-native.js).
 export const HANDSCHRIFT = (() => {
-	const tesseractReady = () => typeof window !== "undefined" && !!window.Tesseract;
 	const available = () => true;
 
-	async function ensureTesseractLoaded() {
-		if (tesseractReady()) return true;
-		try {
-			await U.loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js", "Tesseract");
-			return tesseractReady();
-		} catch {
-			throw new Error("Tesseract-OCR konnte nicht geladen werden. 📶 Internetverbindung für den Erstabruf erforderlich.");
+	let inkWorker = null;
+	let inkReqId = 0;
+	const inkPending = new Map();
+
+	function getInkWorker() {
+		if (!inkWorker && typeof Worker !== "undefined") {
+			try {
+				inkWorker = new Worker("./handwriting-worker.js", { type: "module" });
+				inkWorker.addEventListener("message", (e) => {
+					const msg = e.data || {};
+					if (msg.id && inkPending.has(msg.id)) {
+						const { resolve, reject } = inkPending.get(msg.id);
+						inkPending.delete(msg.id);
+						if (msg.type === "error") reject(new Error(msg.error));
+						else resolve(msg.text || "");
+					}
+				});
+				inkWorker.addEventListener("error", (err) => {
+					for (const { reject } of inkPending.values()) reject(new Error(err?.message || "Worker-Fehler"));
+					inkPending.clear();
+					try { inkWorker?.terminate(); } catch {}
+					inkWorker = null;
+				});
+			} catch { inkWorker = null; }
 		}
+		return inkWorker;
 	}
 
-	// Vorverarbeitung für Tesseract: Graustufen + weiche Schwelle. Papier und
-	// Linien werden weiß, Tinte schwarz — hebt die Trefferquote bei lokalem Fallback.
-	function preprocess(canvas) {
-		const c = document.createElement("canvas");
-		c.width = canvas.width; c.height = canvas.height;
-		const x = c.getContext("2d", { willReadFrequently: true });
-		x.drawImage(canvas, 0, 0);
-		const d = x.getImageData(0, 0, c.width, c.height);
-		const px = d.data;
-		for (let i = 0; i < px.length; i += 4) {
-			const v = (px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8;
-			const o = v > 176 ? 255 : v < 112 ? 0 : Math.round((v - 112) / 64 * 255);
-			px[i] = px[i + 1] = px[i + 2] = o;
-		}
-		x.putImageData(d, 0, 0);
-		return c;
-	}
-
-	async function recognizeTesseract(canvas) {
-		await ensureTesseractLoaded();
-		const pre = preprocess(canvas);
-		const res = await window.Tesseract.recognize(pre, "deu+eng");
-		const data = (res && res.data) || {};
-		const lines = (data.lines || [])
-			.filter((l) => (l.confidence || 0) >= 35)
-			.map((l) => String(l.text || "").trim())
-			.filter(Boolean);
-		return (lines.length ? lines.join("\n") : String(data.text || "")).trim();
+	async function recognizeStrokes(strokes) {
+		if (!strokes || !strokes.length) return "";
+		const worker = getInkWorker();
+		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
+		const id = ++inkReqId;
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				if (inkPending.has(id)) {
+					inkPending.delete(id);
+					reject(new Error("Timeout bei Handschrift-Erkennung"));
+				}
+			}, 15000);
+			inkPending.set(id, {
+				resolve: (res) => { clearTimeout(timeout); resolve(res); },
+				reject: (err) => { clearTimeout(timeout); reject(err); },
+			});
+			worker.postMessage({ type: "recognize_strokes", id, strokes });
+		});
 	}
 
 	// Liefert erkannten Text oder null (= Aufrufer behält den bisherigen Stand).
-	async function recognize(canvas) {
+	async function recognize(canvas, strokes = null) {
+		// 1. Priorität: Lokale Stricherkennung (Online Handwriting via ONNX Runtime Web)
+		if (strokes && Array.isArray(strokes) && strokes.length > 0) {
+			try {
+				const inkText = await recognizeStrokes(strokes);
+				if (inkText && inkText.trim()) return inkText.trim();
+			} catch (e) {
+				console.info("Handschrift: Vektor-Stricherkennung nicht verfügbar, Fallback auf Bild-OCR:", e?.message || e);
+			}
+		}
+
 		if (!canvas) return null;
 
-		// 1. Priorität: On-Device Google ML Kit auf Android
+		// 2. Priorität: On-Device Google ML Kit auf Android (für Fotos / Bild-Anhänge)
 		if (PLATFORM_NATIVE.isNative && PLATFORM_NATIVE.ocr.isAvailable) {
 			try {
 				const mlkitText = await PLATFORM_NATIVE.ocr.recognizeCanvas(canvas);
 				if (mlkitText != null) return mlkitText;
 			} catch (e) {
-				console.warn("Handschrift: ML Kit fehlgeschlagen — Fallback auf Tesseract", e);
+				console.warn("Handschrift: ML Kit fehlgeschlagen:", e);
 			}
-		}
-
-		// 2. Priorität: Lokales Tesseract im Browser
-		try {
-			return await recognizeTesseract(canvas);
-		} catch (e) {
-			console.warn("Handschrift: Tesseract fehlgeschlagen", e);
 		}
 
 		return null;
 	}
 
-	return { available, recognize };
+	const STORAGE_KEY_SAMPLES = "impala67_handwriting_training_samples";
+
+	function getTrainingSamples() {
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY_SAMPLES);
+			return raw ? JSON.parse(raw) : [];
+		} catch { return []; }
+	}
+
+	function saveTrainingSample(strokes, label) {
+		if (!strokes || !strokes.length || !label || !String(label).trim()) return false;
+		const samples = getTrainingSamples();
+		samples.push({
+			id: U.uid(),
+			text: String(label).trim(),
+			strokes: strokes.map((s) => ({
+				pts: (s.pts || []).map((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]),
+			})),
+			createdAt: Date.now(),
+		});
+		try {
+			localStorage.setItem(STORAGE_KEY_SAMPLES, JSON.stringify(samples));
+			return true;
+		} catch (e) {
+			console.warn("Handschrift: Fehler beim Speichern des Trainingsbeispiels:", e);
+			return false;
+		}
+	}
+
+	function exportTrainingSamplesJson() {
+		return JSON.stringify(getTrainingSamples(), null, 2);
+	}
+
+	function clearTrainingSamples() {
+		try { localStorage.removeItem(STORAGE_KEY_SAMPLES); } catch {}
+	}
+
+	return {
+		available,
+		recognize,
+		recognizeStrokes,
+		saveTrainingSample,
+		getTrainingSamples,
+		exportTrainingSamplesJson,
+		clearTrainingSamples,
+	};
 })();

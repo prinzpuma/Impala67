@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.17"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.18"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
@@ -52,6 +52,10 @@ const APP_FILES = [
 	"./embedding.js",
 	"./think-heuristik.js",
 	"./handschrift.js",
+	"./handwriting-preprocessor.js",
+	"./handwriting-vocab.js",
+	"./handwriting-ctc.js",
+	"./handwriting-worker.js",
 	"./rag.js",
 	"./rag-ranking.js",
 	"./rag-worker.js",

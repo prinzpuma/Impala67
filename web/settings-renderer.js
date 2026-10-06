@@ -9,6 +9,7 @@ import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMi
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
+import { HANDSCHRIFT } from "./handschrift.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 
@@ -169,9 +170,28 @@ function renderAi(vm) {
 			'</div>' +
 		'</div>';
 
+		const samplesCount = (HANDSCHRIFT.getTrainingSamples ? HANDSCHRIFT.getTrainingSamples().length : 0);
+		const handwritingStatus = '<div id="ai-handwriting" data-settings-anchor>' +
+			'<div class="settings-status is-ok">' +
+				'<span class="settings-status-dot"></span>' +
+				'<span class="settings-row-copy">' +
+					'<b>Handschrifterkennung (Digital Ink)</b>' +
+					'<small>' +
+						'100 % lokal (ONNX Runtime Web, ca. 3 MB) · ' + (samplesCount > 0 ? samplesCount + ' Trainingsbeispiele gesammelt' : 'Noch keine eigenen Trainingsbeispiele') +
+					'</small>' +
+				'</span>' +
+				'<span id="handwritingActions">' +
+					(samplesCount > 0
+						? button("📥 Exportieren", "btnExportHandwritingSamples", "secondary") + ' ' + button("🗑 Leeren", "btnClearHandwritingSamples", "secondary danger-text")
+						: '') +
+				'</span>' +
+			'</div>' +
+		'</div>';
+
 		content += UI.disclosure("Erweitert", "Embedding, Werkzeuge und eigene Anweisungen",
 			UI.row({ title: "Tools mitsenden", description: "Stellt der KI die App-Werkzeuge zur Verfügung", trailing: switchControl("inpAlwaysTools", "Tools mitsenden", S.settings.alwaysSendTools !== false) }) +
 			embedStatus +
+			handwritingStatus +
 			UI.field("Eigene Anweisungen", "inpCustomInstructions", S.settings.customInstructions || "", { explicit: true, multiline: true, rows: 5, description: "Tonfall, Fach und dauerhafte Vorlieben", placeholder: "Optional" }).replace('class="settings-input-row"', 'class="settings-input-row" id="ai-instructions" data-settings-anchor'));
 	}
 	return UI.page("KI & Lernen", "Modelle, Zugänge und Lernhilfen – klar getrennt und schnell erreichbar.", tabs + '<div id="aiStatusSettings" class="ai-status-banner"></div>' + content + (tab === "sources" || tab === "models" ? UI.saveBar() : ""));

@@ -7,6 +7,7 @@ import { AI } from "./ai.js";
 import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { DRIVE } from "./drive.js";
+import { HANDSCHRIFT } from "./handschrift.js";
 import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
@@ -1450,6 +1451,25 @@ export async function handleImportChange(e) {
 	}
 }
 
+export function handleExportHandwritingSamples() {
+	const count = HANDSCHRIFT.getTrainingSamples ? HANDSCHRIFT.getTrainingSamples().length : 0;
+	if (!count) {
+		U.toast("Noch keine Trainingsbeispiele gesammelt.");
+		return;
+	}
+	const json = HANDSCHRIFT.exportTrainingSamplesJson();
+	U.download("my_handwriting_samples.json", json);
+	U.toast(`${count} Trainingsbeispiele exportiert! 📥`);
+}
+
+export function handleClearHandwritingSamples() {
+	if (confirm("Möchtest du alle gesammelten Handschrift-Trainingsbeispiele wirklich löschen?")) {
+		HANDSCHRIFT.clearTrainingSamples();
+		U.toast("Trainingsbeispiele gelöscht.");
+		openSettings(S.settingsSection || "ai");
+	}
+}
+
 export const SETTINGS = {
 	checkAI,
 	applyTheme,
@@ -1511,12 +1531,8 @@ export const SETTINGS = {
 	handleDashboardAdd,
 	homeLayout,
 	HOME_SECTIONS,
-	handleFileBgChange,
-	handleImportChange,
-	updateLocalEmbeddingManagerUi,
-	handleEnableLocalEmbedding,
-	handleDownloadLocalEmbedding,
-	handleDeleteLocalEmbedding,
+	handleExportHandwritingSamples,
+	handleClearHandwritingSamples,
 	BREAK_REMINDER_KEY,
 	getBreakReminder,
 	setBreakReminder,
