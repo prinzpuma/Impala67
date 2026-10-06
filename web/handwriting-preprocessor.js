@@ -243,13 +243,26 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 	// Berechnet die normalisierte Feature-Sequenz für eine Liste von Strichen einer Zeile
 	// Rückgabe: Array von [dx, dy, pen_down]
 	function extractLineFeatures(lineStrokes, options = {}) {
-		const step = options.step || STEP_PIXELS;
 		// 1. Automatische Begradigung / Deskewing bei schräger Handschrift
 		const angle = estimateOrientation(lineStrokes);
 		const deskewed = Math.abs(angle) > 0.015 ? deskewStrokes(lineStrokes, angle) : lineStrokes;
 
+		// 2. Ermittle Zeilenhöhe ZUVOR, damit das Resampling streng skaleninvariant ist!
+		// Das neuronale Netz erwartet ca. 20-25 Punkte pro Einheits-Höhe (step = 0.045 * height).
+		let minY = Infinity, maxY = -Infinity;
+		for (const s of deskewed) {
+			const pts = s.pts || [];
+			for (const p of pts) {
+				if (p[1] < minY) minY = p[1];
+				if (p[1] > maxY) maxY = p[1];
+			}
+		}
+		const rawHeight = Math.max(10, maxY - minY);
+		const step = options.step || Math.max(1.5, rawHeight * 0.045);
+
 		const resampledStrokes = [];
-		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+		let minX = Infinity, maxX = -Infinity;
+		minY = Infinity; maxY = -Infinity;
 
 		for (const s of deskewed) {
 			const pts = s.pts || [];
@@ -267,8 +280,8 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 
 		if (!resampledStrokes.length) return [];
 
-		// Normierungsfaktor: Zeilenhöhe normieren (z. B. auf 100 Einheiten)
-		const height = Math.max(20, maxY - minY);
+		// Normierungsfaktor: Zeilenhöhe normieren (auf 1.0 Einheit)
+		const height = Math.max(10, maxY - minY);
 		const scale = 1.0 / height;
 
 		const features = [];
