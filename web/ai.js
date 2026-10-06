@@ -1237,6 +1237,7 @@ export const AI = (() => {
 			? "\n\nAn Nachrichten können Bilder hängen (z. B. Heft-Seiten oder Screenshots). Wenn du Bilder technisch nicht empfangen oder nicht sehen kannst (kein Vision-Modell), erwähne das kurz und ehrlich, statt Inhalte zu raten."
 			: "";
 		const modelNote = modelSwitchNote(target, model);
+		const sysMsg = (mode) => ({ role: "system", content: systemPrompt(mode, [modelNote, visionNote].filter(Boolean).join("\n\n")) });
 		const wsCtx = workspaceContext(ragContext, chatSummary, current, workspaceSnapshot);
 		const messages = [sysMsg(metaOnly ? "meta" : true)];
 		if (history.length > 1) messages.push(...history.slice(0, -1));
