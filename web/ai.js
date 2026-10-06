@@ -558,8 +558,10 @@ export const AI = (() => {
 	const isThoughtPart = (part) => part && (part.thought === true || ["thinking", "thought", "reasoning"].includes(part.type));
 	function reasoningFrom(value) {
 		if (!value || typeof value !== "object") return "";
-		if (typeof value.reasoning_content === "string" && value.reasoning_content) return value.reasoning_content;
 		if (typeof value.reasoning === "string" && value.reasoning) return value.reasoning;
+		if (typeof value.reasoning_content === "string" && value.reasoning_content) return value.reasoning_content;
+		if (typeof value.thought === "string" && value.thought) return value.thought;
+		if (typeof value.thinking === "string" && value.thinking) return value.thinking;
 		return Array.isArray(value.content) ? value.content.filter(isThoughtPart).map((part) => part.text || part.content || "").join("") : "";
 	}
 	function textFrom(content) {
@@ -582,8 +584,11 @@ export const AI = (() => {
 		if (!message.tool_calls.length) delete message.tool_calls;
 	}
 	function finishMessage(data) {
-		const message = data?.choices?.[0]?.message || { role: "assistant", content: "" };
-		const raw = textFrom(message.content), apiReasoning = reasoningFrom(message), split = splitThink(raw, !!apiReasoning);
+		const choice = data?.choices?.[0];
+		const message = choice?.message || { role: "assistant", content: "" };
+		const raw = textFrom(message.content);
+		const apiReasoning = reasoningFrom(message) || reasoningFrom(choice) || reasoningFrom(data);
+		const split = splitThink(raw, !!apiReasoning);
 		normalizeToolCalls(message);
 		message.content = split.content;
 		let reasoning = apiReasoning;

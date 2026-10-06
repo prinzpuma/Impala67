@@ -20,8 +20,8 @@ const UPSERT_USER_SQL = `
 		updated_at=excluded.updated_at
 `;
 
-const AI_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"];
-const VISION_MODELS = new Set([AI_MODELS[0]]);
+const AI_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
+const VISION_MODELS = new Set(["qwen/qwen3.8-27b"]);
 const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000;
 
 function corsHeaders() {
