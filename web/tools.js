@@ -189,7 +189,7 @@ export const TOOLS = (() => {
 	// ohne bei jeder Anfrage dutzende Schemas an das Modell zu schicken.
 	const defs = [
 		t("inspect", "Liest App-Daten. Mehrere Seiten oder Karten in einem Aufruf abrufen.", {
-			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats", "archived"] },
+			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats", "archived"], description: "pages = Liste der Seiten & Hefte (optional query zum Filtern); page = Inhalt der Seiten/Hefte in 'titles' (inkl. OCR-Text & Seitenzahl bei Heften)" },
 			titles: { type: "array", items: { type: "string" }, description: "Seitentitel für kind=page" },
 			query: { type: "string" }, deck: { type: "string" }, limit: { type: "number" },
 			semantic: { type: "boolean", description: "Semantische statt Stichwortsuche" },
@@ -357,7 +357,7 @@ export const TOOLS = (() => {
 		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text }],
 		"page.patch": (o) => ["patch_page", { page_title: o.title, search: o.search, replace: o.replace ?? o.content }],
 		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
-		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent }],
+		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent ?? o.to }],
 		"page.trash": (o) => ["delete_page", { page_title: o.title }],
 		"page.archive": (o) => ["archive_page", { page_title: o.title }],
 		"page.unarchive": (o) => ["unarchive_page", { page_title: o.title }],
@@ -381,9 +381,12 @@ export const TOOLS = (() => {
 				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
 				switch (a.kind) {
 					case "context": return run("get_context", {});
-					case "pages": return run("list_pages", {});
+					case "pages": {
+						return run("list_pages", { query: a.query });
+					}
 					case "page": {
-						const titles = Array.isArray(a.titles) ? a.titles.slice(0, 12) : [];
+						const rawTitles = a.titles || a.title || a.page_title || a.page || [];
+						const titles = (Array.isArray(rawTitles) ? rawTitles : [rawTitles]).filter(Boolean).map(String).slice(0, 12);
 						if (!titles.length) return { error: "inspect: titles fehlt für kind=page." };
 						const pages = [];
 						for (const title of titles) pages.push(await run("read_page", { page_title: title }));
@@ -681,12 +684,9 @@ export const TOOLS = (() => {
 			}
 			case "list_pages": {
 				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.
-				// FIX: gab ALLE Seiten zurück. ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen —
-				// beim Modell kam abgeschnittenes, unlesbares JSON an. Jetzt zuletzt bearbeitete
-				// zuerst, harte Obergrenze, ehrliche Gesamtzahl statt stiller Kappung.
-				const all = STATE.activePages().slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || "")));
-				// 100 Einträge lagen bereits über der 6000-Zeichen-Grenze in ai.js — die Liste kam beim
-				// Modell abgeschnitten an. 60 passen sicher hinein, der Rest läuft über die Suche.
+				const q = String(a.query || "").trim().toLowerCase();
+				let all = STATE.activePages().slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || "")));
+				if (q) all = all.filter((pg) => (pg.title || "").toLowerCase().includes(q));
 				return {
 					pages: all.slice(0, 60).map((pg) => ({
 						title: pg.title,
@@ -694,7 +694,7 @@ export const TOOLS = (() => {
 						hasPdf: !!pg.pdfId,
 					})),
 					total: all.length,
-					...(all.length > 60 ? { note: "Nur die 60 zuletzt bearbeiteten Seiten — für den Rest search_notes oder semantic_search nutzen." } : {}),
+					...(all.length > 60 ? { note: "Nur die ersten 60 Treffer — für spezifischere Treffer query verfeinern oder search_notes nutzen." } : {}),
 				};
 			}
 			case "search_notes":
@@ -909,7 +909,9 @@ export const TOOLS = (() => {
 				// Das passiert am Ende einer KI-Antwort, also OHNE direkten Klick — Browser
 				// verweigern das Kopieren dann gern. Dieser Fehler darf nicht still verschwinden.
 				try {
-					return (await NLM.sendPages(a.page_titles || [])) || { ok: true };
+					const raw = a.page_titles || a.titles || a.pages || a.page_title || a.title || [];
+					const titles = (Array.isArray(raw) ? raw : [raw]).filter(Boolean).map(String);
+					return (await NLM.sendPages(titles)) || { ok: true };
 				} catch (e) {
 					return { error: "Übergabe an Gemini Notebook fehlgeschlagen: " + String((e && e.message) || e) + ". Häufigste Ursache: Die Zwischenablage ist ohne direkten Klick gesperrt — Inhalte bitte manuell kopieren." };
 				}

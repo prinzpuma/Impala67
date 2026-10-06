@@ -104,7 +104,8 @@ export const AI = (() => {
 		const family = provider?.id === "cloudflare" || /\b(cloudflare|workers\.dev|impala\s*ai)\b/.test(tag) || /workers\.dev|\/api\/ai\b/.test(base) ? "cloudflare"
 			: /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|\/|$)/.test(base) || /\b(local|lm[\s-]?studio|ollama|llama\.cpp|jan)\b/.test(tag) ? "local"
 			: /generativelanguage|googleapis|google/.test(base) || /\b(google|gemini|gemma)\b/.test(tag) ? "google"
-				: /api\.openai\.com/.test(base) || /\bopenai\b/.test(tag) ? "openai" : "other";
+			: /\bdeepseek\b/.test(tag) || /deepseek/i.test(base) ? "deepseek"
+			: /api\.openai\.com/.test(base) || /\bopenai\b/.test(tag) ? "openai" : "other";
 		familyCache.set(key, family);
 		return family;
 	}
@@ -552,7 +553,9 @@ export const AI = (() => {
 	function applyThinking(body, enabled, c) {
 		if (!enabled) return;
 		const cap = capStore()[capKey(c)] || declaredThinkingCapabilities(c);
-		if (!c.thinkingEnabled && cap.offEffort) body.reasoning_effort = cap.offEffort;
+		if (!c.thinkingEnabled && cap.offEffort && c.family !== "google" && !(c.family === "openai" && cap.offEffort === "none")) {
+			body.reasoning_effort = cap.offEffort;
+		}
 		if (c.family === "google" && cap.includeThoughts) body.extra_body = { google: { thinking_config: { include_thoughts: true } } };
 	}
 	const isThoughtPart = (part) => part && (part.thought === true || ["thinking", "thought", "reasoning"].includes(part.type));
@@ -682,12 +685,17 @@ export const AI = (() => {
 		if (Array.isArray(content)) return content.length > 0;
 		return Boolean(content);
 	}
-	function normalizeMessagesForApi(messages) {
+	function normalizeMessagesForApi(messages, family) {
 		if (!Array.isArray(messages) || !messages.length) return [];
 		const out = [];
+		const allowReasoningContent = family === "deepseek";
 		for (const raw of messages) {
 			if (!raw || typeof raw !== "object") continue;
 			const m = { ...raw };
+			if (!allowReasoningContent) {
+				delete m.reasoning_content;
+				delete m.reasoning;
+			}
 			const hasContent = hasMessageContent(m.content);
 			const hasTools = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
 			const isToolResult = m.role === "tool";
@@ -713,7 +721,7 @@ export const AI = (() => {
 		return out;
 	}
 	async function doChat(messages, tools, onDelta, onReasoning, withExtras, markProduced, requestConfig) {
-		const c = requestConfig || cfg(), body = { model: c.model, messages: normalizeMessagesForApi(messages) };
+		const c = requestConfig || cfg(), body = { model: c.model, messages: normalizeMessagesForApi(messages, c.family) };
 		// Gemini 3.x lehnt Sampling-Regler inzwischen ab; lokale und andere kompatible
 		// Server behalten den bisherigen Wert für rückwärtskompatibles Verhalten.
 		if (c.family !== "google" && c.family !== "openai" && c.family !== "cloudflare") body.temperature = 0.4;
@@ -732,7 +740,7 @@ export const AI = (() => {
 	function isCompatibilityError(error, extras, plannedTools, hasToolHistory) {
 		if (!(error instanceof AiHttpError) || ![400, 422].includes(error.status)) return false;
 		const text = errorText(error).toLowerCase();
-		if (extras && /(thinking|reasoning|thought|extra_body|unknown.*(field|parameter)|unsupported.*(field|parameter))/i.test(text)) return true;
+		if (/(reasoning_content|thinking|reasoning|thought|extra_body|unknown.*(field|parameter)|unsupported.*(field|parameter))/i.test(text)) return true;
 		return isToolSchemaError(error, plannedTools, hasToolHistory);
 	}
 	function isToolSchemaError(error, plannedTools, hasToolHistory) {
@@ -802,21 +810,21 @@ export const AI = (() => {
 			// Sobald Werkzeuge ausgeführt wurden, hat das Modell das Bild bereits ausgewertet.
 			// Wir ersetzen Base64-Bilder durch einen Textplatzhalter, um das ITPM-Limit im Folgeschritt einzuhalten.
 			if (hasToolTurns || ++images > LIMIT.images) {
-				message.content = message.content.filter((part) => part?.type !== "image_url").concat({ type: "text", text: "[Bild aus Platzgründen entfernt — bei Bedarf mit get_heft_page_image erneut anfordern]" });
+				message.content = message.content.filter((part) => part?.type !== "image_url").concat({ type: "text", text: "[Bild aus Platzgründen entfernt — bei Bedarf mit view_heft_page erneut anfordern]" });
 			}
 		}
 	}
-	function toApiMessage(message, isGoogle) {
-		const out = { role: "assistant", content: message.content || "" };
+	function toApiMessage(message, isGoogle, family) {
+		const out = { role: "assistant", content: message.content || (message.tool_calls?.length ? null : "") };
 		if (message.tool_calls?.length) out.tool_calls = message.tool_calls.map((call) => {
 			const clean = { ...call, function: call.function ? { ...call.function } : call.function };
 			copyThoughtMetadata(call, clean, isGoogle);
 			return clean;
 		});
-		// Qwen/Gemma-ähnliche OpenAI-Adapter erwarten den Denktext beim nächsten
-		// Werkzeug-Schritt wieder als reasoning_content. Für Google übernimmt das
-		// separate thought_signature-Format diese Aufgabe.
-		if (!isGoogle && message.tool_calls?.length && message.reasoning) out.reasoning_content = message.reasoning;
+		// Nur native DeepSeek-Adapter erwarten den Denktext beim nächsten
+		// Werkzeug-Schritt wieder als reasoning_content. Groq, OpenAI, Cloudflare und
+		// Google verwerfen reasoning_content in assistant-Nachrichten mit HTTP 400.
+		if (family === "deepseek" && message.tool_calls?.length && message.reasoning) out.reasoning_content = message.reasoning;
 		copyThoughtMetadata(message, out, isGoogle);
 		return out;
 	}
@@ -971,11 +979,19 @@ export const AI = (() => {
 			attachmentBudget -= Math.min(String(file.content || "").length, limit);
 			return clippedAttachment(file, label, limit);
 		};
-		return recent.map((m) => {
+		const lastImageIndex = recent.map((m) => !!m.image).lastIndexOf(true);
+		return recent.map((m, idx) => {
 			let content = m.content || "";
 			if (m.textFile) content += (content ? "\n\n" : "") + attachment(m, "Angehängte Datei", m.textFile);
 			if (m.pdfFile) content += (content ? "\n\n" : "") + attachment(m, "Angehängtes PDF", m.pdfFile);
-			return m.image ? { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] } : { role: m.role, content };
+			if (m.image) {
+				if (idx === lastImageIndex) {
+					return { role: m.role, content: [{ type: "text", text: content }, { type: "image_url", image_url: { url: m.image } }] };
+				}
+				const note = "[Bild aus früherem Chat-Schritt — aus Platzgründen nicht erneut übertragen]";
+				content += (content ? "\n\n" : "") + note;
+			}
+			return { role: m.role, content };
 		});
 	}
 	async function ragFor(text) {
@@ -1221,8 +1237,11 @@ export const AI = (() => {
 			? "\n\nAn Nachrichten können Bilder hängen (z. B. Heft-Seiten oder Screenshots). Wenn du Bilder technisch nicht empfangen oder nicht sehen kannst (kein Vision-Modell), erwähne das kurz und ehrlich, statt Inhalte zu raten."
 			: "";
 		const modelNote = modelSwitchNote(target, model);
-		const sysMsg = (mode) => ({ role: "system", content: systemPrompt(mode, modelNote) + visionNote });
-		const messages = [sysMsg(metaOnly ? "meta" : true), workspaceContext(ragContext, chatSummary, current, workspaceSnapshot), ...history];
+		const wsCtx = workspaceContext(ragContext, chatSummary, current, workspaceSnapshot);
+		const messages = [sysMsg(metaOnly ? "meta" : true)];
+		if (history.length > 1) messages.push(...history.slice(0, -1));
+		messages.push(wsCtx);
+		if (history.length > 0) messages.push(history[history.length - 1]);
 		debugEvent("Tool-Modus", { mode: metaOnly ? "nur request_tools" : "volle Liste", reason: metaOnly ? "Einstellung »Tools immer mitsenden« ist aus" : runUnlocked ? "in diesem Chat freigeschaltet" : "Standard: Tools immer mitsenden" });
 
 		let renderQueued = false, lastRender = 0;
@@ -1246,6 +1265,7 @@ export const AI = (() => {
 		const fail = (error) => {
 			if (error && typeof error === "object") error.reasoning = String(S.aiThinkingDraft || "").trim();
 			S.aiThinkingDraft = "";
+			S.aiDraft = "";
 			flushEdits();
 			persist(true);
 			throw error;
@@ -1300,7 +1320,7 @@ export const AI = (() => {
 					(text) => { S.aiDraft = text; scheduleRender(); },
 					(text) => { S.aiThinkingDraft = text; scheduleRender(); }, current);
 			} catch (error) { fail(error); }
-			messages.push(toApiMessage(message, isGoogle));
+			messages.push(toApiMessage(message, isGoogle, current.family));
 			if (message.tool_calls?.length) {
 				if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
 				if (String(message.content || "").trim()) target.push({ mid: U.uid(), role: "assistant", content: String(message.content).trim(), model, reasoningExpanded: false });
@@ -1310,13 +1330,15 @@ export const AI = (() => {
 			if (!message.tool_calls?.length) {
 				if (!String(message.content || "").trim() && !nudged) {
 					nudged = true;
+					agentTools = null;
 					if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
 					S.aiDraft = ""; S.aiThinkingDraft = "";
 					messages.push({ role: "user", content: "Deine Antwort war leer. Sage in ein bis zwei Sätzen konkret, was du getan oder herausgefunden hast — ohne weiteren Werkzeug-Aufruf." });
 					continue;
 				}
 				if (String(message.reasoning || "").trim()) target.push({ mid: U.uid(), role: "thought", reasoning: String(message.reasoning).trim(), reasoningExpanded: false });
-				const final = { mid: U.uid(), role: "assistant", content: message.content || "", model, reasoning: null, reasoningExpanded: false };
+				const finalContent = String(message.content || "").trim() || (message.reasoning ? "Aktion abgeschlossen." : "(Keine Antwort vom Modell erhalten.)");
+				const final = { mid: U.uid(), role: "assistant", content: finalContent, model, reasoning: null, reasoningExpanded: false };
 				S.aiDraft = ""; S.aiThinkingDraft = "";
 				target.push(final);
 				flushEdits();
@@ -1382,7 +1404,12 @@ export const AI = (() => {
 				finishTool(call, name, toolDetail(name, args), out);
 				recordMutation(name, args, out, before, pendingEdits);
 			}
-			if (pendingImages.length) messages.push(...pendingImages);
+			if (pendingImages.length) {
+				if (messages[messages.length - 1]?.role === "tool") {
+					messages.push({ role: "assistant", content: "Heftseite als Bild empfangen." });
+				}
+				messages.push(...pendingImages);
+			}
 		}
 		S.aiDraft = ""; S.aiThinkingDraft = "";
 		const text = "(Abgebrochen: zu viele Tool-Schritte.)";

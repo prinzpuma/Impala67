@@ -562,7 +562,7 @@ export function initMcpBridge() {
 				bridgeLastCallDurationMs = Math.round(duration * 10) / 10;
 
 				if (ws && ws.readyState === 1) {
-					ws.send(JSON.stringify({ callId, result }));
+					ws.send(JSON.stringify({ callId, result: safeSerialize(result) }));
 				}
 			} catch (err) {
 				if (currentCallId && ws && ws.readyState === 1) {
@@ -579,7 +579,7 @@ export function initMcpBridge() {
 
 	function scheduleReconnect() {
 		reconnectAttempts++;
-		const delay = 1000;
+		const delay = Math.min(1000 * Math.pow(1.5, Math.min(reconnectAttempts, 8)), 15000);
 		clearTimeout(reconnectTimer);
 		reconnectTimer = setTimeout(connect, delay);
 	}

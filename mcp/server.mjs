@@ -43,6 +43,12 @@ try {
 			if (activeBrowserWs === ws) {
 				activeBrowserWs = connectedSockets.size > 0 ? connectedSockets.values().next().value : null;
 			}
+			for (const [id, entry] of pendingBrowserCalls.entries()) {
+				if (entry.ws === ws) {
+					pendingBrowserCalls.delete(id);
+					entry.resolve({ error: `Verbindung zur Browser-App wurde während '${entry.tool}' getrennt.`, disconnected: true });
+				}
+			}
 			console.error(`[impala-mcp] Browser-App getrennt (${connectedSockets.size} verbleibend).`);
 		});
 
@@ -111,6 +117,7 @@ async function callLiveBrowser(tool, args = {}) {
 		}, timeoutMs);
 
 		pendingBrowserCalls.set(callId, {
+			ws,
 			tool,
 			startTime,
 			resolve: (res) => {

@@ -20,7 +20,7 @@ const UPSERT_USER_SQL = `
 		updated_at=excluded.updated_at
 `;
 
-const AI_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
+const AI_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile"];
 const VISION_MODELS = new Set(["qwen/qwen3.8-27b"]);
 const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000;
 
@@ -119,9 +119,6 @@ function normalizeAiMessages(messages) {
 				function: { name: String(call?.function?.name || "").slice(0, 128), arguments: String(call?.function?.arguments || "") },
 			}));
 		}
-		if (message.role === "assistant" && typeof message.reasoning_content === "string") {
-			entry.reasoning_content = message.reasoning_content.slice(0, MAX_AI_MESSAGE_CHARS);
-		}
 		if (Array.isArray(message.content)) {
 			entry.content = [];
 			for (const part of message.content) {
@@ -164,7 +161,7 @@ async function handleAi(request, env) {
 	if (normalized.error) return json({ error: normalized.error }, 400);
 	const tools = normalizeAiTools(body?.tools);
 	let requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-	if (requestedModel === "qwen/qwen3.6-27b" || requestedModel === "llama-3.3-70b-versatile") requestedModel = "qwen/qwen3.8-27b";
+	if (requestedModel === "qwen/qwen3.6-27b") requestedModel = "qwen/qwen3.8-27b";
 	let models = normalized.hasImages ? AI_MODELS.filter((m) => VISION_MODELS.has(m)) : AI_MODELS;
 	if (requestedModel && requestedModel !== "impala-ai" && requestedModel !== "cloudflare-auto" && models.includes(requestedModel)) {
 		models = [requestedModel, ...models.filter((m) => m !== requestedModel)];
@@ -176,7 +173,9 @@ async function handleAi(request, env) {
 		if (body?.tool_choice) payload.tool_choice = body.tool_choice;
 		if (body?.reasoning_effort === "none") {
 			payload.reasoning_format = "hidden";
-			payload.reasoning_effort = "none";
+			if (model.startsWith("qwen/")) {
+				payload.reasoning_effort = "none";
+			}
 		} else {
 			payload.reasoning_format = "parsed";
 			if (typeof body?.reasoning_effort === "string" && body.reasoning_effort) {
@@ -190,7 +189,7 @@ async function handleAi(request, env) {
 			method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
 		});
 		text = await upstream.text();
-		if (upstream.status === 400 && payload.reasoning_format && /reasoning_format/i.test(text)) {
+		if (upstream.status === 400 && (payload.reasoning_format || payload.reasoning_effort) && /(?:reasoning_format|reasoning_effort|reasoning)/i.test(text)) {
 			delete payload.reasoning_format;
 			delete payload.reasoning_effort;
 			upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
