@@ -119,6 +119,9 @@ function normalizeAiMessages(messages) {
 				function: { name: String(call?.function?.name || "").slice(0, 128), arguments: String(call?.function?.arguments || "") },
 			}));
 		}
+		if (message.role === "assistant" && typeof message.reasoning_content === "string") {
+			entry.reasoning_content = message.reasoning_content.slice(0, MAX_AI_MESSAGE_CHARS);
+		}
 		if (Array.isArray(message.content)) {
 			entry.content = [];
 			for (const part of message.content) {
@@ -171,6 +174,15 @@ async function handleAi(request, env) {
 		const payload = { model, messages: normalized.messages, stream: false };
 		if (tools) payload.tools = tools;
 		if (body?.tool_choice) payload.tool_choice = body.tool_choice;
+		if (body?.reasoning_effort === "none") {
+			payload.reasoning_format = "hidden";
+			payload.reasoning_effort = "none";
+		} else {
+			payload.reasoning_format = "parsed";
+			if (typeof body?.reasoning_effort === "string" && body.reasoning_effort) {
+				payload.reasoning_effort = body.reasoning_effort;
+			}
+		}
 		if (Number.isInteger(body?.max_completion_tokens) && body.max_completion_tokens > 0) {
 			payload.max_completion_tokens = body.max_completion_tokens;
 		}
@@ -178,6 +190,14 @@ async function handleAi(request, env) {
 			method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
 		});
 		text = await upstream.text();
+		if (upstream.status === 400 && payload.reasoning_format && /reasoning_format/i.test(text)) {
+			delete payload.reasoning_format;
+			delete payload.reasoning_effort;
+			upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+				method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
+			});
+			text = await upstream.text();
+		}
 		const canRetry = (upstream.status === 429 || upstream.status === 404 || upstream.status === 400 || upstream.status === 410) && model !== models.at(-1);
 		if (!canRetry) break;
 	}

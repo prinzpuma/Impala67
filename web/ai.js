@@ -123,7 +123,7 @@ export const AI = (() => {
 	const capStore = () => S.thinkingCapabilities || (S.thinkingCapabilities = Object.create(null));
 	function declaredThinkingCapabilities(c) {
 		if (c.family === "cloudflare") {
-			return { levels: [], includeThoughts: false, source: "none" };
+			return { levels: ["none", "low", "medium", "high"], includeThoughts: true, offEffort: "none", offLabel: "Aus", source: "groq-openai" };
 		}
 		// Googles /models-Antworten dürfen IDs als "models/gemini-…" liefern. Das
 		// Präfix gehört zum Transportweg, nicht zum eigentlichen Modellnamen.
@@ -263,6 +263,7 @@ export const AI = (() => {
 					tools: body.tools,
 					tool_choice: body.tool_choice,
 				};
+				if (body.reasoning_effort) payload.reasoning_effort = body.reasoning_effort;
 				res = await withTimeout(() => CLOUDFLARE_SYNC.aiRequest(payload, { base, signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
 			} else {
 				res = await withTimeout(() => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...auth(key) }, body: JSON.stringify(body), signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
@@ -712,7 +713,7 @@ export const AI = (() => {
 		// Server behalten den bisherigen Wert für rückwärtskompatibles Verhalten.
 		if (c.family !== "google" && c.family !== "openai" && c.family !== "cloudflare") body.temperature = 0.4;
 		if (/^https:\/\/api\.openai\.com(?:\/|$)/i.test(c.base)) body.safety_identifier = safetyIdentifier();
-		if (c.family !== "cloudflare") applyThinking(body, withExtras, c);
+		applyThinking(body, withExtras, c);
 		const requestTools = toolsForRequest(tools, c.family);
 		if (requestTools) { body.tools = requestTools; body.tool_choice = "auto"; }
 		if (onDelta && c.family !== "cloudflare") body.stream = true;
