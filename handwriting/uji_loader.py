@@ -67,24 +67,85 @@ def parse_uji_dataset(file_path: str = UJI_FILE) -> Dict[str, List[List[List[Tup
     return dataset
 
 
-def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]]) -> List[List[Tuple[float, float]]]:
-    """Normalisiert ein Zeichen auf Bounding Box Höhe 1.0 und zentriert."""
+import math
+from generate_synthetic import interpolate_points, generate_word_strokes
+
+TYPOGRAPHY_BOUNDS = {
+    # Kleinbuchstaben (x-Höhe 0.35..0.90)
+    "a": (0.35, 0.90), "c": (0.35, 0.90), "e": (0.35, 0.90), "m": (0.35, 0.90),
+    "n": (0.35, 0.90), "o": (0.35, 0.90), "r": (0.35, 0.90), "s": (0.35, 0.90),
+    "u": (0.35, 0.90), "v": (0.35, 0.90), "w": (0.35, 0.90), "x": (0.35, 0.90),
+    "z": (0.35, 0.90),
+    # Kleinbuchstaben mit Oberlängen (0.05..0.90)
+    "b": (0.05, 0.90), "d": (0.05, 0.90), "f": (0.05, 0.90), "h": (0.05, 0.90),
+    "k": (0.05, 0.90), "l": (0.05, 0.90), "t": (0.15, 0.90), "ß": (0.05, 0.90),
+    # Kleinbuchstaben mit Punkten (0.15..0.90 / Unterlänge)
+    "i": (0.15, 0.90), "j": (0.15, 1.25),
+    # Kleinbuchstaben mit Unterlängen (0.35..1.25)
+    "g": (0.35, 1.25), "p": (0.35, 1.25), "q": (0.35, 1.25), "y": (0.35, 1.25),
+    # Ziffern 0-9 (0.05..0.90)
+    "0": (0.05, 0.90), "1": (0.05, 0.90), "2": (0.05, 0.90), "3": (0.05, 0.90),
+    "4": (0.05, 0.90), "5": (0.05, 0.90), "6": (0.05, 0.90), "7": (0.05, 0.90),
+    "8": (0.05, 0.90), "9": (0.05, 0.90),
+    # Satzzeichen & Operatoren
+    ".": (0.85, 0.92), ",": (0.85, 1.05), "-": (0.48, 0.54), "=": (0.40, 0.65),
+    ":": (0.35, 0.90), ";": (0.35, 1.05), "!": (0.05, 0.92), "?": (0.05, 0.92),
+    "+": (0.30, 0.70), "/": (0.05, 0.95), "(": (0.05, 0.95), ")": (0.05, 0.95),
+}
+
+
+def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str, step: float = 0.045) -> List[List[Tuple[float, float]]]:
+    """Normalisiert ein Zeichen typografisch korrekt auf x-Höhe, Ober-/Unterlängen und resampelt äquidistant."""
     all_pts = [p for s in strokes for p in s]
     if not all_pts:
         return strokes
     min_x = min(p[0] for p in all_pts)
+    max_x = max(p[0] for p in all_pts)
     min_y = min(p[1] for p in all_pts)
     max_y = max(p[1] for p in all_pts)
-    h = max(1.0, max_y - min_y)
+    raw_h = max(1.0, max_y - min_y)
+    raw_w = max(1.0, max_x - min_x)
+
+    # Typografische Ziel-Grenzen
+    if char in TYPOGRAPHY_BOUNDS:
+        tgt_top, tgt_bot = TYPOGRAPHY_BOUNDS[char]
+    elif char.isupper():
+        tgt_top, tgt_bot = (0.05, 0.90)
+    elif char.islower():
+        tgt_top, tgt_bot = (0.35, 0.90)
+    else:
+        tgt_top, tgt_bot = (0.10, 0.90)
+
+    tgt_h = max(0.1, tgt_bot - tgt_top)
+    aspect = raw_w / raw_h
+    tgt_w = max(0.15, min(0.85, aspect * tgt_h))
 
     norm = []
     for s in strokes:
-        norm.append([((p[0] - min_x) / h, (p[1] - min_y) / h) for p in s])
+        if not s:
+            continue
+        mapped_s = []
+        for p in s:
+            nx = ((p[0] - min_x) / raw_w) * tgt_w
+            ny = tgt_top + ((p[1] - min_y) / raw_h) * tgt_h
+            mapped_s.append((nx, ny))
+
+        # Äquidistantes Resampling für identische Punktdichte mit Browser-Preprocessor
+        resampled = []
+        for idx, pt in enumerate(mapped_s):
+            if idx == 0:
+                resampled.append(pt)
+            else:
+                prev = resampled[-1]
+                resampled.extend(interpolate_points(prev, pt, step))
+        if resampled:
+            norm.append(resampled)
+
     return norm
 
 
 class RealHandwritingSampler:
-    """Baut aus echten menschlichen Glyphen ganze Wörter und Sequenzen."""
+    """Baut aus echten menschlichen Glyphen ganze Wörter und Sequenzen mit natürlichen Proportionen."""
 
     def __init__(self, file_path: str = UJI_FILE):
         self.raw_data = parse_uji_dataset(file_path)
@@ -94,25 +155,23 @@ class RealHandwritingSampler:
         return c in self.raw_data and len(self.raw_data[c]) > 0
 
     def get_real_word_strokes(self, word: str) -> List[List[Tuple[float, float]]]:
-        """Setzt echte menschliche Striche für ein Wort aneinander."""
+        """Setzt echte menschliche Striche für ein Wort typografisch korrekt aneinander."""
         word_strokes: List[List[Tuple[float, float]]] = []
         cursor_x = 0.0
 
+        slant = random.uniform(-0.15, 0.20)
+        scale_y = random.uniform(0.90, 1.10)
+
         for char in word:
             if char == " ":
-                cursor_x += 0.4
+                cursor_x += 0.40
                 continue
 
             if self.has_char(char):
                 raw_strokes = random.choice(self.raw_data[char])
-                norm_strokes = normalize_glyph_strokes(raw_strokes)
-
+                norm_strokes = normalize_glyph_strokes(raw_strokes, char)
                 all_pts = [p for s in norm_strokes for p in s]
-                char_w = max(p[0] for p in all_pts) if all_pts else 0.5
-
-                # Stochastische Neigung & Skalierung
-                slant = random.uniform(-0.15, 0.2)
-                scale_y = random.uniform(0.85, 1.15)
+                char_w = max(p[0] for p in all_pts) if all_pts else 0.4
 
                 for s in norm_strokes:
                     placed_s = []
@@ -122,10 +181,20 @@ class RealHandwritingSampler:
                         placed_s.append((x, y))
                     word_strokes.append(placed_s)
 
-                cursor_x += char_w + random.uniform(0.08, 0.18)
+                cursor_x += char_w + random.uniform(0.06, 0.16)
             else:
-                # Fallback für Zeichen die UJI nicht hat (z. B. Umlaute)
-                cursor_x += 0.5
+                # Fallback für Umlaute oder Zeichen, die UJI nicht hat
+                fallback = generate_word_strokes(char)
+                all_pts = [p for s in fallback for p in s]
+                char_w = max(p[0] for p in all_pts) if all_pts else 0.5
+                for s in fallback:
+                    placed_s = []
+                    for p in s:
+                        x = cursor_x + p[0] + (p[1] * slant)
+                        y = p[1] * scale_y
+                        placed_s.append((x, y))
+                    word_strokes.append(placed_s)
+                cursor_x += char_w + random.uniform(0.06, 0.16)
 
         return word_strokes
 
@@ -133,4 +202,5 @@ class RealHandwritingSampler:
 if __name__ == "__main__":
     sampler = RealHandwritingSampler()
     sample = sampler.get_real_word_strokes("Hallo")
-    print(f"'Hallo' mit echten menschlichen Strichen erzeugt: {len(sample)} Striche, {sum(len(s) for s in sample)} Punkte")
+    print(f"'Hallo' mit typografisch korrekten Strichen erzeugt: {len(sample)} Striche, {sum(len(s) for s in sample)} Punkte")
+

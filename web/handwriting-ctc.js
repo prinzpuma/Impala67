@@ -7,7 +7,7 @@ import { HANDWRITING_VOCAB } from "./handwriting-vocab.js";
 export const HANDWRITING_CTC = (() => {
 	// Kompakte Liste häufiger deutscher Notiz- und Alltagswörter für Post-Processing
 	const COMMON_WORDS = new Set([
-		"der", "die", "das", "und", "in", "den", "von", "zu", "das", "mit",
+		"der", "die", "das", "und", "in", "den", "von", "zu", "mit",
 		"sich", "des", "auf", "für", "ist", "im", "dem", "nicht", "ein", "eine",
 		"als", "auch", "es", "an", "werden", "aus", "er", "hat", "dass", "sie",
 		"nach", "wird", "bei", "einer", "um", "am", "sind", "noch", "wie", "einem",
@@ -20,6 +20,8 @@ export const HANDWRITING_CTC = (() => {
 		"januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september",
 		"oktober", "november", "dezember", "jahr", "woche", "monat", "tag", "stunde",
 		"frage", "fragen", "antwort", "antworten", "code", "test", "fehler", "plan",
+		// Mathe-, Einheiten- und MINT-Begriffe
+		"sin", "cos", "tan", "lim", "log", "exp", "max", "min", "grad",
 	]);
 
 	// Levenshtein-Distanz zur Fehlertoleranz
@@ -44,8 +46,8 @@ export const HANDWRITING_CTC = (() => {
 	// Korrigiert ein einzelnes Wort über das Wörterbuch
 	function correctWord(rawWord) {
 		if (!rawWord || rawWord.length < 3) return rawWord;
-		// Reines Zahlen- oder Symbolwort nicht antasten
-		if (/^[\d\W]+$/.test(rawWord)) return rawWord;
+		// Reines Zahlen-, Symbol- oder Matheformel-Wort nicht antasten
+		if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/^_{}()\\]/.test(rawWord)) return rawWord;
 
 		// Satzzeichen am Rand isolieren
 		const match = rawWord.match(/^([^\w]*)(.*?)([^\w]*)$/);

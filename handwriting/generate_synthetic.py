@@ -161,6 +161,35 @@ MATH_FORMULAS = [
 ]
 
 
+# Alternative Glyphen-Varianten (z. B. Einstrich-Schrift, Schreibschrift-Elemente, verschiedene Ziffernstile)
+GLYPH_VARIANTS = {
+    "w": [
+        [[(0.1, 0.3), (0.3, 0.9), (0.5, 0.4), (0.7, 0.9), (0.9, 0.3)]],
+    ],
+    "a": [
+        [[(0.8, 0.3), (0.4, 0.2), (0.1, 0.5), (0.3, 0.9), (0.7, 0.8), (0.8, 0.3), (0.8, 0.9)]],
+    ],
+    "d": [
+        [[(0.8, 0.0), (0.8, 0.9), (0.5, 0.9), (0.2, 0.6), (0.4, 0.3), (0.8, 0.4)]],
+    ],
+    "u": [
+        [[(0.2, 0.3), (0.2, 0.8), (0.5, 0.9), (0.8, 0.8), (0.8, 0.3), (0.8, 0.9)]],
+    ],
+    "t": [
+        [[(0.4, 0.1), (0.4, 0.85), (0.6, 0.9)], [(0.2, 0.3), (0.7, 0.3)]],
+    ],
+    "1": [
+        [[(0.5, 0.0), (0.5, 1.0)]],
+    ],
+    "7": [
+        [[(0.1, 0.0), (0.85, 0.0), (0.4, 1.0)]],
+    ],
+    "l": [
+        [[(0.3, 0.0), (0.3, 0.85), (0.55, 0.9)]],
+    ],
+}
+
+
 def interpolate_points(p0: Tuple[float, float], p1: Tuple[float, float], step: float) -> List[Tuple[float, float]]:
     dx = p1[0] - p0[0]
     dy = p1[1] - p0[1]
@@ -203,7 +232,10 @@ def generate_word_strokes(
     step_actual = step * random.uniform(0.8, 1.3) * speed_factor
 
     for char in word:
-        glyph = GLYPH_STROKES.get(char, GLYPH_STROKES.get("c"))
+        if char in GLYPH_VARIANTS and random.random() < 0.45:
+            glyph = random.choice(GLYPH_VARIANTS[char])
+        else:
+            glyph = GLYPH_STROKES.get(char, GLYPH_STROKES.get("c"))
         char_width = (0.6 if char != " " else 0.4) * width_mult
         char_jitter = jitter * random.uniform(0.6, 1.4)
 

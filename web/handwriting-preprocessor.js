@@ -36,12 +36,12 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		});
 	}
 
-	// Gruppiert Striche in Textzeilen (von oben nach unten, darin von links nach rechts)
+	// Gruppiert Striche in Textzeilen (von oben nach unten, darin von links nach rechts unter Wahrung der natürlichen Strichfolge)
 	function segmentLines(strokes) {
 		const valid = filterInkStrokes(strokes);
 		if (!valid.length) return [];
 
-		const items = valid.map((s) => ({ stroke: s, bbox: strokeBbox(s) })).filter((item) => item.bbox);
+		const items = valid.map((s, idx) => ({ stroke: s, bbox: strokeBbox(s), origIdx: idx })).filter((item) => item.bbox);
 		if (!items.length) return [];
 
 		// Nach vertikalem Zentrum sortieren
@@ -52,7 +52,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 			let placed = false;
 			for (const line of lines) {
 				const lineH = Math.max(20, line.maxY - line.minY);
-				const strokeH = Math.max(10, item.bbox.h);
 				// Vertikaler Überlappungs-Check
 				const overlap = Math.min(line.maxY, item.bbox.maxY) - Math.max(line.minY, item.bbox.minY);
 				const closeY = Math.abs(item.bbox.cy - line.cy) < lineH * 0.7;
@@ -81,11 +80,50 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		// Zeilen von oben nach unten sortieren
 		lines.sort((a, b) => a.minY - b.minY);
 
-		// Innerhalb jeder Zeile Striche von links nach rechts sortieren
+		// Hilfsfunktion: Striche innerhalb einer Zeile ordnen.
+		// Überlappende oder nah beieinander liegende Striche (z.B. Stamm + Querstrich von 't'/'f'/'A' oder i-Punkte)
+		// bleiben im selben Zeichencluster in ihrer chronologischen Zeichenreihenfolge (origIdx).
+		// Räumlich getrennte Zeichen/Wortblöcke werden von links nach rechts geordnet.
+		function sortLineItems(lineItems) {
+			if (lineItems.length <= 1) return lineItems;
+			const sorted = lineItems.slice().sort((a, b) => a.bbox.minX - b.bbox.minX);
+			const clusters = [];
+			for (const it of sorted) {
+				let merged = false;
+				for (const cl of clusters) {
+					const overlap = Math.min(cl.maxX, it.bbox.maxX) - Math.max(cl.minX, it.bbox.minX);
+					const close = it.bbox.minX <= cl.maxX + Math.max(8, (cl.maxY - cl.minY) * 0.25);
+					if (overlap > 0 || close) {
+						cl.items.push(it);
+						cl.minX = Math.min(cl.minX, it.bbox.minX);
+						cl.maxX = Math.max(cl.maxX, it.bbox.maxX);
+						cl.minY = Math.min(cl.minY, it.bbox.minY);
+						cl.maxY = Math.max(cl.maxY, it.bbox.maxY);
+						merged = true;
+						break;
+					}
+				}
+				if (!merged) {
+					clusters.push({
+						minX: it.bbox.minX, maxX: it.bbox.maxX,
+						minY: it.bbox.minY, maxY: it.bbox.maxY,
+						items: [it],
+					});
+				}
+			}
+			clusters.sort((a, b) => a.minX - b.minX);
+			const result = [];
+			for (const cl of clusters) {
+				cl.items.sort((a, b) => a.origIdx - b.origIdx);
+				result.push(...cl.items);
+			}
+			return result;
+		}
+
 		return lines.map((l) => {
-			l.items.sort((a, b) => a.bbox.minX - b.bbox.minX);
+			const sortedItems = sortLineItems(l.items);
 			return {
-				strokes: l.items.map((i) => i.stroke),
+				strokes: sortedItems.map((i) => i.stroke),
 				bbox: { minX: l.minX, maxX: l.maxX, minY: l.minY, maxY: l.maxY, h: l.maxY - l.minY, w: l.maxX - l.minX },
 			};
 		});
@@ -94,15 +132,24 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 	// Schätzt den Neigungswinkel einer Zeile/Strichmenge (in Radiant) via linearer Regression / Trägheitsachse
 	function estimateOrientation(strokes) {
 		let n = 0, sumX = 0, sumY = 0;
+		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 		for (const s of strokes) {
 			const pts = s.pts || [];
 			for (const p of pts) {
 				sumX += p[0];
 				sumY += p[1];
+				if (p[0] < minX) minX = p[0];
+				if (p[0] > maxX) maxX = p[0];
+				if (p[1] < minY) minY = p[1];
+				if (p[1] > maxY) maxY = p[1];
 				n++;
 			}
 		}
 		if (n < 6) return 0;
+		const w = maxX - minX;
+		const h = maxY - minY;
+		if (w < h * 1.5) return 0; // Nur echte horizontale Zeilen drehen, keine isolierten Zeichen
+
 		const cx = sumX / n;
 		const cy = sumY / n;
 
@@ -258,7 +305,7 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 			}
 		}
 		const rawHeight = Math.max(10, maxY - minY);
-		const step = options.step || Math.max(1.5, rawHeight * 0.045);
+		const step = options.step || Math.max(0.6, rawHeight * 0.045);
 
 		const resampledStrokes = [];
 		let minX = Infinity, maxX = -Infinity;
