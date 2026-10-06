@@ -29,3 +29,6 @@ Impala67.apk
 handwriting/.venv/
 handwriting/data/
 handwriting/checkpoints/
+handwriting/ujipenchars2.txt
+__pycache__/
+*.pyc

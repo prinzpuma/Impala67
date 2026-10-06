@@ -5,21 +5,52 @@ Exportiert das Modell nach dem Training als ONNX-Datei für den Browser.
 """
 
 import os
+import sys
+import random
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from vocabulary import CHAR_TO_IDX, VOCAB_SIZE, BLANK_IDX, index_to_char
-from generate_synthetic import random_sample
+from generate_synthetic import random_sample, SAMPLE_WORDS
 from model import HandwritingCRNN
 
 
-class SyntheticInkDataset(Dataset):
-    def __init__(self, size: int = 1500):
+from uji_loader import RealHandwritingSampler
+from generate_synthetic import strokes_to_features
+
+class MixedInkDataset(Dataset):
+    """Kombiniert echte menschliche Handschrift (UJI Pen Chars) mit Formeln und synthetischen Daten."""
+    def __init__(self, size: int = 4000):
         self.samples = []
+        real_sampler = RealHandwritingSampler()
+
         for _ in range(size):
-            features, word = random_sample()
+            # 50% echte menschliche Handschrift-Glyphen, 50% mathematische Formeln & synthetische Wörter
+            if random.random() < 0.50:
+                word = random.choice(SAMPLE_WORDS)
+                strokes = real_sampler.get_real_word_strokes(word)
+                if not strokes:
+                    features, word = random_sample()
+                else:
+                    features = strokes_to_features(strokes)
+            else:
+                features, word = random_sample()
+
+            if len(features) < 3:
+                continue
+
+            target_indices = [CHAR_TO_IDX[c] for c in word if c in CHAR_TO_IDX and CHAR_TO_IDX[c] != BLANK_IDX]
+            if not target_indices:
+                continue
+
             feat_tensor = torch.tensor(features, dtype=torch.float32)
-            target = torch.tensor([CHAR_TO_IDX.get(c, 0) for c in word], dtype=torch.long)
+            target = torch.tensor(target_indices, dtype=torch.long)
             self.samples.append((feat_tensor, target, word))
 
     def __len__(self):
@@ -98,7 +129,7 @@ def train(epochs: int = 30, batch_size: int = 32, lr: float = 1.8e-3, user_sampl
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.CTCLoss(blank=BLANK_IDX, zero_infinity=True)
 
-    base_dataset = SyntheticInkDataset(size=3500)
+    base_dataset = MixedInkDataset(size=4500)
     dataset = HybridInkDataset(base_dataset, user_samples_path=user_samples_path)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
