@@ -8,10 +8,15 @@ import os
 import glob
 import math
 import re
+import pickle
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Dict, Optional
 
+import numpy as np
+
 from vocabulary import CHAR_TO_IDX, BLANK_IDX
+
+CACHE_VERSION = 3
 
 # LaTeX zu Vokabular-Mapping
 LATEX_REPLACEMENTS = [
@@ -28,6 +33,9 @@ LATEX_REPLACEMENTS = [
     (r"\\leq", "<="),
     (r"\\geq", ">="),
     (r"\\neq", "!="),
+    (r"\\le(?![a-zA-Z])", "<="),
+    (r"\\ge(?![a-zA-Z])", ">="),
+    (r"\\ne(?![a-zA-Z])", "!="),
     (r"\\pm", "+-"),
     (r"\\left\(", "("),
     (r"\\right\)", ")"),
@@ -40,21 +48,33 @@ LATEX_REPLACEMENTS = [
 
 
 def clean_latex_label(raw_label: str) -> str:
-    """Wandelt LaTeX-Labels in lesbare Zeichenketten unseres Vokabulars um."""
+    """
+    Wandelt LaTeX-Labels in lesbare Zeichenketten unseres Vokabulars um.
+    Gibt "" zurück, wenn das Label nicht verlustfrei abbildbar ist (unbekannte Befehle wie \\theta,
+    Zeichen außerhalb des Vokabulars). Sonst stünden geschriebene Zeichen ohne passendes Label im
+    Training und das Modell würde lernen, echte Striche zu ignorieren.
+    """
     if not raw_label:
         return ""
     text = raw_label
     for pattern, repl in LATEX_REPLACEMENTS:
         text = re.sub(pattern, repl, text)
 
-    # Verbleibende LaTeX-Befehle bereinigen (z.B. \mathrm{x} -> x)
-    text = re.sub(r"\\[a-zA-Z]+\{([^{}]+)\}", r"\1", text)
-    text = re.sub(r"\\[a-zA-Z]+", "", text)
-    text = text.replace("{", "").replace("}", "").replace("\\", "").strip()
+    # Reine Formatierungs-Hüllen auflösen (z.B. \mathrm{x} -> x)
+    text = re.sub(r"\\(?:mathrm|mathbf|mathit|text|operatorname)\{([^{}]+)\}", r"\1", text)
+    # Abstands-Befehle haben keine Tinte
+    text = re.sub(r"\\[,;:! ]|\\quad|\\qquad", "", text)
+    if re.search(r"\\[a-zA-Z]+", text):
+        return ""
+    # Leerzeichen in LaTeX sind Satzformatierung, keine geschriebenen Lücken
+    # Geschriebene Mengenklammern \{ \} behalten, LaTeX-Gruppierungsklammern entfernen
+    text = text.replace("\\{", "\x01").replace("\\}", "\x02")
+    text = text.replace("{", "").replace("}", "").replace(" ", "")
+    text = text.replace("\x01", "{").replace("\x02", "}")
 
-    # Filter auf Zeichen, die in CHAR_TO_IDX existieren
-    filtered = "".join(c for c in text if c in CHAR_TO_IDX and CHAR_TO_IDX[c] != BLANK_IDX)
-    return filtered
+    if any(c not in CHAR_TO_IDX or CHAR_TO_IDX[c] == BLANK_IDX for c in text):
+        return ""
+    return text
 
 
 def resample_stroke(pts: List[Tuple[float, float]], step: float) -> List[Tuple[float, float]]:
@@ -171,42 +191,69 @@ def strokes_to_normalized_features(strokes: List[List[Tuple[float, float]]]) -> 
 class MathWritingDataset:
     """Verwaltet und lädt die echten Google MathWriting Trainingsdaten."""
 
-    def __init__(self, base_dir: str = None):
+    def __init__(self, base_dir: str = None, max_samples: int = 250_000):
         if base_dir is None:
-            base_dir = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "data", "mathwriting", "mathwriting-2024-excerpt"
+            # Voller Datensatz (mathwriting-2024.tgz) hat Vorrang vor dem kleinen Auszug
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+            candidates = [
+                os.path.join(data_dir, "mw_download", "mathwriting-2024"),
+                os.path.join(data_dir, "mathwriting", "mathwriting-2024"),
+                os.path.join(data_dir, "mathwriting", "mathwriting-2024-excerpt"),
+            ]
+            base_dir = next(
+                (c for c in candidates if os.path.isdir(c) or glob.glob(f"{c}-{max_samples}-v{CACHE_VERSION}.cache.pkl")),
+                candidates[-1],
             )
         self.base_dir = base_dir
-        self.samples: List[Tuple[List[Tuple[float, float, float]], str]] = []
+        self.max_samples = max_samples
+        self.samples: List[Tuple[np.ndarray, str]] = []
         self._load()
 
+    def _cache_path(self) -> str:
+        # Versionsnummer erhöhen, wenn sich clean_latex_label oder die Feature-Berechnung ändert
+        return os.path.join(os.path.dirname(self.base_dir), f"{os.path.basename(self.base_dir)}-{self.max_samples}-v{CACHE_VERSION}.cache.pkl")
+
     def _load(self):
-        if not os.path.exists(self.base_dir):
+        # Cache zuerst: Er reicht allein, die Rohdaten (3 GB) müssen dann nicht mehr vorhanden sein
+        cache = self._cache_path()
+        if not os.path.exists(cache) and not os.path.exists(self.base_dir):
             print(f"MathWriting Verzeichnis nicht gefunden: {self.base_dir}")
             return
 
-        # Wir laden 'train' und 'synthetic' für das Training
-        patterns = [
-            os.path.join(self.base_dir, "train", "*.inkml"),
-            os.path.join(self.base_dir, "synthetic", "*.inkml"),
-            os.path.join(self.base_dir, "symbols", "*.inkml"),
-        ]
+        if os.path.exists(cache):
+            with open(cache, "rb") as f:
+                # Rohbytes statt numpy-Objekten: Cache funktioniert mit numpy 1 und 2 (.venv vs. .venv_rocm)
+                self.samples = [(np.frombuffer(raw, dtype=np.float32).reshape(-1, 4), label) for raw, label in pickle.load(f)]
+            print(f"Google MathWriting aus Cache geladen: {len(self.samples)} Beispiele ({cache}).")
+            return
 
+        # Echte Handschrift ('train', 'symbols') zuerst, 'synthetic' (aus Bausteinen zusammengesetzt) nur zum Auffüllen
         files = []
-        for pat in patterns:
-            files.extend(glob.glob(pat))
+        for sub in ("train", "symbols", "synthetic"):
+            files.extend(sorted(glob.glob(os.path.join(self.base_dir, sub, "*.inkml"))))
 
-        for fp in files:
+        skipped = 0
+        for i, fp in enumerate(files):
+            if len(self.samples) >= self.max_samples:
+                break
             res = parse_inkml_file(fp)
             if not res:
+                skipped += 1
                 continue
             traces, label = res
             feats = strokes_to_normalized_features(traces)
             if len(feats) >= 5 and len(label) > 0:
-                self.samples.append((feats, label))
+                # float32-Arrays statt Tupel-Listen: ~10x weniger RAM beim vollen Datensatz
+                self.samples.append((np.asarray(feats, dtype=np.float32), label))
+            if i and i % 20000 == 0:
+                print(f"  MathWriting: {i}/{len(files)} Dateien gelesen, {len(self.samples)} übernommen", flush=True)
 
-        print(f"Google MathWriting geladen: {len(self.samples)} echte handgeschriebene Formel- & Symbolbeispiele.")
+        with open(cache, "wb") as f:
+            pickle.dump([(feats.tobytes(), label) for feats, label in self.samples], f, protocol=4)
+        print(
+            f"Google MathWriting geladen: {len(self.samples)} echte handgeschriebene Formel- & Symbolbeispiele "
+            f"({skipped} nicht verlustfrei abbildbare Labels verworfen)."
+        )
 
     def __len__(self):
         return len(self.samples)

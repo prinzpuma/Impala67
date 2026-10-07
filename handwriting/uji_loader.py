@@ -12,21 +12,22 @@ from typing import Dict, List, Tuple
 UJI_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ujipenchars2.txt")
 
 
-def parse_uji_dataset(file_path: str = UJI_FILE) -> Dict[str, List[List[List[Tuple[float, float]]]]]:
+def parse_uji_dataset(file_path: str = UJI_FILE) -> Dict[str, List[Tuple[str, List[List[Tuple[float, float]]]]]]:
     """
     Parst ujipenchars2.txt und gruppiert die Striche nach Zeichen.
-    Rückgabe: Dict[char, List[strokes]] wobei strokes = List[stroke], stroke = List[(x, y)]
+    Rückgabe: Dict[char, List[(schreiber, strokes)]] wobei strokes = List[stroke], stroke = List[(x, y)]
     """
     if not os.path.exists(file_path):
         return {}
 
-    dataset: Dict[str, List[List[List[Tuple[float, float]]]]] = {}
+    dataset: Dict[str, List[Tuple[str, List[List[Tuple[float, float]]]]]] = {}
 
     current_char = None
+    current_writer = ""
     current_strokes: List[List[Tuple[float, float]]] = []
     num_strokes_expected = 0
 
-    with open(file_path, "r", encoding="latin-1") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("//"):
@@ -38,6 +39,9 @@ def parse_uji_dataset(file_path: str = UJI_FILE) -> Dict[str, List[List[List[Tup
                 if len(parts) >= 2:
                     current_char = parts[1]
                     current_strokes = []
+                    # Session-ID wie "trn_UJI_W01-01" -> Schreiber "W01"
+                    session = parts[2] if len(parts) >= 3 else ""
+                    current_writer = session.split("_")[-1].split("-")[0]
 
             elif line.startswith("NUMSTROKES "):
                 num_strokes_expected = int(line.split()[1])
@@ -61,7 +65,7 @@ def parse_uji_dataset(file_path: str = UJI_FILE) -> Dict[str, List[List[List[Tup
                 if current_char and len(current_strokes) == num_strokes_expected and current_strokes:
                     if current_char not in dataset:
                         dataset[current_char] = []
-                    dataset[current_char].append(current_strokes)
+                    dataset[current_char].append((current_writer, current_strokes))
                     current_strokes = []
 
     return dataset
@@ -81,6 +85,9 @@ TYPOGRAPHY_BOUNDS = {
     "k": (0.05, 0.90), "l": (0.05, 0.90), "t": (0.15, 0.90), "ß": (0.05, 0.90),
     # Kleinbuchstaben mit Punkten (0.15..0.90 / Unterlänge)
     "i": (0.15, 0.90), "j": (0.15, 1.25),
+    "ä": (0.15, 0.90), "ö": (0.15, 0.90), "ü": (0.15, 0.90),
+    # Großbuchstaben mit Umlautpunkten über der Versalhöhe
+    "Ä": (-0.12, 0.90), "Ö": (-0.12, 0.90), "Ü": (-0.12, 0.90),
     # Kleinbuchstaben mit Unterlängen (0.35..1.25)
     "g": (0.35, 1.25), "p": (0.35, 1.25), "q": (0.35, 1.25), "y": (0.35, 1.25),
     # Ziffern 0-9 (0.05..0.90)
@@ -144,20 +151,79 @@ def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str,
     return norm
 
 
+def _bbox(strokes: List[List[Tuple[float, float]]]) -> Tuple[float, float, float, float]:
+    xs = [p[0] for s in strokes for p in s]
+    ys = [p[1] for s in strokes for p in s]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def split_diaeresis(strokes: List[List[Tuple[float, float]]]):
+    """Trennt ein echtes ü/Ü in Grundkörper und Umlautpunkte (kleine Striche im oberen Bereich)."""
+    if len(strokes) < 2:
+        return None
+    _, _, y0, y1 = _bbox(strokes)
+    glyph_h = max(1.0, y1 - y0)
+    dots, body = [], []
+    for s in strokes:
+        sx0, sx1, sy0, sy1 = _bbox([s])
+        small = max(sx1 - sx0, sy1 - sy0) < 0.35 * glyph_h
+        upper = (sy0 + sy1) / 2 < y0 + 0.45 * glyph_h
+        (dots if small and upper else body).append(s)
+    if not dots or len(dots) > 2 or not body:
+        return None
+    return body, dots
+
+
 class RealHandwritingSampler:
     """Baut aus echten menschlichen Glyphen ganze Wörter und Sequenzen mit natürlichen Proportionen."""
 
+    UMLAUT_BASES = {"ä": ("a", "ü"), "ö": ("o", "ü"), "Ä": ("A", "Ü"), "Ö": ("O", "Ü")}
+
     def __init__(self, file_path: str = UJI_FILE):
         self.raw_data = parse_uji_dataset(file_path)
-        print(f"UJI Pen Characters geladen: {len(self.raw_data)} verschiedene Zeichen, {sum(len(v) for v in self.raw_data.values())} Gesamtexemplare")
+        self.writers = sorted({w for v in self.raw_data.values() for w, _ in v})
+        # Echte Umlautpunkte je Schreiber: (Punkte, Körper-Box des Spenderzeichens)
+        self.diaeresis: Dict[str, List[Tuple[str, list, Tuple[float, float, float, float]]]] = {}
+        for donor in ("ü", "Ü"):
+            for writer, strokes in self.raw_data.get(donor, []):
+                parts = split_diaeresis(strokes)
+                if parts:
+                    body, dots = parts
+                    self.diaeresis.setdefault(donor, []).append((writer, dots, _bbox(body)))
+        print(
+            f"UJI Pen Characters geladen: {len(self.raw_data)} verschiedene Zeichen, "
+            f"{sum(len(v) for v in self.raw_data.values())} Gesamtexemplare, {len(self.writers)} Schreiber, "
+            f"{sum(len(v) for v in self.diaeresis.values())} echte Umlautpunkte"
+        )
 
     def has_char(self, c: str) -> bool:
-        return c in self.raw_data and len(self.raw_data[c]) > 0
+        return (c in self.raw_data and len(self.raw_data[c]) > 0) or (
+            c in self.UMLAUT_BASES and self.has_char(self.UMLAUT_BASES[c][0]) and bool(self.diaeresis.get(self.UMLAUT_BASES[c][1]))
+        )
+
+    def _pick(self, options: list, writer: str):
+        """Bevorzugt Exemplare desselben Schreibers, damit eine Zeile wie aus einer Hand aussieht."""
+        own = [o for o in options if o[0] == writer]
+        return random.choice(own or options)
+
+    def get_glyph(self, char: str, writer: str) -> List[List[Tuple[float, float]]]:
+        """Liefert echte Striche eines Zeichens; ä/ö/Ä/Ö entstehen aus echtem a/o/A/O plus echten Umlautpunkten."""
+        if char in self.raw_data and self.raw_data[char]:
+            return self._pick(self.raw_data[char], writer)[1]
+        base_char, donor = self.UMLAUT_BASES[char]
+        base = self._pick(self.raw_data[base_char], writer)[1]
+        _, dots, (dx0, dx1, dy0, dy1) = self._pick(self.diaeresis[donor], writer)
+        bx0, bx1, by0, by1 = _bbox(base)
+        scale = (by1 - by0) / max(1.0, dy1 - dy0)
+        dcx, bcx = (dx0 + dx1) / 2, (bx0 + bx1) / 2
+        placed = [[(bcx + (p[0] - dcx) * scale, by0 + (p[1] - dy0) * scale) for p in s] for s in dots]
+        return base + placed
 
     def get_real_word_strokes(self, word: str, cursive_prob: float = 0.45) -> List[List[Tuple[float, float]]]:
         """Setzt echte menschliche Striche für ein Wort/Satz typografisch korrekt aneinander, optional mit Schreibschrift-Ligaturen."""
         word_strokes: List[List[Tuple[float, float]]] = []
         cursor_x = 0.0
+        writer = random.choice(self.writers) if self.writers else ""
 
         slant = random.uniform(-0.25, 0.30)
         scale_y = random.uniform(0.85, 1.15)
@@ -173,8 +239,7 @@ class RealHandwritingSampler:
                 continue
 
             if self.has_char(char):
-                raw_strokes = random.choice(self.raw_data[char])
-                norm_strokes = normalize_glyph_strokes(raw_strokes, char)
+                norm_strokes = normalize_glyph_strokes(self.get_glyph(char, writer), char)
             else:
                 # Fallback für Umlaute oder Zeichen, die UJI nicht hat
                 norm_strokes = generate_word_strokes(char)

@@ -68,10 +68,10 @@ class HandwritingCRNN(nn.Module):
         # Von (B, C, T_out) nach (T_out, B, C) für LSTM
         feats = feats.permute(2, 0, 1)
 
-        # Pack padded sequence nur auf CPU; auf GPU (ROCm) direkter Durchlauf zur Vermeidung von MIOpen-Overhead
+        # Gepackte Sequenzen auch auf der GPU: Sonst liest das Rückwärts-LSTM erst das Padding,
+        # was es in der App (ohne Padding) nie gibt. Beim ONNX-Export ohne Packing.
         if (
             in_lens is not None
-            and not feats.is_cuda
             and not torch.jit.is_tracing()
             and not torch.onnx.is_in_onnx_export()
         ):

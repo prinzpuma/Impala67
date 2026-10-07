@@ -30,6 +30,7 @@ from generate_synthetic import (
 )
 from model import HandwritingCRNN
 from uji_loader import RealHandwritingSampler
+from text_corpus import random_text
 from mathwriting_loader import MathWritingDataset, strokes_to_normalized_features
 from beam_search import ctc_beam_search_decode, get_default_dictionary
 from evaluate_user_benchmark_words import (
@@ -55,12 +56,18 @@ class DynamicInkDataset(Dataset):
         self.math_ds = MathWritingDataset()
         self.math_len = len(self.math_ds)
 
-        # Alle Samples vorab im Speicher generieren für maximale GPU-Durchsatzrate
         self.samples = []
-        tag = "Validierungs-Set" if is_val else "Trainings-Set"
-        print(f"Erzeuge {tag} mit {size} Beispielen...", flush=True)
-        rng = random.Random(seed if seed is not None else (42 if is_val else 1337))
-        for _ in range(size):
+        self.regenerate(seed if seed is not None else (42 if is_val else 1337))
+
+    def regenerate(self, seed: int):
+        """Erzeugt alle Samples neu im Speicher (schnell für die GPU). Fürs Training jede Epoche aufrufen,
+        damit das Modell immer neue Kombinationen sieht statt dieselben Beispiele auswendig zu lernen."""
+        tag = "Validierungs-Set" if self.is_val else "Trainings-Set"
+        print(f"Erzeuge {tag} mit {self.size} Beispielen...", flush=True)
+        rng = random.Random(seed)
+        random.seed(seed)
+        self.samples = []
+        for _ in range(self.size):
             sample = self._generate_single_sample(rng)
             if sample:
                 self.samples.append(sample)
@@ -76,31 +83,21 @@ class DynamicInkDataset(Dataset):
             idx = rng.randint(0, self.math_len - 1)
             features, word = self.math_ds.get_sample(idx)
 
-        elif r < 0.55:
-            # 30% UJI PenChars: Fließschrift mit Ligaturen & Leerzeichen
-            if rng.random() < 0.40:
-                # Kurzer 2-Wort Satz oder echter Satz
-                if rng.random() < 0.50:
-                    word = rng.choice(GERMAN_SENTENCES)
-                else:
-                    w1 = rng.choice(SAMPLE_WORDS)
-                    w2 = rng.choice(SAMPLE_WORDS)
-                    word = f"{w1} {w2}"
-            else:
-                word = rng.choice(SAMPLE_WORDS)
-
+        elif r < 0.85:
+            # 60% Echte UJI-Glyphen (ein Schreiber pro Zeile) zu deutschen Wörtern/Zeilen aus dem Wörterbuch zusammengesetzt
+            word = random_text(rng)
             strokes = self.real_sampler.get_real_word_strokes(word, cursive_prob=0.45)
             if strokes:
                 features = strokes_to_features(strokes)
             else:
                 features, word = random_sample()
 
-        elif r < 0.80:
-            # 25% Ganze Sätze oder Formeln aus Synthetik-Generator
+        elif r < 0.95:
+            # 10% Ganze Sätze oder Formeln aus Synthetik-Generator
             features, word = random_sample()
 
         else:
-            # 20% Zahlen, Datumsangaben, MINT-Begriffe & Symbole
+            # 5% Zahlen, Datumsangaben, MINT-Begriffe & Symbole
             if rng.random() < 0.5:
                 word = rng.choice(SAMPLE_WORDS)
             else:
@@ -109,7 +106,7 @@ class DynamicInkDataset(Dataset):
             strokes = generate_word_strokes(word, rotation_deg=rot)
             features = strokes_to_features(strokes)
 
-        if not features or len(features) < 4:
+        if features is None or len(features) < 4:
             return None
 
         target_indices = [
@@ -142,6 +139,30 @@ def collate_fn(batch):
 
     padded_targets = torch.cat(targets)
     return padded_features, padded_targets, input_lengths, target_lengths, words
+
+
+class LengthBucketSampler(torch.utils.data.Sampler):
+    """Bündelt ähnlich lange Beispiele in einen Batch: viel weniger Auffüll-Padding, deutlich schneller."""
+
+    def __init__(self, dataset: "DynamicInkDataset", batch_size: int):
+        self.dataset = dataset
+        self.batch_size = batch_size
+
+    def _batches(self):
+        # Leichtes Rauschen auf die Länge, damit die Batches nicht jede Epoche identisch sind
+        order = sorted(
+            range(len(self.dataset)),
+            key=lambda i: len(self.dataset.samples[i][0]) * random.uniform(0.9, 1.1),
+        )
+        batches = [order[i : i + self.batch_size] for i in range(0, len(order), self.batch_size)]
+        random.shuffle(batches)
+        return batches
+
+    def __iter__(self):
+        return iter(self._batches())
+
+    def __len__(self):
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 
 
 def ctc_greedy_decode(log_probs, blank_idx: int = BLANK_IDX) -> str:
@@ -205,26 +226,35 @@ def levenshtein_dist(s1: str, s2: str) -> int:
     return dp[m][n]
 
 
-def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
+def train(
+    epochs: int = 30,
+    batch_size: int = 128,
+    lr: float = 1.6e-3,
+    train_size: int = 30000,
+    publish: bool = False,
+    eval_every: int = 3,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if device.type == "cpu":
         torch.set_num_threads(10)
         print(f"Training auf Gerät: CPU ({torch.get_num_threads()} CPU-Threads)")
     else:
-        torch.backends.cudnn.enabled = False
-        gpu_name = torch.cuda.get_device_name(0)
-        print(f"Training auf Gerät: GPU {gpu_name} (AMD ROCm)")
+        if torch.version.hip:
+            # MIOpen-LSTM unter Windows/ROCm instabil (kann den Treiber abstürzen lassen)
+            torch.backends.cudnn.enabled = False
+        backend = "AMD ROCm" if torch.version.hip else "NVIDIA CUDA"
+        print(f"Training auf Gerät: GPU {torch.cuda.get_device_name(0)} ({backend})")
 
     model = HandwritingCRNN(in_features=4, hidden_size=192, num_layers=3, dropout=0.0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.CTCLoss(blank=BLANK_IDX, zero_infinity=True)
 
-    train_dataset = DynamicInkDataset(size=5200, is_val=False)
+    train_dataset = DynamicInkDataset(size=train_size, is_val=False)
     val_dataset = DynamicInkDataset(size=300, is_val=True, seed=42)
 
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
+        train_dataset, batch_sampler=LengthBucketSampler(train_dataset, batch_size), collate_fn=collate_fn
     )
     val_loader = DataLoader(
         val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
@@ -234,18 +264,34 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
         optimizer, T_max=epochs, eta_min=1e-4
     )
 
-    checkpoints_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints")
+    # In Colab zeigt HW_CHECKPOINT_DIR auf Google Drive, damit ein Abbruch nichts verliert
+    checkpoints_dir = os.environ.get("HW_CHECKPOINT_DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "checkpoints"
+    )
     os.makedirs(checkpoints_dir, exist_ok=True)
+    last_path = os.path.join(checkpoints_dir, "last.pt")
     best_real_cer = 1.0
     best_real_acc = 0.0
     best_epoch = 0
+    start_epoch = 1
+
+    if os.path.exists(last_path):
+        state = torch.load(last_path, map_location=device)
+        model.load_state_dict(state["model_state"])
+        optimizer.load_state_dict(state["optimizer_state"])
+        scheduler.load_state_dict(state["scheduler_state"])
+        best_real_cer, best_real_acc, best_epoch = state["best_real_cer"], state["best_real_acc"], state["best_epoch"]
+        start_epoch = state["epoch"] + 1
+        print(f"Setze Training fort ab Epoche {start_epoch} (aus {last_path}).")
 
     benchmark_data = json.load(open(BENCHMARK_DATA_PATH, encoding="utf-8"))
     word_dict = get_default_dictionary()
 
     print("Starte Training mit 4 Features. Modellauswahl erfolgt nach echtem Test-Set (strikt getrennt)!")
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
+        if epoch > 1:
+            train_dataset.regenerate(seed=1337 + epoch)
         model.train()
         total_loss = 0.0
 
@@ -291,9 +337,33 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
         val_cer = val_errors / max(1, val_chars)
         val_acc = (1.0 - val_cer) * 100
 
-        # 2. ECHTES TEST-SET (Schritt 1: best.pt nach echtem Test-Set auswählen, nie mittrainieren)
-        real_chars = 0
-        real_errors = 0
+        def save_last():
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state": model.state_dict(),
+                    "optimizer_state": optimizer.state_dict(),
+                    "scheduler_state": scheduler.state_dict(),
+                    "best_real_cer": best_real_cer,
+                    "best_real_acc": best_real_acc,
+                    "best_epoch": best_epoch,
+                },
+                last_path,
+            )
+
+        # Echt-Auswertung mit Wörterbuch-Beam-Search ist teuer: nur alle eval_every Epochen und in der letzten
+        if epoch % eval_every != 0 and epoch != epochs:
+            print(
+                f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} %",
+                flush=True,
+            )
+            save_last()
+            continue
+
+        # 2. ECHTE HANDSCHRIFT, aufgeteilt: gerade Zeilen wählen best.pt aus, ungerade bleiben unberührter Test.
+        #    Würde dieselbe Menge auswählen UND bewerten, wäre der Testwert geschönt.
+        real_chars = {"sel": 0, "test": 0}
+        real_errors = {"sel": 0, "test": 0}
         with torch.no_grad():
             for row in benchmark_data:
                 l_idx = row["lineIdx"]
@@ -323,15 +393,17 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
 
                 line_pred = " ".join(recognized_words)
                 dist = levenshtein_dist(line_pred, gt)
-                gt_len = max(1, len(gt))
-                real_chars += gt_len
-                real_errors += dist
+                split = "sel" if l_idx % 2 == 0 else "test"
+                real_chars[split] += max(1, len(gt))
+                real_errors[split] += dist
 
-        real_cer = real_errors / max(1, real_chars)
+        real_cer = real_errors["sel"] / max(1, real_chars["sel"])
         real_acc = max(0.0, (1.0 - real_cer) * 100.0)
+        test_cer = real_errors["test"] / max(1, real_chars["test"])
 
         print(
-            f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} % | ECHT TEST ACC: {real_acc:.1f} % (CER: {real_cer * 100:.1f} %)",
+            f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} % | "
+            f"Auswahl-CER: {real_cer * 100:.1f} % | TEST-CER: {test_cer * 100:.1f} %",
             flush=True,
         )
 
@@ -339,7 +411,7 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
             print(f"  [Synth-Probe] Soll: '{tgt}' | Ist: '{prd}'")
 
         # Modellauswahl: best.pt nach dem ECHTEN Test-Set auswählen
-        if real_cer < best_real_cer or epoch == 1:
+        if best_epoch == 0 or real_cer < best_real_cer:
             best_real_cer = real_cer
             best_real_acc = real_acc
             best_epoch = epoch
@@ -350,23 +422,30 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
                     "model_state": model.state_dict(),
                     "optimizer_state": optimizer.state_dict(),
                     "val_cer": val_cer,
-                    "test_cer": real_cer,
-                    "test_acc": real_acc,
+                    "select_cer": real_cer,
+                    "test_cer": test_cer,
                 },
                 best_path,
             )
-            print(f"  --> [BEST] Neuer Bestwert auf echtem Test-Set: {real_acc:.1f} % (Epoche {epoch}) gespeichert!", flush=True)
+            print(f"  --> [BEST] Auswahl-CER {real_cer * 100:.1f} %, Test-CER {test_cer * 100:.1f} % (Epoche {epoch}) gespeichert!", flush=True)
+        save_last()
 
     # ONNX Export des besten Modells
-    print(f"\nTraining abgeschlossen. Bester Real-Test-Score: {best_real_acc:.1f} % in Epoche {best_epoch}.")
     best_ckpt = torch.load(os.path.join(checkpoints_dir, "best.pt"), map_location="cpu")
+    print(
+        f"\nTraining abgeschlossen. Bestes Modell aus Epoche {best_epoch}: "
+        f"Auswahl-Genauigkeit {best_real_acc:.1f} %, unberührte TEST-CER {best_ckpt['test_cer'] * 100:.1f} %."
+    )
     model.load_state_dict(best_ckpt["model_state"])
 
     onnx_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.onnx")
     export_to_onnx(model.cpu(), onnx_path)
 
-
-    # Direkt in web/ kopieren
+    # Nur auf ausdrücklichen Wunsch in die App übernehmen (python train.py --publish),
+    # damit ein schwächerer Lauf nicht ungeprüft das ausgelieferte Modell ersetzt.
+    if not publish:
+        print("App-Modell unverändert. Nach Vergleich der TEST-CER mit 'python train.py --publish' übernehmen.")
+        return
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     web_dest = os.path.join(repo_root, "web", "handwriting-model.onnx")
     try:
@@ -379,4 +458,4 @@ def train(epochs: int = 30, batch_size: int = 128, lr: float = 1.6e-3):
 
 
 if __name__ == "__main__":
-    train(epochs=28, batch_size=128)
+    train(epochs=28, batch_size=128, publish="--publish" in sys.argv)
