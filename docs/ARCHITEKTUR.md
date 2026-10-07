@@ -1,6 +1,6 @@
 # Impala67 – Architektur
 
-Stand: 2026-10-07 · ca. 40.000 Zeilen in `web/*.js`, 89 Module.
+Stand: 2026-10-07 · ca. 38.600 Zeilen in `web/*.js`, 89 Module.
 Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln stehen in `AGENTS.md`, Sync-Details im Skill `cloudflare-sync-v4`.
 
 ---
@@ -102,7 +102,8 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 ### Heft (Stift)
 | Datei | Zeilen | Aufgabe |
 |---|---:|---|
-| `heft.js` | 3575 | Alles rund ums Heft: Rendern, Zoom/Kacheln, Stifteingabe, Lasso, Undo, Menüs, Import, **Scanner-Oberfläche** |
+| `heft.js` | 2915 | Alles rund ums Heft: Rendern, Zoom/Kacheln, Stifteingabe, Lasso, Undo, Menüs, Import |
+| `heft-scanner-ui.js` | 671 | Scanner-Oberfläche (Kamera, Live-Prüfung, Nachbearbeitung, Android-Google-Scanner) |
 | `heft-document-core.js`, `heft-pages-core.js`, `heft-geometry.js`, `heft-tools.js` | klein | reine Logik (Diff, Seiten, Geometrie, Werkzeug-Einstellungen) |
 | `heft-export.js` | 179 | PDF/PNG-Export |
 | `heft-scan.js` | 603 | Scanner-Bildverarbeitung (Randerkennung, Entzerrung) |
@@ -151,7 +152,6 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 ### B3 – Riesen-Funktionen und Mischverantwortung
 - `app.js:518–2380` `wireEvents`: ein Klick-Handler für die ganze App plus Drag & Drop, Inline-Umbenennen, Sidebar-Breite.
 - `render.js` enthält Logik: Konflikt-Speicher und -Auflösung (854–1141), localStorage-Zugriffe (222–245).
-- `heft.js`: Scanner-UI (2459–3089, ~630 Z.) ist ein eigenständiger Teil.
 - `ai.js:361–531`: Embedding-Worker-Verwaltung, obwohl `embedding.js` dafür existiert.
 - Einstellungen: `settings.js` und `settings-renderer.js` erzeugen beide HTML für dieselben Bereiche (Modell-Liste, Embedding-Karte).
 
@@ -186,7 +186,7 @@ Reihenfolge nach **Nutzen pro Risiko**. Jeder Schritt einzeln committen, vorher 
    - Tote Funktionen und `heftDiffOps` entfernen.
    - Doppelte Helfer zusammenführen (B4): Krypto/gzip/mapLimit → `sync-core`/`sync-crypto`; Vektor-Mathe → `rag-ranking.js`; Embedding-Konstante.
 2. **Monolithen schneiden** (mittel, rein mechanisch)
-   - `heft.js` → `heft-scanner-ui.js` (Scanner), danach `heft-viewport.js` (Zoom/Kacheln) und `heft-input.js` (Stift/Lasso).
+   - ✅ `heft.js` → `heft-scanner-ui.js` (Scanner). Danach `heft-viewport.js` (Zoom/Kacheln) und `heft-input.js` (Stift/Lasso).
    - `render.js` → `conflict-ui.js`.
    - `app.js:wireEvents` → nach Bereichen getrennte Verkabelung (`wire-sidebar.js`, `wire-dnd.js` …) mit gemeinsamem Klick-Verteiler.
 3. **Knäuel lösen** (B1/B2, größter Hebel, braucht Sorgfalt)

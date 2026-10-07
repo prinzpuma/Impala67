@@ -114,6 +114,7 @@ const APP_FILES = [
 	"./heft-geometry.js",
 	"./heft-pages-core.js",
 	"./heft-scan.js",
+	"./heft-scanner-ui.js",
 	"./heft-tools.js",
 	"./heft-export.js",
 	"./heft-indexer.js",
