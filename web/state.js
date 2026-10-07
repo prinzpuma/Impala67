@@ -52,11 +52,6 @@ export const S = {
 		// diese Einstellung bleiben in settings-sync.js bewusst kompatibel.
 		syncSecrets: false,
 		notionToken: "", // Notion-Integrationstoken für Import + Zwei-Wege-Sync
-		notionPageId: "", // Wurzelseite in Notion, unter der lokale neue Seiten entstehen
-		notionMap: {}, // lokale Seiten-ID → Notion-Seiten-ID (für lokal erstellte Seiten)
-		notionMeta: {}, // Sync-Gedächtnis je Notion-Seite: { r: Remote-Stand, l: lokaler Stand } beim letzten Abgleich — verhindert Ping-Pong-Übertragungen
-		notionLastSync: "", // Zeitstempel des letzten Zwei-Wege-Syncs
-		corsProxy: "", // optionaler eigener Notion-Proxy (leer = authentifizierter Impala67-Worker)
 		deckConf: {}, // Stapel-Optionen: Tageslimits + Leech-Verhalten je Stapel ("*" = Standardwerte)
 	},
 	// „Standard“ ist der Default-Name für Karten ohne Stapel — löschbar wie jeder andere Stapel
@@ -99,8 +94,6 @@ export const S = {
 	aiOnline: null, // null = unbekannt, true/false = Ping-Ergebnis
 	reviewShowBack: false,
 	reviewCardId: null, // Karte bleibt von der Frage bis zur Bewertung fest angeheftet
-	notionToken: "",
-	notionPageId: "",
 	pendingTextFile: null, // { name, content, size } — langer geklebter Text, wird als .txt-Anhang statt Fließtext gesendet
 	pendingPdf: null, // { name, content, size, pages } — PDF-Anhang für den aktuellen Chat, wird nicht automatisch als Seite gespeichert
 	availableModels: [], // vom Server abgefragte Modell-Liste (ephemer, nicht persistiert)
@@ -492,10 +485,8 @@ export const STATE = (() => {
 					icon: p.icon || null, cover: p.cover || null, coverImg: p.coverImg || null,
 					daily: p.daily || null, dailyRoot: p.dailyRoot || null,
 					db: p.db || null, props: p.props || null,
-					// Verknüpfung mit der Notion-Seite (import-notion.js). Sie hängt bewusst
-					// an der Seite selbst statt in settings.notionMap: so reist sie mit der
-					// Seite durchs Event-Log, statt in einem globalen Objekt zu liegen, das
-					// bei jedem Sync komplett neu geschrieben wird.
+					// Altlast des entfernten Notion-Imports (Tag notion-import-letzte-version):
+					// bleibt erhalten, damit importierte Seiten ihre Verknüpfung nicht verlieren.
 					notionId: p.notionId || null,
 					// Seitentyp: "notion" (Block-Editor) oder "heft" (GoodNotes-Notizbuch).
 					// Alt-Seiten ohne kind bleiben automatisch Notion-Seiten.

@@ -1644,13 +1644,6 @@ function wireEvents() {
 			case "btnAiDebugFull":
 				await copyAiDebugTrace();
 				break;
-			case "btnMigrateNotion":
-			case "btnNotionSync":
-				await SETTINGS.handleNotionSync(t);
-				break;
-			case "btnNotionCancel":
-				SETTINGS.handleNotionCancel();
-				break;
 			case "btnDriveLogin":
 				await SETTINGS.handleDriveLogin(t);
 				break;

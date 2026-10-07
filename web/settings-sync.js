@@ -2,6 +2,7 @@
 // Tokens bleiben im lokalen Settings-State verfügbar, werden aber bei Bedarf
 // zuverlässig aus jedem Drive-Transport entfernt.
 export const SETTINGS_SYNC = (() => {
+	// notionToken: Notion-Import entfernt; ein evtl. noch gespeicherter Token bleibt trotzdem geheim.
 	const SECRET_FIELDS = Object.freeze(["notionToken", "driveDesktopClientSecret"]);
 
 	const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);

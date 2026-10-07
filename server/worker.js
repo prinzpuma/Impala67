@@ -205,21 +205,6 @@ async function handleAi(request, env) {
 	return new Response(text, { status: upstream?.status || 502, headers });
 }
 
-async function handleNotion(request, env) {
-	if (request.method !== "POST") return json({ error: "Nur POST erlaubt." }, 405);
-	if (!(await verifyExistingUser(request, env))) return json({ error: "Ungültiger Autorisierungs-Token für diesen Account." }, 403);
-	const body = await request.json().catch(() => null), token = String(body?.token || "").trim(), path = String(body?.path || ""), method = String(body?.method || "GET").toUpperCase();
-	const allowed = /^\/(?:search|pages|blocks|databases)(?:\/|\?|$)/.test(path) && !path.startsWith("//") && !path.includes("\\") && !path.includes("..");
-	if (!token || token.length > 4096 || !allowed || !["GET", "POST", "PATCH", "DELETE"].includes(method)) return json({ error: "Ungültige Notion-Anfrage." }, 400);
-	const upstream = await fetch("https://api.notion.com/v1" + path, {
-		method,
-		headers: { Authorization: `Bearer ${token}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
-		body: method === "GET" || method === "DELETE" || body.body === undefined ? undefined : JSON.stringify(body.body),
-	});
-	const headers = { "Content-Type": upstream.headers.get("Content-Type") || "application/json", ...corsHeaders() };
-	if (upstream.headers.get("Retry-After")) headers["Retry-After"] = upstream.headers.get("Retry-After");
-	return new Response(upstream.body, { status: upstream.status, headers });
-}
 
 export class SyncRoom {
 	constructor(ctx, env) {
@@ -583,7 +568,6 @@ async function handleRequest(request, env) {
 	if (url.pathname !== "/ws") { const error = protocolError(request); if (error) return error; }
 	if (["/api/models", "/models", "/v1/models"].includes(url.pathname)) return json({ object: "list", data: [{ id: "impala-ai", object: "model", owned_by: "impala67" }] });
 	if (url.pathname === "/api/ai") return handleAi(request, env);
-	if (url.pathname === "/api/notion") return handleNotion(request, env);
 	const userId = userIdOf(request);
 	if (!userId || userId.length < 16) return json({ error: "Fehlende oder ungültige User-ID." }, 401);
 	if (!env.SYNC_ROOM) return json({ error: "SYNC_ROOM Durable Object fehlt." }, 503);

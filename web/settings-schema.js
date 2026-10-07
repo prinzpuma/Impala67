@@ -7,7 +7,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "general", label: "Allgemein", icon: "sliders", description: "Startseite und grundlegendes Verhalten" },
 	{ id: "appearance", label: "Darstellung", icon: "appearance", description: "Theme, Akzent, Dichte und Hintergrund" },
 	{ id: "ai", label: "KI & Lernen", icon: "sparkles", description: "Modelle, Quellen und Lernfunktionen" },
-	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Cloudflare, Google Drive, Notion und lokale Tokens" },
+	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Cloudflare, Google Drive und lokale Tokens" },
 	{ id: "data", label: "Daten & App", icon: "archive", description: "Backups, Exporte, Speicher und Updates" },
 	{ id: "devices", label: "Geräte & Bedienung", icon: "gamepad", description: "Controller, Tastenbelegung und Eingabegeräte" },
 ];
@@ -36,7 +36,7 @@ export const BREAK_REMINDER_SETTING = Object.freeze({
 // Das Schema ist zugleich Informationsarchitektur und Suchindex. Renderer lesen
 // dieselben IDs, Titel und Beschreibungen; dadurch driften Navigation und Inhalt nicht auseinander.
 export const SETTINGS_ITEMS = [
-	{ id: "overview-status", section: "overview", group: "Status", label: "App-Status", description: "KI, Drive, Notion, Backup, Speicher und Version auf einen Blick", keywords: "zustand start dashboard diagnose" },
+	{ id: "overview-status", section: "overview", group: "Status", label: "App-Status", description: "KI, Drive, Backup, Speicher und Version auf einen Blick", keywords: "zustand start dashboard diagnose" },
 	{ id: "home-name", section: "general", group: "Start", label: "Begrüßungsname", description: "Name auf der Home-Seite", keywords: "anzeigename profil startseite" },
 	{ id: "home-layout", section: "general", group: "Home", label: "Home-Bereiche", description: "Bereiche einblenden, ausblenden und sortieren", keywords: "dashboard reihenfolge widgets kacheln" },
 	{ id: "theme", section: "appearance", group: "Design", label: "Erscheinungsbild", description: "System, Hell oder Dunkel", keywords: "theme modus mode dark light gerätemodus" },
@@ -57,8 +57,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "cf-sync", section: "sync", group: "Cloudflare Echtzeit-Sync", label: "Cloudflare Live-Sync", description: "Echtzeit-Synchronisierung über WebSockets mit 500 MB Cloud-Speicher", keywords: "cloudflare echtzeit sync websocket live server speicher quota e2ee" },
 	{ id: "drive", section: "sync", group: "Google Drive", label: "Drive-Synchronisierung", description: "Geräte über den privaten App-Speicher synchronisieren", keywords: "google login konto cloud verbinden" },
 	{ id: "drive-automation", section: "sync", group: "Google Drive", label: "Automatische Synchronisierung", description: "Intervall und Sync nach Änderungen festlegen", keywords: "automatisch intervall minuten häufigkeit jede änderung" },
-	{ id: "token-sync", section: "sync", group: "Datenschutz", label: "Tokens über Drive synchronisieren", description: "KI-Keys und Notion-Token lokal behalten", keywords: "secrets api schlüssel privat sicherheit" },
-	{ id: "notion", section: "sync", group: "Notion", label: "Notion", description: "Seiten importieren und in beide Richtungen synchronisieren", keywords: "integration secret page migration" },
+	{ id: "token-sync", section: "sync", group: "Datenschutz", label: "Tokens über Drive synchronisieren", description: "KI-Keys lokal behalten", keywords: "secrets api schlüssel privat sicherheit" },
 	{ id: "sync-advanced", section: "sync", group: "Erweitert", label: "Verbindungsdetails", description: "Google Client-ID und CORS-Proxy", keywords: "oauth client id proxy technisch" },
 	{ id: "backup", section: "data", group: "Backup", label: "Backup & Wiederherstellung", description: "Event-Log und Dateien exportieren oder importieren", keywords: "json sichern wiederherstellen" },
 	{ id: "native-fs-backup", section: "data", group: "Backup", label: "In Gerätespeicher sichern", description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen", keywords: "backup dateisystem speicher ordner android documents", platform: "native" },

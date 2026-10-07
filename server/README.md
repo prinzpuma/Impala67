@@ -11,7 +11,6 @@ Dieser Worker stellt das aktuelle **Sync-Protokoll v4** bereit. Ältere Protokol
 - **1.000 MB Quota pro Sync-Schlüssel:** Eventpakete und Blobs zählen gemeinsam gegen das Limit.
 - **WebSockets via Durable Objects:** WebSockets dienen zur Invalidierung/Benachrichtigung; die eigentliche geordnete Übertragung läuft über HTTP-Pull/-Push.
 - **Geschützter AI-Proxy:** `/api/ai` verwendet den serverseitigen `GROQ_API_KEY`; der Schlüssel wird nie an die PWA ausgeliefert.
-- **Geschützter Notion-Proxy:** `/api/notion` akzeptiert nur erlaubte Notion-API-Pfade und verwendet die bestehende Sync-Autorisierung.
 
 ---
 

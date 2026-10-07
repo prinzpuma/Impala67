@@ -8,7 +8,6 @@ import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
 import { DRIVE } from "./drive.js";
 import { HANDSCHRIFT } from "./handschrift.js";
-import { NOTION_MIGRATOR } from "./import-notion.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
@@ -149,34 +148,6 @@ export async function applyBg() {
 	}
 }
 
-// Zeichnet den Notion-Fortschritt in die Einstellungen — falls sie offen sind.
-// Der Zustand lebt in S.notionJob und überlebt so das Schließen des Dialogs:
-// beim Wiederöffnen (render.js → openSettings) wird er einfach neu gezeichnet.
-export function renderNotionJob() {
-	const bar = U.el("notionProgress");
-	if (!bar) return; // Einstellungen (Notion-Tab) sind gerade nicht offen
-	const job = S.notionJob;
-	const fill = bar.querySelector(".progress-fill");
-	const status = U.el("notionStatus");
-	const cancelBtn = U.el("btnNotionCancel");
-	const btnImp = U.el("btnMigrateNotion");
-	const btnSync = U.el("btnNotionSync");
-	const running = !!(job && job.running);
-	bar.hidden = !job || (!running && job.fraction == null);
-	if (fill) {
-		if (job && job.fraction != null) { bar.classList.remove("indeterminate"); fill.style.width = Math.round(job.fraction * 100) + "%"; }
-		else { bar.classList.toggle("indeterminate", running); fill.style.width = ""; }
-	}
-	if (status) status.textContent = job ? job.status || "" : "";
-	if (cancelBtn) {
-		cancelBtn.hidden = !running;
-		cancelBtn.disabled = !!(job && job.cancelling);
-		cancelBtn.textContent = job && job.cancelling ? "Wird abgebrochen…" : "⏹ Abbrechen";
-	}
-	if (btnImp) { btnImp.disabled = running; btnImp.textContent = running && job.kind === "import" ? "Importiere…" : "⬇ Import"; }
-	if (btnSync) { btnSync.disabled = running; btnSync.textContent = running && job.kind === "sync" ? "Synchronisiere…" : "⇅ Zwei-Wege-Sync"; }
-}
-
 // ---------- Settings-System: Schema, Shell und einheitlicher Entwurfszustand ----------
 let settingsDraftInitial = "[]";
 let settingsSearchQuery = "";
@@ -260,7 +231,7 @@ function focusSettingsAnchor(anchor) {
 export function openSettings(section, anchor) {
 	const stored = localStorage.getItem(SETTINGS_LAST_SECTION_KEY);
 	const resolved = resolveSettingsSection(section || stored || "overview");
-	const legacyAnchor = { ki: "ai-models", home: "home-layout", look: "theme", notion: "notion", backup: "backup", update: "updates", controller: "controller-status", experimente: "learning-beta" }[section];
+	const legacyAnchor = { ki: "ai-models", home: "home-layout", look: "theme", backup: "backup", update: "updates", controller: "controller-status", experimente: "learning-beta" }[section];
 	const previousSec = S.settingsSection;
 	S.settingsSection = resolved;
 	localStorage.setItem(SETTINGS_LAST_SECTION_KEY, resolved);
@@ -315,7 +286,6 @@ export function openSettings(section, anchor) {
 	refreshSettingsDirtyState();
 	focusSettingsAnchor(anchor || legacyAnchor);
 	hydrateStorageUsage();
-	if (resolved === "sync") renderNotionJob();
 	if (resolved === "ai") {
 		renderStatusDot();
 		queueMicrotask(() => {
@@ -378,54 +348,6 @@ export async function handleDriveSyncAfterChange(enabled) {
 }
 
 // Einstellungen-Aktionen aus wireEvents:
-
-export async function handleNotionSync(t) {
-	if (S.notionJob && S.notionJob.running) return;
-	const isSync = t.id === "btnNotionSync";
-	const tok = U.el("inpNotionToken").value.trim();
-	const pid = U.el("inpNotionPage").value.trim();
-	const prox = U.el("inpCorsProxy") ? U.el("inpCorsProxy").value.trim() : (S.settings.corsProxy || "");
-	// FIX: Validierung VOR dem Speichern — vorher überschrieb ein Klick mit leerem
-	// Token-Feld erst den gespeicherten Token mit "" und brach dann erst ab.
-	if (!tok) { U.toast("Token ist erforderlich.", "error"); return; }
-	S.notionToken = tok;
-	S.notionPageId = pid;
-	await STATE.dispatch("settingsSet", { notionToken: tok, notionPageId: pid, corsProxy: prox });
-	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
-	refreshSettingsDirtyState();
-	S.notionJob = { running: true, cancelling: false, kind: isSync ? "sync" : "import", status: isSync ? "Starte Sync…" : "Starte Import…", fraction: null };
-	renderNotionJob();
-	const onStatus = (st, fraction) => {
-		S.notionJob.status = st;
-		S.notionJob.fraction = fraction == null ? null : fraction;
-		renderNotionJob();
-	};
-	try {
-		if (isSync) {
-			const r = await NOTION_MIGRATOR.sync(tok, pid || null, onStatus);
-			S.notionJob.status = "✅ Sync fertig — " + r.pulled + " übernommen, " + (r.skipped || 0) + " unverändert übersprungen, " + r.pushed + " nach Notion übertragen, " + r.created + " in Notion angelegt" + (r.merged ? ", " + r.merged + " Duplikat(e) zusammengeführt" : "") + ".";
-		} else {
-			const newId = await NOTION_MIGRATOR.migrate(tok, pid || null, onStatus);
-			// Die Abschlusszeile („… übernommen · … unverändert übersprungen“) kommt jetzt
-			// aus migrate() selbst — hier nicht mehr mit „Import fertig!“ überschreiben.
-			if (newId) setTimeout(() => { closeOverlay(); openPage(newId); }, 600);
-		}
-		S.notionJob.fraction = 1;
-	} catch (err) {
-		S.notionJob.status = err.cancelled ? "⏹ Abgebrochen." : "⚠️ " + err.message;
-		S.notionJob.fraction = null;
-	}
-	S.notionJob.running = false;
-	S.notionJob.cancelling = false;
-	renderNotionJob();
-	render();
-}
-
-export function handleNotionCancel() {
-	NOTION_MIGRATOR.cancel();
-	if (S.notionJob) { S.notionJob.cancelling = true; S.notionJob.status = "Wird abgebrochen…"; }
-	renderNotionJob();
-}
 
 export async function handleCfConnect(t) {
 	const urlEl = document.getElementById("inpCfUrl");
@@ -1124,14 +1046,9 @@ export async function handleSaveSettings() {
 		patch.embedModel = (sep === -1 ? raw : raw.slice(sep + 2)).trim();
 	}
 	if (g("inpDrive")) patch.driveClientId = g("inpDrive").value.trim();
-	if (g("inpNotionToken")) patch.notionToken = g("inpNotionToken").value.trim();
-	if (g("inpNotionPage")) patch.notionPageId = g("inpNotionPage").value.trim();
-	if (g("inpCorsProxy")) patch.corsProxy = g("inpCorsProxy").value.trim();
 	if (g("inpCustomInstructions")) patch.customInstructions = g("inpCustomInstructions").value;
 	if (g("inpAlwaysTools")) patch.alwaysSendTools = g("inpAlwaysTools").checked; // Tool-Angebot v3
 	await STATE.dispatch("settingsSet", patch);
-	S.notionToken = patch.notionToken ?? S.notionToken;
-	S.notionPageId = patch.notionPageId ?? S.notionPageId;
 	settingsDraftInitial = valuesSnapshot(explicitSettingsValues());
 	refreshSettingsDirtyState();
 	U.toast("Einstellungen gespeichert.", "success");
@@ -1455,7 +1372,6 @@ export const SETTINGS = {
 	applyTheme,
 	applyAppearance,
 	applyBg,
-	renderNotionJob,
 	openSettings,
 	navigateSettings,
 	requestCloseSettings,
@@ -1466,8 +1382,6 @@ export const SETTINGS = {
 	refreshCloudflareStatusUi,
 	hasUnsavedSettings,
 	SETTINGS_SECTIONS,
-	handleNotionSync,
-	handleNotionCancel,
 	handleDriveLogin,
 	handleDriveLogout,
 	handleDriveSyncSettings,

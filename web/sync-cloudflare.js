@@ -801,19 +801,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		});
 	}
 
-	async function notionRequest(token, path, options = {}) {
-		const target = options.base || state.url || DEFAULT_WORKER_URL;
-		if (!credentials && state.syncKey) credentials = await deriveSyncCredentials(state.syncKey);
-		if (!target || !credentials) throw new Error("Der sichere Notion-Proxy benötigt eine eingerichtete Cloudflare-Synchronisierung.");
-		return fetch(api("/api/notion", target), {
-			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false),
-			body: JSON.stringify({ token, path, method: options.method || "GET", body: options.body }), signal: options.signal,
-		});
-	}
 
 	return {
 		init, configure, disconnect, syncNow: () => requestSync(false), purgeCloudData,
-		generateSyncKey, status: () => ({ ...state }), aiRequest, notionRequest,
+		generateSyncKey, status: () => ({ ...state }), aiRequest,
 		isConfigured: () => !!(state.url && (credentials || state.syncKey)),
 		migrateLocalV4,
 	};

@@ -55,13 +55,11 @@ function driveOverviewRow() {
 
 function renderOverview(vm) {
 	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
-	const notionReady = !!(S.settings.notionToken || S.notionToken);
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const version = vm.version;
 	const statusRows = [
 		UI.row({ title: "Künstliche Intelligenz", description: aiReady ? S.settings.aiModel : "Noch kein Modell gewählt", leading: '<span class="settings-status-dot is-' + (aiReady ? "ok" : "idle") + '"></span>', trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
 		driveOverviewRow(),
-		UI.row({ title: "Notion", description: notionReady ? (S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Bereit") : "Nicht eingerichtet", leading: '<span class="settings-status-dot is-' + (notionReady ? "ok" : "idle") + '"></span>', trailing: linkButton("Öffnen", "sync", "notion") }),
 		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt: " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: '<span class="settings-status-dot is-' + (lastBackup ? "ok" : "warn") + '"></span>', trailing: linkButton("Sichern", "data", "backup") }),
 		UI.row({ title: "Lokaler Speicher", description: "Wird berechnet …", leading: '<span class="settings-status-dot is-idle"></span>', trailing: '<span id="settingsStorageOverview" class="settings-value">—</span>' }),
 		UI.row({ title: "Impala67", description: "Installierbare Offline-App", leading: '<span class="settings-status-dot is-ok"></span>', trailing: '<span class="settings-value">v' + e(String(version).replace(/^v/i, "")) + "</span>" }),
@@ -241,23 +239,17 @@ function cloudflareContent() {
 }
 
 function renderSync() {
-	const notionReady = !!(S.settings.notionToken || S.notionToken);
-	const notion = UI.status(notionReady ? "ok" : "idle", notionReady ? "Bereit" : "Nicht eingerichtet", S.settings.notionLastSync ? "Letzter Sync: " + U.fmtDate(S.settings.notionLastSync) : "Token und optional eine Wurzelseite hinterlegen") +
-		UI.field("Integration-Token", "inpNotionToken", S.settings.notionToken || S.notionToken || "", { explicit: true, type: "password", autocomplete: "off", placeholder: "secret_…" }) +
-		UI.field("Wurzelseiten-ID", "inpNotionPage", S.settings.notionPageId || S.notionPageId || "", { explicit: true, placeholder: "Leer = alle freigegebenen Seiten" }) +
-		UI.actions([{ label: "Einmalig importieren", id: "btnMigrateNotion" }, { label: "Zwei-Wege-Sync", id: "btnNotionSync" }, { label: "Abbrechen", id: "btnNotionCancel", className: "danger-text", hidden: true }]) + '<div class="progress-bar" id="notionProgress" hidden><div class="progress-fill"></div></div><p class="settings-footnote" id="notionStatus"></p>';
-	const privacy = UI.row({ id: "token-sync", title: "Tokens über Drive synchronisieren", description: SETTINGS_SYNC.allowsSecrets(S.settings) ? "KI-Keys und Notion-Token werden an deine eigenen Geräte übertragen" : "Tokens bleiben ausschließlich auf diesem Gerät", leading: '<span class="settings-privacy-icon">⌾</span>', trailing: switchControl("inpSyncSecrets", "Tokens über Drive synchronisieren", SETTINGS_SYNC.allowsSecrets(S.settings)) });
+	const privacy = UI.row({ id: "token-sync", title: "Tokens über Drive synchronisieren", description: SETTINGS_SYNC.allowsSecrets(S.settings) ? "KI-Keys werden an deine eigenen Geräte übertragen" : "Tokens bleiben ausschließlich auf diesem Gerät", leading: '<span class="settings-privacy-icon">⌾</span>', trailing: switchControl("inpSyncSecrets", "Tokens über Drive synchronisieren", SETTINGS_SYNC.allowsSecrets(S.settings)) });
 	const syncMinutes = normalizeDriveSyncMinutes(S.settings);
 	const intervalOptions = DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value, label }) => '<option value="' + value + '"' + (value === syncMinutes ? " selected" : "") + '>' + e(label) + "</option>").join("");
 	const automation = UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
 		UI.row({ title: "Nach jeder Änderung synchronisieren", description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall", trailing: switchControl("inpDriveSyncAfterChange", "Nach jeder Änderung synchronisieren", driveSyncAfterChange(S.settings)) });
-	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" }) + UI.field("Eigener Notion-Proxy", "inpCorsProxy", S.settings.corsProxy || "", { explicit: true, placeholder: "Leer = sicherer Impala67-Worker" });
+	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" });
 	return UI.page("Sync & Dienste", "Verbinde nur die Dienste, die du wirklich nutzt.",
 		UI.group("Cloudflare Echtzeit-Sync", '<div id="cf-connection-status">' + cloudflareContent() + "</div>", { id: "cf-sync", footnote: "100 % Ende-zu-Ende verschlüsselt (AES-GCM 256-Bit). Der Server sieht niemals Klartext-Notizen." }) +
 		UI.group("Google Drive (Backup & Langzeitspeicher)", '<div id="drive-connection-status">' + driveContent() + "</div>", { id: "drive", footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal." }) +
 		UI.group("Automatische Synchronisierung", automation, { id: "drive-automation", footnote: "Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus." }) +
 		UI.group("Datenschutz", privacy) +
-		UI.group("Notion", notion, { id: "notion" }) +
 		UI.disclosure("Erweitert", "Client-ID und Verbindungsdetails", '<div id="sync-advanced" data-settings-anchor>' + advanced + "</div>") +
 		UI.saveBar());
 }

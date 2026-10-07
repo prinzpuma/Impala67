@@ -13,7 +13,6 @@ import { EDITOR } from "./editor.js";
 import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { APP } from "./app.js";
-import { NOTION_MIGRATOR } from "./import-notion.js";
 import { COLLAPSE } from "./collapse.js";
 import { CHATS } from "./chats.js";
 import "./updater.js";
@@ -45,7 +44,7 @@ import "./pdfpaste.js";
 // Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.
 Object.assign(window, {
 	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, EXTRAS,
-	COLLAPSE, CHATS, MOBILE, NOTION_MIGRATOR, SETTINGS, LIBRARY, TABS, SEARCH,
+	COLLAPSE, CHATS, MOBILE, SETTINGS, LIBRARY, TABS, SEARCH,
 	SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE, LERNZEIT,
 	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC, SYNC_MAINTENANCE,
 	PERF_PROFILER,

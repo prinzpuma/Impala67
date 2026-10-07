@@ -37,7 +37,6 @@ const APP_FILES = [
 	"./platform-native.js",
 	"./collapse.js",
 	"./chats.js",
-	"./import-notion.js",
 	"./util.js",
 	"./optional-modules.js",
 	"./db.js",
