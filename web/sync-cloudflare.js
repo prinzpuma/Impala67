@@ -28,7 +28,7 @@ import {
 	generateSyncKey,
 	sha256Hex,
 } from "./sync-crypto.js";
-import { isRetryableSyncError, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes } from "./sync-transfer.js";
+import { isRetryableSyncError, mapLimit, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes } from "./sync-transfer.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -81,16 +81,6 @@ export function acknowledgedUploadCursor(data, expectedGeneration, currentSeq) {
 	return toSeq;
 }
 
-async function mapLimit(items, limit, fn) {
-	let i = 0;
-	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-		while (i < items.length) {
-			const index = i++;
-			await fn(items[index], index);
-		}
-	});
-	await Promise.all(workers);
-}
 
 export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;

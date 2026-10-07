@@ -21,6 +21,7 @@ import { generateQrSvg } from "./qrcode.js";
 import { openQrScanner } from "./qr-scanner.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
+import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -981,7 +982,7 @@ export async function updateLocalEmbeddingManagerUi() {
 	const actionsEl = U.el("localEmbeddingActions");
 	const progress = U.el("localEmbeddingProgress");
 	const inpEmbed = U.el("inpEmbed");
-	const modelId = "local:bekko-a8m";
+	const modelId = LOCAL_EMBED_MODEL_ID;
 	const configured = inpEmbed?.value === "local::" + modelId;
 
 	try {
@@ -1014,8 +1015,8 @@ export async function updateLocalEmbeddingManagerUi() {
 export async function handleEnableLocalEmbedding() {
 	const inpEmbed = U.el("inpEmbed");
 	try {
-		await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: "local:bekko-a8m" });
-		if (inpEmbed) inpEmbed.value = "local::local:bekko-a8m";
+		await STATE.dispatch("settingsSet", { embedProviderId: "local", embedModel: LOCAL_EMBED_MODEL_ID });
+		if (inpEmbed) inpEmbed.value = "local::" + LOCAL_EMBED_MODEL_ID;
 		U.toast("Semantische Suche aktiviert.", "success");
 		await updateLocalEmbeddingManagerUi();
 		RAG.reindexStale();
@@ -1033,7 +1034,7 @@ export async function handleDownloadLocalEmbedding() {
 	const fill = progress?.querySelector(".progress-fill");
 	const msgEl = U.el("localEmbeddingMsg");
 	const inpEmbed = U.el("inpEmbed");
-	const modelId = "local:bekko-a8m";
+	const modelId = LOCAL_EMBED_MODEL_ID;
 
 	isDownloadingLocalEmbedding = true;
 	if (statusEl) statusEl.className = "settings-status is-warn";
@@ -1077,7 +1078,7 @@ export async function handleDownloadLocalEmbedding() {
 }
 
 export async function handleDeleteLocalEmbedding() {
-	const modelId = "local:bekko-a8m";
+	const modelId = LOCAL_EMBED_MODEL_ID;
 	const inpEmbed = U.el("inpEmbed");
 	try {
 		await AI.deleteLocalEmbedding(modelId);

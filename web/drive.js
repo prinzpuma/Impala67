@@ -2,7 +2,9 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, sha256Hex, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
+import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, gzipBytes, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
+import { sha256Hex } from "./sync-crypto.js";
+import { mapLimit } from "./sync-transfer.js";
 import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
@@ -316,16 +318,6 @@ export const DRIVE = (() => {
 		.then(() => { indexRemove(fileId); return true; })
 		.catch(() => false);
 
-	// Begrenzte Parallelität — bündelt Netz-Rundreisen für Down-/Uploads/Deletes.
-	async function mapLimit(items, limit, fn) {
-		const list = items || [];
-		const out = new Array(list.length);
-		let next = 0;
-		await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, list.length)) }, async () => {
-			while (next < list.length) { const i = next++; out[i] = await fn(list[i], i); }
-		}));
-		return out;
-	}
 
 	// ---------- Datei-Index + Changes API (v5) ----------
 	// Statt bei jedem Sync ALLE Dateien zu listen, pflegt ein lokaler Index den
@@ -416,12 +408,6 @@ export const DRIVE = (() => {
 		return decodeJson(bytes, file.appProperties?.encoding || (file.name.endsWith(".gz") ? "gzip" : "identity"));
 	}
 
-	// Bytes direkt gzippen — für schon serialisierte Blobs (spart decode→parse→stringify).
-	async function gzipRaw(raw) {
-		if (typeof CompressionStream !== "function") return { bytes: raw, encoding: "identity" };
-		const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream("gzip"));
-		return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: "gzip" };
-	}
 
 	// v10 (26.7.2026) [B1] Heft-Echo: heft.js schickt beim Speichern nur den Unterschied zum
 	// zuletzt veröffentlichten Stand. Bisher wurden die fremden Events zuerst abgespielt und das
@@ -581,7 +567,7 @@ export const DRIVE = (() => {
 		}
 		if (toUpload.length) setStatus("syncing", toUpload.length + " Datei(en) hochladen…");
 		await mapLimit(toUpload, 3, async (u) => {
-			const packed = await gzipRaw(u.raw);
+			const packed = await gzipBytes(u.raw);
 			// blobId in den appProperties ist jetzt Pflicht — [G2] entscheidet damit ohne Download.
 			await uploadNamed(BLOB_PREFIX + u.hash + ".json.gz", packed.bytes, packed.encoding, null, { hash: u.hash, blobId: u.id });
 		});

@@ -12,6 +12,9 @@ function requireAdapter() {
 
 import { PERF_PROFILER } from "./performance-profiler.js";
 
+// Einziges angebotenes lokales Embedding-Modell (Bekko a8m, läuft im Worker).
+export const LOCAL_EMBED_MODEL_ID = "local:bekko-a8m";
+
 export const EMBEDDINGS = {
 	setAdapter(next) {
 		if (!next || typeof next.embed !== "function") {

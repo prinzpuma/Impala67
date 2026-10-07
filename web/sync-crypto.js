@@ -33,7 +33,8 @@ export function hexToBytes(value) {
 }
 
 export async function sha256Hex(value) {
-	const digest = await crypto.subtle.digest("SHA-256", enc.encode(String(value ?? "")));
+	const bytes = value instanceof Uint8Array ? value : enc.encode(String(value ?? ""));
+	const digest = await crypto.subtle.digest("SHA-256", bytes);
 	return bytesToHex(digest);
 }
 

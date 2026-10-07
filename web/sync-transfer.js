@@ -2,6 +2,17 @@
 
 const UTF8_ENCODER = new TextEncoder();
 
+// Begrenzte Parallelität: höchstens `limit` gleichzeitige Aufrufe, Ergebnisse in Eingabereihenfolge.
+export async function mapLimit(items, limit, fn) {
+	const list = items || [];
+	const out = new Array(list.length);
+	let next = 0;
+	await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, list.length)) }, async () => {
+		while (next < list.length) { const i = next++; out[i] = await fn(list[i], i); }
+	}));
+	return out;
+}
+
 export function transferBodyBytes(body) {
 	if (typeof body === "string") return UTF8_ENCODER.encode(body).byteLength;
 	if (body instanceof ArrayBuffer) return body.byteLength;

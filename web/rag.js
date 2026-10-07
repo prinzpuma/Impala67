@@ -2,7 +2,7 @@
 import { S } from "./state.js";
 import { DB } from "./db.js";
 import { EMBEDDINGS } from "./embedding.js";
-import { rankRag } from "./rag-ranking.js";
+import { norm, rankRag } from "./rag-ranking.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
@@ -247,8 +247,6 @@ export const RAG = (() => {
 			if (!v || v.updated !== pg.updated || v.model !== model || v.providerId !== providerId) queuePage(pg.id);
 		}
 	}
-
-	const norm = (v) => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * v[i]; return Math.sqrt(s) || 1; };
 
 	// Suche v2 (15. Juli):
 	// - Vektoren werden im Speicher gecacht (IndexedDB-Volllast nur noch alle 30 s

@@ -12,6 +12,7 @@ import { PLATFORM_NATIVE } from "./platform-native.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
+import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 
 const e = (value) => U.esc(String(value ?? ""));
 const button = (label, id, className = "", disabled = false) => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + e(label) + "</button>";
@@ -150,9 +151,9 @@ function renderAi(vm) {
 	const tabs = '<nav class="settings-subnav" role="tablist" aria-label="KI und Lernen"><button type="button" data-aitab="models" class="' + (tab === "models" ? "active" : "") + '">Modelle</button><button type="button" data-aitab="sources" class="' + (tab === "sources" ? "active" : "") + '">Quellen</button><button type="button" data-aitab="learning" class="' + (tab === "learning" ? "active" : "") + '">Lernen</button></nav>';
 	let content = tab === "sources" ? renderAiSources() : tab === "learning" ? renderLearning(vm) : renderAiModels(vm);
 	if (tab !== "learning") {
-		const isConfigured = S.settings.embedProviderId === "local" && S.settings.embedModel === "local:bekko-a8m";
+		const isConfigured = S.settings.embedProviderId === "local" && S.settings.embedModel === LOCAL_EMBED_MODEL_ID;
 		const embedStatus = '<div id="ai-embedding" data-settings-anchor>' +
-			'<input type="hidden" id="inpEmbed" value="' + (isConfigured ? "local::local:bekko-a8m" : "") + '">' +
+			'<input type="hidden" id="inpEmbed" value="' + (isConfigured ? "local::" + LOCAL_EMBED_MODEL_ID : "") + '">' +
 			'<div id="localEmbeddingStatus" class="settings-status ' + (isConfigured ? "is-ok" : "is-idle") + '">' +
 				'<span class="settings-status-dot"></span>' +
 				'<span class="settings-row-copy">' +

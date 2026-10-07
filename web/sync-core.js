@@ -21,20 +21,16 @@ export function newestFile(files, names) {
 		.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")))[0] || null;
 }
 
-export async function sha256Hex(value) {
-	const bytes = value instanceof Uint8Array ? value : enc.encode(String(value ?? ""));
-	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 export const jsonByteLength = (value) => enc.encode(JSON.stringify(value)).byteLength;
 
-export async function encodeJson(value) {
-	const raw = enc.encode(JSON.stringify(value));
+// Bytes gzippen; ohne CompressionStream unverändert („identity“).
+export async function gzipBytes(raw) {
 	if (typeof CompressionStream !== "function") return { bytes: raw, encoding: "identity" };
 	const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream("gzip"));
 	return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: "gzip" };
 }
+
+export const encodeJson = (value) => gzipBytes(enc.encode(JSON.stringify(value)));
 
 export async function decodeJson(bytes, encoding) {
 	let stream = new Blob([bytes]).stream();

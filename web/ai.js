@@ -7,7 +7,7 @@ import { RENDER } from "./render.js";
 import { CHATS } from "./chats.js";
 import { THINK } from "./think-heuristik.js";
 import { RAG } from "./rag.js";
-import { EMBEDDINGS } from "./embedding.js";
+import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "./sync-core.js";
 
@@ -360,7 +360,7 @@ export const AI = (() => {
 	}
 	const LOCAL_EMBEDDING_MODELS = [
 		{
-			id: "local:bekko-a8m",
+			id: LOCAL_EMBED_MODEL_ID,
 			hfId: "hotchpotch/bekko-embedding-v1-a8m",
 			name: "Bekko a8m (Lokal im Browser, 256d)",
 			dim: 256,
@@ -425,7 +425,7 @@ export const AI = (() => {
 		return () => embeddingWorkerListeners.delete(listener);
 	}
 
-	async function getLocalEmbeddingStatus(modelId = "local:bekko-a8m") {
+	async function getLocalEmbeddingStatus(modelId = LOCAL_EMBED_MODEL_ID) {
 		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
 		try {
 			const res = await postEmbeddingWorkerMessage("status", { model: def.hfId });
@@ -435,12 +435,12 @@ export const AI = (() => {
 		}
 	}
 
-	async function downloadLocalEmbedding(modelId = "local:bekko-a8m") {
+	async function downloadLocalEmbedding(modelId = LOCAL_EMBED_MODEL_ID) {
 		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
 		return await postEmbeddingWorkerMessage("download", { model: def.hfId, dim: def.dim });
 	}
 
-	async function deleteLocalEmbedding(modelId = "local:bekko-a8m") {
+	async function deleteLocalEmbedding(modelId = LOCAL_EMBED_MODEL_ID) {
 		const def = LOCAL_EMBEDDING_MODELS.find((m) => m.id === modelId) || LOCAL_EMBEDDING_MODELS[0];
 		return await postEmbeddingWorkerMessage("delete", { model: def.hfId });
 	}

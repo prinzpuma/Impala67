@@ -3,6 +3,7 @@
 import { S } from "./state.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { DB } from "./db.js";
+import { dot, norm } from "./rag-ranking.js";
 
 // Offizieller Schulfächer-Katalog
 export const KNOWN_SUBJECTS = Object.freeze([
@@ -367,20 +368,6 @@ function getCachedSubject(pageObj) {
 function setCachedSubject(pageObj, subject) {
 	if (!pageObj?.id || !subject) return;
 	pageClassificationCache.set(pageObj.id, { updated: pageObj.updated, subject });
-}
-
-// Vektor-Ähnlichkeits-Berechnung (Kosinus-Ähnlichkeit)
-function norm(v) {
-	let s = 0;
-	for (let i = 0; i < v.length; i++) s += v[i] * v[i];
-	return Math.sqrt(s) || 1;
-}
-
-function dot(a, b) {
-	let s = 0;
-	const len = Math.min(a.length, b.length);
-	for (let i = 0; i < len; i++) s += a[i] * b[i];
-	return s;
 }
 
 let prototypeVectors = null;
