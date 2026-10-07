@@ -310,6 +310,48 @@ const TOOLS = [
 			},
 		},
 	},
+	{
+		name: "impala_heft_scan_extract",
+		description: "Scannt Heft-Seiten aus IndexedDB, clustert Striche in isolierte Wörter/Zeilen und rendert kleine PNG-Bilder für LLM-Labeling (mit Datenschutz: nur Einzelwörter, Seiten ausschließbar).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				exclude_page_ids: { type: "array", items: { type: "string" }, description: "Optionale Liste von Seiten-IDs, die aus Datenschutzgründen nicht gescannt werden sollen." },
+				limit_clusters: { type: "number", description: "Maximale Anzahl an Wort-Clustern (Standard: 30, max: 100)." },
+			},
+		},
+	},
+	{
+		name: "impala_heft_scan_consensus_import",
+		description: "Führt den 3-Wege-Konsens-Check durch (Modell A == Modell B == Lokales Netz). Bei 100 % Übereinstimmung wird das Sample automatisch als Trainingsbeispiel gespeichert; sonst wandert es in die Prüfliste.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				cluster_id: { type: "string", description: "Cluster-ID des Wortes" },
+				original_strokes: { type: "array", description: "Original-Vektorstriche des Wortes" },
+				local_prediction: { type: "string", description: "Erkanntes Wort des lokalen Modells" },
+				llm_a_label: { type: "string", description: "Erkanntes Wort von LLM-Modell A" },
+				llm_b_label: { type: "string", description: "Erkanntes Wort von LLM-Modell B" },
+			},
+			required: ["original_strokes", "local_prediction", "llm_a_label", "llm_b_label"],
+		},
+	},
+	{
+		name: "impala_heft_scan_review_list",
+		description: "Verwaltet die Prüfliste für abweichende oder unsichere Handschrift-Beispiele (list, approve, reject, clear).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				action: {
+					type: "string",
+					enum: ["list", "approve", "reject", "clear"],
+					description: "Aktion für die Prüfliste (list = Anzeigen, approve = Bestätigen/Speichern, reject = Verwerfen, clear = Leeren)",
+				},
+				item_id: { type: "string", description: "ID des Eintrags für approve oder reject" },
+				corrected_label: { type: "string", description: "Manuell korrigierter Text bei Freigabe" },
+			},
+		},
+	},
 ];
 
 /**
@@ -463,6 +505,9 @@ export async function startServer(opts = {}) {
 			case "impala_eval":
 			case "impala_run_ui_action":
 			case "impala_storage_cleanup":
+			case "impala_heft_scan_extract":
+			case "impala_heft_scan_consensus_import":
+			case "impala_heft_scan_review_list":
 				return { error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).` };
 			default:
 				return { error: `Unbekanntes Werkzeug: ${name}` };

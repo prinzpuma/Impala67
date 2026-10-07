@@ -396,7 +396,7 @@ function syncActiveTabChip(bar) {
 	});
 
 	const backBtn = $("btnNavBack"), pageBackBtn = $("btnPageNavBack");
-	const canBack = S.navIndex > 0;
+	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
 	if (backBtn) backBtn.disabled = !canBack;
 	if (pageBackBtn) pageBackBtn.disabled = !canBack;
 
@@ -599,9 +599,11 @@ function renderTabs() {
 	if (S.tabs.some((id) => id.startsWith("chat:"))) {
 		try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
 	}
+	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
+	const canFwd = S.navIndex < S.navHistory.length - 1;
 	let html = '<button class="navbtn" id="btnSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
-		`<button class="navbtn" id="btnNavBack" ${S.navIndex > 0 ? "" : "disabled"} title="Zurück">‹</button>` +
-		`<button class="navbtn" id="btnNavForward" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +
+		`<button class="navbtn" id="btnNavBack" ${canBack ? "" : "disabled"} title="Zurück">‹</button>` +
+		`<button class="navbtn" id="btnNavForward" ${canFwd ? "" : "disabled"} title="Vor">›</button>` +
 		'<div class="tabstrip">';
 	html += S.tabs.map((id) => {
 		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
@@ -675,11 +677,13 @@ function renderMain() {
 	// main.dataset.scrollPageId entfällt — .page-scroll wird gar nicht mehr ersetzt und
 	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
 	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
+	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
+	const canFwd = S.navIndex < S.navHistory.length - 1;
 	const pageShellHtml =
 		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' +
 		'<button class="navbtn topbar-sb-toggle" id="btnPageSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
-		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavBack" data-navback="1" ${S.navIndex > 0 ? "" : "disabled"} title="Zurück">‹</button>` +
-		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavForward" data-navforward="1" ${S.navIndex < S.navHistory.length - 1 ? "" : "disabled"} title="Vor">›</button>` +
+		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavBack" data-navback="1" ${canBack ? "" : "disabled"} title="Zurück">‹</button>` +
+		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavForward" data-navforward="1" ${canFwd ? "" : "disabled"} title="Vor">›</button>` +
 		breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
 		(pg.archived ? `<div class="archived-banner"><span>🗄️ Diese Seite ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") + "</div>" +
 		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
@@ -1807,10 +1811,16 @@ function renderMainChatLog() {
 // EINE "Gedankengang"-Box für live UND finalisiert (gleiche Struktur/Optik)
 function thinkBoxHtml(opts) {
 	const expanded = !!opts.expanded;
+	const text = String(opts.text || "").trim();
+	const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+	let label = opts.label || "Gedankengang";
+	if (!opts.live && words > 0) {
+		label += ` (${words} Wörter)`;
+	}
 	return `<div class="think-box${opts.live ? " live" : ""}${expanded ? " expanded" : opts.live ? " peek" : ""}">` +
 		`<button type="button" class="think-toggle" ${opts.toggleAttr} aria-expanded="${expanded ? "true" : "false"}">` +
-			`<span class="think-icon">${ICONS.think}</span><span class="think-label">${esc(opts.label)}</span><span class="think-chevron">▸</span></button>` +
-		`<div class="think-body-wrap"><div class="think-body">${esc(opts.text || "")}</div></div></div>`;
+			`<span class="think-icon">${ICONS.think}</span><span class="think-label">${esc(label)}</span><span class="think-chevron">▸</span></button>` +
+		`<div class="think-body-wrap"><div class="think-body">${esc(text || "…denkt nach…")}</div></div></div>`;
 }
 
 // Live: Mini-Vorschau mit den letzten 2 Zeilen, ausklappbar

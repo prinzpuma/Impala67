@@ -76,9 +76,14 @@ async function initSession(modelPath = currentModelPath) {
 	}
 }
 
+// Maximale Punktsequenzlänge aus dem Training (darüber wird das Netz unzuverlässiger)
+const MAX_TRAINING_POINTS = 450;
+
 // Führt Inferenz für eine einzelne Zeile von [dx, dy, pen_down]-Features aus
-async function recognizeLineFeatures(features) {
-	if (!features || features.length < 3) return "";
+async function recognizeLineFeatures(features, options = {}) {
+	if (!features || features.length < 3) {
+		return { text: "", rawText: "", confidence: 0, status: "empty", isConfident: false, blankRatio: 1 };
+	}
 	if (!session) {
 		await initSession();
 	}
@@ -87,15 +92,16 @@ async function recognizeLineFeatures(features) {
 	}
 
 	const seqLen = features.length;
-	// Input-Tensor: Shape [1, seq_len, 3]
-	const flatData = new Float32Array(seqLen * 3);
+	// Input-Tensor: Shape [1, seq_len, 4]
+	const flatData = new Float32Array(seqLen * 4);
 	for (let i = 0; i < seqLen; i++) {
-		flatData[i * 3 + 0] = features[i][0]; // dx
-		flatData[i * 3 + 1] = features[i][1]; // dy
-		flatData[i * 3 + 2] = features[i][2]; // pen_down
+		flatData[i * 4 + 0] = features[i][0]; // dx
+		flatData[i * 4 + 1] = features[i][1]; // dy
+		flatData[i * 4 + 2] = features[i][2]; // pen_down
+		flatData[i * 4 + 3] = features[i][3] !== undefined ? features[i][3] : 0.0; // y_rel
 	}
 
-	const inputTensor = new ort.Tensor("float32", flatData, [1, seqLen, 3]);
+	const inputTensor = new ort.Tensor("float32", flatData, [1, seqLen, 4]);
 	const feeds = {};
 	const inputName = session.inputNames[0] || "input";
 	feeds[inputName] = inputTensor;
@@ -139,31 +145,61 @@ async function recognizeLineFeatures(features) {
 		logits2D.push(row);
 	}
 
-	return HANDWRITING_CTC.greedyDecode(logits2D, HANDWRITING_VOCAB);
+	return HANDWRITING_CTC.decodeWithConfidence(logits2D, HANDWRITING_VOCAB, options);
 }
 
-// Erkennt eine Liste von Strichen auf einer Seite (mit 2D-Mathe/Bruch-Unterstützung)
-async function recognizePageStrokes(strokes) {
-	// Prüfe zuerst, ob die Strichmenge als 2D-Bruch aufgebaut ist
+// Erkennt eine Liste von Strichen auf einer Seite mit vollständiger Strich-Bilanzierung
+async function recognizePageStrokes(strokes, options = {}) {
+	const totalStrokesCount = Array.isArray(strokes) ? strokes.length : 0;
+	if (totalStrokesCount === 0) {
+		return { text: "", lines: [], accounting: { total: 0, recognized: 0, uncertain: 0, skipped: 0, balanced: true } };
+	}
+
+	// 1. Strich-Tracking initialisieren: Jeder Strich bekommt genau einen Status
+	const strokeStatus = new Array(totalStrokesCount).fill(null);
+	const validInkStrokes = [];
+
+	for (let i = 0; i < totalStrokesCount; i++) {
+		const s = strokes[i];
+		if (!s || !Array.isArray(s.pts) || s.pts.length === 0) {
+			strokeStatus[i] = "skipped_empty";
+		} else if (s.tool === "shape" || s.tool === "eraser" || s.tool === "laser") {
+			strokeStatus[i] = "skipped_tool";
+		} else if (s.pts.length < 2) {
+			strokeStatus[i] = "skipped_too_short";
+		} else {
+			validInkStrokes.push({ stroke: s, origIdx: i });
+		}
+	}
+
+	// Prüfe zuerst 2D-Brüche
 	const fraction = HANDWRITING_PREPROCESSOR.detectFraction(strokes);
 	if (fraction) {
 		try {
 			const numFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.numeratorStrokes);
 			const denFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.denominatorStrokes);
-			const [numText, denText] = await Promise.all([
-				numFeat.length >= 3 ? recognizeLineFeatures(numFeat) : Promise.resolve(""),
-				denFeat.length >= 3 ? recognizeLineFeatures(denFeat) : Promise.resolve(""),
+			const [numRes, denRes] = await Promise.all([
+				numFeat.length >= 3 ? recognizeLineFeatures(numFeat, options) : Promise.resolve({ text: "", isConfident: false }),
+				denFeat.length >= 3 ? recognizeLineFeatures(denFeat, options) : Promise.resolve({ text: "", isConfident: false }),
 			]);
 
 			let sideText = "";
 			if (fraction.sideStrokes.length >= 2) {
 				const sideFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.sideStrokes);
-				if (sideFeat.length >= 3) sideText = await recognizeLineFeatures(sideFeat);
+				if (sideFeat.length >= 3) {
+					const sideRes = await recognizeLineFeatures(sideFeat, options);
+					if (sideRes.isConfident) sideText = sideRes.text;
+				}
 			}
 
-			const fracLaTeX = `\\frac{${numText.trim() || "?"}}{${denText.trim() || "?"}}`;
+			// Striche als erkannt markieren
+			for (let i = 0; i < totalStrokesCount; i++) {
+				if (!strokeStatus[i]) strokeStatus[i] = (numRes.isConfident && denRes.isConfident) ? "recognized" : "uncertain";
+			}
+
+			const fracLaTeX = `\\frac{${numRes.text.trim() || "?"}}{${denRes.text.trim() || "?"}}`;
+			let fullText = fracLaTeX;
 			if (sideText.trim()) {
-				// Prüfe ob sideStrokes links oder rechts vom Bruch lagen
 				const sideBox = fraction.sideStrokes.reduce(
 					(acc, s) => {
 						const b = HANDWRITING_PREPROCESSOR.strokeBbox(s);
@@ -172,35 +208,131 @@ async function recognizePageStrokes(strokes) {
 					},
 					{ minX: Infinity, maxX: -Infinity }
 				);
-				if (sideBox.maxX < fraction.barBox.minX) {
-					return `${sideText.trim()} ${fracLaTeX}`;
-				}
-				return `${fracLaTeX} ${sideText.trim()}`;
+				fullText = (sideBox.maxX < fraction.barBox.minX) ? `${sideText.trim()} ${fracLaTeX}` : `${fracLaTeX} ${sideText.trim()}`;
 			}
-			return fracLaTeX;
+
+			return {
+				text: (numRes.isConfident || denRes.isConfident) ? fullText : "",
+				lines: [fullText],
+				accounting: {
+					total: totalStrokesCount,
+					recognized: (numRes.isConfident && denRes.isConfident) ? totalStrokesCount : 0,
+					uncertain: (!numRes.isConfident || !denRes.isConfident) ? totalStrokesCount : 0,
+					skipped: 0,
+					balanced: true,
+				}
+			};
 		} catch (err) {
-			console.info("[handwriting-worker] 2D-Bruch-Erkennung Fallback auf Zeilenerkennung:", err);
+			console.info("[handwriting-worker] 2D-Bruch Fallback auf Standard-Segmentierung:", err);
 		}
 	}
 
-	const lines = HANDWRITING_PREPROCESSOR.segmentLines(strokes);
-	if (!lines.length) return "";
+	const rawInkOnly = validInkStrokes.map((v) => v.stroke);
+	const lines = HANDWRITING_PREPROCESSOR.segmentLines(rawInkOnly);
 
 	const recognizedLines = [];
+	const groupsReport = [];
+
 	for (const line of lines) {
-		const features = HANDWRITING_PREPROCESSOR.extractLineFeatures(line.strokes);
-		if (features.length < 5) continue;
-		try {
-			const text = await recognizeLineFeatures(features);
-			if (text && text.trim()) {
-				recognizedLines.push(HANDWRITING_CTC.cleanTranscription(text));
+		const lineStrokes = line.strokes || [];
+		const lineOrigIndices = [];
+		for (const s of lineStrokes) {
+			const found = validInkStrokes.find((v) => v.stroke === s && strokeStatus[v.origIdx] === null);
+			if (found) lineOrigIndices.push(found.origIdx);
+		}
+
+		const features = HANDWRITING_PREPROCESSOR.extractLineFeatures(lineStrokes);
+
+		// Prüfung auf zu lange Sequenzen (Training-Limit)
+		const isTooLong = features.length > MAX_TRAINING_POINTS;
+		if (isTooLong) {
+			console.warn(`[handwriting-accounting] Warnung: Strichgruppe mit ${features.length} Features ist länger als Trainingsdaten (${MAX_TRAINING_POINTS}).`);
+		}
+
+		let status = "skipped_too_short";
+		let text = "";
+		let confidence = 0;
+
+		if (features.length < 5) {
+			status = "skipped_too_short";
+			for (const idx of lineOrigIndices) strokeStatus[idx] = "skipped_too_short";
+		} else {
+			try {
+				const rec = await recognizeLineFeatures(features, options);
+				text = rec.text;
+				confidence = rec.confidence;
+				status = rec.status; // recognized, uncertain, drawing, empty
+
+				if (isTooLong && status === "recognized") {
+					// Bei extrem langen Zeilen Sicherheitsabzug
+					if (rec.confidence < 0.90) status = "uncertain";
+				}
+
+				for (const idx of lineOrigIndices) {
+					strokeStatus[idx] = status;
+				}
+
+				if (status === "recognized" && text && text.trim()) {
+					recognizedLines.push(text);
+				}
+			} catch (err) {
+				console.warn("[handwriting-worker] Inferenzfehler in Zeile:", err);
+				status = "error";
+				for (const idx of lineOrigIndices) strokeStatus[idx] = "error";
 			}
-		} catch (err) {
-			console.warn("[handwriting-worker] Zeile konnte nicht erkannt werden:", err);
+		}
+
+		groupsReport.push({
+			strokesCount: lineStrokes.length,
+			featuresCount: features.length,
+			status,
+			confidence,
+			text,
+			tooLong: isTooLong,
+		});
+	}
+
+	// 2. Summen-Abgleich (Accounting Verification)
+	// Jeder Strich MUSS genau einer Kategorie zugeordnet sein!
+	let recognizedCount = 0;
+	let uncertainCount = 0;
+	let skippedCount = 0;
+	let unassignedCount = 0;
+
+	for (let i = 0; i < totalStrokesCount; i++) {
+		const st = strokeStatus[i];
+		if (!st) {
+			unassignedCount++;
+			strokeStatus[i] = "unassigned";
+		} else if (st === "recognized") {
+			recognizedCount++;
+		} else if (st === "uncertain") {
+			uncertainCount++;
+		} else {
+			skippedCount++;
 		}
 	}
 
-	return recognizedLines.join("\n");
+	const balanced = (recognizedCount + uncertainCount + skippedCount) === totalStrokesCount && unassignedCount === 0;
+	if (!balanced) {
+		console.error(`[handwriting-accounting] FEHLER: Strich-Bilanz geht nicht auf! Gesamt: ${totalStrokesCount}, Erkannt: ${recognizedCount}, Unsicher: ${uncertainCount}, Übersprungen: ${skippedCount}, Nicht zugeordnet: ${unassignedCount}`);
+	} else {
+		console.debug(`[handwriting-accounting] Strich-Bilanz sauber aufgegangen (${totalStrokesCount} Striche: ${recognizedCount} erkannt, ${uncertainCount} unsicher, ${skippedCount} übersprungen).`);
+	}
+
+	return {
+		text: recognizedLines.join("\n"),
+		lines: recognizedLines,
+		accounting: {
+			total: totalStrokesCount,
+			recognized: recognizedCount,
+			uncertain: uncertainCount,
+			skipped: skippedCount,
+			unassigned: unassignedCount,
+			balanced,
+			groups: groupsReport,
+		}
+	};
 }
 
 self.addEventListener("message", async (event) => {
@@ -215,8 +347,14 @@ self.addEventListener("message", async (event) => {
 	if (msg.type === "recognize_strokes") {
 		const id = msg.id;
 		try {
-			const text = await recognizePageStrokes(msg.strokes || []);
-			self.postMessage({ type: "result", id, text });
+			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {});
+			self.postMessage({
+				type: "result",
+				id,
+				text: res.text,
+				lines: res.lines,
+				accounting: res.accounting,
+			});
 		} catch (err) {
 			self.postMessage({ type: "error", id, error: err?.message || String(err) });
 		}
@@ -226,11 +364,20 @@ self.addEventListener("message", async (event) => {
 	if (msg.type === "recognize_line") {
 		const id = msg.id;
 		try {
-			const text = await recognizeLineFeatures(msg.features || []);
-			self.postMessage({ type: "result", id, text });
+			const res = await recognizeLineFeatures(msg.features || [], msg.options || {});
+			self.postMessage({
+				type: "result",
+				id,
+				text: res.text,
+				confidence: res.confidence,
+				status: res.status,
+				isConfident: res.isConfident,
+				blankRatio: res.blankRatio,
+			});
 		} catch (err) {
 			self.postMessage({ type: "error", id, error: err?.message || String(err) });
 		}
 		return;
 	}
 });
+

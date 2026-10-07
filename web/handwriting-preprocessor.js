@@ -328,8 +328,9 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		if (!resampledStrokes.length) return [];
 
 		// Normierungsfaktor: Zeilenhöhe normieren (auf 1.0 Einheit)
-		const height = Math.max(10, maxY - minY);
+		const height = options.lineHeight || Math.max(10, maxY - minY);
 		const scale = 1.0 / height;
+		const refMinY = options.lineMinY !== undefined ? options.lineMinY : minY;
 
 		const features = [];
 		let lastX = null, lastY = null;
@@ -337,12 +338,13 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		for (let si = 0; si < resampledStrokes.length; si++) {
 			const stroke = resampledStrokes[si];
 			const firstPt = stroke[0];
+			const firstYRel = (firstPt[1] - refMinY) * scale - 0.5;
 
 			if (lastX !== null && lastY !== null) {
 				// Stift angehoben (Pen-Up-Sprung zum nächsten Strich)
 				const dx = (firstPt[0] - lastX) * scale;
 				const dy = (firstPt[1] - lastY) * scale;
-				features.push([dx, dy, 0]); // pen_down = 0
+				features.push([dx, dy, 0, firstYRel]); // pen_down = 0
 			}
 
 			lastX = firstPt[0];
@@ -352,7 +354,8 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 				const pt = stroke[pi];
 				const dx = (pt[0] - lastX) * scale;
 				const dy = (pt[1] - lastY) * scale;
-				features.push([dx, dy, 1]); // pen_down = 1
+				const yRel = (pt[1] - refMinY) * scale - 0.5;
+				features.push([dx, dy, 1, yRel]); // pen_down = 1
 				lastX = pt[0];
 				lastY = pt[1];
 			}

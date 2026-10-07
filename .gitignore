@@ -32,3 +32,6 @@ handwriting/checkpoints/
 handwriting/ujipenchars2.txt
 __pycache__/
 *.pyc
+
+# Claude Code (persönliche Einstellungen)
+.claude/settings.local.json

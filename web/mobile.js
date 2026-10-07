@@ -79,11 +79,18 @@ export const MOBILE = (() => {
 	window.addEventListener("popstate", () => {
 		if (selfNav) { selfNav = false; return; }
 		const layer = hstack.pop();
-		if (!layer) return;
-		poppingState = true;
-		LAYERS[layer].close();
-		updateUI();
-		poppingState = false;
+		if (layer) {
+			poppingState = true;
+			LAYERS[layer].close();
+			updateUI();
+			poppingState = false;
+			return;
+		}
+		// Wenn kein Modal/Sheet offen ist, bedient Zurück die Notizen-Historie:
+		if (typeof TABS !== "undefined" && TABS.navBack && (S.navIndex >= 0 || S.view !== "home")) {
+			TABS.navBack();
+			updateUI();
+		}
 	});
 
 	function mount() {

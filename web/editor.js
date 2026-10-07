@@ -2474,6 +2474,15 @@ export const EDITOR = (() => {
 				}
 			}
 		});
+		document.addEventListener("visibilitychange", () => {
+			if (document.hidden && saveTimer) save(true);
+		});
+		window.addEventListener("pagehide", () => {
+			if (saveTimer) save(true);
+		});
+		window.addEventListener("freeze", () => {
+			if (saveTimer) save(true);
+		});
 	}
 
 	// ---------- Styles für Datei-/Medienblöcke (einmalig injiziert, wie notebooklm.js) ----------

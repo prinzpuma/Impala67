@@ -775,7 +775,23 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (typeof window !== "undefined") {
 			window.addEventListener("offline", () => { closeSocket(); clearTimeout(localTimer); clearTimeout(reconnectTimer); });
 			window.addEventListener("online", () => { clearTimeout(retryTimer); retryTimer = 0; connectWebSocket(); requestSync().catch(() => {}); });
-			window.addEventListener("visibilitychange", () => { if (!document.hidden && credentials) { connectWebSocket(); requestSync().catch(() => {}); } });
+			window.addEventListener("visibilitychange", () => {
+				if (document.hidden) {
+					closeSocket();
+				} else if (credentials) {
+					clearTimeout(reconnectTimer);
+					clearTimeout(retryTimer);
+					connectWebSocket();
+					requestSync().catch(() => {});
+				}
+			});
+			window.addEventListener("freeze", () => { closeSocket(); });
+			window.addEventListener("resume", () => {
+				if (credentials && !document.hidden) {
+					connectWebSocket();
+					requestSync().catch(() => {});
+				}
+			});
 		}
 		void (async () => {
 			try { await migrateLocalV4(); }

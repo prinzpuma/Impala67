@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "impala67": {
+      "command": "node",
+      "args": ["mcp/server.mjs"]
+    }
+  }
+}

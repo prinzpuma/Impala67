@@ -24,10 +24,10 @@ export const HANDSCHRIFT = (() => {
 				inkWorker.addEventListener("message", (e) => {
 					const msg = e.data || {};
 					if (msg.id && inkPending.has(msg.id)) {
-						const { resolve, reject } = inkPending.get(msg.id);
+						const { resolve, reject, fullDetails } = inkPending.get(msg.id);
 						inkPending.delete(msg.id);
 						if (msg.type === "error") reject(new Error(msg.error));
-						else resolve(msg.text || "");
+						else resolve(fullDetails ? msg : (msg.text || ""));
 					}
 				});
 				inkWorker.addEventListener("error", (err) => {
@@ -41,7 +41,7 @@ export const HANDSCHRIFT = (() => {
 		return inkWorker;
 	}
 
-	async function recognizeStrokes(strokes) {
+	async function recognizeStrokes(strokes, options = {}) {
 		if (!strokes || !strokes.length) return "";
 		const worker = getInkWorker();
 		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
@@ -56,8 +56,30 @@ export const HANDSCHRIFT = (() => {
 			inkPending.set(id, {
 				resolve: (res) => { clearTimeout(timeout); resolve(res); },
 				reject: (err) => { clearTimeout(timeout); reject(err); },
+				fullDetails: false,
 			});
-			worker.postMessage({ type: "recognize_strokes", id, strokes });
+			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
+		});
+	}
+
+	async function recognizeStrokesDetails(strokes, options = {}) {
+		if (!strokes || !strokes.length) return { text: "", lines: [], accounting: { total: 0, balanced: true } };
+		const worker = getInkWorker();
+		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
+		const id = ++inkReqId;
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				if (inkPending.has(id)) {
+					inkPending.delete(id);
+					reject(new Error("Timeout bei Handschrift-Erkennung"));
+				}
+			}, 15000);
+			inkPending.set(id, {
+				resolve: (res) => { clearTimeout(timeout); resolve(res); },
+				reject: (err) => { clearTimeout(timeout); reject(err); },
+				fullDetails: true,
+			});
+			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
 		});
 	}
 
@@ -129,6 +151,7 @@ export const HANDSCHRIFT = (() => {
 		available,
 		recognize,
 		recognizeStrokes,
+		recognizeStrokesDetails,
 		saveTrainingSample,
 		getTrainingSamples,
 		exportTrainingSamplesJson,

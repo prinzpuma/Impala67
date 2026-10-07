@@ -279,21 +279,22 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 	.change-page-title { font-size: 22px }
 	.change-page-flyout { width: 100%; max-height: 92dvh }
 }
-/* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live… */
-.think-box { margin: 4px 0 6px; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint); overflow: hidden; transition: border-color .15s ease }
-.think-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; background: transparent; border: none; color: var(--text2); font-size: var(--text-sm); font-weight: 600; text-align: left; min-height: 0; border-radius: 0 }
-.think-toggle:hover { background: var(--surface-hover); color: var(--text) }
-.think-icon { flex-shrink: 0; font-size: var(--text-sm); line-height: 1 }
+/* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live und finalisiert */
+.think-box { margin: 6px 0 8px; border: 1px solid var(--edge); border-left: 3px solid var(--accent); border-radius: var(--radius-md); background: var(--surface-subtle); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease }
+.think-box:hover { border-color: var(--accent) }
+.think-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: transparent; border: none; color: var(--text); font-size: var(--text-sm); font-weight: 600; text-align: left; min-height: 34px; border-radius: 0; cursor: pointer }
+.think-toggle:hover { background: var(--surface-hover) }
+.think-icon { flex-shrink: 0; font-size: var(--text-sm); line-height: 1; color: var(--accent) }
 .think-box.live .think-icon { animation: softPulse 1.2s ease-in-out infinite }
-.think-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.think-chevron { flex-shrink: 0; font-size: var(--text-3xs); color: var(--text2); transition: transform .15s ease }
+.think-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text) }
+.think-chevron { flex-shrink: 0; font-size: var(--text-2xs); color: var(--text2); transition: transform .15s ease }
 .think-toggle[aria-expanded="true"] .think-chevron { transform: rotate(90deg) }
 .think-body-wrap { position: relative; max-height: 0; overflow: hidden; transition: max-height .2s ease }
-.think-box.peek .think-body-wrap { max-height: 3em }
-.think-box.expanded .think-body-wrap { max-height: 320px }
-.think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 16px; background: linear-gradient(180deg, transparent, var(--surface-faint)); pointer-events: none }
-.think-body { padding: 0 10px 9px; font-size: var(--text-sm); line-height: 1.5; color: var(--text2); white-space: pre-wrap }
-.think-box.expanded .think-body { max-height: 320px; overflow-y: auto }
+.think-box.peek .think-body-wrap { max-height: 3.6em }
+.think-box.expanded .think-body-wrap { max-height: 480px }
+.think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18px; background: linear-gradient(180deg, transparent, var(--surface-subtle)); pointer-events: none }
+.think-body { padding: 4px 12px 10px; font-size: var(--text-sm); line-height: 1.55; color: var(--text2); white-space: pre-wrap; font-family: inherit }
+.think-box.expanded .think-body { max-height: 480px; overflow-y: auto }
 /* Blockmarkierung als durchgehende Fläche wie in Notion – keine… */
 /* Edit-Karten: Notion-artige Diff-/Undo-Anzeige nach KI-Bearbeit… */
 .edit-card { border: 1px solid var(--surface-hover); border-radius: var(--radius-lg); padding: 14px 16px; background: var(--surface-faint); box-shadow: 0 4px 12px var(--input-bg); font-size: var(--text-base); margin: 8px 0 }

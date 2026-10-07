@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(npm run verify)",
+      "Bash(npm run check:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run dry-run)",
+      "Bash(node --test:*)",
+      "Bash(node --check:*)",
+      "Bash(node test/check-syntax.mjs)",
+      "Bash(node .github/scripts/:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "PowerShell(npm test)",
+      "PowerShell(npm run verify)",
+      "PowerShell(npm run check:*)",
+      "PowerShell(node --test:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "mcp__impala67__impala_list_pages",
+      "mcp__impala67__impala_get_page",
+      "mcp__impala67__impala_search",
+      "mcp__impala67__impala_list_flashcards",
+      "mcp__impala67__impala_get_diagnostics",
+      "mcp__impala67__impala_get_performance_trace"
+    ],
+    "deny": [
+      "Read(web/config.local.js)",
+      "Read(web/.env)",
+      "Read(mcp/.config.json)",
+      "Read(node_modules/**)",
+      "Read(tmp/**)",
+      "Read(handwriting/data/**)",
+      "Read(handwriting/checkpoints/**)",
+      "Read(handwriting/.venv/**)",
+      "Read(handwriting/ujipenchars2.txt)",
+      "Read(**/*.onnx)"
+    ]
+  },
+  "enableAllProjectMcpServers": true
+}

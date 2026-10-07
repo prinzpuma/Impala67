@@ -8,7 +8,7 @@ Rechtlich 100 % sauber ohne externe proprietäre Datensätze.
 
 import math
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from vocabulary import CHAR_TO_IDX, VOCAB_SIZE, BLANK_IDX
 
 # Grundlegende Strichprimitiven für Zeichen (Linienzüge im Normalraum [0..1, 0..1])
@@ -232,11 +232,15 @@ def generate_word_strokes(
     step_actual = step * random.uniform(0.8, 1.3) * speed_factor
 
     for char in word:
+        if char == " ":
+            cursor_x += random.uniform(0.40, 0.60) * width_mult
+            continue
+
         if char in GLYPH_VARIANTS and random.random() < 0.45:
             glyph = random.choice(GLYPH_VARIANTS[char])
         else:
             glyph = GLYPH_STROKES.get(char, GLYPH_STROKES.get("c"))
-        char_width = (0.6 if char != " " else 0.4) * width_mult
+        char_width = 0.6 * width_mult
         char_jitter = jitter * random.uniform(0.6, 1.4)
 
         for raw_stroke in glyph:
@@ -270,17 +274,49 @@ def generate_word_strokes(
     return strokes
 
 
-def strokes_to_features(strokes: List[List[Tuple[float, float]]]) -> List[Tuple[float, float, float]]:
-    """Wandelt Striche in [dx, dy, pen_down] Sequenz um (identisch zum Web-Preprocessor)."""
+GERMAN_SENTENCES = [
+    "Das ist ein Test.",
+    "Heute ist schönes Wetter.",
+    "Impala läuft lokal im Browser.",
+    "Wir trainieren auf der GPU.",
+    "Notiz für heute speichern.",
+    "Aufgabe bis morgen erledigen.",
+    "Wichtige Punkte zusammenfassen.",
+    "Ergebnis der Messung: OK",
+    "Lineare Algebra und Analysis",
+    "Übung 12 zur Prüfung lernen",
+    "Formel und Graph analysieren",
+    "Ein neues Kapitel beginnt.",
+    "Code und Daten synchronisieren.",
+    "Wie viel Zeit bleibt noch?",
+    "Der Test war erfolgreich.",
+    "Die Antwort ist richtig.",
+    "Hier steht ein Beispiel.",
+    "Alles funktioniert einwandfrei.",
+]
+
+
+def strokes_to_features(
+    strokes: List[List[Tuple[float, float]]],
+    line_min_y: Optional[float] = None,
+    line_height: Optional[float] = None,
+) -> List[Tuple[float, float, float, float]]:
+    """Wandelt Striche in [dx, dy, pen_down, y_rel] Sequenz um (identisch zum Web-Preprocessor)."""
     if not strokes:
         return []
 
     all_pts = [pt for s in strokes for pt in s]
     if not all_pts:
         return []
-    min_y = min(p[1] for p in all_pts)
-    max_y = max(p[1] for p in all_pts)
-    height = max(0.1, max_y - min_y)
+
+    if line_min_y is None or line_height is None:
+        min_y = min(p[1] for p in all_pts)
+        max_y = max(p[1] for p in all_pts)
+        height = max(0.1, max_y - min_y)
+    else:
+        min_y = line_min_y
+        height = max(0.1, line_height)
+
     scale = 1.0 / height
 
     features = []
@@ -290,33 +326,44 @@ def strokes_to_features(strokes: List[List[Tuple[float, float]]]) -> List[Tuple[
         if not stroke:
             continue
         first_pt = stroke[0]
+        first_y_rel = (first_pt[1] - min_y) * scale - 0.5
+
         if last_x is not None and last_y is not None:
             dx = (first_pt[0] - last_x) * scale
             dy = (first_pt[1] - last_y) * scale
-            features.append((dx, dy, 0.0))
+            features.append((dx, dy, 0.0, first_y_rel))
 
         last_x, last_y = first_pt[0], first_pt[1]
 
         for pt in stroke[1:]:
             dx = (pt[0] - last_x) * scale
             dy = (pt[1] - last_y) * scale
-            features.append((dx, dy, 1.0))
+            y_rel = (pt[1] - min_y) * scale - 0.5
+            features.append((dx, dy, 1.0, y_rel))
             last_x, last_y = pt[0], pt[1]
 
     return features
 
 
-def random_sample() -> Tuple[List[Tuple[float, float, float]], str]:
-    """Erzeugt ein zufälliges Sample (Wort, Zahl, Symbolkombination oder mathematischer Ausdruck)."""
+def random_sample() -> Tuple[List[Tuple[float, float, float, float]], str]:
+    """Erzeugt ein zufälliges Sample (Wort, Satz, Zahl oder mathematischer Ausdruck)."""
     mode = random.random()
-    if mode < 0.45:
-        # Normales Wort
+    if mode < 0.35:
+        # Ganzer Satz mit echten Leerzeichen!
+        if random.random() < 0.6:
+            text = random.choice(GERMAN_SENTENCES)
+        else:
+            w1 = random.choice(SAMPLE_WORDS)
+            w2 = random.choice(SAMPLE_WORDS)
+            text = f"{w1} {w2}."
+    elif mode < 0.60:
+        # Einzelwort
         text = random.choice(SAMPLE_WORDS)
-    elif mode < 0.70:
+    elif mode < 0.80:
         # Mathematische Formel / Ausdruck
         text = random.choice(MATH_FORMULAS)
-    elif mode < 0.88:
-        # Reines Zahlen- oder Datums-Sample (stärkt Ziffernerkennung!)
+    else:
+        # Reines Zahlen- oder Symbol-Sample
         num_type = random.randint(1, 4)
         if num_type == 1:
             text = str(random.randint(0, 9999))
@@ -326,14 +373,9 @@ def random_sample() -> Tuple[List[Tuple[float, float, float]], str]:
             text = f"{random.randint(10, 99)}%"
         else:
             text = f"{random.randint(1, 9)}+{random.randint(1, 9)}={random.randint(2, 18)}"
-    else:
-        # Kurze Wortkombination oder Satzzeichen
-        w1 = random.choice(SAMPLE_WORDS)
-        punct = random.choice([".", "!", "?", ":", ""])
-        text = f"{w1}{punct}"
 
     # Zufällige Drehung/Schräglage (-15° bis +15°) zur Robustheitssteigerung
-    rot = random.uniform(-15.0, 15.0) if random.random() < 0.5 else 0.0
+    rot = random.uniform(-15.0, 15.0) if random.random() < 0.4 else 0.0
     strokes = generate_word_strokes(text, rotation_deg=rot)
     features = strokes_to_features(strokes)
     return features, text

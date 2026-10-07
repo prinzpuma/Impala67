@@ -15,8 +15,12 @@ from generate_synthetic import strokes_to_features
 
 def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tuple[List[Tuple[float, float, float]], str]]:
     """Lädt die aus Impala67 exportierten Trainingsdaten."""
+    if "user_eval" in json_path.lower():
+        raise RuntimeError("FATALER DATA-LEAKAGE-FEHLER: Die isolierten Testdaten (user_eval_*.json) dürfen NIEMALS im Training geladen werden!")
+
     if not os.path.exists(json_path):
         return []
+
 
     try:
         with open(json_path, "r", encoding="utf-8") as f:

@@ -370,6 +370,16 @@ export const HEFT = (() => {
 		catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
 	}
 
+	if (typeof document !== "undefined") {
+		document.addEventListener("visibilitychange", () => {
+			if (document.hidden) saveNow().catch(() => {});
+		});
+	}
+	if (typeof window !== "undefined") {
+		window.addEventListener("pagehide", () => { saveNow().catch(() => {}); });
+		window.addEventListener("freeze", () => { saveNow().catch(() => {}); });
+	}
+
 	// ---- Verlauf: lokale Snapshots je Heft (siehe "kommt noch") ----
 	// Zeitstempel + rev stecken im Blob-Key ("heftver:<pid>:<t>:<rev>") — Auflisten und
 	// Aufräumen brauchen so nur allBlobKeys(), keine Meta-Reads. Bewusst NICHT über Drive
@@ -1802,7 +1812,7 @@ export const HEFT = (() => {
 		return '<div class="heft-chrome" aria-hidden="false">' +
 			'<div class="heft-corner-l-group">' +
 				'<button type="button" class="heft-corner heft-sb-toggle" data-hesidebar="1" title="Seitenleiste ein-/ausklappen">☰</button>' +
-				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (window.S && window.S.navIndex > 0 ? '' : ' disabled') + ' title="Zurück">‹</button>' +
+				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (window.S && (window.S.navIndex >= 0 || window.S.currentPageId) ? '' : ' disabled') + ' title="Zurück">‹</button>' +
 				'<button type="button" class="heft-corner heft-nav-forward" data-henavforward="1"' + (window.S && window.S.navIndex < (window.S.navHistory ? window.S.navHistory.length - 1 : 0) ? '' : ' disabled') + ' title="Vor">›</button>' +
 				'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
 					'" data-hepagesmenu="1" title="Seiten">' + svgPages +

@@ -100,6 +100,9 @@ export function openPage(pageId, opts) {
 		S.navHistory = S.navHistory.slice(0, S.navIndex + 1);
 		S.navHistory.push(pageId);
 		S.navIndex = S.navHistory.length - 1;
+		if (typeof window !== "undefined" && window.history && !opts.restoreSession) {
+			try { window.history.pushState({ impalaNav: true, pageId, navIndex: S.navIndex }, ""); } catch { /* ignore */ }
+		}
 	}
 	if (!opts.restoreSession) saveSessionSoon();
 	POPOVERS.blurActive();
@@ -166,11 +169,9 @@ export function openHomeOverview(opts) {
 	S.sidebarMode = "files";
 	S.currentPageId = null;
 	S.activeTabId = null;
-	// FIX Zurück-Logik (17. Juli): Kommt man per „Zurück“ zur Übersicht, bleibt
-	// der Verlauf erhalten — „Vorwärts“ führt danach wieder zur Seite zurück.
-	// Nur ein direkter Sprung zur Übersicht (Logo/Home) beginnt frisch.
+	// FIX Zurück-Logik: Kommt man zur Übersicht, bleibt der Verlauf erhalten —
+	// „Vorwärts“ führt danach wieder zur vorherigen Seite zurück.
 	if (!(opts && opts.keepHistory)) {
-		S.navHistory = [];
 		S.navIndex = -1;
 	}
 	POPOVERS.blurActive();
@@ -218,8 +219,16 @@ export async function restoreSession() {
 	}
 }
 
-// Beim Gerätewechsel/Schließen nicht auf den Debounce warten.
-window.addEventListener("pagehide", () => { saveSessionNow().catch(() => {}); });
+// Beim Hintergrundwechsel/Minimieren/Schließen sofort synchron speichern (Best Practice für PWA)
+if (typeof document !== "undefined") {
+	document.addEventListener("visibilitychange", () => {
+		if (document.hidden) saveSessionNow().catch(() => {});
+	});
+}
+if (typeof window !== "undefined") {
+	window.addEventListener("pagehide", () => { saveSessionNow().catch(() => {}); });
+	window.addEventListener("freeze", () => { saveSessionNow().catch(() => {}); });
+}
 
 export const TABS = {
 	openPage,

@@ -154,47 +154,67 @@ class RealHandwritingSampler:
     def has_char(self, c: str) -> bool:
         return c in self.raw_data and len(self.raw_data[c]) > 0
 
-    def get_real_word_strokes(self, word: str) -> List[List[Tuple[float, float]]]:
-        """Setzt echte menschliche Striche für ein Wort typografisch korrekt aneinander."""
+    def get_real_word_strokes(self, word: str, cursive_prob: float = 0.45) -> List[List[Tuple[float, float]]]:
+        """Setzt echte menschliche Striche für ein Wort/Satz typografisch korrekt aneinander, optional mit Schreibschrift-Ligaturen."""
         word_strokes: List[List[Tuple[float, float]]] = []
         cursor_x = 0.0
 
-        slant = random.uniform(-0.15, 0.20)
-        scale_y = random.uniform(0.90, 1.10)
+        slant = random.uniform(-0.25, 0.30)
+        scale_y = random.uniform(0.85, 1.15)
+        width_mult = random.uniform(0.85, 1.20)
+        y_shift = random.uniform(-0.06, 0.06)
 
-        for char in word:
+        prev_char = ""
+
+        for char_idx, char in enumerate(word):
             if char == " ":
-                cursor_x += 0.40
+                cursor_x += random.uniform(0.35, 0.55) * width_mult
+                prev_char = " "
                 continue
 
             if self.has_char(char):
                 raw_strokes = random.choice(self.raw_data[char])
                 norm_strokes = normalize_glyph_strokes(raw_strokes, char)
-                all_pts = [p for s in norm_strokes for p in s]
-                char_w = max(p[0] for p in all_pts) if all_pts else 0.4
-
-                for s in norm_strokes:
-                    placed_s = []
-                    for p in s:
-                        x = cursor_x + p[0] + (p[1] * slant)
-                        y = p[1] * scale_y
-                        placed_s.append((x, y))
-                    word_strokes.append(placed_s)
-
-                cursor_x += char_w + random.uniform(0.06, 0.16)
             else:
                 # Fallback für Umlaute oder Zeichen, die UJI nicht hat
-                fallback = generate_word_strokes(char)
-                all_pts = [p for s in fallback for p in s]
-                char_w = max(p[0] for p in all_pts) if all_pts else 0.5
-                for s in fallback:
-                    placed_s = []
-                    for p in s:
-                        x = cursor_x + p[0] + (p[1] * slant)
-                        y = p[1] * scale_y
-                        placed_s.append((x, y))
-                    word_strokes.append(placed_s)
-                cursor_x += char_w + random.uniform(0.06, 0.16)
+                norm_strokes = generate_word_strokes(char)
+
+            all_pts = [p for s in norm_strokes for p in s]
+            char_w = (max(p[0] for p in all_pts) if all_pts else 0.4) * width_mult
+
+            # Schreibschrift-Verbindung (Ligatur): Zwischen Kleinbuchstaben bleibt der Stift manchmal aufgesetzt!
+            can_ligature = (
+                prev_char != ""
+                and prev_char != " "
+                and prev_char.islower()
+                and char.islower()
+                and word_strokes
+                and norm_strokes
+                and random.random() < cursive_prob
+            )
+
+            for s_idx, s in enumerate(norm_strokes):
+                placed_s = []
+                for p in s:
+                    x = cursor_x + p[0] * width_mult + (p[1] * slant)
+                    y = p[1] * scale_y + y_shift
+                    placed_s.append((x, y))
+
+                if s_idx == 0 and can_ligature and word_strokes and placed_s:
+                    # Verbindungsstrich zwischen vorherigem und jetzigem Buchstaben
+                    p_last = word_strokes[-1][-1]
+                    p_next = placed_s[0]
+                    dist = math.hypot(p_next[0] - p_last[0], p_next[1] - p_last[1])
+                    if dist < 0.8:
+                        inter = interpolate_points(p_last, p_next, step=0.045)
+                        word_strokes[-1].extend(inter)
+                        word_strokes[-1].extend(placed_s)
+                        continue
+
+                word_strokes.append(placed_s)
+
+            prev_char = char
+            cursor_x += char_w + random.uniform(0.04, 0.14)
 
         return word_strokes
 

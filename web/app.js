@@ -343,7 +343,7 @@ function initPlatformLifecycle() {
 				document.body.classList.remove("mnav-open", "mmore-open");
 				return;
 			}
-			if (typeof S !== "undefined" && S.navIndex > 0) {
+			if (typeof S !== "undefined" && (S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null))) {
 				TABS.navBack();
 				return;
 			}
@@ -2332,33 +2332,50 @@ function wireEvents() {
 		CHAT_FULLSCREEN.handlePaste(e);
 	});
 
-	// 📱 FIX iPad-Tastatur v2 — ROOT-CAUSE-FIX „Seite springt nach oben“ (Teil 2):
-	// Der frühere pauschale focusout-Listener setzte auf ALLEN Geräten bei JEDEM
-	// Fokusverlust den Scroll auf 0/0 zurück — daher der Sprung nach oben, egal wo
-	// man in der App war. Jetzt gilt (KISS): zurückgesetzt wird nur noch, wenn
-	// (a) vorher wirklich eine Bildschirmtastatur offen war (visualViewport) und
-	// (b) das Fenster tatsächlich verschoben ist. Sonst passiert exakt nichts.
+	// 📱 FIX Tastatur & Chat-Verschiebung:
+	// Wird die Bildschirmtastatur (Chat, Suche, Notiz) geschlossen, muss
+	// die Verschiebung zuverlässig zurückgesetzt werden — sowohl am Window
+	// als auch an #main, wo Chat und mobile Shell sonst oben hängen bleiben.
 	const isEditing = () => {
 		const a = document.activeElement;
 		return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
 	};
-	const viewportDisplaced = () =>
-		window.scrollY > 0 || document.documentElement.scrollTop > 0 || document.body.scrollTop > 0 ||
-		(window.visualViewport && window.visualViewport.offsetTop > 0);
+	const viewportDisplaced = () => {
+		const main = document.getElementById("main");
+		const mainScrolled = !!main && (S.view === "chat" || !!main.querySelector(".chat-full-wrap")) && main.scrollTop > 0;
+		return window.scrollY > 0 || document.documentElement.scrollTop > 0 || document.body.scrollTop > 0 ||
+			(window.visualViewport && window.visualViewport.offsetTop > 0) || mainScrolled;
+	};
 	const resetViewportScroll = () => {
-		if (isEditing() || !viewportDisplaced()) return; // Tastatur offen ODER nichts verschoben → nichts tun
+		if (isEditing() || !viewportDisplaced()) return;
 		window.scrollTo(0, 0);
-		document.documentElement.scrollTop = 0;
-		document.body.scrollTop = 0;
+		if (document.documentElement) document.documentElement.scrollTop = 0;
+		if (document.body) document.body.scrollTop = 0;
+		const main = document.getElementById("main");
+		if (main && (S.view === "chat" || main.querySelector(".chat-full-wrap"))) {
+			main.scrollTop = 0;
+		}
+	};
+	const scheduleResetViewport = () => {
+		setTimeout(resetViewportScroll, 50);
+		setTimeout(resetViewportScroll, 180);
+		setTimeout(resetViewportScroll, 360);
 	};
 	if (window.visualViewport) {
 		let kbOpen = false;
 		window.visualViewport.addEventListener("resize", () => {
-			const open = window.visualViewport.height < window.innerHeight * 0.82;
-			if (kbOpen && !open) setTimeout(resetViewportScroll, 60);
+			const open = window.visualViewport.height < window.innerHeight * 0.85;
+			if (kbOpen && !open) scheduleResetViewport();
 			kbOpen = open;
 		});
 	}
+	document.addEventListener("focusout", (e) => {
+		if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+			setTimeout(() => {
+				if (!isEditing()) scheduleResetViewport();
+			}, 60);
+		}
+	});
 }
 
 export const APP = {

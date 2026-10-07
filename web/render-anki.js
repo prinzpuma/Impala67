@@ -150,38 +150,44 @@ function deckMenuHtml(name) {
 }
 
 function renderAnki(main) {
-	const tab = S.ankiTab || "decks";
-	const isStudy = tab === "study";
-	const tbtn = (id, label) => '<button data-ankitab="' + id + '" class="' + (tab === id ? "active" : "") + '">' + label + "</button>";
-	// Während einer Wiederholung bleibt die Oberfläche bewusst frei von
-	// Verwaltungsaktionen. Die Lernansicht selbst enthält nur die kompakte
-	// Status-/Zurück-Leiste und die Karte; Stapel, Browser und Optionen stehen
-	// nach dem Lernen wieder in der normalen Kopfzeile zur Verfügung.
-	let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
-	// 🃏 Übersicht-Redesign v2 (23. Juli): ruhige Kopfzeile — Tabs, ⚙️ Optionen, ⛶ und EIN
-	// „＋ Neu“-Menü (Karte / Stapel / Import / Export) statt vier gleichrangiger Buttons.
-	// <details> klappt nativ ohne eigenes JS auf; app.js schließt bei Außenklick/Menü-Aktion.
-	if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
-		'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + tbtn("archive", "Archiv") + "</div>" +
-		'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
-		// ⛶ Vollbild (23. Juli): Seitenleiste + Tab-Leiste ausblenden (erneut klicken = zurück)
-		'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button>' +
-		'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
-			'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
-			'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
-			'<button data-ankiimport="1">⬇ Import<small>TXT, CSV oder Anki-Paket</small></button>' +
-			'<button data-ankiexport="1">⬆ Export<small>TXT, CSV oder Anki-Paket</small></button>' +
-		"</div></details></div>";
-	if (tab === "browser") html += ankiBrowserHtml();
-	else if (tab === "stats") html += ankiStatsHtml();
-	else if (tab === "archive") html += ankiArchiveHtml();
-	else if (tab === "study") html += ankiStudyHtml();
-	else html += ankiDecksHtml();
-	html += "</div>";
-	U.morph(main, html);
-	U.renderMath(main);
-	U.highlightCode(main);
-	hydrateImages(main);
+	try {
+		const tab = S.ankiTab || "decks";
+		const isStudy = tab === "study";
+		const tbtn = (id, label) => '<button data-ankitab="' + id + '" class="' + (tab === id ? "active" : "") + '">' + label + "</button>";
+		let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
+		if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
+			'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + tbtn("archive", "Archiv") + "</div>" +
+			'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
+			'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button>' +
+			'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
+				'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
+				'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
+				'<button data-ankiimport="1">⬇ Import<small>TXT, CSV oder Anki-Paket</small></button>' +
+				'<button data-ankiexport="1">⬆ Export<small>TXT, CSV oder Anki-Paket</small></button>' +
+			"</div></details></div>";
+		if (tab === "browser") html += ankiBrowserHtml();
+		else if (tab === "stats") html += ankiStatsHtml();
+		else if (tab === "archive") html += ankiArchiveHtml();
+		else if (tab === "study") html += ankiStudyHtml();
+		else html += ankiDecksHtml();
+		html += "</div>";
+		U.morph(main, html);
+		U.renderMath(main);
+		U.highlightCode(main);
+		hydrateImages(main);
+	} catch (err) {
+		console.error("[Anki] Fehler beim Rendern der Karteikarten-Ansicht:", err);
+		S.ankiTab = "decks";
+		S.reviewCardId = null;
+		try {
+			let fallback = '<div class="library anki"><div class="lib-head"><h1>🃏 Karteikarten</h1>' +
+				'<div class="mode-btns"><button data-ankitab="decks" class="active">Stapel</button></div></div>' +
+				ankiDecksHtml() + '</div>';
+			U.morph(main, fallback);
+		} catch (fallbackErr) {
+			main.innerHTML = '<div class="library anki" style="padding:24px"><div class="empty"><b>Karteikarten-Ansicht wird neu geladen…</b><br><small>' + U.esc(String(err?.message || err)) + '</small><br><br><button data-ankitab="decks" class="primary">Zu den Stapeln</button></div></div>';
+		}
+	}
 }
 
 // Stapel-Übersicht wie Ankis Deck-Liste: hierarchisch eingerückt (Unterstapel per "::"),
@@ -267,14 +273,14 @@ function ankiBrowserHtml() {
 	let cards = ankiCardsOf(S.ankiDeck);
 	if (q) cards = cards.filter((c) => (c.front + "\n" + c.back).toLowerCase().includes(q));
 	const val = (c) => {
-		if (key === "front") return c.front.toLowerCase();
+		if (key === "front") return (c.front || "").toLowerCase();
 		if (key === "deck") return (c.deck || "Standard").toLowerCase();
-		if (key === "state") return (c.suspended ? "z" : c.srs.state);
-		if (key === "interval") return c.srs.stability || 0;
-		if (key === "reps") return c.srs.reps || 0;
-		if (key === "lapses") return c.srs.lapses || 0;
-		if (key === "created") return c.created;
-		return c.srs.due;
+		if (key === "state") return (c.suspended ? "z" : (c.srs?.state || "new"));
+		if (key === "interval") return c.srs?.stability || 0;
+		if (key === "reps") return c.srs?.reps || 0;
+		if (key === "lapses") return c.srs?.lapses || 0;
+		if (key === "created") return c.created || "";
+		return c.srs?.due || "";
 	};
 	// Im Gesamt-Browser stehen die Karten zuerst nach Stapel gruppiert — wie in Anki.
 	// Innerhalb eines Stapels gilt weiterhin die gewählte Spaltensortierung.
@@ -478,9 +484,18 @@ function ankiStudyHtml() {
 				'</div></div>';
 	}
 
+	// Fallback wenn keine Karte verfügbar ist (z.B. Tageslimits erreicht oder Deck leer)
+	if (!c) {
+		return head +
+			'<div class="study-done study-card"><h2>Keine Karten fällig 🎉</h2>' +
+			'<p class="hint">Für diesen Stapel gibt es gerade keine weiteren fälligen Karten zum Lernen.</p>' +
+			'<div class="modal-actions"><button class="primary" data-ankitab="decks">Zur Stapelübersicht</button></div></div>';
+	}
+
 	// `c` ist bereits beim Anzeigen der Frage festgepinnt, nicht erst beim Aufdecken.
-	const pv = SRS.preview(c.srs);
-	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[c.srs.state] || c.srs.state;
+	const pv = c.srs ? SRS.preview(c.srs) : { 1: "1m", 2: "10m", 3: "1d", 4: "4d" };
+	const cardState = c.srs?.state || "new";
+	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[cardState] || cardState;
 	// 🃏 Karten-Redesign v1 (22. Juli, Nacht): ruhige Kopfzeile statt langer Meta-Kette —
 	// Stapel links, Status rechts als Pille; Details (Wdh./Fehler/Intervall) nur noch als Tooltip.
 	let html = head + '<div class="study-card">' +

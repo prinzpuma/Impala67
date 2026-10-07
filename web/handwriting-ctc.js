@@ -81,38 +81,122 @@ export const HANDWRITING_CTC = (() => {
 		return rawWord;
 	}
 
-	// Greedy CTC-Decoding: Argmax pro Zeitschritt, identische aufeinanderfolgende Token kollabieren, Blank entfernen
-	function greedyDecode(logits2D, vocab = HANDWRITING_VOCAB) {
-		if (!logits2D || !logits2D.length) return "";
-		const blank = vocab.BLANK_INDEX ?? 0;
-		const indices = [];
+	// Berechnet Softmax über ein 1D-Float32Array
+	function softmax(arr) {
+		let maxVal = -Infinity;
+		for (let i = 0; i < arr.length; i++) {
+			if (arr[i] > maxVal) maxVal = arr[i];
+		}
+		let sum = 0;
+		const expArr = new Float32Array(arr.length);
+		for (let i = 0; i < arr.length; i++) {
+			const e = Math.exp(arr[i] - maxVal);
+			expArr[i] = e;
+			sum += e;
+		}
+		const invSum = sum > 0 ? 1 / sum : 1;
+		for (let i = 0; i < arr.length; i++) {
+			expArr[i] *= invSum;
+		}
+		return expArr;
+	}
 
-		for (let t = 0; t < logits2D.length; t++) {
-			const step = logits2D[t];
-			let bestIdx = 0, bestVal = -Infinity;
-			for (let c = 0; c < step.length; c++) {
-				if (step[c] > bestVal) {
-					bestVal = step[c];
+	// Dekodiert CTC-Logits mit genauer Konfidenz- und Statusberechnung
+	function decodeWithConfidence(logits2D, vocab = HANDWRITING_VOCAB, options = {}) {
+		if (!logits2D || !logits2D.length) {
+			return { text: "", rawText: "", confidence: 0, status: "empty", isConfident: false, blankRatio: 1, charConfidences: [] };
+		}
+		const blank = vocab.BLANK_INDEX ?? 0;
+		const threshold = Number(options.threshold ?? 0.80);
+		const numSteps = logits2D.length;
+
+		let blankCount = 0;
+		const collapsed = [];
+		const charConfidences = [];
+		let currentRunIdx = null;
+		let currentRunMaxProb = 0;
+
+		for (let t = 0; t < numSteps; t++) {
+			const stepLogits = logits2D[t];
+			const probs = softmax(stepLogits);
+
+			let bestIdx = 0;
+			let bestProb = -Infinity;
+			for (let c = 0; c < probs.length; c++) {
+				if (probs[c] > bestProb) {
+					bestProb = probs[c];
 					bestIdx = c;
 				}
 			}
-			indices.push(bestIdx);
-		}
 
-		// CTC-Kompression: Duplikate kollabieren und Blank entfernen
-		const collapsed = [];
-		let prev = null;
-		for (const idx of indices) {
-			if (idx !== prev) {
-				if (idx !== blank) {
-					collapsed.push(idx);
+			if (bestIdx === blank) {
+				blankCount++;
+				if (currentRunIdx !== null) {
+					collapsed.push(currentRunIdx);
+					charConfidences.push(currentRunMaxProb);
+					currentRunIdx = null;
+					currentRunMaxProb = 0;
 				}
-				prev = idx;
+			} else {
+				if (bestIdx === currentRunIdx) {
+					if (bestProb > currentRunMaxProb) currentRunMaxProb = bestProb;
+				} else {
+					if (currentRunIdx !== null) {
+						collapsed.push(currentRunIdx);
+						charConfidences.push(currentRunMaxProb);
+					}
+					currentRunIdx = bestIdx;
+					currentRunMaxProb = bestProb;
+				}
 			}
 		}
 
-		const rawText = collapsed.map((idx) => vocab.charForIndex(idx)).join("");
-		return cleanTranscription(rawText);
+		if (currentRunIdx !== null) {
+			collapsed.push(currentRunIdx);
+			charConfidences.push(currentRunMaxProb);
+		}
+
+		const blankRatio = blankCount / Math.max(1, numSteps);
+		const rawChars = collapsed.map((idx) => vocab.charForIndex(idx));
+		const rawText = rawChars.join("");
+		const text = cleanTranscription(rawText);
+
+		// Gesamt-Konfidenz: Arithmetisches Mittel der Zeichen-Wahrscheinlichkeiten
+		let confidence = 0;
+		if (charConfidences.length > 0) {
+			const sum = charConfidences.reduce((a, b) => a + b, 0);
+			confidence = sum / charConfidences.length;
+		}
+
+		// Statusbestimmung (Zeichnung vs. Unsicher vs. Erkannt)
+		let status = "recognized";
+		if (text.length === 0) {
+			status = "empty";
+		} else if (blankRatio > 0.96 || confidence < 0.45 || (text.length <= 2 && confidence < 0.60)) {
+			// Kaum Text-Signale, viele Blanks oder chaotische Ausgabe -> Reine Zeichnung ("kein Text")
+			status = "drawing";
+		} else if (confidence < threshold) {
+			// Unsicher: Liegt unterhalb der Kauderwelsch-Schwelle
+			status = "uncertain";
+		}
+
+		const isConfident = status === "recognized";
+
+		return {
+			text,
+			rawText,
+			confidence: Math.round(confidence * 1000) / 1000,
+			status,
+			isConfident,
+			blankRatio: Math.round(blankRatio * 1000) / 1000,
+			charConfidences,
+		};
+	}
+
+	// Greedy CTC-Decoding (Abwärtskompatibel)
+	function greedyDecode(logits2D, vocab = HANDWRITING_VOCAB) {
+		const res = decodeWithConfidence(logits2D, vocab);
+		return res.text;
 	}
 
 	// Bereinigung von Formatierungsfehlern und Wörterbuch-Abgleich
@@ -130,8 +214,10 @@ export const HANDWRITING_CTC = (() => {
 
 	return {
 		greedyDecode,
+		decodeWithConfidence,
 		cleanTranscription,
 		correctWord,
 		levenshtein,
 	};
 })();
+
