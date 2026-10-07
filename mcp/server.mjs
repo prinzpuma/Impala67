@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
 import { createInterface } from "node:readline";
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { createStore } from "./store.mjs";
 import { createSyncClient } from "./sync-client.mjs";
 
@@ -17,9 +17,72 @@ const serverStats = {
 };
 
 const wsPort = Number(process.env.IMPALA_WS_PORT || 8765);
-try {
+const RELAY_PATH = "/relay";
+
+// Mehrere MCP-Server (z. B. je Claude-Sitzung einer) teilen sich Port 8765:
+// Wer ihn zuerst bekommt, ist Primärserver und spricht mit dem Browser. Alle
+// weiteren verbinden sich als Relay mit ihm und reichen ihre Aufrufe durch.
+// Endet der Primärserver, übernimmt ein Relay den Port.
+let relayWs = null;
+const pendingRelayCalls = new Map();
+let relayCallSeq = 1;
+
+function serveRelay(ws) {
+	ws.send(JSON.stringify({ relayAck: true }));
+	ws.on("message", async (raw) => {
+		let msg;
+		try { msg = JSON.parse(raw); } catch { return; }
+		if (!msg || !msg.relayCallId || !msg.tool) return;
+		const result = await callLiveBrowser(msg.tool, msg.args || {});
+		if (ws.readyState === 1) ws.send(JSON.stringify({ relayCallId: msg.relayCallId, result }));
+	});
+}
+
+function startRelay() {
+	const ws = new WebSocket(`ws://127.0.0.1:${wsPort}${RELAY_PATH}`);
+	let retryMs = 1000 + Math.random() * 1000;
+	// Ein Primärserver ohne Relay-Unterstützung (alte Version) hielte uns für einen
+	// Browser — ohne Bestätigung sofort trennen und nur selten neu versuchen.
+	const ackTimer = setTimeout(() => { retryMs = 30000; ws.close(); }, 1500);
+	ws.on("message", (raw) => {
+		try {
+			const data = JSON.parse(raw);
+			if (data?.relayAck) {
+				clearTimeout(ackTimer);
+				relayWs = ws;
+				console.error("[impala-mcp] Port belegt — leite Aufrufe über den Primärserver weiter.");
+				return;
+			}
+			if (data?.callId && !data.relayCallId) { retryMs = 30000; ws.close(); return; }
+			const entry = data && pendingRelayCalls.get(data.relayCallId);
+			if (entry) { pendingRelayCalls.delete(data.relayCallId); entry(data.result); }
+		} catch { /* ignore */ }
+	});
+	ws.on("close", () => {
+		clearTimeout(ackTimer);
+		if (relayWs === ws) relayWs = null;
+		for (const [id, resolve] of pendingRelayCalls) { pendingRelayCalls.delete(id); resolve({ error: "Primärserver wurde beendet.", disconnected: true }); }
+		setTimeout(startWsServer, retryMs);
+	});
+	ws.on("error", () => { /* close folgt */ });
+}
+
+function callViaRelay(tool, args) {
+	const relayCallId = relayCallSeq++;
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => {
+			pendingRelayCalls.delete(relayCallId);
+			resolve({ error: `Timeout bei '${tool}' über den Primärserver.`, timeout: true });
+		}, getToolTimeoutMs(tool, args) + 5000);
+		pendingRelayCalls.set(relayCallId, (res) => { clearTimeout(timer); resolve(res); });
+		relayWs.send(JSON.stringify({ relayCallId, tool, args }));
+	});
+}
+
+function startWsServer() {
 	const wss = new WebSocketServer({ port: wsPort });
-	wss.on("connection", (ws) => {
+	wss.on("connection", (ws, req) => {
+		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
 		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
 		connectedSockets.add(ws);
 		activeBrowserWs = ws;
@@ -56,12 +119,13 @@ try {
 			console.error("[impala-mcp] WebSocket-Fehler:", err.message);
 		});
 	});
+	wss.on("listening", () => console.error(`[impala-mcp] Primärserver auf Port ${wsPort}.`));
 	wss.on("error", (err) => {
-		console.error("[impala-mcp] WSS Port 8765:", err.message);
+		if (err.code === "EADDRINUSE") { wss.close(); startRelay(); return; }
+		console.error(`[impala-mcp] WSS Port ${wsPort}:`, err.message);
 	});
-} catch (e) {
-	console.error("[impala-mcp] Konnte WSS nicht starten:", e.message);
 }
+startWsServer();
 
 function getActiveBrowserWs() {
 	if (activeBrowserWs && activeBrowserWs.readyState === 1) return activeBrowserWs;
@@ -90,6 +154,7 @@ function getToolTimeoutMs(tool, args = {}) {
 }
 
 async function callLiveBrowser(tool, args = {}) {
+	if (relayWs && relayWs.readyState === 1) return callViaRelay(tool, args);
 	let ws = getActiveBrowserWs();
 	if (!ws) {
 		// Warte bis zu 3,5 Sekunden, falls die Browser-App gerade im Reconnect-Zyklus ist

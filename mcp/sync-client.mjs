@@ -11,7 +11,6 @@ import {
 	prepareCloudEvents,
 	prepareIncomingCloudEvents,
 	pruneEventsForUpload,
-	sha256Hex as coreSha256Hex,
 } from "../web/sync-core.js";
 
 import {
@@ -19,6 +18,7 @@ import {
 	encryptPayload,
 	decryptPayload,
 	formatStorageUsage,
+	sha256Hex,
 } from "../web/sync-crypto.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -162,7 +162,7 @@ export async function createSyncClient(opts = {}) {
 				const packets = [];
 
 				for (const chunk of chunks) {
-					const id = `p-${await coreSha256Hex(chunk.map((e) => e.id).join("\n"))}`;
+					const id = `p-${await sha256Hex(chunk.map((e) => e.id).join("\n"))}`;
 					const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(chunk));
 					packets.push({ id, ...encrypted });
 				}
