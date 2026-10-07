@@ -25,7 +25,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .menu-item:hover { background: var(--surface-hover); color: var(--text) }
 
 .menu-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-1-5) }
-.menu-chip { min-height: 0; padding: 4px 9px; font-size: var(--text-xs); border-radius: var(--radius-lg); background: var(--surface); color: var(--text2) }
+.menu-chip { min-height: 0; padding: var(--space-1) 9px; font-size: var(--text-xs); border-radius: var(--radius-lg); background: var(--surface); color: var(--text2) }
 .menu-chip:hover { background: var(--surface-active); color: var(--text) }
 .menu-chip.active { background: var(--accent-soft); color: var(--accent) }
 

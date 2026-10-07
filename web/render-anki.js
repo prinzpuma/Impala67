@@ -4,6 +4,7 @@ import { EXTRAS } from "./extras.js";
 import { SRS } from "./srs.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
+import { ICON } from "./icons.js";
 import { RENDER } from "./render.js";
 import { TELE } from "./telemetrie.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
@@ -149,6 +150,15 @@ function deckMenuHtml(name) {
 		"</div>";
 }
 
+// Gemeinsame Bausteine (DRY): Kennzahl-Karte und Abschnittstitel — Übersicht, Statistik und Archiv nutzen dieselben.
+function statHtml({ label, value, note = "", tag = "div", cls = "", valueCls = "", attrs = "" }) {
+	return "<" + tag + ' class="anki-stat ' + cls + '"' + (attrs ? " " + attrs : "") + "><small>" + label + '</small><b class="' + valueCls + '">' + value + "</b>" +
+		(note ? "<span>" + note + "</span>" : "") + "</" + tag + ">";
+}
+function ankiSec(title, note = "") {
+	return '<div class="anki-sec"><h2>' + title + "</h2>" + (note ? '<p class="anki-note">' + note + "</p>" : "") + "</div>";
+}
+
 function renderAnki(main) {
 	try {
 		const tab = S.ankiTab || "decks";
@@ -157,19 +167,17 @@ function renderAnki(main) {
 		let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
 		if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
 			'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + tbtn("archive", "Archiv") + "</div>" +
-			'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">⚙️ Optionen</button>' +
-			'<button data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button>' +
+			'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" class="anki-ghost" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">' + ICON.gear + "<span>Optionen</span></button>" +
+			'<button data-ankizen="1" class="anki-ghost anki-icon" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden" aria-label="Vollbild">' + ICON.expand + "</button>" +
 			'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
 				'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
 				'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
 				'<button data-ankiimport="1">⬇ Import<small>TXT, CSV oder Anki-Paket</small></button>' +
 				'<button data-ankiexport="1">⬆ Export<small>TXT, CSV oder Anki-Paket</small></button>' +
 			"</div></details></div>";
-		if (tab === "browser") html += ankiBrowserHtml();
-		else if (tab === "stats") html += ankiStatsHtml();
-		else if (tab === "archive") html += ankiArchiveHtml();
-		else if (tab === "study") html += ankiStudyHtml();
-		else html += ankiDecksHtml();
+		// Alle Tabs teilen EIN Container (Mitte, 1120 px); der Lernmodus braucht die volle Breite.
+		if (isStudy) html += ankiStudyHtml();
+		else html += '<div class="anki-page">' + ({ browser: ankiBrowserHtml, stats: ankiStatsHtml, archive: ankiArchiveHtml }[tab] || ankiDecksHtml)() + "</div>";
 		html += "</div>";
 		U.morph(main, html);
 		U.renderMath(main);
@@ -242,26 +250,36 @@ function ankiDecksHtml() {
 			(S.deckMenuOpenName === d ? deckMenuHtml(d) : "") +
 			"</div>";
 	}).join("");
-	// 🃏 Übersicht-Redesign v2 (23. Juli): Hero „Heute“ mit EINEM klaren Einstieg statt der
-	// alten Fußleiste — dieselben Aktionen (Alle lernen / Feynman / Gemischt) und dieselben
-	// data-Attribute wie vorher, damit alle app.js-Handler unverändert greifen.
+	// 🃏 Übersicht v3 wie der Homescreen (home-view.js): ein Satz vorn — die Kartenzahl ist selbst
+	// der Startknopf —, darunter Modi und zwei Kennzahlen, dann die ruhige Stapel-Liste. Dieselben
+	// data-Attribute wie vorher, damit die app.js-Handler unverändert greifen. Styles: styles.css.
 	const g = STATE.studySnapshot(null).counts;
 	const openAll = ankiStudyOpen(null);
+	const dis = openAll ? "" : "disabled";
 	// grobe Sessionschätzung: ~2,5 Karten pro Minute, mindestens 1 Minute
 	const minutes = Math.max(1, Math.round(g.total / 2.5));
-	const hero = '<section class="anki-hero">' +
-		'<div class="anki-hero-main"><div class="anki-hero-eyebrow">Heute</div>' +
-		(g.total
-			? "<h2>" + g.total + (g.total === 1 ? " Karte wartet" : " Karten warten") + " auf dich.</h2>" +
-				"<p>" + g.review + " Wiederholung" + (g.review === 1 ? "" : "en") + ", " + g.learn + " Lernschritt" + (g.learn === 1 ? "" : "e") + ", " + g.neu + " neue Karte" + (g.neu === 1 ? "" : "n") + " — etwa " + minutes + " Minute" + (minutes === 1 ? "" : "n") + ".</p>"
-			: "<h2>Alles gelernt für heute. 🎉</h2><p>Keine fälligen Karten und keine offenen Lernschritte mehr.</p>") +
-		'<div class="anki-hero-actions">' +
-			'<button class="primary" data-ankistudy="" ' + (openAll ? "" : "disabled") + ">▶ Alle fälligen Karten lernen</button>" +
-			'<button class="hero-ghost" data-ankistudy="" data-ankifeyn="1" ' + (openAll ? "" : "disabled") + ' title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
-			'<button class="hero-quiet" data-ankistudy="" data-ankimix="1" ' + (openAll ? "" : "disabled") + ' title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt</button>' +
-		"</div></div>" +
-		'<div class="anki-hero-stat"><b>' + g.neu + "</b><small>neue Karte" + (g.neu === 1 ? "" : "n") + " bereit für deine nächste Session</small></div></section>";
-	return hero + '<div class="anki-sec"><h2>Deine Stapel</h2></div>' +
+	const minText = minutes + (minutes === 1 ? " Minute" : " Minuten");
+	const word = g.total === 1 ? "Karte" : "Karten";
+	const dueTitle = g.review + " Wiederholungen, " + g.learn + " Lernschritte, " + g.neu + " neue Karten";
+	const lead = !flat.length ? "Lege deinen ersten Stapel an — über „＋ Neu“."
+		: g.total
+			? (openAll ? '<button type="button" class="anki-link" data-ankistudy="">' + g.total + " " + word + "</button>" : g.total + " " + word) + " warten auf dich, etwa " + minText + "."
+			: "Für heute ist alles gelernt.";
+	// Modi nur, wenn es etwas zu starten gibt — sonst wären sie tote, ausgegraute Knöpfe
+	const modes = openAll
+		? '<div class="anki-modes">' +
+			'<button type="button" data-ankistudy="" data-ankifeyn="1" title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
+			'<button type="button" data-ankistudy="" data-ankimix="1" title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt</button>' +
+		"</div>"
+		: "";
+	const dueCard = g.total
+		? statHtml({ tag: "button", cls: "due", label: "Heute fällig", value: g.total + " " + word, note: "etwa " + minText + " · Lernen starten",
+			attrs: 'type="button" data-ankistudy="" ' + dis + ' title="' + U.esc(dueTitle) + '"' })
+		: statHtml({ label: "Heute fällig", value: flat.length ? "✓ Alles gelernt" : "Keine Karten", valueCls: flat.length ? "done" : "",
+			note: flat.length ? "Morgen geht’s weiter" : "Stapel anlegen" });
+	const overview = '<section class="anki-home"><p class="anki-lead">' + lead + "</p>" + modes +
+		'<div class="anki-stats">' + dueCard + statHtml({ label: "Neue Karten", value: g.neu, note: "im heutigen Tageslimit" }) + "</div></section>";
+	return overview + ankiSec("Deine Stapel") +
 		'<div class="deck-list">' + (rows || '<div class="empty small">Noch keine Stapel — über „＋ Neu“ einen anlegen</div>') + "</div>";
 }
 
@@ -344,9 +362,9 @@ function ankiArchiveHtml() {
 	const cardRows = STATE.orphanArchivedCards().map((card) => '<div class="deck-row"><span class="deck-ico" aria-hidden="true">🃏</span>' +
 		'<span class="deck-info"><span class="deck-name">' + U.esc(String(card.front || "Ohne Vorderseite").slice(0, 100)) + '</span><span class="deck-meta">' + U.esc(card.deck || "Standard") + '</span></span>' +
 		'<span class="deck-actions"><button data-ankiunarchive="' + U.esc(card.id) + '">Wiederherstellen</button></span></div>').join("");
-	return '<section class="anki-sec"><h2>Archiv</h2><p class="hint">Archivierte Karten bleiben erhalten, erscheinen aber nicht beim Lernen, in der aktiven Kartensuche oder im Wissensgraphen.</p></section>' +
-		'<div class="anki-sec"><h3>Stapel</h3></div><div class="deck-list">' + (deckRows || '<div class="empty small">Keine archivierten Stapel</div>') + '</div>' +
-		'<div class="anki-sec"><h3>Einzelne Karten</h3></div><div class="deck-list">' + (cardRows || '<div class="empty small">Keine einzeln archivierten Karten</div>') + '</div>';
+	return ankiSec("Archiv", "Archivierte Karten bleiben erhalten, erscheinen aber nicht beim Lernen, in der aktiven Kartensuche oder im Wissensgraphen.") +
+		ankiSec("Stapel") + '<div class="deck-list">' + (deckRows || '<div class="empty small">Keine archivierten Stapel</div>') + "</div>" +
+		ankiSec("Einzelne Karten") + '<div class="deck-list">' + (cardRows || '<div class="empty small">Keine einzeln archivierten Karten</div>') + "</div>";
 }
 
 // Statistik-Dashboard: Kennzahlen, 30-Tage-Diagramm, 7-Tage-Prognose.
@@ -381,17 +399,17 @@ function ankiStatsHtml() {
 		fc.push({ label: i === 0 ? "Heute" : d0.toLocaleDateString("de-DE", { weekday: "short" }), n });
 	}
 	const fcMax = Math.max(1, ...fc.map((x) => x.n));
-	const kpi = (label, value) => '<div class="kpi"><div class="kpi-num">' + value + '</div><div class="kpi-label">' + label + "</div></div>";
-	return '<div class="kpi-row">' +
-			kpi("Karten", cards.length) + kpi("Fällig", due) + kpi("Neu", neu) + kpi("Gelernt", learned) +
-			kpi("Wiederholungen", reviews.length) + kpi("Sofort richtig", retention === null ? "—" : retention + "%") +
+	const kpi = (label, value) => statHtml({ label, value });
+	return '<div class="anki-stats anki-kpis">' +
+		kpi("Karten", cards.length) + kpi("Fällig", due) + kpi("Neu", neu) + kpi("Gelernt", learned) +
+		kpi("Wiederholungen", reviews.length) + kpi("Sofort richtig", retention === null ? "—" : retention + "%") +
 		"</div>" +
-		"<h3>Wiederholungen — letzte 30 Tage</h3>" +
+		ankiSec("Wiederholungen — letzte 30 Tage") +
 		'<div class="bar-chart">' + bars + "</div>" +
-		"<h3>Prognose — nächste 7 Tage</h3>" +
+		ankiSec("Prognose — nächste 7 Tage") +
 		'<div class="bar-chart forecast">' + fc.map((x) => '<div class="bar-wrap" title="' + x.label + ": " + x.n + '"><div class="bar" style="height:' + Math.round(x.n / fcMax * 100) + '%"></div><div class="bar-label">' + x.label + "</div></div>").join("") + "</div>" +
-		"<h3>Aktivität — letzte 12 Monate</h3>" + heatmapHtml(reviews) +
-		"<h3>Retention nach Wiederholungsabstand</h3>" + retentionTableHtml(reviews) +
+		ankiSec("Aktivität — letzte 12 Monate") + heatmapHtml(reviews) +
+		ankiSec("Retention nach Wiederholungsabstand") + retentionTableHtml(reviews) +
 		// 📈 Phase 3: Lern-Analyse aus analyse.js (Beobachtungen aus der Telemetrie)
 		(window.ANALYSE ? window.ANALYSE.statsHtml() : "");
 }

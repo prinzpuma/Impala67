@@ -820,6 +820,8 @@ export const LERNZEIT = (() => {
 
 	return {
 		totalsByDay,
+		weekData,
+		weekGoalMinutes,
 		homeWidgetHtml,
 		activeSessions,
 		totalForDay,

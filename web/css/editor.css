@@ -2,9 +2,9 @@
 
 /* == Block-Editor (Notion-artig): Blöcke, Handles, Slash-Menü, Au == */
 /* Blockfläche: Beim Schreiben bleibt derselbe Block als Dokument… */
-.block-editor { position: relative; overflow: visible; padding: 8px 24px clamp(140px, 24vh, 260px); max-width: 760px; width: 100%; margin: 0 auto }
+.block-editor { position: relative; overflow: visible; padding: var(--space-2) var(--space-6) clamp(140px, 24vh, 260px); max-width: 760px; width: 100%; margin: 0 auto }
 .blk { display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-sm); position: relative }
-.blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: 6px; opacity: 0; transition: opacity .1s }
+.blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: var(--space-1-5); opacity: 0; transition: opacity .1s }
 .blk:hover .blk-gutter, .blk:focus-within .blk-gutter { opacity: 1 }
 .blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs) }
 .blk-plus:hover, .blk-handle:hover { background: var(--surface-active); color: var(--text) }
@@ -25,10 +25,10 @@
 .blk-input-h1 { font-size: 1.7em; font-weight: 700; letter-spacing: -.025em; line-height: 1.3 }
 .blk-input-h2 { font-size: 1.35em; font-weight: 700; letter-spacing: -.018em; line-height: 1.3 }
 .blk-input-h3 { font-size: 1.12em; font-weight: 650 }
-.blk-input-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-base); background: var(--surface-subtle); padding: 8px 10px }
+.blk-input-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-base); background: var(--surface-subtle); padding: var(--space-2) 10px }
 @media (max-width: 600px) {
-	.page-chrome { padding: 6px 10px }
-	.page-meta, .block-editor { padding-left: 16px; padding-right: 16px }
+	.page-chrome { padding: var(--space-1-5) 10px }
+	.page-meta, .block-editor { padding-left: var(--space-4); padding-right: var(--space-4) }
 }
 .blk-h { margin: 0.35em 0 0.1em; line-height: 1.3 }
 h1.blk-h { font-size: 1.7em }
@@ -37,7 +37,7 @@ h3.blk-h { font-size: 1.12em }
 /* == --- Trennlinie --- == */
 .blk-hr { width: 100%; border: none; border-top: 1px solid var(--edge); margin: 13px 0 }
 /* == --- Listen (Bullet / Nummer / To-do) --- == */
-.blk-li { gap: 8px; display: flex; align-items: flex-start; width: 100% }
+.blk-li { gap: var(--space-2); display: flex; align-items: flex-start; width: 100% }
 .blk-marker { min-width: 18px; text-align: right; width: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; min-height: 1.5em; padding-top: 3px; color: var(--text); font-size: 16px; user-select: none }
 .blk-litext { flex: 1; min-width: 0 }
 .blk-litext.done { color: var(--text2); text-decoration: line-through }
@@ -82,18 +82,18 @@ h3.blk-h { font-size: 1.12em }
 .blk-text:empty:focus::before, .blk-h1:empty::before, .blk-h2:empty::before, .blk-h3:empty::before, [data-bsummary]:empty::before, .blk[data-btype="todo"] .blk-text:empty::before, .blk[data-btype="bullet"] .blk-text:empty::before, .blk[data-btype="number"] .blk-text:empty::before, .blk-quote .blk-text:empty::before { content: attr(data-placeholder) }
 /* == --- Überschriften --- == */
 .blk[data-btype="h1"] { margin-top: 22px }
-.blk[data-btype="h2"] { margin-top: 16px }
+.blk[data-btype="h2"] { margin-top: var(--space-4) }
 .blk[data-btype="h3"] { margin-top: 10px }
 .blk:first-child[data-btype^="h"] { margin-top: 0 }
 .blk[data-btype="h1"] .blk-gutter { padding-top: 14px }
 .blk[data-btype="h2"] .blk-gutter { padding-top: 10px }
 .blk[data-btype="h3"] .blk-gutter { padding-top: 7px }
 .blk[data-btype="quote"] .blk-gutter { padding-top: 5px }
-.blk[data-btype="divider"] .blk-gutter { padding-top: 4px }
-.blk[data-btype="file"] .blk-gutter { padding-top: 12px }
-.blk[data-btype="callout"] .blk-gutter { padding-top: 24px }
+.blk[data-btype="divider"] .blk-gutter { padding-top: var(--space-1) }
+.blk[data-btype="file"] .blk-gutter { padding-top: var(--space-3) }
+.blk[data-btype="callout"] .blk-gutter { padding-top: var(--space-6) }
 .blk[data-btype="code"] .blk-gutter { padding-top: 10px }
-.blk[data-btype="math"] .blk-gutter { padding-top: 16px }
+.blk[data-btype="math"] .blk-gutter { padding-top: var(--space-4) }
 .blk[data-btype="table"] .blk-gutter { padding-top: 15px }
 .blk[data-btype="image"] .blk-gutter { padding-top: 10px }
 .blk[data-btype="heft"] .blk-gutter { padding-top: 10px }
@@ -106,30 +106,30 @@ h3.blk-h { font-size: 1.12em }
 /* == --- Zitat --- == */
 .blk-quote { margin: 0; width: 100%; border-left: 3px solid var(--text); padding: 2px 0 2px 14px; font-size: 16px }
 /* == --- Codeblock --- == */
-.blk-codewrap { position: relative; width: 100%; margin: 4px 0; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm) }
-.blk-code { margin: 0; padding: 34px 16px 30px 32px; overflow-x: auto; background: transparent; border: none }
+.blk-codewrap { position: relative; width: 100%; margin: var(--space-1) 0; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm) }
+.blk-code { margin: 0; padding: 34px var(--space-4) 30px var(--space-8); overflow-x: auto; background: transparent; border: none }
 .blk-code .blk-text, .blk-code code.blk-text { display: block; padding: 0; background: transparent; color: var(--text); font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 85%; line-height: 1.6; white-space: pre-wrap; tab-size: 2; border-radius: 0 }
-.blk-codelang { position: absolute; top: 6px; left: 8px; z-index: 1; background: transparent; border: none; color: var(--text2); font-size: var(--text-xs); padding: 2px 6px; border-radius: var(--radius-xs); cursor: pointer; opacity: 0; transition: opacity .1s }
+.blk-codelang { position: absolute; top: 6px; left: 8px; z-index: 1; background: transparent; border: none; color: var(--text2); font-size: var(--text-xs); padding: 2px var(--space-1-5); border-radius: var(--radius-xs); cursor: pointer; opacity: 0; transition: opacity .1s }
 .blk-codewrap:hover .blk-codelang, .blk-codewrap:focus-within .blk-codelang { opacity: 1 }
 .blk-codelang:hover { background: var(--surface-hover); color: var(--text) }
 /* == --- Gleichungen (Block + Inline-Chip) --- == */
-.blk-math { width: 100%; padding: 10px 8px; text-align: center; cursor: pointer; border-radius: var(--radius-xs); outline: none; overflow-x: auto }
+.blk-math { width: 100%; padding: 10px var(--space-2); text-align: center; cursor: pointer; border-radius: var(--radius-xs); outline: none; overflow-x: auto }
 .blk-math:hover, .blk-math:focus { background: var(--surface-subtle) }
 .blk-mathview { font-size: 1.15em }
 .blk-mathempty { color: var(--text2); font-size: var(--text-base) }
 .blk-imath { cursor: pointer; border-radius: var(--radius-xs); padding: 0 1px }
 .blk-imath:hover { background: var(--accent-soft) }
-.blk-mathpop { position: fixed; z-index: var(--z-editor-pop); width: 380px; max-width: 92vw; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: 8px }
-.blk-mathinput { width: 100%; resize: vertical; background: var(--input-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); color: var(--text); font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: var(--text-sm); padding: 8px; outline: none }
+.blk-mathpop { position: fixed; z-index: var(--z-editor-pop); width: 380px; max-width: 92vw; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: var(--space-2) }
+.blk-mathinput { width: 100%; resize: vertical; background: var(--input-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); color: var(--text); font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: var(--text-sm); padding: var(--space-2); outline: none }
 .blk-mathinput:focus { border-color: var(--accent-border) }
-.blk-mathfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--text2) }
-.blk-mathok { background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-sm); padding: 5px 12px; font-size: var(--text-sm); cursor: pointer }
+.blk-mathfoot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-1-5); color: var(--text2) }
+.blk-mathok { background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-sm); padding: 5px var(--space-3); font-size: var(--text-sm); cursor: pointer }
 /* == --- Bild --- == */
-.blk-img { margin: 4px 0; width: 100% }
+.blk-img { margin: var(--space-1) 0; width: 100% }
 .blk-img img { max-width: 100%; border-radius: var(--radius-xs); display: block }
-.blk-img figcaption { font-size: var(--text-sm); color: var(--text2); padding-top: 6px }
+.blk-img figcaption { font-size: var(--text-sm); color: var(--text2); padding-top: var(--space-1-5) }
 /* == --- Tabelle (wie Notion: dezente volle Rahmen, Kopfzeile lei == */
-.blk-tablewrap { position: relative; width: 100%; padding: 6px 26px 26px 0; overflow-x: auto; overflow-y: hidden }
+.blk-tablewrap { position: relative; width: 100%; padding: var(--space-1-5) 26px 26px 0; overflow-x: auto; overflow-y: hidden }
 /* Viele Spalten behalten ihre Mindestbreite und werden auf schmalen Ansichten
    horizontal gescrollt, statt durch das feste Layout auf Zeichenbreite zu schrumpfen. */
 .blk-table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: var(--text-base); table-layout: fixed }
@@ -147,7 +147,7 @@ h3.blk-h { font-size: 1.12em }
 	.blk-tbtn-row { height: 26px }
 }
 /* == --- Callout (kanonisch, UI-Fix v7: Rahmen aus dem früheren D == */
-.blk-callout { display: flex; gap: 10px; width: 100%; margin: 4px 0; padding: 16px 16px 16px 14px; border-radius: var(--radius-sm); border: 1px solid var(--surface-hover); background: var(--surface) }
+.blk-callout { display: flex; gap: 10px; width: 100%; margin: var(--space-1) 0; padding: var(--space-4) var(--space-4) var(--space-4) 14px; border-radius: var(--radius-sm); border: 1px solid var(--surface-hover); background: var(--surface) }
 .blk-callout .blk-children { flex: 1; min-width: 0 }
 .blk-callout .blk { border-radius: var(--radius-xs) }
 .blk-calloutdot { width: 18px; height: 18px; flex-shrink: 0; margin-top: 3px; border: none; border-radius: 50%; cursor: pointer; padding: 0; min-height: 0; background: var(--text2) }
@@ -174,9 +174,9 @@ h3.blk-h { font-size: 1.12em }
 .blk-togglehead { display: flex; align-items: flex-start }
 .blk-togglearrow { width: 24px; height: 24px; flex-shrink: 0; margin-top: 1px; background: transparent; border: none; border-radius: var(--radius-xs); color: var(--text); font-size: var(--text-xs); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; min-height: 0; transition: background .1s }
 .blk-togglearrow:hover { background: var(--surface-active) }
-.blk-togglebody { padding-left: 24px }
+.blk-togglebody { padding-left: var(--space-6) }
 /* == --- Spalten --- == */
-.blk-columns { display: flex; gap: 32px; width: 100% }
+.blk-columns { display: flex; gap: var(--space-8); width: 100% }
 .blk-column { flex: 1; min-width: 0 }
 @media (max-width: 640px) {
 	.blk-columns { flex-direction: column; gap: 0 }
@@ -197,9 +197,9 @@ h3.blk-h { font-size: 1.12em }
 .blk.drop-above { box-shadow: 0 -2px 0 var(--accent) }
 .blk.drop-below { box-shadow: 0 2px 0 var(--accent) }
 /* == --- Menüs: Slash / Link / Block --- == */
-.blk-menu { position: fixed; z-index: var(--z-editor-pop); min-width: 260px; max-width: 330px; max-height: 340px; overflow-y: auto; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: 6px }
-.blk-msec { font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text2); padding: 8px 10px 3px }
-.blk-mi { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); color: var(--text); user-select: none }
+.blk-menu { position: fixed; z-index: var(--z-editor-pop); min-width: 260px; max-width: 330px; max-height: 340px; overflow-y: auto; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: var(--space-1-5) }
+.blk-msec { font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text2); padding: var(--space-2) 10px 3px }
+.blk-mi { display: flex; align-items: center; gap: 10px; padding: var(--space-1-5) 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); color: var(--text); user-select: none }
 .blk-mi:hover, .blk-mi.active { background: var(--surface-hover-strong) }
 .blk-mi small { margin-left: auto; color: var(--text2); font-size: var(--text-xs) }
 .blk-mi.danger { color: var(--danger) }
@@ -207,7 +207,7 @@ h3.blk-h { font-size: 1.12em }
 .blk-mi.disabled:hover { background: transparent }
 .blk-mi-ic { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: var(--radius-xs); font-size: var(--text-sm) }
 /* == --- Farbreihen im Blockmenü --- == */
-.blk-colorrow { display: flex; gap: 6px; padding: 4px 10px 6px; flex-wrap: wrap }
+.blk-colorrow { display: flex; gap: var(--space-1-5); padding: var(--space-1) 10px var(--space-1-5); flex-wrap: wrap }
 .blk-cdot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; padding: 0; min-height: 0; border: 1px solid var(--edge); background: var(--surface); color: var(--text2); font-size: var(--text-2xs); display: flex; align-items: center; justify-content: center }
 .blk-cdot:hover { transform: scale(1.15) }
 .blk-cdot.c-gray { background: rgb(var(--c-gray)) }
@@ -229,8 +229,8 @@ h3.blk-h { font-size: 1.12em }
 /* == --- KaTeX im Editor: Farbe erbt vom Text --- == */
 .block-editor .katex { color: var(--text); font-size: 1.06em }
 /* == Unterseiten-Verweise am Seitenende (wie Notion-Seitenzeilen) == */
-.child-pages { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 4px }
-.child-page-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer }
+.child-pages { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 var(--space-1) }
+.child-page-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); border: 0; background: none; color: inherit; font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer }
 .child-page-row:hover { background: var(--surface-hover) }
 .child-page-row .cp-icon { flex: none; width: 20px; text-align: center }
 
@@ -241,6 +241,6 @@ h3.blk-h { font-size: 1.12em }
 }
 
 @media (max-width: 600px) {
-	.block-editor { padding-right: 8px }
+	.block-editor { padding-right: var(--space-2) }
 	.blk-gutter { width: 38px }
 }

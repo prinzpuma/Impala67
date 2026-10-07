@@ -1172,10 +1172,10 @@ export async function handleBackupNow(button) {
 // exakt die Bereiche aus render.js → renderHome(); Sichtbarkeit UND Reihenfolge kommen aus
 // homeLayout(). Gespeichert als Gerätewahl (localStorage) wie Theme/Dichte — kein Drive-Sync.
 export const HOME_SECTIONS = [
-	{ id: "insights", label: "Lernanalyse", hint: "Lernzeit · Wochenverlauf · Kartenqualität · Empfehlungen" },
-	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
 	{ id: "recent", label: "Zuletzt & Weitermachen", hint: "zuletzt bearbeitete Notizen und schneller Wiedereinstieg" },
 	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten" },
+	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
+	{ id: "insights", label: "Lernanalyse", hint: "Lernzeit · Wochenverlauf · Kartenqualität · Empfehlungen" },
 	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
 	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
 ];

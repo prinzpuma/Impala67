@@ -164,7 +164,7 @@ export async function sendChatMessage(text, type) {
 		VOICE.consumeReply();
 		if (err?.name === "AbortError") {
 			// ⏹ über den Senden-Knopf: Teilantwort behalten, kein Fehler-Ton.
-			target.push({ mid: U.uid(), role: "assistant", content: (S.aiDraft ? S.aiDraft + "\n\n" : "") + "*(Abgebrochen.)*", reasoning: err?.reasoning || null, reasoningExpanded: false });
+			target.push({ mid: U.uid(), role: "assistant", content: (err?.draft ? err.draft + "\n\n" : "") + "*(Abgebrochen.)*", reasoning: err?.reasoning || null, reasoningExpanded: false });
 		} else {
 			// Scheitert eine Anfrage MIT Bild, liegt es meist am nicht vision-fähigen Modell.
 			const hint = img ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";

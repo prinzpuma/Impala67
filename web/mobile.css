@@ -33,7 +33,7 @@ body.mobile-ui #main {
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-bottom: 8px;
+	padding-bottom: var(--space-2);
 }
 body.mobile-ui #main:has(.chat-full-wrap) {
 	overflow: hidden;
@@ -52,7 +52,7 @@ body.mobile-ui #mTop {
 	align-items: flex-end;
 	justify-content: space-between;
 	gap: 10px;
-	padding: env(safe-area-inset-top) 16px 8px;
+	padding: env(safe-area-inset-top) var(--space-4) var(--space-2);
 	background: color-mix(in srgb, var(--panel-solid) 88%, transparent);
 	backdrop-filter: blur(24px);
 	-webkit-backdrop-filter: blur(24px);
@@ -85,14 +85,14 @@ body.mobile-ui #mTop .top-back-btn {
 	min-height: 44px;
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--space-1);
 	background: transparent;
 	border: none;
 	color: var(--accent);
-	font-size: 14.5px;
+	font-size: var(--text-base);
 	font-weight: 650;
 	cursor: pointer;
-	padding: 4px 8px 4px 0;
+	padding: var(--space-1) var(--space-2) var(--space-1) 0;
 	transition: opacity 0.12s;
 }
 body.mobile-ui #mTop .top-back-btn:active { opacity: 0.7; }
@@ -101,7 +101,7 @@ body.mobile-ui #mTop .top-back-btn svg { width: 19px; height: 19px; stroke: curr
 body.mobile-ui #mTop .mTop-right {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--space-2);
 	flex-shrink: 0;
 }
 
@@ -136,12 +136,12 @@ body.mobile-ui #mTop .pill-action-btn {
 	background: var(--accent);
 	border: none;
 	color: var(--on-accent);
-	font-size: 13px;
+	font-size: var(--text-sm);
 	font-weight: 700;
 	cursor: pointer;
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--space-1);
 	transition: opacity 0.08s;
 }
 body.mobile-ui #mTop .pill-action-btn:active { opacity: 0.8; }
@@ -157,7 +157,7 @@ body.mobile-ui #mNav {
 	display: grid;
 	grid-template-columns: repeat(5, 1fr);
 	align-items: start;
-	padding: 6px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
+	padding: var(--space-1-5) max(var(--space-1), env(safe-area-inset-right)) env(safe-area-inset-bottom) max(var(--space-1), env(safe-area-inset-left));
 	background: color-mix(in srgb, var(--panel-solid) 90%, transparent);
 	backdrop-filter: blur(24px);
 	-webkit-backdrop-filter: blur(24px);
@@ -172,7 +172,7 @@ body.mobile-ui #mNav button {
 	gap: 2px;
 	min-width: 0;
 	min-height: 44px;
-	padding: 4px 2px 2px;
+	padding: var(--space-1) 2px 2px;
 	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--text2);
@@ -214,7 +214,7 @@ body.mobile-ui #mLibHead {
 	justify-content: space-between;
 	flex: 0 0 auto;
 	min-height: 52px;
-	padding: 0 0 12px;
+	padding: 0 0 var(--space-3);
 	border-bottom: 1px solid var(--edge-soft);
 }
 body.mobile-ui #mLibHead strong {
@@ -240,7 +240,7 @@ body.mobile-ui #sidebar {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	padding: calc(12px + env(safe-area-inset-top)) 14px calc(var(--m-bot) + 12px);
+	padding: calc(var(--space-3) + env(safe-area-inset-top)) 14px calc(var(--m-bot) + var(--space-3));
 	gap: 10px;
 	border: 0;
 	border-radius: 24px 24px 0 0;
@@ -266,7 +266,7 @@ body.mobile-ui #tree {
 }
 body.mobile-ui #tree .row {
 	min-height: 44px;
-	padding: 8px 10px;
+	padding: var(--space-2) 10px;
 	border-radius: var(--radius-md);
 	transition: background .08s;
 }
@@ -305,8 +305,8 @@ body.mobile-ui #mMoreSheet {
 	height: 100dvh;
 	display: flex;
 	flex-direction: column;
-	padding: calc(16px + env(safe-area-inset-top)) 16px calc(var(--m-bot) + 16px);
-	gap: 16px;
+	padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) calc(var(--m-bot) + var(--space-4));
+	gap: var(--space-4);
 	background: var(--sidebar-bg);
 	border-radius: 24px 24px 0 0;
 	box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
@@ -336,33 +336,33 @@ body.mobile-ui .mSheet-head button {
 	border-radius: 50%;
 	background: var(--surface-hover);
 	color: var(--text);
-	font-size: 15px;
+	font-size: var(--text-md);
 	border: none;
 }
 body.mobile-ui .home-continue {
 	background: linear-gradient(135deg, rgba(111, 195, 255, 0.10), rgba(255, 255, 255, 0.02));
 	border: 1px solid rgba(111, 195, 255, 0.22);
 	border-radius: var(--radius-lg);
-	padding: 14px 16px;
+	padding: 14px var(--space-4);
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	margin-bottom: 16px;
+	gap: var(--space-3);
+	margin-bottom: var(--space-4);
 	cursor: pointer;
 	transition: background 0.08s;
 }
 body.mobile-ui .home-continue:active { background: rgba(111, 195, 255, 0.16); }
 body.mobile-ui .home-continue .recent-icon { font-size: 24px; }
 body.mobile-ui .home-continue .recent-copy { flex: 1; min-width: 0; }
-body.mobile-ui .home-continue .recent-copy b { font-size: 14.5px; font-weight: 750; color: var(--text); display: block; }
-body.mobile-ui .home-continue .recent-copy small { font-size: 11.5px; color: var(--accent); }
+body.mobile-ui .home-continue .recent-copy b { font-size: var(--text-base); font-weight: 750; color: var(--text); display: block; }
+body.mobile-ui .home-continue .recent-copy small { font-size: var(--text-2xs); color: var(--accent); }
 body.mobile-ui .home-continue .recent-arrow { color: var(--accent); font-size: 18px; font-weight: bold; }
 
 body.mobile-ui .home-list-row {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	padding: 12px 14px;
+	gap: var(--space-3);
+	padding: var(--space-3) 14px;
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -374,8 +374,8 @@ body.mobile-ui .home-list-row {
 }
 body.mobile-ui .home-list-row:active { background: var(--surface-active); }
 body.mobile-ui .home-list-row .recent-icon { font-size: 18px; }
-body.mobile-ui .home-list-row b { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body.mobile-ui .home-list-row small { display: inline-block !important; font-size: 11.5px; color: var(--text2); margin-right: 4px; }
+body.mobile-ui .home-list-row b { flex: 1; font-size: var(--text-sm); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.mobile-ui .home-list-row small { display: inline-block !important; font-size: var(--text-2xs); color: var(--text2); margin-right: var(--space-1); }
 body.mobile-ui .home-list-row i { color: var(--text2); font-style: normal; }
 
 /* ============================================================
@@ -397,7 +397,7 @@ body.mobile-ui:not(.panel-collapsed) #panel {
 body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
 	content: "Stell mir eine Frage zu deinen Notizen, Karten oder Plänen.";
 	display: block;
-	margin: 38dvh 32px 0;
+	margin: 38dvh var(--space-8) 0;
 	text-align: center;
 	color: var(--text2);
 	font-size: var(--text-md);
@@ -405,13 +405,13 @@ body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
 }
 body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
 	min-height: var(--m-top);
-	padding: env(safe-area-inset-top) 12px 8px;
+	padding: env(safe-area-inset-top) var(--space-3) var(--space-2);
 	border-bottom: 1px solid var(--edge-soft);
 }
 body.mobile-ui:not(.panel-collapsed) #btnChatExpand { display: none }
 body.mobile-ui:not(.panel-collapsed) #panel .panel-title { font-size: 17px; font-weight: 700 }
 body.mobile-ui:not(.panel-collapsed) #panel > #chatForm {
-	margin: 8px 10px 10px;
+	margin: var(--space-2) 10px 10px;
 }
 
 /* ============================================================
@@ -421,7 +421,7 @@ body.mobile-ui .library.anki {
 	width: 100%;
 	max-width: none;
 	background: none;
-	padding: 10px 10px 20px;
+	padding: 10px 10px var(--space-5);
 }
 /* Die Handyansicht bietet dieselben Karteikarten-Bereiche und Verwaltungsaktionen
    wie Desktop. Nur der doppelte Titel entfällt, weil er bereits in #mTop steht. */
@@ -429,38 +429,29 @@ body.mobile-ui .library.anki .lib-head {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto auto;
 	align-items: center;
-	gap: 8px;
-	margin: 0 0 12px;
+	gap: var(--space-2);
+	margin: 0 0 var(--space-3);
 	padding: 0 0 10px;
 }
 body.mobile-ui .library.anki .lib-head h1 { display: none }
 body.mobile-ui .library.anki .mode-btns {
 	grid-column: 1 / -1;
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	width: 100%;
 	order: 0;
 }
-body.mobile-ui .library.anki .mode-btns button { min-height: 40px; padding-inline: 6px }
+body.mobile-ui .library.anki .mode-btns button { min-height: 40px; padding-inline: var(--space-1-5) }
 body.mobile-ui .library.anki .lib-head > button { min-height: 40px; padding-inline: 10px }
 body.mobile-ui .library.anki .lib-head > [data-ankizen],
 body.mobile-ui .library.anki .lib-head .anki-new { display: none !important }
 
-/* Hero */
-body.mobile-ui .anki-hero {
-	margin: 0 0 12px;
-	padding: 14px;
-	border-radius: var(--radius-xl);
-	background: var(--surface);
-	border: 1px solid var(--edge-soft);
-}
-body.mobile-ui .anki-hero-main h2 { font-size: 24px; letter-spacing: -.03em; margin: 4px 0 8px }
-body.mobile-ui .anki-hero-main p { font-size: var(--text-base); color: var(--text2); margin: 0 0 14px }
-body.mobile-ui .anki-hero-actions { display: grid; grid-template-columns: 1fr; gap: 8px }
-body.mobile-ui .anki-hero-actions .primary { min-height: 52px; border-radius: var(--radius-lg); font-size: 16px; font-weight: 700 }
-body.mobile-ui .anki-hero-actions .hero-ghost,
-body.mobile-ui .anki-hero-actions .hero-quiet { min-height: 44px; border-radius: var(--radius-lg) }
-body.mobile-ui .anki-hero-stat { display: none }
+/* Kopf (wie Desktop, Stil in styles.css „Stapel-Übersicht v3“): Modi untereinander, Kennzahlen daneben */
+body.mobile-ui .anki-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) }
+body.mobile-ui .anki-modes button { min-height: 44px; border-radius: var(--radius-lg); font-size: var(--text-base) }
+body.mobile-ui .anki-stats { gap: var(--space-2); margin-top: var(--space-4) }
+body.mobile-ui .anki-stat { padding: 14px; border-radius: var(--radius-xl); background: var(--surface) }
+body.mobile-ui .anki-home button.anki-stat.due { min-height: 76px }
 
 /* Stapel-Liste */
 body.mobile-ui .anki-sec h2 {
@@ -469,14 +460,14 @@ body.mobile-ui .anki-sec h2 {
 	letter-spacing: .08em;
 	color: var(--text2);
 	font-weight: 700;
-	margin: 16px 0 8px;
+	margin: var(--space-4) 0 var(--space-2);
 }
 body.mobile-ui .deck-row {
 	display: grid;
 	grid-template-columns: 34px minmax(0, 1fr) auto;
 	align-items: center;
-	gap: 12px;
-	padding: 13px 12px;
+	gap: var(--space-3);
+	padding: 13px var(--space-3);
 	margin-bottom: 7px;
 	border-radius: var(--radius-lg);
 	background: var(--surface);
@@ -492,7 +483,7 @@ body.mobile-ui .deck-counts {
 	align-items: flex-end;
 }
 body.mobile-ui .deck-counts .cnt-due { font-size: var(--text-sm) }
-body.mobile-ui .deck-counts small { font-size: 11px }
+body.mobile-ui .deck-counts small { font-size: var(--text-2xs) }
 body.mobile-ui .deck-iconbtn { display: none }
 body.mobile-ui .deck-more-btn {
 	display: inline-flex !important;
@@ -510,11 +501,11 @@ body.mobile-ui .deck-actions {
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 8px;
+	gap: var(--space-2);
 }
 body.mobile-ui .deck-study {
 	min-height: 40px;
-	padding: 0 16px;
+	padding: 0 var(--space-4);
 	border-radius: var(--radius-lg);
 	background: var(--accent-soft);
 	color: var(--accent);
@@ -546,10 +537,10 @@ body.mobile-ui .study-card {
 	justify-content: center;
 	margin: 0;
 	max-width: none;
-	gap: 6px;
+	gap: var(--space-1-5);
 }
 body.mobile-ui .study-card .card-face {
-	padding: 16px 8px;
+	padding: var(--space-4) var(--space-2);
 	font-size: clamp(18px, 5vw, 25px);
 	line-height: 1.55;
 	text-align: center;
@@ -560,9 +551,9 @@ body.mobile-ui .study-card .study-divider {
 	font-size: var(--text-2xs);
 	text-transform: uppercase;
 	letter-spacing: .1em;
-	margin: 4px 0;
+	margin: var(--space-1) 0;
 }
-body.mobile-ui .study-counts-row { font-size: var(--text-xs); color: var(--text2); text-align: center; margin: 6px 0 10px }
+body.mobile-ui .study-counts-row { font-size: var(--text-xs); color: var(--text2); text-align: center; margin: var(--space-1-5) 0 10px }
 body.mobile-ui .confidence-row,
 body.mobile-ui .study-reveal-controls .mini,
 body.mobile-ui .study-keys { display: none }
@@ -573,7 +564,7 @@ body.mobile-ui .study-reveal-controls .modal-actions [data-ankishowback].mini { 
 body.mobile-ui .feyn-inline-actions {
 	display: grid;
 	grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
-	gap: 8px;
+	gap: var(--space-2);
 }
 body.mobile-ui .feyn-inline-actions button { min-height: 44px; margin: 0 }
 /* 🐛 Fix (28. Juli): Die ⛶-Taste war auf dem Handy ausgeblendet — wer das Vollbild am
@@ -586,18 +577,18 @@ body.mobile-ui .modal-actions [data-ankishowback] {
 	color: var(--on-accent);
 	font-size: 17px;
 	font-weight: 700;
-	margin: 8px 0;
+	margin: var(--space-2) 0;
 }
 body.mobile-ui .grades {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gap: 8px;
-	margin-top: 6px;
+	gap: var(--space-2);
+	margin-top: var(--space-1-5);
 }
 body.mobile-ui .grades [data-ankigrade] {
 	min-height: 56px;
 	border-radius: var(--radius-lg);
-	font-size: 15px;
+	font-size: var(--text-md);
 	font-weight: 700;
 	transition: background .08s;
 }
@@ -609,7 +600,7 @@ body.mobile-ui .grades .grade-ivl { font-size: var(--text-2xs); color: var(--tex
 body.mobile-ui .study-footer {
 	display: flex;
 	justify-content: center;
-	padding-top: 6px;
+	padding-top: var(--space-1-5);
 }
 body.mobile-ui .study-footer [data-deckconf] { display: none }
 
@@ -619,7 +610,7 @@ body.mobile-ui .study-footer [data-deckconf] { display: none }
 body.light .feyn-inline {
 	background: var(--surface-subtle);
 	border-radius: var(--radius-lg);
-	padding: 12px;
+	padding: var(--space-3);
 	color: var(--text);
 }
 body.light .feyn-inline textarea,
@@ -659,7 +650,7 @@ body.mobile-ui.m-typing #mNav { transform: translateY(110%) }
 body.mobile-ui.m-study #app { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) }
 body.mobile-ui.m-typing #app,
 body.mobile-ui.m-typing:not(.panel-collapsed) #panel { padding-bottom: env(safe-area-inset-bottom) }
-body.mobile-ui.m-study .library.anki { padding: 6px 10px 10px }
+body.mobile-ui.m-study .library.anki { padding: var(--space-1-5) 10px 10px }
 
 /* ============================================================
    PREVIEW-DESIGN — produktive Mobile-Ansicht
@@ -670,7 +661,7 @@ body.mobile-ui #mNav .nav-btn {
 	min-height: 48px;
 }
 body.mobile-ui #mNav .nav-btn.home-btn {
-	padding: 2px 4px 4px;
+	padding: 2px var(--space-1) var(--space-1);
 }
 body.mobile-ui #mNav .nav-btn.home-btn svg {
 	width: 27px;
@@ -685,13 +676,13 @@ body.mobile-ui #mNav .nav-btn.home-btn svg {
 body.mobile-ui #main > .mobile-home-preview {
 	max-width: 414px;
 	margin: 0 auto;
-	padding: 16px 16px 24px;
+	padding: var(--space-4) var(--space-4) var(--space-6);
 }
 body.mobile-ui .mobile-home-preview .greet-wrap {
 	display: flex;
 	justify-content: space-between;
 	align-items: flex-start;
-	margin: 2px 0 16px;
+	margin: 2px 0 var(--space-4);
 }
 body.mobile-ui .mobile-home-preview .greet-wrap h1 {
 	font-size: 24px;
@@ -703,7 +694,7 @@ body.mobile-ui .mobile-home-preview .greet-wrap h1 {
 body.mobile-ui .mobile-home-preview .date-pill {
 	display: inline-block;
 	margin-top: 5px;
-	font-size: 11.5px;
+	font-size: var(--text-2xs);
 	color: var(--text2);
 	font-weight: 600;
 }
@@ -715,7 +706,7 @@ body.mobile-ui .mobile-home-preview .home-customize {
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
 	color: var(--text2);
-	font-size: 14px;
+	font-size: var(--text-base);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -727,12 +718,12 @@ body.mobile-ui .mobile-home-preview .home-customize:active {
 body.mobile-ui .mobile-home-preview .stat-pills-row {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 6px;
+	gap: var(--space-1-5);
 	margin-bottom: 14px;
 }
 body.mobile-ui .mobile-home-preview .stat-mini-card {
 	min-width: 0;
-	padding: 10px 4px;
+	padding: 10px var(--space-1);
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -740,7 +731,7 @@ body.mobile-ui .mobile-home-preview .stat-mini-card {
 }
 body.mobile-ui .mobile-home-preview .stat-mini-card strong {
 	display: block;
-	font-size: 13.5px;
+	font-size: var(--text-sm);
 	font-weight: 800;
 	color: var(--text);
 	white-space: nowrap;
@@ -750,7 +741,7 @@ body.mobile-ui .mobile-home-preview .stat-mini-card strong {
 body.mobile-ui .mobile-home-preview .stat-mini-card small {
 	display: block;
 	margin-top: 3px;
-	font-size: 10px;
+	font-size: var(--text-3xs);
 	color: var(--text2);
 	font-weight: 600;
 	text-transform: uppercase;
@@ -762,14 +753,14 @@ body.mobile-ui .mobile-home-preview .hero-focus-card {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	gap: 12px;
+	gap: var(--space-3);
 	width: 100%;
 	margin-bottom: 18px;
 	text-align: left;
 	background: linear-gradient(135deg, rgba(111, 195, 255, .10), rgba(255, 255, 255, .02));
 	border: 1px solid rgba(111, 195, 255, .22);
 	border-radius: var(--radius-lg);
-	padding: 16px 18px;
+	padding: var(--space-4) 18px;
 	cursor: pointer;
 	transition: background .08s;
 }
@@ -793,26 +784,26 @@ body.mobile-ui .mobile-home-preview .hero-focus-left strong {
 	letter-spacing: -.01em;
 }
 body.mobile-ui .mobile-home-preview .hero-focus-left small {
-	font-size: 12px;
+	font-size: var(--text-xs);
 	color: var(--accent);
 	font-weight: 500;
 }
 body.mobile-ui .mobile-home-preview .hero-focus-btn {
 	flex: 0 0 auto;
-	padding: 8px 14px;
+	padding: var(--space-2) 14px;
 	border-radius: var(--radius-pill);
 	background: var(--accent);
 	color: var(--on-accent);
 	font-weight: 750;
-	font-size: 12.5px;
+	font-size: var(--text-xs);
 	border: none;
 }
 body.mobile-ui .mobile-home-preview .mobile-continue {
 	margin-bottom: 18px;
 }
 body.mobile-ui .mobile-home-preview .mobile-recent h2 {
-	margin: 18px 0 8px;
-	font-size: 11px;
+	margin: 18px 0 var(--space-2);
+	font-size: var(--text-2xs);
 	text-transform: uppercase;
 	letter-spacing: .08em;
 	color: var(--text2);
@@ -826,11 +817,11 @@ body.mobile-ui .mobile-home-preview .mobile-item-list {
 body.mobile-ui .mobile-home-preview .item-row {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: var(--space-3);
 	width: 100%;
 	min-width: 0;
 	margin: 0;
-	padding: 12px 14px;
+	padding: var(--space-3) 14px;
 	text-align: left;
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
@@ -854,7 +845,7 @@ body.mobile-ui .mobile-home-preview .item-row .info {
 	gap: 2px;
 }
 body.mobile-ui .mobile-home-preview .item-row .info strong {
-	font-size: 14px;
+	font-size: var(--text-base);
 	font-weight: 600;
 	color: var(--text);
 	white-space: nowrap;
@@ -862,13 +853,13 @@ body.mobile-ui .mobile-home-preview .item-row .info strong {
 	text-overflow: ellipsis;
 }
 body.mobile-ui .mobile-home-preview .item-row .info small {
-	font-size: 11.5px;
+	font-size: var(--text-2xs);
 	color: var(--text2);
 }
 body.mobile-ui .mobile-home-preview .item-arrow {
 	flex: 0 0 auto;
 	color: var(--text2);
-	font-size: 20px;
+	font-size: var(--text-lg);
 	line-height: 1;
 }
 body.mobile-ui .mobile-home-preview .mobile-home-extra {
@@ -882,7 +873,7 @@ body.mobile-ui #mMoreSheet .drive-sync-card {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
+	gap: var(--space-3);
 	padding: 14px;
 	border-radius: var(--radius-lg);
 	background: var(--surface);
@@ -901,11 +892,11 @@ body.mobile-ui #mMoreSheet .drive-sync-left > div {
 	gap: 2px;
 }
 body.mobile-ui #mMoreSheet .drive-sync-left strong {
-	font-size: 14px;
+	font-size: var(--text-base);
 	font-weight: 700;
 }
 body.mobile-ui #mMoreSheet .drive-sync-left small {
-	font-size: 11px;
+	font-size: var(--text-2xs);
 	color: var(--text2);
 }
 body.mobile-ui #mMoreSheet .drive-dot {
@@ -924,7 +915,7 @@ body.mobile-ui #mMoreSheet .more-dashboard-grid {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 10px;
 	overflow: auto;
-	padding-bottom: 8px;
+	padding-bottom: var(--space-2);
 }
 body.mobile-ui #mMoreSheet .more-card {
 	display: flex;
@@ -949,12 +940,12 @@ body.mobile-ui #mMoreSheet .more-card .m-ico {
 	line-height: 1;
 }
 body.mobile-ui #mMoreSheet .more-card strong {
-	font-size: 13.5px;
+	font-size: var(--text-sm);
 	font-weight: 700;
 }
 body.mobile-ui #mMoreSheet .more-card small {
 	margin-top: 3px;
-	font-size: 10.5px;
+	font-size: var(--text-3xs);
 	color: var(--text2);
 }
 
@@ -982,16 +973,16 @@ body.mobile-ui .study-meta-bar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 8px;
+	gap: var(--space-2);
 	margin-bottom: 14px;
 }
 body.mobile-ui .study-exit-btn {
-	padding: 5px 12px;
+	padding: 5px var(--space-3);
 	border-radius: var(--radius-pill);
 	background: var(--surface);
 	border: 1px solid var(--edge);
 	color: var(--text);
-	font-size: 12px;
+	font-size: var(--text-xs);
 	font-weight: 700;
 	cursor: pointer;
 }
@@ -1005,7 +996,7 @@ body.mobile-ui #palette {
 	inset: 0;
 	width: 100%;
 	height: 100%;
-	padding: calc(12px + env(safe-area-inset-top)) 14px calc(var(--m-bot) + 14px);
+	padding: calc(var(--space-3) + env(safe-area-inset-top)) 14px calc(var(--m-bot) + 14px);
 	background: var(--panel-solid);
 	z-index: 1380;
 	display: flex;
@@ -1029,7 +1020,7 @@ body.mobile-ui .palette-input-wrap {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	margin-bottom: 12px;
+	margin-bottom: var(--space-3);
 }
 body.mobile-ui #paletteInput {
 	flex: 1;
@@ -1048,7 +1039,7 @@ body.mobile-ui .palette-close-btn {
 	background: var(--surface-hover);
 	border: none;
 	color: var(--text);
-	font-size: 15px;
+	font-size: var(--text-md);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1081,7 +1072,7 @@ body.mobile-ui .settings-mobile-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
+	padding: calc(14px + env(safe-area-inset-top)) var(--space-4) var(--space-3);
 	border-bottom: 1px solid var(--edge-soft);
 	background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
 	backdrop-filter: blur(24px);
@@ -1096,12 +1087,12 @@ body.mobile-ui .settings-mobile-head h2 {
 	letter-spacing: -.02em;
 }
 body.mobile-ui .settings-mobile-done {
-	padding: 6px 16px;
+	padding: var(--space-1-5) var(--space-4);
 	border-radius: var(--radius-pill);
 	background: var(--accent);
 	color: var(--on-accent);
 	font-weight: 700;
-	font-size: 13px;
+	font-size: var(--text-sm);
 	border: none;
 	cursor: pointer;
 }
@@ -1109,10 +1100,10 @@ body.mobile-ui .settings-mobile-back {
 	background: transparent;
 	border: none;
 	color: var(--accent);
-	font-size: 15px;
+	font-size: var(--text-md);
 	font-weight: 650;
 	cursor: pointer;
-	padding: 4px 0;
+	padding: var(--space-1) 0;
 }
 body.mobile-ui .settings-modal-v2.is-mobile .settings-page-head {
 	display: none !important;
@@ -1121,7 +1112,7 @@ body.mobile-ui .settings-modal-v2.is-mobile .settings-main {
 	flex: 1;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
-	padding: 16px 14px calc(var(--m-bot) + 24px);
+	padding: var(--space-4) 14px calc(var(--m-bot) + var(--space-6));
 }
 body.mobile-ui .settings-update-row {
 	align-items: stretch;
@@ -1138,7 +1129,7 @@ body.mobile-ui .settings-update-row .settings-row-control > button { margin-left
 body.mobile-ui .settings-row:has(.settings-row-control .settings-actions) {
 	align-items: stretch;
 	flex-direction: column;
-	gap: 8px;
+	gap: var(--space-2);
 }
 body.mobile-ui .settings-row:has(.settings-row-control .settings-actions) .settings-row-control {
 	width: 100%;
@@ -1150,7 +1141,7 @@ body.mobile-ui .settings-row-control > .settings-actions {
 body.mobile-ui .settings-mobile-row {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: var(--space-3);
 	width: 100%;
 	padding: 14px 14px;
 	background: transparent;
@@ -1190,11 +1181,11 @@ body.mobile-ui .settings-mobile-row .settings-row-copy {
 	gap: 2px;
 }
 body.mobile-ui .settings-mobile-row .settings-row-copy b {
-	font-size: 14.5px;
+	font-size: var(--text-base);
 	font-weight: 650;
 }
 body.mobile-ui .settings-mobile-row .settings-row-copy small {
-	font-size: 11.5px;
+	font-size: var(--text-2xs);
 	color: var(--text2);
 	white-space: nowrap;
 	overflow: hidden;
@@ -1205,7 +1196,7 @@ body.mobile-ui .settings-pill-badge {
 	border-radius: var(--radius-pill);
 	background: var(--accent-soft);
 	color: var(--accent);
-	font-size: 11px;
+	font-size: var(--text-2xs);
 	font-weight: 750;
 	flex-shrink: 0;
 }
@@ -1220,13 +1211,13 @@ body.mobile-ui .mobile-nav-card {
 	background: var(--surface);
 	border: 1px solid var(--edge-soft);
 	overflow: hidden;
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 body.mobile-ui .settings-mobile-footer {
 	text-align: center;
-	padding: 16px 8px;
+	padding: var(--space-4) var(--space-2);
 	color: var(--text2);
-	font-size: 11.5px;
+	font-size: var(--text-2xs);
 }
 
 /* Modal- & Menü-Animationen auf Mobile abschalten (verhindert Skalierungs- & Positions-Sprünge) */
@@ -1260,5 +1251,5 @@ body.mobile-ui .deck-row > .page-menu {
 	right: 0;
 	top: 100%;
 	z-index: 50;
-	margin-top: 4px;
+	margin-top: var(--space-1);
 }

@@ -38,6 +38,17 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 export const HEFT = (() => {
 	const PAGE_W = 1000, PAGE_H = 1414;
 	const KEY = (p) => "heft:" + p;
+	// Zuletzt angesehene Seite je Heft (Gerätewahl): Öffnen springt dorthin, die Startseite zeigt sie als Vorschau.
+	const POS_KEY = "impala67HeftPos";
+	const positions = () => { try { return JSON.parse(localStorage.getItem(POS_KEY)) || {}; } catch { return {}; } };
+	const lastPage = (p) => positions()[p] || 0;
+	function rememberPos() {
+		if (!pid) return;
+		const all = positions();
+		if (all[pid] === idx) return;
+		all[pid] = idx;
+		try { localStorage.setItem(POS_KEY, JSON.stringify(all)); } catch { /* Speicher voll: Position ist verzichtbar */ }
+	}
 	const INK_LEGACY = (p) => "impala67.ink." + p;
 
 	const docs = {};
@@ -100,7 +111,7 @@ export const HEFT = (() => {
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
 	const laserTimers = new Set();
 	let insertPos = "after";
-	let pop = null;
+	let pop = null, popScrim = null;
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
@@ -451,14 +462,20 @@ export const HEFT = (() => {
 		if (pop !== owner) return; // Pop wurde inzwischen geschlossen/ersetzt
 		const fmt = (t) => new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		owner.__verSnaps = snaps;
-		owner.innerHTML = '<div class="heft-pop-head">Verlauf (letzte 24 h)</div>' +
+		owner.innerHTML = '<div class="heft-pages-top">' +
+				'<div class="heft-pages-manager-head">' +
+					'<button type="button" class="heft-pages-icon" data-hepagesback="1" aria-label="Zurück" title="Zurück">‹</button>' +
+					'<b>Verlauf</b>' +
+					'<button type="button" class="heft-pages-icon" data-hepagesclose="1" aria-label="Schließen" title="Schließen">✕</button></div>' +
+				'<div class="heft-seg-row heft-pages-seg"><button type="button" class="heft-seg" data-hepagesback="1">Raster</button><button type="button" class="heft-seg active">Verlauf</button></div></div>' +
 			(snaps.length
 				? '<div class="heft-pop-grid">' + snaps.map((s, i) =>
 					'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
-						'<canvas width="92" height="130"></canvas><span>' + fmt(s.t) + '</span></div>').join("") + '</div>' +
-					'<div class="heft-pop-sub">Antippen stellt den Stand wieder her — der aktuelle Stand wird vorher im Verlauf gesichert. Snapshots entstehen automatisch (max. alle 10 Min.), bleiben 24 h und nur auf diesem Gerät.</div>'
-				: '<div class="heft-pop-sub">Noch keine Snapshots — sie entstehen automatisch beim Schreiben (max. alle 10 Min., 24 h aufbewahrt, nur auf diesem Gerät).</div>') +
-			'<button type="button" class="heft-pop-row" data-hepagesback="1">← Zurück</button>';
+						'<canvas width="264" height="374"></canvas><span>' + fmt(s.t) + '</span></div>').join("") + '</div>' +
+					'<div class="heft-pages-manager-actions heft-pages-foot"><span>Letzte 24 h · antippen zum Wiederherstellen</span></div>'
+				: '<div class="heft-pop-grid heft-pages-empty">Noch keine Snapshots. Sie entstehen automatisch beim Schreiben (max. alle 10 Min., nur auf diesem Gerät).</div>' +
+					'<div class="heft-pages-manager-actions heft-pages-foot"><span>Letzte 24 h</span></div>');
+		placePagesPop();
 		const cvs = owner.querySelectorAll(".heft-pop-thumb canvas");
 		snaps.forEach((s, i) => { if (cvs[i]) renderBlobPreview(s.key, cvs[i]); });
 	}
@@ -1887,6 +1904,7 @@ export const HEFT = (() => {
 	function closePop() {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
+		if (popScrim) { popScrim.remove(); popScrim = null; }
 		exportSel = null;
 	}
 	function onDocPointerDown(e) {
@@ -1894,6 +1912,13 @@ export const HEFT = (() => {
 		if (pop.contains(e.target)) return;
 		if (e.target.closest && e.target.closest("[data-hepagesmenu],[data-heplusmenu],[data-heimgmenu]")) return;
 		closePop();
+	}
+	// Seitenübersicht und Verlauf mittig im Heft halten (nach jedem Inhaltswechsel neu messen).
+	function placePagesPop() {
+		if (!pop || !host) return;
+		const hr = host.getBoundingClientRect();
+		pop.style.top = Math.max(12, Math.round((hr.height - pop.offsetHeight) / 2)) + "px";
+		pop.style.left = Math.max(8, Math.round((hr.width - pop.offsetWidth) / 2)) + "px";
 	}
 	function openPop(anchor, html, kind, cls) {
 		closePop();
@@ -1904,11 +1929,20 @@ export const HEFT = (() => {
 		host.appendChild(pop);
 
 		const hr = host.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
-		pop.style.top = Math.round(ar.bottom - hr.top + 6) + "px";
-		let left = kind === "pages" ? Math.round((hr.width - pop.offsetWidth) / 2) : Math.round(ar.left - hr.left);
-		if (left + pop.offsetWidth > hr.width - 8) left = Math.round(hr.width - pop.offsetWidth - 8);
-		pop.style.left = Math.max(8, left) + "px";
-		if (kind === "pages") wirePagesPop();
+		if (kind === "pages") {
+			// Seitenübersicht: mittig im Heft über abgedunkeltem Hintergrund, nicht an die Werkzeugleiste angedockt.
+			popScrim = document.createElement("div");
+			popScrim.className = "heft-pop-scrim";
+			popScrim.addEventListener("pointerdown", closePop);
+			host.appendChild(popScrim);
+			placePagesPop();
+			wirePagesPop();
+		} else {
+			pop.style.top = Math.round(ar.bottom - hr.top + 6) + "px";
+			let left = Math.round(ar.left - hr.left);
+			if (left + pop.offsetWidth > hr.width - 8) left = Math.round(hr.width - pop.offsetWidth - 8);
+			pop.style.left = Math.max(8, left) + "px";
+		}
 		setTimeout(() => document.addEventListener("pointerdown", onDocPointerDown, true), 0);
 	}
 	function togglePop(kind, anchor) {
@@ -1921,18 +1955,29 @@ export const HEFT = (() => {
 		const picking = !!exportSel;
 		const n = picking ? exportSel.size : 0;
 		const deletable = canDeletePages(doc.pages.length, n);
-		return '<div class="heft-pages-manager-head"><div><b>Seiten</b><small>' + (picking ? n + ' ausgewählt · über Seiten wischen für Schnellauswahl' : 'Ziehen zum Sortieren · antippen zum Öffnen') + '</small></div>' +
-			(picking ? '<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button>' : '<button type="button" class="heft-pop-row compact" data-heexpstart="1">Auswählen</button>') + '</div>' +
-			'<div class="heft-pop-grid">' + doc.pages.map((_, i) =>
-				'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="option" aria-selected="' + (picking && exportSel.has(i) ? 'true' : 'false') + '" tabindex="0" draggable="' + (!picking) + '" title="Seite ' + (i + 1) + '">' +
-					'<canvas width="132" height="187"></canvas>' +
-					'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
-					(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
-				'</div>').join('') + '</div>' +
-			'<div class="heft-pages-manager-actions">' + (picking
-				? '<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>🗑 Löschen (' + n + ')</button>' +
-					'<button type="button" data-heexpcancel="1">Fertig</button><button type="button" class="primary" data-heexportopen="1"' + (n ? '' : ' disabled') + '>Exportieren (' + n + ')</button>'
-				: '<button type="button" data-heverlauf="1">🕘 Verlauf</button><button type="button" class="primary" data-heimport="1">＋ PDF oder Bilder importieren</button>') + '</div>';
+		const thumbs = doc.pages.map((_, i) =>
+			'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="option" aria-selected="' + (picking && exportSel.has(i) ? 'true' : 'false') + '" tabindex="0" draggable="' + (!picking) + '" title="Seite ' + (i + 1) + '">' +
+				'<canvas width="264" height="374"></canvas>' +
+				'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
+				(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
+			'</div>').join('');
+		if (picking) return '<div class="heft-pages-manager-head"><div><b>Seiten</b><small>' + n + ' ausgewählt · über Seiten wischen für Schnellauswahl</small></div>' +
+			'<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button></div>' +
+			'<div class="heft-pop-grid">' + thumbs + '</div>' +
+			'<div class="heft-pages-manager-actions">' +
+				'<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>🗑 Löschen (' + n + ')</button>' +
+				'<button type="button" data-heexpcancel="1">Fertig</button><button type="button" class="primary" data-heexportopen="1"' + (n ? '' : ' disabled') + '>Exportieren (' + n + ')</button></div>';
+		return '<div class="heft-pages-top">' +
+			'<div class="heft-pages-manager-head">' +
+				'<button type="button" class="heft-pages-icon" data-heexpstart="1" aria-label="Auswählen" title="Auswählen">⋯</button>' +
+				'<b>Seiten</b>' +
+				'<button type="button" class="heft-pages-icon" data-hepagesclose="1" aria-label="Schließen" title="Schließen">✕</button></div>' +
+			'<div class="heft-seg-row heft-pages-seg"><button type="button" class="heft-seg active">Raster</button><button type="button" class="heft-seg" data-heverlauf="1">Verlauf</button></div></div>' +
+			'<div class="heft-pop-grid">' + thumbs +
+				'<button type="button" class="heft-pop-add" data-headdend="1"><span>+</span>Neue Seite</button></div>' +
+			'<div class="heft-pages-manager-actions heft-pages-foot"><span>Ziehen zum Sortieren</span>' +
+				'<button type="button" class="primary" data-heimport="1">' +
+					'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M4 20h16"/></svg>Importieren</button></div>';
 	}
 
 	function paintPopThumbs() {
@@ -2272,6 +2317,7 @@ export const HEFT = (() => {
 		const vpGo = viewport();
 		if (slot && vpGo) animateTo(view.x, slot.offsetTop + slot.offsetHeight / 2 - (vpGo.height / view.k) / 2, view.k, 320);
 		updateChrome();
+		rememberPos();
 	}
 	function addPageAt(paper, pageObj) {
 		const at = insertIndex();
@@ -2527,10 +2573,11 @@ export const HEFT = (() => {
 		if (d.heexpstart) { exportSel = new Set(); refreshPagesPop(); return; }
 		if (d.heselectall) { const all = exportSel && exportSel.size === doc.pages.length; exportSel = new Set(all ? [] : doc.pages.map((_, i) => i)); refreshPagesPop(); return; }
 		if (d.heexpcancel) { exportSel = null; refreshPagesPop(); return; }
+		if (d.hepagesclose) { closePop(); return; }
 		if (d.hepagesdelete) { deleteSelectedPages().catch((e2) => U.toast && U.toast("Seiten konnten nicht gelöscht werden: " + ((e2 && e2.message) || e2), "error")); return; }
 		if (d.heexportopen) { openExportDialog(); return; }
 		if (d.heverlauf) { openVerlaufPop(); return; }
-		if (d.hepagesback) { if (pop) { pop.dataset.kind = "pages"; pop.innerHTML = pagesPopHtml(); paintPopThumbs(); } return; }
+		if (d.hepagesback) { if (pop) { pop.dataset.kind = "pages"; pop.innerHTML = pagesPopHtml(); paintPopThumbs(); wirePagesPop(); } return; }
 		if (d.heverrestore != null) {
 			const s = pop && pop.__verSnaps && pop.__verSnaps[Number(d.heverrestore)];
 			if (!s) return;
@@ -2663,7 +2710,7 @@ export const HEFT = (() => {
 				const d2 = Math.abs(page.top + page.height / 2 - mid);
 				if (d2 < bestD) { bestD = d2; best = i; }
 			});
-			if (best !== idx) { idx = best; updateChrome(); }
+			if (best !== idx) { idx = best; updateChrome(); rememberPos(); }
 		}, 80);
 	}
 
@@ -2781,7 +2828,7 @@ export const HEFT = (() => {
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
 			doc = await load(pageId);
 			if (pid !== pageId) return;
-			idx = 0; sel = null; undoStack = []; redoStack = []; insertPos = "after";
+			idx = Math.min(lastPage(pageId), doc.pages.length - 1); sel = null; undoStack = []; redoStack = []; insertPos = "after";
 			view.x = 0; view.y = 0; view.k = 1; navReset();
 			expanded = false;
 
@@ -2804,6 +2851,7 @@ export const HEFT = (() => {
 			bindScroll();
 			bindTrayDrag();
 			layout();
+			if (idx) go(idx);
 
 			scheduleHandwritingIndexV2(idx);
 			purgeOrphanLegacyInk();
@@ -2813,6 +2861,7 @@ export const HEFT = (() => {
 		}
 	}
 	function unmount(discardPending = false) {
+		rememberPos();
 		closePop();
 		scanner.close();
 		// Offener Text-Editor MUSS vor dem Flush zu: inlineEd überlebte unmount, das nächste
@@ -2905,7 +2954,7 @@ export const HEFT = (() => {
 
 
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
+		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),

@@ -16,6 +16,8 @@ import { HEFT } from "./heft.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { homeViewHtml, hydrateHome } from "./home-view.js";
+import { lernanalyseParts } from "./lernanalyse.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -1198,38 +1200,11 @@ function renderHome(main) {
 	}
 	const favPages = pages.filter((p) => p.favorite && !isConflictPage(p));
 	const homeName = ((S.settings || {}).homeUserName || "").trim();
-
-	const conflictBanner = conflictCount
-		? `<div class="conflict-banner"><div class="conflict-banner-copy"><b>⚠ ${conflictCount} Sync-Konflikt${conflictCount === 1 ? "" : "e"}</b><span>Gleiche Seite auf mehreren Geräten geändert — Diff prüfen & lösen.</span></div><button data-conflictopen="0">Jetzt lösen</button></div>`
-		: "";
-
-	// Kompakte „Heute“-Leiste statt großer Widget-Kacheln
-	const pill = (cls, attr, title, ico, b, small) => `<button class="home-pill${cls}" ${attr} title="${title}"><span class="home-pill-ico">${ico}</span><span class="home-pill-body"><b>${b}</b><small>${small}</small></span></button>`;
-	const grades = (SCHULNOTEN.allGrades && SCHULNOTEN.allGrades()) || [];
-	const notenAvg = SCHULNOTEN.average ? SCHULNOTEN.average(grades) : null;
-	const notenSub = notenAvg ? `Ø ${notenAvg} · Eintragen` : "Schnitt & Eintragen";
-	const goalClass = lz.goalPct >= 100 ? " done" : "";
-	const todayPills = '<div class="home-today">' +
-		pill(homeStudy.total ? " attention" : "", 'data-homeaction="cards"', "Karteikarten", "🃏", "Karteikarten", homeStudy.neu + " neu · " + homeStudy.review + " fällig · " + homeStudy.learn + " lernen") +
-		pill(goalClass, 'data-lz-goal="1"', "Wochenziel anpassen", "🎯", esc(`Wochenziel ${lz.goalPct} %`), esc(lz.goalPct >= 100 ? "Ziel erreicht 🎉 · Ändern" : "Klick zum Ändern")) +
-		pill("", 'data-noten-open="1"', "Schulnoten öffnen", "🎓", "Noten", esc(notenSub)) +
-		"</div>";
-
 	const continueBlock = recent[0]
 		? `<button class="home-continue" data-page="${recent[0].id}"><span class="recent-icon">${esc(pageIconLabel(recent[0]))}</span><span class="recent-copy"><small>Weitermachen</small><b>${esc(recent[0].title)}</b><small>Zuletzt · ${U.fmtDate(recent[0].updated)}</small></span><span class="recent-arrow">›</span></button>`
 		: '<button class="home-continue muted" data-homeaction="newpage"><span class="recent-icon">✦</span><span class="recent-copy"><small>Start</small><b>Erste Seite anlegen</b><small>Workspace ist noch leer</small></span><span class="recent-arrow">›</span></button>';
 
 	const listRow = (attr, ico, b, small) => `<button class="home-list-row" ${attr}><span class="recent-icon sm">${ico}</span><b>${b}</b><small>${small}</small><i>›</i></button>`;
-	const subRecent = recent.slice(1, 5);
-	const subRecentList = subRecent.length
-		? '<div class="home-list home-subrecent">' + subRecent.map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg)), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
-		: (!recent[0] ? '<div class="empty-state compact"><b>Noch keine Seiten</b><p>Leg die erste an oder öffne die Bibliothek.</p><button data-homeaction="newpage">Neue Seite</button></div>' : "");
-	const recentBody = '<div class="home-recent-wrap">' +
-		continueBlock +
-		subRecentList +
-		'<div class="fold-foot"><button class="mini" data-homeaction="library">Bibliothek öffnen ›</button></div>' +
-		'</div>';
-
 	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
 	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
 	const leeches = STATE.activeCards().filter((c) => !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
@@ -1260,18 +1235,20 @@ function renderHome(main) {
 		: '<div class="empty-state compact"><b>Noch keine Favoriten</b><p>Der ☆-Stern oben rechts auf einer Seite pinnt sie hierher.</p></div>';
 
 	// Bereichs-Bausteine — ids identisch mit SETTINGS.HOME_SECTIONS (Einstellungen → Home)
+	// Lernanalyse: zugeklappt nur eine berechnete Kernaussage, die Panels liegen im Fold
+	const topInsight = (lz.smartInsights || [])[0];
+	const insightHeadline = topInsight
+		? `<p class="home-insight"><b>${esc(topInsight.title)}</b> ${esc(topInsight.desc)}</p>`
+		: '<p class="home-insight">Sobald du lernst, steht hier, was gut läuft und wo es hakt.</p>';
 	const SECTION_HTML = {
 		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
-		today: todayPills,
-		insights: LERNZEIT.homeWidgetHtml(lzTotals, lz),
+		insights: '<section class="home-analysis">' + insightHeadline + homeFold("insights", `Lernanalyse <span class="fold-meta">${lz.goalPct} % vom Wochenziel</span>`, LERNZEIT.homeWidgetHtml(lzTotals, lz), false) + "</section>",
 		decks: due > 0 ? homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true) : "",
 		favorites: favPages.length > 0 ? homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true) : "",
-		recent: homeFold("recent", `📄 Zuletzt & Weitermachen <span class="fold-meta">${pages.length} Seiten</span>`, recentBody, true),
 	};
 	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
 	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
 	const mobileLayout = SETTINGS.homeLayout();
-	const sectionsHtml = mobileLayout.filter((e) => e.on).map((e) => SECTION_HTML[e.id] || "").join("");
 	const mobileOn = new Set(mobileLayout.filter((e) => e.on).map((e) => e.id));
 	const mobileExtraHtml = mobileLayout
 		.filter((e) => e.on && !["today", "recent"].includes(e.id))
@@ -1300,11 +1277,13 @@ function renderHome(main) {
 			extraHtml: mobileExtraHtml,
 		})
 		: "";
-	const homeHtml = mobileHomeHtml || ('<div class="home home-v2 home-slim" data-key="home">' +
-		`<header class="home-hero"><div><h1>${greeting}${homeName ? ", " + esc(homeName) : ""} 👋</h1><p class="home-meta">${dateLine}</p></div><button class="home-customize" data-set="home" title="Homeseite anpassen (Bereiche & Begrüßung)">⚙</button></header>` +
-		conflictBanner +
-		'<div class="quick-actions"><button data-homeaction="newpage">+ Neue Seite</button></div>' +
-		sectionsHtml + "</div>");
+	const homeAnalysisHtml = () => { const la = lernanalyseParts(); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
+	// PC & Tablet: eine Startseite, zwei Looks zum Ausprobieren (home-view.js)
+	const homeHtml = mobileHomeHtml || homeViewHtml({
+		greeting, name: homeName, dateLine, conflictCount, last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),
+		todaySeconds: lz.todaySeconds, week: LERNZEIT.weekData(0, lzTotals), goalMin: LERNZEIT.weekGoalMinutes(),
+		streak: lz.streakDays || 0, analysisHtml: mobileHomeHtml ? "" : homeAnalysisHtml(),
+	});
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
 	// dadurch von allein erhalten (der zentrale Scroll-Anker unten greift nur noch,
@@ -1313,6 +1292,7 @@ function renderHome(main) {
 	U.morph(main, homeHtml);
 	main._lastHomeHtml = homeHtml;
 	restoreScroll();
+	hydrateHome(main);
 }
 
 // Papierkorb: Seiten, Stapel, Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen

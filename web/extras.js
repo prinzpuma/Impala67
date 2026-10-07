@@ -26,12 +26,7 @@ export const EXTRAS = (() => {
 	// ---- Zusätzliche Styles (Heatmap, Leech, Fußbereich, Mobile-Panel, Multi-Tab) ----
 	const style = document.createElement("style");
 	style.textContent = [
-		".heatmap-wrap{width:100%;max-width:100%;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}",
-		".heatmap{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:2px;min-width:max-content;padding:2px 0 6px}",
-		".heat-cell{width:10px;height:10px;border-radius:2px;background:var(--surface-hover-strong, rgba(128,128,128,.15))}",
-		".heat-cell.l1{background:color-mix(in srgb, var(--success) 30%, transparent)}.heat-cell.l2{background:color-mix(in srgb, var(--success) 55%, transparent)}.heat-cell.l3{background:color-mix(in srgb, var(--success) 80%, transparent)}.heat-cell.l4{background:var(--success)}",
 		".leech-badge{color:#e5534b;font-weight:600}",
-		".retention-table{max-width:520px}",
 		".page-footer{max-width:820px;margin:26px auto 60px;padding-top:10px;border-top:1px solid rgba(128,128,128,.25)}",
 		".backlinks h4{margin:12px 0 6px}.backlinks .crumb{margin-right:14px;cursor:pointer}",
 		// (KISS 23. Juli: Die Lernmodus-Basisregeln — .study-counts-Farben, .study-keys,

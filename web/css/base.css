@@ -31,7 +31,7 @@ button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active
 	}
 }
 /* Flächen heben sich beim Öffnen und beim Hover nur über Transfo… */
-.lib-card:hover, .deck-row:hover { transform: translateY(-2px) }
+.lib-card:hover { transform: translateY(-2px) }
 /* Schwebende Menüs und Dialoge verwenden dieselbe dezente Einble… */
 @keyframes uiEnter {
 	from { opacity: 0; transform: translateY(6px) scale(.985) }

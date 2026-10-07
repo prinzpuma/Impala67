@@ -2,20 +2,20 @@
 
 ## 1. Produkt und Plattformen
 
-- **Plattformunabhängige PWA**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First). Sie läuft nahtlos auf allen Plattformen:
-  - **iPad / Tablet**: Für handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht).
-  - **Laptop / PC (Linux, Windows, macOS)**: Für strukturiertes Tippen mit Tastatur (Markdown-Editor).
-  - **Smartphone**: Für schnelles Lesen und mobile Kurznotizen.
-- **Kostenlos & unabhängig**: Das Projekt ist darauf ausgelegt, dauerhaft ohne laufende Serverkosten für mich betrieben zu werden (Cloudflare Free Tier, GitHub Pages).
-- **Direkt ohne Bundler**: Die App nutzt native ES-Module und Standard-CSS. Alles läuft direkt im Browser ohne vorgeschalteten Build- oder Kompilierungsschritt.
-- **Plattformübergreifende Entwicklung**: Alle Entwickler-Tools, npm-Skripte und Tests müssen gleichermaßen unter Windows, Linux und macOS funktionieren.
+- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) mit Android-Hülle (Capacitor). Nutzung:
+  - **iPad / Tablet**: Handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht).
+  - **Laptop / PC (Linux, Windows, macOS)**: Strukturiertes Tippen (Markdown-Editor).
+  - **Smartphone / Android**: Schnelles Lesen und mobile Kurznotizen.
+- **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
+- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Capacitor kopiert nur die fertigen Dateien in die Android-Hülle.
+- **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren.
 
 ## 2. Daten und Synchronisation
 
-- **Local-First**: Alle Notizen und Daten liegen primär lokal im Browser (IndexedDB). Die App funktioniert immer offline.
-- **Cloudflare Live-Sync (E2EE)**: Schneller, Ende-zu-Ende-verschlüsselter Live-Sync zwischen Geräten über Cloudflare.
-- **Google Drive Backup**: Dient als optionales, unabhängiges Notfall-Backup.
-- **Protokoll-Details ausgelagert**: Spezifische technische Regeln für das Protokoll v4 (R2-Speicher, D1-Index, clientseitige Kompaktierung) liegen gebündelt im Skill `cloudflare-sync-v4`, um diese Datei übersichtlich zu halten.
+- **Local-First**: Alle Daten liegen primär lokal im Browser (IndexedDB). Die App funktioniert immer offline.
+- **Cloudflare Live-Sync (E2EE)**: Schneller, Ende-zu-Ende-verschlüsselter Sync zwischen Geräten.
+- **Google Drive Backup**: Optionales, unabhängiges Notfall-Backup.
+- **Protokoll-Details**: Technische Regeln für Protokoll v4 (R2, D1, Kompaktierung) stehen im Skill `cloudflare-sync-v4`.
 
 ## 3. Wichtige Bereiche
 
@@ -26,39 +26,36 @@
 - **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/drive.js`, `server/`
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
-- **Veröffentlichung**: `.github/workflows/release.yml`
-- **Backlog & Offene Punkte**: `TODO.md`
+- **Veröffentlichung**: `.github/workflows/release.yml`, `.github/scripts/set-version.mjs`
+- **Backlog**: `TODO.md`
 
 ## 4. Code-Qualität und Sicherheit
 
-- **Bugs an der Wurzel lösen**: Keine doppelten Regeln oder parallelen Sonderfälle (DRY / KISS / YAGNI).
-- **Dateigrößen im Zaum halten**: Große Module (`heft.js`, `editor.js`, `state.js`) nicht endlos aufblähen. Neue, in sich geschlossene Logik bevorzugt in kleine, gut testbare Hilfsmodule auslagern.
-- **Sicherheit & Geheimnisse**: Niemals API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben rein nutzerlokal im Browser.
-- **Rückwärtskompatibilität**: Lokale Daten in IndexedDB dürfen durch Updates niemals verloren gehen oder ungefragt inkompatibel werden.
-- **Offline-Cache**: Werden gecachte App-Dateien geändert, muss die Cache-Version im Service-Worker angepasst werden.
+- **Ursachen lösen, nicht Symptome**: Keine doppelten Regeln oder Sonderfälle nebeneinander. Einfachste Lösung zuerst (KISS), nichts auf Vorrat bauen (YAGNI).
+- **Dateigrößen**: Neue, in sich geschlossene Logik in kleine, testbare Module auslagern. Große Dateien, die nicht endlos wachsen sollen: `web/heft.js`, `web/editor.js`, `web/app.js`, `web/render.js`, `web/state.js`, `web/settings.js`, `web/ai.js`.
+- **Sicherheit & Geheimnisse**: Keine API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben nur lokal im Browser.
+- **Rückwärtskompatibilität**: Lokale IndexedDB-Daten dürfen durch Updates nie verloren gehen oder ungefragt inkompatibel werden.
+- **Offline-Cache**: Werden gecachte App-Dateien geändert, muss die Cache-Version im Service Worker angepasst werden.
 
-## 5. Kommunikation und Arbeitsweise
+## 5. Arbeitsweise
 
-- **Knapp & prägnant**: Antworten immer so kurz und direkt wie möglich halten. Auf den Punkt kommen, keine ausschweifenden Erklärungen oder langen Einleitungen.
-- **Verständliche Antworten**: Erkläre Änderungen in einfacher, alltagstauglicher Sprache. Beschreibe immer konkret, was sich für die Bedienung, das Verhalten oder den Nutzen der App ändert.
-- **Hintergründe auf den Punkt**: Erkläre bei wichtigen Entscheidungen kurz und verständlich die Gründe ("Warum wurde dieser Weg gewählt?"), ohne dich in Code-Monologen zu verlieren.
-- **Keine Code-Wiederholungen im Chat**: Vermeide es, lange Codeblöcke im Chattext zu duplizieren.
-- **Kontext sparen**: Große Dateien (>300 Zeilen) nicht ungezielt komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten.
-- **Gezielt testen**: Vor Änderungen zuerst die betroffenen Einzeltests ausführen. Vollständige Checks (`npm run verify`) kurz halten.
-- **Keine ungefragten Tests**: Erstelle niemals ungefragt neue Testdateien (`test/*.test.mjs`). Neue Testdateien dürfen nur angelegt werden, wenn der Nutzer dies ausdrücklich verlangt. Verifiziere Änderungen stattdessen über bestehende Tests, gezielte Checks oder die MCP-Live-Bridge.
+- **Kommunikation**: Kurz und verständlich antworten. Änderungen so beschreiben, wie sie sich für Bedienung, Verhalten oder Nutzen der App auswirken. Keine langen Code-Blöcke im Chat wiederholen.
+- **Kontext sparen**: Dateien über 300 Zeilen nicht komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten. Details zu Agenten-Delegation stehen in `CLAUDE.md`.
+- **Testen**: Vor einer Änderung die betroffenen Einzeltests ausführen. `npm run verify` nur bei Bedarf.
+- **Keine ungefragten Tests**: Neue Testdateien (`test/*.test.mjs`) nur auf ausdrücklichen Wunsch anlegen. Sonst über bestehende Tests, gezielte Checks oder die MCP-Live-Bridge verifizieren.
 
 ## 6. Veröffentlichung
 
-- Ein Push auf den `main`-Branch veröffentlicht die PWA automatisch über GitHub Pages.
-- Versionsnummern und Cache-Strings für Releases werden im CI-Workflow gesetzt.
+- **Ein Push auf `main` geht sofort live**: Er veröffentlicht die PWA automatisch über GitHub Pages. Vorher prüfen, ob die Änderung fertig ist.
+- **Versionen automatisch**: Der CI-Workflow setzt Versionsnummern und Cache-Strings über `.github/scripts/set-version.mjs`. Nicht von Hand ändern.
 
 ## 7. KI- & Entwickler-Integration (MCP Live-Bridge)
 
-- **Direkte App-Verbindung (`mcp/` & `web/mcp-bridge.js`)**: Der MCP-Server verbindet KI-Assistenten (wie Antigravity) über einen lokalen WebSocket (`ws://127.0.0.1:8765`) direkt mit der im Browser laufenden App (`http://localhost:8000`).
-- **Live-Tools**:
-  - **Inhalte verwalten**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`.
-  - **Diagnose & Performance**: `impala_get_diagnostics` (aktive Seite, Tabs, Speicher, Sync-Status, Console-Errors) und `impala_get_performance_trace` (Profiler-Trace, Long-Tasks).
-  - **Live-Testing & UI-Interaktion**: `impala_eval` (beliebigen JS-Code im Browser-Kontext ausführen) und `impala_run_ui_action` (Seiten öffnen, Tabs schließen, Suche öffnen, Sync anstoßen).
-- **Entwickler-Workflow**: Der Agent kann neue Features, Fehlerbehebungen und UI-Zustände direkt im echten Browser-Tab prüfen, Messwerte auslesen und ohne manuelle Testschritte des Nutzers verifizieren.
-- **NotebookLM CLI-Integration (`notebooklm-py`)**: Auf dem Desktop-PC steht die offizielle CLI bereit (`notebooklm`). Der Agent kann Notizen via `impala67`-MCP auslesen, per CLI an Google NotebookLM übergeben (`notebooklm source add`), Studio-Artefakte wie Audio-Podcasts, Quizzes oder Flashcards generieren (`notebooklm generate`/`download`) und fertige Karteikarten oder Zusammenfassungen lautlos per `impala_create_flashcard` / `impala_update_page` direkt in Impala67 zurückschreiben.
-
+- **Verbindung**: Der MCP-Server in `mcp/` verbindet KI-Assistenten über einen lokalen WebSocket (`ws://127.0.0.1:8765`) mit der im Browser laufenden App (`http://localhost:8000`). Die Gegenseite in der App ist `web/mcp-bridge.js`.
+- **Tools** (Stand: Code in `mcp/` und `web/mcp-bridge.js`):
+  - **Inhalte**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`
+  - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`
+  - **Live-Testing & UI**: `impala_eval`, `impala_run_ui_action`
+  - **Heft-Import**: `impala_heft_scan_extract`, `impala_heft_scan_review_list`, `impala_heft_scan_consensus_import`
+  - **Speicher**: `impala_storage_report`, `impala_storage_cleanup`
+- **Entwickler-Workflow**: Der Agent prüft Features und Fehler direkt im echten Browser-Tab und liest Messwerte aus. Der Nutzer muss dafür keine manuellen Testschritte machen.

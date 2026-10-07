@@ -8,6 +8,5 @@
 - **Einzeltests**: `node --test test/<name>.test.mjs` (ai, editor, heft, state, sync). Danach bei Bedarf `npm run verify`.
 - **Live-Prüfung**: Der MCP-Server `impala67` (`.mcp.json`) verbindet sich mit der offenen App im Browser. Ohne offenen Tab arbeitet er nur auf `mcp/.storage.json`.
 - **Skills**: Projekt-Skills liegen in `.claude/skills/` (z. B. `cloudflare-sync-v4` vor Sync-Arbeiten laden).
-- **Größte Dateien** (immer gezielt per Grep/Zeilenausschnitt lesen): `heft.js`, `editor.js`, `app.js`, `render.js`, `state.js`, `settings.js`, `ai.js`.
-- **Token-Effizienz / Delegation**: Kleine Aufgaben selbst erledigen (Subagents starten ohne Kontext und kosten dann mehr). Breite Suchen über viele Dateien → Agent `scout` (Haiku). Fertig geplante, mechanische Mehrdatei-Änderungen → Agent `worker` (Sonnet). Kein Agent für Einzeiler oder Dinge, deren Kontext schon im Gespräch steht.
+- **Delegation**: Kleine Aufgaben selbst erledigen. Breite Suchen über viele Dateien → Agent `scout`. Fertig geplante Mehrdatei-Änderungen → Agent `worker`. Kein Agent für Einzeiler.
 - **Handschrift-ML** (`handwriting/`): Python-Training mit eigenem `.venv`; erzeugtes Modell landet als `web/handwriting-model.onnx`.

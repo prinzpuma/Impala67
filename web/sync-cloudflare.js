@@ -16,6 +16,7 @@ import {
 	isBlobAlive,
 	isSyncBlobId,
 	prepareCloudEvents,
+	prepareIncomingCloudEvents,
 	pruneEventsForUpload,
 } from "./sync-core.js";
 import {

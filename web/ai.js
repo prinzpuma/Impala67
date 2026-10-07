@@ -1248,7 +1248,10 @@ export const AI = (() => {
 		};
 		let nudged = false;
 		const fail = (error) => {
-			if (error && typeof error === "object") error.reasoning = String(S.aiThinkingDraft || "").trim();
+			if (error && typeof error === "object") {
+				error.reasoning = String(S.aiThinkingDraft || "").trim();
+				error.draft = String(S.aiDraft || "").trim();
+			}
 			S.aiThinkingDraft = "";
 			S.aiDraft = "";
 			flushEdits();
