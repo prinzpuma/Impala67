@@ -142,19 +142,28 @@ def collate_fn(batch):
 
 
 class LengthBucketSampler(torch.utils.data.Sampler):
-    """Bündelt ähnlich lange Beispiele in einen Batch: viel weniger Auffüll-Padding, deutlich schneller."""
+    """Bündelt ähnlich lange Beispiele in einen Batch: viel weniger Auffüll-Padding, deutlich schneller.
+    Lange Formeln bekommen kleinere Batches (Punkte-Budget), sonst läuft der GPU-Speicher über."""
 
-    def __init__(self, dataset: "DynamicInkDataset", batch_size: int):
+    def __init__(self, dataset: "DynamicInkDataset", batch_size: int, max_points: int = 64000):
         self.dataset = dataset
         self.batch_size = batch_size
+        self.max_points = max_points
 
     def _batches(self):
+        lengths = [len(s[0]) for s in self.dataset.samples]
         # Leichtes Rauschen auf die Länge, damit die Batches nicht jede Epoche identisch sind
-        order = sorted(
-            range(len(self.dataset)),
-            key=lambda i: len(self.dataset.samples[i][0]) * random.uniform(0.9, 1.1),
-        )
-        batches = [order[i : i + self.batch_size] for i in range(0, len(order), self.batch_size)]
+        order = sorted(range(len(lengths)), key=lambda i: lengths[i] * random.uniform(0.95, 1.05))
+        batches, cur, cur_max = [], [], 0
+        for i in order:
+            new_max = max(cur_max, lengths[i])
+            if cur and (len(cur) >= self.batch_size or (len(cur) + 1) * new_max > self.max_points):
+                batches.append(cur)
+                cur, new_max = [], lengths[i]
+            cur.append(i)
+            cur_max = new_max
+        if cur:
+            batches.append(cur)
         random.shuffle(batches)
         return batches
 
@@ -162,7 +171,7 @@ class LengthBucketSampler(torch.utils.data.Sampler):
         return iter(self._batches())
 
     def __len__(self):
-        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
+        return len(self._batches())
 
 
 def ctc_greedy_decode(log_probs, blank_idx: int = BLANK_IDX) -> str:
@@ -314,7 +323,7 @@ def train(
             total_loss += loss.item()
 
         scheduler.step()
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = total_loss / max(1, batch_idx + 1)
 
         # 1. Informativer Durchlauf auf synthetischem Val-Set
         model.eval()
