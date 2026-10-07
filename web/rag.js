@@ -1,7 +1,6 @@
 "use strict";
-import { S, STATE } from "./state.js";
+import { S } from "./state.js";
 import { DB } from "./db.js";
-import { U } from "./util.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { rankRag } from "./rag-ranking.js";
 import { PERF_PROFILER } from "./performance-profiler.js";

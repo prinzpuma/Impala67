@@ -123,12 +123,6 @@ export function setBreakReminder(enabled) {
 
 export const isBreakReminderEnabled = getBreakReminder;
 
-export function handleBreakReminderToggle(enabled) {
-	const on = typeof enabled === "boolean" ? enabled : !getBreakReminder();
-	setBreakReminder(on);
-	if (document.querySelector(".settings-modal-v2")) openSettings("ai");
-	return on;
-}
 
 // Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
 export async function applyBg() {
@@ -973,10 +967,6 @@ export async function testProviderRow(id, btn) {
 	}
 }
 export const handleProviderTest = (t) => testProviderRow(t.dataset.provtest, t);
-// Beim Öffnen des KI-Tabs: alle Quellen parallel durchpingen — jede Karte zeigt ihren Status.
-export function testAllProviders() {
-	return Promise.all(Array.from(document.querySelectorAll("[data-provrow]")).map((row) => testProviderRow(row.dataset.provrow)));
-}
 
 // Das Produkt bietet bewusst nur das geprüfte lokale Bekko-Modell an.
 // Lokales Embedding-Modell (Bekko a8m): Status aktualisieren und UI synchronisieren.
@@ -1225,17 +1215,6 @@ export async function handleDeleteAllCards(t) {
 	}
 }
 
-export async function handleDriveSync(t) {
-	const hasId = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId;
-	if (!hasId) {
-		U.toast("Für den Drive-Sync fehlt noch die Google Client-ID — einmalig unter ⚙️ Einstellungen → Sync einrichten.", "error");
-		openSettings("sync");
-		return;
-	}
-	// Dieser Klick ist die von Google geforderte Nutzeraktion: Ist das Token abgelaufen,
-	// wird es hier erneuert und derselbe Ablauf synchronisiert direkt weiter.
-	await runDriveSync(t, "☁️ ");
-}
 
 export async function handleBackupNow(button) {
 	const old = button?.textContent || "";
@@ -1509,7 +1488,6 @@ export const SETTINGS = {
 	switchKiTab,
 	handleApplyCustomModel,
 	testProviderRow,
-	testAllProviders,
 	handleProviderTest,
 	handleCheckUpdate,
 	handleApplyPwaUpdate,
@@ -1520,7 +1498,6 @@ export const SETTINGS = {
 	handleDriveSyncAfterChange,
 	handleClearBg,
 	handleResetAll,
-	handleDriveSync,
 	handleBackupNow,
 	handleThemeSelect,
 	handleSystemThemeToggle,
@@ -1537,7 +1514,6 @@ export const SETTINGS = {
 	getBreakReminder,
 	setBreakReminder,
 	isBreakReminderEnabled,
-	handleBreakReminderToggle,
 };
 
 document.addEventListener("change", (e) => {

@@ -25,7 +25,6 @@ export const KNOWN_SUBJECTS = Object.freeze([
 	"Sport",
 ]);
 
-export const SUBJECTS = KNOWN_SUBJECTS;
 export const DEFAULT_SUBJECT = "Allgemein";
 
 const MAX_LEN = 80;
@@ -643,28 +642,17 @@ export const FACH = (() => {
 		return syncResult;
 	}
 
-	function clearCache() {
-		pageClassificationCache.clear();
-		activeEmbeddingJobs.clear();
-		prototypeVectors = null;
-		prototypePromise = null;
-		cachedModelIdentity = "";
-	}
 
 	return {
 		KNOWN_SUBJECTS,
-		SUBJECTS: KNOWN_SUBJECTS,
 		DEFAULT_SUBJECT,
 		clean,
 		page,
 		pageAsync,
-		detectPageAsync: pageAsync,
-		classifyWithEmbedding: classifyPageWithEmbedding,
 		deck,
 		context,
 		card,
 		resolveSubject,
-		clearCache,
 	};
 })();
 

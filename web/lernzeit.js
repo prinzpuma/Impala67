@@ -814,12 +814,6 @@ export const LERNZEIT = (() => {
 		if (tickTimer) return;
 		tickTimer = setInterval(tick, TICK_MS);
 	}
-	function stopInterval() {
-		if (tickTimer) {
-			clearInterval(tickTimer);
-			tickTimer = 0;
-		}
-	}
 	function contextChanged() {
 		tick();
 	}
@@ -835,12 +829,8 @@ export const LERNZEIT = (() => {
 		poke,
 		contextChanged,
 		startInterval,
-		stopInterval,
 		isBreakReminderEnabled,
 		showBreakReminderPrompt,
-		getActiveStretchMs: () => activeStretchMs,
-		setActiveStretchMs: (ms) => { activeStretchMs = ms; },
-		setReminderShownForBlock: (b) => { reminderShownForBlock = b; },
 		computeSmartInsights,
 		tick,
 	};

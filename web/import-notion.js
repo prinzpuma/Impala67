@@ -2,7 +2,6 @@
 
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
-import { DB } from "./db.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 
 export const NOTION_MIGRATOR = (() => {

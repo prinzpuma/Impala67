@@ -102,6 +102,5 @@ export const HEFT_INDEXER = (() => {
 		startBackgroundScan,
 		findUnindexedPages,
 		stop,
-		get isRunning() { return scanRunning; },
 	};
 })();

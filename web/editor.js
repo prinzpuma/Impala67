@@ -4,7 +4,6 @@ import { U } from "./util.js";
 import { DB } from "./db.js";
 import { RAG } from "./rag.js";
 import { HEFT } from "./heft.js";
-import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import {
@@ -12,10 +11,6 @@ import {
 	serialize as serializeMarkdown,
 	serializeBlock,
 	FENCE,
-	COLOR_META_RE,
-	HEFT_RE,
-	FILE_RE,
-	IMAGE_RE,
 	mimeFromName,
 } from "./editor-markdown.js";
 

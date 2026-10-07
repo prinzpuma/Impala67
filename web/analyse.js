@@ -86,12 +86,6 @@ export const ANALYSE = (() => {
 			dwell.ms += 15000;
 		}, 15000);
 	}
-	function stopDwellTimer() {
-		if (dwellTimer) {
-			clearInterval(dwellTimer);
-			dwellTimer = 0;
-		}
-	}
 	document.addEventListener("visibilitychange", () => { if (document.hidden && dwell) dwell.lost++; });
 	window.addEventListener("pagehide", flushDwell);
 
@@ -212,5 +206,5 @@ export const ANALYSE = (() => {
 			"</div>";
 	}
 
-	return { statsHtml, initDwellTimer, stopDwellTimer };
+	return { statsHtml, initDwellTimer };
 })();

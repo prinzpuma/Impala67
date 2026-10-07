@@ -5,7 +5,7 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { cooperativeGate, yieldToMain } from "./cooperative.js";
+import { cooperativeGate } from "./cooperative.js";
 import {
 	CLOUD_SYNC_PROTOCOL,
 	CLOUD_SYNC_PROTOCOL_HEADER,
@@ -16,11 +16,9 @@ import {
 	isBlobAlive,
 	isSyncBlobId,
 	prepareCloudEvents,
-	prepareIncomingCloudEvents,
 	pruneEventsForUpload,
 } from "./sync-core.js";
 import {
-	MAX_USER_STORAGE_BYTES,
 	decryptBlobRecord,
 	decryptPayload,
 	deriveSyncCredentials,
@@ -824,7 +822,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	return {
-		init, configure, disconnect, catchUp: requestSync, syncNow: () => requestSync(false), purgeCloudData,
+		init, configure, disconnect, syncNow: () => requestSync(false), purgeCloudData,
 		generateSyncKey, status: () => ({ ...state }), aiRequest, notionRequest,
 		isConfigured: () => !!(state.url && (credentials || state.syncKey)),
 		migrateLocalV4,

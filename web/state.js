@@ -103,14 +103,12 @@ export const S = {
 	notionPageId: "",
 	pendingTextFile: null, // { name, content, size } — langer geklebter Text, wird als .txt-Anhang statt Fließtext gesendet
 	pendingPdf: null, // { name, content, size, pages } — PDF-Anhang für den aktuellen Chat, wird nicht automatisch als Seite gespeichert
-	driveUserEmail: null, // gesetzt nach erfolgreichem Google-Login (nur für die aktuelle Sitzung)
 	availableModels: [], // vom Server abgefragte Modell-Liste (ephemer, nicht persistiert)
 	modelMenuOpen: false,
 	modelMenuAnchor: "panel", // welches Chat-Fenster das Modell-Dropdown geöffnet hat: "panel" | "full"
 	modelMenuLoading: false, // true, solange listModels() die Quellen abfragt
 	modelMenuSection: "root", // "root" | "models" | "thinking"
 	customModelProviderPick: null, // im Dropdown gewählte Quelle für ein eigenes Modell
-	editingMsgId: null, // mid einer Nutzer-Nachricht, die gerade bearbeitet wird
 	refineOpenMid: null, // mid einer Assistenten-Antwort, deren "Anpassen"-Menü offen ist
 	libMode: "notion", // Bibliothek-Ansicht: "notion" (Dokumente/Seitenbaum) | "hefte" (GoodNotes-Regal) | "nlm" (NotebookLM-Mediathek)
 	nlmLibFilter: "all", // NotebookLM-Mediathek-Filter: "all" | "inbox" | "audio" | "video" | "mindmap" | "slides"

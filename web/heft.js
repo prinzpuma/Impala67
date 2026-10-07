@@ -11,7 +11,7 @@ import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
-import { EXPORT_W, exportName, exportIdxs, buildPdf, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
+import { exportName, buildPdf, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
@@ -505,7 +505,6 @@ export const HEFT = (() => {
 	// abgeleitete Rest aus der Blob-Ära und konnte nach einem Import veraltete
 	// Seitenzahlen liefern (oder gar nicht mehr existieren).
 	const docOf = (p) => S.heftDocs[p] || docs[p] || null;
-	const hasHeft = (p) => { const d = docOf(p); return !!(d && d.pages && d.pages.length); };
 	const pagesOf = (p) => { const d = docOf(p); return d && d.pages && d.pages.length ? d.pages.length : 1; };
 
 	function paintPaper(x, w, h, kind) {
@@ -3556,19 +3555,11 @@ export const HEFT = (() => {
 		return renderPageCanvas(pg, w).toDataURL("image/png");
 	}
 
-	async function pageCanvas(pageId, pageIdx, w = 1100) {
-		if (!pageId) return null;
-		const d = pageId === pid && doc ? doc : await load(pageId);
-		const pg = d && d.pages && d.pages[pageIdx || 0];
-		if (!pg) return null;
-		return renderPageCanvas(pg, w, pageIdx || 0);
-	}
 
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, hasHeft, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, pageCanvas, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
+		mount, unmount, saveNow, addText, restoreDoc, pagesOf, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),
-		lastStrokeTime: () => lastStrokeAt,
 	};
 })();

@@ -1,6 +1,5 @@
 "use strict";
 import { U } from "./util.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 
 // handschrift.js — Handschrift- und Strich-Erkennung für Impala67 (heft.js).
 //
@@ -83,33 +82,6 @@ export const HANDSCHRIFT = (() => {
 		});
 	}
 
-	// Liefert erkannten Text oder null (= Aufrufer behält den bisherigen Stand).
-	async function recognize(canvas, strokes = null) {
-		// 1. Priorität: Lokale Stricherkennung (Online Handwriting via ONNX Runtime Web)
-		if (strokes && Array.isArray(strokes) && strokes.length > 0) {
-			try {
-				const inkText = await recognizeStrokes(strokes);
-				if (inkText && inkText.trim()) return inkText.trim();
-			} catch (e) {
-				console.info("Handschrift: Vektor-Stricherkennung nicht verfügbar, Fallback auf Bild-OCR:", e?.message || e);
-			}
-		}
-
-		if (!canvas) return null;
-
-		// 2. Priorität: On-Device Google ML Kit auf Android (für Fotos / Bild-Anhänge)
-		if (PLATFORM_NATIVE.isNative && PLATFORM_NATIVE.ocr.isAvailable) {
-			try {
-				const mlkitText = await PLATFORM_NATIVE.ocr.recognizeCanvas(canvas);
-				if (mlkitText != null) return mlkitText;
-			} catch (e) {
-				console.warn("Handschrift: ML Kit fehlgeschlagen:", e);
-			}
-		}
-
-		return null;
-	}
-
 	const STORAGE_KEY_SAMPLES = "impala67_handwriting_training_samples";
 
 	function getTrainingSamples() {
@@ -149,7 +121,6 @@ export const HANDSCHRIFT = (() => {
 
 	return {
 		available,
-		recognize,
 		recognizeStrokes,
 		recognizeStrokesDetails,
 		saveTrainingSample,

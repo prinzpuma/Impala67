@@ -828,22 +828,6 @@ export const AI = (() => {
 		copyThoughtMetadata(message, out, isGoogle);
 		return out;
 	}
-	async function debugProbe() {
-		const c = cfg(), messages = [{ role: "system", content: "Antworte ausschließlich mit OK." }, { role: "user", content: "Schreibe OK." }];
-		const run = async (name, tools, extras) => {
-			const started = performance.now();
-			try {
-				const message = await doChat(messages, tools, null, null, extras, () => {});
-				return { name, ok: true, ms: Math.round(performance.now() - started), answer: String(message.content || "").slice(0, 120), hasReasoning: !!message.reasoning };
-			} catch (error) {
-				return { name, ok: false, ms: Math.round(performance.now() - started), status: error instanceof AiHttpError ? error.status : null, error: errorText(error).slice(0, 260) };
-			}
-		};
-		return {
-			provider: c.providerId || "—", model: c.model || "—", base: c.base || "—", pingOk: await ping(),
-			tests: [await run("Antwort mit Thinking-Parametern", null, true), await run("Antwort ohne Thinking-Parameter", null, false), await run("Antwort mit Tool-Schema", fullToolDefs(), false)],
-		};
-	}
 	async function complete(prompt, system) {
 		const messages = system ? [{ role: "system", content: system }] : [];
 		messages.push({ role: "user", content: prompt });
@@ -1427,7 +1411,6 @@ export const AI = (() => {
 		resolve(answer);
 		return true;
 	}
-	const hasPendingChoice = () => Object.keys(pendingChoices).length > 0;
 	async function refine(historyMessages, instruction, onDelta, onReasoning) {
 		return (await chatOnce([{ role: "system", content: systemPrompt() }, ...historyMessages, { role: "user", content: instruction }], null, onDelta, onReasoning)).content || "";
 	}
@@ -1444,5 +1427,5 @@ export const AI = (() => {
 		onProgress: onEmbeddingProgress,
 	});
 
-	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, hasPendingChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugProbe, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugReport, MODEL_PRESETS };
 })();

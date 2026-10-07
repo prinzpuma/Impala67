@@ -193,12 +193,6 @@ export const HANDWRITING_CTC = (() => {
 		};
 	}
 
-	// Greedy CTC-Decoding (Abwärtskompatibel)
-	function greedyDecode(logits2D, vocab = HANDWRITING_VOCAB) {
-		const res = decodeWithConfidence(logits2D, vocab);
-		return res.text;
-	}
-
 	// Bereinigung von Formatierungsfehlern und Wörterbuch-Abgleich
 	function cleanTranscription(text) {
 		const cleaned = String(text || "")
@@ -213,7 +207,6 @@ export const HANDWRITING_CTC = (() => {
 	}
 
 	return {
-		greedyDecode,
 		decodeWithConfidence,
 		cleanTranscription,
 		correctWord,

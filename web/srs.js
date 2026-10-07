@@ -213,12 +213,6 @@ export const SRS = (() => {
 		return out;
 	}
 
-	// Reine Formeln für Unit-Tests / Debugging (FSRS-5-Referenz)
-	const formulas = {
-		W, DECAY, FACTOR, REQUEST_RETENTION, MAX_IVL, MIN_STABILITY,
-		initStability, initDifficulty, retrievability, nextInterval,
-		nextDifficulty, recallStability, forgetStability, shortTermStability, fuzzDays,
-	};
 
-	return { newCard, rate, preview, formulas };
+	return { newCard, rate, preview };
 })();

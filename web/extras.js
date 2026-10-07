@@ -4,7 +4,6 @@ import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
 import { NLM } from "./notebooklm.js";
-import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
@@ -320,11 +319,6 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			seen.add(key);
 		}
 		return count;
-	}
-	async function importCsvFile(file) {
-		const parsed = parseCardText(await U.readAsText(file));
-		const n = await importCards(parsed.cards, false);
-		U.toast(n + " Karten importiert.", "success");
 	}
 
 	// ---- sql.js bei Bedarf nachladen (nur für .apkg nötig, ~1 MB WASM) ----
@@ -706,5 +700,5 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		}
 	});
 
-	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportTxt, exportCsv, exportApkg, importCsvFile, importApkgFile, exportPagePdf, exportPageMd };
+	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportTxt, exportCsv, exportApkg, importApkgFile, exportPagePdf, exportPageMd };
 })();

@@ -22,11 +22,8 @@ export const HANDWRITING_VOCAB = (() => {
 	const CHAR_TO_IDX = new Map(CHARACTERS.map((char, index) => [char, index]));
 
 	return {
-		BLANK_INDEX: 0,
 		CHARACTERS,
 		CHAR_TO_IDX,
 		size: CHARACTERS.length,
-		charForIndex: (idx) => CHARACTERS[idx] || "",
-		indexForChar: (char) => CHAR_TO_IDX.get(char) ?? 0,
 	};
 })();

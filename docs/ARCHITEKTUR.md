@@ -122,7 +122,7 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `lernzeit.js`, `telemetrie.js`, `analyse.js`, `fach.js` | ~2150 | Lernzeit, Statistik, Fächer-Erkennung |
 | `schulnoten.js`, `notebooklm.js`, `voice.js` | | Noten, NotebookLM-Panel, Sprache |
 | `experimente.js` | 652 | experimentelle Lernmodi (standardmäßig aus) |
-| `graph.js` + `graph-worker.js` | 662 | Wissensgraph – **von keiner Stelle der Oberfläche aufrufbar** |
+| `graph.js` + `graph-worker.js` | 662 | Wissensgraph (Knopf unten links; verdrahtet sich beim Import selbst an `#btnGraph`) |
 
 ### Einstellungen
 | Datei | Zeilen | Aufgabe |
@@ -168,8 +168,8 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 | `esc`/`$`/`blurActive`/Overlay-Wrapper | in 5+ Dateien |
 | `"local:bekko-a8m"` als Text | 8× statt Konstante |
 
-### B5 – Toter bzw. unerreichbarer Code
-- `graph.js` + `graph-worker.js` (~660 Z.): nur importiert, nirgends geöffnet.
+### B5 – Toter Code
+> Achtung bei Analysen: Mehrere Module (z. B. `graph.js`, `popovers.js`) hängen sich beim Import **selbst** an DOM-Knöpfe. „Niemand ruft X auf“ heißt deshalb nicht „X ist unerreichbar“.
 - ~35 öffentliche Funktionen ohne jeden Aufrufer (z. B. `AI.debugProbe`, `HEFT.pageCanvas`, `FACH.classifyWithEmbedding`, `LERNZEIT.setActiveStretchMs`, `CLOUDFLARE_SYNC.catchUp`, `SETTINGS.testAllProviders`, `sync-core.heftDiffOps`).
 - Viele Module bieten mehr nach außen an, als genutzt wird (nur intern gebrauchte Funktionen im Rückgabe-Objekt).
 
@@ -183,7 +183,7 @@ Migrationen alter Datenformate: `db.js:59–75` (alte DB „notion“), `state-c
 Reihenfolge nach **Nutzen pro Risiko**. Jeder Schritt einzeln committen, vorher und nachher `npm test` und eine Live-Prüfung über die MCP-Bridge.
 
 1. **Aufräumen ohne Verhaltensänderung** (risikoarm)
-   - Tote Funktionen und `heftDiffOps` entfernen; über `graph.js` entscheiden (anbinden oder löschen).
+   - Tote Funktionen und `heftDiffOps` entfernen.
    - Doppelte Helfer zusammenführen (B4): Krypto/gzip/mapLimit → `sync-core`/`sync-crypto`; Vektor-Mathe → `rag-ranking.js`; Embedding-Konstante.
 2. **Monolithen schneiden** (mittel, rein mechanisch)
    - `heft.js` → `heft-scanner-ui.js` (Scanner), danach `heft-viewport.js` (Zoom/Kacheln) und `heft-input.js` (Stift/Lasso).

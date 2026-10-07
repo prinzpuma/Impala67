@@ -596,6 +596,5 @@ export const NLM = (() => {
 	return {
 		openDialog, openExternal, sendPages, renderPane, importFiles,
 		listArtifacts, playById, saveById, deleteById, placeById, kindIcon, kindLabel,
-		hideEmbeddedIfActive: () => {}, // Kompatibilität: früherer Webview-Modus (v3) — bewusst No-Op
 	};
 })();

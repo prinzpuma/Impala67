@@ -105,8 +105,6 @@ function gnFolderHtml(folder) {
 		'<span class="lib-folder-count">' + direct + (direct === 1 ? " Objekt" : " Objekte") + "</span>" +
 		'<button class="gn-folder-more" data-gnfoldermenu="' + U.esc(folder.id) + '" title="Ordneroptionen" aria-label="Ordneroptionen">•••</button></div>'; 
 }
-// Kompatibler Export für andere Module; GoodNotes verwendet intern gnFolderHtml.
-export function libFolderHtml(folder) { return gnFolderHtml(folder); }
 
 // GoodNotes-artiger Neu-Dialog: eine Aktion, danach klarer Typ statt permanenter
 // "Neue Ordner"-Kachel und Eingabezeile in der Bibliothek.
@@ -825,7 +823,6 @@ export const LIBRARY = {
 	libCardHtml,
 	libDocHtml,
 	libCoverHtml,
-	libFolderHtml,
 	folderTone,
 	defaultCover,
 	COVER_PRESETS,
