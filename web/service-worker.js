@@ -57,6 +57,8 @@ const APP_FILES = [
 	"./embedding.js",
 	"./think-heuristik.js",
 	"./handschrift.js",
+	"./abschreiben.js",
+	"./abschreiben-texte.js",
 	"./handwriting-preprocessor.js",
 	"./handwriting-vocab.js",
 	"./handwriting-ctc.js",

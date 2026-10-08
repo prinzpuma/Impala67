@@ -180,6 +180,7 @@ function renderAi(vm) {
 					'</small>' +
 				'</span>' +
 				'<span id="handwritingActions">' +
+					button("✍️ Abschreiben", "btnOpenAbschreiben", "secondary") + ' ' +
 					(samplesCount > 0
 						? button("📥 Exportieren", "btnExportHandwritingSamples", "secondary") + ' ' + button("🗑 Leeren", "btnClearHandwritingSamples", "secondary danger-text")
 						: '') +

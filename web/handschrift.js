@@ -91,10 +91,12 @@ export const HANDSCHRIFT = (() => {
 		} catch { return []; }
 	}
 
-	function saveTrainingSample(strokes, label) {
+	// meta: optionale Zusatzfelder, z. B. { split: "eval" } für Messzeilen aus dem Abschreib-Modus
+	function saveTrainingSample(strokes, label, meta = {}) {
 		if (!strokes || !strokes.length || !label || !String(label).trim()) return false;
 		const samples = getTrainingSamples();
 		samples.push({
+			...meta,
 			id: U.uid(),
 			text: String(label).trim(),
 			strokes: strokes.map((s) => ({

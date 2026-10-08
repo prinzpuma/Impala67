@@ -1704,6 +1704,9 @@ function wireEvents() {
 			case "btnDeleteLocalEmbedding":
 				await SETTINGS.handleDeleteLocalEmbedding();
 				break;
+			case "btnOpenAbschreiben":
+				(await import("./abschreiben.js")).open();
+				break;
 			case "btnExportHandwritingSamples":
 				SETTINGS.handleExportHandwritingSamples();
 				break;

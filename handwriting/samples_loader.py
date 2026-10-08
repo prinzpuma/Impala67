@@ -86,6 +86,11 @@ def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tu
         if not text or not strokes_data:
             continue
 
+        # 0. Messzeilen aus dem Abschreib-Modus sind nur zum Messen da, nie zum Trainieren
+        if item.get("split") == "eval":
+            rejected_count += 1
+            continue
+
         # 1. Text-Schutz gegen Benchmark
         if text in BENCHMARK_PROTECTED_TEXTS:
             rejected_count += 1
