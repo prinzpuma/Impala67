@@ -3,10 +3,12 @@
 // web/handwriting-ctc.js — CTC-Decoding & Wörterbuch-Korrektur für Strichsequenz-Inferenz.
 
 import { HANDWRITING_VOCAB } from "./handwriting-vocab.js";
+import { GERMAN_WORDS } from "./handwriting-words-de.js";
 
 export const HANDWRITING_CTC = (() => {
-	// Kompakte Liste häufiger deutscher Notiz- und Alltagswörter für Post-Processing
+	// Häufigste deutsche Wörter plus Notiz-, Kalender- und Mathe-Begriffe für Post-Processing
 	const COMMON_WORDS = new Set([
+		...GERMAN_WORDS,
 		"der", "die", "das", "und", "in", "den", "von", "zu", "mit",
 		"sich", "des", "auf", "für", "ist", "im", "dem", "nicht", "ein", "eine",
 		"als", "auch", "es", "an", "werden", "aus", "er", "hat", "dass", "sie",
