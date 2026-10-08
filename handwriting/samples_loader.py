@@ -56,29 +56,52 @@ def _get_benchmark_fingerprints() -> set:
     return fps
 
 
-def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tuple[List[Tuple[float, float, float, float]], str]]:
-    """
-    Lädt die aus Impala67 exportierten Trainingsdaten.
-    Prüft strikt gegen Data-Leakage mit dem Benchmark-Testset!
-    """
-    path_lower = json_path.lower()
-    if "user_eval" in path_lower or "benchmark" in path_lower:
-        raise RuntimeError("FATALER DATA-LEAKAGE-FEHLER: Isolierte Testdaten dürfen NIEMALS im Training geladen werden!")
+Strokes = List[List[Tuple[float, float]]]
 
+
+def _parse_strokes(strokes_data) -> Strokes:
+    parsed = []
+    for s in strokes_data:
+        pts = s.get("pts", s) if isinstance(s, dict) else s
+        if pts:
+            parsed.append([(float(p[0]), float(p[1])) for p in pts])
+    return parsed
+
+
+def _in_vocab(text: str) -> bool:
+    return all(c in CHAR_TO_IDX and CHAR_TO_IDX[c] != BLANK_IDX for c in text)
+
+
+def _read_json(json_path: str) -> list:
     if not os.path.exists(json_path):
         return []
-
     try:
         with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            return json.load(f)
     except Exception as e:
         print(f"Fehler beim Laden von {json_path}: {e}")
         return []
 
+
+def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tuple[Strokes, str]]:
+    """
+    Lädt die aus Impala67 exportierten Trainingsdaten als rohe Striche (für Augmentierung im Training).
+    Zusätzlich zu jeder Zeile kommen ihre einzelnen Wörter, wenn die Wort-Segmentierung (wie in der App)
+    genau zum Soll-Text passt: Die App erkennt wortweise, das Training sieht so dieselbe Einheit.
+    Prüft strikt gegen Data-Leakage mit dem Benchmark-Testset!
+    """
+    from evaluate_user_benchmark_words import segment_line_into_words
+
+    path_lower = json_path.lower()
+    if "user_eval" in path_lower or "benchmark" in path_lower:
+        raise RuntimeError("FATALER DATA-LEAKAGE-FEHLER: Isolierte Testdaten dürfen NIEMALS im Training geladen werden!")
+
+    data = _read_json(json_path)
     bench_fps = _get_benchmark_fingerprints()
 
     samples = []
     rejected_count = 0
+    lines = 0
 
     for item in data:
         text = str(item.get("text", "")).strip()
@@ -98,33 +121,37 @@ def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tu
             continue
 
         # 2. Strich-Fingerprint-Schutz gegen Benchmark
-        has_leak = False
-        for s in strokes_data:
-            fp = _stroke_fingerprint(s)
-            if fp and fp in bench_fps:
-                has_leak = True
-                break
-        if has_leak:
+        if any(_stroke_fingerprint(s) in bench_fps for s in strokes_data if _stroke_fingerprint(s)):
             rejected_count += 1
             print(f"[Schutz] Trainingsbeispiel verworfen (Benchmark-Strich match): '{text}'")
             continue
 
-        # Format: Liste von Strichen, jeder Strich ist Liste von (x, y) Punkten
-        parsed_strokes = []
-        for s in strokes_data:
-            pts = s.get("pts", s) if isinstance(s, dict) else s
-            if pts:
-                parsed_strokes.append([(float(p[0]), float(p[1])) for p in pts])
+        strokes = _parse_strokes(strokes_data)
+        if not strokes or not _in_vocab(text):
+            continue
+        samples.append((strokes, text))
+        lines += 1
 
-        if parsed_strokes:
-            feats = strokes_to_normalized_features(parsed_strokes)
-            if len(feats) >= 4:
-                # Prüfe Vokabular
-                if not any(c not in CHAR_TO_IDX or CHAR_TO_IDX[c] == BLANK_IDX for c in text):
-                    samples.append((feats, text))
+        words = text.split()
+        groups = segment_line_into_words(strokes)
+        if len(words) > 1 and len(groups) == len(words):
+            samples.extend((g, w) for g, w in zip(groups, words))
 
-    print(f"{len(samples)} nutzereigene Trainingsbeispiele aus {json_path} geladen ({rejected_count} verworfen).")
+    print(f"{lines} eigene Zeilen + {len(samples) - lines} Einzelwörter aus {json_path} geladen ({rejected_count} verworfen).")
     return samples
+
+
+def load_user_eval_lines(json_path: str = "my_handwriting_samples.json") -> List[Tuple[Strokes, str]]:
+    """Messzeilen (split "eval") aus dem Abschreib-Modus. Nur für Modellauswahl/Messung, nie fürs Training."""
+    lines = []
+    for item in _read_json(json_path):
+        text = str(item.get("text", "")).strip()
+        if item.get("split") != "eval" or not text or not _in_vocab(text):
+            continue
+        strokes = _parse_strokes(item.get("strokes", []))
+        if strokes:
+            lines.append((strokes, text))
+    return lines
 
 
 class HybridInkDataset(Dataset):
@@ -141,8 +168,8 @@ class HybridInkDataset(Dataset):
     def __getitem__(self, idx):
         import random
         if self.user_samples and random.random() < self.user_weight:
-            feats, word = random.choice(self.user_samples)
-            feat_tensor = torch.tensor(feats, dtype=torch.float32)
+            strokes, word = random.choice(self.user_samples)
+            feat_tensor = torch.tensor(strokes_to_normalized_features(strokes), dtype=torch.float32)
             target = torch.tensor([CHAR_TO_IDX[c] for c in word if c in CHAR_TO_IDX and CHAR_TO_IDX[c] != BLANK_IDX], dtype=torch.long)
             return feat_tensor, target, word
 

@@ -19,7 +19,7 @@ if hasattr(sys.stderr, "reconfigure"):
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from vocabulary import CHAR_TO_IDX, VOCAB_SIZE, BLANK_IDX, index_to_char
+from vocabulary import CHAR_TO_IDX, VOCAB_SIZE, BLANK_IDX, MATH_SYMBOLS as MATH_CHARS, index_to_char
 from generate_synthetic import (
     random_sample,
     SAMPLE_WORDS,
@@ -33,7 +33,7 @@ from uji_loader import RealHandwritingSampler
 from text_corpus import random_text
 from mathwriting_loader import MathWritingDataset, strokes_to_normalized_features
 from brush_loader import BrushDataset
-from samples_loader import load_user_samples
+from samples_loader import load_user_samples, load_user_eval_lines
 from beam_search import ctc_beam_search_decode, get_default_dictionary
 from evaluate_user_benchmark_words import (
     segment_line_into_words,
@@ -90,9 +90,11 @@ class DynamicInkDataset(Dataset):
         word = ""
         features = []
 
-        if self.user_samples and rng.random() < 0.45:
-            # 45% Eigene Handschrift bei Fine-Tuning
-            features, word = rng.choice(self.user_samples)
+        if self.user_samples and rng.random() < 0.3:
+            # 30% Eigene Handschrift bei Fine-Tuning, immer leicht verzerrt: wenige Zeilen sonst schnell auswendig gelernt
+            strokes, word = rng.choice(self.user_samples)
+            from augmentations import apply_augmentations_on_the_fly
+            features = strokes_to_normalized_features(apply_augmentations_on_the_fly(strokes))
 
         elif self.brush_len > 0 and r < 0.40:
             # 40% Echte BRUSH-Handschrift (170 Schreiber)
@@ -271,6 +273,44 @@ def levenshtein_dist(s1: str, s2: str) -> int:
     return dp[m][n]
 
 
+def _recognize_line(model, device, strokes, word_dict, mode: str) -> str:
+    """Erkennt eine Zeile wie die App: in Wörter segmentieren, je Wort Beam-Search mit Wörterbuch."""
+    words = []
+    for wg in segment_line_into_words(strokes):
+        parsed = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
+        feats = strokes_to_normalized_features(parsed)
+        if len(feats) < 3:
+            continue
+        inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
+        out = model(inp, in_lens=torch.tensor([len(feats)], device=device))
+        words.append(ctc_beam_search_decode(out[:, 0, :].cpu().numpy(), beam_width=8, word_list=word_dict, word_bonus=2.0, mode=mode))
+    return " ".join(words)
+
+
+def evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines=()) -> dict:
+    """Zeichenfehlerrate (CER) auf echter Handschrift.
+    sel  = gerade Benchmark-Zeilen + Abschreib-Messzeilen (wählt best.pt aus)
+    test = ungerade Benchmark-Zeilen (nie zur Auswahl, sonst wäre der Testwert geschönt)
+    own  = nur die Abschreib-Messzeilen (Teil von sel, zur Info)"""
+    chars = {"sel": 0, "test": 0, "own": 0}
+    errors = {"sel": 0, "test": 0, "own": 0}
+    model.eval()
+    with torch.no_grad():
+        for row in benchmark_data:
+            cat, gt = LINES_GROUND_TRUTH.get(row["lineIdx"], ("unbekannt", ""))
+            pred = _recognize_line(model, device, row["strokes"], word_dict, "math" if cat in ("formel", "rechnung") else "text")
+            split = "sel" if row["lineIdx"] % 2 == 0 else "test"
+            chars[split] += max(1, len(gt))
+            errors[split] += levenshtein_dist(pred, gt)
+        for strokes, gt in user_eval_lines:
+            pred = _recognize_line(model, device, strokes, word_dict, "math" if any(c in MATH_CHARS for c in gt) else "text")
+            dist, n = levenshtein_dist(pred, gt), max(1, len(gt))
+            for split in ("sel", "own"):
+                chars[split] += n
+                errors[split] += dist
+    return {k: errors[k] / max(1, chars[k]) for k in chars}
+
+
 def train(
     epochs: int = 30,
     batch_size: int = 128,
@@ -302,6 +342,11 @@ def train(
             print(f"Geladene eigene Handschrift-Samples: {len(user_samples)}.")
         else:
             print(f"Hinweis: Keine Datei '{samples_path}' gefunden. Nutze Basistraining.")
+
+    # Abschreib-Messzeilen zählen immer zur Modellauswahl (auch ohne Fine-Tuning), nie zum Training
+    user_eval_lines = load_user_eval_lines(samples_path)
+    if user_eval_lines:
+        print(f"{len(user_eval_lines)} Abschreib-Messzeilen gehen in die Auswahl-CER ein.")
 
     model = HandwritingCRNN(in_features=4, hidden_size=192, num_layers=3, dropout=0.0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -426,46 +471,16 @@ def train(
             save_last()
             continue
 
-        # 2. ECHTE HANDSCHRIFT, aufgeteilt: gerade Zeilen wählen best.pt aus, ungerade bleiben unberührter Test.
-        #    Würde dieselbe Menge auswählen UND bewerten, wäre der Testwert geschönt.
-        real_chars = {"sel": 0, "test": 0}
-        real_errors = {"sel": 0, "test": 0}
-        with torch.no_grad():
-            for row in benchmark_data:
-                l_idx = row["lineIdx"]
-                cat, gt = LINES_GROUND_TRUTH.get(l_idx, ("unbekannt", ""))
-                raw_strokes = row["strokes"]
-
-                word_groups = segment_line_into_words(raw_strokes)
-                recognized_words = []
-                line_mode = "math" if cat in ("formel", "rechnung") else "text"
-
-                for wg in word_groups:
-                    parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
-                    feats = strokes_to_normalized_features(parsed_strokes)
-                    if len(feats) < 3:
-                        continue
-                    inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
-                    in_lens = torch.tensor([len(feats)], device=device)
-                    out = model(inp, in_lens=in_lens)
-                    logits = out[:, 0, :].cpu().numpy()
-
-                    w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0, mode=line_mode)
-                    recognized_words.append(w_beam)
-
-                line_pred = " ".join(recognized_words)
-                dist = levenshtein_dist(line_pred, gt)
-                split = "sel" if l_idx % 2 == 0 else "test"
-                real_chars[split] += max(1, len(gt))
-                real_errors[split] += dist
-
-        real_cer = real_errors["sel"] / max(1, real_chars["sel"])
+        # 2. ECHTE HANDSCHRIFT: Auswahl (gerade Benchmark-Zeilen + Abschreib-Messzeilen) wählt best.pt,
+        #    ungerade Benchmark-Zeilen bleiben unberührter Test.
+        real = evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines)
+        real_cer, test_cer = real["sel"], real["test"]
         real_acc = max(0.0, (1.0 - real_cer) * 100.0)
-        test_cer = real_errors["test"] / max(1, real_chars["test"])
+        own = f" (davon Abschreib-Messzeilen: {real['own'] * 100:.1f} %)" if user_eval_lines else ""
 
         print(
             f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} % | "
-            f"Auswahl-CER: {real_cer * 100:.1f} % | TEST-CER: {test_cer * 100:.1f} %",
+            f"Auswahl-CER: {real_cer * 100:.1f} %{own} | TEST-CER: {test_cer * 100:.1f} %",
             flush=True,
         )
 
