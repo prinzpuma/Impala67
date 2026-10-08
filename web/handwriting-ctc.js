@@ -185,8 +185,9 @@ export const HANDWRITING_CTC = (() => {
 		let status = "recognized";
 		if (text.length === 0) {
 			status = "empty";
-		} else if (blankRatio > 0.96 || confidence < 0.45 || (text.length <= 2 && confidence < 0.60)) {
-			// Kaum Text-Signale, viele Blanks oder chaotische Ausgabe -> Reine Zeichnung ("kein Text")
+		} else if (confidence < 0.45 || (text.length <= 2 && confidence < 0.60)) {
+			// Chaotische Ausgabe -> Reine Zeichnung ("kein Text"). blankRatio taugt dafür nicht:
+			// seit der Median-Normalisierung liefert auch saubere Schrift ~97 % Blank-Schritte.
 			status = "drawing";
 		} else if (confidence < threshold) {
 			// Unsicher: Liegt unterhalb der Kauderwelsch-Schwelle

@@ -29,7 +29,7 @@ async function loadOrt() {
 	return ort;
 }
 
-const MODEL_CACHE_KEY = "impala67-handwriting-model-v4";
+const MODEL_CACHE_KEY = "impala67-handwriting-model-v5"; // v5: feingetuntes Modell (Abschreib-Zeilen)
 
 async function fetchModelBuffer(modelPath) {
 	if (typeof caches !== "undefined") {
@@ -76,8 +76,9 @@ async function initSession(modelPath = currentModelPath) {
 	}
 }
 
-// Maximale Punktsequenzlänge aus dem Training (darüber wird das Netz unzuverlässiger)
-const MAX_TRAINING_POINTS = 450;
+// Maximale Punktsequenzlänge aus dem Training (darüber wird das Netz unzuverlässiger).
+// Mit Median-Normalisierung hat eine ganze Abschreib-Zeile (~34 Zeichen) 2000–3800 Features.
+const MAX_TRAINING_POINTS = 4000;
 
 // Führt Inferenz für eine einzelne Zeile von [dx, dy, pen_down]-Features aus
 async function recognizeLineFeatures(features, options = {}) {
