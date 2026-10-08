@@ -667,8 +667,10 @@ function renderMain() {
 		main._lastPageShellHtml = null;
 		if (HEFT.activeId === pg.id && main.querySelector("#heftStage")) return;
 		// data-owned: der Canvas gehört HEFT — U.morph fasst diesen Teilbaum nie an.
+		// data-key: sonst gleicht der nächste Renderer (Karten, Bibliothek …) sein
+		// schlüsselloses Wurzel-<div> per Position mit der Bühne ab und lässt sie stehen.
 		main.innerHTML = (pg.archived ? `<div class="archived-banner heft-archived-banner"><span>🗄️ Dieses Heft ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") +
-			`<div id="heftStage" class="heft-stage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
+			`<div id="heftStage" class="heft-stage" data-key="heftstage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
 		const stage = $("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
 		return;
