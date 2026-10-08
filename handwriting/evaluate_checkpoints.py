@@ -12,7 +12,6 @@ import sys
 
 import torch
 
-from beam_search import get_default_dictionary
 from model import HandwritingCRNN
 from samples_loader import load_user_eval_lines
 from train import BENCHMARK_DATA_PATH, evaluate_real
@@ -31,7 +30,6 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
     benchmark_data = json.load(open(BENCHMARK_DATA_PATH, encoding="utf-8"))
-    word_dict = get_default_dictionary()
     user_eval_lines = load_user_eval_lines(args.samples)
     print(f"{len(user_eval_lines)} Abschreib-Messzeilen, {len(benchmark_data)} Benchmark-Zeilen")
 
@@ -40,7 +38,7 @@ def main():
         state = torch.load(path, map_location=device)
         model = HandwritingCRNN(in_features=4, hidden_size=192, num_layers=3, dropout=0.0).to(device)
         model.load_state_dict(state.get("model_state", state))
-        r = evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines)
+        r = evaluate_real(model, device, benchmark_data, user_eval_lines)
         results.append((r["sel"], path))
         print(
             f"{path} (Epoche {state.get('epoch', '?')}): Auswahl-CER {r['sel'] * 100:.1f} % "

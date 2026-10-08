@@ -34,9 +34,9 @@ from text_corpus import random_text
 from mathwriting_loader import MathWritingDataset, strokes_to_normalized_features
 from brush_loader import BrushDataset
 from samples_loader import load_user_samples, load_user_eval_lines
-from beam_search import ctc_beam_search_decode, get_default_dictionary
 from evaluate_user_benchmark_words import (
-    segment_line_into_words,
+    ctc_greedy,
+    line_distance,
     strokes_to_4features,
     LINES_GROUND_TRUTH,
     DATA_PATH as BENCHMARK_DATA_PATH,
@@ -273,21 +273,19 @@ def levenshtein_dist(s1: str, s2: str) -> int:
     return dp[m][n]
 
 
-def _recognize_line(model, device, strokes, word_dict, mode: str) -> str:
-    """Erkennt eine Zeile wie die App: in Wörter segmentieren, je Wort Beam-Search mit Wörterbuch."""
-    words = []
-    for wg in segment_line_into_words(strokes):
-        parsed = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
-        feats = strokes_to_normalized_features(parsed)
-        if len(feats) < 3:
-            continue
-        inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
-        out = model(inp, in_lens=torch.tensor([len(feats)], device=device))
-        words.append(ctc_beam_search_decode(out[:, 0, :].cpu().numpy(), beam_width=8, word_list=word_dict, word_bonus=2.0, mode=mode))
-    return " ".join(words)
+def _recognize_line(model, device, strokes, mode: str) -> str:
+    """Erkennt eine Zeile wie die App (handwriting-worker.js): ganze Zeile, Greedy-CTC mit Mathe-Maskierung.
+    Wort-für-Wort-Erkennung ist auf echter Handschrift deutlich schlechter und wird von der App nicht genutzt."""
+    parsed = [[(float(p[0]), float(p[1])) for p in s] for s in strokes]
+    feats = strokes_to_normalized_features(parsed)
+    if len(feats) < 3:
+        return ""
+    inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
+    out = model(inp, in_lens=torch.tensor([len(feats)], device=device))
+    return ctc_greedy(out[:, 0, :].cpu().numpy(), mode=mode)[0]
 
 
-def evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines=()) -> dict:
+def evaluate_real(model, device, benchmark_data, user_eval_lines=()) -> dict:
     """Zeichenfehlerrate (CER) auf echter Handschrift.
     sel  = gerade Benchmark-Zeilen + Abschreib-Messzeilen (wählt best.pt aus)
     test = ungerade Benchmark-Zeilen (nie zur Auswahl, sonst wäre der Testwert geschönt)
@@ -298,13 +296,15 @@ def evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines=()) 
     with torch.no_grad():
         for row in benchmark_data:
             cat, gt = LINES_GROUND_TRUTH.get(row["lineIdx"], ("unbekannt", ""))
-            pred = _recognize_line(model, device, row["strokes"], word_dict, "math" if cat in ("formel", "rechnung") else "text")
+            mode = "math" if cat in ("formel", "rechnung") else "text"
+            pred = _recognize_line(model, device, row["strokes"], mode)
             split = "sel" if row["lineIdx"] % 2 == 0 else "test"
-            chars[split] += max(1, len(gt))
-            errors[split] += levenshtein_dist(pred, gt)
+            dist, n = line_distance(pred, gt, mode)
+            chars[split] += n
+            errors[split] += dist
         for strokes, gt in user_eval_lines:
-            pred = _recognize_line(model, device, strokes, word_dict, "math" if any(c in MATH_CHARS for c in gt) else "text")
-            dist, n = levenshtein_dist(pred, gt), max(1, len(gt))
+            mode = "math" if any(c in MATH_CHARS for c in gt) else "text"
+            dist, n = line_distance(_recognize_line(model, device, strokes, mode), gt, mode)
             for split in ("sel", "own"):
                 chars[split] += n
                 errors[split] += dist
@@ -394,7 +394,6 @@ def train(
         print(f"Setze Training fort ab Epoche {start_epoch} (aus {last_path}).")
 
     benchmark_data = json.load(open(BENCHMARK_DATA_PATH, encoding="utf-8"))
-    word_dict = get_default_dictionary()
 
     print("Starte Training mit 4 Features. Modellauswahl erfolgt nach echtem Test-Set (strikt getrennt)!")
 
@@ -473,7 +472,7 @@ def train(
 
         # 2. ECHTE HANDSCHRIFT: Auswahl (gerade Benchmark-Zeilen + Abschreib-Messzeilen) wählt best.pt,
         #    ungerade Benchmark-Zeilen bleiben unberührter Test.
-        real = evaluate_real(model, device, benchmark_data, word_dict, user_eval_lines)
+        real = evaluate_real(model, device, benchmark_data, user_eval_lines)
         real_cer, test_cer = real["sel"], real["test"]
         real_acc = max(0.0, (1.0 - real_cer) * 100.0)
         own = f" (davon Abschreib-Messzeilen: {real['own'] * 100:.1f} %)" if user_eval_lines else ""

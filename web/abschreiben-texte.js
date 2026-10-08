@@ -30,6 +30,16 @@ export const ABSCHREIB_TEXTE = [
 	{ titel: "Dotierung", text: "Baut man Phosphor in Silizium ein, bringt jedes Atom ein freies Elektron mit: n-Dotierung. Bor erzeugt dagegen Löcher: p-Dotierung. Am pn-Übergang entsteht eine Raumladungszone ohne freie Ladungsträger." },
 	{ titel: "Externe Kosten", text: "Externe Kosten entstehen, wenn ein Schaden nicht im Preis steckt, etwa bei CO2-Emissionen. Eine CO2-Steuer macht diese Kosten sichtbar. Der Emissionshandel setzt dagegen eine feste Obergrenze und lässt den Preis frei." },
 	{ titel: "Python", text: "def quadrat(x): return x*x berechnet ein Quadrat. Die Schleife for i in range(3): print(i) gibt 0, 1 und 2 aus. Listen beginnen in Python immer beim Index 0." },
+	// Gezielt für Schwachstellen der Erkennung (Okt. 2026): Ziffern (5/S, 9/g, 1/7),
+	// große J, E, D am Wortanfang, kurze Wörter (um, auf, für, im) und Rechnungen mit + und /.
+	{ titel: "Termine", text: "Die Klausur ist am 19.02.2027 um 9:15 Uhr im Raum E 105. Jede Aufgabe gibt 15 Punkte, bestanden ist ab 45 von 90. Danach ist um 13 Uhr Essen in der Mensa." },
+	{ titel: "Einkauf", text: "Für das Projekt brauchen wir 25 Kabel, 8 Dioden und 150 Widerstände. Jeder Widerstand kostet 0,05, also 150 * 0,05 = 7,50. Das Paket kommt Dienstag oder Donnerstag." },
+	{ titel: "Jahreszahlen", text: "Ohm fand sein Gesetz im Jahr 1826, Maxwell schrieb 1865 seine Gleichungen auf. Der erste Transistor kam 1947, der erste Chip 1958. Jedes Jahr gibt es mehr Transistoren auf einem Chip." },
+	{ titel: "Kopfrechnen", text: "Erst rechnen, dann prüfen: 48 + 37 = 85 und 96 / 8 = 12. Dann 3 * 19 = 57 und 100 - 64 = 36. Ein Fehler fällt auf, wenn die Probe nicht stimmt." },
+	{ titel: "Labor", text: "Im Labor messen wir bei 5 V einen Strom von 25 mA. Daraus folgt R = 5 / 0,025 = 200 Ohm. Die Messung dauert 15 Minuten und wird um 10 Uhr wiederholt." },
+	{ titel: "Notizen", text: "Jan fragt, ob wir das Protokoll bis Freitag fertig haben. Dafür fehlen noch die Diagramme und das Fazit. Eva macht die Tabellen, ich schreibe die Einleitung." },
+	{ titel: "Einheiten", text: "Ein Kilometer hat 1000 m, eine Stunde hat 3600 s. Also sind 36 km/h genau 10 m/s. Doppelt so schnell heißt bei gleicher Masse viermal so viel Energie." },
+	{ titel: "Wochenplan", text: "Am Montag ist Mathe, am Dienstag Elektrotechnik und am Mittwoch Chemie. Jeden Donnerstag gibt es eine Übung um 8:00 Uhr. Das Wochenende bleibt für die Wiederholung frei." },
 ];
 
 // Jeder vierte Text (Index 3, 7, 11, ...) ist eine Messzeile und darf nie ins Training.

@@ -9,7 +9,6 @@ import onnxruntime as ort
 
 from vocabulary import index_to_char, BLANK_IDX
 from mathwriting_loader import resample_stroke, strokes_to_normalized_features
-from beam_search import ctc_beam_search_decode, get_default_dictionary
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.onnx")
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "benchmark_test_strokes.json")
@@ -73,6 +72,12 @@ def levenshtein_distance(s1: str, s2: str) -> int:
                 dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
     return dp[m][n]
 
+def line_distance(pred: str, gt: str, mode: str = "text"):
+    """(Fehler, Zeichen) einer Zeile. In Formeln zählen Leerzeichen nicht: "15+27=42" ist inhaltlich richtig."""
+    if mode == "math":
+        pred, gt = "".join(pred.split()), "".join(gt.split())
+    return levenshtein_distance(pred, gt), max(1, len(gt))
+
 def ctc_greedy(logits, mode="text"):
     if mode != "math":
         from vocabulary import MATH_INDICES
@@ -112,11 +117,10 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
     if session is None:
         session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
     data = json.load(open(DATA_PATH, encoding="utf-8"))
-    word_dict = get_default_dictionary()
 
     if verbose:
         print("=" * 75)
-        print("ERGEBNISSE MIT 4-FEATURE-MODELL, LIGATUREN & GROSSEM WÖRTERBUCH")
+        print("ERGEBNISSE WIE IN DER APP (ganze Zeile, Greedy-CTC, ohne Wortkorrektur)")
         print("=" * 75)
 
     total_chars = 0
@@ -129,33 +133,14 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
     for row in data:
         l_idx = row["lineIdx"]
         cat, gt = LINES_GROUND_TRUTH.get(l_idx, ("unbekannt", ""))
-        raw_strokes = row["strokes"]
-        
-        word_groups = segment_line_into_words(raw_strokes)
-        recognized_words = []
-        avg_confs = []
-        
         line_mode = "math" if cat in ("formel", "rechnung") else "text"
-
-        for wg in word_groups:
-            parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
-            feats = strokes_to_normalized_features(parsed_strokes)
-            if len(feats) < 3:
-                continue
+        parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in row["strokes"]]
+        feats = strokes_to_normalized_features(parsed_strokes)
+        line_pred, conf = "", 0.0
+        if len(feats) >= 3:
             inp = np.array(feats, dtype=np.float32).reshape(1, len(feats), 4)
-            out = session.run(["output"], {"input": inp})[0]
-            logits = out[:, 0, :]
-            
-            # Beam search mit Wörterbuch
-            w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0, mode=line_mode)
-            _, conf = ctc_greedy(logits, mode=line_mode)
-            
-            recognized_words.append(w_beam)
-            avg_confs.append(conf)
-            
-        line_pred = " ".join(recognized_words)
-        dist = levenshtein_distance(line_pred, gt)
-        gt_len = max(1, len(gt))
+            line_pred, conf = ctc_greedy(session.run(["output"], {"input": inp})[0][:, 0, :], mode=line_mode)
+        dist, gt_len = line_distance(line_pred, gt, line_mode)
         acc = max(0.0, (1.0 - dist / gt_len) * 100.0)
         
         total_chars += gt_len
@@ -169,8 +154,7 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
         
         if verbose:
             split_tag = "TEST" if l_idx % 2 == 1 else "SEL "
-            conf_mean = float(np.mean(avg_confs)) if avg_confs else 0.0
-            print(f"[{cat:<8}|{split_tag}] Zeile {l_idx:02d} | Genauigkeit: {acc:>5.1f} % | Conf: {conf_mean:.2f}")
+            print(f"[{cat:<8}|{split_tag}] Zeile {l_idx:02d} | Genauigkeit: {acc:>5.1f} % | Conf: {conf:.2f}")
             print(f"  Soll: '{gt}'")
             print(f"  Ist : '{line_pred}'")
             print("-" * 75)

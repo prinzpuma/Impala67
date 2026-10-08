@@ -86,8 +86,8 @@ def _read_json(json_path: str) -> list:
 def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tuple[Strokes, str]]:
     """
     Lädt die aus Impala67 exportierten Trainingsdaten als rohe Striche (für Augmentierung im Training).
-    Zusätzlich zu jeder Zeile kommen ihre einzelnen Wörter, wenn die Wort-Segmentierung (wie in der App)
-    genau zum Soll-Text passt: Die App erkennt wortweise, das Training sieht so dieselbe Einheit.
+    Zusätzlich zu jeder Zeile kommen ihre einzelnen Wörter, wenn die Wort-Segmentierung genau zum
+    Soll-Text passt (zusätzliche Beispiele; die App selbst erkennt ganze Zeilen).
     Prüft strikt gegen Data-Leakage mit dem Benchmark-Testset!
     """
     from evaluate_user_benchmark_words import segment_line_into_words
