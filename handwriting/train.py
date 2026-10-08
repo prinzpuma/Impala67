@@ -9,7 +9,7 @@ import os
 import sys
 import random
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)

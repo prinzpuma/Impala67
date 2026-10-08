@@ -526,17 +526,19 @@ export const HEFT = (() => {
 		x.fillStyle = "#fbfaf7";
 		x.fillRect(0, 0, w, h);
 		if (kind === "blank") return;
+		// Linien, Raster und Punkte nehmen die Akzentfarbe (settings.js setzt --accent am body)
+		const ink = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#6b8cae";
 		x.save();
 		if (kind === "dots") {
-			x.fillStyle = "rgba(60,80,120,0.20)";
+			x.fillStyle = ink; x.globalAlpha = 0.35;
 			for (let y = 40; y < h; y += 28) for (let gx = 40; gx < w; gx += 28) { x.beginPath(); x.arc(gx, y, 1.2, 0, Math.PI * 2); x.fill(); }
 		} else {
-			x.strokeStyle = "rgba(70,110,180,0.15)";
+			x.strokeStyle = ink; x.globalAlpha = 0.22;
 			x.lineWidth = 1;
 			const x0 = kind === "lined" ? 90 : 0, x1 = kind === "lined" ? w - 50 : w;
 			for (let y = kind === "lined" ? 96 : 28; y < h - (kind === "lined" ? 40 : 0); y += 28) { x.beginPath(); x.moveTo(x0, y); x.lineTo(x1, y); x.stroke(); }
 			if (kind === "grid") for (let gx = 28; gx < w; gx += 28) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, h); x.stroke(); }
-			if (kind === "lined") { x.strokeStyle = "rgba(224,72,62,0.22)"; x.beginPath(); x.moveTo(90, 40); x.lineTo(90, h - 40); x.stroke(); }
+			if (kind === "lined") { x.globalAlpha = 0.4; x.beginPath(); x.moveTo(90, 40); x.lineTo(90, h - 40); x.stroke(); }
 		}
 		x.restore();
 	}

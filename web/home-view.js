@@ -72,13 +72,13 @@ function cardText(md) {
 }
 function recall(cards) {
 	const pool = cards.filter((c) => c && !c.suspended && c.srs && c.srs.state === "review" && cardText(c.front).length >= 3);
-	if (pool.length < 5) return null;
+	if (pool.length < 5) return "";
 	const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
 	const c = pool[(day * 2654435761 >>> 0) % pool.length];
 	const cloze = CLOZE.test(c.front); CLOZE.lastIndex = 0;
 	const q = cloze ? cardText(c.front.replace(CLOZE, "＿＿＿")) : cardText(c.front);
 	const a = cloze ? [...c.front.matchAll(CLOZE)].map((m) => cardText(m[1])).join(" · ") : cardText(c.back);
-	if (!a) return null;
+	if (!a) return "";
 	const cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 	return `<details class="hv-recall" data-key="recall:${esc(c.id)}"><summary><small>Weißt du's noch?</small><span>${esc(cut(q, 140))}</span><em>Antwort zeigen</em></summary><p>${esc(cut(a, 220))}</p></details>`;
 }

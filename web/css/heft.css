@@ -205,6 +205,9 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-tpl:hover { background: var(--surface-hover); border-color: var(--edge-soft); color: var(--text) }
 .heft-tpl small { font-size: var(--text-3xs); opacity: .7 }
 .heft-tpl-paper { display: block; width: 40px; height: 56px; border-radius: var(--radius-xs); background: #fdfdf8; border: 1px solid var(--edge) }
+.heft-tpl-lined { background-image: repeating-linear-gradient(to bottom, transparent 0 5px, color-mix(in srgb, var(--accent) 40%, transparent) 5px 6px) }
+.heft-tpl-grid { background-image: linear-gradient(to right, color-mix(in srgb, var(--accent) 30%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--accent) 30%, transparent) 1px, transparent 1px); background-size: 6px 6px }
+.heft-tpl-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--accent) 60%, transparent) 0.8px, transparent 1px); background-size: 6px 6px }
 /* PDF-Scanner-Overlay (Dateien scannen): Kamera-Bühne, Auslöser,… */
 .heft-scan { position: fixed; inset: 0; z-index: var(--z-scan); display: flex; flex-direction: column; background: rgba(3,5,10,.97); color: #fff }
 .heft-scan-top { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); flex-shrink: 0 }
