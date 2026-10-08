@@ -223,9 +223,11 @@ def strokes_to_normalized_features(
 
 
 class MathWritingDataset:
-    """Verwaltet und lädt die echten Google MathWriting Trainingsdaten."""
+    """Verwaltet und lädt die echten Google MathWriting Daten.
+    split "train": train/symbols/synthetic fürs Training; "test": eigene Schreiber, nur zum Messen."""
 
-    def __init__(self, base_dir: str = None, max_samples: int = 250_000):
+    def __init__(self, base_dir: str = None, max_samples: int = 250_000, split: str = "train"):
+        self.split = split
         if base_dir is None:
             # Voller Datensatz (mathwriting-2024.tgz) hat Vorrang vor dem kleinen Auszug
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -245,7 +247,8 @@ class MathWritingDataset:
 
     def _cache_path(self) -> str:
         # Versionsnummer erhöhen, wenn sich clean_latex_label oder die Feature-Berechnung ändert
-        return os.path.join(os.path.dirname(self.base_dir), f"{os.path.basename(self.base_dir)}-{self.max_samples}-v{CACHE_VERSION}.cache.pkl")
+        split = "" if self.split == "train" else f"-{self.split}"
+        return os.path.join(os.path.dirname(self.base_dir), f"{os.path.basename(self.base_dir)}{split}-{self.max_samples}-v{CACHE_VERSION}.cache.pkl")
 
     def _load(self):
         # Cache zuerst: Er reicht allein, die Rohdaten (3 GB) müssen dann nicht mehr vorhanden sein
@@ -263,7 +266,7 @@ class MathWritingDataset:
 
         # Echte Handschrift ('train', 'symbols') zuerst, 'synthetic' (aus Bausteinen zusammengesetzt) nur zum Auffüllen
         files = []
-        for sub in ("train", "symbols", "synthetic"):
+        for sub in (("train", "symbols", "synthetic") if self.split == "train" else (self.split,)):
             files.extend(sorted(glob.glob(os.path.join(self.base_dir, sub, "*.inkml"))))
 
         skipped = 0

@@ -273,27 +273,49 @@ def levenshtein_dist(s1: str, s2: str) -> int:
     return dp[m][n]
 
 
-def _recognize_line(model, device, strokes, mode: str) -> str:
+def _recognize_features(model, device, feats, mode: str) -> str:
     """Erkennt eine Zeile wie die App (handwriting-worker.js): ganze Zeile, Greedy-CTC mit Mathe-Maskierung.
     Wort-für-Wort-Erkennung ist auf echter Handschrift deutlich schlechter und wird von der App nicht genutzt."""
-    parsed = [[(float(p[0]), float(p[1])) for p in s] for s in strokes]
-    feats = strokes_to_normalized_features(parsed)
     if len(feats) < 3:
         return ""
-    inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
+    inp = torch.as_tensor(np.asarray(feats, dtype=np.float32), device=device).unsqueeze(0)
     out = model(inp, in_lens=torch.tensor([len(feats)], device=device))
     return ctc_greedy(out[:, 0, :].cpu().numpy(), mode=mode)[0]
 
 
-def evaluate_real(model, device, benchmark_data, user_eval_lines=()) -> dict:
+def _recognize_line(model, device, strokes, mode: str) -> str:
+    parsed = [[(float(p[0]), float(p[1])) for p in s] for s in strokes]
+    return _recognize_features(model, device, strokes_to_normalized_features(parsed), mode)
+
+
+def load_foreign_eval(limit: int = 300) -> List[Tuple[np.ndarray, str, str]]:
+    """Messzeilen fremder Schreiber, die nie im Training sind: BRUSH-Schreiber 150–169 und MathWriting "test".
+    Ohne sie würde die Modellauswahl nur die eigene Handschrift bewerten und sich darauf spezialisieren."""
+    def pick(samples, mode):
+        samples = [(f, t) for f, t in samples if t.strip() and all(c in CHAR_TO_IDX for c in t)]
+        if mode == "text":
+            # Ganze Sätze bevorzugen, die App erkennt Zeilen
+            samples = [s for s in samples if " " in s[1]] or samples
+        step = max(1, len(samples) // limit)
+        return [(f, t, mode) for f, t in samples[::step][:limit]]
+    return pick(BrushDataset(split="val").samples, "text") + pick(MathWritingDataset(split="test").samples, "math")
+
+
+def evaluate_real(model, device, benchmark_data, user_eval_lines=(), foreign_lines=()) -> dict:
     """Zeichenfehlerrate (CER) auf echter Handschrift.
-    sel  = gerade Benchmark-Zeilen + Abschreib-Messzeilen (wählt best.pt aus)
-    test = ungerade Benchmark-Zeilen (nie zur Auswahl, sonst wäre der Testwert geschönt)
-    own  = nur die Abschreib-Messzeilen (Teil von sel, zur Info)"""
-    chars = {"sel": 0, "test": 0, "own": 0}
-    errors = {"sel": 0, "test": 0, "own": 0}
+    sel   = gerade Benchmark-Zeilen + Abschreib-Messzeilen (eigene Handschrift)
+    fremd = fremde Schreiber (load_foreign_eval)
+    score = Mittel aus sel und fremd: wählt best.pt, damit kein Modell gewinnt, das nur eine Schrift kann
+    test  = ungerade Benchmark-Zeilen (nie zur Auswahl, sonst wäre der Testwert geschönt)
+    own   = nur die Abschreib-Messzeilen (Teil von sel, zur Info)"""
+    chars = {"sel": 0, "test": 0, "own": 0, "fremd": 0}
+    errors = {"sel": 0, "test": 0, "own": 0, "fremd": 0}
     model.eval()
     with torch.no_grad():
+        for feats, gt, mode in foreign_lines:
+            dist, n = line_distance(_recognize_features(model, device, feats, mode), gt, mode)
+            chars["fremd"] += n
+            errors["fremd"] += dist
         for row in benchmark_data:
             cat, gt = LINES_GROUND_TRUTH.get(row["lineIdx"], ("unbekannt", ""))
             mode = "math" if cat in ("formel", "rechnung") else "text"
@@ -308,7 +330,9 @@ def evaluate_real(model, device, benchmark_data, user_eval_lines=()) -> dict:
             for split in ("sel", "own"):
                 chars[split] += n
                 errors[split] += dist
-    return {k: errors[k] / max(1, chars[k]) for k in chars}
+    result = {k: errors[k] / max(1, chars[k]) for k in chars}
+    result["score"] = (result["sel"] + result["fremd"]) / 2 if chars["fremd"] else result["sel"]
+    return result
 
 
 def train(
@@ -394,6 +418,16 @@ def train(
         print(f"Setze Training fort ab Epoche {start_epoch} (aus {last_path}).")
 
     benchmark_data = json.load(open(BENCHMARK_DATA_PATH, encoding="utf-8"))
+    foreign_lines = load_foreign_eval()
+    print(f"{len(foreign_lines)} Messzeilen fremder Schreiber gehen in die Modellauswahl ein.")
+
+    if finetune_path:
+        # Feintuning muss die Basis schlagen, sonst bleibt die Basis das beste Modell
+        base = evaluate_real(model, device, benchmark_data, user_eval_lines, foreign_lines)
+        best_real_cer, best_real_acc = base["score"], max(0.0, (1.0 - base["score"]) * 100.0)
+        torch.save({"epoch": 0, "model_state": model.state_dict(), "select_cer": base["score"], "test_cer": base["test"]},
+                   os.path.join(checkpoints_dir, "best.pt"))
+        print(f"Basis: Auswahl-Score {base['score'] * 100:.1f} % (eigene {base['sel'] * 100:.1f} %, fremde {base['fremd'] * 100:.1f} %) | TEST-CER {base['test'] * 100:.1f} %")
 
     print("Starte Training mit 4 Features. Modellauswahl erfolgt nach echtem Test-Set (strikt getrennt)!")
 
@@ -461,7 +495,7 @@ def train(
                 last_path,
             )
 
-        # Echt-Auswertung mit Wörterbuch-Beam-Search ist teuer: nur alle eval_every Epochen und in der letzten
+        # Echt-Auswertung (Hunderte Zeilen) nur alle eval_every Epochen und in der letzten
         if epoch % eval_every != 0 and epoch != epochs:
             print(
                 f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} %",
@@ -470,24 +504,25 @@ def train(
             save_last()
             continue
 
-        # 2. ECHTE HANDSCHRIFT: Auswahl (gerade Benchmark-Zeilen + Abschreib-Messzeilen) wählt best.pt,
+        # 2. ECHTE HANDSCHRIFT: Auswahl-Score (eigene Auswahlzeilen + fremde Schreiber) wählt best.pt,
         #    ungerade Benchmark-Zeilen bleiben unberührter Test.
-        real = evaluate_real(model, device, benchmark_data, user_eval_lines)
-        real_cer, test_cer = real["sel"], real["test"]
+        real = evaluate_real(model, device, benchmark_data, user_eval_lines, foreign_lines)
+        real_cer, test_cer = real["score"], real["test"]
         real_acc = max(0.0, (1.0 - real_cer) * 100.0)
         own = f" (davon Abschreib-Messzeilen: {real['own'] * 100:.1f} %)" if user_eval_lines else ""
 
         print(
             f"Epoche {epoch:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Synth Val Acc: {val_acc:.1f} % | "
-            f"Auswahl-CER: {real_cer * 100:.1f} %{own} | TEST-CER: {test_cer * 100:.1f} %",
+            f"Auswahl-Score: {real_cer * 100:.1f} % | eigene: {real['sel'] * 100:.1f} %{own} | "
+            f"fremde: {real['fremd'] * 100:.1f} % | TEST-CER: {test_cer * 100:.1f} %",
             flush=True,
         )
 
         for tgt, prd in sample_preds[:1]:
             print(f"  [Synth-Probe] Soll: '{tgt}' | Ist: '{prd}'")
 
-        # Modellauswahl und früher Abbruch nach der Auswahl-Hälfte (gerade lineIdx)
-        if best_epoch == 0 or real_cer < best_real_cer:
+        # Modellauswahl und früher Abbruch nach dem Auswahl-Score
+        if real_cer < best_real_cer:
             best_real_cer = real_cer
             best_real_acc = real_acc
             best_epoch = epoch
@@ -516,6 +551,8 @@ def train(
 
     # ONNX Export des besten Modells
     best_ckpt = torch.load(os.path.join(checkpoints_dir, "best.pt"), map_location="cpu")
+    if finetune_path and best_epoch == 0:
+        print("\nKeine Feintuning-Epoche war besser als die Basis – exportiert wird die unveränderte Basis.")
     print(
         f"\nTraining abgeschlossen. Bestes Modell aus Epoche {best_epoch}: "
         f"Auswahl-Genauigkeit {best_real_acc:.1f} %, unberührte TEST-CER {best_ckpt['test_cer'] * 100:.1f} %."
