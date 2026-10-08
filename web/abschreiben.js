@@ -1,4 +1,5 @@
 // Abschreib-Modus: Vollbild-Schreibfeld zum Sammeln eigener Handschrift.
+// Das Schreibfeld hat feste Höhe und sitzt oben, damit die Hand darunter Platz hat.
 // Der Text wird zeilenweise vorgegeben; „Weiter“ speichert Striche + Soll-Text
 // über HANDSCHRIFT.saveTrainingSample (Export in den KI-Einstellungen).
 // Jeder vierte Text ist eine Messzeile (split: "eval") und darf nie ins Training.
@@ -15,10 +16,10 @@ const CSS = `
 #abschreiben .ab-kopf { display: flex; align-items: center; gap: 8px }
 #abschreiben .ab-kopf b { flex: 1; font-size: 1.05rem }
 #abschreiben .ab-info { color: var(--text2, #999); font-size: .85rem }
-#abschreiben .ab-text { max-height: 30vh; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--surface, #222); font-size: 1rem; line-height: 1.6; color: var(--text2, #999) }
+#abschreiben .ab-text { max-height: 22vh; overflow: auto; padding: 8px 12px; border-radius: 10px; background: var(--surface, #222); font-size: 1rem; line-height: 1.6; color: var(--text2, #999) }
 #abschreiben .ab-text .ab-akt { color: var(--text, #eee); background: var(--accent-soft, #234); border-radius: 4px; padding: 1px 3px }
 #abschreiben .ab-vorgabe { font-size: 1.6rem; font-weight: 600; text-align: center; letter-spacing: .01em }
-#abschreiben canvas { flex: 1; min-height: 180px; width: 100%; border-radius: 12px; background: var(--panel-solid, #1a1a1a); border: 1px solid var(--edge, #444); touch-action: none; cursor: crosshair }
+#abschreiben canvas { flex: none; height: clamp(170px, 30vh, 280px); width: 100%; border-radius: 12px; background: var(--panel-solid, #1a1a1a); border: 1px solid var(--edge, #444); touch-action: none; cursor: crosshair }
 #abschreiben .ab-leiste { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end }
 #abschreiben .ab-leiste button { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--edge, #444); background: var(--surface, #222); color: inherit; font: inherit }
 #abschreiben .ab-leiste .ab-weiter { background: var(--accent, #3a7bd5); border-color: transparent; color: var(--on-accent, #fff); font-weight: 600 }
