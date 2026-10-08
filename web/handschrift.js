@@ -117,6 +117,24 @@ export const HANDSCHRIFT = (() => {
 		return JSON.stringify(getTrainingSamples(), null, 2);
 	}
 
+	// Teilen-Menü (iPad: „In Drive sichern“), sonst normaler Download.
+	// Muss direkt aus einem Klick heraus aufgerufen werden (navigator.share braucht die Geste).
+	async function shareTrainingSamples() {
+		const name = "my_handwriting_samples.json";
+		const json = exportTrainingSamplesJson();
+		const file = typeof File !== "undefined" ? new File([json], name, { type: "application/json" }) : null;
+		if (file && navigator.canShare?.({ files: [file] })) {
+			try {
+				await navigator.share({ files: [file], title: name });
+				return "geteilt";
+			} catch (e) {
+				if (e?.name === "AbortError") return "abgebrochen";
+			}
+		}
+		U.download(name, json);
+		return "heruntergeladen";
+	}
+
 	function clearTrainingSamples() {
 		try { localStorage.removeItem(STORAGE_KEY_SAMPLES); } catch {}
 	}
@@ -128,6 +146,7 @@ export const HANDSCHRIFT = (() => {
 		saveTrainingSample,
 		getTrainingSamples,
 		exportTrainingSamplesJson,
+		shareTrainingSamples,
 		clearTrainingSamples,
 	};
 })();

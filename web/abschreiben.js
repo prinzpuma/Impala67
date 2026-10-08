@@ -74,6 +74,7 @@ export function open() {
 		'<div class="ab-vorgabe"></div>' +
 		"<canvas></canvas>" +
 		'<div class="ab-leiste">' +
+		'<button type="button" data-ab="senden">📤 Senden</button>' +
 		'<button type="button" data-ab="naechsterText">Anderer Text</button>' +
 		'<button type="button" data-ab="ueberspringen">Überspringen</button>' +
 		'<button type="button" data-ab="rueckgaengig">↶ Strich</button>' +
@@ -186,6 +187,11 @@ export function open() {
 		const aktion = e.target.closest("[data-ab]")?.dataset.ab;
 		if (!aktion) return;
 		if (aktion === "zu") return schliessen();
+		if (aktion === "senden") {
+			if (!HANDSCHRIFT.getTrainingSamples().length) return U.toast("Noch keine Zeilen gespeichert.");
+			HANDSCHRIFT.shareTrainingSamples();
+			return;
+		}
 		if (aktion === "loeschen") { striche = []; zeichne(); return; }
 		if (aktion === "rueckgaengig") { striche.pop(); zeichne(); return; }
 		if (aktion === "ueberspringen") { naechsteZeile(); zeige(); return; }

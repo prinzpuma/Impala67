@@ -1354,9 +1354,9 @@ export function handleExportHandwritingSamples() {
 		U.toast("Noch keine Trainingsbeispiele gesammelt.");
 		return;
 	}
-	const json = HANDSCHRIFT.exportTrainingSamplesJson();
-	U.download("my_handwriting_samples.json", json);
-	U.toast(`${count} Trainingsbeispiele exportiert! 📥`);
+	HANDSCHRIFT.shareTrainingSamples().then((weg) => {
+		if (weg !== "abgebrochen") U.toast(`${count} Trainingsbeispiele exportiert! 📥`);
+	});
 }
 
 export function handleClearHandwritingSamples() {
