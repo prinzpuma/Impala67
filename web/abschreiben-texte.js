@@ -1,45 +1,38 @@
-// Texte für den Abschreib-Modus (abschreiben.js).
-// Nur Zeichen aus dem Handschrift-Vokabular (handwriting/vocabulary.py):
-// Buchstaben, äöüÄÖÜß, Ziffern, Leerzeichen und .,!?-+:/*=()@#%'
+// Texte für den Abschreib-Modus (abschreiben.js): Stoff aus dem SSE-Studium
+// (Mathe, Elektrotechnik, Physik, Chemie, Energie), damit die Erkennung genau
+// die Fachwörter und Formeln lernt, die später im Heft vorkommen.
+// Nur Zeichen aus dem Handschrift-Vokabular (handwriting/vocabulary.py).
 // Keine Texte aus data/benchmark_test_strokes.json übernehmen (sonst Leakage).
 // Reihenfolge nicht ändern: Index bestimmt, ob ein Text Mess- oder Trainingsdaten liefert.
 
 export const ABSCHREIB_TEXTE = [
-	{ titel: "Drei Herzen", text: "Ein Oktopus hat drei Herzen und blaues Blut. Zwei Herzen pumpen das Blut durch die Kiemen, das dritte versorgt den Körper. Beim Schwimmen hört dieses dritte Herz sogar auf zu schlagen. Deshalb kriechen Oktopusse lieber, als dass sie schwimmen." },
-	{ titel: "Ewiger Honig", text: "Honig verdirbt fast nie. Er enthält kaum Wasser und ist leicht sauer, darin können Bakterien nicht überleben. In alten ägyptischen Gräbern fanden Forscher Töpfe mit Honig, die mehrere tausend Jahre alt waren." },
-	{ titel: "Falsche Beeren", text: "Botanisch gesehen ist die Banane eine Beere, die Erdbeere aber nicht. Auch Gurken, Kürbisse und Tomaten zählen zu den Beeren. Die Erdbeere ist eine Sammelnussfrucht: Die kleinen gelben Punkte auf ihr sind die eigentlichen Früchte." },
-	{ titel: "Langer Tag", text: "Auf der Venus dauert ein Tag länger als ein Jahr. Für eine Drehung um sich selbst braucht sie 243 Erdtage, für eine Runde um die Sonne nur 225. Außerdem dreht sie sich andersherum als die Erde, die Sonne geht dort im Westen auf." },
-	{ titel: "Kleopatra", text: "Kleopatra lebte zeitlich näher an der ersten Mondlandung als am Bau der großen Pyramide von Gizeh. Die Pyramide war zu ihrer Zeit schon etwa 2500 Jahre alt. Von Kleopatra bis zur Mondlandung 1969 vergingen dagegen nur rund 2000 Jahre." },
-	{ titel: "Victor jagt", text: "Victor jagt zwölf Boxkämpfer quer über den großen Sylter Deich. Falsches Üben von Xylophonmusik quält jeden größeren Zwerg. Beide Sätze enthalten jeden Buchstaben des Alphabets mindestens einmal. Man nennt solche Sätze Pangramme." },
-	{ titel: "Acht Minuten", text: "Das Licht der Sonne braucht etwa 8 Minuten und 20 Sekunden bis zur Erde. Wenn wir die Sonne ansehen, sehen wir sie also so, wie sie vor über acht Minuten war. Das Licht ferner Sterne ist oft sogar Tausende Jahre unterwegs." },
-	{ titel: "Wachsender Turm", text: "Der Eiffelturm ist im Sommer bis zu 15 cm höher als im Winter. Das Eisen dehnt sich bei Wärme aus. Gebaut wurde er 1889 für die Weltausstellung in Paris und sollte eigentlich nach 20 Jahren wieder abgerissen werden." },
-	{ titel: "Würfel", text: "Wombats sind die einzigen Tiere, die würfelförmigen Kot machen. Die Würfel rollen nicht weg und markieren so das Revier auf Steinen und Baumstämmen. Wie genau der Darm die Ecken formt, haben Forscher erst 2018 herausgefunden." },
-	{ titel: "Zahlenzauber", text: "Rechne einmal 111111111 * 111111111 aus. Das Ergebnis ist 12345678987654321, eine Zahl, die von 1 bis 9 hinauf und wieder hinunter läuft. Auch 9 * 9 = 81 und 99 * 99 = 9801 folgen einem hübschen Muster." },
-	{ titel: "Schachbrett", text: "Ein alter Herrscher wollte den Erfinder des Schachspiels belohnen. Der wünschte sich ein Reiskorn auf dem ersten Feld, zwei auf dem zweiten, vier auf dem dritten und so weiter. Auf allen 64 Feldern zusammen wären das über 18 Trillionen Körner gewesen." },
-	{ titel: "Schweres Sternchen", text: "Ein Neutronenstern ist so dicht gepackt, dass ein Teelöffel davon auf der Erde etwa eine Milliarde Tonnen wiegen würde. Dabei hat so ein Stern nur einen Durchmesser von ungefähr 20 Kilometern, kaum größer als eine Stadt." },
-	{ titel: "Kochen am Gipfel", text: "Auf der Zugspitze kocht Wasser schon bei etwa 90 Grad. Oben ist der Luftdruck niedriger, deshalb verdampft das Wasser früher. Nudeln brauchen dort länger, weil das Wasser nie so heiß wird wie im Tal." },
-	{ titel: "Fleißiges Herz", text: "Ein menschliches Herz schlägt etwa 100000 Mal am Tag. In einem langen Leben kommen so fast drei Milliarden Schläge zusammen. Dabei pumpt es jeden Tag rund 7000 Liter Blut durch den Körper." },
-	{ titel: "Haie und Bäume", text: "Haie gibt es schon länger als Bäume. Die ersten Haie schwammen vor über 400 Millionen Jahren durch die Meere. Die ersten echten Bäume wuchsen erst einige Millionen Jahre später an Land." },
-	{ titel: "Der See ohne Grenze", text: "Am Bodensee treffen Deutschland, Österreich und die Schweiz aufeinander. Wo genau die Grenzen im Wasser verlaufen, wurde nie verbindlich festgelegt. Es ist eine der wenigen Stellen in Europa ohne klare Grenze." },
-	{ titel: "Drei f", text: "Seit der Rechtschreibreform schreibt man Schifffahrt mit drei f. Kaffeeersatz hat sogar drei e hintereinander. Eines der längsten Wörter im Duden ist Kraftfahrzeug-Haftpflichtversicherung. Im Alltag sagt das aber niemand, wir sagen einfach Autoversicherung." },
-	{ titel: "Ada Lovelace", text: "Ada Lovelace schrieb 1843 das erste Computerprogramm der Welt. Es war für eine Rechenmaschine gedacht, die nie fertig gebaut wurde. Sie ahnte schon damals, dass solche Maschinen eines Tages auch Musik komponieren könnten." },
-	{ titel: "Kaltes Licht", text: "Glühwürmchen erzeugen Licht fast ganz ohne Wärme. Ein Großteil der Energie wird zu Licht. Eine alte Glühbirne dagegen verwandelt den größten Teil ihres Stroms in Wärme und nur wenige Prozent in Licht." },
-	{ titel: "Lernen mit Pausen", text: "Wer Vokabeln an mehreren Tagen wiederholt, behält sie viel länger als jemand, der alles am Abend vor der Prüfung lernt. Diesen Effekt nennt man verteiltes Lernen. Karteikarten mit wachsenden Abständen nutzen genau diesen Trick." },
-	{ titel: "Ohmsches Gesetz", text: "In der Physik gilt U = R * I. Die Spannung ist also Widerstand mal Stromstärke. Bei 230 Volt und einem Widerstand von 46 Ohm fließen genau 5 Ampere. Verdoppelt man den Widerstand, halbiert sich der Strom." },
-	{ titel: "Schlafkönige", text: "Koalas schlafen bis zu 20 Stunden am Tag. Ihre Nahrung, die Blätter des Eukalyptus, liefert kaum Energie und ist schwer zu verdauen. Wer so wenig Energie bekommt, spart sie am besten im Schlaf." },
-	{ titel: "Pfannkuchen", text: "Für vier Pfannkuchen brauchst du 200 g Mehl, 2 Eier, 300 ml Milch und eine Prise Salz. Alles glatt rühren und den Teig 10 Minuten ruhen lassen. Dann in einer heißen Pfanne mit etwas Butter von beiden Seiten goldbraun backen." },
-	{ titel: "Der höchste Berg", text: "Der Mount Everest ist 8849 Meter hoch und wächst noch immer um einige Millimeter pro Jahr. Die indische Platte schiebt sich langsam unter Asien. Gemessen vom Erdmittelpunkt ist aber der Chimborazo in Ecuador der höchste Gipfel." },
-	{ titel: "Postkarte aus 2075", text: "Liebe Grüße aus dem Jahr 2075! Die Züge fahren pünktlich, die Hausaufgaben macht niemand mehr allein und Briefe schreibt man wieder mit der Hand. Nur das WLAN im Zug ist immer noch genauso schlecht wie früher." },
-	{ titel: "Geschwindigkeit", text: "Die Geschwindigkeit ist Strecke durch Zeit, also v = s / t. Ein Zug fährt 360 km in 2 Stunden und ist damit im Schnitt 180 km/h schnell. Ein Gepard schafft kurz über 100 km/h, aber nur für wenige hundert Meter." },
-	{ titel: "Bienensprache", text: "Honigbienen tanzen, um anderen Bienen den Weg zu Blüten zu zeigen. Die Richtung des Tanzes zeigt den Winkel zur Sonne, die Dauer verrät die Entfernung. Für ein Glas Honig fliegen Bienen zusammen etwa dreimal um die Erde." },
-	{ titel: "Der Mond entfernt sich", text: "Der Mond entfernt sich jedes Jahr um etwa 3,8 cm von der Erde. Das haben Forscher mit Laserstrahlen gemessen, die sie an Spiegeln auf dem Mond reflektieren ließen. Die Spiegel stellten Astronauten 1969 dort ab." },
-	{ titel: "Eine kurze Geschichte", text: "Es war einmal ein Igel, der jeden Morgen um sieben Uhr zum Bäcker ging. Er kaufte immer genau ein Brötchen und zwei Kekse. Eines Tages war der Bäcker krank. Der Igel ging nach Hause, backte selbst und eröffnete eine Woche später seine eigene Bäckerei." },
-	{ titel: "Quadratzahlen", text: "Die Summe der ersten ungeraden Zahlen ist immer eine Quadratzahl: 1 + 3 = 4, 1 + 3 + 5 = 9 und 1 + 3 + 5 + 7 = 16. Legt man Steine in Winkeln um ein Quadrat, sieht man sofort, warum das so ist." },
-	{ titel: "Elefanten", text: "Elefanten können über den Boden kommunizieren. Sie erzeugen sehr tiefe Töne, die als Schwingungen viele Kilometer weit laufen. Andere Elefanten spüren diese Signale mit ihren Füßen und ihrem Rüssel." },
-	{ titel: "Papier falten", text: "Ein Blatt Papier lässt sich kaum öfter als sieben Mal falten. Mit jeder Faltung verdoppelt sich die Dicke. Könnte man es 42 Mal falten, wäre der Stapel dicker als der Weg von der Erde bis zum Mond." },
+	{ titel: "Gradient", text: "Der Gradient grad f zeigt in die Richtung des steilsten Anstiegs. Seine Länge gibt an, wie schnell f dort wächst. Ist der Gradient null, liegt ein kritischer Punkt vor: Maximum, Minimum oder Sattelpunkt." },
+	{ titel: "Determinante", text: "Für eine 2x2-Matrix gilt det A = a*d - b*c. Ist die Determinante null, sind die Spalten linear abhängig und A ist nicht invertierbar. Der Betrag der Determinante ist der Faktor, um den A Flächen streckt." },
+	{ titel: "Wachstum und Zerfall", text: "Die Gleichung y' = λ*y beschreibt Wachstum und Zerfall. Ihre Lösung lautet y(t) = C*e^(λt). Für λ < 0 klingt sie ab, für λ > 0 wächst sie exponentiell." },
+	{ titel: "Federpendel", text: "Ein Federpendel gehorcht der Gleichung m*x'' = -k*x. Es schwingt mit der Kreisfrequenz √(k/m). Eine doppelte Masse macht die Schwingung also um den Faktor √2 langsamer." },
+	{ titel: "Polarkoordinaten", text: "In Polarkoordinaten gilt x = r*cos(t) und y = r*sin(t). Beim Integrieren kommt der Faktor r dazu: dx dy = r dr dt. Damit ergibt sich die Kreisfläche zu π*R^2." },
+	{ titel: "Fourierreihe", text: "Jede periodische Funktion lässt sich als Summe von Sinus- und Kosinusschwingungen schreiben. Die Koeffizienten verraten, wie stark jede Frequenz vertreten ist. So zerlegt ein Equalizer Musik in Bässe und Höhen." },
+	{ titel: "Satz von Gauß", text: "Der Satz von Gauß verbindet Volumen und Rand: Das Integral der Divergenz über ein Volumen ist gleich dem Fluss durch seine Oberfläche. Für das elektrische Feld heißt das: Der Fluss durch eine geschlossene Fläche hängt nur von der eingeschlossenen Ladung ab." },
+	{ titel: "Taylorreihe", text: "Die Taylorreihe nähert eine Funktion durch ein Polynom an: sin(x) = x - x^3/6 + x^5/120 - ... Für kleine Winkel reicht schon der erste Term. Deshalb rechnet man beim Pendel einfach mit sin(x) = x." },
+	{ titel: "Kondensator", text: "Ein Kondensator speichert Ladung: Q = C*U. Die gespeicherte Energie beträgt W = 1/2 * C * U^2. Beim Aufladen über einen Widerstand steigt die Spannung mit der Zeitkonstante R*C." },
+	{ titel: "Wechselstrom", text: "Im Stromnetz schwingt die Spannung 50-mal pro Sekunde. Der Effektivwert von 230 V entspricht einer Spitze von etwa 325 V, denn 230 * √2 = 325. Spulen und Kondensatoren verschieben Strom und Spannung gegeneinander." },
+	{ titel: "Kirchhoff", text: "Nach der Knotenregel ist die Summe aller Ströme in einem Knoten null. Nach der Maschenregel addieren sich alle Spannungen in einer Masche zu null. Mit beiden Regeln lässt sich jedes Netzwerk aus Widerständen berechnen." },
+	{ titel: "Blindwiderstand", text: "Der Blindwiderstand einer Spule wächst mit der Frequenz: X = 2*π*f*L. Beim Kondensator ist es umgekehrt: X = 1/(2*π*f*C). Bei der Resonanzfrequenz heben sich beide genau auf." },
+	{ titel: "Coulomb", text: "Zwei Ladungen ziehen sich an oder stoßen sich ab. Die Kraft sinkt mit dem Quadrat des Abstands: F = k*q1*q2/r^2. Doppelter Abstand bedeutet also nur noch ein Viertel der Kraft." },
+	{ titel: "Lorentzkraft", text: "Bewegt sich eine Ladung durch ein Magnetfeld, wirkt die Lorentzkraft F = q*v*B senkrecht zur Bewegung. Deshalb laufen Elektronen im Magnetfeld auf Kreisbahnen. Nach demselben Prinzip drehen sich Elektromotoren." },
+	{ titel: "Induktion", text: "Ändert sich der magnetische Fluss durch eine Leiterschleife, wird eine Spannung induziert. Nach Lenz wirkt der induzierte Strom seiner Ursache entgegen. Jeder Generator im Kraftwerk nutzt dieses Prinzip." },
+	{ titel: "Wellen", text: "Für jede Welle gilt c = λ*f. Grünes Licht mit 500 nm Wellenlänge schwingt also rund 600 Billionen Mal pro Sekunde. Zwei Wellen verstärken sich, wenn ihr Gangunterschied ein Vielfaches von λ ist." },
+	{ titel: "Redox", text: "Bei einer Redoxreaktion wandern Elektronen. Oxidation ist Elektronenabgabe, Reduktion ist Elektronenaufnahme. Merksatz: Das Reduktionsmittel gibt ab, das Oxidationsmittel nimmt auf." },
+	{ titel: "Akku", text: "In einem Lithium-Ionen-Akku wandern beim Laden Lithium-Ionen zur Graphit-Anode. Beim Entladen fließen sie zurück, und Elektronen treiben den Strom durch das Gerät. Eine Zelle liefert etwa 3,7 V." },
+	{ titel: "Ideales Gas", text: "Für ein ideales Gas gilt p*V = n*R*T. Verdoppelt man die Temperatur bei festem Volumen, verdoppelt sich der Druck. Deshalb sollte man Spraydosen nie in die pralle Sonne legen." },
+	{ titel: "Elektrolyse", text: "Bei der Elektrolyse wird Wasser mit Strom zerlegt: 2 H2O -> 2 H2 + O2. Der Wasserstoff kann später in einer Brennstoffzelle wieder Strom liefern. So lässt sich Solarstrom aus dem Sommer für den Winter speichern." },
+	{ titel: "Solarzelle", text: "Eine Solarzelle besteht aus dotiertem Silizium. Trifft Licht auf den pn-Übergang, entstehen freie Ladungsträger und ein Strom fließt. Gute Module wandeln heute über 22 % des Sonnenlichts in Strom um." },
+	{ titel: "Windkraft", text: "Die Leistung des Windes wächst mit der dritten Potenz der Geschwindigkeit: P ist proportional zu v^3. Doppelter Wind bringt also achtfache Leistung. Mehr als 59 % kann aber keine Turbine entnehmen, das ist die Betz-Grenze." },
+	{ titel: "Carnot", text: "Keine Wärmekraftmaschine schlägt den Carnot-Prozess: Wirkungsgrad = 1 - Tk/Tw. Bei 600 K und 300 K sind höchstens 50 % möglich. Deshalb arbeiten Kraftwerke mit möglichst heißem Dampf." },
+	{ titel: "Kilowattstunde", text: "Eine Kilowattstunde sind 3,6 Millionen Joule. Damit fährt ein E-Auto etwa 6 km weit oder ein Kühlschrank läuft einen Tag. Ein Mensch leistet auf dem Fahrrad dauerhaft nur rund 100 W." },
 ];
 
-// Jeder vierte Text liefert Messzeilen (nie Training), der Rest Trainingsdaten.
+// Jeder vierte Text (Index 3, 7, 11, ...) ist eine Messzeile und darf nie ins Training.
 export function abschreibSplit(textIndex) {
 	return textIndex % 4 === 3 ? "eval" : "train";
 }

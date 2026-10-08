@@ -8,7 +8,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { ABSCHREIB_TEXTE, abschreibSplit } from "./abschreiben-texte.js";
 
-const POS_KEY = "impala67_abschreiben_pos";
+const POS_KEY = "impala67_abschreiben_pos2"; // v2: neue Semester-Texte, Position neu ab Text 1
 const MAX_ZEILE = 34; // Zeichen pro Schreibzeile, passt bequem auf ein Tablet-Querformat
 
 const CSS = `
