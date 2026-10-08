@@ -150,6 +150,8 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 	}, 12000);
 </script>
 
+<!-- Fester, einfarbiger Streifen oben: verhindert den Glas-Blur von iOS 27 in der installierten App (Stil: layout.css). -->
+<div id="statusBand" aria-hidden="true"></div>
 <div id="app">
 	<aside id="sidebar">
 		<div class="topbar">
@@ -269,7 +271,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=177"></script>
+<script type="module" src="main.js?build=178"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -279,7 +281,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=77", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=78", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

@@ -1,5 +1,9 @@
 /* layout.css — Impala67: App-Grid, density-compact, Safe-Areas & Responsive */
 
+/* iOS 27 blurt in installierten Web-Apps den oberen Rand, außer dort liegt ein festes, einfarbiges Element
+   (mind. 6px hoch, ≥80 % breit, ≤4px vom Rand). Der Streifen bleibt im Statusleisten-Bereich und nimmt keinen Platz weg. */
+#statusBand { display: none }
+body.is-ios.is-standalone #statusBand { display: block; position: fixed; z-index: var(--z-toast); top: 0; left: 0; right: 0; height: max(6px, env(safe-area-inset-top)); background: var(--panel-solid); pointer-events: none }
 #app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: var(--space-3); height: 100dvh; padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left)) }
 /* Flache Panels, dezente Kanten, kein Glas-Look */
 #sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
