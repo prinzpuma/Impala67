@@ -11,7 +11,7 @@ const POS_KEY = "impala67_abschreiben_pos";
 const MAX_ZEILE = 34; // Zeichen pro Schreibzeile, passt bequem auf ein Tablet-Querformat
 
 const CSS = `
-#abschreiben { position: fixed; inset: 0; z-index: var(--z-palette, 1000); display: flex; flex-direction: column; gap: 12px; padding: max(12px, var(--safe-top)) 16px max(12px, env(safe-area-inset-bottom)); background: var(--bg1, #111); color: var(--text, #eee) }
+#abschreiben { position: fixed; inset: 0; z-index: var(--z-palette, 1000); display: flex; flex-direction: column; gap: 12px; padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); background: var(--bg1, #111); color: var(--text, #eee) }
 #abschreiben .ab-kopf { display: flex; align-items: center; gap: 8px }
 #abschreiben .ab-kopf b { flex: 1; font-size: 1.05rem }
 #abschreiben .ab-info { color: var(--text2, #999); font-size: .85rem }
