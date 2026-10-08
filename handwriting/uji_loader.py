@@ -144,8 +144,9 @@ def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str,
                 resampled.append(pt)
             else:
                 prev = resampled[-1]
-                resampled.extend(interpolate_points(prev, pt, step))
-        if resampled:
+        if len(resampled) == 1:
+            resampled.append(resampled[0])
+        if len(resampled) >= 2:
             norm.append(resampled)
 
     return norm

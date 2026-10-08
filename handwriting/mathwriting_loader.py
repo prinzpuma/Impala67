@@ -16,7 +16,7 @@ import numpy as np
 
 from vocabulary import CHAR_TO_IDX, BLANK_IDX
 
-CACHE_VERSION = 3
+CACHE_VERSION = 4  # v4: Median-Normalisierung (alte v3-Caches haben veraltete Features)
 
 # LaTeX zu Vokabular-Mapping
 LATEX_REPLACEMENTS = [
@@ -79,8 +79,10 @@ def clean_latex_label(raw_label: str) -> str:
 
 def resample_stroke(pts: List[Tuple[float, float]], step: float) -> List[Tuple[float, float]]:
     """Resampelt einen Strich äquidistant (exakt wie im Web-Preprocessor)."""
-    if len(pts) < 2:
-        return pts
+    if len(pts) == 0:
+        return []
+    if len(pts) == 1:
+        return [(float(pts[0][0]), float(pts[0][1])), (float(pts[0][0]), float(pts[0][1]))]
     out = [pts[0]]
     cur_dist = 0.0
     for i in range(len(pts) - 1):
@@ -141,7 +143,7 @@ def parse_inkml_file(file_path: str) -> Optional[Tuple[List[List[Tuple[float, fl
                         pts.append((x, y))
                     except ValueError:
                         pass
-            if len(pts) >= 2:
+            if len(pts) >= 1:
                 traces.append(pts)
 
         if not traces:
@@ -152,22 +154,54 @@ def parse_inkml_file(file_path: str) -> Optional[Tuple[List[List[Tuple[float, fl
         return None
 
 
-def strokes_to_normalized_features(strokes: List[List[Tuple[float, float]]]) -> List[Tuple[float, float, float, float]]:
-    """Wandelt Striche mit äquidistantem Resampling in [dx, dy, pen_down, y_rel] Features um."""
-    all_pts = [p for s in strokes for p in s]
+def calculate_stroke_height_median(strokes, fallback=10.0) -> float:
+    if not strokes:
+        return fallback
+    heights = []
+    for s in strokes:
+        pts = s.get("pts", s) if isinstance(s, dict) else s
+        if not pts or len(pts) < 2:
+            continue
+        ys = [p[1] for p in pts]
+        h = max(ys) - min(ys)
+        if h > 1e-4:
+            heights.append(h)
+    if not heights:
+        return fallback
+    heights.sort()
+    mid = len(heights) // 2
+    return float(heights[mid] if len(heights) % 2 != 0 else (heights[mid - 1] + heights[mid]) / 2.0)
+
+
+def strokes_to_normalized_features(
+    strokes: List[List[Tuple[float, float]]],
+    line_min_y: Optional[float] = None,
+    line_height: Optional[float] = None,
+    step: Optional[float] = None,
+) -> List[Tuple[float, float, float, float]]:
+    """Wandelt Striche mit äquidistantem Resampling in [dx, dy, pen_down, y_rel] Features um (auf Median-Höhe normiert)."""
+    raw_list = [(s.get("pts", s) if isinstance(s, dict) else s) for s in strokes]
+    all_pts = [p for s in raw_list for p in s]
     if not all_pts:
         return []
-    min_y = min(p[1] for p in all_pts)
+    min_y = min(p[1] for p in all_pts) if line_min_y is None else line_min_y
     max_y = max(p[1] for p in all_pts)
-    raw_h = max(10.0, max_y - min_y)
-    step = max(0.6, raw_h * 0.045)
+    med_h = calculate_stroke_height_median(strokes, fallback=10.0)
+    norm_h = line_height if line_height is not None else (med_h if med_h > 0.1 else max(5.0, max_y - min_y))
+    if step is None:
+        step = max(0.6 if norm_h > 2.0 else 0.045, norm_h * 0.045)
 
-    resampled = [resample_stroke(s, step) for s in strokes]
-    resampled = [s for s in resampled if len(s) >= 2]
+    resampled = []
+    for s in raw_list:
+        if not s:
+            continue
+        r = resample_stroke(s, step)
+        if len(r) >= 2:
+            resampled.append(r)
     if not resampled:
         return []
 
-    scale = 1.0 / raw_h
+    scale = 1.0 / norm_h
     feats = []
     last_x, last_y = None, None
 

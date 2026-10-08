@@ -21,9 +21,21 @@ export const HANDWRITING_VOCAB = (() => {
 
 	const CHAR_TO_IDX = new Map(CHARACTERS.map((char, index) => [char, index]));
 
+	// Mathematische Sonderzeichen für die Trennung von Textmodus und Mathemodus
+	const MATH_CHARS = new Set(["^", "_", "<", ">", "{", "}", "~", "√", "∫", "∑", "π", "λ", "α", "β", "\\"]);
+	const MATH_INDICES = new Set(
+		Array.from(MATH_CHARS)
+			.map((char) => CHAR_TO_IDX.get(char))
+			.filter((idx) => idx !== undefined)
+	);
+
 	return {
 		CHARACTERS,
 		CHAR_TO_IDX,
+		MATH_CHARS,
+		MATH_INDICES,
+		BLANK_INDEX: 0,
 		size: CHARACTERS.length,
+		charForIndex: (idx) => CHARACTERS[idx] ?? "",
 	};
 })();

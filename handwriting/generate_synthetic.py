@@ -213,6 +213,20 @@ def rotate_point(x: float, y: float, angle_rad: float, cx: float, cy: float) -> 
     return nx, ny
 
 
+_FONT_SYNTH = None
+
+
+def get_font_synthesizer():
+    global _FONT_SYNTH
+    if _FONT_SYNTH is None:
+        try:
+            from font_sampler import FontHandwritingSynthesizer
+            _FONT_SYNTH = FontHandwritingSynthesizer()
+        except Exception:
+            _FONT_SYNTH = None
+    return _FONT_SYNTH
+
+
 def generate_word_strokes(
     word: str,
     step: float = 0.05,
@@ -220,7 +234,20 @@ def generate_word_strokes(
     rotation_deg: float = 0.0,
     speed_factor: float = 1.0,
 ) -> List[List[Tuple[float, float]]]:
-    """Generiert stochastisch variierte Striche für ein Wort oder eine Formel mit hoher Diversität."""
+    """Generiert stochastisch variierte Striche für ein Wort oder eine Formel mit hoher Diversität (mittels >= 20 OFL-Fonts)."""
+    synth = get_font_synthesizer()
+    if synth is not None and random.random() < 0.95:
+        font_strokes = synth.render_word_strokes(word)
+        if font_strokes:
+            from augmentations import apply_augmentations_on_the_fly
+            all_pts = [p for s in font_strokes for p in s]
+            if all_pts:
+                min_y = min(p[1] for p in all_pts)
+                max_y = max(p[1] for p in all_pts)
+                h = max(1.0, max_y - min_y)
+                scaled = [[(p[0] / h, (p[1] - min_y) / h) for p in s] for s in font_strokes]
+                return apply_augmentations_on_the_fly(scaled)
+
     strokes = []
     cursor_x = 0.0
     # Breitere Spanne für Handschrift-Stile: von stark nach links bis stark nach rechts geneigt
@@ -296,12 +323,31 @@ GERMAN_SENTENCES = [
 ]
 
 
+def calculate_stroke_height_median(strokes, fallback=10.0) -> float:
+    if not strokes:
+        return fallback
+    heights = []
+    for s in strokes:
+        pts = s.get("pts", s) if isinstance(s, dict) else s
+        if not pts or len(pts) < 2:
+            continue
+        ys = [p[1] for p in pts]
+        h = max(ys) - min(ys)
+        if h > 1e-4:
+            heights.append(h)
+    if not heights:
+        return fallback
+    heights.sort()
+    mid = len(heights) // 2
+    return float(heights[mid] if len(heights) % 2 != 0 else (heights[mid - 1] + heights[mid]) / 2.0)
+
+
 def strokes_to_features(
     strokes: List[List[Tuple[float, float]]],
     line_min_y: Optional[float] = None,
     line_height: Optional[float] = None,
 ) -> List[Tuple[float, float, float, float]]:
-    """Wandelt Striche in [dx, dy, pen_down, y_rel] Sequenz um (identisch zum Web-Preprocessor)."""
+    """Wandelt Striche in [dx, dy, pen_down, y_rel] Sequenz um (auf Kleinbuchstaben-Höhe/Median normiert)."""
     if not strokes:
         return []
 
@@ -309,13 +355,13 @@ def strokes_to_features(
     if not all_pts:
         return []
 
-    if line_min_y is None or line_height is None:
-        min_y = min(p[1] for p in all_pts)
-        max_y = max(p[1] for p in all_pts)
-        height = max(0.1, max_y - min_y)
-    else:
-        min_y = line_min_y
+    min_y = min(p[1] for p in all_pts) if line_min_y is None else line_min_y
+    if line_height is not None:
         height = max(0.1, line_height)
+    else:
+        med_h = calculate_stroke_height_median(strokes, fallback=10.0)
+        max_y = max(p[1] for p in all_pts)
+        height = med_h if med_h > 0.1 else max(0.1, max_y - min_y)
 
     scale = 1.0 / height
 
@@ -325,6 +371,8 @@ def strokes_to_features(
     for stroke in strokes:
         if not stroke:
             continue
+        if len(stroke) == 1:
+            stroke = [stroke[0], stroke[0]]
         first_pt = stroke[0]
         first_y_rel = (first_pt[1] - min_y) * scale - 0.5
 

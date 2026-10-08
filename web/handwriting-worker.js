@@ -165,8 +165,6 @@ async function recognizePageStrokes(strokes, options = {}) {
 			strokeStatus[i] = "skipped_empty";
 		} else if (s.tool === "shape" || s.tool === "eraser" || s.tool === "laser") {
 			strokeStatus[i] = "skipped_tool";
-		} else if (s.pts.length < 2) {
-			strokeStatus[i] = "skipped_too_short";
 		} else {
 			validInkStrokes.push({ stroke: s, origIdx: i });
 		}
@@ -178,9 +176,10 @@ async function recognizePageStrokes(strokes, options = {}) {
 		try {
 			const numFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.numeratorStrokes);
 			const denFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.denominatorStrokes);
+			const mathOpts = { ...options, mode: "math" };
 			const [numRes, denRes] = await Promise.all([
-				numFeat.length >= 3 ? recognizeLineFeatures(numFeat, options) : Promise.resolve({ text: "", isConfident: false }),
-				denFeat.length >= 3 ? recognizeLineFeatures(denFeat, options) : Promise.resolve({ text: "", isConfident: false }),
+				numFeat.length >= 3 ? recognizeLineFeatures(numFeat, mathOpts) : Promise.resolve({ text: "", isConfident: false }),
+				denFeat.length >= 3 ? recognizeLineFeatures(denFeat, mathOpts) : Promise.resolve({ text: "", isConfident: false }),
 			]);
 
 			let sideText = "";

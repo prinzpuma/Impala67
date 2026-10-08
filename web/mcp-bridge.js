@@ -613,7 +613,13 @@ export function initMcpBridge() {
 
 											for (const s of clusterStrokes) {
 												const pts = s.pts || [];
-												if (pts.length < 2) continue;
+												if (!pts.length) continue;
+												if (pts.length === 1) {
+													ctx.beginPath();
+													ctx.arc(pts[0][0] - minX + pad, pts[0][1] - minY + pad, 2.0, 0, Math.PI * 2);
+													ctx.fill();
+													continue;
+												}
 												ctx.beginPath();
 												ctx.moveTo(pts[0][0] - minX + pad, pts[0][1] - minY + pad);
 												for (let p = 1; p < pts.length; p++) {

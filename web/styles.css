@@ -719,18 +719,39 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .heatmap-wrap { width: 100%; overflow-x: auto; padding: 4px 0 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin }
 .heatmap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 10px); gap: 2px; min-width: max-content; padding: 2px 0 6px }
 .heat-cell { width: 10px; height: 10px; border-radius: 2px; background: var(--surface-hover-strong) }
-.heat-cell.l1 { background: color-mix(in srgb, var(--success) 30%, transparent) }
-.heat-cell.l2 { background: color-mix(in srgb, var(--success) 55%, transparent) }
-.heat-cell.l3 { background: color-mix(in srgb, var(--success) 80%, transparent) }
-.heat-cell.l4 { background: var(--success) }
+.heat-cell.l1 { background: rgb(var(--accent-rgb) / .3) }
+.heat-cell.l2 { background: rgb(var(--accent-rgb) / .55) }
+.heat-cell.l3 { background: rgb(var(--accent-rgb) / .8) }
+.heat-cell.l4 { background: var(--accent) }
 .retention-table { max-width: 520px }
+/* Statistik (anki-stats.js): Lernbestand, Trefferquoten, Liste der schwierigen Karten */
+.anki-stack { display: flex; gap: 2px; height: 14px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-hover) }
+.anki-stack i { min-width: 4px }
+.st-neu { background: rgb(var(--accent-rgb) / .35) }
+.st-lernen { background: var(--warn) }
+.st-wiederholen { background: var(--accent) }
+.st-ausgesetzt { background: var(--edge) }
+.anki-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin-top: var(--space-3); font-size: var(--text-sm); color: var(--text2) }
+.anki-legend span { display: inline-flex; align-items: center; gap: var(--space-1-5) }
+.anki-legend i { width: 8px; height: 8px; border-radius: 50% }
+.anki-legend b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums }
+.anki-meter { display: inline-block; width: 72px; height: 6px; margin-right: var(--space-2); vertical-align: middle; border-radius: 3px; background: var(--surface-hover); overflow: hidden }
+.anki-meter i { display: block; height: 100%; background: var(--accent) }
+.anki-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--edge-soft) }
+.anki-row:last-child { border-bottom: 0 }
+.anki-row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.anki-row b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.anki-row small { color: var(--text2); font-size: var(--text-xs) }
+.anki-row button { flex-shrink: 0; height: 30px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--edge); color: var(--text2); font-size: var(--text-sm) }
+.anki-row button:hover { background: var(--surface-hover); color: var(--text) }
+.bar-label b { display: block; color: var(--text); font-weight: 600; font-size: var(--text-2xs) }
 .library h3 { margin: 18px 0 var(--space-2); color: var(--text2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.5px }
 .bar-chart { display: flex; align-items: flex-end; gap: var(--space-1); height: 130px; max-width: 720px; padding: var(--space-2); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg) }
 .bar-wrap { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px }
 .bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .8 }
 .bar-wrap:hover .bar { opacity: 1 }
 .bar-label { font-size: var(--text-3xs); color: var(--text2) }
-.bar-chart.forecast .bar { background: var(--success) }
+.bar-chart.forecast .bar { background: var(--accent); opacity: .5 }
 /* == Daily Notes: Monatskalender == */
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1-5); max-width: 980px }
 .cal-head-row { margin-bottom: var(--space-1-5) }
@@ -1550,15 +1571,6 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 	.graph-skill, .graph-inspector { transition: none }
 }
 /* ---------- 📈 Lern-Analyse (analyse.js) ---------- */
-.ana-block { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--edge-soft) }
-.ana-note { font-size: var(--text-xs); color: var(--text2); margin: var(--space-1-5) 0 var(--space-3) }
-.ana-chrono { display: flex; gap: 2px; margin-bottom: var(--space-4) }
-.ana-hour { flex: 1; height: 26px; border-radius: var(--radius-xs); position: relative }
-.ana-hour span { position: absolute; top: 100%; left: 0; font-size: var(--text-3xs); color: var(--text2) }
-.ana-problems { display: flex; flex-direction: column; gap: var(--space-1-5) }
-.ana-problem { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border-radius: var(--radius-md); padding: var(--space-2) 10px }
-.ana-problem small { display: block; color: var(--text2) }
-.ana-problem button { min-height: 32px; white-space: nowrap }
 .card-face.tappable { cursor: pointer }
 /* ★ Modell-Favoriten im Modell-Dropdown (18. Juli) */
 .model-row { display: flex; align-items: stretch; gap: 2px }

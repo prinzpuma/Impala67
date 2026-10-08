@@ -171,11 +171,11 @@ function hardHtml(d) {
 	const rows = d.hard.map((c) => {
 		const front = String(c.front || "").replace(/\{\{c\d+::|\}\}/g, "").replace(/\s+/g, " ").trim();
 		const cut = front.length > 110 ? front.slice(0, 109) + "…" : front;
-		return '<div class="anki-hard-row"><span><b>' + esc(cut || "Ohne Vorderseite") + "</b><small>" + esc(c.deck || "Standard") + " · " +
+		return '<div class="anki-row"><span><b>' + esc(cut || "Ohne Vorderseite") + "</b><small>" + esc(c.deck || "Standard") + " · " +
 			c.srs.lapses + "× vergessen · Intervall " + Math.max(1, Math.round(c.srs.stability || 0)) + " T</small></span>" +
 			'<button data-ankiedit="' + esc(c.id) + '">Bearbeiten</button></div>';
 	}).join("");
-	return ankiSec("Schwierigste Karten", "Am häufigsten vergessen. Ein Klick öffnet die Karte zum Bearbeiten.") + '<div class="anki-hard">' + rows + "</div>";
+	return ankiSec("Schwierigste Karten", "Am häufigsten vergessen. Ein Klick öffnet die Karte zum Bearbeiten.") + '<div class="anki-rows">' + rows + "</div>";
 }
 
 function retentionHtml(d) {

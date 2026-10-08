@@ -36,13 +36,21 @@ def ctc_beam_search_decode(
     beam_width: int = 15,
     word_list: Set[str] = None,
     word_bonus: float = 2.0,
-    blank_idx: int = BLANK_IDX
+    blank_idx: int = BLANK_IDX,
+    mode: str = "text",
 ) -> str:
     """
     Standard CTC Beam Search mit Präfix-Baum und optionalem Wörterbuch-Bonus.
+    In mode="text" werden mathematische Sonderzeichen (√, ^, _, usw.) gesperrt.
     """
     if word_list is None:
         word_list = get_default_dictionary()
+
+    if mode != "math":
+        from vocabulary import MATH_INDICES
+        logits2D = logits2D.copy()
+        for m_idx in MATH_INDICES:
+            logits2D[:, m_idx] = -1e9
 
     probs = softmax(logits2D)
 

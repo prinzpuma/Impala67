@@ -7,10 +7,10 @@ import { U } from "./util.js";
 import { ICON } from "./icons.js";
 import { RENDER } from "./render.js";
 import { TELE } from "./telemetrie.js";
+import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 
 const hydrateImages = (...args) => RENDER.hydrateImages(...args);
-const localDayKey = (...args) => RENDER.localDayKey(...args);
 const modal = (...args) => RENDER.modal(...args);
 // 🎮 Controller (27. Juli): Der Tastenhinweis steckt DIREKT in der Schaltfläche, die
 // die Taste auslöst — kein schwebendes Overlay, das etwas überdecken kann. Liefert
@@ -148,15 +148,6 @@ function deckMenuHtml(name) {
 		'<button type="button" class="menu-item" data-deckarchive="' + U.esc(name) + '">🗄 Archivieren</button>' +
 		'<button type="button" class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
 		"</div>";
-}
-
-// Gemeinsame Bausteine (DRY): Kennzahl-Karte und Abschnittstitel — Übersicht, Statistik und Archiv nutzen dieselben.
-function statHtml({ label, value, note = "", tag = "div", cls = "", valueCls = "", attrs = "" }) {
-	return "<" + tag + ' class="anki-stat ' + cls + '"' + (attrs ? " " + attrs : "") + "><small>" + label + '</small><b class="' + valueCls + '">' + value + "</b>" +
-		(note ? "<span>" + note + "</span>" : "") + "</" + tag + ">";
-}
-function ankiSec(title, note = "") {
-	return '<div class="anki-sec"><h2>' + title + "</h2>" + (note ? '<p class="anki-note">' + note + "</p>" : "") + "</div>";
 }
 
 function renderAnki(main) {
@@ -367,84 +358,20 @@ function ankiArchiveHtml() {
 		ankiSec("Einzelne Karten") + '<div class="deck-list">' + (cardRows || '<div class="empty small">Keine einzeln archivierten Karten</div>') + "</div>";
 }
 
-// Statistik-Dashboard: Kennzahlen, 30-Tage-Diagramm, 7-Tage-Prognose.
+// Statistik-Tab: Auswertung und Markup liegen in anki-stats.js. Hier nur die Eingaben:
+// Karten dieses Stapels und die Bewertungen, deren Stapel (eingefroren beim Ereignis) dazugehört.
 function ankiStatsHtml() {
 	const cards = ankiCardsOf(S.ankiDeck);
-	const now = new Date();
-	const due = cards.filter((c) => !c.suspended && new Date(c.srs.due) <= now).length;
-	const neu = cards.filter((c) => c.srs.state === "new").length;
-	const learned = cards.filter((c) => c.srs.state === "review").length;
-	// Review-Events tragen ihren ursprünglichen Stapel, damit ein späterer Move
-	// historische Statistik nicht in den neuen Stapel verschiebt.
-	// BUG FIX: Unterstapel (z. B. "Mathe::Analysis") müssen beim Filtern
-	// eingeschlossen werden, damit Stats des Eltern-Stapels korrekt sind.
 	const reviews = (S.reviews || []).filter((r) => {
 		if (!S.ankiDeck) return true;
 		const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 		return STATE.deckInTree(d, S.ankiDeck);
 	});
-	const graded = reviews.filter((r) => r.grade > 0 && !r.first && !r.learning);
-	const retention = graded.length ? Math.round(graded.filter((r) => r.grade > 1).length / graded.length * 100) : null;
-	const perDay = {};
-	reviews.forEach((r) => { const k = localDayKey(r.t); perDay[k] = (perDay[k] || 0) + 1; });
-	const dayKeys = [];
-	for (let i = 29; i >= 0; i--) dayKeys.push(localDayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)));
-	const maxN = Math.max(1, ...dayKeys.map((k) => perDay[k] || 0));
-	const bars = dayKeys.map((k) => '<div class="bar-wrap" title="' + k + ": " + (perDay[k] || 0) + ' Wiederholungen"><div class="bar" style="height:' + Math.round((perDay[k] || 0) / maxN * 100) + '%"></div></div>').join("");
-	const fc = [];
-	for (let i = 0; i < 7; i++) {
-		const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-		const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1);
-		const n = cards.filter((c) => !c.suspended && new Date(c.srs.due) >= (i === 0 ? new Date(0) : d0) && new Date(c.srs.due) < d1).length;
-		fc.push({ label: i === 0 ? "Heute" : d0.toLocaleDateString("de-DE", { weekday: "short" }), n });
-	}
-	const fcMax = Math.max(1, ...fc.map((x) => x.n));
-	const kpi = (label, value) => statHtml({ label, value });
-	return '<div class="anki-stats anki-kpis">' +
-		kpi("Karten", cards.length) + kpi("Fällig", due) + kpi("Neu", neu) + kpi("Gelernt", learned) +
-		kpi("Wiederholungen", reviews.length) + kpi("Sofort richtig", retention === null ? "—" : retention + "%") +
-		"</div>" +
-		ankiSec("Wiederholungen — letzte 30 Tage") +
-		'<div class="bar-chart">' + bars + "</div>" +
-		ankiSec("Prognose — nächste 7 Tage") +
-		'<div class="bar-chart forecast">' + fc.map((x) => '<div class="bar-wrap" title="' + x.label + ": " + x.n + '"><div class="bar" style="height:' + Math.round(x.n / fcMax * 100) + '%"></div><div class="bar-label">' + x.label + "</div></div>").join("") + "</div>" +
-		ankiSec("Aktivität — letzte 12 Monate") + heatmapHtml(reviews) +
-		ankiSec("Retention nach Wiederholungsabstand") + retentionTableHtml(reviews) +
-		// 📈 Phase 3: Lern-Analyse aus analyse.js (Beobachtungen aus der Telemetrie)
-		(window.ANALYSE ? window.ANALYSE.statsHtml() : "");
-}
-
-// GitHub-artige Aktivitäts-Heatmap: 53 Wochen × 7 Tage, Farbstufe = Wiederholungen pro Tag.
-function heatmapHtml(reviews) {
-	const perDay = {};
-	reviews.forEach((r) => { const k = localDayKey(r.t); perDay[k] = (perDay[k] || 0) + 1; });
 	const now = new Date();
-	const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-	const start = new Date(end);
-	start.setDate(start.getDate() - 364 - ((end.getDay() + 6) % 7)); // auf Montag ausrichten
-	let cells = "";
-	for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-		const k = localDayKey(d);
-		const n = perDay[k] || 0;
-		const lvl = n === 0 ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 30 ? 3 : 4;
-		cells += '<div class="heat-cell l' + lvl + '" title="' + k + ": " + n + ' Wiederholungen"></div>';
-	}
-	return '<div class="heatmap-wrap"><div class="heatmap">' + cells + "</div></div>";
+	const analyse = window.ANALYSE ? window.ANALYSE.statsHtml() : "";
+	return statsPageHtml(statsData({ cards, reviews, now, thinkMs: TELE.thinkMedian() }), analyse, now);
 }
 
-// Langzeit-Retention: Anteil bestandener Wiederholungen, wenn die Karte nach
-// einem natürlichen Abstand erneut auftaucht. Ohne ausreichende Daten bleibt die
-// Aussage bewusst leer statt eine scheinpräzise Quote zu zeigen.
-function retentionTableHtml(reviews) {
-	const stats = TELE.retentionStatsForReviews(reviews);
-	const row = (label, bucket) => "<tr><td>" + label + "</td><td>" + bucket.n + "</td><td>" + (bucket.rate === null ? "—" : Math.round(bucket.rate * 100) + " %") + "</td></tr>";
-	return '<table class="lib-table retention-table"><thead><tr><th>Abstand</th><th>Wiederholungen</th><th>Retention</th></tr></thead><tbody>' +
-		row("ca. 1 Tag", stats.day1) +
-		row("ca. 3 Tage", stats.day3) +
-		row("ca. 7 Tage", stats.day7) +
-		row("ca. 14 Tage", stats.day14) +
-		"</tbody></table>";
-}
 
 // Lern-Ansicht — Anki-nah:
 // Queue Learning→Review→New, Learn-Ahead 20 Min, Space=Antwort / bei Rückseite=Gut.

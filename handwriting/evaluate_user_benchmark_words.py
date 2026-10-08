@@ -8,7 +8,7 @@ import numpy as np
 import onnxruntime as ort
 
 from vocabulary import index_to_char, BLANK_IDX
-from mathwriting_loader import resample_stroke
+from mathwriting_loader import resample_stroke, strokes_to_normalized_features
 from beam_search import ctc_beam_search_decode, get_default_dictionary
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.onnx")
@@ -19,9 +19,27 @@ def stroke_bbox(s):
     ys = [p[1] for p in s]
     return min(xs), max(xs), min(ys), max(ys)
 
-def segment_line_into_words(strokes, gap_thresh=8.5):
+def calculate_stroke_height_median(strokes, fallback=10.0):
+    if not strokes:
+        return fallback
+    heights = []
+    for s in strokes:
+        if not s:
+            continue
+        ys = [p[1] for p in s]
+        h = max(ys) - min(ys)
+        if h > 0:
+            heights.append(h)
+    if not heights:
+        return fallback
+    return float(np.median(heights))
+
+def segment_line_into_words(strokes, gap_thresh=None, gap_factor=1.1):
     if not strokes:
         return []
+    if gap_thresh is None:
+        med_h = calculate_stroke_height_median(strokes)
+        gap_thresh = max(4.0, gap_factor * med_h)
     words = []
     cur_word = [strokes[0]]
     cur_box = list(stroke_bbox(strokes[0]))
@@ -39,41 +57,8 @@ def segment_line_into_words(strokes, gap_thresh=8.5):
     words.append(cur_word)
     return words
 
-def strokes_to_4features(strokes, line_min_y=None, line_height=None):
-    all_pts = [p for s in strokes for p in s]
-    if not all_pts:
-        return []
-    if line_min_y is None or line_height is None:
-        min_y = min(p[1] for p in all_pts)
-        max_y = max(p[1] for p in all_pts)
-        raw_h = max(10.0, max_y - min_y)
-    else:
-        min_y = line_min_y
-        raw_h = max(10.0, line_height)
-
-    step = max(0.6, raw_h * 0.045)
-    resampled = [resample_stroke(s, step) for s in strokes]
-    resampled = [s for s in resampled if len(s) >= 2]
-    if not resampled:
-        return []
-
-    scale = 1.0 / raw_h
-    feats = []
-    last_x, last_y = None, None
-
-    for s in resampled:
-        first = s[0]
-        first_y_rel = (first[1] - min_y) * scale - 0.5
-        if last_x is not None:
-            feats.append(((first[0] - last_x) * scale, (first[1] - last_y) * scale, 0.0, first_y_rel))
-        last_x, last_y = first[0], first[1]
-
-        for p in s[1:]:
-            y_rel = (p[1] - min_y) * scale - 0.5
-            feats.append(((p[0] - last_x) * scale, (p[1] - last_y) * scale, 1.0, y_rel))
-            last_x, last_y = p[0], p[1]
-
-    return feats
+# Gemeinsame Feature-Funktion (identisch mit Training und handwriting-preprocessor.js)
+strokes_to_4features = strokes_to_normalized_features
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     m, n = len(s1), len(s2)
@@ -88,7 +73,12 @@ def levenshtein_distance(s1: str, s2: str) -> int:
                 dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
     return dp[m][n]
 
-def ctc_greedy(logits):
+def ctc_greedy(logits, mode="text"):
+    if mode != "math":
+        from vocabulary import MATH_INDICES
+        logits = logits.copy()
+        for m_idx in MATH_INDICES:
+            logits[:, m_idx] = -1e9
     exp_l = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
     probs = exp_l / np.sum(exp_l, axis=-1, keepdims=True)
     preds = np.argmax(probs, axis=-1)
@@ -131,25 +121,25 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
 
     total_chars = 0
     total_errors = 0
+    test_chars = 0
+    test_errors = 0
+    sel_chars = 0
+    sel_errors = 0
 
     for row in data:
         l_idx = row["lineIdx"]
         cat, gt = LINES_GROUND_TRUTH.get(l_idx, ("unbekannt", ""))
         raw_strokes = row["strokes"]
         
-        # Zeilen-Bounding-Box für Grundlinien-Referenz
-        all_line_pts = [p for s in raw_strokes for p in s]
-        line_min_y = min(p[1] for p in all_line_pts) if all_line_pts else 0.0
-        line_max_y = max(p[1] for p in all_line_pts) if all_line_pts else 10.0
-        line_h = max(10.0, line_max_y - line_min_y)
-
-        word_groups = segment_line_into_words(raw_strokes, gap_thresh=8.5)
+        word_groups = segment_line_into_words(raw_strokes)
         recognized_words = []
         avg_confs = []
         
+        line_mode = "math" if cat in ("formel", "rechnung") else "text"
+
         for wg in word_groups:
             parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
-            feats = strokes_to_4features(parsed_strokes, line_min_y=line_min_y, line_height=line_h)
+            feats = strokes_to_normalized_features(parsed_strokes)
             if len(feats) < 3:
                 continue
             inp = np.array(feats, dtype=np.float32).reshape(1, len(feats), 4)
@@ -157,8 +147,8 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
             logits = out[:, 0, :]
             
             # Beam search mit Wörterbuch
-            w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0)
-            _, conf = ctc_greedy(logits)
+            w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0, mode=line_mode)
+            _, conf = ctc_greedy(logits, mode=line_mode)
             
             recognized_words.append(w_beam)
             avg_confs.append(conf)
@@ -170,19 +160,33 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
         
         total_chars += gt_len
         total_errors += dist
+        if l_idx % 2 == 1:
+            test_chars += gt_len
+            test_errors += dist
+        else:
+            sel_chars += gt_len
+            sel_errors += dist
         
         if verbose:
+            split_tag = "TEST" if l_idx % 2 == 1 else "SEL "
             conf_mean = float(np.mean(avg_confs)) if avg_confs else 0.0
-            print(f"[{cat:<8}] Zeile {l_idx:02d} | Genauigkeit: {acc:>5.1f} % | Conf: {conf_mean:.2f}")
+            print(f"[{cat:<8}|{split_tag}] Zeile {l_idx:02d} | Genauigkeit: {acc:>5.1f} % | Conf: {conf_mean:.2f}")
             print(f"  Soll: '{gt}'")
             print(f"  Ist : '{line_pred}'")
             print("-" * 75)
 
-    overall_acc = max(0.0, (1.0 - total_errors / total_chars) * 100.0)
+    overall_cer = total_errors / max(1, total_chars)
+    test_cer = test_errors / max(1, test_chars)
+    sel_cer = sel_errors / max(1, sel_chars)
+    overall_acc = max(0.0, (1.0 - overall_cer) * 100.0)
+    test_acc = max(0.0, (1.0 - test_cer) * 100.0)
+    sel_acc = max(0.0, (1.0 - sel_cer) * 100.0)
     if verbose:
-        print(f"GESAMT-GENAUIGKEIT ÜBER ALLE ZEILEN: {overall_acc:.1f} %")
+        print(f"TEST-CER     (ungerade Zeilen): {test_cer * 100:.1f} % (Genauigkeit: {test_acc:.1f} %)")
+        print(f"AUSWAHL-CER    (gerade Zeilen): {sel_cer * 100:.1f} % (Genauigkeit: {sel_acc:.1f} %)")
+        print(f"GESAMT-CER       (alle Zeilen): {overall_cer * 100:.1f} % (Genauigkeit: {overall_acc:.1f} %)")
         print("=" * 75)
-    return overall_acc
+    return test_cer
 
 if __name__ == "__main__":
     evaluate_benchmark()

@@ -44,6 +44,9 @@ VOCAB_SIZE = len(CHARS)
 CHAR_TO_IDX: Dict[str, int] = {char: idx for idx, char in enumerate(CHARS)}
 IDX_TO_CHAR: Dict[int, str] = {idx: char for idx, char in enumerate(CHARS)}
 
+MATH_CHARS = set("^_<>{}~√∫∑πλαβ\\")
+MATH_INDICES = {CHAR_TO_IDX[c] for c in MATH_CHARS if c in CHAR_TO_IDX}
+
 
 def get_vocab_size() -> int:
     return VOCAB_SIZE

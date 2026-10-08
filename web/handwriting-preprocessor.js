@@ -257,7 +257,8 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 
 	// Resampling eines einzelnen Strichs auf äquidistante Punkte
 	function resampleStroke(pts, step = STEP_PIXELS) {
-		if (pts.length <= 1) return pts.map((p) => [p[0], p[1]]);
+		if (!pts || pts.length === 0) return [];
+		if (pts.length === 1) return [[pts[0][0], pts[0][1]], [pts[0][0], pts[0][1]]];
 		const out = [[pts[0][0], pts[0][1]]];
 		let curDist = 0;
 
@@ -265,7 +266,7 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 			const p0 = pts[i - 1];
 			const p1 = pts[i];
 			const segDist = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-			if (segDist === 0) continue;
+			if (segDist < 1e-6) continue;
 
 			let walked = 0;
 			while (curDist + (segDist - walked) >= step) {
@@ -291,44 +292,41 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 	// Rückgabe: Array von [dx, dy, pen_down]
 	function extractLineFeatures(lineStrokes, options = {}) {
 		// 1. Automatische Begradigung / Deskewing bei schräger Handschrift
-		const angle = estimateOrientation(lineStrokes);
-		const deskewed = Math.abs(angle) > 0.015 ? deskewStrokes(lineStrokes, angle) : lineStrokes;
+		const angle = options.deskew !== false ? estimateOrientation(lineStrokes) : 0;
+		const deskewed = (options.deskew !== false && Math.abs(angle) > 0.015) ? deskewStrokes(lineStrokes, angle) : lineStrokes;
 
-		// 2. Ermittle Zeilenhöhe ZUVOR, damit das Resampling streng skaleninvariant ist!
-		// Das neuronale Netz erwartet ca. 20-25 Punkte pro Einheits-Höhe (step = 0.045 * height).
+		// 2. Normalisierung auf Kleinbuchstaben-Höhe (Median der Strichhöhen) statt Gesamtrahmen
 		let minY = Infinity, maxY = -Infinity;
 		for (const s of deskewed) {
-			const pts = s.pts || [];
+			const pts = s.pts || s || [];
 			for (const p of pts) {
 				if (p[1] < minY) minY = p[1];
 				if (p[1] > maxY) maxY = p[1];
 			}
 		}
-		const rawHeight = Math.max(10, maxY - minY);
-		const step = options.step || Math.max(0.6, rawHeight * 0.045);
+		const medH = calculateStrokeHeightMedian(deskewed, 10.0);
+		const normHeight = options.lineHeight || (medH > 0.1 ? medH : Math.max(5.0, maxY - minY));
+		const step = options.step || Math.max(normHeight > 2.0 ? 0.6 : 0.045, normHeight * 0.045);
 
 		const resampledStrokes = [];
 		let minX = Infinity, maxX = -Infinity;
-		minY = Infinity; maxY = -Infinity;
 
 		for (const s of deskewed) {
-			const pts = s.pts || [];
-			if (pts.length === 0) continue;
+			const pts = s.pts || s || [];
+			if (!pts.length) continue;
 			const r = resampleStroke(pts, step);
-			if (r.length === 0) continue;
+			if (r.length < 2) continue;
 			for (const p of r) {
 				if (p[0] < minX) minX = p[0];
 				if (p[0] > maxX) maxX = p[0];
-				if (p[1] < minY) minY = p[1];
-				if (p[1] > maxY) maxY = p[1];
 			}
 			resampledStrokes.push(r);
 		}
 
 		if (!resampledStrokes.length) return [];
 
-		// Normierungsfaktor: Zeilenhöhe normieren (auf 1.0 Einheit)
-		const height = options.lineHeight || Math.max(10, maxY - minY);
+		// Normierungsfaktor: auf Kleinbuchstaben-Höhe (Median) normieren
+		const height = normHeight;
 		const scale = 1.0 / height;
 		const refMinY = options.lineMinY !== undefined ? options.lineMinY : minY;
 
@@ -364,6 +362,71 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		return features;
 	}
 
+	// Berechnet den Median der Strichhöhen als robuste Referenz für die Schrifthöhe
+	function calculateStrokeHeightMedian(strokes, fallback = 10.0) {
+		if (!strokes || !strokes.length) return fallback;
+		const heights = [];
+		for (const s of strokes) {
+			const pts = s.pts || s;
+			if (!pts || pts.length < 2) continue;
+			let minY = Infinity, maxY = -Infinity;
+			for (const p of pts) {
+				const y = p[1];
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+			const h = maxY - minY;
+			if (h > 0) heights.push(h);
+		}
+		if (!heights.length) return fallback;
+		heights.sort((a, b) => a - b);
+		const mid = Math.floor(heights.length / 2);
+		return heights.length % 2 !== 0 ? heights[mid] : (heights[mid - 1] + heights[mid]) / 2;
+	}
+
+	// Trennt eine Strichsequenz anhand des relativen horizontalen Abstands (relativ zur Schrifthöhe) in Wörter
+	function segmentLineIntoWords(strokes, gapThresh = null, gapFactor = 1.1) {
+		if (!strokes || !strokes.length) return [];
+		if (gapThresh === null || gapThresh === undefined) {
+			const medH = calculateStrokeHeightMedian(strokes);
+			gapThresh = Math.max(4.0, gapFactor * medH);
+		}
+		const getBox = (s) => {
+			const pts = s.pts || s;
+			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+			for (const p of pts) {
+				const x = p[0], y = p[1];
+				if (x < minX) minX = x;
+				if (x > maxX) maxX = x;
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+			return { minX, maxX, minY, maxY };
+		};
+
+		const words = [];
+		let curWord = [strokes[0]];
+		let curBox = getBox(strokes[0]);
+
+		for (let i = 1; i < strokes.length; i++) {
+			const s = strokes[i];
+			const b = getBox(s);
+			const gap = b.minX - curBox.maxX;
+			if (gap > gapThresh) {
+				words.push(curWord);
+				curWord = [s];
+				curBox = { ...b };
+			} else {
+				curWord.push(s);
+				curBox.maxX = Math.max(curBox.maxX, b.maxX);
+				curBox.minY = Math.min(curBox.minY, b.minY);
+				curBox.maxY = Math.max(curBox.maxY, b.maxY);
+			}
+		}
+		words.push(curWord);
+		return words;
+	}
+
 	return {
 		strokeBbox,
 		filterInkStrokes,
@@ -373,5 +436,7 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		detectFraction,
 		resampleStroke,
 		extractLineFeatures,
+		calculateStrokeHeightMedian,
+		segmentLineIntoWords,
 	};
 })();

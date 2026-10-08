@@ -4,6 +4,7 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { TELE } from "./telemetrie.js";
+import { ankiSec } from "./anki-stats.js";
 
 // analyse.js — 📈 Lern-Analyse
 // Wertet die gesammelte Telemetrie (telemetrie.js) aus und zeigt die Ergebnisse im Statistik-Tab.
@@ -36,11 +37,11 @@ export const ANALYSE = (() => {
 				"<tr><td>ohne Timer</td><td>" + timerOff.length + "</td><td>" + pct(rate(timerOff)) + "</td></tr>";
 		}
 		if (buckets.length < 2 && !timerRows) return "";
-		return "<h4>Sitzungsverlauf × Erfolg</h4>" +
+		return ankiSec("Sitzungsverlauf × Erfolg") +
 			'<table class="lib-table"><thead><tr><th>Abschnitt</th><th>Reviews</th><th>richtig</th></tr></thead><tbody>' +
 			buckets.map((b) => "<tr><td>" + b.label + "</td><td>" + b.n + "</td><td>" + pct(b.rate) + "</td></tr>").join("") +
 			timerRows + "</tbody></table>" +
-			'<div class="ana-note">Beobachtung, keine Regel — Tageszeit, Fach und Schwierigkeit sind nicht herausgerechnet.</div>';
+			'<div class="anki-note">Beobachtung, keine Regel — Tageszeit, Fach und Schwierigkeit sind nicht herausgerechnet.</div>';
 	}
 
 	// ---------- 2) Chronobiologie: Erfolgsquote nach Tageszeit ----------
@@ -53,16 +54,13 @@ export const ANALYSE = (() => {
 			hours.push({ h, n: list.length, rate: rate(list) });
 		}
 		if (hours.filter((x) => x.n >= 8).length < 3) return "";
-		const cells = hours.map((x) => {
+		const bars = hours.map((x) => {
 			const known = x.n >= 8;
-			const bg = known ? "hsl(" + Math.round(x.rate * 120) + " 55% 42%)" : "var(--bg2, #2a2d33)";
-			return '<div class="ana-hour" style="background:' + bg + '" title="' + x.h + " Uhr: " +
-				(known ? pct(x.rate) + " richtig (" + x.n + " Reviews)" : "zu wenig Daten") + '">' +
-				(x.h % 6 === 0 ? "<span>" + x.h + "</span>" : "") + "</div>";
+			const h = known ? Math.max(4, Math.round(x.rate * 100)) : 0;
+			return '<div class="bar-wrap" title="' + x.h + " Uhr: " + (known ? pct(x.rate) + " richtig (" + x.n + " Reviews)" : "zu wenig Daten") + '"><div class="bar" style="height:' + h + '%"></div><div class="bar-label">' + (x.h % 6 === 0 ? x.h : "") + "</div></div>";
 		}).join("");
-		return "<h4>Erfolgsquote nach Tageszeit</h4>" +
-			'<div class="ana-chrono">' + cells + "</div>" +
-			'<div class="ana-note">Grün = hohe Quote, Rot = niedrige, Grau = unter 8 Reviews. n=1-Daten sind verrauscht — als Tendenz lesen, nicht als Stundenplan.</div>';
+		return ankiSec("Erfolgsquote nach Tageszeit", "Höhe = Anteil richtiger Antworten. Stunden mit unter 8 Reviews bleiben leer. Als Tendenz lesen, nicht als Stundenplan.") +
+			'<div class="bar-chart">' + bars + "</div>";
 	}
 
 	// ---------- 3) Problemzonen: Lesezeit + Fokus-Verluste pro Seite ----------
@@ -100,12 +98,12 @@ export const ANALYSE = (() => {
 			.filter((x) => x.pg && !x.pg.trashed && x.ms >= 5 * 60000)
 			.sort((a, b) => (b.ms + b.lost * 60000) - (a.ms + a.lost * 60000)).slice(0, 5);
 		if (!rows.length) return "";
-		return "<h4>Problemzonen (viel Lesezeit)</h4>" +
-			'<div class="ana-problems">' + rows.map((x) =>
-				'<div class="ana-problem"><span><b>' + U.esc(x.pg.title) + "</b><small>" + Math.round(x.ms / 60000) + " min gelesen · " +
+		return ankiSec("Problemzonen (viel Lesezeit)") +
+			'<div class="anki-rows">' + rows.map((x) =>
+				'<div class="anki-row"><span><b>' + U.esc(x.pg.title) + "</b><small>" + Math.round(x.ms / 60000) + " min gelesen · " +
 				x.lost + "× App gewechselt" + (x.pg.pdfId ? " · PDF" : "") + "</small></span>" +
 				'<button data-anacard="' + x.id + '">＋ Karte</button></div>').join("") + "</div>" +
-			'<div class="ana-note">Viel Wiederlesen + häufige App-Wechsel = Kandidat für aktives Abrufen. ＋ legt eine Abruf-Karte im Stapel „Problemzonen“ an.</div>';
+			'<div class="anki-note">Viel Wiederlesen + häufige App-Wechsel = Kandidat für aktives Abrufen. ＋ legt eine Abruf-Karte im Stapel „Problemzonen“ an.</div>';
 	}
 	async function cardFromPage(pageId) {
 		const pg = S.pages[pageId];
@@ -191,18 +189,18 @@ export const ANALYSE = (() => {
 			.map(([key, label]) => { const list = rs.filter((e) => Array.isArray(e.data.exp) && e.data.exp.includes(key)); return { label, n: list.length, average: gradeAverage(list) }; })
 			.filter((x) => x.n >= 15);
 		if (!rows.length || base.length < 30) return "";
-		return "<h4>Experimente × Bewertung</h4>" +
+		return ankiSec("Experimente × Bewertung") +
 			'<table class="lib-table"><thead><tr><th>Experiment</th><th>Reviews</th><th>Ø Bewertung</th></tr></thead><tbody>' +
 			rows.map((x) => "<tr><td>" + x.label + "</td><td>" + x.n + "</td><td>" + x.average.toFixed(2) + "</td></tr>").join("") +
 			"<tr><td>ohne Experimente</td><td>" + base.length + "</td><td>" + gradeAverage(base).toFixed(2) + "</td></tr></tbody></table>" +
-			'<div class="ana-note">Skala: 1 = Nochmal, 2 = Schwer, 3 = Gut, 4 = Einfach. Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
+			'<div class="anki-note">Skala: 1 = Nochmal, 2 = Schwer, 3 = Gut, 4 = Einfach. Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
 	}
 
 	// ---------- Statistik-Tab (render-anki.js hängt das an) ----------
 	function statsHtml() {
 		const html = positionHtml() + chronoHtml() + expHtml() + problemHtml();
-		return '<div class="ana-block"><h3>📈 Lern-Analyse (Beobachtungen)</h3>' +
-			(html || '<div class="ana-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Bewertung und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
+		return '<div class="anki-block">' + ankiSec("Lern-Analyse", "Beobachtungen aus deinem Lernverlauf: Muster zum Prüfen, keine Regeln.") +
+			(html || '<div class="anki-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Bewertung und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
 			"</div>";
 	}
 

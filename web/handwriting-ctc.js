@@ -44,10 +44,14 @@ export const HANDWRITING_CTC = (() => {
 	}
 
 	// Korrigiert ein einzelnes Wort über das Wörterbuch
-	function correctWord(rawWord) {
+	function correctWord(rawWord, mode = "text") {
 		if (!rawWord || rawWord.length < 3) return rawWord;
-		// Reines Zahlen-, Symbol- oder Matheformel-Wort nicht antasten
-		if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/^_{}()\\]/.test(rawWord)) return rawWord;
+		// Im Mathe-Modus Formelausdrücke nicht antasten
+		if (mode === "math") {
+			if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/^_{}()\\]/.test(rawWord)) return rawWord;
+		} else {
+			if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/]/.test(rawWord)) return rawWord;
+		}
 
 		// Satzzeichen am Rand isolieren
 		const match = rawWord.match(/^([^\w]*)(.*?)([^\w]*)$/);
@@ -108,6 +112,9 @@ export const HANDWRITING_CTC = (() => {
 		}
 		const blank = vocab.BLANK_INDEX ?? 0;
 		const threshold = Number(options.threshold ?? 0.80);
+		const mode = options.mode || "text";
+		const isTextMode = mode !== "math";
+		const mathIndices = isTextMode && vocab.MATH_INDICES ? vocab.MATH_INDICES : null;
 		const numSteps = logits2D.length;
 
 		let blankCount = 0;
@@ -117,7 +124,13 @@ export const HANDWRITING_CTC = (() => {
 		let currentRunMaxProb = 0;
 
 		for (let t = 0; t < numSteps; t++) {
-			const stepLogits = logits2D[t];
+			let stepLogits = logits2D[t];
+			if (mathIndices && mathIndices.size > 0) {
+				stepLogits = new Float32Array(stepLogits);
+				for (const mIdx of mathIndices) {
+					stepLogits[mIdx] = -Infinity;
+				}
+			}
 			const probs = softmax(stepLogits);
 
 			let bestIdx = 0;
@@ -159,7 +172,7 @@ export const HANDWRITING_CTC = (() => {
 		const blankRatio = blankCount / Math.max(1, numSteps);
 		const rawChars = collapsed.map((idx) => vocab.charForIndex(idx));
 		const rawText = rawChars.join("");
-		const text = cleanTranscription(rawText);
+		const text = cleanTranscription(rawText, options);
 
 		// Gesamt-Konfidenz: Arithmetisches Mittel der Zeichen-Wahrscheinlichkeiten
 		let confidence = 0;
@@ -194,15 +207,21 @@ export const HANDWRITING_CTC = (() => {
 	}
 
 	// Bereinigung von Formatierungsfehlern und Wörterbuch-Abgleich
-	function cleanTranscription(text) {
-		const cleaned = String(text || "")
+	function cleanTranscription(text, options = {}) {
+		let cleaned = String(text || "")
 			.replace(/\s+/g, " ")
 			.trim();
+
+		const mode = options.mode || "text";
+		if (mode !== "math") {
+			// Schutz gegen angehängte oder fehldekodierte Mathe-Zeichen ("Handbreit√")
+			cleaned = cleaned.replace(/[\^_<>{}\~√∫∑πλαβ\\]/g, "").replace(/\s+/g, " ").trim();
+		}
 
 		// Wörterbuch-Korrektur über einzelne Wörter laufen lassen
 		return cleaned
 			.split(" ")
-			.map(correctWord)
+			.map((w) => correctWord(w, mode))
 			.join(" ");
 	}
 

@@ -32,6 +32,8 @@ from model import HandwritingCRNN
 from uji_loader import RealHandwritingSampler
 from text_corpus import random_text
 from mathwriting_loader import MathWritingDataset, strokes_to_normalized_features
+from brush_loader import BrushDataset
+from samples_loader import load_user_samples
 from beam_search import ctc_beam_search_decode, get_default_dictionary
 from evaluate_user_benchmark_words import (
     segment_line_into_words,
@@ -46,15 +48,25 @@ import numpy as np
 class DynamicInkDataset(Dataset):
     """
     Erzeugt dynamisch bei jeder Epoche frische, augmentierte Trainingsdaten.
-    Verhindert Overfitting und deckt Sätze mit Leerzeichen, Ligaturen und Formeln ab.
+    Verhindert Overfitting und kombiniert BRUSH-Handschrift (40 %), Google MathWriting (20 %),
+    synthetische Handschriftfonts / UJI (30 %) und Formeln/Zahlen.
     """
 
-    def __init__(self, size: int = 5000, is_val: bool = False, seed: int = None):
+    def __init__(
+        self,
+        size: int = 50000,
+        is_val: bool = False,
+        seed: int = None,
+        user_samples: Optional[List[Tuple[List[Tuple[float, float, float, float]], str]]] = None,
+    ):
         self.size = size
         self.is_val = is_val
         self.real_sampler = RealHandwritingSampler()
         self.math_ds = MathWritingDataset()
         self.math_len = len(self.math_ds)
+        self.brush_ds = BrushDataset(split="val" if is_val else "train")
+        self.brush_len = len(self.brush_ds)
+        self.user_samples = user_samples or []
 
         self.samples = []
         self.regenerate(seed if seed is not None else (42 if is_val else 1337))
@@ -78,26 +90,40 @@ class DynamicInkDataset(Dataset):
         word = ""
         features = []
 
-        if r < 0.25 and self.math_len > 0:
-            # 25% Echte Google MathWriting Formeln
+        if self.user_samples and rng.random() < 0.45:
+            # 45% Eigene Handschrift bei Fine-Tuning
+            features, word = rng.choice(self.user_samples)
+
+        elif self.brush_len > 0 and r < 0.40:
+            # 40% Echte BRUSH-Handschrift (170 Schreiber)
+            idx = rng.randint(0, self.brush_len - 1)
+            features, word = self.brush_ds.get_sample(idx)
+
+        elif r < (0.60 if self.brush_len > 0 else 0.25) and self.math_len > 0:
+            # 20% (bzw. 25%) Echte Google MathWriting Formeln
             idx = rng.randint(0, self.math_len - 1)
             features, word = self.math_ds.get_sample(idx)
 
-        elif r < 0.85:
-            # 60% Echte UJI-Glyphen (ein Schreiber pro Zeile) zu deutschen Wörtern/Zeilen aus dem Wörterbuch zusammengesetzt
+        elif r < (0.90 if self.brush_len > 0 else 0.85):
+            # 30% (bzw. 60%) Echte UJI-Glyphen oder Font-Synthese (>=20 OFL Fonts) mit On-the-fly-Augmentierungen
             word = random_text(rng)
-            strokes = self.real_sampler.get_real_word_strokes(word, cursive_prob=0.45)
+            if rng.random() < 0.5:
+                strokes = generate_word_strokes(word)
+            else:
+                strokes = self.real_sampler.get_real_word_strokes(word, cursive_prob=0.45)
             if strokes:
+                from augmentations import apply_augmentations_on_the_fly
+                strokes = apply_augmentations_on_the_fly(strokes)
                 features = strokes_to_features(strokes)
             else:
                 features, word = random_sample()
 
-        elif r < 0.95:
-            # 10% Ganze Sätze oder Formeln aus Synthetik-Generator
+        elif r < (0.97 if self.brush_len > 0 else 0.95):
+            # 7% (bzw. 10%) Ganze Sätze oder Formeln aus Synthetik-Generator
             features, word = random_sample()
 
         else:
-            # 5% Zahlen, Datumsangaben, MINT-Begriffe & Symbole
+            # 3% (bzw. 5%) Zahlen, Datumsangaben, MINT-Begriffe & Symbole
             if rng.random() < 0.5:
                 word = rng.choice(SAMPLE_WORDS)
             else:
@@ -174,8 +200,18 @@ class LengthBucketSampler(torch.utils.data.Sampler):
         return len(self._batches())
 
 
-def ctc_greedy_decode(log_probs, blank_idx: int = BLANK_IDX) -> str:
-    """Argmax + Kollabieren identischer Tokens + Entfernen des Blanks."""
+def ctc_greedy_decode(log_probs, blank_idx: int = BLANK_IDX, mode: str = "text") -> str:
+    """Argmax + Kollabieren identischer Tokens + Entfernen des Blanks. In mode='text' werden Mathezeichen gesperrt."""
+    if mode != "math":
+        from vocabulary import MATH_INDICES
+        if hasattr(log_probs, "clone"):
+            log_probs = log_probs.clone()
+            for m_idx in MATH_INDICES:
+                log_probs[..., m_idx] = -1e9
+        elif hasattr(log_probs, "copy"):
+            log_probs = log_probs.copy()
+            for m_idx in MATH_INDICES:
+                log_probs[..., m_idx] = -1e9
     if hasattr(log_probs, "argmax"):
         pred_indices = log_probs.argmax(axis=-1).tolist()
     else:
@@ -239,9 +275,12 @@ def train(
     epochs: int = 30,
     batch_size: int = 128,
     lr: float = 1.6e-3,
-    train_size: int = 30000,
+    train_size: int = 50000,
     publish: bool = False,
     eval_every: int = 3,
+    early_stopping_patience: int = 5,
+    finetune_path: Optional[str] = None,
+    samples_path: str = "my_handwriting_samples.json",
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -255,12 +294,21 @@ def train(
         backend = "AMD ROCm" if torch.version.hip else "NVIDIA CUDA"
         print(f"Training auf Gerät: GPU {torch.cuda.get_device_name(0)} ({backend})")
 
+    user_samples = []
+    if finetune_path:
+        print(f"Fine-Tuning Modus aktiviert (Quelle: {finetune_path}).")
+        if os.path.exists(samples_path):
+            user_samples = load_user_samples(samples_path)
+            print(f"Geladene eigene Handschrift-Samples: {len(user_samples)}.")
+        else:
+            print(f"Hinweis: Keine Datei '{samples_path}' gefunden. Nutze Basistraining.")
+
     model = HandwritingCRNN(in_features=4, hidden_size=192, num_layers=3, dropout=0.0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.CTCLoss(blank=BLANK_IDX, zero_infinity=True)
 
-    train_dataset = DynamicInkDataset(size=train_size, is_val=False)
-    val_dataset = DynamicInkDataset(size=300, is_val=True, seed=42)
+    train_dataset = DynamicInkDataset(size=train_size, is_val=False, user_samples=user_samples)
+    val_dataset = DynamicInkDataset(size=400, is_val=True, seed=42)
 
     train_loader = DataLoader(
         train_dataset, batch_sampler=LengthBucketSampler(train_dataset, batch_size), collate_fn=collate_fn
@@ -270,7 +318,7 @@ def train(
     )
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=epochs, eta_min=1e-4
+        optimizer, T_max=epochs, eta_min=1e-5 if finetune_path else 1e-4
     )
 
     # In Colab zeigt HW_CHECKPOINT_DIR auf Google Drive, damit ein Abbruch nichts verliert
@@ -283,13 +331,20 @@ def train(
     best_real_acc = 0.0
     best_epoch = 0
     start_epoch = 1
+    epochs_without_improvement = 0
 
-    if os.path.exists(last_path):
+    if finetune_path and os.path.exists(finetune_path):
+        print(f"Lade Basis-Gewichte für Fine-Tuning aus {finetune_path}...")
+        ft_state = torch.load(finetune_path, map_location=device)
+        model.load_state_dict(ft_state.get("model_state", ft_state))
+        print("Vorab-Gewichte erfolgreich geladen.")
+    elif os.path.exists(last_path):
         state = torch.load(last_path, map_location=device)
         model.load_state_dict(state["model_state"])
         optimizer.load_state_dict(state["optimizer_state"])
         scheduler.load_state_dict(state["scheduler_state"])
         best_real_cer, best_real_acc, best_epoch = state["best_real_cer"], state["best_real_acc"], state["best_epoch"]
+        epochs_without_improvement = state.get("epochs_without_improvement", 0)
         start_epoch = state["epoch"] + 1
         print(f"Setze Training fort ab Epoche {start_epoch} (aus {last_path}).")
 
@@ -336,7 +391,8 @@ def train(
                 v_inputs = v_inputs.to(device)
                 v_out = model(v_inputs, in_lens=v_in_lens)
                 for i in range(len(v_words)):
-                    pred = ctc_greedy_decode(v_out[:, i, :])
+                    valid_len = max(1, int(v_in_lens[i]) // 2)
+                    pred = ctc_greedy_decode(v_out[:valid_len, i, :])
                     target = v_words[i]
                     val_errors += levenshtein_dist(target, pred)
                     val_chars += max(len(target), 1)
@@ -356,6 +412,7 @@ def train(
                     "best_real_cer": best_real_cer,
                     "best_real_acc": best_real_acc,
                     "best_epoch": best_epoch,
+                    "epochs_without_improvement": epochs_without_improvement,
                 },
                 last_path,
             )
@@ -379,17 +436,13 @@ def train(
                 cat, gt = LINES_GROUND_TRUTH.get(l_idx, ("unbekannt", ""))
                 raw_strokes = row["strokes"]
 
-                all_line_pts = [p for s in raw_strokes for p in s]
-                line_min_y = min(p[1] for p in all_line_pts) if all_line_pts else 0.0
-                line_max_y = max(p[1] for p in all_line_pts) if all_line_pts else 10.0
-                line_h = max(10.0, line_max_y - line_min_y)
-
-                word_groups = segment_line_into_words(raw_strokes, gap_thresh=8.5)
+                word_groups = segment_line_into_words(raw_strokes)
                 recognized_words = []
+                line_mode = "math" if cat in ("formel", "rechnung") else "text"
 
                 for wg in word_groups:
                     parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in wg]
-                    feats = strokes_to_4features(parsed_strokes, line_min_y=line_min_y, line_height=line_h)
+                    feats = strokes_to_normalized_features(parsed_strokes)
                     if len(feats) < 3:
                         continue
                     inp = torch.tensor(feats, dtype=torch.float32, device=device).unsqueeze(0)
@@ -397,7 +450,7 @@ def train(
                     out = model(inp, in_lens=in_lens)
                     logits = out[:, 0, :].cpu().numpy()
 
-                    w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0)
+                    w_beam = ctc_beam_search_decode(logits, beam_width=8, word_list=word_dict, word_bonus=2.0, mode=line_mode)
                     recognized_words.append(w_beam)
 
                 line_pred = " ".join(recognized_words)
@@ -419,11 +472,12 @@ def train(
         for tgt, prd in sample_preds[:1]:
             print(f"  [Synth-Probe] Soll: '{tgt}' | Ist: '{prd}'")
 
-        # Modellauswahl: best.pt nach dem ECHTEN Test-Set auswählen
+        # Modellauswahl und früher Abbruch nach der Auswahl-Hälfte (gerade lineIdx)
         if best_epoch == 0 or real_cer < best_real_cer:
             best_real_cer = real_cer
             best_real_acc = real_acc
             best_epoch = epoch
+            epochs_without_improvement = 0
             best_path = os.path.join(checkpoints_dir, "best.pt")
             torch.save(
                 {
@@ -437,6 +491,13 @@ def train(
                 best_path,
             )
             print(f"  --> [BEST] Auswahl-CER {real_cer * 100:.1f} %, Test-CER {test_cer * 100:.1f} % (Epoche {epoch}) gespeichert!", flush=True)
+        else:
+            epochs_without_improvement += 1
+            print(f"  [Früher Abbruch Check] Keine Verbesserung der Auswahl-CER seit {epochs_without_improvement}/{early_stopping_patience} Auswertungen.")
+            if epochs_without_improvement >= early_stopping_patience:
+                print(f"\n[Früher Abbruch] Auswahl-CER (gerade Zeilen) hat sich seit {early_stopping_patience} Auswertungen nicht mehr verbessert. Stoppe Training vorzeitig.")
+                save_last()
+                break
         save_last()
 
     # ONNX Export des besten Modells
@@ -467,4 +528,32 @@ def train(
 
 
 if __name__ == "__main__":
-    train(epochs=28, batch_size=128, publish="--publish" in sys.argv)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Impala67 Handschrift-Training")
+    parser.add_argument("--epochs", type=int, default=28, help="Anzahl Trainings-Epochen")
+    parser.add_argument("--batch-size", type=int, default=128, help="Batch-Größe")
+    parser.add_argument("--lr", type=float, default=None, help="Lernrate (Standard: 1.6e-3, bei Finetune: 2.5e-4)")
+    parser.add_argument("--train-size", type=int, default=50000, help="Trainings-Set-Größe pro Epoche")
+    parser.add_argument("--publish", action="store_true", help="Neues ONNX-Modell direkt in web/ kopieren")
+    parser.add_argument("--eval-every", type=int, default=3, help="Intervall für Benchmark-Auswertung")
+    parser.add_argument("--patience", type=int, default=5, help="Early-Stopping-Patience")
+    parser.add_argument("--finetune", type=str, default=None, help="Pfad zu Checkpoint für Fine-Tuning (z.B. best.pt)")
+    parser.add_argument("--samples", type=str, default="my_handwriting_samples.json", help="Pfad zu nutzereigenen Samples")
+    args = parser.parse_args()
+
+    # Lernrate anpassen, falls nicht explizit übergeben
+    lr = args.lr if args.lr is not None else (2.5e-4 if args.finetune else 1.6e-3)
+    epochs = 10 if (args.finetune and "--epochs" not in sys.argv) else args.epochs
+
+    train(
+        epochs=epochs,
+        batch_size=args.batch_size,
+        lr=lr,
+        train_size=args.train_size,
+        publish=args.publish,
+        eval_every=args.eval_every,
+        early_stopping_patience=args.patience,
+        finetune_path=args.finetune,
+        samples_path=args.samples,
+    )
