@@ -2,7 +2,8 @@
    Impala67 – Beta-Design (Experimentelle UI)
    Diese Datei wird nur aktiv, wenn in den Einstellungen „Beta-Design“
    eingeschaltet ist (Klasse: body.beta-ui).
-   Aktuell: verspielte Startseite für PC & Tablet (Markup unverändert in home-view.js).
+   Aktuell: Startseite, Karteikarten, Bibliothek & Archiv, Lernanalyse, Lernzeit,
+   Einstellungen sowie Dialoge und Menüs (Markup unverändert). Mobile folgt später.
    Reines CSS – die Standardansicht bleibt dadurch genau gleich.
    ========================================================================== */
 
@@ -13,11 +14,11 @@ body.beta-ui {
 	--hv-sky: #9ccfff;
 	--hv-mint: #9ff0cf;
 	--hv-butter: #ffe59a;
+	--hv-grad: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--hv-pink)));
 }
 
 /* Grundform: Startseite und Karteikarten-Übersicht teilen Verlauf, Schrift und Hintergrund */
 body.beta-ui .hv, body.beta-ui .anki-page, body.beta-ui .anki-study-mode {
-	--hv-grad: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--hv-pink)));
 	position: relative;
 	isolation: isolate;
 	font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
@@ -128,6 +129,61 @@ body.beta-ui .anki-study-mode .grades [data-ankigrade] .grade-key { opacity: .7 
 body.beta-ui .anki-study-mode [data-ankishowback]:not(.mini) { border: 0; border-radius: 999px; background: var(--hv-grad); color: #081018; font-weight: 700; box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hv-pink) 80%, transparent) }
 body.beta-ui .anki-study-mode .study-footer .mini { border-radius: 999px }
 body.beta-ui .anki-study-mode .exp-answer { border-radius: 18px }
+
+/* 11. Bibliothek & Archiv: Ansichtsschalter, Filter-Pillen, Seitenbaum */
+body.beta-ui .lib-mode { border: 0; border-radius: 999px; padding: 5px 14px; font-weight: 600; background: color-mix(in srgb, var(--hv-lilac) 20%, transparent); color: var(--text) }
+body.beta-ui .lib-mode.active { background: var(--hv-grad); color: #081018 }
+body.beta-ui .lib-tabs { border-radius: 999px; background: color-mix(in srgb, var(--hv-lilac) 10%, transparent) }
+body.beta-ui .lib-tab { border-radius: 999px; font-weight: 600 }
+body.beta-ui .lib-tab.active { background: color-mix(in srgb, var(--hv-pink) 30%, transparent); color: var(--text) }
+body.beta-ui .lib-tab.active .lib-tab-n { color: var(--text) }
+body.beta-ui .lib-tab-n { padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--hv-sky) 26%, transparent); opacity: 1 }
+body.beta-ui .notion-tree-workspace { border-top: 0; margin-top: 12px }
+body.beta-ui .notion-tree-workspace-name { display: inline-flex; align-items: center; height: 28px; margin: 0; padding: 0 12px; border-radius: 999px; box-sizing: border-box; background: color-mix(in srgb, var(--hv-mint) 22%, transparent); color: var(--text); opacity: 1; font-size: 12px; letter-spacing: 0; text-transform: none }
+body.beta-ui .notion-tree-row { border-top: 0; border-radius: 16px; margin: 2px 0; min-height: 40px }
+body.beta-ui .notion-tree-row:hover { background: color-mix(in srgb, var(--hv-lilac) 14%, transparent) }
+body.beta-ui .notion-tree-title { font-weight: 600 }
+body.beta-ui .notion-tree-caret { border-radius: 999px }
+body.beta-ui .notion-tree-caret:hover { background: color-mix(in srgb, var(--hv-sky) 35%, transparent) }
+body.beta-ui .notion-tree-meta { padding: 1px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); opacity: .85 }
+body.beta-ui .archive-row-actions .mini { border-radius: 999px }
+
+/* 12. Lernanalyse: Karten, Fortschrittsbalken, Aktions-Pille */
+body.beta-ui .la-block { padding: 18px; border-radius: 26px; background: var(--panel-solid); box-shadow: 0 0 0 1px var(--edge-soft), 0 14px 30px -26px rgb(0 0 0 / .5) }
+body.beta-ui .la-row { border-radius: 18px }
+body.beta-ui .la-row:hover { background: color-mix(in srgb, var(--hv-lilac) 10%, transparent) }
+body.beta-ui .la-meter { height: 10px; border-radius: 99px; background: color-mix(in srgb, var(--text) 8%, transparent) }
+body.beta-ui .la-meter i { border-radius: 99px; background: linear-gradient(90deg, var(--hv-sky), var(--hv-lilac)) }
+body.beta-ui .la-row.best .la-meter i { background: linear-gradient(90deg, var(--hv-mint), var(--success)) }
+body.beta-ui .la-row.down .la-meter i { background: linear-gradient(90deg, var(--hv-butter), var(--warn)) }
+body.beta-ui .la-answer { border-radius: 18px }
+body.beta-ui .la-act { border: 0; border-radius: 999px; padding: 4px 12px; background: color-mix(in srgb, var(--hv-pink) 22%, transparent) }
+
+/* 13. Lernzeit: Ansichtsschalter, Karten, Balken */
+body.beta-ui .lz-view-switch { border-color: transparent; border-radius: 999px; background: color-mix(in srgb, var(--hv-lilac) 14%, transparent) }
+body.beta-ui .lz-view-switch button { border-radius: 999px; font-weight: 600 }
+body.beta-ui .lz-view-switch button.active { background: var(--hv-grad); color: #081018; box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--hv-pink) 80%, transparent) }
+body.beta-ui .lz-panel { padding: 18px; border-radius: 26px; background: var(--panel-solid); box-shadow: 0 0 0 1px var(--edge-soft) }
+body.beta-ui .lz-summary-card { border: 0; border-radius: 28px; background: linear-gradient(160deg, color-mix(in srgb, var(--hv-sky) 16%, var(--panel-solid)), var(--panel-solid)) }
+body.beta-ui .lz-kpi-grid > div { border: 0; border-radius: 22px; background: color-mix(in srgb, var(--hv-mint) 14%, var(--panel-solid)) }
+body.beta-ui .lz-recommendation { border: 0; border-radius: 22px; background: color-mix(in srgb, var(--hv-butter) 16%, transparent) }
+body.beta-ui .lz-progress, body.beta-ui .lz-subject-track { height: 10px; border-radius: 99px }
+body.beta-ui .lz-progress i, body.beta-ui .lz-subject-track i { border-radius: 99px; background: linear-gradient(90deg, var(--hv-sky), var(--hv-lilac), var(--hv-pink)) }
+body.beta-ui .lz-bar-col i { border-radius: 99px 99px 6px 6px; background: linear-gradient(to top, var(--hv-lilac), var(--hv-pink)) }
+body.beta-ui .lz-bar-col.today i { background: linear-gradient(to top, var(--hv-mint), var(--accent)) }
+
+/* 14. Einstellungen: weiche Gruppenkarten statt harter Rahmen */
+body.beta-ui .settings-group > h3 { color: var(--text); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; font-weight: 650 }
+body.beta-ui .settings-group-card { border: 0; border-radius: 26px; background: var(--panel-solid); box-shadow: 0 0 0 1px var(--edge-soft), 0 14px 30px -26px rgb(0 0 0 / .5) }
+body.beta-ui .settings-row { min-height: 62px }
+body.beta-ui .settings-switch input:checked + span { background: var(--hv-grad) }
+
+/* 15. Dialoge, Menüs und Seitenreiter */
+body.beta-ui .modal { border-radius: 30px; box-shadow: 0 30px 60px -30px rgb(0 0 0 / .6) }
+body.beta-ui .modal-actions button, body.beta-ui .modal-x { border-radius: 999px }
+body.beta-ui .page-menu, body.beta-ui .model-menu, body.beta-ui .palette-box { border-radius: 24px }
+body.beta-ui .menu-item { border-radius: 14px }
+body.beta-ui .tab.active { background: color-mix(in srgb, var(--hv-lilac) 26%, transparent); color: var(--text); font-weight: 600 }
 
 @media (prefers-reduced-motion: reduce) {
 	body.beta-ui .hv *, body.beta-ui .anki-page *, body.beta-ui .anki-study-mode * { transition: none !important }

@@ -211,6 +211,18 @@ function libModeTabsHtml() {
 	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("archive", "🗄 Archiv") + b("nlm", "📥 Gemini Notebook") + "</div>";
 }
 
+// Einheitlicher Aufbau aller Bibliotheks-Ansichten: Titel + Modi, darunter eine feste Werkzeugzeile
+// (links Filter bzw. Pfad, rechts Suche). Dadurch stehen Suche und Inhalt in jedem Modus gleich.
+function libHeadHtml() {
+	return '<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div></div>";
+}
+function libToolbarHtml(left, right) {
+	return '<div class="lib-toolbar"><div class="lib-toolbar-left">' + left + '</div><div class="lib-head-tools">' + (right || "") + "</div></div>";
+}
+function libSearchHtml(placeholder) {
+	return '<input id="libFilter" placeholder="' + placeholder + '" autocomplete="off" value="' + U.esc(S.libFilter || "") + '">';
+}
+
 export function renderLibrary(main) {
 	const mode = S.libMode || "notion";
 	if (mode === "hefte") { renderHefteShelf(main); return; }
@@ -219,6 +231,27 @@ export function renderLibrary(main) {
 	// Notion bleibt ein kompakter Baum: Eltern, Unterseiten und ihre gespeicherte
 	// Reihenfolge werden nicht in eine nach Datum sortierte Tabelle aufgelöst.
 	renderNotionTree(main);
+}
+
+// Gemeinsamer Seitenbaum für Bibliothek (Notion) und Archiv: pages sind die Geschwister einer Ebene,
+// kidsOf liefert die Unterseiten, visible entscheidet über Filter/Suche, rowMeta/rowActions liefern
+// Text und Buttons der Zeile.
+function treeRowsHtml(pages, depth, kidsOf, visible, rowMeta, rowActions) {
+	return pages.filter(visible).map((pg) => {
+		const kids = kidsOf(pg).filter(visible);
+		// Ein-/Ausklappen teilt sich denselben Zustand wie die Sidebar (S.treeOpen) —
+		// dieselbe Seite, dieselbe Klapp-Info, nur eine andere Ansicht.
+		const collapsed = kids.length > 0 && COLLAPSE.isCollapsed(pg.id);
+		const caret = kids.length
+			? '<button class="notion-tree-caret" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">' + (collapsed ? "▸" : "▾") + "</button>"
+			: '<span class="notion-tree-caret spacer"></span>';
+		const row = '<div class="notion-tree-row" data-page="' + pg.id + '" style="--tree-depth:' + depth + '">' +
+			caret +
+			'<span class="notion-tree-icon">' + U.esc(RENDER.pageIconLabel(pg)) + "</span>" +
+			'<span class="notion-tree-title">' + U.esc(pg.title || "Ohne Titel") + "</span>" +
+			'<span class="notion-tree-meta">' + rowMeta(pg) + "</span>" + (rowActions ? rowActions(pg) : "") + "</div>";
+		return row + (collapsed ? "" : treeRowsHtml(kids, depth + 1, kidsOf, visible, rowMeta, rowActions));
+	}).join("");
 }
 
 // ---------- Notion-Ansicht: kompakter Seitenbaum, kein Kartenraster ----------
@@ -237,39 +270,20 @@ function renderNotionTree(main) {
 	// Bei einer Suche bleiben passende Unterseiten samt ihren Eltern sichtbar.
 	const visible = (pg) => ownMatch(pg)
 		|| STATE.childrenOf(pg.id, pg.workspaceId).some(visible);
-	const walk = (parentId, wsId, depth) => STATE.childrenOf(parentId, wsId)
-		.filter(visible)
-		.map((pg) => {
-			const kids = STATE.childrenOf(pg.id, wsId).filter(visible);
-			// Ein-/Ausklappen teilt sich denselben Zustand wie die Sidebar (S.treeOpen) —
-			// dieselbe Seite, dieselbe Klapp-Info, nur eine andere Ansicht.
-			const collapsed = kids.length > 0 && COLLAPSE.isCollapsed(pg.id);
-			const type = pg.kind === "heft" ? "Heft" : "Seite";
-			const caret = kids.length
-				? '<button class="notion-tree-caret" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">' + (collapsed ? "▸" : "▾") + "</button>"
-				: '<span class="notion-tree-caret spacer"></span>';
-			const row = '<div class="notion-tree-row" data-page="' + pg.id + '" style="--tree-depth:' + depth + '">' +
-				caret +
-				'<span class="notion-tree-icon">' + U.esc(RENDER.pageIconLabel(pg)) + "</span>" +
-				'<span class="notion-tree-title">' + U.esc(pg.title || "Ohne Titel") + "</span>" +
-				'<span class="notion-tree-meta">' + type + " · " + U.fmtDate(pg.updated) + "</span></div>";
-			return row + (collapsed ? "" : walk(pg.id, wsId, depth + 1));
-		}).join("");
+	const notionMeta = (pg) => (pg.kind === "heft" ? "Heft" : "Seite") + " · " + U.fmtDate(pg.updated);
 	const wsIds = [...new Set(allPages.map((pg) => pg.workspaceId || "default"))];
 	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
-	let html = '<div class="library lib-docs lib-notion-tree"><div class="lib-head">' +
-		'<div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div>" +
-		'<div class="lib-head-tools"><input id="libFilter" placeholder="Seiten suchen…" autocomplete="off" value="' + U.esc(S.libFilter || "") + '"></div></div>';
-	html += '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
+	const tabs = '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
 		'<button class="lib-tab' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
+	let html = '<div class="library lib-docs lib-notion-tree">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
 	wsIds.forEach((wsId) => {
-		const rows = walk(null, wsId, 0);
+		const rows = treeRowsHtml(STATE.childrenOf(null, wsId), 0, (pg) => STATE.childrenOf(pg.id, wsId), visible, notionMeta);
 		if (!rows) return;
 		const ws = S.workspaces[wsId] || { name: "Privat" };
 		html += '<section class="notion-tree-workspace"><div class="notion-tree-workspace-name">' + U.esc(ws.name) + "</div>" + rows + "</section>";
 	});
 	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
-	main.innerHTML = html + "</div>";
+	main.innerHTML = html + "</div></div>";
 }
 
 export async function exportWorkspaceZip(wsId) {
@@ -410,17 +424,14 @@ export function renderHefteShelf(main) {
 	const crumbs = q ? '<span class="lib-crumb current">Suche</span>'
 		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + gnAncestors(folderId).map((f) =>
 			'<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>").join("");
-	let html = '<div class="library lib-docs lib-shelf gn-shelf">' +
-		'<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div>" +
-		'<div class="lib-head-tools"><input id="libFilter" placeholder="Suchen" autocomplete="off" value="' + U.esc(S.libFilter || "") + '">' +
-		'<button class="lib-new-action" data-libshelfnew="1">+ Neu</button></div></div>' +
-		'<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>" +
-		'<div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
+	let html = '<div class="library lib-docs lib-shelf gn-shelf">' + libHeadHtml() +
+		libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>", '<button class="lib-new-action" data-libshelfnew="1">+ Neu</button>' + libSearchHtml("Suchen")) +
+		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
 			? gnFolderHtml(item.value)
 			: libCardHtml(item.value).replace('class="lib-card"', 'class="lib-card gn-card" draggable="true" data-gnitem="p:' + item.value.id + '" data-gnorder="' + item.order + '"'))
 			.join("") + "</div>" +
 		(items.length ? "" : '<div class="empty small">' + (q ? "Keine Treffer" : (current ? "Dieser Ordner ist leer." : "Noch keine Hefte oder Ordner.")) + "</div>") +
-		'<p class="hint lib-shelf-hint">Ziehe Hefte auf Ordner zum Einsortieren. Ziehe Ordner auf Ordner, um Unterordner anzulegen. Die Reihenfolge hier ist unabhängig von Notion.</p></div>';
+		'<p class="hint lib-shelf-hint">Ziehe Hefte auf Ordner zum Einsortieren. Ziehe Ordner auf Ordner, um Unterordner anzulegen. Die Reihenfolge hier ist unabhängig von Notion.</p></div></div>';
 	main.innerHTML = html;
 	hydrateCovers(main);
 }
@@ -428,9 +439,9 @@ export function renderHefteShelf(main) {
 // ---------- Gemini-Notebook-Ansicht (ehemals NotebookLM): Inbox + Mediathek ----------
 const NLM_FILTERS = [["all", "Alle"], ["inbox", "📥 Inbox"], ["audio", "🎧 Podcasts"], ["video", "🎬 Videos"], ["mindmap", "🧠 Mind Maps"], ["slides", "📑 Folien"]];
 export function renderNlmLibrary(main) {
-	main.innerHTML = '<div class="library lib-docs lib-nlm">' +
-		'<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div></div>" +
-		'<div id="nlmLibBody"><div class="empty small">Lade Mediathek…</div></div></div>';
+	main.innerHTML = '<div class="library lib-docs lib-nlm">' + libHeadHtml() +
+		libToolbarHtml('<div id="nlmTabs" class="lib-tabs"></div>', "") +
+		'<div id="nlmLibBody" class="lib-body"><div class="empty small">Lade Mediathek…</div></div></div>';
 	NLM.listArtifacts().then((list) => {
 		const body = U.el("nlmLibBody");
 		if (!body) return;
@@ -458,94 +469,61 @@ export function renderNlmLibrary(main) {
 				'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">⬇</button>' +
 				'<button data-nlmlibdel="' + f.id + '" title="Löschen">🗑</button></span></div>';
 		}).join("");
-		body.innerHTML = '<div class="lib-tabs">' + tabs + "</div>" +
-			(rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im 📓-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>');
+		const tabsEl = U.el("nlmTabs");
+		if (tabsEl) tabsEl.innerHTML = tabs;
+		body.innerHTML = rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im 📓-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>';
 	});
 }
 
-// ---------- Archiv-Ansicht: archivierte Hefte & Seiten ----------
+// ---------- Archiv-Ansicht: dieselbe Baum-Struktur wie die Bibliothek (Notion) ----------
+// STATE.childrenOf überspringt archivierte Seiten. Unterseiten archivierter Seiten sind aber
+// ebenfalls archiviert — deshalb eigene Suche, sonst wären sie im Archiv nicht zu öffnen.
+function archivedChildrenOf(pg) {
+	return Object.values(S.pages)
+		.filter((c) => c && c.parentId === pg.id && c.archived && !c.trashed)
+		.sort((a, b) => STATE.sortKeyOf(a) - STATE.sortKeyOf(b));
+}
+
 export function renderArchiveLibrary(main) {
 	const q = (S.libFilter || "").trim().toLowerCase();
 	const typeFilter = S.libArchiveType || "all";
 	const roots = (STATE.archivedPageRoots && STATE.archivedPageRoots()) || [];
-	const filtered = roots.filter((pg) => {
-		if (!q) return true;
-		return (pg.title || "").toLowerCase().includes(q)
-			|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q));
-	});
-
-	const hefte = filtered.filter((p) => p.kind === "heft");
-	const pages = filtered.filter((p) => p.kind !== "heft");
-	const allHefteCount = roots.filter((p) => p.kind === "heft").length;
-	const allPagesCount = roots.filter((p) => p.kind !== "heft").length;
+	const isHeft = (pg) => pg.kind === "heft";
+	const kindOk = (pg) => typeFilter === "all" || (typeFilter === "hefte" ? isHeft(pg) : !isHeft(pg));
+	const ownMatch = (pg) => kindOk(pg) && (!q || (pg.title || "").toLowerCase().includes(q)
+		|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
+	// Wie in der Bibliothek: passende Unterseiten bleiben samt ihren Eltern sichtbar.
+	const visible = (pg) => ownMatch(pg) || archivedChildrenOf(pg).some(visible);
+	const archiveMeta = (pg) => (isHeft(pg) ? "Heft" : "Seite") + " · archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
+	const archiveActions = (pg) => '<span class="archive-row-actions">' +
+		'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
+		'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button></span>';
+	const wsIds = [...new Set(roots.map((pg) => pg.workspaceId || "default"))];
 
 	const filterTabs = [
 		["all", "Alle", roots.length],
-		["hefte", "📓 Hefte", allHefteCount],
-		["pages", "📝 Seiten", allPagesCount],
+		["hefte", "📓 Hefte", roots.filter(isHeft).length],
+		["pages", "📝 Seiten", roots.filter((pg) => !isHeft(pg)).length],
 	];
 
-	let html = '<div class="library lib-docs lib-archive"><div class="lib-head">' +
-		'<div class="lib-head-left"><h1>Bibliothek</h1>' + libModeTabsHtml() + "</div>" +
-		'<div class="lib-head-tools"><input id="libFilter" placeholder="Archiv durchsuchen…" autocomplete="off" value="' + U.esc(S.libFilter || "") + '"></div></div>';
-
-	html += '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
+	const tabs = '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
 		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
+	let html = '<div class="library lib-docs lib-notion-tree lib-archive">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
 
 	if (!roots.length) {
-		html += '<div class="empty small" style="margin-top:32px">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
-		main.innerHTML = html + "</div>";
+		html += '<div class="empty small">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
+		main.innerHTML = html + "</div></div>";
 		return;
 	}
 
-	if (!filtered.length) {
-		html += '<div class="empty small" style="margin-top:32px">Keine Treffer für diese Suche im Archiv.</div>';
-		main.innerHTML = html + "</div>";
-		return;
-	}
-
-	// Hefte-Abschnitt
-	if ((typeFilter === "all" || typeFilter === "hefte") && hefte.length) {
-		html += '<div class="ws-head" style="margin-top:16px"><span class="ws-name">📓 Hefte (' + hefte.length + ')</span></div>';
-		html += '<div class="lib-grid gn-grid" style="margin-bottom:24px">';
-		hefte.forEach((pg) => {
-			const heftPages = (S.heftMeta && S.heftMeta[pg.id] && S.heftMeta[pg.id].pages) || 1;
-			const meta = heftPages + " Seite" + (heftPages === 1 ? "" : "n") + " · archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
-			html += '<div class="lib-card gn-card" data-page="' + pg.id + '">' +
-				'<div class="lib-card-visual">' + libCoverHtml(pg) +
-				'<button class="lib-cover-btn" data-libcover="' + pg.id + '" title="Heftoptionen" aria-label="Heftoptionen">•••</button>' +
-				'</div>' +
-				'<div class="lib-card-title">' + U.esc(pg.title || "Ohne Titel") + '</div>' +
-				'<div class="lib-card-date">' + meta + '</div>' +
-				'<div class="archive-card-actions">' +
-				'<button type="button" class="mini archive-btn" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
-				'<button type="button" class="mini danger archive-btn" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button>' +
-				'</div></div>';
-		});
-		html += '</div>';
-	}
-
-	// Seiten-Abschnitt
-	if ((typeFilter === "all" || typeFilter === "pages") && pages.length) {
-		html += '<div class="ws-head" style="margin-top:16px"><span class="ws-name">📝 Seiten (' + pages.length + ')</span></div>';
-		html += '<div class="archive-list">';
-		pages.forEach((pg) => {
-			const subCount = Object.values(S.pages).filter((c) => c && c.parentId === pg.id && !c.trashed).length;
-			const meta = (subCount ? subCount + " Unterseite" + (subCount === 1 ? "" : "n") + " · " : "") + "archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
-			html += '<div class="archive-row" data-page="' + pg.id + '">' +
-				'<span class="row-icon">' + U.esc(RENDER.pageIconLabel(pg)) + '</span>' +
-				'<span class="row-title">' + U.esc(pg.title || "Ohne Titel") + '</span>' +
-				'<span class="hint">' + meta + '</span>' +
-				'<div class="archive-row-actions">' +
-				'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
-				'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button>' +
-				'</div></div>';
-		});
-		html += '</div>';
-	}
-
-	main.innerHTML = html + "</div>";
-	hydrateCovers(main);
+	wsIds.forEach((wsId) => {
+		const rows = treeRowsHtml(roots.filter((pg) => (pg.workspaceId || "default") === wsId), 0, archivedChildrenOf, visible, archiveMeta, archiveActions);
+		if (!rows) return;
+		const ws = S.workspaces[wsId] || { name: "Privat" };
+		html += '<section class="notion-tree-workspace"><div class="notion-tree-workspace-name">' + U.esc(ws.name) + "</div>" + rows + "</section>";
+	});
+	if (!html.includes("notion-tree-row")) html += '<div class="empty small">Keine Treffer für diese Suche im Archiv.</div>';
+	main.innerHTML = html + "</div></div>";
 }
 
 // Ansichts-Umschalter + NotebookLM-Mediathek: eigene Delegation + Styles
@@ -588,27 +566,32 @@ libStyle.textContent = [
 	".lib-create-choices span{font-size:24px}.lib-create-choices b{font-size:14px}.lib-create-choices small{font-size:11.5px;color:var(--text2);line-height:1.35}",
 	".lib-create-label{font-size:12px;color:var(--text2);font-weight:650;margin-bottom:-7px}",
 	".lib-create-covers .cover-swatch.active{outline:2px solid var(--accent);outline-offset:2px}",
-	".gn-shelf{max-width:none!important;padding-top:20px}",
-	".gn-shelf .lib-head{padding-bottom:14px;border-bottom:1px solid var(--edge-soft);margin-bottom:0}",
-	".gn-shelf .lib-head-left .lib-modes{margin-top:6px}",
-	".gn-crumbs{margin:14px 0 24px}.gn-crumb-root,.gn-crumb{min-height:0;padding:0;background:transparent;color:var(--text2);font-size:13px}.gn-crumb-root:hover,.gn-crumb:hover{background:transparent;color:var(--text);text-decoration:underline}",
+	".lib-docs .lib-head{padding-bottom:14px;border-bottom:1px solid var(--edge-soft);margin-bottom:14px}",
+	".lib-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-2) var(--space-3);min-height:40px;margin:0 0 var(--space-3)}",
+	".lib-toolbar-left{display:flex;align-items:center;flex-wrap:wrap;min-width:0}",
+	".lib-toolbar .lib-tabs,.lib-toolbar .gn-crumbs{margin:0}",
+	".lib-toolbar .lib-tabs:empty{display:none}",
+	".lib-toolbar .lib-head-tools{margin-left:auto;flex-wrap:nowrap}",
+	".lib-toolbar #libFilter{width:240px}",
+	"@media(max-width:640px){.lib-toolbar #libFilter{width:100%}}",
+	// Inhalt: jede Ansicht beginnt auf derselben Höhe und an derselben Kante wie die Toolbar.
+	".lib-body{margin:0}",
+	".lib-body>.empty{margin:0;padding:8px 0}",
+	".notion-tree-workspace{margin-top:12px;border-top:0}",
+	".lib-body>.notion-tree-workspace:first-child{margin-top:0}",
+	".notion-tree-workspace-name{height:28px;padding:0 0 6px;margin:0;display:flex;align-items:center}",
+	".notion-tree-row{padding-left:calc(var(--tree-depth) * 22px)}",
+	".gn-crumbs{margin:0}.gn-crumb-root,.gn-crumb{min-height:0;padding:0;background:transparent;color:var(--text2);font-size:13px}.gn-crumb-root:hover,.gn-crumb:hover{background:transparent;color:var(--text);text-decoration:underline}",
 	".gn-folder-more{position:absolute;right:0;bottom:-2px;min-height:24px;padding:0 5px;background:transparent;color:var(--text2);font-size:10px;letter-spacing:1px;opacity:0}.gn-folder{position:relative}.gn-folder:hover .gn-folder-more,.gn-folder-more:focus{opacity:1}.gn-folder-more:hover{color:var(--text);background:var(--surface-hover)}",
-	".gn-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:28px 24px;min-height:180px;align-items:start}",
+	".gn-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:28px 24px;min-height:0;align-items:start}",
+	".gn-grid:empty{min-height:56px}",
+	".gn-grid+.empty{margin:0 0 8px}",
 	".gn-grid.gn-drop-active{outline:2px dashed var(--accent);outline-offset:10px;border-radius:12px}",
 	".gn-folder,.gn-card{user-select:none;-webkit-user-select:none}.gn-folder[draggable=true],.gn-card[draggable=true]{cursor:grab}.gn-folder[draggable=true]:active,.gn-card[draggable=true]:active{cursor:grabbing}",
 	".gn-card .lib-into{display:none}",
 	".gn-folder.gn-drop-target .lib-folder-visual,.gn-card.gn-drop-target .lib-notebook{filter:drop-shadow(0 0 0 2px var(--accent)) drop-shadow(0 10px 22px rgba(76,141,255,.35))}",
 	".gn-folder.gn-dragging,.gn-card.gn-dragging{opacity:.35}",
-	".archive-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}",
-	".archive-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--edge-soft);border-radius:var(--radius-md);background:var(--surface-subtle);cursor:pointer}",
-	".archive-row:hover{border-color:var(--accent-border);background:var(--surface-hover)}",
-	".archive-row .row-icon{font-size:16px;flex:none}",
-	".archive-row .row-title{flex:1;min-width:0;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-	".archive-row .hint{font-size:12px;color:var(--text2);flex:none}",
-	".archive-row-actions,.archive-card-actions{display:flex;gap:4px;flex:none;align-items:center}",
-	".archive-card-actions{margin-top:6px;width:100%}",
-	".archive-card-actions button{flex:1;min-height:26px;font-size:11px}",
-	".archive-card-actions button.danger{flex:0 0 26px}",
+	".archive-row-actions{display:flex;gap:4px;margin-left:8px;flex:none;align-items:center}",
 	"@media(max-width:640px){.gn-toolbar{align-items:flex-start;flex-direction:column}.gn-toolbar-actions{width:100%}.gn-toolbar-actions #libFilter{flex:1;min-width:0}.gn-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:22px 16px}}",
 ].join("\n");
 document.head.appendChild(libStyle);

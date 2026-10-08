@@ -34,4 +34,12 @@ if (fs.existsSync(gradlePath)) {
   fs.writeFileSync(gradlePath, gradle);
 }
 
+const indexPath = "./web/index.html";
+if (fs.existsSync(indexPath)) {
+  let indexHtml = fs.readFileSync(indexPath, "utf8");
+  indexHtml = indexHtml.replace(/service-worker\.js\?build=(\d+)/, (_, b) => `service-worker.js?build=${Number(b) + 1}`);
+  indexHtml = indexHtml.replace(/main\.js\?build=(\d+)/, (_, b) => `main.js?build=${Number(b) + 1}`);
+  fs.writeFileSync(indexPath, indexHtml);
+}
+
 console.log(`Version erhöht: ${major}.${minor}.${patch} -> ${newVersion}`);
