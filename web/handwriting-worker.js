@@ -29,7 +29,10 @@ async function loadOrt() {
 	return ort;
 }
 
-const MODEL_CACHE_KEY = "impala67-handwriting-model-v5"; // v5: feingetuntes Modell (Abschreib-Zeilen)
+// Bei jedem neuen handwriting-model.onnx erhöhen: neuer Cache-Name und neue URL umgehen alte Kopien.
+// v6: Feintuning mit Auswahl über eigene + fremde Schreiber (Okt. 2026)
+const MODEL_VERSION = "v6";
+const MODEL_CACHE_KEY = `impala67-handwriting-model-${MODEL_VERSION}`;
 
 async function fetchModelBuffer(modelPath) {
 	if (typeof caches !== "undefined") {
@@ -37,7 +40,7 @@ async function fetchModelBuffer(modelPath) {
 			const cache = await caches.open(MODEL_CACHE_KEY);
 			let response = await cache.match(modelPath);
 			if (!response) {
-				response = await fetch(modelPath + "?v=2.2.21");
+				response = await fetch(`${modelPath}?v=${MODEL_VERSION}`);
 				if (response.ok) {
 					await cache.put(modelPath, response.clone());
 				}
@@ -47,7 +50,7 @@ async function fetchModelBuffer(modelPath) {
 			console.info("[handwriting-worker] Cache Storage nicht verfügbar, lade direkt:", e);
 		}
 	}
-	const res = await fetch(modelPath + "?v=2.2.21");
+	const res = await fetch(`${modelPath}?v=${MODEL_VERSION}`);
 	return await res.arrayBuffer();
 }
 

@@ -278,7 +278,7 @@ def _recognize_features(model, device, feats, mode: str) -> str:
     Wort-für-Wort-Erkennung ist auf echter Handschrift deutlich schlechter und wird von der App nicht genutzt."""
     if len(feats) < 3:
         return ""
-    inp = torch.as_tensor(np.asarray(feats, dtype=np.float32), device=device).unsqueeze(0)
+    inp = torch.tensor(np.array(feats, dtype=np.float32), device=device).unsqueeze(0)
     out = model(inp, in_lens=torch.tensor([len(feats)], device=device))
     return ctc_greedy(out[:, 0, :].cpu().numpy(), mode=mode)[0]
 
