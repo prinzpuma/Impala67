@@ -26,3 +26,9 @@
 /* Popover und Dialoge nutzen denselben neutralen Ton wie die App-Navigation. */
 :root { --menu-bg: #202020 }
 :root { --space-1: 4px; --space-1-5: 6px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px }
+/* Oberer Sicherheitsabstand. iOS/iPadOS 26+ legt in installierten Web-Apps einen Glas-Verlauf
+   ~40px unter die Statusleiste, der sich nicht abschalten lässt → Bedienelemente darunter halten. */
+:root { --safe-top: env(safe-area-inset-top, 0px) }
+@supports (-webkit-touch-callout: none) {
+	@media (display-mode: standalone) and (min-height: 501px) { :root { --safe-top: calc(env(safe-area-inset-top, 0px) + 40px) } }
+}

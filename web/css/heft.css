@@ -189,7 +189,7 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 	.heft-pages-manager-actions button { min-width: 0; padding-inline: 7px }
 	.heft-pop-pages .heft-pages-foot { display: flex; justify-content: space-between }
 	#overlay:has(.heft-transfer) { align-items: end }
-	.heft-transfer { width: 100%; max-height: calc(100dvh - env(safe-area-inset-top)); border-width: 1px 0 0; border-radius: 22px 22px 0 0 }
+	.heft-transfer { width: 100%; max-height: calc(100dvh - var(--safe-top)); border-width: 1px 0 0; border-radius: 22px 22px 0 0 }
 	.heft-transfer > header { padding: 14px }
 	.heft-transfer-body { padding: 19px var(--space-4) }
 	.heft-transfer > footer { display: grid; grid-template-columns: 1fr 1.35fr; padding: 11px 14px calc(11px + env(safe-area-inset-bottom)) }

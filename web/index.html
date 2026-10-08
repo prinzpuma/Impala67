@@ -269,7 +269,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=175"></script>
+<script type="module" src="main.js?build=176"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -279,7 +279,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=75", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=76", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}
