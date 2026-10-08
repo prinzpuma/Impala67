@@ -13,16 +13,27 @@ export const HANDWRITING_CTC = (() => {
 		"nach", "wird", "bei", "einer", "um", "am", "sind", "noch", "wie", "einem",
 		"über", "einen", "so", "zum", "war", "haben", "nur", "oder", "aber", "vor",
 		"zur", "bis", "mehr", "durch", "man", "sein", "wurde", "sei", "prozent",
+		"ich", "du", "wir", "ihr", "mein", "meine", "meiner", "dein", "deine", "unser",
+		"kann", "können", "muss", "müssen", "soll", "sollte", "sollten", "wollen",
+		"geht", "gibt", "gut", "sehr", "hier", "da", "dort", "jetzt", "immer", "wieder",
+		"schon", "dann", "wenn", "weil", "alle", "alles", "viele", "nichts", "etwas",
 		"notiz", "notizen", "aufgabe", "aufgaben", "projekt", "projekte", "idee", "ideen",
 		"ziel", "ziele", "datum", "heute", "morgen", "gestern", "wichtig", "dringend",
 		"treffen", "meeting", "bericht", "arbeit", "schule", "studium", "thema", "kapitel",
+		"seite", "seiten", "punkt", "punkte", "text", "texte", "zeile", "zeilen",
+		"lernen", "lesen", "schreiben", "übung", "übungen", "beispiel", "beispiele",
+		"frage", "fragen", "antwort", "antworten", "code", "test", "fehler", "plan",
+		"neu", "neue", "neues", "groß", "große", "klein", "kleine",
 		"montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag",
 		"januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september",
 		"oktober", "november", "dezember", "jahr", "woche", "monat", "tag", "stunde",
-		"frage", "fragen", "antwort", "antworten", "code", "test", "fehler", "plan",
 		// Mathe-, Einheiten- und MINT-Begriffe
 		"sin", "cos", "tan", "lim", "log", "exp", "max", "min", "grad",
 	]);
+
+	// Wörter, deren unsicherstes Zeichen darüber liegt, gelten als sicher erkannt.
+	// Benchmark (Okt. 2026): falsche Wörter max. 0,63, richtige meist ≥ 0,8.
+	const CORRECT_BELOW_CONFIDENCE = 0.7;
 
 	// Levenshtein-Distanz zur Fehlertoleranz
 	function levenshtein(a, b) {
@@ -45,7 +56,7 @@ export const HANDWRITING_CTC = (() => {
 
 	// Korrigiert ein einzelnes Wort über das Wörterbuch
 	function correctWord(rawWord, mode = "text") {
-		if (!rawWord || rawWord.length < 3) return rawWord;
+		if (!rawWord || rawWord.length < 4) return rawWord;
 		// Im Mathe-Modus Formelausdrücke nicht antasten
 		if (mode === "math") {
 			if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/^_{}()\\]/.test(rawWord)) return rawWord;
@@ -53,29 +64,43 @@ export const HANDWRITING_CTC = (() => {
 			if (/^[\d\W]+$/.test(rawWord) || /[=+\-*/]/.test(rawWord)) return rawWord;
 		}
 
-		// Satzzeichen am Rand isolieren
-		const match = rawWord.match(/^([^\w]*)(.*?)([^\w]*)$/);
+		// Satzzeichen am Rand isolieren (inkl. deutscher Umlaute und typischer Anführungszeichen)
+		const match = rawWord.match(/^([^\p{L}\p{N}]*)([\s\S]*?)([^\p{L}\p{N}]*)$/u);
 		if (!match) return rawWord;
 		const [, prefix, core, suffix] = match;
-		if (core.length < 3) return rawWord;
+
+		// Kurze Kerne (< 4 Buchstaben) nicht korrigieren (Schutz vor Falschersetzungen wie wir -> wird)
+		if (core.length < 4) return rawWord;
+
+		// Abkürzungen komplett in Großbuchstaben (z. B. GPU, CPU, API) nicht verändern
+		if (core === core.toUpperCase() && core.length >= 2) return rawWord;
 
 		const lower = core.toLowerCase();
 		if (COMMON_WORDS.has(lower)) return rawWord;
 
+		// Höchstens 1 Fehler: bei 2 erlaubten Fehlern kippen echte Wörter außerhalb der Liste
+		// (teilen -> zeilen, Physiker -> Physik).
+		const maxAllowed = 1;
 		let bestMatch = null;
-		let minDistance = 2; // Maximal 1 Fehler bei kurzen Wörtern, 2 bei langen Wörtern
+		let minDistance = Infinity;
+		let tie = false;
 
 		for (const dictWord of COMMON_WORDS) {
-			if (Math.abs(dictWord.length - lower.length) > 1) continue;
+			if (Math.abs(dictWord.length - lower.length) > maxAllowed) continue;
 			const dist = levenshtein(lower, dictWord);
-			if (dist < minDistance) {
-				minDistance = dist;
-				bestMatch = dictWord;
-				if (dist === 1) break; // Schnellabgleich
+			if (dist <= maxAllowed) {
+				if (dist < minDistance) {
+					minDistance = dist;
+					bestMatch = dictWord;
+					tie = false;
+				} else if (dist === minDistance) {
+					tie = true;
+				}
 			}
 		}
 
-		if (bestMatch && minDistance <= (core.length >= 6 ? 2 : 1)) {
+		// Nur bei eindeutigem besten Treffer korrigieren (kein unklares Raten bei Gleichstand)
+		if (bestMatch && !tie && minDistance <= maxAllowed) {
 			// Großschreibung des Originals beibehalten
 			const isCapitalized = core[0] === core[0].toUpperCase();
 			const corrected = isCapitalized ? bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1) : bestMatch;
@@ -172,7 +197,7 @@ export const HANDWRITING_CTC = (() => {
 		const blankRatio = blankCount / Math.max(1, numSteps);
 		const rawChars = collapsed.map((idx) => vocab.charForIndex(idx));
 		const rawText = rawChars.join("");
-		const text = cleanTranscription(rawText, options);
+		const text = cleanTranscription(rawText, { ...options, charConfidences });
 
 		// Gesamt-Konfidenz: Arithmetisches Mittel der Zeichen-Wahrscheinlichkeiten
 		let confidence = 0;
@@ -208,22 +233,27 @@ export const HANDWRITING_CTC = (() => {
 	}
 
 	// Bereinigung von Formatierungsfehlern und Wörterbuch-Abgleich
+	// charConfidences (optional, 1:1 zu den Zeichen von text): Ein Wort wird nur korrigiert,
+	// wenn das Modell bei mindestens einem seiner Zeichen unsicher war. Sicher erkannte
+	// Wörter außerhalb der Liste (z. B. "Treffer") bleiben so unangetastet.
 	function cleanTranscription(text, options = {}) {
-		let cleaned = String(text || "")
-			.replace(/\s+/g, " ")
-			.trim();
-
+		const raw = String(text || "");
 		const mode = options.mode || "text";
-		if (mode !== "math") {
-			// Schutz gegen angehängte oder fehldekodierte Mathe-Zeichen ("Handbreit√")
-			cleaned = cleaned.replace(/[\^_<>{}\~√∫∑πλαβ\\]/g, "").replace(/\s+/g, " ").trim();
+		const confs = options.charConfidences?.length === raw.length ? options.charConfidences : null;
+		const words = [];
+		const re = /\S+/g;
+		let m;
+		while ((m = re.exec(raw))) {
+			let word = m[0];
+			if (mode !== "math") {
+				// Schutz gegen angehängte oder fehldekodierte Mathe-Zeichen ("Handbreit√")
+				word = word.replace(/[\^_<>{}\~√∫∑πλαβ\\]/g, "");
+				if (!word) continue;
+			}
+			const minConf = confs ? Math.min(...confs.slice(m.index, m.index + m[0].length)) : 0;
+			words.push(minConf < CORRECT_BELOW_CONFIDENCE ? correctWord(word, mode) : word);
 		}
-
-		// Wörterbuch-Korrektur über einzelne Wörter laufen lassen
-		return cleaned
-			.split(" ")
-			.map((w) => correctWord(w, mode))
-			.join(" ");
+		return words.join(" ");
 	}
 
 	return {
