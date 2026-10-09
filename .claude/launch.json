@@ -4,8 +4,26 @@
     {
       "name": "impala67",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "web"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8000",
+        "--directory",
+        "web"
+      ],
       "port": 8000
+    },
+    {
+      "name": "impala67-test",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8011",
+        "--directory",
+        "web"
+      ],
+      "port": 8011
     }
   ]
 }

@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.44";
+const BUILD_VERSION = "2.2.45";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {

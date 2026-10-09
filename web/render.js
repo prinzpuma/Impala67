@@ -17,12 +17,14 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { homeViewHtml, hydrateHome } from "./home-view.js";
+import { conflictDialogHtml, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
 const lsGet = (k, fb) => U.storage.getJson(k, fb);
 const lsSet = (k, v) => U.storage.setJson(k, v);
+const DATETIME_OPTS = { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" };
 function openOverlay(html) {
 	const o = $("overlay");
 	if (!o) return null;
@@ -854,10 +856,10 @@ function breadcrumbHtml(pg) {
 		`<span class="crumb-sep">/</span><span class="crumb current">${esc(pg.title || "Unbenannt")}</span></nav>`;
 }
 
-// ---- Sync-Konflikte: Pending-Liste + Lösungs-Popup mit Diff -----
+// ---- Sync-Konflikte: Pending-Liste + Entscheidungs-Dialog -----
+// Darstellung (HTML, Zeilenvergleich) liegt in conflict-ui.js. Hier: Zustand, Aktionen, Events.
 const CONFLICT_KEY = "impala67_pending_conflicts";
 const RESOLVED_CONFLICT_KEY = "impala67_resolved_conflicts";
-const DATETIME_OPTS = { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" };
 const loadResolvedConflictIds = () => new Set(lsGet(RESOLVED_CONFLICT_KEY, []));
 function markConflictResolved(conflictPageId) {
 	if (!conflictPageId) return;
@@ -880,133 +882,30 @@ function mergePendingConflicts(details) {
 	for (const c of details || []) map.set(c.conflictPageId || c.pageId, c);
 	savePendingConflicts([...map.values()]);
 }
-function fmtConflictTime(iso) {
-	try { return new Date(iso).toLocaleString("de-DE", DATETIME_OPTS); } catch { return iso || "?"; }
-}
+// Gerettete Kopien aus früheren Konflikten (ohne gespeicherte Details)
 function legacyConflictItems() {
 	return STATE.activePages().filter(isConflictPage).map((p) => ({
 		pageId: null,
 		title: (p.title || "").replace(/^⚠ Konflikt:\s*/, "").split(" — Stand")[0],
 		reason: "Unterlegener Stand einer früheren Sync-Kollision. Der Gegen-Stand ist nicht mehr rekonstruierbar — deshalb zeigt die Ansicht nur diese gerettete Kopie.",
-		// FIX (25. Juli): remoteContent war "" — der Zeilenvergleich markierte dadurch den
-		// KOMPLETTEN Text als „nur auf diesem Gerät vorhanden“ und suggerierte, die Gegenseite
-		// sei leer. null = zweiter Stand unbekannt; die Ansicht zeigt dann bewusst keinen Diff.
+		// null = zweiter Stand unbekannt; die Ansicht zeigt dann bewusst keinen Diff.
 		localContent: p.content || "", remoteContent: null,
 		localTime: p.updated, remoteTime: null,
 		winner: "remote", loserContent: p.content || "", loserTime: p.updated,
 		conflictPageId: p.id, eventId: null, legacy: true,
 	}));
 }
-// Popup zeigt IMMER beide Stände: Hefte als Blob-Vorschau der ersten Seite,
-// Lösch-Konflikte als „gelöscht“ gegen die gerettete Kopie
-const conflictPaneHead = (label, time) => `<header><b>${label}</b>${time ? `<small>${esc(fmtConflictTime(time))}</small>` : ""}</header>`;
-function buildSpecialComparisonHtml(c) {
-	const notePane = (side, label, time, note) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><div class="conflict-empty">${esc(note)}</div></div></section>`;
-	const textPane = (side, label, time, text) => `<section class="conflict-pane ${side}">${conflictPaneHead(label, time)}<div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
-	// Alt-Konflikte (aus der Zeit vor den gespeicherten Details): es existiert nur noch die
-	// gerettete Kopie. Ein Zwei-Spalten-Diff wäre hier eine Falschaussage — lieber ehrlich
-	// EINE Spalte zeigen und dazuschreiben, warum es keinen Vergleich gibt.
-	if (c.legacy) {
-		return '<div class="conflict-compare conflict-compare-single">' +
-			textPane("remote", "Geretteter Stand (Konfliktkopie)", c.loserTime, c.loserContent || c.localContent || "") +
-			'</div><p class="conflict-key">Zu diesem älteren Konflikt ist nur noch die gerettete Kopie vorhanden — der Gegen-Stand lässt sich nicht mehr rekonstruieren. Prüfe den Text und entscheide, ob du ihn behältst.</p>';
-	}
-	// v8 (25. Juli): Heft-Striche liegen als Ereignisse im Log, nicht mehr als
-	// binärer Blob. Zwei Geräte können dieselbe Heft-Seite deshalb gar nicht mehr
-	// überschreiben — es gibt keine Heft-Konfliktkopie und folglich auch keine
-	// Canvas-Gegenüberstellung mehr. Der ganze Zweig ist ersatzlos entfallen.
-	if (c.conflictType === "delete-change") {
-		const kept = textPane("remote", "✏️ Geänderter Stand (gerettete Kopie)", c.changedAt, ((S.pages[c.conflictPageId] || {}).content || ""));
-		return '<div class="conflict-compare">' +
-			notePane("local", "🗑 Gelöscht", c.deletedAt, "Die Seite wurde auf einem Gerät endgültig gelöscht. Beim Zusammenführen gewinnt das Löschen — der andere Stand wurde als Kopie gerettet (rechts).") +
-			kept + "</div>";
-	}
-	return '<div class="conflict-no-compare"><b>Kein Textvergleich möglich</b><span>Die Änderung betrifft den Seitenstatus, nicht zwei Textfassungen. Öffne die gerettete Kopie und entscheide anschließend, was erhalten bleiben soll.</span></div>';
+// Quelle der offenen Konflikte: Pending-Liste, sonst gerettete Alt-Kopien
+function conflictSource() {
+	const items = loadPendingConflicts();
+	return items.length ? items : legacyConflictItems();
 }
-// ---- Zeilenvergleich: erst zuschneiden, dann ausrichten -------------------------
-// U.diffLines steigt oberhalb von 400 Zeilen in einen groben Modus aus (die O(n*m)-Matrix
-// würde sonst explodieren). Genau bei langen Seiten verschwand deshalb bisher JEDE
-// Markierung, obwohl typischerweise nur ein einziger Absatz abweicht. Vorschaltung:
-// identischen Anfang und identisches Ende abschneiden und nur die abweichende Mitte diffen.
-// Erst wenn auch die Mitte größer als 400 Zeilen ist, gibt es wirklich kein Ergebnis.
-const DIFF_MAX_MIDDLE = 400;
-function conflictDiff(left, right) {
-	const A = String(left ?? "").split("\n"), B = String(right ?? "").split("\n");
-	let pre = 0;
-	while (pre < A.length && pre < B.length && A[pre] === B[pre]) pre++;
-	let post = 0;
-	while (post < A.length - pre && post < B.length - pre && A[A.length - 1 - post] === B[B.length - 1 - post]) post++;
-	const midA = A.slice(pre, A.length - post), midB = B.slice(pre, B.length - post);
-	if (midA.length > DIFF_MAX_MIDDLE || midB.length > DIFF_MAX_MIDDLE) return null;
-	const same = (text) => ({ type: "same", text });
-	const out = A.slice(0, pre).map(same);
-	// Leere Seite bewusst selbst behandeln: U.diffLines("", x) erzeugt sonst eine
-	// Geister-Leerzeile, weil "".split("\n") ein Array mit einem leeren String liefert.
-	if (!midA.length && midB.length) out.push(...midB.map((text) => ({ type: "add", text })));
-	else if (!midB.length && midA.length) out.push(...midA.map((text) => ({ type: "del", text })));
-	else if (midA.length) out.push(...U.diffLines(midA.join("\n"), midB.join("\n")));
-	out.push(...A.slice(A.length - post).map(same));
-	return out;
+function closeConflictDialog() {
+	const o = $("overlay");
+	if (o) { o.hidden = true; o.innerHTML = ""; }
 }
-
-// Beide Spalten zeilengenau ausrichten. Vorher filterte jede Spalte unabhängig (links
-// same+del, rechts same+add) — die Spalten hatten dadurch unterschiedlich viele Zeilen,
-// „gleiche“ Zeilen standen auf verschiedenen Höhen und nichts war mehr vergleichbar.
-// Jetzt bilden gelöschte und hinzugefügte Zeilen eines Blocks Paare; die kürzere Seite
-// bekommt Leerzeilen. Lange unveränderte Strecken werden eingeklappt, damit man bei einer
-// 2000-Zeilen-Seite nicht ewig an Identischem vorbeiscrollt.
-const COLLAPSE_AFTER = 8, COLLAPSE_KEEP = 3;
-function alignDiffRows(diff) {
-	const rows = [];
-	let dels = [], adds = [];
-	const flush = () => {
-		const n = Math.max(dels.length, adds.length);
-		for (let k = 0; k < n; k++) rows.push({ left: dels[k] ?? null, right: adds[k] ?? null, changed: true, start: k === 0 });
-		dels = []; adds = [];
-	};
-	for (const d of diff) {
-		if (d.type === "del") dels.push(d.text);
-		else if (d.type === "add") adds.push(d.text);
-		else { flush(); rows.push({ left: d.text, right: d.text, changed: false }); }
-	}
-	flush();
-	const out = [];
-	for (let i = 0; i < rows.length; i++) {
-		if (rows[i].changed) { out.push(rows[i]); continue; }
-		let j = i;
-		while (j < rows.length && !rows[j].changed) j++;
-		const run = j - i;
-		if (run <= COLLAPSE_AFTER) out.push(...rows.slice(i, j));
-		else {
-			out.push(...rows.slice(i, i + COLLAPSE_KEEP), { gap: run - 2 * COLLAPSE_KEEP }, ...rows.slice(j - COLLAPSE_KEEP, j));
-		}
-		i = j - 1;
-	}
-	return out;
-}
-
-const diffCell = (text, cls, marker) => text === null
-	? '<div class="conflict-line filler" style="opacity:.3">&nbsp;</div>'
-	: `<div class="conflict-line ${cls}"><span class="conflict-line-marker">${marker}</span>${esc(text) || "&nbsp;"}</div>`;
-// EINE Tabelle mit zwei Spalten statt zwei getrennter Blöcke: die Ausrichtung hält dann
-// auch bei umbrechenden Zeilen, und es gibt nur EINEN Scrollbereich — die Spalten können
-// gar nicht mehr auseinanderlaufen. data-changeidx markiert den Beginn jedes Änderungsblocks
-// (Sprungziel für „Nächste Änderung“).
-function diffTableHtml(rows) {
-	let changes = 0;
-	const cellStyle = ' style="width:50%;vertical-align:top;padding:0 6px"';
-	const body = rows.map((r) => {
-		if (r.gap) return `<tr class="conflict-gap"><td colspan="2" style="text-align:center;opacity:.55;padding:6px 0">··· ${r.gap} unveränderte Zeilen ···</td></tr>`;
-		const attr = r.changed && r.start ? ` data-changeidx="${changes++}"` : "";
-		return `<tr${attr}><td${cellStyle}>` + diffCell(r.left, r.changed ? "local-only" : "same", r.changed ? "−" : "") +
-			`</td><td${cellStyle}>` + diffCell(r.right, r.changed ? "remote-only" : "same", r.changed ? "+" : "") + "</td></tr>";
-	}).join("");
-	return { html: '<table class="conflict-diff-table" style="width:100%;table-layout:fixed;border-collapse:collapse">' + body + "</table>", changes };
-}
-
 function openConflictResolver(index) {
-	let items = loadPendingConflicts();
-	if (!items.length) items = legacyConflictItems();
+	const items = conflictSource();
 	if (!items.length) return void U.toast("Keine offenen Konflikte.", "success");
 	const i = Math.max(0, Math.min(Number(index) || 0, items.length - 1));
 	let c = items[i];
@@ -1022,67 +921,107 @@ function openConflictResolver(index) {
 			c = { ...c,
 				localContent: c.winner === "remote" ? loserContent : winnerContent,
 				remoteContent: c.winner === "remote" ? winnerContent : loserContent,
-				// FIX (25. Juli): loserContent wurde hier NIE mitrekonstruiert. „Stattdessen anderen
-				// Stand übernehmen“ schickte dann patch.content = undefined und leerte die Seite.
-				// Trat nur bei sehr großen Seiten auf — genau dort, wo der Quota-Fallback greift.
 				loserContent: c.loserContent || loserContent,
 			};
 		}
 	}
-	// FIX (25. Juli): das rekonstruierte Objekt MUSS zurück in die Liste. resolveConflict liest
-	// später S.conflictResolveList[i] — vorher wurde die Liste VOR der Rekonstruktion gesetzt,
-	// die Reparatur landete also nur in einer lokalen Variablen und war beim Klick wieder weg.
+	// Das rekonstruierte Objekt MUSS zurück in die Liste: resolveConflict liest S.conflictResolveList[i].
 	items[i] = c;
 	S.conflictResolveIndex = i;
 	S.conflictResolveList = items;
-	const left = c.localContent || "", right = c.remoteContent || "";
-	const hasTextComparison = !c.conflictType && !c.legacy && (!!left || !!right);
-	const diff = hasTextComparison ? conflictDiff(left, right) : null;
-	const table = diff ? diffTableHtml(alignDiffRows(diff)) : null;
-	const winnerLabel = c.winner === "local" ? "Dieses Gerät" : "Drive / anderes Gerät";
-	const conflictSummary = c.reason || (c.conflictType === "delete-change"
-		? "Auf einem Gerät wurde die Seite gelöscht, während sie auf dem anderen Gerät noch geändert oder verschoben wurde. Die App kann diese beiden Aktionen nicht automatisch zusammenführen."
-		: "Diese Seite wurde nach der letzten erfolgreichen Synchronisierung zweimal unabhängig geändert: auf diesem Gerät am " + fmtConflictTime(c.localTime) + " und in Drive am " + fmtConflictTime(c.remoteTime) + ". Deshalb kann die App nicht sicher entscheiden, welchen Text du behalten möchtest.");
-	const headCell = (label, time) => `<th style="width:50%;text-align:left;padding:6px"><b>${label}</b>${time ? `<br><small>${esc(fmtConflictTime(time))}</small>` : ""}</th>`;
-	const fullPane = (side, label, time, text) => `<section class="conflict-pane ${side}"><header><b>${label}</b><small>${esc(fmtConflictTime(time))}</small></header><div class="conflict-pane-body"><pre class="conflict-fulltext">${esc(text) || "(Kein Text vorhanden.)"}</pre></div></section>`;
-	let comparisonHtml;
-	if (!hasTextComparison) comparisonHtml = buildSpecialComparisonHtml(c);
-	else if (table) {
-		comparisonHtml = '<div class="conflict-compare conflict-compare-aligned">' +
-			'<table style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>' +
-			headCell("Dieses Gerät", c.localTime) + headCell("Drive / anderes Gerät", c.remoteTime) + "</tr></thead></table>" +
-			'<div class="conflict-pane-body conflict-diff-scroll" id="conflictDiffScroll" style="max-height:46vh;overflow:auto">' +
-			table.html + "</div></div>" +
-			'<p class="conflict-key"><span>− Nur dieses Gerät</span><span>+ Nur Drive / anderes Gerät</span><span>Unmarkiert: gleich</span>' +
-			(table.changes ? `<button type="button" class="mini" data-conflictdiffnext="1">↓ Nächste Änderung (${table.changes})</button>` : "") + "</p>";
-	} else {
-		comparisonHtml = '<div class="conflict-compare">' +
-			fullPane("local", "Dieses Gerät", c.localTime, left) + fullPane("remote", "Drive / anderes Gerät", c.remoteTime, right) +
-			'</div><p class="conflict-key">Sehr große Seite: Die beiden Fassungen unterscheiden sich auf über 400 Zeilen — eine zeilenweise Markierung wäre hier zu langsam. Beide Volltexte stehen nebeneinander.</p>';
-	}
-	// Blättern zwischen mehreren Konflikten: der Zähler „1 von N“ stand vorher da, ohne dass
-	// man irgendwohin blättern konnte — man musste jeden Konflikt entscheiden, um den nächsten
-	// überhaupt zu sehen. Jetzt ‹ / › plus „Später entscheiden“.
-	const navHtml = items.length > 1
-		? `<span class="conflict-nav"><button type="button" class="mini" data-conflictnav="-1" title="Vorheriger Konflikt">‹</button>` +
-			`<span class="hint">${i + 1} von ${items.length}</span>` +
-			`<button type="button" class="mini" data-conflictnav="1" title="Nächster Konflikt">›</button></span>`
-		: "";
-	openOverlay('<div class="modal conflict-modal">' +
-		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<header class="conflict-head"><span class="conflict-icon">⚠</span><span><b>Synchronisation braucht eine Entscheidung' +
-		`</b><small>“${esc(c.title || "Seite")}”</small></span>` + navHtml + "</header>" +
-		'<div class="conflict-reason"><b>Warum sehe ich das?</b> ' + esc(conflictSummary) +
-		(c.legacy ? "" : `<br><span class="hint">Die App empfiehlt: <b>${esc(winnerLabel)}</b> behalten, weil dieser Stand den neueren Zeitstempel hat.</span>`) +
-		"</div>" + comparisonHtml +
-		'<div class="conflict-actions"><button class="primary" data-conflictresolve="keep-winner">Empfehlung übernehmen</button>' +
-		(c.pageId && !c.legacy ? '<button data-conflictresolve="use-loser">Stattdessen anderen Stand übernehmen</button>' : "") +
-		(items.length > 1 ? '<button data-conflictnav="1">Später entscheiden ›</button>' : "") +
-		"</div></div>");
+	const copyText = (S.pages[c.conflictPageId] || {}).content || "";
+	const o = openOverlay(conflictDialogHtml(items, i, { copyText }));
+	const d = o && o.querySelector(".conflict-modal");
+	if (d && !d.contains(document.activeElement)) d.focus({ preventScroll: true });
 }
 
-// ‹ / › zwischen Konflikten und Sprung zur nächsten Änderung. Capture-Phase wie beim
-// Modell-Stern, damit die Klicks nicht vorher in der allgemeinen Overlay-Delegation landen.
+// Eine Entscheidung für EINEN Konflikt anwenden. Liefert false, wenn sie nicht sicher ausführbar
+// war (dann ist nichts verändert). loserContent geht nie als undefined an pageUpdate.
+async function applyConflictAction(conf, action) {
+	const copyId = conf.conflictPageId;
+	const copyExists = !!(copyId && S.pages[copyId]);
+	const isDelete = conf.conflictType === "delete-change";
+	if (action === "use-loser") {
+		if (isDelete) {
+			if (!copyExists) { U.toast("Die gerettete Kopie fehlt. Es wurde nichts geändert.", "error"); return false; }
+			// Gerettete Kopie: Titel/Workspace/Elternordner aus dem Payload zurück
+			await STATE.dispatch("pageUpdate", { id: copyId, patch: { title: conf.title, parentId: conf.parentId || null, workspaceId: conf.workspaceId || "default" } });
+		} else {
+			const loser = conf.loserContent ?? (copyExists ? S.pages[copyId].content : undefined);
+			if (!conf.pageId || typeof loser !== "string") { U.toast("Der andere Stand ist nicht mehr vorhanden. Es wurde nichts geändert.", "error"); return false; }
+			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: loser } });
+		}
+	}
+	// keep-winner und use-loser (ohne Löschfall) legen die Kopie in den Papierkorb; keep-both lässt sie stehen
+	if (copyExists && (action === "keep-winner" || (action === "use-loser" && !isDelete))) {
+		await STATE.dispatch("pageTrash", { id: copyId });
+	}
+	// Konflikt quittieren und aus der Pending-Liste nehmen (sonst kommt derselbe Dialog nach dem nächsten Start wieder)
+	markConflictResolved(copyId);
+	const key = copyId || conf.pageId;
+	savePendingConflicts(loadPendingConflicts().filter((x) => (x.conflictPageId || x.pageId) !== key));
+	return true;
+}
+
+// Nach einer Entscheidung: nächsten offenen Konflikt zeigen, sonst schließen.
+function afterConflictResolved(i) {
+	const rest = conflictSource();
+	if (rest.length) openConflictResolver(Math.min(i, rest.length - 1));
+	else { closeConflictDialog(); U.toast("Konflikt erledigt.", "success"); }
+	render();
+}
+
+// Entscheidung für den gerade angezeigten Konflikt (Buttons im Dialog)
+async function resolveConflict(action) {
+	const list = S.conflictResolveList || loadPendingConflicts();
+	const i = S.conflictResolveIndex || 0;
+	const conf = list[i];
+	if (!conf) return;
+	if (!(await applyConflictAction(conf, action))) return;
+	afterConflictResolved(i);
+}
+
+// „Alle X Konflikte mit Empfehlung lösen“: wendet die Empfehlung auf alle Konflikte mit Empfehlung an.
+async function resolveAllRecommended() {
+	const todo = conflictSource().filter((c) => recommendedAction(c));
+	if (!todo.length) return;
+	const ok = await U.confirm(
+		`Bei ${todo.length} Konflikten wird die Empfehlung übernommen. Die jeweils andere Fassung landet im Papierkorb und lässt sich dort wiederherstellen.`,
+		{ title: `Alle ${todo.length} Konflikte lösen?`, ok: "Mit Empfehlung lösen" });
+	if (!ok) { openConflictResolver(S.conflictResolveIndex || 0); return; }
+	let done = 0;
+	try {
+		for (const c of todo) {
+			if (!(await applyConflictAction(c, recommendedAction(c)))) break;
+			done++;
+		}
+	} catch (err) {
+		U.toast("Nicht alle Konflikte konnten gelöst werden.", "error");
+	}
+	if (done) U.toast(`${done} ${done === 1 ? "Konflikt" : "Konflikte"} gelöst.`, "success");
+	if (conflictSource().length) openConflictResolver(0);
+	else closeConflictDialog();
+	render();
+}
+
+// Escape schließt, ↑/↓ wechseln den Konflikt (nicht in Scroll-Bereichen des Vergleichs).
+document.addEventListener("keydown", (e) => {
+	const o = $("overlay");
+	if (!o || o.hidden || !o.querySelector(".conflict-modal")) return;
+	if (e.key === "Escape") { e.preventDefault(); closeConflictDialog(); return; }
+	if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+	const t = e.target;
+	if (t && t.closest && t.closest(".cf-scroll, .cf-pane-text")) return;
+	if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+	const n = (S.conflictResolveList || []).length;
+	if (n < 2) return;
+	e.preventDefault();
+	const step = e.key === "ArrowDown" ? 1 : -1;
+	openConflictResolver((((S.conflictResolveIndex || 0) + step) % n + n) % n);
+});
+
+// Nav (‹ / ›), Sprung zur nächsten Änderung und Schnell-Lösung. Capture-Phase, damit die Klicks
+// nicht vorher in der allgemeinen Overlay-Delegation landen.
 document.addEventListener("click", (e) => {
 	const nav = e.target && e.target.closest && e.target.closest("[data-conflictnav]");
 	if (nav && !nav.disabled) {
@@ -1092,6 +1031,13 @@ document.addEventListener("click", (e) => {
 		if (!list.length) return;
 		const step = Number(nav.dataset.conflictnav) || 0;
 		openConflictResolver((((S.conflictResolveIndex || 0) + step) % list.length + list.length) % list.length);
+		return;
+	}
+	const bulk = e.target && e.target.closest && e.target.closest("[data-conflictbulk]");
+	if (bulk) {
+		e.preventDefault();
+		e.stopPropagation();
+		resolveAllRecommended();
 		return;
 	}
 	const jump = e.target && e.target.closest && e.target.closest("[data-conflictdiffnext]");
@@ -1107,36 +1053,6 @@ document.addEventListener("click", (e) => {
 	const next = marks.find((m) => m.getBoundingClientRect().top - boxTop > 8) || marks[0];
 	box.scrollTo({ top: Math.max(0, box.scrollTop + next.getBoundingClientRect().top - boxTop - 40), behavior: "smooth" });
 }, true);
-async function resolveConflict(action) {
-	const list = S.conflictResolveList || loadPendingConflicts();
-	const i = S.conflictResolveIndex || 0;
-	const conf = list[i];
-	if (!conf) return;
-	if (action === "use-loser" && conf.pageId) {
-		// v8: Heft-Konflikte existieren nicht mehr (Striche liegen als Ereignisse im Log) —
-		// der frühere Blob-Kopier-Zweig war seither unerreichbar und ist entfallen.
-		if (conf.conflictType === "delete-change") {
-			// Gerettete Kopie: Titel/Workspace/Elternordner aus dem Payload zurück (nicht Root)
-			await STATE.dispatch("pageUpdate", { id: conf.conflictPageId, patch: { title: conf.title, parentId: conf.parentId || null, workspaceId: conf.workspaceId || "default" } });
-		} else {
-			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: conf.loserContent } });
-		}
-	}
-	if (conf.conflictPageId && S.pages[conf.conflictPageId] &&
-		(action === "keep-winner" || (action === "use-loser" && conf.conflictType !== "delete-change"))) {
-		await STATE.dispatch("pageTrash", { id: conf.conflictPageId });
-	}
-	// Pending bereinigen + Kopie lokal quittieren (sonst kommt derselbe Banner/Dialog
-	// bei „Beide behalten“ nach dem nächsten Start wieder)
-	markConflictResolved(conf.conflictPageId);
-	const next = loadPendingConflicts().filter((x) => (x.conflictPageId || x.pageId) !== (conf.conflictPageId || conf.pageId));
-	savePendingConflicts(next);
-	if (next.length) { openConflictResolver(Math.min(i, next.length - 1)); render(); return; }
-	const o = $("overlay");
-	if (o) { o.hidden = true; o.innerHTML = ""; }
-	U.toast("Konflikt erledigt.", "success");
-	render();
-}
 
 // Home v4: persönliches Dashboard aus schaltbaren Bereichen. Sichtbarkeit und
 // Reihenfolge kommen aus SETTINGS.homeLayout() (Einstellungen → Home) — die

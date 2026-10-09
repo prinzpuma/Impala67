@@ -335,44 +335,6 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 .anki-import-sample small { display: block; color: var(--text2) }
 .anki-import-modal label.check { display: flex; align-items: center; gap: var(--space-2); color: var(--text) }
 .anki-import-modal label.check input { width: auto }
-/* == Drive-Sync-Konflikte: zwei ruhige, direkt vergleichbare Seit == */
-.conflict-head .conflict-icon { font-size: 24px }
-.conflict-reason b { color: var(--text) }
-.conflict-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; min-height: 0 }
-.conflict-pane { min-width: 0; border: 1px solid var(--edge); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-faint) }
-.conflict-pane header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); padding: 9px 11px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-sm) }
-.conflict-pane header small { color: var(--text2); font-size: var(--text-2xs); white-space: nowrap }
-.conflict-pane.local header { border-left: 3px solid rgb(var(--danger-rgb) / .72) }
-.conflict-pane.remote header { border-left: 3px solid rgb(var(--success-rgb) / .72) }
-.conflict-pane-body { height: min(44dvh, 430px); overflow: auto; padding: var(--space-1-5); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
-.conflict-line { display: grid; grid-template-columns: 16px minmax(0, 1fr); padding: 2px var(--space-1-5); white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--radius-xs) }
-.conflict-line-marker { color: var(--text2); font-weight: 700; text-align: center }
-.conflict-line.local-only { background: rgb(var(--danger-rgb) / .16); color: #f2b0a9 }
-.conflict-line.remote-only { background: rgb(var(--success-rgb) / .16); color: #a9dfba }
-.conflict-line.local-only .conflict-line-marker { color: var(--danger) }
-.conflict-line.remote-only .conflict-line-marker { color: var(--success) }
-.conflict-empty { color: var(--text2); padding: var(--space-3) }
-/* Lange Konfliktseiten werden vollständig gezeigt; keine Platzha… */
-.conflict-fulltext { margin: 0; min-height: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: var(--text) }
-.conflict-key { display: flex; flex-wrap: wrap; gap: var(--space-2) 14px; margin: -4px 0 0; color: var(--text2); font-size: var(--text-xs) }
-.conflict-key span:first-child { color: #f2b0a9 }
-.conflict-key span:nth-child(2) { color: #a9dfba }
-.conflict-no-compare { display: flex; flex-direction: column; gap: var(--space-1); padding: 14px; border: 1px solid rgba(245,185,70,.32); border-radius: var(--radius-lg); background: rgba(245,185,70,.08); color: var(--text2); font-size: var(--text-sm) }
-.conflict-no-compare b { color: var(--text) }
-/* 🆚 Heft-Konflikte: gerenderte Seiten-Vorschau beider Stände nebeneinander */
-.conflict-heft-body { display: flex; flex-direction: column; gap: var(--space-1-5); font: inherit }
-.conflict-heft-body canvas { width: 100%; height: auto; background: #fff; border: 1px solid var(--edge-soft); border-radius: var(--radius-md) }
-/* Bug-3-Fix: Navigationsleiste für mehrseitige Heft-Vorschauen */
-.conflict-heft-nav { display: flex; align-items: center; gap: var(--space-1-5); justify-content: center }
-.conflict-heft-nav .conflict-heft-prev, .conflict-heft-nav .conflict-heft-next { min-height: 0; height: 22px; width: 26px; padding: 0; font-size: var(--text-md); line-height: 1; background: var(--surface); color: var(--text2); border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center }
-.conflict-heft-nav .conflict-heft-prev:not(:disabled):hover, .conflict-heft-nav .conflict-heft-next:not(:disabled):hover { background: var(--surface-hover); color: var(--text) }
-.conflict-heft-note { flex: 1; text-align: center; color: var(--text2); font-size: var(--text-2xs) }
-@media (max-width: 700px) {
-	.conflict-compare { grid-template-columns: 1fr }
-	.conflict-pane-body { height: min(29dvh, 260px) }
-	.conflict-actions > button { flex: 1 1 calc(50% - 7px) }
-}
-.hint { font-size: var(--text-sm); color: var(--text2) }
 .card-face { padding: 18px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--edge) }
 .card-face.back { border-color: var(--accent-border) }
 .grades { display: flex; gap: var(--space-2) }
@@ -1101,25 +1063,83 @@ body.reduce-motion *:not(.boot-spinner):not(#bootSplash *), body.reduce-motion *
 	.lib-notebook, .lib-newdoc-notebook { height: 168px }
 	.lib-folder-visual { height: 100px }
 }
-/* == Sync-Konflikt: Popup + Homescreen-Banner == */
-.conflict-modal { width: min(880px, 96vw); max-height: min(820px, 90dvh); padding: 0; overflow: hidden; gap: 0 }
-.conflict-head { display: flex; align-items: center; gap: var(--space-3); padding: 18px 48px var(--space-3) var(--space-5); border-bottom: 1px solid var(--edge) }
-.conflict-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-lg); background: rgb(var(--danger-rgb) / .16); font-size: 18px }
-.conflict-head span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px }
-.conflict-head small { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.conflict-reason { padding: var(--space-3) var(--space-5); color: var(--text2); font-size: var(--text-base); line-height: 1.45; border-bottom: 1px solid var(--edge-soft) }
-.conflict-legend { display: flex; flex-wrap: wrap; gap: 10px; padding: var(--space-2) var(--space-5); font-size: var(--text-xs); color: var(--text2) }
-.conflict-legend .leg { padding: 2px var(--space-2); border-radius: var(--radius-pill) }
-.conflict-legend .leg.del { background: var(--danger-soft); color: #f0a89f }
-.conflict-legend .leg.add { background: var(--success-soft); color: #9fdcb4 }
-.conflict-legend .leg.same { background: var(--surface) }
-.conflict-diff { max-height: min(420px, 48dvh) }
-.conflict-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--edge-soft) }
-.conflict-actions button.primary { background: var(--accent); color: var(--on-accent); font-weight: 650 }
-@media (max-width: 600px) {
-	.conflict-diff { max-height: 42dvh }
+/* == Sync-Konflikt-Dialog (conflict-ui.js): Liste links, Entscheidung rechts == */
+.modal.conflict-modal { width: min(980px, 96vw); height: min(780px, 92dvh); max-height: 92dvh; padding: 0; gap: 0; overflow: hidden }
+.cf-top { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: 14px 52px 12px 20px; border-bottom: 1px solid var(--edge-soft) }
+.cf-top-title { margin: 0; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-md); font-weight: 650 }
+.cf-warn { color: var(--warn) }
+.cf-top-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) }
+.cf-bulk { min-height: 32px; padding: 6px 12px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--text); font-weight: 600; font-size: var(--text-sm) }
+.cf-bulk:hover { background: var(--accent-border) }
+.cf-compact-nav { display: none; align-items: center; gap: var(--space-2) }
+.cf-counter { min-width: 56px; text-align: center; color: var(--text2); font-size: var(--text-sm); font-variant-numeric: tabular-nums }
+.cf-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) }
+.cf-list { min-height: 0; overflow: auto; padding: var(--space-2); border-right: 1px solid var(--edge-soft) }
+.cf-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
+.cf-item { width: 100%; min-height: 44px; display: grid; gap: 2px; justify-items: start; text-align: left; padding: 8px 10px; border-radius: var(--radius-md); background: transparent; color: var(--text) }
+.cf-item:hover { background: var(--surface-hover) }
+.cf-item[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent) }
+.cf-item-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600 }
+.cf-item-kind, .cf-item-time { font-size: var(--text-2xs); color: var(--text2) }
+.cf-detail { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 18px }
+.cf-kicker { margin: 0; font-size: var(--text-xs); color: var(--text2) }
+.cf-title { margin: 0; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere }
+.cf-explain { margin: 0; font-size: var(--text-base); line-height: 1.45; color: var(--text2) }
+.cf-more { font-size: var(--text-sm); color: var(--text2) }
+.cf-more summary { cursor: pointer; width: max-content }
+.cf-more p { margin: 6px 0 0; line-height: 1.5 }
+.cf-compare { flex: 1 1 300px; min-height: 220px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-faint) }
+.cf-compare--empty { flex: none; min-height: 0; padding: 12px 14px }
+.cf-compare-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--edge-soft) }
+.cf-note { font-size: var(--text-xs); line-height: 1.4; color: var(--text2) }
+.cf-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: var(--text-xs); color: var(--text2) }
+.cf-key { padding: 2px 8px; border-radius: var(--radius-pill) }
+.cf-key.is-del { background: rgb(var(--danger-rgb) / .18) }
+.cf-key.is-add { background: rgb(var(--success-rgb) / .18) }
+.cf-next { min-height: 32px; white-space: nowrap }
+.cf-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
+.cf-table { width: 100%; table-layout: fixed; border-collapse: collapse }
+.cf-table th { position: sticky; top: 0; z-index: 1; background: var(--panel-solid); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--edge-soft); font-family: inherit; font-size: var(--text-sm); font-weight: 600 }
+.cf-table th small { display: block; font-size: var(--text-2xs); font-weight: 400; color: var(--text2) }
+.cf-table td { width: 50%; vertical-align: top; padding: 0 6px }
+.cf-gap td { padding: 6px 0; text-align: center; font-size: var(--text-xs); color: var(--text2) }
+.cf-line { display: grid; grid-template-columns: 16px minmax(0, 1fr); padding: 1px 6px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--radius-xs) }
+.cf-line.is-empty { opacity: .3 }
+.cf-line.is-del { background: rgb(var(--danger-rgb) / .16) }
+.cf-line.is-add { background: rgb(var(--success-rgb) / .16) }
+.cf-line-mark { color: var(--text2); font-weight: 700; text-align: center }
+.cf-body-single { flex: 1 1 auto; min-height: 0; display: flex; padding: 8px }
+.cf-panes { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px }
+.cf-pane { min-width: 0; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); overflow: hidden }
+.cf-body-single .cf-pane { flex: 1 1 auto; border: none; border-radius: 0 }
+.cf-pane-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--edge-soft); font-size: var(--text-sm) }
+.cf-pane-head small { font-size: var(--text-2xs); color: var(--text2); white-space: nowrap }
+.cf-pane.is-local .cf-pane-head { border-left: 3px solid rgb(var(--danger-rgb) / .72) }
+.cf-pane.is-remote .cf-pane-head { border-left: 3px solid rgb(var(--success-rgb) / .72) }
+.cf-pane-text { flex: 1 1 auto; min-height: 0; margin: 0; padding: 8px 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text) }
+.cf-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+.cf-action { min-height: 44px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; text-align: left; white-space: normal; border-radius: var(--radius-lg); border: 1px solid var(--edge); background: var(--surface); color: var(--text) }
+.cf-action:hover { background: var(--surface-hover-strong) }
+.cf-action.is-rec { border-color: var(--accent-border); background: var(--accent-soft) }
+.cf-action-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--text-base) }
+.cf-action-sub { font-size: var(--text-xs); line-height: 1.4; font-weight: 400; color: var(--text2) }
+.cf-badge { padding: 2px 8px; border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent); font-size: var(--text-2xs); font-weight: 650 }
+.modal.conflict-modal button:focus-visible, .cf-item:focus-visible, .cf-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+@media (pointer: coarse) {
+	.cf-bulk, .cf-next, .cf-compact-nav .mini { min-height: 44px }
 }
-.study-divider { border: none; border-top: 1px solid var(--edge); margin: 0 var(--space-3) }
+@media (max-width: 699px) {
+	.modal.conflict-modal { width: 96vw; height: 92dvh; max-height: 92dvh }
+	.cf-list { display: none }
+	.cf-body { grid-template-columns: minmax(0, 1fr) }
+	.cf-compact-nav { display: flex }
+	.cf-top { padding: 12px 52px 10px 16px }
+	.cf-detail { padding: 14px 16px 16px }
+	.cf-actions { grid-template-columns: minmax(0, 1fr) }
+	.cf-compare { flex: none; height: 46dvh; min-height: 200px }
+	.cf-panes { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(140px, auto); overflow: auto }
+	.cf-table { font-size: 12px }
+}
 .study-head { text-align: center; color: var(--text2); font-size: var(--text-sm) }
 .study-head button { margin-left: 10px }
 /* KISS (23. Juli): Lernmodus-Basisregeln aus extras.js hierher zusammengelegt — dort lebten

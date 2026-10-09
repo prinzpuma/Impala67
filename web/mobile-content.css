@@ -1,0 +1,935 @@
+/* ============================================================
+   Impala67 — Handy-Inhalte (mobile-content.css)
+   Passt die Desktop-Inhalte ans Telefon an: Editor, Heft,
+   Karteikarten, KI-Panel, Suche, Dialoge, Einstellungen,
+   Bibliothek und Popup-Menüs. Alle Regeln beginnen mit
+   `body.mobile-ui` — iPad und Desktop bleiben unberührt.
+   Tokens (--m-top, --m-bot, --m-gutter …) definiert mobile.css.
+   ============================================================ */
+
+/* ============================================================
+   1. EDITOR-SEITE
+   ============================================================ */
+/* Seiten-Chrome (Breadcrumbs, Topbar) entfällt; die Seite
+   bekommt einen ruhigen, randbündigen Inhalt. */
+body.mobile-ui .page-chrome { display: none }
+body.mobile-ui .page-scroll {
+	padding-top: var(--m-top);
+	padding-bottom: calc(var(--m-bot) + 40px);
+}
+
+/* Blockgriffe aus: Tippen und Ziehen laufen direkt im Text. */
+body.mobile-ui .blk-gutter { display: none }
+body.mobile-ui .blk { gap: 0 }
+body.mobile-ui .blk-body { width: 100%; min-width: 0 }
+body.mobile-ui .blk-children { padding-left: 14px }
+
+/* Seitenrand: alles hängt am gleichen Gutter. */
+body.mobile-ui .page-meta {
+	width: 100%;
+	max-width: none;
+	margin: 0;
+	padding: 0 var(--m-gutter) var(--space-2);
+}
+body.mobile-ui .editor-wrap,
+body.mobile-ui .block-editor {
+	width: 100%;
+	max-width: none;
+	padding-left: var(--m-gutter);
+	padding-right: var(--m-gutter);
+	box-sizing: border-box;
+}
+
+/* Titel: groß, eng, ohne Rahmen. */
+body.mobile-ui #pageTitle {
+	display: block;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	resize: none;
+	overflow: hidden;
+	font-size: 28px;
+	font-weight: 800;
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+	color: var(--text);
+}
+
+/* Fließtext: 17px mit ruhiger Zeilenhöhe. */
+body.mobile-ui .block-editor .blk-body,
+body.mobile-ui .block-editor .md,
+body.mobile-ui .block-editor [contenteditable] {
+	font-size: 17px;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+body.mobile-ui .block-editor .blk[data-btype="h1"] .blk-body { font-size: 24px; line-height: 1.25; font-weight: 750 }
+body.mobile-ui .block-editor .blk[data-btype="h2"] .blk-body { font-size: 20px; line-height: 1.3; font-weight: 700 }
+body.mobile-ui .block-editor .blk[data-btype="h3"] .blk-body { font-size: 18px; line-height: 1.35; font-weight: 650 }
+
+/* Cover: schmaler Streifen statt Titelbild-Hero. */
+body.mobile-ui .page-cover { height: 140px; border-radius: var(--m-radius); margin: 0 0 var(--space-2) }
+body.mobile-ui .page-meta .addcover-btn { min-height: 40px; font-size: var(--text-sm) }
+
+/* Bilder und Tabellen bleiben im Rand. */
+body.mobile-ui .md img,
+body.mobile-ui .blk img,
+body.mobile-ui .blk-body img {
+	max-width: 100%;
+	height: auto;
+}
+body.mobile-ui .blk-tablewrap {
+	width: 100%;
+	max-width: 100%;
+	padding: var(--space-1) 0 var(--space-2);
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+}
+body.mobile-ui .blk-tablewrap table { min-width: max-content }
+
+/* Popover (Slash-Menü, Blockmenü): nie über den Bildschirmrand. */
+body.mobile-ui .blk-menu {
+	max-width: calc(100vw - 24px);
+	min-width: min(260px, calc(100vw - 24px));
+	max-height: min(60dvh, 360px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+body.mobile-ui .blk-mi {
+	min-height: 44px;
+	font-size: var(--text-base);
+	padding: var(--space-2) var(--space-3);
+}
+
+/* ============================================================
+   2. HEFT (Handschrift)
+   ============================================================ */
+/* Volle Breite: die Heft-Fläche füllt den Bildschirm. */
+body.mobile-ui .heft-stage { width: 100%; min-width: 0 }
+body.mobile-ui .heft-chrome { inset: 0 }
+
+/* Eckknöpfe unterhalb der oberen Leiste. */
+body.mobile-ui .heft-corner-l-group,
+body.mobile-ui .heft-corner-r { top: calc(var(--m-top) + 6px) }
+body.mobile-ui .heft-corner-l-group { left: var(--space-2) }
+body.mobile-ui .heft-corner-r { right: var(--space-2) }
+body.mobile-ui .heft-corner-l-group .heft-corner,
+body.mobile-ui .heft-corner-r .heft-corner {
+	min-height: 44px;
+	min-width: 44px;
+	height: 44px;
+}
+
+/* Werkzeugleiste: kompakt, horizontal wischbar, Ziele 44px. */
+body.mobile-ui .heft-float {
+	top: calc(var(--m-top) + 58px);
+	left: var(--space-2);
+	right: var(--space-2);
+	max-width: calc(100vw - 16px);
+	gap: var(--space-1);
+	padding: 4px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+body.mobile-ui .heft-float::-webkit-scrollbar { display: none }
+body.mobile-ui .heft-float > * { flex-shrink: 0 }
+body.mobile-ui .heft-main,
+body.mobile-ui .heft-opt {
+	min-height: 44px;
+	height: 44px;
+	min-width: 44px;
+	padding: 0 var(--space-2);
+}
+body.mobile-ui .heft-size {
+	min-width: 44px !important;
+	height: 44px !important;
+	min-height: 44px !important;
+}
+body.mobile-ui .heft-swatch {
+	width: 28px;
+	height: 28px;
+	min-width: 28px !important;
+	min-height: 28px !important;
+}
+body.mobile-ui .heft-sep { height: 24px }
+body.mobile-ui .heft-tray {
+	max-width: 100%;
+	overflow-x: auto;
+	padding-bottom: var(--space-1);
+}
+
+/* ============================================================
+   3. KARTEIKARTEN (Stapel, Statistik, Lernmodus)
+   ============================================================ */
+body.mobile-ui .library.anki {
+	width: 100%;
+	max-width: none;
+	background: none;
+	padding: var(--space-3) var(--m-gutter) var(--space-5);
+	box-sizing: border-box;
+}
+body.mobile-ui .library.anki .lib-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-3);
+}
+body.mobile-ui .library.anki .lib-head h1 { display: none } /* Titel steht schon in der oberen Leiste */
+body.mobile-ui .library.anki .lib-head > [data-ankizen],
+body.mobile-ui .library.anki .lib-head .anki-new { display: none !important }
+body.mobile-ui .library.anki .lib-head > button { min-height: 40px; padding-inline: var(--space-3) }
+
+/* Modi und Kennzahlen: zwei Spalten, große Ziele. */
+body.mobile-ui .anki-modes {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-2);
+}
+body.mobile-ui .anki-modes button {
+	min-height: 44px;
+	border-radius: var(--m-radius);
+	font-size: var(--text-base);
+}
+body.mobile-ui .anki-stats {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+}
+body.mobile-ui .anki-stat {
+	padding: var(--space-3) 14px;
+	border-radius: var(--m-radius);
+	background: var(--surface);
+	border: 0;
+}
+body.mobile-ui .anki-home button.anki-stat.due { min-height: 76px }
+
+/* Abschnittsüberschriften wie in iOS-Listen. */
+body.mobile-ui .anki-sec h2 {
+	margin: var(--space-5) 0 var(--space-2);
+	padding-left: var(--space-1);
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text2);
+}
+
+/* Stapel-Zeilen: Karte mit eingerückter Trennlinie. */
+body.mobile-ui .deck-row {
+	display: grid;
+	grid-template-columns: 32px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-3);
+	min-height: var(--m-row-h);
+	margin: 0;
+	padding: 10px 14px;
+	border: 0;
+	border-radius: 0;
+	background: var(--surface);
+	box-shadow: inset 0 -1px 0 var(--edge-soft);
+}
+body.mobile-ui .anki-sec .deck-row:first-of-type { border-radius: var(--m-radius) var(--m-radius) 0 0 }
+body.mobile-ui .anki-sec .deck-row:last-of-type { border-radius: 0 0 var(--m-radius) var(--m-radius); box-shadow: none }
+body.mobile-ui .anki-sec .deck-row:only-of-type { border-radius: var(--m-radius); box-shadow: none }
+body.mobile-ui .deck-ico { font-size: 22px; line-height: 1; text-align: center }
+body.mobile-ui .deck-info { min-width: 0 }
+body.mobile-ui .deck-name {
+	font-size: 16px;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+body.mobile-ui .deck-meta { margin-top: 2px; font-size: var(--text-xs); color: var(--text2) }
+body.mobile-ui .deck-counts { min-width: 56px; justify-content: flex-end; align-items: center }
+body.mobile-ui .deck-counts .cnt-due { font-size: 16px; font-weight: 700 }
+body.mobile-ui .deck-iconbtn { display: none }
+body.mobile-ui .deck-more-btn {
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	min-height: 44px;
+	border-radius: 12px;
+	opacity: 1;
+	font-size: 18px;
+	color: var(--text2);
+	grid-column: 3;
+	grid-row: 1;
+}
+body.mobile-ui .deck-actions {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin-top: var(--space-1);
+}
+body.mobile-ui .deck-study,
+body.mobile-ui .deck-feyn {
+	min-height: 44px;
+	border-radius: 12px;
+	font-size: var(--text-base);
+	font-weight: 650;
+}
+body.mobile-ui .deck-study { background: var(--accent-soft); color: var(--accent) }
+body.mobile-ui .deck-feyn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Lernmodus: Karte füllt den Schirm, Bewertung klebt unten. */
+body.mobile-ui .anki-study-mode {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+	max-width: none;
+	padding: var(--space-2) var(--m-gutter) var(--space-3);
+	box-sizing: border-box;
+}
+body.mobile-ui.m-study .anki-study-mode {
+	/* Platz für die fixierte Bewertungsleiste unten */
+	padding-bottom: calc(132px + env(safe-area-inset-bottom));
+}
+body.mobile-ui .study-head { display: none }
+body.mobile-ui .study-keys,
+body.mobile-ui .grade-key,
+body.mobile-ui .study-keys.hint { display: none !important }
+body.mobile-ui .study-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	width: 100%;
+	max-width: none;
+}
+body.mobile-ui .study-card .card-face {
+	padding: 18px;
+	border: 0;
+	border-radius: var(--m-radius);
+	background: var(--surface);
+	font-size: 17px;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+body.mobile-ui .study-card .card-face.back { box-shadow: inset 0 0 0 1px var(--accent-border) }
+body.mobile-ui .study-card .card-face img { max-width: 100%; height: auto }
+body.mobile-ui .study-divider {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin: var(--space-1) 0;
+	font-size: var(--text-xs);
+	color: var(--text2);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+body.mobile-ui .study-divider::before,
+body.mobile-ui .study-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--edge-soft);
+}
+body.mobile-ui .study-counts-row {
+	font-size: var(--text-xs);
+	color: var(--text2);
+	text-align: center;
+	margin: var(--space-1) 0;
+}
+
+/* Antwort-Knopf: breit, großes Ziel, Akzent. */
+body.mobile-ui .study-reveal-controls { display: flex; justify-content: center }
+body.mobile-ui .study-reveal-controls .modal-actions { margin: 0; width: 100%; justify-content: center }
+body.mobile-ui .study-reveal-controls [data-ankishowback]:not(.mini),
+body.mobile-ui .modal-actions [data-ankishowback]:not(.mini) {
+	width: 100%;
+	min-height: 52px;
+	border-radius: var(--m-radius);
+	background: var(--accent);
+	color: var(--on-accent);
+	font-size: 17px;
+	font-weight: 650;
+}
+body.mobile-ui .study-reveal-controls [data-ankishowback].mini {
+	min-height: 44px;
+	padding: 0 var(--space-4);
+}
+body.mobile-ui .study-reveal-controls [data-ankishowback]:active { transform: scale(.98) }
+
+/* Bewertung: vier große farbige Knöpfe in einer Reihe.
+   Im Lernmodus fest am unteren Rand (ohne Tab-Leiste). */
+body.mobile-ui .grades {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--space-2);
+	width: 100%;
+	margin: var(--space-2) 0 0;
+}
+body.mobile-ui.m-study .anki-study-mode .grades {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: var(--z-dock);
+	margin: 0;
+	padding: 10px var(--m-gutter) calc(10px + env(safe-area-inset-bottom));
+	background: color-mix(in srgb, var(--panel-solid) 88%, transparent);
+	backdrop-filter: blur(20px) saturate(1.6);
+	-webkit-backdrop-filter: blur(20px) saturate(1.6);
+	border-top: 1px solid var(--edge-soft);
+}
+body.mobile-ui .grades [data-ankigrade] {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	min-height: 60px;
+	padding: 6px 4px;
+	border: 0;
+	border-radius: var(--m-radius);
+	font-size: 15px;
+	font-weight: 700;
+	transition: transform 120ms var(--ease-out), background-color 120ms var(--ease-out);
+}
+body.mobile-ui .grades [data-ankigrade]:active { transform: scale(.96) }
+body.mobile-ui .grades [data-ankigrade="1"] { background: rgb(var(--c-red) / .16); color: rgb(var(--c-red)) }
+body.mobile-ui .grades [data-ankigrade="2"] { background: rgb(var(--c-orange) / .16); color: rgb(var(--c-orange)) }
+body.mobile-ui .grades [data-ankigrade="3"] { background: rgb(var(--c-green) / .16); color: rgb(var(--c-green)) }
+body.mobile-ui .grades [data-ankigrade="4"] { background: rgb(var(--c-blue) / .16); color: rgb(var(--c-blue)) }
+body.mobile-ui .grades .grade-ivl { font-size: var(--text-2xs); font-weight: 600; opacity: .8 }
+
+/* Footer des Lernmodus: schlicht, Ziele 40px. */
+body.mobile-ui .study-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	margin: var(--space-2) 0 0;
+	padding: 0;
+}
+body.mobile-ui .study-footer [data-deckconf] { display: none }
+body.mobile-ui .study-footer-options { display: flex; gap: var(--space-1) }
+body.mobile-ui .study-footer .mini { min-height: 40px; min-width: 40px }
+
+/* ============================================================
+   4. KI-PANEL (Vollbild)
+   ============================================================ */
+body.mobile-ui #panel { display: none }
+body.mobile-ui:not(.panel-collapsed) #panel {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-ai-sheet);
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100dvh;
+	min-height: 0;
+	border: 0;
+	border-radius: 0;
+	background: var(--panel-solid);
+	padding: 0;
+	box-sizing: border-box;
+}
+body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	flex: 0 0 auto;
+	height: calc(var(--m-bar-h) + env(safe-area-inset-top));
+	padding: env(safe-area-inset-top) var(--m-gutter) 0;
+	box-sizing: border-box;
+	background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+	backdrop-filter: blur(20px) saturate(1.6);
+	-webkit-backdrop-filter: blur(20px) saturate(1.6);
+	border-bottom: 1px solid var(--edge-soft);
+}
+body.mobile-ui:not(.panel-collapsed) #panel .panel-head-left { min-width: 0; flex: 1 }
+body.mobile-ui:not(.panel-collapsed) #panel .panel-title {
+	font-size: 17px;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+body.mobile-ui:not(.panel-collapsed) #btnChatExpand { display: none }
+body.mobile-ui:not(.panel-collapsed) #btnTogglePanel {
+	width: 44px;
+	height: 44px;
+	min-width: 44px;
+	border-radius: 12px;
+	font-size: 20px;
+	color: var(--text2);
+}
+body.mobile-ui:not(.panel-collapsed) #chatLog {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	padding: var(--space-3) var(--m-gutter);
+	gap: var(--space-3);
+}
+body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
+	content: "Frag mich etwas\A Zu deinen Notizen, Karten oder Plänen.";
+	display: block;
+	white-space: pre-line;
+	margin: 30dvh var(--space-6) 0;
+	text-align: center;
+	color: var(--text2);
+	font-size: 15px;
+	line-height: 1.6;
+}
+body.mobile-ui:not(.panel-collapsed) #chatLog:not(:has(.msg))::before {
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--text);
+}
+body.mobile-ui:not(.panel-collapsed) #chatLog .msg { font-size: 16px; line-height: 1.6 }
+
+/* Eingabe unten: Safe-Area, 16px gegen den iOS-Zoom. */
+body.mobile-ui:not(.panel-collapsed) #panel > #chatForm {
+	flex: 0 0 auto;
+	width: auto;
+	min-height: 0;
+	margin: 0;
+	padding: var(--space-2) var(--m-gutter) calc(var(--space-2) + env(safe-area-inset-bottom));
+	border-top: 1px solid var(--edge-soft);
+	background: var(--panel-solid);
+	box-sizing: border-box;
+}
+body.mobile-ui:not(.panel-collapsed) #chatForm .composer-body { width: 100% }
+body.mobile-ui:not(.panel-collapsed) #chatInput {
+	width: 100%;
+	min-height: 44px;
+	max-height: 40dvh;
+	font-size: 16px;
+	line-height: 1.4;
+	border-radius: var(--m-radius);
+	padding: 11px 14px;
+	background: var(--surface);
+	border: 0;
+	box-sizing: border-box;
+	resize: none;
+}
+body.mobile-ui:not(.panel-collapsed) #chatForm .composer-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+body.mobile-ui:not(.panel-collapsed) #chatForm .composer-actions button {
+	min-width: 40px;
+	min-height: 40px;
+	border-radius: 999px;
+}
+body.mobile-ui:not(.panel-collapsed) #chatForm button[type="submit"] {
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	padding: 0;
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--on-accent);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+body.mobile-ui:not(.panel-collapsed) #chatForm .model-menu { max-width: calc(100vw - 24px) }
+
+/* ============================================================
+   5. SUCHE / BEFEHLS-PALETTE (Vollbild)
+   ============================================================ */
+body.mobile-ui #palette {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-palette);
+	display: flex;
+	align-items: stretch;
+	justify-content: center;
+	padding: env(safe-area-inset-top) 0 0;
+	background: var(--panel-solid);
+}
+body.mobile-ui #palette .palette-box {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: none;
+	height: 100%;
+	min-height: 0;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	background: transparent;
+}
+body.mobile-ui #palette .palette-input-wrap {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--m-gutter);
+	border-bottom: 1px solid var(--edge-soft);
+}
+body.mobile-ui #paletteInput {
+	flex: 1;
+	min-width: 0;
+	height: 44px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: var(--m-radius);
+	background: var(--surface);
+	font-size: 16px;
+	box-sizing: border-box;
+}
+body.mobile-ui .palette-close-btn {
+	min-width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	font-size: 18px;
+	color: var(--text2);
+}
+body.mobile-ui #paletteList {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: var(--space-1) var(--m-gutter) var(--space-5);
+}
+body.mobile-ui #paletteList .palette-head {
+	margin-top: var(--space-3);
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text2);
+}
+body.mobile-ui #paletteList .palette-item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-height: 52px;
+	padding: 10px 12px;
+	border-radius: var(--m-radius);
+	font-size: 16px;
+}
+body.mobile-ui #paletteList .palette-item:active { background: var(--surface-active) }
+body.mobile-ui .palette-foot { display: none }
+
+/* ============================================================
+   6. DIALOGE ALS BOTTOM-SHEET
+   ============================================================ */
+body.mobile-ui #overlay {
+	place-items: end stretch;
+	padding: 0;
+}
+body.mobile-ui .modal {
+	position: relative;
+	width: 100%;
+	max-width: 100%;
+	max-height: 88dvh;
+	margin: 0;
+	padding: var(--space-2) var(--m-gutter) calc(var(--space-4) + env(safe-area-inset-bottom));
+	gap: var(--space-3);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	border-radius: 20px 20px 0 0;
+	border: 0;
+	border-top: 1px solid var(--edge-soft);
+	box-sizing: border-box;
+}
+/* Griff oben am Sheet */
+body.mobile-ui .modal::before {
+	content: "";
+	display: block;
+	flex: 0 0 auto;
+	width: 36px;
+	height: 5px;
+	margin: 4px auto 6px;
+	border-radius: 3px;
+	background: var(--edge);
+}
+body.mobile-ui .modal h3 { font-size: 18px; font-weight: 700; padding-right: 44px; line-height: 1.3 }
+body.mobile-ui .modal label { font-size: 13px }
+body.mobile-ui .modal input,
+body.mobile-ui .modal textarea,
+body.mobile-ui .modal select { width: 100%; min-height: 44px; font-size: 16px; box-sizing: border-box }
+body.mobile-ui .modal .modal-x {
+	position: absolute;
+	top: 10px;
+	right: var(--m-gutter);
+	width: 44px;
+	height: 44px;
+	min-height: 44px;
+	border-radius: 12px;
+	font-size: 18px;
+}
+body.mobile-ui .modal-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+body.mobile-ui .modal-actions > button,
+body.mobile-ui .modal-actions > a {
+	width: 100%;
+	min-height: 48px;
+	border-radius: 14px;
+	font-size: 16px;
+	font-weight: 600;
+	justify-content: center;
+}
+
+/* ============================================================
+   7. EINSTELLUNGEN (Vollbild, iOS-Optik)
+   ============================================================ */
+body.mobile-ui .settings-modal-v2.is-mobile {
+	width: 100%;
+	max-width: 100%;
+	height: 100dvh;
+	max-height: 100dvh;
+	margin: 0;
+	padding: 0;
+	gap: 0;
+	border: 0;
+	border-radius: 0;
+	background: var(--panel-solid);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+body.mobile-ui .settings-modal-v2.is-mobile::before { display: none }
+body.mobile-ui .settings-mobile-head {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	min-height: calc(var(--m-bar-h) + env(safe-area-inset-top));
+	padding: env(safe-area-inset-top) var(--m-gutter) 0;
+	box-sizing: border-box;
+	background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+	backdrop-filter: blur(20px) saturate(1.6);
+	-webkit-backdrop-filter: blur(20px) saturate(1.6);
+	border-bottom: 1px solid var(--edge-soft);
+}
+body.mobile-ui .settings-mobile-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; padding: var(--space-2) 0 }
+body.mobile-ui .settings-mobile-head h2 { font-size: 17px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+body.mobile-ui .settings-mobile-done,
+body.mobile-ui .settings-mobile-back {
+	min-height: 44px;
+	padding: 0 var(--space-2);
+	border: 0;
+	background: transparent;
+	color: var(--accent);
+	font-size: 16px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+body.mobile-ui .settings-modal-v2.is-mobile .settings-page-head { padding: 0 var(--m-gutter) }
+body.mobile-ui .settings-modal-v2.is-mobile .settings-main {
+	padding: var(--space-2) var(--m-gutter) calc(var(--space-6) + env(safe-area-inset-bottom));
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+/* Startseite der Einstellungen: gruppierte Zeilen */
+body.mobile-ui .settings-mobile-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	width: 100%;
+	min-height: 60px;
+	padding: 10px 14px;
+	border: 0;
+	border-radius: 0;
+	background: var(--surface);
+	color: var(--text);
+	text-align: left;
+	box-shadow: inset 0 -1px 0 var(--edge-soft);
+}
+body.mobile-ui .settings-mobile-row:first-child { border-radius: var(--m-radius) var(--m-radius) 0 0 }
+body.mobile-ui .settings-mobile-row:last-child { border-radius: 0 0 var(--m-radius) var(--m-radius); box-shadow: none }
+body.mobile-ui .settings-mobile-row:only-child { border-radius: var(--m-radius); box-shadow: none }
+body.mobile-ui .settings-mobile-row:active { background: var(--surface-active) }
+body.mobile-ui .settings-mobile-row .settings-row-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
+body.mobile-ui .settings-mobile-row .settings-row-copy b { font-size: 16px; font-weight: 600 }
+body.mobile-ui .settings-mobile-row .settings-row-copy small {
+	font-size: 13px;
+	color: var(--text2);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+body.mobile-ui .settings-mobile-row svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--text2); opacity: .6 }
+/* Unterseiten: Zeilen als Karten mit Trennlinie */
+body.mobile-ui .settings-modal-v2.is-mobile .settings-row {
+	min-height: 52px;
+	padding: 10px 14px;
+	border: 0;
+	border-radius: 0;
+	background: var(--surface);
+	box-shadow: inset 0 -1px 0 var(--edge-soft);
+}
+body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control { max-width: 100%; min-width: 0 }
+body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control input,
+body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control select { font-size: 16px; min-height: 40px }
+body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control > button { min-height: 40px }
+body.mobile-ui .settings-mobile-footer { padding: var(--space-4) 0 0 }
+
+/* ============================================================
+   8. BIBLIOTHEK / ARCHIV / PAPIERKORB / GRAPH
+   ============================================================ */
+body.mobile-ui .library:not(.anki) {
+	width: 100%;
+	max-width: none;
+	padding: var(--space-3) var(--m-gutter) var(--space-5);
+	box-sizing: border-box;
+}
+/* Kopfbereiche umbrechen, statt zu überlaufen */
+body.mobile-ui .lib-head,
+body.mobile-ui .library .lib-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+body.mobile-ui .lib-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; min-width: 0 }
+body.mobile-ui .lib-head > button { min-height: 40px }
+body.mobile-ui .lib-tabs,
+body.mobile-ui .lib-tab-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1-5);
+}
+body.mobile-ui .lib-tabs button,
+body.mobile-ui .lib-tab-row button { min-height: 40px }
+/* Listenzeilen mindestens 52px hoch */
+body.mobile-ui .library .row,
+body.mobile-ui .library .lib-row,
+body.mobile-ui .library .lib-card {
+	min-height: var(--m-row-h);
+	padding: 10px 14px;
+	box-sizing: border-box;
+}
+body.mobile-ui .library .lib-card:hover { transform: none }
+body.mobile-ui .library .lib-card { overflow-wrap: anywhere }
+
+/* Graph (Wissensgraph): Inspektor unter der Karte, nicht daneben */
+body.mobile-ui .graph-head { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--m-gutter) }
+body.mobile-ui .graph-modes { display: flex; gap: var(--space-1-5); overflow-x: auto; scrollbar-width: none }
+body.mobile-ui .graph-modes button { min-height: 40px; flex-shrink: 0 }
+body.mobile-ui .graph-actions { flex-wrap: wrap; gap: var(--space-2); min-width: 0 }
+body.mobile-ui .graph-search { flex: 1 1 100%; min-width: 0 }
+body.mobile-ui .graph-search input { font-size: 16px; min-height: 40px }
+body.mobile-ui .graph-shell { display: flex; flex-direction: column; min-height: 0 }
+body.mobile-ui .graph-stage { min-height: 52dvh; overflow: auto; -webkit-overflow-scrolling: touch }
+body.mobile-ui .graph-inspector {
+	max-height: 40dvh;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: var(--space-3) var(--m-gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+	border-top: 1px solid var(--edge-soft);
+}
+
+/* ============================================================
+   9. DESKTOP-POPUP-MENÜS (außerhalb des Sheets)
+   ============================================================ */
+body.mobile-ui .page-menu:not(.top-menu),
+body.mobile-ui .model-menu,
+body.mobile-ui .attach-menu,
+body.mobile-ui .refine-menu {
+	max-width: calc(100vw - 24px);
+	min-width: min(220px, calc(100vw - 24px));
+	box-sizing: border-box;
+}
+body.mobile-ui .page-menu:not(.top-menu) button,
+body.mobile-ui .model-menu button,
+body.mobile-ui .attach-menu button,
+body.mobile-ui .refine-menu button,
+body.mobile-ui .model-menu .menu-item {
+	min-height: 44px;
+	font-size: 15px;
+}
+body.mobile-ui .model-menu,
+body.mobile-ui .attach-menu,
+body.mobile-ui .refine-menu { max-height: min(60dvh, 420px); overflow-y: auto; overscroll-behavior: contain }
+
+/* ============================================================
+   10. TOASTS
+   ============================================================ */
+body.mobile-ui #toasts {
+	bottom: calc(var(--m-bot) + 12px);
+	width: max-content;
+	max-width: calc(100vw - 32px);
+	align-items: center;
+}
+body.mobile-ui .toast { max-width: calc(100vw - 32px); font-size: 15px; box-sizing: border-box }
+body.mobile-ui.m-typing #toasts,
+body.mobile-ui.m-study #toasts {
+	bottom: calc(env(safe-area-inset-bottom) + 12px);
+}
+body.mobile-ui.m-study #toasts { bottom: calc(env(safe-area-inset-bottom) + 150px) }
+
+/* ============================================================
+   11. ALLGEMEIN
+   ============================================================ */
+/* Eingabefelder: mindestens 16px, sonst zoomt iOS beim Tippen. */
+body.mobile-ui input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+body.mobile-ui textarea,
+body.mobile-ui select {
+	font-size: 16px;
+}
+/* Schaltflächen in Inhalten: Ziel mindestens 40px. */
+body.mobile-ui .anki-study-mode button,
+body.mobile-ui .modal button,
+body.mobile-ui .settings-modal-v2.is-mobile button {
+	min-height: 40px;
+}
+/* Ruhige Lichtdarstellung: flachere Schatten statt Dunkel-Rahmen. */
+body.light.mobile-ui .deck-row,
+body.light.mobile-ui .anki-stat,
+body.light.mobile-ui .settings-mobile-row,
+body.light.mobile-ui .settings-modal-v2.is-mobile .settings-row {
+	box-shadow: inset 0 -1px 0 var(--edge-soft);
+}
+body.light.mobile-ui .grades [data-ankigrade] { box-shadow: 0 1px 2px rgb(0 0 0 / .05) }
+body.light.mobile-ui .modal { box-shadow: 0 -8px 32px rgb(0 0 0 / .12) }
+body.light.mobile-ui #chatForm .composer-body textarea { background: var(--surface) }
+
+/* Bewegung reduzieren: keine Übergänge und Animationen. */
+@media (prefers-reduced-motion: reduce) {
+	body.mobile-ui *,
+	body.mobile-ui *::before,
+	body.mobile-ui *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* Mehrfach-Tab-Hinweis (extras.js): volle Breite über der Tab-Leiste statt schmaler Spalte */
+body.mobile-ui .multitab-note {
+	left: var(--m-gutter);
+	right: var(--m-gutter);
+	transform: none;
+	bottom: calc(var(--m-bot) + 12px);
+	border-radius: var(--m-radius);
+	padding: 12px 14px;
+	z-index: var(--z-toast);
+	font-size: 14px;
+	line-height: 1.4;
+}
