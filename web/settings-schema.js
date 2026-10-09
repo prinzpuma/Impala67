@@ -64,6 +64,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "data-export", section: "data", group: "Exporte", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
 	{ id: "storage", section: "data", group: "App", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
 	{ id: "performance-profiler", section: "data", group: "Diagnose", label: "Performance-Profiler", description: "Sporadische Hänger und langsame Sync-, Render- oder Eingabephasen lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln" },
+	{ id: "mcp-bridge", section: "data", group: "Diagnose", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live" },
 	{ id: "updates", section: "data", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
 	{ id: "danger-zone", section: "data", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
 	{ id: "danger-chats", section: "data", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },

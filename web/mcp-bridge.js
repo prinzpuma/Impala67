@@ -11,30 +11,25 @@ import { SEARCH } from "./search.js";
 import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
 import { HEFT_LABEL } from "./heft-label.js";
+import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
-const BRIDGE_STORAGE_KEY = "impala.mcpBridge";
+let bridgeStarted = false;
+
+// Schalter in Einstellungen → Daten → Diagnose: an verbindet sofort, aus wirkt nach dem nächsten App-Start.
+if (typeof document !== "undefined") {
+	document.addEventListener("change", (event) => {
+		if (event.target?.id !== "inpMcpBridge") return;
+		const on = event.target.checked;
+		setMcpBridgeEnabled(on);
+		if (on) initMcpBridge();
+		U.toast(on ? "MCP-Live-Bridge aktiviert." : "MCP-Live-Bridge wird beim nächsten Start nicht mehr verbunden.", "success");
+	}, true);
+}
 
 export function initMcpBridge() {
-	if (typeof window === "undefined") return;
-	const enableFlag = window.__IMPALA_ENABLE_MCP_BRIDGE === true;
-	// ?mcpBridge=1 schaltet die Bridge dauerhaft ein (auch in der gehosteten PWA), ?mcpBridge=0 wieder aus.
-	const queryFlag = (() => {
-		try {
-			const q = new URLSearchParams(window.location?.search || "").get("mcpBridge");
-			if (q === "1") localStorage.setItem(BRIDGE_STORAGE_KEY, "1");
-			else if (q === "0") localStorage.removeItem(BRIDGE_STORAGE_KEY);
-			return q === "1" || (q !== "0" && localStorage.getItem(BRIDGE_STORAGE_KEY) === "1");
-		} catch {
-			return false;
-		}
-	})();
-	const localDevDefault = (() => {
-		const host = String(window.location?.hostname || "");
-		const port = String(window.location?.port || "");
-		return (host === "localhost" || host === "127.0.0.1") && port === "8000";
-	})();
-	if (!enableFlag && !queryFlag && !localDevDefault) return;
+	if (typeof window === "undefined" || bridgeStarted || !mcpBridgeEnabled()) return;
+	bridgeStarted = true;
 
 	const WS_URL = (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
 	const recentErrors = [];

@@ -8,6 +8,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { isLocalDev, mcpBridgeEnabled } from "./mcp-bridge-flag.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
@@ -310,7 +311,8 @@ function renderData(vm) {
 		: "";
 	const diagnostics = UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
 		modeRow +
-		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "");
+		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "") +
+		(PLATFORM_NATIVE.isNative ? "" : UI.row({ id: "mcp-bridge", title: "MCP-Live-Bridge", description: isLocalDev() ? "Auf dem lokalen Dev-Server immer aktiv" : "Verbindet die App mit einem KI-Assistenten auf diesem Rechner (ws://127.0.0.1:8765). Chrome fragt einmal nach Zugriff aufs lokale Netzwerk.", trailing: switchControl("inpMcpBridge", "MCP-Live-Bridge aktivieren", mcpBridgeEnabled()) }));
 	const chats = CHATS.load();
 	const cardCount = Object.keys(S.cards || {}).length;
 	const deckCount = Object.keys(S.decks || {}).length;
