@@ -223,7 +223,9 @@ async function recognizePageStrokes(strokes, options = {}) {
 					strokeStatus[idx] = status;
 				}
 
-				if (status === "recognized" && text && text.trim()) {
+				// Unsichere Zeilen (meist kurze Formeln wie "y=5") liefern trotzdem Text: für die Suche
+				// ist eine fast richtige Lesung besser als keine. Nur Zeichnungen fallen weg.
+				if ((status === "recognized" || status === "uncertain") && text && text.trim()) {
 					recognizedLines.push(text);
 				}
 			} catch (err) {
