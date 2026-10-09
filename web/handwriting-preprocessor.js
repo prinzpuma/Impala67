@@ -36,45 +36,76 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		});
 	}
 
-	// Gruppiert Striche in Textzeilen (von oben nach unten, darin von links nach rechts unter Wahrung der natürlichen Strichfolge)
+	// Typische Strichhöhe der Seite: Median aller nicht winzigen Striche (i-Punkte, Querstriche zählen nicht mit)
+	function typicalStrokeHeight(items) {
+		const median = (arr) => {
+			const a = arr.slice().sort((x, y) => x - y);
+			return a[Math.floor((a.length - 1) / 2)];
+		};
+		const heights = items.map((it) => it.bbox.h);
+		const rough = median(heights);
+		return Math.max(8, median(heights.filter((h) => h >= rough * 0.5)));
+	}
+
+	// Gruppiert Striche in Textzeilen (von oben nach unten, darin von links nach rechts unter Wahrung der natürlichen Strichfolge).
+	// Die Zeilenhöhe hängt fest an der typischen Strichhöhe, damit Pfeile/Klammern Zeilen nicht aufblähen.
+	// Sehr hohe oder sehr breite Striche (Skizzen, Rahmen, Unterstreichungen) werden nicht als Text erkannt.
 	function segmentLines(strokes) {
 		const valid = filterInkStrokes(strokes);
 		if (!valid.length) return [];
 
-		const items = valid.map((s, idx) => ({ stroke: s, bbox: strokeBbox(s), origIdx: idx })).filter((item) => item.bbox);
+		let items = valid.map((s, idx) => ({ stroke: s, bbox: strokeBbox(s), origIdx: idx })).filter((item) => item.bbox);
 		if (!items.length) return [];
 
-		// Nach vertikalem Zentrum sortieren
-		items.sort((a, b) => a.bbox.cy - b.bbox.cy);
+		const refH = typicalStrokeHeight(items);
+		// Ab 3x lagen echte Buchstaben (z.B. ein durchgezogenes "f") noch darüber, daher 4x
+		if (items.length >= 5) items = items.filter((it) => it.bbox.h <= refH * 4 && it.bbox.w <= refH * 12);
+		if (!items.length) return [];
 
 		const lines = [];
-		for (const item of items) {
-			let placed = false;
+		const addTo = (line, item) => {
+			line.items.push(item);
+			line.minY = Math.min(line.minY, item.bbox.minY);
+			line.maxY = Math.max(line.maxY, item.bbox.maxY);
+			line.minX = Math.min(line.minX, item.bbox.minX);
+			line.maxX = Math.max(line.maxX, item.bbox.maxX);
+		};
+		const newLine = (item, cy) => {
+			const line = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, cy, cySum: 0, cyCount: 0, items: [] };
+			lines.push(line);
+			addTo(line, item);
+			return line;
+		};
+		// Abstand des Strichs zum festen Kernband der Zeile (Zeilenmitte ± halbe typische Strichhöhe)
+		const gapToCore = (item, l) => Math.max(0, l.cy - refH / 2 - item.bbox.maxY, item.bbox.minY - (l.cy + refH / 2));
+		// Unter den Zeilen, deren Kernband nah genug ist, die mit dem nächsten Zentrum (bzw. kleinsten Abstand)
+		const nearest = (item, maxGap, byGap) => {
+			let best = null, bestD = Infinity;
 			for (const line of lines) {
-				const lineH = Math.max(20, line.maxY - line.minY);
-				// Vertikaler Überlappungs-Check
-				const overlap = Math.min(line.maxY, item.bbox.maxY) - Math.max(line.minY, item.bbox.minY);
-				const closeY = Math.abs(item.bbox.cy - line.cy) < lineH * 0.7;
+				const gap = gapToCore(item, line);
+				if (gap > maxGap) continue;
+				const d = byGap ? gap : Math.abs(item.bbox.cy - line.cy);
+				if (d < bestD) { bestD = d; best = line; }
+			}
+			return best;
+		};
 
-				if (overlap > 0 || closeY) {
-					line.items.push(item);
-					line.minY = Math.min(line.minY, item.bbox.minY);
-					line.maxY = Math.max(line.maxY, item.bbox.maxY);
-					line.minX = Math.min(line.minX, item.bbox.minX);
-					line.maxX = Math.max(line.maxX, item.bbox.maxX);
-					line.cy = (line.minY + line.maxY) / 2;
-					placed = true;
-					break;
-				}
-			}
-			if (!placed) {
-				lines.push({
-					minX: item.bbox.minX, maxX: item.bbox.maxX,
-					minY: item.bbox.minY, maxY: item.bbox.maxY,
-					cy: item.bbox.cy,
-					items: [item],
-				});
-			}
+		// 1) Buchstabengroße Striche bilden die Zeilen
+		const isSmall = (it) => it.bbox.h < refH * 0.4 && it.bbox.w < refH;
+		const main = items.filter((it) => !isSmall(it)).sort((a, b) => a.bbox.cy - b.bbox.cy);
+		for (const item of main) {
+			const line = nearest(item, refH * 0.75, false) || newLine(item, item.bbox.cy);
+			if (line.items[line.items.length - 1] !== item) addTo(line, item);
+			line.cySum += item.bbox.cy;
+			line.cyCount++;
+			line.cy = line.cySum / line.cyCount;
+		}
+
+		// 2) Kleine Striche (i-Punkte, Umlaut-Punkte, Querstriche, Satzzeichen) an die nächste Zeile hängen
+		for (const item of items.filter(isSmall)) {
+			const line = nearest(item, refH * 1.5, true);
+			if (line) addTo(line, item);
+			else newLine(item, item.bbox.cy);
 		}
 
 		// Zeilen von oben nach unten sortieren

@@ -125,7 +125,7 @@ def run_user_benchmark():
             continue
 
 
-        inp = np.array(feats, dtype=np.float32).reshape(1, len(feats), 3)
+        inp = np.array(feats, dtype=np.float32).reshape(1, len(feats), 4)
         out = session.run(["output"], {"input": inp})[0]
         # out shape: (seq_len, 1, vocab_size)
         logits = out[:, 0, :]

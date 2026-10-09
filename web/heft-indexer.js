@@ -28,7 +28,7 @@ export const HEFT_INDEXER = (() => {
 	const MODEL_KEY = "impala67_heft_index_model";
 	// Die Lesung hängt auch an der Erkennungslogik: Bei einer Änderung dort (ohne neues Modell)
 	// RECOGNIZER_REVISION erhöhen, damit alle Seiten einmal neu erkannt werden.
-	const RECOGNIZER_REVISION = 2; // 2: kein Bruch-Sonderweg mehr, Mathezeichen automatisch
+	const RECOGNIZER_REVISION = 3; // 3: robuste Zeilentrennung mit Skizzen-Filter (Median, Best-Match)
 	const INDEX_VERSION = `${HANDWRITING_MODEL_VERSION}+r${RECOGNIZER_REVISION}`;
 	const readIndexedModel = () => { try { return localStorage.getItem(MODEL_KEY); } catch { return null; } };
 	const writeIndexedModel = () => { try { localStorage.setItem(MODEL_KEY, INDEX_VERSION); } catch {} };

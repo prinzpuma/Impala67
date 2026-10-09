@@ -1,0 +1,101 @@
+================================================================================
+IMPALA67 — HANDSCHRIFT-ERKENNUNG: ERKENNTNISSE, STATUS & ROADMAP
+Stand: 09. Oktober 2026
+================================================================================
+
+1. ZIEL & PHILOSOPHIE
+---------------------
+- 100 % lokale, geräteübergreifende Digital-Ink-Erkennung (Vektor-Handschrift).
+- Keine Cloud-Kosten (0 €), keine API-Schlüssel, voller Offline-Betrieb (PWA/IndexedDB).
+- Eingabe: Stiftvektoren (x, y) aus der Canvas-Heftansicht (web/heft.js).
+- Ausgabe: Erkannter Text für Suche (RAG), Volltext-Indexierung und Notizen.
+
+
+2. ARCHITEKTUR & PIPELINE IM ÜBERBLICK
+--------------------------------------
+A) App-Eingabe & Sammelmodus:
+   - web/abschreiben.js + web/abschreiben-texte.js:
+     In-App "Abschreib-Modus" (Einstellungen -> Abschreiben). Zeigt Fachtexte aus
+     Semester 3 (Software Systems Engineering / Informatik) Zeile für Zeile.
+   - Benutzer schreibt mit Stift/iPad ab -> Striche landen in localStorage
+     ("impala67_handwriting_training_samples").
+   - Export via Web-Share / Download ("my_handwriting_samples.json") nach Google Drive.
+
+B) Vorverarbeitung (web/handwriting-preprocessor.js):
+   - Filterung von Werkzeugen (nur echte Stifte; Radierer/Formen werden ignoriert).
+   - Zeilensegmentierung (segmentLines): Gruppiert vertikal überlappende Striche.
+   - Resampling: Striche werden äquidistant abgetastet (4-Pixel-Schritte).
+   - Normalisierung: Skalierung anhand der Median-Höhe der Kleinbuchstaben.
+   - Features: 4 Dimensionen pro Punkt:
+     [dx, dy, pen_down, y_rel]
+     (dx, dy = Delta-Schritte, pen_down = 1 beim Zeichnen / 0 beim Stiftanheben,
+      y_rel = relative vertikale Position im Schriftband).
+
+C) Modell (handwriting/model.py):
+   - Typ: 1D-CNN + 3-lagiges BiLSTM (hidden_size=192) + CTC-Head (HandwritingCRNN).
+   - Vokabular (vocabulary.py / vocabulary.json): 86 Token (a-z, A-Z, Umlaute ä/ö/ü/Ä/Ö/Ü/ß,
+     Ziffern 0-9, Sonderzeichen & Mathezeichen +, -, *, /, =, <, >, ^, _, Blank-Token 0).
+   - Modellgröße: ca. 1,8 Mio. Parameter (~10 MB ONNX-Datei).
+
+D) Browser-Inferenz (web/handwriting-worker.js + web/handwriting-ctc.js):
+   - Läuft in eigenem Web Worker via ONNX Runtime Web (WASM + SIMD).
+   - Model-Caching via Cache Storage ("impala67-handwriting-model-dev" / Version-Hash).
+   - CTC Greedy-Decoding mit Konfidenz-Berechnung.
+   - Wörterbuch-Korrektur (web/handwriting-words-de.js) bei Wörtern mit niedriger Konfidenz
+     (Mathematik und Formeln werden von der Wörterbuchkorrektur ausgenommen).
+
+E) Hintergrund-Indexierung (web/heft-indexer.js):
+   - Läuft automatisch in Idle-Phasen (requestIdleCallback / 2s Pausen), um Akku/CPU zu schonen.
+   - Durchsucht alle Heftseiten nach nicht-erkannten Strichen, ruft Inferenz auf und
+     trägt ocrText in die Seite ein.
+   - Übergibt den Text an die RAG-Suche (web/rag.js).
+   - Bei neuer Modellversion (HANDWRITING_MODEL_VERSION) werden alle Seiten neu erkannt.
+
+
+3. TRAININGS-DATENSÄTZE & SETUP
+-------------------------------
+Training läuft kostenlos auf Google Colab (T4 GPU) über handwriting/train_colab.ipynb.
+Checkpoints und Caches werden in Google Drive unter "Impala67-Handschrift/" gesichert.
+
+Datenmischung:
+1. BRUSH-Datensatz (40 %): Echte Handschrift von 170 Schreibern (~570 MB).
+2. Google MathWriting (20 %): CC-BY 4.0, Formeln und mathematische Ausdrücke.
+3. Synthetische Daten & UJI Pen Characters (ca. 10 %): Zeichensätze, Umlaute.
+4. Eigene Handschrift / Feintuning (30 %):
+   - Eigene Abschreib-Zeilen (my_handwriting_samples.json) mit On-the-Fly-Augmentierung
+     (Skalierung, Scherung, Strich-Jitter).
+   - Strikte Trennung: Eigene Zeilen werden in Trainings-/Auswahl- und unberührte
+     Test-Zeilen aufgeteilt. Auswahl des besten Checkpoints erfolgt nach
+     Auswahl-Score (eigene Auswahl + fremde Schreiber), NIEMALS nach Test-CER.
+
+
+4. AKTUELLE METRIKEN & STATUS (Stand 09.10.2026)
+------------------------------------------------
+- Version v2.2.42 ist bereits live (Commit 04444d4 baut auf cb1f1d1 auf).
+- Realistische Einordnung der 5,5 % Test-CER:
+  * 5,5 % auf sauberen Benchmark-Zeilen ist hervorragend, aber Alltagstexte
+    sind schneller/schräger geschrieben -> im Alltag realistisch eher 8–11 % CER.
+  * Weiteres stures Abschreiben bringt wenig (Diminishing Returns).
+  * Nächste Stufe für Daten: Echte Notizseiten aus Heften (über heft-label.js / MCP).
+
+
+5. ERREICHTE VERBESSERUNGEN & NÄCHSTE SCHRITTE
+----------------------------------------------
+A) Neue Zeilentrennung (web/handwriting-preprocessor.js -> segmentLines):
+   - Feste Zeilenhöhe via Strich-Median (Pfeile & Klammern blähen Zeilen nicht mehr auf).
+   - Zuweisung nach Best-Match (geringster Zentrumsabstand statt First-Match).
+   - Skizzen-Filter für Striche > 4x Median-Höhe oder > 12x Median-Breite (Schutz
+     für hohe Buchstaben wie 'f', die bis zu 3,1x erreichen).
+   - Ergebnis im Test:
+     * Seiten mit Pfeilen & Unterstreichungen: Vorher 0/72 -> Jetzt 72/72 bestanden!
+   - Alle 32 npm-Tests (inkl. 9 Heft-Tests) und alle 100 JS-Syntax-Checks bestehen fehlerfrei.
+
+B) Reindexierung bestehender Seiten:
+   - In web/heft-indexer.js RECOGNIZER_REVISION von 2 auf 3 erhöhen, damit alle
+     bereits gespeicherten Heftseiten auf den Geräten automatisch mit der
+     neuen, robusteren Zeilentrennung neu analysiert werden.
+
+C) Nächste Priorität:
+   - Commit & Release der neuen Zeilentrennung.
+   - Praxistest auf echten Seiten via MCP-Bridge (wenn localhost:8000 läuft).
+================================================================================
