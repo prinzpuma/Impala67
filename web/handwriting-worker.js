@@ -176,62 +176,8 @@ async function recognizePageStrokes(strokes, options = {}) {
 		}
 	}
 
-	// Prüfe zuerst 2D-Brüche
-	const fraction = HANDWRITING_PREPROCESSOR.detectFraction(strokes);
-	if (fraction) {
-		try {
-			const numFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.numeratorStrokes);
-			const denFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.denominatorStrokes);
-			const mathOpts = { ...options, mode: "math" };
-			const [numRes, denRes] = await Promise.all([
-				numFeat.length >= 3 ? recognizeLineFeatures(numFeat, mathOpts) : Promise.resolve({ text: "", isConfident: false }),
-				denFeat.length >= 3 ? recognizeLineFeatures(denFeat, mathOpts) : Promise.resolve({ text: "", isConfident: false }),
-			]);
-
-			let sideText = "";
-			if (fraction.sideStrokes.length >= 2) {
-				const sideFeat = HANDWRITING_PREPROCESSOR.extractLineFeatures(fraction.sideStrokes);
-				if (sideFeat.length >= 3) {
-					const sideRes = await recognizeLineFeatures(sideFeat, options);
-					if (sideRes.isConfident) sideText = sideRes.text;
-				}
-			}
-
-			// Striche als erkannt markieren
-			for (let i = 0; i < totalStrokesCount; i++) {
-				if (!strokeStatus[i]) strokeStatus[i] = (numRes.isConfident && denRes.isConfident) ? "recognized" : "uncertain";
-			}
-
-			const fracLaTeX = `\\frac{${numRes.text.trim() || "?"}}{${denRes.text.trim() || "?"}}`;
-			let fullText = fracLaTeX;
-			if (sideText.trim()) {
-				const sideBox = fraction.sideStrokes.reduce(
-					(acc, s) => {
-						const b = HANDWRITING_PREPROCESSOR.strokeBbox(s);
-						if (!b) return acc;
-						return { minX: Math.min(acc.minX, b.minX), maxX: Math.max(acc.maxX, b.maxX) };
-					},
-					{ minX: Infinity, maxX: -Infinity }
-				);
-				fullText = (sideBox.maxX < fraction.barBox.minX) ? `${sideText.trim()} ${fracLaTeX}` : `${fracLaTeX} ${sideText.trim()}`;
-			}
-
-			return {
-				text: (numRes.isConfident || denRes.isConfident) ? fullText : "",
-				lines: [fullText],
-				accounting: {
-					total: totalStrokesCount,
-					recognized: (numRes.isConfident && denRes.isConfident) ? totalStrokesCount : 0,
-					uncertain: (!numRes.isConfident || !denRes.isConfident) ? totalStrokesCount : 0,
-					skipped: 0,
-					balanced: true,
-				}
-			};
-		} catch (err) {
-			console.info("[handwriting-worker] 2D-Bruch Fallback auf Standard-Segmentierung:", err);
-		}
-	}
-
+	// Brüche brauchen keinen Sonderweg: Das Modell ist auf MathWriting mit Brüchen als "a/b" trainiert
+	// und liest sie direkt innerhalb der Zeile.
 	const rawInkOnly = validInkStrokes.map((v) => v.stroke);
 	const lines = HANDWRITING_PREPROCESSOR.segmentLines(rawInkOnly);
 

@@ -26,8 +26,12 @@ export const HEFT_INDEXER = (() => {
 
 	// Pro Gerät gemerkt: Mit welcher Modellversion wurde der Bestand zuletzt komplett erkannt?
 	const MODEL_KEY = "impala67_heft_index_model";
+	// Die Lesung hängt auch an der Erkennungslogik: Bei einer Änderung dort (ohne neues Modell)
+	// RECOGNIZER_REVISION erhöhen, damit alle Seiten einmal neu erkannt werden.
+	const RECOGNIZER_REVISION = 2; // 2: kein Bruch-Sonderweg mehr, Mathezeichen automatisch
+	const INDEX_VERSION = `${HANDWRITING_MODEL_VERSION}+r${RECOGNIZER_REVISION}`;
 	const readIndexedModel = () => { try { return localStorage.getItem(MODEL_KEY); } catch { return null; } };
-	const writeIndexedModel = () => { try { localStorage.setItem(MODEL_KEY, HANDWRITING_MODEL_VERSION); } catch {} };
+	const writeIndexedModel = () => { try { localStorage.setItem(MODEL_KEY, INDEX_VERSION); } catch {} };
 	let reindexAll = false;
 	let hadFailure = false; // z. B. offline, Modell noch nicht geladen: Durchlauf gilt dann nicht als erledigt
 
@@ -102,7 +106,7 @@ export const HEFT_INDEXER = (() => {
 	function startBackgroundScan() {
 		if (scanRunning) return;
 		scanRunning = true;
-		reindexAll = readIndexedModel() !== HANDWRITING_MODEL_VERSION;
+		reindexAll = readIndexedModel() !== INDEX_VERSION;
 		hadFailure = false;
 		clearTimeout(scanTimer);
 		// Startet 2 Sekunden nach Aufruf, damit der initiale Renderzyklus frei bleibt

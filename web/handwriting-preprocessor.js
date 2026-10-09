@@ -208,59 +208,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		}));
 	}
 
-	// Erkennt 2D-Mathe-Strukturen (insbesondere Bruchstriche mit Zähler und Nenner)
-	// Ein Bruchstrich ist charakterisiert durch:
-	// 1. Deutlich breiter als hoch (Aspekt-Verhältnis > 3.0)
-	// 2. Hat Striche oberhalb (Zähler) UND unterhalb (Nenner)
-	function detectFraction(strokes) {
-		if (!strokes || strokes.length < 3) return null;
-		for (let i = 0; i < strokes.length; i++) {
-			const s = strokes[i];
-			const box = strokeBbox(s);
-			if (!box || box.w < 20 || box.h > 15) continue;
-			if (box.w / Math.max(1, box.h) < 2.5) continue; // Kein horizontaler Strich
-
-			// Prüfe, ob andere Striche oberhalb und unterhalb innerhalb der horizontalen Spanne liegen
-			const above = [];
-			const below = [];
-			const side = [];
-
-			for (let j = 0; j < strokes.length; j++) {
-				if (i === j) continue;
-				const other = strokes[j];
-				const obox = strokeBbox(other);
-				if (!obox) continue;
-
-				// Horizontale Überlappung mit dem potenziellen Bruchstrich
-				const xOverlap = Math.min(box.maxX, obox.maxX) - Math.max(box.minX, obox.minX);
-				const horizCoverage = xOverlap / Math.max(1, obox.w);
-
-				if (horizCoverage > 0.4 || (obox.minX >= box.minX - 10 && obox.maxX <= box.maxX + 10)) {
-					if (obox.maxY <= box.minY + 5) {
-						above.push(other);
-					} else if (obox.minY >= box.maxY - 5) {
-						below.push(other);
-					} else {
-						side.push(other);
-					}
-				} else {
-					side.push(other);
-				}
-			}
-
-			if (above.length > 0 && below.length > 0) {
-				return {
-					barStroke: s,
-					numeratorStrokes: above,
-					denominatorStrokes: below,
-					sideStrokes: side,
-					barBox: box,
-				};
-			}
-		}
-		return null;
-	}
-
 	// Resampling eines einzelnen Strichs auf äquidistante Punkte
 	function resampleStroke(pts, step = STEP_PIXELS) {
 		if (!pts || pts.length === 0) return [];
@@ -440,7 +387,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		orderLineStrokes,
 		estimateOrientation,
 		deskewStrokes,
-		detectFraction,
 		resampleStroke,
 		extractLineFeatures,
 		calculateStrokeHeightMedian,

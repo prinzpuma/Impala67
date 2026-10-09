@@ -132,14 +132,24 @@ export const HANDWRITING_CTC = (() => {
 		return expArr;
 	}
 
-	// Dekodiert CTC-Logits mit genauer Konfidenz- und Statusberechnung
+	// Formel statt Fließtext: ein "=" oder ein Mathezeichen, auf das noch etwas folgt (x^2, ∫2x).
+	// Ein angehängtes Zeichen am Wortende ("Handbreit√") zählt nicht.
+	const FORMULA_HINT = /=|[\^_{}<>~√∫∑πλαβ]\S/;
+
+	// Dekodiert CTC-Logits mit genauer Konfidenz- und Statusberechnung.
+	// options.mode: "text" sperrt Mathezeichen, "math" erlaubt sie; ohne Angabe entscheidet die
+	// ungesperrte Lesung selbst, ob die Zeile eine Formel ist.
 	function decodeWithConfidence(logits2D, vocab = HANDWRITING_VOCAB, options = {}) {
 		if (!logits2D || !logits2D.length) {
 			return { text: "", rawText: "", confidence: 0, status: "empty", isConfident: false, blankRatio: 1, charConfidences: [] };
 		}
+		if (!options.mode) {
+			const asMath = decodeWithConfidence(logits2D, vocab, { ...options, mode: "math" });
+			return FORMULA_HINT.test(asMath.rawText) ? asMath : decodeWithConfidence(logits2D, vocab, { ...options, mode: "text" });
+		}
 		const blank = vocab.BLANK_INDEX ?? 0;
 		const threshold = Number(options.threshold ?? 0.80);
-		const mode = options.mode || "text";
+		const mode = options.mode;
 		const isTextMode = mode !== "math";
 		const mathIndices = isTextMode && vocab.MATH_INDICES ? vocab.MATH_INDICES : null;
 		const numSteps = logits2D.length;
