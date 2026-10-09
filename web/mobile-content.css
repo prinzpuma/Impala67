@@ -933,3 +933,8 @@ body.mobile-ui .multitab-note {
 	font-size: 14px;
 	line-height: 1.4;
 }
+
+/* Startseite (home-view.js, dieselbe wie am PC): nur Ränder ans Handy anpassen */
+body.mobile-ui #main > .home.hv { padding: 0 }
+body.mobile-ui .hv-page { padding: var(--space-4) var(--m-gutter) var(--space-8) }
+body.mobile-ui .hv-lead { margin-top: var(--space-4) }

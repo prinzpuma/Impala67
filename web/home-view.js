@@ -114,7 +114,7 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, last, fa
 		"</span></header>";
 
 	const alert = conflictCount
-		? `<p class="hv-alert"><span>${conflictCount} ${conflictCount === 1 ? "Seite wurde" : "Seiten wurden"} auf zwei Geräten verschieden geändert.</span><button data-conflictopen="0">Ansehen</button></p>`
+		? `<p class="hv-alert"><span>${conflictCount === 1 ? "Ein Sync-Konflikt wartet" : conflictCount + " Sync-Konflikte warten"} auf deine Entscheidung.</span><button data-conflictopen="0">Lösen</button></p>`
 		: "";
 
 	const cont = last

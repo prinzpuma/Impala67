@@ -766,6 +766,9 @@ export const DB = (() => {
 				...Object.keys(remoteDel).filter((id) => localLife[id]).map((id) => ({ id, del: remoteDel[id], moved: localLife[id], loserSource: "local" })),
 			];
 			for (const { id, del, moved, loserSource } of pairs) {
+				// Papierkorb/Archiv gegen endgültiges Löschen ist kein Konflikt: beide Seiten wollten die
+				// Seite weghaben. Sonst entstand aus einer verworfenen Konfliktkopie die nächste Kopie.
+				if (moved.type === "pageTrash" || moved.type === "pageArchive") continue;
 				if (seenIds.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
 				const pg = reconstructPageFromEvents([...local, ...fresh], id); // Seite ist lokal ggf. schon weg

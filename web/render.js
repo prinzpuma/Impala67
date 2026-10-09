@@ -3,7 +3,6 @@ import { CHATS } from "./chats.js";
 import { COLLAPSE } from "./collapse.js";
 import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
-import { MOBILE_VIEW } from "./mobile-view.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
@@ -17,7 +16,7 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { homeViewHtml, hydrateHome } from "./home-view.js";
-import { conflictDialogHtml, recommendedAction } from "./conflict-ui.js";
+import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
 
 const esc = (s) => U.esc(s);
@@ -866,7 +865,8 @@ function markConflictResolved(conflictPageId) {
 	// nur lokale UI-Quittierung; klein halten (kein wachsender LocalStorage)
 	lsSet(RESOLVED_CONFLICT_KEY, [...loadResolvedConflictIds().add(conflictPageId)].slice(-200));
 }
-const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && ((p.id || "").startsWith("conflictpg-") || (p.title || "").startsWith("⚠ Konflikt")));
+// Maßgeblich ist der ⚠-Titel: „Beide behalten“ benennt die Kopie um, und das reist per Sync mit.
+const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && (p.title || "").startsWith("⚠ Konflikt"));
 const loadPendingConflicts = () => lsGet(CONFLICT_KEY, []);
 function savePendingConflicts(list) {
 	if (!list || !list.length) { U.storage.remove(CONFLICT_KEY); return; }
@@ -883,17 +883,20 @@ function mergePendingConflicts(details) {
 	savePendingConflicts([...map.values()]);
 }
 // Gerettete Kopien aus früheren Konflikten (ohne gespeicherte Details)
+// Verglichen wird mit der heutigen Seite gleichen Titels (pageId/remoteContent), damit der Dialog
+// zeigen kann, ob in der Kopie überhaupt etwas steht, das sonst fehlt.
 function legacyConflictItems() {
-	return STATE.activePages().filter(isConflictPage).map((p) => ({
-		pageId: null,
-		title: (p.title || "").replace(/^⚠ Konflikt:\s*/, "").split(" — Stand")[0],
-		reason: "Unterlegener Stand einer früheren Sync-Kollision. Der Gegen-Stand ist nicht mehr rekonstruierbar — deshalb zeigt die Ansicht nur diese gerettete Kopie.",
-		// null = zweiter Stand unbekannt; die Ansicht zeigt dann bewusst keinen Diff.
-		localContent: p.content || "", remoteContent: null,
-		localTime: p.updated, remoteTime: null,
-		winner: "remote", loserContent: p.content || "", loserTime: p.updated,
-		conflictPageId: p.id, eventId: null, legacy: true,
-	}));
+	const pages = STATE.activePages();
+	return pages.filter(isConflictPage).map((p) => {
+		const { title, nested, original, extraLines } = legacyCopyInfo(p, pages);
+		return {
+			pageId: original?.id || null, originalTitle: original?.title || null, title, nested, extraLines,
+			localContent: p.content || "", remoteContent: original ? original.content || "" : null,
+			localTime: p.updated, remoteTime: original?.updated || null,
+			winner: "remote", loserContent: p.content || "", loserTime: p.updated,
+			conflictPageId: p.id, eventId: null, legacy: true,
+		};
+	});
 }
 // Quelle der offenen Konflikte: Pending-Liste, sonst gerettete Alt-Kopien
 function conflictSource() {
@@ -951,6 +954,10 @@ async function applyConflictAction(conf, action) {
 			if (!conf.pageId || typeof loser !== "string") { U.toast("Der andere Stand ist nicht mehr vorhanden. Es wurde nichts geändert.", "error"); return false; }
 			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: loser } });
 		}
+	}
+	// „Beide behalten“: die Kopie wird eine normale Seite — ohne ⚠-Titel, der sie wieder als Konflikt zählen ließe.
+	if (action === "keep-both" && copyExists) {
+		await STATE.dispatch("pageUpdate", { id: copyId, patch: { title: conflictTitle(conf) + " (Kopie)" } });
 	}
 	// keep-winner und use-loser (ohne Löschfall) legen die Kopie in den Papierkorb; keep-both lässt sie stehen
 	if (copyExists && (action === "keep-winner" || (action === "use-loser" && !isDelete))) {
@@ -1054,11 +1061,8 @@ document.addEventListener("click", (e) => {
 	box.scrollTo({ top: Math.max(0, box.scrollTop + next.getBoundingClientRect().top - boxTop - 40), behavior: "smooth" });
 }, true);
 
-// Home v4: persönliches Dashboard aus schaltbaren Bereichen. Sichtbarkeit und
-// Reihenfolge kommen aus SETTINGS.homeLayout() (Einstellungen → Home) — die
-// Bereichs-ids hier und in SETTINGS.HOME_SECTIONS sind identisch (EINE Quelle).
-// Neu: Begrüßung mit Namen, ✨ „Für dich heute“ (Tipps aus den Lerndaten),
-// 🃏 Stapel-Überblick (Klick lernt den Stapel) und ★ Favoriten.
+// Startseite: Aufbau in home-view.js; hier nur Daten sammeln. Aufklapp-Zustand
+// der Lernanalyse (<details data-fold>) bleibt über HOME_FOLD_KEY erhalten.
 const HOME_FOLD_KEY = "impala67HomeFolds";
 const homeFolds = () => lsGet(HOME_FOLD_KEY, {}) || {};
 const homeFoldOpen = (id, fb) => { const f = homeFolds(); return f[id] === undefined ? fb : !!f[id]; };
@@ -1082,125 +1086,20 @@ function renderHome(main) {
 	const pages = STATE.activePages();
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
 	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => ((b.updated || "") < (a.updated || "") ? -1 : (b.updated || "") > (a.updated || "") ? 1 : 0)).slice(0, 6);
-	const dueCards = STATE.dueCards();
-	const due = dueCards.length;
 	const homeStudy = STATE.studySnapshot(null).counts;
-	// Backup-Empfehlungen bewusst entfernt („kommt noch“, 22. Juli): kein Backup-Pill
-	// und kein Backup-Tipp mehr — Backups laufen weiter über Einstellungen → Backup.
-	const daily = pages.find((p) => p.daily === localDayKey(new Date()));
 	const hour = new Date().getHours();
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 	const lzTotals = (LERNZEIT.totalsByDay && LERNZEIT.totalsByDay()) || null;
 	const lz = (LERNZEIT.statsForHome && (lzTotals ? LERNZEIT.statsForHome(lzTotals) : LERNZEIT.statsForHome())) || { goalPct: 0 };
-	// 7-Tage-Trend für die persönlichen Hinweise. Rückwärts-Durchlauf mit Frühabbruch
-	// über den Review-Log; die ausführliche Wochenanalyse lebt zentral in lernzeit.js.
-	const iso = (days) => new Date(Date.now() - days * 864e5).toISOString();
-	const cut14 = iso(14), cut7 = iso(7);
-	const win = { cur7: [0, 0], prev7: [0, 0] };
-	const bump = (w, ok) => { w[0]++; if (ok) w[1]++; };
-	const revs = S.reviews || [];
-	for (let i = revs.length - 1; i >= 0; i--) {
-		const r = revs[i];
-		if (r.t < cut14) break;
-		if (!(r.grade > 0)) continue;
-		const ok = r.grade > 1;
-		if (r.t >= cut7) bump(win.cur7, ok);
-		else bump(win.prev7, ok);
-	}
-	const rate = (w) => w[1] / w[0];
-	const trend = win.cur7[0] >= 10 && win.prev7[0] >= 10 ? rate(win.cur7) - rate(win.prev7) : null;
-	// 🃏 fällige Karten je Wurzel-Stapel + ★-Seiten (Bereiche „Stapel“ / „Favoriten“)
-	const dueByDeck = {};
-	for (const c of dueCards) {
-		const root = (c.deck || "Standard").split("::")[0];
-		dueByDeck[root] = (dueByDeck[root] || 0) + 1;
-	}
 	const favPages = pages.filter((p) => p.favorite && !isConflictPage(p));
 	const homeName = ((S.settings || {}).homeUserName || "").trim();
-	const continueBlock = recent[0]
-		? `<button class="home-continue" data-page="${recent[0].id}"><span class="recent-icon">${esc(pageIconLabel(recent[0]))}</span><span class="recent-copy"><small>Weitermachen</small><b>${esc(recent[0].title)}</b><small>Zuletzt · ${U.fmtDate(recent[0].updated)}</small></span><span class="recent-arrow">›</span></button>`
-		: '<button class="home-continue muted" data-homeaction="newpage"><span class="recent-icon">✦</span><span class="recent-copy"><small>Start</small><b>Erste Seite anlegen</b><small>Workspace ist noch leer</small></span><span class="recent-arrow">›</span></button>';
-
-	const listRow = (attr, ico, b, small) => `<button class="home-list-row" ${attr}><span class="recent-icon sm">${ico}</span><b>${b}</b><small>${small}</small><i>›</i></button>`;
-	// ✨ „Für dich heute“ — wählt aus allen lokalen Daten (Lernzeit, Streak, Reviews,
-	// Problemkarten, Backup-Alter, Daily) die 3 dringlichsten Hinweise; Reihenfolge = Priorität
-	const leeches = STATE.activeCards().filter((c) => !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
-	const tips = [];
-	if (lz.smartInsights && lz.smartInsights.length) {
-		for (const si of lz.smartInsights) {
-			if (si.id === "forgettingAlarm" || si.id === "duePeak" || si.id === "procrastinationShield") {
-				tips.push([si.action || 'data-homeaction="cards"', si.icon, si.title, si.desc]);
-			}
-		}
-	}
-	if (lz.todaySeconds === 0 && lz.streakDays > 0 && hour >= 15) tips.push(['data-homeaction="cards"', "🔥", `${lz.streakDays}-Tage-Streak in Gefahr`, "Heute noch nichts gelernt — schon 5 Minuten zählen."]);
-	if (due > 0 && !tips.some((t) => t[2].includes("fällig") || t[2].includes("Lernspitze"))) tips.push(['data-homeaction="cards"', "🃏", due > 20 ? `${due} Karten warten` : `Nur ${due} Karte${due === 1 ? "" : "n"} offen`, due > 20 ? "Früh anfangen entzerrt den Tag." : "Eine kurze Runde und du bist durch."]);
-	if (trend !== null && trend <= -0.05) tips.push(['data-homeaction="cards"', "📉", "Erfolgsquote sinkt", `${Math.round(rate(win.cur7) * 100)} % diese Woche (davor ${Math.round(rate(win.prev7) * 100)} %) — kleinere Portionen, dafür täglich.`]);
-	if (leeches >= 3 && !tips.some((t) => t[2].includes("Vergessenskurven"))) tips.push(['data-homeaction="cards"', "🧗", `${leeches} hartnäckige Karten`, "Mindestens 4-mal vergessen — umformulieren oder aufteilen hilft."]);
-	if (!daily && hour >= 17) tips.push(['data-homeaction="daily"', "📅", "Noch keine Daily Note", "Ein kurzer Tagesrückblick festigt das Gelernte."]);
-	if (trend !== null && trend >= 0.05) tips.push(['data-homeaction="cards"', "📈", "Erfolgsquote steigt", `${Math.round(rate(win.cur7) * 100)} % richtig diese Woche — dranbleiben!`]);
-	if (!tips.length) tips.push(['data-homeaction="library"', "✅", "Alles im grünen Bereich", "Nichts Dringendes — guter Moment zum Vertiefen oder Aufräumen."]);
-	const forYou = '<div class="home-list">' + tips.slice(0, 3).map((tp) => listRow(tp[0], tp[1], tp[2], tp[3])).join("") + "</div>";
-
-	// 🃏 Stapel-Überblick (Klick = diesen Stapel lernen) und ★ Favoriten
-	const deckNames = Object.keys(dueByDeck).sort((a, b) => dueByDeck[b] - dueByDeck[a]).slice(0, 6);
-	const deckRows = deckNames.length
-		? '<div class="home-list">' + deckNames.map((d) => listRow(`data-ankistudy="${esc(d)}"`, "🃏", esc(d), dueByDeck[d] + " fällig — jetzt lernen")).join("") + "</div>"
-		: '<div class="empty-state compact"><b>Nichts fällig</b><p>Alle Stapel sind für den Moment gelernt. 🎉</p></div>';
-	const favRows = favPages.length
-		? '<div class="home-list">' + favPages.slice(0, 6).map((pg) => listRow(`data-page="${pg.id}"`, esc(pageIconLabel(pg, "★")), esc(pg.title), U.fmtDate(pg.updated))).join("") + "</div>"
-		: '<div class="empty-state compact"><b>Noch keine Favoriten</b><p>Der ☆-Stern oben rechts auf einer Seite pinnt sie hierher.</p></div>';
-
-	// Bereichs-Bausteine — ids identisch mit SETTINGS.HOME_SECTIONS (Einstellungen → Home)
-	// Lernanalyse: zugeklappt nur eine berechnete Kernaussage, die Panels liegen im Fold
-	const topInsight = (lz.smartInsights || [])[0];
-	const insightHeadline = topInsight
-		? `<p class="home-insight"><b>${esc(topInsight.title)}</b> ${esc(topInsight.desc)}</p>`
-		: '<p class="home-insight">Sobald du lernst, steht hier, was gut läuft und wo es hakt.</p>';
-	const SECTION_HTML = {
-		foryou: homeFold("foryou", '✨ Für dich heute <span class="fold-meta">aus deinen Lerndaten</span>', forYou, true),
-		insights: '<section class="home-analysis">' + insightHeadline + homeFold("insights", `Lernanalyse <span class="fold-meta">${lz.goalPct} % vom Wochenziel</span>`, LERNZEIT.homeWidgetHtml(lzTotals, lz), false) + "</section>",
-		decks: due > 0 ? homeFold("decks", `🃏 Stapel <span class="fold-meta">${due} fällig</span>`, deckRows, true) : "",
-		favorites: favPages.length > 0 ? homeFold("favorites", `★ Favoriten <span class="fold-meta">${favPages.length}</span>`, favRows, true) : "",
-	};
-	// Jeder Bereich lässt sich direkt vom Homescreen ausblenden (✕): Folds tragen das ✕
-	// in der Summary, alle übrigen Bereiche bekommen einen Hover-Wrapper mit ✕-Button.
-	const mobileLayout = SETTINGS.homeLayout();
-	const mobileOn = new Set(mobileLayout.filter((e) => e.on).map((e) => e.id));
-	const mobileExtraHtml = mobileLayout
-		.filter((e) => e.on && !["today", "recent"].includes(e.id))
-		.map((e) => SECTION_HTML[e.id] || "")
-		.join("");
-	const mobileRecent = recent.slice(0, 5).map((pg) => ({
-		id: pg.id,
-		icon: pageIconLabel(pg),
-		title: pg.title,
-		meta: U.fmtDate(pg.updated),
-	}));
-	const mobileHomeHtml = document.body.classList.contains("mobile-ui")
-		? MOBILE_VIEW.homeHtml({
-			greeting,
-			homeName,
-			dateLine,
-			streakDays: lz.streakDays,
-			todayMinutes: Math.round((lz.todaySeconds || 0) / 60),
-			due,
-			goalPct: lz.goalPct,
-			showStats: mobileOn.has("today"),
-			showFocus: mobileOn.has("today"),
-			showRecent: mobileOn.has("recent"),
-			recent: mobileRecent,
-			continueHtml: mobileOn.has("recent") ? continueBlock : "",
-			extraHtml: mobileExtraHtml,
-		})
-		: "";
 	const homeAnalysisHtml = () => { const la = lernanalyseParts(); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
-	// PC & Tablet: eine Startseite, zwei Looks zum Ausprobieren (home-view.js)
-	const homeHtml = mobileHomeHtml || homeViewHtml({
+	// Eine Startseite für alle Geräte (home-view.js) — schmale Bildschirme über die Container-Query in home.css
+	const homeHtml = homeViewHtml({
 		greeting, name: homeName, dateLine, conflictCount, last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),
 		todaySeconds: lz.todaySeconds, week: LERNZEIT.weekData(0, lzTotals), goalMin: LERNZEIT.weekGoalMinutes(),
-		streak: lz.streakDays || 0, analysisHtml: mobileHomeHtml ? "" : homeAnalysisHtml(),
+		streak: lz.streakDays || 0, analysisHtml: homeAnalysisHtml(),
 	});
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben

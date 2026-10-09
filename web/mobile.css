@@ -502,8 +502,6 @@ body.mobile-ui .m-link {
 body.mobile-ui .m-row:active,
 body.mobile-ui .m-pill:active,
 body.mobile-ui .m-sync-card:active,
-body.mobile-ui .m-focus:active,
-body.mobile-ui .m-stat:active,
 body.mobile-ui .m-note-main:active,
 body.mobile-ui .m-note-drill:active,
 body.mobile-ui .m-sheet-body .menu-item:active {
@@ -764,192 +762,6 @@ body.mobile-ui .m-sheet-body .menu-sep {
 body.mobile-ui .m-sheet-body .menu-hint { display: none }
 
 /* ============================================================
-   9. Startseite (.m-home in #main)
-   ============================================================ */
-body.mobile-ui .m-home {
-	box-sizing: border-box;
-	padding: 4px var(--m-gutter) 0;
-}
-
-body.mobile-ui .m-home-head {
-	display: flex;
-	align-items: flex-end;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 8px 0 16px;
-}
-body.mobile-ui .m-home-head > div {
-	flex: 1 1 auto;
-	min-width: 0;
-}
-body.mobile-ui .m-home-head p,
-body.mobile-ui .m-home-date {
-	margin: 0 0 4px;
-	color: var(--text2);
-	font-size: 12px;
-	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-}
-body.mobile-ui .m-home-head h1 {
-	margin: 0;
-	color: var(--text);
-	font-size: 28px;
-	font-weight: 800;
-	letter-spacing: -0.02em;
-	line-height: 1.15;
-}
-body.mobile-ui .m-home-head > button,
-body.mobile-ui .m-home-set {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex: none;
-	width: 40px;
-	height: 40px;
-	margin: 0;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: var(--surface);
-	color: var(--text);
-	cursor: pointer;
-	appearance: none;
-}
-body.mobile-ui .m-home-head > button svg,
-body.mobile-ui .m-home-set svg { width: 20px; height: 20px; display: block }
-
-/* Fokuskarte: nächste Lernaufgabe */
-body.mobile-ui .m-focus {
-	display: flex;
-	align-items: center;
-	gap: 14px;
-	box-sizing: border-box;
-	width: 100%;
-	min-height: 96px;
-	margin: 0;
-	padding: 18px 20px;
-	border: 0;
-	border-radius: 20px;
-	background: var(--surface);
-	color: var(--text);
-	font: inherit;
-	text-align: left;
-	cursor: pointer;
-	appearance: none;
-	transition: background-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
-}
-body.mobile-ui .m-focus.is-due {
-	background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #7b5cff));
-	color: var(--on-accent);
-	box-shadow: var(--drop-2);
-}
-body.mobile-ui .m-focus.is-done {
-	box-shadow: inset 3px 0 0 var(--success);
-}
-body.mobile-ui .m-focus strong {
-	display: block;
-	font-size: 17px;
-	font-weight: 700;
-	line-height: 1.3;
-}
-body.mobile-ui .m-focus small {
-	display: block;
-	margin-top: 2px;
-	color: var(--text2);
-	font-size: 13px;
-	line-height: 1.35;
-}
-body.mobile-ui .m-focus.is-due small { color: inherit; opacity: 0.8 }
-body.mobile-ui .m-focus b {
-	flex: none;
-	font-size: 40px;
-	font-weight: 800;
-	line-height: 1;
-	letter-spacing: -0.03em;
-	font-variant-numeric: tabular-nums;
-}
-body.mobile-ui .m-focus > div { flex: 1 1 auto; min-width: 0 }
-/* Pfeil in halbtransparentem weißem Kreis (letztes SVG der Karte) */
-body.mobile-ui .m-focus > svg:last-child {
-	flex: none;
-	width: 36px;
-	height: 36px;
-	margin-left: auto;
-	padding: 9px;
-	box-sizing: border-box;
-	border-radius: 50%;
-	background: rgb(255 255 255 / .22);
-	color: inherit;
-}
-
-/* Statistik-Kacheln */
-body.mobile-ui .m-stats {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 10px;
-	margin-top: 12px;
-}
-body.mobile-ui .m-stat {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-	margin: 0;
-	padding: 12px;
-	border: 0;
-	border-radius: 14px;
-	background: var(--surface);
-	color: var(--text);
-	font: inherit;
-	text-align: left;
-	cursor: pointer;
-	appearance: none;
-	transition: background-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
-}
-body.mobile-ui .m-stat b {
-	font-size: 20px;
-	font-weight: 800;
-	line-height: 1.2;
-	font-variant-numeric: tabular-nums;
-}
-body.mobile-ui .m-stat small {
-	color: var(--text2);
-	font-size: 12px;
-	line-height: 1.3;
-}
-body.mobile-ui .m-stat-bar {
-	height: 4px;
-	margin-top: 8px;
-	overflow: hidden;
-	border-radius: var(--radius-pill);
-	background: var(--surface-hover-strong);
-}
-body.mobile-ui .m-stat-bar > * {
-	display: block;
-	width: var(--pct, 0%);
-	height: 100%;
-	border-radius: var(--radius-pill);
-	background: var(--accent);
-}
-
-/* Weiterlernen: Kinder wirken wie Karten */
-body.mobile-ui .m-continue {
-	margin-top: 16px;
-}
-body.mobile-ui .m-continue > * {
-	border-radius: var(--m-radius);
-}
-
-body.mobile-ui .m-home-extra {
-	margin-top: 24px;
-}
-body.mobile-ui .m-home-extra > * {
-	max-width: 100%;
-	box-sizing: border-box;
-}
-
-/* ============================================================
    10. Hell-Modus
    ============================================================ */
 body.light.mobile-ui #mBar {
@@ -962,8 +774,7 @@ body.light.mobile-ui .m-tab-new,
 body.light.mobile-ui .m-tab.m-tab-new {
 	box-shadow: var(--drop-2);
 }
-body.light.mobile-ui .m-sync-card,
-body.light.mobile-ui .m-focus:not(.is-due) {
+body.light.mobile-ui .m-sync-card {
 	box-shadow: var(--elev-1);
 }
 body.light.mobile-ui .m-sheet {

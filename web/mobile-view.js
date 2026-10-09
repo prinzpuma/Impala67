@@ -1,11 +1,7 @@
 "use strict";
-import { U } from "./util.js";
 
 // Mobile-Ansichten: reines Darstellungsmodul. Keine Seiteneffekte, kein Zugriff
-// auf State, DB oder DOM. Alle Nutzerwerte laufen durch esc(); Daten, Aktionen
-// und Events liegen in den zuständigen Modulen (app.js, mobile.js, mobile-notes.js).
-
-const esc = (value) => U.esc(String(value ?? ""));
+// auf State, DB oder DOM. Daten, Aktionen und Events liegen in den zuständigen Modulen (app.js, mobile.js, mobile-notes.js).
 
 // Lucide-artige Linien-Icons (24er viewBox), selbst als Pfade geschrieben.
 const ICON_BODIES = {
@@ -95,88 +91,4 @@ ${moreRow("settings", "gray", "settings", "Einstellungen", "Design, KI, Konto")}
 </div>`;
 }
 
-function homeHtml(params = {}) {
-	const p = params || {};
-	const greeting = esc(p.greeting);
-	const name = p.homeName ? ", " + esc(p.homeName) : "";
-	const due = Number(p.due) || 0;
-	const streak = Number(p.streakDays) || 0;
-	const minutes = Number(p.todayMinutes) || 0;
-	const goal = Number(p.goalPct) || 0;
-	const barPct = Math.min(100, Math.max(0, goal));
-	const recent = Array.isArray(p.recent) ? p.recent : [];
-	const continueHtml = p.continueHtml || "";
-	const extraHtml = p.extraHtml || "";
-
-	let html = `<div class="home m-home" data-key="home">
-  <header class="m-home-head">
-    <div class="m-home-titles">
-      <div class="m-home-date">${esc(p.dateLine)}</div>
-      <h1>${greeting}${name}</h1>
-    </div>
-    <button type="button" class="m-iconbtn m-home-set" data-set="home" aria-label="Startseite anpassen">${icon("settings")}</button>
-  </header>
-`;
-
-	if (p.showFocus) {
-		html += due > 0
-			? `  <button type="button" class="m-focus is-due" data-homeaction="cards">
-    <span class="m-focus-num">${esc(due)}</span>
-    <span class="m-focus-text"><strong>${due === 1 ? "Karte fällig" : "Karten fällig"}</strong><small>Jetzt wiederholen</small></span>
-    ${icon("forward")}
-  </button>
-`
-			: `  <div class="m-focus is-done">
-    <span class="m-focus-text"><strong>Alles erledigt für heute</strong><small>Keine Karten fällig</small></span>
-  </div>
-`;
-	}
-
-	if (p.showStats) {
-		html += `  <div class="m-stats">
-    <div class="m-stat"><b>${esc(streak)} ${streak === 1 ? "Tag" : "Tage"}</b><small>Streak</small></div>
-    <div class="m-stat"><b>${esc(minutes)} Min</b><small>Heute</small></div>
-    <button type="button" class="m-stat" data-lz-goal="1"><b>${esc(goal)} %</b><small>Wochenziel</small><span class="m-stat-bar"><i style="width:${barPct}%"></i></span></button>
-  </div>
-`;
-	}
-
-	if (p.showRecent) {
-		if (recent.length === 0 && !continueHtml) {
-			html += `  <div class="m-empty">
-    <strong>Noch keine Notizen</strong>
-    <p>Lege deine erste Notiz an, dann erscheint sie hier.</p>
-    <button type="button" class="m-pill" data-homeaction="newpage">Erste Notiz anlegen</button>
-  </div>
-`;
-		} else {
-			if (continueHtml) {
-				html += `  <h2 class="m-section-label">Weitermachen</h2>
-  <div class="m-continue">${continueHtml}</div>
-`;
-			}
-			const list = (continueHtml ? recent.slice(1) : recent).slice(0, 5);
-			if (list.length > 0) {
-				html += `  <h2 class="m-section-label">Zuletzt bearbeitet</h2>
-  <div class="m-group">
-`;
-				for (const r of list) {
-					const title = esc(r.title) || "Ohne Titel";
-					html += `    <button type="button" class="m-row" data-page="${esc(r.id)}"><span class="m-note-ico">${esc(r.icon)}</span><span class="m-row-text"><strong>${title}</strong><small>${esc(r.meta)}</small></span>${icon("forward")}</button>
-`;
-				}
-				html += `  </div>
-`;
-			}
-		}
-		html += `  <button type="button" class="m-link" data-homeaction="library">Alle in der Bibliothek ›</button>
-`;
-	}
-
-	if (extraHtml) html += `  <div class="m-home-extra">${extraHtml}</div>
-`;
-	html += `</div>`;
-	return html;
-}
-
-export const MOBILE_VIEW = Object.freeze({ shellHtml, homeHtml, moreHtml, icon });
+export const MOBILE_VIEW = Object.freeze({ shellHtml, moreHtml, icon });
