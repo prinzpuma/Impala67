@@ -13,13 +13,18 @@ import { STORAGE_TOOLS } from "./storage-tools.js";
 import { HEFT_LABEL } from "./heft-label.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
+const BRIDGE_STORAGE_KEY = "impala.mcpBridge";
+
 export function initMcpBridge() {
 	if (typeof window === "undefined") return;
 	const enableFlag = window.__IMPALA_ENABLE_MCP_BRIDGE === true;
+	// ?mcpBridge=1 schaltet die Bridge dauerhaft ein (auch in der gehosteten PWA), ?mcpBridge=0 wieder aus.
 	const queryFlag = (() => {
 		try {
-			const q = new URLSearchParams(window.location?.search || "");
-			return q.get("mcpBridge") === "1";
+			const q = new URLSearchParams(window.location?.search || "").get("mcpBridge");
+			if (q === "1") localStorage.setItem(BRIDGE_STORAGE_KEY, "1");
+			else if (q === "0") localStorage.removeItem(BRIDGE_STORAGE_KEY);
+			return q === "1" || (q !== "0" && localStorage.getItem(BRIDGE_STORAGE_KEY) === "1");
 		} catch {
 			return false;
 		}

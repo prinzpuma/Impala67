@@ -62,6 +62,19 @@ Der MCP-Server unterstützt zwei Möglichkeiten zur Angabe des Sync-Schlüssels:
 
 ---
 
+## 3a. Zwei Wege zur App
+
+| Weg | Voraussetzung | Was geht |
+|---|---|---|
+| **Live-Bridge** | PWA im Browser offen, MCP-Server läuft auf demselben Rechner | Alles, inkl. `impala_eval`, `impala_run_ui_action`, Diagnose, Heft-Bild |
+| **Cloudflare-Sync** | `IMPALA67_SYNC_KEY` gesetzt, kein Browser nötig | Inhalte: Seiten, Karteikarten, Suche (E2EE) |
+
+**Live-Bridge in der gehosteten PWA aktivieren:** `https://prinzpuma.github.io/Impala67/?mcpBridge=1` öffnen. Die Einstellung bleibt im Browser gespeichert; `?mcpBridge=0` schaltet sie wieder aus. Auf `localhost:8000` ist die Bridge ohnehin an. Chrome/Firefox erlauben `ws://127.0.0.1` von HTTPS-Seiten; Safari/iPad blockiert das meist.
+
+Der Server nimmt Browser-Verbindungen nur von `localhost`, `127.0.0.1` und `https://prinzpuma.github.io` an. Weitere Herkunft (z. B. eigene Domain): `IMPALA_ALLOWED_ORIGINS=https://meine.domain` (kommagetrennt).
+
+---
+
 ## 4. Verfügbare Werkzeuge (MCP Tools)
 
 ### `impala_list_pages`

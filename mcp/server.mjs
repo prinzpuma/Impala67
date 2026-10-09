@@ -19,6 +19,24 @@ const serverStats = {
 const wsPort = Number(process.env.IMPALA_WS_PORT || 8765);
 const RELAY_PATH = "/relay";
 
+// Browser dürfen sich nur von lokalen Seiten und der gehosteten PWA verbinden — sonst
+// könnte jede fremde Webseite über ws://127.0.0.1 Tools wie impala_eval auslösen.
+// Verbindungen ohne Origin (Relay-Server, Skripte) stammen nicht aus einem Browser.
+const ALLOWED_ORIGINS = new Set([
+	"https://prinzpuma.github.io",
+	...String(process.env.IMPALA_ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean),
+]);
+function isAllowedOrigin(origin) {
+	if (!origin) return true;
+	if (ALLOWED_ORIGINS.has(origin)) return true;
+	try {
+		const { protocol, hostname } = new URL(origin);
+		return (protocol === "http:" || protocol === "https:") && (hostname === "localhost" || hostname === "127.0.0.1");
+	} catch {
+		return false;
+	}
+}
+
 // Mehrere MCP-Server (z. B. je Claude-Sitzung einer) teilen sich Port 8765:
 // Wer ihn zuerst bekommt, ist Primärserver und spricht mit dem Browser. Alle
 // weiteren verbinden sich als Relay mit ihm und reichen ihre Aufrufe durch.
@@ -80,7 +98,7 @@ function callViaRelay(tool, args) {
 }
 
 function startWsServer() {
-	const wss = new WebSocketServer({ port: wsPort });
+	const wss = new WebSocketServer({ port: wsPort, verifyClient: (info) => isAllowedOrigin(info.origin) });
 	wss.on("connection", (ws, req) => {
 		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
 		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
