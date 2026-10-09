@@ -10,7 +10,7 @@ import onnxruntime as ort
 from vocabulary import index_to_char, BLANK_IDX
 from mathwriting_loader import resample_stroke, strokes_to_normalized_features
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.onnx")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "web", "handwriting-model.onnx")
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "benchmark_test_strokes.json")
 
 def stroke_bbox(s):
@@ -173,5 +173,6 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
     return test_cer
 
 if __name__ == "__main__":
-    evaluate_benchmark()
+    # Optional anderes Modell, z.B. das frisch trainierte model.onnx vor "train.py --publish"
+    evaluate_benchmark(sys.argv[1] if len(sys.argv) > 1 else MODEL_PATH)
 

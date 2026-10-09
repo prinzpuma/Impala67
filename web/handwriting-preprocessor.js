@@ -36,17 +36,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		});
 	}
 
-	// Typische Strichhöhe der Seite: Median aller nicht winzigen Striche (i-Punkte, Querstriche zählen nicht mit)
-	function typicalStrokeHeight(items) {
-		const median = (arr) => {
-			const a = arr.slice().sort((x, y) => x - y);
-			return a[Math.floor((a.length - 1) / 2)];
-		};
-		const heights = items.map((it) => it.bbox.h);
-		const rough = median(heights);
-		return Math.max(8, median(heights.filter((h) => h >= rough * 0.5)));
-	}
-
 	// Gruppiert Striche in Textzeilen (von oben nach unten, darin von links nach rechts unter Wahrung der natürlichen Strichfolge).
 	// Die Zeilenhöhe hängt fest an der typischen Strichhöhe, damit Pfeile/Klammern Zeilen nicht aufblähen.
 	// Sehr hohe oder sehr breite Striche (Skizzen, Rahmen, Unterstreichungen) werden nicht als Text erkannt.
@@ -57,7 +46,8 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		let items = valid.map((s, idx) => ({ stroke: s, bbox: strokeBbox(s), origIdx: idx })).filter((item) => item.bbox);
 		if (!items.length) return [];
 
-		const refH = typicalStrokeHeight(items);
+		// Typische Strichhöhe ohne winzige Striche (i-Punkte, Querstriche)
+		const refH = Math.max(8, calculateStrokeHeightMedian(items.map((it) => it.stroke), 8, 0.5));
 		// Ab 3x lagen echte Buchstaben (z.B. ein durchgezogenes "f") noch darüber, daher 4x
 		if (items.length >= 5) items = items.filter((it) => it.bbox.h <= refH * 4 && it.bbox.w <= refH * 12);
 		if (!items.length) return [];
@@ -346,69 +336,26 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		return features;
 	}
 
-	// Berechnet den Median der Strichhöhen als robuste Referenz für die Schrifthöhe
-	function calculateStrokeHeightMedian(strokes, fallback = 10.0) {
-		if (!strokes || !strokes.length) return fallback;
-		const heights = [];
-		for (const s of strokes) {
-			const pts = s.pts || s;
-			if (!pts || pts.length < 2) continue;
-			let minY = Infinity, maxY = -Infinity;
-			for (const p of pts) {
-				const y = p[1];
-				if (y < minY) minY = y;
-				if (y > maxY) maxY = y;
-			}
-			const h = maxY - minY;
-			if (h > 0) heights.push(h);
-		}
-		if (!heights.length) return fallback;
-		heights.sort((a, b) => a - b);
-		const mid = Math.floor(heights.length / 2);
-		return heights.length % 2 !== 0 ? heights[mid] : (heights[mid - 1] + heights[mid]) / 2;
+	function median(values) {
+		const a = values.slice().sort((x, y) => x - y);
+		const mid = Math.floor(a.length / 2);
+		return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
 	}
 
-	// Trennt eine Strichsequenz anhand des relativen horizontalen Abstands (relativ zur Schrifthöhe) in Wörter
-	function segmentLineIntoWords(strokes, gapThresh = null, gapFactor = 1.1) {
-		if (!strokes || !strokes.length) return [];
-		if (gapThresh === null || gapThresh === undefined) {
-			const medH = calculateStrokeHeightMedian(strokes);
-			gapThresh = Math.max(4.0, gapFactor * medH);
+	// Median der Strichhöhen als robuste Referenz für die Schrifthöhe.
+	// minRatio > 0 lässt zusätzlich winzige Striche (unter minRatio x grobem Median) weg.
+	function calculateStrokeHeightMedian(strokes, fallback = 10.0, minRatio = 0) {
+		let heights = (strokes || [])
+			.map((s) => s.pts || s)
+			.filter((pts) => pts && pts.length >= 2)
+			.map((pts) => strokeBbox({ pts }).h)
+			.filter((h) => h > 0);
+		if (!heights.length) return fallback;
+		if (minRatio > 0) {
+			const rough = median(heights);
+			heights = heights.filter((h) => h >= rough * minRatio);
 		}
-		const getBox = (s) => {
-			const pts = s.pts || s;
-			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-			for (const p of pts) {
-				const x = p[0], y = p[1];
-				if (x < minX) minX = x;
-				if (x > maxX) maxX = x;
-				if (y < minY) minY = y;
-				if (y > maxY) maxY = y;
-			}
-			return { minX, maxX, minY, maxY };
-		};
-
-		const words = [];
-		let curWord = [strokes[0]];
-		let curBox = getBox(strokes[0]);
-
-		for (let i = 1; i < strokes.length; i++) {
-			const s = strokes[i];
-			const b = getBox(s);
-			const gap = b.minX - curBox.maxX;
-			if (gap > gapThresh) {
-				words.push(curWord);
-				curWord = [s];
-				curBox = { ...b };
-			} else {
-				curWord.push(s);
-				curBox.maxX = Math.max(curBox.maxX, b.maxX);
-				curBox.minY = Math.min(curBox.minY, b.minY);
-				curBox.maxY = Math.max(curBox.maxY, b.maxY);
-			}
-		}
-		words.push(curWord);
-		return words;
+		return median(heights);
 	}
 
 	return {
@@ -416,11 +363,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		filterInkStrokes,
 		segmentLines,
 		orderLineStrokes,
-		estimateOrientation,
-		deskewStrokes,
-		resampleStroke,
 		extractLineFeatures,
-		calculateStrokeHeightMedian,
-		segmentLineIntoWords,
 	};
 })();

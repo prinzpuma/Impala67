@@ -1,79 +1,78 @@
-# Lokale Handschrifterkennung (Digital Ink Recognition)
+# Handschrifterkennung (Digital Ink) für Impala67
 
-## 1. Ziel des Projekts
+Lokale, kostenlose Erkennung der Stift-Vektordaten aus der Heft-Ansicht (`web/heft.js`). Kein Cloud-Dienst, kein API-Schlüssel, läuft offline im Browser.
 
-Entwicklung einer **vollständig lokalen, geräteübergreifenden und lizenzfreien Handschrifterkennung** für Impala67 (`web/heft.js`).
-
-Statt teurer oder plattformgebundener Lösungen (wie Google ML Kit auf Android oder Apple Scribble auf iOS) und statt überdimensionierter Cloud-Vision-LLMs nutzen wir die **echten Vektordaten des Stifts** ($x, y, t$, Pen-Down/Up).
-
----
-
-## 2. Kernprinzipien & Strategie (Pragmatischer Ansatz)
-
-1. **Rechtlich saubere & maßgeschneiderte Trainingsdaten:**
-   - **Synthetische Daten:** Generiert aus offenen Vektor-Schriften (OFL / Google Fonts) mit realistischem Strich-Jitter, variablen Strichstärken und Neigung.
-   - **In-App Datensammler ("Human-in-the-loop"):** Nutzer können handgeschriebene Wörter/Zeilen in der Heft-Ansicht korrigieren und als Trainingsbeispiel speichern. So lernt das Modell mit der Zeit gezielt die eigene Handschrift.
-   - *Kein Lizenzrisiko:* Keine Abhängigkeit von proprietären oder akademisch beschränkten Datensätzen (wie IAM-OnDB) in veröffentlichten Modellen.
-
-2. **Kostenloses Training (Google Colab / Kaggle):**
-   - Bereitstellung eines schlüsselfertigen Jupyter Notebooks (`train_colab.ipynb`), das kostenlos auf einer T4/V100-GPU in Colab läuft.
-   - Das fertig trainierte Modell (`model.onnx`, ca. 3–6 MB) wird als statische Asset-Datei via GitHub Pages ausgeliefert. **0 € Betriebskosten.**
-
-3. **Einfacher, iterativer Start:**
-   - Fokus zuerst auf **Einzelwörter und einzelne Textzeilen** statt chaotischer Ganzseiten-Layouts.
-   - **Lazy Loading:** `onnxruntime-web` und die Modelldatei werden erst beim ersten Erkennungsversuch geladen und im Browser-Cache gecacht. Der normale App-Start bleibt 0 ms verzögert.
-   - **Wörterbuch-Korrektur:** Post-Processing gleicht erkannte Zeichenfolgen mit einer deutschen Wortliste ab, um geometrisch ähnliche Zeichen (z. B. `rn` vs `m`, `cl` vs `d`, `o` vs `0`) aufzulösen.
-
----
-
-## 3. Architektur-Übersicht
+## Pipeline
 
 ```
-[ web/heft.js (Canvas-Striche: pts [x, y, p]) ]
-                      │
-                      ▼
-        [ web/handwriting-preprocessor.js ]
-   (Resampling auf äquidistante Punkte, Delta-Features [dx, dy, pen_down])
-                      │
-                      ▼
-         [ web/handwriting-worker.js ]
-   (Lazy Loading von onnxruntime-web & model.onnx via WebAssembly/WebGPU)
-                      │
-                      ▼
-           [ web/handwriting-ctc.js ]
-   (Greedy CTC-Decoding + Wörterbuch-Bereinigung)
-                      │
-                      ▼
-         [ Ergebnis: Textnotiz in Impala67 ]
+web/heft.js (Striche)
+  → web/handwriting-preprocessor.js  Zeilentrennung (segmentLines, Skizzen-Filter), Resampling,
+                                     Normierung auf Median-Strichhöhe, Features [dx, dy, pen_down, y_rel]
+  → web/handwriting-worker.js        ONNX Runtime Web (WASM), Modell: web/handwriting-model.onnx
+  → web/handwriting-ctc.js           Greedy-CTC + Wörterbuch-Korrektur (handwriting-words-de.js, nicht bei Formeln)
+  → web/heft-indexer.js              Hintergrund-Erkennung aller Seiten → Suche/RAG
 ```
 
----
+- **Modell** (`model.py`): 1D-CNN + 3× BiLSTM (192) + CTC, ca. 1,8 Mio. Parameter, ~10 MB ONNX.
+- **Vokabular** (`vocabulary.py/.json`): 86 Token (a–z, A–Z, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
+- **Neu-Erkennung**: Neues Modell → `web/handwriting-model-version.js`; geänderte Vorverarbeitung → `RECOGNIZER_REVISION` in `web/heft-indexer.js` erhöhen.
 
-## 4. Dateien in diesem Verzeichnis
+## Dateien
 
-- `vocabulary.py` / `vocabulary.json`: 86 Zeichen (a-z, A-Z, ä, ö, ü, Ä, Ö, Ü, ß, 0-9, Satzzeichen, Blank-Index 0).
-- `generate_synthetic.py`: Erzeugt synthetische Vektor-Striche für Wörter und Zeichen.
-- `model.py`: 1D-CNN + BiLSTM + CTC-Head (< 5 MB).
-- `train.py`: PyTorch CTC-Trainingspipeline mit ONNX-Export. Trainingsdaten werden jede Epoche neu gemischt. Die eigene Benchmark-Handschrift ist geteilt: gerade Zeilen wählen `best.pt`, ungerade bleiben unberührter Test. Ins App-Modell (`web/handwriting-model.onnx`) wird nur mit `python train.py --publish` kopiert. Batches werden nach Länge gebündelt (wenig Padding), die teure Echt-Auswertung läuft nur alle 3 Epochen. Nach einem Abbruch setzt `train.py` automatisch bei `checkpoints/last.pt` fort (für ein neues Training von vorn `last.pt` löschen); `HW_CHECKPOINT_DIR` legt den Ordner fest.
-- `train_colab.ipynb`: **Empfohlener Trainingsweg.** Kostenlose T4-GPU in Google Colab, holt Repo und Daten selbst, sichert alles in Google Drive (`Impala67-Handschrift/`). Lokal (`.venv_rocm`, RX 9060 XT) ist das Training unter Windows instabil (MIOpen-Absturz), auf der CPU dauert ein Batch ~40 s.
-- `text_corpus.py`: Deutsche Trainingstexte aus `dictionary_de.txt` (Wörter, Zeilen, Zahlen).
-- `uji_loader.py`: Setzt echte UJI-Glyphen zu Zeilen zusammen (ein Schreiber pro Zeile). ä/ö/Ä/Ö entstehen aus echtem a/o/A/O plus echten Umlautpunkten aus UJI-ü/Ü.
-- `mathwriting_loader.py`: Nutzt den vollen MathWriting-Datensatz unter `data/mw_download/mathwriting-2024/`, sonst den Auszug. Labels, die nicht verlustfrei ins Vokabular passen, werden verworfen.
+| Datei | Zweck |
+| :--- | :--- |
+| `train.py` | Training + ONNX-Export nach `model.onnx` (nicht in Git); `--publish` kopiert nach `web/` |
+| `train_colab.ipynb` | **Empfohlener Weg**: kostenlose T4-GPU, Daten/Checkpoints in Drive (`Impala67-Handschrift/`) |
+| `evaluate_user_benchmark_words.py` | Benchmark auf eigener Handschrift (TEST-/AUSWAHL-CER) |
+| `evaluate_checkpoints.py` | Vergleich Basis vs. Feintuning (inkl. fremde Schreiber) |
+| `samples_loader.py` | Eigene Abschreib-Zeilen (`my_handwriting_samples.json`) laden, Benchmark-Texte schützen |
+| `brush_loader.py`, `mathwriting_loader.py`, `uji_loader.py` | Datensatz-Loader |
+| `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Synthetische Daten, Texte (`dictionary_de.txt`), Augmentierung |
 
-### Trainingsdaten und Lizenzen
+## Ablauf
 
-| Datensatz | Lizenz | Verwendung |
+1. In der App **Einstellungen → Abschreiben**: Zeilen mit dem Stift abschreiben, `my_handwriting_samples.json` exportieren und in Drive (`Impala67-Handschrift/`) legen. Eigene Handschrift nie auf GitHub.
+2. `train_colab.ipynb` ausführen (Standard: Feintuning ab `best.pt`). `best.pt` wird nach AUSWAHL-CER gewählt, nie nach TEST-CER.
+3. `model.onnx` lokal nach `handwriting/` legen, prüfen und übernehmen:
+
+```bash
+python evaluate_user_benchmark_words.py model.onnx
+```
+
+```bash
+python train.py --publish
+```
+
+Ohne Argument prüft der Benchmark das ausgelieferte App-Modell (`web/handwriting-model.onnx`). Alternativ `model.onnx` von Hand nach `web/handwriting-model.onnx` kopieren.
+
+## Trainingsdaten
+
+| Datensatz | Lizenz | Anteil |
 | :--- | :--- | :--- |
-| Google MathWriting | CC BY 4.0 | Formeln, Ziffern, Buchstabenformen |
-| UJI Pen Characters v2 | frei (UCI) | Echte Einzelzeichen von 60 Schreibern |
-| IAM-OnDB | nur nicht-kommerziell, Registrierung | **nicht verwendet** |
-| IBM-UB-1 | keine öffentliche Lizenz | **nicht verwendet** |
+| BRUSH (170 Schreiber) | Lizenz noch prüfen (vor Weitergabe des Modells) | ~40 % |
+| Google MathWriting | CC BY 4.0 | ~20 % |
+| Synthetisch + UJI Pen Characters v2 | OFL-Fonts / frei (UCI) | ~10 % |
+| Eigene Abschreib-Zeilen (augmentiert) | eigene Daten | ~30 % |
 
-Vollen MathWriting-Datensatz laden (3,1 GB) und entpacken:
+IAM-OnDB und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verwendet. Voller MathWriting-Datensatz (3,1 GB) unter `data/mw_download/`:
 
 ```bash
 curl -L --create-dirs -o data/mw_download/mathwriting-2024.tgz https://storage.googleapis.com/mathwriting_data/mathwriting-2024.tgz
+```
+
+```bash
 tar -xzf data/mw_download/mathwriting-2024.tgz -C data/mw_download
 ```
-- `train_colab.ipynb`: Fertiges Notebook für kostenloses GPU-Training in Google Colab.
-- `samples_collector.py`: Hilfsskript zum Importieren von In-App gesammelten Trainingsdaten.
+
+## Messwerte-Verlauf (eigene Handschrift)
+
+| Stand | TEST-CER | Bemerkung |
+| :--- | :---: | :--- |
+| Basismodell (4 Features seit v2.2.24) | 44,7 % | ohne eigene Handschrift |
+| 1. Feintuning (`7c16cc4`) | 21,0 % | eigene Abschreib-Zeilen |
+| 2. Feintuning, 206 Zeilen (`cb1f1d1`) | **5,5 %** | AUSWAHL-CER 11,4 %, gesamt 9,7 % |
+
+- TEST = ungerade, unberührte Benchmark-Zeilen; AUSWAHL = gerade Zeilen (Checkpoint-Wahl).
+- Ältere Messung (07.10., 3 Features, anderer Testsatz mit 121 Proben): 14,5 % CER – nicht vergleichbar.
+- Rest-Fehler: einzelne Buchstaben-Verwechslungen (z. B. „läuft“ → „Läutt“). Echte Heftseiten sind schwerer als Abschreib-Zeilen.
+- Nächste Schritte: echte Heftseiten per MCP beschriften (`impala_heft_label_lines`) als Benchmark und Trainingsdaten; erst danach Beam-Search.
