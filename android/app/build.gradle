@@ -7,8 +7,8 @@ android {
         applicationId "org.impala67.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 202047
-        versionName "2.2.47"
+        versionCode 202048
+        versionName "2.2.48"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

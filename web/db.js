@@ -119,12 +119,20 @@ export const DB = (() => {
 		return openPromise;
 	}
 
-	let _knownEventIds = null;
+	// Alle lokal vorhandenen Event-ids (für die Dublettenprüfung in importAll, wenn der Aufrufer
+	// nur ein Delta des Logs mitgibt). Inkrementell: nur Events oberhalb der zuletzt gelesenen seq
+	// werden nachgeladen — das erfasst auch Events, die ein anderer Tab geschrieben hat.
+	let _knownEventIds = null, _knownMaxSeq = 0;
 	async function ensureKnownEventIds() {
-		if (_knownEventIds) return _knownEventIds;
-		_knownEventIds = new Set(await eventIds());
+		if (!_knownEventIds) { _knownEventIds = new Set(); _knownMaxSeq = 0; }
+		const delta = await eventsAfterSeqAll(_knownMaxSeq);
+		for (const ev of delta) {
+			if (ev?.id) _knownEventIds.add(ev.id);
+			_knownMaxSeq = Math.max(_knownMaxSeq, Number(ev?.seq) || 0);
+		}
 		return _knownEventIds;
 	}
+	const forgetKnownEventIds = () => { _knownEventIds = null; _knownMaxSeq = 0; };
 
 	// Viele Events in EINER Transaktion — beim Import/Sync um Größenordnungen schneller.
 	async function addEvents(evs) {
@@ -428,6 +436,7 @@ export const DB = (() => {
 				if (dropped < minDrop) return;
 				const keep = new Set(compacted.map((ev) => ev.seq));
 				for (const ev of evs) if (!keep.has(ev.seq)) store.delete(ev.seq);
+				forgetKnownEventIds();
 				floor = compacted.length ? compacted[0].t : U.now();
 			};
 			req.onerror = () => { try { tx.abort(); } catch {} };
@@ -451,6 +460,7 @@ export const DB = (() => {
 			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
 			const req = store.getAll();
 			req.onsuccess = () => {
+				forgetKnownEventIds();
 				for (const ev of req.result || []) {
 					if ((ev.type === "heftOps" || ev.type === "heftSnap") && cutoff > 0 && ev.seq && ev.seq <= cutoff) {
 						store.delete(ev.seq);
@@ -636,8 +646,17 @@ export const DB = (() => {
 		// Sync-Transporte, die den Log fuer ihre Cursor-Pruefung ohnehin schon gelesen
 		// haben, duerfen denselben konsistenten Snapshot weiterreichen. Das vermeidet
 		// einen zweiten kompletten IndexedDB-Read pro Importseite.
-		const local = Array.isArray(opts.localEvents) ? opts.localEvents : await allEvents();
-		const seenIds = new Set(local.map((e) => e.id));
+		// localEvents ist beim Cloudflare-Sync nur das unbestätigte Delta (seq > Upload-Cursor).
+		// Für die Konflikt-Erkennung "was habe ICH geändert" reicht das — für alles andere nicht:
+		// Dublettenprüfung und gelöste Konflikte (conflict-/merge3-/lifeconflict-ids) brauchen
+		// ALLE lokalen ids, die Drei-Wege-Basis die ganze Historie. Mit nur dem Delta wurden
+		// längst vorhandene Events erneut importiert und gelöste Konflikte als neue Kopien angelegt.
+		const partialLocal = Array.isArray(opts.localEvents);
+		const local = partialLocal ? opts.localEvents : await allEvents();
+		const seenIds = partialLocal ? new Set(await ensureKnownEventIds()) : new Set();
+		local.forEach((e) => seenIds.add(e.id));
+		let fullLog = partialLocal ? null : local;
+		const history = async () => (fullLog ??= await allEvents());
 		const floor = compactFloor();
 		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,
 		// validateEvent verlangt aber auch t und type und WIRFT — damit flog die komplette
@@ -694,10 +713,10 @@ export const DB = (() => {
 			// [A9] Der UI-Zustand (S.pages) kann veraltet sein: der zweite Tab betritt syncRaw mit dem Stand
 			// VOR dem Import des ersten (der Web Lock serialisiert nur, er teilt keinen Speicher). Titel und
 			// Ablageort einer Konfliktkopie waren dadurch falsch. Das Log ist die Wahrheit — also Rückfall.
-			const info = (id) => {
+			const info = async (id) => {
 				const pi = (opts.pageInfo && opts.pageInfo(id)) || null;
 				if (pi && pi.title) return pi;
-				const pg = reconstructPageFromEvents([...local, ...fresh], id);
+				const pg = reconstructPageFromEvents([...await history(), ...fresh], id);
 				return { title: pg.title, parentId: pg.parentId, workspaceId: pg.workspaceId };
 			};
 
@@ -706,7 +725,7 @@ export const DB = (() => {
 			const localHeads = contentHeadsOf(local, localOnly), remoteHeads = contentHeadsOf(fresh);
 			// Letzter GEMEINSAMER Stand = alles, was dieses Gerät schon gesynct hatte bzw. selbst
 			// per Sync bekommen hat. Genau die Basis, von der beide Seiten losgelaufen sind.
-			const commonEvents = local.filter((ev) => !localOnly(ev));
+			let commonEvents = null; // erst laden, wenn es wirklich einen Kandidaten gibt
 			for (const [id, remote] of Object.entries(remoteHeads)) {
 				const mine = localHeads[id];
 				if (!mine || mine.payload.patch.content === remote.payload.patch.content) continue;
@@ -716,9 +735,10 @@ export const DB = (() => {
 				// Merge ist damit idempotent und läuft nach dem Rück-Sync nicht doppelt.
 				const mergeId = "merge3-" + (mine.id < remote.id ? mine.id + "-" + remote.id : remote.id + "-" + mine.id);
 				if (seenIds.has(mergeId)) continue; // schon zusammengeführt — kein Konflikt mehr
+				commonEvents ??= (await history()).filter((ev) => !localOnly(ev));
 				const m3 = merge3(reconstructPageFromEvents(commonEvents, id).content, mine.payload.patch.content, remote.payload.patch.content);
 				if (m3.ok) {
-					mergedDetails.push({ pageId: id, title: info(id).title || "Seite", localTime: mine.t, remoteTime: remote.t });
+					mergedDetails.push({ pageId: id, title: (await info(id)).title || "Seite", localTime: mine.t, remoteTime: remote.t });
 					fresh.push({ id: mergeId, t: U.now(), type: "pageUpdate", _derived: true, payload: { id, patch: { content: m3.text } } });
 					continue;
 				}
@@ -728,7 +748,7 @@ export const DB = (() => {
 				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
 				const loser = remoteWins ? mine : remote;
 				if (seenIds.has("conflict-" + loser.id)) continue;
-				const pi = info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
+				const pi = await info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
 				conflictDetails.push({
 					pageId: id, title,
 					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät geändert — und zwar an derselben Stelle, sodass sie sich nicht automatisch zusammenführen ließ. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
@@ -771,7 +791,7 @@ export const DB = (() => {
 				if (moved.type === "pageTrash" || moved.type === "pageArchive") continue;
 				if (seenIds.has("lifeconflict-" + moved.id)) continue;
 				const conflictPageId = "conflictpg-" + moved.id;
-				const pg = reconstructPageFromEvents([...local, ...fresh], id); // Seite ist lokal ggf. schon weg
+				const pg = reconstructPageFromEvents([...await history(), ...fresh], id); // Seite ist lokal ggf. schon weg
 				conflictDetails.push({
 					pageId: id, title: pg.title,
 					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
@@ -809,6 +829,7 @@ export const DB = (() => {
 	}
 
 	async function resetDatabase() {
+		forgetKnownEventIds();
 		db?.close();
 		db = null;
 		openPromise = null; // nächster open() muss wieder wirklich öffnen
@@ -836,6 +857,7 @@ export const DB = (() => {
 		const pageTypes = new Set(["pageCreate", "pageUpdate", "pageMove", "pageDelete", "pageTrash", "pageRestore", "pageArchive", "pageUnarchive",
 			"heftOps", "heftSnap", "heftBlob", "heftUpdated", "gnFolderCreate", "gnFolderMove", "gnFolderDelete", "gnItemMove", "uiTreeSet", "uiTabsSet"]);
 		const evStore = t.objectStore("events");
+		forgetKnownEventIds();
 		const evReq = evStore.getAll();
 		evReq.onsuccess = () => evReq.result.forEach((ev) => { if (pageTypes.has(ev.type)) evStore.delete(ev.seq); });
 		t.objectStore("vecs").clear();
