@@ -150,6 +150,8 @@ function getToolTimeoutMs(tool, args = {}) {
 	}
 	if (tool === "impala_eval") return 30000;
 	if (tool === "impala_get_performance_trace") return 15000;
+	// Handschrift-Modell muss evtl. erst laden, dann Erkennung pro Zeile
+	if (tool === "impala_heft_page_image" || tool === "impala_heft_label_lines") return 30000;
 	return 10000; // Standard für reguläre UI- und Lese-Aufrufe
 }
 
@@ -376,45 +378,41 @@ const TOOLS = [
 		},
 	},
 	{
-		name: "impala_heft_scan_extract",
-		description: "Scannt Heft-Seiten aus IndexedDB, clustert Striche in isolierte Wörter/Zeilen und rendert kleine PNG-Bilder für LLM-Labeling (mit Datenschutz: nur Einzelwörter, Seiten ausschließbar).",
+		name: "impala_heft_page_image",
+		description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, graues Koordinatenraster alle 100 Einheiten) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Erster Schritt zum Beschriften: Seite lesen, dann impala_heft_label_lines aufrufen. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				exclude_page_ids: { type: "array", items: { type: "string" }, description: "Optionale Liste von Seiten-IDs, die aus Datenschutzgründen nicht gescannt werden sollen." },
-				limit_clusters: { type: "number", description: "Maximale Anzahl an Wort-Clustern (Standard: 30, max: 100)." },
+				page_id: { type: "string", description: "ID der Impala-Seite (des Hefts)" },
+				page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" },
 			},
+			required: ["page_id"],
 		},
 	},
 	{
-		name: "impala_heft_scan_consensus_import",
-		description: "Führt den 3-Wege-Konsens-Check durch (Modell A == Modell B == Lokales Netz). Bei 100 % Übereinstimmung wird das Sample automatisch als Trainingsbeispiel gespeichert; sonst wandert es in die Prüfliste.",
+		name: "impala_heft_label_lines",
+		description: "Speichert deine Lesung einer Heftseite als Trainingsbeispiele für das lokale Handschrift-Modell. Du legst selbst fest, was eine Zeile ist: pro Zeile ein Rahmen in Seitenkoordinaten (laut Raster), die Leserichtung und der exakte Text (wie geschrieben, inkl. Groß-/Kleinschreibung und Satzzeichen; Formeln als z. B. a^2+b^2=c^2). Skizzen/Zeichnungen weglassen. Jeder Strich gehört zum kleinsten Rahmen, der seinen Mittelpunkt enthält. Antwort: pro Zeile Modell-Lesung vs. dein Text, Zeichenfehlerrate des Modells, nicht zugeordnete Striche (zum Nachbessern) und wie oft die Zeilenzerlegung der App von deiner abweicht. Erneutes Beschriften derselben Seite ersetzt deren alte Beispiele; save=false prüft nur.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				cluster_id: { type: "string", description: "Cluster-ID des Wortes" },
-				original_strokes: { type: "array", description: "Original-Vektorstriche des Wortes" },
-				local_prediction: { type: "string", description: "Erkanntes Wort des lokalen Modells" },
-				llm_a_label: { type: "string", description: "Erkanntes Wort von LLM-Modell A" },
-				llm_b_label: { type: "string", description: "Erkanntes Wort von LLM-Modell B" },
-			},
-			required: ["original_strokes", "local_prediction", "llm_a_label", "llm_b_label"],
-		},
-	},
-	{
-		name: "impala_heft_scan_review_list",
-		description: "Verwaltet die Prüfliste für abweichende oder unsichere Handschrift-Beispiele (list, approve, reject, clear).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				action: {
-					type: "string",
-					enum: ["list", "approve", "reject", "clear"],
-					description: "Aktion für die Prüfliste (list = Anzeigen, approve = Bestätigen/Speichern, reject = Verwerfen, clear = Leeren)",
+				page_id: { type: "string", description: "ID der Impala-Seite (des Hefts)" },
+				page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" },
+				lines: {
+					type: "array",
+					description: "Zeilen der Seite",
+					items: {
+						type: "object",
+						properties: {
+							box: { type: "array", items: { type: "number" }, description: "[x0, y0, x1, y1] in Seitenkoordinaten" },
+							text: { type: "string", description: "Exakter Text der Zeile" },
+							angle: { type: "number", description: "Leserichtung in Grad: 0 = links→rechts (Standard), 90 = oben→unten, -90 = unten→oben, 180 = kopfüber" },
+						},
+						required: ["box", "text"],
+					},
 				},
-				item_id: { type: "string", description: "ID des Eintrags für approve oder reject" },
-				corrected_label: { type: "string", description: "Manuell korrigierter Text bei Freigabe" },
+				save: { type: "boolean", description: "false = nur prüfen, nichts speichern (Standard true)" },
 			},
+			required: ["page_id", "lines"],
 		},
 	},
 ];
@@ -570,9 +568,8 @@ export async function startServer(opts = {}) {
 			case "impala_eval":
 			case "impala_run_ui_action":
 			case "impala_storage_cleanup":
-			case "impala_heft_scan_extract":
-			case "impala_heft_scan_consensus_import":
-			case "impala_heft_scan_review_list":
+			case "impala_heft_page_image":
+			case "impala_heft_label_lines":
 				return { error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).` };
 			default:
 				return { error: `Unbekanntes Werkzeug: ${name}` };
@@ -618,7 +615,11 @@ export async function startServer(opts = {}) {
 				try {
 					const result = await handleToolCall(toolName, toolArgs);
 					const isError = !!result?.error;
-					const textContent = isError ? `Fehler: ${result.error}` : JSON.stringify(result, null, 2);
+					// Ein Bild (Data-URL im Feld "image") geht als echter Bild-Inhalt an den Client,
+					// sonst sähe die KI nur Base64-Text
+					const imageMatch = !isError && typeof result?.image === "string" && result.image.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
+					const { image, ...rest } = result || {};
+					const textContent = isError ? `Fehler: ${result.error}` : JSON.stringify(imageMatch ? rest : result, null, 2);
 
 					sendResponse(id, {
 						content: [
@@ -626,6 +627,7 @@ export async function startServer(opts = {}) {
 								type: "text",
 								text: textContent,
 							},
+							...(imageMatch ? [{ type: "image", mimeType: imageMatch[1], data: imageMatch[2] }] : []),
 						],
 						isError,
 					});

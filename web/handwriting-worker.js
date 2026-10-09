@@ -6,10 +6,11 @@
 import { HANDWRITING_PREPROCESSOR } from "./handwriting-preprocessor.js";
 import { HANDWRITING_VOCAB } from "./handwriting-vocab.js";
 import { HANDWRITING_CTC } from "./handwriting-ctc.js";
+import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 
 let ort = null;
 let session = null;
-let modelLoading = false;
+let modelLoading = null; // Promise des laufenden Ladevorgangs
 let modelReady = false;
 let currentModelPath = "./handwriting-model.onnx";
 
@@ -29,9 +30,8 @@ async function loadOrt() {
 	return ort;
 }
 
-// Bei jedem neuen handwriting-model.onnx erhöhen: neuer Cache-Name und neue URL umgehen alte Kopien.
-// v6: Feintuning mit Auswahl über eigene + fremde Schreiber (Okt. 2026)
-const MODEL_VERSION = "v6";
+// Neuer Cache-Name und neue URL je Modellversion umgehen alte Kopien.
+const MODEL_VERSION = HANDWRITING_MODEL_VERSION;
 const MODEL_CACHE_KEY = `impala67-handwriting-model-${MODEL_VERSION}`;
 
 async function fetchModelBuffer(modelPath) {
@@ -54,10 +54,14 @@ async function fetchModelBuffer(modelPath) {
 	return await res.arrayBuffer();
 }
 
-async function initSession(modelPath = currentModelPath) {
-	if (session && currentModelPath === modelPath) return session;
-	if (modelLoading) return null;
-	modelLoading = true;
+// Gleichzeitige Anfragen warten auf denselben Ladevorgang, statt leer auszugehen
+function initSession(modelPath = currentModelPath) {
+	if (session && currentModelPath === modelPath) return Promise.resolve(session);
+	if (!modelLoading) modelLoading = loadSession(modelPath).finally(() => { modelLoading = null; });
+	return modelLoading;
+}
+
+async function loadSession(modelPath) {
 	try {
 		await loadOrt();
 		currentModelPath = modelPath;
@@ -74,8 +78,6 @@ async function initSession(modelPath = currentModelPath) {
 		console.warn("[handwriting-worker] Fehler beim Laden des ONNX-Modells:", e);
 		self.postMessage({ type: "init_error", error: e?.message || String(e) });
 		return null;
-	} finally {
-		modelLoading = false;
 	}
 }
 
@@ -350,6 +352,8 @@ self.addEventListener("message", async (event) => {
 	if (msg.type === "recognize_strokes") {
 		const id = msg.id;
 		try {
+			// Ohne Modell wäre jede Zeile still "leer": als Fehler melden, damit Aufrufer es später erneut versuchen
+			if (!(await initSession())) throw new Error("Handschrift-Modell ist nicht geladen.");
 			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {});
 			self.postMessage({
 				type: "result",

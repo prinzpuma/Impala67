@@ -56,6 +56,6 @@
   - **Inhalte**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`
   - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`
   - **Live-Testing & UI**: `impala_eval`, `impala_run_ui_action`
-  - **Heft-Import**: `impala_heft_scan_extract`, `impala_heft_scan_review_list`, `impala_heft_scan_consensus_import`
+  - **Handschrift-Training**: `impala_heft_page_image` (Seite als Bild + Modell-Lesung), `impala_heft_label_lines` (KI legt Zeilen und Text fest → Trainingsbeispiele)
   - **Speicher**: `impala_storage_report`, `impala_storage_cleanup`
 - **Entwickler-Workflow**: Der Agent prüft Features und Fehler direkt im echten Browser-Tab und liest Messwerte aus. Der Nutzer muss dafür keine manuellen Testschritte machen.

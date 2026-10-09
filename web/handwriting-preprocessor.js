@@ -80,46 +80,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		// Zeilen von oben nach unten sortieren
 		lines.sort((a, b) => a.minY - b.minY);
 
-		// Hilfsfunktion: Striche innerhalb einer Zeile ordnen.
-		// Überlappende oder nah beieinander liegende Striche (z.B. Stamm + Querstrich von 't'/'f'/'A' oder i-Punkte)
-		// bleiben im selben Zeichencluster in ihrer chronologischen Zeichenreihenfolge (origIdx).
-		// Räumlich getrennte Zeichen/Wortblöcke werden von links nach rechts geordnet.
-		function sortLineItems(lineItems) {
-			if (lineItems.length <= 1) return lineItems;
-			const sorted = lineItems.slice().sort((a, b) => a.bbox.minX - b.bbox.minX);
-			const clusters = [];
-			for (const it of sorted) {
-				let merged = false;
-				for (const cl of clusters) {
-					const overlap = Math.min(cl.maxX, it.bbox.maxX) - Math.max(cl.minX, it.bbox.minX);
-					const close = it.bbox.minX <= cl.maxX + Math.max(8, (cl.maxY - cl.minY) * 0.25);
-					if (overlap > 0 || close) {
-						cl.items.push(it);
-						cl.minX = Math.min(cl.minX, it.bbox.minX);
-						cl.maxX = Math.max(cl.maxX, it.bbox.maxX);
-						cl.minY = Math.min(cl.minY, it.bbox.minY);
-						cl.maxY = Math.max(cl.maxY, it.bbox.maxY);
-						merged = true;
-						break;
-					}
-				}
-				if (!merged) {
-					clusters.push({
-						minX: it.bbox.minX, maxX: it.bbox.maxX,
-						minY: it.bbox.minY, maxY: it.bbox.maxY,
-						items: [it],
-					});
-				}
-			}
-			clusters.sort((a, b) => a.minX - b.minX);
-			const result = [];
-			for (const cl of clusters) {
-				cl.items.sort((a, b) => a.origIdx - b.origIdx);
-				result.push(...cl.items);
-			}
-			return result;
-		}
-
 		return lines.map((l) => {
 			const sortedItems = sortLineItems(l.items);
 			return {
@@ -127,6 +87,52 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 				bbox: { minX: l.minX, maxX: l.maxX, minY: l.minY, maxY: l.maxY, h: l.maxY - l.minY, w: l.maxX - l.minX },
 			};
 		});
+	}
+
+	// Striche innerhalb einer Zeile ordnen.
+	// Überlappende oder nah beieinander liegende Striche (z.B. Stamm + Querstrich von 't'/'f'/'A' oder i-Punkte)
+	// bleiben im selben Zeichencluster in ihrer chronologischen Zeichenreihenfolge (origIdx).
+	// Räumlich getrennte Zeichen/Wortblöcke werden von links nach rechts geordnet.
+	function sortLineItems(lineItems) {
+		if (lineItems.length <= 1) return lineItems;
+		const sorted = lineItems.slice().sort((a, b) => a.bbox.minX - b.bbox.minX);
+		const clusters = [];
+		for (const it of sorted) {
+			let merged = false;
+			for (const cl of clusters) {
+				const overlap = Math.min(cl.maxX, it.bbox.maxX) - Math.max(cl.minX, it.bbox.minX);
+				const close = it.bbox.minX <= cl.maxX + Math.max(8, (cl.maxY - cl.minY) * 0.25);
+				if (overlap > 0 || close) {
+					cl.items.push(it);
+					cl.minX = Math.min(cl.minX, it.bbox.minX);
+					cl.maxX = Math.max(cl.maxX, it.bbox.maxX);
+					cl.minY = Math.min(cl.minY, it.bbox.minY);
+					cl.maxY = Math.max(cl.maxY, it.bbox.maxY);
+					merged = true;
+					break;
+				}
+			}
+			if (!merged) {
+				clusters.push({
+					minX: it.bbox.minX, maxX: it.bbox.maxX,
+					minY: it.bbox.minY, maxY: it.bbox.maxY,
+					items: [it],
+				});
+			}
+		}
+		clusters.sort((a, b) => a.minX - b.minX);
+		const result = [];
+		for (const cl of clusters) {
+			cl.items.sort((a, b) => a.origIdx - b.origIdx);
+			result.push(...cl.items);
+		}
+		return result;
+	}
+
+	// Ordnet die Striche einer (bereits waagerechten) Zeile wie segmentLines; strokes in Zeichenreihenfolge.
+	function orderLineStrokes(strokes) {
+		const items = strokes.map((s, idx) => ({ stroke: s, bbox: strokeBbox(s), origIdx: idx })).filter((it) => it.bbox);
+		return sortLineItems(items).map((it) => it.stroke);
 	}
 
 	// Schätzt den Neigungswinkel einer Zeile/Strichmenge (in Radiant) via linearer Regression / Trägheitsachse
@@ -431,6 +437,7 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		strokeBbox,
 		filterInkStrokes,
 		segmentLines,
+		orderLineStrokes,
 		estimateOrientation,
 		deskewStrokes,
 		detectFraction,

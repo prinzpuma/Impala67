@@ -3,12 +3,9 @@ import { U } from "./util.js";
 
 // handschrift.js — Handschrift- und Strich-Erkennung für Impala67 (heft.js).
 //
-// Pipeline:
-//   1) Vektor-Handschrift (Primär): On-Device WebAssembly via ONNX Runtime Web
-//      (handwriting-worker.js) — 100 % offline, < 2 ms Inferenz, erkennt Strichsequenzen,
-//      Mathe-Formeln und Brüche direkt aus Vektordaten.
-//   2) Native Android App (Fallback für reine Bitmaps/Fotos): Google ML Kit
-//      (On-Device Text Recognition via platform-native.js).
+// Einziger Erkennungsweg: Vektor-Handschrift on-device via ONNX Runtime Web
+// (handwriting-worker.js) — 100 % offline, erkennt Strichsequenzen, Mathe-Formeln
+// und Brüche direkt aus Vektordaten. (Bild-OCR per ML Kit wurde mit v2.2.18 entfernt.)
 export const HANDSCHRIFT = (() => {
 	const available = () => true;
 
@@ -113,6 +110,17 @@ export const HANDSCHRIFT = (() => {
 		}
 	}
 
+	// Entfernt Beispiele, deren Felder alle zu match passen (z. B. { source: "llm", pageId, pageIdx }),
+	// damit eine neu beschriftete Seite ihre alten Beispiele ersetzt statt sie zu verdoppeln.
+	function removeTrainingSamples(match) {
+		const keys = Object.keys(match || {});
+		if (!keys.length) return 0;
+		const samples = getTrainingSamples();
+		const kept = samples.filter((s) => !keys.every((k) => s[k] === match[k]));
+		try { localStorage.setItem(STORAGE_KEY_SAMPLES, JSON.stringify(kept)); } catch {}
+		return samples.length - kept.length;
+	}
+
 	function exportTrainingSamplesJson() {
 		return JSON.stringify(getTrainingSamples(), null, 2);
 	}
@@ -144,6 +152,7 @@ export const HANDSCHRIFT = (() => {
 		recognizeStrokes,
 		recognizeStrokesDetails,
 		saveTrainingSample,
+		removeTrainingSamples,
 		getTrainingSamples,
 		exportTrainingSamplesJson,
 		shareTrainingSamples,

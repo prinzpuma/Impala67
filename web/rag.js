@@ -130,7 +130,7 @@ export const RAG = (() => {
 				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 40000);
 			} catch (e) { console.warn("Inline-PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
-		// Auch Handschrift-Hefte (getippte Textfelder und ML-Kit Handschrift-OCR) indexieren
+		// Auch Handschrift-Hefte (getippte Textfelder und erkannte Handschrift) indexieren
 		const hdoc = (S.heftDocs && S.heftDocs[pageId]) || null;
 		if (hdoc && Array.isArray(hdoc.pages) && hdoc.pages.length > 0) {
 			const pageBlocks = [];

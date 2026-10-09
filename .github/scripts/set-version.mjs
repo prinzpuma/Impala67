@@ -2,6 +2,7 @@
 // Wird nur im CI-Workflow ausgeführt und nicht zurück ins Repository committet.
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 
 const version = process.argv[2];
 if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
@@ -39,6 +40,20 @@ if (!/const CACHE = "impala67-v[^"]+"/.test(worker)) {
 }
 worker = worker.replace(/const CACHE = "impala67-v[^"]+"/, `const CACHE = "impala67-v${version}"`);
 fs.writeFileSync(workerPath, worker);
+
+// Handschrift-Modellversion = Prüfsumme der Modelldatei: ändert sich genau dann, wenn ein neues
+// Modell eingecheckt wird (neuer Cache im Worker, einmalige Neuerkennung aller Heftseiten).
+const modelPath = "./web/handwriting-model.onnx";
+const modelVersionPath = "./web/handwriting-model-version.js";
+const modelHash = crypto.createHash("sha256").update(fs.readFileSync(modelPath)).digest("hex").slice(0, 12);
+let modelVersion = fs.readFileSync(modelVersionPath, "utf8");
+if (!/export const HANDWRITING_MODEL_VERSION = "[^"]+"/.test(modelVersion)) {
+  console.error("HANDWRITING_MODEL_VERSION fehlt in web/handwriting-model-version.js");
+  process.exit(1);
+}
+modelVersion = modelVersion.replace(/export const HANDWRITING_MODEL_VERSION = "[^"]+"/, `export const HANDWRITING_MODEL_VERSION = "${modelHash}"`);
+fs.writeFileSync(modelVersionPath, modelVersion);
+console.log(`Handschrift-Modellversion gesetzt: ${modelHash}.`);
 
 const gradlePath = "./android/app/build.gradle";
 if (fs.existsSync(gradlePath)) {
