@@ -35,3 +35,6 @@ __pycache__/
 
 # Claude Code (persönliche Einstellungen)
 .claude/settings.local.json
+
+# Colab-Upload (Handschrift-Code für Drive), lokal erzeugt
+code.zip

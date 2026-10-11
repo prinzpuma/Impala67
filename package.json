@@ -5,6 +5,8 @@
   "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
   "type": "module",
   "scripts": {
+    "start": "python -m http.server 8000 --directory web",
+    "release": "node .github/scripts/release.mjs",
     "test": "node --test test/*.test.mjs",
     "test:e2e": "node --test test/sync-v4-browser.e2e.mjs",
     "test:all": "node --test test/*.test.mjs test/sync-v4-browser.e2e.mjs",
