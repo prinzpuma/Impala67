@@ -6,6 +6,8 @@ import { S } from "./state.js";
 
 const SOURCES = ".deck-row, .hv-continue, .hv-pin, .hv-stat, .anki-stat, .hv-recall, .la-block, .lib-card, .notion-tree-row";
 const SWITCHES = [".lib-tabs", ".lz-view-switch", ".mode-btns"];
+// Beta-Design: zusätzlich Seitenbaum, Bereichs-Tabs und Seiten-Tabs.
+const BETA_SWITCHES = ["#tree", "#sidebar .topbar", ".tabstrip"];
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 let lastKey = "";
@@ -39,12 +41,13 @@ function onPointerDown(e) {
 			at: performance.now(),
 		};
 	}
-	const btn = e.target.closest?.("button, .lib-tab");
-	const sel = btn && SWITCHES.find((s) => btn.closest(s));
+	const btn = e.target.closest?.("button, .lib-tab, .tabchip, #tree .row");
+	const switches = document.body.classList.contains("beta-ui") ? SWITCHES.concat(BETA_SWITCHES) : SWITCHES;
+	const sel = btn && switches.find((s) => btn.closest(s));
 	if (sel && !btn.classList.contains("active")) slideSwitch(sel);
 }
 
-// Gleitende Markierung: das ::before des neuen aktiven Knopfs startet dort, wo das alte lag.
+// Gleitende Markierung: das ::before des neuen aktiven Eintrags startet dort, wo das alte lag (waagerecht wie senkrecht).
 function slideSwitch(sel) {
 	const old = document.querySelector(sel + " .active");
 	if (!old) return;
@@ -54,12 +57,12 @@ function slideSwitch(sel) {
 		const now = document.querySelector(sel + " .active");
 		if (now && now !== old && now.isConnected) {
 			const to = now.getBoundingClientRect();
-			if (to.left !== from.left || to.right !== from.right) {
+			if (to.left !== from.left || to.right !== from.right || to.top !== from.top) {
+				const kf = { left: [from.left - to.left + "px", "0px"], right: [to.right - from.right + "px", "0px"] };
+				// Senkrecht nur bei echter Bewegung: Unterstrich-Tabs haben kein festes top.
+				if (to.top !== from.top) Object.assign(kf, { top: [from.top - to.top + "px", "0px"], bottom: [to.bottom - from.bottom + "px", "0px"] });
 				try {
-					now.animate(
-						{ left: [from.left - to.left + "px", "0px"], right: [to.right - from.right + "px", "0px"] },
-						{ duration: 480, easing: spring(), pseudoElement: "::before" },
-					);
+					now.animate(kf, { duration: 480, easing: spring(), pseudoElement: "::before" });
 				} catch { /* ältere Browser: Markierung springt einfach */ }
 			}
 			return;
