@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { TELE } from "./telemetrie.js";
 import { FACH } from "./fach.js";
 import { idlePromptContextKind } from "./lernzeit-context.js";
+import { icon, lead } from "./icons.js";
 
 // lernzeit.js — Lernzeit v5 (4. August 2026)
 // v5: Home-Analyse mit Woche/Monat-Schalter, einer Fachdimension und
@@ -21,13 +22,12 @@ export const LERNZEIT = (() => {
 	const GOAL_KEY = "impala67WeekGoalMinutes";
 	const FOLD_KEY = "impala67LzFolds";
 	const CATEGORIES = {
-		cards: { icon: "🃏", label: "Karteikarten" },
-		notebook: { icon: "📓", label: "Hefte" },
-		notes: { icon: "📝", label: "Notizen" },
-		ai: { icon: "✦", label: "KI" },
-		other: { icon: "⏱", label: "Sonstiges" },
+		cards: { icon: "cards", label: "Karteikarten" },
+		notebook: { icon: "notebook", label: "Hefte" },
+		notes: { icon: "note", label: "Notizen" },
+		ai: { icon: "sparkles", label: "KI" },
+		other: { icon: "timer", label: "Sonstiges" },
 	};
-	const ANIMALS = ["🦊", "🐹", "🦉", "🐢", "🐨", "🐸", "🐼"];
 
 	let lastActivityAt = Date.now();
 	let current = null;
@@ -175,7 +175,7 @@ export const LERNZEIT = (() => {
 		animal = document.createElement("button");
 		animal.type = "button";
 		animal.id = "lzAnimal";
-		animal.innerHTML = '<span>' + ANIMALS[Math.floor(Math.random() * ANIMALS.length)] + '</span><b>Lernst du noch?</b><small>Berühre mich oder fahre darüber, um die Lernzeit fortzusetzen.</small>';
+		animal.innerHTML = '<span>' + icon("hand") + '</span><b>Lernst du noch?</b><small>Berühre mich oder fahre darüber, um die Lernzeit fortzusetzen.</small>';
 		const resume = () => poke();
 		animal.addEventListener("pointerenter", resume, { once: true });
 		animal.addEventListener("click", resume, { once: true });
@@ -186,7 +186,7 @@ export const LERNZEIT = (() => {
 		const overlay = document.getElementById("overlay");
 		if (!overlay) return;
 		overlay.hidden = false;
-		overlay.innerHTML = '<div class="modal lz-break-modal"><h3>☕ Zeit für eine kurze Pause?</h3>' +
+		overlay.innerHTML = '<div class="modal lz-break-modal"><h3>' + lead("coffee") + 'Zeit für eine kurze Pause?</h3>' +
 			'<p>Du lernst schon <b>40 Minuten</b> am Stück. Eine 5-minütige Pause hilft deinem Gehirn, das Gelernte zu festigen.</p>' +
 			'<div class="modal-actions">' +
 			'<button class="primary" data-lz-break="5">5 Min Pause</button>' +
@@ -196,9 +196,9 @@ export const LERNZEIT = (() => {
 
 	function openTimerDone(minutes) {
 		const overlay = document.getElementById("overlay");
-		if (!overlay) { U.toast("⏰ Lernblock geschafft — " + minutes + " Minuten.", "success"); return; }
+		if (!overlay) { U.toast("Lernblock geschafft — " + minutes + " Minuten.", "success"); return; }
 		overlay.hidden = false;
-		overlay.innerHTML = '<div class="modal lz-done"><h3>🎉 Lernblock geschafft</h3><p><b>' + minutes + ' Minuten</b> fokussiert gelernt. Gute Arbeit!</p><div class="modal-actions"><button data-lz-start="5">5 Min weiter</button><button data-lz-close="1">Pause machen</button></div></div>';
+		overlay.innerHTML = '<div class="modal lz-done"><h3>' + lead("party") + 'Lernblock geschafft</h3><p><b>' + minutes + ' Minuten</b> fokussiert gelernt. Gute Arbeit!</p><div class="modal-actions"><button data-lz-start="5">5 Min weiter</button><button data-lz-close="1">Pause machen</button></div></div>';
 	}
 
 	// ---------- Timer (v3: mit Pause/Fortsetzen + Fortschritt) ----------
@@ -495,7 +495,7 @@ export const LERNZEIT = (() => {
 		TELE.log("goalChange", { minutes: next });
 		renderHomeWidget();
 		if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lz:goal-changed", { detail: { minutes: next } }));
-		U.toast("🎯 Wochenziel: " + Math.round(next / 60 * 10) / 10 + " h", "success");
+		U.toast("Wochenziel: " + Math.round(next / 60 * 10) / 10 + " h", "success");
 	}
 	function computeSmartInsights(totals = totalsByDay()) {
 		const list = [];
@@ -511,7 +511,7 @@ export const LERNZEIT = (() => {
 		if (problemCards > 0) {
 			list.push({
 				id: "forgettingAlarm",
-				icon: "🧠",
+				icon: "brain",
 				title: problemCards + " Karte" + (problemCards === 1 ? "" : "n") + " kurz vor dem Vergessen",
 				desc: "Jetzt gezielt wiederholen spart 80 % der Lernzeit und festigt den Stoff.",
 				action: 'data-homeaction="cards"',
@@ -522,7 +522,7 @@ export const LERNZEIT = (() => {
 		if (dueCards.length > 25) {
 			list.push({
 				id: "duePeak",
-				icon: "🔔",
+				icon: "bell",
 				title: "Lernspitze steht an",
 				desc: dueCards.length + " Karten sind fällig — starte früh, um den Tag zu entzerren.",
 				action: 'data-homeaction="cards"',
@@ -533,7 +533,7 @@ export const LERNZEIT = (() => {
 		if (todaySec === 0 && streak > 0 && hour >= 15) {
 			list.push({
 				id: "procrastinationShield",
-				icon: "🔥",
+				icon: "flame",
 				title: streak + "-Tage-Streak in Gefahr",
 				desc: "Heute noch nichts gelernt — schon 5 Minuten halten deine Serie aufrecht.",
 				action: 'data-homeaction="cards"',
@@ -548,7 +548,7 @@ export const LERNZEIT = (() => {
 			const optMin = Math.max(20, Math.min(45, avgMin || 25));
 			list.push({
 				id: "optimalSession",
-				icon: "⏱️",
+				icon: "timer",
 				title: "Optimale Session-Länge: ~" + optMin + " min",
 				desc: "Deine Konzentrationskurve ist in Blöcken von 25–35 Minuten am stabilsten.",
 			});
@@ -579,7 +579,7 @@ export const LERNZEIT = (() => {
 				const label = bestBucket === "morning" ? "vormittags (6–12 Uhr)" : bestBucket === "afternoon" ? "nachmittags (12–18 Uhr)" : "abends (18–24 Uhr)";
 				list.push({
 					id: "bestTime",
-					icon: "☀️",
+					icon: "sun",
 					title: "Bester Lernzeitpunkt",
 					desc: "Höchste Behaltequote " + label + " mit " + Math.round(bestRate * 100) + " % Erfolgsquote.",
 				});
@@ -674,25 +674,25 @@ export const LERNZEIT = (() => {
 		const problemCards = (typeof STATE !== "undefined" && STATE.activeCards ? STATE.activeCards() : Object.values((S && S.cards) || {}))
 			.filter((c) => !c.trashed && !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
 		const problemActionHtml = problemCards > 0
-			? '<button class="lz-btn-problem" data-homeaction="cards">⚡ ' + problemCards + ' Problemkarte' + (problemCards === 1 ? '' : 'n') + ' gezielt wiederholen</button>'
-			: '<span class="lz-problem-none">✨ Keine Problemkarten — alles stabil</span>';
+			? '<button class="lz-btn-problem" data-homeaction="cards">' + lead("zap") + problemCards + ' Problemkarte' + (problemCards === 1 ? '' : 'n') + ' gezielt wiederholen</button>'
+			: '<span class="lz-problem-none">' + lead("sparkles") + 'Keine Problemkarten — alles stabil</span>';
 
 		const recommendations = [];
-		if (!seconds && !reviews.reviews) recommendations.push(["🌱", "Noch keine Lernzeit", "Starte einen Fokusblock oder füge eine Einheit hinzu. Der Zeitraum bleibt vollständig nachvollziehbar."]);
+		if (!seconds && !reviews.reviews) recommendations.push(["sprout", "Noch keine Lernzeit", "Starte einen Fokusblock oder füge eine Einheit hinzu. Der Zeitraum bleibt vollständig nachvollziehbar."]);
 		else {
-			if (deltaPct !== null) recommendations.push([deltaPct >= 0 ? "📈" : "↘", deltaPct >= 10 ? "Mehr Lernzeit" : deltaPct <= -20 ? "Weniger Lernzeit" : "Stabiler Umfang", deltaText + "."]);
-			if (mode === "week") recommendations.push([activeDays >= 4 ? "✅" : "🗓", activeDays + ' aktive' + (activeDays === 1 ? 'r' : '') + ' Lerntag' + (activeDays === 1 ? '' : 'e'), activeDays >= 4 ? 'Gute Verteilung über die Woche.' : 'Kürzere Einheiten an mehreren Tagen helfen beim Behalten.']);
-			else if (subjects.length > 1) recommendations.push(["🔀", subjects.length + " Fächer im Monat", "Deine Lernzeit verteilt sich auf mehrere Lernkontexte."]);
-			if (retentionRate !== null) recommendations.push([retentionRate >= 85 ? "🎯" : "🧠", retentionStatus, retentionRate >= 85 ? "Langfristig sitzt der Stoff gut." : "Kürzere Abstände oder gezielte Wiederholungen können helfen."]);
+			if (deltaPct !== null) recommendations.push([deltaPct >= 0 ? "trending-up" : "trending-down", deltaPct >= 10 ? "Mehr Lernzeit" : deltaPct <= -20 ? "Weniger Lernzeit" : "Stabiler Umfang", deltaText + "."]);
+			if (mode === "week") recommendations.push([activeDays >= 4 ? "check-circle" : "calendar", activeDays + ' aktive' + (activeDays === 1 ? 'r' : '') + ' Lerntag' + (activeDays === 1 ? '' : 'e'), activeDays >= 4 ? 'Gute Verteilung über die Woche.' : 'Kürzere Einheiten an mehreren Tagen helfen beim Behalten.']);
+			else if (subjects.length > 1) recommendations.push(["shuffle", subjects.length + " Fächer im Monat", "Deine Lernzeit verteilt sich auf mehrere Lernkontexte."]);
+			if (retentionRate !== null) recommendations.push([retentionRate >= 85 ? "target" : "brain", retentionStatus, retentionRate >= 85 ? "Langfristig sitzt der Stoff gut." : "Kürzere Abstände oder gezielte Wiederholungen können helfen."]);
 		}
 		const smartList = computeSmartInsights(totals);
 		const smartHtml = (smartList.length ? smartList : recommendations.slice(0, 3).map(([icon, title, sub]) => ({ icon, title, desc: sub }))).map((item) =>
-			'<div class="lz-recommendation"><span>' + item.icon + '</span><div><b>' + U.esc(item.title) + '</b><small>' + U.esc(item.desc) + '</small></div></div>'
+			'<div class="lz-recommendation"><span>' + icon(item.icon) + '</span><div><b>' + U.esc(item.title) + '</b><small>' + U.esc(item.desc) + '</small></div></div>'
 		).join("");
 
 		const log = sessions.slice(0, 12).map((session) => {
 			const meta = CATEGORIES[session.category] || CATEGORIES.other;
-			return '<div class="lz-log-row"><span>' + meta.icon + ' <b>' + U.esc(sessionSubject(session)) + '</b><small>' + meta.label + ' · ' + new Date(session.startedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + fmt(session.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + session.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + session.id + '">🗑</button></span></div>';
+			return '<div class="lz-log-row"><span>' + lead(meta.icon) + '<b>' + U.esc(sessionSubject(session)) + '</b><small>' + meta.label + ' · ' + new Date(session.startedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + fmt(session.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + session.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + session.id + '" title="Einheit löschen">' + icon("trash") + '</button></span></div>';
 		}).join("") || '<p class="hint lz-empty">Keine abgeschlossene Einheit in diesem Zeitraum.</p>';
 		const isCurrent = mode === "month" ? monthOffset === 0 : weekOffset === 0;
 		const navLabel = mode === "month" ? "Monate" : "Wochen";
@@ -700,9 +700,9 @@ export const LERNZEIT = (() => {
 			'<div class="lz-dashboard-actions"><div class="lz-view-switch" role="tablist" aria-label="Analysezeitraum"><button data-lz-mode="week" role="tab" aria-selected="' + (mode === 'week') + '" class="' + (mode === 'week' ? 'active' : '') + '">Woche</button><button data-lz-mode="month" role="tab" aria-selected="' + (mode === 'month') + '" class="' + (mode === 'month' ? 'active' : '') + '">Monat</button></div><div class="lz-week-nav"><button data-lz-period="-1" aria-label="Vorherige ' + navLabel + '">←</button><button data-lz-todayperiod="1"' + (isCurrent ? ' disabled' : '') + '>Heute</button><button data-lz-period="1" aria-label="Nächste ' + navLabel + '"' + (isCurrent ? ' disabled' : '') + '>→</button></div></div></header>' +
 			'<div class="lz-summary-card"><div class="lz-summary-hero">' +
 			'<div class="lz-summary-left"><span class="lz-summary-sub">Gesamte Lernzeit</span><b class="lz-summary-time">' + fmt(seconds) + '</b><span class="lz-summary-delta' + (deltaPct !== null && deltaPct < 0 ? ' down' : '') + '">' + deltaText + '</span></div>' +
-			'<div class="lz-summary-right"><div class="lz-summary-goal-label"><span>🎯 <b>' + Math.min(100, goalPct) + ' %</b> vom ' + (mode === 'week' ? 'Wochenziel' : 'Monatsziel') + ' (' + (Math.round(goalMinutes / 60 * 10) / 10) + ' h)</span><button class="mini" data-lz-goal="1">Ziel ändern</button></div>' +
+			'<div class="lz-summary-right"><div class="lz-summary-goal-label"><span>' + lead("target") + '<b>' + Math.min(100, goalPct) + ' %</b> vom ' + (mode === 'week' ? 'Wochenziel' : 'Monatsziel') + ' (' + (Math.round(goalMinutes / 60 * 10) / 10) + ' h)</span><button class="mini" data-lz-goal="1">Ziel ändern</button></div>' +
 			'<div class="lz-progress lz-goal-bar"><i style="width:' + Math.min(100, goalPct) + '%"></i></div>' +
-			'<div class="lz-summary-subline"><span>🔥 <b>' + homeStats.streakDays + '</b> ' + (homeStats.streakDays === 1 ? 'Tag Streak' : 'Tage Streak') + '</span><span>🗓 <b>' + activeDays + '</b> ' + (activeDays === 1 ? 'aktiver Tag' : 'aktive Tage') + '</span></div></div>' +
+			'<div class="lz-summary-subline"><span>' + lead("flame") + '<b>' + homeStats.streakDays + '</b> ' + (homeStats.streakDays === 1 ? 'Tag Streak' : 'Tage Streak') + '</span><span>' + lead("calendar") + '<b>' + activeDays + '</b> ' + (activeDays === 1 ? 'aktiver Tag' : 'aktive Tage') + '</span></div></div>' +
 			'</div></div>' +
 			'<div class="lz-panel lz-week-chart"><div class="lz-panel-head"><div><b>' + (mode === 'week' ? 'Lernrhythmus der Woche' : 'Lernkalender des Monats') + '</b><small>' + (mode === 'week' ? 'Lernzeit und Karten pro Tag' : 'Jeder Tag zeigt Intensität und Reviews') + '</small></div><span>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</span></div><div class="' + (mode === 'month' ? 'lz-month-wrap' : 'lz-bars') + '">' + chart + '</div></div>' +
 			'<div class="lz-analysis-grid"><div class="lz-panel lz-subjects"><div class="lz-panel-head"><div><b>Fächer & Lernkontexte</b><small>Automatisch aus Stapeln, Seiten und Workspaces</small></div><span>' + subjects.length + ' erkannt</span></div>' + subjectRows + '</div>' +
@@ -711,8 +711,8 @@ export const LERNZEIT = (() => {
 			'<div class="lz-quality-kpi"><b>' + retentionStatus + '</b><small>' + (reviews.reviews ? reviews.reviews + ' Reviews in diesem Zeitraum' : 'Noch keine Reviews erfasst') + '</small></div>' +
 			'<div class="lz-quality-action">' + problemActionHtml + '</div>' +
 			'</div></div></div>' +
-			'<div class="lz-panel lz-insights"><div class="lz-panel-head"><div><b>Smarte Lern-Analysen</b><small>Aus Lernzeit, Fächern und Lernerfolg gemeinsam abgeleitet</small></div></div><div class="lz-recommendations">' + smartHtml + '</div>' + fold("patterns", "🧠 Langzeitmuster aus allen Lerndaten", TELE.homeInsightsHtml(), false) + '</div>' +
-			fold("log", "📝 Einheiten in diesem Zeitraum", '<div class="lz-log-head"><b>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>', false) + '</section>';
+			'<div class="lz-panel lz-insights"><div class="lz-panel-head"><div><b>Smarte Lern-Analysen</b><small>Aus Lernzeit, Fächern und Lernerfolg gemeinsam abgeleitet</small></div></div><div class="lz-recommendations">' + smartHtml + '</div>' + fold("patterns", lead("brain") + "Langzeitmuster aus allen Lerndaten", TELE.homeInsightsHtml(), false) + '</div>' +
+			fold("log", lead("note") + "Einheiten in diesem Zeitraum", '<div class="lz-log-head"><b>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>', false) + '</section>';
 	}
 
 	function refreshLive() {
@@ -741,7 +741,7 @@ export const LERNZEIT = (() => {
 		const old = id ? S.learningSessions[id] : null;
 		const overlay = document.getElementById("overlay");
 		if (!overlay) return;
-		const options = Object.entries(CATEGORIES).map(([key, value]) => '<option value="' + key + '"' + ((old ? old.category : "other") === key ? " selected" : "") + '>' + value.icon + ' ' + value.label + '</option>').join("");
+		const options = Object.entries(CATEGORIES).map(([key, value]) => '<option value="' + key + '"' + ((old ? old.category : "other") === key ? " selected" : "") + '>' + value.label + '</option>').join("");
 		const subject = old ? sessionSubject(old) : subjectNowMeta().name;
 		overlay.hidden = false;
 		overlay.innerHTML = '<div class="modal lz-edit-modal"><button class="modal-x" data-lz-close="1">✕</button><h3>' + (old ? 'Lerneinheit bearbeiten' : 'Zeit hinzufügen') + '</h3><label>Tag<input id="lzEditDay" type="date" value="' + dayKey(old && old.startedAt) + '"></label><label>Minuten<input id="lzEditMinutes" type="number" min="1" max="1440" value="' + (old ? Math.round(old.durationSeconds / 60) : 25) + '"></label><label>Fach<input id="lzEditSubject" maxlength="80" value="' + U.esc(subject) + '" placeholder="z. B. Mathematik"></label><label>Aktivität<select id="lzEditCategory">' + options + '</select></label><div class="modal-actions"><button data-lz-close="1">Abbrechen</button><button class="primary" data-lz-save="' + (id || '') + '">Speichern</button></div></div>';
@@ -777,7 +777,7 @@ export const LERNZEIT = (() => {
 				activeStretchMs = 0;
 				reminderShownForBlock = false;
 				lastActiveTickAt = 0;
-				U.toast("☕ 5 Minuten Pause — Zeit zum Durchatmen!", "info");
+				U.toast("5 Minuten Pause — Zeit zum Durchatmen!", "info");
 			} else {
 				reminderShownForBlock = true;
 			}

@@ -10,6 +10,7 @@ import { TABS } from "./tabs.js";
 import { COLLAPSE } from "./collapse.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
+import { icon, lead, pageIcon } from "./icons.js";
 
 const renderMain = (...args) => RENDER.renderMain(...args);
 const render = (...args) => RENDER.render(...args);
@@ -37,7 +38,7 @@ export function folderTone(key) {
 
 // Portrait-Notebook: Rücken + Cover (Bild oder Verlauf) + Titel-Label auf dem Cover.
 export function libCoverHtml(pg) {
-	const icon = RENDER.pageIconLabel(pg);
+	const pgIcon = pageIcon(pg);
 	const title = (pg.title || "Ohne Titel").trim();
 	const short = title.length > 28 ? title.slice(0, 28) + "…" : title;
 	if (pg.coverImg) {
@@ -48,17 +49,17 @@ export function libCoverHtml(pg) {
 	const preset = pg.cover || defaultCover(pg);
 	return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' +
 		'<div class="lib-cover cover-' + U.esc(preset) + '">' +
-		'<span class="lib-cover-icon">' + U.esc(icon) + "</span>" +
+		'<span class="lib-cover-icon">' + pgIcon + "</span>" +
 		'<span class="lib-cover-label">' + U.esc(short) + "</span></div></div>";
 }
 
 // Notion-Seite als flaches Dokumentblatt (Icon, Titel, erste Textzeile, Linien) —
 // bewusst Notion-Look; nur GoodNotes-Hefte bekommen das Notizbuch-Cover.
 export function libDocHtml(pg) {
-	const icon = RENDER.pageIconLabel(pg);
+	const pgIcon = pageIcon(pg);
 	const firstLine = ((pg.content || "").split("\n").find((l) => l.trim() && !l.trim().startsWith("#")) || "").replace(/[#>*`\[\]]/g, "").slice(0, 80);
 	return '<div class="lib-docsheet">' +
-		'<span class="lib-docsheet-icon">' + U.esc(icon) + "</span>" +
+		'<span class="lib-docsheet-icon">' + pgIcon + "</span>" +
 		'<span class="lib-docsheet-title">' + U.esc((pg.title || "Ohne Titel").slice(0, 44)) + "</span>" +
 		(firstLine ? '<span class="lib-docsheet-text">' + U.esc(firstLine) + "</span>" : "") +
 		'<span class="lib-docsheet-lines" aria-hidden="true"><i></i><i></i><i></i></span>' +
@@ -118,8 +119,8 @@ function openShelfNewDialog() {
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<h3>Neu</h3><p class="hint">Was möchtest du ' + where + ' anlegen?</p>' +
 		'<div class="lib-create-choices">' +
-		'<button type="button" data-libnewkind="heft"><span>📓</span><b>Neues Heft</b><small>Cover wählen und direkt losschreiben</small></button>' +
-		'<button type="button" data-libnewkind="folder"><span>📁</span><b>Neuer Ordner</b><small>Hefte und weitere Ordner organisieren</small></button>' +
+		'<button type="button" data-libnewkind="heft"><span>' + icon("notebook") + '</span><b>Neues Heft</b><small>Cover wählen und direkt losschreiben</small></button>' +
+		'<button type="button" data-libnewkind="folder"><span>' + icon("folder") + '</span><b>Neuer Ordner</b><small>Hefte und weitere Ordner organisieren</small></button>' +
 		'</div></div>';
 }
 
@@ -190,12 +191,12 @@ function openLibCoverPicker(pageId) {
 		'<h3>Heftoptionen</h3><p class="hint">„' + U.esc(pg.title || "Heft") + '“</p>' +
 		'<div class="cover-grid">' + swatches + "</div>" +
 		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
-		'<div class="row-btns"><button type="button" id="btnLibCoverUpload">🖼 Eigenes Bild wählen</button></div>' +
+		'<div class="row-btns"><button type="button" id="btnLibCoverUpload">' + lead("image") + 'Eigenes Bild wählen</button></div>' +
 		'<div class="modal-actions">' +
 		'<button type="button" data-libcoverset="">Cover entfernen</button>' +
 		(pg.archived
-			? '<button type="button" data-pageunarchive="' + pg.id + '">↩ Aus Archiv holen</button>'
-			: '<button type="button" data-libheftarchive="' + pg.id + '">🗄 Archivieren</button>') +
+			? '<button type="button" data-pageunarchive="' + pg.id + '">' + lead("undo") + 'Aus Archiv holen</button>'
+			: '<button type="button" data-libheftarchive="' + pg.id + '">' + lead("archive") + 'Archivieren</button>') +
 		'<button type="button" class="danger" data-libhefttrash="' + pg.id + '">In Papierkorb</button>' +
 		'<button type="button" id="btnCloseOverlay">Schließen</button></div></div>'; 
 }
@@ -208,7 +209,7 @@ function openLibCoverPicker(pageId) {
 function libModeTabsHtml() {
 	const mode = S.libMode || "notion";
 	const b = (m, label) => '<button class="lib-mode' + (mode === m ? " active" : "") + '" data-libmode="' + m + '">' + label + "</button>";
-	return '<div class="lib-modes">' + b("notion", "📝 Notion") + b("hefte", "📓 GoodNotes") + b("archive", "🗄 Archiv") + b("nlm", "📥 Gemini Notebook") + "</div>";
+	return '<div class="lib-modes">' + b("notion", lead("note") + "Notion") + b("hefte", lead("notebook") + "GoodNotes") + b("archive", lead("archive") + "Archiv") + b("nlm", lead("inbox") + "Gemini Notebook") + "</div>";
 }
 
 // Einheitlicher Aufbau aller Bibliotheks-Ansichten: Titel + Modi, darunter eine feste Werkzeugzeile
@@ -247,7 +248,7 @@ function treeRowsHtml(pages, depth, kidsOf, visible, rowMeta, rowActions) {
 			: '<span class="notion-tree-caret spacer"></span>';
 		const row = '<div class="notion-tree-row" data-page="' + pg.id + '" style="--tree-depth:' + depth + '">' +
 			caret +
-			'<span class="notion-tree-icon">' + U.esc(RENDER.pageIconLabel(pg)) + "</span>" +
+			'<span class="notion-tree-icon">' + pageIcon(pg) + "</span>" +
 			'<span class="notion-tree-title">' + U.esc(pg.title || "Ohne Titel") + "</span>" +
 			'<span class="notion-tree-meta">' + rowMeta(pg) + "</span>" + (rowActions ? rowActions(pg) : "") + "</div>";
 		return row + (collapsed ? "" : treeRowsHtml(kids, depth + 1, kidsOf, visible, rowMeta, rowActions));
@@ -437,7 +438,7 @@ export function renderHefteShelf(main) {
 }
 
 // ---------- Gemini-Notebook-Ansicht (ehemals NotebookLM): Inbox + Mediathek ----------
-const NLM_FILTERS = [["all", "Alle"], ["inbox", "📥 Inbox"], ["audio", "🎧 Podcasts"], ["video", "🎬 Videos"], ["mindmap", "🧠 Mind Maps"], ["slides", "📑 Folien"]];
+const NLM_FILTERS = [["all", "Alle"], ["inbox", lead("inbox") + "Inbox"], ["audio", lead("headphones") + "Podcasts"], ["video", lead("film") + "Videos"], ["mindmap", lead("graph") + "Mind Maps"], ["slides", lead("slides") + "Folien"]];
 export function renderNlmLibrary(main) {
 	main.innerHTML = '<div class="library lib-docs lib-nlm">' + libHeadHtml() +
 		libToolbarHtml('<div id="nlmTabs" class="lib-tabs"></div>', "") +
@@ -458,20 +459,20 @@ export function renderNlmLibrary(main) {
 			const src = (f.sourcePageIds || []).map((id) => S.pages[id]).filter((p) => p && !p.trashed);
 			const placed = (f.placedPageId && S.pages[f.placedPageId] && !S.pages[f.placedPageId].trashed) ? S.pages[f.placedPageId] : null;
 			const sub = placed
-				? '📄 eingeordnet in <a href="#" data-nlmgoto="' + placed.id + '">' + U.esc((placed.title || "Ohne Titel").slice(0, 40)) + "</a>"
-				: (src.length ? "Quelle: " + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 60)) : "📥 Inbox — noch nicht eingeordnet");
+				? lead("file") + 'eingeordnet in <a href="#" data-nlmgoto="' + placed.id + '">' + U.esc((placed.title || "Ohne Titel").slice(0, 40)) + "</a>"
+				: (src.length ? "Quelle: " + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 60)) : lead("inbox") + "Inbox — noch nicht eingeordnet");
 			return '<div class="nlm-lib-row' + (placed ? "" : " nlm-lib-inbox") + '">' +
-				'<span class="nlm-lib-icon">' + NLM.kindIcon(f.kind) + "</span>" +
+				'<span class="nlm-lib-icon">' + NLM.kindSvg(f.kind) + "</span>" +
 				'<span class="nlm-lib-main"><span class="nlm-lib-name">' + U.esc(f.name) + "</span>" +
 				'<span class="nlm-lib-sub">' + NLM.kindLabel(f.kind) + " · " + U.fmtDate(new Date(f.ts).toISOString()) + (f.size ? " · " + (Math.round(f.size / 1048576 * 10) / 10) + " MB" : "") + " · " + sub + "</span></span>" +
-				'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">▶</button>' +
-				'<button data-nlmlibplace="' + f.id + '" title="Einordnen">📌</button>' +
-				'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">⬇</button>' +
-				'<button data-nlmlibdel="' + f.id + '" title="Löschen">🗑</button></span></div>';
+				'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">' + icon("play") + '</button>' +
+				'<button data-nlmlibplace="' + f.id + '" title="Einordnen">' + icon("pin") + '</button>' +
+				'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">' + icon("download") + '</button>' +
+				'<button data-nlmlibdel="' + f.id + '" title="Löschen">' + icon("trash") + '</button></span></div>';
 		}).join("");
 		const tabsEl = U.el("nlmTabs");
 		if (tabsEl) tabsEl.innerHTML = tabs;
-		body.innerHTML = rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im 📓-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>';
+		body.innerHTML = rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im Gemini-Notebook-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>';
 	});
 }
 
@@ -496,18 +497,18 @@ export function renderArchiveLibrary(main) {
 	const visible = (pg) => ownMatch(pg) || archivedChildrenOf(pg).some(visible);
 	const archiveMeta = (pg) => (isHeft(pg) ? "Heft" : "Seite") + " · archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
 	const archiveActions = (pg) => '<span class="archive-row-actions">' +
-		'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">↩ Wiederherstellen</button>' +
-		'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">🗑</button></span>';
+		'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">' + lead("undo") + 'Wiederherstellen</button>' +
+		'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">' + icon("trash") + '</button></span>';
 	const wsIds = [...new Set(roots.map((pg) => pg.workspaceId || "default"))];
 
 	const filterTabs = [
 		["all", "Alle", roots.length],
-		["hefte", "📓 Hefte", roots.filter(isHeft).length],
-		["pages", "📝 Seiten", roots.filter((pg) => !isHeft(pg)).length],
+		["hefte", lead("notebook") + "Hefte", roots.filter(isHeft).length],
+		["pages", lead("note") + "Seiten", roots.filter((pg) => !isHeft(pg)).length],
 	];
 
 	const tabs = '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
-		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
+		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + label + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
 	let html = '<div class="library lib-docs lib-notion-tree lib-archive">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
 
 	if (!roots.length) {
@@ -626,7 +627,7 @@ document.addEventListener("click", async (e) => {
 		const title = (inp && inp.value.trim()) || "Neues Heft";
 		const gnFolderId = typeof S.libFolder === "string" ? S.libFolder : null;
 		const id = U.uid();
-		await STATE.dispatch("pageCreate", { id, title, parentId: null, content: "", icon: "📓", cover: S.libNewCover || COVER_PRESETS[0], tags: [], workspaceId: S.currentWorkspaceId || "default", gnFolderId, gnOrder: Date.now(), kind: "heft" });
+		await STATE.dispatch("pageCreate", { id, title, parentId: null, content: "", cover: S.libNewCover || COVER_PRESETS[0], tags: [], workspaceId: S.currentWorkspaceId || "default", gnFolderId, gnOrder: Date.now(), kind: "heft" });
 		S.libNewCover = null;
 		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
 		TABS.openPage(id);
@@ -714,7 +715,7 @@ document.addEventListener("click", async (e) => {
 		const id = U.uid();
 		await STATE.dispatch("pageCreate", {
 			id, title: "Neues Heft", parentId: folder.pageId || null, content: "",
-			icon: "📓", workspaceId: folder.wsId || Object.keys(S.workspaces)[0] || "default", kind: "heft",
+			workspaceId: folder.wsId || Object.keys(S.workspaces)[0] || "default", kind: "heft",
 		});
 		TABS.openPage(id);
 		return;

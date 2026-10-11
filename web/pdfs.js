@@ -6,6 +6,7 @@ import { RAG } from "./rag.js";
 import { AI } from "./ai.js";
 import { TABS } from "./tabs.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { icon, lead } from "./icons.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
 export const PDFS = (() => {
@@ -123,7 +124,7 @@ export const PDFS = (() => {
 	async function mountViewer(container, pdfId, opts = {}) {
 		if (!container || !pdfId) return;
 		const sessionId = (container._pdfSessionId = (container._pdfSessionId || 0) + 1);
-		container.innerHTML = '<div class="pdf-loading"><span>📄 PDF wird geladen…</span></div>';
+		container.innerHTML = '<div class="pdf-loading"><span>' + lead("file") + 'PDF wird geladen…</span></div>';
 
 		try {
 			const rec = await DB.getBlob(pdfId);
@@ -157,34 +158,34 @@ export const PDFS = (() => {
 				'<div class="pdf-toolbar">' +
 					'<div class="pdf-toolbar-group">' +
 						'<button type="button" class="pdf-toggle-btn" title="' + (isCollapsed ? "PDF aufklappen" : "PDF einklappen") + '">' +
-							'<svg class="pdf-toggle-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
-							'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">📄 ' + U.esc(docTitle) + '</span>' +
+							icon("chevron-down", "pdf-toggle-icon i-strong", 12) +
+							'<span class="pdf-doc-title" title="' + U.esc(docTitle) + '">' + lead("file") + U.esc(docTitle) + '</span>' +
 							'<span class="pdf-page-count">(' + totalPages + ' ' + (totalPages === 1 ? "Seite" : "Seiten") + ')</span>' +
 						'</button>' +
 					'</div>' +
 					'<div class="pdf-toolbar-group">' +
 						'<div class="pdf-zoom-pill">' +
 							'<button type="button" class="pdf-zoom-btn pdf-zoom-out" title="Verkleinern" aria-label="Verkleinern">' +
-								'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+								icon("minus", "i-strong", 11) +
 							'</button>' +
 							'<button type="button" class="pdf-zoom-val pdf-zoom-label" title="Auf 100% zurücksetzen">100%</button>' +
 							'<button type="button" class="pdf-zoom-btn pdf-zoom-in" title="Vergrößern" aria-label="Vergrößern">' +
-								'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+								icon("plus", "i-strong", 11) +
 							'</button>' +
 						'</div>' +
 						'<button type="button" class="pdf-action-btn pdf-fit-btn" title="An Breite anpassen">' +
-							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
+							icon("expand", "i-strong", 12) +
 							'<span>Breite</span>' +
 						'</button>' +
 						'<button type="button" class="pdf-action-btn pdf-fullscreen-btn" title="Vollbild umschalten">' +
-							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>' +
+							icon("fullscreen", "i-strong", 12) +
 							'<span>Vollbild</span>' +
 						'</button>' +
 						'<button type="button" class="pdf-action-btn icon-only pdf-open-btn" title="In neuem Tab öffnen" aria-label="In neuem Tab öffnen">' +
-							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
+							icon("external", "i-strong", 12) +
 						'</button>' +
 						'<button type="button" class="pdf-action-btn icon-only pdf-download-btn" title="PDF herunterladen" aria-label="PDF herunterladen">' +
-							'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
+							icon("download", "i-strong", 12) +
 						'</button>' +
 					'</div>' +
 				'</div>' +
@@ -323,8 +324,8 @@ export const PDFS = (() => {
 				const isFull = container.classList.toggle("is-fullscreen");
 				if (fullscreenBtn) {
 					fullscreenBtn.innerHTML = isFull
-						? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>Schließen</span>'
-						: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg><span>Vollbild</span>';
+						? icon("x", "i-strong", 12) + '<span>Schließen</span>'
+						: icon("fullscreen", "i-strong", 12) + '<span>Vollbild</span>';
 					fullscreenBtn.title = isFull ? "Vollbild beenden (Esc)" : "Vollbild umschalten";
 				}
 				if (isFull && isCollapsed) {
@@ -405,12 +406,12 @@ export const PDFS = (() => {
 			console.error("PDF Viewer Initialisierungsfehler:", err);
 			container.innerHTML =
 				'<div class="pdf-toolbar">' +
-					'<span class="pdf-doc-title">📄 ' + U.esc(opts.title || "PDF-Dokument") + '</span>' +
-					'<button type="button" class="pdf-action-btn pdf-open-tab-btn">↗ Im neuen Tab öffnen</button>' +
+					'<span class="pdf-doc-title">' + lead("file") + U.esc(opts.title || "PDF-Dokument") + '</span>' +
+					'<button type="button" class="pdf-action-btn pdf-open-tab-btn">' + lead("external") + 'Im neuen Tab öffnen</button>' +
 				'</div>' +
 				'<div class="pdf-body" style="padding:24px;text-align:center;">' +
 					'<p style="color:var(--text);margin-bottom:12px;">Der interne Viewer konnte das PDF nicht direkt darstellen.</p>' +
-					'<button type="button" class="mini pdf-fallback-open btn-primary" style="padding:8px 16px;cursor:pointer;">↗ Im neuen Tab öffnen</button>' +
+					'<button type="button" class="mini pdf-fallback-open btn-primary" style="padding:8px 16px;cursor:pointer;">' + lead("external") + 'Im neuen Tab öffnen</button>' +
 				'</div>';
 			const fBtn = container.querySelector(".pdf-fallback-open");
 			if (fBtn) fBtn.onclick = () => openViewer(pdfId);

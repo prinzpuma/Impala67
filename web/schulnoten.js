@@ -2,6 +2,7 @@
 
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
+import { icon, lead } from "./icons.js";
 
 // Schulnoten: persistiert jede Änderung im Event-Log (gradeAdd/gradeDelete),
 // damit sie mit dem bestehenden Drive-Sync zwischen Geräten repliziert wird.
@@ -79,7 +80,7 @@ export const SCHULNOTEN = (() => {
 		const groups = subjects();
 		const total = average(allGrades());
 		let html = '<section class="noten-wrap">' +
-			'<header class="section-head"><h2>🎓 Schulnoten</h2>' +
+			'<header class="section-head"><h2>' + lead("graduation") + 'Schulnoten</h2>' +
 			(total ? '<span class="hint">Gesamtschnitt: <b>' + total + '</b></span>' : '<span class="hint">Noch keine Noten</span>') +
 			'<button type="button" class="mini" data-noten-export="1">↓ Markdown</button></header>' +
 			'<form class="noten-form" id="notenForm">' +
@@ -99,7 +100,7 @@ export const SCHULNOTEN = (() => {
 					'<table class="noten-table"><thead><tr><th>Note</th><th>Gew.</th><th>Datum</th><th>Kommentar</th><th></th></tr></thead><tbody>';
 				for (const entry of entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
 					html += '<tr><td style="color:' + gradeColor(entry.grade) + '"><b>' + entry.grade + '</b></td><td>' + entry.weight + '</td><td>' + U.esc(entry.date) + '</td><td>' + U.esc(entry.comment || '') + '</td>' +
-						'<td><button type="button" class="mini danger" data-noten-delete="' + entry.id + '" title="Note löschen">🗑</button></td></tr>';
+						'<td><button type="button" class="mini danger" data-noten-delete="' + entry.id + '" title="Note löschen">' + icon("trash") + '</button></td></tr>';
 				}
 				html += '</tbody></table></article>';
 			}

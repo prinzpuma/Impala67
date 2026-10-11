@@ -3,6 +3,7 @@ import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
 import { U } from "./util.js";
 import { MOBILE_VIEW } from "./mobile-view.js";
+import { pageIcon } from "./icons.js";
 
 // Notizen-Browser der Handy-UI (#mNotes). Zeigt jeweils eine Ebene der Seitenhierarchie
 // (Drill-down statt Baum). Die Suche ersetzt die Ebenenansicht durch eine flache Trefferliste.
@@ -33,7 +34,7 @@ const byUpdatedDesc = (a, b) => (updatedKey(b) < updatedKey(a) ? -1 : updatedKey
 function rowHtml(pg, cache) {
 	const id = U.esc(pg.id);
 	const title = String(pg.title || "").trim() ? pg.title : "Ohne Titel";
-	const icon = U.esc(String(RENDER.pageIconLabel(pg) || ""));
+	const pgIcon = pageIcon(pg);
 	const date = pg.updated ? U.esc(U.fmtDate(pg.updated)) : "";
 	const count = kidsOf(pg.id, cache).length;
 	const drill = count
@@ -42,7 +43,7 @@ function rowHtml(pg, cache) {
 	return (
 		`<div class="m-row m-note" data-mrow="${id}">` +
 		`<button type="button" class="m-note-main" data-page="${id}">` +
-		`<span class="m-note-ico">${icon}</span>` +
+		`<span class="m-note-ico">${pgIcon}</span>` +
 		`<span class="m-row-text"><strong>${U.esc(title)}</strong><small>${date}</small></span>` +
 		`</button>` +
 		drill +

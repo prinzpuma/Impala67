@@ -105,7 +105,7 @@ export function initMcpBridge() {
 		ws.onopen = () => {
 			reconnectAttempts = 0;
 			bridgeConnectedAt = new Date().toISOString();
-			console.info("[MCP-Bridge] ⚡ Verbunden mit Antigravity MCP-Server");
+			console.info("[MCP-Bridge] Verbunden mit Antigravity MCP-Server");
 		};
 
 		ws.onmessage = async (event) => {

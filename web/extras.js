@@ -1,4 +1,5 @@
 "use strict";
+import { icon, lead } from "./icons.js";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
@@ -61,7 +62,7 @@ export const EXTRAS = (() => {
 		warned = true;
 		const div = document.createElement("div");
 		div.className = "multitab-note";
-		div.innerHTML = "⚠️ Die App ist in einem weiteren Tab geöffnet. Änderungen werden live abgeglichen — trotzdem besser nur in einem Tab arbeiten. <button>OK</button>";
+		div.innerHTML = lead("alert") + "Die App ist in einem weiteren Tab geöffnet. Änderungen werden live abgeglichen — trotzdem besser nur in einem Tab arbeiten. <button>OK</button>";
 		div.querySelector("button").addEventListener("click", () => div.remove());
 		document.body.appendChild(div);
 	}
@@ -461,7 +462,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		const conf = STATE.deckConfOf(key === "*" ? "" : key);
 		const o = U.el("overlay");
 		o.hidden = false;
-		o.innerHTML = '<div class="modal"><h3>⚙️ Stapel-Optionen — ' + U.esc(key === "*" ? "Standardwerte (alle Stapel)" : key) + "</h3>" +
+		o.innerHTML = '<div class="modal"><h3>' + lead("gear") + 'Stapel-Optionen — ' + U.esc(key === "*" ? "Standardwerte (alle Stapel)" : key) + "</h3>" +
 			'<div><label for="dcNew">Neue Karten pro Tag</label><input id="dcNew" type="number" min="0" value="' + conf.newPerDay + '"></div>' +
 			'<div><label for="dcRev">Wiederholungen pro Tag</label><input id="dcRev" type="number" min="0" value="' + conf.revPerDay + '"></div>' +
 			'<div><label for="dcLeech">Leech-Schwelle (Fehler bis zur Markierung)</label><input id="dcLeech" type="number" min="1" value="' + conf.leechThreshold + '"></div>' +
@@ -537,7 +538,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		const o = U.el("overlay");
 		o.hidden = false;
 		if (mode === "export") {
-			o.innerHTML = '<div class="modal"><h3>⬆ Karten exportieren</h3>' +
+			o.innerHTML = '<div class="modal"><h3>' + lead("upload") + 'Karten exportieren</h3>' +
 				'<p class="hint">.apkg lädt beim ersten Mal sql.js nach (einmalig Internet nötig, wird danach gecacht).</p>' +
 				'<div class="row-btns"><button id="btnExpTxt">Textdatei</button><button id="btnExpCsv">CSV</button><button id="btnExpApkg">Anki-Paket</button></div>' +
 				'<div class="modal-actions"><button id="btnCloseOverlay">Schließen</button></div></div>';
@@ -545,7 +546,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			U.el("btnExpCsv").addEventListener("click", exportCsv);
 			U.el("btnExpApkg").addEventListener("click", () => exportApkg().catch((e) => U.toast("Export fehlgeschlagen: " + (e.message || e), "error")));
 		} else {
-			o.innerHTML = '<div class="modal anki-import-modal"><h3>⬇ Karten importieren</h3>' +
+			o.innerHTML = '<div class="modal anki-import-modal"><h3>' + lead("download") + 'Karten importieren</h3>' +
 				'<p class="hint">Textdatei (empfohlen), CSV/TSV bzw. Anki-Text oder Anki-Paket (.apkg ohne Medien).</p>' +
 				'<div class="row-btns"><button id="btnPickImport" class="primary">Datei wählen…</button><button id="btnCopyCardPrompt">KI-Anweisung kopieren</button></div>' +
 				'<details><summary>TXT-Format anzeigen</summary><pre class="anki-import-format">' + U.esc(AI_CARD_PROMPT.split("\n\n").slice(1).join("\n\n")) + '</pre></details>' +
@@ -584,7 +585,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			'<link rel="stylesheet" href="' + OPTIONAL_MODULE_URLS.katexCss + '">' +
 			"<style>body{font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;color:#111;max-width:760px;margin:40px auto;padding:0 24px}h1{margin-top:0}pre{background:#f5f5f5;padding:10px;border-radius:6px;overflow:auto}mark{background:#ffe58a}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}" +
 			".pdf-bar{position:fixed;top:10px;right:10px;display:flex;gap:8px}.pdf-bar button{font:13px -apple-system,'Segoe UI',sans-serif;padding:7px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}@media print{.pdf-bar{display:none}}</style>" +
-			"</head><body><div class=\"pdf-bar\"><button onclick=\"window.print()\">🖨 Drucken / PDF</button><button onclick=\"window.close()\">✕ Schließen</button></div>" +
+			"</head><body><div class=\"pdf-bar\"><button onclick=\"window.print()\">Drucken / PDF</button><button onclick=\"window.close()\">Schließen</button></div>" +
 			"<h1>" + U.esc((pg.icon ? pg.icon + " " : "") + pg.title) + "</h1>" + printable.innerHTML + "</body></html>");
 		w.document.close();
 		w.onafterprint = () => { try { w.close(); } catch (e) { /* egal */ } };

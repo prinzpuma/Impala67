@@ -4,7 +4,7 @@ import { EXTRAS } from "./extras.js";
 import { SRS } from "./srs.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
-import { ICON } from "./icons.js";
+import { icon, lead } from "./icons.js";
 import { RENDER } from "./render.js";
 import { TELE } from "./telemetrie.js";
 import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
@@ -123,10 +123,10 @@ function deckTreeHtml() {
 				chevron +
 				(renaming
 					? '<input class="row-rename-input" data-deckrenamename="' + U.esc(name) + '" value="' + U.esc(label) + '" autocomplete="off">'
-					: '<span class="row-title">🃏 ' + U.esc(label) + "</span>") +
+					: '<span class="row-title">' + lead("cards") + U.esc(label) + "</span>") +
 				(due ? '<span class="deck-badge due" title="fällig">' + due + "</span>" : "") +
 				(neu ? '<span class="deck-badge" title="neu">' + neu + "</span>" : "") +
-				'<button type="button" class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">⋯</button>' +
+				'<button type="button" class="row-add" draggable="false" data-deckmenu="' + U.esc(name) + '" title="Weitere Optionen">' + icon("dots") + '</button>' +
 				'<button type="button" class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
 				(menuOpen ? deckMenuHtml(name) : "") +
 				"</div>";
@@ -143,10 +143,10 @@ function deckTreeHtml() {
 function deckMenuHtml(name) {
 	// data-deckmenu-panel markiert das Stapel-Popover eindeutig (nicht mit Seiten-⋯ verwechseln).
 	return '<div class="page-menu" data-deckmenu-panel="' + U.esc(name) + '">' +
-		'<button type="button" class="menu-item" data-deckrename="' + U.esc(name) + '">✎ Umbenennen</button>' +
-		'<button type="button" class="menu-item" data-deckduplicate="' + U.esc(name) + '">📋 Duplizieren</button>' +
-		'<button type="button" class="menu-item" data-deckarchive="' + U.esc(name) + '">🗄 Archivieren</button>' +
-		'<button type="button" class="menu-item danger" data-deckdel="' + U.esc(name) + '">🗑 In Papierkorb</button>' +
+		'<button type="button" class="menu-item" data-deckrename="' + U.esc(name) + '">' + lead("pen") + 'Umbenennen</button>' +
+		'<button type="button" class="menu-item" data-deckduplicate="' + U.esc(name) + '">' + lead("copy") + 'Duplizieren</button>' +
+		'<button type="button" class="menu-item" data-deckarchive="' + U.esc(name) + '">' + lead("archive") + 'Archivieren</button>' +
+		'<button type="button" class="menu-item danger" data-deckdel="' + U.esc(name) + '">' + lead("trash") + 'In Papierkorb</button>' +
 		"</div>";
 }
 
@@ -156,15 +156,15 @@ function renderAnki(main) {
 		const isStudy = tab === "study";
 		const tbtn = (id, label) => '<button data-ankitab="' + id + '" class="' + (tab === id ? "active" : "") + '">' + label + "</button>";
 		let html = '<div class="library anki' + (isStudy ? " anki-study-mode" : "") + '">';
-		if (!isStudy) html += '<div class="lib-head"><h1>🃏 ' + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
+		if (!isStudy) html += '<div class="lib-head"><h1>' + lead("cards") + (S.ankiDeck ? U.esc(S.ankiDeck) : "Karteikarten") + "</h1>" +
 			'<div class="mode-btns">' + tbtn("decks", "Stapel") + tbtn("browser", "Browser") + tbtn("stats", "Statistik") + tbtn("archive", "Archiv") + "</div>" +
-			'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" class="anki-ghost" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">' + ICON.gear + "<span>Optionen</span></button>" +
-			'<button data-ankizen="1" class="anki-ghost anki-icon" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden" aria-label="Vollbild">' + ICON.expand + "</button>" +
+			'<button data-deckconf="' + U.esc(S.ankiDeck || "*") + '" class="anki-ghost" title="Tageslimits & Leech-Verhalten (Stapel-Optionen)">' + icon("gear", "", 17) + "<span>Optionen</span></button>" +
+			'<button data-ankizen="1" class="anki-ghost anki-icon" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden" aria-label="Vollbild">' + icon("expand", "", 17) + "</button>" +
 			'<details class="anki-new"><summary title="Neue Karte, neuer Stapel, Import oder Export">＋ Neu ▾</summary><div class="anki-new-menu">' +
-				'<button data-ankinewcard="1">🃏 Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
-				'<button data-decknew="1">▸ Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
-				'<button data-ankiimport="1">⬇ Import<small>TXT, CSV oder Anki-Paket</small></button>' +
-				'<button data-ankiexport="1">⬆ Export<small>TXT, CSV oder Anki-Paket</small></button>' +
+				'<button data-ankinewcard="1">' + lead("cards") + 'Neue Karte<small>Frage &amp; Antwort erstellen</small></button>' +
+				'<button data-decknew="1">' + lead("plus") + 'Neuer Stapel<small>Unterstapel per „Eltern::Kind“</small></button>' +
+				'<button data-ankiimport="1">' + lead("download") + 'Import<small>TXT, CSV oder Anki-Paket</small></button>' +
+				'<button data-ankiexport="1">' + lead("upload") + 'Export<small>TXT, CSV oder Anki-Paket</small></button>' +
 			"</div></details></div>";
 		// Alle Tabs teilen EIN Container (Mitte, 1120 px); der Lernmodus braucht die volle Breite.
 		if (isStudy) html += ankiStudyHtml();
@@ -179,7 +179,7 @@ function renderAnki(main) {
 		S.ankiTab = "decks";
 		S.reviewCardId = null;
 		try {
-			let fallback = '<div class="library anki"><div class="lib-head"><h1>🃏 Karteikarten</h1>' +
+			let fallback = '<div class="library anki"><div class="lib-head"><h1>' + lead("cards") + 'Karteikarten</h1>' +
 				'<div class="mode-btns"><button data-ankitab="decks" class="active">Stapel</button></div></div>' +
 				ankiDecksHtml() + '</div>';
 			U.morph(main, fallback);
@@ -215,10 +215,10 @@ function ankiDecksHtml() {
 		const cnt = STATE.studySnapshot(d).counts;
 		const open = ankiStudyOpen(d);
 		const susp = cards.filter((c) => c.suspended).length;
-		const icon = hasKids
+		const deckIco = hasKids
 			? '<button class="deck-ico deck-collapse" data-collapse="deck:' + U.esc(d) + '" aria-expanded="' + (!collapsed) + '" title="Unterstapel ' + (collapsed ? "anzeigen" : "ausblenden") + '">' + (collapsed ? "▸" : "▾") + "</button>"
-			: '<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : "🃏") + "</span>";
-		return '<div class="deck-row" style="--deck-depth:' + depth + '">' + icon +
+			: '<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : icon("cards")) + "</span>";
+		return '<div class="deck-row" style="--deck-depth:' + depth + '">' + deckIco +
 			'<span class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
 			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
 			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
@@ -227,16 +227,16 @@ function ankiDecksHtml() {
 					: '<small class="deck-done">✓ fertig für heute</small>') +
 			"</span>" +
 			'<span class="deck-actions">' +
-				'<button class="deck-iconbtn" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">🔍</button>' +
-				'<button class="deck-iconbtn" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">＋</button>' +
-				'<button class="deck-iconbtn" data-deckarchive="' + U.esc(d) + '" title="Stapel archivieren">🗄</button>' +
+				'<button class="deck-iconbtn" data-ankideckfilter="' + U.esc(d) + '" title="Stapel durchsuchen">' + icon("search") + '</button>' +
+				'<button class="deck-iconbtn" data-decksub="' + U.esc(d) + '" title="Unterstapel anlegen">' + icon("plus") + '</button>' +
+				'<button class="deck-iconbtn" data-deckarchive="' + U.esc(d) + '" title="Stapel archivieren">' + icon("archive") + '</button>' +
 				// 🗑 Direkt-Löschen — nutzt weiterhin den bestehenden [data-deckdel]-Handler
 				// in app.js (Nachfrage + Soft-Delete via deckTrash).
-				'<button class="deck-iconbtn danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">🗑</button>' +
+				'<button class="deck-iconbtn danger" data-deckdel="' + U.esc(d) + '" title="Stapel in den Papierkorb">' + icon("trash") + '</button>' +
 				'<button class="deck-study" data-ankistudy="' + U.esc(d) + '" ' + (open ? "" : "disabled") + ">Lernen</button>" +
 				// 🧑‍🏫 Feynman-Modus als eigene Lern-Option je Stapel (Phase 2, beim Start wählbar)
-				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (open ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">🧑‍🏫 Feynman</button>' +
-				'<button type="button" class="deck-iconbtn deck-more-btn" data-deckmenu="' + U.esc(d) + '" title="Weitere Optionen">⋯</button>' +
+				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (open ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">' + lead("explain") + 'Feynman</button>' +
+				'<button type="button" class="deck-iconbtn deck-more-btn" data-deckmenu="' + U.esc(d) + '" title="Weitere Optionen">' + icon("dots") + '</button>' +
 			"</span>" +
 			(S.deckMenuOpenName === d ? deckMenuHtml(d) : "") +
 			"</div>";
@@ -252,15 +252,15 @@ function ankiDecksHtml() {
 	const minText = minutes + (minutes === 1 ? " Minute" : " Minuten");
 	const word = g.total === 1 ? "Karte" : "Karten";
 	const dueTitle = g.review + " Wiederholungen, " + g.learn + " Lernschritte, " + g.neu + " neue Karten";
-	const lead = !flat.length ? "Lege deinen ersten Stapel an — über „＋ Neu“."
+	const leadText = !flat.length ? "Lege deinen ersten Stapel an — über „＋ Neu“."
 		: g.total
 			? (openAll ? '<button type="button" class="anki-link" data-ankistudy="">' + g.total + " " + word + "</button>" : g.total + " " + word) + " warten auf dich, etwa " + minText + "."
 			: "Für heute ist alles gelernt.";
 	// Modi nur, wenn es etwas zu starten gibt — sonst wären sie tote, ausgegraute Knöpfe
 	const modes = openAll
 		? '<div class="anki-modes">' +
-			'<button type="button" data-ankistudy="" data-ankifeyn="1" title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">🧑‍🏫 Feynman-Modus</button>' +
-			'<button type="button" data-ankistudy="" data-ankimix="1" title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">🔀 Gemischt</button>' +
+			'<button type="button" data-ankistudy="" data-ankifeyn="1" title="Alle Stapel im Feynman-Modus: erst in eigenen Worten erklären, dann von der KI prüfen lassen">' + lead("explain") + 'Feynman-Modus</button>' +
+			'<button type="button" data-ankistudy="" data-ankimix="1" title="Fällige Karten aller Stapel gemischt statt Stapel für Stapel — Interleaved Practice festigt das Langzeitgedächtnis">' + lead("shuffle") + 'Gemischt</button>' +
 		"</div>"
 		: "";
 	const dueCard = g.total
@@ -268,7 +268,7 @@ function ankiDecksHtml() {
 			attrs: 'type="button" data-ankistudy="" ' + dis + ' title="' + U.esc(dueTitle) + '"' })
 		: statHtml({ label: "Heute fällig", value: flat.length ? "✓ Alles gelernt" : "Keine Karten", valueCls: flat.length ? "done" : "",
 			note: flat.length ? "Morgen geht’s weiter" : "Stapel anlegen" });
-	const overview = '<section class="anki-home"><p class="anki-lead">' + lead + "</p>" + modes +
+	const overview = '<section class="anki-home"><p class="anki-lead">' + leadText + "</p>" + modes +
 		'<div class="anki-stats">' + dueCard + statHtml({ label: "Neue Karten", value: g.neu, note: "im heutigen Tageslimit" }) + "</div></section>";
 	return overview + ankiSec("Deine Stapel") +
 		'<div class="deck-list">' + (rows || '<div class="empty small">Noch keine Stapel — über „＋ Neu“ einen anlegen</div>') + "</div>";
@@ -325,16 +325,16 @@ function ankiBrowserHtml() {
 			'<tr class="' + (c.suspended ? "suspended" : "") + '">' +
 				'<td class="anki-front" data-ankiedit="' + c.id + '" title="Zum Bearbeiten klicken">' + U.esc(c.front.length > 90 ? c.front.slice(0, 90) + "…" : c.front) + "</td>" +
 				"<td>" + U.esc(c.deck || "Standard") + "</td>" +
-				"<td>" + (c.suspended ? "⏸ Ausgesetzt" : (stateLabel[c.srs.state] || c.srs.state)) + "</td>" +
+				"<td>" + (c.suspended ? lead("pause") + "Ausgesetzt" : (stateLabel[c.srs.state] || c.srs.state)) + "</td>" +
 				"<td>" + U.fmtDate(c.srs.due) + "</td>" +
 				"<td>" + (c.srs.state === "new" ? "—" : Math.max(1, Math.round(c.srs.stability)) + " T") + "</td>" +
 				"<td>" + (c.srs.reps || 0) + "</td>" +
 				"<td>" + (c.srs.lapses || 0) + "</td>" +
 				'<td class="anki-rowbtns">' +
-					'<button data-ankiedit="' + c.id + '" title="Bearbeiten">✎</button>' +
-					'<button data-ankisuspend="' + c.id + '" title="' + (c.suspended ? "Fortsetzen" : "Aussetzen") + '">' + (c.suspended ? "▶" : "⏸") + "</button>" +
-					'<button data-ankiarchive="' + c.id + '" title="Archivieren">🗄</button>' +
-					'<button data-ankidel="' + c.id + '" class="danger" title="Löschen">🗑</button>' +
+					'<button data-ankiedit="' + c.id + '" title="Bearbeiten">' + icon("pen") + '</button>' +
+					'<button data-ankisuspend="' + c.id + '" title="' + (c.suspended ? "Fortsetzen" : "Aussetzen") + '">' + icon(c.suspended ? "play" : "pause") + "</button>" +
+					'<button data-ankiarchive="' + c.id + '" title="Archivieren">' + icon("archive") + '</button>' +
+					'<button data-ankidel="' + c.id + '" class="danger" title="Löschen">' + icon("trash") + '</button>' +
 				"</td></tr>"
 		).join("") + "</tbody></table></div>" +
 		(cards.length > shown.length ? '<div class="row-btns" style="margin-top:8px"><button data-ankimore="1">↓ ' + (cards.length - shown.length) + " weitere Karten anzeigen</button></div>" : "") +
@@ -346,11 +346,11 @@ function ankiBrowserHtml() {
 function ankiArchiveHtml() {
 	const deckRows = STATE.archivedDeckRoots().map((name) => {
 		const count = Object.values(S.cards).filter((c) => c && !c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
-		return '<div class="deck-row"><span class="deck-ico" aria-hidden="true">🗄</span>' +
+		return '<div class="deck-row"><span class="deck-ico" aria-hidden="true">' + icon("archive") + '</span>' +
 			'<span class="deck-info"><span class="deck-name">' + U.esc(name) + '</span><span class="deck-meta">' + count + (count === 1 ? " Karte" : " Karten") + ' inklusive Unterstapel</span></span>' +
 			'<span class="deck-actions"><button data-deckunarchive="' + U.esc(name) + '">Wiederherstellen</button></span></div>';
 	}).join("");
-	const cardRows = STATE.orphanArchivedCards().map((card) => '<div class="deck-row"><span class="deck-ico" aria-hidden="true">🃏</span>' +
+	const cardRows = STATE.orphanArchivedCards().map((card) => '<div class="deck-row"><span class="deck-ico" aria-hidden="true">' + icon("cards") + '</span>' +
 		'<span class="deck-info"><span class="deck-name">' + U.esc(String(card.front || "Ohne Vorderseite").slice(0, 100)) + '</span><span class="deck-meta">' + U.esc(card.deck || "Standard") + '</span></span>' +
 		'<span class="deck-actions"><button data-ankiunarchive="' + U.esc(card.id) + '">Wiederherstellen</button></span></div>').join("");
 	return ankiSec("Archiv", "Archivierte Karten bleiben erhalten, erscheinen aber nicht beim Lernen, in der aktiven Kartensuche oder im Wissensgraphen.") +
@@ -401,14 +401,14 @@ function ankiStudyHtml() {
 	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
 	const head = '<div class="study-head">' +
 		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel' + pad("exit") + '</button>' +
-		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · 🔀 gemischt" : "") + (S.ankiFeyn ? " · 🧑‍🏫 Feynman" : "") + "</span>" +
+		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · " + lead("shuffle") + "gemischt" : "") + (S.ankiFeyn ? " · " + lead("explain") + "Feynman" : "") + "</span>" +
 		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span>' +
 		// ⛶ Vollbild (23. Juli): gleicher Schalter wie in der Kopfzeile der Übersicht
-		'<button class="mini" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">⛶</button></div>';
+		'<button class="mini" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">' + icon("expand") + '</button></div>';
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
 	if (!c && snap.done) {
-		return head + '<div class="study-done study-card"><h2>Gratulation! 🎉</h2>' +
+		return head + '<div class="study-done study-card"><h2>' + lead("party") + 'Gratulation!</h2>' +
 			'<p class="hint">Du hast diesen Stapel für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
 			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
 	}
@@ -419,10 +419,10 @@ function ankiStudyHtml() {
 	if (!c && snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
 		return head +
 			'<div class="study-wait study-card">' +
-				'<h2>Geschafft! 🎉</h2>' +
+				'<h2>' + lead("party") + 'Geschafft!</h2>' +
 				'<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt.</p>' +
 				'<p class="hint">' + snap.learnWaiting.length + ' Lernkarte(n) sind später heute wieder dran.</p>' +
-				(snap.lockedAhead ? '<p class="hint">🔒 Kurzzeitgedächtnis-Falle: ' + snap.lockedAhead + ' frisch bewertete Karte(n) sind kurz gesperrt — sofortiges Nochmal-Drillen fühlt sich gut an, landet aber nicht im Langzeitgedächtnis.</p>' : "") +
+				(snap.lockedAhead ? '<p class="hint">' + lead("lock") + 'Kurzzeitgedächtnis-Falle: ' + snap.lockedAhead + ' frisch bewertete Karte(n) sind kurz gesperrt — sofortiges Nochmal-Drillen fühlt sich gut an, landet aber nicht im Langzeitgedächtnis.</p>' : "") +
 				'<div class="modal-actions">' +
 					'<button class="primary" data-ankiwaitrefresh="1">Erneut prüfen</button>' +
 					'<button data-ankitab="decks">Zur Stapelübersicht</button>' +
@@ -432,7 +432,7 @@ function ankiStudyHtml() {
 	// Fallback wenn keine Karte verfügbar ist (z.B. Tageslimits erreicht oder Deck leer)
 	if (!c) {
 		return head +
-			'<div class="study-done study-card"><h2>Keine Karten fällig 🎉</h2>' +
+			'<div class="study-done study-card"><h2>' + lead("party") + 'Keine Karten fällig</h2>' +
 			'<p class="hint">Für diesen Stapel gibt es gerade keine weiteren fälligen Karten zum Lernen.</p>' +
 			'<div class="modal-actions"><button class="primary" data-ankitab="decks">Zur Stapelübersicht</button></div></div>';
 	}
@@ -448,7 +448,7 @@ function ankiStudyHtml() {
 			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage Intervall" : "Lernschritt") + '">' +
 			'<button type="button" class="study-exit-btn" data-ankitab="decks" data-ankiexit="1" aria-label="Lernen beenden">← Stapel</button>' +
 			'<span class="study-meta-deck">' + U.esc(c.deck || "Standard") + "</span>" +
-			(c.leech ? '<span class="leech-badge" title="Leech">🐛 Leech</span>' : "") +
+			(c.leech ? '<span class="leech-badge" title="Leech">' + lead("bug") + 'Leech</span>' : "") +
 			'<span class="study-meta-state">' + stLabel + "</span>" +
 		"</div>" +
 		// Bug-Fix („kommt noch“, 22. Juli): Klick/Tipp auf die Frage deckt NICHT mehr
@@ -479,9 +479,9 @@ function ankiStudyHtml() {
 		const confOn = !!confPref && confPref !== "off"; // Einstellung: Selbsteinschätzung (Standard: automatisch)
 		html += '<div class="study-reveal-controls">' +
 			(confOn ? '<div class="confidence-row"><span class="hint">Wie sicher bist du?</span>' +
-				'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">😎 Sicher</button>' +
-				'<button type="button" class="menu-chip" data-confidence="unsure" title="Ich bin unsicher">🤔 Unsicher</button>' +
-				'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">🎲 Geraten</button></div>' : "") +
+				'<button type="button" class="menu-chip" data-confidence="sure" title="Ich weiß die Antwort sicher">' + lead("check-circle") + 'Sicher</button>' +
+				'<button type="button" class="menu-chip" data-confidence="unsure" title="Ich bin unsicher">' + lead("help") + 'Unsicher</button>' +
+				'<button type="button" class="menu-chip" data-confidence="guess" title="Ich müsste raten">' + lead("dice") + 'Geraten</button></div>' : "") +
 			// Zähler und Selbsteinschätzung bleiben unmittelbar beim Aufdecken.
 			'<div class="study-counts-row">' + countsHtml + "</div>" +
 			// 🧑‍🏫 Feynman-Lernmodus (beim Stapel-Start gewählt): KEIN Dialog mehr —
@@ -491,10 +491,10 @@ function ankiStudyHtml() {
 			// Feedback über den Bewertungs-Buttons (kein Kontextwechsel mehr).
 			(S.ankiFeyn
 				? '<div class="feyn-inline" data-feyncard="' + c.id + '">' +
-					'<div class="hint feyn-inline-head">🧑‍🏫 Erkläre die Antwort in eigenen Worten — so einfach, dass es ein Kind versteht.</div>' +
+					'<div class="hint feyn-inline-head">' + lead("explain") + 'Erkläre die Antwort in eigenen Worten — so einfach, dass es ein Kind versteht.</div>' +
 					'<textarea class="exp-answer" rows="4" placeholder="Meine Erklärung … (Strg+Enter = prüfen)"></textarea>' +
 					'<div class="row-btns feyn-inline-actions">' +
-						'<button type="button" class="mini" data-expfeynmic="1" title="Diktieren statt tippen (Web Speech API)">🎙️ Diktieren</button>' +
+						'<button type="button" class="mini" data-expfeynmic="1" title="Diktieren statt tippen (Web Speech API)">' + lead("mic") + 'Diktieren</button>' +
 						'<button type="button" class="primary" data-expfeyncheck="1" title="Die KI prüft deine Erklärung gegen die Rückseite, deckt auf und schlägt eine Note vor">Prüfen & aufdecken</button>' +
 					'</div>' +
 					'<div class="exp-feynout"></div>' +
@@ -512,10 +512,10 @@ function ankiStudyHtml() {
 // rechts — beide Aktionen existierten bereits (data-ankiedit / data-deckconf).
 function studyFooterHtml(c) {
 	return '<div class="study-footer">' +
-		'<button class="mini" data-ankiedit="' + c.id + '" title="Diese Karte bearbeiten">✎ Bearbeiten' + pad("edit") + '</button>' +
+		'<button class="mini" data-ankiedit="' + c.id + '" title="Diese Karte bearbeiten">' + lead("pen") + 'Bearbeiten' + pad("edit") + '</button>' +
 		'<div class="study-footer-options">' +
-			'<button class="mini" data-ankisuspend="' + c.id + '" title="Diese Karte aussetzen">⏸ Aussetzen' + pad("susp") + '</button>' +
-			'<button class="mini" data-deckconf="' + U.esc(c.deck || S.ankiDeck || "Standard") + '" title="Stapel-Optionen">⚙️ Optionen</button>' +
+			'<button class="mini" data-ankisuspend="' + c.id + '" title="Diese Karte aussetzen">' + lead("pause") + 'Aussetzen' + pad("susp") + '</button>' +
+			'<button class="mini" data-deckconf="' + U.esc(c.deck || S.ankiDeck || "Standard") + '" title="Stapel-Optionen">' + lead("gear") + 'Optionen</button>' +
 		'</div>' +
 	'</div>';
 }

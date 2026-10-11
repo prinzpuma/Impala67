@@ -8,6 +8,7 @@ import { PDFS } from "./pdfs.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
 import { VOICE } from "./voice.js";
+import { icon } from "./icons.js";
 
 // chat-fullscreen.js — Steuerung für BEIDE Chat-Flächen (Seitenpanel + Chat-Tab).
 // Der Dateiname bleibt, weil main.js, app.js und der Service-Worker darauf zeigen.
@@ -70,7 +71,7 @@ function updateSubmitButtons() {
 		const busy = isActiveRun(isSide);
 		const inp = U.el(isSide ? "chatInput" : "mainChatInput");
 		btn.disabled = busy ? false : !inp?.value.trim();
-		btn.textContent = busy ? "⏹" : "↑";
+		btn.innerHTML = busy ? icon("stop") : "↑";
 		btn.title = busy ? "Antwort abbrechen" : "Senden";
 		btn.classList.toggle("busy", busy);
 	}
@@ -154,7 +155,7 @@ export async function sendChatMessage(text, type) {
 			: txt ? "Fasse die angehängte Datei zusammen."
 			: "Beschreibe das angehängte Bild.";
 		const answer = await AI.agent(text || fallback, kind, (tool) => {
-			S.aiStatus = "⚙ " + tool + "…";
+			S.aiStatus = tool + "…";
 			schedulePaint(isSide);
 		}, { id: runId, target });
 		// Nur Antworten auf eine Spracheingabe vorlesen — getippte Chats bleiben still.
@@ -167,8 +168,8 @@ export async function sendChatMessage(text, type) {
 			target.push({ mid: U.uid(), role: "assistant", content: (err?.draft ? err.draft + "\n\n" : "") + "*(Abgebrochen.)*", reasoning: err?.reasoning || null, reasoningExpanded: false });
 		} else {
 			// Scheitert eine Anfrage MIT Bild, liegt es meist am nicht vision-fähigen Modell.
-			const hint = img ? "\n\nℹ️ Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
-			target.push({ mid: U.uid(), role: "assistant", content: "⚠️ " + (err?.message || err) + hint, reasoning: err?.reasoning || null, reasoningExpanded: false });
+			const hint = img ? "\n\nHinweis: Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
+			target.push({ mid: U.uid(), role: "assistant", content: "**Fehler:** " + (err?.message || err) + hint, reasoning: err?.reasoning || null, reasoningExpanded: false });
 		}
 	}
 	setBusy(isSide, false);

@@ -23,6 +23,7 @@ import { HEFT } from "./heft.js";
 import { FACH } from "./fach.js";
 import { PDFS } from "./pdfs.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
+import { icon, lead, pageIcon } from "./icons.js";
 
 // Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
 // FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
@@ -96,7 +97,7 @@ function mountFullChatVoiceButton() {
 	if (!submit || $("btnVoiceFull")) return;
 	// SVG statt Emoji — konsistent mit den übrigen Icons (voice.js pflegt den Zustand)
 	const voiceBtn = Object.assign(document.createElement("button"), { type: "button", id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)" });
-	voiceBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
+	voiceBtn.innerHTML = icon("mic");
 	submit.before(voiceBtn);
 }
 
@@ -131,11 +132,11 @@ function openMoveDialog(pageId) {
 	const bad = STATE.pageSubtreeIds(pageId);
 	let items = "";
 	for (const ws of Object.values(S.workspaces)) {
-		items += `<button class="menu-item" data-movetarget="ws:${esc(ws.id)}">📁 ${esc(ws.name)}</button>`;
+		items += `<button class="menu-item" data-movetarget="ws:${esc(ws.id)}">${lead("folder")}${esc(ws.name)}</button>`;
 		const walk = (parentId, depth) => {
 			for (const p of STATE.childrenOf(parentId, ws.id)) {
 				if (bad.has(p.id) || p.trashed) continue;
-				items += `<button class="menu-item" data-movetarget="pg:${p.id}" style="padding-left:${14 + depth * 16}px">${p.icon ? esc(p.icon) + " " : "📝 "}${esc(p.title)}</button>`;
+				items += `<button class="menu-item" data-movetarget="pg:${p.id}" style="padding-left:${14 + depth * 16}px">${pageIcon(p, "note", "i-lead")}${esc(p.title)}</button>`;
 				walk(p.id, depth + 1);
 			}
 		};
@@ -371,12 +372,12 @@ async function openDailyNote(key) {
 		let root = STATE.activePages().find((p) => p.dailyRoot);
 		if (!root) {
 			const rid = U.uid();
-			await STATE.dispatch("pageCreate", { id: rid, title: "Daily Notes", icon: "📅", workspaceId: "default", dailyRoot: true });
+			await STATE.dispatch("pageCreate", { id: rid, title: "Daily Notes", icon: null, workspaceId: "default", dailyRoot: true });
 			root = S.pages[rid];
 		}
 		const id = U.uid();
 		const title = new Date(key + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-		await STATE.dispatch("pageCreate", { id, title, parentId: root.id, workspaceId: root.workspaceId || "default", icon: "📅", daily: key, content: "" });
+		await STATE.dispatch("pageCreate", { id, title, parentId: root.id, workspaceId: root.workspaceId || "default", icon: null, daily: key, content: "" });
 		pg = S.pages[id];
 	}
 	if (pg) openPage(pg.id);
@@ -730,7 +731,7 @@ function wireEvents() {
 				navigator.clipboard.writeText(text).then(() => {
 					copyBtn.classList.add("copied");
 					const prevHtml = copyBtn.innerHTML;
-					copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:block;margin:auto"><polyline points="20 6 9 17 4 12"/></svg>';
+					copyBtn.innerHTML = icon("check", "i-strong");
 					setTimeout(() => {
 						copyBtn.classList.remove("copied");
 						copyBtn.innerHTML = prevHtml;
@@ -1213,7 +1214,7 @@ function wireEvents() {
 				const id = U.uid();
 				await STATE.dispatch("pageCreate", {
 					id, title: kind === "heft" ? "Neues Heft" : "Neue Seite", parentId: p.parentId || null, content: "",
-					icon: kind === "heft" ? "📓" : null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId, kind,
+					icon: null, tags: [], workspaceId: p.wsId || S.currentWorkspaceId, kind,
 				});
 				openPage(id, p.newTab ? { newTab: true } : undefined);
 				focusPageTitle();

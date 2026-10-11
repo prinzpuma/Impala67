@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.54";
+const BUILD_VERSION = "2.2.55";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -204,23 +204,23 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
 
 	if (window.Capacitor?.isNativePlatform?.()) {
-		say("⬇️ APK-Download wird im Browser geöffnet…");
+		say("APK-Download wird im Browser geöffnet…");
 		const apkUrl = "https://github.com/prinzpuma/Impala67/releases/latest/download/Impala67.apk";
 		window.open(apkUrl, "_system");
 		pendingUpdate = null;
 		return { reloaded: false, nativeDownload: true };
 	}
 
-	say(expectedVersion ? "⬇️ Update wird vorbereitet…" : "🔄 App wird neu geladen…");
+	say(expectedVersion ? "Update wird vorbereitet…" : "App wird neu geladen…");
 	try {
 		const reg = await (preparingUpdate || refreshServiceWorker());
 		if (reg) {
 			if (!reg.waiting && reg.installing) {
-				say("⬇️ Update wird geladen…");
+				say("Update wird geladen…");
 				await Promise.race([waitForWaiting(reg), delay(8000)]);
 			}
 			if (reg.waiting) {
-				say("⚙️ Update wird aktiviert…");
+				say("Update wird aktiviert…");
 				await activateWaitingWorker(reg, expectedVersion);
 			} else if (reg.installing) {
 				try { reg.installing.postMessage({ type: "SKIP_WAITING" }); } catch { /* ignore */ }
@@ -231,7 +231,7 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 	}
 	pendingUpdate = null;
 	preparingUpdate = null;
-	say(expectedVersion ? "✅ Update aktiv · App wird neu geladen…" : "🔄 App wird neu geladen…");
+	say(expectedVersion ? "Update aktiv · App wird neu geladen…" : "App wird neu geladen…");
 	await delay(150);
 	reloadWithCacheBust();
 	return { reloaded: true };
@@ -250,7 +250,7 @@ function showUpdateNotification(latest) {
 	wrap.style.cssText = "display:flex;align-items:center;gap:10px;cursor:default;";
 
 	const msg = document.createElement("span");
-	msg.textContent = `🚀 Update v${latest} verfügbar`;
+	msg.textContent = `Update v${latest} verfügbar`;
 
 	const btn = document.createElement("button");
 	btn.textContent = "Aktualisieren";

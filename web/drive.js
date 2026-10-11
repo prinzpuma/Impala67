@@ -464,7 +464,7 @@ export const DRIVE = (() => {
 		await getToken(false);
 		const files = await listSyncFiles();
 		if (Math.abs(clockSkewMs) > CLOCK_SKEW_WARN_MS) {
-			U.toast("⚠ Die Geräteuhr weicht ~" + Math.round(Math.abs(clockSkewMs) / 60000) + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
+			U.toast("Die Geräteuhr weicht ~" + Math.round(Math.abs(clockSkewMs) / 60000) + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
 			console.warn("[sync] Uhren-Drift gegen Drive:", clockSkewMs, "ms");
 		}
 		// [F4] Wasserstand klemmen: ein Wert über maxSeq (Kompaktierung/Restore) würde die

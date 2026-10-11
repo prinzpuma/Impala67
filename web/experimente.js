@@ -5,6 +5,7 @@ import { AI } from "./ai.js";
 import { TOOLS } from "./tools.js";
 import { PDFS } from "./pdfs.js";
 import { TELE } from "./telemetrie.js";
+import { icon, lead } from "./icons.js";
 
 // experimente.js — 🧪 Experimentelle KI-Lernmodi (Phase 2 aus „kommt noch“)
 // ---------------------------------------------------------------------------
@@ -31,13 +32,13 @@ export const EXP = (() => {
 	// Feynman-Logik (openFeynman/checkFeynman/hydrateFeynInline) lebt weiterhin
 	// hier, hängt aber nicht mehr am experiments-Flag.
 	const FEATURES = [
-		["elaboration", "🤔 Elaborative Interrogation", "Nach ca. jeder 4. gut beantworteten Karte fragt die KI „Und warum?“ nach — mit kurzem Feedback zu deiner Begründung."],
-		["variation", "🔀 Fragen-Variation", "Jede 3. Wiederholung wird die Vorderseite umformuliert, damit du das Konzept statt des Wortlauts lernst. Varianten werden lokal gecacht (offline-fähig)."],
-		["scaffolding", "💡 Gestufte Hinweise", "Statt sofort aufzudecken: Kategorie → Anfang/Struktur → Eselsbrücke. Erst nach dem ersten Abrufversuch — sonst leidet der Testing-Effekt."],
-		["mc", "🎯 Distraktor-Quiz", "Karte als Multiple-Choice mit plausiblen Falschantworten. Auflösung + Erklärung kommen sofort (Pflicht — sonst prägen sich Distraktoren ein)."],
-		["fehler", "🕵️ Fehler-Detektor", "Die KI schreibt eine kurze Erklärung mit eingebauten Fehlern, du suchst sie. Die Auflösung wird immer angezeigt. Start unten per Button."],
-		["pretest", "📖 Pre-Testing bei PDFs", "Nach dem PDF-Import stellt die KI dir Vorab-Fragen, BEVOR du liest. Falsch raten ist erwünscht — es primt das Gehirn (Pre-Testing-Effekt)."],
-		["wissensluecken", "🔍 Wissenslücken-Detektor", "Neues Chat-Werkzeug: „Prüfe meine Notiz zu X auf Lücken“ — findet Fachbegriffe, die benutzt, aber nie erklärt werden (Fluch des Wissens)."],
+		["elaboration", "Elaborative Interrogation", "Nach ca. jeder 4. gut beantworteten Karte fragt die KI „Und warum?“ nach — mit kurzem Feedback zu deiner Begründung.", "help"],
+		["variation", "Fragen-Variation", "Jede 3. Wiederholung wird die Vorderseite umformuliert, damit du das Konzept statt des Wortlauts lernst. Varianten werden lokal gecacht (offline-fähig).", "shuffle"],
+		["scaffolding", "Gestufte Hinweise", "Statt sofort aufzudecken: Kategorie → Anfang/Struktur → Eselsbrücke. Erst nach dem ersten Abrufversuch — sonst leidet der Testing-Effekt.", "bulb"],
+		["mc", "Distraktor-Quiz", "Karte als Multiple-Choice mit plausiblen Falschantworten. Auflösung + Erklärung kommen sofort (Pflicht — sonst prägen sich Distraktoren ein).", "target"],
+		["fehler", "Fehler-Detektor", "Die KI schreibt eine kurze Erklärung mit eingebauten Fehlern, du suchst sie. Die Auflösung wird immer angezeigt. Start unten per Button.", "bug"],
+		["pretest", "Pre-Testing bei PDFs", "Nach dem PDF-Import stellt die KI dir Vorab-Fragen, BEVOR du liest. Falsch raten ist erwünscht — es primt das Gehirn (Pre-Testing-Effekt).", "book-open"],
+		["wissensluecken", "Wissenslücken-Detektor", "Neues Chat-Werkzeug: „Prüfe meine Notiz zu X auf Lücken“ — findet Fachbegriffe, die benutzt, aber nie erklärt werden (Fluch des Wissens).", "search"],
 	];
 
 	const flags = () => (S.settings && S.settings.experiments) || {};
@@ -87,7 +88,7 @@ export const EXP = (() => {
 		closeModal();
 		const bd = document.createElement("div");
 		bd.className = "exp-modal-backdrop";
-		bd.innerHTML = '<div class="exp-modal"><div class="exp-modal-head"><b>' + U.esc(title) + "</b>" +
+		bd.innerHTML = '<div class="exp-modal"><div class="exp-modal-head"><b>' + title + "</b>" +
 			'<button type="button" class="mini" data-expclose="1" title="Schließen">✕</button></div>' +
 			'<div class="exp-modal-body">' + bodyHtml + "</div></div>";
 		bd.addEventListener("click", (e) => {
@@ -106,7 +107,7 @@ export const EXP = (() => {
 	function settingsHtml() {
 		let h = "";
 		FEATURES.forEach((f) => {
-			h += '<div class="settings-row"><span class="settings-row-copy"><b>' + U.esc(f[1]) + '</b><small>' + U.esc(f[2]) + '</small></span><span class="settings-row-control"><label class="settings-switch"><input type="checkbox" data-expflag="' + f[0] + '"' + (on(f[0]) ? " checked" : "") + ' aria-label="' + U.esc(f[1]) + '"><span aria-hidden="true"></span></label></span></div>';
+			h += '<div class="settings-row"><span class="settings-row-copy"><b>' + lead(f[3]) + U.esc(f[1]) + '</b><small>' + U.esc(f[2]) + '</small></span><span class="settings-row-control"><label class="settings-switch"><input type="checkbox" data-expflag="' + f[0] + '"' + (on(f[0]) ? " checked" : "") + ' aria-label="' + U.esc(f[1]) + '"><span aria-hidden="true"></span></label></span></div>';
 		});
 		h += '<div class="settings-actions"><button type="button" data-expfehler="1"' + (on("fehler") ? "" : " disabled") + '>Fehler-Detektor jetzt starten</button></div>';
 		return h;
@@ -121,7 +122,7 @@ export const EXP = (() => {
 		STATE.dispatch("settingsSet", { experiments: next });
 		const fBtn = document.querySelector("[data-expfehler]");
 		if (fBtn) fBtn.disabled = !next.fehler;
-		if (U.toast) U.toast(t.checked ? "🧪 Experiment aktiviert" : "Experiment deaktiviert");
+		if (U.toast) U.toast(t.checked ? "Experiment aktiviert" : "Experiment deaktiviert");
 	}, true);
 
 	// ---------- Klick-Verdrahtung (Capture, wie telemetrie.js) ----------
@@ -181,10 +182,10 @@ export const EXP = (() => {
 			// gewählt) rendert render-anki.js das Erklär-Feld bereits INLINE in die
 			// Karte (.feyn-inline) — dann keinen zusätzlichen Dialog-Knopf anbieten.
 			// Feynman ist regulär (24. Juli): kein experiments-Flag mehr — Knopf immer anbieten.
-			if (!S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1" data-card="' + U.esc(card.id) + '">🧑‍🏫 Erst erklären</button>');
+			if (!S.ankiFeyn && !cardEl.querySelector(".feyn-inline")) extras.push('<button type="button" class="mini" data-expfeynstart="1" data-card="' + U.esc(card.id) + '">' + lead("explain") + 'Erst erklären</button>');
 			hydrateFeynInline(cardEl, card);
-			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1" data-card="' + U.esc(card.id) + '">💡 Hinweis</button>');
-			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1" data-card="' + U.esc(card.id) + '">🎯 Als Quiz</button>');
+			if (on("scaffolding")) extras.push('<button type="button" class="mini" data-exphint="1" data-card="' + U.esc(card.id) + '">' + lead("bulb") + 'Hinweis</button>');
+			if (on("mc")) extras.push('<button type="button" class="mini" data-expmc="1" data-card="' + U.esc(card.id) + '">' + lead("target") + 'Als Quiz</button>');
 			const actions = showBtn.closest(".modal-actions");
 			if (extras.length && actions) actions.insertAdjacentHTML("beforeend", extras.join(""));
 		} else if (cardEl.querySelector(".grades")) {
@@ -205,13 +206,13 @@ export const EXP = (() => {
 				const gb = grades.querySelector('[data-ankigrade="' + feynVerdict.note + '"]');
 				if (gb) {
 					gb.classList.add("grade-suggest");
-					gb.insertAdjacentHTML("beforeend", '<span class="grade-ai" title="Vorschlag der KI aus deiner Erklärung">🧑‍🏫 KI-Vorschlag</span>');
+					gb.insertAdjacentHTML("beforeend", '<span class="grade-ai" title="Vorschlag der KI aus deiner Erklärung">' + lead("explain") + 'KI-Vorschlag</span>');
 				}
 			}
 			// Ehrlichkeits-Notiz, wenn Hinweise benutzt wurden
 			if (hintsUsedFor === card.id) {
 				grades.insertAdjacentHTML("beforebegin",
-					'<div class="hint exp-honesty">💡 Mit Hinweisen abgerufen — bewerte ehrlich (eher „Schwer“).</div>');
+					'<div class="hint exp-honesty">' + lead("bulb") + 'Mit Hinweisen abgerufen — bewerte ehrlich (eher „Schwer“).</div>');
 				hintsUsedFor = null;
 			}
 		}
@@ -247,7 +248,7 @@ export const EXP = (() => {
 		if (!face || !v) return;
 		if (varTrackedFor !== card.id) { varTrackedFor = card.id; trackCard("variation", { cardId: card.id }); }
 		face.dataset.exporigHtml = face.innerHTML;
-		face.innerHTML = '<div class="hint">🔀 Variante · <button type="button" class="mini" data-expvarorig="1">Original zeigen</button></div>' + U.md(v);
+		face.innerHTML = '<div class="hint">' + lead("shuffle") + 'Variante · <button type="button" class="mini" data-expvarorig="1">Original zeigen</button></div>' + U.md(v);
 		mathify(face);
 	}
 	function showOriginalFront(btn) {
@@ -271,8 +272,8 @@ export const EXP = (() => {
 		try { hints = JSON.parse(localStorage.getItem(key) || "null"); } catch (err) {}
 		if (!hints) {
 			btn.disabled = true;
-			const old = btn.textContent;
-			btn.textContent = "💡 …";
+			const old = btn.innerHTML;
+			btn.innerHTML = lead("bulb") + "…";
 			try {
 				const raw = await ask("Karteikarte:\nFrage: " + card.front + "\nAntwort: " + card.back +
 					'\n\nErzeuge 3 gestufte Hinweise, OHNE die Antwort zu verraten:\n1) grobe Kategorie/Richtung, 2) Anfangsbuchstabe oder Struktur, 3) Eselsbrücke.\nAntworte NUR als JSON: {"hinweise":["…","…","…"]}');
@@ -283,7 +284,7 @@ export const EXP = (() => {
 				if (U.toast) U.toast("Hinweise gerade nicht verfügbar (KI offline?)");
 			}
 			btn.disabled = false;
-			btn.textContent = old;
+			btn.innerHTML = old;
 			if (!hints) return;
 		}
 		if (!hints[hintLevel]) return;
@@ -299,7 +300,7 @@ export const EXP = (() => {
 		}
 		box.insertAdjacentHTML("beforeend", '<div class="exp-hint-line">' + U.esc(hints[hintLevel]) + "</div>");
 		hintLevel++;
-		btn.textContent = hintLevel >= 3 ? "💡 Keine weiteren Hinweise" : "💡 Noch ein Hinweis (" + hintLevel + "/3)";
+		btn.innerHTML = lead("bulb") + (hintLevel >= 3 ? "Keine weiteren Hinweise" : "Noch ein Hinweis (" + hintLevel + "/3)");
 		if (hintLevel >= 3) btn.disabled = true;
 	}
 
@@ -308,7 +309,7 @@ export const EXP = (() => {
 	async function openMc(btn) {
 		const card = S.cards[btn && btn.dataset.card] || displayedCard();
 		if (!card) return;
-		const bd = openModal("🎯 Distraktor-Quiz", '<div class="exp-wait">Quiz wird erstellt …</div>');
+		const bd = openModal(lead("target") + "Distraktor-Quiz", '<div class="exp-wait">Quiz wird erstellt …</div>');
 		try {
 			const raw = await ask("Karteikarte:\nFrage: " + card.front + "\nAntwort: " + card.back +
 				'\n\nBaue daraus eine Multiple-Choice-Frage: 1 korrekte Antwort + 3 PLAUSIBLE Falschantworten (typische Denkfehler/Verwechslungen). Erkläre zu JEDER Option in einem Satz, warum sie richtig bzw. falsch ist.\nAntworte NUR als JSON: {"frage":"…","optionen":[{"text":"…","korrekt":true,"warum":"…"}]}');
@@ -393,11 +394,11 @@ export const EXP = (() => {
 		const card = S.cards[cardId] || displayedCard();
 		if (!card) return;
 		feynCard = card;
-		openModal("🧑‍🏫 Feynman-Modus",
+		openModal(lead("explain") + "Feynman-Modus",
 			'<div class="md">' + U.md(card.front) + "</div>" +
 			'<p class="hint">Erkläre die Antwort in eigenen Worten — so einfach, dass es ein Kind versteht.</p>' +
 			'<textarea class="exp-answer" rows="5" placeholder="Meine Erklärung …"></textarea>' +
-			'<div class="row-btns"><button type="button" data-expfeynmic="1">🎙️ Diktieren</button>' +
+			'<div class="row-btns"><button type="button" data-expfeynmic="1">' + lead("mic") + 'Diktieren</button>' +
 			'<button type="button" data-expfeyncheck="1">Von der KI prüfen lassen</button></div>' +
 			'<div class="exp-feynout"></div>');
 	}
@@ -422,10 +423,10 @@ export const EXP = (() => {
 				"\n\nErklärung des Lernenden:\n" + txt.trim() +
 				'\n\nBewerte die Erklärung als Rubrik. Antworte NUR als JSON:\n{"getroffen":["Kernpunkt …"],"fehlend":["…"],"falsch":["…"],"note":3,"kommentar":"1–2 Sätze"}\nnote: 1=Nochmal, 2=Schwer, 3=Gut, 4=Einfach.');
 			const j = parseJson(raw) || {};
-			const li = (arr, icon) => (Array.isArray(arr) ? arr : []).map((x) => "<li>" + icon + " " + U.esc(String(x)) + "</li>").join("");
+			const li = (arr, ic) => (Array.isArray(arr) ? arr : []).map((x) => "<li>" + ic + " " + U.esc(String(x)) + "</li>").join("");
 			const names = { 1: "Nochmal", 2: "Schwer", 3: "Gut", 4: "Einfach" };
 			const note = names[j.note] ? Number(j.note) : 3;
-			const rubric = "<ul>" + li(j.getroffen, "✅") + li(j.fehlend, "⚠️ fehlt:") + li(j.falsch, "❌") + "</ul>" +
+			const rubric = "<ul>" + li(j.getroffen, icon("check-circle", "i-ok")) + li(j.fehlend, icon("alert", "i-warn") + " fehlt:") + li(j.falsch, icon("x-circle", "i-bad")) + "</ul>" +
 				"<p>" + U.esc(String(j.kommentar || "")) + "</p>";
 			trackCard("feynman", { cardId: card.id, note });
 			const verdictHtml = rubric + "<p><b>KI-Vorschlag: „" + names[note] + "“</b> — bestätige mit den Bewertungs-Buttons. Die Entscheidung bleibt bei dir.</p>";
@@ -476,7 +477,7 @@ export const EXP = (() => {
 
 	// ---------- 🤔 Elaborative Interrogation ----------
 	async function askWhy(card) {
-		const bd = openModal("🤔 Und warum?",
+		const bd = openModal(lead("help") + "Und warum?",
 			'<p class="hint">Elaborative Interrogation: kurz begründen verankert das Wissen tiefer. Überspringen ist ok.</p>' +
 			'<div class="exp-wait">Folgefrage wird erstellt …</div>');
 		try {
@@ -519,7 +520,7 @@ export const EXP = (() => {
 		const thema = window.prompt("Zu welchem Thema soll die KI eine Erklärung mit eingebauten Fehlern schreiben?");
 		if (!thema) return;
 		track("fehler", { thema });
-		const bd = openModal("🕵️ Fehler-Detektor", '<div class="exp-wait">Text wird erstellt …</div>');
+		const bd = openModal(lead("bug") + "Fehler-Detektor", '<div class="exp-wait">Text wird erstellt …</div>');
 		try {
 			const raw = await ask('Schreibe eine kurze Erklärung (5–8 Sätze) zum Thema „' + thema +
 				'“ und baue GENAU 2 sachliche Fehler ein (plausibel, keine Tippfehler).\nAntworte NUR als JSON: {"text":"…","fehler":[{"falsch":"Zitat aus dem Text","richtig":"Korrektur","warum":"…"}]}');
@@ -534,7 +535,7 @@ export const EXP = (() => {
 			body.querySelector("[data-expreveal]").addEventListener("click", (ev) => {
 				ev.currentTarget.remove();
 				body.insertAdjacentHTML("beforeend", "<ul>" + (Array.isArray(j.fehler) ? j.fehler : []).map((f) =>
-					"<li>❌ „" + U.esc(String(f.falsch || "")) + "“ → ✅ " + U.esc(String(f.richtig || "")) +
+					"<li>" + lead("x-circle") + "„" + U.esc(String(f.falsch || "")) + "“ → " + lead("check-circle") + U.esc(String(f.richtig || "")) +
 					(f.warum ? ' <span class="hint">(' + U.esc(String(f.warum)) + ")</span>" : "") + "</li>").join("") + "</ul>");
 			});
 		} catch (err) {
@@ -558,7 +559,7 @@ export const EXP = (() => {
 		const src = String(page.content || "").slice(0, 6000);
 		if (src.length < 200) return;
 		track("pretest", { pageId: page.id });
-		const bd = openModal("📖 Pre-Testing: " + (page.title || "Neues PDF"), '<div class="exp-wait">Vorab-Fragen werden erstellt …</div>');
+		const bd = openModal(lead("book-open") + "Pre-Testing: " + U.esc(page.title || "Neues PDF"), '<div class="exp-wait">Vorab-Fragen werden erstellt …</div>');
 		try {
 			const raw = await ask("Textauszug:\n" + src +
 				'\n\nErzeuge 4 kurze Vorab-Fragen mit knapper Musterantwort, die das Kernwissen dieses Textes abfragen.\nAntworte NUR als JSON: {"fragen":[{"q":"…","a":"…"}]}');
@@ -574,7 +575,7 @@ export const EXP = (() => {
 			body.querySelector("[data-expreveal]").addEventListener("click", (ev) => {
 				ev.currentTarget.remove();
 				body.querySelectorAll(".exp-pretest-q").forEach((el, i) => {
-					el.insertAdjacentHTML("beforeend", '<div class="hint">✅ ' + U.esc(String((fragen[i] || {}).a || "")) + "</div>");
+					el.insertAdjacentHTML("beforeend", '<div class="hint">' + lead("check-circle") + U.esc(String((fragen[i] || {}).a || "")) + "</div>");
 				});
 			});
 		} catch (err) {
@@ -591,7 +592,7 @@ export const EXP = (() => {
 			type: "function",
 			function: {
 				name: "check_wissensluecken",
-				description: "🧪 Prüft eine Notiz-Seite auf Wissenslücken: Fachbegriffe, die verwendet, aber nirgends definiert oder erklärt werden (Fluch des Wissens). Nutzen, wenn der Nutzer seine Notizen auf Lücken/unklare Begriffe prüfen will.",
+				description: "Prüft eine Notiz-Seite auf Wissenslücken: Fachbegriffe, die verwendet, aber nirgends definiert oder erklärt werden (Fluch des Wissens). Nutzen, wenn der Nutzer seine Notizen auf Lücken/unklare Begriffe prüfen will.",
 				parameters: {
 					type: "object",
 					properties: { seite: { type: "string", description: "Titel der zu prüfenden Seite" } },

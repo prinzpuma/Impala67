@@ -2,6 +2,7 @@
 // nur HTML-Strings zurück. Kein DOM-Zugriff, kein Zugriff auf Seiten oder Speicher.
 // Zustand, Aktionen und Events bleiben in render.js.
 import { U } from "./util.js";
+import { icon } from "./icons.js";
 
 const esc = (s) => U.esc(s);
 
@@ -224,7 +225,7 @@ export function conflictDialogHtml(items, i, { copyText = "" } = {}) {
 	const bulk = bulkN >= 2 ? `<button type="button" class="cf-bulk" data-conflictbulk="1">Alle ${bulkN} Konflikte mit Empfehlung lösen</button>` : "";
 	return '<div class="modal conflict-modal" role="dialog" aria-modal="true" aria-labelledby="conflictDialogTitle" tabindex="-1">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen (Esc)" aria-label="Schließen">✕</button>' +
-		'<header class="cf-top"><h1 class="cf-top-title" id="conflictDialogTitle"><span class="cf-warn" aria-hidden="true">⚠</span>' +
+		'<header class="cf-top"><h1 class="cf-top-title" id="conflictDialogTitle"><span class="cf-warn" aria-hidden="true">' + icon("alert") + '</span>' +
 		"Synchronisation braucht eine Entscheidung</h1>" +
 		`<div class="cf-top-tools">${bulk}${nav}</div></header>` +
 		`<div class="cf-body">${list}<section class="cf-detail" aria-labelledby="cfDetailTitle">` +

@@ -3,6 +3,7 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { FACH } from "./fach.js";
+import { icon } from "./icons.js";
 
 // telemetrie.js — Lern-Telemetrie v4 (4. August 2026: Fach + verzögerte Retention)
 // Neu in v3 (DRY): TELE.mark(feature) — experimente.js markiert Nutzung pro Karte,
@@ -298,7 +299,7 @@ export const TELE = (() => {
 		const cacheKey = logStamp(tele) + ":" + logStamp(S.reviews || []) + ":" + new Date().getHours();
 		if (cacheKey === _insightsKey && _insightsHtml) return _insightsHtml;
 		const reviews = reviewEvents();
-		const row = (icon, title, sub) => `<div class="insight"><span class="insight-ico">${icon}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
+		const row = (ic, title, sub) => `<div class="insight"><span class="insight-ico">${icon(ic)}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
 		const out = [];
 
 		// 1) Beste Tageszeit (Erfolgsquote nach Tagesabschnitt, min. 15 Bewertungen)
@@ -309,7 +310,7 @@ export const TELE = (() => {
 			}).filter((s) => s.n >= 15).sort((a, b) => b.rate - a.rate);
 		if (slots.length >= 2) {
 			const best = slots[0], worst = slots.at(-1);
-			out.push(row("🌅", `Du lernst ${best.label} am besten`,
+			out.push(row("sunrise", `Du lernst ${best.label} am besten`,
 				`${pct(best.rate)} % richtig (${best.n} Karten) — ${worst.label} nur ${pct(worst.rate)} %. Lege schwere Stapel in deine starke Zeit.`));
 		}
 
@@ -322,9 +323,9 @@ export const TELE = (() => {
 			let trend = ".";
 			if (recent.length >= 10 && older.length >= 10) {
 				const diff = Math.round((med(older) - med(recent)) / Math.max(1, med(older)) * 100);
-				trend = diff > 5 ? ` — zuletzt ${diff} % schneller ✅` : diff < -5 ? ` — zuletzt ${-diff} % langsamer.` : " — stabil.";
+				trend = diff > 5 ? ` — zuletzt ${diff} % schneller.` : diff < -5 ? ` — zuletzt ${-diff} % langsamer.` : " — stabil.";
 			}
-			out.push(row("⚡", `Denkzeit: ${(med(timed) / 1000).toFixed(1)} s pro Karte (Median)`, "Zeit von Frage bis „Antwort zeigen“" + trend));
+			out.push(row("zap", `Denkzeit: ${(med(timed) / 1000).toFixed(1)} s pro Karte (Median)`, "Zeit von Frage bis „Antwort zeigen“" + trend));
 		}
 
 		// 3) Kalibrierung: Einschätzung vs. tatsächlicher Erfolg. Bevorzugt die (jetzt
@@ -341,7 +342,7 @@ export const TELE = (() => {
 		const sure = confRate("sure"), guess = confRate("guess");
 		if (sure) {
 			const p = pct(sure.rate);
-			out.push(row("🎯", useAuto
+			out.push(row("target", useAuto
 				? `Zügig beantwortete Karten stimmen zu ${p} %`
 				: `Kalibrierung: „Sicher“-Karten stimmen zu ${p} %`,
 				p < 85
@@ -356,7 +357,7 @@ export const TELE = (() => {
 		const early = reviews.filter((e) => e.data.pos < 20), late = reviews.filter((e) => e.data.pos >= 40);
 		if (early.length >= 30 && late.length >= 30) {
 			const er = passRate(early), lr = passRate(late);
-			if (er - lr > 0.08) out.push(row("🪫", `Lange Sitzungen kosten dich ${pct(er - lr)} Punkte`,
+			if (er - lr > 0.08) out.push(row("battery-low", `Lange Sitzungen kosten dich ${pct(er - lr)} Punkte`,
 				`Ab Karte 40 sinkt deine Quote von ${pct(er)} % auf ${pct(lr)} % — lieber mehrere kurze Blöcke mit Timer.`));
 		}
 
@@ -365,7 +366,7 @@ export const TELE = (() => {
 		if (ends.length >= 3) {
 			const hours = ends.reduce((sum, e) => sum + e.data.durationMs, 0) / 3600000;
 			const perHour = ends.reduce((sum, e) => sum + (e.data.distractions || 0), 0) / Math.max(0.1, hours);
-			out.push(row("🎧", `Fokus: ${perHour.toFixed(1)} Ablenkungen pro Lernstunde`,
+			out.push(row("headphones", `Fokus: ${perHour.toFixed(1)} Ablenkungen pro Lernstunde`,
 				perHour > 6 ? "Viele App-Wechsel beim Lernen — probiere den Lerntimer mit stummem Gerät." : "Guter Fokus — App-Wechsel während des Lernens sind selten."));
 		}
 
@@ -383,13 +384,13 @@ export const TELE = (() => {
 			.map(([name, v]) => ({ name, n: v.n, rate: v.pass / v.n })).sort((a, b) => a.rate - b.rate);
 		if (decks.length && decks[0].rate < 0.88) {
 			const hard = decks[0];
-			out.push(row("🧗", "Schwierigster Stapel: " + U.esc(hard.name),
+			out.push(row("mountain", "Schwierigster Stapel: " + U.esc(hard.name),
 				`${pct(hard.rate)} % Erfolgsquote (${hard.n} Reviews in 30 Tagen) — Karten vereinfachen oder in kleinere Schritte teilen.`));
 		}
 
 		_insightsHtml = out.length
 			? `<div class="insight-list">${out.join("")}</div>`
-			: '<div class="insight empty"><span class="insight-ico">🧠</span><span><b>Noch zu wenig Daten für Insights</b>' +
+			: '<div class="insight empty"><span class="insight-ico">' + icon("brain") + '</span><span><b>Noch zu wenig Daten für Insights</b>' +
 				'<small>Ab jetzt wird jede Bewertung mit Denkzeit, Tageszeit, Selbsteinschätzung und Fokus protokolliert. Nach ein paar Lerntagen erscheinen hier konkrete Empfehlungen.</small></span></div>';
 		_insightsKey = cacheKey;
 		return _insightsHtml;

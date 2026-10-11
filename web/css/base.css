@@ -79,3 +79,23 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
 
 body.reduce-motion *:not(.boot-spinner):not(#bootSplash *) { animation: none !important; transition: none !important }
+
+/* Einheitliche Linien-Icons aus icons.svg (icons.js → icon("name")). Größe folgt der Schrift,
+   Farbe dem Text. Kontexte dürfen width/height/stroke-width überschreiben. */
+.i { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -0.15em; overflow: visible }
+:where(svg.i:not([width])) { width: 1.1em; height: 1.1em }
+.i-strong { stroke-width: 2.2 }
+/* Icon vor Text (lead() in icons.js): fester Abstand statt Leerzeichen */
+.i-lead { margin-right: .4em }
+.page-emoji { font-style: normal }
+.i-ok { color: var(--success) }
+.i-warn { color: var(--warn) }
+.i-bad { color: var(--danger) }
+.i-ok { color: var(--success) }
+.i-warn { color: var(--warn) }
+.i-bad { color: var(--danger) }
+.i-fill { fill: currentColor }
+/* Menüeinträge mit Icon: Icon + Text links, Tastenhinweis rechts (Abstand kommt vom gap) */
+.menu-item:has(> .i:first-child) { justify-content: flex-start }
+.menu-item > .menu-hint { margin-left: auto }
+:is(.menu-item, .heft-pop-row) > .i-lead { margin-right: 0 }

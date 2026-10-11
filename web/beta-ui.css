@@ -41,7 +41,6 @@ body.beta-ui .hv::before, body.beta-ui .anki-page::before, body.beta-ui .anki-st
 
 /* 3. Begrüßung & Kopfzeile */
 body.beta-ui .hv .hv-lead { font-size: 30px; line-height: 1.3; letter-spacing: -.02em; font-weight: 500 }
-body.beta-ui .hv .hv-hello::after { content: " 🌸" }
 body.beta-ui .hv .hv-btn { border-radius: 999px; border-color: transparent; background: color-mix(in srgb, var(--hv-pink) 24%, transparent); color: var(--text); font-weight: 600 }
 body.beta-ui .hv .hv-btn:hover { background: color-mix(in srgb, var(--hv-pink) 38%, transparent); transform: translateY(-1px) }
 body.beta-ui .hv .hv-ghost { border-radius: 999px }
@@ -88,7 +87,6 @@ body.beta-ui .hv .hv-recall small { color: var(--text); font-weight: 600 }
 
 /* 9. Karteikarten-Übersicht (Stapel-Tab): Begrüßungssatz, Modi, Kennzahlen und Stapel-Zeilen */
 body.beta-ui .anki-page .anki-lead { font-size: 30px; line-height: 1.3; letter-spacing: -.02em; font-weight: 500 }
-body.beta-ui .anki-page .anki-lead::after { content: " 🃏" }
 body.beta-ui .anki-page .anki-modes button { border-radius: 999px; border-color: transparent; font-weight: 600; background: color-mix(in srgb, var(--hv-lilac) 26%, transparent) }
 body.beta-ui .anki-page .anki-modes button:nth-child(2) { background: color-mix(in srgb, var(--hv-mint) 26%, transparent) }
 body.beta-ui .anki-page .anki-modes button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06) }

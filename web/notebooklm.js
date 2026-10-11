@@ -2,6 +2,7 @@
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
+import { icon, lead, pageIcon } from "./icons.js";
 // notebooklm.js — Gemini-Notebook-Anbindung v4. OHNE fremde APIs.
 // Google hat NotebookLM am 16.07.2026 in „Gemini Notebook" umbenannt — gleiches
 // Produkt, neuer Name. Alles Sichtbare heißt hier deshalb Gemini Notebook.
@@ -80,15 +81,17 @@ export const NLM = (() => {
 
 	// ---- Artefakt-Arten: Anzeige-Icons/-Labels je kind --------------------------
 	const KINDS = {
-		audio: { icon: "🎧", label: "Podcast" },
-		video: { icon: "🎬", label: "Video" },
-		mindmap: { icon: "🧠", label: "Mind Map" },
-		"slides-pdf": { icon: "📑", label: "Folien (PDF)" },
-		"slides-pptx": { icon: "📑", label: "Folien (PPTX)" },
-		text: { icon: "📄", label: "Text" },
-		file: { icon: "📎", label: "Datei" },
+		audio: { icon: "🎧", svg: "headphones", label: "Podcast" },
+		video: { icon: "🎬", svg: "film", label: "Video" },
+		mindmap: { icon: "🧠", svg: "graph", label: "Mind Map" },
+		"slides-pdf": { icon: "📑", svg: "slides", label: "Folien (PDF)" },
+		"slides-pptx": { icon: "📑", svg: "slides", label: "Folien (PPTX)" },
+		text: { icon: "📄", svg: "file", label: "Text" },
+		file: { icon: "📎", svg: "paperclip", label: "Datei" },
 	};
+	// icon: Emoji für Markdown-Inhalt und Seiten-Icon (Daten), svg: Anzeige in der Oberfläche
 	const kindIcon = (k) => (KINDS[k] || KINDS.file).icon;
+	const kindSvg = (k) => icon((KINDS[k] || KINDS.file).svg);
 	const kindLabel = (k) => (KINDS[k] || KINDS.file).label;
 	const EXT_KIND = {
 		mp3: "audio", m4a: "audio", aac: "audio", wav: "audio", ogg: "audio", opus: "audio",
@@ -208,7 +211,7 @@ export const NLM = (() => {
 		rememberSources(ids); // Herkunft für den nächsten Import merken
 		try { await navigator.clipboard.writeText(text); }
 		catch (e) { prompt("Zwischenablage blockiert — Text mit Strg+C kopieren:", text); return true; }
-		U.toast('📋 ' + ids.length + ' Seite(n) kopiert — in ' + PRODUCT + ': „Quelle hinzufügen → Kopierter Text" → Einfügen.', "success");
+		U.toast(ids.length + ' Seite(n) kopiert — in ' + PRODUCT + ': „Quelle hinzufügen → Kopierter Text" → Einfügen.', "success");
 		return true;
 	}
 
@@ -219,7 +222,7 @@ export const NLM = (() => {
 		let last = null;
 		for (const f of files) last = await fileAdd(f.name || "gemini-notebook-datei", f);
 		if (files.length === 1) showInboxToast(last);
-		else U.toast("📥 " + files.length + " Dateien in die Inbox übernommen (Bibliothek → 📥).", "success");
+		else U.toast(files.length + " Dateien in die Inbox übernommen (Bibliothek → Gemini Notebook).", "success");
 		refreshHubList();
 		return files.length;
 	}
@@ -248,7 +251,7 @@ export const NLM = (() => {
 	async function embedInto(pg, f) {
 		await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: (pg.content || "").replace(/\s*$/, "") + embedMd(f) } });
 		await fileUpdate(f.id, { placedPageId: pg.id });
-		U.toast("✅ " + kindLabel(f.kind) + ' in „' + (pg.title || "Ohne Titel") + '" eingebettet.', "success");
+		U.toast(kindLabel(f.kind) + ' in „' + (pg.title || "Ohne Titel") + '" eingebettet.', "success");
 		TABS.openPage(pg.id);
 	}
 	async function placeAsSubpage(f, parentPg) {
@@ -264,7 +267,7 @@ export const NLM = (() => {
 			tags: ["notebooklm"], // Tag bleibt technisch stabil (bestehende Filter/Seiten)
 		});
 		await fileUpdate(f.id, { placedPageId: id });
-		U.toast("✅ Unterseite angelegt.", "success");
+		U.toast("Unterseite angelegt.", "success");
 		TABS.openPage(id);
 	}
 
@@ -276,14 +279,14 @@ export const NLM = (() => {
 		const embedTargets = sources.filter((p) => p.kind !== "heft"); // Hefte rendern pg.content nicht
 		const o = U.el("overlay");
 		o.hidden = false;
-		const srcRows = embedTargets.map((pg) => '<button class="nlm-place-opt" data-embed="' + pg.id + '">📄 In „' +
+		const srcRows = embedTargets.map((pg) => '<button class="nlm-place-opt" data-embed="' + pg.id + '">' + lead("file") + 'In „' +
 			U.esc((pg.title || "Ohne Titel").slice(0, 44)) + '" einbetten</button>').join("");
-		o.innerHTML = '<div class="modal nlm-modal"><h3>📌 Einordnen: ' + kindIcon(f.kind) + " " + U.esc(f.name) + "</h3>" +
+		o.innerHTML = '<div class="modal nlm-modal"><h3>' + lead("pin") + 'Einordnen: ' + U.esc(f.name) + "</h3>" +
 			(sources.length ? '<p class="hint">Herkunft erkannt: zuletzt wurden diese Seiten als Quelle kopiert.</p>' : '<p class="hint">Keine Herkunft bekannt — Ziel selbst wählen.</p>') +
 			'<div class="nlm-place-list">' + srcRows +
-				'<button class="nlm-place-opt" data-sub="1">🆕 Als neue Unterseite' + (sources.length ? ' unter „' + U.esc((sources[0].title || "Ohne Titel").slice(0, 30)) + '"' : "") + "</button>" +
-				'<button class="nlm-place-opt" data-pickpage="1">🔎 Andere Seite wählen…</button>' +
-				'<button class="nlm-place-opt" data-keep="1">📥 Nur in der Mediathek behalten</button>' +
+				'<button class="nlm-place-opt" data-sub="1">' + lead("plus") + 'Als neue Unterseite' + (sources.length ? ' unter „' + U.esc((sources[0].title || "Ohne Titel").slice(0, 30)) + '"' : "") + "</button>" +
+				'<button class="nlm-place-opt" data-pickpage="1">' + lead("search") + 'Andere Seite wählen…</button>' +
+				'<button class="nlm-place-opt" data-keep="1">' + lead("inbox") + 'Nur in der Mediathek behalten</button>' +
 			"</div>" +
 			'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div></div>';
 		o.querySelectorAll("[data-embed]").forEach((b) => b.addEventListener("click", async () => {
@@ -298,7 +301,7 @@ export const NLM = (() => {
 		const keep = o.querySelector("[data-keep]");
 		if (keep) keep.addEventListener("click", () => {
 			o.hidden = true;
-			U.toast("📥 Bleibt in der Mediathek (Bibliothek → 📥).", "success");
+			U.toast("Bleibt in der Mediathek (Bibliothek → Gemini Notebook).", "success");
 		});
 	}
 	function openPagePickDialog(f) {
@@ -309,10 +312,10 @@ export const NLM = (() => {
 			const t = (term || "").trim().toLowerCase();
 			const hits = pages.filter((pg) => !t || (pg.title || "").toLowerCase().includes(t)).slice(0, 40);
 			return hits.map((pg) => '<div class="nlm-row"><div class="nlm-check" data-nlmembedto="' + pg.id + '"><span class="nlm-title">' +
-				U.esc((pg.icon ? pg.icon + " " : "") + (pg.title || "Ohne Titel")) + "</span></div></div>").join("") ||
+				pageIcon(pg, "", "i-lead") + U.esc(pg.title || "Ohne Titel") + "</span></div></div>").join("") ||
 				'<div class="nlm-empty">Keine Seiten gefunden.</div>';
 		};
-		o.innerHTML = '<div class="modal nlm-modal"><h3>Seite wählen für ' + kindIcon(f.kind) + " " + U.esc(f.name) + "</h3>" +
+		o.innerHTML = '<div class="modal nlm-modal"><h3>Seite wählen für ' + kindSvg(f.kind) + " " + U.esc(f.name) + "</h3>" +
 			'<input type="search" class="nlm-search" id="nlmPlaceSearch" placeholder="Seiten durchsuchen…">' +
 			'<div class="nlm-list" id="nlmPlaceList">' + rowsHtml("") + "</div>" +
 			'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div></div>';
@@ -333,10 +336,10 @@ export const NLM = (() => {
 		const el = document.createElement("div");
 		el.className = "nlm-inbox-toast";
 		const src = (rec.sourcePageIds || []).map((id) => S.pages[id]).filter((p) => p && !p.trashed);
-		el.innerHTML = '<div class="nlm-it-title">' + kindIcon(rec.kind) + " " + U.esc(kindLabel(rec.kind)) + " übernommen</div>" +
+		el.innerHTML = '<div class="nlm-it-title">' + kindSvg(rec.kind) + " " + U.esc(kindLabel(rec.kind)) + " übernommen</div>" +
 			'<div class="nlm-it-name">' + U.esc(rec.name) + "</div>" +
 			(src.length ? '<div class="nlm-it-src">Quelle: ' + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 60)) + "</div>" : "") +
-			'<div class="nlm-it-btns"><button class="nlm-it-primary" data-a="place">📌 Einordnen</button><button data-a="play">▶ Öffnen</button><button data-a="later">Später</button></div>';
+			'<div class="nlm-it-btns"><button class="nlm-it-primary" data-a="place">' + lead("pin") + 'Einordnen</button><button data-a="play">' + lead("play") + 'Öffnen</button><button data-a="later">Später</button></div>';
 		document.body.appendChild(el);
 		const close = () => el.remove();
 		const timer = setTimeout(close, 15000);
@@ -401,7 +404,7 @@ export const NLM = (() => {
 				? '<span class="nlm-toggle" data-nlmtoggle="' + pg.id + '">' + (expanded.has(pg.id) ? "▾" : "▸") + "</span>"
 				: '<span class="nlm-toggle nlm-toggle-empty">▸</span>';
 			return '<div class="nlm-row' + (isCur ? " nlm-cur" : "") + '" style="padding-left:' + (depth * 18) + 'px" data-nlmrow="' + pg.id + '">' + toggle +
-				'<div class="nlm-check' + (isPicked ? " nlm-picked" : "") + '" data-nlmpick="' + pg.id + '"><span class="nlm-title">' + U.esc((pg.icon ? pg.icon + " " : "") + (pg.title || "Ohne Titel")) + (isCur ? ' <span class="nlm-tag">aktuell</span>' : "") + "</span>" +
+				'<div class="nlm-check' + (isPicked ? " nlm-picked" : "") + '" data-nlmpick="' + pg.id + '"><span class="nlm-title">' + pageIcon(pg, "", "i-lead") + U.esc(pg.title || "Ohne Titel") + (isCur ? ' <span class="nlm-tag">aktuell</span>' : "") + "</span>" +
 				'<span class="nlm-checkmark">✓</span></div></div>';
 		}
 		function listHtml(filter) {
@@ -413,12 +416,12 @@ export const NLM = (() => {
 		}
 		function updateCount() { const c = U.el("nlmCount"); if (c) c.textContent = picked.size + " ausgewählt"; }
 
-		o.innerHTML = '<div class="modal nlm-modal"><h3>📚 Seiten für ' + PRODUCT + ' auswählen</h3>' +
+		o.innerHTML = '<div class="modal nlm-modal"><h3>' + lead("library") + 'Seiten für ' + PRODUCT + ' auswählen</h3>' +
 			'<p class="hint">Kopiert die Inhalte als eine Quelle in die Zwischenablage — in ' + PRODUCT + ' dann „Quelle hinzufügen → Kopierter Text" wählen und einfügen.</p>' +
 			'<input type="search" class="nlm-search" id="nlmSearch" placeholder="Seiten durchsuchen…">' +
 			'<div class="nlm-quickrow"><button id="nlmAll">Alle</button><button id="nlmNone">Keine</button><button id="nlmCurOnly">Nur aktuelle Seite</button><span class="nlm-count" id="nlmCount"></span></div>' +
 			'<div class="nlm-list" id="nlmList">' + listHtml("") + "</div>" +
-			'<div class="modal-actions"><button id="btnNlmCopy">📋 Kopieren & ' + PRODUCT + ' öffnen</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
+			'<div class="modal-actions"><button id="btnNlmCopy">' + lead("copy") + 'Kopieren & ' + PRODUCT + ' öffnen</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
 
 		function bindRows() {
 			const list = U.el("nlmList");
@@ -480,9 +483,9 @@ export const NLM = (() => {
 		else if (f.kind === "audio" || /\.(mp3|m4a|wav|ogg|opus|aac)$/i.test(f.name)) body = '<audio controls autoplay style="width:100%" src="' + url + '"></audio>';
 		else if (f.kind === "mindmap") body = '<img style="max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:8px" src="' + url + '" alt="">';
 		else if (f.kind === "slides-pdf") body = '<iframe style="width:100%;height:70vh;border:none;border-radius:8px" src="' + url + '"></iframe>';
-		else body = '<p class="hint">Für diese Datei gibt es keine Vorschau — mit ⬇ speichern und lokal öffnen.</p>';
-		o.innerHTML = '<div class="modal" style="width:min(760px,94vw)"><h3>' + kindIcon(f.kind) + " " + U.esc(f.name) + "</h3>" + body +
-			'<div class="modal-actions"><button data-nlmsavequick="' + f.id + '">⬇ Speichern</button><button id="btnCloseOverlay">Schließen</button></div></div>';
+		else body = '<p class="hint">Für diese Datei gibt es keine Vorschau — speichern und lokal öffnen.</p>';
+		o.innerHTML = '<div class="modal" style="width:min(760px,94vw)"><h3>' + kindSvg(f.kind) + " " + U.esc(f.name) + "</h3>" + body +
+			'<div class="modal-actions"><button data-nlmsavequick="' + f.id + '">' + lead("download") + 'Speichern</button><button id="btnCloseOverlay">Schließen</button></div></div>';
 		const sv = o.querySelector("[data-nlmsavequick]");
 		if (sv) sv.addEventListener("click", () => U.downloadBlob(f.name, f.blob));
 	}
@@ -505,32 +508,32 @@ export const NLM = (() => {
 	function hubRowHtml(f) {
 		const src = (f.sourcePageIds || []).map((id) => S.pages[id]).filter((p) => p && !p.trashed);
 		return '<div class="nlm-lib-row nlm-lib-inbox">' +
-			'<span class="nlm-lib-icon">' + kindIcon(f.kind) + "</span>" +
+			'<span class="nlm-lib-icon">' + kindSvg(f.kind) + "</span>" +
 			'<span class="nlm-lib-main"><span class="nlm-lib-name">' + U.esc(f.name) + "</span>" +
 			'<span class="nlm-lib-sub">' + kindLabel(f.kind) + " · " + U.fmtDate(new Date(f.ts).toISOString()) +
 			(src.length ? " · Quelle: " + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 50)) : "") + "</span></span>" +
-			'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">▶</button>' +
-			'<button data-nlmlibplace="' + f.id + '" title="Einordnen">📌</button>' +
-			'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">⬇</button>' +
-			'<button data-nlmlibdel="' + f.id + '" title="Löschen">🗑</button></span></div>';
+			'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">' + icon("play") + '</button>' +
+			'<button data-nlmlibplace="' + f.id + '" title="Einordnen">' + icon("pin") + '</button>' +
+			'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">' + icon("download") + '</button>' +
+			'<button data-nlmlibdel="' + f.id + '" title="Löschen">' + icon("trash") + '</button></span></div>';
 	}
 	async function refreshHubList() {
 		const box = U.el("nlmHubList");
 		if (!box) return;
 		const inbox = (await fileList().catch(() => [])).filter((f) => !f.placedPageId);
 		box.innerHTML = inbox.map(hubRowHtml).join("") ||
-			'<div class="empty small">Inbox ist leer. Importierte Downloads erscheinen hier — alle (auch eingeordnete) Dateien: Bibliothek → 📥.</div>';
+			'<div class="empty small">Inbox ist leer. Importierte Downloads erscheinen hier — alle (auch eingeordnete) Dateien: Bibliothek → Gemini Notebook.</div>';
 	}
 	function renderPane(main) {
 		main.innerHTML = '<div class="nlm-hub">' +
-			"<h1>📓 " + PRODUCT + "</h1>" +
+			"<h1>" + lead("book") + PRODUCT + "</h1>" +
 			'<p class="hint">Google hat NotebookLM in ' + PRODUCT + ' umbenannt — gleiches Produkt, neuer Name. Einbetten in der App blockiert Google, deshalb öffnet es extern.</p>' +
 			'<div class="row-btns nlm-hub-actions">' +
-				'<button id="btnNlmHubCopy">📚 Seiten als Quelle kopieren…</button>' +
-				'<button id="btnNlmHubOpen">↗ ' + PRODUCT + ' öffnen</button>' +
-				'<button id="btnNlmHubImport">📥 Download importieren…</button></div>' +
+				'<button id="btnNlmHubCopy">' + lead("library") + 'Seiten als Quelle kopieren…</button>' +
+				'<button id="btnNlmHubOpen">' + lead("external") + PRODUCT + ' öffnen</button>' +
+				'<button id="btnNlmHubImport">' + lead("download") + 'Download importieren…</button></div>' +
 			'<div class="nlm-drop" id="nlmDrop">Heruntergeladene Datei aus ' + PRODUCT + ' (Podcast, Video, Mind Map, Folien …) hier ablegen — sie landet in der Inbox und lässt sich in Seiten einordnen.</div>' +
-			'<h4 class="nlm-hub-sub">📥 Inbox</h4><div id="nlmHubList"></div></div>';
+			'<h4 class="nlm-hub-sub">' + lead("inbox") + 'Inbox</h4><div id="nlmHubList"></div></div>';
 		U.el("btnNlmHubCopy").addEventListener("click", () => openPicker(openExternal));
 		U.el("btnNlmHubOpen").addEventListener("click", openExternal);
 		U.el("btnNlmHubImport").addEventListener("click", pickImportFiles);
@@ -552,14 +555,14 @@ export const NLM = (() => {
 		const o = U.el("overlay");
 		o.hidden = false;
 		const rows = files.map((f) => '<div style="display:flex;gap:8px;align-items:center;padding:3px 0">' +
-			'<span style="flex:none">' + kindIcon(f.kind) + "</span>" +
+			'<span style="flex:none">' + kindSvg(f.kind) + "</span>" +
 			'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + U.esc(f.name) + (f.placedPageId ? "" : ' <span class="nlm-tag">Inbox</span>') + "</span>" +
-			'<button data-nlmplay="' + f.id + '">▶</button><button data-nlmplace="' + f.id + '" title="Einordnen">📌</button><button data-nlmsave="' + f.id + '">⬇</button><button data-nlmdel="' + f.id + '">🗑</button></div>').join("");
-		o.innerHTML = '<div class="modal"><h3>📓 ' + PRODUCT + '</h3>' +
+			'<button data-nlmplay="' + f.id + '" title="Öffnen">' + icon("play") + '</button><button data-nlmplace="' + f.id + '" title="Einordnen">' + icon("pin") + '</button><button data-nlmsave="' + f.id + '" title="Speichern">' + icon("download") + '</button><button data-nlmdel="' + f.id + '" title="Löschen">' + icon("trash") + '</button></div>').join("");
+		o.innerHTML = '<div class="modal"><h3>' + lead("book") + PRODUCT + '</h3>' +
 			'<p class="hint">Ehemals NotebookLM — Google hat das Produkt umbenannt.</p>' +
-			'<div class="row-btns"><button id="btnNlmPick">📚 Seiten als Quelle kopieren…</button><button id="btnNlmOpen">↗ ' + PRODUCT + ' öffnen</button><button id="btnNlmImport">📥 Download importieren…</button></div>' +
-			(files.length ? "<h4>📥 Mediathek</h4>" + rows : '<p class="hint">Noch keine Dateien — in ' + PRODUCT + ' herunterladen und hier bzw. im 📓-Tab importieren (Knopf oder Drag & Drop).</p>') +
-			'<div class="modal-actions"><button id="btnNlmTab">📓 Import-Tab öffnen</button><button id="btnCloseOverlay">Schließen</button></div></div>';
+			'<div class="row-btns"><button id="btnNlmPick">' + lead("library") + 'Seiten als Quelle kopieren…</button><button id="btnNlmOpen">' + lead("external") + PRODUCT + ' öffnen</button><button id="btnNlmImport">' + lead("download") + 'Download importieren…</button></div>' +
+			(files.length ? "<h4>" + lead("inbox") + "Mediathek</h4>" + rows : '<p class="hint">Noch keine Dateien — in ' + PRODUCT + ' herunterladen und hier bzw. im Gemini-Notebook-Tab importieren (Knopf oder Drag & Drop).</p>') +
+			'<div class="modal-actions"><button id="btnNlmTab">' + lead("book") + 'Import-Tab öffnen</button><button id="btnCloseOverlay">Schließen</button></div></div>';
 		U.el("btnNlmPick").addEventListener("click", () => openPicker(openExternal));
 		U.el("btnNlmOpen").addEventListener("click", () => { o.hidden = true; openExternal(); });
 		U.el("btnNlmImport").addEventListener("click", () => { o.hidden = true; pickImportFiles(); });
@@ -590,11 +593,11 @@ export const NLM = (() => {
 		}
 		if (!(await copyPages(pages.map((p) => p.id)))) return { error: "Die Seiten sind leer." };
 		openExternal();
-		return { ok: true, copied: pages.length, hint: 'Inhalte liegen in der Zwischenablage — in Gemini Notebook (ehemals NotebookLM) „Quelle hinzufügen → Kopierter Text" wählen und einfügen, dann z.B. Audio-Übersicht (Lernpodcast) erstellen. Heruntergeladene Ergebnisse anschließend im 📓-Tab der App importieren (Knopf oder Drag & Drop) — sie kennen diese Seiten als Herkunft.' };
+		return { ok: true, copied: pages.length, hint: 'Inhalte liegen in der Zwischenablage — in Gemini Notebook (ehemals NotebookLM) „Quelle hinzufügen → Kopierter Text" wählen und einfügen, dann z.B. Audio-Übersicht (Lernpodcast) erstellen. Heruntergeladene Ergebnisse anschließend im Gemini-Notebook-Tab der App importieren (Knopf oder Drag & Drop) — sie kennen diese Seiten als Herkunft.' };
 	}
 
 	return {
 		openDialog, openExternal, sendPages, renderPane, importFiles,
-		listArtifacts, playById, saveById, deleteById, placeById, kindIcon, kindLabel,
+		listArtifacts, playById, saveById, deleteById, placeById, kindIcon, kindSvg, kindLabel,
 	};
 })();

@@ -3,13 +3,13 @@
 // unten die Lernanalyse (lernanalyse.js). Reines Markup aus fertigen Daten; render.js sammelt.
 // Klicks laufen über die data-*-Handler in app.js. Styles: home.css.
 import { U } from "./util.js";
-import { ICON } from "./icons.js";
+import { icon } from "./icons.js";
 import { HEFT } from "./heft.js";
 import { TELE } from "./telemetrie.js";
 
 const esc = (s) => U.esc(s);
 const DAY = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const GEAR = ICON.gear;
+const GEAR = icon("gear", "", 17);
 
 
 function when(iso) {
@@ -139,7 +139,7 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, 
 		return `<span class="hv-day${i === todayIdx ? " today" : ""}${i > todayIdx ? " later" : ""}" title="${DAY[i]}: ${min >= 1 ? dur(min) : "nichts"} gelernt"><span class="hv-bar"><i style="height:${h}%"></i></span>${DAY[i]}</span>`;
 	}).join("");
 	const pctGoal = Math.min(100, Math.round(weekMin / goalMin * 100));
-	const CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+	const CHECK = icon("check", "i-strong", 18);
 
 	const cards = open
 		? `<button class="hv-stat hv-cards due" data-homeaction="cards"><small>Heute fällig</small><b>${open} ${open === 1 ? "Karte" : "Karten"}</b><span>etwa ${estMin} Min · Lernen starten</span></button>`

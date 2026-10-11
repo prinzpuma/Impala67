@@ -197,7 +197,7 @@ export async function initApp() {
 			window.__IMPALA_PERF__.totalBootMs = totalMs;
 			window.__IMPALA_PERF__.appInitMs = appMs;
 			PERF_PROFILER.record("boot-ready", totalMs, { appInitMs: appMs });
-			console.info(`⚡ Impala67 Startzeit (lokal): Gesamt (inkl. Navigation/HTML) = ${totalMs} ms (App-Init = ${appMs} ms)`);
+			console.info(`Impala67 Startzeit (lokal): Gesamt (inkl. Navigation/HTML) = ${totalMs} ms (App-Init = ${appMs} ms)`);
 		} catch (e) { /* ignore */ }
 	}
 	SETTINGS.checkAI();
@@ -228,7 +228,7 @@ export async function initApp() {
 			if (decoded.url && decoded.key) {
 				await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
 				CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
-				U.toast("📱 Cloudflare-Sync automatisch verbunden!", "success");
+				U.toast("Cloudflare-Sync automatisch verbunden!", "success");
 				if (typeof history !== "undefined" && history.replaceState) {
 					history.replaceState(null, "", location.pathname + location.search);
 				}
@@ -303,10 +303,10 @@ function bootFail(e) {
 	const wrap = document.createElement("div");
 	wrap.style.cssText = "text-align:center;padding:24px;max-width:420px";
 	const msg = document.createElement("div");
-	msg.textContent = "⚠️ Start fehlgeschlagen: " + String((e && e.message) || e);
+	msg.textContent = "Start fehlgeschlagen: " + String((e && e.message) || e);
 	msg.style.cssText = "margin-bottom:14px;line-height:1.5";
 	const btn = document.createElement("button");
-	btn.textContent = "🔄 Neu laden";
+	btn.textContent = "Neu laden";
 	btn.style.cssText = "font:inherit;padding:8px 18px;border-radius:8px;border:1px solid #555;background:#2a2a2e;color:inherit";
 	btn.addEventListener("click", () => location.reload());
 	wrap.append(msg, btn);

@@ -7,6 +7,7 @@ import { PLATFORM_NATIVE } from "./platform-native.js";
 import { SCANCORE } from "./heft-scan.js";
 import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
 import { buildPdf } from "./heft-export.js";
+import { lead } from "./icons.js";
 
 const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuadAsync, liveCheck, processShot, blobToDataUrl } = SCANCORE;
 
@@ -92,13 +93,13 @@ export function createScanner(host) {
 			'<div class="heft-scan-modes" role="group" aria-label="Filter für neue und vorhandene Seiten">' + filters + '</div>' +
 			'<div class="heft-scan-bar">' +
 				'<div class="heft-scan-tools">' +
-					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
-					'<button type="button" data-hescantorch="1" aria-pressed="false" title="Taschenlampe" hidden>🔦 Licht</button>' +
+					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Auto-Scan aktivieren">' + lead("zap") + 'Auto aus</button>' +
+					'<button type="button" data-hescantorch="1" aria-pressed="false" title="Taschenlampe" hidden>' + lead("flashlight") + 'Licht</button>' +
 				'</div>' +
 				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen" aria-label="Seite aufnehmen" disabled></button>' +
 				'<div class="heft-scan-actions">' +
-					'<button type="button" data-hescanpdf="1" disabled>📄 Als PDF speichern</button>' +
-					'<button type="button" data-hescanheft="1" disabled>📓 In Heft einfügen</button>' +
+					'<button type="button" data-hescanpdf="1" disabled>' + lead("file") + 'Als PDF speichern</button>' +
+					'<button type="button" data-hescanheft="1" disabled>' + lead("notebook") + 'In Heft einfügen</button>' +
 				'</div>' +
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Seiten werden vorbereitet…</span></div>';
@@ -384,7 +385,7 @@ export function createScanner(host) {
 		else owner.autoArmed = false;
 		b.classList.toggle("active", owner.autoCapture);
 		b.setAttribute("aria-pressed", String(owner.autoCapture));
-		b.textContent = owner.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
+		b.innerHTML = lead("zap") + (owner.autoCapture ? "Auto an" : "Auto aus");
 	}
 
 	async function scanCapture(isAuto = false) {
@@ -548,8 +549,8 @@ export function createScanner(host) {
 		const enabled = n > 0 || owner.pending > 0;
 		const pdfBtn = owner.wrap.querySelector("[data-hescanpdf]");
 		const heftBtn = owner.wrap.querySelector("[data-hescanheft]");
-		if (pdfBtn) { pdfBtn.disabled = !enabled; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
-		if (heftBtn) { heftBtn.disabled = !enabled; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
+		if (pdfBtn) { pdfBtn.disabled = !enabled; pdfBtn.innerHTML = lead("file") + "Als PDF speichern" + (n ? " (" + n + ")" : ""); }
+		if (heftBtn) { heftBtn.disabled = !enabled; heftBtn.innerHTML = lead("notebook") + "In Heft einfügen" + (n ? " (" + n + ")" : ""); }
 	}
 	function scanPickFiles() {
 		const owner = scanUI;
@@ -650,10 +651,10 @@ export function createScanner(host) {
 				'<button type="button" data-hescanmode="' + m[0] + '" class="' + (sh.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>').join("") + '</div>' +
 			'<div class="heft-scan-editbar">' +
 				'<button type="button" data-hescancompare="1">◑ Vorher/Nachher</button>' +
-				'<button type="button" data-hescancorners="1">⌜ Ecken anpassen</button>' +
-				'<button type="button" data-hescanrot="1">⟳ Drehen' + (sh.rot ? " (" + (sh.rot * 90) + "°)" : "") + '</button>' +
-				'<button type="button" data-hescandel="1">🗑 Löschen</button>' +
-				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Fertig</button>' +
+				'<button type="button" data-hescancorners="1">' + lead("expand") + 'Ecken anpassen</button>' +
+				'<button type="button" data-hescanrot="1">' + lead("rotate") + 'Drehen' + (sh.rot ? " (" + (sh.rot * 90) + "°)" : "") + '</button>' +
+				'<button type="button" data-hescandel="1">' + lead("trash") + 'Löschen</button>' +
+				'<button type="button" class="heft-scan-apply" data-hescandone="1">' + lead("check") + 'Fertig</button>' +
 			'</div>';
 		owner.wrap.appendChild(ed);
 

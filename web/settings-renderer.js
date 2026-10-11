@@ -16,9 +16,10 @@ import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
+import { lead } from "./icons.js";
 
 const e = (value) => U.esc(String(value ?? ""));
-const button = (label, id, className = "", disabled = false) => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + e(label) + "</button>";
+const button = (label, id, className = "", disabled = false, ic = "") => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + (ic ? lead(ic) : "") + e(label) + "</button>";
 const linkButton = (label, section, anchor) => '<button type="button" class="settings-link" data-settings-go="' + e(section) + '"' + (anchor ? ' data-settings-anchor-target="' + e(anchor) + '"' : "") + '>' + e(label) + UI.icon("chevron") + "</button>";
 const switchControl = (id, label, checked) => '<label class="settings-switch"><input id="' + e(id) + '" type="checkbox"' + (checked ? " checked" : "") + ' aria-label="' + e(label) + '"><span aria-hidden="true"></span></label>';
 
@@ -175,7 +176,7 @@ function renderAi(vm) {
 				'<span id="localEmbeddingActions">' +
 					(isConfigured
 						? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
-						: button("📥 Herunterladen (ca. 165 MB)", "btnDownloadLocalEmbedding", "primary")) +
+						: button("Herunterladen (ca. 165 MB)", "btnDownloadLocalEmbedding", "primary", false, "download")) +
 				'</span>' +
 			'</div>' +
 		'</div>';
@@ -193,10 +194,10 @@ function renderAi(vm) {
 					'<small>Modell auf Basis von de-htr-web-v2 (naeyn, Apache-2.0); Trainingsdaten: ScaDS.AI German Handwriting (CC BY 4.0), fhswf/german_handwriting (AFL-3.0), Google MathWriting (CC BY 4.0)</small>' +
 				'</span>' +
 				'<span id="handwritingActions">' +
-					button("✍️ Abschreiben", "btnOpenAbschreiben", "secondary") + ' ' +
-					button("📤 Alle Handschrift exportieren", "btnExportAllInk", "secondary") + ' ' +
+					button("Abschreiben", "btnOpenAbschreiben", "secondary", false, "pen") + ' ' +
+					button("Alle Handschrift exportieren", "btnExportAllInk", "secondary", false, "upload") + ' ' +
 					(samplesCount > 0
-						? button("📥 Exportieren", "btnExportHandwritingSamples", "secondary") + ' ' + button("🗑 Leeren", "btnClearHandwritingSamples", "secondary danger-text")
+						? button("Exportieren", "btnExportHandwritingSamples", "secondary", false, "upload") + ' ' + button("Leeren", "btnClearHandwritingSamples", "secondary danger-text", false, "trash")
 						: '') +
 				'</span>' +
 			'</div>' +
@@ -248,8 +249,8 @@ function cloudflareContent() {
 	UI.field("Cloudflare Worker URL", "inpCfUrl", cf.url || "", { explicit: true, placeholder: "https://impala67-sync.<account>.workers.dev" }) +
 	UI.field("Sync-Schlüssel (E2EE)", "inpCfKey", cf.syncKey || "", { explicit: true, type: "password", placeholder: "impala-xxxx-xxxx-xxxx-xxxx" }) +
 	UI.actions([
-		{ label: "📷 QR-Code scannen", id: "btnCfScanPairing", className: "secondary" },
-		{ label: "📱 Gerät koppeln (QR-Code)", id: "btnCfPairing", className: "secondary", hidden: !hasCloudflareConfig(cf) },
+		{ label: "QR-Code scannen", icon: "camera", id: "btnCfScanPairing", className: "secondary" },
+		{ label: "Gerät koppeln (QR-Code)", icon: "phone", id: "btnCfPairing", className: "secondary", hidden: !hasCloudflareConfig(cf) },
 		{ label: "Schlüssel generieren", id: "btnCfGenKey", className: "secondary", hidden: !!(cf.syncKey || S.settings.cfSyncKey) },
 		{ label: "Schlüssel kopieren", id: "btnCfCopyKey", className: "secondary", hidden: !(cf.syncKey || S.settings.cfSyncKey) },
 	]) +

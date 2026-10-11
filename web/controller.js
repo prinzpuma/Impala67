@@ -278,10 +278,10 @@ window.addEventListener("gamepadconnected", (e) => {
 	hadPad = null;
 	ensureWatch(); // auch bei ausgeschalteter Steuerung — sonst sieht der Anlern-Modus nichts
 	U.toast(!enabled()
-		? "🎮 Controller erkannt — unter Einstellungen → Controller einschalten."
+		? "Controller erkannt — unter Einstellungen → Controller einschalten."
 		: (e.gamepad.mapping === "standard"
-			? "🎮 Controller verbunden — " + labelOf(map().g3) + " zeigt die Antwort."
-			: "🎮 Controller verbunden, Belegung unbekannt — bitte in den Einstellungen anlernen."), "success");
+			? "Controller verbunden — " + labelOf(map().g3) + " zeigt die Antwort."
+			: "Controller verbunden, Belegung unbekannt — bitte in den Einstellungen anlernen."), "success");
 	reopen();
 });
 window.addEventListener("gamepaddisconnected", () => { hadPad = null; tick(); reopen(); });

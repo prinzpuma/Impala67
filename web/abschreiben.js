@@ -4,6 +4,7 @@
 // über HANDSCHRIFT.saveTrainingSample (Export in den KI-Einstellungen).
 // Jeder vierte Text ist eine Messzeile (split: "eval") und darf nie ins Training.
 
+import { icon, lead } from "./icons.js";
 import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { ABSCHREIB_TEXTE, abschreibSplit } from "./abschreiben-texte.js";
@@ -74,7 +75,7 @@ export function open() {
 		'<div class="ab-vorgabe"></div>' +
 		"<canvas></canvas>" +
 		'<div class="ab-leiste">' +
-		'<button type="button" data-ab="senden">📤 Senden</button>' +
+		'<button type="button" data-ab="senden">' + lead("send") + 'Senden</button>' +
 		'<button type="button" data-ab="naechsterText">Anderer Text</button>' +
 		'<button type="button" data-ab="ueberspringen">Überspringen</button>' +
 		'<button type="button" data-ab="rueckgaengig">↶ Strich</button>' +
@@ -126,7 +127,7 @@ export function open() {
 		const t = ABSCHREIB_TEXTE[pos.t];
 		const zeilen = zeilenVon(t.text);
 		if (pos.l >= zeilen.length) pos.l = zeilen.length - 1;
-		root.querySelector(".ab-kopf b").textContent = "✍️ " + t.titel;
+		root.querySelector(".ab-kopf b").innerHTML = lead("pen") + U.esc(t.titel);
 		root.querySelector(".ab-info").textContent =
 			"Zeile " + (pos.l + 1) + "/" + zeilen.length + " · Text " + (pos.t + 1) + "/" + ABSCHREIB_TEXTE.length +
 			(gespeichert ? " · " + gespeichert + " gespeichert" : "");

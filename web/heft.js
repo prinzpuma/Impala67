@@ -13,6 +13,7 @@ import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
+import { icon, lead } from "./icons.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -1764,25 +1765,25 @@ export const HEFT = (() => {
 	}
 
 	let chromeMin = false;
-	const icon = (p) => '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
+	const tIcon = (name) => icon(name, "", 19);
 	function toolbarHtml() {
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
 
-		const svgPen = icon('<path d="M17 3.5a2.6 2.6 0 0 1 3.7 3.7L7.7 20.2 2.5 21.5l1.3-5.2z"/><path d="M14.5 6l3.5 3.5"/>');
-		const svgMarker = icon('<path d="M14.5 5.5l4 4L9.5 18.5h-4v-4z"/><path d="M4 21.5h16"/>');
-		const svgEraser = icon('<path d="M20 20H9l-4.3-4.3a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L13.5 18"/><path d="M8.5 9.5l6 6"/>');
-		const svgLasso = icon('<ellipse cx="12" cy="9.5" rx="7.5" ry="5.5" stroke-dasharray="3.2 3"/><path d="M7.5 14.5c-2.2 1.8-.6 4.3 1.5 4.1 2-.2 1.2 2-.8 2.9"/>');
-		const svgLaser = icon('<circle cx="12" cy="12" r="2.4"/><path d="M12 4.2v2.2M12 17.6v2.2M4.2 12h2.2M17.6 12h2.2M6.5 6.5l1.6 1.6M15.9 15.9l1.6 1.6M17.5 6.5l-1.6 1.6M8.1 15.9l-1.6 1.6"/>');
-		const svgImage = icon('<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l5-5 3.5 3.5 2.5-2.5 4 4"/>');
-		const svgUndo = icon('<path d="M8.5 5L4 9.5 8.5 14"/><path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/>');
-		const svgRedo = icon('<path d="M15.5 5L20 9.5 15.5 14"/><path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/>');
-		const svgHand = icon('<path d="M8.5 11.5V5.2a1.3 1.3 0 0 1 2.6 0V10m0-5.5a1.3 1.3 0 0 1 2.6 0V10m0-3.8a1.3 1.3 0 0 1 2.6 0v6.6c0 3.9-2.5 6.4-5.9 6.4-2.6 0-4.1-1.2-5.3-3.3l-2-3.6c-.5-.9-.2-1.9.7-2.3.8-.4 1.7-.1 2.2.7l1.5 2.3z"/>');
-		const svgPages = icon('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9.5h16M4 15h16"/>');
-		const svgPlus = icon('<path d="M12 5v14M5 12h14"/>');
-		const svgSpark = icon('<path d="M12 3.5l1.9 4.9 4.9 1.9-4.9 1.9L12 17.1l-1.9-4.9-4.9-1.9 4.9-1.9z"/>');
-		const svgChevDown = icon('<path d="M6 9.5l6 6 6-6"/>');
+		const svgPen = tIcon("pen-tool");
+		const svgMarker = tIcon("marker");
+		const svgEraser = tIcon("eraser");
+		const svgLasso = tIcon("lasso");
+		const svgLaser = tIcon("laser");
+		const svgImage = tIcon("image");
+		const svgUndo = tIcon("undo");
+		const svgRedo = tIcon("redo");
+		const svgHand = tIcon("hand");
+		const svgPages = tIcon("pages");
+		const svgPlus = tIcon("plus");
+		const svgSpark = tIcon("sparkles");
+		const svgChevDown = tIcon("chevron-down");
 		const writeIcon = tool === "marker" ? svgMarker : svgPen;
 
 		if (chromeMin) {
@@ -1969,7 +1970,7 @@ export const HEFT = (() => {
 			'<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button></div>' +
 			'<div class="heft-pop-grid">' + thumbs + '</div>' +
 			'<div class="heft-pages-manager-actions">' +
-				'<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>🗑 Löschen (' + n + ')</button>' +
+				'<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>' + lead("trash") + 'Löschen (' + n + ')</button>' +
 				'<button type="button" data-heexpcancel="1">Fertig</button><button type="button" class="primary" data-heexportopen="1"' + (n ? '' : ' disabled') + '>Exportieren (' + n + ')</button></div>';
 		return '<div class="heft-pages-top">' +
 			'<div class="heft-pages-manager-head">' +
@@ -1981,7 +1982,7 @@ export const HEFT = (() => {
 				'<button type="button" class="heft-pop-add" data-headdend="1"><span>+</span>Neue Seite</button></div>' +
 			'<div class="heft-pages-manager-actions heft-pages-foot"><span>Ziehen zum Sortieren</span>' +
 				'<button type="button" class="primary" data-heimport="1">' +
-					'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M4 20h16"/></svg>Importieren</button></div>';
+					icon("upload") + 'Importieren</button></div>';
 	}
 
 	function paintPopThumbs() {
@@ -2004,7 +2005,7 @@ export const HEFT = (() => {
 		}
 		const n = exportSel.size, total = doc.pages.length;
 		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = n + " ausgewählt · über Seiten wischen für Schnellauswahl";
-		const del = pop.querySelector("[data-hepagesdelete]"); if (del) { del.disabled = !canDeletePages(total, n); del.textContent = "🗑 Löschen (" + n + ")"; }
+		const del = pop.querySelector("[data-hepagesdelete]"); if (del) { del.disabled = !canDeletePages(total, n); del.innerHTML = lead("trash") + "Löschen (" + n + ")"; }
 		const exp = pop.querySelector("[data-heexportopen]"); if (exp) { exp.disabled = !n; exp.textContent = "Exportieren (" + n + ")"; }
 		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = n === total ? "Auswahl aufheben" : "Alle auswählen";
 	}
@@ -2051,11 +2052,11 @@ export const HEFT = (() => {
 	}
 	function imgPopHtml() {
 		return '<div class="heft-pop-head">Bilder</div>' +
-			'<button type="button" class="heft-pop-row" data-hetool="select">⬚ Bilder & Texte auswählen & bearbeiten</button>' +
+			'<button type="button" class="heft-pop-row" data-hetool="select">' + icon("select") + 'Bilder & Texte auswählen & bearbeiten</button>' +
 			'<div class="heft-pop-sep"></div>' +
-			'<button type="button" class="heft-pop-row" data-hetextadd="1">✍️ Text schreiben</button>' +
-			'<button type="button" class="heft-pop-row" data-heimgadd="1">🖼 Bild hinzufügen</button>' +
-			'<button type="button" class="heft-pop-row" data-heimgcam="1">📷 Bild aufnehmen</button>' +
+			'<button type="button" class="heft-pop-row" data-hetextadd="1">' + icon("pen") + 'Text schreiben</button>' +
+			'<button type="button" class="heft-pop-row" data-heimgadd="1">' + icon("image") + 'Bild hinzufügen</button>' +
+			'<button type="button" class="heft-pop-row" data-heimgcam="1">' + icon("camera") + 'Bild aufnehmen</button>' +
 			'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
 	}
 	function plusPopHtml() {
@@ -2079,9 +2080,9 @@ export const HEFT = (() => {
 					'<i class="heft-tpl-paper heft-tpl-' + p[0] + '"></i><span>' + p[2] + '</span></button>').join("") +
 			'</div>' +
 			'<div class="heft-pop-sep"></div>' +
-			'<button type="button" class="heft-pop-row" data-headdimg="1">🖼 Bild</button>' +
-			'<button type="button" class="heft-pop-row" data-heimport="1">⬳ Importieren</button>' +
-			'<button type="button" class="heft-pop-row" data-hescan="1">📷 Dateien scannen</button>';
+			'<button type="button" class="heft-pop-row" data-headdimg="1">' + icon("image") + 'Bild</button>' +
+			'<button type="button" class="heft-pop-row" data-heimport="1">' + icon("upload") + 'Importieren</button>' +
+			'<button type="button" class="heft-pop-row" data-hescan="1">' + icon("camera") + 'Dateien scannen</button>';
 	}
 
 	function openTextEditor(pi, px, py, txt) {
@@ -2214,11 +2215,11 @@ export const HEFT = (() => {
 		if (!lassoSel || !lassoSel.strokes.length) { if (bar) bar.remove(); return; }
 		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
 		const n = lassoSel.strokes.length;
-		bar.innerHTML = "<span>🪢 " + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
-			'<button type="button" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">📝 In Text</button>' +
-			'<button type="button" data-helassotrain="1" title="Als Trainingsbeispiel für die Handschrift speichern">🎓 Trainieren</button>' +
-			'<button type="button" data-helassodup="1">⧉ Duplizieren</button>' +
-			'<button type="button" data-helassodel="1">🗑 Löschen</button>' +
+		bar.innerHTML = "<span>" + lead("lasso") + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
+			'<button type="button" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">' + lead("note") + 'In Text</button>' +
+			'<button type="button" data-helassotrain="1" title="Als Trainingsbeispiel für die Handschrift speichern">' + lead("graduation") + 'Trainieren</button>' +
+			'<button type="button" data-helassodup="1">' + lead("copy") + 'Duplizieren</button>' +
+			'<button type="button" data-helassodel="1">' + lead("trash") + 'Löschen</button>' +
 			'<button type="button" data-helassoclear="1">Aufheben</button>';
 	}
 
@@ -2249,7 +2250,7 @@ export const HEFT = (() => {
 			const saved = HANDSCHRIFT.saveTrainingSample(lassoSel.strokes, label.trim());
 			if (saved) {
 				const count = HANDSCHRIFT.getTrainingSamples().length;
-				U.toast("Gespeichert! (" + count + " Trainingsbeispiele gesammelt 🎓)");
+				U.toast("Gespeichert! (" + count + " Trainingsbeispiele gesammelt)");
 			}
 		}
 	}
@@ -2813,7 +2814,7 @@ export const HEFT = (() => {
 			// Der Geist-Knopf stand vorher IMMER unter der letzten Seite. Jetzt holt erst das
 			// Hochziehen ihn hervor (ab 12px), ab 70px löst Loslassen aus.
 			if (btn) btn.classList.toggle("pulling", atEnd() && dy > 12);
-			if (atEnd() && dy > 70) { pull.armed = true; if (btn) { btn.classList.add("armed"); btn.textContent = "⬆ Loslassen: neue Seite"; } }
+			if (atEnd() && dy > 70) { pull.armed = true; if (btn) { btn.classList.add("armed"); btn.innerHTML = lead("arrow-up") + "Loslassen: neue Seite"; } }
 			else if (pull.armed) { pull.armed = false; if (btn) { btn.classList.remove("armed"); btn.textContent = "＋ Neue Seite"; } }
 		}, { passive: true });
 		scroll.addEventListener("touchend", () => {
@@ -2952,10 +2953,10 @@ export const HEFT = (() => {
 			try {
 				const url = await thumbnail(id, 0, 320);
 				el.innerHTML = (url ? '<img class="heft-embed-img" src="' + url + '" alt="Heft-Vorschau">' : "") +
-					'<span class="heft-embed-label">📓 ' + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " · " + pagesOf(id) + " Seite(n)</span>";
+					'<span class="heft-embed-label">' + lead("notebook") + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " · " + pagesOf(id) + " Seite(n)</span>";
 			} catch (e) {
 				delete el.dataset.heftdone;
-				el.innerHTML = '<span class="heft-embed-label">📓 ' + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " öffnen</span>";
+				el.innerHTML = '<span class="heft-embed-label">' + lead("notebook") + U.esc((S.pages[id] && S.pages[id].title) || "Heft") + " öffnen</span>";
 				console.warn("Heft: Embed-Vorschau fehlgeschlagen", e);
 			}
 		}

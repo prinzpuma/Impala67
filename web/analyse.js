@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { TELE } from "./telemetrie.js";
 import { ankiSec } from "./anki-stats.js";
+import { lead } from "./icons.js";
 
 // analyse.js — 📈 Lern-Analyse
 // Wertet die gesammelte Telemetrie (telemetrie.js) aus und zeigt die Ergebnisse im Statistik-Tab.
@@ -33,7 +34,7 @@ export const ANALYSE = (() => {
 		const timerOff = rs.filter((e) => e.data.timer === false);
 		let timerRows = "";
 		if (timerOn.length >= 15 && timerOff.length >= 15) {
-			timerRows = "<tr><td>⏱ mit Lerntimer</td><td>" + timerOn.length + "</td><td>" + pct(rate(timerOn)) + "</td></tr>" +
+			timerRows = "<tr><td>" + lead("timer") + "mit Lerntimer</td><td>" + timerOn.length + "</td><td>" + pct(rate(timerOn)) + "</td></tr>" +
 				"<tr><td>ohne Timer</td><td>" + timerOff.length + "</td><td>" + pct(rate(timerOff)) + "</td></tr>";
 		}
 		if (buckets.length < 2 && !timerRows) return "";
@@ -146,7 +147,7 @@ export const ANALYSE = (() => {
 		if (gezoegert && langsam && r.grade >= 3 && !hintShownThisSession && now - lastHint > 600000) {
 			hintShownThisSession = true;
 			lastHint = now;
-			U.toast("🤔 " + Math.round(r.thinkMs / 1000) + " s bis zum Aufdecken und dann „" + (r.grade >= 4 ? "Einfach" : "Gut") + "“? Ehrlich bewerten hilft dem Planer.");
+			U.toast(Math.round(r.thinkMs / 1000) + " s bis zum Aufdecken und dann „" + (r.grade >= 4 ? "Einfach" : "Gut") + "“? Ehrlich bewerten hilft dem Planer.");
 		}
 		// 5) Pausen-Hinweis statt „Aufmerksamkeits-Prädiktion“: steigen Fehlerquote
 		//    UND Denkzeit innerhalb der Sitzung, wird EINMAL eine Pause vorgeschlagen.
@@ -162,7 +163,7 @@ export const ANALYSE = (() => {
 			const ta = think(a), tb = think(b);
 			if (errRate(b) >= 0.4 && errRate(b) > errRate(a) + 0.15 && ta && tb && tb > ta * 1.3) {
 				lastPause = now;
-				U.toast("🪫 Fehler und Denkzeit steigen — 5 Minuten Pause bringen hier mehr als Weitermachen.");
+				U.toast("Fehler und Denkzeit steigen — 5 Minuten Pause bringen hier mehr als Weitermachen.");
 			}
 		}
 	});
@@ -177,7 +178,7 @@ export const ANALYSE = (() => {
 	// telemetrie.js v3), gegen normale Reviews. Anders als die übrigen Erfolgsquoten
 	// zählt hier die vollständige 1–4-Bewertung: Nochmal, Schwer, Gut und Einfach
 	// beeinflussen den Mittelwert jeweils unterschiedlich.
-	const EXP_NAMES = { feynman: "🧑‍🏫 Feynman", scaffolding: "💡 Hinweise", variation: "🔀 Variation", mc: "🎯 Quiz" };
+	const EXP_NAMES = { feynman: lead("explain") + "Feynman", scaffolding: lead("bulb") + "Hinweise", variation: lead("shuffle") + "Variation", mc: lead("target") + "Quiz" };
 	const gradeAverage = (list) => {
 		const grades = list.map((e) => Number(e.data.grade)).filter((g) => g >= 1 && g <= 4);
 		return grades.length ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length : 0;

@@ -1315,6 +1315,10 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 .anki-new-menu button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: var(--space-2) 10px; border-radius: var(--radius-md); background: transparent; color: var(--text); font-size: var(--text-sm); font-weight: 650; text-align: left }
 .anki-new-menu button:hover { background: var(--accent-soft) }
 .anki-new-menu button small { color: var(--text2); font-size: var(--text-2xs); font-weight: 400 }
+/* Icon links neben Titel + Unterzeile */
+.anki-new-menu button:has(> .i) { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center }
+.anki-new-menu button > .i { grid-row: 1 / 3; margin: 0; width: 18px; height: 18px }
+.anki-new-menu button:has(> .i) small { grid-column: 2 }
 .anki-toolbar .menu-chips { margin: 0; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; padding-bottom: 2px }
 .anki-toolbar .menu-chip { white-space: nowrap; min-height: 30px }
 .anki-browser-table { overflow: auto; border: 1px solid var(--edge); border-radius: var(--radius-lg); background: var(--surface-faint) }

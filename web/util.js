@@ -1,4 +1,5 @@
 "use strict";
+import { icon } from "./icons.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 // util.js — kleine Helfer
 const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
@@ -319,6 +320,8 @@ export const U = {
 		const t = document.createElement("div");
 		t.className = "toast" + (type ? " " + type : "");
 		t.textContent = String(msg ?? "");
+		// Erfolg/Fehler mit einheitlichem Status-Icon statt Emoji im Text
+		if (type === "success" || type === "error") t.insertAdjacentHTML("afterbegin", icon(type === "error" ? "alert" : "check-circle", "i-lead"));
 		wrap.appendChild(t);
 		setTimeout(() => {
 			t.classList.add("hide");
@@ -586,7 +589,7 @@ export const U = {
 			const btn = document.createElement("button");
 			btn.type = "button"; btn.className = "code-copy"; btn.dataset.codecopy = "1";
 			btn.title = "Code kopieren";
-			btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+			btn.innerHTML = icon("copy");
 			pre.appendChild(btn);
 		});
 		const hasCode = !!el.querySelector("pre code:not(.language-mermaid)");
@@ -634,7 +637,7 @@ export const U = {
 					const status = document.createElement("div");
 					status.className = "mermaid-status";
 					status.style.cssText = "font-size:12px;opacity:0.7;padding:4px 0;";
-					status.textContent = "⏳ Diagramm-Engine wird geladen…";
+					status.textContent = "Diagramm-Engine wird geladen…";
 					pre.insertBefore(status, b);
 				}
 			});
@@ -645,7 +648,7 @@ export const U = {
 					const pre = b.closest("pre");
 					if (pre) {
 						const st = pre.querySelector(".mermaid-status");
-						if (st) st.textContent = "📶 Internetverbindung erforderlich, um Diagramm-Engine zum ersten Mal zu laden.";
+						if (st) st.textContent = "Internetverbindung erforderlich, um Diagramm-Engine zum ersten Mal zu laden.";
 					}
 				});
 				return;

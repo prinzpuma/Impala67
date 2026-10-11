@@ -20,6 +20,7 @@ import { canGoBack, canGoForward } from "./nav-history.js";
 import { BACKUP } from "./backup-status.js";
 import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
+import { icon, lead, pageIcon } from "./icons.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -41,24 +42,9 @@ function openOverlay(html) {
 const deckTreeHtml = (...a) => RENDER_ANKI.deckTreeHtml(...a);
 const renderAnki = (...a) => RENDER_ANKI.renderAnki(...a);
 
-// Kleine Inline-SVG-Icons für die Chat-UI — statt Emojis, konsistent mit den
-// übrigen SVG-Icons der App. stroke: currentColor → färbt sich per CSS mit.
-const svgIcon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-const ICONS = {
-	pen: svgIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
-	trash: svgIcon('<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
-	copy: svgIcon('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'),
-	gear: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M2 12h3M19 12h3M4.9 19.1l2.2-2.2M16.9 7.1l2.2-2.2"/>'),
-	think: svgIcon('<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/>'),
-	lock: svgIcon('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
-	arrowUp: svgIcon('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
-	arrowDown: svgIcon('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
-	arrowSame: svgIcon('<path d="M4 12h16"/><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/>'),
-};
 
-// Icon: eigenes > Heft > PDF > Fallback (auch von library.js/search.js genutzt)
-const pageIconLabel = (pg, fb = "📝") => pg.icon || (pg.kind === "heft" ? "📓" : pg.pdfId ? "📄" : fb);
-const pageIconHtml = (pg, fb) => { const i = pageIconLabel(pg, fb); return i ? esc(i) + " " : ""; };
+// Icon: eigenes Emoji > Heft > PDF > Fallback (Sprite-SVG, siehe icons.js pageIcon)
+const pageIconHtml = (pg, fb = "note") => pageIcon(pg, fb, "i-lead");
 
 // v14 (25. Juli): inBlockEditor, isEditingBlock, isProtectedFocus, PROTECTED_FOCUS_IDS und der ganze
 // _mainRenderPending-Nachhol-Mechanismus sind ersatzlos entfallen. Sie existierten nur,
@@ -206,12 +192,12 @@ function currentModelLabel() {
 // Beide Auslöser (kleines Panel + großer Chat) bekommen dasselbe Icon/Label
 function renderModelBar() {
 	const label = currentModelLabel();
-	const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.6" fill="currentColor"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></svg>';
+	const modelIcon = icon("model");
 	for (const id of ["btnModelChipFull", "btnModelMenu"]) {
 		const b = $(id);
 		if (!b) continue;
 		// Das Icon ist konstant — es bei jedem Frame erneut zu parsen war reine Doppelarbeit.
-		if (!b._iconSet) { b.innerHTML = icon; b._iconSet = true; }
+		if (!b._iconSet) { b.innerHTML = modelIcon; b._iconSet = true; }
 		b.title = "Modell: " + label;
 	}
 	renderModelMenu();
@@ -435,20 +421,20 @@ function sidebarTabsHtml() {
 
 	html += S.tabs.map((id) => {
 		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
-		let icon = "📄", title = "Unbenannt";
+		let tabIcon = lead("file"), title = "Unbenannt";
 		if (isChat) {
-			icon = "✦ ";
+			tabIcon = "✦ ";
 			title = chatById.get(id.slice(5))?.title || "Chat";
 		} else if (isNlm) {
-			icon = "📓 ";
+			tabIcon = lead("book");
 			title = "Gemini Notebook";
 		} else if (isAnki) {
-			icon = "🃏 ";
+			tabIcon = lead("cards");
 			title = "Karteikarten";
 		} else {
 			const pg = S.pages[id];
 			if (!pg) return "";
-			icon = pageIconHtml(pg, "");
+			tabIcon = pageIconHtml(pg, "");
 			title = pg.title || "Unbenannt";
 		}
 		const active = id === S.activeTabId && (
@@ -460,7 +446,7 @@ function sidebarTabsHtml() {
 
 		return `<div class="row sidebar-tab-row${active}" data-tabopen="${id}" data-key="sbtab:${id}" title="${esc(title)}">` +
 			'<span class="row-chevron spacer"></span>' +
-			`<span class="row-title">${icon}${esc(title)}</span>` +
+			`<span class="row-title">${tabIcon}${esc(title)}</span>` +
 			`<button type="button" class="row-add sidebar-tab-x" data-tabclose="${id}" title="Tab schließen">✕</button>` +
 			`</div>`;
 	}).join("");
@@ -540,16 +526,16 @@ function chatListHtml() {
 		? `<div class="row chat-selbar"><span class="row-title">${sel.size} ausgewählt</span>` +
 			`<button class="row-add" data-chatselall="1" title="Alle Chats auswählen">Alle</button>` +
 			`<button class="row-add" data-chatselnone="1" title="Auswahl aufheben">✕</button>` +
-			`<button class="row-add danger" data-chatdelsel="1" title="Ausgewählte Chats löschen">${ICONS.trash}</button></div>`
+			`<button class="row-add danger" data-chatdelsel="1" title="Ausgewählte Chats löschen">${icon("trash")}</button></div>`
 		: '<div class="row" data-newchat="1"><span class="row-title">+ Neuer Chat</span></div>';
 	return head + list.map((s) => {
 		const on = sel.has(s.id);
 		return `<div class="row chat-row${s.id === S.currentChatId ? " active" : ""}${on ? " selected" : ""}" data-key="chat:${s.id}" data-chat="${s.id}">` +
-			(sel.size ? `<button class="row-add chat-sel${on ? " on" : ""}" data-chatsel="${s.id}" aria-pressed="${on ? "true" : "false"}" title="${on ? "Abwählen" : "Auswählen"}">${on ? "☑" : "☐"}</button>` : "") +
+			(sel.size ? `<button class="row-add chat-sel${on ? " on" : ""}" data-chatsel="${s.id}" aria-pressed="${on ? "true" : "false"}" title="${on ? "Abwählen" : "Auswählen"}">${icon(on ? "check-square" : "square")}</button>` : "") +
 			`<span class="row-title">${esc(s.title || "Chat")}</span><span class="hint chat-date">${U.fmtDate(s.updated || s.created)}</span>` +
 			`<div class="chat-row-actions">` +
-			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${ICONS.pen}</button>` +
-			`<button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${ICONS.trash}</button>` +
+			`<button class="row-add" data-chatrename="${s.id}" title="Chat umbenennen">${icon("pen")}</button>` +
+			`<button class="row-add danger" data-chatdel="${s.id}" title="Chat löschen">${icon("trash")}</button>` +
 			`</div></div>`;
 	}).join("");
 }
@@ -580,15 +566,15 @@ function rowHtml(pg, depth, wsId) {
 
 // Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
 const menuBtn = (attr, id, label, cls = "") => `<button class="menu-item${cls}" data-${attr}="${id}">${label}</button>`;
-const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, "📋 Duplizieren") + menuBtn("pagetemplate", pg.id, "📑 " + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
-const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, "📦 Verschieben nach…") +
-	(pg.archived ? menuBtn("pageunarchive", pg.id, "↩ Aus Archiv holen") : menuBtn("pagearchive", pg.id, "🗄 Archivieren")) +
-	menuBtn("pagetrash", pg.id, "🗑 Löschen", " danger");
+const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, lead("copy") + "Duplizieren") + menuBtn("pagetemplate", pg.id, lead("template") + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
+const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, lead("folder-move") + "Verschieben nach…") +
+	(pg.archived ? menuBtn("pageunarchive", pg.id, lead("undo") + "Aus Archiv holen") : menuBtn("pagearchive", pg.id, lead("archive") + "Archivieren")) +
+	menuBtn("pagetrash", pg.id, lead("trash") + "Löschen", " danger");
 function pageMenuHtml(pg) {
 	return '<div class="page-menu">' +
-		menuBtn("pageopennew", pg.id, "↗ In neuem Tab öffnen") +
-		menuBtn("pagerename", pg.id, "✎ Umbenennen") + dupTplItems(pg) +
-		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") + moveTrashItems(pg) + "</div>";
+		menuBtn("pageopennew", pg.id, lead("external") + "In neuem Tab öffnen") +
+		menuBtn("pagerename", pg.id, lead("pen") + "Umbenennen") + dupTplItems(pg) +
+		menuBtn("pagefav", pg.id, lead("star") + (pg.favorite ? "Favorit entfernen" : "Zu Favoriten")) + moveTrashItems(pg) + "</div>";
 }
 
 // ---------- Tab-Leiste (Zurück/Vor + offene Seiten UND Chats) ----------
@@ -622,8 +608,8 @@ function renderTabs() {
 		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
 		let title;
 		if (isChat) title = "✦ " + esc(chatById.get(id.slice(5))?.title || "Chat"); // ✦ = KI-Markenzeichen wie Home/FAB
-		else if (isNlm) title = "📓 Gemini Notebook";
-		else if (isAnki) title = "🃏 Karteikarten"; // eigener Tab seit 23. Juli — gleiche Mechanik wie nlm:main
+		else if (isNlm) title = lead("book") + "Gemini Notebook";
+		else if (isAnki) title = lead("cards") + "Karteikarten"; // eigener Tab seit 23. Juli — gleiche Mechanik wie nlm:main
 		else {
 			const pg = S.pages[id];
 			if (!pg) return "";
@@ -680,7 +666,7 @@ function renderMain() {
 		// data-owned: der Canvas gehört HEFT — U.morph fasst diesen Teilbaum nie an.
 		// data-key: sonst gleicht der nächste Renderer (Karten, Bibliothek …) sein
 		// schlüsselloses Wurzel-<div> per Position mit der Bühne ab und lässt sie stehen.
-		main.innerHTML = (pg.archived ? `<div class="archived-banner heft-archived-banner"><span>🗄️ Dieses Heft ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") +
+		main.innerHTML = (pg.archived ? `<div class="archived-banner heft-archived-banner"><span>${lead("archive")}Dieses Heft ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">${lead("undo")}Wiederherstellen</button></div>` : "") +
 			`<div id="heftStage" class="heft-stage" data-key="heftstage" data-owned="1" aria-label="${esc(pg.title)}"></div>`;
 		const stage = $("heftStage");
 		if (stage) HEFT.mount(stage, pg.id);
@@ -700,13 +686,13 @@ function renderMain() {
 		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavBack" data-navback="1" ${canBack ? "" : "disabled"} title="Zurück">‹</button>` +
 		`<button class="navbtn topbar-sb-toggle topbar-nav-btn" id="btnPageNavForward" data-navforward="1" ${canFwd ? "" : "disabled"} title="Vor">›</button>` +
 		breadcrumbHtml(pg) + topbarActionsHtml(pg) + "</div>" +
-		(pg.archived ? `<div class="archived-banner"><span>🗄️ Diese Seite ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">↩ Wiederherstellen</button></div>` : "") + "</div>" +
+		(pg.archived ? `<div class="archived-banner"><span>${lead("archive")}Diese Seite ist archiviert.</span><button class="mini" data-pageunarchive="${pg.id}">${lead("undo")}Wiederherstellen</button></div>` : "") + "</div>" +
 		'<div class="page-scroll" data-key="pagescroll"><div class="page-meta">' +
 			(pg.coverImg || pg.cover
 				? `<div class="page-cover ${pg.coverImg ? "has-img" : "cover-" + pg.cover}" data-key="cover:${esc(pg.coverImg || pg.cover || "")}"${pg.coverImg ? ` data-coverimg="${esc(pg.coverImg)}"` : ""}><div class="cover-btns"><button data-coverpick="1">Cover ändern</button><button data-coverremove="1">Entfernen</button></div></div>`
 				: "") +
 			'<div class="page-heading">' +
-				`<button class="page-icon" data-iconpick="1" title="Icon ändern">${pageIconLabel(pg)}</button>` +
+				`<button class="page-icon" data-iconpick="1" title="Icon ändern">${pageIcon(pg)}</button>` +
 				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">+ Cover</button>' : "") +
 			"</div>" +
 			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
@@ -779,35 +765,35 @@ function pdfEmbedBlockHtml(pg) {
 // Topbar rechts: Teilen, Favoriten-Stern, ⋯ (Stern/Menüpunkte via app.js, Auf/Zu via extras.js)
 function topbarActionsHtml(pg) {
 	return '<div class="topbar-actions">' +
-		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">↗ Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
-		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${pg.favorite ? "★" : "☆"}</button>` +
+		`<span class="topbar-wrap"><button class="topbar-btn" data-sharemenu="1" title="Exportieren & Teilen">${lead("upload")}Teilen</button>${S.topMenu === "share" ? shareMenuHtml(pg) : ""}</span>` +
+		`<button class="topbar-btn${pg.favorite ? " fav-active" : ""}" data-pagefav="${pg.id}" title="${pg.favorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}">${icon("star", pg.favorite ? "i-fill" : "")}</button>` +
 		`<span class="topbar-wrap"><button class="topbar-btn" data-morepagemenu="1" title="Weitere Optionen">⋯</button>${S.topMenu === "more" ? moreMenuHtml(pg) : ""}</span></div>`;
 }
 
 function shareMenuHtml(pg) {
-	return '<div class="page-menu top-menu">' + menuBtn("exportpdf", pg.id, "🖨 Als PDF exportieren / drucken") +
-		menuBtn("exportmd", pg.id, "⬇ Als Markdown (.md) speichern") + menuBtn("copylink", pg.id, "🔗 Internen Link kopieren") + "</div>";
+	return '<div class="page-menu top-menu">' + menuBtn("exportpdf", pg.id, lead("printer") + "Als PDF exportieren / drucken") +
+		menuBtn("exportmd", pg.id, lead("download") + "Als Markdown (.md) speichern") + menuBtn("copylink", pg.id, lead("link") + "Internen Link kopieren") + "</div>";
 }
 
 function moreMenuHtml(pg) {
 	const marks = ((pg.content || "").match(/==[^=\n]+==/g) || []).length + ((pg.content || "").match(/\{\{c\d+::/g) || []).length;
 	return '<div class="page-menu top-menu">' +
-		'<button class="menu-item" data-editundo="1">↩ Rückgängig <span class="menu-hint">Strg+Z</span></button>' +
-		'<button class="menu-item" data-editredo="1">↪ Wiederholen <span class="menu-hint">Strg+Y</span></button>' +
+		'<button class="menu-item" data-editundo="1">' + lead("undo") + 'Rückgängig <span class="menu-hint">Strg+Z</span></button>' +
+		'<button class="menu-item" data-editredo="1">' + lead("redo") + 'Wiederholen <span class="menu-hint">Strg+Y</span></button>' +
 		'<div class="menu-sep"></div>' +
-		menuBtn("pagefav", pg.id, pg.favorite ? "★ Favorit entfernen" : "☆ Zu Favoriten") +
-		menuBtn("exportpdf", pg.id, "🖨 Als PDF exportieren / drucken") +
-		menuBtn("exportmd", pg.id, "⬇ Als Markdown (.md) speichern") +
-		menuBtn("copylink", pg.id, "🔗 Internen Link kopieren") +
+		menuBtn("pagefav", pg.id, lead("star") + (pg.favorite ? "Favorit entfernen" : "Zu Favoriten")) +
+		menuBtn("exportpdf", pg.id, lead("printer") + "Als PDF exportieren / drucken") +
+		menuBtn("exportmd", pg.id, lead("download") + "Als Markdown (.md) speichern") +
+		menuBtn("copylink", pg.id, lead("link") + "Internen Link kopieren") +
 		'<div class="menu-sep"></div>' +
-		'<button class="menu-item" id="btnHistory">🕘 Verlauf</button>' +
+		'<button class="menu-item" id="btnHistory">' + lead("history") + 'Verlauf</button>' +
 		(pg.pdfId ?
-			'<button class="menu-item" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">↗ PDF im neuen Tab öffnen</button>' +
-			'<button class="menu-item" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">⬇ PDF herunterladen</button>'
+			'<button class="menu-item" id="btnOpenPdfTab" data-pdfid="' + pg.pdfId + '">' + lead("external") + 'PDF im neuen Tab öffnen</button>' +
+			'<button class="menu-item" id="btnDownloadPdf" data-pdfid="' + pg.pdfId + '" data-pdftitle="' + esc(pg.title) + '">' + lead("download") + 'PDF herunterladen</button>'
 		: "") +
-		'<button class="menu-item" data-iconpick="1">😀 Icon ändern</button>' +
-		'<button class="menu-item" data-coverpick="1">🖼 Cover ändern</button>' +
-		(marks ? menuBtn("cardsfromhl", pg.id, `🃏 Karten aus Markierungen (${marks})`) : "") +
+		'<button class="menu-item" data-iconpick="1">' + lead("smile") + 'Icon ändern</button>' +
+		'<button class="menu-item" data-coverpick="1">' + lead("image") + 'Cover ändern</button>' +
+		(marks ? menuBtn("cardsfromhl", pg.id, lead("cards") + `Karten aus Markierungen (${marks})`) : "") +
 		dupTplItems(pg) + moveTrashItems(pg) + "</div>";
 }
 
@@ -815,7 +801,7 @@ function moreMenuHtml(pg) {
 function backlinksChipHtml(pg) {
 	const links = STATE.backlinksOf(pg.id);
 	if (!links.length) return "";
-	return `<div class="backlinks-row"><button class="backlinks-chip" data-backlinks="1">↙ ${links.length} Rückverweise</button>` +
+	return `<div class="backlinks-row"><button class="backlinks-chip" data-backlinks="1">${lead("backlink")}${links.length} Rückverweise</button>` +
 		(S.backlinksOpen ? '<div class="backlinks">' + links.slice(0, 20).map((l) => `<span class="crumb" data-page="${l.id}">${pageIconHtml(l)}${esc(l.title)}</span>`).join("") + "</div>" : "") + "</div>";
 }
 
@@ -1128,14 +1114,14 @@ function renderHome(main) {
 // Papierkorb: Seiten, Stapel, Karten — Soft-Delete mit Wiederherstellen / Endgültig löschen
 const trashRow = (kind, id, title, hint) =>
 	`<div class="trash-row"><span class="row-title">${title}</span><span class="hint">${hint}</span>` +
-	`<button data-${kind}restore="${id}">↩ Wiederherstellen</button><button data-${kind}purge="${id}" class="danger">🗑 Endgültig löschen</button></div>`;
+	`<button data-${kind}restore="${id}">${lead("undo")}Wiederherstellen</button><button data-${kind}purge="${id}" class="danger">${lead("trash")}Endgültig löschen</button></div>`;
 function renderTrash(main) {
 	const filter = S.trashFilter || "all";
 	const pages = STATE.trashedPages();
 	const decks = (STATE.trashedDeckRoots && STATE.trashedDeckRoots()) || [];
 	const cards = (STATE.orphanTrashedCards && STATE.orphanTrashedCards()) || [];
 	const total = pages.length + decks.length + cards.length;
-	let html = '<div class="library"><div class="lib-head"><div><h1>🗑 Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div>' +
+	let html = '<div class="library"><div class="lib-head"><div><h1>' + lead("trash") + 'Papierkorb</h1><p class="hint">Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.</p></div>' +
 		(total ? '<button class="danger" data-trashclear="1">Papierkorb leeren</button>' : "") + '</div>';
 	if (!total) {
 		U.morph(main, html + '<p class="hint">Der Papierkorb ist leer.</p></div>');
@@ -1156,13 +1142,13 @@ function renderTrash(main) {
 	if ((filter === "all" || filter === "decks") && decks.length) {
 		html += head("Stapel") + decks.map((name) => {
 			const n = Object.values(S.cards).filter((c) => c.trashed && STATE.deckInTree(c.deck || "Standard", name)).length;
-			return trashRow("deck", esc(name), "🃏 " + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
+			return trashRow("deck", esc(name), lead("cards") + esc(name) + (n ? ` · ${n} Karte(n)` : ""), "gelöscht " + U.fmtDate((S.decks[name] || {}).trashedAt || ""));
 		}).join("");
 	}
 	if ((filter === "all" || filter === "cards") && cards.length) {
 		html += head("Karten") + cards.map((c) => {
 			const front = (c.front || "").replace(/\s+/g, " ").trim();
-			return trashRow("card", c.id, "🃏 " + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
+			return trashRow("card", c.id, lead("cards") + esc((front.length > 60 ? front.slice(0, 60) + "…" : front) || "(leere Vorderseite)"), esc(c.deck || "Standard") + " · gelöscht " + U.fmtDate(c.trashedAt || ""));
 		}).join("");
 	}
 	// U.morph statt innerHTML (Regel aus util.js): Scrollstand und Hover bleiben erhalten,
@@ -1214,7 +1200,7 @@ function renderDaily(main) {
 		const snippet = pg ? ((pg.content || "").split("\n").find((l) => l.trim()) || "") : "";
 		cells += `<div class="cal-day${key === todayKey ? " today" : ""}${pg ? " has-note" : ""}" data-dailyday="${key}" title="${key}"><span class="cal-num">${d}</span>${pg ? `<span class="cal-snippet">${esc(snippet.slice(0, 70))}</span>` : ""}</div>`;
 	}
-	U.morph(main, '<div class="library daily"><div class="lib-head"><h1>📅 Daily Notes</h1>' +
+	U.morph(main, '<div class="library daily"><div class="lib-head"><h1>' + lead("calendar") + 'Daily Notes</h1>' +
 		'<div class="mode-btns"><button data-dailynav="-1" title="Voriger Monat">‹</button><button id="btnDailyToday">Heute</button><button data-dailynav="1" title="Nächster Monat">›</button></div>' +
 		`<span class="hint">${cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>` +
 		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => `<div class="cal-dow">${d}</div>`).join("") + "</div>" +
@@ -1231,7 +1217,7 @@ function openTemplatePicker() {
 			'<button type="button" class="newpage-card" data-tplheft="1"><span class="newpage-visual is-heft" aria-hidden="true"><span></span></span><b>GoodNotes-Heft</b><small>Papier · Stift · Seiten</small></button>' +
 		"</div>" +
 		(tpls.length ? '<p class="hint">Oder aus einer Vorlage:</p>' : "") +
-		tpls.map((p) => `<button class="tpl-opt" data-tpluse="${p.id}">${p.icon ? esc(p.icon) + " " : (p.kind === "heft" ? "📓 " : "📑 ")}${esc(p.title)}</button>`).join("") +
+		tpls.map((p) => `<button class="tpl-opt" data-tpluse="${p.id}">${pageIcon(p, "template", "i-lead")}${esc(p.title)}</button>`).join("") +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div>'
 	));
 }
@@ -1246,9 +1232,9 @@ function renderHistoryModal() {
 		`<button class="hist-item${i === idx ? " active" : ""}" data-histversion="${i}">${new Date(x.t).toLocaleString("de-DE", DATETIME_OPTS)}${i === vs.length - 1 ? ' <span class="hint">aktuell</span>' : ""}</button>`).join("");
 	const o = openOverlay('<div class="modal hist-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-		'<div class="hist-list"><h3>🕘 Verlauf</h3>' + (items || '<p class="hint">Keine Versionen</p>') + "</div>" +
+		'<div class="hist-list"><h3>' + lead("history") + 'Verlauf</h3>' + (items || '<p class="hint">Keine Versionen</p>') + "</div>" +
 		`<div class="hist-preview"><h3>${esc(v ? v.title : "")}</h3><div class="md hist-md">${v ? U.md(v.content) : ""}</div>` +
-		`<div class="modal-actions"><button id="btnHistRestore" ${!v || idx === vs.length - 1 ? "disabled" : ""}>↩ Diese Version wiederherstellen</button></div></div></div>`);
+		`<div class="modal-actions"><button id="btnHistRestore" ${!v || idx === vs.length - 1 ? "disabled" : ""}>${lead("undo")}Diese Version wiederherstellen</button></div></div></div>`);
 	const pv = o && o.querySelector(".hist-md");
 	if (pv) { U.renderMath(pv); U.highlightCode(pv); hydrateImages(pv); }
 }
@@ -1258,16 +1244,16 @@ function renderHistoryModal() {
 // Liste bestimmt statt pro Blase — vorher findIndex + slice je Nachricht, also quadratisch.
 function userMsgHtml(m, locked) {
 	return '<div class="msg user">' +
-		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${locked ? ICONS.lock : ICONS.pen}</button>` +
+		`<button class="msg-edit${locked ? " locked" : ""}" data-editmsg="${m.mid}" title="${locked ? "Erst spätere Änderungen rückgängig machen" : "Bearbeiten"}">${icon(locked ? "lock" : "pen")}</button>` +
 		(m.content ? esc(m.content) : "") +
 		(m.image ? `<img class="msg-img" src="${m.image}" alt="Anhang">` : "") +
 		(m.textFile ? fileChipHtml(m) : "") +
-		(m.pdfFile ? `<div class="file-chip"><span>📄 ${esc(m.pdfFile.name)} · ${m.pdfFile.pages || "?"} Seiten</span></div>` : "") +
+		(m.pdfFile ? `<div class="file-chip"><span>${lead("file")}${esc(m.pdfFile.name)} · ${m.pdfFile.pages || "?"} Seiten</span></div>` : "") +
 		"</div>";
 }
 
 // Lange geklebte Texte als .txt-Karte (Modell bekommt den Inhalt trotzdem als Kontext)
-const fileChipHtml = (m) => `<div class="file-chip"><span>📄 ${esc(m.textFile.name)} · ${m.textFile.size} Zeichen</span><button data-filedownload="${m.mid}">Herunterladen</button></div>`;
+const fileChipHtml = (m) => `<div class="file-chip"><span>${lead("file")}${esc(m.textFile.name)} · ${m.textFile.size} Zeichen</span><button data-filedownload="${m.mid}">Herunterladen</button></div>`;
 
 // Werkzeug-Karte je Tool-Aufruf („Hat … verwendet“)
 const TOOL_LABELS = {
@@ -1286,7 +1272,7 @@ const TOOL_LABELS = {
 	write_to_heft: "Ins Heft geschrieben", get_heft_page_image: "Heftseite angesehen",
 	search_chat_history: "Frühere Chats durchsucht", calculate: "Gerechnet", request_tools: "Werkzeuge freigeschaltet",
 };
-const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">${ICONS.gear} ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
+const toolChipHtml = (m) => `<div class="tool-chip${m.error ? " err" : ""}" title="Werkzeug: ${esc(m.name)}">${icon("gear")} ${esc(TOOL_LABELS[m.name] || m.name)}${m.detail ? ` <span class="tool-detail">· ${esc(m.detail)}</span>` : ""}${m.error ? " — Fehler" : ""}</div>`;
 
 // Markup EINER fertigen Nachricht (der Live-Entwurf läuft getrennt)
 function msgHtml(m, locked) {
@@ -1494,7 +1480,7 @@ function contextChipHtml() {
 		: info && info.sent < info.total
 			? "Seitenkontext · Anfang mitgesendet (" + k(info.sent) + " von " + k(info.total) + " Zeichen) — Rest auf Nachfrage"
 			: "Seitenkontext · wird mitgesendet";
-	return `<span class="chip-ico">${isHeft ? "📓" : "📄"}</span><span class="chip-body"><b>${esc(title)}</b><small>${esc(meta)}</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`;
+	return `<span class="chip-ico">${icon(isHeft ? "notebook" : "file")}</span><span class="chip-body"><b>${esc(title)}</b><small>${esc(meta)}</small></span><button class="chip-x" data-removecontext="1" title="Seitenkontext entfernen">✕</button>`;
 }
 
 function renderSideContextChip() {
@@ -1596,10 +1582,10 @@ function renderFullChat(main) {
 			// Schnellstart-Chips setzen einen Prompt-Anfang ins Eingabefeld (kein Auto-Senden)
 			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' +
 				'<div class="chat-suggests">' +
-				'<button type="button" data-chatsuggest="Erkläre mir Schritt für Schritt: ">💡 Erkläre mir…</button>' +
-				'<button type="button" data-chatsuggest="Erstelle Karteikarten zu: ">🃏 Karteikarten zu…</button>' +
-				'<button type="button" data-chatsuggest="Fasse kompakt zusammen: ">📄 Fasse zusammen…</button>' +
-				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">🎯 Quiz mich zu…</button></div>' : "") +
+				'<button type="button" data-chatsuggest="Erkläre mir Schritt für Schritt: ">' + lead("bulb") + 'Erkläre mir…</button>' +
+				'<button type="button" data-chatsuggest="Erstelle Karteikarten zu: ">' + lead("cards") + 'Karteikarten zu…</button>' +
+				'<button type="button" data-chatsuggest="Fasse kompakt zusammen: ">' + lead("file") + 'Fasse zusammen…</button>' +
+				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">' + lead("target") + 'Quiz mich zu…</button></div>' : "") +
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
 			'<form id="mainChatForm" class="chat-form-full"><div id="mainPendingChip" hidden></div>' +
 				'<div class="composer-body"><textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea></div>' +
@@ -1629,7 +1615,7 @@ function thinkBoxHtml(opts) {
 	}
 	return `<div class="think-box${opts.live ? " live" : ""}${expanded ? " expanded" : opts.live ? " peek" : ""}">` +
 		`<button type="button" class="think-toggle" ${opts.toggleAttr} aria-expanded="${expanded ? "true" : "false"}">` +
-			`<span class="think-icon">${ICONS.think}</span><span class="think-label">${esc(label)}</span><span class="think-chevron">▸</span></button>` +
+			`<span class="think-icon">${icon("bulb")}</span><span class="think-label">${esc(label)}</span><span class="think-chevron">▸</span></button>` +
 		`<div class="think-body-wrap"><div class="think-body">${esc(text || "…denkt nach…")}</div></div></div>`;
 }
 
@@ -1642,10 +1628,10 @@ const thinkingLiveHtml = () => thinkBoxHtml({
 function assistantMsgHtml(m) {
 	const think = m.reasoning ? thinkBoxHtml({ text: m.reasoning, expanded: !!m.reasoningExpanded, live: false, label: "Gedankengang", toggleAttr: `data-reasoningtoggle="${m.mid}"` }) : "";
 	const refine = S.refineOpenMid === m.mid
-		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">${ICONS.arrowUp} Länger</button><button data-refine="${m.mid}" data-mode="same">${ICONS.arrowSame} Gleich</button><button data-refine="${m.mid}" data-mode="shorter">${ICONS.arrowDown} Kürzer</button></div>`
+		? `<div class="refine-menu"><button data-refine="${m.mid}" data-mode="longer">${icon("arrow-up")} Länger</button><button data-refine="${m.mid}" data-mode="same">${icon("arrows-h")} Gleich</button><button data-refine="${m.mid}" data-mode="shorter">${icon("arrow-down")} Kürzer</button></div>`
 		: "";
 	return think + '<div class="msg assistant"><div class="md">' + U.md(m.content) + "</div>" +
-		`<div class="msg-tools"><button class="msg-tool-btn" data-copymsg="${m.mid}" title="Antwort in die Zwischenablage kopieren">${ICONS.copy} Kopieren</button>` +
+		`<div class="msg-tools"><button class="msg-tool-btn" data-copymsg="${m.mid}" title="Antwort in die Zwischenablage kopieren">${icon("copy")} Kopieren</button>` +
 		`<button class="msg-tool-btn" data-refinetoggle="${m.mid}" title="Antwort anpassen">✦ Anpassen</button>${refine}</div></div>`;
 }
 
@@ -1655,11 +1641,11 @@ function editCardHtml(m) {
 		`<button class="btn-undo-icon" data-undo="${m.mid}" ${m.undone ? "disabled" : ""} title="Gesamte KI-Aktion rückgängig machen">↺</button></div></div>`;
 	const title = m.pageTitle || "Unbenannt";
 	const label = m.created ? "Hat erstellt" : "Hat geändert";
-	const icon = m.after?.icon || S.pages[m.pageId]?.icon || "📄";
+	const pgIco = pageIcon({ icon: m.after?.icon || S.pages[m.pageId]?.icon }, "file", "i-lead");
 	return `<div class="edit-card${m.undone ? " undone" : ""}"><div class="edit-title">${esc(m.summary || (label + " " + title))}</div>` +
 		`<div class="edit-actions-row"><button class="btn-show-changes" data-difftoggle="${m.mid}">Änderungen anzeigen</button>` +
 		`<button class="btn-undo-icon" data-undo="${m.mid}" ${m.undone ? "disabled" : ""} title="Rückgängig machen">↺</button></div>` +
-		`<div class="edit-subtitle">${label}</div><div class="edit-files-list"><div class="edit-file-item">${esc(icon)} ${esc(title)}</div></div></div>`;
+		`<div class="edit-subtitle">${label}</div><div class="edit-files-list"><div class="edit-file-item">${pgIco}${esc(title)}</div></div></div>`;
 }
 
 // Seitenartige Diff-Vorschau: grün/rot markierte Blöcke statt Code-Diff
@@ -1690,7 +1676,7 @@ function openChangePreview(m) {
 	if (!o || !m) return;
 	const before = m.before || {}, after = m.after || {};
 	const title = after.title || m.pageTitle || before.title || "Unbenannte Seite";
-	const icon = after.icon || S.pages[m.pageId]?.icon || "📄";
+	const pgIco = pageIcon({ icon: after.icon || S.pages[m.pageId]?.icon }, "file");
 	o.hidden = false;
 	o.classList.add("change-overlay");
 	o.innerHTML =
@@ -1700,7 +1686,7 @@ function openChangePreview(m) {
 			`<span class="hint">${m.created ? "Seite erstellt" : "Seite geändert"}</span>` +
 			`<button class="btn-undo-change" data-undo="${m.mid}" ${m.undone ? "disabled" : ""}>↺ Rückgängig</button>` +
 			(m.pageId ? `<button type="button" class="mini" data-openchangepage="${esc(m.pageId)}">Seite öffnen</button>` : "") + "</div>" +
-			`<article class="change-page-sheet"><div class="change-page-heading"><span class="change-page-icon">${esc(icon)}</span><h1 class="change-page-title">${esc(title)}</h1></div>` +
+			`<article class="change-page-sheet"><div class="change-page-heading"><span class="change-page-icon">${pgIco}</span><h1 class="change-page-title">${esc(title)}</h1></div>` +
 			changePageBodyHtml(before.content, after.content) + "</article>" +
 			'<div class="change-page-legend"><span class="leg add">+ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div></div>';
 	const sheet = o.querySelector(".change-page-sheet");
@@ -1727,8 +1713,8 @@ function renderPendingChip(type) {
 		const att = (ico, name, meta, btnAttr) =>
 			`<span class="chip-ico">${ico}</span><span class="chip-body"><b>${esc(name)}</b><small>${esc(meta)}</small></span><button class="chip-x" ${btnAttr} title="Anhang entfernen">✕</button>`;
 		if (S.pendingImage) html = att(`<img src="${S.pendingImage}" alt="">`, "Bild", "wird mitgesendet", 'data-removeattachment="1"');
-		else if (S.pendingTextFile) html = att("📄", S.pendingTextFile.name, S.pendingTextFile.size + " Zeichen · wird als Datei angehängt", 'id="btnRemoveTextFile"');
-		else if (S.pendingPdf) html = att("📄", S.pendingPdf.name, (S.pendingPdf.pages || "?") + " Seiten · wird als PDF-Kontext angehängt", 'id="btnRemovePdf"');
+		else if (S.pendingTextFile) html = att(icon("file"), S.pendingTextFile.name, S.pendingTextFile.size + " Zeichen · wird als Datei angehängt", 'id="btnRemoveTextFile"');
+		else if (S.pendingPdf) html = att(icon("file"), S.pendingPdf.name, (S.pendingPdf.pages || "?") + " Seiten · wird als PDF-Kontext angehängt", 'id="btnRemovePdf"');
 	}
 	// Der Vollbild-Chat hat kein eigenes Kontext-Element (das 📄-Chip lebte nur im Panel) —
 	// er hängt hier mit dran. Zwei Chips gleichzeitig: jeder in seiner eigenen Hülle, damit
@@ -1768,7 +1754,7 @@ function openCoverPicker() {
 		"<h3>Cover wählen</h3>" +
 		'<div class="cover-grid">' + ["sunset", "ocean", "forest", "grape", "mono"].map((c) => `<button class="cover-swatch cover-${c}" data-coverset="${c}"></button>`).join("") + "</div>" +
 		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
-		'<div class="row-btns"><button id="btnCoverUpload">🖼 Eigenes Bild wählen</button></div>' +
+		'<div class="row-btns"><button id="btnCoverUpload">' + lead("image") + 'Eigenes Bild wählen</button></div>' +
 		'<div class="modal-actions"><button data-coverset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
 	));
 }
@@ -1776,19 +1762,19 @@ function openCoverPicker() {
 function openReview() {
 	const snap = STATE.studySnapshot(null);
 	if (snap.done) {
-		return void openOverlay(modal("<h3>Gratulation! 🎉</h3>" +
+		return void openOverlay(modal("<h3>" + lead("party") + "Gratulation!</h3>" +
 			'<p class="hint">Dieser Stapel ist für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' + closeAction));
 	}
 	// Wie Anki: statische Meldung, kein Live-Countdown. „Erneut prüfen“ baut neu auf
 	// OHNE reviewShowBack — sonst zeigte eine inzwischen fällige Karte direkt die Rückseite
 	if (snap.finishedForNow && snap.learnWaiting && snap.learnWaiting.length) {
-		return void openOverlay(modal("<h3>Geschafft! 🎉</h3>" +
+		return void openOverlay(modal("<h3>" + lead("party") + "Geschafft!</h3>" +
 			`<p class="hint">Du hast diesen Stapel für den Moment fertig gelernt. ${snap.learnWaiting.length} Lernkarte(n) sind später heute wieder dran.</p>` +
 			'<div class="modal-actions"><button id="btnReviewRefresh">Erneut prüfen</button><button id="btnCloseOverlay">Später</button></div>'));
 	}
 	const c = snap.dueNow[0];
 	// FIX: leere dueNow-Queue crashte hier vorher (undefined.front)
-	if (!c) return void openOverlay(modal("<h3>Gratulation! 🎉</h3>" + '<p class="hint">Gerade ist keine Karte fällig.</p>' + closeAction));
+	if (!c) return void openOverlay(modal("<h3>" + lead("party") + "Gratulation!</h3>" + '<p class="hint">Gerade ist keine Karte fällig.</p>' + closeAction));
 	const cnt = snap.counts;
 	openOverlay(modal(
 		`<h3>${cnt.neu} neu · ${cnt.learn} lernen · ${cnt.review} wdh.</h3>` +
@@ -1797,8 +1783,8 @@ function openReview() {
 			? '<div class="card-face back md">' + U.md(c.back) + '</div><div class="grades">' +
 				[[1, "Nochmal"], [2, "Schwer"], [3, "Gut"], [4, "Einfach"]].map(([g, l]) => `<button data-grade="${g}" data-card="${c.id}">${l}</button>`).join("") + "</div>"
 			: '<div class="modal-actions"><button id="btnShowBack">Antwort zeigen</button></div>') +
-		`<div class="modal-actions review-tools"><button data-ankiedit="${c.id}" title="Karte bearbeiten">✎ Bearbeiten</button>` +
-		`<button data-reviewsuspend="${c.id}" title="Karte aussetzen (zählt nicht mehr als fällig)">⏸ Aussetzen</button>` +
+		`<div class="modal-actions review-tools"><button data-ankiedit="${c.id}" title="Karte bearbeiten">${lead("pen")}Bearbeiten</button>` +
+		`<button data-reviewsuspend="${c.id}" title="Karte aussetzen (zählt nicht mehr als fällig)">${lead("pause")}Aussetzen</button>` +
 		'<button id="btnCloseOverlay">Beenden</button></div>'
 	));
 }
@@ -1821,7 +1807,7 @@ export const RENDER = {
 	openTemplatePicker, openReview, openCards, openIconPicker, openCoverPicker,
 	hydrateImages, hydrateCovers, localDayKey, modal, ancestorsOf,
 	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
-	pageIconLabel, pageIconHtml,
+	pageIconHtml,
 	favModels, toggleFavModel, removeProviderFavorites, // Modell-Favoriten (Chat + Einstellungen → KI)
 	moreMenuHtml, shareMenuHtml,
 	openSettings: (...a) => SETTINGS.openSettings(...a),

@@ -1,4 +1,5 @@
 import { PLATFORM_NATIVE } from "./platform-native.js";
+import { lead } from "./icons.js";
 
 /**
  * Extrahiert Cloudflare Worker URL und Sync-Schlüssel aus einem gescannten Text.
@@ -73,7 +74,7 @@ export async function openQrScanner(onResult, onError) {
 
 	modal.innerHTML = `
 		<div class="card" style="max-width:440px;width:100%;background:var(--bg-card, #1e1e2e);color:var(--text, #fff);padding:20px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,0.6);text-align:center;">
-			<h3 style="margin-top:0;margin-bottom:8px;">📷 QR-Code scannen</h3>
+			<h3 style="margin-top:0;margin-bottom:8px;">${lead("camera")}QR-Code scannen</h3>
 			<p style="font-size:0.88rem;opacity:0.85;margin-bottom:14px;line-height:1.4;">Halte die Kamera auf den QR-Code des anderen Geräts.</p>
 			
 			<div style="position:relative;width:100%;max-width:320px;margin:0 auto 16px;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;">
@@ -90,7 +91,7 @@ export async function openQrScanner(onResult, onError) {
 
 			<input type="file" id="qrScanFileInput" accept="image/*" style="display:none;">
 			<div style="display:flex;flex-direction:column;gap:8px;">
-				<button type="button" id="btnQrScanFile" class="btn secondary" style="width:100%;">📁 QR-Code aus Foto/Screenshot lesen</button>
+				<button type="button" id="btnQrScanFile" class="btn secondary" style="width:100%;">${lead("image")}QR-Code aus Foto/Screenshot lesen</button>
 				<button type="button" id="btnQrScanClose" class="btn" style="width:100%;background:rgba(255,255,255,0.1);">Abbrechen</button>
 			</div>
 		</div>

@@ -1,5 +1,25 @@
-// Gemeinsame Linien-Icons (24er Raster, Strichstärke 1.6): Homescreen und Karteikarten-Kopf nutzen dieselben.
-export const ICON = {
-	gear: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-	expand: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
-};
+// Zentrale Icons: alle Symbole liegen einmal in icons.svg (Sprite) und werden hier per <use>
+// referenziert. Der Browser lädt die Datei nur einmal (Service-Worker-Cache), Farbe und
+// Strichstärke kommen per CSS (.i in styles.css). Keine Inline-SVGs oder Emojis als UI-Icons.
+const SPRITE = "icons.svg";
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// icon("trash") → SVG-String. cls: zusätzliche Klassen; size: feste Pixelgröße (sonst 1em).
+export function icon(name, cls = "", size = 0) {
+	const dim = size ? ' width="' + size + '" height="' + size + '"' : "";
+	return '<svg class="i' + (cls ? " " + cls : "") + '"' + dim + ' aria-hidden="true" focusable="false"><use href="' + SPRITE + "#" + name + '"/></svg>';
+}
+
+// Seiten-Icon: ein selbst gewähltes Emoji bleibt Inhalt des Nutzers. Die früher automatisch
+// vergebenen Standard-Emojis (Heft, PDF, Notiz, Daily Note) werden als SVG gezeigt.
+const DEFAULT_PAGE_EMOJI = { "📓": "notebook", "📄": "file", "📝": "note", "📅": "calendar" };
+export function pageIcon(pg, fallback = "note", cls = "") {
+	const own = pg && pg.icon;
+	if (own && !DEFAULT_PAGE_EMOJI[own]) return '<span class="page-emoji' + (cls ? " " + cls : "") + '">' + esc(own) + "</span>";
+	const name = DEFAULT_PAGE_EMOJI[own] || (pg && pg.kind === "heft" ? "notebook" : pg && pg.pdfId ? "file" : pg && (pg.daily || pg.dailyRoot) ? "calendar" : fallback);
+	return name ? icon(name, cls) : "";
+}
+
+// Icon vor einem Text (Knopf, Menüeintrag, Überschrift): mit festem Abstand nach rechts.
+export const lead = (name) => icon(name, "i-lead");

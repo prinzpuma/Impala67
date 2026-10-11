@@ -1,40 +1,16 @@
 "use strict";
 
+import { icon as spriteIcon } from "./icons.js";
+
 // Mobile-Ansichten: reines Darstellungsmodul. Keine Seiteneffekte, kein Zugriff
 // auf State, DB oder DOM. Daten, Aktionen und Events liegen in den zuständigen Modulen (app.js, mobile.js, mobile-notes.js).
 
-// Lucide-artige Linien-Icons (24er viewBox), selbst als Pfade geschrieben.
-const ICON_BODIES = {
-	back: '<polyline points="15 18 9 12 15 6"/>',
-	forward: '<polyline points="9 18 15 12 9 6"/>',
-	search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-	sparkle: '<path d="M12 3c.5 4.5 2.5 6.5 7 7-4.5.5-6.5 2.5-7 7-.5-4.5-2.5-6.5-7-7 4.5-.5 6.5-2.5 7-7z"/><path d="M19 15.5c.2 1.4.7 1.9 2.1 2.1-1.4.2-1.9.7-2.1 2.1-.2-1.4-.7-1.9-2.1-2.1 1.4-.2 1.9-.7 2.1-2.1z"/>',
-	dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
-	home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
-	notes: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
-	plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
-	cards: '<rect x="3" y="6" width="13" height="15" rx="2"/><path d="M8 3h11a2 2 0 0 1 2 2v12"/>',
-	grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
-	x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-	library: '<path d="M4 5a2 2 0 0 1 2-2h11v16H6a2 2 0 0 0-2 2z"/><path d="M4 5v16"/><path d="M9 7h6"/>',
-	graph: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.2 10.6 15.5"/><path d="M15.8 7.2 13.4 15.5"/><path d="M8.5 6h7"/>',
-	notebook: '<path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5z"/><path d="M5 3v18"/><path d="M9 8h6"/><path d="M9 12h6"/>',
-	chart: '<path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-3"/>',
-	archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
-	trash: '<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
-	settings: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
-	sync: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 15"/><path d="M20 20v-5h-5"/>',
-};
+// Icons kommen aus dem zentralen Sprite (icons.svg); hier nur die mobilen Namen.
+const NAMES = { back: "chevron-left", forward: "chevron-right", search: "search", sparkle: "sparkles", dots: "dots", home: "home", notes: "note", plus: "plus", cards: "cards", grid: "grid", x: "x", library: "library", graph: "graph", notebook: "notebook", chart: "chart", archive: "archive", trash: "trash", settings: "sliders", sync: "sync" };
 
 function icon(name) {
-	if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(ICON_BODIES, name)) return "";
-	const cls = name === "forward" ? ' class="m-chev"' : "";
-	return (
-		'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-		'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' + cls + ">" +
-		ICON_BODIES[name] +
-		"</svg>"
-	);
+	if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(NAMES, name)) return "";
+	return spriteIcon(NAMES[name], name === "forward" ? "m-chev" : "");
 }
 
 function shellHtml() {

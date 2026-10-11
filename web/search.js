@@ -12,6 +12,7 @@ import { TABS } from "./tabs.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
 import { APP } from "./app.js";
+import { icon, pageIcon } from "./icons.js";
 
 let items = []; // aktuell angezeigte, auswählbare Einträge (für ↑/↓ und Enter)
 let selIdx = 0;
@@ -105,26 +106,26 @@ function actionItems() {
 	const light = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light";
 	const click = (id) => () => { const b = U.el(id); if (b) b.click(); };
 	return [
-		{ type: "action", icon: "＋", label: "Neue Seite", run: () => APP.newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
-		{ type: "action", icon: "🃏", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
+		{ type: "action", icon: "plus", label: "Neue Seite", run: () => APP.newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
+		{ type: "action", icon: "cards", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
 		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
 		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
-		{ type: "action", icon: "▱", label: "Karten verwalten", run: () => APP.openAnki("browser") },
-		{ type: "action", icon: "📅", label: "Daily Note von heute öffnen", run: () => APP.openDailyNote(RENDER.localDayKey(new Date())) },
-		{ type: "action", icon: "🗓", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
-		{ type: "action", icon: "📓", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
-		{ type: "action", icon: light ? "🌙" : "☀️", label: light ? "Dunkles Design" : "Helles Design", run: () => {
+		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => APP.openAnki("browser") },
+		{ type: "action", icon: "calendar", label: "Daily Note von heute öffnen", run: () => APP.openDailyNote(RENDER.localDayKey(new Date())) },
+		{ type: "action", icon: "calendar", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
+		{ type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
+		{ type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");
 			SETTINGS.applyTheme();
 		} },
-		{ type: "action", icon: "🗄", label: "Archiv in Bibliothek öffnen", run: () => {
+		{ type: "action", icon: "archive", label: "Archiv in Bibliothek öffnen", run: () => {
 			S.view = "library";
 			S.libMode = "archive";
 			RENDER.render();
 		} },
-		{ type: "action", icon: "🗑", label: "Papierkorb öffnen", run: click("btnTrash") },
-		{ type: "action", icon: "☁", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
-		{ type: "action", icon: "⚙", label: "Einstellungen öffnen", run: click("btnSettings") }
+		{ type: "action", icon: "trash", label: "Papierkorb öffnen", run: click("btnTrash") },
+		{ type: "action", icon: "cloud", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
+		{ type: "action", icon: "sliders", label: "Einstellungen öffnen", run: click("btnSettings") }
 	];
 }
 
@@ -132,7 +133,7 @@ function actionItems() {
 function newTabActions() {
 	const wsId = S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default";
 	return [
-		{ type: "action", icon: "✦", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
+		{ type: "action", icon: "sparkles", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
 			if (typeof APP.startNewChat === "function") APP.startNewChat({ newTab: true });
 			else {
 				// Fallback: Chat-Tab-Button / neue Session über Sidebar-Flow
@@ -140,7 +141,7 @@ function newTabActions() {
 				if (b) b.click();
 			}
 		} },
-		{ type: "action", icon: "📄", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
+		{ type: "action", icon: "file", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
 			// Immer in neuem Tab anlegen (wie Notion + → Neue Seite)
 			if (typeof APP.createPageInNewTab === "function") await APP.createPageInNewTab(wsId, null);
 			else await APP.newPageFlow(wsId, null);
@@ -239,7 +240,7 @@ function renderList(q) {
 			const snip = r.snippet ? r.snippet.replace(/\s+/g, " ").trim().slice(0, 110) : "";
 			const path = r.path || "";
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
-				'<span class="palette-icon">' + U.esc(RENDER.pageIconLabel(pg)) + "</span>" +
+				'<span class="palette-icon">' + pageIcon(pg) + "</span>" +
 				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, re) + "</span>" +
 				(path ? '<span class="palette-snip">' + mark(path, re) + "</span>"
 					: (snip ? '<span class="palette-snip">' + mark(snip, re) + "</span>" : "")) +
@@ -253,7 +254,7 @@ function renderList(q) {
 				'<span class="palette-kind">' + U.fmtDate(r.chat.updated || r.chat.created) + "</span></button>";
 		}
 		return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
-			'<span class="palette-icon">' + r.icon + "</span>" +
+			'<span class="palette-icon">' + icon(r.icon) + "</span>" +
 			'<span class="palette-main"><span class="palette-title">' + mark(r.label, re) + "</span></span>" +
 			'<span class="palette-kind">' + U.esc(r.kind || "Aktion") + "</span></button>";
 	}).join("") || '<div class="empty">Nichts gefunden</div>';

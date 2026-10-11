@@ -6,6 +6,7 @@ import { RAG } from "./rag.js";
 import { HEFT } from "./heft.js";
 import { PDFS } from "./pdfs.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { icon, lead, pageIcon } from "./icons.js";
 import {
 	parse as parseMarkdown,
 	serialize as serializeMarkdown,
@@ -649,7 +650,7 @@ export const EDITOR = (() => {
 				// contenteditable="false": Player-Bedienelemente (Video/Audio/PDF) müssen
 				// klickbar sein und dürfen nie Teil des editierbaren Textflusses werden.
 				inner = '<figure class="blk-file" data-key="file:' + esc(b.src || "") + '" data-filesrc="' + esc(b.src || "") + '" data-fileblk="' + b.id +
-					'" contenteditable="false"><div class="blk-file-row"><span class="blk-file-ic">📎</span>' +
+					'" contenteditable="false"><div class="blk-file-row"><span class="blk-file-ic">' + icon("paperclip") + '</span>' +
 					'<span class="blk-file-name">' + esc(b.name || "Datei") + "</span></div></figure>";
 				break;
 			case "heft":
@@ -725,8 +726,7 @@ export const EDITOR = (() => {
 		const kinder = STATE.childrenOf(pageId, pg.workspaceId).filter((child) => !embedded.has(child.id));
 		if (!kinder.length) return "";
 		return '<div class="child-pages" contenteditable="false">' + kinder.map((k) => {
-			const ic = k.icon || (k.pdfId ? "📄" : k.kind === "heft" ? "📓" : "📝");
-			const icHtml = /^(https?:|data:)/.test(ic) ? '<img class="cp-img" src="' + esc(ic) + '" alt="">' : esc(ic);
+			const icHtml = /^(https?:|data:)/.test(k.icon || "") ? '<img class="cp-img" src="' + esc(k.icon) + '" alt="">' : pageIcon(k);
 			return '<button type="button" class="child-page-row" data-page="' + esc(k.id) + '">' +
 				'<span class="cp-icon">' + icHtml + "</span>" +
 				'<span class="cp-title">' + esc(k.title || "Ohne Titel") + "</span>" +
@@ -844,11 +844,11 @@ export const EDITOR = (() => {
 	function fileViewHtml(url, mime, name, bid, src) {
 		const cap = name ? "<figcaption>" + esc(name) + "</figcaption>" : "";
 		if (mime.startsWith("video/")) return '<video class="blk-media" src="' + esc(url) + '" controls preload="metadata" playsinline></video>' + cap;
-		if (mime.startsWith("audio/")) return '<div class="blk-file-row"><span class="blk-file-ic">🎧</span><span class="blk-file-name">' + esc(name || "Audio") + '</span></div><audio class="blk-media" src="' + esc(url) + '" controls preload="metadata"></audio>';
+		if (mime.startsWith("audio/")) return '<div class="blk-file-row"><span class="blk-file-ic">' + icon("headphones") + '</span><span class="blk-file-name">' + esc(name || "Audio") + '</span></div><audio class="blk-media" src="' + esc(url) + '" controls preload="metadata"></audio>';
 		if (mime.startsWith("image/")) return '<img class="blk-media" src="' + esc(url) + '" alt="' + esc(name) + '" draggable="false">' + cap;
 		if (mime === "application/pdf") return '<div class="pdf-viewer embedded" data-key="pdf:' + esc(src || bid) + '" data-owned="1"></div>';
 		// Unbekanntes Format: Zeile mit Download-Knopf (Delegation über data-fdl in wire()).
-		return '<div class="blk-file-row"><span class="blk-file-ic">📎</span><span class="blk-file-name">' + esc(name || "Datei") + '</span><button type="button" class="blk-file-dl" data-fdl="' + bid + '">⬇ Herunterladen</button></div>';
+		return '<div class="blk-file-row"><span class="blk-file-ic">' + icon("paperclip") + '</span><span class="blk-file-name">' + esc(name || "Datei") + '</span><button type="button" class="blk-file-dl" data-fdl="' + bid + '">' + lead("download") + 'Herunterladen</button></div>';
 	}
 
 	async function hydrateFileBlock(fig) {
@@ -866,16 +866,16 @@ export const EDITOR = (() => {
 		if (src.startsWith("file:") || (!src.includes("/") && !src.startsWith("http"))) {
 			try {
 				const rec = await DB.getBlob(src);
-				if (!rec) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
+				if (!rec) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">' + icon("alert") + '</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
 				mime = (rec.meta && rec.meta.type) || mime;
 				if (mime === "application/pdf" || (rec.meta && /\.pdf$/i.test(rec.meta.name))) isPdf = true;
 				// Bei PDF lädt PDFS.mountViewer die Daten direkt per DB.getBlob — keine Blob-URL nötig
 				if (!isPdf) {
 					const u = await DB.blobUrl(src, mime);
-					if (!u) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
+					if (!u) { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">' + icon("alert") + '</span><span class="blk-file-name">Datei fehlt: ' + esc(name || src) + "</span></div>"; return; }
 					url = u;
 				}
-			} catch { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">⚠️</span><span class="blk-file-name">Datei konnte nicht geladen werden</span></div>'; return; }
+			} catch { fig.innerHTML = '<div class="blk-file-row"><span class="blk-file-ic">' + icon("alert") + '</span><span class="blk-file-name">Datei konnte nicht geladen werden</span></div>'; return; }
 		}
 		if (isPdf) mime = "application/pdf";
 		fig.innerHTML = fileViewHtml(url, mime || "", name, bid, src);
@@ -996,22 +996,22 @@ export const EDITOR = (() => {
 		{ k: "h1", icon: "H1", label: "Überschrift 1", hint: "# " },
 		{ k: "h2", icon: "H2", label: "Überschrift 2", hint: "## " },
 		{ k: "h3", icon: "H3", label: "Überschrift 3", hint: "### " },
-		{ k: "todo", icon: "☑", label: "To-do-Liste", hint: "[] " },
+		{ k: "todo", icon: icon("check-square"), label: "To-do-Liste", hint: "[] " },
 		{ k: "bullet", icon: "•", label: "Aufzählung", hint: "- " },
 		{ k: "number", icon: "1.", label: "Nummerierte Liste", hint: "1. " },
 		{ k: "toggle", icon: "▸", label: "Toggle-Liste", hint: "> aufklappbar" },
 		{ k: "quote", icon: "”", label: "Zitat", hint: "> " },
-		{ k: "callout", icon: "💡", label: "Callout", hint: "Hervorgehobener Kasten" },
+		{ k: "callout", icon: icon("bulb"), label: "Callout", hint: "Hervorgehobener Kasten" },
 		{ k: "code", icon: "</>", label: "Code", hint: "Codeblock mit Syntax" },
 		{ k: "math", icon: "√", label: "Gleichung", hint: "KaTeX-Formel" },
 		{ k: "table", icon: "▦", label: "Tabelle", hint: "Einfache Tabelle" },
-		{ k: "columns", icon: "▫▫", label: "2 Spalten", hint: "Nebeneinander" },
+		{ k: "columns", icon: icon("columns"), label: "2 Spalten", hint: "Nebeneinander" },
 		{ k: "divider", icon: "—", label: "Trennlinie", hint: "---" },
-		{ k: "image", icon: "🏞", label: "Bild", hint: "Hochladen" },
-		{ k: "pdf", icon: "📄", label: "PDF", hint: "PDF einbetten" },
-		{ k: "file", icon: "📎", label: "Datei / Medien", hint: "Video, Audio, Sonstige" },
-		{ k: "heft", icon: "📓", label: "Heft", hint: "Handschrift-Einbettung" },
-		{ k: "link", icon: "🔗", label: "Seite verlinken", hint: "[[" },
+		{ k: "image", icon: icon("image"), label: "Bild", hint: "Hochladen" },
+		{ k: "pdf", icon: icon("file"), label: "PDF", hint: "PDF einbetten" },
+		{ k: "file", icon: icon("paperclip"), label: "Datei / Medien", hint: "Video, Audio, Sonstige" },
+		{ k: "heft", icon: icon("notebook"), label: "Heft", hint: "Handschrift-Einbettung" },
+		{ k: "link", icon: icon("link"), label: "Seite verlinken", hint: "[[" },
 	];
 
 	function openSlash(bid, query) {
@@ -1062,7 +1062,7 @@ export const EDITOR = (() => {
 			// :::heft-Verweis im Dokument landen.
 			await STATE.dispatch("pageCreate", {
 				id: heftPageId, title: "Heft", parentId: pageId,
-				workspaceId: S.pages[pageId] && S.pages[pageId].workspaceId, icon: "📓", kind: "heft",
+				workspaceId: S.pages[pageId] && S.pages[pageId].workspaceId, kind: "heft",
 			});
 			c = findContext(bid);
 			if (!c) return;
@@ -1119,7 +1119,7 @@ export const EDITOR = (() => {
 		const html = items.length
 			? items.map((p, k) =>
 				'<div class="blk-mi' + (k === keepIndex ? " active" : "") + '" data-linkpick="' + p.id + '">' +
-				'<span class="blk-mi-ic">' + esc(p.icon || "📄") + "</span><span>" + esc(p.title || "Ohne Titel") + "</span></div>").join("")
+				'<span class="blk-mi-ic">' + pageIcon(p, "file") + "</span><span>" + esc(p.title || "Ohne Titel") + "</span></div>").join("")
 			: '<div class="blk-mi disabled">Keine Seite gefunden</div>';
 		openMenu(field, html, "blk-linkmenu");
 		linkMenu = { items, index: keepIndex, bid, query: q };

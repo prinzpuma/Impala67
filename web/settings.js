@@ -22,6 +22,7 @@ import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
+import { lead } from "./icons.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -432,11 +433,11 @@ export function handleCfPairing() {
 	const modalHtml = `
 		<div class="exp-modal-backdrop" id="cfPairModal" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;padding:16px;">
 			<div class="card" style="max-width:440px;width:100%;background:var(--bg-card, #1e1e2e);color:var(--text, #fff);padding:24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,0.6);text-align:center;">
-				<h3 style="margin-top:0;margin-bottom:8px;">📱 Gerät automatisch koppeln</h3>
-				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit der Impala67-App auf deinem Smartphone/Tablet (unter <em>Einstellungen → Sync → 📷 QR-Code scannen</em>).</p>
+				<h3 style="margin-top:0;margin-bottom:8px;">${lead("phone")}Gerät automatisch koppeln</h3>
+				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit der Impala67-App auf deinem Smartphone/Tablet (unter <em>Einstellungen → Sync → QR-Code scannen QR-Code scannen</em>).</p>
 				<div style="margin:16px auto;display:flex;justify-content:center;">${qrSvg}</div>
 				<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px;">
-					<button type="button" id="btnCopyPairLink" class="btn" style="width:100%;">🔗 Kopplungs-Link kopieren</button>
+					<button type="button" id="btnCopyPairLink" class="btn" style="width:100%;">${lead("link")}Kopplungs-Link kopieren</button>
 					<button type="button" id="btnClosePairModal" class="btn secondary" style="width:100%;">Schließen</button>
 				</div>
 			</div>
@@ -476,7 +477,7 @@ export async function handleCfScanPairing() {
 		const success = await CLOUDFLARE_SYNC.configure(data.url, data.key);
 		if (success) {
 			await STATE.dispatch("settingsSet", { cfUrl: data.url, cfSyncKey: data.key });
-			U.toast("📱 Cloudflare-Sync erfolgreich gekoppelt!", "success");
+			U.toast("Cloudflare-Sync erfolgreich gekoppelt!", "success");
 		} else {
 			U.toast("Verbindung fehlgeschlagen. Bitte URL und Schlüssel prüfen.", "error");
 		}
@@ -698,16 +699,16 @@ export async function handleCheckUpdate(button = U.el("btnPwaUpdateAction")) {
 				: "—";
 		}
 		if (r.hasUpdate) {
-			if (status) status.textContent = "⬇️ Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „Update laden“.";
+			if (status) status.textContent = "Update v" + r.latest + " verfügbar (du: v" + r.current + "). Tippe „Update laden“.";
 			paintUpdateAction(button, "install", r.latest);
 			U.toast("Update v" + r.latest + " verfügbar.", "success");
 		} else if (r.remoteOlder) {
-			if (status) status.textContent = "ℹ️ Bundle v" + r.current + " · Server v" + r.latest +
+			if (status) status.textContent = "Bundle v" + r.current + " · Server v" + r.latest +
 				" (Server älter — version.json beim Deploy mitbumpen).";
 			U.toast("Lokal neuer als Server-Stand.", "success");
 			paintUpdateAction(button, "check");
 		} else {
-			if (status) status.textContent = "✅ Aktuell: v" + (r.current || "?") +
+			if (status) status.textContent = "Aktuell: v" + (r.current || "?") +
 				(r.latest ? " · Server v" + r.latest : "") + ".";
 			U.toast("Kein Update nötig.", "success");
 			paintUpdateAction(button, "check");
@@ -715,7 +716,7 @@ export async function handleCheckUpdate(button = U.el("btnPwaUpdateAction")) {
 	} catch (e) {
 		// FIX iPad: früher window.open(GitHub) → Safari. Nie mehr extern öffnen.
 		const msg = (e && e.message) ? e.message : String(e);
-		if (status) status.textContent = "⚠️ Check fehlgeschlagen: " + msg +
+		if (status) status.textContent = "Check fehlgeschlagen: " + msg +
 			" — du kannst die App trotzdem neu laden.";
 		if (remoteEl) remoteEl.textContent = "nicht erreichbar";
 		paintUpdateAction(button, "reload");
@@ -726,7 +727,7 @@ export async function handleCheckUpdate(button = U.el("btnPwaUpdateAction")) {
 export async function handleApplyPwaUpdate(button = U.el("btnPwaUpdateAction")) {
 	const status = U.el("updateStatus");
 	paintUpdateAction(button, "installing");
-	if (status) status.textContent = "⬇️ Update wird geladen…";
+	if (status) status.textContent = "Update wird geladen…";
 	try {
 		if (typeof window.installAppUpdate === "function") {
 			await window.installAppUpdate((st) => { if (status) status.textContent = st; });
@@ -736,7 +737,7 @@ export async function handleApplyPwaUpdate(button = U.el("btnPwaUpdateAction")) 
 			location.reload();
 		}
 	} catch (e) {
-		if (status) status.textContent = "⚠️ Update fehlgeschlagen: " + (e.message || e);
+		if (status) status.textContent = "Update fehlgeschlagen: " + (e.message || e);
 		U.toast("Update fehlgeschlagen.", "error");
 		paintUpdateAction(button, "reload");
 	}
@@ -927,7 +928,7 @@ export async function updateLocalEmbeddingManagerUi() {
 				: configured
 					? `Download erforderlich (ca. ${status.sizeMb || 165} MB); danach ist die Offline-Suche wieder verfügbar`
 					: `Einmaliger Download (ca. ${status.sizeMb || 165} MB); danach offline im Browser nutzbar`;
-			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">${status.partial ? "📥 Download fortsetzen" : `📥 Herunterladen (ca. ${status.sizeMb || 165} MB)`}</button>`;
+			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">${lead("download")}${status.partial ? "Download fortsetzen" : `Herunterladen (ca. ${status.sizeMb || 165} MB)`}</button>`;
 			if (progress) progress.hidden = true;
 		}
 	} catch (err) {
@@ -1357,7 +1358,7 @@ export function handleExportHandwritingSamples() {
 		return;
 	}
 	HANDSCHRIFT.shareTrainingSamples().then((weg) => {
-		if (weg !== "abgebrochen") U.toast(`${count} Trainingsbeispiele exportiert! 📥`);
+		if (weg !== "abgebrochen") U.toast(`${count} Trainingsbeispiele exportiert!`);
 	});
 }
 
@@ -1371,7 +1372,7 @@ export async function handleExportAllInk() {
 	}
 	const name = "impala67_handschrift_" + new Date().toISOString().slice(0, 10) + ".json";
 	const weg = await deliverExport([new File([JSON.stringify(data)], name, { type: "application/json" })]);
-	if (weg !== "cancelled") U.toast(`${data.strokeCount} Striche aus ${data.notebooks.length} Heften exportiert 📥`);
+	if (weg !== "cancelled") U.toast(`${data.strokeCount} Striche aus ${data.notebooks.length} Heften exportiert`);
 }
 
 export function handleClearHandwritingSamples() {

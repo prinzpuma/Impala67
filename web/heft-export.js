@@ -1,6 +1,7 @@
 "use strict";
 import { S } from "./state.js";
 import { U } from "./util.js";
+import { icon } from "./icons.js";
 
 // FIX unscharfe Exporte: vorher 1600px Breite (~190 dpi auf A4) — jetzt 300 dpi.
 export const EXPORT_W = 2480;
@@ -156,7 +157,7 @@ export function openExportDialog({
 	closeTransferOverlay,
 	toast = U.toast,
 }) {
-	const body = '<div class="heft-transfer-summary"><span>↗</span><div><small>Auswahl</small><b>' + indices.length + (indices.length === 1 ? ' Seite' : ' Seiten') + '</b><em>' + U.esc(title) + '</em></div></div>' +
+	const body = '<div class="heft-transfer-summary"><span>' + icon("upload") + '</span><div><small>Auswahl</small><b>' + indices.length + (indices.length === 1 ? ' Seite' : ' Seiten') + '</b><em>' + U.esc(title) + '</em></div></div>' +
 		'<div class="heft-transfer-field"><label for="heftExportName">Dateiname</label><input id="heftExportName" value="' + U.esc(defaultName) + '"></div><h3>Format</h3><div class="heft-transfer-formats">' +
 		'<label><input type="radio" name="heftExportFormat" value="pdf" checked><span><b>PDF-Dokument</b><small>Alle ausgewählten Seiten in einer Datei</small></span><i>✓</i></label>' +
 		'<label><input type="radio" name="heftExportFormat" value="images"><span><b>Einzelne Bilder</b><small>Eine PNG-Datei pro ausgewählter Seite</small></span><i>✓</i></label></div>';
