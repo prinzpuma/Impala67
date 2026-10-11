@@ -4,7 +4,9 @@
 // laufen im Worker (heft-scan-worker.js) und im Hauptthread-Fallback (heft-scan.js).
 
 export const SCAN_JPEG_QUALITY = 0.95;
-export const SCAN_SOURCE_MAX = 2600;
+// Quelle vor dem Entzerren höchstens so groß: genug für 12-MP-Fotos (4032 px), damit
+// die Ausgabe (max. 2200 px Kante) ihre volle Schärfe aus dem Kamerafoto bekommt.
+export const SCAN_SOURCE_MAX = 4096;
 const OUT_MAX_EDGE = 2200, OUT_MAX_PIXELS = 4_800_000;
 
 // ---------- Canvas-Brücke (nur Lesen/Schreiben der Pixel) ----------

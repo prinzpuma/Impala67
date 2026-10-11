@@ -27,7 +27,8 @@ web/heft.js (Striche)
 | `evaluate_checkpoints.py` | Vergleich Basis vs. Feintuning (inkl. fremde Schreiber) |
 | `samples_loader.py` | Eigene Abschreib-Zeilen (`my_handwriting_samples.json`) laden, Benchmark-Texte schützen |
 | `brush_loader.py`, `mathwriting_loader.py`, `uji_loader.py` | Datensatz-Loader |
-| `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Synthetische Daten, Texte (`dictionary_de.txt`), Augmentierung |
+| `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Synthetische Daten, Texte (`dictionary_de.txt`, mit Fokus auf zuletzt oft falsche Zeichen), Augmentierung |
+| `label_noise.py` | Sperrliste für vermutlich falsch beschriftete BRUSH-/MathWriting-Beispiele (`data/label_noise_blocklist.json`) |
 
 ## Ablauf
 
@@ -52,7 +53,7 @@ Ohne Argument prüft der Benchmark das ausgelieferte App-Modell (`web/handwritin
 | BRUSH (170 Schreiber) | Lizenz noch prüfen (vor Weitergabe des Modells) | ~40 % |
 | Google MathWriting | CC BY 4.0 | ~20 % |
 | Synthetisch + UJI Pen Characters v2 | OFL-Fonts / frei (UCI) | ~10 % |
-| Eigene Abschreib-Zeilen (augmentiert) | eigene Daten | ~30 % |
+| Eigene Abschreib-Zeilen (augmentiert, zur Hälfte als Wort-Collage neu zusammengesetzt) | eigene Daten | ~30 % |
 
 IAM-OnDB und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verwendet. Voller MathWriting-Datensatz (3,1 GB) unter `data/mw_download/`:
 

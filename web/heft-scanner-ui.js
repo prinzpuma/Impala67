@@ -10,7 +10,7 @@ import { buildPdf } from "./heft-export.js";
 const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats, blobToDataUrl } = SCANCORE;
 
 // Kappe für das Videobild, falls ImageCapture fehlt (sonst volle Sensorauflösung per takePhoto).
-const CAPTURE_MAX_DIM = 2600;
+const CAPTURE_MAX_DIM = 4096;
 
 // Bild wieder freigeben, sofern es nicht die Quelle selbst ist (Bitmaps haben close()).
 function releaseImg(img, src) {
