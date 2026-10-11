@@ -79,7 +79,8 @@ export const AI = (() => {
 
 	// Fehler zusätzlich in den Performance-Profiler (Einstellungen → Diagnose) — nur Metadaten,
 	// keine Antworttexte; bei HTTP-Fehlern höchstens die Fehlermeldung des Providers.
-	const PROFILER_ERRORS = new Set(["KI-Timeout", "Netzwerkfehler", "HTTP-Fehler", "Embedding-Netzwerkfehler", "Embedding-Fehler", "Lokaler-Embedding-Fehler"]);
+	// Chat-Anfragen misst doChat als Operation „ai.request“ (inkl. Fehlern) — hier nur Embeddings.
+	const PROFILER_ERRORS = new Set(["Embedding-Netzwerkfehler", "Embedding-Fehler", "Lokaler-Embedding-Fehler"]);
 	function providerErrorMessage(text) {
 		try { const e = JSON.parse(text)?.error; return String(e?.message || e || "").slice(0, 160); } catch { return ""; }
 	}
@@ -168,11 +169,13 @@ export const AI = (() => {
 			let message = `KI-Fehler ${status}: ${String(text || "").slice(0, 300)}`;
 			try {
 				const json = JSON.parse(text);
-				if (json?.error && typeof json.error === "string") {
-					if (status === 429 && (json.error.includes("Tageslimit") || json.code === "rate_limit_exceeded")) {
-						message = `KI-Limit des Anbieters erreicht: ${json.error} Du kannst unter Einstellungen → KI einen eigenen API-Key oder LM Studio hinterlegen.`;
+				// OpenAI-kompatible Anbieter liefern { error: { message, metadata.raw } }, der Worker { error: "…" }.
+				const detail = typeof json?.error === "string" ? json.error : json?.error?.metadata?.raw || json?.error?.message || "";
+				if (detail) {
+					if (status === 429) {
+						message = `KI-Limit des Anbieters erreicht: ${detail} Warte kurz oder wähle unter Einstellungen → KI einen anderen Anbieter.`;
 					} else {
-						message = `KI-Fehler ${status}: ${json.error}`;
+						message = `KI-Fehler ${status}: ${detail}`;
 					}
 				}
 			} catch {}
@@ -276,6 +279,7 @@ export const AI = (() => {
 					messages: body.messages,
 					tools: body.tools,
 					tool_choice: body.tool_choice,
+					stream: body.stream,
 				};
 				if (body.reasoning_effort) payload.reasoning_effort = body.reasoning_effort;
 				res = await withTimeout(() => CLOUDFLARE_SYNC.aiRequest(payload, { base, signal: op.controller.signal }), op, LIMIT.requestMs, "die Verbindung");
@@ -284,7 +288,8 @@ export const AI = (() => {
 			}
 		} catch (error) {
 			op.done();
-			debugEvent(error?.name === "AiTimeoutError" ? "KI-Timeout" : "Netzwerkfehler", { ...meta, ms: Math.round(performance.now() - started), error: errorText(error) });
+			const kind = error?.name === "AiTimeoutError" ? "KI-Timeout" : error?.name === "AbortError" ? "Abgebrochen" : "Netzwerkfehler";
+			debugEvent(kind, { ...meta, ms: Math.round(performance.now() - started), error: errorText(error) });
 			throw error;
 		}
 		const requestId = res.headers?.get?.("x-request-id") || res.headers?.get?.("x-goog-request-id") || null;
@@ -742,14 +747,26 @@ export const AI = (() => {
 		applyThinking(body, withExtras, c);
 		const requestTools = toolsForRequest(tools, c.family);
 		if (requestTools) { body.tools = requestTools; body.tool_choice = "auto"; }
-		if (onDelta && c.family !== "cloudflare") body.stream = true;
-		const call = await request("/chat/completions", body, c);
+		if (onDelta) body.stream = true;
+		// Profiler: Dauer bis zur fertigen Antwort (inkl. Stream). Langsam = ab 20 s auffällig.
+		const started = performance.now();
+		const finish = PERF_PROFILER.start("ai.request", { provider: c.providerId, model: c.model, stream: !!body.stream, messages: body.messages.length, tools: body.tools?.length || 0, anomalyThresholdMs: 20000 }, 0);
+		let call;
+		try { call = await request("/chat/completions", body, c); }
+		catch (error) { finish(profileOutcome(error)); throw error; }
+		const headersMs = Math.round(performance.now() - started);
 		try {
 			const contentType = call.res.headers?.get?.("content-type") || "";
-			if (onDelta && call.res.body && !/\bapplication\/json\b/i.test(contentType)) return await readStream(call, onDelta, onReasoning, markProduced, c.family === "google");
-			return finishMessage(await withTimeout(() => call.res.json(), call.op, LIMIT.requestMs, "die Antwort"));
-		} finally { call.done(); }
+			const message = onDelta && call.res.body && !/\bapplication\/json\b/i.test(contentType)
+				? await readStream(call, onDelta, onReasoning, markProduced, c.family === "google")
+				: finishMessage(await withTimeout(() => call.res.json(), call.op, LIMIT.requestMs, "die Antwort"));
+			finish({ status: call.res.status, headersMs, toolCalls: message.tool_calls?.length || 0, reasoningChars: String(message.reasoning || "").length });
+			return message;
+		} catch (error) { finish(profileOutcome(error)); throw error; }
+		finally { call.done(); }
 	}
+	// Abbrüche durch den Nutzer sind kein Fehler; alles andere markiert die Messung als fehlgeschlagen.
+	const profileOutcome = (error) => error?.name === "AbortError" ? { aborted: true } : { failed: true, status: error?.status || 0, errorName: error?.name || "Error", errorMessage: errorText(error).slice(0, 160) };
 	function isCompatibilityError(error, extras, plannedTools, hasToolHistory) {
 		if (!(error instanceof AiHttpError) || ![400, 422].includes(error.status)) return false;
 		const text = errorText(error).toLowerCase();
@@ -769,15 +786,17 @@ export const AI = (() => {
 		let produced = false, lastError;
 		const hasToolHistory = messages.some((m) => m?.role === "tool" || m?.tool_calls?.length);
 		const mayDropTools = !!tools?.length && !hasToolHistory;
-		const plans = [
-			["Standard", true, tools], ["Retry ohne Thinking-Extras", false, tools], ["Retry mit gleichem Request", false, tools],
-			[mayDropTools ? "Fallback ohne Tool-Schema" : "Letzter Retry", false, mayDropTools ? null : tools],
-		];
+		// Thinking-Extras fallen nur weg, wenn der Server sie als inkompatibel ablehnt —
+		// nicht bei Überlast (5xx/429) oder Netzfehlern, sonst verschwindet der Gedankengang.
+		const plans = [["Standard", tools], ["Retry", tools], ["Retry", tools], [mayDropTools ? "Fallback ohne Tool-Schema" : "Letzter Retry", mayDropTools ? null : tools]];
 		const waits = [0, 750, 1800, 3500];
+		let extras = true;
 		for (let i = 0; i < plans.length; i++) {
-			const [label, extras, plannedTools] = plans[i];
+			let [label, plannedTools] = plans[i];
+			// Ein Limit sagt nichts über das Tool-Schema — Werkzeuge bleiben dann erhalten.
+			if (!plannedTools && lastError?.status === 429) { label = "Letzter Retry"; plannedTools = tools; }
 			if (i) {
-				debugEvent("Fallback", { step: label, previousStatus: lastError?.status, waitMs: waits[i] });
+				debugEvent("Fallback", { step: label + (extras ? "" : " ohne Thinking-Extras"), previousStatus: lastError?.status, waitMs: waits[i] });
 				await sleep(Math.max(waits[i], lastError?.retryAfterMs || 0));
 			}
 			try {
@@ -797,11 +816,12 @@ export const AI = (() => {
 				}
 				const network = !(error instanceof AiHttpError) && (error instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(errorText(error)));
 				const serverRetry = error instanceof AiHttpError && (error.status >= 500 || error.status === 429);
-				if (produced || !(serverRetry || network || isCompatibilityError(error, extras, plannedTools, hasToolHistory))) throw error;
+				const compatibility = isCompatibilityError(error, extras, plannedTools, hasToolHistory);
+				if (produced || !(serverRetry || network || compatibility)) throw error;
 				if (isToolSchemaError(error, plannedTools, hasToolHistory)) {
-					plans.splice(i + 1, plans.length - i - 1, ["Fallback ohne Tool-Schema", false, null]);
+					plans.splice(i + 1, plans.length - i - 1, ["Fallback ohne Tool-Schema", null]);
 					waits[i + 1] = 0;
-				}
+				} else if (compatibility) extras = false;
 				lastError = error;
 			}
 		}
@@ -1002,7 +1022,9 @@ export const AI = (() => {
 			return hits
 				.filter((h) => {
 					if (active && (h.pageId === activeId || h.title === activeTitle)) return false;
-					return (h.score == null || h.score >= 0.45) && h.snippet;
+					// Gemessen (lokales Embedding): passende Fragen ≥ 0,62, themenfremde ≤ 0,59.
+					// 0,45 schickte bei fachfremden Fragen beliebige Notizen als „Kontext“ mit.
+					return (h.score == null || h.score >= 0.6) && h.snippet;
 				})
 				.map((h) => `• [${h.title}${h.archived ? " (archiviert)" : ""}] ${h.snippet}`)
 				.join("\n");
@@ -1220,6 +1242,9 @@ export const AI = (() => {
 			render();
 		};
 
+		// Profiler: ganzer Lauf (auffällig ab 45 s) und Vorbereitung (auffällig ab 1,5 s).
+		const finishRun = PERF_PROFILER.start("ai.agent", { provider: current.providerId, model, anomalyThresholdMs: 45000 }, 0);
+		let steps = 0;
 		const workspaceSnapshot = contextSnapshot(), attachment = takeAttachment(type);
 		target.push({ mid: U.uid(), role: "user", content: userText, ...attachment });
 		render();
@@ -1228,7 +1253,9 @@ export const AI = (() => {
 		const history = historyMessages(recent);
 		const metaOnly = S.settings.alwaysSendTools === false && !runUnlocked;
 		let agentTools = metaOnly ? [META_TOOL_DEF] : fullToolDefs();
+		const finishContext = PERF_PROFILER.start("ai.context", { overflow: overflow.length, anomalyThresholdMs: 1500 }, 0);
 		const [ragContext, chatSummary, contextImage] = await Promise.all([ragFor(userText), summaryFor(type, overflow, current, runId), pageContextImage(workspaceSnapshot)]);
+		finishContext({ rag: !!ragContext, summary: !!chatSummary, image: !!contextImage });
 		if (contextImage) history.push(contextImage);
 		const visionNote = history.some((m) => Array.isArray(m.content))
 			? "\n\nAn Nachrichten können Bilder hängen (z. B. Heft-Seiten oder Screenshots). Wenn du Bilder technisch nicht empfangen oder nicht sehen kannst (kein Vision-Modell), erwähne das kurz und ehrlich, statt Inhalte zu raten."
@@ -1269,6 +1296,7 @@ export const AI = (() => {
 			S.aiDraft = "";
 			flushEdits();
 			persist(true);
+			finishRun({ steps, ...profileOutcome(error) });
 			throw error;
 		};
 		async function waitForAnswer(question, options, status) {
@@ -1314,6 +1342,7 @@ export const AI = (() => {
 		for (let step = 0; step < LIMIT.agentSteps; step++) {
 			S.aiDraft = "";
 			S.aiThinkingDraft = "";
+			steps = step + 1;
 			pruneRunHistory(messages);
 			let message;
 			try {
@@ -1345,6 +1374,7 @@ export const AI = (() => {
 				flushEdits();
 				persist(true);
 				if (runUnlocked) rememberUnlock();
+				finishRun({ steps });
 				return final.content;
 			}
 
@@ -1417,6 +1447,7 @@ export const AI = (() => {
 		target.push({ mid: U.uid(), role: "assistant", content: text, reasoning: null, reasoningExpanded: false });
 		flushEdits();
 		persist(true);
+		finishRun({ steps, failed: true, errorMessage: "zu viele Tool-Schritte" });
 		return text;
 	}
 

@@ -382,6 +382,15 @@ export const DB = (() => {
 			if (ev.type === "pageDelete") deletedAt.page[ev.payload.id] = ev.t;
 			if (ev.type === "cardDelete") deletedAt.card[ev.payload.id] = ev.t;
 		}
+		// Chats sind Last-write-wins nach `updated` (state.js „chatUpsert“): jedes Event ist ein
+		// kompletter Schnappschuss. Behalten wird nur der Gewinner je Chat (bei Gleichstand das
+		// spätere Event, wie beim Replay) — ältere Schnappschüsse blähten Log und Sync auf.
+		const chatWinner = {};
+		for (const ev of sorted) {
+			if (ev.type !== "chatUpsert" || !ev.payload?.id) continue;
+			const updated = String(ev.payload.updated || ev.t || ""), best = chatWinner[ev.payload.id];
+			if (!best || updated >= best.updated) chatWinner[ev.payload.id] = { ev, updated };
+		}
 		const covered = {}, contentKept = {}, keep = [];
 		let uiTabsKept = false;
 		const uiTreeKeys = new Set();
@@ -389,6 +398,7 @@ export const DB = (() => {
 			const ev = sorted[i], p = ev.payload || {};
 			if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
 			else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
+			else if (ev.type === "chatUpsert" && p.id && chatWinner[p.id].ev !== ev) continue;
 			if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
 			if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
 			const [bucket, patch] =
@@ -446,6 +456,19 @@ export const DB = (() => {
 			};
 			tx.onerror = tx.onabort = () => reject(tx.error || req.error);
 		});
+	}
+
+	// Die Kompaktierung liest und sortiert den gesamten Log. Deshalb erst prüfen, wenn seit der
+	// letzten Analyse mindestens so viele neue Events hinzukamen, wie compactLocal als Gewinn
+	// verlangt. Gemeinsam für Drive und Cloudflare — vorher lief sie nur nach einem Drive-Sync.
+	const COMPACT_CHECK_STEP = 200, COMPACT_CHECK_SEQ_KEY = "impala67_compact_checked_seq";
+	async function compactLocalIfDue() {
+		const top = await maxSeq();
+		const checked = Math.min(Number(localStorage.getItem(COMPACT_CHECK_SEQ_KEY) || localStorage.getItem("impala67_drive_compact_checked_seq") || 0), top);
+		if (top - checked < COMPACT_CHECK_STEP) return 0;
+		const dropped = await compactLocal(COMPACT_CHECK_STEP);
+		localStorage.setItem(COMPACT_CHECK_SEQ_KEY, String(top));
+		return dropped;
 	}
 
 	// Einmalige v4-Migration: alten Heft-Transportzustand atomar durch je EIN
@@ -867,5 +890,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactLocalIfDue, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();

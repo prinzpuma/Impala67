@@ -522,6 +522,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 			finishProfile({ received, uploaded, uploadAcknowledged: uploaded && !!pushed.confirmed });
+			// Erst nach dem Upload verdichten: überholte Schnappschüsse sind dann sicher entbehrlich.
+			try { await PERF_PROFILER.run("db.compact-local", () => DB.compactLocalIfDue(), {}, 50); }
+			catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 			return true;
 		} catch (error) {
 			finishProfile({ failed: true, errorName: error?.name || "Error" });

@@ -285,9 +285,10 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 .think-chevron { flex-shrink: 0; font-size: var(--text-2xs); color: var(--text2); transition: transform .15s ease }
 .think-toggle[aria-expanded="true"] .think-chevron { transform: rotate(90deg) }
 .think-body-wrap { position: relative; max-height: 0; overflow: hidden; transition: max-height .2s ease }
-.think-box.peek .think-body-wrap { max-height: 3.6em }
+/* Live-Vorschau unten verankert: umgebrochene Zeilen schieben das Neueste nicht mehr aus dem Fenster */
+.think-box.peek .think-body-wrap { max-height: 3.6em; display: flex; flex-direction: column; justify-content: flex-end }
 .think-box.expanded .think-body-wrap { max-height: 480px }
-.think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18px; background: linear-gradient(180deg, transparent, var(--surface-subtle)); pointer-events: none }
+.think-box.peek .think-body-wrap::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14px; background: linear-gradient(0deg, transparent, var(--surface-subtle)); pointer-events: none }
 .think-body { padding: var(--space-1) var(--space-3) 10px; font-size: var(--text-sm); line-height: 1.55; color: var(--text2); white-space: pre-wrap; font-family: inherit }
 .think-box.expanded .think-body { max-height: 480px; overflow-y: auto }
 /* Blockmarkierung als durchgehende Fläche wie in Notion – keine… */

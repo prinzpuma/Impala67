@@ -20,7 +20,7 @@ const UPSERT_USER_SQL = `
 		updated_at=excluded.updated_at
 `;
 
-const AI_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile"];
+const AI_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
 const VISION_MODELS = new Set(["qwen/qwen3.8-27b"]);
 const MAX_AI_MESSAGES = 60, MAX_AI_MESSAGE_CHARS = 32_000, MAX_AI_IMAGE_CHARS = 6_000_000;
 
@@ -166,9 +166,15 @@ async function handleAi(request, env) {
 	if (requestedModel && requestedModel !== "impala-ai" && requestedModel !== "cloudflare-auto" && models.includes(requestedModel)) {
 		models = [requestedModel, ...models.filter((m) => m !== requestedModel)];
 	}
-	let upstream, text = "";
+	const stream = body?.stream === true;
+	const groq = (payload) => fetch("https://api.groq.com/openai/v1/chat/completions", {
+		method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
+	});
+	// Scheitern alle Modelle, zählt der aussagekräftigste Fehler: ein Limit (429) samt
+	// Retry-After, damit der Client gezielt warten kann — nicht der Fehler des letzten Modells.
+	let failure = null;
 	for (const model of models) {
-		const payload = { model, messages: normalized.messages, stream: false };
+		const payload = { model, messages: normalized.messages, stream };
 		if (tools) payload.tools = tools;
 		if (body?.tool_choice) payload.tool_choice = body.tool_choice;
 		if (body?.reasoning_effort === "none") {
@@ -185,24 +191,25 @@ async function handleAi(request, env) {
 		if (Number.isInteger(body?.max_completion_tokens) && body.max_completion_tokens > 0) {
 			payload.max_completion_tokens = body.max_completion_tokens;
 		}
-		upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-			method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
-		});
-		text = await upstream.text();
-		if (upstream.status === 400 && (payload.reasoning_format || payload.reasoning_effort) && /(?:reasoning_format|reasoning_effort|reasoning)/i.test(text)) {
-			delete payload.reasoning_format;
-			delete payload.reasoning_effort;
-			upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.GROQ_API_KEY}` }, body: JSON.stringify(payload),
-			});
-			text = await upstream.text();
+		let upstream = await groq(payload);
+		if (!upstream.ok && upstream.status === 400 && (payload.reasoning_format || payload.reasoning_effort)) {
+			const text = await upstream.text();
+			if (/(?:reasoning_format|reasoning_effort|reasoning)/i.test(text)) {
+				delete payload.reasoning_format;
+				delete payload.reasoning_effort;
+				upstream = await groq(payload);
+			} else upstream = new Response(text, { status: upstream.status, headers: upstream.headers });
 		}
-		const canRetry = (upstream.status === 429 || upstream.status === 404 || upstream.status === 400 || upstream.status === 410) && model !== models.at(-1);
-		if (!canRetry) break;
+		if (upstream.ok) {
+			return new Response(upstream.body, { status: upstream.status, headers: { "Content-Type": upstream.headers.get("Content-Type") || (stream ? "text/event-stream" : "application/json"), ...corsHeaders() } });
+		}
+		const current = { status: upstream.status, text: await upstream.text(), retryAfter: upstream.headers.get("Retry-After") };
+		if (!failure || current.status === 429 || failure.status !== 429) failure = current;
+		if (![429, 404, 400, 410].includes(current.status)) break;
 	}
-	const headers = { "Content-Type": upstream?.headers.get("Content-Type") || "application/json", ...corsHeaders() };
-	if (upstream?.headers?.get("Retry-After")) headers["Retry-After"] = upstream.headers.get("Retry-After");
-	return new Response(text, { status: upstream?.status || 502, headers });
+	const headers = { "Content-Type": "application/json", ...corsHeaders() };
+	if (failure?.retryAfter) headers["Retry-After"] = failure.retryAfter;
+	return new Response(failure?.text || JSON.stringify({ error: "KI-Anfrage fehlgeschlagen." }), { status: failure?.status || 502, headers });
 }
 
 

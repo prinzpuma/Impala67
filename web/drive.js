@@ -25,8 +25,6 @@ export const DRIVE = (() => {
 	// über ALLE Blob-Schlüssel. Pro Heft und Tag landeten so bis zu 20 Vollkopien in Drive,
 	// die jedes andere Gerät auch noch herunterlud und speicherte.
 	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:");
-	const COMPACT_CHECK_STEP = 200;
-	const COMPACT_CHECK_SEQ_KEY = "impala67_drive_compact_checked_seq";
 	const LS = localStorage;
 	const lsJson = (k, fb) => { try { return JSON.parse(LS.getItem(k) ?? "null") ?? fb; } catch { return fb; } };
 	const DEVICE_ID = (() => {
@@ -653,17 +651,8 @@ export const DRIVE = (() => {
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
 		await replayImported(importedEvents);
-		// Die Kompaktierung liest und sortiert den gesamten Log. Deshalb nur pruefen,
-		// wenn seit der letzten Analyse mindestens so viele neue Events hinzugekommen
-		// sind, wie compactLocal ueberhaupt als Mindestgewinn verlangt.
 		const finalMaxSeq = await DB.maxSeq();
-		const compactCheckedSeq = Math.min(Number(LS.getItem(COMPACT_CHECK_SEQ_KEY) || 0), finalMaxSeq);
-		if (finalMaxSeq - compactCheckedSeq >= COMPACT_CHECK_STEP) {
-			try {
-				await DB.compactLocal(COMPACT_CHECK_STEP);
-				LS.setItem(COMPACT_CHECK_SEQ_KEY, String(finalMaxSeq));
-			} catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
-		}
+		try { await DB.compactLocalIfDue(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));
 		LS.setItem("impala67_drive_last_ok", new Date().toISOString());
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
