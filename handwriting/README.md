@@ -57,7 +57,7 @@ Ohne Training liest es deutschen Text schon so gut wie das feingetunte Strich-Mo
 | `image_model.py` | ResNet18-Stamm + 3× BiLSTM-256 + CTC, Gewichts-Import aus de-htr, int8-Export (nur Gewichte, läuft in ONNX Runtime Web) |
 | `rasterize.py` | Striche bzw. Punkt-Features → Graustufenbild 64 px hoch |
 | `image_datasets.py` | ScaDS- und fhswf-Zeilenbilder laden (Cache) |
-| `train_image.py` | Mathe-Feintuning mit Text-Wiederholung; best.pt nur, wenn Text höchstens 0,3 Punkte schlechter wird |
+| `train_image.py` | Mathe-Feintuning mit Text-Wiederholung; best.pt nur, wenn Text höchstens 1 Punkt schlechter wird |
 | `train_image_colab.ipynb` | Colab-Ablauf inkl. Datensatz-Downloads |
 | `scads_split.json` | ScaDS-Schreiber für Auswahl/Test, die de-htr nie gesehen hat |
 

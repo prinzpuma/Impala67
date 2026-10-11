@@ -1,11 +1,12 @@
 """Feintuning des Bild-Modells (image_model.py, Start: de-htr-web-v2) auf Formeln, ohne Text zu verlernen.
 
-Mischung je Batch (Standard): 50 % Mathe (MathWriting als Bild + synthetische Rechnungen),
-50 % Text-Wiederholung (ScaDS-Trainingsschreiber + fhswf), also dieselbe Art Daten, auf denen de-htr gelernt hat.
+Mischung je Batch (Standard): 35 % Mathe (MathWriting als Bild + synthetische Rechnungen),
+65 % Text: ScaDS-Trainingsschreiber + fhswf (Scans, wie bei de-htr) und gezeichnete Sätze mit Leerzeichen.
 Der Bild-Teil (ResNet) lernt nur mit 1/10 der Lernrate.
 
-Auswahl von best.pt: Text-CER der ScaDS-Auswahlschreiber darf höchstens --max-text-loss über dem Startwert liegen,
-darunter gewinnt die niedrigste Mathe-CER (MathWriting-Auswahlhälfte). Test-Schreiber und Test-Hälften
+Auswahl von best.pt: Text-CER der ScaDS-Auswahlschreiber (Scans) und der BRUSH-Auswahlschreiber (Striche) darf
+je höchstens --max-text-loss (1 Punkt) über dem Startwert liegen, darunter gewinnt die niedrigste Mathe-CER
+(MathWriting-Auswahlhälfte). Test-Schreiber und Test-Hälften
 werden nur gemeldet, nie zur Auswahl benutzt.
 
 Aufruf (Colab): python train_image.py --dehtr <Ordner mit model-fp32.onnx + config.json> --scads <Ordner> --fhswf <Ordner>
@@ -32,9 +33,11 @@ from evaluate_user_benchmark_words import LINES_GROUND_TRUTH, ctc_greedy, line_d
 from generate_synthetic import MATH_FORMULAS, generate_word_strokes
 from image_datasets import load_fhswf, load_scads, normalize_label
 from image_model import ImageCRNN, export_image_onnx, load_dehtr_onnx
+from brush_loader import BrushDataset
 from mathwriting_loader import MathWritingDataset
 from rasterize import features_to_strokes, pad_width, render_strokes
 from samples_loader import load_user_eval_lines
+from text_corpus import random_text
 from vocabulary import CHAR_TO_IDX
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,17 +73,24 @@ def synthetic_math_text(rng: random.Random) -> str:
     return rng.choice(MATH_FORMULAS)
 
 
+def synthetic_line_text(rng: random.Random) -> str:
+    """Mehrwort-Zeile aus dem Wortschatz (text_corpus), nie die Benchmark-Sätze aus GERMAN_SENTENCES."""
+    for _ in range(10):
+        text = random_text(rng)
+        if " " in text:
+            return text
+    return text
+
+
 class LineSampler:
     """Erzeugt einzelne Trainingsbeispiele (Bild [64, W] float32, Text) aus der gewichteten Quellen-Mischung."""
 
     def __init__(self, scads_train, fhswf, mathwriting, math_share: float):
-        self.sources = []
-        text_sources = [s for s in (scads_train, fhswf) if s]
+        # Text: Scans (ScaDS, fhswf) plus gezeichnete Sätze mit Leerzeichen. Lauf 1 ohne gezeichneten Text hat
+        # Leerzeichen verlernt: MathWriting-Labels haben keine, obwohl im Bild Lücken sind.
         text_share = 1.0 - math_share
-        if scads_train and fhswf:
-            self.sources += [("scads", 0.6 * text_share), ("fhswf", 0.4 * text_share)]
-        elif text_sources:
-            self.sources += [("scads" if scads_train else "fhswf", text_share)]
+        self.sources = [(n, w * text_share) for n, w in (("scads", 0.5), ("fhswf", 0.3), ("synth_text", 0.2))
+                        if n == "synth_text" or (scads_train if n == "scads" else fhswf)]
         self.sources += [("mathwriting", 0.8 * math_share), ("synth_math", 0.2 * math_share)]
         self.data = {"scads": scads_train, "fhswf": fhswf, "mathwriting": mathwriting}
         total = sum(w for _, w in self.sources)
@@ -102,7 +112,7 @@ class LineSampler:
             feats, text = rng.choice(self.data["mathwriting"])
             strokes = features_to_strokes(feats)
         else:
-            text = synthetic_math_text(rng)
+            text = synthetic_math_text(rng) if name == "synth_math" else synthetic_line_text(rng)
             strokes = generate_word_strokes(text, rotation_deg=rng.uniform(-4, 4))
         if not strokes:
             return None
@@ -169,6 +179,11 @@ def build_eval_sets(scads, mw_test, samples_path):
     render = lambda feats: render_strokes(features_to_strokes(feats))
     sets["sel_math"] = [(render(f), t, "math") for f, t in mw[0::2]]
     sets["test_math"] = [(render(f), t, "math") for f, t in mw[1::2]]
+    # Gezeichneter Text fremder Schreiber (BRUSH 150–169, nie trainiert): prüft Leerzeichen und Strich-Bilder
+    ink = [(f, t) for f, t in BrushDataset(split="val").samples if " " in t.strip()]
+    ink = ink[:: max(1, len(ink) // 400)][:400]
+    sets["sel_ink"] = [(render(f), t.strip(), "text") for f, t in ink[0::2]]
+    sets["test_ink"] = [(render(f), t.strip(), "text") for f, t in ink[1::2]]
     # Eigene Handschrift: nur zur Info (universelles Modell, nicht darauf optimiert)
     own = []
     if os.path.exists(BENCHMARK_PATH):
@@ -218,9 +233,9 @@ def main():
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--backbone-lr-factor", type=float, default=0.1)
-    ap.add_argument("--math-share", type=float, default=0.5)
+    ap.add_argument("--math-share", type=float, default=0.35)
     ap.add_argument("--eval-every", type=int, default=1000)
-    ap.add_argument("--max-text-loss", type=float, default=0.003, help="Erlaubte Text-CER-Verschlechterung (0.003 = 0,3 Punkte)")
+    ap.add_argument("--max-text-loss", type=float, default=0.01, help="Erlaubte Text-CER-Verschlechterung (0.01 = 1 Punkt; Lauf 1: +0,6 Text für -48 Mathe)")
     ap.add_argument("--workers", type=int, default=max(0, min(8, (os.cpu_count() or 1) - 1)))
     ap.add_argument("--out", default=os.path.join(HERE, "model.onnx"))
     args = ap.parse_args()
@@ -300,7 +315,8 @@ def main():
             losses = []
         if step % args.eval_every == 0 or step == args.steps:
             r = evaluate(model, device, sets)
-            ok = r["sel_text"] <= base["sel_text"] + args.max_text_loss
+            # Beide Text-Prüfungen (Scans und gezeichnete Striche) müssen halten; fehlt BRUSH, zählt nur ScaDS
+            ok = all(not (r[k] > base[k] + args.max_text_loss) for k in ("sel_text", "sel_ink"))
             better = ok and r["sel_math"] < best["sel_math"]
             print(f"[Schritt {step}] {fmt(r)} | Text {'ok' if ok else 'ZU SCHLECHT'}" + (" → neues best.pt" if better else ""))
             if better:

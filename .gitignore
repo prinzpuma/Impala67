@@ -29,6 +29,7 @@ handwriting/data/
 handwriting/checkpoints/
 handwriting/checkpoints-image/
 handwriting/model.onnx
+handwriting/model-bild*.onnx
 __pycache__/
 *.pyc
 
