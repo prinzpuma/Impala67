@@ -39,7 +39,7 @@ body.beta-ui .hv { position: relative; isolation: isolate }
 body.beta-ui .hv::before {
 	content: "";
 	position: absolute;
-	inset: -120px -80px auto;
+	inset: 0 0 auto;
 	height: 420px;
 	z-index: -1;
 	pointer-events: none;
