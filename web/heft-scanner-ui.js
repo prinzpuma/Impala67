@@ -5,9 +5,10 @@
 import { U } from "./util.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import { SCANCORE } from "./heft-scan.js";
+import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
 import { buildPdf } from "./heft-export.js";
 
-const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats, blobToDataUrl } = SCANCORE;
+const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuadAsync, liveCheck, processShot, blobToDataUrl } = SCANCORE;
 
 // Kappe für das Videobild, falls ImageCapture fehlt (sonst volle Sensorauflösung per takePhoto).
 const CAPTURE_MAX_DIM = 4096;
@@ -57,7 +58,7 @@ export function createScanner(host) {
 					const images = [];
 					for (const uri of res.images) {
 						const src = window.Capacitor?.convertFileSrc ? window.Capacitor.convertFileSrc(uri) : uri;
-						const im = await host.fileToImageData(await (await fetch(src)).blob(), 2400);
+						const im = await host.fileToImageData(await (await fetch(src)).blob(), SCAN_OUT_MAX_EDGE, "image/jpeg", SCAN_JPEG_QUALITY);
 						images.push({ ...im, scan: true });
 					}
 					host.insertPages(images);
@@ -241,20 +242,6 @@ export function createScanner(host) {
 		for (const frame of hist) spread = Math.max(spread, quadDelta(frame.quad, quad));
 		return { ...info, quad, jitter: spread, stable: hist.length >= 3 && spread < Math.max(info.sw, info.sh) * 0.035 };
 	}
-	function liveQualityFrame(video) {
-		const sw = 300, sh = Math.max(150, Math.round(video.videoHeight / Math.max(1, video.videoWidth) * sw));
-		const c = document.createElement("canvas"); c.width = sw; c.height = sh;
-		c.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, sw, sh);
-		// Kennzahlen aus SCANCORE.lumStats — genau die Formel, mit der danach auch der
-		// fertige Scan bewertet wird. Die Rechnung stand hier vorher ein zweites Mal.
-		// step 2: jedes zweite Pixel reicht dem 340-ms-Takt der Live-Prüfung.
-		const { mean, contrast, sharp } = lumStats(c, 2);
-		const quad = detectQuad(c, sw, sh);
-		const found = quadArea(quad) < sw * sh * 0.96;
-		const area = quadArea(quad) / Math.max(1, sw * sh);
-		const margin = found ? Math.min(...quad.map((p) => Math.min(p[0], p[1], sw - 1 - p[0], sh - 1 - p[1]))) : 0;
-		return { quad, found, mean, contrast, sharp, area, margin, sw, sh };
-	}
 	function setLiveGuide(info, video) {
 		if (!scanUI) return;
 		const stage = scanUI.wrap.querySelector(".heft-scan-stage");
@@ -289,10 +276,15 @@ export function createScanner(host) {
 	function startLiveQuality(video, owner) {
 		if (!owner || scanUI !== owner) return;
 		stopLiveQuality();
-		const check = () => {
-			if (scanUI !== owner || owner.busy || !video.videoWidth || !video.isConnected) return;
+		// Die Erkennung läuft im Worker. Während eine Prüfung läuft, wird der 340-ms-Takt
+		// übersprungen; Ergebnisse nach Schließen/Wechsel des Scanners werden verworfen.
+		const check = async () => {
+			if (scanUI !== owner || owner.busy || owner.liveBusy || !video.videoWidth || !video.isConnected) return;
+			owner.liveBusy = true;
 			try {
-				const info = stabilizeLiveInfo(liveQualityFrame(video), owner);
+				const frame = await liveCheck(video);
+				if (scanUI !== owner || owner.busy) return;
+				const info = stabilizeLiveInfo(frame, owner);
 				const ready = setLiveGuide(info, video);
 				if (!ready) {
 					owner.liveStable = 0;
@@ -311,6 +303,7 @@ export function createScanner(host) {
 					scanCapture(true);
 				}
 			} catch (e) { console.warn("Heft: Live-Scan-Prüfung fehlgeschlagen", e); }
+			finally { owner.liveBusy = false; }
 		};
 		check();
 		owner.liveTimer = setInterval(check, 340);
@@ -483,7 +476,8 @@ export function createScanner(host) {
 		const img = await loadImg(sh.src);
 		try {
 			const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-			const quad = detectQuad(img, w, h);
+			// Erkennung im Worker, damit das Hinzufügen einer Aufnahme die Bedienung nicht blockiert
+			const quad = await detectQuadAsync(img, w, h);
 			sh.w = w; sh.h = h; sh.quad = quad;
 			sh.autoCrop = quadArea(quad) < w * h * 0.96;
 		} finally { releaseImg(img, sh.src); }

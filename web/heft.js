@@ -1913,7 +1913,8 @@ export const HEFT = (() => {
 	function onDocPointerDown(e) {
 		if (!pop) return;
 		if (pop.contains(e.target)) return;
-		if (e.target.closest && e.target.closest("[data-hepagesmenu],[data-heplusmenu],[data-heimgmenu]")) return;
+		// #overlay: Bestätigungsdialoge (U.confirm) liegen über dem Popup und gehören noch dazu.
+		if (e.target.closest && e.target.closest("[data-hepagesmenu],[data-heplusmenu],[data-heimgmenu],#overlay")) return;
 		closePop();
 	}
 	// Seitenübersicht und Verlauf mittig im Heft halten (nach jedem Inhaltswechsel neu messen).
@@ -2328,11 +2329,15 @@ export const HEFT = (() => {
 		sel = null;
 		scheduleSave(); rebuildScroll(); go(at);
 	}
-	function deletePageAt(i) {
+	// Bestätigung über den In-App-Dialog: natives confirm() kann Chrome lautlos mit false
+	// beantworten (unterdrückte Dialoge, App-Fenster) — der Klick tat dann scheinbar nichts.
+	const confirmDelete = (msg) => U.confirm(msg, { title: "Löschen", ok: "Löschen", danger: true });
+	async function deletePageAt(i) {
 		if (!doc || doc.pages.length <= 1 || !doc.pages[i]) return;
 		const pg = doc.pages[i];
 		const hasContent = (pg.strokes && pg.strokes.length) || (pg.images && pg.images.length) || (pg.texts && pg.texts.length);
-		if (hasContent && !confirm("Diese Heftseite wirklich löschen?")) return;
+		if (hasContent && !(await confirmDelete("Diese Heftseite wirklich löschen?"))) return;
+		if (doc.pages[i] !== pg) return; // während des Dialogs geändert (z. B. Sync)
 		doc.pages.splice(i, 1);
 		sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		scheduleSave(); rebuildScroll(); go(Math.min(i, doc.pages.length - 1));
@@ -2340,13 +2345,17 @@ export const HEFT = (() => {
 	async function deleteSelectedPages() {
 		if (!doc || !exportSel || !canDeletePages(doc.pages.length, exportSel.size)) return;
 		const chosen = [...exportSel].sort((a, b) => b - a);
-		if (!confirm(chosen.length + (chosen.length === 1 ? " ausgewählte Seite" : " ausgewählte Seiten") + " wirklich löschen?")) return;
+		const chosenIds = chosen.map((i) => doc.pages[i] && doc.pages[i].id);
+		if (!(await confirmDelete(chosen.length + (chosen.length === 1 ? " ausgewählte Seite" : " ausgewählte Seiten") + " wirklich löschen?"))) return;
+		// Während des Dialogs kann der Sync das Dokument ersetzt haben — dann nicht blind per Index löschen.
+		if (!doc || chosen.some((i, k) => !doc.pages[i] || doc.pages[i].id !== chosenIds[k])) { if (U.toast) U.toast("Heft wurde inzwischen geändert — bitte Auswahl prüfen", "error"); return; }
 		try { await writeSnapshot(pid, encodeDoc(doc), doc.pages.length); } catch (e) { console.warn("Heft: Sicherung vor Löschen fehlgeschlagen", e); }
 		const currentId = page() && page().id;
 		chosen.forEach((i) => doc.pages.splice(i, 1));
 		idx = doc.pages.findIndex((pg) => pg.id === currentId);
 		if (idx < 0) idx = Math.min(chosen[chosen.length - 1] || 0, doc.pages.length - 1);
-		exportSel = new Set(); sel = null; lassoSel = null; undoStack = []; redoStack = [];
+		if (exportSel) exportSel = new Set(); // Popup kann während des Dialogs geschlossen worden sein
+		sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		scheduleSave(); rebuildScroll(); refreshPagesPop(); go(idx);
 		if (U.toast) U.toast(chosen.length + " Seite(n) gelöscht · über Verlauf wiederherstellbar", "success");
 	}
@@ -2586,15 +2595,18 @@ export const HEFT = (() => {
 		if (d.heverrestore != null) {
 			const s = pop && pop.__verSnaps && pop.__verSnaps[Number(d.heverrestore)];
 			if (!s) return;
-			if (!confirm("Diesen Stand wiederherstellen? Der aktuelle Stand wird vorher im Verlauf gesichert.")) return;
-			closePop();
-			restoreSnapshot(pid, s.key).catch((e2) => {
+			const p = pid;
+			U.confirm("Diesen Stand wiederherstellen? Der aktuelle Stand wird vorher im Verlauf gesichert.", { title: "Wiederherstellen", ok: "Wiederherstellen" }).then((ok) => {
+				if (!ok) return;
+				closePop();
+				return restoreSnapshot(p, s.key);
+			}).catch((e2) => {
 				console.warn("Heft: Wiederherstellen fehlgeschlagen", e2);
 				if (U.toast) U.toast("Wiederherstellen fehlgeschlagen: " + ((e2 && e2.message) || e2), "error");
 			});
 			return;
 		}
-		if (d.hedelpage != null) { e.stopPropagation(); deletePageAt(Number(d.hedelpage)); return; }
+		if (d.hedelpage != null) { e.stopPropagation(); deletePageAt(Number(d.hedelpage)).catch((e2) => U.toast && U.toast("Seite konnte nicht gelöscht werden: " + ((e2 && e2.message) || e2), "error")); return; }
 		if (d.hepagedrag != null) return;
 		if (d.hethumb != null) {
 			const ti = Number(d.hethumb);

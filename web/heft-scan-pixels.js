@@ -3,24 +3,31 @@
 // Rändern gebraucht (readPixels/writePixels; mk = Canvas-Fabrik). Dieselben Funktionen
 // laufen im Worker (heft-scan-worker.js) und im Hauptthread-Fallback (heft-scan.js).
 
-export const SCAN_JPEG_QUALITY = 0.95;
+// Scan-Ausgabe: sparsam, aber gut lesbar. Gemessen an einer A4-Seite (Okt. 2026):
+// 2200 px / JPEG 0.95 ≈ 610 KB, 1800 px / 0.78 ≈ 230 KB — Texterkennung unverändert
+// (100 % Wörter). Gilt für den eigenen Scanner UND den Google-Scanner der APK.
+export const SCAN_JPEG_QUALITY = 0.78;
+export const SCAN_OUT_MAX_EDGE = 1800;
 // Quelle vor dem Entzerren höchstens so groß: genug für 12-MP-Fotos (4032 px), damit
-// die Ausgabe (max. 2200 px Kante) ihre volle Schärfe aus dem Kamerafoto bekommt.
+// die verkleinerte Ausgabe ihre Schärfe aus dem vollen Kamerafoto bekommt.
 export const SCAN_SOURCE_MAX = 4096;
-const OUT_MAX_EDGE = 2200, OUT_MAX_PIXELS = 4_800_000;
+const OUT_MAX_PIXELS = 4_800_000;
 
 // ---------- Canvas-Brücke (nur Lesen/Schreiben der Pixel) ----------
 
 // Liest ein Bild (Canvas, ImageBitmap, Image) in exakt w×h Pixel. Ein Canvas in passender
-// Größe wird direkt ausgelesen, sonst skaliert es über ein Hilfs-Canvas.
+// Größe wird direkt ausgelesen, sonst skaliert es über ein Hilfs-Canvas. Das Hilfs-Canvas
+// bewusst OHNE willReadFrequently: so skaliert die GPU, und nur das kleine Ergebnis wird
+// einmal zurückgelesen. Mit dem Flag skalierte der Browser 12-MP-Fotos in Software (~1 s).
 export function readPixels(drawable, w, h, mk) {
-	let cv = drawable;
-	if (!(typeof drawable.getContext === "function" && drawable.width === w && drawable.height === h)) {
-		cv = mk(w, h);
-		cv.getContext("2d", { willReadFrequently: true }).drawImage(drawable, 0, 0, w, h);
+	if (typeof drawable.getContext === "function" && drawable.width === w && drawable.height === h) {
+		const d = drawable.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h);
+		return { data: d.data, width: w, height: h };
 	}
-	const d = cv.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h);
-	return { data: d.data, width: w, height: h };
+	const cv = mk(w, h), ctx = cv.getContext("2d");
+	ctx.imageSmoothingQuality = "high";
+	ctx.drawImage(drawable, 0, 0, w, h);
+	return { data: ctx.getImageData(0, 0, w, h).data, width: w, height: h };
 }
 
 export function writePixels(pix, mk) {
@@ -104,7 +111,7 @@ export function warpPixels(src, quad) {
 	let H = Math.round(Math.max(dist2d(quad[0], quad[3]), dist2d(quad[1], quad[2])));
 	// Scan-Ausgabe erhält genug Reserve für kleine Schrift, Formeln und OCR. Kanten- UND
 	// Pixelbudget begrenzen den Speicher auf iPadOS, statt pauschal herunterzuskalieren.
-	const edgeScale = Math.min(1, OUT_MAX_EDGE / Math.max(W, H, 1));
+	const edgeScale = Math.min(1, SCAN_OUT_MAX_EDGE / Math.max(W, H, 1));
 	const pixelScale = Math.min(1, Math.sqrt(OUT_MAX_PIXELS / Math.max(1, W * H)));
 	const k = Math.min(edgeScale, pixelScale);
 	W = Math.max(8, Math.round(W * k));
@@ -476,4 +483,299 @@ export function refineQuadPixels(gray, gw, gh, quad) {
 	const a0 = quadArea(quad), a1 = quadArea(out);
 	if (a0 < 1 || a1 < a0 * REFINE_AREA_MIN || a1 > a0 * REFINE_AREA_MAX) return unchanged;
 	return out;
+}
+
+
+// ---------- Dokumenterkennung (rein, ohne Canvas) ----------
+
+// Analyse- und Verfeinerungsauflösung. Worker und Hauptthread skalieren damit identisch.
+export const DETECT_MAX = 720, REFINE_MAX = 1600;
+
+export function detectSizes(w, h) {
+	const dw = Math.min(DETECT_MAX, w), kk = dw / w, dh = Math.max(12, Math.round(h * kk));
+	const kr = Math.min(1, REFINE_MAX / Math.max(w, h, 1));
+	return { dw, dh, gw: Math.max(2, Math.round(w * kr)), gh: Math.max(2, Math.round(h * kr)) };
+}
+
+export function fullQuadPixels(w, h) {
+	return [[0, 0], [Math.max(0, w - 1), 0], [Math.max(0, w - 1), Math.max(0, h - 1)], [0, Math.max(0, h - 1)]];
+}
+
+// Konvexe Hülle (Andrew Monotone Chain) — Grundlage der Eckensuche
+function convexHull(pts) {
+	const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	if (p.length < 3) return p;
+	const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+	const lower = [];
+	for (const pt of p) {
+		while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pt) <= 0) lower.pop();
+		lower.push(pt);
+	}
+	const upper = [];
+	for (let i = p.length - 1; i >= 0; i--) {
+		const pt = p[i];
+		while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pt) <= 0) upper.pop();
+		upper.push(pt);
+	}
+	lower.pop(); upper.pop();
+	return lower.concat(upper);
+}
+
+// Separabler Box-Blur mit Gleitsumme — O(n) statt O(n·r²)
+function blurMap(src, dw, dh, r) {
+	const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+	const pass = (inp, outp, len, stride, lines, lineStride) => {
+		for (let l = 0; l < lines; l++) {
+			const base = l * lineStride;
+			let acc = 0;
+			for (let i = -r; i <= r; i++) acc += inp[base + Math.min(len - 1, Math.max(0, i)) * stride];
+			for (let i = 0; i < len; i++) {
+				outp[base + i * stride] = acc / (2 * r + 1);
+				acc += inp[base + Math.min(len - 1, i + r + 1) * stride] - inp[base + Math.max(0, i - r) * stride];
+			}
+		}
+	};
+	pass(src, tmp, dw, 1, dh, dw);
+	pass(tmp, out, dh, dw, dw, 1);
+	return out;
+}
+
+// Separable Morphologie: pick=1 Dilatation, pick=0 Erosion (Radius 2)
+function morphPass(src, dw, dh, pick) {
+	const n = dw * dh, mid = new Uint8Array(n), out = new Uint8Array(n);
+	for (let i = 0; i < n; i++) {
+		const x = i % dw;
+		let v = src[i] === pick;
+		for (let k = 1; k <= 2 && !v; k++) v = (x - k >= 0 && src[i - k] === pick) || (x + k < dw && src[i + k] === pick);
+		mid[i] = v ? pick : 1 - pick;
+	}
+	for (let i = 0; i < n; i++) {
+		const y = (i / dw) | 0;
+		let v = mid[i] === pick;
+		for (let k = 1; k <= 2 && !v; k++) v = (y - k >= 0 && mid[i - k * dw] === pick) || (y + k < dh && mid[i + k * dw] === pick);
+		out[i] = v ? pick : 1 - pick;
+	}
+	return out;
+}
+
+// Flächenmaximales konvexes Viereck in der Hülle einer Blattgrenze (Ecken tl→tr→br→bl).
+// null, wenn die Hülle kein Viereck hergibt.
+function quadFromBoundary(boundary) {
+	const hull = convexHull(boundary);
+	if (hull.length < 4) return null;
+	// Start-Viereck aus Extrempunkten (x+y bzw. x−y) …
+	let tl = hull[0], tr = hull[0], br = hull[0], bl = hull[0];
+	for (const p of hull) {
+		if (p[0] + p[1] < tl[0] + tl[1]) tl = p;
+		if (p[0] + p[1] > br[0] + br[1]) br = p;
+		if (p[0] - p[1] > tr[0] - tr[1]) tr = p;
+		if (p[0] - p[1] < bl[0] - bl[1]) bl = p;
+	}
+	const quad = [tl, tr, br, bl];
+	// … dann Ecken gegen Hüllpunkte tauschen, solange die Fläche wächst.
+	let improved = true, guard = 0;
+	while (improved && guard++ < 10) {
+		improved = false;
+		for (let ci = 0; ci < 4; ci++) {
+			let bestA = quadArea(quad), bestP = quad[ci];
+			for (const p of hull) {
+				const q2 = [quad[0], quad[1], quad[2], quad[3]];
+				q2[ci] = p;
+				const a2 = quadArea(q2);
+				if (a2 > bestA + 0.5 && isConvex(q2)) { bestA = a2; bestP = p; }
+			}
+			if (bestP !== quad[ci]) { quad[ci] = bestP; improved = true; }
+		}
+	}
+	// Reihenfolge tl→tr→br→bl herstellen (Winkelsortierung um den Schwerpunkt)
+	const cqx = (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4;
+	const cqy = (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4;
+	quad.sort((a, b) => Math.atan2(a[1] - cqy, a[0] - cqx) - Math.atan2(b[1] - cqy, b[0] - cqx));
+	let st = 0;
+	for (let i = 1; i < 4; i++) if (quad[i][0] + quad[i][1] < quad[st][0] + quad[st][1]) st = i;
+	return quad.slice(st).concat(quad.slice(0, st));
+}
+
+// Toleranz ±4 px (nicht ±2): die Maskenhülle liegt systematisch 3–4 px innerhalb der echten
+// Blattkante (Analyseauflösung), sonst fände das richtige Viereck keine Stützung.
+const EDGE_CANDIDATES = 6, EDGE_SAMPLES = 40, EDGE_TOL = 4, EDGE_SUPPORT_OK = 0.35;
+
+// Anteil der Seitenpunkte, die innerhalb ±EDGE_TOL senkrecht zur Seite auf einer echten Kante
+// (Gradient ≥ edgeThr) liegen. Ergebnis ist das Minimum über die 4 Seiten: eine Seite ohne
+// Kante macht das ganze Viereck verdächtig.
+function edgeSupportMin(quad, edge, dw, dh, edgeThr) {
+	let min = 1;
+	for (let e = 0; e < 4; e++) {
+		const a = quad[e], b = quad[(e + 1) % 4];
+		const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+		const nx = -dy / len, ny = dx / len;
+		let hit = 0;
+		for (let k = 0; k < EDGE_SAMPLES; k++) {
+			const t = (k + 0.5) / EDGE_SAMPLES;
+			const px = a[0] + dx * t, py = a[1] + dy * t;
+			let ok = false;
+			for (let s = -EDGE_TOL; s <= EDGE_TOL && !ok; s++) {
+				const x = Math.round(px + nx * s), y = Math.round(py + ny * s);
+				if (x > 0 && y > 0 && x < dw - 1 && y < dh - 1 && edge[y * dw + x] >= edgeThr) ok = true;
+			}
+			if (ok) hit++;
+		}
+		min = Math.min(min, hit / EDGE_SAMPLES);
+	}
+	return min;
+}
+
+// Dokumenterkennung v4. analysis = { data, width, height } (RGBA, ≤ DETECT_MAX breit, Größe
+// aus detectSizes). w, h = Originalgröße. refine = { gray, gw, gh } (Graubild aus toGray,
+// ≤ REFINE_MAX) oder null (dann ohne Kanten-Verfeinerung). Ergebnis in Originalkoordinaten.
+// Gibt bei unsicherer Erkennung IMMER das ganze Bild zurück — niemals Inhalt abschneiden.
+export function detectQuadPixels(analysis, w, h, refine) {
+	const full = fullQuadPixels(w, h);
+	if (!w || !h) return full;
+	try {
+		const dw = analysis.width, dh = analysis.height, d = analysis.data;
+		const kk = dw / w;
+		const n = dw * dh;
+		const L = new Float32Array(n), sat = new Float32Array(n);
+		const ca = new Float32Array(n), cb = new Float32Array(n), edge = new Float32Array(n);
+		let sumL = 0, borderL = 0, borderA = 0, borderB = 0, borderN = 0;
+		for (let i = 0; i < n; i++) {
+			const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+			const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+			L[i] = r * 0.299 + g * 0.587 + b * 0.114;
+			sat[i] = mx ? (mx - mn) / mx : 0;
+			ca[i] = r - g; cb[i] = b - g; sumL += L[i];
+			const y = (i / dw) | 0, x2 = i % dw;
+			if (x2 < 3 || y < 3 || x2 >= dw - 3 || y >= dh - 3) {
+				borderL += L[i]; borderA += ca[i]; borderB += cb[i]; borderN++;
+			}
+		}
+		borderL /= Math.max(1, borderN); borderA /= Math.max(1, borderN); borderB /= Math.max(1, borderN);
+		for (let y = 1; y < dh - 1; y++) for (let x2 = 1; x2 < dw - 1; x2++) {
+			const i = y * dw + x2;
+			const gx = L[i + 1] - L[i - 1], gy = L[i + dw] - L[i - dw];
+			edge[i] = Math.abs(gx) + Math.abs(gy);
+		}
+		const meanL = sumL / n;
+		const blur = blurMap(L, dw, dh, Math.max(5, Math.round(dw / 70)));
+		// Drei voneinander unabhängige Segmentierungen: helles Papier, Farbe gegen
+		// den am Bildrand gemessenen Tisch und eine kantenumschlossene Fläche.
+		const lightMask = new Uint8Array(n), colorMask = new Uint8Array(n);
+		// Ein fester, globaler Helligkeitsboden schnitt beschattete Papierbereiche aus.
+		const thrPaper = Math.max(58, meanL * 0.55);
+		for (let i = 0; i < n; i++) {
+			const colorDelta = Math.hypot((L[i] - borderL) * 0.75, ca[i] - borderA, cb[i] - borderB);
+			lightMask[i] = L[i] >= thrPaper && sat[i] < 0.48 && L[i] >= blur[i] * 0.78 ? 1 : 0;
+			colorMask[i] = L[i] > 32 && colorDelta > 13 && (sat[i] < 0.72 || L[i] > borderL + 12) ? 1 : 0;
+		}
+		// Starke Kanten bilden eine Barriere. Vom Außenrand wird der Tisch geflutet;
+		// was von einer geschlossenen Blattkante umschlossen bleibt, ist Kandidat 3.
+		const edgeBarrier = new Uint8Array(n), outside = new Uint8Array(n), flood = new Int32Array(n);
+		let edgeMean = 0;
+		for (let i = 0; i < n; i++) edgeMean += edge[i];
+		const edgeThr = Math.max(18, edgeMean / n * 2.35);
+		for (let i = 0; i < n; i++) edgeBarrier[i] = edge[i] >= edgeThr ? 1 : 0;
+		const barrier = morphPass(edgeBarrier, dw, dh, 1);
+		let ft = 0;
+		const seed = (i) => { if (!outside[i] && !barrier[i]) { outside[i] = 1; flood[ft++] = i; } };
+		for (let x2 = 0; x2 < dw; x2++) { seed(x2); seed((dh - 1) * dw + x2); }
+		for (let y = 1; y < dh - 1; y++) { seed(y * dw); seed(y * dw + dw - 1); }
+		while (ft) {
+			const p = flood[--ft], x2 = p % dw, y = (p / dw) | 0;
+			if (x2 > 0) seed(p - 1); if (x2 < dw - 1) seed(p + 1);
+			if (y > 0) seed(p - dw); if (y < dh - 1) seed(p + dw);
+		}
+		const enclosedMask = new Uint8Array(n);
+		for (let i = 0; i < n; i++) enclosedMask[i] = outside[i] || barrier[i] ? 0 : 1;
+		const masks = [lightMask, colorMask, enclosedMask].map((m) => {
+			// Closing füllt Textlöcher, anschließendes Opening entfernt kleine Reflexe.
+			const closed = morphPass(morphPass(m, dw, dh, 1), dw, dh, 0);
+			return morphPass(morphPass(closed, dw, dh, 0), dw, dh, 1);
+		});
+		// Bei Schatten kann eine einzelne Maske genau eine Ecke verlieren. Ein vierter,
+		// konservativer Kandidat vereinigt die unabhängigen Hinweise.
+		const combinedMask = new Uint8Array(n);
+		for (let i = 0; i < n; i++) combinedMask[i] = (lightMask[i] && (colorMask[i] || enclosedMask[i])) || (colorMask[i] && enclosedMask[i]) ? 1 : 0;
+		const combinedClosed = morphPass(morphPass(combinedMask, dw, dh, 1), dw, dh, 0);
+		masks.push(morphPass(morphPass(combinedClosed, dw, dh, 0), dw, dh, 1));
+		const stack = new Int32Array(n);
+		const cands = [];
+		for (let mi = 0; mi < masks.length; mi++) {
+			const mask = masks[mi], seen = new Uint8Array(n);
+			for (let s0 = 0; s0 < n; s0++) {
+				if (!mask[s0] || seen[s0]) continue;
+				let top = 0, area = 0, touches = 0, edgeSum = 0;
+				let minX = dw, maxX = 0, minY = dh, maxY = 0;
+				const boundary = [];
+				stack[top++] = s0; seen[s0] = 1;
+				while (top) {
+					const p = stack[--top], py = (p / dw) | 0, pxx = p % dw; area++;
+					if (pxx < minX) minX = pxx; if (pxx > maxX) maxX = pxx;
+					if (py < minY) minY = py; if (py > maxY) maxY = py;
+					let bnd = pxx <= 0 || py <= 0 || pxx >= dw - 1 || py >= dh - 1;
+					if (bnd) touches++;
+					if (pxx > 0) { const j = p - 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (pxx < dw - 1) { const j = p + 1; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (py > 0) { const j = p - dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (py < dh - 1) { const j = p + dw; if (mask[j]) { if (!seen[j]) { seen[j] = 1; stack[top++] = j; } } else bnd = true; }
+					if (bnd) { boundary.push([pxx, py]); edgeSum += edge[p]; }
+				}
+				if (area < n * 0.075 || area > n * 0.965 || boundary.length < 20) continue;
+				const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+				const fill = Math.min(1, area / (bw * bh)), aspect = bw / bh;
+				if (aspect < 0.24 || aspect > 4.2) continue;
+				const cx2 = (minX + maxX) / 2, cy2 = (minY + maxY) / 2;
+				const centerPenalty = Math.hypot(cx2 - dw / 2, cy2 - dh / 2) / Math.hypot(dw, dh);
+				const edgeBonus = Math.min(1.8, edgeSum / Math.max(1, boundary.length * edgeThr));
+				const touchPenalty = 1 - Math.min(0.72, touches / Math.max(1, boundary.length) * 2.5);
+				const sc = area * (0.45 + fill) * (0.8 + edgeBonus) * touchPenalty * (1 - centerPenalty * 0.35) * (mi >= 2 ? 1.08 : 1);
+				cands.push({ sc, boundary });
+			}
+		}
+		if (!cands.length) return full;
+		// Die besten Komponenten (nach Flächen-Score) werden zusätzlich daran geprüft, ob ihr
+		// Viereck auf echten Kanten liegt. Ein Schatten auf dem Tisch macht den unbeschatteten
+		// Tisch zur „Papier“-Referenz (Rand-Mittel verschoben): die Komponente läuft dann bis in
+		// eine Bildecke. Ein Viereck ohne Kantenunterstützung verliert deshalb an Gewicht.
+		cands.sort((p, q) => q.sc - p.sc);
+		const scored = [];
+		for (const c of cands.slice(0, EDGE_CANDIDATES)) {
+			const quad = quadFromBoundary(c.boundary);
+			if (quad) scored.push({ quad, sc: c.sc, es: edgeSupportMin(quad, edge, dw, dh, edgeThr) });
+		}
+		if (!scored.length) return full;
+		// Kandidaten mit wenig Kantenunterstützung nur, wenn kein besserer existiert.
+		const good = scored.filter((c) => c.es >= EDGE_SUPPORT_OK);
+		const pool = good.length ? good : scored;
+		let pick = pool[0];
+		for (const c of pool) if (c.sc * (0.25 + c.es) > pick.sc * (0.25 + pick.es)) pick = c;
+		// Auf Originalkoordinaten zurück, dann Kanten auf die echten Blattkanten ziehen
+		const q0 = pick.quad.map((p) => [p[0] / kk, p[1] / kk]);
+		let q = q0;
+		if (refine) {
+			try {
+				const sx = refine.gw / w, sy = refine.gh / h;
+				const res = refineQuadPixels(refine.gray, refine.gw, refine.gh, q0.map((p) => [p[0] * sx, p[1] * sy]));
+				q = res.map((p) => [p[0] / sx, p[1] / sy]);
+			} catch (e) {
+				console.warn("Heft: Kanten-Verfeinerung übersprungen", e);
+			}
+		}
+		// Leicht nach innen (≈0,5 %): die Antialiasing-Kante zwischen Blatt und Tisch würde
+		// sonst als 1–2 px dunkler Strich im Scan stehen (S/W macht ihn schwarz, OCR liest „|“).
+		const ccx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4;
+		const ccy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+		for (const p of q) {
+			p[0] = Math.max(0, Math.min(w - 1, ccx + (p[0] - ccx) * 0.99));
+			p[1] = Math.max(0, Math.min(h - 1, ccy + (p[1] - ccy) * 0.99));
+		}
+		// Plausibilität — sonst lieber das ganze Bild behalten
+		const areaQ = quadArea(q);
+		if (areaQ < w * h * 0.1 || areaQ > w * h * 0.985 || !isConvex(q)) return full;
+		for (let i = 0; i < 4; i++) if (Math.hypot(q[i][0] - q[(i + 1) % 4][0], q[i][1] - q[(i + 1) % 4][1]) < Math.min(w, h) * 0.12) return full;
+		return q;
+	} catch (e) {
+		console.warn("Heft: Dokumenterkennung fehlgeschlagen", e);
+		return full;
+	}
 }

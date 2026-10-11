@@ -9,6 +9,7 @@ import os
 import sys
 import random
 import math
+import time
 from typing import List, Optional, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -74,26 +75,47 @@ class DynamicInkDataset(Dataset):
         self.user_samples = user_samples or []
         # Wort-Collagen erst ab einigen Wörtern, sonst wiederholen sich die Kombinationen
         self.word_bank = word_bank if word_bank and len(word_bank) >= 10 else []
-        self.focus: Optional[CharFocus] = None
+        # Fehlerraten je Zeichen für CharFocus (klein und picklebar, die Worker bauen CharFocus selbst)
+        self.focus_rates: dict = {}
+        self._focus_cache = (None, None)
+        self._pending = None
 
         self.samples = []
+        # Trainingsdaten parallel auf allen CPU-Kernen erzeugen (nur Linux/Colab: fork teilt die geladenen
+        # Datensätze ohne Kopie). Der Pool entsteht vor dem Training, solange noch keine Threads laufen.
+        self.pool = None if is_val else _make_pool(self)
         self.regenerate(seed if seed is not None else (42 if is_val else 1337))
 
-    def regenerate(self, seed: int):
-        """Erzeugt alle Samples neu im Speicher (schnell für die GPU). Fürs Training jede Epoche aufrufen,
-        damit das Modell immer neue Kombinationen sieht statt dieselben Beispiele auswendig zu lernen."""
-        tag = "Validierungs-Set" if self.is_val else "Trainings-Set"
-        print(f"Erzeuge {tag} mit {self.size} Beispielen...", flush=True)
-        rng = random.Random(seed)
-        random.seed(seed)
-        self.samples = []
-        for _ in range(self.size):
-            sample = self._generate_single_sample(rng)
-            if sample:
-                self.samples.append(sample)
-        print(f"{tag} fertig: {len(self.samples)} Beispiele.", flush=True)
+    @property
+    def focus(self) -> Optional[CharFocus]:
+        key, focus = self._focus_cache
+        if key != self.focus_rates:
+            focus = CharFocus(self.focus_rates) if self.focus_rates else None
+            self._focus_cache = (dict(self.focus_rates), focus)
+        return focus
 
-    def _generate_single_sample(self, rng=random) -> Tuple[torch.Tensor, torch.Tensor, str]:
+    def start_regenerate(self, seed: int):
+        """Beginnt im Hintergrund mit den Daten der nächsten Epoche, während die GPU noch trainiert.
+        Jede Epoche neue Daten, damit das Modell neue Kombinationen sieht statt Beispiele auswendig zu lernen."""
+        sizes = [len(c) for c in np.array_split(np.arange(self.size), max(1, _workers() * 4))] if self.pool else [self.size]
+        jobs = [(seed * 1000 + i, n, self.focus_rates) for i, n in enumerate(sizes) if n]
+        self._pending = self.pool.map_async(_generate_chunk, jobs) if self.pool else jobs
+
+    def finish_regenerate(self):
+        tag = "Validierungs-Set" if self.is_val else "Trainings-Set"
+        t0 = time.time()
+        pending, self._pending = self._pending, None
+        chunks = pending.get() if self.pool else [_generate_chunk(job, self) for job in pending]
+        self.samples = [
+            (torch.tensor(f), torch.tensor(t, dtype=torch.long), w) for chunk in chunks for f, t, w in chunk
+        ]
+        print(f"{tag} fertig: {len(self.samples)} Beispiele (auf Daten gewartet: {time.time() - t0:.0f} s).", flush=True)
+
+    def regenerate(self, seed: int):
+        self.start_regenerate(seed)
+        self.finish_regenerate()
+
+    def _generate_single_sample(self, rng=random) -> Optional[Tuple[np.ndarray, List[int], str]]:
         r = rng.random()
         word = ""
         features = []
@@ -153,15 +175,46 @@ class DynamicInkDataset(Dataset):
         if not target_indices:
             return None
 
-        feat_tensor = torch.tensor(features, dtype=torch.float32)
-        target = torch.tensor(target_indices, dtype=torch.long)
-        return feat_tensor, target, word
+        return np.asarray(features, dtype=np.float32), target_indices, word
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         return self.samples[idx]
+
+
+_POOL_DATASET: Optional[DynamicInkDataset] = None
+
+
+def _workers() -> int:
+    return max(1, (os.cpu_count() or 2) - 1)
+
+
+def _make_pool(dataset: DynamicInkDataset):
+    """Prozess-Pool, der das Dataset per fork erbt. Ohne fork (Windows/macOS) wird seriell erzeugt."""
+    global _POOL_DATASET
+    import multiprocessing as mp
+    if "fork" not in mp.get_all_start_methods() or _workers() < 2:
+        return None
+    _POOL_DATASET = dataset
+    print(f"Erzeuge Trainingsdaten parallel mit {_workers()} Prozessen.", flush=True)
+    return mp.get_context("fork").Pool(_workers())
+
+
+def _generate_chunk(job, dataset: Optional[DynamicInkDataset] = None):
+    """Erzeugt einen Teil der Epochen-Daten. Läuft im Worker-Prozess (oder seriell im Hauptprozess)."""
+    seed, n, focus_rates = job
+    ds = dataset or _POOL_DATASET
+    ds.focus_rates = focus_rates
+    rng = random.Random(seed)
+    random.seed(seed)
+    out = []
+    for _ in range(n):
+        sample = ds._generate_single_sample(rng)
+        if sample:
+            out.append(sample)
+    return out
 
 
 def collate_fn(batch):
@@ -397,7 +450,7 @@ def evaluate_real(model, device, benchmark_data, user_eval_lines=(), foreign_lin
 def update_focus(dataset: "DynamicInkDataset", real: dict):
     """Nächste Epochen üben gezielt die Zeichen, die zuletzt am häufigsten falsch waren."""
     rates = char_error_rates(real["char_err"])
-    dataset.focus = CharFocus(rates) if rates else None
+    dataset.focus_rates = rates
     top = sorted(rates.items(), key=lambda kv: -kv[1])[:8]
     if top:
         print("  [Fokus] häufigste Fehlerzeichen: " + ", ".join(f"'{c}' {r * 100:.0f} %" for c, r in top))
@@ -501,8 +554,12 @@ def train(
     print("Starte Training mit 4 Features. Modellauswahl erfolgt nach echtem Test-Set (strikt getrennt)!")
 
     for epoch in range(start_epoch, epochs + 1):
-        if epoch > 1:
-            train_dataset.regenerate(seed=1337 + epoch)
+        if epoch > start_epoch:
+            train_dataset.finish_regenerate()
+        if epoch < epochs:
+            # Daten der nächsten Epoche entstehen parallel zum Training dieser Epoche
+            train_dataset.start_regenerate(seed=1337 + epoch + 1)
+        t_train = time.time()
         model.train()
         total_loss = 0.0
 
@@ -526,6 +583,7 @@ def train(
 
         scheduler.step()
         avg_loss = total_loss / max(1, batch_idx + 1)
+        print(f"  Training Epoche {epoch}: {time.time() - t_train:.0f} s", flush=True)
 
         # 1. Informativer Durchlauf auf synthetischem Val-Set
         model.eval()
@@ -618,6 +676,9 @@ def train(
                 save_last()
                 break
         save_last()
+
+    if train_dataset.pool:
+        train_dataset.pool.terminate()
 
     # ONNX Export des besten Modells
     best_ckpt = torch.load(os.path.join(checkpoints_dir, "best.pt"), map_location="cpu")

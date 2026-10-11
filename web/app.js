@@ -1912,7 +1912,7 @@ function wireEvents() {
 			return;
 		}
 		if (e.target.id === "inpNativeScanner") {
-			localStorage.setItem("impala67NativeScanner", e.target.checked ? "1" : "0");
+			localStorage.setItem("impala67NativeScanner", e.target.value === "impala" ? "0" : "1");
 			return;
 		}
 		if (e.target.id === "inpOverlearn") {

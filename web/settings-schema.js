@@ -9,7 +9,7 @@ export const SETTINGS_SECTIONS = [
 	{ id: "ai", label: "KI & Lernen", icon: "sparkles", description: "Modelle, Quellen und Lernfunktionen" },
 	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Cloudflare, Google Drive und lokale Tokens" },
 	{ id: "data", label: "Daten & App", icon: "archive", description: "Backups, Exporte, Speicher und Updates" },
-	{ id: "devices", label: "Geräte & Bedienung", icon: "gamepad", description: "Controller, Tastenbelegung und Eingabegeräte" },
+	{ id: "devices", label: "Geräte & Bedienung", icon: "gamepad", description: "Scanner, Controller, Tastenbelegung und Eingabegeräte" },
 ];
 
 export const SETTINGS_ALIASES = Object.freeze({
@@ -70,6 +70,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "danger-chats", section: "data", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
 	{ id: "danger-cards", section: "data", group: "Gefahrenzone", label: "Alle Karteikarten löschen", description: "Alle Karteikarten, Stapel und Lernfortschritte entfernen", keywords: "karteikarten anki karten stapel deck löschen zurücksetzen" },
 	{ id: "controller-status", section: "devices", group: "Controller", label: "Controller-Steuerung", description: "Gamepad verbinden, Hinweise und Vibration", keywords: "gamepad pad xbox playstation stadia" },
+	{ id: "native-scanner", section: "devices", group: "Scanner", label: "Dokumenten-Scanner", description: "Google-Scanner oder Impala-Scanner verwenden", keywords: "scanner scannen kamera dokument google ml kit impala foto", platform: "native" },
 	{ id: "native-haptics", section: "devices", group: "Haptik", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
 	{ id: "controller-map", section: "devices", group: "Belegung", label: "Tastenbelegung", description: "Aktionen an Controller-Tasten binden", keywords: "mapping anlernen taste button" },
 	{ id: "controller-advanced", section: "devices", group: "Erweitert", label: "Deadzone & HID", description: "Rohe Achsen und nicht standardisierte Controller", keywords: "hid achse trigger deadzone technisch" },

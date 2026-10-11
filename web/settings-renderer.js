@@ -336,15 +336,17 @@ function renderDevices(vm) {
 	const nativeScannerRow = vm?.nativeScannerAvailable
 		? UI.row({
 			id: "native-scanner",
-			title: "Google ML Dokumenten-Scanner",
-			description: "Google Play Scanner-Engine. Bei Hängern, Auslöse-Problemen oder Custom-ROMs deaktivieren, um den integrierten Impala-Kamerascanner zu nutzen",
-			trailing: switchControl("inpNativeScanner", "Google ML Dokumenten-Scanner", vm.nativeScannerEnabled),
+			title: "Dokumenten-Scanner",
+			description: "Google-Scanner (schnell, von Google Play) oder Impala-Scanner (eigene Kamera-Ansicht mit Filtern, auch ohne Google-Dienste)",
+			trailing: '<select id="inpNativeScanner" aria-label="Dokumenten-Scanner">' +
+				'<option value="google"' + (vm.nativeScannerEnabled ? " selected" : "") + '>Google-Scanner</option>' +
+				'<option value="impala"' + (vm.nativeScannerEnabled ? "" : " selected") + '>Impala-Scanner</option></select>',
 		})
 		: "";
 	const nativeFeatures = nativeHapticsRow + nativeScannerRow;
 	const content = (nativeFeatures ? UI.group("Native Funktionen", nativeFeatures, { id: "native-features-group" }) : "") +
 		(window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>');
-	return UI.page("Geräte & Bedienung", "Nutze Controller und passe Eingaben an dein Gerät an.", content);
+	return UI.page("Geräte & Bedienung", "Wähle den Scanner, nutze Controller und passe Eingaben an dein Gerät an.", content);
 }
 
 function renderMobileOverview(vm) {
