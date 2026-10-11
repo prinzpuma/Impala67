@@ -43,6 +43,7 @@ const APP_FILES = [
 	"./mobile-content.css",
 	"./home.css",
 	"./beta-ui.css",
+	"./beta-motion.js",
 	"./platform-native.js",
 	"./collapse.js",
 	"./chats.js",
