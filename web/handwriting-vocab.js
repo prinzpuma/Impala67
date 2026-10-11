@@ -2,7 +2,7 @@
 
 // web/handwriting-vocab.js — Vokabular und Indizes für CTC Handschrifterkennung.
 // Index 0 ist das CTC-Blank-Token.
-// Stimmt 1:1 mit handwriting/vocabulary.json überein.
+// Stimmt 1:1 mit handwriting/vocabulary.py überein.
 
 export const HANDWRITING_VOCAB = (() => {
 	const CHARACTERS = [

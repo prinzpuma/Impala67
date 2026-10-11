@@ -7,6 +7,7 @@ import { HANDWRITING_PREPROCESSOR } from "./handwriting-preprocessor.js";
 import { HANDWRITING_VOCAB } from "./handwriting-vocab.js";
 import { HANDWRITING_CTC } from "./handwriting-ctc.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
+import { rasterizeLine, IMAGE_HEIGHT } from "./handwriting-rasterizer.js";
 
 let ort = null;
 let session = null;
@@ -81,15 +82,11 @@ async function loadSession(modelPath) {
 	}
 }
 
-// Maximale Punktsequenzlänge aus dem Training (darüber wird das Netz unzuverlässiger).
-// Mit Median-Normalisierung hat eine ganze Abschreib-Zeile (~34 Zeichen) 2000–3800 Features.
-const MAX_TRAINING_POINTS = 4000;
+// Breiteste Zeilenbilder im Training (handwriting/train_image.py); breitere werden unzuverlässiger.
+const MAX_TRAINING_WIDTH = 2048;
 
-// Führt Inferenz für eine einzelne Zeile von [dx, dy, pen_down]-Features aus
-async function recognizeLineFeatures(features, options = {}) {
-	if (!features || features.length < 3) {
-		return { text: "", rawText: "", confidence: 0, status: "empty", isConfident: false, blankRatio: 1 };
-	}
+// Führt Inferenz für ein Zeilenbild aus (rasterizeLine: Graustufen 0..1, Höhe 64)
+async function recognizeLineImage(image, options = {}) {
 	if (!session) {
 		await initSession();
 	}
@@ -97,17 +94,7 @@ async function recognizeLineFeatures(features, options = {}) {
 		throw new Error("Handschrift-Modell ist nicht geladen.");
 	}
 
-	const seqLen = features.length;
-	// Input-Tensor: Shape [1, seq_len, 4]
-	const flatData = new Float32Array(seqLen * 4);
-	for (let i = 0; i < seqLen; i++) {
-		flatData[i * 4 + 0] = features[i][0]; // dx
-		flatData[i * 4 + 1] = features[i][1]; // dy
-		flatData[i * 4 + 2] = features[i][2]; // pen_down
-		flatData[i * 4 + 3] = features[i][3] !== undefined ? features[i][3] : 0.0; // y_rel
-	}
-
-	const inputTensor = new ort.Tensor("float32", flatData, [1, seqLen, 4]);
+	const inputTensor = new ort.Tensor("float32", image.data, [1, 1, IMAGE_HEIGHT, image.width]);
 	const feeds = {};
 	const inputName = session.inputNames[0] || "input";
 	feeds[inputName] = inputTensor;
@@ -192,24 +179,25 @@ async function recognizePageStrokes(strokes, options = {}) {
 			if (found) lineOrigIndices.push(found.origIdx);
 		}
 
-		const features = HANDWRITING_PREPROCESSOR.extractLineFeatures(lineStrokes);
+		const pointCount = lineStrokes.reduce((n, s) => n + ((s.pts && s.pts.length) || 0), 0);
+		const image = pointCount >= 5 ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
 
-		// Prüfung auf zu lange Sequenzen (Training-Limit)
-		const isTooLong = features.length > MAX_TRAINING_POINTS;
+		// Prüfung auf zu breite Zeilen (Training-Limit)
+		const isTooLong = !!image && image.width > MAX_TRAINING_WIDTH;
 		if (isTooLong) {
-			console.warn(`[handwriting-accounting] Warnung: Strichgruppe mit ${features.length} Features ist länger als Trainingsdaten (${MAX_TRAINING_POINTS}).`);
+			console.warn(`[handwriting-accounting] Warnung: Zeilenbild mit ${image.width} px ist breiter als die Trainingsdaten (${MAX_TRAINING_WIDTH} px).`);
 		}
 
 		let status = "skipped_too_short";
 		let text = "";
 		let confidence = 0;
 
-		if (features.length < 5) {
+		if (!image) {
 			status = "skipped_too_short";
 			for (const idx of lineOrigIndices) strokeStatus[idx] = "skipped_too_short";
 		} else {
 			try {
-				const rec = await recognizeLineFeatures(features, options);
+				const rec = await recognizeLineImage(image, options);
 				text = rec.text;
 				confidence = rec.confidence;
 				status = rec.status; // recognized, uncertain, drawing, empty
@@ -237,7 +225,7 @@ async function recognizePageStrokes(strokes, options = {}) {
 
 		groupsReport.push({
 			strokesCount: lineStrokes.length,
-			featuresCount: features.length,
+			imageWidth: image ? image.width : 0,
 			status,
 			confidence,
 			text,
@@ -309,25 +297,6 @@ self.addEventListener("message", async (event) => {
 				text: res.text,
 				lines: res.lines,
 				accounting: res.accounting,
-			});
-		} catch (err) {
-			self.postMessage({ type: "error", id, error: err?.message || String(err) });
-		}
-		return;
-	}
-
-	if (msg.type === "recognize_line") {
-		const id = msg.id;
-		try {
-			const res = await recognizeLineFeatures(msg.features || [], msg.options || {});
-			self.postMessage({
-				type: "result",
-				id,
-				text: res.text,
-				confidence: res.confidence,
-				status: res.status,
-				isConfident: res.isConfident,
-				blankRatio: res.blankRatio,
 			});
 		} catch (err) {
 			self.postMessage({ type: "error", id, error: err?.message || String(err) });

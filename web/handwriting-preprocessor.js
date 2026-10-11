@@ -6,11 +6,9 @@
 // Schritte:
 // 1. Striche filtern (keine Formen/Radierer).
 // 2. Zeilensegmentierung (Gruppierung vertikal überlappender Striche zu Textzeilen).
-// 3. Räumliches Resampling (äquidistante Abtastung entlang des Strichverlaufs, unabhängig von Schreibtempo).
-// 4. Feature-Extraktion: Delta-Koordinaten (dx, dy) und Stift-Zustand (pen_down: 1 = Zeichnen, 0 = Absetzen).
+// 3. Schräge Zeilen begradigen (deskewLine); danach rastert handwriting-rasterizer.js die Zeile zum Bild.
 
 export const HANDWRITING_PREPROCESSOR = (() => {
-	const STEP_PIXELS = 4; // Äquidistanter Punktabstand in Pixeln
 
 	// Berechnet die Bounding Box eines Strichs
 	function strokeBbox(stroke) {
@@ -229,111 +227,9 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		}));
 	}
 
-	// Resampling eines einzelnen Strichs auf äquidistante Punkte
-	function resampleStroke(pts, step = STEP_PIXELS) {
-		if (!pts || pts.length === 0) return [];
-		if (pts.length === 1) return [[pts[0][0], pts[0][1]], [pts[0][0], pts[0][1]]];
-		const out = [[pts[0][0], pts[0][1]]];
-		let curDist = 0;
-
-		for (let i = 1; i < pts.length; i++) {
-			const p0 = pts[i - 1];
-			const p1 = pts[i];
-			const segDist = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-			if (segDist < 1e-6) continue;
-
-			let walked = 0;
-			while (curDist + (segDist - walked) >= step) {
-				const rem = step - curDist;
-				walked += rem;
-				const t = walked / segDist;
-				const nx = p0[0] + (p1[0] - p0[0]) * t;
-				const ny = p0[1] + (p1[1] - p0[1]) * t;
-				out.push([nx, ny]);
-				curDist = 0;
-			}
-			curDist += (segDist - walked);
-		}
-
-		const last = pts[pts.length - 1];
-		if (out.length < 2 || Math.hypot(last[0] - out[out.length - 1][0], last[1] - out[out.length - 1][1]) > step * 0.5) {
-			out.push([last[0], last[1]]);
-		}
-		return out;
-	}
-
-	// Berechnet die normalisierte Feature-Sequenz für eine Liste von Strichen einer Zeile
-	// Rückgabe: Array von [dx, dy, pen_down]
-	function extractLineFeatures(lineStrokes, options = {}) {
-		// 1. Automatische Begradigung / Deskewing bei schräger Handschrift
-		const angle = options.deskew !== false ? estimateOrientation(lineStrokes) : 0;
-		const deskewed = (options.deskew !== false && Math.abs(angle) > 0.015) ? deskewStrokes(lineStrokes, angle) : lineStrokes;
-
-		// 2. Normalisierung auf Kleinbuchstaben-Höhe (Median der Strichhöhen) statt Gesamtrahmen
-		let minY = Infinity, maxY = -Infinity;
-		for (const s of deskewed) {
-			const pts = s.pts || s || [];
-			for (const p of pts) {
-				if (p[1] < minY) minY = p[1];
-				if (p[1] > maxY) maxY = p[1];
-			}
-		}
-		const medH = calculateStrokeHeightMedian(deskewed, 10.0);
-		const normHeight = options.lineHeight || (medH > 0.1 ? medH : Math.max(5.0, maxY - minY));
-		const step = options.step || Math.max(normHeight > 2.0 ? 0.6 : 0.045, normHeight * 0.045);
-
-		const resampledStrokes = [];
-		let minX = Infinity, maxX = -Infinity;
-
-		for (const s of deskewed) {
-			const pts = s.pts || s || [];
-			if (!pts.length) continue;
-			const r = resampleStroke(pts, step);
-			if (r.length < 2) continue;
-			for (const p of r) {
-				if (p[0] < minX) minX = p[0];
-				if (p[0] > maxX) maxX = p[0];
-			}
-			resampledStrokes.push(r);
-		}
-
-		if (!resampledStrokes.length) return [];
-
-		// Normierungsfaktor: auf Kleinbuchstaben-Höhe (Median) normieren
-		const height = normHeight;
-		const scale = 1.0 / height;
-		const refMinY = options.lineMinY !== undefined ? options.lineMinY : minY;
-
-		const features = [];
-		let lastX = null, lastY = null;
-
-		for (let si = 0; si < resampledStrokes.length; si++) {
-			const stroke = resampledStrokes[si];
-			const firstPt = stroke[0];
-			const firstYRel = (firstPt[1] - refMinY) * scale - 0.5;
-
-			if (lastX !== null && lastY !== null) {
-				// Stift angehoben (Pen-Up-Sprung zum nächsten Strich)
-				const dx = (firstPt[0] - lastX) * scale;
-				const dy = (firstPt[1] - lastY) * scale;
-				features.push([dx, dy, 0, firstYRel]); // pen_down = 0
-			}
-
-			lastX = firstPt[0];
-			lastY = firstPt[1];
-
-			for (let pi = 1; pi < stroke.length; pi++) {
-				const pt = stroke[pi];
-				const dx = (pt[0] - lastX) * scale;
-				const dy = (pt[1] - lastY) * scale;
-				const yRel = (pt[1] - refMinY) * scale - 0.5;
-				features.push([dx, dy, 1, yRel]); // pen_down = 1
-				lastX = pt[0];
-				lastY = pt[1];
-			}
-		}
-
-		return features;
+	// Begradigt eine schräg geschriebene Zeile, bevor sie als Bild gelesen wird (handwriting-rasterizer.js)
+	function deskewLine(lineStrokes) {
+		return deskewStrokes(lineStrokes, estimateOrientation(lineStrokes));
 	}
 
 	function median(values) {
@@ -363,6 +259,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		filterInkStrokes,
 		segmentLines,
 		orderLineStrokes,
-		extractLineFeatures,
+		deskewLine,
 	};
 })();

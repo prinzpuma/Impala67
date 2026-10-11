@@ -8,7 +8,7 @@ import numpy as np
 import onnxruntime as ort
 
 from vocabulary import index_to_char, BLANK_IDX
-from mathwriting_loader import resample_stroke, strokes_to_normalized_features
+from rasterize import render_strokes
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "web", "handwriting-model.onnx")
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "benchmark_test_strokes.json")
@@ -55,9 +55,6 @@ def segment_line_into_words(strokes, gap_thresh=None, gap_factor=1.1):
             cur_box[1] = max(cur_box[1], b[1])
     words.append(cur_word)
     return words
-
-# Gemeinsame Feature-Funktion (identisch mit Training und handwriting-preprocessor.js)
-strokes_to_4features = strokes_to_normalized_features
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     m, n = len(s1), len(s2)
@@ -134,12 +131,11 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
         l_idx = row["lineIdx"]
         cat, gt = LINES_GROUND_TRUTH.get(l_idx, ("unbekannt", ""))
         line_mode = "math" if cat in ("formel", "rechnung") else "text"
-        parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in row["strokes"]]
-        feats = strokes_to_normalized_features(parsed_strokes)
+        parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in row["strokes"] if s]
         line_pred, conf = "", 0.0
-        if len(feats) >= 3:
-            inp = np.array(feats, dtype=np.float32).reshape(1, len(feats), 4)
-            line_pred, conf = ctc_greedy(session.run(["output"], {"input": inp})[0][:, 0, :], mode=line_mode)
+        if parsed_strokes:
+            # Zeile wie in der App als Bild (rasterize.py ↔ web/handwriting-rasterizer.js)
+            line_pred, conf = ctc_greedy(session.run(["output"], {"input": render_strokes(parsed_strokes)[None, None]})[0][:, 0, :], mode=line_mode)
         dist, gt_len = line_distance(line_pred, gt, line_mode)
         acc = max(0.0, (1.0 - dist / gt_len) * 100.0)
         
@@ -173,6 +169,6 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
     return test_cer
 
 if __name__ == "__main__":
-    # Optional anderes Modell, z.B. das frisch trainierte model.onnx vor "train.py --publish"
+    # Optional anderes Modell, z.B. das frisch trainierte model-bild.onnx vor dem Kopieren nach web/
     evaluate_benchmark(sys.argv[1] if len(sys.argv) > 1 else MODEL_PATH)
 

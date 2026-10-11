@@ -1,94 +1,86 @@
-# Handschrifterkennung (Digital Ink) für Impala67
+# Handschrifterkennung (Bild-Modell) für Impala67
 
-Lokale, kostenlose Erkennung der Stift-Vektordaten aus der Heft-Ansicht (`web/heft.js`). Kein Cloud-Dienst, kein API-Schlüssel, läuft offline im Browser.
+Lokale, kostenlose Erkennung der Stift-Striche aus der Heft-Ansicht (`web/heft.js`). Jede Zeile wird als Bild gelesen.
+Kein Cloud-Dienst, kein API-Schlüssel, läuft offline im Browser.
 
 ## Pipeline
 
 ```
 web/heft.js (Striche)
-  → web/handwriting-preprocessor.js  Zeilentrennung (segmentLines, Skizzen-Filter), Resampling,
-                                     Normierung auf Median-Strichhöhe, Features [dx, dy, pen_down, y_rel]
+  → web/handwriting-preprocessor.js  Zeilentrennung (segmentLines, Skizzen-Filter), Begradigung (deskewLine)
+  → web/handwriting-rasterizer.js    Zeile → Graustufenbild, 64 px hoch (gleiche Regeln wie rasterize.py)
   → web/handwriting-worker.js        ONNX Runtime Web (WASM), Modell: web/handwriting-model.onnx
-  → web/handwriting-ctc.js           Greedy-CTC + Wörterbuch-Korrektur (handwriting-words-de.js, nicht bei Formeln)
-  → web/heft-indexer.js              Hintergrund-Erkennung aller Seiten → Suche/RAG
+  → web/handwriting-ctc.js           CTC-Beam-Search + Wörterbuch (handwriting-words-de.js, nicht bei Formeln)
+  → web/heft-indexer.js              Hintergrund-Erkennung aller Seiten → Suche/RAG, Fortschritt in den Einstellungen
 ```
 
-- **Modell** (`model.py`): 1D-CNN + 3× BiLSTM (192) + CTC, ca. 1,8 Mio. Parameter, ~10 MB ONNX.
-- **Vokabular** (`vocabulary.py/.json`): 86 Token (a–z, A–Z, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
-- **Neu-Erkennung**: Neues Modell → `web/handwriting-model-version.js`; geänderte Vorverarbeitung → `RECOGNIZER_REVISION` in `web/heft-indexer.js` erhöhen.
+- **Modell** (`image_model.py`): ResNet18-Stamm (bis layer3) + 1×1-Projektion + 3× BiLSTM-256 + CTC, ca. 10 Mio. Parameter,
+  9,7 MB ONNX (Gewichte int8, gerechnet wird in float, daher in ONNX Runtime Web lauffähig).
+- **Start**: [de-htr-web-v2](https://huggingface.co/naeyn/de-htr-web-v2) (naeyn, Apache-2.0, trainiert auf ScaDS.AI + fhswf),
+  Gewichte per `load_dehtr_onnx` übernommen und auf unser Vokabular abgebildet (`^ ~ √ ∫ ∑ π λ α β` neu).
+- **Vokabular** (`vocabulary.py`, `web/handwriting-vocab.js`): 101 Token (Buchstaben, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
+- **Neu-Erkennung**: Neues Modell → Version setzt der Release-Workflow automatisch; geänderte Vorverarbeitung →
+  `RECOGNIZER_REVISION` in `web/heft-indexer.js` erhöhen.
 
 ## Dateien
 
 | Datei | Zweck |
 | :--- | :--- |
-| `train.py` | Training + ONNX-Export nach `model.onnx` (nicht in Git); `--publish` kopiert nach `web/` |
-| `train_colab.ipynb` | **Empfohlener Weg**: kostenlose T4-GPU, Daten/Checkpoints in Drive (`Impala67-Handschrift/`) |
+| `image_model.py` | Modell, Gewichts-Import aus de-htr, int8-Export (`export_image_onnx`) |
+| `rasterize.py` | Striche bzw. Punkt-Features → Zeilenbild (muss zu `web/handwriting-rasterizer.js` passen) |
+| `train_image.py` | Feintuning: Formeln lernen, Text behalten; best.pt nur, wenn Text höchstens 1 Punkt schlechter wird |
+| `train_image_colab.ipynb` | **Empfohlener Weg**: Colab (L4), Datensätze und Zwischenstände in Drive (`Impala67-Handschrift/`) |
+| `image_datasets.py` | ScaDS- und fhswf-Zeilenbilder laden (Cache) |
+| `mathwriting_loader.py`, `brush_loader.py` | MathWriting (Training + Messung) und BRUSH (nur Messung: gezeichneter Text fremder Schreiber) |
+| `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Gezeichnete Sätze und Rechnungen aus Handschrift-Fonts, Verzerrungen |
+| `samples_loader.py` | Eigene Abschreib-Zeilen (`my_handwriting_samples.json`) – nur zum Messen |
 | `evaluate_user_benchmark_words.py` | Benchmark auf eigener Handschrift (TEST-/AUSWAHL-CER) |
-| `evaluate_checkpoints.py` | Vergleich Basis vs. Feintuning (inkl. fremde Schreiber) |
-| `samples_loader.py` | Eigene Abschreib-Zeilen (`my_handwriting_samples.json`) laden, Benchmark-Texte schützen |
-| `brush_loader.py`, `mathwriting_loader.py`, `uji_loader.py` | Datensatz-Loader |
-| `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Synthetische Daten, Texte (`dictionary_de.txt`, mit Fokus auf zuletzt oft falsche Zeichen), Augmentierung |
-| `label_noise.py` | Sperrliste für vermutlich falsch beschriftete BRUSH-/MathWriting-Beispiele (`data/label_noise_blocklist.json`) |
+| `scads_split.json` | ScaDS-Schreiber für Auswahl/Test, die de-htr nie gesehen hat |
 
 ## Ablauf
 
-1. In der App **Einstellungen → Abschreiben**: Zeilen mit dem Stift abschreiben, `my_handwriting_samples.json` exportieren und in Drive (`Impala67-Handschrift/`) legen. Eigene Handschrift nie auf GitHub.
-2. `train_colab.ipynb` ausführen (Standard: Feintuning ab `best.pt`). `best.pt` wird nach AUSWAHL-CER gewählt, nie nach TEST-CER.
-3. `model.onnx` lokal nach `handwriting/` legen, prüfen und übernehmen:
+1. `train_image_colab.ipynb` in Colab öffnen (Datei → Notebook öffnen → GitHub → `handwriting/train_image_colab.ipynb`), L4 wählen, **Alle ausführen**.
+   Neuer Lauf: `LAUF` in der Trainingszelle ändern.
+2. `best.pt` aus `Impala67-Handschrift/checkpoints-bild/<LAUF>/` nach `checkpoints-image/` legen und exportieren:
 
 ```bash
-python evaluate_user_benchmark_words.py model.onnx
+python -c "import torch; from image_model import ImageCRNN, export_image_onnx; m = ImageCRNN(); m.load_state_dict(torch.load('checkpoints-image/best.pt', map_location='cpu', weights_only=False)['model']); export_image_onnx(m, 'model-bild.onnx')"
+```
+
+3. Prüfen und übernehmen (ohne Argument misst der Benchmark das ausgelieferte App-Modell):
+
+```bash
+python evaluate_user_benchmark_words.py model-bild.onnx
 ```
 
 ```bash
-python train.py --publish
+cp model-bild.onnx ../web/handwriting-model.onnx
 ```
-
-Ohne Argument prüft der Benchmark das ausgelieferte App-Modell (`web/handwriting-model.onnx`). Alternativ `model.onnx` von Hand nach `web/handwriting-model.onnx` kopieren.
-
-## Bild-Modell (in Arbeit)
-
-Nachfolger des Strich-Modells: Striche werden als Zeilenbild gelesen (`rasterize.py`). Start ist **de-htr-web-v2**
-(naeyn, Apache-2.0, trainiert auf ScaDS.AI CC BY 4.0 + fhswf AFL-3.0), nachgebaut in `image_model.py` mit unserem Vokabular.
-Ohne Training liest es deutschen Text schon so gut wie das feingetunte Strich-Modell, Formeln aber kaum.
-
-| Datei | Zweck |
-| :--- | :--- |
-| `image_model.py` | ResNet18-Stamm + 3× BiLSTM-256 + CTC, Gewichts-Import aus de-htr, int8-Export (nur Gewichte, läuft in ONNX Runtime Web) |
-| `rasterize.py` | Striche bzw. Punkt-Features → Graustufenbild 64 px hoch |
-| `image_datasets.py` | ScaDS- und fhswf-Zeilenbilder laden (Cache) |
-| `train_image.py` | Mathe-Feintuning mit Text-Wiederholung; best.pt nur, wenn Text höchstens 1 Punkt schlechter wird |
-| `train_image_colab.ipynb` | Colab-Ablauf inkl. Datensatz-Downloads |
-| `scads_split.json` | ScaDS-Schreiber für Auswahl/Test, die de-htr nie gesehen hat |
 
 ## Trainingsdaten
 
-| Datensatz | Lizenz | Anteil |
+| Datensatz | Lizenz | Rolle |
 | :--- | :--- | :--- |
-| BRUSH (170 Schreiber) | Lizenz noch prüfen (vor Weitergabe des Modells) | ~40 % |
-| Google MathWriting | CC BY 4.0 | ~20 % |
-| Synthetisch + UJI Pen Characters v2 | OFL-Fonts / frei (UCI) | ~10 % |
-| Eigene Abschreib-Zeilen (augmentiert, zur Hälfte als Wort-Collage neu zusammengesetzt) | eigene Daten | ~30 % |
+| ScaDS.AI German Lines (Zenodo 18301532) | CC BY 4.0 | Text (Scans), ~32 % |
+| fhswf/german_handwriting | AFL-3.0 | Text (Scans), ~20 % |
+| Gezeichnete Sätze aus OFL-Handschrift-Fonts | OFL | Text mit Leerzeichen, ~13 % |
+| Google MathWriting | CC BY 4.0 | Formeln, ~28 % |
+| Synthetische Rechnungen (Fonts) | OFL | Formeln, ~7 % |
+| BRUSH (Schreiber 150–169) | Lizenz noch prüfen | nur Messung |
+| Eigene Abschreib-Zeilen | eigene Daten (nie auf GitHub) | nur Messung |
 
-IAM-OnDB und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verwendet. Voller MathWriting-Datensatz (3,1 GB) unter `data/mw_download/`:
+Die Weitergabe des Modells braucht Namensnennung für de-htr-web-v2 (Apache-2.0), ScaDS.AI (CC BY 4.0), fhswf (AFL-3.0) und MathWriting (CC BY 4.0).
+IAM, IAM-OnDB, CVL, GoBo und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verwendet.
 
-```bash
-curl -L --create-dirs -o data/mw_download/mathwriting-2024.tgz https://storage.googleapis.com/mathwriting_data/mathwriting-2024.tgz
-```
+## Messwerte
 
-```bash
-tar -xzf data/mw_download/mathwriting-2024.tgz -C data/mw_download
-```
+| Stand | TEST-CER (eigene) | Formeln fremd | Text fremd (Scan / Strich) |
+| :--- | :---: | :---: | :---: |
+| Strich-Modell, 2. Feintuning (`cb1f1d1`, abgelöst) | 5,5 % | – | – |
+| de-htr-web-v2 unverändert | – | 62,8 % | 8,38 % / 19,7 % |
+| Bild-Modell Lauf 1 (50 % Mathe, ohne gezeichneten Text) | 1,4 % | 14,9 % | 8,79 % / – (Leerzeichen verlernt) |
+| **Bild-Modell Lauf 3** | **0,0 %** | **16,0 %** | **8,42 % / 18,0 %** |
 
-## Messwerte-Verlauf (eigene Handschrift)
-
-| Stand | TEST-CER | Bemerkung |
-| :--- | :---: | :--- |
-| Basismodell (4 Features seit v2.2.24) | 44,7 % | ohne eigene Handschrift |
-| 1. Feintuning (`7c16cc4`) | 21,0 % | eigene Abschreib-Zeilen |
-| 2. Feintuning, 206 Zeilen (`cb1f1d1`) | **5,5 %** | AUSWAHL-CER 11,4 %, gesamt 9,7 % |
-
-- TEST = ungerade, unberührte Benchmark-Zeilen; AUSWAHL = gerade Zeilen (Checkpoint-Wahl).
-- Ältere Messung (07.10., 3 Features, anderer Testsatz mit 121 Proben): 14,5 % CER – nicht vergleichbar.
-- Rest-Fehler: einzelne Buchstaben-Verwechslungen (z. B. „läuft“ → „Läutt“). Echte Heftseiten sind schwerer als Abschreib-Zeilen.
-- Nächste Schritte: echte Heftseiten per MCP beschriften (`impala_heft_label_lines`) als Benchmark und Trainingsdaten; erst danach Beam-Search.
+- TEST = ungerade Benchmark-Zeilen; „fremd“ = Test-Schreiber, die nie trainiert oder zur Auswahl benutzt wurden.
+- Lauf 3 auf den Abschreib-Messzeilen: 5,3 % CER (Strich-Modell mit Feintuning auf genau diese Handschrift: 6,7 %).
+- Das frühere Strich-Modell (Punktfolgen, `train.py`) steht im Git-Verlauf bis `269e442`.

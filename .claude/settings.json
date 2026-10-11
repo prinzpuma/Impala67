@@ -39,7 +39,6 @@
       "Read(handwriting/data/**)",
       "Read(handwriting/checkpoints/**)",
       "Read(handwriting/.venv/**)",
-      "Read(handwriting/ujipenchars2.txt)",
       "Read(**/*.onnx)"
     ]
   },

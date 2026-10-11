@@ -187,9 +187,10 @@ function renderAi(vm) {
 				'<span class="settings-row-copy">' +
 					'<b>Handschrifterkennung (Digital Ink)</b>' +
 					'<small>' +
-						'100 % lokal (ONNX Runtime Web, ca. 3 MB) · ' + (samplesCount > 0 ? samplesCount + ' Trainingsbeispiele gesammelt' : 'Noch keine eigenen Trainingsbeispiele') +
+						'100 % lokal (ONNX Runtime Web, ca. 10 MB) · ' + (samplesCount > 0 ? samplesCount + ' Trainingsbeispiele gesammelt' : 'Noch keine eigenen Trainingsbeispiele') +
 					'</small>' +
 					'<small id="handwritingProgress">' + U.esc(HEFT_INDEX_PROGRESS.label()) + '</small>' +
+					'<small>Modell auf Basis von de-htr-web-v2 (naeyn, Apache-2.0); Trainingsdaten: ScaDS.AI German Handwriting (CC BY 4.0), fhswf/german_handwriting (AFL-3.0), Google MathWriting (CC BY 4.0)</small>' +
 				'</span>' +
 				'<span id="handwritingActions">' +
 					button("✍️ Abschreiben", "btnOpenAbschreiben", "secondary") + ' ' +
