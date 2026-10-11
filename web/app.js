@@ -1700,6 +1700,9 @@ function wireEvents() {
 			case "btnExportHandwritingSamples":
 				SETTINGS.handleExportHandwritingSamples();
 				break;
+			case "btnExportAllInk":
+				await SETTINGS.handleExportAllInk();
+				break;
 			case "btnClearHandwritingSamples":
 				SETTINGS.handleClearHandwritingSamples();
 				break;

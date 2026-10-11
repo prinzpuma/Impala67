@@ -27,6 +27,7 @@ Impala67.apk
 handwriting/.venv/
 handwriting/data/
 handwriting/checkpoints/
+handwriting/checkpoints-image/
 handwriting/model.onnx
 __pycache__/
 *.pyc

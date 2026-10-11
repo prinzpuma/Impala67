@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.52"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.53"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
@@ -140,6 +140,7 @@ const APP_FILES = [
 	"./heft-tools.js",
 	"./heft-export.js",
 	"./heft-indexer.js",
+	"./heft-index-progress.js",
 ];
 
 // Leichtgewichtige Basis-CDN-Bibliotheken beim Installieren vorab cachen.

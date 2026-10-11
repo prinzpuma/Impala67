@@ -21,6 +21,7 @@ import { openQrScanner } from "./qr-scanner.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
+import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 
 const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
 const render = (...args) => RENDER.render(...args);
@@ -1360,6 +1361,19 @@ export function handleExportHandwritingSamples() {
 	});
 }
 
+// Alle Handschrift der App (Striche aller Hefte + Abschreib-Beispiele) als eine JSON-Datei.
+export async function handleExportAllInk() {
+	const { allInk, deliverExport } = await import("./heft-export.js");
+	const data = allInk(S, HANDSCHRIFT.getTrainingSamples ? HANDSCHRIFT.getTrainingSamples() : []);
+	if (!data.strokeCount && !data.trainingSamples.length) {
+		U.toast("Noch keine Handschrift vorhanden.");
+		return;
+	}
+	const name = "impala67_handschrift_" + new Date().toISOString().slice(0, 10) + ".json";
+	const weg = await deliverExport([new File([JSON.stringify(data)], name, { type: "application/json" })]);
+	if (weg !== "cancelled") U.toast(`${data.strokeCount} Striche aus ${data.notebooks.length} Heften exportiert 📥`);
+}
+
 export function handleClearHandwritingSamples() {
 	if (confirm("Möchtest du alle gesammelten Handschrift-Trainingsbeispiele wirklich löschen?")) {
 		HANDSCHRIFT.clearTrainingSamples();
@@ -1425,6 +1439,7 @@ export const SETTINGS = {
 	homeLayout,
 	HOME_SECTIONS,
 	handleExportHandwritingSamples,
+	handleExportAllInk,
 	handleClearHandwritingSamples,
 	BREAK_REMINDER_KEY,
 	getBreakReminder,
@@ -1436,4 +1451,10 @@ document.addEventListener("change", (e) => {
 	if (e.target && e.target.id === "inpEmbed") {
 		updateLocalEmbeddingManagerUi();
 	}
+});
+
+// Fortschritt der Handschrift-Analyse live nachführen, solange die Einstellungen offen sind
+window.addEventListener("impala67:heft-index-progress", () => {
+	const el = document.getElementById("handwritingProgress");
+	if (el) el.textContent = HEFT_INDEX_PROGRESS.label();
 });

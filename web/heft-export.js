@@ -116,6 +116,20 @@ export async function exportImages(pageId, indices, { loadDoc, renderCanvas, dow
 	if (toast) toast(idxs.length + " Bild(er) gespeichert");
 }
 
+// Alle Stift-Striche der App als Rohdaten (Punkte), z. B. als Trainingsdaten für die Handschrift-Erkennung.
+// Nur Seiten mit Strichen; `index` ist die Seitennummer im Heft (ab 0).
+export function allInk(state = S, trainingSamples = []) {
+	const notebooks = [];
+	for (const [pageId, doc] of Object.entries((state && state.heftDocs) || {})) {
+		const pages = ((doc && doc.pages) || [])
+			.map((pg, index) => ({ index, id: pg.id, paper: pg.paper, ocrText: pg.ocrText || "", strokes: pg.strokes || [] }))
+			.filter((pg) => pg.strokes.length);
+		if (pages.length) notebooks.push({ pageId, title: (state.pages && state.pages[pageId] && state.pages[pageId].title) || "Heft", pages });
+	}
+	const strokeCount = notebooks.reduce((n, nb) => n + nb.pages.reduce((m, pg) => m + pg.strokes.length, 0), 0);
+	return { format: "impala67-ink", version: 1, exportedAt: new Date().toISOString(), strokeCount, notebooks, trainingSamples };
+}
+
 export async function deliverExport(files, download = U.downloadBlob) {
 	let canShare = false;
 	try { canShare = !!(typeof navigator !== "undefined" && navigator.share && navigator.canShare?.({ files })); } catch { /* Download-Fallback */ }

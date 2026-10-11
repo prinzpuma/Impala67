@@ -12,6 +12,7 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { isLocalDev, mcpBridgeEnabled } from "./mcp-bridge-flag.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import { HANDSCHRIFT } from "./handschrift.js";
+import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
@@ -188,9 +189,11 @@ function renderAi(vm) {
 					'<small>' +
 						'100 % lokal (ONNX Runtime Web, ca. 3 MB) · ' + (samplesCount > 0 ? samplesCount + ' Trainingsbeispiele gesammelt' : 'Noch keine eigenen Trainingsbeispiele') +
 					'</small>' +
+					'<small id="handwritingProgress">' + U.esc(HEFT_INDEX_PROGRESS.label()) + '</small>' +
 				'</span>' +
 				'<span id="handwritingActions">' +
 					button("✍️ Abschreiben", "btnOpenAbschreiben", "secondary") + ' ' +
+					button("📤 Alle Handschrift exportieren", "btnExportAllInk", "secondary") + ' ' +
 					(samplesCount > 0
 						? button("📥 Exportieren", "btnExportHandwritingSamples", "secondary") + ' ' + button("🗑 Leeren", "btnClearHandwritingSamples", "secondary danger-text")
 						: '') +

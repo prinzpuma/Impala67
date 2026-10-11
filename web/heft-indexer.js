@@ -7,6 +7,7 @@ import { RAG } from "./rag.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 import { PAGE_W, PAGE_H, composePageText } from "./heft-document-core.js";
 import { SCAN_OCR } from "./scan-ocr.js";
+import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 
 // heft-indexer.js — Automatischer, akkuschonender Hintergrund-Crawler für Handschrift-Hefte.
 //
@@ -38,6 +39,17 @@ export const HEFT_INDEXER = (() => {
 	const INDEX_VERSION = `${HANDWRITING_MODEL_VERSION}+r${RECOGNIZER_REVISION}`;
 	const readIndexedModel = () => { try { return localStorage.getItem(MODEL_KEY); } catch { return null; } };
 	const writeIndexedModel = () => { try { localStorage.setItem(MODEL_KEY, INDEX_VERSION); } catch {} };
+	// Pro Gerät: Seiten (checkKey), die mit INDEX_VERSION erkannt sind. Ergibt den Fortschritt und lässt eine
+	// Neu-Erkennung nach einem Neustart weiterlaufen, statt von vorn zu beginnen.
+	const DONE_KEY = "impala67_heft_index_done";
+	const done = (() => {
+		try {
+			const saved = JSON.parse(localStorage.getItem(DONE_KEY) || "null");
+			if (saved && saved.version === INDEX_VERSION && Array.isArray(saved.keys)) return new Set(saved.keys);
+		} catch {}
+		return new Set();
+	})();
+	const saveDone = () => { try { localStorage.setItem(DONE_KEY, JSON.stringify({ version: INDEX_VERSION, keys: [...done] })); } catch {} };
 	let reindexAll = false;
 	let hadFailure = false; // z. B. offline, Modell noch nicht geladen: Durchlauf gilt dann nicht als erledigt
 
@@ -53,17 +65,27 @@ export const HEFT_INDEXER = (() => {
 	}
 
 	// Findet alle offenen Aufgaben: Stricherkennung (nach Modellwechsel: alle) und Scan-Bilder
+	// Nebenbei: Fortschritt (Seiten mit Strichen gesamt / davon erledigt) und alle aktuellen Seiten-Schlüssel
 	function findUnindexedPages() {
 		const jobs = [];
 		const heftDocs = S.heftDocs || {};
+		let total = 0;
+		let doneCount = 0;
+		const present = new Set();
 		for (const [pageId, doc] of Object.entries(heftDocs)) {
 			if (!doc || !Array.isArray(doc.pages)) continue;
 			for (let idx = 0; idx < doc.pages.length; idx++) {
 				const pg = doc.pages[idx];
 				if (!pg) continue;
-				if (Array.isArray(pg.strokes) && pg.strokes.length && !checked.has(checkKey(pageId, pg))) {
-					if (reindexAll || !String(pg.ocrText || "").trim()) {
-						jobs.push({ kind: "strokes", key: checkKey(pageId, pg), pageId, pageIdx: idx, page: pg });
+				if (Array.isArray(pg.strokes) && pg.strokes.length) {
+					const key = checkKey(pageId, pg);
+					const hasText = !!String(pg.ocrText || "").trim();
+					total++;
+					present.add(key);
+					// Fehlgeschlagene Seiten (checked, aber nicht done) zählen nicht als erledigt
+					if (done.has(key) || (!reindexAll && hasText)) doneCount++;
+					if (!checked.has(key) && !done.has(key) && (reindexAll || !hasText)) {
+						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, page: pg });
 					}
 				}
 				for (const im of pg.images || []) {
@@ -74,9 +96,13 @@ export const HEFT_INDEXER = (() => {
 				}
 			}
 		}
+		HEFT_INDEX_PROGRESS.set({ done: doneCount, total, running: scanRunning });
+		lastPresent = present;
 		return jobs;
 	}
+	let lastPresent = new Set();
 
+	// true = Seite ist erkannt (auch ohne Text, z. B. reine Skizze); false = später erneut versuchen
 	async function indexStrokes(job) {
 		let text = null;
 		try {
@@ -85,7 +111,9 @@ export const HEFT_INDEXER = (() => {
 			hadFailure = true;
 			console.info("[heft-indexer] Stricherkennung Fehler:", err);
 		}
-		if (text == null) return;
+		if (text == null) return false;
+		done.add(job.key);
+		saveDone();
 		// Ein leeres Ergebnis ersetzt keinen vorhandenen Text: sicherer bei reinen Skizzen mit Beschriftung.
 		const composed = composePageText(text, job.page);
 		if (!composed || composed === String(job.page.ocrText || "").trim()) return;
@@ -141,8 +169,13 @@ export const HEFT_INDEXER = (() => {
 		if (!unindexed.length) {
 			// Erst nach einem vollständigen Durchlauf merken; bricht die App vorher ab, geht es beim nächsten Start weiter
 			if (reindexAll && !hadFailure) writeIndexedModel();
+			// Schlüssel gelöschter oder geänderter Seiten verwerfen, damit die Liste nicht wächst
+			for (const key of done) if (!lastPresent.has(key)) done.delete(key);
+			saveDone();
 			reindexAll = false;
 			scanRunning = false;
+			const p = HEFT_INDEX_PROGRESS.get();
+			if (p) HEFT_INDEX_PROGRESS.set({ ...p, running: false });
 			return;
 		}
 

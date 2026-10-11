@@ -46,6 +46,21 @@ python train.py --publish
 
 Ohne Argument prüft der Benchmark das ausgelieferte App-Modell (`web/handwriting-model.onnx`). Alternativ `model.onnx` von Hand nach `web/handwriting-model.onnx` kopieren.
 
+## Bild-Modell (in Arbeit)
+
+Nachfolger des Strich-Modells: Striche werden als Zeilenbild gelesen (`rasterize.py`). Start ist **de-htr-web-v2**
+(naeyn, Apache-2.0, trainiert auf ScaDS.AI CC BY 4.0 + fhswf AFL-3.0), nachgebaut in `image_model.py` mit unserem Vokabular.
+Ohne Training liest es deutschen Text schon so gut wie das feingetunte Strich-Modell, Formeln aber kaum.
+
+| Datei | Zweck |
+| :--- | :--- |
+| `image_model.py` | ResNet18-Stamm + 3× BiLSTM-256 + CTC, Gewichts-Import aus de-htr, int8-Export (nur Gewichte, läuft in ONNX Runtime Web) |
+| `rasterize.py` | Striche bzw. Punkt-Features → Graustufenbild 64 px hoch |
+| `image_datasets.py` | ScaDS- und fhswf-Zeilenbilder laden (Cache) |
+| `train_image.py` | Mathe-Feintuning mit Text-Wiederholung; best.pt nur, wenn Text höchstens 0,3 Punkte schlechter wird |
+| `train_image_colab.ipynb` | Colab-Ablauf inkl. Datensatz-Downloads |
+| `scads_split.json` | ScaDS-Schreiber für Auswahl/Test, die de-htr nie gesehen hat |
+
 ## Trainingsdaten
 
 | Datensatz | Lizenz | Anteil |
