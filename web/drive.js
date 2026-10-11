@@ -91,6 +91,7 @@ export const DRIVE = (() => {
 			email: accountEmail || null,
 			connected: authState === DRIVE_AUTH_STATE.CONNECTED,
 			needsLogin: authState === DRIVE_AUTH_STATE.RENEWAL_REQUIRED,
+			lastOkAt: LS.getItem("impala67_drive_last_ok") || null,
 		};
 	}
 
@@ -664,6 +665,7 @@ export const DRIVE = (() => {
 			} catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 		}
 		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));
+		LS.setItem("impala67_drive_last_ok", new Date().toISOString());
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
 		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.
 		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
@@ -828,5 +830,22 @@ export const DRIVE = (() => {
 		return autoSync("start");
 	}
 
-	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync };
+	// Speicheranzeige: Belegung des Google-Kontos plus der Anteil des privaten App-Ordners.
+	// Nur mit gültigem Token — eine Anzeige ist nie Grund für ein Anmeldefenster.
+	async function storageInfo() {
+		if (!validSavedToken()) return null;
+		token = validSavedToken();
+		const about = await (await api("/drive/v3/about?fields=storageQuota")).json();
+		let appBytes = 0, pageToken = "";
+		do {
+			const q = "/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(size)" + (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : "");
+			const page = await (await api(q)).json();
+			appBytes += (page.files || []).reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+			pageToken = page.nextPageToken || "";
+		} while (pageToken);
+		const quota = about.storageQuota || {};
+		return { appBytes, usedBytes: Number(quota.usage) || 0, limitBytes: Number(quota.limit) || 0 };
+	}
+
+	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync, storageInfo };
 })();

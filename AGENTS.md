@@ -54,7 +54,7 @@
 - **Verbindung**: Der MCP-Server in `mcp/` verbindet KI-Assistenten über einen lokalen WebSocket (`ws://127.0.0.1:8765`) mit der im Browser laufenden App (`http://localhost:8000`). Die Gegenseite in der App ist `web/mcp-bridge.js`.
 - **Tools** (Stand: Code in `mcp/` und `web/mcp-bridge.js`):
   - **Inhalte**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`
-  - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`
+  - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`, `impala_get_ai_trace`
   - **Live-Testing & UI**: `impala_eval`, `impala_run_ui_action`
   - **Handschrift-Training**: `impala_heft_page_image` (Seite als Bild + Modell-Lesung), `impala_heft_label_lines` (KI legt Zeilen und Text fest → Trainingsbeispiele)
   - **Speicher**: `impala_storage_report`, `impala_storage_cleanup`

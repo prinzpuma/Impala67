@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.48"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.49"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
@@ -74,6 +74,7 @@ const APP_FILES = [
 	"./embedding-worker.js",
 	"./drive.js",
 	"./drive-status.js",
+	"./backup-status.js",
 	"./drive-sync-policy.js",
 	"./sync-core.js",
 	"./sync-crypto.js",
@@ -113,6 +114,7 @@ const APP_FILES = [
 	"./performance-profiler-settings.js",
 	"./mcp-bridge-flag.js",
 	"./tabs.js",
+	"./nav-history.js",
 	"./search.js",
 	"./shortcuts.js",
 	"./chat-fullscreen.js",
@@ -129,7 +131,10 @@ const APP_FILES = [
 	"./heft-geometry.js",
 	"./heft-pages-core.js",
 	"./heft-scan.js",
+	"./heft-scan-pixels.js",
+	"./heft-scan-worker.js",
 	"./heft-scanner-ui.js",
+	"./scan-ocr.js",
 	"./heft-tools.js",
 	"./heft-export.js",
 	"./heft-indexer.js",

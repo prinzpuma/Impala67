@@ -16,6 +16,8 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { homeViewHtml, hydrateHome } from "./home-view.js";
+import { canGoBack, canGoForward } from "./nav-history.js";
+import { BACKUP } from "./backup-status.js";
 import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
 
@@ -399,12 +401,12 @@ function syncActiveTabChip(bar) {
 	});
 
 	const backBtn = $("btnNavBack"), pageBackBtn = $("btnPageNavBack");
-	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
+	const canBack = canGoBack();
 	if (backBtn) backBtn.disabled = !canBack;
 	if (pageBackBtn) pageBackBtn.disabled = !canBack;
 
 	const fwdBtn = $("btnNavForward"), pageFwdBtn = $("btnPageNavForward");
-	const canFwd = S.navIndex < S.navHistory.length - 1;
+	const canFwd = canGoForward();
 	if (fwdBtn) fwdBtn.disabled = !canFwd;
 	if (pageFwdBtn) pageFwdBtn.disabled = !canFwd;
 	return true;
@@ -590,7 +592,15 @@ function pageMenuHtml(pg) {
 }
 
 // ---------- Tab-Leiste (Zurück/Vor + offene Seiten UND Chats) ----------
+// Heft-Ecken werden nur beim Aufbau des Hefts gezeichnet — bei jedem Tab-Render mitziehen.
+function syncHeftNavButtons() {
+	const back = !canGoBack(), fwd = !canGoForward();
+	document.querySelectorAll("[data-henavback]").forEach((b) => { b.disabled = back; });
+	document.querySelectorAll("[data-henavforward]").forEach((b) => { b.disabled = fwd; });
+}
+
 function renderTabs() {
+	syncHeftNavButtons();
 	const bar = $("tabbar");
 	if (!bar) return;
 	if (bar.dataset.renderRevision === String(_tabsRevision) && syncActiveTabChip(bar)) return;
@@ -602,8 +612,8 @@ function renderTabs() {
 	if (S.tabs.some((id) => id.startsWith("chat:"))) {
 		try { CHATS.load().forEach((s) => chatById.set(s.id, s)); } catch { /* ignore */ }
 	}
-	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
-	const canFwd = S.navIndex < S.navHistory.length - 1;
+	const canBack = canGoBack();
+	const canFwd = canGoForward();
 	let html = '<button class="navbtn" id="btnSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
 		`<button class="navbtn" id="btnNavBack" ${canBack ? "" : "disabled"} title="Zurück">‹</button>` +
 		`<button class="navbtn" id="btnNavForward" ${canFwd ? "" : "disabled"} title="Vor">›</button>` +
@@ -682,8 +692,8 @@ function renderMain() {
 	// main.dataset.scrollPageId entfällt — .page-scroll wird gar nicht mehr ersetzt und
 	// behält seinen Scrollstand deshalb von selbst. data-key trennt die Ansichten sauber:
 	// beim Wechsel Home ↔ Seite wird nicht versucht, fremde Container umzudeuten.
-	const canBack = S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null);
-	const canFwd = S.navIndex < S.navHistory.length - 1;
+	const canBack = canGoBack();
+	const canFwd = canGoForward();
 	const pageShellHtml =
 		'<div class="page-chrome" data-key="pagechrome"><div class="page-topbar">' +
 		'<button class="navbtn topbar-sb-toggle" id="btnPageSidebarToggle" title="Linke Spalte ein-/ausklappen">☰</button>' +
@@ -1077,6 +1087,9 @@ if (typeof window !== "undefined") {
 	window.addEventListener("lz:goal-changed", () => {
 		if (S.view === "home") renderMain();
 	});
+	window.addEventListener("impala67:backup-status", () => {
+		if (S.view === "home") renderMain();
+	});
 }
 function renderHome(main) {
 	// Scroll-Anker: jedes Re-Render (Fold, Pins, Sync…) hüpfte sonst nach oben.
@@ -1097,7 +1110,7 @@ function renderHome(main) {
 	const homeAnalysisHtml = () => { const la = lernanalyseParts(); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
 	// Eine Startseite für alle Geräte (home-view.js) — schmale Bildschirme über die Container-Query in home.css
 	const homeHtml = homeViewHtml({
-		greeting, name: homeName, dateLine, conflictCount, last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),
+		greeting, name: homeName, dateLine, conflictCount, backup: BACKUP.homeHint(), last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),
 		todaySeconds: lz.todaySeconds, week: LERNZEIT.weekData(0, lzTotals), goalMin: LERNZEIT.weekGoalMinutes(),
 		streak: lz.streakDays || 0, analysisHtml: homeAnalysisHtml(),
 	});

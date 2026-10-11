@@ -28,12 +28,12 @@
       "mcp__impala67__impala_search",
       "mcp__impala67__impala_list_flashcards",
       "mcp__impala67__impala_get_diagnostics",
-      "mcp__impala67__impala_get_performance_trace"
+      "mcp__impala67__impala_get_performance_trace",
+      "mcp__impala67__impala_get_ai_trace"
     ],
     "deny": [
       "Read(web/config.local.js)",
       "Read(web/.env)",
-      "Read(mcp/.config.json)",
       "Read(node_modules/**)",
       "Read(tmp/**)",
       "Read(handwriting/data/**)",

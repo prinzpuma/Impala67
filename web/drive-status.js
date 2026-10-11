@@ -29,7 +29,9 @@ export function driveStatusView({ authState, syncState = "idle", online = true, 
 		return { state: "waiting", label: "Offline", detail: "Drive-Sync wartet auf eine Internetverbindung" };
 	}
 	if (authState === DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
-		return { state: "error", label: "Anmeldung nötig", detail: "Google-Sitzung abgelaufen – einmal synchronisieren" };
+		// Googles Web-Anmeldung hält nur eine Stunde — das ist der Normalfall, kein Fehler.
+		// Ob wirklich etwas ungesichert ist, beurteilt backup-status.js.
+		return { state: "idle", label: "Pausiert", detail: "Sichert weiter, sobald du auf „Jetzt sichern“ tippst" };
 	}
 	if (syncState !== "idle") {
 		return { state: syncState, label: label || "Drive-Sync", detail: detail || label || "Drive-Sync" };

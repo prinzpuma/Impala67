@@ -101,8 +101,8 @@ TYPOGRAPHY_BOUNDS = {
 }
 
 
-def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str, step: float = 0.045) -> List[List[Tuple[float, float]]]:
-    """Normalisiert ein Zeichen typografisch korrekt auf x-Höhe, Ober-/Unterlängen und resampelt äquidistant."""
+def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str) -> List[List[Tuple[float, float]]]:
+    """Normalisiert ein Zeichen typografisch korrekt auf x-Höhe, Ober- und Unterlängen."""
     all_pts = [p for s in strokes for p in s]
     if not all_pts:
         return strokes
@@ -137,17 +137,10 @@ def normalize_glyph_strokes(strokes: List[List[Tuple[float, float]]], char: str,
             ny = tgt_top + ((p[1] - min_y) / raw_h) * tgt_h
             mapped_s.append((nx, ny))
 
-        # Äquidistantes Resampling für identische Punktdichte mit Browser-Preprocessor
-        resampled = []
-        for idx, pt in enumerate(mapped_s):
-            if idx == 0:
-                resampled.append(pt)
-            else:
-                prev = resampled[-1]
-        if len(resampled) == 1:
-            resampled.append(resampled[0])
-        if len(resampled) >= 2:
-            norm.append(resampled)
+        # Resampling übernimmt strokes_to_normalized_features (wie in der App)
+        if len(mapped_s) == 1:
+            mapped_s.append(mapped_s[0])
+        norm.append(mapped_s)
 
     return norm
 

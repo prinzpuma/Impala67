@@ -24,6 +24,18 @@
         "web"
       ],
       "port": 8011
+    },
+    {
+      "name": "impala67-backup",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8012",
+        "--directory",
+        "web"
+      ],
+      "port": 8012
     }
   ]
 }

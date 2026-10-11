@@ -10,6 +10,8 @@ import math
 import random
 from typing import List, Tuple, Optional
 from vocabulary import CHAR_TO_IDX, VOCAB_SIZE, BLANK_IDX
+from augmentations import apply_augmentations_on_the_fly
+from mathwriting_loader import strokes_to_normalized_features
 
 # Grundlegende Strichprimitiven für Zeichen (Linienzüge im Normalraum [0..1, 0..1])
 # Jeder Strich ist eine Liste von (x, y) Kontrollpunkten.
@@ -239,14 +241,11 @@ def generate_word_strokes(
     if synth is not None and random.random() < 0.95:
         font_strokes = synth.render_word_strokes(word)
         if font_strokes:
-            from augmentations import apply_augmentations_on_the_fly
+            # Unaugmentiert zurückgeben: augmentiert wird genau einmal beim Erzeugen des Trainingsbeispiels
             all_pts = [p for s in font_strokes for p in s]
-            if all_pts:
-                min_y = min(p[1] for p in all_pts)
-                max_y = max(p[1] for p in all_pts)
-                h = max(1.0, max_y - min_y)
-                scaled = [[(p[0] / h, (p[1] - min_y) / h) for p in s] for s in font_strokes]
-                return apply_augmentations_on_the_fly(scaled)
+            min_y = min(p[1] for p in all_pts)
+            h = max(1.0, max(p[1] for p in all_pts) - min_y)
+            return [[(p[0] / h, (p[1] - min_y) / h) for p in s] for s in font_strokes]
 
     strokes = []
     cursor_x = 0.0
@@ -323,76 +322,6 @@ GERMAN_SENTENCES = [
 ]
 
 
-def calculate_stroke_height_median(strokes, fallback=10.0) -> float:
-    if not strokes:
-        return fallback
-    heights = []
-    for s in strokes:
-        pts = s.get("pts", s) if isinstance(s, dict) else s
-        if not pts or len(pts) < 2:
-            continue
-        ys = [p[1] for p in pts]
-        h = max(ys) - min(ys)
-        if h > 1e-4:
-            heights.append(h)
-    if not heights:
-        return fallback
-    heights.sort()
-    mid = len(heights) // 2
-    return float(heights[mid] if len(heights) % 2 != 0 else (heights[mid - 1] + heights[mid]) / 2.0)
-
-
-def strokes_to_features(
-    strokes: List[List[Tuple[float, float]]],
-    line_min_y: Optional[float] = None,
-    line_height: Optional[float] = None,
-) -> List[Tuple[float, float, float, float]]:
-    """Wandelt Striche in [dx, dy, pen_down, y_rel] Sequenz um (auf Kleinbuchstaben-Höhe/Median normiert)."""
-    if not strokes:
-        return []
-
-    all_pts = [pt for s in strokes for pt in s]
-    if not all_pts:
-        return []
-
-    min_y = min(p[1] for p in all_pts) if line_min_y is None else line_min_y
-    if line_height is not None:
-        height = max(0.1, line_height)
-    else:
-        med_h = calculate_stroke_height_median(strokes, fallback=10.0)
-        max_y = max(p[1] for p in all_pts)
-        height = med_h if med_h > 0.1 else max(0.1, max_y - min_y)
-
-    scale = 1.0 / height
-
-    features = []
-    last_x, last_y = None, None
-
-    for stroke in strokes:
-        if not stroke:
-            continue
-        if len(stroke) == 1:
-            stroke = [stroke[0], stroke[0]]
-        first_pt = stroke[0]
-        first_y_rel = (first_pt[1] - min_y) * scale - 0.5
-
-        if last_x is not None and last_y is not None:
-            dx = (first_pt[0] - last_x) * scale
-            dy = (first_pt[1] - last_y) * scale
-            features.append((dx, dy, 0.0, first_y_rel))
-
-        last_x, last_y = first_pt[0], first_pt[1]
-
-        for pt in stroke[1:]:
-            dx = (pt[0] - last_x) * scale
-            dy = (pt[1] - last_y) * scale
-            y_rel = (pt[1] - min_y) * scale - 0.5
-            features.append((dx, dy, 1.0, y_rel))
-            last_x, last_y = pt[0], pt[1]
-
-    return features
-
-
 def random_sample() -> Tuple[List[Tuple[float, float, float, float]], str]:
     """Erzeugt ein zufälliges Sample (Wort, Satz, Zahl oder mathematischer Ausdruck)."""
     mode = random.random()
@@ -424,9 +353,8 @@ def random_sample() -> Tuple[List[Tuple[float, float, float, float]], str]:
 
     # Zufällige Drehung/Schräglage (-15° bis +15°) zur Robustheitssteigerung
     rot = random.uniform(-15.0, 15.0) if random.random() < 0.4 else 0.0
-    strokes = generate_word_strokes(text, rotation_deg=rot)
-    features = strokes_to_features(strokes)
-    return features, text
+    strokes = apply_augmentations_on_the_fly(generate_word_strokes(text, rotation_deg=rot))
+    return strokes_to_normalized_features(strokes), text
 
 
 if __name__ == "__main__":

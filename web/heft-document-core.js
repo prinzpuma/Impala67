@@ -8,8 +8,25 @@ function signature(value) {
 	}
 	// Bildpixel liegen unveränderlich als eigener Blob vor; nur der Rahmen gehört
 	// zur Dokumentänderung. Legacy-src bleibt lesbar, bis alle Altstände ersetzt sind.
-	if (value.ref || value.src) return value.x + "," + value.y + "," + value.w + "," + value.h + "|" + (value.ref || value.src.length);
+	if (value.ref || value.src) {
+		const base = value.x + "," + value.y + "," + value.w + "," + value.h + "|" + (value.ref || value.src.length);
+		// Erkannter Scan-Text gehört zum Bild. Nur anhängen, wenn er existiert, damit alte Signaturen gleich bleiben.
+		return value.ocr !== undefined ? base + "|o" + blobId(value.ocr) : base;
+	}
 	return JSON.stringify(value);
+}
+
+// Seitenmaße einer Heftseite (Weltkoordinaten), gemeinsam für heft.js und den Indexer.
+export const PAGE_W = 1000, PAGE_H = 1414;
+
+// EINZIGE Stelle, die den durchsuchbaren Seitentext zusammensetzt: Stricherkennung,
+// danach der Text aller Scan-Bilder (in Reihenfolge), mit Zeilenumbruch verbunden.
+export function composePageText(strokeText, page) {
+	const parts = [String(strokeText || "").trim()];
+	for (const im of (page && page.images) || []) {
+		if (im && im.ocr) parts.push(String(im.ocr).trim());
+	}
+	return parts.filter(Boolean).join("\n").trim();
 }
 
 const signatureMap = (items) => new Map((items || []).map((item) => [item.id, signature(item)]));

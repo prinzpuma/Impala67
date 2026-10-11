@@ -46,14 +46,10 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("change", (event) => {
 	if (event.target?.id === "inpPerformanceProfiler") {
+		// Der Detail-Trace ist ein Entwickler-Modus (nur per MCP) — über den Schalter immer Auffälligkeiten.
+		if (event.target.checked) PERF_PROFILER.setMode("anomalies");
 		PERF_PROFILER.setEnabled(event.target.checked);
 		U.toast(event.target.checked ? "Performance-Profiler aktiviert." : "Performance-Profiler deaktiviert.", "success");
-		reopen();
-		return;
-	}
-	if (event.target?.id === "inpPerformanceProfilerMode") {
-		const newMode = PERF_PROFILER.setMode(event.target.value);
-		U.toast(newMode === "all" ? "Modus: Vollständiger Detail-Trace." : "Modus: Nur Auffälligkeiten (aggregiert).", "info");
 		reopen();
 		return;
 	}

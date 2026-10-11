@@ -2,8 +2,6 @@
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
 import { createInterface } from "node:readline";
 import { WebSocket, WebSocketServer } from "ws";
-import { createStore } from "./store.mjs";
-import { createSyncClient } from "./sync-client.mjs";
 
 const connectedSockets = new Set();
 let activeBrowserWs = null;
@@ -167,6 +165,8 @@ function getToolTimeoutMs(tool, args = {}) {
 		return args.await === false || args.wait === false ? 5000 : 45000;
 	}
 	if (tool === "impala_eval") return 30000;
+	// Bedeutungssuche muss evtl. erst das Embedding-Modell laden
+	if (tool === "impala_search" && args.semantic) return 30000;
 	if (tool === "impala_get_performance_trace") return 15000;
 	// Handschrift-Modell muss evtl. erst laden, dann Erkennung pro Zeile
 	if (tool === "impala_heft_page_image" || tool === "impala_heft_label_lines") return 30000;
@@ -176,15 +176,15 @@ function getToolTimeoutMs(tool, args = {}) {
 async function callLiveBrowser(tool, args = {}) {
 	if (relayWs && relayWs.readyState === 1) return callViaRelay(tool, args);
 	let ws = getActiveBrowserWs();
+	// Warte bis zu 3,5 Sekunden, falls die Browser-App gerade im Reconnect-Zyklus ist
 	if (!ws) {
-		// Warte bis zu 3,5 Sekunden, falls die Browser-App gerade im Reconnect-Zyklus ist
 		const waitStart = Date.now();
 		while (!ws && Date.now() - waitStart < 3500) {
 			await new Promise((r) => setTimeout(r, 200));
 			ws = getActiveBrowserWs();
 		}
-		if (!ws) return null;
 	}
+	if (!ws) return null;
 
 	const callId = browserCallSeq++;
 	const timeoutMs = getToolTimeoutMs(tool, args);
@@ -238,8 +238,10 @@ const TOOLS = [
 			type: "object",
 			properties: {
 				query: { type: "string", description: "Optionaler Suchbegriff zum Filtern nach Titel oder Inhalt" },
-				kind: { type: "string", enum: ["all", "notion", "heft"], description: "Filter nach Notiz-Art: Notion-Seite oder GoodNotes-Handschriftheft" },
+				kind: { type: "string", enum: ["all", "notion", "heft"], description: "Filter nach Notiz-Art: Notion-Seite oder Handschrift-Heft (Standard: all)" },
 				subject: { type: "string", description: "Filter nach Schulfach (z.B. Mathematik, Biologie, Deutsch)" },
+				archived: { type: "boolean", description: "true = nur archivierte Notizen" },
+				includeArchived: { type: "boolean", description: "Archivierte Notizen mit auflisten (Standard: false)" },
 				limit: { type: "number", description: "Maximale Anzahl der Treffer (Standard: 50)" },
 			},
 		},
@@ -264,7 +266,8 @@ const TOOLS = [
 				title: { type: "string", description: "Titel der neuen Notiz" },
 				content: { type: "string", description: "Markdown-Inhalt der Notiz" },
 				subject: { type: "string", description: "Fach bzw. Kategorie (z.B. Informatik, Physik)" },
-				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz" },
+				parentId: { type: "string", description: "ID einer optionalen übergeordneten Notiz" },
+				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz (falls ID nicht bekannt)" },
 				kind: { type: "string", enum: ["notion", "heft"], description: "Art der Notiz: notion (Standard) oder heft" },
 			},
 			required: ["title"],
@@ -272,26 +275,29 @@ const TOOLS = [
 	},
 	{
 		name: "impala_update_page",
-		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt oder Fach).",
+		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt, Fach, Archiv). Bei Handschrift-Heften bleiben Striche unangetastet: Text (content oder append_content) kommt als neue Textbox auf die erste Heftseite.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				id: { type: "string", description: "ID der Notiz" },
 				title: { type: "string", description: "Titel der Notiz" },
 				new_title: { type: "string", description: "Neuer Titel der Notiz" },
-				content: { type: "string", description: "Ersetzt den gesamten Textinhalt (nur bei Notion-Seiten)" },
-				append_content: { type: "string", description: "Hängt neuen Text an (auch bei Heften sicher als Textbox möglich)" },
+				content: { type: "string", description: "Ersetzt den gesamten Markdown-Inhalt (bei Heften: neue Textbox, ersetzt nichts)" },
+				append_content: { type: "string", description: "Hängt Text am Ende an (bei Heften: neue Textbox)" },
 				subject: { type: "string", description: "Neues Fach der Notiz" },
+				archived: { type: "boolean", description: "true = archivieren, false = aus dem Archiv holen" },
 			},
 		},
 	},
 	{
 		name: "impala_search",
-		description: "Durchsucht Notizen (Titel, Fließtext, OCR) und Karteikarten nach Stichworten.",
+		description: "Durchsucht Notizen (Titel, Fließtext, OCR) und Karteikarten nach Stichworten. Mit semantic=true sucht sie stattdessen nach Bedeutung über den RAG-Index der App (findet auch Umschreibungen, nur Notizen).",
 		inputSchema: {
 			type: "object",
 			properties: {
 				query: { type: "string", description: "Suchbegriff oder Frage" },
+				semantic: { type: "boolean", description: "Bedeutungssuche statt Stichwortsuche (Standard: false). Fällt auf Stichworte zurück, wenn in der App keine Embeddings eingerichtet sind." },
+				archived: { type: "boolean", description: "true = nur archivierte, false = nur nicht archivierte Notizen (Standard: alle)" },
 				limit: { type: "number", description: "Maximale Anzahl an Treffern (Standard: 20)" },
 			},
 			required: ["query"],
@@ -338,7 +344,18 @@ const TOOLS = [
 			type: "object",
 			properties: {
 				enable: { type: "boolean", description: "Profiler aktivieren (true) oder deaktivieren (false)" },
+				mode: { type: "string", enum: ["anomalies", "all"], description: "anomalies = nur auffällige Einträge aufzeichnen, all = alles" },
 				clear: { type: "boolean", description: "Bestehende Trace-Einträge nach dem Lesen leeren (Standard: false)" },
+			},
+		},
+	},
+	{
+		name: "impala_get_ai_trace",
+		description: "Liest das KI-Debugprotokoll dieser Sitzung: jede KI-Anfrage mit Provider, Modell, Nachrichten-/Tool-Metadaten, Status, Dauer, Fallbacks und gekürzten Fehlerantworten. API-Schlüssel und Nutzereingaben sind nicht enthalten. KI-Fehler stehen zusätzlich kompakt im Performance-Trace.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				clear: { type: "boolean", description: "Protokoll nach dem Lesen leeren (Standard: false)" },
 			},
 		},
 	},
@@ -348,7 +365,7 @@ const TOOLS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				code: { type: "string", description: "Ausführbarer JavaScript-Code (kann async/await nutzen; Zugriff auf S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH)" },
+				code: { type: "string", description: "Ausführbarer JavaScript-Code als Funktionsrumpf (Ergebnis per return; async/await möglich; Zugriff auf S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH)" },
 				timeoutMs: { type: "number", description: "Optionales individuelles Timeout in Millisekunden (Standard: 30000)" },
 			},
 			required: ["code"],
@@ -438,24 +455,7 @@ const TOOLS = [
 /**
  * Startet den MCP-Server.
  */
-export async function startServer(opts = {}) {
-	const storagePath = opts.storagePath || process.env.IMPALA67_STORAGE_FILE || undefined;
-	const store = createStore({ ...(opts.storeOptions || {}), ...(storagePath ? { storagePath } : {}) });
-	const syncClient = await createSyncClient(opts.syncOptions);
-
-	// Wenn Sync konfiguriert ist, beim Start im Hintergrund synchronisieren
-	if (syncClient.isConfigured()) {
-		try {
-			const since = store.getState().meta.lastSyncedSeq || 0;
-			const pullRes = await syncClient.pull(since);
-			if (pullRes.events?.length) {
-				store.applyRemoteEvents(pullRes.events, pullRes.maxSeq, pullRes.generation);
-			}
-		} catch (err) {
-			console.error("[impala-mcp] Hintergrund-Sync Pull Fehler:", err.message);
-		}
-	}
-
+export async function startServer() {
 	function sendResponse(id, result) {
 		const message = {
 			jsonrpc: "2.0",
@@ -474,124 +474,22 @@ export async function startServer(opts = {}) {
 		process.stdout.write(JSON.stringify(msg) + "\n");
 	}
 
-	async function pushEventsIfSync(events) {
-		if (!syncClient.isConfigured() || !events || !events.length) return;
-		try {
-			const res = await syncClient.push(events);
-			if (res.ok && res.ack?.toSeq) {
-				store.getState().meta.lastUploadedSeq = res.ack.toSeq;
-				store.saveToDisk();
-			}
-		} catch (err) {
-			console.error("[impala-mcp] Sync Push fehlgeschlagen (offline gespeichert):", err.message);
-		}
-	}
-
 	async function handleToolCall(name, args = {}) {
-		// 1. Wenn die App im Browser geöffnet ist: IMMER direkt live in der App ausführen!
-		const liveResult = await callLiveBrowser(name, args);
-		if (liveResult !== null) {
-			if (name === "impala_get_diagnostics" && liveResult && typeof liveResult === "object" && !liveResult.error) {
-				liveResult.mcpServer = {
-					name: SERVER_NAME,
-					version: SERVER_VERSION,
-					connectedClients: connectedSockets.size,
-					lastLatencyMs: serverStats.lastDurationMs,
-					totalCallsProcessed: serverStats.totalCalls,
-					uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
-				};
-			}
-			return liveResult;
+		const result = await callLiveBrowser(name, args);
+		if (result === null) {
+			return { error: "Impala67 ist nicht verbunden. Öffne die App im Browser (http://localhost:8000 oder die PWA mit ?mcpBridge=1)." };
 		}
-
-		// 2. Fallback: Wenn kein Browser geöffnet ist, lokalen Offline-Store nutzen
-		switch (name) {
-			case "impala_list_pages": {
-				return store.listPages(args);
-			}
-			case "impala_get_page": {
-				return store.getPage(args);
-			}
-			case "impala_create_page": {
-				const res = store.createPage(args);
-				if (res.createdEvent) {
-					await pushEventsIfSync([res.createdEvent]);
-					delete res.createdEvent;
-				}
-				return res;
-			}
-			case "impala_update_page": {
-				const res = store.updatePage(args);
-				if (res.updatedEvents?.length) {
-					await pushEventsIfSync(res.updatedEvents);
-					delete res.updatedEvents;
-				}
-				return res;
-			}
-			case "impala_search": {
-				return store.search(args);
-			}
-			case "impala_list_flashcards": {
-				return store.listFlashcards(args);
-			}
-			case "impala_create_flashcard": {
-				const res = store.createFlashcard(args);
-				if (res.createdEvent) {
-					await pushEventsIfSync([res.createdEvent]);
-					delete res.createdEvent;
-				}
-				return res;
-			}
-			case "impala_get_diagnostics": {
-				return {
-					error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).`,
-					mcpServer: {
-						name: SERVER_NAME,
-						version: SERVER_VERSION,
-						connectedClients: 0,
-						totalCallsProcessed: serverStats.totalCalls,
-						uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
-					},
-					store: {
-						totalPages: Object.keys(store.getState().pages || {}).length,
-						totalCards: Object.keys(store.getState().cards || {}).length,
-						lastSyncedSeq: store.getState().meta?.lastSyncedSeq || 0,
-					},
-					sync: {
-						configured: syncClient.isConfigured(),
-					},
-				};
-			}
-			case "impala_storage_report": {
-				const pages = store.getState().pages || {};
-				const rows = [];
-				for (const p of Object.values(pages)) {
-					if (p.trashed) continue;
-					const isPdf = (p.title || "").startsWith("📄") || (p.content || "").includes(".pdf");
-					if (!isPdf) continue;
-					const m = String(p.content || "").match(/·\s*([\d.,]+)\s*(KB|MB)/i);
-					let kb = 0;
-					if (m) {
-						const num = parseFloat(m[1].replace(",", "."));
-						if (Number.isFinite(num)) kb = Math.round(/MB/i.test(m[2]) ? num * 1024 : num);
-					}
-					rows.push({ id: p.id, title: (p.title || "").slice(0, 70), kb });
-				}
-				rows.sort((a, b) => b.kb - a.kb);
-				const totalKb = rows.reduce((s, r) => s + r.kb, 0);
-				const limit = Math.max(1, Math.min(50, Number(args.limit) || 15));
-				return { count: rows.length, totalMB: Math.round(totalKb / 1024), top: rows.slice(0, limit), offline: true };
-			}
-			case "impala_get_performance_trace":
-			case "impala_eval":
-			case "impala_run_ui_action":
-			case "impala_storage_cleanup":
-			case "impala_heft_page_image":
-			case "impala_heft_label_lines":
-				return { error: `Werkzeug '${name}' ist nur im Live-Betrieb verfügbar. Bitte öffne Impala67 im Browser (http://localhost:8000).` };
-			default:
-				return { error: `Unbekanntes Werkzeug: ${name}` };
+		if (name === "impala_get_diagnostics" && result && typeof result === "object" && !result.error) {
+			result.mcpServer = {
+				name: SERVER_NAME,
+				version: SERVER_VERSION,
+				connectedClients: connectedSockets.size,
+				lastLatencyMs: serverStats.lastDurationMs,
+				totalCallsProcessed: serverStats.totalCalls,
+				uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
+			};
 		}
+		return result;
 	}
 
 	async function handleMessage(message) {
@@ -693,7 +591,7 @@ export async function startServer(opts = {}) {
 		process.exit(0);
 	});
 
-	console.error(`[impala-mcp] Server läuft (Version ${SERVER_VERSION}, E2EE-Sync: ${syncClient.isConfigured() ? "Aktiv" : "Offline-Fallback"}).`);
+	console.error(`[impala-mcp] Server läuft (Version ${SERVER_VERSION}).`);
 }
 
 // Direkte Ausführung im CLI-Modus

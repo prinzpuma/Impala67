@@ -162,20 +162,15 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 .panel-head { padding: var(--space-2) 10px var(--space-2) var(--space-3); border-bottom: 1px solid var(--edge); font-weight: 600; font-size: var(--text-sm); letter-spacing: 0.6px; color: var(--text2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2) }
 .panel-head-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0 }
 .panel-title { font-weight: 600; font-size: var(--text-sm); letter-spacing: 0.4px; color: var(--text2); white-space: nowrap }
-/* Kleine, bewusst sichtbare Diagnose-Schaltfläche: führt keine C… */
-.ai-debug-btn { min-height: 0; padding: 3px 7px; border: 1px solid var(--edge-soft); border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-2xs); font-weight: 650 }
-/* UI-Fix v7: min. 11px */
-.ai-debug-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft) }
-.ai-debug-copy { min-height: 300px; resize: vertical; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace }
 .panel-head-right { display: flex; align-items: center; gap: 2px; flex-shrink: 0 }
 .chat-full-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: var(--space-1) }
 .chat-full-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 /* 🎨 Chat-Redesign (28. Juli): Kopfzeilen-Symbole als EINE stille Regel — kein Kasten-Look mehr,
    30px-Quadrat, Fläche erscheint erst beim Hover. Gilt für ALLE Knöpfe rechts im Panel-Kopf
    (Verlauf/Neu/Vollbild/Schließen); die frühere Einzelregel für #btnTogglePanel/#btnChatExpand
-   entfällt (DRY). Status-Punkt und Diagnose-Pille behalten bewusst ihr eigenes Aussehen. */
-.panel-head-right button:not(.ai-status-chip):not(.ai-debug-btn) { min-height: 0; width: 30px; height: 30px; padding: 0; border: none; border-radius: var(--radius-md); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center }
-.panel-head-right button:not(.ai-status-chip):not(.ai-debug-btn):hover { background: var(--surface-hover); color: var(--text) }
+   entfällt (DRY). Der Status-Punkt behält bewusst sein eigenes Aussehen. */
+.panel-head-right button:not(.ai-status-chip) { min-height: 0; width: 30px; height: 30px; padding: 0; border: none; border-radius: var(--radius-md); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center }
+.panel-head-right button:not(.ai-status-chip):hover { background: var(--surface-hover); color: var(--text) }
 /* == Modell-Auswahl: kompaktes Icon im kleinen Chat, Chip im groß == */
 .composer-tool { min-height: 0; width: 30px; height: 30px; padding: 0; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text2) }
 .composer-tool:hover { background: var(--surface-hover-strong); color: var(--text) }

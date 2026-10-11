@@ -5,6 +5,8 @@ import { HANDSCHRIFT } from "./handschrift.js";
 import { HEFT } from "./heft.js";
 import { RAG } from "./rag.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
+import { PAGE_W, PAGE_H, composePageText } from "./heft-document-core.js";
+import { SCAN_OCR } from "./scan-ocr.js";
 
 // heft-indexer.js — Automatischer, akkuschonender Hintergrund-Crawler für Handschrift-Hefte.
 //
@@ -12,6 +14,9 @@ import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 //   Durchsucht beim App-Start den Bestand. Jede Seite mit Strichen, die noch keinen
 //   ocrText hat, wird nacheinander in Idle-Phasen durch die lokale Vektor-Handschrifterkennung
 //   analysiert, gespeichert, synchronisiert und ins RAG übergeben.
+//   Gescannte Bilder ohne ocr-Feld (Scan-Flag oder ältere Vollseiten-Scans) werden per
+//   Tesseract (scan-ocr.js) erkannt; das Ergebnis steht am Bild (ocr) und fließt über
+//   composePageText in den Seitentext.
 //   Nach einem Modellwechsel (HANDWRITING_MODEL_VERSION) werden einmalig ALLE Seiten neu
 //   erkannt, damit alte Notizen vom besseren Modell profitieren.
 //   Läuft im Hintergrund und pausiert sofort, wenn der Nutzer aktiv schreibt.
@@ -19,10 +24,11 @@ import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 export const HEFT_INDEXER = (() => {
 	let scanRunning = false;
 	let scanTimer = null;
-	// In dieser Sitzung schon geprüfte Seiten. Neue Striche ändern den Schlüssel,
+	// In dieser Sitzung schon geprüfte Aufgaben. Neue Striche ändern den Schlüssel,
 	// dann wird die Seite erneut geprüft.
 	const checked = new Set();
 	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${pg.strokes.length}`;
+	const scanKey = (pageId, pg, im) => `${pageId}:${pg.id}:img:${im.id}`;
 
 	// Pro Gerät gemerkt: Mit welcher Modellversion wurde der Bestand zuletzt komplett erkannt?
 	const MODEL_KEY = "impala67_heft_index_model";
@@ -35,7 +41,18 @@ export const HEFT_INDEXER = (() => {
 	let reindexAll = false;
 	let hadFailure = false; // z. B. offline, Modell noch nicht geladen: Durchlauf gilt dann nicht als erledigt
 
-	// Findet alle noch nicht analysierten Seiten mit echten Strichen (nach Modellwechsel: alle)
+	// Ein Bild ist eine offene Scan-Aufgabe, wenn es noch kein ocr-Feld hat und entweder
+	// als Scan markiert ist oder als älterer Vollseiten-Scan gilt.
+	const EDGE_PX = 1;
+	const fillsPage = (im) => (im.x <= EDGE_PX && PAGE_W - (im.x + im.w) <= EDGE_PX) || (im.y <= EDGE_PX && PAGE_H - (im.y + im.h) <= EDGE_PX);
+	function isPendingScan(pg, im) {
+		if (!im || !im.ref || im.ocr !== undefined) return false;
+		if (im.scan === true) return true;
+		// Ältere Scans ohne Flag: einziges Bild einer strichlosen Seite, das die Seite ausfüllt.
+		return !(pg.strokes && pg.strokes.length) && pg.images.length === 1 && fillsPage(im);
+	}
+
+	// Findet alle offenen Aufgaben: Stricherkennung (nach Modellwechsel: alle) und Scan-Bilder
 	function findUnindexedPages() {
 		const jobs = [];
 		const heftDocs = S.heftDocs || {};
@@ -43,13 +60,72 @@ export const HEFT_INDEXER = (() => {
 			if (!doc || !Array.isArray(doc.pages)) continue;
 			for (let idx = 0; idx < doc.pages.length; idx++) {
 				const pg = doc.pages[idx];
-				if (!pg || !Array.isArray(pg.strokes) || !pg.strokes.length || checked.has(checkKey(pageId, pg))) continue;
-				if (reindexAll || !String(pg.ocrText || "").trim()) {
-					jobs.push({ pageId, pageIdx: idx, page: pg });
+				if (!pg) continue;
+				if (Array.isArray(pg.strokes) && pg.strokes.length && !checked.has(checkKey(pageId, pg))) {
+					if (reindexAll || !String(pg.ocrText || "").trim()) {
+						jobs.push({ kind: "strokes", key: checkKey(pageId, pg), pageId, pageIdx: idx, page: pg });
+					}
+				}
+				for (const im of pg.images || []) {
+					const key = scanKey(pageId, pg, im);
+					if (!checked.has(key) && isPendingScan(pg, im)) {
+						jobs.push({ kind: "scan", key, pageId, pageIdx: idx, page: pg, image: im });
+					}
 				}
 			}
 		}
 		return jobs;
+	}
+
+	async function indexStrokes(job) {
+		let text = null;
+		try {
+			text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes);
+		} catch (err) {
+			hadFailure = true;
+			console.info("[heft-indexer] Stricherkennung Fehler:", err);
+		}
+		if (text == null) return;
+		// Ein leeres Ergebnis ersetzt keinen vorhandenen Text: sicherer bei reinen Skizzen mit Beschriftung.
+		const composed = composePageText(text, job.page);
+		if (!composed || composed === String(job.page.ocrText || "").trim()) return;
+		job.page.ocrText = composed;
+		await STATE.dispatch("heftOps", {
+			pageId: job.pageId,
+			ops: [{ t: "ocr", p: job.page.id, text: composed }],
+		});
+		try { RAG.queuePage(job.pageId); } catch {}
+	}
+
+	async function blobData(ref) {
+		if (typeof S.heftBlobs[ref] !== "string") await STATE.hydrateHeftBlobs([ref]);
+		return typeof S.heftBlobs[ref] === "string" ? S.heftBlobs[ref] : "";
+	}
+
+	// Ein Scan-Bild: Striche der Seite zuerst (ihr Text fließt in den Seitentext), dann das Bild.
+	// Fehler (offline, CDN nicht erreichbar) lassen das Bild offen: nächster Start versucht es erneut.
+	async function indexScanImage(job) {
+		const { pageId, page: pg, image: im } = job;
+		try {
+			let strokeText = "";
+			if (pg.strokes && pg.strokes.length) strokeText = await HANDSCHRIFT.recognizeStrokes(pg.strokes);
+			const src = await blobData(im.ref);
+			if (!src) return;
+			const { text } = await SCAN_OCR.recognize(src);
+			const previous = String(pg.ocrText || "").trim();
+			im.ocr = text;
+			const composed = composePageText(strokeText, pg);
+			const ops = [{ t: "i=", p: pg.id, o: im }];
+			if (composed && composed !== previous) {
+				pg.ocrText = composed;
+				ops.push({ t: "ocr", p: pg.id, text: composed });
+			}
+			await STATE.dispatch("heftOps", { pageId, ops });
+			try { RAG.queuePage(pageId); } catch {}
+		} catch (err) {
+			hadFailure = true;
+			console.info("[heft-indexer] Scan-Erkennung übersprungen (offline?):", err);
+		}
 	}
 
 	async function processNextBatch() {
@@ -71,28 +147,10 @@ export const HEFT_INDEXER = (() => {
 		}
 
 		const job = unindexed[0];
-		checked.add(checkKey(job.pageId, job.page));
+		checked.add(job.key);
 		try {
-			let text = null;
-			if (Array.isArray(job.page.strokes) && job.page.strokes.length > 0) {
-				try {
-					text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes);
-				} catch (err) {
-					hadFailure = true;
-					console.info("[heft-indexer] Stricherkennung Fehler:", err);
-				}
-			}
-			// Nur bei geändertem Ergebnis schreiben (Neuerkennung erzeugt sonst unnötige Sync-Ereignisse).
-			// Ein leeres Ergebnis ersetzt keinen vorhandenen Text: sicherer bei reinen Skizzen mit Beschriftung.
-			if (text != null && String(text).trim() && String(text).trim() !== String(job.page.ocrText || "").trim()) {
-					const recognized = String(text).trim();
-					job.page.ocrText = recognized;
-					await STATE.dispatch("heftOps", {
-						pageId: job.pageId,
-						ops: [{ t: "ocr", p: job.page.id, text: recognized }],
-					});
-					try { RAG.queuePage(job.pageId); } catch {}
-				}
+			if (job.kind === "scan") await indexScanImage(job);
+			else await indexStrokes(job);
 		} catch (err) {
 			console.warn("[heft-indexer] Seite konnte nicht analysiert werden:", err);
 		}
@@ -104,6 +162,7 @@ export const HEFT_INDEXER = (() => {
 	}
 
 	function startBackgroundScan() {
+		// Läuft schon: die Schleife holt neue Seiten bei jedem Durchlauf selbst ab.
 		if (scanRunning) return;
 		scanRunning = true;
 		reindexAll = readIndexedModel() !== INDEX_VERSION;

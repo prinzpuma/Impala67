@@ -1,156 +1,54 @@
 # Impala67 MCP-Server (Model Context Protocol)
 
-Ein modularer, eigenständiger MCP-Server für **Impala67**, der KI-Assistenten (wie Google Antigravity, Claude Desktop oder Cursor) direkten, sicheren Zugriff auf Notizen, GoodNotes-Hefte und Karteikarten bietet.
+Verbindet KI-Assistenten (Claude Code, Claude Desktop, Cursor, Antigravity …) mit der **im Browser geöffneten** Impala67-App. Alle Tools arbeiten direkt auf den Daten der App; ist keine App verbunden, melden sie das als Fehler.
 
----
+## 1. Einrichtung
 
-## 1. Übersicht & Eigenschaften
-
-- **Stdio JSON-RPC 2.0**: Entspricht der offiziellen MCP-Spezifikation (Transport über `stdin` / `stdout`, Logs über `stderr`).
-- **100 % Nicht-invasiv**: Verändert keine Core-Dateien in `web/`, `server/` oder `test/`.
-- **E2EE Cloudflare Sync v4**: Nutzt bei konfiguriertem Sync-Schlüssel (`IMPALA67_SYNC_KEY`) dieselbe Ende-zu-Ende-Verschlüsselung (AES-GCM / PBKDF2) wie die PWA und synchronisiert live mit dem Cloudflare Worker Backend.
-- **Lokaler Offline-Fallback**: Läuft dank `mcp/.storage.json` sofort und ohne Serveranbindung vollständig offline.
-- **Heft-Schutz (GoodNotes)**: Liest Textinhalte und OCR aus Handschrift-Heften aus und erlaubt Textergänzungen, ohne Vektorstriche oder Zeichnungen zu beschädigen.
-- **Automatische Fach-Erkennung**: Erkennt Schulfächer anhand von expliziten Feldern, Tags, Titeln oder Text-Heuristiken.
-
----
-
-## 2. Einrichtung in Antigravity & MCP-Clients
-
-### Antigravity (`~/.gemini/config/mcp_config.json`)
-
-Füge den Server unter `mcpServers` in deiner Antigravity-Konfiguration ein:
+Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clients:
 
 ```json
 {
   "mcpServers": {
-    "impala67": {
-      "command": "node",
-      "args": [
-        "C:/Users/joshu/Documents/Notion/mcp/server.mjs"
-      ],
-      "env": {
-        "IMPALA67_SYNC_KEY": "impala-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx"
-      }
-    }
+    "impala67": { "command": "node", "args": ["<Pfad zum Repo>/mcp/server.mjs"] }
   }
 }
 ```
 
-> **Hinweis für Linux / macOS**: Verwende den entsprechenden absoluten Pfad, z. B. `"/home/user/Notion/mcp/server.mjs"`.
+## 2. Verbindung zur App
 
----
+- **Lokal:** Auf `http://localhost:8000` ist die Bridge immer an.
+- **Gehostete PWA:** `?mcpBridge=1` anhängen oder in Einstellungen → Daten → Diagnose einschalten. Chrome/Firefox erlauben `ws://127.0.0.1` von HTTPS-Seiten, Safari/iPad meist nicht.
+- Die App verbindet sich per WebSocket mit `ws://127.0.0.1:8765` (Port per `IMPALA_WS_PORT` änderbar). Ein Aufruf wartet bis zu 3,5 s, falls die App gerade neu verbindet.
+- Mehrere MCP-Server (z. B. je Claude-Sitzung) teilen sich den Port: der erste spricht mit dem Browser, die anderen reichen ihre Aufrufe als Relay durch.
+- Browser-Verbindungen werden nur von `localhost`, `127.0.0.1` und `https://prinzpuma.github.io` angenommen; weitere Herkunft per `IMPALA_ALLOWED_ORIGINS` (kommagetrennt).
 
-## 3. Konfiguration der Synchronisation
+## 3. Tools
 
-Der MCP-Server unterstützt zwei Möglichkeiten zur Angabe des Sync-Schlüssels:
+**Inhalte**
+- `impala_list_pages` — Notizen auflisten; Filter `query`, `kind`, `subject`, `archived`/`includeArchived`, `limit`.
+- `impala_get_page` — Inhalt per `id` oder `title`; bei Heften OCR- und Textbox-Text aller Seiten.
+- `impala_create_page` — neue Notiz (`title`, `content`, `subject`, `parentId`/`parent_title`, `kind`).
+- `impala_update_page` — Titel, Inhalt, Fach, Archiv. Bei Heften wird Text als neue Textbox auf Seite 1 gelegt, Striche bleiben unberührt.
+- `impala_search` — Stichwortsuche in Notizen und Karteikarten; mit `semantic: true` Bedeutungssuche über den RAG-Index der App (braucht eingerichtete Embeddings, sonst Rückfall auf Stichworte).
+- `impala_list_flashcards`, `impala_create_flashcard` — Karteikarten.
 
-1. **Umgebungsvariable (empfohlen für Antigravity / CI)**:
-   ```bash
-   export IMPALA67_SYNC_KEY="impala-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx"
-   ```
-2. **Lokale Konfigurationsdatei (`mcp/.config.json`)**:
-   Erstelle eine Datei `mcp/.config.json` (wird automatisch von Git ignoriert):
-   ```json
-   {
-     "syncKey": "impala-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx",
-     "syncUrl": "https://impala67-sync.joshuagayer1.workers.dev"
-   }
-   ```
+**Diagnose & Testen**
+- `impala_get_diagnostics` — aktive Seite, Tabs, Zähler, Heap, Sync-Status, letzte Fehler.
+- `impala_get_performance_trace` — Profiler-Trace inkl. App- und KI-Fehler; `enable`, `mode` (`anomalies`/`all`, Detail-Trace nur hierüber), `clear`.
+- `impala_get_ai_trace` — vollständiges KI-Debugprotokoll der Sitzung (Anfragen, Status, Dauer, Fallbacks); `clear`.
+- `impala_eval` — JavaScript in der App ausführen (Funktionsrumpf mit `return`; `S`, `STATE`, `RENDER`, `TABS`, `PERF_PROFILER`, `CLOUDFLARE_SYNC`, `DRIVE`, `SEARCH` verfügbar).
+- `impala_run_ui_action` — `open_page`, `close_active_tab`, `search_ui`, `trigger_sync`, `toggle_sidebar`.
 
-*Ist kein Schlüssel angegeben, startet der Server automatisch im Offline-Modus und speichert Daten lokal in `mcp/.storage.json`.*
+**Handschrift-Training**
+- `impala_heft_page_image` — Heftseite als Bild mit Raster plus Lesung des lokalen Modells.
+- `impala_heft_label_lines` — eigene Zeilen-Lesung als Trainingsbeispiele speichern.
 
----
+**Speicher**
+- `impala_storage_report` — größte PDFs und Cloudflare-Quota.
+- `impala_storage_cleanup` — PDF-Binärdaten auslagern; Standard `dryRun: true`.
 
-## 3a. Zwei Wege zur App
-
-| Weg | Voraussetzung | Was geht |
-|---|---|---|
-| **Live-Bridge** | PWA im Browser offen, MCP-Server läuft auf demselben Rechner | Alles, inkl. `impala_eval`, `impala_run_ui_action`, Diagnose, Heft-Bild |
-| **Cloudflare-Sync** | `IMPALA67_SYNC_KEY` gesetzt, kein Browser nötig | Inhalte: Seiten, Karteikarten, Suche (E2EE) |
-
-**Live-Bridge in der gehosteten PWA aktivieren:** `https://prinzpuma.github.io/Impala67/?mcpBridge=1` öffnen. Die Einstellung bleibt im Browser gespeichert; `?mcpBridge=0` schaltet sie wieder aus. Auf `localhost:8000` ist die Bridge ohnehin an. Chrome/Firefox erlauben `ws://127.0.0.1` von HTTPS-Seiten; Safari/iPad blockiert das meist.
-
-Der Server nimmt Browser-Verbindungen nur von `localhost`, `127.0.0.1` und `https://prinzpuma.github.io` an. Weitere Herkunft (z. B. eigene Domain): `IMPALA_ALLOWED_ORIGINS=https://meine.domain` (kommagetrennt).
-
----
-
-## 4. Verfügbare Werkzeuge (MCP Tools)
-
-### `impala_list_pages`
-Listet Notizen in Impala67 auf.
-- **Parameter**:
-  - `query` *(optional, string)*: Filter nach Suchbegriff im Titel, Inhalt oder Fach.
-  - `kind` *(optional, string)*: Filter nach Art: `"all"`, `"notion"` (Standard) oder `"heft"`.
-  - `subject` *(optional, string)*: Filter nach Schulfach (z. B. `"Mathematik"`, `"Physik"`).
-  - `limit` *(optional, number)*: Maximale Trefferanzahl (Standard: 50).
-- **Rückgabe**: Liste von Notizen mit ID, Titel, Art (`notion`/`heft`), Fach, Aktualisierungszeitpunkt.
-
-### `impala_get_page`
-Liest den vollständigen Inhalt einer Notiz.
-- **Parameter**:
-  - `id` *(optional, string)*: ID der Notiz.
-  - `title` *(optional, string)*: Titel der Notiz (falls ID nicht bekannt).
-- **Rückgabe**: Titel, Inhalt (Markdown bzw. extrahierter Heft-Text/OCR), Fach, Erstellungs- und Änderungszeitpunkt.
-- **Besonderheit bei Heften**: Striche bleiben unberührt; der Text aller Seiten wird strukturiert extrahiert.
-
-### `impala_create_page`
-Erstellt eine neue Notiz.
-- **Parameter**:
-  - `title` *(Pflicht, string)*: Titel der neuen Notiz.
-  - `content` *(optional, string)*: Text bzw. Markdown-Inhalt.
-  - `subject` *(optional, string)*: Fach oder Thema.
-  - `parent_title` *(optional, string)*: Titel einer übergeordneten Seite (für Baumstruktur).
-  - `kind` *(optional, string)*: `"notion"` (Standard) oder `"heft"`.
-- **Rückgabe**: Bestätigung `{ ok: true, id, title, kind, subject }`.
-
-### `impala_update_page`
-Aktualisiert eine Notiz oder hängt neuen Inhalt an.
-- **Parameter**:
-  - `id` *(optional, string)*: ID der Notiz.
-  - `title` *(optional, string)*: Titel der Notiz (wenn ID nicht bekannt).
-  - `new_title` *(optional, string)*: Neuer Titel.
-  - `content` *(optional, string)*: Ersetzt gesamten Inhalt (nur Notion-Seiten).
-  - `append_content` *(optional, string)*: Hängt Text an (auch bei Heften sicher als Textbox).
-  - `subject` *(optional, string)*: Neues Fach.
-- **Rückgabe**: `{ ok: true, id, title, kind, subject }`.
-
-### `impala_search`
-Durchsucht alle Notizen und Karteikarten.
-- **Parameter**:
-  - `query` *(Pflicht, string)*: Suchbegriff oder Frage.
-  - `limit` *(optional, number)*: Maximale Treffer (Standard: 20).
-- **Rückgabe**: Trefferliste mit Typ (`page` oder `flashcard`), Titel, Fach/Stapel und Textausschnitt (Snippet).
-
-### `impala_list_flashcards`
-Listet Karteikarten auf.
-- **Parameter**:
-  - `deck` *(optional, string)*: Filter nach Stapelname (z. B. `"Standard"` oder `"Mathematik::Analysis"`).
-  - `query` *(optional, string)*: Textfilter in Vorder- oder Rückseite.
-  - `limit` *(optional, number)*: Maximale Anzahl an Karten (Standard: 50).
-- **Rückgabe**: Array von Karten mit ID, Vorderseite, Rückseite, Stapel und Lernstatus.
-
-### `impala_create_flashcard`
-Erstellt eine neue Karteikarte.
-- **Parameter**:
-  - `front` *(Pflicht, string)*: Vorderseite / Frage.
-  - `back` *(Pflicht, string)*: Rückseite / Antwort.
-  - `deck` *(optional, string)*: Zielstapel (Standard: `"Standard"`).
-  - `page_title` *(optional, string)*: Zugehörige Notiz.
-- **Rückgabe**: Bestätigung `{ ok: true, id, front, back, deck }`.
-
----
-
-## 5. Tests & Verifikation
-
-Der MCP-Server verfügt über eine eigene Test-Suite, die den Server als echten Child-Process per Stdio JSON-RPC testet:
+## 4. Tests
 
 ```bash
 node --test mcp/test-mcp.mjs
-```
-
-Die bestehenden Tests des Hauptprojekts bleiben davon völlig unberührt:
-
-```bash
-npm test
 ```

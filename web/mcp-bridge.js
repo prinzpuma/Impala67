@@ -5,9 +5,11 @@ import { U } from "./util.js";
 import { RENDER } from "./render.js";
 import { TABS } from "./tabs.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { AI } from "./ai.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { DRIVE } from "./drive.js";
 import { SEARCH } from "./search.js";
+import { RAG } from "./rag.js";
 import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
 import { HEFT_LABEL } from "./heft-label.js";
@@ -241,9 +243,23 @@ export function initMcpBridge() {
 						} else {
 							const patch = {};
 							if (args.new_title) patch.title = String(args.new_title).trim();
-							if (args.content !== undefined) patch.content = String(args.content);
-							if (args.append_content) patch.content = (page.content || "") + "\n" + String(args.append_content);
 							if (args.subject !== undefined) patch.subject = args.subject ? String(args.subject).trim() : null;
+							const newText = args.append_content || args.content;
+							if (page.kind === "heft") {
+								// Striche nie anfassen: Text kommt als neue Textbox auf die erste Heftseite
+								const firstPageId = S.heftDocs?.[page.id]?.pages?.[0]?.id;
+								if (newText && String(newText).trim()) {
+									if (!firstPageId) { result = { error: "Heft hat keine Seite für die Textbox." }; break; }
+									await STATE.dispatch("heftOps", {
+										pageId: page.id,
+										ops: [{ t: "x+", p: firstPageId, o: { id: U.uid(), text: String(newText).trim(), x: 20, y: 50 } }],
+									});
+								}
+							} else if (args.append_content) {
+								patch.content = (page.content ? page.content + "\n\n" : "") + String(args.append_content).trim();
+							} else if (args.content !== undefined) {
+								patch.content = String(args.content);
+							}
 
 							if (Object.keys(patch).length > 0) {
 								await STATE.dispatch("pageUpdate", { id: page.id, patch });
@@ -256,12 +272,22 @@ export function initMcpBridge() {
 								}
 							}
 							RENDER.render();
-							result = { ok: true, id: page.id, title: page.title, archived: !!page.archived };
+							const fresh = S.pages[page.id] || page;
+							result = { ok: true, id: fresh.id, title: fresh.title, kind: fresh.kind || "notion", subject: fresh.subject || null, archived: !!fresh.archived };
 						}
 						break;
 					}
 					case "impala_search": {
 						const q = String(args.query || "").trim().toLowerCase();
+						const max = Math.max(1, Math.min(100, Number(args.limit) || 20));
+						if (args.semantic && q) {
+							const hits = await RAG.search(String(args.query), max);
+							if (hits) {
+								const filtered = hits.filter((h) => args.archived === undefined || h.archived === !!args.archived);
+								result = { query: args.query, mode: "semantic", totalMatches: filtered.length, results: filtered.map(({ pageId, ...h }) => ({ type: "page", id: pageId, ...h })) };
+								break;
+							}
+						}
 						const results = [];
 						if (q) {
 							for (const p of Object.values(S.pages || {})) {
@@ -321,8 +347,10 @@ export function initMcpBridge() {
 								}
 							}
 						}
-						const max = Math.max(1, Math.min(100, Number(args.limit) || 20));
-						result = { query: args.query, totalMatches: results.length, results: results.slice(0, max) };
+						result = {
+							query: args.query, mode: "keyword", totalMatches: results.length, results: results.slice(0, max),
+							...(args.semantic ? { note: "Keine Embeddings eingerichtet (Einstellungen → KI → Embedding-Modell) — Stichwortsuche verwendet." } : {}),
+						};
 						break;
 					}
 					case "impala_create_flashcard": {
@@ -440,6 +468,11 @@ export function initMcpBridge() {
 						}
 						break;
 					}
+					case "impala_get_ai_trace": {
+						result = { report: AI.debugReport() };
+						if (args.clear) AI.debugClear();
+						break;
+					}
 					case "impala_eval": {
 						if (!args.code) {
 							result = { error: "Kein JavaScript-Code übergeben." };
@@ -447,8 +480,8 @@ export function initMcpBridge() {
 						}
 						try {
 							// Sichere Ausführung im Window-Kontext
-							const fn = new Function("S", "STATE", "TOOLS", "RENDER", "TABS", "PERF_PROFILER", "CLOUDFLARE_SYNC", "DRIVE", "SEARCH", `return (async () => { ${args.code} })();`);
-							const evalOutput = await fn(S, STATE, null, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH);
+							const fn = new Function("S", "STATE", "RENDER", "TABS", "PERF_PROFILER", "CLOUDFLARE_SYNC", "DRIVE", "SEARCH", `return (async () => { ${args.code} })();`);
+							const evalOutput = await fn(S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH);
 							result = { ok: true, output: safeSerialize(evalOutput) };
 						} catch (evalErr) {
 							result = { ok: false, error: evalErr.message, stack: evalErr.stack };

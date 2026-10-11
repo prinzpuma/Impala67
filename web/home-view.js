@@ -42,7 +42,7 @@ function secPerCard() {
 const plain = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 function excerpt(pg) {
 	const lines = String(pg.content || "").split("\n")
-		.map((l) => l.replace(/^\s*(#{1,6}|[-*+]|\d+\.|>|- \[[ x]\])\s*/i, "").replace(/[*_`~]|!?\[([^\]]*)\]\([^)]*\)/g, "$1").trim())
+		.map((l) => l.replace(/<[^>]+>/g, "").replace(/^\s*>\s*\[![a-z]+\]/i, ">").replace(/^\s*(#{1,6}|[-*+]|\d+\.|>|- \[[ x]\])\s*/i, "").replace(/[*_`~]|!?\[([^\]]*)\]\([^)]*\)/g, "$1").trim())
 		.filter(Boolean);
 	const t = plain(pg.title);
 	if (lines.length && t && plain(lines[0]).includes(t)) lines.shift();
@@ -85,7 +85,7 @@ function recall(cards) {
 
 function title(pg) { return (pg.icon ? `<span class="hv-ico">${esc(pg.icon)}</span>` : "") + esc(pg.title || "Ohne Titel"); }
 
-export function homeViewHtml({ greeting, name, dateLine, conflictCount, last, favPages, study, cards: allCards, todaySeconds, week, goalMin, streak, analysisHtml }) {
+export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, last, favPages, study, cards: allCards, todaySeconds, week, goalMin, streak, analysisHtml }) {
 	const hasCards = allCards.length > 0;
 	const open = study.neu + study.review + study.learn;
 	const estMin = Math.max(1, Math.round(open * secPerCard() / 60));
@@ -116,6 +116,11 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, last, fa
 	const alert = conflictCount
 		? `<p class="hv-alert"><span>${conflictCount === 1 ? "Ein Sync-Konflikt wartet" : conflictCount + " Sync-Konflikte warten"} auf deine Entscheidung.</span><button data-conflictopen="0">Lösen</button></p>`
 		: "";
+	// Nur bei echtem Handlungsbedarf (backup-status.js): Sync hängt hinterher oder es gibt gar keinen.
+	const backupAlert = !backup ? ""
+		: backup.level === "stale"
+			? `<p class="hv-alert"><span>Änderungen seit ${esc(when(backup.since))} sind noch nicht gesichert.</span><button data-homeaction="backup-now">Jetzt sichern</button><button class="hv-alert-later" data-homeaction="backup-later">Später</button></p>`
+			: `<p class="hv-alert"><span>Deine Notizen liegen bisher nur auf diesem Gerät.</span><button data-homeaction="backup-setup">Sync einrichten</button><button class="hv-alert-later" data-homeaction="backup-later">Später</button></p>`;
 
 	const cont = last
 		? `<button class="hv-continue" data-page="${esc(last.id)}">${preview(last)}` +
@@ -150,7 +155,7 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, last, fa
 		'<button data-lz-goal="1" title="Wochenziel umschalten">Ziel ändern</button></span></div>';
 
 	return '<div class="home hv" data-key="home"><div class="hv-page">' +
-		head + alert + `<p class="hv-lead">${hello} ${sum}</p>` +
+		head + alert + backupAlert + `<p class="hv-lead">${hello} ${sum}</p>` +
 		`<div class="hv-grid"><div class="hv-main">${cont}${pins}${recall(allCards)}</div><div class="hv-stats">${cards}${weekCard}</div></div>` +
 		analysisHtml +
 		"</div></div>";

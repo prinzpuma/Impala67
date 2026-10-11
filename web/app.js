@@ -10,6 +10,7 @@ import { S, STATE } from "./state.js";
 import { SRS } from "./srs.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
+import { BACKUP } from "./backup-status.js";
 import { LIBRARY } from "./library.js";
 import { TABS } from "./tabs.js";
 import { SEARCH } from "./search.js";
@@ -76,36 +77,27 @@ export function closeOverlay() {
 }
 // Großer Chat wird dynamisch gerendert → Debug- und Voice-Button hier nachrüsten
 // (Kommentar saß vorher falsch: der prompt()-Hinweis gehört zu openPromptDialog)
-function mountFullChatDebugButton() {
-	const head = document.querySelector(".chat-full-head");
-	if (!head || head.querySelector("#btnAiDebugFull")) return;
-	const mk = (props) => Object.assign(document.createElement("button"), { type: "button", ...props });
-	head.appendChild(mk({ id: "btnAiDebugFull", className: "ai-debug-btn", title: "Letztes KI-Debugprotokoll in die Zwischenablage kopieren", textContent: "Debugprotokoll" }));
-	const submit = $("mainChatSubmit");
-	if (submit && !$("btnVoiceFull")) {
-		// SVG statt Emoji — konsistent mit den übrigen Icons (voice.js pflegt den Zustand)
-		const voiceBtn = mk({ id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)" });
-		voiceBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
-		submit.before(voiceBtn);
+// Startseiten-Hinweis „Jetzt sichern“: Cloudflare und Drive in einem Klick (Drive darf neu anmelden).
+async function backupFromHome(button) {
+	button.disabled = true;
+	button.textContent = "Sichert…";
+	try {
+		await BACKUP.backupNow();
+		U.toast("Alles gesichert.", "success");
+	} catch (err) {
+		U.toast("Sichern fehlgeschlagen: " + (err?.message || err), "error");
+		button.disabled = false;
+		button.textContent = "Jetzt sichern";
 	}
 }
 
-async function copyAiDebugTrace() {
-	const report = AI.debugReport();
-	try {
-		await navigator.clipboard.writeText(report);
-		U.toast("KI-Debugprotokoll kopiert — hier im Chat einfügen.", "success");
-	} catch {
-		// Clipboard blockiert (file:// / Berechtigung) → auswählbarer Dialog statt Datenverlust
-		const o = $("overlay");
-		if (!o) return;
-		o.hidden = false;
-		o.innerHTML = '<div class="modal modal-sm"><button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
-			'<h3>KI-Debugprotokoll</h3><p class="hint">Zwischenablage blockiert. Bitte den folgenden Text kopieren und hier einfügen.</p>' +
-			`<textarea class="ai-debug-copy" readonly>${esc(report)}</textarea></div>`;
-		const area = o.querySelector("textarea");
-		if (area) { area.focus(); area.select(); }
-	}
+function mountFullChatVoiceButton() {
+	const submit = $("mainChatSubmit");
+	if (!submit || $("btnVoiceFull")) return;
+	// SVG statt Emoji — konsistent mit den übrigen Icons (voice.js pflegt den Zustand)
+	const voiceBtn = Object.assign(document.createElement("button"), { type: "button", id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)" });
+	voiceBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
+	submit.before(voiceBtn);
 }
 
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt #overlay wie alle Dialoge
@@ -343,7 +335,7 @@ function initPlatformLifecycle() {
 				document.body.classList.remove("mnav-open", "mmore-open");
 				return;
 			}
-			if (typeof S !== "undefined" && (S.navIndex >= 0 || (S.view !== "home" && S.currentPageId != null))) {
+			if (TABS.canGoBack()) {
 				TABS.navBack();
 				return;
 			}
@@ -802,6 +794,9 @@ function wireEvents() {
 				case "cards": openAnki("study", null); break;
 				case "daily": await openDailyNote(localDayKey(new Date())); break;
 				case "backup": await SETTINGS.handleBackupNow(); break;
+				case "backup-now": await backupFromHome(t); break;
+				case "backup-setup": SETTINGS.openSettings("sync"); break;
+				case "backup-later": BACKUP.snooze(); break;
 				case "conflicts": RENDER.openConflictResolver(0); break;
 			}
 			return;
@@ -840,13 +835,12 @@ function wireEvents() {
 		if (t.dataset.crumbws) {
 			const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
 			if (pg) S.currentWorkspaceId = pg.workspaceId || "default";
-			S.view = "home";
-			render();
+			openHomeOverview();
 			return;
 		}
 
 		// Tab-Leiste: Tab öffnen / schließen / neuer Tab (Notion-artig: + = neuer Tab)
-		if (t.dataset.tabopen) { openPage(t.dataset.tabopen, { skipHistory: false }); return; }
+		if (t.dataset.tabopen) { openPage(t.dataset.tabopen, { replaceHistory: true }); return; }
 		if (t.dataset.tabclose) { closeTab(t.dataset.tabclose); return; }
 		if (t.dataset.tabnew != null || t.id === "btnTabNew") {
 			// Plus: Notion-artiges Menü „In neuem Tab öffnen…“ (Suche + Neue Seite / Chat)
@@ -1640,10 +1634,6 @@ function wireEvents() {
 				renderTabs();
 				break;
 			case "btnSettings": SETTINGS.openSettings(); break;
-			case "btnAiDebug":
-			case "btnAiDebugFull":
-				await copyAiDebugTrace();
-				break;
 			case "btnDriveLogin":
 				await SETTINGS.handleDriveLogin(t);
 				break;
@@ -2270,10 +2260,10 @@ function wireEvents() {
 		new MutationObserver(() => {
 			if (mountQueued) return;
 			mountQueued = true;
-			requestAnimationFrame(() => { mountQueued = false; mountFullChatDebugButton(); });
+			requestAnimationFrame(() => { mountQueued = false; mountFullChatVoiceButton(); });
 		}).observe(main, { childList: true, subtree: true });
 	}
-	mountFullChatDebugButton();
+	mountFullChatVoiceButton();
 
 	// ---------- ↔️ Breite der linken Spalte ziehen (Griff #sidebarResizer) ----------
 	// EINE Quelle der Wahrheit: die CSS-Variable --sidebar-w. Sie steht inline am <body>

@@ -9,10 +9,8 @@ import json
 import os
 import hashlib
 from typing import List, Tuple
-import torch
-from torch.utils.data import Dataset
 from vocabulary import CHAR_TO_IDX, BLANK_IDX
-from mathwriting_loader import strokes_to_normalized_features
+from mathwriting_loader import calculate_stroke_height_median
 
 BENCHMARK_PROTECTED_TEXTS = {
     "Apfel, Käse, Größe, Straße, Zukunft, Übung, Physik, Notiz, schnell, blau",
@@ -83,11 +81,42 @@ def _read_json(json_path: str) -> list:
         return []
 
 
-def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tuple[Strokes, str]]:
+def _word_in_line_units(word_strokes: Strokes, line_strokes: Strokes) -> Strokes:
+    """Normiert ein Wort auf die Maße seiner Zeile: x ab 0, y relativ zur Zeilenmitte, Einheit = Median-Strichhöhe.
+    So passen Wörter aus verschiedenen Zeilen in Größe und Grundlinie zusammen."""
+    unit = max(1e-6, calculate_stroke_height_median(line_strokes))
+    ys = sorted(p[1] for s in line_strokes for p in s)
+    mid_y = ys[len(ys) // 2]
+    x0 = min(p[0] for s in word_strokes for p in s)
+    return [[((p[0] - x0) / unit, (p[1] - mid_y) / unit) for p in s] for s in word_strokes]
+
+
+def compose_user_line(word_bank: List[Tuple[Strokes, str]], rng, focus=None) -> Tuple[Strokes, str]:
+    """Wort-Collage: setzt 2–6 eigene Wörter aus verschiedenen Zeilen zu einer neuen Zeile zusammen.
+    Aus wenigen Abschreib-Zeilen entstehen so laufend neue Zeilen in der eigenen Handschrift.
+    Mit focus werden bevorzugt Wörter mit oft verwechselten Zeichen gewählt."""
+    picked = []
+    for _ in range(rng.randint(2, 6)):
+        c = focus.pick_char(rng) if focus else None
+        options = [w for w in word_bank if c in w[1]] if c else None
+        picked.append(rng.choice(options or word_bank))
+    strokes: Strokes = []
+    cursor = 0.0
+    for word_strokes, _ in picked:
+        scale = rng.uniform(0.92, 1.08)
+        dy = rng.uniform(-0.08, 0.08)
+        placed = [[(cursor + x * scale, y * scale + dy) for x, y in s] for s in word_strokes]
+        strokes.extend(placed)
+        cursor = max(p[0] for s in placed for p in s) + rng.uniform(1.0, 1.8)
+    return strokes, " ".join(w for _, w in picked)
+
+
+def load_user_samples(json_path: str = "my_handwriting_samples.json") -> Tuple[List[Tuple[Strokes, str]], List[Tuple[Strokes, str]]]:
     """
     Lädt die aus Impala67 exportierten Trainingsdaten als rohe Striche (für Augmentierung im Training).
-    Zusätzlich zu jeder Zeile kommen ihre einzelnen Wörter, wenn die Wort-Segmentierung genau zum
-    Soll-Text passt (zusätzliche Beispiele; die App selbst erkennt ganze Zeilen).
+    Liefert (samples, word_bank):
+    - samples: jede Zeile plus ihre einzelnen Wörter, wenn die Wort-Segmentierung genau zum Soll-Text passt
+    - word_bank: dieselben Wörter auf Zeilenmaße normiert, für compose_user_line
     Prüft strikt gegen Data-Leakage mit dem Benchmark-Testset!
     """
     from evaluate_user_benchmark_words import segment_line_into_words
@@ -100,6 +129,7 @@ def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tu
     bench_fps = _get_benchmark_fingerprints()
 
     samples = []
+    word_bank = []
     rejected_count = 0
     lines = 0
 
@@ -136,9 +166,10 @@ def load_user_samples(json_path: str = "my_handwriting_samples.json") -> List[Tu
         groups = segment_line_into_words(strokes)
         if len(words) > 1 and len(groups) == len(words):
             samples.extend((g, w) for g, w in zip(groups, words))
+            word_bank.extend((_word_in_line_units(g, strokes), w) for g, w in zip(groups, words))
 
     print(f"{lines} eigene Zeilen + {len(samples) - lines} Einzelwörter aus {json_path} geladen ({rejected_count} verworfen).")
-    return samples
+    return samples, word_bank
 
 
 def load_user_eval_lines(json_path: str = "my_handwriting_samples.json") -> List[Tuple[Strokes, str]]:
@@ -154,28 +185,6 @@ def load_user_eval_lines(json_path: str = "my_handwriting_samples.json") -> List
     return lines
 
 
-class HybridInkDataset(Dataset):
-    """Kombiniert ein Basis-Dataset mit echten Nutzer-Samples aus Impala67."""
-
-    def __init__(self, base_dataset, user_samples_path: str = "my_handwriting_samples.json", user_weight: float = 0.5):
-        self.base_dataset = base_dataset
-        self.user_samples = load_user_samples(user_samples_path)
-        self.user_weight = user_weight if self.user_samples else 0.0
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        import random
-        if self.user_samples and random.random() < self.user_weight:
-            strokes, word = random.choice(self.user_samples)
-            feat_tensor = torch.tensor(strokes_to_normalized_features(strokes), dtype=torch.float32)
-            target = torch.tensor([CHAR_TO_IDX[c] for c in word if c in CHAR_TO_IDX and CHAR_TO_IDX[c] != BLANK_IDX], dtype=torch.long)
-            return feat_tensor, target, word
-
-        return self.base_dataset[idx]
-
-
 if __name__ == "__main__":
-    samples = load_user_samples("my_handwriting_samples.json")
-    print(f"Gefundene Samples: {len(samples)}")
+    samples, word_bank = load_user_samples("my_handwriting_samples.json")
+    print(f"Gefundene Samples: {len(samples)}, Wörter für Collagen: {len(word_bank)}")

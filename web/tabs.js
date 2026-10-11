@@ -5,6 +5,7 @@ import { CHATS } from "./chats.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
 import { U } from "./util.js";
+import { HOME, navState, navIndexOf, entryAt, currentEntry, displayedEntry, isValidEntry, prevValidIndex, nextValidIndex, canGoBack, canGoForward } from "./nav-history.js";
 
 const render = (...args) => RENDER.render(...args);
 const renderTabs = (...args) => RENDER.renderTabs(...args);
@@ -53,6 +54,82 @@ function activateTab(pageId, { newTab = false } = {}) {
 	}
 }
 
+// ---------- Verlauf: App-Verlauf und Browser-Verlauf laufen im Gleichschritt ----------
+const hasHistory = () => typeof window !== "undefined" && Boolean(window.history);
+
+// Browser-Eintrag für den aktuellen Index. Liegt oben noch ein Ebenen-Eintrag der
+// Handy-UI (Notizen-Navigator, KI-Panel …), wird er ersetzt statt überbaut — sonst
+// bliebe er als toter Eintrag unter der Seite liegen.
+function writeEntry() {
+	if (!hasHistory()) return;
+	try {
+		if (window.history.state?.mLayer) window.history.replaceState(navState(), "");
+		else window.history.pushState(navState(), "");
+	} catch { /* ignore */ }
+}
+
+function pushNav(id) {
+	if (currentEntry() === id) return; // dieselbe Seite nochmal öffnen = kein neuer Schritt
+	S.navHistory = S.navHistory.slice(0, S.navIndex + 1);
+	S.navHistory.push(id);
+	S.navIndex = S.navHistory.length - 1;
+	writeEntry();
+}
+
+// Tab-Wechsel und Tab-Schließen sind kein eigener Zurück-Schritt: Sie ersetzen den
+// aktuellen Eintrag. Nur von der Übersicht aus zählt der Wechsel als Navigation.
+function replaceNav(id) {
+	if (currentEntry() === HOME) pushNav(id);
+	else S.navHistory[S.navIndex] = id;
+}
+
+function showEntry(id) {
+	if (id === HOME) showHome();
+	else openPage(id, { skipHistory: true });
+}
+
+// Ohne passenden Browser-Eintrag (Tests, verlorener Zustand) direkt umschalten.
+const ownsHistory = () => hasHistory() && navIndexOf(window.history.state) === S.navIndex;
+
+function jumpTo(i) {
+	S.navIndex = i;
+	showEntry(entryAt(i));
+}
+
+function onPopState(e) {
+	const target = navIndexOf(e.state);
+	// Handy-UI: offene Ebenen (Panel, Blatt, Dialog) schließen zuerst. Ist der
+	// Browser dabei über einen Seiteneintrag gesprungen, wird er wiederhergestellt.
+	if (layerHandler && layerHandler()) {
+		if (target !== S.navIndex) writeEntry();
+		return;
+	}
+	if (target === S.navIndex) return;
+	// Aus einer Ansicht ohne eigenen Eintrag (Bibliothek, Papierkorb …) führt Zurück
+	// erst zur Seite, von der man kam — genau wie der Zurück-Pfeil.
+	const cur = currentEntry();
+	if (target < S.navIndex && displayedEntry() !== cur && isValidEntry(cur)) {
+		writeEntry();
+		showEntry(cur);
+		return;
+	}
+	const dir = target > S.navIndex ? 1 : -1;
+	S.navIndex = target;
+	const id = entryAt(target);
+	if (!isValidEntry(id)) {
+		// Gelöschte Seite: in derselben Richtung weiter; vorwärts ohne gültiges Ziel → zurück.
+		window.history.go(dir > 0 && nextValidIndex() !== -1 ? 1 : -1);
+		return;
+	}
+	showEntry(id);
+}
+
+let layerHandler = null;
+// Die Handy-UI meldet hier, ob ein Zurück eine ihrer Ebenen geschlossen hat.
+export function setLayerHandler(fn) { layerHandler = fn; }
+
+if (typeof window !== "undefined") window.addEventListener("popstate", onPopState);
+
 // ---------- Zentrale Navigation: Notion-artig ----------
 // Standard: Navigation ändert nur den AKTIVEN Tab (ersetzt dessen Inhalt).
 // Neuer Tab nur mit opts.newTab (Plus-Button) oder wenn noch kein Tab existiert.
@@ -96,14 +173,8 @@ export function openPage(pageId, opts) {
 
 	activateTab(pageId, opts);
 
-	if (!opts.skipHistory) {
-		S.navHistory = S.navHistory.slice(0, S.navIndex + 1);
-		S.navHistory.push(pageId);
-		S.navIndex = S.navHistory.length - 1;
-		if (typeof window !== "undefined" && window.history && !opts.restoreSession) {
-			try { window.history.pushState({ impalaNav: true, pageId, navIndex: S.navIndex }, ""); } catch { /* ignore */ }
-		}
-	}
+	if (opts.replaceHistory) replaceNav(pageId);
+	else if (!opts.skipHistory) pushNav(pageId);
 	if (!opts.restoreSession) saveSessionSoon();
 	POPOVERS.blurActive();
 	render();
@@ -149,56 +220,47 @@ export async function closeTab(pageId) {
 	if (S.activeTabId === pageId) {
 		const next = S.tabs[i] || S.tabs[i - 1] || null;
 		if (next) {
-			openPage(next, { skipHistory: true });
+			openPage(next, { replaceHistory: true });
 		} else {
-			S.view = "home";
-			S.currentPageId = null;
-			S.activeTabId = null;
-			render();
+			replaceNav(HOME);
+			showHome();
 		}
 	} else {
 		renderTabs();
 	}
 }
 
-// Die Home-Übersicht ist der feste Anfang der Navigation. Sie ist bewusst
-// kein künstlicher Seitentab: offene Dokument-/Chat-Tabs bleiben erhalten,
-// während die Übersicht jederzeit als neutraler Ausgangspunkt erreichbar ist.
-export function openHomeOverview(opts) {
+// Die Home-Übersicht ist der feste Anfang der Navigation (Index -1). Sie ist bewusst
+// kein künstlicher Seitentab: offene Dokument-/Chat-Tabs bleiben erhalten. Wird sie
+// mitten im Verlauf geöffnet, ist sie ein normaler Schritt — Zurück führt zur Seite davor.
+function showHome() {
 	S.view = "home";
 	S.sidebarMode = "files";
 	S.currentPageId = null;
 	S.activeTabId = null;
-	// FIX Zurück-Logik: Kommt man zur Übersicht, bleibt der Verlauf erhalten —
-	// „Vorwärts“ führt danach wieder zur vorherigen Seite zurück.
-	if (!(opts && opts.keepHistory)) {
-		S.navIndex = -1;
-	}
 	POPOVERS.blurActive();
 	render();
 }
 
+export function openHomeOverview() {
+	pushNav(HOME);
+	showHome();
+}
+
 export function navBack() {
-	// Vom ersten Verlaufseintrag führt Zurück zur Home-Übersicht — der Verlauf
-	// bleibt erhalten (Index -1 = „vor dem ersten Eintrag“). Vorher wurde der
-	// Verlauf hier gelöscht: „Vorwärts“ war danach immer tot und weiteres
-	// „Zurück“ fühlte sich willkürlich an — das war die komische Zurück-Logik.
-	if (S.navIndex <= 0) {
-		S.navIndex = -1;
-		openHomeOverview({ keepHistory: true });
-		return;
-	}
-	S.navIndex--;
-	const id = S.navHistory[S.navIndex];
-	if (id) openPage(id, { skipHistory: true });
-	else openHomeOverview({ keepHistory: true });
+	// Aus einer Ansicht ohne eigenen Eintrag zurück zum aktuellen Eintrag.
+	const cur = currentEntry();
+	if (displayedEntry() !== cur && isValidEntry(cur)) { showEntry(cur); return; }
+	if (S.navIndex < 0) return;
+	if (ownsHistory()) { window.history.back(); return; } // Rest erledigt onPopState
+	jumpTo(prevValidIndex());
 }
 
 export function navForward() {
-	if (S.navIndex >= S.navHistory.length - 1) return;
-	S.navIndex++;
-	const id = S.navHistory[S.navIndex];
-	if (id) openPage(id, { skipHistory: true });
+	const next = nextValidIndex();
+	if (next === -1) return;
+	if (ownsHistory()) { window.history.forward(); return; }
+	jumpTo(next);
 }
 
 // Wird nach STATE.load() aufgerufen. Ungültige/gelöschte Seiten und Chats werden
@@ -214,8 +276,13 @@ export async function restoreSession() {
 		S.activeTabId = active;
 		await saveSessionNow();
 	}
+	// Der aktuelle Browser-Eintrag wird zum Anfang (Home); Einträge eines früheren
+	// Ladens gelten als fremd. Die wiederhergestellte Seite ist der erste Schritt.
+	S.navHistory = [];
+	S.navIndex = -1;
+	if (hasHistory()) { try { window.history.replaceState(navState(), ""); } catch { /* ignore */ } }
 	if (active) {
-		openPage(active, { skipHistory: true, restoreSession: true });
+		openPage(active, { restoreSession: true });
 	}
 }
 
@@ -236,6 +303,9 @@ export const TABS = {
 	closeTab,
 	navBack,
 	navForward,
+	canGoBack,
+	canGoForward,
+	setLayerHandler,
 	openHomeOverview,
 	restoreSession
 };

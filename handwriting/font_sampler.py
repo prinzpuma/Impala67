@@ -147,6 +147,62 @@ def skeleton_to_strokes(skel: np.ndarray) -> List[List[Tuple[float, float]]]:
     return strokes
 
 
+def _near(a: Tuple[float, float], b: Tuple[float, float], tol: float) -> bool:
+    return abs(a[0] - b[0]) <= tol and abs(a[1] - b[1]) <= tol
+
+
+def _length(stroke) -> float:
+    return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(stroke, stroke[1:]))
+
+
+def clean_skeleton_strokes(strokes: List[List[Tuple[float, float]]], spur_len: float) -> List[List[Tuple[float, float]]]:
+    """Macht aus Skelett-Bruchstücken stiftähnliche Striche:
+    1. Sporne entfernen (kurze Äste, die an einem anderen Strich hängen; freie Punkte wie i-Punkte bleiben)
+    2. Bruchstücke, die sich an Verzweigungen berühren, zu durchgehenden Strichen verketten
+    3. Treppenstufen der Pixel glätten"""
+    owners: Dict[Tuple[int, int], set] = {}
+    for i, s in enumerate(strokes):
+        for p in s:
+            owners.setdefault((int(p[0]), int(p[1])), set()).add(i)
+
+    def touches_other(i: int, p) -> bool:
+        x, y = int(p[0]), int(p[1])
+        return any(owners.get((x + dx, y + dy), {i}) - {i} for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+
+    strokes = [
+        s for i, s in enumerate(strokes)
+        if _length(s) >= spur_len or not (touches_other(i, s[0]) or touches_other(i, s[-1]))
+    ]
+
+    remaining = sorted(strokes, key=lambda s: (min(p[0] for p in s), min(p[1] for p in s)))
+    chained = []
+    while remaining:
+        cur = list(remaining.pop(0))
+        extended = True
+        while extended:
+            extended = False
+            for k, o in enumerate(remaining):
+                if _near(cur[-1], o[0], 2.0):
+                    cur.extend(o[1:])
+                elif _near(cur[-1], o[-1], 2.0):
+                    cur.extend(list(reversed(o))[1:])
+                else:
+                    continue
+                remaining.pop(k)
+                extended = True
+                break
+        chained.append(cur)
+
+    smoothed = []
+    for s in chained:
+        if len(s) < 3:
+            smoothed.append(s)
+            continue
+        mid = [((a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3) for a, b, c in zip(s, s[1:], s[2:])]
+        smoothed.append([s[0]] + mid + [s[-1]])
+    return smoothed
+
+
 class FontHandwritingSynthesizer:
     """Rendert Text in echten OFL-Handschriftfonts, skelettiert und erzeugt Strichsequenzen."""
 
@@ -160,10 +216,13 @@ class FontHandwritingSynthesizer:
         self,
         text: str,
         font_path: Optional[str] = None,
-        font_size: int = 56,
+        font_size: Optional[int] = None,
     ) -> List[List[Tuple[float, float]]]:
         if not text or not text.strip():
             return []
+        if font_size is None:
+            # Unterschiedliche Auflösung ergibt unterschiedlich feine Skelette
+            font_size = random.randint(40, 72)
 
         if font_path is None:
             font_path = random.choice(self.font_files)
@@ -173,29 +232,29 @@ class FontHandwritingSynthesizer:
         except Exception:
             font = ImageFont.load_default()
 
-        # Canvas-Größe bestimmen
-        dummy_img = Image.new("L", (1, 1), 0)
-        draw = ImageDraw.Draw(dummy_img)
+        # Wörter einzeln rendern: Font-Leerzeichen sind viel schmaler als Wortlücken in echter Handschrift.
+        # Gleicher Ursprung je Wort hält die Grundlinie gemeinsam.
+        strokes: List[List[Tuple[float, float]]] = []
+        cursor = 0.0
+        for word in text.split():
+            word_strokes = self._render_skeleton(word, font, font_size)
+            if not word_strokes:
+                continue
+            x0 = min(p[0] for s in word_strokes for p in s)
+            strokes.extend([[(p[0] - x0 + cursor, p[1]) for p in s] for s in word_strokes])
+            cursor = max(p[0] for s in strokes for p in s) + random.uniform(0.35, 0.75) * font_size
+        return strokes
+
+    @staticmethod
+    def _render_skeleton(text: str, font, font_size: int) -> List[List[Tuple[float, float]]]:
+        draw = ImageDraw.Draw(Image.new("L", (1, 1), 0))
         bbox = draw.textbbox((10, 10), text, font=font)
-        w = max(40, bbox[2] + 20)
-        h = max(40, bbox[3] + 20)
-
-        # Rendern
-        img = Image.new("L", (w, h), 0)
-        draw = ImageDraw.Draw(img)
-        draw.text((10, 10), text, fill=255, font=font)
-
-        # Binarisieren
+        img = Image.new("L", (max(40, bbox[2] + 20), max(40, bbox[3] + 20)), 0)
+        ImageDraw.Draw(img).text((10, 10), text, fill=255, font=font)
         arr = np.array(img) > 128
         if not np.any(arr):
             return []
-
-        # Skelettieren mit skimage
-        skel = skeletonize(arr)
-
-        # In Striche in Schreibreihenfolge umwandeln
-        strokes = skeleton_to_strokes(skel)
-        return strokes
+        return clean_skeleton_strokes(skeleton_to_strokes(skeletonize(arr)), spur_len=0.08 * font_size)
 
 
 if __name__ == "__main__":

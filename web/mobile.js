@@ -6,6 +6,7 @@ import { MOBILE_SHEET } from "./mobile-sheet.js";
 import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
+import { navState } from "./nav-history.js";
 
 // mobile.js — Controller der Handy-UI (Mobile UI v7).
 // Die Handy-UI ist nur aktiv, wenn body.mobile-ui gesetzt ist (APP.PLATFORM.phoneQuery).
@@ -108,27 +109,25 @@ export const MOBILE = (() => {
 		while (keep < hstack.length && hstack[keep] === want[keep]) keep++;
 		const drop = hstack.length - keep;
 		hstack.length = keep;
-		if (drop) { selfNav = true; history.go(-drop); return; }
+		// Liegt oben schon ein Seiteneintrag (Seite aus dem Navigator geöffnet), hat
+		// TABS den Ebenen-Eintrag ersetzt — dann nichts zurücknehmen, sonst ginge die Seite verloren.
+		if (drop && history.state?.mLayer) { selfNav = true; history.go(-drop); return; }
 		for (const layer of want.slice(keep)) {
 			hstack.push(layer);
-			history.pushState({ mLayer: layer }, "");
+			history.pushState(navState({ mLayer: layer }), "");
 		}
 	}
 
-	window.addEventListener("popstate", () => {
-		if (selfNav) { selfNav = false; updateUI(); scheduleUI(); return; }
+	// Browser-/Android-Zurück: zuerst die oberste Ebene schließen. Ohne Ebene übernimmt
+	// TABS den Schritt im Notiz-/Ansichtsverlauf (gemeinsamer popstate-Handler).
+	TABS.setLayerHandler(() => {
+		if (selfNav) { selfNav = false; updateUI(); scheduleUI(); return true; }
 		const layer = hstack.pop();
-		if (layer) {
-			LAYERS[layer].close();
-			updateUI();
-			scheduleUI();
-			return;
-		}
-		// Kein Ebenen-Eintrag mehr: Zurück bedient die Notiz-/Ansichts-Historie.
-		if (S.navIndex >= 0 || S.view !== "home") {
-			TABS.navBack();
-			updateUI();
-		}
+		if (!layer) { scheduleUI(); return false; }
+		LAYERS[layer].close();
+		updateUI();
+		scheduleUI();
+		return true;
 	});
 
 	// Zentrale Zurück-Logik (Zurück-Pfeil, Wischgeste, Escape, Zurück-Taste).
@@ -142,7 +141,7 @@ export const MOBILE = (() => {
 			else body.classList.remove("mnav-open");
 			return;
 		}
-		if (S.view !== "home") TABS.navBack();
+		if (TABS.canGoBack()) TABS.navBack();
 	}
 
 	// Aktionsblatt für eine Notiz (Ergebnis von MOBILE_NOTES.handleClick → "menu").

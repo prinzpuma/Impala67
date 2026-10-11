@@ -34,6 +34,7 @@
 .hv-alert { display: flex; align-items: center; gap: var(--space-4); margin: var(--space-4) 0 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); background: rgb(232 198 90 / .12); color: var(--warn); font-size: var(--text-sm) }
 body.light .hv-alert { color: #8a6412; background: #f8eecf }
 .hv-alert button { margin-left: auto; text-decoration: underline; text-underline-offset: 3px }
+.hv-alert .hv-alert-later { margin-left: 0; opacity: .7 }
 
 .hv-lead { margin: var(--space-6) 0 0; max-width: 720px; font-size: var(--text-xl); line-height: 1.4; letter-spacing: -.015em; color: var(--text2); text-wrap: pretty }
 .hv-hello { color: var(--text) }

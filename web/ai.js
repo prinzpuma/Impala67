@@ -10,6 +10,7 @@ import { RAG } from "./rag.js";
 import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "./sync-core.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 export const AI = (() => {
 	const MODEL_PRESETS = [
@@ -76,10 +77,22 @@ export const AI = (() => {
 		} catch { return ""; }
 	}
 
+	// Fehler zusätzlich in den Performance-Profiler (Einstellungen → Diagnose) — nur Metadaten,
+	// keine Antworttexte; bei HTTP-Fehlern höchstens die Fehlermeldung des Providers.
+	const PROFILER_ERRORS = new Set(["KI-Timeout", "Netzwerkfehler", "HTTP-Fehler", "Embedding-Netzwerkfehler", "Embedding-Fehler", "Lokaler-Embedding-Fehler"]);
+	function providerErrorMessage(text) {
+		try { const e = JSON.parse(text)?.error; return String(e?.message || e || "").slice(0, 160); } catch { return ""; }
+	}
 	function debugEvent(kind, detail) {
 		debugLog.push({ at: new Date().toISOString(), kind, detail });
 		if (debugLog.length > LIMIT.debug) debugLog.splice(0, debugLog.length - LIMIT.debug);
+		if (!PROFILER_ERRORS.has(kind)) return;
+		const { response, error, ...meta } = detail || {};
+		const status = meta.status ? "HTTP " + meta.status : "";
+		const message = error || [status, providerErrorMessage(response)].filter(Boolean).join(": ") || kind;
+		PERF_PROFILER.error("ai-error", { name: kind, message }, meta);
 	}
+	function debugClear() { debugLog.length = 0; }
 	function debugReport() {
 		const { base, model, providerId } = cfg();
 		const rows = debugLog.map((e) => `[${e.at}] ${e.kind}\n${JSON.stringify(e.detail, null, 2)}`);
@@ -1430,5 +1443,5 @@ export const AI = (() => {
 		onProgress: onEmbeddingProgress,
 	});
 
-	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugReport, MODEL_PRESETS };
+	return { chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, refine, ping, pingProvider, embed, listModels, listEmbeddingModels, getLocalEmbeddingStatus, downloadLocalEmbedding, deleteLocalEmbedding, onEmbeddingProgress, LOCAL_EMBEDDING_MODELS, detectThinkingCapabilities, debugReport, debugClear, MODEL_PRESETS };
 })();

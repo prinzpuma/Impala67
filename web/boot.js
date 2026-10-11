@@ -24,24 +24,23 @@ import { startUpdateWatcher } from "./updater.js";
 const render = (...args) => RENDER.render(...args);
 
 const WELCOME_MD = [
-	"# 👋 Willkommen bei Impala67!",
+	"# 👋 Willkommen bei Impala67",
 	"",
-	"Notizen, Unterseiten, Datenbanken, Markdown und GoodNotes-Hefte funktionieren vertraut – aber Impala67 kann mehr:",
+	"Impala67 ist dein Ort für Notizen, Handschrift und Lernen. Alles bleibt lokal auf deinem Gerät.",
 	"",
-	"### Das Besondere",
-	"- **Local First**: Deine Daten bleiben auf deinem Gerät; Export, Backups und Google-Drive-Sync halten sie verfügbar.",
-	"- **KI-Arbeitsraum**: Chatte mit deinen Inhalten, finde Wissen per RAG und lass Seiten, Zusammenfassungen oder Karteikarten erstellen.",
-	"- **PDF-Workflow**: PDFs teilen oder importieren, per KI einordnen und zusammen mit Notizen durchsuchen.",
-	"- **Lernen, das sich anpasst**: FSRS-Karteikarten, Clozes, TXT-/Anki-Import, Lernzeit und Notenübersicht.",
-	"- **Handschrift & Scanner**: Schreibe und zeichne in Heften, scanne Blätter ein und mache Handschrift per OCR durchsuchbar.",
-	"- **Vernetztes Wissen**: Wissensgraph, NotebookLM-Anbindung und optionale KI-Lernmodi wie Feynman-Training.",
-	"- **Synchron arbeiten**: Mehrgeräte-Sync mit Konfliktlösung sowie optionaler Notion-Zwei-Wege-Sync.",
+	"## Die wichtigsten Features",
 	"",
-	"### Loslegen",
-	"1. Öffne ⚙️ **Einstellungen**, richte eine KI-Quelle ein und wähle ein Modell.",
-	"2. Erstelle eine Notiz oder ein **GoodNotes-Heft** – der KI-Chat begleitet dich direkt daneben.",
+	"- 📝 **Notizen** – Schreibe in Markdown und lege Unterseiten an.",
+	"- ✍️ **Hefte** – Schreibe und zeichne mit dem Stift.",
+	"- 🤖 **KI-Chat** – Stelle Fragen zu deinen eigenen Inhalten.",
+	"- 🃏 **Karteikarten** – Lerne mit Wiederholungen, die sich an dich anpassen.",
+	"- 🔄 **Sync** – Optional halten sich deine Geräte synchron.",
 	"",
-	"**Tipp:** Mit **Strg+K** öffnest du die Schnellsuche.",
+	"## Los geht's",
+	"",
+	"1. Lege deine erste Seite mit **+ Neue Seite** auf der Startseite an.",
+	"2. Richte optional eine KI in den ⚙️ **Einstellungen** ein.",
+	"3. Finde alles schnell mit **Strg+K**.",
 ].join("\n");
 
 export async function seedIfEmpty() {

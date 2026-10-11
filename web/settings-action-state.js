@@ -5,7 +5,7 @@
 // Detailseiten weder Beschriftungen noch erlaubte Aktionen unterschiedlich raten.
 export function driveActionState({ hasClient = false, connected = false, needsLogin = false } = {}) {
 	if (!hasClient) return { action: "setup", label: "Drive einrichten" };
-	if (needsLogin) return { action: "sync", label: "Drive-Anmeldung erneuern" };
+	if (needsLogin) return { action: "sync", label: "Jetzt sichern" };
 	if (connected) return { action: "sync", label: "Drive synchronisieren" };
 	return { action: "sync", label: "Mit Google anmelden & synchronisieren" };
 }

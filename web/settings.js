@@ -13,7 +13,7 @@ import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty, BREAK_REMINDER_KEY } from "./settings-schema.js";
-import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
+import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { generateQrSvg } from "./qrcode.js";
@@ -286,6 +286,7 @@ export function openSettings(section, anchor) {
 	refreshSettingsDirtyState();
 	focusSettingsAnchor(anchor || legacyAnchor);
 	hydrateStorageUsage();
+	hydrateDriveStorage();
 	if (resolved === "ai") {
 		renderStatusDot();
 		queueMicrotask(() => {

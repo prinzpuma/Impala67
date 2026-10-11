@@ -7,11 +7,12 @@ import { createScanner } from "./heft-scanner-ui.js";
 import { PDFS } from "./pdfs.js";
 import { RAG } from "./rag.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, blobId } from "./heft-document-core.js";
+import { documentShadow, diffDocument, blobId, composePageText, PAGE_W, PAGE_H } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { canGoBack, canGoForward } from "./nav-history.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -36,7 +37,6 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 // Scanner: Oberfläche in heft-scanner-ui.js, Bildverarbeitung in heft-scan.js; Handschrift-OCR in handschrift.js.
 
 export const HEFT = (() => {
-	const PAGE_W = 1000, PAGE_H = 1414;
 	const KEY = (p) => "heft:" + p;
 	// Zuletzt angesehene Seite je Heft (Gerätewahl): Öffnen springt dorthin, die Startseite zeigt sie als Vorschau.
 	const POS_KEY = "impala67HeftPos";
@@ -151,8 +151,9 @@ export const HEFT = (() => {
 				}
 
 				if (pid !== jobPid || doc !== jobDoc || text == null) continue;
-				if (String(text).trim() !== String(pg.ocrText || "").trim()) {
-					pg.ocrText = String(text).trim();
+				const composed = composePageText(text, pg);
+				if (composed !== String(pg.ocrText || "").trim()) {
+					pg.ocrText = composed;
 					scheduleSave();
 					try { RAG.queuePage(jobPid); } catch {}
 				}
@@ -1828,8 +1829,8 @@ export const HEFT = (() => {
 		return '<div class="heft-chrome" aria-hidden="false">' +
 			'<div class="heft-corner-l-group">' +
 				'<button type="button" class="heft-corner heft-sb-toggle" data-hesidebar="1" title="Seitenleiste ein-/ausklappen">☰</button>' +
-				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (window.S && (window.S.navIndex >= 0 || window.S.currentPageId) ? '' : ' disabled') + ' title="Zurück">‹</button>' +
-				'<button type="button" class="heft-corner heft-nav-forward" data-henavforward="1"' + (window.S && window.S.navIndex < (window.S.navHistory ? window.S.navHistory.length - 1 : 0) ? '' : ' disabled') + ' title="Vor">›</button>' +
+				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (canGoBack() ? '' : ' disabled') + ' title="Zurück">‹</button>' +
+				'<button type="button" class="heft-corner heft-nav-forward" data-henavforward="1"' + (canGoForward() ? '' : ' disabled') + ' title="Vor">›</button>' +
 				'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
 					'" data-hepagesmenu="1" title="Seiten">' + svgPages +
 					'<span class="heft-pageno-inline"></span></button>' +
@@ -2458,7 +2459,7 @@ export const HEFT = (() => {
 		const pg = newPage(paper || "blank");
 		const pad = bleed ? 0 : 40;
 		const k = Math.min((PAGE_W - pad * 2) / im.w, (PAGE_H - pad * 2) / im.h);
-		pg.images.push({ id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k });
+		pg.images.push({ id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k, ...(im.scan ? { scan: true } : {}) });
 		return pg;
 	}
 	async function addImagePageFromFile(f) {
@@ -2507,6 +2508,8 @@ export const HEFT = (() => {
 		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; });
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
+		// Texterkennung im Hintergrund; dynamischer Import vermeidet den Zyklus heft.js <-> heft-indexer.js.
+		import("./heft-indexer.js").then((m) => m.HEFT_INDEXER.startBackgroundScan()).catch(() => {});
 	}
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----

@@ -3,6 +3,7 @@
 import { S } from "./state.js";
 import { U } from "./util.js";
 import { DRIVE } from "./drive.js";
+import { BACKUP } from "./backup-status.js";
 import { CHATS } from "./chats.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
@@ -45,14 +46,22 @@ function refreshActionButton(id, state) {
 	target.dataset.settingsSyncAction = state.action;
 }
 
+// Abgelaufene Google-Anmeldung ist der Normalfall (Web-Token hält eine Stunde). Gewarnt wird erst,
+// wenn backup-status.js wirklich Ungesichertes meldet, das älter als einen Tag ist.
+const backupTone = () => (BACKUP.view().level === "stale" ? "warn" : "idle");
+const driveLastOk = (session) => (session.lastOkAt ? "Zuletzt gesichert " + U.fmtDate(session.lastOkAt) : "Pausiert");
+
 function driveOverviewRow() {
 	const session = driveSession();
 	const description = session.connected
 		? (session.email ? "Verbunden als " + session.email : "Verbunden")
-		: session.needsLogin ? "Anmeldung abgelaufen" : "Nicht verbunden";
-	const tone = session.connected ? "ok" : session.needsLogin ? "warn" : "idle";
+		: session.needsLogin ? driveLastOk(session) : "Nicht verbunden";
+	const tone = session.connected ? "ok" : session.needsLogin ? backupTone() : "idle";
 	return UI.row({ id: "drive-overview-status", title: "Google Drive", description, leading: '<span class="settings-status-dot is-' + tone + '"></span>', trailing: linkButton("Öffnen", "sync", "drive") });
 }
+
+// Ein lokaler Export ist nur dringend, wenn kein Sync die Daten schon vom Gerät holt.
+const localBackupTone = () => (BACKUP.view().cloudflare || BACKUP.view().drive ? "idle" : "warn");
 
 function renderOverview(vm) {
 	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
@@ -61,7 +70,7 @@ function renderOverview(vm) {
 	const statusRows = [
 		UI.row({ title: "Künstliche Intelligenz", description: aiReady ? S.settings.aiModel : "Noch kein Modell gewählt", leading: '<span class="settings-status-dot is-' + (aiReady ? "ok" : "idle") + '"></span>', trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
 		driveOverviewRow(),
-		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt: " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: '<span class="settings-status-dot is-' + (lastBackup ? "ok" : "warn") + '"></span>', trailing: linkButton("Sichern", "data", "backup") }),
+		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt: " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: '<span class="settings-status-dot is-' + (lastBackup ? "ok" : localBackupTone()) + '"></span>', trailing: linkButton("Sichern", "data", "backup") }),
 		UI.row({ title: "Lokaler Speicher", description: "Wird berechnet …", leading: '<span class="settings-status-dot is-idle"></span>', trailing: '<span id="settingsStorageOverview" class="settings-value">—</span>' }),
 		UI.row({ title: "Impala67", description: "Installierbare Offline-App", leading: '<span class="settings-status-dot is-ok"></span>', trailing: '<span class="settings-value">v' + e(String(version).replace(/^v/i, "")) + "</span>" }),
 	].join("");
@@ -201,11 +210,15 @@ function renderAi(vm) {
 function driveContent() {
 	const session = driveSession();
 	const action = driveActionState({ hasClient: hasDriveClient(), ...session });
-	const tone = session.connected ? "ok" : session.needsLogin || !hasDriveClient() ? "warn" : "idle";
-	const title = session.connected ? "Verbunden" : session.needsLogin ? "Anmeldung abgelaufen" : hasDriveClient() ? "Nicht verbunden" : "Einrichtung erforderlich";
-	const description = session.connected ? (session.email || "Google Drive") : session.needsLogin ? ((session.email ? session.email + " · " : "") + "Anmeldung beim nächsten Sync erneuern") : hasDriveClient() ? "Google öffnet erst nach deinem Klick ein Anmeldefenster" : "Hinterlege unter Erweitert eine Google Client-ID";
+	const tone = session.connected ? "ok" : session.needsLogin ? backupTone() : !hasDriveClient() ? "warn" : "idle";
+	const title = session.connected ? "Verbunden" : session.needsLogin ? "Pausiert" : hasDriveClient() ? "Nicht verbunden" : "Einrichtung erforderlich";
+	const lastOk = session.lastOkAt ? "Zuletzt gesichert " + U.fmtDate(session.lastOkAt) : "";
+	const description = session.connected ? [session.email || "Google Drive", lastOk].filter(Boolean).join(" · ")
+		: session.needsLogin ? [lastOk, "Google meldet dich nach einer Stunde ab – ein Tipp sichert weiter"].filter(Boolean).join(" · ")
+			: hasDriveClient() ? "Google öffnet erst nach deinem Klick ein Anmeldefenster" : "Hinterlege unter Erweitert eine Google Client-ID";
+	const storage = session.connected ? '<p id="driveStorageInfo" class="settings-footnote">Speicher wird ermittelt …</p>' : "";
 	return UI.status(tone, title, description,
-		button(action.label, "btnDrivePrimaryAction") + (session.connected || session.needsLogin ? button("Abmelden", "btnDriveLogout", "secondary") : ""));
+		button(action.label, "btnDrivePrimaryAction") + (session.connected || session.needsLogin ? button("Abmelden", "btnDriveLogout", "secondary") : "")) + storage;
 }
 
 function cloudflareContent() {
@@ -260,7 +273,7 @@ export function refreshDriveStatusUi() {
 	const overview = document.getElementById("drive-overview-status");
 	if (overview) overview.outerHTML = driveOverviewRow();
 	const connection = document.getElementById("drive-connection-status");
-	if (connection) connection.innerHTML = driveContent();
+	if (connection) { connection.innerHTML = driveContent(); hydrateDriveStorage(); }
 	refreshActionButton("btnDrivePrimaryAction", driveActionState({ hasClient: hasDriveClient(), ...driveSession() }));
 }
 
@@ -295,22 +308,8 @@ function renderData(vm) {
 	const countPrefix = perf.enabled
 		? (perf.records + (isAnomalies ? (perf.records === 1 ? " Auffälligkeit · " : " Auffälligkeiten · ") : (perf.records === 1 ? " Messpunkt · " : " Messpunkte · ")))
 		: "";
-	const perfDescription = countPrefix + "Erfasst lokal Zeitpunkte, Dauer, Ansicht und Mengen bei Hängern in Eingabe, Rendern und Sync – nie Inhalte oder Zugangsdaten";
-	const modeSelect = '<select id="inpPerformanceProfilerMode" aria-label="Profiler-Modus">' +
-		'<option value="anomalies"' + (isAnomalies ? ' selected' : '') + '>Nur Auffälligkeiten (aggregiert)</option>' +
-		'<option value="all"' + (!isAnomalies ? ' selected' : '') + '>Vollständiger Detail-Trace</option>' +
-		'</select>';
-	const modeRow = perf.enabled
-		? UI.row({
-			title: "Protokoll-Modus",
-			description: isAnomalies
-				? "Filtert Routine-Messungen und bündelt gleiche Hänger mit Zähler"
-				: "Erfasst jeden Messpunkt einzeln bis zum Limit (180 Einträge)",
-			trailing: modeSelect,
-		})
-		: "";
+	const perfDescription = countPrefix + "Erfasst lokal Hänger in Eingabe, Rendern und Sync sowie App- und KI-Fehler – nie Inhalte oder Zugangsdaten";
 	const diagnostics = UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
-		modeRow +
 		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "") +
 		(PLATFORM_NATIVE.isNative ? "" : UI.row({ id: "mcp-bridge", title: "MCP-Live-Bridge", description: isLocalDev() ? "Auf dem lokalen Dev-Server immer aktiv" : "Verbindet die App mit einem KI-Assistenten auf diesem Rechner (ws://127.0.0.1:8765). Chrome fragt einmal nach Zugriff aufs lokale Netzwerk.", trailing: switchControl("inpMcpBridge", "MCP-Live-Bridge aktivieren", mcpBridgeEnabled()) }));
 	const chats = CHATS.load();
@@ -434,6 +433,27 @@ export function renderSearchResults(query) {
 	if (!query.trim()) return "";
 	if (!results.length) return '<div class="settings-search-empty">Keine Einstellung gefunden</div>';
 	return results.map((item) => '<button type="button" data-settings-go="' + e(item.section) + '" data-settings-anchor-target="' + e(item.id) + '"><span><b>' + e(item.label) + "</b><small>" + e(item.sectionLabel) + " · " + e(item.description) + "</small></span>" + UI.icon("chevron") + "</button>").join("");
+}
+
+const fmtBytes = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(1).replace(".", ",") + " GB" : b >= 1048576 ? (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace(".", ",") + " MB" : Math.max(1, Math.round(b / 1024)) + " KB");
+let driveStorageCache = null; // { at, text } — Drive-Abfrage höchstens alle 5 Minuten
+
+export async function hydrateDriveStorage() {
+	const target = document.getElementById("driveStorageInfo");
+	if (!target) return;
+	if (driveStorageCache && Date.now() - driveStorageCache.at < 300000) { target.textContent = driveStorageCache.text; return; }
+	let text = "";
+	try {
+		const info = await DRIVE.storageInfo?.();
+		if (info) {
+			text = "Impala67 belegt " + fmtBytes(info.appBytes) + " in Drive";
+			if (info.limitBytes) text += " · Google-Speicher: " + fmtBytes(info.usedBytes) + " von " + fmtBytes(info.limitBytes) + " belegt";
+			driveStorageCache = { at: Date.now(), text };
+		}
+	} catch { /* Anzeige ist optional */ }
+	const el = document.getElementById("driveStorageInfo");
+	if (!el) return;
+	if (text) el.textContent = text; else el.remove();
 }
 
 export async function hydrateStorageUsage() {

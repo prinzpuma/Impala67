@@ -26,14 +26,15 @@ from generate_synthetic import (
     GERMAN_SENTENCES,
     MATH_FORMULAS,
     generate_word_strokes,
-    strokes_to_features,
 )
+from augmentations import apply_augmentations_on_the_fly
 from model import HandwritingCRNN
 from uji_loader import RealHandwritingSampler
-from text_corpus import random_text
+from text_corpus import random_text, CharFocus
 from mathwriting_loader import MathWritingDataset, strokes_to_normalized_features
 from brush_loader import BrushDataset
-from samples_loader import load_user_samples, load_user_eval_lines
+from samples_loader import load_user_samples, load_user_eval_lines, compose_user_line
+from label_noise import drop_blocked
 from evaluate_user_benchmark_words import (
     ctc_greedy,
     line_distance,
@@ -57,16 +58,23 @@ class DynamicInkDataset(Dataset):
         size: int = 50000,
         is_val: bool = False,
         seed: int = None,
-        user_samples: Optional[List[Tuple[List[Tuple[float, float, float, float]], str]]] = None,
+        user_samples: Optional[List[Tuple[List[List[Tuple[float, float]]], str]]] = None,
+        word_bank: Optional[List[Tuple[List[List[Tuple[float, float]]], str]]] = None,
     ):
         self.size = size
         self.is_val = is_val
         self.real_sampler = RealHandwritingSampler()
         self.math_ds = MathWritingDataset()
-        self.math_len = len(self.math_ds)
         self.brush_ds = BrushDataset(split="val" if is_val else "train")
+        if not is_val:
+            self.math_ds.samples = drop_blocked(self.math_ds.samples, "MathWriting")
+            self.brush_ds.samples = drop_blocked(self.brush_ds.samples, "BRUSH")
+        self.math_len = len(self.math_ds)
         self.brush_len = len(self.brush_ds)
         self.user_samples = user_samples or []
+        # Wort-Collagen erst ab einigen Wörtern, sonst wiederholen sich die Kombinationen
+        self.word_bank = word_bank if word_bank and len(word_bank) >= 10 else []
+        self.focus: Optional[CharFocus] = None
 
         self.samples = []
         self.regenerate(seed if seed is not None else (42 if is_val else 1337))
@@ -91,9 +99,12 @@ class DynamicInkDataset(Dataset):
         features = []
 
         if self.user_samples and rng.random() < 0.3:
-            # 30% Eigene Handschrift bei Fine-Tuning, immer leicht verzerrt: wenige Zeilen sonst schnell auswendig gelernt
-            strokes, word = rng.choice(self.user_samples)
-            from augmentations import apply_augmentations_on_the_fly
+            # 30% Eigene Handschrift bei Fine-Tuning, immer verzerrt: wenige Zeilen sonst schnell auswendig gelernt.
+            # Die Hälfte davon als Wort-Collage: neue Zeilen aus eigenen Wörtern verschiedener Zeilen.
+            if self.word_bank and rng.random() < 0.5:
+                strokes, word = compose_user_line(self.word_bank, rng, self.focus)
+            else:
+                strokes, word = rng.choice(self.user_samples)
             features = strokes_to_normalized_features(apply_augmentations_on_the_fly(strokes))
 
         elif self.brush_len > 0 and r < 0.40:
@@ -108,15 +119,14 @@ class DynamicInkDataset(Dataset):
 
         elif r < (0.90 if self.brush_len > 0 else 0.85):
             # 30% (bzw. 60%) Echte UJI-Glyphen oder Font-Synthese (>=20 OFL Fonts) mit On-the-fly-Augmentierungen
-            word = random_text(rng)
+            word = random_text(rng, self.focus)
             if rng.random() < 0.5:
                 strokes = generate_word_strokes(word)
             else:
                 strokes = self.real_sampler.get_real_word_strokes(word, cursive_prob=0.45)
             if strokes:
-                from augmentations import apply_augmentations_on_the_fly
-                strokes = apply_augmentations_on_the_fly(strokes)
-                features = strokes_to_features(strokes)
+                # Dieselbe Vorverarbeitung wie App, BRUSH und eigene Zeilen (äquidistantes Resampling)
+                features = strokes_to_normalized_features(apply_augmentations_on_the_fly(strokes))
             else:
                 features, word = random_sample()
 
@@ -132,7 +142,7 @@ class DynamicInkDataset(Dataset):
                 word = f"{rng.randint(10, 999)} + {rng.randint(10, 999)} = {rng.randint(20, 1998)}"
             rot = rng.uniform(-15.0, 15.0) if rng.random() < 0.4 else 0.0
             strokes = generate_word_strokes(word, rotation_deg=rot)
-            features = strokes_to_features(strokes)
+            features = strokes_to_normalized_features(apply_augmentations_on_the_fly(strokes))
 
         if features is None or len(features) < 4:
             return None
@@ -301,21 +311,65 @@ def load_foreign_eval(limit: int = 300) -> List[Tuple[np.ndarray, str, str]]:
     return pick(BrushDataset(split="val").samples, "text") + pick(MathWritingDataset(split="test").samples, "math")
 
 
+def char_errors(pred: str, gt: str, mode: str = "text") -> List[Tuple[str, bool]]:
+    """Ordnet jedem Soll-Zeichen zu, ob es richtig erkannt wurde (Levenshtein-Rückverfolgung).
+    Eingefügte Zeichen zählen nicht, sie gehören zu keinem Soll-Zeichen."""
+    if mode == "math":
+        pred, gt = "".join(pred.split()), "".join(gt.split())
+    m, n = len(gt), len(pred)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (gt[i - 1] != pred[j - 1]))
+    result = []
+    i, j = m, n
+    while i > 0:
+        if j > 0 and dp[i][j] == dp[i - 1][j - 1] + (gt[i - 1] != pred[j - 1]):
+            result.append((gt[i - 1], gt[i - 1] != pred[j - 1]))
+            i, j = i - 1, j - 1
+        elif dp[i][j] == dp[i - 1][j] + 1:
+            result.append((gt[i - 1], True))
+            i -= 1
+        else:
+            j -= 1
+    return result[::-1]
+
+
+def char_error_rates(char_err: dict, min_count: int = 3) -> dict:
+    """Geglättete Fehlerrate je Zeichen (selten gesehene Zeichen werden nicht überbewertet)."""
+    return {c: (e + 0.5) / (n + 5) for c, (e, n) in char_err.items() if n >= min_count and e > 0}
+
+
 def evaluate_real(model, device, benchmark_data, user_eval_lines=(), foreign_lines=()) -> dict:
     """Zeichenfehlerrate (CER) auf echter Handschrift.
     sel   = gerade Benchmark-Zeilen + Abschreib-Messzeilen (eigene Handschrift)
     fremd = fremde Schreiber (load_foreign_eval)
     score = Mittel aus sel und fremd: wählt best.pt, damit kein Modell gewinnt, das nur eine Schrift kann
     test  = ungerade Benchmark-Zeilen (nie zur Auswahl, sonst wäre der Testwert geschönt)
-    own   = nur die Abschreib-Messzeilen (Teil von sel, zur Info)"""
+    own   = nur die Abschreib-Messzeilen (Teil von sel, zur Info)
+    char_err = {Zeichen: [Fehler, Anzahl]} aus sel und fremd (nie aus test) für CharFocus"""
     chars = {"sel": 0, "test": 0, "own": 0, "fremd": 0}
     errors = {"sel": 0, "test": 0, "own": 0, "fremd": 0}
+    char_err = {}
+
+    def count_chars(pred, gt, mode):
+        for c, wrong in char_errors(pred, gt, mode):
+            stat = char_err.setdefault(c, [0, 0])
+            stat[0] += wrong
+            stat[1] += 1
+
     model.eval()
     with torch.no_grad():
         for feats, gt, mode in foreign_lines:
-            dist, n = line_distance(_recognize_features(model, device, feats, mode), gt, mode)
+            pred = _recognize_features(model, device, feats, mode)
+            dist, n = line_distance(pred, gt, mode)
             chars["fremd"] += n
             errors["fremd"] += dist
+            count_chars(pred, gt, mode)
         for row in benchmark_data:
             cat, gt = LINES_GROUND_TRUTH.get(row["lineIdx"], ("unbekannt", ""))
             mode = "math" if cat in ("formel", "rechnung") else "text"
@@ -324,15 +378,29 @@ def evaluate_real(model, device, benchmark_data, user_eval_lines=(), foreign_lin
             dist, n = line_distance(pred, gt, mode)
             chars[split] += n
             errors[split] += dist
+            if split == "sel":
+                count_chars(pred, gt, mode)
         for strokes, gt in user_eval_lines:
             mode = "math" if any(c in MATH_CHARS for c in gt) else "text"
-            dist, n = line_distance(_recognize_line(model, device, strokes, mode), gt, mode)
+            pred = _recognize_line(model, device, strokes, mode)
+            dist, n = line_distance(pred, gt, mode)
             for split in ("sel", "own"):
                 chars[split] += n
                 errors[split] += dist
+            count_chars(pred, gt, mode)
     result = {k: errors[k] / max(1, chars[k]) for k in chars}
     result["score"] = (result["sel"] + result["fremd"]) / 2 if chars["fremd"] else result["sel"]
+    result["char_err"] = char_err
     return result
+
+
+def update_focus(dataset: "DynamicInkDataset", real: dict):
+    """Nächste Epochen üben gezielt die Zeichen, die zuletzt am häufigsten falsch waren."""
+    rates = char_error_rates(real["char_err"])
+    dataset.focus = CharFocus(rates) if rates else None
+    top = sorted(rates.items(), key=lambda kv: -kv[1])[:8]
+    if top:
+        print("  [Fokus] häufigste Fehlerzeichen: " + ", ".join(f"'{c}' {r * 100:.0f} %" for c, r in top))
 
 
 def train(
@@ -358,12 +426,12 @@ def train(
         backend = "AMD ROCm" if torch.version.hip else "NVIDIA CUDA"
         print(f"Training auf Gerät: GPU {torch.cuda.get_device_name(0)} ({backend})")
 
-    user_samples = []
+    user_samples, word_bank = [], []
     if finetune_path:
         print(f"Fine-Tuning Modus aktiviert (Quelle: {finetune_path}).")
         if os.path.exists(samples_path):
-            user_samples = load_user_samples(samples_path)
-            print(f"Geladene eigene Handschrift-Samples: {len(user_samples)}.")
+            user_samples, word_bank = load_user_samples(samples_path)
+            print(f"Geladene eigene Handschrift-Samples: {len(user_samples)}, Wörter für Collagen: {len(word_bank)}.")
         else:
             print(f"Hinweis: Keine Datei '{samples_path}' gefunden. Nutze Basistraining.")
 
@@ -376,7 +444,7 @@ def train(
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.CTCLoss(blank=BLANK_IDX, zero_infinity=True)
 
-    train_dataset = DynamicInkDataset(size=train_size, is_val=False, user_samples=user_samples)
+    train_dataset = DynamicInkDataset(size=train_size, is_val=False, user_samples=user_samples, word_bank=word_bank)
     val_dataset = DynamicInkDataset(size=400, is_val=True, seed=42)
 
     train_loader = DataLoader(
@@ -428,6 +496,7 @@ def train(
         torch.save({"epoch": 0, "model_state": model.state_dict(), "select_cer": base["score"], "test_cer": base["test"]},
                    os.path.join(checkpoints_dir, "best.pt"))
         print(f"Basis: Auswahl-Score {base['score'] * 100:.1f} % (eigene {base['sel'] * 100:.1f} %, fremde {base['fremd'] * 100:.1f} %) | TEST-CER {base['test'] * 100:.1f} %")
+        update_focus(train_dataset, base)
 
     print("Starte Training mit 4 Features. Modellauswahl erfolgt nach echtem Test-Set (strikt getrennt)!")
 
@@ -520,6 +589,7 @@ def train(
 
         for tgt, prd in sample_preds[:1]:
             print(f"  [Synth-Probe] Soll: '{tgt}' | Ist: '{prd}'")
+        update_focus(train_dataset, real)
 
         # Modellauswahl und früher Abbruch nach dem Auswahl-Score
         if real_cer < best_real_cer:

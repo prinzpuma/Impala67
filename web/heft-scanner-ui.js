@@ -1,17 +1,50 @@
 "use strict";
-// Scanner-Oberfläche des Hefts: Kamera mit Live-Prüfung und Auto-Scan, Aufnahmeleiste,
-// Nachbearbeitung (Ecken, Filter, Drehen) und Abschluss als PDF oder Heftseiten.
-// Bildverarbeitung: heft-scan.js (SCANCORE). Auf Android zuerst der Google-Scanner.
+// Scanner-Oberfläche des Hefts: Kamera mit Live-Prüfung und Auto-Scan, Aufnahmeleiste mit
+// Hintergrund-Warteschlange, Nachbearbeitung (Ecken, Filter, Drehen) und Abschluss als PDF oder Heftseiten.
+// Bildverarbeitung: heft-scan.js (SCANCORE, läuft im Web-Worker). Auf Android zuerst der Google-Scanner.
 import { U } from "./util.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import { SCANCORE } from "./heft-scan.js";
 import { buildPdf } from "./heft-export.js";
 
-const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats } = SCANCORE;
+const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, processShot, lumStats, blobToDataUrl } = SCANCORE;
 
-// host: insertPages([{ src, w, h }]), pickFiles(opts, cb), fileToImageData(file, maxDim, mime)
+// Kappe für das Videobild, falls ImageCapture fehlt (sonst volle Sensorauflösung per takePhoto).
+const CAPTURE_MAX_DIM = 2600;
+
+// Bild wieder freigeben, sofern es nicht die Quelle selbst ist (Bitmaps haben close()).
+function releaseImg(img, src) {
+	if (img && img !== src && typeof img.close === "function") { try { img.close(); } catch {  } }
+}
+function stopStream(stream) {
+	try { if (stream) stream.getTracks().forEach((t) => t.stop()); } catch {  }
+}
+function qualityNote(q) {
+	if (!q) return "";
+	if (q.soft) return "Weich";
+	if (q.tooDark) return "Dunkel";
+	if (q.glare) return "Spiegelung";
+	if (q.flat) return "Kontrast";
+	return "";
+}
+// buildPdf erwartet JPEG-Data-URLs (DCTDecode). Andere Formate werden auf Weiß nach JPEG gewandelt.
+async function toJpegDataUrl(blob) {
+	const img = await loadImg(blob);
+	try {
+		const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+		const c = document.createElement("canvas");
+		c.width = w; c.height = h;
+		const x = c.getContext("2d");
+		x.fillStyle = "#fff"; x.fillRect(0, 0, w, h);
+		x.drawImage(img, 0, 0, w, h);
+		return c.toDataURL("image/jpeg", 0.92);
+	} finally { releaseImg(img, blob); }
+}
+
+// host: insertPages([{ src, w, h, scan }]), pickFiles(opts, cb), fileToImageData(file, maxDim, mime)
 export function createScanner(host) {
 	let scanUI = null;
+	let editCommitT = 0;
 
 	async function openScanner() {
 		if (scanUI) return;
@@ -24,7 +57,8 @@ export function createScanner(host) {
 					const images = [];
 					for (const uri of res.images) {
 						const src = window.Capacitor?.convertFileSrc ? window.Capacitor.convertFileSrc(uri) : uri;
-						images.push(await host.fileToImageData(await (await fetch(src)).blob(), 2400));
+						const im = await host.fileToImageData(await (await fetch(src)).blob(), 2400);
+						images.push({ ...im, scan: true });
 					}
 					host.insertPages(images);
 					return;
@@ -42,94 +76,145 @@ export function createScanner(host) {
 			// Fallback: Bei Fehlern oder fehlendem ML Kit startet automatisch der interne Kamera-Scanner.
 		}
 
+		const filters = SCAN_MODES.map((m) =>
+			'<button type="button" data-hescanfilter="' + m[0] + '" aria-pressed="' + (m[0] === "color" ? "true" : "false") + '"' + (m[0] === "color" ? ' class="active"' : "") + ">" + m[1] + "</button>").join("");
 		const wrap = document.createElement("div");
 		wrap.className = "heft-scan";
 		wrap.innerHTML =
-			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen">✕</button></div>' +
+			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen" aria-label="Schließen">✕</button></div>' +
 			'<div class="heft-scan-stage"><video autoplay playsinline muted></video>' +
 				'<svg class="heft-scan-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="7,7 93,7 93,93 7,93"></polygon></svg>' +
-				'<div class="heft-scan-quality" data-hescanquality="1">Kamera wird geprüft…</div>' +
+				'<div class="heft-scan-quality" data-hescanquality="1" role="status" aria-live="polite">Kamera wird geprüft…</div>' +
+				'<div class="heft-scan-flash" aria-hidden="true"></div>' +
 				'<div class="heft-scan-hint">Blatt vollständig ins Bild legen. Grün = bereit; der Rahmen zeigt exakt den späteren Zuschnitt.</div></div>' +
 			'<div class="heft-scan-shots"></div>' +
+			'<div class="heft-scan-modes" role="group" aria-label="Filter für neue und vorhandene Seiten">' + filters + '</div>' +
 			'<div class="heft-scan-bar">' +
-				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen"></button>' +
+				'<div class="heft-scan-tools">' +
+					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
+					'<button type="button" data-hescantorch="1" aria-pressed="false" title="Taschenlampe" hidden>🔦 Licht</button>' +
+				'</div>' +
+				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen" aria-label="Seite aufnehmen" disabled></button>' +
 				'<div class="heft-scan-actions">' +
-					'<button type="button" data-hescanautocap="1" title="Auto-Scan aktivieren">⚡ Auto aus</button>' +
 					'<button type="button" data-hescanpdf="1" disabled>📄 Als PDF speichern</button>' +
 					'<button type="button" data-hescanheft="1" disabled>📓 In Heft einfügen</button>' +
 				'</div>' +
 			'</div>' +
-			'<div class="heft-scan-busy" hidden><span>Scan wird aufbereitet…</span></div>';
+			'<div class="heft-scan-busy" hidden><span>Seiten werden vorbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, shots: [], edit: null, busy: false, liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, track: null, torch: false, shots: [], stripCount: 0, edit: null, mode: "color", busy: false, exporting: false, pending: 0, queue: Promise.resolve(), liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
 		const ui = scanUI;
 		wrap.addEventListener("click", onScanClick);
 		try {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("getUserMedia fehlt");
 
-			let stream = null;
-			try {
-				stream = await navigator.mediaDevices.getUserMedia({
-					video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
-					audio: false,
-				});
-			} catch (cameraError) {
-
-				const name = cameraError && cameraError.name;
-				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw cameraError;
-				stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-			}
-
-			if (scanUI !== ui || !wrap.isConnected) { try { stream.getTracks().forEach((t) => t.stop()); } catch {  } return; }
+			const stream = await acquireStream();
+			if (scanUI !== ui || !wrap.isConnected) { stopStream(stream); return; }
 			ui.stream = stream;
 			const video = wrap.querySelector("video");
 			video.srcObject = stream;
 			video.muted = true;
 			video.setAttribute("playsinline", "");
+			refreshShutter(ui);
 
 			try { await video.play(); } catch (e2) { console.warn("Heft: Video-play blockiert", e2); }
 			startLiveQuality(video, ui);
-			const track = stream.getVideoTracks && stream.getVideoTracks()[0];
+			const track = stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
 			if (track) {
-
-				try {
-					const caps = track.getCapabilities ? track.getCapabilities() : null;
-					const advanced = {};
-					if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.focusMode = "continuous";
-					if (caps && Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.exposureMode = "continuous";
-					if (Object.keys(advanced).length) await track.applyConstraints({ advanced: [advanced] });
-				} catch (constraintError) { console.info("Heft: Kamera-Automatik bleibt auf Gerätestandard", constraintError); }
+				ui.track = track;
+				await setupTrack(ui, track);
 				track.addEventListener("ended", () => showCameraStopped(ui), { once: true });
 			}
 			video.addEventListener("error", () => showCameraStopped(ui), { once: true });
 		} catch (e) {
-
 			console.warn("Heft: Kamera nicht verfügbar", e);
 			if (scanUI === ui) {
 				wrap.querySelector(".heft-scan-stage").innerHTML =
 					'<div class="heft-scan-nocam"><p>Keine Kamera verfügbar oder Zugriff abgelehnt.</p>' +
 					'<button type="button" data-hescanpick="1">Fotos auswählen…</button></div>';
-				const shut = wrap.querySelector(".heft-scan-shutter");
-				if (shut) shut.disabled = true;
+				refreshShutter(ui);
 			}
 		}
 	}
+
+	// Erst hohe Auflösung wünschen, dann auf kleinere Profile und zuletzt auf beliebige Kamera zurückfallen.
+	async function acquireStream() {
+		const attempts = [
+			{ facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+			{ facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+			true,
+		];
+		let lastError = null;
+		for (const video of attempts) {
+			try {
+				return await navigator.mediaDevices.getUserMedia({ video, audio: false });
+			} catch (err) {
+				lastError = err;
+				const name = err && err.name;
+				if (name !== "OverconstrainedError" && name !== "ConstraintNotSatisfiedError" && name !== "NotFoundError") throw err;
+			}
+		}
+		throw lastError;
+	}
+
+	async function setupTrack(owner, track) {
+		let caps = null;
+		try { caps = track.getCapabilities ? track.getCapabilities() : null; } catch { caps = null; }
+		const advanced = {};
+		if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) advanced.focusMode = "continuous";
+		if (caps && Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) advanced.exposureMode = "continuous";
+		try {
+			if (Object.keys(advanced).length) await track.applyConstraints({ advanced: [advanced] });
+		} catch (constraintError) { console.info("Heft: Kamera-Automatik bleibt auf Gerätestandard", constraintError); }
+		if (caps && caps.torch) {
+			const b = owner.wrap.querySelector("[data-hescantorch]");
+			if (b) b.hidden = false;
+		}
+	}
+
+	async function toggleTorch(owner, b) {
+		if (!owner.track) return;
+		const on = !owner.torch;
+		try {
+			await owner.track.applyConstraints({ advanced: [{ torch: on }] });
+			owner.torch = on;
+			b.classList.toggle("active", on);
+			b.setAttribute("aria-pressed", String(on));
+		} catch (e) {
+			console.warn("Heft: Taschenlampe nicht verfügbar", e);
+			U.toast?.("Taschenlampe ist auf diesem Gerät nicht verfügbar", "error");
+		}
+	}
+
+	// Auslöser nur während des Bildgreifens und ohne Kamera gesperrt — nie durch Aufbereitung oder Export.
+	function refreshShutter(owner) {
+		const shut = owner.wrap.querySelector(".heft-scan-shutter");
+		if (shut) shut.disabled = owner.busy || !owner.stream;
+	}
+
 	function showCameraStopped(owner) {
 		if (!owner || scanUI !== owner || !owner.wrap.isConnected) return;
 		stopLiveQuality();
-		try { if (owner.stream) owner.stream.getTracks().forEach((t) => t.stop()); } catch {  }
+		stopStream(owner.stream);
 		owner.stream = null;
+		owner.track = null;
+		owner.torch = false;
 		const stage = owner.wrap.querySelector(".heft-scan-stage");
 		if (stage) stage.innerHTML = '<div class="heft-scan-nocam"><p>Kameraverbindung wurde unterbrochen.</p><button type="button" data-hescanpick="1">Fotos auswählen…</button><small>Bereits aufgenommene Scans bleiben erhalten.</small></div>';
-		const shut = owner.wrap.querySelector(".heft-scan-shutter");
-		if (shut) shut.disabled = true;
-		if (U.toast) U.toast("Kamera wurde beendet — du kannst Fotos auswählen.", "error");
+		const tb = owner.wrap.querySelector("[data-hescantorch]");
+		if (tb) tb.hidden = true;
+		refreshShutter(owner);
+		U.toast?.("Kamera wurde beendet — du kannst Fotos auswählen.", "error");
 	}
+
 	function closeScanner() {
-		if (!scanUI) return;
+		const owner = scanUI;
+		if (!owner) return;
+		closeEdit();
 		stopLiveQuality();
-		try { if (scanUI.stream) scanUI.stream.getTracks().forEach((t) => t.stop()); } catch {  }
-		try { scanUI.wrap.remove(); } catch {  }
+		stopStream(owner.stream);
+		owner.shots.forEach(revokeThumb);
+		try { owner.wrap.remove(); } catch {  }
 		scanUI = null;
 	}
 
@@ -233,73 +318,82 @@ export function createScanner(host) {
 	function stopLiveQuality() {
 		if (scanUI && scanUI.liveTimer) { clearInterval(scanUI.liveTimer); scanUI.liveTimer = 0; }
 	}
+	// Overlay nur noch für Abschluss und Export; die Aufbereitung läuft im Hintergrund.
 	function setScanBusy(on, label) {
 		if (!scanUI) return;
-		scanUI.busy = !!on;
 		const el = scanUI.wrap.querySelector(".heft-scan-busy");
-		if (el) {
-			el.hidden = !on;
-			const sp = el.querySelector("span");
-			if (sp && label) sp.textContent = label;
-		}
-		const shut = scanUI.wrap.querySelector(".heft-scan-shutter");
-		if (shut) shut.disabled = !!on;
+		if (!el) return;
+		el.hidden = !on;
+		const sp = el.querySelector("span");
+		if (sp && label) sp.textContent = label;
 	}
+	function flashShot(owner) {
+		const flash = owner.wrap.querySelector(".heft-scan-flash");
+		if (flash) { flash.classList.remove("go"); void flash.offsetWidth; flash.classList.add("go"); }
+		navigator.vibrate?.(15);
+	}
+
 	function onScanClick(e) {
 		const b = e.target.closest("button");
-		if (!b || !scanUI) return;
+		const owner = scanUI;
+		if (!b || !owner) return;
 		const d = b.dataset;
 		if (d.hescanclose) closeScanner();
 		else if (d.hescanshot) scanCapture();
-		else if (d.hescanpdf) { if (scanUI.shots.length) scanFinishPdf(); }
-		else if (d.hescanheft) { if (scanUI.shots.length) scanFinishHeft(); }
-		else if (d.hescanautocap) {
-			scanUI.autoCapture = !scanUI.autoCapture;
-			if (scanUI.autoCapture) { scanUI.autoArmed = true; scanUI.liveStable = 0; }
-			else { scanUI.autoArmed = false; }
-			b.classList.toggle("active", scanUI.autoCapture);
-			b.textContent = scanUI.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
-		}
+		else if (d.hescanpdf) scanFinishPdf();
+		else if (d.hescanheft) scanFinishHeft();
+		else if (d.hescanautocap) toggleAutoCapture(owner, b);
+		else if (d.hescantorch) toggleTorch(owner, b);
+		else if (d.hescanfilter) setGlobalMode(owner, d.hescanfilter);
 		else if (d.hescanpick) scanPickFiles();
+		else if (d.hescandelshot) removeShot(owner, owner.shots[Number(d.hescandelshot)]);
+		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
+		else if (d.hescaneditback) closeEdit();
 		else if (d.hescancompare) {
-			const ed = scanUI.edit;
+			const ed = curEdit();
 			if (ed) {
 				ed.compare = !ed.compare;
 				b.textContent = ed.compare ? "◐ Nur Scan" : "◑ Vorher/Nachher";
-				const sh = scanUI.shots[ed.i];
-				if (sh && sh.out) drawEditResult(sh);
+				if (!ed.cornerMode && ed.sh.out) drawEditResult(ed.sh);
 			}
 		}
 		else if (d.hescancorners) {
-			const ed = scanUI.edit;
+			const ed = curEdit();
 			if (ed && ed.img) { ed.cornerMode = true; layoutEdit(); }
-			else if (U.toast) U.toast("Rohbild wird geladen…");
+			else U.toast?.("Rohbild wird geladen…");
 		}
-		else if (d.hescanedit != null) openEdit(Number(d.hescanedit));
-		else if (d.hescaneditback) closeEdit();
 		else if (d.hescanmode) {
-
-			if (scanUI.edit) {
-				scanUI.edit.mode = d.hescanmode;
-				scanUI.edit.dirty = true;
-				scanUI.edit.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === scanUI.edit.mode));
-				liveReprocessEdit();
+			const ed = curEdit();
+			if (ed) {
+				ed.mode = d.hescanmode;
+				ed.el.querySelectorAll("[data-hescanmode]").forEach((m) => m.classList.toggle("active", m.dataset.hescanmode === ed.mode));
+				queueEditReprocess();
 			}
 		}
 		else if (d.hescanrot) {
-			if (scanUI.edit) {
-				scanUI.edit.rot = (scanUI.edit.rot + 1) % 4;
-				scanUI.edit.dirty = true;
-				const rb = scanUI.edit.el.querySelector("[data-hescanrot]");
-				if (rb) rb.textContent = "⟳ Drehen" + (scanUI.edit.rot ? " (" + (scanUI.edit.rot * 90) + "°)" : "");
-				liveReprocessEdit();
+			const ed = curEdit();
+			if (ed) {
+				ed.rot = (ed.rot + 1) % 4;
+				const rb = ed.el.querySelector("[data-hescanrot]");
+				if (rb) rb.textContent = "⟳ Drehen" + (ed.rot ? " (" + (ed.rot * 90) + "°)" : "");
+				queueEditReprocess();
 			}
 		}
 		else if (d.hescandel) {
-			if (scanUI.edit) { const i = scanUI.edit.i; closeEdit(); scanUI.shots.splice(i, 1); renderShots(); }
+			const ed = curEdit();
+			if (ed) { const sh = ed.sh; closeEdit(); removeShot(owner, sh); }
 		}
 		else if (d.hescandone) finishEdit();
 	}
+	function toggleAutoCapture(owner, b) {
+		owner.autoCapture = !owner.autoCapture;
+		if (owner.autoCapture) { owner.autoArmed = true; owner.liveStable = 0; }
+		else owner.autoArmed = false;
+		b.classList.toggle("active", owner.autoCapture);
+		b.setAttribute("aria-pressed", String(owner.autoCapture));
+		b.textContent = owner.autoCapture ? "⚡ Auto an" : "⚡ Auto aus";
+	}
+
 	async function scanCapture(isAuto = false) {
 		const owner = scanUI;
 		if (!owner || owner.busy) return;
@@ -308,128 +402,181 @@ export function createScanner(host) {
 		const video = owner.wrap.querySelector("video");
 		if (!video) return;
 
-		setScanBusy(true, "Kamera wird vorbereitet…");
-
-		if (!video.videoWidth || !video.videoHeight) {
-			try { await video.play(); } catch {  }
-			if (scanUI !== owner) return;
-			if (!video.videoWidth) {
-				setScanBusy(false);
-				if (U.toast) U.toast("Kamera startet noch — kurz warten und erneut tippen", "error");
-				return;
-			}
-		}
-		setScanBusy(true, "Aufnahme wird aufbereitet…");
+		owner.busy = true;
+		refreshShutter(owner);
+		let src = null;
 		try {
-
-			const cap = 2600, k = Math.min(1, cap / Math.max(video.videoWidth, video.videoHeight));
-			const c = document.createElement("canvas");
-			c.width = Math.max(2, Math.round(video.videoWidth * k)); c.height = Math.max(2, Math.round(video.videoHeight * k));
-			const captureCtx = c.getContext("2d");
-			captureCtx.imageSmoothingEnabled = true; captureCtx.imageSmoothingQuality = "high";
-			captureCtx.drawImage(video, 0, 0, c.width, c.height);
-
-			await addRawScan(c.toDataURL("image/png"), c.width, c.height, owner);
+			if (!video.videoWidth) { try { await video.play(); } catch {  } }
+			if (scanUI !== owner) return;
+			if (!video.videoWidth) { U.toast?.("Kamera startet noch — kurz warten und erneut tippen", "error"); return; }
+			src = await grabFrame(owner, video);
 		} catch (e) {
-			console.warn("Heft: Scan fehlgeschlagen", e);
-			if (U.toast) U.toast("Scan fehlgeschlagen", "error");
+			console.warn("Heft: Aufnahme fehlgeschlagen", e);
+			U.toast?.("Scan fehlgeschlagen", "error");
+		} finally {
+			if (scanUI === owner) { owner.busy = false; refreshShutter(owner); }
 		}
-		if (scanUI === owner) setScanBusy(false);
+		if (!src || scanUI !== owner) return;
+		flashShot(owner);
+		queueShot(owner, src);
+	}
+	// Volle Sensorauflösung per ImageCapture; sonst (oder bei Fehler) das Videobild als Canvas.
+	async function grabFrame(owner, video) {
+		if (owner.track && "ImageCapture" in window) {
+			try { return await new window.ImageCapture(owner.track).takePhoto(); }
+			catch (e) { console.info("Heft: ImageCapture nicht nutzbar, nehme Videobild", e); }
+		}
+		const k = Math.min(1, CAPTURE_MAX_DIM / Math.max(video.videoWidth, video.videoHeight));
+		const c = document.createElement("canvas");
+		c.width = Math.max(2, Math.round(video.videoWidth * k));
+		c.height = Math.max(2, Math.round(video.videoHeight * k));
+		const x = c.getContext("2d");
+		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+		x.drawImage(video, 0, 0, c.width, c.height);
+		return c;
 	}
 
-	async function addRawScan(src, w, h, owner) {
-		const img = await loadImg(src);
-
-		const iw = img.naturalWidth || w, ih = img.naturalHeight || h;
-
-		const quad = detectQuad(img, iw, ih);
-		const sh = { src, w: iw, h: ih, quad, autoCrop: quadArea(quad) < iw * ih * 0.96, mode: "color", rot: 0, out: null, img };
-		await processShot(sh);
-		if (scanUI !== owner || !sh.out) return;
-		owner.shots.push(sh);
+	// ---- Warteschlange: Seiten werden nacheinander aufbereitet, die Oberfläche bleibt bedienbar.
+	function enqueue(owner, task) {
+		owner.pending++;
+		owner.queue = owner.queue.then(async () => {
+			try { if (scanUI === owner) await task(); }
+			catch (e) { console.warn("Heft: Scan-Warteschlange", e); }
+			finally {
+				owner.pending--;
+				if (scanUI === owner) renderShots();
+			}
+		});
 		renderShots();
+		return owner.queue;
+	}
+	async function waitQueueIdle(owner) {
+		while (scanUI === owner && owner.pending > 0) await owner.queue;
+	}
+	function isLive(owner, sh) {
+		return scanUI === owner && owner.shots.includes(sh);
+	}
+	// Seite aufbereiten. rev verwirft Ergebnisse, die von einer neueren Aufbereitung überholt wurden.
+	function queueProcess(owner, sh, snapshot, onDone) {
+		const rev = ++sh.rev;
+		enqueue(owner, async () => {
+			if (!isLive(owner, sh)) return;
+			try {
+				if (!sh.quad) await detectShot(sh);
+				const out = snapshot ? await processShot(sh, snapshot) : await processShot(sh);
+				if (!isLive(owner, sh) || sh.rev !== rev) return;
+				sh.out = out;
+				sh.failed = false;
+				setThumb(sh, out);
+				if (onDone) onDone();
+			} catch (e) {
+				console.warn("Heft: Scan-Aufbereitung fehlgeschlagen", e);
+				if (isLive(owner, sh) && sh.rev === rev) {
+					sh.failed = true;
+					U.toast?.("Eine Seite konnte nicht aufbereitet werden", "error");
+				}
+			}
+		});
+	}
+	// Ausgangsbild lesen, Größe und Eckenvorschlag ermitteln (nur beim ersten Durchlauf einer Seite).
+	async function detectShot(sh) {
+		const img = await loadImg(sh.src);
+		try {
+			const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+			const quad = detectQuad(img, w, h);
+			sh.w = w; sh.h = h; sh.quad = quad;
+			sh.autoCrop = quadArea(quad) < w * h * 0.96;
+		} finally { releaseImg(img, sh.src); }
+	}
+	function queueShot(owner, src) {
+		const sh = { src, w: 0, h: 0, quad: null, autoCrop: true, mode: owner.mode, rot: 0, out: null, thumbUrl: "", rev: 0, failed: false };
+		owner.shots.push(sh);
+		queueProcess(owner, sh, null);
+	}
+	function setGlobalMode(owner, mode) {
+		if (!SCAN_MODES.some((m) => m[0] === mode)) return;
+		owner.mode = mode;
+		owner.wrap.querySelectorAll("[data-hescanfilter]").forEach((b) => {
+			const on = b.dataset.hescanfilter === mode;
+			b.classList.toggle("active", on);
+			b.setAttribute("aria-pressed", String(on));
+		});
+		for (const sh of owner.shots) {
+			if (sh.mode === mode) continue;
+			sh.mode = mode;
+			queueProcess(owner, sh, null);
+		}
+	}
+	function removeShot(owner, sh) {
+		const idx = sh ? owner.shots.indexOf(sh) : -1;
+		if (idx < 0) return;
+		owner.shots.splice(idx, 1);
+		sh.rev++; // laufende Aufbereitung dieser Seite verwerfen
+		revokeThumb(sh);
+		renderShots();
+		U.toast?.("Seite " + (idx + 1) + " gelöscht");
+	}
+
+	// ---- Thumbnails: ObjectURLs nur für fertige Scans, beim Ersetzen, Löschen und Schließen freigegeben.
+	function revokeThumb(sh) {
+		if (sh.thumbUrl) { try { URL.revokeObjectURL(sh.thumbUrl); } catch {  } sh.thumbUrl = ""; }
+	}
+	function setThumb(sh, out) {
+		revokeThumb(sh);
+		sh.thumbUrl = URL.createObjectURL(out.blob);
+	}
+	function shotTileHtml(sh, i) {
+		const n = i + 1;
+		const hasThumb = !!sh.thumbUrl;
+		let note = "";
+		if (sh.failed) note = "Fehler";
+		else if (hasThumb) note = !sh.autoCrop ? "Vollbild" : qualityNote(sh.out && sh.out.quality);
+		const inner = hasThumb ? '<img src="' + sh.thumbUrl + '" alt="Seite ' + n + '">'
+			: (sh.failed ? '<b class="heft-scan-failmark" aria-hidden="true">!</b>' : '<i class="heft-scan-spin" aria-hidden="true"></i>');
+		const cls = "heft-scan-shot" + (hasThumb || sh.failed ? "" : " pending") + (sh.failed ? " failed" : "");
+		return '<div class="heft-scan-tile">' +
+			'<button type="button" class="' + cls + '" data-hescanedit="' + i + '" title="Seite ' + n + ' bearbeiten" aria-label="Seite ' + n + ' bearbeiten">' + inner +
+				'<span>' + n + '</span>' + (note ? '<small>' + note + '</small>' : "") + '</button>' +
+			'<button type="button" class="heft-scan-x" data-hescandelshot="' + i + '" title="Seite ' + n + ' löschen" aria-label="Seite ' + n + ' löschen">×</button>' +
+		'</div>';
 	}
 	function renderShots() {
-		if (!scanUI) return;
-		const strip = scanUI.wrap.querySelector(".heft-scan-shots");
-		if (!strip) return;
-
-		strip.innerHTML = scanUI.shots.map((sh, i) => {
-			const src = (sh.out && sh.out.dataUrl) || sh.src;
-			const quality = sh.out && sh.out.quality;
-			const note = !sh.autoCrop ? "Vollbild" : (quality && quality.soft ? "Weich" : (quality && quality.tooDark ? "Dunkel" : (quality && quality.glare ? "Spiegelung" : (quality && quality.flat ? "Kontrast" : ""))));
-			return '<button type="button" class="heft-scan-shot" data-hescanedit="' + i + '" title="Scan ' + (i + 1) + ' nachbearbeiten">' +
-				'<img src="' + src + '" alt="Scan ' + (i + 1) + '"><span>' + (i + 1) + '</span>' +
-				(note ? '<small>' + note + '</small>' : "") + '</button>';
-		}).join("");
-		strip.scrollLeft = strip.scrollWidth;
-		const ready = scanUI.shots.filter((sh) => sh.out && sh.out.dataUrl);
-		const n = ready.length;
-		const pdfBtn = scanUI.wrap.querySelector("[data-hescanpdf]");
-		const heftBtn = scanUI.wrap.querySelector("[data-hescanheft]");
-		if (pdfBtn) { pdfBtn.disabled = !n; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
-		if (heftBtn) { heftBtn.disabled = !n; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
+		const owner = scanUI;
+		if (!owner) return;
+		const strip = owner.wrap.querySelector(".heft-scan-shots");
+		if (strip) {
+			const grew = owner.shots.length > owner.stripCount;
+			owner.stripCount = owner.shots.length;
+			strip.innerHTML = owner.shots.map(shotTileHtml).join("");
+			if (grew) strip.scrollLeft = strip.scrollWidth;
+		}
+		const n = owner.shots.filter((sh) => sh.out).length;
+		const enabled = n > 0 || owner.pending > 0;
+		const pdfBtn = owner.wrap.querySelector("[data-hescanpdf]");
+		const heftBtn = owner.wrap.querySelector("[data-hescanheft]");
+		if (pdfBtn) { pdfBtn.disabled = !enabled; pdfBtn.textContent = "📄 Als PDF speichern" + (n ? " (" + n + ")" : ""); }
+		if (heftBtn) { heftBtn.disabled = !enabled; heftBtn.textContent = "📓 In Heft einfügen" + (n ? " (" + n + ")" : ""); }
 	}
 	function scanPickFiles() {
+		const owner = scanUI;
+		if (!owner) return;
 		host.pickFiles({ multiple: true, capture: true }, async (files) => {
-			const owner = scanUI;
-			if (!owner) return;
-			setScanBusy(true, "Fotos werden aufbereitet…");
 			for (const f of files) {
+				if (scanUI !== owner) return;
 				try {
 					const im = await host.fileToImageData(f, 2400, "image/png");
 					if (scanUI !== owner) return;
-					await addRawScan(im.src, im.w, im.h, owner);
+					queueShot(owner, im.src);
 				} catch (e) {
 					console.warn("Heft: Scan-Foto fehlgeschlagen", e);
-					if (U.toast) U.toast("Foto konnte nicht gelesen werden", "error");
+					U.toast?.("Foto konnte nicht gelesen werden", "error");
 				}
 			}
-			if (scanUI === owner) setScanBusy(false);
 		});
 	}
 
-	let liveSeq = 0, editCommitT = 0;
-
-	function queueCornerReprocess() {
-		clearTimeout(editCommitT);
-		editCommitT = setTimeout(() => { editCommitT = 0; liveReprocessEdit(true); }, 160);
-	}
-
-	function syncShotWithEdit(sh, ed) {
-		sh.quad = ed.quad.map((p) => p.slice());
-		sh.mode = ed.mode;
-		sh.rot = ed.rot;
-		sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
-		return { quad: sh.quad.map((p) => p.slice()), mode: sh.mode, rot: sh.rot, commit: false };
-	}
-	async function liveReprocessEdit(quiet = false) {
-		const owner = scanUI;
-		const ed = owner && owner.edit;
-		if (!ed || !owner) return;
-		const sh = owner.shots[ed.i];
-		if (!sh) return;
-
-		const snapshot = syncShotWithEdit(sh, ed);
-		const seq = ++liveSeq;
-		if (!quiet) setScanBusy(true, "Filter wird angewendet…");
-		try {
-			const out = await processShot(sh, snapshot);
-
-			if (scanUI !== owner || seq !== liveSeq) return;
-			sh.out = out;
-			renderShots();
-			if (owner.edit && owner.edit.el === ed.el) {
-				ed.dirty = false;
-				if (!ed.cornerMode && sh.out) drawEditResult(sh);
-			}
-		} catch (e) {
-			console.warn("Heft: Live-Aufbereitung fehlgeschlagen", e);
-			if (scanUI === owner && U.toast) U.toast("Scan-Aufbereitung fehlgeschlagen", "error");
-		} finally {
-			if (!quiet && scanUI === owner && seq === liveSeq) setScanBusy(false);
-		}
-	}
+	// ---- Nachbearbeitung
+	const curEdit = () => (scanUI && scanUI.edit) || null;
 
 	function fitStageScale(el, contentW, contentH) {
 		const stageW = el.clientWidth || window.innerWidth;
@@ -437,26 +584,45 @@ export function createScanner(host) {
 		return Math.max(0.02, Math.min((stageW - 24) / contentW, (stageH - 24) / contentH));
 	}
 
+	function queueCornerReprocess() {
+		clearTimeout(editCommitT);
+		editCommitT = setTimeout(() => { editCommitT = 0; queueEditReprocess(); }, 160);
+	}
+	function syncShotWithEdit(sh, ed) {
+		sh.quad = ed.quad.map((p) => p.slice());
+		sh.mode = ed.mode;
+		sh.rot = ed.rot;
+		sh.autoCrop = quadArea(sh.quad) < sh.w * sh.h * 0.96;
+		return { quad: sh.quad.map((p) => p.slice()), mode: sh.mode, rot: sh.rot, commit: false };
+	}
+	function queueEditReprocess() {
+		const owner = scanUI, ed = curEdit();
+		if (!owner || !ed) return;
+		const sh = ed.sh;
+		const snapshot = syncShotWithEdit(sh, ed);
+		ed.dirty = false;
+		queueProcess(owner, sh, snapshot, () => {
+			if (curEdit() === ed && !ed.cornerMode && sh.out) drawEditResult(sh);
+		});
+	}
+
 	function drawEditResult(sh) {
-		const ed = scanUI && scanUI.edit;
-		if (!ed || !sh.out) return;
+		const ed = curEdit();
+		if (!ed || ed.sh !== sh || !sh.out) return;
 		const stage = ed.el.querySelector(".heft-scan-editstage");
 		const cv = ed.el.querySelector("canvas");
 		if (!stage || !cv) return;
-		const img = new Image();
-		img.onload = () => {
-			if (!scanUI || !scanUI.edit || scanUI.edit.el !== ed.el) return;
-
-			const k = fitStageScale(stage, img.naturalWidth, img.naturalHeight);
-			cv.width = Math.max(1, Math.round(img.naturalWidth * k));
-			cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+		createImageBitmap(sh.out.blob).then((bmp) => {
+			if (curEdit() !== ed) { bmp.close(); return; }
+			const k = fitStageScale(stage, bmp.width, bmp.height);
+			cv.width = Math.max(1, Math.round(bmp.width * k));
+			cv.height = Math.max(1, Math.round(bmp.height * k));
 			const x = cv.getContext("2d");
 			x.clearRect(0, 0, cv.width, cv.height);
 			if (ed.compare && ed.img) {
 				const half = cv.width / 2;
-
 				x.drawImage(ed.img, 0, 0, half, cv.height);
-				x.drawImage(img, half, 0, half, cv.height);
+				x.drawImage(bmp, half, 0, half, cv.height);
 				x.fillStyle = "rgba(3,5,10,.7)";
 				x.fillRect(0, 0, half, 21); x.fillRect(half, 0, half, 21);
 				x.strokeStyle = "rgba(255,255,255,.8)"; x.lineWidth = 2;
@@ -464,7 +630,7 @@ export function createScanner(host) {
 				x.fillStyle = "#fff"; x.font = "600 11px -apple-system,sans-serif"; x.textAlign = "center";
 				x.fillText("VORHER", half / 2, 14); x.fillText("AUFBEREITET", half + half / 2, 14);
 			} else {
-				x.drawImage(img, 0, 0, cv.width, cv.height);
+				x.drawImage(bmp, 0, 0, cv.width, cv.height);
 			}
 			x.fillStyle = "rgba(3,5,10,0.55)";
 			x.fillRect(0, cv.height - 22, cv.width, 22);
@@ -472,17 +638,19 @@ export function createScanner(host) {
 			x.font = "11px -apple-system,sans-serif";
 			x.textAlign = "center";
 			x.fillText(ed.compare ? "Links Rohfoto · rechts entzerrter und aufbereiteter Scan" : "Aufbereitet · Ecken anpassen für manuellen Zuschnitt", cv.width / 2, cv.height - 7);
-		};
-		img.src = sh.out.dataUrl;
+			bmp.close();
+		}).catch((e) => console.warn("Heft: Vorschau laden fehlgeschlagen", e));
 	}
 	function openEdit(i) {
-		const sh = scanUI.shots[i];
+		const owner = scanUI;
+		const sh = owner && owner.shots[i];
 		if (!sh) return;
+		if (!sh.quad) { U.toast?.("Seite wird noch aufbereitet…"); return; }
 		closeEdit();
 		const ed = document.createElement("div");
 		ed.className = "heft-scan-edit";
 		ed.innerHTML =
-			'<div class="heft-scan-top"><b>Scan ' + (i + 1) + ' bearbeiten</b><button type="button" data-hescaneditback="1" title="Zurück">✕</button></div>' +
+			'<div class="heft-scan-top"><b>Scan ' + (i + 1) + ' bearbeiten</b><button type="button" data-hescaneditback="1" title="Zurück" aria-label="Zurück">✕</button></div>' +
 			'<div class="heft-scan-editstage"><canvas></canvas></div>' +
 			'<div class="heft-scan-modes">' + SCAN_MODES.map((m) =>
 				'<button type="button" data-hescanmode="' + m[0] + '" class="' + (sh.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>').join("") + '</div>' +
@@ -493,9 +661,10 @@ export function createScanner(host) {
 				'<button type="button" data-hescandel="1">🗑 Löschen</button>' +
 				'<button type="button" class="heft-scan-apply" data-hescandone="1">✓ Fertig</button>' +
 			'</div>';
-		scanUI.wrap.appendChild(ed);
+		owner.wrap.appendChild(ed);
 
-		scanUI.edit = { i, el: ed, quad: (sh.quad || []).map((p) => p.slice()), mode: sh.mode || "color", rot: sh.rot || 0, img: null, drag: -1, k: 1, cornerMode: false, compare: false, dirty: false };
+		const state = { sh, el: ed, quad: sh.quad.map((p) => p.slice()), mode: sh.mode || "color", rot: sh.rot || 0, img: null, drag: -1, k: 1, cornerMode: false, compare: false, dirty: false };
+		owner.edit = state;
 		const cv = ed.querySelector("canvas");
 		cv.addEventListener("pointerdown", onEditDown);
 		cv.addEventListener("pointermove", onEditMove);
@@ -503,32 +672,33 @@ export function createScanner(host) {
 		cv.addEventListener("pointercancel", onEditUp);
 
 		if (sh.out) drawEditResult(sh);
-		const setRaw = (img) => {
-			if (scanUI && scanUI.edit && scanUI.edit.el === ed) {
-				scanUI.edit.img = img;
-				if (!sh.out) layoutEdit();
-			}
-		};
-		if (sh.img) setRaw(sh.img);
-		else loadImg(sh.src).then((img) => { sh.img = img; setRaw(img); }).catch((e) => console.warn("Heft: Rohbild laden fehlgeschlagen", e));
+		loadImg(sh.src).then((img) => {
+			if (curEdit() !== state) { releaseImg(img, sh.src); return; }
+			state.img = img;
+			if (sh.out) drawEditResult(sh);
+			else layoutEdit();
+		}).catch((e) => console.warn("Heft: Rohbild laden fehlgeschlagen", e));
 	}
 	function closeEdit() {
 		clearTimeout(editCommitT); editCommitT = 0;
-		if (scanUI && scanUI.edit) { scanUI.edit.el.remove(); scanUI.edit = null; }
+		const ed = curEdit();
+		if (!ed) return;
+		releaseImg(ed.img, ed.sh.src);
+		ed.el.remove();
+		scanUI.edit = null;
 	}
 	function layoutEdit() {
-		const ed = scanUI && scanUI.edit;
+		const ed = curEdit();
 		if (!ed || !ed.img) return;
 		const stage = ed.el.querySelector(".heft-scan-editstage");
 		const cv = ed.el.querySelector("canvas");
-		const sh = scanUI.shots[ed.i];
-		ed.k = fitStageScale(stage, sh.w, sh.h);
-		cv.width = Math.max(1, Math.round(sh.w * ed.k));
-		cv.height = Math.max(1, Math.round(sh.h * ed.k));
+		ed.k = fitStageScale(stage, ed.sh.w, ed.sh.h);
+		cv.width = Math.max(1, Math.round(ed.sh.w * ed.k));
+		cv.height = Math.max(1, Math.round(ed.sh.h * ed.k));
 		drawEdit();
 	}
 	function drawEdit() {
-		const ed = scanUI && scanUI.edit;
+		const ed = curEdit();
 		if (!ed || !ed.img) return;
 		const cv = ed.el.querySelector("canvas");
 		const x = cv.getContext("2d");
@@ -561,14 +731,14 @@ export function createScanner(host) {
 	}
 	function editPos(e, cv) {
 		const r = cv.getBoundingClientRect();
-
 		const sx = cv.width / Math.max(1, r.width);
 		const sy = cv.height / Math.max(1, r.height);
-		const k = (scanUI.edit && scanUI.edit.k) || 1;
+		const ed = curEdit();
+		const k = (ed && ed.k) || 1;
 		return [((e.clientX - r.left) * sx) / k, ((e.clientY - r.top) * sy) / k];
 	}
 	function onEditDown(e) {
-		const ed = scanUI && scanUI.edit;
+		const ed = curEdit();
 		if (!ed || !ed.img) return;
 
 		if (!ed.cornerMode) {
@@ -588,75 +758,89 @@ export function createScanner(host) {
 		ed.drag = best;
 	}
 	function onEditMove(e) {
-		const ed = scanUI && scanUI.edit;
+		const ed = curEdit();
 		if (!ed || ed.drag < 0) return;
 		e.preventDefault();
-		const sh = scanUI.shots[ed.i];
 		const p = editPos(e, e.currentTarget);
-		ed.quad[ed.drag] = [Math.min(sh.w, Math.max(0, p[0])), Math.min(sh.h, Math.max(0, p[1]))];
+		ed.quad[ed.drag] = [Math.min(ed.sh.w, Math.max(0, p[0])), Math.min(ed.sh.h, Math.max(0, p[1]))];
 		drawEdit();
 	}
 	function onEditUp() {
-		const ed = scanUI && scanUI.edit;
+		const ed = curEdit();
 		if (!ed) return;
 		const was = ed.drag;
 		ed.drag = -1;
 		if (was < 0) return;
-		const sh = scanUI.shots[ed.i];
+		const sh = ed.sh;
 
-		if (!sh || quadArea(ed.quad) < sh.w * sh.h * 0.015 || !isConvex(ed.quad)) {
-			ed.quad = sh && sh.quad ? sh.quad.map((p) => p.slice()) : ed.quad;
+		if (quadArea(ed.quad) < sh.w * sh.h * 0.015 || !isConvex(ed.quad)) {
+			ed.quad = sh.quad.map((p) => p.slice());
 			drawEdit();
-			if (U.toast) U.toast("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
+			U.toast?.("Ecken dürfen sich nicht kreuzen und müssen ausreichend Abstand haben.", "error");
 			return;
 		}
 
 		ed.dirty = true;
 		queueCornerReprocess();
 	}
-	async function finishEdit() {
-
-		const owner = scanUI;
-		const ed = owner && owner.edit;
-		if (!ed || !owner) return;
-		const sh = owner.shots[ed.i];
-		if (sh) {
-			const snapshot = syncShotWithEdit(sh, ed);
-
-			clearTimeout(editCommitT); editCommitT = 0;
-			if (!sh.out || ed.dirty) {
-
-				const seq = ++liveSeq;
-				setScanBusy(true, "Scan wird aufbereitet…");
-				try {
-					const out = await processShot(sh, snapshot);
-					if (scanUI === owner && seq === liveSeq) { sh.out = out; ed.dirty = false; }
-				} catch (e2) { console.warn("Heft: Scan aufbereiten fehlgeschlagen", e2); }
-				if (scanUI === owner) setScanBusy(false);
-			}
-		}
-		if (scanUI !== owner) return;
+	function finishEdit() {
+		const owner = scanUI, ed = curEdit();
+		if (!owner || !ed) return;
+		clearTimeout(editCommitT); editCommitT = 0;
+		const sh = ed.sh;
+		// Nur neu aufbereiten, wenn sich etwas geändert hat oder die Seite fehlgeschlagen ist.
+		if (owner.shots.includes(sh) && (ed.dirty || sh.failed)) queueProcess(owner, sh, syncShotWithEdit(sh, ed));
 		closeEdit();
 		renderShots();
 	}
 
-	const readyScanOuts = () => scanUI.shots.map((sh) => sh.out).filter((o) => o && o.dataUrl && o.w && o.h);
-	function scanFinishPdf() {
+	// ---- Abschluss: auf die Warteschlange warten, dann fertige Scans als Data-URLs liefern.
+	async function collectReadyPages(owner, jpeg) {
+		if (owner.exporting) return null;
+		owner.exporting = true;
+		setScanBusy(true, "Seiten werden vorbereitet…");
 		try {
-			const outs = readyScanOuts();
-			if (!outs.length) { if (U.toast) U.toast("Keine fertigen Scans zum Export", "error"); return; }
-			const bytes = buildPdf(outs);
-			U.downloadBlob("scan-" + new Date().toISOString().slice(0, 10) + ".pdf", new Blob([bytes], { type: "application/pdf" }));
-			if (U.toast) U.toast("PDF mit " + outs.length + " Seite(n) gespeichert");
+			await waitQueueIdle(owner);
+			if (scanUI !== owner) return null;
+			const ready = owner.shots.filter((sh) => sh.out);
+			if (!ready.length) { U.toast?.("Keine fertigen Scans zum Export", "error"); return null; }
+			const pages = [];
+			for (const sh of ready) {
+				const { blob, w, h } = sh.out;
+				const dataUrl = jpeg && blob.type !== "image/jpeg" ? await toJpegDataUrl(blob) : await blobToDataUrl(blob);
+				pages.push({ dataUrl, w, h });
+			}
+			return pages;
 		} catch (e) {
-			console.warn("Heft: PDF erzeugen fehlgeschlagen", e);
-			if (U.toast) U.toast("PDF konnte nicht erzeugt werden", "error");
+			console.warn("Heft: Seiten vorbereiten fehlgeschlagen", e);
+			U.toast?.("Seiten konnten nicht vorbereitet werden", "error");
+			return null;
+		} finally {
+			if (scanUI === owner) setScanBusy(false);
+			owner.exporting = false;
 		}
 	}
-	function scanFinishHeft() {
-		const outs = readyScanOuts();
+	async function scanFinishPdf() {
+		const owner = scanUI;
+		if (!owner) return;
+		const pages = await collectReadyPages(owner, true);
+		if (!pages || scanUI !== owner) return;
+		try {
+			const bytes = buildPdf(pages);
+			U.downloadBlob("scan-" + new Date().toISOString().slice(0, 10) + ".pdf", new Blob([bytes], { type: "application/pdf" }));
+			U.toast?.("PDF mit " + pages.length + " Seite(n) gespeichert");
+		} catch (e) {
+			console.warn("Heft: PDF erzeugen fehlgeschlagen", e);
+			U.toast?.("PDF konnte nicht erzeugt werden", "error");
+		}
+	}
+	async function scanFinishHeft() {
+		const owner = scanUI;
+		if (!owner) return;
+		const pages = await collectReadyPages(owner, false);
+		if (!pages || scanUI !== owner) return;
 		closeScanner();
-		host.insertPages(outs.map((o) => ({ src: o.dataUrl, w: o.w, h: o.h })));
+		host.insertPages(pages.map((p) => ({ src: p.dataUrl, w: p.w, h: p.h, scan: true })));
 	}
 
 	// Escape schließt zuerst die Nachbearbeitung, dann den Scanner. true = behandelt.
