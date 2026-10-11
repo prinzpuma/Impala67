@@ -250,7 +250,7 @@ def main():
     held_out = set(split["val"]) | set(split["test"])
     scads = load_scads(args.scads, DATA)
     scads_train = [s for s in scads if s[2] not in held_out]
-    fhswf = load_fhswf(args.fhswf, DATA) if os.path.isdir(args.fhswf) else []
+    fhswf = load_fhswf(args.fhswf, DATA)  # nutzt den Cache, auch ohne Parquet-Ordner
     mw_train = [s for s in MathWritingDataset().samples if s[1]]
     mw_test = MathWritingDataset(split="test").samples
     print(f"Training: ScaDS {len(scads_train)}, fhswf {len(fhswf)}, MathWriting {len(mw_train)}")

@@ -58,6 +58,8 @@ def _cached(path: str, build):
         print(f"Cache geladen: {path} ({len(data)} Zeilen)")
         return data
     data = build()
+    if not data:
+        return data  # nichts gefunden: keinen leeren Cache anlegen, der spätere echte Daten verdeckt
     with open(path, "wb") as f:
         pickle.dump(data, f, protocol=4)
     print(f"Cache gespeichert: {path} ({len(data)} Zeilen)")
