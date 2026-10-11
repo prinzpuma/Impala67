@@ -39,7 +39,7 @@ import { SYNC_MAINTENANCE } from "./sync-maintenance.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import "./performance-profiler-settings.js";
 import "./pdfpaste.js";
-import "./beta-motion.js";
+import "./motion.js";
 
 // Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
 // Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.

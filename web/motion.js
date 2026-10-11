@@ -1,4 +1,4 @@
-// beta-motion.js — Bewegungsschicht des Beta-Designs.
+// motion.js — Bewegungsschicht des Designs.
 // Morph von der angeklickten Fläche in die neue Ansicht, gleitende Markierung in
 // Umschaltern und hochzählende Kennzahlen. Rein additiv: liest nur DOM und S,
 // ändert keinen App-Zustand. Aus bei „Bewegung reduzieren“ (App-Einstellung, wie überall).
@@ -13,8 +13,7 @@ let source = null;
 let enterTimer = 0;
 
 function enabled() {
-	const b = document.body.classList;
-	return b.contains("beta-ui") && !b.contains("reduce-motion");
+	return !document.body.classList.contains("reduce-motion");
 }
 
 function spring() {

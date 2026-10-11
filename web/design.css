@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Impala67 – Design-Schicht (früher Beta-Design, jetzt Standard)
+   Leitidee: ruhige, weiche Flächen aus der Theme-Akzentfarbe; Verspieltheit
+   kommt aus Bewegung (motion.js), nicht aus Deko.
+   „:root body“ hält das Gewicht der früheren body.beta-ui-Selektoren, damit
+   diese Schicht weiter über styles.css/home.css gewinnt.
+   ========================================================================== */
+
+/* 1. Tokens: alles aus --accent abgeleitet, damit jedes Farbthema passt */
+:root body {
+	--b-warm: color-mix(in oklab, var(--accent) 55%, #ff8fb1);
+	--b-tint: color-mix(in srgb, var(--accent) 9%, transparent);
+	--b-tint-2: color-mix(in srgb, var(--accent) 16%, transparent);
+	--b-tint-3: color-mix(in srgb, var(--accent) 24%, transparent);
+	--b-ok: color-mix(in srgb, var(--success) 16%, transparent);
+	--b-due: color-mix(in srgb, var(--warn) 18%, transparent);
+	--b-grad: linear-gradient(135deg, var(--accent), var(--b-warm));
+	--b-on-grad: var(--on-accent, #fff);
+	--b-r-sm: 10px;
+	--b-r-md: 16px;
+	--b-r-lg: 22px;
+	--b-card: 0 0 0 1px var(--edge-soft), 0 10px 28px -22px rgb(0 0 0 / .45);
+	--b-lift: 0 0 0 1px var(--edge), 0 14px 30px -20px rgb(0 0 0 / .5);
+	--b-ease: cubic-bezier(.2, .8, .2, 1);
+	--b-spring: linear(0, .109, .342, .593, .805, .954, 1.041, 1.078, 1.082, 1.068, 1.047, 1.027, 1.011, 1.001, .995, .993, .993, .995, .997, .998, .999, 1);
+	--b-display: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+}
+
+/* 2. Schrift: rund nur für Überschriften und Zahlen */
+:root body .hv .hv-lead, :root body .anki-page .anki-lead, :root body .lib-head h1,
+:root body .hv-stat > b, :root body .anki-stat > b, :root body .hv-cont-copy b,
+:root body .anki-study-mode .card-face {
+	font-family: var(--b-display);
+}
+:root body .hv .hv-lead, :root body .anki-page .anki-lead { font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 550 }
+
+/* 3. Ein dezenter Farbschimmer – nur auf der Startseite */
+:root body .hv { position: relative; isolation: isolate }
+:root body .hv::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 420px;
+	z-index: -1;
+	pointer-events: none;
+	background: radial-gradient(60% 70% at 15% 10%, var(--b-tint-2), transparent 70%);
+}
+
+/* 4. Gemeinsame Bausteine: Karten, Pillen, Hover */
+:root body :is(.hv-continue, .hv-stat, .anki-stat, .deck-row, .la-block, .lz-panel, .settings-group-card, .study-card) {
+	border: 0;
+	border-radius: var(--b-r-lg);
+	background: var(--panel-solid);
+	box-shadow: var(--b-card);
+	transition: transform .45s var(--b-spring), box-shadow .2s var(--b-ease), background .2s var(--b-ease);
+}
+:root body :is(.hv-continue, button.hv-stat, button.anki-stat:not(:disabled), .deck-row):hover { transform: translateY(-2px); box-shadow: var(--b-lift) }
+:root body :is(.hv-btn, .hv-ghost, .hv-alert, .hv-pin, .anki-modes button, .deck-study, .deck-feyn, .deck-iconbtn, .la-act, .lib-mode, .modal-actions button, .modal-x, .study-exit-btn, .study-footer .mini, .archive-row-actions .mini) {
+	border-radius: 999px;
+}
+:root body :is(button, [role="button"]):active:not(:disabled) { transform: scale(.97) }
+
+/* 5. Startseite */
+:root body .hv .hv-btn { border-color: transparent; background: var(--b-tint-2); color: var(--text); font-weight: 600; transition: background .2s var(--b-ease), transform .45s var(--b-spring) }
+:root body .hv .hv-btn:hover { background: var(--b-tint-3) }
+:root body .hv .hv-continue { padding: 14px }
+:root body .hv .hv-prev { border-radius: var(--b-r-md) }
+:root body .hv .hv-cont-copy b { font-size: 24px }
+:root body .hv .hv-pin { height: 36px; box-shadow: none; font-weight: 500; color: var(--text); background: var(--b-tint); transition: background .2s var(--b-ease), transform .45s var(--b-spring) }
+:root body .hv .hv-pin:hover { background: var(--b-tint-2); transform: translateY(-2px) }
+:root body .hv .hv-stat { padding: 20px 22px }
+:root body .hv .hv-stat > b, :root body .anki-page .anki-stat > b { font-size: 30px; font-variant-numeric: tabular-nums }
+:root body .hv .hv-cards.due, :root body .anki-page button.anki-stat.due { background: var(--b-grad); color: var(--b-on-grad) }
+:root body .hv .hv-cards.done { background: color-mix(in srgb, var(--success) 12%, var(--panel-solid)) }
+:root body .hv .hv-goalbar, :root body .la-meter, :root body .lz-progress, :root body .lz-subject-track { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 8%, transparent) }
+:root body :is(.hv-goalbar, .la-meter, .lz-progress, .lz-subject-track) i { border-radius: 99px; background: var(--b-grad) }
+:root body :is(.hv-week.reached .hv-goalbar, .la-row.best .la-meter) i { background: var(--success) }
+:root body .la-row.down .la-meter i { background: var(--warn) }
+:root body .hv .hv-bar { width: 10px; background: color-mix(in srgb, var(--text) 7%, transparent) }
+:root body :is(.hv-bar, .lz-bar-col) i { border-radius: 99px; background: var(--b-tint-3) }
+:root body :is(.hv-day.today .hv-bar, .lz-bar-col.today) i { background: var(--b-grad) }
+:root body .hv .hv-recall { border: 0; border-radius: var(--b-r-lg); background: var(--b-tint); transition: background .2s var(--b-ease) }
+:root body .hv .hv-recall:hover { background: var(--b-tint-2) }
+:root body .hv .hv-recall small { color: var(--text); font-weight: 600 }
+
+/* 6. Karteikarten-Übersicht */
+:root body .anki-page .anki-modes button { border-color: transparent; font-weight: 600; background: var(--b-tint-2) }
+:root body .anki-page .anki-modes button:hover:not(:disabled) { background: var(--b-tint-3) }
+:root body .anki-page .anki-stat { padding: 20px 22px }
+:root body .anki-page .deck-list { gap: 8px }
+:root body .anki-page .deck-row { padding: 12px 16px; min-height: 0 }
+:root body .anki-page .deck-ico { width: 34px; height: 34px; border-radius: 50%; background: var(--b-tint); font-size: 17px }
+:root body .anki-page .cnt-due { display: inline-block; padding: 1px 9px; border-radius: 999px; background: var(--b-due) }
+:root body .anki-page .deck-study { border: 0; padding: 6px 16px; background: var(--b-grad); color: var(--b-on-grad); transition: transform .45s var(--b-spring), filter .2s }
+:root body .anki-page .deck-study:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06) }
+:root body .anki-page .deck-feyn { border: 0; background: var(--b-tint-2) }
+:root body .anki-page .deck-actions button:disabled { background: var(--surface-hover); color: var(--text2); opacity: 1 }
+
+/* 7. Lernmodus */
+:root body .anki-study-mode .study-card { border-radius: 28px }
+:root body .anki-study-mode .study-meta-state, :root body .anki-study-mode .study-side-label { display: inline-block; padding: 2px 12px; border-radius: 999px; background: var(--b-tint-2); color: var(--text); font-weight: 600 }
+:root body .anki-study-mode .study-side-label { align-self: center }
+:root body .anki-study-mode .grades [data-ankigrade] { --gc: var(--accent); border: 0; border-radius: var(--b-r-md); background: color-mix(in srgb, var(--gc) 14%, transparent); color: var(--text); transition: transform .45s var(--b-spring), background .2s var(--b-ease) }
+:root body .anki-study-mode .grades [data-ankigrade="1"] { --gc: var(--danger, #e5484d) }
+:root body .anki-study-mode .grades [data-ankigrade="2"] { --gc: var(--warn) }
+:root body .anki-study-mode .grades [data-ankigrade="3"] { --gc: var(--success) }
+:root body .anki-study-mode .grades [data-ankigrade]:hover:not(:disabled) { background: color-mix(in srgb, var(--gc) 24%, transparent); transform: translateY(-3px) }
+:root body .anki-study-mode .grades [data-ankigrade] .grade-key { opacity: .6 }
+:root body .anki-study-mode [data-ankishowback]:not(.mini) { border: 0; border-radius: 999px; background: var(--b-grad); color: var(--b-on-grad); font-weight: 650; transition: transform .45s var(--b-spring), filter .2s }
+:root body .anki-study-mode [data-ankishowback]:not(.mini):hover { transform: translateY(-2px); filter: brightness(1.06) }
+:root body .anki-study-mode .exp-answer { border-radius: var(--b-r-md) }
+
+/* 8. Umschalter mit gleitender Markierung (Position animiert motion.js) */
+:root body :is(.lib-tabs, .lz-view-switch, .mode-btns) { border-color: transparent; border-radius: 999px; background: var(--b-tint); padding: 3px }
+:root body :is(.lib-tab, .lz-view-switch button, .mode-btns button) { position: relative; isolation: isolate; border: 0; border-radius: 999px; background: transparent; font-weight: 600 }
+:root body :is(.lib-tab, .lz-view-switch button, .mode-btns button).active { background: transparent; color: var(--text) }
+:root body :is(.lib-tab, .lz-view-switch button, .mode-btns button).active::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--panel-solid);
+	box-shadow: 0 0 0 1px var(--edge-soft), 0 4px 12px -6px rgb(0 0 0 / .35);
+}
+/* Karteikarten-Reiter bleiben Unterstrich-Tabs: hier gleitet der Unterstrich */
+:root body .library.anki .lib-head .mode-btns { padding: 0; border-radius: 0; background: none }
+:root body .library.anki .lib-head .mode-btns button.active { border-bottom-color: transparent }
+:root body .library.anki .lib-head .mode-btns button.active::before { inset: auto 0 0; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: none }
+:root body .lib-tab-n { padding: 0 7px; border-radius: 999px; background: var(--b-tint-2); opacity: 1 }
+:root body .lib-tab.active .lib-tab-n { color: var(--text) }
+:root body .lib-mode { border: 0; padding: 5px 14px; font-weight: 600; background: var(--b-tint); color: var(--text) }
+:root body .lib-mode.active { background: var(--b-grad); color: var(--b-on-grad) }
+
+/* 9. Seitenleiste & Bibliothek */
+:root body .notion-tree-workspace { border-top: 0; margin-top: 12px }
+:root body .notion-tree-row { border-top: 0; border-radius: var(--b-r-sm); margin: 1px 0 }
+:root body .notion-tree-row:hover { background: var(--b-tint) }
+:root body .notion-tree-caret { border-radius: 999px }
+:root body .notion-tree-caret:hover { background: var(--b-tint-2) }
+:root body .notion-tree-meta { padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent) }
+
+/* 10. Lernanalyse & Lernzeit */
+:root body .la-block, :root body .lz-panel { padding: 18px }
+:root body .la-row { border-radius: var(--b-r-md) }
+:root body .la-row:hover { background: var(--b-tint) }
+:root body .la-answer { border-radius: var(--b-r-md) }
+:root body .la-act { border: 0; padding: 4px 12px; background: var(--b-tint-2) }
+:root body .lz-summary-card { border: 0; border-radius: var(--b-r-lg); background: linear-gradient(160deg, var(--b-tint-2), var(--panel-solid) 70%) }
+:root body .lz-kpi-grid > div, :root body .lz-recommendation { border: 0; border-radius: var(--b-r-md); background: var(--b-tint) }
+
+/* 11. Einstellungen, Dialoge, Menüs, Seitenreiter */
+:root body .settings-group > h3 { color: var(--text); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; font-weight: 650 }
+:root body .settings-row { min-height: 58px }
+:root body .settings-switch input:checked + span { background: var(--b-grad) }
+:root body .modal { border-radius: 24px; box-shadow: 0 30px 60px -30px rgb(0 0 0 / .6) }
+:root body :is(.page-menu, .model-menu, .palette-box) { border-radius: 18px }
+:root body .menu-item { border-radius: var(--b-r-sm) }
+:root body .tab.active { background: var(--b-tint-2); color: var(--text) }
+
+/* 12. Auftritte (motion.js setzt .bm-enter kurz nach einem Ansichtswechsel) */
+@keyframes bm-rise { from { opacity: 0; transform: translateY(10px) } }
+@keyframes bm-grow-x { from { transform: scaleX(0) } }
+@keyframes bm-grow-y { from { transform: scaleY(0) } }
+:root body #main.bm-enter :is(.hv, .anki-page, .lib-docs) > * {
+	animation: bm-rise .5s var(--b-ease) both;
+}
+:root body #main.bm-enter :is(.hv, .anki-page, .lib-docs) > *:nth-child(2) { animation-delay: 40ms }
+:root body #main.bm-enter :is(.hv, .anki-page, .lib-docs) > *:nth-child(3) { animation-delay: 80ms }
+:root body #main.bm-enter :is(.hv, .anki-page, .lib-docs) > *:nth-child(n+4) { animation-delay: 120ms }
+:root body #main.bm-enter :is(.hv-goalbar, .la-meter, .lz-progress, .lz-subject-track) i { transform-origin: left; animation: bm-grow-x .9s var(--b-spring) .15s both }
+:root body #main.bm-enter :is(.hv-bar, .lz-bar-col) i { transform-origin: bottom; animation: bm-grow-y .8s var(--b-spring) .1s both }
+
+/* Morph-Hülle (wandert von der angeklickten Fläche zur neuen Ansicht) */
+.bm-ghost { position: fixed; z-index: 9000; pointer-events: none; margin: 0; contain: strict }
