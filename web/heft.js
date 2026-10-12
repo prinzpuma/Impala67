@@ -8,12 +8,27 @@ import { PDFS } from "./pdfs.js";
 import { RAG } from "./rag.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
 import { documentShadow, diffDocument, blobId, composePageText, PAGE_W, PAGE_H } from "./heft-document-core.js";
-import { fitStrokeShape, hitBox, lassoBounds, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
+import { fitStrokeShape, hitBox, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
+import {
+	lassoBounds,
+	selectStrokesByLasso,
+	lassoTouchAction,
+	isLassoHandleHit,
+	isLassoBodyHit,
+	drawLassoSelection,
+	drawLassoPath,
+	updateLassoBarUI,
+	duplicateLassoStrokes,
+	deleteLassoStrokes,
+	recognizeLassoText,
+	trainLassoSample
+} from "./heft-lasso.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
 import { icon, lead } from "./icons.js";
+import { HEFT_INDEXER } from "./heft-indexer.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -116,54 +131,6 @@ export const HEFT = (() => {
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
-	const ocrQueueV2 = new Set();
-	const ocrLastRun = new Map();
-	let ocrTimerV2 = 0, ocrBusyV2 = false;
-	// OCR nur im Leerlauf starten: das 1100px-Canvas-Rendern blockierte sonst kurz das
-	// Scrollen/Schreiben (Mikroruckler). requestIdleCallback wartet auf eine ruhige Phase
-	// (max. +10 s); Safari ohne die API verhält sich exakt wie bisher.
-	const runOcrWhenIdle = () => (window.requestIdleCallback ? window.requestIdleCallback(() => runHandwritingIndexV2(), { timeout: 10000 }) : runHandwritingIndexV2());
-	function scheduleHandwritingIndexV2(pi) {
-		if (!HANDSCHRIFT.available()) return;
-		ocrQueueV2.add(pi);
-		clearTimeout(ocrTimerV2);
-		ocrTimerV2 = setTimeout(runOcrWhenIdle, 4000);
-	}
-	async function runHandwritingIndexV2() {
-		// Nach unmount NICHT neu einplanen — sonst tickte der 4-s-Timer ewig weiter (Akku).
-		if (ocrBusyV2 || !doc || !pid) { clearTimeout(ocrTimerV2); if (doc && pid) ocrTimerV2 = setTimeout(runOcrWhenIdle, 4000); return; }
-		const jobPid = pid, jobDoc = doc;
-		const indices = [...ocrQueueV2];
-		ocrQueueV2.clear();
-		ocrBusyV2 = true;
-		try {
-			for (const pi of indices) {
-				const key = jobPid + ":" + pi;
-				if (Date.now() - (ocrLastRun.get(key) || 0) < 45000) { ocrQueueV2.add(pi); continue; }
-				const pg = jobDoc.pages[pi];
-				if (!pg || !(pg.strokes && pg.strokes.length)) continue;
-
-				ocrLastRun.set(key, Date.now());
-				let text = null;
-				try {
-					text = await HANDSCHRIFT.recognizeStrokes(pg.strokes);
-				} catch (err) {
-					console.warn("Heft: Vektor-Handschrifterkennung fehlgeschlagen", err);
-				}
-
-				if (pid !== jobPid || doc !== jobDoc || text == null) continue;
-				const composed = composePageText(text, pg);
-				if (composed !== String(pg.ocrText || "").trim()) {
-					pg.ocrText = composed;
-					scheduleSave();
-					try { RAG.queuePage(jobPid); } catch {}
-				}
-			}
-		} catch (e) { console.warn("Heft: Handschrift-Erkennung v2 fehlgeschlagen", e); }
-		ocrBusyV2 = false;
-
-		if (ocrQueueV2.size) { clearTimeout(ocrTimerV2); ocrTimerV2 = setTimeout(runOcrWhenIdle, 45000); }
-	}
 
 	const enc = new TextEncoder(), dec = new TextDecoder();
 
@@ -638,13 +605,6 @@ export const HEFT = (() => {
 		}
 		return c;
 	}
-	function drawLassoSelection(x, strokes) {
-		const bb = lassoBounds(strokes || []);
-		if (!bb) return;
-		x.save(); x.setLineDash([8, 5]); x.strokeStyle = "#2f6fed"; x.lineWidth = 2;
-		x.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18);
-		x.setLineDash([]); x.fillStyle = "#2f6fed"; x.beginPath(); x.arc(bb.maxX + 9, bb.maxY + 9, 8, 0, Math.PI * 2); x.fill(); x.restore();
-	}
 
 	function drawSelection(x, im) {
 		x.save();
@@ -680,7 +640,7 @@ export const HEFT = (() => {
 			drawStroke(x, s);
 		});
 		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
-		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes);
+		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes, lassoSel.bounds);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
 			const im = sel.imgId ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
 			if (im) drawSelection(x, im);
@@ -1360,7 +1320,6 @@ export const HEFT = (() => {
 	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
 	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
 	const touchNavigates = () => onlyPen && !penRecently();
-	const lassoTouchAction = (pointerType, currentTool, onLasso) => pointerType === "touch" && currentTool === "lasso" ? (onLasso ? "interact" : "dismiss") : "none";
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
 	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
 	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
@@ -1426,8 +1385,8 @@ export const HEFT = (() => {
 		const pg = doc.pages[pi];
 		if (!pg) return;
 		const p = pos(e, cv);
-		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? lassoBounds(lassoSel.strokes) : null;
-		const onLasso = !!activeLassoBox && p[0] >= activeLassoBox.minX - 18 && p[0] <= activeLassoBox.maxX + 22 && p[1] >= activeLassoBox.minY - 18 && p[1] <= activeLassoBox.maxY + 22;
+		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? (lassoSel.bounds || lassoBounds(lassoSel.strokes)) : null;
+		const onLasso = !!activeLassoBox && isLassoBodyHit(p, activeLassoBox, 20);
 		// Ein Fingertipp außerhalb beendet Auswahl UND Lasso-Modus. Der Nur-Stift-
 		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
 		const touchLasso = lassoTouchAction(e.pointerType, tool, onLasso);
@@ -1447,13 +1406,13 @@ export const HEFT = (() => {
 		if (tool === "lasso") {
 
 			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
-				const bb = lassoBounds(lassoSel.strokes);
-				if (bb && nearPoint(p, bb.maxX + 9, bb.maxY + 9, 22)) {
+				const bb = lassoSel.bounds || lassoBounds(lassoSel.strokes);
+				if (bb && isLassoHandleHit(p, bb, 22)) {
 					const w = Math.max(1, bb.maxX - bb.minX), h = Math.max(1, bb.maxY - bb.minY);
 					drawing = { lassoResize: true, strokes: lassoSel.strokes, originals: lassoSel.strokes.map(strokeGeometry), cv, pageIdx: pi, anchor: [bb.minX, bb.minY], base: [w, h], factor: 1 };
 					return;
 				}
-				if (bb && p[0] >= bb.minX - 12 && p[0] <= bb.maxX + 12 && p[1] >= bb.minY - 12 && p[1] <= bb.maxY + 12) {
+				if (bb && isLassoBodyHit(p, bb, 12)) {
 					drawing = { lassoMove: true, strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
 					return;
 				}
@@ -1564,14 +1523,13 @@ export const HEFT = (() => {
 		if (!drawing || rejected(e)) return;
 		e.preventDefault();
 		if (drawing.lasso) {
-			drawing.pts.push(pos(e, drawing.cv));
-
-			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
-			const x = drawing.ctx;
-			x.save(); x.setLineDash([7, 4]); x.strokeStyle = "#2f6fed"; x.lineWidth = 1.7;
-			x.beginPath(); x.moveTo(drawing.pts[0][0], drawing.pts[0][1]);
-			for (let i = 1; i < drawing.pts.length; i++) x.lineTo(drawing.pts[i][0], drawing.pts[i][1]);
-			x.stroke(); x.restore();
+			const p = pos(e, drawing.cv);
+			const last = drawing.pts[drawing.pts.length - 1];
+			if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 2.5) {
+				drawing.pts.push(p);
+				if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
+				drawLassoPath(drawing.ctx, drawing.pts);
+			}
 			return;
 		}
 		if (drawing.lassoMove) {
@@ -1581,6 +1539,10 @@ export const HEFT = (() => {
 			if (dx || dy) {
 				drawing.strokes.forEach((s) => translateStroke(s, dx, dy));
 				drawing.dx += dx; drawing.dy += dy; drawing.last = pm;
+				if (lassoSel && lassoSel.bounds) {
+					lassoSel.bounds.minX += dx; lassoSel.bounds.maxX += dx;
+					lassoSel.bounds.minY += dy; lassoSel.bounds.maxY += dy;
+				}
 				redrawNextFrame(drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event
 			}
 			return;
@@ -1592,6 +1554,7 @@ export const HEFT = (() => {
 			const factor = Math.max(0.15, Math.min(maxFactor, projected));
 			drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, drawing.originals[i], ax, ay, factor));
 			drawing.factor = factor;
+			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
 			redrawNextFrame(drawing.pageIdx);
 			return;
 		}
@@ -1655,10 +1618,10 @@ export const HEFT = (() => {
 		const pg = doc.pages[pi];
 		if (!pg) { drawing = null; return; }
 		if (drawing.lasso) {
+			clearLiveInk(pi);
 			const poly = drawing.pts;
-
-			const hits = poly.length >= 3 ? pg.strokes.filter((s) => strokeOutline(s).some((p) => pointInPolygon(p, poly))) : [];
-			lassoSel = hits.length ? { pageIdx: pi, strokes: hits } : null;
+			const hits = selectStrokesByLasso(pg.strokes, poly);
+			lassoSel = hits.length ? { pageIdx: pi, strokes: hits, bounds: lassoBounds(hits) } : null;
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (drawing.lassoMove) {
@@ -1666,13 +1629,15 @@ export const HEFT = (() => {
 				pushUndo({ kind: "lassoMove", strokes: drawing.strokes, dx: drawing.dx, dy: drawing.dy, pageIdx: pi });
 				scheduleSave(); renderThumb(pi);
 			}
+			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (drawing.lassoResize) {
 			if (Math.abs(drawing.factor - 1) > 0.001) {
 				pushUndo({ kind: "lassoResize", strokes: drawing.strokes, prev: drawing.originals, pageIdx: pi });
-				scheduleSave(); renderThumb(pi); scheduleHandwritingIndexV2(pi);
+				scheduleSave(); renderThumb(pi); HEFT_INDEXER.schedulePage(pid, pg);
 			}
+			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
 			drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (drawing.laser) {
@@ -1710,7 +1675,7 @@ export const HEFT = (() => {
 
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
-			if (drawing.tool === "pen" || drawing.tool === "marker") scheduleHandwritingIndexV2(pi);
+			if (drawing.tool === "pen" || drawing.tool === "marker") HEFT_INDEXER.schedulePage(pid, pg);
 		}
 		drawing = null;
 		updateChrome();
@@ -2219,75 +2184,28 @@ export const HEFT = (() => {
 	}
 
 	function updateLassoBar() {
-		if (!host) return;
-		let bar = host.querySelector(".heft-lasso-bar");
-		if (!lassoSel || !lassoSel.strokes.length) { if (bar) bar.remove(); return; }
-		if (!bar) { bar = document.createElement("div"); bar.className = "heft-lasso-bar"; host.appendChild(bar); }
-		const n = lassoSel.strokes.length;
-		bar.innerHTML = "<span>" + lead("lasso") + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
-			'<button type="button" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">' + lead("note") + 'In Text</button>' +
-			'<button type="button" data-helassotrain="1" title="Als Trainingsbeispiel für die Handschrift speichern">' + lead("graduation") + 'Trainieren</button>' +
-			'<button type="button" data-helassodup="1">' + lead("copy") + 'Duplizieren</button>' +
-			'<button type="button" data-helassodel="1">' + lead("trash") + 'Löschen</button>' +
-			'<button type="button" data-helassoclear="1">Aufheben</button>';
+		updateLassoBarUI(host, lassoSel, lead);
 	}
 
-	async function recognizeLassoSelection() {
-		if (!lassoSel || !lassoSel.strokes.length) return;
-		try {
-			U.toast("Handschrift wird erkannt…");
-			const text = await HANDSCHRIFT.recognizeStrokes(lassoSel.strokes);
-			if (text && text.trim()) {
-				let copied = true;
-				try { await navigator.clipboard.writeText(text.trim()); } catch (e) { copied = false; PERF_PROFILER.error("clipboard-error", e, { source: "heft-lasso" }); }
-				U.toast((copied ? "Erkannt & kopiert: „" : "Erkannt (Kopieren nicht möglich): „") + text.trim() + "“");
-			} else {
-				U.toast("Kein Text erkannt.");
-			}
-		} catch (e) {
-			U.toast("Erkennung fehlgeschlagen: " + (e?.message || e));
-		}
+	function recognizeLassoSelection() {
+		recognizeLassoText(lassoSel, HANDSCHRIFT, U.toast, PERF_PROFILER);
 	}
 
-	async function trainLassoSelection() {
-		if (!lassoSel || !lassoSel.strokes.length) return;
-		let guess = "";
-		try {
-			guess = await HANDSCHRIFT.recognizeStrokes(lassoSel.strokes) || "";
-		} catch {}
-		const label = window.prompt("Welcher Text steht in dieser Auswahl?", guess);
-		if (label != null && label.trim()) {
-			const saved = HANDSCHRIFT.saveTrainingSample(lassoSel.strokes, label.trim());
-			if (saved) {
-				const count = HANDSCHRIFT.getTrainingSamples().length;
-				U.toast("Gespeichert! (" + count + " Trainingsbeispiele gesammelt)");
-			}
-		}
+	function trainLassoSelection() {
+		trainLassoSample(lassoSel, HANDSCHRIFT, U.toast);
 	}
+
 	function duplicateLassoSelection() {
-		if (!lassoSel || !doc) return;
-		const pg = doc.pages[lassoSel.pageIdx];
-		if (!pg) return;
-
-		const copies = lassoSel.strokes.map((s) => {
-			const c = JSON.parse(JSON.stringify(s));
-			c.id = U.uid(); // Kopie ist ein eigener Strich, nicht derselbe an neuer Stelle
-			translateStroke(c, 28, 28);
-			return c;
-		});
-		pg.strokes.push(...copies);
-		pushUndo({ kind: "lassoDup", strokes: copies, pageIdx: lassoSel.pageIdx });
-		lassoSel = { pageIdx: lassoSel.pageIdx, strokes: copies };
+		const next = duplicateLassoStrokes(lassoSel, doc, pushUndo);
+		if (!next) return;
+		lassoSel = next;
 		scheduleSave(); redrawPage(lassoSel.pageIdx); renderThumb(lassoSel.pageIdx); updateChrome();
 	}
+
 	function deleteLassoSelection() {
-		if (!lassoSel || !doc) return;
-		const pg = doc.pages[lassoSel.pageIdx];
-		if (!pg) { lassoSel = null; updateChrome(); return; }
-		const strokes = lassoSel.strokes.slice();
-		pg.strokes = pg.strokes.filter((s) => !strokes.includes(s));
-		pushUndo({ kind: "lassoDel", strokes, pageIdx: lassoSel.pageIdx });
-		const lpi = lassoSel.pageIdx; lassoSel = null;
+		const lpi = deleteLassoStrokes(lassoSel, doc, pushUndo);
+		if (lpi == null) { lassoSel = null; updateChrome(); return; }
+		lassoSel = null;
 		refresh(lpi);
 	}
 	let boundTray = null;
@@ -2525,8 +2443,7 @@ export const HEFT = (() => {
 		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; });
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
-		// Texterkennung im Hintergrund; dynamischer Import vermeidet den Zyklus heft.js <-> heft-indexer.js.
-		import("./heft-indexer.js").then((m) => m.HEFT_INDEXER.startBackgroundScan()).catch((e) => PERF_PROFILER.error("heft-indexer-error", e));
+		HEFT_INDEXER.startBackgroundScan();
 	}
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
@@ -2881,7 +2798,7 @@ export const HEFT = (() => {
 			PERF_PROFILER.measure("heft.layout", () => layout(), { pages: doc.pages.length }, 16);
 			if (idx) PERF_PROFILER.measure("heft.go", () => go(idx), { page: idx }, 16);
 
-			scheduleHandwritingIndexV2(idx);
+			if (doc && doc.pages && doc.pages[idx]) HEFT_INDEXER.schedulePage(pid, doc.pages[idx]);
 			purgeOrphanLegacyInk();
 			pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
 		} finally {
@@ -2917,7 +2834,7 @@ export const HEFT = (() => {
 		geometry = { viewport: null, content: { w: 1, h: 1 }, pages: [] };
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
-		clearTimeout(holdTimer); ocrQueueV2.clear(); clearTimeout(ocrTimerV2); ocrTimerV2 = 0; holdTool = null; suppressEraserClick = false;
+		clearTimeout(holdTimer); holdTool = null; suppressEraserClick = false;
 
 		navReset(); activePenPointers.clear(); clearTimeout(wheelCommitT); clearTimeout(zoomSettleTimer); zoomSettleTimer = 0; clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }

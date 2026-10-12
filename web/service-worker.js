@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.61"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.62"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
@@ -108,6 +108,7 @@ const APP_FILES = [
 	"./controller.js",
 	"./editor.js",
 	"./editor-markdown.js",
+	"./editor-menus.js",
 	"./render.js",
 	"./conflict-ui.js",
 	"./library.js",
@@ -137,6 +138,7 @@ const APP_FILES = [
 	"./heft.js",
 	"./heft-document-core.js",
 	"./heft-geometry.js",
+	"./heft-lasso.js",
 	"./heft-pages-core.js",
 	"./heft-scan.js",
 	"./heft-scan-pixels.js",
@@ -157,7 +159,7 @@ const APP_FILES = [
 // Nutzerabhaengige OCR-/Transformers-Dateien bleiben echtes On-Demand-Material.
 const CDN_FILES = [
 	"https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js",
-	"https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.umd.js",
+	"https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.umd.js",
 ];
 
 // Installation: App-Dateien verpflichtend, CDN-Dateien best effort vorab cachen.

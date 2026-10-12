@@ -1,6 +1,6 @@
 {
   "name": "impala67",
-  "version": "2.2.61",
+  "version": "2.2.62",
   "private": true,
   "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
   "type": "module",
@@ -19,11 +19,11 @@
   },
   "devDependencies": {
     "@capacitor-mlkit/document-scanner": "^8.2.1",
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/app": "^8.1.1",
-    "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2",
-    "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/splash-screen": "^8.0.2",
@@ -31,8 +31,8 @@
     "@mindlib-capacitor/send-intent": "^8.0.6",
     "jsdom": "^30.1.2",
     "jsqr": "^1.4.0",
-    "puppeteer-core": "^25.8.0",
-    "wrangler": "^4.124.0",
-    "ws": "^8.21.0"
+    "puppeteer-core": "^25.13.0",
+    "wrangler": "^4.149.0",
+    "ws": "^8.22.0"
   }
 }

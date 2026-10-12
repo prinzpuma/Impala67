@@ -21,7 +21,7 @@
 
 - [ ] **Eigene Handschrifterkennung ausbauen** (ML Kit OCR seit v2.2.18 ersetzt, Plugin entfernt):
   - Erkennung läuft plattformunabhängig direkt auf den Stift-Strichen (ONNX-Modell im Worker, `handwriting/` → `web/handwriting-model.onnx`) – auch auf iPad/PC, wo ML Kit nie verfügbar war.
-  - Nächste Schritte: Erkennungsqualität messen/verbessern (siehe `handwriting/BASELINE_CER.md`), doppelte OCR-Abläufe in `heft.js` und `heft-indexer.js` zu einem zusammenführen.
+  - Nächste Schritte: Erkennungsqualität messen/verbessern (siehe `handwriting/BASELINE_CER.md`); doppelte OCR-Abläufe in `heft.js` und `heft-indexer.js` wurden zusammengeführt (priorisierte Erkennung via `HEFT_INDEXER.schedulePage`).
   - Ziel: Grundlage für Heft-Suche und KI-Funktionen wie „Erstelle einen Lernzettel aus diesem Heft“.
 
 - [x] **Stift-Latenz im Heft (`desynchronized: true`)**:
@@ -32,17 +32,17 @@
   - Prüfen und Testen des OAuth2-Ablaufs in der nativen Capacitor-Umgebung (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
 
 - [ ] **UI-Designsystem vereinheitlichen**:
-  - **Typografie auf eine feste Skala zurückführen**: Die vorhandenen Textgrößen-Tokens konsequent als visuelle Hierarchie verwenden und nahe beieinanderliegende Hardcode-Schriftgrößen auf wenige definierte Stufen mappen.
-  - **Spacing-Skala einführen und anwenden**: Eine kleine, konsistente Abstands-Skala (z. B. 4/6/8/12/16/20/24/32 px) in `web/css/variables.css` definieren und wiederkehrende Padding-/Margin-/Gap-Werte schrittweise darauf umstellen. Sonderwerte und exakte Geometrie nicht zwanghaft ersetzen.
-  - **Farbpalette konsolidieren**: Das bereits vorhandene Token-System in `web/css/variables.css` als zentrale Quelle stärken und nur semantisch passende freie Farben migrieren. Sonderfarben, z. B. für Cover-Designs oder Scanner/Illustrationen, bewusst separat lassen.
-  - **Icon-Sprache vereinheitlichen**: Emoji als UI-Icons schrittweise durch eine konsistente, plattformunabhängige Icon-Sprache ersetzen bzw. ihre Verwendung auf bewusst geeignete Inhalte beschränken; bestehende SVG-/Icon-Lösungen als Referenz verwenden.
-  - **Reihenfolge bei der Umsetzung**: zuerst Typografie und Spacing, danach Farbkonsolidierung und Icons. Kein komplettes Redesign nur wegen dieser Bereinigung.
+  - [x] **Typografie auf eine feste Skala zurückführen**: Die vorhandenen Textgrößen-Tokens (`--text-*`) konsequent in `styles.css` und `mobile-content.css` als visuelle Hierarchie angewendet (inkl. iOS Safari 16px-Zoom-Schutz für Eingabefelder).
+  - [x] **Spacing-Skala einführen und anwenden**: Konsistente Abstands-Skala (`--space-*`) in `variables.css` definiert und Margin-/Padding-/Gap-Werte in Desktop- und Mobile-CSS harmonisiert.
+  - [ ] **Farbpalette konsolidieren**: Das bereits vorhandene Token-System in `web/css/variables.css` als zentrale Quelle stärken und nur semantisch passende freie Farben migrieren. Sonderfarben, z. B. für Cover-Designs oder Scanner/Illustrationen, bewusst separat lassen.
+  - [ ] **Icon-Sprache vereinheitlichen**: Emoji als UI-Icons schrittweise durch eine konsistente, plattformunabhängige Icon-Sprache ersetzen bzw. ihre Verwendung auf bewusst geeignete Inhalte beschränken; bestehende SVG-/Icon-Lösungen als Referenz verwenden.
+  - **Reihenfolge bei der Umsetzung**: zuerst Typografie und Spacing (erledigt), danach Farbkonsolidierung und Icons. Kein komplettes Redesign nur wegen dieser Bereinigung.
 
 - [ ] **Projekt-Entschlackung & Neustrukturierung (KISS & DRY)**:
   - **Code-Verständnis & Übersicht neu erarbeiten**: Die gesamte Architektur und Zusammenhänge schrittweise selbst wieder durchdringen, da die Übersicht verloren gegangen ist.
   - **Code-Dokumentation komplett neu aufbauen**: Modul-Zusammenspiel, Datenflüsse (State, DB, Cloudflare, Drive) und Kernkomponenten von Grund auf klar, verständlich und aktuell dokumentieren.
-  - **Redundanzen abbauen**: Doppelte Helfer, parallele Sonderfälle und überflüssige Abstraktionen bereinigen.
-  - **Monolithen aufbrechen & aufräumen**: Große Dateien (`heft.js`, `editor.js`, `render.js`, `state.js`, `settings.js`) auf Altlasten, ungenutzten Code und tote Pfade untersuchen.
+  - [x] **Redundanzen abbauen**: Doppelte OCR-Logik und In-Memory-Queues zwischen `heft.js` und `heft-indexer.js` aufgelöst; zentrale Erkennung läuft akkuschonend über `HEFT_INDEXER.schedulePage`.
+  - **Monolithen aufbrechen & aufräumen**: Große Dateien (`heft.js`, `editor.js`, `render.js`, `state.js`, `settings.js`) auf Altlasten untersuchen und modularisieren (z. B. Menüs/Popovers nach `editor-menus.js`, Lasso-Geometrie nach `heft-lasso.js`).
   - **Architektur vereinfachen**: Klare Modulverantwortlichkeiten schärfen und unnötige Komplexität konsequent entfernen, um den Arbeitsregeln wieder voll zu entsprechen.
 - [x] **Android Transparente Statusleiste**:
   - Statusleiste permanent transparent eingeblendet (Edge-to-Edge); immersiver Vollbild-Schalter restlos entfernt.

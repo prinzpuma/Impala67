@@ -31,6 +31,18 @@ export const HEFT_INDEXER = (() => {
 	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${pg.strokes.length}`;
 	const scanKey = (pageId, pg, im) => `${pageId}:${pg.id}:img:${im.id}`;
 
+	// Priorisierte Aufgaben: Seiten, auf denen der Nutzer gerade gezeichnet hat
+	const priorityQueue = new Map();
+	let priorityTimer = null;
+	let busy = false;
+
+	const runWhenIdle = (fn) => {
+		if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+			return window.requestIdleCallback(fn, { timeout: 10000 });
+		}
+		return setTimeout(fn, 0);
+	};
+
 	// Pro Gerät gemerkt: Mit welcher Modellversion wurde der Bestand zuletzt komplett erkannt?
 	const MODEL_KEY = "impala67_heft_index_model";
 	// Die Lesung hängt auch an der Erkennungslogik: Bei einer Änderung dort (ohne neues Modell)
@@ -156,14 +168,63 @@ export const HEFT_INDEXER = (() => {
 		}
 	}
 
+	function schedulePage(pageId, pg, force = false) {
+		if (!pageId || !pg || !Array.isArray(pg.strokes) || !pg.strokes.length) return;
+		if (HANDSCHRIFT.available && !HANDSCHRIFT.available()) return;
+		const key = checkKey(pageId, pg);
+		const isRecentEdit = force || (HEFT.isWriting && HEFT.isWriting());
+		if (!isRecentEdit && done.has(key) && String(pg.ocrText || "").trim()) return;
+		checked.delete(key);
+		done.delete(key);
+		priorityQueue.set(`${pageId}:${pg.id}`, {
+			kind: "strokes",
+			key,
+			pageId,
+			page: pg,
+		});
+		clearTimeout(priorityTimer);
+		priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 3500);
+	}
+
 	async function processNextBatch() {
-		if (!scanRunning) return;
+		if (busy) return;
 
 		// Wenn der Nutzer gerade im Heft zeichnet oder schreibt: pausieren und später fortsetzen
 		if (HEFT.isWriting && HEFT.isWriting()) {
-			scanTimer = setTimeout(processNextBatch, 5000);
+			clearTimeout(scanTimer);
+			clearTimeout(priorityTimer);
+			const retryDelay = priorityQueue.size ? 3500 : 5000;
+			const timerId = setTimeout(() => runWhenIdle(processNextBatch), retryDelay);
+			if (priorityQueue.size) priorityTimer = timerId;
+			else scanTimer = timerId;
 			return;
 		}
+
+		// 1. Zuerst priorisierte Aufgaben abarbeiten (Seiten, auf denen gerade gezeichnet wurde)
+		if (priorityQueue.size > 0) {
+			const [pageKey, job] = priorityQueue.entries().next().value;
+			priorityQueue.delete(pageKey);
+			busy = true;
+			checked.add(job.key);
+			try {
+				await indexStrokes(job);
+			} catch (err) {
+				console.warn("[heft-indexer] Priorisierte Seite konnte nicht analysiert werden:", err);
+			} finally {
+				busy = false;
+			}
+			if (priorityQueue.size > 0) {
+				clearTimeout(priorityTimer);
+				priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 500);
+			} else if (scanRunning) {
+				clearTimeout(scanTimer);
+				scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
+			}
+			return;
+		}
+
+		// 2. Falls ein Hintergrund-Scan aktiv ist: unindizierten Bestand abarbeiten
+		if (!scanRunning) return;
 
 		const unindexed = findUnindexedPages();
 		if (!unindexed.length) {
@@ -181,16 +242,20 @@ export const HEFT_INDEXER = (() => {
 
 		const job = unindexed[0];
 		checked.add(job.key);
+		busy = true;
 		try {
 			if (job.kind === "scan") await indexScanImage(job);
 			else await indexStrokes(job);
 		} catch (err) {
 			console.warn("[heft-indexer] Seite konnte nicht analysiert werden:", err);
+		} finally {
+			busy = false;
 		}
 
 		// Nach jedem Durchlauf kurz an den Browser abgeben (2 s Schonpause, schont Akku & CPU)
 		if (scanRunning) {
-			scanTimer = setTimeout(processNextBatch, 2000);
+			clearTimeout(scanTimer);
+			scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
 		}
 	}
 
@@ -202,17 +267,21 @@ export const HEFT_INDEXER = (() => {
 		hadFailure = false;
 		clearTimeout(scanTimer);
 		// Startet 2 Sekunden nach Aufruf, damit der initiale Renderzyklus frei bleibt
-		scanTimer = setTimeout(processNextBatch, 2000);
+		scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
 	}
 
 	function stop() {
 		scanRunning = false;
 		clearTimeout(scanTimer);
+		clearTimeout(priorityTimer);
+		priorityQueue.clear();
 	}
 
 	return {
 		startBackgroundScan,
 		findUnindexedPages,
+		schedulePage,
+		scheduleCheck: schedulePage,
 		stop,
 	};
 })();

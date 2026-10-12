@@ -57,14 +57,17 @@ function syncOverviewRow() {
 }
 
 function overviewTiles(vm) {
-	const aiReady = !!(S.settings.aiModel && (S.settings.aiProviders || []).length);
+	const providers = S.settings.aiProviders || [];
+	const activeProvider = providers.find((provider) => provider.id === S.settings.aiProviderId) || providers[0];
+	const aiReady = !!(S.settings.aiModel && activeProvider);
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const backupAction = backupActionState({ hasBackup: !!lastBackup });
+	const storageMeter = '<span class="settings-meter" aria-hidden="true"><span id="settingsStorageBar"></span></span>';
 	return [
-		UI.row({ title: "KI", description: aiReady ? S.settings.aiModel : "Noch kein Modell gewählt", leading: statusDot(aiReady ? "ok" : "idle"), trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
+		UI.row({ title: "KI", description: aiReady ? activeProvider.name || activeProvider.id : "Noch kein Modell gewählt", leading: statusDot(aiReady ? "ok" : "idle"), trailing: linkButton(aiReady ? "Konfigurieren" : "Einrichten", "ai", "ai-models") }),
 		syncOverviewRow(),
 		UI.row({ title: "Backup", description: lastBackup ? "Zuletzt " + U.fmtDate(lastBackup) : "Noch kein lokales Backup", leading: statusDot(lastBackup ? "ok" : localBackupTone()), trailing: button(backupAction.label, "btnExport") }),
-		UI.row({ title: "Speicher", description: "Wird berechnet …", descriptionId: "settingsStorageOverview", leading: statusDot("idle"), trailing: linkButton("Verwalten", "app", "storage") }),
+		UI.row({ title: "Speicher", description: "Wird berechnet …", descriptionId: "settingsStorageOverview", extra: storageMeter, leading: statusDot("idle"), trailing: linkButton("Verwalten", "app", "storage") }),
 		UI.row({ title: "App-Version", description: "v" + plainVersion(vm.version) + " · Offline-App", leading: statusDot("ok"), trailing: updateButton() }),
 	].join("");
 }
@@ -395,6 +398,7 @@ export async function hydrateStorageUsage() {
 	const targets = [document.getElementById("settingsStorageValue"), document.getElementById("settingsStorageOverview")].filter(Boolean);
 	if (!targets.length) return;
 	let text = "Nicht verfügbar";
+	let percent = 0;
 	try {
 		const estimate = await navigator.storage?.estimate?.();
 		if (estimate) {
@@ -402,7 +406,10 @@ export async function hydrateStorageUsage() {
 			const quota = (estimate.quota || 0) / 1073741824;
 			text = mb < 1 ? "< 1 MB" : mb.toFixed(mb < 10 ? 1 : 0) + " MB";
 			if (quota) text += " von " + quota.toFixed(1) + " GB";
+			if (estimate.quota) percent = Math.min(100, ((estimate.usage || 0) / estimate.quota) * 100);
 		}
 	} catch { /* Anzeige bleibt neutral */ }
 	targets.forEach((target) => { target.textContent = text; });
+	const bar = document.getElementById("settingsStorageBar");
+	if (bar) bar.style.width = percent.toFixed(1) + "%";
 }
