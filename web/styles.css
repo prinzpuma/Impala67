@@ -124,6 +124,12 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 .cover-forest { background: linear-gradient(120deg, #134e5e, #71b280) }
 .cover-grape { background: linear-gradient(120deg, #6a11cb, #2575fc) }
 .cover-mono { background: linear-gradient(120deg, #3a3a3a, #101010) }
+/* Neuere Cover: aus der Akzentfarbe abgeleitet (Farbwolken bzw. Heftpapier) */
+.cover-aurora { background: radial-gradient(60% 90% at 15% 20%, var(--accent), transparent 62%), radial-gradient(50% 85% at 82% 25%, color-mix(in oklab, var(--accent) 45%, #ff8fb1), transparent 62%), radial-gradient(70% 90% at 55% 110%, color-mix(in oklab, var(--accent) 40%, #5eead4), transparent 62%), color-mix(in srgb, var(--accent) 22%, #10121c) }
+:is(.cover-karo, .cover-linien, .cover-punkte) { --paper: color-mix(in srgb, var(--accent) 28%, #121722); --ink: rgb(255 255 255 / .09); background-color: var(--paper); box-shadow: inset 6px 0 0 var(--accent) }
+.cover-karo { background-image: linear-gradient(var(--ink) 1px, transparent 1px), linear-gradient(90deg, var(--ink) 1px, transparent 1px); background-size: 14px 14px }
+.cover-linien { background-image: linear-gradient(transparent 17px, var(--ink) 17px, var(--ink) 18px); background-size: 100% 18px }
+.cover-punkte { background-image: radial-gradient(rgb(255 255 255 / .16) 1.2px, transparent 1.6px); background-size: 14px 14px }
 .page-cover.has-img { background-size: cover; background-position: center; background-color: var(--surface-hover) }
 .page-heading { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px }
 .page-icon { font-size: 40px; line-height: 1; background: transparent; padding: 2px var(--space-1-5); border-radius: var(--radius-md) }

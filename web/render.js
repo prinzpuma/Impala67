@@ -1752,7 +1752,7 @@ function openCoverPicker() {
 	if (!S.currentPageId) return;
 	openOverlay(modal(
 		"<h3>Cover wählen</h3>" +
-		'<div class="cover-grid">' + ["sunset", "ocean", "forest", "grape", "mono"].map((c) => `<button class="cover-swatch cover-${c}" data-coverset="${c}"></button>`).join("") + "</div>" +
+		'<div class="cover-grid">' + [...LIBRARY.COVER_PRESETS, "aurora", "karo", "linien", "punkte"].map((c) => `<button class="cover-swatch cover-${c}" data-coverset="${c}"></button>`).join("") + "</div>" +
 		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
 		'<div class="row-btns"><button id="btnCoverUpload">' + lead("image") + 'Eigenes Bild wählen</button></div>' +
 		'<div class="modal-actions"><button data-coverset="">Entfernen</button><button id="btnCloseOverlay">Schließen</button></div>'
