@@ -21,6 +21,7 @@ import { BACKUP } from "./backup-status.js";
 import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
 import { icon, lead, pageIcon } from "./icons.js";
+import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -1567,25 +1568,15 @@ function renderFullChat(main) {
 		const h1 = oldWrap.querySelector(".chat-full-head h1");
 		const wantTitle = "✦ " + title;
 		if (h1 && h1.textContent !== wantTitle) h1.textContent = wantTitle;
-		if (!empty) {
-			oldWrap.querySelector(".chat-empty-hint")?.remove();
-			oldWrap.querySelector(".chat-suggests")?.remove();
-		}
 		renderMainChatLog();
 		renderPendingChip("full");
 		return;
 	}
 	main.innerHTML =
-		`<div class="chat-full-wrap" data-chatid="${esc(String(S.currentChatId || ""))}">` +
+		`<div class="chat-full-wrap${empty ? " is-empty" : ""}" data-chatid="${esc(String(S.currentChatId || ""))}">` +
 			'<div class="chat-full-head"><button type="button" class="ai-status-chip" id="aiStatusChipFull" title="KI-Status" data-aistatus="1"></button>' +
 			`<h1>✦ ${esc(title)}</h1></div>` +
-			// Schnellstart-Chips setzen einen Prompt-Anfang ins Eingabefeld (kein Auto-Senden)
-			(empty ? '<p class="hint chat-empty-hint">Stell deine erste Frage — die Antwort erscheint hier groß, LaTeX und Code werden live gerendert.</p>' +
-				'<div class="chat-suggests">' +
-				'<button type="button" data-chatsuggest="Erkläre mir Schritt für Schritt: ">' + lead("bulb") + 'Erkläre mir…</button>' +
-				'<button type="button" data-chatsuggest="Erstelle Karteikarten zu: ">' + lead("cards") + 'Karteikarten zu…</button>' +
-				'<button type="button" data-chatsuggest="Fasse kompakt zusammen: ">' + lead("file") + 'Fasse zusammen…</button>' +
-				'<button type="button" data-chatsuggest="Stell mir 5 Prüfungsfragen zu: ">' + lead("target") + 'Quiz mich zu…</button></div>' : "") +
+			(empty ? chatStartHtml() : "") +
 			'<div id="mainChatLog" class="chat-log-full"></div>' +
 			'<form id="mainChatForm" class="chat-form-full"><div id="mainPendingChip" hidden></div>' +
 				'<div class="composer-body"><textarea id="mainChatInput" rows="1" placeholder="Frag deinen KI-Coach…"></textarea></div>' +
@@ -1593,7 +1584,8 @@ function renderFullChat(main) {
 					'<button type="button" id="btnAttachFull" title="Fotos und Dateien hinzufügen">+</button>' +
 					'<button type="button" id="btnModelChipFull" class="composer-tool" title="Modell wählen"></button>' +
 				'</div><button id="mainChatSubmit" type="submit" title="Senden" disabled>↑</button></div>' +
-				'<div id="modelMenuFull" class="model-menu" hidden></div></form></div>';
+				'<div id="modelMenuFull" class="model-menu" hidden></div></form>' +
+			(empty ? chatSuggestsHtml() : "") + "</div>";
 	renderMainChatLog();
 	renderPendingChip("full");
 	renderStatusDot();
@@ -1601,7 +1593,15 @@ function renderFullChat(main) {
 
 function renderMainChatLog() {
 	const log = $("mainChatLog");
-	if (log) renderChatLog(log, S.chat);
+	if (!log) return;
+	// Erste Nachricht: Begrüßung und Vorschläge weichen dem Verlauf
+	const wrap = log.parentElement;
+	if (S.chat.length && wrap.classList.contains("is-empty")) {
+		wrap.classList.remove("is-empty");
+		wrap.querySelector(".chat-start")?.remove();
+		wrap.querySelector(".chat-suggests")?.remove();
+	}
+	renderChatLog(log, S.chat);
 }
 
 // EINE "Gedankengang"-Box für live UND finalisiert (gleiche Struktur/Optik)

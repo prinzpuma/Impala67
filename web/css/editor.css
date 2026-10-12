@@ -6,6 +6,8 @@
 .blk { display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-sm); position: relative }
 .blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: var(--space-1-5); opacity: 0; transition: opacity .1s }
 .blk:hover .blk-gutter, .blk:focus-within .blk-gutter { opacity: 1 }
+/* Griffe hängen links im Rand, damit der Text bündig unter dem Seitentitel steht */
+@media (min-width: 601px) { .blk-gutter { margin-left: -46px } }
 .blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs) }
 .blk-plus:hover, .blk-handle:hover { background: var(--surface-active); color: var(--text) }
 .blk-handle { cursor: grab; font-size: var(--text-xs) }

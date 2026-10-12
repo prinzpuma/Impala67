@@ -2,7 +2,7 @@
    Impala67 – Beta-Design (Experimentelle UI)
    Aktiv nur mit „Beta-Design“ in den Einstellungen (Klasse: body.beta-ui).
    Experiment: das Design aus design.css auf die ganze App ausweiten.
-   Ruhiger Hover (nur Fläche/Rand, kein Anheben), Feder nur beim Drücken und
+   Ruhiger Hover (nur Fläche/Rand, kein Anheben), Trennlinien und Ränder bleiben, Feder nur beim Drücken und
    bei echten Übergängen. Grundwerte (Ecken, Schatten) werden als Tokens
    überschrieben, damit auch nicht einzeln angefasste Stellen mitziehen.
    ========================================================================== */
@@ -35,10 +35,7 @@ body.beta-ui :is(.hv-continue, button.hv-stat, button.anki-stat, .deck-row, .lib
 body.beta-ui .hv .hv-continue:hover .hv-prev { transform: none }
 body.beta-ui :is(.hv .hv-pin, .anki-page .deck-study, .anki-study-mode [data-ankishowback]:not(.mini), .anki-study-mode .grades [data-ankigrade], #btnAiFab):hover:not(:disabled) { transform: none }
 
-/* 3. Rahmen: Seitenleiste, Tab-Leiste, Kopfzeile – Flächen statt Linien */
-body.beta-ui:not(.mobile-ui) #sidebar { border-right: 0 }
-body.beta-ui #sidebar .topbar, body.beta-ui .side-foot, body.beta-ui #tabbar { border: 0 }
-body.beta-ui.density-compact:not(.mobile-ui) #panel { border-left: 0; background: var(--sidebar-bg) }
+/* 3. Seitenleiste, Tab-Leiste, Kopfzeile – Trennlinien bleiben erhalten */
 body.beta-ui .side-foot button { border-radius: var(--b-r-sm) }
 body.beta-ui .side-foot button:hover { background: var(--b-tint) }
 body.beta-ui .ws-head { letter-spacing: 0; text-transform: none; font-size: var(--text-sm) }
@@ -61,16 +58,15 @@ body.beta-ui .crumb:not(.current):hover { background: var(--b-tint); color: var(
 
 /* 4. Editor und Seiten */
 body.beta-ui #pageTitle { font-family: var(--b-display); font-weight: 650; letter-spacing: -.03em }
-body.beta-ui .blk-callout { border: 0; border-radius: var(--b-r-md) }
+body.beta-ui .blk-callout { border-radius: var(--b-r-md) }
 body.beta-ui .blk-quote { border-left: 3px solid var(--accent); padding: 6px 14px; border-radius: 0 var(--b-r-sm) var(--b-r-sm) 0; background: var(--b-tint) }
-body.beta-ui :is(.blk-codewrap, .md pre) { border: 0; border-radius: var(--b-r-md); background: color-mix(in srgb, var(--text) 5%, transparent) }
+body.beta-ui :is(.blk-codewrap, .md pre) { border-radius: var(--b-r-md); background: color-mix(in srgb, var(--text) 5%, transparent) }
 body.beta-ui .md blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; border-radius: 0 var(--b-r-sm) var(--b-r-sm) 0; background: var(--b-tint); color: var(--text) }
 body.beta-ui .md code { border-radius: 6px; background: var(--b-tint-2) }
 body.beta-ui .blk-check { accent-color: var(--accent) }
 
 /* 5. Überlagerungen: Suche, Menüs, Dialoge, Hinweise – ein Look, ein Auftritt */
 body.beta-ui :is(.palette-box, .blk-menu, .model-menu, .page-menu, .attach-menu, .toast) {
-	border: 0;
 	box-shadow: var(--elev-3);
 }
 body.beta-ui .palette-box { border-radius: 22px; animation: beta-pop .32s var(--b-spring) both }
@@ -83,7 +79,7 @@ body.beta-ui .palette-input-wrap { display: flex; align-items: center; gap: var(
 body.beta-ui #paletteInput { flex: 1; min-width: 0; border: 0 }
 body.beta-ui .palette-input-wrap > button { border-radius: 999px }
 body.beta-ui .palette-head { text-transform: none; letter-spacing: 0; font-size: var(--text-xs); font-weight: 600 }
-body.beta-ui .palette-foot { border-top: 0; background: color-mix(in srgb, var(--text) 3%, transparent) }
+body.beta-ui .palette-foot { background: color-mix(in srgb, var(--text) 3%, transparent) }
 
 /* 6. KI-Chat und KI-Knopf */
 body.beta-ui .msg.user { border-radius: 18px 18px 6px 18px; background: var(--b-tint-2) }
@@ -95,28 +91,23 @@ body.beta-ui #btnAiFab:hover { background: var(--b-tint-3) }
 
 /* 7. Wissensgraph, PDF, Heft, Papierkorb */
 body.beta-ui .graph-overlay { background: var(--panel-solid) }
-body.beta-ui .graph-head, body.beta-ui .graph-status { border-bottom: 0 }
 body.beta-ui .graph-modes { border-radius: 999px; background: var(--b-tint) }
 body.beta-ui .graph-modes button, body.beta-ui .graph-actions > button { border-radius: 999px }
 body.beta-ui .graph-modes button.active { background: var(--panel-solid); box-shadow: 0 0 0 1px var(--edge-soft), 0 4px 12px -6px rgb(0 0 0 / .35) }
-body.beta-ui .graph-lane { border: 0; border-radius: var(--b-r-lg); background: var(--b-tint); box-shadow: none }
-body.beta-ui .graph-lane > header { border: 0; border-radius: var(--b-r-md); box-shadow: var(--b-card) }
-body.beta-ui .graph-skill { border: 0; border-radius: var(--b-r-md); background: var(--panel-solid); box-shadow: var(--b-card) }
+body.beta-ui .graph-lane { border-radius: var(--b-r-lg); background: var(--b-tint); box-shadow: none }
+body.beta-ui .graph-lane > header { border-radius: var(--b-r-md); box-shadow: var(--b-card) }
+body.beta-ui .graph-skill { border-radius: var(--b-r-md); background: var(--panel-solid); box-shadow: var(--b-card) }
 body.beta-ui .graph-skill.selected { box-shadow: 0 0 0 2px var(--accent), var(--b-lift) }
-body.beta-ui .pdf-toolbar { border-bottom: 0 }
 body.beta-ui .pdf-toolbar button.pdf-action-btn { border: 0; border-radius: 999px; background: var(--b-tint) }
 body.beta-ui .pdf-toolbar button.pdf-action-btn.icon-only { background: transparent }
 body.beta-ui .pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--b-tint-2) }
-body.beta-ui :is(.heft-chrome .heft-pill, .heft-chrome .heft-tray) { border: 0; border-radius: 999px; box-shadow: var(--b-float) }
+body.beta-ui :is(.heft-chrome .heft-pill, .heft-chrome .heft-tray) { border-radius: 999px; box-shadow: var(--b-float) }
 body.beta-ui :is(.heft-chrome .heft-main, .heft-chrome .heft-tray-drag) { border-radius: 999px }
 body.beta-ui :is(.heft-chrome .heft-main, .heft-chrome .heft-corner):hover { background: var(--b-tint-2) }
 body.beta-ui :is(.heft-chrome .heft-main.active, .heft-chrome .heft-main.open, .heft-opt.active, .heft-chrome .heft-corner.active) { background: var(--b-tint-2); color: var(--text) }
-body.beta-ui .trash-row { border: 0; border-radius: var(--b-r-md); background: var(--panel-solid); box-shadow: var(--b-card) }
+body.beta-ui .trash-row { border-radius: var(--b-r-md); background: var(--panel-solid); box-shadow: var(--b-card) }
 
-/* 8. Startseite nachschärfen: kompakteres „Weitermachen“, leise leere Zustände */
-body.beta-ui .hv .hv-continue { padding: 10px; gap: var(--space-5) }
-body.beta-ui .hv .hv-prev { width: 150px }
-body.beta-ui .hv .hv-cont-copy b { font-size: 20px }
+/* 8. Startseite: leise leere Zustände */
 body.beta-ui .hv .hv-cards:not(.due, .done) > b { font-family: inherit; font-size: var(--text-md); font-weight: 600 }
 body.beta-ui .hv .hv-cards:not(.due, .done) > span { color: var(--accent); font-weight: 600 }
 body.beta-ui .hv .hv-cards:not(.due, .done) > span::after { content: " →" }

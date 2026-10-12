@@ -223,7 +223,7 @@ function ankiDecksHtml() {
 			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
 			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
 				(cnt.review + cnt.learn + cnt.neu
-					? '<b class="cnt-due">' + cnt.review + " fällig</b><small>" + cnt.learn + " lernen · " + cnt.neu + " neu</small>"
+					? (cnt.review ? '<b class="cnt-due">' + cnt.review + " fällig</b>" : '<b class="cnt-open">' + (cnt.learn + cnt.neu) + " offen</b>") + "<small>" + cnt.learn + " lernen · " + cnt.neu + " neu</small>"
 					: '<small class="deck-done">✓ fertig für heute</small>') +
 			"</span>" +
 			'<span class="deck-actions">' +

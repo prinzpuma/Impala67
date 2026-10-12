@@ -4,6 +4,7 @@
 @import url("./css/components.css");
 @import url("./css/editor.css");
 @import url("./css/heft.css");
+@import url("./css/chat-start.css");
 /* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne u… */
 @media (pointer: coarse) {
 	#tree .row, .deck-tree-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
@@ -488,13 +489,11 @@ body.light .pdf-body { background: #eaebed }
 /* 🎨 (29. Juli) Die Scrollleiste gehört an den RECHTEN Rand der Fläche, nicht mitten ins Bild:
    der Verlauf scrollt jetzt über die volle Breite, die 760px-Lesespalte entsteht über Innenabstand. */
 .chat-full-wrap { display: flex; flex-direction: column; height: 100%; padding: 28px 0 var(--space-5); overflow: hidden }
-.chat-full-head, .chat-full-wrap > .chat-empty-hint { width: 100%; max-width: 760px; margin: 0 auto var(--space-1-5); padding: 0 var(--space-5) }
+.chat-full-head { width: 100%; max-width: 760px; margin: 0 auto var(--space-1-5); padding: 0 var(--space-5) }
 /* 🐛 Fix: Schnellstart-Chips fehlten in der Lesespalten-Regel — sie liefen als einziges Element
    ohne max-width/padding bis an die Kante des Wraps und wurden dort von dessen overflow:hidden
    beschnitten (linker/rechter Chip angeschnitten, Reihe nicht bündig mit Titel und Hinweis). */
-.chat-full-wrap > .chat-suggests { width: 100%; max-width: 760px; margin: 0 auto var(--space-3); padding: 0 var(--space-5) }
 .chat-full-wrap h1 { flex-shrink: 0; margin-bottom: var(--space-1) }
-.chat-full-wrap .chat-empty-hint { flex-shrink: 0 }
 .chat-log-full { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-self: stretch; width: 100%; max-width: none; padding: var(--space-2) max(var(--space-5), calc((100% - 760px) / 2)) var(--space-4) }
 /* DRY (Feinschliff v12): nur noch die Vollbild-Besonderheiten. Rahmen, Radius, Fläche und Fokus-Ring kommen aus dem kanonischen Composer-Block oben — beide Composer können nicht mehr auseinanderdriften. */
 .chat-form-full { align-self: center; position: relative; width: calc(100% - 40px); max-width: 760px; flex-shrink: 0 }
@@ -603,7 +602,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .library.lib-docs { max-width: 1180px }
 .library h1 { margin-bottom: var(--space-3) }
 .library .row { font-size: var(--text-md); padding: var(--space-2) 10px }
-.chat-empty-hint { margin: -4px 0 10px }
 .empty.small { padding: var(--space-1) 10px; font-size: var(--text-sm); text-align: left }
 .row .hint { font-size: var(--text-2xs); flex-shrink: 0 }
 /* == Mobile Touch-Feinschliff: größere Tipp-Flächen, kein Callout == */
@@ -1291,6 +1289,7 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 .deck-meta { margin-top: 1px; color: var(--text2); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .deck-counts { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums }
 .deck-counts .cnt-due { font-size: var(--text-base); font-weight: 700 }
+.deck-counts .cnt-open { font-size: var(--text-base); font-weight: 600; color: var(--text) }
 .deck-counts small { color: var(--text2); font-size: var(--text-2xs) }
 .deck-done { color: var(--success); font-size: var(--text-xs) }
 .cnt-learn { color: var(--accent) }
@@ -1445,9 +1444,6 @@ pre { position: relative }
 .code-copy:hover { background: var(--surface-hover-strong); color: var(--text) }
 .code-copy.copied { background: var(--success-soft); color: var(--success); border-color: var(--success-border); opacity: 1 }
 pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
-.chat-suggests { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); flex-shrink: 0 }
-.chat-suggests button { font-size: var(--text-sm); padding: 7px var(--space-3); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--edge); color: var(--text2) }
-.chat-suggests button:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft) }
 @media (pointer: coarse) {
 	/* Touch hat kein Hover: Bearbeiten/Kopieren/Anpassen und Code-Kopieren immer zeigen */
 	.msg-tool-btn, .msg-edit, .code-copy { opacity: 1 }

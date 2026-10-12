@@ -21,6 +21,7 @@ const APP_FILES = [
 	"./css/components.css",
 	"./css/editor.css",
 	"./css/heft.css",
+	"./css/chat-start.css",
 	"./manifest.json",
 	// Der Update-Check fragt version.json mit no-store an. Der Fetch-Handler nimmt
 	// daher online immer den Serverstand, kann bei Netz-/Pages-Fehlern aber auf
@@ -35,6 +36,7 @@ const APP_FILES = [
 	"./mobile-notes.js",
 	"./mobile-sheet.js",
 	"./home-view.js",
+	"./chat-start.js",
 	"./icons.js",
 	"./icons.svg",
 	"./anki-stats.js",
