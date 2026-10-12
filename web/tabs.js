@@ -1,6 +1,7 @@
 "use strict";
 
 import { S, STATE } from "./state.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { CHATS } from "./chats.js";
 import { RENDER } from "./render.js";
 import { POPOVERS } from "./popovers.js";
@@ -15,7 +16,8 @@ const renderTabs = (...args) => RENDER.renderTabs(...args);
 // und dürfen deshalb genauso wie Seiten als Tab gespeichert und wiederhergestellt werden.
 const syncableTabs = () => S.tabs.filter((id) => {
 	if (typeof id !== "string") return false;
-	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5)));
+	// Der offene, noch leere „Neuer Chat“ zählt mit (Sitzung entsteht erst mit der ersten Nachricht)
+	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5))) || id === "chat:" + S.currentChatId;
 	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 }).slice(-12);
 let saveTimer = 0;
@@ -289,12 +291,12 @@ export async function restoreSession() {
 // Beim Hintergrundwechsel/Minimieren/Schließen sofort synchron speichern (Best Practice für PWA)
 if (typeof document !== "undefined") {
 	document.addEventListener("visibilitychange", () => {
-		if (document.hidden) saveSessionNow().catch(() => {});
+		if (document.hidden) saveSessionNow().catch((e) => PERF_PROFILER.error("tabs-session-save-error", e));
 	});
 }
 if (typeof window !== "undefined") {
-	window.addEventListener("pagehide", () => { saveSessionNow().catch(() => {}); });
-	window.addEventListener("freeze", () => { saveSessionNow().catch(() => {}); });
+	window.addEventListener("pagehide", () => { saveSessionNow().catch((e) => PERF_PROFILER.error("tabs-session-save-error", e)); });
+	window.addEventListener("freeze", () => { saveSessionNow().catch((e) => PERF_PROFILER.error("tabs-session-save-error", e)); });
 }
 
 export const TABS = {

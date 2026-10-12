@@ -238,6 +238,9 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
    des Formulars, weil .chat-form-full textarea gleiche Spezifität hat und früher steht.
    Der Composer zeigt Fokus jetzt nur noch über die ÄUSSERE Umrundung (Regel oben). */
 #chatForm textarea:focus-visible, .chat-form-full textarea:focus-visible { outline: none }
+/* Kein zweiter, innerer Rahmen: die Basisregeln aus css/components.css (textarea / textarea:focus)
+   werden später geladen und gewannen bei gleicher Spezifität — Rahmen nur am Composer selbst. */
+#chatForm textarea, #chatForm textarea:focus, form.chat-form-full textarea, form.chat-form-full textarea:focus { border: 0; outline: 0; box-shadow: none; background: transparent }
 /* Untere Reihe behält die bestehende Reihenfolge: Anhang → Model… */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1 }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2 }

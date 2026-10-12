@@ -2238,8 +2238,9 @@ export const HEFT = (() => {
 			U.toast("Handschrift wird erkannt…");
 			const text = await HANDSCHRIFT.recognizeStrokes(lassoSel.strokes);
 			if (text && text.trim()) {
-				try { await navigator.clipboard.writeText(text.trim()); } catch {}
-				U.toast("Erkannt & kopiert: „" + text.trim() + "“");
+				let copied = true;
+				try { await navigator.clipboard.writeText(text.trim()); } catch (e) { copied = false; PERF_PROFILER.error("clipboard-error", e, { source: "heft-lasso" }); }
+				U.toast((copied ? "Erkannt & kopiert: „" : "Erkannt (Kopieren nicht möglich): „") + text.trim() + "“");
 			} else {
 				U.toast("Kein Text erkannt.");
 			}
@@ -2525,7 +2526,7 @@ export const HEFT = (() => {
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
 		// Texterkennung im Hintergrund; dynamischer Import vermeidet den Zyklus heft.js <-> heft-indexer.js.
-		import("./heft-indexer.js").then((m) => m.HEFT_INDEXER.startBackgroundScan()).catch(() => {});
+		import("./heft-indexer.js").then((m) => m.HEFT_INDEXER.startBackgroundScan()).catch((e) => PERF_PROFILER.error("heft-indexer-error", e));
 	}
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----

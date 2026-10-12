@@ -1,6 +1,6 @@
 {
   "name": "impala67",
-  "version": "2.2.60",
+  "version": "2.2.61",
   "private": true,
   "description": "Impala67 - Local-First PWA Note-Taking App with E2EE Cloudflare Sync",
   "type": "module",
@@ -29,7 +29,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capgo/capacitor-speech-recognition": "^8.3.2",
     "@mindlib-capacitor/send-intent": "^8.0.6",
-    "jsdom": "^26.0.0",
+    "jsdom": "^30.1.2",
     "jsqr": "^1.4.0",
     "puppeteer-core": "^25.8.0",
     "wrangler": "^4.124.0",

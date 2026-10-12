@@ -945,14 +945,16 @@ export const STATE = (() => {
 				break;
 			case "uiTabsSet": {
 				// Seiten, NotebookLM, Karteikarten (anki:main) UND Chats sind synchronisierte Tabs. Ein Chat-Tab
-				// ist nur gültig, wenn seine (ebenfalls synchronisierte) Sitzung existiert.
+				// ist nur gültig, wenn seine (ebenfalls synchronisierte) Sitzung existiert — oder wenn es der
+				// gerade offene, noch leere „Neuer Chat“ ist (die Sitzung entsteht erst mit der ersten Nachricht;
+				// sonst verschwand der frische Tab 350 ms nach dem Öffnen wieder).
 				const seen = new Set();
 				S.tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((id) => {
 					if (typeof id !== "string" || seen.has(id)) return false;
 					seen.add(id);
 					if (id.startsWith("chat:")) {
 						const chat = S.chatSessions[id.slice(5)];
-						return !!(chat && !chat.deleted);
+						return !!(chat && !chat.deleted) || (!_loading && id === "chat:" + S.currentChatId);
 					}
 					return !!(S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 				}).slice(-12);
@@ -1243,7 +1245,7 @@ export const STATE = (() => {
 		if (_checkpointPayloadLoaded || _idleHydrateTimer) return;
 		const execute = () => {
 			_idleHydrateTimer = 0;
-			if (!_checkpointPayloadLoaded) hydrateHeftBlobs().catch(() => {});
+			if (!_checkpointPayloadLoaded) hydrateHeftBlobs().catch((e) => PERF_PROFILER.error("heft-hydrate-error", e));
 		};
 		if (typeof requestIdleCallback === "function") {
 			_idleHydrateTimer = requestIdleCallback(execute, { timeout: 3000 });

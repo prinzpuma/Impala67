@@ -810,7 +810,7 @@ export const DRIVE = (() => {
 		// Millisekunden ein — der keepalive-Upload in uploadNamed wurde praktisch nie erreicht.
 		// Der versprochene Flush fand faktisch nicht statt. visibilitychange→hidden deckt den
 		// Regelfall ohnehin schon vollständig ab; das hier ist die letzte Rettung.
-		window.addEventListener("pagehide", () => { flushUpload().catch(() => {}); });
+		window.addEventListener("pagehide", () => { flushUpload().catch((e) => PERF_PROFILER.error("drive-flush-error", e)); });
 		const tick = () => {
 			if (!document.hidden) autoSync("interval");
 			scheduleInterval();

@@ -1,5 +1,6 @@
 "use strict";
 import { COLLAPSE } from "./collapse.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { CHATS } from "./chats.js";
 import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
@@ -313,7 +314,7 @@ function initPlatformLifecycle() {
 					const snap = STATE.studySnapshot?.(null);
 					const due = (snap?.counts?.neu || 0) + (snap?.counts?.learn || 0) + (snap?.counts?.review || 0);
 					if (due > 0) PLATFORM_NATIVE.notifications.scheduleSRSReview(due);
-				} catch { /* ignore */ }
+				} catch (e) { PERF_PROFILER.error("srs-reminder-error", e); }
 			}
 		},
 		onBackButton: () => {

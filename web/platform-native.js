@@ -1,4 +1,5 @@
 "use strict";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 // platform-native.js — Schlanke Brücke zu nativen Capacitor-Plugins auf Mobilgeräten.
 // Läuft direkt als ES-Modul ohne Bundler: Greift auf window.Capacitor zu.
@@ -312,7 +313,7 @@ export const PLATFORM_NATIVE = {
 				if (ds.isGoogleDocumentScannerModuleAvailable) {
 					const mod = await ds.isGoogleDocumentScannerModuleAvailable().catch(() => ({ available: true }));
 					if (mod && mod.available === false && ds.installGoogleDocumentScannerModule) {
-						ds.installGoogleDocumentScannerModule().catch(() => {});
+						ds.installGoogleDocumentScannerModule().catch((e) => PERF_PROFILER.error("scanner-module-install-error", e));
 					}
 				}
 				const res = await ds.scanDocument({

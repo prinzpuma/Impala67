@@ -1,6 +1,6 @@
 "use strict";
 import { icon } from "./icons.js";
-import { OPTIONAL_MODULE_URLS, MERMAID_VERSION } from "./optional-modules.js";
+import { OPTIONAL_MODULE_URLS, OPTIONAL_MODULE_INTEGRITY, MERMAID_VERSION } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 // util.js — kleine Helfer
 const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
@@ -52,10 +52,11 @@ export const U = {
 				const s = document.createElement("script");
 				s.src = src;
 				s.crossOrigin = "anonymous";
+				if (OPTIONAL_MODULE_INTEGRITY[src]) s.integrity = OPTIONAL_MODULE_INTEGRITY[src];
 				document.head.appendChild(s);
 				await new Promise((resolve, reject) => {
 					s.onload = () => { s.dataset.loaded = "1"; resolve(); };
-					s.onerror = () => reject(new Error("Netzwerkfehler beim Laden von " + src));
+					s.onerror = () => reject(new Error("Netzwerk- oder Integritätsfehler beim Laden von " + src));
 				});
 			} else if (existing.dataset.loaded !== "1" && !(testGlobal && window[testGlobal])) {
 				await new Promise((resolve, reject) => {
@@ -82,6 +83,7 @@ export const U = {
 				l.rel = "stylesheet";
 				l.href = href;
 				l.crossOrigin = "anonymous";
+				if (OPTIONAL_MODULE_INTEGRITY[href]) l.integrity = OPTIONAL_MODULE_INTEGRITY[href];
 				document.head.appendChild(l);
 			}
 			await new Promise((resolve, reject) => {
@@ -556,12 +558,12 @@ export const U = {
 	async ensureKatex() {
 		if (typeof window === "undefined") return false;
 		if (!U._katexReady) {
-			U._katexReady = (async () => {
+			U._katexReady = PERF_PROFILER.run("katex.load", async () => {
 				await U.loadStyle(OPTIONAL_MODULE_URLS.katexCss);
 				await U.loadScript(OPTIONAL_MODULE_URLS.katex, "katex");
 				await U.loadScript(OPTIONAL_MODULE_URLS.katexAutoRender, "renderMathInElement");
 				return !!(window.katex && window.renderMathInElement);
-			})();
+			}, {}, 0);
 		}
 		try {
 			return await U._katexReady;

@@ -2034,7 +2034,11 @@ export const EDITOR = (() => {
 			try { copied = document.execCommand("copy"); } catch { /* Fallback */ }
 			ta.remove();
 			if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
-				navigator.clipboard.writeText(md).catch(() => {});
+				// Ausschneiden löscht gleich danach: scheitert das Kopieren, muss der Nutzer es erfahren.
+				navigator.clipboard.writeText(md).catch((e) => {
+					PERF_PROFILER.error("clipboard-error", e, { source: "editor-cut" });
+					U.toast("Ausschneiden: Zwischenablage nicht verfügbar — mit Strg+Z rückgängig machen.", "error");
+				});
 			}
 			mutateDeleteSelection("Delete");
 			return true;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>if (typeof performance !== "undefined" && performance.mark) performance.mark("impala67:nav-start");</script>
 <!-- 🔐 CSP-Grundschutz: Lokale App + gepinnte CDNs. connect-src bleibt offen für frei konfigurierbare KI-Endpunkte. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src * data: blob:; worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src * data: blob:; worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <script>
 // Unerwartete Fehler in Konsole und Performance-Protokoll (Einstellungen -> Diagnose) erfassen
 window.recordAppError = function (title, details, stack) {
@@ -272,7 +272,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=208"></script>
+<script type="module" src="main.js?build=209"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -282,7 +282,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=107", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=108", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

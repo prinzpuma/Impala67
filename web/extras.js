@@ -1,5 +1,6 @@
 "use strict";
 import { icon, lead } from "./icons.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { RENDER } from "./render.js";
@@ -321,8 +322,9 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	let sqlPromise = null;
 	function loadSql() {
 		if (!sqlPromise) {
-			sqlPromise = U.loadScript(OPTIONAL_MODULE_URLS.sql, "initSqlJs")
-				.then(() => initSqlJs({ locateFile: () => OPTIONAL_MODULE_URLS.sqlWasm }));
+			sqlPromise = PERF_PROFILER.run("sql.load", () => U.loadScript(OPTIONAL_MODULE_URLS.sql, "initSqlJs")
+				.then(() => initSqlJs({ locateFile: () => OPTIONAL_MODULE_URLS.sqlWasm })), {}, 0)
+				.catch((err) => { sqlPromise = null; throw err; });
 		}
 		return sqlPromise;
 	}

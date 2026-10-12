@@ -11,21 +11,36 @@ const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/`;
 // Die Dateien werden nur in Cache Storage abgelegt; sie werden beim Prefetch
 // weder als Skript eingebunden noch geparst oder ausgefuehrt.
 export const OPTIONAL_MODULE_URLS = Object.freeze({
-	katexCss: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css",
-	katex: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js",
-	katexAutoRender: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js",
+	katexCss: "https://cdn.jsdelivr.net/npm/katex@0.19.0/dist/katex.min.css",
+	katex: "https://cdn.jsdelivr.net/npm/katex@0.19.0/dist/katex.min.js",
+	katexAutoRender: "https://cdn.jsdelivr.net/npm/katex@0.19.0/dist/contrib/auto-render.min.js",
 	highlightCss: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/github-dark.min.css",
 	highlight: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js",
 	mermaid: `https://cdn.jsdelivr.net/npm/mermaid@${MERMAID_VERSION}/dist/mermaid.min.js`,
-	math: "https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js",
+	math: "https://cdnjs.cloudflare.com/ajax/libs/mathjs/15.2.0/math.min.js",
 	pdf: PDFJS_BASE + "legacy/build/pdf.min.mjs",
 	pdfWorker: PDFJS_BASE + "legacy/build/pdf.worker.min.mjs",
 	// Ordner fuer Zusatzdaten (wasm: JPEG2000-Scans, cmaps: asiatische Schriften,
 	// standard_fonts: nicht eingebettete Schriften, iccs: CMYK-Farben).
 	pdfAssets: PDFJS_BASE,
 	pdfJpxWasm: PDFJS_BASE + "wasm/openjpeg.wasm",
-	sql: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js",
-	sqlWasm: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
+	sql: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.14.2/sql-wasm.min.js",
+	sqlWasm: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.14.2/sql-wasm.wasm",
+});
+
+// Subresource-Integrity fuer alles, was per <script>/<link> nachgeladen wird (U.loadScript/
+// U.loadStyle): ein manipuliertes CDN kann so keinen fremden Code einschleusen. Bei einem
+// Versionswechsel den Hash neu berechnen (sha384 der exakten Datei). ES-Module und Worker
+// (pdf.js, Transformers.js, onnxruntime) lassen sich so nicht absichern.
+export const OPTIONAL_MODULE_INTEGRITY = Object.freeze({
+	[OPTIONAL_MODULE_URLS.katexCss]: "sha384-3rdsX6e5mueWyoweR9NIVmtEsUkokpBT/0ALqKKIBMr9j4qhHkaIkAcGgsE6uVlp",
+	[OPTIONAL_MODULE_URLS.katex]: "sha384-QFFtAGzvvj+bfgCGxXJlNZZR1nXEZgvG8tDLCCY1F19xl20WlfTYgguB4VcNdxYk",
+	[OPTIONAL_MODULE_URLS.katexAutoRender]: "sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz",
+	[OPTIONAL_MODULE_URLS.highlightCss]: "sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH",
+	[OPTIONAL_MODULE_URLS.highlight]: "sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix",
+	[OPTIONAL_MODULE_URLS.mermaid]: "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2",
+	[OPTIONAL_MODULE_URLS.math]: "sha384-TXqmmbU84DoiUDuaVImpZsAMbaLXSLnnbKzWHyTOK+WETLtS5nWpNr5I95aN32D3",
+	[OPTIONAL_MODULE_URLS.sql]: "sha384-ua6rbgEfbwIWlrG1MxSagm4g3MI0VYpCkQQCjt6CtFL345h8/3ttwVWpyKiRzt/9",
 });
 
 export const OPTIONAL_MODULE_GROUPS = Object.freeze([

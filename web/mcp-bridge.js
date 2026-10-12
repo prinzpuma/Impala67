@@ -29,6 +29,30 @@ if (typeof document !== "undefined") {
 	}, true);
 }
 
+// impala_eval ohne 'unsafe-eval' (CSP): Der Code läuft als Inline-Skript ('unsafe-inline'
+// ist erlaubt) und liefert sein Ergebnis über einen einmaligen globalen Rückruf.
+function runEvalCode(code, ctx) {
+	return new Promise((resolve, reject) => {
+		const key = "__impalaEval_" + Math.random().toString(36).slice(2);
+		let syntaxError = null;
+		const onError = (e) => { syntaxError = e.error || new SyntaxError(e.message); };
+		window[key] = { ctx, resolve, reject };
+		const script = document.createElement("script");
+		script.textContent = "(async () => { const { ctx, resolve, reject } = window." + key + "; delete window." + key + ";" +
+			" const { S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH } = ctx;" +
+			" try { resolve(await (async () => {\n" + code + "\n})()); } catch (e) { reject(e); } })();";
+		window.addEventListener("error", onError);
+		document.head.appendChild(script);
+		window.removeEventListener("error", onError);
+		script.remove();
+		// Wurde der Rückruf nicht abgeholt, lief das Skript nicht (Syntaxfehler oder CSP).
+		if (window[key]) {
+			delete window[key];
+			reject(syntaxError || new Error("Code konnte nicht ausgeführt werden."));
+		}
+	});
+}
+
 export function initMcpBridge() {
 	if (typeof window === "undefined" || bridgeStarted || !mcpBridgeEnabled()) return;
 	bridgeStarted = true;
@@ -479,9 +503,7 @@ export function initMcpBridge() {
 							break;
 						}
 						try {
-							// Sichere Ausführung im Window-Kontext
-							const fn = new Function("S", "STATE", "RENDER", "TABS", "PERF_PROFILER", "CLOUDFLARE_SYNC", "DRIVE", "SEARCH", `return (async () => { ${args.code} })();`);
-							const evalOutput = await fn(S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH);
+							const evalOutput = await runEvalCode(args.code, { S, STATE, RENDER, TABS, PERF_PROFILER, CLOUDFLARE_SYNC, DRIVE, SEARCH });
 							result = { ok: true, output: safeSerialize(evalOutput) };
 						} catch (evalErr) {
 							result = { ok: false, error: evalErr.message, stack: evalErr.stack };

@@ -13,6 +13,8 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 const TESSERACT_VERSION = "7.0.0";
 const CDN = "https://cdn.jsdelivr.net/npm/";
 const SCRIPT_URL = `${CDN}tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`;
+// SRI-Hash der exakten Datei; bei einem Versionswechsel neu berechnen.
+const SCRIPT_INTEGRITY = "sha384-2BQ3U3OdKOb0Uczxqr41I9UvZkzr4V9Hv8uSzMMZAlmhsFClvdZX5wi5fDCzG+tM";
 const WORKER_PATH = `${CDN}tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`;
 const CORE_PATH = `${CDN}tesseract.js-core@${TESSERACT_VERSION}`;
 const LANGS = "deu+eng";
@@ -41,6 +43,8 @@ function loadTesseract() {
 		scriptPromise = new Promise((resolve, reject) => {
 			const script = document.createElement("script");
 			script.src = SCRIPT_URL;
+			script.crossOrigin = "anonymous";
+			script.integrity = SCRIPT_INTEGRITY;
 			script.async = true;
 			script.onload = () => {
 				if (window.Tesseract) resolve(window.Tesseract);

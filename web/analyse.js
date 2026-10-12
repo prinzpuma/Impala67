@@ -1,6 +1,7 @@
 "use strict";
 
 import { S, STATE } from "./state.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { TELE } from "./telemetrie.js";
@@ -118,7 +119,7 @@ export const ANALYSE = (() => {
 				"Du bist ein präziser Karteikarten-Autor. Antworte NUR mit gültigem JSON.");
 			const j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]);
 			if (j.front && j.back) { front = j.front; back = j.back; }
-		} catch (err) { /* Fallback-Karte reicht */ }
+		} catch (err) { PERF_PROFILER.error("analyse-card-ai-error", err); /* Fallback-Karte reicht */ }
 		await STATE.dispatch("cardCreate", { id: U.uid(), front, back, pageId, deck: "Problemzonen" });
 		U.toast("Karte in „Problemzonen“ angelegt.", "success");
 	}

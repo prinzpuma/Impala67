@@ -1,5 +1,6 @@
 "use strict";
 import { S, STATE } from "./state.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { SRS } from "./srs.js";
 import { EXTRAS } from "./extras.js";
@@ -930,7 +931,7 @@ export const TOOLS = (() => {
 			case "calculate": {
 				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") {
 					try {
-						await U.loadScript(OPTIONAL_MODULE_URLS.math, "math");
+						await PERF_PROFILER.run("math.load", () => U.loadScript(OPTIONAL_MODULE_URLS.math, "math"), {}, 0);
 					} catch {
 						return { error: "Mathe-Modul (math.js) konnte nicht geladen werden. Internetverbindung für den Erstabruf erforderlich." };
 					}

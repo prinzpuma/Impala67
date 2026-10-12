@@ -120,7 +120,10 @@ export async function initApp() {
 	await yieldForPaint();
 	await DB.open();
 	// Speicher als persistent markieren — der Browser darf IndexedDB dann nicht still räumen.
-	if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+	// Ohne Zusage darf v. a. Safari die Daten nach längerer Nichtnutzung löschen: im Profiler sichtbar machen.
+	if (navigator.storage && navigator.storage.persist) navigator.storage.persist()
+		.then((granted) => { if (!granted) PERF_PROFILER.error("storage-not-persistent", new Error("Browser hat dauerhaften Speicher abgelehnt")); })
+		.catch((e) => PERF_PROFILER.error("storage-persist-error", e));
 	SETTINGS.applyTheme();
 	// Linke Sidebar: zuletzt eingeklappt? (Desktop — ☰ in der Tab-Leiste öffnet wieder)
 	try {
@@ -174,7 +177,7 @@ export async function initApp() {
 					}
 				}
 			}
-			STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null).then(() => render()).catch(() => {});
+			STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null).then(() => render()).catch((e) => PERF_PROFILER.error("heft-hydrate-error", e));
 		}
 	} catch { /* Heft-Payload bleibt lazy */ }
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.

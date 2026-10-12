@@ -355,7 +355,9 @@ function syncActiveSidebarRow(tree) {
 
 	if (targetMode === "files") {
 		const targetId = S.view === "page" ? S.currentPageId : null;
-		const curActive = tree.querySelector(".row.active");
+		// Vertikale Tab-Zeilen sind auch .row — sie haben ihre eigene Markierung (tabsKey).
+		// Sonst griff querySelector die erste Tab-Zeile und nahm ihr die Markierung weg.
+		const curActive = tree.querySelector(".row.active:not(.sidebar-tab-row)");
 		const targetRow = targetId ? tree.querySelector(`.row[data-page="${cssEsc(targetId)}"]`) : null;
 		if (curActive === targetRow) return true;
 		if (targetId && !targetRow) return false; // Seite nicht in der Sidebar (neu/eingeklappt) -> Fallback auf Voll-Render
@@ -367,6 +369,16 @@ function syncActiveSidebarRow(tree) {
 	return false;
 }
 
+// EINE Regel für „dieser Tab ist markiert“ (Leiste oben UND vertikale Tabs):
+// aktiver Tab UND die Ansicht passt zu seiner Art.
+function isActiveTab(id) {
+	if (!id || id !== S.activeTabId) return false;
+	if (id.startsWith("chat:")) return S.view === "chat";
+	if (id === "nlm:main") return S.view === "notebooklm";
+	if (id === "anki:main") return S.view === "anki";
+	return S.view === "page";
+}
+
 // Schnelle O(1)-Abstimmung für aktiven Tab-Chip und Nav-Buttons.
 function syncActiveTabChip(bar) {
 	if (!bar || !bar.firstElementChild) return false;
@@ -376,16 +388,7 @@ function syncActiveTabChip(bar) {
 		if (chips[i].dataset.tabopen !== S.tabs[i]) return false;
 	}
 
-	const isChat = String(S.activeTabId).startsWith("chat:");
-	const isNlm = S.activeTabId === "nlm:main";
-	const isAnki = S.activeTabId === "anki:main";
-	const activeViewMatches = (isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (isAnki && S.view === "anki") || (!isChat && !isNlm && !isAnki && S.view === "page");
-	const targetActiveId = activeViewMatches ? S.activeTabId : null;
-
-	chips.forEach((chip) => {
-		const shouldBeActive = targetActiveId != null && chip.dataset.tabopen === targetActiveId;
-		chip.classList.toggle("active", shouldBeActive);
-	});
+	chips.forEach((chip) => chip.classList.toggle("active", isActiveTab(chip.dataset.tabopen)));
 
 	const backBtn = $("btnNavBack"), pageBackBtn = $("btnPageNavBack");
 	const canBack = canGoBack();
@@ -438,12 +441,7 @@ function sidebarTabsHtml() {
 			tabIcon = pageIconHtml(pg, "");
 			title = pg.title || "Unbenannt";
 		}
-		const active = id === S.activeTabId && (
-			(isChat && S.view === "chat") ||
-			(isNlm && S.view === "notebooklm") ||
-			(isAnki && S.view === "anki") ||
-			(!isChat && !isNlm && !isAnki && S.view === "page")
-		) ? " active" : "";
+		const active = isActiveTab(id) ? " active" : "";
 
 		return `<div class="row sidebar-tab-row${active}" data-tabopen="${id}" data-key="sbtab:${id}" title="${esc(title)}">` +
 			'<span class="row-chevron spacer"></span>' +
@@ -616,7 +614,7 @@ function renderTabs() {
 			if (!pg) return "";
 			title = pageIconHtml(pg) + esc(pg.title);
 		}
-		const active = id === S.activeTabId && ((isChat && S.view === "chat") || (isNlm && S.view === "notebooklm") || (isAnki && S.view === "anki") || (!isChat && !isNlm && !isAnki && S.view === "page")) ? " active" : "";
+		const active = isActiveTab(id) ? " active" : "";
 		return `<div class="tabchip${active}" data-key="tab:${id}" data-tabopen="${id}"><span class="tabchip-title">${title}</span><button class="tabchip-x" data-tabclose="${id}" title="Schließen">✕</button></div>`;
 	}).join("");
 	// „+“ öffnet einen neuen Tab (Navigation ersetzt sonst den aktuellen)
@@ -1518,6 +1516,8 @@ function renderChatHistMenu() {
 
 function renderChat() {
 	renderSideContextChip();
+	// Der Vollbild-Chat zeigt den Seitenkontext im eigenen Chip — sonst blieb er nach ✕ stehen
+	renderPendingChip("full");
 	renderChatHistMenu();
 	const log = $("chatLog");
 	if (log) renderChatLog(log, S.sideChat);
