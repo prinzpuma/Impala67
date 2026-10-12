@@ -1,5 +1,6 @@
 "use strict";
 import { U } from "./util.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 // handschrift.js — Handschrift- und Strich-Erkennung für Impala67 (heft.js).
 //
@@ -19,6 +20,8 @@ export const HANDSCHRIFT = (() => {
 				inkWorker = new Worker("./handwriting-worker.js", { type: "module" });
 				inkWorker.addEventListener("message", (e) => {
 					const msg = e.data || {};
+					if (msg.type === "ready") PERF_PROFILER.record("operation", msg.loadMs || 0, { name: "handwriting.model-load", runtime: msg.runtime });
+					else if (msg.type === "init_error") PERF_PROFILER.error("handwriting-error", new Error(msg.error || "Handschrift-Modell konnte nicht geladen werden"), { runtime: msg.runtime });
 					if (msg.id && inkPending.has(msg.id)) {
 						const { resolve, reject, fullDetails } = inkPending.get(msg.id);
 						inkPending.delete(msg.id);
@@ -42,7 +45,7 @@ export const HANDSCHRIFT = (() => {
 		const worker = getInkWorker();
 		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
 		const id = ++inkReqId;
-		return new Promise((resolve, reject) => {
+		return PERF_PROFILER.run("handwriting.recognize", () => new Promise((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				if (inkPending.has(id)) {
 					inkPending.delete(id);
@@ -55,7 +58,7 @@ export const HANDSCHRIFT = (() => {
 				fullDetails: false,
 			});
 			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
-		});
+		}), { strokes: strokes.length }, 50);
 	}
 
 	async function recognizeStrokesDetails(strokes, options = {}) {
@@ -63,7 +66,7 @@ export const HANDSCHRIFT = (() => {
 		const worker = getInkWorker();
 		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
 		const id = ++inkReqId;
-		return new Promise((resolve, reject) => {
+		return PERF_PROFILER.run("handwriting.recognize", () => new Promise((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				if (inkPending.has(id)) {
 					inkPending.delete(id);
@@ -76,7 +79,7 @@ export const HANDSCHRIFT = (() => {
 				fullDetails: true,
 			});
 			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
-		});
+		}), { strokes: strokes.length }, 50);
 	}
 
 	const STORAGE_KEY_SAMPLES = "impala67_handwriting_training_samples";

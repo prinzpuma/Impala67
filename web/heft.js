@@ -2498,10 +2498,7 @@ export const HEFT = (() => {
 			if (U.toast) U.toast("PDF-Engine konnte nicht geladen werden: " + ((e && e.message) || e), "error");
 			return at;
 		}
-		const lib = window.pdfjsLib;
-		if (!lib) return at;
-		const buf = await f.arrayBuffer();
-		const pdf = await lib.getDocument({ data: buf }).promise;
+		const pdf = await PDFS.openDocument(await f.arrayBuffer());
 		for (let i = 1; i <= pdf.numPages; i++) {
 			const p = await pdf.getPage(i);
 

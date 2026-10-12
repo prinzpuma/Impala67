@@ -402,6 +402,7 @@ export const AI = (() => {
 				embeddingWorker.addEventListener("message", (e) => {
 					const msg = e.data;
 					if (!msg) return;
+					if (msg.loadInfo) PERF_PROFILER.record("operation", msg.loadInfo.loadMs || 0, { name: "embedding.model-load", ...msg.loadInfo });
 					if (msg.type === "progress") {
 						for (const l of embeddingWorkerListeners) {
 							try { l(msg); } catch {}
@@ -416,6 +417,7 @@ export const AI = (() => {
 				});
 				embeddingWorker.addEventListener("error", (err) => {
 					console.warn("Embedding Worker Error:", err);
+					PERF_PROFILER.error("embedding-worker-error", new Error(err?.message || "Embedding Worker Fehler"));
 					for (const [id, { reject }] of embeddingWorkerPending) {
 						reject(new Error(err?.message || "Embedding Worker Fehler"));
 					}

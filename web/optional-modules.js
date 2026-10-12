@@ -1,5 +1,12 @@
 "use strict";
 
+// pdf.js-„legacy“-Build: der normale Build verlangt seit 6.0 Safari 18 / Chrome 125;
+// legacy laeuft auch auf aelteren iPads. Mermaid bleibt auf 11.x, weil 12 Safari 17.4
+// voraussetzt und bestehende Diagramme neu layoutet.
+export const PDFJS_VERSION = "6.4.299";
+export const MERMAID_VERSION = "11.17.2";
+const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/`;
+
 // Eine Quelle der Wahrheit fuer alle fest versionierten, optionalen CDN-Pakete.
 // Die Dateien werden nur in Cache Storage abgelegt; sie werden beim Prefetch
 // weder als Skript eingebunden noch geparst oder ausgefuehrt.
@@ -7,12 +14,16 @@ export const OPTIONAL_MODULE_URLS = Object.freeze({
 	katexCss: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css",
 	katex: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js",
 	katexAutoRender: "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js",
-	highlightCss: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css",
-	highlight: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js",
-	mermaid: "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js",
+	highlightCss: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/styles/github-dark.min.css",
+	highlight: "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.12.0/highlight.min.js",
+	mermaid: `https://cdn.jsdelivr.net/npm/mermaid@${MERMAID_VERSION}/dist/mermaid.min.js`,
 	math: "https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.3/math.min.js",
-	pdf: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
-	pdfWorker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+	pdf: PDFJS_BASE + "legacy/build/pdf.min.mjs",
+	pdfWorker: PDFJS_BASE + "legacy/build/pdf.worker.min.mjs",
+	// Ordner fuer Zusatzdaten (wasm: JPEG2000-Scans, cmaps: asiatische Schriften,
+	// standard_fonts: nicht eingebettete Schriften, iccs: CMYK-Farben).
+	pdfAssets: PDFJS_BASE,
+	pdfJpxWasm: PDFJS_BASE + "wasm/openjpeg.wasm",
 	sql: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js",
 	sqlWasm: "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
 });
@@ -22,7 +33,7 @@ export const OPTIONAL_MODULE_GROUPS = Object.freeze([
 	Object.freeze({ name: "Highlight.js", urls: Object.freeze([OPTIONAL_MODULE_URLS.highlightCss, OPTIONAL_MODULE_URLS.highlight]) }),
 	Object.freeze({ name: "Mermaid", urls: Object.freeze([OPTIONAL_MODULE_URLS.mermaid]) }),
 	Object.freeze({ name: "Math.js", urls: Object.freeze([OPTIONAL_MODULE_URLS.math]) }),
-	Object.freeze({ name: "PDF.js", urls: Object.freeze([OPTIONAL_MODULE_URLS.pdf, OPTIONAL_MODULE_URLS.pdfWorker]) }),
+	Object.freeze({ name: "PDF.js", urls: Object.freeze([OPTIONAL_MODULE_URLS.pdf, OPTIONAL_MODULE_URLS.pdfWorker, OPTIONAL_MODULE_URLS.pdfJpxWasm]) }),
 	Object.freeze({ name: "SQL.js", urls: Object.freeze([OPTIONAL_MODULE_URLS.sql, OPTIONAL_MODULE_URLS.sqlWasm]) }),
 ]);
 

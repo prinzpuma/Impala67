@@ -1,4 +1,5 @@
 "use strict";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 // scan-ocr.js — Texterkennung (OCR) für gescannte Heftseiten mit Tesseract.js.
 //
@@ -9,7 +10,7 @@
 //   und Speicher zu schonen. Sprachdaten cached Tesseract selbst (IndexedDB).
 //   Fehler (offline, CDN nicht erreichbar) werden als Exception weitergereicht.
 
-const TESSERACT_VERSION = "5.1.1";
+const TESSERACT_VERSION = "7.0.0";
 const CDN = "https://cdn.jsdelivr.net/npm/";
 const SCRIPT_URL = `${CDN}tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`;
 const WORKER_PATH = `${CDN}tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`;
@@ -59,8 +60,9 @@ function loadTesseract() {
 function getWorker() {
 	clearTimeout(idleTimer);
 	if (!workerPromise) {
-		workerPromise = loadTesseract()
-			.then((T) => T.createWorker(LANGS, 1, { workerPath: WORKER_PATH, corePath: CORE_PATH }))
+		// Laden + Sprachdaten: im Profiler als ocr.load (Fehler inklusive) sichtbar.
+		workerPromise = PERF_PROFILER.run("ocr.load", () => loadTesseract()
+			.then((T) => T.createWorker(LANGS, 1, { workerPath: WORKER_PATH, corePath: CORE_PATH })), { runtime: TESSERACT_VERSION }, 0)
 			.catch((err) => { workerPromise = null; throw err; });
 	}
 	return workerPromise;
@@ -79,9 +81,13 @@ function scheduleIdleStop() {
 export function recognize(src) {
 	const run = async () => {
 		const worker = await getWorker();
-		const { data } = await worker.recognize(src);
+		const finish = PERF_PROFILER.start("ocr.recognize", { runtime: TESSERACT_VERSION }, 0);
+		let data;
+		try { ({ data } = await worker.recognize(src)); }
+		catch (err) { finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) }); throw err; }
 		const confidence = Number(data && data.confidence) || 0;
 		const text = cleanOcrText(data && data.text);
+		finish({ confidence: Math.round(confidence), chars: text.length });
 		if (confidence < MIN_CONFIDENCE || text.length < MIN_CHARS) return { text: "", confidence };
 		return { text, confidence };
 	};

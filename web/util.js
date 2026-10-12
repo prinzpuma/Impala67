@@ -1,6 +1,7 @@
 "use strict";
 import { icon } from "./icons.js";
-import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { OPTIONAL_MODULE_URLS, MERMAID_VERSION } from "./optional-modules.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 // util.js — kleine Helfer
 const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
 function withLoadTimeout(task, label) {
@@ -459,6 +460,11 @@ export const U = {
 	_safeAttrs: new Set(["alt", "class", "colspan", "href", "rowspan", "src", "title"]),
 	sanitize(html) {
 		if (window.DOMPurify) return DOMPurify.sanitize(html);
+		// DOMPurify fehlt (offline, CDN- oder SRI-Fehler): einmal pro Sitzung im Profiler melden.
+		if (!U._purifyMissingReported) {
+			U._purifyMissingReported = true;
+			PERF_PROFILER.error("dompurify-missing", new Error("DOMPurify nicht geladen, nutze eingebauten Filter"));
+		}
 		const body = new DOMParser().parseFromString(String(html ?? ""), "text/html").body;
 		for (const el of [...body.querySelectorAll("*")]) {
 			if (U._dropTags.has(el.localName)) { el.remove(); continue; }
@@ -498,7 +504,17 @@ export const U = {
 		// `breaks: true` erzeugt <br>-Knoten innerhalb mehrzeiliger $$…$$-Blöcke.
 		// KaTeX Auto-Render kann Delimiter nicht über solche DOM-Grenzen hinweg
 		// erkennen; ohne erzwungene Soft-Breaks bleibt der LaTeX-Block zusammen.
-		const html = U._unmaskMath(U.sanitize(marked.parse(raw, { breaks: false })), masked.stash);
+		const finish = PERF_PROFILER.start("markdown.parse", { chars: raw.length }, 16);
+		let parsed;
+		try {
+			parsed = marked.parse(raw, { breaks: false });
+			finish();
+		} catch (err) {
+			// Parserfehler melden und wie offline als Rohtext zeigen (nicht cachen).
+			finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) });
+			return "<pre>" + U.esc(U._unmaskMath(raw, masked.stash, false)) + "</pre>";
+		}
+		const html = U._unmaskMath(U.sanitize(parsed), masked.stash);
 		// Kleiner Cache: erspart erneutes Parsen bei jedem Voll-Render derselben Inhalte.
 		// PERF (Audit 21. Juli): nur den ältesten Eintrag verdrängen statt clear() — das
 		// Komplett-Leeren erzwang periodisch ein Neu-Parsen ALLER sichtbaren Inhalte in
@@ -516,7 +532,8 @@ export const U = {
 		const masked = U._maskMath(text);
 		const raw = U._markHighlights(masked.text);
 		if (window.marked && marked.parseInline) {
-			try { return U._unmaskMath(U.sanitize(marked.parseInline(raw, { breaks: true })), masked.stash); } catch { /* Fallback unten */ }
+			try { return U._unmaskMath(U.sanitize(marked.parseInline(raw, { breaks: true })), masked.stash); }
+			catch (err) { PERF_PROFILER.error("markdown-error", err, { inline: true }); }
 		}
 		return U.esc(U._unmaskMath(raw, masked.stash, false));
 	},
@@ -596,8 +613,10 @@ export const U = {
 		if (!hasCode) return;
 		if (!window.hljs) {
 			try {
-				await U.loadStyle(OPTIONAL_MODULE_URLS.highlightCss);
-				await U.loadScript(OPTIONAL_MODULE_URLS.highlight, "hljs");
+				await PERF_PROFILER.run("highlight.load", async () => {
+					await U.loadStyle(OPTIONAL_MODULE_URLS.highlightCss);
+					await U.loadScript(OPTIONAL_MODULE_URLS.highlight, "hljs");
+				}, {}, 0);
 			} catch (err) {
 				if (U.toast && !U._hlToastShown) {
 					U._hlToastShown = true;
@@ -607,6 +626,8 @@ export const U = {
 			}
 		}
 		if (!window.hljs) return;
+		const finish = PERF_PROFILER.start("highlight.render", {}, 16);
+		let highlighted = 0, failed = 0, lastError = null;
 		el.querySelectorAll("pre code").forEach((block) => {
 			if (block.classList.contains("language-mermaid")) return;
 			// PERF-WURZEL: Bisher wurde bei JEDEM Streaming-Frame JEDER Codeblock des gesamten
@@ -619,8 +640,10 @@ export const U = {
 			// hljs verweigert ein zweites Einfärben, solange diese Marke steht — beim wachsenden
 			// Block wäre die Färbung sonst nach dem ersten Frame für immer eingefroren.
 			delete block.dataset.highlighted;
-			try { hljs.highlightElement(block); } catch { /* ignorieren */ }
+			try { hljs.highlightElement(block); highlighted++; } catch (err) { failed++; lastError = err; }
 		});
+		finish({ blocks: highlighted, failed });
+		if (lastError) PERF_PROFILER.error("highlight-error", lastError, { failed });
 	},
 
 	// Mermaid-Diagramme rendern: ```mermaid-Codeblöcke → SVG (dunkles Theme).
@@ -642,7 +665,7 @@ export const U = {
 				}
 			});
 			try {
-				await U.loadScript(OPTIONAL_MODULE_URLS.mermaid, "mermaid");
+				await PERF_PROFILER.run("mermaid.load", () => U.loadScript(OPTIONAL_MODULE_URLS.mermaid, "mermaid"), { runtime: MERMAID_VERSION }, 0);
 			} catch {
 				blocks.forEach((b) => {
 					const pre = b.closest("pre");
@@ -670,13 +693,14 @@ export const U = {
 			try {
 				const id = "mmd" + Math.random().toString(36).slice(2, 10);
 				if (!(await mermaid.parse(src, { suppressErrors: true }))) { delete pre.dataset.mermaidDone; return; }
-				const { svg } = await mermaid.render(id, src);
+				const { svg } = await PERF_PROFILER.run("mermaid.render", () => mermaid.render(id, src), { chars: src.length, runtime: MERMAID_VERSION }, 50);
 				const wrap = document.createElement("div");
 				wrap.className = "mermaid-diagram";
 				wrap.innerHTML = svg;
 				pre.replaceWith(wrap);
 			} catch {
-				// Ungültige/unfertige Syntax — Codeblock unverändert lassen, später erneut versuchen
+				// Ungültige/unfertige Syntax — Codeblock unverändert lassen, später erneut versuchen.
+				// Fehler nach erfolgreichem parse stehen als fehlgeschlagenes mermaid.render im Profiler.
 				delete pre.dataset.mermaidDone;
 			}
 		});

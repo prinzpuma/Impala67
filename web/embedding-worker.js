@@ -53,9 +53,14 @@ function normalizeVec(vec) {
 	return out;
 }
 
+const TRANSFORMERS_VERSION = "4.3.1";
+// Ladeinfo des zuletzt gestarteten Modells; geht einmal mit der nächsten Antwort an den
+// Hauptthread (ai.js → Profiler „embedding.model-load“).
+let pendingLoadInfo = null;
+
 async function loadTransformers() {
 	if (!pipeline) {
-		const tf = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1");
+		const tf = await import(`https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}`);
 		pipeline = tf.pipeline;
 		env = tf.env;
 		if (env) {
@@ -164,6 +169,7 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 
 	isInitializing = true;
 	initPromise = (async () => {
+		const started = performance.now();
 		try {
 			await loadTransformers();
 			const device = await chooseDevice();
@@ -187,6 +193,7 @@ async function initExtractor(modelId = "hotchpotch/bekko-embedding-v1-a8m", dim 
 			currentModel = modelId;
 			currentDevice = usedDevice;
 			currentDim = dim;
+			pendingLoadInfo = { loadMs: Math.round(performance.now() - started), device: usedDevice, fallback: usedDevice !== device, runtime: TRANSFORMERS_VERSION };
 			resetIdleTimer();
 			return extractor;
 		} finally {
@@ -269,6 +276,12 @@ async function deleteModelCache(modelId = "hotchpotch/bekko-embedding-v1-a8m") {
 const foregroundEmbeds = [], backgroundEmbeds = [];
 let processingEmbeds = false;
 
+function takeLoadInfo() {
+	const info = pendingLoadInfo;
+	pendingLoadInfo = null;
+	return info;
+}
+
 async function runEmbed(msg) {
 	const { texts, model = "hotchpotch/bekko-embedding-v1-a8m", dim = 256, id } = msg;
 	if (!Array.isArray(texts)) {
@@ -285,7 +298,7 @@ async function runEmbed(msg) {
 			const sliced = dim && dim < arr.length ? arr.slice(0, dim) : arr;
 			return normalizeVec(sliced);
 		});
-		self.postMessage({ type: "embed-result", id, vectors });
+		self.postMessage({ type: "embed-result", id, vectors, loadInfo: takeLoadInfo() });
 	} catch (err) {
 		self.postMessage({ type: "error", id, error: String(err?.message || err) });
 	}
@@ -335,6 +348,7 @@ self.addEventListener("message", async (e) => {
 					type: "download-complete",
 					model,
 					device: currentDevice,
+					loadInfo: takeLoadInfo(),
 					id: msg.id,
 				});
 			} catch (err) {

@@ -5,7 +5,8 @@ import { S, STATE } from "./state.js";
 import { RAG } from "./rag.js";
 import { AI } from "./ai.js";
 import { TABS } from "./tabs.js";
-import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { OPTIONAL_MODULE_URLS, PDFJS_VERSION } from "./optional-modules.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 import { icon, lead } from "./icons.js";
 // pdfs.js — PDF-Pipeline: speichern (IndexedDB) → Text extrahieren (pdf.js)
 // → KI sortiert ein & fasst zusammen → Seite wird angelegt.
@@ -13,8 +14,9 @@ export const PDFS = (() => {
 	async function ensureLoaded() {
 		const mainUrl = OPTIONAL_MODULE_URLS.pdf;
 		const workerUrl = OPTIONAL_MODULE_URLS.pdfWorker;
+		// Seit pdf.js 4 nur noch als ES-Modul; window.pdfjsLib bleibt die gemeinsame Referenz.
 		if (!window.pdfjsLib) {
-			await U.loadScript(mainUrl, "pdfjsLib");
+			window.pdfjsLib = await PERF_PROFILER.run("pdf.load", () => import(mainUrl), { runtime: PDFJS_VERSION }, 0);
 		}
 		if (!window.pdfjsLib) throw new Error("pdf.js konnte nicht geladen werden.");
 		pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -32,17 +34,47 @@ export const PDFS = (() => {
 		return true;
 	}
 
-	async function extractText(buf, maxPages = 40) {
+	// Einziger Weg, ein PDF zu öffnen (Viewer, Textauszug, Heft-Import). Die Zusatzdaten
+	// verbessern Scans (JPEG2000), asiatische und nicht eingebettete Schriften und CMYK-Farben.
+	async function openDocument(buf) {
 		await ensureLoaded();
-		const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-		const n = Math.min(doc.numPages, maxPages);
-		const parts = [];
-		for (let i = 1; i <= n; i++) {
-			const page = await doc.getPage(i);
-			const tc = await page.getTextContent();
-			parts.push("[Seite " + i + "] " + tc.items.map((it) => it.str).join(" "));
+		const base = OPTIONAL_MODULE_URLS.pdfAssets;
+		const finish = PERF_PROFILER.start("pdf.open", { kb: Math.round((buf?.byteLength || 0) / 1024), runtime: PDFJS_VERSION }, 0);
+		try {
+			const doc = await pdfjsLib.getDocument({
+				data: new Uint8Array(buf),
+				wasmUrl: base + "wasm/",
+				cMapUrl: base + "cmaps/",
+				cMapPacked: true,
+				standardFontDataUrl: base + "standard_fonts/",
+				iccUrl: base + "iccs/",
+			}).promise;
+			finish({ pages: doc.numPages });
+			return doc;
+		} catch (err) {
+			finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) });
+			throw err;
 		}
-		return { text: parts.join("\n\n"), numPages: doc.numPages };
+	}
+
+	async function extractText(buf, maxPages = 40) {
+		const doc = await openDocument(buf);
+		const n = Math.min(doc.numPages, maxPages);
+		const finish = PERF_PROFILER.start("pdf.extract-text", { pages: n }, 0);
+		const parts = [];
+		try {
+			for (let i = 1; i <= n; i++) {
+				const page = await doc.getPage(i);
+				const tc = await page.getTextContent();
+				parts.push("[Seite " + i + "] " + tc.items.map((it) => it.str).join(" "));
+			}
+		} catch (err) {
+			finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) });
+			throw err;
+		}
+		const text = parts.join("\n\n");
+		finish({ chars: text.length });
+		return { text, numPages: doc.numPages };
 	}
 
 	async function ingest(file, onStatus) {
@@ -135,10 +167,7 @@ export const PDFS = (() => {
 				return;
 			}
 
-			await ensureLoaded();
-			if (sessionId !== container._pdfSessionId) return;
-
-			const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+			const doc = await openDocument(buf);
 			if (sessionId !== container._pdfSessionId) return;
 
 			const totalPages = doc.numPages;
@@ -278,6 +307,7 @@ export const PDFS = (() => {
 				}
 
 				async function renderPage(pageNum, sheetEl) {
+					const finish = PERF_PROFILER.start("pdf.render-page", { page: pageNum }, 50);
 					try {
 						const page = await doc.getPage(pageNum);
 						if (sessionId !== container._pdfSessionId) return;
@@ -288,10 +318,13 @@ export const PDFS = (() => {
 						canvas.height = Math.floor(vp.height * dpr);
 						canvas.style.width = Math.floor(vp.width) + "px";
 						canvas.style.height = Math.floor(vp.height) + "px";
+						// HiDPI über den transform-Parameter: pdf.js setzt die Kontext-Transformation
+						// beim Rendern selbst, ein vorher gesetztes setTransform ist nicht verlässlich.
 						const ctx = canvas.getContext("2d");
-						ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-						await page.render({ canvasContext: ctx, viewport: vp }).promise;
+						await page.render({ canvasContext: ctx, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
+						finish();
 					} catch (err) {
+						finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) });
 						console.warn("PDF Seite", pageNum, "Renderfehler:", err);
 					}
 				}
@@ -420,5 +453,5 @@ export const PDFS = (() => {
 		}
 	}
 
-	return { ingest, openViewer, download, mountViewer, urlFor, extractText, ensureLoaded };
+	return { ingest, openViewer, download, mountViewer, urlFor, extractText, ensureLoaded, openDocument };
 })();

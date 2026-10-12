@@ -9,6 +9,7 @@ import { HANDWRITING_CTC } from "./handwriting-ctc.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 import { rasterizeLine, IMAGE_HEIGHT } from "./handwriting-rasterizer.js";
 
+const ORT_VERSION = "1.30.0";
 let ort = null;
 let session = null;
 let modelLoading = null; // Promise des laufenden Ladevorgangs
@@ -18,7 +19,7 @@ let currentModelPath = "./handwriting-model.onnx";
 async function loadOrt() {
 	if (!ort) {
 		try {
-			ort = await import("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.all.bundle.min.mjs");
+			ort = await import(`https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.all.bundle.min.mjs`);
 			if (ort?.env?.wasm) {
 				ort.env.wasm.numThreads = 1;
 				ort.env.wasm.simd = true;
@@ -63,6 +64,7 @@ function initSession(modelPath = currentModelPath) {
 }
 
 async function loadSession(modelPath) {
+	const started = performance.now();
 	try {
 		await loadOrt();
 		currentModelPath = modelPath;
@@ -73,11 +75,12 @@ async function loadSession(modelPath) {
 			graphOptimizationLevel: "all",
 		});
 		modelReady = true;
-		self.postMessage({ type: "ready", model: modelPath });
+		// loadMs/runtime landen im Profiler des Hauptthreads (handschrift.js).
+		self.postMessage({ type: "ready", model: modelPath, loadMs: Math.round(performance.now() - started), runtime: ORT_VERSION });
 		return session;
 	} catch (e) {
 		console.warn("[handwriting-worker] Fehler beim Laden des ONNX-Modells:", e);
-		self.postMessage({ type: "init_error", error: e?.message || String(e) });
+		self.postMessage({ type: "init_error", error: e?.message || String(e), runtime: ORT_VERSION });
 		return null;
 	}
 }
