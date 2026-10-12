@@ -78,6 +78,8 @@ const APP_FILES = [
 	"./rag-ranking.js",
 	"./rag-worker.js",
 	"./embedding-worker.js",
+	"./compact-events.js",
+	"./compact-worker.js",
 	"./drive.js",
 	"./drive-status.js",
 	"./backup-status.js",
