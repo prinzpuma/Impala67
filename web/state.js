@@ -78,7 +78,7 @@ export const S = {
 	pendingImage: null,
 	pendingAttachmentTarget: null, // "side" | "full" — Chat, dem der ausgewählte Anhang gehört
 	attachTarget: "side", // zuletzt geöffneter Datei-Dialog; erst nach Dateiauswahl wird der Anhang zugeordnet
-	settingsSection: "ki",
+	settingsSection: "overview",
 	sidebarMode: "files", // "files" | "chats"
 	currentChatId: null,
 	tabs: [], // offene Seiten- oder Chat-IDs (Präfix "chat:" für Chats)

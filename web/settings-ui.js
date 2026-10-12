@@ -6,7 +6,7 @@ import { icon as spriteIcon, lead } from "./icons.js";
 const e = (value) => U.esc(String(value ?? ""));
 
 // Abschnitts-Icons der Einstellungen → Namen im zentralen Sprite (icons.svg)
-const NAMES = { home: "home", sliders: "sliders", appearance: "palette", sparkles: "sparkles", sync: "sync", archive: "archive", gamepad: "gamepad", search: "search", chevron: "chevron-right", check: "check" };
+const NAMES = { home: "home", sliders: "sliders", appearance: "palette", sparkles: "sparkles", sync: "sync", graduation: "graduation", gear: "gear", search: "search", chevron: "chevron-right", check: "check" };
 
 export function icon(name, className = "") {
 	return spriteIcon(NAMES[name] || "sliders", ("settings-icon " + className).trim());
@@ -47,7 +47,8 @@ export function field(label, id, value, options = {}) {
 	const control = tag === "textarea"
 		? '<textarea id="' + e(id) + '" rows="' + (options.rows || 4) + '" ' + attrs + ">" + e(value) + "</textarea>"
 		: '<input id="' + e(id) + '" value="' + e(value) + '" ' + attrs + ">";
-	return '<label class="settings-input-row" for="' + e(id) + '"><span><b>' + e(label) + "</b>" + (options.description ? "<small>" + e(options.description) + "</small>" : "") + "</span>" + control + "</label>";
+	const anchor = options.anchor ? ' id="' + e(options.anchor) + '" data-settings-anchor' : "";
+	return '<label class="settings-input-row"' + anchor + ' for="' + e(id) + '"><span><b>' + e(label) + "</b>" + (options.description ? "<small>" + e(options.description) + "</small>" : "") + "</span>" + control + "</label>";
 }
 
 export function actions(buttons, className = "") {

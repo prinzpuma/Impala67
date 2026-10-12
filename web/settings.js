@@ -126,30 +126,6 @@ export function setBreakReminder(enabled) {
 export const isBreakReminderEnabled = getBreakReminder;
 
 
-// Eigenes Hintergrundbild anwenden (Blob aus IndexedDB, dunkel überblendet)
-export async function applyBg() {
-	const bg = U.el("bg");
-	if (!bg) return;
-	try {
-		// DB.blobUrl cacht: vorher entstand bei JEDEM Aufruf (Theme-Wechsel, Akzentfarbe,
-		// Start) ein neuer Object-URL fürs selbe Bild, der nie freigegeben wurde.
-		const url = await DB.blobUrl("bgImage", "image/jpeg");
-		if (url) {
-			document.body.classList.add("has-custom-background");
-			bg.style.backgroundImage = "linear-gradient(rgba(6,8,12,0.84), rgba(6,8,12,0.93)), url('" + url + "')";
-			bg.style.backgroundSize = "cover";
-			bg.style.backgroundPosition = "center";
-		} else {
-			document.body.classList.remove("has-custom-background");
-			bg.style.backgroundImage = "";
-			bg.style.backgroundSize = "";
-			bg.style.backgroundPosition = "";
-		}
-	} catch (e) {
-		console.warn("Hintergrund konnte nicht geladen werden:", e);
-	}
-}
-
 // ---------- Settings-System: Schema, Shell und einheitlicher Entwurfszustand ----------
 let settingsDraftInitial = "[]";
 let settingsSearchQuery = "";
@@ -213,8 +189,6 @@ function settingsViewModel() {
 		nativeFilesystemAvailable: PLATFORM_NATIVE.isNative,
 		nativeFilesystemEnabled: localStorage.getItem("impala67NativeFsBackup") !== "0",
 		breakReminder: getBreakReminder(),
-		homeLayout,
-		homeSections: HOME_SECTIONS,
 	};
 }
 
@@ -233,7 +207,7 @@ function focusSettingsAnchor(anchor) {
 export function openSettings(section, anchor) {
 	const stored = localStorage.getItem(SETTINGS_LAST_SECTION_KEY);
 	const resolved = resolveSettingsSection(section || stored || "overview");
-	const legacyAnchor = { ki: "ai-models", home: "home-layout", look: "theme", backup: "backup", update: "updates", controller: "controller-status", experimente: "learning-beta" }[section];
+	const legacyAnchor = { ki: "ai-models", home: "home-name", look: "theme", backup: "backup", update: "updates", controller: "controller-status", devices: "controller-status", experimente: "learning-beta", pause: "break-reminder", lernzeit: "break-reminder" }[section];
 	const previousSec = S.settingsSection;
 	S.settingsSection = resolved;
 	localStorage.setItem(SETTINGS_LAST_SECTION_KEY, resolved);
@@ -246,6 +220,15 @@ export function openSettings(section, anchor) {
 	if (existingModal && isExistingMobile === isMobile) {
 		const previousMain = existingModal.querySelector(".settings-main");
 		const keepScroll = previousMain ? previousMain.scrollTop : 0;
+		// Aufgeklappte Abschnitte bleiben beim Neuzeichnen desselben Bereichs offen.
+		const openDisclosures = previousSec === resolved && previousMain
+			? Array.from(previousMain.querySelectorAll("details[open] > summary b"), (b) => b.textContent) : [];
+		const fillMain = (main, html) => {
+			main.innerHTML = html;
+			main.querySelectorAll("details > summary b").forEach((b) => { if (openDisclosures.includes(b.textContent)) b.closest("details").open = true; });
+			if (keepScroll && previousSec === resolved) main.scrollTop = keepScroll;
+			else if (!anchor && !legacyAnchor) main.scrollTop = 0;
+		};
 		existingModal.setAttribute("data-sec", resolved);
 
 		if (isMobile) {
@@ -262,9 +245,7 @@ export function openSettings(section, anchor) {
 				const searchBar = isOverview
 					? '<label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Einstellungen suchen…" value="' + U.esc(settingsSearchQuery) + '" aria-label="Einstellungen durchsuchen"></label><div id="settingsSearchResults" class="settings-search-results" hidden></div>'
 					: '';
-				main.innerHTML = searchBar + renderSettingsPage(resolved, settingsViewModel());
-				if (keepScroll && previousSec === resolved) main.scrollTop = keepScroll;
-				else if (!anchor && !legacyAnchor) main.scrollTop = 0;
+				fillMain(main, searchBar + renderSettingsPage(resolved, settingsViewModel()));
 			}
 		} else {
 			existingModal.querySelectorAll(".settings-nav-item").forEach((btn) => {
@@ -273,11 +254,7 @@ export function openSettings(section, anchor) {
 				btn.setAttribute("aria-current", active ? "page" : "false");
 			});
 			const main = existingModal.querySelector(".settings-main");
-			if (main) {
-				main.innerHTML = renderSettingsPage(resolved, settingsViewModel());
-				if (keepScroll && previousSec === resolved) main.scrollTop = keepScroll;
-				else if (!anchor && !legacyAnchor) main.scrollTop = 0;
-			}
+			if (main) fillMain(main, renderSettingsPage(resolved, settingsViewModel()));
 		}
 	} else {
 		overlay.hidden = false;
@@ -292,7 +269,7 @@ export function openSettings(section, anchor) {
 	if (resolved === "ai") {
 		renderStatusDot();
 		queueMicrotask(() => {
-			loadKiTabContent(S.settingsKiTab || "models");
+			refreshChatModels();
 			if (U.el("inpEmbed")) refreshEmbeddingModels();
 		});
 	}
@@ -659,8 +636,7 @@ export async function handleAddProvider() {
 	}) : (S.settings.aiProviders || []).slice();
 	providers.push({ id: U.uid(), name: "Neue Quelle", base: "", key: "" });
 	await STATE.dispatch("settingsSet", { aiProviders: providers });
-	S.settingsKiTab = "sources"; // nach dem Anlegen im Quellen-Tab bleiben
-	openSettings("ki");
+	openSettings("ai", "ai-sources");
 }
 
 function paintUpdateAction(button, mode, version = "") {
@@ -741,20 +717,6 @@ export async function handleApplyPwaUpdate(button = U.el("btnPwaUpdateAction")) 
 		U.toast("Update fehlgeschlagen.", "error");
 		paintUpdateAction(button, "reload");
 	}
-}
-
-// Horizontaler KI-Unter-Tab wechseln — ohne Full-Rerender, damit ungespeicherte
-// Eingaben in den anderen Panes erhalten bleiben.
-export async function switchKiTab(tab) {
-	if (!(await allowDiscardSettings())) return;
-	S.settingsKiTab = tab === "sources" || tab === "learning" ? tab : "models";
-	openSettings("ai");
-}
-
-// Inhalte lazy nachladen, sobald der jeweilige Unter-Tab sichtbar wird.
-function loadKiTabContent(tab) {
-	if (tab === "models") refreshChatModels();
-	// sources: kein Auto-Ping — Nutzer testet gezielt pro Karte
 }
 
 // Zeichnet die Modell-Liste in den offenen KI-Einstellungen (Favoriten oben).
@@ -1064,12 +1026,6 @@ export async function handleSaveSettings() {
 	AI.detectThinkingCapabilities().catch(() => {});
 }
 
-export async function handleClearBg() {
-	await DB.putBlob("bgImage", new ArrayBuffer(0), {});
-	await applyBg();
-	openSettings("appearance", "background");
-}
-
 export async function handleResetAll(t) {
 	const ok = await U.confirm(
 		"Möchtest du wirklich alle lokalen Seiten unwiderruflich löschen?\n\nDeine Einstellungen, API-Keys, Karteikarten und Stapel bleiben erhalten.",
@@ -1167,84 +1123,11 @@ export async function handleBackupNow(button) {
 		if (button) button.disabled = false;
 	}
 	if (S.view === "home") render();
+	if (document.querySelector(".settings-modal-v2")) openSettings(S.settingsSection);
 }
 
-// ---------- 🏠 Home-Editor: EINE Quelle der Wahrheit für die Homeseiten-Bereiche ----------
-// Ersetzt die alte DASHBOARD_WIDGETS-Liste, die renderHome() nie gelesen hat (Einstellungen
-// und Homeseite waren entkoppelt — Ausblenden war deshalb wirkungslos). Diese ids sind jetzt
-// exakt die Bereiche aus render.js → renderHome(); Sichtbarkeit UND Reihenfolge kommen aus
-// homeLayout(). Gespeichert als Gerätewahl (localStorage) wie Theme/Dichte — kein Drive-Sync.
-export const HOME_SECTIONS = [
-	{ id: "recent", label: "Zuletzt & Weitermachen", hint: "zuletzt bearbeitete Notizen und schneller Wiedereinstieg" },
-	{ id: "today", label: "Heute-Leiste", hint: "Daily · Karten · Noten" },
-	{ id: "foryou", label: "Für dich heute", hint: "persönliche Hinweise aus deinen Lerndaten" },
-	{ id: "insights", label: "Lernanalyse", hint: "Lernzeit · Wochenverlauf · Kartenqualität · Empfehlungen" },
-	{ id: "decks", label: "Stapel-Überblick", hint: "fällige Karten pro Stapel, Klick lernt" },
-	{ id: "favorites", label: "Favoriten", hint: "deine ★-Seiten" },
-];
-const HOME_LAYOUT_KEY = "impala67HomeLayout";
-
-// Liefert IMMER alle Bereiche: gespeicherte zuerst (in gespeicherter Reihenfolge),
-// neue/unbekannte Bereiche hängen sichtbar hinten an — robust gegen App-Updates.
-// Altdaten-Migration: ignoriert 'chats', ordnet 'continue' dem neuen 'recent' zu.
-export function homeLayout() {
-	let saved = [];
-	try { saved = JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY)) || []; } catch { /* Standard */ }
-	const known = new Map(HOME_SECTIONS.map((s) => [s.id, s]));
-	const out = [];
-	const savedList = Array.isArray(saved) ? saved : [];
-	const hasActiveRecentOrContinue = savedList.some((e) => (e?.id === "recent" || e?.id === "continue") && e.on !== false);
-	for (const e of savedList) {
-		if (!e || !e.id || e.id === "chats") continue;
-		const id = e.id === "continue" ? "recent" : e.id;
-		if (known.has(id)) {
-			const on = id === "recent" ? hasActiveRecentOrContinue : e.on !== false;
-			out.push({ id, on });
-			known.delete(id);
-		}
-	}
-	for (const s of known.values()) out.push({ id: s.id, on: true });
-	return out;
-}
-
-const saveHomeLayout = (list) => { try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(list)); } catch { /* egal */ } };
-
-// Handler-Namen bleiben (DRY): app.js verdrahtet data-dashtoggle/-move/-add bereits —
-// nur die Bedeutung ist neu (Ausblenden statt Entfernen, ↺ Standard statt „Hinzufügen“).
-export function handleDashboardToggle(id) {
-	saveHomeLayout(homeLayout().map((e) => (e.id === id ? { id: e.id, on: !e.on } : e)));
-	openSettings("home");
-}
-
-export function handleDashboardMove(id, direction) {
-	const list = homeLayout();
-	const from = list.findIndex((e) => e.id === id);
-	const to = from + Number(direction);
-	if (from < 0 || to < 0 || to >= list.length) return;
-	[list[from], list[to]] = [list[to], list[from]];
-	saveHomeLayout(list);
-	openSettings("home");
-}
-
-export function handleDashboardReorder(fromId, toId) {
-	const list = homeLayout();
-	const from = list.findIndex((entry) => entry.id === fromId);
-	const to = list.findIndex((entry) => entry.id === toId);
-	if (from < 0 || to < 0 || from === to) return;
-	const [moved] = list.splice(from, 1);
-	list.splice(to, 0, moved);
-	saveHomeLayout(list);
-	openSettings("general", "home-layout");
-}
-
-export function handleDashboardAdd() {
-	localStorage.removeItem(HOME_LAYOUT_KEY);
-	U.toast("Home-Layout zurückgesetzt.", "success");
-	openSettings("home");
-}
-
-// Begrüßungsname speichert sich selbst (Capture-Muster wie telemetrie.js): synct als
-// normale Einstellung über Drive — und Umsortieren der Bereiche verwirft keine Eingabe.
+// Begrüßungsname speichert sich selbst (Capture-Muster wie telemetrie.js) und synct als
+// normale Einstellung – unabhängig von der Speichern-Leiste.
 document.addEventListener("change", (e) => {
 	if (!e.target || e.target.id !== "inpHomeName") return;
 	STATE.dispatch("settingsSet", { homeUserName: e.target.value.trim() }).then(() => U.toast("Name gespeichert.", "success"));
@@ -1272,31 +1155,11 @@ document.addEventListener("click", (e) => {
 	if (!target) return;
 	e.preventDefault();
 	e.stopPropagation();
-	settingsSearchQuery = "";
+	// Treffer gewählt: Suchfeld leeren und Trefferliste schließen
+	const search = U.el("settingsSearch");
+	if (search) search.value = "";
+	updateSettingsSearch("");
 	navigateSettings(target.dataset.settingsGo, target.dataset.settingsAnchorTarget || "");
-}, true);
-
-let draggedHomeSection = "";
-document.addEventListener("dragstart", (e) => {
-	const row = e.target?.closest?.("[data-dashboard-row]");
-	if (!row) return;
-	draggedHomeSection = row.dataset.dashboardRow;
-	row.classList.add("is-dragging");
-	e.dataTransfer.effectAllowed = "move";
-}, true);
-document.addEventListener("dragover", (e) => {
-	if (draggedHomeSection && e.target?.closest?.("[data-dashboard-row]")) e.preventDefault();
-}, true);
-document.addEventListener("drop", (e) => {
-	const row = e.target?.closest?.("[data-dashboard-row]");
-	if (!row || !draggedHomeSection) return;
-	e.preventDefault();
-	handleDashboardReorder(draggedHomeSection, row.dataset.dashboardRow);
-	draggedHomeSection = "";
-}, true);
-document.addEventListener("dragend", () => {
-	document.querySelector(".settings-sort-row.is-dragging")?.classList.remove("is-dragging");
-	draggedHomeSection = "";
 }, true);
 
 export function handleAppearanceSelect(kind, value) {
@@ -1305,7 +1168,7 @@ export function handleAppearanceSelect(kind, value) {
 	localStorage.setItem(keys[kind], value);
 	applyAppearance();
 	render();
-	openSettings(S.settingsSection === "ai" ? "ai" : "appearance");
+	openSettings(S.settingsSection || "appearance");
 }
 
 
@@ -1324,17 +1187,6 @@ export function handleThemeSelect(theme) {
 	localStorage.removeItem("notionTheme");
 	applyAppearance();
 	openSettings("look");
-}
-
-export async function handleFileBgChange(e) {
-	if (e.target.files[0]) {
-		const file = e.target.files[0];
-		e.target.value = "";
-		const buf = await U.readAsBuffer(file);
-		await DB.putBlob("bgImage", buf, { name: file.name, type: file.type });
-		await applyBg();
-		if (document.querySelector(".settings-modal-v2")) openSettings("appearance", "background");
-	}
 }
 
 export async function handleImportChange(e) {
@@ -1387,7 +1239,6 @@ export const SETTINGS = {
 	checkAI,
 	applyTheme,
 	applyAppearance,
-	applyBg,
 	openSettings,
 	navigateSettings,
 	requestCloseSettings,
@@ -1416,7 +1267,6 @@ export const SETTINGS = {
 	refreshEmbeddingModels,
 	refreshChatModels,
 	paintSettingsModels,
-	switchKiTab,
 	handleApplyCustomModel,
 	testProviderRow,
 	handleProviderTest,
@@ -1427,18 +1277,11 @@ export const SETTINGS = {
 	handleSyncSecretsToggle,
 	handleDriveAutoSyncMinutes,
 	handleDriveSyncAfterChange,
-	handleClearBg,
 	handleResetAll,
 	handleBackupNow,
 	handleThemeSelect,
 	handleSystemThemeToggle,
 	handleAppearanceSelect,
-	handleDashboardToggle,
-	handleDashboardMove,
-	handleDashboardReorder,
-	handleDashboardAdd,
-	homeLayout,
-	HOME_SECTIONS,
 	handleExportHandwritingSamples,
 	handleExportAllInk,
 	handleClearHandwritingSamples,

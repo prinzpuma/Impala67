@@ -4,7 +4,7 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 
-const reopen = () => window.openSettings?.("data", "performance-profiler");
+const reopen = () => window.openSettings?.("app", "performance-profiler");
 
 document.addEventListener("click", async (event) => {
 	const button = event.target?.closest?.("#btnPerfCopy, #btnPerfExport, #btnPerfClear");

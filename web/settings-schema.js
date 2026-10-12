@@ -3,81 +3,70 @@
 export const SETTINGS_LAST_SECTION_KEY = "impala67SettingsLastSection";
 
 export const SETTINGS_SECTIONS = [
-	{ id: "overview", label: "Übersicht", icon: "home", description: "Status und schnelle Wege zu den wichtigsten Einstellungen" },
-	{ id: "general", label: "Allgemein", icon: "sliders", description: "Startseite und grundlegendes Verhalten" },
-	{ id: "appearance", label: "Darstellung", icon: "appearance", description: "Theme, Akzent, Dichte und Hintergrund" },
-	{ id: "ai", label: "KI & Lernen", icon: "sparkles", description: "Modelle, Quellen und Lernfunktionen" },
-	{ id: "sync", label: "Sync & Dienste", icon: "sync", description: "Cloudflare, Google Drive und lokale Tokens" },
-	{ id: "data", label: "Daten & App", icon: "archive", description: "Backups, Exporte, Speicher und Updates" },
-	{ id: "devices", label: "Geräte & Bedienung", icon: "gamepad", description: "Scanner, Controller, Tastenbelegung und Eingabegeräte" },
+	{ id: "overview", label: "Übersicht", icon: "home", description: "KI, Sync, Backup, Speicher und Version auf einen Blick" },
+	{ id: "appearance", label: "Darstellung", icon: "appearance", description: "Design, Lesbarkeit und Oberfläche" },
+	{ id: "ai", label: "KI", icon: "sparkles", description: "Modelle, Quellen und lokale KI" },
+	{ id: "learning", label: "Lernen", icon: "graduation", description: "Lernverhalten, Pausen und Controller" },
+	{ id: "sync", label: "Sync & Backup", icon: "sync", description: "Live-Sync, Google Drive und Backups" },
+	{ id: "app", label: "App & Speicher", icon: "gear", description: "Speicher, Updates und Experimente" },
 ];
 
+// Frühere Bereichs-IDs und Kurzformen führen weiter an die passende Stelle.
 export const SETTINGS_ALIASES = Object.freeze({
-	ki: "ai", home: "general", look: "appearance", notion: "sync",
-	backup: "data", update: "data", controller: "devices", experimente: "ai",
-	cloudflare: "sync", pause: "ai", lernzeit: "ai",
+	ki: "ai", look: "appearance", home: "appearance", general: "appearance",
+	notion: "sync", cloudflare: "sync", drive: "sync", backup: "sync",
+	data: "app", update: "app", storage: "app",
+	devices: "learning", controller: "learning", experimente: "learning", pause: "learning", lernzeit: "learning",
 });
 
 export const BREAK_REMINDER_KEY = "impala67BreakReminder";
 
-export const BREAK_REMINDER_SETTING = Object.freeze({
-	id: "impala67BreakReminder",
-	key: "impala67BreakReminder",
-	type: "boolean",
-	default: true,
-	label: "Pausen-Erinnerung (40 min)",
-	hint: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause",
-	description: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause",
-	section: "ai",
-	group: "Lernen",
-	keywords: "pause pausen-erinnerung karten lernzeit timer 40 min break reminder",
-});
-
 // Das Schema ist zugleich Informationsarchitektur und Suchindex. Renderer lesen
 // dieselben IDs, Titel und Beschreibungen; dadurch driften Navigation und Inhalt nicht auseinander.
+// platform: "native" = nur in der Android-App, "web" = nur im Browser.
 export const SETTINGS_ITEMS = [
-	{ id: "overview-status", section: "overview", group: "Status", label: "App-Status", description: "KI, Drive, Backup, Speicher und Version auf einen Blick", keywords: "zustand start dashboard diagnose" },
-	{ id: "home-name", section: "general", group: "Start", label: "Begrüßungsname", description: "Name auf der Home-Seite", keywords: "anzeigename profil startseite" },
-	{ id: "home-layout", section: "general", group: "Home", label: "Home-Bereiche", description: "Bereiche einblenden, ausblenden und sortieren", keywords: "dashboard reihenfolge widgets kacheln" },
+	{ id: "overview-status", section: "overview", group: "Status", label: "App-Status", description: "KI, Sync, Backup, Speicher und Version auf einen Blick", keywords: "zustand start dashboard diagnose" },
 	{ id: "theme", section: "appearance", group: "Design", label: "Erscheinungsbild", description: "System, Hell oder Dunkel", keywords: "theme modus mode dark light gerätemodus" },
 	{ id: "accent", section: "appearance", group: "Design", label: "Akzentfarbe", description: "Farbe für aktive Elemente", keywords: "blau violett grün orange farbe" },
-	{ id: "tabs-position", section: "appearance", group: "Design", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
-	{ id: "beta-ui", section: "appearance", group: "Design", label: "Beta-Design", description: "Experimentelles, modernes Oberflächendesign aktivieren", keywords: "beta ui design modern experimentell oberfläche layout" },
-	{ id: "density", section: "appearance", group: "Lesbarkeit", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
+	{ id: "density", section: "appearance", group: "Design", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
-	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung", description: "Animationen reduzieren", keywords: "animation motion barrierefreiheit" },
-	{ id: "background", section: "appearance", group: "Hintergrund", label: "Eigenes Hintergrundbild", description: "Bild auswählen oder entfernen", keywords: "foto wallpaper bild" },
-	{ id: "ai-models", section: "ai", group: "Modelle", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
+	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", keywords: "animation motion barrierefreiheit" },
+	{ id: "native-haptics", section: "appearance", group: "Lesbarkeit", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
+	{ id: "tabs-position", section: "appearance", group: "Oberfläche", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
+	{ id: "home-name", section: "appearance", group: "Oberfläche", label: "Begrüßungsname", description: "Name in der Begrüßung auf der Startseite", keywords: "anzeigename profil startseite home" },
+	{ id: "ai-models", section: "ai", group: "Aktives Modell", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
 	{ id: "ai-sources", section: "ai", group: "Quellen", label: "KI-Quellen", description: "OpenAI, Gemini, LM Studio und eigene Endpunkte", keywords: "api key schlüssel token url endpoint anbieter" },
-	{ id: "ai-embedding", section: "ai", group: "Erweitert", label: "Embedding-Modell", description: "Modell für semantische Suche", keywords: "rag vektor suche" },
-	{ id: "ai-instructions", section: "ai", group: "Erweitert", label: "Eigene Anweisungen", description: "Tonfall und dauerhafte Vorgaben", keywords: "prompt system text" },
-	{ id: "learning-options", section: "ai", group: "Lernen", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und lokale Lernanalyse", keywords: "karten telemetrie sicherheit confidence" },
-	{ id: "impala67BreakReminder", key: "impala67BreakReminder", section: "ai", group: "Lernen", label: "Pausen-Erinnerung (40 min)", description: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause", hint: "Erinnert nach 40 Minuten kontinuierlichem Lernen an eine kurze Pause", type: "boolean", default: true, keywords: "pause pausen-erinnerung karten lernzeit timer 40 min break reminder" },
-	{ id: "learning-beta", section: "ai", group: "Lernen", label: "Beta-Lernfunktionen", description: "Optionale KI-gestützte Lernmodi", keywords: "experimente feynman fehler hinweise multiple choice" },
-	{ id: "cf-sync", section: "sync", group: "Cloudflare Echtzeit-Sync", label: "Cloudflare Live-Sync", description: "Echtzeit-Synchronisierung über WebSockets mit 500 MB Cloud-Speicher", keywords: "cloudflare echtzeit sync websocket live server speicher quota e2ee" },
-	{ id: "drive", section: "sync", group: "Google Drive", label: "Drive-Synchronisierung", description: "Geräte über den privaten App-Speicher synchronisieren", keywords: "google login konto cloud verbinden" },
+	{ id: "ai-embedding", section: "ai", group: "Lokale KI", label: "Embedding-Modell", description: "Modell für semantische Suche", keywords: "rag vektor suche bekko" },
+	{ id: "ai-handwriting", section: "ai", group: "Lokale KI", label: "Handschrifterkennung", description: "Lokales Modell, Trainingsbeispiele und Handschrift-Export", keywords: "handschrift ink stift heft training abschreiben onnx" },
+	{ id: "ai-tools", section: "ai", group: "Verhalten", label: "Tools mitsenden", description: "Der KI die App-Werkzeuge zur Verfügung stellen", keywords: "werkzeuge tools funktionen" },
+	{ id: "ai-instructions", section: "ai", group: "Verhalten", label: "Eigene Anweisungen", description: "Tonfall und dauerhafte Vorgaben", keywords: "prompt system text" },
+	{ id: "learning-options", section: "learning", group: "Lernverhalten", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und Lernanalyse", keywords: "karten telemetrie sicherheit confidence statistik" },
+	{ id: "break-reminder", section: "learning", group: "Lernverhalten", label: "Pausen-Erinnerung", description: "Erinnert nach 40 Minuten Lernen an eine kurze Pause", keywords: "pause karten lernzeit timer 40 min break reminder" },
+	{ id: "learning-beta", section: "learning", group: "Beta-Lernfunktionen", label: "Beta-Lernfunktionen", description: "Optionale KI-gestützte Lernmodi", keywords: "experimente feynman fehler hinweise multiple choice" },
+	{ id: "controller-status", section: "learning", group: "Controller", label: "Mit Controller lernen", description: "Gamepad verbinden, Tastenhinweise und Vibration", keywords: "gamepad pad xbox playstation stadia controller" },
+	{ id: "controller-map", section: "learning", group: "Controller", label: "Tastenbelegung", description: "Aktionen an Controller-Tasten binden", keywords: "mapping anlernen taste button gamepad" },
+	{ id: "controller-advanced", section: "learning", group: "Controller", label: "Deadzone & HID", description: "Rohe Achsen und nicht standardisierte Controller", keywords: "hid achse trigger deadzone technisch gamepad" },
+	{ id: "cf-sync", section: "sync", group: "Cloudflare Live-Sync", label: "Cloudflare Live-Sync", description: "Echtzeit-Synchronisierung mit Ende-zu-Ende-Verschlüsselung", keywords: "cloudflare echtzeit sync websocket live server speicher quota e2ee koppeln qr" },
+	{ id: "drive", section: "sync", group: "Google Drive", label: "Google Drive", description: "Backup und Sync über den privaten App-Speicher", keywords: "google login konto cloud verbinden" },
 	{ id: "drive-automation", section: "sync", group: "Google Drive", label: "Automatische Synchronisierung", description: "Intervall und Sync nach Änderungen festlegen", keywords: "automatisch intervall minuten häufigkeit jede änderung" },
-	{ id: "token-sync", section: "sync", group: "Datenschutz", label: "Tokens über Drive synchronisieren", description: "KI-Keys lokal behalten", keywords: "secrets api schlüssel privat sicherheit" },
-	{ id: "sync-advanced", section: "sync", group: "Erweitert", label: "Verbindungsdetails", description: "Google Client-ID und CORS-Proxy", keywords: "oauth client id proxy technisch" },
-	{ id: "backup", section: "data", group: "Backup", label: "Backup & Wiederherstellung", description: "Event-Log und Dateien exportieren oder importieren", keywords: "json sichern wiederherstellen" },
-	{ id: "native-fs-backup", section: "data", group: "Backup", label: "In Gerätespeicher sichern", description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen", keywords: "backup dateisystem speicher ordner android documents", platform: "native" },
-	{ id: "data-export", section: "data", group: "Exporte", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
-	{ id: "storage", section: "data", group: "App", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
-	{ id: "performance-profiler", section: "data", group: "Diagnose", label: "Performance-Profiler", description: "Hänger, App- und KI-Fehler lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln fehler ki debug protokoll" },
-	{ id: "mcp-bridge", section: "data", group: "Diagnose", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live" },
-	{ id: "updates", section: "data", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
-	{ id: "danger-zone", section: "data", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
-	{ id: "danger-chats", section: "data", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
-	{ id: "danger-cards", section: "data", group: "Gefahrenzone", label: "Alle Karteikarten löschen", description: "Alle Karteikarten, Stapel und Lernfortschritte entfernen", keywords: "karteikarten anki karten stapel deck löschen zurücksetzen" },
-	{ id: "controller-status", section: "devices", group: "Controller", label: "Controller-Steuerung", description: "Gamepad verbinden, Hinweise und Vibration", keywords: "gamepad pad xbox playstation stadia" },
-	{ id: "native-scanner", section: "devices", group: "Scanner", label: "Dokumenten-Scanner", description: "Google-Scanner oder Impala-Scanner verwenden", keywords: "scanner scannen kamera dokument google ml kit impala foto", platform: "native" },
-	{ id: "native-haptics", section: "devices", group: "Haptik", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
-	{ id: "controller-map", section: "devices", group: "Belegung", label: "Tastenbelegung", description: "Aktionen an Controller-Tasten binden", keywords: "mapping anlernen taste button" },
-	{ id: "controller-advanced", section: "devices", group: "Erweitert", label: "Deadzone & HID", description: "Rohe Achsen und nicht standardisierte Controller", keywords: "hid achse trigger deadzone technisch" },
+	{ id: "token-sync", section: "sync", group: "Google Drive", label: "Tokens über Drive synchronisieren", description: "KI-Keys lokal behalten oder auf eigene Geräte übertragen", keywords: "secrets api schlüssel privat sicherheit datenschutz" },
+	{ id: "sync-advanced", section: "sync", group: "Erweitert", label: "Google Client-ID", description: "OAuth-Webclient für Google Drive", keywords: "oauth client id technisch verbindungsdetails" },
+	{ id: "backup", section: "sync", group: "Backup", label: "Backup & Wiederherstellung", description: "Event-Log und Dateien exportieren oder importieren", keywords: "json sichern wiederherstellen import export" },
+	{ id: "native-fs-backup", section: "sync", group: "Backup", label: "In Gerätespeicher sichern", description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen", keywords: "backup dateisystem speicher ordner android documents", platform: "native" },
+	{ id: "data-export", section: "sync", group: "Backup", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
+	{ id: "storage", section: "app", group: "Speicher", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
+	{ id: "updates", section: "app", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
+	{ id: "native-scanner", section: "app", group: "Gerät", label: "Dokumenten-Scanner", description: "Google-Scanner oder Impala-Scanner verwenden", keywords: "scanner scannen kamera dokument google ml kit impala foto", platform: "native" },
+	{ id: "beta-ui", section: "app", group: "Experimente", label: "Beta-Design", description: "Experimentelles Oberflächendesign aktivieren", keywords: "beta ui design modern experimentell oberfläche layout" },
+	{ id: "danger-zone", section: "app", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
+	{ id: "danger-chats", section: "app", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
+	{ id: "danger-cards", section: "app", group: "Gefahrenzone", label: "Alle Karteikarten löschen", description: "Alle Karteikarten, Stapel und Lernfortschritte entfernen", keywords: "karteikarten anki karten stapel deck löschen zurücksetzen" },
+	{ id: "performance-profiler", section: "app", group: "Für Entwickler", label: "Performance-Profiler", description: "Hänger, App- und KI-Fehler lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln fehler ki debug protokoll entwickler" },
+	{ id: "mcp-bridge", section: "app", group: "Für Entwickler", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live", platform: "web" },
 ];
 
 const normalize = (value) => String(value || "").toLocaleLowerCase("de-DE")
-	.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+	.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
 export function resolveSettingsSection(section) {
 	const id = normalize(section).replace(/ /g, "");

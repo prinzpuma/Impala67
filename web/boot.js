@@ -147,7 +147,6 @@ export async function initApp() {
 	await TABS.restoreSession();
 	APP.wireEvents();
 	APP.checkIncomingShare?.();
-	SETTINGS.applyBg();
 	// FIX (Start-Performance): Hook erst nach Abschluss aller Start-Migrationen
 	// aktivieren, damit Dispatches beim Boot keine verfrühten Renders hinter dem Splash auslösen.
 	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);

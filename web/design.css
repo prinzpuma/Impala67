@@ -35,7 +35,7 @@
 :root body .hv .hv-lead, :root body .anki-page .anki-lead { font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 550 }
 
 /* 4. Gemeinsame Bausteine: Karten, Pillen, Hover */
-:root body :is(.hv-continue, .hv-stat, .anki-stat, .deck-row, .la-block, .lz-panel, .settings-group-card, .study-card) {
+:root body :is(.hv-continue, .hv-stat, .anki-stat, .deck-row, .la-block, .lz-panel, .study-card) {
 	border: 0;
 	border-radius: var(--b-r-lg);
 	background: var(--panel-solid);
@@ -137,10 +137,7 @@
 :root body .lz-summary-card { border: 0; border-radius: var(--b-r-lg); background: linear-gradient(160deg, var(--b-tint-2), var(--panel-solid) 70%) }
 :root body .lz-kpi-grid > div, :root body .lz-recommendation { border: 0; border-radius: var(--b-r-md); background: var(--b-tint) }
 
-/* 11. Einstellungen, Dialoge, Menüs, Seitenreiter */
-:root body .settings-group > h3 { color: var(--text); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; font-weight: 650 }
-:root body .settings-row { min-height: 58px }
-:root body .settings-switch input:checked + span { background: var(--b-grad) }
+/* 11. Dialoge, Menüs, Seitenreiter (Einstellungen: styles.css) */
 :root body .modal { border-radius: 24px; box-shadow: 0 30px 60px -30px rgb(0 0 0 / .6) }
 :root body :is(.page-menu, .model-menu, .palette-box) { border-radius: 18px }
 :root body .menu-item { border-radius: var(--b-r-sm) }

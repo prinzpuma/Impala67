@@ -691,12 +691,6 @@ function wireEvents() {
 
 		// Darstellung: dieselben zentralen Optionen steuern alle Komponenten über CSS-Tokens.
 		if (t.dataset.accent) { SETTINGS.handleAppearanceSelect("accent", t.dataset.accent); return; }
-		if (t.dataset.dashmove) {
-			const [id, direction] = t.dataset.dashmove.split(":");
-			SETTINGS.handleDashboardMove(id, Number(direction));
-			return;
-		}
-		if (t.dataset.dashadd) { SETTINGS.handleDashboardAdd(); return; }
 		if (t.dataset.removeattachment) { CHAT_FULLSCREEN.handleRemoveAttachment(); return; }
 		// Seitenkontext abwählen — wie ein Anhang entfernen, gilt nur für die aktuelle Seite
 		if (t.dataset.removecontext) { S.sideContextOff = S.currentPageId; RENDER.renderChat(); return; }
@@ -922,12 +916,6 @@ function wireEvents() {
 			return;
 		}
 
-		// KI-Einstellungen: horizontaler Unter-Tab (Modelle | Quellen | Mehr)
-		if (t.dataset.aitab) {
-			await SETTINGS.switchKiTab(t.dataset.aitab);
-			return;
-		}
-
 		// Verbindung EINER Quelle testen (Einstellungen → KI) — nutzt die aktuellen Feldwerte
 		if (t.dataset.provtest) {
 			await SETTINGS.handleProviderTest(t);
@@ -963,8 +951,7 @@ function wireEvents() {
 			if (S.settings.embedProviderId === t.dataset.provdel) patch.embedProviderId = "";
 			RENDER.removeProviderFavorites(t.dataset.provdel);
 			await STATE.dispatch("settingsSet", patch);
-			S.settingsKiTab = "sources";
-			SETTINGS.openSettings("ki");
+			SETTINGS.openSettings("ai");
 			return;
 		}
 
@@ -1720,7 +1707,6 @@ function wireEvents() {
 			case "btnModelChipFull":
 				await CHAT_FULLSCREEN.handleModelMenuToggle(t);
 				break;
-			case "btnPickBg": $("fileBg").click(); break;
 			case "btnCoverUpload": {
 				const pid = S.currentPageId;
 				if (!pid) break;
@@ -1738,14 +1724,11 @@ function wireEvents() {
 				}
 				break;
 			}
-			case "btnClearBg":
-				await SETTINGS.handleClearBg();
-				break;
 			case "btnResetChats":
-				if (await CHAT_FULLSCREEN.handleDeleteAllChats()) SETTINGS.openSettings("data", "danger-zone");
+				if (await CHAT_FULLSCREEN.handleDeleteAllChats()) SETTINGS.openSettings("app", "danger-zone");
 				break;
 			case "btnResetCards":
-				if (await SETTINGS.handleDeleteAllCards(t)) SETTINGS.openSettings("data", "danger-zone");
+				if (await SETTINGS.handleDeleteAllCards(t)) SETTINGS.openSettings("app", "danger-zone");
 				break;
 			case "btnCloseSettings": await SETTINGS.requestCloseSettings(); break;
 			case "btnCloseOverlay": closeOverlay(); break;
@@ -1894,10 +1877,6 @@ function wireEvents() {
 			await SETTINGS.handleDriveSyncAfterChange(!!e.target.checked);
 			return;
 		}
-		if (e.target.dataset?.dashtoggle) {
-			SETTINGS.handleDashboardToggle(e.target.dataset.dashtoggle);
-			return;
-		}
 		if (e.target.id === "inpBetaUi") {
 			SETTINGS.handleAppearanceSelect("betaUi", e.target.checked ? "1" : "0");
 			return;
@@ -1925,6 +1904,10 @@ function wireEvents() {
 		}
 		if (e.target.id === "inpConfidence") {
 			SETTINGS.handleAppearanceSelect("confidence", e.target.checked ? "on" : "off");
+			return;
+		}
+		if (e.target.id === "inpBreakReminder") {
+			SETTINGS.handleAppearanceSelect("breakReminder", e.target.checked ? "1" : "0");
 			return;
 		}
 		if (e.target.id === "inpTelemetry") {
@@ -1962,9 +1945,6 @@ function wireEvents() {
 		}
 		if (e.target.id === "fileImg" && e.target.files[0]) {
 			CHAT_FULLSCREEN.handleFileImgChange(e);
-		}
-		if (e.target.id === "fileBg" && e.target.files[0]) {
-			await SETTINGS.handleFileBgChange(e);
 		}
 		if (e.target.id === "fileImport" && e.target.files[0]) {
 			await SETTINGS.handleImportChange(e);

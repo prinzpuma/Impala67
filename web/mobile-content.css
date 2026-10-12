@@ -786,7 +786,11 @@ body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control { max-width: 1
 body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control input,
 body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control select { font-size: 16px; min-height: 40px }
 body.mobile-ui .settings-modal-v2.is-mobile .settings-row-control > button { min-height: 40px }
-body.mobile-ui .settings-mobile-footer { padding: var(--space-4) 0 0 }
+/* Einstieg: Bereichsliste und Status-Kacheln; Kacheln als kompakte Zeilen mit Aktion rechts */
+body.mobile-ui .settings-mobile-hub { display: grid; gap: var(--space-5) }
+body.mobile-ui .settings-modal-v2.is-mobile #overview-status .settings-row { flex-wrap: nowrap; align-items: center; box-shadow: none }
+body.mobile-ui #overview-status .settings-row-leading { padding-top: 0 }
+body.mobile-ui #overview-status .settings-row-control { flex: 0 0 auto; padding-left: 0 }
 
 /* ============================================================
    8. BIBLIOTHEK / ARCHIV / PAPIERKORB / GRAPH
