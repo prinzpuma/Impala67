@@ -68,23 +68,26 @@ export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes) {
 	};
 }
 
-export function isUsableStateCheckpoint(checkpoint, currentInfo, boundaryEvent, tailEvents) {
-	if (!checkpoint || !checkpoint.state) return false;
+// Liefert den Grund, warum der Checkpoint nicht taugt ("" = nutzbar). Der Grund
+// landet im Performance-Trace, damit Voll-Replays beim Start erklärbar sind.
+export function stateCheckpointRejectReason(checkpoint, currentInfo, boundaryEvent, tailEvents) {
+	if (!checkpoint) return "missing";
+	if (!checkpoint.state) return "no-state";
 	if (checkpoint.format === STATE_CHECKPOINT_FORMAT) {
-		if (!STATE_CHECKPOINT_CORE_KEYS.every((key) => own(checkpoint.state, key))) return false;
-		if (!checkpoint.heftBlobSizes || typeof checkpoint.heftBlobSizes !== "object" || Array.isArray(checkpoint.heftBlobSizes)) return false;
+		if (!STATE_CHECKPOINT_CORE_KEYS.every((key) => own(checkpoint.state, key))) return "keys";
+		if (!checkpoint.heftBlobSizes || typeof checkpoint.heftBlobSizes !== "object" || Array.isArray(checkpoint.heftBlobSizes)) return "blob-sizes";
 	} else if (checkpoint.format === LEGACY_STATE_CHECKPOINT_FORMAT) {
-		if (!STATE_CHECKPOINT_KEYS.every((key) => own(checkpoint.state, key))) return false;
-	} else return false;
+		if (!STATE_CHECKPOINT_KEYS.every((key) => own(checkpoint.state, key))) return "keys";
+	} else return "format";
 	const maxSeq = Math.max(0, Number(checkpoint.maxSeq) || 0);
 	const eventCount = Math.max(0, Number(checkpoint.eventCount) || 0);
 	const tail = Array.isArray(tailEvents) ? tailEvents : [];
-	if (maxSeq > (Number(currentInfo?.maxSeq) || 0)) return false;
-	if (eventCount + tail.length !== (Number(currentInfo?.count) || 0)) return false;
-	if (maxSeq > 0 && (!boundaryEvent || Number(boundaryEvent.seq) !== maxSeq || String(boundaryEvent.id || "") !== String(checkpoint.lastEventId || ""))) return false;
-	if (tail.some((event) => (Number(event?.seq) || 0) <= maxSeq)) return false;
+	if (maxSeq > (Number(currentInfo?.maxSeq) || 0)) return "seq-ahead";
+	if (eventCount + tail.length !== (Number(currentInfo?.count) || 0)) return "count";
+	if (maxSeq > 0 && (!boundaryEvent || Number(boundaryEvent.seq) !== maxSeq || String(boundaryEvent.id || "") !== String(checkpoint.lastEventId || ""))) return "boundary";
+	if (tail.some((event) => (Number(event?.seq) || 0) <= maxSeq)) return "tail-seq";
 	// Ein nachträglich importiertes älteres Event muss in die globale Zeitreihenfolge
 	// einsortiert werden. In diesem seltenen Fall ist nur der Voll-Replay beweisbar korrekt.
-	if (checkpoint.maxTime && tail.some((event) => String(event?.t || "") < checkpoint.maxTime)) return false;
-	return true;
+	if (checkpoint.maxTime && tail.some((event) => String(event?.t || "") < checkpoint.maxTime)) return "older-tail";
+	return "";
 }

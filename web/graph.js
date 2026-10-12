@@ -4,6 +4,7 @@ import { S, STATE } from "./state.js";
 import { SRS } from "./srs.js";
 import { AI } from "./ai.js";
 import { DB } from "./db.js";
+import { vectorModelKey } from "./embedding.js";
 import { TABS } from "./tabs.js";
 import { U } from "./util.js";
 
@@ -62,7 +63,7 @@ export const GRAPH = (() => {
 	}
 
 	const fingerprint = (cards = activeCards()) => hash(cards.map((c) => c.id + "|" + deckName(c) + "|" + cardText(c)).sort().join("\n"));
-	const isStale = (g = graph()) => !!g && (g.sourceFingerprint !== fingerprint() || g.model !== S.settings.embedModel);
+	const isStale = (g = graph()) => !!g && (g.sourceFingerprint !== fingerprint() || g.model !== vectorModelKey(S.settings.embedModel));
 	const skillById = (g, id) => (g && g.skills || []).find((skill) => skill.id === id) || null;
 
 	function retrievability(card) {
@@ -116,7 +117,7 @@ export const GRAPH = (() => {
 	async function vectorsFor(cards) {
 		const all = await DB.allVecs();
 		const provider = S.settings.embedProviderId || "";
-		const model = S.settings.embedModel;
+		const model = vectorModelKey(S.settings.embedModel);
 		const out = new Map();
 		const stale = [];
 		const activeIds = new Set(cards.map((card) => card.id));
@@ -352,7 +353,7 @@ export const GRAPH = (() => {
 			const subjects = [...new Map(groups.map((group) => [subjectId(group.subject), { id: subjectId(group.subject), name: group.subject }])).values()];
 			const topics = [...new Map(skills.map((skill) => [skill.topicId, { id: skill.topicId, subjectId: skill.subjectId, name: skill.topicName || "Grundlagen" }])).values()];
 			const next = {
-				v: VERSION, updated: U.now(), model: S.settings.embedModel, sourceFingerprint: fingerprint(cards),
+				v: VERSION, updated: U.now(), model: vectorModelKey(S.settings.embedModel), sourceFingerprint: fingerprint(cards),
 				subjects, topics,
 				skills: storedSkills, bridges,
 			};

@@ -1,7 +1,7 @@
 "use strict";
 import { S } from "./state.js";
 import { DB } from "./db.js";
-import { EMBEDDINGS } from "./embedding.js";
+import { EMBEDDINGS, isValidVector, vectorModelKey } from "./embedding.js";
 import { norm, rankRag } from "./rag-ranking.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
@@ -15,8 +15,9 @@ export const RAG = (() => {
 
 	const enabled = () => !!S.settings.embedModel;
 	const embeddingProviderId = () => String(S.settings.embedProviderId || "");
+	const embeddingModel = () => vectorModelKey(S.settings.embedModel);
 	const embeddingIdentity = () => ({
-		model: String(S.settings.embedModel || ""),
+		model: embeddingModel(),
 		providerId: embeddingProviderId(),
 	});
 	const sameEmbeddingIdentity = (left, right) => left.model === right.model && left.providerId === right.providerId;
@@ -71,7 +72,13 @@ export const RAG = (() => {
 
 	async function indexPage(pageId) {
 		if (!enabled()) return;
-		return PERF_PROFILER.run("rag.index-page", () => performIndexPage(pageId), { pageId }, 40);
+		const finishProfile = PERF_PROFILER.start("rag.index-page", { pageId }, 40);
+		try {
+			finishProfile(await performIndexPage(pageId) || {});
+		} catch (error) {
+			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
+			throw error;
+		}
 	}
 
 	async function performIndexPage(pageId) {
@@ -164,20 +171,31 @@ export const RAG = (() => {
 		// Inferenz-Batch erhalten. Das Modell verarbeitet die Batches nacheinander;
 		// dadurch bleibt der Spitzenverbrauch klein und die UI bekommt zwischen den
 		// Schritten wieder Kontrolle.
-		const vecs = [];
-		for (let at = 0; at < chunks.length; at += EMBEDDING_BATCH_SIZE) {
+		// Unveränderte Abschnitte behalten ihren Vektor (gleicher Text + gleiches Modell =
+		// gleicher Vektor). Beim Tippen ändert sich meist nur ein Abschnitt — vorher wurde
+		// nach jeder Tipp-Pause die ganze Seite (bis 80 Abschnitte) neu eingebettet.
+		let previous = null;
+		try { previous = await DB.getVec(pageId); } catch { /* ohne Altbestand alles neu einbetten */ }
+		const reusable = new Map();
+		if (previous && previous.model === identity.model && previous.providerId === identity.providerId && Array.isArray(previous.chunks)) {
+			for (const c of previous.chunks) if (c && typeof c.text === "string" && isValidVector(c.vec)) reusable.set(c.text, c.vec);
+		}
+		const vecs = chunks.map((text) => reusable.get(text) || null);
+		const missing = chunks.map((_, i) => i).filter((i) => !vecs[i]);
+		for (let at = 0; at < missing.length; at += EMBEDDING_BATCH_SIZE) {
+			const idx = missing.slice(at, at + EMBEDDING_BATCH_SIZE);
 			assertCurrent();
-			const batch = await EMBEDDINGS.embed(chunks.slice(at, at + EMBEDDING_BATCH_SIZE), { priority: "background" });
+			const batch = await EMBEDDINGS.embed(idx.map((i) => chunks[i]), { priority: "background" });
 			assertCurrent();
-			if (!Array.isArray(batch) || batch.length !== Math.min(EMBEDDING_BATCH_SIZE, chunks.length - at) || batch.some((v) => !v || !v.length)) {
+			if (!Array.isArray(batch) || batch.length !== idx.length || !batch.every(isValidVector)) {
 				throw new Error("Embedding unvollständig für Seite " + pageId);
 			}
-			vecs.push(...batch);
+			idx.forEach((i, j) => { vecs[i] = batch[j]; });
 			await yieldToBrowser();
 		}
 		// Unvollständige Embedding-Antworten verwerfen statt einen halben Index zu
 		// speichern — queuePage fängt den Fehler und die Seite bleibt „stale“.
-		if (!Array.isArray(vecs) || vecs.length !== chunks.length || vecs.some((v) => !v || !v.length)) {
+		if (!Array.isArray(vecs) || vecs.length !== chunks.length || !vecs.every(isValidVector)) {
 			throw new Error("Embedding unvollständig für Seite " + pageId);
 		}
 		assertCurrent();
@@ -196,6 +214,7 @@ export const RAG = (() => {
 			}),
 		});
 		invalidateRankingIndex(); // Suche lädt beim nächsten Mal frisch
+		return { chunks: chunks.length, embedded: missing.length };
 	}
 
 	// Debounced-Warteschlange — wird nach Edits/Ingest aus app.js & pdfs.js befüllt.
@@ -240,7 +259,7 @@ export const RAG = (() => {
 	async function reindexStale() {
 		if (!enabled()) return;
 		const vecs = await DB.allVecs();
-		const model = S.settings.embedModel, providerId = embeddingProviderId();
+		const model = embeddingModel(), providerId = embeddingProviderId();
 		for (const pg of Object.values(S.pages)) {
 			if (pg.trashed) continue;
 			const v = vecs[pg.id];
@@ -261,7 +280,7 @@ export const RAG = (() => {
 	let vecCache = null, vecCacheAt = 0, vecCacheIdentity = "";
 	const queryCache = new Map();
 	async function allVecsCached() {
-		const identity = embeddingProviderId() + "::" + String(S.settings.embedModel || "");
+		const identity = embeddingProviderId() + "::" + embeddingModel();
 		if (!vecCache || vecCacheIdentity !== identity || Date.now() - vecCacheAt > 30000) {
 			vecCache = await DB.allVecs();
 			vecCacheAt = Date.now();
@@ -272,7 +291,7 @@ export const RAG = (() => {
 	async function queryVec(query) {
 		// Embedding-Quelle gehört mit in den Cache-Schlüssel: derselbe Modellname über eine
 		// andere Quelle darf keine gecachten Query-Vektoren der alten Quelle wiederverwenden.
-		const key = String(query || "").trim().toLowerCase() + "::" + (S.settings.embedProviderId || "") + "::" + (S.settings.embedModel || "");
+		const key = String(query || "").trim().toLowerCase() + "::" + embeddingProviderId() + "::" + embeddingModel();
 		if (queryCache.has(key)) return queryCache.get(key);
 		const [qv] = await EMBEDDINGS.embed([query], { priority: "foreground" });
 		queryCache.set(key, qv);
@@ -286,7 +305,7 @@ export const RAG = (() => {
 
 	async function performSearch(query, k = 6) {
 		const qv = await queryVec(query);
-		const model = S.settings.embedModel, providerId = embeddingProviderId();
+		const model = embeddingModel(), providerId = embeddingProviderId();
 		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed, archived: !!pg.archived }]));
 		const worker = getRankingWorker();
 		if (worker) {

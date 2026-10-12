@@ -13,6 +13,7 @@ import {
 	cloudEventsEnvelope,
 	encryptedPacketChars,
 	heftBaselineOps,
+	blobAliveChecker,
 	isBlobAlive,
 	isSyncBlobId,
 	prepareCloudEvents,
@@ -87,7 +88,8 @@ export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
 	let reconnectAttempts = 0, retryAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
-	const blobHashCache = new Map(), ignoredBlobKeys = new Set();
+	// ignoredBlobKeys: Server-Schlüssel → entschlüsselte Blob-ID verworfener (verwaister) Blobs.
+	const blobHashCache = new Map(), ignoredBlobKeys = new Map();
 	const pendingUploadedEventIds = new Set();
 	let blobInventoryDirty = true;
 
@@ -238,7 +240,6 @@ export const CLOUDFLARE_SYNC = (() => {
 		const imported = result.importedEvents || [];
 		if (imported.length) {
 			await STATE.applyRemoteEventsCooperative(imported);
-			ignoredBlobKeys.clear();
 		}
 	}
 
@@ -434,7 +435,8 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function syncBlobs() {
 		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return false;
 		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
-		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && isBlobAlive(id, S.pages));
+		const alive = blobAliveChecker(S.pages);
+		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && alive(id));
 		const localByKey = new Map();
 		await mapLimit(localIds, 6, async (id) => localByKey.set(await blobOpaqueKey(id), id));
 		const remote = await listRemoteBlobs();
@@ -463,7 +465,15 @@ export const CLOUDFLARE_SYNC = (() => {
 			updateFileProgress("Übertrage Dateien…", uploadProgress);
 		});
 
-		const download = [...remote].filter((key) => !localByKey.has(key) && !ignoredBlobKeys.has(key));
+		// Verworfene Blobs nicht bei jedem Sync erneut laden und entschlüsseln: Ihre ID ist
+		// bekannt, also genügt die Prüfung, ob inzwischen eine Seite auf sie verweist.
+		const stillIgnored = (key) => {
+			if (!ignoredBlobKeys.has(key)) return false;
+			const id = ignoredBlobKeys.get(key);
+			if (isSyncBlobId(id) && alive(id)) { ignoredBlobKeys.delete(key); return false; }
+			return true;
+		};
+		const download = [...remote].filter((key) => !localByKey.has(key) && !stillIgnored(key));
 		const downloadProgress = new Array(download.length).fill(0);
 		if (download.length) updateFileProgress("Empfange Dateien…", downloadProgress);
 		await mapLimit(download, 3, async (key, index) => {
@@ -478,7 +488,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			if (await blobOpaqueKey(record.id) !== key) throw new Error("Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.");
 			const alive = isBlobAlive(record.id, S.pages);
 			if (!isSyncBlobId(record.id) || !alive) {
-				ignoredBlobKeys.add(key);
+				ignoredBlobKeys.set(key, record.id);
 				downloadProgress[index] = 1;
 				updateFileProgress("Empfange Dateien…", downloadProgress);
 				return;
@@ -523,7 +533,8 @@ export const CLOUDFLARE_SYNC = (() => {
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
 			finishProfile({ received, uploaded, uploadAcknowledged: uploaded && !!pushed.confirmed });
 			// Erst nach dem Upload verdichten: überholte Schnappschüsse sind dann sicher entbehrlich.
-			try { await PERF_PROFILER.run("db.compact-local", () => DB.compactLocalIfDue(), {}, 50); }
+			// Verdichten löscht Events → gespeicherter Start-Checkpoint passt nicht mehr (Voll-Replay beim nächsten Start).
+			try { if (await PERF_PROFILER.run("db.compact-local", () => DB.compactLocalIfDue(), {}, 50)) STATE.scheduleCheckpoint(); }
 			catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 			return true;
 		} catch (error) {
@@ -611,10 +622,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function scheduleSync(event = null) {
 		if (!credentials) return;
-		if (!event || eventHasBlobRef(event)) {
-			ignoredBlobKeys.clear();
-			blobInventoryDirty = true;
-		}
+		if (!event || eventHasBlobRef(event)) blobInventoryDirty = true;
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
 			closeSocket();
 			return;

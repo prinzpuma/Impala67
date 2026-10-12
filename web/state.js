@@ -15,8 +15,8 @@ import {
 	checkpointStateStats,
 	eventLogInfoOf,
 	heftBlobSizesOf,
-	isUsableStateCheckpoint,
 	makeStateCheckpoint,
+	stateCheckpointRejectReason,
 } from "./state-checkpoint.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
 // Jede Änderung ist ein Event: reduce() wendet es an, dispatch() persistiert es.
@@ -1141,7 +1141,7 @@ export const STATE = (() => {
 		_checkpointBlobSizes = {}; _checkpointDirtyBlobHashes = new Set();
 		_checkpointPayloadLoaded = true; _checkpointPayloadPromise = null; _checkpointPayloadGeneration++;
 		_checkpointBaseSeq = 0; _appliedPostLoadEventIds = new Set();
-		let checkpointUsed = false, replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
+		let checkpointUsed = false, rejectReason = "missing", replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
 		try {
 			let checkpoint = null, tail = [], boundary = null;
 			try {
@@ -1154,11 +1154,13 @@ export const STATE = (() => {
 						checkpoint.maxSeq ? DB.eventAtSeq(checkpoint.maxSeq) : Promise.resolve(null),
 						DB.eventsAfterSeqAll(checkpoint.maxSeq, info.maxSeq),
 					]), { fromSeq: checkpoint.maxSeq, toSeq: info.maxSeq }, 5);
-					checkpointUsed = isUsableStateCheckpoint(checkpoint, info, boundary, tail);
+					rejectReason = stateCheckpointRejectReason(checkpoint, info, boundary, tail);
+					checkpointUsed = !rejectReason;
 				}
 			} catch (error) {
 				console.warn("[state] Start-Checkpoint wird neu aufgebaut:", error);
 				checkpointUsed = false;
+				rejectReason = "read-error";
 			}
 
 			if (checkpointUsed) {
@@ -1210,7 +1212,10 @@ export const STATE = (() => {
 				_checkpointPayloadLoaded = true;
 				replayed = events.length;
 				replayIds = new Set(events.map((event) => event?.id).filter(Boolean));
-				if (checkpoint) DB.clearStateCheckpoint().catch(() => {});
+				// Nur den ungültigen Kernzustand verwerfen: Die Heft-Bilder darin sind
+				// inhaltsadressiert und bleiben gültig. Vorher schrieb der nächste
+				// Checkpoint alle Bilder (hier >10 MB) komplett neu.
+				if (checkpoint) DB.clearStateCheckpoint({ keepHeftBlobs: true }).catch(() => {});
 			}
 
 			_loadedSeq = info.maxSeq;
@@ -1223,7 +1228,7 @@ export const STATE = (() => {
 				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
 			}
 
-			finishProfile({ count: info.count, replayed, checkpointUsed });
+			finishProfile({ count: info.count, replayed, checkpointUsed, ...(rejectReason ? { rejectReason } : {}) });
 			return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: info.count, replayed, checkpointUsed };
 		} catch (error) {
 			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });

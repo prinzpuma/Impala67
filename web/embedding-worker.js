@@ -1,6 +1,6 @@
 "use strict";
 
-// web/embedding-worker.js — Web Worker für lokale Inferenz mit Transformers.js v3.
+// web/embedding-worker.js — Web Worker für lokale Inferenz mit Transformers.js v4.
 // Führt die Bekko-a8m-Inferenz komplett abseits des UI-Threads aus.
 // Nutzt WebGPU, wenn ein Adapter verfügbar ist, sonst WASM-CPU; Matryoshka-Kürzung (z.B. 256d)
 // und L2-Normalisierung. Geraeteabhaengiges Auto-Unload begrenzt den RAM, ohne
@@ -55,7 +55,7 @@ function normalizeVec(vec) {
 
 async function loadTransformers() {
 	if (!pipeline) {
-		const tf = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3");
+		const tf = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1");
 		pipeline = tf.pipeline;
 		env = tf.env;
 		if (env) {

@@ -13,7 +13,7 @@ import { MOBILE } from "./mobile.js";
 import { DRIVE } from "./drive.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { ANALYSE } from "./analyse.js";
-import { isBlobAlive } from "./sync-core.js";
+import { blobAliveChecker, isBlobAlive } from "./sync-core.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
@@ -76,9 +76,12 @@ export async function purgeOldTrash() {
 export async function purgeOrphanBlobs() {
 	try {
 		let removed = 0;
+		const alive = blobAliveChecker(S.pages);
 		for (const k of await DB.allBlobKeys()) {
 			const key = String(k);
-			if (isBlobAlive(key, S.pages)) continue;
+			// Schnellprüfung gegen einen Schnappschuss; vor dem Löschen frisch nachprüfen,
+			// falls eine Seite den Blob während der Schleife gerade wieder referenziert.
+			if (alive(key) || isBlobAlive(key, S.pages)) continue;
 			await DB.delBlob(key);
 			removed++;
 		}

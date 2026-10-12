@@ -122,19 +122,29 @@ export function isSyncBlobId(id) {
 	return /^(?:img:|file:|cover:|pdftext:)/.test(key) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
 }
 
-export function isBlobAlive(key, pages) {
-	const k = String(key || "");
-	if (!k) return false;
+// Für viele Schlüssel auf einmal: Seitentexte nur EINMAL einsammeln statt je Blob
+// erneut über alle Seiten zu laufen (lief im Sync synchron und fror die UI ein).
+// Das Trennzeichen \0 kommt in keinem Schlüssel vor — Treffer bleiben exakt dieselben.
+export function blobAliveChecker(pages) {
 	const strings = [];
 	for (const page of Object.values(pages || {})) {
 		if (!page || typeof page !== "object") continue;
 		for (const value of Object.values(page)) if (typeof value === "string" && value) strings.push(value);
 	}
-	const ref = (target) => !!target && strings.some((value) => value.includes(target));
-	if (k.startsWith("heft:")) return !!pages?.[k.slice(5)];
-	if (k.startsWith("pdftext:")) return ref(k.slice(8));
-	if (k.startsWith("cover:")) return ref(k) || ref(k.slice(6));
-	if (k.startsWith("img:") || k.startsWith("file:")) return ref(k);
-	if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return ref(k);
-	return true; // Fail-Safe: gerätespezifische oder nicht-synchronisierte Spezialschlüssel ("bgImage", "heftver:...") nie löschen
+	const text = strings.join("\0");
+	const ref = (target) => !!target && !target.includes("\0") && text.includes(target);
+	return (key) => {
+		const k = String(key || "");
+		if (!k) return false;
+		if (k.startsWith("heft:")) return !!pages?.[k.slice(5)];
+		if (k.startsWith("pdftext:")) return ref(k.slice(8));
+		if (k.startsWith("cover:")) return ref(k) || ref(k.slice(6));
+		if (k.startsWith("img:") || k.startsWith("file:")) return ref(k);
+		if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return ref(k);
+		return true; // Fail-Safe: gerätespezifische oder nicht-synchronisierte Spezialschlüssel ("bgImage", "heftver:...") nie löschen
+	};
+}
+
+export function isBlobAlive(key, pages) {
+	return blobAliveChecker(pages)(key);
 }

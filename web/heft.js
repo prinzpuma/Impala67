@@ -297,8 +297,11 @@ export const HEFT = (() => {
 				}
 			}
 		}
-		if (docHashes.length) await STATE.hydrateHeftBlobs(docHashes);
-		else await STATE.hydrateHeftBlobs();
+		// Ein bekanntes Heft ohne Bilder braucht keine Bilddaten — vorher lud es die
+		// Bilder ALLER Hefte (mehrere MB). Nur ein noch unbekanntes Heft lädt alles.
+		if (docHashes.length || !Array.isArray(docPages)) {
+			await PERF_PROFILER.run("heft.hydrate-images", () => STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null), { images: docHashes.length }, 16);
+		}
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
@@ -310,7 +313,7 @@ export const HEFT = (() => {
 		}
 		try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
 		docs[p] = d;
-		if (!published[p]) published[p] = documentShadow(d);
+		if (!published[p]) published[p] = PERF_PROFILER.measure("heft.shadow", () => documentShadow(d), { pages: d?.pages?.length }, 16);
 		return d;
 	}
 
@@ -324,7 +327,10 @@ export const HEFT = (() => {
 	// fremden Strich zurück, das Log wuchs bei jedem Sync, und beim Hin- und Herspielen
 	// konnten Striche doppelt erscheinen. Der Flush passiert jetzt VOR dem Abspielen
 	// (drive.js → replayImported); hier wird nur noch der Schatten nachgezogen.
-	async function onRemoteApplied() {
+	function onRemoteApplied() {
+		PERF_PROFILER.measure("heft.remote-apply", applyRemoteToOpenDocs, { docs: Object.keys(published).length }, 16);
+	}
+	function applyRemoteToOpenDocs() {
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
 			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
@@ -361,15 +367,18 @@ export const HEFT = (() => {
 
 	// Speichern = Unterschied ermitteln und als Operationsliste ins Log schicken.
 	// Kein Blob, kein Hash, keine Datei — der Sync trägt das Event wie jedes andere.
+	// Messpunkte: Diff und Schatten laufen synchron über das ganze Heft — Verdacht für
+	// die Hänger kurz nach dem Absetzen des Stifts (Trace: touchend bis 1,4 s).
 	async function persistDoc(savePid, saveDoc) {
-		const ops = diffDocument(published[savePid], saveDoc);
+		const pages = saveDoc?.pages?.length;
+		const ops = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
 		if (!ops.length) return;
-		const nextPublished = documentShadow(saveDoc);
-		await persistReferencedBlobs(saveDoc);
+		const nextPublished = PERF_PROFILER.measure("heft.shadow", () => documentShadow(saveDoc), { pages }, 16);
+		await PERF_PROFILER.run("heft.save-blobs", () => persistReferencedBlobs(saveDoc), {}, 16);
 		dropThumbs(savePid);
-		await STATE.dispatch("heftOps", { pageId: savePid, ops });
+		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
 		published[savePid] = nextPublished;
-		await maybeSnapshot(savePid, saveDoc);
+		await PERF_PROFILER.run("heft.snapshot", () => maybeSnapshot(savePid, saveDoc), {}, 30);
 	}
 
 	async function saveNow() {
@@ -377,7 +386,7 @@ export const HEFT = (() => {
 		if (!pid || !doc) return;
 
 		const savePid = pid, saveDoc = doc;
-		try { await persistDoc(savePid, saveDoc); }
+		try { await PERF_PROFILER.run("heft.save", () => persistDoc(savePid, saveDoc), { pages: saveDoc.pages?.length }, 30); }
 		catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
 	}
 
@@ -2838,14 +2847,16 @@ export const HEFT = (() => {
 	}
 	async function mount(container, pageId) {
 		const finish = PERF_PROFILER.start("heft.mount", { pageId }, 30);
+		let finishView = null;
 		try {
 			unmount();
 			host = container;
 			pid = pageId;
 			if (getComputedStyle(host).position === "static") host.style.position = "relative";
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
-			doc = await load(pageId);
+			doc = await PERF_PROFILER.run("heft.load", () => load(pageId), { pageId }, 30);
 			if (pid !== pageId) return;
+			finishView = PERF_PROFILER.start("heft.mount-view", { pages: doc.pages.length }, 16);
 			idx = Math.min(lastPage(pageId), doc.pages.length - 1); sel = null; undoStack = []; redoStack = []; insertPos = "after";
 			view.x = 0; view.y = 0; view.k = 1; navReset();
 			expanded = false;
@@ -2868,13 +2879,15 @@ export const HEFT = (() => {
 			bindCanvas();
 			bindScroll();
 			bindTrayDrag();
-			layout();
-			if (idx) go(idx);
+			finishView();
+			PERF_PROFILER.measure("heft.layout", () => layout(), { pages: doc.pages.length }, 16);
+			if (idx) PERF_PROFILER.measure("heft.go", () => go(idx), { page: idx }, 16);
 
 			scheduleHandwritingIndexV2(idx);
 			purgeOrphanLegacyInk();
 			pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
 		} finally {
+			finishView?.(); // idempotent: schließt die Messung auch nach einem Fehler
 			finish();
 		}
 	}

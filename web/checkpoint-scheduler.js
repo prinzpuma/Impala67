@@ -21,7 +21,7 @@ export function createCheckpointScheduler(run, options = {}) {
 	const activityTarget = options.activityTarget ?? (typeof document !== "undefined" ? document : null);
 	const onError = typeof options.onError === "function" ? options.onError : () => {};
 
-	let timer = 0, idle = 0, attempts = 0, watching = false, stopped = false;
+	let timer = 0, idle = 0, attempts = 0, watching = false, stopped = false, running = false, rerun = false;
 
 	const clearPending = () => {
 		if (timer) clearTimer(timer);
@@ -30,7 +30,7 @@ export function createCheckpointScheduler(run, options = {}) {
 	};
 	const unwatch = () => {
 		if (!watching || !activityTarget?.removeEventListener) return;
-		for (const type of ACTIVITY_EVENTS) activityTarget.removeEventListener(type, schedule, true);
+		for (const type of ACTIVITY_EVENTS) activityTarget.removeEventListener(type, arm, true);
 		watching = false;
 	};
 	const stop = () => {
@@ -38,26 +38,39 @@ export function createCheckpointScheduler(run, options = {}) {
 		clearPending();
 		unwatch();
 	};
+	// Erledigt (oder aufgegeben): ruhen, bis jemand erneut schedule() ruft — z.B. nach
+	// einer Kompaktierung, die den gespeicherten Checkpoint sonst ungültig machen würde.
+	const settle = () => {
+		clearPending();
+		unwatch();
+		attempts = 0;
+		if (rerun) { rerun = false; arm(); }
+	};
 	const isWritingActive = () => typeof window !== "undefined" && typeof window.HEFT?.isWriting === "function" && window.HEFT.isWriting();
 	const execute = async () => {
 		if (isWritingActive()) {
 			idle = 0;
-			schedule();
+			arm();
 			return;
 		}
 		idle = 0;
 		attempts++;
+		running = true;
+		let saved = false;
 		try {
-			if (await run()) return stop();
+			saved = !!(await run());
 		} catch (error) { onError(error); }
-		if (attempts >= maxAttempts) return stop();
-		schedule();
+		finally { running = false; }
+		if (saved || attempts >= maxAttempts) return settle();
+		rerun = false; // der Wiederholungsversuch sieht den neuen Stand ohnehin
+		arm();
 	};
-	function schedule() {
+	// Nutzeraktivität verschiebt den Termin nur; ein laufendes Speichern wird nicht doppelt gestartet.
+	function arm() {
 		if (stopped) return false;
 		clearPending();
 		if (!watching && activityTarget?.addEventListener) {
-			for (const type of ACTIVITY_EVENTS) activityTarget.addEventListener(type, schedule, true);
+			for (const type of ACTIVITY_EVENTS) activityTarget.addEventListener(type, arm, true);
 			watching = true;
 		}
 		timer = setTimer(() => {
@@ -66,6 +79,12 @@ export function createCheckpointScheduler(run, options = {}) {
 			else execute();
 		}, quietMs);
 		return true;
+	}
+	// Während eines laufenden Speicherns vorgemerkt: Der Lauf hat den neuen Stand evtl. nicht gesehen.
+	function schedule() {
+		if (stopped) return false;
+		if (running) { rerun = true; return true; }
+		return arm();
 	}
 
 	return { schedule, stop, status: () => ({ scheduled: !!(timer || idle), attempts, watching, stopped }) };

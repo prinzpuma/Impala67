@@ -652,7 +652,7 @@ export const DRIVE = (() => {
 		}
 		await replayImported(importedEvents);
 		const finalMaxSeq = await DB.maxSeq();
-		try { await DB.compactLocalIfDue(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
+		try { if (await DB.compactLocalIfDue()) STATE.scheduleCheckpoint(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));
 		LS.setItem("impala67_drive_last_ok", new Date().toISOString());
 		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal

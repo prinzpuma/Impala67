@@ -264,27 +264,35 @@ export const DB = (() => {
 	// Kernzustand und neue, inhaltsadressierte Heft-Bilder werden gemeinsam committed.
 	// Bereits gespeicherte Hashes sind unveränderlich und werden deshalb nicht erneut
 	// geklont oder geschrieben. Das beseitigt den großen Checkpoint-Write im Normalfall.
+	// Bilder, die der neue Checkpoint nicht mehr kennt, fliegen in derselben Transaktion —
+	// sonst sammelten sich verwaiste Heft-Bilder unbegrenzt an.
+	const stateCheckpointBlobRange = () => IDBKeyRange.bound(STATE_CHECKPOINT_BLOB_PREFIX, STATE_CHECKPOINT_BLOB_PREFIX + "￿");
 	function putStateCheckpoint(checkpoint, heftBlobs) {
 		const entries = Object.entries(heftBlobs || {}).filter(([hash, data]) => hash && typeof data === "string");
+		const known = checkpoint?.heftBlobSizes && typeof checkpoint.heftBlobSizes === "object" ? checkpoint.heftBlobSizes : null;
 		return rw("blobs", (s) => {
-			if (entries.length) {
-				const checkReq = s.getAllKeys();
-				checkReq.onsuccess = () => {
-					const existingKeys = new Set(checkReq.result || []);
-					entries.forEach(([hash, data]) => {
-						const key = STATE_CHECKPOINT_BLOB_PREFIX + hash;
-						if (!existingKeys.has(key)) s.put({ data }, key);
-					});
-				};
-			}
+			const checkReq = s.getAllKeys(stateCheckpointBlobRange());
+			checkReq.onsuccess = () => {
+				const existingKeys = new Set(checkReq.result || []);
+				entries.forEach(([hash, data]) => {
+					const key = STATE_CHECKPOINT_BLOB_PREFIX + hash;
+					if (!existingKeys.has(key)) s.put({ data }, key);
+				});
+				if (known) existingKeys.forEach((key) => {
+					if (!Object.hasOwn(known, String(key).slice(STATE_CHECKPOINT_BLOB_PREFIX.length))) s.delete(key);
+				});
+			};
 			s.put(checkpoint, STATE_CHECKPOINT_KEY);
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
 		});
 	}
-	function clearStateCheckpoint() {
+	// Ein Range-Delete statt eines Requests je Schlüssel: Safari brach die Einzel-Deletes
+	// (276 Stück) mit „without an in-progress transaction“ ab.
+	function clearStateCheckpoint({ keepHeftBlobs = false } = {}) {
 		return rw("blobs", (s) => {
-			const req = s.getAllKeys();
-			req.onsuccess = () => req.result.forEach((key) => { if (isStateCheckpointKey(key)) s.delete(key); });
+			s.delete(STATE_CHECKPOINT_KEY);
+			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
+			if (!keepHeftBlobs) s.delete(stateCheckpointBlobRange());
 		});
 	}
 

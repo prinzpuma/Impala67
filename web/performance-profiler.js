@@ -6,6 +6,7 @@ const MODE_ANOMALIES = "anomalies";
 const MODE_ALL = "all";
 const DATA_KEY = "impala67PerformanceTraceV2";
 const LEGACY_DATA_KEY = "impala67PerformanceTrace";
+const VERSION_KEY = "impala67PerformanceTraceVersion";
 const MAX_RECORDS = 180;
 const LAG_INTERVAL_MS = 250;
 const LAG_THRESHOLD_MS = 120;
@@ -41,6 +42,10 @@ const storage = () => typeof localStorage !== "undefined" ? localStorage : null;
 const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
 const wallTime = () => new Date().toISOString();
 const round = (value) => Math.round(Number(value || 0) * 10) / 10;
+// Jeder Eintrag trägt die App-Version, unter der er entstand. Nach einem Update
+// beginnt ein weiterhin auftretendes Problem einen NEUEN Eintrag — alte Einträge
+// zeigen damit nur noch den Stand vor dem Fix und lassen sich gezielt überspringen.
+const appVersion = () => (typeof window !== "undefined" && window.APP_VERSION) || "";
 
 function isEnabled() {
 	try { return storage()?.getItem(ENABLE_KEY) === "1"; } catch { return false; }
@@ -156,6 +161,9 @@ function isAnomaly(kind, durationMs, meta = {}) {
 	if (kind === "profiler-start") {
 		return false;
 	}
+	if (kind === "app-update") {
+		return true;
+	}
 	if (kind === "operation") {
 		if (meta?.anomalyThresholdMs && Number.isFinite(meta.anomalyThresholdMs)) {
 			return durationMs >= meta.anomalyThresholdMs;
@@ -192,6 +200,9 @@ function anomalySignature(kind, meta = {}, context = null) {
 	if (kind === "operation") {
 		return "op:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
 	}
+	if (kind === "app-update") {
+		return "app-update:" + (meta.fromVersion || "") + ">" + (meta.toVersion || "");
+	}
 	return kind + ":" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
 }
 
@@ -203,10 +214,11 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 
 		const context = compactContext(contextOverride || currentContext());
 		const dur = round(durationMs);
+		const version = appVersion();
 
 		if (mode === MODE_ANOMALIES) {
 			const sig = anomalySignature(kind, meta, contextOverride || context);
-			const existingIndex = records.findIndex((r) => r.sig === sig);
+			const existingIndex = records.findIndex((r) => r.sig === sig && (r.version || "") === version);
 			if (existingIndex >= 0) {
 				const existing = records[existingIndex];
 				const count = (existing.count || 1) + 1;
@@ -288,6 +300,7 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 				avgDurationMs: dur,
 				totalDurationMs: dur,
 				sig,
+				...(version ? { version } : {}),
 				...cleanMeta,
 			};
 			if (Object.keys(context).length) entry.context = context;
@@ -299,7 +312,7 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 
 		const cleanMeta = safeMeta(meta);
 		delete cleanMeta.minMs;
-		const entry = { at, kind, durationMs: dur, ...cleanMeta };
+		const entry = { at, kind, durationMs: dur, ...(version ? { version } : {}), ...cleanMeta };
 		if (Object.keys(context).length) entry.context = context;
 		records.push(entry);
 		if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
@@ -533,10 +546,23 @@ function init() {
 		window.addEventListener("unhandledrejection", (event) => error("unhandled-rejection", event.reason || "Unhandled Promise Rejection"));
 	}
 	record("profiler-start", 0);
+	noteVersionChange();
 	if (!pagehideInstalled && typeof window !== "undefined") {
 		pagehideInstalled = true;
 		window.addEventListener("pagehide", flush);
 	}
+}
+
+// Versionssprung seit dem letzten Profiler-Start als eigenen Eintrag festhalten:
+// Alles davor stammt aus der alten Version und ist evtl. schon behoben.
+function noteVersionChange() {
+	const current = appVersion();
+	if (!current) return;
+	try {
+		const previous = storage()?.getItem(VERSION_KEY) || "";
+		if (previous && previous !== current) record("app-update", 0, { fromVersion: previous, toVersion: current });
+		storage()?.setItem(VERSION_KEY, current);
+	} catch { /* ignore */ }
 }
 
 function stop() {
@@ -591,7 +617,10 @@ function report() {
 		mode: getMode(),
 		contextEncoding: "delta",
 		exportedAt: wallTime(),
-		version: typeof window !== "undefined" ? (window.APP_VERSION || "unknown") : "unknown",
+		version: appVersion() || "unknown",
+		// Einträge je Version: Nur Einträge der aktuellen Version zeigen den Stand nach
+		// dem letzten Update; "unknown" = aufgezeichnet, bevor Versionen erfasst wurden.
+		recordsByVersion: records.reduce((acc, r) => { const v = r.version || "unknown"; acc[v] = (acc[v] || 0) + 1; return acc; }, {}),
 		environment: {
 			userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
 			hardwareConcurrency: typeof navigator !== "undefined" ? navigator.hardwareConcurrency || null : null,
