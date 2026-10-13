@@ -7,7 +7,16 @@
 .blk-gutter { display: flex; justify-content: flex-end; width: 44px; flex-shrink: 0; padding-top: var(--space-1-5); opacity: 0; transition: opacity .1s }
 .blk:hover .blk-gutter, .blk:focus-within .blk-gutter { opacity: 1 }
 /* Griffe hängen links im Rand, damit der Text bündig unter dem Seitentitel steht */
-@media (min-width: 601px) { .blk-gutter { margin-left: -46px } }
+@media (min-width: 601px) {
+	.blk-gutter { margin-left: -46px }
+	/* Oberste Ebene: Rand per Padding in den Block holen, sonst schneidet die
+	   Paint-Containment von content-visibility die Griffe ab. Optisch unverändert. */
+	.block-editor > .blk { margin-left: -46px; padding-left: 46px }
+}
+/* PERF: Blöcke außerhalb des Bildschirms überspringt der Browser bei Layout und
+   Zeichnen. Lange Seiten (300+ Blöcke) öffnen und tippen sich so ~4–10× schneller.
+   Achtung: alles, was über den Block hinausragt, wird abgeschnitten. */
+.block-editor > .blk { content-visibility: auto; contain-intrinsic-size: auto 2.5em }
 .blk-plus, .blk-handle { min-height: 0; width: 20px; height: 22px; padding: 0; background: transparent; color: var(--text2); font-size: var(--text-base); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs) }
 .blk-plus:hover, .blk-handle:hover { background: var(--surface-active); color: var(--text) }
 .blk-handle { cursor: grab; font-size: var(--text-xs) }
@@ -193,11 +202,12 @@ h3.blk-h { font-size: 1.12em }
 .heft-embed-img { display: block; width: 100%; max-height: 300px; object-fit: cover; object-position: top center; background: var(--panel-solid) }
 .heft-embed-label { display: block; padding: 9px 11px; color: var(--text2); font-size: var(--text-sm); font-weight: 600 }
 /* == --- Blockauswahl (Esc / Handle / Strg+A Stufe 2) --- == */
-.blk.selected { background: color-mix(in srgb, var(--accent) 22%, transparent) }
+.blk.selected { background: color-mix(in srgb, var(--accent) 22%, transparent); background-clip: content-box }
 .blk.selected .blk-body { border-radius: var(--radius-xs) }
 /* == --- Drag-&-Drop-Ziellinien --- == */
-.blk.drop-above { box-shadow: 0 -2px 0 var(--accent) }
-.blk.drop-below { box-shadow: 0 2px 0 var(--accent) }
+/* inset: ein äußerer Schatten würde von content-visibility abgeschnitten */
+.blk.drop-above { box-shadow: inset 0 2px 0 var(--accent) }
+.blk.drop-below { box-shadow: inset 0 -2px 0 var(--accent) }
 /* == --- Menüs: Slash / Link / Block --- == */
 .blk-menu { position: fixed; z-index: var(--z-editor-pop); min-width: 260px; max-width: 330px; max-height: 340px; overflow-y: auto; background: var(--menu-bg); border: 1px solid var(--edge-soft); border-radius: var(--radius-md); box-shadow: var(--elev-2); padding: var(--space-1-5) }
 .blk-msec { font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text2); padding: var(--space-2) 10px 3px }

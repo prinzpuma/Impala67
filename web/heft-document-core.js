@@ -44,20 +44,28 @@ export function documentShadow(document) {
 	};
 }
 
+// Liefert zugleich die Signaturen des neuen Stands. PERF: Der Schatten für den
+// nächsten Vergleich fällt beim Diff ohnehin an — vorher rechnete documentShadow()
+// nach jedem Speichern alle Signaturen des ganzen Hefts ein zweites Mal aus.
 function diffItems(operations, pageId, kind, previous, items) {
 	const removed = new Set(previous ? previous.keys() : []);
+	const current = new Map();
 	for (const item of items || []) {
 		if (!item || !item.id) continue;
+		const sig = signature(item);
+		current.set(item.id, sig);
 		const oldSignature = previous ? previous.get(item.id) : undefined;
 		if (oldSignature === undefined) operations.push({ t: kind + "+", p: pageId, o: item });
 		else {
 			removed.delete(item.id);
-			if (oldSignature !== signature(item)) operations.push({ t: kind + "=", p: pageId, o: item });
+			if (oldSignature !== sig) operations.push({ t: kind + "=", p: pageId, o: item });
 		}
 	}
 	if (removed.size) operations.push({ t: kind + "-", p: pageId, ids: [...removed] });
+	return current;
 }
 
+// { ops, shadow }: ops führen previous in next über, shadow ist documentShadow(next).
 export function diffDocument(previous, next) {
 	const operations = [];
 	const oldPages = (previous && previous.pages) || [];
@@ -78,15 +86,20 @@ export function diffDocument(previous, next) {
 	const keptAfter = nextIds.filter((id) => oldById.has(id)).join(",");
 	if (added || keptBefore !== keptAfter) operations.push({ t: "pgo", order: nextIds });
 
-	for (const page of next.pages) {
+	const pages = next.pages.map((page) => {
 		const oldPage = oldById.get(page.id);
 		if (oldPage && oldPage.paper !== page.paper) operations.push({ t: "pgp", p: page.id, paper: page.paper });
 		if ((oldPage ? oldPage.ocrText : "") !== (page.ocrText || "")) operations.push({ t: "ocr", p: page.id, text: page.ocrText || "" });
-		diffItems(operations, page.id, "s", oldPage && oldPage.s, page.strokes);
-		diffItems(operations, page.id, "i", oldPage && oldPage.i, page.images);
-		diffItems(operations, page.id, "x", oldPage && oldPage.x, page.texts);
-	}
-	return operations;
+		return {
+			id: page.id,
+			paper: page.paper,
+			ocrText: page.ocrText || "",
+			s: diffItems(operations, page.id, "s", oldPage && oldPage.s, page.strokes),
+			i: diffItems(operations, page.id, "i", oldPage && oldPage.i, page.images),
+			x: diffItems(operations, page.id, "x", oldPage && oldPage.x, page.texts),
+		};
+	});
+	return { ops: operations, shadow: { pages } };
 }
 
 export function blobId(data) {

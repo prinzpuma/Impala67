@@ -56,11 +56,6 @@ function resetTransientUiLayers() {
 	});
 }
 window.addEventListener("pageshow", resetTransientUiLayers);
-if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
-	navigator.serviceWorker.getRegistrations().then((regs) => {
-		for (const r of regs) r.unregister();
-	}).catch(() => {});
-}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover">
 <!-- PWA-Meta: theme-color kommt aus settings.js (hell/dunkel). -->
@@ -89,14 +84,13 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 <!-- Favicon & Touch-Icon -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
-<!-- CDN-Bibliotheken: Leichtgewichtige Basis (Markdown-Rendering + DOM-Sanitizing + Google Login).
+<!-- CDN-Bibliotheken: Leichtgewichtige Basis (Markdown-Rendering + DOM-Sanitizing; Google-Login lädt boot.js im Leerlauf).
      Fest versionierte Zusatzmodule werden nach dem Start im Leerlauf offline gecacht und erst
      bei Nutzung ausgeführt; OCR-/KI-Dateien bleiben bedarfsgesteuert (siehe optional-modules.js). -->
 <!-- Beide Basismodule werden vor main.js benötigt, müssen aber den HTML-Parser nicht
      blockieren. defer macht den Startbildschirm sofort aufbaubar und wahrt die Reihenfolge. -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.umd.js" integrity="sha384-rATToyt6602Jnq8c7w8HZwmyOUgPL7mzxX01FBWoV48ns/EgkakGozpES+PnaYOI" crossorigin="anonymous" defer></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="panel-collapsed">
 <script>
@@ -115,14 +109,14 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
 			: (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark");
 		var density = localStorage.getItem("impala67Density") || "compact";
-		var motion = localStorage.getItem("impala67Motion") || "reduced";
+		var motion = localStorage.getItem("impala67Motion") || "full";
 		var fontSize = localStorage.getItem("impala67FontSize") || "m";
 		var tabsPos = localStorage.getItem("impala67TabsPosition") || "top";
 		var betaUi = localStorage.getItem("impala67BetaUi") === "1";
 		document.body.classList.toggle("beta-ui", betaUi);
 		document.body.classList.toggle("light", theme === "light");
 		document.body.classList.toggle("density-compact", density === "compact");
-		document.body.classList.toggle("reduce-motion", motion === "reduced");
+		document.body.classList.toggle("perf-mode", motion === "reduced");
 		document.body.classList.toggle("tabs-in-sidebar", tabsPos === "sidebar");
 		document.body.classList.toggle("font-s", fontSize === "s");
 		document.body.classList.toggle("font-l", fontSize === "l");
@@ -147,7 +141,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 		body.light #bootSplash { background: #f8f9fa; background: var(--panel-solid, #f8f9fa); color: #202124; color: var(--text, #202124); }
 		body.light #bootSplash .boot-spinner { border-color: rgba(0,0,0,0.12); border-color: var(--edge, rgba(0,0,0,0.12)); border-top-color: var(--accent, #2563eb); }
 		@keyframes bootspin { 0% { transform: translateZ(0) rotate(0deg); } 100% { transform: translateZ(0) rotate(360deg); } }
-		body.reduce-motion #bootSplash .boot-spinner,
+		body.perf-mode #bootSplash .boot-spinner,
 		#bootSplash .boot-spinner { animation: bootspin 0.85s linear infinite !important; animation-duration: 0.85s !important; animation-iteration-count: infinite !important; }
 	</style>
 </div>
@@ -280,7 +274,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=212"></script>
+<script type="module" src="main.js?build=213"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -290,7 +284,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=111", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=112", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

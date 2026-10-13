@@ -101,11 +101,15 @@ function startWsServer() {
 		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
 		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
 		connectedSockets.add(ws);
-		activeBrowserWs = ws;
+		// Eine neue Verbindung übernimmt nur, wenn noch keine aktiv ist. Sonst lenkte
+		// jeder frisch geöffnete (z. B. Test-)Tab alle Aufrufe von der genutzten App weg.
+		// Das Fenster, das der Nutzer gerade sieht, meldet sich per { claim: true }.
+		if (!activeBrowserWs || activeBrowserWs.readyState !== 1) activeBrowserWs = ws;
 
 		ws.on("message", (raw) => {
 			try {
 				const data = JSON.parse(raw);
+				if (data?.claim) { activeBrowserWs = ws; return; }
 				if (data && data.callId && pendingBrowserCalls.has(data.callId)) {
 					activeBrowserWs = ws;
 					const { resolve } = pendingBrowserCalls.get(data.callId);

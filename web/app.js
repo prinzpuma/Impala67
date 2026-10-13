@@ -502,7 +502,6 @@ function syncComposer(input) {
 const APPEARANCE_BTN = {
 	btnDensityComfortable: ["density", "comfortable"], btnDensityCompact: ["density", "compact"],
 	btnTabsTop: ["tabspos", "top"], btnTabsSidebar: ["tabspos", "sidebar"],
-	btnMotionFull: ["motion", "full"], btnMotionReduced: ["motion", "reduced"],
 	btnFontS: ["fontsize", "s"], btnFontM: ["fontsize", "m"], btnFontL: ["fontsize", "l"],
 	btnLockOn: ["overlearn", "on"], btnLockOff: ["overlearn", "off"],
 	btnConfOn: ["confidence", "on"], btnConfOff: ["confidence", "off"],

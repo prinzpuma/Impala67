@@ -129,6 +129,7 @@ export function initMcpBridge() {
 			reconnectAttempts = 0;
 			bridgeConnectedAt = new Date().toISOString();
 			console.info("[MCP-Bridge] Verbunden mit Antigravity MCP-Server");
+			if (!document.hidden) claim();
 		};
 
 		ws.onmessage = async (event) => {
@@ -439,6 +440,7 @@ export function initMcpBridge() {
 								totalCallsProcessed: bridgeCallsCount,
 								lastCallDurationMs: bridgeLastCallDurationMs,
 								wsUrl: WS_URL,
+								appOrigin: location.origin,
 								tabVisible: typeof document !== "undefined" ? !document.hidden : true,
 							},
 							app: {
@@ -646,16 +648,23 @@ export function initMcpBridge() {
 		reconnectTimer = setTimeout(connect, delay);
 	}
 
+	// Sind mehrere App-Fenster verbunden, bekommt das zuletzt genutzte die Aufrufe.
+	function claim() {
+		if (ws && ws.readyState === 1) ws.send(JSON.stringify({ claim: true }));
+	}
+
 	if (typeof document !== "undefined") {
 		window.addEventListener("focus", () => {
 			if (!ws || ws.readyState > 1) connect();
+			else claim();
 		});
 		document.addEventListener("visibilitychange", () => {
-			if (!document.hidden && (!ws || ws.readyState > 1)) {
+			if (document.hidden) return;
+			if (!ws || ws.readyState > 1) {
 				clearTimeout(reconnectTimer);
 				reconnectTimer = null;
 				connect();
-			}
+			} else claim();
 		});
 	}
 

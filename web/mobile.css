@@ -21,6 +21,8 @@ body.mobile-ui {
 	overscroll-behavior: none;
 	-webkit-tap-highlight-color: transparent;
 }
+/* Performance-Modus: ohne Milchglas deckende Leisten (sonst schiene Text unscharf-frei durch) */
+body.mobile-ui.perf-mode { --m-bar-bg: var(--panel-solid) }
 
 /* ============================================================
    1. Desktop-Chrome auf dem Handy ausblenden
@@ -634,13 +636,23 @@ body.mobile-ui .m-sync-dot {
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
+	position: relative;
 	background: var(--success);
+}
+/* PERF: Der Puls-Ring wächst per transform/opacity (läuft auf der GPU). Die frühere
+   box-shadow-Animation musste in jedem Frame neu gemalt werden — endlos, solange
+   „Mehr“ offen war. 10px-Punkt + 9px Ring = 28px → scale(2.8). */
+body.mobile-ui .m-sync-dot::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: rgb(var(--success-rgb) / .55);
 	animation: m-pulse 2.4s var(--ease-out) infinite;
 }
 @keyframes m-pulse {
-	0% { box-shadow: 0 0 0 0 rgb(var(--success-rgb) / .55) }
-	70% { box-shadow: 0 0 0 9px rgb(var(--success-rgb) / 0) }
-	100% { box-shadow: 0 0 0 0 rgb(var(--success-rgb) / 0) }
+	0% { transform: none; opacity: 1 }
+	70%, 100% { transform: scale(2.8); opacity: 0 }
 }
 
 /* ============================================================

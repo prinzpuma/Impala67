@@ -502,9 +502,11 @@ body.light .pdf-body { background: #eaebed }
 .progress-bar { height: 8px; border-radius: var(--radius-xs); background: var(--surface-active); overflow: hidden; margin: 10px 0 }
 .progress-bar .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width .3s ease }
 .progress-bar.indeterminate .progress-fill { width: 30%; animation: progressSlide 1.1s ease-in-out infinite }
+/* PERF: transform statt margin-left — kein Layout pro Frame. Prozente beziehen sich hier
+   auf die eigene Breite (30 % der Leiste): -100 % = -30 %, 333,33 % = 100 % der Leiste. */
 @keyframes progressSlide {
-	0% { margin-left: -30% }
-	100% { margin-left: 100% }
+	0% { transform: translateX(-100%) }
+	100% { transform: translateX(333.33%) }
 }
 /* == Rückfrage-Karten (ask_choice), Antwort-Anpassen (länger/kürz == */
 .question-card { border: 1px solid var(--accent-border); border-radius: var(--radius-lg); padding: 10px var(--space-3); background: var(--accent-soft) }
@@ -802,8 +804,8 @@ input, textarea, select, .row, .menu-item { border-radius: var(--radius-md) }
 .home h2, .library h2 { font-size: var(--text-lg); letter-spacing: -.015em }
 .hint, small, .menu-note { font-size: var(--text-sm) }
 .md { max-width: 76ch }
-/* Reduzierte Bewegung: auch manuell wählbar, zusätzlich zum Betr… */
-body.reduce-motion *:not(.boot-spinner):not(#bootSplash *), body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important }
+/* Performance-Modus: auch manuell wählbar, zusätzlich zum Betr… */
+body.perf-mode *:not(.boot-spinner):not(#bootSplash *), body.perf-mode *::before, body.perf-mode *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important }
 @media (prefers-reduced-motion: reduce) {
 	*:not(.boot-spinner):not(#bootSplash *), *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important }
 }

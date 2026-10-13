@@ -85,7 +85,7 @@ export function applyAppearance() {
 	installSystemThemeListener();
 	const theme = resolvedTheme();
 	const density = localStorage.getItem("impala67Density") || "compact";
-	const motion = localStorage.getItem("impala67Motion") || "reduced";
+	const motion = localStorage.getItem("impala67Motion") || "full";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
 	const isLight = theme === "light";
@@ -96,7 +96,7 @@ export function applyAppearance() {
 		m.content = theme === "light" ? "#f2efe9" : "#05070d";
 	});
 	document.body.classList.toggle("density-compact", density === "compact");
-	document.body.classList.toggle("reduce-motion", motion === "reduced");
+	document.body.classList.toggle("perf-mode", motion === "reduced");
 	const tabsPos = localStorage.getItem("impala67TabsPosition") || "top";
 	document.body.classList.toggle("tabs-in-sidebar", tabsPos === "sidebar");
 	const fontSize = localStorage.getItem("impala67FontSize") || "m";
@@ -181,7 +181,7 @@ function settingsViewModel() {
 		theme: resolvedTheme(),
 		accent: localStorage.getItem("impala67Accent") || "blue",
 		density: localStorage.getItem("impala67Density") || "compact",
-		motion: localStorage.getItem("impala67Motion") || "reduced",
+		motion: localStorage.getItem("impala67Motion") || "full",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
 		betaUi: localStorage.getItem("impala67BetaUi") === "1",

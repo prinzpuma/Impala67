@@ -744,20 +744,6 @@ function renderMain() {
 			PDFS.mountViewer(v, pg.pdfId, { title: pg.title });
 		}
 	}
-	if (document.body.classList.contains("mobile-ui")) {
-		const mTopWrap = document.getElementById("mTopWrap");
-		const mTopMenu = document.getElementById("mTopMenu");
-		if (mTopWrap) mTopWrap.style.display = (S.view === "page" && pg) ? "inline-flex" : "none";
-		if (mTopMenu) {
-			if (S.view === "page" && pg && S.topMenu) {
-				mTopMenu.hidden = false;
-				mTopMenu.innerHTML = S.topMenu === "share" ? shareMenuHtml(pg) : moreMenuHtml(pg);
-			} else {
-				mTopMenu.hidden = true;
-				mTopMenu.innerHTML = "";
-			}
-		}
-	}
 }
 
 function pdfEmbedBlockHtml(pg) {

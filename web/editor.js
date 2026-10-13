@@ -58,7 +58,7 @@ export const EDITOR = (() => {
 	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
 	let histFocus = null;
 	let renderBoundary = null; // einmalige DOM-Marke für exakte Merge-Caretposition
-	// v3 (25. Juli): scrollReserve entfallen. Der Editor baut seinen DOM nicht mehr bei
+	let listNums = new Map(); // Block-ID → Listennummer, vor jedem render() berechnet	// v3 (25. Juli): scrollReserve entfallen. Der Editor baut seinen DOM nicht mehr bei
 	// jedem Render neu auf (U.morph gleicht nur Unterschiede an) — dadurch ändert sich die
 	// Gesamthöhe nicht mehr schlagartig, der Browser klemmt scrollTop nicht mehr, und die
 	// ganze Anker-Rechnerei samt End-Reserve wird nicht mehr gebraucht.
@@ -621,7 +621,7 @@ export const EDITOR = (() => {
 					editable(b, { ph: "Liste", style: colorStyle(b) }) + "</div>";
 				break;
 			case "number": {
-				inner = '<div class="blk-li"' + ind + '><span class="blk-marker blk-num" data-bnum="' + b.id + '">1.</span>' +
+				inner = '<div class="blk-li"' + ind + '><span class="blk-marker blk-num">' + (listNums.get(b.id) || 1) + '.</span>' +
 					editable(b, { ph: "Liste", style: colorStyle(b) }) + "</div>";
 				break;
 			}
@@ -739,7 +739,7 @@ export const EDITOR = (() => {
 		collect(blocks);
 		const kinder = STATE.childrenOf(pageId, pg.workspaceId).filter((child) => !embedded.has(child.id));
 		if (!kinder.length) return "";
-		return '<div class="child-pages" contenteditable="false">' + kinder.map((k) => {
+		return '<div class="child-pages" data-key="childpages" contenteditable="false">' + kinder.map((k) => {
 			const icHtml = /^(https?:|data:)/.test(k.icon || "") ? '<img class="cp-img" src="' + esc(k.icon) + '" alt="">' : pageIcon(k);
 			return '<button type="button" class="child-page-row" data-page="' + esc(k.id) + '">' +
 				'<span class="cp-icon">' + icHtml + "</span>" +
@@ -778,25 +778,61 @@ export const EDITOR = (() => {
 		// (data-key = Block-ID) — alles andere bleibt physisch dasselbe DOM-Element.
 		const pg = S.pages[pageId];
 		const displayBlocks = blocks.filter((b) => !isPdfDuplicateBlock(b, pg));
-		U.morph(host, displayBlocks.map((b) => blockHtml(b)).join("") +
-			childPagesHtml() +
-			'<div class="blk-tail" data-key="tail" data-btail="1"></div>');
+		listNums = numberBlocks();
+		const parts = displayBlocks.map((b) => [b.id, blockHtml(b)]);
+		const kids = childPagesHtml();
+		if (kids) parts.push(["childpages", kids]);
+		parts.push(["tail", '<div class="blk-tail" data-key="tail" data-btail="1"></div>']);
+		patchBlocks(parts);
 		renderBoundary = null;
-		renumber();
 		hydrate();
 		applySelectionClasses();
 		finish();
 	}
 
-	// Nummerierte Listen: fortlaufende Zähler je Ebene (wie Notion).
-	function renumber() {
-		const counters = {};
+	// PERF: Blockweise angleichen. Vorher wurde bei jedem Render (Enter, Sync, Chat-Stream …)
+	// die ganze Seite als ein HTML-String geparst und verglichen — bei 400 Blöcken ~8 ms
+	// für einen einzigen neuen Block. Jetzt merkt sich jeder Blockknoten das Markup, auf
+	// das er zuletzt vollständig angeglichen wurde (_edHtml); nur geänderte Blöcke werden
+	// geparst und per U.morph-Regeln angeglichen. _edHtml = null heißt „DOM weicht evtl.
+	// ab“: nach Tippen (input-Handler), wenn morph das fokussierte Feld auslassen musste,
+	// und bei der Caret-Marke, die placeCaret gleich wieder entfernt.
+	function patchBlocks(parts) {
+		const wanted = new Set(parts.map((p) => p[0]));
+		const old = new Map();
+		// Weggefallene und fremde Knoten zuerst entfernen — sonst müssten die übrigen
+		// verschoben werden (ein verschobenes Feld verliert den Fokus).
+		for (const n of [...host.childNodes]) {
+			const k = n.nodeType === 1 ? n.getAttribute("data-key") : null;
+			if (k != null && wanted.has(k) && !old.has(k)) old.set(k, n);
+			else n.remove();
+		}
+		let cursor = host.firstChild;
+		for (const [key, html] of parts) {
+			let node = old.get(key);
+			if (!node || node._edHtml !== html) {
+				const tpl = document.createElement("template");
+				tpl.innerHTML = html;
+				const fresh = tpl.content.firstElementChild;
+				if (node && node.nodeName === fresh.nodeName) U._morphNode(node, fresh);
+				else {
+					if (node) { if (node === cursor) cursor = node.nextSibling; node.remove(); }
+					node = fresh;
+				}
+			}
+			if (node === cursor) cursor = node.nextSibling;
+			else host.insertBefore(node, cursor);
+			node._edHtml = node.contains(document.activeElement) || html.includes("data-caret-boundary") ? null : html;
+		}
+	}
+
+	// Nummerierte Listen: fortlaufende Zähler je Ebene (wie Notion). PERF: Die Nummer
+	// steht schon im erzeugten HTML. Vorher kam jeder Marker als „1.“ heraus, U.morph
+	// setzte ihn bei jedem Render zurück und ein DOM-Durchlauf schrieb ihn danach neu —
+	// zwei Textänderungen pro Listenpunkt und Tastendruck (Style + Layout jedes Mal).
+	function numberBlocks() {
+		const nums = new Map(), counters = {};
 		let prevListy = false;
-		// PERF: alle Zähler-Marker EINMAL einsammeln. Vorher lief pro nummeriertem
-		// Eintrag ein eigener DOM-Selektor über den ganzen Editor — bei jedem Enter in
-		// einer langen Liste hunderte Suchläufe.
-		const nums = new Map();
-		host.querySelectorAll("[data-bnum]").forEach((el) => nums.set(el.dataset.bnum, el));
 		const walk = (list) => {
 			for (const b of list) {
 				if (b.type === "number") {
@@ -804,8 +840,7 @@ export const EDITOR = (() => {
 					if (!prevListy) for (const k in counters) delete counters[k];
 					counters[depth] = (counters[depth] || 0) + 1;
 					for (const k in counters) if (+k > depth) delete counters[k];
-					const el = nums.get(b.id);
-					if (el) el.textContent = counters[depth] + ".";
+					nums.set(b.id, counters[depth]);
 					prevListy = true;
 				} else {
 					prevListy = LISTY[b.type] ? true : false;
@@ -816,6 +851,7 @@ export const EDITOR = (() => {
 			}
 		};
 		walk(blocks);
+		return nums;
 	}
 
 	// Asynchrone Anreicherung nach dem HTML-Aufbau: Bilder, Hefte, Formeln, Code.
@@ -1847,6 +1883,10 @@ export const EDITOR = (() => {
 
 		// Tippen: Modell synchronisieren + Live-Trigger prüfen (kein Re-Render)
 		host.addEventListener("input", (e) => {
+			// Getippt: dieser Block weicht jetzt am gemerkten Markup vorbei ab (patchBlocks)
+			let top = e.target;
+			while (top && top.parentNode !== host) top = top.parentNode;
+			if (top) top._edHtml = null;
 			if (composing) return;
 			const field = e.target.closest && e.target.closest("[data-btext],[data-bcell],[data-bsummary],[data-bcode]");
 			if (!field) return;

@@ -96,7 +96,9 @@ const bootMsg = (t) => { const m = document.getElementById("bootSplashMsg"); if 
 // Start-Performance: Nach jedem BootMsg kurz an den Browser abgeben, damit der
 // CSS-Ladekreis (bootspin) wirklich ein Frame malen kann. Ohne Yield blockieren
 // STATE.load + erster Render den Main-Thread am Stück und der Kreis hängt.
-const yieldForPaint = () => new Promise((res) => {
+// Im Hintergrund (versteckter Tab/PWA) malt der Browser nichts und drosselt Timer
+// auf ~1 s — dort würde jedes Yield den Start nur um eine Sekunde verlängern.
+const yieldForPaint = () => document.hidden ? Promise.resolve() : new Promise((res) => {
 	let done = false;
 	const finish = () => { if (!done) { done = true; res(); } };
 	const timer = setTimeout(finish, 50);
@@ -125,16 +127,10 @@ export async function initApp() {
 		.then((granted) => { if (!granted) PERF_PROFILER.error("storage-not-persistent", new Error("Browser hat dauerhaften Speicher abgelehnt")); })
 		.catch((e) => PERF_PROFILER.error("storage-persist-error", e));
 	SETTINGS.applyTheme();
-	// Linke Sidebar: zuletzt eingeklappt? (Desktop — ☰ in der Tab-Leiste öffnet wieder)
-	try {
-		if (localStorage.getItem("impala67.sidebarCollapsed") === "1") {
-			document.body.classList.add("sidebar-collapsed");
-		}
-	} catch { /* ignore */ }
+	// Eingeklappte Sidebar stellt bereits das Inline-Skript in index.html wieder her.
 	bootMsg("Arbeitsbereich laden…");
 	await yieldForPaint();
 	const snapshotInfo = await STATE.load();
-	await yieldForPaint();
 	bootMsg("Start vorbereiten…");
 	// Einmalige v4-Heft-Migration: muss abgeschlossen sein, bevor der Nutzer das Heft bearbeiten kann bzw. bevor die App interaktiv wird.
 	try {
@@ -282,6 +278,11 @@ export async function initApp() {
 		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
 		purgeOrphanBlobs();
 		try { HEFT_INDEXER.startBackgroundScan(); } catch (e) { console.warn("Heft-Indexer Start übersprungen:", e); }
+		// Google-Login (nur für die Drive-Anmeldung per Klick) erst nach dem Start laden.
+		const gsi = document.createElement("script");
+		gsi.src = "https://accounts.google.com/gsi/client";
+		gsi.async = true;
+		document.head.appendChild(gsi);
 	});
 	// Zusatzbibliotheken nur im Hintergrund in Cache Storage ablegen. Der Start
 	// wartet nicht darauf und keine Bibliothek wird dabei ausgefuehrt.

@@ -103,7 +103,7 @@ function renderAppearance(vm) {
 	const readable = UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
 		{ value: "s", label: "Klein", id: "btnFontS" }, { value: "m", label: "Normal", id: "btnFontM" }, { value: "l", label: "Groß", id: "btnFontL" },
 	], vm.fontSize, "Schriftgröße") }) +
-		UI.row({ id: "motion", title: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", trailing: switchControl("inpReduceMotion", "Bewegung reduzieren", vm.motion === "reduced") }) +
+		UI.row({ id: "motion", title: "Performance-Modus", description: "Für ältere Geräte: ohne Animationen und Milchglas-Effekte", trailing: switchControl("inpReduceMotion", "Performance-Modus", vm.motion === "reduced") }) +
 		(vm.isNative ? UI.row({ id: "native-haptics", title: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", trailing: switchControl("inpNativeHaptics", "Haptisches Feedback", vm.nativeHapticsEnabled) }) : "");
 	const surface = UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
 		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },

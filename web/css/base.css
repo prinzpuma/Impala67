@@ -78,7 +78,10 @@ h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-
 
 button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
 
-body.reduce-motion *:not(.boot-spinner):not(#bootSplash *) { animation: none !important; transition: none !important }
+body.perf-mode *:not(.boot-spinner):not(#bootSplash *) { animation: none !important; transition: none !important }
+/* Performance-Modus: kein Milchglas. backdrop-filter muss bei jedem Scroll-Frame den
+   Hintergrund neu weichzeichnen — auf alten Geräten die Hauptursache für Ruckeln. */
+body.perf-mode * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important }
 
 /* Einheitliche Linien-Icons aus icons.svg (icons.js → icon("name")). Größe folgt der Schrift,
    Farbe dem Text. Kontexte dürfen width/height/stroke-width überschreiben. */

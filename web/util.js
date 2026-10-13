@@ -268,6 +268,13 @@ export const U = {
 		if (oldNode.nodeType !== 1) return false;
 		// Teilbaum gehört einem Modul — komplett in Ruhe lassen (Canvas, Editor, Video).
 		if (oldNode.dataset && oldNode.dataset.owned) return false;
+		// PERF: Unveränderter Teilbaum → nichts zu tun. isEqualNode vergleicht nativ
+		// (Attribute, Text, Kinder) statt Knoten für Knoten in JS — auf langen Seiten
+		// ~4× schnellere Renders (z. B. bei jedem Enter). Eingabefelder ausgenommen: ihr
+		// Live-Wert steht in keinem Attribut und wird unten bewusst angeglichen
+		// (Checkboxen haben keinen solchen Wert und dürfen mit).
+		const textFields = "input:not([type=checkbox]):not([type=radio]), textarea";
+		if (oldNode.isEqualNode(newNode) && !oldNode.matches(textFields) && !oldNode.querySelector(textFields)) return false;
 		let changed = false;
 		// Attribute angleichen
 		for (const a of [...newNode.attributes]) {

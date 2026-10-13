@@ -271,7 +271,7 @@ export const HEFT = (() => {
 		let d = S.heftDocs[p];
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
-			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy) });
+			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy).ops });
 			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
 			d = S.heftDocs[p];
 			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
@@ -337,9 +337,8 @@ export const HEFT = (() => {
 	// die Hänger kurz nach dem Absetzen des Stifts (Trace: touchend bis 1,4 s).
 	async function persistDoc(savePid, saveDoc) {
 		const pages = saveDoc?.pages?.length;
-		const ops = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
+		const { ops, shadow: nextPublished } = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
 		if (!ops.length) return;
-		const nextPublished = PERF_PROFILER.measure("heft.shadow", () => documentShadow(saveDoc), { pages }, 16);
 		await PERF_PROFILER.run("heft.save-blobs", () => persistReferencedBlobs(saveDoc), {}, 16);
 		dropThumbs(savePid);
 		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
@@ -418,7 +417,7 @@ export const HEFT = (() => {
 	async function restoreDoc(p, restored) {
 		const target = { v: 2, rev: 0, pages: JSON.parse(JSON.stringify(restored?.pages || [])) };
 		const current = S.heftDocs[p] || { v: 2, rev: 0, pages: [] };
-		const ops = diffDocument(documentShadow(current), target);
+		const { ops } = diffDocument(documentShadow(current), target);
 		if (ops.length) await STATE.dispatch("heftOps", { pageId: p, ops });
 		const d = S.heftDocs[p];
 		docs[p] = d;
@@ -1118,10 +1117,18 @@ export const HEFT = (() => {
 
 	// Nur bei Groessenaenderung oder Neuaufbau: fit neu bestimmen und den Mittelpunkt
 	// der Ansicht halten. Beim Zoomen wird das NIE aufgerufen.
-	function layout() {
+	// settle (Fenster-/Containergroesse): PERF wie beim Pinch-Zoom nur verschieben und
+	// erst nach kurzer Ruhe scharf rastern. Vorher rasterte jedes Resize-Ereignis alle
+	// sichtbaren Seiten neu — beim animierten Ein-/Ausklappen der Seitenleiste am Tablet
+	// (0,5 s) in JEDEM Frame. Gleiche Groesse (z. B. Erstmeldung des Observers) = nichts tun.
+	let layoutSize = "";
+	function layout(settle = false) {
 		const scroll = scrollEl(), pgs = pagesEl();
 		if (!scroll) return;
 		const vp = scroll.getBoundingClientRect();
+		const size = vp.width + "x" + vp.height;
+		if (settle && size === layoutSize) return;
+		layoutSize = size;
 		const padT = padTop();
 		const availW = Math.max(1, vp.width - 2 * PAD_X), availH = Math.max(1, vp.height - padT - PAD_BOTTOM);
 		const prev = fitScale || 1;
@@ -1141,7 +1148,7 @@ export const HEFT = (() => {
 		// Ein Layout-Read nach den Groessen-Aenderungen; Gesten arbeiten danach
 		// ausschliesslich mit stabilen Zahlen aus dem Cache.
 		refreshGeometry(vp);
-		paintView(true);
+		paintView(!settle, settle);
 	}
 	function animateZoom(target, clientX, clientY, dur = 280) {
 		const vp = viewport(); if (!vp) return;
@@ -2828,11 +2835,11 @@ export const HEFT = (() => {
 			host.addEventListener("pointerup", onHostPointerUp);
 			host.addEventListener("pointercancel", onHostPointerUp);
 			document.addEventListener("keydown", onKey);
-			resizeFn = () => layout();
+			resizeFn = () => layout(true);
 			window.addEventListener("resize", resizeFn);
 
 			if (window.ResizeObserver) {
-				resizeObserver = new ResizeObserver(() => layout());
+				resizeObserver = new ResizeObserver(() => layout(true));
 				resizeObserver.observe(host);
 			}
 			bindCanvas();

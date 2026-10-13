@@ -449,7 +449,7 @@ body.mobile-ui:not(.panel-collapsed) #panel .panel-head {
 	height: calc(var(--m-bar-h) + env(safe-area-inset-top));
 	padding: env(safe-area-inset-top) var(--m-gutter) 0;
 	box-sizing: border-box;
-	background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+	background: var(--m-bar-bg);
 	backdrop-filter: blur(20px) saturate(1.6);
 	-webkit-backdrop-filter: blur(20px) saturate(1.6);
 	border-bottom: 1px solid var(--edge-soft);
@@ -719,7 +719,7 @@ body.mobile-ui .settings-mobile-head {
 	min-height: calc(var(--m-bar-h) + env(safe-area-inset-top));
 	padding: env(safe-area-inset-top) var(--m-gutter) 0;
 	box-sizing: border-box;
-	background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+	background: var(--m-bar-bg);
 	backdrop-filter: blur(20px) saturate(1.6);
 	-webkit-backdrop-filter: blur(20px) saturate(1.6);
 	border-bottom: 1px solid var(--edge-soft);

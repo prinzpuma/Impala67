@@ -39,7 +39,7 @@
 	from { opacity: 0; transform: translateY(-6px) scale(.98) }
 	to { opacity: 1; transform: none }
 }
-body.reduce-motion .heft-tray { animation: none }
+body.perf-mode .heft-tray { animation: none }
 .heft-main, .heft-opt { min-height: 0; height: 36px; min-width: 38px; padding: 0 9px; border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-md); display: inline-flex; align-items: center; justify-content: center; gap: 2px }
 .heft-main:hover, .heft-opt:hover { background: var(--surface-active); color: var(--text) }
 .heft-main.open { background: var(--surface-active); color: var(--text) }

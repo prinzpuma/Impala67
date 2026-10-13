@@ -15,7 +15,7 @@ let source = null;
 let enterTimer = 0;
 
 function enabled() {
-	return !document.body.classList.contains("reduce-motion");
+	return !document.body.classList.contains("perf-mode");
 }
 
 function spring() {
@@ -112,8 +112,13 @@ function countUp(main) {
 }
 
 function onViewChange(main) {
-	main.classList.remove("bm-enter");
-	void main.offsetWidth;
+	// Erzwungenes Layout nur, wenn die Klasse noch vom letzten Wechsel steht (Animation
+	// neu starten). Sonst startet add() sie ohnehin — und der frisch gerenderte View
+	// wird nicht zweimal hintereinander gelayoutet.
+	if (main.classList.contains("bm-enter")) {
+		main.classList.remove("bm-enter");
+		void main.offsetWidth;
+	}
 	main.classList.add("bm-enter");
 	clearTimeout(enterTimer);
 	enterTimer = setTimeout(() => main.classList.remove("bm-enter"), 1000);
