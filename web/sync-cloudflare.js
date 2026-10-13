@@ -63,13 +63,6 @@ export function syncCursorStorageKeys(userId) {
 	return { lastSynced: `${LS_RECV}_${id}`, lastUploaded: `${LS_SEND}_${id}`, generation: `${LS_GEN}_${id}` };
 }
 
-export function resetSyncCursorStorage(storage, userId, generation = 0) {
-	const keys = syncCursorStorageKeys(userId);
-	storage.setItem(keys.lastSynced, "0");
-	storage.setItem(keys.lastUploaded, "0");
-	storage.setItem(keys.generation, String(Number(generation) || 0));
-}
-
 // Nur eine lückenlose, zur lokalen Ausgangsposition passende Server-Bestätigung
 // darf den Empfangs-Cursor vorsetzen. Alte Server oder konkurrierende Uploads
 // liefern null; dann bleibt der bisherige bestätigende Pull aktiv.

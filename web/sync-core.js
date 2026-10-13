@@ -72,7 +72,6 @@ export function prepareIncomingCloudEvents(envelopes) {
 	});
 }
 
-export const cloudEventEnvelope = (event) => ({ v: CLOUD_SYNC_PROTOCOL, event });
 export function cloudEventsEnvelope(events) {
 	if (!Array.isArray(events) || !events.length) throw new Error("Cloud-Event-Paket ist leer.");
 	return { v: CLOUD_SYNC_PROTOCOL, events };

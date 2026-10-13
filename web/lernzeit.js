@@ -430,11 +430,12 @@ export const LERNZEIT = (() => {
 	function monthStats(offset = 0, totals = null) {
 		const { from, to } = monthRange(offset), days = monthDays(offset, totals);
 		const seconds = days.reduce((sum, item) => sum + item.seconds, 0);
+		const activeDays = days.filter((item) => item.seconds >= 300).length;
 		const previous = monthDays(offset - 1, totals).reduce((sum, item) => sum + item.seconds, 0);
 		return {
 			from, to, days, seconds, previousSeconds: previous,
-			activeDays: days.filter((item) => item.seconds >= 300).length,
-			averageSeconds: days.filter((item) => item.seconds >= 300).length ? Math.round(seconds / days.filter((item) => item.seconds >= 300).length) : 0,
+			activeDays,
+			averageSeconds: activeDays ? Math.round(seconds / activeDays) : 0,
 			reviews: TELE.rangeStats(from, to),
 			previousReviews: TELE.rangeStats(monthRange(offset - 1).from, from),
 		};
@@ -442,15 +443,19 @@ export const LERNZEIT = (() => {
 	function monthCalendar(days, reviews) {
 		const leading = (days[0].d.getDay() + 6) % 7;
 		const max = Math.max(1, ...days.map((item) => item.seconds));
+		const today = dayKey();
 		const head = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((label) => '<span>' + label + '</span>').join("");
 		const cells = Array.from({ length: leading }, () => '<i class="lz-month-empty"></i>').join("") + days.map((item) => {
 			const level = item.seconds ? Math.max(1, Math.ceil(item.seconds / max * 4)) : 0;
 			const reviewCount = reviews.byDay[dayKey(item.d)] || 0;
-			return '<div class="lz-month-day lvl-' + level + (dayKey(item.d) === dayKey() ? ' today' : '') + '" title="' + dateLabel(item.d, { weekday: "long", day: "numeric", month: "long" }) + ' · ' + fmt(item.seconds) + (reviewCount ? ' · ' + reviewCount + ' Reviews' : '') + '"><b>' + item.d.getDate() + '</b><i style="height:' + (item.seconds ? Math.max(4, Math.round(item.seconds / max * 100)) : 2) + '%"></i><small>' + (reviewCount || '') + '</small></div>';
+			return '<div class="lz-month-day lvl-' + level + (dayKey(item.d) === today ? ' today' : '') + '" title="' + DAY_TITLE_FMT.format(item.d) + ' · ' + fmt(item.seconds) + (reviewCount ? ' · ' + reviewCount + ' Reviews' : '') + '"><b>' + item.d.getDate() + '</b><i style="height:' + (item.seconds ? Math.max(4, Math.round(item.seconds / max * 100)) : 2) + '%"></i><small>' + (reviewCount || '') + '</small></div>';
 		}).join("");
 		return '<div class="lz-month-calendar"><div class="lz-month-weekdays">' + head + '</div><div class="lz-month-grid">' + cells + '</div></div>';
 	}
 	function dateLabel(date, options) { return date.toLocaleDateString("de-DE", options); }
+	// PERF: Ein Formatter pro Format statt eines neuen in jeder Tageszelle (toLocaleDateString baut jedes Mal einen).
+	const DAY_TITLE_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long" });
+	const WEEKDAY_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "short" });
 	function rangeTitle(from, to, mode) {
 		if (mode === "month") return dateLabel(from, { month: "long", year: "numeric" });
 		const end = new Date(to); end.setDate(end.getDate() - 1);
@@ -645,7 +650,7 @@ export const LERNZEIT = (() => {
 		for (const item of reviews.bySubject || []) if (!subjectMap.has(item.subject)) subjectMap.set(item.subject, { subject: item.subject, seconds: 0, sessions: 0 });
 		const subjects = [...subjectMap.values()]
 			.filter((item) => FACH.KNOWN_SUBJECTS.includes(item.subject))
-			.sort((a, b) => b.seconds - a.seconds || a.subject.localeCompare(b.subject, "de"));
+			.sort((a, b) => b.seconds - a.seconds || U.cmpDe(a.subject, b.subject));
 		const maxSubject = Math.max(1, ...subjects.map((item) => item.seconds));
 		const subjectRows = subjects.slice(0, 12).map((item, index) => {
 			const quality = (reviews.bySubject || []).find((entry) => entry.subject === item.subject);
@@ -655,9 +660,10 @@ export const LERNZEIT = (() => {
 				: quality?.passRate !== null && quality?.passRate !== undefined ? Math.round(quality.passRate * 100) + " % sofort richtig" : "Noch keine Retention";
 			return '<div class="lz-subject-row"><span class="lz-subject-rank">' + (index + 1) + '</span><div><b>' + U.esc(item.subject) + '</b><small>' + (item.sessions ? item.sessions + ' Einheit' + (item.sessions === 1 ? '' : 'en') + ' · ' : '') + (quality?.reviews || 0) + ' Reviews · ' + qualityText + '</small></div><div class="lz-subject-track"><i style="width:' + (item.seconds ? Math.max(4, Math.round(item.seconds / maxSubject * 100)) : 4) + '%"></i></div><strong>' + fmt(item.seconds) + '</strong></div>';
 		}).join("") || '<p class="hint lz-empty">Noch kein Fach in diesem Zeitraum erfasst.</p>';
+		const maxDay = Math.max(1, ...selected.days.map((x) => x.seconds)), today = dayKey();
 		const chart = mode === "month" ? monthCalendar(selected.days, reviews) : selected.days.map(({ d, seconds: daySeconds }) => {
-			const dayReviews = reviews.byDay[dayKey(d)] || 0, height = daySeconds ? Math.max(6, Math.round(daySeconds / Math.max(1, ...selected.days.map((x) => x.seconds)) * 100)) : 2;
-			return '<div class="lz-bar-col' + (dayKey(d) === dayKey() ? ' today' : '') + (daySeconds ? '' : ' empty') + '" title="' + fmt(daySeconds) + ' · ' + dayReviews + ' Reviews"><span>' + (daySeconds ? fmt(daySeconds) : '—') + '</span><i style="height:' + height + '%"></i><small>' + d.toLocaleDateString('de-DE', { weekday: 'short' }) + '<b>' + d.getDate() + '</b></small><em>' + (dayReviews ? dayReviews + ' Karten' : '&nbsp;') + '</em></div>';
+			const key = dayKey(d), dayReviews = reviews.byDay[key] || 0, height = daySeconds ? Math.max(6, Math.round(daySeconds / maxDay * 100)) : 2;
+			return '<div class="lz-bar-col' + (key === today ? ' today' : '') + (daySeconds ? '' : ' empty') + '" title="' + fmt(daySeconds) + ' · ' + dayReviews + ' Reviews"><span>' + (daySeconds ? fmt(daySeconds) : '—') + '</span><i style="height:' + height + '%"></i><small>' + WEEKDAY_FMT.format(d) + '<b>' + d.getDate() + '</b></small><em>' + (dayReviews ? dayReviews + ' Karten' : '&nbsp;') + '</em></div>';
 		}).join("");
 		const periodTitle = rangeTitle(range.from, range.to, mode);
 		const relative = mode === "month" ? (monthOffset === 0 ? "Dieser Monat" : monthOffset === -1 ? "Letzter Monat" : 'Vor ' + Math.abs(monthOffset) + ' Monaten') : (weekOffset === 0 ? "Diese Woche" : weekOffset === -1 ? "Letzte Woche" : 'Vor ' + Math.abs(weekOffset) + ' Wochen');

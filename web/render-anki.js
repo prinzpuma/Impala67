@@ -36,10 +36,7 @@ function collectActiveDeckSet(extraName = null) {
 		if ((d && d.trashed) || STATE.isDeckArchived(n)) return;
 		add(n);
 	});
-	Object.values(S.cards).forEach((c) => {
-		if (!c || c.trashed || STATE.isCardArchived(c)) return;
-		add(c.deck || "Standard");
-	});
+	STATE.activeCards().forEach((c) => add(c.deck || "Standard"));
 	if (extraName) add(extraName);
 	[...set].forEach((n) => {
 		const parts = n.split("::");
@@ -61,18 +58,16 @@ function ankiDecks() {
 			if (ob === null) return -1;
 			if (oa !== ob) return oa - ob;
 		}
-		return a.localeCompare(b, "de");
+		return U.cmpDe(a, b);
 	});
 }
 
 // Karten eines Stapels INKLUSIVE aller Unterstapel ("Mathe" enthält "Mathe::Analysis").
-// Papierkorb-Karten sind ausgeblendet (Soft-Delete).
+// Papierkorb-Karten sind ausgeblendet (Soft-Delete). activeCards() ist memoiziert und
+// liefert eine Kopie — Aufrufer dürfen sie weiter sortieren.
 function ankiCardsOf(deck) {
-	return Object.values(S.cards).filter((c) => {
-		if (!c || c.trashed || STATE.isCardArchived(c)) return false;
-		if (!deck) return true;
-		return STATE.deckInTree(c.deck || "Standard", deck);
-	});
+	const cards = STATE.activeCards();
+	return deck ? cards.filter((c) => STATE.deckInTree(c.deck || "Standard", deck)) : cards;
 }
 
 // Anki hat für die „für den Moment fertig“-Ansicht KEINEN Hintergrund-Timer und
@@ -293,14 +288,14 @@ function ankiBrowserHtml() {
 	};
 	// Im Gesamt-Browser stehen die Karten zuerst nach Stapel gruppiert — wie in Anki.
 	// Innerhalb eines Stapels gilt weiterhin die gewählte Spaltensortierung.
-	cards = cards.slice().sort((a, b) => {
+	// PERF: Sortierschlüssel einmal je Karte statt bei jedem der n·log n Vergleiche.
+	cards = cards.map((c) => ({ c, d: c.deck || "Standard", v: val(c) })).sort((a, b) => {
 		if (!S.ankiDeck) {
-			const deckCompare = (a.deck || "Standard").localeCompare(b.deck || "Standard", "de");
+			const deckCompare = U.cmpDe(a.d, b.d);
 			if (deckCompare) return deckCompare;
 		}
-		const va = val(a), vb = val(b);
-		return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
-	});
+		return (a.v < b.v ? -1 : a.v > b.v ? 1 : 0) * dir;
+	}).map((x) => x.c);
 	// Nur ein Fenster rendern — 2000+ Zeilen auf einmal machten den Tab spürbar zäh.
 	const shown = cards.slice(0, S.ankiBrowserLimit || 200);
 	const arrow = (k) => (key === k ? (dir === 1 ? " ↑" : " ↓") : "");
@@ -526,7 +521,7 @@ function editorDecks() {
 	const list = [...collectActiveDeckSet(S.ankiDeck)].sort((a, b) => {
 		if (a === "Standard") return -1;
 		if (b === "Standard") return 1;
-		return a.localeCompare(b, "de");
+		return U.cmpDe(a, b);
 	});
 	return list.length ? list : ["Standard"];
 }

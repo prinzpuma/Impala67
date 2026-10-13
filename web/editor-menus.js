@@ -10,11 +10,6 @@ export let linkMenu = null;   // { items, index, query, bid }
 export let blockMenuId = null;
 export let mathEdit = null;   // { bid, spanEl, delimiters }
 
-export const getSlash = () => slash;
-export const getLinkMenu = () => linkMenu;
-export const getBlockMenuId = () => blockMenuId;
-export const getMathEdit = () => mathEdit;
-
 // Blocktypen mit EINEM editierbaren Rich-Text-Feld (block.text)
 export const TEXTY = { p: 1, h1: 1, h2: 1, h3: 1, bullet: 1, number: 1, todo: 1, quote: 1 };
 export const COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"];

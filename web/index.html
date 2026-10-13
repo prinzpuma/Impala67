@@ -68,7 +68,15 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Impala67 — Notizen · PDFs · KI</title>
-<link rel="stylesheet" href="styles.css?build=68">
+<!-- Teil-Stylesheets direkt verlinken (vorher @import in styles.css): der Browser lädt sie parallel statt erst nach styles.css. Reihenfolge = Kaskade. -->
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/editor.css">
+<link rel="stylesheet" href="css/heft.css">
+<link rel="stylesheet" href="css/chat-start.css">
+<link rel="stylesheet" href="styles.css?build=69">
 <link rel="stylesheet" href="home.css?build=3">
 <link rel="stylesheet" href="design.css?build=1">
 <link rel="stylesheet" href="beta-ui.css?build=9">
@@ -272,7 +280,7 @@ if (window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator) {
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=211"></script>
+<script type="module" src="main.js?build=212"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -282,7 +290,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=110", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=111", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

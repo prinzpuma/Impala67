@@ -152,9 +152,7 @@ function newTabActions() {
 // WARUM: Sortierung nach Datum stand zweimal im File, einmal ungeklammert —
 // eine Seite ohne "updated" liess Strg+K mit TypeError platzen. Eine Quelle.
 function recentPages(limit) {
-	return STATE.activePages().slice()
-		.sort((a, b) => (b.updated || "").localeCompare(a.updated || ""))
-		.slice(0, limit);
+	return STATE.activePages().sort(U.byNewest).slice(0, limit);
 }
 
 // Breadcrumb-Pfad einer Seite für die New-Tab-Liste (Workspace › Eltern › …)
@@ -216,9 +214,17 @@ function markRe(ql) {
 	return ql ? new RegExp("(" + ql.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi") : null;
 }
 
+// Auf dem Klartext markieren und stückweise escapen — auf dem escapten String traf
+// die Suche „a“ sonst das „&amp;“ und zeigte kaputte Entities.
 function mark(text, re) {
-	const esc = U.esc(text || "");
-	return re ? esc.replace(re, "<mark>$1</mark>") : esc;
+	const raw = String(text || "");
+	if (!re) return U.esc(raw);
+	let out = "", last = 0;
+	for (const m of raw.matchAll(re)) {
+		out += U.esc(raw.slice(last, m.index)) + "<mark>" + U.esc(m[0]) + "</mark>";
+		last = m.index + m[0].length;
+	}
+	return out + U.esc(raw.slice(last));
 }
 
 function renderList(q) {

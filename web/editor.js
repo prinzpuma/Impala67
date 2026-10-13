@@ -212,34 +212,40 @@ export const EDITOR = (() => {
 	// Inline-Formeln ($…$ und \\(…\\)) werden zu nicht-editierbaren Chips mit data-md —
 	// KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
 	function inlineHtml(text) {
-		return esc(text)
+		// Wiki-Links, Formeln und Inline-Code werden nach dem Umwandeln als Platzhalter
+		// geparkt: Sonst griffen die *-, ~~- und ==-Regeln in ihren Inhalt und ihre
+		// Attribute (aus $a * b * c$ wurde im data-md „$a <em> b </em> c$“ gespeichert).
+		const stash = [];
+		const hold = (html) => "" + (stash.push(html) - 1) + "";
+		const restore = (s) => s.replace(/(\d+)/g, (_, i) => restore(stash[+i]));
+		return restore(esc(text)
 			// Ausgeschriebene Wiki-Links bleiben als [[Titel]] gespeichert, werden im
 			// Editor aber wie die vom Link-Menü erzeugte Markdown-Variante anklickbar.
 			// Nur ein exakter, aktiver Seitentitel wird verlinkt; unbekannte Titel
 			// bleiben normaler Text und können weiter bearbeitet werden.
 			.replace(/\[\[([^\]\n]+)\]\]/g, (md, label) => {
 				const page = Object.values(S.pages || {}).find((p) => p && !p.trashed && esc(p.title || "Ohne Titel") === label);
-				return page ? tag("a", label, ' href="#' + esc(page.id) + '" data-md="' + md + '"') : md;
+				return page ? hold(tag("a", label, ' href="#' + esc(page.id) + '" data-md="' + md + '"')) : md;
 			})
 			// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches
 			// KaTeX); bleibt sie gleich, bleibt der gerenderte Chip unangetastet stehen.
 			// Formeln matchen nur echte Delimiter; maskierte \$ bleiben reiner Text.
 			.replace(/\\\((.+?)\\\)|(?<!\\)\$([^$\n]+?)(?<!\\)\$/g, (md, paren, dollar) => {
 				const f = paren == null ? dollar : paren;
-				return LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + f + '" data-md="' + md + '" title="Formel bearbeiten">' + f + LT + "/span>";
+				return hold(LT + 'span class="blk-imath" contenteditable="false" data-key="im:' + f + '" data-md="' + md + '" title="Formel bearbeiten">' + f + LT + "/span>");
 			})
 			.replace(/\\(\$)/g, "$1")
+			.replace(/\x60([^\x60]+)\x60/g, (_, v) => hold(tag("code", v)))
 			.replace(/\{(bg-)?(gray|red|orange|yellow|green|blue|purple|pink)\}([\s\S]*?)\{\/\}/g,
 				(_, bg, color, v) => tag("span", v, ' class="' + (bg ? "hl-" : "c-") + color + '"'))
 			.replace(/==([^=\n]+)==/g, (_, v) => tag("mark", v))
-			.replace(/\x60([^\x60]+)\x60/g, (_, v) => tag("code", v))
 			.replace(/\*\*\*([^*]+)\*\*\*/g, (_, v) => tag("strong", tag("em", v)))
 			.replace(/\*\*([^*]+)\*\*/g, (_, v) => tag("strong", v))
 			.replace(/~~([^~]+)~~/g, (_, v) => tag("s", v))
 			.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/gi, (_, v) => tag("u", v))
 			.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, pre, v) => pre + tag("em", v))
 			.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => tag("a", label, ' href="' + href + '"'))
-			.replace(/\n/g, LT + "br>");
+			.replace(/\n/g, LT + "br>"));
 	}
 
 	// DOM eines editierbaren Feldes → Inline-Markdown (exakte Umkehrung von inlineHtml).
@@ -462,7 +468,7 @@ export const EDITOR = (() => {
 	// Wie Notion: App-eigene History, NIE die Browser-History (execCommand).
 	function snapshotJson() { return JSON.stringify(blocks); }
 
-	function commitHistory() {
+	function commitHistory(skipSnapshot) {
 		if (!histPending) return;
 		histPending = false;
 		const stack = undoStacks[pageId] || (undoStacks[pageId] = []);
@@ -470,19 +476,20 @@ export const EDITOR = (() => {
 		stack.push({ json: histState, focus: histFocus, scrollTop: root ? root.scrollTop : 0 });
 		if (stack.length > HISTORY_LIMIT) stack.shift();
 		redoStacks[pageId] = [];
-		histState = snapshotJson();
+		// mutate() schreibt histState nach fn() selbst — ein Snapshot hier wäre doppelte Arbeit.
+		if (!skipSnapshot) histState = snapshotJson();
 	}
 
 	// checkpoint(): VOR einer Änderung aufrufen. Tipp-Änderungen werden 700ms
 	// gebündelt (ein Undo-Schritt pro Tipp-Phase, wie in Notion), strukturelle
 	// Änderungen (force) schreiben sofort fest.
-	function checkpoint(force) {
+	function checkpoint(force, skipSnapshot) {
 		if (!histPending) {
 			histPending = true;
 			histFocus = caretInfo();
 		}
 		clearTimeout(histTimer);
-		if (force) commitHistory();
+		if (force) commitHistory(skipSnapshot);
 		else histTimer = setTimeout(commitHistory, 700);
 	}
 
@@ -550,17 +557,16 @@ export const EDITOR = (() => {
 
 	// mutate(): die eine Transaktions-Klammer für ALLE Strukturänderungen.
 	function mutate(fn, opts) {
-		checkpoint(!(opts && opts.soft));
+		const soft = !!(opts && opts.soft);
+		checkpoint(!soft, true);
 		// Strukturänderung: Blockindex verwerfen und während fn() direkt suchen.
 		ctxLive = false;
-		try { fn(); } finally { bustCtxIdx(); ctxLive = true; }
-		// Nach Struktur-Mutation muss histState dem IST-Zustand entsprechen.
-		// checkpoint(force) hat zuvor den Vorzustand committed und histState auf den
-		// Snapshot VOR fn() gesetzt — ohne diese Korrektur hinkt die History hinterher
-		// und Strg+Z stellt oft denselben Stand wieder her (wirkt wie "tut nichts").
-		if (!(opts && opts.soft)) {
-			histState = snapshotJson();
-			histPending = false;
+		try { fn(); } finally {
+			bustCtxIdx(); ctxLive = true;
+			// Nach Struktur-Mutation muss histState dem IST-Zustand entsprechen — sonst
+			// hinkt die History hinterher und Strg+Z stellt oft denselben Stand wieder her.
+			// checkpoint() hat den Vorzustand bereits festgeschrieben (ohne eigenen Snapshot).
+			if (!soft) { histState = snapshotJson(); histPending = false; }
 		}
 		if (!(opts && opts.noRender)) render(opts);
 		save(!!(opts && opts.saveNow));
@@ -1323,7 +1329,7 @@ export const EDITOR = (() => {
 		// --- Strg+D: Block duplizieren ---
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "d" && c) {
 			e.preventDefault();
-			mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(JSON.parse(JSON.stringify(c.block)))); });
+			mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(c.block)); });
 			return;
 		}
 
@@ -1473,7 +1479,6 @@ export const EDITOR = (() => {
 					if (prev && LISTY[prev.type] && (b.indent || 0) <= (prev.indent || 0)) b.indent = (b.indent || 0) + 1;
 				}
 			}, { soft: true });
-			render();
 			focusBlock(b.id, off);
 			return;
 		}
@@ -1491,7 +1496,6 @@ export const EDITOR = (() => {
 			if (LISTY[b.type]) {
 				if ((b.indent || 0) > 0) {
 					mutate(() => { b.indent--; }, { soft: true });
-					render();
 					focusBlock(b.id, 0);
 					return;
 				}
@@ -1804,7 +1808,7 @@ export const EDITOR = (() => {
 			e.preventDefault();
 			const { from, to } = selRange;
 			mutate(() => {
-				const copies = blocks.slice(from, to + 1).map((b) => cloneBlock(JSON.parse(JSON.stringify(b))));
+				const copies = blocks.slice(from, to + 1).map(cloneBlock);
 				blocks.splice(to + 1, 0, ...copies);
 			});
 			selectBlocks(to + 1, to + 1 + (to - from));
@@ -2151,7 +2155,7 @@ export const EDITOR = (() => {
 			if (dup) {
 				const c = findContext(dup.dataset.bdup);
 				closeMenus();
-				if (c) mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(JSON.parse(JSON.stringify(c.block)))); });
+				if (c) mutate(() => { c.list.splice(c.index + 1, 0, cloneBlock(c.block)); });
 				return;
 			}
 			const cp = t.closest && t.closest("[data-bcopy]");

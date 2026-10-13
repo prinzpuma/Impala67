@@ -139,9 +139,7 @@ export const S = {
 	heftBlobs: {}, // hash → dataURL (unveränderlich; identische Bilder teilen sich einen Eintrag)
 };
 
-const cloneStateValue = (value) => typeof structuredClone === "function"
-	? structuredClone(value)
-	: JSON.parse(JSON.stringify(value));
+const cloneStateValue = (value) => structuredClone(value);
 const INITIAL_PERSISTED_STATE = cloneStateValue(checkpointStateOf(S));
 
 export const STATE = (() => {
@@ -425,7 +423,8 @@ export const STATE = (() => {
 					// Reihenfolge umsortieren. Unbekannte Seiten (vom anderen Gerät neu)
 					// hängen hinten an, statt verloren zu gehen.
 					const order = Array.isArray(op.order) ? op.order : [];
-					const rank = (id) => { const i = order.indexOf(id); return i < 0 ? 1e9 : i; };
+					const pos = new Map(order.map((id, i) => [id, i]).reverse()); // wie indexOf (erster Treffer), aber ohne Suche je Vergleich
+					const rank = (id) => pos.get(id) ?? 1e9;
 					doc.pages = doc.pages.map((pg2, i) => [pg2, i]).sort((a, b) => rank(a[0].id) - rank(b[0].id) || a[1] - b[1]).map((x) => x[0]);
 					break;
 				}
@@ -1486,10 +1485,20 @@ export const STATE = (() => {
 
 	// Alle NICHT im Papierkorb liegenden und NICHT archivierten Seiten — zentrale Quelle für Home,
 	// Bibliothek, KI-Systemprompt und Tools, damit Papierkorb- & Archiv-Seiten nirgends durchsickern.
-	const activePages = () => Object.values(S.pages).filter((pg) => {
-		if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-		return !pg.trashed && !isPageArchived(pg);
-	});
+	// PERF: memoiziert über _pageRev — Papierkorb/Archiv/Existenz ändern sich nur über
+	// page*-Events oder resetDerivedState(). Vorher lief pro Aufruf (Sidebar, Home,
+	// Bibliothek je Ordner, Suche) die Elternkette jeder Seite erneut durch.
+	const _activeCache = { rev: -1, list: [] };
+	const activePages = () => {
+		if (_activeCache.rev !== _pageRev) {
+			_activeCache.list = Object.values(S.pages).filter((pg) => {
+				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
+				return !pg.trashed && !isPageArchived(pg);
+			});
+			_activeCache.rev = _pageRev;
+		}
+		return _activeCache.list.slice();
+	};
 
 	const archivedPages = () => Object.values(S.pages)
 		.filter((pg) => {
@@ -1504,7 +1513,16 @@ export const STATE = (() => {
 
 	// Aktive Karten sind weder gelöscht noch selbst/über ihren Stapel archiviert.
 	// Diese eine Quelle nutzen Lernen, KI-Werkzeuge, Suche und Wissensgraph.
-	const activeCards = () => Object.values(S.cards).filter((c) => !c.trashed && !isCardArchived(c));
+	// PERF: wie activePages über _cardRev memoiziert — Papierkorb/Archiv ändern sich nur
+	// über card*/deck*-Events. Kopie zurückgeben: Aufrufer sortieren die Liste in place.
+	const _activeCardsCache = { rev: -1, list: [] };
+	const activeCards = () => {
+		if (_activeCardsCache.rev !== _cardRev) {
+			_activeCardsCache.list = Object.values(S.cards).filter((c) => !c.trashed && !isCardArchived(c));
+			_activeCardsCache.rev = _cardRev;
+		}
+		return _activeCardsCache.list.slice();
+	};
 	const archivedCards = () => Object.values(S.cards)
 		.filter((c) => !c.trashed && c.archived)
 		.sort((a, b) => ((b.archivedAt || "") < (a.archivedAt || "") ? -1 : (b.archivedAt || "") > (a.archivedAt || "") ? 1 : 0));
@@ -1565,15 +1583,16 @@ export const STATE = (() => {
 	// wird granular pro Seite mit Versionsstempel gecacht — Bearbeiten einer Seite
 	// invalidiert nur diese eine Seite statt des gesamten Arbeitsbereichs.
 	const _hayMap = new Map();
+	// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
+	const rawTextOf = (pg, heftOcr) => pg.title + "\n" + pg.content + (heftOcr ? "\n" + heftOcr : "");
 	function haystackOf(pg) {
 		let e = _hayMap.get(pg.id);
 		const heftOcr = (S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "";
 		if (!e || e.updated !== pg.updated || e.ocr !== heftOcr) {
-			// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
-			const raw = pg.title + "\n" + pg.content + (heftOcr ? "\n" + heftOcr : "");
 			// contentLc: nur der Inhalt klein — genau das braucht backlinksOf, das es
-			// vorher pro Aufruf für ALLE Seiten neu erzeugt hat.
-			e = { updated: pg.updated, ocr: heftOcr, raw, hay: raw.toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
+			// vorher pro Aufruf für ALLE Seiten neu erzeugt hat. Der Originaltext wird nicht
+			// mitgecacht: searchNotes() baut ihn nur für die wenigen angezeigten Treffer.
+			e = { updated: pg.updated, ocr: heftOcr, hay: rawTextOf(pg, heftOcr).toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
 			_hayMap.set(pg.id, e);
 		}
 		return e;
@@ -1587,13 +1606,17 @@ export const STATE = (() => {
 				? Object.values(S.pages).filter((pg) => !pg.trashed)
 				: activePages();
 			return pool.map((pg) => {
-				const { raw, hay, title } = haystackOf(pg);
+				const { hay, title, ocr } = haystackOf(pg);
 				const idx = hay.indexOf(q);
 				if (idx < 0) return null;
-				const score = (title.includes(q) ? 10 : 0) + hay.split(q).length - 1;
-				return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
+				// PERF: Treffer zählen ohne split() — das kopierte pro Treffer-Seite den ganzen Text in Teilstücke.
+				let score = title.includes(q) ? 10 : 0;
+				for (let i = idx; i >= 0; i = hay.indexOf(q, i + q.length)) score++;
+				return { page: pg, score, idx, ocr };
 			// Archivierte Treffer stehen immer unter den aktiven.
-			}).filter(Boolean).sort((a, b) => (!!a.page.archived - !!b.page.archived) || b.score - a.score).slice(0, 8);
+			}).filter(Boolean).sort((a, b) => (!!a.page.archived - !!b.page.archived) || b.score - a.score).slice(0, 8)
+				// Ausschnitt erst für die angezeigten Treffer bauen statt für jede Fundstelle.
+				.map(({ page, score, idx, ocr }) => ({ page, score, snippet: rawTextOf(page, ocr).slice(Math.max(0, idx - 80), idx + 160) }));
 		}, { query: String(query).slice(0, 40) }, 15);
 	}
 

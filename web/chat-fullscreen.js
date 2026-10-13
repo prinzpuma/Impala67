@@ -52,12 +52,13 @@ function find(mid) {
 	return null;
 }
 
-// Streaming-Renderings auf einen Frame zusammenfassen.
-let paintQueued = false;
+// Streaming-Renderings auf einen Frame zusammenfassen — je Fläche getrennt, sonst schluckte
+// ein laufender Vollbild-Stream die Klicks im Seitenpanel (und umgekehrt).
+const paintQueued = new Set();
 function schedulePaint(isSide) {
-	if (paintQueued) return;
-	paintQueued = true;
-	requestAnimationFrame(() => { paintQueued = false; paint(isSide); });
+	if (paintQueued.has(isSide)) return;
+	paintQueued.add(isSide);
+	requestAnimationFrame(() => { paintQueued.delete(isSide); paint(isSide); });
 }
 
 export function saveCurrentChat() { CHATS.persist(S.chat, "currentChatId"); }
@@ -113,15 +114,14 @@ export async function refineMessage(mid, mode) {
 	list.splice(idx, 1);
 	setBusy(isSide, true, runId);
 
-	let content = msg.content, reasoning = "Die gewünschte Anpassung wird geprüft und neu formuliert.", refined = false;
-	S.aiThinkingDraft = reasoning;
-	paint(isSide);
+	// Nur echtes Modell-Reasoning zeigen — kein Platzhalter, der wie ein Gedankengang aussieht.
+	let content = msg.content, reasoning = "", refined = false;
 	try {
 		content = await AI.refine(history, REFINE_PROMPTS[mode] || REFINE_PROMPTS.same, (text) => {
 			S.aiDraft = text;
 			schedulePaint(isSide);
 		}, (text) => {
-			reasoning = "Die gewünschte Anpassung wird geprüft und neu formuliert.\n\n" + text;
+			reasoning = text;
 			S.aiThinkingDraft = reasoning;
 			schedulePaint(isSide);
 		});
@@ -133,7 +133,7 @@ export async function refineMessage(mid, mode) {
 	// In dieselbe Sitzung einsetzen, auch wenn inzwischen ein anderer Chat sichtbar ist.
 	// Alle Felder der Originalnachricht bleiben erhalten (Karten, Undo, Anhänge, mid).
 	const target = list;
-	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoning: refined ? reasoning : msg.reasoning, reasoningExpanded: false });
+	target.splice(Math.min(idx, target.length), 0, { ...msg, content, reasoning: refined ? (reasoning.trim() || null) : msg.reasoning, reasoningExpanded: false });
 	saveChat(isSide, target, runId);
 	repaint();
 }

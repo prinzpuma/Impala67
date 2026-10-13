@@ -1,10 +1,3 @@
-@import url("./css/variables.css");
-@import url("./css/base.css");
-@import url("./css/layout.css");
-@import url("./css/components.css");
-@import url("./css/editor.css");
-@import url("./css/heft.css");
-@import url("./css/chat-start.css");
 /* Touch generell (iPad in JEDER Groesse und Ausrichtung): Ohne u… */
 @media (pointer: coarse) {
 	#tree .row, .deck-tree-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
@@ -1277,7 +1270,7 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 .anki-page button.anki-stat:hover:not(:disabled) { background: var(--surface-hover) }
 .anki-page button.anki-stat.due { padding: var(--space-4) var(--space-5); background: var(--accent); border-color: transparent; color: #081018 }
 /* Dunkler Text auf dem Akzent: rund 5:1 in Hell und Dunkel (Weiß kam im Hellmodus nur auf 3,5:1) */
-.anki-page button.anki-stat.due small, .anki-page button.anki-stat.due > span { color: #081018 }
+.anki-page button.anki-stat.due small, .anki-page button.anki-stat.due > span, .anki-page button.anki-stat.due > b { color: #081018 }
 .anki-page button.anki-stat.due:hover:not(:disabled) { background: var(--accent); filter: brightness(1.07) }
 .anki-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) }
 .anki-sec { margin: var(--space-8) 0 var(--space-3) }
@@ -1391,9 +1384,6 @@ body.light .file-chip, body.light .edit-files-list { background: var(--bg0); bor
 body.light .graph-skill { background: var(--panel-solid); border-color: var(--edge-soft) }
 body.light .graph-lane { background: linear-gradient(180deg, var(--surface-subtle), transparent 45%) }
 /* == Home v3 (15. Juli 2026) — persönliches Dashboard: Hero-Chips == */
-.home-chip { display: inline-flex; align-items: center; gap: var(--space-1-5); padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--edge-soft); background: var(--surface-subtle); font-size: var(--text-xs); color: var(--text2) }
-.home-chip b { color: var(--text); font-weight: 650 }
-.home-chip.warn { border-color: rgba(255, 213, 106, 0.35); background: rgba(255, 213, 106, 0.08) }
 /* Ausklappbare Home-Bereiche */
 .home-fold { border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--surface-faint); margin-top: var(--space-3) }
 .home-fold > summary { list-style: none; display: flex; align-items: center; gap: var(--space-2); padding: 11px 14px; cursor: pointer; font-size: var(--text-sm); font-weight: 650; color: var(--text2); user-select: none }

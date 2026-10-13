@@ -3,7 +3,6 @@ import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
-import { createScanner } from "./heft-scanner-ui.js";
 import { PDFS } from "./pdfs.js";
 import { RAG } from "./rag.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
@@ -1066,7 +1065,7 @@ export const HEFT = (() => {
 	}
 
 	function commitStrokeRender(i, stroke) {
-		const finish = PERF_PROFILER.start("heft.stroke", { points: stroke?.points?.length }, 8);
+		const finish = PERF_PROFILER.start("heft.stroke", { points: stroke?.pts?.length || 0 }, 8);
 		const cv = canvases[i];
 		if (cv && cv.width > 1) { const x = cv.getContext("2d"); applyTransform(x); drawStroke(x, stroke); }
 		const tile = detailCanvases[i];
@@ -1308,8 +1307,8 @@ export const HEFT = (() => {
 		wheelCommitT = setTimeout(() => paintView(true), 160);
 	}
 
-	const pos = (e, cv) => {
-		const r = cv.getBoundingClientRect();
+	// r: optional vorab gemessenes Rechteck — gebündelte Stift-Events teilen sich eine Messung.
+	const pos = (e, cv, r = cv.getBoundingClientRect()) => {
 		return [
 			Math.round((e.clientX - r.left) / scale * 10) / 10,
 			Math.round((e.clientY - r.top) / scale * 10) / 10,
@@ -1347,8 +1346,10 @@ export const HEFT = (() => {
 	// Radierer-Fläche ist wieder raus — es kostete pro Pointer-Event neue Strich-Objekte
 	// (samt neuen IDs, Sync-Ereignissen und Voll-Redraws) und war deshalb zäh.
 	function eraseAt(e) {
-		showEraserRing(e);
+		// PERF: erst messen, dann den Ring verschieben — andersherum erzwang jedes
+		// Pointer-Event ein zusätzliches synchrones Layout.
 		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
+		showEraserRing(e);
 		// PERF: Pointer-Events feuern viel dichter, als der Radierer breit ist —
 		// Mini-Schritte müssen nicht jedes Mal alle Striche der Seite prüfen.
 		const lp = drawing.lastErase;
@@ -1618,15 +1619,16 @@ export const HEFT = (() => {
 				im.w = w; im.h = w * (o.h / o.w);
 			}
 			drawing.moved = true;
-			redrawPage(drawing.pageIdx);
+			redrawNextFrame(drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event (Stift feuert öfter als der Bildschirm)
 			return;
 		}
 		if (drawing.erasing) { eraseAt(e); return; }
 
 		let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
 		if (!evs || !evs.length) evs = [e];
+		const rect = drawing.cv.getBoundingClientRect();
 		for (const ce of evs) {
-			drawing.pts.push(pos(ce, drawing.cv));
+			drawing.pts.push(pos(ce, drawing.cv, rect));
 			const n = drawing.pts.length;
 
 			const tail = drawing.tool === "marker" ? 2 : 3;
@@ -2473,7 +2475,12 @@ export const HEFT = (() => {
 	}
 
 	// Scanner-Oberfläche lebt in heft-scanner-ui.js; das Heft liefert nur das Einfügen.
-	const scanner = createScanner({ insertPages: insertScannedPages, pickFiles: filePick, fileToImageData });
+	// PERF: Scanner samt Bildverarbeitung (~85 KB) erst beim ersten Öffnen laden, nicht bei jedem Start.
+	let scanner = null;
+	async function openScanner() {
+		scanner ||= (await import("./heft-scanner-ui.js")).createScanner({ insertPages: insertScannedPages, pickFiles: filePick, fileToImageData });
+		scanner.open();
+	}
 	function insertScannedPages(images) {
 		if (!doc || !images.length) { if (U.toast) U.toast("Keine fertigen Scans zum Einfügen", "error"); return; }
 		let at = insertIndex();
@@ -2586,7 +2593,7 @@ export const HEFT = (() => {
 		if (d.headdend) { addPageAtEnd(); return; }
 		if (d.headdimg) { closePop(); pickImage(false, addImagePageFromFile); return; }
 		if (d.heimport) { closePop(); importFiles(); return; }
-		if (d.hescan) { closePop(); scanner.open(); return; }
+		if (d.hescan) { closePop(); openScanner(); return; }
 		if (d.hetextadd) { closePop(); tool = "select"; expanded = false; openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
@@ -2648,7 +2655,7 @@ export const HEFT = (() => {
 			return;
 		}
 		if (e.key === "Escape") {
-			if (scanner.handleEscape()) e.preventDefault();
+			if (scanner?.handleEscape()) e.preventDefault();
 			else if (pop) { e.preventDefault(); closePop(); }
 			return;
 		}
@@ -2846,7 +2853,7 @@ export const HEFT = (() => {
 	function unmount(discardPending = false) {
 		rememberPos();
 		closePop();
-		scanner.close();
+		scanner?.close();
 		// Offener Text-Editor MUSS vor dem Flush zu: inlineEd überlebte unmount, das nächste
 		// openTextEditor committete den alten Text ins dann geladene Heft.
 		closeTextEditor(true);

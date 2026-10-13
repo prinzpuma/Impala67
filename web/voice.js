@@ -66,9 +66,11 @@ function start(type) {
 		const full = (type || "side") === "full";
 		const input = document.getElementById(full ? "mainChatInput" : "chatInput");
 		const baseValue = input ? input.value : "";
+		let lastPartial = "";
 		PLATFORM_NATIVE.speech.startListening({
 			lang: "de-DE",
 			onPartial: (partialText) => {
+				if (partialText) lastPartial = partialText;
 				if (input && partialText) {
 					input.value = baseValue ? `${baseValue.trim()} ${partialText}` : partialText;
 					input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -76,10 +78,11 @@ function start(type) {
 			},
 			onResult: (finalText) => {
 				clearRecognition();
-				const resultText = (finalText && finalText.trim()) || (input ? input.value.trim() : "");
-				if (resultText) {
-					handleResult(resultText);
-				}
+				const spoken = (finalText && finalText.trim()) || lastPartial.trim();
+				// Die Teilergebnisse stehen schon im Feld — zurück auf den Ausgangstext,
+				// sonst hängt handleResult das Gesprochene ein zweites Mal an.
+				if (input) input.value = baseValue;
+				if (spoken) handleResult(spoken);
 			},
 			onError: (err) => {
 				clearRecognition();

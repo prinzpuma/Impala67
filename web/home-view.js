@@ -10,6 +10,10 @@ import { TELE } from "./telemetrie.js";
 const esc = (s) => U.esc(s);
 const DAY = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const GEAR = icon("gear", "", 17);
+// PERF: Formatter einmal bauen; toLocale*String erzeugt bei jedem Aufruf (pro Listenzeile) einen neuen.
+const TIME_FMT = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
+const WEEKDAY_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "long" });
+const SHORT_DATE_FMT = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
 
 
 function when(iso) {
@@ -19,11 +23,11 @@ function when(iso) {
 	if (min < 1) return "gerade eben";
 	if (min < 60) return `vor ${min} Min.`;
 	const today = new Date(); today.setHours(0, 0, 0, 0);
-	const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+	const time = TIME_FMT.format(d);
 	if (d >= today) return `heute ${time}`;
 	if (d >= today - 864e5) return `gestern ${time}`;
-	if (d >= today - 6 * 864e5) return d.toLocaleDateString("de-DE", { weekday: "long" });
-	return d.toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+	if (d >= today - 6 * 864e5) return WEEKDAY_FMT.format(d);
+	return SHORT_DATE_FMT.format(d);
 }
 
 function dur(min) {

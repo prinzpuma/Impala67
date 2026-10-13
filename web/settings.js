@@ -16,8 +16,6 @@ import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, v
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
-import { generateQrSvg } from "./qrcode.js";
-import { openQrScanner } from "./qr-scanner.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
@@ -46,11 +44,12 @@ export async function checkAI() {
 
 // Zentrale Darstellungsoptionen. Alles wird als Gerätewahl in localStorage gespeichert,
 // damit Theme, Akzent, Dichte und Bewegung nicht durch den Drive-Sync überschrieben werden.
+// Akzent als RGB-Tripel je Theme. Hell ist kräftiger, damit Weiß darauf mind. 4,5:1 Kontrast hat.
 const ACCENT_THEMES = {
-	blue:   { solid: "#6b8cae", soft: "rgba(107,140,174,.14)", border: "rgba(107,140,174,.25)" },
-	violet: { solid: "#8f82a9", soft: "rgba(143,130,169,.14)", border: "rgba(143,130,169,.25)" },
-	green:  { solid: "#6e8c75", soft: "rgba(110,140,117,.14)", border: "rgba(110,140,117,.25)" },
-	orange: { solid: "#b07f59", soft: "rgba(176,127,89,.14)", border: "rgba(176,127,89,.25)" },
+	blue:   { dark: "107 140 174", light: "36 120 199" },
+	violet: { dark: "143 130 169", light: "124 113 147" },
+	green:  { dark: "110 140 117", light: "98 125 105" },
+	orange: { dark: "176 127 89", light: "151 109 77" },
 };
 
 // Standard: Theme automatisch vom Betriebssystem übernehmen. Nur ein explizites
@@ -89,6 +88,7 @@ export function applyAppearance() {
 	const motion = localStorage.getItem("impala67Motion") || "reduced";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
+	const isLight = theme === "light";
 	const betaUi = localStorage.getItem("impala67BetaUi") === "1";
 	document.body.classList.toggle("beta-ui", betaUi);
 	document.body.classList.toggle("light", theme === "light");
@@ -102,9 +102,12 @@ export function applyAppearance() {
 	const fontSize = localStorage.getItem("impala67FontSize") || "m";
 	document.body.classList.toggle("font-s", fontSize === "s");
 	document.body.classList.toggle("font-l", fontSize === "l");
-	document.body.style.setProperty("--accent", accent.solid);
-	document.body.style.setProperty("--accent-soft", accent.soft);
-	document.body.style.setProperty("--accent-border", accent.border);
+	// Alle vier Werte inline am body: --accent aus :root wäre sonst mit dem Dunkel-Akzent festgelegt.
+	const rgb = isLight ? accent.light : accent.dark;
+	document.body.style.setProperty("--accent-rgb", rgb);
+	document.body.style.setProperty("--accent", `rgb(${rgb})`);
+	document.body.style.setProperty("--accent-soft", isLight ? `color-mix(in srgb, rgb(${rgb}) 15%, #fff)` : `rgb(${rgb} / .14)`);
+	document.body.style.setProperty("--accent-border", `rgb(${rgb} / ${isLight ? ".36" : ".25"})`);
 }
 
 export function applyTheme() { applyAppearance(); }
@@ -392,7 +395,8 @@ export async function handleCfDisconnect() {
 	refreshCloudflareStatusUi();
 }
 
-export function handleCfPairing() {
+// PERF: QR-Erzeugung/-Scanner (~25 KB) erst beim Koppeln laden, nicht bei jedem Start.
+export async function handleCfPairing() {
 	const cf = CLOUDFLARE_SYNC.status();
 	const url = cf.url || document.getElementById("inpCfUrl")?.value.trim();
 	const key = cf.syncKey || document.getElementById("inpCfKey")?.value.trim();
@@ -405,13 +409,14 @@ export function handleCfPairing() {
 	const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ url, key }))));
 	const baseAppUrl = location.origin + location.pathname;
 	const pairingLink = `${baseAppUrl}#cf-pair=${payload}`;
+	const { generateQrSvg } = await import("./qrcode.js");
 	const qrSvg = generateQrSvg(pairingLink, 220);
 
 	const modalHtml = `
 		<div class="exp-modal-backdrop" id="cfPairModal" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;padding:16px;">
 			<div class="card" style="max-width:440px;width:100%;background:var(--bg-card, #1e1e2e);color:var(--text, #fff);padding:24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,0.6);text-align:center;">
 				<h3 style="margin-top:0;margin-bottom:8px;">${lead("phone")}Gerät automatisch koppeln</h3>
-				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit der Impala67-App auf deinem Smartphone/Tablet (unter <em>Einstellungen → Sync → QR-Code scannen QR-Code scannen</em>).</p>
+				<p style="font-size:0.88rem;opacity:0.85;margin-bottom:16px;line-height:1.4;">Scanne diesen QR-Code mit der Impala67-App auf deinem Smartphone/Tablet (unter <em>Einstellungen → Sync → QR-Code scannen</em>).</p>
 				<div style="margin:16px auto;display:flex;justify-content:center;">${qrSvg}</div>
 				<div style="margin-top:20px;display:flex;flex-direction:column;gap:8px;">
 					<button type="button" id="btnCopyPairLink" class="btn" style="width:100%;">${lead("link")}Kopplungs-Link kopieren</button>
@@ -440,6 +445,7 @@ export function handleCfPairing() {
 }
 
 export async function handleCfScanPairing() {
+	const { openQrScanner } = await import("./qr-scanner.js");
 	await openQrScanner(async (data) => {
 		if (!data?.url || !data?.key) {
 			U.toast("Ungültige Verbindungsdaten im QR-Code.", "error");
@@ -1227,12 +1233,13 @@ export async function handleExportAllInk() {
 	if (weg !== "cancelled") U.toast(`${data.strokeCount} Striche aus ${data.notebooks.length} Heften exportiert`);
 }
 
-export function handleClearHandwritingSamples() {
-	if (confirm("Möchtest du alle gesammelten Handschrift-Trainingsbeispiele wirklich löschen?")) {
-		HANDSCHRIFT.clearTrainingSamples();
-		U.toast("Trainingsbeispiele gelöscht.");
-		openSettings(S.settingsSection || "ai");
-	}
+export async function handleClearHandwritingSamples() {
+	const ok = await U.confirm("Möchtest du alle gesammelten Handschrift-Trainingsbeispiele wirklich löschen?",
+		{ title: "Trainingsbeispiele löschen", ok: "Löschen", danger: true });
+	if (!ok) return;
+	HANDSCHRIFT.clearTrainingSamples();
+	U.toast("Trainingsbeispiele gelöscht.");
+	openSettings(S.settingsSection || "ai");
 }
 
 export const SETTINGS = {

@@ -3,6 +3,7 @@ import { CHATS } from "./chats.js";
 import { COLLAPSE } from "./collapse.js";
 import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
+import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
@@ -70,8 +71,9 @@ function render() {
 	renderPendingChip("full");
 	renderStatusDot();
 	renderModelBar();
-	const due = $("dueCount");
-	if (due) due.textContent = STATE.dueCards().length;
+	// Nur bei Änderung schreiben: textContent ersetzt sonst bei JEDEM Render den Textknoten (Style-Neuberechnung).
+	const due = $("dueCount"), dueText = String(STATE.dueCards().length);
+	if (due && due.textContent !== dueText) due.textContent = dueText;
 	finishProfile();
 }
 
@@ -545,7 +547,10 @@ function branchHtml(parentId, depth, wsId) {
 
 function rowHtml(pg, depth, wsId) {
 	const active = pg.id === S.currentPageId && S.view === "page" ? " active" : "";
-	const hasKids = STATE.childrenOf(pg.id, wsId || pg.workspaceId).length > 0;
+	const ws = wsId || pg.workspaceId;
+	// Kinder EINMAL holen — vorher zweiter childrenOf()-Aufruf (Kopie) über branchHtml().
+	const kids = STATE.childrenOf(pg.id, ws);
+	const hasKids = kids.length > 0;
 	const collapsed = COLLAPSE.isCollapsed(pg.id);
 	// Bug-Fix („kommt noch“, 22. Juli): kein draggable="true" mehr — HTML5-DnD wird in
 	// iPad startet HTML5-DnD nur per Long-Press. Das Verschieben läuft deshalb über
@@ -560,7 +565,7 @@ function rowHtml(pg, depth, wsId) {
 		`<button class="row-add" data-pagemenu="${pg.id}" title="Weitere Optionen">⋯</button>` +
 		`<button class="row-add" data-addchild="${pg.id}" title="Unterseite anlegen">+</button>` +
 		(S.pageMenuOpenId === pg.id ? pageMenuHtml(pg) : "") +
-		"</div>" + (hasKids && !collapsed ? branchHtml(pg.id, depth + 1, wsId || pg.workspaceId) : "");
+		"</div>" + (hasKids && !collapsed && depth < 8 ? kids.map((k) => rowHtml(k, depth + 1, ws)).join("") : "");
 }
 
 // Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
@@ -861,7 +866,9 @@ function markConflictResolved(conflictPageId) {
 	lsSet(RESOLVED_CONFLICT_KEY, [...loadResolvedConflictIds().add(conflictPageId)].slice(-200));
 }
 // Maßgeblich ist der ⚠-Titel: „Beide behalten“ benennt die Kopie um, und das reist per Sync mit.
-const isConflictPage = (p) => !!(p && !loadResolvedConflictIds().has(p.id) && (p.title || "").startsWith("⚠ Konflikt"));
+// PERF: billige Titelprüfung zuerst — sonst las die Startseite pro Seite (3×) die
+// Erledigt-Liste aus dem localStorage und parste sie neu.
+const isConflictPage = (p) => !!(p && (p.title || "").startsWith("⚠ Konflikt") && !loadResolvedConflictIds().has(p.id));
 const loadPendingConflicts = () => lsGet(CONFLICT_KEY, []);
 function savePendingConflicts(list) {
 	if (!list || !list.length) { U.storage.remove(CONFLICT_KEY); return; }
@@ -1083,7 +1090,7 @@ function renderHome(main) {
 	const restoreScroll = U.scrollAnchor(() => main.querySelector(".home") || main);
 	const pages = STATE.activePages();
 	const conflictCount = Math.max(loadPendingConflicts().length, pages.filter(isConflictPage).length);
-	const recent = pages.filter((p) => !isConflictPage(p)).slice().sort((a, b) => ((b.updated || "") < (a.updated || "") ? -1 : (b.updated || "") > (a.updated || "") ? 1 : 0)).slice(0, 6);
+	const recent = pages.filter((p) => !isConflictPage(p)).sort(U.byNewest).slice(0, 6);
 	const homeStudy = STATE.studySnapshot(null).counts;
 	const hour = new Date().getHours();
 	const greeting = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
@@ -1293,8 +1300,11 @@ function chatLiveParts(historyList) {
 	const id = type === "full" ? S.currentChatId : S.sideChatId;
 	if (S.aiActiveChatId !== id) return { think: "", rest: "" };
 	const activeList = historyList;
-	// Offene ask_choice-Karte IST der Wartezustand — keine zweite busy-Zeile
-	const waitingChoice = activeList.some((m) => m.role === "question" && !m.answered);
+	// Offene ask_choice-Karte IST der Wartezustand — keine zweite busy-Zeile. Nur die LETZTE
+	// Nachricht zählt: Solange der Lauf wartet, steht seine Karte ganz unten. Eine verwaiste
+	// Karte aus einem abgebrochenen Lauf weiter oben blendete sonst jede busy-Zeile aus.
+	const last = activeList[activeList.length - 1];
+	const waitingChoice = last?.role === "question" && !last.answered;
 	// Think-Box UND Draft parallel — sonst wirkt geleaktes Reasoning wie die Antwort
 	const think = S.aiThinkingDraft ? thinkingLiveHtml() : "";
 	const rest = S.aiDraft ? '<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>"

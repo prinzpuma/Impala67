@@ -12,7 +12,6 @@ import { SEARCH } from "./search.js";
 import { RAG } from "./rag.js";
 import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
-import { HEFT_LABEL } from "./heft-label.js";
 import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
@@ -170,7 +169,7 @@ export function initMcpBridge() {
 								return title.includes(q) || content.includes(q) || subj.includes(q);
 							});
 						}
-						pool.sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+						pool.sort(U.byNewest);
 						const count = Math.max(1, Math.min(200, Number(args.limit) || 50));
 						const pages = pool.slice(0, count).map((p) => ({
 							id: p.id,
@@ -609,11 +608,12 @@ export function initMcpBridge() {
 						};
 						break;
 					}
+					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.
 					case "impala_heft_page_image":
-						result = await HEFT_LABEL.pageImage(args);
+						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage(args);
 						break;
 					case "impala_heft_label_lines":
-						result = await HEFT_LABEL.labelLines(args);
+						result = await (await import("./heft-label.js")).HEFT_LABEL.labelLines(args);
 						break;
 					default:
 						result = { error: `Unbekanntes Werkzeug: ${tool}` };

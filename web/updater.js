@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.63";
+const BUILD_VERSION = "2.2.64";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -310,8 +310,8 @@ export function startUpdateWatcher() {
 		if (!document.hidden) runCheck();
 	});
 
-	// 3. Periodisch alle 30 Minuten
-	setInterval(runCheck, 30 * 60 * 1000);
+	// 3. Periodisch alle 30 Minuten — nur im sichtbaren Tab (Rückkehr prüft ohnehin, s. 2.)
+	setInterval(() => { if (!document.hidden) runCheck(); }, 30 * 60 * 1000);
 }
 
 export { cmpSemver, fetchDeployedVersion, refreshServiceWorker, workerVersion, waitForControllerChange };

@@ -29,7 +29,9 @@ function dayKey(x) {
 	return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 const utcOf = (k) => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
-const shortDate = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("de-DE", { day: "numeric", month: "short" }); };
+// PERF: ein Formatter für alle Balken statt eines neuen pro Aufruf (gleiche Ausgabe).
+const SHORT_DATE_FMT = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
+const shortDate = (k) => { const [y, m, d] = k.split("-").map(Number); return SHORT_DATE_FMT.format(new Date(y, m - 1, d)); };
 
 // Behalten zählt nur echte Abfragen: Erstkontakt und Lernschritte sagen noch nichts über das Gedächtnis
 const graded = (list) => list.filter((r) => r.grade > 0 && !r.first && !r.learning);
@@ -79,7 +81,7 @@ export function statsData({ cards, reviews, now = new Date(), thinkMs = 0 }) {
 	}
 	const decks = Object.values(decksMap)
 		.map((row) => ({ ...row, rate: hitRate(last.filter((r) => r.deck === row.name)) }))
-		.sort((a, b) => b.due - a.due || a.name.localeCompare(b.name, "de"));
+		.sort((a, b) => b.due - a.due || U.cmpDe(a.name, b.name));
 
 	// Verlauf: 30 Tage Balken, Prognose für 7 Tage, Serien über alle Zeit
 	const perDay = {};

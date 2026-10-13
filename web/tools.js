@@ -282,7 +282,11 @@ export const TOOLS = (() => {
 			if (!S.pages[x.id]) await STATE.dispatch("pageCreate", clone(x.before));
 			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.updated;
 			await STATE.dispatch("pageUpdate", { id: x.id, patch });
-			await STATE.dispatch(x.before.trashed ? "pageTrash" : "pageRestore", { id: x.id });
+			// Nur bei echtem Papierkorb-Wechsel: pageRestore holt den GANZEN Unterbaum zurück —
+			// pauschal aufgerufen kamen nach einem Inhalts-Undo gelöschte Unterseiten wieder.
+			if (Boolean(x.before.trashed) !== Boolean(x.after?.trashed)) {
+				await STATE.dispatch(x.before.trashed ? "pageTrash" : "pageRestore", { id: x.id });
+			}
 			if (x.before.archived !== x.after?.archived) {
 				await STATE.dispatch(x.before.archived ? "pageArchive" : "pageUnarchive", { id: x.id });
 			}
@@ -292,7 +296,10 @@ export const TOOLS = (() => {
 			if (!S.cards[x.id]) await STATE.dispatch("cardCreate", clone(x.before));
 			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.trashed; delete patch.trashedAt;
 			await STATE.dispatch("cardUpdate", { id: x.id, patch });
-			await STATE.dispatch(x.before.trashed ? "cardTrash" : "cardRestore", { id: x.id });
+			// cardRestore holt auch einen gelöschten Stapel zurück — daher nur bei echtem Wechsel.
+			if (Boolean(x.before.trashed) !== Boolean(S.cards[x.id]?.trashed)) {
+				await STATE.dispatch(x.before.trashed ? "cardTrash" : "cardRestore", { id: x.id });
+			}
 		}
 		for (const x of changeSet.cards || []) if (!x.before && S.cards[x.id]) await STATE.dispatch("cardDelete", { id: x.id });
 		for (const x of changeSet.pages || []) if (!x.before && S.pages[x.id]) await STATE.dispatch("pageDelete", { id: x.id });
@@ -622,8 +629,7 @@ export const TOOLS = (() => {
 				const now = new Date();
 				const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
 				const body = cur ? String(cur.content || "") : "";
-				const recent = STATE.activePages()
-					.slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || ""))).slice(0, 8)
+				const recent = STATE.activePages().sort(U.byNewest).slice(0, 8)
 					.map((pg) => ({ title: pg.title, updated: String(pg.updated || "").slice(0, 10) }));
 				let study = null;
 				try {
@@ -686,7 +692,7 @@ export const TOOLS = (() => {
 			case "list_pages": {
 				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.
 				const q = String(a.query || "").trim().toLowerCase();
-				let all = STATE.activePages().slice().sort((x, y) => String(y.updated || "").localeCompare(String(x.updated || "")));
+				let all = STATE.activePages().sort(U.byNewest);
 				if (q) all = all.filter((pg) => (pg.title || "").toLowerCase().includes(q));
 				return {
 					pages: all.slice(0, 60).map((pg) => ({

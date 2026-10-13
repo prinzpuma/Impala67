@@ -33,7 +33,7 @@ export function legacyCopyInfo(copy, pages) {
 	const nested = /^(⚠ Konflikt[^:]*:\s*){2,}/.test(String(copy.title || ""));
 	const copyLines = textLines(copy.content);
 	const others = pages.filter((p) => p.id !== copy.id && !String(p.title || "").startsWith("⚠ Konflikt"))
-		.sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+		.sort(U.byNewest);
 	const missingIn = (p) => { const have = new Set(textLines(p.content)); return copyLines.filter((l) => !have.has(l)).length; };
 	const same = others.filter((p) => p.title === title);
 	// Umbenannte Seite: ohne Titel-Treffer zählt eine Seite, die den ganzen Text der Kopie schon enthält.

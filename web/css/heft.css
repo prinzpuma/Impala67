@@ -54,6 +54,7 @@ body.reduce-motion .heft-tray { animation: none }
 .heft-swatch { width: 22px; height: 22px; min-width: 22px !important; min-height: 0 !important; padding: 0 !important; border-radius: 50% !important; border: 2px solid rgba(255,255,255,.18); background: var(--sw, #1c1c1e) }
 .heft-swatch:hover { transform: scale(1.08) }
 .heft-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+body.light .heft-swatch:not(.active) { border-color: rgba(0,0,0,.18) }
 /* Eck-Pills: Seiten links, Chat/＋ rechts — auch floating, kein B… */
 /* ♻️ Größe/Farbe/Rahmen kommen aus Taskbar v7; hier bleibt nur, was dort nicht gesetzt wird. */
 .heft-corner { font-weight: 700; white-space: nowrap; color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1) }
@@ -105,7 +106,7 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-pop-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text); font-size: var(--text-base); padding: 9px 10px; border-radius: var(--radius-md) }
 .heft-pop-row:hover { background: var(--surface-hover-strong) }
 /* Seitenmanager: große Goodnotes-artige Übersicht mit Auswahl und Sortierung. */
-.heft-pop-scrim { position: absolute; inset: 0; z-index: 59; background: rgba(0,0,0,.45); animation: heftScrimIn .2s var(--ease-out) }
+.heft-pop-scrim { position: absolute; inset: 0; z-index: 59; background: var(--overlay-bg); animation: heftScrimIn .2s var(--ease-out) }
 @keyframes heftScrimIn { from { opacity: 0 } }
 .heft-pop-pages { width: min(560px, calc(100% - 48px)); max-width: calc(100% - 48px); height: min(620px, calc(100% - 48px)); max-height: min(780px, calc(100% - 48px)); padding: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-radius: 22px; border-color: transparent; box-shadow: 0 30px 80px rgba(0,0,0,.5); animation: heftPagesIn .24s var(--ease-out) }
 @keyframes heftPagesIn { from { opacity: 0; transform: translateY(10px) scale(.98) } }

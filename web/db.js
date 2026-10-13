@@ -557,21 +557,29 @@ export const DB = (() => {
 	const MERGE_MAX_LINES = 1200; // O(n*m)-Matrix: darüber lohnt der Versuch nicht
 	// LCS als Paar-Liste (Index in A, Index in B) — Grundlage beider Zwei-Wege-Diffs.
 	function lcsPairs(A, B) {
-		const n = A.length, m = B.length;
+		// Gleiche Anfangs- und Endzeilen gehören immer zur LCS — nur die Mitte braucht
+		// die O(n*m)-Matrix. Bei typischen Konflikten (ein paar Zeilen geändert) ist sie winzig.
+		let pre = 0;
+		while (pre < A.length && pre < B.length && A[pre] === B[pre]) pre++;
+		let suf = 0;
+		while (suf < A.length - pre && suf < B.length - pre && A[A.length - 1 - suf] === B[B.length - 1 - suf]) suf++;
+		const n = A.length - pre - suf, m = B.length - pre - suf;
 		const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
 		for (let i = n - 1; i >= 0; i--) {
 			const row = dp[i], next = dp[i + 1];
 			for (let j = m - 1; j >= 0; j--) {
-				row[j] = A[i] === B[j] ? next[j + 1] + 1 : Math.max(next[j], row[j + 1]);
+				row[j] = A[pre + i] === B[pre + j] ? next[j + 1] + 1 : Math.max(next[j], row[j + 1]);
 			}
 		}
 		const pairs = [];
+		for (let k = 0; k < pre; k++) pairs.push([k, k]);
 		let i = 0, j = 0;
 		while (i < n && j < m) {
-			if (A[i] === B[j]) { pairs.push([i, j]); i++; j++; }
+			if (A[pre + i] === B[pre + j]) { pairs.push([pre + i, pre + j]); i++; j++; }
 			else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
 			else j++;
 		}
+		for (let k = 0; k < suf; k++) pairs.push([pre + n + k, pre + m + k]);
 		return pairs;
 	}
 	function merge3(base, mine, theirs) {
@@ -809,7 +817,7 @@ export const DB = (() => {
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
 		// structuredClone vermeidet den teuren JSON-Text-Roundtrip. Die tiefe Kopie
 		// bleibt nötig: Live-Module dürfen den unveränderlichen Import nicht mitmutieren.
-		const importedEvents = fresh.map((ev) => typeof structuredClone === "function" ? structuredClone(ev) : JSON.parse(JSON.stringify(ev)));
+		const importedEvents = fresh.map((ev) => structuredClone(ev));
 		finishProfile({ added: fresh.length, incoming: incoming.length });
 		return { added: fresh.length, malformed, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents };
 	}

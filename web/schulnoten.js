@@ -57,7 +57,7 @@ export const SCHULNOTEN = (() => {
 
 	function exportMarkdown() {
 		const lines = ["# Schulnoten", ""];
-		for (const [subject, entries] of Object.entries(subjects()).sort(([a], [b]) => a.localeCompare(b, "de"))) {
+		for (const [subject, entries] of Object.entries(subjects()).sort(([a], [b]) => U.cmpDe(a, b))) {
 			lines.push("## " + subject + " — Ø " + average(entries));
 			for (const entry of entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
 				lines.push("- **" + entry.grade + "** · Gewichtung " + entry.weight + " · " + entry.date + (entry.comment ? " · " + entry.comment : ""));
@@ -94,7 +94,7 @@ export const SCHULNOTEN = (() => {
 		if (!Object.keys(groups).length) {
 			html += '<p class="hint noten-empty">Trag die erste Note ein — der gewichtete Schnitt erscheint sofort.</p>';
 		} else {
-			for (const [subject, entries] of Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, "de"))) {
+			for (const [subject, entries] of Object.entries(groups).sort(([a], [b]) => U.cmpDe(a, b))) {
 				const avg = average(entries);
 				html += '<article class="noten-subject"><header><b>' + U.esc(subject) + '</b><span style="color:' + gradeColor(Number(avg)) + '">Ø ' + avg + '</span></header>' +
 					'<table class="noten-table"><thead><tr><th>Note</th><th>Gew.</th><th>Datum</th><th>Kommentar</th><th></th></tr></thead><tbody>';

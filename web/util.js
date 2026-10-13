@@ -218,9 +218,22 @@ export const U = {
 			const k = U._morphKey(child);
 			if (k != null && !keyed.has(k)) keyed.set(k, child);
 		}
+		const wantedKeys = new Set();
+		for (const child of newParent.childNodes) {
+			const k = U._morphKey(child);
+			if (k != null) wantedKeys.add(k);
+		}
 		let cursor = oldParent.firstChild;
 		for (const wanted of [...newParent.childNodes]) {
 			const key = U._morphKey(wanted);
+			// Weggefallene Key-Knoten sofort entfernen: blieb der Cursor an ihnen hängen,
+			// wurden alle ungekeyten Geschwister dahinter unnötig neu gebaut.
+			while (cursor && U._morphKey(cursor) != null && !wantedKeys.has(U._morphKey(cursor))) {
+				const stale = cursor;
+				cursor = cursor.nextSibling;
+				stale.remove();
+				changed = true;
+			}
 			let match = null;
 			if (key != null && keyed.has(key)) {
 				const cand = keyed.get(key);
@@ -278,9 +291,6 @@ export const U = {
 		if (U._morphChildren(oldNode, newNode)) changed = true;
 		return changed;
 	},
-
-	// Bequemer Ersatz für `el.innerHTML = html` an allen Render-Stellen.
-	setHtml(el, html) { return U.morph(el, html); },
 
 	debounce(fn, ms) {
 		let timer;
@@ -393,6 +403,12 @@ export const U = {
 	// Intl-Formatter (teuer, läuft in jedem Listen-Render pro Zeile). Einen Formatter
 	// wiederverwenden — identisches Format, ungültige Daten liefern wie bisher "Invalid Date".
 	_dateFmt: new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }),
+	// PERF: localeCompare(x, "de") sucht bei jedem Vergleich die Sortierregeln neu heraus —
+	// in sort() also tausendfach. Ein Collator liefert exakt dasselbe Ergebnis.
+	cmpDe: new Intl.Collator("de").compare,
+	// Neueste Seite zuerst (ISO-Zeitstempel in "updated"). Direkter String-Vergleich statt
+	// localeCompare: bei ISO-Daten dieselbe Reihenfolge, aber ohne Collator-Aufwand.
+	byNewest: (a, b) => { const x = String(a.updated || ""), y = String(b.updated || ""); return x < y ? 1 : x > y ? -1 : 0; },
 	fmtDate: (iso) => { const d = new Date(iso); return isNaN(d) ? "Invalid Date" : U._dateFmt.format(d); },
 
 	// Farb-Syntax: {red}Text{/} → farbiger Text, {bg-yellow}Text{/} → Hintergrundfarbe.
@@ -409,7 +425,7 @@ export const U = {
 			.replace(/\{\/\}/g, "");
 	},
 
-	// Gemeinsamer Helfer für md()/mdInline(): ==markiert== → escapetes <mark>…</mark>,
+	// Gemeinsamer Helfer für md(): ==markiert== → escapetes <mark>…</mark>,
 	// danach Farb-Syntax. Vorher in beiden Funktionen fast identisch kopiert.
 	_markHighlights(text) {
 		const str = String(text ?? "");
@@ -526,27 +542,14 @@ export const U = {
 		return html;
 	},
 
-	// Nur Inline-Markdown (einzelne Zeile, ohne <p>-Wrapper) — für Blockzeilen
-	// im Block-Editor (Überschriften, Listenpunkte, To-dos).
-	mdInline(text) {
-		// 🧮 gleiche Formel-Maskierung wie in md() — auch einzeilige Blockzeilen
-		// (Listenpunkte, Überschriften) enthalten oft $…$ mit _ ^ & \\.
-		const masked = U._maskMath(text);
-		const raw = U._markHighlights(masked.text);
-		if (window.marked && marked.parseInline) {
-			try { return U._unmaskMath(U.sanitize(marked.parseInline(raw, { breaks: true })), masked.stash); }
-			catch (err) { PERF_PROFILER.error("markdown-error", err, { inline: true }); }
-		}
-		return U.esc(U._unmaskMath(raw, masked.stash, false));
-	},
-
 	hasMathDelimiters(el) {
 		if (!el) return false;
 		if (el.tagName === "CODE" || el.tagName === "PRE") return false;
 		const txt = el.textContent || "";
 		if (!txt.trim()) return false;
 		// Präzise Formel-Erkennung: $$...$$, \(...\), \[...\] oder $...$ (vermeidet $10, 10$ & Code-Fehlauslösungen)
-		const mathRegex = /\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|(?:\$[^$\s\n][^$]*?[^$\s\n]\$)/;
+		// Ein Zeichen reicht ($x$) — sonst blieben Karten mit nur einer Variablen roh.
+		const mathRegex = /\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|(?:\$[^$\s](?:[^$]*?[^$\s])?\$)/;
 		return mathRegex.test(txt);
 	},
 

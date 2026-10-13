@@ -65,7 +65,9 @@ export function stylesheetAssetUrls(css, stylesheetUrl) {
 	const seen = new Set();
 	for (const match of String(css || "").matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi)) {
 		const value = match[2].trim();
-		if (!value || value.startsWith("data:") || value.startsWith("#")) continue;
+		// Alt-Schriftformate überspringen: Jeder unterstützte Browser nimmt die woff2-Quelle,
+		// woff/ttf daneben wären nur ~800 KB toter Cache (KaTeX).
+		if (!value || value.startsWith("data:") || value.startsWith("#") || /\.(?:woff|ttf)(?:$|[?#])/i.test(value)) continue;
 		const absolute = new URL(value, stylesheetUrl).href;
 		if (!seen.has(absolute)) {
 			seen.add(absolute);
