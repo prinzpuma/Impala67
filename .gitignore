@@ -30,6 +30,8 @@ handwriting/checkpoints/
 handwriting/checkpoints-image/
 handwriting/model.onnx
 handwriting/model-bild*.onnx
+handwriting/benchmark_notizen.json
+handwriting/process_export/
 __pycache__/
 *.pyc
 
@@ -38,3 +40,7 @@ __pycache__/
 
 # Colab-Upload (Handschrift-Code für Drive), lokal erzeugt
 code.zip
+
+# Kladaba / Uni-Scraper Session-Cookies
+tools/kladaba-sync/kladaba_*.json
+

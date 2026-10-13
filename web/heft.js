@@ -13,7 +13,7 @@ import {
 	lassoBounds,
 	selectStrokesByLasso,
 	lassoTouchAction,
-	isLassoHandleHit,
+	hitLassoHandle,
 	isLassoBodyHit,
 	drawLassoSelection,
 	drawLassoPath,
@@ -1407,9 +1407,22 @@ export const HEFT = (() => {
 
 			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
 				const bb = lassoSel.bounds || lassoBounds(lassoSel.strokes);
-				if (bb && isLassoHandleHit(p, bb, 22)) {
-					const w = Math.max(1, bb.maxX - bb.minX), h = Math.max(1, bb.maxY - bb.minY);
-					drawing = { lassoResize: true, strokes: lassoSel.strokes, originals: lassoSel.strokes.map(strokeGeometry), cv, pageIdx: pi, anchor: [bb.minX, bb.minY], base: [w, h], factor: 1 };
+				const handle = bb && hitLassoHandle(p, bb, e.pointerType === "touch" ? 22 : 18);
+				if (handle) {
+					const anchor = handle.anchor;
+					const startDist = Math.max(12, Math.hypot(p[0] - anchor[0], p[1] - anchor[1]));
+					drawing = {
+						lassoResize: true,
+						strokes: lassoSel.strokes,
+						originals: lassoSel.strokes.map(strokeGeometry),
+						cv,
+						pageIdx: pi,
+						anchor,
+						bb,
+						startPos: [p[0], p[1]],
+						startDist,
+						factor: 1,
+					};
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
@@ -1548,11 +1561,35 @@ export const HEFT = (() => {
 			return;
 		}
 		if (drawing.lassoResize) {
-			const p = pos(e, drawing.cv), [ax, ay] = drawing.anchor, [w, h] = drawing.base;
-			const projected = ((p[0] - ax) * w + (p[1] - ay) * h) / (w * w + h * h);
-			const maxFactor = Math.max(0.15, Math.min(6, (PAGE_W - ax) / w, (PAGE_H - ay) / h));
-			const factor = Math.max(0.15, Math.min(maxFactor, projected));
-			drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, drawing.originals[i], ax, ay, factor));
+			const p = pos(e, drawing.cv);
+			const anchor = drawing.anchor;
+			const startPos = drawing.startPos;
+			const startDist = drawing.startDist;
+
+			// Vektor vom Anker zur Start-Klickposition
+			const vx = (startPos[0] - anchor[0]) / startDist;
+			const vy = (startPos[1] - anchor[1]) / startDist;
+
+			// Vektor vom Anker zur aktuellen Zeigerposition
+			const dx = p[0] - anchor[0];
+			const dy = p[1] - anchor[1];
+
+			// Projektion auf die Diagonale: startet bei exakt 1.0 (kein Ruck), wächst/schrumpft kontinuierlich
+			const currentDist = dx * vx + dy * vy;
+
+			// Maximaler Faktor, damit die skalierte Box auf der Seite bleibt (Kanten mit Abstand > 0 zum Anker)
+			const bb0 = drawing.bb;
+			let maxFactor = Infinity;
+			if (bb0.minX < anchor[0]) maxFactor = Math.min(maxFactor, anchor[0] / (anchor[0] - bb0.minX));
+			if (bb0.maxX > anchor[0]) maxFactor = Math.min(maxFactor, (PAGE_W - anchor[0]) / (bb0.maxX - anchor[0]));
+			if (bb0.minY < anchor[1]) maxFactor = Math.min(maxFactor, anchor[1] / (anchor[1] - bb0.minY));
+			if (bb0.maxY > anchor[1]) maxFactor = Math.min(maxFactor, (PAGE_H - anchor[1]) / (bb0.maxY - anchor[1]));
+			// Mindestens 1, falls die Auswahl schon über den Rand ragt (sonst würde sie zwanghaft schrumpfen)
+			maxFactor = Math.max(1, maxFactor);
+
+			const factor = Math.max(0.15, Math.min(6.0, maxFactor, currentDist / startDist));
+
+			drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, drawing.originals[i], anchor[0], anchor[1], factor));
 			drawing.factor = factor;
 			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
 			redrawNextFrame(drawing.pageIdx);

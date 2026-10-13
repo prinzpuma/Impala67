@@ -431,11 +431,17 @@ body.tabs-in-sidebar .heft-scroll {
 /* ---------- Heft-Werkzeugleiste: SVG-Icons (Toolbar-Redesign) ---------- */
 .heft-chrome .heft-main svg, .heft-chrome .heft-opt svg, .heft-chrome .heft-corner svg { display: block; pointer-events: none }
 
-/* ---------- 🪢 Lasso-Aktionsleiste (heft.js) — iPad hat keine Entf-Taste ---------- */
-.heft-lasso-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 78px; z-index: 60; display: flex; gap: var(--space-2); align-items: center; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-lg); padding: var(--space-1-5) 10px; font-size: var(--text-sm); box-shadow: var(--elev-2); max-width: min(94vw, 620px); overflow-x: auto; scrollbar-width: none }
-.heft-lasso-bar::-webkit-scrollbar { display: none }
-.heft-lasso-bar span { color: var(--text2); padding: 0 2px; white-space: nowrap }
-.heft-lasso-bar button { min-height: 34px; white-space: nowrap; flex-shrink: 0 }
+/* ---------- 🪢 Lasso-Aktionsleiste: schlank, modern, pill-förmig ---------- */
+.heft-lasso-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 60; display: inline-flex; gap: 4px; align-items: center; background: var(--menu-bg); border: 1px solid var(--edge); border-radius: var(--radius-pill); padding: 4px 6px; box-shadow: var(--elev-2); max-width: calc(100vw - 24px); animation: heftTrayIn .14s ease }
+.heft-lasso-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; height: 32px; padding: 0 10px; border-radius: var(--radius-pill); background: transparent; color: var(--text); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; border: none; cursor: pointer; transition: background .12s ease, color .12s ease }
+.heft-lasso-btn:hover { background: var(--surface-hover-strong) }
+.heft-lasso-btn.heft-lasso-del:hover { background: var(--danger-soft); color: var(--danger) }
+.heft-lasso-btn.heft-lasso-train { padding: 0 8px; color: var(--text2) }
+.heft-lasso-btn.heft-lasso-train:hover { color: var(--text) }
+.heft-lasso-btn.heft-lasso-close { width: 30px; min-width: 30px; padding: 0; color: var(--text2); font-size: var(--text-sm) }
+.heft-lasso-btn.heft-lasso-close:hover { color: var(--text); background: var(--surface-hover-strong) }
+/* Schmale Phones (375 px): Leiste lief ~11 px über — Abstände etwas kleiner, Schließen-Button bleibt sichtbar */
+@media (max-width: 480px) { .heft-lasso-bar { gap: 2px } .heft-lasso-btn { padding: 0 7px } }
 /* == ✍️ Inline-Text-Editor + ➕ Seiten-Ende + 👆 Tipp-Aufdecken (QoL 18.7) == */
 /* ♻️ .heft-page-slot { position: relative } hier entfernt — steht identisch schon in der Bühnen-Geometrie oben. */
 .heft-text-editor { position: absolute; z-index: 30; background: rgba(255, 255, 255, .93); border: 1.5px dashed var(--accent); border-radius: var(--radius-sm); padding: 10px; margin: 0; resize: none; overflow: hidden; box-sizing: border-box; outline: none; min-height: 44px; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default }

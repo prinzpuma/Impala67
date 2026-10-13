@@ -197,7 +197,7 @@ function gather(q) {
 	}
 
 	const pages = ql
-		? STATE.searchNotes(ql).map((r) => ({ type: "page", page: r.page, snippet: r.snippet }))
+		? STATE.searchNotes(ql, { includeArchived: true }).map((r) => ({ type: "page", page: r.page, snippet: r.snippet }))
 		: recentPages(6).map((p) => ({ type: "page", page: p }));
 	let chats = loadChats(); // gecacht, siehe loadChats
 	chats = (ql
@@ -245,7 +245,7 @@ function renderList(q) {
 				(path ? '<span class="palette-snip">' + mark(path, re) + "</span>"
 					: (snip ? '<span class="palette-snip">' + mark(snip, re) + "</span>" : "")) +
 				"</span>" +
-				'<span class="palette-kind">' + (paletteMode === "newTab" && path ? U.esc(path.split(" › ").slice(-1)[0] || "") : U.fmtDate(pg.updated)) + "</span></button>";
+				'<span class="palette-kind">' + (paletteMode === "newTab" && path ? U.esc(path.split(" › ").slice(-1)[0] || "") : (pg.archived ? "Archiv · " : "") + U.fmtDate(pg.updated)) + "</span></button>";
 		}
 		if (r.type === "chat") {
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +

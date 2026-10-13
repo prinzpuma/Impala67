@@ -82,7 +82,8 @@ body.reduce-motion *:not(.boot-spinner):not(#bootSplash *) { animation: none !im
 
 /* Einheitliche Linien-Icons aus icons.svg (icons.js → icon("name")). Größe folgt der Schrift,
    Farbe dem Text. Kontexte dürfen width/height/stroke-width überschreiben. */
-.i { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -0.15em; overflow: visible }
+/* display explizit: fremde CSS-Resets (z. B. von Dark-Mode-Erweiterungen eingeschleust) setzen sonst svg { display: block } */
+.i { display: inline-block; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -0.15em; overflow: visible }
 :where(svg.i:not([width])) { width: 1.1em; height: 1.1em }
 .i-strong { stroke-width: 2.2 }
 /* Icon vor Text (lead() in icons.js): fester Abstand statt Leerzeichen */

@@ -153,12 +153,41 @@ export function selectStrokesByLasso(strokes, poly) {
 export const lassoTouchAction = (pointerType, currentTool, onLasso) =>
 	pointerType === "touch" && currentTool === "lasso" ? (onLasso ? "interact" : "dismiss") : "none";
 
+export const LASSO_HANDLE_OFFSET = 8;
+export const LASSO_HANDLE_RADIUS = 5.5;
+export const LASSO_HIT_RADIUS = 18;
+
 /**
- * Prüft, ob ein Klick/Tap den Skalier-Griff (Kreis unten rechts) getroffen hat.
+ * Liefert die 4 Eckgriffe für eine Bounding Box:
+ * tl: oben-links, tr: oben-rechts, bl: unten-links, br: unten-rechts
+ * Jeder Griff hat einen gegenüberliegenden Ankerpunkt für die proportionale Skalierung.
  */
-export function isLassoHandleHit(pos, bounds, radius = 22) {
-	if (!bounds) return false;
-	return nearPoint(pos, bounds.maxX + 9, bounds.maxY + 9, radius);
+export function getLassoHandles(bounds) {
+	if (!bounds) return null;
+	const off = LASSO_HANDLE_OFFSET;
+	return {
+		tl: { x: bounds.minX - off, y: bounds.minY - off, anchor: [bounds.maxX, bounds.maxY], name: "tl" },
+		tr: { x: bounds.maxX + off, y: bounds.minY - off, anchor: [bounds.minX, bounds.maxY], name: "tr" },
+		bl: { x: bounds.minX - off, y: bounds.maxY + off, anchor: [bounds.maxX, bounds.minY], name: "bl" },
+		br: { x: bounds.maxX + off, y: bounds.maxY + off, anchor: [bounds.minX, bounds.minY], name: "br" }
+	};
+}
+
+/**
+ * Prüft, ob ein Klick/Tap einen der 4 Eckgriffe getroffen hat.
+ * Gibt das Griff-Objekt mit Anker zurück oder null.
+ */
+export function hitLassoHandle(pos, bounds, hitRadius = LASSO_HIT_RADIUS) {
+	if (!bounds) return null;
+	const handles = getLassoHandles(bounds);
+	if (!handles) return null;
+	const r2 = hitRadius * hitRadius;
+	for (const key of ["br", "tr", "bl", "tl"]) {
+		const h = handles[key];
+		const dx = pos[0] - h.x, dy = pos[1] - h.y;
+		if (dx * dx + dy * dy <= r2) return h;
+	}
+	return null;
 }
 
 /**
@@ -175,21 +204,37 @@ export function isLassoBodyHit(pos, bounds, tolerance = 12) {
 }
 
 /**
- * Zeichnet den Lasso-Auswahlrahmen (gestrichelte Bounding-Box + blauer Skalierungsgriff).
+ * Zeichnet den Lasso-Auswahlrahmen (gestrichelte Bounding-Box + 4 Eckgriffe).
  */
 export function drawLassoSelection(ctx, strokes, cachedBounds = null) {
 	const bb = cachedBounds || lassoBounds(strokes || []);
 	if (!bb) return;
+	const off = LASSO_HANDLE_OFFSET;
 	ctx.save();
-	ctx.setLineDash([8, 5]);
+	ctx.setLineDash([7, 4]);
 	ctx.strokeStyle = "#2f6fed";
-	ctx.lineWidth = 2;
-	ctx.strokeRect(bb.minX - 9, bb.minY - 9, bb.maxX - bb.minX + 18, bb.maxY - bb.minY + 18);
+	ctx.lineWidth = 1.8;
+	ctx.strokeRect(bb.minX - off, bb.minY - off, bb.maxX - bb.minX + 2 * off, bb.maxY - bb.minY + 2 * off);
 	ctx.setLineDash([]);
-	ctx.fillStyle = "#2f6fed";
-	ctx.beginPath();
-	ctx.arc(bb.maxX + 9, bb.maxY + 9, 8, 0, Math.PI * 2);
-	ctx.fill();
+
+	const handles = [
+		[bb.minX - off, bb.minY - off],
+		[bb.maxX + off, bb.minY - off],
+		[bb.minX - off, bb.maxY + off],
+		[bb.maxX + off, bb.maxY + off]
+	];
+
+	for (let i = 0; i < 4; i++) {
+		const [hx, hy] = handles[i];
+		ctx.beginPath();
+		ctx.arc(hx, hy, LASSO_HANDLE_RADIUS, 0, Math.PI * 2);
+		ctx.fillStyle = "#2f6fed";
+		ctx.fill();
+		ctx.strokeStyle = "#ffffff";
+		ctx.lineWidth = 2;
+		ctx.stroke();
+	}
+
 	ctx.restore();
 }
 
@@ -212,7 +257,8 @@ export function drawLassoPath(ctx, pts) {
 }
 
 /**
- * Aktualisiert oder entfernt die schwebende Lasso-Aktionsleiste am unteren Bildschirmrand.
+ * Aktualisiert oder entfernt die kompakte, aufgeräumte Lasso-Aktionsleiste.
+ * Keine störenden Tutorial-Texte mehr — nur noch direkte, intuitive Aktionen.
  */
 export function updateLassoBarUI(host, lassoSel, lead) {
 	if (!host) return;
@@ -226,14 +272,12 @@ export function updateLassoBarUI(host, lassoSel, lead) {
 		bar.className = "heft-lasso-bar";
 		host.appendChild(bar);
 	}
-	const n = lassoSel.strokes.length;
 	bar.innerHTML =
-		"<span>" + lead("lasso") + n + (n === 1 ? " Strich" : " Striche") + " · ziehen verschiebt · blauer Punkt skaliert</span>" +
-		'<button type="button" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">' + lead("note") + "In Text</button>" +
-		'<button type="button" data-helassotrain="1" title="Als Trainingsbeispiel für die Handschrift speichern">' + lead("graduation") + "Trainieren</button>" +
-		'<button type="button" data-helassodup="1">' + lead("copy") + "Duplizieren</button>" +
-		'<button type="button" data-helassodel="1">' + lead("trash") + "Löschen</button>" +
-		'<button type="button" data-helassoclear="1">Aufheben</button>';
+		'<button type="button" class="heft-lasso-btn" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">' + lead("note") + 'In Text</button>' +
+		'<button type="button" class="heft-lasso-btn" data-helassodup="1" title="Auswahl duplizieren">' + lead("copy") + 'Duplizieren</button>' +
+		'<button type="button" class="heft-lasso-btn heft-lasso-del" data-helassodel="1" title="Auswahl löschen">' + lead("trash") + 'Löschen</button>' +
+		'<button type="button" class="heft-lasso-btn heft-lasso-train" data-helassotrain="1" title="Als KI-Trainingsbeispiel speichern" aria-label="Als KI-Trainingsbeispiel speichern">' + lead("graduation") + '</button>' +
+		'<button type="button" class="heft-lasso-btn heft-lasso-close" data-helassoclear="1" title="Auswahl aufheben" aria-label="Auswahl aufheben">✕</button>';
 }
 
 /**

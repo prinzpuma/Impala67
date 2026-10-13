@@ -1592,7 +1592,8 @@ export const STATE = (() => {
 				if (idx < 0) return null;
 				const score = (title.includes(q) ? 10 : 0) + hay.split(q).length - 1;
 				return { page: pg, score, snippet: raw.slice(Math.max(0, idx - 80), idx + 160) };
-			}).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 8);
+			// Archivierte Treffer stehen immer unter den aktiven.
+			}).filter(Boolean).sort((a, b) => (!!a.page.archived - !!b.page.archived) || b.score - a.score).slice(0, 8);
 		}, { query: String(query).slice(0, 40) }, 15);
 	}
 
