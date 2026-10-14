@@ -51,7 +51,11 @@ body.beta-ui .heft-chrome .heft-corner {
 	border: 0; border-radius: 999px; background: var(--menu-bg); box-shadow: var(--b-float);
 }
 body.beta-ui .heft-chrome .heft-corner svg { width: 18px; height: 18px }
-body.beta-ui .heft-chrome .heft-corner-l .heft-pageno-inline { font-size: var(--text-xs); font-weight: 600; color: var(--text2); font-variant-numeric: tabular-nums }
+/* Reine Icon-Kreise: nichts daneben, das das Symbol aus der Mitte schiebt (Seitenzahl steht an jeder Seite). */
+body.beta-ui .heft-chrome :is(.heft-corner-l, .heft-plus, .heft-chat) { width: 36px; min-width: 36px; padding: 0; gap: 0; display: inline-grid; place-items: center }
+body.beta-ui.mobile-ui .heft-chrome :is(.heft-corner-l, .heft-plus, .heft-chat) { width: 44px; min-width: 44px }
+@media (pointer: coarse) { body.beta-ui:not(.mobile-ui) .heft-chrome :is(.heft-corner-l, .heft-plus, .heft-chat) { width: 40px; min-width: 40px; height: 40px } }
+body.beta-ui .heft-chrome .heft-pageno-inline { display: none }
 
 /* 4. Gemeinsame Heft-Popups: Menü-Look der App */
 body.beta-ui .heft-pop {

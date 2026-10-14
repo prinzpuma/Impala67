@@ -1810,7 +1810,7 @@ export const HEFT = (() => {
 		const svgUndo = tIcon("undo");
 		const svgRedo = tIcon("redo");
 		const svgHand = tIcon("hand");
-		const svgPages = tIcon(beta ? "pages-grid" : "pages");
+		const svgPages = tIcon(beta ? "pages-stack" : "pages");
 		const svgPlus = tIcon("plus");
 		const svgSpark = tIcon("sparkles");
 		const svgChevDown = tIcon("chevron-down");
