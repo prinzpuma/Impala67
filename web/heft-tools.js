@@ -7,6 +7,13 @@ export const COLORS = ["#1c1c1e", "#2f6fed", "#e0483e", "#1f9d55", "#f5b800", "#
 export const SIZES = [["F", 1.6], ["M", 3], ["B", 5.5]];
 export const PAPERS = [["lined", "☰", "Liniert"], ["grid", "▦", "Kariert"], ["dots", "⣿", "Punkte"], ["blank", "▢", "Blanko"]];
 
+// Stift-Favoriten (Beta-Leiste): drei feste Stifte mit eigener Farbe und Dicke.
+export const DEFAULT_PENS = [{ color: COLORS[0], size: 3 }, { color: COLORS[1], size: 3 }, { color: COLORS[2], size: 1.6 }];
+const normPens = (pens) => DEFAULT_PENS.map((d, i) => {
+	const p = Array.isArray(pens) ? pens[i] : null;
+	return { color: p && typeof p.color === "string" ? p.color : d.color, size: p && typeof p.size === "number" ? p.size : d.size };
+});
+
 export function loadToolPrefs(storage = U.storage) {
 	const saved = (storage && storage.getJson ? storage.getJson(TOOL_PREFS_KEY, {}) : null) || {};
 	return {
@@ -14,6 +21,8 @@ export function loadToolPrefs(storage = U.storage) {
 		size: typeof saved.size === "number" ? saved.size : 3,
 		onlyPen: saved.onlyPen !== false,
 		eraserSize: typeof saved.eraserSize === "number" ? saved.eraserSize : 16,
+		pens: normPens(saved.pens),
+		penSlot: Number.isInteger(saved.penSlot) && saved.penSlot >= 0 && saved.penSlot < DEFAULT_PENS.length ? saved.penSlot : 0,
 	};
 }
 
@@ -24,5 +33,7 @@ export function saveToolPrefs(prefs = {}, storage = U.storage) {
 		size: typeof prefs.size === "number" ? prefs.size : 3,
 		onlyPen: prefs.onlyPen !== false,
 		eraserSize: typeof prefs.eraserSize === "number" ? prefs.eraserSize : 16,
+		pens: normPens(prefs.pens),
+		penSlot: Number.isInteger(prefs.penSlot) ? prefs.penSlot : 0,
 	});
 }

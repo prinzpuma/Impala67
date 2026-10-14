@@ -339,6 +339,18 @@ export const EDITOR = (() => {
 	const serialize = (customBlocks) => PERF_PROFILER.measure("editor.serialize", () => serializeMarkdown(customBlocks !== undefined ? customBlocks : blocks), { blocks: (customBlocks || blocks)?.length }, 15);
 
 	// ---------- Fokus / Caret ----------
+	// Sichtbare Zeichen zählen wie setCaret: Formel-Chips (contenteditable="false")
+	// zählen nicht. Range.toString() zählte das KaTeX-Innenleben mit — nach Tab,
+	// Umwandeln oder Strg+Z stand der Caret dann um diese Länge zu weit rechts.
+	function visibleLength(node) {
+		let n = 0;
+		for (const ch of node.childNodes) {
+			if (ch.nodeType === 3) n += ch.nodeValue.length;
+			else if (ch.nodeType === 1 && ch.getAttribute("contenteditable") !== "false") n += visibleLength(ch);
+		}
+		return n;
+	}
+
 	function caretInfo() {
 		const sel = window.getSelection();
 		if (!sel || !sel.rangeCount || !host) return null;
@@ -352,7 +364,7 @@ export const EDITOR = (() => {
 			bid: field.dataset.btext || field.dataset.bsummary || field.dataset.bcode || (field.dataset.bcell || "").split(":")[0],
 			cell: field.dataset.bcell || null,
 			kind: field.dataset.bsummary ? "summary" : field.dataset.bcode ? "code" : field.dataset.bcell ? "cell" : "text",
-			offset: range.toString().length,
+			offset: visibleLength(range.cloneContents()),
 		};
 	}
 
@@ -851,12 +863,23 @@ export const EDITOR = (() => {
 					for (const k in counters) if (+k > depth) delete counters[k];
 					nums.set(b.id, counters[depth]);
 					prevListy = true;
+				} else if (LISTY[b.type]) {
+					// Aufzählung/Todo auf derselben Ebene beendet die Nummerierung dort
+					// (tiefer eingerückte unterbrechen sie nicht).
+					const depth = b.indent || 0;
+					for (const k in counters) if (+k >= depth) delete counters[k];
+					prevListy = true;
 				} else {
-					prevListy = LISTY[b.type] ? true : false;
-					if (!LISTY[b.type]) for (const k in counters) delete counters[k];
+					prevListy = false;
+					for (const k in counters) delete counters[k];
 				}
-				if (b.children) walk(b.children);
-				if (b.columns) b.columns.forEach(walk);
+				if (b.children || b.columns) {
+					if (b.children) walk(b.children);
+					if (b.columns) b.columns.forEach((col) => { prevListy = false; walk(col); });
+					// Eine Liste im Callout/Toggle darf nicht hinter dem Container weiterzählen.
+					prevListy = false;
+					for (const k in counters) delete counters[k];
+				}
 			}
 		};
 		walk(blocks);
@@ -1039,12 +1062,15 @@ export const EDITOR = (() => {
 		if (accept) input.accept = accept;
 		input.multiple = true;
 		input.onchange = async () => {
-			for (const file of input.files || []) await insertFileBlock(file, bid);
+			let after = bid;
+			for (const file of input.files || []) after = await insertFileBlock(file, after);
 		};
 		input.click();
 	}
 	// EINE Funktion für ALLE Uploads (DRY — ersetzt insertImageFile): Bilder werden
 	// Bildblöcke, alles andere (Video, Audio, PDF, beliebige Dateien) ein Dateiblock.
+	// Liefert die ID des neuen Blocks: Mehrere Dateien hängen sich so der Reihe nach
+	// an (vorher: umgekehrte Reihenfolge bzw. ab der zweiten ans Seitenende).
 	async function insertFileBlock(file, afterBid) {
 		const isImg = (file.type || mimeFromName(file.name)).startsWith("image/");
 		const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
@@ -1060,10 +1086,10 @@ export const EDITOR = (() => {
 				console.warn("PDF-Textextraktion fehlgeschlagen:", e);
 			}
 		}
+		const nb = isImg
+			? { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }
+			: { id: uid(), type: "file", src: blobId, name: file.name };
 		mutate(() => {
-			const nb = isImg
-				? { id: uid(), type: "image", src: blobId, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }
-				: { id: uid(), type: "file", src: blobId, name: file.name };
 			const c = afterBid && findContext(afterBid);
 			if (c) {
 				if (TEXTY[c.block.type] && !String(c.block.text || "").trim()) c.list.splice(c.index, 1, nb);
@@ -1072,6 +1098,7 @@ export const EDITOR = (() => {
 				blocks.push(nb);
 			}
 		});
+		return nb.id;
 	}
 
 	// ---------- Umwandeln ("Turn into") ----------
@@ -1152,7 +1179,7 @@ export const EDITOR = (() => {
 		// Slash-Menü öffnen/aktualisieren
 		const sm = upto.match(/\/([a-zäöüß0-9]*)$/i);
 		if (sm && (upto.length === sm[0].length || /\s\/[a-zäöüß0-9]*$/i.test(upto))) {
-			openSlash(bid, sm[1]);
+			openSlash(bid, sm[1], upto.length);
 			return false;
 		} else if (slash) closeMenus();
 
@@ -1163,8 +1190,8 @@ export const EDITOR = (() => {
 		const lm = upto.match(/\[\[([^\]]*)$/);
 		if (lm) {
 			clearTimeout(linkMenuTimer);
-			if (!linkMenu) openLinkMenu(bid, lm[1]);
-			else linkMenuTimer = setTimeout(() => { if (linkMenu) openLinkMenu(bid, lm[1]); }, 80);
+			if (!linkMenu) openLinkMenu(bid, lm[1], upto.length);
+			else linkMenuTimer = setTimeout(() => { if (linkMenu) openLinkMenu(bid, lm[1], upto.length); }, 80);
 			return false;
 		}
 		else if (linkMenu) { clearTimeout(linkMenuTimer); closeMenus(); }
@@ -1192,20 +1219,16 @@ export const EDITOR = (() => {
 		}
 		// "---" → Trennlinie
 		if (text === "---") {
-			mutate(() => {
-				const nb = newBlock("p");
-				c.list.splice(c.index, 1, { id: c.block.id, type: "divider" }, nb);
-				focusBlock(nb.id, 0);
-			});
+			const nb = newBlock("p");
+			mutate(() => { c.list.splice(c.index, 1, { id: c.block.id, type: "divider" }, nb); });
+			focusBlock(nb.id, 0);
 			return true;
 		}
 		// Code-Zaun → Codeblock
 		if (text.startsWith(FENCE)) {
 			const language = text.slice(3).trim() || "javascript";
-			mutate(() => {
-				c.list.splice(c.index, 1, { id: c.block.id, type: "code", language, text: "" });
-				focusBlock(c.block.id, 0, "code");
-			});
+			mutate(() => { c.list.splice(c.index, 1, { id: c.block.id, type: "code", language, text: "" }); });
+			focusBlock(c.block.id, 0, "code");
 			return true;
 		}
 		// "$$" → Gleichungsblock mit Popover
@@ -1430,14 +1453,17 @@ export const EDITOR = (() => {
 					e.preventDefault();
 					const c = findContext(b.id);
 					if (c) {
+						// Nur leere TEXT-Kinder dürfen mit dem Toggle verschwinden — ein einzelnes
+						// Bild oder eine Tabelle ohne .text wäre sonst kommentarlos gelöscht worden.
+						const kids = b.children || [];
+						const leer = !kids.length || (kids.length === 1 && TEXTY[kids[0].type] && !String(kids[0].text || "").trim());
 						mutate(() => {
-							if (!b.children || b.children.length === 0 || (b.children.length === 1 && !String(b.children[0].text || "").trim())) {
-								turnInto(b, "p");
-							} else {
-								c.list.splice(c.index, 1, ...b.children);
-							}
+							if (leer) turnInto(b, "p");
+							else c.list.splice(c.index, 1, ...kids);
 						});
-						focusBlock(b.id, 0);
+						// Beim Auspacken existiert der Toggle nicht mehr: Fokus ins erste Kind.
+						if (leer) focusBlock(b.id, 0);
+						else focusNeighbor(kids[0], 1);
 						return;
 					}
 				}
@@ -1445,9 +1471,9 @@ export const EDITOR = (() => {
 			if (e.key === "ArrowUp" || e.key === "ArrowDown") {
 				const b = findBlock(field.dataset.bsummary);
 				const caret = caretInfo();
-				const text = String(b && b.summary || "");
 				const d = e.key === "ArrowUp" ? -1 : 1;
-				const edge = d < 0 ? caret && caret.offset === 0 : caret && caret.offset >= text.length;
+				// Sichtlänge statt Markdown-Länge: bei **fett** im Titel kam ↓ sonst nie raus
+				const edge = d < 0 ? caret && caret.offset === 0 : caret && caret.offset >= visibleLength(field);
 				if (edge) {
 					const c = findContext(field.dataset.bsummary);
 					if (d > 0 && b && b.open && b.children && b.children.length) {
@@ -1475,7 +1501,7 @@ export const EDITOR = (() => {
 		const text = String(b.text || "");
 		const off = caret ? caret.offset : text.length;
 		const atStart = off === 0 && String(window.getSelection()).length === 0;
-		const atEnd = off >= (field.textContent || "").length;
+		const atEnd = off >= visibleLength(field);
 
 		// Shift+Enter = weicher Umbruch im selben Block (Browser macht <br>) → ok
 		if (e.key === "Enter" && e.shiftKey) return;
@@ -1613,16 +1639,22 @@ export const EDITOR = (() => {
 			return;
 		}
 
-		if (e.key === "Delete" && atEnd) {
+		if (e.key === "Delete" && atEnd && !String(window.getSelection())) {
 			const next = c.list[c.index + 1];
 			if (!next) return;
 			e.preventDefault();
 			if (TEXTY[next.type]) {
+				const nextText = String(next.text || "");
 				mutate(() => {
-					b.text = text + String(next.text || "");
+					b.text = text + nextText;
 					c.list.splice(c.index + 1, 1);
 				});
-				focusBlock(b.id, off);
+				// Das fokussierte Feld lässt der DOM-Abgleich unangetastet — ohne
+				// Neumalen fehlte der angehängte Text, und das nächste Tippen schrieb
+				// den alten Feldinhalt zurück ins Modell (Text des Folgeblocks weg).
+				field.innerHTML = inlineHtml(text) + '<span data-caret-boundary="1"></span>' + inlineHtml(nextText);
+				hydrateInlineMath(field);
+				if (!focusBoundary(field.querySelector("[data-caret-boundary]"))) focusBlock(b.id, off);
 			} else {
 				if (selectTopOf(next)) field.blur();
 			}
@@ -1767,7 +1799,9 @@ export const EDITOR = (() => {
 				if (!neighbor && d > 0 && c && !c.parent) {
 					// Unter dem letzten Codeblock einen Absatz anlegen (sonst käme man nie raus)
 					e.preventDefault();
-					mutate(() => { const nb = newBlock("p"); blocks.push(nb); focusBlock(nb.id, 0); });
+					const nb = newBlock("p");
+					mutate(() => { blocks.push(nb); });
+					focusBlock(nb.id, 0);
 					return true;
 				}
 			}
@@ -1901,6 +1935,12 @@ export const EDITOR = (() => {
 			if (!field) return;
 			checkpoint();
 			syncFieldToModel(field);
+			// Nach dem letzten gelöschten Zeichen lässt der Browser ein <br> stehen:
+			// :empty greift dann nicht und der Platzhalter („To-do“, „Liste“ …) fehlt.
+			if (field.childNodes.length === 1 && field.firstChild.nodeName === "BR") {
+				field.textContent = "";
+				setCaret(field, 0);
+			}
 			handleLiveTriggers(field, e);
 			save();
 		});
@@ -1928,13 +1968,11 @@ export const EDITOR = (() => {
 			if (plus) {
 				const c = findContext(plus.dataset.bplus);
 				if (c) {
-					mutate(() => {
-						const nb = newBlock("p");
-						nb.text = "/";
-						c.list.splice(c.index + 1, 0, nb);
-						focusBlock(nb.id, 1);
-						openSlash(nb.id, "");
-					});
+					const nb = newBlock("p");
+					nb.text = "/";
+					mutate(() => { c.list.splice(c.index + 1, 0, nb); });
+					focusBlock(nb.id, 1);
+					openSlash(nb.id, "", 1);
 				}
 				return;
 			}
@@ -2021,11 +2059,9 @@ export const EDITOR = (() => {
 				if (last && TEXTY[last.type] && !String(last.text || "").trim()) {
 					focusBlock(last.id, 0);
 				} else {
-					mutate(() => {
-						const nb = newBlock("p");
-						blocks.push(nb);
-						focusBlock(nb.id, 0);
-					});
+					const nb = newBlock("p");
+					mutate(() => { blocks.push(nb); });
+					focusBlock(nb.id, 0);
 				}
 				return;
 			}
@@ -2088,9 +2124,8 @@ export const EDITOR = (() => {
 			// Video/Audio/PDF/Sonstiges als Dateiblock), nicht mehr nur Bilder.
 			if (e.dataTransfer.files && e.dataTransfer.files.length) {
 				const over = e.target.closest && e.target.closest("[data-blk]");
-				for (const f of e.dataTransfer.files) {
-					await insertFileBlock(f, over && over.dataset.blk);
-				}
+				let after = over && over.dataset.blk;
+				for (const f of e.dataTransfer.files) after = await insertFileBlock(f, after);
 				dragBid = null;
 				return;
 			}
@@ -2137,11 +2172,22 @@ export const EDITOR = (() => {
 				const c = findContext(field.dataset.btext);
 				if (c) {
 					const pasted = parse(text);
-					mutate(() => {
-						c.list.splice(c.index + 1, 0, ...pasted);
-						if (!String(c.block.text || "").trim() && c.block.type === "p") c.list.splice(c.index, 1);
-					});
+					// Am Caret teilen (wie Enter): Text davor bleibt im Block, Text danach
+					// folgt hinter den eingefügten Blöcken. Ersetzt auch markierten Text.
+					const teile = splitFieldAtCaret(field, c.block.text);
 					const last = pasted[pasted.length - 1];
+					if (teile.nach) {
+						pasted.push(LISTY[c.block.type]
+							? { id: uid(), type: c.block.type, indent: c.block.indent || 0, text: teile.nach, ...(c.block.type === "todo" ? { checked: false } : {}) }
+							: { id: uid(), type: "p", text: teile.nach });
+					}
+					field.innerHTML = inlineHtml(teile.vor);
+					hydrateInlineMath(field);
+					mutate(() => {
+						c.block.text = teile.vor;
+						c.list.splice(c.index + 1, 0, ...pasted);
+						if (!teile.vor.trim() && c.block.type === "p") c.list.splice(c.index, 1);
+					});
 					if (last) focusBlock(last.id, null);
 					return;
 				}

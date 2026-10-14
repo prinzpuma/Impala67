@@ -36,6 +36,18 @@
         "web"
       ],
       "port": 8012
+    },
+    {
+      "name": "impala67-alt",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8023",
+        "--directory",
+        "web"
+      ],
+      "port": 8023
     }
   ]
 }

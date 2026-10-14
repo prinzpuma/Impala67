@@ -23,6 +23,7 @@ import {
 	trainLassoSample
 } from "./heft-lasso.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
+import { isBetaUi, penFavoritesHtml, sizeDotHtml, plusPopBetaHtml } from "./heft-toolbar-beta.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
@@ -82,9 +83,12 @@ export const HEFT = (() => {
 	const savedTools = loadToolPrefs();
 	let tool = "pen", color = savedTools.color, size = savedTools.size, onlyPen = savedTools.onlyPen;
 	let eraserSize = savedTools.eraserSize;
+	const pens = savedTools.pens;
+	let penSlot = savedTools.penSlot;
+	if (isBetaUi()) ({ color, size } = pens[penSlot]);
 	let inlineEd = null;
 	let lastEmptyTap = null;
-	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize }); }
+	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, pens, penSlot }); }
 	const activePenPointers = new Set();
 	let lastPenUpAt = 0, lastStrokeAt = 0;
 	const PEN_GRACE_MS = 400;
@@ -1781,8 +1785,13 @@ export const HEFT = (() => {
 	}
 	function trayStyle() {
 		if (!trayPos) return "";
-		return ' style="left:' + Math.round(trayPos.x) + 'px;top:' + Math.round(trayPos.y) + 'px;transform:none"';
+		return ' style="' + trayCss(trayPos) + '"';
 	}
+	// Am linken/rechten Rand dockt das Tray senkrecht an; rechts über `right`, damit es beim Fenster-Resize am Rand bleibt.
+	const TRAY_DOCK_PX = 48;
+	const trayCss = (p) => (p.side === "right" ? "left:auto;right:8px" : "right:auto;left:" + Math.round(p.side === "left" ? 8 : p.x) + "px") +
+		";top:" + Math.round(p.y) + "px;transform:none";
+	const trayClass = () => "heft-tray" + (trayPos && trayPos.side ? " is-vertical" : "");
 
 	let chromeMin = false;
 	const tIcon = (name) => icon(name, "", 19);
@@ -1790,6 +1799,7 @@ export const HEFT = (() => {
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
+		const beta = isBetaUi();
 
 		const svgPen = tIcon("pen-tool");
 		const svgMarker = tIcon("marker");
@@ -1800,7 +1810,7 @@ export const HEFT = (() => {
 		const svgUndo = tIcon("undo");
 		const svgRedo = tIcon("redo");
 		const svgHand = tIcon("hand");
-		const svgPages = tIcon("pages");
+		const svgPages = tIcon(beta ? "pages-grid" : "pages");
 		const svgPlus = tIcon("plus");
 		const svgSpark = tIcon("sparkles");
 		const svgChevDown = tIcon("chevron-down");
@@ -1821,14 +1831,15 @@ export const HEFT = (() => {
 		let tray = "";
 		if (showWrite) {
 			tray =
-				'<div class="heft-tray" data-hetray="1" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
+				'<div class="' + trayClass() + '" data-hetray="1" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
+					(beta ? SIZES.map((sz) => sizeDotHtml(sz[0], sz[1], size === sz[1], color)).join("") :
 					'<button type="button" data-hetool="pen" class="heft-opt' + (tool === "pen" ? " active" : "") +
 						'" title="Stift">' + svgPen + '</button>' +
 					'<button type="button" data-hetool="marker" class="heft-opt' + (tool === "marker" ? " active" : "") +
 						'" title="Marker">' + svgMarker + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
-					SIZES.map(sizeLine).join("") +
+					SIZES.map(sizeLine).join("")) +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					COLORS.map((c) => '<button type="button" class="heft-swatch' + (color === c ? " active" : "") +
 						'" data-hecolor="' + c + '" style="--sw:' + c + ';background:' + c + '" title="Farbe"></button>').join("") +
@@ -1840,7 +1851,7 @@ export const HEFT = (() => {
 		} else if (showEraser) {
 
 			tray =
-				'<div class="heft-tray" data-hetray="1" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
+				'<div class="' + trayClass() + '" data-hetray="1" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
 					[["Klein", 10], ["Mittel", 16], ["Groß", 30]].map((z) => '<button type="button" class="heft-size' + (eraserSize === z[1] ? " active" : "") +
 						'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
@@ -1858,9 +1869,11 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
+					(beta ? penFavoritesHtml({ pens, penSlot, tool, expanded }, tIcon) :
 					'<button type="button" data-hewrite="1" class="heft-main' + (writeOn ? " active" : "") +
 						(showWrite ? " open" : "") + '" title="Schreiben">' +
-						writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span><span class="heft-chev">▾</span></button>' +
+						writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span><span class="heft-chev">▾</span></button>') +
+					(beta ? '<span class="heft-sep" aria-hidden="true"></span>' : '') +
 					'<button type="button" data-hetool="eraser" class="heft-main' + (tool === "eraser" ? " active" : "") +
 						(showEraser ? " open" : "") + '" title="Radierer">' + svgEraser + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
@@ -1900,23 +1913,31 @@ export const HEFT = (() => {
 		if (!grip || !tray || !host) return;
 		e.preventDefault(); e.stopPropagation();
 		const r = tray.getBoundingClientRect(), hr = host.getBoundingClientRect();
-		trayDrag = { tray, pid: e.pointerId, ox: e.clientX - r.left, oy: e.clientY - r.top };
-		trayPos = { x: r.left - hr.left, y: r.top - hr.top };
-		tray.style.left = Math.round(trayPos.x) + "px";
-		tray.style.top = Math.round(trayPos.y) + "px";
-		tray.style.transform = "none";
+		trayDrag = { tray, grip, pid: e.pointerId, ox: e.clientX - r.left, oy: e.clientY - r.top };
+		trayPos = { x: r.left - hr.left, y: r.top - hr.top, side: trayPos && trayPos.side || null };
+		tray.style.cssText = trayCss(trayPos);
 		tray.classList.add("is-dragging");
 		try { grip.setPointerCapture(e.pointerId); } catch {  }
 	}
 	function onTrayPointerMove(e) {
 		if (!trayDrag || !host || e.pointerId !== trayDrag.pid) return;
 		e.preventDefault();
-		const hr = host.getBoundingClientRect(), tr = trayDrag.tray.getBoundingClientRect();
-		const x = Math.min(Math.max(8, e.clientX - hr.left - trayDrag.ox), Math.max(8, hr.width - tr.width - 8));
+		const { tray, grip } = trayDrag;
+		const hr = host.getBoundingClientRect();
+		const px = e.clientX - hr.left;
+		const side = px < TRAY_DOCK_PX ? "left" : px > hr.width - TRAY_DOCK_PX ? "right" : null;
+		if (side !== trayPos.side) {
+			// Ausrichtung wechselt → Griff bleibt unter dem Finger.
+			tray.classList.toggle("is-vertical", !!side);
+			const r = tray.getBoundingClientRect(), g = grip.getBoundingClientRect();
+			trayDrag.ox = g.left - r.left + g.width / 2;
+			trayDrag.oy = g.top - r.top + g.height / 2;
+		}
+		const tr = tray.getBoundingClientRect();
+		const x = Math.min(Math.max(8, px - trayDrag.ox), Math.max(8, hr.width - tr.width - 8));
 		const y = Math.min(Math.max(8, e.clientY - hr.top - trayDrag.oy), Math.max(8, hr.height - tr.height - 8));
-		trayPos = { x, y };
-		trayDrag.tray.style.left = Math.round(x) + "px";
-		trayDrag.tray.style.top = Math.round(y) + "px";
+		trayPos = { x, y, side };
+		tray.style.cssText = trayCss(trayPos);
 	}
 	function onTrayPointerUp(e) {
 		if (!trayDrag || e.pointerId !== trayDrag.pid) return;
@@ -2080,7 +2101,8 @@ export const HEFT = (() => {
 			'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
 	}
 	function plusPopHtml() {
-		const seg = (k, lbl) => '<button type="button" class="heft-seg' + (insertPos === k ? ' active' : '') + '" data-hepos="' + k + '">' + lbl + '</button>';
+		if (isBetaUi()) return plusPopBetaHtml({ insertPos, curPaper: page() ? page().paper : "lined" }, icon);
+		const seg =(k, lbl) => '<button type="button" class="heft-seg' + (insertPos === k ? ' active' : '') + '" data-hepos="' + k + '">' + lbl + '</button>';
 		const curPaper = page() ? page().paper : "lined";
 		const tpl = (p, lbl, sub) =>
 			'<button type="button" class="heft-tpl" data-headdtpl="' + p + '">' +
@@ -2610,13 +2632,22 @@ export const HEFT = (() => {
 			else { tool = "pen"; expanded = true; }
 			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		}
+		else if (d.hepen != null) {
+			// Beta: Stift-Favorit wählen; erneuter Tipp auf den aktiven öffnet Farbe und Dicke.
+			const i = Number(d.hepen);
+			if (tool === "pen" && penSlot === i) expanded = !expanded;
+			else { tool = "pen"; penSlot = i; ({ color, size } = pens[i]); expanded = false; }
+			lassoSel = null;
+			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
+		}
 		else if (d.hetool) {
 			if (d.hetool === "eraser") {
 				if (tool === "eraser") expanded = !expanded;
 				else { tool = "eraser"; expanded = true; }
 			} else if (d.hetool === "pen" || d.hetool === "marker") {
-
-				tool = d.hetool; expanded = true;
+				// Beta: wie die Stift-Favoriten – erster Tipp wählt, zweiter öffnet die Optionen.
+				expanded = isBetaUi() ? tool === d.hetool && !expanded : true;
+				tool = d.hetool;
 			} else {
 
 				tool = d.hetool; expanded = false;
@@ -2628,8 +2659,12 @@ export const HEFT = (() => {
 		else if (d.hecolor) {
 			color = d.hecolor;
 			if (tool === "eraser" || tool === "select") { tool = "pen"; expanded = true; }
+			if (tool === "pen" && isBetaUi()) pens[penSlot] = { color, size };
 		}
-		else if (d.hesize) size = parseFloat(d.hesize);
+		else if (d.hesize) {
+			size = parseFloat(d.hesize);
+			if (tool === "pen" && isBetaUi()) pens[penSlot] = { color, size };
+		}
 		else if (d.heerasersize) eraserSize = parseFloat(d.heerasersize);
 		else if (d.heundo) { undo(); return; }
 		else if (d.heredo) { redo(); return; }

@@ -77,6 +77,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="stylesheet" href="beta-ui.css?build=9">
 <link rel="stylesheet" href="mobile.css?build=14">
 <link rel="stylesheet" href="mobile-content.css?build=1">
+<link rel="stylesheet" href="css/heft-beta.css">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
@@ -118,6 +119,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 		document.body.classList.toggle("tabs-in-sidebar", tabsPos === "sidebar");
 		document.body.classList.toggle("font-s", fontSize === "s");
 		document.body.classList.toggle("font-l", fontSize === "l");
+		document.body.classList.toggle("beta-ui", localStorage.getItem("impala67BetaUi") === "1");
 		document.body.classList.toggle("sidebar-collapsed", localStorage.getItem("impala67.sidebarCollapsed") === "1");
 		var sidebarWidth = Number(localStorage.getItem("impala67.sidebarWidth") || 0);
 		if (sidebarWidth) document.body.style.setProperty("--sidebar-w", Math.max(200, Math.min(420, sidebarWidth)) + "px");
@@ -272,7 +274,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 
 <!-- config.local.js wird bewusst nur optional durch main.js geladen. drive.js liest
      window.APP_CONFIG erst beim Login; fehlende lokale Konfiguration blockiert die PWA nicht. -->
-<script type="module" src="main.js?build=215"></script>
+<script type="module" src="main.js?build=216"></script>
 <script>
 // Service-Worker nur im regulären Browser über http(s) registrieren — nicht in der nativen Capacitor-App,
 // da die App-Dateien dort bereits lokal im APK liegen und ein Worker die native Bridge behindern könnte.
@@ -282,7 +284,7 @@ if ("serviceWorker" in navigator) {
 			for (const r of regs) r.unregister();
 		}).catch(() => {});
 	} else if (location.protocol.startsWith("http")) {
-		navigator.serviceWorker.register("service-worker.js?build=114", { updateViaCache: "none" })
+		navigator.serviceWorker.register("service-worker.js?build=115", { updateViaCache: "none" })
 			.then((reg) => reg.update().catch(() => {}))
 			.catch((e) => console.warn("Service-Worker:", e));
 	}

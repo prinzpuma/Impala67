@@ -244,15 +244,27 @@ export function parse(md, uidGenerator) {
 		if (li) {
 			const indent = Math.floor(li[1].replace(/\t/g, "  ").length / 2);
 			const rest = li[3];
+			// Folgezeilen (Shift+Enter im Listenpunkt) sind um 2 Leerzeichen tiefer
+			// eingerückt — wie in CommonMark. Vorher wurde daraus ein eigener Absatz.
+			const contIndent = li[1].replace(/\t/g, "  ").length + 2;
+			let cont = "";
+			i++;
+			while (i < lines.length) {
+				const ws = lines[i].match(/^[ \t]*/)[0].replace(/\t/g, "  ");
+				const body = lines[i].slice(lines[i].match(/^[ \t]*/)[0].length);
+				if (ws.length < contIndent || /^([-*+]|\d+[.)])\s/.test(body) || body.startsWith(FENCE)) break;
+				cont += "\n" + ws.slice(contIndent) + body;
+				i++;
+			}
 			const todo = rest.match(/^\[( |x|X)\]\s?(.*)$/);
 			if (todo && /^[-*+]$/.test(li[2])) {
-				out.push(applyColor({ id: uid(), type: "todo", checked: todo[1].toLowerCase() === "x", indent, text: todo[2] }));
+				out.push(applyColor({ id: uid(), type: "todo", checked: todo[1].toLowerCase() === "x", indent, text: todo[2] + cont }));
 			} else if (/^[-*+]$/.test(li[2])) {
-				out.push(applyColor({ id: uid(), type: "bullet", indent, text: rest }));
+				out.push(applyColor({ id: uid(), type: "bullet", indent, text: rest + cont }));
 			} else {
-				out.push(applyColor({ id: uid(), type: "number", indent, text: rest }));
+				out.push(applyColor({ id: uid(), type: "number", indent, text: rest + cont }));
 			}
-			i++; continue;
+			continue;
 		}
 
 		// Absatz (Folgezeilen bis Leerzeile gehören dazu, außer neue Blockstarts)
@@ -275,13 +287,15 @@ export function serializeBlock(b) {
 		? "<!--@c:" + (b.textColor || "") + (b.bgColor ? ";bg:" + b.bgColor : "") + "-->\n"
 		: "";
 	const ind = "  ".repeat(b.indent || 0);
+	// Zeilenumbrüche im Listenpunkt als eingerückte Folgezeilen (parse() liest sie zurück)
+	const liText = String(b.text || "").replace(/\n/g, "\n" + ind + "  ");
 	switch (b.type) {
 		case "h1": return colorMeta + "# " + (b.text || "");
 		case "h2": return colorMeta + "## " + (b.text || "");
 		case "h3": return colorMeta + "### " + (b.text || "");
-		case "bullet": return colorMeta + ind + "- " + (b.text || "");
-		case "number": return colorMeta + ind + "1. " + (b.text || "");
-		case "todo": return colorMeta + ind + "- [" + (b.checked ? "x" : " ") + "] " + (b.text || "");
+		case "bullet": return colorMeta + ind + "- " + liText;
+		case "number": return colorMeta + ind + "1. " + liText;
+		case "todo": return colorMeta + ind + "- [" + (b.checked ? "x" : " ") + "] " + liText;
 		case "quote": return colorMeta + String(b.text || "").split("\n").map((l) => "> " + l).join("\n");
 		case "divider": return "---";
 		case "image": return "![" + (b.alt || "") + "](" + (b.src || "") + ")";

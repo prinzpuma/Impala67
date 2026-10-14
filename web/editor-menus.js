@@ -117,7 +117,8 @@ export const SLASH = [
 	{ k: "link", icon: icon("link"), label: "Seite verlinken", hint: "[[" },
 ];
 
-export function openSlash(bid, query) {
+// end = Markdown-Position direkt hinter "/befehl" (Caret beim Tippen).
+export function openSlash(bid, query, end) {
 	const q = (query || "").toLowerCase();
 	const items = SLASH.filter((s) => !q || s.label.toLowerCase().includes(q) || s.k.includes(q));
 	if (!items.length) { closeMenus(); return; }
@@ -135,21 +136,27 @@ export function openSlash(bid, query) {
 	} else {
 		openMenu(field, html, "blk-slashmenu");
 	}
-	slash = { items, index: keepIndex, bid, query: q };
+	slash = { items, index: keepIndex, bid, query: q, end, len: 1 + String(query || "").length };
 }
 
 // Führt eine Slash-Auswahl aus: "/befehl" aus dem Text entfernen, Block wandeln.
 export async function applySlash(kind) {
 	if (!slash) return;
-	const bid = slash.bid;
+	const { bid, end, len } = slash;
 	closeMenus();
 	let c = env.findContext(bid);
 	if (!c) return;
-	const text = String(c.block.text || "").replace(/\/[^/]*$/, "");
+	// Nur "/befehl" an der Caret-Stelle entfernen. Vorher fiel alles ab dem letzten
+	// "/" weg — bei einem Befehl mitten im Satz auch der Text HINTER dem Caret.
+	const full = String(c.block.text || "");
+	const atCaret = end != null && full[end - len] === "/";
+	const text = atCaret ? full.slice(0, end - len) + full.slice(end) : full.replace(/\/[^/]*$/, "");
 	if (kind === "link") {
-		env.mutate(() => { c.block.text = text + "[["; }, { soft: true });
-		env.paintTextField(bid, text + "[[", text.length + 2);
-		openLinkMenu(bid, "");
+		const cut = atCaret ? end - len : text.length;
+		const withLink = text.slice(0, cut) + "[[" + text.slice(cut);
+		env.mutate(() => { c.block.text = withLink; }, { soft: true });
+		env.paintTextField(bid, withLink, cut + 2);
+		openLinkMenu(bid, "", cut + 2);
 		return;
 	}
 	if (kind === "image" || kind === "file" || kind === "pdf") {
@@ -209,11 +216,12 @@ export async function applySlash(kind) {
 	// Falls der ursprüngliche Textblock erhalten blieb, muss sein geschützter
 	// contenteditable-DOM denselben Stand wie das Modell erhalten. Bei ersetzten
 	// Strukturblöcken existiert das Feld nicht mehr und der Aufruf ist wirkungslos.
-	env.paintTextField(bid, text, text.length);
+	env.paintTextField(bid, text, atCaret ? end - len : text.length);
 }
 
 // ---------- [[ Seiten-Link-Menü ----------
-export function openLinkMenu(bid, query) {
+// end = Markdown-Position direkt hinter "[[suche" (Caret beim Tippen).
+export function openLinkMenu(bid, query, end) {
 	const q = (query || "").toLowerCase();
 	const pageId = env.getPageId();
 	const items = STATE.activePages()
@@ -228,22 +236,25 @@ export function openLinkMenu(bid, query) {
 			'<span class="blk-mi-ic">' + pageIcon(p, "file") + "</span><span>" + esc(p.title || "Ohne Titel") + "</span></div>").join("")
 		: '<div class="blk-mi disabled">Keine Seite gefunden</div>';
 	openMenu(field, html, "blk-linkmenu");
-	linkMenu = { items, index: keepIndex, bid, query: q };
+	linkMenu = { items, index: keepIndex, bid, query: q, end };
 }
 
 export function applyLink(pid) {
 	if (!linkMenu) return;
-	const bid = linkMenu.bid;
+	const { bid, end } = linkMenu;
 	closeMenus();
 	const c = env.findContext(bid);
 	const page = S.pages[pid];
 	if (!c || !page) return;
 	const link = "[" + (page.title || "Ohne Titel") + "](#" + pid + ")";
-	const newText = String(c.block.text || "").replace(/\[\[[^\]]*$/, link);
+	// Nur "[[suche" vor dem Caret ersetzen — Text dahinter bleibt stehen.
+	const full = String(c.block.text || "");
+	const start = end != null ? full.lastIndexOf("[[", end - 2) : -1;
+	const newText = start >= 0 ? full.slice(0, start) + link + full.slice(end) : full.replace(/\[\[[^\]]*$/, link);
 	env.mutate(() => {
 		c.block.text = newText;
 	});
-	env.paintTextField(bid, newText, newText.length);
+	env.paintTextField(bid, newText, start >= 0 ? start + (page.title || "Ohne Titel").length : newText.length);
 }
 
 // ---------- ⋮⋮-Blockmenü (Umwandeln, Farbe, Duplizieren, Löschen …) ----------

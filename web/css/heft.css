@@ -305,6 +305,12 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-chrome .heft-tray .heft-size i { width: 15px }
 .heft-chrome .heft-tray .heft-swatch { width: 16px; height: 16px; min-width: 16px !important; margin: 0 1px }
 .heft-chrome .heft-tray .heft-sep { height: 16px; margin: 0 3px }
+/* Am Seitenrand angedockt: senkrecht, scrollt bei wenig Höhe vertikal. */
+.heft-chrome .heft-tray.is-vertical { flex-direction: column; padding: var(--space-1) 2px; max-width: none; max-height: calc(100% - 16px); overflow-x: hidden; overflow-y: auto }
+.heft-chrome .heft-tray.is-vertical .heft-tray-drag { width: 24px; height: 20px; min-height: 20px }
+.heft-chrome .heft-tray.is-vertical .heft-sep { width: 16px; height: 1px; margin: 3px 0 }
+.heft-chrome .heft-tray.is-vertical .heft-swatch { margin: 1px 0; flex-shrink: 0 }
+.heft-chrome .heft-tray.is-vertical > * { flex-shrink: 0 }
 /* Eckaktionen bleiben klein, aber klar treffbar. */
 .heft-chrome .heft-corner { top: 10px; height: 28px; min-height: 28px; min-width: 28px; padding: 0 7px; border-radius: var(--radius-md); font-size: var(--text-xs); background: var(--menu-bg); border-color: var(--edge); box-shadow: none }
 .heft-chrome .heft-corner.heft-chat { min-width: 28px; padding: 0 7px; background: var(--menu-bg); color: var(--text) }

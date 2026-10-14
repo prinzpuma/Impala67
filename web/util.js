@@ -276,6 +276,12 @@ export const U = {
 		const textFields = "input:not([type=checkbox]):not([type=radio]), textarea";
 		if (oldNode.isEqualNode(newNode) && !oldNode.matches(textFields) && !oldNode.querySelector(textFields)) return false;
 		let changed = false;
+		// contenteditable-Inhalte gehören dem Editor, solange der Cursor drin steht —
+		// aber nur, wenn der Knoten VOR dem Angleichen schon das Feld war und es bleibt.
+		// Nach dem Attribut-Abgleich geprüft, galt beim Typwechsel (Todo → Text) die alte
+		// Listen-Hülle als Feld: Checkbox und inneres Feld blieben darin stecken.
+		const ownsCaret = oldNode.isContentEditable && oldNode.contains(document.activeElement) &&
+			newNode.getAttribute("contenteditable") === "true";
 		// Attribute angleichen
 		for (const a of [...newNode.attributes]) {
 			if (oldNode.getAttribute(a.name) !== a.value) { oldNode.setAttribute(a.name, a.value); changed = true; }
@@ -293,8 +299,7 @@ export const U = {
 		// gegen den Textknoten. Der Seitentitel (#pageTitle) ist ein <textarea> und zeigte
 		// nach einer Umbenennung von außen (Sync, KI-Tool) weiter den alten Namen.
 		if (/^(INPUT|TEXTAREA)$/.test(oldNode.tagName) && oldNode.value !== newNode.value) { oldNode.value = newNode.value; changed = true; }
-		// contenteditable-Inhalte gehören dem Editor, solange der Cursor drin steht.
-		if (oldNode.isContentEditable && oldNode.contains(document.activeElement)) return changed;
+		if (ownsCaret) return changed;
 		if (U._morphChildren(oldNode, newNode)) changed = true;
 		return changed;
 	},
