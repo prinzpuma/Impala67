@@ -70,7 +70,10 @@ body.beta-ui .heft-pop-row svg { width: 18px; height: 18px; color: var(--text2);
 body.beta-ui .heft-seg-row { gap: 2px; padding: 3px; margin: 0 2px 8px; border: 0; border-radius: 999px; background: var(--b-tint) }
 body.beta-ui .heft-seg { min-height: 30px; border-radius: 999px; color: var(--text2); font-weight: 600; transition: background .2s var(--b-ease), color .2s var(--b-ease) }
 body.beta-ui .heft-seg:hover:not(.active) { color: var(--text) }
-body.beta-ui .heft-seg.active { background: var(--panel-solid); color: var(--text); box-shadow: 0 0 0 1px var(--edge-soft), 0 4px 12px -6px rgb(0 0 0 / .35) }
+/* Aktiv = heller und angehoben (im Dunkelmodus war die dunkle Fläche wie „eingedrückt“) */
+body.beta-ui { --seg-on: color-mix(in srgb, var(--text) 12%, var(--menu-bg)) }
+body.beta-ui.light { --seg-on: var(--panel-solid) }
+body.beta-ui .heft-seg.active { background: var(--seg-on); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .18), 0 4px 12px -6px rgb(0 0 0 / .35) }
 
 /* 5. „Seite hinzufügen“: große Papiere zum Anlegen, kleine Chips für die aktuelle Seite */
 body.beta-ui .heft-pop-plus { width: 320px }
@@ -95,18 +98,48 @@ body.beta-ui .heft-paper-chip.active { background: var(--panel-solid); color: va
 body.beta-ui .heft-paper-chip .heft-tpl-paper { width: 12px; height: 16px; border-radius: 2px; background-size: 4px 4px; flex-shrink: 0 }
 body.beta-ui .heft-paper-chip .heft-tpl-lined { background-image: repeating-linear-gradient(to bottom, transparent 0 3px, rgb(92 120 170 / .5) 3px 4px) }
 
-/* 6. Seitenübersicht: ruhiger Kopf, Seiten ohne dunkles Band, Griffe erst beim Überfahren */
-body.beta-ui .heft-pop-pages { padding: 0; border-radius: var(--b-r-lg); animation: beta-pop .32s var(--b-spring) both }
-body.beta-ui .heft-pages-top { gap: 10px; padding: 12px 14px 4px }
-body.beta-ui .heft-pages-top .heft-pages-manager-head b { font-size: var(--text-base); font-weight: 650 }
+/* 6. Seitenübersicht: fester Rahmen (Kopf, Umschalter, Fußleiste gleich hoch in allen Ansichten),
+   gleitende Markierung im Umschalter, keine Hüpf-Effekte. */
+body.beta-ui .heft-pop-pages { padding: 0; border-radius: var(--b-r-lg); animation: beta-pop .2s var(--b-ease) both }
+body.beta-ui .heft-pages-top { gap: 10px; padding: 12px 14px 6px }
+body.beta-ui .heft-pages-top .heft-pages-manager-head { grid-template-columns: 1fr auto 1fr; min-height: 40px }
+body.beta-ui .heft-pages-manager-head > :first-child { justify-self: start }
+body.beta-ui .heft-pages-manager-head > :last-child { justify-self: end }
+body.beta-ui .heft-pp-title { display: grid; justify-items: center; gap: 1px; line-height: 1.2 }
+body.beta-ui .heft-pp-title b { font-size: var(--text-base); font-weight: 650; letter-spacing: -.01em }
+body.beta-ui .heft-pp-title small { font-size: var(--text-2xs); color: var(--text2); font-variant-numeric: tabular-nums }
 body.beta-ui .heft-pages-icon { border-radius: 999px }
 body.beta-ui .heft-pages-icon:hover { background: var(--b-tint-2) }
-body.beta-ui .heft-pop-grid { background: transparent; gap: 26px 18px; padding: 18px 22px 30px; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)) }
-body.beta-ui .heft-pop-thumb:hover { transform: translateY(-2px) }
-body.beta-ui .heft-pop-thumb canvas { border-radius: 7px; box-shadow: 0 0 0 1px rgb(0 0 0 / .14), 0 10px 22px -14px rgb(0 0 0 / .7) }
+body.beta-ui .heft-pages-text {
+	min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent;
+	color: var(--accent); font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
+}
+body.beta-ui .heft-pages-text:hover { background: var(--b-tint) }
+/* Umschalter: eine Markierung gleitet, die Knöpfe selbst bleiben flach */
+body.beta-ui .heft-pages-seg { position: relative; isolation: isolate; margin: 0 }
+body.beta-ui .heft-pages-seg::before {
+	content: ""; position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 4px);
+	border-radius: 999px; background: var(--seg-on); box-shadow: 0 1px 2px rgb(0 0 0 / .18), 0 4px 12px -6px rgb(0 0 0 / .35);
+	transition: transform .28s var(--b-ease);
+}
+body.beta-ui .heft-pages-seg.is-history::before { transform: translateX(calc(100% + 2px)) }
+body.beta-ui .heft-pages-seg .heft-seg, body.beta-ui .heft-pages-seg .heft-seg.active { background: transparent; box-shadow: none }
+body.perf-mode .heft-pages-seg::before { transition: none }
+/* Inhalt: dünne, leise Scrollleiste ohne Pfeile; Seiten heben sich nicht beim Überfahren */
+body.beta-ui .heft-pop-grid {
+	background: transparent; gap: 26px 18px; padding: 16px 22px 30px; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+	scrollbar-color: auto; /* globale Farbe würde in Chrome die WebKit-Leiste (ohne Pfeile) abschalten */
+}
+body.beta-ui .heft-pop-grid::-webkit-scrollbar { width: 8px; background: transparent }
+body.beta-ui .heft-pop-grid::-webkit-scrollbar-button { display: none }
+body.beta-ui .heft-pop-grid::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--text) 18%, transparent) }
+body.beta-ui .heft-pop-thumb, body.beta-ui .heft-pop-thumb:hover { transform: none; transition: none }
+body.beta-ui .heft-pop-thumb canvas { border-radius: 7px; box-shadow: 0 0 0 1px rgb(0 0 0 / .14), 0 10px 22px -14px rgb(0 0 0 / .7); transition: box-shadow .15s var(--b-ease) }
+body.beta-ui .heft-pop-thumb:hover canvas { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent), 0 10px 22px -14px rgb(0 0 0 / .7) }
 body.beta-ui .heft-pop-thumb.active canvas { outline: 2px solid var(--accent); outline-offset: 3px }
 body.beta-ui .heft-pop-thumb > span { bottom: -24px; padding: 1px 8px; border-radius: 999px; font-variant-numeric: tabular-nums }
 body.beta-ui .heft-pop-thumb.active > span { background: var(--b-tint-2); color: var(--text) }
+body.beta-ui .heft-pages-empty { font-size: var(--text-sm); color: var(--text2); line-height: 1.5 }
 body.beta-ui .heft-page-drag {
 	top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 999px;
 	background: rgb(20 20 20 / .45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
@@ -114,8 +147,22 @@ body.beta-ui .heft-page-drag {
 }
 body.beta-ui .heft-pop-thumb:hover .heft-page-drag, body.beta-ui .heft-page-drag:focus-visible { opacity: .9 }
 @media (hover: none) { body.beta-ui .heft-page-drag { opacity: .7 } }
-body.beta-ui .heft-pop-add { border: 1.5px dashed var(--edge); border-radius: 7px; background: transparent; color: var(--text2); transition: background .15s var(--b-ease), color .15s var(--b-ease) }
-body.beta-ui .heft-pop-add:hover { background: var(--b-tint); color: var(--text); border-color: var(--accent-border) }
-body.beta-ui .heft-pages-manager-actions { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: transparent }
-body.beta-ui .heft-pages-foot .primary { min-width: 0; padding: 0 14px; height: 34px; border: 0; border-radius: 999px; background: var(--b-tint-2); color: var(--text); box-shadow: none }
-body.beta-ui .heft-pages-foot .primary:hover { background: var(--b-tint-3) }
+body.beta-ui .heft-pop-add {
+	gap: 8px; border: 0; border-radius: 7px; background: var(--b-tint); color: var(--text2); font-weight: 600;
+	transition: background .15s var(--b-ease), color .15s var(--b-ease);
+}
+body.beta-ui .heft-pop-add span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--b-tint-2); font-size: 24px }
+body.beta-ui .heft-pop-add:hover { background: var(--b-tint-2); color: var(--text) }
+/* Fußleiste: immer gleich hoch – egal ob Knopf oder nur Hinweis darin steht */
+body.beta-ui .heft-pop-pages .heft-pages-foot { gap: 6px; min-height: 58px; box-sizing: border-box; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: transparent }
+body.beta-ui .heft-pp-grow { flex: 1 }
+body.beta-ui .heft-pp-hint { flex: 1; text-align: center; font-size: var(--text-xs); color: var(--text2) }
+body.beta-ui .heft-pages-btn {
+	display: inline-flex; align-items: center; gap: 6px; min-width: 0 !important; height: 36px; padding: 0 14px;
+	border: 0; border-radius: 999px; background: var(--b-tint-2); color: var(--text); font-size: var(--text-sm); font-weight: 600;
+}
+body.beta-ui .heft-pages-btn:hover:not(:disabled) { background: var(--b-tint-3) }
+body.beta-ui .heft-pages-btn:disabled { opacity: .4 }
+body.beta-ui .heft-pages-btn.danger { background: var(--danger-soft); color: var(--danger) }
+body.beta-ui .heft-pages-btn svg { width: 16px; height: 16px }
+body.beta-ui .heft-pages-foot .heft-pages-text { min-width: 0 }

@@ -24,6 +24,7 @@ import {
 } from "./heft-lasso.js";
 import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { isBetaUi, penFavoritesHtml, sizeDotHtml, plusPopBetaHtml } from "./heft-toolbar-beta.js";
+import { pagesGridBetaHtml, pagesHistoryBetaHtml, selectionSub, selectAllLabel } from "./heft-pages-beta.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
@@ -317,7 +318,14 @@ export const HEFT = (() => {
 		if (doc && doc !== d) { undoStack = []; redoStack = []; }
 		doc = d; docs[pid] = d;
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
-		sel = null; lassoSel = null;
+		sel = null;
+		// Fremdänderung (auch an anderen Notizen) hob die Auswahl bisher immer auf.
+		// Jetzt: ausgewählte Striche per ID im neuen Stand wiederfinden.
+		if (lassoSel) {
+			const ids = new Set(lassoSel.strokes.map((s) => s.id));
+			const strokes = (d.pages[lassoSel.pageIdx]?.strokes || []).filter((s) => ids.has(s.id));
+			lassoSel = strokes.length ? { pageIdx: lassoSel.pageIdx, strokes, bounds: lassoBounds(strokes) } : null;
+		}
 		if (structural) rebuildScroll();
 		else {
 			// FIX (25. Juli, "Striche erscheinen erst nach dem Neuladen"): renderVisiblePages()
@@ -433,16 +441,20 @@ export const HEFT = (() => {
 		return { ok: true };
 	}
 	async function openVerlaufPop() {
-		if (!pop || !pid) return;
-		const owner = pop;
+		if (!pop || !pid || pop.dataset.kind === "verlauf") return;
+		const owner = pop, beta = isBetaUi();
 		owner.dataset.kind = "verlauf";
-		owner.innerHTML = '<div class="heft-pop-head">Verlauf wird geladen…</div>';
+		if (beta) setPagesView(pagesHistoryBetaHtml(doc.pages.length, null));
+		else owner.innerHTML = '<div class="heft-pop-head">Verlauf wird geladen…</div>';
 		let snaps = [];
 		try { snaps = await pruneSnapshots(pid); } catch (e) { console.warn("Heft: Verlauf laden fehlgeschlagen", e); }
-		if (pop !== owner) return; // Pop wurde inzwischen geschlossen/ersetzt
+		if (pop !== owner || owner.dataset.kind !== "verlauf") return; // Pop geschlossen oder zurück zum Raster
 		const fmt = (t) => new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		owner.__verSnaps = snaps;
-		owner.innerHTML = '<div class="heft-pages-top">' +
+		if (beta) setPagesView(pagesHistoryBetaHtml(doc.pages.length, snaps.map((s, i) =>
+			'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
+				'<canvas width="264" height="374"></canvas><span>' + fmt(s.t) + '</span></div>').join("")));
+		else owner.innerHTML = '<div class="heft-pages-top">' +
 				'<div class="heft-pages-manager-head">' +
 					'<button type="button" class="heft-pages-icon" data-hepagesback="1" aria-label="Zurück" title="Zurück">‹</button>' +
 					'<b>Verlauf</b>' +
@@ -1403,9 +1415,7 @@ export const HEFT = (() => {
 		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
 		const touchLasso = lassoTouchAction(e.pointerType, tool, onLasso);
 		if (touchLasso === "dismiss") {
-			const oldPage = lassoSel?.pageIdx;
-			lassoSel = null; tool = "pen"; expanded = true;
-			if (oldPage != null) redrawPage(oldPage);
+			tool = "pen"; expanded = true;
 			updateChrome();
 			return;
 		}
@@ -1443,6 +1453,9 @@ export const HEFT = (() => {
 				}
 			}
 
+			// Neue Auswahl: alte Markierung sofort wegräumen (lag sie auf einer anderen
+			// Seite, blieb ihr Rahmen dort sonst als Geist stehen).
+			dropLasso();
 			drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
@@ -1737,10 +1750,18 @@ export const HEFT = (() => {
 			// Seite über ID auflösen (Index driftet); Seite weg = Eintrag tot, nicht raten.
 			const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
 			const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
-			if (a.kind === "lassoMove") { const d = isRedo ? 1 : -1; a.strokes.forEach((s) => translateStroke(s, d * a.dx, d * a.dy)); }
+			// Lasso-Einträge ebenfalls über IDs auflösen: nach einem Sync-Import sind die
+			// gemerkten Objekte nicht mehr die auf der Seite (Undo lief sonst ins Leere).
+			const live = a.kind === "lassoMove" || a.kind === "lassoResize" ? new Map(pg.strokes.map((s) => [s.id, s])) : null;
+			if (a.kind === "lassoMove") {
+				const d = isRedo ? 1 : -1;
+				a.strokes = a.strokes.map((s) => live.get(s.id) || s);
+				a.strokes.forEach((s) => { if (live.has(s.id)) translateStroke(s, d * a.dx, d * a.dy); });
+			}
 			else if (a.kind === "lassoResize") {
+				a.strokes = a.strokes.map((s) => live.get(s.id) || s);
 				const current = a.strokes.map(strokeGeometry);
-				a.strokes.forEach((stroke, i) => applyStrokeGeometry(stroke, a.prev[i]));
+				a.strokes.forEach((stroke, i) => { if (live.has(stroke.id)) applyStrokeGeometry(stroke, a.prev[i]); });
 				a.prev = current;
 			}
 			else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
@@ -1770,6 +1791,9 @@ export const HEFT = (() => {
 					if (lassoSel && lassoSel.strokes.some((s) => ids.has(s.id))) lassoSel = null;
 				}
 			}
+			// Rahmen folgt den Strichen: sonst blieb er nach Undo von Verschieben/Skalieren
+			// an der alten Stelle stehen und griff ins Leere.
+			if (lassoSel) lassoSel.bounds = lassoBounds(lassoSel.strokes);
 			toStack.push(a);
 			refresh(pi);
 		}, { isRedo }, 16);
@@ -2007,6 +2031,7 @@ export const HEFT = (() => {
 				'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
 				(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
 			'</div>').join('');
+		if (isBetaUi()) return pagesGridBetaHtml({ thumbs, total: doc.pages.length, picking, n, deletable }, { icon, lead });
 		if (picking) return '<div class="heft-pages-manager-head"><div><b>Seiten</b><small>' + n + ' ausgewählt · über Seiten wischen für Schnellauswahl</small></div>' +
 			'<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button></div>' +
 			'<div class="heft-pop-grid">' + thumbs + '</div>' +
@@ -2029,9 +2054,24 @@ export const HEFT = (() => {
 	function paintPopThumbs() {
 		if (doc) doc.pages.forEach((_, i) => renderThumb(i));
 	}
+	// Kopf und Umschalter bleiben stehen (nur angeglichen), Inhalt und Fußleiste werden getauscht.
+	// Vorher wurde das ganze Fenster neu gebaut: Kopf verschwand kurz, Scroll sprang nach oben.
+	function setPagesView(html) {
+		const t = document.createElement("div"); t.innerHTML = html;
+		const top = pop.querySelector(":scope > .heft-pages-top"), freshTop = t.querySelector(":scope > .heft-pages-top");
+		if (!top || !freshTop) { pop.innerHTML = html; return; }
+		U.morph(top, freshTop.innerHTML);
+		top.className = freshTop.className;
+		while (top.nextSibling) top.nextSibling.remove();
+		freshTop.remove();
+		pop.append(...t.childNodes);
+	}
 	function refreshPagesPop() {
 		if (!pop || pop.dataset.kind !== "pages" || !doc) return;
-		pop.innerHTML = pagesPopHtml();
+		const scroll = pop.querySelector(".heft-pop-grid")?.scrollTop || 0;
+		setPagesView(pagesPopHtml());
+		lastPopSig = pagesPopSig();
+		const grid = pop.querySelector(".heft-pop-grid"); if (grid) grid.scrollTop = scroll;
 		paintPopThumbs();
 		wirePagesPop();
 	}
@@ -2045,10 +2085,11 @@ export const HEFT = (() => {
 			const label = thumb.querySelector(":scope > span"); if (label) label.textContent = (i + 1) + (on ? " ✓" : "");
 		}
 		const n = exportSel.size, total = doc.pages.length;
-		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = n + " ausgewählt · über Seiten wischen für Schnellauswahl";
+		const beta = isBetaUi();
+		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = beta ? selectionSub(n) : n + " ausgewählt · über Seiten wischen für Schnellauswahl";
 		const del = pop.querySelector("[data-hepagesdelete]"); if (del) { del.disabled = !canDeletePages(total, n); del.innerHTML = lead("trash") + "Löschen (" + n + ")"; }
 		const exp = pop.querySelector("[data-heexportopen]"); if (exp) { exp.disabled = !n; exp.textContent = "Exportieren (" + n + ")"; }
-		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = n === total ? "Auswahl aufheben" : "Alle auswählen";
+		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = beta ? selectAllLabel(n, total) : n === total ? "Auswahl aufheben" : "Alle auswählen";
 	}
 	function movePageAt(from, to) {
 		if (!doc) return;
@@ -2217,16 +2258,26 @@ export const HEFT = (() => {
 	// Die Seiten-Vorschau nur neu aufbauen, wenn sich wirklich etwas an ihr ändert —
 	// sonst wurden bei jedem Strich alle Miniaturen neu gezeichnet (Flackern).
 	let lastPopSig = "";
+	const pagesPopSig = () => doc.pages.length + "|" + idx + "|" + (exportSel ? [...exportSel].sort((a, b) => a - b).join(",") : "-");
 	function refreshPagesPopIfNeeded() {
 		if (!pop || pop.dataset.kind !== "pages" || !doc) { lastPopSig = ""; return; }
-		const sigNow = doc.pages.length + "|" + idx + "|" + (exportSel ? [...exportSel].sort((a, b) => a - b).join(",") : "-");
+		const sigNow = pagesPopSig();
 		if (sigNow === lastPopSig) return;
+		const [lastLen, , lastSel] = lastPopSig.split("|");
 		lastPopSig = sigNow;
+		// Nur die aktuelle Seite hat gewechselt: Markierung umsetzen statt neu bauen (kein Flackern, Scroll bleibt).
+		if (!exportSel && lastSel === "-" && Number(lastLen) === doc.pages.length) {
+			pop.querySelectorAll("[data-hethumb]").forEach((t) => t.classList.toggle("active", Number(t.dataset.hethumb) === idx));
+			return;
+		}
 		refreshPagesPop();
 	}
 	let lastChromeHtml = "";
 	function updateChrome() {
 		if (!host || !doc) return;
+		// EINE Stelle für alle Werkzeugwechsel (Stift-Knopf, Favoriten, Bild, Radierer halten):
+		// Auswahl gehört nur zum Lasso. Vorher blieben Rahmen und Leiste beim Stift stehen.
+		if (lassoSel && tool !== "lasso") dropLasso();
 		const html = toolbarHtml();
 		const chrome = host.querySelector(".heft-chrome");
 		if (chrome && html === lastChromeHtml) { syncVolatileChrome(); updateLassoBar(); refreshPagesPopIfNeeded(); return; }
@@ -2251,6 +2302,12 @@ export const HEFT = (() => {
 		refreshPagesPopIfNeeded();
 	}
 
+	// Auswahl aufheben UND ihren Rahmen von der Seite nehmen (nur null setzen ließ ihn stehen).
+	function dropLasso() {
+		const lpi = lassoSel && lassoSel.pageIdx;
+		lassoSel = null;
+		if (lpi != null) redrawPage(lpi);
+	}
 	function updateLassoBar() {
 		updateLassoBarUI(host, lassoSel, lead);
 	}
@@ -2577,7 +2634,7 @@ export const HEFT = (() => {
 		if (d.helassotrain) { trainLassoSelection(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
 		if (d.helassodel) { deleteLassoSelection(); return; }
-		if (d.helassoclear) { const lpi = lassoSel && lassoSel.pageIdx; lassoSel = null; if (lpi != null) redrawPage(lpi); updateChrome(); return; }
+		if (d.helassoclear) { dropLasso(); updateChrome(); return; }
 		if (suppressEraserClick && d.hetool === "eraser") return;
 		if (d.hepagesmenu) { togglePop("pages", b); return; }
 		if (d.heplusmenu) { togglePop("plus", b); return; }
@@ -2589,7 +2646,7 @@ export const HEFT = (() => {
 		if (d.hepagesdelete) { deleteSelectedPages().catch((e2) => U.toast && U.toast("Seiten konnten nicht gelöscht werden: " + ((e2 && e2.message) || e2), "error")); return; }
 		if (d.heexportopen) { openExportDialog(); return; }
 		if (d.heverlauf) { openVerlaufPop(); return; }
-		if (d.hepagesback) { if (pop) { pop.dataset.kind = "pages"; pop.innerHTML = pagesPopHtml(); paintPopThumbs(); wirePagesPop(); } return; }
+		if (d.hepagesback) { if (pop && pop.dataset.kind !== "pages") { pop.dataset.kind = "pages"; setPagesView(pagesPopHtml()); lastPopSig = pagesPopSig(); paintPopThumbs(); wirePagesPop(); } return; }
 		if (d.heverrestore != null) {
 			const s = pop && pop.__verSnaps && pop.__verSnaps[Number(d.heverrestore)];
 			if (!s) return;
@@ -2637,7 +2694,6 @@ export const HEFT = (() => {
 			const i = Number(d.hepen);
 			if (tool === "pen" && penSlot === i) expanded = !expanded;
 			else { tool = "pen"; penSlot = i; ({ color, size } = pens[i]); expanded = false; }
-			lassoSel = null;
 			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		}
 		else if (d.hetool) {
@@ -2653,7 +2709,6 @@ export const HEFT = (() => {
 				tool = d.hetool; expanded = false;
 				if (d.hetool === "select") closePop();
 			}
-			if (tool !== "lasso") lassoSel = null;
 			if (tool !== "select" && sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		}
 		else if (d.hecolor) {
@@ -2841,6 +2896,9 @@ export const HEFT = (() => {
 		// Die Ansicht haengt nur an view, nicht am DOM: merken, neu aufbauen,
 		// zurueckschreiben. Kein Scroll-Anker und kein Nachziehen ueber Frames mehr.
 		const keep = { x: view.x, y: view.y, k: view.k };
+		// Seiten neu angeordnet (einfügen, importieren, Sync): pageIdx der Auswahl zeigte
+		// sonst auf eine fremde Seite -> Duplizieren landete dort.
+		lassoSel = null;
 		scroll.innerHTML = pagesHtml();
 		bindCanvas();
 		view.x = keep.x; view.y = keep.y; view.k = keep.k;
