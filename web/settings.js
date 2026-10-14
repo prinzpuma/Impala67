@@ -89,8 +89,6 @@ export function applyAppearance() {
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
 	const isLight = theme === "light";
-	const betaUi = localStorage.getItem("impala67BetaUi") === "1";
-	document.body.classList.toggle("beta-ui", betaUi);
 	document.body.classList.toggle("light", theme === "light");
 	document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
 		m.content = theme === "light" ? "#f2efe9" : "#05070d";

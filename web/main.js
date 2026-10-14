@@ -38,6 +38,7 @@ import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { SYNC_MAINTENANCE } from "./sync-maintenance.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import "./performance-profiler-settings.js";
+import "./perf-hint.js";
 import "./pdfpaste.js";
 import "./motion.js";
 

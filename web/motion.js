@@ -5,9 +5,7 @@
 import { S } from "./state.js";
 
 const SOURCES = ".deck-row, .hv-continue, .hv-pin, .hv-stat, .anki-stat, .hv-recall, .la-block, .lib-card, .notion-tree-row";
-const SWITCHES = [".lib-tabs", ".lz-view-switch", ".mode-btns"];
-// Beta-Design: zusätzlich Seitenbaum, Bereichs-Tabs und Seiten-Tabs.
-const BETA_SWITCHES = ["#tree", "#sidebar .topbar", ".tabstrip"];
+const SWITCHES = [".lib-tabs", ".lz-view-switch", ".mode-btns", "#tree", "#sidebar .topbar", ".tabstrip"];
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 let lastKey = "";
@@ -42,8 +40,7 @@ function onPointerDown(e) {
 		};
 	}
 	const btn = e.target.closest?.("button, .lib-tab, .tabchip, #tree .row");
-	const switches = document.body.classList.contains("beta-ui") ? SWITCHES.concat(BETA_SWITCHES) : SWITCHES;
-	const sel = btn && switches.find((s) => btn.closest(s));
+	const sel = btn && SWITCHES.find((s) => btn.closest(s));
 	if (sel && !btn.classList.contains("active")) slideSwitch(sel);
 }
 

@@ -12,6 +12,7 @@ import {
 	STATE_CHECKPOINT_FORMAT,
 	STATE_CHECKPOINT_KEYS,
 	checkpointStateOf,
+	checkpointSavedState,
 	checkpointStateStats,
 	eventLogInfoOf,
 	heftBlobSizesOf,
@@ -1144,7 +1145,7 @@ export const STATE = (() => {
 		_checkpointBaseSeq = 0; _appliedPostLoadEventIds = new Set();
 		let checkpointUsed = false, rejectReason = "missing", replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
 		try {
-			let checkpoint = null, tail = [], boundary = null;
+			let checkpoint = null, tail = [], boundary = null, saved = null;
 			try {
 				[info, checkpoint] = await Promise.all([
 					PERF_PROFILER.run("state.event-info", () => DB.eventLogInfo(), {}, 5),
@@ -1157,6 +1158,7 @@ export const STATE = (() => {
 					]), { fromSeq: checkpoint.maxSeq, toSeq: info.maxSeq }, 5);
 					rejectReason = stateCheckpointRejectReason(checkpoint, info, boundary, tail);
 					checkpointUsed = !rejectReason;
+					if (checkpointUsed) saved = checkpointSavedState(checkpoint);
 				}
 			} catch (error) {
 				console.warn("[state] Start-Checkpoint wird neu aufgebaut:", error);
@@ -1166,10 +1168,10 @@ export const STATE = (() => {
 
 			if (checkpointUsed) {
 				const partitioned = checkpoint.format === STATE_CHECKPOINT_FORMAT;
-				_checkpointBlobSizes = partitioned ? { ...checkpoint.heftBlobSizes } : heftBlobSizesOf(checkpoint.state);
+				_checkpointBlobSizes = partitioned ? { ...checkpoint.heftBlobSizes } : heftBlobSizesOf(saved);
 				_checkpointPayloadLoaded = !partitioned || Object.keys(_checkpointBlobSizes).length === 0;
-				const checkpointStats = checkpointStateStats(checkpoint.state, _checkpointBlobSizes);
-				PERF_PROFILER.measure("state.checkpoint-restore", () => restorePersistedState(checkpoint.state, false), {
+				const checkpointStats = checkpointStateStats(saved, _checkpointBlobSizes);
+				PERF_PROFILER.measure("state.checkpoint-restore", () => restorePersistedState(saved, false), {
 					keys: partitioned ? STATE_CHECKPOINT_CORE_KEYS.length : STATE_CHECKPOINT_KEYS.length,
 					partitioned,
 					...checkpointStats,

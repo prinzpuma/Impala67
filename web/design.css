@@ -2,7 +2,7 @@
    Impala67 – Design-Schicht (früher Beta-Design, jetzt Standard)
    Leitidee: ruhige, weiche Flächen aus der Theme-Akzentfarbe; Verspieltheit
    kommt aus Bewegung (motion.js), nicht aus Deko.
-   „:root body“ hält das Gewicht der früheren body.beta-ui-Selektoren, damit
+   „:root body“ hält das Gewicht von body + Klasse, damit
    diese Schicht weiter über styles.css/home.css gewinnt.
    ========================================================================== */
 

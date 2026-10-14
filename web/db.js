@@ -4,6 +4,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { shouldUploadToSync } from "./sync-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { compactEvents } from "./compact-events.js";
+import { yieldToMain } from "./cooperative.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
 // zeitlich deterministisch; Heft-Striche und Bilder reisen vollständig im Event-Log.
@@ -123,15 +124,27 @@ export const DB = (() => {
 	// Alle lokal vorhandenen Event-ids (für die Dublettenprüfung in importAll, wenn der Aufrufer
 	// nur ein Delta des Logs mitgibt). Inkrementell: nur Events oberhalb der zuletzt gelesenen seq
 	// werden nachgeladen — das erfasst auch Events, die ein anderer Tab geschrieben hat.
-	let _knownEventIds = null, _knownMaxSeq = 0;
-	async function ensureKnownEventIds() {
-		if (!_knownEventIds) { _knownEventIds = new Set(); _knownMaxSeq = 0; }
-		const delta = await eventsAfterSeqAll(_knownMaxSeq);
-		for (const ev of delta) {
-			if (ev?.id) _knownEventIds.add(ev.id);
-			_knownMaxSeq = Math.max(_knownMaxSeq, Number(ev?.seq) || 0);
+	// PERF: in Häppchen mit Pause dazwischen. Der erste Aufruf nach dem Start liest den GANZEN
+	// Log — am Stück war das ein einziger Main-Thread-Block (86k Events: 660 ms am PC, auf
+	// alten Geräten Sekunden). Gleiche Gesamtarbeit, aber die Oberfläche bleibt bedienbar.
+	const KNOWN_IDS_CHUNK = 1000;
+	let _knownEventIds = null, _knownMaxSeq = 0, _knownScan = null;
+	function ensureKnownEventIds() {
+		return (_knownScan ??= scanKnownEventIds().finally(() => { _knownScan = null; }));
+	}
+	async function scanKnownEventIds() {
+		for (;;) {
+			if (!_knownEventIds) { _knownEventIds = new Set(); _knownMaxSeq = 0; }
+			const ids = _knownEventIds;
+			const delta = await eventsAfterSeqAll(_knownMaxSeq, Infinity, KNOWN_IDS_CHUNK);
+			if (ids !== _knownEventIds) continue; // währenddessen verworfen (Kompaktierung) → neu
+			for (const ev of delta) {
+				if (ev?.id) ids.add(ev.id);
+				_knownMaxSeq = Math.max(_knownMaxSeq, Number(ev?.seq) || 0);
+			}
+			if (delta.length < KNOWN_IDS_CHUNK) return ids;
+			await yieldToMain();
 		}
-		return _knownEventIds;
 	}
 	const forgetKnownEventIds = () => { _knownEventIds = null; _knownMaxSeq = 0; };
 
@@ -212,7 +225,7 @@ export const DB = (() => {
 			req.onerror = () => rej(req.error);
 		});
 	}
-	function eventsAfterSeqAll(seq, upToSeq = Infinity) {
+	function eventsAfterSeqAll(seq, upToSeq = Infinity, limit = 0) {
 		ensureOpen();
 		const lower = Number(seq || 0), upper = Number(upToSeq);
 		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
@@ -222,7 +235,7 @@ export const DB = (() => {
 		return new Promise((res, rej) => {
 			const store = db.transaction("events").objectStore("events");
 			if (typeof store.getAll === "function") {
-				const req = store.getAll(range);
+				const req = limit ? store.getAll(range, limit) : store.getAll(range);
 				req.onsuccess = () => res(req.result || []);
 				req.onerror = () => rej(req.error);
 				return;
@@ -232,7 +245,9 @@ export const DB = (() => {
 			req.onsuccess = () => {
 				const cur = req.result;
 				if (!cur) return res(out);
-				out.push(cur.value); cur.continue();
+				out.push(cur.value);
+				if (limit && out.length >= limit) return res(out);
+				cur.continue();
 			};
 			req.onerror = () => rej(req.error);
 		});

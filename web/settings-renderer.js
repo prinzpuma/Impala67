@@ -306,7 +306,7 @@ function renderApp(vm) {
 			'<option value="google"' + (vm.nativeScannerEnabled ? " selected" : "") + '>Google-Scanner</option>' +
 			'<option value="impala"' + (vm.nativeScannerEnabled ? "" : " selected") + '>Impala-Scanner</option></select>',
 	})) : "";
-	const experiments = UI.row({ id: "beta-ui", title: "Beta-Design", description: "Experimentelles Oberflächendesign aktivieren", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
+	const experiments = UI.row({ id: "beta-ui", title: "Beta-Design", description: "Vorerst ohne Wirkung – das Design ist jetzt Standard", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
 	const chats = CHATS.load();
 	const cardCount = Object.keys(S.cards || {}).length;
 	const deckCount = Object.keys(S.decks || {}).length;

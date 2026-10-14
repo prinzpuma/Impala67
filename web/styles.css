@@ -497,6 +497,8 @@ body.light .pdf-body { background: #eaebed }
    beschnitten (linker/rechter Chip angeschnitten, Reihe nicht bündig mit Titel und Hinweis). */
 .chat-full-wrap h1 { flex-shrink: 0; margin-bottom: var(--space-1) }
 .chat-log-full { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-self: stretch; width: 100%; max-width: none; padding: var(--space-2) max(var(--space-5), calc((100% - 760px) / 2)) var(--space-4) }
+/* Einträge nie stauchen: Sonst drückt der Scroll-Container Elemente mit overflow:hidden (Gedankengang-Box) auf 0 px, sobald der Chat länger als der Bildschirm ist. */
+.chat-log-full > * { flex-shrink: 0 }
 /* DRY (Feinschliff v12): nur noch die Vollbild-Besonderheiten. Rahmen, Radius, Fläche und Fokus-Ring kommen aus dem kanonischen Composer-Block oben — beide Composer können nicht mehr auseinanderdriften. */
 .chat-form-full { align-self: center; position: relative; width: calc(100% - 40px); max-width: 760px; flex-shrink: 0 }
 .progress-bar { height: 8px; border-radius: var(--radius-xs); background: var(--surface-active); overflow: hidden; margin: 10px 0 }

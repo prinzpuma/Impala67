@@ -55,7 +55,13 @@ export function checkpointStateStats(state, knownBlobSizes) {
 	};
 }
 
+// PERF: Die Heft-Striche (Millionen kleiner Zahlen-Listen) gehen als JSON-Text in den
+// Checkpoint. IndexedDB klont einen Text in einem Rutsch; das Objekt dagegen Liste für
+// Liste — gemessen 90 → 40 ms beim Speichern UND bei jedem Start (alte Geräte: ~10×).
+// Eigenes Feld statt state.heftDocs: ältere App-Versionen verwerfen so den Checkpoint
+// ("keys") und spielen das Log ab, statt einen Text als Heft-Daten zu übernehmen.
 export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes) {
+	const { heftDocs, ...core } = checkpointCoreStateOf(state);
 	return {
 		format: STATE_CHECKPOINT_FORMAT,
 		maxSeq: Math.max(0, Number(info?.maxSeq) || 0),
@@ -64,8 +70,16 @@ export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes) {
 		maxTime: String(maxTime || ""),
 		heftBlobSizes: heftBlobSizesOf(state, knownBlobSizes),
 		reconciledArchive: true,
-		state: checkpointCoreStateOf(state),
+		state: core,
+		heftDocsJson: JSON.stringify(heftDocs ?? {}),
 	};
+}
+
+// Gespeicherter Zustand eines Checkpoints, Heft-Striche wieder als Objekt.
+export function checkpointSavedState(checkpoint) {
+	const state = checkpoint?.state;
+	if (!state || typeof checkpoint.heftDocsJson !== "string") return state;
+	return { ...state, heftDocs: JSON.parse(checkpoint.heftDocsJson) };
 }
 
 // Liefert den Grund, warum der Checkpoint nicht taugt ("" = nutzbar). Der Grund
@@ -74,7 +88,8 @@ export function stateCheckpointRejectReason(checkpoint, currentInfo, boundaryEve
 	if (!checkpoint) return "missing";
 	if (!checkpoint.state) return "no-state";
 	if (checkpoint.format === STATE_CHECKPOINT_FORMAT) {
-		if (!STATE_CHECKPOINT_CORE_KEYS.every((key) => own(checkpoint.state, key))) return "keys";
+		const hasKey = (key) => own(checkpoint.state, key) || (key === "heftDocs" && typeof checkpoint.heftDocsJson === "string");
+		if (!STATE_CHECKPOINT_CORE_KEYS.every(hasKey)) return "keys";
 		if (!checkpoint.heftBlobSizes || typeof checkpoint.heftBlobSizes !== "object" || Array.isArray(checkpoint.heftBlobSizes)) return "blob-sizes";
 	} else if (checkpoint.format === LEGACY_STATE_CHECKPOINT_FORMAT) {
 		if (!STATE_CHECKPOINT_KEYS.every((key) => own(checkpoint.state, key))) return "keys";
