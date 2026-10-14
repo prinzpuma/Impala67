@@ -1293,9 +1293,79 @@ function chatLiveParts(historyList) {
 	const waitingChoice = last?.role === "question" && !last.answered;
 	// Think-Box UND Draft parallel — sonst wirkt geleaktes Reasoning wie die Antwort
 	const think = S.aiThinkingDraft ? thinkingLiveHtml() : "";
-	const rest = S.aiDraft ? '<div class="msg assistant busy"><div class="md">' + U.md(S.aiDraft) + "</div></div>"
-		: (!S.aiThinkingDraft && !waitingChoice ? '<div class="msg assistant busy">' + esc(S.aiStatus || "…") + "</div>" : "");
-	return { think, rest };
+	// Ein Antwortentwurf wird abschnittsweise gestreamt (streamDraft), sonst die Statuszeile.
+	const draft = S.aiDraft || "";
+	const rest = draft || S.aiThinkingDraft || waitingChoice ? "" : '<div class="msg assistant busy">' + esc(S.aiStatus || "…") + "</div>";
+	return { think, rest, draft };
+}
+
+// PERF: Eine gestreamte Antwort wächst nur am Ende. Fertige Abschnitte werden EINMAL
+// gerendert und bleiben stehen; pro Streaming-Schritt wird nur der letzte, noch wachsende
+// Abschnitt neu geparst. Vorher lief alle 80 ms die GANZE Antwort durch Markdown,
+// Sanitizer (der teuerste Teil), DOM-Ersatz, KaTeX und Highlighting — bei langen
+// Antworten auf alten Geräten mehr Arbeit, als ein Frame hat. Die fertige Nachricht
+// rendert danach wie bisher als Ganzes (msgHtml).
+// Grenze = Zeilenanfang nach einer Leerzeile, an dem getrenntes Parsen dasselbe ergibt:
+// nicht in Code-/Formelblock, nicht eingerückt, kein Listenpunkt (sonst würden lockere
+// Listen oder Fortsetzungsabsätze zerrissen). Nur vollständige Zeilen zählen.
+// Rohes HTML (<details> …) kann über Leerzeilen reichen, ein Linkverweis „[1]: url“ wirkt
+// auf frühere Absätze zurück — dann -1: diese Antwort wie bisher am Stück rendern.
+const SPLIT_UNSAFE = /^ {0,3}(?:<|\[[^\]]+\]:)/;
+const LIST_START = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+const FENCE_START = /^ {0,3}(`{3,}|~{3,})/;
+function stableMdEnd(text, from) {
+	let end = from, fence = "", math = false, blank = false;
+	for (let pos = from, nl = text.indexOf("\n", pos); nl >= 0; pos = nl + 1, nl = text.indexOf("\n", pos)) {
+		const line = text.slice(pos, nl);
+		if (fence) {
+			if (line.trimStart().startsWith(fence)) fence = "";
+			continue;
+		}
+		if (!math && !line.trim()) { blank = true; continue; }
+		if (!math && SPLIT_UNSAFE.test(line)) return -1;
+		if (!math && blank && pos > from && !/^[ \t]/.test(line) && !LIST_START.test(line)) end = pos;
+		blank = false;
+		const f = !math && FENCE_START.exec(line);
+		if (f) { fence = f[1]; continue; }
+		// Formelblöcke ($$ … $$ bzw. \[ … \]) dürfen Leerzeilen enthalten
+		if (line.split("$$").length % 2 === 0) math = !math;
+		if (line.split("\\[").length !== line.split("\\]").length) math = !math;
+	}
+	return end;
+}
+function mdChunk(parent, src) {
+	const wrap = document.createElement("div");
+	wrap.style.display = "contents"; // kein eigener Kasten: Abstände wie aus einem Guss
+	wrap.innerHTML = U.md(src);
+	parent.append(wrap);
+	U.renderMath(wrap);
+	U.highlightCode(wrap);
+	return wrap;
+}
+function streamDraft(host, draft) {
+	let st = host._stream;
+	if (!st || !draft.startsWith(st.stable)) {
+		host.innerHTML = '<div class="msg assistant busy"><div class="md"></div></div>';
+		st = host._stream = { md: host.querySelector(".md"), stable: "", tail: null, tailSrc: "", whole: false };
+	}
+	let end = st.whole ? 0 : stableMdEnd(draft, st.stable.length);
+	if (end < 0) {
+		st.md.replaceChildren();
+		st.stable = ""; st.tail = null; st.whole = true; end = 0;
+	}
+	if (end > st.stable.length) {
+		st.tail?.remove(); st.tail = null;
+		mdChunk(st.md, draft.slice(st.stable.length, end));
+		st.stable = draft.slice(0, end);
+	}
+	const tail = draft.slice(end);
+	if (!st.tail || st.tailSrc !== tail) {
+		const old = st.tail;
+		st.tail = mdChunk(st.md, tail);
+		st.tailSrc = tail;
+		old?.remove();
+	}
+	st.text = draft;
 }
 
 // PERF-WURZEL: Der Verlauf wird nachrichtenweise abgeglichen. Vorher entschied EIN Hash über
@@ -1410,7 +1480,7 @@ function renderChatLog(log, historyList) {
 	const nextThinkText = liveParts.think ? (S.thinkingLiveExpanded ? S.aiThinkingDraft : U.lastLines(S.aiThinkingDraft, 2)) : "";
 	const liveDirty = thinkHost._structure !== thinkStructure
 		|| (!!liveParts.think && currentThinkBody?.textContent !== nextThinkText)
-		|| restHost._chatHtml !== liveParts.rest;
+		|| (liveParts.draft ? restHost._stream?.text !== liveParts.draft : restHost._chatHtml !== liveParts.rest);
 	// Unveränderte Logs sind beim Tabwechsel der Normalfall. Dann keine
 	// Layout-Messung und kein Scroll-Nachziehen über mehrere Animationsframes.
 	if (!staticPlan.dirty && !liveDirty) return;
@@ -1428,7 +1498,11 @@ function renderChatLog(log, historyList) {
 			if (S.thinkingLiveExpanded) body.scrollTop = body.scrollHeight; // am neuesten Gedanken bleiben
 		}
 	}
-	if (restHost._chatHtml !== liveParts.rest) {
+	if (liveParts.draft) {
+		streamDraft(restHost, liveParts.draft);
+		restHost._chatHtml = null;
+	} else if (restHost._chatHtml !== liveParts.rest) {
+		restHost._stream = null;
 		restHost.innerHTML = liveParts.rest;
 		restHost._chatHtml = liveParts.rest;
 		U.renderMath(restHost);

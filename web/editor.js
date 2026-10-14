@@ -53,6 +53,7 @@ export const EDITOR = (() => {
 	let lastColor = "bg:yellow"; // Strg+Shift+H = letzte Farbe erneut
 	let saveTimer = 0;
 	let lastSaved = "";      // Inhalt, den der Editor selbst zuletzt geschrieben hat
+	const ownPending = new Map(); // pageId → Zahl eigener, noch nicht angewandter pageUpdate-Dispatches
 	let histTimer = 0;
 	let histPending = false;
 	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
@@ -548,8 +549,16 @@ export const EDITOR = (() => {
 			// Blockauswahl statt Textfokus) nicht mehr in einem Textfeld liegt. render.js
 			// hielt das für eine EXTERNE Änderung und baute #main komplett neu auf —
 			// der frische Scroll-Container begann dann immer bei 0 („springt nach oben“).
-			STATE.dispatch("pageUpdate", { id: pageId, patch: { content }, viaEditor: true });
-			RAG.queuePage(pageId);
+			// Bis reduce() läuft, hat pg.content noch den ALTEN Stand. mount() darf das in
+			// diesem Fenster nicht für eine externe Änderung halten (sonst parst ein
+			// dazwischenkommender App-Render den veralteten Inhalt, z.B. nach schnellem Undo/Redo).
+			const pid = pageId;
+			ownPending.set(pid, (ownPending.get(pid) || 0) + 1);
+			STATE.dispatch("pageUpdate", { id: pid, patch: { content }, viaEditor: true }).finally(() => {
+				const n = (ownPending.get(pid) || 1) - 1;
+				if (n) ownPending.set(pid, n); else ownPending.delete(pid);
+			});
+			RAG.queuePage(pid);
 		};
 		if (now) run();
 		else saveTimer = setTimeout(() => { saveTimer = 0; run(); }, 450);
@@ -2324,7 +2333,9 @@ export const EDITOR = (() => {
 			}
 			// Externe Änderung = pg.content weicht von dem ab, was der Editor selbst geschrieben
 			// hat. Vorher wurde dafür bei JEDEM Render die komplette Seite neu serialisiert.
-			const externallyChanged = !pageChanged && (pg.content || "") !== lastSaved && !histPending;
+			// Solange ein eigener Speicherstand noch unterwegs ist, ist pg.content veraltet,
+			// nicht extern geändert — sein reduce() überschreibt es gleich mit lastSaved.
+			const externallyChanged = !pageChanged && (pg.content || "") !== lastSaved && !histPending && !ownPending.has(pid);
 			host = el;
 			host.classList.add("block-editor");
 			injectStyles();
