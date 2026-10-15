@@ -5,7 +5,25 @@
    Was sich bewährt hat, wandert nach design.css.
    ========================================================================== */
 
-/* Touch-Menüs am iPad. Das Handy (mobile-ui) zeigt Menüs schon als
+/* 1. Ruhigere Fläche: ein Akzent ohne Verlauf, zwei Schattenstufen, kein farbiges Leuchten.
+   Karten tragen nur noch einen feinen Rand (im Dark Mode sieht man Schatten ohnehin kaum);
+   echter Schatten nur für Schwebendes (Menüs, Dialoge, Leisten). */
+:root body.beta-ui {
+	--b-grad: var(--accent);
+	--b-card: 0 0 0 1px var(--edge-soft), 0 1px 2px rgb(0 0 0 / .04);
+	--b-lift: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / .06);
+	--b-float: 0 0 0 1px var(--edge-soft), 0 12px 32px -16px rgb(0 0 0 / .5);
+	--elev-3: var(--b-float);
+}
+/* „Fällig“-Karten: getönt statt Vollton-Fläche, die Zahl trägt den Akzent */
+:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due) { background: var(--b-tint-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent-border); filter: none }
+:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due):hover:not(:disabled) { background: var(--b-tint-3); filter: none }
+:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due) :is(small, span) { color: var(--text2); opacity: 1 }
+:root body.beta-ui .hv .hv-cards.due > b, :root body.beta-ui .anki-page button.anki-stat.due > b { color: var(--accent) }
+/* Kein Akzent-Leuchten unter „Antwort zeigen“ */
+:root body.beta-ui .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini), :root body.beta-ui .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { box-shadow: none }
+
+/* 2. Touch-Menüs am iPad. Das Handy (mobile-ui) zeigt Menüs schon als
    Sheet mit 52px-Zeilen; das iPad bekam bisher die Maus-Popover mit 36px-Zeilen. Apple-HIG: 44px. */
 @media (pointer: coarse) {
 	body.beta-ui:not(.mobile-ui) :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }

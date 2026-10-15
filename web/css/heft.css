@@ -35,9 +35,10 @@
 /* 🐛 Nur noch, was Taskbar v7 nicht setzt. blur() raus: das -webkit-Pendant blieb auf Safari/iPad aktiv, obwohl v7 keinen Blur will. */
 .heft-tray { overflow-x: auto; scrollbar-width: none; animation: heftTrayIn .16s ease }
 .heft-tray::-webkit-scrollbar { display: none }
+/* translate/scale statt transform: das überschrieb die Zentrierung translateX(-50%) — die Leiste
+   stand während der Animation um ihre halbe Breite versetzt und flog danach an ihren Platz. */
 @keyframes heftTrayIn {
-	from { opacity: 0; transform: translateY(-6px) scale(.98) }
-	to { opacity: 1; transform: none }
+	from { opacity: 0; translate: 0 -6px; scale: .98 }
 }
 body.perf-mode .heft-tray { animation: none }
 .heft-main, .heft-opt { min-height: 0; height: 36px; min-width: 38px; padding: 0 9px; border-radius: var(--radius-pill); background: transparent; color: var(--text2); font-size: var(--text-md); display: inline-flex; align-items: center; justify-content: center; gap: 2px }

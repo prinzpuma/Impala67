@@ -1832,8 +1832,11 @@ export const HEFT = (() => {
 	}
 	// Am linken/rechten Rand dockt das Tray senkrecht an; rechts über `right`, damit es beim Fenster-Resize am Rand bleibt.
 	const TRAY_DOCK_PX = 48;
+	// Senkrecht: Höhe am Heft messen, nicht per CSS-% an .heft-chrome — die ist mit „Tabs in der
+	// Seitenleiste“ nur eine 42px-Leiste, und die angedockte Leiste zeigte dann nur noch den Griff.
 	const trayCss = (p) => (p.side === "right" ? "left:auto;right:8px" : "right:auto;left:" + Math.round(p.side === "left" ? 8 : p.x) + "px") +
-		";top:" + Math.round(p.y) + "px;bottom:auto;transform:none";
+		";top:" + Math.round(p.y) + "px;bottom:auto;transform:none" +
+		(p.side && host ? ";max-height:" + Math.max(44, host.clientHeight - Math.round(p.y) - 8) + "px" : "");
 	const trayClass = () => "heft-tray" + (trayPos && trayPos.side ? " is-vertical" : "");
 
 	let chromeMin = false;
