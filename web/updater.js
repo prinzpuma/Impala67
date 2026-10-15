@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.76";
+const BUILD_VERSION = "2.2.77";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -35,36 +35,36 @@ function cmpSemver(a, b) {
 
 const normVer = (v) => String(v || "").replace(/^v/i, "").trim();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Merkt sich über das Neuladen hinweg, welche Version der Klick installieren sollte.
+// Der nächste Start prüft damit, ob das Update wirklich angekommen ist.
+const UPDATE_TARGET_KEY = "impala67:update-target";
 let pendingUpdate = null;
-let preparingUpdate = null;
+let preparing = null; // { version, promise } — ein Ladevorgang je Zielversion
+let reportStatus = () => {};
 
-function waitForWaiting(reg) {
+async function getRegistration() {
+	if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
+	try { return (await navigator.serviceWorker.getRegistration(new URL("./", import.meta.url))) || null; }
+	catch { return null; }
+}
+
+// true, sobald der Worker einen der Zielzustände erreicht; false bei redundant/Timeout.
+function waitForWorkerState(worker, states, timeoutMs) {
 	return new Promise((resolve) => {
-		if (reg?.waiting) return resolve(reg.waiting);
-		const worker = reg?.installing;
-		if (!worker) return resolve(null);
-		const onState = () => {
-			if (worker.state === "installed") { worker.removeEventListener("statechange", onState); resolve(reg.waiting || worker); }
-			else if (worker.state === "activated" || worker.state === "redundant") { worker.removeEventListener("statechange", onState); resolve(null); }
+		if (!worker) return resolve(false);
+		const finish = (ok) => {
+			clearTimeout(timer);
+			worker.removeEventListener("statechange", onState);
+			resolve(ok);
 		};
+		const onState = () => {
+			if (states.includes(worker.state)) finish(true);
+			else if (worker.state === "redundant") finish(false);
+		};
+		const timer = setTimeout(() => finish(false), timeoutMs);
 		worker.addEventListener("statechange", onState);
 		onState();
 	});
-}
-
-async function refreshServiceWorker() {
-	if (!("serviceWorker" in navigator)) return null;
-	try {
-		// Nur der Worker dieser App ist relevant. Das Update darf bereits geladen
-		// werden, bleibt aber "waiting" und übernimmt die laufende App noch nicht.
-		const reg = await navigator.serviceWorker.getRegistration(new URL("./", import.meta.url));
-		if (typeof reg?.update === "function") await reg.update();
-		await Promise.race([waitForWaiting(reg), delay(10000)]);
-		return reg;
-	} catch (error) {
-		console.warn("PWA-Update vorbereiten:", error);
-		return null;
-	}
 }
 
 async function workerVersion(worker, timeoutMs = 2000) {
@@ -82,35 +82,79 @@ async function workerVersion(worker, timeoutMs = 2000) {
 	});
 }
 
-function waitForControllerChange(timeoutMs = 4000) {
-	if (!("serviceWorker" in navigator)) return Promise.resolve(true);
-	return new Promise((resolve) => {
-		let done = false;
-		const finish = () => {
-			if (done) return;
-			done = true;
-			navigator.serviceWorker.removeEventListener("controllerchange", onController);
-			clearTimeout(timer);
-			resolve(true);
-		};
-		const onController = () => finish();
-		const timer = setTimeout(finish, timeoutMs);
-		navigator.serviceWorker.addEventListener("controllerchange", onController);
-	});
+// Lädt den Service Worker der Zielversion vollständig, aktiviert ihn aber NICHT.
+// Ergebnis: { worker } (wartet auf Aktivierung), { active: true } (läuft schon,
+// nur diese Seite ist alt) oder null (Version noch nicht ladbar).
+// Früher wurde nach 10 + 8 s Wartezeit trotzdem neu geladen — lief die Installation
+// (~150 Dateien) länger oder schlug sie fehl, startete die App wieder im alten Stand.
+async function loadUpdateWorker(expected) {
+	const reg = await getRegistration();
+	if (!reg) return null;
+	const want = normVer(expected);
+	const matches = async (worker) => !want || (await workerVersion(worker, 1500)) === want;
+	const attempts = want ? 3 : 1;
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		if (attempt) await delay(3000 * attempt);
+		if (reg.installing) {
+			reportStatus("Update wird geladen…");
+			await waitForWorkerState(reg.installing, ["installed", "activating", "activated"], 120000);
+		}
+		if (reg.waiting && await matches(reg.waiting)) return { worker: reg.waiting };
+		if (want && reg.active && await matches(reg.active)) return { active: true };
+		try { await reg.update(); }
+		catch (error) { console.warn("PWA-Update laden:", error); }
+		if (reg.installing) {
+			reportStatus("Update wird geladen…");
+			await waitForWorkerState(reg.installing, ["installed", "activating", "activated"], 120000);
+		}
+		if (reg.waiting && await matches(reg.waiting)) return { worker: reg.waiting };
+		if (want && reg.active && await matches(reg.active)) return { active: true };
+	}
+	return null;
 }
 
-async function activateWaitingWorker(reg, expectedVersion) {
-	const waiting = reg?.waiting;
-	if (!waiting) return false;
-	let waitingVersion = "";
-	try { waitingVersion = await workerVersion(waiting, 1000); } catch { /* best effort */ }
-	if (expectedVersion && waitingVersion && waitingVersion !== normVer(expectedVersion)) {
-		console.warn("Geladener Service Worker meldet Version " + waitingVersion + " statt " + expectedVersion + ".");
+function prepareUpdate(expected) {
+	const version = normVer(expected);
+	if (preparing?.version !== version) {
+		const promise = loadUpdateWorker(version).catch((error) => {
+			console.warn("PWA-Update vorbereiten:", error);
+			return null;
+		}).then((result) => {
+			// Fehlschlag nicht merken — der nächste Versuch lädt neu.
+			if (!result && preparing?.promise === promise) preparing = null;
+			return result;
+		});
+		preparing = { version, promise };
 	}
-	const changed = waitForControllerChange(4000);
-	waiting.postMessage({ type: "SKIP_WAITING" });
-	await changed;
-	return true;
+	return preparing.promise;
+}
+
+// Erst wenn der neue Worker wirklich "activated" ist, wird neu geladen.
+// Sonst bediente der alte Worker die neue Navigation noch aus dem alten Cache.
+async function activateWorker(worker) {
+	if (worker.state === "activated") return true;
+	const changed = new Promise((resolve) => {
+		navigator.serviceWorker.addEventListener("controllerchange", () => resolve(true), { once: true });
+	});
+	const activated = waitForWorkerState(worker, ["activated"], 20000);
+	worker.postMessage({ type: "SKIP_WAITING" });
+	const ok = await activated;
+	if (ok) await Promise.race([changed, delay(1500)]);
+	return ok;
+}
+
+function rememberUpdateTarget(version) {
+	try { localStorage.setItem(UPDATE_TARGET_KEY, normVer(version)); } catch { /* privater Modus */ }
+}
+
+function takeUpdateTarget() {
+	try {
+		const target = localStorage.getItem(UPDATE_TARGET_KEY) || "";
+		localStorage.removeItem(UPDATE_TARGET_KEY);
+		return normVer(target);
+	} catch {
+		return "";
+	}
 }
 
 function reloadWithCacheBust() {
@@ -186,9 +230,9 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	const { latest, source } = await fetchDeployedVersion();
 	const hasUpdate = cmpSemver(latest, current) > 0;
 	pendingUpdate = hasUpdate ? { version: latest } : null;
-	// Das neue Bundle bereits laden, aber NICHT aktivieren. Erst der bewusste
-	// Klick sendet SKIP_WAITING; so kann keine alte UI neue Lazy-Module erhalten.
-	preparingUpdate = (hasUpdate && !window.Capacitor?.isNativePlatform?.()) ? refreshServiceWorker() : null;
+	// Das neue Bundle bereits im Hintergrund laden, aber NICHT aktivieren. Erst der
+	// bewusste Klick sendet SKIP_WAITING; so erhält keine alte UI neue Lazy-Module.
+	if (hasUpdate && !window.Capacitor?.isNativePlatform?.()) prepareUpdate(latest);
 	return {
 		ok: true,
 		latest,
@@ -211,26 +255,31 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 		return { reloaded: false, nativeDownload: true };
 	}
 
-	say(expectedVersion ? "Update wird vorbereitet…" : "App wird neu geladen…");
+	say(expectedVersion ? "Update wird geladen…" : "App wird neu geladen…");
+	reportStatus = say;
 	try {
-		const reg = await (preparingUpdate || refreshServiceWorker());
-		if (reg) {
-			if (!reg.waiting && reg.installing) {
-				say("Update wird geladen…");
-				await Promise.race([waitForWaiting(reg), delay(8000)]);
+		if (await getRegistration()) {
+			const ready = await prepareUpdate(expectedVersion);
+			// Lieber ehrlich abbrechen als in die alte Version neu starten.
+			if (!ready && expectedVersion) {
+				throw new Error("v" + expectedVersion + " ist noch nicht vollständig ladbar (Server verteilt sie evtl. noch). Bitte gleich erneut versuchen.");
 			}
-			if (reg.waiting) {
+			if (ready?.worker) {
 				say("Update wird aktiviert…");
-				await activateWaitingWorker(reg, expectedVersion);
-			} else if (reg.installing) {
-				try { reg.installing.postMessage({ type: "SKIP_WAITING" }); } catch { /* ignore */ }
+				if (!(await activateWorker(ready.worker)) && expectedVersion) {
+					throw new Error("Update konnte nicht aktiviert werden. Bitte erneut versuchen.");
+				}
 			}
 		}
 	} catch (error) {
-		console.warn("PWA-Update Aktivierungshinweis:", error);
+		preparing = null;
+		throw error;
+	} finally {
+		reportStatus = () => {};
 	}
+	if (expectedVersion) rememberUpdateTarget(expectedVersion);
 	pendingUpdate = null;
-	preparingUpdate = null;
+	preparing = null;
 	say(expectedVersion ? "Update aktiv · App wird neu geladen…" : "App wird neu geladen…");
 	await delay(150);
 	reloadWithCacheBust();
@@ -242,7 +291,7 @@ window.applyPwaUpdate = () => window.installAppUpdate();
 let watcherStarted = false;
 let updateBannerEl = null;
 
-function showUpdateNotification(latest) {
+function showUpdateNotification(latest, retry = false) {
 	if (updateBannerEl || document.getElementById("updateNotificationBanner")) return;
 	const wrap = document.createElement("div");
 	wrap.id = "updateNotificationBanner";
@@ -250,7 +299,7 @@ function showUpdateNotification(latest) {
 	wrap.style.cssText = "display:flex;align-items:center;gap:10px;cursor:default;";
 
 	const msg = document.createElement("span");
-	msg.textContent = `Update v${latest} verfügbar`;
+	msg.textContent = retry ? `Update v${latest} wurde nicht übernommen` : `Update v${latest} verfügbar`;
 
 	const btn = document.createElement("button");
 	btn.textContent = "Aktualisieren";
@@ -258,7 +307,8 @@ function showUpdateNotification(latest) {
 	btn.addEventListener("click", () => {
 		btn.disabled = true;
 		btn.textContent = "Lade…";
-		window.installAppUpdate((st) => { msg.textContent = st; }).catch(() => {
+		window.installAppUpdate((st) => { msg.textContent = st; }).catch((error) => {
+			msg.textContent = error?.message || "Update fehlgeschlagen";
 			btn.disabled = false;
 			btn.textContent = "Wiederholen";
 		});
@@ -288,13 +338,23 @@ export function startUpdateWatcher() {
 	if (watcherStarted || typeof window === "undefined") return;
 	watcherStarted = true;
 
+	// Nach einem Update-Klick: bestätigen, dass die neue Version läuft — oder
+	// sofort erneut anbieten, statt still im alten Stand weiterzulaufen.
+	const target = takeUpdateTarget();
+	const missed = !!target && cmpSemver(BUILD_VERSION, target) < 0;
+	if (target && !missed) {
+		import("./util.js").then(({ U }) => U.toast("Update auf v" + BUILD_VERSION + " installiert.", "success")).catch(() => {});
+	} else if (missed) {
+		console.warn("Update auf v" + target + " nicht übernommen, laufend: v" + BUILD_VERSION);
+	}
+
 	const runCheck = async () => {
 		if (typeof navigator !== "undefined" && !navigator.onLine) return;
 		try {
 			const res = await window.checkAppUpdate();
 			if (res?.hasUpdate) {
 				window.dispatchEvent(new CustomEvent("impala:update-available", { detail: res }));
-				showUpdateNotification(res.latest);
+				showUpdateNotification(res.latest, missed && cmpSemver(res.latest, target) >= 0);
 			}
 		} catch (e) {
 			// Leise im Hintergrund scheitern
@@ -303,7 +363,7 @@ export function startUpdateWatcher() {
 	};
 
 	// 1. Initialer Check nach wenigen Sekunden Leerlauf
-	setTimeout(runCheck, 6000);
+	setTimeout(runCheck, missed ? 1000 : 6000);
 
 	// 2. Bei Rückkehr in den Tab
 	document.addEventListener("visibilitychange", () => {
@@ -314,4 +374,4 @@ export function startUpdateWatcher() {
 	setInterval(() => { if (!document.hidden) runCheck(); }, 30 * 60 * 1000);
 }
 
-export { cmpSemver, fetchDeployedVersion, refreshServiceWorker, workerVersion, waitForControllerChange };
+export { cmpSemver, fetchDeployedVersion, prepareUpdate, workerVersion };

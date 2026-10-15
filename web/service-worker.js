@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.76"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.77"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
@@ -169,12 +169,33 @@ const CDN_FILES = [
 // Der neue Worker bleibt danach bewusst in "waiting", solange noch die alte App
 // läuft. Erst updater.js sendet nach dem ausdrücklichen Update-Klick SKIP_WAITING.
 // Dadurch bedient niemals ein neues Cache-Bundle eine noch laufende alte UI.
+// Jede Datei mit ?v=<Version> laden: so kann kein CDN-/Browser-Cache kurz nach
+// dem Deploy noch alte Dateien in den neuen Cache mischen. Gespeichert wird ohne
+// Query, passend zum Fetch-Handler. updater.js muss genau diese Version melden —
+// sonst schlägt die Installation fehl und der Updater versucht es erneut, statt
+// die App mit altem Code unter neuer Cache-Version zu starten.
+const VERSION = CACHE.replace(/^impala67-v/, "");
+
+async function cacheAppFile(cache, path) {
+	const url = new URL(path, self.location.href);
+	url.searchParams.set("v", VERSION);
+	const res = await fetch(url, { cache: "reload" });
+	if (!res.ok || isHtmlFallback(url.pathname, res)) throw new Error("App-Datei nicht ladbar: " + path + " (" + res.status + ")");
+	await cache.put(path, res);
+}
+
+async function installApp() {
+	const cache = await caches.open(CACHE);
+	await Promise.all(APP_FILES.map((path) => cacheAppFile(cache, path)));
+	const updater = await (await cache.match("./updater.js"))?.text();
+	if (!updater?.includes('const BUILD_VERSION = "' + VERSION + '"')) {
+		throw new Error("updater.js passt nicht zu Version " + VERSION);
+	}
+	await Promise.allSettled(CDN_FILES.map((u) => cache.add(u)));
+}
+
 self.addEventListener("install", (e) => {
-	e.waitUntil(
-		caches.open(CACHE)
-			.then((c) => c.addAll(APP_FILES.map((u) => new Request(u, { cache: "reload" })))
-				.then(() => Promise.allSettled(CDN_FILES.map((u) => c.add(u)))))
-	);
+	e.waitUntil(installApp());
 });
 
 self.addEventListener("message", (e) => {
