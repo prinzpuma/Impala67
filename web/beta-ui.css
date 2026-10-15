@@ -41,6 +41,9 @@
 :root body .ws-head { letter-spacing: 0; text-transform: none; font-size: var(--text-sm) }
 /* Gleitende Markierungen (Position animiert motion.js): Seitenbaum, Bereichs-Tabs, Seiten-Tabs */
 :root body :is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip) { position: relative; isolation: isolate; border-radius: var(--b-r-sm) }
+/* 🐛 Jede Zeile ist dadurch eine eigene Ebene: ihr ⋯-Menü (steckt IN der Zeile) lag nach unten UNTER den
+   Folgezeilen und wirkte durchsichtig. Die Zeile mit offenem Menü hebt sich deshalb über ihre Nachbarn. */
+:root body #tree .row:has(> .page-menu) { z-index: 5 }
 :root body :is(#sidebar .topbar .tab, .tabstrip .tabchip, .tabchip-new, .navbtn, .topbar-btn) { border-radius: 999px }
 :root body :is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip):hover { background: var(--b-tint) }
 :root body :is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip).active { background: transparent; color: var(--text) }
@@ -132,4 +135,14 @@
 	/* ⋯ an Sidebar-Zeilen: breiter, Tippfläche per Pseudo-Element höher — die Zeilen bleiben so dicht wie bisher */
 	body.beta-ui:not(.mobile-ui) .row-add { position: relative; min-width: 36px }
 	body.beta-ui:not(.mobile-ui) .row-add::after { content: ""; position: absolute; inset: -8px 0 }
+	/* Langer Druck auf Bedienelemente markierte deren Text wie zum Kopieren — nur Inhalte bleiben auswählbar */
+	body.beta-ui:not(.mobile-ui) :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+	body.beta-ui:not(.mobile-ui) :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
+	/* Editor-Rand: ⊕/⋮ nur am gerade bearbeiteten Block statt halbtransparent an jeder Zeile, und so groß wie
+	   am Desktop (die 28×30-Griffe waren höher als eine Textzeile und saßen 5px zu tief). Tippfläche per Pseudo-Element. */
+	body.beta-ui:not(.mobile-ui) .blk-gutter { opacity: 0; pointer-events: none }
+	body.beta-ui:not(.mobile-ui) :is(.blk:focus-within, .blk:hover) > .blk-gutter { opacity: 1; pointer-events: auto }
+	body.beta-ui:not(.mobile-ui) :is(.blk-plus, .blk-handle) { position: relative; width: 20px; height: 22px; font-size: var(--text-base) }
+	body.beta-ui:not(.mobile-ui) .blk-handle { font-size: var(--text-xs) }
+	body.beta-ui:not(.mobile-ui) :is(.blk-plus, .blk-handle)::after { content: ""; position: absolute; inset: -10px 0 }
 }
