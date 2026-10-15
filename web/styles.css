@@ -226,14 +226,10 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 .composer-actions-left #btnAttach, .composer-actions-left #btnAttachFull, .composer-actions-left .composer-tool { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: var(--radius-md) }
 /* Text läuft über die volle obere Reihe (UI-Fix v7: Netto-Werte… */
 #chatInput, .chat-form-full textarea { order: -1; flex: 1; width: 100%; min-height: 30px; max-height: 160px; overflow-y: auto; resize: none; border: none; outline: none; box-shadow: none; background: transparent; padding: var(--space-1-5) 0 }
-/* 🐛 Fix (28. Juli): doppelte Umrundung im Composer — die globale :focus-visible-Regel
-   (outline: 2px solid var(--accent)) traf das Textfeld zusätzlich zum :focus-within-Rahmen
-   des Formulars, weil .chat-form-full textarea gleiche Spezifität hat und früher steht.
-   Der Composer zeigt Fokus jetzt nur noch über die ÄUSSERE Umrundung (Regel oben). */
-#chatForm textarea:focus-visible, .chat-form-full textarea:focus-visible { outline: none }
-/* Kein zweiter, innerer Rahmen: die Basisregeln aus css/components.css (textarea / textarea:focus)
-   werden später geladen und gewannen bei gleicher Spezifität — Rahmen nur am Composer selbst. */
-#chatForm textarea, #chatForm textarea:focus, form.chat-form-full textarea, form.chat-form-full textarea:focus { border: 0; outline: 0; box-shadow: none; background: transparent }
+/* Felder im eigenen Rahmen (KI-Composer, Suchfelder): Rand und Fokus-Ring zeigt NUR der äußere Rahmen
+   (:focus-within). Das Feld selbst bekommt nie einen zweiten, inneren Rand — auch nicht von den
+   globalen input/textarea-Regeln (css/components.css, :focus-visible weiter unten). */
+:is(#chatForm, .chat-form-full, .settings-search, .graph-search, .palette-input-wrap) :is(input, textarea), :is(#chatForm, .chat-form-full, .settings-search, .graph-search, .palette-input-wrap) :is(input, textarea):is(:focus, :focus-visible) { border: 0; outline: 0; box-shadow: none; background: transparent }
 /* Untere Reihe behält die bestehende Reihenfolge: Anhang → Model… */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { order: 1 }
 #chatForm #btnModelMenu, .chat-form-full #btnModelChipFull { order: 2 }
@@ -1505,7 +1501,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .graph-actions > button:hover { color: var(--text); background: var(--surface-hover) }
 .graph-search { width: min(230px, 25vw); display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 10px; border: 1px solid var(--edge-soft); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text2) }
 .graph-search:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft) }
-.graph-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none }
+.graph-search input { width: 100%; min-width: 0; padding: 0 }
 .graph-status { flex: 0 0 auto; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: 7px var(--space-4); border-bottom: 1px solid var(--edge-soft); background: rgb(var(--accent-rgb) / .06); font-size: var(--text-sm) }
 .graph-status[hidden] { display: none }
 .graph-status span { color: var(--text2) }
@@ -1612,7 +1608,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-modal-v2 .settings-search { position: relative; display: flex; align-items: center; gap: 7px; height: 34px; margin: 0; padding: 0 var(--space-2); border: 1px solid var(--edge-soft); border-radius: var(--radius-sm); color: var(--text2); background: var(--input-bg) }
 .settings-search:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft) }
 .settings-search .settings-icon { width: 15px; height: 15px; flex: 0 0 15px }
-.settings-search input { min-width: 0; width: 100%; height: 30px; padding: 0; border: 0; outline: 0; background: transparent; font-size: var(--text-sm) }
+.settings-search input { min-width: 0; width: 100%; height: 30px; padding: 0; font-size: var(--text-sm) }
 .settings-search kbd { padding: 1px 5px; border: 1px solid var(--edge-soft); border-radius: var(--radius-xs); color: var(--text2); background: var(--surface); font: 500 var(--text-3xs)/1.5 inherit; white-space: nowrap }
 .settings-search-results { position: absolute; z-index: 4; width: 228px; max-height: 340px; margin-top: var(--space-1-5); padding: 5px; overflow-y: auto; border: 1px solid var(--edge); border-radius: var(--radius-md); background: var(--menu-bg); box-shadow: var(--elev-3) }
 .settings-search-results[hidden] { display: none }
@@ -1651,7 +1647,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .settings-switch input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none }
 .settings-switch > span { width: 42px; height: 24px; border: 1px solid var(--edge); border-radius: var(--radius-pill); background: var(--surface-active); transition: background-color .16s ease, border-color .16s ease }
 .settings-switch > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--menu-bg); box-shadow: var(--elev-1); transition: transform .16s ease }
-.settings-switch input:checked + span { border-color: var(--accent); background: var(--b-grad) }
+.settings-switch input:checked + span { border-color: var(--accent); background: var(--accent) }
 .settings-switch input:checked + span::after { transform: translateX(18px) }
 .settings-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px }
 .settings-segmented { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-pill); background: var(--b-tint) }

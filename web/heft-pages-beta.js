@@ -1,5 +1,5 @@
 "use strict";
-// Beta-Seitenübersicht (body.beta-ui): EIN fester Rahmen aus Kopf, Umschalter und Fußleiste
+// Seitenübersicht des Hefts: EIN fester Rahmen aus Kopf, Umschalter und Fußleiste
 // für Raster, Verlauf und Auswahl. heft.js gleicht beim Wechsel nur den Kopf an und tauscht
 // Inhalt und Fußleiste aus – Höhen und Positionen bleiben gleich, nichts springt.
 const plural = (n) => n + (n === 1 ? " Seite" : " Seiten");

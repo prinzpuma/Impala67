@@ -22,8 +22,8 @@ import {
 	recognizeLassoText,
 	trainLassoSample
 } from "./heft-lasso.js";
-import { COLORS, SIZES, PAPERS, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
-import { isBetaUi, penFavoritesHtml, sizeDotHtml, plusPopBetaHtml } from "./heft-toolbar-beta.js";
+import { COLORS, SIZES, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
+import { penFavoritesHtml, sizeDotHtml, plusPopBetaHtml } from "./heft-toolbar-beta.js";
 import { pagesGridBetaHtml, pagesHistoryBetaHtml, selectionSub, selectAllLabel } from "./heft-pages-beta.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
@@ -86,7 +86,7 @@ export const HEFT = (() => {
 	let eraserSize = savedTools.eraserSize;
 	const pens = savedTools.pens;
 	let penSlot = savedTools.penSlot;
-	if (isBetaUi()) ({ color, size } = pens[penSlot]);
+	({ color, size } = pens[penSlot]);
 	let inlineEd = null;
 	let lastEmptyTap = null;
 	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, pens, penSlot }); }
@@ -455,31 +455,17 @@ export const HEFT = (() => {
 	}
 	async function openVerlaufPop() {
 		if (!pop || !pid || pop.dataset.kind === "verlauf") return;
-		const owner = pop, beta = isBetaUi();
+		const owner = pop;
 		owner.dataset.kind = "verlauf";
-		if (beta) setPagesView(pagesHistoryBetaHtml(doc.pages.length, null));
-		else owner.innerHTML = '<div class="heft-pop-head">Verlauf wird geladen…</div>';
+		setPagesView(pagesHistoryBetaHtml(doc.pages.length, null));
 		let snaps = [];
 		try { snaps = await pruneSnapshots(pid); } catch (e) { console.warn("Heft: Verlauf laden fehlgeschlagen", e); }
 		if (pop !== owner || owner.dataset.kind !== "verlauf") return; // Pop geschlossen oder zurück zum Raster
 		const fmt = (t) => new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		owner.__verSnaps = snaps;
-		if (beta) setPagesView(pagesHistoryBetaHtml(doc.pages.length, snaps.map((s, i) =>
+		setPagesView(pagesHistoryBetaHtml(doc.pages.length, snaps.map((s, i) =>
 			'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
 				'<canvas width="264" height="374"></canvas><span>' + fmt(s.t) + '</span></div>').join("")));
-		else owner.innerHTML = '<div class="heft-pages-top">' +
-				'<div class="heft-pages-manager-head">' +
-					'<button type="button" class="heft-pages-icon" data-hepagesback="1" aria-label="Zurück" title="Zurück">‹</button>' +
-					'<b>Verlauf</b>' +
-					'<button type="button" class="heft-pages-icon" data-hepagesclose="1" aria-label="Schließen" title="Schließen">✕</button></div>' +
-				'<div class="heft-seg-row heft-pages-seg"><button type="button" class="heft-seg" data-hepagesback="1">Raster</button><button type="button" class="heft-seg active">Verlauf</button></div></div>' +
-			(snaps.length
-				? '<div class="heft-pop-grid">' + snaps.map((s, i) =>
-					'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
-						'<canvas width="264" height="374"></canvas><span>' + fmt(s.t) + '</span></div>').join("") + '</div>' +
-					'<div class="heft-pages-manager-actions heft-pages-foot"><span>Letzte 24 h · antippen zum Wiederherstellen</span></div>'
-				: '<div class="heft-pop-grid heft-pages-empty">Noch keine Snapshots. Sie entstehen automatisch beim Schreiben (max. alle 10 Min., nur auf diesem Gerät).</div>' +
-					'<div class="heft-pages-manager-actions heft-pages-foot"><span>Letzte 24 h</span></div>');
 		placePagesPop();
 		const cvs = owner.querySelectorAll(".heft-pop-thumb canvas");
 		snaps.forEach((s, i) => { if (cvs[i]) renderBlobPreview(s.key, cvs[i]); });
@@ -1820,12 +1806,6 @@ export const HEFT = (() => {
 	function undo() { applyHistory(undoStack, redoStack, false); }
 	function redo() { applyHistory(redoStack, undoStack, true); }
 
-	function sizeLine(sz) {
-		const h = sz[1] <= 2 ? 1.5 : sz[1] <= 4 ? 3 : 5;
-		return '<button type="button" class="heft-size' + (size === sz[1] ? " active" : "") +
-			'" data-hesize="' + sz[1] + '" title="Strich: ' + sz[0] + '">' +
-			'<i style="height:' + h + 'px"></i></button>';
-	}
 	function trayStyle() {
 		if (!trayPos) return "";
 		return ' style="' + trayCss(trayPos) + '"';
@@ -1845,9 +1825,8 @@ export const HEFT = (() => {
 		const writeOn = tool === "pen" || tool === "marker";
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
-		const beta = isBetaUi();
-		// Beta auf dem Handy: Rückgängig/Wiederholen oben in der Eckreihe, die Leiste unten passt so ohne Scrollen.
-		const phone = beta && document.body.classList.contains("mobile-ui");
+		// Auf dem Handy: Rückgängig/Wiederholen oben in der Eckreihe, die Leiste unten passt so ohne Scrollen.
+		const phone = document.body.classList.contains("mobile-ui");
 
 		const svgPen = tIcon("pen-tool");
 		const svgMarker = tIcon("marker");
@@ -1858,7 +1837,7 @@ export const HEFT = (() => {
 		const svgUndo = tIcon("undo");
 		const svgRedo = tIcon("redo");
 		const svgHand = tIcon("hand");
-		const svgPages = tIcon(beta ? "pages-stack" : "pages");
+		const svgPages = tIcon("pages-stack");
 		const svgPlus = tIcon("plus");
 		const svgSpark = tIcon("sparkles");
 		const svgChevDown = tIcon("chevron-down");
@@ -1881,13 +1860,7 @@ export const HEFT = (() => {
 			tray =
 				'<div class="' + trayClass() + '" data-hetray="1" data-key="tray-write" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
-					(beta ? SIZES.map((sz) => sizeDotHtml(sz[0], sz[1], size === sz[1], color)).join("") :
-					'<button type="button" data-hetool="pen" class="heft-opt' + (tool === "pen" ? " active" : "") +
-						'" title="Stift">' + svgPen + '</button>' +
-					'<button type="button" data-hetool="marker" class="heft-opt' + (tool === "marker" ? " active" : "") +
-						'" title="Marker">' + svgMarker + '</button>' +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					SIZES.map(sizeLine).join("")) +
+					SIZES.map((sz) => sizeDotHtml(sz[0], sz[1], size === sz[1], color)).join("") +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					COLORS.map((c) => '<button type="button" class="heft-swatch' + (color === c ? " active" : "") +
 						'" data-hecolor="' + c + '" style="--sw:' + c + ';background:' + c + '" title="Farbe"></button>').join("") +
@@ -1919,11 +1892,8 @@ export const HEFT = (() => {
 			'</div>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
-					(beta ? penFavoritesHtml({ pens, penSlot, tool, expanded }, tIcon) :
-					'<button type="button" data-hewrite="1" class="heft-main' + (writeOn ? " active" : "") +
-						(showWrite ? " open" : "") + '" title="Schreiben">' +
-						writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span><span class="heft-chev">▾</span></button>') +
-					(beta ? '<span class="heft-sep" aria-hidden="true"></span>' : '') +
+					penFavoritesHtml({ pens, penSlot, tool, expanded }, tIcon) +
+					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-hetool="eraser" class="heft-main' + (tool === "eraser" ? " active" : "") +
 						(showEraser ? " open" : "") + '" title="Radierer">' + svgEraser + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
@@ -2057,24 +2027,7 @@ export const HEFT = (() => {
 				'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
 				(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
 			'</div>').join('');
-		if (isBetaUi()) return pagesGridBetaHtml({ thumbs, total: doc.pages.length, picking, n, deletable }, { icon, lead });
-		if (picking) return '<div class="heft-pages-manager-head"><div><b>Seiten</b><small>' + n + ' ausgewählt · über Seiten wischen für Schnellauswahl</small></div>' +
-			'<button type="button" class="heft-pop-row compact" data-heselectall="1">' + (n === doc.pages.length ? 'Auswahl aufheben' : 'Alle auswählen') + '</button></div>' +
-			'<div class="heft-pop-grid">' + thumbs + '</div>' +
-			'<div class="heft-pages-manager-actions">' +
-				'<button type="button" class="danger" data-hepagesdelete="1"' + (deletable ? '' : ' disabled') + '>' + lead("trash") + 'Löschen (' + n + ')</button>' +
-				'<button type="button" data-heexpcancel="1">Fertig</button><button type="button" class="primary" data-heexportopen="1"' + (n ? '' : ' disabled') + '>Exportieren (' + n + ')</button></div>';
-		return '<div class="heft-pages-top">' +
-			'<div class="heft-pages-manager-head">' +
-				'<button type="button" class="heft-pages-icon" data-heexpstart="1" aria-label="Auswählen" title="Auswählen">⋯</button>' +
-				'<b>Seiten</b>' +
-				'<button type="button" class="heft-pages-icon" data-hepagesclose="1" aria-label="Schließen" title="Schließen">✕</button></div>' +
-			'<div class="heft-seg-row heft-pages-seg"><button type="button" class="heft-seg active">Raster</button><button type="button" class="heft-seg" data-heverlauf="1">Verlauf</button></div></div>' +
-			'<div class="heft-pop-grid">' + thumbs +
-				'<button type="button" class="heft-pop-add" data-headdend="1"><span>+</span>Neue Seite</button></div>' +
-			'<div class="heft-pages-manager-actions heft-pages-foot"><span>Ziehen zum Sortieren</span>' +
-				'<button type="button" class="primary" data-heimport="1">' +
-					icon("upload") + 'Importieren</button></div>';
+		return pagesGridBetaHtml({ thumbs, total: doc.pages.length, picking, n, deletable }, { icon, lead });
 	}
 
 	function paintPopThumbs() {
@@ -2111,11 +2064,10 @@ export const HEFT = (() => {
 			const label = thumb.querySelector(":scope > span"); if (label) label.textContent = (i + 1) + (on ? " ✓" : "");
 		}
 		const n = exportSel.size, total = doc.pages.length;
-		const beta = isBetaUi();
-		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = beta ? selectionSub(n) : n + " ausgewählt · über Seiten wischen für Schnellauswahl";
+		const sub = pop.querySelector(".heft-pages-manager-head small"); if (sub) sub.textContent = selectionSub(n);
 		const del = pop.querySelector("[data-hepagesdelete]"); if (del) { del.disabled = !canDeletePages(total, n); del.innerHTML = lead("trash") + "Löschen (" + n + ")"; }
 		const exp = pop.querySelector("[data-heexportopen]"); if (exp) { exp.disabled = !n; exp.textContent = "Exportieren (" + n + ")"; }
-		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = beta ? selectAllLabel(n, total) : n === total ? "Auswahl aufheben" : "Alle auswählen";
+		const all = pop.querySelector("[data-heselectall]"); if (all) all.textContent = selectAllLabel(n, total);
 	}
 	function movePageAt(from, to) {
 		if (!doc) return;
@@ -2168,30 +2120,7 @@ export const HEFT = (() => {
 			'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
 	}
 	function plusPopHtml() {
-		if (isBetaUi()) return plusPopBetaHtml({ insertPos, curPaper: page() ? page().paper : "lined" }, icon);
-		const seg =(k, lbl) => '<button type="button" class="heft-seg' + (insertPos === k ? ' active' : '') + '" data-hepos="' + k + '">' + lbl + '</button>';
-		const curPaper = page() ? page().paper : "lined";
-		const tpl = (p, lbl, sub) =>
-			'<button type="button" class="heft-tpl" data-headdtpl="' + p + '">' +
-				'<i class="heft-tpl-paper heft-tpl-' + p + '"></i><span>' + lbl + '</span>' + (sub ? '<small>' + sub + '</small>' : '') +
-			'</button>';
-		return '<div class="heft-pop-head">Seite hinzufügen</div>' +
-			'<div class="heft-seg-row">' + seg("before", "Vor dieser") + seg("after", "Nach dieser") + seg("last", "Letzte Seite") + '</div>' +
-			'<div class="heft-pop-head">Neue Vorlagen</div>' +
-			'<div class="heft-pop-sub">Die hier gezeigten Vorlagen übernehmen wenn möglich die Eigenschaften der aktuellen Seite.</div>' +
-			'<div class="heft-tpl-row">' +
-				tpl(curPaper, "Aktuelle Vorlage", "A4") +
-				PAPERS.filter((p) => p[0] !== curPaper).map((p) => tpl(p[0], p[2], "")).join("") +
-			'</div>' +
-			'<div class="heft-pop-head">Vorlage dieser Seite ändern</div>' +
-			'<div class="heft-tpl-row">' +
-				PAPERS.map((p) => '<button type="button" class="heft-tpl' + (p[0] === curPaper ? ' active' : '') + '" data-hesetpaper="' + p[0] + '">' +
-					'<i class="heft-tpl-paper heft-tpl-' + p[0] + '"></i><span>' + p[2] + '</span></button>').join("") +
-			'</div>' +
-			'<div class="heft-pop-sep"></div>' +
-			'<button type="button" class="heft-pop-row" data-headdimg="1">' + icon("image") + 'Bild</button>' +
-			'<button type="button" class="heft-pop-row" data-heimport="1">' + icon("upload") + 'Importieren</button>' +
-			'<button type="button" class="heft-pop-row" data-hescan="1">' + icon("camera") + 'Dateien scannen</button>';
+		return plusPopBetaHtml({ insertPos, curPaper: page() ? page().paper : "lined" }, icon);
 	}
 
 	function openTextEditor(pi, px, py, txt) {
@@ -2711,14 +2640,8 @@ export const HEFT = (() => {
 		if (d.hetextadd) { closePop(); tool = "select"; expanded = false; openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
-		if (d.hewrite) {
-
-			if (tool === "pen" || tool === "marker") expanded = !expanded;
-			else { tool = "pen"; expanded = true; }
-			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
-		}
-		else if (d.hepen != null) {
-			// Beta: Stift-Favorit wählen; erneuter Tipp auf den aktiven öffnet Farbe und Dicke.
+		if (d.hepen != null) {
+			// Stift-Favorit wählen; erneuter Tipp auf den aktiven öffnet Farbe und Dicke.
 			const i = Number(d.hepen);
 			if (tool === "pen" && penSlot === i) expanded = !expanded;
 			else { tool = "pen"; penSlot = i; ({ color, size } = pens[i]); expanded = false; }
@@ -2729,8 +2652,8 @@ export const HEFT = (() => {
 				if (tool === "eraser") expanded = !expanded;
 				else { tool = "eraser"; expanded = true; }
 			} else if (d.hetool === "pen" || d.hetool === "marker") {
-				// Beta: wie die Stift-Favoriten – erster Tipp wählt, zweiter öffnet die Optionen.
-				expanded = isBetaUi() ? tool === d.hetool && !expanded : true;
+				// Wie die Stift-Favoriten – erster Tipp wählt, zweiter öffnet die Optionen.
+				expanded = tool === d.hetool && !expanded;
 				tool = d.hetool;
 			} else {
 
@@ -2742,11 +2665,11 @@ export const HEFT = (() => {
 		else if (d.hecolor) {
 			color = d.hecolor;
 			if (tool === "eraser" || tool === "select") { tool = "pen"; expanded = true; }
-			if (tool === "pen" && isBetaUi()) pens[penSlot] = { color, size };
+			if (tool === "pen") pens[penSlot] = { color, size };
 		}
 		else if (d.hesize) {
 			size = parseFloat(d.hesize);
-			if (tool === "pen" && isBetaUi()) pens[penSlot] = { color, size };
+			if (tool === "pen") pens[penSlot] = { color, size };
 		}
 		else if (d.heerasersize) eraserSize = parseFloat(d.heerasersize);
 		else if (d.heundo) { undo(); return; }

@@ -67,9 +67,9 @@ export function positionMenu(menu, anchorEl) {
 		if (caretRect && (caretRect.width || caretRect.height)) r = caretRect;
 	}
 	const mw = menu.offsetWidth || 280, mh = menu.offsetHeight || 200;
-	// Beta: iPadOS verkleinert innerHeight nicht, wenn die Bildschirmtastatur offen ist — das
+	// iPadOS verkleinert innerHeight nicht, wenn die Bildschirmtastatur offen ist — das
 	// Menü landete darunter. visualViewport beschreibt den wirklich sichtbaren Ausschnitt.
-	const vv = typeof document !== "undefined" && document.body?.classList.contains("beta-ui") ? window.visualViewport : null;
+	const vv = typeof window !== "undefined" ? window.visualViewport : null;
 	const viewTop = vv ? vv.offsetTop : 0;
 	const winH = vv ? vv.offsetTop + vv.height : typeof window !== "undefined" ? window.innerHeight : 800;
 	const winW = typeof window !== "undefined" ? window.innerWidth : 1200;

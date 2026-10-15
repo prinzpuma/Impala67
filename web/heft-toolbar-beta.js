@@ -1,10 +1,8 @@
 "use strict";
-// Beta-Oberfläche des Hefts (Einstellungen → Experimente → „Beta-Design“, body.beta-ui):
+// Standard-Oberfläche der Heft-Werkzeugleiste:
 // Stift-Favoriten statt eines „Schreiben“-Knopfs, Dicken als echte Punkte, ruhigeres
 // „Seite hinzufügen“-Menü. Nur HTML-Bausteine; Zustand und Klicks bleiben in heft.js.
 import { PAPERS } from "./heft-tools.js";
-
-export const isBetaUi = () => typeof document !== "undefined" && !!document.body && document.body.classList.contains("beta-ui");
 
 const dotPx = (size) => Math.round(Math.max(4, Math.min(12, 2 + size * 1.6)));
 

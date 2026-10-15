@@ -1,44 +1,6 @@
 /* ==========================================================================
    Impala67 – Beta-Design (Einstellungen → Experimente → „Beta-Design“)
-   Hier steht NUR, was an body.beta-ui hängt: neue Ideen zum Testen, die das
-   Standard-Design (design.css) überschreiben. Schalter aus = die stabile Version.
-   Was sich bewährt hat, wandert nach design.css.
+   Platz für neue Ideen zum Testen: Regeln hier hängen an body.beta-ui und
+   überschreiben das Standard-Design (design.css). Schalter aus = die stabile Version.
+   Was sich bewährt hat, wandert nach design.css. Aktuell leer: Beta macht nichts.
    ========================================================================== */
-
-/* 1. Ruhigere Fläche: ein Akzent ohne Verlauf, zwei Schattenstufen, kein farbiges Leuchten.
-   Karten tragen nur noch einen feinen Rand (im Dark Mode sieht man Schatten ohnehin kaum);
-   echter Schatten nur für Schwebendes (Menüs, Dialoge, Leisten). */
-:root body.beta-ui {
-	--b-grad: var(--accent);
-	--b-card: 0 0 0 1px var(--edge-soft), 0 1px 2px rgb(0 0 0 / .04);
-	--b-lift: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / .06);
-	--b-float: 0 0 0 1px var(--edge-soft), 0 12px 32px -16px rgb(0 0 0 / .5);
-	--elev-3: var(--b-float);
-}
-/* „Fällig“-Karten: getönt statt Vollton-Fläche, die Zahl trägt den Akzent */
-:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due) { background: var(--b-tint-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent-border); filter: none }
-:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due):hover:not(:disabled) { background: var(--b-tint-3); filter: none }
-:root body.beta-ui :is(.hv .hv-cards.due, .anki-page button.anki-stat.due) :is(small, span) { color: var(--text2); opacity: 1 }
-:root body.beta-ui .hv .hv-cards.due > b, :root body.beta-ui .anki-page button.anki-stat.due > b { color: var(--accent) }
-/* Kein Akzent-Leuchten unter „Antwort zeigen“ */
-:root body.beta-ui .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini), :root body.beta-ui .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { box-shadow: none }
-
-/* 2. Touch-Menüs am iPad. Das Handy (mobile-ui) zeigt Menüs schon als
-   Sheet mit 52px-Zeilen; das iPad bekam bisher die Maus-Popover mit 36px-Zeilen. Apple-HIG: 44px. */
-@media (pointer: coarse) {
-	body.beta-ui:not(.mobile-ui) :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }
-	body.beta-ui:not(.mobile-ui) .menu-chip { min-height: 40px; padding-inline: var(--space-3) }
-	/* ⋯ an Sidebar-Zeilen: breiter, Tippfläche per Pseudo-Element höher — die Zeilen bleiben so dicht wie bisher */
-	body.beta-ui:not(.mobile-ui) .row-add { position: relative; min-width: 36px }
-	body.beta-ui:not(.mobile-ui) .row-add::after { content: ""; position: absolute; inset: -8px 0 }
-	/* Langer Druck auf Bedienelemente markierte deren Text wie zum Kopieren — nur Inhalte bleiben auswählbar */
-	body.beta-ui:not(.mobile-ui) :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
-	body.beta-ui:not(.mobile-ui) :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
-	/* Editor-Rand: ⊕/⋮ nur am gerade bearbeiteten Block statt halbtransparent an jeder Zeile, und so groß wie
-	   am Desktop (die 28×30-Griffe waren höher als eine Textzeile und saßen 5px zu tief). Tippfläche per Pseudo-Element. */
-	body.beta-ui:not(.mobile-ui) .blk-gutter { opacity: 0; pointer-events: none }
-	body.beta-ui:not(.mobile-ui) :is(.blk:focus-within, .blk:hover) > .blk-gutter { opacity: 1; pointer-events: auto }
-	body.beta-ui:not(.mobile-ui) :is(.blk-plus, .blk-handle) { position: relative; width: 20px; height: 22px; font-size: var(--text-base) }
-	body.beta-ui:not(.mobile-ui) .blk-handle { font-size: var(--text-xs) }
-	body.beta-ui:not(.mobile-ui) :is(.blk-plus, .blk-handle)::after { content: ""; position: absolute; inset: -10px 0 }
-}

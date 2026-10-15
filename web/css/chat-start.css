@@ -1,6 +1,6 @@
 /* chat-start.css — Impala67: Leerzustand des KI-Chats (Vollansicht)
    Alles mittig: Status, Leucht-Kugel, Begrüßung, Eingabe, Vorschlagskarten.
-   Farben kommen aus --accent (und --b-warm aus design.css), passen also zu jedem Theme. */
+   Farben kommen aus --accent, passen also zu jedem Theme. */
 
 .chat-full-wrap.is-empty { justify-content: center; gap: var(--space-4); padding-bottom: 8vh; overflow-y: auto }
 .chat-full-wrap.is-empty .chat-log-full { display: none }
@@ -24,7 +24,7 @@
 /* Leucht-Kugel: weicher Farbverlauf aus der Akzentfarbe, dreht sich langsam */
 .cs-orb { position: relative; display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: var(--space-1); isolation: isolate }
 .cs-orb::before { content: ""; position: absolute; inset: -18px; z-index: -2; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 45%, transparent), transparent); filter: blur(10px) }
-.cs-orb i { position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: conic-gradient(from 0deg, var(--accent), var(--b-warm, var(--accent)), color-mix(in oklab, var(--accent) 60%, #7dd3fc), var(--accent)); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .18), inset 0 -10px 22px rgb(0 0 0 / .25), inset 0 8px 16px rgb(255 255 255 / .22) }
+.cs-orb i { position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: conic-gradient(from 0deg, var(--accent), color-mix(in oklab, var(--accent) 60%, #7dd3fc), var(--accent)); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .18), inset 0 -10px 22px rgb(0 0 0 / .25), inset 0 8px 16px rgb(255 255 255 / .22) }
 .cs-orb span { color: #fff; font-size: 28px; line-height: 1; text-shadow: 0 1px 8px rgb(0 0 0 / .25) }
 @keyframes cs-spin { to { transform: rotate(1turn) } }
 @keyframes cs-breathe { 50% { opacity: .65; transform: scale(1.08) } }
