@@ -1,6 +1,6 @@
 /* ==========================================================================
    Impala67 – Erweitertes Design (früher Beta-Design, jetzt Standard)
-   Gilt immer; der Schalter „Beta-Design“ hat vorerst keine Wirkung.
+   Gilt immer; nur Abschnitt 10 hängt am Schalter „Beta-Design“ (body.beta-ui).
    „:root body“ hält das Gewicht von body + Klasse.
    Ruhiger Hover (nur Fläche/Rand, kein Anheben), Trennlinien und Ränder bleiben, Feder nur beim Drücken und
    bei echten Übergängen. Grundwerte (Ecken, Schatten) werden als Tokens
@@ -123,3 +123,13 @@
 :root body .cover-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
 :root body .cover-swatch { width: auto; height: 64px; border: 0; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--edge-soft) }
 :root body .cover-swatch:hover, :root body .cover-swatch.active { outline: 2px solid var(--accent); outline-offset: 2px }
+
+/* 10. Beta (nur body.beta-ui): Touch-Menüs am iPad. Das Handy (mobile-ui) zeigt Menüs schon als
+   Sheet mit 52px-Zeilen; das iPad bekam bisher die Maus-Popover mit 36px-Zeilen. Apple-HIG: 44px. */
+@media (pointer: coarse) {
+	body.beta-ui:not(.mobile-ui) :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }
+	body.beta-ui:not(.mobile-ui) .menu-chip { min-height: 40px; padding-inline: var(--space-3) }
+	/* ⋯ an Sidebar-Zeilen: breiter, Tippfläche per Pseudo-Element höher — die Zeilen bleiben so dicht wie bisher */
+	body.beta-ui:not(.mobile-ui) .row-add { position: relative; min-width: 36px }
+	body.beta-ui:not(.mobile-ui) .row-add::after { content: ""; position: absolute; inset: -8px 0 }
+}
