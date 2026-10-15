@@ -13,7 +13,6 @@ body.mobile-ui {
 	--m-top: calc(var(--m-bar-h) + env(safe-area-inset-top));
 	--m-bot: calc(var(--m-tabs-h) + env(safe-area-inset-bottom));
 	--m-gutter: 16px;
-	--m-radius: 14px;
 	--m-row-h: 52px;
 	--m-bar-bg: color-mix(in srgb, var(--panel-solid) 82%, transparent);
 	height: 100dvh;
@@ -88,7 +87,7 @@ body.mobile-ui .m-title {
 	margin: 0;
 	min-width: 0;
 	font-size: 22px;
-	font-weight: 800;
+	font-weight: 700;
 	letter-spacing: -0.02em;
 	line-height: 1.15;
 	color: var(--text);
@@ -129,7 +128,7 @@ body.mobile-ui .m-iconbtn {
 	margin: 0;
 	padding: 0;
 	border: 0;
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--text);
 	cursor: pointer;
@@ -304,7 +303,7 @@ body.mobile-ui .m-section-label {
 
 body.mobile-ui .m-group {
 	overflow: hidden;
-	border-radius: var(--m-radius);
+	border-radius: var(--radius-lg);
 	background: var(--surface);
 }
 
@@ -385,7 +384,7 @@ body.mobile-ui .m-row-ico {
 	flex: none;
 	width: 32px;
 	height: 32px;
-	border-radius: 9px;
+	border-radius: var(--radius-sm);
 	background: rgb(var(--tc) / .18);
 	color: rgb(var(--tc));
 }
@@ -417,7 +416,7 @@ body.mobile-ui .m-empty strong {
 	margin-bottom: 4px;
 	color: var(--text);
 	font-size: 17px;
-	font-weight: 650;
+	font-weight: 600;
 }
 body.mobile-ui .m-empty p {
 	margin: 0;
@@ -447,7 +446,7 @@ body.mobile-ui .m-search {
 	margin: 0;
 	padding: 0 12px 0 38px;
 	border: 0;
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	background: var(--surface);
 	color: var(--text);
 	font: inherit;
@@ -529,7 +528,7 @@ body.mobile-ui .m-notes-crumb {
 	padding: 8px 0 4px;
 	color: var(--text);
 	font-size: 20px;
-	font-weight: 750;
+	font-weight: 700;
 	letter-spacing: -0.01em;
 	line-height: 1.2;
 }
@@ -572,7 +571,7 @@ body.mobile-ui .m-note-ico {
 	justify-content: center;
 	width: 34px;
 	height: 34px;
-	border-radius: 9px;
+	border-radius: var(--radius-sm);
 	background: var(--surface-hover);
 	font-size: 22px;
 	line-height: 1;
@@ -614,7 +613,7 @@ body.mobile-ui .m-sync-card {
 	margin: 0;
 	padding: 16px;
 	border: 0;
-	border-radius: var(--m-radius);
+	border-radius: var(--radius-lg);
 	background: var(--surface);
 	color: var(--text);
 	font: inherit;
@@ -683,7 +682,7 @@ body.mobile-ui .m-sheet {
 	z-index: var(--z-mobile-sheet);
 	max-height: 85dvh;
 	box-sizing: border-box;
-	border-radius: 20px 20px 0 0;
+	border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 	background: var(--menu-bg);
 	box-shadow: var(--elev-3);
 	transform: translateY(100%);
@@ -715,7 +714,7 @@ body.mobile-ui .m-sheet-title {
 	overflow: hidden;
 	color: var(--text);
 	font-size: 17px;
-	font-weight: 650;
+	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -754,7 +753,7 @@ body.mobile-ui .m-sheet-body .menu-item {
 	margin: 0;
 	padding: 0 16px;
 	border: 0;
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--text);
 	font: inherit;

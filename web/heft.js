@@ -1876,7 +1876,7 @@ export const HEFT = (() => {
 		let tray = "";
 		if (showWrite) {
 			tray =
-				'<div class="' + trayClass() + '" data-hetray="1" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
+				'<div class="' + trayClass() + '" data-hetray="1" data-key="tray-write" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
 					(beta ? SIZES.map((sz) => sizeDotHtml(sz[0], sz[1], size === sz[1], color)).join("") :
 					'<button type="button" data-hetool="pen" class="heft-opt' + (tool === "pen" ? " active" : "") +
@@ -1896,7 +1896,7 @@ export const HEFT = (() => {
 		} else if (showEraser) {
 
 			tray =
-				'<div class="' + trayClass() + '" data-hetray="1" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
+				'<div class="' + trayClass() + '" data-hetray="1" data-key="tray-eraser" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
 					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
 					[["Klein", 10], ["Mittel", 16], ["Groß", 30]].map((z) => '<button type="button" class="heft-size' + (eraserSize === z[1] ? " active" : "") +
 						'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
@@ -2310,6 +2310,8 @@ export const HEFT = (() => {
 		// backdrop-filter (Unschärfe) erst neu aufbauen und die Einblend-Animation der
 		// Options-Leiste startete bei JEDER Kleinigkeit (Farbe, Werkzeug, Position) von
 		// vorn — dazwischen war für einen Frame nichts zu sehen.
+		// Die Options-Leiste trägt ein data-key: ohne ihn glich morph beim Ausklappen nach
+		// Position ab und baute die Ecke oben rechts (KI-Chat, ＋) zur Leiste um.
 		if (chrome) {
 			const t = document.createElement("div"); t.innerHTML = html;
 			const fresh = t.firstElementChild;

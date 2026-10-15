@@ -306,7 +306,7 @@ function renderApp(vm) {
 			'<option value="google"' + (vm.nativeScannerEnabled ? " selected" : "") + '>Google-Scanner</option>' +
 			'<option value="impala"' + (vm.nativeScannerEnabled ? "" : " selected") + '>Impala-Scanner</option></select>',
 	})) : "";
-	const experiments = UI.row({ id: "beta-ui", title: "Beta-Design", description: "Neue Heft-Werkzeugleiste mit Stift-Favoriten und überarbeitete Seitenmenüs (in Arbeit)", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
+	const experiments = UI.row({ id: "beta-ui", title: "Beta-Design", description: "Neue Heft-Werkzeugleiste mit Stift-Favoriten und überarbeitete Seitenmenüs (Standard: an)", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
 	const chats = CHATS.load();
 	const cardCount = Object.keys(S.cards || {}).length;
 	const deckCount = Object.keys(S.decks || {}).length;

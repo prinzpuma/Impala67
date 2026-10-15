@@ -100,7 +100,7 @@ export function applyAppearance() {
 	const fontSize = localStorage.getItem("impala67FontSize") || "m";
 	document.body.classList.toggle("font-s", fontSize === "s");
 	document.body.classList.toggle("font-l", fontSize === "l");
-	document.body.classList.toggle("beta-ui", localStorage.getItem("impala67BetaUi") === "1");
+	document.body.classList.toggle("beta-ui", localStorage.getItem("impala67BetaUi") !== "0");
 	// Alle vier Werte inline am body: --accent aus :root wäre sonst mit dem Dunkel-Akzent festgelegt.
 	const rgb = isLight ? accent.light : accent.dark;
 	document.body.style.setProperty("--accent-rgb", rgb);
@@ -183,7 +183,7 @@ function settingsViewModel() {
 		motion: localStorage.getItem("impala67Motion") || "full",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
-		betaUi: localStorage.getItem("impala67BetaUi") === "1",
+		betaUi: localStorage.getItem("impala67BetaUi") !== "0",
 		isNative: PLATFORM_NATIVE.isNative,
 		nativeHapticsEnabled: localStorage.getItem("impala67NativeHaptics") !== "0",
 		nativeScannerAvailable: PLATFORM_NATIVE.scanner.isAvailable,

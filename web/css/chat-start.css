@@ -7,7 +7,7 @@
 .chat-full-wrap.is-empty .chat-full-head { order: 0; justify-content: center; margin: 0 auto -4px }
 .chat-full-wrap.is-empty .chat-full-head h1 { display: none }
 .chat-full-wrap.is-empty .chat-start { order: 1 }
-.chat-full-wrap.is-empty .chat-form-full { order: 2; max-width: 680px; padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4); border-radius: 24px; box-shadow: 0 0 0 1px var(--edge-soft), 0 24px 50px -30px color-mix(in srgb, var(--accent) 60%, transparent) }
+.chat-full-wrap.is-empty .chat-form-full { order: 2; max-width: 680px; padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4); border-radius: var(--radius-xl); box-shadow: 0 0 0 1px var(--edge-soft), 0 24px 50px -30px color-mix(in srgb, var(--accent) 60%, transparent) }
 .chat-full-wrap.is-empty .chat-form-full textarea { min-height: 52px; font-size: var(--text-md) }
 .chat-full-wrap.is-empty .chat-suggests { order: 3 }
 
@@ -17,7 +17,7 @@
 
 /* Begrüßung */
 .chat-start { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); width: 100%; max-width: 680px; margin: 0 auto; padding: 0 var(--space-5); text-align: center }
-.cs-title { margin: 0; font-family: var(--b-display, inherit); font-size: clamp(26px, 3.2vw, 34px); font-weight: 650; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance }
+.cs-title { margin: 0; font-family: var(--b-display, inherit); font-size: clamp(26px, 3.2vw, 34px); font-weight: 600; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance }
 .cs-title span { color: var(--text2) }
 .cs-sub { margin: 0; max-width: 46ch; color: var(--text2); font-size: var(--text-sm); line-height: 1.55; text-wrap: pretty }
 
@@ -34,13 +34,13 @@ body:not(.perf-mode) .cs-orb::before { animation: cs-breathe 4.5s ease-in-out in
 
 /* Vorschlagskarten */
 .chat-suggests { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); width: 100%; max-width: 720px; margin: 0 auto; padding: 0 var(--space-5) }
-.chat-suggests button { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); min-height: 0; padding: var(--space-3); border: 1px solid var(--edge-soft); border-radius: 16px; background: var(--panel-solid); color: var(--text); text-align: left; transition: border-color .15s, background .15s, transform .3s var(--b-spring, ease) }
+.chat-suggests button { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); min-height: 0; padding: var(--space-3); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); background: var(--panel-solid); color: var(--text); text-align: left; transition: border-color .15s, background .15s, transform .3s var(--b-spring, ease) }
 .chat-suggests button:hover { border-color: var(--accent-border); background: color-mix(in srgb, var(--accent) 7%, var(--panel-solid)) }
 .chat-suggests button:active { transform: scale(.98) }
-.cs-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent) }
+.cs-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent) }
 .cs-ico svg { width: 16px; height: 16px }
 .cs-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
-.cs-copy b { font-size: var(--text-sm); font-weight: 650 }
+.cs-copy b { font-size: var(--text-sm); font-weight: 600 }
 .cs-copy small { color: var(--text2); font-size: var(--text-xs); line-height: 1.4 }
 
 @media (max-width: 760px) {
