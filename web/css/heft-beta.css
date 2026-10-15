@@ -166,3 +166,39 @@ body.beta-ui .heft-pages-btn:disabled { opacity: .4 }
 body.beta-ui .heft-pages-btn.danger { background: var(--danger-soft); color: var(--danger) }
 body.beta-ui .heft-pages-btn svg { width: 16px; height: 16px }
 body.beta-ui .heft-pages-foot .heft-pages-text { min-width: 0 }
+
+/* 7. Handy (body.mobile-ui): Eckreihe oben, Werkzeugleiste unten am Daumen, Optionen direkt darüber.
+   Die Heft-Fläche beginnt schon unter der App-Leiste – Abstände daher relativ zur Fläche, nicht zu --m-top. */
+body.beta-ui.mobile-ui .heft-chrome .heft-corner-l-group,
+body.beta-ui.mobile-ui .heft-chrome .heft-corner-r { top: 8px; gap: 6px }
+body.beta-ui.mobile-ui .heft-chrome .heft-corner-l-group { left: 8px }
+body.beta-ui.mobile-ui .heft-chrome .heft-corner-r { right: 8px }
+body.beta-ui.mobile-ui .heft-chrome .heft-corner {
+	width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0;
+	display: inline-grid; place-items: center; background: var(--menu-bg); color: var(--text);
+}
+body.beta-ui.mobile-ui .heft-chrome .heft-corner svg { width: 20px; height: 20px }
+/* KI-Chat steckt auf dem Handy schon in der App-Leiste oben */
+body.beta-ui.mobile-ui .heft-chrome .heft-chat { display: none }
+body.beta-ui.mobile-ui .heft-chrome .heft-float {
+	top: auto !important; bottom: calc(10px + env(safe-area-inset-bottom)); left: 50% !important; right: auto;
+	transform: translateX(-50%) !important; max-width: calc(100% - 16px) !important; padding: 0; overflow: visible;
+}
+body.beta-ui.mobile-ui .heft-chrome .heft-pill { padding: 4px; gap: 2px }
+body.beta-ui.mobile-ui .heft-chrome .heft-main { width: 42px; min-width: 42px; height: 42px; min-height: 42px; padding: 0 }
+body.beta-ui.mobile-ui .heft-chrome .heft-pill > .heft-sep { height: 22px; margin: 0 3px }
+body.beta-ui.mobile-ui .heft-chrome .heft-tray {
+	top: auto; bottom: calc(68px + env(safe-area-inset-bottom)); max-width: calc(100% - 16px); padding: 4px; overflow-x: auto;
+}
+body.beta-ui.mobile-ui .heft-chrome .heft-tray .heft-opt,
+body.beta-ui.mobile-ui .heft-chrome .heft-tray .heft-size { width: 34px; min-width: 34px !important; height: 34px !important; min-height: 34px !important }
+body.beta-ui.mobile-ui .heft-chrome .heft-tray .heft-swatch { width: 24px; height: 24px; min-width: 24px !important; min-height: 24px !important; margin: 0 1px }
+body.beta-ui.mobile-ui .heft-chrome .heft-tray .heft-sep { height: 22px; margin: 0 2px }
+body.beta-ui.mobile-ui .heft-chrome .heft-tray-drag { width: 20px; min-width: 20px }
+/* Popups: Seitenübersicht fast bildschirmfüllend, „Seite hinzufügen“ in voller Breite */
+body.beta-ui.mobile-ui .heft-pop-pages { width: calc(100% - 16px); max-width: none; height: calc(100% - 16px); max-height: none }
+body.beta-ui.mobile-ui .heft-pop-pages .heft-pop-grid { padding: 14px 14px 28px; gap: 24px 12px; grid-template-columns: repeat(2, 1fr) }
+body.beta-ui.mobile-ui .heft-pop-plus { width: calc(100% - 16px); max-width: none }
+/* Deaktiviert (nichts rückgängig zu machen): Kreis bleibt, nur das Symbol wird blass */
+body.beta-ui .heft-chrome .heft-corner:disabled { opacity: 1 }
+body.beta-ui .heft-chrome .heft-corner:disabled svg { opacity: .3 }

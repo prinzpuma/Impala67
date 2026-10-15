@@ -320,12 +320,7 @@ export const HEFT = (() => {
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
 		sel = null;
 		// Fremdänderung (auch an anderen Notizen) hob die Auswahl bisher immer auf.
-		// Jetzt: ausgewählte Striche per ID im neuen Stand wiederfinden.
-		if (lassoSel) {
-			const ids = new Set(lassoSel.strokes.map((s) => s.id));
-			const strokes = (d.pages[lassoSel.pageIdx]?.strokes || []).filter((s) => ids.has(s.id));
-			lassoSel = strokes.length ? { pageIdx: lassoSel.pageIdx, strokes, bounds: lassoBounds(strokes) } : null;
-		}
+		relinkLasso(d);
 		if (structural) rebuildScroll();
 		else {
 			// FIX (25. Juli, "Striche erscheinen erst nach dem Neuladen"): renderVisiblePages()
@@ -340,6 +335,23 @@ export const HEFT = (() => {
 		updateChrome();
 	}
 	STATE.onRemoteApplied(onRemoteApplied);
+	// Speichern und Sync legen geänderte Striche als KOPIEN ins Dokument (Events sind
+	// unveränderlich). Auswahl und laufendes Ziehen hielten danach die alten Objekte:
+	// das zweite Verschieben/Skalieren bewegte Striche, die gar nicht mehr auf der Seite
+	// lagen. Darum hier per ID auf den aktuellen Stand umhängen.
+	function relinkLasso(d) {
+		const liveOf = (pi) => new Map((d.pages[pi]?.strokes || []).map((s) => [s.id, s]));
+		if (lassoSel) {
+			const live = liveOf(lassoSel.pageIdx);
+			const strokes = lassoSel.strokes.map((s) => live.get(s.id)).filter(Boolean);
+			lassoSel = strokes.length ? { pageIdx: lassoSel.pageIdx, strokes, bounds: lassoBounds(strokes) } : null;
+		}
+		if (drawing && (drawing.lassoMove || drawing.lassoResize)) {
+			const live = liveOf(drawing.pageIdx);
+			// Reihenfolge halten: originals[i] gehört zu strokes[i].
+			drawing.strokes = drawing.strokes.map((s) => live.get(s.id) || s);
+		}
+	}
 	function scheduleSave() { clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
 	const refresh = (i) => { scheduleSave(); redrawPage(i); renderThumb(i); updateChrome(); };
 
@@ -355,6 +367,7 @@ export const HEFT = (() => {
 		dropThumbs(savePid);
 		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
 		published[savePid] = nextPublished;
+		if (savePid === pid && saveDoc === doc) relinkLasso(doc);
 		await PERF_PROFILER.run("heft.snapshot", () => maybeSnapshot(savePid, saveDoc), {}, 30);
 	}
 
@@ -1212,6 +1225,8 @@ export const HEFT = (() => {
 		// Greift plattformuebergreifend (Android hat kein touchType, aber
 		// pointerdown mit pointerType=pen feuert VOR touchstart).
 		if (penRecently()) return;
+		// Finger zieht gerade die Lasso-Auswahl: nicht gleichzeitig die Seite verschieben.
+		if (drawing && drawing.byTouch) return;
 		const fingers = fingersOf(e.touches);
 		if (!fingers.length) return;
 		for (const t of fingersOf(e.changedTouches)) gesture.pts.set(t.identifier, { x: t.clientX, y: t.clientY });
@@ -1228,6 +1243,7 @@ export const HEFT = (() => {
 	}
 	function onTouchMove(e) {
 		if (penRecently()) { navReset(); return; }
+		if (drawing && drawing.byTouch) return;
 		for (const t of e.changedTouches) {
 			const s = gesture.pts.get(t.identifier);
 			if (s && Math.hypot(t.clientX - s.x, t.clientY - s.y) > 6) gesture.moved = true;
@@ -1435,6 +1451,7 @@ export const HEFT = (() => {
 					const startDist = Math.max(12, Math.hypot(p[0] - anchor[0], p[1] - anchor[1]));
 					drawing = {
 						lassoResize: true,
+						byTouch: e.pointerType === "touch",
 						strokes: lassoSel.strokes,
 						originals: lassoSel.strokes.map(strokeGeometry),
 						cv,
@@ -1448,7 +1465,7 @@ export const HEFT = (() => {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					drawing = { lassoMove: true, strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
+					drawing = { lassoMove: true, byTouch: e.pointerType === "touch", strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
 					return;
 				}
 			}
@@ -1558,7 +1575,9 @@ export const HEFT = (() => {
 		return fitStrokeShape(pts);
 	}
 	function onMove(e) {
-		if (!drawing || rejected(e)) return;
+		// Ein per Finger gegriffenes Lasso (onDown: "interact") darf sich auch per Finger
+		// bewegen — sonst verwarf "Nur Stift" jede Bewegung und die Auswahl blieb stehen.
+		if (!drawing || (rejected(e) && !drawing.byTouch)) return;
 		e.preventDefault();
 		if (drawing.lasso) {
 			const p = pos(e, drawing.cv);
@@ -1814,7 +1833,7 @@ export const HEFT = (() => {
 	// Am linken/rechten Rand dockt das Tray senkrecht an; rechts über `right`, damit es beim Fenster-Resize am Rand bleibt.
 	const TRAY_DOCK_PX = 48;
 	const trayCss = (p) => (p.side === "right" ? "left:auto;right:8px" : "right:auto;left:" + Math.round(p.side === "left" ? 8 : p.x) + "px") +
-		";top:" + Math.round(p.y) + "px;transform:none";
+		";top:" + Math.round(p.y) + "px;bottom:auto;transform:none";
 	const trayClass = () => "heft-tray" + (trayPos && trayPos.side ? " is-vertical" : "");
 
 	let chromeMin = false;
@@ -1824,6 +1843,8 @@ export const HEFT = (() => {
 		const showWrite = expanded && writeOn;
 		const showEraser = expanded && tool === "eraser";
 		const beta = isBetaUi();
+		// Beta auf dem Handy: Rückgängig/Wiederholen oben in der Eckreihe, die Leiste unten passt so ohne Scrollen.
+		const phone = beta && document.body.classList.contains("mobile-ui");
 
 		const svgPen = tIcon("pen-tool");
 		const svgMarker = tIcon("marker");
@@ -1890,6 +1911,8 @@ export const HEFT = (() => {
 				'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
 					'" data-hepagesmenu="1" title="Seiten">' + svgPages +
 					'<span class="heft-pageno-inline"></span></button>' +
+				(phone ? '<button type="button" data-heundo="1" class="heft-corner" title="Rückgängig">' + svgUndo + '</button>' +
+					'<button type="button" data-heredo="1" class="heft-corner" title="Wiederholen">' + svgRedo + '</button>' : '') +
 			'</div>' +
 			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 				'<div class="heft-pill">' +
@@ -1904,16 +1927,16 @@ export const HEFT = (() => {
 					'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
 						'" title="Lasso — Striche auswählen">' + svgLasso + '</button>' +
 
-					'<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
-						'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>' +
+					(phone ? '' : '<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
+						'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>') +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heimgmenu="1" class="heft-main' +
 						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
+					(phone ? '' : '<span class="heft-sep" aria-hidden="true"></span>' +
 					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig">' + svgUndo + '</button>' +
 					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen">' + svgRedo + '</button>' +
 					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>' +
+					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>') +
 				'</div>' +
 			'</div>' +
 			tray +
