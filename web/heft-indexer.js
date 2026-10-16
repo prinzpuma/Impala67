@@ -8,6 +8,7 @@ import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
 import { PAGE_W, PAGE_H, composePageText } from "./heft-document-core.js";
 import { SCAN_OCR } from "./scan-ocr.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
+import { BUS } from "./event-bus.js";
 
 // heft-indexer.js — Automatischer, akkuschonender Hintergrund-Crawler für Handschrift-Hefte.
 //
@@ -285,3 +286,7 @@ export const HEFT_INDEXER = (() => {
 		stop,
 	};
 })();
+
+BUS.on("heft:schedule-page", (p) => { if (p && p.pageId) HEFT_INDEXER.schedulePage(p.pageId, p.page); });
+BUS.on("heft:start-background-scan", () => HEFT_INDEXER.startBackgroundScan());
+

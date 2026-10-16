@@ -1,30 +1,29 @@
 "use strict";
 
-import { S, STATE } from "./state.js";
+import { S, STATE, favModels } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { AI } from "./ai.js";
 import { RAG } from "./rag.js";
-import { RENDER } from "./render.js";
+import { BUS } from "./event-bus.js";
 import { DRIVE } from "./drive.js";
 import { HANDSCHRIFT } from "./handschrift.js";
-import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { normalizeDriveSyncMinutes } from "./drive-sync-policy.js";
 import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, valuesSnapshot, valuesAreDirty, BREAK_REMINDER_KEY } from "./settings-schema.js";
-import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi } from "./settings-renderer.js";
+import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi, renderSettingsModelList, localEmbeddingStatusView } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
-import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
+import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { lead } from "./icons.js";
 
-const renderStatusDot = (...args) => RENDER.renderStatusDot(...args);
-const render = (...args) => RENDER.render(...args);
-const closeOverlay = (...args) => APP.closeOverlay(...args);
+const renderStatusDot = () => BUS.emit("ui:render-status-dot");
+const render = (opts) => BUS.emit("ui:render", opts);
+const closeOverlay = (el) => BUS.emit("ui:close-overlay", el);
 const openPage = (...args) => TABS.openPage(...args);
 
 // Verbindungsstatus automatisch prüfen (beim Start, nach Einstellungen, alle 60s).
@@ -556,13 +555,13 @@ export function handleDriveLogout() {
 // Nach Drive-Sync: Konfliktdetails merken, Popup öffnen (oder nach Reload via boot.js).
 function finishDriveSync({ imported, conflicts, conflictDetails }) {
 	const details = conflictDetails || [];
-	if (details.length) RENDER.mergePendingConflicts(details);
+	if (details.length) BUS.emit("ui:merge-pending-conflicts", details);
 	const n = details.length || conflicts || 0;
 	// drive.js hat importierte Events bereits deterministisch in STATE eingespielt;
 	// kein location.reload() mehr — Editor, Tabs und Scrollposition bleiben erhalten.
 	if (n > 0) {
 		U.toast("Sync fertig — " + imported + " Änderungen, " + n + " Konflikt(e).", "error");
-		RENDER.openConflictResolver(0);
+		BUS.emit("ui:open-conflict-resolver", 0);
 		return;
 	}
 	if (imported > 0) {
@@ -612,9 +611,9 @@ let autoReloadScheduled = false;
 function handleAutomaticDriveSync(result) {
 	if (!result) return;
 	const details = result.conflictDetails || [];
-	if (details.length) RENDER.mergePendingConflicts(details);
+	if (details.length) BUS.emit("ui:merge-pending-conflicts", details);
 	if (details.length || result.conflicts) {
-		RENDER.openConflictResolver(0);
+		BUS.emit("ui:open-conflict-resolver", 0);
 		return;
 	}
 	if (result.imported > 0) {
@@ -727,65 +726,10 @@ export async function handleApplyPwaUpdate(button = U.el("btnPwaUpdateAction")) 
 // Zeichnet die Modell-Liste in den offenen KI-Einstellungen (Favoriten oben).
 // Nutzt S.availableModels (Cache) — ohne Netz. Nach Laden: refreshChatModels().
 export function paintSettingsModels() {
-	const host = U.el("settingsModelList");
-	const label = U.el("aiCurrentModelLabel");
-	if (!host) return;
-	const providers = S.settings.aiProviders || [];
-	const nameOf = (id) => ((providers.find((p) => p.id === id) || {}).name) || id || "";
-	const curPr = S.settings.aiProviderId || "";
-	const curModel = S.settings.aiModel || "";
-	if (label) label.textContent = curModel ? (nameOf(curPr) + " · " + curModel) : "Kein Modell gewählt";
-	const favSet = (typeof RENDER.favModels === "function") ? RENDER.favModels() : new Set();
-	const live = Array.isArray(S.availableModels) ? S.availableModels : [];
-	// Suche: filtert NUR die Anzeige. Favoriten, aktives Modell und die Gruppierung nach
-	// Quelle bleiben unverändert — ein Filter über der bestehenden Liste, keine zweite Liste.
-	const q = String(S.modelQuery || "").trim().toLowerCase();
-	const hit = (m) => !q || (String(m.id) + " " + nameOf(m.providerId)).toLowerCase().includes(q);
-	const count = U.el("aiModelCount");
-	if (count) count.textContent = q ? live.filter(hit).length + " von " + live.length : live.length + " Modelle";
-	const row = (m) => {
-		const favKey = m.providerId + "::" + m.id;
-		const fav = favSet.has(favKey);
-		const active = m.providerId === curPr && m.id === curModel;
-		const displayName = m.id === "impala-ai" ? "Impala AI" : m.id;
-		return '<div class="model-row">' +
-			'<button type="button" class="menu-item' + (active ? " active" : "") + '" data-modelset="' + U.esc(m.providerId) + "::" + U.esc(m.id) + '">' +
-				'<span class="menu-item-label">' + U.esc(displayName) + "</span>" +
-				'<small class="settings-model-src">' + U.esc(nameOf(m.providerId)) + "</small>" +
-				(active ? '<span class="menu-check">✓</span>' : "") +
-			"</button>" +
-			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + U.esc(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit pinnen") + '">' + (fav ? "★" : "☆") + "</button></div>";
-	};
-	let body = "";
-	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id) && hit(m));
-	if (favLive.length) body += '<div class="menu-label">★ Favoriten</div>' + favLive.map(row).join("");
-	for (const pr of providers) {
-		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id) && hit(m));
-		if (rest.length) body += '<div class="menu-label">' + U.esc(pr.name || pr.id) + "</div>" + rest.map(row).join("");
-	}
-	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten (nur für vorhandene Quellen)
-	const knownProviders = new Set(providers.map((p) => p.id));
-	const seen = new Set(live.map((m) => m.providerId + "::" + m.id));
-	const orphans = [];
-	favSet.forEach((k) => {
-		const sep = k.indexOf("::");
-		const pId = sep === -1 ? curPr : k.slice(0, sep);
-		if (!seen.has(k) && knownProviders.has(pId)) orphans.push(k);
+	renderSettingsModelList({
+		favSet: favModels(),
+		presets: AI.MODEL_PRESETS || [],
 	});
-	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel) && knownProviders.has(curPr)) orphans.push(curPr + "::" + curModel);
-	const orphanRows = orphans.map((k) => {
-		const sep = k.indexOf("::");
-		return { providerId: sep === -1 ? curPr : k.slice(0, sep), id: sep === -1 ? k : k.slice(sep + 2) };
-	}).filter(hit);
-	if (orphanRows.length) body += '<div class="menu-label">Gespeichert</div>' + orphanRows.map(row).join("");
-	// Offline / keine Live-Liste: feste Vorschläge (Gemini/OpenAI/lokal) anbieten
-	if (!body && !q && (AI.MODEL_PRESETS || []).length) {
-		body = '<div class="menu-label">Vorschläge</div>' + (AI.MODEL_PRESETS || []).map((p) =>
-			row({ id: p.value, providerId: p.provider })).join("");
-	}
-	host.innerHTML = body || (q
-		? '<div class="menu-note">Kein Modell passt zu „' + U.esc(q) + '“.</div>'
-		: '<div class="menu-note">Keine Modelle erreichbar. Quelle prüfen oder unten manuell eintragen.</div>');
 }
 
 // Lädt Chat-Modelle ALLER Quellen und zeichnet die Liste (inkl. Favoriten).
@@ -828,7 +772,7 @@ export async function handleApplyCustomModel() {
 	await STATE.dispatch("settingsSet", { aiProviderId: providerId, aiModel: model });
 	paintSettingsModels();
 	renderStatusDot();
-	if (typeof RENDER.renderModelBar === "function") RENDER.renderModelBar();
+	BUS.emit("ui:render-model-bar");
 	AI.detectThinkingCapabilities().catch(() => {});
 	checkAI();
 	U.toast("Modell übernommen: " + model, "success");
@@ -859,7 +803,8 @@ export async function testProviderRow(id, btn) {
 		box.textContent = r.error || "Keine Verbindung";
 	}
 }
-export const handleProviderTest = (t) => testProviderRow(t.dataset.provtest, t);
+export const handleProviderTest = (t) => testProviderTestRow(t);
+const testProviderTestRow = (t) => testProviderRow(t.dataset.provtest, t);
 
 // Das Produkt bietet bewusst nur das geprüfte lokale Bekko-Modell an.
 // Lokales Embedding-Modell (Bekko a8m): Status aktualisieren und UI synchronisieren.
@@ -878,26 +823,17 @@ export async function updateLocalEmbeddingManagerUi() {
 	const configured = inpEmbed?.value === "local::" + modelId;
 
 	try {
-		const status = await AI.getLocalEmbeddingStatus(modelId);
-		if (status.cached) {
-			statusEl.className = "settings-status " + (configured ? "is-ok" : "is-idle");
-			if (msgEl) msgEl.textContent = configured
-				? `Bereit für Offline-Suche · ca. ${status.sizeMb || 165} MB im Browser-Cache (kann entfernt werden) · wird im Leerlauf aus dem RAM entladen`
-				: "Im Browser-Cache vorhanden, aber noch nicht aktiviert · der Cache kann entfernt werden";
-			if (actionsEl) actionsEl.innerHTML = configured
-				? '<button type="button" id="btnDeleteLocalEmbedding" class="secondary danger-text">Modell löschen</button>'
-				: '<button type="button" id="btnEnableLocalEmbedding" class="primary">Für Suche aktivieren</button>';
-			if (progress) progress.hidden = true;
-		} else {
-			statusEl.className = "settings-status " + (configured || status.partial ? "is-warn" : "is-idle");
-			if (msgEl) msgEl.textContent = status.partial
-				? "Der vorige Download war unvollständig · vorhandene Teile werden beim Fortsetzen wiederverwendet"
-				: configured
-					? `Download erforderlich (ca. ${status.sizeMb || 165} MB); danach ist die Offline-Suche wieder verfügbar`
-					: `Einmaliger Download (ca. ${status.sizeMb || 165} MB); danach offline im Browser nutzbar`;
-			if (actionsEl) actionsEl.innerHTML = `<button type="button" id="btnDownloadLocalEmbedding" class="primary">${lead("download")}${status.partial ? "Download fortsetzen" : `Herunterladen (ca. ${status.sizeMb || 165} MB)`}</button>`;
-			if (progress) progress.hidden = true;
-		}
+		const status = await EMBEDDINGS.getLocalStatus(modelId);
+		const view = localEmbeddingStatusView({
+			configured,
+			cached: !!status.cached,
+			partial: !!status.partial,
+			sizeMb: status.sizeMb || 165,
+		});
+		statusEl.className = view.statusClass;
+		if (msgEl) msgEl.textContent = view.msg;
+		if (actionsEl) actionsEl.innerHTML = view.actionHtml;
+		if (progress) progress.hidden = true;
 	} catch (err) {
 		statusEl.className = "settings-status is-warn";
 		if (msgEl) msgEl.textContent = "Status konnte nicht ermittelt werden: " + (err.message || err);
@@ -935,7 +871,7 @@ export async function handleDownloadLocalEmbedding() {
 	if (fill) fill.style.width = "0%";
 	if (msgEl) msgEl.textContent = "Lade Modell-Dateien herunter… Bitte warten.";
 
-	const unsub = AI.onEmbeddingProgress((p) => {
+	const unsub = EMBEDDINGS.onProgress((p) => {
 		if (p.progress !== undefined) {
 			const pct = Math.min(100, Math.max(0, Math.round(p.progress)));
 			if (fill) fill.style.width = pct + "%";
@@ -949,7 +885,7 @@ export async function handleDownloadLocalEmbedding() {
 	});
 
 	try {
-		await AI.downloadLocalEmbedding(modelId);
+		await EMBEDDINGS.downloadLocal(modelId);
 		unsub();
 		if (fill) fill.style.width = "100%";
 		U.toast("Lokales Modell erfolgreich heruntergeladen!", "success");
@@ -973,7 +909,7 @@ export async function handleDeleteLocalEmbedding() {
 	const modelId = LOCAL_EMBED_MODEL_ID;
 	const inpEmbed = U.el("inpEmbed");
 	try {
-		await AI.deleteLocalEmbedding(modelId);
+		await EMBEDDINGS.deleteLocal(modelId);
 		await STATE.dispatch("settingsSet", { embedProviderId: "", embedModel: "" });
 		if (inpEmbed) inpEmbed.value = "";
 		U.toast("Lokales Modell aus dem Cache gelöscht.", "success");
@@ -1313,3 +1249,7 @@ window.addEventListener("impala67:heft-index-progress", () => {
 	const el = document.getElementById("handwritingProgress");
 	if (el) el.textContent = HEFT_INDEX_PROGRESS.label();
 });
+
+BUS.on("ui:open-settings", (arg) => typeof arg === "string" ? openSettings(arg) : openSettings(arg?.section || arg?.tab, arg?.focusKey));
+BUS.on("ui:paint-settings-models", () => paintSettingsModels());
+

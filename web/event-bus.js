@@ -9,6 +9,39 @@ export class EventBus {
 	constructor() {
 		/** @type {Map<string, Set<Function>>} */
 		this._listeners = new Map();
+		/** @type {Map<string, Function>} */
+		this._providers = new Map();
+	}
+
+	/**
+	 * Registriert einen einzelnen Handler für einen benannten Aufruf (Request/Reply ohne Zyklus).
+	 * @param {string} serviceName Name des Dienstes
+	 * @param {Function} handler Callback-Funktion
+	 * @returns {() => void} Deregistrierungs-Funktion
+	 */
+	provide(serviceName, handler) {
+		if (!serviceName || typeof handler !== "function") return () => {};
+		this._providers.set(serviceName, handler);
+		return () => {
+			if (this._providers.get(serviceName) === handler) {
+				this._providers.delete(serviceName);
+			}
+		};
+	}
+
+	/**
+	 * Ruft einen per provide() registrierten Dienst auf und gibt dessen Rückgabewert zurück.
+	 * @param {string} serviceName Name des Dienstes
+	 * @param {...*} args Argumente
+	 * @returns {*}
+	 */
+	call(serviceName, ...args) {
+		const fn = this._providers.get(serviceName);
+		if (typeof fn !== "function") {
+			console.warn(`[EventBus] Kein Anbieter für "${serviceName}" registriert.`);
+			return undefined;
+		}
+		return fn(...args);
 	}
 
 	/**

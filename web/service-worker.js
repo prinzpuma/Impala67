@@ -4,7 +4,7 @@
 // Neue App-Version veroeffentlichen = Dateien auf GitHub Pages pushen.
 // config.local.js (geraetespezifisch, optional) wird grundsaetzlich NICHT behandelt.
 // Versions-Changelog: siehe Projekt-Doku. Hier nur der aktuelle Cache-Schluessel.
-const CACHE = "impala67-v2.2.77"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
+const CACHE = "impala67-v2.2.78"; // Release-Workflow ersetzt diesen Wert im veröffentlichten Build.
 
 // Geteilte PDFs & nachgeladene Zusatz-Module liegen in EIGENEN, versionsübergreifenden Caches.
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
@@ -21,7 +21,6 @@ const APP_FILES = [
 	"./css/components.css",
 	"./css/editor.css",
 	"./css/heft.css",
-	"./css/heft-ui.css",
 	"./css/chat-start.css",
 	"./manifest.json",
 	// Der Update-Check fragt version.json mit no-store an. Der Fetch-Handler nimmt
@@ -107,6 +106,7 @@ const APP_FILES = [
 	"./analyse.js",
 	"./controller.js",
 	"./editor.js",
+	"./editor-inline.js",
 	"./editor-markdown.js",
 	"./editor-menus.js",
 	"./render.js",
@@ -131,6 +131,8 @@ const APP_FILES = [
 	"./popovers.js",
 	"./boot.js",
 	"./app.js",
+	"./app-dialogs.js",
+	"./app-sidebar-events.js",
 	"./updater.js",
 	"./voice.js",
 	"./render-anki.js",
@@ -138,6 +140,7 @@ const APP_FILES = [
 	"./notebooklm.js",
 	"./heft.js",
 	"./heft-document-core.js",
+	"./heft-storage.js",
 	"./heft-geometry.js",
 	"./heft-lasso.js",
 	"./heft-pages-core.js",
@@ -149,8 +152,9 @@ const APP_FILES = [
 	"./heft-scanner-ui.js",
 	"./scan-ocr.js",
 	"./heft-tools.js",
-	"./heft-toolbar-beta.js",
-	"./heft-pages-beta.js",
+	"./heft-toolbar-ui.js",
+	"./heft-pages-ui.js",
+	"./heft-import.js",
 	"./heft-export.js",
 	"./heft-indexer.js",
 	"./heft-index-progress.js",

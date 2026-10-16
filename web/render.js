@@ -6,7 +6,9 @@ import { EDITOR } from "./editor.js";
 import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
 import { RENDER_ANKI } from "./render-anki.js";
-import { S, STATE } from "./state.js";
+import { S, STATE, ancestorsOf, favModels, toggleFavModel, removeProviderFavorites } from "./state.js";
+import { BUS } from "./event-bus.js";
+import { TABS } from "./tabs.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
@@ -213,21 +215,6 @@ function currentThinkingCapability() {
 	return (S.thinkingCapabilities || {})[key] || null;
 }
 
-// ★ Modell-Favoriten: "providerId::modelId", bewusst lokal (Quellen-IDs sind gerätespezifisch).
-// Wird vom Chat-Dropdown UND den KI-Einstellungen genutzt (exportiert unten).
-const MODEL_FAV_KEY = "impala67FavModels";
-const favModels = () => new Set(lsGet(MODEL_FAV_KEY, []));
-function toggleFavModel(key) {
-	const s = favModels();
-	s.has(key) ? s.delete(key) : s.add(key);
-	lsSet(MODEL_FAV_KEY, [...s]);
-}
-function removeProviderFavorites(providerId) {
-	if (!providerId) return;
-	const prefix = providerId + "::";
-	const remaining = [...favModels()].filter((k) => !k.startsWith(prefix));
-	lsSet(MODEL_FAV_KEY, remaining);
-}
 // Capture: Stern darf nicht gleichzeitig das Modell umschalten
 document.addEventListener("click", (e) => {
 	const b = e.target && e.target.closest && e.target.closest("[data-modelfav]");
@@ -810,18 +797,6 @@ function dbTableHtml(pg) {
 		`</tbody></table><div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="${pg.id}">+ Neue Zeile</button></div></div>`;
 }
 
-// Breadcrumb: Workspace › Eltern › aktuelle Seite
-function ancestorsOf(pg) {
-	const chain = [];
-	const guard = new Set();
-	let cur = pg?.parentId ? S.pages[pg.parentId] : null;
-	while (cur && !cur.trashed && !guard.has(cur.id)) {
-		guard.add(cur.id);
-		chain.unshift(cur);
-		cur = cur.parentId ? S.pages[cur.parentId] : null;
-	}
-	return chain;
-}
 
 function breadcrumbHtml(pg) {
 	const ws = S.workspaces[pg.workspaceId] || { name: "Privat" };
@@ -1766,8 +1741,7 @@ function openChangePreview(m) {
 	o.querySelector("[data-openchangepage]")?.addEventListener("click", (e) => {
 		const id = e.currentTarget.dataset.openchangepage;
 		close();
-		if (typeof window.openPage === "function") window.openPage(id);
-		else if (S.pages[id]) { S.currentPageId = id; S.view = "page"; render(); }
+		TABS.openPage(id);
 	});
 	// Klick auf den Overlay-Hintergrund schließt
 	const onBg = (e) => { if (e.target === o) { close(); o.removeEventListener("click", onBg); } };
@@ -1884,3 +1858,19 @@ export const RENDER = {
 	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
 	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),
 };
+
+BUS.on("ui:render", (opts) => render(opts));
+BUS.on("ui:render-main", () => renderMain());
+BUS.on("ui:render-sidebar", () => renderSidebar());
+BUS.on("ui:render-tabs", () => renderTabs());
+BUS.on("ui:render-chat", () => renderChat());
+BUS.on("ui:render-main-chat-log", () => renderMainChatLog());
+BUS.on("ui:render-pending-chip", (type) => renderPendingChip(type));
+BUS.on("ui:render-model-bar", () => renderModelBar());
+BUS.on("ui:render-status-dot", () => renderStatusDot());
+BUS.on("ui:hydrate-images", (root) => hydrateImages(root));
+BUS.on("ui:hydrate-covers", (root) => hydrateCovers(root));
+BUS.on("ui:modal", (html) => modal(html));
+BUS.on("ui:merge-pending-conflicts", (details) => mergePendingConflicts(details));
+BUS.on("ui:open-conflict-resolver", (idx) => openConflictResolver(idx));
+

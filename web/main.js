@@ -42,35 +42,14 @@ import "./perf-hint.js";
 import "./pdfpaste.js";
 import "./motion.js";
 
-// Übergangsweise für ältere Module und Inline-Handler verfügbar machen.
+// MCP-Live-Bridge und Konsolen-Inspektion (impala_eval).
 // Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.
 Object.assign(window, {
-	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, EXTRAS,
-	COLLAPSE, CHATS, MOBILE, SETTINGS, LIBRARY, TABS, SEARCH,
-	SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE, LERNZEIT,
-	SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC, SYNC_MAINTENANCE,
-	PERF_PROFILER,
-	openPage: TABS.openPage,
-	openNewTab: TABS.openNewTab,
-	closeTab: TABS.closeTab,
-	render: RENDER.render,
-	renderTopbar: RENDER.renderTopbar,
-	renderModelMenu: RENDER.renderModelMenu,
-	renderSidebar: RENDER.renderSidebar,
-	renderMain: RENDER.renderMain,
-	openSettings: SETTINGS.openSettings,
-	openReview: RENDER.openReview,
-	openCards: RENDER.openCards,
-	RENDER_ANKI,
-	ankiDecks: RENDER_ANKI.ankiDecks,
-	ankiCardsOf: RENDER_ANKI.ankiCardsOf,
-	ankiDueOf: RENDER_ANKI.ankiDueOf,
-	deckTreeHtml: RENDER_ANKI.deckTreeHtml,
-	deckMenuHtml: RENDER_ANKI.deckMenuHtml,
-	renderAnki: RENDER_ANKI.renderAnki,
-	openCardEditor: RENDER_ANKI.openCardEditor,
-	readCardEditorDeck: RENDER_ANKI.readCardEditorDeck,
-	wireEvents: APP.wireEvents,
+	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, RENDER,
+	RENDER_ANKI, APP, EXTRAS, COLLAPSE, CHATS, MOBILE, SETTINGS, LIBRARY,
+	TABS, SEARCH, SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE,
+	LERNZEIT, SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC,
+	SYNC_MAINTENANCE, PERF_PROFILER,
 });
 
 PERF_PROFILER.setContextProvider(() => ({

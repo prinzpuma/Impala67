@@ -3,8 +3,7 @@ import { icon, lead } from "./icons.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
-import { RENDER } from "./render.js";
-import { SETTINGS } from "./settings.js";
+import { BUS } from "./event-bus.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
@@ -17,7 +16,7 @@ import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 // (Das frühere Mobile-Panel-Overlay-CSS lebt jetzt regulär in styles.css — „Mobile Shell v2".)
 // Alle neuen Knöpfe laufen über eine EIGENE Event-Delegation (data-*-Attribute),
 // damit bestehende Handler in app.js unangetastet bleiben.
-const render = (...args) => RENDER.render(...args);
+const render = (...args) => BUS.emit("ui:render", args[0]);
 export const EXTRAS = (() => {
 	// Cloze-Marker zusammengesetzt statt wörtlich, damit die doppelt geschweiften
 	// Klammern nirgends mit Template-/Platzhalter-Systemen kollidieren.
@@ -611,13 +610,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	async function clozeSaveFromEditor() {
 		const front = U.el("cardFront") ? U.el("cardFront").value : "";
 		// Gleicher Stapel-Pfad wie der normale Karten-Editor (Select + optionaler neuer Name)
-		let deck = "Standard";
-		const reader = (typeof window !== "undefined" && (window.readCardEditorDeck || (window.RENDER_ANKI && window.RENDER_ANKI.readCardEditorDeck))) || null;
-		if (reader) deck = reader();
-		else if (U.el("cardDeck")) {
-			const v = U.el("cardDeck").value;
-			deck = v === "__new__" ? ((U.el("cardDeckNew") || {}).value || "").trim() || "Standard" : (v || "Standard");
-		}
+		const deck = BUS.call("anki:read-card-editor-deck") || "Standard";
 		const n = await createClozeCards(front, deck, S.currentPageId);
 		if (!n) { U.toast("Keine Cloze-Lücken gefunden — erst Text markieren und „Lücke einfügen“ klicken.", "error"); return; }
 		U.el("overlay").hidden = true;
@@ -673,7 +666,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			list.push({ ...p, key: "" });
 			// LM Studio direkt als aktive Quelle setzen, damit das Modell-Dropdown sie sofort zeigt
 			await STATE.dispatch("settingsSet", { aiProviders: list, ...(p.id === "local" ? { aiProviderId: "local" } : {}) });
-			SETTINGS.openSettings("ki");
+			BUS.emit("ui:open-settings", "ki");
 			return;
 		}
 		if ((el = q("[data-ankiundo]"))) { if (!el.disabled) await undoReview(); return; }

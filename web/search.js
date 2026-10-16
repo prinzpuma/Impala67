@@ -11,7 +11,7 @@ import { CHATS } from "./chats.js";
 import { TABS } from "./tabs.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
-import { APP } from "./app.js";
+import { newPageFlow, openAnki, openDailyNote, startNewChat, createPageInNewTab } from "./app-dialogs.js";
 import { icon, pageIcon } from "./icons.js";
 
 let items = []; // aktuell angezeigte, auswählbare Einträge (für ↑/↓ und Enter)
@@ -106,12 +106,12 @@ function actionItems() {
 	const light = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light";
 	const click = (id) => () => { const b = U.el(id); if (b) b.click(); };
 	return [
-		{ type: "action", icon: "plus", label: "Neue Seite", run: () => APP.newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
+		{ type: "action", icon: "plus", label: "Neue Seite", run: () => newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
 		{ type: "action", icon: "cards", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
 		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
 		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
-		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => APP.openAnki("browser") },
-		{ type: "action", icon: "calendar", label: "Daily Note von heute öffnen", run: () => APP.openDailyNote(RENDER.localDayKey(new Date())) },
+		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => openAnki("browser") },
+		{ type: "action", icon: "calendar", label: "Daily Note von heute öffnen", run: () => openDailyNote(RENDER.localDayKey(new Date())) },
 		{ type: "action", icon: "calendar", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
 		{ type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
 		{ type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
@@ -134,7 +134,7 @@ function newTabActions() {
 	const wsId = S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default";
 	return [
 		{ type: "action", icon: "sparkles", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
-			if (typeof APP.startNewChat === "function") APP.startNewChat({ newTab: true });
+			if (typeof startNewChat === "function") startNewChat({ newTab: true });
 			else {
 				// Fallback: Chat-Tab-Button / neue Session über Sidebar-Flow
 				const b = U.el("btnChatTab");
@@ -143,8 +143,8 @@ function newTabActions() {
 		} },
 		{ type: "action", icon: "file", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
 			// Immer in neuem Tab anlegen (wie Notion + → Neue Seite)
-			if (typeof APP.createPageInNewTab === "function") await APP.createPageInNewTab(wsId, null);
-			else await APP.newPageFlow(wsId, null);
+			if (typeof createPageInNewTab === "function") await createPageInNewTab(wsId, null);
+			else await newPageFlow(wsId, null);
 		} },
 	];
 }

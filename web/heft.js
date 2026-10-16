@@ -6,7 +6,27 @@ import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { RAG } from "./rag.js";
 import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, blobId, composePageText, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { documentShadow, diffDocument, composePageText, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import {
+	KEY,
+	INK_LEGACY,
+	ensureBlobPersisted,
+	blobRef,
+	persistReferencedBlobs,
+	imgSrc,
+	toRefImage,
+	normalizeDoc,
+	readLegacyDoc,
+	takeLegacyInk,
+	purgeOrphanLegacyInk,
+	listSnapshots,
+	pruneSnapshots,
+	encodeDoc,
+	writeSnapshot,
+	maybeSnapshot,
+	loadSnapshotDoc,
+	restoreSnapshot as runRestoreSnapshot
+} from "./heft-storage.js";
 import { fitStrokeShape, hitBox, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
 import {
 	lassoBounds,
@@ -22,14 +42,28 @@ import {
 	recognizeLassoText,
 	trainLassoSample
 } from "./heft-lasso.js";
-import { COLORS, SIZES, loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
-import { penFavoritesHtml, sizeDotHtml, plusPopBetaHtml } from "./heft-toolbar-beta.js";
-import { pagesGridBetaHtml, pagesHistoryBetaHtml, selectionSub, selectAllLabel } from "./heft-pages-beta.js";
+import { loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
+import { TRAY_DOCK_PX, trayCss, toolbarHtml as buildToolbarHtml, plusPopHtml as buildPlusPopHtml, imgPopHtml } from "./heft-toolbar-ui.js";
+import { pagesGridHtml, pagesHistoryHtml, selectionSub, selectAllLabel } from "./heft-pages-ui.js";
 import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
+import {
+	filePick,
+	pickImage,
+	transferOverlay,
+	closeTransferOverlay,
+	fileToImageData,
+	imagePage as createImagePage,
+	insertImageFile as runInsertImageFile,
+	addImagePageFromFile as runAddImagePageFromFile,
+	importPdf as runImportPdf,
+	importFilesIntoHeft as runImportFilesIntoHeft,
+	openImportDialog as renderImportDialog,
+	importFiles as runImportFiles
+} from "./heft-import.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
 import { icon, lead } from "./icons.js";
-import { HEFT_INDEXER } from "./heft-indexer.js";
+import { BUS } from "./event-bus.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -54,7 +88,6 @@ import { HEFT_INDEXER } from "./heft-indexer.js";
 // Scanner: Oberfläche in heft-scanner-ui.js, Bildverarbeitung in heft-scan.js; Handschrift-OCR in handschrift.js.
 
 export const HEFT = (() => {
-	const KEY = (p) => "heft:" + p;
 	// Zuletzt angesehene Seite je Heft (Gerätewahl): Öffnen springt dorthin, die Startseite zeigt sie als Vorschau.
 	const POS_KEY = "impala67HeftPos";
 	const positions = () => { try { return JSON.parse(localStorage.getItem(POS_KEY)) || {}; } catch { return {}; } };
@@ -66,7 +99,6 @@ export const HEFT = (() => {
 		all[pid] = idx;
 		try { localStorage.setItem(POS_KEY, JSON.stringify(all)); } catch { /* Speicher voll: Position ist verzichtbar */ }
 	}
-	const INK_LEGACY = (p) => "impala67.ink." + p;
 
 	const docs = {};
 	const thumbs = {};
@@ -136,8 +168,6 @@ export const HEFT = (() => {
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
 
-	const enc = new TextEncoder(), dec = new TextDecoder();
-
 	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
 
 	// ---- Veröffentlichen: Unterschied zum letzten Stand als Operationsliste ----
@@ -147,112 +177,8 @@ export const HEFT = (() => {
 	// reicht die Signatur völlig.
 	const published = {};
 
-	// ---- Bilder, Scans und PDF-Seiten als eigene, unveränderliche Blob-Events ----
-	// Ein Foto oder Scan ist schnell 1–3 MB groß. Bisher steckte die komplette dataURL
-	// IM Bild-Objekt des Hefts. Folge: jedes Verschieben und jedes Skalieren schickte das
-	// ganze Bild erneut durchs Log (die Signatur änderte sich, also ging ein "i=" mit
-	// voller Nutzlast raus), und jeder Verdichtungs-Snapshot trug sämtliche Bilder noch
-	// einmal mit sich. Bei ein paar gescannten Seiten wuchs das Log dadurch in Minuten
-	// um zweistellige Megabyte — genau die Datenmenge, die der Sync danach hin- und
-	// hertragen musste.
-	// Jetzt wird der Bildinhalt GENAU EINMAL als "heftBlob" geschrieben; das Heft merkt
-	// sich nur noch den Inhalts-Hash ({ id, ref, x, y, w, h }, ca. 80 Byte). Verschieben
-	// kostet damit ein paar Byte statt ein paar Megabyte, und zwei Geräte, die dasselbe
-	// Bild einfügen, teilen sich automatisch einen Eintrag (gleicher Inhalt = gleicher Hash).
-	const pendingBlobData = new Map();
-	const blobWrites = new Map();
-	function ensureBlobPersisted(hash, dataUrl) {
-		if (blobWrites.has(hash)) return blobWrites.get(hash);
-		const write = STATE.dispatch("heftBlob", { hash, data: dataUrl }).then(() => {
-			pendingBlobData.delete(hash);
-		}).finally(() => {
-			if (blobWrites.get(hash) === write) blobWrites.delete(hash);
-		});
-		blobWrites.set(hash, write);
-		return write;
-	}
-	function blobRef(dataUrl) {
-		const hash = blobId(dataUrl);
-		if (!S.heftBlobs[hash]) {
-			// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
-			// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
-			S.heftBlobs[hash] = dataUrl;
-			pendingBlobData.set(hash, dataUrl);
-			void ensureBlobPersisted(hash, dataUrl).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
-		}
-		return hash;
-	}
-	async function persistReferencedBlobs(saveDoc) {
-		const refs = new Set((saveDoc?.pages || []).flatMap((pg) => (pg.images || []).map((im) => im.ref).filter(Boolean)));
-		for (const ref of refs) {
-			const data = pendingBlobData.get(ref);
-			if (data) await ensureBlobPersisted(ref, data);
-		}
-	}
-	// Bildquelle auflösen: neue Bilder tragen ref, Alt-Bestände noch src.
-	const imgSrc = (im) => (im && im.ref ? (S.heftBlobs[im.ref] || "") : (im && im.src) || "");
-	// Alt-Bild (dataURL inline) beim ersten Anfassen in eine Referenz umschreiben.
-	function toRefImage(im) {
-		if (!im || !im.src || im.ref) return im;
-		const { src, ...rest } = im;
-		return { ...rest, ref: blobRef(src) };
-	}
-
-	// Alt-Bestände (Blob je Heft bzw. localStorage-Ink) werden beim ersten Öffnen
-	// EINMAL in ein heftSnap-Event überführt. Danach lebt das Heft nur noch im Log.
-	function normalizeDoc(d) {
-		const withId = (o) => (o && o.id ? o : { ...o, id: U.uid() });
-		const pages = (d && Array.isArray(d.pages) ? d.pages : []).map((pg) => ({
-			id: pg.id || U.uid(),
-			paper: pg.paper || "lined",
-			strokes: (pg.strokes || []).map(withId),
-			images: (pg.images || []).map((im) => toRefImage(withId(im))),
-			texts: (pg.texts || []).map(withId),
-			ocrText: pg.ocrText || "",
-		}));
-		return pages.length ? { v: 2, rev: 0, pages } : null;
-	}
-	async function readLegacyDoc(p) {
-		try {
-			const rec = await DB.getBlob(KEY(p));
-			if (rec && rec.buf && rec.buf.byteLength) {
-				const parsed = JSON.parse(dec.decode(rec.buf));
-				const norm = normalizeDoc(parsed);
-				if (norm) return norm;
-			}
-		} catch (e) { console.warn("Heft: Alt-Blob lesen fehlgeschlagen", e); }
-		const legacy = takeLegacyInk(p);
-		if (legacy) return normalizeDoc({ pages: [{ paper: "lined", strokes: legacy }] });
-		return null;
-	}
 	const page = () => (doc ? doc.pages[idx] : null);
 	const imagesOf = (pg) => (pg.images || (pg.images = []));
-
-	function takeLegacyInk(p) {
-		try {
-			const raw = localStorage.getItem(INK_LEGACY(p));
-			if (!raw) return null;
-			const d = JSON.parse(raw);
-			localStorage.removeItem(INK_LEGACY(p));
-			if (d && Array.isArray(d.strokes) && d.strokes.length) return d.strokes;
-		} catch (e) { console.warn("Heft: Legacy-Ink lesen fehlgeschlagen", e); }
-		return null;
-	}
-	function purgeOrphanLegacyInk() {
-		try {
-			const doomed = [];
-			for (let i = 0; i < localStorage.length; i++) {
-				const k = localStorage.key(i);
-				if (k && k.startsWith("impala67.ink.")) doomed.push(k);
-			}
-			doomed.forEach((k) => {
-				const id = k.slice("impala67.ink.".length);
-				const pg = S.pages && S.pages[id];
-				if (pg && pg.kind === "heft") return;
-				localStorage.removeItem(k);
-			});
-		} catch {  }
-	}
 
 	// Das Dokument kommt jetzt aus dem abgespielten Log. docs[p] IST S.heftDocs[p] —
 	// dieselbe Objektreferenz. Trifft während des Zeichnens ein Fremd-Event ein,
@@ -390,52 +316,12 @@ export const HEFT = (() => {
 		window.addEventListener("freeze", () => { saveNow().catch(() => {}); });
 	}
 
-	// ---- Verlauf: lokale Snapshots je Heft (siehe "kommt noch") ----
-	// Zeitstempel + rev stecken im Blob-Key ("heftver:<pid>:<t>:<rev>") — Auflisten und
-	// Aufräumen brauchen so nur allBlobKeys(), keine Meta-Reads. Bewusst NICHT über Drive
-	// gesynct: Snapshots erzeugen keine heftUpdated-Events, der Sync sieht sie nie.
-	const VER_PREFIX = (p) => "heftver:" + p + ":";
-	const VER_TTL = 24 * 60 * 60 * 1000, VER_GAP = 10 * 60 * 1000, VER_MAX = 20;
-	const verLast = {}; // letzter Snapshot-Zeitpunkt je Heft (spart Key-Scan bei jedem Save)
-	async function listSnapshots(p) {
-		const pre = VER_PREFIX(p);
-		return (await DB.allBlobKeys())
-			.filter((k) => k.startsWith(pre))
-			.map((k) => { const [t, rev] = k.slice(pre.length).split(":"); return { key: k, t: Number(t) || 0, rev: Number(rev) || 0 }; })
-			.sort((a, b) => b.t - a.t);
-	}
-	async function pruneSnapshots(p) {
-		const cutoff = Date.now() - VER_TTL;
-		const all = await listSnapshots(p);
-		const keep = all.filter((s, i) => i < VER_MAX && s.t >= cutoff);
-		for (const s of all) if (!keep.includes(s)) await DB.delBlob(s.key);
-		return keep;
-	}
-	const encodeDoc = (d) => { const b = enc.encode(JSON.stringify({ v: 2, pages: d.pages })); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
-	async function writeSnapshot(p, buf, rev) {
-		const t = Date.now();
-		await DB.putBlob(VER_PREFIX(p) + t + ":" + rev, buf, { type: "application/json", kind: "heftver" });
-		verLast[p] = t;
-	}
-	async function maybeSnapshot(p, d) {
-		try {
-			if (!verLast[p]) { const s = await listSnapshots(p); verLast[p] = s.length ? s[0].t : 0; }
-			if (Date.now() - verLast[p] < VER_GAP) return; // gedrosselt: max. alle 10 Min.
-			await writeSnapshot(p, encodeDoc(d), ((d && d.pages) || []).length);
-			await pruneSnapshots(p);
-		} catch (e) { console.warn("Heft: Verlauf-Snapshot fehlgeschlagen", e); }
-	}
 	async function restoreSnapshot(p, key) {
-		const rec = await DB.getBlob(key);
-		if (!rec || !rec.buf) { if (U.toast) U.toast("Snapshot nicht mehr vorhanden", "error"); return; }
-		const cur = pid === p && doc ? doc : await load(p);
-		// Sicherheitsnetz: aktuellen Stand IMMER sichern — Wiederherstellen ist damit selbst umkehrbar.
-		await writeSnapshot(p, encodeDoc(cur), ((cur && cur.pages) || []).length);
-		const restored = normalizeDoc(JSON.parse(dec.decode(rec.buf)));
-		if (!restored) { if (U.toast) U.toast("Snapshot ist leer", "error"); return; }
-		// Wiederherstellen ist ein normales Event — es synchronisiert damit von allein.
-		await restoreDoc(p, restored);
-		if (U.toast) U.toast("Heft-Stand wiederhergestellt");
+		return runRestoreSnapshot(p, key, {
+			getCurrentDoc: async (id) => (pid === id && doc ? doc : load(id)),
+			restoreDoc,
+			toast: U.toast,
+		});
 	}
 	// Gemeinsamer Wiederherstellungspfad für Verlauf und KI-Undo. Er aktualisiert nicht
 	// nur das Event-Log, sondern auch die laufenden Canvas-Referenzen des geöffneten Hefts.
@@ -457,15 +343,12 @@ export const HEFT = (() => {
 		if (!pop || !pid || pop.dataset.kind === "verlauf") return;
 		const owner = pop;
 		owner.dataset.kind = "verlauf";
-		setPagesView(pagesHistoryBetaHtml(doc.pages.length, null));
+		setPagesView(pagesHistoryHtml(doc.pages.length, null));
 		let snaps = [];
 		try { snaps = await pruneSnapshots(pid); } catch (e) { console.warn("Heft: Verlauf laden fehlgeschlagen", e); }
 		if (pop !== owner || owner.dataset.kind !== "verlauf") return; // Pop geschlossen oder zurück zum Raster
-		const fmt = (t) => new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		owner.__verSnaps = snaps;
-		setPagesView(pagesHistoryBetaHtml(doc.pages.length, snaps.map((s, i) =>
-			'<div class="heft-pop-thumb" data-heverrestore="' + i + '" role="button" tabindex="0" title="Stand ' + fmt(s.t) + ' wiederherstellen">' +
-				'<canvas width="264" height="374"></canvas><span>' + fmt(s.t) + '</span></div>').join("")));
+		setPagesView(pagesHistoryHtml(doc.pages.length, snaps));
 		placePagesPop();
 		const cvs = owner.querySelectorAll(".heft-pop-thumb canvas");
 		snaps.forEach((s, i) => { if (cvs[i]) renderBlobPreview(s.key, cvs[i]); });
@@ -1703,7 +1586,7 @@ export const HEFT = (() => {
 		if (drawing.lassoResize) {
 			if (Math.abs(drawing.factor - 1) > 0.001) {
 				pushUndo({ kind: "lassoResize", strokes: drawing.strokes, prev: drawing.originals, pageIdx: pi });
-				scheduleSave(); renderThumb(pi); HEFT_INDEXER.schedulePage(pid, pg);
+				scheduleSave(); renderThumb(pi); BUS.emit("heft:schedule-page", { pageId: pid, page: pg });
 			}
 			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
 			drawing = null; redrawPage(pi); updateChrome(); return;
@@ -1743,7 +1626,7 @@ export const HEFT = (() => {
 
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
-			if (drawing.tool === "pen" || drawing.tool === "marker") HEFT_INDEXER.schedulePage(pid, pg);
+			if (drawing.tool === "pen" || drawing.tool === "marker") BUS.emit("heft:schedule-page", { pageId: pid, page: pg });
 		}
 		drawing = null;
 		updateChrome();
@@ -1806,120 +1689,24 @@ export const HEFT = (() => {
 	function undo() { applyHistory(undoStack, redoStack, false); }
 	function redo() { applyHistory(redoStack, undoStack, true); }
 
-	function trayStyle() {
-		if (!trayPos) return "";
-		return ' style="' + trayCss(trayPos) + '"';
-	}
-	// Am linken/rechten Rand dockt das Tray senkrecht an; rechts über `right`, damit es beim Fenster-Resize am Rand bleibt.
-	const TRAY_DOCK_PX = 48;
-	// Senkrecht: Höhe am Heft messen, nicht per CSS-% an .heft-chrome — die ist mit „Tabs in der
-	// Seitenleiste“ nur eine 42px-Leiste, und die angedockte Leiste zeigte dann nur noch den Griff.
-	const trayCss = (p) => (p.side === "right" ? "left:auto;right:8px" : "right:auto;left:" + Math.round(p.side === "left" ? 8 : p.x) + "px") +
-		";top:" + Math.round(p.y) + "px;bottom:auto;transform:none" +
-		(p.side && host ? ";max-height:" + Math.max(44, host.clientHeight - Math.round(p.y) - 8) + "px" : "");
-	const trayClass = () => "heft-tray" + (trayPos && trayPos.side ? " is-vertical" : "");
-
 	let chromeMin = false;
-	const tIcon = (name) => icon(name, "", 19);
-	function toolbarHtml() {
-		const writeOn = tool === "pen" || tool === "marker";
-		const showWrite = expanded && writeOn;
-		const showEraser = expanded && tool === "eraser";
-		// Auf dem Handy: Rückgängig/Wiederholen oben in der Eckreihe, die Leiste unten passt so ohne Scrollen.
-		const phone = document.body.classList.contains("mobile-ui");
-
-		const svgPen = tIcon("pen-tool");
-		const svgMarker = tIcon("marker");
-		const svgEraser = tIcon("eraser");
-		const svgLasso = tIcon("lasso");
-		const svgLaser = tIcon("laser");
-		const svgImage = tIcon("image");
-		const svgUndo = tIcon("undo");
-		const svgRedo = tIcon("redo");
-		const svgHand = tIcon("hand");
-		const svgPages = tIcon("pages-stack");
-		const svgPlus = tIcon("plus");
-		const svgSpark = tIcon("sparkles");
-		const svgChevDown = tIcon("chevron-down");
-		const writeIcon = tool === "marker" ? svgMarker : svgPen;
-
-		if (chromeMin) {
-			return '<div class="heft-chrome heft-chrome-min" aria-hidden="false">' +
-				'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
-					'<div class="heft-pill heft-pill-min">' +
-						'<button type="button" data-heexpand="1" class="heft-main" title="Werkzeugleiste ausklappen">' +
-							writeIcon + '<span class="heft-color-dot" style="background:' + color + '"></span>' +
-							'<span class="heft-chev">▾</span></button>' +
-					'</div>' +
-				'</div>' +
-			'</div>';
-		}
-
-		let tray = "";
-		if (showWrite) {
-			tray =
-				'<div class="' + trayClass() + '" data-hetray="1" data-key="tray-write" role="group" aria-label="Schreib-Optionen"' + trayStyle() + '>' +
-					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
-					SIZES.map((sz) => sizeDotHtml(sz[0], sz[1], size === sz[1], color)).join("") +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					COLORS.map((c) => '<button type="button" class="heft-swatch' + (color === c ? " active" : "") +
-						'" data-hecolor="' + c + '" style="--sw:' + c + ';background:' + c + '" title="Farbe"></button>').join("") +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-heonlypen="1" class="heft-opt' + (onlyPen ? " active" : "") +
-						'" title="' + (onlyPen ? "Nur Stift zeichnet" : "Finger dürfen zeichnen") + '">' +
-						(onlyPen ? svgPen : svgHand) + '</button>' +
-				'</div>';
-		} else if (showEraser) {
-
-			tray =
-				'<div class="' + trayClass() + '" data-hetray="1" data-key="tray-eraser" role="group" aria-label="Radierer-Optionen"' + trayStyle() + '>' +
-					'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
-					[["Klein", 10], ["Mittel", 16], ["Groß", 30]].map((z) => '<button type="button" class="heft-size' + (eraserSize === z[1] ? " active" : "") +
-						'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
-				'</div>';
-		}
-
-		return '<div class="heft-chrome" aria-hidden="false">' +
-			'<div class="heft-corner-l-group">' +
-				'<button type="button" class="heft-corner heft-sb-toggle" data-hesidebar="1" title="Seitenleiste ein-/ausklappen">☰</button>' +
-				'<button type="button" class="heft-corner heft-nav-back" data-henavback="1"' + (canGoBack() ? '' : ' disabled') + ' title="Zurück">‹</button>' +
-				'<button type="button" class="heft-corner heft-nav-forward" data-henavforward="1"' + (canGoForward() ? '' : ' disabled') + ' title="Vor">›</button>' +
-				'<button type="button" class="heft-corner heft-corner-l' + (pop && pop.dataset.kind === "pages" ? " active" : "") +
-					'" data-hepagesmenu="1" title="Seiten">' + svgPages +
-					'<span class="heft-pageno-inline"></span></button>' +
-				(phone ? '<button type="button" data-heundo="1" class="heft-corner" title="Rückgängig">' + svgUndo + '</button>' +
-					'<button type="button" data-heredo="1" class="heft-corner" title="Wiederholen">' + svgRedo + '</button>' : '') +
-			'</div>' +
-			'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
-				'<div class="heft-pill">' +
-					penFavoritesHtml({ pens, penSlot, tool, expanded }, tIcon) +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hetool="eraser" class="heft-main' + (tool === "eraser" ? " active" : "") +
-						(showEraser ? " open" : "") + '" title="Radierer">' + svgEraser + '</button>' +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
-						'" title="Lasso — Striche auswählen">' + svgLasso + '</button>' +
-
-					(phone ? '' : '<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
-						'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>') +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-heimgmenu="1" class="heft-main' +
-						((pop && pop.dataset.kind === "img") || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
-					(phone ? '' : '<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig">' + svgUndo + '</button>' +
-					'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen">' + svgRedo + '</button>' +
-					'<span class="heft-sep" aria-hidden="true"></span>' +
-					'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>') +
-				'</div>' +
-			'</div>' +
-			tray +
-			'<div class="heft-corner-r">' +
-				'<button type="button" class="heft-corner heft-chat" data-hechat="1" title="KI-Chat">' + svgSpark + '</button>' +
-				'<button type="button" class="heft-corner heft-plus' + (pop && pop.dataset.kind === "plus" ? " active" : "") +
-					'" data-heplusmenu="1" title="Seite hinzufügen">' + svgPlus + '</button>' +
-			'</div>' +
-		'</div>';
-	}
+	const toolbarHtml = () => buildToolbarHtml({
+		tool,
+		expanded,
+		chromeMin,
+		color,
+		size,
+		eraserSize,
+		onlyPen,
+		pens,
+		penSlot,
+		popKind: pop ? pop.dataset.kind : "",
+		phone: document.body.classList.contains("mobile-ui"),
+		canBack: canGoBack(),
+		canForward: canGoForward(),
+		trayPos,
+		hostHeight: host ? host.clientHeight : 0,
+	});
 	const pagesHtml = () => '<div class="heft-pages">' + doc.pages.map((_, i) =>
 		'<div class="heft-page-slot" data-hepage="' + i + '">' +
 			'<canvas class="heft-canvas"></canvas>' +
@@ -1935,7 +1722,7 @@ export const HEFT = (() => {
 		const r = tray.getBoundingClientRect(), hr = host.getBoundingClientRect();
 		trayDrag = { tray, grip, pid: e.pointerId, ox: e.clientX - r.left, oy: e.clientY - r.top };
 		trayPos = { x: r.left - hr.left, y: r.top - hr.top, side: trayPos && trayPos.side || null };
-		tray.style.cssText = trayCss(trayPos);
+		tray.style.cssText = trayCss(trayPos, host.clientHeight);
 		tray.classList.add("is-dragging");
 		try { grip.setPointerCapture(e.pointerId); } catch {  }
 	}
@@ -1957,7 +1744,7 @@ export const HEFT = (() => {
 		const x = Math.min(Math.max(8, px - trayDrag.ox), Math.max(8, hr.width - tr.width - 8));
 		const y = Math.min(Math.max(8, e.clientY - hr.top - trayDrag.oy), Math.max(8, hr.height - tr.height - 8));
 		trayPos = { x, y, side };
-		tray.style.cssText = trayCss(trayPos);
+		tray.style.cssText = trayCss(trayPos, host.clientHeight);
 	}
 	function onTrayPointerUp(e) {
 		if (!trayDrag || e.pointerId !== trayDrag.pid) return;
@@ -2017,18 +1804,8 @@ export const HEFT = (() => {
 		else if (kind === "plus") openPop(anchor, plusPopHtml(), "plus", "heft-pop-plus");
 		else if (kind === "img") openPop(anchor, imgPopHtml(), "img", "heft-pop-img");
 	}
-	function pagesPopHtml() {
-		const picking = !!exportSel;
-		const n = picking ? exportSel.size : 0;
-		const deletable = canDeletePages(doc.pages.length, n);
-		const thumbs = doc.pages.map((_, i) =>
-			'<div class="heft-pop-thumb' + ((picking ? exportSel.has(i) : i === idx) ? ' active' : '') + '" data-hethumb="' + i + '" role="option" aria-selected="' + (picking && exportSel.has(i) ? 'true' : 'false') + '" tabindex="0" draggable="' + (!picking) + '" title="Seite ' + (i + 1) + '">' +
-				'<canvas width="264" height="374"></canvas>' +
-				'<span>' + (i + 1) + (picking && exportSel.has(i) ? ' ✓' : '') + '</span>' +
-				(!picking ? '<button type="button" class="heft-page-drag" data-hepagedrag="' + i + '" aria-label="Seite verschieben" title="Ziehen zum Verschieben">⠿</button>' : '<i class="heft-page-check">✓</i>') +
-			'</div>').join('');
-		return pagesGridBetaHtml({ thumbs, total: doc.pages.length, picking, n, deletable }, { icon, lead });
-	}
+	const pagesPopHtml = () => pagesGridHtml({ total: doc.pages.length, idx, exportSel });
+	const plusPopHtml = () => buildPlusPopHtml({ insertPos, curPaper: page() ? page().paper : "lined" });
 
 	function paintPopThumbs() {
 		if (doc) doc.pages.forEach((_, i) => renderThumb(i));
@@ -2109,18 +1886,6 @@ export const HEFT = (() => {
 		handle.addEventListener("pointerup", (e) => { if (pageDragFrom < 0) return; const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-hethumb]"); const from = pageDragFrom; pageDragFrom = -1; grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); suppressPageClickUntil = Date.now() + 450; if (hit && grid.contains(hit)) movePageAt(from, Number(hit.dataset.hethumb)); });
 		handle.addEventListener("pointercancel", () => { pageDragFrom = -1; grid.querySelectorAll(".drag-target").forEach((x) => x.classList.remove("drag-target")); });
 		});
-	}
-	function imgPopHtml() {
-		return '<div class="heft-pop-head">Bilder</div>' +
-			'<button type="button" class="heft-pop-row" data-hetool="select">' + icon("select") + 'Bilder & Texte auswählen & bearbeiten</button>' +
-			'<div class="heft-pop-sep"></div>' +
-			'<button type="button" class="heft-pop-row" data-hetextadd="1">' + icon("pen") + 'Text schreiben</button>' +
-			'<button type="button" class="heft-pop-row" data-heimgadd="1">' + icon("image") + 'Bild hinzufügen</button>' +
-			'<button type="button" class="heft-pop-row" data-heimgcam="1">' + icon("camera") + 'Bild aufnehmen</button>' +
-			'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
-	}
-	function plusPopHtml() {
-		return plusPopBetaHtml({ insertPos, curPaper: page() ? page().paper : "lined" }, icon);
 	}
 
 	function openTextEditor(pi, px, py, txt) {
@@ -2371,150 +2136,69 @@ export const HEFT = (() => {
 		if (U.toast) U.toast(chosen.length + " Seite(n) gelöscht · über Verlauf wiederherstellbar", "success");
 	}
 
-	// EIN Datei-Dialog für Bilder, Import und Scanner (vorher 3x fast identisch)
-	function filePick({ accept = "image/*", multiple = false, capture = false } = {}, cb) {
-		const inp = Object.assign(document.createElement("input"), { type: "file", accept, multiple });
-		if (capture) inp.setAttribute("capture", "environment"); // öffnet auf Tablets/Handys direkt die Kamera
-		inp.onchange = () => { const files = Array.from(inp.files || []); if (files.length) cb(multiple ? files : files[0]); };
-		inp.click();
-	}
-	const niceBytes = (bytes) => bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + " KB" : (bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " MB";
-	function transferOverlay(title, subtitle, body, actions) {
-		const o = U.el("overlay");
-		o.hidden = false;
-		o.innerHTML = '<section class="heft-transfer" role="dialog" aria-modal="true"><header><div><h2>' + U.esc(title) + '</h2><p>' + U.esc(subtitle) + '</p></div><button type="button" id="btnCloseOverlay" aria-label="Schließen">×</button></header><div class="heft-transfer-body">' + body + '</div><footer>' + actions + '</footer></section>';
-		return o;
-	}
-	function closeTransferOverlay() { const o = U.el("overlay"); if (o) o.hidden = true; }
+	// Import-, Datei- und Bildverarbeitung (ausgelagert in heft-import.js)
+	const imagePage = (im, paper, bleed) => createImagePage(im, paper, bleed, { blobRef, newPage });
+	const importPdf = (f, at, targetDoc = doc) => runImportPdf(f, at, targetDoc, { blobRef, newPage, pdfs: PDFS, toast: U.toast });
+
 	async function importFilesIntoHeft(targetId, files, position, onStatus) {
-		const targetDoc = targetId === pid && doc ? doc : await load(targetId);
-		if (!targetDoc) throw new Error("Ziel-Heft konnte nicht geöffnet werden.");
-		const current = targetId === pid ? idx : Math.max(0, targetDoc.pages.length - 1);
-		let at = insertAt(position, current, targetDoc.pages.length);
-		for (const f of files) {
-			if (onStatus) onStatus("Importiere " + f.name + " …");
-			const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
-			if (isPdf) at = await importPdf(f, at, targetDoc);
-			else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
-				const im = await fileToImageData(f, 1600);
-				targetDoc.pages.splice(at, 0, imagePage(im, "blank", false)); at++;
-			}
-		}
-		await persistDoc(targetId, targetDoc);
-		if (targetId === pid && doc === targetDoc) { rebuildScroll(); go(Math.max(0, at - 1)); }
-		return at;
+		return runImportFilesIntoHeft(targetId, files, position, onStatus, {
+			getActiveDoc: () => doc,
+			getActivePid: () => pid,
+			getActiveIdx: () => idx,
+			loadDoc: load,
+			persistDoc,
+			rebuildScroll,
+			go,
+			blobRef,
+			newPage,
+			pdfs: PDFS,
+			toast: U.toast
+		});
 	}
+
 	function openImportDialog(files, initialHeftId = pid) {
-		files = Array.from(files || []).filter(Boolean);
-		if (!files.length) return;
-		const onlyPdfs = files.every((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
-		const hefts = Object.values(S.pages).filter((pg) => pg && !pg.trashed && pg.kind === "heft");
-		const destinations = (onlyPdfs ? '<option value="notes">Als neue Notiz-Seite(n)</option>' : "") + hefts.map((pg) => '<option value="heft:' + U.esc(pg.id) + '"' + (pg.id === initialHeftId ? ' selected' : '') + '>' + U.esc(pg.title || "Heft") + '</option>').join("");
-		const rows = files.map((f) => '<div class="heft-transfer-file"><span>' + (f.type === "application/pdf" || /\.pdf$/i.test(f.name) ? "PDF" : "IMG") + '</span><div><b>' + U.esc(f.name) + '</b><small>' + niceBytes(f.size || 0) + '</small></div></div>').join("");
-		const body = '<div class="heft-transfer-files">' + rows + '</div><div class="heft-transfer-field"><label for="heftImportTarget">Ort</label><select id="heftImportTarget">' + destinations + '</select></div>' +
-			'<div class="heft-transfer-field" id="heftImportPositionWrap"><label for="heftImportPosition">Einfügen</label><select id="heftImportPosition"><option value="after">Nach der aktuellen Seite</option><option value="before">Vor der aktuellen Seite</option><option value="start">Am Anfang</option><option value="end">Am Ende</option></select></div>' +
-			'<p class="heft-transfer-hint">PDF-Seiten werden als unveränderliche Heftseiten eingefügt. Als Notiz entsteht pro PDF eine eigene Seite mit durchsuchbarem Inhalt.</p>';
-		const o = transferOverlay("In Impala67 importieren", files.length + (files.length === 1 ? " Datei" : " Dateien") + " ausgewählt", body, '<button type="button" data-hetransfercancel="1">Abbrechen</button><button type="button" class="primary" data-hetransferimport="1">Importieren</button>');
-		const target = o.querySelector("#heftImportTarget"), positionWrap = o.querySelector("#heftImportPositionWrap");
-		const syncTarget = () => { if (positionWrap) positionWrap.hidden = target.value === "notes"; };
-		target.addEventListener("change", syncTarget); syncTarget();
-		o.querySelector("[data-hetransfercancel]").addEventListener("click", closeTransferOverlay);
-		o.querySelector("[data-hetransferimport]").addEventListener("click", async (e) => {
-			const button = e.currentTarget, label = button.textContent; button.disabled = true; button.textContent = "Importiere …";
-			try {
-				if (target.value === "notes") {
-					for (const file of files) await PDFS.ingest(file, (message) => { button.textContent = message; });
-				} else {
-					const targetId = target.value.replace(/^heft:/, "");
-					await importFilesIntoHeft(targetId, files, o.querySelector("#heftImportPosition").value, (message) => { button.textContent = message; });
-				}
-				closeTransferOverlay(); if (U.toast) U.toast("Import abgeschlossen", "success");
-			} catch (error) { button.disabled = false; button.textContent = label; if (U.toast) U.toast("Import fehlgeschlagen: " + ((error && error.message) || error), "error"); }
+		return renderImportDialog(files, initialHeftId, {
+			importFiles: (targetId, fls, pos, onStatus) => importFilesIntoHeft(targetId, fls, pos, onStatus),
+			getActivePid: () => pid,
+			pages: S.pages,
+			pdfs: PDFS,
+			toast: U.toast,
+			transferOverlay,
+			closeTransferOverlay
 		});
 	}
-	const pickImage = (capture, cb) => filePick({ capture }, cb);
-	function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) {
 
-		return new Promise((resolve, reject) => {
-			const r = new FileReader();
-			r.onerror = () => reject(new Error("Datei lesen fehlgeschlagen"));
-			r.onload = () => {
-				const img = new Image();
-				img.onload = () => {
-					let w = img.naturalWidth, h = img.naturalHeight;
-					const k = Math.min(1, maxDim / Math.max(w, h));
-					w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
-					const c = document.createElement("canvas");
-					c.width = w; c.height = h;
-					const x = c.getContext("2d");
-					x.fillStyle = "#fff"; x.fillRect(0, 0, w, h);
-					x.drawImage(img, 0, 0, w, h);
-					resolve({ src: mime === "image/png" ? c.toDataURL("image/png") : c.toDataURL(mime, quality), w, h });
-				};
-				img.onerror = () => reject(new Error("Bild dekodieren fehlgeschlagen"));
-				img.src = r.result;
-			};
-			r.readAsDataURL(f);
-		});
-	}
 	async function insertImageFile(f) {
-		try {
-			const pg = page(); if (!pg) return;
-			const im = await fileToImageData(f, 1400);
-			const k = Math.min((PAGE_W * 0.7) / im.w, (PAGE_H * 0.7) / im.h, 1);
-			const img = { id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k };
-			imagesOf(pg).push(img);
-			pushUndo({ kind: "imgAdd", img, pageIdx: idx });
-			sel = { pageIdx: idx, imgId: img.id };
-			tool = "select";
-			expanded = false;
-			refresh(idx);
-		} catch (e) {
-			console.warn("Heft: Bild einfügen fehlgeschlagen", e);
-			if (U.toast) U.toast("Bild konnte nicht eingefügt werden", "error");
-		}
+		return runInsertImageFile(f, {
+			getPage: page,
+			getIdx: () => idx,
+			blobRef,
+			pushUndo,
+			onInserted: ({ img, pageIdx }) => {
+				sel = { pageIdx, imgId: img.id };
+				tool = "select";
+				expanded = false;
+				refresh(pageIdx);
+			},
+			toast: U.toast
+		});
 	}
-	function imagePage(im, paper, bleed) {
 
-		const pg = newPage(paper || "blank");
-		const pad = bleed ? 0 : 40;
-		const k = Math.min((PAGE_W - pad * 2) / im.w, (PAGE_H - pad * 2) / im.h);
-		pg.images.push({ id: U.uid(), ref: blobRef(im.src), x: (PAGE_W - im.w * k) / 2, y: (PAGE_H - im.h * k) / 2, w: im.w * k, h: im.h * k, ...(im.scan ? { scan: true } : {}) });
-		return pg;
-	}
 	async function addImagePageFromFile(f) {
-		try {
-			const im = await fileToImageData(f, 1600);
-			addPageAt(null, imagePage(im, page() ? page().paper : "blank", false));
-		} catch (e) { console.warn("Heft: Bild-Seite fehlgeschlagen", e); }
+		return runAddImagePageFromFile(f, {
+			getPage: page,
+			addPageAt,
+			blobRef,
+			newPage
+		});
 	}
 
 	function importFiles() {
-		filePick({ accept: "image/*,application/pdf", multiple: true }, (files) => openImportDialog(files, pid));
-	}
-	async function importPdf(f, at, targetDoc = doc) {
-		try {
-			await PDFS.ensureLoaded();
-		} catch (e) {
-			if (U.toast) U.toast("PDF-Engine konnte nicht geladen werden: " + ((e && e.message) || e), "error");
-			return at;
-		}
-		const pdf = await PDFS.openDocument(await f.arrayBuffer());
-		for (let i = 1; i <= pdf.numPages; i++) {
-			const p = await pdf.getPage(i);
-
-			const vp = p.getViewport({ scale: 3 });
-			const c = document.createElement("canvas");
-			c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-			const cx = c.getContext("2d");
-			cx.fillStyle = "#fff";
-			cx.fillRect(0, 0, c.width, c.height);
-			await p.render({ canvasContext: cx, viewport: vp }).promise;
-
-			targetDoc.pages.splice(at, 0, imagePage({ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height }, "blank", true));
-			at++;
-		}
-		return at;
+		return runImportFiles({
+			pickFiles: filePick,
+			openDialog: openImportDialog,
+			getPid: () => pid
+		});
 	}
 
 	// Scanner-Oberfläche lebt in heft-scanner-ui.js; das Heft liefert nur das Einfügen.
@@ -2530,7 +2214,7 @@ export const HEFT = (() => {
 		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; });
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
-		HEFT_INDEXER.startBackgroundScan();
+		BUS.emit("heft:start-background-scan");
 	}
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
@@ -2585,8 +2269,8 @@ export const HEFT = (() => {
 			}
 			return;
 		}
-		if (d.henavback) { (window.TABS?.navBack || window.navBack)?.(); return; }
-		if (d.henavforward) { (window.TABS?.navForward || window.navForward)?.(); return; }
+		if (d.henavback) { BUS.emit("tabs:nav-back"); return; }
+		if (d.henavforward) { BUS.emit("tabs:nav-forward"); return; }
 		if (d.helassotext) { recognizeLassoSelection(); return; }
 		if (d.helassotrain) { trainLassoSelection(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
@@ -2686,7 +2370,7 @@ export const HEFT = (() => {
 		else if (d.hechat) {
 
 			document.body.classList.remove("panel-collapsed");
-			try { if (window.RENDER && window.RENDER.renderTabs) window.RENDER.renderTabs(); } catch {  }
+			BUS.emit("ui:render-tabs");
 			return;
 		}
 		else return;
@@ -2893,7 +2577,7 @@ export const HEFT = (() => {
 			PERF_PROFILER.measure("heft.layout", () => layout(), { pages: doc.pages.length }, 16);
 			if (idx) PERF_PROFILER.measure("heft.go", () => go(idx), { page: idx }, 16);
 
-			if (doc && doc.pages && doc.pages[idx]) HEFT_INDEXER.schedulePage(pid, doc.pages[idx]);
+			if (doc && doc.pages && doc.pages[idx]) BUS.emit("heft:schedule-page", { pageId: pid, page: doc.pages[idx] });
 			purgeOrphanLegacyInk();
 			pruneSnapshots(pageId).catch(() => {}); // abgelaufene Verlauf-Snapshots beim Öffnen wegräumen
 		} finally {
@@ -3001,3 +2685,6 @@ export const HEFT = (() => {
 		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),
 	};
 })();
+
+BUS.provide("heft:is-writing", () => HEFT.isWriting());
+

@@ -1883,5 +1883,36 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory };
+	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory, ancestorsOf, favModels, toggleFavModel, removeProviderFavorites };
 })();
+
+// Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)
+export function ancestorsOf(pg) {
+	const chain = [];
+	const guard = new Set();
+	let cur = pg?.parentId ? S.pages[pg.parentId] : null;
+	while (cur && !cur.trashed && !guard.has(cur.id)) {
+		guard.add(cur.id);
+		chain.unshift(cur);
+		cur = cur.parentId ? S.pages[cur.parentId] : null;
+	}
+	return chain;
+}
+
+// ★ Modell-Favoriten: "providerId::modelId", bewusst lokal (Quellen-IDs sind gerätespezifisch).
+const MODEL_FAV_KEY = "impala67FavModels";
+export function favModels() {
+	return new Set(U.storage.getJson(MODEL_FAV_KEY, []));
+}
+export function toggleFavModel(key) {
+	const s = favModels();
+	s.has(key) ? s.delete(key) : s.add(key);
+	U.storage.setJson(MODEL_FAV_KEY, [...s]);
+}
+export function removeProviderFavorites(providerId) {
+	if (!providerId) return;
+	const prefix = providerId + "::";
+	const remaining = [...favModels()].filter((k) => !k.startsWith(prefix));
+	U.storage.setJson(MODEL_FAV_KEY, remaining);
+}
+

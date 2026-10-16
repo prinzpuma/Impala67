@@ -1,5 +1,7 @@
 "use strict";
 
+import { BUS } from "./event-bus.js";
+
 const DEFAULT_QUIET_MS = 5000;
 const DEFAULT_IDLE_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -46,7 +48,7 @@ export function createCheckpointScheduler(run, options = {}) {
 		attempts = 0;
 		if (rerun) { rerun = false; arm(); }
 	};
-	const isWritingActive = () => typeof window !== "undefined" && typeof window.HEFT?.isWriting === "function" && window.HEFT.isWriting();
+	const isWritingActive = () => Boolean(BUS.call("heft:is-writing"));
 	const execute = async () => {
 		if (isWritingActive()) {
 			idle = 0;

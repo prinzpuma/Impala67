@@ -1,48 +1,61 @@
 # Impala67 – Backlog & Offene Punkte
 
-## 1. Umgesetzt: Capacitor Android-Integration
+Stand: v2.2.77 (Oktober 2026)
 
-- [x] **Capacitor Basis-Setup & Konfiguration**:
-  - `capacitor.config.json` eingerichtet mit `appId: org.impala67.app`, `appName: Impala67`, `webDir: web`.
-  - Android-Plattformgerüst (`android/`) initialisiert und synchronisiert (`cap sync android`).
-- [x] **Native Plattform-Schicht (`web/platform-native.js`)**:
-  - Reines ES-Modul ohne Bundler mit Graceful Degradation für Web/PWA.
-  - **Hardware Back-Button**: Schließt zuerst Modals/Overlays, dann Mobile Navigation, dann Tab-History, bevor die App minimiert wird.
-  - **Haptik**: Taktiles Feedback bei Karteikarten-Bewertungen und UI-Aktionen.
-  - **Lokale SRS-Benachrichtigungen**: Tägliche Erinnerung an fällige Karten (100 % lokal ohne Server).
-  - **Dateisystem-Backup**: Exportiert Backups unter Android direkt in `Documents/Impala67/` (mit Schalter in den Einstellungen).
-  - **Google ML Kit Document Scanner**: Kamera-Dokumentenscan mit automatischer Randerkennung direkt ins Heft.
-  - **Offline-Spracheingabe**: Robuste Android-Spracherkennung ohne Timeouts und Cloud-Zwang.
-  - **Systemweites Teilen ("Senden an Impala67")**: Empfangen von geteilten PDFs, Bildern und Texten aus anderen Apps via Android Intent-Filter.
-- [x] **Automatischer APK-Build (CI)**:
-  - GitHub Actions Workflow `.github/workflows/android-build.yml` für automatische Debug-APK bei Push auf `main`.
+---
 
-## 2. Nächste Schritte & Optimierungen
+## 1. Zuletzt umgesetzt (Erledigt)
 
-- [ ] **Eigene Handschrifterkennung ausbauen** (ML Kit OCR seit v2.2.18 ersetzt, Plugin entfernt):
-  - Erkennung läuft plattformunabhängig direkt auf den Stift-Strichen (ONNX-Modell im Worker, `handwriting/` → `web/handwriting-model.onnx`) – auch auf iPad/PC, wo ML Kit nie verfügbar war.
-  - Nächste Schritte: Erkennungsqualität messen/verbessern (siehe `handwriting/BASELINE_CER.md`); doppelte OCR-Abläufe in `heft.js` und `heft-indexer.js` wurden zusammengeführt (priorisierte Erkennung via `HEFT_INDEXER.schedulePage`).
-  - Ziel: Grundlage für Heft-Suche und KI-Funktionen wie „Erstelle einen Lernzettel aus diesem Heft“.
+- [x] **Capacitor Android-Integration & Native Schicht (`web/platform-native.js`)**:
+  - Basis-Setup (`capacitor.config.json`, `android/`), automatischer APK-Build via GitHub Actions (`.github/workflows/android-build.yml`) und permanente Edge-to-Edge-Statusleiste.
+  - Hardware-Back-Button, Haptik, lokale SRS-Erinnerungen, Dateisystem-Backup (`Documents/Impala67/`), ML Kit Document Scanner, Offline-Spracheingabe und „Senden an Impala67" (Share-Intent).
+- [x] **Lokale Handschrifterkennung (Bild-Modell v2)**:
+  - Plattformunabhängige ONNX-Erkennung im Worker (`handwriting/` → `web/handwriting-model.onnx`, ResNet18 + BiLSTM + CTC) ersetzt ML Kit OCR.
+  - Beam-Search mit deutschem Wörterbuch (`web/handwriting-ctc.js`), Mathe-Formeln (MathWriting) und eigener Abschreib-Modus (`web/abschreiben.js`).
+  - Benchmark-Stand (Lauf 3, siehe `handwriting/README.md`): **0,0 % TEST-CER** auf eigenen Benchmark-Wörtern, **5,3 % CER** auf Abschreib-Zeilen.
+  - Zentrale, akkuschonende Hintergrund-Indexierung über `HEFT_INDEXER.schedulePage` (`web/heft-indexer.js`) und reduzierte Stiftlatenz (`desynchronized: true`).
+- [x] **UI-Designsystem & Icon-Sprache**:
+  - Typografie- (`--text-*`) und Spacing-Skala (`--space-*`) in `web/css/variables.css` konsolidiert.
+  - Zentrales SVG-Icon-Sprite (`web/icons.svg` + `web/icons.js`) ersetzt UI-Emojis und verstreute Inline-SVGs in über 40 Dateien.
+  - Ruhige, aus `--accent` abgeleitete Flächen-Tokens (`--b-tint*`, `--b-card`, `--b-float`) und Feder-Animationen (`web/design.css`, `web/motion.js`) als Standard übernommen; `web/beta-ui.css` als leerer Experimentier-Slot zurückgesetzt.
+- [x] **Erste Entschlackung & Modularisierung**:
+  - Architektur, Datenflüsse und Baustellen (B1–B6) in `docs/ARCHITEKTUR.md` dokumentiert.
+  - Tote Funktionen (~30 Exporte) und doppelte Helfer (`mapLimit`, `sha256Hex`, `gzipBytes`, `norm`/`dot`, `LOCAL_EMBED_MODEL_ID`) bereinigt.
+  - Event-Kompaktierung in Hintergrund-Worker ausgelagert (`web/compact-events.js`, `web/compact-worker.js`).
+  - Module aus Monolithen geschnitten: `web/editor-menus.js` (aus `editor.js`), `web/heft-lasso.js`, `web/heft-scanner-ui.js`, `web/heft-pages-beta.js`, `web/heft-toolbar-beta.js` (aus `heft.js`), `web/conflict-ui.js` (aus `render.js`).
 
-- [x] **Stift-Latenz im Heft (`desynchronized: true`)**:
-  - Der 2D-Canvas-Context der Live-Ink-Ebene (`wetCanvases`) in `web/heft.js` wird mit `{ desynchronized: true }` initialisiert (reduziert Stiftlatenz auf Android/Chromium durch Umgehung der Compositor-Queue).
-- [ ] **Android Home-Screen Widget**:
-  - Optionales Widget für den Startbildschirm mit offenen Karteikarten.
+---
+
+## 2. Jetzt am nötigsten (Priorisierte nächste Schritte)
+
+### Priorität 1: Monolithen, CSS-Schichten & Modul-Grenzen aufräumen (KISS & DRY)
+- [x] **Beta-Namensreste & Heft-CSS-Überlagerung bereinigt**:
+  - `web/heft-pages-beta.js` und `web/heft-toolbar-beta.js` in `web/heft-pages-ui.js` und `web/heft-toolbar-ui.js` überführt; die gesamte Toolbar-, Tray- und Popover-HTML-Erzeugung aus `web/heft.js` dorthin ausgelagert.
+  - `web/css/heft-ui.css` vollständig mit `web/css/heft.css` zusammengeführt und als separate Datei entfernt.
+- [x] **Doppelte Zuständigkeiten auflösen (`docs/ARCHITEKTUR.md` B3)**:
+  - Embedding-Worker-Verwaltung und lokaler Modellkatalog aus `web/ai.js` vollständig nach `web/embedding.js` verlagert.
+  - Doppelte HTML-Erzeugung zwischen `web/settings.js` und `web/settings-renderer.js` (Modell-Liste, lokaler Embedding-Status) im Renderer zusammengeführt.
+- [x] **Weitere Monolithen-Schnitte umgesetzt**:
+  - `web/heft-import.js` (Datei-/Bild-/PDF-Import) und `web/heft-storage.js` (Blob-Referenzen, Altbestand-Migration, Verlauf-Snapshots) aus `web/heft.js` ausgelagert.
+  - `web/app-sidebar-events.js` (Sidebar-Drag-&-Drop, Inline-Umbenennen, Breitenanpassung) und `web/app-dialogs.js` (Dialoge, Seiten-Flows, Anki-/Lernmodus-Helfer) aus `web/app.js` ausgelagert.
+  - `web/editor-inline.js` (Inline-Markdown, KaTeX-Hydrierung, Caret-Berechnung) aus `web/editor.js` ausgelagert.
+- [ ] **Große Dateien weiter schneiden**:
+  - `web/heft.js` (~2.680 Zeilen): Viewport/Zoom/Kachel-Rendering (`heft-viewport.js`) und Stift-/Touch-Eingabe (`heft-input.js`) herauslösen.
+  - `web/app.js` (~1.815 Zeilen): Verbleibende Bereiche in `wireEvents()` (z. B. Anki/Lernmodus-Klicks, Daily Notes, Kontextmenüs) aufteilen.
+  - `web/editor.js` (~2.215 Zeilen): Verbleibende Teilbereiche (z. B. Tastatur-Handler / Block-Operationen) modularisieren.
+- [x] **Restliche CSS-Überlagerungen abgebaut**:
+  - Abgeleitete Design-Tokens (`--b-*`) nach `web/css/variables.css` überführt und die Komponenten-Regeln aus `web/design.css` direkt in `web/home.css`, `web/styles.css`, `web/css/editor.css` und `web/css/heft.css` integriert (`web/design.css` enthält nur noch Querschnitts-Kartenbasis und `motion.js`-Übergänge).
+- [x] **Abhängigkeits-Knäuel & `window`-Brücke aufgelöst (`docs/ARCHITEKTUR.md` B1/B2)**:
+  - Alle zirkulären Modul-Importe (0 verbleibende Zyklen in `web/*.js`) über `web/event-bus.js` (`BUS.on`/`emit`/`provide`/`call`) und direkte Submodul-Importe (`web/app-dialogs.js`, `web/state.js`) entkoppelt; veraltete Einzelfunktions-Aliase auf `window` in `web/main.js` entfernt.
+
+### Priorität 2: Heft-KI & Handschrift im Alltag nutzbar machen
+- [ ] **KI-Funktionen direkt fürs Heft**:
+  - Auf Basis des erkannten Heft-Textes (`ocrText` aus `heft-indexer.js`) und der Seitenbilder direkte Aktionen anbieten wie „Lernzettel aus diesem Heft erstellen" oder „Karteikarten aus Heft-Seite generieren".
+- [ ] **Handschrifterkennung gezielt weiter schärfen**:
+  - Erkennungsqualität auf echten Notizseiten (`handwriting/evaluate_notes_benchmark.py`) bei längeren Sätzen, Skizzen-Abgrenzung und Mathe-Ausdrücken weiter verbessern.
+
+### Priorität 3: Android & Plattform-Ergänzungen
 - [ ] **Google Drive Login in Android-APK verifizieren**:
-  - Prüfen und Testen des OAuth2-Ablaufs in der nativen Capacitor-Umgebung (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
-
-- [ ] **UI-Designsystem vereinheitlichen**:
-  - [x] **Typografie auf eine feste Skala zurückführen**: Die vorhandenen Textgrößen-Tokens (`--text-*`) konsequent in `styles.css` und `mobile-content.css` als visuelle Hierarchie angewendet (inkl. iOS Safari 16px-Zoom-Schutz für Eingabefelder).
-  - [x] **Spacing-Skala einführen und anwenden**: Konsistente Abstands-Skala (`--space-*`) in `variables.css` definiert und Margin-/Padding-/Gap-Werte in Desktop- und Mobile-CSS harmonisiert.
-  - [ ] **Farbpalette konsolidieren**: Das bereits vorhandene Token-System in `web/css/variables.css` als zentrale Quelle stärken und nur semantisch passende freie Farben migrieren. Sonderfarben, z. B. für Cover-Designs oder Scanner/Illustrationen, bewusst separat lassen.
-  - [ ] **Icon-Sprache vereinheitlichen**: Emoji als UI-Icons schrittweise durch eine konsistente, plattformunabhängige Icon-Sprache ersetzen bzw. ihre Verwendung auf bewusst geeignete Inhalte beschränken; bestehende SVG-/Icon-Lösungen als Referenz verwenden.
-  - **Reihenfolge bei der Umsetzung**: zuerst Typografie und Spacing (erledigt), danach Farbkonsolidierung und Icons. Kein komplettes Redesign nur wegen dieser Bereinigung.
-
-- [ ] **Projekt-Entschlackung & Neustrukturierung (KISS & DRY)**:
-  - **Code-Verständnis & Übersicht neu erarbeiten**: Die gesamte Architektur und Zusammenhänge schrittweise selbst wieder durchdringen, da die Übersicht verloren gegangen ist.
-  - **Code-Dokumentation komplett neu aufbauen**: Modul-Zusammenspiel, Datenflüsse (State, DB, Cloudflare, Drive) und Kernkomponenten von Grund auf klar, verständlich und aktuell dokumentieren.
-  - [x] **Redundanzen abbauen**: Doppelte OCR-Logik und In-Memory-Queues zwischen `heft.js` und `heft-indexer.js` aufgelöst; zentrale Erkennung läuft akkuschonend über `HEFT_INDEXER.schedulePage`.
-  - **Monolithen aufbrechen & aufräumen**: Große Dateien (`heft.js`, `editor.js`, `render.js`, `state.js`, `settings.js`) auf Altlasten untersuchen und modularisieren (z. B. Menüs/Popovers nach `editor-menus.js`, Lasso-Geometrie nach `heft-lasso.js`).
-  - **Architektur vereinfachen**: Klare Modulverantwortlichkeiten schärfen und unnötige Komplexität konsequent entfernen, um den Arbeitsregeln wieder voll zu entsprechen.
-- [x] **Android Transparente Statusleiste**:
-  - Statusleiste permanent transparent eingeblendet (Edge-to-Edge); immersiver Vollbild-Schalter restlos entfernt.
+  - OAuth2-Ablauf in der nativen Capacitor-Umgebung testen und absichern (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
+- [ ] **Android Home-Screen Widget (optional)**:
+  - Startbildschirm-Widget für einen schnellen Blick auf heute fällige Karteikarten.

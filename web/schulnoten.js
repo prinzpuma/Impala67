@@ -3,6 +3,7 @@
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { icon, lead } from "./icons.js";
+import { BUS } from "./event-bus.js";
 
 // Schulnoten: persistiert jede Änderung im Event-Log (gradeAdd/gradeDelete),
 // damit sie mit dem bestehenden Drive-Sync zwischen Geräten repliziert wird.
@@ -167,7 +168,7 @@ export const SCHULNOTEN = (() => {
 		event.preventDefault();
 		S.view = "noten";
 		S.sidebarMode = "files";
-		if (typeof window.render === "function") window.render();
+		BUS.emit("ui:render");
 	});
 
 	return { addGrade, deleteGrade, allGrades, average, exportMarkdown, render };

@@ -3,8 +3,9 @@
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
+import { BUS } from "./event-bus.js";
 
-const reopen = () => window.openSettings?.("app", "performance-profiler");
+const reopen = () => BUS.emit("ui:open-settings", { tab: "app", focusKey: "performance-profiler" });
 
 document.addEventListener("click", async (event) => {
 	const button = event.target?.closest?.("#btnPerfCopy, #btnPerfExport, #btnPerfClear");

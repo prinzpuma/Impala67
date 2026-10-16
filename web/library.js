@@ -1,10 +1,9 @@
 "use strict";
 
-import { S, STATE } from "./state.js";
+import { S, STATE, ancestorsOf } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
-import { RENDER } from "./render.js";
-import { APP } from "./app.js";
+import { BUS } from "./event-bus.js";
 import { NLM } from "./notebooklm.js";
 import { TABS } from "./tabs.js";
 import { COLLAPSE } from "./collapse.js";
@@ -12,11 +11,10 @@ import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { icon, lead, pageIcon } from "./icons.js";
 
-const renderMain = (...args) => RENDER.renderMain(...args);
-const render = (...args) => RENDER.render(...args);
-const hydrateCovers = (...args) => RENDER.hydrateCovers(...args);
-const ancestorsOf = (...args) => RENDER.ancestorsOf(...args);
-const newPageFlow = (...args) => APP.newPageFlow(...args);
+const renderMain = () => BUS.emit("ui:render-main");
+const render = (opts) => BUS.emit("ui:render", opts);
+const hydrateCovers = (root) => BUS.emit("ui:hydrate-covers", root);
+const newPageFlow = (arg) => BUS.emit("ui:new-page-flow", arg);
 
 // ---------- GoodNotes Documents: Cover-Presets + Notebook-Regal ----------
 export const COVER_PRESETS = ["sunset", "ocean", "forest", "grape", "mono"];

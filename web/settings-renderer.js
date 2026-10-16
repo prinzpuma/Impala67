@@ -17,6 +17,8 @@ import { backupActionState, cloudflareActionState, driveActionState, updateActio
 import * as UI from "./settings-ui.js";
 import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { lead } from "./icons.js";
+import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { BUS } from "./event-bus.js";
 
 const e = (value) => U.esc(String(value ?? ""));
 const button = (label, id, className = "", disabled = false, ic = "") => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + (ic ? lead(ic) : "") + e(label) + "</button>";
@@ -31,9 +33,9 @@ const updateButton = () => {
 
 const hasDriveClient = () => !!((window.APP_CONFIG && window.APP_CONFIG.GOOGLE_WEB_CLIENT_ID) || S.settings.driveClientId);
 const driveSession = () => DRIVE.status?.() || { connected: !!DRIVE.isConnected?.(), needsLogin: false, email: null };
-const cloudflareSession = () => typeof window !== "undefined" && window.CLOUDFLARE_SYNC
-	? window.CLOUDFLARE_SYNC.status()
-	: { status: "disconnected", url: S.settings.cfUrl || "", syncKey: S.settings.cfSyncKey || "" };
+const cloudflareSession = () => (CLOUDFLARE_SYNC?.status?.()
+	?? (typeof window !== "undefined" && window.CLOUDFLARE_SYNC?.status ? window.CLOUDFLARE_SYNC.status() : null)
+	?? { status: "disconnected", url: S.settings.cfUrl || "", syncKey: S.settings.cfSyncKey || "" });
 const hasCloudflareConfig = (cf = cloudflareSession()) => !!((cf.url || S.settings.cfUrl) && (cf.syncKey || S.settings.cfSyncKey));
 
 // Abgelaufene Google-Anmeldung ist der Normalfall (Web-Token hält eine Stunde). Gewarnt wird erst,
@@ -136,24 +138,113 @@ function aiSourcesGroup() {
 	return UI.group("Quellen", cards + UI.actions([{ label: "Quelle hinzufügen", id: "btnAddProvider" }, { label: "Impala AI", data: 'data-provpreset="cloudflare"', className: "secondary" }, { label: "LM Studio", data: 'data-provpreset="local"', className: "secondary" }, { label: "Gemini", data: 'data-provpreset="google"', className: "secondary" }, { label: "OpenAI", data: 'data-provpreset="openai"', className: "secondary" }]), { id: "ai-sources", footnote: "Zugangsdaten werden erst mit Speichern übernommen." });
 }
 
+// Zeichnet die Modell-Liste in den offenen KI-Einstellungen (Favoriten oben).
+export function renderSettingsModelList({ favSet = new Set(), presets = [] } = {}) {
+	const host = U.el("settingsModelList");
+	const label = U.el("aiCurrentModelLabel");
+	if (!host) return;
+	const providers = S.settings.aiProviders || [];
+	const nameOf = (id) => ((providers.find((p) => p.id === id) || {}).name) || id || "";
+	const curPr = S.settings.aiProviderId || "";
+	const curModel = S.settings.aiModel || "";
+	if (label) label.textContent = curModel ? (nameOf(curPr) + " · " + curModel) : "Kein Modell gewählt";
+	const live = Array.isArray(S.availableModels) ? S.availableModels : [];
+	// Suche: filtert NUR die Anzeige. Favoriten, aktives Modell und die Gruppierung nach
+	// Quelle bleiben unverändert — ein Filter über der bestehenden Liste, keine zweite Liste.
+	const q = String(S.modelQuery || "").trim().toLowerCase();
+	const hit = (m) => !q || (String(m.id) + " " + nameOf(m.providerId)).toLowerCase().includes(q);
+	const count = U.el("aiModelCount");
+	if (count) count.textContent = q ? live.filter(hit).length + " von " + live.length : live.length + " Modelle";
+	const row = (m) => {
+		const favKey = m.providerId + "::" + m.id;
+		const fav = favSet.has(favKey);
+		const active = m.providerId === curPr && m.id === curModel;
+		const displayName = m.id === "impala-ai" ? "Impala AI" : m.id;
+		return '<div class="model-row">' +
+			'<button type="button" class="menu-item' + (active ? " active" : "") + '" data-modelset="' + e(m.providerId) + "::" + e(m.id) + '">' +
+				'<span class="menu-item-label">' + e(displayName) + "</span>" +
+				'<small class="settings-model-src">' + e(nameOf(m.providerId)) + "</small>" +
+				(active ? '<span class="menu-check">✓</span>' : "") +
+			"</button>" +
+			'<button type="button" class="model-fav' + (fav ? " on" : "") + '" data-modelfav="' + e(favKey) + '" title="' + (fav ? "Favorit entfernen" : "Als Favorit pinnen") + '">' + (fav ? "★" : "☆") + "</button></div>";
+	};
+	let body = "";
+	const favLive = live.filter((m) => favSet.has(m.providerId + "::" + m.id) && hit(m));
+	if (favLive.length) body += '<div class="menu-label">★ Favoriten</div>' + favLive.map(row).join("");
+	for (const pr of providers) {
+		const rest = live.filter((m) => m.providerId === pr.id && !favSet.has(pr.id + "::" + m.id) && hit(m));
+		if (rest.length) body += '<div class="menu-label">' + e(pr.name || pr.id) + "</div>" + rest.map(row).join("");
+	}
+	// Offline-Favoriten / aktuelles Modell ohne Live-Treffer trotzdem anbieten (nur für vorhandene Quellen)
+	const knownProviders = new Set(providers.map((p) => p.id));
+	const seen = new Set(live.map((m) => m.providerId + "::" + m.id));
+	const orphans = [];
+	favSet.forEach((k) => {
+		const sep = k.indexOf("::");
+		const pId = sep === -1 ? curPr : k.slice(0, sep);
+		if (!seen.has(k) && knownProviders.has(pId)) orphans.push(k);
+	});
+	if (curModel && !seen.has(curPr + "::" + curModel) && !favSet.has(curPr + "::" + curModel) && knownProviders.has(curPr)) orphans.push(curPr + "::" + curModel);
+	const orphanRows = orphans.map((k) => {
+		const sep = k.indexOf("::");
+		return { providerId: sep === -1 ? curPr : k.slice(0, sep), id: sep === -1 ? k : k.slice(sep + 2) };
+	}).filter(hit);
+	if (orphanRows.length) body += '<div class="menu-label">Gespeichert</div>' + orphanRows.map(row).join("");
+	// Offline / keine Live-Liste: feste Vorschläge (Gemini/OpenAI/lokal) anbieten
+	if (!body && !q && presets.length) {
+		body = '<div class="menu-label">Vorschläge</div>' + presets.map((p) =>
+			row({ id: p.value, providerId: p.provider })).join("");
+	}
+	host.innerHTML = body || (q
+		? '<div class="menu-note">Kein Modell passt zu „' + e(q) + '“.</div>'
+		: '<div class="menu-note">Keine Modelle erreichbar. Quelle prüfen oder unten manuell eintragen.</div>');
+}
+
+export function localEmbeddingStatusView({ configured, cached, partial, sizeMb = 165, checking = false }) {
+	if (checking) {
+		return {
+			statusClass: "settings-status " + (configured ? "is-ok" : "is-idle"),
+			msg: configured ? "Aktiviert · prüfe den lokalen Modell-Cache…" : `Einmaliger Download (ca. ${sizeMb} MB); danach offline im Browser nutzbar`,
+			actionHtml: configured
+				? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
+				: button(`Herunterladen (ca. ${sizeMb} MB)`, "btnDownloadLocalEmbedding", "primary", false, "download"),
+		};
+	}
+	if (cached) {
+		return {
+			statusClass: "settings-status " + (configured ? "is-ok" : "is-idle"),
+			msg: configured
+				? `Bereit für Offline-Suche · ca. ${sizeMb} MB im Browser-Cache (kann entfernt werden) · wird im Leerlauf aus dem RAM entladen`
+				: "Im Browser-Cache vorhanden, aber noch nicht aktiviert · der Cache kann entfernt werden",
+			actionHtml: configured
+				? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
+				: button("Für Suche aktivieren", "btnEnableLocalEmbedding", "primary"),
+		};
+	}
+	return {
+		statusClass: "settings-status " + (configured || partial ? "is-warn" : "is-idle"),
+		msg: partial
+			? "Der vorige Download war unvollständig · vorhandene Teile werden beim Fortsetzen wiederverwendet"
+			: configured
+				? `Download erforderlich (ca. ${sizeMb} MB); danach ist die Offline-Suche wieder verfügbar`
+				: `Einmaliger Download (ca. ${sizeMb} MB); danach offline im Browser nutzbar`,
+		actionHtml: button(partial ? "Download fortsetzen" : `Herunterladen (ca. ${sizeMb} MB)`, "btnDownloadLocalEmbedding", "primary", false, "download"),
+	};
+}
+
 function localAiGroup() {
 	const isConfigured = S.settings.embedProviderId === "local" && S.settings.embedModel === LOCAL_EMBED_MODEL_ID;
+	const view = localEmbeddingStatusView({ configured: isConfigured, cached: false, partial: false, checking: true });
 	const embedStatus = '<div id="ai-embedding" data-settings-anchor>' +
 		'<input type="hidden" id="inpEmbed" value="' + (isConfigured ? "local::" + LOCAL_EMBED_MODEL_ID : "") + '">' +
-		'<div id="localEmbeddingStatus" class="settings-status ' + (isConfigured ? "is-ok" : "is-idle") + '">' +
+		'<div id="localEmbeddingStatus" class="' + view.statusClass + '">' +
 			'<span class="settings-status-dot"></span>' +
 			'<span class="settings-row-copy">' +
 				'<b>Semantische Suche (Bekko a8m)</b>' +
-				'<small id="localEmbeddingMsg">' +
-					(isConfigured ? "Aktiviert · prüfe den lokalen Modell-Cache…" : "Einmaliger Download (ca. 165 MB); danach offline im Browser nutzbar") +
-				'</small>' +
+				'<small id="localEmbeddingMsg">' + e(view.msg) + '</small>' +
 				'<div class="progress-bar" id="localEmbeddingProgress" hidden style="margin-top: 6px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;"><div class="progress-fill" style="width: 0%; height: 100%; background: var(--accent, #6366f1); transition: width 0.15s ease;"></div></div>' +
 			'</span>' +
-			'<span id="localEmbeddingActions">' +
-				(isConfigured
-					? button("Modell löschen", "btnDeleteLocalEmbedding", "secondary danger-text")
-					: button("Herunterladen (ca. 165 MB)", "btnDownloadLocalEmbedding", "primary", false, "download")) +
-			'</span>' +
+			'<span id="localEmbeddingActions">' + view.actionHtml + '</span>' +
 		'</div>' +
 	'</div>';
 
@@ -198,8 +289,8 @@ function renderLearning(vm) {
 		UI.row({ title: "Selbsteinschätzung abfragen", description: confidence ? "Du bewertest deine Sicherheit bewusst" : "Die App schätzt Sicherheit aus der Antwortzeit", trailing: switchControl("inpConfidence", "Selbsteinschätzung abfragen", confidence) }) +
 		UI.row({ title: "Lernanalyse aufzeichnen", description: "Speichert Lernzeiten und Bewertungen für Statistik und Lernanalyse – nur auf deinen eigenen Geräten", trailing: switchControl("inpTelemetry", "Lernanalyse aufzeichnen", telemetry) }) +
 		UI.row({ id: "break-reminder", title: "Pausen-Erinnerung", description: "Erinnert nach 40 Minuten Lernen an eine kurze Pause", trailing: switchControl("inpBreakReminder", "Pausen-Erinnerung", vm.breakReminder) });
-	const beta = window.EXP?.settingsHtml ? window.EXP.settingsHtml() : '<div class="settings-empty">Lernmodul nicht geladen.</div>';
-	const controller = window.CONTROLLER?.settingsHtml ? window.CONTROLLER.settingsHtml() : '<div class="settings-empty">Controller-Modul nicht geladen.</div>';
+	const beta = BUS.call("exp:settings-html") ?? "";
+	const controller = BUS.call("controller:settings-html") ?? "";
 	return UI.page("Lernen", "Wie Karteikarten abgefragt werden und welche Lernhilfen dich unterstützen.",
 		UI.group("Lernverhalten", options, { id: "learning-options" }) +
 		UI.group("Beta-Lernfunktionen", beta, { id: "learning-beta", footnote: "Beta-Funktionen sind standardmäßig aus und lassen sich einzeln aktivieren." }) +

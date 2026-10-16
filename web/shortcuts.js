@@ -3,14 +3,13 @@
 import { S } from "./state.js";
 import { U } from "./util.js";
 import { RENDER } from "./render.js";
-import { APP } from "./app.js";
 import { SEARCH } from "./search.js";
 import { POPOVERS } from "./popovers.js";
 import { VOICE } from "./voice.js";
+import { closeOverlay, studySpaceOrEnter, showStudyAnswer, gradeStudyCard } from "./app-dialogs.js";
 
 const renderSidebar = (...args) => RENDER.renderSidebar(...args);
 const renderMain = (...args) => RENDER.renderMain(...args);
-const closeOverlay = (...args) => APP.closeOverlay(...args);
 
 function isTypingTarget(el) {
 	if (!el || el === document.body) return false;
@@ -93,15 +92,15 @@ export function wireShortcuts() {
 			if (S.view === "anki" && S.ankiTab === "study") {
 				if (e.key === " " || e.key === "Enter") {
 					e.preventDefault();
-					if (APP.studySpaceOrEnter) APP.studySpaceOrEnter();
-					else if (APP.showStudyAnswer) APP.showStudyAnswer();
+					if (studySpaceOrEnter) studySpaceOrEnter();
+					else if (showStudyAnswer) showStudyAnswer();
 					return;
 				}
 				if (e.key >= "1" && e.key <= "4") {
 					// Nur bei sichtbarer Antwort (sonst versehentlich bewerten)
 					if (!S.reviewShowBack) return;
 					e.preventDefault();
-					if (APP.gradeStudyCard) APP.gradeStudyCard(Number(e.key));
+					if (gradeStudyCard) gradeStudyCard(Number(e.key));
 					return;
 				}
 			}

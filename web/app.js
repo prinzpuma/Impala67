@@ -21,10 +21,34 @@ import { VOICE } from "./voice.js";
 import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 import { HEFT } from "./heft.js";
-import { FACH } from "./fach.js";
 import { PDFS } from "./pdfs.js";
 import { PLATFORM_NATIVE } from "./platform-native.js";
-import { icon, lead, pageIcon } from "./icons.js";
+import { icon } from "./icons.js";
+import { wireSidebarEvents, focusRenameInput, movePageSubtreeToWorkspace } from "./app-sidebar-events.js";
+import {
+	closeOverlay,
+	backupFromHome,
+	mountFullChatVoiceButton,
+	openPromptDialog,
+	openMoveDialog,
+	duplicatePage,
+	newPageFlow,
+	setAnkiZen,
+	resetStudyCard,
+	openAnki,
+	openDailyNote,
+	openHistory,
+	rateAndReviewCard,
+	showStudyAnswer,
+	gradeStudyCard,
+	studySpaceOrEnter,
+	startNewChat,
+	createPageInNewTab,
+	syncComposer,
+} from "./app-dialogs.js";
+
+export { closeOverlay };
+
 
 // Kurz-Aliasse — bewusst spät gebunden ((...a) =>) wegen Modul-Zyklen.
 // FIX: toter openNewTab-Alias entfernt (wurde nirgends aufgerufen)
@@ -72,115 +96,7 @@ const focusPageTitle = () => {
 	}
 };
 
-export function closeOverlay() {
-	const o = $("overlay");
-	if (o) { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; }
-	S.reviewShowBack = false;
-}
-// Großer Chat wird dynamisch gerendert → Debug- und Voice-Button hier nachrüsten
-// (Kommentar saß vorher falsch: der prompt()-Hinweis gehört zu openPromptDialog)
-// Startseiten-Hinweis „Jetzt sichern“: Cloudflare und Drive in einem Klick (Drive darf neu anmelden).
-async function backupFromHome(button) {
-	button.disabled = true;
-	button.textContent = "Sichert…";
-	try {
-		await BACKUP.backupNow();
-		U.toast("Alles gesichert.", "success");
-	} catch (err) {
-		U.toast("Sichern fehlgeschlagen: " + (err?.message || err), "error");
-		button.disabled = false;
-		button.textContent = "Jetzt sichern";
-	}
-}
 
-function mountFullChatVoiceButton() {
-	const submit = $("mainChatSubmit");
-	if (!submit || $("btnVoiceFull")) return;
-	// SVG statt Emoji — konsistent mit den übrigen Icons (voice.js pflegt den Zustand)
-	const voiceBtn = Object.assign(document.createElement("button"), { type: "button", id: "btnVoiceFull", className: "composer-tool", title: "Spracheingabe starten (Alt+Leertaste)" });
-	voiceBtn.innerHTML = icon("mic");
-	submit.before(voiceBtn);
-}
-
-// Eigener Eingabe-Dialog statt window.prompt() — nutzt #overlay wie alle Dialoge
-function openPromptDialog(title, onSubmit, initial) {
-	const o = $("overlay");
-	if (!o) return;
-	o.innerHTML = `<div class="modal modal-sm"><h3>${esc(title)}</h3><input id="dlgPromptInput" autocomplete="off" value="${esc(initial || "")}">` +
-		'<div class="modal-actions"><button id="dlgPromptCancel">Abbrechen</button><button id="dlgPromptOk">OK</button></div></div>';
-	o.hidden = false;
-	const inp = $("dlgPromptInput");
-	const submit = () => { const v = inp.value.trim(); closeOverlay(); if (v) onSubmit(v); };
-	$("dlgPromptOk").addEventListener("click", submit);
-	$("dlgPromptCancel").addEventListener("click", () => closeOverlay());
-	inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
-	inp.focus();
-	if (!PLATFORM.isTouch()) {
-		inp.select();
-	} else {
-		try {
-			const len = inp.value.length;
-			inp.setSelectionRange(len, len);
-		} catch { /* ignore */ }
-	}
-}
-
-// „Verschieben nach…“: Ziel = Workspace-Wurzel oder Seite (ohne eigene Nachfahren)
-function openMoveDialog(pageId) {
-	const o = $("overlay");
-	const pg = S.pages[pageId];
-	if (!o || !pg) return;
-	const bad = STATE.pageSubtreeIds(pageId);
-	let items = "";
-	for (const ws of Object.values(S.workspaces)) {
-		items += `<button class="menu-item" data-movetarget="ws:${esc(ws.id)}">${lead("folder")}${esc(ws.name)}</button>`;
-		const walk = (parentId, depth) => {
-			for (const p of STATE.childrenOf(parentId, ws.id)) {
-				if (bad.has(p.id) || p.trashed) continue;
-				items += `<button class="menu-item" data-movetarget="pg:${p.id}" style="padding-left:${14 + depth * 16}px">${pageIcon(p, "note", "i-lead")}${esc(p.title)}</button>`;
-				walk(p.id, depth + 1);
-			}
-		};
-		walk(null, 1);
-	}
-	o.innerHTML = `<div class="modal modal-sm"><h3>„${esc(pg.title)}“ verschieben nach…</h3><div class="move-list">${items}</div>` +
-		'<div class="modal-actions"><button id="dlgMoveCancel">Abbrechen</button></div></div>';
-	o.hidden = false;
-	S.movePageId = pageId;
-	$("dlgMoveCancel").addEventListener("click", () => closeOverlay());
-}
-
-async function movePageSubtreeToWorkspace(pageId, workspaceId) {
-	if (!pageId || !workspaceId) return;
-	for (const id of STATE.pageSubtreeIds(pageId)) {
-		const page = S.pages[id];
-		if (page && (page.workspaceId || "default") !== workspaceId) {
-			await STATE.dispatch("pageUpdate", { id, patch: { workspaceId } });
-		}
-	}
-}
-
-// Seite samt Unterseiten duplizieren (parallel); "(Kopie)" nur am Wurzel-Titel
-async function duplicatePage(pageId, newParentId, newWsId) {
-	const pg = S.pages[pageId];
-	if (!pg) return null;
-	const id = U.uid();
-	const wsId = newWsId || pg.workspaceId;
-	await STATE.dispatch("pageCreate", {
-		id, title: pg.title + (newParentId === undefined ? " (Kopie)" : ""),
-		parentId: newParentId !== undefined ? newParentId : pg.parentId,
-		content: pg.content, workspaceId: wsId, icon: pg.icon, cover: pg.cover,
-		coverImg: pg.coverImg, tags: pg.tags, kind: pg.kind || "notion",
-	});
-	await Promise.all(STATE.childrenOf(pg.id, pg.workspaceId).map((kid) => duplicatePage(kid.id, id, wsId)));
-	return id;
-}
-
-// Anlegen zeigt IMMER den Typ-Dialog (Seite/Heft); Vorlagen darin als Zusatzoptionen
-function newPageFlow(wsId, parentId) {
-	S.pendingNewPage = { wsId, parentId };
-	openTemplatePicker();
-}
 
 // 🃏-Bereich öffnen — läuft seit 23. Juli als eigener Tab "anki:main" über TABS.openPage
 // (gleiche Mechanik wie nlm:main): view/sidebarMode, Tab-Leiste, Verlauf und Render
@@ -346,157 +262,7 @@ function initPlatformLifecycle() {
 	});
 }
 
-// ⛶ Karteikarten-Vollbild als Zustand statt als loser Body-Klasse — so weiß jede Ansicht,
-// dass es an ist, und es lässt sich überall wieder verlassen (⛶-Taste, auch auf dem Handy).
-function setAnkiZen(on) {
-	S.ankiZen = !!on;
-	document.body.classList.toggle("anki-zen", S.ankiZen);
-}
 
-function resetStudyCard() {
-	S.reviewShowBack = false;
-	S.reviewCardId = null;
-}
-
-function openAnki(tab, deck) {
-	S.ankiTab = tab || "decks";
-	if (deck !== undefined) S.ankiDeck = deck;
-	resetStudyCard();
-	blurActive();
-	openPage("anki:main");
-}
-
-// Daily Note öffnen — Seite (und 📅-Sammelordner) bei Bedarf anlegen
-async function openDailyNote(key) {
-	let pg = STATE.activePages().find((p) => p.daily === key);
-	if (!pg) {
-		let root = STATE.activePages().find((p) => p.dailyRoot);
-		if (!root) {
-			const rid = U.uid();
-			await STATE.dispatch("pageCreate", { id: rid, title: "Daily Notes", icon: null, workspaceId: "default", dailyRoot: true });
-			root = S.pages[rid];
-		}
-		const id = U.uid();
-		const title = new Date(key + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-		await STATE.dispatch("pageCreate", { id, title, parentId: root.id, workspaceId: root.workspaceId || "default", icon: null, daily: key, content: "" });
-		pg = S.pages[id];
-	}
-	if (pg) openPage(pg.id);
-}
-
-// Seitenverlauf öffnen (Versionen aus dem Event-Log rekonstruiert)
-async function openHistory(pageId) {
-	S.histVersions = await STATE.pageHistory(pageId);
-	S.histIndex = S.histVersions.length - 1;
-	S.histPageId = pageId;
-	renderHistoryModal();
-}
-
-// FSRS-Bewertung als EIN Event (Browser-Inline + Review-Modal), grade immer im
-// Payload (Tageslimits/Statistik). _ratingInFlight verhindert Doppel-Bewertung:
-// zwei schnelle Klicks/Tasten lasen sonst beide den alten Stand → kaputte Intervalle
-let _ratingInFlight = false;
-async function rateAndReviewCard(cardId, grade, renderedReviewId) {
-	if (_ratingInFlight) return null;
-	const card = S.cards[cardId];
-	if (!card) return null;
-	_ratingInFlight = true;
-	try {
-		const wasNew = card.srs.state === "new";
-		const wasLearning = card.srs.state === "learning" || card.srs.state === "relearning";
-		const previous = (S.reviews || []).filter((item) => item && item.cardId === card.id && item.grade > 0)
-			.sort((a, b) => String(b.t).localeCompare(String(a.t)))[0] || null;
-		const subject = FACH.card(card);
-		const reviewId = renderedReviewId || U.uid();
-		const intervalDays = previous ? Math.max(0, (Date.now() - new Date(previous.t).getTime()) / 864e5) : null;
-		const srs = SRS.rate(card.srs, grade);
-		await STATE.dispatch("cardReview", {
-			id: card.id, srs, grade, reviewId, deck: card.deck || "Standard", first: wasNew, learning: wasLearning,
-			subject: subject.name, subjectSource: subject.source, dueAt: card.srs.due || null,
-			previousReviewAt: previous?.t || null, intervalDays,
-		});
-		return card;
-	} finally {
-		_ratingInFlight = false;
-	}
-}
-
-// Anki-Tastatur (docs.ankiweb.net/studying.html): Space/Enter → Antwort,
-// Bewertet wird ausschließlich die in showStudyAnswer festgepinnte, sichtbare Karte.
-// FIX: Der frühere Fallback auf dueNow[0] in gradeStudyCard konnte eine ANDERE Karte
-// bewerten, wenn sich die Queue zwischen Aufdecken und Tastendruck ändert — genau der
-// Fehler, den das Festpinnen verhindern soll. Nicht wieder einbauen.
-// bei sichtbarer Antwort → Good(3); 1–4 → Again/Hard/Good/Easy
-const inStudy = () => S.view === "anki" && S.ankiTab === "study";
-// Bug-Fix („kommt noch“, 22. Juli): Die sichtbare Karte wird beim Aufdecken in
-// S.reviewCardId festgepinnt. Vorher lasen Aufdecken UND Bewerten blind dueNow[0] —
-// ändert sich die Queue dazwischen (Learning-Karte wird fällig), sprang die Ansicht
-// auf eine andere Karte bzw. Space/Enter bewertete die falsche Karte.
-function showStudyAnswer(cardId) {
-	if (!inStudy() || S.reviewShowBack) return false;
-	// Die beim Rendern festgepinnte Karte ist die einzige, die aufgedeckt werden darf.
-	// Sie muss nicht mehr im aktuellen Queue-Snapshot stehen: Genau dieser Snapshot
-	// kann sich geändert haben, während der Lernende die Frage beantwortet.
-	if (cardId && S.reviewCardId && cardId !== S.reviewCardId) return false;
-	const c = S.cards[cardId || S.reviewCardId];
-	if (!c || c.trashed || c.suspended) return false;
-	S.reviewCardId = c.id;
-	S.reviewShowBack = true;
-	renderMain();
-	return true;
-}
-async function gradeStudyCard(grade) {
-	if (!inStudy() || !S.reviewShowBack) return false;
-	const c = S.cards[S.reviewCardId];
-	if (!c) return false;
-	await rateAndReviewCard(c.id, Math.max(1, Math.min(4, Number(grade) || 3)));
-	resetStudyCard(); // dispatch triggert den Render
-	return true;
-}
-async function studySpaceOrEnter() {
-	if (!inStudy()) return false;
-	return S.reviewShowBack ? gradeStudyCard(3) : showStudyAnswer();
-}
-
-// Einheitlicher Einstieg für neue Chats (Sidebar, Home, „+ Tab“-Menü)
-function startNewChat(opts = {}) {
-	saveCurrentChat();
-	// FIX: Vorher wurde hier sofort eine LEERE Sitzung ins Event-Log geschrieben und auf alle
-	// Geräte gesynct — jeder Klick auf „+ Neuer Chat“ hinterließ einen Geister-Chat in der
-	// Liste. Die Sitzung entsteht jetzt mit der ersten Nachricht; CHATS.persist übernimmt
-	// dabei genau diese vorgemerkte ID, damit der offene Tab weiter passt.
-	const newId = U.uid();
-	S.chat = [];
-	S.currentChatId = newId;
-	openPage("chat:" + newId, opts.newTab ? { newTab: true } : undefined);
-}
-
-// Neue Seite direkt in neuem Tab („+ → Neue Seite“ im Tab-Menü)
-async function createPageInNewTab(wsId, parentId, tpl) {
-	const id = U.uid();
-	S.currentWorkspaceId = wsId || S.currentWorkspaceId;
-	await STATE.dispatch("pageCreate", {
-		id, title: tpl ? tpl.title : "Neue Seite", parentId: parentId || null,
-		content: tpl ? tpl.content : "", icon: tpl ? tpl.icon : null,
-		tags: tpl ? tpl.tags : [], workspaceId: S.currentWorkspaceId,
-	});
-	openPage(id, { newTab: true });
-	focusPageTitle();
-	return id;
-}
-
-// Chat-Composer: wächst mit dem Text; Senden nur bei Inhalt aktiv
-function syncComposer(input) {
-	if (!input) return;
-	const full = input.id === "mainChatInput";
-	const form = $(full ? "mainChatForm" : "chatForm");
-	const max = full ? 260 : 210;
-	input.style.height = "auto";
-	input.style.height = Math.min(max, Math.max(30, input.scrollHeight)) + "px";
-	input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
-	if (form) form.classList.toggle("has-text", !!input.value.trim());
-	CHAT_FULLSCREEN.updateSubmitButtons();
-}
 
 // Darstellungs-Buttons → handleAppearanceSelect(gruppe, wert) — statt 14 case-Zeilen
 const APPEARANCE_BTN = {
@@ -1951,215 +1717,7 @@ function wireEvents() {
 		}
 	});
 
-	// ---------- Verschieben in der Sidebar ----------
-	// Stapel: weiterhin HTML5 Drag & Drop (unverändert — dort nicht als Bug gemeldet).
-	// Seiten: Pointer-Events statt HTML5-DnD, s. u. (Bug-Fix „kommt noch“, 22. Juli).
-	const clearDropMarks = () => {
-		document.querySelectorAll(".row.drop-target,.row.drop-before,.row.drop-after").forEach((r) => {
-			r.classList.remove("drop-target", "drop-before", "drop-after");
-			r.style.borderTop = "";
-			r.style.borderBottom = "";
-		});
-	};
-	const markDropZone = (row, zone) => {
-		clearDropMarks();
-		if (!row) return;
-		if (zone === "before") { row.classList.add("drop-before"); row.style.borderTop = "2px solid #4a9eff"; }
-		else if (zone === "after") { row.classList.add("drop-after"); row.style.borderBottom = "2px solid #4a9eff"; }
-		else row.classList.add("drop-target");
-	};
-	// Drei Zonen: oberes Viertel = DAVOR, unteres = DANACH, Mitte = als Kind/Unterstapel
-	const dropZoneFor = (row, clientY) => {
-		const r = row.getBoundingClientRect();
-		const y = clientY - r.top;
-		if (y < r.height * 0.25) return "before";
-		if (y > r.height * 0.75) return "after";
-		return "into";
-	};
-	// ENTFERNT (toter Rest aus der HTML5-DnD-Zeit): ein globaler mousedown-Blocker in der
-	// Capture-Phase. Stapel-Drag (dragstart) und Seiten-Drag (pointerdown) filtern diese
-	// Buttons längst selbst; der Blocker konnte nur noch andere Module um ihr mousedown
-	// bringen. Nicht wieder einbauen.
-
-	// Stapel (Decks): unverändertes HTML5 Drag & Drop
-	let deckDragId = null, deckDropZone = null;
-	document.addEventListener("dragstart", (e) => {
-		if (closestOf(e, "button, input, a, .page-menu, .row-add, .row-chevron")) { e.preventDefault(); return; }
-		const deckRow = closestOf(e, "[data-deck]");
-		if (deckRow) { deckDragId = deckRow.dataset.deck; e.dataTransfer.effectAllowed = "move"; }
-	});
-	document.addEventListener("dragover", (e) => {
-		if (!deckDragId) return;
-		const deckRow = closestOf(e, "[data-deck]");
-		if (!deckRow && !closestOf(e, "#tree")) return;
-		e.preventDefault();
-		deckDropZone = deckRow ? dropZoneFor(deckRow, e.clientY) : "into";
-		markDropZone(deckRow, deckDropZone);
-	});
-	document.addEventListener("dragend", () => { deckDragId = null; deckDropZone = null; clearDropMarks(); });
-	// EIN drop-Handler für Stapel: oberes/unteres Viertel = Reihenfolge (deckReorder),
-	// Mitte bzw. freie Baumfläche = Verschieben (deckMove).
-	// FIX: Vorher zwei drop-Listener, die sich per stopImmediatePropagation gegenseitig
-	// ausbremsten — die Registrierungsreihenfolge entschied über das Verhalten, und der
-	// Zustand (deckDragId/deckDropZone) wurde in beiden Zweigen unterschiedlich geräumt.
-	document.addEventListener("drop", async (e) => {
-		if (!deckDragId) return;
-		const deckRow = closestOf(e, "[data-deck]");
-		const inTree = closestOf(e, "#tree");
-		clearDropMarks();
-		if (!deckRow && !inTree) { deckDragId = null; deckDropZone = null; return; }
-		e.preventDefault();
-		const moved = deckDragId;
-		const zone = deckDropZone;
-		deckDragId = null; deckDropZone = null;
-		if (deckRow && (zone === "before" || zone === "after")) {
-			const target = deckRow.dataset.deck;
-			if (!target || STATE.deckInTree(target, moved)) return;
-			// Sortieren gilt je Ebene: Ziel muss ein Geschwister-Stapel sein
-			const parentOf = (n) => (n.includes("::") ? n.slice(0, n.lastIndexOf("::")) : "");
-			if (parentOf(target) !== parentOf(moved)) return;
-			const sibs = RENDER_ANKI.ankiDecks().filter((n) => parentOf(n) === parentOf(target) && n !== moved);
-			const idx = sibs.indexOf(target);
-			if (idx === -1) return;
-			sibs.splice(zone === "before" ? idx : idx + 1, 0, moved);
-			// Reihenfolge komplett neu durchnummerieren — robust gegen fehlende order-Werte
-			for (let i = 0; i < sibs.length; i++) {
-				await STATE.dispatch("deckReorder", { name: sibs[i], order: (i + 1) * 1000 });
-			}
-			return;
-		}
-		const targetDeck = deckRow ? deckRow.dataset.deck : "";
-		// kein Zyklus: nicht in sich selbst / eigenen Unterstapel ziehen
-		if (targetDeck !== "Standard" && !STATE.deckInTree(targetDeck, moved)) {
-			await STATE.dispatch("deckMove", { from: moved, target: targetDeck });
-			if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, moved)) {
-				const label = moved.split("::").pop();
-				const newRoot = (targetDeck ? targetDeck + "::" : "") + label;
-				S.ankiDeck = newRoot + S.ankiDeck.slice(moved.length);
-			}
-		}
-	});
-
-	// Seiten (Pages): Pointer-Events statt HTML5-DnD — Bug-Fix „kommt noch“ (22. Juli):
-	// HTML5-Drag&Drop startet auf iPad nur per Long-Press und kollidiert mit dem
-	// Scrollen. Pointer-Events (pointerdown/-move/-up) laufen in Maus- und Touch-
-	// Browsern identisch — ein
-	// Code-Pfad statt Plattform-Sonderfälle. Dieselbe Zielfindung (davor/danach/als Kind)
-	// und dieselben dispatch-Aufrufe wie vorher, nur die Eingabe-Ereignisse sind ersetzt.
-	async function movePageRelative(movedId, targetId, zone) {
-		const target = S.pages[targetId], moved = S.pages[movedId];
-		if (!target || !moved || STATE.pageInTree(target.id, moved.id)) return;
-		// Geschwister des Ziels in Anzeige-Reihenfolge; neue Position = Mittelwert der
-		// Sortierschlüssel der künftigen Nachbarn (STATE.sortKeyOf).
-		const sibs = STATE.childrenOf(target.parentId || null, target.workspaceId || "default").filter((p) => p.id !== moved.id);
-		const idx = sibs.findIndex((p) => p.id === target.id);
-		if (idx === -1) return;
-		const pos = zone === "before" ? idx : idx + 1;
-		const prev = sibs[pos - 1], next = sibs[pos];
-		const kPrev = prev ? STATE.sortKeyOf(prev) : null;
-		const kNext = next ? STATE.sortKeyOf(next) : null;
-		const order = kPrev != null && kNext != null ? (kPrev + kNext) / 2 : kPrev != null ? kPrev + 60000 : kNext != null ? kNext - 60000 : Date.now();
-		await STATE.dispatch("pageMove", { id: moved.id, parentId: target.parentId || null, order });
-		await movePageSubtreeToWorkspace(moved.id, target.workspaceId || "default");
-	}
-	async function movePageInto(movedId, targetId) {
-		const moved = S.pages[movedId];
-		const target = targetId ? S.pages[targetId] : null;
-		if (!moved || (targetId && (!target || STATE.pageInTree(targetId, movedId)))) return;
-		await STATE.dispatch("pageMove", { id: movedId, parentId: targetId || null });
-		await movePageSubtreeToWorkspace(movedId, target ? (target.workspaceId || "default") : (moved.workspaceId || "default"));
-	}
-
-	const PAGE_DRAG_THRESHOLD = 6; // px, bevor aus einem Tipp ein Drag wird (KISS: eine Schwelle für Maus+Touch)
-	// iPad-Fix: Mit Finger war JEDER Wisch über einer Heft-Zeile sofort ein Drag —
-	// Scrollen der Seitenleiste verschob dadurch Hefte. Auf Touch gilt jetzt wie in
-	// Notion/GoodNotes: kurz halten, DANN ziehen. Wischt man vorher los, ist es Scrollen.
-	const TOUCH_HOLD_MS = 380;
-	let pageDrag = null; // { id, pointerId, startX, startY, dragging, row, ghost, target, zone }
-	function endPageDrag() {
-		if (!pageDrag) return;
-		pageDrag.ghost?.remove();
-		if (pageDrag.row) pageDrag.row.style.touchAction = "";
-		clearDropMarks();
-		pageDrag = null;
-	}
-	document.addEventListener("pointerdown", (e) => {
-		if (e.button !== undefined && e.button !== 0) return;
-		const row = closestOf(e, "#tree .row[data-page]");
-		if (!row || closestOf(e, "button, input, a, .page-menu, .row-add, .row-chevron")) return;
-		pageDrag = { id: row.dataset.page, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, row, touch: e.pointerType !== "mouse", downAt: Date.now() };
-	});
-	document.addEventListener("pointermove", (e) => {
-		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
-		if (!pageDrag.dragging) {
-			const moved = Math.hypot(e.clientX - pageDrag.startX, e.clientY - pageDrag.startY);
-			if (pageDrag.touch && Date.now() - pageDrag.downAt < TOUCH_HOLD_MS) {
-				// Bewegung innerhalb der Haltezeit = Scrollwisch → Drag-Kandidat verwerfen
-				if (moved >= PAGE_DRAG_THRESHOLD) endPageDrag();
-				return;
-			}
-			if (moved < PAGE_DRAG_THRESHOLD) return;
-			// FIX (Absturz "pageDrag.ghost.style" von undefined, 22. Juli): Ghost ERST
-			// vollständig aufbauen und NUR bei Erfolg auf pageDrag schreiben — "dragging"
-			// zuletzt setzen. Vorher stand dragging=true schon fest, bevor das Ghost
-			// erzeugt war; warf setPointerCapture() dazwischen (z. B. Zeile durch einen
-			// Re-Render inzwischen aus dem DOM entfernt), blieb dragging=true ohne Ghost
-			// stehen — jeder weitere pointermove crashte auf pageDrag.ghost.style.
-			// setPointerCapture ist hier unnötig (Zielsuche läuft über
-			// document.elementFromPoint statt über e.target) und daher entfernt (KISS).
-			const pg = S.pages[pageDrag.id];
-			const ghost = document.createElement("div");
-			ghost.className = "row drag-ghost";
-			Object.assign(ghost.style, {
-				position: "fixed", left: "0", top: "0", width: pageDrag.row.getBoundingClientRect().width + "px",
-				pointerEvents: "none", opacity: "0.9", zIndex: "9999",
-				background: "var(--bg-elevated, #fff)", boxShadow: "0 4px 14px rgba(0,0,0,.18)",
-			});
-			ghost.textContent = (pg?.icon ? pg.icon + " " : "") + (pg?.title || "");
-			document.body.appendChild(ghost);
-			// Touch-Scroll erst JETZT unterbinden (Drag erkannt) — ein normaler Wisch zum
-			// Scrollen der Seitenleiste, der auf einer Zeile beginnt, bleibt so unangetastet.
-			pageDrag.row.style.touchAction = "none";
-			pageDrag.ghost = ghost;
-			pageDrag.dragging = true;
-		}
-		if (!pageDrag.ghost) return; // Sicherheitsnetz: ohne Ghost keine Drag-Anzeige möglich
-		e.preventDefault();
-		pageDrag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
-		const under = document.elementFromPoint(e.clientX, e.clientY);
-		const overRow = under?.closest?.("#tree .row[data-page]");
-		// Über der eigenen Zeile: KEIN Ziel (sonst landete die Seite fälschlich in der
-		// Wurzel — der else-if-Zweig für freie Baumfläche griff, weil overRow zwar
-		// existierte, aber per id-Check verworfen wurde).
-		if (overRow && overRow.dataset.page === pageDrag.id) {
-			pageDrag.target = undefined;
-			pageDrag.zone = null;
-			clearDropMarks();
-		} else if (overRow) {
-			pageDrag.target = overRow.dataset.page;
-			pageDrag.zone = dropZoneFor(overRow, e.clientY);
-			markDropZone(overRow, pageDrag.zone);
-		} else if (under?.closest?.("#tree")) {
-			pageDrag.target = null; // freie Fläche im Baum = Wurzelebene
-			pageDrag.zone = "into";
-			clearDropMarks();
-		} else {
-			pageDrag.target = undefined; // außerhalb des Baums abgesetzt = ungültiges Ziel
-			clearDropMarks();
-		}
-	}, { passive: false });
-	document.addEventListener("pointerup", async (e) => {
-		if (!pageDrag || e.pointerId !== pageDrag.pointerId) return;
-		const { id, dragging, target, zone, row } = pageDrag;
-		endPageDrag();
-		if (!dragging) return; // reiner Tipp/Klick — der normale Seiten-Öffnen-Handler übernimmt
-		// Der Browser feuert nach dem Drag noch ein "click" auf dieselbe Zeile — einmalig unterdrücken
-		row.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
-		if (target === undefined) return;
-		if (target && zone !== "into") await movePageRelative(id, target, zone);
-		else await movePageInto(id, target || null);
-	});
-	document.addEventListener("pointercancel", (e) => { if (pageDrag && e.pointerId === pageDrag.pointerId) endPageDrag(); });
+	wireSidebarEvents();
 	// Chat-Formulare (Panel + Vollbild) per Delegation — Vollbild-Form wird pro Render neu erzeugt
 	const CHAT_FORMS = { chatForm: ["chatInput", "side"], mainChatForm: ["mainChatInput", "full"] };
 	document.addEventListener("submit", async (e) => {
@@ -2182,58 +1740,6 @@ function wireEvents() {
 		else if (e.target.id === "mainChatInput") { e.preventDefault(); $("mainChatForm").requestSubmit(); }
 	});
 
-	// ---------- Inline-Umbenennen (Seiten + Stapel) — Enter bestätigt, Esc/Blur bricht ab ----------
-	// FIX: commitRename lief zweimal — Enter bestätigte, der folgende Fokusverlust
-	// bestätigte erneut (doppeltes Neuzeichnen); nach Escape schrieb der Fokusverlust den
-	// verworfenen Text sogar noch fest. Der Umbenenn-Zustand ist jetzt die Sperre: ist er
-	// geräumt, war die Umbenennung schon erledigt oder abgebrochen.
-	function focusRenameInput(inp) {
-		if (!inp) return;
-		inp.focus();
-		inp.select();
-	}
-	async function commitRename(input) {
-		if (input.dataset.renamename) {
-			const id = input.dataset.renamename;
-			if (S.renamingPageId !== id) return;
-			const newTitle = input.value.trim();
-			const pg = S.pages[id];
-			S.renamingPageId = null;
-			if (newTitle && pg && newTitle !== pg.title) {
-				await STATE.dispatch("pageUpdate", { id, patch: { title: newTitle } });
-				RAG.queuePage(id);
-			}
-			render();
-		} else if (input.dataset.deckrenamename) {
-			const from = input.dataset.deckrenamename;
-			if (S.renamingDeck !== from) return;
-			const newLabel = input.value.trim();
-			const oldLabel = from.split("::").pop();
-			S.renamingDeck = null;
-			if (newLabel && newLabel !== oldLabel) {
-				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
-				const to = prefix + newLabel;
-				await STATE.dispatch("deckRename", { from, to });
-				if (S.ankiDeck && STATE.deckInTree(S.ankiDeck, from)) S.ankiDeck = to + S.ankiDeck.slice(from.length);
-			}
-			render();
-		}
-	}
-	document.addEventListener("keydown", (e) => {
-		const ds = dsOf(e);
-		if (!ds.renamename && !ds.deckrenamename) return;
-		if (e.key === "Enter") { e.preventDefault(); commitRename(e.target); }
-		else if (e.key === "Escape") {
-			S.renamingPageId = null;
-			S.renamingDeck = null;
-			render();
-		}
-	});
-	document.addEventListener("focusout", (e) => {
-		const ds = dsOf(e);
-		if (!ds.renamename && !ds.deckrenamename) return;
-		commitRename(e.target);
-	});
 	// Debug-Button nach jedem Chat-Render nachrüsten (nur großer Chat, nie Seiten-Panel)
 	// PERF: Während die KI streamt, ändert sich #main hunderte Mal pro Antwort — der
 	// Observer suchte bei JEDER Änderung im DOM (und löste sich mit dem eingefügten Knopf
@@ -2249,51 +1755,6 @@ function wireEvents() {
 	}
 	mountFullChatVoiceButton();
 
-	// ---------- ↔️ Breite der linken Spalte ziehen (Griff #sidebarResizer) ----------
-	// EINE Quelle der Wahrheit: die CSS-Variable --sidebar-w. Sie steht inline am <body>
-	// (gewinnt damit gegen die Kompakt-Regeln in styles.css), die Grid-Spalten lesen sie.
-	// Pointer-Events wie beim Seiten-Verschieben — ein Pfad für Maus und Touch.
-	const SIDEBAR_W_KEY = "impala67.sidebarWidth";
-	const SIDEBAR_W_MIN = 180, SIDEBAR_W_MAX = 560;
-	const setSidebarWidth = (px, persist) => {
-		const w = Math.round(Math.min(SIDEBAR_W_MAX, Math.max(SIDEBAR_W_MIN, px)));
-		document.body.style.setProperty("--sidebar-w", w + "px");
-		if (persist) { try { localStorage.setItem(SIDEBAR_W_KEY, String(w)); } catch { /* ignore */ } }
-	};
-	try {
-		const savedW = Number(localStorage.getItem(SIDEBAR_W_KEY) || 0);
-		if (savedW) setSidebarWidth(savedW, false);
-	} catch { /* ignore */ }
-	let sidebarResize = null;
-	document.addEventListener("pointerdown", (e) => {
-		if (e.button !== undefined && e.button !== 0) return;
-		if (!closestOf(e, "#sidebarResizer")) return;
-		const bar = $("sidebar");
-		if (!bar) return;
-		e.preventDefault();
-		sidebarResize = { pointerId: e.pointerId, startX: e.clientX, startW: bar.getBoundingClientRect().width };
-		document.body.classList.add("sidebar-resizing");
-	});
-	document.addEventListener("pointermove", (e) => {
-		if (!sidebarResize || e.pointerId !== sidebarResize.pointerId) return;
-		e.preventDefault();
-		setSidebarWidth(sidebarResize.startW + (e.clientX - sidebarResize.startX), false);
-	}, { passive: false });
-	const endSidebarResize = (e) => {
-		if (!sidebarResize || (e && e.pointerId !== sidebarResize.pointerId)) return;
-		sidebarResize = null;
-		document.body.classList.remove("sidebar-resizing");
-		const bar = $("sidebar");
-		if (bar) setSidebarWidth(bar.getBoundingClientRect().width, true);
-	};
-	document.addEventListener("pointerup", endSidebarResize);
-	document.addEventListener("pointercancel", endSidebarResize);
-	// Doppelklick auf den Griff = zurück zur Standardbreite (CSS entscheidet wieder)
-	document.addEventListener("dblclick", (e) => {
-		if (!closestOf(e, "#sidebarResizer")) return;
-		document.body.style.removeProperty("--sidebar-w");
-		try { localStorage.removeItem(SIDEBAR_W_KEY); } catch { /* ignore */ }
-	});
 
 	// Tastenkombinationen (Shortcuts) registrieren
 	SHORTCUTS.wireShortcuts();

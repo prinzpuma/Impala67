@@ -3,6 +3,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
+import { BUS } from "./event-bus.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { cooperativeGate } from "./cooperative.js";
@@ -551,7 +552,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	const HEFT_SYNC_QUIET_MS = 3500;
 	function isWritingActive() {
-		return typeof window !== "undefined" && typeof window.HEFT?.isWriting === "function" && window.HEFT.isWriting();
+		return Boolean(BUS.call("heft:is-writing"));
 	}
 
 	function requestSync(forceAll = false) {

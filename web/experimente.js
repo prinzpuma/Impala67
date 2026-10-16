@@ -6,6 +6,7 @@ import { TOOLS } from "./tools.js";
 import { PDFS } from "./pdfs.js";
 import { TELE } from "./telemetrie.js";
 import { icon, lead } from "./icons.js";
+import { BUS } from "./event-bus.js";
 
 // experimente.js — 🧪 Experimentelle KI-Lernmodi (Phase 2 aus „kommt noch“)
 // ---------------------------------------------------------------------------
@@ -16,8 +17,8 @@ import { icon, lead } from "./icons.js";
 // Architektur wie telemetrie.js: Das Modul koppelt sich von außen an —
 // MutationObserver auf die Lernkarte, Capture-Listener für Klicks/Toggles und
 // sanfte Wrapper um TOOLS.run bzw. PDFS.ingest. Nötige Kern-Änderungen sind
-// minimal: settings.js ruft EXP.settingsHtml(), ai.js hängt EXP.extraToolDefs()
-// an die Tool-Liste, main.js importiert das Modul und setzt window.EXP.
+// minimal: settings-renderer.js holt EXP.settingsHtml() und ai.js EXP.extraToolDefs()
+// über den Event-Bus (BUS.provide unten), main.js importiert das Modul.
 //
 // Telemetrie (21. Juli 2026): Jede Nutzung wird als expEvent geloggt; Karten-
 // Features markieren sich zusätzlich per TELE.mark → exp-Array im review-Event.
@@ -650,3 +651,6 @@ export const EXP = (() => {
 
 	return { settingsHtml, extraToolDefs, enabled: on };
 })();
+
+BUS.provide("exp:extra-tool-defs", () => EXP.extraToolDefs());
+BUS.provide("exp:settings-html", () => EXP.settingsHtml());

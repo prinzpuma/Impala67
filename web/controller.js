@@ -2,7 +2,8 @@
 
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
-import { RENDER } from "./render.js";
+import { BUS } from "./event-bus.js";
+import { LERNZEIT } from "./lernzeit.js";
 import { RENDER_ANKI } from "./render-anki.js";
 
 // controller.js — 🎮 Gamepad-Steuerung für den Lernmodus (Roadmap „Controller für
@@ -36,7 +37,7 @@ const deadzone = () => Math.min(0.9, Math.max(0.2, Number(get(LS.dead, "0.5")) |
 const pads = () => (navigator.getGamepads ? Array.from(navigator.getGamepads()) : []).filter(Boolean);
 const inStudy = () => S.view === "anki" && S.ankiTab === "study";
 const click = (sel) => { const el = document.querySelector(sel); if (el) el.click(); return !!el; };
-const reopen = () => { if (window.SETTINGS && S.settingsSection === "learning") window.SETTINGS.openSettings("learning"); };
+const reopen = () => { if (S.settingsSection === "learning") BUS.emit("ui:open-settings", "learning"); };
 
 // ---------- Aktionen: Label · Standardtaste (Standard-Mapping) · Ausführung ----------
 // grade-Aktionen brauchen keine eigene run(): sie klicken den passenden
@@ -95,7 +96,7 @@ function hopDeck(dir) {
 	const i = decks.indexOf(S.ankiDeck);
 	S.ankiDeck = decks[i === -1 ? (dir > 0 ? 0 : decks.length - 1) : (i + dir + decks.length) % decks.length];
 	S.reviewShowBack = false;
-	RENDER.renderMain();
+	BUS.emit("ui:render-main");
 	U.toast("Stapel: " + S.ankiDeck, "success");
 }
 
@@ -143,7 +144,7 @@ function syncBadges() {
 	const now = hintsOn();
 	if (now === hadPad) return;
 	hadPad = now;
-	if (inStudy()) RENDER.renderMain();
+	if (inStudy()) BUS.emit("ui:render-main");
 }
 function toggleHints() {
 	put(LS.hud, hudOn() ? "off" : "on");
@@ -177,7 +178,7 @@ function poll() {
 		if (prev.has(id)) continue; // Kantenerkennung: nur false → true zählt
 		// Lernzeit-Erfassung über jeden Tastendruck informieren: ein Gamepad löst keine
 		// Maus-/Tastatur-Ereignisse aus, sonst erscheint mitten im Abfragen „Lernst du noch?“.
-		const woke = window.LERNZEIT && window.LERNZEIT.poke ? window.LERNZEIT.poke() : false;
+		const woke = LERNZEIT.poke();
 		if (learn) { learnBind(id); break; }
 		if (woke) break; // dieser Druck hat nur das „Lernst du noch?“-Tierchen weggeklickt
 		if (now < lock) break; // 250-ms-Sperre nach einer Bewertung (Prellen)
@@ -301,3 +302,7 @@ export const CONTROLLER = {
 	labelOf,
 	enabled,
 };
+
+BUS.provide("controller:badge", (id) => CONTROLLER.badge(id));
+BUS.provide("controller:settings-html", () => CONTROLLER.settingsHtml());
+

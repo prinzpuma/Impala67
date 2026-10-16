@@ -1953,3 +1953,165 @@ body.density-compact .library.anki { padding: 18px var(--space-6) 88px }
 
 /* Helles Theme: dort ist die Navigation umgekehrt eine Spur DUNKLER als die weiße Dokumentfläche. */
 body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
+
+/* == Design-Schicht: Komponenten-Regeln (ehemals design.css) == */
+
+/* 2. Schrift: Überschriften & Zahlen */
+.anki-page .anki-lead, .lib-head h1, .anki-stat > b, .anki-study-mode .card-face {
+	font-family: var(--b-display);
+}
+.anki-page .anki-lead { font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 500 }
+
+/* 5. Karteikarten-Übersicht */
+.anki-page .anki-modes button { border-color: transparent; border-radius: var(--radius-pill); font-weight: 600; background: var(--b-tint-2) }
+.anki-page .anki-modes button:hover:not(:disabled) { background: var(--b-tint-3) }
+.anki-page .anki-stat { padding: 20px 22px; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card); transition: box-shadow .2s var(--b-ease), background .2s var(--b-ease), transform .3s var(--b-spring) }
+.anki-page button.anki-stat:not(:disabled):hover { transform: none; box-shadow: var(--b-lift); background: var(--b-hover-bg) }
+.anki-page button.anki-stat:active:not(:disabled) { transform: scale(.99) }
+.anki-page .anki-stat > b { font-size: 30px; font-variant-numeric: tabular-nums }
+.anki-page button.anki-stat.due { background: var(--b-tint-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent-border); filter: none }
+.anki-page button.anki-stat.due:hover:not(:disabled) { background: var(--b-tint-3); filter: none }
+.anki-page button.anki-stat.due :is(small, span) { color: var(--text2); opacity: 1 }
+.anki-page button.anki-stat.due > b { color: var(--accent) }
+.anki-page .deck-list { gap: 8px }
+.anki-page .deck-row { padding: 12px 16px; min-height: 0; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card); transition: box-shadow .2s var(--b-ease), background .2s var(--b-ease), transform .3s var(--b-spring) }
+.anki-page .deck-row:hover { transform: none; box-shadow: var(--b-lift); background: var(--b-hover-bg) }
+.anki-page .deck-row:active:not(:disabled) { transform: scale(.99) }
+.anki-page .deck-ico { width: 34px; height: 34px; border-radius: 50%; background: var(--b-tint); font-size: 17px }
+.anki-page .cnt-due { display: inline-block; padding: 1px 9px; border-radius: var(--radius-pill); background: var(--b-due); color: color-mix(in srgb, var(--warn) 70%, var(--text)) }
+.anki-page .deck-study { border: 0; border-radius: var(--radius-pill); padding: 6px 16px; background: var(--accent); color: var(--on-accent); transition: transform .45s var(--b-spring), filter .2s }
+.anki-page .deck-study:hover:not(:disabled) { transform: none; filter: brightness(1.06) }
+.anki-page .deck-feyn { border: 0; border-radius: var(--radius-pill); background: var(--b-tint-2) }
+.anki-page .deck-actions button:disabled { background: var(--surface-hover); color: var(--text2); opacity: 1 }
+.anki-page .deck-actions .deck-iconbtn { border-radius: var(--radius-pill) }
+
+/* 6. Lernmodus */
+.anki-study-mode .study-card { border-radius: var(--radius-xl) }
+.anki-study-mode .study-meta-state, .anki-study-mode .study-side-label { display: inline-block; padding: 2px 12px; border-radius: var(--radius-pill); background: var(--b-tint-2); color: var(--text); font-weight: 600 }
+.anki-study-mode .study-side-label { align-self: center }
+.anki-study-mode .grades [data-ankigrade] { --gc: var(--accent); border: 0; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--gc) 14%, transparent); color: var(--text); transition: transform .45s var(--b-spring), background .2s var(--b-ease) }
+.anki-study-mode .grades [data-ankigrade]:hover:not(:disabled) { transform: none; background: color-mix(in srgb, var(--gc) 24%, transparent) }
+.anki-study-mode .grades [data-ankigrade="1"] { --gc: var(--danger, #e5484d) }
+.anki-study-mode .grades [data-ankigrade="2"] { --gc: var(--warn) }
+.anki-study-mode .grades [data-ankigrade="3"] { --gc: var(--success) }
+.anki-study-mode .grades [data-ankigrade] .grade-key { opacity: .6 }
+.anki-study-mode [data-ankishowback]:not(.mini) { border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent); font-weight: 600; transition: transform .45s var(--b-spring), filter .2s }
+.anki-study-mode [data-ankishowback]:not(.mini):hover:not(:disabled) { transform: none; filter: brightness(1.06) }
+.anki-study-mode .exp-answer { border-radius: var(--radius-lg) }
+.anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini), .anki-study-mode .study-reveal-controls [data-ankishowback]:not(.mini):hover:not(:disabled) { box-shadow: none }
+.anki-study-mode :is(.study-exit-btn, .study-footer .mini) { border-radius: var(--radius-pill) }
+
+/* 7. Umschalter mit gleitender Markierung */
+:is(.lib-tabs, .lz-view-switch, .mode-btns) { border-color: transparent; border-radius: var(--radius-pill); background: var(--b-tint); padding: 3px }
+:is(.lib-tab, .lz-view-switch button, .mode-btns button) { position: relative; isolation: isolate; border: 0; border-radius: var(--radius-pill); background: transparent; font-weight: 600 }
+:is(.lib-tab, .lz-view-switch button, .mode-btns button).active { background: transparent; color: var(--text) }
+:is(.lib-tab, .lz-view-switch button, .mode-btns button).active::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--panel-solid);
+	box-shadow: var(--b-knob);
+}
+.library.anki .lib-head .mode-btns { padding: 0; border-radius: 0; background: none }
+.library.anki .lib-head .mode-btns button.active { border-bottom-color: transparent }
+.library.anki .lib-head .mode-btns button.active::before { inset: auto 0 0; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: none }
+.lib-tab-n { padding: 0 7px; border-radius: var(--radius-pill); background: var(--b-tint-2); opacity: 1 }
+.lib-tab.active .lib-tab-n { color: var(--text) }
+.lib-mode { border: 0; border-radius: var(--radius-pill); padding: 5px 14px; font-weight: 600; background: var(--b-tint); color: var(--text) }
+.lib-mode.active { background: var(--accent); color: var(--on-accent) }
+
+/* 8. Seitenleiste, Tab-Leiste, Kopfzeile */
+.notion-tree-workspace { border-top: 0; margin-top: 12px }
+.notion-tree-row { border-top: 0; border-radius: var(--radius-sm); margin: 1px 0 }
+.notion-tree-row:hover { background: var(--b-tint) }
+.notion-tree-caret { border-radius: var(--radius-pill) }
+.notion-tree-caret:hover { background: var(--b-tint-2) }
+.notion-tree-meta { padding: 1px 8px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 6%, transparent) }
+.side-foot button { border-radius: var(--radius-sm) }
+.side-foot button:hover { background: var(--b-tint) }
+.ws-head { letter-spacing: 0; text-transform: none; font-size: var(--text-sm) }
+:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip) { position: relative; isolation: isolate; border-radius: var(--radius-sm) }
+#tree .row:has(> .page-menu) { z-index: 5 }
+:is(#sidebar .topbar .tab, .tabstrip .tabchip, .tabchip-new, .navbtn, .topbar-btn) { border-radius: var(--radius-pill) }
+:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip):hover { background: var(--b-tint) }
+:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip).active { background: transparent; color: var(--text) }
+:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip).active::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--b-tint-2);
+}
+:is(.navbtn, .topbar-btn, .tabchip-new, .tabchip-x):hover:not(:disabled) { background: var(--b-tint) }
+.tab.active { background: var(--b-tint-2); color: var(--text) }
+.crumb { padding: 1px 8px; border-radius: var(--radius-pill) }
+.crumb:not(.current):hover { background: var(--b-tint); color: var(--text) }
+
+/* 10. Lernanalyse & Lernzeit */
+.la-block, .lz-panel { padding: 18px; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card); transition: box-shadow .2s var(--b-ease), background .2s var(--b-ease), transform .3s var(--b-spring) }
+.la-row { border-radius: var(--radius-lg) }
+.la-row:hover { background: var(--b-tint) }
+.la-answer { border-radius: var(--radius-lg) }
+.la-act { border: 0; border-radius: var(--radius-pill); padding: 4px 12px; background: var(--b-tint-2) }
+.lz-summary-card { border: 0; border-radius: var(--radius-xl); background: linear-gradient(160deg, var(--b-tint-2), var(--panel-solid) 70%) }
+.lz-kpi-grid > div, .lz-recommendation { border: 0; border-radius: var(--radius-lg); background: var(--b-tint) }
+:is(.la-meter, .lz-progress, .lz-subject-track) { height: 8px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 8%, transparent) }
+:is(.la-meter, .lz-progress, .lz-subject-track) i { border-radius: var(--radius-pill); background: var(--accent) }
+.la-row.best .la-meter i { background: var(--success) }
+.la-row.down .la-meter i { background: var(--warn) }
+.lz-bar-col i { border-radius: var(--radius-pill); background: var(--b-tint-3) }
+.lz-bar-col.today i { background: var(--accent) }
+
+/* 11. Überlagerungen: Suche, Menüs, Dialoge, Hinweise */
+@keyframes bm-rise { from { opacity: 0; transform: translateY(10px) } }
+@keyframes bm-pop { from { opacity: 0; transform: translateY(-4px) scale(.98) } }
+
+:is(.modal, .palette-box, .blk-menu, .model-menu, .page-menu, .attach-menu, .toast) { box-shadow: var(--elev-3) }
+:is(.modal, .palette-box) { border-radius: var(--radius-xl); animation: bm-pop .32s var(--b-spring) both }
+:is(.blk-menu, .model-menu, .page-menu, .attach-menu) { border-radius: var(--radius-lg); padding: 6px; animation: bm-pop .26s var(--b-spring) both; transform-origin: top }
+.toast { border-radius: var(--radius-lg); animation: bm-rise .32s var(--b-spring) both }
+:is(.palette-item, .blk-mi, .menu-item, .page-menu button, .attach-menu button) { border-radius: var(--radius-sm); transition: background .15s var(--b-ease) }
+:is(.palette-item.selected, .palette-item:hover, .blk-mi:hover, .blk-mi.active, .menu-item:hover, .page-menu button:hover, .attach-menu button:hover) { background: var(--b-tint-2) }
+.palette-input-wrap { display: flex; align-items: center; gap: var(--space-2); padding-right: 10px; border-bottom: 1px solid var(--edge-soft) }
+#paletteInput { flex: 1; min-width: 0; border: 0 }
+.palette-input-wrap > button { border-radius: var(--radius-pill) }
+.palette-head { text-transform: none; letter-spacing: 0; font-size: var(--text-xs); font-weight: 600 }
+.palette-foot { background: color-mix(in srgb, var(--text) 3%, transparent) }
+:is(.modal-actions button, .modal-x) { border-radius: var(--radius-pill) }
+
+/* 12. KI-Chat und KI-Knopf */
+.msg.user { border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg); background: var(--b-tint-2) }
+:is(#chatForm, .chat-form-full) { border-color: var(--edge-soft); border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card) }
+:is(#chatForm, .chat-form-full):focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--b-tint-2) }
+:is(#chatForm, .chat-form-full) button[type="submit"]:not(:disabled) { background: var(--accent); color: var(--on-accent) }
+#btnAiFab { border: 0; background: var(--b-tint-2); color: var(--text); box-shadow: var(--b-card); backdrop-filter: blur(12px) }
+#btnAiFab:hover:not(:disabled) { transform: none; background: var(--b-tint-3) }
+
+/* 13. Wissensgraph, PDF, Papierkorb */
+.graph-overlay { background: var(--panel-solid) }
+.graph-modes { border-radius: var(--radius-pill); background: var(--b-tint) }
+.graph-modes button, .graph-actions > button { border-radius: var(--radius-pill) }
+.graph-modes button.active { background: var(--panel-solid); box-shadow: var(--b-knob) }
+.graph-lane { border-radius: var(--radius-xl); background: var(--b-tint); box-shadow: none }
+.graph-lane > header { border-radius: var(--radius-lg); box-shadow: var(--b-card) }
+.graph-skill { border-radius: var(--radius-lg); background: var(--panel-solid); box-shadow: var(--b-card); transition: box-shadow .2s var(--b-ease), background .2s var(--b-ease), transform .3s var(--b-spring) }
+.graph-skill:hover { transform: none; box-shadow: var(--b-lift); background: var(--b-hover-bg) }
+.graph-skill:active:not(:disabled) { transform: scale(.99) }
+.graph-skill.selected { box-shadow: 0 0 0 2px var(--accent), var(--b-lift) }
+.pdf-toolbar button.pdf-action-btn { border: 0; border-radius: var(--radius-pill); background: var(--b-tint) }
+.pdf-toolbar button.pdf-action-btn.icon-only { background: transparent }
+.pdf-toolbar button.pdf-action-btn:hover:not(:disabled) { background: var(--b-tint-2) }
+.trash-row { border-radius: var(--radius-lg); background: var(--panel-solid); box-shadow: var(--b-card) }
+
+/* 14. Touch: Menüs, Chips, Sidebar-Aktionen, Auswahlschutz */
+@media (pointer: coarse) {
+	body:not(.mobile-ui) :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }
+	body:not(.mobile-ui) .menu-chip { min-height: 40px; padding-inline: var(--space-3) }
+	body:not(.mobile-ui) .row-add { position: relative; min-width: 36px }
+	body:not(.mobile-ui) .row-add::after { content: ""; position: absolute; inset: -8px 0 }
+	body:not(.mobile-ui) :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+	body:not(.mobile-ui) :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
+}

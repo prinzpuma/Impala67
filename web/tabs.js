@@ -3,13 +3,13 @@
 import { S, STATE } from "./state.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { CHATS } from "./chats.js";
-import { RENDER } from "./render.js";
+import { BUS } from "./event-bus.js";
 import { POPOVERS } from "./popovers.js";
 import { U } from "./util.js";
 import { HOME, navState, navIndexOf, entryAt, currentEntry, displayedEntry, isValidEntry, prevValidIndex, nextValidIndex, canGoBack, canGoForward } from "./nav-history.js";
 
-const render = (...args) => RENDER.render(...args);
-const renderTabs = (...args) => RENDER.renderTabs(...args);
+const render = (...args) => BUS.emit("ui:render", args[0]);
+const renderTabs = () => BUS.emit("ui:render-tabs");
 
 // Der Tab-Arbeitsbereich wird als kleiner Snapshot gespeichert: Reihenfolge
 // und aktiver Tab gehören zusammen. Chats sind jetzt Event-Log-/Drive-synchronisiert
@@ -311,3 +311,8 @@ export const TABS = {
 	openHomeOverview,
 	restoreSession
 };
+
+BUS.on("tabs:open-page", (arg) => typeof arg === "string" ? openPage(arg) : openPage(arg?.id, arg?.opts));
+BUS.on("tabs:nav-back", () => navBack());
+BUS.on("tabs:nav-forward", () => navForward());
+

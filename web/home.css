@@ -26,17 +26,17 @@
 
 .hv-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); color: var(--text2); font-size: var(--text-sm) }
 .hv-tools { display: flex; align-items: center; gap: var(--space-1) }
-.hv .hv-btn { height: 32px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--edge); color: var(--text) }
-.hv .hv-btn:hover { background: var(--surface-hover) }
-.hv .hv-ghost { height: 32px; width: 32px; border-radius: var(--radius-md); color: var(--text2); display: inline-flex; align-items: center; justify-content: center }
+.hv .hv-btn { height: 32px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--radius-pill); background: var(--b-tint-2); color: var(--text); font-weight: 600; transition: background .2s var(--b-ease), transform .45s var(--b-spring) }
+.hv .hv-btn:hover { background: var(--b-tint-3) }
+.hv .hv-ghost { height: 32px; width: 32px; border-radius: var(--radius-pill); color: var(--text2); display: inline-flex; align-items: center; justify-content: center }
 .hv .hv-ghost:hover { background: var(--surface-hover); color: var(--text) }
 
-.hv-alert { display: flex; align-items: center; gap: var(--space-4); margin: var(--space-4) 0 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); background: rgb(232 198 90 / .12); color: var(--warn); font-size: var(--text-sm) }
+.hv-alert { display: flex; align-items: center; gap: var(--space-4); margin: var(--space-4) 0 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill); background: rgb(232 198 90 / .12); color: var(--warn); font-size: var(--text-sm) }
 body.light .hv-alert { color: #8a6412; background: #f8eecf }
 .hv-alert button { margin-left: auto; text-decoration: underline; text-underline-offset: 3px }
 .hv-alert .hv-alert-later { margin-left: 0; opacity: .7 }
 
-.hv-lead { margin: var(--space-6) 0 0; max-width: 720px; font-size: var(--text-xl); line-height: 1.4; letter-spacing: -.015em; color: var(--text2); text-wrap: pretty }
+.hv-lead { margin: var(--space-6) 0 0; max-width: 720px; font-family: var(--b-display); font-size: 28px; line-height: 1.3; letter-spacing: -.02em; font-weight: 500; color: var(--text2); text-wrap: pretty }
 .hv-hello { color: var(--text) }
 .hv button.hv-link { color: var(--text); border: solid var(--accent-border); border-width: 0 0 1.5px; border-radius: 0; padding: 0; background: none; line-height: 1.15 }
 .hv button.hv-link:hover { border-bottom-color: var(--accent); background: none }
@@ -45,10 +45,10 @@ body.light .hv-alert { color: #8a6412; background: #f8eecf }
 .hv-main { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0 }
 
 /* Weitermachen: keine Kachel — die Vorschau ist das Bild, daneben der Titel */
-.hv .hv-continue { display: flex; gap: var(--space-6); align-items: center; min-width: 0; border-radius: var(--radius-lg) }
-.hv-prev { width: 200px; aspect-ratio: 4 / 3; flex-shrink: 0; border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; gap: 5px; box-sizing: border-box;
+.hv .hv-continue { display: flex; gap: var(--space-6); align-items: center; min-width: 0; padding: 14px; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card) }
+.hv-prev { width: 200px; aspect-ratio: 4 / 3; flex-shrink: 0; border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; gap: 5px; box-sizing: border-box;
 	box-shadow: 0 0 0 1px var(--edge-soft), var(--drop-1); transition: transform var(--motion-base) var(--ease-out), box-shadow var(--motion-base) }
-.hv .hv-continue:hover .hv-prev { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--edge), var(--drop-2) }
+.hv .hv-continue:hover .hv-prev { transform: none }
 .hv-prev.heft { background: #fbf9f4 }
 .hv-prev.heft img { width: 100%; height: 100%; object-fit: cover; object-position: top }
 .hv-prev.heft img:not([src]) { visibility: hidden }
@@ -61,36 +61,41 @@ body:not(.light) .hv-prev.text { background: #222 }
 .hv-prev.text .hv-empty { font-size: var(--text-sm) }
 .hv-cont-copy { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0 }
 .hv-cont-copy small { font-size: var(--text-xs); color: var(--text2) }
-.hv-cont-copy b { font-size: 22px; font-weight: 600; letter-spacing: -.015em; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.hv-cont-copy b { font-family: var(--b-display); font-size: 24px; font-weight: 600; letter-spacing: -.015em; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .hv-cont-copy > span { font-size: var(--text-sm); color: var(--text2) }
 .hv .hv-continue:hover .hv-cont-copy b { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; text-decoration-color: var(--edge) }
 .hv-ico { margin-right: var(--space-1-5) }
 
 /* Angeheftet */
 .hv-pins { display: flex; flex-wrap: wrap; gap: var(--space-2) }
-.hv .hv-pin { height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-pill); font-size: var(--text-sm); display: inline-flex; align-items: center; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); box-shadow: 0 0 0 1px var(--edge-soft) inset }
-.hv .hv-pin:hover { background: var(--surface-hover); color: var(--text) }
+.hv .hv-pin { height: 36px; padding: 0 var(--space-3); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; display: inline-flex; align-items: center; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); background: var(--b-tint); box-shadow: none; transition: background .2s var(--b-ease), transform .45s var(--b-spring) }
+.hv .hv-pin:hover { background: var(--b-tint-2); transform: none }
 
 /* Kennzahlen */
 .hv-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-content: start }
-.hv .hv-stat { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) var(--space-5); border-radius: var(--radius-xl); min-width: 0; border: 1px solid var(--edge-soft); transition: background var(--motion-fast), filter var(--motion-fast) }
+.hv .hv-stat { display: flex; flex-direction: column; gap: var(--space-1); padding: 20px 22px; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card); min-width: 0; transition: background var(--motion-fast), filter var(--motion-fast) }
 .hv button.hv-stat:hover { background: var(--surface-hover) }
 .hv-stat small { font-size: var(--text-xs); color: var(--text2) }
-.hv-stat > b { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums }
+.hv-stat > b { font-family: var(--b-display); font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums }
 .hv-stat > b span { font-size: var(--text-md); font-weight: 400; letter-spacing: 0; color: var(--text2) }
 .hv-cards > span:last-child { font-size: var(--text-sm); color: var(--text2) }
-.hv .hv-cards.due { background: var(--accent); border-color: transparent; color: var(--on-accent) }
-.hv .hv-cards.due small, .hv .hv-cards.due > span { color: var(--on-accent); opacity: .75 }
-.hv .hv-cards.due:hover { background: var(--accent); filter: brightness(1.07) }
+.hv .hv-cards.due { background: var(--b-tint-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent-border); filter: none }
+.hv .hv-cards.due:hover { background: var(--b-tint-3); filter: none }
+.hv .hv-cards.due :is(small, span) { color: var(--text2); opacity: 1 }
+.hv .hv-cards.due > b { color: var(--accent) }
+.hv .hv-cards.done { background: color-mix(in srgb, var(--success) 12%, var(--panel-solid)) }
+.hv .hv-cards:not(.due, .done) > b { font-family: inherit; font-size: var(--text-md); font-weight: 600 }
+.hv .hv-cards:not(.due, .done) > span { color: var(--accent); font-weight: 600 }
+.hv .hv-cards:not(.due, .done) > span::after { content: " →" }
 
-.hv-goalbar { display: block; height: 4px; border-radius: 2px; background: var(--surface-hover); margin: var(--space-2) 0 var(--space-1); overflow: hidden }
-.hv-goalbar i { display: block; height: 100%; border-radius: 2px; background: var(--accent) }
+.hv-goalbar { display: block; height: 8px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 8%, transparent); margin: var(--space-2) 0 var(--space-1); overflow: hidden }
+.hv-goalbar i { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--accent) }
 .hv-bars { display: flex; justify-content: space-between; gap: var(--space-1); height: 48px; margin-top: var(--space-2) }
 .hv-day { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); font-size: var(--text-3xs); color: var(--text2); flex: 1 }
 .hv-day.today { color: var(--text); font-weight: 600 }
 .hv-day.later { opacity: .45 }
-.hv-bar { width: 8px; flex: 1; border-radius: 4px; background: var(--surface-hover); display: flex; align-items: flex-end; overflow: hidden }
-.hv-bar i { display: block; width: 100%; border-radius: 4px; background: var(--text2) }
+.hv-bar { width: 10px; flex: 1; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 7%, transparent); display: flex; align-items: flex-end; overflow: hidden }
+.hv-bar i { display: block; width: 100%; border-radius: var(--radius-pill); background: var(--b-tint-3) }
 .hv-day.today .hv-bar i { background: var(--accent) }
 .hv-week-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text2) }
 .hv-week-foot button { color: var(--text2); text-decoration: underline; text-decoration-color: var(--edge); text-underline-offset: 3px }
@@ -173,13 +178,13 @@ body.light .la-col.peak i { background: #c58a14 }
 
 /* ---------- Letzter Schliff: Erinnerung, Erfolgsmomente, Bewegung beim Öffnen ---------- */
 /* „Weißt du's noch?“ — eigene Karte zum Aufdecken, ruhig wie eine Randnotiz */
-.hv-recall { margin-top: var(--space-2); padding: var(--space-4) var(--space-5); border-radius: var(--radius-lg); border: 1px dashed var(--edge); transition: border-color var(--motion-base), background var(--motion-base) }
+.hv-recall { margin-top: var(--space-2); padding: var(--space-4) var(--space-5); border: 0; border-radius: var(--radius-xl); background: var(--b-tint); transition: background .2s var(--b-ease) }
 .hv-recall > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1) }
 .hv-recall > summary::-webkit-details-marker { display: none }
-.hv-recall small { font-size: var(--text-xs); color: var(--text2) }
+.hv-recall small { font-size: var(--text-xs); color: var(--text); font-weight: 600 }
 .hv-recall span { font-size: var(--text-md); line-height: 1.45; color: var(--text) }
 .hv-recall em { font-style: normal; font-size: var(--text-xs); color: var(--accent); margin-top: var(--space-1) }
-.hv-recall:hover { border-color: var(--accent-border) }
+.hv-recall:hover { background: var(--b-tint-2) }
 .hv-recall[open] { border-style: solid; border-color: var(--edge-soft); background: var(--surface-subtle) }
 .hv-recall[open] em { display: none }
 .hv-recall p { margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--edge-soft); font-size: var(--text-md); line-height: 1.45; color: var(--text); animation: hv-in .3s var(--ease-out) both }

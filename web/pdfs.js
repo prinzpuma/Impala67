@@ -3,7 +3,7 @@ import { U } from "./util.js";
 import { DB } from "./db.js";
 import { S, STATE } from "./state.js";
 import { RAG } from "./rag.js";
-import { AI } from "./ai.js";
+import { BUS } from "./event-bus.js";
 import { TABS } from "./tabs.js";
 import { OPTIONAL_MODULE_URLS, PDFJS_VERSION } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
@@ -98,7 +98,7 @@ export const PDFS = (() => {
 				"3) kompakte Markdown-Zusammenfassung (Überschriften, Stichpunkte, wichtigste Formeln als Klartext), 4) 2-5 Tags.\n" +
 				'Antworte NUR als JSON: {"title":"...","parent_title":"...oder null","summary":"...","tags":["..."]}\n\n' +
 				"PDF-Auszug:\n" + text.slice(0, 14000);
-			const raw = await AI.complete(prompt, "Du bist ein präziser Bibliothekar. Antworte NUR mit gültigem JSON.");
+			const raw = await BUS.call("ai:complete", prompt, "Du bist ein präziser Bibliothekar. Antworte NUR mit gültigem JSON.");
 			meta = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]);
 		} catch (e) {
 			console.warn("KI-Ingest fehlgeschlagen:", e);

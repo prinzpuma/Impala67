@@ -5,17 +5,18 @@ import { SRS } from "./srs.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { icon, lead } from "./icons.js";
-import { RENDER } from "./render.js";
+import { BUS } from "./event-bus.js";
+import { ANALYSE } from "./analyse.js";
 import { TELE } from "./telemetrie.js";
 import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 
-const hydrateImages = (...args) => RENDER.hydrateImages(...args);
-const modal = (...args) => RENDER.modal(...args);
+const hydrateImages = (root) => BUS.emit("ui:hydrate-images", root);
+const modal = (html) => BUS.emit("ui:modal", html);
 // 🎮 Controller (27. Juli): Der Tastenhinweis steckt DIREKT in der Schaltfläche, die
 // die Taste auslöst — kein schwebendes Overlay, das etwas überdecken kann. Liefert
 // einen leeren String, solange kein Pad verbunden bzw. die Steuerung aus ist.
-const pad = (id) => (window.CONTROLLER ? window.CONTROLLER.badge(id) : "");
+const pad = (id) => BUS.call("controller:badge", id) ?? "";
 
 // render-anki.js — aus render.js ausgelagert (Datei-Split): der komplette Anki-Bereich
 // (Stapel-Baum, Stapel-Liste, Karten-Browser, Statistik mit Heatmap & Retention,
@@ -363,7 +364,7 @@ function ankiStatsHtml() {
 		return STATE.deckInTree(d, S.ankiDeck);
 	});
 	const now = new Date();
-	const analyse = window.ANALYSE ? window.ANALYSE.statsHtml() : "";
+	const analyse = ANALYSE ? ANALYSE.statsHtml() : "";
 	return statsPageHtml(statsData({ cards, reviews, now, thinkMs: TELE.thinkMedian() }), analyse, now);
 }
 
@@ -614,3 +615,6 @@ export const RENDER_ANKI = {
 	openCardEditor,
 	readCardEditorDeck
 };
+
+BUS.provide("anki:read-card-editor-deck", () => readCardEditorDeck());
+
