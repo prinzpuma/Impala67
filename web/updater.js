@@ -1,7 +1,7 @@
 // updater.js — PWA-Version und kontrolliertes Neuladen.
 // BUILD_VERSION beschreibt immer das aktuell geladene Bundle; version.json den
 // veröffentlichten Stand. Der Release-Workflow setzt beide Werte gemeinsam.
-const BUILD_VERSION = "2.2.82";
+const BUILD_VERSION = "2.2.83";
 window.APP_VERSION = BUILD_VERSION;
 
 function cmpSemver(a, b) {
@@ -87,20 +87,21 @@ async function workerVersion(worker, timeoutMs = 2000) {
 // nur diese Seite ist alt) oder null (Version noch nicht ladbar).
 // Früher wurde nach 10 + 8 s Wartezeit trotzdem neu geladen — lief die Installation
 // (~150 Dateien) länger oder schlug sie fehl, startete die App wieder im alten Stand.
+// Jeder Worker muss genau die Zielversion melden: ein wartender Worker kann auch
+// eine ältere Neuinstallation sein (z. B. nach geänderter ?build=-Registrierungs-URL).
 async function loadUpdateWorker(expected) {
 	const reg = await getRegistration();
-	if (!reg) return null;
 	const want = normVer(expected);
-	const matches = async (worker) => !want || (await workerVersion(worker, 1500)) === want;
-	const attempts = want ? 3 : 1;
-	for (let attempt = 0; attempt < attempts; attempt++) {
+	if (!reg || !want) return null;
+	const matches = async (worker) => (await workerVersion(worker, 1500)) === want;
+	for (let attempt = 0; attempt < 3; attempt++) {
 		if (attempt) await delay(3000 * attempt);
 		if (reg.installing) {
 			reportStatus("Update wird geladen…");
 			await waitForWorkerState(reg.installing, ["installed", "activating", "activated"], 120000);
 		}
 		if (reg.waiting && await matches(reg.waiting)) return { worker: reg.waiting };
-		if (want && reg.active && await matches(reg.active)) return { active: true };
+		if (reg.active && await matches(reg.active)) return { active: true };
 		try { await reg.update(); }
 		catch (error) { console.warn("PWA-Update laden:", error); }
 		if (reg.installing) {
@@ -108,7 +109,7 @@ async function loadUpdateWorker(expected) {
 			await waitForWorkerState(reg.installing, ["installed", "activating", "activated"], 120000);
 		}
 		if (reg.waiting && await matches(reg.waiting)) return { worker: reg.waiting };
-		if (want && reg.active && await matches(reg.active)) return { active: true };
+		if (reg.active && await matches(reg.active)) return { active: true };
 	}
 	return null;
 }
@@ -244,7 +245,6 @@ window.checkAppUpdate = async function checkAppUpdate() {
 };
 
 window.installAppUpdate = async function installAppUpdate(onStatus) {
-	const expectedVersion = pendingUpdate?.version || "";
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
 
 	if (window.Capacitor?.isNativePlatform?.()) {
@@ -255,18 +255,28 @@ window.installAppUpdate = async function installAppUpdate(onStatus) {
 		return { reloaded: false, nativeDownload: true };
 	}
 
+	// Ohne bekannte Zielversion (Aufruf vor der ersten Hintergrundprüfung) erst
+	// version.json fragen. Früher lief der Update-Pfad dann ohne Ziel: irgendein
+	// wartender Worker galt als Update — oder es wurde ohne neuen Worker neu
+	// geladen, und die App startete wieder im alten Stand.
+	if (!pendingUpdate) {
+		say("Suche Update…");
+		try { await window.checkAppUpdate(); } catch (error) { console.warn("PWA-Update prüfen:", error); }
+	}
+	const expectedVersion = pendingUpdate?.version || "";
+
 	say(expectedVersion ? "Update wird geladen…" : "App wird neu geladen…");
 	reportStatus = say;
 	try {
-		if (await getRegistration()) {
+		if (expectedVersion && await getRegistration()) {
 			const ready = await prepareUpdate(expectedVersion);
 			// Lieber ehrlich abbrechen als in die alte Version neu starten.
-			if (!ready && expectedVersion) {
+			if (!ready) {
 				throw new Error("v" + expectedVersion + " ist noch nicht vollständig ladbar (Server verteilt sie evtl. noch). Bitte gleich erneut versuchen.");
 			}
 			if (ready?.worker) {
 				say("Update wird aktiviert…");
-				if (!(await activateWorker(ready.worker)) && expectedVersion) {
+				if (!(await activateWorker(ready.worker))) {
 					throw new Error("Update konnte nicht aktiviert werden. Bitte erneut versuchen.");
 				}
 			}
