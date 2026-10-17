@@ -1073,6 +1073,12 @@ document.addEventListener("change", (e) => {
 	if (!e.target || e.target.id !== "inpHomeName") return;
 	STATE.dispatch("settingsSet", { homeUserName: e.target.value.trim() }).then(() => U.toast("Name gespeichert.", "success"));
 });
+// Tagesartikel (home-article.js): gleiches Muster wie der Begrüßungsname
+document.addEventListener("change", (e) => {
+	const id = e.target && e.target.id;
+	if (id === "inpHomeArticle") STATE.dispatch("settingsSet", { homeArticle: e.target.checked });
+	else if (id === "inpHomeTopics") STATE.dispatch("settingsSet", { homeArticleTopics: e.target.value.trim() }).then(() => U.toast("Themen gespeichert.", "success"));
+});
 
 document.addEventListener("keydown", (e) => {
 	if (!document.querySelector(".settings-modal-v2")) return;

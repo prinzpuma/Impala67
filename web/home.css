@@ -189,6 +189,29 @@ body.light .la-col.peak i { background: #c58a14 }
 .hv-recall[open] em { display: none }
 .hv-recall p { margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--edge-soft); font-size: var(--text-md); line-height: 1.45; color: var(--text); animation: hv-in .3s var(--ease-out) both }
 
+/* Tagesartikel (home-article.js) — volle Breite unter dem Raster */
+.hv-article { margin-top: 40px; padding: var(--space-5) var(--space-6); border: 1px solid transparent; border-radius: var(--radius-xl); background: var(--b-tint); transition: background .2s var(--b-ease) }
+.hv-article > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1) }
+.hv-article > summary::-webkit-details-marker { display: none }
+.hv-article small, .hv-article-past small, .hv-article-src small { font-size: var(--text-xs); color: var(--text2); font-weight: 600 }
+.hv-article > summary b { font-size: 20px; line-height: 1.3; color: var(--text) }
+.hv-article > summary span { font-size: var(--text-md); line-height: 1.5; color: var(--text2) }
+.hv-article > summary em { font-style: normal; font-size: var(--text-xs); color: var(--accent); margin-top: var(--space-1) }
+.hv-article:hover { background: var(--b-tint-2) }
+.hv-article[open] { border-color: var(--edge-soft); background: var(--surface-subtle) }
+.hv-article[open] > summary span, .hv-article[open] > summary em { display: none }
+.hv-article-body { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--edge-soft); font-size: var(--text-md); line-height: 1.6; max-width: 70ch; animation: hv-in .3s var(--ease-out) both }
+.hv-article-src { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-4) }
+.hv-article-src small { flex-basis: 100% }
+.hv-article-foot { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-5) }
+.hv-article-note { margin: 40px 0 0; font-size: var(--text-sm); color: var(--text2) }
+.hv-article-modal { max-width: 720px }
+.hv-article-list { max-height: 70vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2) }
+.hv-article-past { border-bottom: 1px solid var(--edge-soft); padding: var(--space-3) 0 }
+.hv-article-past > summary { cursor: pointer; display: flex; flex-direction: column; gap: 2px }
+.hv-article-past > .md { margin-top: var(--space-3); line-height: 1.6 }
+@container (max-width: 520px) { .hv-article { padding: var(--space-4) var(--space-5) } }
+
 /* Erfolg: ruhiges Grün statt Konfetti */
 .hv .hv-cards.done b { display: flex; align-items: center; gap: var(--space-2); color: var(--success) }
 .hv-week.reached .hv-goalbar i { background: var(--success) }
@@ -208,5 +231,5 @@ body.light .la-col.peak i { background: #c58a14 }
 .hv-day:nth-child(7) i, .la-col:nth-child(7) i { animation-delay: 240ms }
 .la-line { stroke-dasharray: 400; animation: hv-draw 1s var(--ease-out) .1s both }
 @media (prefers-reduced-motion: reduce) {
-	.hv-bar i, .la-col i, .hv-goalbar i, .la-meter i, .la-line, .hv-recall p { animation: none }
+	.hv-bar i, .la-col i, .hv-goalbar i, .la-meter i, .la-line, .hv-recall p, .hv-article-body { animation: none }
 }

@@ -1,6 +1,6 @@
 // Startseite für PC und Tablet (die Mobil-Ansicht hat ihr eigenes Home in mobile-view.js).
 // Idee: Der Begrüßungssatz ist selbst die Bedienung, darunter Weitermachen + zwei Kennzahlen,
-// unten die Lernanalyse (lernanalyse.js). Reines Markup aus fertigen Daten; render.js sammelt.
+// darunter der Tagesartikel (home-article.js), unten die Lernanalyse (lernanalyse.js). Reines Markup aus fertigen Daten; render.js sammelt.
 // Klicks laufen über die data-*-Handler in app.js. Styles: home.css.
 import { U } from "./util.js";
 import { icon } from "./icons.js";
@@ -89,7 +89,7 @@ function recall(cards) {
 
 function title(pg) { return (pg.icon ? `<span class="hv-ico">${esc(pg.icon)}</span>` : "") + esc(pg.title || "Ohne Titel"); }
 
-export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, last, favPages, study, cards: allCards, todaySeconds, week, goalMin, streak, analysisHtml }) {
+export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, last, favPages, study, cards: allCards, todaySeconds, week, goalMin, streak, analysisHtml, articleHtml }) {
 	const hasCards = allCards.length > 0;
 	const open = study.neu + study.review + study.learn;
 	const estMin = Math.max(1, Math.round(open * secPerCard() / 60));
@@ -161,12 +161,14 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, 
 	return '<div class="home hv" data-key="home"><div class="hv-page">' +
 		head + alert + backupAlert + `<p class="hv-lead">${hello} ${sum}</p>` +
 		`<div class="hv-grid"><div class="hv-main">${cont}${pins}${recall(allCards)}</div><div class="hv-stats">${cards}${weekCard}</div></div>` +
-		analysisHtml +
+		articleHtml + analysisHtml +
 		"</div></div>";
 }
 
 // Nach dem Rendern: echte Heft-Vorschau der zuletzt angesehenen Seite nachladen (HEFT cached)
 export function hydrateHome(root) {
+	// Formeln im Tagesartikel (home-article.js) setzen
+	for (const el of root.querySelectorAll(".hv-article-body")) U.renderMath(el);
 	for (const img of root.querySelectorAll("img[data-heftthumb]")) {
 		const id = img.dataset.heftthumb;
 		HEFT.thumbnail(id, HEFT.lastPage(id), 480).then((url) => url || HEFT.thumbnail(id, 0, 480)).then((url) => {

@@ -19,6 +19,7 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { homeViewHtml, hydrateHome } from "./home-view.js";
+import { HOME_ARTICLE } from "./home-article.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
 import { BACKUP } from "./backup-status.js";
 import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
@@ -1065,8 +1066,9 @@ function renderHome(main) {
 	const homeHtml = homeViewHtml({
 		greeting, name: homeName, dateLine, conflictCount, backup: BACKUP.homeHint(), last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),
 		todaySeconds: lz.todaySeconds, week: LERNZEIT.weekData(0, lzTotals), goalMin: LERNZEIT.weekGoalMinutes(),
-		streak: lz.streakDays || 0, analysisHtml: homeAnalysisHtml(),
+		streak: lz.streakDays || 0, analysisHtml: homeAnalysisHtml(), articleHtml: HOME_ARTICLE.homeHtml(),
 	});
+	HOME_ARTICLE.ensure(recent);
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
 	// dadurch von allein erhalten (der zentrale Scroll-Anker unten greift nur noch,

@@ -34,6 +34,8 @@ export const SETTINGS_ITEMS = [
 	{ id: "native-haptics", section: "appearance", group: "Lesbarkeit", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
 	{ id: "tabs-position", section: "appearance", group: "Oberfläche", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "home-name", section: "appearance", group: "Oberfläche", label: "Begrüßungsname", description: "Name in der Begrüßung auf der Startseite", keywords: "anzeigename profil startseite home" },
+	{ id: "home-article", section: "appearance", group: "Oberfläche", label: "Tagesartikel", description: "KI-Zusammenfassung deiner Notizen auf der Startseite", keywords: "artikel zusammenfassung ki startseite home täglich" },
+	{ id: "home-topics", section: "appearance", group: "Oberfläche", label: "Themen für den Tagesartikel", description: "Themen, über die der Tagesartikel schreibt", keywords: "artikel themen fächer startseite" },
 	{ id: "ai-models", section: "ai", group: "Aktives Modell", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
 	{ id: "ai-sources", section: "ai", group: "Quellen", label: "KI-Quellen", description: "OpenAI, Gemini, LM Studio und eigene Endpunkte", keywords: "api key schlüssel token url endpoint anbieter" },
 	{ id: "ai-embedding", section: "ai", group: "Lokale KI", label: "Embedding-Modell", description: "Modell für semantische Suche", keywords: "rag vektor suche bekko" },

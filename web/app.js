@@ -6,6 +6,7 @@ import { DB } from "./db.js";
 import { EDITOR } from "./editor.js";
 import { RAG } from "./rag.js";
 import { RENDER } from "./render.js";
+import { HOME_ARTICLE } from "./home-article.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
 import { SRS } from "./srs.js";
@@ -559,6 +560,9 @@ function wireEvents() {
 				case "backup-setup": SETTINGS.openSettings("sync"); break;
 				case "backup-later": BACKUP.snooze(); break;
 				case "conflicts": RENDER.openConflictResolver(0); break;
+				case "article-read": HOME_ARTICLE.markRead(); break;
+				case "article-history": HOME_ARTICLE.openHistory(); break;
+				case "article-retry": HOME_ARTICLE.retry(); break;
 			}
 			return;
 		}
