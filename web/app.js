@@ -32,6 +32,7 @@ import {
 	mountFullChatVoiceButton,
 	openPromptDialog,
 	openMoveDialog,
+	openSubjectDialog,
 	duplicatePage,
 	newPageFlow,
 	setAnkiZen,
@@ -1033,6 +1034,13 @@ function wireEvents() {
 			S.pageMenuOpenId = null;
 			const pg = S.pages[t.dataset.pagefav];
 			if (pg) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { favorite: !pg.favorite } });
+			return;
+		}
+		if (t.dataset.pagesubject) {
+			S.pageMenuOpenId = null;
+			closeTopMenu();
+			renderSidebar();
+			openSubjectDialog(t.dataset.pagesubject);
 			return;
 		}
 		if (t.dataset.pagemove) {

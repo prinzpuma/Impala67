@@ -24,9 +24,16 @@ export const KNOWN_SUBJECTS = Object.freeze([
 	"Spanisch",
 	"Latein",
 	"Sport",
+	"Elektrotechnik",
+	"Maschinenbau",
+	"Politik",
 ]);
 
-export const DEFAULT_SUBJECT = "Allgemein";
+// Keine Fächer, sondern Kategorien: Sammelseiten (Semester, gemischte Fächer) und
+// alles, was sich nicht eindeutig zuordnen lässt. Bewusst nicht in KNOWN_SUBJECTS,
+// damit Lernzeit-/Analyse-Statistiken nur echte Fächer zeigen.
+export const DEFAULT_SUBJECT = "Sonstiges";
+export const OVERVIEW_SUBJECT = "Übersicht";
 
 const MAX_LEN = 80;
 
@@ -49,6 +56,9 @@ const SUBJECT_PROTOTYPES = Object.freeze({
 	"Spanisch": "Spanisch Español Espanol Spanish Vocabulario Gramática Lengua Española Traducción Comprensión Verbos",
 	"Latein": "Latein Lingua Latina Latin Grammatica Deklination Konjugation Vokabeln Lateinisch Caesar Cicero Ovid ACI Ablativus Absolutus",
 	"Sport": "Sport Sporttheorie Trainingslehre Bewegungslehre Leichtathletik Gymnastik Ausdauer Krafttraining Sportunterricht Fitness Biomechanik",
+	"Elektrotechnik": "Elektrotechnik Elektronik Netzwerkanalyse Zweipole Wechselstromrechnung Impedanz Kirchhoff Maschenstrom Knotenpotential Ersatzschaltbild Dioden Transistoren Operationsverstärker Kondensator Spule Halbleiter Schaltungen",
+	"Maschinenbau": "Maschinenbau Technische Mechanik Kontinuumsmechanik Statik Festigkeitslehre Balken Biegemoment Schnittgrößen Flächenträgheitsmoment Freikörperbild Lagerkräfte Werkstoffkunde Konstruktion Maschinenelemente Torsion",
+	"Politik": "Politik Sozialkunde Gemeinschaftskunde Demokratie Bundestag Grundgesetz Wahlen Gewaltenteilung Föderalismus Parteien Europäische Union Bundesverfassungsgericht",
 });
 
 const SUBJECT_DEFINITIONS = [
@@ -61,8 +71,10 @@ const SUBJECT_DEFINITIONS = [
 			"differentialrechnung", "integralrechnung", "ableitung", "ableitungen",
 			"integral", "integrale", "trigonometrie", "bruchrechnung", "brüche",
 			"kurvendiskussion", "lineare algebra", "wahrscheinlichkeitsrechnung",
-			"matrizen", "matrix", "terme", "gleichung", "gleichungen",
-			"funktionen", "differentialgleichung", "nullstellen",
+			"matrizen", "matrix", "terme", "differentialgleichung", "differentialgleichungen",
+			"nullstellen", "lineare gleichungssysteme", "determinanten", "determinante",
+			"eigenwerte", "eigenvektoren", "vektorräume", "vektorraum", "grenzwerte",
+			"stetigkeit", "mehrdimensionale integration", "taylorreihe", "numerik",
 		],
 	},
 	{
@@ -89,14 +101,15 @@ const SUBJECT_DEFINITIONS = [
 	},
 	{
 		name: "Physik",
-		aliases: ["physik", "physics"],
+		aliases: ["physik", "physics", "experimentalphysik", "festkörperphysik", "theoretische physik", "quantenmechanik"],
 		keywords: [
 			"mechanik", "optik", "optics", "elektrizitätslehre", "elektrodynamik",
 			"thermodynamik", "thermodynamics", "astrophysik", "quantenphysik",
-			"atomphysik", "kernphysik", "kinematik", "dynamik", "magnetismus",
+			"atomphysik", "kernphysik", "kinematik", "magnetismus", "elektrostatik",
 			"schwingungen", "schwingung", "wellenlehre", "wellen", "gravitation",
-			"relativitätstheorie", "stromkreis", "induktion", "lorentzkraft",
-			"newton", "kreisbewegung", "reibungskraft", "energieerhaltung",
+			"relativitätstheorie", "stromkreis", "lorentzkraft", "maxwell-gleichungen",
+			"newton", "kreisbewegung", "reibungskraft", "energieerhaltung", "interferometrie",
+			"kristallgitter", "realgitter", "reziprokes gitter", "phononen", "bändermodell",
 		],
 	},
 	{
@@ -105,8 +118,7 @@ const SUBJECT_DEFINITIONS = [
 		keywords: [
 			"anorganik", "organik", "anorganische chemie", "organische chemie",
 			"periodensystem", "stöchiometrie", "chemische reaktionen", "chemische reaktion",
-			"reaktionen", "reaktion", "säuren und basen", "säuren", "basen",
-			"säure", "base", "atombau", "chemische bindung", "kovalente bindung",
+			"säuren und basen", "säuren", "säure", "atombau", "chemische bindung", "kovalente bindung",
 			"ionenbindung", "moleküle", "molekül", "redox", "redoxreaktion",
 			"elektrochemie", "titration", "alkane", "alkene", "alkohole", "ester",
 			"polymere", "pse",
@@ -142,19 +154,19 @@ const SUBJECT_DEFINITIONS = [
 		aliases: ["geografie", "geographie", "erdkunde", "geography"],
 		keywords: [
 			"klimazonen", "klimazone", "plattentektonik", "vulkanismus", "vulkane",
-			"geologie", "kartografie", "kartographie", "atmosphäre", "klimawandel",
+			"geologie", "kartografie", "kartographie", "klimawandel",
 			"topographie", "stadtgeographie", "stadtgeografie", "tektonik",
 			"kontinente", "kontinent", "tropen", "geomorphologie", "demographie",
-			"demografie", "migration", "glazialmorphologie", "sedimentation",
+			"demografie", "glazialmorphologie", "sedimentation",
 		],
 	},
 	{
 		name: "Informatik",
-		aliases: ["informatik", "computer science", "computer-science", "info"],
+		aliases: ["informatik", "computer science", "computer-science"],
 		keywords: [
 			"programmierung", "programmieren", "python", "javascript", "typescript",
 			"java", "c++", "c#", "algorithmen", "algorithmus", "algorithms",
-			"datenbanken", "datenbank", "sql", "datenstrukturen", "netzwerke",
+			"datenbanken", "datenbank", "sql", "datenstrukturen",
 			"rechnernetze", "softwareentwicklung", "html", "css", "coding",
 			"objektorientierte programmierung", "oop", "rekursion", "sortieralgorithmen",
 		],
@@ -163,13 +175,13 @@ const SUBJECT_DEFINITIONS = [
 		name: "Wirtschaft",
 		aliases: [
 			"wirtschaft", "wirtschaft & recht", "wirtschaft und recht", "wiwat",
-			"bwl", "vwl", "ökonomie", "oekonomie", "economics",
+			"bwl", "vwl", "ökonomie", "oekonomie", "economics", "wirtschaften",
 		],
 		keywords: [
-			"finanzen", "unternehmen", "volkswirtschaft", "betriebswirtschaft",
+			"finanzen", "volkswirtschaft", "betriebswirtschaft",
 			"volkswirtschaftslehre", "betriebswirtschaftslehre", "rechnungswesen",
 			"marketing", "geldpolitik", "inflation", "angebot und nachfrage",
-			"marktformen", "marktwirtschaft", "steuern", "bilanz", "buchführung",
+			"marktformen", "marktwirtschaft", "bilanz", "buchführung",
 			"gewinn und verlust", "bip", "bruttoinlandsprodukt", "konjunktur",
 			"wirtschaftskreislauf", "aktiengesellschaft", "gmbh",
 		],
@@ -178,9 +190,9 @@ const SUBJECT_DEFINITIONS = [
 		name: "Kunst",
 		aliases: ["kunst", "art", "bildende kunst"],
 		keywords: [
-			"zeichnen", "zeichnung", "malerei", "malen", "kunstgeschichte",
-			"skulptur", "plastik", "farbtheorie", "farbenlehre", "perspektive",
-			"grafik", "bildanalyse", "design", "architektur", "epochen der kunst",
+			"malerei", "malen", "kunstgeschichte",
+			"skulptur", "farbtheorie", "farbenlehre",
+			"bildanalyse", "epochen der kunst",
 			"impressionismus", "expressionismus", "surrealismus", "kubismus",
 			"barock", "renaissance-kunst", "pop art", "radierung", "aquarell",
 		],
@@ -189,7 +201,7 @@ const SUBJECT_DEFINITIONS = [
 		name: "Musik",
 		aliases: ["musik", "music"],
 		keywords: [
-			"musiktheorie", "notenlehre", "harmonielehre", "instrumente",
+			"musiktheorie", "notenlehre", "harmonielehre",
 			"instrumentenkunde", "gehörbildung", "komposition", "tonleiter",
 			"tonleitern", "akkorde", "akkord", "rhythmus", "partitur", "gesang",
 			"melodie", "symphonie", "sonate", "notenlesen", "dreiklänge",
@@ -204,7 +216,7 @@ const SUBJECT_DEFINITIONS = [
 		],
 		keywords: [
 			"evangelisch", "katholisch", "theologie", "moral", "bibel", "glaube",
-			"werte", "philosophieren", "sokrates", "platon", "aristoteles", "kant",
+			"philosophieren", "sokrates", "platon", "aristoteles", "kant",
 			"kategorischer imperativ", "utilitarismus", "deontologie", "menschenwürde",
 			"gerechtigkeit", "gewissen", "weltreligionen", "judentum", "christentum",
 			"islam", "buddhismus", "hinduismus",
@@ -245,7 +257,43 @@ const SUBJECT_DEFINITIONS = [
 			"sporttheorie", "trainingslehre", "bewegungslehre", "leichtathletik",
 			"gymnastik", "ausdauer", "krafttraining", "sportunterricht", "fitness",
 			"biomechanik", "trainingsmethoden", "superkompensation", "aerob",
-			"anaerob", "sportbiologie", "koordination",
+			"anaerob", "sportbiologie",
+		],
+	},
+	{
+		name: "Elektrotechnik",
+		aliases: ["elektrotechnik", "e-technik", "etechnik", "elektronik", "electrical engineering"],
+		keywords: [
+			"netzwerkanalyse", "zweipole", "zweipol", "wechselstrom", "wechselstromrechnung",
+			"gleichstrom", "impedanz", "maschenstrom", "maschenstromverfahren", "knotenpotential",
+			"knotenpotentialverfahren", "ersatzschaltbild", "ersatzschaltbilder", "schaltung",
+			"schaltungen", "diode", "dioden", "transistor", "transistoren", "operationsverstärker",
+			"kondensator", "spule", "ohmsches gesetz", "kirchhoff", "kirchhoffsche regeln",
+			"ltspice", "spannungsteiler", "stromteiler", "rc-schaltung", "rc-schaltungen",
+			"bauelemente", "halbleiter", "leistungsanpassung", "reaktive netzwerke",
+		],
+	},
+	{
+		name: "Maschinenbau",
+		aliases: [
+			"maschinenbau", "technische mechanik", "kontinuumsmechanik", "festigkeitslehre",
+			"werkstoffkunde", "konstruktionslehre", "maschinenelemente", "mechanical engineering",
+		],
+		keywords: [
+			"statik", "balken", "biegemoment", "biegemomente", "biegemomentenverlauf",
+			"schnittgrößen", "querkraft", "querkraftverlauf", "flächenträgheitsmoment",
+			"flächenträgheitsmomente", "steiner-satz", "freikörperbild", "lagerkräfte",
+			"spannungstensor", "hookesches gesetz", "torsion", "knickung", "finite elemente",
+			"getriebe", "werkstoffe",
+		],
+	},
+	{
+		name: "Politik",
+		aliases: ["politik", "sozialkunde", "gemeinschaftskunde", "powi", "politikwissenschaft"],
+		keywords: [
+			"demokratie", "bundestag", "bundesrat", "grundgesetz", "gewaltenteilung",
+			"föderalismus", "europäische union", "bundesverfassungsgericht", "parteien",
+			"wahlrecht", "rechtsstaat",
 		],
 	},
 ];
@@ -262,7 +310,7 @@ function buildBoundaryRegex(terms) {
 }
 
 // Exakter Alias-Index für Soforttreffer
-const EXACT_MAP = new Map();
+const EXACT_MAP = new Map([["info", "Informatik"], ["et", "Elektrotechnik"]]);
 for (const def of SUBJECT_DEFINITIONS) {
 	EXACT_MAP.set(def.name.toLowerCase(), def.name);
 	for (const alias of def.aliases) {
@@ -292,82 +340,67 @@ function sanitize(value) {
 		.slice(0, MAX_LEN);
 }
 
-// Schneller Keyword- & Regex-Abgleich
+// Punkte je Fach: Namen (Alias) zählen mehr als Fachbegriffe. Absteigend sortiert.
+function rankSubjects(text, aliasWeight, keywordWeight) {
+	const ranked = [];
+	for (const rule of COMPILED_RULES) {
+		let score = 0;
+		if (rule.aliasRegex) score += (text.match(rule.aliasRegex) || []).length * aliasWeight;
+		if (rule.keywordRegex) score += (text.match(rule.keywordRegex) || []).length * keywordWeight;
+		if (score) ranked.push({ name: rule.name, score });
+	}
+	return ranked.sort((a, b) => b.score - a.score);
+}
+
+// Nur eindeutige Ergebnisse: genug Punkte UND mindestens doppelt so viele wie das zweitbeste
+// Fach. Alles andere ist mehrdeutig und bekommt bewusst kein Fach (lieber "Sonstiges" als falsch).
+function clearWinner(ranked, minScore) {
+	const [best, second] = ranked;
+	if (!best || best.score < minScore) return null;
+	return !second || best.score >= 2 * second.score ? best.name : null;
+}
+
+// Titel, Tags, Stapelnamen: ein Fachname oder ein eindeutiger Fachbegriff genügt
 export function resolveSubject(text) {
 	const sanitized = sanitize(text);
 	if (!sanitized) return null;
 	const lower = sanitized.toLowerCase();
-
-	// 1. Direkter Sofortabgleich (z. B. "Mathe" -> "Mathematik", "Wiwat" -> "Wirtschaft")
-	if (EXACT_MAP.has(lower)) {
-		return EXACT_MAP.get(lower);
-	}
-
-	// 2. Keyword- & Alias-Bewertung
-	let bestSubject = null;
-	let bestScore = 0;
-
-	for (const rule of COMPILED_RULES) {
-		let score = 0;
-		if (rule.aliasRegex) {
-			const m = sanitized.match(rule.aliasRegex);
-			if (m) score += m.length * 4;
-		}
-		if (rule.keywordRegex) {
-			const m = sanitized.match(rule.keywordRegex);
-			if (m) score += m.length * 2;
-		}
-		if (score > bestScore) {
-			bestScore = score;
-			bestSubject = rule.name;
-		}
-	}
-
-	return bestScore > 0 ? bestSubject : null;
+	if (EXACT_MAP.has(lower)) return EXACT_MAP.get(lower);
+	return clearWinner(rankSubjects(sanitized, 4, 2), 2);
 }
 
+// Fließtext: mindestens drei Fachbegriffe (oder Name + Begriffe) mit klarem Vorsprung
 function resolveSubjectFromContent(content) {
 	if (!content) return null;
-	const sample = String(content).slice(0, 3000);
-	let bestSubject = null;
-	let bestScore = 0;
-
-	for (const rule of COMPILED_RULES) {
-		let score = 0;
-		if (rule.aliasRegex) {
-			const m = sample.match(rule.aliasRegex);
-			if (m) score += m.length * 3;
-		}
-		if (rule.keywordRegex) {
-			const m = sample.match(rule.keywordRegex);
-			if (m) score += m.length * 2;
-		}
-		if (score > bestScore) {
-			bestScore = score;
-			bestSubject = rule.name;
-		}
-	}
-
-	// Schwellenwert für Fließtext: mindestens 2 Keywords oder 1 Alias + 1 Keyword
-	return bestScore >= 4 ? bestSubject : null;
+	return clearWinner(rankSubjects(String(content).slice(0, 3000), 3, 2), 6);
 }
 
+// Nennt ein Titel mehrere Fächer beim Namen ("ET × Mathe × Physik"), ist es eine Sammelseite
+function namesSeveralSubjects(text) {
+	const sanitized = sanitize(text);
+	return COMPILED_RULES.filter((rule) => rule.aliasRegex && (sanitized.match(rule.aliasRegex) || []).length).length >= 2;
+}
+
+// Sammelseiten am Titel erkennen: "Semester 3", "Übersicht", "Stundenplan" …
+const OVERVIEW_TITLE = /^[^\p{L}\p{N}]*(?:semester|wintersemester|sommersemester|übersicht|uebersicht|overview|dashboard|stundenplan|studienplan|klausurplan|lernplan|inhaltsverzeichnis)(?=$|[^\p{L}])/iu;
+const isOverviewTitle = (title) => OVERVIEW_TITLE.test(sanitize(title)) || namesSeveralSubjects(title);
+
 // In-Memory-Klassifikations-Cache für Embedding & Textanalyse
-const pageClassificationCache = new Map(); // pageId -> { updated, subject }
+const pageClassificationCache = new Map(); // pageId -> { updated, subject, source }
 const activeEmbeddingJobs = new Set();
 
 function getCachedSubject(pageObj) {
 	if (!pageObj?.id) return null;
 	const entry = pageClassificationCache.get(pageObj.id);
 	if (entry && entry.updated === pageObj.updated) {
-		return entry.subject;
+		return { name: entry.subject, source: entry.source };
 	}
 	return null;
 }
 
-function setCachedSubject(pageObj, subject) {
+function setCachedSubject(pageObj, subject, source) {
 	if (!pageObj?.id || !subject) return;
-	pageClassificationCache.set(pageObj.id, { updated: pageObj.updated, subject });
+	pageClassificationCache.set(pageObj.id, { updated: pageObj.updated, subject, source });
 }
 
 let prototypeVectors = null;
@@ -410,6 +443,7 @@ async function getPrototypeVectors() {
 	return prototypePromise;
 }
 
+const EMBED_MIN = 0.4, EMBED_MARGIN = 0.04;
 async function classifyVector(vec) {
 	if (!vec || !vec.length) return null;
 	const prototypes = await getPrototypeVectors();
@@ -417,19 +451,23 @@ async function classifyVector(vec) {
 
 	const vecNorm = norm(vec);
 	let bestSubject = null;
-	let bestScore = -1;
+	let bestScore = -1, secondScore = -1;
 
 	for (const [subject, pVec] of prototypes.entries()) {
 		if (pVec.length !== vec.length) continue;
 		const sim = dot(vec, pVec) / vecNorm;
 		if (sim > bestScore) {
+			secondScore = bestScore;
 			bestScore = sim;
 			bestSubject = subject;
+		} else if (sim > secondScore) {
+			secondScore = sim;
 		}
 	}
 
-	// Mindestähnlichkeit zum Fach-Prototyp
-	if (bestSubject && bestScore >= 0.35) {
+	// Mindestähnlichkeit UND klarer Abstand zum zweitnächsten Fach — die Prototypen sind nur
+	// Stichwortlisten, knappe Entscheidungen sind meist Zufall (Kontinuumsmechanik → Sport).
+	if (bestSubject && bestScore >= EMBED_MIN && bestScore - secondScore >= EMBED_MARGIN) {
 		return { name: bestSubject, score: bestScore };
 	}
 	return null;
@@ -475,7 +513,7 @@ function scheduleBackgroundEmbedding(pageObj) {
 		try {
 			const detected = await classifyPageWithEmbedding(pageObj);
 			if (detected) {
-				setCachedSubject(pageObj, detected);
+				setCachedSubject(pageObj, detected, "embedding");
 			}
 		} catch {
 			// Embedding-Fehler still abfangen
@@ -491,35 +529,69 @@ function scheduleBackgroundEmbedding(pageObj) {
 	}
 }
 
-function explicitTag(pageObj) {
-	if (!pageObj || !Array.isArray(pageObj.tags)) return "";
-	for (const raw of pageObj.tags) {
-		const tag = sanitize(raw);
-		const match = tag.match(/^(?:fach|fachbereich|subject)\s*:\s*(.+)$/i);
-		if (match) {
-			const resolved = resolveSubject(match[1]);
-			if (resolved) return resolved;
-		}
-		const direct = resolveSubject(tag);
-		if (direct) return direct;
-	}
-	return "";
+// Fachfeld oder Tag darf auch eine Kategorie sein — so lassen sich Fehlgriffe dauerhaft korrigieren
+function resolveExplicit(value) {
+	const lower = sanitize(value).toLowerCase();
+	if (!lower) return null;
+	if (lower === OVERVIEW_SUBJECT.toLowerCase() || lower === "uebersicht") return OVERVIEW_SUBJECT;
+	if (lower === DEFAULT_SUBJECT.toLowerCase() || lower === "allgemein") return DEFAULT_SUBJECT;
+	return resolveSubject(value);
 }
 
-function ancestorSubject(pageObj) {
-	let cur = pageObj, hops = 0;
-	while (cur && cur.parentId && S?.pages?.[cur.parentId] && hops++ < 100) {
-		cur = S.pages[cur.parentId];
-		if (cur.subject) {
-			const s = resolveSubject(cur.subject);
-			if (s) return s;
-		}
-		const tag = explicitTag(cur);
-		if (tag) return tag;
-		const titleSubject = resolveSubject(cur.title);
-		if (titleSubject) return titleSubject;
+// Ausdrücklich festgelegt: Fachfeld der Seite (Menü „Fach festlegen“) oder Tag ("fach: Mathe", "Biologie")
+function explicitSubject(pageObj) {
+	if (!pageObj) return null;
+	if (pageObj.subject) {
+		const s = resolveExplicit(pageObj.subject);
+		if (s) return s;
+	}
+	for (const raw of Array.isArray(pageObj.tags) ? pageObj.tags : []) {
+		const match = sanitize(raw).match(/^(?:fach|fachbereich|subject)\s*:\s*(.+)$/i);
+		const s = match ? resolveExplicit(match[1]) : resolveSubject(raw);
+		if (s) return s;
 	}
 	return null;
+}
+
+// Seitenkette von der obersten Seite bis zur Seite selbst
+function lineage(pageObj) {
+	const chain = [pageObj], seen = new Set([pageObj.id]);
+	let cur = pageObj;
+	while (cur.parentId && S?.pages?.[cur.parentId] && !seen.has(cur.parentId)) {
+		cur = S.pages[cur.parentId];
+		seen.add(cur.id);
+		chain.unshift(cur);
+	}
+	return chain;
+}
+
+// Fach einer Seite nur aus ihr selbst (ohne Eltern) — für die Abstimmung der Unterseiten
+const intrinsicCache = new Map(); // pageId -> { updated, subject }
+function intrinsicSubject(pageObj) {
+	const hit = intrinsicCache.get(pageObj.id);
+	if (hit && hit.updated === pageObj.updated) return hit.subject;
+	const explicit = explicitSubject(pageObj);
+	const subject = explicit
+		? (KNOWN_SUBJECTS.includes(explicit) ? explicit : null)
+		: isOverviewTitle(pageObj.title) ? null : resolveSubject(pageObj.title) || resolveSubjectFromContent(pageObj.content);
+	intrinsicCache.set(pageObj.id, { updated: pageObj.updated, subject });
+	return subject;
+}
+
+// Unterseiten stimmen ab: klare Mehrheit (≥ 2/3) → deren Fach, gemischt → Übersicht
+function childrenVote(pageObj) {
+	const votes = new Map();
+	let n = 0;
+	for (const child of Object.values(S?.pages || {})) {
+		if (child.parentId !== pageObj.id || child.trashed) continue;
+		const s = intrinsicSubject(child);
+		if (!s) continue;
+		n++;
+		votes.set(s, (votes.get(s) || 0) + 1);
+	}
+	if (n < 2) return null;
+	const [top, count] = [...votes].sort((a, b) => b[1] - a[1])[0];
+	return count / n >= 2 / 3 ? { name: top, source: "children" } : { name: OVERVIEW_SUBJECT, source: "overview" };
 }
 
 function workspaceSubject(pageObj) {
@@ -530,56 +602,68 @@ function workspaceSubject(pageObj) {
 // Haupt-API
 export const FACH = (() => {
 	function clean(value) {
-		const resolved = resolveSubject(value);
-		return resolved || DEFAULT_SUBJECT;
+		return resolveExplicit(value) || DEFAULT_SUBJECT;
 	}
 
+	// Reihenfolge = Verlässlichkeit. Die Ordnerstruktur schlägt den eigenen Titel: Eine Notiz
+	// „Funktionen“ im Ordner „Informatik 1“ ist Informatik, nicht Mathematik.
 	function page(pageObj) {
 		if (!pageObj) return { name: DEFAULT_SUBJECT, source: "fallback" };
 
-		// 1. Explizites Fachfeld der Seite
-		if (pageObj.subject) {
-			const s = resolveSubject(pageObj.subject);
-			if (s) return { name: s, source: "manual" };
+		// 1. Für diese Seite festgelegt (Fachfeld oder Tag)
+		const own = explicitSubject(pageObj);
+		if (own) return { name: own, source: "manual" };
+
+		// 2. Nächste übergeordnete Seite mit festgelegtem Fach vererbt es — außer „Übersicht“:
+		//    Unter einer Sammelseite hat jeder Zweig sein eigenes Fach.
+		const chain = lineage(pageObj);
+		for (let i = chain.length - 2; i >= 0; i--) {
+			const s = explicitSubject(chain[i]);
+			if (s && s !== OVERVIEW_SUBJECT) return { name: s, source: "inherited" };
 		}
 
-		// 2. Tag-Angabe (z. B. "fach: Mathe", "Biologie")
-		const tagSubj = explicitTag(pageObj);
-		if (tagSubj) return { name: tagSubj, source: "tag" };
-
-		// 3. Seitentitel
-		if (pageObj.title) {
-			const titleSubj = resolveSubject(pageObj.title);
-			if (titleSubj) return { name: titleSubj, source: "title" };
+		// 3. Oberste Seite mit eindeutigem Fach im Titel bestimmt den ganzen Zweig
+		for (const node of chain) {
+			if (isOverviewTitle(node.title)) continue;
+			const s = resolveSubject(node.title);
+			if (s) return { name: s, source: node === pageObj ? "title" : "page-root" };
 		}
 
-		// 4. Übergeordnete Seiten / Ordnerstruktur
-		const anc = ancestorSubject(pageObj);
-		if (anc) return { name: anc, source: "page-root" };
+		// 4. Sammelseiten: am Titel oder an Unterseiten mit gemischten Fächern
+		if (isOverviewTitle(pageObj.title)) return { name: OVERVIEW_SUBJECT, source: "overview" };
+		const vote = childrenVote(pageObj);
+		if (vote) return vote;
 
-		// 5. Workspace-Name
+		// 5. Fließtext bzw. gemerktes Embedding-Ergebnis (je Seitenstand)
+		const cached = getCachedSubject(pageObj);
+		if (cached) return cached;
+		const contentSubj = resolveSubjectFromContent(pageObj.content);
+		if (contentSubj) {
+			setCachedSubject(pageObj, contentSubj, "content");
+			return { name: contentSubj, source: "content" };
+		}
+
+		// 6. Workspace-Name
 		const ws = workspaceSubject(pageObj);
 		if (ws) return { name: ws, source: "workspace" };
 
-		// 6. Gecachte Embedding- oder Inhalts-Erkennung
-		const cached = getCachedSubject(pageObj);
-		if (cached) return { name: cached, source: "embedding" };
-
-		// 7. Fließtext-Schlüsselwörter
-		if (pageObj.content) {
-			const contentSubj = resolveSubjectFromContent(pageObj.content);
-			if (contentSubj) {
-				setCachedSubject(pageObj, contentSubj);
-				return { name: contentSubj, source: "content" };
-			}
-		}
-
-		// 8. Hintergrund-Embedding anstoßen (blockiert niemals synchron)
+		// 7. Hintergrund-Embedding anstoßen (blockiert niemals synchron)
 		if (pageObj.content && String(pageObj.content).trim().length >= 30) {
 			scheduleBackgroundEmbedding(pageObj);
 		}
 
 		return { name: DEFAULT_SUBJECT, source: "fallback" };
+	}
+
+	// Echte Fächer einer Seitenliste, zuletzt bearbeitetes zuerst (ohne Übersicht/Sonstiges)
+	function subjectsOf(pages) {
+		const out = [];
+		const newest = [...pages].sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+		for (const p of newest) {
+			const s = page(p).name;
+			if (KNOWN_SUBJECTS.includes(s) && !out.includes(s)) out.push(s);
+		}
+		return out;
 	}
 
 	function deck(deckName) {
@@ -633,8 +717,10 @@ export const FACH = (() => {
 	return {
 		KNOWN_SUBJECTS,
 		DEFAULT_SUBJECT,
+		OVERVIEW_SUBJECT,
 		clean,
 		page,
+		subjectsOf,
 		pageAsync,
 		deck,
 		context,

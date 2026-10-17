@@ -211,7 +211,7 @@ export const TELE = (() => {
 		return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 	};
 	function reviewSubject(review) {
-		if (review?.subject) return String(review.subject).trim().slice(0, 80) || "Allgemein";
+		if (review?.subject) return String(review.subject).trim().slice(0, 80) || FACH.DEFAULT_SUBJECT;
 		return FACH.card(S.cards[review?.cardId])?.name || FACH.deck(review?.deck).name;
 	}
 	function reviewRows() {

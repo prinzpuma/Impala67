@@ -107,6 +107,33 @@ export function openMoveDialog(pageId) {
 	$("dlgMoveCancel").addEventListener("click", () => closeOverlay());
 }
 
+// „Fach festlegen“: Fachfeld der Seite setzen (gilt auch für alle Unterseiten) oder zurück auf
+// automatisch. „Übersicht“ markiert Sammelseiten, deren Unterseiten eigene Fächer haben.
+export function openSubjectDialog(pageId) {
+	const o = $("overlay");
+	const pg = S.pages[pageId];
+	if (!o || !pg) return;
+	const current = pg.subject ? FACH.clean(pg.subject) : "";
+	const auto = FACH.page({ ...pg, subject: null });
+	const btn = (value, label) => `<button class="menu-item${value === current ? " active" : ""}" data-subjectpick="${esc(value)}">${esc(label)}${value === current ? " ✓" : ""}</button>`;
+	o.innerHTML = `<div class="modal modal-sm"><h3>Fach für „${esc(pg.title)}“</h3>` +
+		'<p class="hint">Gilt auch für alle Unterseiten.</p><div class="move-list">' +
+		btn("", `Automatisch (erkannt: ${auto.name})`) +
+		FACH.KNOWN_SUBJECTS.map((s) => btn(s, s)).join("") +
+		btn(FACH.OVERVIEW_SUBJECT, FACH.OVERVIEW_SUBJECT + " (Sammelseite)") + btn(FACH.DEFAULT_SUBJECT, FACH.DEFAULT_SUBJECT) +
+		'</div><div class="modal-actions"><button id="dlgSubjectCancel">Abbrechen</button></div></div>';
+	o.hidden = false;
+	$("dlgSubjectCancel").addEventListener("click", () => closeOverlay());
+	o.querySelector(".move-list").addEventListener("click", async (e) => {
+		const b = e.target.closest("[data-subjectpick]");
+		if (!b) return;
+		closeOverlay();
+		const subject = b.dataset.subjectpick || null;
+		if ((pg.subject || null) !== subject) await STATE.dispatch("pageUpdate", { id: pageId, patch: { subject } });
+		U.toast(subject ? `Fach: ${subject}` : `Fach wird wieder automatisch erkannt (${FACH.page(S.pages[pageId]).name}).`, "success");
+	});
+}
+
 // Seite samt Unterseiten duplizieren (parallel); "(Kopie)" nur am Wurzel-Titel
 export async function duplicatePage(pageId, newParentId, newWsId) {
 	const pg = S.pages[pageId];

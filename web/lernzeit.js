@@ -71,7 +71,7 @@ export const LERNZEIT = (() => {
 		}
 		if (page) return FACH.page(page);
 		if (S.aiBusy) return { name: "KI / Allgemein", source: "ai" };
-		return { name: "Allgemein", source: "fallback" };
+		return { name: FACH.DEFAULT_SUBJECT, source: "fallback" };
 	}
 	function settingsAreOpen() {
 		const overlay = document.getElementById("overlay");
@@ -739,7 +739,7 @@ export const LERNZEIT = (() => {
 		await STATE.dispatch("learningSessionUpsert", {
 			id: id || U.uid(), startedAt, endedAt, durationSeconds,
 			category: CATEGORIES[category] ? category : "other",
-			subject: FACH.clean(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNowMeta().name) || "Allgemein",
+			subject: FACH.clean(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNowMeta().name) || FACH.DEFAULT_SUBJECT,
 			sourceId: old ? old.sourceId : null, updated: iso(),
 		});
 	}

@@ -8,6 +8,7 @@ if (typeof window === "undefined") {
 
 import { EventBus } from "../web/event-bus.js";
 import { FACH, KNOWN_SUBJECTS, resolveSubject } from "../web/fach.js";
+import { S } from "../web/state.js";
 import { SRS } from "../web/srs.js";
 const { cmpSemver } = await import("../web/updater.js");
 
@@ -39,8 +40,8 @@ test("EventBus: on, emit, off und once arbeiten zuverlässig", () => {
 // ==========================================
 // 2. FACH / SUBJECT CLASSIFICATION
 // ==========================================
-test("Fach: 17 standardisierte Fächer & Alias-Auflösung", () => {
-	assert.equal(KNOWN_SUBJECTS.length, 17);
+test("Fach: standardisierte Fächer & Alias-Auflösung", () => {
+	assert.equal(KNOWN_SUBJECTS.length, 20);
 	assert.ok(Object.isFrozen(KNOWN_SUBJECTS));
 
 	// Alias-Erkennung
@@ -51,9 +52,35 @@ test("Fach: 17 standardisierte Fächer & Alias-Auflösung", () => {
 	assert.equal(FACH.clean("Vocab"), "Englisch");
 	assert.equal(FACH.clean("Literatur"), "Deutsch");
 
-	// Unbekannte Begriffe geben bei resolveSubject null zurück, FACH.clean fällt auf Allgemein zurück
+	// Unbekannte Begriffe geben bei resolveSubject null zurück, FACH.clean fällt auf Sonstiges zurück
 	assert.equal(resolveSubject("UnbekanntesThema123"), null);
-	assert.equal(FACH.clean("UnbekanntesThema123"), "Allgemein");
+	assert.equal(FACH.clean("UnbekanntesThema123"), "Sonstiges");
+	assert.equal(FACH.clean("Allgemein"), "Sonstiges");
+
+	// Uni-Fächer und mehrdeutige Begriffe
+	assert.equal(resolveSubject("Kontinuumsmechanik"), "Maschinenbau");
+	assert.equal(resolveSubject("Einführung in die Elektrotechnik"), "Elektrotechnik");
+	assert.equal(resolveSubject("Festkörperphysik"), "Physik");
+	assert.equal(resolveSubject("Funktionen"), null);
+	assert.equal(resolveSubject("Messwerte und Werte"), null);
+});
+
+test("Fach: Ordner vor Titel, Übersicht und festgelegtes Fach", () => {
+	const add = (id, title, parentId = null, extra = {}) => { S.pages[id] = { id, title, parentId, updated: "2026-10-01", content: "", ...extra }; };
+	add("f-sem", "📚 Semester 1");
+	add("f-inf", "Informatik 1", "f-sem");
+	add("f-fun", "Funktionen (VL 1-9)", "f-inf");
+	add("f-kombi", "Kombiniertes Lernen: Mathe × Experimentalphysik");
+	add("f-man", "Kontinuumsmechanik", null, { subject: "Physik" });
+	add("f-kid", "Blatt 3", "f-man");
+	try {
+		assert.equal(FACH.page(S.pages["f-fun"]).name, "Informatik");
+		assert.equal(FACH.page(S.pages["f-sem"]).name, "Übersicht");
+		assert.equal(FACH.page(S.pages["f-kombi"]).name, "Übersicht");
+		assert.deepEqual(FACH.page(S.pages["f-kid"]), { name: "Physik", source: "inherited" });
+	} finally {
+		for (const id of ["f-sem", "f-inf", "f-fun", "f-kombi", "f-man", "f-kid"]) delete S.pages[id];
+	}
 });
 
 // ==========================================

@@ -1074,6 +1074,14 @@ document.addEventListener("change", (e) => {
 	STATE.dispatch("settingsSet", { homeUserName: e.target.value.trim() }).then(() => U.toast("Name gespeichert.", "success"));
 });
 // Tagesartikel (home-article.js): gleiches Muster wie der Begrüßungsname
+document.addEventListener("click", (e) => {
+	const b = e.target.closest && e.target.closest("[data-topicadd]");
+	const input = b && document.getElementById("inpHomeTopics");
+	if (!input) return;
+	input.value = [input.value.trim(), b.dataset.topicadd].filter(Boolean).join(", ");
+	b.remove();
+	STATE.dispatch("settingsSet", { homeArticleTopics: input.value }).then(() => U.toast("Themen gespeichert.", "success"));
+});
 document.addEventListener("change", (e) => {
 	const id = e.target && e.target.id;
 	if (id === "inpHomeArticle") STATE.dispatch("settingsSet", { homeArticle: e.target.checked });

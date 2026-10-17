@@ -12,6 +12,7 @@ import { SEARCH } from "./search.js";
 import { RAG } from "./rag.js";
 import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
+import { FACH } from "./fach.js";
 import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
@@ -157,16 +158,18 @@ export function initMcpBridge() {
 						if (args.kind && args.kind !== "all") {
 							pool = pool.filter((p) => (p.kind === "heft" ? "heft" : "notion") === args.kind);
 						}
+						// Erkanntes Fach (fach.js) statt nur des selten gesetzten Fachfelds
+						const subjectOf = (p) => FACH.page(p).name;
 						if (args.subject) {
-							const sQuery = String(args.subject).trim().toLowerCase();
-							pool = pool.filter((p) => String(p.subject || "").toLowerCase() === sQuery);
+							const sQuery = FACH.clean(args.subject);
+							pool = pool.filter((p) => subjectOf(p) === sQuery);
 						}
 						if (args.query) {
 							const q = String(args.query).trim().toLowerCase();
 							pool = pool.filter((p) => {
 								const title = (p.title || "").toLowerCase();
 								const content = (p.content || "").toLowerCase();
-								const subj = String(p.subject || "").toLowerCase();
+								const subj = subjectOf(p).toLowerCase();
 								return title.includes(q) || content.includes(q) || subj.includes(q);
 							});
 						}
@@ -176,7 +179,7 @@ export function initMcpBridge() {
 							id: p.id,
 							title: p.title || "Ohne Titel",
 							kind: p.kind || "notion",
-							subject: p.subject || null,
+							subject: subjectOf(p),
 							parentId: p.parentId || null,
 							archived: !!p.archived,
 							updated: p.updated,

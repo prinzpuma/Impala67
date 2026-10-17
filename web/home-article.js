@@ -4,22 +4,26 @@
 // kurzen Artikel zusammen und ergänzt Hintergrund (eigener Abschnitt). Höchstens einer pro
 // Tag; ein ungelesener bleibt stehen, bis er als gelesen markiert ist. Ältere Artikel
 // bleiben als Verlauf. Nur lokal auf diesem Gerät (localStorage), kein Sync.
-// Themen: Einstellung homeArticleTopics (kommagetrennt), sonst die zuletzt bearbeiteten Notizen.
+// Themen: Einstellung homeArticleTopics (kommagetrennt, rotieren täglich), sonst automatisch ein
+// Fach (fach.js) aus den aktiven Notizen: das zuletzt bearbeitete, das nicht schon im letzten
+// Artikel dran war. Archivierte Notizen sind nie Hauptthema (render.js reicht nur aktive Seiten
+// herein), dürfen aber als kurzer Verweis vorkommen: nach den aktiven und mit weniger Text.
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { RAG } from "./rag.js";
 import { BUS } from "./event-bus.js";
 import { closeOverlay } from "./app-dialogs.js";
+import { FACH } from "./fach.js";
 
 const KEY = "impala67.homeArticles";
 const KEEP = 30;
-const PER_DAY = 2; // Themen pro Artikel
-const NOTE_CHARS = 1800, NOTES_TOTAL = 9000;
+const PER_DAY = 2; // eigene Themen pro Artikel (automatisch: ein Fach)
+const NOTE_CHARS = 1800, ARCHIVED_CHARS = 500, NOTES_TOTAL = 9000;
 const esc = (s) => U.esc(s);
 const DATE_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "short" });
 
-let tried = false, busy = false, error = "", lastRecent = [];
+let tried = false, busy = false, error = "", activePages = () => [];
 
 const pad = (n) => String(n).padStart(2, "0");
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -35,45 +39,57 @@ function current() {
 }
 const due = () => { const a = load()[0]; return !a || (!!a.readAt && a.day !== today()); };
 
-// Eigene Themen rotieren täglich; ohne Einstellung die Titel der zuletzt bearbeiteten Notizen
-function pickTopics(recent) {
+// Eigene Themen rotieren täglich; ohne Einstellung ein Fach, abwechselnd zum letzten Artikel
+function pickTopics(pages) {
 	const own = String((S.settings || {}).homeArticleTopics || "").split(/[,;\n]/).map((t) => t.trim()).filter(Boolean);
 	if (own.length) {
 		const start = Math.floor(Date.now() / 864e5) % own.length;
 		return [...new Set(Array.from({ length: Math.min(PER_DAY, own.length) }, (_, i) => own[(start + i) % own.length]))];
 	}
-	return recent.map((p) => String(p.title || "").trim()).filter((t) => t && t !== "Ohne Titel").slice(0, PER_DAY);
+	const subjects = FACH.subjectsOf(pages), last = (load()[0] || {}).topics || [];
+	return [subjects.find((s) => !last.includes(s)) || subjects[0]].filter(Boolean);
 }
 
-async function notesFor(topic) {
+const asSubject = (topic) => FACH.KNOWN_SUBJECTS.find((s) => s.toLowerCase() === topic.toLowerCase());
+
+// Ein Fach als Thema: dessen neueste aktive Notizen, dazu wenige archivierte. Sonst Suche.
+async function notesFor(topic, pages) {
+	const subject = asSubject(topic);
+	if (subject) {
+		const of = (list) => list.filter((p) => FACH.page(p).name === subject).sort(U.byNewest);
+		return [...of(pages).slice(0, 4), ...of(STATE.archivedPages()).slice(0, 2)].map((p) => ({ id: p.id, snippet: "" }));
+	}
 	let hits = null;
 	try { hits = await RAG.search(topic, 6); } catch { /* Stichwortsuche reicht */ }
 	const list = hits
 		? hits.map((h) => ({ id: h.pageId, snippet: h.snippet }))
-		: (STATE.searchNotes(topic) || []).slice(0, 4).map((r) => ({ id: r.page.id, snippet: r.snippet }));
+		: (STATE.searchNotes(topic, { includeArchived: true }) || []).slice(0, 4).map((r) => ({ id: r.page.id, snippet: r.snippet }));
 	return list.filter((x) => S.pages[x.id] && !S.pages[x.id].trashed);
 }
 
-async function write(recent) {
-	const topics = pickTopics(recent);
-	if (!topics.length) throw new Error("Noch keine Themen — leg Notizen an oder trag Themen in den Einstellungen ein.");
+async function write(pages) {
+	const topics = pickTopics(pages);
+	if (!topics.length) throw new Error("Noch kein Fach erkannt — trag Themen in den Einstellungen ein.");
 	const seen = new Map();
-	for (const t of topics) for (const n of await notesFor(t)) if (!seen.has(n.id)) seen.set(n.id, n.snippet);
+	for (const t of topics) for (const n of await notesFor(t, pages)) if (!seen.has(n.id)) seen.set(n.id, n.snippet);
 	let budget = NOTES_TOTAL;
-	const notes = [...seen].slice(0, 6).map(([id, snippet]) => {
+	const ranked = [...seen].map(([id, snippet]) => ({ id, snippet, archived: STATE.isPageArchived(id) }))
+		.sort((a, b) => a.archived - b.archived);
+	const notes = ranked.slice(0, 6).map(({ id, snippet, archived }) => {
 		const pg = S.pages[id];
-		const text = (String(pg.content || "").trim() || String(snippet || "")).slice(0, Math.min(NOTE_CHARS, Math.max(0, budget)));
+		const text = (String(pg.content || "").trim() || String(snippet || "")).slice(0, Math.min(archived ? ARCHIVED_CHARS : NOTE_CHARS, Math.max(0, budget)));
 		budget -= text.length;
-		return { id, title: pg.title || "Ohne Titel", text };
+		return { id, title: pg.title || "Ohne Titel", text, archived };
 	}).filter((n) => n.text);
 	const prompt = `Schreibe einen kurzen Artikel (250–400 Wörter) über: ${topics.join(", ")}.\n` +
 		(notes.length
 			? "Grundlage sind meine Notizen unten: Fasse ihre Kernaussagen verständlich zusammen und verknüpfe sie. " +
 			"Was nicht aus den Notizen stammt (Hintergrund, Beispiele, Zusammenhänge), schreibst du in einen eigenen Abschnitt „## Hintergrund“ am Ende. " +
-			"Widerspricht eine Notiz gesichertem Wissen, weise im Hintergrund kurz darauf hin.\n"
+			"Widerspricht eine Notiz gesichertem Wissen, weise im Hintergrund kurz darauf hin. " +
+			"Archivierte Notizen sind älterer Stoff: höchstens am Rand als Verweis oder Zusammenhang erwähnen, nie zum Hauptthema machen.\n"
 			: "Zu diesen Themen gibt es noch keine Notizen — schreibe aus allgemeinem Wissen.\n") +
 		"Format: Erste Zeile „# Überschrift“, danach Markdown-Fließtext. Keine Einleitung wie „Hier ist dein Artikel“." +
-		notes.map((n) => `\n\n--- Notiz: ${n.title} ---\n${n.text}`).join("");
+		notes.map((n) => `\n\n--- ${n.archived ? "Archivierte Notiz" : "Notiz"}: ${n.title} ---\n${n.text}`).join("");
 	const raw = String(await AI.complete(prompt, "Du schreibst kurze, gut lesbare Wissensartikel auf Deutsch für Lernende. Sachlich, anschaulich, ohne Floskeln.") || "").trim();
 	if (!raw) throw new Error("Die KI hat keinen Text geliefert.");
 	const m = raw.match(/^\s*#\s+(.+)\n?/);
@@ -81,19 +97,19 @@ async function write(recent) {
 		id: U.uid(), day: today(), created: U.now(), readAt: null, topics,
 		title: m ? m[1].trim() : topics.join(" · "),
 		body: (m ? raw.slice(m[0].length) : raw).trim(),
-		sources: notes.map((n) => ({ id: n.id, title: n.title })),
+		sources: notes.map((n) => ({ id: n.id, title: n.title, ...(n.archived ? { archived: true } : {}) })),
 	};
 }
 
 // Startet höchstens einen Versuch pro App-Start — leicht verzögert, damit der Start flüssig bleibt.
-// recent: zuletzt bearbeitete Notizen ohne Konflikt-Kopien (render.js filtert schon).
-function ensure(recent) {
-	if (recent) lastRecent = recent;
+// getPages: liefert die aktiven Notizen ohne Konflikt-Kopien (render.js filtert), erst bei Bedarf.
+function ensure(getPages) {
+	if (getPages) activePages = getPages;
 	if (tried || !enabled() || !due()) return;
 	tried = true;
 	setTimeout(() => {
 		busy = true; error = ""; refresh();
-		write(lastRecent)
+		write(activePages())
 			.then((a) => save([a, ...load()]))
 			.catch((err) => { error = (err && err.message) || "KI nicht erreichbar."; })
 			.finally(() => { busy = false; refresh(); });
@@ -112,7 +128,7 @@ function markRead() {
 
 const sourcesHtml = (a) => (a.sources || []).length
 	? '<nav class="hv-article-src" aria-label="Quellen"><small>Aus deinen Notizen</small>' +
-		a.sources.map((s) => `<button class="hv-pin" data-page="${esc(s.id)}">${esc(s.title)}</button>`).join("") + "</nav>"
+		a.sources.map((s) => `<button class="hv-pin" data-page="${esc(s.id)}">${esc(s.title)}${s.archived ? " · Archiv" : ""}</button>`).join("") + "</nav>"
 	: "";
 const teaser = (body) => {
 	// Erster Fließtext-Absatz, ohne Überschriften, Listen und Formeln

@@ -20,6 +20,7 @@ import { SCHULNOTEN } from "./schulnoten.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { homeViewHtml, hydrateHome } from "./home-view.js";
 import { HOME_ARTICLE } from "./home-article.js";
+import { FACH } from "./fach.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
 import { BACKUP } from "./backup-status.js";
 import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
@@ -559,7 +560,8 @@ function rowHtml(pg, depth, wsId) {
 // Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
 const menuBtn = (attr, id, label, cls = "") => `<button class="menu-item${cls}" data-${attr}="${id}">${label}</button>`;
 const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, lead("copy") + "Duplizieren") + menuBtn("pagetemplate", pg.id, lead("template") + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
-const moveTrashItems = (pg) => menuBtn("pagemove", pg.id, lead("folder-move") + "Verschieben nach…") +
+const moveTrashItems = (pg) => menuBtn("pagesubject", pg.id, lead("graduation") + "Fach: " + esc(FACH.page(pg).name) + "…") +
+	menuBtn("pagemove", pg.id, lead("folder-move") + "Verschieben nach…") +
 	(pg.archived ? menuBtn("pageunarchive", pg.id, lead("undo") + "Aus Archiv holen") : menuBtn("pagearchive", pg.id, lead("archive") + "Archivieren")) +
 	menuBtn("pagetrash", pg.id, lead("trash") + "Löschen", " danger");
 function pageMenuHtml(pg) {
@@ -1068,7 +1070,7 @@ function renderHome(main) {
 		todaySeconds: lz.todaySeconds, week: LERNZEIT.weekData(0, lzTotals), goalMin: LERNZEIT.weekGoalMinutes(),
 		streak: lz.streakDays || 0, analysisHtml: homeAnalysisHtml(), articleHtml: HOME_ARTICLE.homeHtml(),
 	});
-	HOME_ARTICLE.ensure(recent);
+	HOME_ARTICLE.ensure(() => pages.filter((p) => !isConflictPage(p)));
 	// PERF: nur neu aufbauen, wenn sich das Markup wirklich geändert hat.
 	// v14: angleichen statt ersetzen — offene <details>, Scroll und Hover bleiben
 	// dadurch von allein erhalten (der zentrale Scroll-Anker unten greift nur noch,
