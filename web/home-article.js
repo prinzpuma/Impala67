@@ -2,8 +2,9 @@
 
 // Tagesartikel auf der Startseite: Die KI fasst deine Notizen als kurzen Artikel zusammen und
 // ergänzt Hintergrund (eigener Abschnitt). Höchstens einer pro Tag; ein ungelesener bleibt stehen,
-// bis er als gelesen markiert ist. Ältere Artikel bleiben als Verlauf. Nur lokal auf diesem Gerät
-// (localStorage), kein Sync.
+// bis er als gelesen markiert ist. Ältere Artikel bleiben als Verlauf. Synchronisiert über das
+// Event-Log (state.js „homeArticleUpsert“): Liegt der Artikel eines anderen Geräts schon vor, schreibt
+// dieses Gerät keinen eigenen; „Gelesen“ gilt auf allen Geräten.
 //
 // Auswahl — jeden Tag anders:
 //  • Ein Thema pro Tag: von den eigenen Themen (Einstellung homeArticleTopics) das am längsten nicht
@@ -20,7 +21,7 @@ import { BUS } from "./event-bus.js";
 import { closeOverlay } from "./app-dialogs.js";
 import { FACH } from "./fach.js";
 
-const KEY = "impala67.homeArticles";
+const LEGACY_KEY = "impala67.homeArticles"; // vor dem Sync: nur localStorage
 const KEEP = 30;
 const RECENT = 7; // so viele frühere Artikel zählen als „kürzlich verwendet“
 const ACTIVE_NOTES = 4, ARCHIVED_NOTES = 2, MIN_TEXT = 40;
@@ -33,8 +34,25 @@ let phase = "idle", tried = false, error = "", activePages = () => [];
 
 const pad = (n) => String(n).padStart(2, "0");
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-const load = () => { const l = U.storage.getJson(KEY, []); return Array.isArray(l) ? l : []; };
-const save = (list) => U.storage.setJson(KEY, list.slice(0, KEEP));
+// Neueste zuerst; der Verlauf zeigt höchstens KEEP (die Kompaktierung behält ebenso viele)
+const load = () => Object.values(S.homeArticles || {})
+	.sort((a, b) => String(b.created || "").localeCompare(String(a.created || ""))).slice(0, KEEP);
+const save = (article) => STATE.dispatch("homeArticleUpsert", article);
+
+// Einmalig: Artikel aus der Zeit vor dem Sync ins Event-Log übernehmen (ein Promise für alle Aufrufer)
+let migration = null;
+function migrateLocal() {
+	migration ||= (async () => {
+		const old = U.storage.getJson(LEGACY_KEY, null);
+		if (!Array.isArray(old)) return;
+		for (const a of old) {
+			if (a && a.id && a.body && !(S.homeArticles || {})[a.id]) await save({ ...a, updated: a.readAt || a.created });
+		}
+		U.storage.remove(LEGACY_KEY);
+		refresh();
+	})().catch((err) => console.warn("Tagesartikel-Migration:", err));
+	return migration;
+}
 const enabled = () => (S.settings || {}).homeArticle !== false;
 const refresh = () => { if (S.view === "home") BUS.emit("ui:render-main"); };
 const newest = (a, b) => String(b.updated || "").localeCompare(String(a.updated || ""));
@@ -144,13 +162,17 @@ async function write(pages) {
 // getPages: liefert die aktiven Notizen ohne Konflikt-Kopien (render.js filtert), erst bei Bedarf.
 function ensure(getPages) {
 	if (getPages) activePages = getPages;
+	migrateLocal();
 	if (tried || phase !== "idle" || !enabled() || !due()) return;
 	tried = true;
 	phase = "waiting";
-	setTimeout(() => {
+	setTimeout(async () => {
+		await migrateLocal();
+		// Erneut prüfen: übernommene oder inzwischen von einem anderen Gerät gesyncte Artikel
+		if (!due()) { phase = "idle"; refresh(); return; }
 		phase = "busy"; error = ""; refresh();
 		write(activePages())
-			.then((a) => { if (due()) save([a, ...load()]); })
+			.then((a) => (due() ? save({ ...a, updated: a.created }) : null))
 			.catch((err) => { error = (err && err.message) || "KI nicht erreichbar."; })
 			.finally(() => { phase = "idle"; refresh(); });
 	}, 1500);
@@ -163,12 +185,14 @@ function retry() {
 }
 
 function markRead() {
-	const list = load();
-	if (!list[0] || list[0].readAt) return;
-	list[0] = { ...list[0], readAt: U.now() };
-	save(list);
-	refresh();
+	const a = load()[0];
+	if (!a || a.readAt) return;
+	const now = U.now();
+	save({ ...a, readAt: now, updated: now }).then(refresh);
 }
+
+// Artikel oder Gelesen-Markierung von einem anderen Gerät → Startseite neu zeichnen
+STATE.onRemoteApplied((types) => { if (types && types.has && types.has("homeArticleUpsert")) refresh(); });
 
 const sourcesHtml = (a) => (a.sources || []).length
 	? '<nav class="hv-article-src" aria-label="Quellen"><small>Aus deinen Notizen</small>' +

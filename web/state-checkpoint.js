@@ -3,7 +3,7 @@
 export const STATE_CHECKPOINT_FORMAT = 2;
 export const LEGACY_STATE_CHECKPOINT_FORMAT = 1;
 export const STATE_CHECKPOINT_KEYS = Object.freeze([
-	"pages", "cards", "grades", "learningSessions", "chatSessions", "settings",
+	"pages", "cards", "grades", "learningSessions", "chatSessions", "homeArticles", "settings",
 	"decks", "workspaces", "gnFolders", "treeOpen", "tabs", "activeTabId",
 	"reviews", "telemetry", "heftDocs", "heftBlobs",
 ]);

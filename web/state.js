@@ -28,6 +28,7 @@ export const S = {
 	grades: {},  // id → { id, subject, grade, weight, date, comment, created }
 	learningSessions: {}, // id → { id, startedAt, endedAt, durationSeconds, category, subject, subjectSource, sourceId, updated, deleted? }
 	chatSessions: {}, // id → { id, title, messages, created, updated, deleted? } — Drive-synchronisiert
+	homeArticles: {}, // id → { id, day, created, updated, readAt, topics, focus, title, body, sources } — Tagesartikel (home-article.js)
 	settings: {
 		aiProviders: [
 			{ id: "cloudflare", name: "Impala AI", base: "https://impala67-sync.joshuagayer1.workers.dev", key: "" },
@@ -927,6 +928,21 @@ export const STATE = (() => {
 				};
 				break;
 			}
+			case "homeArticleUpsert": {
+				// Tagesartikel: jedes Event ist ein kompletter Stand, Last-write-wins nach updated
+				// (Gelesen-Markierung = neuer Stand mit readAt).
+				if (!p.id || !p.body) break;
+				const current = S.homeArticles[p.id];
+				const updated = p.updated || p.created || ev.t;
+				if (current && String(current.updated || "") > String(updated)) break;
+				S.homeArticles[p.id] = {
+					id: p.id, day: String(p.day || ""), created: p.created || ev.t, updated, readAt: p.readAt || null,
+					topics: Array.isArray(p.topics) ? p.topics.map(String) : [], focus: p.focus || null,
+					title: String(p.title || ""), body: String(p.body),
+					sources: Array.isArray(p.sources) ? p.sources.filter((src) => src && src.id) : [],
+				};
+				break;
+			}
 			case "chatDelete": {
 				if (!p.id) break;
 				const current = S.chatSessions[p.id] || { id: p.id };
@@ -1189,6 +1205,16 @@ export const STATE = (() => {
 					eventCount: Math.max(0, Number(checkpoint.eventCount) || 0),
 					lastEventId: String(checkpoint.lastEventId || ""),
 				};
+				// Checkpoints von vor dem Artikel-Sync kennen homeArticles nicht: Artikel, die andere
+				// Geräte davor geschickt haben, stehen nur im Log — einmalig nachspielen.
+				if (!Object.prototype.hasOwnProperty.call(saved || {}, "homeArticles")) {
+					try {
+						const articleEvents = (await DB.allEvents()).filter((event) => event?.type === "homeArticleUpsert");
+						for (const event of sortEvents(articleEvents)) reduce(event);
+					} catch (err) {
+						console.warn("Artikel-Abgleich nach Checkpoint:", err);
+					}
+				}
 				// Nur bei älteren Checkpoints, die noch ohne Archiv-Status abgespeichert wurden,
 				// führen wir den einmaligen Abgleich durch. Alle regulären Checkpoints überspringen das.
 				if (!checkpoint.reconciledArchive) {

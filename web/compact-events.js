@@ -14,6 +14,9 @@
 const KEEP_CONTENT_VERSIONS = 10;
 const TELE_KEEP_DAYS = 90;
 
+const SNAPSHOT_TYPES = new Set(["chatUpsert", "homeArticleUpsert"]);
+const ARTICLE_KEEP = 30;
+
 export function compactEvents(events) {
 	const sorted = [...events].sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0));
 	const deletedAt = { page: {}, card: {} };
@@ -22,15 +25,21 @@ export function compactEvents(events) {
 		if (ev.type === "pageDelete") deletedAt.page[ev.payload.id] = ev.t;
 		if (ev.type === "cardDelete") deletedAt.card[ev.payload.id] = ev.t;
 	}
-	// Chats sind Last-write-wins nach `updated` (state.js „chatUpsert“): jedes Event ist ein
-	// kompletter Schnappschuss. Behalten wird nur der Gewinner je Chat (bei Gleichstand das
-	// spätere Event, wie beim Replay) — ältere Schnappschüsse blähten Log und Sync auf.
-	const chatWinner = {};
+	// Chats und Tagesartikel sind Last-write-wins nach `updated` (state.js „chatUpsert“,
+	// „homeArticleUpsert“): jedes Event ist ein kompletter Schnappschuss. Behalten wird nur der
+	// Gewinner je Eintrag (bei Gleichstand das spätere Event, wie beim Replay) — ältere
+	// Schnappschüsse blähten Log und Sync auf.
+	const winner = {};
 	for (const ev of sorted) {
-		if (ev.type !== "chatUpsert" || !ev.payload?.id) continue;
-		const updated = String(ev.payload.updated || ev.t || ""), best = chatWinner[ev.payload.id];
-		if (!best || updated >= best.updated) chatWinner[ev.payload.id] = { ev, updated };
+		if (!SNAPSHOT_TYPES.has(ev.type) || !ev.payload?.id) continue;
+		const key = ev.type + ":" + ev.payload.id;
+		const updated = String(ev.payload.updated || ev.t || ""), best = winner[key];
+		if (!best || updated >= best.updated) winner[key] = { ev, updated };
 	}
+	// Tagesartikel: nur die neuesten ARTICLE_KEEP behalten (wie der Verlauf in home-article.js)
+	const keptArticles = new Set(Object.values(winner).filter((w) => w.ev.type === "homeArticleUpsert")
+		.sort((a, b) => String(b.ev.payload.created || "").localeCompare(String(a.ev.payload.created || "")))
+		.slice(0, ARTICLE_KEEP).map((w) => w.ev.payload.id));
 	const covered = {}, contentKept = {}, keep = [];
 	let uiTabsKept = false;
 	const uiTreeKeys = new Set();
@@ -38,7 +47,8 @@ export function compactEvents(events) {
 		const ev = sorted[i], p = ev.payload || {};
 		if (ev.type === "uiTabsSet") { if (uiTabsKept) continue; uiTabsKept = true; }
 		else if (ev.type === "uiTreeSet") { if (p.key == null || uiTreeKeys.has(p.key)) continue; uiTreeKeys.add(p.key); }
-		else if (ev.type === "chatUpsert" && p.id && chatWinner[p.id].ev !== ev) continue;
+		else if (SNAPSHOT_TYPES.has(ev.type) && p.id && winner[ev.type + ":" + p.id].ev !== ev) continue;
+		if (ev.type === "homeArticleUpsert" && !keptArticles.has(p.id)) continue;
 		if (ev.type === "pageUpdate" && deletedAt.page[p.id] && ev.t <= deletedAt.page[p.id]) continue;
 		if (ev.type === "cardUpdate" && deletedAt.card[p.id] && ev.t <= deletedAt.card[p.id]) continue;
 		const [bucket, patch] =
