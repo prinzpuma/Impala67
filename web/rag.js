@@ -327,5 +327,45 @@ export const RAG = (() => {
 		return rankRag({ query, qv, vecs: await allVecsCached(), pages, model, providerId, k });
 	}
 
-	return { queuePage, reindexStale, search, indexPage, enabled };
+	// Verwandte Seiten: Seitenvektor = normierter Mittelwert der Chunk-Vektoren, gecacht
+	// je Vektor-Datensatz (allVecsCached liefert nach Reindex neue Objekte).
+	const pageVecCache = new WeakMap();
+	function pageVecOf(rec) {
+		let v = pageVecCache.get(rec);
+		if (v === undefined) {
+			v = null;
+			for (const c of rec.chunks || []) {
+				if (!c.vec) continue;
+				if (!v) v = new Float32Array(c.vec.length);
+				if (c.vec.length !== v.length) continue;
+				const n = c.norm || norm(c.vec);
+				for (let i = 0; i < v.length; i++) v[i] += c.vec[i] / n;
+			}
+			if (v) { const n = norm(v); for (let i = 0; i < v.length; i++) v[i] /= n; }
+			pageVecCache.set(rec, v);
+		}
+		return v;
+	}
+	const RELATED_MIN = 0.5;
+	async function related(pageId, k = 3) {
+		if (!enabled()) return [];
+		const vecs = await allVecsCached();
+		const model = embeddingModel(), providerId = embeddingProviderId();
+		const usable = (rec) => rec && rec.model === model && String(rec.providerId || "") === providerId;
+		const base = usable(vecs[pageId]) && pageVecOf(vecs[pageId]);
+		if (!base) return [];
+		const hits = [];
+		for (const [id, rec] of Object.entries(vecs)) {
+			const pg = S.pages[id];
+			if (id === pageId || !pg || pg.trashed || pg.archived || !usable(rec)) continue;
+			const v = pageVecOf(rec);
+			if (!v || v.length !== base.length) continue;
+			let score = 0;
+			for (let i = 0; i < v.length; i++) score += v[i] * base[i];
+			if (score >= RELATED_MIN) hits.push({ id, score });
+		}
+		return hits.sort((a, b) => b.score - a.score).slice(0, k);
+	}
+
+	return { queuePage, reindexStale, search, indexPage, enabled, related };
 })();

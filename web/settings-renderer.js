@@ -113,6 +113,7 @@ function renderAppearance(vm) {
 	], vm.tabsPosition || "top", "Tab-Anordnung") }) +
 		UI.field("Begrüßungsname", "inpHomeName", S.settings.homeUserName || "", { anchor: "home-name", description: "Erscheint in der Begrüßung auf der Startseite", placeholder: "Optional" }) +
 		UI.row({ id: "home-article", title: "Tagesartikel", description: "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen", trailing: switchControl("inpHomeArticle", "Tagesartikel", S.settings.homeArticle !== false) }) +
+		UI.row({ id: "related-pages", title: "Verwandte Seiten", description: "Zeigt unter jeder Notiz bis zu drei inhaltlich ähnliche Seiten (braucht das Embedding-Modell unter KI)", trailing: switchControl("inpRelatedPages", "Verwandte Seiten", S.settings.relatedPages !== false) }) +
 		UI.field("Themen für den Tagesartikel", "inpHomeTopics", S.settings.homeArticleTopics || "", { anchor: "home-topics", description: "Kommagetrennt, wechseln täglich. Leer = jeden Tag eines deiner aktiven Fächer", placeholder: "Automatisch" }) +
 		topicSuggestions();
 	return UI.page("Darstellung", "Ein ruhiges Erscheinungsbild, das zu deinem Gerät und deinem Lernstil passt.",

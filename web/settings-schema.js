@@ -35,6 +35,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "tabs-position", section: "appearance", group: "Oberfläche", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "home-name", section: "appearance", group: "Oberfläche", label: "Begrüßungsname", description: "Name in der Begrüßung auf der Startseite", keywords: "anzeigename profil startseite home" },
 	{ id: "home-article", section: "appearance", group: "Oberfläche", label: "Tagesartikel", description: "KI-Zusammenfassung deiner Notizen auf der Startseite", keywords: "artikel zusammenfassung ki startseite home täglich" },
+	{ id: "related-pages", section: "appearance", group: "Oberfläche", label: "Verwandte Seiten", description: "Inhaltlich ähnliche Seiten unter jeder Notiz", keywords: "ähnlich verwandt vorschläge embedding notiz verknüpfung" },
 	{ id: "home-topics", section: "appearance", group: "Oberfläche", label: "Themen für den Tagesartikel", description: "Themen, über die der Tagesartikel schreibt", keywords: "artikel themen fächer startseite" },
 	{ id: "ai-models", section: "ai", group: "Aktives Modell", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
 	{ id: "ai-sources", section: "ai", group: "Quellen", label: "KI-Quellen", description: "OpenAI, Gemini, LM Studio und eigene Endpunkte", keywords: "api key schlüssel token url endpoint anbieter" },

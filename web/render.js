@@ -27,6 +27,7 @@ import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } 
 import { lernanalyseParts } from "./lernanalyse.js";
 import { icon, lead, pageIcon } from "./icons.js";
 import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
+import { relatedSlotHtml, hydrateRelated } from "./related-pages.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -697,12 +698,14 @@ function renderMain() {
 		(pg.db ? dbTableHtml(pg) : "") +
 		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
 		// U.morph lässt ihn unangetastet.
-		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div></div>';
+		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div>' +
+		relatedSlotHtml(pg) + "</div>";
 	// Hintergrund-Updates erzeugen für die offene Seite meist exakt dasselbe Markup.
 	// Dann weder HTML erneut parsen noch den DOM-Baum durchlaufen; Editor, Fokus,
 	// Scroll und eingebettete Medien bleiben komplett unberührt.
 	setHtmlIfChanged(main, pageShellHtml, "_lastPageShellHtml");
 	hydrateCovers(main);
+	hydrateRelated(main);
 	// Titelhöhe an den Inhalt koppeln. WICHTIG: Das <textarea> überlebt den Render jetzt —
 	// der Listener darf deshalb nur EINMAL pro Element hängen, sonst sammeln sich mit
 	// jedem Render weitere Kopien an.

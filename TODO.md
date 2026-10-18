@@ -40,7 +40,7 @@ Stand: v2.2.77 (Oktober 2026)
   - `web/app-sidebar-events.js` (Sidebar-Drag-&-Drop, Inline-Umbenennen, Breitenanpassung) und `web/app-dialogs.js` (Dialoge, Seiten-Flows, Anki-/Lernmodus-Helfer) aus `web/app.js` ausgelagert.
   - `web/editor-inline.js` (Inline-Markdown, KaTeX-Hydrierung, Caret-Berechnung) aus `web/editor.js` ausgelagert.
 - [ ] **Große Dateien weiter schneiden**:
-  - `web/heft.js` (~2.680 Zeilen): Viewport/Zoom/Kachel-Rendering (`heft-viewport.js`) und Stift-/Touch-Eingabe (`heft-input.js`) herauslösen.
+  - `web/heft.js` (~2.075 Zeilen): Viewport/Zoom/Kacheln und Finger-Gesten sind in `web/heft-viewport.js` ausgelagert. Offen: Stift-Eingabe (`onDown`/`onMove`/`onUp`, eng mit Werkzeugen, Auswahl und Undo verflochten) in `heft-input.js` herauslösen.
   - `web/app.js` (~1.815 Zeilen): Verbleibende Bereiche in `wireEvents()` (z. B. Anki/Lernmodus-Klicks, Daily Notes, Kontextmenüs) aufteilen.
   - `web/editor.js` (~2.215 Zeilen): Verbleibende Teilbereiche (z. B. Tastatur-Handler / Block-Operationen) modularisieren.
 - [x] **Restliche CSS-Überlagerungen abgebaut**:

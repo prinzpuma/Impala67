@@ -195,7 +195,7 @@ function gather(q) {
 	}
 
 	const pages = ql
-		? STATE.searchNotes(ql, { includeArchived: true }).map((r) => ({ type: "page", page: r.page, snippet: r.snippet }))
+		? STATE.searchNotes(ql, { includeArchived: true }).map((r) => ({ type: "page", page: r.page, snippet: r.snippet, terms: r.terms }))
 		: recentPages(6).map((p) => ({ type: "page", page: p }));
 	let chats = loadChats(); // gecacht, siehe loadChats
 	chats = (ql
@@ -210,8 +210,10 @@ function gather(q) {
 
 // WARUM: Regex wurde je Zeile UND je Tastendruck neu kompiliert. Jetzt einmal pro
 // Render bauen und durchreichen. text||"" weil leere Titel sonst "undefined" anzeigten.
-function markRe(ql) {
-	return ql ? new RegExp("(" + ql.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi") : null;
+// terms: Wortformen aus Tippfehler-Treffern (STATE.searchNotes), zusätzlich markiert.
+function markRe(ql, terms) {
+	const parts = [ql, ...(terms || [])].filter(Boolean).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+	return parts.length ? new RegExp("(" + parts.join("|") + ")", "gi") : null;
 }
 
 // Auf dem Klartext markieren und stückweise escapen — auf dem escapten String traf
@@ -245,11 +247,12 @@ function renderList(q) {
 			const pg = r.page;
 			const snip = r.snippet ? r.snippet.replace(/\s+/g, " ").trim().slice(0, 110) : "";
 			const path = r.path || "";
+			const rowRe = r.terms ? markRe(ql, r.terms) : re;
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
 				'<span class="palette-icon">' + pageIcon(pg) + "</span>" +
-				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, re) + "</span>" +
-				(path ? '<span class="palette-snip">' + mark(path, re) + "</span>"
-					: (snip ? '<span class="palette-snip">' + mark(snip, re) + "</span>" : "")) +
+				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, rowRe) + "</span>" +
+				(path ? '<span class="palette-snip">' + mark(path, rowRe) + "</span>"
+					: (snip ? '<span class="palette-snip">' + mark(snip, rowRe) + "</span>" : "")) +
 				"</span>" +
 				'<span class="palette-kind">' + (paletteMode === "newTab" && path ? U.esc(path.split(" › ").slice(-1)[0] || "") : (pg.archived ? "Archiv · " : "") + U.fmtDate(pg.updated)) + "</span></button>";
 		}

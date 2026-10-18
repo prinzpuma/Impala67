@@ -1,0 +1,111 @@
+"use strict";
+
+// Fehlertolerante Ergänzung zur Volltextsuche: findet Seiten trotz Tippfehlern,
+// „ae“ statt „ä“, „f“ statt „ph“ und halb getippter Wörter. Läuft nur, wenn die
+// exakte Suche zu wenig liefert (siehe STATE.searchNotes).
+
+// Schreibweisen angleichen, die beim Tippen oft abweichen. Beide Seiten (Suchwort
+// und Seitentext) laufen hier durch, deshalb darf die Faltung „unschön“ sein.
+export function fold(s) {
+	return String(s).toLowerCase()
+		.replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+		.normalize("NFD").replace(/[̀-ͯ]/g, "")
+		.replace(/ph/g, "f").replace(/th/g, "t");
+}
+
+const SPLIT = /[^\p{L}\p{N}]+/u;
+
+// Wörter als Paar aus Originalform (für die Markierung) und gefalteter Form (zum Vergleich).
+function words(text) {
+	const out = [];
+	for (const form of String(text).toLowerCase().split(SPLIT)) {
+		if (form.length >= 2) out.push({ form, key: fold(form) });
+	}
+	return out;
+}
+
+// Editierdistanz mit Vertauschung (OSA); bricht ab, sobald sie sicher über max liegt.
+export function typoDistance(a, b, max) {
+	if (Math.abs(a.length - b.length) > max) return max + 1;
+	let prev2 = null, prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+	for (let i = 1; i <= a.length; i++) {
+		const cur = [i];
+		let rowMin = i;
+		for (let j = 1; j <= b.length; j++) {
+			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+			let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+			if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+			cur[j] = v;
+			if (v < rowMin) rowMin = v;
+		}
+		if (rowMin > max) return max + 1;
+		prev2 = prev;
+		prev = cur;
+	}
+	return prev[b.length];
+}
+
+// 3 = gleiches Wort, 2 = Wortanfang, 1 = Tippfehler, 0 = kein Treffer.
+function quality(term, word) {
+	if (word === term) return 3;
+	if (word.startsWith(term)) return 2;
+	const max = term.length >= 8 ? 2 : term.length >= 4 ? 1 : 0;
+	if (!max) return 0;
+	if (typoDistance(term, word, max) <= max) return 1;
+	// Wort wird noch getippt: Tippfehler im Anfang („fotosint“ → „fotosintese“).
+	if (term.length >= 5 && word.length > term.length && typoDistance(term, word.slice(0, term.length), max) <= max) return 1;
+	return 0;
+}
+
+export function createFuzzyIndex() {
+	const vocab = new Map(); // gefaltetes Wort → { pages: Set<pageId>, forms: Set<string> }
+	const pageKeys = new Map(); // pageId → Set gefalteter Wörter
+
+	function setPage(id, text) {
+		for (const key of pageKeys.get(id) || []) {
+			const v = vocab.get(key);
+			if (v && v.pages.delete(id) && !v.pages.size) vocab.delete(key);
+		}
+		const keys = new Set();
+		for (const { form, key } of words(text)) {
+			let v = vocab.get(key);
+			if (!v) vocab.set(key, v = { pages: new Set(), forms: new Set() });
+			v.pages.add(id);
+			v.forms.add(form);
+			keys.add(key);
+		}
+		pageKeys.set(id, keys);
+	}
+
+	// Jedes Suchwort muss auf der Seite vorkommen (UND). Liefert Seiten mit Punktzahl
+	// und den getroffenen Originalformen zum Markieren.
+	function search(query, allow) {
+		const terms = [...new Set(words(query).map((w) => w.key))].filter((t) => t.length >= 3);
+		if (!terms.length) return [];
+		let hits = null; // pageId → { score, forms }
+		for (const term of terms) {
+			const next = new Map();
+			for (const [key, v] of vocab) {
+				const q = quality(term, key);
+				if (!q) continue;
+				for (const id of v.pages) {
+					if (hits ? !hits.has(id) : !allow(id)) continue;
+					let h = next.get(id);
+					if (!h) next.set(id, h = { q: 0, forms: [] });
+					if (q > h.q) h.q = q;
+					h.forms.push(...v.forms);
+				}
+			}
+			for (const [id, h] of next) {
+				const prev = hits && hits.get(id);
+				h.score = (prev ? prev.score : 0) + h.q;
+				if (prev) h.forms.push(...prev.forms);
+			}
+			hits = next;
+			if (!hits.size) return [];
+		}
+		return [...hits].map(([id, h]) => ({ id, score: h.score, forms: [...new Set(h.forms)] }));
+	}
+
+	return { setPage, search };
+}
