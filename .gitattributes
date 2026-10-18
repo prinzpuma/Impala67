@@ -1,0 +1,3 @@
+# Wörterbuch der Handschrift-Erkennung: web/handwriting-lexicon.js trennt Wörter an "\n" und vergleicht
+# Zeichen für Zeichen; CRLF würde an jedes Wort ein "\r" hängen.
+web/handwriting-lexicon-de.txt text eol=lf
