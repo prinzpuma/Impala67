@@ -260,5 +260,6 @@ export const HANDWRITING_PREPROCESSOR = (() => {
 		segmentLines,
 		orderLineStrokes,
 		deskewLine,
+		calculateStrokeHeightMedian,
 	};
 })();

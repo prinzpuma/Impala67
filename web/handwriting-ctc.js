@@ -195,6 +195,46 @@ export const HANDWRITING_CTC = (() => {
 		return best ? best.text : "";
 	}
 
+	function argmax(row) {
+		let best = 0;
+		for (let c = 1; c < row.length; c++) if (row[c] > row[best]) best = c;
+		return best;
+	}
+
+	// Beam-Search; mit großem Wörterbuch (options.lexicon, handwriting-lexicon.js) wird zusätzlich jedes Wort
+	// (Abschnitt zwischen Leerzeichen-Schritten) entlang echter Wörter gelesen.
+	function decodeText(probsPerStep, vocab, blank, options) {
+		const clean = (probs) => cleanTranscription(beamSearch(probs, vocab, blank), { ...options, correct: false });
+		if (!options.lexicon) return clean(probsPerStep);
+		const space = vocab.CHAR_TO_IDX.get(" ");
+		const words = [];
+		let start = 0;
+		for (let t = 0; t <= probsPerStep.length; t++) {
+			if (t < probsPerStep.length && argmax(probsPerStep[t]) !== space) continue;
+			const segment = probsPerStep.slice(start, t);
+			const raw = segment.length ? clean(segment) : "";
+			if (raw) words.push(options.lexicon.correct(raw, segment, vocab));
+			start = t + 1;
+		}
+		return words.join(" ");
+	}
+
+	// Große Lücken zwischen den Strichen sind Wortgrenzen, auch wo das Modell kein Leerzeichen liest (in Zeilen
+	// mit Formeln lässt es sie fast immer weg: "=2xywirddyly"). gaps: leere Spaltenbereiche [von, bis) des
+	// Zeilenbilds (findInkGaps); erzwingt in der Mitte jeder Lücke ohne Leerzeichen eins. Ändert logits2D.
+	function markGapSpaces(logits2D, gaps, imageWidth, vocab = HANDWRITING_VOCAB) {
+		const space = vocab.CHAR_TO_IDX.get(" ");
+		const stepsPerColumn = logits2D.length / imageWidth;
+		const step = (x) => Math.min(logits2D.length - 1, Math.floor(x * stepsPerColumn));
+		for (const [from, to] of gaps) {
+			let hasSpace = false;
+			for (let t = step(from); t <= step(to - 1) && !hasSpace; t++) hasSpace = argmax(logits2D[t]) === space;
+			if (hasSpace) continue;
+			const row = logits2D[step((from + to) / 2)];
+			row[space] = row[argmax(row)] + 2;
+		}
+	}
+
 	// Formel statt Fließtext: ein "=" oder ein Mathezeichen, auf das noch etwas folgt (x^2, ∫2x).
 	// Ein angehängtes Zeichen am Wortende ("Handbreit√") zählt nicht.
 	const FORMULA_HINT = /=|[\^_{}<>~√∫∑πλαβ]\S/;
@@ -277,7 +317,7 @@ export const HANDWRITING_CTC = (() => {
 		// Text: Beam-Search mit Wörterbuch (options.decoder "greedy" schaltet zurück). Formeln bleiben Greedy.
 		const useBeam = isTextMode && options.decoder !== "greedy";
 		const text = useBeam
-			? cleanTranscription(beamSearch(probsPerStep, vocab, blank), { ...options, correct: false })
+			? decodeText(probsPerStep, vocab, blank, options)
 			: cleanTranscription(rawText, { ...options, charConfidences });
 
 		// Gesamt-Konfidenz: Arithmetisches Mittel der Zeichen-Wahrscheinlichkeiten
@@ -339,6 +379,7 @@ export const HANDWRITING_CTC = (() => {
 
 	return {
 		decodeWithConfidence,
+		markGapSpaces,
 		cleanTranscription,
 		correctWord,
 		levenshtein,

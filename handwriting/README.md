@@ -10,7 +10,8 @@ web/heft.js (Striche)
   → web/handwriting-preprocessor.js  Zeilentrennung (segmentLines, Skizzen-Filter), Begradigung (deskewLine)
   → web/handwriting-rasterizer.js    Zeile → Graustufenbild, 64 px hoch (gleiche Regeln wie rasterize.py)
   → web/handwriting-worker.js        ONNX Runtime Web (WASM), Modell: web/handwriting-model.onnx
-  → web/handwriting-ctc.js           CTC-Beam-Search + Wörterbuch (handwriting-words-de.js, nicht bei Formeln)
+  → web/handwriting-ctc.js           Leerzeichen an großen Strich-Lücken, CTC-Beam-Search + Wörterbuch (nicht bei Formeln)
+  → web/handwriting-lexicon.js       jedes Wort zusätzlich entlang echter Wörter lesen (handwriting-lexicon-de.txt, 233.000 Wörter + Endungen)
   → web/heft-indexer.js              Hintergrund-Erkennung aller Seiten → Suche/RAG, Fortschritt in den Einstellungen
 ```
 
@@ -19,7 +20,9 @@ web/heft.js (Striche)
 - **Start**: [de-htr-web-v2](https://huggingface.co/naeyn/de-htr-web-v2) (naeyn, Apache-2.0, trainiert auf ScaDS.AI + fhswf),
   Gewichte per `load_dehtr_onnx` übernommen und auf unser Vokabular abgebildet (`^ ~ √ ∫ ∑ π λ α β` neu).
 - **Vokabular** (`vocabulary.py`, `web/handwriting-vocab.js`): 101 Token (Buchstaben, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
-- **Neu-Erkennung**: Neues Modell → Version setzt der Release-Workflow automatisch; geänderte Vorverarbeitung →
+- **Wörterbuch** (`build_lexicon.py` → `web/handwriting-lexicon-de.txt`): aus `dictionary_de.txt` plus den 5.000 häufigsten
+  Wörtern; ersetzt eine Lesung nur, wenn das Modell die Wörterbuch-Lesung nicht viel unwahrscheinlicher findet.
+- **Neu-Erkennung**: Neues Modell oder Wörterbuch → Version setzt der Release-Workflow automatisch; geänderte Vorverarbeitung →
   `RECOGNIZER_REVISION` in `web/heft-indexer.js` erhöhen.
 
 ## Dateien
@@ -34,6 +37,7 @@ web/heft.js (Striche)
 | `mathwriting_loader.py`, `brush_loader.py` | MathWriting (Training + Messung) und BRUSH (nur Messung: gezeichneter Text fremder Schreiber) |
 | `generate_synthetic.py`, `font_sampler.py`, `text_corpus.py`, `augmentations.py` | Gezeichnete Sätze und Rechnungen aus Handschrift-Fonts, Verzerrungen |
 | `samples_loader.py` | Eigene Abschreib-Zeilen (`my_handwriting_samples.json`) – nur zum Messen |
+| `build_lexicon.py` | Baut `web/handwriting-lexicon-de.txt` (klein geschrieben, sortiert) |
 | `evaluate_user_benchmark_words.py` | Benchmark auf eigener Handschrift (TEST-/AUSWAHL-CER) |
 | `scads_split.json` | ScaDS-Schreiber für Auswahl/Test, die de-htr nie gesehen hat |
 
@@ -83,4 +87,9 @@ IAM, IAM-OnDB, CVL, GoBo und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verw
 
 - TEST = ungerade Benchmark-Zeilen; „fremd“ = Test-Schreiber, die nie trainiert oder zur Auswahl benutzt wurden.
 - Lauf 3 auf den Abschreib-Messzeilen: 5,3 % CER (Strich-Modell mit Feintuning auf genau diese Handschrift: 6,7 %).
+- Ohne Training (Okt. 2026, Lauf 3, Decoder der App): großes Wörterbuch (Vorrang 12), Lücken-Leerzeichen und Mindesthöhe
+  der Zeile (3 typische Strichhöhen) senken die CER: Heft-Mitschriften (`benchmark_notizen.json`) 5,1 → 2,9 %,
+  Abschreib-Zeilen 5,2 → 4,8 %, ScaDS-Test-Schreiber (Scans, nur Wörterbuch) 8,1 → 6,3 %.
+  Geprüft und verworfen: dickere Striche, Mittelung über mehrere Renderings, fp32 statt int8 (gleich gut),
+  Ensemble mit Lauf 1 (viel schlechter), Komposita-Zerlegung, Schutzregeln für Endungen/Abkürzungen/sichere Zeichen.
 - Das frühere Strich-Modell (Punktfolgen, `train.py`) steht im Git-Verlauf bis `269e442`.

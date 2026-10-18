@@ -7,7 +7,8 @@ import { HANDWRITING_PREPROCESSOR } from "./handwriting-preprocessor.js";
 import { HANDWRITING_VOCAB } from "./handwriting-vocab.js";
 import { HANDWRITING_CTC } from "./handwriting-ctc.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
-import { rasterizeLine, IMAGE_HEIGHT } from "./handwriting-rasterizer.js";
+import { rasterizeLine, findInkGaps, IMAGE_HEIGHT } from "./handwriting-rasterizer.js";
+import { createLexicon } from "./handwriting-lexicon.js";
 
 const ORT_VERSION = "1.30.0";
 let ort = null;
@@ -36,24 +37,45 @@ async function loadOrt() {
 const MODEL_VERSION = HANDWRITING_MODEL_VERSION;
 const MODEL_CACHE_KEY = `impala67-handwriting-model-${MODEL_VERSION}`;
 
-async function fetchModelBuffer(modelPath) {
+// Modell und Wörterbuch: einmal je Version laden, danach aus dem eigenen Cache
+async function fetchCached(path) {
 	if (typeof caches !== "undefined") {
 		try {
 			const cache = await caches.open(MODEL_CACHE_KEY);
-			let response = await cache.match(modelPath);
+			let response = await cache.match(path);
 			if (!response) {
-				response = await fetch(`${modelPath}?v=${MODEL_VERSION}`);
+				response = await fetch(`${path}?v=${MODEL_VERSION}`);
 				if (response.ok) {
-					await cache.put(modelPath, response.clone());
+					await cache.put(path, response.clone());
 				}
 			}
-			return await response.arrayBuffer();
+			return response;
 		} catch (e) {
 			console.info("[handwriting-worker] Cache Storage nicht verfügbar, lade direkt:", e);
 		}
 	}
-	const res = await fetch(`${modelPath}?v=${MODEL_VERSION}`);
-	return await res.arrayBuffer();
+	return fetch(`${path}?v=${MODEL_VERSION}`);
+}
+
+// Großes Wörterbuch (handwriting-lexicon.js); fehlt es, liest die Erkennung ohne weiter
+const LEXICON_PATH = "./handwriting-lexicon-de.txt";
+let lexicon = null;
+let lexiconLoading = null;
+function loadLexicon() {
+	if (!lexiconLoading) {
+		lexiconLoading = fetchCached(LEXICON_PATH)
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.text();
+			})
+			.then((text) => (lexicon = createLexicon(text)))
+			.catch((e) => {
+				console.warn("[handwriting-worker] Wörterbuch nicht geladen:", e);
+				lexiconLoading = null;
+				return null;
+			});
+	}
+	return lexiconLoading;
 }
 
 // Gleichzeitige Anfragen warten auf denselben Ladevorgang, statt leer auszugehen
@@ -68,7 +90,7 @@ async function loadSession(modelPath) {
 	try {
 		await loadOrt();
 		currentModelPath = modelPath;
-		const modelBuffer = await fetchModelBuffer(modelPath);
+		const modelBuffer = await (await fetchCached(modelPath)).arrayBuffer();
 		const executionProviders = ["wasm"];
 		session = await ort.InferenceSession.create(modelBuffer, {
 			executionProviders,
@@ -87,6 +109,8 @@ async function loadSession(modelPath) {
 
 // Breiteste Zeilenbilder im Training (handwriting/train_image.py); breitere werden unzuverlässiger.
 const MAX_TRAINING_WIDTH = 2048;
+// Leere Spalten ab dieser Breite (Zeilenbild 64 px hoch) sind sicher eine Wortlücke; 16 px trennten schon Buchstaben.
+const WORD_GAP_PX = 24;
 
 // Führt Inferenz für ein Zeilenbild aus (rasterizeLine: Graustufen 0..1, Höhe 64)
 async function recognizeLineImage(image, options = {}) {
@@ -141,7 +165,18 @@ async function recognizeLineImage(image, options = {}) {
 		logits2D.push(row);
 	}
 
-	return HANDWRITING_CTC.decodeWithConfidence(logits2D, HANDWRITING_VOCAB, options);
+	HANDWRITING_CTC.markGapSpaces(logits2D, findInkGaps(image, WORD_GAP_PX), image.width);
+	return HANDWRITING_CTC.decodeWithConfidence(logits2D, HANDWRITING_VOCAB, { ...options, lexicon });
+}
+
+// Zeile mindestens so hoch zeichnen wie 3 typische Strichhöhen: sonst füllen Zeilen ohne Ober- und Unterlängen
+// das ganze Bild (Heft-Mitschriften Okt. 2026: 5,4 → 5,1 % Greedy-CER, ab 4 schlechter).
+const MIN_LINE_HEIGHT_STROKES = 3;
+
+function rasterizeStraightLine(lineStrokes) {
+	const straight = HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes);
+	const strokeHeight = HANDWRITING_PREPROCESSOR.calculateStrokeHeightMedian(straight, 0, 0.5);
+	return rasterizeLine(straight, MIN_LINE_HEIGHT_STROKES * strokeHeight);
 }
 
 // Erkennt eine Liste von Strichen auf einer Seite mit vollständiger Strich-Bilanzierung
@@ -183,7 +218,7 @@ async function recognizePageStrokes(strokes, options = {}) {
 		}
 
 		const pointCount = lineStrokes.reduce((n, s) => n + ((s.pts && s.pts.length) || 0), 0);
-		const image = pointCount >= 5 ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
+		const image = pointCount >= 5 ? rasterizeStraightLine(lineStrokes) : null;
 
 		// Prüfung auf zu breite Zeilen (Training-Limit)
 		const isTooLong = !!image && image.width > MAX_TRAINING_WIDTH;
@@ -284,7 +319,7 @@ self.addEventListener("message", async (event) => {
 	if (!msg) return;
 
 	if (msg.type === "init") {
-		await initSession(msg.modelPath || currentModelPath);
+		await Promise.all([initSession(msg.modelPath || currentModelPath), loadLexicon()]);
 		return;
 	}
 
@@ -292,7 +327,8 @@ self.addEventListener("message", async (event) => {
 		const id = msg.id;
 		try {
 			// Ohne Modell wäre jede Zeile still "leer": als Fehler melden, damit Aufrufer es später erneut versuchen
-			if (!(await initSession())) throw new Error("Handschrift-Modell ist nicht geladen.");
+			const [ready] = await Promise.all([initSession(), loadLexicon()]);
+			if (!ready) throw new Error("Handschrift-Modell ist nicht geladen.");
 			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {});
 			self.postMessage({
 				type: "result",

@@ -75,6 +75,7 @@ const APP_FILES = [
 	"./handwriting-words-de.js",
 	"./handwriting-worker.js",
 	"./handwriting-rasterizer.js",
+	"./handwriting-lexicon.js",
 	"./rag.js",
 	"./rag-ranking.js",
 	"./rag-worker.js",

@@ -41,11 +41,12 @@ if (!/const CACHE = "impala67-v[^"]+"/.test(worker)) {
 worker = worker.replace(/const CACHE = "impala67-v[^"]+"/, `const CACHE = "impala67-v${version}"`);
 fs.writeFileSync(workerPath, worker);
 
-// Handschrift-Modellversion = Prüfsumme der Modelldatei: ändert sich genau dann, wenn ein neues
-// Modell eingecheckt wird (neuer Cache im Worker, einmalige Neuerkennung aller Heftseiten).
+// Handschrift-Modellversion = Prüfsumme von Modell und Wörterbuch: ändert sich genau dann, wenn eins davon
+// neu eingecheckt wird (neuer Cache im Worker, einmalige Neuerkennung aller Heftseiten).
 const modelPath = "./web/handwriting-model.onnx";
+const lexiconPath = "./web/handwriting-lexicon-de.txt";
 const modelVersionPath = "./web/handwriting-model-version.js";
-const modelHash = crypto.createHash("sha256").update(fs.readFileSync(modelPath)).digest("hex").slice(0, 12);
+const modelHash = crypto.createHash("sha256").update(fs.readFileSync(modelPath)).update(fs.readFileSync(lexiconPath)).digest("hex").slice(0, 12);
 let modelVersion = fs.readFileSync(modelVersionPath, "utf8");
 if (!/export const HANDWRITING_MODEL_VERSION = "[^"]+"/.test(modelVersion)) {
   console.error("HANDWRITING_MODEL_VERSION fehlt in web/handwriting-model-version.js");
