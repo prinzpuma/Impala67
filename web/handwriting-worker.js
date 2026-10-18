@@ -109,8 +109,9 @@ async function loadSession(modelPath) {
 
 // Breiteste Zeilenbilder im Training (handwriting/train_image.py); breitere werden unzuverlässiger.
 const MAX_TRAINING_WIDTH = 2048;
-// Leere Spalten ab dieser Breite (Zeilenbild 64 px hoch) sind sicher eine Wortlücke; 16 px trennten schon Buchstaben.
-const WORD_GAP_PX = 24;
+// Leere Spalten ab dieser Breite (Zeilenbild 64 px hoch) sind sicher eine Wortlücke. Bei fremden ScaDS-Schreibern
+// ab 32 px ohne Nachteil; 24 px half nur eigenen Formel-Zeilen und kostete bei ScaDS leicht, 16 px trennte Buchstaben.
+const WORD_GAP_PX = 32;
 
 // Führt Inferenz für ein Zeilenbild aus (rasterizeLine: Graustufen 0..1, Höhe 64)
 async function recognizeLineImage(image, options = {}) {
@@ -169,16 +170,6 @@ async function recognizeLineImage(image, options = {}) {
 	return HANDWRITING_CTC.decodeWithConfidence(logits2D, HANDWRITING_VOCAB, { ...options, lexicon });
 }
 
-// Zeile mindestens so hoch zeichnen wie 3 typische Strichhöhen: sonst füllen Zeilen ohne Ober- und Unterlängen
-// das ganze Bild (Heft-Mitschriften Okt. 2026: 5,4 → 5,1 % Greedy-CER, ab 4 schlechter).
-const MIN_LINE_HEIGHT_STROKES = 3;
-
-function rasterizeStraightLine(lineStrokes) {
-	const straight = HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes);
-	const strokeHeight = HANDWRITING_PREPROCESSOR.calculateStrokeHeightMedian(straight, 0, 0.5);
-	return rasterizeLine(straight, MIN_LINE_HEIGHT_STROKES * strokeHeight);
-}
-
 // Erkennt eine Liste von Strichen auf einer Seite mit vollständiger Strich-Bilanzierung
 async function recognizePageStrokes(strokes, options = {}) {
 	const totalStrokesCount = Array.isArray(strokes) ? strokes.length : 0;
@@ -218,7 +209,7 @@ async function recognizePageStrokes(strokes, options = {}) {
 		}
 
 		const pointCount = lineStrokes.reduce((n, s) => n + ((s.pts && s.pts.length) || 0), 0);
-		const image = pointCount >= 5 ? rasterizeStraightLine(lineStrokes) : null;
+		const image = pointCount >= 5 ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
 
 		// Prüfung auf zu breite Zeilen (Training-Limit)
 		const isTooLong = !!image && image.width > MAX_TRAINING_WIDTH;

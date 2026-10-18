@@ -49,17 +49,16 @@ def pad_width(img: np.ndarray) -> np.ndarray:
 
 
 def render_strokes(strokes: Strokes, stroke_width: Optional[float] = None, height: int = IMAGE_HEIGHT,
-                   padding: int = PADDING, min_height: float = 0.0) -> np.ndarray:
-    """Gibt ein Graustufenbild [height, width] als float32 in [0, 1] zurück (1 = weiß).
-    min_height: Tinte mittig in mindestens dieser Höhe zeichnen (App: 3 typische Strichhöhen, handwriting-worker.js)."""
+                   padding: int = PADDING) -> np.ndarray:
+    """Gibt ein Graustufenbild [height, width] als float32 in [0, 1] zurück (1 = weiß)."""
     strokes = [s for s in strokes if s]
     if not strokes:
         return np.ones((height, 4), dtype=np.float32)
     ss = SUPERSAMPLE
     xs = [p[0] for s in strokes for p in s]
     ys = [p[1] for s in strokes for p in s]
-    h = max(max(ys) - min(ys), min_height, 1e-6)
-    x0, y0 = min(xs), (min(ys) + max(ys) - h) / 2
+    x0, y0 = min(xs), min(ys)
+    h = max(max(ys) - y0, 1e-6)
     scale = (height - 2 * padding) * ss / h
     w = int((max(xs) - x0) * scale) + 2 * padding * ss + 1
     img = Image.new("L", (w, height * ss), 255)

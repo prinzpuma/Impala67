@@ -1,18 +1,16 @@
 "use strict";
 
 // web/handwriting-rasterizer.js — Zeile (Striche) → Graustufenbild für das Bild-Modell.
-// Gleiche Regeln wie handwriting/rasterize.py (Training): Zeile auf 64 px Höhe skaliert (Bounding-Box bzw.
-// Mindesthöhe, 6 px Rand), 2,5 px breite runde Striche, schwarz auf weiß, Werte 0..1, Breite auf ein Vielfaches von 4.
+// Gleiche Regeln wie handwriting/rasterize.py (Training): Zeile auf 64 px Höhe skaliert (Bounding-Box,
+// 6 px Rand), 2,5 px breite runde Striche, schwarz auf weiß, Werte 0..1, Breite auf ein Vielfaches von 4.
 // Läuft im Worker (OffscreenCanvas).
 
 export const IMAGE_HEIGHT = 64;
 const PADDING = 6;
 const STROKE_WIDTH = 2.5;
 
-// Rückgabe: { data: Float32Array(64 * width), width } oder null ohne Tinte.
-// minHeight: Zeilen ohne Ober- und Unterlängen ("zu sein") nicht auf volle Höhe aufblasen, sondern mittig
-// in mindestens dieser Höhe zeichnen (handwriting-worker.js).
-export function rasterizeLine(strokes, minHeight = 0) {
+// Rückgabe: { data: Float32Array(64 * width), width } oder null ohne Tinte
+export function rasterizeLine(strokes) {
 	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 	for (const s of strokes) {
 		for (const p of s.pts || []) {
@@ -23,9 +21,7 @@ export function rasterizeLine(strokes, minHeight = 0) {
 		}
 	}
 	if (!Number.isFinite(minX)) return null;
-	const height = Math.max(maxY - minY, minHeight, 1e-6);
-	const top = (minY + maxY - height) / 2;
-	const scale = (IMAGE_HEIGHT - 2 * PADDING) / height;
+	const scale = (IMAGE_HEIGHT - 2 * PADDING) / Math.max(maxY - minY, 1e-6);
 	const inkWidth = Math.floor((maxX - minX) * scale) + 2 * PADDING;
 	const width = Math.max(4, Math.ceil(inkWidth / 4) * 4);
 
@@ -38,7 +34,7 @@ export function rasterizeLine(strokes, minHeight = 0) {
 	ctx.lineCap = "round";
 	ctx.lineJoin = "round";
 	const tx = (x) => (x - minX) * scale + PADDING;
-	const ty = (y) => (y - top) * scale + PADDING;
+	const ty = (y) => (y - minY) * scale + PADDING;
 	for (const s of strokes) {
 		const pts = s.pts || [];
 		if (!pts.length) continue;

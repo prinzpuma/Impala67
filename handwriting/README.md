@@ -87,9 +87,11 @@ IAM, IAM-OnDB, CVL, GoBo und IBM-UB-1 werden wegen ihrer Lizenzen **nicht** verw
 
 - TEST = ungerade Benchmark-Zeilen; „fremd“ = Test-Schreiber, die nie trainiert oder zur Auswahl benutzt wurden.
 - Lauf 3 auf den Abschreib-Messzeilen: 5,3 % CER (Strich-Modell mit Feintuning auf genau diese Handschrift: 6,7 %).
-- Ohne Training (Okt. 2026, Lauf 3, Decoder der App): großes Wörterbuch (Vorrang 12), Lücken-Leerzeichen und Mindesthöhe
-  der Zeile (3 typische Strichhöhen) senken die CER: Heft-Mitschriften (`benchmark_notizen.json`) 5,1 → 2,9 %,
-  Abschreib-Zeilen 5,2 → 4,8 %, ScaDS-Test-Schreiber (Scans, nur Wörterbuch) 8,1 → 6,3 %.
-  Geprüft und verworfen: dickere Striche, Mittelung über mehrere Renderings, fp32 statt int8 (gleich gut),
-  Ensemble mit Lauf 1 (viel schlechter), Komposita-Zerlegung, Schutzregeln für Endungen/Abkürzungen/sichere Zeichen.
+- Ohne Training (Okt. 2026, Lauf 3, Decoder der App): großes Wörterbuch und Lücken-Leerzeichen senken die CER.
+  Einstellungen nur übernommen, wenn sie auch bei fremden Schreibern helfen oder dort neutral sind
+  (Wörterbuch-Vorrang 12 auf ScaDS-Auswahl gewählt, Lücke 32 px auf ScaDS neutral):
+  ScaDS-Test-Schreiber 8,1 → 6,3 %, Heft-Mitschriften (`benchmark_notizen.json`) 5,1 → 3,1 %, Abschreib-Zeilen 5,2 → 4,8 %.
+  Geprüft und verworfen: Mindesthöhe der Zeile (eigene Schrift besser, fremde Formeln 17 → 21 %), dickere Striche,
+  Mittelung über mehrere Renderings, fp32 statt int8 (gleich gut), Ensemble mit Lauf 1 (viel schlechter),
+  Komposita-Zerlegung, Schutzregeln für Endungen/Abkürzungen/sichere Zeichen.
 - Das frühere Strich-Modell (Punktfolgen, `train.py`) steht im Git-Verlauf bis `269e442`.
