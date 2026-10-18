@@ -169,7 +169,7 @@ export async function maybeSnapshot(p, d) {
 	} catch (e) { console.warn("Heft: Verlauf-Snapshot fehlgeschlagen", e); }
 }
 
-export async function loadSnapshotDoc(key) {
+async function loadSnapshotDoc(key) {
 	try {
 		const rec = await DB.getBlob(key);
 		if (!rec || !rec.buf) return null;
@@ -181,18 +181,12 @@ export async function loadSnapshotDoc(key) {
 }
 
 export async function restoreSnapshot(p, key, { getCurrentDoc, restoreDoc, toast = U.toast } = {}) {
-	const rec = await DB.getBlob(key);
-	if (!rec || !rec.buf) { if (toast) toast("Snapshot nicht mehr vorhanden", "error"); return; }
+	// Erst lesen, dann sichern: ein fehlender oder kaputter Snapshot legt keine nutzlose Sicherung an.
+	const restored = await loadSnapshotDoc(key);
+	if (!restored) { if (toast) toast("Snapshot fehlt oder ist beschädigt", "error"); return; }
 	const cur = getCurrentDoc ? await getCurrentDoc(p) : null;
 	// Sicherheitsnetz: aktuellen Stand IMMER sichern — Wiederherstellen ist damit selbst umkehrbar.
 	if (cur) await writeSnapshot(p, encodeDoc(cur), ((cur && cur.pages) || []).length);
-	let restored = null;
-	try {
-		restored = normalizeDoc(JSON.parse(dec.decode(rec.buf)));
-	} catch (e) {
-		console.warn("Heft: Snapshot decodieren fehlgeschlagen", e);
-	}
-	if (!restored) { if (toast) toast("Snapshot ist leer", "error"); return; }
 	// Wiederherstellen ist ein normales Event — es synchronisiert damit von allein.
 	if (restoreDoc) await restoreDoc(p, restored);
 	if (toast) toast("Heft-Stand wiederhergestellt");

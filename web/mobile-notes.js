@@ -1,6 +1,5 @@
 "use strict";
 import { S, STATE } from "./state.js";
-import { RENDER } from "./render.js";
 import { U } from "./util.js";
 import { MOBILE_VIEW } from "./mobile-view.js";
 import { pageIcon } from "./icons.js";

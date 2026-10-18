@@ -1,6 +1,6 @@
 "use strict";
 
-import { S } from "./state.js";
+import { STATE } from "./state.js";
 import { U } from "./util.js";
 import { inlineMathParts } from "./editor-menus.js";
 
@@ -8,6 +8,20 @@ import { inlineMathParts } from "./editor-menus.js";
 const LT = String.fromCharCode(60);
 const tag = (name, inner, attrs) => LT + name + (attrs || "") + ">" + inner + LT + "/" + name + ">";
 const esc = (t) => U.esc(String(t ?? ""));
+
+// Escapter Titel → Seite; neu gebaut nur, wenn sich der Titel-Index im State ändert. Vorher
+// lief je [[Link]] ein Durchlauf über ALLE Seiten samt Escaping — große Seiten mit vielen
+// Links öffneten dadurch spürbar langsamer.
+let linkIdx = { src: null, map: null };
+function pageForLabel(label) {
+	const src = STATE.pagesByTitle();
+	if (linkIdx.src !== src) {
+		const map = new Map();
+		for (const [title, pg] of src) map.set(esc(title), pg);
+		linkIdx = { src, map };
+	}
+	return linkIdx.map.get(label);
+}
 
 // Rendert den Inline-Markdown eines Textblocks als echten Rich-Text.
 // Inline-Formeln ($…$ und \(…\)) werden zu nicht-editierbaren Chips mit data-md —
@@ -25,7 +39,7 @@ export function inlineHtml(text) {
 		// Nur ein exakter, aktiver Seitentitel wird verlinkt; unbekannte Titel
 		// bleiben normaler Text und können weiter bearbeitet werden.
 		.replace(/\[\[([^\]\n]+)\]\]/g, (md, label) => {
-			const page = Object.values(S?.pages || {}).find((p) => p && !p.trashed && esc(p.title || "Ohne Titel") === label);
+			const page = pageForLabel(label);
 			return page ? hold(tag("a", label, ' href="#' + esc(page.id) + '" data-md="' + md + '"')) : md;
 		})
 		// data-key enthält die Formel: ändert sie sich, ersetzt U.morph den Chip (frisches

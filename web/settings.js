@@ -1266,5 +1266,4 @@ window.addEventListener("impala67:heft-index-progress", () => {
 });
 
 BUS.on("ui:open-settings", (arg) => typeof arg === "string" ? openSettings(arg) : openSettings(arg?.section || arg?.tab, arg?.focusKey));
-BUS.on("ui:paint-settings-models", () => paintSettingsModels());
 

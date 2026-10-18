@@ -1,6 +1,6 @@
 "use strict";
 
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { DB } from "./db.js";
 import { dot, norm } from "./rag-ranking.js";
@@ -375,6 +375,17 @@ function resolveSubjectFromContent(content) {
 	return clearWinner(rankSubjects(String(content).slice(0, 3000), 3, 2), 6);
 }
 
+// Fließtext-Fach je Seitenstand gemerkt — auch „kein Fach“. Die rund 40 Regex-Durchläufe
+// je Seite liefen sonst bei jedem Render erneut für jede Seite ohne erkennbares Fach.
+const contentSubjectCache = new Map(); // pageId -> { updated, subject }
+function contentSubjectOf(pageObj) {
+	const hit = contentSubjectCache.get(pageObj.id);
+	if (hit && hit.updated === pageObj.updated) return hit.subject;
+	const subject = resolveSubjectFromContent(pageObj.content);
+	contentSubjectCache.set(pageObj.id, { updated: pageObj.updated, subject });
+	return subject;
+}
+
 // Nennt ein Titel mehrere Fächer beim Namen ("ET × Mathe × Physik"), ist es eine Sammelseite
 function namesSeveralSubjects(text) {
 	const sanitized = sanitize(text);
@@ -387,7 +398,10 @@ const isOverviewTitle = (title) => OVERVIEW_TITLE.test(sanitize(title)) || names
 
 // In-Memory-Klassifikations-Cache für Embedding & Textanalyse
 const pageClassificationCache = new Map(); // pageId -> { updated, subject, source }
-const activeEmbeddingJobs = new Set();
+// pageId -> updated: je Seitenstand höchstens EIN Embedding-Versuch, auch ohne Treffer.
+// page() läuft bei jedem Render; ohne diese Sperre löste jede Seite ohne erkennbares Fach
+// pro Render eine neue Embedding-Anfrage aus (bei Online-Anbietern echte API-Kosten).
+const embeddingTried = new Map();
 
 function getCachedSubject(pageObj) {
 	if (!pageObj?.id) return null;
@@ -506,8 +520,8 @@ export async function classifyPageWithEmbedding(pageObj) {
 }
 
 function scheduleBackgroundEmbedding(pageObj) {
-	if (!pageObj?.id || activeEmbeddingJobs.has(pageObj.id)) return;
-	activeEmbeddingJobs.add(pageObj.id);
+	if (!pageObj?.id || !S?.settings?.embedModel || embeddingTried.get(pageObj.id) === pageObj.updated) return;
+	embeddingTried.set(pageObj.id, pageObj.updated);
 
 	const run = async () => {
 		try {
@@ -517,8 +531,6 @@ function scheduleBackgroundEmbedding(pageObj) {
 			}
 		} catch {
 			// Embedding-Fehler still abfangen
-		} finally {
-			activeEmbeddingJobs.delete(pageObj.id);
 		}
 	};
 
@@ -573,7 +585,7 @@ function intrinsicSubject(pageObj) {
 	const explicit = explicitSubject(pageObj);
 	const subject = explicit
 		? (KNOWN_SUBJECTS.includes(explicit) ? explicit : null)
-		: isOverviewTitle(pageObj.title) ? null : resolveSubject(pageObj.title) || resolveSubjectFromContent(pageObj.content);
+		: isOverviewTitle(pageObj.title) ? null : resolveSubject(pageObj.title) || contentSubjectOf(pageObj);
 	intrinsicCache.set(pageObj.id, { updated: pageObj.updated, subject });
 	return subject;
 }
@@ -582,8 +594,9 @@ function intrinsicSubject(pageObj) {
 function childrenVote(pageObj) {
 	const votes = new Map();
 	let n = 0;
-	for (const child of Object.values(S?.pages || {})) {
-		if (child.parentId !== pageObj.id || child.trashed) continue;
+	// Über den Eltern-Index statt über alle Seiten: page() für jede Seite war sonst O(n²).
+	for (const child of STATE.childPagesOf(pageObj.id)) {
+		if (child.trashed) continue;
 		const s = intrinsicSubject(child);
 		if (!s) continue;
 		n++;
@@ -637,11 +650,8 @@ export const FACH = (() => {
 		// 5. Fließtext bzw. gemerktes Embedding-Ergebnis (je Seitenstand)
 		const cached = getCachedSubject(pageObj);
 		if (cached) return cached;
-		const contentSubj = resolveSubjectFromContent(pageObj.content);
-		if (contentSubj) {
-			setCachedSubject(pageObj, contentSubj, "content");
-			return { name: contentSubj, source: "content" };
-		}
+		const contentSubj = contentSubjectOf(pageObj);
+		if (contentSubj) return { name: contentSubj, source: "content" };
 
 		// 6. Workspace-Name
 		const ws = workspaceSubject(pageObj);
@@ -705,7 +715,7 @@ export const FACH = (() => {
 		try {
 			const detected = await classifyPageWithEmbedding(pageObj);
 			if (detected) {
-				setCachedSubject(pageObj, detected);
+				setCachedSubject(pageObj, detected, "embedding");
 				return { name: detected, source: "embedding" };
 			}
 		} catch {}

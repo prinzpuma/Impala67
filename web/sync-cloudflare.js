@@ -15,7 +15,6 @@ import {
 	encryptedPacketChars,
 	heftBaselineOps,
 	blobAliveChecker,
-	isBlobAlive,
 	isSyncBlobId,
 	prepareCloudEvents,
 	prepareIncomingCloudEvents,
@@ -46,6 +45,10 @@ const MAX_HTTP_CHARS = 6_000_000;
 const LOCAL_SYNC_DELAY = 80;
 const SYNC_FETCH_TIMEOUT_MS = 45000;
 const BLOB_FETCH_TIMEOUT_MS = 120000;
+// Obergrenze des Servers je Datei (server/worker.js MAX_BLOB_BYTES).
+const MAX_BLOB_BYTES = 100_000_000;
+// Der Server meldet volle Quota UND zu große Einzeldateien mit 413 — nur die Meldung unterscheidet sie.
+const isQuotaError = (error) => /quota/i.test(error?.message || "");
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
 const CLIENT_ID = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
 	? crypto.randomUUID()
@@ -81,9 +84,11 @@ export function acknowledgedUploadCursor(data, expectedGeneration, currentSeq) {
 export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
 	let reconnectAttempts = 0, retryAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
-	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
+	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false, quotaCompacting = false;
 	// ignoredBlobKeys: Server-Schlüssel → entschlüsselte Blob-ID verworfener (verwaister) Blobs.
 	const blobHashCache = new Map(), ignoredBlobKeys = new Map();
+	// Zu große Dateien (Server-Limit je Datei): bleiben lokal und blockieren den Sync nicht mehr.
+	const oversizedBlobKeys = new Set();
 	const pendingUploadedEventIds = new Set();
 	let blobInventoryDirty = true;
 
@@ -233,11 +238,20 @@ export const CLOUDFLARE_SYNC = (() => {
 		});
 		const imported = result.importedEvents || [];
 		if (imported.length) {
+			// FIX: Wie drive.js (replayImported) eigene, noch nicht veröffentlichte Heft-Änderungen
+			// VOR dem Abspielen fremder Heft-Events speichern. Sonst zog applyRemoteToOpenDocs den
+			// Schatten über sie hinweg: sie galten als veröffentlicht, ohne je als Event geschrieben
+			// worden zu sein — kein Sync, und nach dem Neuladen waren sie weg.
+			if (imported.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
+				try { await BUS.call("heft:save-now"); } catch (error) { console.warn("[cf-sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", error); }
+			}
 			await STATE.applyRemoteEventsCooperative(imported);
 		}
 	}
 
-	async function pull() {
+	// repaired: höchstens EINE automatische Reparatur je Abruf — meldet der Server danach
+	// weiterhin 410, wäre die Cloud sonst in einer Endlosschleife immer wieder geleert worden.
+	async function pull(repaired = false) {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		let received = 0, progressStart = state.lastSyncedSeq;
 		while (true) {
@@ -247,11 +261,11 @@ export const CLOUDFLARE_SYNC = (() => {
 			try {
 				response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
 				if (!response.ok) {
-					if (response.status === 410) {
+					if (response.status === 410 && !repaired) {
 						finishRequest({ failed: true, status: 410, errorName: "PacketMissing" });
 						console.warn("[cf-sync] Cloud-Historie unvollständig oder beschädigt. Führe automatische Reparatur aus...");
 						await purgeCloudData();
-						return pull();
+						return pull(true);
 					}
 					throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
 				}
@@ -435,7 +449,17 @@ export const CLOUDFLARE_SYNC = (() => {
 		await mapLimit(localIds, 6, async (id) => localByKey.set(await blobOpaqueKey(id), id));
 		const remote = await listRemoteBlobs();
 
-		const upload = [...localByKey].filter(([key]) => !remote.has(key));
+		const upload = [...localByKey].filter(([key]) => !remote.has(key) && !oversizedBlobKeys.has(key));
+		// FIX: Eine einzige Datei über dem Server-Limit warf bisher den ganzen Sync um — Dateien
+		// laufen VOR den Notizen, also synchronisierte danach gar nichts mehr. Ihre 413 hielt der
+		// Client zudem für „Speicher voll“ und löste bei jedem Versuch eine komplette Cloud-
+		// Kompaktierung aus. Jetzt bleibt die Datei lokal und der Nutzer erfährt es einmal.
+		const skipOversized = (key, id, record) => {
+			oversizedBlobKeys.add(key);
+			const name = record?.meta?.name || id;
+			console.warn("[cf-sync] Datei zu groß für den Cloud-Sync, bleibt lokal:", name);
+			U.toast(`„${name}“ ist größer als 100 MB und wird nicht synchronisiert — sie bleibt nur auf diesem Gerät.`, "error");
+		};
 		const uploadProgress = new Array(upload.length).fill(0);
 		const updateFileProgress = (label, values) => setProgress(label, values.reduce((sum, value) => sum + value, 0), values.length);
 		if (upload.length) updateFileProgress("Übertrage Dateien…", uploadProgress);
@@ -443,6 +467,11 @@ export const CLOUDFLARE_SYNC = (() => {
 			const record = await DB.getBlob(id);
 			if (!record) { uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress); return; }
 			const encrypted = await encryptBlobRecord(credentials.cryptoKey, id, record);
+			if (encrypted.bytes.byteLength > MAX_BLOB_BYTES) {
+				skipOversized(key, id, record);
+				uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress);
+				return;
+			}
 			const response = await fetchTimed(api(`/api/blob/${key}`), {
 				method: "PUT",
 				headers: authHeaders({ "Content-Type": "application/octet-stream", "X-Impala-IV": encrypted.iv }),
@@ -452,7 +481,13 @@ export const CLOUDFLARE_SYNC = (() => {
 				uploadProgress[index] = Math.min(0.99, loaded / Math.max(1, total || encrypted.bytes.byteLength));
 				updateFileProgress("Übertrage Dateien…", uploadProgress);
 			});
-			if (!response.ok) throw await responseError(response, `Blob ${id} konnte nicht hochgeladen werden`);
+			if (!response.ok) {
+				const error = await responseError(response, `Blob ${id} konnte nicht hochgeladen werden`);
+				if (error.status !== 413 || isQuotaError(error)) throw error;
+				skipOversized(key, id, record);
+				uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress);
+				return;
+			}
 			const usage = Number(response.headers.get("X-Impala-Usage"));
 			if (Number.isFinite(usage)) state.usage = formatStorageUsage(usage);
 			uploadProgress[index] = 1;
@@ -480,8 +515,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			const iv = response.headers.get("X-Impala-IV");
 			const record = await decryptBlobRecord(credentials.cryptoKey, iv, new Uint8Array(await response.arrayBuffer()));
 			if (await blobOpaqueKey(record.id) !== key) throw new Error("Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.");
-			const alive = isBlobAlive(record.id, S.pages);
-			if (!isSyncBlobId(record.id) || !alive) {
+			// Den oben einmal gebauten Prüfer nutzen: isBlobAlive() setzte je Blob den Text ALLER
+			// Seiten neu zusammen — beim ersten Sync mit vielen Dateien fror das die Oberfläche ein.
+			if (!isSyncBlobId(record.id) || !alive(record.id)) {
 				ignoredBlobKeys.set(key, record.id);
 				downloadProgress[index] = 1;
 				updateFileProgress("Empfange Dateien…", downloadProgress);
@@ -580,19 +616,31 @@ export const CLOUDFLARE_SYNC = (() => {
 					phase: "requestSync",
 					retryable: isRetryableSyncError(e),
 				});
-				if (Number(error?.status) === 413 || /quota/i.test(error?.message || "")) {
+				const fail = (err) => {
+					state.lastError = err.message;
+					if (!scheduleHttpRetry(err)) setStatus("error", "Sync-Fehler", err.message);
+					throw err;
+				};
+				// quotaCompacting: Scheitert auch der Sync INNERHALB der Kompaktierung, nicht erneut verdichten.
+				if (!quotaCompacting && isQuotaError(error)) {
 					console.warn("[cf-sync] Quota überschritten. Führe sofortige Cloud-Kompaktierung durch...");
-					try {
-						const { compactCloudData } = await import("./sync-maintenance.js");
-						await compactCloudData(CLOUDFLARE_SYNC, { bypassCooldown: true });
-						return true;
-					} catch (compactErr) {
-						console.error("[cf-sync] Auto-Kompaktierung nach Quota-Überschreitung fehlgeschlagen:", compactErr);
-					}
+					// FIX (Verklemmung): compactCloudData ruft selbst syncNow() auf. Direkt hier hätte es
+					// genau diesen noch offenen Lauf zurückbekommen und auf sich selbst gewartet — der Sync
+					// hing dann bis zum Neuladen. syncPromise wird erst im finally frei; das erste await der
+					// Kompaktierung läuft danach, deren syncNow() startet also einen frischen Lauf.
+					quotaCompacting = true;
+					return (async () => {
+						try {
+							const { compactCloudData } = await import("./sync-maintenance.js");
+							await compactCloudData(CLOUDFLARE_SYNC, { bypassCooldown: true });
+							return true;
+						} catch (compactErr) {
+							console.error("[cf-sync] Auto-Kompaktierung nach Quota-Überschreitung fehlgeschlagen:", compactErr);
+							return fail(e);
+						} finally { quotaCompacting = false; }
+					})();
 				}
-				state.lastError = e.message;
-				if (!scheduleHttpRetry(e)) setStatus("error", "Sync-Fehler", e.message);
-				throw e;
+				return fail(e);
 			} finally { syncPromise = null; }
 		})();
 		return syncPromise;

@@ -1,6 +1,6 @@
 "use strict";
 
-import { S, STATE, ancestorsOf } from "./state.js";
+import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { BUS } from "./event-bus.js";
@@ -10,6 +10,7 @@ import { COLLAPSE } from "./collapse.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { icon, lead, pageIcon } from "./icons.js";
+import { PLATFORM } from "./platform.js";
 
 const renderMain = () => BUS.emit("ui:render-main");
 const render = (opts) => BUS.emit("ui:render", opts);
@@ -162,7 +163,7 @@ function openShelfHeftDialog() {
 	const inp = U.el("libHeftName");
 	if (inp) {
 		inp.focus();
-		if (!window.PLATFORM?.isTouch?.()) {
+		if (!PLATFORM.isTouch()) {
 			inp.select();
 		} else {
 			try {
@@ -478,8 +479,8 @@ export function renderNlmLibrary(main) {
 // STATE.childrenOf überspringt archivierte Seiten. Unterseiten archivierter Seiten sind aber
 // ebenfalls archiviert — deshalb eigene Suche, sonst wären sie im Archiv nicht zu öffnen.
 function archivedChildrenOf(pg) {
-	return Object.values(S.pages)
-		.filter((c) => c && c.parentId === pg.id && c.archived && !c.trashed)
+	return STATE.childPagesOf(pg.id)
+		.filter((c) => c && c.archived && !c.trashed)
 		.sort((a, b) => STATE.sortKeyOf(a) - STATE.sortKeyOf(b));
 }
 

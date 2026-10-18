@@ -4,38 +4,27 @@ import { DB } from "./db.js";
 import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
-import { RAG } from "./rag.js";
-import { movePage, insertAt, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, composePageText, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { movePage, canDeletePages } from "./heft-pages-core.js";
+import { documentShadow, diffDocument, PAGE_W, PAGE_H } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
-	ensureBlobPersisted,
 	blobRef,
 	persistReferencedBlobs,
 	imgSrc,
-	toRefImage,
-	normalizeDoc,
 	readLegacyDoc,
-	takeLegacyInk,
 	purgeOrphanLegacyInk,
-	listSnapshots,
 	pruneSnapshots,
 	encodeDoc,
 	writeSnapshot,
 	maybeSnapshot,
-	loadSnapshotDoc,
 	restoreSnapshot as runRestoreSnapshot
 } from "./heft-storage.js";
-import { fitStrokeShape, hitBox, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom, nearPoint, pointInPolygon, strokeOutline, strokeHitAt } from "./heft-geometry.js";
+import { hitBox, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom } from "./heft-geometry.js";
 import {
 	lassoBounds,
-	selectStrokesByLasso,
 	lassoTouchAction,
-	hitLassoHandle,
-	isLassoBodyHit,
 	drawLassoSelection,
-	drawLassoPath,
 	updateLassoBarUI,
 	duplicateLassoStrokes,
 	deleteLassoStrokes,
@@ -62,9 +51,11 @@ import {
 } from "./heft-import.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
-import { icon, lead } from "./icons.js";
+import { lead } from "./icons.js";
 import { BUS } from "./event-bus.js";
 import { createHeftViewport } from "./heft-viewport.js";
+import { createHeftInput } from "./heft-input.js";
+import { PLATFORM } from "./platform.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -120,11 +111,7 @@ export const HEFT = (() => {
 	let penSlot = savedTools.penSlot;
 	({ color, size } = pens[penSlot]);
 	let inlineEd = null;
-	let lastEmptyTap = null;
 	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, pens, penSlot }); }
-	const activePenPointers = new Set();
-	let lastPenUpAt = 0, lastStrokeAt = 0;
-	const PEN_GRACE_MS = 400;
 	let expanded = false;
 	let trayPos = null;
 	let trayDrag = null;
@@ -161,7 +148,6 @@ export const HEFT = (() => {
 	let sel = null;
 	let lassoSel = null;
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
-	const laserTimers = new Set();
 	let insertPos = "after";
 	let pop = null, popScrim = null;
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
@@ -184,7 +170,9 @@ export const HEFT = (() => {
 	// dieselbe Objektreferenz. Trifft während des Zeichnens ein Fremd-Event ein,
 	// fügt der Reducer die Striche direkt in die Arrays ein, auf denen hier gezeichnet
 	// wird. Der alte Cache-Invalidierungs-Tanz über meta.rev entfällt ersatzlos.
-	async function load(p) {
+	// create: false für reine Vorschauen (Startseite, Export, Seitenbild für die KI). Nur wer das
+	// Heft öffnet oder beschreibt, legt bei einem noch leeren Heft die erste Seite an.
+	async function load(p, { create = true } = {}) {
 		const docHashes = [];
 		const docPages = S.heftDocs?.[p]?.pages;
 		if (Array.isArray(docPages)) {
@@ -203,6 +191,10 @@ export const HEFT = (() => {
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
 			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy).ops });
+			// FIX: Eine Vorschau schrieb hier bisher selbst eine leere erste Seite ins Log. Kam ein
+			// Heft per Sync an, bevor seine Seiten da waren (oder wurde es woanders gerade angelegt),
+			// hatte es danach eine überzählige leere Seite VOR den echten — auf allen Geräten.
+			else if (!create) return null;
 			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
 			d = S.heftDocs[p];
 			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
@@ -593,437 +585,41 @@ export const HEFT = (() => {
 
 	// Ansicht (Zoom, Verschieben, Kacheln, Finger-Gesten): heft-viewport.js.
 	// Getter statt Werte, weil bindCanvas()/unmount() die Zeichenflächen neu zuweisen;
-	// const-Pfeilfunktionen (penRecently …) erst beim Aufruf auflösen.
+	// input (Stift-Eingabe, weiter unten angelegt) erst beim Aufruf auflösen.
 	const vp = createHeftViewport({
 		host: () => host, doc: () => doc, drawing: () => drawing,
 		canvases: () => canvases, detailCanvases: () => detailCanvases, wetCanvases: () => wetCanvases, pageSlots: () => pageSlots,
-		penRecently: () => penRecently(), touchNavigates: () => touchNavigates(),
+		penRecently: () => input.penRecently(), touchNavigates: () => input.touchNavigates(),
 		drawStroke, renderPageTo, applyTransform, redrawBasePage, undo, redo, viewChanged,
 	});
 	const {
-		view, gesture, PALM_UNDO_MS, viewport, contentSize, scrollEl, stopAnim, navReset, animateTo, layout,
-		visiblePageIndices, pageRectForTile, renderDetailTile, renderVisiblePages,
-		liveInkCtx, clearLiveInk, commitStrokeRender, applyTouchAction,
+		view, viewport, contentSize, scrollEl, navReset, animateTo, layout,
+		visiblePageIndices, pageRectForTile, renderDetailTile, renderVisiblePages, applyTouchAction,
 		onPenBoundary, onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onWheelZoom,
 	} = vp;
 	let scrollSettleTimer = 0;
 
-	// r: optional vorab gemessenes Rechteck — gebündelte Stift-Events teilen sich eine Messung.
-	const pos = (e, cv, r = cv.getBoundingClientRect()) => {
-		return [
-			Math.round((e.clientX - r.left) / vp.scale() * 10) / 10,
-			Math.round((e.clientY - r.top) / vp.scale() * 10) / 10,
-			Math.round((e.pressure || 0.5) * 100) / 100,
-		];
-	};
-
-	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
-	const rejected = (e) => e.pointerType === "touch" && (onlyPen || penRecently());
-	const touchNavigates = () => onlyPen && !penRecently();
-	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
-	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
-	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
-	// Radierer-Feedback ("wo wirkt er?"): ein Ring in echter Radierer-Größe als DOM-Element
-	// im Host. Bewusst KEIN Canvas-Zeichnen — das hinterlässt Schlieren auf der Seite oder
-	// erzwingt zusätzliche Redraws; dieses Element folgt einfach dem Zeiger.
-	function showEraserRing(e) {
-		if (!host) return;
-		let ring = host.querySelector(".heft-eraser-ring");
-		if (!ring) { ring = document.createElement("div"); ring.className = "heft-eraser-ring"; host.appendChild(ring); }
-		// GRÖSSE: eraserSize sind Seiten-Einheiten, der Ring lebt im unskalierten Host —
-		// maßgeblich ist deshalb scale (= fitScale * view.k). Vorher fehlte fitScale, der
-		// Ring war dadurch deutlich größer als die Fläche, die wirklich radiert.
-		const box = host.getBoundingClientRect(), d = eraserSize * 2 * vp.scale();
-		ring.style.width = ring.style.height = d + "px";
-		ring.style.left = (e.clientX - box.left) + "px";
-		ring.style.top = (e.clientY - box.top) + "px";
-		ring.hidden = false;
-	}
-	function hideEraserRing() {
-		const ring = host && host.querySelector(".heft-eraser-ring");
-		if (ring) ring.hidden = true;
-	}
-	// Strichradierer: ein berührter Strich geht GANZ weg. Das Auftrennen an der
-	// Radierer-Fläche ist wieder raus — es kostete pro Pointer-Event neue Strich-Objekte
-	// (samt neuen IDs, Sync-Ereignissen und Voll-Redraws) und war deshalb zäh.
-	function eraseAt(e) {
-		// PERF: erst messen, dann den Ring verschieben — andersherum erzwang jedes
-		// Pointer-Event ein zusätzliches synchrones Layout.
-		const p0 = pos(e, drawing.cv), r = eraserSize, pg = doc.pages[drawing.pageIdx];
-		showEraserRing(e);
-		// PERF: Pointer-Events feuern viel dichter, als der Radierer breit ist —
-		// Mini-Schritte müssen nicht jedes Mal alle Striche der Seite prüfen.
-		const lp = drawing.lastErase;
-		if (lp && Math.hypot(p0[0] - lp[0], p0[1] - lp[1]) < r * 0.35) return;
-		drawing.lastErase = p0;
-		const keep = [], removed = [];
-		for (const s of pg.strokes) {
-			if (strokeHitAt(s, p0[0], p0[1], r)) removed.push(s); else keep.push(s);
-		}
-		if (removed.length) {
-			pg.strokes = keep; drawing.removed.push(...removed);
-			// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
-			// als Pointer-Events eintreffen.
-			redrawNextFrame(drawing.pageIdx);
-		}
-	}
-	function onDown(e) {
-
-		if (e.pointerType === "pen") {
-			activePenPointers.add(e.pointerId); stopAnim(); applyTouchAction();
-			// Handballen-Nachsorge: hat eine Berührung Millisekunden vorher die Seite
-			// verschoben, war das die Hand — zurück auf die alte Position.
-			if (gesture.restore && Date.now() - gesture.startedAt < PALM_UNDO_MS) gesture.restore();
-			gesture.restore = null;
-		}
-		// Handballen: eine bereits bestehende blaue Markierung wegräumen (CSS verhindert
-		// neue, das hier löst die alte auf — sonst blieb sie sichtbar hängen).
-		// nicht 'sel' benennen: verdeckte die Heft-Auswahl im ganzen Block
-		if (e.pointerType !== "mouse") { const domSel = window.getSelection?.(); if (domSel && !domSel.isCollapsed) domSel.removeAllRanges(); }
-		if (!doc) return;
-		const cv = e.currentTarget;
-		const slot = cv.closest('.heft-page-slot');
-		const pi = slot ? Number(slot.dataset.hepage) : idx;
-		const pg = doc.pages[pi];
-		if (!pg) return;
-		const p = pos(e, cv);
-		const activeLassoBox = lassoSel && lassoSel.pageIdx === pi ? (lassoSel.bounds || lassoBounds(lassoSel.strokes)) : null;
-		const onLasso = !!activeLassoBox && isLassoBodyHit(p, activeLassoBox, 20);
-		// Ein Fingertipp außerhalb beendet Auswahl UND Lasso-Modus. Der Nur-Stift-
-		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
-		const touchLasso = lassoTouchAction(e.pointerType, tool, onLasso);
-		if (touchLasso === "dismiss") {
-			tool = "pen"; expanded = true;
-			updateChrome();
-			return;
-		}
-		if (rejected(e) && touchLasso !== "interact") return;
-		idx = pi;
-		e.preventDefault();
-		try { cv.setPointerCapture(e.pointerId); } catch {  }
-
-		const x = liveInkCtx(pi);
-		if (tool === "lasso") {
-
-			if (lassoSel && lassoSel.pageIdx === pi && lassoSel.strokes.length) {
-				const bb = lassoSel.bounds || lassoBounds(lassoSel.strokes);
-				const handle = bb && hitLassoHandle(p, bb, e.pointerType === "touch" ? 22 : 18);
-				if (handle) {
-					const anchor = handle.anchor;
-					const startDist = Math.max(12, Math.hypot(p[0] - anchor[0], p[1] - anchor[1]));
-					drawing = {
-						lassoResize: true,
-						byTouch: e.pointerType === "touch",
-						strokes: lassoSel.strokes,
-						originals: lassoSel.strokes.map(strokeGeometry),
-						cv,
-						pageIdx: pi,
-						anchor,
-						bb,
-						startPos: [p[0], p[1]],
-						startDist,
-						factor: 1,
-					};
-					return;
-				}
-				if (bb && isLassoBodyHit(p, bb, 12)) {
-					drawing = { lassoMove: true, byTouch: e.pointerType === "touch", strokes: lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
-					return;
-				}
-			}
-
-			// Neue Auswahl: alte Markierung sofort wegräumen (lag sie auf einer anderen
-			// Seite, blieb ihr Rahmen dort sonst als Geist stehen).
-			dropLasso();
-			drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
-			return;
-		}
-		if (tool === "laser") {
-
-			drawing = { laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
-			return;
-		}
-		if (tool === "select") {
-
-			const st = sel && sel.pageIdx === pi && sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
-			if (st && nearPoint(p, st.x + st.w, st.y, 16)) {
-
-				pg.texts = textsOf(pg).filter((t2) => t2 !== st);
-				pushUndo({ kind: "txtDel", txt: st, pageIdx: pi });
-				sel = null;
-				refresh(pi);
-				return;
-			}
-			if (st && nearPoint(p, st.x + st.w, st.y + (st.h || 60), 16)) {
-
-				drawing = { imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
-				return;
-			}
-			const ht = hitText(pg, p);
-			if (ht) {
-				const now = Date.now();
-				if (sel && sel.txtId === ht.id && now - (sel.tapAt || 0) < 400) {
-
-					sel = { pageIdx: pi, txtId: ht.id, tapAt: 0 };
-					openTextEditor(pi, ht.x, ht.y, ht);
-					return;
-				}
-				sel = { pageIdx: pi, txtId: ht.id, tapAt: now };
-				drawing = { imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
-				redrawPage(pi);
-				return;
-			}
-
-			const im = sel && sel.pageIdx === pi ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
-			if (im && nearPoint(p, im.x + im.w, im.y, 16)) {
-
-				pg.images = imagesOf(pg).filter((i2) => i2 !== im);
-				pushUndo({ kind: "imgDel", img: im, pageIdx: pi });
-				sel = null;
-				refresh(pi);
-				return;
-			}
-			if (im && nearPoint(p, im.x + im.w, im.y + im.h, 16)) {
-
-				drawing = { imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
-				return;
-			}
-			const hit = hitImage(pg, p);
-			if (hit) {
-				sel = { pageIdx: pi, imgId: hit.id };
-				drawing = { imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
-				redrawPage(pi);
-				lastEmptyTap = null;
-			} else {
-
-				const now2 = Date.now();
-				if (lastEmptyTap && lastEmptyTap.pi === pi && now2 - lastEmptyTap.t < 450 && Math.hypot(p[0] - lastEmptyTap.p[0], p[1] - lastEmptyTap.p[1]) < 40) {
-					lastEmptyTap = null;
-					openTextEditor(pi, Math.max(20, p[0] - 10), Math.max(20, p[1] - 20), null);
-					return;
-				}
-				lastEmptyTap = { pi, t: now2, p };
-				if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
-			}
-			return;
-		}
-		if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
-		if (tool === "eraser") { drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else { drawing = { tool, color, size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
-
-		setWriting(true);
-	}
-
-	let snapTimer = null;
-	function armHoldSnap(p) {
-		if (snapTimer) clearTimeout(snapTimer);
-		snapTimer = null;
-		if (!drawing || drawing.snapped || drawing.laser || !(drawing.tool === "pen" || drawing.tool === "marker")) return;
-		drawing.holdAnchor = p;
-		snapTimer = setTimeout(trySnapShape, 550);
-	}
-	function trySnapShape() {
-		snapTimer = null;
-		if (!drawing || drawing.snapped || !drawing.pts || drawing.pts.length < 8) return;
-		const shape = fitShape(drawing.pts);
-		if (!shape) return;
-		drawing.snapped = shape;
-		if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
-		drawStroke(drawing.ctx, { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0]], shape });
-		if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {  } }
-	}
-
-	function fitShape(pts) {
-		return fitStrokeShape(pts);
-	}
-	function onMove(e) {
-		// Ein per Finger gegriffenes Lasso (onDown: "interact") darf sich auch per Finger
-		// bewegen — sonst verwarf "Nur Stift" jede Bewegung und die Auswahl blieb stehen.
-		if (!drawing || (rejected(e) && !drawing.byTouch)) return;
-		e.preventDefault();
-		if (drawing.lasso) {
-			const p = pos(e, drawing.cv);
-			const last = drawing.pts[drawing.pts.length - 1];
-			if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 2.5) {
-				drawing.pts.push(p);
-				if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
-				drawLassoPath(drawing.ctx, drawing.pts);
-			}
-			return;
-		}
-		if (drawing.lassoMove) {
-
-			const pm = pos(e, drawing.cv);
-			const dx = pm[0] - drawing.last[0], dy = pm[1] - drawing.last[1];
-			if (dx || dy) {
-				drawing.strokes.forEach((s) => translateStroke(s, dx, dy));
-				drawing.dx += dx; drawing.dy += dy; drawing.last = pm;
-				if (lassoSel && lassoSel.bounds) {
-					lassoSel.bounds.minX += dx; lassoSel.bounds.maxX += dx;
-					lassoSel.bounds.minY += dy; lassoSel.bounds.maxY += dy;
-				}
-				redrawNextFrame(drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event
-			}
-			return;
-		}
-		if (drawing.lassoResize) {
-			const p = pos(e, drawing.cv);
-			const anchor = drawing.anchor;
-			const startPos = drawing.startPos;
-			const startDist = drawing.startDist;
-
-			// Vektor vom Anker zur Start-Klickposition
-			const vx = (startPos[0] - anchor[0]) / startDist;
-			const vy = (startPos[1] - anchor[1]) / startDist;
-
-			// Vektor vom Anker zur aktuellen Zeigerposition
-			const dx = p[0] - anchor[0];
-			const dy = p[1] - anchor[1];
-
-			// Projektion auf die Diagonale: startet bei exakt 1.0 (kein Ruck), wächst/schrumpft kontinuierlich
-			const currentDist = dx * vx + dy * vy;
-
-			// Maximaler Faktor, damit die skalierte Box auf der Seite bleibt (Kanten mit Abstand > 0 zum Anker)
-			const bb0 = drawing.bb;
-			let maxFactor = Infinity;
-			if (bb0.minX < anchor[0]) maxFactor = Math.min(maxFactor, anchor[0] / (anchor[0] - bb0.minX));
-			if (bb0.maxX > anchor[0]) maxFactor = Math.min(maxFactor, (PAGE_W - anchor[0]) / (bb0.maxX - anchor[0]));
-			if (bb0.minY < anchor[1]) maxFactor = Math.min(maxFactor, anchor[1] / (anchor[1] - bb0.minY));
-			if (bb0.maxY > anchor[1]) maxFactor = Math.min(maxFactor, (PAGE_H - anchor[1]) / (bb0.maxY - anchor[1]));
-			// Mindestens 1, falls die Auswahl schon über den Rand ragt (sonst würde sie zwanghaft schrumpfen)
-			maxFactor = Math.max(1, maxFactor);
-
-			const factor = Math.max(0.15, Math.min(6.0, maxFactor, currentDist / startDist));
-
-			drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, drawing.originals[i], anchor[0], anchor[1], factor));
-			drawing.factor = factor;
-			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
-			redrawNextFrame(drawing.pageIdx);
-			return;
-		}
-		if (drawing.snapped) {
-
-			const pSnap = pos(e, drawing.cv);
-			drawing.pts.push(pSnap);
-			if (drawing.snapped.type === "line") { drawing.snapped.x2 = pSnap[0]; drawing.snapped.y2 = pSnap[1]; }
-			if (!clearLiveInk(drawing.pageIdx)) redrawPage(drawing.pageIdx);
-			drawStroke(drawing.ctx, { tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0]], shape: drawing.snapped });
-			return;
-		}
-		if (drawing.imgMove || drawing.imgResize) {
-			const p = pos(e, drawing.cv);
-			const dx = p[0] - drawing.start[0], dy = p[1] - drawing.start[1];
-			const im = drawing.im, o = drawing.orig;
-			if (drawing.imgMove) {
-				im.x = Math.min(PAGE_W - 20, Math.max(20 - im.w, o.x + dx));
-				im.y = Math.min(PAGE_H - 20, Math.max(20 - im.h, o.y + dy));
-			} else if (drawing.isText) {
-				im.w = Math.max(120, o.w + dx);
-			} else {
-				const w = Math.max(40, o.w + dx);
-				im.w = w; im.h = w * (o.h / o.w);
-			}
-			drawing.moved = true;
-			redrawNextFrame(drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event (Stift feuert öfter als der Bildschirm)
-			return;
-		}
-		if (drawing.erasing) { eraseAt(e); return; }
-
-		let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-		if (!evs || !evs.length) evs = [e];
-		const rect = drawing.cv.getBoundingClientRect();
-		for (const ce of evs) {
-			drawing.pts.push(pos(ce, drawing.cv, rect));
-			const n = drawing.pts.length;
-
-			const tail = drawing.tool === "marker" ? 2 : 3;
-			drawStroke(drawing.ctx, { tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts.slice(Math.max(0, n - tail)) });
-		}
-
-		const lastP = drawing.pts[drawing.pts.length - 1];
-		if (!drawing.holdAnchor || Math.hypot(lastP[0] - drawing.holdAnchor[0], lastP[1] - drawing.holdAnchor[1]) > 6) armHoldSnap(lastP);
-	}
-	function onUp(e) {
-		if (e && e.pointerType === "pen") {
-			activePenPointers.delete(e.pointerId);
-			lastPenUpAt = Date.now();
-			if (!activePenPointers.size) {
-
-				applyTouchAction();
-				setTimeout(applyTouchAction, PEN_GRACE_MS + 30);
-			}
-		}
-		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
-		lastStrokeAt = Date.now();
-		setWriting(false);
-		hideEraserRing();
-		if (!drawing) return;
-		const pi = drawing.pageIdx;
-		const pg = doc.pages[pi];
-		if (!pg) { drawing = null; return; }
-		if (drawing.lasso) {
-			clearLiveInk(pi);
-			const poly = drawing.pts;
-			const hits = selectStrokesByLasso(pg.strokes, poly);
-			lassoSel = hits.length ? { pageIdx: pi, strokes: hits, bounds: lassoBounds(hits) } : null;
-			drawing = null; redrawPage(pi); updateChrome(); return;
-		}
-		if (drawing.lassoMove) {
-			if (drawing.dx || drawing.dy) {
-				pushUndo({ kind: "lassoMove", strokes: drawing.strokes, dx: drawing.dx, dy: drawing.dy, pageIdx: pi });
-				scheduleSave(); renderThumb(pi);
-			}
-			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
-			drawing = null; redrawPage(pi); updateChrome(); return;
-		}
-		if (drawing.lassoResize) {
-			if (Math.abs(drawing.factor - 1) > 0.001) {
-				pushUndo({ kind: "lassoResize", strokes: drawing.strokes, prev: drawing.originals, pageIdx: pi });
-				scheduleSave(); renderThumb(pi); BUS.emit("heft:schedule-page", { pageId: pid, page: pg });
-			}
-			if (lassoSel) lassoSel.bounds = lassoBounds(drawing.strokes);
-			drawing = null; redrawPage(pi); updateChrome(); return;
-		}
-		if (drawing.laser) {
-			const laserPage = pi;
-			const timer = setTimeout(() => { laserTimers.delete(timer); redrawPage(laserPage); }, 900);
-			laserTimers.add(timer); drawing = null; return;
-		}
-		if (drawing.imgMove || drawing.imgResize) {
-			const { im, orig, moved } = drawing;
-			if (moved && (im.x !== orig.x || im.y !== orig.y || im.w !== orig.w)) {
-				pushUndo({ kind: "imgMod", im, pageIdx: pi, prev: orig });
-				scheduleSave(); renderThumb(pi);
-			}
-			drawing = null;
-			updateChrome();
-			return;
-		}
-		if (drawing.erasing) {
-			if (drawing.removed.length) {
-				pushUndo({ kind: "erase", removed: drawing.removed, pageIdx: pi });
-				scheduleSave();
-				renderThumb(pi);
-			}
-		} else {
-
-			// Jeder Strich bekommt eine stabile ID — sie ist der Schlüssel dafür, dass
-			// zwei Geräte dieselben Striche als dieselben erkennen und nicht doppeln.
-			const stroke = drawing.snapped
-				? { id: U.uid(), tool: "shape", color: drawing.color, size: drawing.size, pts: [drawing.pts[0], drawing.pts[drawing.pts.length - 1]], shape: drawing.snapped }
-				: { id: U.uid(), tool: drawing.tool, color: drawing.color, size: drawing.size, pts: drawing.pts };
-			strokeBounds(stroke);
-			pg.strokes.push(stroke);
-			pushUndo({ kind: "add", stroke, pageIdx: pi });
-			scheduleSave();
-
-			commitStrokeRender(pi, stroke);
-			renderThumb(pi);
-			if (drawing.tool === "pen" || drawing.tool === "marker") BUS.emit("heft:schedule-page", { pageId: pid, page: pg });
-		}
-		drawing = null;
-		updateChrome();
-	}
+	// Stift-Eingabe (heft-input.js). Gemeinsamer Zustand über Getter/Setter, damit die
+	// Eingabe immer das aktuelle Dokument, Werkzeug und die aktuelle Auswahl sieht.
+	const input = createHeftInput({
+		vp,
+		get doc() { return doc; },
+		get host() { return host; },
+		get pid() { return pid; },
+		get idx() { return idx; }, set idx(v) { idx = v; },
+		get tool() { return tool; }, set tool(v) { tool = v; },
+		set expanded(v) { expanded = v; },
+		get color() { return color; },
+		get size() { return size; },
+		get onlyPen() { return onlyPen; },
+		get eraserSize() { return eraserSize; },
+		get drawing() { return drawing; }, set drawing(v) { drawing = v; },
+		get sel() { return sel; }, set sel(v) { sel = v; },
+		get lassoSel() { return lassoSel; }, set lassoSel(v) { lassoSel = v; },
+		imagesOf, textsOf, hitText, redrawPage, updateChrome, dropLasso, pushUndo, refresh,
+		openTextEditor, setWriting, drawStroke, scheduleSave, renderThumb,
+	});
+	const { onDown, onMove, onUp } = input;
 
 	function applyHistory(fromStack, toStack, isRedo) {
 		PERF_PROFILER.measure("heft.undo-redo", () => {
@@ -1612,7 +1208,7 @@ export const HEFT = (() => {
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
 	async function loadDocFor(pageId) {
-		const d = pageId === pid && doc ? doc : await load(pageId);
+		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		if (!d) return null;
 		// Bilder vorab dekodieren, sonst fehlen sie auf frisch geladenen Canvases
 		const jobs = [];
@@ -1654,7 +1250,7 @@ export const HEFT = (() => {
 		if (!b || !doc) return;
 		const d = b.dataset;
 		if (d.hesidebar) {
-			const mobile = window.PLATFORM ? window.PLATFORM.isPhone() : false;
+			const mobile = PLATFORM.isPhone();
 			if (mobile) document.body.classList.toggle("mnav-open");
 			else {
 				const on = document.body.classList.toggle("sidebar-collapsed");
@@ -1997,11 +1593,10 @@ export const HEFT = (() => {
 		Object.keys(imgCache).forEach((k) => { imgCache[k].src = ""; delete imgCache[k]; });
 		host = null; pid = null; doc = null; idx = 0; canvases = []; pageSlots = []; detailCanvases = []; wetCanvases = [];
 		drawing = null; sel = null; lassoSel = null; undoStack = []; redoStack = [];
-		laserTimers.forEach(clearTimeout); laserTimers.clear();
+		input.reset();
 		clearTimeout(holdTimer); holdTool = null; suppressEraserClick = false;
 
-		vp.reset(); activePenPointers.clear(); clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
-		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
+		vp.reset(); clearTimeout(scrollSettleTimer); scrollSettleTimer = 0;
 		trayDrag = null; boundTray = null; // detached Knoten nicht festhalten
 		clearTimeout(writingOffT); writingOffT = 0; writing = false;
 		lastChromeHtml = ""; lastPopSig = "";
@@ -2020,8 +1615,8 @@ export const HEFT = (() => {
 
 		if (thumbJobs[key]) return thumbJobs[key];
 		const job = (async () => {
-			const d = await load(pageId);
-			const pg = d.pages[i];
+			const d = await load(pageId, { create: false });
+			const pg = d && d.pages[i];
 			if (!pg) return null;
 			const c = renderPageCanvas(pg, w);
 			const url = c.toDataURL("image/png");
@@ -2056,7 +1651,7 @@ export const HEFT = (() => {
 
 	async function pageAsDataUrl(pageId, pageIdx, w = 1200) {
 		if (!pageId) return null;
-		const d = pageId === pid && doc ? doc : await load(pageId);
+		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		const pg = d && d.pages && d.pages[pageIdx || 0];
 		if (!pg) return null;
 		return renderPageCanvas(pg, w).toDataURL("image/png");
@@ -2067,9 +1662,10 @@ export const HEFT = (() => {
 		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
-		isWriting: () => !!(pid && (drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500))),
+		isWriting: () => !!(pid && input.isWriting()),
 	};
 })();
 
 BUS.provide("heft:is-writing", () => HEFT.isWriting());
+BUS.provide("heft:save-now", () => HEFT.saveNow());
 

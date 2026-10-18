@@ -160,7 +160,7 @@ async function write(pages) {
 
 // Startet höchstens einen Versuch pro App-Start — leicht verzögert, damit der Start flüssig bleibt.
 // getPages: liefert die aktiven Notizen ohne Konflikt-Kopien (render.js filtert), erst bei Bedarf.
-function ensure(getPages) {
+function ensure(getPages, manual = false) {
 	if (getPages) activePages = getPages;
 	migrateLocal();
 	if (tried || phase !== "idle" || !enabled() || !due()) return;
@@ -170,6 +170,10 @@ function ensure(getPages) {
 		await migrateLocal();
 		// Erneut prüfen: übernommene oder inzwischen von einem anderen Gerät gesyncte Artikel
 		if (!due()) { phase = "idle"; refresh(); return; }
+		// Automatisch nur bei erreichbarer KI — sonst liefen bei jedem Start (z. B. am Handy ohne
+		// lokale KI) vier vergebliche Anfragen samt Wartezeiten. Ist der Start-Check noch nicht
+		// fertig, genügt ein eigener kurzer Ping.
+		if (!manual && !(S.aiOnline ?? await AI.ping())) { error = "KI nicht erreichbar."; phase = "idle"; refresh(); return; }
 		phase = "busy"; error = ""; refresh();
 		write(activePages())
 			.then((a) => (due() ? save({ ...a, updated: a.created }) : null))
@@ -181,7 +185,7 @@ function ensure(getPages) {
 function retry() {
 	if (phase !== "idle") return;
 	tried = false;
-	ensure();
+	ensure(null, true);
 }
 
 function markRead() {

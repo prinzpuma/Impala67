@@ -1868,7 +1868,6 @@ export const RENDER = {
 
 BUS.on("ui:render", (opts) => render(opts));
 BUS.on("ui:render-main", () => renderMain());
-BUS.on("ui:render-sidebar", () => renderSidebar());
 BUS.on("ui:render-tabs", () => renderTabs());
 BUS.on("ui:render-chat", () => renderChat());
 BUS.on("ui:render-main-chat-log", () => renderMainChatLog());
@@ -1877,7 +1876,6 @@ BUS.on("ui:render-model-bar", () => renderModelBar());
 BUS.on("ui:render-status-dot", () => renderStatusDot());
 BUS.on("ui:hydrate-images", (root) => hydrateImages(root));
 BUS.on("ui:hydrate-covers", (root) => hydrateCovers(root));
-BUS.on("ui:modal", (html) => modal(html));
 BUS.on("ui:merge-pending-conflicts", (details) => mergePendingConflicts(details));
 BUS.on("ui:open-conflict-resolver", (idx) => openConflictResolver(idx));
 

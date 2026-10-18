@@ -70,10 +70,8 @@ export const ANALYSE = (() => {
 	// beim Seitenwechsel wandert sie als "dwell"-Event ins Telemetrie-Log (ab 45 s).
 	let dwell = null; // { pageId, ms, lost }
 	function flushDwell() {
-		if (dwell && dwell.ms >= 45000) {
-			try { STATE.dispatch("teleEvent", { id: U.uid(), kind: "dwell", data: { pageId: dwell.pageId, ms: Math.min(dwell.ms, 3600000), lost: dwell.lost } }).catch(() => {}); }
-			catch (err) { /* Telemetrie ist nie kritisch */ }
-		}
+		// Über TELE.log: dort greift auch die Einstellung „Lernanalyse aufzeichnen“ (aus = nichts speichern).
+		if (dwell && dwell.ms >= 45000) TELE.log("dwell", { pageId: dwell.pageId, ms: Math.min(dwell.ms, 3600000), lost: dwell.lost });
 		dwell = null;
 	}
 	let dwellTimer = 0;

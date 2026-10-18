@@ -15,34 +15,55 @@ export function fold(s) {
 
 const SPLIT = /[^\p{L}\p{N}]+/u;
 
-// Wörter als Paar aus Originalform (für die Markierung) und gefalteter Form (zum Vergleich).
+// Faltung je Wortform merken: dieselben Wörter stehen auf fast jeder Seite, und der
+// erste Indexaufbau faltete sonst jedes Vorkommen einzeln.
+const foldCache = new Map();
+function foldWord(form) {
+	let key = foldCache.get(form);
+	if (key === undefined) {
+		if (foldCache.size >= 200000) foldCache.clear();
+		foldCache.set(form, key = fold(form));
+	}
+	return key;
+}
+
+// Wörter als Originalform (für die Markierung) → gefaltete Form (zum Vergleich), jede Form einmal.
 function words(text) {
-	const out = [];
+	const out = new Map();
 	for (const form of String(text).toLowerCase().split(SPLIT)) {
-		if (form.length >= 2) out.push({ form, key: fold(form) });
+		if (form.length >= 2 && !out.has(form)) out.set(form, foldWord(form));
 	}
 	return out;
 }
 
-// Editierdistanz mit Vertauschung (OSA); bricht ab, sobald sie sicher über max liegt.
-export function typoDistance(a, b, max) {
-	if (Math.abs(a.length - b.length) > max) return max + 1;
-	let prev2 = null, prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+// Drei wiederverwendete Zeilen: die Suche ruft das pro Tastendruck für den ganzen
+// Wortschatz auf, neue Arrays je Aufruf kosteten dort den Großteil der Zeit.
+let rows = [new Int32Array(64), new Int32Array(64), new Int32Array(64)];
+
+// Editierdistanz mit Vertauschung (OSA) zwischen a und den ersten bLen Zeichen von b;
+// bricht ab, sobald sie sicher über max liegt.
+export function typoDistance(a, b, max, bLen = b.length) {
+	if (Math.abs(a.length - bLen) > max) return max + 1;
+	if (rows[0].length <= bLen) rows = rows.map(() => new Int32Array(bLen * 2));
+	let [prev2, prev, cur] = rows;
+	for (let j = 0; j <= bLen; j++) prev[j] = j;
 	for (let i = 1; i <= a.length; i++) {
-		const cur = [i];
+		const ai = a.charCodeAt(i - 1);
+		cur[0] = i;
 		let rowMin = i;
-		for (let j = 1; j <= b.length; j++) {
-			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-			let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-			if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+		for (let j = 1; j <= bLen; j++) {
+			const bj = b.charCodeAt(j - 1);
+			let v = prev[j - 1] + (ai === bj ? 0 : 1);
+			if (prev[j] + 1 < v) v = prev[j] + 1;
+			if (cur[j - 1] + 1 < v) v = cur[j - 1] + 1;
+			if (i > 1 && j > 1 && ai === b.charCodeAt(j - 2) && a.charCodeAt(i - 2) === bj && prev2[j - 2] + 1 < v) v = prev2[j - 2] + 1;
 			cur[j] = v;
 			if (v < rowMin) rowMin = v;
 		}
 		if (rowMin > max) return max + 1;
-		prev2 = prev;
-		prev = cur;
+		[prev2, prev, cur] = [prev, cur, prev2];
 	}
-	return prev[b.length];
+	return prev[bLen];
 }
 
 // 3 = gleiches Wort, 2 = Wortanfang, 1 = Tippfehler, 0 = kein Treffer.
@@ -53,7 +74,7 @@ function quality(term, word) {
 	if (!max) return 0;
 	if (typoDistance(term, word, max) <= max) return 1;
 	// Wort wird noch getippt: Tippfehler im Anfang („fotosint“ → „fotosintese“).
-	if (term.length >= 5 && word.length > term.length && typoDistance(term, word.slice(0, term.length), max) <= max) return 1;
+	if (term.length >= 5 && word.length > term.length && typoDistance(term, word, max, term.length) <= max) return 1;
 	return 0;
 }
 
@@ -67,7 +88,7 @@ export function createFuzzyIndex() {
 			if (v && v.pages.delete(id) && !v.pages.size) vocab.delete(key);
 		}
 		const keys = new Set();
-		for (const { form, key } of words(text)) {
+		for (const [form, key] of words(text)) {
 			let v = vocab.get(key);
 			if (!v) vocab.set(key, v = { pages: new Set(), forms: new Set() });
 			v.pages.add(id);
@@ -80,7 +101,7 @@ export function createFuzzyIndex() {
 	// Jedes Suchwort muss auf der Seite vorkommen (UND). Liefert Seiten mit Punktzahl
 	// und den getroffenen Originalformen zum Markieren.
 	function search(query, allow) {
-		const terms = [...new Set(words(query).map((w) => w.key))].filter((t) => t.length >= 3);
+		const terms = [...new Set(words(query).values())].filter((t) => t.length >= 3);
 		if (!terms.length) return [];
 		let hits = null; // pageId → { score, forms }
 		for (const term of terms) {

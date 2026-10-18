@@ -7,15 +7,16 @@ import { RENDER } from "./render.js";
 import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
 import { navState } from "./nav-history.js";
+import { PLATFORM } from "./platform.js";
 
 // mobile.js — Controller der Handy-UI (Mobile UI v7).
-// Die Handy-UI ist nur aktiv, wenn body.mobile-ui gesetzt ist (APP.PLATFORM.phoneQuery).
+// Die Handy-UI ist nur aktiv, wenn body.mobile-ui gesetzt ist (PLATFORM.phoneQuery).
 // Zustand lebt in Body-Klassen; updateUI() ist idempotent und setzt Klassen ausschließlich
 // über classList.toggle(name, force). toggle mit unverändertem Wert erzeugt keine
 // Mutation, daher bleibt die MutationObserver-Rückkopplung (Body-Klassen → updateUI)
 // endlich.
 export const MOBILE = (() => {
-	const mq = APP.PLATFORM.phoneQuery;
+	const mq = PLATFORM.phoneQuery;
 	const body = document.body;
 	let started = false;
 	let wired = false;

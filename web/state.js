@@ -1487,6 +1487,8 @@ export const STATE = (() => {
 		_childIdx = m;
 		return m;
 	}
+	// Alle direkten Unterseiten (inkl. Papierkorb/Archiv, unsortiert, nicht kopiert — nur lesen).
+	const childPagesOf = (id) => ensureParentIdx().get(id || "") || [];
 	const childrenOf = (id, wsId) => {
 		const parentWorkspaceId = id && S.pages[id] ? (S.pages[id].workspaceId || "default") : null;
 		const k = (wsId || parentWorkspaceId || S.currentWorkspaceId || "default") + "\0" + (id || "");
@@ -1584,6 +1586,23 @@ export const STATE = (() => {
 	});
 
 	const pageTitles = () => activePages().map((pg) => pg.title);
+
+	// Titel → erste nicht gelöschte Seite (Reihenfolge wie Object.values, Archiv inklusive),
+	// memoiziert über _pageRev. Grundlage für das Auflösen von [[Wiki-Links]] im Editor.
+	const _titleCache = { rev: -1, map: null };
+	function pagesByTitle() {
+		if (_titleCache.rev !== _pageRev) {
+			const map = new Map();
+			for (const pg of Object.values(S.pages)) {
+				if (!pg || pg.trashed) continue;
+				const title = pg.title || "Ohne Titel";
+				if (!map.has(title)) map.set(title, pg);
+			}
+			_titleCache.map = map;
+			_titleCache.rev = _pageRev;
+		}
+		return _titleCache.map;
+	}
 
 	// PERF: EIN Durchlauf statt zweier separater .find()-Durchläufe (Exakt- und
 	// Teilstring-Treffer), inklusive nur je einmal berechnetem toLowerCase() pro Seite.
@@ -1934,7 +1953,7 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory, ancestorsOf, favModels, toggleFavModel, removeProviderFavorites };
+	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory, ancestorsOf, favModels, toggleFavModel, removeProviderFavorites };
 })();
 
 // Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)

@@ -3,6 +3,7 @@
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { icon, pageIcon } from "./icons.js";
+import { PLATFORM } from "./platform.js";
 
 // ---------- Menü- und Popover-Zustand ----------
 export let slash = null;      // { items, index, bid, query }
@@ -37,9 +38,6 @@ let env = {
 	focusBlock: () => {},
 	turnInto: () => {},
 	syncFieldToModel: () => {},
-	inlineMathParts,
-	TEXTY,
-	COLORS,
 };
 
 export function initEditorMenus(context) {
@@ -189,9 +187,8 @@ export async function applySlash(kind) {
 		env.paintTextField(bid, text, text.length, false);
 		return;
 	}
-	const texty = env.TEXTY || TEXTY;
 	env.mutate(() => {
-		if (texty[c.block.type] && (kind === "table" || kind === "columns" || kind === "code" || kind === "math" ||
+		if (TEXTY[c.block.type] && (kind === "table" || kind === "columns" || kind === "code" || kind === "math" ||
 			kind === "divider" || kind === "callout" || kind === "toggle")) {
 			// Strukturblock: Rest-Text bleibt als eigener Block erhalten
 			const nb = env.newBlock(kind);
@@ -271,24 +268,22 @@ export const TURN_TYPES = [
 export function openBlockMenu(bid, anchorEl) {
 	const b = env.findBlock(bid);
 	if (!b) return;
-	const texty = env.TEXTY || TEXTY;
-	const colors = env.COLORS || COLORS;
-	const turn = texty[b.type] || b.type === "toggle" || b.type === "callout" || b.type === "code"
+	const turn = TEXTY[b.type] || b.type === "toggle" || b.type === "callout" || b.type === "code"
 		? '<div class="blk-msec">Umwandeln in</div>' + TURN_TYPES.map(([k, label]) =>
 			'<div class="blk-mi' + (b.type === k ? " active" : "") + '" data-turninto="' + bid + ":" + k + '">' + esc(label) + "</div>").join("")
 		: "";
-	const colorsHtml = texty[b.type] || b.type === "callout"
+	const colorsHtml = TEXTY[b.type] || b.type === "callout"
 		? '<div class="blk-msec">Farbe</div><div class="blk-colorrow">' +
-			colors.map((cname) => '<button class="blk-cdot c-' + cname + '" data-bcolor="' + bid + ":c:" + cname + '" title="' + cname + '"></button>').join("") +
+			COLORS.map((cname) => '<button class="blk-cdot c-' + cname + '" data-bcolor="' + bid + ":c:" + cname + '" title="' + cname + '"></button>').join("") +
 			'</div><div class="blk-colorrow">' +
-			colors.map((cname) => '<button class="blk-cdot hl-' + cname + '" data-bcolor="' + bid + ":bg:" + cname + '" title="' + cname + ' Hintergrund"></button>').join("") +
+			COLORS.map((cname) => '<button class="blk-cdot hl-' + cname + '" data-bcolor="' + bid + ":bg:" + cname + '" title="' + cname + ' Hintergrund"></button>').join("") +
 			'<button class="blk-cdot" data-bcolor="' + bid + ':none:" title="Farbe entfernen">✕</button></div>'
 		: "";
 	const html = turn + colorsHtml +
 		'<div class="blk-msec"></div>' +
 		'<div class="blk-mi" data-bdup="' + bid + '">Duplizieren <small>Strg+D</small></div>' +
 		'<div class="blk-mi" data-bcopy="' + bid + '">Als Markdown kopieren</div>' +
-		(texty[b.type] ? '<div class="blk-mi" data-bflash="' + bid + '">Lernkarte erstellen</div>' : "") +
+		(TEXTY[b.type] ? '<div class="blk-mi" data-bflash="' + bid + '">Lernkarte erstellen</div>' : "") +
 		'<div class="blk-mi danger" data-bdel="' + bid + '">Löschen <small>Entf</small></div>';
 	openMenu(anchorEl, html, "blk-blockmenu");
 	blockMenuId = bid;
@@ -300,8 +295,7 @@ export function openMathPop(bid, spanEl) {
 	const host = env.getHost();
 	const anchor = spanEl || (host && host.querySelector('[data-bmath="' + bid + '"]'));
 	if (!anchor) return;
-	const parseInline = env.inlineMathParts || inlineMathParts;
-	const inline = spanEl ? parseInline(spanEl.dataset.md) : null;
+	const inline = spanEl ? inlineMathParts(spanEl.dataset.md) : null;
 	const src = inline ? inline.formula : String((env.findBlock(bid) || {}).text || "");
 	const pop = document.createElement("div");
 	pop.className = "blk-mathpop";
@@ -315,7 +309,7 @@ export function openMathPop(bid, spanEl) {
 	mathEdit = { bid, spanEl: spanEl || null, delimiters: inline ? [inline.open, inline.close] : null };
 	const ta = pop.querySelector("textarea");
 	ta.focus();
-	if (typeof window !== "undefined" && !window.PLATFORM?.isTouch?.()) {
+	if (!PLATFORM.isTouch()) {
 		ta.select();
 	} else {
 		try {

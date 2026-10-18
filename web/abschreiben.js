@@ -4,7 +4,7 @@
 // über HANDSCHRIFT.saveTrainingSample (Export in den KI-Einstellungen).
 // Jeder vierte Text ist eine Messzeile (split: "eval") und darf nie ins Training.
 
-import { icon, lead } from "./icons.js";
+import { lead } from "./icons.js";
 import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { ABSCHREIB_TEXTE, abschreibSplit } from "./abschreiben-texte.js";

@@ -8,7 +8,7 @@ import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
 import { THINK } from "./think-heuristik.js";
 import { RAG } from "./rag.js";
-import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID, LOCAL_EMBEDDING_MODELS } from "./embedding.js";
+import { EMBEDDINGS, LOCAL_EMBEDDING_MODELS } from "./embedding.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER } from "./sync-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";

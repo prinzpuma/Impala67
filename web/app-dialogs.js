@@ -9,6 +9,7 @@ import { SRS } from "./srs.js";
 import { TABS } from "./tabs.js";
 import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
+import { PLATFORM } from "./platform.js";
 
 const $ = (id) => U.el(id);
 const esc = (s) => U.esc(s);
@@ -19,7 +20,7 @@ const renderHistoryModal = (...a) => RENDER.renderHistoryModal(...a);
 const renderMain = (...a) => RENDER.renderMain(...a);
 const saveCurrentChat = (...a) => CHAT_FULLSCREEN.saveCurrentChat(...a);
 
-const isTouch = () => (typeof window !== "undefined" && window.PLATFORM?.isTouch ? window.PLATFORM.isTouch() : false);
+const isTouch = () => PLATFORM.isTouch();
 
 const focusPageTitle = () => {
 	if (isTouch()) return;

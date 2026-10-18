@@ -13,6 +13,7 @@ import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
 import { newPageFlow, openAnki, openDailyNote, startNewChat, createPageInNewTab } from "./app-dialogs.js";
 import { icon, pageIcon } from "./icons.js";
+import { PLATFORM } from "./platform.js";
 
 let items = []; // aktuell angezeigte, auswählbare Einträge (für ↑/↓ und Enter)
 let selIdx = 0;
@@ -62,7 +63,7 @@ function openPaletteUi(mode, placeholder, opts = {}) {
 		"</div>";
 	selIdx = 0;
 	renderList("");
-	const isTouch = !!window.PLATFORM?.isTouch?.();
+	const isTouch = PLATFORM.isTouch();
 	const shouldFocus = opts.focus !== undefined ? !!opts.focus : !isTouch;
 	const inp = U.el("paletteInput");
 	if (shouldFocus && inp) inp.focus();
@@ -91,7 +92,7 @@ export function closePalette() {
 	const back = lastFocus;
 	lastFocus = null;
 	// Auf Touchgeräten Fokus nicht ungefragt zurückgeben, da sonst die Tastatur erneut aufpoppt
-	const isTouch = !!window.PLATFORM?.isTouch?.();
+	const isTouch = PLATFORM.isTouch();
 	if (!isTouch && back && back.isConnected && typeof back.focus === "function") back.focus();
 }
 

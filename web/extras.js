@@ -1,5 +1,5 @@
 "use strict";
-import { icon, lead } from "./icons.js";
+import { lead } from "./icons.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";

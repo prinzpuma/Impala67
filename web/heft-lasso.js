@@ -4,7 +4,6 @@ import { U } from "./util.js";
 import {
 	strokeBounds,
 	translateStroke,
-	nearPoint,
 	pointInPolygon,
 	strokeOutline
 } from "./heft-geometry.js";

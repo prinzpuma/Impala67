@@ -312,7 +312,6 @@ export const TABS = {
 	restoreSession
 };
 
-BUS.on("tabs:open-page", (arg) => typeof arg === "string" ? openPage(arg) : openPage(arg?.id, arg?.opts));
 BUS.on("tabs:nav-back", () => navBack());
 BUS.on("tabs:nav-forward", () => navForward());
 

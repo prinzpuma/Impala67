@@ -334,11 +334,3 @@ export function wireSidebarEvents() {
 		try { localStorage.removeItem(SIDEBAR_W_KEY); } catch { /* ignore */ }
 	});
 }
-
-export const APP_SIDEBAR_EVENTS = {
-	wireSidebarEvents,
-	focusRenameInput,
-	commitRename,
-	movePageSubtreeToWorkspace,
-	setSidebarWidth,
-};

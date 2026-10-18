@@ -10,9 +10,12 @@ import { ANALYSE } from "./analyse.js";
 import { TELE } from "./telemetrie.js";
 import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
+import { PLATFORM } from "./platform.js";
 
 const hydrateImages = (root) => BUS.emit("ui:hydrate-images", root);
-const modal = (html) => BUS.emit("ui:modal", html);
+// Reiner String-Wrapper. FIX: lief vorher über BUS.emit — emit liefert aber keinen Rückgabewert,
+// der Karten-Editor zeigte deshalb nur „undefined“ statt Formular.
+const modal = (inner) => '<div class="modal">' + inner + "</div>";
 // 🎮 Controller (27. Juli): Der Tastenhinweis steckt DIREKT in der Schaltfläche, die
 // die Taste auslöst — kein schwebendes Overlay, das etwas überdecken kann. Liefert
 // einen leeren String, solange kein Pad verbunden bzw. die Steuerung aus ist.
@@ -589,7 +592,7 @@ function openCardEditor(cardId) {
 			neu.hidden = !isNew;
 			if (isNew) {
 				neu.focus();
-				if (!window.PLATFORM?.isTouch?.()) {
+				if (!PLATFORM.isTouch()) {
 					neu.select();
 				} else {
 					try {

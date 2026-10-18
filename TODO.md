@@ -39,10 +39,13 @@ Stand: v2.2.77 (Oktober 2026)
   - `web/heft-import.js` (Datei-/Bild-/PDF-Import) und `web/heft-storage.js` (Blob-Referenzen, Altbestand-Migration, Verlauf-Snapshots) aus `web/heft.js` ausgelagert.
   - `web/app-sidebar-events.js` (Sidebar-Drag-&-Drop, Inline-Umbenennen, Breitenanpassung) und `web/app-dialogs.js` (Dialoge, Seiten-Flows, Anki-/Lernmodus-Helfer) aus `web/app.js` ausgelagert.
   - `web/editor-inline.js` (Inline-Markdown, KaTeX-Hydrierung, Caret-Berechnung) aus `web/editor.js` ausgelagert.
-- [ ] **Große Dateien weiter schneiden**:
-  - `web/heft.js` (~2.075 Zeilen): Viewport/Zoom/Kacheln und Finger-Gesten sind in `web/heft-viewport.js` ausgelagert. Offen: Stift-Eingabe (`onDown`/`onMove`/`onUp`, eng mit Werkzeugen, Auswahl und Undo verflochten) in `heft-input.js` herauslösen.
-  - `web/app.js` (~1.815 Zeilen): Verbleibende Bereiche in `wireEvents()` (z. B. Anki/Lernmodus-Klicks, Daily Notes, Kontextmenüs) aufteilen.
-  - `web/editor.js` (~2.215 Zeilen): Verbleibende Teilbereiche (z. B. Tastatur-Handler / Block-Operationen) modularisieren.
+- [x] **Große Dateien weiter geschnitten**:
+  - `web/heft.js` (~1.670 Zeilen): Stift-Eingabe (`onDown`/`onMove`/`onUp`, Radierer, Lasso-Griffe, Formerkennung) in `web/heft-input.js`; gemeinsamer Zustand über Getter/Setter.
+  - `web/app.js` (~850 Zeilen): Zentraler Klick-Handler in `web/app-click-chat.js`, `app-click-anki.js`, `app-click-pages.js`, `app-click-buttons.js` aufgeteilt; Helfer in `web/app-ui.js`, Touch/Handy-Erkennung in `web/platform.js` (statt `window.PLATFORM`).
+  - `web/editor.js` (~1.900 Zeilen): Text-/Tabellen-/Code-Tasten in `web/editor-keys.js`.
+- [ ] **Große Dateien optional weiter schneiden**:
+  - `web/editor.js`: Blockauswahl-Tasten (`handleSelectionKeys`) und Host-Verkabelung (`wire`) — teilen sich viel Auswahl-Zustand, nur mit Getter/Setter-Schnittstelle sinnvoll.
+  - `web/app.js`: Eingabe-/Change-Handler in `wireEvents()`.
 - [x] **Restliche CSS-Überlagerungen abgebaut**:
   - Abgeleitete Design-Tokens (`--b-*`) nach `web/css/variables.css` überführt und die Komponenten-Regeln aus `web/design.css` direkt in `web/home.css`, `web/styles.css`, `web/css/editor.css` und `web/css/heft.css` integriert (`web/design.css` enthält nur noch Querschnitts-Kartenbasis und `motion.js`-Übergänge).
 - [x] **Abhängigkeits-Knäuel & `window`-Brücke aufgelöst (`docs/ARCHITEKTUR.md` B1/B2)**:

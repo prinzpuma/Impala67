@@ -824,11 +824,14 @@ export const DB = (() => {
 			}
 		}); // neue lokale Seq
 		if (fresh.length) await addEvents(fresh);
-		const blobs = data.blobs && typeof data.blobs === "object" ? data.blobs : {};
-		const have = new Set(await allBlobKeys());
-		// PERF: fehlende Blobs in EINER Transaktion statt einer je Blob (Erst-Import mit vielen PDFs/Heften).
-		const missing = Object.entries(blobs).filter(([k]) => !isStateCheckpointKey(k) && !have.has(k));
-		if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
+		const blobEntries = data.blobs && typeof data.blobs === "object" ? Object.entries(data.blobs) : [];
+		// PERF: Sync-Pakete (Cloudflare) bringen nie Blobs mit — dann auch nicht bei jedem Paket alle
+		// Blob-Schlüssel aus IndexedDB lesen. Fehlende Blobs in EINER Transaktion statt einer je Blob.
+		if (blobEntries.length) {
+			const have = new Set(await allBlobKeys());
+			const missing = blobEntries.filter(([k]) => !isStateCheckpointKey(k) && !have.has(k));
+			if (missing.length) await rw("blobs", (s) => missing.forEach(([k, v]) => s.put({ buf: U.b64ToBuf(v.b64), meta: v.meta }, k)));
+		}
 		// importedEvents = tiefe Kopien für Live-Replay ohne reload — UI darf den Import-Payload nicht mutieren.
 		// structuredClone vermeidet den teuren JSON-Text-Roundtrip. Die tiefe Kopie
 		// bleibt nötig: Live-Module dürfen den unveränderlichen Import nicht mitmutieren.
