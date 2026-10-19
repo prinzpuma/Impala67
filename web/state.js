@@ -16,8 +16,11 @@ import {
 	checkpointSavedState,
 	checkpointStateStats,
 	eventLogInfoOf,
+	hashHeftDocs,
 	heftBlobSizesOf,
+	isPartitionedCheckpoint,
 	makeStateCheckpoint,
+	serializeHeftDocs,
 	stateCheckpointRejectReason,
 } from "./state-checkpoint.js";
 // state.js — In-Memory-Zustand, aufgebaut durch Abspielen des Event-Logs.
@@ -1140,6 +1143,21 @@ export const STATE = (() => {
 		resetDerivedState();
 	}
 
+	// Liest die Heft-Striche eines Format-3-Checkpoints Heft für Heft: Holen und Einlesen
+	// laufen in getrennten Tasks, damit nie mehrere MB am Stück den Start blockieren.
+	// Fehlt ein Eintrag, taugt der Checkpoint nicht (null) und das Log wird abgespielt.
+	async function readCheckpointHeftDocs(heftDocHashes) {
+		const docs = {};
+		for (const [pageId, hash] of Object.entries(heftDocHashes || {})) {
+			const json = await DB.getStateCheckpointHeft(hash);
+			if (typeof json !== "string") return null;
+			await yieldToMain();
+			docs[pageId] = JSON.parse(json);
+			await yieldToMain();
+		}
+		return docs;
+	}
+
 	async function replayCooperatively(events) {
 		const yieldIfNeeded = cooperativeGate();
 		for (const event of events) {
@@ -1174,8 +1192,15 @@ export const STATE = (() => {
 						DB.eventsAfterSeqAll(checkpoint.maxSeq, info.maxSeq),
 					]), { fromSeq: checkpoint.maxSeq, toSeq: info.maxSeq }, 5);
 					rejectReason = stateCheckpointRejectReason(checkpoint, info, boundary, tail);
+					let heftDocs = null;
+					if (!rejectReason && checkpoint.format === STATE_CHECKPOINT_FORMAT) {
+						heftDocs = await PERF_PROFILER.run("state.checkpoint-hefte", () => readCheckpointHeftDocs(checkpoint.heftDocHashes), {
+							docs: Object.keys(checkpoint.heftDocHashes).length,
+						}, 5);
+						if (!heftDocs) rejectReason = "heft-docs";
+					}
 					checkpointUsed = !rejectReason;
-					if (checkpointUsed) saved = PERF_PROFILER.measure("state.checkpoint-parse", () => checkpointSavedState(checkpoint), { heftDocsKb: Math.round((checkpoint.heftDocsJson?.length || 0) / 1024) }, 5);
+					if (checkpointUsed) saved = PERF_PROFILER.measure("state.checkpoint-parse", () => checkpointSavedState(checkpoint, heftDocs), { heftDocsKb: Math.round((checkpoint.heftDocsJson?.length || 0) / 1024) }, 5);
 				}
 			} catch (error) {
 				console.warn("[state] Start-Checkpoint wird neu aufgebaut:", error);
@@ -1184,7 +1209,7 @@ export const STATE = (() => {
 			}
 
 			if (checkpointUsed) {
-				const partitioned = checkpoint.format === STATE_CHECKPOINT_FORMAT;
+				const partitioned = isPartitionedCheckpoint(checkpoint);
 				_checkpointBlobSizes = partitioned ? { ...checkpoint.heftBlobSizes } : heftBlobSizesOf(saved);
 				_checkpointPayloadLoaded = !partitioned || Object.keys(_checkpointBlobSizes).length === 0;
 				const checkpointStats = checkpointStateStats(saved, _checkpointBlobSizes);
@@ -1392,8 +1417,15 @@ export const STATE = (() => {
 			const dirtyBlobs = Object.fromEntries(dirtyHashes
 				.map((hash) => [hash, S.heftBlobs[hash]])
 				.filter(([, data]) => typeof data === "string"));
-			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes);
-			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(checkpoint, dirtyBlobs), {
+			// Heft-Texte und Kernzustand müssen zum selben maxSeq gehören. Kam während des Hashens
+			// ein Event an, passt der Text nicht mehr: verwerfen, der Planer versucht es später.
+			const { heftDocHashes, heftDocJson } = await hashHeftDocs(serializeHeftDocs(S.heftDocs));
+			if (revision !== _stateRevision) {
+				finishProfile({ stale: true });
+				return false;
+			}
+			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes, heftDocHashes);
+			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(checkpoint, dirtyBlobs, heftDocJson), {
 				eventCount: current.count,
 				keys: STATE_CHECKPOINT_CORE_KEYS.length,
 				dirtyHeftBlobCount: Object.keys(dirtyBlobs).length,

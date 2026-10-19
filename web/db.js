@@ -261,7 +261,10 @@ export const DB = (() => {
 	const LEGACY_STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v1__";
 	const STATE_CHECKPOINT_KEY = "__impala67_state_checkpoint_v2__";
 	const STATE_CHECKPOINT_BLOB_PREFIX = "__impala67_state_checkpoint_v2_blob__:";
-	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY || String(key).startsWith(STATE_CHECKPOINT_BLOB_PREFIX);
+	// Heft-Striche je Heft als eigener, inhaltsadressierter Eintrag (JSON-Text, Schlüssel = Hash).
+	const STATE_CHECKPOINT_HEFT_PREFIX = "__impala67_state_checkpoint_v3_heft__:";
+	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY
+		|| String(key).startsWith(STATE_CHECKPOINT_BLOB_PREFIX) || String(key).startsWith(STATE_CHECKPOINT_HEFT_PREFIX);
 	async function getStateCheckpoint() {
 		const current = await ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
 		return current || ro("blobs", (s) => s.get(LEGACY_STATE_CHECKPOINT_KEY));
@@ -282,21 +285,31 @@ export const DB = (() => {
 	// Bilder, die der neue Checkpoint nicht mehr kennt, fliegen in derselben Transaktion —
 	// sonst sammelten sich verwaiste Heft-Bilder unbegrenzt an.
 	const stateCheckpointBlobRange = () => IDBKeyRange.bound(STATE_CHECKPOINT_BLOB_PREFIX, STATE_CHECKPOINT_BLOB_PREFIX + "￿");
-	function putStateCheckpoint(checkpoint, heftBlobs) {
-		const entries = Object.entries(heftBlobs || {}).filter(([hash, data]) => hash && typeof data === "string");
-		const known = checkpoint?.heftBlobSizes && typeof checkpoint.heftBlobSizes === "object" ? checkpoint.heftBlobSizes : null;
+	const stateCheckpointHeftRange = () => IDBKeyRange.bound(STATE_CHECKPOINT_HEFT_PREFIX, STATE_CHECKPOINT_HEFT_PREFIX + "￿");
+	const getStateCheckpointHeft = (hash) => ro("blobs", (s) => s.get(STATE_CHECKPOINT_HEFT_PREFIX + hash))
+		.then((rec) => (rec && typeof rec.data === "string" ? rec.data : null));
+	// Schreibt nur Einträge, deren Hash noch fehlt (unveränderte Hefte kosten nichts), und
+	// räumt in derselben Transaktion alles weg, was der neue Checkpoint nicht mehr kennt.
+	function putPartitionedEntries(s, range, prefix, entries, known) {
+		const checkReq = s.getAllKeys(range);
+		checkReq.onsuccess = () => {
+			const existingKeys = new Set(checkReq.result || []);
+			entries.forEach(([hash, data]) => {
+				const key = prefix + hash;
+				if (!existingKeys.has(key)) s.put({ data }, key);
+			});
+			if (known) existingKeys.forEach((key) => {
+				if (!known.has(String(key).slice(prefix.length))) s.delete(key);
+			});
+		};
+	}
+	function putStateCheckpoint(checkpoint, heftBlobs, heftDocs) {
+		const validEntries = (map) => Object.entries(map || {}).filter(([hash, data]) => hash && typeof data === "string");
+		const knownBlobs = checkpoint?.heftBlobSizes && typeof checkpoint.heftBlobSizes === "object" ? new Set(Object.keys(checkpoint.heftBlobSizes)) : null;
+		const knownHefte = checkpoint?.heftDocHashes && typeof checkpoint.heftDocHashes === "object" ? new Set(Object.values(checkpoint.heftDocHashes)) : null;
 		return rw("blobs", (s) => {
-			const checkReq = s.getAllKeys(stateCheckpointBlobRange());
-			checkReq.onsuccess = () => {
-				const existingKeys = new Set(checkReq.result || []);
-				entries.forEach(([hash, data]) => {
-					const key = STATE_CHECKPOINT_BLOB_PREFIX + hash;
-					if (!existingKeys.has(key)) s.put({ data }, key);
-				});
-				if (known) existingKeys.forEach((key) => {
-					if (!Object.hasOwn(known, String(key).slice(STATE_CHECKPOINT_BLOB_PREFIX.length))) s.delete(key);
-				});
-			};
+			putPartitionedEntries(s, stateCheckpointBlobRange(), STATE_CHECKPOINT_BLOB_PREFIX, validEntries(heftBlobs), knownBlobs);
+			if (knownHefte) putPartitionedEntries(s, stateCheckpointHeftRange(), STATE_CHECKPOINT_HEFT_PREFIX, validEntries(heftDocs), knownHefte);
 			s.put(checkpoint, STATE_CHECKPOINT_KEY);
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
 		});
@@ -307,7 +320,7 @@ export const DB = (() => {
 		return rw("blobs", (s) => {
 			s.delete(STATE_CHECKPOINT_KEY);
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
-			if (!keepHeftBlobs) s.delete(stateCheckpointBlobRange());
+			if (!keepHeftBlobs) { s.delete(stateCheckpointBlobRange()); s.delete(stateCheckpointHeftRange()); }
 		});
 	}
 
@@ -879,5 +892,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactLocalIfDue, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactLocalIfDue, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
 })();
