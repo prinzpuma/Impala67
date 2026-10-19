@@ -369,13 +369,32 @@ export const LERNZEIT = (() => {
 		const list = addLiveSession(activeSessions()).filter((s) => dayKey(s.startedAt) === key);
 		return mergedSeconds(list);
 	}
-	function totalsByDay() {
-		const grouped = {};
-		const sessions = addLiveSession(activeSessions());
+	// PERF: totalsByDay lief bei jedem Startseiten-Render mehrfach über ALLE Sitzungen
+	// (Tausende, ~11 ms je Aufruf). state.js ersetzt eine Sitzung bei jeder Änderung durch
+	// ein neues Objekt; ein Identitätsvergleich der Liste genügt deshalb als Cache-Schlüssel.
+	let closedTotalsCache = { sessions: [], grouped: {}, totals: {} };
+	function closedTotals() {
+		const sessions = activeSessions(), cached = closedTotalsCache;
+		if (sessions.length === cached.sessions.length && sessions.every((s, i) => s === cached.sessions[i])) return cached;
+		const grouped = {}, totals = {};
 		for (const session of sessions) (grouped[dayKey(session.startedAt)] ||= []).push(session);
-		const totals = {};
 		for (const [key, list] of Object.entries(grouped)) totals[key] = mergedSeconds(list);
-		return totals;
+		return (closedTotalsCache = { sessions, grouped, totals });
+	}
+	// Nur die Tage der laufenden Sitzung neu rechnen; ihre gespeicherte Vorversion fällt raus.
+	function totalsByDay() {
+		const { sessions, grouped, totals } = closedTotals();
+		const result = { ...totals }, live = currentAsSession();
+		if (!live) return result;
+		const liveKey = dayKey(live.startedAt), days = new Set([liveKey]);
+		for (const session of sessions) if (session.id === live.id) days.add(dayKey(session.startedAt));
+		for (const key of days) {
+			const list = (grouped[key] || []).filter((session) => session.id !== live.id);
+			if (key === liveKey) list.push(live);
+			if (list.length) result[key] = mergedSeconds(list);
+			else delete result[key];
+		}
+		return result;
 	}
 	function groupedSubjects(from, to) {
 		const start = from.getTime(), end = to.getTime(), groups = {};
