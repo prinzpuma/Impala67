@@ -5,8 +5,9 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 
 const version = process.argv[2];
-if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
-  console.error("Nutzung: node set-version.mjs <version>, z.B. 0.3.0");
+// Release: MAJOR.MINOR.PATCH. Zwischenstände von main: MAJOR.MINOR.PATCH-dev.N (siehe deploy-pwa.yml).
+if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(version)) {
+  console.error("Nutzung: node set-version.mjs <version>, z.B. 0.3.0 oder 0.3.1-dev.12");
   process.exit(1);
 }
 
@@ -56,8 +57,9 @@ modelVersion = modelVersion.replace(/export const HANDWRITING_MODEL_VERSION = "[
 fs.writeFileSync(modelVersionPath, modelVersion);
 console.log(`Handschrift-Modellversion gesetzt: ${modelHash}.`);
 
+// Android-APKs gibt es nur zu Releases; versionCode kennt keine Zwischenstände.
 const gradlePath = "./android/app/build.gradle";
-if (fs.existsSync(gradlePath)) {
+if (fs.existsSync(gradlePath) && /^\d+\.\d+\.\d+$/.test(version)) {
   let gradle = fs.readFileSync(gradlePath, "utf8");
   const [major, minor, patch] = version.split(".").map(Number);
   const versionCode = major * 100000 + minor * 1000 + patch;

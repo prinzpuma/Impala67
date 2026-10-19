@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const expected = process.argv[2] || pkg.version;
-if (!/^\d+\.\d+\.\d+$/.test(expected)) {
+if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(expected)) {
 	throw new Error(`Invalid version: ${expected}`);
 }
 

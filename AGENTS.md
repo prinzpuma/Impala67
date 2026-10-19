@@ -35,7 +35,7 @@
 - **Dateigrößen**: Neue, in sich geschlossene Logik in kleine, testbare Module auslagern. Große Dateien, die nicht endlos wachsen sollen: `web/heft.js`, `web/editor.js`, `web/app.js`, `web/render.js`, `web/state.js`, `web/settings.js`, `web/ai.js`.
 - **Sicherheit & Geheimnisse**: Keine API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben nur lokal im Browser.
 - **Rückwärtskompatibilität**: Lokale IndexedDB-Daten dürfen durch Updates nie verloren gehen oder ungefragt inkompatibel werden.
-- **Offline-Cache**: Werden gecachte App-Dateien geändert, muss die Cache-Version im Service Worker angepasst werden.
+- **Offline-Cache**: Jeder Push auf `main` bekommt automatisch eine eigene Cache-Version (Zwischenstand `x.y.z-dev.N`, Release `x.y.z`, siehe `.github/workflows/deploy-pwa.yml`). Neue App-Dateien müssen nur in `APP_FILES` im Service Worker stehen.
 
 ## 5. Arbeitsweise
 

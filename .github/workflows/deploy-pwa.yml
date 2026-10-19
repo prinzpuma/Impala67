@@ -23,6 +23,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-node@v5
         with:
@@ -44,7 +46,17 @@ jobs:
       - name: PWA-Versionsdateien synchronisieren
         run: |
           set -euo pipefail
+          # Jeder Push bekommt eine eigene Version und damit einen eigenen Offline-Cache,
+          # sonst erreicht er installierte PWAs nicht (Service Worker liefert cache-first).
+          # Release-Commit (package.json geändert): genau diese Version.
+          # Sonst: nächster Patch als Vorabversion, z. B. 2.2.84-dev.57 (> 2.2.83, < 2.2.84).
           VERSION=$(node -p "require('./package.json').version")
+          PREVIOUS=$(git show HEAD^:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
+          if [ "$VERSION" = "$PREVIOUS" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))-dev.$GITHUB_RUN_NUMBER"
+          fi
+          echo "PWA-Version: $VERSION"
           node .github/scripts/set-version.mjs "$VERSION"
           node .github/scripts/check-version-sync.mjs "$VERSION"
           node .github/scripts/check-pwa-cache.mjs

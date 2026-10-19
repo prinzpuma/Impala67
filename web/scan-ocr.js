@@ -87,7 +87,12 @@ export function recognize(src) {
 		const worker = await getWorker();
 		const finish = PERF_PROFILER.start("ocr.recognize", { runtime: TESSERACT_VERSION }, 0);
 		let data;
-		try { ({ data } = await worker.recognize(src)); }
+		// Data-URL vorher als Blob: Tesseract zerlegt Strings auf dem Hauptthread per
+		// atob().split("").map() in Millionen Einzelwerte — bei großen Scans sekundenlanger Stillstand.
+		try {
+			const image = typeof src === "string" && src.startsWith("data:") ? await (await fetch(src)).blob() : src;
+			({ data } = await worker.recognize(image));
+		}
 		catch (err) { finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) }); throw err; }
 		const confidence = Number(data && data.confidence) || 0;
 		const text = cleanOcrText(data && data.text);
