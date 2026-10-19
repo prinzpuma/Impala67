@@ -5,6 +5,8 @@ import { U } from "./util.js";
 import { PDFS } from "./pdfs.js";
 import { insertAt } from "./heft-pages-core.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
+import { cleanOcrText } from "./scan-ocr.js";
 
 // heft-import.js — Datei-, Bild- und PDF-Import sowie Dialoge für Hefte
 
@@ -170,7 +172,10 @@ export async function importPdf(f, at, targetDoc, {
 	const pdf = await pdfs.openDocument(await f.arrayBuffer());
 	for (let i = 1; i <= pdf.numPages; i++) {
 		const p = await pdf.getPage(i);
-		const vp = p.getViewport({ scale: 3 });
+		// Gleiche Auflösung und Qualität wie der Scanner: früher Faktor 3 bei Qualität 0.92,
+		// eine Scan-PDF wurde dadurch im Heft rund viermal so groß wie das Original.
+		const base = p.getViewport({ scale: 1 });
+		const vp = p.getViewport({ scale: Math.min(3, SCAN_OUT_MAX_EDGE / Math.max(base.width, base.height)) });
 		const c = document.createElement("canvas");
 		c.width = Math.round(vp.width);
 		c.height = Math.round(vp.height);
@@ -180,11 +185,17 @@ export async function importPdf(f, at, targetDoc, {
 		await p.render({ canvasContext: cx, viewport: vp }).promise;
 
 		const pg = imagePage(
-			{ src: c.toDataURL("image/jpeg", 0.92), w: c.width, h: c.height },
+			{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height },
 			"blank",
 			true,
 			{ blobRef, newPage, pageW, pageH }
 		);
+		// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
+		const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
+		if (text.length >= 20) {
+			pg.images[0].ocr = text;
+			pg.ocrText = text;
+		}
 		targetDoc.pages.splice(at, 0, pg);
 		at++;
 	}
