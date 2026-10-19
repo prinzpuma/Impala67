@@ -193,7 +193,9 @@ function anomalySignature(kind, meta = {}, context = null) {
 	}
 	if (kind === "main-thread-stall") {
 		const input = meta.inputName || (typeof meta.events === "string" ? meta.events.split(",")[0] : "");
-		const op = context?.operations?.[0]?.name || "";
+		// Nach der Operation mit dem größten Anteil benennen, nicht nach der ersten: Sonst hieß ein
+		// Start-Hänger "checkpoint-restore", obwohl die nur 0,6 ms der 300 ms ausmachte.
+		const op = (context?.operations || []).reduce((top, entry) => (!top || entry.overlapMs > top.overlapMs ? entry : top), null)?.name || "";
 		if (input) return "stall:input:" + input + (op ? ":" + op : "");
 		if (op) return "stall:op:" + op;
 		return "stall:task";

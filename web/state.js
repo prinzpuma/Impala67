@@ -1175,7 +1175,7 @@ export const STATE = (() => {
 					]), { fromSeq: checkpoint.maxSeq, toSeq: info.maxSeq }, 5);
 					rejectReason = stateCheckpointRejectReason(checkpoint, info, boundary, tail);
 					checkpointUsed = !rejectReason;
-					if (checkpointUsed) saved = checkpointSavedState(checkpoint);
+					if (checkpointUsed) saved = PERF_PROFILER.measure("state.checkpoint-parse", () => checkpointSavedState(checkpoint), { heftDocsKb: Math.round((checkpoint.heftDocsJson?.length || 0) / 1024) }, 5);
 				}
 			} catch (error) {
 				console.warn("[state] Start-Checkpoint wird neu aufgebaut:", error);
