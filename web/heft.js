@@ -150,6 +150,7 @@ export const HEFT = (() => {
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
 	let insertPos = "after";
 	let pop = null, popScrim = null, thumbIO = null;
+	const thumbBitmaps = new Map(); // Seitenübersicht: verkleinerte Scans (siehe thumbBitmap)
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
@@ -512,11 +513,11 @@ export const HEFT = (() => {
 		x.stroke();
 		x.restore();
 	}
-	function renderPageTo(x, pg, pi, tileRect = null) {
+	function renderPageTo(x, pg, pi, tileRect = null, imgOf = imgEl) {
 		paintPaper(x, PAGE_W, PAGE_H, pg.paper);
 		(pg.images || []).forEach((im) => {
-			const el = imgEl(im);
-			if (el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
+			const el = imgOf(im);
+			if (el instanceof ImageBitmap ? el.width : el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
 		(pg.strokes || []).forEach((s) => {
 			if (tileRect) {
@@ -746,6 +747,7 @@ export const HEFT = (() => {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
 		if (thumbIO) { thumbIO.disconnect(); thumbIO = null; }
+		dropThumbBitmaps();
 		if (popScrim) { popScrim.remove(); popScrim = null; }
 		exportSel = null;
 	}
@@ -1069,17 +1071,44 @@ export const HEFT = (() => {
 	}
 
 	// Seite in ein vorhandenes Canvas einpassen (Breite vorgegeben, Höhe folgt A4)
-	function paintInto(cv, pg, pi) {
+	function paintInto(cv, pg, pi, imgOf) {
 		const k = cv.width / PAGE_W;
 		cv.height = Math.round(PAGE_H * k); // setzt die Höhe UND leert das Canvas
 		const x = cv.getContext("2d");
 		x.setTransform(k, 0, 0, k, 0, 0);
-		renderPageTo(x, pg, pi);
+		renderPageTo(x, pg, pi, null, imgOf);
 	}
-	function paintThumbEl(t) {
-		const i = Number(t.dataset.hethumb), cv = t.querySelector("canvas");
-		if (!cv || !doc || !doc.pages[i]) return;
-		paintInto(cv, doc.pages[i], i);
+	// Scans für Miniaturen verkleinert im Hintergrund dekodieren: drawImage des vollen JPEGs
+	// dekodierte im Hauptthread (~30 ms pro Scan) — 20 sichtbare Scan-Seiten ≈ 1 s Ruckler.
+	// Lebt nur, solange die Übersicht offen ist (closePop gibt die Bitmaps frei), höchstens THUMB_BITMAP_MAX Stück.
+	const THUMB_BITMAP_MAX = 48;
+	function thumbBitmap(im, width) {
+		const key = (im.ref || im.id) + "@" + width;
+		if (!thumbBitmaps.has(key)) {
+			const src = imgSrc(im);
+			if (!src) return Promise.resolve(null); // Blob noch nicht geladen: nicht merken, später erneut
+			thumbBitmaps.set(key, fetch(src).then((r) => r.blob())
+				.then((b) => createImageBitmap(b, { resizeWidth: width, resizeQuality: "medium" })).catch(() => null));
+			if (thumbBitmaps.size > THUMB_BITMAP_MAX) {
+				const [oldKey, old] = thumbBitmaps.entries().next().value;
+				thumbBitmaps.delete(oldKey);
+				old.then((b) => b && b.close());
+			}
+		}
+		return thumbBitmaps.get(key);
+	}
+	function dropThumbBitmaps() {
+		thumbBitmaps.forEach((p) => p.then((b) => b && b.close()));
+		thumbBitmaps.clear();
+	}
+	async function paintThumbEl(t) {
+		const i = Number(t.dataset.hethumb), cv = t.querySelector("canvas"), pg = doc && doc.pages[i];
+		if (!cv || !pg) return;
+		const ims = pg.images || [];
+		const bmps = await Promise.all(ims.map((im) => thumbBitmap(im, Math.max(1, Math.ceil(im.w * cv.width / PAGE_W)))));
+		if (!t.isConnected || !doc || doc.pages[i] !== pg) return; // Übersicht zu oder Seiten verschoben
+		// Eine inzwischen verdrängte (geschlossene) Bitmap hat Breite 0 → volles Bild als Rückfall.
+		paintInto(cv, pg, i, (im) => { const b = bmps[ims.indexOf(im)]; return b && b.width ? b : imgEl(im); });
 		t.dataset.painted = "1";
 	}
 	// Nur schon gezeichnete Miniaturen auffrischen; die übrigen malt der Observer beim Hineinscrollen.
