@@ -39,6 +39,7 @@ const LS_KEY = "impala67_cf_sync_key";
 const LS_RECV = "impala67_cf_last_seq";
 const LS_SEND = "impala67_cf_last_uploaded_local_seq";
 const LS_GEN = "impala67_cf_generation";
+const LS_IGNORED_BLOBS = "impala67_cf_ignored_blobs";
 const PAGE_LIMIT = 100;
 const MAX_HTTP_PACKETS = 20;
 const MAX_HTTP_CHARS = 6_000_000;
@@ -128,6 +129,19 @@ export const CLOUDFLARE_SYNC = (() => {
 	const saveRecv = (seq) => { state.lastSyncedSeq = Number(seq) || 0; LS.setItem(keys().lastSynced, String(state.lastSyncedSeq)); };
 	const saveSend = (seq) => { state.lastUploadedLocalSeq = Number(seq) || 0; LS.setItem(keys().lastUploaded, String(state.lastUploadedLocalSeq)); };
 	const saveGeneration = (generation) => { state.generation = Number(generation) || 0; LS.setItem(keys().generation, String(state.generation)); };
+	// Verworfene Server-Blobs überdauern einen Neustart: Sonst lud jeder App-Start alle verwaisten
+	// Dateien erneut herunter und entschlüsselte sie, nur um sie wieder zu verwerfen.
+	const ignoredBlobsKey = () => `${LS_IGNORED_BLOBS}_${credentials.userId}`;
+	const loadIgnoredBlobKeys = () => {
+		ignoredBlobKeys.clear();
+		try {
+			for (const [key, id] of Object.entries(JSON.parse(LS.getItem(ignoredBlobsKey()) || "{}"))) ignoredBlobKeys.set(key, String(id));
+		} catch { /* beschädigter Eintrag: dann eben einmal neu prüfen */ }
+	};
+	const saveIgnoredBlobKeys = () => {
+		if (ignoredBlobKeys.size) LS.setItem(ignoredBlobsKey(), JSON.stringify(Object.fromEntries(ignoredBlobKeys)));
+		else LS.removeItem(ignoredBlobsKey());
+	};
 
 	function clearCursors(generation = state.generation) {
 		pendingUploadedEventIds.clear();
@@ -502,6 +516,8 @@ export const CLOUDFLARE_SYNC = (() => {
 			if (isSyncBlobId(id) && alive(id)) { ignoredBlobKeys.delete(key); return false; }
 			return true;
 		};
+		const ignoredBefore = ignoredBlobKeys.size;
+		for (const key of ignoredBlobKeys.keys()) if (!remote.has(key)) ignoredBlobKeys.delete(key);
 		const download = [...remote].filter((key) => !localByKey.has(key) && !stillIgnored(key));
 		const downloadProgress = new Array(download.length).fill(0);
 		if (download.length) updateFileProgress("Empfange Dateien…", downloadProgress);
@@ -527,6 +543,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			downloadProgress[index] = 1;
 			updateFileProgress("Empfange Dateien…", downloadProgress);
 		});
+		if (download.length || ignoredBlobKeys.size !== ignoredBefore) saveIgnoredBlobKeys();
 		return upload.length > 0 || download.length > 0;
 	}
 
@@ -783,6 +800,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			state.lastSyncedSeq = Number(LS.getItem(k.lastSynced)) || 0;
 			state.lastUploadedLocalSeq = Number(LS.getItem(k.lastUploaded)) || 0;
 			state.generation = Number(LS.getItem(k.generation)) || 0;
+			loadIgnoredBlobKeys();
 			await requestSync();
 			if (generation !== configureGeneration) return false;
 			connectWebSocket();
@@ -804,7 +822,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const response = await fetchTimed(api("/api/reset"), { method: "POST", headers: authHeaders() });
 		if (!response.ok) throw await responseError(response, "Cloud-Daten konnten nicht gelöscht werden");
 		const data = await response.json();
-		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
+		blobHashCache.clear(); ignoredBlobKeys.clear(); saveIgnoredBlobKeys(); blobInventoryDirty = true;
 		clearCursors(Number(data.generation) || state.generation + 1);
 		return true;
 	}

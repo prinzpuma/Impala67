@@ -169,8 +169,9 @@ function isAnomaly(kind, durationMs, meta = {}) {
 			return durationMs >= meta.anomalyThresholdMs;
 		}
 		const name = String(meta?.name || "");
-		// Schwere asynchrone Hintergrund- oder Transfer-Operationen
-		if (/^(cloudflare|drive|heft\.export|embedding|rag\.index|state\.load|state\.full-replay)/.test(name)) {
+		// Schwere asynchrone Hintergrund- oder Transfer-Operationen sowie einmalige Startschritte
+		// (kaltes Öffnen der IndexedDB); ein zu langsamer Start fällt über boot-ready auf.
+		if (/^(cloudflare|drive|heft\.export|embedding|rag\.index|db\.open|state\.(load|full-replay|event-info|checkpoint-read))/.test(name)) {
 			return durationMs >= 1200;
 		}
 		// Interaktive UI-Aktionen (Zeichnen, Rendern, Editor, Suche, SRS-Berechnung)
