@@ -149,7 +149,7 @@ export const HEFT = (() => {
 	let lassoSel = null;
 	let holdTool = null, holdTimer = 0, suppressEraserClick = false;
 	let insertPos = "after";
-	let pop = null, popScrim = null;
+	let pop = null, popScrim = null, thumbIO = null;
 	let exportSel = null; // Set<pageIndex> im Export-Auswahlmodus des Seiten-Menüs
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
@@ -745,6 +745,7 @@ export const HEFT = (() => {
 	function closePop() {
 		document.removeEventListener("pointerdown", onDocPointerDown, true);
 		if (pop) { pop.remove(); pop = null; }
+		if (thumbIO) { thumbIO.disconnect(); thumbIO = null; }
 		if (popScrim) { popScrim.remove(); popScrim = null; }
 		exportSel = null;
 	}
@@ -796,8 +797,16 @@ export const HEFT = (() => {
 	const pagesPopHtml = () => pagesGridHtml({ total: doc.pages.length, idx, exportSel });
 	const plusPopHtml = () => buildPlusPopHtml({ insertPos, curPaper: page() ? page().paper : "lined" });
 
+	// Miniaturen erst zeichnen, wenn sie in Sichtweite scrollen: alle auf einmal hielt bei
+	// großen Heften (175 Seiten) den Hauptthread ~10 s fest, bevor die Übersicht reagierte.
 	function paintPopThumbs() {
-		if (doc) doc.pages.forEach((_, i) => renderThumb(i));
+		if (thumbIO) { thumbIO.disconnect(); thumbIO = null; }
+		const grid = pop && doc && pop.dataset.kind === "pages" && pop.querySelector(".heft-pop-grid");
+		if (!grid) return;
+		thumbIO = new IntersectionObserver((entries, io) => {
+			for (const e of entries) if (e.isIntersecting) { io.unobserve(e.target); paintThumbEl(e.target); }
+		}, { root: grid, rootMargin: "600px 0px" });
+		grid.querySelectorAll("[data-hethumb]").forEach((t) => thumbIO.observe(t));
 	}
 	// Kopf und Umschalter bleiben stehen (nur angeglichen), Inhalt und Fußleiste werden getauscht.
 	// Vorher wurde das ganze Fenster neu gebaut: Kopf verschwand kurz, Scroll sprang nach oben.
@@ -1067,10 +1076,17 @@ export const HEFT = (() => {
 		x.setTransform(k, 0, 0, k, 0, 0);
 		renderPageTo(x, pg, pi);
 	}
+	function paintThumbEl(t) {
+		const i = Number(t.dataset.hethumb), cv = t.querySelector("canvas");
+		if (!cv || !doc || !doc.pages[i]) return;
+		paintInto(cv, doc.pages[i], i);
+		t.dataset.painted = "1";
+	}
+	// Nur schon gezeichnete Miniaturen auffrischen; die übrigen malt der Observer beim Hineinscrollen.
 	function renderThumb(i) {
 		if (!pop || pop.dataset.kind !== "pages" || !doc || !doc.pages[i]) return;
-		const cv = pop.querySelectorAll(".heft-pop-thumb canvas")[i];
-		if (cv) paintInto(cv, doc.pages[i], i);
+		const t = pop.querySelector('[data-hethumb="' + i + '"]');
+		if (t && t.dataset.painted) paintThumbEl(t);
 	}
 
 	function insertIndex() {
