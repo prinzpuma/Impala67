@@ -37,6 +37,18 @@ export const HEFT_INDEXER = (() => {
 	let priorityTimer = null;
 	let busy = false;
 
+	// Seiten, deren Erkennung den Text geändert hat und die noch ins RAG müssen. Erst übergeben,
+	// wenn für die Seite keine Aufgabe mehr offen ist: Sonst ändert jedes weitere Scan-Bild die
+	// Seite mitten im Embedding, und das RAG verwirft die Indexierung jedes Mal.
+	const ragPending = new Set();
+	function flushRag(openPageIds = new Set()) {
+		for (const pageId of ragPending) {
+			if (openPageIds.has(pageId)) continue;
+			ragPending.delete(pageId);
+			try { RAG.queuePage(pageId); } catch {}
+		}
+	}
+
 	const runWhenIdle = (fn) => {
 		if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
 			return window.requestIdleCallback(fn, { timeout: 10000 });
@@ -135,7 +147,7 @@ export const HEFT_INDEXER = (() => {
 			pageId: job.pageId,
 			ops: [{ t: "ocr", p: job.page.id, text: composed }],
 		});
-		try { RAG.queuePage(job.pageId); } catch {}
+		ragPending.add(job.pageId);
 	}
 
 	async function blobData(ref) {
@@ -162,7 +174,7 @@ export const HEFT_INDEXER = (() => {
 				ops.push({ t: "ocr", p: pg.id, text: composed });
 			}
 			await STATE.dispatch("heftOps", { pageId, ops });
-			try { RAG.queuePage(pageId); } catch {}
+			ragPending.add(pageId);
 		} catch (err) {
 			hadFailure = true;
 			console.info("[heft-indexer] Scan-Erkennung übersprungen (offline?):", err);
@@ -214,6 +226,7 @@ export const HEFT_INDEXER = (() => {
 			} finally {
 				busy = false;
 			}
+			flushRag();
 			if (priorityQueue.size > 0) {
 				clearTimeout(priorityTimer);
 				priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 500);
@@ -228,6 +241,7 @@ export const HEFT_INDEXER = (() => {
 		if (!scanRunning) return;
 
 		const unindexed = findUnindexedPages();
+		flushRag(new Set(unindexed.map((job) => job.pageId)));
 		if (!unindexed.length) {
 			// Erst nach einem vollständigen Durchlauf merken; bricht die App vorher ab, geht es beim nächsten Start weiter
 			if (reindexAll && !hadFailure) writeIndexedModel();
@@ -272,6 +286,7 @@ export const HEFT_INDEXER = (() => {
 	}
 
 	function stop() {
+		flushRag();
 		scanRunning = false;
 		clearTimeout(scanTimer);
 		clearTimeout(priorityTimer);

@@ -476,9 +476,16 @@ function watchLongTasks() {
 		try {
 			const observer = new PerformanceObserver((list) => {
 				for (const entry of list.getEntries()) {
-					if (type === "event" && entry.duration < 80) continue;
+					// Event-Timing endet erst beim nächsten gemalten Bild. Bleibt das aus (Stift gehalten,
+					// Fenster verdeckt), wächst duration auf Sekunden, obwohl der Hauptthread frei war.
+					// Gezählt wird daher nur Eingabeverzögerung + Handler; Render-Arbeit danach melden
+					// Long-Task und Event-Loop-Lag selbst.
+					const durationMs = type === "event" && entry.processingEnd > 0
+						? Math.min(entry.duration, entry.processingEnd - entry.startTime)
+						: entry.duration;
+					if (type === "event" && durationMs < 80) continue;
 					if (type === "event" && NOISY_INPUT_EVENTS.has(entry.name)) continue;
-					queueStall(type === "longtask" ? "long-task" : "slow-input", entry.startTime, entry.duration, {
+					queueStall(type === "longtask" ? "long-task" : "slow-input", entry.startTime, durationMs, {
 						eventName: type === "event" ? entry.name || type : "",
 						interactionId: Number(entry.interactionId) || 0,
 					});
