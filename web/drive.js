@@ -5,7 +5,6 @@ import { U } from "./util.js";
 import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, gzipBytes, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
 import { sha256Hex } from "./sync-crypto.js";
 import { mapLimit } from "./sync-transfer.js";
-import { HEFT } from "./heft.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
@@ -408,19 +407,11 @@ export const DRIVE = (() => {
 	}
 
 
-	// v10 (26.7.2026) [B1] Heft-Echo: heft.js schickt beim Speichern nur den Unterschied zum
-	// zuletzt veröffentlichten Stand. Bisher wurden die fremden Events zuerst abgespielt und das
-	// offene Heft erst DANACH informiert — sein Flush verglich also ein Dokument, das die fremden
-	// Striche schon enthielt, mit dem alten Schatten und hielt jeden empfangenen Strich für eine
-	// eigene Neuerung. Jeder fremde Strich wanderte damit sofort wieder hoch (und beim nächsten
-	// Sync beim Gegenüber erneut): das Log wuchs bei jedem Lauf, Striche konnten doppelt
-	// auftauchen. Jetzt bekommt das offene Heft VOR dem Abspielen die Gelegenheit, seine eigenen
-	// noch nicht veröffentlichten Striche rauszuschreiben — der Diff bleibt damit ehrlich.
+	// Offene Hefte brauchen vor dem Abspielen keinen Flush mehr: Ihr Veröffentlichungs-Schatten
+	// folgt dem Log (heft.js), fremde Striche gelten nie als eigene Neuerung und eigene, noch
+	// nicht gespeicherte Striche bleiben als Änderung erkennbar.
 	async function replayImported(events) {
 		if (!(events || []).length) return;
-		if (events.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
-			try { await HEFT.saveNow(); } catch (e) { console.warn("[sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", e); }
-		}
 		await STATE.applyRemoteEventsCooperative(events);
 	}
 

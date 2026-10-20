@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { documentShadow, diffDocument, applyOpsToShadow, PAGE_W, PAGE_H } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
@@ -162,7 +162,17 @@ export const HEFT = (() => {
 	// Schatten aus IDs und billigen Signaturen. Eine echte Kopie wäre bei Heften
 	// mit eingebetteten Bildern teuer — zum Erkennen von "neu / geändert / weg"
 	// reicht die Signatur völlig.
+	// Der Schatten folgt dem LOG, nicht dem Dokument: Jedes heftOps-Event (eigenes wie
+	// fremdes, egal ob per Cloudflare, Drive oder zweitem Tab) wird auf ihn angewandt.
+	// Vorher wurde er nach jedem Fremd-Event aus dem Dokument neu berechnet — gerade
+	// gezeichnete, noch nicht gespeicherte Striche galten dann als veröffentlicht und
+	// landeten nie im Log (nach dem Neuladen waren sie weg).
 	const published = {};
+	BUS.on("state:heft-changed", ({ pageId, event }) => {
+		if (!pageId || !published[pageId] || !event) return;
+		if (event.type === "heftOps") applyOpsToShadow(published[pageId], event.payload?.ops);
+		else if (event.type === "heftSnap" && S.heftDocs[pageId]) published[pageId] = documentShadow(S.heftDocs[pageId]);
+	});
 
 	const page = () => (doc ? doc.pages[idx] : null);
 	const imagesOf = (pg) => (pg.images || (pg.images = []));
@@ -207,16 +217,10 @@ export const HEFT = (() => {
 		return d;
 	}
 
-	// Fremdänderungen sind eingetroffen (drive.js → STATE.emitRemoteApplied).
-	// FIX (26. Juli, „der sync hat immer noch bugs beim heft sync“): Hier stand ein
-	// saveNow()-Flush — gedacht als Schutz für eigene, noch nicht veröffentlichte Striche.
-	// Er lief aber ZU SPÄT: drive.js spielt die fremden Events erst in S.heftDocs ein und
-	// meldet sich DANACH. Der Diff verglich also das bereits ergänzte Dokument mit dem
-	// alten Schatten — jeder empfangene fremde Strich sah wie eine eigene Neuerung aus und
-	// ging als „s+“-Operation sofort wieder hoch. Ergebnis: jedes Gerät schickte jeden
-	// fremden Strich zurück, das Log wuchs bei jedem Sync, und beim Hin- und Herspielen
-	// konnten Striche doppelt erscheinen. Der Flush passiert jetzt VOR dem Abspielen
-	// (drive.js → replayImported); hier wird nur noch der Schatten nachgezogen.
+	// Fremdänderungen sind eingetroffen (Cloudflare, Drive oder ein zweiter Tab). Der Schatten
+	// steht über state:heft-changed schon auf dem Log-Stand; hier wird nur noch die Ansicht
+	// nachgezogen. Fremde Striche gelten so nie als eigene Neuerung (kein Echo-Upload), und
+	// eigene, noch nicht gespeicherte bleiben als Änderung für den nächsten Save erkennbar.
 	function onRemoteApplied() {
 		PERF_PROFILER.measure("heft.remote-apply", applyRemoteToOpenDocs, { docs: Object.keys(published).length }, 16);
 	}
@@ -224,7 +228,8 @@ export const HEFT = (() => {
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
 			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
-			if (d) { published[key] = documentShadow(d); docs[key] = d; }
+			// Der Schatten ist über state:heft-changed bereits auf dem Log-Stand.
+			if (d) docs[key] = d;
 			else delete published[key];
 		}
 		if (!pid || !host) return;
@@ -280,12 +285,12 @@ export const HEFT = (() => {
 	// die Hänger kurz nach dem Absetzen des Stifts (Trace: touchend bis 1,4 s).
 	async function persistDoc(savePid, saveDoc) {
 		const pages = saveDoc?.pages?.length;
-		const { ops, shadow: nextPublished } = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
+		const { ops } = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
 		if (!ops.length) return;
 		await PERF_PROFILER.run("heft.save-blobs", () => persistReferencedBlobs(saveDoc), {}, 16);
 		dropThumbs(savePid);
+		// Der Reducer meldet das Event über state:heft-changed — damit rückt auch der Schatten vor.
 		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
-		published[savePid] = nextPublished;
 		if (savePid === pid && saveDoc === doc) relinkLasso(doc);
 		await PERF_PROFILER.run("heft.snapshot", () => maybeSnapshot(savePid, saveDoc), {}, 30);
 	}
@@ -1712,5 +1717,4 @@ export const HEFT = (() => {
 })();
 
 BUS.provide("heft:is-writing", () => HEFT.isWriting());
-BUS.provide("heft:save-now", () => HEFT.saveNow());
 

@@ -157,17 +157,24 @@ function startStaticServer() {
 	});
 }
 
+// Eigener, bei jedem Lauf geleerter Speicherort: Ohne --persist-to legt Wrangler den Zustand
+// neben server/wrangler.toml ab. Der alte Pfad (./.wrangler/state) wurde nie benutzt — jeder Lauf
+// legte dauerhaft neue Testkonten an, bis das Server-Limit (MAX_USERS) jede Anmeldung ablehnte.
+const E2E_STATE_DIR = path.join(process.cwd(), ".wrangler", "e2e-state");
+
 async function startWrangler() {
-	try { fs.rmSync(path.join(process.cwd(), ".wrangler", "state"), { recursive: true, force: true }); } catch {}
+	fs.rmSync(E2E_STATE_DIR, { recursive: true, force: true });
 	execFileSync(process.execPath, [
 		WRANGLER_JS, "d1", "execute", "impala67-db",
 		"--local",
+		"--persist-to", E2E_STATE_DIR,
 		"--config", "server/wrangler.toml",
 		"--file", "server/schema.sql",
 	], { stdio: "pipe" });
 	wranglerProcess = spawn(process.execPath, [
 		WRANGLER_JS, "dev", "server/worker.js",
 		"--config", "server/wrangler.toml",
+		"--persist-to", E2E_STATE_DIR,
 		"--port", String(WORKER_PORT),
 		"--ip", "127.0.0.1",
 	], { detached: process.platform !== "win32" });

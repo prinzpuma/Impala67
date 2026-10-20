@@ -259,16 +259,9 @@ export const CLOUDFLARE_SYNC = (() => {
 			allowSecrets: SETTINGS_SYNC.allowsSecrets(S.settings),
 		});
 		const imported = result.importedEvents || [];
-		if (imported.length) {
-			// FIX: Wie drive.js (replayImported) eigene, noch nicht veröffentlichte Heft-Änderungen
-			// VOR dem Abspielen fremder Heft-Events speichern. Sonst zog applyRemoteToOpenDocs den
-			// Schatten über sie hinweg: sie galten als veröffentlicht, ohne je als Event geschrieben
-			// worden zu sein — kein Sync, und nach dem Neuladen waren sie weg.
-			if (imported.some((ev) => ev.type === "heftOps" || ev.type === "heftSnap")) {
-				try { await BUS.call("heft:save-now"); } catch (error) { console.warn("[cf-sync] Heft-Flush vor dem Abspielen fehlgeschlagen:", error); }
-			}
-			await STATE.applyRemoteEventsCooperative(imported);
-		}
+		// Offene Hefte brauchen hier keinen Flush mehr: ihr Veröffentlichungs-Schatten folgt dem
+		// Log (heft.js), noch nicht gespeicherte Striche bleiben dadurch als Änderung erkennbar.
+		if (imported.length) await STATE.applyRemoteEventsCooperative(imported);
 	}
 
 	// repaired: höchstens EINE automatische Reparatur je Abruf — meldet der Server danach

@@ -102,6 +102,49 @@ export function diffDocument(previous, next) {
 	return { ops: operations, shadow: { pages } };
 }
 
+// Schreibt Log-Operationen in einen Schatten fort — mit denselben Regeln, mit denen der
+// Reducer (state.js applyHeftOps) sie auf das Dokument anwendet. Der Schatten zeigt damit
+// immer den Stand im Log, auch wenn das offene Dokument schon lokale, noch nicht
+// gespeicherte Änderungen trägt (die bleiben so beim nächsten Diff sichtbar).
+const emptyShadowPage = (id, paper) => ({ id, paper: paper || "lined", ocrText: "", s: new Map(), i: new Map(), x: new Map() });
+export function applyOpsToShadow(shadow, ops) {
+	const pageOf = (id) => shadow.pages.find((page) => page.id === id) || null;
+	for (const op of ops || []) {
+		if (!op || !op.t) continue;
+		const page = op.p ? pageOf(op.p) : null;
+		switch (op.t) {
+			case "pg+": {
+				if (!op.page || !op.page.id || pageOf(op.page.id)) break;
+				const at = Math.max(0, Math.min(typeof op.at === "number" ? op.at : shadow.pages.length, shadow.pages.length));
+				shadow.pages.splice(at, 0, emptyShadowPage(op.page.id, op.page.paper));
+				break;
+			}
+			case "pg-": {
+				const index = shadow.pages.findIndex((x) => x.id === op.p);
+				if (index >= 0) shadow.pages.splice(index, 1);
+				break;
+			}
+			case "pgo": {
+				const order = Array.isArray(op.order) ? op.order : [];
+				const pos = new Map(order.map((id, i) => [id, i]).reverse());
+				const rank = (id) => pos.get(id) ?? 1e9;
+				shadow.pages = shadow.pages.map((p, i) => [p, i]).sort((a, b) => rank(a[0].id) - rank(b[0].id) || a[1] - b[1]).map((x) => x[0]);
+				break;
+			}
+			case "pgp": if (page) page.paper = op.paper || "lined"; break;
+			case "ocr": if (page) page.ocrText = op.text || ""; break;
+			default: {
+				const items = page && page[op.t[0]];
+				if (!(items instanceof Map)) break;
+				const mode = op.t[1];
+				if (mode === "-") for (const id of op.ids || []) items.delete(id);
+				else if (op.o && op.o.id && (mode === "=" || (mode === "+" && !items.has(op.o.id)))) items.set(op.o.id, signature(op.o));
+			}
+		}
+	}
+	return shadow;
+}
+
 export function blobId(data) {
 	// Bestehendes 64-Bit-Verfahren bewusst unverändert halten: Die ID ist Teil des
 	// persistierten Heftformats und darf sich durch eine Refaktorierung nicht ändern.
