@@ -307,8 +307,9 @@ h3.blk-h { font-size: 1.12em }
 .db-wide { grid-column: span 2 }
 .db-full { grid-column: 1 / -1 }
 .db-prop { display: flex; flex-direction: column; min-width: 0; cursor: text }
-.db-prop.db-blank { display: none }
-.db-item:hover .db-prop.db-blank, .db-item:focus-within .db-prop.db-blank { display: flex }
+/* Leere Felder behalten ihren Platz (nichts springt, Spalten bleiben gleich) und werden erst bei Hover/Fokus sichtbar */
+.db-prop.db-blank { opacity: 0; transition: opacity var(--motion-base) ease }
+.db-item:hover .db-prop.db-blank, .db-item:focus-within .db-prop.db-blank { opacity: 1 }
 .db-label { padding: 0 var(--space-1-5); font-size: var(--text-2xs); font-weight: 500; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .db-val { position: relative; display: block; min-height: 28px; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
 .db-prop:not(.db-ro):hover .db-val { background: var(--surface-hover) }

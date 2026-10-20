@@ -45,7 +45,7 @@ function showHtml(t, raw) {
 function fieldHtml(row, col, listId) {
 	const raw = String((row.props || {})[col.name] ?? "");
 	const t = col.type || "text";
-	// Leere Felder blendet CSS aus, bis die Karte gehovert/fokussiert wird.
+	// Leere Felder behalten ihren Platz; CSS macht sie erst bei Hover/Fokus der Karte sichtbar.
 	const cls = "db-prop" + (t === "multi_select" ? " db-full" : WIDE[t] ? " db-wide" : "") + (RO[t] ? " db-ro" : "") + (raw.trim() ? "" : " db-blank");
 	const label = `<span class="db-label">${esc(col.name)}</span>`;
 	if (RO[t]) return `<div class="${cls}">${label}<div class="db-val"><span class="db-show">${showHtml(t, raw)}</span></div></div>`;
