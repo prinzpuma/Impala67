@@ -28,6 +28,7 @@ import { lernanalyseParts } from "./lernanalyse.js";
 import { icon, lead, pageIcon } from "./icons.js";
 import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
 import { relatedSlotHtml, hydrateRelated } from "./related-pages.js";
+import { dbTableHtml } from "./db-view.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -787,22 +788,6 @@ function backlinksChipHtml(pg) {
 	return `<div class="backlinks-row"><button class="backlinks-chip" data-backlinks="1">${lead("backlink")}${links.length} Rückverweise</button>` +
 		(S.backlinksOpen ? '<div class="backlinks">' + links.slice(0, 20).map((l) => `<span class="crumb" data-page="${l.id}">${pageIconHtml(l)}${esc(l.title)}</span>`).join("") + "</div>" : "") + "</div>";
 }
-
-// Datenbank-Seite (pg.db): Unterseiten als editierbare Tabelle; Zell-Änderungen
-// laufen als pageUpdate-Event (Verlauf/Diff/Sync greifen)
-function dbTableHtml(pg) {
-	const cols = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
-	const RO = { formula: 1, rollup: 1, created_time: 1, last_edited_time: 1, created_by: 1, last_edited_by: 1, people: 1, relation: 1, files: 1, button: 1, unique_id: 1, verification: 1 };
-	return '<div class="db-view md"><table class="db-table"><thead><tr><th>Name</th>' +
-		cols.map((c) => `<th title='${esc(c.type || "text")}'>${esc(c.name)}</th>`).join("") + "</tr></thead><tbody>" +
-		STATE.childrenOf(pg.id, pg.workspaceId).map((r) => `<tr><td><span class="crumb" data-page="${r.id}">${pageIconHtml(r)}${esc(r.title)}</span></td>` +
-			cols.map((c) => {
-				const v = esc((r.props || {})[c.name] || "");
-				return RO[c.type] ? `<td><span class="hint">${v}</span></td>` : `<td><input class="db-cell" data-dbrow="${r.id}" data-dbcol="${esc(c.name)}" value="${v}"></td>`;
-			}).join("") + "</tr>").join("") +
-		`</tbody></table><div class="row-btns" style="margin:8px 0 14px"><button class="mini" data-dbnewrow="${pg.id}">+ Neue Zeile</button></div></div>`;
-}
-
 
 function breadcrumbHtml(pg) {
 	const ws = S.workspaces[pg.workspaceId] || { name: "Privat" };

@@ -133,6 +133,7 @@ const APP_FILES = [
 	"./search.js",
 	"./search-fuzzy.js",
 	"./related-pages.js",
+	"./db-view.js",
 	"./shortcuts.js",
 	"./chat-fullscreen.js",
 	"./popovers.js",
