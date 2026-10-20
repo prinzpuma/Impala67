@@ -226,7 +226,7 @@ function wireEvents() {
 	initPlatformLifecycle();
 	// dispatch() rendert bereits rAF-gebündelt → nach dispatch kein extra render();
 	// reine UI-Navigation ohne dispatch rendert sofort.
-	// „＋ Neue Zeile“ in der Datenbank-Ansicht — wird beim nächsten Sync als echte Notion-Zeile angelegt
+	// „＋ Neue Zeile“ in der Datenbank-Ansicht: neue Unterseite mit leeren Eigenschaften
 	document.addEventListener("click", async (e) => {
 		const btn = closestOf(e, "[data-dbnewrow]");
 		if (!btn) return;
@@ -311,7 +311,7 @@ function wireEvents() {
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
 		"[data-pagemenu],[data-pageopennew],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
-		"[data-pagetemplate],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
+		"[data-pagetemplate],[data-pagedb],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {

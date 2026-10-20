@@ -10,6 +10,7 @@ import { SETTINGS } from "./settings.js";
 import { TABS } from "./tabs.js";
 import { POPOVERS } from "./popovers.js";
 import { icon } from "./icons.js";
+import { LECTURE_SCHEMA } from "./db-view.js";
 import { focusRenameInput, movePageSubtreeToWorkspace } from "./app-sidebar-events.js";
 import { PLATFORM } from "./platform.js";
 import { closeTopMenu, focusPageTitle } from "./app-ui.js";
@@ -30,6 +31,16 @@ export async function handlePageClick(t, e) {
 		S.topMenu = null; // auch im Topbar-⋯-Menü — sonst bleibt es nach der Aktion offen
 		const pg = S.pages[t.dataset.pagetemplate];
 		if (pg) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { isTemplate: !pg.isTemplate } });
+		return true;
+	}
+
+	// ⋯-Menü: Unterseiten als Vorlesungs-Karten zeigen / wieder normale Seite. Werte der
+	// Unterseiten (props) bleiben beim Aufheben erhalten.
+	if (t.dataset.pagedb) {
+		S.pageMenuOpenId = null;
+		S.topMenu = null;
+		const pg = S.pages[t.dataset.pagedb];
+		if (pg) await STATE.dispatch("pageUpdate", { id: pg.id, patch: { db: pg.db ? null : { schema: LECTURE_SCHEMA.map((c) => ({ ...c })) } } });
 		return true;
 	}
 

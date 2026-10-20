@@ -577,7 +577,8 @@ export const EDITOR = (() => {
 	// Seitenzeilen (die Navigation übernimmt die data-page-Delegation in app.js).
 	function childPagesHtml() {
 		const pg = S.pages[pageId];
-		if (!pg) return "";
+		// Datenbank-Seiten zeigen ihre Unterseiten schon als Karten (db-view.js).
+		if (!pg || pg.db) return "";
 		// Eingebettete Hefte sind bereits als große, klickbare Vorschau Teil der Seite.
 		// Dieselbe Unterseite darunter ein zweites Mal als Textzeile zu zeigen, erzeugt
 		// zwei konkurrierende Navigationselemente für dasselbe Dokument.

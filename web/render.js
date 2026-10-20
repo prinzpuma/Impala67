@@ -561,7 +561,8 @@ function rowHtml(pg, depth, wsId) {
 
 // Geteilte Menüpunkte für Seiten-⋯ (Sidebar) und Topbar-⋯
 const menuBtn = (attr, id, label, cls = "") => `<button class="menu-item${cls}" data-${attr}="${id}">${label}</button>`;
-const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, lead("copy") + "Duplizieren") + menuBtn("pagetemplate", pg.id, lead("template") + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage"));
+const dupTplItems = (pg) => menuBtn("pageduplicate", pg.id, lead("copy") + "Duplizieren") + menuBtn("pagetemplate", pg.id, lead("template") + (pg.isTemplate ? "Vorlage entfernen" : "Als Vorlage")) +
+	(pg.kind === "heft" ? "" : menuBtn("pagedb", pg.id, lead("grid") + (pg.db ? "Übersicht aufheben" : "Als Vorlesungsübersicht")));
 const moveTrashItems = (pg) => menuBtn("pagesubject", pg.id, lead("graduation") + "Fach: " + esc(FACH.page(pg).name) + "…") +
 	menuBtn("pagemove", pg.id, lead("folder-move") + "Verschieben nach…") +
 	(pg.archived ? menuBtn("pageunarchive", pg.id, lead("undo") + "Aus Archiv holen") : menuBtn("pagearchive", pg.id, lead("archive") + "Archivieren")) +

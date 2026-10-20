@@ -62,6 +62,13 @@ function datalist(id, col, rows) {
 	return vals.length ? `<datalist id="${id}">${vals.map((s) => `<option value="${esc(s)}">`).join("")}</datalist>` : "";
 }
 
+// Spalten für „Als Vorlesungsübersicht“ im ⋯-Menü; die erste Zahlenspalte wird zur Laufnummer.
+export const LECTURE_SCHEMA = Object.freeze([
+	{ name: "Thema", type: "title" }, { name: "Nr", type: "number" }, { name: "Datum", type: "date" },
+	{ name: "Schwierigkeit", type: "select" }, { name: "Status", type: "select" }, { name: "Klausurrelevanz", type: "select" },
+	{ name: "Themen", type: "multi_select" }, { name: "Folien", type: "text" },
+]);
+
 export function dbViewHtml(pg) {
 	const all = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
 	// Die erste Zahlenspalte (Nr/VL) ist die Laufnummer: kein eigenes Feld, sondern „#1“ vor dem Titel.
