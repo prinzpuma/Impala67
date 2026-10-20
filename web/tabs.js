@@ -22,8 +22,7 @@ const syncableTabs = () => S.tabs.filter((id) => {
 }).slice(-12);
 // Zuletzt im Event-Log stehender Tab-Stand. Unverändertes wird nicht erneut geschrieben:
 // Jeder App-Wechsel (visibilitychange/pagehide/freeze) erzeugte sonst ein neues
-// uiTabsSet-Event — und weil Tabs geräteübergreifend per „letzter gewinnt“ synchronisieren,
-// überschrieb ein Gerät, das nur in den Hintergrund ging, echte Tab-Änderungen der anderen.
+// uiTabsSet-Event und stieß damit jedes Mal einen Sync-Lauf an.
 let savedKey = null;
 const sessionKey = () => JSON.stringify([syncableTabs(), S.activeTabId]);
 const markSessionSaved = () => { savedKey = sessionKey(); };

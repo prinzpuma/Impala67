@@ -92,6 +92,14 @@ export const CLOUDFLARE_SYNC = (() => {
 	const oversizedBlobKeys = new Set();
 	const pendingUploadedEventIds = new Set();
 	let blobInventoryDirty = true;
+	// Datei-IDs, die schon abgeglichen (oder dabei als lokal fehlend erkannt) wurden. Nur ein
+	// Verweis außerhalb dieser Menge macht einen erneuten Datei-Abgleich nötig; solche neuen
+	// Verweise sammelt pendingBlobRefs bis zum nächsten Abgleich.
+	const syncedBlobIds = new Set(), pendingBlobRefs = new Set();
+	const forgetBlobInventory = () => {
+		blobHashCache.clear(); ignoredBlobKeys.clear(); syncedBlobIds.clear(); pendingBlobRefs.clear();
+		blobInventoryDirty = true;
+	};
 
 	let state = {
 		status: "disconnected",
@@ -457,6 +465,8 @@ export const CLOUDFLARE_SYNC = (() => {
 	async function syncBlobs() {
 		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return false;
 		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+		const checkedRefs = [...pendingBlobRefs];
+		pendingBlobRefs.clear();
 		const alive = blobAliveChecker(S.pages);
 		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && alive(id));
 		const localByKey = new Map();
@@ -519,7 +529,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const ignoredBefore = ignoredBlobKeys.size;
 		for (const key of ignoredBlobKeys.keys()) if (!remote.has(key)) ignoredBlobKeys.delete(key);
 		const download = [...remote].filter((key) => !localByKey.has(key) && !stillIgnored(key));
-		const downloadProgress = new Array(download.length).fill(0);
+		const downloadProgress = new Array(download.length).fill(0), downloadedIds = [];
 		if (download.length) updateFileProgress("Empfange Dateien…", downloadProgress);
 		await mapLimit(download, 3, async (key, index) => {
 			const response = await fetchTimed(api(`/api/blob/${key}`), { headers: authHeaders() }, BLOB_FETCH_TIMEOUT_MS, ({ direction, loaded, total, lengthComputable }) => {
@@ -540,10 +550,12 @@ export const CLOUDFLARE_SYNC = (() => {
 				return;
 			}
 			await DB.putBlob(record.id, record.buf, record.meta);
+			downloadedIds.push(record.id);
 			downloadProgress[index] = 1;
 			updateFileProgress("Empfange Dateien…", downloadProgress);
 		});
 		if (download.length || ignoredBlobKeys.size !== ignoredBefore) saveIgnoredBlobKeys();
+		for (const id of [...localIds, ...downloadedIds, ...checkedRefs]) syncedBlobIds.add(id);
 		return upload.length > 0 || download.length > 0;
 	}
 
@@ -560,8 +572,11 @@ export const CLOUDFLARE_SYNC = (() => {
 			if (blobInventoryDirty || received > 0) {
 				state.progress = null;
 				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
-				await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20);
+				// VOR dem Abgleich zurücksetzen: Ein währenddessen eingefügtes Bild setzt das Flag
+				// erneut und wird im nächsten Durchlauf hochgeladen, statt hier überschrieben zu werden.
 				blobInventoryDirty = false;
+				try { await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20); }
+				catch (error) { blobInventoryDirty = true; throw error; }
 			}
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
@@ -663,25 +678,26 @@ export const CLOUDFLARE_SYNC = (() => {
 		return syncPromise;
 	}
 
-	function eventHasBlobRef(ev) {
+	// Bringt ein lokales Event einen Verweis auf eine noch nicht abgeglichene Datei mit?
+	// Seiten tragen Verweise in payload (pageCreate) bzw. payload.patch (pageUpdate): Bilder und
+	// Anhänge im Inhalt (img:/file:/cover:), Cover-Bild und PDF. Vorher wurde payload.changes
+	// geprüft, das es nie gab — neue Bilder, Cover und PDFs warteten bis zum nächsten App-Start.
+	const BLOB_REF_RE = /(?:img|file|cover):[^\s)"'<>\]]+/g;
+	function hasUnsyncedBlobRef(ev) {
 		if (!ev || typeof ev !== "object") return true;
-		const type = String(ev.type || "");
-		if (type.startsWith("heft") || type.startsWith("flashcard") || type.startsWith("tag") || type.startsWith("folder") || type.startsWith("deck") || type.startsWith("ui")) {
-			return false;
-		}
-		const payload = ev.payload;
-		if (!payload) return false;
-		if (payload.coverImg || payload.changes?.coverImg) return true;
-		const content = payload.content || payload.changes?.content;
-		if (typeof content === "string" && (content.includes("img:") || content.includes("file:") || content.includes("cover:"))) {
-			return true;
-		}
-		return false;
+		if (ev.type !== "pageCreate" && ev.type !== "pageUpdate") return false;
+		const fields = ev.type === "pageUpdate" ? ev.payload?.patch : ev.payload;
+		if (!fields) return false;
+		const refs = [fields.coverImg, fields.pdfId].filter(Boolean).map(String);
+		if (typeof fields.content === "string") refs.push(...(fields.content.match(BLOB_REF_RE) || []));
+		let fresh = false;
+		for (const id of refs) if (!syncedBlobIds.has(id)) { pendingBlobRefs.add(id); fresh = true; }
+		return fresh;
 	}
 
 	function scheduleSync(event = null) {
 		if (!credentials) return;
-		if (!event || eventHasBlobRef(event)) blobInventoryDirty = true;
+		if (hasUnsyncedBlobRef(event)) blobInventoryDirty = true;
 		if (typeof navigator !== "undefined" && navigator.onLine === false) {
 			closeSocket();
 			return;
@@ -787,7 +803,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		const generation = ++configureGeneration;
 		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 		closeSocket(); credentials = null; pendingUploadedEventIds.clear();
-		blobHashCache.clear(); ignoredBlobKeys.clear(); blobInventoryDirty = true;
+		forgetBlobInventory();
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
 		cleanKey ? LS.setItem(LS_KEY, cleanKey) : LS.removeItem(LS_KEY);
@@ -813,7 +829,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function disconnect() {
 		configureGeneration++; clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0; closeSocket(); credentials = null;
-		blobHashCache.clear(); ignoredBlobKeys.clear(); pendingUploadedEventIds.clear();
+		forgetBlobInventory(); pendingUploadedEventIds.clear();
 		setStatus("disconnected", "Getrennt");
 	}
 
@@ -822,12 +838,14 @@ export const CLOUDFLARE_SYNC = (() => {
 		const response = await fetchTimed(api("/api/reset"), { method: "POST", headers: authHeaders() });
 		if (!response.ok) throw await responseError(response, "Cloud-Daten konnten nicht gelöscht werden");
 		const data = await response.json();
-		blobHashCache.clear(); ignoredBlobKeys.clear(); saveIgnoredBlobKeys(); blobInventoryDirty = true;
+		forgetBlobInventory(); saveIgnoredBlobKeys();
 		clearCursors(Number(data.generation) || state.generation + 1);
 		return true;
 	}
 
-	STATE.onAfterDispatch((ev) => scheduleSync(ev));
+	// Nur Events, die tatsächlich hochgeladen werden, brauchen einen Sync-Lauf. Reine UI-Events
+	// (Tab-Wechsel, Ordner auf/zu) lösten sonst jedes Mal einen Netz-Abgleich aus.
+	STATE.onAfterDispatch((ev) => { if (isUploadableToCloudflare(ev)) scheduleSync(ev); });
 
 	function init() {
 		if (initialized) return;
