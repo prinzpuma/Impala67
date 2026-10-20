@@ -10,6 +10,10 @@ const CACHE = "impala67-v2.2.83"; // Release-Workflow ersetzt diesen Wert im ver
 // Sie bleiben auch bei einem App-Update (Wechsel von CACHE) vollständig erhalten.
 const SHARE_CACHE = "impala67-pdf-share";
 const OPTIONAL_CACHE = "impala67-optional-modules";
+// Lokaler Dev-Server: App-Dateien Netz zuerst, Cache nur als Offline-Fallback. Die Version
+// ändert sich beim Entwickeln nicht — cache-first lieferte sonst den Stand der Installation,
+// gemischt mit frisch geladenen Modulen, und Live-Prüfungen sahen alten Code.
+const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(self.location.hostname);
 
 const APP_FILES = [
 	"./",
@@ -298,7 +302,7 @@ self.addEventListener("fetch", (e) => {
 				// das Netz. Updates bleiben sicher: ein neuer Worker befüllt CACHE erst
 				// vollständig und aktiviert ihn danach. Explizite no-store-Abfragen
 				// (insbesondere updater.js -> version.json) bleiben netzaktuell.
-				if (cached && req.cache !== "no-store") return cached;
+				if (cached && req.cache !== "no-store" && !DEV_HOST) return cached;
 				try {
 					const res = await fetch(new Request(req, { cache: "no-store" }));
 					if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
