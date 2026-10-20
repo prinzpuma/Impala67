@@ -8,6 +8,7 @@
 - **Einzeltests**: `node --test test/<name>.test.mjs` (ai, editor, heft, state, sync). Danach bei Bedarf `npm run verify`.
 - **Live-Prüfung**: Der MCP-Server `impala67` (`.mcp.json`) verbindet sich mit der offenen App im Browser. Vor jeder Live-Prüfung den Skill `impala-live` laden (Ablauf: Tools laden → `impala_get_diagnostics` → falls kein Tab: `preview_start impala67`).
 - **Skills**: Projekt-Skills liegen in `.claude/skills/` (z. B. `cloudflare-sync-v4` vor Sync-Arbeiten laden).
-- **Pushen**: Fertige und geprüfte Änderungen ohne Rückfrage committen und auf `main` pushen. Nur bei unfertigen, riskanten oder unklaren Änderungen vorher fragen.
+- **Erst besprechen**: Vor jeder Code- oder Design-Änderung zuerst kurz Vorschlag/Plan mit dem Nutzer besprechen und auf seine Zustimmung warten. Erst danach umsetzen.
+- **Pushen**: Nach Freigabe fertige und geprüfte Änderungen ohne weitere Rückfrage committen und auf `main` pushen. Nur bei unfertigen, riskanten oder unklaren Änderungen vorher fragen.
 - **Delegation**: Kleine Aufgaben selbst erledigen. Breite Suchen über viele Dateien → Agent `scout`. Fertig geplante Mehrdatei-Änderungen → Agent `worker`. Kein Agent für Einzeiler.
 - **Handschrift-ML** (`handwriting/`): Python-Training mit eigenem `.venv`; erzeugtes Modell landet als `web/handwriting-model.onnx`.
