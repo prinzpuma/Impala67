@@ -110,6 +110,7 @@ async function checkIncomingShare() {
 			try {
 				const id = U.uid();
 				const title = shared.title || "Geteiltes Bild";
+				const alt = title.replace(/[[\]]/g, "");
 				let mdContent = "";
 				for (const uri of items) {
 					const fileSrc = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
@@ -117,9 +118,11 @@ async function checkIncomingShare() {
 						: uri;
 					const resp = await fetch(fileSrc);
 					const blob = await resp.blob();
-					const blobId = U.uid();
+					// Gleiches Format wie Bildblöcke im Editor (img:<id>): nur das löst editor.js
+					// hydrate() aus IndexedDB auf. „blob:<id>“ landete ungeprüft als <img src>.
+					const blobId = "img:" + U.uid();
 					await DB.putBlob(blobId, await U.readAsBuffer(blob), { name: "image.png", size: blob.size, type: blob.type || "image/png" });
-					mdContent += `![${title}](blob:${blobId})\n\n`;
+					mdContent += `![${alt}](${blobId})\n\n`;
 				}
 				if (shared.text && shared.text !== title) {
 					mdContent += shared.text + "\n\n";

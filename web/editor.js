@@ -727,11 +727,13 @@ export const EDITOR = (() => {
 			const src = img.dataset.imgsrc;
 			if (!src) return;
 			img.dataset.hydrated = "1";
-			if (src.startsWith("img:")) {
+			// Altformat „blob:<uuid>“: so legte das Android-Teilen Bilder ab (Blob unter der nackten UUID).
+			const legacyId = /^blob:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(src)?.[1];
+			if (src.startsWith("img:") || legacyId) {
 				try {
 					// DB.putBlob speichert { buf, meta } — blob.data bleibt als Fallback für
 					// Alt-Datensätze aus der früheren "notion"-DB lesbar (siehe DB.blobUrl).
-					const u = await DB.blobUrl(src, "image/png");
+					const u = await DB.blobUrl(legacyId || src, "image/png");
 					if (u) img.src = u; else img.alt = "Bild fehlt";
 				} catch { img.alt = "Bild fehlt"; }
 			} else {
