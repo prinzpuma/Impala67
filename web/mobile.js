@@ -450,5 +450,5 @@ export const MOBILE = (() => {
 		setInterval(scheduleUI, 60000);
 	}
 
-	return { init, updateUI: scheduleUI };
+	return { init };
 })();

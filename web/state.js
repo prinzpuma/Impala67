@@ -1729,47 +1729,18 @@ export const STATE = (() => {
 	// zählen gegen das Limit des jeweiligen Stapels (aus dem Review-Protokoll).
 	// Learning/Relearning zählen NICHT gegen new/rev-Limits — sonst endet die
 	// Session nach einem Durchlauf, obwohl Minuten-Lernschritte noch offen sind.
-	// DRY: Tagesverbrauch (heute gelernte neue Karten/Reviews je Stapel) aus dem
-	// Review-Protokoll — war vorher in applyDailyLimits UND computeStudySnapshot
-	// identisch dupliziert (jede Regeländerung musste zweimal gemacht werden).
-	// Learning/Relearning-Schritte verbrauchen kein Limit (wie Anki).
+	// S.reviews ist NICHT streng chronologisch: Fremd-Events (Sync) hängen ältere Reviews
+	// hinten an. Deshalb ganz durchlaufen statt beim ersten alten Eintrag abzubrechen.
 	function dailyUsageSince(dayStart) {
 		const usedNew = {}, usedRev = {};
-		// PERF: Rückwärts-Iteration mit Frühabbruch — S.reviews ist chronologisch sortiert.
-		// Bei zehntausenden Reviews werden nur die heutigen Einträge geprüft statt des gesamten Verlaufs.
 		const cut = dayStart.toISOString();
-		const revs = S.reviews || [];
-		for (let i = revs.length - 1; i >= 0; i--) {
-			const r = revs[i];
-			// Importierte Reviews werden beim Replay nicht zwingend chronologisch
-			// angehängt. Deshalb darf ein alter Eintrag den Scan nicht abbrechen.
-			if (r.t < cut) continue;
-			if (r.learning) continue;
+		for (const r of S.reviews || []) {
+			if (r.t < cut || r.learning) continue;
 			const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
 			if (r.first) usedNew[d] = (usedNew[d] || 0) + 1;
 			else usedRev[d] = (usedRev[d] || 0) + 1;
 		}
 		return { usedNew, usedRev };
-	}
-
-	function applyDailyLimits(cards) {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		const { usedNew, usedRev } = dailyUsageSince(today);
-		return cards.filter((c) => {
-			const st = (c.srs && c.srs.state) || "new";
-			if (st === "learning" || st === "relearning") return true;
-			const d = c.deck || "Standard";
-			const conf = deckConfOf(d);
-			if (st === "new") {
-				if ((usedNew[d] || 0) >= conf.newPerDay) return false;
-				usedNew[d] = (usedNew[d] || 0) + 1;
-			} else {
-				if ((usedRev[d] || 0) >= conf.revPerDay) return false;
-				usedRev[d] = (usedRev[d] || 0) + 1;
-			}
-			return true;
-		});
 	}
 
 	// Lokales Tagesende (nächste Mitternacht) — Lernkarten mit due davor zählen noch „heute“.
@@ -1871,15 +1842,11 @@ export const STATE = (() => {
 		// Overlearning-Sperre: frisch bewertete Karten (< 10 Min) nicht vorzeitig per
 		// Learn-Ahead zeigen — sofortiges Nochmal-Drillen füttert nur das Kurzzeit-
 		// gedächtnis („Illusion of Competence“). Wirklich fällige Karten sperrt das nie.
-		// PERF: Rückwärts-Iteration mit Frühabbruch
+		// Kein Frühabbruch: ein per Sync nachgereichtes altes Review am Listenende hätte
+		// die Sperre sonst für alle gerade bewerteten Karten aufgehoben (s. dailyUsageSince).
 		const lockCutIso = new Date(t.getTime() - OVERLEARN_LOCK_MS).toISOString();
 		const freshRated = new Set();
-		const revs = S.reviews || [];
-		for (let i = revs.length - 1; i >= 0; i--) {
-			const r = revs[i];
-			if (r.t <= lockCutIso) break;
-			freshRated.add(r.cardId);
-		}
+		for (const r of S.reviews || []) if (r.t > lockCutIso) freshRated.add(r.cardId);
 		const lockOn = localStorage.getItem("impala67Overlearn") !== "off"; // Einstellung: Overlearning-Sperre
 		const aheadFree = lockOn ? learnAhead.filter((c) => !freshRated.has(c.id)) : learnAhead.slice();
 		const lockedAhead = learnAhead.length - aheadFree.length;
@@ -1986,7 +1953,7 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { BUS, onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, persistCheckpoint, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, snapshotInfo: () => ({ maxSeq: _loadedSeq, maxTime: _loadedTime }), migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, pageCreatedAt, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedCards, archivedDeckRoots, orphanArchivedCards, trashedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, applyDailyLimits, studySnapshot, endOfLocalDay, isLearnState, deckConfOf, backlinksOf, pageHistory, ancestorsOf, favModels, toggleFavModel, removeProviderFavorites };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
 })();
 
 // Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)

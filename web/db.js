@@ -58,7 +58,7 @@ export const DB = (() => {
 		});
 	}
 
-	// Einmalige Migration der Alt-DB "notion"; Alt-DB bleibt als Sicherheitsnetz bis resetDatabase liegen.
+	// Einmalige Migration der Alt-DB "notion"; die Alt-DB bleibt als Sicherheitsnetz liegen.
 	async function migrateLegacy() {
 		if (await ro("events", (s) => s.count())) return;
 		let legacy = null;
@@ -91,7 +91,7 @@ export const DB = (() => {
 			} catch (e) {
 				// Der abgelaufene Versuch läuft im Hintergrund weiter. Kommt er später doch durch,
 				// MUSS die Verbindung geschlossen werden: eine vergessene offene Verbindung
-				// blockiert jeden Versionswechsel und resetDatabase (onblocked) — genau der
+				// blockiert jeden Versionswechsel (onblocked) — genau der
 				// Zustand, in dem die App „Datenbank ist noch in einem anderen Tab geöffnet“
 				// meldet, obwohl gar kein zweiter Tab offen ist.
 				opening.then((d) => { if (d && d !== db) d.close(); }).catch(() => {});
@@ -178,21 +178,6 @@ export const DB = (() => {
 			lastReq.onerror = () => fail(lastReq);
 		});
 	}
-	function eventIds() {
-		ensureOpen();
-		return new Promise((res, rej) => {
-			const ids = [];
-			const req = db.transaction("events").objectStore("events").openCursor();
-			req.onsuccess = () => {
-				const cur = req.result;
-				if (!cur) return res(ids);
-				if (cur.value?.id) ids.push(cur.value.id);
-				cur.continue();
-			};
-			req.onerror = () => rej(req.error);
-		});
-	}
-
 	// Cursor/Batch liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
 	// Transport unterdrückt ausschließlich sein eigenes Echo; Cloudflare-Events
 	// dürfen deshalb weiterhin ins Drive-Backup und umgekehrt.
@@ -853,22 +838,6 @@ export const DB = (() => {
 		return { added: fresh.length, malformed, conflicts: conflictDetails.length, conflictDetails, merged: mergedDetails.length, mergedDetails, importedEvents };
 	}
 
-	async function resetDatabase() {
-		forgetKnownEventIds();
-		db?.close();
-		db = null;
-		openPromise = null; // nächster open() muss wieder wirklich öffnen
-		const deleteDb = (name) => new Promise((resolve, reject) => {
-			const req = indexedDB.deleteDatabase(name);
-			req.onsuccess = () => resolve();
-			req.onerror = () => reject(req.error);
-			// Ohne onblocked bliebe das Promise ewig offen, wenn ein anderer Tab die DB noch offen hält.
-			req.onblocked = () => reject(new Error("Datenbank ist noch in einem anderen Tab geöffnet. Bitte alle anderen Tabs dieser App schließen und erneut versuchen."));
-		});
-		await deleteDb("notion").catch((e) => console.warn("Alt-Datenbank 'notion' konnte nicht gelöscht werden:", e)); // nicht fatal
-		await deleteDb("impala67");
-	}
-
 	// Seiten-Reset: Page-Events, Vecs und Blobs (außer Hintergrundbild) entsorgen — Settings überleben.
 	// Löschungen synchron im onsuccess anstoßen: nach einem await wäre die Transaktion (Safari) ggf. schon zu.
 	function clearPages() {
@@ -892,5 +861,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, addEvents, allEvents, eventAtSeq, eventLogInfo, eventIds, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocal, compactLocalIfDue, compactFloor, DROPPABLE_TYPES, isLocalOnly, merge3, contentHeadsOf, reconstructPageFromEvents, redactSecretsFromEvent, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, blobUrl, revokeBlobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, resetDatabase, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

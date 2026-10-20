@@ -171,5 +171,5 @@ export const SCHULNOTEN = (() => {
 		BUS.emit("ui:render");
 	});
 
-	return { addGrade, deleteGrade, allGrades, average, exportMarkdown, render };
+	return { render };
 })();

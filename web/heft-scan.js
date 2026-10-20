@@ -190,6 +190,6 @@ export const SCANCORE = (() => {
 	// Nur die Namen, die heft-scanner-ui.js wirklich zieht.
 	return {
 		SCAN_MODES, loadImg, quadArea, isConvex, detectQuad, detectQuadAsync, liveCheck,
-		processShot, lumStats, blobToDataUrl,
+		processShot, blobToDataUrl,
 	};
 })();

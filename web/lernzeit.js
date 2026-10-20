@@ -847,18 +847,9 @@ export const LERNZEIT = (() => {
 		totalsByDay,
 		weekData,
 		weekGoalMinutes,
-		homeWidgetHtml,
-		activeSessions,
-		totalForDay,
-		fmt,
-		startTimer,
 		statsForHome,
 		poke,
 		contextChanged,
 		startInterval,
-		isBreakReminderEnabled,
-		showBreakReminderPrompt,
-		computeSmartInsights,
-		tick,
 	};
 })();

@@ -1008,5 +1008,5 @@ export const TOOLS = (() => {
 
 	// cardsOfDeck/subtreeIds nach außen: ai.js baut damit seine Bestätigungstexte, statt
 	// dieselben Baum-Regeln ein zweites Mal zu formulieren (drifteten sonst auseinander).
-	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, deckMatches, selectCards, cardsOfDeck, subtreeIds: STATE.pageSubtreeIds };
+	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, selectCards, cardsOfDeck, subtreeIds: STATE.pageSubtreeIds };
 })();

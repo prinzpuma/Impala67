@@ -367,5 +367,5 @@ export const RAG = (() => {
 		return hits.sort((a, b) => b.score - a.score).slice(0, k);
 	}
 
-	return { queuePage, reindexStale, search, indexPage, enabled, related };
+	return { queuePage, reindexStale, search, enabled, related };
 })();

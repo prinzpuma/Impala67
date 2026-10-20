@@ -597,7 +597,7 @@ export const NLM = (() => {
 	}
 
 	return {
-		openDialog, openExternal, sendPages, renderPane, importFiles,
-		listArtifacts, playById, saveById, deleteById, placeById, kindIcon, kindSvg, kindLabel,
+		openDialog, openExternal, sendPages, renderPane,
+		listArtifacts, playById, saveById, deleteById, placeById, kindSvg, kindLabel,
 	};
 })();

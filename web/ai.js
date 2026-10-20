@@ -1372,13 +1372,8 @@ export const AI = (() => {
 	EMBEDDINGS.setAdapter({ embed });
 
 	return {
-		chatOnce, complete, agent, undo: undoAi, abortActive, resolveChoice, refine,
+		complete, agent, undo: undoAi, abortActive, resolveChoice, refine,
 		ping, pingProvider, embed, listModels,
-		listEmbeddingModels: EMBEDDINGS.listModels,
-		getLocalEmbeddingStatus: EMBEDDINGS.getLocalStatus,
-		downloadLocalEmbedding: EMBEDDINGS.downloadLocal,
-		deleteLocalEmbedding: EMBEDDINGS.deleteLocal,
-		onEmbeddingProgress: EMBEDDINGS.onProgress,
 		LOCAL_EMBEDDING_MODELS,
 		detectThinkingCapabilities, debugReport, debugClear, MODEL_PRESETS,
 	};

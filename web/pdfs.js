@@ -453,5 +453,5 @@ export const PDFS = (() => {
 		}
 	}
 
-	return { ingest, openViewer, download, mountViewer, urlFor, extractText, ensureLoaded, openDocument };
+	return { ingest, openViewer, download, mountViewer, extractText, ensureLoaded, openDocument };
 })();

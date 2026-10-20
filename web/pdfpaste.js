@@ -58,5 +58,5 @@ export const PDFPASTE = (() => {
 	initPaste();
 	initShareTarget();
 
-	return { ingest, initPaste, initShareTarget };
+	return { ingest };
 })();

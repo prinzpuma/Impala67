@@ -691,5 +691,5 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		}
 	});
 
-	return { canUndoReview, undoReview, createClozeCards, cardsFromHighlights, exportTxt, exportCsv, exportApkg, importApkgFile, exportPagePdf, exportPageMd };
+	return { canUndoReview, createClozeCards };
 })();

@@ -48,5 +48,5 @@ export const SETTINGS_SYNC = (() => {
 		};
 	}
 
-	return { SECRET_FIELDS, allowsSecrets, sanitizeEvent, sanitizeEvents, mergePatch, secretSnapshot };
+	return { allowsSecrets, sanitizeEvent, sanitizeEvents, mergePatch, secretSnapshot };
 })();

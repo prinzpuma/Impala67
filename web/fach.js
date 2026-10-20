@@ -707,23 +707,6 @@ export const FACH = (() => {
 		return context({ deck: cardObj?.deck, pageId: cardObj?.pageId });
 	}
 
-	async function pageAsync(pageObj) {
-		const syncResult = page(pageObj);
-		if (syncResult.source !== "fallback") return syncResult;
-		if (!pageObj || !pageObj.content) return syncResult;
-
-		try {
-			const detected = await classifyPageWithEmbedding(pageObj);
-			if (detected) {
-				setCachedSubject(pageObj, detected, "embedding");
-				return { name: detected, source: "embedding" };
-			}
-		} catch {}
-
-		return syncResult;
-	}
-
-
 	return {
 		KNOWN_SUBJECTS,
 		DEFAULT_SUBJECT,
@@ -731,7 +714,6 @@ export const FACH = (() => {
 		clean,
 		page,
 		subjectsOf,
-		pageAsync,
 		deck,
 		context,
 		card,

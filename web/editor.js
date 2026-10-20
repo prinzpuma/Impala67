@@ -1959,5 +1959,5 @@ export const EDITOR = (() => {
 		}
 	}
 
-	return { mount, parse, serialize, undoRedo, undo: () => undoRedo(false), redo: () => undoRedo(true) };
+	return { mount, undoRedo };
 })();

@@ -589,5 +589,5 @@ export const GRAPH = (() => {
 	document.addEventListener("click", (event) => { if (event.target.closest && event.target.closest("#btnGraph")) { event.preventDefault(); open(); } }, true);
 	document.addEventListener("keydown", (event) => { if (event.key === "Escape" && overlay) { if (selectedId) { selectedId = null; render(); } else close(); } });
 
-	return { open, close, mastery };
+	return { open, close };
 })();

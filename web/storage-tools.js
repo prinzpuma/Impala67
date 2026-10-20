@@ -58,5 +58,5 @@ export const STORAGE_TOOLS = (() => {
     return { patch: { pdfId: null, content }, pdfId: page.pdfId };
   }
 
-  return { parseSizeKb, isPdfPage, collectPdfPages, storageReport, buildDetachPatch };
+  return { collectPdfPages, storageReport, buildDetachPatch };
 })();

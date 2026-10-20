@@ -649,7 +649,7 @@ export const EXP = (() => {
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 	else init();
 
-	return { settingsHtml, extraToolDefs, enabled: on };
+	return { settingsHtml, extraToolDefs };
 })();
 
 BUS.provide("exp:extra-tool-defs", () => EXP.extraToolDefs());
