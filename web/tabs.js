@@ -20,17 +20,30 @@ const syncableTabs = () => S.tabs.filter((id) => {
 	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5))) || id === "chat:" + S.currentChatId;
 	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
 }).slice(-12);
+// Zuletzt im Event-Log stehender Tab-Stand. Unverändertes wird nicht erneut geschrieben:
+// Jeder App-Wechsel (visibilitychange/pagehide/freeze) erzeugte sonst ein neues
+// uiTabsSet-Event — und weil Tabs geräteübergreifend per „letzter gewinnt“ synchronisieren,
+// überschrieb ein Gerät, das nur in den Hintergrund ging, echte Tab-Änderungen der anderen.
+let savedKey = null;
+const sessionKey = () => JSON.stringify([syncableTabs(), S.activeTabId]);
+const markSessionSaved = () => { savedKey = sessionKey(); };
+STATE.onRemoteApplied((types) => { if (new Set(types).has("uiTabsSet")) markSessionSaved(); });
+
 let saveTimer = 0;
 function saveSessionSoon() {
 	clearTimeout(saveTimer);
 	saveTimer = setTimeout(() => {
-		STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId }).catch((e) => console.warn("Tabs konnten nicht gespeichert werden:", e));
+		saveSessionNow().catch((e) => console.warn("Tabs konnten nicht gespeichert werden:", e));
 	}, 350);
 }
 function saveSessionNow() {
 	clearTimeout(saveTimer);
 	saveTimer = 0;
-	return STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId });
+	const key = sessionKey();
+	if (key === savedKey) return Promise.resolve();
+	savedKey = key;
+	return STATE.dispatch("uiTabsSet", { tabs: syncableTabs(), activeTabId: S.activeTabId })
+		.then(markSessionSaved, (e) => { savedKey = null; throw e; });
 }
 
 function activateTab(pageId, { newTab = false } = {}) {
@@ -271,6 +284,7 @@ export function navForward() {
 // geladen. HEFT.mount zeigt „Heft laden…" und lädt per hydrateHeftBlobs() nach,
 // sobald der Splash weg ist — sonst hängt der Ladekreis im Boot.
 export async function restoreSession() {
+	markSessionSaved(); // S.tabs/S.activeTabId kommen gerade frisch aus dem Log
 	const tabs = syncableTabs();
 	const active = tabs.includes(S.activeTabId) ? S.activeTabId : (tabs[tabs.length - 1] || null);
 	if (tabs.length !== S.tabs.length || active !== S.activeTabId) {
