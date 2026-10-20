@@ -121,9 +121,18 @@ export function isSyncBlobId(id) {
 	return /^(?:img:|file:|cover:|pdftext:)/.test(key) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
 }
 
+const UUID_SRC = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const BLOB_REF_EXACT = new RegExp("^(?:img:|file:|cover:)?" + UUID_SRC + "$", "i");
+// Lookahead statt normalem Treffer: findet auch überlappende Vorkommen, die Menge enthält
+// damit genau die Verweise, die text.includes() finden würde.
+const BLOB_REF_SCAN = new RegExp("(?=((?:img:|file:|cover:)?" + UUID_SRC + "))", "gi");
+
 // Für viele Schlüssel auf einmal: Seitentexte nur EINMAL einsammeln statt je Blob
 // erneut über alle Seiten zu laufen (lief im Sync synchron und fror die UI ein).
 // Das Trennzeichen \0 kommt in keinem Schlüssel vor — Treffer bleiben exakt dieselben.
+// UUID-basierte IDs (der Normalfall) stehen nach EINEM Durchlauf in einer Menge: vorher lief
+// text.includes() je Blob über den ganzen Seitentext — bei vielen Dateien und großen Seiten
+// Milliarden Zeichenvergleiche bei jedem Sync mit neuen Daten.
 export function blobAliveChecker(pages) {
 	const strings = [];
 	for (const page of Object.values(pages || {})) {
@@ -131,7 +140,13 @@ export function blobAliveChecker(pages) {
 		for (const value of Object.values(page)) if (typeof value === "string" && value) strings.push(value);
 	}
 	const text = strings.join("\0");
-	const ref = (target) => !!target && !target.includes("\0") && text.includes(target);
+	let refs = null;
+	const ref = (target) => {
+		if (!target || target.includes("\0")) return false;
+		if (!BLOB_REF_EXACT.test(target)) return text.includes(target);
+		if (!refs) refs = new Set(Array.from(text.matchAll(BLOB_REF_SCAN), (m) => m[1]));
+		return refs.has(target);
+	};
 	return (key) => {
 		const k = String(key || "");
 		if (!k) return false;
