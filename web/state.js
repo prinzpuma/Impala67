@@ -470,7 +470,6 @@ export const STATE = (() => {
 		_stateRevision++;
 		const eventTime = String(ev?.t || "");
 		if (eventTime > _loadedTime) _loadedTime = eventTime;
-		const p = ev.payload || {};
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
 		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
 		// FIX: Heft-Events zählten nicht als Seitenänderung. Der Handschrift-Text (ocrText) steckt
@@ -478,6 +477,20 @@ export const STATE = (() => {
 		// erst, wenn irgendwann zufällig ein anderes Seiten-Event vorbeikam.
 		if (ev.type.startsWith("page") || ev.type.startsWith("heft")) _pageRev++;
 		if (ev.type.startsWith("card") || ev.type.startsWith("deck") || ev.type === "settingsSet") _cardRev++;
+		// Ein einzelnes fehlerhaftes Event (fremde App-Version, beschädigter Import) darf weder
+		// den Start noch den Sync blockieren: Es liegt dauerhaft im Log und würde load() auf
+		// jedem Gerät bei jedem Start erneut abbrechen.
+		try {
+			applyEvent(ev, ev.payload || {});
+		} catch (error) {
+			console.warn("[state] Event übersprungen (" + ev.type + "):", error);
+			PERF_PROFILER.error("state.reduce-error", error, { type: ev.type });
+			return;
+		}
+		if (!_loading) emitDomainEvents(ev);
+	}
+
+	function applyEvent(ev, p) {
 		switch (ev.type) {
 			case "pageCreate":
 				// FIX: fehlende Validierung — ohne id konnte eine "undefined"-Seite entstehen.
@@ -537,7 +550,7 @@ export const STATE = (() => {
 				delete S.heftDocs[p.id]; // Heft-Inhalt mit aufräumen
 				delete S.pages[p.id];
 				break;
-			case "pageTrash":
+			case "pageTrash": {
 				bustChildIdx();
 				// Wie in Notion: die ganze Unterseiten-Struktur wandert zusammen in den Papierkorb.
 				const trashedIds = collectSubtree(p.id);
@@ -547,6 +560,7 @@ export const STATE = (() => {
 				});
 				closePageTabs(trashedIds);
 				break;
+			}
 			case "pageRestore":
 				bustChildIdx();
 				collectSubtree(p.id).forEach((id) => {
@@ -816,6 +830,7 @@ export const STATE = (() => {
 				break;
 			}
 			case "deckDuplicate": {
+				if (!p.name) break;
 				const from = p.name;
 				const prefix = from.includes("::") ? from.slice(0, from.lastIndexOf("::") + 2) : "";
 				const to = prefix + from.split("::").pop() + " (Kopie)";
@@ -984,9 +999,6 @@ export const STATE = (() => {
 			case "settingsSet":
 				Object.assign(S.settings, SETTINGS_SYNC.mergePatch(S.settings, p));
 				break;
-		}
-		if (!_loading) {
-			emitDomainEvents(ev);
 		}
 	}
 
@@ -1279,9 +1291,6 @@ export const STATE = (() => {
 			const queued = sortEvents(_queuedRemoteEvents.filter((event) => !event?.id || !replayIds.has(event.id)));
 			_queuedRemoteEvents = [];
 			if (queued.length) await applyRemoteEventsCooperative(queued);
-			for (const pg of Object.values(S.pages || {})) {
-				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-			}
 
 			finishProfile({ count: info.count, replayed, checkpointUsed, ...(rejectReason ? { rejectReason } : {}) });
 			return { maxSeq: _loadedSeq, maxTime: _loadedTime, count: info.count, replayed, checkpointUsed };
@@ -1499,7 +1508,6 @@ export const STATE = (() => {
 		const m = new Map();
 		for (const [parentId, kids] of ensureParentIdx()) {
 			for (const pg of kids) {
-				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
 				if (pg.trashed || pg.archived) continue;
 				const k = (pg.workspaceId || "default") + "\0" + parentId;
 				let arr = m.get(k);
@@ -1527,11 +1535,10 @@ export const STATE = (() => {
 		return (ensureChildIdx().get(k) || []).slice();
 	};
 
+	// Jede Seite hat created: pageCreate setzt es immer, restorePersistedState() ergänzt es
+	// für alte Checkpoints. Die Abfragen unten müssen es deshalb nicht mehr nachbessern.
 	const trashedPages = () => Object.values(S.pages)
-		.filter((pg) => {
-			if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-			return pg.trashed;
-		})
+		.filter((pg) => pg.trashed)
 		.sort((a, b) => ((b.trashedAt || "") < (a.trashedAt || "") ? -1 : (b.trashedAt || "") > (a.trashedAt || "") ? 1 : 0));
 
 	const isPageArchived = (pgOrId) => {
@@ -1554,20 +1561,14 @@ export const STATE = (() => {
 	const _activeCache = { rev: -1, list: [] };
 	const activePages = () => {
 		if (_activeCache.rev !== _pageRev) {
-			_activeCache.list = Object.values(S.pages).filter((pg) => {
-				if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-				return !pg.trashed && !isPageArchived(pg);
-			});
+			_activeCache.list = Object.values(S.pages).filter((pg) => !pg.trashed && !isPageArchived(pg));
 			_activeCache.rev = _pageRev;
 		}
 		return _activeCache.list.slice();
 	};
 
 	const archivedPages = () => Object.values(S.pages)
-		.filter((pg) => {
-			if (pg && !pg.created) pg.created = pg.updated || new Date().toISOString();
-			return !pg.trashed && isPageArchived(pg);
-		})
+		.filter((pg) => !pg.trashed && isPageArchived(pg))
 		.sort((a, b) => ((b.archivedAt || "") < (a.archivedAt || "") ? -1 : (b.archivedAt || "") > (a.archivedAt || "") ? 1 : 0));
 
 	const archivedPageRoots = () => archivedPages().filter((pg) => {
