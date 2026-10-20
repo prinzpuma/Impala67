@@ -1,4 +1,5 @@
-// Datenbank-Seite (pg.db): Unterseiten als editierbare Tabelle.
+// Datenbank-Seite (pg.db): Unterseiten als Liste; jede Zeile zeigt ihre Eigenschaften als
+// umbrechendes Raster – passt immer in die Textbreite, kein seitliches Scrollen.
 // Zell-Änderungen laufen über .db-cell als pageUpdate-Event (app.js, change-Listener).
 import { STATE } from "./state.js";
 import { U } from "./util.js";
@@ -28,20 +29,28 @@ function tone(v) {
 const pillValues = (type, v) => (type === "multi_select" ? v.split(",") : [v]).map((s) => s.trim()).filter(Boolean);
 const pillsHtml = (type, v) => pillValues(type, v).map((s) => `<span class="db-pill db-tone-${tone(s)}">${esc(s)}</span>`).join("");
 
-function cellHtml(row, col, listId) {
+const WIDE = { multi_select: 1, text: 1, rich_text: 1, url: 1, email: 1 };
+const deDate = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" });
+
+function showHtml(t, raw) {
+	if (!raw) return '<span class="db-empty">–</span>';
+	if (PILL[t]) return pillsHtml(t, raw);
+	if (t === "date" && ISO_DATE.test(raw)) return esc(deDate(raw));
+	return esc(raw);
+}
+
+// Ein Feld: in Ruhe die Anzeige (Chips/Text, bricht um), beim Bearbeiten das darübergelegte
+// Eingabefeld (CSS :focus-within) – ein Feld, kein Extra-Zustand. <label>: Klick fokussiert.
+function fieldHtml(row, col, listId) {
 	const raw = String((row.props || {})[col.name] ?? "");
-	const v = esc(raw);
 	const t = col.type || "text";
-	if (RO[t]) return `<td class="db-td db-ro"><span class="db-show">${v}</span></td>`;
-	const data = `data-dbrow="${row.id}" data-dbcol="${esc(col.name)}" aria-label="${esc(col.name)}"`;
-	if (t === "number") return `<td class="db-td db-num"><input class="db-cell" ${data} value="${v}" inputmode="decimal" autocomplete="off"></td>`;
+	const cls = "db-prop" + (t === "multi_select" ? " db-full" : WIDE[t] ? " db-wide" : "") + (RO[t] ? " db-ro" : "");
+	const label = `<span class="db-label">${esc(col.name)}</span>`;
+	if (RO[t]) return `<div class="${cls}">${label}<div class="db-val"><span class="db-show">${showHtml(t, raw)}</span></div></div>`;
 	// Nur echte ISO-Tage als Datumsfeld; Bereiche/Freitext bleiben Text, sonst gingen sie beim Speichern verloren.
-	if (t === "date" && (!raw || ISO_DATE.test(raw))) return `<td class="db-td db-date"><input type="date" class="db-cell" ${data} value="${v}" required></td>`;
-	// In Ruhe umbrechende Anzeige (Chips oder Text, nichts wird abgeschnitten), beim Bearbeiten
-	// das darübergelegte Eingabefeld (CSS :focus-within) – ein Feld, kein Extra-Zustand.
-	const show = PILL[t] ? pillsHtml(t, raw) : v;
-	return `<td class="db-td db-fld${PILL[t] ? " db-pills" : ""}"><input class="db-cell" ${data} value="${v}"${listId ? ` list="${listId}"` : ""} autocomplete="off" spellcheck="false">` +
-		`<span class="db-show" aria-hidden="true">${show}</span></td>`;
+	const type = t === "date" && (!raw || ISO_DATE.test(raw)) ? ' type="date"' : t === "number" ? ' inputmode="decimal"' : "";
+	return `<label class="${cls}">${label}<span class="db-val"><input class="db-cell"${type} data-dbrow="${row.id}" data-dbcol="${esc(col.name)}" value="${esc(raw)}"` +
+		`${listId ? ` list="${listId}"` : ""} autocomplete="off" spellcheck="false"><span class="db-show" aria-hidden="true">${showHtml(t, raw)}</span></span></label>`;
 }
 
 // Vorschlagsliste je Auswahl-Spalte: alle bereits benutzten Werte (für Tippen/Wählen)
@@ -51,18 +60,16 @@ function datalist(id, col, rows) {
 	return vals.length ? `<datalist id="${id}">${vals.map((s) => `<option value="${esc(s)}">`).join("")}</datalist>` : "";
 }
 
-export function dbTableHtml(pg) {
+export function dbViewHtml(pg) {
 	const cols = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
-	const titleCol = ((pg.db && pg.db.schema) || []).find((c) => c.type === "title");
 	const rows = STATE.childrenOf(pg.id, pg.workspaceId);
 	const lists = cols.map((c, i) => datalist(`dbl-${pg.id}-${i}`, c, rows));
-	const head = `<tr><th class="db-th db-name">${esc(titleCol?.name || "Name")}</th>` +
-		cols.map((c) => `<th class="db-th${c.type === "number" ? " db-num" : ""}" title="${esc(c.type || "text")}">${esc(c.name)}</th>`).join("") + "</tr>";
-	const body = rows.map((r) => `<tr><th class="db-td db-name" scope="row"><button class="db-open" data-page="${r.id}" title="Öffnen">` +
-		`<span class="db-open-ic">${pageIcon(r, "note")}</span><span class="db-open-t">${esc(r.title || "Unbenannt")}</span></button></th>` +
-		cols.map((c, i) => cellHtml(r, c, lists[i] && `dbl-${pg.id}-${i}`)).join("") + "</tr>").join("");
+	const items = rows.map((r) => '<article class="db-item">' +
+		`<button class="db-open" data-page="${r.id}" title="Öffnen"><span class="db-open-ic">${pageIcon(r, "note")}</span><span class="db-open-t">${esc(r.title || "Unbenannt")}</span></button>` +
+		(cols.length ? '<div class="db-props">' + cols.map((c, i) => fieldHtml(r, c, lists[i] && `dbl-${pg.id}-${i}`)).join("") + "</div>" : "") +
+		"</article>").join("");
 	return '<section class="db-view" aria-label="Datenbank">' +
 		`<div class="db-bar">${rows.length} ${rows.length === 1 ? "Eintrag" : "Einträge"}</div>` +
-		`<div class="db-scroll"><table class="db-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>` +
+		`<div class="db-list">${items}</div>` +
 		`<button class="db-add-row" data-dbnewrow="${pg.id}">${icon("plus")}Neue Zeile</button>${lists.join("")}</section>`;
 }

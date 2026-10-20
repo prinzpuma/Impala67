@@ -28,7 +28,7 @@ import { lernanalyseParts } from "./lernanalyse.js";
 import { icon, lead, pageIcon } from "./icons.js";
 import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
 import { relatedSlotHtml, hydrateRelated } from "./related-pages.js";
-import { dbTableHtml } from "./db-view.js";
+import { dbViewHtml } from "./db-view.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -696,7 +696,7 @@ function renderMain() {
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.pdfId ? pdfEmbedBlockHtml(pg) : "") +
-		(pg.db ? dbTableHtml(pg) : "") +
+		(pg.db ? dbViewHtml(pg) : "") +
 		// data-owned: der Block-Editor besitzt seinen DOM selbst (Cursor, Auswahl) —
 		// U.morph lässt ihn unangetastet.
 		'<div class="editor-wrap"><div id="blockEditor" class="block-editor" data-owned="1"></div></div>' +

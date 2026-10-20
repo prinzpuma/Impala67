@@ -292,49 +292,33 @@ h3.blk-h { font-size: 1.12em }
 	.blk-gutter { width: 38px }
 }
 
-/* ---- Datenbank-Ansicht (db-view.js): Tabelle bündig mit dem Text, scrollt seitlich statt abzuschneiden ---- */
-.db-view { --db-gutter: max(var(--space-6), calc((100% - 760px) / 2 + var(--space-6))); --db-line: var(--edge-soft); margin: var(--space-2) 0 var(--space-5) }
-.db-bar { padding: 0 var(--db-gutter) var(--space-1-5); font-size: var(--text-xs); color: var(--text2) }
-.db-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 var(--db-gutter); overscroll-behavior-x: contain }
-.db-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: var(--text-base); line-height: 1.45 }
-.db-th { position: relative; padding: var(--space-1-5) 10px; text-align: left; font-size: var(--text-xs); font-weight: 600; color: var(--text2); white-space: nowrap; border-bottom: 1px solid var(--edge) }
-.db-td { position: relative; padding: 0; vertical-align: middle; border-bottom: 1px solid var(--db-line); min-width: 150px; max-width: 320px }
-.db-th + .db-th, .db-td + .db-td { border-left: 1px solid var(--db-line) }
-.db-table tbody tr { transition: background-color var(--motion-fast) ease }
-.db-table tbody tr:hover { background: var(--surface-subtle) }
-/* Name-Spalte bleibt beim seitlichen Scrollen stehen */
-.db-name { position: sticky; left: 0; z-index: 1; background: var(--db-bg, var(--panel-solid)); min-width: 220px; max-width: 340px; font-weight: 500 }
-thead .db-name { z-index: 2 }
-/* Deckt den Rand links der fixierten Spalte ab, damit gescrollte Zellen dort nicht durchscheinen */
-.db-name::before { content: ""; position: absolute; top: 0; bottom: -1px; right: 100%; width: 100vw; background: var(--db-bg, var(--panel-solid)); pointer-events: none }
-.db-table tbody tr:hover .db-name { background: linear-gradient(var(--surface-subtle), var(--surface-subtle)), var(--db-bg, var(--panel-solid)) }
-.db-open { display: flex; align-items: flex-start; gap: var(--space-2); width: 100%; min-height: 40px; padding: var(--space-2) 10px var(--space-2) 2px; background: none; border: none; border-radius: 0; color: var(--text); font: inherit; font-weight: 500; text-align: left; cursor: pointer }
-.db-open-ic { flex: none; display: inline-flex; width: 1.3em; justify-content: center; line-height: 1.45 }
-.db-open-t { min-width: 0; overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: text-decoration-color var(--motion-fast) ease }
-.db-open:hover .db-open-t, .db-open:focus-visible .db-open-t { text-decoration-color: var(--edge) }
-/* Zellen: wirken wie Text, Rahmen erst beim Bearbeiten */
-.db-cell { display: block; width: 100%; min-height: 40px; margin: 0; padding: var(--space-2) 10px; border: none; border-radius: 0; background: transparent; color: var(--text); font: inherit; outline: none; box-shadow: none }
-.db-td:not(.db-name):hover { background: var(--surface-subtle) }
-.db-td:not(.db-name):focus-within { background: var(--input-bg); box-shadow: inset 0 0 0 2px var(--accent-border); z-index: 1 }
-.db-num { min-width: 64px; width: 72px }
-.db-num .db-cell { text-align: right; font-variant-numeric: tabular-nums }
-.db-th.db-num { text-align: right }
-.db-date { min-width: 150px }
-.db-date .db-cell:invalid:not(:focus) { color: transparent }
-.db-td:hover .db-cell:invalid { color: var(--text2) }
-.db-date .db-cell::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; transition: opacity var(--motion-fast) ease }
-.db-date:hover .db-cell::-webkit-calendar-picker-indicator, .db-date:focus-within .db-cell::-webkit-calendar-picker-indicator { opacity: .6 }
-.db-fld .db-cell { position: absolute; inset: 0; height: 100%; opacity: 0 }
-.db-fld:focus-within .db-cell { opacity: 1 }
-.db-fld:focus-within .db-show { visibility: hidden }
-.db-show { display: block; min-height: 40px; padding: var(--space-2) 10px; overflow-wrap: anywhere; pointer-events: none }
+/* ---- Datenbank-Ansicht (db-view.js): Liste in Textbreite, Eigenschaften brechen um statt zu scrollen ---- */
+.db-view { width: min(760px, 100%); margin: var(--space-2) auto var(--space-5); padding: 0 var(--space-6) }
+.db-bar { padding: 0 0 var(--space-1-5); font-size: var(--text-xs); color: var(--text2); border-bottom: 1px solid var(--edge) }
+.db-item { padding: var(--space-3) 0 10px; border-bottom: 1px solid var(--edge-soft) }
+.db-open { display: flex; align-items: flex-start; gap: var(--space-2); max-width: 100%; min-height: 0; padding: 2px var(--space-2); margin: 0 0 var(--space-1-5); background: none; border: none; border-radius: var(--radius-sm); color: var(--text); font: inherit; font-size: var(--text-md); font-weight: 600; line-height: 1.4; text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease }
+.db-open:hover, .db-open:focus-visible { background: var(--surface-hover) }
+.db-open-ic { flex: none; display: inline-flex; width: 1.3em; justify-content: center }
+.db-open-t { min-width: 0; overflow-wrap: anywhere }
+.db-props { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); grid-auto-flow: row dense; gap: 2px var(--space-1-5) }
+.db-wide { grid-column: span 2 }
+.db-full { grid-column: 1 / -1 }
+.db-prop { display: flex; flex-direction: column; min-width: 0; cursor: text }
+.db-label { padding: 0 var(--space-2); font-size: var(--text-2xs); font-weight: 500; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.db-val { position: relative; display: block; min-height: 30px; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease }
+.db-prop:not(.db-ro):hover .db-val { background: var(--surface-hover) }
+.db-val:focus-within { background: var(--input-bg); box-shadow: inset 0 0 0 1.5px var(--accent-border) }
+.db-show { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-height: 30px; padding: 3px var(--space-2); font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; pointer-events: none }
 .db-ro .db-show { color: var(--text2) }
-.db-pills .db-show { display: flex; flex-wrap: wrap; align-content: center; gap: var(--space-1) }
-.db-pill { --tone: var(--c-gray); display: inline-block; max-width: 100%; padding: 1px var(--space-2); border-radius: var(--radius-xs); background: rgb(var(--tone) / .16); color: rgb(var(--tone)); font-size: var(--text-xs); font-weight: 600; line-height: 1.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.db-empty { color: var(--text2); opacity: .45 }
+.db-cell { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0 var(--space-2); border: none; border-radius: inherit; background: transparent; color: var(--text); font: inherit; font-size: var(--text-sm); outline: none; box-shadow: none; opacity: 0 }
+.db-val:focus-within .db-cell { opacity: 1 }
+.db-val:focus-within .db-show { visibility: hidden }
+.db-pill { --tone: var(--c-gray); display: inline-block; max-width: 100%; padding: 0 var(--space-2); border-radius: var(--radius-xs); background: rgb(var(--tone) / .16); color: rgb(var(--tone)); font-size: var(--text-xs); font-weight: 600; line-height: 1.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .db-tone-red { --tone: var(--c-red) } .db-tone-orange { --tone: var(--c-orange) } .db-tone-yellow { --tone: var(--c-yellow) } .db-tone-green { --tone: var(--c-green) }
 .db-tone-blue { --tone: var(--c-blue) } .db-tone-purple { --tone: var(--c-purple) } .db-tone-pink { --tone: var(--c-pink) }
 body.light .db-pill { color: color-mix(in srgb, rgb(var(--tone)) 70%, #000) }
-.db-add-row { display: flex; align-items: center; gap: var(--space-1-5); width: calc(100% - 2 * var(--db-gutter)); margin: 0 var(--db-gutter); min-height: 38px; padding: 0 var(--space-2); background: none; border: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); color: var(--text2); font-size: var(--text-sm); text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
+.db-add-row { display: flex; align-items: center; gap: var(--space-1-5); width: 100%; min-height: 38px; padding: 0 var(--space-2); background: none; border: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); color: var(--text2); font-size: var(--text-sm); text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
 .db-add-row:hover { background: var(--surface-hover); color: var(--text) }
-@media (max-width: 600px) { .db-view { --db-gutter: var(--space-4) } .db-name { min-width: 150px; max-width: 52vw } .db-fld, .db-date { min-width: 120px } }
-body.mobile-ui .db-view { --db-gutter: var(--m-gutter, var(--space-4)) }
+@media (max-width: 600px) { .db-view { padding: 0 var(--space-4) } .db-props { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)) } }
+body.mobile-ui .db-view { width: 100%; padding: 0 var(--m-gutter, var(--space-4)) }
