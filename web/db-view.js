@@ -27,7 +27,8 @@ function tone(v) {
 }
 
 const pillValues = (type, v) => (type === "multi_select" ? v.split(",") : [v]).map((s) => s.trim()).filter(Boolean);
-const pillsHtml = (type, v) => pillValues(type, v).map((s) => `<span class="db-pill db-tone-${tone(s)}">${esc(s)}</span>`).join("");
+// Mehrfachauswahl (Themen o. Ä.) bleibt neutral grau – Farbe nur dort, wo sie eine Stufe bedeutet.
+const pillsHtml = (type, v) => pillValues(type, v).map((s) => `<span class="db-pill db-tone-${type === "multi_select" ? "gray" : tone(s)}">${esc(s)}</span>`).join("");
 
 const WIDE = { multi_select: 1, text: 1, rich_text: 1, url: 1, email: 1 };
 const deDate = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" });
@@ -44,7 +45,8 @@ function showHtml(t, raw) {
 function fieldHtml(row, col, listId) {
 	const raw = String((row.props || {})[col.name] ?? "");
 	const t = col.type || "text";
-	const cls = "db-prop" + (t === "multi_select" ? " db-full" : WIDE[t] ? " db-wide" : "") + (RO[t] ? " db-ro" : "");
+	// Leere Felder blendet CSS aus, bis die Karte gehovert/fokussiert wird.
+	const cls = "db-prop" + (t === "multi_select" ? " db-full" : WIDE[t] ? " db-wide" : "") + (RO[t] ? " db-ro" : "") + (raw.trim() ? "" : " db-blank");
 	const label = `<span class="db-label">${esc(col.name)}</span>`;
 	if (RO[t]) return `<div class="${cls}">${label}<div class="db-val"><span class="db-show">${showHtml(t, raw)}</span></div></div>`;
 	// Nur echte ISO-Tage als Datumsfeld; Bereiche/Freitext bleiben Text, sonst gingen sie beim Speichern verloren.
@@ -61,11 +63,15 @@ function datalist(id, col, rows) {
 }
 
 export function dbViewHtml(pg) {
-	const cols = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
+	const all = ((pg.db && pg.db.schema) || []).filter((c) => c.type !== "title");
+	// Die erste Zahlenspalte (Nr/VL) ist die Laufnummer: kein eigenes Feld, sondern „#1“ vor dem Titel.
+	const numCol = all.find((c) => c.type === "number");
+	const cols = all.filter((c) => c !== numCol);
 	const rows = STATE.childrenOf(pg.id, pg.workspaceId);
+	const no = (r) => String((numCol && (r.props || {})[numCol.name]) ?? "").trim();
 	const lists = cols.map((c, i) => datalist(`dbl-${pg.id}-${i}`, c, rows));
 	const items = rows.map((r) => '<article class="db-item">' +
-		`<button class="db-open" data-page="${r.id}" title="Öffnen"><span class="db-open-ic">${pageIcon(r, "note")}</span><span class="db-open-t">${esc(r.title || "Unbenannt")}</span></button>` +
+		`<button class="db-open" data-page="${r.id}" title="Öffnen">${no(r) ? `<span class="db-no">#${esc(no(r))}</span>` : ""}<span class="db-open-ic">${pageIcon(r, "note")}</span><span class="db-open-t">${esc(r.title || "Unbenannt")}</span></button>` +
 		(cols.length ? '<div class="db-props">' + cols.map((c, i) => fieldHtml(r, c, lists[i] && `dbl-${pg.id}-${i}`)).join("") + "</div>" : "") +
 		"</article>").join("");
 	return '<section class="db-view" aria-label="Datenbank">' +
