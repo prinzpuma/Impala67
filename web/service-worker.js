@@ -114,6 +114,7 @@ const APP_FILES = [
 	"./editor-keys.js",
 	"./editor-markdown.js",
 	"./editor-menus.js",
+	"./diagram.js",
 	"./render.js",
 	"./conflict-ui.js",
 	"./library.js",

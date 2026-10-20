@@ -41,6 +41,7 @@ import {
 	setCaret,
 } from "./editor-inline.js";
 import { createBlockKeys } from "./editor-keys.js";
+import { diagramLang, renderDiagram } from "./diagram.js";
 
 export const EDITOR = (() => {
 
@@ -107,6 +108,8 @@ export const EDITOR = (() => {
 	// LISTY (editor-markdown.js) und TEXTY (editor-menus.js) kommen aus den Teilmodulen.
 
 	const uid = () => U.uid();
+	// Diagramm-Blöcke, deren Code gerade offen ist (nur Anzeige, wird nie gespeichert)
+	const diagramEdit = new Set();
 	const esc = (t) => U.esc(String(t ?? ""));
 
 	// ---------- Modell: Block-Fabriken & Baum-Navigation ----------
@@ -115,6 +118,7 @@ export const EDITOR = (() => {
 		if (kind === "table") return { id: uid(), type: "table", rows: [["", ""], ["", ""]] };
 		if (kind === "columns") return { id: uid(), type: "columns", columns: [[newBlock("p")], [newBlock("p")]] };
 		if (kind === "code") return { id: uid(), type: "code", language: "javascript", text: "" };
+		if (kind === "mermaid" || kind === "svg") return { id: uid(), type: "code", language: kind, text: "" };
 		if (kind === "math") return { id: uid(), type: "math", text: "" };
 		if (kind === "divider") return { id: uid(), type: "divider" };
 		if (kind === "callout") return { id: uid(), type: "callout", color: "blue", children: [newBlock("p")] };
@@ -436,6 +440,23 @@ export const EDITOR = (() => {
 		return esc(src);
 	}
 
+	// Diagramm-Codeblock (```mermaid / ```svg): fertig gerendert anzeigen, Klick öffnet
+	// den Code darüber mit Live-Vorschau darunter; Fokusverlust schließt ihn wieder.
+	// data-key = Quelle: unveränderte Diagramme behalten ihr SVG (kein Neu-Rendern).
+	function diagramBlockHtml(b) {
+		const src = String(b.text || "");
+		const editing = diagramEdit.has(b.id) || !src.trim();
+		const view = '<div class="blk-diagram" data-bdiagram="' + b.id + '" data-key="dg:' + esc(b.language) + ":" + esc(src) +
+			'" data-owned="1" data-dglang="' + esc(b.language) + '" data-dgsrc="' + esc(src) + '" contenteditable="false"' +
+			(editing ? "" : ' tabindex="0" role="button" aria-label="Diagramm bearbeiten"') + "></div>";
+		if (!editing) return '<div class="blk-codewrap blk-dgwrap">' + view + "</div>";
+		return '<div class="blk-codewrap blk-dgwrap is-editing">' +
+			'<button class="blk-codelang" data-bcodelang="' + b.id + '">' + esc(b.language) + "</button>" +
+			'<pre class="blk-code"><code class="blk-text" data-bcode="' + b.id +
+			'" contenteditable="true" spellcheck="false">' + codeHtml(b.text, b.language === "svg" ? "xml" : "") + "</code></pre>" +
+			view + "</div>";
+	}
+
 	function blockHtml(b, ctx) {
 		const nested = ctx && ctx.nested;
 		const ind = b.indent ? ' style="margin-left:' + (b.indent * 26) + 'px"' : "";
@@ -466,6 +487,7 @@ export const EDITOR = (() => {
 				inner = '<hr class="blk-hr">';
 				break;
 			case "code":
+				if (diagramLang(b.language)) { inner = diagramBlockHtml(b); break; }
 				// Immer contenteditable-<pre> — nie eine Textarea (kein Designwechsel).
 				// Syntax-Highlight passiert nur bei render(), nicht während des Tippens
 				// (sonst springt der Caret); beim Verlassen wird neu gerendert.
@@ -720,6 +742,11 @@ export const EDITOR = (() => {
 		host.querySelectorAll(".blk-file[data-filesrc]").forEach(hydrateFileBlock);
 		// Heft-Einbettungen
 		try { HEFT.hydrateEmbeds(host); } catch { /* Heft-Modul optional */ }
+		// Diagramme (Mermaid/SVG): nur neue oder geänderte Quellen rendern
+		host.querySelectorAll(".blk-diagram[data-dgsrc]:not([data-hydrated])").forEach((el) => {
+			el.dataset.hydrated = "1";
+			renderDiagram(el, el.dataset.dglang, el.dataset.dgsrc);
+		});
 		// Formel-Blöcke mit KaTeX rendern (Quelle bleibt in data-mathsrc)
 		// data-key hängt an der Formel: unveränderte Formeln behalten ihr KaTeX-DOM,
 		// geänderte bekommen ein frisches Element und werden hier neu gerendert.
@@ -775,6 +802,27 @@ export const EDITOR = (() => {
 				PDFS.mountViewer(viewer, src, { title: name });
 			}
 		}
+	}
+
+	// Diagramm in den Bearbeiten-Modus schalten (Code + Vorschau) und Caret ans Ende.
+	function editDiagram(bid) {
+		const b = findBlock(bid);
+		if (!b) return;
+		diagramEdit.add(bid);
+		render();
+		focusBlock(bid, String(b.text || "").length, "code");
+	}
+
+	// Live-Vorschau beim Tippen (entprellt): rendert direkt in die Vorschau, ohne render().
+	let previewTimer = 0;
+	function previewDiagram(bid) {
+		const b = findBlock(bid);
+		if (!b || !diagramLang(b.language)) return;
+		clearTimeout(previewTimer);
+		previewTimer = setTimeout(() => {
+			const view = host && host.querySelector('[data-bdiagram="' + bid + '"]');
+			if (view) renderDiagram(view, b.language, b.text);
+		}, 350);
 	}
 
 	// Highlight eines Codeblocks neu aufbauen (nur bei Fokusverlust — nie beim
@@ -1430,6 +1478,7 @@ export const EDITOR = (() => {
 				setCaret(field, 0);
 			}
 			handleLiveTriggers(field, e);
+			if (field.dataset.bcode) previewDiagram(field.dataset.bcode);
 			save();
 		});
 
@@ -1438,7 +1487,17 @@ export const EDITOR = (() => {
 		// Fokusverlust: Codeblöcke neu highlighten, Tipp-History festschreiben
 		host.addEventListener("focusout", (e) => {
 			const code = e.target.closest && e.target.closest("[data-bcode]");
-			if (code) setTimeout(() => rehighlight(code.dataset.bcode), 0);
+			if (code && diagramLang(findBlock(code.dataset.bcode)?.language)) {
+				// Diagramm-Code verlassen → wieder als Grafik zeigen (außer der Fokus
+				// bleibt im selben Block, z. B. beim Sprache-Knopf).
+				const bid = code.dataset.bcode;
+				setTimeout(() => {
+					const wrap = code.closest(".blk-dgwrap");
+					if (wrap && wrap.contains(document.activeElement)) return;
+					diagramEdit.delete(bid);
+					render();
+				}, 0);
+			} else if (code) setTimeout(() => rehighlight(code.dataset.bcode), 0);
 			commitHistory();
 		});
 
@@ -1505,6 +1564,8 @@ export const EDITOR = (() => {
 				if (next != null) mutate(() => { b.language = next.trim() || "text"; });
 				return;
 			}
+			const dgView = t.closest && t.closest(".blk-dgwrap:not(.is-editing) [data-bdiagram]");
+			if (dgView) { editDiagram(dgView.dataset.bdiagram); return; }
 			const mathBlk = t.closest && t.closest("[data-bmath]");
 			if (mathBlk) { openMathPop(mathBlk.dataset.bmath); return; }
 			const imath = t.closest && t.closest(".blk-imath");

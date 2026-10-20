@@ -663,7 +663,27 @@ export const U = {
 		if (lastError) PERF_PROFILER.error("highlight-error", lastError, { failed });
 	},
 
-	// Mermaid-Diagramme rendern: ```mermaid-Codeblöcke → SVG (dunkles Theme).
+	// Mermaid einmal laden und initialisieren (Chat-Antworten und Editor-Diagramme).
+	// Liefert false, wenn die Engine nicht geladen werden kann (offline beim ersten Mal).
+	async ensureMermaid() {
+		if (!window.mermaid) {
+			try {
+				await PERF_PROFILER.run("mermaid.load", () => U.loadScript(OPTIONAL_MODULE_URLS.mermaid, "mermaid"), { runtime: MERMAID_VERSION }, 0);
+			} catch {
+				return false;
+			}
+		}
+		if (!window.mermaid) return false;
+		// Theme folgt dem App-Design (hell/dunkel); neu initialisieren nur bei Wechsel.
+		const theme = document.body.classList.contains("light") ? "default" : "dark";
+		if (U._mermaidTheme !== theme) {
+			U._mermaidTheme = theme;
+			try { mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict", fontFamily: "inherit" }); } catch { /* ignorieren */ }
+		}
+		return true;
+	},
+
+	// Mermaid-Diagramme rendern: ```mermaid-Codeblöcke → SVG (Theme wie die App).
 	// Fehlertolerant: während des KI-Streamens unvollständige Diagramme bleiben
 	// als Codeblock stehen und werden erst gerendert, wenn die Syntax gültig ist.
 	async renderMermaid(el) {
@@ -681,9 +701,7 @@ export const U = {
 					pre.insertBefore(status, b);
 				}
 			});
-			try {
-				await PERF_PROFILER.run("mermaid.load", () => U.loadScript(OPTIONAL_MODULE_URLS.mermaid, "mermaid"), { runtime: MERMAID_VERSION }, 0);
-			} catch {
+			if (!(await U.ensureMermaid())) {
 				blocks.forEach((b) => {
 					const pre = b.closest("pre");
 					if (pre) {
@@ -694,11 +712,7 @@ export const U = {
 				return;
 			}
 		}
-		if (!window.mermaid) return;
-		if (!U._mermaidInit) {
-			U._mermaidInit = true;
-			try { mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict", fontFamily: "inherit" }); } catch { /* ignorieren */ }
-		}
+		if (!(await U.ensureMermaid())) return;
 		blocks.forEach(async (block) => {
 			const pre = block.closest("pre");
 			if (!pre || pre.dataset.mermaidDone) return;

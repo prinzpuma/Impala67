@@ -109,6 +109,8 @@ export const SLASH = [
 	{ k: "callout", icon: icon("bulb"), label: "Callout", hint: "Hervorgehobener Kasten" },
 	{ k: "code", icon: "</>", label: "Code", hint: "Codeblock mit Syntax" },
 	{ k: "math", icon: "√", label: "Gleichung", hint: "KaTeX-Formel" },
+	{ k: "mermaid", icon: icon("graph"), label: "Diagramm", hint: "Mermaid: Ablauf, Zustände, Zeitachse" },
+	{ k: "svg", icon: icon("pen-tool"), label: "SVG-Grafik", hint: "Zeichnung als SVG-Code" },
 	{ k: "table", icon: "▦", label: "Tabelle", hint: "Einfache Tabelle" },
 	{ k: "columns", icon: icon("columns"), label: "2 Spalten", hint: "Nebeneinander" },
 	{ k: "divider", icon: "—", label: "Trennlinie", hint: "---" },
@@ -189,7 +191,7 @@ export async function applySlash(kind) {
 	}
 	env.mutate(() => {
 		if (TEXTY[c.block.type] && (kind === "table" || kind === "columns" || kind === "code" || kind === "math" ||
-			kind === "divider" || kind === "callout" || kind === "toggle")) {
+			kind === "mermaid" || kind === "svg" || kind === "divider" || kind === "callout" || kind === "toggle")) {
 			// Strukturblock: Rest-Text bleibt als eigener Block erhalten
 			const nb = env.newBlock(kind);
 			if (kind === "callout" && text) nb.children = [{ id: U.uid(), type: "p", text }];
@@ -203,7 +205,7 @@ export async function applySlash(kind) {
 			setTimeout(() => {
 				if (kind === "table") env.focusBlock(nb.id, 0, "cell", nb.id + ":0:0");
 				else if (kind === "toggle") env.focusBlock(nb.id, null, "summary");
-				else if (kind === "code") env.focusBlock(nb.id, 0, "code");
+				else if (kind === "code" || kind === "mermaid" || kind === "svg") env.focusBlock(nb.id, 0, "code");
 				else if (kind === "math") openMathPop(nb.id);
 				else if (nb.columns && nb.columns[0] && nb.columns[0][0]) env.focusBlock(nb.columns[0][0].id, 0);
 				else if (nb.children && nb.children[0]) env.focusBlock(nb.children[0].id, 0);

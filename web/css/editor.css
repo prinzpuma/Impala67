@@ -123,6 +123,18 @@ h3.blk-h { font-size: 1.12em }
 .blk-codelang { position: absolute; top: 6px; left: 8px; z-index: 1; background: transparent; border: none; color: var(--text2); font-size: var(--text-xs); padding: 2px var(--space-1-5); border-radius: var(--radius-xs); cursor: pointer; opacity: 0; transition: opacity .1s }
 .blk-codewrap:hover .blk-codelang, .blk-codewrap:focus-within .blk-codelang { opacity: 1 }
 .blk-codelang:hover { background: var(--surface-hover); color: var(--text) }
+/* == --- Diagramme (```mermaid / ```svg) --- == */
+/* Anzeige wie eine Abbildung (kein Codekasten); Klick öffnet Code + Live-Vorschau. */
+.blk-dgwrap:not(.is-editing) { background: transparent; border-color: transparent }
+.blk-diagram { display: flex; justify-content: center; padding: var(--space-3) var(--space-2); color: var(--text); overflow-x: auto; border-radius: var(--radius-sm); outline: none }
+.blk-dgwrap:not(.is-editing) .blk-diagram { cursor: pointer; transition: background var(--motion-fast) }
+.blk-dgwrap:not(.is-editing) .blk-diagram:hover, .blk-dgwrap:not(.is-editing) .blk-diagram:focus-visible { background: var(--surface-subtle) }
+.blk-dgwrap.is-editing .blk-diagram { border-top: 1px solid var(--edge-soft); border-radius: 0 }
+.blk-diagram svg, .blk-diagram img { max-width: 100%; height: auto }
+/* SVG ohne width-Angabe würde die ganze Spalte füllen → handliche Standardbreite */
+.blk-diagram > svg:not([width]) { width: min(100%, 560px) }
+.blk-diagram-msg { color: var(--text2); font-size: var(--text-sm) }
+.blk-diagram-error .blk-diagram-msg { color: var(--danger) }
 /* == --- Gleichungen (Block + Inline-Chip) --- == */
 .blk-math { width: 100%; padding: 10px var(--space-2); text-align: center; cursor: pointer; border-radius: var(--radius-xs); outline: none; overflow-x: auto }
 .blk-math:hover, .blk-math:focus { background: var(--surface-subtle) }
