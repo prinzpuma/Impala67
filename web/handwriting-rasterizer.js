@@ -8,6 +8,13 @@
 export const IMAGE_HEIGHT = 64;
 const PADDING = 6;
 const STROKE_WIDTH = 2.5;
+// Flache Zeilen (Unterstrich, Bruchstrich, Minus) bekamen sonst eine riesige Skalierung: Ein
+// 0,4 Einheiten hoher Strich ergab ein 143.512 px breites Bild – Inferenz über Gigabytes,
+// Timeout, auf dem iPad ein eingefrorener Tab. Unter dieser Höhe (Seiten-Einheiten, ~1,7 mm)
+// zählt die Zeile als so hoch und liegt mittig; normale Zeilen bleiben wie im Training.
+const MIN_INK_HEIGHT = 8;
+// Doppelte Trainingsbreite: Längere Zeilen werden kleiner gezeichnet statt endlos breit.
+const MAX_WIDTH = 4096;
 
 // Rückgabe: { data: Float32Array(64 * width), width } oder null ohne Tinte
 export function rasterizeLine(strokes) {
@@ -21,9 +28,11 @@ export function rasterizeLine(strokes) {
 		}
 	}
 	if (!Number.isFinite(minX)) return null;
-	const scale = (IMAGE_HEIGHT - 2 * PADDING) / Math.max(maxY - minY, 1e-6);
+	let scale = (IMAGE_HEIGHT - 2 * PADDING) / Math.max(maxY - minY, MIN_INK_HEIGHT);
+	scale = Math.min(scale, (MAX_WIDTH - 2 * PADDING) / Math.max(maxX - minX, 1e-6));
 	const inkWidth = Math.floor((maxX - minX) * scale) + 2 * PADDING;
 	const width = Math.max(4, Math.ceil(inkWidth / 4) * 4);
+	const top = (IMAGE_HEIGHT - (maxY - minY) * scale) / 2; // = PADDING bei normaler Zeilenhöhe
 
 	const canvas = new OffscreenCanvas(width, IMAGE_HEIGHT);
 	const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -34,7 +43,7 @@ export function rasterizeLine(strokes) {
 	ctx.lineCap = "round";
 	ctx.lineJoin = "round";
 	const tx = (x) => (x - minX) * scale + PADDING;
-	const ty = (y) => (y - minY) * scale + PADDING;
+	const ty = (y) => (y - minY) * scale + top;
 	for (const s of strokes) {
 		const pts = s.pts || [];
 		if (!pts.length) continue;
