@@ -540,6 +540,55 @@ function watchActions() {
 	document.addEventListener("keydown", remember, true);
 }
 
+// Absturz-Spur: Solange die App läuft, steht hier alle 2 s (und bei jedem Sichtbarkeitswechsel), was gerade
+// lief. Normales Schließen (pagehide) löscht sie. Findet der nächste Start sie noch vor, wurde die App hart
+// beendet: im Vordergrund ein Absturz (z. B. Speicher voll), im Hintergrund vom System geschlossen.
+const ALIVE_KEY = "impala67PerformanceAlive";
+const ALIVE_INTERVAL_MS = 2000;
+let aliveTimer = 0;
+
+function writeAlive() {
+	try {
+		const ctx = currentContext();
+		storage()?.setItem(ALIVE_KEY, JSON.stringify({
+			at: wallTime(),
+			version: appVersion(),
+			visibility: ctx.visibility,
+			view: ctx.view,
+			active: (ctx.active || []).map((entry) => entry.name).join(","),
+			lastAction: ctx.lastAction ? `${ctx.lastAction.type}:${ctx.lastAction.tag}#${ctx.lastAction.id}` : "",
+			heapMb: typeof performance !== "undefined" && performance.memory ? round(performance.memory.usedJSHeapSize / 1048576) : null,
+		}));
+	} catch { /* ignore */ }
+}
+
+function clearAlive() {
+	try { storage()?.removeItem(ALIVE_KEY); } catch { /* ignore */ }
+}
+
+function noteUncleanExit() {
+	let last = null;
+	try { last = JSON.parse(storage()?.getItem(ALIVE_KEY) || "null"); } catch { /* ignore */ }
+	if (!last) return;
+	record(last.visibility === "hidden" ? "app-killed-in-background" : "app-crash", 0, {
+		failed: true,
+		lastSeenAt: last.at,
+		lastVersion: last.version,
+		lastView: last.view,
+		lastActive: last.active,
+		lastAction: last.lastAction,
+		lastHeapMb: last.heapMb,
+	});
+}
+
+function watchAlive() {
+	noteUncleanExit();
+	writeAlive();
+	clearInterval(aliveTimer);
+	aliveTimer = setInterval(writeAlive, ALIVE_INTERVAL_MS);
+	if (typeof aliveTimer?.unref === "function") aliveTimer.unref();
+}
+
 function init() {
 	if (initialized || !isEnabled()) return;
 	initialized = true;
@@ -560,7 +609,12 @@ function init() {
 	if (!pagehideInstalled && typeof window !== "undefined") {
 		pagehideInstalled = true;
 		window.addEventListener("pagehide", flush);
+		window.addEventListener("pagehide", clearAlive);
+		// Aus dem bfcache zurück: Seite läuft weiter, Spur wieder setzen
+		window.addEventListener("pageshow", () => { if (initialized) writeAlive(); });
+		document.addEventListener("visibilitychange", () => { if (initialized) writeAlive(); });
 	}
+	watchAlive();
 }
 
 // Versionssprung seit dem letzten Profiler-Start als eigenen Eintrag festhalten:
@@ -580,6 +634,9 @@ function stop() {
 	observers = [];
 	clearTimeout(lagTimer);
 	clearTimeout(stallTimer);
+	clearInterval(aliveTimer);
+	aliveTimer = 0;
+	clearAlive();
 	lagTimer = 0;
 	stallTimer = 0;
 	pendingStalls = [];

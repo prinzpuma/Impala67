@@ -13,7 +13,29 @@ export const HANDSCHRIFT = (() => {
 	let inkReqId = 0;
 	const inkPending = new Map();
 
+	// Das Modell belegt im Worker schnell über 100 MB (WebAssembly-Speicher wächst, schrumpft aber nie).
+	// Auf Tablets mit 4 GB beendet Android die App dann eher. Darum den Worker nach einer Minute ohne
+	// Anfrage und sofort im Hintergrund beenden; die nächste Erkennung lädt das Modell neu (~2 s).
+	const IDLE_RELEASE_MS = 60000;
+	let idleTimer = 0;
+	function releaseWorker() {
+		clearTimeout(idleTimer);
+		if (!inkWorker || inkPending.size) return;
+		try { inkWorker.terminate(); } catch {}
+		inkWorker = null;
+	}
+	function scheduleRelease() {
+		clearTimeout(idleTimer);
+		if (inkPending.size) return;
+		if (typeof document !== "undefined" && document.hidden) releaseWorker();
+		else idleTimer = setTimeout(releaseWorker, IDLE_RELEASE_MS);
+	}
+	if (typeof document !== "undefined") {
+		document.addEventListener("visibilitychange", () => { if (document.hidden) releaseWorker(); });
+	}
+
 	function getInkWorker() {
+		clearTimeout(idleTimer);
 		if (!inkWorker && typeof Worker !== "undefined") {
 			try {
 				inkWorker = new Worker("./handwriting-worker.js", { type: "module" });
@@ -52,8 +74,8 @@ export const HANDSCHRIFT = (() => {
 				}
 			}, 15000);
 			inkPending.set(id, {
-				resolve: (res) => { clearTimeout(timeout); resolve(res); },
-				reject: (err) => { clearTimeout(timeout); reject(err); },
+				resolve: (res) => { clearTimeout(timeout); resolve(res); scheduleRelease(); },
+				reject: (err) => { clearTimeout(timeout); reject(err); scheduleRelease(); },
 			});
 			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
 		}), { strokes: strokes.length }, 50);

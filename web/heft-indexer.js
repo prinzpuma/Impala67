@@ -240,8 +240,9 @@ export const HEFT_INDEXER = (() => {
 	async function processNextBatch() {
 		if (busy) return;
 
-		// Wenn der Nutzer gerade im Heft zeichnet oder schreibt: pausieren und später fortsetzen
-		if (HEFT.isWriting && HEFT.isWriting()) {
+		// Wenn der Nutzer gerade im Heft zeichnet oder schreibt oder die App im Hintergrund ist: pausieren und
+		// später fortsetzen. Im Hintergrund gibt handschrift.js das Modell frei, sonst würde es dort ständig neu geladen.
+		if ((HEFT.isWriting && HEFT.isWriting()) || (typeof document !== "undefined" && document.hidden)) {
 			clearTimeout(scanTimer);
 			clearTimeout(priorityTimer);
 			const retryDelay = priorityQueue.size ? 3500 : 5000;
