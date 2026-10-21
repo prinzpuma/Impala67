@@ -66,7 +66,7 @@ export const HEFT_LABEL = (() => {
 		const { doc, pg, strokes } = getPage(page_id, page_index);
 		let appReading = "";
 		try {
-			appReading = strokes.length ? await HANDSCHRIFT.recognizeStrokes(pg.strokes) : "";
+			appReading = strokes.length ? await HANDSCHRIFT.recognizeStrokes(pg.strokes, {}, "label") : "";
 		} catch (e) {
 			appReading = `(Erkennung fehlgeschlagen: ${e.message})`;
 		}
@@ -144,7 +144,7 @@ export const HEFT_LABEL = (() => {
 			if (!own.length || !text) { results.push({ ...row, skipped: own.length ? "kein Text" : "keine Striche im Rahmen" }); continue; }
 			const lineStrokes = PRE.orderLineStrokes(rotateToReading(own, Number(lines[j].angle) || 0));
 			try {
-				row.app = String(await HANDSCHRIFT.recognizeStrokes(lineStrokes)).replace(/\n/g, " ");
+				row.app = String(await HANDSCHRIFT.recognizeStrokes(lineStrokes, {}, "label")).replace(/\n/g, " ");
 				row.errors = HANDWRITING_CTC.levenshtein(row.app, text);
 				errApp += row.errors;
 				chars += text.length;

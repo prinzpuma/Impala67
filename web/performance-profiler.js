@@ -639,7 +639,8 @@ function watchAlive() {
 function init() {
 	if (initialized || !isEnabled()) return;
 	initialized = true;
-	load();
+	// Kein erneutes load(): Die Einträge sind seit dem Modul-Laden im Speicher. Ein zweites Laden verwarf alles,
+	// was Module beim Import gemeldet hatten (z. B. heft-index-crash, handwriting-crash) – genau die Absturzgründe.
 	lastContext = null; // Jeder Profiler-Start beginnt mit einem vollständigen Kontext-Snapshot.
 	watchLongTasks();
 	watchEventLoop();

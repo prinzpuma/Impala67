@@ -34,6 +34,28 @@ export const HANDSCHRIFT = (() => {
 		document.addEventListener("visibilitychange", () => { if (document.hidden) releaseWorker(); });
 	}
 
+	// Absturz-Spur: Solange eine Erkennung läuft, steht hier, wo der Worker gerade ist (Modell laden, Zeile N,
+	// Bildbreite). Stürzt die WebView dabei ab, meldet der nächste Start handwriting-crash mit genau diesem Stand.
+	const INFLIGHT_KEY = "impala67_handwriting_inflight";
+	let inflight = null;
+	function writeInflight(step) {
+		inflight = { ...inflight, ...step, at: new Date().toISOString(), visibility: typeof document !== "undefined" ? document.visibilityState : "" };
+		try { localStorage.setItem(INFLIGHT_KEY, JSON.stringify(inflight)); } catch {}
+	}
+	function clearInflight() {
+		inflight = null;
+		try { localStorage.removeItem(INFLIGHT_KEY); } catch {}
+	}
+	try {
+		const last = JSON.parse(localStorage.getItem(INFLIGHT_KEY) || "null");
+		if (last) {
+			localStorage.removeItem(INFLIGHT_KEY);
+			PERF_PROFILER.error("handwriting-crash", new Error("App brach während der Handschrift-Erkennung ab"), last);
+		}
+	} catch {}
+	// Normales Schließen mitten in einer Erkennung ist kein Absturz
+	if (typeof window !== "undefined") window.addEventListener("pagehide", clearInflight);
+
 	function getInkWorker() {
 		clearTimeout(idleTimer);
 		if (!inkWorker && typeof Worker !== "undefined") {
@@ -43,6 +65,11 @@ export const HANDSCHRIFT = (() => {
 					const msg = e.data || {};
 					if (msg.type === "ready") PERF_PROFILER.record("operation", msg.loadMs || 0, { name: "handwriting.model-load", runtime: msg.runtime });
 					else if (msg.type === "init_error") PERF_PROFILER.error("handwriting-error", new Error(msg.error || "Handschrift-Modell konnte nicht geladen werden"), { runtime: msg.runtime });
+					else if (msg.type === "line_error") PERF_PROFILER.error("handwriting-line-error", new Error(msg.error || "Inferenzfehler"), { width: msg.width });
+					if (msg.type === "progress") {
+						if (inkPending.has(msg.id)) writeInflight({ phase: msg.phase, line: msg.line, lines: msg.lines, width: msg.width });
+						return;
+					}
 					if (msg.id && inkPending.has(msg.id)) {
 						const { resolve, reject } = inkPending.get(msg.id);
 						inkPending.delete(msg.id);
@@ -51,8 +78,10 @@ export const HANDSCHRIFT = (() => {
 					}
 				});
 				inkWorker.addEventListener("error", (err) => {
-					for (const { reject } of inkPending.values()) reject(new Error(err?.message || "Worker-Fehler"));
+					PERF_PROFILER.error("handwriting-worker-error", new Error(err?.message || "Worker-Fehler"), { phase: inflight?.phase, width: inflight?.width });
+					const pending = [...inkPending.values()];
 					inkPending.clear();
+					for (const { reject } of pending) reject(new Error(err?.message || "Worker-Fehler"));
 					try { inkWorker?.terminate(); } catch {}
 					inkWorker = null;
 				});
@@ -61,24 +90,32 @@ export const HANDSCHRIFT = (() => {
 		return inkWorker;
 	}
 
-	async function recognizeStrokes(strokes, options = {}) {
+	// source: Aufrufer für die Absturz-Spur ("indexer", "lasso", "label" …)
+	async function recognizeStrokes(strokes, options = {}, source = "") {
 		if (!strokes || !strokes.length) return "";
 		const worker = getInkWorker();
 		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
 		const id = ++inkReqId;
 		return PERF_PROFILER.run("handwriting.recognize", () => new Promise((resolve, reject) => {
+			const done = () => {
+				clearTimeout(timeout);
+				if (!inkPending.size) clearInflight();
+				scheduleRelease();
+			};
 			const timeout = setTimeout(() => {
-				if (inkPending.has(id)) {
+				const entry = inkPending.get(id);
+				if (entry) {
 					inkPending.delete(id);
-					reject(new Error("Timeout bei Handschrift-Erkennung"));
+					entry.reject(new Error("Timeout bei Handschrift-Erkennung"));
 				}
 			}, 15000);
 			inkPending.set(id, {
-				resolve: (res) => { clearTimeout(timeout); resolve(res); scheduleRelease(); },
-				reject: (err) => { clearTimeout(timeout); reject(err); scheduleRelease(); },
+				resolve: (res) => { done(); resolve(res); },
+				reject: (err) => { done(); reject(err); },
 			});
+			writeInflight({ source, strokes: strokes.length, phase: "queued", line: 0, lines: 0, width: 0 });
 			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
-		}), { strokes: strokes.length }, 50);
+		}), { strokes: strokes.length, source }, 50);
 	}
 
 	const STORAGE_KEY_SAMPLES = "impala67_handwriting_training_samples";

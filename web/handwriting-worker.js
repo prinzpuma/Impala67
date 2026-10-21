@@ -117,8 +117,14 @@ async function loadSession(modelPath) {
 	}
 }
 
-// Breiteste Zeilenbilder im Training (handwriting/train_image.py); breitere werden unzuverlässiger.
+// Breiteste Zeilenbilder im Training (handwriting/train_image.py lässt breitere aus). Breitere Zeilen werden an
+// Lücken in Stücke höchstens dieser Breite geteilt und einzeln gelesen: Das Modell sieht nur Breiten wie im
+// Training, und der Speicher der Faltungsschichten (wächst linear mit der Breite) halbiert sich gegenüber 4096 px.
 const MAX_TRAINING_WIDTH = 2048;
+// Schnittstellen: Lücken ab dieser Breite; die breiteste Lücke in der hinteren Hälfte des Fensters gewinnt
+const CHUNK_GAP_PX = 8;
+// Mindestabstand eines Schnitts vom Stückanfang (= Rand des Zeilenbilds, rasterizeLine PADDING)
+const PADDING_COLUMNS = 6;
 // Leere Spalten ab dieser Breite (Zeilenbild 64 px hoch) sind sicher eine Wortlücke. Bei fremden ScaDS-Schreibern
 // ab 32 px ohne Nachteil; 24 px half nur eigenen Formel-Zeilen und kostete bei ScaDS leicht, 16 px trennte Buchstaben.
 const WORD_GAP_PX = 32;
@@ -180,8 +186,71 @@ async function recognizeLineImage(image, options = {}) {
 	return HANDWRITING_CTC.decodeWithConfidence(logits2D, HANDWRITING_VOCAB, { ...options, lexicon });
 }
 
+// Spalten [from, to) eines Zeilenbilds; Breite auf ein Vielfaches von 4, Rest weiß
+function sliceImage(image, from, to) {
+	const width = Math.max(4, Math.ceil((to - from) / 4) * 4);
+	const data = new Float32Array(width * IMAGE_HEIGHT).fill(1);
+	for (let y = 0; y < IMAGE_HEIGHT; y++) {
+		data.set(image.data.subarray(y * image.width + from, y * image.width + to), y * width);
+	}
+	return { data, width };
+}
+
+// Schnittpunkte für Zeilen breiter als MAX_TRAINING_WIDTH: in jedem Fenster die breiteste Lücke der hinteren
+// Hälfte (sonst irgendeine), ohne Lücke hart an der Fenstergrenze. space: Lücke breit genug für eine Wortgrenze.
+function chunkCuts(image) {
+	const gaps = findInkGaps(image, CHUNK_GAP_PX);
+	const cuts = [];
+	let start = 0;
+	while (image.width - start > MAX_TRAINING_WIDTH) {
+		const limit = start + MAX_TRAINING_WIDTH;
+		let best = null, bestLate = null;
+		for (const gap of gaps) {
+			const mid = Math.floor((gap[0] + gap[1]) / 2);
+			if (mid <= start + PADDING_COLUMNS || mid > limit) continue;
+			const w = gap[1] - gap[0];
+			if (!best || w > best.w) best = { mid, w };
+			if (mid > start + MAX_TRAINING_WIDTH / 2 && (!bestLate || w > bestLate.w)) bestLate = { mid, w };
+		}
+		const pick = bestLate || best;
+		const at = pick ? pick.mid : limit;
+		cuts.push({ at, space: !!pick && pick.w >= WORD_GAP_PX });
+		start = at;
+	}
+	return cuts;
+}
+
+// Wie recognizeLineImage, aber breite Zeilen in Stücken; onChunk(width) vor jeder Inferenz (Absturz-Spur).
+// Stücke, die das Modell für eine Zeichnung hält, fallen weg – wie sonst ganze Zeichnungs-Zeilen.
+async function recognizeWideLine(image, options, onChunk) {
+	const cuts = chunkCuts(image);
+	if (!cuts.length) {
+		onChunk(image.width);
+		return recognizeLineImage(image, options);
+	}
+	let text = "", textWidth = 0, weighted = 0, allRecognized = true, sawDrawing = false, from = 0;
+	for (let i = 0; i <= cuts.length; i++) {
+		const to = i < cuts.length ? cuts[i].at : image.width;
+		const part = sliceImage(image, from, to);
+		onChunk(part.width);
+		const rec = await recognizeLineImage(part, options);
+		const partText = (rec.text || "").trim();
+		if (rec.status === "drawing") sawDrawing = true;
+		else if (partText) {
+			text += text ? (cuts[i - 1].space ? " " : "") + partText : partText;
+			weighted += rec.confidence * (to - from);
+			textWidth += to - from;
+			allRecognized = allRecognized && rec.status === "recognized";
+		}
+		from = to;
+	}
+	if (!text) return { text: "", confidence: 0, status: sawDrawing ? "drawing" : "empty" };
+	return { text, confidence: weighted / textWidth, status: allRecognized ? "recognized" : "uncertain" };
+}
+
 // Erkennt eine Liste von Strichen auf einer Seite mit vollständiger Strich-Bilanzierung
-async function recognizePageStrokes(strokes, options = {}) {
+// progress({ phase, line, lines, width }): Absturz-Spur im Hauptthread (handschrift.js)
+async function recognizePageStrokes(strokes, options = {}, progress = () => {}) {
 	const totalStrokesCount = Array.isArray(strokes) ? strokes.length : 0;
 	if (totalStrokesCount === 0) {
 		return { text: "", lines: [], accounting: { total: 0, recognized: 0, uncertain: 0, skipped: 0, balanced: true } };
@@ -210,8 +279,9 @@ async function recognizePageStrokes(strokes, options = {}) {
 	const recognizedLines = [];
 	const groupsReport = [];
 
-	for (const line of lines) {
+	for (const [lineIndex, line] of lines.entries()) {
 		const lineStrokes = line.strokes || [];
+		progress({ phase: "rasterize", line: lineIndex + 1, lines: lines.length, width: 0 });
 		const lineOrigIndices = [];
 		for (const s of lineStrokes) {
 			const found = validInkStrokes.find((v) => v.stroke === s && strokeStatus[v.origIdx] === null);
@@ -221,11 +291,8 @@ async function recognizePageStrokes(strokes, options = {}) {
 		const pointCount = lineStrokes.reduce((n, s) => n + ((s.pts && s.pts.length) || 0), 0);
 		const image = pointCount >= 5 ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
 
-		// Prüfung auf zu breite Zeilen (Training-Limit)
+		// Breiter als im Training: wird in Stücken gelesen (recognizeWideLine)
 		const isTooLong = !!image && image.width > MAX_TRAINING_WIDTH;
-		if (isTooLong) {
-			console.warn(`[handwriting-accounting] Warnung: Zeilenbild mit ${image.width} px ist breiter als die Trainingsdaten (${MAX_TRAINING_WIDTH} px).`);
-		}
 
 		let status = "skipped_too_short";
 		let text = "";
@@ -236,15 +303,10 @@ async function recognizePageStrokes(strokes, options = {}) {
 			for (const idx of lineOrigIndices) strokeStatus[idx] = "skipped_too_short";
 		} else {
 			try {
-				const rec = await recognizeLineImage(image, options);
+				const rec = await recognizeWideLine(image, options, (width) => progress({ phase: "infer", line: lineIndex + 1, lines: lines.length, width }));
 				text = rec.text;
 				confidence = rec.confidence;
 				status = rec.status; // recognized, uncertain, drawing, empty
-
-				if (isTooLong && status === "recognized") {
-					// Bei extrem langen Zeilen Sicherheitsabzug
-					if (rec.confidence < 0.90) status = "uncertain";
-				}
 
 				for (const idx of lineOrigIndices) {
 					strokeStatus[idx] = status;
@@ -257,6 +319,8 @@ async function recognizePageStrokes(strokes, options = {}) {
 				}
 			} catch (err) {
 				console.warn("[handwriting-worker] Inferenzfehler in Zeile:", err);
+				// z. B. "WebAssembly.Memory(): could not allocate memory": im Leistungsprotokoll sichtbar machen
+				self.postMessage({ type: "line_error", error: err?.message || String(err), width: image.width });
 				status = "error";
 				for (const idx of lineOrigIndices) strokeStatus[idx] = "error";
 			}
@@ -326,11 +390,13 @@ self.addEventListener("message", async (event) => {
 
 	if (msg.type === "recognize_strokes") {
 		const id = msg.id;
+		const progress = (step) => self.postMessage({ type: "progress", id, ...step });
 		try {
 			// Ohne Modell wäre jede Zeile still "leer": als Fehler melden, damit Aufrufer es später erneut versuchen
+			if (!session || !lexicon) progress({ phase: "model-load" });
 			const [ready] = await Promise.all([initSession(), loadLexicon()]);
 			if (!ready) throw new Error("Handschrift-Modell ist nicht geladen.");
-			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {});
+			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {}, progress);
 			self.postMessage({
 				type: "result",
 				id,

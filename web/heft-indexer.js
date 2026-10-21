@@ -159,7 +159,7 @@ export const HEFT_INDEXER = (() => {
 	async function indexStrokes(job) {
 		let text = null;
 		try {
-			text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes);
+			text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes, {}, "indexer");
 		} catch (err) {
 			hadFailure = true;
 			console.info("[heft-indexer] Stricherkennung Fehler:", err);
@@ -189,7 +189,7 @@ export const HEFT_INDEXER = (() => {
 		const { pageId, page: pg, image: im } = job;
 		try {
 			let strokeText = "";
-			if (pg.strokes && pg.strokes.length) strokeText = await HANDSCHRIFT.recognizeStrokes(pg.strokes);
+			if (pg.strokes && pg.strokes.length) strokeText = await HANDSCHRIFT.recognizeStrokes(pg.strokes, {}, "indexer-scan");
 			const src = await blobData(im.ref);
 			if (!src) return;
 			const { text } = await SCAN_OCR.recognize(src);

@@ -320,7 +320,7 @@ export function deleteLassoStrokes(lassoSel, doc, pushUndo) {
 export async function recognizeLassoText(lassoSel, handschrift, toast, perfProfiler) {
 	if (!lassoSel || !lassoSel.strokes || !lassoSel.strokes.length) return;
 	if (toast) toast("Handschrift wird erkannt…");
-	const recognized = Promise.resolve().then(() => handschrift.recognizeStrokes(lassoSel.strokes)).then((t) => String(t || "").trim());
+	const recognized = Promise.resolve().then(() => handschrift.recognizeStrokes(lassoSel.strokes, {}, "lasso")).then((t) => String(t || "").trim());
 	let copying = null;
 	if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
 		const blob = recognized.then((t) => { if (!t) throw new Error("Kein Text erkannt."); return new Blob([t], { type: "text/plain" }); });
@@ -351,7 +351,7 @@ export async function trainLassoSample(lassoSel, handschrift, toast) {
 	if (!lassoSel || !lassoSel.strokes || !lassoSel.strokes.length) return;
 	let guess = "";
 	try {
-		guess = (await handschrift.recognizeStrokes(lassoSel.strokes)) || "";
+		guess = (await handschrift.recognizeStrokes(lassoSel.strokes, {}, "lasso-train")) || "";
 	} catch {}
 	const label = window.prompt("Welcher Text steht in dieser Auswahl?", guess);
 	if (label != null && label.trim()) {
