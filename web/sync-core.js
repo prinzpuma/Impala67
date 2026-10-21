@@ -1,4 +1,6 @@
 "use strict";
+import { gzip, gunzip } from "./sync-crypto.js";
+import { utf8Length } from "./sync-transfer.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -21,24 +23,20 @@ export function newestFile(files, names) {
 		.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")))[0] || null;
 }
 
-export const jsonByteLength = (value) => enc.encode(JSON.stringify(value)).byteLength;
+export const jsonByteLength = (value) => utf8Length(JSON.stringify(value));
 
 // Bytes gzippen; ohne CompressionStream unverändert („identity“).
 export async function gzipBytes(raw) {
-	if (typeof CompressionStream !== "function") return { bytes: raw, encoding: "identity" };
-	const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream("gzip"));
-	return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: "gzip" };
+	const packed = await gzip(raw);
+	return packed ? { bytes: packed, encoding: "gzip" } : { bytes: raw, encoding: "identity" };
 }
 
 export const encodeJson = (value) => gzipBytes(enc.encode(JSON.stringify(value)));
+// Für schon serialisierte Exporte (DB.exportAll): kein Parse-und-Stringify des ganzen Logs.
+export const encodeJsonText = (text) => gzipBytes(enc.encode(text));
 
 export async function decodeJson(bytes, encoding) {
-	let stream = new Blob([bytes]).stream();
-	if (encoding === "gzip") {
-		if (typeof DecompressionStream !== "function") throw new Error("Gzip wird auf diesem Gerät nicht unterstützt.");
-		stream = stream.pipeThrough(new DecompressionStream("gzip"));
-	}
-	return JSON.parse(dec.decode(await new Response(stream).arrayBuffer()));
+	return JSON.parse(dec.decode(encoding === "gzip" ? await gunzip(bytes) : bytes));
 }
 
 export function boundedKnownIds(ids, max = 2000) {
@@ -93,10 +91,6 @@ export function chunkCloudEvents(events, { maxEvents = 250, maxJsonBytes, maxJso
 	if (chunk.length) out.push(chunk);
 	return out;
 }
-
-// Öffentliche Bezeichnung aus v4 beibehalten; der Wert ist jetzt tatsächlich
-// eine UTF-8-Byte-Schätzung des JSON-Pakets statt bloßer JS-Zeichenanzahl.
-export const encryptedPacketChars = (packet) => jsonByteLength(packet) + 1;
 
 export function heftBaselineOps(doc) {
 	const pages = Array.isArray(doc?.pages) ? doc.pages : [];

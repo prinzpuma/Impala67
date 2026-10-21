@@ -2,7 +2,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, decodeJson, gzipBytes, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
+import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, encodeJsonText, decodeJson, gzipBytes, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
 import { sha256Hex } from "./sync-crypto.js";
 import { mapLimit } from "./sync-transfer.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
@@ -469,12 +469,16 @@ export const DRIVE = (() => {
 		};
 		let imported = 0, uploaded = 0, conflicts = 0, merged = 0;
 		const conflictDetails = [], importedEvents = [], mergedDetails = [];
+		// Sofort anwenden (wie Cloudflare): Bisher lief das erst am Ende des Syncs. Scheiterte
+		// dazwischen ein Datei-Transfer, lagen die Events im Log und galten als gelesen, die App
+		// zeigte sie aber nie – und Weitertippen überschrieb die fremde Änderung still.
 		const importJson = async (json) => {
 			const r = await DB.importAll(json, importOpts);
 			imported += r.added; conflicts += r.conflicts || 0; merged += r.merged || 0;
 			conflictDetails.push(...(r.conflictDetails || []));
 			mergedDetails.push(...(r.mergedDetails || [])); // automatisch zusammengeführte Seiten (db.js merge3)
 			importedEvents.push(...(r.importedEvents || []));
+			await replayImported(r.importedEvents);
 		};
 
 		// ---- [G4] Pull: Snapshot + alle unbekannten Delta-Shards in EINEM Durchgang ----
@@ -504,7 +508,7 @@ export const DRIVE = (() => {
 		// Dokument — die müssen mit durch importAll, sonst gingen sie beim Zusammenlegen verloren.
 		const pullBlobs = snapPayload?.blobs && typeof snapPayload.blobs === "object" ? snapPayload.blobs : {};
 		if (pullEvents.length || Object.keys(pullBlobs).length) {
-			await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: pullEvents, blobs: pullBlobs }));
+			await importJson({ app: "impala67", version: 2, exportedAt: U.now(), events: pullEvents, blobs: pullBlobs });
 		}
 		// „Gelesen“-Marken erst NACH erfolgreichem Import setzen: bricht der Import ab, wird das
 		// Paket beim nächsten Sync erneut geholt statt still übersprungen.
@@ -573,7 +577,7 @@ export const DRIVE = (() => {
 		const scrubSecrets = localStorage.getItem("impala67_drive_secret_scrub") === "1" && !SETTINGS_SYNC.allowsSecrets(S.settings);
 		if (scrubSecrets) {
 			setStatus("syncing", "Token-Kopien aus Drive entfernen…");
-			const scrubPacked = await encodeJson(JSON.parse(await DB.exportAll({ includeBlobs: false, redactSecrets: true })));
+			const scrubPacked = await encodeJsonText(await DB.exportAll({ includeBlobs: false, redactSecrets: true }));
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			const createdScrubSnapshot = await uploadNamed(SNAPSHOT_NAME, scrubPacked.bytes, scrubPacked.encoding, oldSnapshot?.id, { protocol: "2", redacted: "1" });
 			const staleSecretFiles = files.filter((f) => f.name.startsWith(DELTA_PREFIX) || f.name === FILE_NAME || f.name === LEGACY_FILE_NAME);
@@ -596,10 +600,10 @@ export const DRIVE = (() => {
 		if (!scrubSecrets && listedDeltas.length >= 50) {
 			setStatus("syncing", "Sync-Stand optimieren…");
 			// Der Snapshot folgt derselben Token-Policy wie die Deltas.
-			const packed = await encodeJson(JSON.parse(await DB.exportAll({
+			const packed = await encodeJsonText(await DB.exportAll({
 				includeBlobs: false,
 				redactSecrets: !SETTINGS_SYNC.allowsSecrets(S.settings),
-			})));
+			}));
 			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
 			const createdSnap = await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
 			const deleted = await mapLimit(listedDeltas, 6, (f) => del(f.id));
@@ -636,12 +640,11 @@ export const DRIVE = (() => {
 			if (lateEvents.length) {
 				// v8: Nachzügler-Deltas bringen Heft-Striche jetzt SELBST mit — der frühere zweite
 				// Blob-Durchgang [H1] ist damit gegenstandslos geworden.
-				await importJson(JSON.stringify({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} }));
+				await importJson({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} });
 			}
 			lateDeltas.forEach((f) => knownDeltaIds.add(f.id));
 			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
 		}
-		await replayImported(importedEvents);
 		const finalMaxSeq = await DB.maxSeq();
 		try { if (await DB.compactLocalIfDue()) STATE.scheduleCheckpoint(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));

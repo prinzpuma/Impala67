@@ -67,12 +67,14 @@ async function transformBytes(bytes, transformer) {
 	return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function gzip(bytes) {
+// Gemeinsame Kompression für Sync-Pakete (hier) und Drive/Cloudflare-JSON (sync-core.js).
+// gzip liefert null, wenn das Gerät keinen CompressionStream kennt.
+export async function gzip(bytes) {
 	if (typeof CompressionStream !== "function") return null;
 	return transformBytes(bytes, new CompressionStream("gzip"));
 }
 
-async function gunzip(bytes) {
+export async function gunzip(bytes) {
 	if (typeof DecompressionStream !== "function") throw new Error("Gzip wird auf diesem Gerät nicht unterstützt.");
 	return transformBytes(bytes, new DecompressionStream("gzip"));
 }

@@ -625,7 +625,16 @@ export const DB = (() => {
 	// opts (nur Drive-Sync): unsyncedAfterSeq = Seq des letzten Uploads (Basis der Konflikt-Erkennung),
 	// pageInfo(id) → {title,parentId,workspaceId}, remote = echter Drive-Download.
 	// Rückgabe: { added, conflicts, conflictDetails, importedEvents }.
-	async function importAll(json, opts = {}) {
+	// Importe laufen nacheinander: Dublettenprüfung (seenIds) und Schreiben liegen mehrere awaits
+	// auseinander. Holten Cloudflare und Drive denselben Rückstand gleichzeitig (Start, „online“),
+	// landeten dieselben Events doppelt im Log – Wiederholungen und Telemetrie zählten doppelt.
+	let _importChain = Promise.resolve();
+	function importAll(json, opts) {
+		const run = _importChain.then(() => importAllNow(json, opts));
+		_importChain = run.catch(() => {});
+		return run;
+	}
+	async function importAllNow(json, opts = {}) {
 		ensureOpen();
 		const finishProfile = PERF_PROFILER.start("db.import", { remote: !!opts.remote }, 20);
 		const data = typeof json === "string" ? JSON.parse(json) : json;

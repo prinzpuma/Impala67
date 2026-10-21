@@ -12,7 +12,6 @@ import {
 	CLOUD_SYNC_PROTOCOL_HEADER,
 	chunkCloudEvents,
 	cloudEventsEnvelope,
-	encryptedPacketChars,
 	heftBaselineOps,
 	blobAliveChecker,
 	isSyncBlobId,
@@ -30,7 +29,7 @@ import {
 	generateSyncKey,
 	sha256Hex,
 } from "./sync-crypto.js";
-import { isRetryableSyncError, mapLimit, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes } from "./sync-transfer.js";
+import { isRetryableSyncError, mapLimit, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes, utf8Length } from "./sync-transfer.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -86,6 +85,14 @@ export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
 	let reconnectAttempts = 0, retryAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false, quotaCompacting = false;
+	// Neue Zugangsdaten: Der laufende Durchgang hört an der nächsten Etappe auf. Sonst gingen
+	// die restlichen, mit dem alten Schlüssel verschlüsselten Pakete an das neue Konto (und in
+	// dessen Cursor) – alle Geräte mit dem neuen Schlüssel scheiterten danach am Entschlüsseln.
+	let stopPass = false;
+	const PASS_STOPPED = "cf-pass-stopped";
+	const checkPass = () => {
+		if (stopPass) throw Object.assign(new Error("Sync-Durchgang abgebrochen (Zugangsdaten geändert)."), { code: PASS_STOPPED });
+	};
 	// ignoredBlobKeys: Server-Schlüssel → entschlüsselte Blob-ID verworfener (verwaister) Blobs.
 	const blobHashCache = new Map(), ignoredBlobKeys = new Map();
 	// Zu große Dateien (Server-Limit je Datei): bleiben lokal und blockieren den Sync nicht mehr.
@@ -270,6 +277,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		let received = 0, progressStart = state.lastSyncedSeq;
 		while (true) {
+			checkPass();
 			const since = state.lastSyncedSeq;
 			const finishRequest = PERF_PROFILER.start("cloudflare.pull-request", { since }, 500);
 			let response, data;
@@ -286,7 +294,8 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 				data = await response.json();
 				const responsePackets = Array.isArray(data.events) ? data.events : [];
-				finishRequest({ status: response.status, packets: responsePackets.length, encryptedChars: responsePackets.reduce((sum, packet) => sum + encryptedPacketChars(packet), 0) });
+				// Nur ein Messwert: die Base64-Länge reicht, ohne jedes Paket erneut zu serialisieren.
+				finishRequest({ status: response.status, packets: responsePackets.length, encryptedChars: responsePackets.reduce((sum, packet) => sum + (packet?.data?.length || 0), 0) });
 			} catch (error) {
 				finishRequest({ failed: true, status: Number(error?.status) || response?.status || 0, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
 				throw error;
@@ -341,15 +350,17 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
 		const finishProfile = PERF_PROFILER.start("cloudflare.upload", { packets: packets.length }, 20);
 		const batches = [];
+		// Jedes Paket nur EINMAL serialisieren: Der Text zählt fürs Größenlimit und wird direkt
+		// zum Request-Body zusammengesetzt (identisch zu JSON.stringify({ events: batch })).
 		for (let i = 0; i < packets.length;) {
-			const batch = [];
+			const parts = [];
 			let chars = 0;
-			while (i < packets.length && batch.length < MAX_HTTP_PACKETS) {
-				const packet = packets[i], n = encryptedPacketChars(packet);
-				if (batch.length && chars + n > MAX_HTTP_CHARS) break;
-				batch.push(packet); chars += n; i++;
+			while (i < packets.length && parts.length < MAX_HTTP_PACKETS) {
+				const json = JSON.stringify(packets[i]), n = utf8Length(json) + 1;
+				if (parts.length && chars + n > MAX_HTTP_CHARS) break;
+				parts.push(json); chars += n; i++;
 			}
-			const body = JSON.stringify({ events: batch });
+			const body = '{"events":[' + parts.join(",") + "]}";
 			batches.push({ body, bytes: transferBodyBytes(body) });
 		}
 		const totalBytes = batches.reduce((sum, batch) => sum + batch.bytes, 0);
@@ -357,6 +368,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		setProgress("Übertrage Notizen…", 0, totalBytes);
 		try {
 			for (const batch of batches) {
+				checkPass();
 				requests++;
 				utf8Bytes += batch.bytes;
 				const finishRequest = PERF_PROFILER.start("cloudflare.upload-request", { request: requests, utf8Bytes: batch.bytes }, 500);
@@ -562,6 +574,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
 			const received = await PERF_PROFILER.run("cloudflare.pull", () => pull(), {}, 20);
+			checkPass();
 			if (blobInventoryDirty || received > 0) {
 				state.progress = null;
 				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
@@ -571,6 +584,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				try { await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20); }
 				catch (error) { blobInventoryDirty = true; throw error; }
 			}
+			checkPass();
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
 			const pushed = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
@@ -636,6 +650,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 				return true;
 			} catch (error) {
+				if (error?.code === PASS_STOPPED) return false;
 				const e = readable(error);
 				PERF_PROFILER.error("cloudflare.sync-error", e, {
 					phase: "requestSync",
@@ -666,7 +681,7 @@ export const CLOUDFLARE_SYNC = (() => {
 					})();
 				}
 				return fail(e);
-			} finally { syncPromise = null; }
+			} finally { syncPromise = null; stopPass = false; }
 		})();
 		return syncPromise;
 	}
@@ -795,7 +810,11 @@ export const CLOUDFLARE_SYNC = (() => {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
 		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
-		closeSocket(); credentials = null; pendingUploadedEventIds.clear();
+		closeSocket();
+		if (syncPromise) { stopPass = true; await syncPromise.catch(() => {}); }
+		if (generation !== configureGeneration) return false;
+		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
+		credentials = null; pendingUploadedEventIds.clear();
 		forgetBlobInventory();
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
@@ -821,6 +840,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	function disconnect() {
+		if (syncPromise) stopPass = true;
 		configureGeneration++; clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0; closeSocket(); credentials = null;
 		forgetBlobInventory(); pendingUploadedEventIds.clear();
 		setStatus("disconnected", "Getrennt");

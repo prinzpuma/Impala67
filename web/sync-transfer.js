@@ -13,8 +13,13 @@ export async function mapLimit(items, limit, fn) {
 	return out;
 }
 
+// UTF-8-Länge ohne Kopie, wenn der Text reines ASCII ist (Sync-Pakete: Base64/Hex). Der
+// TextEncoder legte sonst jedes bis zu 8 MB große Paket ein weiteres Mal im Speicher an.
+const NON_ASCII = /[^\x00-\x7f]/;
+export const utf8Length = (text) => (NON_ASCII.test(text) ? UTF8_ENCODER.encode(text).byteLength : text.length);
+
 export function transferBodyBytes(body) {
-	if (typeof body === "string") return UTF8_ENCODER.encode(body).byteLength;
+	if (typeof body === "string") return utf8Length(body);
 	if (body instanceof ArrayBuffer) return body.byteLength;
 	if (ArrayBuffer.isView(body)) return body.byteLength;
 	if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
