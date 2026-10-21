@@ -249,15 +249,17 @@ export function applyLink(pid) {
 	const c = env.findContext(bid);
 	const page = S.pages[pid];
 	if (!c || !page) return;
-	const link = "[" + (page.title || "Ohne Titel") + "](#" + pid + ")";
+	// Eckige Klammern im Titel beendeten den Link-Text vorzeitig (aus „[Kap. 1] Zelle“ wurde Kaputtes).
+	const label = (page.title || "Ohne Titel").replace(/[[\]]/g, "");
+	const link = "[" + label + "](#" + pid + ")";
 	// Nur "[[suche" vor dem Caret ersetzen — Text dahinter bleibt stehen.
 	const full = String(c.block.text || "");
 	const start = end != null ? full.lastIndexOf("[[", end - 2) : -1;
-	const newText = start >= 0 ? full.slice(0, start) + link + full.slice(end) : full.replace(/\[\[[^\]]*$/, link);
+	const newText = start >= 0 ? full.slice(0, start) + link + full.slice(end) : full.replace(/\[\[[^\]]*$/, () => link);
 	env.mutate(() => {
 		c.block.text = newText;
 	});
-	env.paintTextField(bid, newText, start >= 0 ? start + (page.title || "Ohne Titel").length : newText.length);
+	env.paintTextField(bid, newText, start >= 0 ? start + label.length : newText.length);
 }
 
 // ---------- ⋮⋮-Blockmenü (Umwandeln, Farbe, Duplizieren, Löschen …) ----------
