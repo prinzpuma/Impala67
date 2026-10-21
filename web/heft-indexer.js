@@ -9,6 +9,7 @@ import { PAGE_W, PAGE_H, composePageText } from "./heft-document-core.js";
 import { SCAN_OCR } from "./scan-ocr.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { BUS } from "./event-bus.js";
+import { PERF_PROFILER } from "./performance-profiler.js";
 
 // heft-indexer.js — Automatischer, akkuschonender Hintergrund-Crawler für Handschrift-Hefte.
 //
@@ -78,6 +79,33 @@ export const HEFT_INDEXER = (() => {
 	let reindexAll = false;
 	let hadFailure = false; // z. B. offline, Modell noch nicht geladen: Durchlauf gilt dann nicht als erledigt
 
+	// Absturzschutz: Stirbt die App (z. B. Speicher voll auf schwachen Tablets) mitten in einer Erkennung,
+	// käme dieselbe Seite bei jedem Start sofort wieder dran und risse die App erneut mit. Die laufende
+	// Aufgabe steht darum in localStorage; steht sie beim nächsten Start noch da, zählt das als Absturz.
+	// Nach zwei Abstürzen bleibt die Seite liegen, bis neue Striche den Schlüssel ändern.
+	const INFLIGHT_KEY = "impala67_heft_index_inflight";
+	const CRASHES_KEY = "impala67_heft_index_crashes";
+	const MAX_CRASHES = 2;
+	const crashes = (() => {
+		let saved = {};
+		try { saved = JSON.parse(localStorage.getItem(CRASHES_KEY) || "{}") || {}; } catch {}
+		try {
+			const inflight = localStorage.getItem(INFLIGHT_KEY);
+			if (inflight) {
+				saved[inflight] = (saved[inflight] || 0) + 1;
+				localStorage.setItem(CRASHES_KEY, JSON.stringify(saved));
+				localStorage.removeItem(INFLIGHT_KEY);
+				PERF_PROFILER.error("heft-index-crash", new Error("App brach während der Handschrift-Erkennung ab"), { key: inflight, crashes: saved[inflight] });
+			}
+		} catch {}
+		return saved;
+	})();
+	const crashedTooOften = (key) => (crashes[key] || 0) >= MAX_CRASHES;
+	const markInflight = (key) => { try { localStorage.setItem(INFLIGHT_KEY, key); } catch {} };
+	const clearInflight = () => { try { localStorage.removeItem(INFLIGHT_KEY); } catch {} };
+	// Normales Schließen ist kein Absturz
+	if (typeof window !== "undefined") window.addEventListener("pagehide", clearInflight);
+
 	// Ein Bild ist eine offene Scan-Aufgabe, wenn es noch kein ocr-Feld hat und entweder
 	// als Scan markiert ist oder als älterer Vollseiten-Scan gilt.
 	const EDGE_PX = 1;
@@ -109,13 +137,13 @@ export const HEFT_INDEXER = (() => {
 					present.add(key);
 					// Fehlgeschlagene Seiten (checked, aber nicht done) zählen nicht als erledigt
 					if (done.has(key) || (!reindexAll && hasText)) doneCount++;
-					if (!checked.has(key) && !done.has(key) && (reindexAll || !hasText)) {
+					if (!checked.has(key) && !done.has(key) && !crashedTooOften(key) && (reindexAll || !hasText)) {
 						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, page: pg });
 					}
 				}
 				for (const im of pg.images || []) {
 					const key = scanKey(pageId, pg, im);
-					if (!checked.has(key) && isPendingScan(pg, im)) {
+					if (!checked.has(key) && !crashedTooOften(key) && isPendingScan(pg, im)) {
 						jobs.push({ kind: "scan", key, pageId, pageIdx: idx, page: pg, image: im });
 					}
 				}
@@ -229,11 +257,13 @@ export const HEFT_INDEXER = (() => {
 			priorityQueue.delete(pageKey);
 			busy = true;
 			checked.add(job.key);
+			markInflight(job.key);
 			try {
 				await indexStrokes(job);
 			} catch (err) {
 				console.warn("[heft-indexer] Priorisierte Seite konnte nicht analysiert werden:", err);
 			} finally {
+				clearInflight();
 				busy = false;
 			}
 			flushRag();
@@ -268,12 +298,14 @@ export const HEFT_INDEXER = (() => {
 		const job = unindexed[0];
 		checked.add(job.key);
 		busy = true;
+		markInflight(job.key);
 		try {
 			if (job.kind === "scan") await indexScanImage(job);
 			else await indexStrokes(job);
 		} catch (err) {
 			console.warn("[heft-indexer] Seite konnte nicht analysiert werden:", err);
 		} finally {
+			clearInflight();
 			busy = false;
 		}
 
