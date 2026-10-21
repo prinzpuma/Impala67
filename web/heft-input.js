@@ -31,7 +31,7 @@ export function createHeftInput(H) {
 
 	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
 	const rejected = (e) => e.pointerType === "touch" && (H.onlyPen || penRecently());
-	const touchNavigates = () => H.onlyPen && !penRecently();
+	const touchNavigates = () => H.viewOnly || (H.onlyPen && !penRecently());
 	// Nur der Zeiger, der die Geste begonnen hat, bewegt oder beendet sie.
 	const ownsDrawing = (e) => H.drawing.pointerId == null || e.pointerId === H.drawing.pointerId;
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
@@ -94,7 +94,7 @@ export function createHeftInput(H) {
 		// neue, das hier löst die alte auf — sonst blieb sie sichtbar hängen).
 		// nicht 'sel' benennen: verdeckte die Heft-Auswahl im ganzen Block
 		if (e.pointerType !== "mouse") { const domSel = window.getSelection?.(); if (domSel && !domSel.isCollapsed) domSel.removeAllRanges(); }
-		if (!H.doc) return;
+		if (!H.doc || H.viewOnly) return;
 		// Zweiter Finger während eines Finger-Strichs: Das ist ein Pinch, kein Strich. Den
 		// angefangenen Strich verwerfen – sonst landeten beide Finger als Zickzack darin.
 		if (H.drawing && H.drawing.pts && !H.drawing.lasso && H.drawing.pointerType === "touch" && e.pointerType === "touch" && H.drawing.pointerId !== e.pointerId) {

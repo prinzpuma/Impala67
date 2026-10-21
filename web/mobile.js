@@ -1,6 +1,6 @@
 "use strict";
 import { APP } from "./app.js";
-import { EDITOR } from "./editor.js";
+import { HEFT } from "./heft.js";
 import { MOBILE_VIEW } from "./mobile-view.js";
 import { MOBILE_NOTES } from "./mobile-notes.js";
 import { MOBILE_SHEET } from "./mobile-sheet.js";
@@ -25,7 +25,7 @@ export const MOBILE = (() => {
 	let lastNotesOpen = false;
 	let notesDirty = false;   // Notizenliste muss im nächsten Takt neu gezeichnet werden
 	let uiRaf = 0;            // rAF-Taktgeber: höchstens ein updateUI-Lauf pro Frame
-	let editPageId = null;    // Seite im Bearbeitungsmodus; jede andere öffnet zum Lesen
+	let editPageId = null;    // Heft im Bearbeitungsmodus; jedes andere öffnet zum Lesen
 
 	// Ebenen-Stapel für Zurück-Taste / History. Reihenfolge = Reihenfolge der eigenen Einträge.
 	const hstack = [];
@@ -56,16 +56,15 @@ export const MOBILE = (() => {
 		if (pal && !pal.hidden) { pal.hidden = true; pal.innerHTML = ""; delete pal.dataset.mode; }
 	};
 
-	// Seiten öffnen auf dem Handy zum Lesen (keine Tastatur beim Tippen/Scrollen); die
-	// Stift-Taste oben schaltet die offene Seite in den Bearbeitungsmodus. Leere Seiten
-	// (z. B. gerade neu angelegt) sind sofort bearbeitbar — und bleiben es auch, sobald
-	// der erste Buchstabe steht.
-	const pageReadOnly = (pid) => {
+	// Hefte öffnen auf dem Handy zum Lesen: Finger blättern und zoomen nur, nichts landet
+	// versehentlich als Strich. Die Stift-Taste oben schaltet aufs Schreiben um. Leere Hefte
+	// (z. B. gerade neu angelegt) sind sofort beschreibbar — und bleiben es nach dem ersten Strich.
+	const heftEmpty = (doc) => doc.pages.every((p) => !(p.strokes || []).length && !(p.images || []).length && !(p.texts || []).length);
+	const heftReadOnly = (pid, doc) => {
 		if (!body.classList.contains("mobile-ui")) return false;
 		if (pid === editPageId) return false;
-		const pg = S.pages[pid];
-		if (!pg || pg.kind === "heft") return false;
-		if (!String(pg.content || "").trim()) { editPageId = pid; return false; }
+		if (!doc) return true; // lädt noch
+		if (heftEmpty(doc)) { editPageId = pid; return false; }
 		return true;
 	};
 
@@ -287,10 +286,7 @@ export const MOBILE = (() => {
 			case "edittoggle": {
 				const pid = S.currentPageId;
 				if (!pid) break;
-				editPageId = pageReadOnly(pid) ? pid : null;
-				// Fokussierte Felder lässt der DOM-Abgleich unangetastet.
-				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-				RENDER.renderMain();
+				editPageId = editPageId === pid ? null : pid;
 				break;
 			}
 			case "pagemenu": {
@@ -379,8 +375,10 @@ export const MOBILE = (() => {
 		const pageOpen = S.view === "page" && !!pg && !notesOpen && !moreOpen;
 		body.classList.toggle("m-page", pageOpen);
 		if (editPageId && (S.view !== "page" || S.currentPageId !== editPageId)) editPageId = null;
-		const canRead = pageOpen && pg.kind !== "heft";
-		const reading = canRead && pageReadOnly(pg.id);
+		const canRead = pageOpen && pg.kind === "heft" && HEFT.activeId === pg.id;
+		const reading = canRead && heftReadOnly(pg.id, HEFT.activeDoc);
+		// Heft lädt noch: gleich erneut prüfen (leere Hefte sind dann sofort beschreibbar).
+		if (canRead && !HEFT.activeDoc) setTimeout(scheduleUI, 150);
 		body.classList.toggle("m-read", reading);
 		const editBtn = document.getElementById("mEditToggle");
 		if (editBtn) {
@@ -462,7 +460,7 @@ export const MOBILE = (() => {
 	function init() {
 		if (started) return;
 		started = true;
-		EDITOR.setReadOnly(pageReadOnly);
+		HEFT.setViewOnly(heftReadOnly);
 		apply(mq.matches);
 		mq.addEventListener("change", (e) => apply(e.matches));
 

@@ -138,9 +138,8 @@ body.mobile-ui .m-iconbtn {
 body.mobile-ui .m-iconbtn svg { width: 22px; height: 22px; display: block }
 body.mobile-ui .m-iconbtn[hidden] { display: none }
 body.mobile-ui #mEditToggle.is-active { color: var(--accent) }
-/* Lesemodus: Cover- und Icon-Knöpfe der Seite ruhen. */
-body.mobile-ui.m-read .page-meta :is(.addcover-btn, .cover-btns) { display: none }
-body.mobile-ui.m-read .page-meta .page-icon { pointer-events: none }
+/* Heft-Lesemodus: nur Blättern und Zoomen — Werkzeuge, Rückgängig und „Seite hinzufügen“ ruhen. */
+body.mobile-ui.m-read :is(.heft-float, .heft-tray, .heft-plus, .heft-corner[data-heundo], .heft-corner[data-heredo]) { display: none }
 body.mobile-ui .m-iconbtn:active { background: var(--surface-active); transform: scale(.94) }
 
 body.mobile-ui #mBack { color: var(--accent) }

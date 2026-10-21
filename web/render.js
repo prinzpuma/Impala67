@@ -701,7 +701,7 @@ function renderMain() {
 			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden). data-pageid
 			// bindet das Feld an seine Seite: Beim Seitenwechsel feuert „change“ erst durch das
 			// blur(), wenn S.currentPageId schon auf die neue Seite zeigt.
-			`<textarea id="pageTitle" data-pageid="${esc(pg.id)}" rows="1" autocomplete="off" aria-label="Seitentitel"${EDITOR.isReadOnly(pg.id) ? " readonly" : ""}>${esc(pg.title)}</textarea>` +
+			`<textarea id="pageTitle" data-pageid="${esc(pg.id)}" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.pdfId ? pdfEmbedBlockHtml(pg) : "") +

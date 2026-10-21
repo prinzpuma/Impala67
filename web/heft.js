@@ -107,6 +107,10 @@ export const HEFT = (() => {
 	const savedTools = loadToolPrefs();
 	let tool = "pen", color = savedTools.color, size = savedTools.size, onlyPen = savedTools.onlyPen;
 	let eraserSize = savedTools.eraserSize;
+	// Lesemodus (Handy): Finger und Stift blättern und zoomen nur. Wann er gilt, entscheidet
+	// die Handy-UI über setViewOnly(fn); abgefragt wird bei jeder Berührung neu.
+	let viewOnlyFn = null;
+	const isViewOnly = () => !!viewOnlyFn && !!pid && !!doc && viewOnlyFn(pid, doc);
 	const pens = savedTools.pens;
 	let penSlot = savedTools.penSlot;
 	({ color, size } = pens[penSlot]);
@@ -632,7 +636,9 @@ export const HEFT = (() => {
 		host: () => host, doc: () => doc, drawing: () => drawing,
 		canvases: () => canvases, detailCanvases: () => detailCanvases, wetCanvases: () => wetCanvases, pageSlots: () => pageSlots,
 		penRecently: () => input.penRecently(), touchNavigates: () => input.touchNavigates(),
-		drawStroke, renderPageTo, applyTransform, redrawBasePage, undo, redo, viewChanged,
+		drawStroke, renderPageTo, applyTransform, redrawBasePage, viewChanged,
+		// Zwei-/Drei-Finger-Tipp: im Lesemodus nichts zurücknehmen.
+		undo: () => { if (!isViewOnly()) undo(); }, redo: () => { if (!isViewOnly()) redo(); },
 	});
 	const {
 		view, viewport, contentSize, scrollEl, navReset, animateTo, layout,
@@ -654,6 +660,7 @@ export const HEFT = (() => {
 		get color() { return color; },
 		get size() { return size; },
 		get onlyPen() { return onlyPen; },
+		get viewOnly() { return isViewOnly(); },
 		get eraserSize() { return eraserSize; },
 		get drawing() { return drawing; }, set drawing(v) { drawing = v; },
 		get sel() { return sel; }, set sel(v) { sel = v; },
@@ -1774,6 +1781,8 @@ export const HEFT = (() => {
 		// Nur für test/heft.test.mjs nach außen gereicht:
 		renderPageTo, pageRectForTile, strokeGeometry, scaleStrokeFrom, lassoTouchAction,
 		get activeId() { return pid; },
+		get activeDoc() { return doc; },
+		setViewOnly(fn) { viewOnlyFn = typeof fn === "function" ? fn : null; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && input.isWriting()),
 		// Absturz-Spur im Profiler: dekodierte Bilder des offenen Hefts (liegen nicht im DOM)
