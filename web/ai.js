@@ -49,6 +49,10 @@ export const AI = (() => {
 	const familyCache = new Map();
 	const activeControllers = new Set();
 	const pendingSleeps = new Set();
+	// ⏹ brach bisher nur laufende HTTP-Anfragen ab. Lief gerade ein Werkzeug (Änderung, Suche,
+	// lokales Embedding), startete der nächste Schritt eine frische Anfrage und der Agent machte
+	// bis zu 12 Schritte weiter. Jeder Lauf merkt sich diesen Zähler und prüft ihn je Etappe.
+	let abortGeneration = 0;
 	const debugLog = [];
 	const modelCache = new Map();
 	const modelRequests = new Map();
@@ -232,6 +236,7 @@ export const AI = (() => {
 		}
 	}
 	function abortActive() {
+		abortGeneration++;
 		for (const controller of activeControllers) controller.abort();
 		activeControllers.clear();
 		for (const entry of pendingSleeps) {
@@ -546,8 +551,12 @@ export const AI = (() => {
 				if (!text.startsWith("data:")) continue;
 				const payload = text.slice(5).trim();
 				if (!payload || payload === "[DONE]") continue;
-				let delta;
-				try { delta = JSON.parse(payload).choices?.[0]?.delta; } catch { continue; }
+				let parsed;
+				try { parsed = JSON.parse(payload); } catch { continue; }
+				// Anbieter melden Fehler mitten im Strom als data: {"error": …}. Bisher still
+				// übersprungen: Die Antwort brach leer oder halb ab, ohne jede Fehlermeldung.
+				if (parsed?.error) throw new AiHttpError(Number(parsed.error.code) || 502, payload);
+				const delta = parsed?.choices?.[0]?.delta;
 				if (!delta) continue;
 				copyThoughtMetadata(delta, message, isGoogle);
 				let fragmentProduced = false;
@@ -1148,6 +1157,7 @@ export const AI = (() => {
 
 		// Profiler: ganzer Lauf (auffällig ab 45 s) und Vorbereitung (auffällig ab 1,5 s).
 		const finishRun = PERF_PROFILER.start("ai.agent", { provider: current.providerId, model, anomalyThresholdMs: 45000 }, 0);
+		const runAbortGeneration = abortGeneration;
 		let steps = 0;
 		const workspaceSnapshot = contextSnapshot(), attachment = takeAttachment(type);
 		target.push({ mid: U.uid(), role: "user", content: userText, ...attachment });
@@ -1179,16 +1189,20 @@ export const AI = (() => {
 			renderQueued = true;
 			setTimeout(() => { renderQueued = false; lastRender = Date.now(); render(); }, Math.max(16, 80 - (Date.now() - lastRender)));
 		};
+		// Zwischenstände nur lokal (Schutz vor Neuladen); ins Log und damit in den Sync geht der Chat
+		// mit final = true (Antwort, Fehler, Rückfrage). Vorher schrieb jeder Werkzeug-Schritt eine
+		// volle Kopie samt Bildern, PDF-Texten und Vorher/Nachher-Ständen ins Log – der Sync lud
+		// sie alle hoch, bevor die Kompaktierung sie wieder entfernte.
 		let persistTimer = 0, lastPersist = 0;
-		const persist = (force = false) => {
+		const persist = (final = false) => {
 			clearTimeout(persistTimer);
 			persistTimer = 0;
-			if (!force && Date.now() - lastPersist < 1500) {
-				persistTimer = setTimeout(() => persist(true), 1500);
+			if (!final && Date.now() - lastPersist < 1500) {
+				persistTimer = setTimeout(() => persist(), 1500);
 				return;
 			}
 			lastPersist = Date.now();
-			try { CHATS.persist(target, type === "side" ? "sideChatId" : "currentChatId", runId); } catch (error) { console.warn("Chat speichern:", error); }
+			try { CHATS.persist(target, type === "side" ? "sideChatId" : "currentChatId", runId, { localOnly: !final }); } catch (error) { console.warn("Chat speichern:", error); }
 		};
 		let nudged = false;
 		const fail = (error) => {
@@ -1202,6 +1216,12 @@ export const AI = (() => {
 			persist(true);
 			finishRun({ steps, ...profileOutcome(error) });
 			throw error;
+		};
+		const checkAborted = () => {
+			if (abortGeneration === runAbortGeneration) return;
+			const error = new Error("Abgebrochen.");
+			error.name = "AbortError";
+			fail(error);
 		};
 		async function waitForAnswer(question, options, status) {
 			const mid = U.uid();
@@ -1244,6 +1264,7 @@ export const AI = (() => {
 		};
 
 		for (let step = 0; step < LIMIT.agentSteps; step++) {
+			checkAborted();
 			S.aiDraft = "";
 			S.aiThinkingDraft = "";
 			steps = step + 1;
@@ -1284,6 +1305,7 @@ export const AI = (() => {
 
 			const pendingImages = [];
 			for (const call of message.tool_calls) {
+				checkAborted();
 				const name = call.function.name, raw = String(call.function.arguments || "").trim();
 				let args = {};
 				if (raw) { try { args = JSON.parse(raw); } catch { args = null; } }

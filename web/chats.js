@@ -139,10 +139,12 @@ export const CHATS = {
 		return this.load().find((s) => s.id === key) || null;
 	},
 
-	// Reines Upsert: fehlende Einträge bedeuten NICHT "gelöscht".
-	save(list) {
+	// Reines Upsert: fehlende Einträge bedeuten NICHT "gelöscht". localOnly: nur im Gerät sichern
+	// (laufende KI-Antwort); migrateLocal hebt einen danach abgebrochenen Stand beim Start ins Log.
+	save(list, { localOnly = false } = {}) {
 		const sessions = sorted((Array.isArray(list) ? list : []).map(normalize).filter(Boolean));
 		writeLocal(sessions);
+		if (localOnly) return sessions;
 		for (const s of sessions) {
 			const cur = S.chatSessions?.[s.id];
 			// Gelöschte Sitzung nur wiederbeleben, wenn die Kopie NEUER als der Löschzeitpunkt ist.
@@ -178,7 +180,7 @@ export const CHATS = {
 	},
 
 	// Gemeinsame Speicherlogik für Seitenpanel-Chat (ai.js) und Chat-Tab.
-	persist(messages, idKey, fixedId) {
+	persist(messages, idKey, fixedId, options) {
 		if (!Array.isArray(messages) || !messages.length) return null;
 		const list = this.load();
 		const wantedId = fixedId || S[idKey];
@@ -203,7 +205,7 @@ export const CHATS = {
 			const first = messages.find((m) => m.role === "user");
 			s.title = String(first?.content || "").slice(0, 60) || "Neuer Chat";
 		}
-		this.save(list);
+		this.save(list, options);
 		return s;
 	},
 };
