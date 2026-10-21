@@ -8,6 +8,7 @@ import { S, STATE } from "./state.js";
 import { TABS } from "./tabs.js";
 import { navState } from "./nav-history.js";
 import { PLATFORM } from "./platform.js";
+import { U } from "./util.js";
 
 // mobile.js — Controller der Handy-UI (Mobile UI v7).
 // Die Handy-UI ist nur aktiv, wenn body.mobile-ui gesetzt ist (PLATFORM.phoneQuery).
@@ -28,8 +29,7 @@ export const MOBILE = (() => {
 	const hstack = [];
 	let selfNav = false;      // history.go() von uns selbst ausgelöst, kein Nutzer-Zurück
 
-	const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
-		({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+	const esc = U.esc;
 
 	const closestOf = (e, sel) => (e.target instanceof Element ? e.target.closest(sel) : null);
 	const notesEl = () => document.getElementById("mNotes");
@@ -49,7 +49,7 @@ export const MOBILE = (() => {
 
 	const closeModals = () => {
 		const o = document.getElementById("overlay");
-		if (o && !o.hidden) { o.hidden = true; o.innerHTML = ""; }
+		if (o && !o.hidden) U.closeOverlay();
 		const pal = document.getElementById("palette");
 		if (pal && !pal.hidden) { pal.hidden = true; pal.innerHTML = ""; delete pal.dataset.mode; }
 	};

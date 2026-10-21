@@ -355,6 +355,21 @@ export const U = {
 		return t;
 	},
 
+	// EIN Schließweg für #overlay. Wer es belegt, kann o._close hinterlegen (U.confirm erfüllt
+	// darüber sein Promise und löst den Tasten-Listener). Wer das Overlay einfach leerte (Handy-
+	// Zurück, Escape), ließ einen wartenden Dialog unsichtbar weiterlaufen: Das nächste Enter
+	// irgendwo bestätigte ihn — z. B. „Papierkorb leeren“.
+	closeOverlay() {
+		const o = document.getElementById("overlay");
+		if (!o) return;
+		const close = o._close;
+		delete o._close;
+		if (typeof close === "function") close();
+		o.hidden = true;
+		o.classList.remove("change-overlay");
+		o.innerHTML = "";
+	},
+
 	// In-App-Bestätigung statt window.confirm() — gleiches #overlay wie alle Dialoge.
 	// opts: { title?, ok?, cancel?, danger? } — danger färbt den OK-Button rot (Löschen).
 	confirm(message, opts) {
@@ -368,16 +383,19 @@ export const U = {
 			const danger = !!opts.danger;
 			// Referenz-Umsetzung für U.h(): DOM-Bau statt innerHTML-Strings — Texte sind
 			// automatisch escaped, kein vergessenes U.esc() mehr möglich.
-			o.innerHTML = "";
-			o.appendChild(U.h("div", { class: "modal modal-sm" },
+			U.closeOverlay();
+			const box = U.h("div", { class: "modal modal-sm" },
 				U.h("h3", null, title),
 				U.h("p", { class: "hint", style: "white-space:pre-wrap" }, String(message ?? "")),
 				U.h("div", { class: "modal-actions" },
 					U.h("button", { type: "button", id: "dlgConfirmCancel" }, cancelLabel),
-					U.h("button", { type: "button", id: "dlgConfirmOk", class: danger ? "danger" : null }, okLabel))));
+					U.h("button", { type: "button", id: "dlgConfirmOk", class: danger ? "danger" : null }, okLabel)));
+			o.appendChild(box);
 			o.hidden = false;
 			let done = false;
 			const onKey = (e) => {
+				// Ein anderer Dialog hat das Overlay übernommen: abbrechen, Taste nicht schlucken.
+				if (!box.isConnected) return finish(false);
 				if (e.key === "Escape") { e.preventDefault(); finish(false); }
 				// FIX: Enter bestätigte bisher IMMER — auch wenn „Abbrechen“ (per Tab) fokussiert
 				// war. Bei destruktiven Dialogen fatal. Jetzt entscheidet der fokussierte Button.
@@ -390,9 +408,8 @@ export const U = {
 				if (done) return;
 				done = true;
 				document.removeEventListener("keydown", onKey, true);
-				delete o._close;
-				o.hidden = true;
-				o.innerHTML = "";
+				if (o._close === close) delete o._close;
+				if (box.isConnected) { o.hidden = true; o.innerHTML = ""; }
 				resolve(ok);
 			};
 			// VERTRAG mit dem Hintergrund-Klick in popovers.js: wer das #overlay belegt,
@@ -400,7 +417,8 @@ export const U = {
 			// Dialog aus dem DOM, ohne finish() zu erreichen (dieser Dialog hat kein
 			// #btnCloseOverlay) — das Promise wurde nie erfüllt und jedes `await U.confirm(…)`
 			// hing für immer: Löschen & Co. taten danach lautlos nichts mehr.
-			o._close = () => finish(false);
+			const close = () => finish(false);
+			o._close = close;
 			U.el("dlgConfirmOk").addEventListener("click", () => finish(true));
 			U.el("dlgConfirmCancel").addEventListener("click", () => finish(false));
 			document.addEventListener("keydown", onKey, true);

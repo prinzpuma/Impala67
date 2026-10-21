@@ -127,10 +127,9 @@ document.addEventListener("pointerdown", (e) => {
 	// 🐛 FIX: Wer das Overlay belegt, hinterlegt seinen Schließweg als o._close (siehe
 	// U.confirm). Nur so kommt auch das wartende Promise zum Abschluss — vorher riss
 	// dieser Handler den Dialog aus dem DOM und der aufrufende `await` hing für immer.
-	if (typeof o._close === "function") return void o._close();
-	const x = o.querySelector("#btnCloseOverlay");
+	const x = typeof o._close === "function" ? null : o.querySelector("#btnCloseOverlay");
 	if (x) x.click();
-	else { o.hidden = true; o.innerHTML = ""; }
+	else U.closeOverlay();
 }, true);
 
 // 👆 Kontextmenüs aufgepeppt: Rechtsklick (Maus) oder langer Druck (iPad/Stift)

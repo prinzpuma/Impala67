@@ -692,8 +692,10 @@ function renderMain() {
 				`<button class="page-icon" data-iconpick="1" title="Icon ändern">${pageIcon(pg)}</button>` +
 				(!pg.cover && !pg.coverImg ? '<button class="addcover-btn" data-coverpick="1">+ Cover</button>' : "") +
 			"</div>" +
-			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden)
-			`<textarea id="pageTitle" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
+			// Mehrzeilig wachsender Titel (ein <input> würde lange Namen abschneiden). data-pageid
+			// bindet das Feld an seine Seite: Beim Seitenwechsel feuert „change“ erst durch das
+			// blur(), wenn S.currentPageId schon auf die neue Seite zeigt.
+			`<textarea id="pageTitle" data-pageid="${esc(pg.id)}" rows="1" autocomplete="off" aria-label="Seitentitel">${esc(pg.title)}</textarea>` +
 			backlinksChipHtml(pg) +
 		"</div>" +
 		(pg.pdfId ? pdfEmbedBlockHtml(pg) : "") +
@@ -858,10 +860,7 @@ function conflictSource() {
 	const items = loadPendingConflicts();
 	return items.length ? items : legacyConflictItems();
 }
-function closeConflictDialog() {
-	const o = $("overlay");
-	if (o) { o.hidden = true; o.innerHTML = ""; }
-}
+const closeConflictDialog = () => U.closeOverlay();
 function openConflictResolver(index) {
 	const items = conflictSource();
 	if (!items.length) return void U.toast("Keine offenen Konflikte.", "success");
@@ -1729,16 +1728,12 @@ function openChangePreview(m) {
 			'<div class="change-page-legend"><span class="leg add">+ hinzugefügt</span><span class="leg del">− entfernt</span><span class="leg same">unverändert</span></div></div>';
 	const sheet = o.querySelector(".change-page-sheet");
 	if (sheet) { U.renderMath(sheet); U.highlightCode(sheet); hydrateImages(sheet); }
-	const close = () => { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; };
-	// „Seite öffnen“: Vorschau schließen und navigieren
+	// „Seite öffnen“: Vorschau schließen und navigieren. Den Hintergrund-Klick erledigt popovers.js.
 	o.querySelector("[data-openchangepage]")?.addEventListener("click", (e) => {
 		const id = e.currentTarget.dataset.openchangepage;
-		close();
+		U.closeOverlay();
 		TABS.openPage(id);
 	});
-	// Klick auf den Overlay-Hintergrund schließt
-	const onBg = (e) => { if (e.target === o) { close(); o.removeEventListener("click", onBg); } };
-	o.addEventListener("click", onBg);
 }
 
 function renderPendingChip(type) {

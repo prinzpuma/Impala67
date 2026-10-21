@@ -711,7 +711,7 @@ function wireEvents() {
 			return;
 		}
 		if (e.target.id === "pageTitle") {
-			const pg = S.currentPageId ? S.pages[S.currentPageId] : null;
+			const pg = S.pages[e.target.dataset.pageid];
 			if (pg && e.target.value.trim()) {
 				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { title: e.target.value.trim() } });
 				RAG.queuePage(pg.id);

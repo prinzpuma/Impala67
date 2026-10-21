@@ -32,8 +32,7 @@ const focusPageTitle = () => {
 };
 
 export function closeOverlay() {
-	const o = $("overlay");
-	if (o) { o.hidden = true; o.classList.remove("change-overlay"); o.innerHTML = ""; }
+	U.closeOverlay();
 	S.reviewShowBack = false;
 }
 
