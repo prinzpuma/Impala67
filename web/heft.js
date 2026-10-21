@@ -140,6 +140,10 @@ export const HEFT = (() => {
 		writingOffT = setTimeout(() => { writingOffT = 0; writing = false; applyWriting(); }, 700);
 	}
 	let drawing = null, saveT = 0, resizeFn = null, resizeObserver = null;
+	// Zählt Ein-/Aushängen: Ein mount, dessen Laden überholt wurde (Heft öffnen, zurück, wieder
+	// öffnen), bricht ab. Der Seiten-ID-Vergleich ließ beide Läufe weiterlaufen – Resize-Listener
+	// und ResizeObserver des ersten blieben für immer hängen.
+	let mountToken = 0;
 	let undoStack = [], redoStack = [];
 	const UNDO_MAX = 100; // Speicher-Limit: stundenlanges Schreiben ließ den Stack unbegrenzt wachsen
 	// pageId mitschreiben: pageIdx driftet, sobald Seiten eingefügt/gelöscht/importiert
@@ -340,6 +344,10 @@ export const HEFT = (() => {
 	// Gemeinsamer Wiederherstellungspfad für Verlauf und KI-Undo. Er aktualisiert nicht
 	// nur das Event-Log, sondern auch die laufenden Canvas-Referenzen des geöffneten Hefts.
 	async function restoreDoc(p, restored) {
+		// Erst ungespeicherte Änderungen ins Log: Der Diff läuft gegen das lebende Dokument. Eine
+		// noch nicht gespeicherte Radierung fehlte darin schon, erzeugte also kein „s-“ – der
+		// Strich blieb im Log und tauchte nach dem Neuladen wieder auf.
+		if (pid === p) await saveNow();
 		const target = { v: 2, rev: 0, pages: JSON.parse(JSON.stringify(restored?.pages || [])) };
 		const current = S.heftDocs[p] || { v: 2, rev: 0, pages: [] };
 		const { ops } = diffDocument(documentShadow(current), target);
@@ -1602,12 +1610,13 @@ export const HEFT = (() => {
 		let finishView = null;
 		try {
 			unmount();
+			const token = mountToken;
 			host = container;
 			pid = pageId;
 			if (getComputedStyle(host).position === "static") host.style.position = "relative";
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
 			doc = await PERF_PROFILER.run("heft.load", () => load(pageId), { pageId }, 30);
-			if (pid !== pageId) return;
+			if (token !== mountToken || pid !== pageId) return;
 			finishView = PERF_PROFILER.start("heft.mount-view", { pages: doc.pages.length }, 16);
 			idx = Math.min(lastPage(pageId), doc.pages.length - 1); sel = null; undoStack = []; redoStack = []; insertPos = "after";
 			view.x = 0; view.y = 0; view.k = 1; navReset();
@@ -1644,6 +1653,7 @@ export const HEFT = (() => {
 		}
 	}
 	function unmount(discardPending = false) {
+		mountToken++;
 		rememberPos();
 		closePop();
 		scanner?.close();
