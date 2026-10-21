@@ -1636,6 +1636,8 @@ export const HEFT = (() => {
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
 			doc = await PERF_PROFILER.run("heft.load", () => load(pageId), { pageId }, 30);
 			if (token !== mountToken || pid !== pageId) return;
+			// Speicher: Bilder zuvor geöffneter Hefte freigeben (Scans sind schnell Hunderte MB).
+			STATE.releaseHeftBlobs(doc.pages.flatMap((pg) => (pg.images || []).map((im) => im.ref).filter(Boolean)));
 			finishView = PERF_PROFILER.start("heft.mount-view", { pages: doc.pages.length }, 16);
 			idx = Math.min(lastPage(pageId), doc.pages.length - 1); sel = null; undoStack = []; redoStack = []; insertPos = "after";
 			view.x = 0; view.y = 0; view.k = 1; navReset();

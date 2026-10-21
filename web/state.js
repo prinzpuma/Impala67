@@ -1331,6 +1331,20 @@ export const STATE = (() => {
 	// ALLE Bilder ALLER Hefte als Data-URL in den Speicher nach — bei vielen Scans Hunderte MB.
 	// Bekannt (geladen oder im Checkpoint) — zum Erkennen schon gespeicherter Bilder.
 	const hasHeftBlob = (hash) => typeof S.heftBlobs[hash] === "string" || Object.prototype.hasOwnProperty.call(_checkpointBlobSizes, hash);
+	// Bilder anderer Hefte wieder aus dem Speicher nehmen (heft.js beim Öffnen eines Hefts).
+	// Nur, was schon im Checkpoint liegt und nicht auf das nächste Speichern wartet — alles
+	// andere ginge sonst verloren. hydrateHeftBlobs holt Freigegebenes bei Bedarf zurück.
+	function releaseHeftBlobs(keep) {
+		const keepSet = new Set(keep || []);
+		let released = 0;
+		for (const hash of Object.keys(S.heftBlobs)) {
+			if (keepSet.has(hash) || _checkpointDirtyBlobHashes.has(hash) || !Object.prototype.hasOwnProperty.call(_checkpointBlobSizes, hash)) continue;
+			delete S.heftBlobs[hash];
+			released++;
+		}
+		if (released) _checkpointPayloadLoaded = false;
+		return released;
+	}
 
 	async function hydrateHeftBlobs(targetHashes = null) {
 		const allHashes = Object.keys(_checkpointBlobSizes);
@@ -1976,7 +1990,7 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, hasHeftBlob, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, cardRevision: () => _cardRev, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, hasHeftBlob, releaseHeftBlobs, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, cardRevision: () => _cardRev, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
 })();
 
 // Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)
