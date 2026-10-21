@@ -424,16 +424,21 @@ export const HEFT = (() => {
 		if (kind === "blank") return;
 		// Linien, Raster und Punkte nehmen die Akzentfarbe (settings.js setzt --accent am body)
 		const ink = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#6b8cae";
+		// PERF: Alle Punkte bzw. Linien in EINEM Pfad — vorher ein fill()/stroke() je Punkt
+		// (Punktpapier: ~1.700 Zeichenaufrufe bei jedem Neuzeichnen und jeder Zoom-Kachel).
 		x.save();
+		x.beginPath();
 		if (kind === "dots") {
 			x.fillStyle = ink; x.globalAlpha = 0.35;
-			for (let y = 40; y < h; y += 28) for (let gx = 40; gx < w; gx += 28) { x.beginPath(); x.arc(gx, y, 1.2, 0, Math.PI * 2); x.fill(); }
+			for (let y = 40; y < h; y += 28) for (let gx = 40; gx < w; gx += 28) { x.moveTo(gx + 1.2, y); x.arc(gx, y, 1.2, 0, Math.PI * 2); }
+			x.fill();
 		} else {
 			x.strokeStyle = ink; x.globalAlpha = 0.22;
 			x.lineWidth = 1;
 			const x0 = kind === "lined" ? 90 : 0, x1 = kind === "lined" ? w - 50 : w;
-			for (let y = kind === "lined" ? 96 : 28; y < h - (kind === "lined" ? 40 : 0); y += 28) { x.beginPath(); x.moveTo(x0, y); x.lineTo(x1, y); x.stroke(); }
-			if (kind === "grid") for (let gx = 28; gx < w; gx += 28) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, h); x.stroke(); }
+			for (let y = kind === "lined" ? 96 : 28; y < h - (kind === "lined" ? 40 : 0); y += 28) { x.moveTo(x0, y); x.lineTo(x1, y); }
+			if (kind === "grid") for (let gx = 28; gx < w; gx += 28) { x.moveTo(gx, 0); x.lineTo(gx, h); }
+			x.stroke();
 			if (kind === "lined") { x.globalAlpha = 0.4; x.beginPath(); x.moveTo(90, 40); x.lineTo(90, h - 40); x.stroke(); }
 		}
 		x.restore();
@@ -505,11 +510,18 @@ export const HEFT = (() => {
 
 	const hitText = (pg, p) => hitBox(textsOf(pg), p);
 
-	function imgEl(im) {
-		let c = imgCache[im.id];
+	// cache: imgCache gehört dem geöffneten Heft (unmount leert ihn). Vorschauen und Exporte
+	// anderer Hefte bekommen einen eigenen, kurzlebigen Cache (scratchImages) — sonst sammelten
+	// sich dort dekodierte Scans aller je angezeigten Hefte bis zum nächsten Schließen an.
+	function imgEl(im, cache = imgCache) {
+		let c = cache[im.id];
 		if (!c) {
+			const src = imgSrc(im);
+			// Bilddaten noch nicht da (Fremd-Event vor seinem heftBlob): nicht merken — sonst bliebe
+			// das leere Bild bis zum Schließen im Cache, obwohl die Daten kurz danach eintreffen.
+			if (!src) return new Image();
 			c = new Image();
-			c.onload = () => {
+			if (cache === imgCache) c.onload = () => {
 
 				if (pid) dropThumbs(pid);
 
@@ -518,8 +530,8 @@ export const HEFT = (() => {
 					if (pageIndex !== -1) { redrawPage(pageIndex); renderThumb(pageIndex); }
 				}
 			};
-			c.src = imgSrc(im);
-			imgCache[im.id] = c;
+			c.src = src;
+			cache[im.id] = c;
 		}
 		return c;
 	}
@@ -1293,24 +1305,31 @@ export const HEFT = (() => {
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
 	// Bilder vorab dekodieren, sonst fehlen Scans und PDF-Seiten auf frisch erzeugten
 	// Canvases (Export, Vorschauen auf Startseite/Einbettungen, Seitenbild für die KI).
-	const decodeImages = (pages) => Promise.all(pages.flatMap((pg) => (pg.images || []).map((im) => {
-		const el = imgEl(im);
-		return el.decode ? el.decode().catch(() => {}) : null;
+	const scratchImages = () => { const cache = {}; return (im) => imgEl(im, cache); };
+	const imagesFor = (pageId) => (pageId === pid ? imgEl : scratchImages());
+	const decodeImages = (pages, imgOf) => Promise.all(pages.flatMap((pg) => (pg.images || []).map((im) => {
+		const el = imgOf(im);
+		return el.decode && el.src ? el.decode().catch(() => {}) : null;
 	})));
-	async function loadDocFor(pageId) {
+	async function docWithImages(pageId, imgOf) {
 		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		if (!d) return null;
-		await decodeImages(d.pages);
+		await decodeImages(d.pages, imgOf);
 		return d;
 	}
+	// Export: dieselben dekodierten Bilder fürs Laden und fürs Zeichnen.
+	function exportDeps(pageId) {
+		const imgOf = imagesFor(pageId);
+		return { loadDoc: (id) => docWithImages(id, imgOf), renderCanvas: (pg, w) => renderPageCanvas(pg, w, -1, imgOf) };
+	}
 	async function pdfBlob(pageId, indices, onStatus) {
-		return PERF_PROFILER.run("heft.export-pdf", () => exportPdfBlob(pageId, indices, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas }), { pages: indices?.length }, 100);
+		return PERF_PROFILER.run("heft.export-pdf", () => exportPdfBlob(pageId, indices, onStatus, exportDeps(pageId)), { pages: indices?.length }, 100);
 	}
 	async function exportPdf(pageId, indices) {
-		return runExportPdf(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
+		return runExportPdf(pageId, indices, exportDeps(pageId));
 	}
 	async function imageFiles(pageId, indices, baseName, onStatus) {
-		return PERF_PROFILER.run("heft.export-images", () => exportImageFiles(pageId, indices, baseName, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas }), { pages: indices?.length }, 100);
+		return PERF_PROFILER.run("heft.export-images", () => exportImageFiles(pageId, indices, baseName, onStatus, exportDeps(pageId)), { pages: indices?.length }, 100);
 	}
 	function openExportDialog() {
 		if (!pid || !exportSel || !exportSel.size) return;
@@ -1688,10 +1707,10 @@ export const HEFT = (() => {
 		lastChromeHtml = ""; lastPopSig = "";
 	}
 
-	function renderPageCanvas(pg, w, pageIdx = -1) {
+	function renderPageCanvas(pg, w, pageIdx = -1, imgOf = imgEl) {
 		const c = document.createElement("canvas");
 		c.width = w;
-		paintInto(c, pg, pageIdx);
+		paintInto(c, pg, pageIdx, imgOf);
 		return c;
 	}
 	async function thumbnail(pageId, pageIndex, width) {
@@ -1704,8 +1723,9 @@ export const HEFT = (() => {
 			const d = await load(pageId, { create: false });
 			const pg = d && d.pages[i];
 			if (!pg) return null;
-			await decodeImages([pg]);
-			const c = renderPageCanvas(pg, w);
+			const imgOf = imagesFor(pageId);
+			await decodeImages([pg], imgOf);
+			const c = renderPageCanvas(pg, w, -1, imgOf);
 			const url = c.toDataURL("image/png");
 			thumbs[key] = url;
 			// Speicher-Limit (FIFO): Thumbnails vieler Hefte (Embeds/Bibliothek) wuchsen
@@ -1741,8 +1761,9 @@ export const HEFT = (() => {
 		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		const pg = d && d.pages && d.pages[pageIdx || 0];
 		if (!pg) return null;
-		await decodeImages([pg]);
-		return renderPageCanvas(pg, w).toDataURL("image/png");
+		const imgOf = imagesFor(pageId);
+		await decodeImages([pg], imgOf);
+		return renderPageCanvas(pg, w, -1, imgOf).toDataURL("image/png");
 	}
 
 
