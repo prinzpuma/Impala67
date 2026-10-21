@@ -163,19 +163,19 @@ export const CLOUDFLARE_SYNC = (() => {
 		saveRecv(0); saveSend(0); saveGeneration(generation);
 	}
 
-	function api(endpoint, baseUrl = state.url) {
+	function api(endpoint, baseUrl = state.url, creds = credentials) {
 		const base = String(baseUrl || "").trim().replace(/\/+$/, "");
 		const sep = endpoint.includes("?") ? "&" : "?";
-		return credentials ? `${base}${endpoint}${sep}user=${encodeURIComponent(credentials.userId)}` : `${base}${endpoint}`;
+		return creds ? `${base}${endpoint}${sep}user=${encodeURIComponent(creds.userId)}` : `${base}${endpoint}`;
 	}
 
 	const fetchTimed = (url, init = {}, stallTimeoutMs = SYNC_FETCH_TIMEOUT_MS, onProgress) =>
 		requestWithStallTimeout(url, init, { stallTimeoutMs, onProgress });
 
-	function authHeaders(extra = {}, includeClientId = true) {
-		return credentials ? {
-			Authorization: `Bearer ${credentials.authToken}`,
-			"X-User-Id": credentials.userId,
+	function authHeaders(extra = {}, includeClientId = true, creds = credentials) {
+		return creds ? {
+			Authorization: `Bearer ${creds.authToken}`,
+			"X-User-Id": creds.userId,
 			...(includeClientId ? { "X-Impala-Client-Id": CLIENT_ID } : {}),
 			[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
 			...extra,
@@ -855,6 +855,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (syncPromise) stopPass = true;
 		configureGeneration++; clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0; closeSocket(); credentials = null;
 		forgetBlobInventory(); pendingUploadedEventIds.clear();
+		// Der Schlüssel muss mit weg: init() verband sich sonst beim nächsten Start still wieder.
+		state.syncKey = ""; LS.removeItem(LS_KEY);
 		setStatus("disconnected", "Getrennt");
 	}
 
@@ -906,12 +908,26 @@ export const CLOUDFLARE_SYNC = (() => {
 		})();
 	}
 
+	// Die KI braucht nur die Anmeldung, nicht den Sync. Eigene Zugangsdaten statt der globalen:
+	// Vorher setzte eine KI-Anfrage vor (oder nach) configure() die Sync-Zugangsdaten — der Sync
+	// lief dann ohne geladene Cursor los und konnte den Upload-Stand auf 0 zurücksetzen.
+	let aiCredentials = null; // { key, creds: Promise }
+	function credentialsForAi() {
+		if (credentials) return Promise.resolve(credentials);
+		if (!state.syncKey) return Promise.resolve(null);
+		if (aiCredentials?.key !== state.syncKey) {
+			const key = state.syncKey;
+			aiCredentials = { key, creds: deriveSyncCredentials(key).catch((error) => { if (aiCredentials?.key === key) aiCredentials = null; throw error; }) };
+		}
+		return aiCredentials.creds;
+	}
+
 	async function aiRequest(payload, options = {}) {
 		const target = options.base || state.url || DEFAULT_WORKER_URL;
-		if (!credentials && state.syncKey) credentials = await deriveSyncCredentials(state.syncKey);
-		if (!target || !credentials) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
-		return fetch(api("/api/ai", target), {
-			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false),
+		const creds = await credentialsForAi();
+		if (!target || !creds) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
+		return fetch(api("/api/ai", target, creds), {
+			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false, creds),
 			body: JSON.stringify(Array.isArray(payload) ? { messages: payload } : payload || {}), signal: options.signal,
 		});
 	}
