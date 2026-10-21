@@ -1,6 +1,6 @@
 # Impala67 – Architektur
 
-Stand: 2026-10-07 · ca. 38.600 Zeilen in `web/*.js`, 89 Module.
+Stand: 2026-10-21 · ca. 45.700 Zeilen in `web/*.js`, 143 Module (ohne Zyklen im Import-Graphen).
 Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln stehen in `AGENTS.md`, Sync-Details im Skill `cloudflare-sync-v4`.
 
 ---
@@ -61,12 +61,16 @@ Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln st
 | `vecs` | Embeddings für die KI-Suche |
 
 **Checkpoints** (`state-checkpoint.js`, `checkpoint-scheduler.js`): Schnappschuss von `S` mit Event-Nummer. Beim Start wird nur der Rest des Logs nachgespielt → schneller Start.
+- **Regel:** Ein Checkpoint entspricht immer dem nach Zeit sortierten Replay seiner Events. Wendet die Laufzeit ein verspätetes Fremd-Event an, das mit neueren Events kollidiert, wird kein Checkpoint davon gespeichert (der nächste Start sortiert es richtig ein).
+- **Verspätete Fremd-Events** (`event-order.js`): Der Checkpoint merkt sich je Sache (Seite, Heft, Karte, Chat …) den spätesten Event-Zeitpunkt (`orderTimes`). Ein älteres Event im Rest wird einfach angehängt, wenn es nichts Neueres berührt; nur echte Überschneidungen erzwingen den Voll-Replay. Neue Event-Typen ohne Eintrag in `orderKeysOf` gelten als „wirkt auf vieles“ – das ist sicher, kostet aber Startzeit.
 
 ### Heft-Daten
 - `S.heftDocs[pageId] = { v:2, rev, pages:[{ id, paper, strokes, images, texts, ocrText }] }`
 - Stroke: `{ id, tool, color, size, pts:[[x,y,p]], shape?, bbox? }`
 - Bilder liegen inhaltsadressiert in `S.heftBlobs[hash]`, das Heft verweist per `ref`.
 - Änderungen laufen als **`heftOps`**-Events (`pg+`, `s+`, `i+`, `x+`, `ocr` …), erzeugt per Diff (`heft-document-core.js`).
+- `s=`/`i=`/`x=` ersetzen den **Inhalt** des vorhandenen Objekts, nicht das Objekt: Undo-Einträge, laufende Gesten und der Text-Editor halten Verweise darauf. Ansichtszustand (z. B. „wird gerade bearbeitet“) gehört nie ins Dokument – er würde mitgespeichert und synchronisiert.
+- Die Handschrift-Erkennung wird beim Speichern für jede Seite mit geänderten Strichen angestoßen (`persistDoc` → `heft:schedule-page`).
 
 ### Sync
 - **Cloudflare** (`sync-cloudflare.js` + `sync-core.js` + `sync-crypto.js` + `sync-transfer.js`, Server: `server/worker.js`): Push nach jedem Dispatch (entprellt), Pull per WebSocket-Hinweis. Ende-zu-Ende-verschlüsselt. Protokoll v4, Details im Skill.
@@ -132,7 +136,7 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `settings-schema.js`, `settings-renderer.js`, `settings-ui.js`, `settings-action-state.js` | ~680 | Abschnitte, HTML, Bausteine, Button-Zustände |
 
 ### Plattform & Infrastruktur
-`util.js` (Helfer `U`), `event-bus.js`, `cooperative.js`, `platform-native.js` (Android/Capacitor), `performance-profiler*.js`, `optional-modules.js` (CDN-Nachladen), `mcp-bridge.js` (Live-Bridge), `service-worker.js`, `updater.js`, `types.js` (nur JSDoc-Typen).
+`util.js` (Helfer `U`, inkl. `U.morph`, `U.closeOverlay` als einziger Schließweg für `#overlay`), `html-escape.js` (einziges HTML-Escape), `event-order.js` (Reihenfolge-Schlüssel für Checkpoints), `event-bus.js`, `cooperative.js`, `platform-native.js` (Android/Capacitor), `performance-profiler*.js`, `optional-modules.js` (CDN-Nachladen), `mcp-bridge.js` (Live-Bridge), `service-worker.js`, `updater.js`, `types.js` (nur JSDoc-Typen).
 
 ---
 

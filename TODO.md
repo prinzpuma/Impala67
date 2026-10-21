@@ -1,10 +1,18 @@
 # Impala67 – Backlog & Offene Punkte
 
-Stand: v2.2.77 (Oktober 2026)
+Stand: v2.2.85 (21. Oktober 2026)
 
 ---
 
 ## 1. Zuletzt umgesetzt (Erledigt)
+
+- [x] **Prüf- und Aufräumrunde (21. Oktober 2026)** – Befunde aus Code-Review und Live-Messung:
+  - Start: Checkpoint wird bei verspäteten Fremd-Events weiterverwendet (`web/event-order.js`); vorher ~9 s Voll-Replay statt ~1,4 s. Checkpoints speichern nur noch sortierte Stände; Kompaktierung behält die höchste seq (kein Komplett-Neu-Upload).
+  - Sicherheit: MCP-Bridge nur über Loopback, Sync-Schlüssel nicht mehr in Diagnosen, Kopplungslink nur mit Rückfrage, `javascript:`-Links im Editor nicht klickbar.
+  - Daten: Seitentitel landet nicht mehr auf der falschen Seite, verdeckte Bestätigungen lösen nichts aus (`U.closeOverlay`), keine doppelten Events bei gleichzeitigem Cloudflare-/Drive-Import, Drive zeigt Importe sofort, Cloud-Reset ohne doppelten Upload.
+  - Heft: Undo/Ziehen/Text-Editor nach dem Speichern, Textfelder verschwinden nicht mehr, Handballen und Zwei-Finger-Zoom zeichnen nicht mehr, Speicher für Kacheln/Scanner/PDF wird freigegeben, flache Linien legen die Handschrift-Erkennung nicht mehr lahm, Suche folgt Radieren/Rückgängig.
+  - Lernen & KI: FSRS-Formel wie Referenz, Wissensgraph zeigt echten Lernstand, ⏹ stoppt KI-Läufe jederzeit, Stream-Fehler werden gemeldet, KI-Zwischenstände gehen nicht mehr in den Sync.
+  - Aufräumen: ~400 Zeilen totes Lernzeit-Widget + CSS, tote Bibliotheks-Handler und Exporte, doppelte Helfer (Escape, gzip, Fokus, leere Heftseite), Import-Zyklus aufgelöst.
 
 - [x] **Capacitor Android-Integration & Native Schicht (`web/platform-native.js`)**:
   - Basis-Setup (`capacitor.config.json`, `android/`), automatischer APK-Build via GitHub Actions (`.github/workflows/android-build.yml`) und permanente Edge-to-Edge-Statusleiste.
@@ -50,6 +58,12 @@ Stand: v2.2.77 (Oktober 2026)
   - Abgeleitete Design-Tokens (`--b-*`) nach `web/css/variables.css` überführt und die Komponenten-Regeln aus `web/design.css` direkt in `web/home.css`, `web/styles.css`, `web/css/editor.css` und `web/css/heft.css` integriert (`web/design.css` enthält nur noch Querschnitts-Kartenbasis und `motion.js`-Übergänge).
 - [x] **Abhängigkeits-Knäuel & `window`-Brücke aufgelöst (`docs/ARCHITEKTUR.md` B1/B2)**:
   - Alle zirkulären Modul-Importe (0 verbleibende Zyklen in `web/*.js`) über `web/event-bus.js` (`BUS.on`/`emit`/`provide`/`call`) und direkte Submodul-Importe (`web/app-dialogs.js`, `web/state.js`) entkoppelt; veraltete Einzelfunktions-Aliase auf `window` in `web/main.js` entfernt.
+
+- [ ] **Bewusst offen gelassen (gemessen unkritisch)**:
+  - Heft: Speichern vergleicht das ganze Heft (`diffDocument`); bei den größten Heften (~2.700 Striche) ~1 ms. Erst bei deutlich größeren Heften auf „nur geänderte Seiten“ umstellen.
+  - KI-Werkzeug `change` kopiert vor jeder Änderung alle Seiten/Karten für das Undo (`tools.js` `managedSnapshot`).
+  - RAG: `related()` liest alle Vektoren im Hauptthread (aktuell ~200 Einträge).
+  - Laufzeit-Reihenfolge: Ein verspätetes, kollidierendes Fremd-Event wird bis zum nächsten Start in Ankunftsreihenfolge angezeigt (korrekt sortiert erst nach dem Neustart).
 
 ### Priorität 2: Heft-KI & Handschrift im Alltag nutzbar machen
 - [ ] **KI-Funktionen direkt fürs Heft**:
