@@ -9,7 +9,7 @@
 import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
-import { fitStrokeShape, hitBox, strokeBounds, translateStroke, strokeGeometry, scaleStrokeFrom, nearPoint, strokeHitAt } from "./heft-geometry.js";
+import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, moveStrokeFrom, scaleStrokeFrom, nearPoint, strokeHitAt } from "./heft-geometry.js";
 import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, isLassoBodyHit, drawLassoPath } from "./heft-lasso.js";
 
 export function createHeftInput(H) {
@@ -143,7 +143,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					H.drawing = { pointerId: e.pointerId, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
+					H.drawing = { pointerId: e.pointerId, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, originals: H.lassoSel.strokes.map(strokeGeometry), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
 					return;
 				}
 			}
@@ -270,14 +270,12 @@ export function createHeftInput(H) {
 		if (H.drawing.lassoMove) {
 
 			const pm = pos(e, H.drawing.cv);
-			const dx = pm[0] - H.drawing.last[0], dy = pm[1] - H.drawing.last[1];
-			if (dx || dy) {
-				H.drawing.strokes.forEach((s) => translateStroke(s, dx, dy));
-				H.drawing.dx += dx; H.drawing.dy += dy; H.drawing.last = pm;
-				if (H.lassoSel && H.lassoSel.bounds) {
-					H.lassoSel.bounds.minX += dx; H.lassoSel.bounds.maxX += dx;
-					H.lassoSel.bounds.minY += dy; H.lassoSel.bounds.maxY += dy;
-				}
+			const dx = pm[0] - H.drawing.start[0], dy = pm[1] - H.drawing.start[1];
+			if (dx !== H.drawing.dx || dy !== H.drawing.dy) {
+				H.drawing.strokes.forEach((s, i) => moveStrokeFrom(s, H.drawing.originals[i], dx, dy));
+				H.drawing.dx = dx; H.drawing.dy = dy;
+				const b = H.drawing.bounds0;
+				if (H.lassoSel) H.lassoSel.bounds = { minX: b.minX + dx, maxX: b.maxX + dx, minY: b.minY + dy, maxY: b.maxY + dy };
 				redrawNextFrame(H.drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event
 			}
 			return;

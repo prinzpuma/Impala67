@@ -13,7 +13,11 @@ function signature(value) {
 		// Erkannter Scan-Text gehört zum Bild. Nur anhängen, wenn er existiert, damit alte Signaturen gleich bleiben.
 		return value.ocr !== undefined ? base + "|o" + blobId(value.ocr) : base;
 	}
-	return JSON.stringify(value);
+	// Textfelder: Die Höhe ist abgeleitet (der Umbruch hängt von der Geräteschrift ab), und
+	// `hidden` ist ein Altrest des Text-Editors. Beides ist keine Änderung – sonst schickte
+	// jedes Gerät mit anderer Schrift alle mehrzeiligen Felder bei jedem Speichern erneut.
+	const { h, hidden, ...text } = value;
+	return JSON.stringify(text);
 }
 
 // Seitenmaße einer Heftseite (Weltkoordinaten), gemeinsam für heft.js und den Indexer.

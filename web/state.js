@@ -361,6 +361,16 @@ export const STATE = (() => {
 	const heftNewPage = (id, paper) => ({ id, paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
 	const heftPageOf = (doc, key) => doc.pages.find((pg) => pg.id === key) || null;
 	const heftById = (list, id) => list.findIndex((x) => x && x.id === id);
+	// „=“ ersetzt den Inhalt, nicht das Objekt: Das offene Heft, Undo-Einträge und laufende
+	// Gesten halten Verweise genau auf dieses Objekt. Vorher hingen sie nach jedem Speichern
+	// an einer verwaisten Kopie (Rückgängig wirkungslos, Ziehen fror ein).
+	function heftReplace(list, o) {
+		const i = heftById(list, o.id);
+		if (i < 0) { list.push(o); return; }
+		const cur = list[i];
+		for (const key of Object.keys(cur)) if (!(key in o)) delete cur[key];
+		Object.assign(cur, o);
+	}
 
 	function heftDocOf(pageId) {
 		let d = S.heftDocs[pageId];
@@ -439,13 +449,13 @@ export const STATE = (() => {
 				case "pgp": if (pg) pg.paper = op.paper || "lined"; break;
 				case "ocr": if (pg) pg.ocrText = op.text || ""; break;
 				case "s+": if (pg && op.o && op.o.id && heftById(pg.strokes, op.o.id) < 0) pg.strokes.push(op.o); break;
-				case "s=": if (pg && op.o && op.o.id) { const i = heftById(pg.strokes, op.o.id); if (i >= 0) pg.strokes[i] = op.o; else pg.strokes.push(op.o); } break;
+				case "s=": if (pg && op.o && op.o.id) heftReplace(pg.strokes, op.o); break;
 				case "s-": if (pg) { const k = new Set(op.ids || []); pg.strokes = pg.strokes.filter((s) => !k.has(s.id)); } break;
 				case "i+": if (pg && op.o && op.o.id && heftById(pg.images, op.o.id) < 0) pg.images.push(op.o); break;
-				case "i=": if (pg && op.o && op.o.id) { const i = heftById(pg.images, op.o.id); if (i >= 0) pg.images[i] = op.o; else pg.images.push(op.o); } break;
+				case "i=": if (pg && op.o && op.o.id) heftReplace(pg.images, op.o); break;
 				case "i-": if (pg) { const k = new Set(op.ids || []); pg.images = pg.images.filter((x) => !k.has(x.id)); } break;
 				case "x+": if (pg && op.o && op.o.id && heftById(pg.texts, op.o.id) < 0) pg.texts.push(op.o); break;
-				case "x=": if (pg && op.o && op.o.id) { const i = heftById(pg.texts, op.o.id); if (i >= 0) pg.texts[i] = op.o; else pg.texts.push(op.o); } break;
+				case "x=": if (pg && op.o && op.o.id) heftReplace(pg.texts, op.o); break;
 				case "x-": if (pg) { const k = new Set(op.ids || []); pg.texts = pg.texts.filter((x) => !k.has(x.id)); } break;
 			}
 		}

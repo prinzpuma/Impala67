@@ -172,6 +172,13 @@ export function applyStrokeGeometry(stroke, geometry) {
 	strokeBounds(stroke);
 }
 
+// Verschiebt absolut von der Ausgangsgeometrie aus: Setzt ein Speichern oder Sync den Strich
+// mitten in der Geste auf einen älteren Stand zurück, geht keine Teilbewegung verloren.
+export function moveStrokeFrom(stroke, geometry, deltaX, deltaY) {
+	applyStrokeGeometry(stroke, geometry);
+	translateStroke(stroke, deltaX, deltaY);
+}
+
 export function scaleStrokeFrom(stroke, geometry, anchorX, anchorY, factor) {
 	const scalePoint = (point) => [anchorX + (point[0] - anchorX) * factor, anchorY + (point[1] - anchorY) * factor, ...point.slice(2)];
 	stroke.pts = (geometry.pts || []).map(scalePoint);

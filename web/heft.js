@@ -111,6 +111,9 @@ export const HEFT = (() => {
 	let penSlot = savedTools.penSlot;
 	({ color, size } = pens[penSlot]);
 	let inlineEd = null;
+	// Textfeld, das gerade im Editor liegt: wird beim Zeichnen ausgelassen. Ansichtszustand
+	// gehört nicht ins Dokument (vorher txt.hidden – das wurde mitgespeichert und synchronisiert).
+	let editingTxtId = null;
 	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, pens, penSlot }); }
 	let expanded = false;
 	let trayPos = null;
@@ -533,7 +536,7 @@ export const HEFT = (() => {
 			}
 			drawStroke(x, s);
 		});
-		(pg.texts || []).forEach((t) => { if (!t.hidden) drawTextBox(x, t); });
+		(pg.texts || []).forEach((t) => { if (t.id !== editingTxtId) drawTextBox(x, t); });
 		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes, lassoSel.bounds);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
 			const im = sel.imgId ? imagesOf(pg).find((i2) => i2.id === sel.imgId) : null;
@@ -647,8 +650,15 @@ export const HEFT = (() => {
 				a.strokes.forEach((stroke, i) => { if (live.has(stroke.id)) applyStrokeGeometry(stroke, a.prev[i]); });
 				a.prev = current;
 			}
-			else if (a.kind === "imgMod") { const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur; }
-			else if (a.kind === "txtEdit") { const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur; }
+			else if (a.kind === "imgMod") {
+				// Bild ODER Textfeld (Verschieben nutzt denselben Eintrag), per ID aufgelöst.
+				a.im = imagesOf(pg).find((o) => o.id === a.im.id) || textsOf(pg).find((o) => o.id === a.im.id) || a.im;
+				const cur = { x: a.im.x, y: a.im.y, w: a.im.w, h: a.im.h }; Object.assign(a.im, a.prev); a.prev = cur;
+			}
+			else if (a.kind === "txtEdit") {
+				a.txt = textsOf(pg).find((o) => o.id === a.txt.id) || a.txt;
+				const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur;
+			}
 			else {
 
 				const spec = {
@@ -899,7 +909,8 @@ export const HEFT = (() => {
 		const cvEl = slot && slot.querySelector("canvas");
 		const pg = doc && doc.pages[pi];
 		if (!cvEl || !pg) return;
-		const k = cvEl.getBoundingClientRect().width / PAGE_W;
+		// Layout-Breite ohne Zoom: Das Feld liegt im Seiten-Slot, den .heft-pages schon skaliert.
+		const k = cvEl.offsetWidth / PAGE_W;
 		const fs = txt && txt.size ? txt.size : 30;
 		const w = txt ? txt.w : Math.max(240, Math.min(420, PAGE_W - px - 40));
 		const ta = document.createElement("textarea");
@@ -913,7 +924,7 @@ export const HEFT = (() => {
 		ta.style.color = txt ? (txt.color || "#1c1c1e") : color;
 		slot.appendChild(ta);
 		inlineEd = { ta, pi, txt, x: px, y: py };
-		if (txt) { txt.hidden = true; redrawPage(pi); }
+		if (txt) { editingTxtId = txt.id; redrawPage(pi); }
 		const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
 		fit();
 		ta.addEventListener("input", fit);
@@ -939,16 +950,18 @@ export const HEFT = (() => {
 		const val = String(ta.value || "");
 		ta.remove();
 		const pg = doc && doc.pages[pi];
-		if (txt) delete txt.hidden;
+		editingTxtId = null;
 		if (!pg) return;
 		const body = val.replace(/\s+$/, "");
-		if (commit && txt && body.trim() && body !== txt.text) {
-			pushUndo({ kind: "txtEdit", txt, prev: txt.text, pageIdx: pi });
-			txt.text = body; scheduleSave();
-		} else if (commit && txt && !body.trim()) {
-			pg.texts = textsOf(pg).filter((t2) => t2 !== txt);
-			pushUndo({ kind: "txtDel", txt, pageIdx: pi });
-			if (sel && sel.txtId === txt.id) sel = null;
+		// Per ID: Ein Import während des Tippens kann das Dokument neu aufgebaut haben.
+		const cur = txt ? textsOf(pg).find((t2) => t2.id === txt.id) : null;
+		if (commit && cur && body.trim() && body !== cur.text) {
+			pushUndo({ kind: "txtEdit", txt: cur, prev: cur.text, pageIdx: pi });
+			cur.text = body; scheduleSave();
+		} else if (commit && cur && !body.trim()) {
+			pg.texts = textsOf(pg).filter((t2) => t2.id !== cur.id);
+			pushUndo({ kind: "txtDel", txt: cur, pageIdx: pi });
+			if (sel && sel.txtId === cur.id) sel = null;
 			scheduleSave();
 		} else if (commit && !txt && body.trim()) {
 			const t = { id: U.uid(), text: body, x: px, y: py, w: Math.max(240, Math.min(420, PAGE_W - px - 40)), h: 60, size: 30, color };
