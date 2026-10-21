@@ -300,6 +300,14 @@ export const U = {
 		// nach einer Umbenennung von außen (Sync, KI-Tool) weiter den alten Namen.
 		if (/^(INPUT|TEXTAREA)$/.test(oldNode.tagName) && oldNode.value !== newNode.value) { oldNode.value = newNode.value; changed = true; }
 		if (ownsCaret) return changed;
+		// Hydriert (Code-Färbung, KaTeX): Der Knoten merkt sich den Quelltext, aus dem er
+		// entstand. Solange der gleich bleibt, behält morph den fertigen Inhalt – vorher
+		// wurde er bei jedem Render wieder zu Rohtext (Code blieb danach ungefärbt, Formeln
+		// flackerten und wurden jedes Mal neu gesetzt).
+		if (oldNode.__srcHtml !== undefined) {
+			if (oldNode.__srcHtml === newNode.innerHTML) return changed;
+			delete oldNode.__srcHtml;
+		}
 		if (U._morphChildren(oldNode, newNode)) changed = true;
 		return changed;
 	},
@@ -479,14 +487,24 @@ export const U = {
 	// \u-Escapes in benannten Konstanten (DRY: eine Definition, unten mitbenutzt).
 	_mathTokL: String.fromCharCode(0xe000),
 	_mathTokR: String.fromCharCode(0xe001),
+	_codeTokL: String.fromCharCode(0xe002),
+	_codeTokR: String.fromCharCode(0xe003),
+	// Code wird ebenfalls weggesichert, aber schon VOR marked wieder eingesetzt: Er braucht den
+	// Parser (```-Blöcke), darf aber keine ==Markierung== oder {Farbe} bekommen. Vorher wurde
+	// aus `if (a == b && c == d)` in KI-Antworten ein <mark>-Balken.
 	_maskMath(src) {
-		const stash = [];
-		const text = String(src ?? "").replace(U._mathMaskRe, (m, code) => {
-			if (code) return code;
+		const stash = [], code = [];
+		const text = String(src ?? "").replace(U._mathMaskRe, (m, c) => {
+			if (c) { code.push(c); return U._codeTokL + (code.length - 1) + U._codeTokR; }
 			stash.push(m);
 			return U._mathTokL + (stash.length - 1) + U._mathTokR;
 		});
-		return { text, stash };
+		return { text, stash, code };
+	},
+	_restoreCode(text, code) {
+		if (!code.length) return text;
+		U._codeRestoreRe = U._codeRestoreRe || new RegExp(U._codeTokL + "([0-9]+)" + U._codeTokR, "g");
+		return text.replace(U._codeRestoreRe, (_, i) => code[+i] ?? "");
 	},
 	// escape=false liefert die Formel als Rohtext zurück (für Text-Fallbacks),
 	// sonst HTML-escaped — KaTeX liest den escapeten Text später korrekt als
@@ -543,7 +561,7 @@ export const U = {
 		}
 		// 🧮 Formeln maskieren → Markdown parsen → Formeln 1:1 wieder einsetzen.
 		const masked = U._maskMath(src);
-		const raw = U._markHighlights(masked.text);
+		const raw = U._restoreCode(U._markHighlights(masked.text), masked.code);
 		if (!window.marked) {
 			// FIX: Offline-Fallback NICHT cachen — sonst blieb der rohe <pre>-Text für
 			// immer im Cache, auch nachdem marked (CDN) später doch noch geladen wurde.
@@ -617,6 +635,13 @@ export const U = {
 		if (!el) return;
 		if (!U.hasMathDelimiters(el)) return;
 		if (!(await U.ensureKatex())) return;
+		// Eltern der Formeltexte merken ihren Quelltext (siehe _morphNode).
+		const parents = new Set();
+		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			if (n.parentElement && /\$|\\\(|\\\[/.test(n.nodeValue)) parents.add(n.parentElement);
+		}
+		for (const parent of parents) parent.__srcHtml = parent.innerHTML;
 		try {
 			renderMathInElement(el, {
 				delimiters: [
@@ -642,6 +667,7 @@ export const U = {
 			btn.type = "button"; btn.className = "code-copy"; btn.dataset.codecopy = "1";
 			btn.title = "Code kopieren";
 			btn.innerHTML = icon("copy");
+			pre.__srcHtml = pre.innerHTML; // vor Knopf und Färbung (siehe _morphNode)
 			pre.appendChild(btn);
 		});
 		const hasCode = !!el.querySelector("pre code:not(.language-mermaid)");
