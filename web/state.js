@@ -8,11 +8,13 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { cooperativeGate, yieldToMain } from "./cooperative.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import { createFuzzyIndex } from "./search-fuzzy.js";
+import { noteEventOrder, reorderSafe } from "./event-order.js";
 import {
 	STATE_CHECKPOINT_CORE_KEYS,
 	STATE_CHECKPOINT_FORMAT,
 	STATE_CHECKPOINT_KEYS,
 	checkpointStateOf,
+	checkpointOrderTimes,
 	checkpointSavedState,
 	checkpointStateStats,
 	eventLogInfoOf,
@@ -469,6 +471,11 @@ export const STATE = (() => {
 		}
 		_stateRevision++;
 		const eventTime = String(ev?.t || "");
+		// Ein verspätetes Fremd-Event, das dieselbe Sache anfasst wie schon angewandte neuere
+		// Events, lässt den Speicher vom sortierten Replay abweichen. Davon keinen Checkpoint
+		// speichern: Der nächste Start sortiert das Event dann wieder richtig ein.
+		if (!_loading && eventTime < _loadedTime && !(_orderTimesComplete && reorderSafe(ev, _orderTimes))) _replayOrdered = false;
+		noteEventOrder(_orderTimes, ev);
 		if (eventTime > _loadedTime) _loadedTime = eventTime;
 		// PERF (18. Juli): Cache-Invalidierung für die Memoization oben — jedes
 		// relevante Event macht die betroffenen Caches ungültig, sonst ändert sich nichts.
@@ -1105,6 +1112,11 @@ export const STATE = (() => {
 
 	let _loadedSeq = 0;
 	let _loadedTime = "";
+	// Je Sache der späteste Event-Zeitpunkt (event-order.js). Unvollständig, wenn der Start
+	// von einem Checkpoint ohne diese Zeiten kam; dann gilt jedes verspätete Event als riskant.
+	let _orderTimes = new Map(), _orderTimesComplete = true;
+	// false, sobald der Speicher nicht mehr dem nach Zeit sortierten Replay entspricht.
+	let _replayOrdered = true;
 	const getLoadedSeq = () => _loadedSeq;
 	const getLoadedTime = () => _loadedTime;
 
@@ -1190,6 +1202,7 @@ export const STATE = (() => {
 		_checkpointBlobSizes = {}; _checkpointDirtyBlobHashes = new Set();
 		_checkpointPayloadLoaded = true; _checkpointPayloadPromise = null; _checkpointPayloadGeneration++;
 		_checkpointBaseSeq = 0; _appliedPostLoadEventIds = new Set();
+		_orderTimes = new Map(); _orderTimesComplete = true; _replayOrdered = true;
 		let checkpointUsed = false, rejectReason = "missing", replayed = 0, info = { count: 0, maxSeq: 0, lastEventId: "" }, replayIds = new Set();
 		try {
 			let checkpoint = null, tail = [], boundary = null, saved = null;
@@ -1233,10 +1246,14 @@ export const STATE = (() => {
 				if (!partitioned) _checkpointDirtyBlobHashes = new Set(Object.keys(_checkpointBlobSizes));
 				const sortedTail = sortEvents(tail);
 				if (checkpoint.maxTime) U.observeTime(checkpoint.maxTime);
+				const savedOrderTimes = checkpointOrderTimes(checkpoint);
+				_orderTimes = savedOrderTimes || new Map();
+				_orderTimesComplete = !!savedOrderTimes;
+				// Der Rest kann komplett älter sein als der Checkpoint (verspätete Fremd-Events).
+				_loadedTime = String(checkpoint.maxTime || "");
 				await PERF_PROFILER.run("state.checkpoint-replay", () => replayCooperatively(sortedTail), { eventCount: sortedTail.length }, 5);
 				replayed = sortedTail.length;
 				replayIds = new Set(sortedTail.map((event) => event?.id).filter(Boolean));
-				_loadedTime = sortedTail.length ? sortedTail.at(-1).t : checkpoint.maxTime || "";
 				_checkpointInfo = {
 					format: checkpoint.format,
 					maxSeq: Math.max(0, Number(checkpoint.maxSeq) || 0),
@@ -1400,6 +1417,12 @@ export const STATE = (() => {
 	async function persistCheckpoint() {
 		const revision = _stateRevision;
 		const finishProfile = PERF_PROFILER.start("state.checkpoint-save", {}, 20);
+		// Ein Checkpoint muss genau dem sortierten Replay seiner Events entsprechen. Den alten
+		// behalten; true beendet die Versuche, bis der nächste Start wieder sortiert einspielt.
+		if (!_replayOrdered) {
+			finishProfile({ skipped: "out-of-order" });
+			return true;
+		}
 		try {
 			const current = await PERF_PROFILER.run("state.checkpoint-save-info", () => DB.eventLogInfo(), {}, 5);
 			if (revision !== _stateRevision) {
@@ -1433,7 +1456,7 @@ export const STATE = (() => {
 				finishProfile({ stale: true });
 				return false;
 			}
-			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes, heftDocHashes);
+			const checkpoint = makeStateCheckpoint(S, current, _loadedTime, _checkpointBlobSizes, heftDocHashes, _orderTimesComplete ? _orderTimes : null);
 			await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(checkpoint, dirtyBlobs, heftDocJson), {
 				eventCount: current.count,
 				keys: STATE_CHECKPOINT_CORE_KEYS.length,
@@ -1444,7 +1467,10 @@ export const STATE = (() => {
 			_checkpointInfo = { format: STATE_CHECKPOINT_FORMAT, maxSeq: current.maxSeq, eventCount: current.count, lastEventId: current.lastEventId };
 			_checkpointBaseSeq = current.maxSeq;
 			_loadedSeq = current.maxSeq;
-			_appliedPostLoadEventIds.clear();
+			// Nur die jetzt gesicherten Events vergessen: Was während des Schreibens angewandt
+			// wurde, liegt über maxSeq und gehört zum nächsten Checkpoint. Ein clear() ließ
+			// jeden weiteren Versuch dieser Sitzung als „unapplied“ scheitern.
+			for (const event of postLoadEvents) if (event?.id) _appliedPostLoadEventIds.delete(event.id);
 			finishProfile({ eventCount: current.count });
 			return true;
 		} catch (error) {

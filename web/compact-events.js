@@ -83,3 +83,26 @@ export function compactEvents(events) {
 	}
 	return keep.filter((ev) => ev.type !== "heftBlob" || usedRefs.has(ev.payload && ev.payload.hash));
 }
+
+// Kompaktiert den events-Store in EINER readwrite-Transaktion (Hauptthread oder compact-worker.js).
+// Das Event mit der höchsten seq bleibt immer: DB.maxSeq() ist der Wasserstand für Upload-Cursor
+// und Start-Checkpoint. Sänke er, hielte der Cloudflare-Push den Log für zurückgesetzt und lüde
+// alles neu hoch. Ein zusätzlich behaltenes Event ist harmlos, der Log bleibt eine Obermenge.
+export function compactEventStore(db, minDrop) {
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
+		const req = store.getAll();
+		let dropped = 0, floor = "";
+		req.onsuccess = () => {
+			const evs = req.result || [], compacted = compactEvents(evs);
+			if (evs.length - compacted.length < minDrop) return;
+			const keep = new Set(compacted.map((ev) => ev.seq));
+			keep.add(evs.reduce((top, ev) => Math.max(top, ev.seq || 0), 0));
+			for (const ev of evs) if (!keep.has(ev.seq)) { store.delete(ev.seq); dropped++; }
+			floor = compacted.length ? compacted[0].t : "";
+		};
+		req.onerror = () => { try { tx.abort(); } catch {} };
+		tx.oncomplete = () => resolve({ dropped, floor });
+		tx.onerror = tx.onabort = () => reject(tx.error || req.error || new Error("Kompaktierung abgebrochen."));
+	});
+}

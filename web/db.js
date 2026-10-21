@@ -3,7 +3,7 @@ import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { shouldUploadToSync } from "./sync-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { compactEvents } from "./compact-events.js";
+import { compactEvents, compactEventStore } from "./compact-events.js";
 import { yieldToMain } from "./cooperative.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
@@ -407,27 +407,9 @@ export const DB = (() => {
 			worker.postMessage({ name: db.name, version: db.version, minDrop });
 		});
 	}
-	function compactInline(minDrop) {
-		return new Promise((resolve, reject) => {
-			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
-			const req = store.getAll();
-			let dropped = 0, floor = "";
-			req.onsuccess = () => {
-				const evs = req.result || [], compacted = compactEvents(evs);
-				dropped = evs.length - compacted.length;
-				if (dropped < minDrop) { dropped = 0; return; }
-				const keep = new Set(compacted.map((ev) => ev.seq));
-				for (const ev of evs) if (!keep.has(ev.seq)) store.delete(ev.seq);
-				floor = compacted.length ? compacted[0].t : "";
-			};
-			req.onerror = () => { try { tx.abort(); } catch {} };
-			tx.oncomplete = () => resolve({ dropped, floor });
-			tx.onerror = tx.onabort = () => reject(tx.error || req.error);
-		});
-	}
 	async function compactLocal(minDrop = 200) {
 		ensureOpen();
-		const { dropped, floor } = (await compactInWorker(minDrop)) || (await compactInline(minDrop));
+		const { dropped, floor } = (await compactInWorker(minDrop)) || (await compactEventStore(db, minDrop));
 		if (!dropped) return 0;
 		forgetKnownEventIds();
 		localStorage.setItem(COMPACT_FLOOR_KEY, floor || U.now());

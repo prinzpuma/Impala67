@@ -66,6 +66,7 @@ const APP_FILES = [
 	"./event-bus.js",
 	"./state.js",
 	"./state-checkpoint.js",
+	"./event-order.js",
 	"./tools.js",
 	"./ai.js",
 	"./embedding.js",

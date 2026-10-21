@@ -1,6 +1,7 @@
 "use strict";
 
 import { sha256Hex } from "./sync-crypto.js";
+import { reorderSafe } from "./event-order.js";
 
 // 3: Heft-Striche je Heft als eigener Eintrag. 2: alle Hefte als ein JSON-Text. 1: alles in einem Objekt.
 export const STATE_CHECKPOINT_FORMAT = 3;
@@ -87,7 +88,9 @@ export async function hashHeftDocs(serialized) {
 	return { heftDocHashes, heftDocJson };
 }
 
-export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes, heftDocHashes) {
+// orderTimes (event-order.js): je Sache der späteste Event-Zeitpunkt im Checkpoint. Fehlt
+// es (ältere Checkpoints, unvollständig bekannt), erzwingt jedes verspätete Event den Voll-Replay.
+export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes, heftDocHashes, orderTimes) {
 	const { heftDocs, ...core } = checkpointCoreStateOf(state);
 	return {
 		format: STATE_CHECKPOINT_FORMAT,
@@ -99,7 +102,13 @@ export function makeStateCheckpoint(state, info, maxTime, knownBlobSizes, heftDo
 		reconciledArchive: true,
 		state: core,
 		heftDocHashes: { ...heftDocHashes },
+		...(orderTimes ? { orderTimes: Object.fromEntries(orderTimes) } : {}),
 	};
+}
+
+export function checkpointOrderTimes(checkpoint) {
+	const times = checkpoint?.orderTimes;
+	return times && typeof times === "object" && !Array.isArray(times) ? new Map(Object.entries(times)) : null;
 }
 
 // Gespeicherter Zustand eines Checkpoints, Heft-Striche wieder als Objekt. Format 3
@@ -134,8 +143,12 @@ export function stateCheckpointRejectReason(checkpoint, currentInfo, boundaryEve
 	if (eventCount + tail.length !== (Number(currentInfo?.count) || 0)) return "count";
 	if (maxSeq > 0 && (!boundaryEvent || Number(boundaryEvent.seq) !== maxSeq || String(boundaryEvent.id || "") !== String(checkpoint.lastEventId || ""))) return "boundary";
 	if (tail.some((event) => (Number(event?.seq) || 0) <= maxSeq)) return "tail-seq";
-	// Ein nachträglich importiertes älteres Event muss in die globale Zeitreihenfolge
-	// einsortiert werden. In diesem seltenen Fall ist nur der Voll-Replay beweisbar korrekt.
-	if (checkpoint.maxTime && tail.some((event) => String(event?.t || "") < checkpoint.maxTime)) return "older-tail";
+	// Ein nachträglich importiertes älteres Event gehört in der Zeitreihenfolge vor einen Teil
+	// des gespeicherten Stands. Nur wenn es dort nichts Gemeinsames anfasst, reicht es, das
+	// Event hinten anzuhängen; sonst ist nur der Voll-Replay korrekt.
+	if (checkpoint.maxTime) {
+		const times = checkpointOrderTimes(checkpoint);
+		if (tail.some((event) => String(event?.t || "") < checkpoint.maxTime && !reorderSafe(event, times))) return "older-tail";
+	}
 	return "";
 }
