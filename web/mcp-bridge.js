@@ -18,6 +18,13 @@ import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
 let bridgeStarted = false;
 
+// Der Sync-Schlüssel ist das E2EE-Geheimnis aller Geräte; er gehört nicht in Diagnose-Antworten,
+// die in KI-Protokollen und Chat-Verläufen landen.
+function cloudflareStatus() {
+	const { syncKey, ...status } = CLOUDFLARE_SYNC.status();
+	return { ...status, hasSyncKey: !!syncKey };
+}
+
 // Schalter in Einstellungen → Daten → Diagnose: an verbindet sofort, aus wirkt nach dem nächsten App-Start.
 if (typeof document !== "undefined") {
 	document.addEventListener("change", (event) => {
@@ -467,7 +474,7 @@ export function initMcpBridge() {
 								memory,
 							},
 							sync: {
-								cloudflare: CLOUDFLARE_SYNC ? CLOUDFLARE_SYNC.status() : null,
+								cloudflare: CLOUDFLARE_SYNC ? cloudflareStatus() : null,
 								drive: DRIVE ? DRIVE.status() : null,
 							},
 							recentErrors: recentErrors.slice(-10),
@@ -545,13 +552,13 @@ export function initMcpBridge() {
 										CLOUDFLARE_SYNC.syncNow().catch((err) => {
 											console.warn("[MCP-Bridge] Hintergrund-Sync Fehler:", err);
 										});
-										result = { ok: true, started: true, mode: "background", status: CLOUDFLARE_SYNC.status() };
+										result = { ok: true, started: true, mode: "background", status: cloudflareStatus() };
 									} else {
 										try {
 											const syncRes = await CLOUDFLARE_SYNC.syncNow();
-											result = { ok: true, sync: syncRes, status: CLOUDFLARE_SYNC.status() };
+											result = { ok: true, sync: syncRes, status: cloudflareStatus() };
 										} catch (syncErr) {
-											result = { ok: false, error: syncErr?.message || String(syncErr), status: CLOUDFLARE_SYNC.status() };
+											result = { ok: false, error: syncErr?.message || String(syncErr), status: cloudflareStatus() };
 										}
 									}
 								} else {

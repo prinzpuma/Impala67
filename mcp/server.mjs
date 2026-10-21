@@ -96,7 +96,9 @@ function callViaRelay(tool, args) {
 }
 
 function startWsServer() {
-	const wss = new WebSocketServer({ port: wsPort, verifyClient: (info) => isAllowedOrigin(info.origin) });
+	// Nur Loopback: Ohne host lauscht ws auf allen Netzwerkschnittstellen, und Verbindungen
+	// ohne Origin (andere Rechner im WLAN) kämen über /relay direkt an impala_eval.
+	const wss = new WebSocketServer({ host: "127.0.0.1", port: wsPort, verifyClient: (info) => isAllowedOrigin(info.origin) });
 	wss.on("connection", (ws, req) => {
 		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
 		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
