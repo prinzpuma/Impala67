@@ -416,10 +416,11 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	}
 
 	// HTML aus Anki-Feldern in Klartext/Markdown-tauglichen Text umwandeln
+	// SECURITY: DOMParser statt innerHTML an einem eigenen <div> — dort laden Bilder auch
+	// ohne Einhängen, ein <img onerror=…> aus einer fremden .apkg-Datei liefe als Code.
 	const stripHtml = (s) => {
-		const d = document.createElement("div");
-		d.innerHTML = String(s || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/div>\s*<div>/gi, "\n");
-		return (d.textContent || "").trim();
+		const html = String(s || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/div>\s*<div>/gi, "\n");
+		return (new DOMParser().parseFromString(html, "text/html").body.textContent || "").trim();
 	};
 
 	// ---- .apkg-Import: collection.anki2/anki21 lesen, Notizen → cardCreate-Events ----
