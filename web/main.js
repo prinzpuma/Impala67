@@ -58,6 +58,7 @@ PERF_PROFILER.setContextProvider(() => ({
 	cards: Object.keys(S.cards || {}).length,
 	eventsLoaded: STATE.loadedSeq?.() || 0,
 }));
+PERF_PROFILER.setMemoryProvider(() => HEFT.memoryStats());
 PERF_PROFILER.init();
 
 // config.local.js bewusst ZULETZT (stand vorher oben): statische Imports laufen

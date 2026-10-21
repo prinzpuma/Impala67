@@ -547,6 +547,36 @@ const ALIVE_KEY = "impala67PerformanceAlive";
 const ALIVE_INTERVAL_MS = 2000;
 let aliveTimer = 0;
 
+// Speicher außerhalb des JS-Heaps, den die App selbst zählen kann: Canvas-Flächen im DOM (4 Byte je Pixel)
+// plus, was der Memory-Provider liefert (dekodierte Heft-Bilder). Der Rest der WebView ist von hier unsichtbar.
+const MEMORY_HIGH_MB = 150, MEMORY_STEP_MB = 25;
+let memoryProvider = null;
+let peakMemoryMb = 0;
+function memoryStats() {
+	const out = {};
+	try {
+		if (typeof document !== "undefined" && document.querySelectorAll) {
+			let px = 0, n = 0;
+			for (const cv of document.querySelectorAll("canvas")) {
+				const p = cv.width * cv.height;
+				if (p > 1) { px += p; n++; }
+			}
+			out.canvasCount = n;
+			out.canvasMb = round(px * 4 / 1048576);
+		}
+		Object.assign(out, safeMeta(memoryProvider?.() || {}));
+	} catch { /* ignore */ }
+	const totalMb = round((out.canvasMb || 0) + (out.imageMb || 0));
+	out.totalMb = totalMb;
+	// Neue Spitzen ab 150 MB festhalten (in 25-MB-Schritten): zeigt auch ohne Absturz, wann es eng wird
+	if (totalMb >= MEMORY_HIGH_MB && totalMb >= peakMemoryMb + MEMORY_STEP_MB) {
+		peakMemoryMb = totalMb;
+		record("memory-high", totalMb, { name: "canvas+images", ...out });
+	}
+	out.peakMb = Math.max(peakMemoryMb, totalMb);
+	return out;
+}
+
 function writeAlive() {
 	try {
 		const ctx = currentContext();
@@ -558,6 +588,7 @@ function writeAlive() {
 			active: (ctx.active || []).map((entry) => entry.name).join(","),
 			lastAction: ctx.lastAction ? `${ctx.lastAction.type}:${ctx.lastAction.tag}#${ctx.lastAction.id}` : "",
 			heapMb: typeof performance !== "undefined" && performance.memory ? round(performance.memory.usedJSHeapSize / 1048576) : null,
+			memory: memoryStats(),
 		}));
 	} catch { /* ignore */ }
 }
@@ -570,6 +601,9 @@ function noteUncleanExit() {
 	let last = null;
 	try { last = JSON.parse(storage()?.getItem(ALIVE_KEY) || "null"); } catch { /* ignore */ }
 	if (!last) return;
+	// Speicherstand höchstens 2 s vor dem Ende: lastCanvasMb, lastImageMb, lastPeakMb, lastHeftPage …
+	const memory = {};
+	for (const [key, value] of Object.entries(last.memory || {})) memory["last" + key[0].toUpperCase() + key.slice(1)] = value;
 	record(last.visibility === "hidden" ? "app-killed-in-background" : "app-crash", 0, {
 		failed: true,
 		lastSeenAt: last.at,
@@ -578,6 +612,7 @@ function noteUncleanExit() {
 		lastActive: last.active,
 		lastAction: last.lastAction,
 		lastHeapMb: last.heapMb,
+		...memory,
 	});
 }
 
@@ -707,12 +742,14 @@ function report() {
 			hardwareConcurrency: typeof navigator !== "undefined" ? navigator.hardwareConcurrency || null : null,
 			deviceMemoryGb: typeof navigator !== "undefined" ? navigator.deviceMemory || null : null,
 			memory,
+			canvasAndImages: memoryStats(),
 		},
 		records,
 	}, null, 2);
 }
 
 function setContextProvider(provider) { contextProvider = typeof provider === "function" ? provider : null; }
+function setMemoryProvider(provider) { memoryProvider = typeof provider === "function" ? provider : null; }
 function status() {
 	const isAnom = getMode() === MODE_ANOMALIES;
 	return {
@@ -750,6 +787,7 @@ export const PERF_PROFILER = {
 	flush,
 	status,
 	setContextProvider,
+	setMemoryProvider,
 	MODE_ANOMALIES,
 	MODE_ALL,
 };

@@ -1776,6 +1776,12 @@ export const HEFT = (() => {
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && input.isWriting()),
+		// Absturz-Spur im Profiler: dekodierte Bilder des offenen Hefts (liegen nicht im DOM)
+		memoryStats() {
+			let px = 0, n = 0;
+			for (const im of Object.values(imgCache)) if (im.naturalWidth) { px += im.naturalWidth * im.naturalHeight; n++; }
+			return { imageCount: n, imageMb: Math.round(px * 4 / 104857.6) / 10, heftPages: doc ? doc.pages.length : 0, heftPage: pid ? idx : -1 };
+		},
 	};
 })();
 
