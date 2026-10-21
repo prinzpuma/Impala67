@@ -221,32 +221,36 @@ export const RAG = (() => {
 	// Fehler pro Batch gebündelt loggen (sonst spamt ein kaputtes Embedding-Modell die Console
 	// mit einer Zeile pro Seite). Bei wiederholtem gleichem Fehler bricht der Batch ab —
 	// die restlichen IDs bleiben stale und kommen im nächsten Zyklus wieder.
+	// Durchläufe nacheinander: Ein Lauf kann (lokales Modell, viele Seiten) länger dauern als die
+	// 2,5 s Wartezeit — vorher startete dann ein zweiter parallel und bettete dieselben Seiten doppelt ein.
+	let running = Promise.resolve();
 	function queuePage(pageId) {
 		if (!enabled()) return;
 		queue.add(pageId);
 		clearTimeout(timer);
-		timer = setTimeout(async () => {
-			const ids = [...queue];
-			queue.clear();
-			let failN = 0, lastErr = null, lastMsg = "";
-			for (const id of ids) {
-				try { await indexPage(id); }
-				catch (e) {
-					failN++;
-					lastErr = e;
-					const msg = String(e?.message || e);
-					// Gleicher Config-/API-Fehler → restliche Seiten überspringen (kein Mehrwert).
-					if (failN > 1 && msg === lastMsg) {
-						failN += ids.length - ids.indexOf(id) - 1;
-						break;
-					}
-					lastMsg = msg;
+		timer = setTimeout(() => { running = running.then(indexQueued); }, 2500);
+	}
+	async function indexQueued() {
+		const ids = [...queue];
+		queue.clear();
+		let failN = 0, lastErr = null, lastMsg = "";
+		for (const id of ids) {
+			try { await indexPage(id); }
+			catch (e) {
+				failN++;
+				lastErr = e;
+				const msg = String(e?.message || e);
+				// Gleicher Config-/API-Fehler → restliche Seiten überspringen (kein Mehrwert).
+				if (failN > 1 && msg === lastMsg) {
+					failN += ids.length - ids.indexOf(id) - 1;
+					break;
 				}
-				await yieldToBrowser();
+				lastMsg = msg;
 			}
-			if (failN === 1) console.warn("RAG-Index fehlgeschlagen:", lastErr);
-			else if (failN > 1) console.warn("RAG-Index: " + failN + " Seite(n) fehlgeschlagen — " + lastMsg);
-		}, 2500);
+			await yieldToBrowser();
+		}
+		if (failN === 1) console.warn("RAG-Index fehlgeschlagen:", lastErr);
+		else if (failN > 1) console.warn("RAG-Index: " + failN + " Seite(n) fehlgeschlagen — " + lastMsg);
 	}
 
 	// Fehlende/veraltete Seiten nachindexieren (beim Start und nach ⚙️-Änderung).
@@ -339,9 +343,12 @@ export const RAG = (() => {
 				if (!v) v = new Float32Array(c.vec.length);
 				if (c.vec.length !== v.length) continue;
 				const n = c.norm || norm(c.vec);
+				if (!n) continue; // Nullvektor: würde alles zu NaN machen
 				for (let i = 0; i < v.length; i++) v[i] += c.vec[i] / n;
 			}
-			if (v) { const n = norm(v); for (let i = 0; i < v.length; i++) v[i] /= n; }
+			const n = v ? norm(v) : 0;
+			if (n) for (let i = 0; i < v.length; i++) v[i] /= n;
+			else v = null;
 			pageVecCache.set(rec, v);
 		}
 		return v;
