@@ -78,7 +78,10 @@ export const U = {
 	loadStyle(href) {
 		const existing = document.querySelector(`link[href="${href}"]`);
 		if (existing?.dataset.loaded === "1") return Promise.resolve(true);
-		return withLoadTimeout((async () => {
+		// Gleichzeitige Aufrufe teilen sich einen Ladevorgang: Ein zweiter Aufruf überschrieb
+		// sonst l.onload des ersten, der dann 15 s in den Timeout lief und einen Fehler meldete.
+		if (U._pendingLoads.has(href)) return U._pendingLoads.get(href);
+		const p = withLoadTimeout((async () => {
 			const l = existing || document.createElement("link");
 			if (!existing) {
 				l.rel = "stylesheet";
@@ -93,7 +96,9 @@ export const U = {
 			});
 			await cacheOptionalAsset(href, "Stylesheet");
 			return true;
-		})(), href);
+		})(), href).finally(() => U._pendingLoads.delete(href));
+		U._pendingLoads.set(href, p);
+		return p;
 	},
 
 	// Fehlertolerante Ablage für reine Geräte-Einstellungen.
@@ -748,8 +753,7 @@ export const U = {
 				});
 				return;
 			}
-		}
-		if (!(await U.ensureMermaid())) return;
+		} else if (!(await U.ensureMermaid())) return;
 		blocks.forEach(async (block) => {
 			const pre = block.closest("pre");
 			if (!pre || pre.dataset.mermaidDone) return;

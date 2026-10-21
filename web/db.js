@@ -181,62 +181,16 @@ export const DB = (() => {
 	// Cursor/Batch liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
 	// Transport unterdrückt ausschließlich sein eigenes Echo; Cloudflare-Events
 	// dürfen deshalb weiterhin ins Drive-Backup und umgekehrt.
-	function eventsAfterSeq(seq, target = "drive", upToSeq = Infinity) {
-		ensureOpen();
-		const lower = Number(seq || 0), upper = Number(upToSeq);
-		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
-		const range = Number.isFinite(upper)
-			? IDBKeyRange.bound(lower, upper, true, false)
-			: IDBKeyRange.lowerBound(lower, true);
-		return new Promise((res, rej) => {
-			const store = db.transaction("events").objectStore("events");
-			if (typeof store.getAll === "function") {
-				const req = store.getAll(range);
-				req.onsuccess = () => {
-					const all = req.result || [];
-					res(all.filter((ev) => shouldUploadToSync(ev, target)));
-				};
-				req.onerror = () => rej(req.error);
-				return;
-			}
-			const out = [];
-			const req = store.openCursor(range);
-			req.onsuccess = () => {
-				const cur = req.result;
-				if (!cur) return res(out);
-				if (shouldUploadToSync(cur.value, target)) out.push(cur.value);
-				cur.continue();
-			};
-			req.onerror = () => rej(req.error);
-		});
-	}
 	function eventsAfterSeqAll(seq, upToSeq = Infinity, limit = 0) {
-		ensureOpen();
 		const lower = Number(seq || 0), upper = Number(upToSeq);
 		if (Number.isFinite(upper) && upper <= lower) return Promise.resolve([]);
 		const range = Number.isFinite(upper)
 			? IDBKeyRange.bound(lower, upper, true, false)
 			: IDBKeyRange.lowerBound(lower, true);
-		return new Promise((res, rej) => {
-			const store = db.transaction("events").objectStore("events");
-			if (typeof store.getAll === "function") {
-				const req = limit ? store.getAll(range, limit) : store.getAll(range);
-				req.onsuccess = () => res(req.result || []);
-				req.onerror = () => rej(req.error);
-				return;
-			}
-			const out = [];
-			const req = store.openCursor(range);
-			req.onsuccess = () => {
-				const cur = req.result;
-				if (!cur) return res(out);
-				out.push(cur.value);
-				if (limit && out.length >= limit) return res(out);
-				cur.continue();
-			};
-			req.onerror = () => rej(req.error);
-		});
+		return ro("events", (s) => (limit ? s.getAll(range, limit) : s.getAll(range))).then((all) => all || []);
 	}
+	const eventsAfterSeq = (seq, target = "drive", upToSeq = Infinity) =>
+		eventsAfterSeqAll(seq, upToSeq).then((all) => all.filter((ev) => shouldUploadToSync(ev, target)));
 
 	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
 	const getBlob = (id) => ro("blobs", (s) => s.get(id));
