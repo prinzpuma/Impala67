@@ -74,18 +74,30 @@ export async function purgeOldTrash() {
 // Blob-Garbage-Collector: PDF- und Heft-Blobs endgültig gelöschter Seiten blieben
 // bisher für immer in IndexedDB liegen (pageDelete löscht nur den Zustand — beim
 // Event-Replay gibt es keine Blob-Löschung). Läuft nach dem Laden im Hintergrund.
+// Der Seitenverlauf hält bis zu 10 Fassungen je Seite (compact-events.js): Ein Bild, das nur
+// noch dort vorkommt, bräuchte das Wiederherstellen — vorher löschte der nächste Start es
+// endgültig. Kandidaten werden deshalb gegen die Fassungen im Log geprüft; weil das den
+// ganzen Log liest, höchstens einmal am Tag.
+const BLOB_GC_KEY = "impala67_blob_gc_at", BLOB_GC_EVERY_MS = 864e5;
 export async function purgeOrphanBlobs() {
 	try {
-		let removed = 0;
+		if (Date.now() - (Number(U.storage.get(BLOB_GC_KEY)) || 0) < BLOB_GC_EVERY_MS) return;
 		const alive = blobAliveChecker(S.pages);
-		for (const k of await DB.allBlobKeys()) {
-			const key = String(k);
-			// Schnellprüfung gegen einen Schnappschuss; vor dem Löschen frisch nachprüfen,
-			// falls eine Seite den Blob während der Schleife gerade wieder referenziert.
-			if (alive(key) || isBlobAlive(key, S.pages)) continue;
-			await DB.delBlob(key);
-			removed++;
+		const orphans = (await DB.allBlobKeys()).map(String).filter((key) => !alive(key));
+		let removed = 0;
+		if (orphans.length) {
+			const versions = (await DB.allEvents())
+				.map((ev) => (ev?.type === "pageCreate" ? ev.payload : ev?.type === "pageUpdate" ? ev.payload?.patch : null))
+				.filter((fields) => fields && typeof fields === "object");
+			const inHistory = blobAliveChecker(versions);
+			for (const key of orphans) {
+				// Vor dem Löschen frisch nachprüfen, falls eine Seite den Blob gerade wieder referenziert.
+				if (inHistory(key) || isBlobAlive(key, S.pages)) continue;
+				await DB.delBlob(key);
+				removed++;
+			}
 		}
+		U.storage.set(BLOB_GC_KEY, Date.now());
 		if (removed) console.info("Blob-GC: " + removed + " verwaiste Blobs entfernt.");
 	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
 }
