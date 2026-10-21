@@ -282,6 +282,8 @@ export const U = {
 			newNode.getAttribute("contenteditable") === "true";
 		// Attribute angleichen
 		for (const a of [...newNode.attributes]) {
+			// Hydriertes Bild (data-hydrated = ursprüngliches src): Blob-URL behalten, solange die Quelle gleich bleibt.
+			if (a.name === "src" && oldNode.dataset.hydrated === a.value) continue;
 			if (oldNode.getAttribute(a.name) !== a.value) { oldNode.setAttribute(a.name, a.value); changed = true; }
 		}
 		for (const a of [...oldNode.attributes]) {
@@ -532,8 +534,13 @@ export const U = {
 	_dropTags: new Set(["script", "style", "iframe", "object", "embed", "form", "link", "meta", "base", "noscript", "template"]),
 	_safeTags: new Set(["a", "abbr", "b", "blockquote", "br", "code", "del", "details", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "ins", "kbd", "li", "mark", "ol", "p", "pre", "s", "small", "span", "strong", "sub", "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "u", "ul"]),
 	_safeAttrs: new Set(["alt", "class", "colspan", "href", "rowspan", "src", "title"]),
+	// Wie DOMPurifys Standardliste, plus „img:“: lokale Bilder aus IndexedDB (![…](img:<id>),
+	// hydrateImages in render.js löst sie auf). Ohne Eintrag strich DOMPurify das src — Bilder in
+	// Karteikarten, Seitenverlauf und KI-Änderungsvorschau blieben leer. Das Schema ist weder
+	// navigier- noch ausführbar.
+	_purifyOpts: { ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|img):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i },
 	sanitize(html) {
-		if (window.DOMPurify) return DOMPurify.sanitize(html);
+		if (window.DOMPurify) return DOMPurify.sanitize(html, U._purifyOpts);
 		// DOMPurify fehlt (offline, CDN- oder SRI-Fehler): einmal pro Sitzung im Profiler melden.
 		if (!U._purifyMissingReported) {
 			U._purifyMissingReported = true;
@@ -544,7 +551,8 @@ export const U = {
 			if (U._dropTags.has(el.localName)) { el.remove(); continue; }
 			if (!U._safeTags.has(el.localName)) { el.replaceWith(...el.childNodes); continue; }
 			for (const a of [...el.attributes]) {
-				const urlOk = !/^(href|src)$/.test(a.name) || /^(https?:|mailto:|#|\.{0,2}\/|data:image\/)/i.test(a.value.trim());
+				const urlOk = !/^(href|src)$/.test(a.name) || /^(https?:|mailto:|#|\.{0,2}\/|data:image\/)/i.test(a.value.trim())
+					|| (a.name === "src" && /^img:/i.test(a.value.trim()));
 				if (!U._safeAttrs.has(a.name) || !urlOk) el.removeAttribute(a.name);
 			}
 		}

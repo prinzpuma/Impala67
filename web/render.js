@@ -1138,8 +1138,11 @@ function hydrateCovers(root) {
 }
 function hydrateImages(root) {
 	(root || document).querySelectorAll('img[src^="img:"]').forEach(async (img) => {
-		const u = await DB.blobUrl(img.getAttribute("src"), "image/png");
-		if (u) img.src = u;
+		const src = img.getAttribute("src");
+		const u = await DB.blobUrl(src, "image/png");
+		// Der Verweis bleibt in data-hydrated: U.morph setzt src sonst bei jedem Render auf
+		// „img:…“ zurück, und das Bild lud jedes Mal neu (Flackern).
+		if (u && img.getAttribute("src") === src) { img.dataset.hydrated = src; img.src = u; }
 	});
 }
 
