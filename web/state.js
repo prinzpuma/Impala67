@@ -1326,19 +1326,11 @@ export const STATE = (() => {
 		}
 	}
 
-	let _idleHydrateTimer = 0;
-	function scheduleBackgroundHydrate() {
-		if (_checkpointPayloadLoaded || _idleHydrateTimer) return;
-		const execute = () => {
-			_idleHydrateTimer = 0;
-			if (!_checkpointPayloadLoaded) hydrateHeftBlobs().catch((e) => PERF_PROFILER.error("heft-hydrate-error", e));
-		};
-		if (typeof requestIdleCallback === "function") {
-			_idleHydrateTimer = requestIdleCallback(execute, { timeout: 3000 });
-		} else {
-			_idleHydrateTimer = setTimeout(execute, 1000);
-		}
-	}
+	// Heft-Bilder aus dem Checkpoint werden nur für das Heft geladen, das sie braucht (heft.js
+	// load(), Vorschau, Export, Texterkennung). Vorher lud das erste geöffnete Heft im Leerlauf
+	// ALLE Bilder ALLER Hefte als Data-URL in den Speicher nach — bei vielen Scans Hunderte MB.
+	// Bekannt (geladen oder im Checkpoint) — zum Erkennen schon gespeicherter Bilder.
+	const hasHeftBlob = (hash) => typeof S.heftBlobs[hash] === "string" || Object.prototype.hasOwnProperty.call(_checkpointBlobSizes, hash);
 
 	async function hydrateHeftBlobs(targetHashes = null) {
 		const allHashes = Object.keys(_checkpointBlobSizes);
@@ -1407,8 +1399,6 @@ export const STATE = (() => {
 			S.heftBlobs = { ...blobs, ...S.heftBlobs };
 			if (!targetHashes || allHashes.every((h) => typeof S.heftBlobs[h] === "string")) {
 				_checkpointPayloadLoaded = true;
-			} else {
-				scheduleBackgroundHydrate();
 			}
 			return true;
 		};
@@ -1986,7 +1976,7 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, cardRevision: () => _cardRev, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, hasHeftBlob, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, cardRevision: () => _cardRev, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
 })();
 
 // Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)

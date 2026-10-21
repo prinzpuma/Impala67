@@ -161,22 +161,7 @@ export async function initApp() {
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
 	window.Capacitor?.Plugins?.SplashScreen?.hide?.();
-	// Heft-Bilder (12 MB+) erst nach dem ersten Frame nachladen. HEFT.mount zeigt
-	// bis dahin „Heft laden…“. Kein Warten hier — sonst hängt der Start wieder.
-	try {
-		if (S.pages?.[S.currentPageId]?.kind === "heft") {
-			const docHashes = [];
-			const docPages = S.heftDocs?.[S.currentPageId]?.pages;
-			if (Array.isArray(docPages)) {
-				for (const pg of docPages) {
-					if (Array.isArray(pg?.images)) {
-						for (const im of pg.images) if (im?.ref) docHashes.push(im.ref);
-					}
-				}
-			}
-			STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null).then(() => render()).catch((e) => PERF_PROFILER.error("heft-hydrate-error", e));
-		}
-	} catch { /* Heft-Payload bleibt lazy */ }
+	// Heft-Bilder lädt HEFT.mount (heft.js load) selbst — nur die des geöffneten Hefts.
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
 	MOBILE.init();
 	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint

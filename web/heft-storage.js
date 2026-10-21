@@ -38,12 +38,17 @@ export function ensureBlobPersisted(hash, dataUrl) {
 
 export function blobRef(dataUrl) {
 	const hash = blobId(dataUrl);
-	if (!S.heftBlobs[hash]) {
+	if (typeof S.heftBlobs[hash] !== "string") {
+		// hasHeftBlob kennt auch gespeicherte, nur nicht geladene Bilder — die brauchen kein
+		// zweites, mehrere MB großes heftBlob-Event im Log.
+		const stored = STATE.hasHeftBlob(hash);
 		// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
 		// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
 		S.heftBlobs[hash] = dataUrl;
-		pendingBlobData.set(hash, dataUrl);
-		void ensureBlobPersisted(hash, dataUrl).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
+		if (!stored) {
+			pendingBlobData.set(hash, dataUrl);
+			void ensureBlobPersisted(hash, dataUrl).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
+		}
 	}
 	return hash;
 }
