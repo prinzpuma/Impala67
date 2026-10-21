@@ -6,7 +6,7 @@ import { icon as spriteIcon } from "./icons.js";
 // auf State, DB oder DOM. Daten, Aktionen und Events liegen in den zuständigen Modulen (app.js, mobile.js, mobile-notes.js).
 
 // Icons kommen aus dem zentralen Sprite (icons.svg); hier nur die mobilen Namen.
-const NAMES = { back: "chevron-left", forward: "chevron-right", search: "search", sparkle: "sparkles", dots: "dots", home: "home", notes: "note", plus: "plus", cards: "cards", grid: "grid", x: "x", library: "library", graph: "graph", notebook: "notebook", chart: "chart", archive: "archive", trash: "trash", settings: "sliders", sync: "sync" };
+const NAMES = { edit: "pen", done: "check", back: "chevron-left", forward: "chevron-right", search: "search", sparkle: "sparkles", dots: "dots", home: "home", notes: "note", plus: "plus", cards: "cards", grid: "grid", x: "x", library: "library", graph: "graph", notebook: "notebook", chart: "chart", archive: "archive", trash: "trash", settings: "sliders", sync: "sync" };
 
 function icon(name) {
 	if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(NAMES, name)) return "";
@@ -23,6 +23,7 @@ function shellHtml() {
   <div class="m-bar-actions">
     <button type="button" class="m-iconbtn" data-m="search" aria-label="Suchen">${icon("search")}</button>
     <button type="button" class="m-iconbtn" data-m="ai" aria-label="KI-Assistent">${icon("sparkle")}</button>
+    <button type="button" id="mEditToggle" class="m-iconbtn" data-m="edittoggle" aria-label="Bearbeiten" hidden>${icon("edit")}</button>
     <button type="button" id="mPageMenu" class="m-iconbtn" data-m="pagemenu" aria-label="Seitenoptionen" hidden>${icon("dots")}</button>
   </div>
 </header>

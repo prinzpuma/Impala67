@@ -1,5 +1,6 @@
 "use strict";
 import { APP } from "./app.js";
+import { EDITOR } from "./editor.js";
 import { MOBILE_VIEW } from "./mobile-view.js";
 import { MOBILE_NOTES } from "./mobile-notes.js";
 import { MOBILE_SHEET } from "./mobile-sheet.js";
@@ -24,6 +25,7 @@ export const MOBILE = (() => {
 	let lastNotesOpen = false;
 	let notesDirty = false;   // Notizenliste muss im nächsten Takt neu gezeichnet werden
 	let uiRaf = 0;            // rAF-Taktgeber: höchstens ein updateUI-Lauf pro Frame
+	let editPageId = null;    // Seite im Bearbeitungsmodus; jede andere öffnet zum Lesen
 
 	// Ebenen-Stapel für Zurück-Taste / History. Reihenfolge = Reihenfolge der eigenen Einträge.
 	const hstack = [];
@@ -52,6 +54,19 @@ export const MOBILE = (() => {
 		if (o && !o.hidden) U.closeOverlay();
 		const pal = document.getElementById("palette");
 		if (pal && !pal.hidden) { pal.hidden = true; pal.innerHTML = ""; delete pal.dataset.mode; }
+	};
+
+	// Seiten öffnen auf dem Handy zum Lesen (keine Tastatur beim Tippen/Scrollen); die
+	// Stift-Taste oben schaltet die offene Seite in den Bearbeitungsmodus. Leere Seiten
+	// (z. B. gerade neu angelegt) sind sofort bearbeitbar — und bleiben es auch, sobald
+	// der erste Buchstabe steht.
+	const pageReadOnly = (pid) => {
+		if (!body.classList.contains("mobile-ui")) return false;
+		if (pid === editPageId) return false;
+		const pg = S.pages[pid];
+		if (!pg || pg.kind === "heft") return false;
+		if (!String(pg.content || "").trim()) { editPageId = pid; return false; }
+		return true;
 	};
 
 	const closeAll = () => {
@@ -269,6 +284,15 @@ export const MOBILE = (() => {
 				body.classList.remove("panel-collapsed");
 				RENDER.renderTabs();
 				break;
+			case "edittoggle": {
+				const pid = S.currentPageId;
+				if (!pid) break;
+				editPageId = pageReadOnly(pid) ? pid : null;
+				// Fokussierte Felder lässt der DOM-Abgleich unangetastet.
+				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+				RENDER.renderMain();
+				break;
+			}
 			case "pagemenu": {
 				const pg = S.pages[S.currentPageId];
 				if (pg) MOBILE_SHEET.open({ title: pg.title || "Seite", html: RENDER.moreMenuHtml(pg) });
@@ -321,7 +345,7 @@ export const MOBILE = (() => {
 	function unmount() {
 		["mBar", "mTabs", "mNotes", "mMore"].forEach((id) => document.getElementById(id)?.remove());
 		MOBILE_SHEET.destroy();
-		body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study", "m-page", "m-sheet-open");
+		body.classList.remove("mnav-open", "mmore-open", "m-typing", "m-study", "m-page", "m-read", "m-sheet-open");
 		lastNotesOpen = false;
 	}
 
@@ -354,6 +378,21 @@ export const MOBILE = (() => {
 		const pg = S.pages[S.currentPageId];
 		const pageOpen = S.view === "page" && !!pg && !notesOpen && !moreOpen;
 		body.classList.toggle("m-page", pageOpen);
+		if (editPageId && (S.view !== "page" || S.currentPageId !== editPageId)) editPageId = null;
+		const canRead = pageOpen && pg.kind !== "heft";
+		const reading = canRead && pageReadOnly(pg.id);
+		body.classList.toggle("m-read", reading);
+		const editBtn = document.getElementById("mEditToggle");
+		if (editBtn) {
+			editBtn.hidden = !canRead;
+			const mode = reading ? "edit" : "done";
+			if (editBtn.dataset.mode !== mode) {
+				editBtn.dataset.mode = mode;
+				editBtn.innerHTML = MOBILE_VIEW.icon(mode);
+				editBtn.setAttribute("aria-label", reading ? "Bearbeiten" : "Fertig");
+				editBtn.classList.toggle("is-active", !reading);
+			}
+		}
 		body.classList.toggle("m-sheet-open", MOBILE_SHEET.isOpen());
 
 		const title = document.getElementById("mTitle");
@@ -423,6 +462,7 @@ export const MOBILE = (() => {
 	function init() {
 		if (started) return;
 		started = true;
+		EDITOR.setReadOnly(pageReadOnly);
 		apply(mq.matches);
 		mq.addEventListener("change", (e) => apply(e.matches));
 

@@ -70,6 +70,10 @@ export const EDITOR = (() => {
 	let histState = "";       // letzter festgeschriebener Snapshot (JSON)
 	let histFocus = null;
 	let renderBoundary = null; // einmalige DOM-Marke für exakte Merge-Caretposition
+	// Lesemodus: Wer ihn wann will, entscheidet der Aufrufer (Handy-UI) über setReadOnly(fn).
+	// render() fragt ihn pro Seite neu ab; Felder bekommen dann contenteditable="false".
+	let readOnlyFn = null;
+	let readOnly = false;
 	let listNums = new Map(); // Block-ID → Listennummer, vor jedem render() berechnet	// v3 (25. Juli): scrollReserve entfallen. Der Editor baut seinen DOM nicht mehr bei
 	// jedem Render neu auf (U.morph gleicht nur Unterschiede an) — dadurch ändert sich die
 	// Gesamthöhe nicht mehr schlagartig, der Browser klemmt scrollTop nicht mehr, und die
@@ -425,7 +429,7 @@ export const EDITOR = (() => {
 		if (!o.plain && renderBoundary && renderBoundary.bid === b.id && o.attr == null) {
 			html = inlineHtml(renderBoundary.before) + '<span data-caret-boundary="1"></span>' + inlineHtml(renderBoundary.after);
 		}
-		return '<div class="' + cls + '" ' + attr + ' contenteditable="true" spellcheck="false" data-placeholder="' +
+		return '<div class="' + cls + '" ' + attr + ' contenteditable="' + !readOnly + '" spellcheck="false" data-placeholder="' +
 			esc(o.ph || "") + '"' + (o.style || "") + ">" + html + "</div>";
 	}
 
@@ -446,7 +450,7 @@ export const EDITOR = (() => {
 	// data-key = Quelle: unveränderte Diagramme behalten ihr SVG (kein Neu-Rendern).
 	function diagramBlockHtml(b) {
 		const src = String(b.text || "");
-		const editing = diagramEdit.has(b.id) || !src.trim();
+		const editing = !readOnly && (diagramEdit.has(b.id) || !src.trim());
 		const view = '<div class="blk-diagram" data-bdiagram="' + b.id + '" data-key="dg:' + esc(b.language) + ":" + esc(src) +
 			'" data-owned="1" data-dglang="' + esc(b.language) + '" data-dgsrc="' + esc(src) + '" contenteditable="false"' +
 			(editing ? "" : ' tabindex="0" role="button" aria-label="Diagramm bearbeiten"') + "></div>";
@@ -495,7 +499,7 @@ export const EDITOR = (() => {
 				inner = '<div class="blk-codewrap">' +
 					'<button class="blk-codelang" data-bcodelang="' + b.id + '">' + esc(b.language || "text") + "</button>" +
 					'<pre class="blk-code"><code class="blk-text" data-bcode="' + b.id +
-					'" contenteditable="true" spellcheck="false">' + codeHtml(b.text, b.language) +
+					'" contenteditable="' + !readOnly + '" spellcheck="false">' + codeHtml(b.text, b.language) +
 					"</code></pre></div>";
 				break;
 			case "math":
@@ -621,6 +625,12 @@ export const EDITOR = (() => {
 		const finish = PERF_PROFILER.start("editor.render", { blocks: blocks?.length }, 16);
 		if (!blocks.length) { blocks.push(newBlock("p")); bustCtxIdx(); }
 		const o = opts || {};
+		readOnly = isReadOnly(pageId);
+		host.classList.toggle("is-readonly", readOnly);
+		// Fokussierte Felder überspringt der DOM-Abgleich — vorher loslassen, sonst bliebe
+		// das Feld beim Wechsel in den Lesemodus editierbar (und die Tastatur offen).
+		const active = document.activeElement;
+		if (readOnly && active && host.contains(active) && typeof active.blur === "function") active.blur();
 		renderBoundary = o.boundary || null;
 		// v3 (25. Juli): DOM ANGLEICHEN statt wegwerfen. Vorher ersetzte jedes render()
 		// den kompletten Editor-Inhalt per innerHTML — bei jedem Enter, jeder Listen-
@@ -1518,6 +1528,9 @@ export const EDITOR = (() => {
 				if (b) mutate(() => { b.checked = todo.checked; });
 				return;
 			}
+			// Lesemodus: nur Lesehilfen (Haken, Aufklappen, Links, Downloads) — nichts, was
+			// Blöcke anlegt oder umbaut.
+			if (readOnly && t.closest && t.closest("[data-bplus],[data-bhandle],[data-btablerow],[data-btablecol],[data-bcalloutcolor],[data-bcodelang],[data-bdiagram],[data-bmath],.blk-imath,[data-btail]")) return;
 			const plus = t.closest && t.closest("[data-bplus]");
 			if (plus) {
 				const c = findContext(plus.dataset.bplus);
@@ -1634,7 +1647,7 @@ export const EDITOR = (() => {
 		// funktionieren dann über die bestehenden Blockauswahl-Shortcuts.
 		host.addEventListener("mousedown", (e) => {
 			mouseSelFrom = -1;
-			if (e.button !== 0) return;
+			if (e.button !== 0 || readOnly) return;
 			if (e.target.closest('.blk-gutter, button, input, a, [contenteditable="false"]')) return;
 			const over = e.target.closest("[data-blk]");
 			if (over) mouseSelFrom = blocks.findIndex((b) => b.id === over.dataset.blk);
@@ -1875,7 +1888,7 @@ export const EDITOR = (() => {
 			// der Fokus außerhalb liegt (z.B. auf dem body nach einer Blockauswahl).
 			// Fremde Eingabefelder (Titel, Suche, Popover) behalten ihr Browser-Undo.
 			const mod = e.ctrlKey || e.metaKey;
-			if (mod && host && document.body.contains(host)) {
+			if (mod && !readOnly && host && document.body.contains(host)) {
 				const ae = document.activeElement;
 				const fremdesFeld = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || (ae.isContentEditable && !host.contains(ae)));
 				if (!fremdesFeld && !(ae && host.contains(ae))) {
@@ -1964,5 +1977,8 @@ export const EDITOR = (() => {
 		}
 	}
 
-	return { mount, undoRedo };
+	function isReadOnly(pid) { return !!readOnlyFn && !!pid && readOnlyFn(pid); }
+	function setReadOnly(fn) { readOnlyFn = typeof fn === "function" ? fn : null; }
+
+	return { mount, undoRedo, isReadOnly, setReadOnly };
 })();

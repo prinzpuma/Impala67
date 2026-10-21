@@ -91,6 +91,10 @@ h3.blk-h { font-size: 1.12em }
 /* Platzhalter: Überschriften/Listen immer wenn leer, Absätze nur bei Fokus */
 .blk-text:empty::before { content: ""; color: color-mix(in srgb, var(--text2) 45%, transparent); pointer-events: none; position: absolute; left: 2px; top: 3px }
 .blk-text:empty:focus::before, .blk-h1:empty::before, .blk-h2:empty::before, .blk-h3:empty::before, [data-bsummary]:empty::before, .blk[data-btype="todo"] .blk-text:empty::before, .blk[data-btype="bullet"] .blk-text:empty::before, .blk[data-btype="number"] .blk-text:empty::before, .blk-quote .blk-text:empty::before { content: attr(data-placeholder) }
+/* Lesemodus (Handy): keine Platzhalter, keine Bearbeitungsknöpfe */
+.block-editor.is-readonly [data-placeholder]:empty::before { content: none !important }
+.block-editor.is-readonly :is(.blk-tbtn, .blk-calloutdot) { display: none }
+.block-editor.is-readonly .blk-text { cursor: auto }
 /* == --- Überschriften --- == */
 .blk[data-btype="h1"] { margin-top: 22px }
 .blk[data-btype="h2"] { margin-top: var(--space-4) }
