@@ -134,7 +134,7 @@ export const PDFS = (() => {
 
 	async function openViewer(pdfId) {
 		const url = await urlFor(pdfId);
-		if (!url) { alert("PDF nicht gefunden."); return; }
+		if (!url) { U.toast("PDF nicht gefunden.", "error"); return; }
 		window.open(url, "_blank");
 	}
 
@@ -142,7 +142,7 @@ export const PDFS = (() => {
 		const rec = await DB.getBlob(pdfId);
 		const buf = rec && (rec.buf || rec.data);
 		if (!buf) {
-			alert("PDF-Daten nicht gefunden.");
+			U.toast("PDF-Daten nicht gefunden.", "error");
 			return;
 		}
 		const rawName = filename || (rec.meta && rec.meta.name) || "dokument.pdf";

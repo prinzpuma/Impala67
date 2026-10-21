@@ -474,7 +474,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			'<div class="modal-actions"><button id="btnDeckConfUndo" ' + (canUndoReview() ? "" : "disabled") + ' title="Letzte Bewertung rückgängig machen">↺ Rückgängig</button><button id="btnDeckConfSave">Speichern</button><button id="btnCloseOverlay">Abbrechen</button></div></div>';
 		const undoButton = U.el("btnDeckConfUndo");
 		if (undoButton) undoButton.addEventListener("click", async () => {
-			o.hidden = true;
+			U.closeOverlay();
 			await undoReview();
 		});
 		U.el("btnDeckConfSave").addEventListener("click", async () => {
@@ -486,7 +486,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 				leechAction: U.el("dcLeechAct").value,
 			};
 			await STATE.dispatch("settingsSet", { deckConf: dc });
-			o.hidden = true;
+			U.closeOverlay();
 		});
 	}
 
@@ -509,7 +509,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			button.disabled = true;
 			try {
 				const n = await importCards(parsed.cards, !!U.el("ankiImportDuplicates")?.checked);
-				o.hidden = true;
+				U.closeOverlay();
 				U.toast(n + " Karten in " + decks.length + " Stapel importiert.", "success");
 				if (typeof render === "function") render();
 			} catch (e) {
@@ -527,7 +527,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 			if (!file) return;
 			try {
 				if (/\.apkg$/i.test(file.name)) {
-					o.hidden = true;
+					U.closeOverlay();
 					await importApkgFile(file);
 					if (typeof render === "function") render();
 				} else showImportPreview(file, parseCardText(await U.readAsText(file)));
@@ -613,7 +613,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		const deck = BUS.call("anki:read-card-editor-deck") || "Standard";
 		const n = await createClozeCards(front, deck, S.currentPageId);
 		if (!n) { U.toast("Keine Cloze-Lücken gefunden — erst Text markieren und „Lücke einfügen“ klicken.", "error"); return; }
-		U.el("overlay").hidden = true;
+		U.closeOverlay();
 		if (typeof render === "function") render();
 	}
 

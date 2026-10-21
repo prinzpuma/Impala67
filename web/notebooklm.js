@@ -297,16 +297,16 @@ export const NLM = (() => {
 			'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button></div></div>';
 		o.querySelectorAll("[data-embed]").forEach((b) => b.addEventListener("click", async () => {
 			const pg = S.pages[b.dataset.embed];
-			o.hidden = true;
+			U.closeOverlay();
 			if (pg) await embedInto(pg, f);
 		}));
 		const sub = o.querySelector("[data-sub]");
-		if (sub) sub.addEventListener("click", async () => { o.hidden = true; await placeAsSubpage(f, sources[0] || null); });
+		if (sub) sub.addEventListener("click", async () => { U.closeOverlay(); await placeAsSubpage(f, sources[0] || null); });
 		const pick = o.querySelector("[data-pickpage]");
 		if (pick) pick.addEventListener("click", () => openPagePickDialog(f));
 		const keep = o.querySelector("[data-keep]");
 		if (keep) keep.addEventListener("click", () => {
-			o.hidden = true;
+			U.closeOverlay();
 			U.toast("Bleibt in der Mediathek (Bibliothek → Gemini Notebook).", "success");
 		});
 	}
@@ -328,7 +328,7 @@ export const NLM = (() => {
 		const bind = () => {
 			o.querySelectorAll("[data-nlmembedto]").forEach((r) => r.addEventListener("click", async () => {
 				const pg = S.pages[r.dataset.nlmembedto];
-				o.hidden = true;
+				U.closeOverlay();
 				if (pg) await embedInto(pg, f);
 			}));
 		};
@@ -471,7 +471,7 @@ export const NLM = (() => {
 		});
 		U.el("btnNlmCopy").addEventListener("click", async () => {
 			if (!picked.size) { U.toast("Mindestens eine Seite anhaken.", "error"); return; }
-			if (await copyPages([...picked])) { o.hidden = true; onDone(); }
+			if (await copyPages([...picked])) { U.closeOverlay(); onDone(); }
 		});
 	}
 
@@ -570,11 +570,11 @@ export const NLM = (() => {
 			(files.length ? "<h4>" + lead("inbox") + "Mediathek</h4>" + rows : '<p class="hint">Noch keine Dateien — in ' + PRODUCT + ' herunterladen und hier bzw. im Gemini-Notebook-Tab importieren (Knopf oder Drag & Drop).</p>') +
 			'<div class="modal-actions"><button id="btnNlmTab">' + lead("book") + 'Import-Tab öffnen</button><button id="btnCloseOverlay">Schließen</button></div></div>';
 		U.el("btnNlmPick").addEventListener("click", () => openPicker(openExternal));
-		U.el("btnNlmOpen").addEventListener("click", () => { o.hidden = true; openExternal(); });
-		U.el("btnNlmImport").addEventListener("click", () => { o.hidden = true; pickImportFiles(); });
-		U.el("btnNlmTab").addEventListener("click", () => { o.hidden = true; open(); });
+		U.el("btnNlmOpen").addEventListener("click", () => { U.closeOverlay(); openExternal(); });
+		U.el("btnNlmImport").addEventListener("click", () => { U.closeOverlay(); pickImportFiles(); });
+		U.el("btnNlmTab").addEventListener("click", () => { U.closeOverlay(); open(); });
 		o.querySelectorAll("[data-nlmplay]").forEach((b) => b.addEventListener("click", () => playById(b.dataset.nlmplay)));
-		o.querySelectorAll("[data-nlmplace]").forEach((b) => b.addEventListener("click", () => { o.hidden = true; openPlaceDialog(b.dataset.nlmplace); }));
+		o.querySelectorAll("[data-nlmplace]").forEach((b) => b.addEventListener("click", () => { U.closeOverlay(); openPlaceDialog(b.dataset.nlmplace); }));
 		o.querySelectorAll("[data-nlmsave]").forEach((b) => b.addEventListener("click", () => saveById(b.dataset.nlmsave)));
 		o.querySelectorAll("[data-nlmdel]").forEach((b) => b.addEventListener("click", async () => {
 			await fileDel(b.dataset.nlmdel);

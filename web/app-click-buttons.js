@@ -236,7 +236,7 @@ export async function handleButtonClick(t) {
 				await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
 				closeOverlay();
 			} catch (err) {
-				alert("Bild konnte nicht als Cover gesetzt werden: " + err.message);
+				U.toast("Bild konnte nicht als Cover gesetzt werden: " + err.message, "error");
 			}
 			break;
 		}

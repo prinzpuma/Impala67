@@ -248,6 +248,18 @@ function treeRowsHtml(pages, depth, kidsOf, visible, rowMeta, rowActions) {
 	}).join("");
 }
 
+// Sichtbar = passt selbst oder hat eine passende Unterseite. Je Render gemerkt: jede Baumebene
+// fragt erneut nach — ungemerkt lief eine Suche je Vorfahre noch einmal durch jeden Teilbaum.
+function visibleWithKids(ownMatch, kidsOf) {
+	const seen = new Map();
+	const visible = (pg) => {
+		let hit = seen.get(pg.id);
+		if (hit === undefined) seen.set(pg.id, hit = ownMatch(pg) || kidsOf(pg).some(visible));
+		return hit;
+	};
+	return visible;
+}
+
 // ---------- Notion-Ansicht: kompakter Seitenbaum, kein Kartenraster ----------
 function renderNotionTree(main) {
 	const q = (S.libFilter || "").trim().toLowerCase();
@@ -262,8 +274,7 @@ function renderNotionTree(main) {
 		&& (!q || (pg.title || "").toLowerCase().includes(q)
 			|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
 	// Bei einer Suche bleiben passende Unterseiten samt ihren Eltern sichtbar.
-	const visible = (pg) => ownMatch(pg)
-		|| STATE.childrenOf(pg.id, pg.workspaceId).some(visible);
+	const visible = visibleWithKids(ownMatch, (pg) => STATE.childrenOf(pg.id, pg.workspaceId));
 	const notionMeta = (pg) => (pg.kind === "heft" ? "Heft" : "Seite") + " · " + U.fmtDate(pg.updated);
 	const wsIds = [...new Set(allPages.map((pg) => pg.workspaceId || "default"))];
 	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
@@ -339,7 +350,7 @@ export async function exportWorkspaceZip(wsId) {
 		}
 	};
 	await walk(null, "", 0);
-	if (!files.length) { alert("Dieser Ordner hat keine Seiten."); return; }
+	if (!files.length) { U.toast("Dieser Ordner hat keine Seiten."); return; }
 	U.downloadBlob(safe(ws ? ws.name : "Ordner") + ".zip", U.zip(files));
 }
 
@@ -458,7 +469,7 @@ export function renderArchiveLibrary(main) {
 	const ownMatch = (pg) => kindOk(pg) && (!q || (pg.title || "").toLowerCase().includes(q)
 		|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
 	// Wie in der Bibliothek: passende Unterseiten bleiben samt ihren Eltern sichtbar.
-	const visible = (pg) => ownMatch(pg) || archivedChildrenOf(pg).some(visible);
+	const visible = visibleWithKids(ownMatch, archivedChildrenOf);
 	const archiveMeta = (pg) => (isHeft(pg) ? "Heft" : "Seite") + " · archiviert " + U.fmtDate(pg.archivedAt || pg.updated);
 	const archiveActions = (pg) => '<span class="archive-row-actions">' +
 		'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">' + lead("undo") + 'Wiederherstellen</button>' +
@@ -582,7 +593,7 @@ document.addEventListener("click", async (e) => {
 		if (!name) { if (inp) inp.focus(); return; }
 		await STATE.dispatch("gnFolderCreate", { id: U.uid(), title: name, parentId: typeof S.libFolder === "string" ? S.libFolder : null, order: Date.now() });
 		S.libFolder = typeof S.libFolder === "string" ? S.libFolder : null;
-		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		renderMain();
 		return;
 	}
@@ -593,7 +604,7 @@ document.addEventListener("click", async (e) => {
 		const id = U.uid();
 		await STATE.dispatch("pageCreate", { id, title, parentId: null, content: "", cover: S.libNewCover || COVER_PRESETS[0], tags: [], workspaceId: S.currentWorkspaceId || "default", gnFolderId, gnOrder: Date.now(), kind: "heft" });
 		S.libNewCover = null;
-		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		TABS.openPage(id);
 		return;
 	}
@@ -602,7 +613,7 @@ document.addEventListener("click", async (e) => {
 		const id = el.dataset.gnfolderdelete;
 		await STATE.dispatch("gnFolderDelete", { id });
 		if (S.libFolder === id) S.libFolder = null;
-		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		renderMain();
 		return;
 	}
@@ -620,7 +631,7 @@ document.addEventListener("click", async (e) => {
 		await STATE.dispatch("pageArchive", { id: pg.id });
 		U.toast("Heft archiviert.", "success");
 		S.libCoverPageId = null;
-		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		renderMain();
 		return;
 	}
@@ -634,7 +645,7 @@ document.addEventListener("click", async (e) => {
 		if (!pg || !await U.confirm('„' + pg.title + '“ in den Papierkorb legen?', { title: "Heft löschen", ok: "In Papierkorb", danger: true })) return;
 		await STATE.dispatch("pageTrash", { id: pg.id });
 		S.libCoverPageId = null;
-		const o = U.el("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		renderMain();
 		return;
 	}
@@ -648,8 +659,7 @@ document.addEventListener("click", async (e) => {
 				patch: val ? { cover: val, coverImg: null } : { cover: null, coverImg: null },
 			});
 		}
-		const o = U.el("overlay");
-		if (o) { o.hidden = true; o.innerHTML = ""; }
+		U.closeOverlay();
 		if (S.view === "library") renderMain();
 		return;
 	}
@@ -665,11 +675,10 @@ document.addEventListener("click", async (e) => {
 			await DB.putBlob(blobId, buf, { name: file.name, type: file.type });
 			await STATE.dispatch("pageUpdate", { id: pid, patch: { coverImg: blobId, cover: null } });
 			S.libCoverPageId = null;
-			const o = U.el("overlay");
-			if (o) { o.hidden = true; o.innerHTML = ""; }
+			U.closeOverlay();
 			if (S.view === "library") renderMain();
 		} catch (err) {
-			alert("Bild konnte nicht als Cover gesetzt werden: " + (err && err.message ? err.message : err));
+			U.toast("Bild konnte nicht als Cover gesetzt werden: " + (err && err.message ? err.message : err), "error");
 		}
 		return;
 	}
@@ -679,7 +688,7 @@ document.addEventListener("click", async (e) => {
 	if ((el = hit("[data-nlmlibplace]"))) { NLM.placeById(el.dataset.nlmlibplace); return; }
 	if ((el = hit("[data-nlmlibsave]"))) { NLM.saveById(el.dataset.nlmlibsave); return; }
 	if ((el = hit("[data-nlmlibdel]"))) {
-		if (!confirm("Datei endgültig aus der Mediathek löschen?")) return;
+		if (!await U.confirm("Datei endgültig aus der Mediathek löschen?", { title: "Löschen", ok: "Löschen", danger: true })) return;
 		await NLM.deleteById(el.dataset.nlmlibdel);
 		renderMain();
 		return;
