@@ -133,12 +133,9 @@ export const SCHULNOTEN = (() => {
 				return;
 			}
 			if (event.target.closest("[data-noten-export]")) {
-				const url = URL.createObjectURL(new Blob([exportMarkdown()], { type: "text/markdown;charset=utf-8" }));
-				const link = document.createElement("a");
-				link.href = url;
-				link.download = "schulnoten.md";
-				link.click();
-				setTimeout(() => URL.revokeObjectURL(url), 0);
+				// Gemeinsamer Download-Helfer: Er gibt die URL erst nach 5 s frei. Das sofortige
+				// Freigeben hier (Timeout 0) ließ den Download in Safari teils ins Leere laufen.
+				U.downloadBlob("schulnoten.md", new Blob([exportMarkdown()], { type: "text/markdown;charset=utf-8" }));
 			}
 		};
 	}

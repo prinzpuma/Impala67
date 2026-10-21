@@ -147,15 +147,7 @@ export const PDFS = (() => {
 		}
 		const rawName = filename || (rec.meta && rec.meta.name) || "dokument.pdf";
 		const name = rawName.toLowerCase().endsWith(".pdf") ? rawName : rawName + ".pdf";
-		const blob = new Blob([buf], { type: "application/pdf" });
-		const u = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = u;
-		a.download = name;
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
-		setTimeout(() => URL.revokeObjectURL(u), 2000);
+		U.downloadBlob(name, new Blob([buf], { type: "application/pdf" }));
 	}
 
 	// Ein Viewer je Container. Erneutes Einhängen – oder ein Container, der nicht mehr im
@@ -272,6 +264,9 @@ export const PDFS = (() => {
 			}
 
 			const firstPage = await doc.getPage(1);
+			// Inzwischen neu eingehängt: Der neue Viewer hat dieses Dokument schon freigegeben.
+			// Weiterlaufen hängte Tasten-Listener an, die niemand mehr entfernt.
+			if (sessionId !== container._pdfSessionId) return;
 			const baseVp = firstPage.getViewport({ scale: 1.0 });
 			const availW = Math.max(200, (body.clientWidth || 760) - 48);
 			let curScale = Math.max(0.6, Math.min(2.0, availW / baseVp.width));
