@@ -181,8 +181,19 @@ export const HEFT_INDEXER = (() => {
 		}
 	}
 
+	// Alle Striche weg (radiert, rückgängig): ihr Text darf nicht weiter in der Suche stehen.
+	// Übrig bleibt nur der Text der Scan-Bilder.
+	function clearStrokeText(pageId, pg) {
+		const composed = composePageText("", pg);
+		if (composed === String(pg.ocrText || "").trim()) return;
+		pg.ocrText = composed;
+		STATE.dispatch("heftOps", { pageId, ops: [{ t: "ocr", p: pg.id, text: composed }] }).catch((e) => console.warn("[heft-indexer] Text leeren:", e));
+		ragPending.add(pageId);
+	}
+
 	function schedulePage(pageId, pg, force = false) {
-		if (!pageId || !pg || !Array.isArray(pg.strokes) || !pg.strokes.length) return;
+		if (!pageId || !pg || !Array.isArray(pg.strokes)) return;
+		if (!pg.strokes.length) { clearStrokeText(pageId, pg); return; }
 		const key = checkKey(pageId, pg);
 		const isRecentEdit = force || (HEFT.isWriting && HEFT.isWriting());
 		if (!isRecentEdit && done.has(key) && String(pg.ocrText || "").trim()) return;

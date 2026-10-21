@@ -303,6 +303,11 @@ export const HEFT = (() => {
 		// Der Reducer meldet das Event über state:heft-changed — damit rückt auch der Schatten vor.
 		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
 		if (savePid === pid && saveDoc === doc) relinkLasso(doc);
+		// Handschrift neu lesen, wo sich Striche geändert haben – EINE Stelle für Schreiben,
+		// Radieren, Rückgängig und Lasso. Vorher nur nach Stiftstrichen: Wegradiertes blieb
+		// in der Suche auffindbar.
+		const strokePages = new Set(ops.filter((op) => op.t === "s+" || op.t === "s-" || op.t === "s=").map((op) => op.p));
+		for (const page of saveDoc.pages) if (strokePages.has(page.id)) BUS.emit("heft:schedule-page", { pageId: savePid, page });
 		await PERF_PROFILER.run("heft.snapshot", () => maybeSnapshot(savePid, saveDoc), {}, 30);
 	}
 

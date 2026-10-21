@@ -7,7 +7,6 @@
 // Eingabe braucht (aktive Stifte, Laser-Timer, Doppeltipp, Radierer-Frame) lebt hier.
 
 import { U } from "./util.js";
-import { BUS } from "./event-bus.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, moveStrokeFrom, scaleStrokeFrom, nearPoint, strokeHitAt } from "./heft-geometry.js";
 import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, isLassoBodyHit, drawLassoPath } from "./heft-lasso.js";
@@ -399,7 +398,7 @@ export function createHeftInput(H) {
 		if (H.drawing.lassoResize) {
 			if (Math.abs(H.drawing.factor - 1) > 0.001) {
 				pushUndo({ kind: "lassoResize", strokes: H.drawing.strokes, prev: H.drawing.originals, pageIdx: pi });
-				scheduleSave(); renderThumb(pi); BUS.emit("heft:schedule-page", { pageId: H.pid, page: pg });
+				scheduleSave(); renderThumb(pi);
 			}
 			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
@@ -439,7 +438,6 @@ export function createHeftInput(H) {
 
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
-			if (H.drawing.tool === "pen" || H.drawing.tool === "marker") BUS.emit("heft:schedule-page", { pageId: H.pid, page: pg });
 		}
 		H.drawing = null;
 		updateChrome();

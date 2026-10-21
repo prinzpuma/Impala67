@@ -313,24 +313,32 @@ export function deleteLassoStrokes(lassoSel, doc, pushUndo) {
 
 /**
  * Führt die Handschrifterkennung (OCR) für die Auswahl durch und kopiert den Text.
+ * Safari erlaubt das Kopieren nur innerhalb der Nutzergeste – nach dem await auf die Erkennung
+ * war sie verbraucht und das Kopieren schlug immer fehl. Darum startet der Schreibauftrag
+ * sofort im Klick, der Text wird als Promise nachgereicht (ClipboardItem).
  */
 export async function recognizeLassoText(lassoSel, handschrift, toast, perfProfiler) {
 	if (!lassoSel || !lassoSel.strokes || !lassoSel.strokes.length) return;
+	if (toast) toast("Handschrift wird erkannt…");
+	const recognized = Promise.resolve().then(() => handschrift.recognizeStrokes(lassoSel.strokes)).then((t) => String(t || "").trim());
+	let copying = null;
+	if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+		const blob = recognized.then((t) => { if (!t) throw new Error("Kein Text erkannt."); return new Blob([t], { type: "text/plain" }); });
+		try { copying = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]); }
+		catch { copying = null; }
+		copying?.catch(() => {}); // Ergebnis wird unten ausgewertet
+	}
 	try {
-		if (toast) toast("Handschrift wird erkannt…");
-		const text = await handschrift.recognizeStrokes(lassoSel.strokes);
-		if (text && text.trim()) {
-			let copied = true;
-			try {
-				await navigator.clipboard.writeText(text.trim());
-			} catch (e) {
-				copied = false;
-				if (perfProfiler) perfProfiler.error("clipboard-error", e, { source: "heft-lasso" });
-			}
-			if (toast) toast((copied ? "Erkannt & kopiert: „" : "Erkannt (Kopieren nicht möglich): „") + text.trim() + "“");
-		} else {
-			if (toast) toast("Kein Text erkannt.");
+		const text = await recognized;
+		if (!text) { if (toast) toast("Kein Text erkannt."); return; }
+		let copied = true;
+		try {
+			await (copying || navigator.clipboard.writeText(text));
+		} catch (e) {
+			copied = false;
+			if (perfProfiler) perfProfiler.error("clipboard-error", e, { source: "heft-lasso" });
 		}
+		if (toast) toast((copied ? "Erkannt & kopiert: „" : "Erkannt (Kopieren nicht möglich): „") + text + "“");
 	} catch (e) {
 		if (toast) toast("Erkennung fehlgeschlagen: " + (e?.message || e));
 	}
