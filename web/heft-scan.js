@@ -110,7 +110,7 @@ export const SCANCORE = (() => {
 		});
 	}
 	async function renderInWorker(img, sw, sh, quad, mode, rot) {
-		// Kopie als ImageBitmap, damit das Original (sh.img) für Neuberechnungen erhalten bleibt
+		// Kopie als ImageBitmap, damit das Rohbild des Aufrufers gültig bleibt (er gibt es selbst frei)
 		const bitmap = await createImageBitmap(img);
 		return ask({ type: "process", bitmap, sw, sh, quad, mode, rot }, [bitmap]);
 	}
@@ -165,10 +165,17 @@ export const SCANCORE = (() => {
 	// Ein Scan: Rohbild → entzerren → Filter → Drehung → JPEG-Blob + Qualität.
 	// Jeder Lauf verarbeitet einen unveränderlichen Schnappschuss von Ecken, Filter und
 	// Drehung, damit ein älterer Lauf nie ein neueres Ergebnis überschreibt.
+	// Das dekodierte Rohbild (12 MP ≈ 48 MB) wird nach jedem Lauf freigegeben statt je
+	// Aufnahme behalten – sonst brachten 15–20 Scans Safari auf dem iPad zum Absturz.
+	// Ein erneuter Lauf (Filter, Ecken) dekodiert es neu.
 	async function processShot(sh, snapshot) {
-		const img = sh.img || await loadImg(sh.src);
+		const img = await loadImg(sh.src);
+		try { return await processDecoded(sh, img, snapshot); }
+		finally { if (img !== sh.src && typeof img?.close === "function") { try { img.close(); } catch { /* schon frei */ } } }
+	}
+	async function processDecoded(sh, img, snapshot) {
 		const { w, h } = sizeOf(img);
-		sh.img = img; sh.w = w; sh.h = h;
+		sh.w = w; sh.h = h;
 		let quad = snapshot && snapshot.quad ? snapshot.quad.map((p) => p.slice()) : sh.quad;
 		if (!Array.isArray(quad) || quad.length !== 4) {
 			quad = await detectQuadAsync(img, sh.w, sh.h);

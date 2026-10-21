@@ -289,11 +289,14 @@ export function createHeftViewport(ctx) {
 		cv.style.display = "block";
 		positionDetailLayer(cv);
 	}
-	function hideLayer(cv) { if (cv) { cv.style.display = "none"; cv.__heftTile = null; } }
-	function hideDetailCanvases() {
-		ctx.detailCanvases().forEach(hideLayer);
-		ctx.wetCanvases().forEach(hideLayer);
-		detailVisible.clear();
+	// Ausgeblendete Kacheln geben ihren Speicher frei (je bis zu ~24 MB). Nur versteckt hielt
+	// jede besuchte Seite zwei volle Kacheln; auf dem iPad war das Canvas-Limit nach 15–20
+	// Seiten erreicht – Seiten blieben leer. Beim Wiederzeigen setzt placeLayer die Größe neu.
+	function hideLayer(cv) {
+		if (!cv) return;
+		cv.style.display = "none";
+		cv.__heftTile = null;
+		if (cv.width || cv.height) { cv.width = 0; cv.height = 0; }
 	}
 
 	function renderDetailTile(i) {

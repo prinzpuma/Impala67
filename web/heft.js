@@ -224,18 +224,24 @@ export const HEFT = (() => {
 	// steht über state:heft-changed schon auf dem Log-Stand; hier wird nur noch die Ansicht
 	// nachgezogen. Fremde Striche gelten so nie als eigene Neuerung (kein Echo-Upload), und
 	// eigene, noch nicht gespeicherte bleiben als Änderung für den nächsten Save erkennbar.
-	function onRemoteApplied() {
-		PERF_PROFILER.measure("heft.remote-apply", applyRemoteToOpenDocs, { docs: Object.keys(published).length }, 16);
+	// Nur Heft-Events (und gelöschte Seiten) betreffen Hefte. Vorher zeichnete jede Fremd-
+	// änderung – auch an einer getippten Notiz – das offene Heft neu und hob die Auswahl auf.
+	const REMOTE_HEFT_TYPES = new Set(["heftOps", "heftSnap", "heftBlob", "pageDelete"]);
+	function onRemoteApplied(types, events) {
+		if (!types || ![...types].some((type) => REMOTE_HEFT_TYPES.has(type))) return;
+		const changed = new Set((events || []).map((ev) => ev?.payload?.pageId).filter(Boolean));
+		PERF_PROFILER.measure("heft.remote-apply", () => applyRemoteToOpenDocs(changed, types.has("heftBlob")), { docs: Object.keys(published).length }, 16);
 	}
-	function applyRemoteToOpenDocs() {
+	function applyRemoteToOpenDocs(changed, newBlobs) {
 		for (const key of Object.keys(published)) {
 			const d = S.heftDocs[key];
-			dropThumbs(key); // Vorschauen anderer Hefte zeigten sonst den Stand vor dem Import
 			// Der Schatten ist über state:heft-changed bereits auf dem Log-Stand.
-			if (d) docs[key] = d;
-			else delete published[key];
+			if (!d) { delete published[key]; continue; }
+			docs[key] = d;
+			// Vorschauen zeigten sonst den Stand vor dem Import (neue Bilddaten: alle).
+			if (newBlobs || changed.has(key)) dropThumbs(key);
 		}
-		if (!pid || !host) return;
+		if (!pid || !host || !(newBlobs || changed.has(pid))) return;
 		const d = S.heftDocs[pid];
 		if (!d || !d.pages.length) return;
 		dropThumbs(pid);
@@ -245,8 +251,10 @@ export const HEFT = (() => {
 		if (doc && doc !== d) { undoStack = []; redoStack = []; }
 		doc = d; docs[pid] = d;
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
-		sel = null;
-		// Fremdänderung (auch an anderen Notizen) hob die Auswahl bisher immer auf.
+		// Auswahl nur aufheben, wenn ihr Bild/Textfeld weg ist (sie hält nur IDs).
+		const selPage = sel && d.pages[sel.pageIdx];
+		const selId = sel && (sel.imgId || sel.txtId);
+		if (sel && !(selPage && [...(selPage.images || []), ...(selPage.texts || [])].some((o) => o.id === selId))) sel = null;
 		relinkLasso(d);
 		if (structural) rebuildScroll();
 		else {
@@ -1270,13 +1278,16 @@ export const HEFT = (() => {
 	}
 
 	// ---- Heft-Export (Seiten-Menü + Teilen-Menü): Seiten als PDF oder PNG ----
+	// Bilder vorab dekodieren, sonst fehlen Scans und PDF-Seiten auf frisch erzeugten
+	// Canvases (Export, Vorschauen auf Startseite/Einbettungen, Seitenbild für die KI).
+	const decodeImages = (pages) => Promise.all(pages.flatMap((pg) => (pg.images || []).map((im) => {
+		const el = imgEl(im);
+		return el.decode ? el.decode().catch(() => {}) : null;
+	})));
 	async function loadDocFor(pageId) {
 		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		if (!d) return null;
-		// Bilder vorab dekodieren, sonst fehlen sie auf frisch geladenen Canvases
-		const jobs = [];
-		d.pages.forEach((pg) => (pg.images || []).forEach((im) => { const el = imgEl(im); if (el.decode) jobs.push(el.decode().catch(() => {})); }));
-		await Promise.all(jobs);
+		await decodeImages(d.pages);
 		return d;
 	}
 	async function pdfBlob(pageId, indices, onStatus) {
@@ -1681,6 +1692,7 @@ export const HEFT = (() => {
 			const d = await load(pageId, { create: false });
 			const pg = d && d.pages[i];
 			if (!pg) return null;
+			await decodeImages([pg]);
 			const c = renderPageCanvas(pg, w);
 			const url = c.toDataURL("image/png");
 			thumbs[key] = url;
@@ -1717,6 +1729,7 @@ export const HEFT = (() => {
 		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
 		const pg = d && d.pages && d.pages[pageIdx || 0];
 		if (!pg) return null;
+		await decodeImages([pg]);
 		return renderPageCanvas(pg, w).toDataURL("image/png");
 	}
 

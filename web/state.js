@@ -214,12 +214,12 @@ export const STATE = (() => {
 	// Importierte Fremd-Events laufen nicht durch dispatch(), sondern direkt durch
 	// reduce() (drive.js replayImported). Wer auf eingetroffene Fremdänderungen
 	// reagieren muss — z.B. ein offenes Heft, das sofort die Striche des anderen
-	// Geräts zeigen soll — hängt sich hier ein.
+	// Geräts zeigen soll — hängt sich hier ein. fn(types: Set, events: Array).
 	const _remoteHooks = [];
 	const onRemoteApplied = (fn) => { _remoteHooks.push(fn); };
-	const emitRemoteApplied = (types) => {
+	const emitRemoteApplied = (types, events) => {
 		for (const fn of _remoteHooks) {
-			try { fn(types || []); } catch (e) { console.warn("remote-Hook:", e); }
+			try { fn(types, events); } catch (e) { console.warn("remote-Hook:", e); }
 		}
 	};
 	const sortEvents = (events) => (Array.isArray(events) ? events.slice() : [])
@@ -228,7 +228,7 @@ export const STATE = (() => {
 	// Uhr nachziehen, Zustand anwenden, UI invalidieren und Live-Module informieren.
 	function afterRemoteEvents(list) {
 		if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: list.length } });
-		emitRemoteApplied(new Set(list.map((ev) => ev?.type).filter((t) => typeof t === "string")));
+		emitRemoteApplied(new Set(list.map((ev) => ev?.type).filter((t) => typeof t === "string")), list);
 	}
 	function applyRemoteEvents(events) {
 		const list = sortEvents(events);

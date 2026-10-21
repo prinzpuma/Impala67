@@ -170,34 +170,38 @@ export async function importPdf(f, at, targetDoc, {
 		return at;
 	}
 	const pdf = await pdfs.openDocument(await f.arrayBuffer());
-	for (let i = 1; i <= pdf.numPages; i++) {
-		const p = await pdf.getPage(i);
-		// Gleiche Auflösung und Qualität wie der Scanner: früher Faktor 3 bei Qualität 0.92,
-		// eine Scan-PDF wurde dadurch im Heft rund viermal so groß wie das Original.
-		const base = p.getViewport({ scale: 1 });
-		const vp = p.getViewport({ scale: Math.min(3, SCAN_OUT_MAX_EDGE / Math.max(base.width, base.height)) });
-		const c = document.createElement("canvas");
-		c.width = Math.round(vp.width);
-		c.height = Math.round(vp.height);
-		const cx = c.getContext("2d");
-		cx.fillStyle = "#fff";
-		cx.fillRect(0, 0, c.width, c.height);
-		await p.render({ canvasContext: cx, viewport: vp }).promise;
+	try {
+		for (let i = 1; i <= pdf.numPages; i++) {
+			const p = await pdf.getPage(i);
+			// Gleiche Auflösung und Qualität wie der Scanner: früher Faktor 3 bei Qualität 0.92,
+			// eine Scan-PDF wurde dadurch im Heft rund viermal so groß wie das Original.
+			const base = p.getViewport({ scale: 1 });
+			const vp = p.getViewport({ scale: Math.min(3, SCAN_OUT_MAX_EDGE / Math.max(base.width, base.height)) });
+			const c = document.createElement("canvas");
+			c.width = Math.round(vp.width);
+			c.height = Math.round(vp.height);
+			const cx = c.getContext("2d");
+			cx.fillStyle = "#fff";
+			cx.fillRect(0, 0, c.width, c.height);
+			await p.render({ canvasContext: cx, viewport: vp }).promise;
 
-		const pg = imagePage(
-			{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height },
-			"blank",
-			true,
-			{ blobRef, newPage, pageW, pageH }
-		);
-		// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
-		const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
-		if (text.length >= 20) {
-			pg.images[0].ocr = text;
-			pg.ocrText = text;
+			const pg = imagePage(
+				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height },
+				"blank",
+				true,
+				{ blobRef, newPage, pageW, pageH }
+			);
+			// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
+			const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
+			if (text.length >= 20) {
+				pg.images[0].ocr = text;
+				pg.ocrText = text;
+			}
+			targetDoc.pages.splice(at, 0, pg);
+			at++;
 		}
-		targetDoc.pages.splice(at, 0, pg);
-		at++;
+	} finally {
+		Promise.resolve(pdf.destroy?.()).catch(() => {});
 	}
 	return at;
 }

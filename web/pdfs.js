@@ -57,6 +57,9 @@ export const PDFS = (() => {
 		}
 	}
 
+	// pdf.js hält jedes geöffnete Dokument im Worker, bis destroy() es freigibt.
+	const releaseDocument = (doc) => { Promise.resolve(doc?.destroy?.()).catch(() => {}); };
+
 	async function extractText(buf, maxPages = 40) {
 		const doc = await openDocument(buf);
 		const n = Math.min(doc.numPages, maxPages);
@@ -71,6 +74,8 @@ export const PDFS = (() => {
 		} catch (err) {
 			finish({ failed: true, errorName: err?.name || "Error", errorMessage: err?.message || String(err) });
 			throw err;
+		} finally {
+			releaseDocument(doc);
 		}
 		const text = parts.join("\n\n");
 		finish({ chars: text.length });
@@ -153,8 +158,17 @@ export const PDFS = (() => {
 		setTimeout(() => URL.revokeObjectURL(u), 2000);
 	}
 
+	// Ein Viewer je Container. Erneutes Einhängen – oder ein Container, der nicht mehr im
+	// DOM hängt – räumt Dokument, Beobachter und Tasten-Listener des vorigen ab.
+	function teardownViewer(container) {
+		const cleanup = container._pdfCleanup;
+		container._pdfCleanup = null;
+		for (const fn of cleanup || []) { try { fn(); } catch { /* weiter aufräumen */ } }
+	}
+
 	async function mountViewer(container, pdfId, opts = {}) {
 		if (!container || !pdfId) return;
+		teardownViewer(container);
 		const sessionId = (container._pdfSessionId = (container._pdfSessionId || 0) + 1);
 		container.innerHTML = '<div class="pdf-loading"><span>' + lead("file") + 'PDF wird geladen…</span></div>';
 
@@ -168,7 +182,8 @@ export const PDFS = (() => {
 			}
 
 			const doc = await openDocument(buf);
-			if (sessionId !== container._pdfSessionId) return;
+			if (sessionId !== container._pdfSessionId) { releaseDocument(doc); return; }
+			const cleanup = container._pdfCleanup = [() => releaseDocument(doc)];
 
 			const totalPages = doc.numPages;
 			const docTitle = opts.title || (rec.meta && rec.meta.name) || "PDF-Dokument";
@@ -263,10 +278,13 @@ export const PDFS = (() => {
 
 			const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
 
+			let observers = [];
+			cleanup.push(() => observers.forEach((o) => o.disconnect()));
 			function renderStack() {
 				stack.innerHTML = "";
 				const renderedMap = new Map();
 				if (zoomLabel) zoomLabel.textContent = Math.round(curScale * 100) + "%";
+				observers.forEach((o) => o.disconnect());
 
 				const observer = new IntersectionObserver((entries) => {
 					for (const entry of entries) {
@@ -279,6 +297,17 @@ export const PDFS = (() => {
 						}
 					}
 				}, { root: body, rootMargin: "400px" });
+				// Weit weggescrollte Seiten geben ihre Zeichenfläche frei (je bis zu ~20 MB) und
+				// werden beim Zurückscrollen neu gezeichnet.
+				const releaser = new IntersectionObserver((entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) continue;
+						const canvas = entry.target.querySelector("canvas");
+						if (canvas && canvas.width) { canvas.width = 0; canvas.height = 0; }
+						renderedMap.delete(Number(entry.target.dataset.page));
+					}
+				}, { root: body, rootMargin: "3000px" });
+				observers = [observer, releaser];
 
 				for (let i = 1; i <= totalPages; i++) {
 					const sheet = document.createElement("div");
@@ -289,10 +318,11 @@ export const PDFS = (() => {
 					sheet.style.width = w + "px";
 					sheet.style.minHeight = h + "px";
 
+					// Pixelgröße erst beim Zeichnen (renderPage); bis dahin hält nur das CSS den Platz.
 					const canvas = document.createElement("canvas");
 					canvas.className = "pdf-page-canvas";
-					canvas.width = Math.floor(w * dpr);
-					canvas.height = Math.floor(h * dpr);
+					canvas.width = 0;
+					canvas.height = 0;
 					canvas.style.width = w + "px";
 					canvas.style.height = h + "px";
 					sheet.appendChild(canvas);
@@ -304,6 +334,7 @@ export const PDFS = (() => {
 
 					stack.appendChild(sheet);
 					observer.observe(sheet);
+					releaser.observe(sheet);
 				}
 
 				async function renderPage(pageNum, sheetEl) {
@@ -375,11 +406,13 @@ export const PDFS = (() => {
 			if (fullscreenBtn) fullscreenBtn.onclick = toggleFullscreen;
 
 			const onKeyDown = (e) => {
+				if (!container.isConnected) { teardownViewer(container); return; }
 				if (e.key === "Escape" && container.classList.contains("is-fullscreen")) {
 					toggleFullscreen();
 				}
 			};
 			window.addEventListener("keydown", onKeyDown);
+			cleanup.push(() => window.removeEventListener("keydown", onKeyDown));
 
 			if (downloadBtn) downloadBtn.onclick = () => download(pdfId, opts.title || (rec.meta && rec.meta.name));
 
