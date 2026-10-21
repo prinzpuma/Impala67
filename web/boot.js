@@ -221,21 +221,29 @@ export async function initApp() {
 	window.addEventListener("online", () => DRIVE.refreshStatus());
 	window.addEventListener("offline", () => DRIVE.refreshStatus());
 
-	// 📱 Automatisches Koppeln via QR-Code oder Kopplungs-Link (#cf-pair=...)
+	// 📱 Koppeln via QR-Code oder Kopplungs-Link (#cf-pair=...). Nie ohne Rückfrage: Mit einem
+	// neuen Schlüssel lädt die App den kompletten Bestand hoch – an den Server und mit dem
+	// Schlüssel aus dem Link. Ein fremder Link hätte sonst alle Notizen abgegriffen.
 	async function applyPairingHash(hash) {
 		if (!hash || !hash.startsWith("#cf-pair=")) return false;
+		const clearHash = () => history.replaceState?.(null, "", location.pathname + location.search);
 		try {
-			const payload = hash.slice(9);
-			const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
-			if (decoded.url && decoded.key) {
-				await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
-				CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
-				U.toast("Cloudflare-Sync automatisch verbunden!", "success");
-				if (typeof history !== "undefined" && history.replaceState) {
-					history.replaceState(null, "", location.pathname + location.search);
-				}
-				return true;
-			}
+			const decoded = JSON.parse(decodeURIComponent(escape(atob(hash.slice(9)))));
+			if (!decoded.url || !decoded.key) return false;
+			const cf = CLOUDFLARE_SYNC.status();
+			if (cf.url === decoded.url && cf.syncKey === decoded.key) { clearHash(); return true; }
+			let host = String(decoded.url);
+			try { host = new URL(decoded.url).host; } catch { /* Text unverändert anzeigen */ }
+			const ok = await U.confirm(
+				(cf.syncKey ? "Dieses Gerät ist bereits mit einem Sync verbunden. " : "") +
+				`Mit dem Sync-Server „${host}“ koppeln? Alle Notizen werden dorthin übertragen.\n\nNur bestätigen, wenn der Link von deinem eigenen Gerät stammt.`,
+				{ title: "Gerät koppeln", ok: "Koppeln", danger: !!cf.syncKey });
+			clearHash();
+			if (!ok) return false;
+			await STATE.dispatch("settingsSet", { cfUrl: decoded.url, cfSyncKey: decoded.key });
+			CLOUDFLARE_SYNC.configure(decoded.url, decoded.key).catch(() => {});
+			U.toast("Cloudflare-Sync verbunden.", "success");
+			return true;
 		} catch (err) {
 			console.warn("[boot] Fehler beim Verarbeiten des Kopplungs-Links:", err);
 		}
