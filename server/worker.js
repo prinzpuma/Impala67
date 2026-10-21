@@ -533,8 +533,9 @@ export class SyncRoom {
 
 		if (url.pathname === "/api/quota" && request.method === "GET") return json({ usage: this.totalBytes, limit: MAX_USER_BYTES, generation: this.generation });
 		if (url.pathname === "/api/sync" && request.method === "GET") {
-			const since = Math.max(0, Number.parseInt(url.searchParams.get("since") || "0", 10));
-			const limit = Math.min(1000, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "100", 10)));
+			// || : Ein unlesbarer Wert (NaN) landete sonst als Bind-Parameter in D1 → 500 statt Standardwert.
+			const since = Math.max(0, Number.parseInt(url.searchParams.get("since") || "0", 10) || 0);
+			const limit = Math.min(1000, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "100", 10) || 100));
 			try {
 				const { events, stopped } = await this.readEvents(since, limit);
 				return json({ events, maxSeq: this.maxSeq, hasMore: stopped || events.length === limit, usage: this.totalBytes, limit: MAX_USER_BYTES, generation: this.generation });
