@@ -120,6 +120,9 @@ export const SRS = (() => {
 	function rate(srs, grade, now = new Date(), fuzz = true) {
 		const s = { ...srs };
 		const g = clamp(Math.round(Number(grade) || 0), 1, 4);
+		// FSRS rechnet die neue Stabilität mit der Schwierigkeit VOR dieser Bewertung (wie
+		// ts-fsrs/py-fsrs); erst danach wird die Schwierigkeit aktualisiert.
+		const prevDifficulty = s.difficulty || 5;
 		const elapsedDays = s.last ? (now - new Date(s.last)) / 864e5 : 0;
 		s.reps = (s.reps || 0) + 1;
 		s.step = s.step || 0;
@@ -177,13 +180,13 @@ export const SRS = (() => {
 			s.lapses = (s.lapses || 0) + 1;
 			s.state = "relearning";
 			s.step = 0;
-			s.stability = forgetStability(s.difficulty, s.stability, R);
+			s.stability = forgetStability(prevDifficulty, s.stability, R);
 			s.due = dueAfterMinutes(now, RELEARN_STEPS[0]);
 		} else {
 			// Review bestanden: echtes FSRS-Stabilitätswachstum (statt Ease-Faktor-Näherung)
 			const S0 = Math.max(MIN_STABILITY, s.stability || initStability(g));
 			const R = retrievability(elapsedDays, S0);
-			s.stability = recallStability(s.difficulty, S0, R, g);
+			s.stability = recallStability(prevDifficulty, S0, R, g);
 			s.due = dueAfterDays(now, nextInterval(s.stability), fuzz);
 		}
 		return s;
@@ -214,5 +217,5 @@ export const SRS = (() => {
 	}
 
 
-	return { newCard, rate, preview };
+	return { newCard, rate, preview, retrievability };
 })();
