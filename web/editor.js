@@ -1906,7 +1906,6 @@ export const EDITOR = (() => {
 			".blk-media{display:block;max-width:100%;border-radius:8px}",
 			"video.blk-media{width:100%;max-height:480px;background:#000}",
 			"audio.blk-media{width:100%;margin-top:6px}",
-			"iframe.blk-pdfframe{width:100%;height:520px;border:1px solid rgba(128,128,128,.35);background:#fff}",
 			".blk-file-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(128,128,128,.35);border-radius:8px}",
 			".blk-file-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 			".blk-file-dl{flex:none;font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;cursor:pointer}",
