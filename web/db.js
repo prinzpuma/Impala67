@@ -810,5 +810,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

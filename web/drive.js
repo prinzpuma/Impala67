@@ -23,7 +23,9 @@ export const DRIVE = (() => {
 	// Snapshots also gar nichts anfangen. Trotzdem lief er mit: die Upload-Schleife iteriert
 	// über ALLE Blob-Schlüssel. Pro Heft und Tag landeten so bis zu 20 Vollkopien in Drive,
 	// die jedes andere Gerät auch noch herunterlud und speicherte.
-	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:");
+	// Ebenso der Start-Checkpoint (db.js): Er liegt im selben Store, und die Upload-Schleife las
+	// bei jedem Sync alle seine Einträge (Heft-Bilder und -Striche, schnell >10 MB), nur um sie zu überspringen.
+	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:") || DB.isStateCheckpointKey(id);
 	const LS = localStorage;
 	const lsJson = (k, fb) => { try { return JSON.parse(LS.getItem(k) ?? "null") ?? fb; } catch { return fb; } };
 	const DEVICE_ID = (() => {
