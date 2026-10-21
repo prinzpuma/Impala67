@@ -275,7 +275,7 @@ function renderNotionTree(main) {
 	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
 	const tabs = '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
 		'<button class="lib-tab' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
+	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
 	wsIds.forEach((wsId) => {
 		const rows = treeRowsHtml(STATE.childrenOf(null, wsId), 0, (pg) => STATE.childrenOf(pg.id, wsId), visible, notionMeta);
 		if (!rows) return;
@@ -283,7 +283,7 @@ function renderNotionTree(main) {
 		html += '<section class="notion-tree-workspace"><div class="notion-tree-workspace-name">' + U.esc(ws.name) + "</div>" + rows + "</section>";
 	});
 	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
-	main.innerHTML = html + "</div></div>";
+	U.morph(main, html + "</div></div>");
 }
 
 export async function exportWorkspaceZip(wsId) {
@@ -377,12 +377,11 @@ export function handleLibSort(sortBy) {
 	renderMain();
 }
 
+// U.morph lässt das fokussierte Suchfeld samt Cursor stehen (vorher baute innerHTML die
+// Ansicht neu: Fokusverlust, auf dem Tablet ging die Tastatur zu, IME-Eingaben brachen ab).
 export function handleFilterInput(e) {
 	S.libFilter = e.target.value;
-	const pos = e.target.selectionStart;
 	renderLibrary(U.el("main"));
-	const inp = U.el("libFilter");
-	if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = pos; }
 }
 
 export async function handleCreateWorkspace() {
@@ -424,7 +423,7 @@ export function renderHefteShelf(main) {
 	const crumbs = q ? '<span class="lib-crumb current">Suche</span>'
 		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + gnAncestors(folderId).map((f) =>
 			'<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>").join("");
-	let html = '<div class="library lib-docs lib-shelf gn-shelf">' + libHeadHtml() +
+	let html = '<div class="library lib-docs lib-shelf gn-shelf" data-key="lib:shelf">' + libHeadHtml() +
 		libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>", '<button class="lib-new-action" data-libshelfnew="1">+ Neu</button>' + libSearchHtml("Suchen")) +
 		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
 			? gnFolderHtml(item.value)
@@ -432,7 +431,7 @@ export function renderHefteShelf(main) {
 			.join("") + "</div>" +
 		(items.length ? "" : '<div class="empty small">' + (q ? "Keine Treffer" : (current ? "Dieser Ordner ist leer." : "Noch keine Hefte oder Ordner.")) + "</div>") +
 		'<p class="hint lib-shelf-hint">Ziehe Hefte auf Ordner zum Einsortieren. Ziehe Ordner auf Ordner, um Unterordner anzulegen. Die Reihenfolge hier ist unabhängig von Notion.</p></div></div>';
-	main.innerHTML = html;
+	U.morph(main, html);
 	hydrateCovers(main);
 }
 
@@ -508,11 +507,11 @@ export function renderArchiveLibrary(main) {
 
 	const tabs = '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
 		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + label + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree lib-archive">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
+	let html = '<div class="library lib-docs lib-notion-tree lib-archive" data-key="lib:archive">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
 
 	if (!roots.length) {
 		html += '<div class="empty small">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
-		main.innerHTML = html + "</div></div>";
+		U.morph(main, html + "</div></div>");
 		return;
 	}
 
@@ -523,7 +522,7 @@ export function renderArchiveLibrary(main) {
 		html += '<section class="notion-tree-workspace"><div class="notion-tree-workspace-name">' + U.esc(ws.name) + "</div>" + rows + "</section>";
 	});
 	if (!html.includes("notion-tree-row")) html += '<div class="empty small">Keine Treffer für diese Suche im Archiv.</div>';
-	main.innerHTML = html + "</div></div>";
+	U.morph(main, html + "</div></div>");
 }
 
 // Ansichts-Umschalter + NotebookLM-Mediathek: eigene Delegation + Styles
