@@ -25,6 +25,11 @@ function pageForLabel(label) {
 
 // Rendert den Inline-Markdown eines Textblocks als echten Rich-Text.
 // Inline-Formeln ($…$ und \(…\)) werden zu nicht-editierbaren Chips mit data-md —
+// Nur harmlose Link-Ziele werden klickbar. [x](javascript:…) aus Import oder KI-Text bleibt
+// sichtbarer Markdown-Text: window.open hätte das Skript sonst unter der App-Herkunft
+// ausgeführt (Zugriff auf alle lokalen Daten).
+export const isSafeHref = (href) => /^(https?:|mailto:|tel:|#|\/|\.{1,2}\/)/i.test(String(href || "").trim());
+
 // KaTeX-DOM darf nie Teil des editierbaren Textflusses werden.
 export function inlineHtml(text) {
 	// Wiki-Links, Formeln und Inline-Code werden nach dem Umwandeln als Platzhalter
@@ -59,7 +64,7 @@ export function inlineHtml(text) {
 		.replace(/~~([^~]+)~~/g, (_, v) => tag("s", v))
 		.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/gi, (_, v) => tag("u", v))
 		.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, pre, v) => pre + tag("em", v))
-		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => tag("a", label, ' href="' + href + '"'))
+		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (md, label, href) => (isSafeHref(href) ? tag("a", label, ' href="' + href + '"') : md))
 		.replace(/\n/g, LT + "br>"));
 }
 

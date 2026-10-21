@@ -37,6 +37,7 @@ import {
 	hydrateKatex,
 	hydrateInlineMath,
 	visibleLength,
+	isSafeHref,
 	caretInfo,
 	setCaret,
 } from "./editor-inline.js";
@@ -1104,9 +1105,11 @@ export const EDITOR = (() => {
 			// sprang der Caret um genau diese Zeichen zu weit nach rechts, sobald hinter der
 			// Fundstelle noch Text stand. splitFieldAtCaret liefert das Markdown VOR dem Caret
 			// exakt über DOM-Ranges — dessen Sichtlänge ist die gesuchte Position.
+			// visibleLength wie setCaret: Formel-Chips zählen nicht (textContent zählte ihr
+			// Innenleben mit – hinter einer Formel stand der Cursor um diese Länge zu weit rechts).
 			const probe = document.createElement("div");
 			probe.innerHTML = inlineHtml(split.vor);
-			const off = probe.textContent.length;
+			const off = visibleLength(probe);
 			field.innerHTML = inlineHtml(text);
 			hydrateInlineMath(field);
 			setCaret(field, off);
@@ -1129,8 +1132,9 @@ export const EDITOR = (() => {
 		const nachR = document.createRange(); nachR.selectNodeContents(field); nachR.setStart(r.endContainer, r.endOffset);
 		const zuMd = (frag) => { const t = document.createElement("div"); t.appendChild(frag); return mdFromEditable(t); };
 		const pre = zuMd(vorR.cloneContents()), mid = zuMd(midR.cloneContents()), post = zuMd(nachR.cloneContents());
-		const domStartOff = vorR.toString().length;
-		const domMidLen = midR.toString().length;
+		// Sichtbare Zeichen wie setCaret (Range.toString zählte KaTeX-Innenleben mit).
+		const domStartOff = visibleLength(vorR.cloneContents());
+		const domMidLen = visibleLength(midR.cloneContents());
 		let next;
 		// Bei einer Auswahl des ganzen gerenderten Elements liegen die Markdown-
 		// Marker in `mid` statt außerhalb in `pre`/`post`. Kursiv braucht eine
@@ -1601,7 +1605,7 @@ export const EDITOR = (() => {
 				const href = a.getAttribute("href") || "";
 				if (href.startsWith("#")) return;
 				e.preventDefault();
-				window.open(href, "_blank", "noopener");
+				if (isSafeHref(href)) window.open(href, "_blank", "noopener");
 				return;
 			}
 
