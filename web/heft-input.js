@@ -33,6 +33,8 @@ export function createHeftInput(H) {
 	const penRecently = () => activePenPointers.size > 0 || Date.now() - lastPenUpAt < PEN_GRACE_MS;
 	const rejected = (e) => e.pointerType === "touch" && (H.onlyPen || penRecently());
 	const touchNavigates = () => H.onlyPen && !penRecently();
+	// Nur der Zeiger, der die Geste begonnen hat, bewegt oder beendet sie.
+	const ownsDrawing = (e) => H.drawing.pointerId == null || e.pointerId === H.drawing.pointerId;
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
 	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
 	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
@@ -125,6 +127,7 @@ export function createHeftInput(H) {
 					const anchor = handle.anchor;
 					const startDist = Math.max(12, Math.hypot(p[0] - anchor[0], p[1] - anchor[1]));
 					H.drawing = {
+						pointerId: e.pointerId,
 						lassoResize: true,
 						byTouch: e.pointerType === "touch",
 						strokes: H.lassoSel.strokes,
@@ -140,7 +143,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					H.drawing = { lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
+					H.drawing = { pointerId: e.pointerId, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, cv, pageIdx: pi, last: p, dx: 0, dy: 0 };
 					return;
 				}
 			}
@@ -148,12 +151,12 @@ export function createHeftInput(H) {
 			// Neue Auswahl: alte Markierung sofort wegräumen (lag sie auf einer anderen
 			// Seite, blieb ihr Rahmen dort sonst als Geist stehen).
 			dropLasso();
-			H.drawing = { lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
+			H.drawing = { pointerId: e.pointerId, lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (H.tool === "laser") {
 
-			H.drawing = { laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
+			H.drawing = { pointerId: e.pointerId, laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (H.tool === "select") {
@@ -169,7 +172,7 @@ export function createHeftInput(H) {
 			}
 			if (st && nearPoint(p, st.x + st.w, st.y + (st.h || 60), 16)) {
 
-				H.drawing = { imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
+				H.drawing = { pointerId: e.pointerId, imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
 				return;
 			}
 			const ht = hitText(pg, p);
@@ -182,7 +185,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				H.sel = { pageIdx: pi, txtId: ht.id, tapAt: now };
-				H.drawing = { imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
+				H.drawing = { pointerId: e.pointerId, imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
 				redrawPage(pi);
 				return;
 			}
@@ -198,13 +201,13 @@ export function createHeftInput(H) {
 			}
 			if (im && nearPoint(p, im.x + im.w, im.y + im.h, 16)) {
 
-				H.drawing = { imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
+				H.drawing = { pointerId: e.pointerId, imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
 				return;
 			}
 			const hit = hitImage(pg, p);
 			if (hit) {
 				H.sel = { pageIdx: pi, imgId: hit.id };
-				H.drawing = { imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
+				H.drawing = { pointerId: e.pointerId, imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
 				redrawPage(pi);
 				lastEmptyTap = null;
 			} else {
@@ -221,8 +224,8 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
-		if (H.tool === "eraser") { H.drawing = { erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else { H.drawing = { tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
+		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		else { H.drawing = { pointerId: e.pointerId, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
 		setWriting(true);
 	}
@@ -252,7 +255,7 @@ export function createHeftInput(H) {
 	function onMove(e) {
 		// Ein per Finger gegriffenes Lasso (onDown: "interact") darf sich auch per Finger
 		// bewegen — sonst verwarf "Nur Stift" jede Bewegung und die Auswahl blieb stehen.
-		if (!H.drawing || (rejected(e) && !H.drawing.byTouch)) return;
+		if (!H.drawing || !ownsDrawing(e) || (rejected(e) && !H.drawing.byTouch)) return;
 		e.preventDefault();
 		if (H.drawing.lasso) {
 			const p = pos(e, H.drawing.cv);
@@ -366,6 +369,8 @@ export function createHeftInput(H) {
 				setTimeout(applyTouchAction, PEN_GRACE_MS + 30);
 			}
 		}
+		// Hebt der Handballen oder ein zweiter Finger ab, läuft der Strich des Stifts weiter.
+		if (H.drawing && e && !ownsDrawing(e)) return;
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
 		lastStrokeAt = Date.now();
 		setWriting(false);
