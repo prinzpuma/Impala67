@@ -230,11 +230,14 @@ self.addEventListener("message", (e) => {
 	}
 });
 
-// Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches (OPTIONAL_CACHE, SHARE_CACHE, transformers-cache) bewahren.
+// Aktivierung: alte Cache-Versionen aufräumen, versionsübergreifende Caches bewahren (OPTIONAL_CACHE,
+// SHARE_CACHE, Embedding-Modelle, Handschrift-Modell – dessen Worker räumt alte Versionen selbst auf).
+const keepsAcrossVersions = (k) => k === SHARE_CACHE || k === OPTIONAL_CACHE || k.includes("transformers") ||
+	k.includes("impala67-models") || k.startsWith("impala67-handwriting-model-");
 self.addEventListener("activate", (e) => {
 	e.waitUntil(
 		caches.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE && k !== OPTIONAL_CACHE && !k.includes("transformers") && !k.includes("impala67-models")).map((k) => caches.delete(k))))
+			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && !keepsAcrossVersions(k)).map((k) => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
@@ -306,7 +309,8 @@ self.addEventListener("fetch", (e) => {
 				if (cached && req.cache !== "no-store" && !DEV_HOST) return cached;
 				try {
 					const res = await fetch(new Request(req, { cache: "no-store" }));
-					if (res && res.ok && !isHtmlFallback(url.pathname, res)) cache.put(key, res.clone());
+					// Das Handschrift-Modell (~10 MB) liegt im eigenen, versionierten Modell-Cache.
+					if (res && res.ok && !isHtmlFallback(url.pathname, res) && !url.pathname.endsWith(".onnx")) cache.put(key, res.clone());
 					return res;
 				} catch {
 					return cached || Response.error();

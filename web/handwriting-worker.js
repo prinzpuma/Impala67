@@ -37,6 +37,15 @@ async function loadOrt() {
 const MODEL_VERSION = HANDWRITING_MODEL_VERSION;
 const MODEL_CACHE_KEY = `impala67-handwriting-model-${MODEL_VERSION}`;
 
+// Ältere Modellversionen belegen sonst je ~13 MB, bis der Speicher voll ist.
+function dropOldModelCaches() {
+	caches.keys()
+		.then((keys) => Promise.all(keys
+			.filter((k) => k.startsWith("impala67-handwriting-model-") && k !== MODEL_CACHE_KEY)
+			.map((k) => caches.delete(k))))
+		.catch(() => {});
+}
+
 // Modell und Wörterbuch: einmal je Version laden, danach aus dem eigenen Cache
 async function fetchCached(path) {
 	if (typeof caches !== "undefined") {
@@ -47,6 +56,7 @@ async function fetchCached(path) {
 				response = await fetch(`${path}?v=${MODEL_VERSION}`);
 				if (response.ok) {
 					await cache.put(path, response.clone());
+					dropOldModelCaches();
 				}
 			}
 			return response;
