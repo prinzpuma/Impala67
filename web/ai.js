@@ -31,7 +31,6 @@ export const AI = (() => {
 		images: 2, toolTotal: 24000, toolResult: 6000,
 		attachmentSingle: 12000, attachmentTotal: 24000,
 	};
-	const MUTATING_TOOLS = new Set(["create_page", "append_to_page", "replace_page_content", "patch_page", "archive_page", "unarchive_page", "change"]);
 	const DROP_SCHEMA_KEYS = new Set(["minItems", "maxItems", "additionalProperties", "default", "$schema", "examples"]);
 	const TOOL_DROPPED = JSON.stringify({ gekuerzt: true, hinweis: "Älteres Ergebnis aus Platzgründen entfernt — bei Bedarf erneut abrufen." });
 	const META_TOOL_DEF = {
@@ -980,15 +979,9 @@ export const AI = (() => {
 			: "";
 	}
 
-	const shortFront = (card, max = 60) => {
-		const text = String(card?.front || "").replace(/\s+/g, " ").trim();
-		return text.length > max ? text.slice(0, max) + "…" : text;
-	};
 	const cancelled = (data, action) => ({ cancelled: true, ...data, note: `${action} abgebrochen — nichts geändert.` });
-	function deckMatch(name) {
-		if (!name) return { error: "deck fehlt." };
-		return TOOLS.resolveDeckStrict(name);
-	}
+	// Bestätigung vor dem Ausführen. Das Modell erreicht Datenänderungen nur über „change“;
+	// die internen Einzel-Werkzeuge (delete_page, …) blockiert agent() vorher als unbekannt.
 	const CONFIRM_SPECS = {
 		change: {
 			options: ["Ja, ausführen", "Abbrechen"],
@@ -1003,65 +996,6 @@ export const AI = (() => {
 					runArgs: args,
 					cancelled: cancelled({ operations: operations.length }, "Aktion"),
 				};
-			},
-		},
-		reset_card_progress: {
-			options: ["Ja, zurücksetzen", "Abbrechen"],
-			resolve(args) {
-				const front = String(args?.front || "").trim(), deck = String(args?.deck || "").trim();
-				if (!front && !deck) return { error: "reset_card_progress: bitte front oder deck angeben." };
-				if (front) {
-					const card = TOOLS.findCard(front, deck || undefined);
-					if (!card) return { error: "Karte nicht gefunden: " + front };
-					const label = shortFront(card);
-					return { detail: label, question: `Lernfortschritt der Karte „${label}“ zurücksetzen? Sie gilt danach wieder als neu.`, runArgs: { front: card.front, deck: card.deck }, cancelled: cancelled({ front: card.front }, "Zurücksetzen") };
-				}
-				const hit = deckMatch(deck);
-				if (hit.error) return { error: hit.error };
-				const count = TOOLS.cardsOfDeck(hit.deck).length;
-				return { detail: hit.deck, question: `Lernfortschritt von ${count} Karte(n) im Stapel „${hit.deck}“ zurücksetzen? Alle gelten danach wieder als neu.`, runArgs: { deck: hit.deck }, cancelled: cancelled({ deck: hit.deck }, "Zurücksetzen") };
-			},
-		},
-		delete_page: {
-			resolve(args) {
-				const title = String(args?.page_title || "").trim();
-				if (!title) return { error: "delete_page: page_title fehlt." };
-				const page = STATE.findPage(title);
-				if (!page) return { error: "Seite nicht gefunden: " + title };
-				const children = TOOLS.subtreeIds(page.id).size - 1;
-				return { detail: page.title, question: `Seite „${page.title}“${children ? ` inkl. ${children} Unterseite(n)` : ""} in den Papierkorb?`, runArgs: { page_title: page.title }, cancelled: cancelled({ title: page.title }, "Löschen") };
-			},
-		},
-		delete_flashcard: {
-			resolve(args) {
-				const front = String(args?.front || "").trim();
-				if (!front) return { error: "delete_flashcard: front fehlt." };
-				const card = TOOLS.findCard(front, args?.deck);
-				if (!card) return { error: "Karte nicht gefunden: " + front };
-				const label = shortFront(card);
-				return { detail: label, question: `Karte „${label}“ in den Papierkorb?`, runArgs: { front: card.front, deck: card.deck }, cancelled: cancelled({ front: card.front }, "Löschen") };
-			},
-		},
-		delete_flashcards: {
-			resolve(args) {
-				const selected = TOOLS.selectCards(args || {});
-				if (selected.error) return { error: selected.error };
-				if (!selected.cards.length) return { error: "Keine passenden Karten gefunden." };
-				const count = selected.cards.length, shown = selected.cards.slice(0, 3).map((card) => `„${shortFront(card, 50)}“`).join(", ");
-				const rest = count - Math.min(3, count), capped = selected.truncated ? ` (von ${selected.total} Treffern — der Rest bleibt vorerst erhalten)` : "";
-				const question = count === 1 ? `Karte „${shortFront(selected.cards[0], 50)}“ in den Papierkorb?`
-					: `${count} Karten${selected.deck ? ` aus „${selected.deck}“` : ""}${capped} in den Papierkorb? ${shown}${rest ? ` und ${rest} weitere` : ""}`;
-				return { detail: `${count}${count === 1 ? " Karte" : " Karten"}${selected.deck ? " · " + selected.deck : ""}`, question, runArgs: { ids: selected.cards.map((card) => card.id) }, cancelled: cancelled({ count }, "Löschen") };
-			},
-		},
-		delete_deck: {
-			resolve(args) {
-				const name = String(args?.deck || "").trim();
-				if (!name) return { error: "delete_deck: deck fehlt." };
-				const hit = deckMatch(name);
-				if (hit.error) return { error: hit.error };
-				const count = TOOLS.cardsOfDeck(hit.deck).length;
-				return { detail: hit.deck, question: `Stapel „${hit.deck}“${count ? ` inkl. ${count} Karte(n)` : ""} in den Papierkorb?`, runArgs: { deck: hit.deck }, cancelled: cancelled({ deck: hit.deck }, "Löschen") };
 			},
 		},
 	};
@@ -1116,28 +1050,10 @@ export const AI = (() => {
 		if (name === "semantic_search") detail += (detail ? " · " : "") + "Embedding: " + (S.settings.embedModel || "—");
 		return detail;
 	}
-	function mutationBefore(name, args) {
-		if (!MUTATING_TOOLS.has(name) || name === "create_page") return { id: null, value: { title: "", content: "" } };
-		const page = STATE.findPage(args.page_title);
-		return page ? { id: page.id, value: { title: page.title, content: page.content } } : { id: null, value: { title: "", content: "" } };
-	}
-	function recordMutation(name, args, out, before, pendingEdits) {
-		if (!MUTATING_TOOLS.has(name) || !out || out.error) return;
-		if (name === "change" && out._undo) {
-			pendingEdits.push({ mid: U.uid(), role: "edit", summary: `${out.operations || 0} KI-Änderung(en)`, undo: out._undo, undone: false });
-			return;
-		}
-		let id = before.id, created = false;
-		if (name === "create_page") {
-			const page = out.id && S.pages[out.id] || STATE.findPage(args.title);
-			if (page) { id = page.id; created = true; }
-		}
-		const page = id && S.pages[id];
-		if (!page) return;
-		const after = { title: page.title, content: page.content };
-		if (created || after.title !== before.value.title || after.content !== before.value.content) {
-			pendingEdits.push({ mid: U.uid(), role: "edit", pageId: id, pageTitle: after.title, before: before.value, after, created, undone: false });
-		}
+	// Jede erfolgreiche „change“-Aktion wird zur Änderungs-Karte mit Rückgängig-Knopf.
+	// (Ältere Chats enthalten noch Karten je Seite mit before/after — chat-fullscreen.js kann sie weiter zurücknehmen.)
+	function recordChange(out, pendingEdits) {
+		if (out?._undo) pendingEdits.push({ mid: U.uid(), role: "edit", summary: `${out.operations || 0} KI-Änderung(en)`, undo: out._undo, undone: false });
 	}
 
 	async function agent(userText, type, onStep, runContext) {
@@ -1329,23 +1245,27 @@ export const AI = (() => {
 					finishTool(call, name, "Werkzeuge freigeschaltet", { ok: true, hinweis: "Alle Werkzeuge sind jetzt in dieser Anfrage verfügbar." });
 					continue;
 				}
+				// Nur angebotene Werkzeuge laufen. TOOLS.run kennt intern auch Einzel-Werkzeuge wie
+				// delete_page — erfand ein Modell (etwa aus altem Verlauf) so einen Namen, liefen
+				// Löschungen sonst an der Bestätigung von „change“ vorbei.
+				if (!fullToolDefs().some((def) => def.function.name === name)) {
+					finishTool(call, name, "unbekanntes Werkzeug", { error: `Unbekanntes Werkzeug „${name}“. Verfügbar: ${fullToolDefs().map((def) => def.function.name).join(", ")}.` });
+					continue;
+				}
 				const confirm = CONFIRM_SPECS[name];
 				if (confirm) {
 					const spec = confirm.resolve(args);
-					if (spec.error) { finishTool(call, name, spec.error, { error: spec.error }); continue; }
+					let out;
 					if (spec.skip) {
-						let out;
 						try { out = await TOOLS.run(name, spec.runArgs); } catch (error) { out = { error: String(error) }; }
 						finishTool(call, name, toolDetail(name, args), out);
-						recordMutation(name, args, out, mutationBefore(name, args), pendingEdits);
-						continue;
+					} else {
+						const answer = await waitForAnswer(spec.question, confirm.options, "Warte auf Bestätigung…");
+						if (!String(answer || "").toLowerCase().startsWith("ja")) out = spec.cancelled;
+						else { try { out = await TOOLS.run(name, spec.runArgs); } catch (error) { out = { error: String(error) }; } }
+						finishTool(call, name, out.cancelled ? null : spec.detail, out, true);
 					}
-					const answer = await waitForAnswer(spec.question, confirm.options || ["Ja, löschen", "Abbrechen"], "Warte auf Bestätigung…");
-					let out;
-					if (!String(answer || "").toLowerCase().startsWith("ja")) out = spec.cancelled;
-					else { try { out = await TOOLS.run(name, spec.runArgs); } catch (error) { out = { error: String(error) }; } }
-					finishTool(call, name, out.cancelled ? null : spec.detail, out, true);
-					recordMutation(name, args, out, mutationBefore(name, args), pendingEdits);
+					recordChange(out, pendingEdits);
 					continue;
 				}
 				if (name === "ask_choice") {
@@ -1355,11 +1275,9 @@ export const AI = (() => {
 					finishTool(call, name, null, { answer, question: normalized.question }, true);
 					continue;
 				}
-				const before = mutationBefore(name, args);
 				let out;
 				try { out = await TOOLS.run(name, args); } catch (error) { out = { error: String(error) }; }
 				finishTool(call, name, toolDetail(name, args), out);
-				recordMutation(name, args, out, before, pendingEdits);
 			}
 			if (pendingImages.length) {
 				if (messages[messages.length - 1]?.role === "tool") {

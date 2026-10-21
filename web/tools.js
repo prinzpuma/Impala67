@@ -3,7 +3,6 @@ import { S, STATE } from "./state.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { SRS } from "./srs.js";
-import { EXTRAS } from "./extras.js";
 import { RAG } from "./rag.js";
 import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
@@ -20,13 +19,9 @@ export const TOOLS = (() => {
 		function: { name, description, parameters: { type: "object", properties, required } },
 	});
 
-	// Cloze-Beispielsyntax zusammengesetzt, damit die doppelt geschweiften Klammern
-	// nirgends mit Template-/Platzhalter-Systemen kollidieren.
-	const CLOZE_HINT = "{" + "{c1::Antwort}" + "}";
-
 	// 🃏 Karten-Design-Spezifikation (22. Juli): kompaktes Standardformat für alle neuen Karten,
 	// damit die Lern-Ansicht ruhig und einheitlich aussieht (weniger Markdown-Wildwuchs).
-	// Hängt an DREI Beschreibungen — jede Zeile zählt dreifach, daher knapp.
+	// Hängt an der Kartenliste von change — geht bei jeder Anfrage mit, daher knapp.
 	const CARD_RULES = " Format: Vorderseite = eine konkrete Frage (8–20 Wörter). Rückseite = Kernantwort in 1–2 Zeilen, optional max. 4 Stichpunkte; keine Überschrift ‚Antwort:', keine Skript-Absätze. LaTeX für Formeln. Eine Karte = ein Fakt.";
 
 	// ask_choice: Argumente säubern/validieren (vom Agent-Loop vor der UI genutzt).
@@ -200,7 +195,7 @@ export const TOOLS = (() => {
 				op: { type: "string", enum: ["page.create", "page.append", "page.replace", "page.patch", "page.rename", "page.move", "page.trash", "page.archive", "page.unarchive", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend", "card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"] },
 				title: { type: "string" }, parent: { type: "string" }, content: { type: "string" }, text: { type: "string" }, search: { type: "string" }, replace: { type: "string" }, page: { type: "number" },
 				front: { type: "string" }, fronts: { type: "array", items: { type: "string" } }, back: { type: "string" }, new_front: { type: "string" }, new_back: { type: "string" },
-				cards: { type: "array", items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] } },
+				cards: { type: "array", description: "Für card.create." + CARD_RULES, items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] } },
 				deck: { type: "string" }, to: { type: "string" }, query: { type: "string" }, suspended: { type: "boolean" }, limit: { type: "number" },
 			}, required: ["op"] }, minItems: 1 },
 		}, ["operations"]),
@@ -584,27 +579,12 @@ export const TOOLS = (() => {
 					note: "Aus dem Archiv wiederhergestellt.",
 				};
 			}
-			case "delete_flashcard": {
-				// Bestätigung erzwingt ai.js (wie bei delete_page) — hier nur die Aktion selbst.
-				const c = findCard(a.front, a.deck);
-				if (!c) return { error: "Karte nicht gefunden: " + a.front };
-				await STATE.dispatch("cardTrash", { id: c.id });
-				return { ok: true, front: c.front, trashed: true, note: "Im Papierkorb — wiederherstellbar." };
-			}
 			case "delete_flashcards": {
-				// Bestätigung erzwingt ai.js. ids = exakte Auswahl, die in der Bestätigung stand
-				// (eindeutig, auch wenn zwei Karten denselben Vorderseiten-Text haben).
-				let cards, leftOver = 0;
-				if (Array.isArray(a.ids) && a.ids.length) {
-					cards = a.ids.map((id) => S.cards[id]).filter((c) => c && !c.trashed);
-					if (!cards.length) return { error: "Die vorgemerkten Karten gibt es nicht mehr." };
-				} else {
-					const sel = selectCards(a);
-					if (sel.error) return sel;
-					if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
-					cards = sel.cards;
-					leftOver = sel.total - sel.cards.length;
-				}
+				// Bestätigung erzwingt ai.js für die ganze change-Aktion.
+				const sel = selectCards(a);
+				if (sel.error) return sel;
+				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
+				const cards = sel.cards, leftOver = sel.total - sel.cards.length;
 				for (const c of cards) await STATE.dispatch("cardTrash", { id: c.id });
 				return {
 					ok: true, trashed: cards.length,
@@ -740,15 +720,6 @@ export const TOOLS = (() => {
 					});
 				}
 				return { ok: true, cards: list.length, deck: a.deck || "Standard" };
-			}
-			case "create_cloze_card": {
-				if (typeof EXTRAS === "undefined") return { error: "Cloze-Modul (extras.js) nicht geladen." };
-				const pg = a.page_title
-					? STATE.findPage(a.page_title)
-					: (S.currentPageId ? S.pages[S.currentPageId] : null);
-				const n = await EXTRAS.createClozeCards(a.text || "", a.deck || undefined, pg ? pg.id : null);
-				if (!n) return { error: "Keine Cloze-Lücken gefunden — Lücken als " + CLOZE_HINT + " markieren." };
-				return { ok: true, cards: n, deck: a.deck || "Standard" };
 			}
 			case "list_due_cards": {
 				// Ohne Stapel und Gesamtzahl konnte das Modell nicht sagen, WO die Karten liegen,
@@ -1006,7 +977,5 @@ export const TOOLS = (() => {
 		}
 	}
 
-	// cardsOfDeck/subtreeIds nach außen: ai.js baut damit seine Bestätigungstexte, statt
-	// dieselben Baum-Regeln ein zweites Mal zu formulieren (drifteten sonst auseinander).
-	return { defs, run, undo, normalizeAskChoice, findCard, resolveDeckStrict, selectCards, cardsOfDeck, subtreeIds: STATE.pageSubtreeIds };
+	return { defs, run, undo, normalizeAskChoice };
 })();
