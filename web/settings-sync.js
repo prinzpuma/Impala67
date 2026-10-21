@@ -31,6 +31,9 @@ export const SETTINGS_SYNC = (() => {
 		if (Array.isArray(next.aiProviders)) {
 			const oldById = new Map((current?.aiProviders || []).map((provider) => [provider.id, provider]));
 			next.aiProviders = next.aiProviders.map((provider) => {
+				// key: null = in den Einstellungen ausdrücklich geleert. Leer oder fehlend heißt
+				// dagegen „unverändert“ — so löscht ein Gerät ohne Schlüssel nie den eines anderen.
+				if (provider?.key === null) return { ...provider, key: "" };
 				const hasNewKey = typeof provider?.key === "string" && provider.key.trim().length > 0;
 				if (hasNewKey) return provider;
 				const old = oldById.get(provider.id);

@@ -152,9 +152,10 @@ export function refreshSettingsDirtyState() {
 }
 
 async function allowDiscardSettings() {
-	if (!hasUnsavedSettings()) return true;
+	// Ohne offenes Fenster gibt es nichts zu verwerfen. Vorher galt der Schnappschuss eines
+	// geschlossenen Fensters weiter als „ungespeichert“ — jeder Einstellungs-Knopf tat dann nichts.
 	const modal = document.querySelector(".settings-modal-v2");
-	if (!modal) return false;
+	if (!modal || !hasUnsavedSettings()) return true;
 	return new Promise((resolve) => {
 		const cancel = U.h("button", { type: "button" }, "Weiter bearbeiten");
 		const discard = U.h("button", { type: "button", class: "danger" }, "Verwerfen");
@@ -937,7 +938,8 @@ export async function handleSaveSettings() {
 				id,
 				name: nameEl && nameEl.value.trim() ? nameEl.value.trim() : id,
 				base: baseEl ? cleanBase(baseEl.value) : "",
-				key: keyEl ? keyEl.value.trim() : "",
+				// Geleertes Feld = Schlüssel entfernen (null, siehe SETTINGS_SYNC.mergePatch).
+				key: keyEl ? (keyEl.value.trim() || null) : "",
 			};
 		});
 	}
