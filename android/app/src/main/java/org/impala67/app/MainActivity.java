@@ -3,12 +3,16 @@ package org.impala67.app;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebView;
 import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
 
@@ -34,6 +38,20 @@ public class MainActivity extends BridgeActivity {
         }
 
         applySystemBars();
+
+        // Stirbt der WebView-Prozess (z. B. Speicher voll auf 4-GB-Tablets), beendet Android sonst die
+        // ganze App. Stattdessen den toten WebView verwerfen und die Activity neu aufbauen: Die App lädt
+        // neu, die Daten liegen ohnehin in IndexedDB.
+        bridge.addWebViewListener(new WebViewListener() {
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                ViewGroup parent = (ViewGroup) view.getParent();
+                if (parent != null) parent.removeView(view);
+                view.destroy();
+                recreate();
+                return true;
+            }
+        });
     }
 
     @Override
