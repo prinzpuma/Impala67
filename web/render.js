@@ -36,7 +36,7 @@ const lsGet = (k, fb) => U.storage.getJson(k, fb);
 const lsSet = (k, v) => U.storage.setJson(k, v);
 const DATETIME_OPTS = { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" };
 function openOverlay(html) {
-	const o = $("overlay");
+	const o = U.takeOverlay();
 	if (!o) return null;
 	if (o.hidden) {
 		o.hidden = false;
@@ -1715,7 +1715,7 @@ function changePageBodyHtml(beforeContent, afterContent) {
 }
 
 function openChangePreview(m) {
-	const o = $("overlay");
+	const o = U.takeOverlay();
 	if (!o || !m) return;
 	const before = m.before || {}, after = m.after || {};
 	const title = after.title || m.pageTitle || before.title || "Unbenannte Seite";

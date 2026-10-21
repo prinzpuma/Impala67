@@ -226,7 +226,7 @@ function homeHtml() {
 }
 
 function openHistory() {
-	const o = document.getElementById("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	const items = load().map((a, i) =>
 		`<details class="hv-article-past"${i === 0 ? " open" : ""}><summary><small>${esc(DATE_FMT.format(new Date(a.created)))} · ${esc((a.topics || []).join(" · "))}</small><b>${esc(a.title)}</b></summary>` +

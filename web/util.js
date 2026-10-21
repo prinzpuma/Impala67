@@ -366,14 +366,24 @@ export const U = {
 	// Zurück, Escape), ließ einen wartenden Dialog unsichtbar weiterlaufen: Das nächste Enter
 	// irgendwo bestätigte ihn — z. B. „Papierkorb leeren“.
 	closeOverlay() {
-		const o = document.getElementById("overlay");
+		const o = U.takeOverlay();
 		if (!o) return;
-		const close = o._close;
-		delete o._close;
-		if (typeof close === "function") close();
 		o.hidden = true;
 		o.classList.remove("change-overlay");
 		o.innerHTML = "";
+	},
+
+	// Wer einen neuen Dialog ins #overlay schreibt, holt es sich hierüber: Ein noch offener
+	// Dialog mit Schließweg (U.confirm) wird vorher beendet. Überschrieb ein Dialog ihn einfach
+	// (Pausen-Erinnerung, Timer-Ende), blieb sein Promise offen — die Aktion dahinter hing.
+	takeOverlay() {
+		const o = document.getElementById("overlay");
+		if (o && typeof o._close === "function") {
+			const close = o._close;
+			delete o._close;
+			close();
+		}
+		return o;
 	},
 
 	// In-App-Bestätigung statt window.confirm() — gleiches #overlay wie alle Dialoge.

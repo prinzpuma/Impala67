@@ -52,7 +52,7 @@ export function mountFullChatVoiceButton() {
 
 // Eigener Eingabe-Dialog statt window.prompt() — nutzt #overlay wie alle Dialoge
 export function openPromptDialog(title, onSubmit, initial) {
-	const o = $("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	o.innerHTML = `<div class="modal modal-sm"><h3>${esc(title)}</h3><input id="dlgPromptInput" autocomplete="off" value="${esc(initial || "")}">` +
 		'<div class="modal-actions"><button id="dlgPromptCancel">Abbrechen</button><button id="dlgPromptOk">OK</button></div></div>';
@@ -75,7 +75,7 @@ export function openPromptDialog(title, onSubmit, initial) {
 
 // „Verschieben nach…“: Ziel = Workspace-Wurzel oder Seite (ohne eigene Nachfahren)
 export function openMoveDialog(pageId) {
-	const o = $("overlay");
+	const o = U.takeOverlay();
 	const pg = S.pages[pageId];
 	if (!o || !pg) return;
 	const bad = STATE.pageSubtreeIds(pageId);
@@ -101,7 +101,7 @@ export function openMoveDialog(pageId) {
 // „Fach festlegen“: Fachfeld der Seite setzen (gilt auch für alle Unterseiten) oder zurück auf
 // automatisch. „Übersicht“ markiert Sammelseiten, deren Unterseiten eigene Fächer haben.
 export function openSubjectDialog(pageId) {
-	const o = $("overlay");
+	const o = U.takeOverlay();
 	const pg = S.pages[pageId];
 	if (!o || !pg) return;
 	const current = pg.subject ? FACH.clean(pg.subject) : "";

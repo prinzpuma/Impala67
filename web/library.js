@@ -103,7 +103,7 @@ function gnFolderHtml(folder) {
 // GoodNotes-artiger Neu-Dialog: eine Aktion, danach klarer Typ statt permanenter
 // "Neue Ordner"-Kachel und Eingabezeile in der Bibliothek.
 function openShelfNewDialog() {
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	const currentFolder = typeof S.libFolder === "string" ? S.gnFolders[S.libFolder] : null;
 	const where = currentFolder ? "in „" + U.esc(currentFolder.title) + "“" : "in Dokumente";
@@ -119,7 +119,7 @@ function openShelfNewDialog() {
 
 function openGnFolderMenu(folderId) {
 	const folder = S.gnFolders[folderId];
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	if (!folder || !o) return;
 	o.hidden = false;
 	o.innerHTML = '<div class="modal modal-sm lib-create-modal">' +
@@ -131,7 +131,7 @@ function openGnFolderMenu(folderId) {
 }
 
 function openShelfFolderDialog() {
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	o.innerHTML = '<div class="modal modal-sm lib-create-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
@@ -143,7 +143,7 @@ function openShelfFolderDialog() {
 }
 
 function openShelfHeftDialog() {
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	const swatches = COVER_PRESETS.map((c, i) =>
 		'<button type="button" class="cover-swatch cover-' + c + (i === 0 ? " active" : "") +
@@ -173,7 +173,7 @@ function openLibCoverPicker(pageId) {
 	const pg = S.pages[pageId];
 	if (!pg) return;
 	S.libCoverPageId = pageId;
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	if (!o) return;
 	const swatches = COVER_PRESETS.map((c) =>
 		'<button type="button" class="cover-swatch cover-' + c + (pg.cover === c && !pg.coverImg ? " active" : "") +

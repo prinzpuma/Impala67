@@ -462,7 +462,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	function openDeckConf(deck) {
 		const key = deck || "*";
 		const conf = STATE.deckConfOf(key === "*" ? "" : key);
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		o.innerHTML = '<div class="modal"><h3>' + lead("gear") + 'Stapel-Optionen — ' + U.esc(key === "*" ? "Standardwerte (alle Stapel)" : key) + "</h3>" +
 			'<div><label for="dcNew">Neue Karten pro Tag</label><input id="dcNew" type="number" min="0" value="' + conf.newPerDay + '"></div>' +
@@ -537,7 +537,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		inp.click();
 	}
 	function openAnkiIo(mode) {
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		if (mode === "export") {
 			o.innerHTML = '<div class="modal"><h3>' + lead("upload") + 'Karten exportieren</h3>' +

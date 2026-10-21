@@ -556,7 +556,7 @@ function openCardEditor(cardId) {
 		'<option value="' + U.esc(d) + '"' + (d === current ? " selected" : "") + ">" + U.esc(d) + "</option>"
 	).join("");
 
-	const o = U.el("overlay");
+	const o = U.takeOverlay();
 	o.hidden = false;
 	o.innerHTML = modal(
 		'<div class="card-editor">' +

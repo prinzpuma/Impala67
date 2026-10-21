@@ -163,7 +163,7 @@ export const LERNZEIT = (() => {
 	}
 
 	function showBreakReminderPrompt() {
-		const overlay = document.getElementById("overlay");
+		const overlay = U.takeOverlay();
 		if (!overlay) return;
 		overlay.hidden = false;
 		overlay.innerHTML = '<div class="modal lz-break-modal"><h3>' + lead("coffee") + 'Zeit für eine kurze Pause?</h3>' +
@@ -175,7 +175,7 @@ export const LERNZEIT = (() => {
 	}
 
 	function openTimerDone(minutes) {
-		const overlay = document.getElementById("overlay");
+		const overlay = U.takeOverlay();
 		if (!overlay) { U.toast("Lernblock geschafft — " + minutes + " Minuten.", "success"); return; }
 		overlay.hidden = false;
 		overlay.innerHTML = '<div class="modal lz-done"><h3>' + lead("party") + 'Lernblock geschafft</h3><p><b>' + minutes + ' Minuten</b> fokussiert gelernt. Gute Arbeit!</p><div class="modal-actions"><button data-lz-start="5">5 Min weiter</button><button data-lz-close="1">Pause machen</button></div></div>';

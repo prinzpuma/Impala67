@@ -283,7 +283,7 @@ export const NLM = (() => {
 		if (!f) { U.toast("Datei nicht gefunden.", "error"); return; }
 		const sources = (f.sourcePageIds || []).map((pid) => S.pages[pid]).filter((p) => p && !p.trashed);
 		const embedTargets = sources.filter((p) => p.kind !== "heft"); // Hefte rendern pg.content nicht
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		const srcRows = embedTargets.map((pg) => '<button class="nlm-place-opt" data-embed="' + pg.id + '">' + lead("file") + 'In „' +
 			U.esc((pg.title || "Ohne Titel").slice(0, 44)) + '" einbetten</button>').join("");
@@ -312,7 +312,7 @@ export const NLM = (() => {
 	}
 	function openPagePickDialog(f) {
 		const pages = STATE.activePages().filter((p) => p.kind !== "heft");
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		const rowsHtml = (term) => {
 			const t = (term || "").trim().toLowerCase();
@@ -392,7 +392,7 @@ export const NLM = (() => {
 		const tree = pageTree(pages);
 		const picked = new Set(S.currentPageId ? [S.currentPageId] : []);
 		const expanded = new Set(); // standardmäßig alles eingeklappt — nur per Pfeil links aufklappbar
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 
 		function isVisible(pg) {
@@ -482,7 +482,7 @@ export const NLM = (() => {
 	function play(f) {
 		if (lastUrl) URL.revokeObjectURL(lastUrl);
 		const url = (lastUrl = URL.createObjectURL(f.blob));
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		let body;
 		if (f.kind === "video" || /\.(mp4|webm|mov|m4v)$/i.test(f.name)) body = '<video controls autoplay style="width:100%;max-height:70vh" src="' + url + '"></video>';
@@ -558,7 +558,7 @@ export const NLM = (() => {
 	// ---- 📓-Dialog (Sidebar-Knopf, via extras.js verdrahtet) ----
 	async function openDialog() {
 		const files = await fileList().catch(() => []);
-		const o = U.el("overlay");
+		const o = U.takeOverlay();
 		o.hidden = false;
 		const rows = files.map((f) => '<div style="display:flex;gap:8px;align-items:center;padding:3px 0">' +
 			'<span style="flex:none">' + kindSvg(f.kind) + "</span>" +
