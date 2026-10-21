@@ -8,6 +8,13 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 const getCapacitor = () => (typeof window !== "undefined" ? window.Capacitor : null);
 const getPlugin = (name) => getCapacitor()?.Plugins?.[name] || null;
 
+const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+	const reader = new FileReader();
+	reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(",") + 1));
+	reader.onerror = () => reject(reader.error);
+	reader.readAsDataURL(blob);
+});
+
 export const PLATFORM_NATIVE = {
 	get isNative() {
 		return Boolean(getCapacitor()?.isNativePlatform?.());
@@ -157,77 +164,26 @@ export const PLATFORM_NATIVE = {
 		},
 	},
 
-	// ---- Lokales Dateisystem (Export & Backup in Android Dokumente-Ordner) ----
+	// ---- Datei-Export: Android-Teilen-Menü (Drive, Mail, „In Dateien speichern“ …) ----
+	// Das WebView kennt kein navigator.share. Darum: Datei in den App-Cache schreiben und
+	// über das Share-Plugin anbieten (FileProvider gibt cache-path frei, siehe file_paths.xml).
 	filesystem: {
-		async exportFile(filename, contentString, { directory = "DOCUMENTS", mimeType = "application/json" } = {}) {
+		async exportFile(filename, blob) {
 			const fs = getPlugin("Filesystem");
-			if (fs) {
-				try {
-					try {
-						await fs.mkdir({
-							path: "Impala67",
-							directory,
-							recursive: true,
-						});
-					} catch { /* Ordner existiert eventuell bereits */ }
-
-					const res = await fs.writeFile({
-						path: `Impala67/${filename}`,
-						data: contentString,
-						directory,
-						encoding: "utf8",
-						recursive: true,
-					});
-					return {
-						native: true,
-						success: true,
-						uri: res?.uri || `Documents/Impala67/${filename}`,
-					};
-				} catch (err) {
-					console.warn("[platform-native] Dateisystem-Export fehlgeschlagen, prüfe Teilen-Fallback:", err);
-				}
+			const share = getPlugin("Share");
+			if (!fs || !share) return { success: false, error: "Teilen auf diesem Gerät nicht verfügbar" };
+			try {
+				const path = String(filename || "Datei").replace(/[\\/:*?"<>|]/g, "_");
+				// Ohne encoding erwartet das Plugin Base64 – so bleiben auch PDFs und ZIPs intakt
+				const { uri } = await fs.writeFile({ path, data: await blobToBase64(blob), directory: "CACHE" });
+				await share.share({ title: filename, dialogTitle: filename, files: [uri] });
+				return { success: true };
+			} catch (err) {
+				// Android meldet ein geschlossenes Teilen-Menü als Fehler „Share canceled“
+				if (/cancel/i.test(err?.message || "")) return { success: false, aborted: true };
+				console.warn("[platform-native] Teilen fehlgeschlagen:", err);
+				return { success: false, error: err?.message || String(err) };
 			}
-
-			// Fallback 1: Web Share API mit Datei (Android Share Sheet: "In Dateien speichern", Drive, Mail etc.)
-			if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-				try {
-					if (typeof File !== "undefined") {
-						const file = new File([contentString], filename, { type: mimeType });
-						if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-							await navigator.share({
-								title: filename,
-								files: [file],
-							});
-							return { native: true, success: true, shared: true, uri: "Teilen-Dialog" };
-						}
-					}
-				} catch (shareErr) {
-					if (shareErr?.name === "AbortError") {
-						return { native: true, success: false, aborted: true };
-					}
-					console.warn("[platform-native] Web Share (Datei) fehlgeschlagen:", shareErr);
-				}
-
-				// Fallback 2: Web Share API als Text (falls File-Sharing im WebView nicht unterstützt wird)
-				try {
-					await navigator.share({
-						title: filename,
-						text: contentString,
-					});
-					return { native: true, success: true, shared: true, uri: "Teilen-Dialog (Text)" };
-				} catch (shareErr) {
-					if (shareErr?.name === "AbortError") {
-						return { native: true, success: false, aborted: true };
-					}
-					console.warn("[platform-native] Web Share (Text) fehlgeschlagen:", shareErr);
-				}
-			}
-
-			return { native: Boolean(fs), success: false, error: "Weder Gerätespeicher noch Teilen verfügbar" };
-		},
-
-		async exportBackup(filename, contentString) {
-			return this.exportFile(filename, contentString);
 		},
 	},
 

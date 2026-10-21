@@ -2,7 +2,6 @@
 
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { BUS } from "./event-bus.js";
 
 const reopen = () => BUS.emit("ui:open-settings", { tab: "app", focusKey: "performance-profiler" });
@@ -21,23 +20,7 @@ document.addEventListener("click", async (event) => {
 	const report = PERF_PROFILER.report();
 	if (button.id === "btnPerfExport") {
 		const filename = "impala67-performance-" + new Date().toISOString().slice(0, 10) + ".json";
-		if (PLATFORM_NATIVE.isNative) {
-			const res = await PLATFORM_NATIVE.filesystem.exportFile(filename, report);
-			if (res.success) {
-				U.toast(res.shared ? "Performance-Diagnose bereitgestellt." : ("Performance-Diagnose im Gerätespeicher gesichert (" + res.uri + ")"), "success");
-			} else if (res.aborted) {
-				// Nutzer hat das Teilen abgebrochen
-			} else {
-				try {
-					await navigator.clipboard.writeText(report);
-					U.toast("Diagnose konnte nicht als Datei gesichert werden – in Zwischenablage kopiert.", "info");
-				} catch {
-					U.toast("Export fehlgeschlagen: " + (res.error || "Unbekannter Fehler"), "error");
-				}
-			}
-		} else {
-			U.download(filename, report);
-		}
+		await U.download(filename, report);
 		return;
 	}
 	navigator.clipboard.writeText(report)

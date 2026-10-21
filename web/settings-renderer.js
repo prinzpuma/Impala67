@@ -365,8 +365,7 @@ function renderSync(vm) {
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const backupAction = backupActionState({ hasBackup: !!lastBackup });
 	const backupDescription = (lastBackup ? "Zuletzt " + U.fmtDate(lastBackup) + " · " : "") + "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt";
-	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) }) +
-		(vm.nativeFilesystemAvailable ? UI.row({ id: "native-fs-backup", title: "In Gerätespeicher sichern", description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen", trailing: switchControl("inpNativeFsBackup", "In Gerätespeicher sichern", vm.nativeFilesystemEnabled) }) : "");
+	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
 	const exports = UI.row({ title: "Lerndaten", description: "Lernanalyse-Daten als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" });
 	return UI.page("Sync & Backup", "Halte deine Geräte synchron und sichere deine Daten.",

@@ -187,8 +187,6 @@ function settingsViewModel() {
 		nativeHapticsEnabled: localStorage.getItem("impala67NativeHaptics") !== "0",
 		nativeScannerAvailable: PLATFORM_NATIVE.scanner.isAvailable,
 		nativeScannerEnabled: PLATFORM_NATIVE.scanner.isEnabled(),
-		nativeFilesystemAvailable: PLATFORM_NATIVE.isNative,
-		nativeFilesystemEnabled: localStorage.getItem("impala67NativeFsBackup") !== "0",
 		breakReminder: getBreakReminder(),
 	};
 }
@@ -1044,19 +1042,9 @@ export async function handleBackupNow(button) {
 	try {
 		const filename = "impala67-export-" + new Date().toISOString().slice(0, 10) + ".json";
 		const json = await DB.exportAll();
-		const useNative = PLATFORM_NATIVE.isNative && localStorage.getItem("impala67NativeFsBackup") !== "0";
-		if (useNative) {
-			const res = await PLATFORM_NATIVE.filesystem.exportBackup(filename, json);
-			if (res.success) {
-				U.toast(res.shared ? "Backup bereitgestellt." : ("Backup in Gerätespeicher gesichert (" + res.uri + ")"), "success");
-			} else if (!res.aborted) {
-				U.download(filename, json);
-			}
-		} else {
-			U.download(filename, json);
-		}
-		localStorage.setItem("impala67LastBackup", new Date().toISOString());
-		if (button) button.textContent = backupActionState({ hasBackup: true }).label;
+		const saved = (await U.download(filename, json)).success;
+		if (saved) localStorage.setItem("impala67LastBackup", new Date().toISOString());
+		if (button) button.textContent = saved ? backupActionState({ hasBackup: true }).label : old;
 	} catch (error) {
 		if (button) button.textContent = old;
 		throw error;

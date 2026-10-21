@@ -55,7 +55,6 @@ export const SETTINGS_ITEMS = [
 	{ id: "token-sync", section: "sync", group: "Google Drive", label: "Tokens über Drive synchronisieren", description: "KI-Keys lokal behalten oder auf eigene Geräte übertragen", keywords: "secrets api schlüssel privat sicherheit datenschutz" },
 	{ id: "sync-advanced", section: "sync", group: "Erweitert", label: "Google Client-ID", description: "OAuth-Webclient für Google Drive", keywords: "oauth client id technisch verbindungsdetails" },
 	{ id: "backup", section: "sync", group: "Backup", label: "Backup & Wiederherstellung", description: "Event-Log und Dateien exportieren oder importieren", keywords: "json sichern wiederherstellen import export" },
-	{ id: "native-fs-backup", section: "sync", group: "Backup", label: "In Gerätespeicher sichern", description: "Backups direkt in Android Dokumente (Documents/Impala67) ablegen", keywords: "backup dateisystem speicher ordner android documents", platform: "native" },
 	{ id: "data-export", section: "sync", group: "Backup", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
 	{ id: "storage", section: "app", group: "Speicher", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
 	{ id: "updates", section: "app", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },

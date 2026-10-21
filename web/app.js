@@ -646,10 +646,6 @@ function wireEvents() {
 			SETTINGS.handleAppearanceSelect("motion", e.target.checked ? "reduced" : "full");
 			return;
 		}
-		if (e.target.id === "inpNativeFsBackup") {
-			localStorage.setItem("impala67NativeFsBackup", e.target.checked ? "1" : "0");
-			return;
-		}
 		if (e.target.id === "inpNativeHaptics") {
 			localStorage.setItem("impala67NativeHaptics", e.target.checked ? "1" : "0");
 			if (e.target.checked) PLATFORM_NATIVE.haptics.light();
