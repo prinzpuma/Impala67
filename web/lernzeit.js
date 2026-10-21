@@ -7,10 +7,9 @@ import { FACH } from "./fach.js";
 import { idlePromptContextKind } from "./lernzeit-context.js";
 import { icon, lead } from "./icons.js";
 
-// lernzeit.js — Lernzeit v5 (4. August 2026)
-// v5: Home-Analyse mit Woche/Monat-Schalter, einer Fachdimension und
-// Vergleichskennzahlen. Die Erfassungs-Engine (automatische Segmente, Idle-Tier,
-// Kategorie-Split) bleibt local-first und rückwärtskompatibel.
+// lernzeit.js — automatische Lernzeit-Erfassung: Segmente je Kontext (Karten, Heft, Notiz,
+// KI), Idle-Tierchen, Pausen-Erinnerung und Tagessummen für die Startseite (render.js,
+// lernanalyse.js). Das frühere eigene Startseiten-Widget ist entfallen.
 
 export const LERNZEIT = (() => {
 	const IDLE_MS = 60000;
@@ -18,25 +17,13 @@ export const LERNZEIT = (() => {
 	const TICK_MS = 5000;
 	const TIMER_KEY = "impala67_lernzeit_timer_end";
 	const TIMER_MIN_KEY = "impala67_lernzeit_timer_minutes";
-	const TIMER_PAUSE_KEY = "impala67_lernzeit_timer_paused_left";
+	const TIMER_PAUSE_KEY = "impala67_lernzeit_timer_paused_left"; // Altlast: nur noch aufräumen
 	const GOAL_KEY = "impala67WeekGoalMinutes";
-	const FOLD_KEY = "impala67LzFolds";
-	const CATEGORIES = {
-		cards: { icon: "cards", label: "Karteikarten" },
-		notebook: { icon: "notebook", label: "Hefte" },
-		notes: { icon: "note", label: "Notizen" },
-		ai: { icon: "sparkles", label: "KI" },
-		other: { icon: "timer", label: "Sonstiges" },
-	};
 
 	let lastActivityAt = Date.now();
 	let current = null;
 	let animal = null;
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
-	let timerPausedLeft = Number(localStorage.getItem(TIMER_PAUSE_KEY) || 0);
-	let weekOffset = 0;
-	let monthOffset = 0;
-	let analysisMode = "week";
 
 	let activeStretchMs = 0;
 	let lastActiveTickAt = 0;
@@ -54,12 +41,6 @@ export const LERNZEIT = (() => {
 	function dayKey(value) {
 		const d = new Date(value || Date.now());
 		return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-	}
-	function fmt(seconds) {
-		const total = Math.max(0, Math.round(seconds || 0));
-		const h = Math.floor(total / 3600);
-		const m = Math.floor((total % 3600) / 60);
-		return h ? h + " h " + String(m).padStart(2, "0") + " min" : m + " min";
 	}
 	function activeSessions() {
 		return Object.values(S.learningSessions || {}).filter((item) => item && !item.deleted && item.durationSeconds > 0);
@@ -165,7 +146,6 @@ export const LERNZEIT = (() => {
 		animal.remove();
 		animal = null;
 		openSegment(categoryNow());
-		refreshLive();
 		return true;
 	}
 
@@ -202,51 +182,16 @@ export const LERNZEIT = (() => {
 	}
 
 	// ---------- Timer (v3: mit Pause/Fortsetzen + Fortschritt) ----------
-	function timerRunning() { return timerEndsAt > Date.now(); }
-	function timerPaused() { return !timerRunning() && timerPausedLeft > 0; }
 	function timerTotalMin() { return Math.max(1, Math.round(Number(localStorage.getItem(TIMER_MIN_KEY)) || 25)); }
 	function startTimer(minutes) {
 		const min = Math.max(5, Math.min(240, Number(minutes) || 25));
 		timerEndsAt = Date.now() + min * 60000;
-		timerPausedLeft = 0;
 		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
 		localStorage.setItem(TIMER_MIN_KEY, String(min));
 		localStorage.removeItem(TIMER_PAUSE_KEY);
 		lastActivityAt = Date.now();
 		openSegment(categoryNow());
 		TELE.log("timerStart", { minutes: min });
-		renderHomeWidget();
-	}
-	function pauseTimer() {
-		if (!timerRunning()) return;
-		timerPausedLeft = Math.max(1000, timerEndsAt - Date.now());
-		timerEndsAt = 0;
-		localStorage.removeItem(TIMER_KEY);
-		localStorage.setItem(TIMER_PAUSE_KEY, String(timerPausedLeft));
-		pauseSegment();
-		TELE.log("timerPause", { leftMs: timerPausedLeft });
-		renderHomeWidget();
-	}
-	function resumeTimer() {
-		if (!timerPaused()) return;
-		timerEndsAt = Date.now() + timerPausedLeft;
-		timerPausedLeft = 0;
-		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
-		localStorage.removeItem(TIMER_PAUSE_KEY);
-		lastActivityAt = Date.now();
-		openSegment(categoryNow());
-		TELE.log("timerResume", {});
-		renderHomeWidget();
-	}
-	async function stopTimer() {
-		const leftMs = timerRunning() ? timerEndsAt - Date.now() : timerPausedLeft;
-		TELE.log("timerStop", { plannedMin: timerTotalMin(), leftMs: Math.max(0, leftMs) });
-		timerEndsAt = 0;
-		timerPausedLeft = 0;
-		localStorage.removeItem(TIMER_KEY);
-		localStorage.removeItem(TIMER_PAUSE_KEY);
-		await finishSession();
-		renderHomeWidget();
 	}
 
 	function tick() {
@@ -258,7 +203,6 @@ export const LERNZEIT = (() => {
 		if (timerEndsAt && Date.now() >= timerEndsAt) {
 			const minutes = timerTotalMin();
 			timerEndsAt = 0;
-			timerPausedLeft = 0;
 			localStorage.removeItem(TIMER_KEY);
 			localStorage.removeItem(TIMER_PAUSE_KEY);
 			TELE.log("timerDone", { minutes });
@@ -274,7 +218,6 @@ export const LERNZEIT = (() => {
 				activeStretchMs = 0;
 				reminderShownForBlock = false;
 			}
-			refreshLive();
 			return;
 		}
 		// Beim Wechsel aus Heft/Chat/Kartenlernen darf ein bereits sichtbares Tier
@@ -311,8 +254,6 @@ export const LERNZEIT = (() => {
 		} else {
 			lastActiveTickAt = 0;
 		}
-
-		refreshLive();
 	}
 
 	// ---------- Auswertung ----------
@@ -359,12 +300,6 @@ export const LERNZEIT = (() => {
 		if (!live) return sessions;
 		return sessions.filter((session) => session.id !== live.id).concat(live);
 	}
-	function sessionSubject(session) {
-		if (session.subject) return FACH.clean(session.subject);
-		if (session.category === "cards") return FACH.deck(session.sourceId).name;
-		const page = session.sourceId && S.pages[session.sourceId];
-		return FACH.page(page).name;
-	}
 	function totalForDay(key) {
 		const list = addLiveSession(activeSessions()).filter((s) => dayKey(s.startedAt) === key);
 		return mergedSeconds(list);
@@ -396,22 +331,6 @@ export const LERNZEIT = (() => {
 		}
 		return result;
 	}
-	function groupedSubjects(from, to) {
-		const start = from.getTime(), end = to.getTime(), groups = {};
-		let sessions = sessionsInRange(from, to);
-		const live = currentAsSession();
-		if (live && Date.now() >= start && Date.now() < end) sessions = sessions.filter((session) => session.id !== live.id).concat(live);
-		for (const session of sessions) (groups[sessionSubject(session)] ||= []).push(session);
-		return Object.entries(groups).map(([subject, list]) => ({ subject, seconds: mergedSeconds(list), sessions: list.length }))
-			.sort((a, b) => b.seconds - a.seconds);
-	}
-	function sessionsInRange(from, to) {
-		const start = from.getTime(), end = to.getTime();
-		return activeSessions().filter((s) => {
-			const t = new Date(s.startedAt).getTime();
-			return Number.isFinite(t) && t >= start && t < end;
-		}).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
-	}
 	function weekStart(offset = 0) {
 		const d = new Date();
 		d.setHours(0, 0, 0, 0);
@@ -424,78 +343,6 @@ export const LERNZEIT = (() => {
 			const d = new Date(start); d.setDate(d.getDate() + index);
 			return { d, seconds: totals ? (totals[dayKey(d)] || 0) : totalForDay(dayKey(d)) };
 		});
-	}
-	function weekRange(offset = 0) {
-		const from = weekStart(offset), to = new Date(from);
-		to.setDate(to.getDate() + 7);
-		return { from, to };
-	}
-	function monthStart(offset = 0) {
-		const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1); d.setMonth(d.getMonth() + offset);
-		return d;
-	}
-	function monthRange(offset = 0) {
-		const from = monthStart(offset), to = new Date(from); to.setMonth(to.getMonth() + 1);
-		return { from, to };
-	}
-	function monthDays(offset = 0, totals = null) {
-		const from = monthStart(offset), to = monthRange(offset).to, days = [];
-		for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-			const copy = new Date(d);
-			days.push({ d: copy, seconds: totals ? (totals[dayKey(copy)] || 0) : totalForDay(dayKey(copy)) });
-		}
-		return days;
-	}
-	function monthStats(offset = 0, totals = null) {
-		const { from, to } = monthRange(offset), days = monthDays(offset, totals);
-		const seconds = days.reduce((sum, item) => sum + item.seconds, 0);
-		const activeDays = days.filter((item) => item.seconds >= 300).length;
-		const previous = monthDays(offset - 1, totals).reduce((sum, item) => sum + item.seconds, 0);
-		return {
-			from, to, days, seconds, previousSeconds: previous,
-			activeDays,
-			averageSeconds: activeDays ? Math.round(seconds / activeDays) : 0,
-			reviews: TELE.rangeStats(from, to),
-			previousReviews: TELE.rangeStats(monthRange(offset - 1).from, from),
-		};
-	}
-	function monthCalendar(days, reviews) {
-		const leading = (days[0].d.getDay() + 6) % 7;
-		const max = Math.max(1, ...days.map((item) => item.seconds));
-		const today = dayKey();
-		const head = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((label) => '<span>' + label + '</span>').join("");
-		const cells = Array.from({ length: leading }, () => '<i class="lz-month-empty"></i>').join("") + days.map((item) => {
-			const level = item.seconds ? Math.max(1, Math.ceil(item.seconds / max * 4)) : 0;
-			const reviewCount = reviews.byDay[dayKey(item.d)] || 0;
-			return '<div class="lz-month-day lvl-' + level + (dayKey(item.d) === today ? ' today' : '') + '" title="' + DAY_TITLE_FMT.format(item.d) + ' · ' + fmt(item.seconds) + (reviewCount ? ' · ' + reviewCount + ' Reviews' : '') + '"><b>' + item.d.getDate() + '</b><i style="height:' + (item.seconds ? Math.max(4, Math.round(item.seconds / max * 100)) : 2) + '%"></i><small>' + (reviewCount || '') + '</small></div>';
-		}).join("");
-		return '<div class="lz-month-calendar"><div class="lz-month-weekdays">' + head + '</div><div class="lz-month-grid">' + cells + '</div></div>';
-	}
-	function dateLabel(date, options) { return date.toLocaleDateString("de-DE", options); }
-	// PERF: Ein Formatter pro Format statt eines neuen in jeder Tageszelle (toLocaleDateString baut jedes Mal einen).
-	const DAY_TITLE_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long" });
-	const WEEKDAY_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "short" });
-	function rangeTitle(from, to, mode) {
-		if (mode === "month") return dateLabel(from, { month: "long", year: "numeric" });
-		const end = new Date(to); end.setDate(end.getDate() - 1);
-		return dateLabel(from, { day: "2-digit", month: "short" }) + " – " + dateLabel(end, { day: "2-digit", month: "short", year: "numeric" });
-	}
-	function weekStats(offset = 0, totals = null) {
-		const goal = weekGoalMinutes();
-		const days = weekData(offset, totals);
-		const seconds = days.reduce((sum, x) => sum + x.seconds, 0);
-		const previousSeconds = weekData(offset - 1, totals).reduce((sum, x) => sum + x.seconds, 0);
-		const activeDays = days.filter((x) => x.seconds >= 5 * 60).length;
-		const bestDay = days.reduce((best, item) => item.seconds > best.seconds ? item : best, days[0]);
-		const { from, to } = weekRange(offset);
-		return {
-			from, to, days, seconds, previousSeconds, activeDays, bestDay,
-			averageSeconds: activeDays ? Math.round(seconds / activeDays) : 0,
-			goalMinutes: goal,
-			goalPct: Math.round(seconds / 60 / goal * 100),
-			reviews: TELE.rangeStats(from, to),
-			previousReviews: TELE.rangeStats(weekRange(offset - 1).from, from),
-		};
 	}
 	// Streak: aufeinanderfolgende Tage mit ≥ 5 min Lernzeit. Ein noch „leerer“
 	// heutiger Tag bricht die Serie nicht — sie zählt dann ab gestern.
@@ -517,100 +364,8 @@ export const LERNZEIT = (() => {
 		const next = presets[(presets.indexOf(weekGoalMinutes()) + 1 + presets.length) % presets.length];
 		localStorage.setItem(GOAL_KEY, String(next));
 		TELE.log("goalChange", { minutes: next });
-		renderHomeWidget();
 		if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lz:goal-changed", { detail: { minutes: next } }));
 		U.toast("Wochenziel: " + Math.round(next / 60 * 10) / 10 + " h", "success");
-	}
-	function computeSmartInsights(totals = totalsByDay()) {
-		const list = [];
-		const cards = (typeof STATE !== "undefined" && STATE.activeCards ? STATE.activeCards() : Object.values((S && S.cards) || {})).filter((c) => !c.trashed && !c.suspended);
-		const problemCards = cards.filter((c) => ((c.srs || {}).lapses || 0) >= 4).length;
-		const now = new Date();
-		const hour = now.getHours();
-		const todaySec = (totals && totals[dayKey(now)]) || 0;
-		const streak = streakDays(totals);
-		const dueCards = (typeof STATE !== "undefined" && STATE.dueCards ? STATE.dueCards() : []);
-
-		// 1. 🧠 Vergessenskurven-Alarm: Problemkarten kurz vor dem Vergessen
-		if (problemCards > 0) {
-			list.push({
-				id: "forgettingAlarm",
-				icon: "brain",
-				title: problemCards + " Karte" + (problemCards === 1 ? "" : "n") + " kurz vor dem Vergessen",
-				desc: "Jetzt gezielt wiederholen spart 80 % der Lernzeit und festigt den Stoff.",
-				action: 'data-homeaction="cards"',
-			});
-		}
-
-		// 2. 🔔 Fälligkeits-Vorschau: Warnt bei Lernspitze (>25 fällige Karten)
-		if (dueCards.length > 25) {
-			list.push({
-				id: "duePeak",
-				icon: "bell",
-				title: "Lernspitze steht an",
-				desc: dueCards.length + " Karten sind fällig — starte früh, um den Tag zu entzerren.",
-				action: 'data-homeaction="cards"',
-			});
-		}
-
-		// 3. 📅 Aufschiebe-Schutz: Streak schützen ab Nachmittag
-		if (todaySec === 0 && streak > 0 && hour >= 15) {
-			list.push({
-				id: "procrastinationShield",
-				icon: "flame",
-				title: streak + "-Tage-Streak in Gefahr",
-				desc: "Heute noch nichts gelernt — schon 5 Minuten halten deine Serie aufrecht.",
-				action: 'data-homeaction="cards"',
-			});
-		}
-
-		// 4. ⏱️ Optimale Session-Länge (aus bisherigen Einheiten)
-		const sessions = activeSessions();
-		if (sessions.length >= 5) {
-			const recent10 = sessions.slice(-10);
-			const avgMin = Math.round(recent10.reduce((acc, s) => acc + (s.durationSeconds || 0), 0) / recent10.length / 60);
-			const optMin = Math.max(20, Math.min(45, avgMin || 25));
-			list.push({
-				id: "optimalSession",
-				icon: "timer",
-				title: "Optimale Session-Länge: ~" + optMin + " min",
-				desc: "Deine Konzentrationskurve ist in Blöcken von 25–35 Minuten am stabilsten.",
-			});
-		}
-
-		// 5. ☀️ Bester Lernzeitpunkt (Biorhythmus): erst ab > 50 Reviews
-		const allReviews = ((typeof TELE !== "undefined" && TELE.history) ? TELE.history() : []).filter((e) => e.type === "review");
-		if (allReviews.length >= 50) {
-			const buckets = { morning: { c: 0, ok: 0 }, afternoon: { c: 0, ok: 0 }, evening: { c: 0, ok: 0 } };
-			for (const r of allReviews) {
-				const h = new Date(r.t || r.timestamp || Date.now()).getHours();
-				const b = h >= 6 && h < 12 ? "morning" : h >= 12 && h < 18 ? "afternoon" : "evening";
-				buckets[b].c++;
-				if (r.rating >= 3 || r.grade >= 3 || r.passed) buckets[b].ok++;
-			}
-			let bestBucket = null;
-			let bestRate = 0;
-			for (const [k, v] of Object.entries(buckets)) {
-				if (v.c >= 15) {
-					const rate = v.ok / v.c;
-					if (rate > bestRate) {
-						bestRate = rate;
-						bestBucket = k;
-					}
-				}
-			}
-			if (bestBucket && bestRate >= 0.7) {
-				const label = bestBucket === "morning" ? "vormittags (6–12 Uhr)" : bestBucket === "afternoon" ? "nachmittags (12–18 Uhr)" : "abends (18–24 Uhr)";
-				list.push({
-					id: "bestTime",
-					icon: "sun",
-					title: "Bester Lernzeitpunkt",
-					desc: "Höchste Behaltequote " + label + " mit " + Math.round(bestRate * 100) + " % Erfolgsquote.",
-				});
-			}
-		}
-
-		return list;
 	}
 
 	// Kennzahlen für die Home-Seite (render.js) — eine Quelle für alle Widgets.
@@ -622,155 +377,9 @@ export const LERNZEIT = (() => {
 			todaySeconds: totals[dayKey()] || 0,
 			streakDays: streakDays(totals),
 			goalPct: Math.round(weekSeconds / 60 / goal * 100),
-			smartInsights: computeSmartInsights(totals),
 		};
 	}
 
-	// ---------- Ausklappbare Widget-Bereiche (Zustand wird gemerkt) ----------
-	function folds() {
-		try { return JSON.parse(localStorage.getItem(FOLD_KEY) || "{}") || {}; } catch { return {}; }
-	}
-	function foldOpen(id, fallback) {
-		const f = folds();
-		return f[id] === undefined ? fallback : !!f[id];
-	}
-	document.addEventListener("toggle", (event) => {
-		const el = event.target;
-		if (!el || !el.matches || !el.matches("details[data-lzfold]")) return;
-		const f = folds();
-		f[el.getAttribute("data-lzfold")] = el.open;
-		localStorage.setItem(FOLD_KEY, JSON.stringify(f));
-	}, true);
-	function fold(id, summary, body, fallbackOpen) {
-		return '<details class="lz-fold" data-lzfold="' + id + '"' + (foldOpen(id, fallbackOpen) ? " open" : "") +
-			'><summary>' + summary + '</summary><div class="lz-fold-body">' + body + '</div></details>';
-	}
-
-	// ---------- Widget ----------
-	function timerCardHtml() {
-		return "";
-	}
-	function homeWidgetHtml(totalsIn, homeStatsIn) {
-		const mode = analysisMode;
-		const range = mode === "month" ? monthRange(monthOffset) : weekRange(weekOffset);
-		const totals = totalsIn || totalsByDay(), homeStats = homeStatsIn || statsForHome(totals);
-		const selected = mode === "month" ? monthStats(monthOffset, totals) : weekStats(weekOffset, totals);
-		const sessions = sessionsInRange(range.from, range.to);
-		const seconds = selected.seconds;
-		const previousSeconds = selected.previousSeconds;
-		const deltaPct = previousSeconds ? Math.round((seconds - previousSeconds) / previousSeconds * 100) : null;
-		const deltaText = deltaPct === null ? "Noch kein Vergleich" : (deltaPct >= 0 ? "+" : "") + deltaPct + " % zum vorherigen Zeitraum";
-		const reviews = selected.reviews;
-		const previousReviews = selected.previousReviews;
-		const reviewRate = reviews.passRate === null ? null : Math.round(reviews.passRate * 100);
-		const previousRate = previousReviews.passRate === null ? null : Math.round(previousReviews.passRate * 100);
-		const reviewDelta = reviewRate === null || previousRate === null ? "Noch kein Vergleich" : (reviewRate - previousRate >= 0 ? "+" : "") + (reviewRate - previousRate) + " Punkte zum vorherigen Zeitraum";
-		const subjectMap = new Map(groupedSubjects(range.from, range.to).map((item) => [item.subject, item]));
-		for (const item of reviews.bySubject || []) if (!subjectMap.has(item.subject)) subjectMap.set(item.subject, { subject: item.subject, seconds: 0, sessions: 0 });
-		const subjects = [...subjectMap.values()]
-			.filter((item) => FACH.KNOWN_SUBJECTS.includes(item.subject))
-			.sort((a, b) => b.seconds - a.seconds || U.cmpDe(a.subject, b.subject));
-		const maxSubject = Math.max(1, ...subjects.map((item) => item.seconds));
-		const subjectRows = subjects.slice(0, 12).map((item, index) => {
-			const quality = (reviews.bySubject || []).find((entry) => entry.subject === item.subject);
-			const retention7 = quality?.retention?.day7;
-			const qualityText = retention7?.rate !== null && retention7?.rate !== undefined
-				? Math.round(retention7.rate * 100) + " % nach 7 Tagen"
-				: quality?.passRate !== null && quality?.passRate !== undefined ? Math.round(quality.passRate * 100) + " % sofort richtig" : "Noch keine Retention";
-			return '<div class="lz-subject-row"><span class="lz-subject-rank">' + (index + 1) + '</span><div><b>' + U.esc(item.subject) + '</b><small>' + (item.sessions ? item.sessions + ' Einheit' + (item.sessions === 1 ? '' : 'en') + ' · ' : '') + (quality?.reviews || 0) + ' Reviews · ' + qualityText + '</small></div><div class="lz-subject-track"><i style="width:' + (item.seconds ? Math.max(4, Math.round(item.seconds / maxSubject * 100)) : 4) + '%"></i></div><strong>' + fmt(item.seconds) + '</strong></div>';
-		}).join("") || '<p class="hint lz-empty">Noch kein Fach in diesem Zeitraum erfasst.</p>';
-		const maxDay = Math.max(1, ...selected.days.map((x) => x.seconds)), today = dayKey();
-		const chart = mode === "month" ? monthCalendar(selected.days, reviews) : selected.days.map(({ d, seconds: daySeconds }) => {
-			const key = dayKey(d), dayReviews = reviews.byDay[key] || 0, height = daySeconds ? Math.max(6, Math.round(daySeconds / maxDay * 100)) : 2;
-			return '<div class="lz-bar-col' + (key === today ? ' today' : '') + (daySeconds ? '' : ' empty') + '" title="' + fmt(daySeconds) + ' · ' + dayReviews + ' Reviews"><span>' + (daySeconds ? fmt(daySeconds) : '—') + '</span><i style="height:' + height + '%"></i><small>' + WEEKDAY_FMT.format(d) + '<b>' + d.getDate() + '</b></small><em>' + (dayReviews ? dayReviews + ' Karten' : '&nbsp;') + '</em></div>';
-		}).join("");
-		const periodTitle = rangeTitle(range.from, range.to, mode);
-		const relative = mode === "month" ? (monthOffset === 0 ? "Dieser Monat" : monthOffset === -1 ? "Letzter Monat" : 'Vor ' + Math.abs(monthOffset) + ' Monaten') : (weekOffset === 0 ? "Diese Woche" : weekOffset === -1 ? "Letzte Woche" : 'Vor ' + Math.abs(weekOffset) + ' Wochen');
-		const activeDays = selected.activeDays;
-		const goalMinutes = mode === "month" ? Math.round(weekGoalMinutes() * 4.345) : weekGoalMinutes();
-		const goalPct = mode === "month" ? Math.round(seconds / 60 / (weekGoalMinutes() * 4.345) * 100) : selected.goalPct;
-		const retention7 = reviews.retention?.day7;
-		const retentionRate = (retention7?.rate !== null && retention7?.rate !== undefined)
-			? Math.round(retention7.rate * 100)
-			: (reviewRate !== null ? reviewRate : null);
-		const retentionStatus = retentionRate !== null
-			? retentionRate + " % Behaltequote (Prüfungsreife)"
-			: "Noch keine Reviews";
-		const problemCards = (typeof STATE !== "undefined" && STATE.activeCards ? STATE.activeCards() : Object.values((S && S.cards) || {}))
-			.filter((c) => !c.trashed && !c.suspended && ((c.srs || {}).lapses || 0) >= 4).length;
-		const problemActionHtml = problemCards > 0
-			? '<button class="lz-btn-problem" data-homeaction="cards">' + lead("zap") + problemCards + ' Problemkarte' + (problemCards === 1 ? '' : 'n') + ' gezielt wiederholen</button>'
-			: '<span class="lz-problem-none">' + lead("sparkles") + 'Keine Problemkarten — alles stabil</span>';
-
-		const recommendations = [];
-		if (!seconds && !reviews.reviews) recommendations.push(["sprout", "Noch keine Lernzeit", "Starte einen Fokusblock oder füge eine Einheit hinzu. Der Zeitraum bleibt vollständig nachvollziehbar."]);
-		else {
-			if (deltaPct !== null) recommendations.push([deltaPct >= 0 ? "trending-up" : "trending-down", deltaPct >= 10 ? "Mehr Lernzeit" : deltaPct <= -20 ? "Weniger Lernzeit" : "Stabiler Umfang", deltaText + "."]);
-			if (mode === "week") recommendations.push([activeDays >= 4 ? "check-circle" : "calendar", activeDays + ' aktive' + (activeDays === 1 ? 'r' : '') + ' Lerntag' + (activeDays === 1 ? '' : 'e'), activeDays >= 4 ? 'Gute Verteilung über die Woche.' : 'Kürzere Einheiten an mehreren Tagen helfen beim Behalten.']);
-			else if (subjects.length > 1) recommendations.push(["shuffle", subjects.length + " Fächer im Monat", "Deine Lernzeit verteilt sich auf mehrere Lernkontexte."]);
-			if (retentionRate !== null) recommendations.push([retentionRate >= 85 ? "target" : "brain", retentionStatus, retentionRate >= 85 ? "Langfristig sitzt der Stoff gut." : "Kürzere Abstände oder gezielte Wiederholungen können helfen."]);
-		}
-		const smartList = computeSmartInsights(totals);
-		const smartHtml = (smartList.length ? smartList : recommendations.slice(0, 3).map(([icon, title, sub]) => ({ icon, title, desc: sub }))).map((item) =>
-			'<div class="lz-recommendation"><span>' + icon(item.icon) + '</span><div><b>' + U.esc(item.title) + '</b><small>' + U.esc(item.desc) + '</small></div></div>'
-		).join("");
-
-		const log = sessions.slice(0, 12).map((session) => {
-			const meta = CATEGORIES[session.category] || CATEGORIES.other;
-			return '<div class="lz-log-row"><span>' + lead(meta.icon) + '<b>' + U.esc(sessionSubject(session)) + '</b><small>' + meta.label + ' · ' + new Date(session.startedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' · ' + fmt(session.durationSeconds) + '</small></span><span><button class="mini" data-lz-edit="' + session.id + '">Bearbeiten</button><button class="mini danger" data-lz-delete="' + session.id + '" title="Einheit löschen">' + icon("trash") + '</button></span></div>';
-		}).join("") || '<p class="hint lz-empty">Keine abgeschlossene Einheit in diesem Zeitraum.</p>';
-		const isCurrent = mode === "month" ? monthOffset === 0 : weekOffset === 0;
-		const navLabel = mode === "month" ? "Monate" : "Wochen";
-		return '<section class="lz-widget" id="lzWidget"><header class="lz-dashboard-head"><div><span class="lz-eyebrow">Lernanalyse</span><h2>' + relative + '</h2><p>' + periodTitle + '</p></div>' +
-			'<div class="lz-dashboard-actions"><div class="lz-view-switch" role="tablist" aria-label="Analysezeitraum"><button data-lz-mode="week" role="tab" aria-selected="' + (mode === 'week') + '" class="' + (mode === 'week' ? 'active' : '') + '">Woche</button><button data-lz-mode="month" role="tab" aria-selected="' + (mode === 'month') + '" class="' + (mode === 'month' ? 'active' : '') + '">Monat</button></div><div class="lz-week-nav"><button data-lz-period="-1" aria-label="Vorherige ' + navLabel + '">←</button><button data-lz-todayperiod="1"' + (isCurrent ? ' disabled' : '') + '>Heute</button><button data-lz-period="1" aria-label="Nächste ' + navLabel + '"' + (isCurrent ? ' disabled' : '') + '>→</button></div></div></header>' +
-			'<div class="lz-summary-card"><div class="lz-summary-hero">' +
-			'<div class="lz-summary-left"><span class="lz-summary-sub">Gesamte Lernzeit</span><b class="lz-summary-time">' + fmt(seconds) + '</b><span class="lz-summary-delta' + (deltaPct !== null && deltaPct < 0 ? ' down' : '') + '">' + deltaText + '</span></div>' +
-			'<div class="lz-summary-right"><div class="lz-summary-goal-label"><span>' + lead("target") + '<b>' + Math.min(100, goalPct) + ' %</b> vom ' + (mode === 'week' ? 'Wochenziel' : 'Monatsziel') + ' (' + (Math.round(goalMinutes / 60 * 10) / 10) + ' h)</span><button class="mini" data-lz-goal="1">Ziel ändern</button></div>' +
-			'<div class="lz-progress lz-goal-bar"><i style="width:' + Math.min(100, goalPct) + '%"></i></div>' +
-			'<div class="lz-summary-subline"><span>' + lead("flame") + '<b>' + homeStats.streakDays + '</b> ' + (homeStats.streakDays === 1 ? 'Tag Streak' : 'Tage Streak') + '</span><span>' + lead("calendar") + '<b>' + activeDays + '</b> ' + (activeDays === 1 ? 'aktiver Tag' : 'aktive Tage') + '</span></div></div>' +
-			'</div></div>' +
-			'<div class="lz-panel lz-week-chart"><div class="lz-panel-head"><div><b>' + (mode === 'week' ? 'Lernrhythmus der Woche' : 'Lernkalender des Monats') + '</b><small>' + (mode === 'week' ? 'Lernzeit und Karten pro Tag' : 'Jeder Tag zeigt Intensität und Reviews') + '</small></div><span>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</span></div><div class="' + (mode === 'month' ? 'lz-month-wrap' : 'lz-bars') + '">' + chart + '</div></div>' +
-			'<div class="lz-analysis-grid"><div class="lz-panel lz-subjects"><div class="lz-panel-head"><div><b>Fächer & Lernkontexte</b><small>Automatisch aus Stapeln, Seiten und Workspaces</small></div><span>' + subjects.length + ' erkannt</span></div>' + subjectRows + '</div>' +
-			'<div class="lz-panel"><div class="lz-panel-head"><div><b>Kartenqualität</b><small>Langfristiges Behalten & Prüfungsreife</small></div></div>' +
-			'<div class="lz-quality-body">' +
-			'<div class="lz-quality-kpi"><b>' + retentionStatus + '</b><small>' + (reviews.reviews ? reviews.reviews + ' Reviews in diesem Zeitraum' : 'Noch keine Reviews erfasst') + '</small></div>' +
-			'<div class="lz-quality-action">' + problemActionHtml + '</div>' +
-			'</div></div></div>' +
-			'<div class="lz-panel lz-insights"><div class="lz-panel-head"><div><b>Smarte Lern-Analysen</b><small>Aus Lernzeit, Fächern und Lernerfolg gemeinsam abgeleitet</small></div></div><div class="lz-recommendations">' + smartHtml + '</div>' + fold("patterns", lead("brain") + "Langzeitmuster aus allen Lerndaten", TELE.homeInsightsHtml(), false) + '</div>' +
-			fold("log", lead("note") + "Einheiten in diesem Zeitraum", '<div class="lz-log-head"><b>' + sessions.length + ' Einheit' + (sessions.length === 1 ? '' : 'en') + '</b><button class="mini" data-lz-add="1">+ Zeit hinzufügen</button></div><div class="lz-log">' + log + '</div>', false) + '</section>';
-	}
-
-	function refreshLive() {
-		const total = document.querySelector("[data-lz-today]");
-		if (total) total.textContent = fmt(totalForDay(dayKey()));
-	}
-	function renderHomeWidget() {
-		const old = document.getElementById("lzWidget");
-		if (old) old.outerHTML = homeWidgetHtml();
-	}
-	async function saveManual(id, minutes, category, date, subject) {
-		const old = id && S.learningSessions[id];
-		const durationSeconds = Math.max(60, Math.round(Number(minutes) * 60));
-		// Manuelle Korrekturen können bewusst einem beliebigen Kalendertag
-		// zugeordnet werden. Mittagszeit verhindert Zeitzonen-Sprünge am Tagesrand.
-		const startedAt = new Date((date || dayKey(old && old.startedAt)) + "T12:00:00").toISOString();
-		const endedAt = new Date(new Date(startedAt).getTime() + durationSeconds * 1000).toISOString();
-		await STATE.dispatch("learningSessionUpsert", {
-			id: id || U.uid(), startedAt, endedAt, durationSeconds,
-			category: CATEGORIES[category] ? category : "other",
-			subject: FACH.clean(subject || (old && old.subject) || (old && sessionSubject(old)) || subjectNowMeta().name) || FACH.DEFAULT_SUBJECT,
-			sourceId: old ? old.sourceId : null, updated: iso(),
-		});
-	}
-	function editModal(id) {
-		const old = id ? S.learningSessions[id] : null;
-		const overlay = document.getElementById("overlay");
-		if (!overlay) return;
-		const options = Object.entries(CATEGORIES).map(([key, value]) => '<option value="' + key + '"' + ((old ? old.category : "other") === key ? " selected" : "") + '>' + value.label + '</option>').join("");
-		const subject = old ? sessionSubject(old) : subjectNowMeta().name;
-		overlay.hidden = false;
-		overlay.innerHTML = '<div class="modal lz-edit-modal"><button class="modal-x" data-lz-close="1">✕</button><h3>' + (old ? 'Lerneinheit bearbeiten' : 'Zeit hinzufügen') + '</h3><label>Tag<input id="lzEditDay" type="date" value="' + dayKey(old && old.startedAt) + '"></label><label>Minuten<input id="lzEditMinutes" type="number" min="1" max="1440" value="' + (old ? Math.round(old.durationSeconds / 60) : 25) + '"></label><label>Fach<input id="lzEditSubject" maxlength="80" value="' + U.esc(subject) + '" placeholder="z. B. Mathematik"></label><label>Aktivität<select id="lzEditCategory">' + options + '</select></label><div class="modal-actions"><button data-lz-close="1">Abbrechen</button><button class="primary" data-lz-save="' + (id || '') + '">Speichern</button></div></div>';
-	}
 
 	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, () => { if (!animal) lastActivityAt = Date.now(); }, { passive: true }));
 	// Das Settings-Overlay ändert S.view nicht. Auf seine DOM-Änderung reagieren wir
@@ -789,14 +398,13 @@ export const LERNZEIT = (() => {
 		}
 	});
 	window.addEventListener("pagehide", () => { finishSession(); });
-	document.addEventListener("click", async (event) => {
+	document.addEventListener("click", (event) => {
 		const source = event && event.target;
-		const target = source && source.nodeType === 1 && source.closest ? source.closest("[data-lz-start],[data-lz-custom],[data-lz-stop],[data-lz-pause],[data-lz-resume],[data-lz-goal],[data-lz-add],[data-lz-edit],[data-lz-delete],[data-lz-save],[data-lz-close],[data-lz-mode],[data-lz-period],[data-lz-todayperiod],[data-lz-break]") : null;
+		const target = source && source.nodeType === 1 && source.closest ? source.closest("[data-lz-start],[data-lz-goal],[data-lz-close],[data-lz-break]") : null;
 		if (!target) return;
 		if (target.dataset.lzBreak) {
 			const action = target.dataset.lzBreak;
-			const o = document.getElementById("overlay");
-			if (o) { o.hidden = true; o.innerHTML = ""; }
+			U.closeOverlay();
 			if (action === "5") {
 				pauseSegment();
 				activeStretchMs = 0;
@@ -811,28 +419,11 @@ export const LERNZEIT = (() => {
 			startTimer(target.dataset.lzStart);
 			// Der Verlängern-Button sitzt im Abschluss-Overlay. Nach dem Neustart des
 			// Timers darf dieses die App nicht weiter blockieren.
-			const overlay = target.closest("#overlay");
-			if (overlay) { overlay.hidden = true; overlay.innerHTML = ""; }
+			if (target.closest("#overlay")) U.closeOverlay();
 		}
-		else if (target.dataset.lzCustom) startTimer((document.getElementById("lzCustomMinutes") || {}).value);
-		else if (target.dataset.lzPause) pauseTimer();
-		else if (target.dataset.lzResume) resumeTimer();
 		else if (target.dataset.lzGoal) cycleGoal();
-		else if (target.dataset.lzMode) { analysisMode = target.dataset.lzMode === "month" ? "month" : "week"; renderHomeWidget(); }
-		else if (target.dataset.lzPeriod) { const delta = Number(target.dataset.lzPeriod) || 0; if (analysisMode === "month") monthOffset = Math.min(0, monthOffset + delta); else weekOffset = Math.min(0, weekOffset + delta); renderHomeWidget(); }
-		else if (target.dataset.lzTodayperiod) { if (analysisMode === "month") monthOffset = 0; else weekOffset = 0; renderHomeWidget(); }
-		else if (target.dataset.lzStop) { await stopTimer(); }
-		else if (target.dataset.lzAdd !== undefined) editModal(null);
-		else if (target.dataset.lzEdit) editModal(target.dataset.lzEdit);
-		else if (target.dataset.lzDelete) { await STATE.dispatch("learningSessionDelete", { id: target.dataset.lzDelete, updated: iso() }); renderHomeWidget(); }
-		else if (target.dataset.lzSave !== undefined) { await saveManual(target.dataset.lzSave || null, (document.getElementById("lzEditMinutes") || {}).value, (document.getElementById("lzEditCategory") || {}).value, (document.getElementById("lzEditDay") || {}).value, (document.getElementById("lzEditSubject") || {}).value); const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } renderHomeWidget(); }
-		else if (target.dataset.lzClose !== undefined) { const o = document.getElementById("overlay"); if (o) { o.hidden = true; o.innerHTML = ""; } }
+		else if (target.dataset.lzClose !== undefined) U.closeOverlay();
 	});
-
-	// 🩹 FIX (19. Juli): Alle .lz-*-Styles (Widget, Timer, Folds, #lzAnimal)
-	// leben jetzt fest in styles.css. Das früher hier zur Laufzeit injizierte
-	// <style id="lernzeitStyles"> war auf manchen Geräten nicht (mehr) aktiv —
-	// das Home-Widget erschien dann komplett ungestylt.
 
 	let tickTimer = 0;
 	function startInterval() {

@@ -87,6 +87,12 @@ function subjects() {
 
 // Häufigster Wurzel-Stapel eines Fachs — damit „Biologie lernen“ genau Biologie startet
 function deckFor(subject) {
+	if (cache.decks.has(subject)) return cache.decks.get(subject);
+	const deck = deckForUncached(subject);
+	cache.decks.set(subject, deck);
+	return deck;
+}
+function deckForUncached(subject) {
 	const count = {};
 	for (const c of STATE.activeCards()) {
 		if (FACH.card(c)?.name !== subject) continue;
@@ -169,9 +175,17 @@ function forecastBars(f) {
 }
 
 // ---------- Zusammenbau ----------
+// Fächer, Tageszeit, Prognose und Stapel-Zuordnung laufen über alle Wiederholungen und Karten –
+// die Startseite rendert aber bei jedem Sync-Tick. Neu gerechnet wird nur nach Karten-/Lern-
+// Events oder an einem neuen Tag; das Wochenziel (laufende Lernzeit) bleibt live.
+let cache = { key: "", parts: null, decks: new Map() };
 function compute() {
-	const totals = LERNZEIT.totalsByDay();
-	return { g: goal(totals), sub: subjects(), time: bestTime(), fc: forecast() };
+	const key = [STATE.cardRevision(), (S.reviews || []).length, (S.telemetry || []).length, startOfDay(0).getTime()].join("|");
+	if (cache.key !== key) {
+		cache = { key, parts: null, decks: new Map() };
+		cache.parts = { sub: subjects(), time: bestTime(), fc: forecast() };
+	}
+	return { g: goal(LERNZEIT.totalsByDay()), ...cache.parts };
 }
 
 // Wichtigste Aussage für den zugeklappten Zustand: Warnung vor Prognose vor Lob.

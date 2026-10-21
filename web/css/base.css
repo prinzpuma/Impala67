@@ -69,7 +69,7 @@ button, .row, .tab, .tabchip, .lib-card, .cal-day, .menu-item, .palette-item { t
 
 /* == ✨ Feinschliff v12 (25. Juli): Typografie-Details, keine neue Struktur == */
 /* Zahlen springen beim Hochzählen nicht mehr in der Breite (Timer, Fällig-Zähler, Statistik). */
-.kpi-num, .lz-total, .lz-bar-col small, .deck-badge, .study-counts-row, .lib-tab-n, .palette-foot kbd { font-variant-numeric: tabular-nums }
+.kpi-num, .deck-badge, .study-counts-row, .lib-tab-n, .palette-foot kbd { font-variant-numeric: tabular-nums }
 /* Überschriften brechen ausgewogen statt mit einem einzelnen Restwort in der letzten Zeile. */
 h1, h2, h3, .blk-h, .home-hero h1, .change-page-title, .study-side-label { text-wrap: balance }
 /* Fließtext vermeidet einzeln stehende Schlusszeilen — eine Regel, wirkt in Editor, Chat und Karten. */

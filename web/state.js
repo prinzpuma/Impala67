@@ -1989,7 +1989,7 @@ export const STATE = (() => {
 		return versions;
 	}
 
-	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
+	return { onChange: null, reduce, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied, load, hydrateHeftBlobs, scheduleCheckpoint, loadedSeq: getLoadedSeq, loadedTime: getLoadedTime, cardRevision: () => _cardRev, migrateLegacySecretsToSync, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree, isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards, archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes, dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory };
 })();
 
 // Breadcrumb-Elternkette (Workspace › Eltern › aktuelle Seite)

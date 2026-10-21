@@ -123,6 +123,12 @@ function onStateChange(type, ev) {
 		if (p.id === S.currentPageId && S.view === "page") renderMain();
 		return;
 	}
+	// Reine Ansichts-Events sichern nur einen Stand, den die Oberfläche schon zeigt: Tabs
+	// speichert tabs.js 350 ms nach der Navigation (die selbst gerendert hat), den Baum-
+	// Klappzustand zeichnet der Klick-Handler. Vorher folgte jedem Seitenwechsel ein zweiter
+	// Komplett-Render samt Editor-Neuaufbau.
+	if (type === "uiTabsSet") { renderTabs(); return; }
+	if (type === "uiTreeSet") return;
 	// Heft: Canvas ist die Live-Ansicht — nur die Bibliothek auffrischen, falls offen
 	if (type.startsWith("heft")) {
 		if (S.view === "library") renderMain();
