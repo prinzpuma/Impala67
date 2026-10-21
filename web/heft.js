@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, applyOpsToShadow, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, PAGE_W, PAGE_H } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
@@ -34,7 +34,7 @@ import {
 import { loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { TRAY_DOCK_PX, trayCss, toolbarHtml as buildToolbarHtml, plusPopHtml as buildPlusPopHtml, imgPopHtml } from "./heft-toolbar-ui.js";
 import { pagesGridHtml, pagesHistoryHtml, selectionSub, selectAllLabel } from "./heft-pages-ui.js";
-import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, exportImages as runExportImages, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
+import { exportName, pdfBlob as exportPdfBlob, imageFiles as exportImageFiles, exportPdf as runExportPdf, deliverExport, openExportDialog as renderExportDialog } from "./heft-export.js";
 import {
 	filePick,
 	pickImage,
@@ -158,7 +158,7 @@ export const HEFT = (() => {
 	let pageSelectGesture = null, suppressPageClickUntil = 0, pageDragFrom = -1;
 
 
-	const newPage = (paper) => ({ id: U.uid(), paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
+	const newPage = (paper) => emptyHeftPage(U.uid(), paper);
 
 	// ---- Veröffentlichen: Unterschied zum letzten Stand als Operationsliste ----
 	// published[pageId] ist bewusst KEINE Kopie des Dokuments, sondern ein
@@ -1299,9 +1299,6 @@ export const HEFT = (() => {
 	async function imageFiles(pageId, indices, baseName, onStatus) {
 		return PERF_PROFILER.run("heft.export-images", () => exportImageFiles(pageId, indices, baseName, onStatus, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas }), { pages: indices?.length }, 100);
 	}
-	async function exportImages(pageId, indices) {
-		return runExportImages(pageId, indices, { loadDoc: loadDocFor, renderCanvas: renderPageCanvas });
-	}
 	function openExportDialog() {
 		if (!pid || !exportSel || !exportSel.size) return;
 		const pageId = pid, indices = [...exportSel].sort((a, b) => a - b);
@@ -1735,7 +1732,9 @@ export const HEFT = (() => {
 
 
 	return {
-		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, renderBlobPreview, renderPageTo, pageRectForTile, pageAsDataUrl, renderPageCanvas, strokeGeometry, scaleStrokeFrom, lassoTouchAction, pdfBlob, exportPdf, exportImages, openImportDialog,
+		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, pageAsDataUrl, pdfBlob, exportPdf, openImportDialog,
+		// Nur für test/heft.test.mjs nach außen gereicht:
+		renderPageTo, pageRectForTile, strokeGeometry, scaleStrokeFrom, lassoTouchAction,
 		get activeId() { return pid; },
 		get activeIndex() { return idx; },
 		isWriting: () => !!(pid && input.isWriting()),

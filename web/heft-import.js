@@ -4,7 +4,7 @@ import { S } from "./state.js";
 import { U } from "./util.js";
 import { PDFS } from "./pdfs.js";
 import { insertAt } from "./heft-pages-core.js";
-import { PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, emptyHeftPage } from "./heft-document-core.js";
 import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
 import { cleanOcrText } from "./scan-ocr.js";
 
@@ -78,7 +78,7 @@ export function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) 
 
 export function imagePage(im, paper, bleed, {
 	blobRef = (src) => src,
-	newPage = (p) => ({ id: U.uid(), paper: p || "lined", strokes: [], images: [], texts: [], ocrText: "" }),
+	newPage = (p) => emptyHeftPage(U.uid(), p),
 	pageW = PAGE_W,
 	pageH = PAGE_H
 } = {}) {

@@ -44,6 +44,7 @@ const APP_FILES = [
 	"./home-article.js",
 	"./chat-start.js",
 	"./icons.js",
+	"./html-escape.js",
 	"./icons.svg",
 	"./anki-stats.js",
 	"./lernanalyse.js",

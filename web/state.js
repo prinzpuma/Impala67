@@ -9,6 +9,7 @@ import { cooperativeGate, yieldToMain } from "./cooperative.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import { createFuzzyIndex } from "./search-fuzzy.js";
 import { noteEventOrder, reorderSafe } from "./event-order.js";
+import { emptyHeftPage } from "./heft-document-core.js";
 import {
 	STATE_CHECKPOINT_CORE_KEYS,
 	STATE_CHECKPOINT_FORMAT,
@@ -113,10 +114,7 @@ export const S = {
 	refineOpenMid: null, // mid einer Assistenten-Antwort, deren "Anpassen"-Menü offen ist
 	libMode: "notion", // Bibliothek-Ansicht: "notion" (Dokumente/Seitenbaum) | "hefte" (GoodNotes-Regal) | "nlm" (NotebookLM-Mediathek)
 	nlmLibFilter: "all", // NotebookLM-Mediathek-Filter: "all" | "inbox" | "audio" | "video" | "mindmap" | "slides"
-	libView: "grid", // Bibliothek: "grid" (GoodNotes-Kacheln) | "table"
-	libFolder: null, // aktueller Ordner der Kachel-Ansicht: null = Wurzel (Workspaces), sonst { wsId, pageId|null }
-	libSort: "updated", // Tabellen-Sortierung: "title" | "updated" | "created"
-	libSortDir: -1, // 1 = aufsteigend, -1 = absteigend
+	libFolder: null, // geöffneter GoodNotes-Ordner im Hefte-Regal (gnFolders-ID), null = Wurzel
 	libFilter: "", // Filtertext der Bibliothek (Titel + Tags)
 	pageMenuOpenId: null, // ID der Seite, deren ⋯-Menü in der Sidebar gerade offen ist
 	histVersions: null, // geladene Versionen für den Seitenverlauf-Dialog
@@ -358,7 +356,6 @@ export const STATE = (() => {
 	// Last-Write-Wins über die Log-Reihenfolge. Dadurch führen zwei Geräte, die
 	// gleichzeitig im selben Heft zeichnen, ihre Striche automatisch zusammen —
 	// ohne Konflikt, ohne Gewinner, ohne Verlierer-Kopie.
-	const heftNewPage = (id, paper) => ({ id, paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
 	const heftPageOf = (doc, key) => doc.pages.find((pg) => pg.id === key) || null;
 	const heftById = (list, id) => list.findIndex((x) => x && x.id === id);
 	// „=“ ersetzt den Inhalt, nicht das Objekt: Das offene Heft, Undo-Einträge und laufende
@@ -429,7 +426,7 @@ export const STATE = (() => {
 					// die Reihenfolge ergibt sich aus der Log-Reihenfolge.
 					if (!op.page || !op.page.id || heftPageOf(doc, op.page.id)) break;
 					const at = Math.max(0, Math.min(typeof op.at === "number" ? op.at : doc.pages.length, doc.pages.length));
-					doc.pages.splice(at, 0, heftNewPage(op.page.id, op.page.paper));
+					doc.pages.splice(at, 0, emptyHeftPage(op.page.id, op.page.paper));
 					break;
 				}
 				case "pg-": {

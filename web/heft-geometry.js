@@ -113,15 +113,6 @@ export function strokeOutline(stroke) {
 	return stroke.pts || [];
 }
 
-export function lassoBounds(strokes) {
-	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-	strokes.forEach((stroke) => strokeOutline(stroke).forEach((point) => {
-		minX = Math.min(minX, point[0]); minY = Math.min(minY, point[1]);
-		maxX = Math.max(maxX, point[0]); maxY = Math.max(maxY, point[1]);
-	}));
-	return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
-
 export function strokeBounds(stroke) {
 	if (!stroke) return null;
 	if (stroke.bbox) return stroke.bbox;

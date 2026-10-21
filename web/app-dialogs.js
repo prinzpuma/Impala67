@@ -10,10 +10,10 @@ import { TABS } from "./tabs.js";
 import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { PLATFORM } from "./platform.js";
+import { blurActive, focusPageTitle } from "./app-ui.js";
 
 const $ = (id) => U.el(id);
 const esc = (s) => U.esc(s);
-const blurActive = () => document.activeElement?.blur();
 const openPage = (...a) => TABS.openPage(...a);
 const openTemplatePicker = (...a) => RENDER.openTemplatePicker(...a);
 const renderHistoryModal = (...a) => RENDER.renderHistoryModal(...a);
@@ -21,15 +21,6 @@ const renderMain = (...a) => RENDER.renderMain(...a);
 const saveCurrentChat = (...a) => CHAT_FULLSCREEN.saveCurrentChat(...a);
 
 const isTouch = () => PLATFORM.isTouch();
-
-const focusPageTitle = () => {
-	if (isTouch()) return;
-	const ti = $("pageTitle");
-	if (ti) {
-		ti.focus();
-		ti.select();
-	}
-};
 
 export function closeOverlay() {
 	U.closeOverlay();
@@ -305,5 +296,4 @@ export function syncComposer(input) {
 }
 
 BUS.on("ui:close-overlay", (el) => closeOverlay(el));
-BUS.on("ui:new-page-flow", (arg) => newPageFlow(arg));
 

@@ -23,6 +23,9 @@ function signature(value) {
 // Seitenmaße einer Heftseite (Weltkoordinaten), gemeinsam für heft.js und den Indexer.
 export const PAGE_W = 1000, PAGE_H = 1414;
 
+// Leere Heftseite: eine Form für Reducer (state.js), Heft-Oberfläche und Import.
+export const emptyHeftPage = (id, paper) => ({ id, paper: paper || "lined", strokes: [], images: [], texts: [], ocrText: "" });
+
 // EINZIGE Stelle, die den durchsuchbaren Seitentext zusammensetzt: Stricherkennung,
 // danach der Text aller Scan-Bilder (in Reihenfolge), mit Zeilenumbruch verbunden.
 export function composePageText(strokeText, page) {

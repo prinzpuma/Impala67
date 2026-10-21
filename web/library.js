@@ -15,7 +15,6 @@ import { PLATFORM } from "./platform.js";
 const renderMain = () => BUS.emit("ui:render-main");
 const render = (opts) => BUS.emit("ui:render", opts);
 const hydrateCovers = (root) => BUS.emit("ui:hydrate-covers", root);
-const newPageFlow = (arg) => BUS.emit("ui:new-page-flow", arg);
 
 // ---------- GoodNotes Documents: Cover-Presets + Notebook-Regal ----------
 export const COVER_PRESETS = ["sunset", "ocean", "forest", "grape", "mono"];
@@ -66,12 +65,7 @@ export function libDocHtml(pg) {
 }
 
 // Kachel nach Seitentyp: Heft = GoodNotes-Notizbuch, Notion-Seite = Dokumentblatt.
-// Beide zeigen exakt die Unterstruktur (Zahl-Badge öffnet die Unterebene).
 export function libCardHtml(pg) {
-	const kids = STATE.childrenOf(pg.id, pg.workspaceId);
-	const into = kids.length
-		? '<button class="lib-into" data-libinto="' + pg.id + '" title="Unterebene öffnen">' + kids.length + "</button>"
-		: "";
 	const fav = pg.favorite ? '<span class="lib-fav" title="Favorit">★</span>' : "";
 	const isHeft = pg.kind === "heft";
 	const visual = isHeft ? libCoverHtml(pg) : libDocHtml(pg);
@@ -84,7 +78,7 @@ export function libCardHtml(pg) {
 		? "Heft · " + heftPages + " Seite" + (heftPages === 1 ? "" : "n") + " · " + U.fmtDate(pg.updated)
 		: U.fmtDate(pg.updated) + (pg.pdfId ? " · PDF" : "");
 	return '<div class="lib-card" data-page="' + pg.id + '">' +
-		'<div class="lib-card-visual">' + visual + into + fav + coverBtn + "</div>" +
+		'<div class="lib-card-visual">' + visual + fav + coverBtn + "</div>" +
 		'<div class="lib-card-title">' + (pg.isTemplate ? '<span class="lib-tpl">Vorlage</span> ' : "") + U.esc(pg.title) + "</div>" +
 		'<div class="lib-card-date">' + meta + "</div></div>";
 }
@@ -347,34 +341,6 @@ export async function exportWorkspaceZip(wsId) {
 	await walk(null, "", 0);
 	if (!files.length) { alert("Dieser Ordner hat keine Seiten."); return; }
 	U.downloadBlob(safe(ws ? ws.name : "Ordner") + ".zip", U.zip(files));
-}
-
-export function handleLibView(viewType) {
-	S.libView = viewType;
-	renderMain();
-}
-
-export function handleLibFolderNavigation(t) {
-	if (t.dataset.libroot) {
-		S.libFolder = null;
-	} else if (t.dataset.libws) {
-		S.libFolder = { wsId: t.dataset.libws, pageId: null };
-	} else if (t.dataset.libinto) {
-		const pg = S.pages[t.dataset.libinto];
-		if (pg) S.libFolder = { wsId: pg.workspaceId || "default", pageId: pg.id };
-	}
-	renderMain();
-}
-
-export async function handleLibNewPage() {
-	const f = S.libFolder || { wsId: Object.keys(S.workspaces)[0] || "default", pageId: null };
-	await newPageFlow(f.wsId, f.pageId);
-}
-
-export function handleLibSort(sortBy) {
-	if (S.libSort === sortBy) S.libSortDir = -(S.libSortDir || -1);
-	else { S.libSort = sortBy; S.libSortDir = 1; }
-	renderMain();
 }
 
 // U.morph lässt das fokussierte Suchfeld samt Cursor stehen (vorher baute innerHTML die
@@ -707,17 +673,6 @@ document.addEventListener("click", async (e) => {
 		}
 		return;
 	}
-	if ((el = hit("[data-libnewheft]"))) {
-		// Direkt ein Heft anlegen — kein Notion-Seite/GoodNotes-Heft-Dialog im GoodNotes-Regal.
-		const folder = S.libFolder || { wsId: Object.keys(S.workspaces)[0] || "default", pageId: null };
-		const id = U.uid();
-		await STATE.dispatch("pageCreate", {
-			id, title: "Neues Heft", parentId: folder.pageId || null, content: "",
-			workspaceId: folder.wsId || Object.keys(S.workspaces)[0] || "default", kind: "heft",
-		});
-		TABS.openPage(id);
-		return;
-	}
 	if ((el = hit("[data-nlmfilter]"))) { S.nlmLibFilter = el.dataset.nlmfilter; renderMain(); return; }
 	if ((el = hit("[data-nlmgoto]"))) { e.preventDefault(); TABS.openPage(el.dataset.nlmgoto); return; }
 	if ((el = hit("[data-nlmlibplay]"))) { NLM.playById(el.dataset.nlmlibplay); return; }
@@ -808,10 +763,6 @@ export const LIBRARY = {
 	folderTone,
 	defaultCover,
 	COVER_PRESETS,
-	handleLibView,
-	handleLibFolderNavigation,
-	handleLibNewPage,
-	handleLibSort,
 	handleFilterInput,
 	handleCreateWorkspace
 };

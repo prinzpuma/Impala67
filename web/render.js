@@ -1838,19 +1838,15 @@ function openCards() {
 }
 
 export const RENDER = {
-	render, onStateChange, scheduleRender,
-	renderTopbar, renderModelMenu, renderModelBar, renderStatusDot,
+	render, onStateChange,
+	renderModelMenu, renderModelBar,
 	renderSidebar, renderTabs, renderMain, renderHistoryModal,
 	renderChat, renderMainChatLog, renderPendingChip, openChangePreview,
 	openTemplatePicker, openReview, openCards, openIconPicker, openCoverPicker,
-	hydrateImages, hydrateCovers, localDayKey, modal, ancestorsOf,
-	loadPendingConflicts, savePendingConflicts, mergePendingConflicts, openConflictResolver, resolveConflict,
-	pageIconHtml,
-	favModels, toggleFavModel, removeProviderFavorites, // Modell-Favoriten (Chat + Einstellungen → KI)
-	moreMenuHtml, shareMenuHtml,
-	openSettings: (...a) => SETTINGS.openSettings(...a),
-	renderLibrary: (...a) => LIBRARY.renderLibrary(...a),
-	libCardHtml: (...a) => LIBRARY.libCardHtml(...a),
+	localDayKey, ancestorsOf,
+	loadPendingConflicts, openConflictResolver, resolveConflict,
+	removeProviderFavorites, // Modell-Favoriten (Chat + Einstellungen → KI)
+	moreMenuHtml,
 };
 
 BUS.on("ui:render", (opts) => render(opts));

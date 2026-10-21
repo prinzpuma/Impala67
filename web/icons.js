@@ -1,9 +1,9 @@
 // Zentrale Icons: alle Symbole liegen einmal in icons.svg (Sprite) und werden hier per <use>
 // referenziert. Der Browser lädt die Datei nur einmal (Service-Worker-Cache), Farbe und
 // Strichstärke kommen per CSS (.i in styles.css). Keine Inline-SVGs oder Emojis als UI-Icons.
-const SPRITE = "icons.svg";
+import { escapeHtml as esc } from "./html-escape.js";
 
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const SPRITE = "icons.svg";
 
 // icon("trash") → SVG-String. cls: zusätzliche Klassen; size: feste Pixelgröße (sonst 1em).
 export function icon(name, cls = "", size = 0) {

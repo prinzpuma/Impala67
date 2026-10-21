@@ -8,7 +8,6 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 // (handwriting-worker.js) — 100 % offline, erkennt Strichsequenzen, Mathe-Formeln
 // und Brüche direkt aus Vektordaten. (Bild-OCR per ML Kit wurde mit v2.2.18 entfernt.)
 export const HANDSCHRIFT = (() => {
-	const available = () => true;
 
 	let inkWorker = null;
 	let inkReqId = 0;
@@ -129,7 +128,6 @@ export const HANDSCHRIFT = (() => {
 	}
 
 	return {
-		available,
 		recognizeStrokes,
 		saveTrainingSample,
 		removeTrainingSamples,

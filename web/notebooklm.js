@@ -143,13 +143,19 @@ export const NLM = (() => {
 
 	// ---- Artefakt-Ablage (eigene IndexedDB — bewusst getrennt vom Event-Log,
 	//      damit große Mediendateien nicht durch den Drive-Sync wandern) ----
+	// Eine Verbindung für alle Zugriffe: Vorher öffnete jeder Aufruf eine neue und schloss sie nie.
+	let dbPromise = null;
 	function dbOpen() {
-		return new Promise((res, rej) => {
+		return (dbPromise ??= new Promise((res, rej) => {
 			const r = indexedDB.open("impala67-nlm", 1);
 			r.onupgradeneeded = () => r.result.createObjectStore("files", { keyPath: "id" });
-			r.onsuccess = () => res(r.result);
+			r.onsuccess = () => {
+				const db = r.result;
+				db.onversionchange = () => { db.close(); dbPromise = null; };
+				res(db);
+			};
 			r.onerror = () => rej(r.error);
-		});
+		}).catch((e) => { dbPromise = null; throw e; }));
 	}
 	const store = (db, mode) => db.transaction("files", mode).objectStore("files");
 	const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });

@@ -571,8 +571,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .lib-cover-empty { align-items: center; justify-content: center; border-style: dashed; background: var(--surface-subtle) }
 .lib-card-title { font-size: var(--text-sm); font-weight: 600; margin-top: 10px; line-height: 1.3; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical }
 .lib-card-date { font-size: var(--text-xs); color: var(--text2); margin-top: 2px }
-.lib-into { position: absolute; top: 8px; right: 8px; z-index: 2; min-height: 0; min-width: 24px; padding: 3px 7px; font-size: var(--text-2xs); font-weight: 700; border-radius: var(--radius-pill); background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.12) }
-.lib-into:hover { background: rgba(0,0,0,.75) }
 .lib-fav { position: absolute; top: 8px; left: 14px; z-index: 2; font-size: var(--text-xs); color: var(--warn); text-shadow: 0 1px 3px rgba(0,0,0,.5); pointer-events: none }
 /* Farbige Ordner (GoodNotes-ähnlich), flach und token-basiert */
 .lib-folder { display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: left; padding: 0; background: transparent; border: none; min-height: 0 }

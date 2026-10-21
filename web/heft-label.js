@@ -4,6 +4,7 @@ import { S } from "./state.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { HANDWRITING_PREPROCESSOR as PRE } from "./handwriting-preprocessor.js";
 import { HANDWRITING_CTC } from "./handwriting-ctc.js";
+import { PAGE_W, PAGE_H } from "./heft-document-core.js";
 
 // web/heft-label.js — Heftseiten von einer Bild-KI beschriften lassen (MCP), damit das lokale
 // Modell aus echten Notizen lernt.
@@ -13,7 +14,7 @@ import { HANDWRITING_CTC } from "./handwriting-ctc.js";
 //      gespeichert. Nebenbei wird gemessen, wie gut die Zeilenzerlegung der App (segmentLines) passt.
 
 export const HEFT_LABEL = (() => {
-	const PAGE_W = 1000, PAGE_H = 1414, GRID = 100; // Seitenmaße wie in heft.js
+	const GRID = 100;
 
 	function getPage(pageId, pageIdx) {
 		const doc = S.heftDocs?.[pageId];

@@ -1,5 +1,6 @@
 "use strict";
 import { icon } from "./icons.js";
+import { escapeHtml } from "./html-escape.js";
 import { OPTIONAL_MODULE_URLS, OPTIONAL_MODULE_INTEGRITY, MERMAID_VERSION } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 // util.js — kleine Helfer
@@ -157,16 +158,8 @@ export const U = {
 		return n;
 	},
 
-	// PERF (Audit 21. Juli): esc() ist die heißeste Funktion der UI — jeder Render baut
-	// damit jede Zeile/jeden Titel. Fast-Path: Strings ohne Sonderzeichen (der Normalfall)
-	// unverändert zurückgeben; Ersetzungs-Map einmal anlegen statt pro Treffer ein neues
-	// Objekt-Literal zu erzeugen.
-	_escTest: /[&<>"']/,
-	_escMap: { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" },
-	esc: (s) => {
-		s = String(s ?? "");
-		return U._escTest.test(s) ? s.replace(/[&<>"']/g, (c) => U._escMap[c]) : s;
-	},
+	// Heißeste Funktion der UI; Fast-Path und einzige Implementierung in html-escape.js.
+	esc: escapeHtml,
 
 	// ---- morph(): DOM angleichen statt wegwerfen (Audit 25. Juli) ----
 	// PROBLEM: Die ganze App rendert mit `el.innerHTML = html`. Damit stirbt bei JEDEM
@@ -918,8 +911,9 @@ export const U = {
 	// stellt ihn danach nicht wieder her. Vorher wurde das in render.js (Home,
 	// Chat-Log, Chat-Cache) und heft.js jeweils einzeln nachgebessert — jede neue
 	// Ansicht brachte den Bug damit von Neuem mit.
-	// REGEL für neuen Code: wer innerHTML / replaceChildren / U.morph auf einen
-	// scrollbaren Bereich anwendet, klammert das in U.keepScroll(el, () => { … }).
+	// REGEL für neuen Code: wer innerHTML / replaceChildren / U.morph auf einen scrollbaren
+	// Bereich anwendet, merkt sich vorher mit U.scrollAnchor(el) die Position und ruft danach
+	// die zurückgegebene Funktion auf.
 	scrollHost(el) {
 		for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
 			const oy = getComputedStyle(n).overflowY;
@@ -954,12 +948,6 @@ export const U = {
 		restore.atBottom = atBottom;
 		return restore;
 	},
-	// Bequeme Klammer: Position merken → DOM ändern → Position wiederherstellen.
-	keepScroll(target, mutate, opts) {
-		const restore = U.scrollAnchor(target, opts);
-		try { return mutate(); } finally { restore(); }
-	},
-
 	// ── Gummi-Kurve (26. Juli) ─────────────────────────────────────────────
 	// EINE Kurve für alles, was sich "wie GoodNotes" anfühlen soll: schnell los,
 	// weich aus, KEIN Überschwingen: der Gummi-Effekt wurde am 26. Juli getestet und

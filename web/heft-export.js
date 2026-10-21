@@ -107,16 +107,6 @@ export async function exportPdf(pageId, indices, { loadDoc, renderCanvas, downlo
 	if (toast) toast("PDF mit " + idxs.length + " Seite(n) gespeichert");
 }
 
-export async function exportImages(pageId, indices, { loadDoc, renderCanvas, download = U.downloadBlob, toast = U.toast } = {}) {
-	const files = await imageFiles(pageId, indices, exportName(pageId), null, { loadDoc, renderCanvas });
-	for (let n = 0; n < files.length; n++) {
-		if (download) download(files[n].name, files[n]);
-		if (n < files.length - 1) await new Promise((r) => setTimeout(r, 350));
-	}
-	const idxs = files;
-	if (toast) toast(idxs.length + " Bild(er) gespeichert");
-}
-
 // Alle Stift-Striche der App als Rohdaten (Punkte), z. B. als Trainingsdaten für die Handschrift-Erkennung.
 // Nur Seiten mit Strichen; `index` ist die Seitennummer im Heft (ab 0).
 export function allInk(state = S, trainingSamples = []) {

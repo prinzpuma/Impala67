@@ -183,7 +183,6 @@ export const HEFT_INDEXER = (() => {
 
 	function schedulePage(pageId, pg, force = false) {
 		if (!pageId || !pg || !Array.isArray(pg.strokes) || !pg.strokes.length) return;
-		if (HANDSCHRIFT.available && !HANDSCHRIFT.available()) return;
 		const key = checkKey(pageId, pg);
 		const isRecentEdit = force || (HEFT.isWriting && HEFT.isWriting());
 		if (!isRecentEdit && done.has(key) && String(pg.ocrText || "").trim()) return;
@@ -285,21 +284,7 @@ export const HEFT_INDEXER = (() => {
 		scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
 	}
 
-	function stop() {
-		flushRag();
-		scanRunning = false;
-		clearTimeout(scanTimer);
-		clearTimeout(priorityTimer);
-		priorityQueue.clear();
-	}
-
-	return {
-		startBackgroundScan,
-		findUnindexedPages,
-		schedulePage,
-		scheduleCheck: schedulePage,
-		stop,
-	};
+	return { startBackgroundScan, schedulePage };
 })();
 
 BUS.on("heft:schedule-page", (p) => { if (p && p.pageId) HEFT_INDEXER.schedulePage(p.pageId, p.page); });

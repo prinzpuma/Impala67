@@ -18,7 +18,6 @@ import { U } from "./util.js";
 import { AI } from "./ai.js";
 import { RAG } from "./rag.js";
 import { BUS } from "./event-bus.js";
-import { closeOverlay } from "./app-dialogs.js";
 import { FACH } from "./fach.js";
 
 const LEGACY_KEY = "impala67.homeArticles"; // vor dem Sync: nur localStorage
@@ -236,9 +235,9 @@ function openHistory() {
 		'<div class="modal-actions"><button id="dlgArticleClose">Schließen</button></div></div>';
 	o.hidden = false;
 	U.renderMath(o);
-	document.getElementById("dlgArticleClose").addEventListener("click", () => closeOverlay());
+	document.getElementById("dlgArticleClose").addEventListener("click", () => U.closeOverlay());
 	// Quellen-Klick: Das Öffnen übernimmt der globale data-page-Handler, danach Overlay schließen
-	o.querySelector(".hv-article-list").addEventListener("click", (e) => { if (e.target.closest("[data-page]")) setTimeout(closeOverlay, 0); });
+	o.querySelector(".hv-article-list").addEventListener("click", (e) => { if (e.target.closest("[data-page]")) setTimeout(() => U.closeOverlay(), 0); });
 }
 
 export const HOME_ARTICLE = { ensure, retry, markRead, homeHtml, openHistory };

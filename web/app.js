@@ -307,14 +307,13 @@ function wireEvents() {
 		"[data-collapse],[data-crumbws],[data-tabopen],[data-tabclose],[data-tabnew],[data-undo],[data-difftoggle]," +
 		"[data-reasoningtoggle],[data-iconset],[data-coverset],[data-coverpick],[data-coverremove]," +
 		"[data-iconpick],[data-filedownload],[data-modelset],[data-chatdel],[data-chatsel],[data-chatselall],[data-chatselnone],[data-chatdelsel],[data-editmsg]," +
-		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark],[data-libview]," +
-		"[data-libws],[data-libinto],[data-libroot]," +
+		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark]," +
 		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter],[data-ankizen]," +
 		"[data-ankisuspend],[data-ankiarchive],[data-ankiunarchive],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
 		"[data-dailyday],[data-dailynav],[data-zipws]," +
-		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate],[data-libnew]," +
+		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate]," +
 		"[data-pagemenu],[data-pageopennew],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
-		"[data-pagetemplate],[data-pagedb],[data-tplblank],[data-tplheft],[data-tpluse],[data-libsort],[data-histversion],[data-renamename],[data-deckrenamename]," +
+		"[data-pagetemplate],[data-pagedb],[data-tplblank],[data-tplheft],[data-tpluse],[data-histversion],[data-renamename],[data-deckrenamename]," +
 		"[data-conflictopen],[data-conflictnav],[data-conflictresolve],[data-conflictpage],button";
 
 	document.addEventListener("click", async (e) => {
@@ -503,30 +502,6 @@ function wireEvents() {
 		}
 
 		if (await handleChatClick(t)) return;
-
-		// Bibliothek: Kachel-/Tabellen-Ansicht umschalten
-		if (t.dataset.libview) {
-			LIBRARY.handleLibView(t.dataset.libview);
-			return;
-		}
-
-		// Bibliothek (Kacheln): Ordner-Navigation (Wurzel, Workspace, in Unterseiten)
-		if (t.dataset.libroot || t.dataset.libws || t.dataset.libinto) {
-			LIBRARY.handleLibFolderNavigation(t);
-			return;
-		}
-
-		// Bibliothek: „＋ Neue Seite“-Kachel legt die Seite direkt im aktuellen Ordner an
-		if (t.dataset.libnew) {
-			await LIBRARY.handleLibNewPage();
-			return;
-		}
-
-		// Bibliothek: Spaltenüberschrift klicken = sortieren (erneut klicken = Richtung wechseln)
-		if (t.dataset.libsort) {
-			LIBRARY.handleLibSort(t.dataset.libsort);
-			return;
-		}
 
 		if (await handleAnkiClick(t, e)) return;
 

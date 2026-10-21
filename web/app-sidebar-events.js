@@ -4,11 +4,10 @@ import { RENDER } from "./render.js";
 import { RENDER_ANKI } from "./render-anki.js";
 import { RAG } from "./rag.js";
 import { U } from "./util.js";
+import { closestOf, dsOf } from "./app-ui.js";
 
 const render = (...a) => RENDER.render(...a);
 const $ = (id) => U.el(id);
-const closestOf = (e, sel) => { const t = e && e.target; return t && t.nodeType === 1 && t.closest ? t.closest(sel) : null; };
-const dsOf = (e) => (e && e.target && e.target.dataset) || {};
 
 // ---------- Verschieben in der Sidebar ----------
 // Stapel: weiterhin HTML5 Drag & Drop (unverändert — dort nicht als Bug gemeldet).
