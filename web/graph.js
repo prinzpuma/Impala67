@@ -7,6 +7,7 @@ import { DB } from "./db.js";
 import { vectorModelKey } from "./embedding.js";
 import { TABS } from "./tabs.js";
 import { U } from "./util.js";
+import { dot, norm } from "./rag-ranking.js";
 
 // Kompakter Wissensgraph: Embeddings ordnen Karten, das LLM benennt die
 // resultierenden Skills. Fachliche Daten synchronisieren über settingsSet;
@@ -303,12 +304,7 @@ export const GRAPH = (() => {
 		return skills;
 	}
 
-	function cosine(a, b) {
-		let dot = 0, aa = 0, bb = 0;
-		const n = Math.min(a.length, b.length);
-		for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 96))) { const x = a[i] || 0, y = b[i] || 0; dot += x * y; aa += x * x; bb += y * y; }
-		return dot / (Math.sqrt(aa * bb) || 1);
-	}
+	const cosine = (a, b) => dot(a, b) / (norm(a) * norm(b));
 
 	function bridgesFor(skills, old) {
 		const candidates = [];

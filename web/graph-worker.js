@@ -1,35 +1,27 @@
 "use strict";
 
+import { dot, norm } from "./rag-ranking.js";
+
 // Rechenarbeit des Wissensgraphen. Der Worker hält das UI auch bei mehreren
 // tausend Karten flüssig; bewusst kein allgemeines Graph-Framework.
-const sampleDims = (length) => {
-	const n = Math.min(96, length);
-	return Array.from({ length: n }, (_, i) => Math.floor(i * length / n));
-};
-
-const cosine = (a, b, dims) => {
-	let dot = 0, aa = 0, bb = 0;
-	for (const i of dims) {
-		const x = a[i] || 0, y = b[i] || 0;
-		dot += x * y; aa += x * x; bb += y * y;
-	}
-	return dot / (Math.sqrt(aa * bb) || 1);
-};
-
+// Volle Vektoren: Vorher rechnete das Clustering nur 96 Stichproben-Dimensionen und ließ den
+// Rest der Zentren auf 0 – die Brücken in graph.js verglichen dann kaum überlappende Werte.
 function cluster(items) {
 	if (!items.length) return [];
-	const dims = sampleDims(items[0].vec.length);
+	const dims = items[0].vec.length;
 	const k = Math.max(1, Math.min(14, Math.round(Math.sqrt(items.length / 7))));
 	let centers = Array.from({ length: k }, (_, i) => {
 		const at = Math.floor(i * items.length / k);
 		return Float32Array.from(items[at].vec);
 	});
 	let assign = new Int16Array(items.length);
+	const itemNorms = items.map((item) => norm(item.vec));
 	for (let pass = 0; pass < 8; pass++) {
+		const centerNorms = centers.map(norm);
 		for (let i = 0; i < items.length; i++) {
 			let best = 0, score = -Infinity;
 			for (let c = 0; c < centers.length; c++) {
-				const s = cosine(items[i].vec, centers[c], dims);
+				const s = dot(items[i].vec, centers[c]) / (itemNorms[i] * centerNorms[c]);
 				if (s > score) { score = s; best = c; }
 			}
 			assign[i] = best;
@@ -39,11 +31,11 @@ function cluster(items) {
 		for (let i = 0; i < items.length; i++) {
 			const c = assign[i], v = items[i].vec;
 			counts[c]++;
-			for (const d of dims) sums[c][d] += v[d] || 0;
+			for (let d = 0; d < dims; d++) sums[c][d] += v[d] || 0;
 		}
 		centers = centers.map((old, c) => {
 			if (!counts[c]) return old;
-			for (const d of dims) sums[c][d] /= counts[c];
+			for (let d = 0; d < dims; d++) sums[c][d] /= counts[c];
 			return sums[c];
 		});
 	}

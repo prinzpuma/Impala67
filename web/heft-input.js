@@ -95,6 +95,16 @@ export function createHeftInput(H) {
 		// nicht 'sel' benennen: verdeckte die Heft-Auswahl im ganzen Block
 		if (e.pointerType !== "mouse") { const domSel = window.getSelection?.(); if (domSel && !domSel.isCollapsed) domSel.removeAllRanges(); }
 		if (!H.doc) return;
+		// Zweiter Finger während eines Finger-Strichs: Das ist ein Pinch, kein Strich. Den
+		// angefangenen Strich verwerfen – sonst landeten beide Finger als Zickzack darin.
+		if (H.drawing && H.drawing.pts && !H.drawing.lasso && H.drawing.pointerType === "touch" && e.pointerType === "touch" && H.drawing.pointerId !== e.pointerId) {
+			const pi0 = H.drawing.pageIdx;
+			if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+			H.drawing = null;
+			setWriting(false);
+			if (!clearLiveInk(pi0)) redrawPage(pi0);
+			return;
+		}
 		const cv = e.currentTarget;
 		const slot = cv.closest('.heft-page-slot');
 		const pi = slot ? Number(slot.dataset.hepage) : H.idx;
@@ -128,7 +138,7 @@ export function createHeftInput(H) {
 					const anchor = handle.anchor;
 					const startDist = Math.max(12, Math.hypot(p[0] - anchor[0], p[1] - anchor[1]));
 					H.drawing = {
-						pointerId: e.pointerId, pageId: pg.id,
+						pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id,
 						lassoResize: true,
 						byTouch: e.pointerType === "touch",
 						strokes: H.lassoSel.strokes,
@@ -144,7 +154,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					H.drawing = { pointerId: e.pointerId, pageId: pg.id, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, originals: H.lassoSel.strokes.map(strokeGeometry), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
+					H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, originals: H.lassoSel.strokes.map(strokeGeometry), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
 					return;
 				}
 			}
@@ -152,12 +162,12 @@ export function createHeftInput(H) {
 			// Neue Auswahl: alte Markierung sofort wegräumen (lag sie auf einer anderen
 			// Seite, blieb ihr Rahmen dort sonst als Geist stehen).
 			dropLasso();
-			H.drawing = { pointerId: e.pointerId, pageId: pg.id, lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
+			H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, lasso: true, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (H.tool === "laser") {
 
-			H.drawing = { pointerId: e.pointerId, pageId: pg.id, laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
+			H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
 		if (H.tool === "select") {
@@ -173,7 +183,7 @@ export function createHeftInput(H) {
 			}
 			if (st && nearPoint(p, st.x + st.w, st.y + (st.h || 60), 16)) {
 
-				H.drawing = { pointerId: e.pointerId, pageId: pg.id, imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
+				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
 				return;
 			}
 			const ht = hitText(pg, p);
@@ -186,7 +196,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				H.sel = { pageIdx: pi, txtId: ht.id, tapAt: now };
-				H.drawing = { pointerId: e.pointerId, pageId: pg.id, imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
+				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
 				redrawPage(pi);
 				return;
 			}
@@ -202,13 +212,13 @@ export function createHeftInput(H) {
 			}
 			if (im && nearPoint(p, im.x + im.w, im.y + im.h, 16)) {
 
-				H.drawing = { pointerId: e.pointerId, pageId: pg.id, imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
+				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
 				return;
 			}
 			const hit = hitImage(pg, p);
 			if (hit) {
 				H.sel = { pageIdx: pi, imgId: hit.id };
-				H.drawing = { pointerId: e.pointerId, pageId: pg.id, imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
+				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
 				redrawPage(pi);
 				lastEmptyTap = null;
 			} else {
@@ -225,8 +235,8 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
-		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pageId: pg.id, erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else { H.drawing = { pointerId: e.pointerId, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
+		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		else { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
 		setWriting(true);
 	}
