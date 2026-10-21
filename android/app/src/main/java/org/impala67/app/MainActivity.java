@@ -13,6 +13,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
 
@@ -39,12 +41,27 @@ public class MainActivity extends BridgeActivity {
 
         applySystemBars();
 
-        // Stirbt der WebView-Prozess (z. B. Speicher voll auf 4-GB-Tablets), beendet Android sonst die
-        // ganze App. Stattdessen den toten WebView verwerfen und die Activity neu aufbauen: Die App lädt
-        // neu, die Daten liegen ohnehin in IndexedDB.
+        NativeDiagnostics.collectExitReasons(this);
+        if (savedInstanceState != null) NativeDiagnostics.note(this, "native-activity-recreated", null);
+
         bridge.addWebViewListener(new WebViewListener() {
             @Override
+            public void onPageLoaded(WebView view) {
+                NativeDiagnostics.deliver(MainActivity.this, view);
+            }
+
+            // Stirbt der WebView-Prozess (z. B. Speicher voll auf 4-GB-Tablets), beendet Android sonst die
+            // ganze App. Stattdessen den toten WebView verwerfen und die Activity neu aufbauen: Die App lädt
+            // neu, die Daten liegen ohnehin in IndexedDB.
+            @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                JSONObject data = new JSONObject();
+                try {
+                    data.put("name", detail.didCrash() ? "crashed" : "killed");
+                    data.put("rendererPriority", detail.rendererPriorityAtExit());
+                } catch (JSONException ignored) {
+                }
+                NativeDiagnostics.note(MainActivity.this, "native-renderer-gone", data);
                 ViewGroup parent = (ViewGroup) view.getParent();
                 if (parent != null) parent.removeView(view);
                 view.destroy();
@@ -52,6 +69,20 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
         });
+    }
+
+    @Override
+    public void onDestroy() {
+        // Systemänderung, die nicht in android:configChanges steht: Android baut die Activity (und damit die App) neu auf
+        if (isChangingConfigurations()) {
+            JSONObject data = new JSONObject();
+            try {
+                data.put("name", "0x" + Integer.toHexString(getChangingConfigurations()));
+            } catch (JSONException ignored) {
+            }
+            NativeDiagnostics.note(this, "native-config-change", data);
+        }
+        super.onDestroy();
     }
 
     @Override

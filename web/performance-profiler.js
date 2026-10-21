@@ -581,6 +581,18 @@ function noteUncleanExit() {
 	});
 }
 
+// Android-Hülle (NativeDiagnostics.java): Gründe für Prozess-Ende, WebView-Absturz, neu erstellte Activity
+function drainNativeDiagnostics() {
+	if (typeof window === "undefined" || !Array.isArray(window.__IMPALA_NATIVE_DIAG__)) return;
+	const entries = window.__IMPALA_NATIVE_DIAG__;
+	window.__IMPALA_NATIVE_DIAG__ = [];
+	for (const entry of entries) {
+		if (!entry || typeof entry.kind !== "string") continue;
+		const { kind, atMs, ...meta } = entry;
+		record(kind, 0, { failed: true, ...meta, nativeAt: Number.isFinite(atMs) ? new Date(atMs).toISOString() : undefined });
+	}
+}
+
 function watchAlive() {
 	noteUncleanExit();
 	writeAlive();
@@ -613,8 +625,10 @@ function init() {
 		// Aus dem bfcache zurück: Seite läuft weiter, Spur wieder setzen
 		window.addEventListener("pageshow", () => { if (initialized) writeAlive(); });
 		document.addEventListener("visibilitychange", () => { if (initialized) writeAlive(); });
+		window.addEventListener("impala-native-diag", () => { if (initialized) drainNativeDiagnostics(); });
 	}
 	watchAlive();
+	drainNativeDiagnostics();
 }
 
 // Versionssprung seit dem letzten Profiler-Start als eigenen Eintrag festhalten:
