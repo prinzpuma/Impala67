@@ -651,7 +651,11 @@ export const DB = (() => {
 		// längst vorhandene Events erneut importiert und gelöste Konflikte als neue Kopien angelegt.
 		const partialLocal = Array.isArray(opts.localEvents);
 		const local = partialLocal ? opts.localEvents : await allEvents();
-		const seenIds = partialLocal ? new Set(await ensureKnownEventIds()) : new Set();
+		// Bekannte ids nur nachschlagen, nicht kopieren (~80k je Pull-Seite). Neue ids landen in
+		// einer eigenen Menge: Scheitert der Import, darf der Cache nichts Ungeschriebenes kennen.
+		const known = partialLocal ? await ensureKnownEventIds() : null;
+		const added = new Set();
+		const seenIds = { has: (id) => added.has(id) || !!known?.has(id), add: (id) => { added.add(id); } };
 		local.forEach((e) => seenIds.add(e.id));
 		let fullLog = partialLocal ? null : local;
 		const history = async () => (fullLog ??= await allEvents());

@@ -286,6 +286,11 @@ export const CLOUDFLARE_SYNC = (() => {
 				if (!response.ok) {
 					if (response.status === 410 && !repaired) {
 						finishRequest({ failed: true, status: 410, errorName: "PacketMissing" });
+						// Ein anderes Gerät baut die Cloud gerade neu auf (Kompaktierung): neue Generation
+						// übernehmen und weiter abrufen. Ein eigener Reset löschte sonst dessen frischen Upload.
+						const info = await response.json().catch(() => ({}));
+						const serverGeneration = Number(info?.generation) || 0;
+						if (serverGeneration && serverGeneration !== state.generation) { clearCursors(serverGeneration); continue; }
 						console.warn("[cf-sync] Cloud-Historie unvollständig oder beschädigt. Führe automatische Reparatur aus...");
 						await purgeCloudData();
 						return pull(true);
@@ -691,8 +696,10 @@ export const CLOUDFLARE_SYNC = (() => {
 	// Anhänge im Inhalt (img:/file:/cover:), Cover-Bild und PDF. Vorher wurde payload.changes
 	// geprüft, das es nie gab — neue Bilder, Cover und PDFs warteten bis zum nächsten App-Start.
 	const BLOB_REF_RE = /(?:img|file|cover):[^\s)"'<>\]]+/g;
+	// Ohne Event (nur aufgeschobener Sync, z. B. während des Schreibens) gibt es keinen neuen
+	// Verweis. Vorher erzwang das nach jedem Stiftstrich mit WS-Hinweis einen vollen Datei-Abgleich.
 	function hasUnsyncedBlobRef(ev) {
-		if (!ev || typeof ev !== "object") return true;
+		if (!ev || typeof ev !== "object") return false;
 		if (ev.type !== "pageCreate" && ev.type !== "pageUpdate") return false;
 		const fields = ev.type === "pageUpdate" ? ev.payload?.patch : ev.payload;
 		if (!fields) return false;
@@ -793,7 +800,12 @@ export const CLOUDFLARE_SYNC = (() => {
 					else if (Number(msg.maxSeq || 0) <= state.lastSyncedSeq) blobInventoryDirty = true;
 					requestSync().catch(() => {});
 				}
-				else if (msg.type === "reset") { clearCursors(Number(msg.generation) || 1); requestSync(true).catch(() => {}); }
+				else if (msg.type === "reset") {
+					// Der eigene Reset kommt hier auch an: Kennt das Gerät die Generation schon, wäre
+					// ein zweiter Komplett-Upload reine Doppelarbeit.
+					const generation = Number(msg.generation) || 1;
+					if (generation !== state.generation) { clearCursors(generation); requestSync(true).catch(() => {}); }
+				}
 				else if (msg.type === "unauthorized" || msg.type === "unsupported_protocol") {
 					state.lastError = msg.error || "Nicht autorisiert"; setStatus("error", "Nicht autorisiert", state.lastError); closeSocket();
 				}
