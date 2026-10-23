@@ -270,7 +270,7 @@ const TOOLS = [
 			type: "object",
 			properties: {
 				title: { type: "string", description: "Titel der neuen Notiz" },
-				content: { type: "string", description: "Markdown-Inhalt der Notiz" },
+				content: { type: "string", description: "Markdown-Inhalt der Notiz. Links auf andere Notizen: [Titel](#<Notiz-ID>)." },
 				subject: { type: "string", description: "Fach bzw. Kategorie (z.B. Informatik, Physik)" },
 				parentId: { type: "string", description: "ID einer optionalen übergeordneten Notiz" },
 				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz (falls ID nicht bekannt)" },
@@ -288,7 +288,7 @@ const TOOLS = [
 				id: { type: "string", description: "ID der Notiz" },
 				title: { type: "string", description: "Titel der Notiz" },
 				new_title: { type: "string", description: "Neuer Titel der Notiz" },
-				content: { type: "string", description: "Ersetzt den gesamten Markdown-Inhalt (bei Heften: neue Textbox, ersetzt nichts)" },
+				content: { type: "string", description: "Ersetzt den gesamten Markdown-Inhalt (bei Heften: neue Textbox, ersetzt nichts). Links auf andere Notizen: [Titel](#<Notiz-ID>)." },
 				append_content: { type: "string", description: "Hängt Text am Ende an (bei Heften: neue Textbox)" },
 				subject: { type: "string", description: "Neues Fach der Notiz" },
 				archived: { type: "boolean", description: "true = archivieren, false = aus dem Archiv holen" },
