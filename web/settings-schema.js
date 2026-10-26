@@ -30,7 +30,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "accent", section: "appearance", group: "Design", label: "Akzentfarbe", description: "Farbe für aktive Elemente", keywords: "blau violett grün orange farbe" },
 	{ id: "density", section: "appearance", group: "Design", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
-	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen", keywords: "animation motion barrierefreiheit" },
+	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen, keine Handschrift-Erkennung", keywords: "animation motion barrierefreiheit performance handschrift erkennung speicher" },
 	{ id: "native-haptics", section: "appearance", group: "Lesbarkeit", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
 	{ id: "tabs-position", section: "appearance", group: "Oberfläche", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "home-name", section: "appearance", group: "Oberfläche", label: "Begrüßungsname", description: "Name in der Begrüßung auf der Startseite", keywords: "anzeigename profil startseite home" },

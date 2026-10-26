@@ -13,6 +13,23 @@ export const HANDSCHRIFT = (() => {
 	let inkReqId = 0;
 	const inkPending = new Map();
 
+	// Performance-Modus (Einstellungen): Handschrift-Erkennung ganz aus, das Modell wird nie geladen
+	const isEnabled = () => {
+		try { return localStorage.getItem("impala67Motion") !== "reduced"; } catch { return true; }
+	};
+
+	// Schon gelesene Zeilen (Zeilenschlüssel aus dem Worker → Ergebnis). Nach einer Änderung liest das Modell
+	// nur die neuen oder geänderten Zeilen statt der ganzen Seite. Liegt hier, weil der Worker im Leerlauf endet.
+	const LINE_CACHE_MAX = 1500;
+	const lineCache = new Map();
+	function rememberLines(fresh) {
+		for (const [sig, rec] of Object.entries(fresh || {})) {
+			lineCache.delete(sig);
+			lineCache.set(sig, rec);
+		}
+		while (lineCache.size > LINE_CACHE_MAX) lineCache.delete(lineCache.keys().next().value);
+	}
+
 	// Das Modell belegt im Worker schnell über 100 MB (WebAssembly-Speicher wächst, schrumpft aber nie).
 	// Auf Tablets mit 4 GB beendet Android die App dann eher. Darum den Worker nach einer Minute ohne
 	// Anfrage und sofort im Hintergrund beenden; die nächste Erkennung lädt das Modell neu (~2 s).
@@ -70,6 +87,7 @@ export const HANDSCHRIFT = (() => {
 						if (inkPending.has(msg.id)) writeInflight({ phase: msg.phase, line: msg.line, lines: msg.lines, width: msg.width });
 						return;
 					}
+					if (msg.type === "result") rememberLines(msg.lineCache);
 					if (msg.id && inkPending.has(msg.id)) {
 						const { resolve, reject } = inkPending.get(msg.id);
 						inkPending.delete(msg.id);
@@ -93,6 +111,7 @@ export const HANDSCHRIFT = (() => {
 	// source: Aufrufer für die Absturz-Spur ("indexer", "lasso", "label" …)
 	async function recognizeStrokes(strokes, options = {}, source = "") {
 		if (!strokes || !strokes.length) return "";
+		if (!isEnabled()) throw new Error("Im Performance-Modus ist die Handschrift-Erkennung aus.");
 		const worker = getInkWorker();
 		if (!worker) throw new Error("Handwriting-Worker nicht verfügbar.");
 		const id = ++inkReqId;
@@ -114,7 +133,7 @@ export const HANDSCHRIFT = (() => {
 				reject: (err) => { done(); reject(err); },
 			});
 			writeInflight({ source, strokes: strokes.length, phase: "queued", line: 0, lines: 0, width: 0 });
-			worker.postMessage({ type: "recognize_strokes", id, strokes, options });
+			worker.postMessage({ type: "recognize_strokes", id, strokes, options, known: Object.fromEntries(lineCache) });
 		}), { strokes: strokes.length, source }, 50);
 	}
 
@@ -187,6 +206,7 @@ export const HANDSCHRIFT = (() => {
 	}
 
 	return {
+		isEnabled,
 		recognizeStrokes,
 		saveTrainingSample,
 		removeTrainingSamples,

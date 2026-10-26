@@ -220,7 +220,7 @@ export const HEFT_INDEXER = (() => {
 	}
 
 	function schedulePage(pageId, pg, force = false) {
-		if (!pageId || !pg || !Array.isArray(pg.strokes)) return;
+		if (!pageId || !pg || !Array.isArray(pg.strokes) || !HANDSCHRIFT.isEnabled()) return;
 		if (!pg.strokes.length) { clearStrokeText(pageId, pg); return; }
 		const key = checkKey(pageId, pg);
 		// Auch beim Öffnen des Hefts: sonst risse dieselbe Seite die App bei jedem Neustart erneut mit
@@ -241,6 +241,15 @@ export const HEFT_INDEXER = (() => {
 
 	async function processNextBatch() {
 		if (busy) return;
+
+		// Performance-Modus: Indexer ganz aus (auch Scan-Texterkennung); der nächste Start ohne Modus holt alles nach
+		if (!HANDSCHRIFT.isEnabled()) {
+			priorityQueue.clear();
+			scanRunning = false;
+			const p = HEFT_INDEX_PROGRESS.get();
+			if (p) HEFT_INDEX_PROGRESS.set({ ...p, running: false });
+			return;
+		}
 
 		// Wenn der Nutzer gerade im Heft zeichnet oder schreibt oder die App im Hintergrund ist: pausieren und
 		// später fortsetzen. Im Hintergrund gibt handschrift.js das Modell frei, sonst würde es dort ständig neu geladen.
@@ -321,7 +330,7 @@ export const HEFT_INDEXER = (() => {
 
 	function startBackgroundScan() {
 		// Läuft schon: die Schleife holt neue Seiten bei jedem Durchlauf selbst ab.
-		if (scanRunning) return;
+		if (scanRunning || !HANDSCHRIFT.isEnabled()) return;
 		scanRunning = true;
 		reindexAll = readIndexedModel() !== INDEX_VERSION;
 		hadFailure = false;

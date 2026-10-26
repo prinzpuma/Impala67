@@ -20,7 +20,8 @@ let currentModelPath = "./handwriting-model.onnx";
 async function loadOrt() {
 	if (!ort) {
 		try {
-			ort = await import(`https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.all.bundle.min.mjs`);
+			// Nur CPU (WASM): das „all“-Paket brächte zusätzlich WebGPU/WebGL mit und lädt 28 statt 14 MB WebAssembly
+			ort = await import(`https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.wasm.bundle.min.mjs`);
 			if (ort?.env?.wasm) {
 				ort.env.wasm.numThreads = 1;
 				ort.env.wasm.simd = true;
@@ -248,12 +249,33 @@ async function recognizeWideLine(image, options, onChunk) {
 	return { text, confidence: weighted / textWidth, status: allRecognized ? "recognized" : "uncertain" };
 }
 
+// Kurzer Schlüssel einer Zeile aus ihren Strichen (id, Punktzahl, erster/letzter Punkt): ändert sich, sobald
+// ein Strich dazukommt, wegfällt oder verschoben wird. cyrb53, damit der Cache klein bleibt.
+function lineSignature(lineStrokes, options) {
+	const parts = lineStrokes.map((s) => {
+		const pts = s.pts || [], a = pts[0] || [], b = pts[pts.length - 1] || [];
+		return `${s.id || ""}:${pts.length}:${a[0]},${a[1]}:${b[0]},${b[1]}`;
+	}).sort();
+	const str = JSON.stringify(options) + "|" + parts.join("|");
+	let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+	for (let i = 0; i < str.length; i++) {
+		const ch = str.charCodeAt(i);
+		h1 = Math.imul(h1 ^ ch, 2654435761);
+		h2 = Math.imul(h2 ^ ch, 1597334677);
+	}
+	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 // Erkennt eine Liste von Strichen auf einer Seite mit vollständiger Strich-Bilanzierung
 // progress({ phase, line, lines, width }): Absturz-Spur im Hauptthread (handschrift.js)
-async function recognizePageStrokes(strokes, options = {}, progress = () => {}) {
+// known: { Zeilenschlüssel: { text, confidence, status } } schon gelesener Zeilen; nur neue/geänderte Zeilen
+// gehen durchs Modell. Neu gelesene Zeilen kommen als lineCache zurück.
+async function recognizePageStrokes(strokes, options = {}, progress = () => {}, known = {}) {
 	const totalStrokesCount = Array.isArray(strokes) ? strokes.length : 0;
 	if (totalStrokesCount === 0) {
-		return { text: "", lines: [], accounting: { total: 0, recognized: 0, uncertain: 0, skipped: 0, balanced: true } };
+		return { text: "", lines: [], lineCache: {}, accounting: { total: 0, recognized: 0, uncertain: 0, skipped: 0, balanced: true } };
 	}
 
 	// 1. Strich-Tracking initialisieren: Jeder Strich bekommt genau einen Status
@@ -278,6 +300,7 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 
 	const recognizedLines = [];
 	const groupsReport = [];
+	const lineCache = {};
 
 	for (const [lineIndex, line] of lines.entries()) {
 		const lineStrokes = line.strokes || [];
@@ -289,7 +312,9 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 		}
 
 		const pointCount = lineStrokes.reduce((n, s) => n + ((s.pts && s.pts.length) || 0), 0);
-		const image = pointCount >= 5 ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
+		const sig = pointCount >= 5 ? lineSignature(lineStrokes, options) : "";
+		const cached = sig && known[sig];
+		const image = pointCount >= 5 && !cached ? rasterizeLine(HANDWRITING_PREPROCESSOR.deskewLine(lineStrokes)) : null;
 
 		// Breiter als im Training: wird in Stücken gelesen (recognizeWideLine)
 		const isTooLong = !!image && image.width > MAX_TRAINING_WIDTH;
@@ -298,7 +323,11 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 		let text = "";
 		let confidence = 0;
 
-		if (!image) {
+		if (cached) {
+			({ text, confidence, status } = cached);
+			for (const idx of lineOrigIndices) strokeStatus[idx] = status;
+			if ((status === "recognized" || status === "uncertain") && text && text.trim()) recognizedLines.push(text);
+		} else if (!image) {
 			status = "skipped_too_short";
 			for (const idx of lineOrigIndices) strokeStatus[idx] = "skipped_too_short";
 		} else {
@@ -307,6 +336,7 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 				text = rec.text;
 				confidence = rec.confidence;
 				status = rec.status; // recognized, uncertain, drawing, empty
+				lineCache[sig] = { text, confidence, status };
 
 				for (const idx of lineOrigIndices) {
 					strokeStatus[idx] = status;
@@ -329,6 +359,7 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 		groupsReport.push({
 			strokesCount: lineStrokes.length,
 			imageWidth: image ? image.width : 0,
+			cached: !!cached,
 			status,
 			confidence,
 			text,
@@ -367,6 +398,7 @@ async function recognizePageStrokes(strokes, options = {}, progress = () => {}) 
 	return {
 		text: recognizedLines.join("\n"),
 		lines: recognizedLines,
+		lineCache,
 		accounting: {
 			total: totalStrokesCount,
 			recognized: recognizedCount,
@@ -396,12 +428,13 @@ self.addEventListener("message", async (event) => {
 			if (!session || !lexicon) progress({ phase: "model-load" });
 			const [ready] = await Promise.all([initSession(), loadLexicon()]);
 			if (!ready) throw new Error("Handschrift-Modell ist nicht geladen.");
-			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {}, progress);
+			const res = await recognizePageStrokes(msg.strokes || [], msg.options || {}, progress, msg.known || {});
 			self.postMessage({
 				type: "result",
 				id,
 				text: res.text,
 				lines: res.lines,
+				lineCache: res.lineCache,
 				accounting: res.accounting,
 			});
 		} catch (err) {
