@@ -8,15 +8,15 @@ import { icon } from "./icons.js";
 // telemetrie.js — Lern-Telemetrie v4 (4. August 2026: Fach + verzögerte Retention)
 // Neu in v3 (DRY): TELE.mark(feature) — experimente.js markiert Nutzung pro Karte,
 // sie landet als exp-Array im review-Event; TELE.onReview(fn) liefert fertige
-// Review-Daten an Abonnenten (analyse.js) statt einer zweiten Zustandsmaschine.
+// Review-Daten an Abonnenten (lernmuster.js) statt einer zweiten Zustandsmaschine.
 // Grundsätze unverändert:
 // 1. Alles läuft über das bestehende Event-Log (STATE.dispatch "teleEvent") und synct über Drive.
 // 2. KEINE Hooks in fremden Modulen: ein Capture-Click-Listener beobachtet die
 //    data-Attribute des Lernmodus (render-anki.js) — app.js, srs.js & Co. bleiben unangetastet.
 // 3. Öffentliche API: TELE.log / TELE.mark / TELE.onReview / TELE.reviewEvents / TELE.passRate /
 //    TELE.thinkMedian / TELE.homeInsightsHtml / TELE.exportDump
-//    (Nutzer: lernzeit.js, render.js, experimente.js, analyse.js; #btnTeleExport aus settings.js wird weiter HIER behandelt).
-//    thinkMedian ist NICHT tot: analyse.js nutzt es als Schwelle für den Ehrlichkeits-Hinweis.
+//    (Nutzer: lernzeit.js, render.js, experimente.js, lernmuster.js; #btnTeleExport aus settings.js wird weiter HIER behandelt).
+//    thinkMedian ist NICHT tot: lernmuster.js nutzt es als Schwelle für den Ehrlichkeits-Hinweis.
 // 4. Telemetrie darf den UI-Fluss NIE stören: fire-and-forget, alle Fehler werden geschluckt.
 
 export const TELE = (() => {
@@ -80,7 +80,7 @@ export const TELE = (() => {
 	// (experimente.js ruft mark()); onGrade hängt sie als exp-Array ans review-Event.
 	let expUsed = new Set();
 	const mark = (feature) => { if (feature) expUsed.add(String(feature)); };
-	// Abonnenten bekommen die fertigen review-Daten (analyse.js: Ehrlichkeits-/Pausen-Hinweise) —
+	// Abonnenten bekommen die fertigen review-Daten (lernmuster.js: Ehrlichkeits-/Pausen-Hinweise) —
 	// DRY: keine zweite Zustandsmaschine über dieselben Buttons in anderen Modulen.
 	const reviewSubs = [];
 	const onReview = (fn) => { if (typeof fn === "function") reviewSubs.push(fn); };
@@ -189,7 +189,7 @@ export const TELE = (() => {
 
 	// ---------- Auswertung ----------
 	// EINE Definition von „gültige Bewertung“ und „Erfolgsquote“ für alle Auswertungen —
-	// analyse.js hatte beides nachgebaut, die Quoten konnten dadurch auseinanderlaufen.
+	// lernmuster.js hatte beides nachgebaut, die Quoten konnten dadurch auseinanderlaufen.
 	// Ein Undo nimmt die zuletzt gebuchte Bewertung zurück; ihr review-Event bleibt im
 	// Log stehen (append-only) und wurde bisher in JEDER Quote weiter mitgezählt.
 	const reviewEvents = () => {

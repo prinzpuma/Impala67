@@ -204,7 +204,7 @@ function heatmapHtml(d, now) {
 	return ankiSec("Aktivität — letzte 12 Monate", note) + '<div class="heatmap-wrap"><div class="heatmap">' + cells + "</div></div>";
 }
 
-// Seite zusammensetzen. analyseHtml ist die bestehende Lern-Analyse (analyse.js) — Beobachtungen, keine Regeln.
+// Seite zusammensetzen. analyseHtml ist die bestehende Lern-Analyse (lernmuster.js) — Beobachtungen, keine Regeln.
 export function statsPageHtml(d, analyseHtml = "", now = new Date()) {
 	return '<section class="anki-home"><p class="anki-lead">' + leadText(d) + "</p>" +
 		'<div class="anki-stats anki-kpis">' + kpisHtml(d) + "</div></section>" +

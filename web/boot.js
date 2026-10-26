@@ -12,7 +12,7 @@ import { CHATS } from "./chats.js";
 import { MOBILE } from "./mobile.js";
 import { DRIVE } from "./drive.js";
 import { LERNZEIT } from "./lernzeit.js";
-import { ANALYSE } from "./analyse.js";
+import { ANALYSE } from "./lernmuster.js";
 import { blobAliveChecker, isBlobAlive } from "./sync-core.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { scheduleOptionalModulePrefetch } from "./optional-modules.js";
