@@ -223,6 +223,8 @@ export const HEFT_INDEXER = (() => {
 		if (!pageId || !pg || !Array.isArray(pg.strokes)) return;
 		if (!pg.strokes.length) { clearStrokeText(pageId, pg); return; }
 		const key = checkKey(pageId, pg);
+		// Auch beim Öffnen des Hefts: sonst risse dieselbe Seite die App bei jedem Neustart erneut mit
+		if (crashedTooOften(key)) return;
 		const isRecentEdit = force || (HEFT.isWriting && HEFT.isWriting());
 		if (!isRecentEdit && done.has(key) && String(pg.ocrText || "").trim()) return;
 		checked.delete(key);
