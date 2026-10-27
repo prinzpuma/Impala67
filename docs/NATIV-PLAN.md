@@ -46,14 +46,51 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
 
 ## Reihenfolge
 
-1. **Spike** (Wegwerf-Branch): `core/` anlegen, ein reines Modul in Rust, als WASM aus der PWA aufrufen.
-   Klärt: Build ohne Bundler, Service-Worker-Cache, Capacitor, CI (`deploy-pwa.yml`), Paketgröße.
-2. **Reine Logik in den Kern, PWA nutzt sie**: Sync-Krypto & -Formate → Event-Reihenfolge/Kompaktierung →
-   RAG-Ranking → CTC-Dekodierung → FSRS → Markdown.
+1. ✅ **Spike**: `core/` angelegt, Event-Kompaktierung in Rust (Ergebnis siehe unten). Weil WASM hier langsamer
+   als JS ist, bleibt die PWA bei JS; die Worker-Anbindung des Spikes wurde nicht übernommen.
+2. **Reine Logik in den Kern, PWA nutzt sie** – zuerst, was rechenintensiv ist und über Bytes/typisierte
+   Arrays mit JS spricht: CTC-Dekodierung → RAG-Ranking/Vektorsuche → FSRS → Sync-Formate & -Krypto
+   (Einheitlichkeit für native Apps, kein Tempo-Gewinn in der PWA) → Event-Reihenfolge → Markdown.
 3. **Speicherschicht** (SQLite im Kern; Web behält IndexedDB über Adapter, Migration ohne Datenverlust).
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
+
+## Spike-Ergebnis (27. Oktober 2026)
+
+**Aufbau**
+- `core/impala-core`: reine Logik ohne Abhängigkeiten. Plattformen reichen ihre Werte über das Trait `JsLike` herein
+  (JSON in Tests, `JsValue` in der PWA, später Swift/Kotlin-Objekte); der Kern fragt nur die Felder ab, die er braucht.
+- `core/impala-wasm`: dünne `wasm-bindgen`-Hülle → `web/core/impala_core.js` + `impala_core_bg.wasm` (`--target web`, natives ES-Modul).
+- `web/compact-core.js` lädt den Kern; `web/compact-worker.js` rechnet damit. Rückfall auf `compactEvents` (JS), wenn das
+  Modul nicht lädt oder ein Event eine Form hat, die nur die JS-Regeln abdecken (der Kern lehnt dann ab, statt zu raten).
+- Tests: `cargo test` in `core/` vergleicht mit Golden-Files aus dem JS-Original (`core/tools/gen-golden.mjs`, Grenzfälle +
+  Zufalls-Logs); `node core/tools/bench.mjs` prüft zusätzlich 300 Zufalls-Logs Rust gegen JS und misst die Laufzeit.
+
+**WASM-Ausgabe wird committet** (nicht in `deploy-pwa.yml` gebaut): Ein Push auf `main` geht sofort live – der Deploy soll
+keine Rust-Toolchain brauchen, die Capacitor-Hülle kopiert `web/` unverändert, und der Dev-Server läuft ohne Rust.
+Gegen vergessene Neubauten hält `core/wasm-build.json` Hashes von Quellen und Ausgabe fest; `npm run check:core`
+(Teil von `verify`, also auch im Deploy) schlägt fehl, wenn sie nicht passen. Lokal bauen: `npm run build:core`
+(braucht `rustup target add wasm32-unknown-unknown` und `cargo install wasm-bindgen-cli --version 0.2.129 --locked`).
+
+**Messwerte** (Node 22 bzw. Chromium, realistisches Log mit 3 KB Inhalt je Seiten-Patch)
+- Größe: `.wasm` 50,5 KB (21 KB gzip), Glue-JS 11 KB. Erster Entwurf mit `serde-wasm-bindgen`: 112 KB.
+- Laufzeit reine Kompaktierung: 10 000 Events JS 6 ms / WASM 14 ms; 100 000 Events JS 52 ms / WASM 155–170 ms.
+  Rust nativ ohne Grenze: 29 ms für 100 000 Events.
+- Die Zeit steckt in der JS↔WASM-Grenze (mehrere Aufrufe je Event, Strings kopieren), nicht in der Logik.
+  Erster Entwurf mit generischem serde-Decoder: 580 ms.
+- Im Worker zählt das kaum: Ein Lauf über 20 000 Events dauert in Chromium ~1,4 s – fast alles IndexedDB
+  (`getAll`, Löschen), mit WASM wie mit JS gleich lang.
+- Chromium: WASM lädt im Worker (`application/wasm`), Ergebnis identisch, Rückfall bei blockierter `.wasm` greift.
+  Android-WebView ist dieselbe Engine; auf einem echten Gerät noch nicht geprüft. Der Glue fällt bei falschem
+  MIME-Typ selbst auf `WebAssembly.instantiate` zurück; WebViews ohne Reference-Types/Bulk-Memory nehmen JS.
+
+**Lehren für Schritt 2**
+- Tempo gewinnt WASM in der PWA nur, wenn wenige grobe Aufrufe viel Rechenarbeit auslösen und Daten als Bytes oder
+  typisierte Arrays wandern (CTC-Logits, Embedding-Vektoren). Für Logik über viele kleine JS-Objekte ist V8 schon schnell.
+- Die Kompaktierung wird erst schneller, wenn die Events gar nicht mehr über die Grenze müssen (Speicherschicht im Kern, Schritt 3).
+- Kein `serde-wasm-bindgen` für große Objekt-Bäume: zu langsam und zu groß. Gezielter Zugriff über ein Trait hält den Kern
+  zudem plattformneutral – dasselbe Muster passt für UniFFI.
 
 ## iOS ohne Mac
 

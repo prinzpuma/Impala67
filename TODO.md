@@ -73,7 +73,9 @@ Stand: v2.2.85 (21. Oktober 2026)
 
 ### Langfristig: Rust-Kern & native Apps
 - [ ] **Plan in `docs/NATIV-PLAN.md`**: Gemeinsamer Rust-Kern (auch als WASM in der PWA), danach iPad, Android, Windows/Linux nativ.
-  - [ ] Schritt 1: Spike `core/` + erstes Modul als WASM aus der PWA aufrufen.
+  - [x] Schritt 1: Spike `core/` – Event-Kompaktierung in Rust; als WASM langsamer als JS, deshalb rechnet die PWA weiter in JS. Ergebnis und Messwerte im Plan.
+  - [ ] Schritt 2: CTC-Dekodierung (`web/handwriting-ctc.js`) in den Kern – rechenintensiv, typisierte Arrays, messbarer Gewinn.
+  - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.
 
 ### Priorität 3: Android & Plattform-Ergänzungen
 - [ ] **Google Drive Login in Android-APK verifizieren**:

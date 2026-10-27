@@ -25,6 +25,7 @@
 - **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
 - **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/drive.js`, `server/`
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
+- **Rust-Kern**: `core/` (Cargo-Workspace, `cargo test`, Regeln `core/AGENT-REGELN.md`, Plan `docs/NATIV-PLAN.md`); die PWA nutzt ihn noch nicht
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - **Veröffentlichung**: `.github/workflows/release.yml`, `.github/scripts/set-version.mjs`
 - **Backlog**: `TODO.md`
