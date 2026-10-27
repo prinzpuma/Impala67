@@ -1,13 +1,15 @@
 // Vergleicht Rust-Kern (WASM) und JS-Original: gleiches Ergebnis auf vielen Zufalls-Logs,
-// dann Laufzeit auf einem großen Log. node core/tools/bench.mjs [Events] [Fuzz-Runden]
+// dann Laufzeit auf einem großen Log. Erst node core/tools/build.mjs, dann
+// node core/tools/bench.mjs [Events] [Fuzz-Runden]
 import fs from "node:fs";
 import { compactEvents } from "../../web/compact-events.js";
-import { loadCompact } from "../../web/compact-core.js";
 import { sampleLog } from "./sample-log.mjs";
 
 const [n = 100_000, rounds = 300] = process.argv.slice(2).map(Number);
-const wasm = await loadCompact(fs.readFileSync(new URL("../../web/core/impala_core_bg.wasm", import.meta.url)));
-if (wasm === compactEvents) throw new Error("WASM nicht geladen");
+// WASM aus core/target/wasm/ (node core/tools/build.mjs); die PWA nutzt den Kern noch nicht.
+const core = await import("../target/wasm/impala_core.js");
+await core.default({ module_or_path: fs.readFileSync(new URL("../target/wasm/impala_core_bg.wasm", import.meta.url)) });
+const wasm = (events) => Array.from(core.compactOrder(events), (i) => events[i]);
 
 const same = (a, b) => a.length === b.length && a.every((ev, i) => ev === b[i]);
 for (let seed = 1000; seed < 1000 + rounds; seed++) {

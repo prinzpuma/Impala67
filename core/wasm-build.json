@@ -1,7 +1,0 @@
-{
-	"sources": "0577c5335a4c1b11ae7042111bbd9ad7dafa62573215f51df1917744bb15153f",
-	"output": {
-		"impala_core.js": "648ac1a71c476462fe5342dbcc654902daa4576a05fab63d1cbc975adfb62067",
-		"impala_core_bg.wasm": "8490140c4d0ca24502138e4cc0196009473f6c96a00f22d53e5018f60f61e89f"
-	}
-}
