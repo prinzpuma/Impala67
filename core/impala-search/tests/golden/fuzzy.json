@@ -1,0 +1,458 @@
+[
+ {
+  "op": "set",
+  "id": "p0",
+  "text": "Wasser naïve Straße Spannung Theorem Kraft Protein Strom"
+ },
+ {
+  "op": "set",
+  "id": "p1",
+  "text": "Integral Glukose der Beschleunigung Mitochondrien Funktion Matrix Spannung Matrix naïve Integral für Mitochondrien Glukose Glukose Matrix Strom der Wasser the Strom Übung"
+ },
+ {
+  "op": "set",
+  "id": "p2",
+  "text": "naïve Übung and mit Pflanze Chlorophyll Grenzwert Beweis Pflanze Zelle der Funktion Beweis Kraft Café Phänomen Straße Eigenwert Grenzwert Energie Energie"
+ },
+ {
+  "op": "set",
+  "id": "p3",
+  "text": "Eigenwert Mitochondrien Übung Eigenwert Licht Straße and Strom mit Prüfung the Zellatmung Spannung Prüfung ist naïve mit Kondensator naïve naïve Strom das Photosynthese Beschleunigung Eigenwert Thermodynamik"
+ },
+ {
+  "op": "set",
+  "id": "p4",
+  "text": "und naïve Strom mit Beweis Prüfung Thermodynamik Strom Vektor Protein Photosynthese Pflanze Café mit Übung Photosynthese Größe Kondensator"
+ },
+ {
+  "op": "set",
+  "id": "p5",
+  "text": "😀Emoji Ableitung 😀Emoji Prüfung das Übung mit Energie 😀Emoji Beschleunigung Widerstand Chlorophyll Gleichung Enzym das für Thermodynamik Prüfung 😀Emoji Größe Thermodynamik Café"
+ },
+ {
+  "op": "set",
+  "id": "p6",
+  "text": "Protein Kondensator die von Mitochondrien Strom Kraft Spannung Mitochondrien Integral Beweis Kraft Chlorophyll Photosynthese Chlorophyll Pflanze Zellatmung"
+ },
+ {
+  "op": "set",
+  "id": "p7",
+  "text": "😀Emoji Wasser Chlorophyll Theorem Masse Thermodynamik Funktion Funktion die Phänomen das Spannung die Theorem Widerstand Matrix Spannung der Zelle Integral mit mit der Beweis Grenzwert"
+ },
+ {
+  "op": "set",
+  "id": "p8",
+  "text": "Integral Funktion Kraft mit Theorem naïve Strom Beweis Eigenwert Spannung Matrix ist Widerstand 😀Emoji von Masse Beweis Straße and Strom Prüfung Chlorophyll Straße Gleichung Größe von"
+ },
+ {
+  "op": "set",
+  "id": "p9",
+  "text": "Matrix Zelle Straße Thermodynamik naïve Vektor Integral Wasser Thermodynamik and die mit naïve Protein naïve"
+ },
+ {
+  "op": "set",
+  "id": "p10",
+  "text": "Spannung Gleichung Phänomen der Übung Thermodynamik Übung Kondensator Ableitung mit Masse Energie Thermodynamik"
+ },
+ {
+  "op": "set",
+  "id": "p11",
+  "text": "Strom Strom ist Café Glukose Zellatmung Matrix Spannung Gleichung the von Spannung the Ableitung Masse and Klausur"
+ },
+ {
+  "op": "set",
+  "id": "p12",
+  "text": "Eigenwert the naïve von Photosynthese Chlorophyll und Zellatmung Zelle the Ableitung Kondensator Ableitung die Phänomen Licht Physik naïve Zelle Zelle Gleichung die Straße"
+ },
+ {
+  "op": "set",
+  "id": "p13",
+  "text": "Masse Zellatmung Masse Beweis Strom Chlorophyll der Vektor Straße mit Pflanze Mitochondrien Phänomen"
+ },
+ {
+  "op": "set",
+  "id": "p3",
+  "text": "Photosynthese Fotosynthese Größe Groesse"
+ },
+ {
+  "op": "set",
+  "id": "p5",
+  "text": ""
+ },
+ {
+  "op": "set",
+  "id": "p1",
+  "text": "ist Matrix mit Prüfung Eigenwert Zelle Zellatmung 😀Emoji Straße Integral"
+ },
+ {
+  "op": "search",
+  "query": "fotosintese",
+  "allow": null,
+  "result": [
+   {
+    "id": "p4",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p6",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p12",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p3",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "photosynthese zelle",
+  "allow": null,
+  "result": [
+   {
+    "id": "p12",
+    "score": 6,
+    "forms": [
+     "zelle",
+     "zellatmung",
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p6",
+    "score": 4,
+    "forms": [
+     "zellatmung",
+     "photosynthese",
+     "fotosynthese"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "groesse",
+  "allow": null,
+  "result": [
+   {
+    "id": "p4",
+    "score": 3,
+    "forms": [
+     "größe",
+     "groesse"
+    ]
+   },
+   {
+    "id": "p8",
+    "score": 3,
+    "forms": [
+     "größe",
+     "groesse"
+    ]
+   },
+   {
+    "id": "p3",
+    "score": 3,
+    "forms": [
+     "größe",
+     "groesse"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "intergal",
+  "allow": null,
+  "result": [
+   {
+    "id": "p6",
+    "score": 1,
+    "forms": [
+     "integral"
+    ]
+   },
+   {
+    "id": "p7",
+    "score": 1,
+    "forms": [
+     "integral"
+    ]
+   },
+   {
+    "id": "p8",
+    "score": 1,
+    "forms": [
+     "integral"
+    ]
+   },
+   {
+    "id": "p9",
+    "score": 1,
+    "forms": [
+     "integral"
+    ]
+   },
+   {
+    "id": "p1",
+    "score": 1,
+    "forms": [
+     "integral"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "matrx",
+  "allow": null,
+  "result": [
+   {
+    "id": "p7",
+    "score": 1,
+    "forms": [
+     "matrix"
+    ]
+   },
+   {
+    "id": "p8",
+    "score": 1,
+    "forms": [
+     "matrix"
+    ]
+   },
+   {
+    "id": "p9",
+    "score": 1,
+    "forms": [
+     "matrix"
+    ]
+   },
+   {
+    "id": "p11",
+    "score": 1,
+    "forms": [
+     "matrix"
+    ]
+   },
+   {
+    "id": "p1",
+    "score": 1,
+    "forms": [
+     "matrix"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "beschleunig",
+  "allow": null,
+  "result": []
+ },
+ {
+  "op": "search",
+  "query": "thermo",
+  "allow": null,
+  "result": [
+   {
+    "id": "p4",
+    "score": 2,
+    "forms": [
+     "thermodynamik"
+    ]
+   },
+   {
+    "id": "p7",
+    "score": 2,
+    "forms": [
+     "thermodynamik"
+    ]
+   },
+   {
+    "id": "p9",
+    "score": 2,
+    "forms": [
+     "thermodynamik"
+    ]
+   },
+   {
+    "id": "p10",
+    "score": 2,
+    "forms": [
+     "thermodynamik"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "ab",
+  "allow": null,
+  "result": []
+ },
+ {
+  "op": "search",
+  "query": "eigenwert funktion",
+  "allow": null,
+  "result": [
+   {
+    "id": "p2",
+    "score": 6,
+    "forms": [
+     "funktion",
+     "eigenwert"
+    ]
+   },
+   {
+    "id": "p8",
+    "score": 6,
+    "forms": [
+     "funktion",
+     "eigenwert"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "zz",
+  "allow": null,
+  "result": []
+ },
+ {
+  "op": "search",
+  "query": "kondensatr strom",
+  "allow": null,
+  "result": [
+   {
+    "id": "p4",
+    "score": 4,
+    "forms": [
+     "strom",
+     "kondensator"
+    ]
+   },
+   {
+    "id": "p6",
+    "score": 4,
+    "forms": [
+     "strom",
+     "kondensator"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "fotosint",
+  "allow": null,
+  "result": [
+   {
+    "id": "p4",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p6",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p12",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   },
+   {
+    "id": "p3",
+    "score": 1,
+    "forms": [
+     "photosynthese",
+     "fotosynthese"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "istanbul",
+  "allow": null,
+  "result": []
+ },
+ {
+  "op": "search",
+  "query": "cafe",
+  "allow": null,
+  "result": [
+   {
+    "id": "p2",
+    "score": 3,
+    "forms": [
+     "café"
+    ]
+   },
+   {
+    "id": "p4",
+    "score": 3,
+    "forms": [
+     "café"
+    ]
+   },
+   {
+    "id": "p11",
+    "score": 3,
+    "forms": [
+     "café"
+    ]
+   }
+  ]
+ },
+ {
+  "op": "search",
+  "query": "energie",
+  "allow": [
+   "p0",
+   "p2",
+   "p4",
+   "p6"
+  ],
+  "result": [
+   {
+    "id": "p2",
+    "score": 3,
+    "forms": [
+     "energie"
+    ]
+   }
+  ]
+ }
+]

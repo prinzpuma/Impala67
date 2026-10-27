@@ -1,0 +1,4256 @@
+{
+ "model": "local:bekko-a8m#r2",
+ "provider_id": "local",
+ "pages": {
+  "r0": {
+   "title": "Photosynthese",
+   "trashed": false,
+   "archived": false
+  },
+  "r1": {
+   "title": "ist the",
+   "trashed": false,
+   "archived": false
+  },
+  "r2": {
+   "title": "Größe Kraft Integral",
+   "trashed": false,
+   "archived": false
+  },
+  "r3": {
+   "title": "das",
+   "trashed": false,
+   "archived": false
+  },
+  "r4": {
+   "title": "Prüfung Phänomen",
+   "trashed": false,
+   "archived": false
+  },
+  "r5": {
+   "title": "Größe the der",
+   "trashed": true,
+   "archived": false
+  },
+  "r6": {
+   "title": "und",
+   "trashed": false,
+   "archived": true
+  },
+  "r7": {
+   "title": "Photosynthese",
+   "trashed": false,
+   "archived": false
+  },
+  "r8": {
+   "title": "Prüfung Photosynthese Zelle",
+   "trashed": false,
+   "archived": false
+  },
+  "r9": {
+   "title": "Übung",
+   "trashed": false,
+   "archived": false
+  },
+  "r10": {
+   "title": "Kondensator Theorem",
+   "trashed": false,
+   "archived": false
+  },
+  "r11": {
+   "title": "Thermodynamik 😀Emoji Glukose",
+   "trashed": false,
+   "archived": false
+  },
+  "r12": {
+   "title": "Funktion",
+   "trashed": false,
+   "archived": false
+  },
+  "r13": {
+   "title": "die Widerstand",
+   "trashed": false,
+   "archived": false
+  }
+ },
+ "records": [
+  [
+   "r0",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+      "vec": [
+       0.7140948176383972,
+       -0.982862114906311,
+       -0.5188834071159363,
+       -0.3074803650379181,
+       -0.2707456052303314,
+       0.5245763063430786,
+       0.4673358201980591,
+       0.38781875371932983,
+       -0.16729389131069183,
+       0.8878634572029114,
+       0.127651646733284,
+       -0.319742888212204,
+       0.11820206791162491,
+       0.3494337201118469,
+       0.3780692219734192,
+       0.22563421726226807
+      ],
+      "norm": 1.9549335440009261
+     }
+    ]
+   }
+  ],
+  [
+   "r1",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+      "vec": {
+       "0": -0.17164553701877594,
+       "1": 0.09504147619009018,
+       "2": -0.7671329379081726,
+       "3": 0.17954182624816895,
+       "4": 0.3153623640537262,
+       "5": 1.2996009588241577,
+       "6": -1.3096736669540405,
+       "7": 1.314368486404419,
+       "8": 0.8519545197486877,
+       "9": -0.6277360320091248,
+       "10": -0.8182990550994873,
+       "11": -0.7178722023963928,
+       "12": -0.6190435886383057,
+       "13": 0.5244903564453125,
+       "14": -0.1404772400856018,
+       "15": 0.20143648982048035
+      },
+      "norm": 2.9856150914643442
+     },
+     {
+      "text": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+      "vec": {
+       "0": -0.16530005633831024,
+       "1": -0.48162776231765747,
+       "2": -0.4305958151817322,
+       "3": 0.834738552570343,
+       "4": 0.5141178965568542,
+       "5": 0.5192429423332214,
+       "6": -0.5661734938621521,
+       "7": 0.9653682708740234,
+       "8": 1.0881593227386475,
+       "9": 0.587421715259552,
+       "10": -0.5083839297294617,
+       "11": -0.3538234531879425,
+       "12": -0.4307834506034851,
+       "13": 0.5923229455947876,
+       "14": -0.030453769490122795,
+       "15": 0.5070493221282959
+      },
+      "norm": 2.373848547219992
+     }
+    ]
+   }
+  ],
+  [
+   "r2",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+      "vec": [
+       -0.15919852256774902,
+       0.9863072633743286,
+       0.00217011128552258,
+       0.49763861298561096,
+       -0.3103261888027191,
+       1.0482829809188843,
+       1.04710054397583,
+       -1.1787481307983398,
+       -0.6371803879737854,
+       -0.16666635870933533,
+       0.3846190273761749,
+       -1.2436050176620483,
+       0.6315178275108337,
+       0.028493963181972504,
+       -0.37036454677581787,
+       -0.6728134155273438
+      ],
+      "norm": 2.8362999775460502
+     },
+     {
+      "text": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+      "vec": [
+       -0.7671626210212708,
+       1.9938150644302368,
+       0.10450153052806854,
+       0.25025424361228943,
+       -1.072819471359253,
+       0.033686377108097076,
+       1.5491985082626343,
+       -1.2414588928222656,
+       0.7906996607780457,
+       -0.3343302309513092,
+       -0.26093870401382446,
+       -1.760287880897522,
+       1.0880217552185059,
+       1.0276525020599365,
+       -0.35458487272262573,
+       0.18966242671012878
+      ],
+      "norm": 4.0044906924512125
+     },
+     {
+      "text": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+      "vec": [
+       -0.025097714737057686,
+       1.895561695098877,
+       0.16723260283470154,
+       0.6175957918167114,
+       -1.1845767498016357,
+       1.1272462606430054,
+       1.894639015197754,
+       -0.7502514719963074,
+       -0.352839857339859,
+       -0.24653469026088715,
+       -0.3632623255252838,
+       -1.2495267391204834,
+       1.2383410930633545,
+       -0.08208996057510376,
+       -0.6409599184989929,
+       0.03741055354475975
+      ],
+      "norm": 3.828919471151906
+     }
+    ]
+   }
+  ],
+  [
+   "r3",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+      "vec": [
+       0.19714626669883728,
+       0.48067086935043335,
+       0.3001701831817627,
+       -0.3032606244087219,
+       0.25173449516296387,
+       0.546880841255188,
+       0.16015399992465973,
+       -0.5712702870368958,
+       -0.481438547372818,
+       -0.2803491950035095,
+       -0.9723809361457825,
+       0.41368967294692993,
+       -0.07125440239906311,
+       -1.4452736377716064,
+       -0.564287006855011,
+       -0.554253101348877
+      ],
+      "norm": 2.3049902855133375
+     },
+     {
+      "text": "Thermodynamik Energie Protein Grenzwert Physik Beweis Übung Kondensator Spannung Beweis 😀Emoji and Physik",
+      "vec": [
+       -0.5774352550506592,
+       0.1480991393327713,
+       0.5230163335800171,
+       -0.3630334138870239,
+       1.5518561601638794,
+       0.5878598093986511,
+       0.2650049924850464,
+       -0.11623440682888031,
+       -0.18498960137367249,
+       -0.31642457842826843,
+       -0.4885757863521576,
+       0.5443292856216431,
+       -0.6794453859329224,
+       -0.4151310324668884,
+       -0.2513478696346283,
+       -0.17417727410793304
+      ],
+      "norm": 2.234976190469852
+     },
+     {
+      "text": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+      "vec": [
+       -0.673448383808136,
+       0.7590813636779785,
+       0.37893521785736084,
+       -0.6028165817260742,
+       0.48783770203590393,
+       0.9357151389122009,
+       0.4825133979320526,
+       -0.9399096369743347,
+       -0.5382654666900635,
+       -0.8060646653175354,
+       -0.4030008018016815,
+       0.06531871855258942,
+       -0.8336141109466553,
+       -0.11963916569948196,
+       0.29175323247909546,
+       0.0370226725935936
+      ],
+      "norm": 2.3808354634222737
+     },
+     {
+      "text": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+      "vec": [
+       -0.176224485039711,
+       0.48642227053642273,
+       1.3875724077224731,
+       -0.4272417426109314,
+       0.6000952124595642,
+       0.13100391626358032,
+       0.3044735789299011,
+       -0.4420270323753357,
+       -0.37475696206092834,
+       -0.331964910030365,
+       -0.8146259188652039,
+       0.5445606112480164,
+       -0.4889256954193115,
+       -1.7270807027816772,
+       -0.03664318099617958,
+       -0.1336783766746521
+      ],
+      "norm": 2.7372973139931096
+     }
+    ]
+   }
+  ],
+  [
+   "r4",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+      "vec": [
+       -0.1940584033727646,
+       -1.5681054592132568,
+       -0.7789931893348694,
+       -0.02357877604663372,
+       0.4751013219356537,
+       0.43918097019195557,
+       0.08346763253211975,
+       -0.3468680679798126,
+       -0.2011980265378952,
+       0.0007160890963859856,
+       -0.38097691535949707,
+       0.3966618478298187,
+       0.17871929705142975,
+       0.3676137626171112,
+       0.2854374051094055,
+       -0.18173539638519287
+      ],
+      "norm": 2.0674702315047186
+     }
+    ]
+   }
+  ],
+  [
+   "r5",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Masse Eigenwert Prüfung für das 😀Emoji Pflanze die Thermodynamik Integral Ableitung Matrix Prüfung Beschleunigung Grenzwert Spannung ist Mitochondrien Matrix Licht Strom Ableitung Protein Wasser Café Thermodynamik Vektor Matrix Wasser Pflanze Zelle Prüfung Größe",
+      "vec": [
+       -1.0399287939071655,
+       -0.4919310510158539,
+       0.18151110410690308,
+       0.7427805066108704,
+       0.10547691583633423,
+       0.4422810971736908,
+       -1.6744948625564575,
+       1.4703792333602905,
+       0.6011118292808533,
+       0.3440822660923004,
+       -0.25265195965766907,
+       -0.4587455093860626,
+       -0.9767630100250244,
+       0.9264962077140808,
+       -0.307955801486969,
+       0.9006157517433167
+      ],
+      "norm": 3.248571763320515
+     },
+     {
+      "text": "die Enzym Café Pflanze das von Gleichung Spannung die Photosynthese Licht Chlorophyll der für Kondensator Klausur Größe Kondensator Beschleunigung Eigenwert Größe and Kraft Spannung Photosynthese mit die Energie",
+      "vec": [
+       -0.21478810906410217,
+       -0.19114865362644196,
+       -0.09093307703733444,
+       0.7286492586135864,
+       -0.2111731320619583,
+       -0.11863716691732407,
+       -0.8505125045776367,
+       1.1692819595336914,
+       0.5559403300285339,
+       0.6611588001251221,
+       0.03965415433049202,
+       -0.8215397000312805,
+       -0.8250961303710938,
+       0.40517041087150574,
+       0.006722257472574711,
+       0.34153303503990173
+      ],
+      "norm": 2.270565618024626
+     }
+    ]
+   }
+  ],
+  [
+   "r6",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+      "vec": {
+       "0": -0.2376611828804016,
+       "1": 1.7058005332946777,
+       "2": -0.027705932036042213,
+       "3": 1.0320781469345093,
+       "4": -1.042773962020874,
+       "5": 0.6746442914009094,
+       "6": 1.2138562202453613,
+       "7": -1.1925625801086426,
+       "8": 0.06416074186563492,
+       "9": -0.6073824763298035,
+       "10": -0.18686175346374512,
+       "11": -1.8542909622192383,
+       "12": 1.0700591802597046,
+       "13": 0.30406320095062256,
+       "14": -0.10349218547344208,
+       "15": -0.7198611497879028
+      },
+      "norm": 3.752745695042733
+     },
+     {
+      "text": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+      "vec": {
+       "0": 0.035125650465488434,
+       "1": 1.3850537538528442,
+       "2": 0.10859042406082153,
+       "3": 0.9487742781639099,
+       "4": -0.7816515564918518,
+       "5": 0.7918838858604431,
+       "6": 1.3298230171203613,
+       "7": -1.4770759344100952,
+       "8": 0.41712746024131775,
+       "9": -0.5576767921447754,
+       "10": -0.06491700559854507,
+       "11": -0.7182468771934509,
+       "12": 0.4159207046031952,
+       "13": 0.7015629410743713,
+       "14": -0.4606667459011078,
+       "15": 0.5518138408660889
+      },
+      "norm": 3.194808056232657
+     },
+     {
+      "text": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+      "vec": {
+       "0": 0.5885840654373169,
+       "1": 1.8120784759521484,
+       "2": 0.38362738490104675,
+       "3": -0.12117611616849899,
+       "4": -0.42143604159355164,
+       "5": 1.0478672981262207,
+       "6": 1.3388017416000366,
+       "7": -1.798865795135498,
+       "8": -0.16326084733009338,
+       "9": -0.45417487621307373,
+       "10": -0.1360899657011032,
+       "11": -1.5918598175048828,
+       "12": 1.1492546796798706,
+       "13": 0.3496043086051941,
+       "14": -0.7404189109802246,
+       "15": 0.03980344161391258
+      },
+      "norm": 3.8567002397640113
+     }
+    ]
+   }
+  ],
+  [
+   "r7",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+      "vec": [
+       0.03398948907852173,
+       0.8334566950798035,
+       1.0202133655548096,
+       -0.4331551194190979,
+       0.682955265045166,
+       0.5847665667533875,
+       0.16790275275707245,
+       -0.994541347026825,
+       -0.4412175118923187,
+       -0.5391887426376343,
+       -0.10209783911705017,
+       0.5900221467018127,
+       -0.4480619728565216,
+       -1.0228585004806519,
+       -0.8251283764839172,
+       -0.2593590319156647
+      ],
+      "norm": 2.566904391992622
+     },
+     {
+      "text": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+      "vec": [
+       -0.32947689294815063,
+       0.4773629605770111,
+       0.5430208444595337,
+       -0.06968478113412857,
+       0.8344341516494751,
+       0.32817113399505615,
+       0.47002285718917847,
+       -0.6630143523216248,
+       -0.42522573471069336,
+       -0.3550584614276886,
+       -0.22347626090049744,
+       -0.07014130055904388,
+       -0.36883217096328735,
+       -0.6334525346755981,
+       -0.20632755756378174,
+       -0.49416887760162354
+      ],
+      "norm": 1.812860251645101
+     },
+     {
+      "text": "Mitochondrien Pflanze Kondensator Physik Protein Glukose Ableitung Grenzwert Kondensator Beschleunigung Funktion Photosynthese Licht Café Masse Funktion Eigenwert von Licht Vektor naïve und Masse Café Widerstand Masse der",
+      "vec": [
+       0.12078564614057541,
+       0.20512181520462036,
+       0.5175997018814087,
+       -0.9352626204490662,
+       0.5791237354278564,
+       0.3670142590999603,
+       -0.08544209599494934,
+       -0.12497053295373917,
+       -0.7326353788375854,
+       -0.7355135083198547,
+       -0.43856409192085266,
+       0.5959100127220154,
+       -0.48797300457954407,
+       -1.6366665363311768,
+       -0.21973936259746552,
+       0.07790646702051163
+      ],
+      "norm": 2.507712750661446
+     },
+     {
+      "text": "naïve Prüfung Energie Übung Thermodynamik naïve Café Phänomen the",
+      "vec": [
+       -0.2927153408527374,
+       -0.06944127380847931,
+       0.8071168661117554,
+       -0.5133728384971619,
+       0.11431346833705902,
+       -0.006006344221532345,
+       0.34318989515304565,
+       -1.2235099077224731,
+       -1.1153175830841064,
+       -0.7641666531562805,
+       -0.43283241987228394,
+       0.5889230966567993,
+       -0.14960050582885742,
+       -1.6841275691986084,
+       -0.32110878825187683,
+       -0.37620556354522705
+      ],
+      "norm": 2.8458248144969764
+     }
+    ]
+   }
+  ],
+  [
+   "r8",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+      "vec": [
+       0.25359681248664856,
+       -1.0527474880218506,
+       0.06501223891973495,
+       -0.6363798379898071,
+       -0.31357482075691223,
+       0.32133927941322327,
+       0.867531955242157,
+       -0.5225366950035095,
+       0.14856846630573273,
+       1.3027459383010864,
+       -0.2510232627391815,
+       -0.4921783208847046,
+       0.4703337550163269,
+       1.004223108291626,
+       0.4744657278060913,
+       -0.25272536277770996
+      ],
+      "norm": 2.5203524303281224
+     }
+    ]
+   }
+  ],
+  [
+   "r9",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+      "vec": [
+       0.1263435333967209,
+       -0.523430585861206,
+       -0.20697392523288727,
+       0.8318766951560974,
+       0.1816132366657257,
+       -0.08704861253499985,
+       -1.2121570110321045,
+       1.1508450508117676,
+       0.3870394229888916,
+       0.1418265551328659,
+       -0.40869519114494324,
+       -0.9616419076919556,
+       -0.20139731466770172,
+       1.0315351486206055,
+       0.5217320919036865,
+       0.238725945353508
+      ],
+      "norm": 2.5602051452666994
+     },
+     {
+      "text": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+      "vec": [
+       -0.5842472314834595,
+       0.09682629257440567,
+       0.4874090254306793,
+       0.8483366966247559,
+       -0.17326036095619202,
+       -0.15386544167995453,
+       -1.2026859521865845,
+       1.0406564474105835,
+       0.8683590888977051,
+       0.3641892373561859,
+       -0.38052865862846375,
+       -0.009996510110795498,
+       -0.0560319758951664,
+       0.49938419461250305,
+       -0.0011617093114182353,
+       0.5543795228004456
+      ],
+      "norm": 2.3414784633725034
+     },
+     {
+      "text": "anders dimensioniert",
+      "vec": [
+       0.09646748006343842,
+       -0.2693498432636261,
+       -0.6879511475563049,
+       -0.28862127661705017,
+       -0.16740906238555908,
+       0.8513078689575195,
+       -1.1347088813781738,
+       0.6578495502471924,
+       -0.23200958967208862,
+       0.3167039155960083,
+       0.16571135818958282,
+       0.613418698310852,
+       -0.7867187857627869,
+       -0.5886587500572205,
+       -0.3539656400680542,
+       0.22290930151939392,
+       0.9950886368751526
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "r10",
+   {
+    "updated": "t",
+    "model": "fremd",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Wasser Klausur Funktion Beschleunigung Theorem Beweis Photosynthese Klausur Klausur Spannung Kondensator Größe",
+      "vec": [
+       -0.03838808462023735,
+       1.9740651845932007,
+       0.4656338095664978,
+       0.3044030964374542,
+       -0.6546987295150757,
+       1.018319845199585,
+       0.9086131453514099,
+       -1.7238035202026367,
+       0.6863159537315369,
+       -0.8089532256126404,
+       -0.2230655401945114,
+       -1.5569525957107544,
+       0.2783930003643036,
+       0.6114559173583984,
+       -0.42542505264282227,
+       -0.043542567640542984
+      ],
+      "norm": 3.7019080496070984
+     },
+     {
+      "text": "Spannung Ableitung das Integral Chlorophyll Protein Pflanze Physik",
+      "vec": [
+       1.0061237812042236,
+       1.8016149997711182,
+       -0.36460208892822266,
+       0.2959582209587097,
+       -0.8164308667182922,
+       0.5555652379989624,
+       1.7595895528793335,
+       -0.8719300031661987,
+       -0.18201930820941925,
+       -0.2922225594520569,
+       0.17717376351356506,
+       -1.2071431875228882,
+       0.4017999768257141,
+       0.845061182975769,
+       -0.31069469451904297,
+       0.14097163081169128
+      ],
+      "norm": 3.4509916154426294
+     },
+     {
+      "text": "Energie Straße Enzym Enzym Beschleunigung Beweis Klausur mit Prüfung Beschleunigung and mit Mitochondrien der Mitochondrien Übung Protein Gleichung Spannung the Licht Funktion Widerstand naïve Phänomen Wasser Energie Straße Energie",
+      "vec": [
+       0.14106519520282745,
+       1.8743462562561035,
+       -0.22456517815589905,
+       -0.02792908065021038,
+       -1.3005977869033813,
+       0.8779792785644531,
+       0.7738646864891052,
+       -1.3911786079406738,
+       -0.028777794912457466,
+       -0.651595413684845,
+       0.21525970101356506,
+       -1.1648930311203003,
+       0.028049439191818237,
+       0.8173720836639404,
+       -0.8842163681983948,
+       -0.07200056314468384
+      ],
+      "norm": 3.4446412495384275
+     }
+    ]
+   }
+  ],
+  [
+   "r11",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "chunks": [
+     {
+      "text": "and Zelle Grenzwert Eigenwert Enzym the Protein Physik Beweis Größe Vektor das Spannung Enzym mit the Glukose Energie Chlorophyll Masse",
+      "vec": {
+       "0": -0.029198797419667244,
+       "1": 0.3209069073200226,
+       "2": 0.2345166653394699,
+       "3": -0.6095950603485107,
+       "4": 0.5535057783126831,
+       "5": 0.5506106019020081,
+       "6": 0.02816895768046379,
+       "7": -0.4001051187515259,
+       "8": -0.8407660126686096,
+       "9": -0.14107811450958252,
+       "10": -0.30653589963912964,
+       "11": 0.38489416241645813,
+       "12": 0.11279253661632538,
+       "13": -1.2517623901367188,
+       "14": 0.16540926694869995,
+       "15": -0.09077473729848862
+      },
+      "norm": 1.971036810240601
+     },
+     {
+      "text": "😀Emoji Spannung Strom das Wasser Energie Kondensator von Beweis 😀Emoji Energie für Klausur Integral für das Widerstand Ableitung Chlorophyll Masse Mitochondrien das Zellatmung Mitochondrien Strom Vektor Spannung 😀Emoji und Klausur Spannung",
+      "vec": {
+       "0": -0.36282530426979065,
+       "1": 0.04069489985704422,
+       "2": 0.7977463603019714,
+       "3": 0.14955562353134155,
+       "4": 0.35738861560821533,
+       "5": 0.48326829075813293,
+       "6": 0.9433333277702332,
+       "7": -0.8643662929534912,
+       "8": -0.5419732928276062,
+       "9": -0.3658822178840637,
+       "10": -0.23624761402606964,
+       "11": 0.6893652677536011,
+       "12": -0.31395676732063293,
+       "13": -1.258657693862915,
+       "14": -0.5993539690971375,
+       "15": 0.03228780999779701
+      },
+      "norm": 2.4066665982903497
+     },
+     {
+      "text": "und Theorem Übung Gleichung 😀Emoji Phänomen Integral Ableitung Kondensator Prüfung and Gleichung Mitochondrien ist die die Chlorophyll naïve Ableitung Grenzwert Enzym Zelle Beschleunigung Wasser Glukose Wasser Café die Spannung Matrix und Chlorophyll Funktion mit Kondensator Funktion 😀Emoji Zellatmung Klausur",
+      "vec": {
+       "0": -0.41559848189353943,
+       "1": 0.4477089047431946,
+       "2": 0.27821364998817444,
+       "3": -0.21934853494167328,
+       "4": -0.004780351184308529,
+       "5": 0.3709852993488312,
+       "6": 0.6327029466629028,
+       "7": -0.02231443114578724,
+       "8": -0.6094656586647034,
+       "9": -0.05392656847834587,
+       "10": 0.060213539749383926,
+       "11": 0.36268389225006104,
+       "12": -0.05027280002832413,
+       "13": -1.1617504358291626,
+       "14": 0.28762558102607727,
+       "15": -0.1402428299188614
+      },
+      "norm": 1.7324132211240668
+     },
+     {
+      "text": "Klausur Theorem Thermodynamik Wasser Strom Matrix Beschleunigung Physik Prüfung Zelle Größe Eigenwert Prüfung für Beschleunigung für Straße Theorem Wasser Übung Beweis von Zelle und und Enzym Zellatmung Eigenwert Café Wasser mit Theorem Phänomen and Beweis Straße Kraft Straße Zelle Theorem Protein Wasser Physik Pflanze Glukose",
+      "vec": {
+       "0": -0.023402350023388863,
+       "1": 0.8307737708091736,
+       "2": 0.4961419105529785,
+       "3": -0.3475482761859894,
+       "4": 0.5705599784851074,
+       "5": 0.5522910356521606,
+       "6": 0.35480883717536926,
+       "7": -0.3367690145969391,
+       "8": -0.8679981231689453,
+       "9": -1.189756989479065,
+       "10": -0.47232237458229065,
+       "11": 0.057599425315856934,
+       "12": -0.5569923520088196,
+       "13": -1.4866957664489746,
+       "14": -0.5888660550117493,
+       "15": 0.27005425095558167
+      },
+      "norm": 2.6950124214414837
+     }
+    ]
+   }
+  ],
+  [
+   "r12",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "remote",
+    "chunks": [
+     {
+      "text": "Zellatmung Café Spannung Matrix Beschleunigung naïve ist Chlorophyll and Theorem ist Energie and Klausur Matrix Wasser Beschleunigung Integral Zelle 😀Emoji das Café Thermodynamik",
+      "vec": [
+       -0.0573580302298069,
+       -0.686978816986084,
+       0.0684812143445015,
+       -0.16779473423957825,
+       -0.08814200013875961,
+       0.5320690870285034,
+       0.6637426018714905,
+       -0.06856467574834824,
+       -0.6025628447532654,
+       0.9954172372817993,
+       0.3806729018688202,
+       0.6602268815040588,
+       -0.46106940507888794,
+       -0.08872093260288239,
+       0.12338153272867203,
+       -0.17818458378314972
+      ],
+      "norm": 1.8564413457382232
+     }
+    ]
+   }
+  ],
+  [
+   "r13",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+      "vec": [
+       -0.10844352096319199,
+       0.09708403795957565,
+       0.5792851448059082,
+       0.20514820516109467,
+       0.7938204407691956,
+       -0.05026537552475929,
+       -0.977703332901001,
+       0.3876677453517914,
+       0.8599835634231567,
+       -0.41023311018943787,
+       -0.3607931137084961,
+       -0.6288710832595825,
+       -0.2754882276058197,
+       0.4626995623111725,
+       -0.3245483636856079,
+       0.6036996841430664
+      ],
+      "norm": 0
+     },
+     {
+      "text": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+      "vec": [
+       -0.3402141034603119,
+       -0.2929261028766632,
+       -0.5722103118896484,
+       0.6284429430961609,
+       -0.43388497829437256,
+       -0.20992471277713776,
+       -1.1629136800765991,
+       0.3525940775871277,
+       0.40959930419921875,
+       0.568628191947937,
+       -0.22434991598129272,
+       -0.5040913820266724,
+       -0.08242432028055191,
+       1.218429446220398,
+       0.19406163692474365,
+       -0.07774057984352112
+      ],
+      "norm": 2.2279026234480552
+     }
+    ]
+   }
+  ],
+  [
+   "ohneSeite",
+   {
+    "updated": "t",
+    "model": "local:bekko-a8m#r2",
+    "providerId": "local",
+    "chunks": [
+     {
+      "text": "Waise",
+      "vec": [
+       0.2296033650636673,
+       -1.1040621995925903,
+       -0.5369061231613159,
+       -0.5391601324081421,
+       -0.02887774258852005,
+       0.4224741458892822,
+       0.6628007292747498,
+       -0.2500428259372711,
+       -0.3635677695274353,
+       0.3529302477836609,
+       0.29882484674453735,
+       -0.03358963504433632,
+       0.2474336326122284,
+       0.30629488825798035,
+       0.23972341418266296,
+       -0.24477319419384003
+      ],
+      "norm": 1
+     }
+    ]
+   }
+  ],
+  [
+   "graph-card:k1",
+   {
+    "kind": "knowledge-card",
+    "model": "local:bekko-a8m#r2",
+    "provider": "local",
+    "hash": "abc",
+    "vec": [
+     -0.5000702142715454,
+     -0.28490811586380005,
+     -0.20159071683883667,
+     0.6887113451957703,
+     -0.05223289132118225,
+     0.46741512417793274,
+     -1.0477650165557861,
+     0.8680489659309387,
+     0.8728847503662109,
+     0.34590667486190796,
+     -0.3084786832332611,
+     -0.38147595524787903,
+     -0.48007848858833313,
+     0.5530358552932739,
+     -0.13214969635009766,
+     0.49876195192337036
+    ]
+   }
+  ]
+ ],
+ "cases": [
+  {
+   "query": "photosynthese",
+   "qv": [
+    0.2701357901096344,
+    -1.369027853012085,
+    -0.5016477704048157,
+    -0.724651038646698,
+    -0.03217320889234543,
+    0.44790780544281006,
+    0.8589562177658081,
+    -0.6082600355148315,
+    -0.23062224686145782,
+    0.23078007996082306,
+    0.041686467826366425,
+    0.36319273710250854,
+    0.5141242146492004,
+    0.45857566595077515,
+    0.48346564173698425,
+    -0.07777276635169983
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.859,
+     "semanticScore": 0.743,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.804,
+     "semanticScore": 0.676,
+     "lexicalScore": 0.882,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.8,
+     "semanticScore": -0.215,
+     "lexicalScore": 0.884,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "photosynthese",
+   "qv": [
+    0.2701357901096344,
+    -1.369027853012085,
+    -0.5016477704048157,
+    -0.724651038646698,
+    -0.03217320889234543,
+    0.44790780544281006,
+    0.8589562177658081,
+    -0.6082600355148315,
+    -0.23062224686145782,
+    0.23078007996082306,
+    0.041686467826366425,
+    0.36319273710250854,
+    0.5141242146492004,
+    0.45857566595077515,
+    0.48346564173698425,
+    -0.07777276635169983
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.859,
+     "semanticScore": 0.743,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.804,
+     "semanticScore": 0.676,
+     "lexicalScore": 0.882,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.8,
+     "semanticScore": -0.215,
+     "lexicalScore": 0.884,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.8,
+     "semanticScore": -0.148,
+     "lexicalScore": 0.905,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.77,
+     "semanticScore": 0.77,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.7,
+     "semanticScore": 0.035,
+     "lexicalScore": 0.823,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "photosynthese",
+   "qv": [
+    0.2701357901096344,
+    -1.369027853012085,
+    -0.5016477704048157,
+    -0.724651038646698,
+    -0.03217320889234543,
+    0.44790780544281006,
+    0.8589562177658081,
+    -0.6082600355148315,
+    -0.23062224686145782,
+    0.23078007996082306,
+    0.041686467826366425,
+    0.36319273710250854,
+    0.5141242146492004,
+    0.45857566595077515,
+    0.48346564173698425,
+    -0.07777276635169983
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.859,
+     "semanticScore": 0.743,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.804,
+     "semanticScore": 0.676,
+     "lexicalScore": 0.882,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.8,
+     "semanticScore": -0.215,
+     "lexicalScore": 0.884,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.8,
+     "semanticScore": -0.148,
+     "lexicalScore": 0.905,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.77,
+     "semanticScore": 0.77,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.7,
+     "semanticScore": 0.035,
+     "lexicalScore": 0.823,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.7,
+     "semanticScore": -0.23,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.7,
+     "semanticScore": -0.14,
+     "lexicalScore": 0.874,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.7,
+     "semanticScore": -0.06,
+     "lexicalScore": 0.751,
+     "archived": true
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.7,
+     "semanticScore": -0.237,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.7,
+     "semanticScore": -0.139,
+     "lexicalScore": 0.813,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.003,
+     "semanticScore": 0.003,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": -0.311,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": -0.17,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0,
+     "semanticScore": -0.123,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0,
+     "semanticScore": -0.547,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0,
+     "semanticScore": -0.515,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Photosynthese",
+   "qv": [
+    -0.636718213558197,
+    -0.15278854966163635,
+    -0.133790984749794,
+    0.4909116327762604,
+    0.24699687957763672,
+    0.540424644947052,
+    -0.7727733254432678,
+    1.0418838262557983,
+    0.45947396755218506,
+    0.24373410642147064,
+    -0.26135945320129395,
+    -0.18303829431533813,
+    -0.6181718111038208,
+    0.43300312757492065,
+    -0.11433719843626022,
+    0.44109639525413513
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.875,
+     "semanticScore": 0.875,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.822,
+     "semanticScore": 0.731,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.808,
+     "semanticScore": 0.808,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Photosynthese",
+   "qv": [
+    -0.636718213558197,
+    -0.15278854966163635,
+    -0.133790984749794,
+    0.4909116327762604,
+    0.24699687957763672,
+    0.540424644947052,
+    -0.7727733254432678,
+    1.0418838262557983,
+    0.45947396755218506,
+    0.24373410642147064,
+    -0.26135945320129395,
+    -0.18303829431533813,
+    -0.6181718111038208,
+    0.43300312757492065,
+    -0.11433719843626022,
+    0.44109639525413513
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.875,
+     "semanticScore": 0.875,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.822,
+     "semanticScore": 0.731,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.808,
+     "semanticScore": 0.808,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.8,
+     "semanticScore": 0.045,
+     "lexicalScore": 0.882,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.8,
+     "semanticScore": -0.353,
+     "lexicalScore": 0.884,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.8,
+     "semanticScore": -0.306,
+     "lexicalScore": 0.905,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Photosynthese",
+   "qv": [
+    -0.636718213558197,
+    -0.15278854966163635,
+    -0.133790984749794,
+    0.4909116327762604,
+    0.24699687957763672,
+    0.540424644947052,
+    -0.7727733254432678,
+    1.0418838262557983,
+    0.45947396755218506,
+    0.24373410642147064,
+    -0.26135945320129395,
+    -0.18303829431533813,
+    -0.6181718111038208,
+    0.43300312757492065,
+    -0.11433719843626022,
+    0.44109639525413513
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.875,
+     "semanticScore": 0.875,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.822,
+     "semanticScore": 0.731,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.808,
+     "semanticScore": 0.808,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.8,
+     "semanticScore": 0.045,
+     "lexicalScore": 0.882,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.8,
+     "semanticScore": -0.353,
+     "lexicalScore": 0.884,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.8,
+     "semanticScore": -0.306,
+     "lexicalScore": 0.905,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.799,
+     "semanticScore": 0.799,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.755,
+     "semanticScore": 0.614,
+     "lexicalScore": 0.813,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.7,
+     "semanticScore": -0.393,
+     "lexicalScore": 0.823,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.7,
+     "semanticScore": -0.274,
+     "lexicalScore": 0.754,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.7,
+     "semanticScore": -0.303,
+     "lexicalScore": 0.874,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.7,
+     "semanticScore": -0.249,
+     "lexicalScore": 0.751,
+     "archived": true
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.7,
+     "semanticScore": -0.186,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.631,
+     "semanticScore": 0.631,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Thermodynamik Energie Protein Grenzwert Physik Beweis Übung Kondensator Spannung Beweis 😀Emoji and Physik",
+     "score": 0.121,
+     "semanticScore": 0.121,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.063,
+     "semanticScore": 0.063,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0,
+     "semanticScore": -0.238,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "licht wasser",
+   "qv": [
+    -0.019181884825229645,
+    1.6994341611862183,
+    -0.269639790058136,
+    0.5149151086807251,
+    -0.7236108183860779,
+    0.9800984263420105,
+    1.1110808849334717,
+    -1.1242613792419434,
+    0.24701036512851715,
+    -0.8794711828231812,
+    0.173344686627388,
+    -1.1519873142242432,
+    0.7223957777023315,
+    0.5765597820281982,
+    -0.5228757262229919,
+    0.2177485078573227
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.949,
+     "semanticScore": 0.94,
+     "lexicalScore": 0.343,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.92,
+     "semanticScore": 0.904,
+     "lexicalScore": 0.355,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.919,
+     "semanticScore": 0.892,
+     "lexicalScore": 0.559,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "licht wasser",
+   "qv": [
+    -0.019181884825229645,
+    1.6994341611862183,
+    -0.269639790058136,
+    0.5149151086807251,
+    -0.7236108183860779,
+    0.9800984263420105,
+    1.1110808849334717,
+    -1.1242613792419434,
+    0.24701036512851715,
+    -0.8794711828231812,
+    0.173344686627388,
+    -1.1519873142242432,
+    0.7223957777023315,
+    0.5765597820281982,
+    -0.5228757262229919,
+    0.2177485078573227
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.949,
+     "semanticScore": 0.94,
+     "lexicalScore": 0.343,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.92,
+     "semanticScore": 0.904,
+     "lexicalScore": 0.355,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.919,
+     "semanticScore": 0.892,
+     "lexicalScore": 0.559,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.884,
+     "semanticScore": 0.884,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.45,
+     "semanticScore": -0.189,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.401,
+     "semanticScore": -0.002,
+     "lexicalScore": 0.892,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "licht wasser",
+   "qv": [
+    -0.019181884825229645,
+    1.6994341611862183,
+    -0.269639790058136,
+    0.5149151086807251,
+    -0.7236108183860779,
+    0.9800984263420105,
+    1.1110808849334717,
+    -1.1242613792419434,
+    0.24701036512851715,
+    -0.8794711828231812,
+    0.173344686627388,
+    -1.1519873142242432,
+    0.7223957777023315,
+    0.5765597820281982,
+    -0.5228757262229919,
+    0.2177485078573227
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.949,
+     "semanticScore": 0.94,
+     "lexicalScore": 0.343,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.92,
+     "semanticScore": 0.904,
+     "lexicalScore": 0.355,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.919,
+     "semanticScore": 0.892,
+     "lexicalScore": 0.559,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.884,
+     "semanticScore": 0.884,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.45,
+     "semanticScore": -0.189,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.401,
+     "semanticScore": -0.002,
+     "lexicalScore": 0.892,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.344,
+     "semanticScore": 0.344,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.339,
+     "semanticScore": 0.171,
+     "lexicalScore": 0.448,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.337,
+     "semanticScore": -0.063,
+     "lexicalScore": 0.749,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.305,
+     "semanticScore": 0.07,
+     "lexicalScore": 0.563,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Mitochondrien Pflanze Kondensator Physik Protein Glukose Ableitung Grenzwert Kondensator Beschleunigung Funktion Photosynthese Licht Café Masse Funktion Eigenwert von Licht Vektor naïve und Masse Café Widerstand Masse der",
+     "score": 0.284,
+     "semanticScore": -0.215,
+     "lexicalScore": 0.63,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.174,
+     "semanticScore": -0.242,
+     "lexicalScore": 0.388,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.157,
+     "semanticScore": -0.244,
+     "lexicalScore": 0.349,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": -0.21,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0,
+     "semanticScore": -0.344,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0,
+     "semanticScore": -0.128,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "ab",
+   "qv": [
+    -0.20231211185455322,
+    0.3730749785900116,
+    0.36860689520835876,
+    -0.24293416738510132,
+    0.3320011794567108,
+    0.4479934871196747,
+    0.13376536965370178,
+    -0.6953825950622559,
+    -0.5468066930770874,
+    -0.36240625381469727,
+    -0.5007875561714172,
+    0.25397273898124695,
+    -0.49645164608955383,
+    -1.0498652458190918,
+    -0.5503369569778442,
+    -0.17105916142463684
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.91,
+     "semanticScore": 0.91,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.906,
+     "semanticScore": 0.906,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "naïve Prüfung Energie Übung Thermodynamik naïve Café Phänomen the",
+     "score": 0.873,
+     "semanticScore": 0.873,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "ab",
+   "qv": [
+    -0.20231211185455322,
+    0.3730749785900116,
+    0.36860689520835876,
+    -0.24293416738510132,
+    0.3320011794567108,
+    0.4479934871196747,
+    0.13376536965370178,
+    -0.6953825950622559,
+    -0.5468066930770874,
+    -0.36240625381469727,
+    -0.5007875561714172,
+    0.25397273898124695,
+    -0.49645164608955383,
+    -1.0498652458190918,
+    -0.5503369569778442,
+    -0.17105916142463684
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.91,
+     "semanticScore": 0.91,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.906,
+     "semanticScore": 0.906,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "naïve Prüfung Energie Übung Thermodynamik naïve Café Phänomen the",
+     "score": 0.873,
+     "semanticScore": 0.873,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.847,
+     "semanticScore": 0.847,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.275,
+     "semanticScore": 0.275,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.255,
+     "semanticScore": 0.255,
+     "lexicalScore": 0,
+     "archived": true
+    }
+   ]
+  },
+  {
+   "query": "ab",
+   "qv": [
+    -0.20231211185455322,
+    0.3730749785900116,
+    0.36860689520835876,
+    -0.24293416738510132,
+    0.3320011794567108,
+    0.4479934871196747,
+    0.13376536965370178,
+    -0.6953825950622559,
+    -0.5468066930770874,
+    -0.36240625381469727,
+    -0.5007875561714172,
+    0.25397273898124695,
+    -0.49645164608955383,
+    -1.0498652458190918,
+    -0.5503369569778442,
+    -0.17105916142463684
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.91,
+     "semanticScore": 0.91,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.906,
+     "semanticScore": 0.906,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "naïve Prüfung Energie Übung Thermodynamik naïve Café Phänomen the",
+     "score": 0.873,
+     "semanticScore": 0.873,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.847,
+     "semanticScore": 0.847,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.275,
+     "semanticScore": 0.275,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.255,
+     "semanticScore": 0.255,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.203,
+     "semanticScore": 0.203,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.109,
+     "semanticScore": 0.109,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0,
+     "semanticScore": -0.468,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": -0.153,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": -0.437,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0,
+     "semanticScore": -0.107,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0,
+     "semanticScore": -0.377,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0,
+     "semanticScore": -0.627,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0,
+     "semanticScore": -0.425,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0,
+     "semanticScore": -0.129,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0,
+     "semanticScore": -0.666,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "und",
+   "qv": [
+    -0.007099583745002747,
+    0.25280195474624634,
+    -2.134880781173706,
+    0.473003089427948,
+    0.029131809249520302,
+    0.34956032037734985,
+    1.4531909227371216,
+    -1.4741487503051758,
+    -0.15232330560684204,
+    -0.2894672453403473,
+    -0.7023499011993408,
+    0.23046071827411652,
+    0.9272884130477905,
+    0.6675847172737122,
+    0.948438823223114,
+    -0.20865055918693542
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.8,
+     "semanticScore": 0.445,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.8,
+     "semanticScore": 0.468,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.439,
+     "semanticScore": 0.439,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "und",
+   "qv": [
+    -0.007099583745002747,
+    0.25280195474624634,
+    -2.134880781173706,
+    0.473003089427948,
+    0.029131809249520302,
+    0.34956032037734985,
+    1.4531909227371216,
+    -1.4741487503051758,
+    -0.15232330560684204,
+    -0.2894672453403473,
+    -0.7023499011993408,
+    0.23046071827411652,
+    0.9272884130477905,
+    0.6675847172737122,
+    0.948438823223114,
+    -0.20865055918693542
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.8,
+     "semanticScore": 0.445,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.8,
+     "semanticScore": 0.468,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.439,
+     "semanticScore": 0.439,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.413,
+     "semanticScore": 0.413,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.397,
+     "semanticScore": 0.397,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.307,
+     "semanticScore": 0.307,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "und",
+   "qv": [
+    -0.007099583745002747,
+    0.25280195474624634,
+    -2.134880781173706,
+    0.473003089427948,
+    0.029131809249520302,
+    0.34956032037734985,
+    1.4531909227371216,
+    -1.4741487503051758,
+    -0.15232330560684204,
+    -0.2894672453403473,
+    -0.7023499011993408,
+    0.23046071827411652,
+    0.9272884130477905,
+    0.6675847172737122,
+    0.948438823223114,
+    -0.20865055918693542
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.8,
+     "semanticScore": 0.445,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.8,
+     "semanticScore": 0.468,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.439,
+     "semanticScore": 0.439,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.413,
+     "semanticScore": 0.413,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.397,
+     "semanticScore": 0.397,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.307,
+     "semanticScore": 0.307,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.188,
+     "semanticScore": 0.188,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.184,
+     "semanticScore": 0.184,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.029,
+     "semanticScore": 0.029,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.011,
+     "semanticScore": 0.011,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": -0.151,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": -0.127,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0,
+     "semanticScore": -0.183,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0,
+     "semanticScore": -0.209,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0,
+     "semanticScore": -0.461,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0,
+     "semanticScore": -0.467,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0,
+     "semanticScore": -0.012,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "",
+   "qv": [
+    0.07887426018714905,
+    1.3238232135772705,
+    0.038202714174985886,
+    0.7477049231529236,
+    -0.6516648530960083,
+    0.3059108555316925,
+    1.378727912902832,
+    -1.5308645963668823,
+    0.07602789252996445,
+    -0.63890141248703,
+    0.03523920848965645,
+    -1.1591343879699707,
+    0.8133872747421265,
+    0.6820385456085205,
+    -0.7413918972015381,
+    -0.09323671460151672
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.938,
+     "semanticScore": 0.938,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.916,
+     "semanticScore": 0.916,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.897,
+     "semanticScore": 0.897,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "",
+   "qv": [
+    0.07887426018714905,
+    1.3238232135772705,
+    0.038202714174985886,
+    0.7477049231529236,
+    -0.6516648530960083,
+    0.3059108555316925,
+    1.378727912902832,
+    -1.5308645963668823,
+    0.07602789252996445,
+    -0.63890141248703,
+    0.03523920848965645,
+    -1.1591343879699707,
+    0.8133872747421265,
+    0.6820385456085205,
+    -0.7413918972015381,
+    -0.09323671460151672
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.938,
+     "semanticScore": 0.938,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.916,
+     "semanticScore": 0.916,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.897,
+     "semanticScore": 0.897,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.873,
+     "semanticScore": 0.873,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.26,
+     "semanticScore": 0.26,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.258,
+     "semanticScore": 0.258,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "",
+   "qv": [
+    0.07887426018714905,
+    1.3238232135772705,
+    0.038202714174985886,
+    0.7477049231529236,
+    -0.6516648530960083,
+    0.3059108555316925,
+    1.378727912902832,
+    -1.5308645963668823,
+    0.07602789252996445,
+    -0.63890141248703,
+    0.03523920848965645,
+    -1.1591343879699707,
+    0.8133872747421265,
+    0.6820385456085205,
+    -0.7413918972015381,
+    -0.09323671460151672
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.938,
+     "semanticScore": 0.938,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.916,
+     "semanticScore": 0.916,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.897,
+     "semanticScore": 0.897,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.873,
+     "semanticScore": 0.873,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.26,
+     "semanticScore": 0.26,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.258,
+     "semanticScore": 0.258,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.181,
+     "semanticScore": 0.181,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.114,
+     "semanticScore": 0.114,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.079,
+     "semanticScore": 0.079,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0,
+     "semanticScore": -0.202,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": -0.227,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": -0.305,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0,
+     "semanticScore": -0.292,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0,
+     "semanticScore": -0.298,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0,
+     "semanticScore": -0.313,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0,
+     "semanticScore": -0.127,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0,
+     "semanticScore": -0.141,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Größe Kraft Integral",
+   "qv": [
+    0.1849849969148636,
+    2.1332554817199707,
+    0.2386079579591751,
+    0.3482283353805542,
+    -0.9732958674430847,
+    0.27615365386009216,
+    1.182469367980957,
+    -1.151145339012146,
+    0.4028008282184601,
+    -0.7814832329750061,
+    -0.26813921332359314,
+    -1.6363062858581543,
+    1.369712233543396,
+    0.5275884866714478,
+    0.03603816404938698,
+    -0.2979881465435028
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.96,
+     "semanticScore": 0.927,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.944,
+     "semanticScore": 0.944,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.931,
+     "semanticScore": 0.876,
+     "lexicalScore": 0.991,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Größe Kraft Integral",
+   "qv": [
+    0.1849849969148636,
+    2.1332554817199707,
+    0.2386079579591751,
+    0.3482283353805542,
+    -0.9732958674430847,
+    0.27615365386009216,
+    1.182469367980957,
+    -1.151145339012146,
+    0.4028008282184601,
+    -0.7814832329750061,
+    -0.26813921332359314,
+    -1.6363062858581543,
+    1.369712233543396,
+    0.5275884866714478,
+    0.03603816404938698,
+    -0.2979881465435028
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.96,
+     "semanticScore": 0.927,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.944,
+     "semanticScore": 0.944,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.931,
+     "semanticScore": 0.876,
+     "lexicalScore": 0.991,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.903,
+     "semanticScore": 0.894,
+     "lexicalScore": 0.181,
+     "archived": true
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.287,
+     "semanticScore": 0.225,
+     "lexicalScore": 0.178,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.193,
+     "semanticScore": 0.084,
+     "lexicalScore": 0.264,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Größe Kraft Integral",
+   "qv": [
+    0.1849849969148636,
+    2.1332554817199707,
+    0.2386079579591751,
+    0.3482283353805542,
+    -0.9732958674430847,
+    0.27615365386009216,
+    1.182469367980957,
+    -1.151145339012146,
+    0.4028008282184601,
+    -0.7814832329750061,
+    -0.26813921332359314,
+    -1.6363062858581543,
+    1.369712233543396,
+    0.5275884866714478,
+    0.03603816404938698,
+    -0.2979881465435028
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.96,
+     "semanticScore": 0.927,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0.944,
+     "semanticScore": 0.944,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "and Masse Masse Energie Kraft Kraft Kraft Beweis Licht Beschleunigung Zelle Beschleunigung",
+     "score": 0.931,
+     "semanticScore": 0.876,
+     "lexicalScore": 0.991,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.903,
+     "semanticScore": 0.894,
+     "lexicalScore": 0.181,
+     "archived": true
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Protein Matrix Gleichung Kondensator Enzym Grenzwert Matrix naïve ist the Phänomen Klausur Enzym für Größe Protein Energie Eigenwert Vektor Masse mit Enzym naïve Physik Pflanze Ableitung naïve Integral Energie Masse Straße",
+     "score": 0.287,
+     "semanticScore": 0.225,
+     "lexicalScore": 0.178,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.193,
+     "semanticScore": 0.084,
+     "lexicalScore": 0.264,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0.181,
+     "semanticScore": 0.181,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.167,
+     "semanticScore": 0.095,
+     "lexicalScore": 0.178,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0.158,
+     "semanticScore": 0.077,
+     "lexicalScore": 0.193,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.107,
+     "semanticScore": -0.193,
+     "lexicalScore": 0.238,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.107,
+     "semanticScore": -0.102,
+     "lexicalScore": 0.237,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.071,
+     "semanticScore": -0.306,
+     "lexicalScore": 0.157,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.07,
+     "semanticScore": -0.225,
+     "lexicalScore": 0.155,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.066,
+     "semanticScore": -0.454,
+     "lexicalScore": 0.146,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.057,
+     "semanticScore": -0.121,
+     "lexicalScore": 0.128,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.056,
+     "semanticScore": -0.201,
+     "lexicalScore": 0.125,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.054,
+     "semanticScore": -0.067,
+     "lexicalScore": 0.121,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Wasser Zelle",
+   "qv": [
+    -0.5575200915336609,
+    0.04261479899287224,
+    -0.20135048031806946,
+    0.016725599765777588,
+    -0.6605170369148254,
+    -0.6696153879165649,
+    0.09095953404903412,
+    0.4826035499572754,
+    0.9442151188850403,
+    1.1862366199493408,
+    1.0571712255477905,
+    0.7447969913482666,
+    -0.14662151038646698,
+    0.47047945857048035,
+    0.18774354457855225,
+    0.039466455578804016
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.593,
+     "semanticScore": 0.35,
+     "lexicalScore": 0.83,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.554,
+     "semanticScore": 0.19,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.399,
+     "semanticScore": -0.162,
+     "lexicalScore": 0.886,
+     "archived": true
+    }
+   ]
+  },
+  {
+   "query": "Wasser Zelle",
+   "qv": [
+    -0.5575200915336609,
+    0.04261479899287224,
+    -0.20135048031806946,
+    0.016725599765777588,
+    -0.6605170369148254,
+    -0.6696153879165649,
+    0.09095953404903412,
+    0.4826035499572754,
+    0.9442151188850403,
+    1.1862366199493408,
+    1.0571712255477905,
+    0.7447969913482666,
+    -0.14662151038646698,
+    0.47047945857048035,
+    0.18774354457855225,
+    0.039466455578804016
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.593,
+     "semanticScore": 0.35,
+     "lexicalScore": 0.83,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.554,
+     "semanticScore": 0.19,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.399,
+     "semanticScore": -0.162,
+     "lexicalScore": 0.886,
+     "archived": true
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.349,
+     "semanticScore": 0.349,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.342,
+     "semanticScore": -0.397,
+     "lexicalScore": 0.76,
+     "archived": true
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.337,
+     "semanticScore": 0.157,
+     "lexicalScore": 0.475,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "Wasser Zelle",
+   "qv": [
+    -0.5575200915336609,
+    0.04261479899287224,
+    -0.20135048031806946,
+    0.016725599765777588,
+    -0.6605170369148254,
+    -0.6696153879165649,
+    0.09095953404903412,
+    0.4826035499572754,
+    0.9442151188850403,
+    1.1862366199493408,
+    1.0571712255477905,
+    0.7447969913482666,
+    -0.14662151038646698,
+    0.47047945857048035,
+    0.18774354457855225,
+    0.039466455578804016
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.593,
+     "semanticScore": 0.35,
+     "lexicalScore": 0.83,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0.554,
+     "semanticScore": 0.19,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.399,
+     "semanticScore": -0.162,
+     "lexicalScore": 0.886,
+     "archived": true
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.349,
+     "semanticScore": 0.349,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.342,
+     "semanticScore": -0.397,
+     "lexicalScore": 0.76,
+     "archived": true
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.337,
+     "semanticScore": 0.157,
+     "lexicalScore": 0.475,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.246,
+     "semanticScore": -0.026,
+     "lexicalScore": 0.547,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0.235,
+     "semanticScore": -0.343,
+     "lexicalScore": 0.521,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.216,
+     "semanticScore": 0.058,
+     "lexicalScore": 0.373,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0.216,
+     "semanticScore": -0.457,
+     "lexicalScore": 0.48,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.207,
+     "semanticScore": 0.207,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.168,
+     "semanticScore": -0.426,
+     "lexicalScore": 0.373,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.16,
+     "semanticScore": -0.149,
+     "lexicalScore": 0.356,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.138,
+     "semanticScore": -0.136,
+     "lexicalScore": 0.307,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": -0.186,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0,
+     "semanticScore": -0.59,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0,
+     "semanticScore": -0.546,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "glukose",
+   "qv": [
+    -0.4495895206928253,
+    -0.27097389101982117,
+    -0.09802156686782837,
+    0.6134389638900757,
+    0.2532676160335541,
+    0.4620116651058197,
+    -0.8904658555984497,
+    0.7472910284996033,
+    0.7348353862762451,
+    0.35700035095214844,
+    -0.46782222390174866,
+    -0.1757713407278061,
+    -0.44542965292930603,
+    0.682691216468811,
+    -0.17261053621768951,
+    0.7922367453575134
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.924,
+     "semanticScore": 0.924,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.85,
+     "semanticScore": 0.761,
+     "lexicalScore": 0.825,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.842,
+     "semanticScore": 0.842,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "glukose",
+   "qv": [
+    -0.4495895206928253,
+    -0.27097389101982117,
+    -0.09802156686782837,
+    0.6134389638900757,
+    0.2532676160335541,
+    0.4620116651058197,
+    -0.8904658555984497,
+    0.7472910284996033,
+    0.7348353862762451,
+    0.35700035095214844,
+    -0.46782222390174866,
+    -0.1757713407278061,
+    -0.44542965292930603,
+    0.682691216468811,
+    -0.17261053621768951,
+    0.7922367453575134
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.924,
+     "semanticScore": 0.924,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.85,
+     "semanticScore": 0.761,
+     "lexicalScore": 0.825,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.842,
+     "semanticScore": 0.842,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.832,
+     "semanticScore": 0.715,
+     "lexicalScore": 0.914,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.825,
+     "semanticScore": 0.683,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.754,
+     "semanticScore": 0.754,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "glukose",
+   "qv": [
+    -0.4495895206928253,
+    -0.27097389101982117,
+    -0.09802156686782837,
+    0.6134389638900757,
+    0.2532676160335541,
+    0.4620116651058197,
+    -0.8904658555984497,
+    0.7472910284996033,
+    0.7348353862762451,
+    0.35700035095214844,
+    -0.46782222390174866,
+    -0.1757713407278061,
+    -0.44542965292930603,
+    0.682691216468811,
+    -0.17261053621768951,
+    0.7922367453575134
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0.924,
+     "semanticScore": 0.924,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0.85,
+     "semanticScore": 0.761,
+     "lexicalScore": 0.825,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0.842,
+     "semanticScore": 0.842,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0.832,
+     "semanticScore": 0.715,
+     "lexicalScore": 0.914,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0.825,
+     "semanticScore": 0.683,
+     "lexicalScore": 1,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0.754,
+     "semanticScore": 0.754,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0.7,
+     "semanticScore": -0.152,
+     "lexicalScore": 0.94,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "die Strom Chlorophyll Funktion Matrix der and 😀Emoji von Mitochondrien Größe Straße der and Photosynthese Vektor Vektor Beweis Chlorophyll Protein ist Gleichung and and Glukose Chlorophyll Funktion Größe Wasser Übung Vektor Enzym Gleichung Matrix Energie Theorem",
+     "score": 0.7,
+     "semanticScore": -0.345,
+     "lexicalScore": 0.825,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0.7,
+     "semanticScore": 0.114,
+     "lexicalScore": 0.78,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0.7,
+     "semanticScore": -0.127,
+     "lexicalScore": 0.821,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Integral Grenzwert Glukose Kondensator und Strom Phänomen und the Widerstand Physik Eigenwert naïve Phänomen Thermodynamik Spannung und von Funktion 😀Emoji Beschleunigung Widerstand das Größe Mitochondrien mit Spannung 😀Emoji der die Wasser and Beweis Enzym Glukose Zelle",
+     "score": 0.7,
+     "semanticScore": -0.375,
+     "lexicalScore": 0.93,
+     "archived": true
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Mitochondrien Pflanze Kondensator Physik Protein Glukose Ableitung Grenzwert Kondensator Beschleunigung Funktion Photosynthese Licht Café Masse Funktion Eigenwert von Licht Vektor naïve und Masse Café Widerstand Masse der",
+     "score": 0.7,
+     "semanticScore": -0.363,
+     "lexicalScore": 0.833,
+     "archived": false
+    },
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0.083,
+     "semanticScore": 0.083,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Thermodynamik Energie Protein Grenzwert Physik Beweis Übung Kondensator Spannung Beweis 😀Emoji and Physik",
+     "score": 0.02,
+     "semanticScore": 0.02,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0,
+     "semanticScore": -0.417,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0,
+     "semanticScore": -0.401,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0,
+     "semanticScore": -0.065,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "x",
+   "qv": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "k": 3,
+   "hits": [
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "x",
+   "qv": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "k": 6,
+   "hits": [
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  },
+  {
+   "query": "x",
+   "qv": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "k": 20,
+   "hits": [
+    {
+     "pageId": "r0",
+     "title": "Photosynthese",
+     "snippet": "Beschleunigung die Funktion Spannung Spannung das Theorem ist das Integral Strom Thermodynamik Enzym Licht Protein Theorem Beweis Beschleunigung Theorem Licht für Café Mitochondrien Zellatmung der Zellatmung Spannung der die Energie Wasser Thermodynamik Phänomen and Masse das Grenzwert Spannung für Straße Größe Wasser Beweis Phänomen Eigenwert the Vektor",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Chlorophyll mit Kraft Beweis Café Ableitung Klausur Grenzwert Pflanze Café Matrix Ableitung Pflanze Thermodynamik Energie Protein Beschleunigung Thermodynamik Funktion Pflanze Chlorophyll",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r1",
+     "title": "ist the",
+     "snippet": "Funktion Ableitung von Grenzwert Klausur für Pflanze Enzym Ableitung Energie Kraft Funktion",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "Straße Photosynthese Protein Widerstand das Chlorophyll Zelle Licht",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r2",
+     "title": "Größe Kraft Integral",
+     "snippet": "die Zelle das 😀Emoji Größe Glukose Gleichung die",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Matrix Integral Kondensator 😀Emoji Grenzwert von Straße Strom Größe Phänomen Energie Café Protein für Chlorophyll naïve Gleichung Größe Theorem Chlorophyll Beschleunigung von Klausur und Ableitung Physik Eigenwert Theorem Übung Theorem and Licht Gleichung mit Licht Chlorophyll Grenzwert Zellatmung Prüfung Thermodynamik Kondensator",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r3",
+     "title": "das",
+     "snippet": "Thermodynamik Energie Protein Grenzwert Physik Beweis Übung Kondensator Spannung Beweis 😀Emoji and Physik",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r4",
+     "title": "Prüfung Phänomen",
+     "snippet": "Widerstand Beweis Thermodynamik Café Matrix Mitochondrien Energie Chlorophyll Widerstand Strom Theorem Eigenwert Gleichung für Prüfung Widerstand Klausur mit Pflanze Klausur Prüfung Klausur Beschleunigung Grenzwert für and Energie Größe the Protein Gleichung Spannung Glukose Kondensator Phänomen Zelle Café Beweis Physik Integral 😀Emoji Masse Theorem",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Straße Zelle Gleichung ist Klausur das Beweis Vektor Photosynthese die von Protein Strom und Photosynthese Zellatmung Vektor Matrix",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r6",
+     "title": "und",
+     "snippet": "Theorem Energie Pflanze Prüfung Physik Funktion Kraft Pflanze Spannung Klausur the für Matrix Glukose 😀Emoji mit Enzym Zelle ist Chlorophyll Matrix the Kraft Vektor naïve Gleichung Wasser Strom die Widerstand Gleichung ist und Pflanze Zelle Photosynthese die",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": true
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Eigenwert Grenzwert Mitochondrien Matrix Pflanze Energie Phänomen Grenzwert Beschleunigung Thermodynamik Wasser Größe Chlorophyll Strom Phänomen Protein Protein Klausur Widerstand Energie Beweis das Spannung Mitochondrien Kraft Strom Eigenwert Beschleunigung Beschleunigung Mitochondrien Energie Physik Wasser Pflanze Prüfung mit",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r7",
+     "title": "Photosynthese",
+     "snippet": "Beweis Strom Kondensator von Thermodynamik und Straße Pflanze von Enzym Eigenwert Strom Zellatmung für Energie Café Energie Funktion Physik und Masse das Klausur Physik mit Masse Vektor Klausur Zellatmung ist Funktion ist Phänomen Café Widerstand",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r8",
+     "title": "Prüfung Photosynthese Zelle",
+     "snippet": "Die Photosynthese braucht Licht und Wasser. Enzym Beweis Übung Zellatmung Größe Phänomen Licht Phänomen für Pflanze mit für Café der Kondensator Photosynthese Integral Vektor Prüfung Kraft Thermodynamik Phänomen ist Enzym Zellatmung Funktion Beweis die Matrix Strom Enzym Vektor",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "für Strom Pflanze Spannung die Zellatmung mit Protein Ableitung Café Beweis Zellatmung Integral Wasser Klausur Strom Glukose Kraft naïve and Photosynthese Prüfung Strom für Mitochondrien Eigenwert Eigenwert das und Straße Zellatmung Klausur Integral von",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r9",
+     "title": "Übung",
+     "snippet": "Prüfung Widerstand 😀Emoji Mitochondrien Zelle Beweis der Masse Phänomen the mit Kraft Chlorophyll and Café naïve für Wasser Chlorophyll die Funktion Klausur Strom Mitochondrien Grenzwert Spannung",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Physik Theorem Thermodynamik the Café Prüfung Übung Beschleunigung Straße Prüfung Zellatmung Glukose Zellatmung Mitochondrien Klausur naïve Wasser Physik Protein 😀Emoji the der Beschleunigung Licht Energie Integral Glukose Beweis the Energie Beweis Integral das Phänomen",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    },
+    {
+     "pageId": "r13",
+     "title": "die Widerstand",
+     "snippet": "Integral Übung the Ableitung Größe Grenzwert Thermodynamik Grenzwert für Glukose mit Photosynthese Pflanze Glukose die",
+     "score": 0,
+     "semanticScore": 0,
+     "lexicalScore": 0,
+     "archived": false
+    }
+   ]
+  }
+ ],
+ "related": [
+  {
+   "page_id": "r0",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r8",
+     "score": 0.7347043840238003
+    }
+   ]
+  },
+  {
+   "page_id": "r1",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r9",
+     "score": 0.7874408257307288
+    },
+    {
+     "id": "r13",
+     "score": 0.7728100135459086
+    }
+   ]
+  },
+  {
+   "page_id": "r2",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r3",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r7",
+     "score": 0.9379633116623854
+    }
+   ]
+  },
+  {
+   "page_id": "r4",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r5",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r9",
+     "score": 0.903356372914393
+    },
+    {
+     "id": "r13",
+     "score": 0.8308981456938668
+    },
+    {
+     "id": "r1",
+     "score": 0.8102579802076277
+    }
+   ]
+  },
+  {
+   "page_id": "r6",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r2",
+     "score": 0.9705047819398367
+    }
+   ]
+  },
+  {
+   "page_id": "r7",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r3",
+     "score": 0.9379633116623854
+    }
+   ]
+  },
+  {
+   "page_id": "r8",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r0",
+     "score": 0.7347043840238003
+    }
+   ]
+  },
+  {
+   "page_id": "r9",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r13",
+     "score": 0.9071594731357074
+    },
+    {
+     "id": "r1",
+     "score": 0.7874408257307288
+    }
+   ]
+  },
+  {
+   "page_id": "r10",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r11",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r12",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r13",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r9",
+     "score": 0.9071594731357074
+    },
+    {
+     "id": "r1",
+     "score": 0.7728100135459086
+    }
+   ]
+  },
+  {
+   "page_id": "ohneSeite",
+   "k": 3,
+   "hits": [
+    {
+     "id": "r0",
+     "score": 0.7867740305248091
+    },
+    {
+     "id": "r8",
+     "score": 0.7433925840666789
+    },
+    {
+     "id": "r4",
+     "score": 0.7213597728873338
+    }
+   ]
+  },
+  {
+   "page_id": "fehlt",
+   "k": 3,
+   "hits": []
+  },
+  {
+   "page_id": "r0",
+   "k": 20,
+   "hits": [
+    {
+     "id": "r8",
+     "score": 0.7347043840238003
+    }
+   ]
+  }
+ ]
+}

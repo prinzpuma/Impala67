@@ -1,0 +1,134 @@
+{
+ "fold": [
+  {
+   "input": "Größe",
+   "output": "groesse"
+  },
+  {
+   "input": "PHOTOSYNTHESE",
+   "output": "fotosyntese"
+  },
+  {
+   "input": "Thema",
+   "output": "tema"
+  },
+  {
+   "input": "Café naïve",
+   "output": "cafe naive"
+  },
+  {
+   "input": "äb",
+   "output": "ab"
+  },
+  {
+   "input": "Straße",
+   "output": "strasse"
+  },
+  {
+   "input": "İstanbul",
+   "output": "istanbul"
+  },
+  {
+   "input": "ÄÖÜ",
+   "output": "aeoeue"
+  },
+  {
+   "input": "Ελληνικά ΣΟΦΟΣ",
+   "output": "ελληνικα σοφος"
+  },
+  {
+   "input": "",
+   "output": ""
+  },
+  {
+   "input": "123 phth",
+   "output": "123 ft"
+  }
+ ],
+ "distance": [
+  {
+   "a": "fotosintese",
+   "b": "fotosyntese",
+   "max": 2,
+   "b_len": 11,
+   "output": 1
+  },
+  {
+   "a": "ab",
+   "b": "ba",
+   "max": 1,
+   "b_len": 2,
+   "output": 1
+  },
+  {
+   "a": "abc",
+   "b": "xyz",
+   "max": 1,
+   "b_len": 3,
+   "output": 2
+  },
+  {
+   "a": "",
+   "b": "abc",
+   "max": 3,
+   "b_len": 3,
+   "output": 3
+  },
+  {
+   "a": "kitten",
+   "b": "sitting",
+   "max": 3,
+   "b_len": 7,
+   "output": 3
+  },
+  {
+   "a": "integral",
+   "b": "intergal",
+   "max": 2,
+   "b_len": 8,
+   "output": 1
+  },
+  {
+   "a": "matrix",
+   "b": "matrizen",
+   "max": 1,
+   "b_len": 8,
+   "output": 2
+  },
+  {
+   "a": "fotosint",
+   "b": "fotosintese",
+   "max": 2,
+   "b_len": 8,
+   "output": 0
+  },
+  {
+   "a": "abcd",
+   "b": "abdc",
+   "max": 1,
+   "b_len": 4,
+   "output": 1
+  },
+  {
+   "a": "😀a",
+   "b": "a😀",
+   "max": 2,
+   "b_len": 3,
+   "output": 2
+  },
+  {
+   "a": "gleichung",
+   "b": "gleichungen",
+   "max": 2,
+   "b_len": 11,
+   "output": 2
+  },
+  {
+   "a": "ca",
+   "b": "abc",
+   "max": 2,
+   "b_len": 3,
+   "output": 3
+  }
+ ]
+}

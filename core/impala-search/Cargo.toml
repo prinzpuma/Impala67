@@ -9,4 +9,18 @@ description = "Suche/RAG: Chunking, Vektorsuche, Ranking, Unscharf-Suche, Embedd
 [lints]
 workspace = true
 
+[features]
+default = []
+# Lokales Embedding-Modell (Bekko a8m) in reinem Rust: ONNX über tract, Tokenizer von Hugging Face.
+# Ohne dieses Feature baut das Crate für wasm32-unknown-unknown.
+onnx = ["dep:tract-onnx", "dep:tokenizers"]
+
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+unicode-normalization = "0.1"
+unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
+tract-onnx = { version = "0.23", optional = true }
+tokenizers = { version = "0.22", optional = true, default-features = false, features = ["fancy-regex"] }
+
+[dev-dependencies]
+serde_json = "1"

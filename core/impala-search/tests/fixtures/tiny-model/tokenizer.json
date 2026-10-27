@@ -1,0 +1,28 @@
+{
+ "version": "1.0",
+ "truncation": null,
+ "padding": null,
+ "added_tokens": [],
+ "normalizer": {
+  "type": "Lowercase"
+ },
+ "pre_tokenizer": {
+  "type": "Whitespace"
+ },
+ "post_processor": null,
+ "decoder": null,
+ "model": {
+  "type": "WordLevel",
+  "vocab": {
+   "[PAD]": 0,
+   "[UNK]": 1,
+   "licht": 2,
+   "wasser": 3,
+   "pflanze": 4,
+   "auto": 5,
+   "motor": 6,
+   "strasse": 7
+  },
+  "unk_token": "[UNK]"
+ }
+}
