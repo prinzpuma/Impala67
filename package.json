@@ -15,7 +15,8 @@
     "check:version": "node .github/scripts/check-version-sync.mjs",
     "verify": "npm test && npm run check:syntax && npm run check:pwa && npm run check:version",
     "deploy": "wrangler deploy --config server/wrangler.toml",
-    "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run"
+    "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run",
+    "build:core": "node core/tools/build.mjs"
   },
   "devDependencies": {
     "@capacitor-mlkit/document-scanner": "^8.2.1",
