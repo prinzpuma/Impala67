@@ -867,6 +867,7 @@ dependencies = [
 name = "impala-wasm"
 version = "0.1.0"
 dependencies = [
+ "impala-ink",
  "impala-search",
  "impala-sync",
  "js-sys",

@@ -1,5 +1,5 @@
 // Misst, wo der Rust-Kern als WASM in der PWA schneller wäre als das JS-Original: Vektorsuche und
-// RAG-Ranking. Ohne Binding, weil gemessen und verworfen (Zahlen in docs/NATIV-PLAN.md): Markdown
+// RAG-Ranking, CTC-Dekodierung der Handschrift. Ohne Binding, weil gemessen und verworfen (Zahlen in docs/NATIV-PLAN.md): Markdown
 // (langsamer, Blöcke müssen als JSON über die Grenze) und Heft-Geometrie (schneller, aber nur
 // Bruchteile einer Millisekunde je Ereignis bei doppeltem Zustand). Prüft vorher, dass beide dasselbe liefern. JS und WASM
 // laufen abwechselnd im selben Prozess (gleiche Last für beide), Median nach Aufwärmen.
@@ -107,4 +107,73 @@ function mulberry(seed) {
 	console.log(`RAG-Treffer identisch (${ra.map((h) => h.pageId).join(", ")})`);
 	race(`RAG-Anfrage ${n} Chunks, k = 6`, { JS: jsRag, WASM: wasmRag });
 	rag.free(); ix.free();
+}
+
+// ---- 2. Handschrift: CTC-Dekodierung (Eingaben wie core/tools/bench-ink.mjs: reale Logits aus den Golden-Files) ----
+{
+	console.log("\n# Handschrift-Dekodierung (CTC)");
+	const { HANDWRITING_CTC } = await import("../../web/handwriting-ctc.js");
+	const { HANDWRITING_VOCAB } = await import("../../web/handwriting-vocab.js");
+	const { createLexicon } = await import("../../web/handwriting-lexicon.js");
+	const { findInkGaps } = await import("../../web/handwriting-rasterizer.js");
+	const here = path.dirname(new URL(import.meta.url).pathname);
+	const golden = JSON.parse(fs.readFileSync(path.join(here, "../impala-ink/tests/golden/pipeline.json"), "utf8"));
+	const CLASSES = 101, WORD_GAP_PX = 32;
+	const unpack = (b64) => zlib.inflateRawSync(Buffer.from(b64, "base64"));
+	// Flach wie die ONNX-Ausgabe im Worker (steps × CLASSES).
+	const flatLogits = (b64, steps) => {
+		const b = unpack(b64), out = new Float32Array(steps * CLASSES);
+		for (let t = 0; t < steps; t++) {
+			const o = t * 26, row = out.subarray(t * CLASSES, (t + 1) * CLASSES);
+			row.fill(b.readInt16LE(o) / 256);
+			for (let k = 0; k < 8; k++) row[b[o + 2 + k * 3]] = b.readInt16LE(o + 3 + k * 3) / 256;
+		}
+		return out;
+	};
+	const lines = golden.pipeline.flatMap((p) => p.runs[0].inferences).map((inf) => {
+		const image = { width: inf.width, data: Float32Array.from(unpack(inf.image), (g) => g / 255) };
+		const gaps = findInkGaps(image, WORD_GAP_PX);
+		return { width: inf.width, flat: flatLogits(inf.logits, inf.steps), gaps: Uint32Array.from(gaps.flat()) };
+	});
+	const steps = lines.reduce((n, l) => n + l.flat.length / CLASSES, 0);
+	const rowsOf = (flat) => Array.from({ length: flat.length / CLASSES }, (_, t) => flat.slice(t * CLASSES, (t + 1) * CLASSES));
+	// Vorbereitet (Lücken markiert) für die reine Dekodierung: JS als Zeilen, WASM flach.
+	const prepared = lines.map((l) => {
+		const rows = rowsOf(l.flat);
+		HANDWRITING_CTC.markGapSpaces(rows, [...Array(l.gaps.length / 2)].map((_, i) => [l.gaps[2 * i], l.gaps[2 * i + 1]]), l.width);
+		const flat = new Float32Array(rows.length * CLASSES);
+		rows.forEach((r, t) => flat.set(r, t * CLASSES));
+		return { rows, flat };
+	});
+	const none = new Uint32Array(0);
+
+	// Wie im Worker aus fetch(): JS braucht den Text (res.text() dekodiert), WASM nimmt die Bytes (res.arrayBuffer()).
+	const bytes = new Uint8Array(fs.readFileSync(path.join(here, "../../web/handwriting-lexicon-de.txt")));
+	let jsLex, dec;
+	race("Wörterbuch laden (inkl. UTF-8-Dekodieren)", {
+		JS: () => { jsLex = createLexicon(new TextDecoder().decode(bytes)); },
+		WASM: () => { dec?.free(); dec = new core.InkDecoder(bytes); },
+	}, 5);
+	check(jsLex.size === dec.lexiconSize, "Wörterbuch-Größe");
+	const plain = new core.InkDecoder();
+	const read = (r) => { const o = { text: r.text, rawText: r.rawText, confidence: r.confidence, status: r.status, blankRatio: r.blankRatio, charConfidences: Array.from(r.charConfidences) }; r.free(); return o; };
+	const same = (a, b) => a.text === b.text && a.rawText === b.rawText && a.confidence === b.confidence && a.status === b.status
+		&& a.blankRatio === b.blankRatio && a.charConfidences.length === b.charConfidences.length && a.charConfidences.every((c, i) => Math.fround(c) === b.charConfidences[i]);
+	for (const [name, lex, wasm] of [["mit Wörterbuch", () => jsLex, () => dec], ["ohne Wörterbuch", () => undefined, () => plain]]) {
+		const js = () => prepared.map((p) => HANDWRITING_CTC.decodeWithConfidence(p.rows, HANDWRITING_VOCAB, { lexicon: lex() }));
+		const wa = () => prepared.map((p) => read(wasm().decodeLine(p.flat, CLASSES, undefined, undefined, none, 0)));
+		// Ganzer Weg wie im Worker: flache Modell-Ausgabe → Zeilen → Lücken markieren → dekodieren.
+		const jsFull = () => lines.map((l) => {
+			const rows = rowsOf(l.flat);
+			HANDWRITING_CTC.markGapSpaces(rows, [...Array(l.gaps.length / 2)].map((_, i) => [l.gaps[2 * i], l.gaps[2 * i + 1]]), l.width);
+			return HANDWRITING_CTC.decodeWithConfidence(rows, HANDWRITING_VOCAB, { lexicon: lex() });
+		});
+		const waFull = () => lines.map((l) => read(wasm().decodeLine(l.flat, CLASSES, undefined, undefined, l.gaps, l.width)));
+		const a = js(), b = wa(), c = jsFull(), d = waFull();
+		check(a.every((r, i) => same(r, b[i]) && same(c[i], d[i]) && same(r, d[i])), "Dekodierung " + name);
+		console.log(`Ergebnisse identisch ${name} (${a.filter((r) => r.status === "recognized").length}/${a.length} erkannt, z. B. "${a[0].text}")`);
+		race(`Dekodieren ${name}: ${lines.length} Zeilen, ${steps} Schritte`, { JS: js, WASM: wa }, 15);
+		race(`  inkl. Zeilen + Lücken markieren`, { JS: jsFull, WASM: waFull }, 15);
+	}
+	dec.free(); plain.free();
 }
