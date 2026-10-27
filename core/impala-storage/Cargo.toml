@@ -9,4 +9,18 @@ description = "Speicherschicht: Storage-Trait und SQLite-Standard (Stores wie In
 [lints]
 workspace = true
 
+[features]
+default = ["sqlite"]
+# SQLite-Standardimplementierung (native Apps). Ohne dieses Feature: Trait, Regeln und
+# MemoryStorage – baut für wasm32-unknown-unknown.
+sqlite = ["dep:rusqlite"]
+
 [dependencies]
+impala-sync = { path = "../impala-sync" }
+# preserve_order: Schlüsselreihenfolge wie JSON.stringify (Hashes der Checkpoint-Hefte).
+serde_json = { version = "1", features = ["preserve_order"] }
+serde = "1"
+sha2 = "0.10"
+base64 = "0.22"
+ryu = "1"
+rusqlite = { version = "0.37", features = ["bundled"], optional = true }

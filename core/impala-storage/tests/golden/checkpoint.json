@@ -1,0 +1,2689 @@
+{
+ "writes": [
+  {
+   "state": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 1"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 1,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s1",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h1"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    },
+    "heftBlobs": {
+     "h1": "data:image/png;base64,AAA1",
+     "h0": "data:image/png;base64,ÄÖ"
+    }
+   },
+   "info": {
+    "count": 21,
+    "maxSeq": 21,
+    "lastEventId": "w2"
+   },
+   "maxTime": "2026-01-01T00:00:07.000Z",
+   "known": {},
+   "orderTimes": null,
+   "dirty": {
+    "h1": "data:image/png;base64,AAA1",
+    "h0": "data:image/png;base64,ÄÖ"
+   },
+   "expect": {
+    "checkpoint": {
+     "format": 3,
+     "maxSeq": 21,
+     "eventCount": 21,
+     "lastEventId": "w2",
+     "maxTime": "2026-01-01T00:00:07.000Z",
+     "heftBlobSizes": {
+      "h1": 26,
+      "h0": 24
+     },
+     "reconciledArchive": true,
+     "state": {
+      "pages": {
+       "p1": {
+        "id": "p1",
+        "title": "Eins 1"
+       }
+      },
+      "cards": {},
+      "grades": {},
+      "learningSessions": [],
+      "chatSessions": {},
+      "homeArticles": {},
+      "settings": {
+       "theme": "dark"
+      },
+      "decks": {},
+      "workspaces": {
+       "default": {
+        "id": "default"
+       }
+      },
+      "gnFolders": {},
+      "treeOpen": {
+       "p1": true
+      },
+      "tabs": [],
+      "activeTabId": null,
+      "reviews": [],
+      "telemetry": {}
+     },
+     "heftDocHashes": {
+      "hp": "44707b4c205758cbb015eb5a563ebc4b91301a429b8681b382e7394252845c5e",
+      "hq": "91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1"
+     }
+    },
+    "heftDocHashes": {
+     "hp": "44707b4c205758cbb015eb5a563ebc4b91301a429b8681b382e7394252845c5e",
+     "hq": "91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1"
+    },
+    "parts": {
+     "__impala67_state_checkpoint_v2_blob__:h0": "data:image/png;base64,ÄÖ",
+     "__impala67_state_checkpoint_v2_blob__:h1": "data:image/png;base64,AAA1",
+     "__impala67_state_checkpoint_v3_heft__:44707b4c205758cbb015eb5a563ebc4b91301a429b8681b382e7394252845c5e": "{\"v\":2,\"rev\":1,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s1\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h1\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}",
+     "__impala67_state_checkpoint_v3_heft__:91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1": "{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}"
+    }
+   }
+  },
+  {
+   "state": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    },
+    "heftBlobs": {
+     "h2": "data:image/png;base64,AAA2",
+     "h0": "data:image/png;base64,ÄÖ"
+    }
+   },
+   "info": {
+    "count": 21,
+    "maxSeq": 21,
+    "lastEventId": "w2"
+   },
+   "maxTime": "2026-01-01T00:00:07.000Z",
+   "known": {
+    "h1": 999
+   },
+   "orderTimes": {
+    "page:p1": "2026-01-01T00:00:05.000Z"
+   },
+   "dirty": {
+    "h2": "data:image/png;base64,AAA2",
+    "h0": "data:image/png;base64,ÄÖ"
+   },
+   "expect": {
+    "checkpoint": {
+     "format": 3,
+     "maxSeq": 21,
+     "eventCount": 21,
+     "lastEventId": "w2",
+     "maxTime": "2026-01-01T00:00:07.000Z",
+     "heftBlobSizes": {
+      "h1": 999,
+      "h2": 26,
+      "h0": 24
+     },
+     "reconciledArchive": true,
+     "state": {
+      "pages": {
+       "p1": {
+        "id": "p1",
+        "title": "Eins 2"
+       }
+      },
+      "cards": {},
+      "grades": {},
+      "learningSessions": [],
+      "chatSessions": {},
+      "homeArticles": {},
+      "settings": {
+       "theme": "dark"
+      },
+      "decks": {},
+      "workspaces": {
+       "default": {
+        "id": "default"
+       }
+      },
+      "gnFolders": {},
+      "treeOpen": {
+       "p1": true
+      },
+      "tabs": [],
+      "activeTabId": null,
+      "reviews": [],
+      "telemetry": {}
+     },
+     "heftDocHashes": {
+      "hp": "1a5f0bf0d9299e19d5e75cc0be92b3d592286dda74137bc212da9f087508e6f3",
+      "hq": "91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1"
+     },
+     "orderTimes": {
+      "page:p1": "2026-01-01T00:00:05.000Z"
+     }
+    },
+    "heftDocHashes": {
+     "hp": "1a5f0bf0d9299e19d5e75cc0be92b3d592286dda74137bc212da9f087508e6f3",
+     "hq": "91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1"
+    },
+    "parts": {
+     "__impala67_state_checkpoint_v2_blob__:h0": "data:image/png;base64,ÄÖ",
+     "__impala67_state_checkpoint_v2_blob__:h1": "data:image/png;base64,AAA1",
+     "__impala67_state_checkpoint_v2_blob__:h2": "data:image/png;base64,AAA2",
+     "__impala67_state_checkpoint_v3_heft__:1a5f0bf0d9299e19d5e75cc0be92b3d592286dda74137bc212da9f087508e6f3": "{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}",
+     "__impala67_state_checkpoint_v3_heft__:91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1": "{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}"
+    }
+   }
+  }
+ ],
+ "cases": [
+  {
+   "name": "legacy-ok",
+   "checkpoint": {
+    "format": 1,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 1"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {},
+     "heftDocs": {
+      "hp": {
+       "v": 2,
+       "rev": 1,
+       "pages": [
+        {
+         "id": "a",
+         "paper": "lined",
+         "strokes": [
+          {
+           "id": "s1",
+           "tool": "pen",
+           "color": "#000",
+           "size": 2,
+           "pts": [
+            [
+             1.5,
+             0.30000000000000004,
+             0.3333333333333333
+            ],
+            [
+             1e+21,
+             1e-7,
+             -2.5
+            ],
+            [
+             123456789.123,
+             0,
+             5e-324
+            ]
+           ]
+          }
+         ],
+         "images": [
+          {
+           "id": "i",
+           "ref": "h1"
+          }
+         ],
+         "texts": [],
+         "ocrText": "Grüße ✓"
+        }
+       ]
+      },
+      "hq": {
+       "v": 2,
+       "rev": 0,
+       "pages": [
+        {
+         "id": "a",
+         "paper": "lined",
+         "strokes": [
+          {
+           "id": "s0",
+           "tool": "pen",
+           "color": "#000",
+           "size": 2,
+           "pts": [
+            [
+             1.5,
+             0.30000000000000004,
+             0.3333333333333333
+            ],
+            [
+             1e+21,
+             1e-7,
+             -2.5
+            ],
+            [
+             123456789.123,
+             0,
+             5e-324
+            ]
+           ]
+          }
+         ],
+         "images": [
+          {
+           "id": "i",
+           "ref": "h0"
+          }
+         ],
+         "texts": [],
+         "ocrText": "Grüße ✓"
+        }
+       ]
+      }
+     },
+     "heftBlobs": {
+      "h1": "data:image/png;base64,AAA1",
+      "h0": "data:image/png;base64,ÄÖ"
+     }
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:03.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    false
+   ],
+   "expect": "",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 1"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 1,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s1",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h1"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    },
+    "heftBlobs": {
+     "h1": "data:image/png;base64,AAA1",
+     "h0": "data:image/png;base64,ÄÖ"
+    }
+   }
+  },
+  {
+   "name": "legacy-keys",
+   "checkpoint": {
+    "format": 1,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "state": {
+     "pages": {}
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:03.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    false
+   ],
+   "expect": "keys",
+   "saved": {
+    "pages": {}
+   }
+  },
+  {
+   "name": "v2-ok",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:11.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "v2-older-tail-safe",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:01.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p9",
+      "patch": {
+       "title": "x"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "v2-older-tail",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:01.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    false
+   ],
+   "expect": "older-tail",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "v2-blob-sizes",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": [],
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:11.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "blob-sizes",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "seq-ahead",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 9,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": null,
+   "tail": [],
+   "reorderSafe": [],
+   "expect": "seq-ahead",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "count",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 5,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:11.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "count",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "boundary",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "other",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "other"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e3",
+     "t": "2026-01-01T00:00:11.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e3"
+      }
+     },
+     "seq": 3
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "boundary",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "tail-seq",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": {
+    "id": "e2",
+    "t": "2026-01-01T00:00:02.000Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p1",
+     "patch": {
+      "title": "e2"
+     }
+    },
+    "seq": 2
+   },
+   "tail": [
+    {
+     "id": "e2",
+     "t": "2026-01-01T00:00:11.000Z",
+     "type": "pageUpdate",
+     "payload": {
+      "id": "p1",
+      "patch": {
+       "title": "e2"
+      }
+     },
+     "seq": 2
+    }
+   ],
+   "reorderSafe": [
+    true
+   ],
+   "expect": "tail-seq",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "format",
+   "checkpoint": {
+    "format": 7,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": null,
+   "tail": [],
+   "reorderSafe": [],
+   "expect": "format",
+   "saved": {
+    "pages": {
+     "p1": {
+      "id": "p1",
+      "title": "Eins 2"
+     }
+    },
+    "cards": {},
+    "grades": {},
+    "learningSessions": [],
+    "chatSessions": {},
+    "homeArticles": {},
+    "settings": {
+     "theme": "dark"
+    },
+    "decks": {},
+    "workspaces": {
+     "default": {
+      "id": "default"
+     }
+    },
+    "gnFolders": {},
+    "treeOpen": {
+     "p1": true
+    },
+    "tabs": [],
+    "activeTabId": null,
+    "reviews": [],
+    "telemetry": {},
+    "heftDocs": {
+     "hp": {
+      "v": 2,
+      "rev": 2,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s2",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h2"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     },
+     "hq": {
+      "v": 2,
+      "rev": 0,
+      "pages": [
+       {
+        "id": "a",
+        "paper": "lined",
+        "strokes": [
+         {
+          "id": "s0",
+          "tool": "pen",
+          "color": "#000",
+          "size": 2,
+          "pts": [
+           [
+            1.5,
+            0.30000000000000004,
+            0.3333333333333333
+           ],
+           [
+            1e+21,
+            1e-7,
+            -2.5
+           ],
+           [
+            123456789.123,
+            0,
+            5e-324
+           ]
+          ]
+         }
+        ],
+        "images": [
+         {
+          "id": "i",
+          "ref": "h0"
+         }
+        ],
+        "texts": [],
+        "ocrText": "Grüße ✓"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "no-state",
+   "checkpoint": {
+    "format": 2,
+    "maxSeq": 2,
+    "eventCount": 2,
+    "lastEventId": "e2",
+    "maxTime": "2026-01-01T00:00:10.000Z",
+    "heftBlobSizes": {},
+    "state": null,
+    "heftDocsJson": "{\"hp\":{\"v\":2,\"rev\":2,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s2\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h2\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]},\"hq\":{\"v\":2,\"rev\":0,\"pages\":[{\"id\":\"a\",\"paper\":\"lined\",\"strokes\":[{\"id\":\"s0\",\"tool\":\"pen\",\"color\":\"#000\",\"size\":2,\"pts\":[[1.5,0.30000000000000004,0.3333333333333333],[1e+21,1e-7,-2.5],[123456789.123,0,5e-324]]}],\"images\":[{\"id\":\"i\",\"ref\":\"h0\"}],\"texts\":[],\"ocrText\":\"Grüße ✓\"}]}}",
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:10.000Z"
+    }
+   },
+   "info": {
+    "count": 3,
+    "maxSeq": 3,
+    "lastEventId": "e3"
+   },
+   "boundary": null,
+   "tail": [],
+   "reorderSafe": [],
+   "expect": "no-state",
+   "saved": null
+  },
+  {
+   "name": "current-ok",
+   "checkpoint": {
+    "format": 3,
+    "maxSeq": 21,
+    "eventCount": 21,
+    "lastEventId": "w2",
+    "maxTime": "2026-01-01T00:00:07.000Z",
+    "heftBlobSizes": {
+     "h1": 999,
+     "h2": 26,
+     "h0": 24
+    },
+    "reconciledArchive": true,
+    "state": {
+     "pages": {
+      "p1": {
+       "id": "p1",
+       "title": "Eins 2"
+      }
+     },
+     "cards": {},
+     "grades": {},
+     "learningSessions": [],
+     "chatSessions": {},
+     "homeArticles": {},
+     "settings": {
+      "theme": "dark"
+     },
+     "decks": {},
+     "workspaces": {
+      "default": {
+       "id": "default"
+      }
+     },
+     "gnFolders": {},
+     "treeOpen": {
+      "p1": true
+     },
+     "tabs": [],
+     "activeTabId": null,
+     "reviews": [],
+     "telemetry": {}
+    },
+    "heftDocHashes": {
+     "hp": "1a5f0bf0d9299e19d5e75cc0be92b3d592286dda74137bc212da9f087508e6f3",
+     "hq": "91aaa5fca3fd80c609fe1695661f276330e7e9c353d9ed8ce6a1ce5eef2a28b1"
+    },
+    "orderTimes": {
+     "page:p1": "2026-01-01T00:00:05.000Z"
+    }
+   },
+   "info": {
+    "count": 21,
+    "maxSeq": 21,
+    "lastEventId": "w2"
+   },
+   "boundary": {
+    "id": "w2",
+    "t": "2026-01-02T03:04:05.678Z",
+    "type": "pageUpdate",
+    "payload": {
+     "id": "p2",
+     "patch": {
+      "title": "Zwei!"
+     }
+    },
+    "seq": 21
+   },
+   "tail": [],
+   "reorderSafe": [],
+   "expect": "",
+   "saved": null
+  }
+ ],
+ "savedCurrent": {
+  "pages": {
+   "p1": {
+    "id": "p1",
+    "title": "Eins 2"
+   }
+  },
+  "cards": {},
+  "grades": {},
+  "learningSessions": [],
+  "chatSessions": {},
+  "homeArticles": {},
+  "settings": {
+   "theme": "dark"
+  },
+  "decks": {},
+  "workspaces": {
+   "default": {
+    "id": "default"
+   }
+  },
+  "gnFolders": {},
+  "treeOpen": {
+   "p1": true
+  },
+  "tabs": [],
+  "activeTabId": null,
+  "reviews": [],
+  "telemetry": {},
+  "heftDocs": {
+   "hp": {
+    "v": 2,
+    "rev": 2,
+    "pages": [
+     {
+      "id": "a",
+      "paper": "lined",
+      "strokes": [
+       {
+        "id": "s2",
+        "tool": "pen",
+        "color": "#000",
+        "size": 2,
+        "pts": [
+         [
+          1.5,
+          0.30000000000000004,
+          0.3333333333333333
+         ],
+         [
+          1e+21,
+          1e-7,
+          -2.5
+         ],
+         [
+          123456789.123,
+          0,
+          5e-324
+         ]
+        ]
+       }
+      ],
+      "images": [
+       {
+        "id": "i",
+        "ref": "h2"
+       }
+      ],
+      "texts": [],
+      "ocrText": "Grüße ✓"
+     }
+    ]
+   },
+   "hq": {
+    "v": 2,
+    "rev": 0,
+    "pages": [
+     {
+      "id": "a",
+      "paper": "lined",
+      "strokes": [
+       {
+        "id": "s0",
+        "tool": "pen",
+        "color": "#000",
+        "size": 2,
+        "pts": [
+         [
+          1.5,
+          0.30000000000000004,
+          0.3333333333333333
+         ],
+         [
+          1e+21,
+          1e-7,
+          -2.5
+         ],
+         [
+          123456789.123,
+          0,
+          5e-324
+         ]
+        ]
+       }
+      ],
+      "images": [
+       {
+        "id": "i",
+        "ref": "h0"
+       }
+      ],
+      "texts": [],
+      "ocrText": "Grüße ✓"
+     }
+    ]
+   }
+  }
+ }
+}
