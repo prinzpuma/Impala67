@@ -71,6 +71,10 @@ Stand: v2.2.85 (21. Oktober 2026)
 - [ ] **Handschrifterkennung gezielt weiter schärfen**:
   - Erkennungsqualität auf echten Notizseiten (`handwriting/evaluate_notes_benchmark.py`) bei längeren Sätzen, Skizzen-Abgrenzung und Mathe-Ausdrücken weiter verbessern.
 
+### Langfristig: Rust-Kern & native Apps
+- [ ] **Plan in `docs/NATIV-PLAN.md`**: Gemeinsamer Rust-Kern (auch als WASM in der PWA), danach iPad, Android, Windows/Linux nativ.
+  - [ ] Schritt 1: Spike `core/` + erstes Modul als WASM aus der PWA aufrufen.
+
 ### Priorität 3: Android & Plattform-Ergänzungen
 - [ ] **Google Drive Login in Android-APK verifizieren**:
   - OAuth2-Ablauf in der nativen Capacitor-Umgebung testen und absichern (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
