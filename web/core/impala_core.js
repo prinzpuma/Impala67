@@ -715,6 +715,88 @@ export function shouldCompactCloud(connected, usage_percent, last_compacted_at_m
 }
 
 /**
+ * Neue Karte, fällig ab `t` (ISO-Zeitpunkt des Events; unlesbar ⇒ jetzt).
+ * @param {string} t
+ * @returns {any}
+ */
+export function srsNewCard(t) {
+    const ptr0 = passStringToWasm0(t, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.srsNewCard(ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Intervall-Texte der vier Antwort-Knöpfe (Nochmal, Schwer, Gut, Einfach).
+ * @param {any} card
+ * @param {number} now_ms
+ * @returns {string[]}
+ */
+export function srsPreview(card, now_ms) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.srsPreview(retptr, addBorrowedObject(card), now_ms);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v1 = getArrayJsValueFromWasm0(r0, r1);
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Lernstand nach einer Bewertung (`grade` 1…4). `fuzz`: Zufallszahl in [0, 1) oder ohne Fuzz.
+ * @param {any} card
+ * @param {number} grade
+ * @param {number} now_ms
+ * @param {number | null} [fuzz]
+ * @returns {any}
+ */
+export function srsRate(card, grade, now_ms, fuzz) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.srsRate(retptr, addBorrowedObject(card), grade, now_ms, !isLikeNone(fuzz), isLikeNone(fuzz) ? 0 : fuzz);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Abrufwahrscheinlichkeit jetzt; `undefined` bei neuen oder unlesbaren Karten.
+ * @param {any} card
+ * @param {number} now_ms
+ * @returns {number | undefined}
+ */
+export function srsRetrievability(card, now_ms) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.srsRetrievability(retptr, addBorrowedObject(card), now_ms);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r2 = getDataViewMemory0().getFloat64(retptr + 8 * 1, true);
+        return r0 === 0 ? undefined : r2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * `{ userId, authToken }` ohne PBKDF2 (KI-Anmeldung am Worker); wirft bei ungültigem Schlüssel.
  * @param {string} sync_key
  * @returns {any}
@@ -948,7 +1030,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_1671(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_1757(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1030,8 +1112,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 65, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1614);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 69, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1700);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -1058,14 +1140,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_1671(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_1671(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_1757(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_1757(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_1614(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_1700(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_1614(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_1700(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -1107,6 +1189,12 @@ function addHeapObject(obj) {
     return idx;
 }
 
+function addBorrowedObject(obj) {
+    if (stack_pointer == 1) throw new Error('out of js stack');
+    heap[--stack_pointer] = obj;
+    return stack_pointer;
+}
+
 const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(state => wasm.__wbindgen_export4(state.a, state.b));
@@ -1120,6 +1208,16 @@ function dropObject(idx) {
 function getArrayF32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(takeObject(mem.getUint32(i, true)));
+    }
+    return result;
 }
 
 function getArrayU32FromWasm0(ptr, len) {
@@ -1272,6 +1370,8 @@ function passStringToWasm0(arg, malloc, realloc) {
     WASM_VECTOR_LEN = offset;
     return ptr;
 }
+
+let stack_pointer = 1024;
 
 function takeObject(idx) {
     const ret = getObject(idx);

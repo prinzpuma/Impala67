@@ -14,7 +14,7 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, heftBaselineOps } from "./sync-core.js";
 import { sha256Hex } from "./sync-crypto.js";
 import { requestWithStallTimeout } from "./sync-transfer.js";
-import { loadCore } from "./rust-core.js";
+import { CORE } from "./rust-core.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -60,8 +60,6 @@ export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
 	let reconnectAttempts = 0, retryAttempts = 0, core = null, socketAuthenticated = false, initialized = false;
 	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
-	// Geladenes Kern-Modul (Hilfsfunktionen) und der Sync-Client des aktuellen Kontos.
-	let coreModule = null;
 
 	let state = {
 		status: "disconnected",
@@ -188,7 +186,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	function scheduleHttpRetry(error) {
 		if (!error?.retryable || !state.url || !core || isOffline()) return false;
 		clearTimeout(retryTimer);
-		const delay = coreModule.syncRetryDelayMs(retryAttempts++);
+		const delay = CORE.syncRetryDelayMs(retryAttempts++);
 		setStatus("syncing", "Verbindung unterbrochen", `Sync wird in ${Math.max(1, Math.ceil(delay / 1000))} s fortgesetzt.`);
 		retryTimer = setTimeout(() => {
 			retryTimer = 0;
@@ -284,7 +282,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	function scheduleReconnect() {
 		clearTimeout(reconnectTimer);
 		if (!state.url || !core || isOffline()) return;
-		reconnectTimer = setTimeout(connectWebSocket, coreModule.reconnectDelayMs(++reconnectAttempts));
+		reconnectTimer = setTimeout(connectWebSocket, CORE.reconnectDelayMs(++reconnectAttempts));
 	}
 
 	async function onSocketMessage(ws, text) {
@@ -296,7 +294,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			socketAuthenticated = true; reconnectAttempts = 0;
 			setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
 			clearInterval(pingTimer);
-			pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(coreModule.wsPingMessage()); }, coreModule.wsPingIntervalMs());
+			pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(CORE.wsPingMessage()); }, CORE.wsPingIntervalMs());
 		}
 		if (action === "sync") requestSync(forceAll).catch(() => {});
 		else if (action === "rejected") {
@@ -349,9 +347,8 @@ export const CLOUDFLARE_SYNC = (() => {
 		if (!cleanUrl || !cleanKey) { setStatus("disconnected", "Nicht eingerichtet", "URL oder Sync-Schlüssel fehlt."); return false; }
 		try {
 			setStatus("connecting", "Verbindung wird aufgebaut…");
-			coreModule = await loadCore();
-			const id = coreModule.syncAuth(cleanKey).userId;
-			const next = await coreModule.SyncCore.open(cleanUrl, cleanKey, CLIENT_ID, http, storeFor(id), (label, current, total) => {
+			const id = CORE.syncAuth(cleanKey).userId;
+			const next = await CORE.SyncCore.open(cleanUrl, cleanKey, CLIENT_ID, http, storeFor(id), (label, current, total) => {
 				if (generation === configureGeneration) setProgress(label, current, total);
 			});
 			if (generation !== configureGeneration) { next.free(); return false; }
@@ -437,14 +434,14 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	async function generateSyncKey() {
-		return (await loadCore()).generateSyncKey();
+		return CORE.generateSyncKey();
 	}
 
 	// Die KI braucht nur die Anmeldung (User-ID, Token), nicht den Sync und kein PBKDF2.
 	async function aiRequest(payload, options = {}) {
 		const target = String(options.base || state.url || DEFAULT_WORKER_URL).trim().replace(/\/+$/, "");
 		if (!target || !state.syncKey) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
-		const { userId: user, authToken } = (await loadCore()).syncAuth(state.syncKey);
+		const { userId: user, authToken } = CORE.syncAuth(state.syncKey);
 		return fetch(`${target}/api/ai?user=${encodeURIComponent(user)}`, {
 			method: "POST",
 			headers: {

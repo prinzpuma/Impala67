@@ -3,7 +3,7 @@
 // Cloud-Kompaktierung: Wann es Zeit ist und der Ablauf selbst stehen im Rust-Kern
 // (core/impala-sync); hier bleiben Zeitstempel, Timer und das Ereignis für die Anzeige.
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
-import { loadCore } from "./rust-core.js";
+import { CORE } from "./rust-core.js";
 
 export const CLOUD_COMPACT_THRESHOLD_PERCENT = 80;
 export const CLOUD_COMPACT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -48,8 +48,7 @@ async function scheduleAutoCompaction(status) {
 	if (status?.status !== "connected" || compactPromise) return;
 	const storage = storageOrNull();
 	const percent = Number(status?.usage?.percent);
-	const core = await loadCore();
-	if (!core.shouldCompactCloud(true, Number.isFinite(percent) ? percent : undefined, readLastCompaction(storage), Date.now(), false)) return;
+	if (!CORE.shouldCompactCloud(true, Number.isFinite(percent) ? percent : undefined, readLastCompaction(storage), Date.now(), false)) return;
 	clearTimeout(autoTimer);
 	autoTimer = setTimeout(() => {
 		compactCloudData(CLOUDFLARE_SYNC, { storage }).catch((error) => {

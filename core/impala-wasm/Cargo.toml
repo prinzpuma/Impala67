@@ -18,6 +18,7 @@ impala-drive = { path = "../impala-drive", default-features = false }
 impala-net = { path = "../impala-net", default-features = false }
 impala-search = { path = "../impala-search", default-features = false }
 impala-ink = { path = "../impala-ink", default-features = false }
+impala-srs = { path = "../impala-srs" }
 serde_json = "1"
 js-sys = "0.3"
 # Exakt gepinnt: wasm-bindgen-cli (npm run build:core) muss dieselbe Version haben.

@@ -872,6 +872,7 @@ dependencies = [
  "impala-ink",
  "impala-net",
  "impala-search",
+ "impala-srs",
  "impala-sync",
  "js-sys",
  "serde_json",

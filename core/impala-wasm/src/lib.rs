@@ -4,6 +4,7 @@ mod drive;
 mod ink;
 mod js;
 mod search;
+mod srs;
 mod sync;
 
 use impala_sync::{Field, JsLike, Kind};

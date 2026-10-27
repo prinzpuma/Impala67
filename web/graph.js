@@ -67,18 +67,8 @@ export const GRAPH = (() => {
 	const isStale = (g = graph()) => !!g && (g.sourceFingerprint !== fingerprint() || g.model !== vectorModelKey(S.settings.embedModel));
 	const skillById = (g, id) => (g && g.skills || []).find((skill) => skill.id === id) || null;
 
-	// Erinnerungswahrscheinlichkeit jetzt: Tage seit der letzten Bewertung. Ohne `last`
-	// (Altkarten) zurückgerechnet aus der Fälligkeit — das Intervall entspricht bei 90 %
-	// Ziel-Behaltensrate der Stabilität.
-	function retrievability(card) {
-		if (!card || !card.srs || card.srs.state === "new") return null;
-		const stability = Math.max(.1, Number(card.srs.stability) || .5);
-		const last = Date.parse(card.srs.last || "");
-		const elapsed = Number.isFinite(last)
-			? (Date.now() - last) / 864e5
-			: stability - (new Date(card.srs.due).getTime() - Date.now()) / 864e5;
-		return SRS.retrievability(Math.max(0, elapsed), stability);
-	}
+	// Erinnerungswahrscheinlichkeit jetzt (null bei neuen Karten).
+	const retrievability = (card) => SRS.retrievability(card?.srs) ?? null;
 
 	function mastery(skill) {
 		if (skill.gap) return { cards: 0, rated: 0, due: 0, value: 0, state: "gap" };

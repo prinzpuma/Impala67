@@ -6,7 +6,7 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
-import { loadCore } from "./rust-core.js";
+import { CORE } from "./rust-core.js";
 // Google-Drive-Backup im privaten appDataFolder. Der Ablauf (Dateiindex über die Changes-API,
 // Snapshot + Änderungspakete, Dateien, Verdichten, Uhren-Drift, Wiederholungen) läuft im
 // Rust-Kern (core/impala-drive, über web/core/). Hier bleiben Anmeldung, Ein-/Ausgabe für den
@@ -260,14 +260,10 @@ export const DRIVE = (() => {
 		putBlob: (id, meta, data) => DB.putBlob(id, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), meta),
 	};
 
-	// Der Kern lädt erst beim ersten Sync (die erste Ansicht wartet nicht auf die WASM-Datei) und
-	// führt immer nur einen Aufruf zur Zeit aus; alles Weitere wartet in dieser Schlange.
-	let corePromise = null, coreQueue = Promise.resolve();
-	const getCore = () => (corePromise ||= loadCore()
-		.then((m) => new m.DriveCore(http, io))
-		.catch((error) => { corePromise = null; throw error; }));
+	// Der Kern führt immer nur einen Aufruf zur Zeit aus; alles Weitere wartet in dieser Schlange.
+	let driveCore = null, coreQueue = Promise.resolve();
 	function withCore(task) {
-		const run = coreQueue.then(async () => task(await getCore()));
+		const run = coreQueue.then(() => task(driveCore ||= new CORE.DriveCore(http, io)));
 		coreQueue = run.catch(() => {});
 		return run;
 	}
@@ -290,9 +286,8 @@ export const DRIVE = (() => {
 	// der keepalive-Schranke von ~64 KB), bleibt der Wasserstand stehen und der nächste Start holt es
 	// nach — ein ehrlicher Fehlschlag statt eines Flushs, der nur auf dem Papier stattfindet.
 	async function flushUpload() {
-		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch. Ohne schon geladenen Kern
-		// lohnt beim Schließen kein Nachladen.
-		if (!isConnected() || syncInFlight || !corePromise) return;
+		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch.
+		if (!isConnected() || syncInFlight) return;
 		flushMode = true;
 		try { await withCore((core) => core.flushUpload(allowSecrets())); } finally { flushMode = false; }
 	}
